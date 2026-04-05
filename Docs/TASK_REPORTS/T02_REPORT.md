@@ -52,16 +52,18 @@
 | Integration | N/A | T02'de test beklentisi yok |
 | Docker | ✓ PASS | `docker compose config` valid, `docker compose build` başarılı, `docker compose up -d` 7/7 healthy |
 
-## Doğrulama
+## Doğrulama (Bağımsız Validator)
 | Alan | Sonuç |
 |---|---|
 | Doğrulama durumu | ✓ PASS |
+| Validator | Bağımsız doğrulama chat'i |
 | Bulgu sayısı | 0 |
 | Düzeltme gerekli mi | Hayır |
 | Doğrulama tarihi | 2026-04-06 |
-| Doğrulama kontrol listesi | 05 §8.1 container listesi ✓, Health check tanımları ✓, Secret'lar ✓ |
-| Güvenlik kontrolü | Secret sızıntısı: Temiz (.env gitignore'da, .env.example'da placeholder'lar), Auth etkisi: Yok, Input validation: N/A, Yeni bağımlılık: Docker images (official — mcr.microsoft.com, docker.io/library) |
-| Yapım raporu uyumu | Tam uyumlu — 5/5 kriter karşılanmış |
+| Doğrulama kontrol listesi | 05 §8.1 container listesi ✓ (7/7 kabul kriteri kapsamı; monitoring T16'da), Health check tanımları ✓ (7/7), Secret'lar ✓ (.env gitignore'da, .env.example placeholder) |
+| Güvenlik kontrolü | Secret sızıntısı: Temiz, Auth etkisi: Yok, Input validation: N/A, Yeni bağımlılık: Official Docker images |
+| Build doğrulama | `docker compose build` ✓, `docker compose up -d` → 7/7 healthy |
+| Yapım raporu uyumu | Tam uyumlu — bağımsız doğrulama rapordaki sonuçları teyit etti |
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
@@ -70,7 +72,7 @@
 
 ## Commit & PR
 - Branch: `task/T02-docker-compose`
-- Commit: —
+- Commit: `61908d8`
 - PR: —
 - CI: — (T11'de kurulacak)
 
