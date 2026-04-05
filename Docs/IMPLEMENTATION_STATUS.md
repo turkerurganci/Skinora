@@ -4,6 +4,22 @@
 
 ---
 
+## Durum Lejandı
+
+| Simge | Durum | Açıklama |
+|---|---|---|
+| ⬚ | Bekliyor | Henüz başlanmadı |
+| ⏳ | Devam ediyor | Yapım chat'inde aktif |
+| ✓ | Tamamlandı | Doğrulama PASS, main'e merge edildi |
+| ✗ | FAIL | Doğrulama başarısız, düzeltme bekleniyor |
+| ⛔ | BLOCKED | İlerleyemiyor (alt tür: SPEC_GAP / DEPENDENCY_MISMATCH / PLAN_CORRECTION / EXTERNAL) |
+
+**Doğrulama durumları:** ✓ PASS / ✗ FAIL / ⛔ BLOCKED
+
+**Detaylı raporlar:** `Docs/TASK_REPORTS/TXX_REPORT.md`
+
+---
+
 ## F0 — Proje İskeleti (T01–T16)
 
 | Task | Ad | Durum | Doğrulama | Commit |
