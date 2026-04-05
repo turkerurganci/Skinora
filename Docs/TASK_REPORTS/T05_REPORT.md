@@ -80,7 +80,7 @@
 ## Commit & PR
 - Branch: `task/T05-middleware-pipeline`
 - Yapım commit: `cb20ae0`
-- Merge commit: (merge sonrası güncellenecek)
+- Merge commit: `64dd01b`
 
 ## Known Limitations / Follow-up
 - Rate limiting → T07'de implement edilecek
