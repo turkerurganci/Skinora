@@ -54,10 +54,11 @@
 - `main` her zaman çalışır durumda kalır.
 - Doğrulama FAIL verirse branch üzerinde düzeltme yapılır, tekrar doğrulanır.
 - Her faz sonunda tag atılır: `phase/FX-pass` (örn: `phase/F0-pass`)
-- **Branch protection kuralları** (T11'de aktifleştirilir):
+- **Branch protection kuralları** (T11'de aktifleştirilir — T11 tamamlandıktan sonra kalan **tüm task'lar için zorunlu rejim** haline gelir, istisnasız):
   - `main`'e direct push kapalı
   - Merge için CI PASS zorunlu (build + test + lint)
   - Merge için validator PASS zorunlu
+  - T01–T10 arası (T11 öncesi) bu kurallar henüz aktif değildir, ama validator PASS kuralı yine de manuel olarak uygulanır
 
 ### 3.3 Doğrulama Döngüsü
 
@@ -72,7 +73,7 @@
   - `✓ Karşılandı` — kanıtla doğrulandı
   - `✗ Karşılanmadı` — eksik veya hatalı
   - `~ Kısmi` — kısmen karşılandı, detay açıklanır
-  - `? Doğrulanamadı` — kanıt yetersiz, doğrulama yapılamadı
+  - `? Doğrulanamadı` — kanıt yetersiz, doğrulama yapılamadı. **Not:** Bu FAIL değildir. Kalite zayıflığı değil, kanıt eksikliği / doğrulama yetersizliği göstergesidir. Raporda FAIL'den ayrı tutulur. Doğrulanamayan kriter için ek kanıt üretilmesi veya doğrulama yönteminin revize edilmesi gerekir.
 - **Kanıt zorunluluğu:** Her kabul kriteri için çalıştırılan komut, test çıktısı ve hangi commit üzerinde bakıldığı belirtilmelidir. Sadece ✓ işareti yetmez, kanıt gerekir.
 
 ### 3.4 Task Durumları
@@ -120,6 +121,11 @@ Bir task BLOCKED durumuna düştüğünde:
 - Doküman uyumu kontrolü
 - İlgili unit/integration testler
 - Build + lint + type check
+- **Mini güvenlik kontrolü:**
+  - Secret sızıntısı var mı? (API key, private key, connection string kodda mı?)
+  - Auth/authorization etkisi var mı? (Yeni endpoint korumasız mı?)
+  - Input validation etkisi var mı? (Yeni kullanıcı girdisi sanitize ediliyor mu?)
+  - Yeni dış bağımlılık eklendi mi? (Güvenilirliği değerlendirildi mi?)
 
 #### Katman 2 — PR / CI Gate (her merge öncesi)
 - GitHub Actions otomatik çalışır:
@@ -147,6 +153,7 @@ Bir task BLOCKED durumuna düştüğünde:
 
 - Her task için `Docs/TASK_REPORTS/TXX_REPORT.md` oluşturulur (detaylı rapor).
 - Her task sonrası `Docs/IMPLEMENTATION_STATUS.md` güncellenir (özet tablo).
+- **Güncelleme sırası kuralı:** `TXX_REPORT.md` finalize edilmeden `IMPLEMENTATION_STATUS.md` güncellenmiş sayılmaz. Önce rapor, sonra status tablosu. Bu kural drift'i önler.
 - Rapor şablonu §3.8'de tanımlıdır.
 
 ### 3.8 Task Rapor Şablonu
