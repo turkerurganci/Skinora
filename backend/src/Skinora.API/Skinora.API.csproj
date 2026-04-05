@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Skinora.Shared\Skinora.Shared.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Transactions\Skinora.Transactions.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Payments\Skinora.Payments.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Steam\Skinora.Steam.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Users\Skinora.Users.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Auth\Skinora.Auth.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Notifications\Skinora.Notifications.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Admin\Skinora.Admin.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Disputes\Skinora.Disputes.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Fraud\Skinora.Fraud.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
