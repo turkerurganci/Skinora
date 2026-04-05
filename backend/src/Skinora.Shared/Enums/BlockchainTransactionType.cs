@@ -1,0 +1,14 @@
+namespace Skinora.Shared.Enums;
+
+public enum BlockchainTransactionType
+{
+    BUYER_PAYMENT,
+    SELLER_PAYOUT,
+    BUYER_REFUND,
+    EXCESS_REFUND,
+    WRONG_TOKEN_INCOMING,
+    WRONG_TOKEN_REFUND,
+    SPAM_TOKEN_INCOMING,
+    LATE_PAYMENT_REFUND,
+    INCORRECT_AMOUNT_REFUND
+}

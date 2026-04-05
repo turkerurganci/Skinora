@@ -1,0 +1,18 @@
+namespace Skinora.Shared.Enums;
+
+public enum TransactionStatus
+{
+    CREATED,
+    ACCEPTED,
+    TRADE_OFFER_SENT_TO_SELLER,
+    ITEM_ESCROWED,
+    PAYMENT_RECEIVED,
+    TRADE_OFFER_SENT_TO_BUYER,
+    ITEM_DELIVERED,
+    COMPLETED,
+    CANCELLED_TIMEOUT,
+    CANCELLED_SELLER,
+    CANCELLED_BUYER,
+    CANCELLED_ADMIN,
+    FLAGGED
+}
