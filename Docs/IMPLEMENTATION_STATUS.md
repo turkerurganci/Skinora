@@ -27,7 +27,7 @@
 | T01 | .NET Solution ve proje yapısı oluşturma | ✓ Tamamlandı | ✓ PASS | `b1ad141` |
 | T02 | Docker Compose ve ortam konfigürasyonu | ✓ Tamamlandı | ✓ PASS | `61908d8` |
 | T03 | Shared Kernel — base sınıflar, exception'lar, interface'ler | ✓ Tamamlandı | ✓ PASS | `f4e4a6f` |
-| T04 | EF Core global konfigürasyon | ⏳ Devam ediyor | — | — |
+| T04 | EF Core global konfigürasyon | ✓ Tamamlandı | ✓ PASS | `71ca7bf` |
 | T05 | Middleware pipeline | ⬚ Bekliyor | — | — |
 | T06 | Authentication altyapısı | ⬚ Bekliyor | — | — |
 | T07 | Rate limiting konfigürasyonu | ⬚ Bekliyor | — | — |
