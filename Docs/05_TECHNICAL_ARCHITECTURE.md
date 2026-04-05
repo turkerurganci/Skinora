@@ -37,7 +37,7 @@ Bu doküman, Skinora platformunun teknik mimarisini, teknoloji seçimlerini ve a
 
 | Katman | Teknoloji | Gerekçe |
 |---|---|---|
-| Backend | .NET 8 (C#) + ASP.NET Core | Proje sahibinin deneyimi, review edebilirlik, güçlü ekosistem |
+| Backend | .NET 9 (C#) + ASP.NET Core | Proje sahibinin deneyimi, review edebilirlik, güçlü ekosistem |
 | Frontend | Next.js (React + TypeScript) | AI kod üretim kalitesi, SSR desteği, modern ekosistem |
 | Veritabanı | SQL Server 2022 | .NET ile doğal uyum, ACID compliance, proje sahibinin deneyimi |
 | Cache / Session | Redis 7 | Session, cache, rate limiting — sadece çökse tolere edilebilir roller |
@@ -45,7 +45,7 @@ Bu doküman, Skinora platformunun teknik mimarisini, teknoloji seçimlerini ve a
 | Background Jobs | Hangfire (SQL Server storage) | Persistent job scheduling, .NET native, Redis bağımsız, dashboard |
 | Real-time | SignalR | WebSocket abstraction, .NET native, Next.js client desteği |
 
-### 2.2 Backend — .NET 8 (C#)
+### 2.2 Backend — .NET 9 (C#)
 
 Ana iş mantığı, API katmanı, state machine, yetkilendirme ve tüm orchestration burada yaşar.
 
@@ -766,7 +766,7 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 
 | Container | Base Image | Port | Açıklama |
 |---|---|---|---|
-| `skinora-backend` | .NET 8 runtime | 5000 | Ana uygulama |
+| `skinora-backend` | .NET 9 runtime | 5000 | Ana uygulama |
 | `skinora-frontend` | Node.js | 3000 | Next.js SSR |
 | `skinora-steam-sidecar` | Node.js | 5100 | Steam bot yönetimi |
 | `skinora-blockchain` | Node.js | 5200 | Tron blockchain servisi |
@@ -925,7 +925,7 @@ Tüm monitoring stack'i self-hosted ve ücretsizdir:
 | # | Konu | Karar | Gerekçe |
 |---|---|---|---|
 | 1 | Genel mimari | Modüler Monolith | MVP basitliği, düşük operasyonel yük, microservice geçiş yolu açık |
-| 2 | Backend | .NET 8 (C#) + ASP.NET Core | Proje sahibinin deneyimi, review edebilirlik |
+| 2 | Backend | .NET 9 (C#) + ASP.NET Core | Proje sahibinin deneyimi, review edebilirlik |
 | 3 | Veritabanı | SQL Server 2022 | .NET uyumu, ACID, proje sahibinin deneyimi |
 | 4 | Cache/Session | Redis 7 | Session, cache, rate limiting — sadece çökse tolere edilebilir roller |
 | 5 | Frontend | Next.js (React + TypeScript) | AI kod üretim kalitesi, SSR, modern ekosistem |

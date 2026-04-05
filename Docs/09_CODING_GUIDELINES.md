@@ -81,7 +81,7 @@ Skinora üç ayrı runtime'dan oluşur (05 §3). Her biri kendi proje kökünde 
 
 ```
 skinora/
-├── backend/                         ← .NET 8 modüler monolith
+├── backend/                         ← .NET 9 modüler monolith
 │   ├── Skinora.sln
 │   ├── src/
 │   └── tests/

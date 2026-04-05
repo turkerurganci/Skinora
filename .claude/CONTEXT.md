@@ -39,6 +39,8 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/11_IMPLEMENTATION_PLAN.md` | Sıralı task listesi ve bağımlılıklar |
 | `Docs/12_VALIDATION_PROTOCOL.md` | Doğrulama kuralları ve cross-check |
 | `Docs/PRODUCT_DISCOVERY_STATUS.md` | Tüm ürün kararlarının kayıt dosyası |
+| `Docs/IMPLEMENTATION_STATUS.md` | Implementation ilerleme tablosu (tüm task'lar) |
+| `Docs/TASK_REPORTS/` | Task bazlı detaylı raporlar (TXX_REPORT.md) |
 | `Docs/AUDIT_REPORTS/` | Doküman audit raporları (00-12) |
 | `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
 | `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) |
