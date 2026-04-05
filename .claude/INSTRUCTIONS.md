@@ -287,11 +287,17 @@ Bir task BLOCKED durumuna düştüğünde:
 
 ## 9. Skill'ler
 
-- `/checkpoint` — Proje sahibi "checkpoint yap" dediğinde çalıştır. Aşama doğrulama ve tutarsızlık taraması yapar.
-- `/handoff` — Proje sahibi "yeni chate geçiyorum", "oturumu kapat" veya "handoff" dediğinde çalıştır. Memory, status tracker, tutarsızlık kontrolü ve temiz geçiş sağlar.
-- `/deep-review` — Proje sahibi "deep review yap", "dokümanı kontrol et", "review et" veya "zayıf noktaları bul" dediğinde çalıştır. 8 katmanlı doküman kalite ve tutarlılık analizi yapar.
-- `/audit` — Proje sahibi "audit yap", "sistematik kontrol" veya "eksiksiz review" dediğinde çalıştır.
-- `/gpt-cross-review` — Audit sonrası otomatik önerilir. Dokümanı GPT o3'e gönderir, Claude bulguları bağımsız değerlendirir.
+### Implementation Skill'leri
+- `/task TXX` — Yapım chat'i başlatır. Task tanımını okur, bağımlılık kontrol eder, branch açar, kodu yazar, rapor taslağı hazırlar. Proje sahibi "T01 yap" veya "task T01" dediğinde çalıştır.
+- `/validate TXX` — Doğrulama chat'i başlatır. Bağımsız spec conformance review yapar. Yapım raporunu görmeden başlar, kanıt bazlı verdict verir. Proje sahibi "T01 doğrula" veya "validate T01" dediğinde çalıştır.
+- `/gate-check FX` — Faz sonu doğrulama. Regresyon, build, docker, traceability, migration kontrolü yapar. Proje sahibi "F0 gate check" dediğinde çalıştır.
+
+### Genel Skill'ler
+- `/checkpoint` — Aşama doğrulama ve tutarsızlık taraması yapar.
+- `/handoff` — Chat geçişi. Memory, status tracker, tutarsızlık kontrolü ve temiz geçiş sağlar.
+- `/deep-review` — 8 katmanlı doküman kalite ve tutarlılık analizi yapar.
+- `/audit` — Envanter bazlı sistematik doküman denetimi yapar.
+- `/gpt-cross-review` — Dokümanı GPT o3'e gönderir, Claude bulguları bağımsız değerlendirir.
 
 ---
 

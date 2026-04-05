@@ -1,0 +1,143 @@
+# Validate — Implementation Doğrulama Chat'i
+
+> **Ne zaman kullanılır:** Bir implementation task'ının yapım chat'i tamamlandıktan sonra, bağımsız doğrulama için.
+>
+> **Tetikleme:** Proje sahibi "T01 doğrula", "validate T01" veya `/validate T01` dediğinde bu skill çalıştırılır.
+>
+> **Parametre:** `hedef` — task numarası (örn: T01, T14, T63a)
+
+## Kritik Kurallar
+
+- **Sen bir spec conformance reviewer'sın.** Yapıcı değil, sapma avcısısın.
+- **Yapım raporunu (TXX_REPORT.md) GÖRME.** Kendi verdict'ünü önce bağımsız oluştur.
+- **Anchoring'e karşı dikkatli ol.** Commit mesajları, branch adı gibi ipuçlarından yola çıkarak "muhtemelen doğrudur" varsayımı yapma.
+- **Kanıt olmadan onaylama.** Her kabul kriteri için somut kanıt (komut çıktısı, test sonucu, kod referansı) gerekir.
+
+## Doğrulama Adımları
+
+### Faz 1 — Bağımsız Değerlendirme
+
+1. **Task tanımını oku:** `Docs/11_IMPLEMENTATION_PLAN.md`'den `hedef` task'ın tanımını bul:
+   - Kabul kriterleri
+   - Test beklentisi
+   - Doğrulama kontrol listesi
+   - Doküman referansları
+
+2. **Referans dokümanları oku:** Task tanımında belirtilen doküman bölümlerini oku. Bunlar source of truth.
+
+3. **Branch kodunu incele:** `task/TXX-*` branch'indeki değişiklikleri oku:
+   - Hangi dosyalar değişmiş / oluşturulmuş?
+   - Değişiklikler dokümanlarla uyumlu mu?
+
+4. **Kabul kriterlerini tek tek doğrula:** Her kriter için:
+   - İlgili kodu bul ve oku
+   - Gerekli komutu çalıştır (build, test, vb.)
+   - Çıktıyı kaydet
+   - Verdict ver:
+     - `✓ Karşılandı` — kanıtla doğrulandı
+     - `✗ Karşılanmadı` — eksik veya hatalı, detay yaz
+     - `~ Kısmi` — kısmen karşılandı, ne eksik detaylı açıkla
+     - `? Doğrulanamadı` — kanıt üretilemedi veya yetersiz (bu FAIL değil, kanıt eksikliği)
+
+5. **Doğrulama kontrol listesini çalıştır:** `11_IMPLEMENTATION_PLAN.md`'deki doğrulama kontrol listesi maddelerini tek tek geç.
+
+6. **Testleri çalıştır:**
+   - `dotnet test` (backend)
+   - `npm test` (frontend/sidecar, varsa)
+   - Sonuçları kaydet
+
+7. **Build kontrolü:** Tüm projeler temiz build veriyor mu?
+
+8. **Mini güvenlik kontrolü:**
+   - Secret sızıntısı var mı?
+   - Auth/authorization etkisi var mı?
+   - Input validation etkisi var mı?
+   - Yeni dış bağımlılık eklendi mi?
+
+9. **Doküman uyumu kontrolü:** Kod, referans dokümanlarla tutarlı mı?
+   - Enum değerleri eşleşiyor mu?
+   - Field adları eşleşiyor mu?
+   - İş kuralları doğru uygulanmış mı?
+
+### Faz 2 — Verdict
+
+10. **Genel verdict oluştur:**
+    - **PASS:** Tüm kabul kriterleri ✓ veya kabul edilebilir ~ (minor), güvenlik kontrolü temiz, testler geçiyor
+    - **FAIL:** En az bir kabul kriteri ✗, veya kritik güvenlik bulgusu, veya testler kırık
+    - **BLOCKED:** Doğrulama yapılamıyor (kod eksik, branch yok, vb.)
+
+11. **Bulguları sınıfla** (FAIL durumunda):
+    - `S1 Sapma` — Task tamamlandı ama dokümanla uyumsuz
+    - `S2 Kırılma` — Mevcut işlevselliği bozan değişiklik
+    - `S3 Eksik` — Kabul kriterinde tanımlı ama implement edilmemiş
+
+### Faz 3 — Rapor Karşılaştırma ve Finalize
+
+12. **Şimdi yapım raporunu oku:** `Docs/TASK_REPORTS/TXX_REPORT.md` taslağını oku.
+    - Kendi verdict'inle karşılaştır
+    - Uyuşmazlık varsa belirt
+
+13. **Raporu finalize et:** TXX_REPORT.md'yi validator sonuçlarıyla güncelle:
+    - Doğrulama bölümünü doldur (durum, bulgu sayısı, düzeltme gerekli mi)
+    - Kabul kriterleri tablosunu validator kanıtlarıyla güncelle
+
+14. **Status güncelle:** (sadece PASS durumunda)
+    - `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `✓ Tamamlandı` yap
+    - **Kural:** Rapor finalize edilmeden status güncellenmiş sayılmaz
+
+15. **Merge:** (sadece PASS durumunda)
+    - Branch'i `main`'e squash merge et
+    - Squash commit mesajı: `TXX: Task adı`
+
+## Çıktı Formatı
+
+```
+## Doğrulama Sonucu — TXX [Task Adı]
+**Tarih:** YYYY-MM-DD
+**Branch:** task/TXX-aciklama
+**Commit:** hash
+
+### Verdict: ✓ PASS / ✗ FAIL / ⛔ BLOCKED
+
+### Kabul Kriterleri
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | [kriter] | ✓/✗/~/? | [komut çıktısı veya referans] |
+
+### Doğrulama Kontrol Listesi
+- [x] / [ ] kontrol maddesi
+
+### Test Sonuçları
+| Tür | Sonuç | Komut | Çıktı |
+|---|---|---|---|
+| Unit | ✓ X/X | dotnet test ... | [özet] |
+
+### Güvenlik Kontrolü
+- [ ] Secret sızıntısı: Temiz / Bulgu
+- [ ] Auth etkisi: Temiz / Bulgu
+- [ ] Input validation: Temiz / Bulgu
+- [ ] Yeni bağımlılık: Yok / [liste]
+
+### Bulgular (FAIL durumunda)
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | S1/S2/S3 | [bulgu] | [dosya] |
+
+### Yapım Raporu Karşılaştırması
+- Uyum: [Tam uyumlu / X uyuşmazlık tespit edildi]
+- [Varsa uyuşmazlık detayları]
+```
+
+## FAIL Durumunda
+
+- Bulguları proje sahibine sun
+- Branch merge edilmez
+- Düzeltme için yeni yapım chat'i açılır
+- Düzeltme sonrası yeni doğrulama chat'i açılır
+
+## Doğrulanamadı Durumunda
+
+- `?` alan kriterler için:
+  - Ek kanıt üretme yöntemi öner
+  - Veya doğrulama yönteminin revize edilmesi gerektiğini belirt
+- Bu FAIL sayılmaz ama PASS için çözülmesi gerekir

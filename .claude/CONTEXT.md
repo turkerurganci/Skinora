@@ -20,6 +20,9 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `.claude/skills/deep-review.md` | `/deep-review` skill — 8 katmanlı doküman kalite analizi |
 | `.claude/skills/audit.md` | `/audit` skill — envanter bazlı sistematik doküman denetimi |
 | `.claude/skills/gpt-cross-review.md` | `/gpt-cross-review` skill — GPT o3 ile ikinci AI review döngüsü |
+| `.claude/skills/task.md` | `/task` skill — implementation yapım chat'i başlatma |
+| `.claude/skills/validate.md` | `/validate` skill — implementation doğrulama chat'i |
+| `.claude/skills/gate-check.md` | `/gate-check` skill — faz sonu doğrulama |
 
 ### Proje Dokümanları
 
