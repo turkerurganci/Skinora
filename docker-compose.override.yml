@@ -1,0 +1,42 @@
+# Development overrides — used automatically by docker compose up
+services:
+  skinora-backend:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+
+  skinora-frontend:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+  skinora-steam-sidecar:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./sidecar-steam:/app
+      - /app/node_modules
+    ports:
+      - "${STEAM_SIDECAR_PORT:-5100}:5100"
+
+  skinora-blockchain-sidecar:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./sidecar-blockchain:/app
+      - /app/node_modules
+    ports:
+      - "${BLOCKCHAIN_SIDECAR_PORT:-5200}:5200"
+
+  skinora-db:
+    ports:
+      - "${DB_PORT:-1433}:1433"
+
+  skinora-redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"

@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-05
+**Son güncelleme:** 2026-04-06
 
 ---
 
@@ -25,7 +25,7 @@
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T01 | .NET Solution ve proje yapısı oluşturma | ✓ Tamamlandı | ✓ PASS | `b1ad141` |
-| T02 | Docker Compose ve ortam konfigürasyonu | ⬚ Bekliyor | — | — |
+| T02 | Docker Compose ve ortam konfigürasyonu | ✓ Tamamlandı | ✓ PASS | — |
 | T03 | Shared Kernel — base sınıflar, exception'lar, interface'ler | ⬚ Bekliyor | — | — |
 | T04 | EF Core global konfigürasyon | ⬚ Bekliyor | — | — |
 | T05 | Middleware pipeline | ⬚ Bekliyor | — | — |
