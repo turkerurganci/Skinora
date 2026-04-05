@@ -24,7 +24,7 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T01 | .NET Solution ve proje yapısı oluşturma | ⬚ Bekliyor | — | — |
+| T01 | .NET Solution ve proje yapısı oluşturma | ⏳ Devam ediyor | ⏳ Bekliyor | `b1ad141` |
 | T02 | Docker Compose ve ortam konfigürasyonu | ⬚ Bekliyor | — | — |
 | T03 | Shared Kernel — base sınıflar, exception'lar, interface'ler | ⬚ Bekliyor | — | — |
 | T04 | EF Core global konfigürasyon | ⬚ Bekliyor | — | — |
