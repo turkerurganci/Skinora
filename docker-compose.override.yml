@@ -40,3 +40,11 @@ services:
   skinora-redis:
     ports:
       - "${REDIS_PORT:-6379}:6379"
+
+  skinora-loki:
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+
+  skinora-grafana:
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"

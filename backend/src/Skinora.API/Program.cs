@@ -2,16 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Skinora.API.Configuration;
 using Skinora.API.Filters;
+using Skinora.API.Logging;
 using Skinora.API.Middleware;
 using Skinora.API.RateLimiting;
 using Skinora.Shared.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Serilog
+// Serilog (T08 — sinks/format/labels driven by appsettings.json; secret masking
+// applied centrally via SecretMaskingEnricher per 09 §18.5)
 builder.Host.UseSerilog((context, config) =>
     config.ReadFrom.Configuration(context.Configuration)
-          .Enrich.FromLogContext());
+          .Enrich.FromLogContext()
+          .Enrich.With<SecretMaskingEnricher>());
 
 // DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>

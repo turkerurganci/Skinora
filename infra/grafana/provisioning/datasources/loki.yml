@@ -1,0 +1,12 @@
+# T08 — Auto-provision Loki as default datasource for Grafana.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://skinora-loki:3100
+    isDefault: true
+    editable: false
+    jsonData:
+      maxLines: 5000

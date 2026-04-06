@@ -28,6 +28,7 @@ COPY tests/Skinora.Notifications.Tests/Skinora.Notifications.Tests.csproj tests/
 COPY tests/Skinora.Admin.Tests/Skinora.Admin.Tests.csproj tests/Skinora.Admin.Tests/
 COPY tests/Skinora.Disputes.Tests/Skinora.Disputes.Tests.csproj tests/Skinora.Disputes.Tests/
 COPY tests/Skinora.Fraud.Tests/Skinora.Fraud.Tests.csproj tests/Skinora.Fraud.Tests/
+COPY tests/Skinora.Shared.Tests/Skinora.Shared.Tests.csproj tests/Skinora.Shared.Tests/
 
 RUN dotnet restore
 
