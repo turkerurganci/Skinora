@@ -31,7 +31,7 @@
 | T05 | Middleware pipeline | ✓ Tamamlandı | ✓ PASS | `64dd01b` |
 | T06 | Authentication altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T07 | Rate limiting konfigürasyonu | ✓ Tamamlandı | ✓ PASS | `329cee2` |
-| T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | `402c0a1` |
 | T09 | Hangfire setup ve background job altyapısı | ⬚ Bekliyor | — | — |
 | T10 | Outbox pattern altyapısı | ⬚ Bekliyor | — | — |
 | T11 | CI/CD pipeline | ⬚ Bekliyor | — | — |
