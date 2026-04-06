@@ -12,6 +12,11 @@ services:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
       - Redis__ConnectionString=${REDIS_CONNECTION_STRING}
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=${JWT_ISSUER:-skinora}
+      - Jwt__Audience=${JWT_AUDIENCE:-skinora-client}
+      - Jwt__AccessTokenExpiryMinutes=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
+      - Jwt__RefreshTokenExpiryDays=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
     depends_on:
       skinora-db:
         condition: service_healthy

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Middleware;
 using Skinora.Shared.Persistence;
@@ -46,6 +47,9 @@ builder.Services.AddAntiforgery(options =>
     options.Cookie.HttpOnly = true;
 });
 
+// Authentication & Authorization (T06)
+builder.Services.AddAuthModule(builder.Configuration);
+
 // Controllers + ApiResponseWrapperFilter
 builder.Services.AddControllers(options =>
 {
@@ -77,9 +81,9 @@ app.UseCors();
 // 7. Routing
 app.UseRouting();
 
-// 8. Authentication & Authorization (placeholder — T06 will configure)
-// app.UseAuthentication();
-// app.UseAuthorization();
+// 8. Authentication & Authorization
+app.UseAuthentication();
+app.UseAuthorization();
 
 // 9. Anti-forgery
 app.UseAntiforgery();
