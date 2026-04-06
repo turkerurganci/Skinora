@@ -3,6 +3,7 @@ using Serilog;
 using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Middleware;
+using Skinora.API.RateLimiting;
 using Skinora.Shared.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,6 +51,9 @@ builder.Services.AddAntiforgery(options =>
 // Authentication & Authorization (T06)
 builder.Services.AddAuthModule(builder.Configuration);
 
+// Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
+builder.Services.AddRateLimiting(builder.Configuration);
+
 // Controllers + ApiResponseWrapperFilter
 builder.Services.AddControllers(options =>
 {
@@ -81,14 +85,20 @@ app.UseCors();
 // 7. Routing
 app.UseRouting();
 
-// 8. Authentication & Authorization
+// 8. Authentication
 app.UseAuthentication();
+
+// 9. Rate limiting (after auth so user-scoped policies see the user ID,
+//    before authorization so blocked requests skip permission checks)
+app.UseMiddleware<RateLimitMiddleware>();
+
+// 10. Authorization
 app.UseAuthorization();
 
-// 9. Anti-forgery
+// 11. Anti-forgery
 app.UseAntiforgery();
 
-// 10. Endpoints
+// 12. Endpoints
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "skinora-backend" }));
 

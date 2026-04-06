@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Exceptions;
 
@@ -84,5 +85,39 @@ public class DiagnosticsController : ControllerBase
     public IActionResult AuthPermission()
     {
         return Ok(new { message = "has_permission" });
+    }
+
+    // --- Rate limit test endpoints (T07) ---
+
+    [AllowAnonymous]
+    [RateLimit("public")]
+    [HttpGet("ratelimit/public")]
+    public IActionResult RateLimitPublic()
+    {
+        return Ok(new { message = "public-rate-limited" });
+    }
+
+    [AllowAnonymous]
+    [RateLimit("auth")]
+    [HttpGet("ratelimit/auth")]
+    public IActionResult RateLimitAuth()
+    {
+        return Ok(new { message = "auth-rate-limited" });
+    }
+
+    [AllowAnonymous]
+    [RateLimit("user-read")]
+    [HttpGet("ratelimit/user-read")]
+    public IActionResult RateLimitUserRead()
+    {
+        return Ok(new { message = "user-read-rate-limited" });
+    }
+
+    [AllowAnonymous]
+    [RateLimit("steam-inventory")]
+    [HttpGet("ratelimit/steam-inventory")]
+    public IActionResult RateLimitSteamInventory()
+    {
+        return Ok(new { message = "steam-inventory-rate-limited" });
     }
 }

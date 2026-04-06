@@ -30,7 +30,7 @@
 | T04 | EF Core global konfigürasyon | ✓ Tamamlandı | ✓ PASS | `71ca7bf` |
 | T05 | Middleware pipeline | ✓ Tamamlandı | ✓ PASS | `64dd01b` |
 | T06 | Authentication altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T07 | Rate limiting konfigürasyonu | ⬚ Bekliyor | — | — |
+| T07 | Rate limiting konfigürasyonu | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T08 | Logging altyapısı | ⬚ Bekliyor | — | — |
 | T09 | Hangfire setup ve background job altyapısı | ⬚ Bekliyor | — | — |
 | T10 | Outbox pattern altyapısı | ⬚ Bekliyor | — | — |
