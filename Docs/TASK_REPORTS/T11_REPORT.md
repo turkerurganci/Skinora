@@ -1,6 +1,6 @@
 # T11 — CI/CD Pipeline
 
-**Faz:** F0 | **Durum:** ✓ Tamamlandı (kısmi kabul) | **Doğrulama:** ✓ PASS (kod) + ~ Discipline-only (branch protection) | **Tarih:** 2026-04-08
+**Faz:** F0 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS (validator final, 2026-04-08) | **Tarih:** 2026-04-08
 
 ---
 
@@ -131,9 +131,27 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✓ PASS (kod tarafı, validator chat'i 2026-04-07) + ✓ Discipline-only kabul (branch protection, proje sahibi 2026-04-08) |
-| Bulgu sayısı | 0 (validator) + 1 (close-out keşfi: GitHub Pro gerekiyor → discipline-only ile çözüldü) |
+| Doğrulama durumu (ilk verdict, 2026-04-07) | ✓ PASS kod tarafı + ~ Kısmi (kriter 2 ve 3 UI evidence bekliyordu) |
+| Doğrulama durumu (re-validation, 2026-04-08) | **✓ PASS (nihai, itirazsız)** — discipline-only mitigasyon + spec ratifikasyonu kabul edildi |
+| Bulgu sayısı | 0 (validator) + 1 (close-out keşfi: GitHub Pro paid feature → discipline-only ile çözüldü) |
 | Düzeltme gerekli mi | Hayır — discipline-only kabul edildi, lokal hook + INSTRUCTIONS.md §3.2 güncellendi |
+
+**Validator re-validation notları (2026-04-08):**
+
+Validator bağımsız doğrulama yaptı:
+- `develop` branch → `git fetch origin && git log origin/develop` → `0327315` HEAD ✓ doğrulandı
+- `scripts/git-hooks/pre-push` → dosya okundu, mantığı ve hata mesajı net ✓
+- `scripts/git-hooks/install.sh` → kopyalama mantığı ve executable bit ✓
+- `INSTRUCTIONS.md §3.2` → discipline-only rejim açıklaması ✓
+- HTTP 403 paid feature blocker → kabul edilebilir EXTERNAL_BLOCKER mitigasyonu
+
+**Validator yargısı (alıntı):**
+> "Spec ratifiye edildi. INSTRUCTIONS.md §3.2 — projenin kendi source-of-truth dokümanı — discipline-only rejimi resmi olarak içeriyor. Validator olarak benim işim koda spec'e uyumluluk; spec güncellenince kriter karşılanmış sayılır. Bu rubber-stamp değil; INSTRUCTIONS.md .claude/'in yapısal parçası ve owner'ın bilinçli güncellemesi."
+
+**Validator follow-up önerileri (PASS'i bloklamaz):**
+- **R1 — Hook kuruluma bağımlılık:** Yeni clone alan biri install.sh çalıştırmazsa koruma yok. Önerim: `git config core.hooksPath scripts/git-hooks` ile repo-level fallback. → **Bu housekeeping commit'inde uygulandı** (`scripts/git-hooks/install.sh` core.hooksPath yaklaşımına çevrildi, `scripts/git-hooks/README.md` eklendi)
+- **R2 — Bypass log'u yok:** SKINORA_ALLOW_DIRECT_PUSH bypass'ları görünmez. → İleride `Docs/BYPASS_LOG.md`. T11 sonrası housekeeping
+- **R3 — CI tarafında defansif kontrol yok:** Hook atlanırsa CI guard yok. → İsteğe bağlı `ci.yml` guard job. T12 veya housekeeping
 
 **Validator notları (2026-04-07):**
 - Kabul kriterleri 1 ve 4: ✓ tam karşılandı (workflow yapısı + ghcr.io push)
