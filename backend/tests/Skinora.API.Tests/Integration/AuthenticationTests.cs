@@ -3,16 +3,16 @@ using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Persistence;
 
 namespace Skinora.API.Tests.Integration;
 
-public class AuthenticationTests : IClassFixture<WebApplicationFactory<Program>>
+public class AuthenticationTests : IClassFixture<HangfireBypassFactory>
 {
     private const string TestSecret = "test-jwt-secret-key-minimum-32-characters-long!!";
     private const string TestIssuer = "skinora";
@@ -26,7 +26,7 @@ public class AuthenticationTests : IClassFixture<WebApplicationFactory<Program>>
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public AuthenticationTests(WebApplicationFactory<Program> factory)
+    public AuthenticationTests(HangfireBypassFactory factory)
     {
         _client = factory.WithWebHostBuilder(builder =>
         {

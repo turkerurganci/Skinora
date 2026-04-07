@@ -1,13 +1,13 @@
 using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Skinora.API.Tests.Common;
 using Skinora.Shared.Persistence;
 
 namespace Skinora.API.Tests.Integration;
 
-public class MiddlewarePipelineTests : IClassFixture<WebApplicationFactory<Program>>
+public class MiddlewarePipelineTests : IClassFixture<HangfireBypassFactory>
 {
     private readonly HttpClient _client;
 
@@ -16,7 +16,7 @@ public class MiddlewarePipelineTests : IClassFixture<WebApplicationFactory<Progr
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    public MiddlewarePipelineTests(WebApplicationFactory<Program> factory)
+    public MiddlewarePipelineTests(HangfireBypassFactory factory)
     {
         _client = factory.WithWebHostBuilder(builder =>
         {
