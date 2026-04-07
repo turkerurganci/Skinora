@@ -1,10 +1,13 @@
 using System;
 using System.Linq;
 using Hangfire;
+using Medallion.Threading;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Skinora.API.BackgroundJobs;
+using Skinora.API.Outbox;
 using Skinora.Shared.BackgroundJobs;
 
 namespace Skinora.API.Tests.Common;
@@ -84,6 +87,31 @@ public class HangfireBypassFactory : WebApplicationFactory<Program>
             // under Hangfire.*), but it depends on IBackgroundJobClient which
             // AddHangfire above re-registered. Re-add explicitly.
             services.AddScoped<IBackgroundJobScheduler, HangfireBackgroundJobScheduler>();
+
+            // T10 — drop the OutboxStartupHook so the dispatcher chain never
+            // primes in unrelated tests. The Hangfire chain would otherwise
+            // try to resolve OutboxDispatcher and reach for AppDbContext /
+            // Medallion's SqlDistributedSynchronizationProvider, both of
+            // which require a real SQL Server.
+            var startupHookDescriptors = services
+                .Where(d => d.ImplementationType == typeof(OutboxStartupHook))
+                .ToList();
+            foreach (var d in startupHookDescriptors)
+            {
+                services.Remove(d);
+            }
+
+            // Replace Medallion's SQL Server lock provider with the in-process
+            // semaphore stub so OutboxDispatcher unit tests can exercise the
+            // tekillik garantisi without a database.
+            var lockDescriptors = services
+                .Where(d => d.ServiceType == typeof(IDistributedLockProvider))
+                .ToList();
+            foreach (var d in lockDescriptors)
+            {
+                services.Remove(d);
+            }
+            services.AddSingleton<IDistributedLockProvider, InMemoryDistributedLockProvider>();
         });
     }
 }

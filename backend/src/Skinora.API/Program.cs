@@ -5,6 +5,7 @@ using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Logging;
 using Skinora.API.Middleware;
+using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.Shared.Persistence;
 
@@ -62,6 +63,12 @@ builder.Services.AddRateLimiting(builder.Configuration);
 // IBackgroundJobScheduler abstraction. Dashboard mount happens later in the
 // pipeline (after authentication) via app.UseHangfireModule().
 builder.Services.AddHangfireModule(builder.Configuration);
+
+// Outbox (T10) — IOutboxService producer, dispatcher (self-rescheduling
+// Hangfire job + Medallion distributed lock), consumer idempotency store,
+// receiver-side external idempotency service, MediatR fan-out and the
+// startup hook that primes the dispatcher chain.
+builder.Services.AddOutboxModule(builder.Configuration);
 
 // Controllers + ApiResponseWrapperFilter
 builder.Services.AddControllers(options =>

@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-07 (T09 ✓ PASS, main'e merge edildi)
+**Son güncelleme:** 2026-04-07 (T10 ✓ PASS — outbox pattern altyapısı hazır, merge bekliyor)
 
 ---
 
@@ -33,7 +33,7 @@
 | T07 | Rate limiting konfigürasyonu | ✓ Tamamlandı | ✓ PASS | `329cee2` |
 | T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | `402c0a1` |
 | T09 | Hangfire setup ve background job altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T10 | Outbox pattern altyapısı | ⬚ Bekliyor | — | — |
+| T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `a6b6be8` |
 | T11 | CI/CD pipeline | ⬚ Bekliyor | — | — |
 | T12 | Test altyapısı | ⬚ Bekliyor | — | — |
 | T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
