@@ -1,0 +1,14 @@
+# Skinora — git attributes
+
+# Shell scripts must always use LF line endings (otherwise bash fails on Linux/macOS)
+*.sh           text eol=lf
+scripts/git-hooks/pre-push          text eol=lf
+scripts/git-hooks/post-*            text eol=lf
+scripts/git-hooks/pre-*             text eol=lf
+
+# YAML files (workflows, configs) should use LF
+*.yml          text eol=lf
+*.yaml         text eol=lf
+
+# Default: respect autocrlf for everything else (Windows users get CRLF in working tree, LF in repo)
+* text=auto
