@@ -80,50 +80,50 @@ public class ExternalIdempotencyService : IExternalIdempotencyService
                     return new ExternalIdempotencyAcquisition.Replay(existing.ResultPayload);
 
                 case ExternalIdempotencyStatus.failed:
-                {
-                    var newLease = DateTime.UtcNow.Add(leaseDuration);
-                    var rows = await _dbContext.ExternalIdempotencyRecords
-                        .Where(r => r.Id == existing.Id
-                                    && r.Status == ExternalIdempotencyStatus.failed)
-                        .ExecuteUpdateAsync(
-                            s => s
-                                .SetProperty(r => r.Status, ExternalIdempotencyStatus.in_progress)
-                                .SetProperty(r => r.LeaseExpiresAt, (DateTime?)newLease),
-                            cancellationToken);
+                    {
+                        var newLease = DateTime.UtcNow.Add(leaseDuration);
+                        var rows = await _dbContext.ExternalIdempotencyRecords
+                            .Where(r => r.Id == existing.Id
+                                        && r.Status == ExternalIdempotencyStatus.failed)
+                            .ExecuteUpdateAsync(
+                                s => s
+                                    .SetProperty(r => r.Status, ExternalIdempotencyStatus.in_progress)
+                                    .SetProperty(r => r.LeaseExpiresAt, (DateTime?)newLease),
+                                cancellationToken);
 
-                    if (rows == 1)
-                        return new ExternalIdempotencyAcquisition.Acquired();
+                        if (rows == 1)
+                            return new ExternalIdempotencyAcquisition.Acquired();
 
-                    // Lost the race — another caller claimed it. Re-read.
-                    continue;
-                }
+                        // Lost the race — another caller claimed it. Re-read.
+                        continue;
+                    }
 
                 case ExternalIdempotencyStatus.in_progress:
-                {
-                    var now = DateTime.UtcNow;
-                    var leaseValid = existing.LeaseExpiresAt.HasValue
-                                     && existing.LeaseExpiresAt.Value > now;
+                    {
+                        var now = DateTime.UtcNow;
+                        var leaseValid = existing.LeaseExpiresAt.HasValue
+                                         && existing.LeaseExpiresAt.Value > now;
 
-                    if (leaseValid)
-                        return new ExternalIdempotencyAcquisition.Blocked();
+                        if (leaseValid)
+                            return new ExternalIdempotencyAcquisition.Blocked();
 
-                    // Stale lease — atomic reclaim from in_progress to failed
-                    // (06 §3.21 stale recovery). The loop then re-reads and
-                    // either claims the now-failed row or sees that another
-                    // caller already did.
-                    await _dbContext.ExternalIdempotencyRecords
-                        .Where(r => r.Id == existing.Id
-                                    && r.Status == ExternalIdempotencyStatus.in_progress
-                                    && r.LeaseExpiresAt != null
-                                    && r.LeaseExpiresAt < now)
-                        .ExecuteUpdateAsync(
-                            s => s
-                                .SetProperty(r => r.Status, ExternalIdempotencyStatus.failed)
-                                .SetProperty(r => r.LeaseExpiresAt, (DateTime?)null),
-                            cancellationToken);
+                        // Stale lease — atomic reclaim from in_progress to failed
+                        // (06 §3.21 stale recovery). The loop then re-reads and
+                        // either claims the now-failed row or sees that another
+                        // caller already did.
+                        await _dbContext.ExternalIdempotencyRecords
+                            .Where(r => r.Id == existing.Id
+                                        && r.Status == ExternalIdempotencyStatus.in_progress
+                                        && r.LeaseExpiresAt != null
+                                        && r.LeaseExpiresAt < now)
+                            .ExecuteUpdateAsync(
+                                s => s
+                                    .SetProperty(r => r.Status, ExternalIdempotencyStatus.failed)
+                                    .SetProperty(r => r.LeaseExpiresAt, (DateTime?)null),
+                                cancellationToken);
 
-                    continue;
-                }
+                        continue;
+                    }
             }
         }
 
