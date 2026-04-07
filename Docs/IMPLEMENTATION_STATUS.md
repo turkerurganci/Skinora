@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-07 (T10 ✓ PASS — outbox pattern altyapısı main'e squash merge edildi)
+**Son güncelleme:** 2026-04-07 (T11 ⏳ devam ediyor — CI/CD pipeline workflows yazıldı, doğrulama bekliyor)
 
 ---
 
@@ -34,7 +34,7 @@
 | T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | `402c0a1` |
 | T09 | Hangfire setup ve background job altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `34794a0` |
-| T11 | CI/CD pipeline | ⬚ Bekliyor | — | — |
+| T11 | CI/CD pipeline | ⏳ Devam ediyor | — | — |
 | T12 | Test altyapısı | ⬚ Bekliyor | — | — |
 | T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
 | T14 | Steam Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |

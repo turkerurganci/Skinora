@@ -1,0 +1,262 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  NODE_VERSION: '20'
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+# Cancel in-progress runs of the same workflow on the same ref
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----------------------------------------------------------------------------
+  # 1. Lint  (09 §21.4 step 1)
+  # ----------------------------------------------------------------------------
+  lint:
+    name: 1. Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: dotnet format (verify backend)
+        working-directory: backend
+        run: dotnet format Skinora.sln --verify-no-changes --severity error
+
+      - name: Node syntax check (frontend placeholder)
+        working-directory: frontend
+        run: node --check server.js
+
+      - name: Node syntax check (sidecar-steam placeholder)
+        working-directory: sidecar-steam
+        run: node --check server.js
+
+      - name: Node syntax check (sidecar-blockchain placeholder)
+        working-directory: sidecar-blockchain
+        run: node --check server.js
+
+  # ----------------------------------------------------------------------------
+  # 2. Build  (09 §21.4 step 2)
+  # ----------------------------------------------------------------------------
+  build:
+    name: 2. Build
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: dotnet restore
+        working-directory: backend
+        run: dotnet restore Skinora.sln
+
+      - name: dotnet build
+        working-directory: backend
+        run: dotnet build Skinora.sln --configuration Release --no-restore
+
+  # ----------------------------------------------------------------------------
+  # 3. Unit test  (09 §21.4 step 3)
+  # Filter: tests NOT in *.Integration namespace
+  # ----------------------------------------------------------------------------
+  unit-test:
+    name: 3. Unit test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Run unit tests
+        working-directory: backend
+        run: |
+          dotnet test Skinora.sln \
+            --configuration Release \
+            --filter "FullyQualifiedName!~.Integration" \
+            --logger "trx;LogFileName=unit-tests.trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory ./TestResults
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: backend/TestResults/
+          retention-days: 7
+
+  # ----------------------------------------------------------------------------
+  # 4. Integration test  (09 §21.4 step 4)
+  # Filter: tests in *.Integration namespace
+  # TestContainers brings up SQL Server / Redis as needed.
+  # ----------------------------------------------------------------------------
+  integration-test:
+    name: 4. Integration test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Run integration tests
+        working-directory: backend
+        run: |
+          dotnet test Skinora.sln \
+            --configuration Release \
+            --filter "FullyQualifiedName~.Integration" \
+            --logger "trx;LogFileName=integration-tests.trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory ./TestResults
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: backend/TestResults/
+          retention-days: 7
+
+  # ----------------------------------------------------------------------------
+  # 5. Contract test  (09 §21.4 step 5)
+  # PLACEHOLDER — gercek altyapi T12'de kurulacak (sidecar <-> backend JSON schema).
+  # Bu job sirasi 09 §21.4'e uymak icin simdi tanimli, T12 sonrasi doldurulacak.
+  # ----------------------------------------------------------------------------
+  contract-test:
+    name: 5. Contract test
+    needs: integration-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: |
+          echo "::notice title=T11 Placeholder::Contract test altyapisi T12'de kurulacak."
+          echo "T12 sonrasi bu job sidecar <-> backend JSON schema dogrulamasi calistiracak."
+          echo "Referans: 09 §19.2, 11_IMPLEMENTATION_PLAN.md T12 kabul kriterleri"
+
+  # ----------------------------------------------------------------------------
+  # 6. Migration dry-run  (09 §21.4 step 6)
+  # PLACEHOLDER — gercek altyapi F1 T28 (initial migration) sonrasi aktif olacak.
+  # ----------------------------------------------------------------------------
+  migration-dry-run:
+    name: 6. Migration dry-run
+    needs: integration-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: |
+          echo "::notice title=T11 Placeholder::Migration dry-run F1 T28 sonrasi aktif olacak."
+          echo "T28 sonrasi bu job staging DB'ye karsi 'dotnet ef database update --dry-run' calistiracak."
+          echo "Referans: 11_IMPLEMENTATION_PLAN.md T28 kabul kriterleri"
+
+  # ----------------------------------------------------------------------------
+  # 7. Docker build check  (kabul kriterleri: image build dogrulamasi)
+  # Push YOK — sadece build dogrulamasi. Push isi docker-publish.yml'da.
+  # ----------------------------------------------------------------------------
+  docker-build-check:
+    name: 7. Docker build (${{ matrix.component.name }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - { name: backend,            context: backend            }
+          - { name: frontend,           context: frontend           }
+          - { name: sidecar-steam,      context: sidecar-steam      }
+          - { name: sidecar-blockchain, context: sidecar-blockchain }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.component.context }}
+          push: false
+          load: false
+          cache-from: type=gha,scope=ci-${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=ci-${{ matrix.component.name }}
+
+  # ----------------------------------------------------------------------------
+  # CI Gate — toplu PASS kontrolu icin tek required check
+  # Branch protection bu job'u required olarak isaretler.
+  # ----------------------------------------------------------------------------
+  ci-gate:
+    name: CI Gate
+    needs:
+      - lint
+      - build
+      - unit-test
+      - integration-test
+      - contract-test
+      - migration-dry-run
+      - docker-build-check
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify all jobs passed
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error title=CI Gate::One or more required jobs failed."
+            exit 1
+          fi
+          echo "All required jobs passed."
