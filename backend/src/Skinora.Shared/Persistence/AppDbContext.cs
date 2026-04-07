@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence.Converters;
+using Skinora.Shared.Persistence.Outbox;
 
 namespace Skinora.Shared.Persistence;
 
@@ -10,6 +11,14 @@ public class AppDbContext : DbContext
         : base(options)
     {
     }
+
+    // T10 — outbox infrastructure tables (06 §3.18–§3.21). The pattern lives
+    // in F0 because the dispatcher and consumer-idempotency abstractions need
+    // working tables; T25 (F1) refines any additional altyapı entities.
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<ExternalIdempotencyRecord> ExternalIdempotencyRecords
+        => Set<ExternalIdempotencyRecord>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -22,9 +31,11 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Apply all IEntityTypeConfiguration from assemblies that reference this context
-        // Module configurations will be registered via modelBuilder.ApplyConfigurationsFromAssembly()
-        // in Program.cs or module registration extensions.
+        // Apply IEntityTypeConfiguration<T> classes that live alongside the
+        // shared persistence layer (currently the T10 outbox configurations).
+        // Module-owned configurations are still registered separately by each
+        // module's DbContext extension.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

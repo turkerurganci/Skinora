@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Skinora.API.BackgroundJobs;
 using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Logging;
 using Skinora.API.Middleware;
+using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.Shared.Persistence;
 
@@ -57,6 +59,17 @@ builder.Services.AddAuthModule(builder.Configuration);
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
 
+// Hangfire (T09) — SQL Server storage, UTC, AutomaticRetry(3) global filter,
+// IBackgroundJobScheduler abstraction. Dashboard mount happens later in the
+// pipeline (after authentication) via app.UseHangfireModule().
+builder.Services.AddHangfireModule(builder.Configuration);
+
+// Outbox (T10) — IOutboxService producer, dispatcher (self-rescheduling
+// Hangfire job + Medallion distributed lock), consumer idempotency store,
+// receiver-side external idempotency service, MediatR fan-out and the
+// startup hook that primes the dispatcher chain.
+builder.Services.AddOutboxModule(builder.Configuration);
+
 // Controllers + ApiResponseWrapperFilter
 builder.Services.AddControllers(options =>
 {
@@ -101,7 +114,11 @@ app.UseAuthorization();
 // 11. Anti-forgery
 app.UseAntiforgery();
 
-// 12. Endpoints
+// 12. Hangfire dashboard (admin-gated, mounted after auth/authorization so the
+//     dashboard authorization filter sees the authenticated principal — T09).
+app.UseHangfireModule();
+
+// 13. Endpoints
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "skinora-backend" }));
 

@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Skinora.API.RateLimiting;
+using Skinora.API.Tests.Common;
 using Skinora.Shared.Persistence;
 using StackExchange.Redis;
 
@@ -26,7 +26,7 @@ public class RateLimitTests
 
     private static HttpClient CreateClient(Action<IServiceCollection>? extraConfig = null)
     {
-        var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        var factory = new HangfireBypassFactory().WithWebHostBuilder(builder =>
         {
             // Tests never connect to a real Redis — supply a placeholder so
             // AddRateLimiting's null-check passes during host build.
@@ -229,7 +229,7 @@ public class RateLimitTests
     [Fact]
     public async Task RateLimitDisabled_BypassesMiddleware()
     {
-        var client = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        var client = new HangfireBypassFactory().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Redis:ConnectionString", "localhost:6379,abortConnect=false");
             builder.UseSetting("RateLimit:Enabled", "false");

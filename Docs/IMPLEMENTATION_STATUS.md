@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-07
+**Son güncelleme:** 2026-04-07 (T11 ⏳ devam ediyor — CI/CD pipeline workflows yazıldı, doğrulama bekliyor)
 
 ---
 
@@ -32,9 +32,9 @@
 | T06 | Authentication altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T07 | Rate limiting konfigürasyonu | ✓ Tamamlandı | ✓ PASS | `329cee2` |
 | T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | `402c0a1` |
-| T09 | Hangfire setup ve background job altyapısı | ⬚ Bekliyor | — | — |
-| T10 | Outbox pattern altyapısı | ⬚ Bekliyor | — | — |
-| T11 | CI/CD pipeline | ⬚ Bekliyor | — | — |
+| T09 | Hangfire setup ve background job altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `34794a0` |
+| T11 | CI/CD pipeline | ⏳ Devam ediyor | — | — |
 | T12 | Test altyapısı | ⬚ Bekliyor | — | — |
 | T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
 | T14 | Steam Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
