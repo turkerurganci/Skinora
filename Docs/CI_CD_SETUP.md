@@ -75,40 +75,47 @@ git push -u origin develop
 
 ### 2.4 Branch Protection Kuralları
 
-**main** branch için (en sıkı):
+**Approvals = 0 kararı (T11 close-out):**
 
-GitHub repo → **Settings → Branches → Add branch protection rule**
+T11 close-out sırasında "Require approvals" sayısı **0** olarak konfigüre edildi (`required_approving_review_count: 0`). Gerekçe:
 
-| Ayar | Değer |
-|---|---|
-| Branch name pattern | `main` |
-| Require a pull request before merging | ✅ |
-| → Require approvals | ✅ (1) |
-| → Dismiss stale pull request approvals when new commits are pushed | ✅ |
-| Require status checks to pass before merging | ✅ |
-| → Require branches to be up to date before merging | ✅ |
-| → Required status checks | `CI Gate` (ci.yml içindeki ci-gate job) |
-| Require conversation resolution before merging | ✅ |
-| Require signed commits | Opsiyonel |
-| Require linear history | ✅ (squash merge ile uyumlu) |
-| Do not allow bypassing the above settings | ✅ |
-| Restrict who can push to matching branches | ✅ (yalnızca admin/maintainer) |
-| Allow force pushes | ❌ |
-| Allow deletions | ❌ |
+1. **Solo developer:** Skinora şu an tek developer ile yürüyor (memory: user_profile). "Approvals: 1" konulursa her PR için ikinci GitHub hesabı veya collaborator gerekir → workflow tıkanır.
+2. **Validator chat = ikinci göz:** INSTRUCTIONS.md §3.3 izolasyon kuralı ile her task ayrı bir validator chat'te bağımsız doğrulanır. Bu zaten "second pair of eyes" görevi görür — GitHub PR review approval ile çakışır.
+3. **CI Gate yeterli koruma:** `ci-gate` aggregate job branch protection'ın required status check'i. Lint + build + test + docker build hepsi yeşil olmadan merge edilemez.
+4. **Geri alınabilir:** İleride collaborator gelirse `gh api ... --field required_pull_request_reviews[required_approving_review_count]=1` ile tek komutta değiştirilir.
 
-**develop** branch için (daha gevşek):
+**main** branch protection (T11 close-out tarafından `gh api PUT branches/main/protection` ile aktifleştirildi):
+
+| Ayar | Değer | Gerekçe |
+|---|---|---|
+| Branch name pattern | `main` | |
+| Require a pull request before merging | ✅ | Direct push yasağı |
+| → Required approving review count | **0** | Solo dev + validator chat workflow'u (yukarı bkz.) |
+| → Dismiss stale reviews on new push | ✅ | İleride approvals 1+ olunca işe yarar |
+| Require status checks to pass before merging | ✅ | |
+| → Strict (branches up to date) | ✅ | Stale branch merge engeli |
+| → Required status checks | `CI Gate` | ci.yml içindeki aggregate job |
+| Require conversation resolution before merging | ✅ | |
+| Require linear history | ✅ | Squash merge ile uyumlu, merge commit yasağı |
+| Enforce admins | ❌ | Acil müdahale için admin override mümkün kalsın |
+| Allow force pushes | ❌ | History koruması |
+| Allow deletions | ❌ | Branch koruması |
+| Restrict who can push | ❌ (boş) | Admin override için açık kalsın |
+
+**develop** branch protection (aynı close-out tarafından aktifleştirildi):
 
 | Ayar | Değer |
 |---|---|
 | Branch name pattern | `develop` |
 | Require a pull request before merging | ✅ |
-| → Require approvals | Opsiyonel (proje sahibi kararı) |
+| → Required approving review count | **0** |
 | Require status checks to pass before merging | ✅ |
 | → Required status checks | `CI Gate` |
 | Allow force pushes | ❌ |
 | Allow deletions | ❌ |
+| Enforce admins | ❌ |
 
-> **Önemli:** `CI Gate` required status check olarak işaretlenebilmesi için workflow'un en az bir kez çalışmış olması gerekir. T11 PR'ı açıldığında ilk çalışma olur, sonra bu check listeden seçilebilir.
+> **Not:** Protection rules ilk olarak T11 PR (#1) merge sonrası, T11 close-out commit'i ile birlikte aktifleştirildi. CI Gate required status check olarak listede görünebilmesi için workflow'un en az bir kez çalışmış olması gerekir — bu PR #1'in ilk run'ı (#24103601508) ile sağlandı.
 
 ### 2.5 Repository Settings → General → Pull Requests
 

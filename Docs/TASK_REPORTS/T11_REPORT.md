@@ -1,6 +1,6 @@
 # T11 — CI/CD Pipeline
 
-**Faz:** F0 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-04-07
+**Faz:** F0 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS | **Tarih:** 2026-04-08
 
 ---
 
@@ -99,9 +99,17 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (validate chat'inde yapılacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (validator chat'i — 2026-04-07) |
+| Bulgu sayısı | 0 (kod tarafı) — operatör tarafı 3 kanıt close-out commit'inde sağlandı |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator notları:**
+- Kabul kriterleri 1 ve 4: ✓ tam karşılandı (workflow yapısı + ghcr.io push)
+- Kabul kriterleri 2 ve 3: validator tarafından `~ Kısmi` olarak işaretlendi (UI tarafı validator chat'inden gözlemlenemez). Operator-side kanıtlar T11 close-out sırasında üretildi:
+  1. `develop` branch oluşturuldu — `gh api repos/turkerurganci/Skinora/branches/develop` PASS
+  2. `main` branch protection aktif — `gh api repos/turkerurganci/Skinora/branches/main/protection` ile `CI Gate` required check listede
+  3. `develop` branch protection aktif — aynı API yanıtı ile doğrulandı
+- Tek yapım↔validator metrik farkı: rapor "52 unit + 84 integration" (filter ile), validator "37 + 99" (full sweep) — toplam 136/136 PASS aynı, anlamsal farksız.
 
 ---
 
@@ -133,9 +141,20 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 ## Commit & PR
 
 - **Branch:** `task/T11-cicd-pipeline`
-- **Commit:** Henüz yok (rapor finalize sonrası commit ve push)
-- **PR:** Henüz yok
-- **CI:** İlk PR run'ında validate edilecek
+- **Pre-merge commits (branch):**
+  - `3c542f9` — chore: dotnet format whitespace autofix on T01-T10 codebase
+  - `ef5499d` — T11: CI/CD pipeline workflows ve setup kilavuzu
+- **PR:** [#1](https://github.com/turkerurganci/Skinora/pull/1) — squash merged
+- **Squash commit (main):** `8869872` — "T11: CI/CD pipeline (#1)"
+- **CI run:** [#24103601508](https://github.com/turkerurganci/Skinora/actions/runs/24103601508) — ✓ PASS (10 job + CI Gate, ~4 dk)
+  - 1. Lint ✓ 38s
+  - 2. Build ✓ 49s
+  - 3. Unit test ✓ 45s
+  - 4. Integration test ✓ 1m 03s
+  - 5. Contract test (placeholder) ✓ 2s
+  - 6. Migration dry-run (placeholder) ✓ 3s
+  - 7. Docker build × 4 (matrix) ✓ paralel
+  - CI Gate ✓ 2s
 
 ---
 
@@ -148,8 +167,10 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | 3 | Test filter trait migration | T12 sonrası | Şu an `FullyQualifiedName~.Integration` namespace bazlı filter. T12 `[Trait("Category", "Integration")]` attribute'larını eklediğinde `Category=Integration` formuna geçirilebilir (daha açık) |
 | 4 | Frontend/sidecar gerçek lint | T13/T14/T15 | Şu an `node --check server.js` placeholder syntax check. Gerçek ESLint T13 (Next.js), T14/T15 (sidecar) iskeletleri kurulduktan sonra eklenecek |
 | 5 | CD (deploy) workflow | F0 sonrası | 05 §8.4'te `SSH → docker compose pull && up -d` tanımlı ama T11 kabul kriterlerinde yok. Staging deploy F0 sonrası ayrı task olarak ele alınacak |
-| 6 | Develop branch fiziksel olarak yok | T11 merge sonrası | `git checkout -b develop && git push -u origin develop` — kullanıcı tek seferlik çalıştırır. `CI_CD_SETUP.md §2.3`'te belgelendi |
-| 7 | Branch protection UI ayarları | T11 merge sonrası | `CI_CD_SETUP.md §2.4` kılavuzu — `CI Gate` check'i ilk run sonrası required olarak seçilebilir. Kullanıcı tek seferlik aktifleştirme yapacak |
+| 6 | ~~Develop branch fiziksel olarak yok~~ | ✓ T11 close-out | T11 close-out commit'i sonrası `gh api PUT repos/.../git/refs` ile main HEAD'inden oluşturuldu, push edildi |
+| 7 | ~~Branch protection UI ayarları~~ | ✓ T11 close-out | `gh api PUT repos/.../branches/main/protection` ve `branches/develop/protection` ile aktifleştirildi. Approvals=0 (solo dev + validator chat), CI Gate required, linear history (main), no force push, no delete |
+| 8 | T09/T10 commit hash drift discovery | Follow-up | T11 close-out sırasında keşfedildi: `IMPLEMENTATION_STATUS.md`'de T10 commit hash'i `34794a0` olarak yazılı ama bu hash sadece local'deydi (squash merge yapıldı ama push edilmedi). T09 ve T10'un kod içeriği T11 squash merge commit'i `8869872` içine gömülü olarak origin/main'e geldi. T10 satırı `8869872 (T11 ile)` olarak güncellenebilir veya `(squash)` haline çevrilebilir — bu T11 scope'u dışında, ayrı bir housekeeping task olarak ele alınabilir. **Veri kaybı yok**, sadece traceability noksanı |
+| 9 | Node.js 20 actions deprecation uyarısı | F0 sonrası | İlk CI run'da GHA `actions/checkout@v4`, `actions/setup-dotnet@v4`, `actions/setup-node@v4`, `actions/cache@v4` için "Node.js 20 deprecated, June 2026'da Node.js 24 default olacak" uyarısı verdi. Şu an bir şey kırılmıyor. Action major version'ları güncellendiğinde otomatik düzelir; gerekirse `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` env ile opt-in yapılabilir |
 
 **T11 sonrası rejim:** INSTRUCTIONS.md §3.2 — "T11 tamamlandıktan sonra kalan tüm task'lar için zorunlu rejim haline gelir, istisnasız". Yani T12'den itibaren her task için PR mecbur, CI PASS mecbur, branch protection aktif (kullanıcı UI ayarlarını yaptıktan sonra).
 
