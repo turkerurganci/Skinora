@@ -75,34 +75,48 @@ git push -u origin develop
 
 ### 2.4 Branch Protection Kuralları
 
-**Approvals = 0 kararı (T11 close-out):**
+> ## ⛔ ÖNEMLİ: Branch protection T11 close-out sırasında AKTIFLEŞTIRILEMEDİ
+>
+> **Sebep:** Klasik branch protection ve yeni Repository Rulesets, **özel repo'larda GitHub Pro paid feature**. Skinora repo'su şu an Free plan + private kombinasyonunda — `gh api PUT branches/main/protection` ve `gh api POST rulesets` her ikisi de HTTP 403 "Upgrade to GitHub Pro or make this repository public" yanıtı veriyor.
+>
+> **Sonuç:** T11 kabul kriteri 2 ⛔ EXTERNAL_BLOCKER (bkz. `Docs/TASK_REPORTS/T11_REPORT.md`). Sistem-enforced branch protection yok; T12+ task'larda main'e doğrudan push'u engelleyen tek mekanizma **manuel disiplin** + opsiyonel lokal git pre-push hook.
+>
+> **Çözüm bekleyen kararlar (proje sahibi):**
+>
+> 1. **GitHub Pro upgrade** (~$4/ay) — branch protection + rulesets aktif olur, aşağıdaki tablolar `gh api` ile uygulanır
+> 2. **Organization'a transfer** — Free organization plan'da private repo rulesets desteği var (test edilmeli)
+> 3. **Discipline-only** — manuel `gh pr merge` zorunluluğu, pre-push hook ile direct push uyarısı
+> 4. **Public repo** — branch protection free olur ama iş kuralları açığa çıkar (önerilmez)
 
-T11 close-out sırasında "Require approvals" sayısı **0** olarak konfigüre edildi (`required_approving_review_count: 0`). Gerekçe:
+---
 
-1. **Solo developer:** Skinora şu an tek developer ile yürüyor (memory: user_profile). "Approvals: 1" konulursa her PR için ikinci GitHub hesabı veya collaborator gerekir → workflow tıkanır.
-2. **Validator chat = ikinci göz:** INSTRUCTIONS.md §3.3 izolasyon kuralı ile her task ayrı bir validator chat'te bağımsız doğrulanır. Bu zaten "second pair of eyes" görevi görür — GitHub PR review approval ile çakışır.
+**Aşağıdaki tablolar HEDEF konfigürasyondur — yukarıdaki kararlardan biri uygulandığında `gh api` veya UI ile aktifleştirilebilir.**
+
+**Approvals = 0 kararı:** "Require approvals" sayısı **0** olarak hedeflendi. Gerekçe:
+
+1. **Solo developer:** Skinora şu an tek developer ile yürüyor. "Approvals: 1" konulursa her PR için ikinci GitHub hesabı veya collaborator gerekir → workflow tıkanır.
+2. **Validator chat = ikinci göz:** INSTRUCTIONS.md §3.3 izolasyon kuralı ile her task ayrı bir validator chat'te bağımsız doğrulanır. Bu zaten "second pair of eyes" görevi görür.
 3. **CI Gate yeterli koruma:** `ci-gate` aggregate job branch protection'ın required status check'i. Lint + build + test + docker build hepsi yeşil olmadan merge edilemez.
-4. **Geri alınabilir:** İleride collaborator gelirse `gh api ... --field required_pull_request_reviews[required_approving_review_count]=1` ile tek komutta değiştirilir.
+4. **Geri alınabilir:** İleride collaborator gelirse tek komutla 1'e çıkarılır.
 
-**main** branch protection (T11 close-out tarafından `gh api PUT branches/main/protection` ile aktifleştirildi):
+**main** branch protection (HEDEF — paid feature aktiflendiğinde):
 
 | Ayar | Değer | Gerekçe |
 |---|---|---|
 | Branch name pattern | `main` | |
 | Require a pull request before merging | ✅ | Direct push yasağı |
-| → Required approving review count | **0** | Solo dev + validator chat workflow'u (yukarı bkz.) |
+| → Required approving review count | **0** | Solo dev + validator chat workflow'u |
 | → Dismiss stale reviews on new push | ✅ | İleride approvals 1+ olunca işe yarar |
 | Require status checks to pass before merging | ✅ | |
 | → Strict (branches up to date) | ✅ | Stale branch merge engeli |
 | → Required status checks | `CI Gate` | ci.yml içindeki aggregate job |
 | Require conversation resolution before merging | ✅ | |
-| Require linear history | ✅ | Squash merge ile uyumlu, merge commit yasağı |
+| Require linear history | ✅ | Squash merge ile uyumlu |
 | Enforce admins | ❌ | Acil müdahale için admin override mümkün kalsın |
 | Allow force pushes | ❌ | History koruması |
 | Allow deletions | ❌ | Branch koruması |
-| Restrict who can push | ❌ (boş) | Admin override için açık kalsın |
 
-**develop** branch protection (aynı close-out tarafından aktifleştirildi):
+**develop** branch protection (HEDEF):
 
 | Ayar | Değer |
 |---|---|
@@ -115,7 +129,7 @@ T11 close-out sırasında "Require approvals" sayısı **0** olarak konfigüre e
 | Allow deletions | ❌ |
 | Enforce admins | ❌ |
 
-> **Not:** Protection rules ilk olarak T11 PR (#1) merge sonrası, T11 close-out commit'i ile birlikte aktifleştirildi. CI Gate required status check olarak listede görünebilmesi için workflow'un en az bir kez çalışmış olması gerekir — bu PR #1'in ilk run'ı (#24103601508) ile sağlandı.
+> **Aktivasyon notu:** CI Gate required status check olarak listede görünebilmesi için workflow'un en az bir kez çalışmış olması gerekir — bu PR #1'in ilk run'ı (#24103601508) ile zaten sağlandı. Paid feature aktif olur olmaz `gh api PUT branches/main/protection --input .github/protection-main.json` çalıştırılabilir (json hazır taslak için bu repo geçmişine bakılabilir).
 
 ### 2.5 Repository Settings → General → Pull Requests
 

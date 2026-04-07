@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-08 (T11 ✓ PASS — CI/CD pipeline main'e squash merge edildi, branch protection ve develop branch aktifleştirildi)
+**Son güncelleme:** 2026-04-08 (T11 ⛔ BLOCKED — kod tarafı PASS ve main'e merge edildi, branch protection EXTERNAL_BLOCKER: GitHub Pro gerekiyor)
 
 ---
 
@@ -34,7 +34,7 @@
 | T08 | Logging altyapısı | ✓ Tamamlandı | ✓ PASS | `402c0a1` |
 | T09 | Hangfire setup ve background job altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `34794a0` |
-| T11 | CI/CD pipeline | ✓ Tamamlandı | ✓ PASS | `8869872` |
+| T11 | CI/CD pipeline | ⛔ BLOCKED (EXTERNAL_BLOCKER) | ~ Kısmi | `8869872` |
 | T12 | Test altyapısı | ⬚ Bekliyor | — | — |
 | T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
 | T14 | Steam Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |

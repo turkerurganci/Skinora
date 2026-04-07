@@ -1,6 +1,29 @@
 # T11 — CI/CD Pipeline
 
-**Faz:** F0 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS | **Tarih:** 2026-04-08
+**Faz:** F0 | **Durum:** ⛔ BLOCKED (EXTERNAL_BLOCKER) | **Doğrulama:** ~ Kısmi (kod ✓, branch protection ⛔) | **Tarih:** 2026-04-08
+
+---
+
+## ⛔ BLOCKED Bilgisi
+
+- **Alt tür:** EXTERNAL_BLOCKER
+- **Neden:** Kabul kriteri 2 (`Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı`) sistem düzeyinde enforce edilemiyor. **Hem klasik branch protection hem de yeni Repository Rulesets özel repo'larda GitHub Pro paid feature** — current plan (Free) + private repo kombinasyonunda enforce yolu yok.
+- **Hata yanıtı:** `gh api PUT branches/main/protection` → HTTP 403 `"Upgrade to GitHub Pro or make this repository public to enable this feature"`. Aynı yanıt `gh api POST rulesets` için de geliyor.
+- **Etkilenen kabul kriteri:** Sadece kriter 2. Kriter 1 (workflow yapısı), kriter 3 (branch stratejisi + develop branch), kriter 4 (docker publish) tam karşılandı.
+- **Etkilenen task'lar:** T12+ tüm task'lar — INSTRUCTIONS.md §3.2 "T11 sonrası rejim" sistem-enforced değil, **disiplin-enforced** olacak.
+- **Etkilenen dokümanlar:** `Docs/CI_CD_SETUP.md` (gerçek durumu yansıtacak şekilde güncellendi), `Docs/INSTRUCTIONS.md §3.2` (rejim açıklaması güncellenebilir).
+
+## Çözüm Önerileri
+
+1. **GitHub Pro'ya yükselt** (~$4/ay) — branch protection + rulesets aktif olur, T11 tam kapanır
+2. **Repo'yu organization'a taşı** — Free organization plan'da private repo rulesets desteği var (doğrulanmalı)
+3. **Discipline-only protection** — sistem enforcement yok, manuel disiplin (every PR validator chat → `gh pr merge`). Lokal git pre-push hook ile main'e direkt push'u local'de bloklayabilirim
+4. **Repo'yu public yap** — branch protection free olur, ama iş kuralları açığa çıkar (önerilmez)
+
+## Proje Sahibi Kararı
+
+- **Karar:** Henüz alınmadı (2026-04-08 close-out sırasında keşfedildi, kullanıcı bilgilendirildi)
+- **Tarih:** —
 
 ---
 
@@ -64,11 +87,11 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | GitHub Actions workflow: Lint → Build → Unit test → Integration test → Contract test → Migration dry-run | ✓ | `.github/workflows/ci.yml` 7 job (5 gerçek + 2 placeholder), 09 §21.4 sırası `needs:` zinciri ile garanti. Job adları "1. Lint", "2. Build", "3. Unit test", "4. Integration test", "5. Contract test", "6. Migration dry-run" — sıra workflow UI'da görünür |
-| 2 | Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı | ~ | Workflow tarafı tamamlandı (`ci-gate` required check için tek hedef). Branch protection kuralları **GitHub UI'dan elle aktifleştirilmeli** — `Docs/CI_CD_SETUP.md §2.4`'te adım adım kılavuz hazır. Kullanıcı T11 merge sonrası bu adımı yapacak. **Bu kriter "kod tarafı + kılavuz" olarak karşılandı; UI aktivasyonu kullanıcı sorumluluğunda** |
+| 2 | Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı | ⛔ EXTERNAL_BLOCKER | Workflow tarafı hazır (`ci-gate` aggregate job required check için hedef). T11 close-out sırasında `gh api PUT branches/main/protection` çağırıldığında **HTTP 403 "Upgrade to GitHub Pro"** yanıtı geldi — özel repo'larda branch protection ve rulesets paid feature. Sistem enforcement mümkün değil, sadece manuel disiplin uygulanabilir. Bkz. `## ⛔ BLOCKED Bilgisi` bölümü |
 | 3 | Branch stratejisi: main, develop, feature branches | ~ | Workflow `branches: [main, develop]` ile her ikisini izler. `develop` branch'i fiziksel olarak henüz yok — `Docs/CI_CD_SETUP.md §2.3`'te kullanıcının tek satır git komutu ile oluşturacağı belgelendi. 09 §21.1 strateji tablosu kod değişikliği gerektirmez; T11 sonrası akış aktiftir |
 | 4 | Docker image build ve push (ghcr.io) | ✓ | `.github/workflows/docker-publish.yml` 4 servis için matrix strategy ile build & push, `secrets.GITHUB_TOKEN` ile authenticate, 3 tag stratejisi (latest + short-sha + main-runnumber). PR'da çalışmaz, sadece main push'unda |
 
-**Özet:** 4 kriterden 2'si tam ✓, 2'si "kod tarafı + manuel UI adımı" şeklinde kısmi (~). Bu kısımlar `Docs/CI_CD_SETUP.md` ile belgelenmiş ve kullanıcı için tek sefer kurulum adımıdır.
+**Özet:** 4 kriterden 3'ü tam ✓ (1, 3, 4), 1'i ⛔ EXTERNAL_BLOCKER (2 — branch protection paid feature). Kod tarafı tüm değişiklikler main'e merge edildi, develop branch oluşturuldu, CI yeşil. Sadece sistem-enforced branch protection eksik.
 
 ---
 
@@ -77,7 +100,7 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | # | Kontrol | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | 09 §21.4'teki 6 adımlı sıralama doğru mu? | ✓ | `ci.yml` job adları ve `needs:` graph'ı: lint → build → (unit-test, integration-test, docker-build-check) → integration-test → (contract-test, migration-dry-run). 6 adım sırası workflow yaml'da görünür ve job adlarında numaralı |
-| 2 | Branch protection kuralları aktif mi? | ~ | Workflow tarafı hazır (`ci-gate` job adı). UI tarafı `CI_CD_SETUP.md §2.4` kılavuzu ile kullanıcı tarafından aktifleştirilir — T11 ilk PR run ettikten sonra `CI Gate` check'i required olarak seçilebilir |
+| 2 | Branch protection kuralları aktif mi? | ⛔ EXTERNAL_BLOCKER | T11 close-out sırasında aktifleştirme denendi → HTTP 403 "Upgrade to GitHub Pro". Hem `gh api PUT branches/main/protection` hem `gh api POST rulesets` aynı yanıtı verdi. Free plan + private repo'da enforce yolu yok |
 
 ---
 
@@ -99,17 +122,19 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✓ PASS (validator chat'i — 2026-04-07) |
-| Bulgu sayısı | 0 (kod tarafı) — operatör tarafı 3 kanıt close-out commit'inde sağlandı |
-| Düzeltme gerekli mi | Hayır |
+| Doğrulama durumu | ~ Kısmi: kod tarafı ✓ PASS (validator chat'i, 2026-04-07), branch protection ⛔ EXTERNAL_BLOCKER |
+| Bulgu sayısı | 0 (validator) + 1 (close-out keşfi: GitHub Pro gerekiyor) |
+| Düzeltme gerekli mi | Evet — proje sahibi karar bekliyor (Pro upgrade / org transfer / discipline-only) |
 
-**Validator notları:**
+**Validator notları (2026-04-07):**
 - Kabul kriterleri 1 ve 4: ✓ tam karşılandı (workflow yapısı + ghcr.io push)
-- Kabul kriterleri 2 ve 3: validator tarafından `~ Kısmi` olarak işaretlendi (UI tarafı validator chat'inden gözlemlenemez). Operator-side kanıtlar T11 close-out sırasında üretildi:
-  1. `develop` branch oluşturuldu — `gh api repos/turkerurganci/Skinora/branches/develop` PASS
-  2. `main` branch protection aktif — `gh api repos/turkerurganci/Skinora/branches/main/protection` ile `CI Gate` required check listede
-  3. `develop` branch protection aktif — aynı API yanıtı ile doğrulandı
-- Tek yapım↔validator metrik farkı: rapor "52 unit + 84 integration" (filter ile), validator "37 + 99" (full sweep) — toplam 136/136 PASS aynı, anlamsal farksız.
+- Kabul kriterleri 2 ve 3: validator tarafından `~ Kısmi` olarak işaretlendi ("UI tarafı validator chat'inden gözlemlenemez")
+- Validator önceden uyardı: "PASS için owner kanıtı gerekli (gh api repos/.../branches/main/protection)"
+- Tek metrik farkı: rapor "52 unit + 84 integration" (filter ile), validator "37 + 99" (full sweep) — toplam 136/136 PASS aynı, anlamsal farksız
+
+**Close-out (2026-04-08) keşifleri:**
+- ✓ Kabul kriteri 3 (develop branch): `gh api POST git/refs` ile `develop` branch `0327315`'ten oluşturuldu, push edildi
+- ⛔ Kabul kriteri 2 (branch protection): aktifleştirme denendi → HTTP 403, GitHub Pro gerekiyor. Validator'ın "owner kanıtı bekler" notu artık "owner kararı bekler" haline geldi (paid feature kararı)
 
 ---
 
@@ -167,8 +192,8 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | 3 | Test filter trait migration | T12 sonrası | Şu an `FullyQualifiedName~.Integration` namespace bazlı filter. T12 `[Trait("Category", "Integration")]` attribute'larını eklediğinde `Category=Integration` formuna geçirilebilir (daha açık) |
 | 4 | Frontend/sidecar gerçek lint | T13/T14/T15 | Şu an `node --check server.js` placeholder syntax check. Gerçek ESLint T13 (Next.js), T14/T15 (sidecar) iskeletleri kurulduktan sonra eklenecek |
 | 5 | CD (deploy) workflow | F0 sonrası | 05 §8.4'te `SSH → docker compose pull && up -d` tanımlı ama T11 kabul kriterlerinde yok. Staging deploy F0 sonrası ayrı task olarak ele alınacak |
-| 6 | ~~Develop branch fiziksel olarak yok~~ | ✓ T11 close-out | T11 close-out commit'i sonrası `gh api PUT repos/.../git/refs` ile main HEAD'inden oluşturuldu, push edildi |
-| 7 | ~~Branch protection UI ayarları~~ | ✓ T11 close-out | `gh api PUT repos/.../branches/main/protection` ve `branches/develop/protection` ile aktifleştirildi. Approvals=0 (solo dev + validator chat), CI Gate required, linear history (main), no force push, no delete |
+| 6 | ~~Develop branch fiziksel olarak yok~~ | ✓ T11 close-out | `gh api POST git/refs` ile `develop` branch main HEAD'inden (`0327315`) oluşturuldu, push edildi |
+| 7 | **Branch protection UI ayarları** | ⛔ EXTERNAL_BLOCKER | `gh api PUT branches/main/protection` ve `gh api POST rulesets` çağrıldığında HTTP 403 "Upgrade to GitHub Pro". Free plan + private repo'da branch protection ve rulesets çalışmıyor. Çözüm proje sahibi kararı bekliyor — bkz. `## ⛔ BLOCKED Bilgisi` |
 | 8 | T09/T10 commit hash drift discovery | Follow-up | T11 close-out sırasında keşfedildi: `IMPLEMENTATION_STATUS.md`'de T10 commit hash'i `34794a0` olarak yazılı ama bu hash sadece local'deydi (squash merge yapıldı ama push edilmedi). T09 ve T10'un kod içeriği T11 squash merge commit'i `8869872` içine gömülü olarak origin/main'e geldi. T10 satırı `8869872 (T11 ile)` olarak güncellenebilir veya `(squash)` haline çevrilebilir — bu T11 scope'u dışında, ayrı bir housekeeping task olarak ele alınabilir. **Veri kaybı yok**, sadece traceability noksanı |
 | 9 | Node.js 20 actions deprecation uyarısı | F0 sonrası | İlk CI run'da GHA `actions/checkout@v4`, `actions/setup-dotnet@v4`, `actions/setup-node@v4`, `actions/cache@v4` için "Node.js 20 deprecated, June 2026'da Node.js 24 default olacak" uyarısı verdi. Şu an bir şey kırılmıyor. Action major version'ları güncellendiğinde otomatik düzelir; gerekirse `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` env ile opt-in yapılabilir |
 
