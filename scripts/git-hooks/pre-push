@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Skinora pre-push hook — discipline-only branch protection
+#
+# T11 close-out karari (2026-04-08): GitHub Free + private repo
+# kombinasyonunda branch protection / rulesets paid feature oldugu icin
+# sistem-enforced koruma yok. Bu hook lokal disiplin katmanidir.
+#
+# Davranis:
+# - main veya develop branch'ine direct push -> BLOCK + cikis 1
+# - SKINORA_ALLOW_DIRECT_PUSH=1 set ise -> WARN + izin verir
+# - Diger branch'ler -> izin verir (feature branch'ler serbest)
+#
+# Kurulum: scripts/git-hooks/install.sh
+#
+# Bypass (acil durum / close-out commit'leri icin):
+#   SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main
+
+set -e
+
+protected_branches="main develop"
+remote="$1"
+remote_url="$2"
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+  for branch in $protected_branches; do
+    if [ "$remote_ref" = "refs/heads/$branch" ]; then
+      if [ "${SKINORA_ALLOW_DIRECT_PUSH:-0}" != "1" ]; then
+        cat <<EOF >&2
+
+==============================================================================
+ERROR: Direct push to '$branch' is blocked by Skinora pre-push hook.
+==============================================================================
+
+Skinora T11 close-out karari (discipline-only branch protection):
+GitHub Free + private repo'da sistem-enforced branch protection paid
+feature. Bu hook lokal disiplin katmanidir.
+
+Korunan branch'ler: $protected_branches
+
+Tum '$branch' degisiklikleri PR + CI uzerinden gitmelidir:
+  1. Feature branch ac:        git checkout -b task/TXX-aciklama
+  2. Degisiklikleri commit:    git commit -m "..."
+  3. Branch'i push et:         git push -u origin task/TXX-aciklama
+  4. PR ac:                    gh pr create --base $branch
+  5. CI yesil olsun + validate chat PASS
+  6. Squash merge:             gh pr merge <PR-no> --squash
+
+Acil durum bypass (kullanmadan iki kez dusun):
+  SKINORA_ALLOW_DIRECT_PUSH=1 git push origin $branch
+
+==============================================================================
+
+EOF
+        exit 1
+      else
+        echo "WARN: SKINORA_ALLOW_DIRECT_PUSH=1 set — '$branch' direct push allowed." >&2
+        echo "      Bu commit'in CI'dan gecmedigini unutma." >&2
+      fi
+    fi
+  done
+done
+
+exit 0

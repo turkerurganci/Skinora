@@ -1,29 +1,38 @@
 # T11 — CI/CD Pipeline
 
-**Faz:** F0 | **Durum:** ⛔ BLOCKED (EXTERNAL_BLOCKER) | **Doğrulama:** ~ Kısmi (kod ✓, branch protection ⛔) | **Tarih:** 2026-04-08
+**Faz:** F0 | **Durum:** ✓ Tamamlandı (kısmi kabul) | **Doğrulama:** ✓ PASS (kod) + ~ Discipline-only (branch protection) | **Tarih:** 2026-04-08
 
 ---
 
-## ⛔ BLOCKED Bilgisi
+## Branch Protection — Discipline-Only Kabul Edildi
 
-- **Alt tür:** EXTERNAL_BLOCKER
-- **Neden:** Kabul kriteri 2 (`Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı`) sistem düzeyinde enforce edilemiyor. **Hem klasik branch protection hem de yeni Repository Rulesets özel repo'larda GitHub Pro paid feature** — current plan (Free) + private repo kombinasyonunda enforce yolu yok.
-- **Hata yanıtı:** `gh api PUT branches/main/protection` → HTTP 403 `"Upgrade to GitHub Pro or make this repository public to enable this feature"`. Aynı yanıt `gh api POST rulesets` için de geliyor.
-- **Etkilenen kabul kriteri:** Sadece kriter 2. Kriter 1 (workflow yapısı), kriter 3 (branch stratejisi + develop branch), kriter 4 (docker publish) tam karşılandı.
-- **Etkilenen task'lar:** T12+ tüm task'lar — INSTRUCTIONS.md §3.2 "T11 sonrası rejim" sistem-enforced değil, **disiplin-enforced** olacak.
-- **Etkilenen dokümanlar:** `Docs/CI_CD_SETUP.md` (gerçek durumu yansıtacak şekilde güncellendi), `Docs/INSTRUCTIONS.md §3.2` (rejim açıklaması güncellenebilir).
+**Geçmiş:** Close-out sırasında `gh api PUT branches/main/protection` ve `gh api POST rulesets` her ikisi de HTTP 403 "Upgrade to GitHub Pro" yanıtı verdi. Doğrulama: GitHub pricing (Team/Enterprise plan gereği), branch protection ve rulesets özel repo'larda paid feature. Free org plan da yeterli değil — sadece individual Pro (~$4/ay) veya org Team (~$4/kullanıcı/ay) çalışıyor.
 
-## Çözüm Önerileri
+**Proje Sahibi Kararı (2026-04-08):** **Seçenek C — Discipline-only protection.**
+- Maliyet: $0
+- Sistem enforcement: yok
+- Lokal koruma: `scripts/git-hooks/pre-push` hook + `scripts/git-hooks/install.sh` install script eklendi
+- INSTRUCTIONS.md §3.2 "T11 sonrası rejim" discipline-only formuyla güncellendi
+- `CI_CD_SETUP.md` güncellendi: hedef tablolar paid feature aktif olunca `gh api` ile uygulanmak üzere parklandı
 
-1. **GitHub Pro'ya yükselt** (~$4/ay) — branch protection + rulesets aktif olur, T11 tam kapanır
-2. **Repo'yu organization'a taşı** — Free organization plan'da private repo rulesets desteği var (doğrulanmalı)
-3. **Discipline-only protection** — sistem enforcement yok, manuel disiplin (every PR validator chat → `gh pr merge`). Lokal git pre-push hook ile main'e direkt push'u local'de bloklayabilirim
-4. **Repo'yu public yap** — branch protection free olur, ama iş kuralları açığa çıkar (önerilmez)
+**Kabul kriteri 2 statüsü:** ⛔ EXTERNAL_BLOCKER → **✓ Discipline-only ile karşılandı (kısmi kabul)**.
 
-## Proje Sahibi Kararı
+**Sistem-enforced rejime geçiş yolu (gelecek):** Kullanıcı GitHub Pro'ya yükselirse (~$4/ay), tek komutla aktiflendirilir:
+```bash
+gh api repos/turkerurganci/Skinora/branches/main/protection --method PUT --input <protection-main.json>
+gh api repos/turkerurganci/Skinora/branches/develop/protection --method PUT --input <protection-develop.json>
+```
+JSON taslakları `Docs/CI_CD_SETUP.md §2.4` "HEDEF konfigürasyon" tablolarından üretilebilir.
 
-- **Karar:** Henüz alınmadı (2026-04-08 close-out sırasında keşfedildi, kullanıcı bilgilendirildi)
-- **Tarih:** —
+**Discipline-only rejim kuralları (T12+):**
+1. Her task feature branch'te yapılır (`task/TXX-aciklama`)
+2. PR açılır, CI yeşil olmadan merge yasağı (manuel kontrol)
+3. Validator chat PASS olmadan merge yasağı (INSTRUCTIONS.md §3.3 izolasyon)
+4. `gh pr merge --squash` kullanılır (UI'dan değil, alışkanlık için)
+5. `git push origin main` → pre-push hook bloklar (kurulum: `bash scripts/git-hooks/install.sh`)
+6. Acil bypass: `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` (kullanmadan iki kez düşün)
+
+**Bypass log:** Bu raporda ve gelecekteki TXX_REPORT'larda, `SKINORA_ALLOW_DIRECT_PUSH=1` ile yapılan her direct push **kayıt edilir** (commit hash + sebep). T11 close-out kendisi 4 direct push içerdi (8869872 squash merge GitHub'da, 0327315 + e44e3d2 + bu close-out commit lokal main'den) — bunlar T11 öncesi (hook kurulumu öncesi) yapıldı, tek seferlik istisna.
 
 ---
 
@@ -87,11 +96,11 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | GitHub Actions workflow: Lint → Build → Unit test → Integration test → Contract test → Migration dry-run | ✓ | `.github/workflows/ci.yml` 7 job (5 gerçek + 2 placeholder), 09 §21.4 sırası `needs:` zinciri ile garanti. Job adları "1. Lint", "2. Build", "3. Unit test", "4. Integration test", "5. Contract test", "6. Migration dry-run" — sıra workflow UI'da görünür |
-| 2 | Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı | ⛔ EXTERNAL_BLOCKER | Workflow tarafı hazır (`ci-gate` aggregate job required check için hedef). T11 close-out sırasında `gh api PUT branches/main/protection` çağırıldığında **HTTP 403 "Upgrade to GitHub Pro"** yanıtı geldi — özel repo'larda branch protection ve rulesets paid feature. Sistem enforcement mümkün değil, sadece manuel disiplin uygulanabilir. Bkz. `## ⛔ BLOCKED Bilgisi` bölümü |
+| 2 | Branch protection: main'e doğrudan push yasağı, CI geçmeden merge yasağı | ✓ (discipline-only kabul) | Sistem-enforced enforcement GitHub Pro paid feature olduğu için mümkün değil. Proje sahibi kararı ile **discipline-only rejim** kabul edildi: lokal `scripts/git-hooks/pre-push` hook + manuel `gh pr merge --squash` disiplin + INSTRUCTIONS.md §3.2 güncel rejim açıklaması. Kabul kriterinin "yasağı" sistem yerine **insan + lokal hook** ile uygulanır. Bkz. `## Branch Protection — Discipline-Only Kabul Edildi` bölümü |
 | 3 | Branch stratejisi: main, develop, feature branches | ~ | Workflow `branches: [main, develop]` ile her ikisini izler. `develop` branch'i fiziksel olarak henüz yok — `Docs/CI_CD_SETUP.md §2.3`'te kullanıcının tek satır git komutu ile oluşturacağı belgelendi. 09 §21.1 strateji tablosu kod değişikliği gerektirmez; T11 sonrası akış aktiftir |
 | 4 | Docker image build ve push (ghcr.io) | ✓ | `.github/workflows/docker-publish.yml` 4 servis için matrix strategy ile build & push, `secrets.GITHUB_TOKEN` ile authenticate, 3 tag stratejisi (latest + short-sha + main-runnumber). PR'da çalışmaz, sadece main push'unda |
 
-**Özet:** 4 kriterden 3'ü tam ✓ (1, 3, 4), 1'i ⛔ EXTERNAL_BLOCKER (2 — branch protection paid feature). Kod tarafı tüm değişiklikler main'e merge edildi, develop branch oluşturuldu, CI yeşil. Sadece sistem-enforced branch protection eksik.
+**Özet:** 4 kriterden 3'ü tam ✓ (1, 3, 4), 1'i ✓ discipline-only kabul (2 — sistem-enforced branch protection paid feature olduğu için lokal hook + manuel disiplin ile uygulanır). Kod tarafı tüm değişiklikler main'e merge edildi, develop branch oluşturuldu, CI yeşil. Sistem-enforced branch protection için yükseltme yolu açık (`Docs/CI_CD_SETUP.md` HEDEF tablolar).
 
 ---
 
@@ -100,7 +109,7 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 | # | Kontrol | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | 09 §21.4'teki 6 adımlı sıralama doğru mu? | ✓ | `ci.yml` job adları ve `needs:` graph'ı: lint → build → (unit-test, integration-test, docker-build-check) → integration-test → (contract-test, migration-dry-run). 6 adım sırası workflow yaml'da görünür ve job adlarında numaralı |
-| 2 | Branch protection kuralları aktif mi? | ⛔ EXTERNAL_BLOCKER | T11 close-out sırasında aktifleştirme denendi → HTTP 403 "Upgrade to GitHub Pro". Hem `gh api PUT branches/main/protection` hem `gh api POST rulesets` aynı yanıtı verdi. Free plan + private repo'da enforce yolu yok |
+| 2 | Branch protection kuralları aktif mi? | ✓ (discipline-only) | Sistem aktivasyonu paid feature olduğu için yapılamadı. Proje sahibi `scripts/git-hooks/pre-push` lokal hook + manuel `gh pr merge` disiplini ile discipline-only rejimi kabul etti. INSTRUCTIONS.md §3.2 ve T11_REPORT BLOCKED bölümünde belgelendi |
 
 ---
 
@@ -122,9 +131,9 @@ T11 kapsamında **`develop` branch'i fiziksel olarak oluşturulmadı** — bu ta
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ~ Kısmi: kod tarafı ✓ PASS (validator chat'i, 2026-04-07), branch protection ⛔ EXTERNAL_BLOCKER |
-| Bulgu sayısı | 0 (validator) + 1 (close-out keşfi: GitHub Pro gerekiyor) |
-| Düzeltme gerekli mi | Evet — proje sahibi karar bekliyor (Pro upgrade / org transfer / discipline-only) |
+| Doğrulama durumu | ✓ PASS (kod tarafı, validator chat'i 2026-04-07) + ✓ Discipline-only kabul (branch protection, proje sahibi 2026-04-08) |
+| Bulgu sayısı | 0 (validator) + 1 (close-out keşfi: GitHub Pro gerekiyor → discipline-only ile çözüldü) |
+| Düzeltme gerekli mi | Hayır — discipline-only kabul edildi, lokal hook + INSTRUCTIONS.md §3.2 güncellendi |
 
 **Validator notları (2026-04-07):**
 - Kabul kriterleri 1 ve 4: ✓ tam karşılandı (workflow yapısı + ghcr.io push)

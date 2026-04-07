@@ -54,11 +54,14 @@
 - `main` her zaman çalışır durumda kalır.
 - Doğrulama FAIL verirse branch üzerinde düzeltme yapılır, tekrar doğrulanır.
 - Her faz sonunda tag atılır: `phase/FX-pass` (örn: `phase/F0-pass`)
-- **Branch protection kuralları** (T11'de aktifleştirilir — T11 tamamlandıktan sonra kalan **tüm task'lar için zorunlu rejim** haline gelir, istisnasız):
-  - `main`'e direct push kapalı
-  - Merge için CI PASS zorunlu (build + test + lint)
-  - Merge için validator PASS zorunlu
-  - T01–T10 arası (T11 öncesi) bu kurallar henüz aktif değildir, ama validator PASS kuralı yine de manuel olarak uygulanır
+- **Branch protection kuralları** (T11 close-out — **discipline-only rejim**):
+  - `main` ve `develop`'a direct push **kuralla yasaktır** ama **sistem-enforced değildir** (GitHub Free + private repo'da branch protection paid feature)
+  - Lokal koruma katmanı: `scripts/git-hooks/pre-push` direct push'u bloklar (`bash scripts/git-hooks/install.sh` ile kurulur)
+  - Merge için CI PASS zorunlu — `gh pr merge --squash` öncesi PR'da CI Gate yeşil olmalı (manuel kontrol, sistem zorlamıyor)
+  - Merge için validator PASS zorunlu (manuel — INSTRUCTIONS.md §3.3 izolasyon kuralı)
+  - **Bypass:** acil durumlarda `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` — kullanmadan iki kez düşün, T11_REPORT BLOCKED bölümüne kayıt geçer
+  - T11 öncesi (T01–T10) bu rejim de yoktu; T11 sonrası rejim "manuel disiplin + lokal hook" şeklindedir
+  - **Yükseltme yolu:** GitHub Pro'ya geçilirse `gh api PUT branches/main/protection --input .github/protection-main.json` (taslak `Docs/CI_CD_SETUP.md`'de hedef tablo olarak hazır) ile sistem-enforced yapılır
 
 ### 3.3 Doğrulama Döngüsü
 

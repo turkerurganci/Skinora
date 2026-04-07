@@ -75,18 +75,24 @@ git push -u origin develop
 
 ### 2.4 Branch Protection Kuralları
 
-> ## ⛔ ÖNEMLİ: Branch protection T11 close-out sırasında AKTIFLEŞTIRILEMEDİ
+> ## ℹ️ Discipline-Only Branch Protection (T11 close-out, 2026-04-08)
 >
-> **Sebep:** Klasik branch protection ve yeni Repository Rulesets, **özel repo'larda GitHub Pro paid feature**. Skinora repo'su şu an Free plan + private kombinasyonunda — `gh api PUT branches/main/protection` ve `gh api POST rulesets` her ikisi de HTTP 403 "Upgrade to GitHub Pro or make this repository public" yanıtı veriyor.
+> **Geçmiş:** T11 close-out sırasında `gh api PUT branches/main/protection` ve `gh api POST rulesets` her ikisi de HTTP 403 "Upgrade to GitHub Pro" yanıtı verdi. Doğrulama: GitHub branch protection ve rulesets özel repo'larda **paid feature** (individual Pro ~$4/ay veya org Team ~$4/kullanıcı/ay). Free organization plan da yeterli değil.
 >
-> **Sonuç:** T11 kabul kriteri 2 ⛔ EXTERNAL_BLOCKER (bkz. `Docs/TASK_REPORTS/T11_REPORT.md`). Sistem-enforced branch protection yok; T12+ task'larda main'e doğrudan push'u engelleyen tek mekanizma **manuel disiplin** + opsiyonel lokal git pre-push hook.
+> **Proje sahibi kararı: Seçenek C — Discipline-only protection** (maliyet $0).
 >
-> **Çözüm bekleyen kararlar (proje sahibi):**
+> **Aktif koruma katmanları (T11 sonrası rejim):**
 >
-> 1. **GitHub Pro upgrade** (~$4/ay) — branch protection + rulesets aktif olur, aşağıdaki tablolar `gh api` ile uygulanır
-> 2. **Organization'a transfer** — Free organization plan'da private repo rulesets desteği var (test edilmeli)
-> 3. **Discipline-only** — manuel `gh pr merge` zorunluluğu, pre-push hook ile direct push uyarısı
-> 4. **Public repo** — branch protection free olur ama iş kuralları açığa çıkar (önerilmez)
+> 1. **Lokal pre-push hook:** `scripts/git-hooks/pre-push` main/develop'a direct push'u bloklar
+>    - Kurulum: `bash scripts/git-hooks/install.sh`
+>    - Bypass (acil): `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` — kullanmadan iki kez düşün
+> 2. **Manuel disiplin:** Her task feature branch → PR → CI yeşil → validator chat PASS → `gh pr merge --squash`
+> 3. **INSTRUCTIONS.md §3.2:** Discipline-only rejim açıklaması
+> 4. **CI Gate workflow yine çalışıyor:** PR'larda CI yeşil olmadan `gh pr merge` çağırılırsa GitHub merge'e izin verir ama disiplin kuralı bunu yasaklar (manuel kontrol)
+>
+> **Sistem-enforced rejime yükseltme yolu:**
+>
+> Eğer GitHub Pro'ya yükseltilirse (~$4/ay), aşağıdaki **HEDEF konfigürasyon** tabloları aynen `gh api PUT branches/main/protection` ile uygulanabilir. JSON taslakları repo geçmişinde `T11: Close-out` commit'leri sırasında yazılmış olarak bulunabilir.
 
 ---
 
