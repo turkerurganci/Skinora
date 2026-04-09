@@ -48,6 +48,20 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
 | `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) |
 
+### CI/CD & Git Hooks (T11)
+
+| Dosya | İçerik |
+|---|---|
+| `.github/workflows/ci.yml` | CI pipeline — 09 §21.4 6 adım + guard-direct-push + docker-build-check + ci-gate |
+| `.github/workflows/docker-publish.yml` | main push'unda 4 servis image'ini ghcr.io'ya push |
+| `.github/pull_request_template.md` | PR şablonu — 09 §21.3 kuralları + mini güvenlik checklist |
+| `.gitattributes` | Shell script + YAML LF line ending zorunluluğu |
+| `Docs/CI_CD_SETUP.md` | Branch protection setup kılavuzu (discipline-only rejim + hedef konfigürasyon) |
+| `Docs/BYPASS_LOG.md` | Direct push bypass kayıtları (pre-push hook otomatik yazar) |
+| `scripts/git-hooks/pre-push` | main/develop direct push bloklama + bypass auto-log |
+| `scripts/git-hooks/install.sh` | `git config core.hooksPath scripts/git-hooks` ile hook kurulumu |
+| `scripts/git-hooks/README.md` | Hook onboarding, test, bypass, devre dışı bırakma rehberi |
+
 ### Araçlar
 
 | Dosya | İçerik |
