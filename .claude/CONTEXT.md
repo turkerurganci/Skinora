@@ -62,6 +62,30 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `scripts/git-hooks/install.sh` | `git config core.hooksPath scripts/git-hooks` ile hook kurulumu |
 | `scripts/git-hooks/README.md` | Hook onboarding, test, bypass, devre dışı bırakma rehberi |
 
+### Frontend — Next.js (T13)
+
+| Dosya | İçerik |
+|---|---|
+| `frontend/src/app/[locale]/layout.tsx` | Root layout (i18n + providers) |
+| `frontend/src/app/[locale]/page.tsx` | Landing page |
+| `frontend/src/app/[locale]/(auth)/` | Auth layout grubu (callback) |
+| `frontend/src/app/[locale]/(main)/` | Main layout grubu (dashboard, transactions, profile, notifications) |
+| `frontend/src/app/[locale]/admin/` | Admin layout grubu (dashboard, transactions, flags, users, settings, roles, audit-logs) |
+| `frontend/src/app/api/health/route.ts` | Health check endpoint |
+| `frontend/src/lib/api/client.ts` | API client — fetch wrapper, ApiResponse<T> unwrap, ApiError, Bearer token (07 §2.4) |
+| `frontend/src/lib/providers.tsx` | TanStack Query provider |
+| `frontend/src/lib/stores/auth-store.ts` | Zustand auth store |
+| `frontend/src/lib/signalr/connection.ts` | SignalR client — HubConnectionBuilder, auto-reconnect |
+| `frontend/src/lib/hooks/useAuth.ts` | Auth hook |
+| `frontend/src/lib/utils/format.ts` | Para, tarih formatlama |
+| `frontend/src/types/api.ts` | ApiResponse<T>, PagedResult<T> types |
+| `frontend/src/types/enums.ts` | 23 TypeScript enum (06 §2 birebir) |
+| `frontend/src/i18n/routing.ts` | next-intl routing config (4 dil, fallback EN) |
+| `frontend/src/i18n/request.ts` | next-intl server request config |
+| `frontend/src/i18n/messages/` | 4 dil dosyası (en, zh, es, tr) |
+| `frontend/src/middleware.ts` | i18n middleware |
+| `frontend/Dockerfile` | Multi-stage Next.js standalone build |
+
 ### Araçlar
 
 | Dosya | İçerik |
