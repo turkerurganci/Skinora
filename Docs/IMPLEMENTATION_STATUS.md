@@ -36,7 +36,7 @@
 | T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `34794a0` |
 | T11 | CI/CD pipeline | ✓ Tamamlandı | ✓ PASS (kod) + discipline-only (branch protection) | `8869872` |
 | T12 | Test altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
+| T13 | Next.js Frontend iskeleti | ⏳ Devam ediyor | — | — |
 | T14 | Steam Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
 | T15 | Blockchain Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
 | T16 | Monitoring altyapısı | ⬚ Bekliyor | — | — |
