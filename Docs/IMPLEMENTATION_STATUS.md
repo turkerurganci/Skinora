@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-08 (T11 ✓ Tamamlandı — kod ✓ PASS, branch protection discipline-only kabul edildi: lokal pre-push hook + manuel disiplin)
+**Son güncelleme:** 2026-04-09 (T12 ⏳ Devam ediyor — yapım tamamlandı, doğrulama bekleniyor)
 
 ---
 
@@ -35,7 +35,7 @@
 | T09 | Hangfire setup ve background job altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T10 | Outbox pattern altyapısı | ✓ Tamamlandı | ✓ PASS | `34794a0` |
 | T11 | CI/CD pipeline | ✓ Tamamlandı | ✓ PASS (kod) + discipline-only (branch protection) | `8869872` |
-| T12 | Test altyapısı | ⬚ Bekliyor | — | — |
+| T12 | Test altyapısı | ⏳ Devam ediyor | ⏳ Bekleniyor | `f9a114f` |
 | T13 | Next.js Frontend iskeleti | ⬚ Bekliyor | — | — |
 | T14 | Steam Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
 | T15 | Blockchain Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
