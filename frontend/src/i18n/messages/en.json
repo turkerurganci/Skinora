@@ -1,0 +1,27 @@
+{
+  "landing": {
+    "title": "Skinora",
+    "subtitle": "Secure CS2 Item Escrow Platform"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "back": "Back",
+    "next": "Next"
+  },
+  "auth": {
+    "loginWithSteam": "Login with Steam",
+    "authenticating": "Authenticating..."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "transactions": "Transactions",
+    "profile": "Profile",
+    "notifications": "Notifications",
+    "settings": "Settings"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "landing": {
+    "title": "Skinora",
+    "subtitle": "Güvenli CS2 Eşya Emanet Platformu"
+  },
+  "common": {
+    "loading": "Yükleniyor...",
+    "error": "Bir hata oluştu",
+    "retry": "Tekrar Dene",
+    "cancel": "İptal",
+    "confirm": "Onayla",
+    "save": "Kaydet",
+    "back": "Geri",
+    "next": "İleri"
+  },
+  "auth": {
+    "loginWithSteam": "Steam ile Giriş Yap",
+    "authenticating": "Doğrulanıyor..."
+  },
+  "nav": {
+    "dashboard": "Kontrol Paneli",
+    "transactions": "İşlemler",
+    "profile": "Profil",
+    "notifications": "Bildirimler",
+    "settings": "Ayarlar"
+  }
+}

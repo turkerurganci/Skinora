@@ -1,0 +1,27 @@
+{
+  "landing": {
+    "title": "Skinora",
+    "subtitle": "安全的CS2物品托管平台"
+  },
+  "common": {
+    "loading": "加载中...",
+    "error": "发生错误",
+    "retry": "重试",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "back": "返回",
+    "next": "下一步"
+  },
+  "auth": {
+    "loginWithSteam": "使用Steam登录",
+    "authenticating": "认证中..."
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "transactions": "交易",
+    "profile": "个人资料",
+    "notifications": "通知",
+    "settings": "设置"
+  }
+}

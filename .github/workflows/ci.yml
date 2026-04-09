@@ -84,9 +84,9 @@ jobs:
         working-directory: backend
         run: dotnet format Skinora.sln --verify-no-changes --severity error
 
-      - name: Node syntax check (frontend placeholder)
+      - name: Frontend lint
         working-directory: frontend
-        run: node --check server.js
+        run: npm ci && npm run lint
 
       - name: Node syntax check (sidecar-steam placeholder)
         working-directory: sidecar-steam
@@ -127,6 +127,15 @@ jobs:
       - name: dotnet build
         working-directory: backend
         run: dotnet build Skinora.sln --configuration Release --no-restore
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm ci && npm run build
 
   # ----------------------------------------------------------------------------
   # 3. Unit test  (09 §21.4 step 3)
