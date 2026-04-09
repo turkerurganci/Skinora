@@ -40,11 +40,18 @@ git config core.hooksPath
 
 ```bash
 SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main
+# Sebep belirtmek icin (otomatik log'a yazilir):
+SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="aciklama" git push origin main
 ```
 
-**Kullanmadan iki kez düşün.** Bypass kullanıldıysa:
-1. Sebebi commit mesajına yaz
-2. İlgili task report'a kaydet (bypass kayıtları ileride `Docs/BYPASS_LOG.md`'ye taşınabilir — validator R2 follow-up)
+**Kullanmadan iki kez düşün.** Hook her bypass'ta `Docs/BYPASS_LOG.md`'ye otomatik satır ekler (tarih, kullanıcı, branch, commit, sebep). Bypass commit'inden sonraki **ilk normal commit'te** log dosyasındaki değişikliği commit'le.
+
+## CI Defansif Guard (R3)
+
+Hook lokal koruma sağlar. Ek olarak `.github/workflows/ci.yml`'da **guard-direct-push** job'u server-side görünürlük sağlar:
+- main'e `push` geldiğinde commit mesajında PR referansı `(#NN)` yoksa job FAIL eder
+- Push zaten gerçekleşmiştir (engelleyemez) ama Actions sekmesinde kırmızı uyarı görünür
+- `[skip-guard]` commit mesajına eklenerek bypass edilebilir (acil durum)
 
 ## Devre dışı bırakma
 

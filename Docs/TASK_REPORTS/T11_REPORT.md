@@ -150,8 +150,8 @@ Validator bağımsız doğrulama yaptı:
 
 **Validator follow-up önerileri (PASS'i bloklamaz):**
 - **R1 — Hook kuruluma bağımlılık:** Yeni clone alan biri install.sh çalıştırmazsa koruma yok. Önerim: `git config core.hooksPath scripts/git-hooks` ile repo-level fallback. → **Bu housekeeping commit'inde uygulandı** (`scripts/git-hooks/install.sh` core.hooksPath yaklaşımına çevrildi, `scripts/git-hooks/README.md` eklendi)
-- **R2 — Bypass log'u yok:** SKINORA_ALLOW_DIRECT_PUSH bypass'ları görünmez. → İleride `Docs/BYPASS_LOG.md`. T11 sonrası housekeeping
-- **R3 — CI tarafında defansif kontrol yok:** Hook atlanırsa CI guard yok. → İsteğe bağlı `ci.yml` guard job. T12 veya housekeeping
+- **R2 — Bypass log'u yok:** → **✓ Çözüldü (R2-R3 housekeeping PR).** `Docs/BYPASS_LOG.md` oluşturuldu, `scripts/git-hooks/pre-push` hook'u bypass'ta otomatik log yazar (tarih, kullanıcı, branch, commit, `SKINORA_BYPASS_REASON` env varsa sebep)
+- **R3 — CI tarafında defansif kontrol yok:** → **✓ Çözüldü (R2-R3 housekeeping PR).** `ci.yml`'a `guard-direct-push` job'u eklendi — main'e push geldiğinde commit mesajında `(#NN)` PR referansı yoksa FAIL. `[skip-guard]` ile bypass edilebilir. Push engellenemez ama Actions sekmesinde kırmızı uyarı görünür (defense-in-depth)
 
 **Validator notları (2026-04-07):**
 - Kabul kriterleri 1 ve 4: ✓ tam karşılandı (workflow yapısı + ghcr.io push)

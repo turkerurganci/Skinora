@@ -24,8 +24,24 @@ remote_url="$2"
 while read -r local_ref local_oid remote_ref remote_oid; do
   for branch in $protected_branches; do
     if [ "$remote_ref" = "refs/heads/$branch" ]; then
-      if [ "${SKINORA_ALLOW_DIRECT_PUSH:-0}" != "1" ]; then
-        cat <<EOF >&2
+      if [ "${SKINORA_ALLOW_DIRECT_PUSH:-0}" = "1" ]; then
+        # --- R2: Bypass log ---
+        REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+        LOG_FILE="$REPO_ROOT/Docs/BYPASS_LOG.md"
+        if [ -f "$LOG_FILE" ]; then
+          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          GIT_USER="$(git config user.name || echo 'unknown')"
+          SHORT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+          REASON="${SKINORA_BYPASS_REASON:-*(sebep belirtilmedi)*}"
+          echo "| $TIMESTAMP | $GIT_USER | $branch | \`$SHORT_SHA\` | $REASON |" >> "$LOG_FILE"
+          echo "BYPASS LOG: Docs/BYPASS_LOG.md'ye kayit eklendi." >&2
+          echo "  Lutfen bir sonraki normal commit'te bu dosyayi da commit'le." >&2
+        fi
+        echo "WARN: SKINORA_ALLOW_DIRECT_PUSH=1 set — '$branch' direct push allowed." >&2
+        echo "      Bu commit'in CI'dan gecmedigini unutma." >&2
+        continue
+      fi
+      cat <<EOF >&2
 
 ==============================================================================
 ERROR: Direct push to '$branch' is blocked by Skinora pre-push hook.
@@ -47,15 +63,12 @@ Tum '$branch' degisiklikleri PR + CI uzerinden gitmelidir:
 
 Acil durum bypass (kullanmadan iki kez dusun):
   SKINORA_ALLOW_DIRECT_PUSH=1 git push origin $branch
+  SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="aciklama" git push origin $branch
 
 ==============================================================================
 
 EOF
-        exit 1
-      else
-        echo "WARN: SKINORA_ALLOW_DIRECT_PUSH=1 set — '$branch' direct push allowed." >&2
-        echo "      Bu commit'in CI'dan gecmedigini unutma." >&2
-      fi
+      exit 1
     fi
   done
 done
