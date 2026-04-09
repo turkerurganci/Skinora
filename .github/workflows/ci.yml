@@ -19,6 +19,48 @@ concurrency:
 
 jobs:
   # ----------------------------------------------------------------------------
+  # 0. Guard — direct push detection (defense-in-depth, T11 R3)
+  # Sadece push event'lerinde calisir (PR'larda skip).
+  # PR squash merge commit mesajlari "(#NN)" icerdiginden otomatik PASS olur.
+  # Direct push'lar (hook bypass veya hook kurulu degil) bunu tetikler.
+  # [skip-guard] commit mesajinda varsa bypass edilir (acil durum).
+  # Bu job FAIL olsa da push zaten gerceklesmistir — amaci: gorunur uyari.
+  # ----------------------------------------------------------------------------
+  guard-direct-push:
+    name: 0. Guard (direct push)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check for PR merge reference
+        run: |
+          MSG=$(git log -1 --format=%B HEAD)
+          echo "Commit message: $MSG"
+          echo ""
+
+          if echo "$MSG" | grep -qE '\(#[0-9]+\)'; then
+            echo "OK: commit message contains PR reference — squash merge detected."
+          elif echo "$MSG" | grep -q '\[skip-guard\]'; then
+            echo "::warning title=Guard Bypass::[skip-guard] override detected in commit message."
+            echo "This commit was pushed directly to a protected branch without a PR."
+          else
+            echo "::error title=Direct Push Detected::This commit was pushed directly without a PR merge."
+            echo ""
+            echo "Discipline-only branch protection rejiminde tum degisiklikler"
+            echo "PR + CI uzerinden gitmeli. Direct push tespit edildi."
+            echo ""
+            echo "Bu hata gorunurluk icindir — push zaten gerceklesti."
+            echo "Bir sonraki commit'te bu durumu duzelt veya bypass log'a kaydet."
+            echo ""
+            echo "Bypass: commit mesajina [skip-guard] ekle (acil durum)."
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------------
   # 1. Lint  (09 §21.4 step 1)
   # ----------------------------------------------------------------------------
   lint:
@@ -243,6 +285,7 @@ jobs:
   ci-gate:
     name: CI Gate
     needs:
+      - guard-direct-push
       - lint
       - build
       - unit-test
