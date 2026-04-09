@@ -107,6 +107,28 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `sidecar-steam/src/trade/InventoryService.ts` | Envanter stub (T67) |
 | `sidecar-steam/Dockerfile` | Multi-stage Node.js 20-alpine build |
 
+### Blockchain Sidecar — Node.js (T15)
+
+| Dosya | İçerik |
+|---|---|
+| `sidecar-blockchain/src/index.ts` | Entry point — Express server + graceful shutdown |
+| `sidecar-blockchain/src/config/index.ts` | Environment config (TronGrid URLs, token contracts, HD wallet, rate limits) |
+| `sidecar-blockchain/src/logger.ts` | Pino logger (Loki push, correlationId, secret redaction) |
+| `sidecar-blockchain/src/errors/SidecarError.ts` | Error hiyerarşisi: SidecarError → InsufficientGasError, TransactionFailedError |
+| `sidecar-blockchain/src/queue/RateLimitedQueue.ts` | Rate-limited istek kuyruğu (TronGrid API) |
+| `sidecar-blockchain/src/webhook/WebhookClient.ts` | HMAC-SHA256 imzalı webhook callback (05 §3.4) |
+| `sidecar-blockchain/src/webhook/WebhookPayloads.ts` | Webhook payload type |
+| `sidecar-blockchain/src/health/HealthController.ts` | /health endpoint |
+| `sidecar-blockchain/src/api/routes.ts` | Express router (health + stub API routes) |
+| `sidecar-blockchain/src/api/middleware.ts` | correlationId + X-Internal-Key auth middleware |
+| `sidecar-blockchain/src/wallet/WalletManager.ts` | HD Wallet yönetimi stub (T70) |
+| `sidecar-blockchain/src/wallet/AddressGenerator.ts` | Adres üretimi stub (T70) |
+| `sidecar-blockchain/src/monitor/TransactionMonitor.ts` | Ödeme izleme stub (T71) |
+| `sidecar-blockchain/src/monitor/PostCancelMonitor.ts` | İptal sonrası izleme stub (T75) |
+| `sidecar-blockchain/src/transfer/TransferService.ts` | TRC-20 transfer stub (T73) |
+| `sidecar-blockchain/src/transfer/RefundService.ts` | İade transfer stub (T73) |
+| `sidecar-blockchain/Dockerfile` | Multi-stage Node.js 20-alpine build |
+
 ### Araçlar
 
 | Dosya | İçerik |
