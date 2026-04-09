@@ -112,6 +112,18 @@ public class HangfireBypassFactory : WebApplicationFactory<Program>
                 services.Remove(d);
             }
             services.AddSingleton<IDistributedLockProvider, InMemoryDistributedLockProvider>();
+
+            // T16 — clear production health checks (SQL Server, Redis) that
+            // would fail without real infrastructure. Tests run without DB/Redis.
+            var healthCheckDescriptors = services
+                .Where(d =>
+                    d.ServiceType.FullName?.Contains("HealthCheck", StringComparison.Ordinal) == true)
+                .ToList();
+            foreach (var d in healthCheckDescriptors)
+            {
+                services.Remove(d);
+            }
+            services.AddHealthChecks();
         });
     }
 }

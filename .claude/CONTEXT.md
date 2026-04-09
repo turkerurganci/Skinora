@@ -129,6 +129,25 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `sidecar-blockchain/src/transfer/RefundService.ts` | İade transfer stub (T73) |
 | `sidecar-blockchain/Dockerfile` | Multi-stage Node.js 20-alpine build |
 
+### Monitoring & Alerting (T16)
+
+| Dosya | İçerik |
+|---|---|
+| `infra/prometheus/prometheus.yml` | Prometheus scrape config (4 target: backend, steam, blockchain, prometheus) |
+| `infra/grafana/provisioning/datasources/prometheus.yml` | Prometheus datasource for Grafana |
+| `infra/grafana/provisioning/dashboards/dashboards.yml` | Dashboard provider config (auto-provision from JSON) |
+| `infra/grafana/provisioning/dashboards/json/system-overview.json` | Sistem dashboard (CPU, RAM, uptime) |
+| `infra/grafana/provisioning/dashboards/json/application-metrics.json` | Uygulama metrikleri (request rate, duration, errors) |
+| `infra/grafana/provisioning/dashboards/json/business-metrics.json` | İş metrikleri (transactions, trade offers, transfers) |
+| `infra/grafana/provisioning/dashboards/json/integration-metrics.json` | Entegrasyon metrikleri (Steam API, TronGrid) |
+| `infra/grafana/provisioning/dashboards/json/security-metrics.json` | Güvenlik metrikleri (auth failures, rate limits, errors) |
+| `infra/grafana/provisioning/alerting/contactpoints.yml` | Telegram + Email contact points |
+| `infra/grafana/provisioning/alerting/policies.yml` | Notification policies (severity-based routing) |
+| `infra/grafana/provisioning/alerting/rules.yml` | Alert rules (3 Critical + 4 Warning) |
+| `backend/src/Skinora.API/HealthChecks/HealthCheckResponseWriter.cs` | Structured JSON health response writer |
+| `sidecar-steam/src/metrics.ts` | Steam sidecar Prometheus metrikleri (prom-client) |
+| `sidecar-blockchain/src/metrics.ts` | Blockchain sidecar Prometheus metrikleri (prom-client) |
+
 ### Araçlar
 
 | Dosya | İçerik |

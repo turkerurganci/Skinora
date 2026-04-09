@@ -1,0 +1,14 @@
+# T16 — Auto-provision Grafana dashboards from JSON files.
+apiVersion: 1
+
+providers:
+  - name: 'Skinora'
+    orgId: 1
+    folder: 'Skinora'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: false

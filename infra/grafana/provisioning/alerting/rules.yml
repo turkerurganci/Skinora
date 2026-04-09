@@ -1,0 +1,278 @@
+# T16 — Grafana Alerting rules (05 §9.3)
+# Critical: service down, DB connection lost, blockchain/Steam unreachable
+# Warning: error rate high, response time high, disk 80%+, job queue growing
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Skinora Critical Alerts
+    folder: Skinora Alerts
+    interval: 1m
+    rules:
+      - uid: backend-down
+        title: Backend Service Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="skinora-backend"}
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Backend service is down
+          description: The skinora-backend service has been unreachable for more than 2 minutes.
+
+      - uid: steam-sidecar-down
+        title: Steam Sidecar Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="skinora-steam-sidecar"}
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Steam sidecar is down
+          description: The skinora-steam-sidecar service has been unreachable for more than 2 minutes.
+
+      - uid: blockchain-sidecar-down
+        title: Blockchain Sidecar Down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="skinora-blockchain-sidecar"}
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Blockchain sidecar is down
+          description: The skinora-blockchain-sidecar service has been unreachable for more than 2 minutes.
+
+  - orgId: 1
+    name: Skinora Warning Alerts
+    folder: Skinora Alerts
+    interval: 2m
+    rules:
+      - uid: high-error-rate-backend
+        title: High Error Rate — Backend
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                sum(rate(http_requests_received_total{code=~"5.."}[5m]))
+                /
+                sum(rate(http_requests_received_total[5m]))
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.05]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backend error rate above 5%
+          description: The backend 5xx error rate has exceeded 5% for the last 5 minutes.
+
+      - uid: high-response-time-backend
+        title: High Response Time — Backend
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backend p95 response time above 2s
+          description: The backend p95 response time has exceeded 2 seconds for the last 5 minutes.
+
+      - uid: steam-api-errors-high
+        title: High Steam API Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(rate(skinora_steam_api_errors_total[5m]))
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Steam API error rate elevated
+          description: Steam API errors are occurring at more than 0.1/s for the last 5 minutes.
+
+      - uid: tron-api-errors-high
+        title: High TronGrid API Error Rate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(rate(skinora_blockchain_tron_api_errors_total[5m]))
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: TronGrid API error rate elevated
+          description: TronGrid API errors are occurring at more than 0.1/s for the last 5 minutes.

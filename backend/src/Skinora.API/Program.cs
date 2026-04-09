@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prometheus;
 using Serilog;
 using Skinora.API.BackgroundJobs;
 using Skinora.API.Configuration;
@@ -70,6 +71,17 @@ builder.Services.AddHangfireModule(builder.Configuration);
 // startup hook that primes the dispatcher chain.
 builder.Services.AddOutboxModule(builder.Configuration);
 
+// Health checks (T16) — DB + Redis dependency checks
+builder.Services.AddHealthChecks()
+    .AddSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")!,
+        name: "sqlserver",
+        tags: ["db", "ready"])
+    .AddRedis(
+        builder.Configuration["Redis:ConnectionString"]!,
+        name: "redis",
+        tags: ["cache", "ready"]);
+
 // Controllers + ApiResponseWrapperFilter
 builder.Services.AddControllers(options =>
 {
@@ -118,9 +130,16 @@ app.UseAntiforgery();
 //     dashboard authorization filter sees the authenticated principal — T09).
 app.UseHangfireModule();
 
-// 13. Endpoints
+// 13. Prometheus metrics (T16) — exposes /metrics for Prometheus scraping
+app.UseHttpMetrics();
+
+// 14. Endpoints
 app.MapControllers();
-app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "skinora-backend" }));
+app.MapMetrics(); // /metrics endpoint for Prometheus
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = Skinora.API.HealthChecks.HealthCheckResponseWriter.WriteResponse
+});
 
 app.Run();
 

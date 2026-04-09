@@ -1,0 +1,30 @@
+# T16 — Prometheus scrape configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'skinora-backend'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['skinora-backend:5000']
+        labels:
+          service: backend
+
+  - job_name: 'skinora-steam-sidecar'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['skinora-steam-sidecar:5100']
+        labels:
+          service: steam-sidecar
+
+  - job_name: 'skinora-blockchain-sidecar'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['skinora-blockchain-sidecar:5200']
+        labels:
+          service: blockchain-sidecar
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
