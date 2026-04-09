@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-09 (T13 ✓ Tamamlandı)
+**Son güncelleme:** 2026-04-09 (T14 ✓ Tamamlandı)
 
 ---
 
@@ -37,7 +37,7 @@
 | T11 | CI/CD pipeline | ✓ Tamamlandı | ✓ PASS (kod) + discipline-only (branch protection) | `8869872` |
 | T12 | Test altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T13 | Next.js Frontend iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T14 | Steam Sidecar Node.js iskeleti | ⏳ Devam ediyor | ⏳ Doğrulama bekleniyor | — |
+| T14 | Steam Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T15 | Blockchain Sidecar Node.js iskeleti | ⬚ Bekliyor | — | — |
 | T16 | Monitoring altyapısı | ⬚ Bekliyor | — | — |
 

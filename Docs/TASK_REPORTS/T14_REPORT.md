@@ -1,6 +1,6 @@
 # T14 — Steam Sidecar Node.js İskeleti
 
-**Faz:** F0 | **Durum:** ⏳ Devam ediyor (doğrulama bekleniyor) | **Tarih:** 2026-04-09
+**Faz:** F0 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-09
 
 ---
 
@@ -65,7 +65,7 @@
 | 7 | Rate limiting istek kuyruğu | ✓ | `src/queue/RateLimitedQueue.ts` — configurable maxRequests/windowMs |
 | 8 | Graceful shutdown handler | ✓ | `src/index.ts` SIGTERM/SIGINT handler — 09 §17.9 uyumlu |
 | 9 | Pino logger (Loki push, correlationId) | ✓ | `src/logger.ts` — secret masking + Loki transport |
-| 10 | ESLint + Prettier | ✓ | `.eslintrc.json` + `.prettierrc.json`, `npx eslint src/` temiz |
+| 10 | ESLint + Prettier | ✓ | `.eslintrc.json` + `.prettierrc.json`, `npm run lint` + `npm run format:check` temiz (validator: WebhookClient.ts format düzeltmesi sonrası) |
 | 11 | Dockerfile | ✓ | Multi-stage builder + runner, Node.js 20-alpine |
 
 ## Test Sonuçları
@@ -80,9 +80,18 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Doğrulama bekleniyor |
-| Bulgu sayısı | 0 |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS |
+| Doğrulama tarihi | 2026-04-09 |
+| Validator | Bağımsız doğrulama chat'i |
+| Bulgu sayısı | 1 (minor — Prettier format, doğrulama sırasında düzeltildi) |
+| Düzeltme gerekli mi | Hayır (doğrulama sırasında çözüldü) |
+
+### Validator Notları
+- 11 kabul kriterinin tümü bağımsız olarak doğrulandı
+- Yapım raporuyla 1 uyuşmazlık: kriter #10 (Prettier) — yapım raporu ✓, validator `prettier --check` → 1 dosya fail. Doğrulama sırasında `prettier --write` ile düzeltildi
+- Doğrulama kontrol listesi (3/3 geçti): klasör yapısı §4.4.1 uyumlu, kütüphaneler 08 §2.5 uyumlu, webhook imzalama 05 §3.4 uyumlu
+- Güvenlik: Temiz (secret yok, env var kullanımı, logger redaction)
+- Build/lint/format: Tümü temiz (düzeltme sonrası)
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
@@ -91,9 +100,8 @@
 
 ## Commit & PR
 - Branch: `task/T14-steam-sidecar-skeleton`
-- Commit: (push sonrası güncellenecek)
-- PR: (oluşturulacak)
-- CI: (PR sonrası)
+- Commit: `836ffc3` (yapım) + validator düzeltme commit'i
+- PR: #8
 
 ## Known Limitations / Follow-up
 - `steam-tradeoffer-manager` ^3.x npm'de mevcut değil — ^2.13.x kullanıldı, 08 §2.5 güncellendi

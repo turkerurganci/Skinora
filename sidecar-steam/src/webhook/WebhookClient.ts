@@ -38,10 +38,7 @@ export async function sendCallback(
   });
 
   if (!response.ok) {
-    logger.error(
-      { url, status: response.status, correlationId },
-      'Webhook callback failed',
-    );
+    logger.error({ url, status: response.status, correlationId }, 'Webhook callback failed');
     throw new Error(`Webhook callback failed: ${response.status} ${response.statusText}`);
   }
 
