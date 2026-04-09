@@ -1,0 +1,47 @@
+# T16 — Grafana Alerting contact points (05 §9.3)
+# Configure via environment variables:
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_HOST, SMTP_FROM, ALERT_EMAIL_TO
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: telegram-critical
+    receivers:
+      - uid: telegram-critical-1
+        type: telegram
+        settings:
+          bottoken: '${TELEGRAM_BOT_TOKEN}'
+          chatid: '${TELEGRAM_CHAT_ID}'
+          message: |
+            {{ `{{ if .Alerts.Firing }}` }}🔴 FIRING: {{ `{{ len .Alerts.Firing }}` }} alert(s){{ `{{ end }}` }}
+            {{ `{{ if .Alerts.Resolved }}` }}✅ RESOLVED: {{ `{{ len .Alerts.Resolved }}` }} alert(s){{ `{{ end }}` }}
+            {{ `{{ range .Alerts }}` }}
+            {{ `{{ .Labels.alertname }}` }} — {{ `{{ .Annotations.summary }}` }}
+            {{ `{{ end }}` }}
+        disableResolveMessage: false
+
+  - orgId: 1
+    name: email-critical
+    receivers:
+      - uid: email-critical-1
+        type: email
+        settings:
+          addresses: '${ALERT_EMAIL_TO}'
+          singleEmail: true
+        disableResolveMessage: false
+
+  - orgId: 1
+    name: telegram-warning
+    receivers:
+      - uid: telegram-warning-1
+        type: telegram
+        settings:
+          bottoken: '${TELEGRAM_BOT_TOKEN}'
+          chatid: '${TELEGRAM_CHAT_ID}'
+          message: |
+            {{ `{{ if .Alerts.Firing }}` }}⚠️ WARNING: {{ `{{ len .Alerts.Firing }}` }} alert(s){{ `{{ end }}` }}
+            {{ `{{ if .Alerts.Resolved }}` }}✅ RESOLVED: {{ `{{ len .Alerts.Resolved }}` }} alert(s){{ `{{ end }}` }}
+            {{ `{{ range .Alerts }}` }}
+            {{ `{{ .Labels.alertname }}` }} — {{ `{{ .Annotations.summary }}` }}
+            {{ `{{ end }}` }}
+        disableResolveMessage: false
