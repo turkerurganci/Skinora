@@ -1,6 +1,6 @@
 # T13 — Next.js Frontend İskeleti
 
-**Faz:** F0 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-09
+**Faz:** F0 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-09
 
 ---
 
@@ -93,9 +93,23 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+### Doğrulama Kontrol Listesi
+- [x] 09 §4.3 klasör yapısı eşleşiyor mu? — Evet (minor: admin/ explicit prefix vs (admin)/ route group — documented & justified)
+- [x] API client 07 §2.4 envelope formatını unwrap ediyor mu? — Evet (success/data/error/traceId)
+- [x] i18n 4 dil dosyası mevcut mu? — Evet (en.json, zh.json, es.json, tr.json)
+
+### Güvenlik Kontrolü
+- [x] Secret sızıntısı: Temiz — yalnızca NEXT_PUBLIC_ env vars
+- [x] Auth etkisi: Temiz — placeholder token storage, gerçek auth T29'da
+- [x] Input validation: N/A (iskelet)
+- [x] Yeni bağımlılık: next-intl, @tanstack/react-query, zustand, @microsoft/signalr, eslint-config-prettier, prettier — tümü beklenen
+
+### Yapım Raporu Karşılaştırması
+- Uyum: Tam uyumlu — yapım raporundaki 9 kabul kriteri validator tarafından bağımsız doğrulandı
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
@@ -104,9 +118,9 @@
 
 ## Commit & PR
 - Branch: `task/T13-nextjs-frontend-skeleton`
-- Commit: (bekliyor)
-- PR: (bekliyor)
-- CI: (bekliyor)
+- Commit: `9ba24a3`
+- PR: (merge sırasında)
+- CI: (merge sırasında)
 
 ## Known Limitations / Follow-up
 - Admin route'ları `(admin)` route group yerine `admin/` explicit prefix kullanıyor — Next.js App Router'da aynı path'e çözümlenen iki paralel route grubu desteklenmiyor. Bu 09 §4.3'teki `(admin)` notasyonundan küçük bir sapma ama fonksiyonel olarak doğru: admin sayfaları `/admin/*` altında erişilebilir.
