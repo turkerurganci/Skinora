@@ -1,0 +1,27 @@
+{
+  "landing": {
+    "title": "Skinora",
+    "subtitle": "Plataforma segura de custodia de ítems CS2"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Ocurrió un error",
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "back": "Volver",
+    "next": "Siguiente"
+  },
+  "auth": {
+    "loginWithSteam": "Iniciar sesión con Steam",
+    "authenticating": "Autenticando..."
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "transactions": "Transacciones",
+    "profile": "Perfil",
+    "notifications": "Notificaciones",
+    "settings": "Configuración"
+  }
+}
