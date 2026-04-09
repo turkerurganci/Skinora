@@ -267,7 +267,7 @@ Trade offer yaşam döngüsü tamamen Node.js sidecar'da `steam-tradeoffer-manag
 
 | Kütüphane | Amaç | Minimum Versiyon |
 |-----------|-------|-----------------|
-| `steam-tradeoffer-manager` | Trade offer CRUD, polling, kabul/red | ^3.x |
+| `steam-tradeoffer-manager` | Trade offer CRUD, polling, kabul/red | ^2.13.x (**Not:** npm'de 3.x yok, 2026-04-09 itibarıyla en güncel 2.13.0) |
 | `steamcommunity` | Session yönetimi, login, envanter okuma, confirmation | ^3.x |
 | `steam-totp` | 2FA kod üretimi, mobile confirmation | ^2.x |
 | `steam-user` | Steam client bağlantısı (opsiyonel — sidecar'da gerekiyorsa) | ^5.x |
