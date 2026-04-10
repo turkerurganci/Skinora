@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Domain;
@@ -8,9 +9,21 @@ namespace Skinora.Shared.Persistence;
 
 public class AppDbContext : DbContext
 {
+    private static readonly List<Assembly> _moduleAssemblies = [];
+
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
+    }
+
+    /// <summary>
+    /// Registers a module assembly so its IEntityTypeConfiguration implementations
+    /// are discovered during OnModelCreating. Call once per module at startup.
+    /// </summary>
+    public static void RegisterModuleAssembly(Assembly assembly)
+    {
+        if (!_moduleAssemblies.Contains(assembly))
+            _moduleAssemblies.Add(assembly);
     }
 
     // T10 — outbox infrastructure tables (06 §3.18–§3.21). The pattern lives
@@ -44,11 +57,14 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Apply IEntityTypeConfiguration<T> classes that live alongside the
-        // shared persistence layer (currently the T10 outbox configurations).
-        // Module-owned configurations are still registered separately by each
-        // module's DbContext extension.
+        // Apply IEntityTypeConfiguration<T> classes from the shared persistence layer
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // Apply IEntityTypeConfiguration<T> classes from registered module assemblies
+        foreach (var assembly in _moduleAssemblies)
+        {
+            modelBuilder.ApplyConfigurationsFromAssembly(assembly);
+        }
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
