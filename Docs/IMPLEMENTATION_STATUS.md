@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-10 (T17 ✓ PASS)
+**Son güncelleme:** 2026-04-10 (T18 ✓ PASS)
 
 ---
 
@@ -50,7 +50,7 @@
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T17 | Enum tanımları (C# + EF Core migration) | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T18 | User, UserLoginLog, RefreshToken entity'leri | ⬚ Bekliyor | — | — |
+| T18 | User, UserLoginLog, RefreshToken entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T19 | Transaction, TransactionHistory entity'leri | ⬚ Bekliyor | — | — |
 | T20 | PaymentAddress, BlockchainTransaction entity'leri | ⬚ Bekliyor | — | — |
 | T21 | TradeOffer, PlatformSteamBot entity'leri | ⬚ Bekliyor | — | — |
