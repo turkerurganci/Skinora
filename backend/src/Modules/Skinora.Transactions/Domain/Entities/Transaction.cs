@@ -92,4 +92,6 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
 
     // --- Navigation properties ---
     public ICollection<TransactionHistory> History { get; set; } = [];
+    public PaymentAddress? PaymentAddress { get; set; }
+    public ICollection<BlockchainTransaction> BlockchainTransactions { get; set; } = [];
 }
