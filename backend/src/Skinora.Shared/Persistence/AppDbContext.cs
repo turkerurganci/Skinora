@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence.Converters;
 using Skinora.Shared.Persistence.Outbox;
@@ -25,6 +26,18 @@ public class AppDbContext : DbContext
         // 09 §7.1: All DateTime properties use UTC converter
         configurationBuilder.Properties<DateTime>()
             .HaveConversion<UtcDateTimeConverter>();
+
+        // T17 / 06 §2: All Skinora enums stored as strings in DB
+        var enumNamespace = typeof(Skinora.Shared.Enums.TransactionStatus).Namespace!;
+        var enumTypes = typeof(Skinora.Shared.Enums.TransactionStatus).Assembly
+            .GetTypes()
+            .Where(t => t.IsEnum && t.Namespace == enumNamespace);
+
+        foreach (var enumType in enumTypes)
+        {
+            configurationBuilder.Properties(enumType)
+                .HaveConversion(typeof(EnumToStringConverter<>).MakeGenericType(enumType));
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
