@@ -46,7 +46,7 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/TASK_REPORTS/` | Task bazlı detaylı raporlar (TXX_REPORT.md) |
 | `Docs/AUDIT_REPORTS/` | Doküman audit raporları (00-12) |
 | `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
-| `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) |
+| `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) + Gate Check raporları (F0) |
 
 ### CI/CD & Git Hooks (T11)
 
