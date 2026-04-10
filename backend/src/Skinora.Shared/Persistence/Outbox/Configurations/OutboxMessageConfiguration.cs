@@ -17,14 +17,13 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
             // without an additional invariant — its semantics are tightened
             // by the consumer that introduces it.
             //
-            // Enum literal values:
-            //   PENDING = 0, PROCESSED = 1, DEFERRED = 2, FAILED = 3.
+            // T17: Status stored as string (global enum→string convention).
             t.HasCheckConstraint(
                 "CK_OutboxMessages_Status_Invariants",
-                "(\"Status\" = 0 AND \"ProcessedAt\" IS NULL) OR " +
-                "(\"Status\" = 1 AND \"ProcessedAt\" IS NOT NULL) OR " +
-                "(\"Status\" = 2) OR " +
-                "(\"Status\" = 3 AND \"ProcessedAt\" IS NULL AND \"ErrorMessage\" IS NOT NULL)");
+                "([Status] = 'PENDING' AND [ProcessedAt] IS NULL) OR " +
+                "([Status] = 'PROCESSED' AND [ProcessedAt] IS NOT NULL) OR " +
+                "([Status] = 'DEFERRED') OR " +
+                "([Status] = 'FAILED' AND [ProcessedAt] IS NULL AND [ErrorMessage] IS NOT NULL)");
         });
 
         builder.HasKey(x => x.Id);
@@ -43,7 +42,7 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         builder.Property(x => x.Status)
             .IsRequired()
-            .HasConversion<int>()
+            .HasMaxLength(20)
             .HasDefaultValue(OutboxMessageStatus.PENDING);
 
         builder.Property(x => x.RetryCount)
@@ -60,10 +59,9 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         // Filtered index on (Status, CreatedAt) WHERE Status IN (PENDING, FAILED)
         // — feeds the dispatcher's "fetch unprocessed and retryable" query
-        // (06 §5.2). Status uses int literals (0 = PENDING, 3 = FAILED) so the
-        // filter is portable across SQL Server and SQLite.
+        // (06 §5.2). T17: Status stored as string.
         builder.HasIndex(x => new { x.Status, x.CreatedAt })
-            .HasFilter("\"Status\" IN (0, 3)")
+            .HasFilter("[Status] IN ('PENDING', 'FAILED')")
             .HasDatabaseName("IX_OutboxMessages_Status_CreatedAt_Pending");
     }
 }
