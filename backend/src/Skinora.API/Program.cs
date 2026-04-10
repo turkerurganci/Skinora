@@ -10,6 +10,7 @@ using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -94,6 +95,7 @@ builder.Services.AddControllers(options =>
 // IEntityTypeConfiguration<T> implementations are discovered by AppDbContext.
 UsersModuleDbRegistration.RegisterUsersModule();
 AuthModuleDbRegistration.RegisterAuthModule();
+TransactionsModuleDbRegistration.RegisterTransactionsModule();
 
 var app = builder.Build();
 
