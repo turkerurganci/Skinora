@@ -50,7 +50,7 @@
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T17 | Enum tanımları (C# + EF Core migration) | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T18 | User, UserLoginLog, RefreshToken entity'leri | ⬚ Bekliyor | — | — |
+| T18 | User, UserLoginLog, RefreshToken entity'leri | ⏳ Devam ediyor | — | `0aa683e` |
 | T19 | Transaction, TransactionHistory entity'leri | ⬚ Bekliyor | — | — |
 | T20 | PaymentAddress, BlockchainTransaction entity'leri | ⬚ Bekliyor | — | — |
 | T21 | TradeOffer, PlatformSteamBot entity'leri | ⬚ Bekliyor | — | — |
