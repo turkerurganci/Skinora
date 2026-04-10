@@ -41,7 +41,7 @@
 | T15 | Blockchain Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 
-**F0 Gate Check:** ⬚ Bekliyor
+**F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
 
 ---
 

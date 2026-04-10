@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.BackgroundJobs;
@@ -25,14 +26,14 @@ namespace Skinora.API.Outbox;
 /// </remarks>
 public class OutboxStartupHook : IHostedService
 {
-    private readonly IBackgroundJobScheduler _jobScheduler;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OutboxStartupHook> _logger;
 
     public OutboxStartupHook(
-        IBackgroundJobScheduler jobScheduler,
+        IServiceScopeFactory scopeFactory,
         ILogger<OutboxStartupHook> logger)
     {
-        _jobScheduler = jobScheduler;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -40,7 +41,10 @@ public class OutboxStartupHook : IHostedService
     {
         try
         {
-            var jobId = _jobScheduler.Enqueue<IOutboxDispatcher>(
+            using var scope = _scopeFactory.CreateScope();
+            var jobScheduler = scope.ServiceProvider.GetRequiredService<IBackgroundJobScheduler>();
+
+            var jobId = jobScheduler.Enqueue<IOutboxDispatcher>(
                 d => d.ProcessAndRescheduleAsync());
 
             _logger.LogInformation(
