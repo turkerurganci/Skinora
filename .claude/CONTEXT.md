@@ -48,6 +48,16 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
 | `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) + Gate Check raporları (F0) |
 
+### Transactions Modülü (T19)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/Transaction.cs` | Transaction entity — 06 §3.5 birebir, ~50+ field |
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/TransactionHistory.cs` | TransactionHistory entity — 06 §3.6, append-only audit trail |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionConfiguration.cs` | EF Core config — 9 check constraint, filtered index, FK'ler |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionHistoryConfiguration.cs` | EF Core config — IDENTITY PK, FK'ler, index |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
+
 ### CI/CD & Git Hooks (T11)
 
 | Dosya | İçerik |
