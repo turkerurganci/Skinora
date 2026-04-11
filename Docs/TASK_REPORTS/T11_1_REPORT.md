@@ -1,6 +1,6 @@
 # T11.1 — CI Close-out
 
-**Faz:** F0 (T11 kapanış borcu) | **Durum:** ⏳ Devam ediyor (yapım ✓, validator bekleniyor) | **Tarih:** 2026-04-11
+**Faz:** F0 (T11 kapanış borcu) | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-12
 
 ---
 
@@ -76,8 +76,8 @@ Ayrıca T17-T19'un task isolation ihlali notu (T20 PR #11 içine gömüldü, INS
 | 5 | Contract test: sidecar ↔ backend JSON schema doğrulaması | ~ Kısmi | CI run #24287464091 "5. Contract test" 51s ✓ (5 T12 smoke test). Gerçek sidecar schema doğrulaması F4 T65/T68 follow-up |
 | 6 | Migration dry-run: EF Core migration CI'da çalışır — T17-T20 şemaları doğrulanır | ~ Kısmi | CI run #24287464091 "6. Migration dry-run" 46s ✓ (`dotnet ef dbcontext info` ile AppDbContext + model validation; T17-T20 entity konfigürasyonları CI'da ilk kez doğrulandı). Gerçek migration script dry-run T28 follow-up |
 | 7 | Docker build: 4-component matrix temiz build verir | ✓ | CI run #24287464091 "7. Docker build (×4)": backend 2m55s, frontend 17s, sidecar-steam 19s, sidecar-blockchain 18s, hepsi ✓ |
-| 8 | Main branch üzerinde en az 1 ardışık CI run tamamen ✓ PASS olmalı | (post-merge) | Squash merge sonrası main CI run — validator chat'inde doğrulanacak |
-| 9 | F0 Gate Check yeniden değerlendirilir | (post-merge) | T11.1 validator PASS + main CI green sonrası F0 Gate Check rapor güncellemesi (validator chat scope'u) |
+| 8 | Main branch üzerinde en az 1 ardışık CI run tamamen ✓ PASS olmalı | ✓ | PR #12 squash merge `b8c1b27` sonrası main CI run [24291749170](https://github.com/turkerurganci/Skinora/actions/runs/24291749170) — 7 step + CI Gate tamamen ✓ PASS (validator chat'inde 2026-04-12 doğrulandı) |
+| 9 | F0 Gate Check yeniden değerlendirilir | (follow-up) | Ayrı işlem — F0 Gate Check raporu T11.1 PASS sonrası güncellenir (scope dışı, T21 öncesi kısa değerlendirme) |
 
 ---
 
@@ -85,10 +85,10 @@ Ayrıca T17-T19'un task isolation ihlali notu (T20 PR #11 içine gömüldü, INS
 
 | # | Kontrol | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | 7 CI step (Lint, Build, Unit, Integration, Contract, Migration, Docker) sırasıyla ✓ | (TBD) | |
-| 2 | Bir özellik branch'inde + main push'unda CI yeşil | (TBD) | |
-| 3 | T17-T20 migration script'leri CI migration dry-run'dan temiz geçiyor | ~ | `dotnet ef dbcontext info` ile DbContext + model validation (migration script değil). Gerçek script dry-run T28 sonrası |
-| 4 | BYPASS_LOG.md T14-T19 disiplin ihlal kayıtları retro-aktif not düşüldü | ✓ | T14/T15/T16 direct push retro + T17-T19 process violation notu eklendi |
+| 1 | 7 CI step (Lint, Build, Unit, Integration, Contract, Migration, Docker) sırasıyla ✓ | ✓ | Main CI run [24291749170](https://github.com/turkerurganci/Skinora/actions/runs/24291749170) — Lint 1m18s / Build 1m14s / Unit 55s / Integration 6m52s / Contract 57s / Migration 36s / Docker×4 paralel, hepsi ✓ |
+| 2 | Bir özellik branch'inde + main push'unda CI yeşil | ✓ | Branch (PR #12): run [24287671195](https://github.com/turkerurganci/Skinora/actions/runs/24287671195) ✓ PASS + main push: run [24291749170](https://github.com/turkerurganci/Skinora/actions/runs/24291749170) ✓ PASS |
+| 3 | T17-T20 migration script'leri CI migration dry-run'dan temiz geçiyor | ~ | `dotnet ef dbcontext info` ile DbContext + model validation (migration script değil). T17-T20 entity konfigürasyonları doğrulandı (TransactionHistory SQLite bug'ı yakalandı ve düzeltildi). Gerçek script dry-run T28 sonrası follow-up |
+| 4 | BYPASS_LOG.md T14-T19 disiplin ihlal kayıtları retro-aktif not düşüldü | ✓ | T14/T15/T16 direct push retro (`0a50389`, `6314591`, `e8ddd38`) + T17-T19 process violation notu eklendi |
 
 ---
 
@@ -147,14 +147,32 @@ Ayrıca T17-T19'un task isolation ihlali notu (T20 PR #11 içine gömüldü, INS
 
 ---
 
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Validator tarihi | 2026-04-12 |
+| Branch / commit | `task/T11.1-ci-closeout` / `aa28fe3` → merge `b8c1b27` |
+| Branch CI | ✓ PASS — run [24287671195](https://github.com/turkerurganci/Skinora/actions/runs/24287671195) |
+| Main CI (post-merge) | ✓ PASS — run [24291749170](https://github.com/turkerurganci/Skinora/actions/runs/24291749170) |
+
+**Verdict gerekçesi:** 7 kabul kriteri tam karşılandı (1-4, 7, 8 ✓) + 2 kriter dokümante edilmiş kapsam daraltmasıyla kısmi (5 contract smoke tests + 6 `dbcontext info` — her ikisi de F4 T65/T68 ve T28 follow-up'larına bağlı, alternatif yok). Kriter 9 (F0 Gate Check re-evaluation) scope dışı follow-up olarak tanımlandı. Yapım raporuyla tam uyumlu. Mini güvenlik kontrolü temiz. Cycle 2 SQLite fix T11.1 "blind spot" gerekçesini retroaktif kanıtladı (CI pipeline aktivasyonu pre-existing bug'ı yakaladı).
+
+---
+
 ## Commit & PR
 
 - **Branch:** `task/T11.1-ci-closeout`
-- **PR:** [#12](https://github.com/turkerurganci/Skinora/pull/12)
+- **PR:** [#12](https://github.com/turkerurganci/Skinora/pull/12) — MERGED 2026-04-12
 - **Commits (yapım):**
   - `985007f` — T11.1: CI close-out — frontend lockfile + contract/migration job aktivasyon
   - `6c61b5b` — T11.1 fix: TransactionHistory.AdditionalData — HasColumnType('nvarchar(max)') kaldirildi
-- **CI:** ✓ PASS — run [24287464091](https://github.com/turkerurganci/Skinora/actions/runs/24287464091) (2. cycle, 9m toplam)
+  - `aa28fe3` — T11.1 docs: rapor finalize + IMPLEMENTATION_STATUS guncelle
+- **Squash merge:** `b8c1b27` — T11.1: CI close-out — tüm pipeline step'leri canlı + lockfile fix + SQLite migration fix (#12)
+- **CI:** ✓ PASS — branch run [24287671195](https://github.com/turkerurganci/Skinora/actions/runs/24287671195) + main run [24291749170](https://github.com/turkerurganci/Skinora/actions/runs/24291749170)
 
 ---
 
