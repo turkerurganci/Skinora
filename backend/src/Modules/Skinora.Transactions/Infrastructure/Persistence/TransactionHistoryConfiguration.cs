@@ -35,8 +35,11 @@ public class TransactionHistoryConfiguration : IEntityTypeConfiguration<Transact
         builder.Property(h => h.ActorId)
             .IsRequired();
 
-        builder.Property(h => h.AdditionalData)
-            .HasColumnType("nvarchar(max)");
+        // AdditionalData: string? with no explicit length → EF Core default is
+        // nvarchar(max) on SQL Server and TEXT on SQLite. Explicit HasColumnType
+        // would force SQL Server syntax and break SQLite integration tests
+        // (API.Tests/Integration use SQLite, see T12 Notlar).
+        builder.Property(h => h.AdditionalData);
 
         builder.Property(h => h.CreatedAt)
             .IsRequired();
