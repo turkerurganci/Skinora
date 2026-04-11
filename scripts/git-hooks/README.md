@@ -6,7 +6,7 @@ T11 close-out (2026-04-08) ile eklendi. **Discipline-only branch protection reji
 
 | Hook | Ne yapar |
 |---|---|
-| `pre-push` | `main` veya `develop` branch'ine direct push'u bloklar. Tüm değişiklikler PR + CI üzerinden gitmelidir. |
+| `pre-push` | İki katman: (1) `main`/`develop`'a direct push'u bloklar. (2) **T11.2 CI guard:** push edilen branch'in son CI run'ı failure/cancelled/timed_out ise push'u bloklar. |
 
 ## Kurulum (yeni clone sonrası tek seferlik)
 
@@ -32,9 +32,13 @@ git config core.hooksPath
 
 | Senaryo | Beklenen sonuç |
 |---|---|
-| `git push origin main` | ✗ BLOCKED, exit 1 |
-| `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` | ⚠ WARN + PASS |
-| `git push origin task/T12-something` | ✓ PASS (feature branch'ler serbest) |
+| `git push origin main` | ✗ BLOCKED, exit 1 (direct push) |
+| `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` | ⚠ WARN + PASS (bypass, BYPASS_LOG'a kayıt) |
+| `git push origin task/TXX-*` (CI run yok) | ✓ PASS |
+| `git push origin task/TXX-*` (son CI success) | ✓ PASS |
+| `git push origin task/TXX-*` (son CI failure) | ✗ BLOCKED, exit 1 (CI guard) |
+| `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin task/TXX-*` (son CI failure) | ⚠ WARN + PASS (bypass, BYPASS_LOG'a kayıt) |
+| `gh` yok veya auth yok | ⚠ WARN + PASS (CI guard skip, direct-push kuralı hâlâ aktif) |
 
 ## Bypass (acil durum)
 

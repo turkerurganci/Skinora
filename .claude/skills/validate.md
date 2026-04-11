@@ -15,7 +15,25 @@
 
 ## Doğrulama Adımları
 
-### Faz 1 — Bağımsız Değerlendirme
+### Adım 0 — Main CI Startup Check (HARD STOP)
+
+**Amaç:** T11.2 savunma katmanı. T20 validator'ı main CI ardışık FAIL'leyen ortamda "lokal temiz, geç" rasyonelizasyonuyla PASS verdi — bu bir daha tekrarlanmamalı.
+
+**Yap:**
+
+```bash
+gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayTitle,createdAt
+```
+
+**Karar kuralı:**
+
+- Üç tamamlanmış run'ın **hepsi** `conclusion=success` ise → doğrulamaya başla.
+- Biri bile `failure`, `cancelled`, `timed_out` veya `action_required` ise → **HARD STOP.**
+  - Kullanıcıya sebebi sor.
+  - "Lokal temiz", "ilgisiz kırılma", "önceki task'ın borcu", "sadece docker-publish" **rasyonelizasyonları yasak.**
+  - CI kırılması mevcut task'ın kendisinden kaynaklanıyorsa → bu zaten S2 Kırılma finding'i, FAIL verdict.
+  - CI kırılması önceki bir task'ın borcundan kaynaklanıyorsa → **BLOCKED (DEPENDENCY_MISMATCH)** — "önceki task yeşil bırakmadığı için bu task doğrulanamaz."
+- Bu adım TXX_REPORT.md'deki doğrulama bölümüne yazılır (3 run ID + conclusion).
 
 1. **Task tanımını oku:** `Docs/11_IMPLEMENTATION_PLAN.md`'den `hedef` task'ın tanımını bul:
    - Kabul kriterleri
@@ -47,6 +65,11 @@
    - Sonuçları kaydet
 
 7. **Build kontrolü:** Tüm projeler temiz build veriyor mu?
+
+   **7a. Task branch CI kontrolü (T11.2 zorunlu madde):** `gh run list --branch task/TXX-* --limit 3 --json databaseId,conclusion,status` ile task branch'inin CI run'larına bak. En az bir run `conclusion=success` olmalı. Hiçbir run yoksa veya en son run `failure` ise → **bu bir finding'dir, sessizce geçilemez.**
+   - Başarısız olan adım (Lint / Build / Unit / Integration / Contract / Migration / Docker) bulguda belirtilir.
+   - "Lokal makinemde geçiyor" kabul edilemez — validator kanıt bazlı çalışır, lokal temizlik CI'yi ikame etmez.
+   - Task'ın kendi CI run'ı yoksa (branch push edilmemiş, PR açılmamış) → BLOCKED (task chat bitiş kapısı çiğnenmiş, `task.md` Bitiş Kapısı bölümüne bak).
 
 8. **Mini güvenlik kontrolü:**
    - Secret sızıntısı var mı?

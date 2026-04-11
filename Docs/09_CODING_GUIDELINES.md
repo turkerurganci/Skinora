@@ -2125,6 +2125,36 @@ migration: add RetryCount column to BlockchainTransactions
 6. Migration dry-run (staging DB'ye karşı)
 ```
 
+### 21.5 Notification & Guard Katmanları (T11.2)
+
+T11.1 retrospektifi T13–T20 döneminde main CI'nin 5 task üst üste sessizce kırık kaldığını, task chat'lerinin PR açmadan bittiğini ve validator'ın kırmızı CI'yi "lokal temiz" gerekçesiyle geçtiğini tespit etti. Tek savunma katmanı yetmiyor — mekanik + şablon + süreç kurallarıyla birden fazla ağ gerekli.
+
+**Katman A — Startup check (skill düzeyi):**
+- `/task TXX` ve `/validate TXX` skill'leri Adım 0'da `gh run list --branch main --limit 3` çağırır.
+- Son 3 tamamlanmış run'dan biri bile `failure/cancelled/timed_out/action_required` ise **HARD STOP** — root cause çözülmeden task'a başlanmaz.
+- Rasyonelizasyonlar ("lokal temiz", "ilgisiz kırılma", "sadece docker-publish") yasak.
+- Kaynak: `.claude/skills/task.md` Adım 0, `.claude/skills/validate.md` Adım 0.
+
+**Katman B — Pre-push CI guard (hook düzeyi):**
+- `scripts/git-hooks/pre-push` push öncesinde push edilen branch'in son CI run'ını kontrol eder.
+- `failure/cancelled/timed_out/action_required/startup_failure` sonuçlarında push bloklanır.
+- `gh` CLI yok veya auth yoksa WARN + geçer (fail-open).
+- Bypass: `SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="..." git push` — `Docs/BYPASS_LOG.md`'ye `[ci-failure]` kayıt düşer.
+
+**Katman C — Validator finding kuralı (süreç düzeyi):**
+- `.claude/skills/validate.md` Faz 1 Adım 7a: task branch CI run'ı FAIL ise bu bir S2 Kırılma finding'idir, sessizce geçilemez.
+- CI kırılması önceki task borcundan ise → BLOCKED (DEPENDENCY_MISMATCH).
+- `INSTRUCTIONS.md §3.3` validator CI rasyonelizasyon yasağı paralel madde olarak kayıtlı.
+
+**Katman D — Task chat bitiş kapısı:**
+- `.claude/skills/task.md` "Bitiş Kapısı" bölümü: branch push + PR create + PR numarası TXX_REPORT + **CI run tamamlandı** + **CI run `success`** — beş maddenin hepsi ✓ olmadan task "yapım bitti" sayılmaz.
+- "CI run başladı" yeterli **değildir** — task chat CI sonucunu beklemeden bitemez, aksi halde kırık CI'yi validator'a havale pattern'i (T13-T20 dönemi) tekrarlanır.
+- Concurrency ile cancel olan run'lar `failure` sayılmaz; en son tamamlanmış run'a bakılır.
+- Bundled PR yasağı: başka bir task'ın PR'ına gömmek yasak (tek istisna: aynı TXX'in düzeltmeleri aynı branch'e).
+- "PR: Henüz oluşturulmadı" veya boş PR alanı → otomatik BLOCKED.
+
+**Tek bir katman yeterli değildir.** Savunma katmanları birbirini tamamlar: startup check chat'i başlamadan önce yakalar; pre-push hook push öncesinde yakalar; validator task sonunda yakalar; bitiş kapısı bundled PR'ı yakalar.
+
 ---
 
 ## 22. Refactor Kuralları

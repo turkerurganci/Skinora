@@ -72,6 +72,13 @@
   - Validator'a verilen girdiler: task tanımı, kabul kriterleri, doğrulama kontrol listesi, ilgili referans dokümanlar, branch kodu, CI sonuçları. **Başka bir şey verilmez.**
   - Validator rolü "spec conformance reviewer" — yapıcı değil, sapma avcısı tonunda çalışır.
   - Validator kendi bağımsız verdict'ünü oluşturduktan sonra yapım raporuyla karşılaştırır.
+- **Validator CI rasyonelizasyon yasağı (T11.2 savunma katmanı):**
+  - Validator `Adım 0`'da son 3 main CI run'ını kontrol eder (`gh run list --branch main --limit 3`). Biri bile FAIL ise **HARD STOP**.
+  - Task branch CI'sı da Faz 1 Adım 7a'da kontrol edilir. Task branch CI FAIL veya yok ise → finding / BLOCKED.
+  - Yasak rasyonelizasyonlar: "lokal temiz, geç", "benim task'ımla ilgisiz kırılma", "önceki task'ın borcu, şimdilik görmezden gel", "sadece docker-publish kırıldı", "küçük değişiklik CI'yi bekleyemez".
+  - CI kırılması mevcut task'tan ise → S2 Kırılma finding'i (FAIL).
+  - CI kırılması önceki task'ın borcundan ise → BLOCKED (DEPENDENCY_MISMATCH), "önceki task yeşil bırakmadığı için bu task doğrulanamaz".
+  - T11.1 retrospektifi: T20 validator'ı main CI T13'ten beri kırmızıyken "lokal temiz" gerekçesiyle PASS verdi. Tekrarlanmamalı — validator'ın kanıt standardı lokal temizlikten yüksektir.
 - **Kabul kriteri doğrulama durumları:**
   - `✓ Karşılandı` — kanıtla doğrulandı
   - `✗ Karşılanmadı` — eksik veya hatalı
