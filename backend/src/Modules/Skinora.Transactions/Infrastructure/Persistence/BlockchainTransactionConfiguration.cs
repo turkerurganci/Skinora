@@ -58,6 +58,11 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Failed",
                 "(Status <> 'FAILED') " +
                 "OR (ConfirmedAt IS NULL)");
+
+            // PENDING: ConfirmationCount < 20
+            t.HasCheckConstraint("CK_BlockchainTransactions_Status_Pending",
+                "(Status <> 'PENDING') " +
+                "OR (ConfirmationCount < 20)");
         });
 
         // --- Primary key ---

@@ -705,6 +705,25 @@ public class PaymentBlockchainEntityTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task CK_Status_Pending_Violated_WhenConfirmationCountHigh()
+    {
+        // Arrange — PENDING requires ConfirmationCount < 20
+        var pa = CreateValidPaymentAddress(hdIndex: 125);
+        Context.Set<PaymentAddress>().Add(pa);
+        await Context.SaveChangesAsync();
+
+        var btx = CreateValidBlockchainTx(
+            status: BlockchainTransactionStatus.PENDING,
+            paymentAddressId: pa.Id);
+        btx.ConfirmationCount = 20; // violation: must be < 20
+
+        Context.Set<BlockchainTransaction>().Add(btx);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+    }
+
+    [Fact]
     public async Task CK_Status_Failed_Violated_WhenConfirmedAtNotNull()
     {
         // Arrange — FAILED requires ConfirmedAt NULL

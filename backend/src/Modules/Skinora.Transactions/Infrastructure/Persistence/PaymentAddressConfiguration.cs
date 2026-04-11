@@ -69,7 +69,7 @@ public class PaymentAddressConfiguration : IEntityTypeConfiguration<PaymentAddre
 
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(p => p.MonitoringStatus)
-            .HasFilter("[MonitoringStatus] = 'ACTIVE'")
+            .HasFilter("[MonitoringStatus] IN ('ACTIVE','POST_CANCEL_24H','POST_CANCEL_7D','POST_CANCEL_30D')")
             .HasDatabaseName("IX_PaymentAddresses_MonitoringStatus_Active");
     }
 }
