@@ -319,6 +319,34 @@ Task T11: CI/CD pipeline
 ```
 
 ```
+Task T11.1: CI close-out — tüm pipeline step'lerini canlı hale getir
+  Bağımlılık: T11, T13, T14, T15 (frontend + sidecar'lar yerinde olmalı)
+  Dokümanlar: 09 §21.4, T11 close-out notları
+  Gerekçe: T20 validator chat'inde (2026-04-11) ortaya çıktı — T13 chore'dan (2026-04-09) itibaren main CI kesintisiz FAIL,
+    toplam 5+ merge silently CI fail ile geçti. T11 discipline "merge için CI PASS zorunlu" kuralı fiilen unutulmuş.
+    Lint step'i T20 PR'ında (A1 fix) düzeltildi ama arkasındaki Build → Frontend → Unit → Integration → Contract →
+    Migration dry-run → Docker build chain'i T13'ten beri hiç çalışmamış. F1 veri katmanı için **migration dry-run
+    kritik** — T17-T20 şemaları CI'da hiç test edilmedi.
+  Kabul kriterleri:
+    - Lint: ✓ PASS (T20 PR #11'de bd8d713 sonrası düzeltildi — sidecar tsc --noEmit)
+    - Build: Frontend `@parcel/watcher` linux-x64-glibc lockfile/platform sorunu çözülür; backend + frontend Linux CI'da temiz build verir
+    - Unit test: dotnet test `!~.Integration` filter GHA runner'da çalışır
+    - Integration test: TestContainers MsSql GHA runner'da çalışır (F1 migration için kritik)
+    - Contract test: sidecar ↔ backend JSON schema doğrulaması çalışır
+    - Migration dry-run: EF Core migration CI'da çalışır — T17-T20 şemaları doğrulanır
+    - Docker build: 4-component matrix (backend, frontend, sidecar-steam, sidecar-blockchain) temiz build verir
+    - Main branch üzerinde en az 1 ardışık CI run tamamen ✓ PASS olmalı
+    - F0 Gate Check yeniden değerlendirilir (önceki gate check CI kırıkken PASS verilmişti, 2026-04-10)
+  Test beklentisi: Yok — CI altyapısının kendisi doğrulanıyor
+  Doğrulama kontrol listesi:
+    - [ ] 7 CI step (Lint, Build, Unit, Integration, Contract, Migration, Docker) sırasıyla ✓
+    - [ ] Bir özellik branch'inde + main push'unda CI yeşil
+    - [ ] T17-T20 migration script'leri CI migration dry-run'dan temiz geçiyor
+    - [ ] BYPASS_LOG.md T11 manuel disiplin ihlal kayıtları (T14-T19 dönemi) retro-aktif not düşüldü
+  Durum: F1 ilerleyişi için blocker — T21 başlamadan önce tamamlanmalı
+```
+
+```
 Task T12: Test altyapısı
   Bağımlılık: T01, T04
   Dokümanlar: 09 §19.2, §19.6, §12.7

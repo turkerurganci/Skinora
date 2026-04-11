@@ -69,6 +69,7 @@
 
 ## Known Limitations / Follow-up
 - BlockchainTransaction, BaseEntity'den türemiyor (RowVersion/IAuditableEntity yok) — 06 §3.8 "Workflow Record" tanımına uygun: Status, ConfirmationCount, RetryCount güncellenir ama concurrency kontrolü transaction seviyesinde yapılır
+- **CI Gate partial — T11 close-out debt (T11.1):** T20 PR #11 CI'da sadece Lint step'i ✓ PASS oldu. Build → Unit → Integration → Contract → Migration dry-run → Docker build chain'i T13'ten beri hiç yeşil olmamıştı — root cause'lar T11 CI workflow'daki stale sidecar placeholder (T14/T15 sonrası geçersiz, bu PR'ın `0a9463b` commit'inde düzeltildi) ve T13 dönemi frontend `@parcel/watcher` lockfile/platform sorunu (düzeltilmedi). T20 kodu lokal olarak TestContainers MsSql 2022 üzerinde 35/35 + full suite 311/311 PASS verdiği için validator verdict PASS; ancak CI migration dry-run adımı hiç çalışmadığından **T17-T20 şemalarının CI migration pipeline'ında doğruluğu henüz kanıtlanmadı** — bu bir blind spot. T11.1 task'ı açıldı (11_IMPLEMENTATION_PLAN.md, IMPLEMENTATION_STATUS.md F0 bölümü); F1 → F1 Gate Check öncesi kapatılacak, T21 başlamadan önce tamamlanmalı.
 
 ## Notlar
 - T19 (TransactionEntityTests) regression testi ayrıca çalıştırıldı

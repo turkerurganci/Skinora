@@ -40,8 +40,11 @@
 | T14 | Steam Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T15 | Blockchain Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ⬚ Bekliyor | — | — |
 
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
+
+> **Not (2026-04-11, T20 validator):** F0 Gate Check CI gate yeşil olmadan PASS verildi. T13 chore'dan (2026-04-09) itibaren main CI ardışık FAIL — root cause T11 workflow'daki T14/T15 sonrası stale sidecar placeholder lint step'i + T13 dönemi frontend `@parcel/watcher` lockfile/platform sorunu. T11.1 task'ı bu borcu kapatacak. F1 → F1 Gate Check öncesi T11.1 PASS şart.
 
 ---
 
