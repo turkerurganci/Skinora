@@ -2147,7 +2147,9 @@ T11.1 retrospektifi T13–T20 döneminde main CI'nin 5 task üst üste sessizce 
 - `INSTRUCTIONS.md §3.3` validator CI rasyonelizasyon yasağı paralel madde olarak kayıtlı.
 
 **Katman D — Task chat bitiş kapısı:**
-- `.claude/skills/task.md` "Bitiş Kapısı" bölümü: branch push + PR create + PR numarası TXX_REPORT + CI run başladı — dört maddenin hepsi ✓ olmadan task "yapım bitti" sayılmaz.
+- `.claude/skills/task.md` "Bitiş Kapısı" bölümü: branch push + PR create + PR numarası TXX_REPORT + **CI run tamamlandı** + **CI run `success`** — beş maddenin hepsi ✓ olmadan task "yapım bitti" sayılmaz.
+- "CI run başladı" yeterli **değildir** — task chat CI sonucunu beklemeden bitemez, aksi halde kırık CI'yi validator'a havale pattern'i (T13-T20 dönemi) tekrarlanır.
+- Concurrency ile cancel olan run'lar `failure` sayılmaz; en son tamamlanmış run'a bakılır.
 - Bundled PR yasağı: başka bir task'ın PR'ına gömmek yasak (tek istisna: aynı TXX'in düzeltmeleri aynı branch'e).
 - "PR: Henüz oluşturulmadı" veya boş PR alanı → otomatik BLOCKED.
 
