@@ -59,7 +59,7 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionConfiguration.cs` | EF Core config — 9 check constraint, filtered index, FK'ler |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionHistoryConfiguration.cs` | EF Core config — IDENTITY PK, FK'ler, index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/PaymentAddressConfiguration.cs` | EF Core config — 3 unique index, 1 filtered (MonitoringStatus), FK'ler |
-| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 8 CHECK constraint, filtered unique TxHash, 3 perf index |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
 
 ### CI/CD & Git Hooks (T11)

@@ -36,9 +36,11 @@
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Build | ✓ 0 warning, 0 error | `dotnet build backend/Skinora.sln --no-restore` (düzeltme sonrası) |
+| Build | ✓ 0 warning, 0 error | `dotnet build` — 22 proje, 26.8s |
 | Integration (yapım) | ✓ 35/35 passed | `dotnet test --filter PaymentBlockchainEntityTests` — düzeltme sonrası |
-| Integration (validator) | ? Doğrulanamadı | Docker unavailable (TestContainers) — altyapı sorunu, kod sorunu değil |
+| Integration (validator) | ✓ 35/35 passed | Docker 29.2.1 + TestContainers MsSql 2022, `commit bd8d713`, süre 5m 38s |
+| Transactions regresyon (T19+T20) | ✓ 58/58 passed | `dotnet test Skinora.Transactions.Tests` — 6m 45s |
+| Full suite regresyon | ✓ 311/311 passed | Shared 154 + API 99 + Transactions 58, 0 fail/skip |
 
 ## Doğrulama
 | Alan | Sonuç |
@@ -61,7 +63,7 @@
 
 ## Commit & PR
 - Branch: `task/T20-payment-blockchain-entities`
-- Commit: (pending)
+- Commit: `bd8d713` (T20 fix: PaymentAddress filtered index + PENDING status CK), `6d3aaaa` (T20: PaymentAddress, BlockchainTransaction entity'leri)
 - PR: (pending)
 - CI: (pending)
 
