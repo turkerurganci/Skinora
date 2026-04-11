@@ -347,6 +347,58 @@ Task T11.1: CI close-out — tüm pipeline step'lerini canlı hale getir
 ```
 
 ```
+Task T11.2: CI disiplin savunma katmanları
+  Bağımlılık: T11.1
+  Dokümanlar: T11.1 retrospektif dersleri, 09 §21.4, INSTRUCTIONS.md §3.1, §3.3
+  Gerekçe: T11.1 close-out retrospektifi T13-T20 döneminde 5 üst üste disiplin
+    ihlalini ortaya çıkardı — (1) main CI T13'ten beri ardışık FAIL sessizce
+    devam etti, (2) T15+T16 task chat'leri bitti ama PR açılmadı, kodları
+    F0 Gate Check PR #10'a "bundled" olarak geldi, (3) T17+T18+T19 ayrı PR
+    yerine T20 branch'ine gömüldü, (4) T20 validator'ı CI kırmızıyken
+    "lokal temiz, geç" rasyonelizasyonuyla PASS verdi, (5) "merge için CI
+    PASS zorunlu" kuralı manuel disiplinde çözündü. Tek savunma katmanı
+    yetmiyor — mekanik + şablon + skill kurallarıyla birden fazla ağ gerekli.
+  Kabul kriterleri:
+    - Startup check (task + validate skill'lerinde): `/task TXX` ve `/validate
+      TXX` skill'lerinin Adım 0 olarak main CI son 3 run conclusion'ını
+      kontrol etmesi; biri bile FAIL ise **hard stop** — kullanıcıya sebep
+      sorulur, root cause çözülmeden task'a başlanmaz. Rasyonelizasyon
+      (lokal temiz, ilgisiz vb.) yasak.
+    - Pre-push CI guard (scripts/git-hooks/pre-push): push öncesi mevcut
+      branch'in son CI run'ı FAIL ise push bloklanır. `gh` CLI yoksa uyarı
+      verir ve geçer. Bypass `SKINORA_ALLOW_DIRECT_PUSH=1` + BYPASS_LOG
+      otomatik kayıt (mevcut pattern genişletilir).
+    - Validator "CI kırmızı = finding" kuralı: .claude/skills/validate.md
+      Faz 1'e zorunlu madde — "Son 3 main CI run'ın conclusion'ı nedir?
+      Biri bile failure ise S2 Kırılma finding olarak kayıtlanır, sessizce
+      PASS verilemez. CI kırılması önceki bir task'ın sorumluluğundaysa
+      BLOCKED (DEPENDENCY_MISMATCH)." INSTRUCTIONS.md §3.3'e de paralel
+      madde eklenir.
+    - Task chat bitiş kapısı: .claude/skills/task.md sonuna "Bitiş Kapısı"
+      check listesi — branch push edildi mi, `gh pr create` çağrıldı mı,
+      PR numarası TXX_REPORT.md'ye yazıldı mı, CI run başladı mı. Dört
+      maddenin hepsi ✓ olmadan task "yapım bitti" sayılmaz; raporda
+      "PR: Henüz oluşturulmadı" ifadesi görülürse otomatik BLOCKED.
+    - BYPASS_LOG düzeltmesi: T11.1'de hatalı retro kaydedilen T14 satırı
+      kaldırılır (T14 PR #8 ile düzgün merge olmuş), T15+T16 için doğru
+      pattern adı eklenir ("PR açılmadı, F0 Gate Check PR #10'a bundled").
+      T17-T19 satırı aynen kalır (T20 PR #11'e bundled zaten doğru).
+    - Dokümantasyon: 09 §21.4'e notification/guard katmanı başlığı eklenir.
+  Test beklentisi: Yok — skill + hook + doküman. Manuel smoke: bilerek
+    kırık bir branch push denemesi hook tarafından bloklanmalı; validator
+    çağrılırken main CI sahte kırmızı senaryosu hard stop üretmeli.
+  Doğrulama kontrol listesi:
+    - [ ] task.md + validate.md Adım 0 startup check mevcut, hard stop wording net
+    - [ ] pre-push hook CI status kontrolü yapıyor, bypass path çalışıyor
+    - [ ] validate.md Faz 1'de "CI kırmızı = finding" maddesi var
+    - [ ] task.md sonunda bitiş kapısı check listesi var, BLOCKED trigger net
+    - [ ] BYPASS_LOG.md T14 satırı kaldırıldı, T15+T16 "bundled PR" notu eklendi
+    - [ ] INSTRUCTIONS.md §3.3'te validator rasyonelizasyon yasağı var
+    - [ ] 09 §21.4 guard katmanı başlığı eklendi
+  Durum: T21 öncesi zorunlu — T11.1 deliklerini kapatır, F1 ilerleyişi bu ağla başlar
+```
+
+```
 Task T12: Test altyapısı
   Bağımlılık: T01, T04
   Dokümanlar: 09 §19.2, §19.6, §12.7

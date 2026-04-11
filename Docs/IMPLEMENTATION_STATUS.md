@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-12 (T11.1 validator ✓ PASS — PR #12 squash merge `b8c1b27`, main CI run 24291749170 ✓ 7/7 + CI Gate)
+**Son güncelleme:** 2026-04-12 (T11.1 validator ✓ PASS; T11.2 plana eklendi — CI disiplin savunma katmanları, T21 öncesi zorunlu)
 
 ---
 
@@ -41,6 +41,7 @@
 | T15 | Blockchain Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ✓ Tamamlandı | ✓ PASS | `b8c1b27` (#12) |
+| T11.2 | CI disiplin savunma katmanları (startup check + pre-push guard + validator kuralı + bitiş kapısı + BYPASS_LOG düzeltme) | ⬚ Bekliyor | — | — |
 
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
 
