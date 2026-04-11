@@ -88,13 +88,13 @@ jobs:
         working-directory: frontend
         run: npm ci && npm run lint
 
-      - name: Node syntax check (sidecar-steam placeholder)
+      - name: Sidecar-steam typecheck
         working-directory: sidecar-steam
-        run: node --check server.js
+        run: npm ci && npx tsc --noEmit
 
-      - name: Node syntax check (sidecar-blockchain placeholder)
+      - name: Sidecar-blockchain typecheck
         working-directory: sidecar-blockchain
-        run: node --check server.js
+        run: npm ci && npx tsc --noEmit
 
   # ----------------------------------------------------------------------------
   # 2. Build  (09 §21.4 step 2)
