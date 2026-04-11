@@ -48,6 +48,20 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
 | `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) + Gate Check raporları (F0) |
 
+### Transactions Modülü (T19–T20)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/Transaction.cs` | Transaction entity — 06 §3.5 birebir, ~50+ field |
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/TransactionHistory.cs` | TransactionHistory entity — 06 §3.6, append-only audit trail |
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/PaymentAddress.cs` | PaymentAddress entity — 06 §3.7, 1:1 Transaction, soft delete |
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/BlockchainTransaction.cs` | BlockchainTransaction entity — 06 §3.8, 17 field, type/status semantiği |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionConfiguration.cs` | EF Core config — 9 check constraint, filtered index, FK'ler |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionHistoryConfiguration.cs` | EF Core config — IDENTITY PK, FK'ler, index |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/PaymentAddressConfiguration.cs` | EF Core config — 3 unique index, 1 filtered (MonitoringStatus), FK'ler |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
+
 ### CI/CD & Git Hooks (T11)
 
 | Dosya | İçerik |

@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-10 (T16 ✓ PASS — F0 tamamlandı, Gate Check bekleniyor)
+**Son güncelleme:** 2026-04-11 (T20 ✓ PASS — validator re-run: 35/35 integration + 311/311 full regresyon)
 
 ---
 
@@ -40,8 +40,11 @@
 | T14 | Steam Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T15 | Blockchain Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ⬚ Bekliyor | — | — |
 
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
+
+> **Not (2026-04-11, T20 validator):** F0 Gate Check CI gate yeşil olmadan PASS verildi. T13 chore'dan (2026-04-09) itibaren main CI ardışık FAIL — root cause T11 workflow'daki T14/T15 sonrası stale sidecar placeholder lint step'i + T13 dönemi frontend `@parcel/watcher` lockfile/platform sorunu. T11.1 task'ı bu borcu kapatacak. F1 → F1 Gate Check öncesi T11.1 PASS şart.
 
 ---
 
@@ -49,10 +52,10 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T17 | Enum tanımları (C# + EF Core migration) | ⬚ Bekliyor | — | — |
-| T18 | User, UserLoginLog, RefreshToken entity'leri | ⬚ Bekliyor | — | — |
-| T19 | Transaction, TransactionHistory entity'leri | ⬚ Bekliyor | — | — |
-| T20 | PaymentAddress, BlockchainTransaction entity'leri | ⬚ Bekliyor | — | — |
+| T17 | Enum tanımları (C# + EF Core migration) | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T18 | User, UserLoginLog, RefreshToken entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T19 | Transaction, TransactionHistory entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
+| T20 | PaymentAddress, BlockchainTransaction entity'leri | ✓ Tamamlandı | ✓ PASS | (pending squash) |
 | T21 | TradeOffer, PlatformSteamBot entity'leri | ⬚ Bekliyor | — | — |
 | T22 | Dispute, FraudFlag entity'leri | ⬚ Bekliyor | — | — |
 | T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ⬚ Bekliyor | — | — |

@@ -8,7 +8,10 @@ using Skinora.API.Logging;
 using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
+using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Infrastructure.Persistence;
+using Skinora.Users.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -87,6 +90,12 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ApiResponseWrapperFilter>();
 });
+
+// Module entity registrations (T18+) — register module assemblies so their
+// IEntityTypeConfiguration<T> implementations are discovered by AppDbContext.
+UsersModuleDbRegistration.RegisterUsersModule();
+AuthModuleDbRegistration.RegisterAuthModule();
+TransactionsModuleDbRegistration.RegisterTransactionsModule();
 
 var app = builder.Build();
 
