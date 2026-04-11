@@ -135,7 +135,7 @@ jobs:
 
       - name: Frontend build
         working-directory: frontend
-        run: npm ci && npm run build
+        run: npm ci --include=optional && npm run build
 
   # ----------------------------------------------------------------------------
   # 3. Unit test  (09 §21.4 step 3)
@@ -167,7 +167,7 @@ jobs:
         run: |
           dotnet test Skinora.sln \
             --configuration Release \
-            --filter "FullyQualifiedName!~.Integration" \
+            --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract" \
             --logger "trx;LogFileName=unit-tests.trx" \
             --logger "console;verbosity=normal" \
             --results-directory ./TestResults
@@ -226,34 +226,86 @@ jobs:
 
   # ----------------------------------------------------------------------------
   # 5. Contract test  (09 §21.4 step 5)
-  # PLACEHOLDER — gercek altyapi T12'de kurulacak (sidecar <-> backend JSON schema).
-  # Bu job sirasi 09 §21.4'e uymak icin simdi tanimli, T12 sonrasi doldurulacak.
+  # T11.1 — ContractTestBase smoke tests (T12). Gercek sidecar <-> backend schema
+  # dogrulamalari F4 sidecar entegrasyonlari (T65, T68) icinde eklenecek.
   # ----------------------------------------------------------------------------
   contract-test:
     name: 5. Contract test
-    needs: integration-test
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Placeholder
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Run contract tests
+        working-directory: backend
         run: |
-          echo "::notice title=T11 Placeholder::Contract test altyapisi T12'de kurulacak."
-          echo "T12 sonrasi bu job sidecar <-> backend JSON schema dogrulamasi calistiracak."
-          echo "Referans: 09 §19.2, 11_IMPLEMENTATION_PLAN.md T12 kabul kriterleri"
+          dotnet test Skinora.sln \
+            --configuration Release \
+            --filter "FullyQualifiedName~.Contract" \
+            --logger "trx;LogFileName=contract-tests.trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory ./TestResults
+
+      - name: Upload contract test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-results
+          path: backend/TestResults/
+          retention-days: 7
 
   # ----------------------------------------------------------------------------
   # 6. Migration dry-run  (09 §21.4 step 6)
-  # PLACEHOLDER — gercek altyapi F1 T28 (initial migration) sonrasi aktif olacak.
+  # T11.1 — `dotnet ef dbcontext info` calistirarak DbContext + model validation
+  # yapilir (T17-T20 entity'leri burada dogrulanir, blind spot kapaniyor).
+  # Gercek `dotnet ef migrations script --dry-run` F1 T28 (initial migration)
+  # sonrasi eklenecek.
   # ----------------------------------------------------------------------------
   migration-dry-run:
     name: 6. Migration dry-run
-    needs: integration-test
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Placeholder
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Install dotnet-ef tool
+        run: dotnet tool install --global dotnet-ef --version 9.0.3
+
+      - name: dotnet ef dbcontext info (model validation)
+        working-directory: backend
         run: |
-          echo "::notice title=T11 Placeholder::Migration dry-run F1 T28 sonrasi aktif olacak."
-          echo "T28 sonrasi bu job staging DB'ye karsi 'dotnet ef database update --dry-run' calistiracak."
-          echo "Referans: 11_IMPLEMENTATION_PLAN.md T28 kabul kriterleri"
+          dotnet ef dbcontext info \
+            --project src/Skinora.Shared/Skinora.Shared.csproj \
+            --startup-project src/Skinora.API/Skinora.API.csproj \
+            --context AppDbContext
 
   # ----------------------------------------------------------------------------
   # 7. Docker build check  (kabul kriterleri: image build dogrulamasi)
