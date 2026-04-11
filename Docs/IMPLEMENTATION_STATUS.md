@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-11 (T11.1 yapım ✓ — PR #12 CI run 24287464091 all-green 7/7 + CI Gate; validator bekleniyor)
+**Son güncelleme:** 2026-04-12 (T11.1 validator ✓ PASS — PR #12 squash merge `b8c1b27`, main CI run 24291749170 ✓ 7/7 + CI Gate)
 
 ---
 
@@ -40,7 +40,7 @@
 | T14 | Steam Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T15 | Blockchain Sidecar Node.js iskeleti | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
-| T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ⏳ Devam ediyor | Validator bekleniyor | PR [#12](https://github.com/turkerurganci/Skinora/pull/12) — `985007f`, `6c61b5b` — CI run [24287464091](https://github.com/turkerurganci/Skinora/actions/runs/24287464091) ✓ PASS |
+| T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ✓ Tamamlandı | ✓ PASS | `b8c1b27` (#12) |
 
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
 
