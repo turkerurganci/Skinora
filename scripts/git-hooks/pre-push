@@ -1,19 +1,24 @@
 #!/usr/bin/env bash
-# Skinora pre-push hook — discipline-only branch protection
+# Skinora pre-push hook — discipline-only branch protection + CI guard
 #
 # T11 close-out karari (2026-04-08): GitHub Free + private repo
 # kombinasyonunda branch protection / rulesets paid feature oldugu icin
 # sistem-enforced koruma yok. Bu hook lokal disiplin katmanidir.
 #
+# T11.2 (2026-04-12): CI guard katmani eklendi. Push edilen branch'in
+# son CI run'i failure ise push bloklanir. gh CLI yoksa WARN + gecer.
+#
 # Davranis:
 # - main veya develop branch'ine direct push -> BLOCK + cikis 1
-# - SKINORA_ALLOW_DIRECT_PUSH=1 set ise -> WARN + izin verir
-# - Diger branch'ler -> izin verir (feature branch'ler serbest)
+# - Herhangi bir branch'in son CI run'i failure -> BLOCK + cikis 1
+# - SKINORA_ALLOW_DIRECT_PUSH=1 set ise -> WARN + izin verir (her iki kural icin)
+# - Diger durumlar -> izin verir
 #
 # Kurulum: scripts/git-hooks/install.sh
 #
 # Bypass (acil durum / close-out commit'leri icin):
 #   SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main
+#   SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="..." git push origin feature-branch
 
 set -e
 
@@ -21,27 +26,81 @@ protected_branches="main develop"
 remote="$1"
 remote_url="$2"
 
+log_bypass() {
+  # $1 = branch name, $2 = reason prefix (e.g. "direct-push" or "ci-failure")
+  local branch="$1"
+  local kind="$2"
+  local REPO_ROOT
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+  local LOG_FILE="$REPO_ROOT/Docs/BYPASS_LOG.md"
+  if [ -f "$LOG_FILE" ]; then
+    local TIMESTAMP
+    TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+    local GIT_USER
+    GIT_USER="$(git config user.name || echo 'unknown')"
+    local SHORT_SHA
+    SHORT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+    local REASON="${SKINORA_BYPASS_REASON:-*(sebep belirtilmedi)*}"
+    echo "| $TIMESTAMP | $GIT_USER | $branch | \`$SHORT_SHA\` | [$kind] $REASON |" >> "$LOG_FILE"
+    echo "BYPASS LOG: Docs/BYPASS_LOG.md'ye kayit eklendi ($kind)." >&2
+    echo "  Lutfen bir sonraki normal commit'te bu dosyayi da commit'le." >&2
+  fi
+}
+
+check_ci_status() {
+  # $1 = branch name
+  # Returns: "success" | "failure" | "none" | "skip"
+  local branch="$1"
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "skip"
+    return 0
+  fi
+
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "skip"
+    return 0
+  fi
+
+  local result
+  result="$(gh run list --branch "$branch" --limit 1 --json conclusion,status 2>/dev/null || echo '[]')"
+
+  if [ "$result" = "[]" ] || [ -z "$result" ]; then
+    echo "none"
+    return 0
+  fi
+
+  # Parse first run's conclusion without jq dependency
+  local conclusion
+  conclusion="$(echo "$result" | grep -o '"conclusion":"[^"]*"' | head -1 | cut -d'"' -f4)"
+  local status
+  status="$(echo "$result" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)"
+
+  if [ "$status" != "completed" ]; then
+    echo "none"
+    return 0
+  fi
+
+  case "$conclusion" in
+    success) echo "success" ;;
+    failure|cancelled|timed_out|action_required|startup_failure) echo "failure" ;;
+    *) echo "none" ;;
+  esac
+}
+
 while read -r local_ref local_oid remote_ref remote_oid; do
+  # --- Layer 1: Protected branch direct-push check ---
+  pushing_branch="${remote_ref#refs/heads/}"
+  is_protected=0
   for branch in $protected_branches; do
     if [ "$remote_ref" = "refs/heads/$branch" ]; then
+      is_protected=1
       if [ "${SKINORA_ALLOW_DIRECT_PUSH:-0}" = "1" ]; then
-        # --- R2: Bypass log ---
-        REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-        LOG_FILE="$REPO_ROOT/Docs/BYPASS_LOG.md"
-        if [ -f "$LOG_FILE" ]; then
-          TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          GIT_USER="$(git config user.name || echo 'unknown')"
-          SHORT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-          REASON="${SKINORA_BYPASS_REASON:-*(sebep belirtilmedi)*}"
-          echo "| $TIMESTAMP | $GIT_USER | $branch | \`$SHORT_SHA\` | $REASON |" >> "$LOG_FILE"
-          echo "BYPASS LOG: Docs/BYPASS_LOG.md'ye kayit eklendi." >&2
-          echo "  Lutfen bir sonraki normal commit'te bu dosyayi da commit'le." >&2
-        fi
+        log_bypass "$branch" "direct-push"
         echo "WARN: SKINORA_ALLOW_DIRECT_PUSH=1 set — '$branch' direct push allowed." >&2
         echo "      Bu commit'in CI'dan gecmedigini unutma." >&2
-        continue
-      fi
-      cat <<EOF >&2
+      else
+        cat <<EOF >&2
 
 ==============================================================================
 ERROR: Direct push to '$branch' is blocked by Skinora pre-push hook.
@@ -68,9 +127,54 @@ Acil durum bypass (kullanmadan iki kez dusun):
 ==============================================================================
 
 EOF
-      exit 1
+        exit 1
+      fi
     fi
   done
+
+  # --- Layer 2: CI guard — current branch's last CI run must not be failure ---
+  # T11.2: T13-T20 doneminde main CI ardisik FAIL sessizce devam etti.
+  # Bu katman push oncesinde kirik CI'yi otomatik yakalar.
+  ci_result="$(check_ci_status "$pushing_branch")"
+
+  case "$ci_result" in
+    success|none)
+      : # push allowed
+      ;;
+    skip)
+      echo "WARN: gh CLI bulunamadi veya auth yok — CI guard atlandi (branch: $pushing_branch)." >&2
+      ;;
+    failure)
+      if [ "${SKINORA_ALLOW_DIRECT_PUSH:-0}" = "1" ]; then
+        log_bypass "$pushing_branch" "ci-failure"
+        echo "WARN: Son CI run failure — SKINORA_ALLOW_DIRECT_PUSH=1 ile gecildi." >&2
+      else
+        cat <<EOF >&2
+
+==============================================================================
+ERROR: Pre-push CI guard blocked push to '$pushing_branch'.
+==============================================================================
+
+Skinora T11.2 CI guard: son CI run'i failure/cancelled/timed_out.
+T13-T20 doneminde main CI 5 task ustuste sessizce kirik kaldi; bu
+katman o senaryonun bir daha olusmasini engeller.
+
+Cozum:
+  1. gh run list --branch $pushing_branch --limit 5
+     (hangi adimin failed oldugunu gor)
+  2. Root cause'u cozup yeniden push et
+  3. Eger failure baska bir PR'dan geliyorsa, o PR'i once yesillendir
+
+Acil durum bypass (kullanmadan iki kez dusun, BYPASS_LOG'a kayit dusulur):
+  SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="..." git push origin $pushing_branch
+
+==============================================================================
+
+EOF
+        exit 1
+      fi
+      ;;
+  esac
 done
 
 exit 0
