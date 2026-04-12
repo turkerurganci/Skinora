@@ -65,7 +65,7 @@
 - Branch: `task/T22-dispute-fraudflag-entities`
 - Commit: `eed4dc7` — T22: Dispute, FraudFlag entity'leri
 - PR: #22
-- CI: ⏳ İzleniyor
+- CI: ✓ PASS (run `24314888594` + `24315150854` success, 11/11 job)
 
 ## Known Limitations / Follow-up
 - Dispute.SystemCheckResult `nvarchar(max)` (text) — JSON validation uygulama katmanında yapılacak (T58)
