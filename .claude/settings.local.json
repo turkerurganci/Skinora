@@ -12,6 +12,17 @@
         "hooks": [
           {
             "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File ~/.claude/hooks/notify.ps1 -Message 'Claude finished — check the response'"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
             "command": "powershell.exe -ExecutionPolicy Bypass -File ~/.claude/hooks/notify.ps1 -Message 'Claude needs your attention'"
           }
         ]
