@@ -1,6 +1,6 @@
 # T21 — TradeOffer, PlatformSteamBot Entity'leri
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-12
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-12
 
 ---
 
@@ -44,9 +44,20 @@
 ## Dogrulama
 | Alan | Sonuc |
 |---|---|
-| Dogrulama durumu | Ayri chat'te yapilacak |
-| Bulgu sayisi | — |
-| Duzeltme gerekli mi | — |
+| Dogrulama durumu | ✓ PASS |
+| Bulgu sayisi | 0 |
+| Duzeltme gerekli mi | Hayir |
+
+### Validator Kanit Ozeti
+- **Adim -1:** Working tree temiz
+- **Adim 0:** Main CI son 3 run hepsi success (24312090356, 24312090370, 24311923045)
+- **Adim 7a:** Task branch CI en son run success (24313139475)
+- **Build:** 0 Warning, 0 Error
+- **Integration test:** 21/21 passed (TestContainers SQL Server)
+- **Guvenlik:** Secret yok, auth etkisi yok, input validation etkisi yok, yeni dis bagimlilik yok
+- **Dokuman uyumu:** 06 §3.9, §3.10, §4.1, §5.1, §5.2 birebir
+- **Enum uyumu:** 06 §2.7, §2.8, §2.15 birebir
+- **Yapim raporu karsilastirmasi:** Tam uyumlu (minor nit: PlatformSteamBot field sayisi metinde 10, BaseEntity+ISoftDeletable dahil 11 — cosmetic)
 
 ## Altyapi Degisiklikleri
 - Migration: Yok (T28'de toplu)

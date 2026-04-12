@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-12 (T11.2 validator ✓ PASS — 4 katman canlı, T21 önündeki son blocker kapandı)
+**Son güncelleme:** 2026-04-12 (T21 validator ✓ PASS — TradeOffer, PlatformSteamBot entity'leri)
 
 ---
 
@@ -59,7 +59,7 @@
 | T18 | User, UserLoginLog, RefreshToken entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T19 | Transaction, TransactionHistory entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T20 | PaymentAddress, BlockchainTransaction entity'leri | ✓ Tamamlandı | ✓ PASS | `be0cc24` (#11) |
-| T21 | TradeOffer, PlatformSteamBot entity'leri | ⏳ Devam ediyor | — | — |
+| T21 | TradeOffer, PlatformSteamBot entity'leri | ✓ Tamamlandı | ✓ PASS | — |
 | T22 | Dispute, FraudFlag entity'leri | ⬚ Bekliyor | — | — |
 | T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ⬚ Bekliyor | — | — |
 | T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ⬚ Bekliyor | — | — |
