@@ -62,6 +62,32 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
 
+### Steam Modülü (T21)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Steam/Domain/Entities/TradeOffer.cs` | TradeOffer entity — 06 §3.9, 11 field, 7 CHECK constraint |
+| `backend/src/Modules/Skinora.Steam/Domain/Entities/PlatformSteamBot.cs` | PlatformSteamBot entity — 06 §3.10, soft delete, denormalized counters |
+| `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/TradeOfferConfiguration.cs` | EF Core config — 7 CHECK constraint, filtered unique SteamTradeOfferId, 2 perf index, 2 FK |
+| `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/PlatformSteamBotConfiguration.cs` | EF Core config — unique SteamId, soft delete query filter, Transaction.EscrowBotId FK (cross-module) |
+| `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/SteamModuleDbRegistration.cs` | Modül assembly kaydı |
+
+### Disputes Modülü (T22)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Disputes/Domain/Entities/Dispute.cs` | Dispute entity — 06 §3.11, 14 field, soft delete |
+| `backend/src/Modules/Skinora.Disputes/Infrastructure/Persistence/DisputeConfiguration.cs` | EF Core config — 1 CHECK (CLOSED→ResolvedAt), unfiltered unique (TransactionId+Type), 3 FK, 2 perf index |
+| `backend/src/Modules/Skinora.Disputes/Infrastructure/Persistence/DisputesModuleDbRegistration.cs` | Modül assembly kaydı |
+
+### Fraud Modülü (T22)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Fraud/Domain/Entities/FraudFlag.cs` | FraudFlag entity — 06 §3.12, 13 field, soft delete |
+| `backend/src/Modules/Skinora.Fraud/Infrastructure/Persistence/FraudFlagConfiguration.cs` | EF Core config — 4 CHECK (scope + review), 3 FK, 3 perf index |
+| `backend/src/Modules/Skinora.Fraud/Infrastructure/Persistence/FraudModuleDbRegistration.cs` | Modül assembly kaydı |
+
 ### CI/CD & Git Hooks (T11)
 
 | Dosya | İçerik |
