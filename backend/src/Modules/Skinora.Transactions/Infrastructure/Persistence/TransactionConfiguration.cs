@@ -197,8 +197,9 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .WithOne(h => h.Transaction)
             .HasForeignKey(h => h.TransactionId);
 
-        // NOTE: EscrowBotId → PlatformSteamBot FK will be configured in T21
-        // when PlatformSteamBot entity is created.
+        // NOTE: EscrowBotId → PlatformSteamBot FK is configured in
+        // Skinora.Steam module (PlatformSteamBotConfiguration) to avoid
+        // circular project references. See T21.
 
         // --- Unique constraints (06 §5.1) ---
         builder.HasIndex(t => t.InviteToken)

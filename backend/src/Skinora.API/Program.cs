@@ -10,6 +10,7 @@ using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
+using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Infrastructure.Persistence;
 
@@ -96,6 +97,7 @@ builder.Services.AddControllers(options =>
 UsersModuleDbRegistration.RegisterUsersModule();
 AuthModuleDbRegistration.RegisterAuthModule();
 TransactionsModuleDbRegistration.RegisterTransactionsModule();
+SteamModuleDbRegistration.RegisterSteamModule();
 
 var app = builder.Build();
 
