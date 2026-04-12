@@ -5,9 +5,9 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 **Kural:** Bypass kullanıldığında hook bu dosyaya yazar. Kullanıcı bypass commit'inden sonraki **ilk normal commit'te** bu dosyadaki değişikliği commit'lemelidir.
 
 **[kind] önekleri (T11.2):**
-- `[direct-push]` — `main`/`develop`'a direct push bypass
-- `[ci-failure]` — push edilen branch'in son CI run'ı failure iken bypass
-- `[bundled-pr]` — task PR'ı açılmadan başka bir PR'a gömme (task-chat bitiş kapısı ihlali, retro-kayıt)
+- `[direct-push]` — `main`/`develop`'a direct push bypass (`SKINORA_ALLOW_DIRECT_PUSH=1`, pre-push Layer 1)
+- `[ci-failure]` — push edilen branch'in son CI run'ı failure iken bypass (`SKINORA_ALLOW_DIRECT_PUSH=1`, pre-push Layer 2)
+- `[bundled-pr]` — task branch isolation bypass: `task/TXX-*` branch'inde kendi TXX'i dışında commit. İlk kullanımı retro-kayıt (T15/T16/T17-T19). T11.2 follow-up ile mekanik tespit: commit-msg hook + pre-push Layer 3 (`SKINORA_ALLOW_BUNDLED=1`). Ayrıca task PR'ı açılmadan başka bir PR'a gömme (task-chat bitiş kapısı ihlali) da bu tag'i kullanır.
 
 **T11.2 düzeltme (2026-04-12):** T11.1 sırasında hatalı olarak "retro direct-push" kaydedilen T14 satırı kaldırıldı — T14 aslında PR #8 ile düzgün merge olmuş (merge commit `0a503891`, `gh pr view 8` ile doğrulandı). T15+T16 satırları birleştirilip `[bundled-pr]` pattern'iyle yeniden sınıflandırıldı.
 
