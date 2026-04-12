@@ -9,6 +9,8 @@ using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Infrastructure.Persistence;
+using Skinora.Disputes.Infrastructure.Persistence;
+using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -98,6 +100,8 @@ UsersModuleDbRegistration.RegisterUsersModule();
 AuthModuleDbRegistration.RegisterAuthModule();
 TransactionsModuleDbRegistration.RegisterTransactionsModule();
 SteamModuleDbRegistration.RegisterSteamModule();
+DisputesModuleDbRegistration.RegisterDisputesModule();
+FraudModuleDbRegistration.RegisterFraudModule();
 
 var app = builder.Build();
 
