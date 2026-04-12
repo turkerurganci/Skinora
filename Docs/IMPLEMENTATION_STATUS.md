@@ -46,6 +46,8 @@
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
 
 > **Not (2026-04-11, T20 validator):** F0 Gate Check CI gate yeşil olmadan PASS verildi. T13 chore'dan (2026-04-09) itibaren main CI ardışık FAIL — root cause T11 workflow'daki T14/T15 sonrası stale sidecar placeholder lint step'i + T13 dönemi frontend `@parcel/watcher` lockfile/platform sorunu. T11.1 task'ı bu borcu kapatacak. F1 → F1 Gate Check öncesi T11.1 PASS şart.
+>
+> **Retro kapanış (2026-04-12):** Borç kapandı. T11.1 (`b8c1b27`, PR #12) main CI 7/7 job'u canlı hale getirdi (run `24291749170` ✓, CI Gate ✓); T11.2 (`9738677`, PR #15) dört savunma katmanı ekledi (startup check HARD STOP, pre-push CI guard, validator CI finding kuralı, task Bitiş Kapısı 5-madde) — post-merge main CI run `24294058832` ✓ + Docker Publish `24294058827` ✓. F0 Gate Check raporu retro bölümle güncellendi: [`Docs/CHECKPOINT_REPORTS/GATE_CHECK_F0.md`](CHECKPOINT_REPORTS/GATE_CHECK_F0.md#retro-güncelleme--2026-04-12). Verdict ✓ PASS korundu, `phase/F0-pass` tag'i geçerli kalır.
 
 ---
 
