@@ -29,10 +29,14 @@ namespace Skinora.API.Tests.Common;
 /// downstream tests to fail.
 /// </para>
 /// <para>
-/// The Hangfire processing server is left in place — it spins up against the
-/// in-memory storage and quietly polls an empty queue. Tests that need to
-/// inspect <see cref="GlobalJobFilters"/> can do so against the test host;
-/// the production HangfireModule mutates the global filters in place, so
+/// The Hangfire processing server is also removed. In Hangfire 1.8.x,
+/// <c>AddHangfireServer</c> registers <c>IHostedService</c> via a factory
+/// delegate (not a concrete type), so the namespace-based scrub catches it
+/// only when the factory's declaring-type assembly is also checked. Without
+/// removal, the server's non-graceful shutdown sets process exit code 1 even
+/// though all tests pass — breaking CI. Tests that need to inspect
+/// <see cref="GlobalJobFilters"/> can do so against the test host; the
+/// production HangfireModule mutates the global filters in place, so
 /// per-test re-application is unnecessary.
 /// </para>
 /// </remarks>
@@ -52,11 +56,18 @@ public class HangfireBypassFactory : WebApplicationFactory<Program>
             // HangfireModule.AddHangfireModule (storage, client, server,
             // hosted service). Service types live across the Hangfire.* and
             // Hangfire.AspNetCore.* assemblies, so a namespace-based scrub is
-            // the most reliable approach.
+            // the most reliable approach. The third condition catches
+            // factory-based registrations (e.g. AddHangfireServer in 1.8.x
+            // registers IHostedService via delegate, leaving ImplementationType
+            // null). Without this, the processing server survives, polls an
+            // empty InMemoryStorage queue, and causes non-graceful shutdown
+            // exit code 1 when the test host disposes.
             var hangfireDescriptors = services
                 .Where(d =>
                     (d.ServiceType.Namespace?.StartsWith("Hangfire", StringComparison.Ordinal) ?? false) ||
-                    (d.ImplementationType?.Namespace?.StartsWith("Hangfire", StringComparison.Ordinal) ?? false))
+                    (d.ImplementationType?.Namespace?.StartsWith("Hangfire", StringComparison.Ordinal) ?? false) ||
+                    (d.ImplementationFactory?.Method.DeclaringType?.Assembly.GetName().Name?
+                        .StartsWith("Hangfire", StringComparison.Ordinal) ?? false))
                 .ToList();
 
             foreach (var d in hangfireDescriptors)
