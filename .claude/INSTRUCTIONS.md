@@ -62,6 +62,7 @@
     - Layer 3 (T11.2 follow-up): `task/TXX-*` branch kendi TXX'i dışında bir task'a ait commit içeriyorsa (bundled-PR mekanik önlemesi)
   - Ek lokal koruma: `scripts/git-hooks/commit-msg` (T11.2 follow-up) `task/TXX-*` branch'inde yapılan her commit'in subject'ini branch TXX'i ile karşılaştırır — Layer 3'ün real-time eşdeğeri, bundled-PR'ı commit anında yakalar
   - Merge için CI PASS zorunlu — `gh pr merge --squash` öncesi PR'da CI Gate yeşil olmalı (manuel kontrol, sistem zorlamıyor)
+  - **CI izleme sorumluluğu — Claude (evrensel kural):** Claude tarafından açılan **her PR** için CI run'ı `gh run watch <ID> --exit-status` (veya eşdeğer polling) ile **concluded + success** olana kadar **Claude izler** — task PR, chore PR, infra PR, docs PR, validator-fix PR ayrımı yok. Claude kullanıcıya "CI'yi sen mi izleyeceksin" türü soru sormaz; izleme default davranıştır. Sonuç Claude tarafından raporlanır: `success` ise merge hazır bildirilir, failure/cancelled/timed_out ise root cause (`gh run view <ID> --log-failed`) + düzeltme önerisi sunulur. İzleme background task olarak sürdürülebilir; kullanıcı başka konuya geçse bile Claude sonucu rapor eder. task.md Bitiş Kapısı'ndaki task-scope CI watch kuralının genelleştirilmiş halidir (2026-04-12).
   - Merge için validator PASS zorunlu (manuel — INSTRUCTIONS.md §3.3 izolasyon kuralı)
   - **Bypass değişkenleri** (kullanmadan iki kez düşün, BYPASS_LOG'a otomatik kayıt geçer):
     - `SKINORA_ALLOW_DIRECT_PUSH=1` → Layer 1 + Layer 2 bypass (`[direct-push]` / `[ci-failure]`)
