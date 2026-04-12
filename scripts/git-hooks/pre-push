@@ -8,10 +8,16 @@
 # T11.2 (2026-04-12): CI guard katmani eklendi. Push edilen branch'in
 # son CI run'i failure ise push bloklanir. gh CLI yoksa WARN + gecer.
 #
+# T11.2 follow-up (2026-04-12): Layer 3 — task branch isolation. task/TXX-*
+# branch'i kendi TXX'i disinda bir task'a ait commit iceriyorsa push bloklanir
+# (bundled-PR onlemesi). commit-msg hook birincil savunma, bu Layer son kontrol.
+#
 # Davranis:
-# - main veya develop branch'ine direct push -> BLOCK + cikis 1
-# - Herhangi bir branch'in son CI run'i failure -> BLOCK + cikis 1
-# - SKINORA_ALLOW_DIRECT_PUSH=1 set ise -> WARN + izin verir (her iki kural icin)
+# - Layer 1: main/develop'a direct push -> BLOCK + exit 1
+# - Layer 2: push edilen branch'in son CI run'i failure -> BLOCK + exit 1
+# - Layer 3: task/TXX-* branch yabanci TXX commit iceriyor -> BLOCK + exit 1
+# - SKINORA_ALLOW_DIRECT_PUSH=1 -> Layer 1 + Layer 2 bypass + WARN
+# - SKINORA_ALLOW_BUNDLED=1 -> Layer 3 bypass + WARN
 # - Diger durumlar -> izin verir
 #
 # Kurulum: scripts/git-hooks/install.sh
@@ -172,6 +178,68 @@ Acil durum bypass (kullanmadan iki kez dusun, BYPASS_LOG'a kayit dusulur):
 
 EOF
         exit 1
+      fi
+      ;;
+  esac
+
+  # --- Layer 3: Task branch isolation — only this task's TXX commits allowed ---
+  # T11.2 follow-up (2026-04-12): T15/T16 (F0 Gate Check PR #10'a gomuldu) ve
+  # T17-T19 (T20 PR #11'e gomuldu) bundled-PR ihlallerinin mekanik karsi-onlemi.
+  # commit-msg hook'u birincil savunma, bu Layer push oncesi son kontrol.
+  case "$pushing_branch" in
+    task/T*)
+      branch_txx="$(echo "$pushing_branch" | sed -nE 's|^task/(T[0-9]+(\.[0-9]+)?[a-z]?).*$|\1|p')"
+      if [ -n "$branch_txx" ]; then
+        found_txx="$(git log main..HEAD --format='%s' 2>/dev/null | grep -oE '^T[0-9]+(\.[0-9]+)?[a-z]?' | sort -u || true)"
+        invalid_txx=""
+        for txx in $found_txx; do
+          if [ "$txx" != "$branch_txx" ]; then
+            if [ -z "$invalid_txx" ]; then
+              invalid_txx="$txx"
+            else
+              invalid_txx="$invalid_txx $txx"
+            fi
+          fi
+        done
+
+        if [ -n "$invalid_txx" ]; then
+          if [ "${SKINORA_ALLOW_BUNDLED:-0}" = "1" ]; then
+            log_bypass "$pushing_branch" "bundled-pr"
+            echo "WARN: SKINORA_ALLOW_BUNDLED=1 — yabanci TXX referansi ($invalid_txx) izin verildi." >&2
+          else
+            cat <<EOF >&2
+
+==============================================================================
+ERROR: Pre-push branch isolation check FAILED.
+==============================================================================
+
+Branch:       $pushing_branch (task: $branch_txx)
+Yabanci TXX:  $invalid_txx
+
+Bu task branch'inde kendi TXX'i ($branch_txx) disinda baska bir task'a
+ait commit(ler) mevcut. T11.2 retrospektifi T15/T16 (F0 Gate Check PR
+#10'a bundled) ve T17-T19 (T20 PR #11'e bundled) ihlallerini ortaya
+cikardi; bu hook o senaryonun bir daha olusmasini engeller.
+
+Cozum:
+  git log main..HEAD --oneline          # yabanci commit'leri goz ile tespit et
+  git rebase -i main                    # yabanci commit'leri kaldir veya ayri branch'e tasi
+
+Veya yabanci commit'leri yeni bir branch'e cherry-pick et:
+  git checkout -b task/$invalid_txx-aciklama main
+  git cherry-pick <yabanci-commit-sha>
+  git checkout $pushing_branch
+  git rebase -i main                    # yabanci commit'i $pushing_branch'ten sil
+
+Acil durum bypass (kullanmadan iki kez dusun, BYPASS_LOG'a kayit dusulur):
+  SKINORA_ALLOW_BUNDLED=1 SKINORA_BYPASS_REASON="..." git push origin $pushing_branch
+
+==============================================================================
+
+EOF
+            exit 1
+          fi
+        fi
       fi
       ;;
   esac

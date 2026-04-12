@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Skinora commit-msg hook — task branch isolation check
+#
+# Amac: T11.2 retrospektifi T15/T16 ve T17-T19 commit'lerinin yanlis
+# branch'lere bundled olarak girdigini ortaya cikardi (T15/T16 -> F0 Gate
+# Check PR #10, T17-T19 -> T20 PR #11). Bu hook task branch'inde yapilan
+# her commit'in branch'in kendi TXX'ine ait olmasini mekanik olarak
+# zorlar — disipline ve iyi niyete bagli degil, grep ile kanitli.
+#
+# Davranis:
+#   - Branch task/TXX-* degilse -> exit 0 (skip, sadece task branch'lerine ozel)
+#   - Branch task/TXX-* ise:
+#       Yeni commit subject + main..HEAD'deki tum commit subject'lerinden
+#       ^T[0-9]+(\.[0-9]+)?[a-z]? pattern'i ile TXX referanslari toplanir.
+#       Eger setteki TXX'lerden biri branch'in TXX'inden farkliysa -> BLOCK.
+#   - SKINORA_ALLOW_BUNDLED=1 set ise -> WARN + BYPASS_LOG'a kayit + izin verir.
+#
+# Konvansiyon:
+#   - "TXX: ..." veya "TXX.Y: ..." prefix'i task'a aittir
+#   - "chore:", "docs:", "fix:" gibi prefix'ler TXX iddiasinda bulunmaz, sayilmaz
+#   - Subject body icindeki "see also TXX" referanslari sayilmaz (anchored to ^)
+#
+# Test:
+#   echo "T17: bug fix" > /tmp/msg && \
+#     git symbolic-ref HEAD refs/heads/task/T21-test && \
+#     bash scripts/git-hooks/commit-msg /tmp/msg
+#   # beklenen: BLOCK (yabanci TXX: T17, branch TXX: T21)
+
+set -e
+
+COMMIT_MSG_FILE="$1"
+
+if [ -z "$COMMIT_MSG_FILE" ] || [ ! -f "$COMMIT_MSG_FILE" ]; then
+  exit 0
+fi
+
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo '')"
+if [ -z "$CURRENT_BRANCH" ]; then
+  exit 0
+fi
+
+# Sadece task/T* branch'leri icin kontrol et
+case "$CURRENT_BRANCH" in
+  task/T*)
+    : # devam
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+
+# Branch adindan TXX numarasini cikar (task/T21-foo -> T21, task/T11.2-bar -> T11.2)
+BRANCH_TXX="$(echo "$CURRENT_BRANCH" | sed -nE 's|^task/(T[0-9]+(\.[0-9]+)?[a-z]?).*$|\1|p')"
+if [ -z "$BRANCH_TXX" ]; then
+  # Branch task/T... ile basliyor ama TXX cikartilamadi -> skip
+  exit 0
+fi
+
+# Yeni commit'in subject satirini al (commit message dosyasinin ilk anlamli satiri).
+# Comment satirlarini (#) ve bos satirlari atla — git editor template'leri ile uyum.
+NEW_SUBJECT="$(grep -v '^#' "$COMMIT_MSG_FILE" 2>/dev/null | sed '/^[[:space:]]*$/d' | head -n 1 || echo '')"
+
+# Merge commit'leri atla (Merge branch 'X' into Y)
+case "$NEW_SUBJECT" in
+  Merge*)
+    exit 0
+    ;;
+esac
+
+# main..HEAD'deki tum mevcut commit subject'lerini al (varsa)
+EXISTING_SUBJECTS="$(git log main..HEAD --format='%s' 2>/dev/null || echo '')"
+
+# Tum subject'leri birlestir
+ALL_SUBJECTS="$(printf '%s\n%s\n' "$NEW_SUBJECT" "$EXISTING_SUBJECTS")"
+
+# Subject'in basindaki ^T[0-9]+(.[0-9]+)?[a-z]? pattern'lerini cikart
+FOUND_TXX="$(echo "$ALL_SUBJECTS" | grep -oE '^T[0-9]+(\.[0-9]+)?[a-z]?' | sort -u || true)"
+
+# Branch TXX'inden farkli TXX referansi var mi?
+INVALID_TXX=""
+for txx in $FOUND_TXX; do
+  if [ "$txx" != "$BRANCH_TXX" ]; then
+    if [ -z "$INVALID_TXX" ]; then
+      INVALID_TXX="$txx"
+    else
+      INVALID_TXX="$INVALID_TXX $txx"
+    fi
+  fi
+done
+
+if [ -z "$INVALID_TXX" ]; then
+  exit 0
+fi
+
+# Bypass yolu
+if [ "${SKINORA_ALLOW_BUNDLED:-0}" = "1" ]; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+  LOG_FILE="$REPO_ROOT/Docs/BYPASS_LOG.md"
+  if [ -f "$LOG_FILE" ]; then
+    TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+    GIT_USER="$(git config user.name || echo 'unknown')"
+    REASON="${SKINORA_BYPASS_REASON:-*(sebep belirtilmedi)*}"
+    echo "| $TIMESTAMP | $GIT_USER | $CURRENT_BRANCH | (commit-msg) | **[bundled-pr]** $REASON — yabanci TXX: $INVALID_TXX |" >> "$LOG_FILE"
+    echo "BYPASS LOG: Docs/BYPASS_LOG.md'ye kayit eklendi (bundled-pr)." >&2
+    echo "  Lutfen bir sonraki normal commit'te bu dosyayi da commit'le." >&2
+  fi
+  echo "WARN: SKINORA_ALLOW_BUNDLED=1 — yabanci TXX referansi ($INVALID_TXX) izin verildi." >&2
+  exit 0
+fi
+
+cat <<EOF >&2
+
+==============================================================================
+ERROR: Task branch isolation check FAILED (commit-msg hook).
+==============================================================================
+
+Branch:        $CURRENT_BRANCH (task: $BRANCH_TXX)
+Yabanci TXX:   $INVALID_TXX
+Yeni subject:  $NEW_SUBJECT
+
+Bu branch'in tasi ($BRANCH_TXX) disinda bir task'a (TXX) ait commit
+yapilmaya calisiliyor. T11.2 retrospektifi T15/T16'nin F0 Gate Check
+PR #10'a, T17-T19'un T20 PR #11'e bundled olarak gomuldugunu ortaya
+cikardi; bu hook o senaryonun bir daha olusmasini engeller.
+
+Cozumler:
+
+  1. Yanlis branch'tesin — dogru task branch'ine gec:
+       git stash
+       git checkout -b task/$INVALID_TXX-aciklama main
+       git stash pop
+       git commit -m "..."
+
+  2. Yeni commit aslinda $BRANCH_TXX'e ait — subject'i duzelt:
+       git commit (mesaji "$BRANCH_TXX: ..." olarak yaz)
+
+  3. Branch'te zaten yabanci TXX commit'i kalmis — temizle:
+       git log main..HEAD --oneline
+       git rebase -i main   (yabanci commit'leri kaldir veya ayri branch'e tasi)
+
+Acil durum bypass (kullanmadan iki kez dusun, BYPASS_LOG'a kayit dusulur):
+  SKINORA_ALLOW_BUNDLED=1 SKINORA_BYPASS_REASON="aciklama" git commit -m "..."
+
+==============================================================================
+
+EOF
+exit 1

@@ -56,10 +56,17 @@
 - Her faz sonunda tag atılır: `phase/FX-pass` (örn: `phase/F0-pass`)
 - **Branch protection kuralları** (T11 close-out — **discipline-only rejim**):
   - `main` ve `develop`'a direct push **kuralla yasaktır** ama **sistem-enforced değildir** (GitHub Free + private repo'da branch protection paid feature)
-  - Lokal koruma katmanı: `scripts/git-hooks/pre-push` direct push'u bloklar (`bash scripts/git-hooks/install.sh` ile kurulur)
+  - Lokal koruma katmanı: `scripts/git-hooks/pre-push` üç katmanlı hook bloklar (`bash scripts/git-hooks/install.sh` ile kurulur):
+    - Layer 1: `main`/`develop`'a direct push
+    - Layer 2 (T11.2): push edilen branch'in son CI run'ı `failure`/`cancelled`/`timed_out`
+    - Layer 3 (T11.2 follow-up): `task/TXX-*` branch kendi TXX'i dışında bir task'a ait commit içeriyorsa (bundled-PR mekanik önlemesi)
+  - Ek lokal koruma: `scripts/git-hooks/commit-msg` (T11.2 follow-up) `task/TXX-*` branch'inde yapılan her commit'in subject'ini branch TXX'i ile karşılaştırır — Layer 3'ün real-time eşdeğeri, bundled-PR'ı commit anında yakalar
   - Merge için CI PASS zorunlu — `gh pr merge --squash` öncesi PR'da CI Gate yeşil olmalı (manuel kontrol, sistem zorlamıyor)
   - Merge için validator PASS zorunlu (manuel — INSTRUCTIONS.md §3.3 izolasyon kuralı)
-  - **Bypass:** acil durumlarda `SKINORA_ALLOW_DIRECT_PUSH=1 git push origin main` — kullanmadan iki kez düşün, T11_REPORT BLOCKED bölümüne kayıt geçer
+  - **Bypass değişkenleri** (kullanmadan iki kez düşün, BYPASS_LOG'a otomatik kayıt geçer):
+    - `SKINORA_ALLOW_DIRECT_PUSH=1` → Layer 1 + Layer 2 bypass (`[direct-push]` / `[ci-failure]`)
+    - `SKINORA_ALLOW_BUNDLED=1` → Layer 3 + commit-msg bypass (`[bundled-pr]`)
+    - Her ikisi için `SKINORA_ALLOW_*=1 SKINORA_BYPASS_REASON="..." git <cmd>` formatı önerilir
   - T11 öncesi (T01–T10) bu rejim de yoktu; T11 sonrası rejim "manuel disiplin + lokal hook" şeklindedir
   - **Yükseltme yolu:** GitHub Pro'ya geçilirse `gh api PUT branches/main/protection --input .github/protection-main.json` (taslak `Docs/CI_CD_SETUP.md`'de hedef tablo olarak hazır) ile sistem-enforced yapılır
 

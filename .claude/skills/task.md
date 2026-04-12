@@ -44,40 +44,60 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 
 3. **Doküman referanslarını oku:** Task tanımındaki doküman referanslarını oku (örn: 09 §4.1, §4.2). Sadece belirtilen bölümleri oku, tüm dokümanı yükleme.
 
-4. **Scope netleştirme:** Proje sahibine şunu sun:
+4. **Dış varsayım doğrulama (Ön-uçuş kontrolü):** Task'ın dayandığı dış varsayımları — kod yazmadan ve scope'u kesinleştirmeden önce — listele ve her birini somut kanıtla doğrula.
+
+   **Amaç:** T11 (GitHub branch protection'ın paid feature olduğunu implementasyon sırasında öğrendik → discipline-only rejime pivot) ve T14 (npm'de `steam-tradeoffer-manager@^3.x` yoktu → ^2.13.x + 08 §2.5 düzeltmesi) dersleri. Reaktif savunma katmanları (Adım 0 startup, Bitiş Kapısı) gerçekleşen hatayı yakalar; bu adım hatanın **gerçekleşmesini** engeller. Kaynak: `feedback_check_external_assumptions.md`.
+
+   **Yap:** Task'ın dayandığı dış varsayımları maddeler halinde listele. Tipik kategoriler:
+   - **Plan tier / feature availability:** paid mi ücretsiz mi, hangi plan tier gerekli (GitHub branch protection, Steam Web API quota, Stripe mode kapsamı, Azure/AWS SKU)
+   - **Paket sürüm uyumu:** `npm view <pkg> versions --json`, `dotnet list package`, NuGet / crates.io arama ile planda/dokümanda geçen sürümün gerçekten var olduğunu doğrula
+   - **Platform/OS farkı:** Windows vs Linux path, SQLite vs SQL Server tip farkları (T11.1'de `nvarchar(max)` SQLite uyumsuzluğu), Docker base image uyumu
+   - **API/sözleşme varsayımı:** çağıracağın dış endpoint gerçekten belgelendiği gibi cevap veriyor mu, auth modeli, schema versiyonu
+   - **Repo/ortam state'i:** CI runner kapasitesi, secret'lar tanımlı mı, gerekli ortam değişkenleri
+
+   **Her varsayım için bir satır kanıt zorunludur:** komut çıktısı, resmi doküman URL'si, manuel test sonucu. "Sanırım", "muhtemelen", "genelde böyle" **yetersizdir**.
+
+   **Karar kuralı:**
+   - Tüm varsayımlar doğrulandı → Adım 5'e (scope netleştirme) geç.
+   - Bir varsayım kırık → **DURMA.** Bu scope'u etkileyen karardır. Proje sahibine sun: "Task X varsayım Y'ye dayanıyor, Y kırık, seçenekler A/B/C." Gerekirse BLOCKED (EXTERNAL_BLOCKER veya PLAN_CORRECTION_REQUIRED) tetikle.
+   - "Bu task'ta dış varsayım yok" **geçerli bir sonuçtur** — ama TXX_REPORT.md "Notlar"a açıkça "Dış varsayım: yok" diye yaz; boş bırakma. Audit trail'in eksikliği ≠ varsayımın yokluğu.
+
+   **Kanıt zorunluluğu:** Varsayım listesi + her biri için kanıt satırı TXX_REPORT.md'nin "Notlar" bölümüne (veya yeni "Dış Varsayımlar" alt başlığına) yazılır. Retrospektif denetim için zorunlu audit trail.
+
+5. **Scope netleştirme:** Proje sahibine şunu sun:
    - Etkilenen modüller / dosyalar
    - Beklenen çıktı / artifact listesi
    - "Bu task bittiğinde sistemde tam olarak ne değişmiş olacak"
 
-5. **Branch oluştur:** `task/TXX-kisa-aciklama` formatında feature branch aç.
+6. **Branch oluştur:** `task/TXX-kisa-aciklama` formatında feature branch aç.
 
 ## Yapım Süreci
 
-6. **Kodu yaz:** Kabul kriterlerini tek tek karşılayacak şekilde implement et.
+7. **Kodu yaz:** Kabul kriterlerini tek tek karşılayacak şekilde implement et.
    - `09_CODING_GUIDELINES.md` standartlarına uy
    - Dokümanlarla çelişki fark edersen → **DURMA**, proje sahibine bildir (BLOCKED akışı, bkz. INSTRUCTIONS.md §3.5)
    - Varsayımla ilerleme, doğaçlama yapma
 
-7. **Testleri yaz ve çalıştır:** Task tanımındaki test beklentisine göre:
+8. **Testleri yaz ve çalıştır:** Task tanımındaki test beklentisine göre:
    - Unit testler
    - Integration testler
    - Tüm testlerin geçtiğini doğrula
 
-8. **Build kontrolü:** `dotnet build` (backend), `npm run build` (frontend/sidecar) başarılı olmalı.
+9. **Build kontrolü:** `dotnet build` (backend), `npm run build` (frontend/sidecar) başarılı olmalı.
 
-9. **Mini güvenlik kontrolü:**
-   - Secret sızıntısı var mı?
-   - Auth/authorization etkisi var mı?
-   - Input validation etkisi var mı?
-   - Yeni dış bağımlılık eklendi mi?
+10. **Mini güvenlik kontrolü:**
+    - Secret sızıntısı var mı?
+    - Auth/authorization etkisi var mı?
+    - Input validation etkisi var mı?
+    - Yeni dış bağımlılık eklendi mi?
 
-10. **Kabul kriterleri self-check:** Her kabul kriterini tek tek gözden geçir. Karşılanmayan varsa tamamla.
+11. **Kabul kriterleri self-check:** Her kabul kriterini tek tek gözden geçir. Karşılanmayan varsa tamamla.
 
 ## Tamamlama
 
-11. **Commit ve push:** Değişiklikleri commit'le ve branch'i push'la.
+12. **Commit ve push:** Değişiklikleri commit'le ve branch'i push'la.
 
-12. **Rapor taslağı hazırla:** `Docs/TASK_REPORTS/TXX_REPORT.md` dosyasını INSTRUCTIONS.md §3.8 şablonuna göre oluştur:
+13. **Rapor taslağı hazırla:** `Docs/TASK_REPORTS/TXX_REPORT.md` dosyasını INSTRUCTIONS.md §3.8 şablonuna göre oluştur:
     - Yapılan işler
     - Etkilenen modüller / dosyalar
     - Kabul kriterleri kontrolü (kanıtlı)
@@ -86,22 +106,27 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
     - Commit bilgisi
     - Known limitations
 
-13. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
+14. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
     - **Not:** `✓ Tamamlandı` yapma — bu doğrulama chat'inin işi.
 
-14. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
+15. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
 
 ## Bitiş Kapısı (T11.2 savunma katmanı)
 
 **Amaç:** T11.1 retrospektifi T15+T16 task chat'lerinin bittiği ama PR açılmadığını, kodlarının F0 Gate Check PR #10'a "bundled" olarak geldiğini ortaya çıkardı. T17-T19 ise T20 branch'ine gömüldü. Yapım chat'inin "bitti" sayılabilmesi için aşağıdaki dört kapı açık olmalı.
 
-Aşağıdakilerin **beşi de ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
+Aşağıdakilerin **altısı da ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
 
 - [ ] **Branch push edildi mi?** `git push -u origin task/TXX-*` başarılı.
 - [ ] **PR açıldı mı?** `gh pr create --base main --title "TXX: ..." --body "..."` çağrıldı, PR numarası geri geldi.
 - [ ] **PR numarası TXX_REPORT.md'ye yazıldı mı?** `Commit & PR` bölümünde `PR: #XX` satırı net.
 - [ ] **CI run tamamlandı mı?** `gh run watch <RUN_ID> --exit-status` veya eşdeğer polling ile **concluded** olmasını bekle. `status=in_progress`/`queued` beklenir; "started, conclusion bekleniyor" yeterli değildir — T11.2 kurgusunun tam karşıtı.
 - [ ] **CI run sonucu `success` mi?** `conclusion=success` değilse (failure, cancelled, timed_out, action_required, startup_failure) → **yapım bitti sayılmaz**, root cause çözülür, yeni push yapılır, CI tekrar beklenir. Validator'a kırık CI ile geçmek yasaktır.
+- [ ] **Branch izolasyon check temiz mi? (T11.2 follow-up mekanik check)** Aşağıdaki komutu çalıştır:
+  ```bash
+  git log main..HEAD --format='%s' | grep -oE '^T[0-9]+(\.[0-9]+)?[a-z]?' | sort -u
+  ```
+  Çıktıda **yalnızca mevcut task'ın TXX numarası** görünmeli. Başka bir TXX varsa → **yapım bitti sayılmaz** (bundled-PR ihlali). Yabancı commit'ler `git rebase -i main` ile kaldırılır veya ayrı bir branch'e `cherry-pick` ile taşınır. Not: commit-msg ve pre-push Layer 3 hook'ları aynı kontrolü otomatik yapar; bu manuel check hook yoksa/atlanmışsa son savunmadır.
 
 **Otomatik BLOCKED trigger:** TXX_REPORT.md içinde "PR: Henüz oluşturulmadı", "PR: TBD", "PR: —" veya boş bırakılmış bir PR alanı görülürse **otomatik BLOCKED** (DEPENDENCY_MISMATCH alt türü) — yapım chat'i açılır, açık kalmaya devam eder ve bir sonraki task'a geçilmez.
 
