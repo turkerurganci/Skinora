@@ -57,7 +57,7 @@
 - Branch: `task/T21-trade-offer-steam-bot-entities`
 - Commit: `0b8428e` — T21: TradeOffer, PlatformSteamBot entity'leri
 - PR: #21
-- CI: Bekleniyor
+- CI: ✓ PASS (run `24312911431`)
 
 ## Known Limitations / Follow-up
 - Transaction.EscrowBotId FK cross-module: PlatformSteamBotConfiguration'dan configure edildi (circular reference onlemi). TransactionConfiguration'da aciklayici NOT comment.
