@@ -59,7 +59,7 @@
 | T18 | User, UserLoginLog, RefreshToken entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T19 | Transaction, TransactionHistory entity'leri | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T20 | PaymentAddress, BlockchainTransaction entity'leri | ✓ Tamamlandı | ✓ PASS | `be0cc24` (#11) |
-| T21 | TradeOffer, PlatformSteamBot entity'leri | ⬚ Bekliyor | — | — |
+| T21 | TradeOffer, PlatformSteamBot entity'leri | ⏳ Devam ediyor | — | — |
 | T22 | Dispute, FraudFlag entity'leri | ⬚ Bekliyor | — | — |
 | T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ⬚ Bekliyor | — | — |
 | T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ⬚ Bekliyor | — | — |
