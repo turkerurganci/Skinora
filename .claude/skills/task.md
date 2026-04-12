@@ -8,6 +8,31 @@
 
 ## Başlangıç Adımları
 
+### Adım -1 — Working Tree Hygiene Check (HARD STOP)
+
+**Amaç:** PR #16 konuşmasında fark edildi: session öncesi uncommitted değişiklikler (GATE_CHECK_F0 retro, IMPLEMENTATION_STATUS, settings.local.json) 3 PR boyunca working tree'de kimsenin fark etmeden yaşadı. Task dalı açıldığında bu değişiklikler task PR'ına bundled olma riski taşır — commit-msg hook bunu yakalamaz çünkü dosya değişiklikleri commit subject'inde TXX referansı oluşturmaz.
+
+**Yap:**
+
+```bash
+git status --short
+```
+
+**Karar kuralı:**
+
+- Çıktı **boş** ise (temiz working tree) → Adım 0'a geç.
+- Çıktıda **staged veya unstaged değişiklik** varsa → **HARD STOP.**
+  - Değişiklikleri kullanıcıya listele: dosya adı + kısa açıklama (diff --stat yeterli).
+  - Kullanıcıya sor: "Bu uncommitted değişiklikler task'tan önce nasıl ele alınmalı?"
+  - Üç seçenek sun:
+    1. **Commit + PR:** Ayrı bir `chore:`/`docs:` dalı aç, commit'le, PR aç, CI izle. Sonra task'a dön.
+    2. **Stash:** `git stash push -m "pre-TXX uncommitted"` — task bitince pop edilir. Geçici park.
+    3. **Discard:** `git restore <dosya>` — kullanıcı onayı **zorunlu**, geri dönüşsüz.
+  - **Kullanıcı kararı olmadan task'a başlama.** "Sonra hallederiz", "önemsiz", "benim değil" **rasyonelizasyonları yasak** — Adım 0'daki CI rasyonelizasyon yasağının working tree eşdeğeri.
+- **Untracked dosyalar:** `.gitignore`'da olmayan yeni dosyalar da rapor edilir. Kullanıcı karar verir (stage, ignore, veya delete).
+
+**Kanıt zorunluluğu:** Check sonucu (temiz / N dosya → kullanıcı kararı) TXX_REPORT.md "Notlar" bölümüne yazılır. "Working tree: temiz" veya "Working tree: 3 dosya → commit (PR #XX)" gibi bir satır yeterli.
+
 ### Adım 0 — Main CI Startup Check (HARD STOP)
 
 **Amaç:** T11.2 ile gelen savunma katmanı. T13-T20 döneminde main CI 5 task üst üste FAIL'leyerek sessizce kırık kalmıştı; "lokal temiz" rasyonelizasyonu kabul edilemez.
