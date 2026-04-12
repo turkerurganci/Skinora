@@ -15,6 +15,21 @@
 
 ## Doğrulama Adımları
 
+### Adım -1 — Working Tree Hygiene Check (HARD STOP)
+
+**Amaç:** Uncommitted değişiklikler doğrulama sırasında karışıklık yaratabilir (hangi dosya task'ın, hangisi daha önceki iş?) ve yanlışlıkla doğrulama branch'ine karışabilir.
+
+**Yap:**
+
+```bash
+git status --short
+```
+
+**Karar kuralı:**
+
+- Çıktı **boş** → Adım 0'a geç.
+- **Staged/unstaged değişiklik var** → **HARD STOP.** Kullanıcıya listele, commit / stash / discard kararı iste. Karar olmadan doğrulamaya başlama. "Sonra hallederiz" rasyonelizasyonu yasak.
+
 ### Adım 0 — Main CI Startup Check (HARD STOP)
 
 **Amaç:** T11.2 savunma katmanı. T20 validator'ı main CI ardışık FAIL'leyen ortamda "lokal temiz, geç" rasyonelizasyonuyla PASS verdi — bu bir daha tekrarlanmamalı.
