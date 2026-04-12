@@ -1,6 +1,6 @@
 # T22 — Dispute, FraudFlag Entity'leri
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-12
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-12
 
 ---
 
@@ -52,9 +52,12 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Main CI startup check | 3/3 success (24314378328, 24314378323, 24312090370) |
+| Branch CI | 11/11 job success (run 24315150854) |
+| Validator notu | FraudFlag.UserId: 06 §3.12 field tablosu NULL, constraint notu "her iki scope'ta zorunlu" — impl NOT NULL, doğru çözüm |
 
 ## Altyapı Değişiklikleri
 - Migration: Yok (EnsureCreated test-only)
