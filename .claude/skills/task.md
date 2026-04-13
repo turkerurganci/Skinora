@@ -134,17 +134,21 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 14. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
     - **Not:** `✓ Tamamlandı` yapma — bu doğrulama chat'inin işi.
 
-15. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
+15. **Rapor + status commit:** Rapor taslağı ve status değişikliğini commit'le ve push'la.
+    - **Neden:** Cloud session'larda (claude.ai/code) session kapandığında local dosyalar kaybolur. Commit+push edilmeyen rapor/status yok olur. PC session'larında da repo'da kalması validator'ın branch'te görmesi için gerekli.
+
+16. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
 
 ## Bitiş Kapısı (T11.2 savunma katmanı)
 
 **Amaç:** T11.1 retrospektifi T15+T16 task chat'lerinin bittiği ama PR açılmadığını, kodlarının F0 Gate Check PR #10'a "bundled" olarak geldiğini ortaya çıkardı. T17-T19 ise T20 branch'ine gömüldü. Yapım chat'inin "bitti" sayılabilmesi için aşağıdaki dört kapı açık olmalı.
 
-Aşağıdakilerin **altısı da ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
+Aşağıdakilerin **yedisi de ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
 
 - [ ] **Branch push edildi mi?** `git push -u origin task/TXX-*` başarılı.
 - [ ] **PR açıldı mı?** `gh pr create --base main --title "TXX: ..." --body "..."` çağrıldı, PR numarası geri geldi.
 - [ ] **PR numarası TXX_REPORT.md'ye yazıldı mı?** `Commit & PR` bölümünde `PR: #XX` satırı net.
+- [ ] **Rapor + status push edildi mi?** TXX_REPORT.md ve IMPLEMENTATION_STATUS.md commit'lenip push edildi. Cloud session'da bu yapılmazsa session kapandığında rapor kaybolur.
 - [ ] **CI run tamamlandı mı?** `gh run watch <RUN_ID> --exit-status` veya eşdeğer polling ile **concluded** olmasını bekle. `status=in_progress`/`queued` beklenir; "started, conclusion bekleniyor" yeterli değildir — T11.2 kurgusunun tam karşıtı.
 - [ ] **CI run sonucu `success` mi?** `conclusion=success` değilse (failure, cancelled, timed_out, action_required, startup_failure) → **yapım bitti sayılmaz**, root cause çözülür, yeni push yapılır, CI tekrar beklenir. Validator'a kırık CI ile geçmek yasaktır.
 - [ ] **Branch izolasyon check temiz mi? (T11.2 follow-up mekanik check)** Aşağıdaki komutu çalıştır:
