@@ -123,7 +123,11 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
     - `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `✓ Tamamlandı` yap
     - **Kural:** Rapor finalize edilmeden status güncellenmiş sayılmaz
 
-15. **Merge:** (sadece PASS durumunda)
+15. **Rapor + status commit+push:** Finalize edilmiş rapor ve status değişikliğini commit'le ve push'la.
+    - Bu adım merge'den önce yapılmalı — aksi halde squash merge bu değişiklikleri içermez.
+    - Cloud session'larda commit+push edilmeyen dosyalar session kapandığında kaybolur.
+
+16. **Merge:** (sadece PASS durumunda)
     - Branch'i `main`'e squash merge et
     - Squash commit mesajı: `TXX: Task adı`
 
