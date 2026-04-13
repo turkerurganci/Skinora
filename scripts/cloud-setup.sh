@@ -2,8 +2,10 @@
 # Skinora — Cloud session setup script
 #
 # claude.ai/code cloud environment'ında session başlamadan önce çalışır.
-# Environment oluştururken "Setup script" alanına şu satırı gir:
-#   bash scripts/cloud-setup.sh
+# Environment oluştururken:
+#   1. Network access → "Full" (Trusted mod .NET indirmesini 403 ile engeller)
+#   2. Setup script alanına şu satırı gir:
+#      bash scripts/cloud-setup.sh
 #
 # Ne yapar:
 #   1. .NET 9.0 SDK kurulumu (yoksa)
