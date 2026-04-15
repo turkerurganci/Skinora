@@ -49,7 +49,7 @@
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Integration | CI'da çalışacak | 22 test — lokal Docker yok (cloud session), CI TestContainers ile çalıştıracak |
+| Integration | ✓ PASS | 22 test — CI TestContainers SQL Server, run `24473886691` |
 | Build | ✓ 0 Error, 0 Warning | `dotnet build backend/Skinora.sln` — full solution build başarılı |
 
 ## Doğrulama
@@ -68,7 +68,7 @@
 - Branch: `task/T23-notification-entities`
 - Commit: `b11a2cc` — T23: Notification, NotificationDelivery, UserNotificationPreference entities
 - PR: #27
-- CI: ⏳ Bekliyor (run `24473824036`)
+- CI: ✓ PASS (run `24473886691` — 12/12 job success, integration test PASS)
 
 ## Known Limitations / Follow-up
 - Yok
