@@ -94,35 +94,37 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
    - Beklenen çıktı / artifact listesi
    - "Bu task bittiğinde sistemde tam olarak ne değişmiş olacak"
 
-6. **Branch oluştur:** `task/TXX-kisa-aciklama` formatında feature branch aç.
+6. **Main'i güncelle:** `git checkout main && git pull origin main` — mobil veya başka session'dan merge edilmiş PR'ları al. Branch eski main üzerinden açılırsa merge conflict riski doğar.
+
+7. **Branch oluştur:** `task/TXX-kisa-aciklama` formatında feature branch aç.
 
 ## Yapım Süreci
 
-7. **Kodu yaz:** Kabul kriterlerini tek tek karşılayacak şekilde implement et.
+8. **Kodu yaz:** Kabul kriterlerini tek tek karşılayacak şekilde implement et.
    - `09_CODING_GUIDELINES.md` standartlarına uy
    - Dokümanlarla çelişki fark edersen → **DURMA**, proje sahibine bildir (BLOCKED akışı, bkz. INSTRUCTIONS.md §3.5)
    - Varsayımla ilerleme, doğaçlama yapma
 
-8. **Testleri yaz ve çalıştır:** Task tanımındaki test beklentisine göre:
+9. **Testleri yaz ve çalıştır:** Task tanımındaki test beklentisine göre:
    - Unit testler
    - Integration testler
    - Tüm testlerin geçtiğini doğrula
 
-9. **Build kontrolü:** `dotnet build` (backend), `npm run build` (frontend/sidecar) başarılı olmalı.
+10. **Build kontrolü:** `dotnet build` (backend), `npm run build` (frontend/sidecar) başarılı olmalı.
 
-10. **Mini güvenlik kontrolü:**
+11. **Mini güvenlik kontrolü:**
     - Secret sızıntısı var mı?
     - Auth/authorization etkisi var mı?
     - Input validation etkisi var mı?
     - Yeni dış bağımlılık eklendi mi?
 
-11. **Kabul kriterleri self-check:** Her kabul kriterini tek tek gözden geçir. Karşılanmayan varsa tamamla.
+12. **Kabul kriterleri self-check:** Her kabul kriterini tek tek gözden geçir. Karşılanmayan varsa tamamla.
 
 ## Tamamlama
 
-12. **Commit ve push:** Değişiklikleri commit'le ve branch'i push'la.
+13. **Commit ve push:** Değişiklikleri commit'le ve branch'i push'la.
 
-13. **Rapor taslağı hazırla:** `Docs/TASK_REPORTS/TXX_REPORT.md` dosyasını INSTRUCTIONS.md §3.8 şablonuna göre oluştur:
+14. **Rapor taslağı hazırla:** `Docs/TASK_REPORTS/TXX_REPORT.md` dosyasını INSTRUCTIONS.md §3.8 şablonuna göre oluştur:
     - Yapılan işler
     - Etkilenen modüller / dosyalar
     - Kabul kriterleri kontrolü (kanıtlı)
@@ -131,13 +133,13 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
     - Commit bilgisi
     - Known limitations
 
-14. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
+15. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
     - **Not:** `✓ Tamamlandı` yapma — bu doğrulama chat'inin işi.
 
-15. **Rapor + status commit:** Rapor taslağı ve status değişikliğini commit'le ve push'la.
+16. **Rapor + status commit:** Rapor taslağı ve status değişikliğini commit'le ve push'la.
     - **Neden:** Cloud session'larda (claude.ai/code) session kapandığında local dosyalar kaybolur. Commit+push edilmeyen rapor/status yok olur. PC session'larında da repo'da kalması validator'ın branch'te görmesi için gerekli.
 
-16. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
+17. **Proje sahibine bildir:** "TXX tamamlandı, doğrulama chat'ine geçebiliriz." de.
 
 ## Bitiş Kapısı (T11.2 savunma katmanı)
 
