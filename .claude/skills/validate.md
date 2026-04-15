@@ -58,11 +58,13 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 
 2. **Referans dokümanları oku:** Task tanımında belirtilen doküman bölümlerini oku. Bunlar source of truth.
 
-3. **Branch kodunu incele:** `task/TXX-*` branch'indeki değişiklikleri oku:
+3. **Remote'u güncelle:** `git fetch origin` — mobil veya başka session'dan push edilmiş değişiklikleri al. Fetch yapılmazsa eski branch state'i incelenir.
+
+4. **Branch kodunu incele:** `task/TXX-*` branch'indeki değişiklikleri oku:
    - Hangi dosyalar değişmiş / oluşturulmuş?
    - Değişiklikler dokümanlarla uyumlu mu?
 
-4. **Kabul kriterlerini tek tek doğrula:** Her kriter için:
+5. **Kabul kriterlerini tek tek doğrula:** Her kriter için:
    - İlgili kodu bul ve oku
    - Gerekli komutu çalıştır (build, test, vb.)
    - Çıktıyı kaydet
@@ -72,62 +74,62 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
      - `~ Kısmi` — kısmen karşılandı, ne eksik detaylı açıkla
      - `? Doğrulanamadı` — kanıt üretilemedi veya yetersiz (bu FAIL değil, kanıt eksikliği)
 
-5. **Doğrulama kontrol listesini çalıştır:** `11_IMPLEMENTATION_PLAN.md`'deki doğrulama kontrol listesi maddelerini tek tek geç.
+6. **Doğrulama kontrol listesini çalıştır:** `11_IMPLEMENTATION_PLAN.md`'deki doğrulama kontrol listesi maddelerini tek tek geç.
 
-6. **Testleri çalıştır:**
+7. **Testleri çalıştır:**
    - `dotnet test` (backend)
    - `npm test` (frontend/sidecar, varsa)
    - Sonuçları kaydet
 
-7. **Build kontrolü:** Tüm projeler temiz build veriyor mu?
+8. **Build kontrolü:** Tüm projeler temiz build veriyor mu?
 
-   **7a. Task branch CI kontrolü (T11.2 zorunlu madde):** `gh run list --branch task/TXX-* --limit 3 --json databaseId,conclusion,status` ile task branch'inin CI run'larına bak. En az bir run `conclusion=success` olmalı. Hiçbir run yoksa veya en son run `failure` ise → **bu bir finding'dir, sessizce geçilemez.**
+   **8a. Task branch CI kontrolü (T11.2 zorunlu madde):** `gh run list --branch task/TXX-* --limit 3 --json databaseId,conclusion,status` ile task branch'inin CI run'larına bak. En az bir run `conclusion=success` olmalı. Hiçbir run yoksa veya en son run `failure` ise → **bu bir finding'dir, sessizce geçilemez.**
    - Başarısız olan adım (Lint / Build / Unit / Integration / Contract / Migration / Docker) bulguda belirtilir.
    - "Lokal makinemde geçiyor" kabul edilemez — validator kanıt bazlı çalışır, lokal temizlik CI'yi ikame etmez.
    - Task'ın kendi CI run'ı yoksa (branch push edilmemiş, PR açılmamış) → BLOCKED (task chat bitiş kapısı çiğnenmiş, `task.md` Bitiş Kapısı bölümüne bak).
 
-8. **Mini güvenlik kontrolü:**
+9. **Mini güvenlik kontrolü:**
    - Secret sızıntısı var mı?
    - Auth/authorization etkisi var mı?
    - Input validation etkisi var mı?
    - Yeni dış bağımlılık eklendi mi?
 
-9. **Doküman uyumu kontrolü:** Kod, referans dokümanlarla tutarlı mı?
-   - Enum değerleri eşleşiyor mu?
-   - Field adları eşleşiyor mu?
-   - İş kuralları doğru uygulanmış mı?
+10. **Doküman uyumu kontrolü:** Kod, referans dokümanlarla tutarlı mı?
+    - Enum değerleri eşleşiyor mu?
+    - Field adları eşleşiyor mu?
+    - İş kuralları doğru uygulanmış mı?
 
 ### Faz 2 — Verdict
 
-10. **Genel verdict oluştur:**
+11. **Genel verdict oluştur:**
     - **PASS:** Tüm kabul kriterleri ✓ veya kabul edilebilir ~ (minor), güvenlik kontrolü temiz, testler geçiyor
     - **FAIL:** En az bir kabul kriteri ✗, veya kritik güvenlik bulgusu, veya testler kırık
     - **BLOCKED:** Doğrulama yapılamıyor (kod eksik, branch yok, vb.)
 
-11. **Bulguları sınıfla** (FAIL durumunda):
+12. **Bulguları sınıfla** (FAIL durumunda):
     - `S1 Sapma` — Task tamamlandı ama dokümanla uyumsuz
     - `S2 Kırılma` — Mevcut işlevselliği bozan değişiklik
     - `S3 Eksik` — Kabul kriterinde tanımlı ama implement edilmemiş
 
 ### Faz 3 — Rapor Karşılaştırma ve Finalize
 
-12. **Şimdi yapım raporunu oku:** `Docs/TASK_REPORTS/TXX_REPORT.md` taslağını oku.
+13. **Şimdi yapım raporunu oku:** `Docs/TASK_REPORTS/TXX_REPORT.md` taslağını oku.
     - Kendi verdict'inle karşılaştır
     - Uyuşmazlık varsa belirt
 
-13. **Raporu finalize et:** TXX_REPORT.md'yi validator sonuçlarıyla güncelle:
+14. **Raporu finalize et:** TXX_REPORT.md'yi validator sonuçlarıyla güncelle:
     - Doğrulama bölümünü doldur (durum, bulgu sayısı, düzeltme gerekli mi)
     - Kabul kriterleri tablosunu validator kanıtlarıyla güncelle
 
-14. **Status güncelle:** (sadece PASS durumunda)
+15. **Status güncelle:** (sadece PASS durumunda)
     - `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `✓ Tamamlandı` yap
     - **Kural:** Rapor finalize edilmeden status güncellenmiş sayılmaz
 
-15. **Rapor + status commit+push:** Finalize edilmiş rapor ve status değişikliğini commit'le ve push'la.
+16. **Rapor + status commit+push:** Finalize edilmiş rapor ve status değişikliğini commit'le ve push'la.
     - Bu adım merge'den önce yapılmalı — aksi halde squash merge bu değişiklikleri içermez.
     - Cloud session'larda commit+push edilmeyen dosyalar session kapandığında kaybolur.
 
-16. **Merge:** (sadece PASS durumunda)
+17. **Merge:** (sadece PASS durumunda)
     - Branch'i `main`'e squash merge et
     - Squash commit mesajı: `TXX: Task adı`
 
