@@ -93,9 +93,9 @@
 
 ## Commit & PR
 - Branch: `task/T25-infrastructure-entities`
-- Commit: pending (bu rapor commit'inden sonra)
-- PR: pending
-- CI: pending
+- Commit: `0af4ac3` (code + doc) — squash merge öncesi
+- PR: #29
+- CI: ⏳ CI run bekleniyor
 
 ## Known Limitations / Follow-up
 - **Integration test çalışması lokal engelli:** Cloud sandbox'ta Docker daemon kullanılamadığı için entity tests (TestContainers tabanlı) yalnızca CI'da çalıştırılıyor. Validator bu testleri CI run output'undan doğrulayacak.
