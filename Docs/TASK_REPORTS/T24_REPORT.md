@@ -46,7 +46,7 @@
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Integration | ⏳ CI bekliyor | 20 test — CI TestContainers SQL Server, PR #28 run takipte |
+| Integration | ✓ PASS | 20 test — CI TestContainers SQL Server, run `24611059800` (12/12 job success) |
 | Build | ✓ 0 Error, 0 Warning | `dotnet build backend/Skinora.sln -v minimal` — full solution build başarılı |
 
 ## Doğrulama
@@ -56,7 +56,7 @@
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 | Main CI Check | ✓ 3/3 success (24610262089, 24610262100, 24472824093) |
-| Task Branch CI | ⏳ PR #28 — CI beklemede |
+| Task Branch CI | ✓ PR #28 run `24611059800` — 12/12 job success, CI Gate ✓ |
 | Lokal Build | ✓ 0 Warning, 0 Error |
 | Lokal Test | Docker daemon unavailable (cloud env — sandbox iptables kısıtı) — CI evidence kullanılacak |
 | Güvenlik | Secret sızıntısı yok, auth etkisi yok (entity layer), yeni dış bağımlılık yok (Users iç modül referansı) |
@@ -71,7 +71,8 @@
 - Branch: `task/T24-admin-entities`
 - Commit: `759fba6` — T24: AdminRole, AdminRolePermission, AdminUserRole entities
 - PR: #28
-- CI: ⏳ Beklemede
+- CI: ✓ PASS (run `24611059800` — 12/12 job success)
+- Concurrency: önceki run `24611041727` yeni push ile cancel edildi (task.md concurrency kuralına uygun — son tamamlanmış run success)
 
 ## Known Limitations / Follow-up
 - Yok
