@@ -18,6 +18,7 @@ COPY src/Modules/Skinora.Notifications/Skinora.Notifications.csproj src/Modules/
 COPY src/Modules/Skinora.Admin/Skinora.Admin.csproj src/Modules/Skinora.Admin/
 COPY src/Modules/Skinora.Disputes/Skinora.Disputes.csproj src/Modules/Skinora.Disputes/
 COPY src/Modules/Skinora.Fraud/Skinora.Fraud.csproj src/Modules/Skinora.Fraud/
+COPY src/Modules/Skinora.Platform/Skinora.Platform.csproj src/Modules/Skinora.Platform/
 COPY tests/Skinora.API.Tests/Skinora.API.Tests.csproj tests/Skinora.API.Tests/
 COPY tests/Skinora.Transactions.Tests/Skinora.Transactions.Tests.csproj tests/Skinora.Transactions.Tests/
 COPY tests/Skinora.Payments.Tests/Skinora.Payments.Tests.csproj tests/Skinora.Payments.Tests/
@@ -28,6 +29,7 @@ COPY tests/Skinora.Notifications.Tests/Skinora.Notifications.Tests.csproj tests/
 COPY tests/Skinora.Admin.Tests/Skinora.Admin.Tests.csproj tests/Skinora.Admin.Tests/
 COPY tests/Skinora.Disputes.Tests/Skinora.Disputes.Tests.csproj tests/Skinora.Disputes.Tests/
 COPY tests/Skinora.Fraud.Tests/Skinora.Fraud.Tests.csproj tests/Skinora.Fraud.Tests/
+COPY tests/Skinora.Platform.Tests/Skinora.Platform.Tests.csproj tests/Skinora.Platform.Tests/
 COPY tests/Skinora.Shared.Tests/Skinora.Shared.Tests.csproj tests/Skinora.Shared.Tests/
 
 RUN dotnet restore
