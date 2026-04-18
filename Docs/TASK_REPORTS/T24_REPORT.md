@@ -1,6 +1,6 @@
 # T24 — AdminRole, AdminRolePermission, AdminUserRole Entity'leri
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-18
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-18
 
 ---
 
@@ -46,21 +46,21 @@
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Integration | ✓ PASS | 20 test — CI TestContainers SQL Server, run `24611059800` (12/12 job success) |
-| Build | ✓ 0 Error, 0 Warning | `dotnet build backend/Skinora.sln -v minimal` — full solution build başarılı |
+| Integration | ✓ PASS | 20 test — CI TestContainers SQL Server, run `24611419571` job `71966527241` (15m 31s) |
+| Build | ✓ 0 Error, 0 Warning | `dotnet build backend/Skinora.sln` — full solution build başarılı (validator lokal sandbox, 00:00:31) |
 
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
-| Main CI Check | ✓ 3/3 success (24610262089, 24610262100, 24472824093) |
-| Task Branch CI | ✓ PR #28 run `24611059800` — 12/12 job success, CI Gate ✓ |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Main CI Check | ✓ 3/3 success — PR #27 `CI Gate` ✓, PR #26 `CI Gate` ✓, PR #25 `CI Gate` ✓ (MCP `get_check_runs` ile doğrulandı) |
+| Task Branch CI | ✓ PR #28 run `24611419571` — 12/12 job success (1 skipped: Guard-direct-push PR context), CI Gate ✓ completed 19:04:53 UTC |
 | Lokal Build | ✓ 0 Warning, 0 Error |
-| Lokal Test | Docker daemon unavailable (cloud env — sandbox iptables kısıtı) — CI evidence kullanılacak |
-| Güvenlik | Secret sızıntısı yok, auth etkisi yok (entity layer), yeni dış bağımlılık yok (Users iç modül referansı) |
-| Doküman uyumu | 06 §3.14, §3.15, §3.16, §4.1, §4.2, §5.1 — tüm field, FK, unique index birebir uyumlu |
+| Lokal Test | Docker daemon unavailable (cloud sandbox — iptables kısıtı) — CI kanıtı kullanıldı (Adım 8a) |
+| Güvenlik | Secret sızıntısı yok (grep temiz), auth etkisi yok (entity layer), input validation etkisi yok, yeni dış paket referansı yok (sadece iç modül: Skinora.Users) |
+| Doküman uyumu | 06 §3.14, §3.15, §3.16, §4.1, §4.2, §5.1 — tüm field, FK, cascade, unique filtered/unfiltered semantiği birebir uyumlu |
 
 ## Altyapı Değişiklikleri
 - Migration: Yok (T28'de initial migration)
@@ -69,10 +69,9 @@
 
 ## Commit & PR
 - Branch: `task/T24-admin-entities`
-- Commit: `759fba6` — T24: AdminRole, AdminRolePermission, AdminUserRole entities
+- Commit: `759fba6` (code) + `ffab9d8` (draft report) + `8e6512d` (report CI update) — squash merge öncesi
 - PR: #28
-- CI: ✓ PASS (run `24611059800` — 12/12 job success)
-- Concurrency: önceki run `24611041727` yeni push ile cancel edildi (task.md concurrency kuralına uygun — son tamamlanmış run success)
+- CI: ✓ PASS (run `24611419571` — 12/12 job success, CI Gate ✓ 19:04:53 UTC)
 
 ## Known Limitations / Follow-up
 - Yok

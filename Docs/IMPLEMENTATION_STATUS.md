@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-18 (T24 yapım tamamlandı, CI + validator bekliyor — AdminRole, AdminRolePermission, AdminUserRole entity'leri)
+**Son güncelleme:** 2026-04-18 (T24 validator PASS — AdminRole, AdminRolePermission, AdminUserRole entity'leri main'e hazır)
 
 ---
 
@@ -62,7 +62,7 @@
 | T21 | TradeOffer, PlatformSteamBot entity'leri | ✓ Tamamlandı | ✓ PASS | — |
 | T22 | Dispute, FraudFlag entity'leri | ✓ Tamamlandı | ✓ PASS | `eed4dc7` |
 | T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ✓ Tamamlandı | ✓ PASS | `b11a2cc` (#27) |
-| T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ⏳ Devam ediyor | CI + validator bekliyor | `759fba6` (#28) |
+| T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ✓ Tamamlandı | ✓ PASS | `759fba6` (#28, pending squash) |
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ⬚ Bekliyor | — | — |
 | T26 | Seed data | ⬚ Bekliyor | — | — |
 | T27 | Performans index'leri ve filtered index'ler | ⬚ Bekliyor | — | — |
