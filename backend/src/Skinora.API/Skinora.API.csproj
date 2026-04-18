@@ -11,6 +11,7 @@
     <ProjectReference Include="..\Modules\Skinora.Admin\Skinora.Admin.csproj" />
     <ProjectReference Include="..\Modules\Skinora.Disputes\Skinora.Disputes.csproj" />
     <ProjectReference Include="..\Modules\Skinora.Fraud\Skinora.Fraud.csproj" />
+    <ProjectReference Include="..\Modules\Skinora.Platform\Skinora.Platform.csproj" />
   </ItemGroup>
 
   <ItemGroup>

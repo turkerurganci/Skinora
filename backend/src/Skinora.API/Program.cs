@@ -13,6 +13,8 @@ using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Disputes.Infrastructure.Persistence;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Notifications.Infrastructure.Persistence;
+using Skinora.Payments.Infrastructure.Persistence;
+using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -106,6 +108,8 @@ DisputesModuleDbRegistration.RegisterDisputesModule();
 FraudModuleDbRegistration.RegisterFraudModule();
 NotificationsModuleDbRegistration.RegisterNotificationsModule();
 AdminModuleDbRegistration.RegisterAdminModule();
+PaymentsModuleDbRegistration.RegisterPaymentsModule();
+PlatformModuleDbRegistration.RegisterPlatformModule();
 
 var app = builder.Build();
 
