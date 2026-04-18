@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-12 (T22 doğrulama PASS — Dispute, FraudFlag entity'leri)
+**Son güncelleme:** 2026-04-15 (T23 doğrulama PASS — Notification, NotificationDelivery, UserNotificationPreference entity'leri)
 
 ---
 
@@ -61,7 +61,7 @@
 | T20 | PaymentAddress, BlockchainTransaction entity'leri | ✓ Tamamlandı | ✓ PASS | `be0cc24` (#11) |
 | T21 | TradeOffer, PlatformSteamBot entity'leri | ✓ Tamamlandı | ✓ PASS | — |
 | T22 | Dispute, FraudFlag entity'leri | ✓ Tamamlandı | ✓ PASS | `eed4dc7` |
-| T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ⬚ Bekliyor | — | — |
+| T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ✓ Tamamlandı | ✓ PASS | `b11a2cc` (#27) |
 | T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ⬚ Bekliyor | — | — |
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ⬚ Bekliyor | — | — |
 | T26 | Seed data | ⬚ Bekliyor | — | — |
