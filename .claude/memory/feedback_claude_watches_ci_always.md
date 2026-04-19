@@ -30,6 +30,8 @@ Actigim her PR'in CI run'ini `gh run watch <ID> --exit-status` (veya esdeger pol
 
 5. **Istisna yok:** task PR, chore PR, infra PR, docs PR, validator fix PR — hepsi ayni. Task dalinda pre-push Layer 2 (CI guard) zaten failure'i blokluyor ama CI watch farkli bir sorumluluk (sonuc raporlama + root cause takibi).
 
+5a. **Workflow tipi ayrimi yok:** Ayni ref'e bagli birden fazla workflow varsa (ornek: `.github/workflows/ci.yml` + `.github/workflows/docker-publish.yml`) hepsi izlenir. PR #37 post-merge'de `CI` run'ini izledim ama `Docker Publish` run'ini izlemedim; kullanici uyardi (2026-04-19): *"docker publish sonucunu neden beklemedik"*. Son 10 Docker Publish sans eseri yesildi ama disiplin olarak yanlisti — ayni PR/merge icin her workflow'un conclusion'i takip edilir, biri success diger in_progress iken "bitti" denmez.
+
 6. Kullaniciya CI ile ilgili soru sorma sablonlari **yasak**:
    - "CI'yi sen mi izleyeceksin?"
    - "gh run watch ile takip edeyim mi?"
