@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-19 (T25 validator PASS — SystemSetting, SystemHeartbeat, AuditLog, ColdWalletTransfer, SellerPayoutIssue + Outbox coverage, IAppendOnly enforcement)
+**Son güncelleme:** 2026-04-19 (T26 yapım — SYSTEM user + SystemHeartbeat + 28 SystemSetting seed + env var bootstrap + startup fail-fast)
 
 ---
 
@@ -64,7 +64,7 @@
 | T23 | Notification, NotificationDelivery, UserNotificationPreference entity'leri | ✓ Tamamlandı | ✓ PASS | `b11a2cc` (#27) |
 | T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ✓ Tamamlandı | ✓ PASS | `759fba6` (#28, pending squash) |
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ✓ Tamamlandı | ✓ PASS | `ba766b9` (#29, pending squash) |
-| T26 | Seed data | ⬚ Bekliyor | — | — |
+| T26 | Seed data | ⏳ Devam ediyor | — | — |
 | T27 | Performans index'leri ve filtered index'ler | ⬚ Bekliyor | — | — |
 | T28 | Initial migration ve migration testi | ⬚ Bekliyor | — | — |
 

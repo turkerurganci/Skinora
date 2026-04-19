@@ -19,7 +19,9 @@ public class SystemSettingEntityTests : IntegrationTestBase
         PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
-    private static SystemSetting CreateValid(string key = "commission_rate", string dataType = "decimal")
+    // T26 note: all test keys are prefixed "test_" so they cannot collide with
+    // the 28 SystemSetting rows seeded by 06 §8.9.
+    private static SystemSetting CreateValid(string key = "test_commission_rate", string dataType = "decimal")
     {
         return new SystemSetting
         {
@@ -45,7 +47,7 @@ public class SystemSettingEntityTests : IntegrationTestBase
         await using var readCtx = CreateContext();
         var loaded = await readCtx.Set<SystemSetting>().FirstAsync(s => s.Id == setting.Id);
 
-        Assert.Equal("commission_rate", loaded.Key);
+        Assert.Equal("test_commission_rate", loaded.Key);
         Assert.Equal("0.02", loaded.Value);
         Assert.True(loaded.IsConfigured);
         Assert.Equal("decimal", loaded.DataType);
@@ -90,12 +92,12 @@ public class SystemSettingEntityTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task SystemSetting_DuplicateKey_Rejected()
     {
-        var first = CreateValid("cancel_limit_count");
+        var first = CreateValid("test_cancel_limit_count");
         Context.Set<SystemSetting>().Add(first);
         await Context.SaveChangesAsync();
 
         await using var ctx = CreateContext();
-        var duplicate = CreateValid("cancel_limit_count");
+        var duplicate = CreateValid("test_cancel_limit_count");
         ctx.Set<SystemSetting>().Add(duplicate);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());

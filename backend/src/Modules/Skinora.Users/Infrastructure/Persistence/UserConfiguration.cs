@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Infrastructure.Persistence;
@@ -83,5 +84,23 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(u => u.DefaultRefundAddress)
             .HasDatabaseName("IX_Users_DefaultRefundAddress");
+
+        // --- Seed: SYSTEM service account (06 §8.9) ---
+        // Referenced as the sentinel ActorId for AuditLog / TransactionHistory
+        // rows produced by platform-automated actions. IsDeactivated = true
+        // excludes it from operational user queries (06 §1.3 predicate).
+        builder.HasData(new
+        {
+            Id = SeedConstants.SystemUserId,
+            SteamId = SeedConstants.SystemSteamId,
+            SteamDisplayName = "System",
+            PreferredLanguage = "en",
+            MobileAuthenticatorVerified = false,
+            CompletedTransactionCount = 0,
+            IsDeactivated = true,
+            IsDeleted = false,
+            CreatedAt = SeedConstants.SeedAnchorUtc,
+            UpdatedAt = SeedConstants.SeedAnchorUtc,
+        });
     }
 }

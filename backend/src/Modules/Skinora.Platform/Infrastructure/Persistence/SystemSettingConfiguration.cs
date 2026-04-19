@@ -57,5 +57,11 @@ public class SystemSettingConfiguration : IEntityTypeConfiguration<SystemSetting
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(s => s.Category)
             .HasDatabaseName("IX_SystemSettings_Category");
+
+        // --- Seed: 28 platform parameters (06 §8.9, §3.17) ---
+        // Parameters with a documented default are seeded IsConfigured = true;
+        // the rest ship IsConfigured = false and must be hydrated before the
+        // API completes startup (06 §8.9 fail-fast).
+        builder.HasData(SystemSettingSeed.All);
     }
 }
