@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Skinora.API.BackgroundJobs;
 using Skinora.API.Outbox;
+using Skinora.API.Startup;
 using Skinora.Shared.BackgroundJobs;
 
 namespace Skinora.API.Tests.Common;
@@ -104,8 +105,16 @@ public class HangfireBypassFactory : WebApplicationFactory<Program>
             // try to resolve OutboxDispatcher and reach for AppDbContext /
             // Medallion's SqlDistributedSynchronizationProvider, both of
             // which require a real SQL Server.
+            //
+            // T26 — drop SettingsBootstrapHook for the same reason: its
+            // StartAsync queries AppDbContext for SystemSettings, which in
+            // these tests is rebuilt as an in-memory SQLite with no seed
+            // rows. Two EF providers in DI (the original SqlServer plus the
+            // SQLite replacement) also trip EF's single-provider guard.
             var startupHookDescriptors = services
-                .Where(d => d.ImplementationType == typeof(OutboxStartupHook))
+                .Where(d =>
+                    d.ImplementationType == typeof(OutboxStartupHook) ||
+                    d.ImplementationType == typeof(SettingsBootstrapHook))
                 .ToList();
             foreach (var d in startupHookDescriptors)
             {
