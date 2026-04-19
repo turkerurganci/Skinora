@@ -52,6 +52,7 @@
 ## Project
 - [project_gpt_review_workflow.md](project_gpt_review_workflow.md) — GPT cross-review sureci ve etki yansitma akisi
 - [project_implementation_decisions.md](project_implementation_decisions.md) — Implementation fazi calisma modeli, dogrulama, ortam, CI/CD kararlari
+- [project_validator_merge_flow.md](project_validator_merge_flow.md) — Validator merge akisi (B — skill §17 korunur, T27'den itibaren validator chat squash merge)
 
 ## Reference
 - [reference_remote_control.md](reference_remote_control.md) — VS Code Claude Code /remote-control (/rc) komutu — mobil session izleme/kontrol
