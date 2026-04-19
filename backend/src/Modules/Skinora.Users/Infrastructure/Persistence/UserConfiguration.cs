@@ -89,6 +89,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         // Referenced as the sentinel ActorId for AuditLog / TransactionHistory
         // rows produced by platform-automated actions. IsDeactivated = true
         // excludes it from operational user queries (06 §1.3 predicate).
+        // RowVersion is set explicitly so SQLite-backed test hosts (which
+        // don't auto-populate rowversion the way SQL Server does) accept the
+        // seed INSERT; SQL Server overwrites it on first write anyway.
         builder.HasData(new
         {
             Id = SeedConstants.SystemUserId,
@@ -101,6 +104,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             IsDeleted = false,
             CreatedAt = SeedConstants.SeedAnchorUtc,
             UpdatedAt = SeedConstants.SeedAnchorUtc,
+            RowVersion = SeedConstants.SeedRowVersion,
         });
     }
 }

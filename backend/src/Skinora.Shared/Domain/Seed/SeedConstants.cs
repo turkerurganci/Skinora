@@ -30,4 +30,12 @@ public static class SeedConstants
     /// </summary>
     public static readonly DateTime SeedAnchorUtc =
         new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>
+    /// Placeholder <c>RowVersion</c> for HasData rows. SQL Server overwrites
+    /// rowversion columns on insert so the value never surfaces in production;
+    /// SQLite-backed test hosts require a non-null byte[] because they do not
+    /// auto-populate the column.
+    /// </summary>
+    public static readonly byte[] SeedRowVersion = new byte[8];
 }

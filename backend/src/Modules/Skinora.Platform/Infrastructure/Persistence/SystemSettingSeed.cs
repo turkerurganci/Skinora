@@ -75,6 +75,7 @@ public static class SystemSettingSeed
             Description = description,
             CreatedAt = SeedConstants.SeedAnchorUtc,
             UpdatedAt = SeedConstants.SeedAnchorUtc,
+            RowVersion = SeedConstants.SeedRowVersion,
         };
 
     private static SystemSetting Default(
@@ -94,5 +95,6 @@ public static class SystemSettingSeed
             Description = description,
             CreatedAt = SeedConstants.SeedAnchorUtc,
             UpdatedAt = SeedConstants.SeedAnchorUtc,
+            RowVersion = SeedConstants.SeedRowVersion,
         };
 }
