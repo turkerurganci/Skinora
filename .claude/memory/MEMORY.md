@@ -5,17 +5,18 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-04-19)
+## Current Status (2026-04-20)
+> **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 - **Completed docs:** 00 (v0.4), 01 (v1.1), 02 (v2.4), 03 (v2.2), 04 (v3.0), 05 (v2.3), 06 (v4.9), 07 (v2.1), 08 (v2.5), 09 (v0.9), 10 (v1.3), 11 (v0.5), 12 (v0.5)
-- **Implementation:** F1 aktif — T01-T26 ✓ PASS. CI pipeline tam canlı + 4 savunma katmanı canlı.
+- **Implementation:** F1 aktif — T01-T26 + T11.1 + T11.2 + T11.3 ✓ PASS. CI pipeline tam canlı + 4 savunma katmanı canlı.
 - **T23 (`b11a2cc` #27):** Notification + NotificationDelivery + UserNotificationPreference entity'leri.
 - **T24 (`759fba6` #28, pending squash):** AdminRole + AdminRolePermission + AdminUserRole entity'leri.
 - **T25 (`ba766b9` #29, pending squash):** Skinora.Platform modülü (SystemSetting, SystemHeartbeat, AuditLog), ColdWalletTransfer (Payments), SellerPayoutIssue (Transactions), IAppendOnly marker + EnforceAppendOnly().
 - **T26 (`c090b14` #30, validated 2026-04-19):** SYSTEM user + SystemHeartbeat singleton + 28 SystemSetting seed + env var bootstrap + startup fail-fast. 8/8 kabul kriteri PASS, 0 kritik. **Meta-karar (B, 2026-04-19):** skill §17 korunur — T27'den itibaren validator chat squash merge yapar. [project_validator_merge_flow.md](project_validator_merge_flow.md) kayıtlı.
 - **CI incidents + 6 chore PR (2026-04-19):** PR #31 `.gitignore` scheduled_tasks.lock, #32 BYPASS_LOG+validator flow memory, #33 plan §T26 "27→28" doc drift fix (tümü merged). Sonra main CI 3 ardışık fail → root cause: xUnit parallel + TestContainers OOM (7.75 GB ubuntu-latest, 10+ SQL Server container taşıyamıyor). PR #34 xunit.runner.json + -m:1 hot-fix (Integration 5 → 22 dk). PR #35 paths-filter docs-only skip (~25 dk/docs PR kazanım), PR #36 docker matrix path filter (~5-15 dk/run kazanım). GitHub Pro'ya geçildi (Free 2000 dk/ay aşılmıştı).
-- **T11.3 plana eklendi:** shared MsSqlContainer ICollectionFixture refactor — hot-fix kalıcılaştırır, Integration runtime ≤10 dk hedef. T27 öncesi zorunlu. [11_IMPLEMENTATION_PLAN.md §T11.3](../../Docs/11_IMPLEMENTATION_PLAN.md).
+- **T11.3 (`e185daf` PR #39, validate `5f5c28e` 2026-04-19):** Shared SQL Server (CI services:mssql + env var) + per-class unique DB (T_{ClassName}_{Guid:N}) + parallel execution geri açık. Integration CI 22 dk → 3:05 (~7× hızlanma). Hot-fix (`5f6a8cb` -m:1) kalıcılaştırıldı, T27 öncesi infra borç kapandı.
 - **T14 not:** steam-tradeoffer-manager ^3.x npm'de mevcut değil, ^2.13.x kullanıldı, 08 §2.5 güncellendi
-- **Next:** T11.3 (shared fixture) → T27 (index'ler) → T28 (migration) → F1 Gate Check.
+- **Next:** T27 (Performans index'leri ve filtered index'ler) → T28 (initial migration) → F1 Gate Check.
 - **F0 Gate Check bulguları:** OutboxStartupHook DI fix (singleton/scoped), Frontend Dockerfile fix (alpine→slim)
 - **Checkpoints completed:** 19 (CP1-CP18, CP18 = 12 audit + GPT review + etki yansıtma + checkpoint)
 - **Audits completed:** 00-12
@@ -49,6 +50,7 @@
 - [feedback_commit_infra_changes_before_task.md](feedback_commit_infra_changes_before_task.md) — Infra/meta degisiklikleri working tree'de birakma, task basindan once commit+PR akisini proaktif baslat
 - [feedback_claude_watches_ci_always.md](feedback_claude_watches_ci_always.md) — Her actigim PR'in CI'sini ben izlerim — task/chore/infra/docs ayrimi yok, "sen mi izleyeceksin" sorusu yasak
 - [feedback_clean_worktree_before_work.md](feedback_clean_worktree_before_work.md) — Session basinda dirty working tree'yi gormezden gelme, commit/stash/discard kararini kullanicidan al
+- [feedback_verify_status_before_quoting.md](feedback_verify_status_before_quoting.md) — "Sirada ne var / nerede kaldik" sorularinda MEMORY snapshot'a guvenme, IMPLEMENTATION_STATUS.md'yi oku
 
 ## Project
 - [project_gpt_review_workflow.md](project_gpt_review_workflow.md) — GPT cross-review sureci ve etki yansitma akisi
