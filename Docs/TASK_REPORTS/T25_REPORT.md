@@ -1,6 +1,6 @@
 # T25 — Altyapı Entity'leri
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-18
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-19
 
 ---
 
@@ -69,22 +69,23 @@
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit | ✓ 150+15 passed | `dotnet test Skinora.Shared.Tests --filter !Integration` → 150/150 ✓, `dotnet test Skinora.API.Tests --filter !Integration` → 15/15 ✓ |
-| Integration | ⏳ Pending (CI) | Docker daemon lokal sandbox'ta çalışmıyor (iptables kısıtı). 37+ entity testi CI'da TestContainers SQL Server ile koşulacak. |
-| Build | ✓ 0 Error, 0 Warning | `dotnet build Skinora.sln` — 24 proje başarıyla build oldu (00:00:20) |
+| Unit (API) | ✓ 99/99 passed | Validator: `dotnet test backend/tests/Skinora.API.Tests` → 99/99 ✓ (lokal sandbox, Docker gerektirmeyen suit) |
+| Unit (Shared non-integration) | ✓ 150/154 passed | Validator lokal: 150 PASS + 4 DockerUnavailableException (TestContainers — CI'de koşuldu) |
+| Integration (CI) | ✓ PASS | GitHub Actions task branch run 24613696778 — `4. Integration test` job `conclusion=success`, TestContainers SQL Server ortamında 37+ yeni test dahil tüm integration suite PASS. |
+| Build | ✓ 0 Error, 0 Warning | Validator: `dotnet build Skinora.sln --nologo` — 24 proje başarıyla build (00:00:42) |
 
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator chat'inde PASS/FAIL verilecek |
-| Bulgu sayısı | 0 (yapım self-check) |
-| Düzeltme gerekli mi | Hayır (yapım aşaması) |
-| Main CI Check | ✓ 3/3 success — PR #28 `CI Gate` ✓ (T24, run 24611802347 — 12/12 job), önceki T23/chore PR'ları da yeşil |
-| Task Branch CI | ⏳ Pending (push + PR sonrası) |
-| Lokal Build | ✓ 0 Warning, 0 Error |
-| Lokal Test | Docker unavailable → CI'da doğrulanacak |
-| Güvenlik | Secret sızıntısı yok, auth etkisi yok (entity layer), input validation etkisi yok, yeni dış paket yok |
-| Doküman uyumu | 06 §3.8a, §3.17–§3.23, §4.1, §4.2, §5.1, §5.2 — tüm field, CHECK, FK, cascade, index semantiği birebir uyumlu |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Main CI Check (Adım 0) | ✓ 3/3 success — son 3 main commit: T24 (`0042e65`, run 24611802347 — 12/12 job), T23 (`5eb1c3c`, 12/12 job), chore skill sync #26 (`f6629dc`, docs-only) |
+| Task Branch CI (Adım 8a) | ✓ PASS — PR #29 run 24613696778, `CI Gate ✓`, 11/11 job success (0. Guard skipped — PR context, doğru davranış) |
+| Lokal Build | ✓ 0 Warning, 0 Error (validator) |
+| Lokal Test | ✓ API 99/99, Shared 150/154 non-integration; 4 fail = DockerUnavailableException (sandbox limit — CI'de PASS) |
+| Güvenlik | ✓ Secret sızıntısı yok, auth etkisi yok (entity layer), input validation etkisi yok, yeni dış paket yok (Skinora.Platform csproj yalnızca ProjectReference) |
+| Doküman uyumu | ✓ 06 §3.8a, §3.17–§3.23, §4.1, §4.2, §5.1, §5.2 — tüm field, CHECK, FK, cascade, index semantiği birebir uyumlu |
 
 ## Altyapı Değişiklikleri
 - Migration: Yok (T28'de initial migration)
@@ -93,9 +94,10 @@
 
 ## Commit & PR
 - Branch: `task/T25-infrastructure-entities`
-- Commit: `0af4ac3` (code + doc) — squash merge öncesi
+- Commit tip: `ba766b9` (Dockerfile COPY fix) ← `e44cccd` (report PR ref) ← `0af4ac3` (entities + tests)
 - PR: #29
-- CI: ⏳ CI run bekleniyor
+- CI: ✓ PASS (run 24613696778 — 11/11 job success)
+- Validator branch: `claude/validate-t25-klavD`
 
 ## Known Limitations / Follow-up
 - **Integration test çalışması lokal engelli:** Cloud sandbox'ta Docker daemon kullanılamadığı için entity tests (TestContainers tabanlı) yalnızca CI'da çalıştırılıyor. Validator bu testleri CI run output'undan doğrulayacak.
