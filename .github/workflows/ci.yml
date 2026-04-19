@@ -12,12 +12,51 @@ env:
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
+# dorny/paths-filter requires pull-requests:read to call the GitHub Files
+# API for PR events. contents:read is the default but made explicit here
+# so future additions stay least-privilege.
+permissions:
+  contents: read
+  pull-requests: read
+
 # Cancel in-progress runs of the same workflow on the same ref
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # ----------------------------------------------------------------------------
+  # Detect which areas of the repo changed so downstream jobs can skip when
+  # a PR only touches docs/memory/markdown. Integration test + migration
+  # dry-run + build + unit/contract test all depend on backend source —
+  # running them on a pure-docs PR wastes ~25 Linux minutes with zero
+  # signal (see 2026-04-19 T26 chore PR chain).
+  #
+  # `backend` output is true when any tracked file under backend/,
+  # frontend/, sidecar-*/, or .github/workflows/ changed. A workflow edit
+  # forces a full run because the workflow itself might reshape job graph.
+  # ----------------------------------------------------------------------------
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Path filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'sidecar-steam/**'
+              - 'sidecar-blockchain/**'
+              - '.github/workflows/**'
+
   # ----------------------------------------------------------------------------
   # 0. Guard — direct push detection (defense-in-depth, T11 R3)
   # Sadece push event'lerinde calisir (PR'larda skip).
@@ -101,7 +140,8 @@ jobs:
   # ----------------------------------------------------------------------------
   build:
     name: 2. Build
-    needs: lint
+    needs: [changes, lint]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -143,7 +183,8 @@ jobs:
   # ----------------------------------------------------------------------------
   unit-test:
     name: 3. Unit test
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -187,7 +228,8 @@ jobs:
   # ----------------------------------------------------------------------------
   integration-test:
     name: 4. Integration test
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -237,7 +279,8 @@ jobs:
   # ----------------------------------------------------------------------------
   contract-test:
     name: 5. Contract test
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -283,7 +326,8 @@ jobs:
   # ----------------------------------------------------------------------------
   migration-dry-run:
     name: 6. Migration dry-run
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -319,7 +363,8 @@ jobs:
   # ----------------------------------------------------------------------------
   docker-build-check:
     name: 7. Docker build (${{ matrix.component.name }})
-    needs: build
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -352,6 +397,7 @@ jobs:
   ci-gate:
     name: CI Gate
     needs:
+      - changes
       - guard-direct-push
       - lint
       - build
