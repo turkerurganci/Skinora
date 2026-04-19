@@ -1,6 +1,6 @@
 # T26 — Seed Data
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-19
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-19
 
 ---
 
@@ -56,12 +56,23 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Yapım tamamlandı, validate chat'ine devir bekliyor |
-| Bulgu sayısı | 0 (yapım chat'inde tespit edilen) |
-| Main CI Check (Adım 0) | ✓ 3/3 success — son 3 completed main run: T25 main run `24624092864`, T24 run `24612180850`, T24 Docker `24612180855` (hepsi `conclusion=success`). T25 Docker Publish run `24624092863` hâlâ `in_progress`, skill kuralı gereği sayılmıyor. |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 kritik / 1 minor (S1 — plan §T26 "27" outdated, aşağı bkz.) |
+| Düzeltme gerekli mi | Hayır — minor finding follow-up PR olarak açılacak, T26 scope dışı. |
+| Main CI Check (Adım 0, validator) | ✓ — son 4 completed main run: T26 CI `24626911543` ✓, T26 Docker `24626911556` ✓, T25 CI `24624092863` ✓, T25 Docker `24624092864` ✓ |
+| Task branch son CI (Adım 8a, validator) | ✓ — run `24626493157` head `b6cbeca6` success (11/11 job + CI Gate). Önceki 3 task branch CI'sı failure → 4 `[ci-failure]` BYPASS_LOG bypass'ı legitim düzeltme turlarıydı. |
 | Lokal Build | ✓ 0 Warning, 0 Error |
-| Güvenlik | ✓ Secret sızıntısı yok. Yeni auth etkisi yok. Env var hydration yalnızca `IsConfigured = false` satırları etkiler (override saldırılarına karşı test kapsamında). Yeni dış bağımlılık: `Microsoft.Extensions.Configuration` + `.Binder` (Microsoft first-party). |
-| Doküman uyumu | ✓ 06 §8.9 seed contract'ın tamamı (SYSTEM user + SystemHeartbeat + 28 SystemSetting), 06 §3.17 parametre listesi, env var bootstrap mekanizması ve startup fail-fast davranışı. |
+| Güvenlik | ✓ Secret sızıntısı yok. Yeni auth etkisi yok. Env var hydration yalnızca `IsConfigured = false` satırları etkiler (malicious override testi: `Execute_Does_Not_Override_Already_Configured_Parameters` — `commission_rate = 0.99` override reddedildi). Yeni dış bağımlılık: `Microsoft.Extensions.Configuration` + `.Binder` (Microsoft first-party). |
+| Doküman uyumu | ✓ 06 §8.9 seed contract'ın tamamı (SYSTEM user + SystemHeartbeat + 28 SystemSetting), 06 §3.17 parametre listesi (28, plan §T26 "27" outdated), env var bootstrap mekanizması, startup fail-fast davranışı, hook registration sırası (Program.cs:84-85 bootstrap < :91 outbox). |
+| Yapım raporu karşılaştırması | ✓ Tam uyumlu — 8/8 kabul kriteri iddiası validator kanıtlarıyla eşleşti, uyuşmazlık yok. |
+
+### Validator Bulguları
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | S1 (minor) | Plan §T26 kabul kriterinde "27 SystemSetting parametresi" yazıyor; 06 v4.9 §3.17 tablosunda 28 satır var (`hot_wallet_limit` §3.17'e eklenmiş, plan güncellenmemiş). Implementation 06'yı kaynak aldı ve 28 parametre seed etti — doğru tercih. **Follow-up:** 11_IMPLEMENTATION_PLAN.md'deki T26 kabul kriteri + doğrulama kontrol listesi + traceability row "27" → "28" güncellenmeli, T27 öncesi chore PR. | `Docs/11_IMPLEMENTATION_PLAN.md:673, :679, :2201` |
+
+### Post-hoc Validator Notu (akış anomalisi)
+Bu validate, T26 squash merge'ü (`c090b14`, PR #30) main'e düştükten sonra çalıştırıldı — [validate.md](.claude/skills/validate.md) §17 "merge yalnızca validator PASS sonrası" kuralıyla örtüşmüyor. Validator veto timing'i kaybolmuş; spec conformance review yine de kanıt bazlı yapıldı ve PASS verildi. Bulgu kritik olsaydı merge revert tartışması gerekirdi. Akış uyumsuzluğunun kendisi (task chat merge vs validator merge) ayrı bir meta-karar — T26 kapanışından sonra değerlendirilecek.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok (T28'de initial migration — bu görevdeki HasData seed, T28 migration'ın içine gömülecek).

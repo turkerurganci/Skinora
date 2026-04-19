@@ -5,13 +5,16 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-04-18)
+## Current Status (2026-04-19)
 - **Completed docs:** 00 (v0.4), 01 (v1.1), 02 (v2.4), 03 (v2.2), 04 (v3.0), 05 (v2.3), 06 (v4.9), 07 (v2.1), 08 (v2.5), 09 (v0.9), 10 (v1.3), 11 (v0.5), 12 (v0.5)
-- **Implementation:** F1 aktif — T01-T24 ✓ PASS. T25 yapım tamamlandı, validator bekliyor. CI pipeline tam canlı + 4 savunma katmanı canlı.
-- **T25 tamamlanan iş:** Skinora.Platform modülü (yeni) — SystemSetting (06 §3.17, DataType CHECK), SystemHeartbeat (06 §3.23, singleton CHECK Id=1), AuditLog (06 §3.20, IAppendOnly). Skinora.Payments — ColdWalletTransfer (06 §3.22, IAppendOnly, UQ TxHash). Skinora.Transactions — SellerPayoutIssue (06 §3.8a, state-dependent CHECK, filtered UQ TransactionId WHERE != RESOLVED). IAppendOnly marker + AppDbContext.EnforceAppendOnly() — UPDATE/DELETE mekanik engeli (06 §4.2). TransactionHistory IAppendOnly'ye dahil edildi. Outbox entities (T10): OutboxMessage, ProcessedEvent, ExternalIdempotencyRecord uyumlu — T25 acceptance için constraint test coverage eklendi. 37+ integration test (Platform 13 + Payments 6 + Transactions 10 + Shared 8).
-- **T22 tamamlanan iş:** Dispute entity (06 §3.11, 13 field, 1 CHECK, unfiltered unique TransactionId+Type, soft delete). FraudFlag entity (06 §3.12, 13 field, 4 CHECK — scope-based + review-based, soft delete).
+- **Implementation:** F1 aktif — T01-T26 ✓ PASS. CI pipeline tam canlı + 4 savunma katmanı canlı.
+- **T23 (`b11a2cc` #27):** Notification + NotificationDelivery + UserNotificationPreference entity'leri.
+- **T24 (`759fba6` #28, pending squash):** AdminRole + AdminRolePermission + AdminUserRole entity'leri.
+- **T25 (`ba766b9` #29, pending squash):** Skinora.Platform modülü (SystemSetting, SystemHeartbeat, AuditLog), ColdWalletTransfer (Payments), SellerPayoutIssue (Transactions), IAppendOnly marker + EnforceAppendOnly().
+- **T26 (`c090b14` #30, validated 2026-04-19):** SYSTEM user + SystemHeartbeat singleton + 28 SystemSetting (06 §3.17) seed + `SKINORA_SETTING_{KEY_UPPER}` env var bootstrap + startup fail-fast. 8/8 kabul kriteri PASS, 0 kritik. Post-hoc validator akış uyumsuzluğu: T26 task chat CI PASS sonrası squash merge etti, validator chat merge'den sonra finalize etti — skill §17 "validator merges" ile çelişir. **Meta-karar pending:** skill §17 güncelle mi, task chat disiplinine geri dön mü.
+- **Minor follow-up:** plan §T26 kabul kriterinde "27 SystemSetting" yazıyor → 06 §3.17 "28" (hot_wallet_limit eklendi, plan güncellenmedi). Chore PR T27 öncesi.
 - **T14 not:** steam-tradeoffer-manager ^3.x npm'de mevcut değil, ^2.13.x kullanıldı, 08 §2.5 güncellendi
-- **Next:** T26 (Seed data: SYSTEM account, SystemHeartbeat, 27 SystemSetting parametresi). Geçmiş borç yok.
+- **Next:** T27 (performans index'leri). Geçmiş borç yok. F1'de kalan: T27 → T28 → F1 Gate Check.
 - **F0 Gate Check bulguları:** OutboxStartupHook DI fix (singleton/scoped), Frontend Dockerfile fix (alpine→slim)
 - **Checkpoints completed:** 19 (CP1-CP18, CP18 = 12 audit + GPT review + etki yansıtma + checkpoint)
 - **Audits completed:** 00-12
