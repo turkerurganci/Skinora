@@ -1,0 +1,17 @@
+﻿<Project>
+  <!--
+    Shared config for every backend/tests/*.Tests project:
+    copies xunit.runner.json into each test assembly's output so xUnit
+    picks up the serial-execution settings. TestContainers spins up a
+    per-class MsSqlContainer, and GitHub Actions' 7.75 GB ubuntu-latest
+    runner cannot hold 10+ SQL Server containers at once — forcing xUnit
+    to run collections sequentially avoids OOM-triggered exits that
+    looked like flakes (see 2026-04-19 T26 validator chain).
+  -->
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)xunit.runner.json">
+      <Link>xunit.runner.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
