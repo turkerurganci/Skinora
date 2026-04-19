@@ -105,12 +105,14 @@ public class AppDbContext : DbContext
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        EnforceAppendOnly();
         UpdateAuditFields();
         return base.SaveChangesAsync(cancellationToken);
     }
 
     public override int SaveChanges()
     {
+        EnforceAppendOnly();
         UpdateAuditFields();
         return base.SaveChanges();
     }
@@ -129,6 +131,22 @@ public class AppDbContext : DbContext
             else if (entry.State == EntityState.Modified)
             {
                 entry.Entity.UpdatedAt = now;
+            }
+        }
+    }
+
+    // 06 §4.2: Append-only entity'lerde INSERT sonrası UPDATE/DELETE tanımlı
+    // değil. Rule is enforced at the DbContext so every caller — including
+    // background jobs and ad-hoc maintenance paths — is bound by it.
+    private void EnforceAppendOnly()
+    {
+        foreach (var entry in ChangeTracker.Entries<IAppendOnly>())
+        {
+            if (entry.State == EntityState.Modified || entry.State == EntityState.Deleted)
+            {
+                throw new InvalidOperationException(
+                    $"{entry.Entity.GetType().Name} is append-only (06 §4.2) — " +
+                    $"{entry.State} is not permitted.");
             }
         }
     }

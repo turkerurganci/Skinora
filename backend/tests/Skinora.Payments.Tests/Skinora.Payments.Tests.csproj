@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Modules\Skinora.Payments\Skinora.Payments.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Skinora.Users\Skinora.Users.csproj" />
     <ProjectReference Include="..\Skinora.Shared.Tests\Skinora.Shared.Tests.csproj" />
   </ItemGroup>
 

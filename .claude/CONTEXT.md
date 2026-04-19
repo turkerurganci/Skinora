@@ -88,6 +88,39 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Fraud/Infrastructure/Persistence/FraudFlagConfiguration.cs` | EF Core config — 4 CHECK (scope + review), 3 FK, 3 perf index |
 | `backend/src/Modules/Skinora.Fraud/Infrastructure/Persistence/FraudModuleDbRegistration.cs` | Modül assembly kaydı |
 
+### Platform Modülü (T25)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Platform/Domain/Entities/SystemSetting.cs` | SystemSetting entity — 06 §3.17, 7 field, admin-yönetimli platform parametresi |
+| `backend/src/Modules/Skinora.Platform/Domain/Entities/SystemHeartbeat.cs` | SystemHeartbeat entity — 06 §3.23, singleton (Id=1 CHECK), uptime takibi |
+| `backend/src/Modules/Skinora.Platform/Domain/Entities/AuditLog.cs` | AuditLog entity — 06 §3.20, 11 field, IAppendOnly (immutable audit trail) |
+| `backend/src/Modules/Skinora.Platform/Infrastructure/Persistence/SystemSettingConfiguration.cs` | EF Core config — DataType CHECK ('int','decimal','bool','string'), UQ Key, Category perf index |
+| `backend/src/Modules/Skinora.Platform/Infrastructure/Persistence/SystemHeartbeatConfiguration.cs` | EF Core config — singleton CHECK (Id = 1), ValueGeneratedNever |
+| `backend/src/Modules/Skinora.Platform/Infrastructure/Persistence/AuditLogConfiguration.cs` | EF Core config — long IDENTITY, 5 perf index (ActorId, UserId, EntityType+EntityId, Action, CreatedAt) |
+| `backend/src/Modules/Skinora.Platform/Infrastructure/Persistence/PlatformModuleDbRegistration.cs` | Modül assembly kaydı |
+
+### Payments Modülü — ColdWalletTransfer (T25)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Payments/Domain/Entities/ColdWalletTransfer.cs` | ColdWalletTransfer entity — 06 §3.22, 8 field, IAppendOnly (hot→cold ledger) |
+| `backend/src/Modules/Skinora.Payments/Infrastructure/Persistence/ColdWalletTransferConfiguration.cs` | EF Core config — long IDENTITY, UQ TxHash, FK User (InitiatedByAdminId) |
+| `backend/src/Modules/Skinora.Payments/Infrastructure/Persistence/PaymentsModuleDbRegistration.cs` | Modül assembly kaydı |
+
+### Transactions — SellerPayoutIssue (T25)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Modules/Skinora.Transactions/Domain/Entities/SellerPayoutIssue.cs` | SellerPayoutIssue entity — 06 §3.8a, 10 field, workflow record (RESOLVED = frozen) |
+| `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/SellerPayoutIssueConfiguration.cs` | EF Core config — state-dependent CHECK (ESCALATED/RESOLVED/RETRY_SCHEDULED), filtered UQ TransactionId WHERE != RESOLVED, 3 FK + 3 perf index |
+
+### Append-Only Altyapı (T25)
+
+| Dosya | İçerik |
+|---|---|
+| `backend/src/Skinora.Shared/Domain/IAppendOnly.cs` | Marker interface — IAppendOnly implement eden entity'lerde UPDATE/DELETE AppDbContext.EnforceAppendOnly() ile reddedilir (06 §4.2) |
+
 ### CI/CD & Git Hooks (T11)
 
 | Dosya | İçerik |

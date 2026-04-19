@@ -5,9 +5,10 @@ namespace Skinora.Transactions.Domain.Entities;
 
 /// <summary>
 /// Append-only audit trail for every transaction state transition.
-/// All fields per 06 §3.6.
+/// All fields per 06 §3.6. Immutability is enforced at the
+/// <c>AppDbContext</c> level via <see cref="IAppendOnly"/> (06 §4.2).
 /// </summary>
-public class TransactionHistory
+public class TransactionHistory : IAppendOnly
 {
     public long Id { get; set; }
     public Guid TransactionId { get; set; }

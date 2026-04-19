@@ -5,12 +5,13 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-04-13)
+## Current Status (2026-04-18)
 - **Completed docs:** 00 (v0.4), 01 (v1.1), 02 (v2.4), 03 (v2.2), 04 (v3.0), 05 (v2.3), 06 (v4.9), 07 (v2.1), 08 (v2.5), 09 (v0.9), 10 (v1.3), 11 (v0.5), 12 (v0.5)
-- **Implementation:** F1 aktif — T01-T22 + T11.1 + T11.2 tümü ✓ PASS. T22 validator 2026-04-13 (PR #22 squash `863df04`, CI run 24316344485 ✓ 11/11 job, 23 integration test PASS). CI pipeline tam canlı + 4 savunma katmanı canlı.
-- **T22 tamamlanan iş:** Dispute entity (06 §3.11, 13 field, 1 CHECK, unfiltered unique TransactionId+Type, soft delete). FraudFlag entity (06 §3.12, 13 field, 4 CHECK — scope-based + review-based, soft delete). DisputesModuleDbRegistration + FraudModuleDbRegistration + Program.cs registration. 23 integration test (11 Dispute + 12 FraudFlag: CRUD + CHECK + unique + FK + soft delete).
+- **Implementation:** F1 aktif — T01-T24 ✓ PASS. T25 yapım tamamlandı, validator bekliyor. CI pipeline tam canlı + 4 savunma katmanı canlı.
+- **T25 tamamlanan iş:** Skinora.Platform modülü (yeni) — SystemSetting (06 §3.17, DataType CHECK), SystemHeartbeat (06 §3.23, singleton CHECK Id=1), AuditLog (06 §3.20, IAppendOnly). Skinora.Payments — ColdWalletTransfer (06 §3.22, IAppendOnly, UQ TxHash). Skinora.Transactions — SellerPayoutIssue (06 §3.8a, state-dependent CHECK, filtered UQ TransactionId WHERE != RESOLVED). IAppendOnly marker + AppDbContext.EnforceAppendOnly() — UPDATE/DELETE mekanik engeli (06 §4.2). TransactionHistory IAppendOnly'ye dahil edildi. Outbox entities (T10): OutboxMessage, ProcessedEvent, ExternalIdempotencyRecord uyumlu — T25 acceptance için constraint test coverage eklendi. 37+ integration test (Platform 13 + Payments 6 + Transactions 10 + Shared 8).
+- **T22 tamamlanan iş:** Dispute entity (06 §3.11, 13 field, 1 CHECK, unfiltered unique TransactionId+Type, soft delete). FraudFlag entity (06 §3.12, 13 field, 4 CHECK — scope-based + review-based, soft delete).
 - **T14 not:** steam-tradeoffer-manager ^3.x npm'de mevcut değil, ^2.13.x kullanıldı, 08 §2.5 güncellendi
-- **Next:** T23 (Notification, NotificationDelivery, UserNotificationPreference entity'leri). Geçmiş borç yok.
+- **Next:** T26 (Seed data: SYSTEM account, SystemHeartbeat, 27 SystemSetting parametresi). Geçmiş borç yok.
 - **F0 Gate Check bulguları:** OutboxStartupHook DI fix (singleton/scoped), Frontend Dockerfile fix (alpine→slim)
 - **Checkpoints completed:** 19 (CP1-CP18, CP18 = 12 audit + GPT review + etki yansıtma + checkpoint)
 - **Audits completed:** 00-12
