@@ -670,13 +670,13 @@ Task T26: Seed data
   Kabul kriterleri:
     - SYSTEM service account: User tablosunda sabit GUID (00000000-0000-0000-0000-000000000001), SteamId="00000000000000001", IsDeactivated=true
     - SystemHeartbeat: Id=1 ile tek satır
-    - SystemSetting: 27 platform parametresi seed edildi (accept_timeout_minutes, commission_rate, vb.), varsayılanı olanlar IsConfigured=true, olmayanlar false
+    - SystemSetting: 28 platform parametresi seed edildi (accept_timeout_minutes, commission_rate, hot_wallet_limit, vb.), varsayılanı olanlar IsConfigured=true, olmayanlar false
     - Env var bootstrap: SKINORA_SETTING_{KEY_UPPER} formatında env var ile SystemSetting hydration
     - Startup fail-fast: IsConfigured=false olan zorunlu parametreler kontrol edildi
   Test beklentisi: Integration — seed data doğru yükleniyor mu, fail-fast çalışıyor mu
   Doğrulama kontrol listesi:
     - [ ] 06 §8.9'daki tüm seed kayıtları var mı?
-    - [ ] 27 SystemSetting parametresi eksiksiz mi?
+    - [ ] 28 SystemSetting parametresi eksiksiz mi?
     - [ ] Env var bootstrap doğru çalışıyor mu?
 ```
 
