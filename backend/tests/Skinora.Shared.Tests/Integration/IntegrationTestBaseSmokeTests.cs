@@ -15,7 +15,14 @@ public class IntegrationTestBaseSmokeTests : IntegrationTestBase
     {
         // Assert
         Assert.False(string.IsNullOrWhiteSpace(ConnectionString));
-        Assert.Contains("Server=", ConnectionString);
+        // SqlConnectionStringBuilder canonicalises "Server=" to "Data Source=".
+        // Accept either so the assertion survives T11.3's shared-server refactor
+        // without coupling to a specific key name.
+        Assert.True(
+            ConnectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
+            ConnectionString.Contains("Server=", StringComparison.OrdinalIgnoreCase),
+            $"Expected connection string to identify the server; got: {ConnectionString}");
+        Assert.Contains("Initial Catalog=T_", ConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

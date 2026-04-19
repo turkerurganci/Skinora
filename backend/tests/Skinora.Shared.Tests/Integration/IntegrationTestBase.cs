@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Persistence;
 using Testcontainers.MsSql;
@@ -6,12 +7,27 @@ namespace Skinora.Shared.Tests.Integration;
 
 /// <summary>
 /// Base class for integration tests that require a real SQL Server instance.
-/// Uses TestContainers to spin up an ephemeral SQL Server container per test class.
-/// EF Core migrations are applied automatically; override <see cref="SeedAsync"/> to insert test data.
+///
+/// Cross-process shared backend (T11.3): when the environment variable
+/// <c>INTEGRATION_TEST_SQL_SERVER</c> is set (CI path — a single SQL Server
+/// lives at the job level and is reused by every test assembly), that
+/// connection string is treated as the server-level base. Otherwise a local
+/// ephemeral SQL Server container is spun up once per test assembly via
+/// TestContainers (local dev / fallback path).
+///
+/// Each test class creates its own uniquely-named database on the shared
+/// server and drops it on tear-down, so parallel classes cannot collide even
+/// when xUnit runs them concurrently within or across assemblies.
 /// </summary>
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
-    private MsSqlContainer _container = null!;
+    private const string EnvVarName = "INTEGRATION_TEST_SQL_SERVER";
+
+    private static readonly SemaphoreSlim _initLock = new(1, 1);
+    private static string? _baseConnectionString;
+    private static MsSqlContainer? _fallbackContainer;
+
+    private string _databaseName = string.Empty;
 
     /// <summary>
     /// The DbContext for the current test. Recreated per test via <see cref="CreateContext"/>.
@@ -19,39 +35,47 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected AppDbContext Context { get; private set; } = null!;
 
     /// <summary>
-    /// The connection string to the ephemeral SQL Server container.
+    /// The connection string pointing at this test class's unique database.
     /// Available after <see cref="InitializeAsync"/> completes.
     /// </summary>
     protected string ConnectionString { get; private set; } = string.Empty;
 
     public async Task InitializeAsync()
     {
-        _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
-            .Build();
+        var baseConnectionString = await EnsureBaseConnectionStringAsync();
+        _databaseName = BuildUniqueDatabaseName(GetType().Name);
 
-        await _container.StartAsync();
+        await CreateDatabaseAsync(baseConnectionString, _databaseName);
 
-        ConnectionString = _container.GetConnectionString();
+        ConnectionString = new SqlConnectionStringBuilder(baseConnectionString)
+        {
+            InitialCatalog = _databaseName,
+            TrustServerCertificate = true
+        }.ConnectionString;
 
-        // Apply EF Core migrations / ensure schema is created
         await using var migrationContext = CreateContext();
         await migrationContext.Database.EnsureCreatedAsync();
-
-        // Allow subclasses to seed test data
         await SeedAsync(migrationContext);
 
-        // Create the context that tests will use
         Context = CreateContext();
     }
 
     public async Task DisposeAsync()
     {
-        await Context.DisposeAsync();
-        await _container.DisposeAsync();
+        if (Context is not null)
+        {
+            await Context.DisposeAsync();
+        }
+
+        if (_baseConnectionString is not null && !string.IsNullOrEmpty(_databaseName))
+        {
+            SqlConnection.ClearAllPools();
+            await DropDatabaseAsync(_baseConnectionString, _databaseName);
+        }
     }
 
     /// <summary>
-    /// Creates a new <see cref="AppDbContext"/> pointing at the test container.
+    /// Creates a new <see cref="AppDbContext"/> pointing at the test database.
     /// Use this to create additional contexts when testing concurrency or isolation.
     /// </summary>
     protected AppDbContext CreateContext()
@@ -70,5 +94,84 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     protected virtual Task SeedAsync(AppDbContext context)
     {
         return Task.CompletedTask;
+    }
+
+    private static async Task<string> EnsureBaseConnectionStringAsync()
+    {
+        if (_baseConnectionString is not null)
+        {
+            return _baseConnectionString;
+        }
+
+        await _initLock.WaitAsync();
+        try
+        {
+            if (_baseConnectionString is not null)
+            {
+                return _baseConnectionString;
+            }
+
+            var envValue = Environment.GetEnvironmentVariable(EnvVarName);
+            if (!string.IsNullOrWhiteSpace(envValue))
+            {
+                _baseConnectionString = envValue;
+            }
+            else
+            {
+                _fallbackContainer = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
+                    .Build();
+                await _fallbackContainer.StartAsync();
+                _baseConnectionString = _fallbackContainer.GetConnectionString();
+            }
+        }
+        finally
+        {
+            _initLock.Release();
+        }
+
+        return _baseConnectionString;
+    }
+
+    private static string BuildUniqueDatabaseName(string className)
+    {
+        // SQL Server DB name max length is 128. Class names are typically short;
+        // trim defensively, prefix with a marker, suffix with a GUID to guarantee uniqueness.
+        var sanitized = className.Length > 40 ? className[..40] : className;
+        var id = Guid.NewGuid().ToString("N");
+        return $"T_{sanitized}_{id}";
+    }
+
+    private static async Task CreateDatabaseAsync(string baseConnectionString, string dbName)
+    {
+        var builder = new SqlConnectionStringBuilder(baseConnectionString)
+        {
+            InitialCatalog = "master",
+            TrustServerCertificate = true
+        };
+
+        await using var conn = new SqlConnection(builder.ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"CREATE DATABASE [{dbName}]";
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task DropDatabaseAsync(string baseConnectionString, string dbName)
+    {
+        var builder = new SqlConnectionStringBuilder(baseConnectionString)
+        {
+            InitialCatalog = "master",
+            TrustServerCertificate = true
+        };
+
+        await using var conn = new SqlConnection(builder.ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        // SINGLE_USER + ROLLBACK IMMEDIATE ensures no lingering connections block the drop.
+        cmd.CommandText =
+            $"IF DB_ID('{dbName}') IS NOT NULL BEGIN " +
+            $"ALTER DATABASE [{dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; " +
+            $"DROP DATABASE [{dbName}]; END";
+        await cmd.ExecuteNonQueryAsync();
     }
 }
