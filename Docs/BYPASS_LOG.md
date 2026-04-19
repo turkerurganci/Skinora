@@ -27,3 +27,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-04-19 08:47 UTC | Türker urgancı | task/T26-seed-data | `4b63ba6` | [ci-failure] T26 CI failure follow-up — HangfireBypassFactory scrub for SettingsBootstrapHook |
 | 2026-04-19 09:12 UTC | Türker urgancı | task/T26-seed-data | `67bb972` | [ci-failure] T26 CI failure follow-up — SQLite RowVersion seed value |
 | 2026-04-19 09:37 UTC | Türker urgancı | task/T26-seed-data | `1a71dec` | [ci-failure] T26 CI failure follow-up — provider-conditional RowVersion mapping |
+| 2026-04-19 11:00 UTC | Türker urgancı | main | `a1bf832` | [direct-push] T26 validator finalize — rapor+status+memory update, T18 pattern: validate PASS sonrası doğrudan main'e commit |
