@@ -399,6 +399,54 @@ Task T11.2: CI disiplin savunma katmanları
 ```
 
 ```
+Task T11.3: Test infra — shared MsSqlContainer fixture refactor
+  Bağımlılık: T12 (test altyapısı)
+  Dokümanlar: 09 §19.6 (test altyapısı), 12_VALIDATION_PROTOCOL
+  Gerekçe: 2026-04-19 T26 validator zinciri üç ardışık post-merge main CI
+    FAIL üretti — her seferinde farklı bir test sınıfı, farklı exit kodları
+    (118, 255), hep DotNet.Testcontainers.ContainerNotRunningException.
+    Root cause: IntegrationTestBase IAsyncLifetime olduğundan xUnit her
+    test sınıfı için ayrı MsSqlContainer açıyor; collection- ve assembly-
+    level parallelization default on → ubuntu-latest'in 7.75 GB RAM'i
+    10+ SQL Server 2022 container'ı taşıyamıyor, Docker daemon OOM
+    kill ediyor. Hot-fix (PR #34) xunit.runner.json ile paralelizasyonu
+    kapattı; Integration step ~5 dk → ~22 dk. Her yeni entity task'ı
+    (T25 +37 test, T26 +11 test, T27+ daha fazla) maliyeti artırıyor.
+    Kalıcı çözüm: tek shared MsSqlContainer, her test class unique DB,
+    paralelizasyon geri açılır.
+  Kabul kriterleri:
+    - Tek MsSqlContainer tüm integration testlere servis (ICollectionFixture
+      pattern; xUnit 09 §19.6 referansı, standart yaklaşım)
+    - Her test class kendi unique DB oluşturur (collision yok), test
+      sonunda kendi DB'sini drop eder — isolation korunur
+    - AppDbContext connection string her test için unique DB'yi gösterir
+    - xunit.runner.json: parallelizeTestCollections=true, parallelizeAssembly=true
+      (hot-fix'te false'du)
+    - .github/workflows/ci.yml integration step: -m:1 kaldırılır
+    - Integration step CI runtime ≤ 10 dk (hedef; baseline hot-fix'in
+      ~22 dk'sından sonra)
+    - Mevcut 48+ integration test regresyon PASS
+    - Cross-test isolation smoke test: aynı tabloya farklı test
+      sınıflarının yazması çakışma yaratmıyor (gerçek paralel execution)
+  Test beklentisi: Integration — tüm mevcut testler PASS, yeni cross-test
+    isolation smoke test eklenir
+  Doğrulama kontrol listesi:
+    - [ ] ICollectionFixture<SqlServerFixture> pattern uygulanmış
+    - [ ] Unique DB per test class (TestContext.CurrentContext.Test veya
+      GUID bazlı isim)
+    - [ ] Paralel execution geri açık, test runtime ≤ 10 dk
+    - [ ] Tüm integration test sınıfları yeni fixture kullanıyor
+      (IntegrationTestBase güncellenmiş)
+    - [ ] -m:1 kaldırıldı, xunit.runner.json paralel ayarları geri
+    - [ ] Hot-fix gerekçesi (BYPASS_LOG ve rapor) closing note ile
+      kapatıldı
+  Durum: T27 öncesi zorunlu — mevcut hot-fix'in CI maliyeti T27+T28+F1
+    Gate Check için kümülatif; ayrıca her yeni task daha fazla test
+    ekler, hot-fix erode olabilir (serial dahi 30 dk üstüne çıkarsa
+    başka timeout'lar tetiklenebilir).
+```
+
+```
 Task T12: Test altyapısı
   Bağımlılık: T01, T04
   Dokümanlar: 09 §19.2, §19.6, §12.7

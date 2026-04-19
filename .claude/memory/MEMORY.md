@@ -11,10 +11,11 @@
 - **T23 (`b11a2cc` #27):** Notification + NotificationDelivery + UserNotificationPreference entity'leri.
 - **T24 (`759fba6` #28, pending squash):** AdminRole + AdminRolePermission + AdminUserRole entity'leri.
 - **T25 (`ba766b9` #29, pending squash):** Skinora.Platform modülü (SystemSetting, SystemHeartbeat, AuditLog), ColdWalletTransfer (Payments), SellerPayoutIssue (Transactions), IAppendOnly marker + EnforceAppendOnly().
-- **T26 (`c090b14` #30, validated 2026-04-19):** SYSTEM user + SystemHeartbeat singleton + 28 SystemSetting (06 §3.17) seed + `SKINORA_SETTING_{KEY_UPPER}` env var bootstrap + startup fail-fast. 8/8 kabul kriteri PASS, 0 kritik. Post-hoc validator akış uyumsuzluğu: T26 task chat CI PASS sonrası squash merge etti, validator chat merge'den sonra finalize etti — skill §17 "validator merges" ile çelişir. **Meta-karar pending:** skill §17 güncelle mi, task chat disiplinine geri dön mü.
-- **Minor follow-up:** plan §T26 kabul kriterinde "27 SystemSetting" yazıyor → 06 §3.17 "28" (hot_wallet_limit eklendi, plan güncellenmedi). Chore PR T27 öncesi.
+- **T26 (`c090b14` #30, validated 2026-04-19):** SYSTEM user + SystemHeartbeat singleton + 28 SystemSetting seed + env var bootstrap + startup fail-fast. 8/8 kabul kriteri PASS, 0 kritik. **Meta-karar (B, 2026-04-19):** skill §17 korunur — T27'den itibaren validator chat squash merge yapar. [project_validator_merge_flow.md](project_validator_merge_flow.md) kayıtlı.
+- **CI incidents + 6 chore PR (2026-04-19):** PR #31 `.gitignore` scheduled_tasks.lock, #32 BYPASS_LOG+validator flow memory, #33 plan §T26 "27→28" doc drift fix (tümü merged). Sonra main CI 3 ardışık fail → root cause: xUnit parallel + TestContainers OOM (7.75 GB ubuntu-latest, 10+ SQL Server container taşıyamıyor). PR #34 xunit.runner.json + -m:1 hot-fix (Integration 5 → 22 dk). PR #35 paths-filter docs-only skip (~25 dk/docs PR kazanım), PR #36 docker matrix path filter (~5-15 dk/run kazanım). GitHub Pro'ya geçildi (Free 2000 dk/ay aşılmıştı).
+- **T11.3 plana eklendi:** shared MsSqlContainer ICollectionFixture refactor — hot-fix kalıcılaştırır, Integration runtime ≤10 dk hedef. T27 öncesi zorunlu. [11_IMPLEMENTATION_PLAN.md §T11.3](../../Docs/11_IMPLEMENTATION_PLAN.md).
 - **T14 not:** steam-tradeoffer-manager ^3.x npm'de mevcut değil, ^2.13.x kullanıldı, 08 §2.5 güncellendi
-- **Next:** T27 (performans index'leri). Geçmiş borç yok. F1'de kalan: T27 → T28 → F1 Gate Check.
+- **Next:** T11.3 (shared fixture) → T27 (index'ler) → T28 (migration) → F1 Gate Check.
 - **F0 Gate Check bulguları:** OutboxStartupHook DI fix (singleton/scoped), Frontend Dockerfile fix (alpine→slim)
 - **Checkpoints completed:** 19 (CP1-CP18, CP18 = 12 audit + GPT review + etki yansıtma + checkpoint)
 - **Audits completed:** 00-12
