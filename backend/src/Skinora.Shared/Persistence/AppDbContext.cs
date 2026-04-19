@@ -74,12 +74,31 @@ public class AppDbContext : DbContext
                 ApplySoftDeleteFilter(modelBuilder, entityType.ClrType);
             }
 
-            // 09 §10.4: RowVersion concurrency token for BaseEntity descendants
+            // 09 §10.4: RowVersion concurrency token for BaseEntity descendants.
+            // Production uses SQL Server, where IsRowVersion() maps to the
+            // server-generated `rowversion` type. Test hosts that use SQLite
+            // (OutboxTests, EfCoreGlobalConfigTests, API middleware tests)
+            // get a plain concurrency-tracked byte[] with a zero default so
+            // HasData seed inserts — which EF would otherwise omit the column
+            // from, expecting server generation — still satisfy NOT NULL.
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
             {
-                modelBuilder.Entity(entityType.ClrType)
-                    .Property(nameof(BaseEntity.RowVersion))
-                    .IsRowVersion();
+                var rowVersion = modelBuilder.Entity(entityType.ClrType)
+                    .Property(nameof(BaseEntity.RowVersion));
+
+                // Provider is checked by name to avoid pulling the SQL Server
+                // or SQLite packages into Skinora.Shared.
+                if (Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+                {
+                    rowVersion.IsRowVersion();
+                }
+                else
+                {
+                    rowVersion
+                        .IsRequired()
+                        .IsConcurrencyToken()
+                        .HasDefaultValue(new byte[8]);
+                }
             }
 
             // 09 §10.6: DeleteBehavior.NoAction for all FK relationships

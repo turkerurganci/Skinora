@@ -1,0 +1,100 @@
+using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Domain.Seed;
+
+namespace Skinora.Platform.Infrastructure.Persistence;
+
+/// <summary>
+/// Deterministic seed contract for <see cref="SystemSetting"/> (06 §8.9, §3.17).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Parameters with a documented default (e.g. <c>commission_rate = 0.02</c>)
+/// are seeded as <c>IsConfigured = true</c>. Parameters whose default is "—"
+/// ship as <c>Value = NULL, IsConfigured = false</c> and must be hydrated
+/// by admin or the <c>SKINORA_SETTING_{KEY_UPPER}</c> env var bootstrap
+/// before the API completes startup (06 §8.9 fail-fast).
+/// </para>
+/// <para>
+/// Key order matches 06 §3.17 row order. Guids are derived from the namespace
+/// prefix plus the row index so rerunning <c>EnsureCreated</c> / regenerating
+/// migrations always produces the same values.
+/// </para>
+/// </remarks>
+public static class SystemSettingSeed
+{
+    private const string GuidNamespacePrefix = "0aa51010-0000-0000-0000-00000000";
+
+    private static Guid IdFor(int index) =>
+        new($"{GuidNamespacePrefix}{index:x4}");
+
+    public static IReadOnlyList<SystemSetting> All { get; } =
+    [
+        Unconfigured( 1, "accept_timeout_minutes",                      "int",     "Timeout",     "Alıcı kabul timeout süresi"),
+        Unconfigured( 2, "trade_offer_seller_timeout_minutes",          "int",     "Timeout",     "Satıcı trade offer timeout süresi"),
+        Unconfigured( 3, "payment_timeout_min_minutes",                 "int",     "Timeout",     "Ödeme timeout minimum"),
+        Unconfigured( 4, "payment_timeout_max_minutes",                 "int",     "Timeout",     "Ödeme timeout maksimum"),
+        Unconfigured( 5, "payment_timeout_default_minutes",             "int",     "Timeout",     "Ödeme timeout varsayılan"),
+        Unconfigured( 6, "trade_offer_buyer_timeout_minutes",           "int",     "Timeout",     "Alıcı trade offer timeout süresi"),
+        Unconfigured( 7, "timeout_warning_ratio",                       "decimal", "Timeout",     "Uyarı gönderim oranı (ör: 0.75)"),
+        Default     ( 8, "commission_rate",                             "decimal", "Commission",  "0.02",  "Komisyon oranı (%2)"),
+        Unconfigured( 9, "min_transaction_amount",                      "decimal", "Limit",       "Minimum işlem tutarı"),
+        Unconfigured(10, "max_transaction_amount",                      "decimal", "Limit",       "Maksimum işlem tutarı"),
+        Unconfigured(11, "max_concurrent_transactions",                 "int",     "Limit",       "Eşzamanlı aktif işlem limiti"),
+        Unconfigured(12, "new_account_transaction_limit",               "int",     "Limit",       "Yeni hesap işlem limiti"),
+        Unconfigured(13, "new_account_period_days",                     "int",     "Limit",       "Kaç gün yeni hesap sayılır"),
+        Unconfigured(14, "cancel_limit_count",                          "int",     "Limit",       "Belirli sürede izin verilen iptal sayısı"),
+        Unconfigured(15, "cancel_limit_period_hours",                   "int",     "Limit",       "İptal limit periyodu"),
+        Unconfigured(16, "cancel_cooldown_hours",                       "int",     "Limit",       "İptal sonrası cooldown süresi"),
+        Default     (17, "gas_fee_protection_ratio",                    "decimal", "Commission",  "0.10",  "Gas fee koruma eşiği (%10)"),
+        Unconfigured(18, "price_deviation_threshold",                   "decimal", "Fraud",       "Piyasa fiyat sapma eşiği"),
+        Unconfigured(19, "high_volume_amount_threshold",                "decimal", "Fraud",       "Yüksek hacim tutar eşiği"),
+        Unconfigured(20, "high_volume_count_threshold",                 "int",     "Fraud",       "Yüksek hacim işlem sayısı eşiği"),
+        Unconfigured(21, "high_volume_period_hours",                    "int",     "Fraud",       "Yüksek hacim kontrol periyodu"),
+        Default     (22, "monitoring_post_cancel_24h_polling_seconds",  "int",     "Monitoring",  "30",    "İptal sonrası ilk 24 saat polling aralığı (saniye)"),
+        Default     (23, "monitoring_post_cancel_7d_polling_seconds",   "int",     "Monitoring",  "300",   "1-7 gün arası polling aralığı (saniye)"),
+        Default     (24, "monitoring_post_cancel_30d_polling_seconds",  "int",     "Monitoring",  "3600",  "7-30 gün arası polling aralığı (saniye)"),
+        Default     (25, "monitoring_stop_after_days",                  "int",     "Monitoring",  "30",    "İzleme durdurma süresi (gün)"),
+        Default     (26, "min_refund_threshold_ratio",                  "decimal", "Monitoring",  "2.0",   "Minimum iade eşiği — iade < gas fee × bu oran ise iade yapılmaz"),
+        Default     (27, "open_link_enabled",                           "bool",    "Feature",     "false", "Açık link yöntemi aktif mi"),
+        Unconfigured(28, "hot_wallet_limit",                            "decimal", "Wallet",      "Hot wallet maksimum bakiye limiti — aşıldığında admin alert (05 §3.3)"),
+    ];
+
+    private static SystemSetting Unconfigured(
+        int index,
+        string key,
+        string dataType,
+        string category,
+        string description) => new()
+        {
+            Id = IdFor(index),
+            Key = key,
+            Value = null,
+            IsConfigured = false,
+            DataType = dataType,
+            Category = category,
+            Description = description,
+            CreatedAt = SeedConstants.SeedAnchorUtc,
+            UpdatedAt = SeedConstants.SeedAnchorUtc,
+            RowVersion = SeedConstants.SeedRowVersion,
+        };
+
+    private static SystemSetting Default(
+        int index,
+        string key,
+        string dataType,
+        string category,
+        string value,
+        string description) => new()
+        {
+            Id = IdFor(index),
+            Key = key,
+            Value = value,
+            IsConfigured = true,
+            DataType = dataType,
+            Category = category,
+            Description = description,
+            CreatedAt = SeedConstants.SeedAnchorUtc,
+            UpdatedAt = SeedConstants.SeedAnchorUtc,
+            RowVersion = SeedConstants.SeedRowVersion,
+        };
+}

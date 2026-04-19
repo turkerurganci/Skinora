@@ -8,12 +8,14 @@ using Skinora.API.Logging;
 using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
+using Skinora.API.Startup;
 using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Disputes.Infrastructure.Persistence;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Notifications.Infrastructure.Persistence;
 using Skinora.Payments.Infrastructure.Persistence;
+using Skinora.Platform.Infrastructure.Bootstrap;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Infrastructure.Persistence;
@@ -74,6 +76,13 @@ builder.Services.AddRateLimiting(builder.Configuration);
 // IBackgroundJobScheduler abstraction. Dashboard mount happens later in the
 // pipeline (after authentication) via app.UseHangfireModule().
 builder.Services.AddHangfireModule(builder.Configuration);
+
+// T26 — SystemSetting bootstrap (env var hydration + startup fail-fast,
+// 06 §8.9). Registered before the outbox hook so the dispatcher chain only
+// primes once configuration is proven complete. IHostedService StartAsync
+// order follows registration order.
+builder.Services.AddScoped<SettingsBootstrapService>();
+builder.Services.AddHostedService<SettingsBootstrapHook>();
 
 // Outbox (T10) — IOutboxService producer, dispatcher (self-rescheduling
 // Hangfire job + Medallion distributed lock), consumer idempotency store,

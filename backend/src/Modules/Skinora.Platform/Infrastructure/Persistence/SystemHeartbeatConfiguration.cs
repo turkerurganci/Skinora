@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Domain.Seed;
 
 namespace Skinora.Platform.Infrastructure.Persistence;
 
@@ -33,5 +34,15 @@ public class SystemHeartbeatConfiguration : IEntityTypeConfiguration<SystemHeart
 
         builder.Property(h => h.UpdatedAt)
             .IsRequired();
+
+        // --- Seed: singleton row pinned to Id = 1 (06 §8.9) ---
+        // Application code only UPDATEs this row; it never INSERTs a second
+        // one (the CK_SystemHeartbeats_Singleton CHECK forbids it).
+        builder.HasData(new SystemHeartbeat
+        {
+            Id = SeedConstants.SystemHeartbeatId,
+            LastHeartbeat = SeedConstants.SeedAnchorUtc,
+            UpdatedAt = SeedConstants.SeedAnchorUtc,
+        });
     }
 }

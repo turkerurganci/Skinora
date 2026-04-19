@@ -1,0 +1,112 @@
+using Microsoft.EntityFrameworkCore;
+using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Persistence;
+using Skinora.Shared.Domain.Seed;
+using Skinora.Shared.Persistence;
+using Skinora.Shared.Tests.Integration;
+using Skinora.Users.Domain.Entities;
+using Skinora.Users.Infrastructure.Persistence;
+
+namespace Skinora.Platform.Tests.Integration;
+
+/// <summary>
+/// Integration tests for the T26 EF Core seed contract (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 28 SystemSetting rows.
+/// </summary>
+public class SeedDataTests : IntegrationTestBase
+{
+    static SeedDataTests()
+    {
+        UsersModuleDbRegistration.RegisterUsersModule();
+        PlatformModuleDbRegistration.RegisterPlatformModule();
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemUser_IsPresent_With_Sentinel_SteamId_And_Deactivated()
+    {
+        // Soft-delete filter is global: the seed row must be IsDeleted = false
+        // to survive it. Double-check by querying both the filter-visible and
+        // filter-ignored result sets.
+        var visible = await Context.Set<User>()
+            .FirstOrDefaultAsync(u => u.Id == SeedConstants.SystemUserId);
+
+        Assert.NotNull(visible);
+        Assert.Equal(SeedConstants.SystemSteamId, visible!.SteamId);
+        Assert.Equal("System", visible.SteamDisplayName);
+        Assert.True(visible.IsDeactivated);
+        Assert.False(visible.MobileAuthenticatorVerified);
+        Assert.False(visible.IsDeleted);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemHeartbeat_IsSingleton_With_Id_One()
+    {
+        var rows = await Context.Set<SystemHeartbeat>().ToListAsync();
+        Assert.Single(rows);
+        Assert.Equal(SeedConstants.SystemHeartbeatId, rows[0].Id);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemSettings_Has_28_Rows_With_Unique_Keys()
+    {
+        var rows = await Context.Set<SystemSetting>().ToListAsync();
+        Assert.Equal(28, rows.Count);
+        Assert.Equal(28, rows.Select(r => r.Key).Distinct().Count());
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
+    {
+        // 06 §3.17: eight rows ship with a documented default.
+        var configured = await Context.Set<SystemSetting>()
+            .Where(s => s.IsConfigured)
+            .OrderBy(s => s.Key)
+            .ToListAsync();
+
+        var expectedConfiguredKeys = new[]
+        {
+            "commission_rate",
+            "gas_fee_protection_ratio",
+            "min_refund_threshold_ratio",
+            "monitoring_post_cancel_24h_polling_seconds",
+            "monitoring_post_cancel_30d_polling_seconds",
+            "monitoring_post_cancel_7d_polling_seconds",
+            "monitoring_stop_after_days",
+            "open_link_enabled",
+        };
+
+        Assert.Equal(expectedConfiguredKeys, configured.Select(s => s.Key).ToArray());
+        Assert.All(configured, s => Assert.False(string.IsNullOrEmpty(s.Value)));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemSettings_Mandatory_Parameters_Are_Unconfigured_And_Null()
+    {
+        // The remaining 20 rows have no default and must ship NULL +
+        // IsConfigured = false so startup fail-fast (06 §8.9) refuses to
+        // launch until an admin or env var provides values.
+        var unconfigured = await Context.Set<SystemSetting>()
+            .Where(s => !s.IsConfigured)
+            .ToListAsync();
+
+        Assert.Equal(20, unconfigured.Count);
+        Assert.All(unconfigured, s => Assert.Null(s.Value));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Seed_SystemSettings_All_DataTypes_Are_Whitelisted()
+    {
+        // Regression guard for 06 §3.17 CHECK constraint: a typo in the seed
+        // (e.g. "double") would fail the check on first insert but a stray
+        // value could still slip in if the check were dropped.
+        var allowed = new[] { "int", "decimal", "bool", "string" };
+        var rows = await Context.Set<SystemSetting>().ToListAsync();
+        Assert.All(rows, s => Assert.Contains(s.DataType, allowed));
+    }
+}
