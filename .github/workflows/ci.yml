@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      docker-matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +57,45 @@ jobs:
               - 'sidecar-steam/**'
               - 'sidecar-blockchain/**'
               - '.github/workflows/**'
+            backend:
+              - 'backend/**'
+              - '.github/workflows/**'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/**'
+            sidecar-steam:
+              - 'sidecar-steam/**'
+              - '.github/workflows/**'
+            sidecar-blockchain:
+              - 'sidecar-blockchain/**'
+              - '.github/workflows/**'
+
+      # Build a matrix JSON for docker-build-check. Empty array when no
+      # image context changed — the docker job then skips entirely
+      # instead of rebuilding all four every PR. A workflow edit sets
+      # every path filter to true so all four are included (defence:
+      # workflow changes might reshape image builds).
+      - name: Build docker matrix
+        id: build-matrix
+        env:
+          F_BACKEND: ${{ steps.filter.outputs.backend }}
+          F_FRONTEND: ${{ steps.filter.outputs.frontend }}
+          F_SIDECAR_STEAM: ${{ steps.filter.outputs['sidecar-steam'] }}
+          F_SIDECAR_BLOCKCHAIN: ${{ steps.filter.outputs['sidecar-blockchain'] }}
+        run: |
+          components=()
+          [ "$F_BACKEND" = "true" ]           && components+=('{"name":"backend","context":"backend"}')
+          [ "$F_FRONTEND" = "true" ]          && components+=('{"name":"frontend","context":"frontend"}')
+          [ "$F_SIDECAR_STEAM" = "true" ]     && components+=('{"name":"sidecar-steam","context":"sidecar-steam"}')
+          [ "$F_SIDECAR_BLOCKCHAIN" = "true" ]&& components+=('{"name":"sidecar-blockchain","context":"sidecar-blockchain"}')
+          if [ ${#components[@]} -eq 0 ]; then
+            matrix='{"component":[]}'
+          else
+            IFS=,
+            matrix="{\"component\":[${components[*]}]}"
+          fi
+          echo "Matrix: $matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   # ----------------------------------------------------------------------------
   # 0. Guard — direct push detection (defense-in-depth, T11 R3)
@@ -364,16 +404,14 @@ jobs:
   docker-build-check:
     name: 7. Docker build (${{ matrix.component.name }})
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true'
+    # Only build images whose context actually changed. Matrix is
+    # computed by the `changes` job; when empty (no image context
+    # touched) the job is skipped entirely.
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.docker-matrix != '{"component":[]}'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        component:
-          - { name: backend,            context: backend            }
-          - { name: frontend,           context: frontend           }
-          - { name: sidecar-steam,      context: sidecar-steam      }
-          - { name: sidecar-blockchain, context: sidecar-blockchain }
+      matrix: ${{ fromJSON(needs.changes.outputs.docker-matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
