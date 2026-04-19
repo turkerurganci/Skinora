@@ -52,3 +52,6 @@ logs/
 # Test results
 TestResults/
 coverage/
+
+# Claude Code runtime artifacts
+.claude/scheduled_tasks.lock
