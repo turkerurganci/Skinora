@@ -50,8 +50,8 @@
 |---|---|---|
 | Build | ✓ 0 Error, 0 Warning | `dotnet build Skinora.sln --nologo` — 24 proje başarıyla build. |
 | Unit testler | — | T26 scope'unda yeni unit test yok; bootstrap mantığı integration testlerle kapsanıyor. |
-| Integration testler (lokal) | ⏸ Skipped | Docker daemon lokalde yok (T25'deki known-limitation aynısı). Tüm 11 yeni integration test + mevcut SystemHeartbeat/SystemSetting testleri CI'da TestContainers SQL Server ile çalışacak. |
-| Integration testler (CI) | ⏳ Bekleniyor | Task branch push sonrası CI run'ı izlenecek. |
+| Integration testler (lokal) | ⏸ Skipped | Docker daemon lokalde yok (T25'deki known-limitation aynısı). Tüm 11 yeni integration test + mevcut SystemHeartbeat/SystemSetting testleri CI'da TestContainers SQL Server ile çalıştı. |
+| Integration testler (CI) | ✓ PASS | Retry #4 run `24626039083` — 11/11 job success + CI Gate ✓. Tüm `SeedDataTests` (6) + `SettingsBootstrapTests` (5) + T25 regresyon testleri PASS. |
 
 ## Doğrulama
 | Alan | Sonuç |
@@ -70,14 +70,16 @@
 
 ## Commit & PR
 - Branch: `task/T26-seed-data`
-- Commit: _(commit sonrası güncellenecek)_
-- PR: _(açılış sonrası güncellenecek)_
-- CI: _(izleme sonrası güncellenecek)_
+- Commits (pending squash): `cefdb84` (seed + bootstrap + tests) → `70bb576` (dotnet format) → `4b63ba6` (HangfireBypassFactory scrub) → `67bb972` (SQLite RowVersion placeholder) → `1a71dec` (provider-conditional RowVersion)
+- PR: #30
+- CI: ✓ PASS (retry #4 — run `24626039083`, 11/11 job + CI Gate success)
+- BYPASS_LOG entries: 4 × `[ci-failure]` (her düzeltme push'u — son CI failure'a karşı hook koruması)
 
 ## Known Limitations / Follow-up
 - **Range validation scope dışı:** 06 §3.17'de "Alan aralığı ve çapraz doğrulama" olarak listelenen kurallar (timeout > 0, commission_rate 0<x<1, payment_timeout_min < max, monitoring sıralaması vb.) bu task'ta uygulanmadı. DataType parse validasyonu yeterli minimum savunmadır. Range kontrolü **T41** (Admin parameter yönetimi, F2) scope'una aittir — Admin update path'i bu kuralları zorunlu koşacak ve aynı validator startup bootstrap'e sonradan çekilebilir.
 - **Integration test lokal engelli:** T25 raporundaki aynı sınırlama — Docker daemon olmadan TestContainers çalışmıyor. Validator CI run output'undan doğrulayacak.
 - **Env var kaynağı IConfiguration:** `SettingsBootstrapService` env var'ı doğrudan `Environment.GetEnvironmentVariable` yerine `IConfiguration`'dan okuyor. Bu, in-memory provider ile test edilebilirlik + ASP.NET Core'un standart env var binding'ine (varsayılan) uyum sağlar. Deploy'da .NET host env var'ları configuration'a otomatik yükler — davranış eşdeğerdir.
+- **CI düzeltme turları (4 adet):** İlk 3 push CI'da başarısız oldu, her biri ayrı bir gerçek sorunu ortaya çıkardı: (1) `dotnet format` hizalama boşluklarını reddetti → auto-fix; (2) Skinora.API.Tests `WebApplicationFactory` orijinal SqlServer kayıtlarını koruyarak SQLite ekleyince EF "multiple providers" hatası verdi → `HangfireBypassFactory`'ye `SettingsBootstrapHook` scrub eklendi (T10 OutboxStartupHook pattern'inin aynısı); (3) EF Core `.IsRowVersion()` `ValueGeneratedOnAddOrUpdate` yaptığı için HasData INSERT'lerini kolonsuz emit ediyor — SQL Server rowversion auto-populate, SQLite NOT NULL fail → provider-conditional `RowVersion` config: SQL Server'da `IsRowVersion()`, diğerlerinde `IsConcurrencyToken() + HasDefaultValue(new byte[8])`. Bu son değişiklik `AppDbContext` global config'ine dokundu ama production (SQL Server) davranışı değişmedi. 4 `[ci-failure]` bypass BYPASS_LOG.md'ye kaydedildi.
 
 ## Notlar
 - **Working tree:** Temiz (task başlarken).
