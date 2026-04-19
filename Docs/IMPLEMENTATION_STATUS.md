@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-19 (T26 kapalı + CI optim PRs #34-#36 merged + T11.3 plana girildi — shared fixture refactor, T27 öncesi)
+**Son güncelleme:** 2026-04-19 (T11.3 yapım bitti, doğrulama bekliyor — shared SQL Server + unique DB per class pattern)
 
 ---
 
@@ -42,7 +42,7 @@
 | T16 | Monitoring altyapısı | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T11.1 | CI close-out — tüm pipeline step'lerini canlı hale getir (F1 blocker, T21 öncesi) | ✓ Tamamlandı | ✓ PASS | `b8c1b27` (#12) |
 | T11.2 | CI disiplin savunma katmanları (startup check + pre-push guard + validator kuralı + bitiş kapısı + BYPASS_LOG düzeltme) | ✓ Tamamlandı | ✓ PASS | `0392a08` (#15, pending squash) |
-| T11.3 | Test infra — shared MsSqlContainer fixture (hot-fix PR #34 kalıcılaştırır, T27 öncesi) | ⬚ Bekliyor | — | — |
+| T11.3 | Test infra — shared MsSqlContainer fixture (hot-fix PR #34 kalıcılaştırır, T27 öncesi) | ⏳ Devam ediyor | — | — |
 
 **F0 Gate Check:** ✓ PASS (2026-04-10) — 145 test passed, 4 build ✓, tag: `phase/F0-pass`
 

@@ -9,6 +9,7 @@ namespace Skinora.Shared.Persistence;
 
 public class AppDbContext : DbContext
 {
+    private static readonly object _moduleAssembliesLock = new();
     private static readonly List<Assembly> _moduleAssemblies = [];
 
     public AppDbContext(DbContextOptions<AppDbContext> options)
@@ -19,11 +20,20 @@ public class AppDbContext : DbContext
     /// <summary>
     /// Registers a module assembly so its IEntityTypeConfiguration implementations
     /// are discovered during OnModelCreating. Call once per module at startup.
+    ///
+    /// The list is guarded by a lock so concurrent callers (xUnit test class
+    /// static constructors firing in parallel — see T11.3) cannot race past the
+    /// containment check and append the same assembly twice. Duplicate entries
+    /// would cause EF's ApplyConfigurationsFromAssembly to run each
+    /// IEntityTypeConfiguration twice, emitting duplicate HasData seed rows.
     /// </summary>
     public static void RegisterModuleAssembly(Assembly assembly)
     {
-        if (!_moduleAssemblies.Contains(assembly))
-            _moduleAssemblies.Add(assembly);
+        lock (_moduleAssembliesLock)
+        {
+            if (!_moduleAssemblies.Contains(assembly))
+                _moduleAssemblies.Add(assembly);
+        }
     }
 
     // T10 — outbox infrastructure tables (06 §3.18–§3.21). The pattern lives
@@ -60,8 +70,16 @@ public class AppDbContext : DbContext
         // Apply IEntityTypeConfiguration<T> classes from the shared persistence layer
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // Apply IEntityTypeConfiguration<T> classes from registered module assemblies
-        foreach (var assembly in _moduleAssemblies)
+        // Apply IEntityTypeConfiguration<T> classes from registered module assemblies.
+        // Snapshot under lock so a concurrent registration cannot mutate the list
+        // while we iterate.
+        Assembly[] assemblies;
+        lock (_moduleAssembliesLock)
+        {
+            assemblies = _moduleAssemblies.ToArray();
+        }
+
+        foreach (var assembly in assemblies)
         {
             modelBuilder.ApplyConfigurationsFromAssembly(assembly);
         }

@@ -11,6 +11,8 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 
 **T11.2 düzeltme (2026-04-12):** T11.1 sırasında hatalı olarak "retro direct-push" kaydedilen T14 satırı kaldırıldı — T14 aslında PR #8 ile düzgün merge olmuş (merge commit `0a503891`, `gh pr view 8` ile doğrulandı). T15+T16 satırları birleştirilip `[bundled-pr]` pattern'iyle yeniden sınıflandırıldı.
 
+**T11.3 hot-fix closing note (2026-04-19):** PR #34 (`5f6a8cb`) integration test step'ine `-m:1` + `xunit.runner.json parallelizeTestCollections=false/parallelizeAssembly=false` ekleyerek TestContainers OOM'unu (T26 validator zinciri) çözdü. Bu bir bypass değil hot-fix'tir; BYPASS_LOG'da satırı yoktur — ancak T11.3 (`task/T11.3-shared-mssql-fixture`) job-level shared SQL Server (CI services:mssql) + unique DB per test class pattern'i ile bu hot-fix'i kalıcı çözüme bağladı. Hot-fix varsayılanları (serial execution) geri alındı; `AppDbContext.RegisterModuleAssembly` paralel test runner'ın ortaya çıkardığı race condition için thread-safe hale getirildi.
+
 ---
 
 ## Log

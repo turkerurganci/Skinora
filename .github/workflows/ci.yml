@@ -264,13 +264,36 @@ jobs:
   # ----------------------------------------------------------------------------
   # 4. Integration test  (09 §21.4 step 4)
   # Filter: tests in *.Integration namespace
-  # TestContainers brings up SQL Server / Redis as needed.
+  #
+  # T11.3 — a single job-level SQL Server container is shared by every test
+  # assembly via INTEGRATION_TEST_SQL_SERVER. IntegrationTestBase creates a
+  # unique database per test class on that shared server, so parallel test
+  # collections + parallel assemblies do not collide. The hot-fix (`-m:1` +
+  # serial xunit.runner.json) is removed — OOM is avoided by having exactly
+  # one server instance for the whole run instead of one per test class.
   # ----------------------------------------------------------------------------
   integration-test:
     name: 4. Integration test
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'Integration_Pwd1!'
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Integration_Pwd1!' -C -N -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 30s
+    env:
+      INTEGRATION_TEST_SQL_SERVER: 'Server=localhost,1433;User Id=sa;Password=Integration_Pwd1!;TrustServerCertificate=True'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -289,11 +312,6 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Run integration tests
-        # -m:1 forces a single test-assembly process at a time. Combined
-        # with the serial xunit.runner.json shared from backend/tests/,
-        # only one MsSqlContainer is alive at any moment — avoids the
-        # OOM exits that looked like flakes on the 7.75 GB ubuntu-latest
-        # runner (see 2026-04-19 T26 validator chain).
         working-directory: backend
         run: |
           dotnet test Skinora.sln \
@@ -301,8 +319,7 @@ jobs:
             --filter "FullyQualifiedName~.Integration" \
             --logger "trx;LogFileName=integration-tests.trx" \
             --logger "console;verbosity=normal" \
-            --results-directory ./TestResults \
-            -m:1
+            --results-directory ./TestResults
 
       - name: Upload integration test results
         if: always()
