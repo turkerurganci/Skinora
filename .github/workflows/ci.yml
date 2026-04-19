@@ -207,6 +207,11 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Run integration tests
+        # -m:1 forces a single test-assembly process at a time. Combined
+        # with the serial xunit.runner.json shared from backend/tests/,
+        # only one MsSqlContainer is alive at any moment — avoids the
+        # OOM exits that looked like flakes on the 7.75 GB ubuntu-latest
+        # runner (see 2026-04-19 T26 validator chain).
         working-directory: backend
         run: |
           dotnet test Skinora.sln \
@@ -214,7 +219,8 @@ jobs:
             --filter "FullyQualifiedName~.Integration" \
             --logger "trx;LogFileName=integration-tests.trx" \
             --logger "console;verbosity=normal" \
-            --results-directory ./TestResults
+            --results-directory ./TestResults \
+            -m:1
 
       - name: Upload integration test results
         if: always()
