@@ -25,3 +25,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-04-11 16:23 UTC | Türker urgancı | main | `4fa6494` | **[direct-push]** T20 post-merge 1-satir cosmetic drift fix (pending squash -> be0cc24); ayri PR 1 satir icin overkill, T11.1 debt zaten acik |
 | 2026-04-19 08:21 UTC | Türker urgancı | task/T26-seed-data | `70bb576` | [ci-failure] T26 CI lint fix — dotnet format whitespace normalization (son CI run lint failure'ını düzeltiyor) |
 | 2026-04-19 08:47 UTC | Türker urgancı | task/T26-seed-data | `4b63ba6` | [ci-failure] T26 CI failure follow-up — HangfireBypassFactory scrub for SettingsBootstrapHook |
+| 2026-04-19 09:12 UTC | Türker urgancı | task/T26-seed-data | `67bb972` | [ci-failure] T26 CI failure follow-up — SQLite RowVersion seed value |
