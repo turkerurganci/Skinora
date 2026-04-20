@@ -13,7 +13,10 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 
 **T11.3 hot-fix closing note (2026-04-19):** PR #34 (`5f6a8cb`) integration test step'ine `-m:1` + `xunit.runner.json parallelizeTestCollections=false/parallelizeAssembly=false` ekleyerek TestContainers OOM'unu (T26 validator zinciri) çözdü. Bu bir bypass değil hot-fix'tir; BYPASS_LOG'da satırı yoktur — ancak T11.3 (`task/T11.3-shared-mssql-fixture`) job-level shared SQL Server (CI services:mssql) + unique DB per test class pattern'i ile bu hot-fix'i kalıcı çözüme bağladı. Hot-fix varsayılanları (serial execution) geri alındı; `AppDbContext.RegisterModuleAssembly` paralel test runner'ın ortaya çıkardığı race condition için thread-safe hale getirildi.
 
----
+**T28 validator retro note (2026-04-20):** `a4b9578` + `8cb3d9e` iki ardışık direct-push, commit mesajlarında `[skip-guard]` tag'i eksikti → main CI `0. Guard (direct push)` job'ları FAIL verdi (a4b9578 run'ı concurrency group nedeniyle cancelled, 8cb3d9e run `24688063473` FAIL). Validator finalize akışı için **öğrenilen ders:**
+1. Pre-push hook (`SKINORA_ALLOW_DIRECT_PUSH=1`) push'u geçirse bile **CI guard job**'u ayrı bir katman — commit mesajı PR referansı (`(#NN)`) veya `[skip-guard]` içermezse job fail verir. İki disiplin mekanizması birlikte düşünülmeli.
+2. Direct-push bypass döngüsü (bypass push → hook otomatik BYPASS_LOG satırı ekler → working tree dirty → yeni bypass commit lazım → loop) **cycle yaratır**. Çözüm: Post-merge cosmetic status drift için direct-push yerine **chore PR** tercih edilmeli (T28 validator closure PR #43 bu pattern'in ilk uygulaması).
+3. T20 `4fa6494` + T26 `a1bf832` pattern'i "1 satır için PR overkill" gerekçesiyle kullanılmış, ancak o commit'ler de guard job'ını FAIL'lamış olmalı — retro-kontrol yapılmadı. Bundan sonra post-squash status drift **yalnızca chore PR ile** kapatılır, direct-push pattern'i validator finalize için **deprecated**.
 
 ## Log
 
@@ -33,3 +36,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-04-19 16:14 UTC | Türker urgancı | chore/ci-docs-only-skip | `a07404f` | [ci-failure] PR #35 paths-filter fix: pull-requests:read permission + changes job added to CI Gate needs (kendi broken push'umu duzeltiyor) |
 | 2026-04-20 19:37 UTC | Türker urgancı | task/T28-initial-migration | `6d536d6` | [ci-failure] T28 fix for known pending-model-changes CI failure in prior run 24686011102 |
 | 2026-04-20 20:13 UTC | Türker urgancı | main | `a4b9578` | [direct-push] T28 validator finalize — post-squash hash reference update (3f6ba9a), T20/T26 pattern: cosmetic 1-line status drift fix |
+| 2026-04-20 20:14 UTC | Türker urgancı | main | `8cb3d9e` | [direct-push] T28 validator finalize — BYPASS_LOG commit (hook auto-add kapanisi) |
