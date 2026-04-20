@@ -32,3 +32,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-04-19 11:00 UTC | Türker urgancı | main | `a1bf832` | [direct-push] T26 validator finalize — rapor+status+memory update, T18 pattern: validate PASS sonrası doğrudan main'e commit |
 | 2026-04-19 16:14 UTC | Türker urgancı | chore/ci-docs-only-skip | `a07404f` | [ci-failure] PR #35 paths-filter fix: pull-requests:read permission + changes job added to CI Gate needs (kendi broken push'umu duzeltiyor) |
 | 2026-04-20 19:37 UTC | Türker urgancı | task/T28-initial-migration | `6d536d6` | [ci-failure] T28 fix for known pending-model-changes CI failure in prior run 24686011102 |
+| 2026-04-20 20:13 UTC | Türker urgancı | main | `a4b9578` | [direct-push] T28 validator finalize — post-squash hash reference update (3f6ba9a), T20/T26 pattern: cosmetic 1-line status drift fix |
