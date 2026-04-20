@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-20 (T28 doğrulama ✓ PASS — InitialCreate migration + integration test + CI migration dry-run job; F1 tüm task'lar tamamlandı, F1 Gate Check bekliyor)
+**Son güncelleme:** 2026-04-20 (F1 Gate Check ✓ PASS — 462/462 test passed, migration rehearsal 26 tablo + seed, traceability boşluk yok; tag `phase/F1-pass`)
 
 ---
 
@@ -69,7 +69,7 @@
 | T27 | Performans index'leri ve filtered index'ler | ✓ Tamamlandı | ✓ PASS | `2f4fab7` (#41, pending squash) |
 | T28 | Initial migration ve migration testi | ✓ Tamamlandı | ✓ PASS | `3f6ba9a` (#42) |
 
-**F1 Gate Check:** ⬚ Bekliyor
+**F1 Gate Check:** ✓ PASS (2026-04-20) — 462 test passed (unit 160 + contract 5 + integration 297), migration rehearsal 26 tablo + 28 SystemSettings + SYSTEM user + Heartbeat seed + idempotent 2. update, backend build 0W/0E, CI run [`24687690451`](https://github.com/turkerurganci/Skinora/actions/runs/24687690451) 13/13 job ✓, traceability §7.1 boşluk 0, rapor: [`Docs/CHECKPOINT_REPORTS/GATE_CHECK_F1.md`](CHECKPOINT_REPORTS/GATE_CHECK_F1.md), tag: `phase/F1-pass`.
 
 ---
 
