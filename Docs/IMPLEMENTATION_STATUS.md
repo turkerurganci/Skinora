@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-20 (T27 doğrulama PASS — 35 performans index'i T18–T25 entity config'lerinde envanterlendi, 06 §5.2'ye SQL Server filtered index `NOT IN` kısıtı notu eklendi, kod değişikliği yok)
+**Son güncelleme:** 2026-04-20 (T28 yapım — InitialCreate migration + integration test + CI migration dry-run job, doğrulama ayrı chat'te)
 
 ---
 
@@ -67,7 +67,7 @@
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ✓ Tamamlandı | ✓ PASS | `ba766b9` (#29, pending squash) |
 | T26 | Seed data | ✓ Tamamlandı | ✓ PASS | `c090b14` (#30) |
 | T27 | Performans index'leri ve filtered index'ler | ✓ Tamamlandı | ✓ PASS | `2f4fab7` (#41, pending squash) |
-| T28 | Initial migration ve migration testi | ⬚ Bekliyor | — | — |
+| T28 | Initial migration ve migration testi | ⏳ Devam ediyor | — | — |
 
 **F1 Gate Check:** ⬚ Bekliyor
 

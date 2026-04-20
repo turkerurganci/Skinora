@@ -54,7 +54,12 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         }.ConnectionString;
 
         await using var migrationContext = CreateContext();
-        await migrationContext.Database.EnsureCreatedAsync();
+        // T28: apply EF Core migrations (InitialCreate+) instead of EnsureCreated
+        // so the production schema-construction path — including HasData seed rows
+        // — is exercised by every integration test. SQLite-backed unit tests keep
+        // using EnsureCreated because the generated migrations are SQL Server
+        // specific (nvarchar(max), rowversion, etc.).
+        await migrationContext.Database.MigrateAsync();
         await SeedAsync(migrationContext);
 
         Context = CreateContext();

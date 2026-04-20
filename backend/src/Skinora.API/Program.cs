@@ -37,7 +37,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions =>
         {
-            sqlOptions.MigrationsAssembly(typeof(Program).Assembly.GetName().Name);
+            sqlOptions.MigrationsAssembly(typeof(AppDbContext).Assembly.GetName().Name);
             sqlOptions.CommandTimeout(30);
         }));
 

@@ -376,16 +376,31 @@ jobs:
 
   # ----------------------------------------------------------------------------
   # 6. Migration dry-run  (09 §21.4 step 6)
-  # T11.1 — `dotnet ef dbcontext info` calistirarak DbContext + model validation
-  # yapilir (T17-T20 entity'leri burada dogrulanir, blind spot kapaniyor).
-  # Gercek `dotnet ef migrations script --dry-run` F1 T28 (initial migration)
-  # sonrasi eklenecek.
+  # T28 — actual migration script generation against a fresh SQL Server so
+  # schema-level errors surface in CI before they reach a real deploy. Model
+  # drift is caught by the InitialMigrationTests Model_HasNoPendingChanges
+  # assertion in the integration-test job.
   # ----------------------------------------------------------------------------
   migration-dry-run:
     name: 6. Migration dry-run
     needs: [changes, build]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'Migration_Pwd1!'
+          MSSQL_PID: Developer
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Migration_Pwd1!' -C -N -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 30s
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -413,6 +428,43 @@ jobs:
             --project src/Skinora.Shared/Skinora.Shared.csproj \
             --startup-project src/Skinora.API/Skinora.API.csproj \
             --context AppDbContext
+
+      - name: dotnet ef migrations script (idempotent DDL artefact)
+        working-directory: backend
+        run: |
+          mkdir -p artifacts
+          dotnet ef migrations script \
+            --idempotent \
+            --project src/Skinora.Shared/Skinora.Shared.csproj \
+            --startup-project src/Skinora.API/Skinora.API.csproj \
+            --context AppDbContext \
+            --output artifacts/migrations.sql
+          # Sanity — script must not be empty.
+          test -s artifacts/migrations.sql
+
+      - name: Apply migrations to empty SQL Server
+        working-directory: backend
+        env:
+          ConnectionStrings__DefaultConnection: 'Server=localhost,1433;Database=SkinoraMigrationDryRun;User Id=sa;Password=Migration_Pwd1!;TrustServerCertificate=True'
+        run: |
+          dotnet ef database update \
+            --project src/Skinora.Shared/Skinora.Shared.csproj \
+            --startup-project src/Skinora.API/Skinora.API.csproj \
+            --context AppDbContext
+          # Idempotency — second update must be a no-op (EF short-circuits on
+          # applied migrations). This mirrors what a re-deploy would do.
+          dotnet ef database update \
+            --project src/Skinora.Shared/Skinora.Shared.csproj \
+            --startup-project src/Skinora.API/Skinora.API.csproj \
+            --context AppDbContext
+
+      - name: Upload migrations script
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migrations-sql
+          path: backend/artifacts/migrations.sql
+          retention-days: 7
 
   # ----------------------------------------------------------------------------
   # 7. Docker build check  (kabul kriterleri: image build dogrulamasi)
