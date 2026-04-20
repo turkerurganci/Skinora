@@ -1260,6 +1260,8 @@ Platform uptime takibi. Beklenmedik kesinti sonrası outage window hesaplaması 
 | AuditLog | CreatedAt | Standard | Tarih bazlı sorgular, kronolojik listeleme |
 
 > **Not:** Filtered index'ler SQL Server'a özgüdür. EF Core migration'larında `HasFilter()` ile tanımlanır.
+>
+> **SQL Server filtered index predicate kısıtı:** Filtered index WHERE predicate'i `NOT IN`, `BETWEEN`, fonksiyon çağrısı ve CASE ifadesi desteklemez (Microsoft Docs — "Create Filtered Indexes"). Yukarıdaki tabloda semantic amaçla `NOT IN (...)` gösterilen filtreler (örn. Transaction.Status aktif durumlar filter'ı) `HasFilter()` içinde `[Col] <> 'A' AND [Col] <> 'B' AND ...` zinciri olarak yazılmalıdır. `IN (...)` ise desteklenir. Kaynak: T27 doğrulama sırasında tespit edildi (PR #41).
 
 ---
 
