@@ -10,6 +10,13 @@
     <PackageReference Include="MediatR.Contracts" Version="2.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.3" />
+    <!--
+      T28: SQL Server provider reference lives in Shared so the generated
+      migrations (which live alongside AppDbContext) compile. The package is
+      inert at runtime until a caller invokes UseSqlServer — SQLite-backed
+      unit tests continue to work unchanged.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.3" />
   </ItemGroup>
 
 </Project>
