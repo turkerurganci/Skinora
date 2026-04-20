@@ -40,6 +40,19 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     /// </summary>
     protected string ConnectionString { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Override to true to build the schema via <c>MigrateAsync</c> (exercising
+    /// EF Core migrations + HasData seed rows) instead of <c>EnsureCreatedAsync</c>.
+    ///
+    /// Default is false because most module test projects only register their
+    /// own entity configurations. <c>MigrateAsync</c> compares the runtime
+    /// model against the migration snapshot and throws
+    /// <c>PendingModelChangesWarning</c> if they differ — which they always do
+    /// when module assemblies are missing. Tests that explicitly register every
+    /// module (e.g. <c>InitialMigrationTests</c>) opt in safely.
+    /// </summary>
+    protected virtual bool UseMigrations => false;
+
     public async Task InitializeAsync()
     {
         var baseConnectionString = await EnsureBaseConnectionStringAsync();
@@ -54,12 +67,14 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         }.ConnectionString;
 
         await using var migrationContext = CreateContext();
-        // T28: apply EF Core migrations (InitialCreate+) instead of EnsureCreated
-        // so the production schema-construction path — including HasData seed rows
-        // — is exercised by every integration test. SQLite-backed unit tests keep
-        // using EnsureCreated because the generated migrations are SQL Server
-        // specific (nvarchar(max), rowversion, etc.).
-        await migrationContext.Database.MigrateAsync();
+        if (UseMigrations)
+        {
+            await migrationContext.Database.MigrateAsync();
+        }
+        else
+        {
+            await migrationContext.Database.EnsureCreatedAsync();
+        }
         await SeedAsync(migrationContext);
 
         Context = CreateContext();

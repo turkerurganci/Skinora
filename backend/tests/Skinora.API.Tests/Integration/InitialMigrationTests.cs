@@ -28,6 +28,8 @@ namespace Skinora.API.Tests.Integration;
 /// </summary>
 public class InitialMigrationTests : IntegrationTestBase
 {
+    protected override bool UseMigrations => true;
+
     static InitialMigrationTests()
     {
         // Schema_ContainsAllExpectedTables compares every entity in the model
