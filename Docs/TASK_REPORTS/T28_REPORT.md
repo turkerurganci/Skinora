@@ -1,6 +1,6 @@
 # T28 — Initial migration ve migration testi
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-20
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-20
 
 ---
 
@@ -53,9 +53,19 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Devam ediyor (validator ayrı chat'te) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (ayrı validator chat'i, 2026-04-20) |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+**Bağımsız doğrulama kanıtları:**
+- Migration bağımsız sayımı: 25 `CreateTable` + 68 `CreateIndex` + 9 `InsertData` + 25 `DropTable` (Down).
+- Entity envanteri tutarlılığı: repo'da 22 modül entity + 3 shared/outbox entity = 25 → migration 25 tablo. Eksik/fazla yok.
+- Task branch CI run `24686747316` (HEAD `822ac2a`): tüm 12 job ✓ (Lint/Build/Unit/Integration/Contract/**Migration dry-run**/Docker × 4/CI Gate).
+- Migration dry-run job kanıtı: `dotnet ef dbcontext info` + `migrations script --idempotent` artifact + fresh mssql container'a iki ardışık `database update` (idempotency) + artifact upload — hepsi PASS.
+- Lokal build ✓ (0 warning/error), format ✓, unit 160/160 ✓.
+- Doküman uyumu: 05 §2.4 ✓, 09 §21.4 step 6 ✓, 09 §10.6 migration kuralları ✓.
+- Güvenlik mini-kontrol: secret sızıntısı yok (CI SA şifreleri ephemeral container scope), auth/input validation etkisi yok, yeni paket `EFCore.SqlServer` design-time compile amaçlı.
+- Main CI startup check: son 3 main run `success` (24676612387, 24676612346, 24639119531).
 
 ## Altyapı Değişiklikleri
 
@@ -67,9 +77,9 @@
 ## Commit & PR
 
 - Branch: `task/T28-initial-migration`
-- Commit: (push sonrası güncellenecek)
-- PR: (push sonrası güncellenecek)
-- CI: ⏳ Beklemede
+- HEAD commit: `822ac2a`
+- PR: [#42](https://github.com/turkerurganci/Skinora/pull/42)
+- CI: ✓ PASS (run `24686747316`, 12/12 job yeşil)
 
 ## Known Limitations / Follow-up
 

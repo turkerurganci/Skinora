@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-20 (T28 yapım — InitialCreate migration + integration test + CI migration dry-run job, doğrulama ayrı chat'te)
+**Son güncelleme:** 2026-04-20 (T28 doğrulama ✓ PASS — InitialCreate migration + integration test + CI migration dry-run job; F1 tüm task'lar tamamlandı, F1 Gate Check bekliyor)
 
 ---
 
@@ -67,7 +67,7 @@
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ✓ Tamamlandı | ✓ PASS | `ba766b9` (#29, pending squash) |
 | T26 | Seed data | ✓ Tamamlandı | ✓ PASS | `c090b14` (#30) |
 | T27 | Performans index'leri ve filtered index'ler | ✓ Tamamlandı | ✓ PASS | `2f4fab7` (#41, pending squash) |
-| T28 | Initial migration ve migration testi | ⏳ Devam ediyor | — | — |
+| T28 | Initial migration ve migration testi | ✓ Tamamlandı | ✓ PASS | `822ac2a` (#42, pending squash) |
 
 **F1 Gate Check:** ⬚ Bekliyor
 
