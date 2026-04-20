@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-19 (T11.3 doğrulama PASS — shared SQL Server + unique DB per class pattern, integration CI 185 sn)
+**Son güncelleme:** 2026-04-20 (T27 doğrulama PASS — 35 performans index'i T18–T25 entity config'lerinde envanterlendi, 06 §5.2'ye SQL Server filtered index `NOT IN` kısıtı notu eklendi, kod değişikliği yok)
 
 ---
 
@@ -66,7 +66,7 @@
 | T24 | Admin entity'leri (AdminRole, AdminRolePermission, AdminUserRole) | ✓ Tamamlandı | ✓ PASS | `759fba6` (#28, pending squash) |
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ✓ Tamamlandı | ✓ PASS | `ba766b9` (#29, pending squash) |
 | T26 | Seed data | ✓ Tamamlandı | ✓ PASS | `c090b14` (#30) |
-| T27 | Performans index'leri ve filtered index'ler | ⬚ Bekliyor | — | — |
+| T27 | Performans index'leri ve filtered index'ler | ✓ Tamamlandı | ✓ PASS | `2f4fab7` (#41, pending squash) |
 | T28 | Initial migration ve migration testi | ⬚ Bekliyor | — | — |
 
 **F1 Gate Check:** ⬚ Bekliyor
