@@ -1,6 +1,6 @@
 # T27 — Performans İndeksleri ve Filtered İndeksler
 
-**Faz:** F1 | **Durum:** ⏳ Devam ediyor (validate bekliyor) | **Tarih:** 2026-04-20
+**Faz:** F1 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-20
 
 ---
 
@@ -113,9 +113,17 @@ Entity configuration dosyaları (HasIndex çağrıları):
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ (validate chat'ine havale) |
-| Bulgu sayısı | 0 kritik / 1 doc gap (aşağıda) |
-| Düzeltme gerekli mi | Hayır — doc gap bu task içinde düzeltildi |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator bağımsız kontrolleri (2026-04-20):**
+- Adım -1 working tree temiz, Adım 0 main CI son 3 run hepsi success (24639119531, 24639119511, 24638836634).
+- 35 index kodda satır-satır bulundu, rapor envanteriyle birebir eşleşiyor.
+- 7 filtered index'in `HasFilter()` ifadeleri SQL Server syntax'ına uygun (`NOT IN` hiçbir filter'da kullanılmamış).
+- `dotnet build` 0 warning / 0 error (24 proje, 17 sn).
+- Task branch CI son run (`24675562336`) success.
+- Yapım raporu — validator verdict'i tam uyumlu. Sapma yok.
 
 ## Altyapı Değişiklikleri
 - Migration: Yok (T28'in scope'u)
@@ -126,7 +134,7 @@ Entity configuration dosyaları (HasIndex çağrıları):
 - Branch: `task/T27-performance-indexes`
 - Commit: `2f4fab7` — "T27: Performans index envanter + 06 §5.2 filtered index NOT IN kısıtı notu"
 - PR: [#41](https://github.com/turkerurganci/Skinora/pull/41)
-- CI: ⏳ run `24675534278` in_progress
+- CI: ✓ PASS (run `24675562336`, önceki `24675534278` cancel edildi)
 
 ## Known Limitations / Follow-up
 - **SQL Server filtered index predicate kısıtı:** `NOT IN`, `BETWEEN`, function call, CASE desteklenmez. Transaction.Status filter'ı bu nedenle `<>` zinciri olarak yazılmış. 06 §5.2 doc'u bu kısıtı açıklayacak şekilde genişletildi (bu PR).
