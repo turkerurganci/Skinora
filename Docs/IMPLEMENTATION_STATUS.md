@@ -67,7 +67,7 @@
 | T25 | Altyapı entity'leri (SystemSetting, OutboxMessage, ProcessedEvent, vb.) | ✓ Tamamlandı | ✓ PASS | `ba766b9` (#29, pending squash) |
 | T26 | Seed data | ✓ Tamamlandı | ✓ PASS | `c090b14` (#30) |
 | T27 | Performans index'leri ve filtered index'ler | ✓ Tamamlandı | ✓ PASS | `2f4fab7` (#41, pending squash) |
-| T28 | Initial migration ve migration testi | ✓ Tamamlandı | ✓ PASS | `822ac2a` (#42, pending squash) |
+| T28 | Initial migration ve migration testi | ✓ Tamamlandı | ✓ PASS | `3f6ba9a` (#42) |
 
 **F1 Gate Check:** ⬚ Bekliyor
 
