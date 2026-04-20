@@ -124,9 +124,9 @@ Entity configuration dosyaları (HasIndex çağrıları):
 
 ## Commit & PR
 - Branch: `task/T27-performance-indexes`
-- Commit: TBD (commit aşamasında güncellenecek)
-- PR: TBD
-- CI: TBD
+- Commit: `2f4fab7` — "T27: Performans index envanter + 06 §5.2 filtered index NOT IN kısıtı notu"
+- PR: [#41](https://github.com/turkerurganci/Skinora/pull/41)
+- CI: ⏳ run `24675534278` in_progress
 
 ## Known Limitations / Follow-up
 - **SQL Server filtered index predicate kısıtı:** `NOT IN`, `BETWEEN`, function call, CASE desteklenmez. Transaction.Status filter'ı bu nedenle `<>` zinciri olarak yazılmış. 06 §5.2 doc'u bu kısıtı açıklayacak şekilde genişletildi (bu PR).
