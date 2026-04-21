@@ -98,9 +98,9 @@
 ## Commit & PR
 
 - Branch: `task/T30-tos-age-geoblock`
-- Commit: TBD
-- PR: TBD
-- CI: TBD
+- Commit: `b4ec42e`
+- PR: #49 (https://github.com/turkerurganci/Skinora/pull/49)
+- CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
 
