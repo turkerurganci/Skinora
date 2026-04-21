@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-20 (F1 Gate Check ✓ PASS — 462/462 test passed, migration rehearsal 26 tablo + seed, traceability boşluk yok; tag `phase/F1-pass`)
+**Son güncelleme:** 2026-04-21 (T29 Steam OpenID auth ✓ PASS — re-doğrulama: 32+6 lokal test ✓ + CI run 24740487643 10/10 job ✓; S1 fix doğrulandı, refresh token DB'de SHA-256 hash)
 
 ---
 
@@ -77,7 +77,7 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T29 | Steam OpenID authentication (login + callback + token üretimi) | ⏳ Devam ediyor | — | — |
+| T29 | Steam OpenID authentication (login + callback + token üretimi) | ✓ Tamamlandı | ✓ PASS (re-doğrulama; 1. validator FAIL → S1 fix) | `5e6a32e` (#46, pending squash) |
 | T30 | ToS kabul, yaş gate, geo-block | ⬚ Bekliyor | — | — |
 | T31 | Steam re-verify ve authenticator kontrolü | ⬚ Bekliyor | — | — |
 | T32 | Refresh token yönetimi | ⬚ Bekliyor | — | — |

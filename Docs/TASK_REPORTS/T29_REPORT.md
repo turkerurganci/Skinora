@@ -1,6 +1,6 @@
 # T29 — Steam OpenID authentication (login + callback + token üretimi)
 
-**Faz:** F2 | **Durum:** ⏳ S1 düzeltme uygulandı, re-doğrulama bekliyor | **Tarih:** 2026-04-21
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-21
 
 ---
 
@@ -58,11 +58,11 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✗ FAIL |
-| Doğrulama tarihi | 2026-04-21 |
-| Doğrulama branch/commit | `task/T29-steam-openid-auth` @ `b0101e7` |
-| Bulgu sayısı | 1 (S1 Sapma) |
-| Düzeltme gerekli mi | Evet — merge engellendi |
+| Doğrulama durumu | ✓ PASS (re-doğrulama 2026-04-21) |
+| 1. doğrulama (62ffead/b0101e7) | ✗ FAIL — 1 S1 Sapma (refresh token plain text) |
+| 2. doğrulama (5e6a32e) | ✓ PASS — 0 yeni bulgu, S1 düzeltmesi doğrulandı |
+| Bulgu sayısı | 0 (önceki S1 fix'lendi) |
+| Düzeltme gerekli mi | Hayır — merge hazır |
 
 ### HARD STOP Kapıları
 - **Adım -1 Working tree:** ✓ temiz (`git status --short` boş).
@@ -142,9 +142,62 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 
 ## Commit & PR
 - Branch: `task/T29-steam-openid-auth`
-- Commit: `62ffead`
+- Commit: `5e6a32e` (HEAD; ilk yapım `62ffead`, S1 fix `e6e102a`, test infra `f99d565`, CI fix `3583c17`)
 - PR: [#46](https://github.com/turkerurganci/Skinora/pull/46)
-- CI: (run izleniyor)
+- CI: ✓ run [24740487643](https://github.com/turkerurganci/Skinora/actions/runs/24740487643) (HEAD `5e6a32e`) 10/10 job — Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration ✓ Docker ✓ CI Gate ✓
+
+## Re-Doğrulama Sonucu (2026-04-21, 2. validator chat)
+
+**Verdict:** ✓ PASS — S1 düzeltmesi doğrulandı, 0 yeni bulgu.
+
+### HARD STOP Kapıları
+- **Adım -1 Working tree:** ✓ temiz (`git status --short` boş).
+- **Adım 0 Main CI startup (son 3 run):** ✓ 24710222019, 24710222028, 24690294086 tamamı `success`.
+- **Adım 0b Repo memory drift:** ✓ `.claude/memory/MEMORY.md` T29 satırları mevcut (L11, L22, L23).
+
+### Kabul Kriterleri (2. Validator)
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `GET /auth/steam` → Steam OpenID redirect | ✓ | [AuthController.cs:38-54](../../backend/src/Skinora.API/Controllers/AuthController.cs#L38-L54); `GetSteam_RedirectsToSteamOpenIdLogin` PASS |
+| 2 | `GET /auth/steam/callback` → assertion + user upsert + JWT + refresh | ✓ | 6 integration test PASS; refresh token DB'ye **SHA-256 hex hash** olarak yazılıyor ([RefreshTokenGenerator.cs:36,58-59](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/RefreshTokenGenerator.cs#L36)); test [AuthSteamEndpointTests.cs:100-107](../../backend/tests/Skinora.API.Tests/Integration/AuthSteamEndpointTests.cs#L100-L107) `Assert.NotEqual(cookieValue, storedToken)` + `Assert.Equal(SHA256(cookieValue), storedToken)` ile doğruluyor — S1 fix etkili |
+| 3a | Assertion backend'de doğrulanır (claimed_id güvenilmez) | ✓ | [SteamOpenIdValidator.cs:42-69](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/SteamOpenIdValidator.cs#L42) Steam'e `check_authentication` POST; [SteamIdParser.cs:11-34](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/SteamIdParser.cs#L11) prefix + 15-20 digit guard |
+| 3b | Return URL kontrolü | ✓ | [ReturnUrlValidator.cs:22-43](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/IReturnUrlValidator.cs#L22) absolute/protocol-relative/backslash reject; [SteamOpenIdValidator.cs:36-40](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/SteamOpenIdValidator.cs#L36) `openid.return_to` ordinal eşleşme zorlar |
+| 3c | Nonce replay koruması | ~ Kısmi | Yerel nonce store yok; Steam `check_authentication` aynı sig+handle için `is_valid:false` döner — OpenID 2.0 §11.4 RP sorumluluğu Steam-side delege ile karşılanır. Defansif yerel nonce tracking eklenmesi enhancement; T29 kabul edilebilir. |
+| 3d | HTTPS zorunlu | ✓ | [Program.cs:131](../../backend/src/Skinora.API/Program.cs#L131) `UseHttpsRedirection` + tüm cookie'ler `Secure=true` |
+| 4 | İlk giriş: ToS gösterilmeli | ~ Kısmi | Backend `?status=new_user` işareti atar; ToS modal UI + `/auth/tos/accept` endpoint **T30 scope** (plan §T30, kullanıcı onaylı) |
+| 5 | `returnUrl` sadece relative path | ✓ | [ReturnUrlValidator](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/IReturnUrlValidator.cs) 11 unit + integration cookie'de `%2Fdashboard` gözlendi |
+| 6 | `GetPlayerSummaries` çağrısı | ✓ | [SteamProfileClient.cs:39-66](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/SteamProfileClient.cs#L39) `x-webapi-key` header; `WebApiKey` yoksa graceful degrade (placeholder display name) |
+| 7 | Geo-block kontrolü | ~ Kısmi (stub) | [IGeoBlockCheck](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/IGeoBlockCheck.cs) pipeline hook çağrılır; `AllowAllGeoBlockCheck` default — gerçek impl **T30+T83 DI swap** ile devralır. Pipeline sözleşmesi `SteamAuthenticationPipelineTests.ExecuteAsync_GeoBlocked_*` ile doğrulanır |
+| 8 | Sanctions eşleşmesi kontrolü | ~ Kısmi (stub) | [ISanctionsCheck](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/ISanctionsCheck.cs) pipeline hook çağrılır; `NoMatchSanctionsCheck` default — gerçek impl **T82 DI swap** ile devralır |
+| 9 | Hesap askıya alınmış mı kontrolü | ✓ | `IsDeactivated=true` → `AccountBanned` outcome → `?error=account_banned`, refresh cookie yok. `Callback_DeactivatedUser_*` test PASS. "Kısıtlı oturum" (suspended read-only) semantiği için entity ayrımı 06 §3.1'de yok — bu T58 dispute / T22+ ek modelleme scope'u, T29 kapsamı dışı |
+
+### Doğrulama Kontrol Listesi (11 plan'dan)
+- [x] **08 §2.1 güvenlik kuralları:** assertion `check_authentication` ✓, `openid.return_to` ordinal mismatch reject ✓, `claimed_id` prefix+format ✓, HTTPS `UseHttpsRedirection` ✓, replay Steam-side delege ✓
+- [x] **03 §2.1 akış adımları:** redirect → callback → pipeline (geo/sanctions/suspend hook → provisioning → JWT+refresh → audit) ✓
+- [x] **07 §4.2–§4.3 endpoint sözleşmesi:** 302 redirect ✓, returnUrl sanitize ✓, `?status=new_user|success` + `?error=auth_failed|account_banned|geo_blocked|sanctions_match` ✓, refresh cookie `HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth` ✓
+
+### Test Sonuçları (2. Validator Tekrar Çalıştırma)
+| Tür | Sonuç | Komut | Süre |
+|---|---|---|---|
+| Unit — Skinora.Auth.Tests | ✓ 32/32 | `dotnet test backend/tests/Skinora.Auth.Tests` | 841 ms |
+| Integration — AuthSteamEndpointTests | ✓ 6/6 | `dotnet test backend/tests/Skinora.API.Tests --filter "FullyQualifiedName~AuthSteamEndpointTests"` | 5 s |
+| CI Task Branch — run 24740487643 | ✓ 10/10 job | Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration ✓ Docker ✓ CI Gate ✓ | — |
+
+### Güvenlik Kontrolü
+- [x] **Secret sızıntısı:** Temiz — `WebApiKey` `x-webapi-key` header (URL'de değil), `JwtSettings.Secret` `IOptions`, appsettings'lerde sadece `REPLACE_IN_ENV` placeholder
+- [x] **Auth etkisi:** Yeni public auth endpoint'leri `[AllowAnonymous]` + `[RateLimit("auth")]` (10 req/60s); diğer kontrolcüler etkilenmiyor
+- [x] **Input validation:** `returnUrl` sanitizer (relative-only) ✓, `claimed_id` prefix + 15-20 digit ✓, `openid.return_to` strict eşleşme ✓, IP/UA truncate (45/256) ✓
+- [x] **Yeni bağımlılık:** Microsoft official 3 paket — `Microsoft.EntityFrameworkCore` 9.0.3, `Microsoft.IdentityModel.Tokens` 8.0.1, `System.IdentityModel.Tokens.Jwt` 8.0.1 — solution geneli versiyonlarla hizalı, CVE temiz
+- [x] **DB secret at-rest (S1 re-check):** Temiz — refresh token DB'ye SHA-256 hex hash olarak yazılıyor (06 §3.3 uyumlu), plain text yalnız cookie'de
+
+### Bulgular
+Yok (0 yeni bulgu). Önceki S1 Sapma fix doğrulandı.
+
+### Yapım Raporu Karşılaştırması
+- Yapım raporu (1. validator FAIL + S1 fix + test infra fix bölümleri dahil) tamamen tutarlı.
+- Bağımsız verdict'im 1. validator'ın ✗ FAIL kararını + S1 düzeltmesinin ✓ etkisini onaylar.
+- Stub karşılamalar (#3c, #4, #7, #8) plan'da net şekilde T30/T82/T83'e devredilmiş — bulgu değil, kapsam ayrımı (yapım raporu Notlar/Scope bölümünde aynı şekilde belgelenmiş).
+- 0 uyuşmazlık.
 
 ## Known Limitations / Follow-up
 - `IGeoBlockCheck` + `ISanctionsCheck` şu an no-op — T30/T82/T83 gerçek implementasyonu DI'da swap edecek (arayüz sabitlendi).
