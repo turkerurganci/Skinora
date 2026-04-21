@@ -4,7 +4,41 @@
       "Bash(npm init:*)",
       "Bash(npm install:*)",
       "WebFetch(domain:steamcommunity.com)",
-      "WebSearch"
+      "WebSearch",
+      "Edit(.claude/**)",
+      "Edit(Docs/**)",
+      "Edit(backend/**)",
+      "Edit(frontend/**)",
+      "Edit(sidecar-steam/**)",
+      "Edit(sidecar-blockchain/**)",
+      "Edit(infra/**)",
+      "Edit(scripts/**)",
+      "Write(.claude/**)",
+      "Write(Docs/**)",
+      "Write(backend/**)",
+      "Write(frontend/**)",
+      "Write(sidecar-steam/**)",
+      "Write(sidecar-blockchain/**)",
+      "Write(infra/**)",
+      "Write(scripts/**)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git restore:*)",
+      "Bash(git stash:*)",
+      "Bash(gh run:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh api:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)"
     ]
   },
   "hooks": {
@@ -26,6 +60,19 @@
           {
             "type": "command",
             "command": "powershell.exe -ExecutionPolicy Bypass -File ~/.claude/hooks/notify.ps1 -Message 'Claude needs your attention'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/post-merge-ci-reminder.ps1",
+            "timeout": 30
           }
         ]
       }

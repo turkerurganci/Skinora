@@ -152,6 +152,16 @@ grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
     - Branch'i `main`'e squash merge et
     - Squash commit mesajı: `TXX: Task adı`
 
+18. **Post-merge CI watch (ZORUNLU çıkış kapısı):**
+    - Squash merge `main` branch'inde yeni bir commit yaratır → bu commit için tüm workflow'lar (CI + Docker Publish) tetiklenir.
+    - `gh run list --branch main --limit 5 --json databaseId,status,workflowName,headSha` ile yeni squash commit'in SHA'sına ait `in_progress` run'ları topla.
+    - Her run için `gh run watch <ID> --exit-status` (background veya foreground) — **concluded** olana kadar izle.
+    - Sonucu raporla:
+      - Hepsi `success` → "T29 main CI ✓ + Docker Publish ✓".
+      - Biri `failure`/`cancelled`/`timed_out` → root cause (`gh run view <ID> --log-failed`) + düzeltme önerisi sun.
+    - **Atlanması yasak.** task PR / chore PR / docs PR / squash sonrası ayrımı yok — INSTRUCTIONS.md §3.2 evrensel kural. Adım 18 yapılmadan validate skill'i tamamlanmış sayılmaz.
+    - Mekanik destek: `.claude/hooks/post-merge-ci-reminder.sh` PostToolUse hook'u `gh pr merge` algılayınca in_progress run ID'lerini context'e inject eder — model unutma riskine karşı yapısal engel.
+
 ## Çıktı Formatı
 
 ```
