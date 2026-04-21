@@ -145,7 +145,7 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 
 **Amaç:** T11.1 retrospektifi T15+T16 task chat'lerinin bittiği ama PR açılmadığını, kodlarının F0 Gate Check PR #10'a "bundled" olarak geldiğini ortaya çıkardı. T17-T19 ise T20 branch'ine gömüldü. Yapım chat'inin "bitti" sayılabilmesi için aşağıdaki dört kapı açık olmalı.
 
-Aşağıdakilerin **yedisi de ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
+Aşağıdakilerin **sekizi de ✓** olmadan task "yapım bitti" sayılmaz ve validate chat'ine geçilmez. Eksik varsa bir önceki adıma dön, tamamla:
 
 - [ ] **Branch push edildi mi?** `git push -u origin task/TXX-*` başarılı.
 - [ ] **PR açıldı mı?** `gh pr create --base main --title "TXX: ..." --body "..."` çağrıldı, PR numarası geri geldi.
@@ -158,6 +158,7 @@ Aşağıdakilerin **yedisi de ✓** olmadan task "yapım bitti" sayılmaz ve val
   git log main..HEAD --format='%s' | grep -oE '^T[0-9]+(\.[0-9]+)?[a-z]?' | sort -u
   ```
   Çıktıda **yalnızca mevcut task'ın TXX numarası** görünmeli. Başka bir TXX varsa → **yapım bitti sayılmaz** (bundled-PR ihlali). Yabancı commit'ler `git rebase -i main` ile kaldırılır veya ayrı bir branch'e `cherry-pick` ile taşınır. Not: commit-msg ve pre-push Layer 3 hook'ları aynı kontrolü otomatik yapar; bu manuel check hook yoksa/atlanmışsa son savunmadır.
+- [ ] **Repo memory'de TXX satırı eklendi/güncellendi mi? (drift önleme — F1 Gate Check sonrası eklendi)** [`.claude/memory/MEMORY.md`](../memory/MEMORY.md) "Current Status" bloğunda TXX için 1-2 satır özet (commit hash + PR no + 1-cümle çıktı). Eksikse → **yapım bitti sayılmaz**, önce memory'yi güncelle. PR description'ında "memory: TXX yansıt" notu olmalı; aynı task PR'ına dahil edilebilir, ayrı chore PR'ı da kabul edilebilir. **Neden:** T27 + T28 + F1 Gate Check sonrası repo memory `4775e4e` (T11.3 yansıt)'tan beri güncellenmemişti — auto-memory güncellendi ama repo memory drift'e girdi. Drift gözlenebilir değildi çünkü hiçbir kapı kontrol etmiyordu. validator Adım 0 ve gate-check Adım 12 paralel kontroller eklendi.
 
 **Otomatik BLOCKED trigger:** TXX_REPORT.md içinde "PR: Henüz oluşturulmadı", "PR: TBD", "PR: —" veya boş bırakılmış bir PR alanı görülürse **otomatik BLOCKED** (DEPENDENCY_MISMATCH alt türü) — yapım chat'i açılır, açık kalmaya devam eder ve bir sonraki task'a geçilmez.
 

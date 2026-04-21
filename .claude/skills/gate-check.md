@@ -85,7 +85,14 @@
 
 12. **PASS durumunda:**
     - `Docs/IMPLEMENTATION_STATUS.md`'de faz gate check durumunu `✓ PASS` yap
-    - Faz tag'i at: `git tag phase/FX-pass`
+    - **Repo memory revizyonu** ([`.claude/memory/MEMORY.md`](../memory/MEMORY.md)) — drift önleme (F1 Gate Check sonrası eklendi):
+      - "Current Status" bloğunda fazın özet satırı eklenir/güncellenir (Gate Check tarihi, PR no, squash hash, tag, ana metrikler).
+      - "Next" satırı bir sonraki fazı işaret edecek şekilde güncellenir.
+      - Tarih başlığı bugünün tarihine çekilir.
+      - Faz içindeki son task'lar (T(X-2), T(X-1), TX) için memory satırı varsa yeterli; yoksa ekle.
+      - **Kanıt:** chore PR description'ında "memory: FX Gate Check yansıt" notu olur.
+    - Yukarıdaki iki güncelleme + Gate Check raporu (`Docs/CHECKPOINT_REPORTS/GATE_CHECK_FX.md`) **aynı chore PR**'da merge edilir.
+    - Faz tag'i at: `git tag phase/FX-pass` (chore PR merge sonrasındaki main commit'i üzerinde)
     - Tag'i push'la: `git push origin phase/FX-pass`
 
 13. **FAIL durumunda:**

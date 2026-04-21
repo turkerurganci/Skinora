@@ -50,6 +50,25 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
   - CI kırılması önceki bir task'ın borcundan kaynaklanıyorsa → **BLOCKED (DEPENDENCY_MISMATCH)** — "önceki task yeşil bırakmadığı için bu task doğrulanamaz."
 - Bu adım TXX_REPORT.md'deki doğrulama bölümüne yazılır (3 run ID + conclusion).
 
+### Adım 0b — Repo Memory Drift Check (HARD STOP)
+
+**Amaç:** F1 Gate Check sonrası eklendi. T27 + T28 + F1 Gate Check sonrası repo memory `4775e4e` (T11.3 yansıt)'tan beri güncellenmemişti — auto-memory güncellendi ama repo memory drift'e girdi. Drift gözlenebilir değildi çünkü hiçbir kapı kontrol etmiyordu. Validator memory'i kontrol eden son kapıdır.
+
+**Yap:**
+
+```bash
+grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
+```
+
+**Karar kuralı:**
+
+- TXX için en az bir satır mevcutsa → doğrulamaya devam.
+- Hiç satır yoksa → **HARD STOP / BLOCKED (DEPENDENCY_MISMATCH).**
+  - Yapım chat'i `task.md` Bitiş Kapısı 8. maddesini ihlal etti (memory güncellemesi atlanmış).
+  - Validator finding: "Repo memory drift — TXX için satır yok. Yapım chat'i memory'i güncellemeden validate'e geçti."
+  - Düzeltme: Yapım chat'ine geri dön → memory güncelle → `chore: memory — TXX yansıt` commit + push (aynı task PR'ına dahil edilebilir veya ayrı chore PR). Sonra validator yeniden başlatılır.
+- "Sonra ekleriz", "önemsiz" rasyonelizasyonları yasak — Adım 0 CI kuralının memory eşdeğeri.
+
 1. **Task tanımını oku:** `Docs/11_IMPLEMENTATION_PLAN.md`'den `hedef` task'ın tanımını bul:
    - Kabul kriterleri
    - Test beklentisi
