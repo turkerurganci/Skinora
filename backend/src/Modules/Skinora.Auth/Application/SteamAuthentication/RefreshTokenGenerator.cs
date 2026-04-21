@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Skinora.Auth.Configuration;
 using Skinora.Auth.Domain.Entities;
@@ -32,7 +33,7 @@ public sealed class RefreshTokenGenerator : IRefreshTokenGenerator
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            Token = plainText,
+            Token = HashToken(plainText),
             ExpiresAt = expiresAt,
             IsRevoked = false,
             IpAddress = TruncateIpAddress(ipAddress),
@@ -53,6 +54,9 @@ public sealed class RefreshTokenGenerator : IRefreshTokenGenerator
             .Replace('+', '-')
             .Replace('/', '_');
     }
+
+    private static string HashToken(string plainText)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainText)));
 
     private static string? TruncateIpAddress(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Length > 45 ? value[..45] : value;

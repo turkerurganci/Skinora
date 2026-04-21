@@ -1,6 +1,6 @@
 # T29 — Steam OpenID authentication (login + callback + token üretimi)
 
-**Faz:** F2 | **Durum:** ✗ FAIL (doğrulama: 1 S1 bulgu) | **Tarih:** 2026-04-21
+**Faz:** F2 | **Durum:** ⏳ S1 düzeltme uygulandı, re-doğrulama bekliyor | **Tarih:** 2026-04-21
 
 ---
 
@@ -118,6 +118,12 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 ### Verdict: ✗ FAIL
 
 **Merge engellendi.** Yeni yapım chat'inde S1 bulgusu düzeltilecek, ardından yeni doğrulama chat'i açılacak.
+
+### S1 Düzeltme (2026-04-21, fix chat)
+- **Kod:** [`RefreshTokenGenerator.cs`](../../backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/RefreshTokenGenerator.cs) — `Token = plainText` yerine `Token = HashToken(plainText)`; `HashToken` = `Convert.ToHexString(SHA256.HashData(UTF8(plainText)))` (64 hex karakter, 06 §3.3 `string(256)` sınırı içinde). `GeneratedRefreshToken.PlainTextToken` değişmedi → cookie hâlâ plain text alır, DB yalnız hash saklar.
+- **Test:** [`AuthSteamEndpointTests.cs`](../../backend/tests/Skinora.API.Tests/Integration/AuthSteamEndpointTests.cs) `Callback_ValidAssertion_NewUser_CreatesUserAndSetsRefreshCookie` — Set-Cookie'den refreshToken değerini parse eder, DB'deki `RefreshToken.Token` ile `Assert.NotEqual(cookie, stored)` ve `Assert.Equal(SHA256(cookie), stored)` asserten. Hash eşitliği + plain text leak yokluğu birlikte doğrulanır.
+- **Sonuç:** Release build 0W/0E; `Skinora.Auth.Tests` 32/32 ✓ (184 ms); `AuthSteamEndpointTests` 6/6 ✓ (2 s); `Skinora.API.Tests` regresyon 105/105 ✓ (3:08, InitialMigrationTests hariç — lokal Docker gereksinimi). Validator'ın önerdiği 3 maddelik düzeltmenin (1) + (3)'ü bu fix'te; (2) T32 refresh path scope'unda kalır (plan §T32 incoming cookie → `SHA256` lookup).
+- **Kapsam dışı:** T32 `/auth/refresh` endpoint implementasyonu (cookie → hash → DB lookup) — plan ayrımına sadık, bu PR'da yok.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok — User/RefreshToken/UserLoginLog T18'de mevcut, şema değişmedi.

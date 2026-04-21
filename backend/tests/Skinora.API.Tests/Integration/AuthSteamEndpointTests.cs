@@ -1,4 +1,6 @@
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using Medallion.Threading;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -81,16 +83,28 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         Assert.StartsWith("https://localhost:3000/auth/callback", location);
         Assert.Contains("status=new_user", location);
 
-        Assert.Contains(response.Headers.GetValues("Set-Cookie"),
-            v => v.StartsWith("refreshToken=") &&
-                 v.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
-                 v.Contains("path=/api/v1/auth", StringComparison.OrdinalIgnoreCase));
+        var refreshCookie = response.Headers.GetValues("Set-Cookie")
+            .FirstOrDefault(v => v.StartsWith("refreshToken="));
+        Assert.NotNull(refreshCookie);
+        Assert.Contains("httponly", refreshCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("path=/api/v1/auth", refreshCookie, StringComparison.OrdinalIgnoreCase);
+
+        var cookieValue = refreshCookie!
+            .Split(';')[0]
+            .Substring("refreshToken=".Length);
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var user = await db.Set<User>().FirstOrDefaultAsync(u => u.SteamId == SteamId);
         Assert.NotNull(user);
-        Assert.Single(db.Set<RefreshToken>().Where(t => t.UserId == user!.Id));
+        var storedToken = await db.Set<RefreshToken>()
+            .Where(t => t.UserId == user!.Id)
+            .Select(t => t.Token)
+            .SingleAsync();
+        Assert.NotEqual(cookieValue, storedToken);
+        var expectedHash = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(cookieValue)));
+        Assert.Equal(expectedHash, storedToken);
         Assert.Single(db.Set<UserLoginLog>().Where(l => l.UserId == user!.Id));
     }
 
