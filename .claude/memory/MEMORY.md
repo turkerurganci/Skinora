@@ -5,18 +5,21 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-04-20)
+## Current Status (2026-04-21)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 - **Completed docs:** 00 (v0.4), 01 (v1.1), 02 (v2.4), 03 (v2.2), 04 (v3.0), 05 (v2.3), 06 (v4.9), 07 (v2.1), 08 (v2.5), 09 (v0.9), 10 (v1.3), 11 (v0.5), 12 (v0.5)
-- **Implementation:** F1 aktif — T01-T26 + T11.1 + T11.2 + T11.3 ✓ PASS. CI pipeline tam canlı + 4 savunma katmanı canlı.
+- **Implementation:** **F1 Gate Check ✓ PASS** (2026-04-20, PR #44 squash `b37f484`, tag `phase/F1-pass`). T01-T28 + T11.1 + T11.2 + T11.3 tümü ✓. Sırada F2 (Çekirdek Servisler, T29 Steam OpenID auth ilk task).
 - **T23 (`b11a2cc` #27):** Notification + NotificationDelivery + UserNotificationPreference entity'leri.
 - **T24 (`759fba6` #28, pending squash):** AdminRole + AdminRolePermission + AdminUserRole entity'leri.
 - **T25 (`ba766b9` #29, pending squash):** Skinora.Platform modülü (SystemSetting, SystemHeartbeat, AuditLog), ColdWalletTransfer (Payments), SellerPayoutIssue (Transactions), IAppendOnly marker + EnforceAppendOnly().
 - **T26 (`c090b14` #30, validated 2026-04-19):** SYSTEM user + SystemHeartbeat singleton + 28 SystemSetting seed + env var bootstrap + startup fail-fast. 8/8 kabul kriteri PASS, 0 kritik. **Meta-karar (B, 2026-04-19):** skill §17 korunur — T27'den itibaren validator chat squash merge yapar. [project_validator_merge_flow.md](project_validator_merge_flow.md) kayıtlı.
 - **CI incidents + 6 chore PR (2026-04-19):** PR #31 `.gitignore` scheduled_tasks.lock, #32 BYPASS_LOG+validator flow memory, #33 plan §T26 "27→28" doc drift fix (tümü merged). Sonra main CI 3 ardışık fail → root cause: xUnit parallel + TestContainers OOM (7.75 GB ubuntu-latest, 10+ SQL Server container taşıyamıyor). PR #34 xunit.runner.json + -m:1 hot-fix (Integration 5 → 22 dk). PR #35 paths-filter docs-only skip (~25 dk/docs PR kazanım), PR #36 docker matrix path filter (~5-15 dk/run kazanım). GitHub Pro'ya geçildi (Free 2000 dk/ay aşılmıştı).
 - **T11.3 (`e185daf` PR #39, validate `5f5c28e` 2026-04-19):** Shared SQL Server (CI services:mssql + env var) + per-class unique DB (T_{ClassName}_{Guid:N}) + parallel execution geri açık. Integration CI 22 dk → 3:05 (~7× hızlanma). Hot-fix (`5f6a8cb` -m:1) kalıcılaştırıldı, T27 öncesi infra borç kapandı.
+- **T27 (PR #41 squash `a8aee59`, 2026-04-20):** 35 performans index'i T18-T25 entity config'lerinde envanterlendi (kod değişikliği yok — zaten tanımlıydı). 06 §5.2'ye kritik not eklendi: SQL Server filtered index `NOT IN`/`BETWEEN`/function/CASE desteklemez — `NOT IN` semantic'i `<>` AND zinciri ile yazılmalı (Transaction.Status filter). Pivot: NOT IN normalize denemesi SqlException ile kırıldı, revert + doc clarification. ✓.
+- **T28 (PR #42 squash `3f6ba9a`, 2026-04-20):** `InitialCreate` migration Skinora.Shared/Persistence/Migrations altında (25 tablo, 68 index, 30 seed satırı). `IntegrationTestBase.UseMigrations` virtual opt-in flag (default `false`: EnsureCreatedAsync; `true`: MigrateAsync — InitialMigrationTests tüm 10 modülü static ctor'da kaydederek `PendingModelChangesWarning`'i aşar). CI `6. Migration dry-run` job'u: dbcontext info + idempotent script artifact + fresh mssql'e iki ardışık `database update`. Validator 4/4 PASS, 0 bulgu. ✓.
+- **F1 Gate Check (PR #44 squash `b37f484`, 2026-04-20):** 462 test PASS (lokal: unit 160 + contract 5 + integration 297) + T28 merge CI run 24687690451 13/13 job ✓. Migration rehearsal fresh DB 26 tablo + 28 SystemSettings + SYSTEM user + Heartbeat + idempotent 2. update. Backend Release 0W/0E. Docker compose kısmi smoke: infra healthy, backend T26 fail-fast designed-as doğrulandı, frontend lokal SIGBUS (Windows Docker Desktop env sınırı, CI Linux runner temiz). Traceability §7.1 13/13 F1 grubu implement, 0 boşluk (25 entity + 23 enum). Yeni dep: EFCore.SqlServer (Microsoft 1st-party, design-time). 0 kritik güvenlik bulgusu. Tag `phase/F1-pass` push'landı. Rapor: [`Docs/CHECKPOINT_REPORTS/GATE_CHECK_F1.md`](../../Docs/CHECKPOINT_REPORTS/GATE_CHECK_F1.md).
 - **T14 not:** steam-tradeoffer-manager ^3.x npm'de mevcut değil, ^2.13.x kullanıldı, 08 §2.5 güncellendi
-- **Next:** T27 (Performans index'leri ve filtered index'ler) → T28 (initial migration) → F1 Gate Check.
+- **Next:** **F2 Çekirdek Servisler** (T29-T43). İlk task T29 — Steam OpenID authentication (login + callback + token üretimi).
 - **F0 Gate Check bulguları:** OutboxStartupHook DI fix (singleton/scoped), Frontend Dockerfile fix (alpine→slim)
 - **Checkpoints completed:** 19 (CP1-CP18, CP18 = 12 audit + GPT review + etki yansıtma + checkpoint)
 - **Audits completed:** 00-12
