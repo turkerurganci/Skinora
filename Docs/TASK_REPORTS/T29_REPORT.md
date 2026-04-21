@@ -1,6 +1,6 @@
 # T29 — Steam OpenID authentication (login + callback + token üretimi)
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-04-21
+**Faz:** F2 | **Durum:** ✗ FAIL (doğrulama: 1 S1 bulgu) | **Tarih:** 2026-04-21
 
 ---
 
@@ -58,9 +58,66 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Beklemede (ayrı chat açılacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✗ FAIL |
+| Doğrulama tarihi | 2026-04-21 |
+| Doğrulama branch/commit | `task/T29-steam-openid-auth` @ `b0101e7` |
+| Bulgu sayısı | 1 (S1 Sapma) |
+| Düzeltme gerekli mi | Evet — merge engellendi |
+
+### HARD STOP Kapıları
+- **Adım -1 Working tree:** ✓ temiz (`git status --short` boş).
+- **Adım 0 Main CI startup (son 3 run):** ✓ 24710222019, 24710222028, 24690294086 tamamı `success`.
+- **Adım 0b Repo memory drift:** ✓ `.claude/memory/MEMORY.md` T29 satırları mevcut (L11 "Sırada F2 … T29 Steam OpenID auth ilk task", L22 T29 özet, L23 "Next: T29 doğrulama → T30").
+- **Task branch CI:** ✓ run 24737739392 (sha `b0101e7`) `conclusion=success`.
+
+### Kabul Kriterleri (Validator Tekrar Değerlendirme)
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `GET /auth/steam` → Steam OpenID redirect | ✓ | `AuthController.cs:38-54`; `GetSteam_RedirectsToSteamOpenIdLogin` PASS |
+| 2 | `GET /auth/steam/callback` → assertion doğrula + user upsert + JWT + refresh | ✓ (kısmi — #refresh storage S1) | 6 integration test PASS; ancak refresh DB'ye plain text yazılıyor (aşağıda S1) |
+| 3a | Assertion backend'de doğrulanır (claimed_id güvenilmez) | ✓ | `SteamOpenIdValidator` Steam'e `check_authentication` POST; `SteamIdParser` prefix/format guard |
+| 3b | Return URL kontrolü | ✓ | `ReturnUrlValidator` absolute/protocol-relative/backslash reddeder; `SteamOpenIdValidator` `openid.return_to` ile `settings.ReturnToUrl` ordinal eşleşmesi zorlar |
+| 3c | Nonce replay koruması | ✓ (dolaylı) | Yerel nonce tracking yok; Steam `check_authentication` aynı assoc_handle+nonce için tekrar `is_valid:true` vermediği için OpenID 2.0 §11.4 RP sorumluluğu karşılanır |
+| 3d | HTTPS zorunlu | ✓ | `Program.cs:131 UseHttpsRedirection` + tüm cookie'ler `Secure=true` |
+| 4 | İlk giriş: ToS gösterilmeli (tosAccepted) | ~ Kısmi | Backend: `?status=new_user` işareti atar; ToS endpoint + modal T30. Rapor/plan açık olarak T30 scope, kullanıcı onaylı. |
+| 5 | `returnUrl` sadece relative path | ✓ | `ReturnUrlValidatorTests` 11 case + `GetSteam_InvalidReturnUrl_IsNotReflectedInRedirect` cookie'de "dashboard" gözlendi |
+| 6 | `GetPlayerSummaries` çağrısı | ✓ | `SteamProfileClient` `x-webapi-key` header, `response.players[0]` parse; `WebApiKey` yoksa graceful degrade (placeholder display name) |
+| 7 | Geo-block kontrolü (IP bazlı) | ✓ (stub) | `IGeoBlockCheck` pipeline hook çağrılır; `AllowAllGeoBlockCheck` default (T30/T83 DI swap). Pipeline sözleşmesi `SteamAuthenticationPipelineTests` ile doğrulanır. |
+| 8 | Sanctions eşleşmesi kontrolü | ✓ (stub) | `ISanctionsCheck` pipeline hook çağrılır; `NoMatchSanctionsCheck` default (T82 DI swap). |
+| 9 | Hesap askıya alınmış mı kontrolü | ✓ | `IsDeactivated=true` → `AccountBanned` outcome → `?error=account_banned`, refresh cookie yok. `Callback_DeactivatedUser_*` test PASS. "Suspended read-only session" kısıtlı oturum semantiği (JWT ile kısıtlı claim) — T30/T32 scope'u. |
+
+### Doğrulama Kontrol Listesi (11 plan'dan)
+- [x] 08 §2.1 güvenlik kuralları uygulanmış mı? → assertion + return_to mismatch + claimed_id + HTTPS karşılanır; replay Steam side'a delege (kabul)
+- [x] 03 §2.1 akış adımları karşılanmış mı? → redirect → callback → geo/sanctions/suspend hook + provisioning + token + audit
+- [x] 07 §4.2–§4.3 endpoint sözleşmesi eşleşiyor mu? → 302 redirect, returnUrl sanitize, cookie contract (`HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`) eşleşir
+
+### Test Sonuçları (Validator Tekrar Çalıştırma)
+| Tür | Sonuç | Komut | Süre |
+|---|---|---|---|
+| Unit — Skinora.Auth.Tests | ✓ 32/32 | `dotnet test tests/Skinora.Auth.Tests/Skinora.Auth.Tests.csproj` | 228 ms |
+| Integration — AuthSteamEndpointTests | ✓ 6/6 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~AuthSteamEndpointTests"` | 2 s |
+| Build (Release) | ✓ 0 Warning / 0 Error | `dotnet build -c Release` | 9.88 s |
+
+### Güvenlik Kontrolü
+- [x] Secret sızıntısı: **Temiz** — `WebApiKey` `x-webapi-key` header'dan (URL değil), `JwtSettings.Secret` `IOptions` üzerinden, log'larda yok.
+- [x] Auth etkisi: Yeni auth akışı eklendi — rate limit `[RateLimit("auth")]` uygulanır, `[AllowAnonymous]` yalnızca `/auth/steam` + `/auth/steam/callback`.
+- [x] Input validation: `returnUrl` sanitizer, `claimed_id` prefix + 17 haneli SteamID64 regex, `openid.return_to` strict eşleşme, UA/IP truncate (45/256).
+- [x] Yeni bağımlılık: `Microsoft.EntityFrameworkCore` 9.0.3, `Microsoft.IdentityModel.Tokens` 8.0.1, `System.IdentityModel.Tokens.Jwt` 8.0.1 — solution'daki diğer projelerle versiyon hizalı.
+- [✗] **DB secret at-rest:** Refresh token plain text saklanıyor — 06 §3.3 ihlali (aşağıda S1).
+
+### Bulgular
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | **S1 Sapma** | `RefreshTokenGenerator.IssueAsync` refresh token'ı plain text olarak DB'ye yazıyor (`Token = plainText`, satır 35). **06 §3.3 L441** açıkça diyor: *"`Token` \| string(256) \| UNIQUE, NOT NULL \| Refresh token'ın SHA-256 hash'i — plain text saklanmaz, DB breach'e karşı koruma"*. Beklenen: plain text cookie'ye (client round-trip), `SHA256(plainText)` → DB `Token` kolonu. Ayrıca `GeneratedRefreshToken.PlainTextToken` ile entity aynı string'i taşıyor (`RefreshTokenGenerator.cs:45` `new GeneratedRefreshToken(entity, plainText, ...)`). **Güvenlik etkisi:** DB breach senaryosunda aktif refresh token'lar plain text olduğu için hemen oturum çalmaya kullanılabilir; SHA-256 hash saklanırsa attacker cookie'yi türetemez. **Testler yakalamadı** çünkü `AuthSteamEndpointTests` yalnız `Assert.Single(...)` ile satır sayısını doğruluyor, DB token içeriğini cookie ile karşılaştırmıyor. **Düzeltme:** (1) `IssueAsync` içinde `Token = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainText)))` (veya Base64url) yap; (2) refresh path'inde (T32) incoming cookie `SHA256` ile hash'lenip `RefreshTokens.Token` kolonunda arat; (3) test: DB'deki `Token`'ın cookie ile eşit OLMADIĞINI ve `SHA256(cookie) == Token` olduğunu assert et. | `backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/RefreshTokenGenerator.cs:35, 45`; `backend/tests/Skinora.API.Tests/Integration/AuthSteamEndpointTests.cs:93` (test eksikliği) |
+
+### Yapım Raporu Karşılaştırması
+- Yapım raporu kabul kriterleri #2 ve #3'ü ✓ olarak işaretlemiş, ama #2 "JWT + refresh token üretimi" kısmında 06 §3.3 spec ihlali var.
+- Yapım raporu "Güvenlik" başlığı altında bu kuralı denetlemedi; at-rest hashing standardı Shared/sözleşme literatüründe değil yalnız 06 §3.3 data model'inde belirtilmiş — yapım chat'i entity spec'ini ayrıntılı okumamış olabilir.
+- Stub'lar (geo/sanctions) ve #4/#9 partial'ları kapsam ayrımı olarak kabul edilebilir (plan T30/T82/T83 bunları devralıyor, arayüz sabit) — bunlar bulgu değil.
+
+### Verdict: ✗ FAIL
+
+**Merge engellendi.** Yeni yapım chat'inde S1 bulgusu düzeltilecek, ardından yeni doğrulama chat'i açılacak.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok — User/RefreshToken/UserLoginLog T18'de mevcut, şema değişmedi.
