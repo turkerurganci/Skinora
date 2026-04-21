@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm init:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:steamcommunity.com)",
+      "WebSearch"
     ]
   },
   "hooks": {

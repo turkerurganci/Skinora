@@ -69,6 +69,9 @@ builder.Services.AddAntiforgery(options =>
 // Authentication & Authorization (T06)
 builder.Services.AddAuthModule(builder.Configuration);
 
+// Steam OpenID authentication services (T29)
+builder.Services.AddSteamAuthenticationModule(builder.Configuration);
+
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
 

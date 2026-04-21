@@ -37,3 +37,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-04-20 19:37 UTC | Türker urgancı | task/T28-initial-migration | `6d536d6` | [ci-failure] T28 fix for known pending-model-changes CI failure in prior run 24686011102 |
 | 2026-04-20 20:13 UTC | Türker urgancı | main | `a4b9578` | [direct-push] T28 validator finalize — post-squash hash reference update (3f6ba9a), T20/T26 pattern: cosmetic 1-line status drift fix |
 | 2026-04-20 20:14 UTC | Türker urgancı | main | `8cb3d9e` | [direct-push] T28 validator finalize — BYPASS_LOG commit (hook auto-add kapanisi) |
+| 2026-04-21 18:41 UTC | Türker urgancı | task/T29-steam-openid-auth | `f99d565` | [ci-failure] T29 S1 fix push sonrasi CI run 24739083342 FAIL (test infra flakiness — EF model cache); commit f99d565 TestAssemblyModuleInitializer ile root cause fix'leniyor, Layer 2 bypass |
