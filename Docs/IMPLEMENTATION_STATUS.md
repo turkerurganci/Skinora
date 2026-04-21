@@ -77,7 +77,7 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T29 | Steam OpenID authentication (login + callback + token üretimi) | ⬚ Bekliyor | — | — |
+| T29 | Steam OpenID authentication (login + callback + token üretimi) | ⏳ Devam ediyor | — | — |
 | T30 | ToS kabul, yaş gate, geo-block | ⬚ Bekliyor | — | — |
 | T31 | Steam re-verify ve authenticator kontrolü | ⬚ Bekliyor | — | — |
 | T32 | Refresh token yönetimi | ⬚ Bekliyor | — | — |
