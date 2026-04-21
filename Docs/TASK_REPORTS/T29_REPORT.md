@@ -70,9 +70,9 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 
 ## Commit & PR
 - Branch: `task/T29-steam-openid-auth`
-- Commit: (beklemede — bu raporla birlikte push'lanacak)
-- PR: (push sonrası `gh pr create`)
-- CI: (run'lar izlenecek)
+- Commit: `62ffead`
+- PR: [#46](https://github.com/turkerurganci/Skinora/pull/46)
+- CI: (run izleniyor)
 
 ## Known Limitations / Follow-up
 - `IGeoBlockCheck` + `ISanctionsCheck` şu an no-op — T30/T82/T83 gerçek implementasyonu DI'da swap edecek (arayüz sabitlendi).
