@@ -1,6 +1,6 @@
 # T30 — ToS kabul, yaş gate, geo-block
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-04-21
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-21
 
 ---
 
@@ -82,9 +82,53 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Beklemede (validate chat'i açılacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (2026-04-21) |
+| Verdict bağımsızlığı | Raporu okumadan Faz 1-2 tamamlandı, Faz 3'te karşılaştırıldı — uyuşmazlık yok |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+### Ön Kontroller
+
+| Adım | Durum | Kanıt |
+|---|---|---|
+| -1. Working tree hygiene | ✓ Temiz | `git status --short` boş |
+| 0. Main CI startup | ✓ PASS | Son 3 main run: `24742526589`, `24742526586`, `24742125980` hepsi `success` |
+| 0b. Repo memory drift | ✓ Güncel | `.claude/memory/MEMORY.md` satır 11, 22, 23 T30 referansları mevcut |
+
+### Kabul Kriterleri (bağımsız verdict)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | POST /auth/tos/accept → ToS versiyonu kaydedilir | ✓ | `AuthController.AcceptTos` (+145) → `TosAcceptanceService` `TosAcceptedVersion` + `TosAcceptedAt` + `AgeConfirmedAt` atomik set. 07 §4.4 sözleşmesi uyumlu: request `{tosVersion, ageOver18}`, response `{accepted, acceptedAt}`, 409 `TOS_ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 401 unauthenticated. 10 test PASS (4 TosAcceptEndpoint + 6 TosAcceptanceService) |
+| 2 | Yaş gate: 18+ beyanı + Steam hesap yaşı | ✓ | 18+ beyanı: `TosAcceptanceService` `ageOver18=false` → `ValidationException`. Steam account age: `SettingsBasedAgeGateCheck` `auth.min_steam_account_age_days` (default 30) altındaki hesapları `AgeBlocked` → controller `?error=age_blocked` redirect. Pipeline sırası (geo→sanctions→profile→age→provisioning) doğru. 7 test PASS (5 SettingsBasedAgeGateCheck + 1 Pipeline.AgeGateBlocked + 1 AuthSteam.FreshSteamAccount) |
+| 3 | Geo-block: IP bazlı + admin-yönetimli yasaklı ülke listesi | ✓ | `SettingsBasedGeoBlockCheck` + `auth.banned_countries` SystemSetting CSV; `NONE` marker + case-insensitive + trim. `ICountryResolver`/`HeaderCountryResolver` abstraction. Admin yönetimi: SystemSetting güncelle → anında etkili. 13 test PASS (6 SettingsBasedGeoBlockCheck + 6 HeaderCountryResolver + 1 AuthSteam.GeoBlockedCountry) |
+| 4 | VPN/proxy tespiti destekleyici sinyal (tek başına engelleme değil) | ✓ | 11_IMPLEMENTATION_PLAN T83 (Geo-block servisi) bağımlılığı T30'dan devralıyor ve aynı kriteri tekrar listeliyor — kapsam ayrımı doküman-destekli. T30 mekanizma + stub resolver verir, T83 MaxMind/ipinfo + VPN heuristics ekleyecek. Şu an VPN detection yok → "tek başına engelleme sebebi" oluşamaz (negatif gereklilik karşılanıyor). Rapor bunu `~` olarak işaretlemişti; validator `✓` olarak düzeltti — scope designed deferral, finding değil |
+
+### Doğrulama Kontrol Listesi
+
+- [x] 07 §4.4 ToS endpoint sözleşmesi doğru mu? — Request/response/hata kodları birebir eşleşiyor
+- [x] 02 §21.1 erişim kuralları eksiksiz mi? — Geo-block + yaş kısıtı `auth.min_steam_account_age_days` satırı güncel, sanctions (T82 stub) + VPN (T83 devri) kapsamlar doküman-uyumlu
+
+### Test Sonuçları
+
+| Tür | Sonuç | Komut | Kanıt |
+|---|---|---|---|
+| Build (Release) | ✓ 0W/0E | `dotnet build --configuration Release` | Lokal 2026-04-21 — 13.98s, tüm modüller |
+| Unit (Auth) | ✓ 13/13 | `dotnet test tests/Skinora.Auth.Tests --filter "HeaderCountryResolverTests\|SteamAuthenticationPipelineTests"` | Lokal 2026-04-21 — 393 ms |
+| Integration + Unit (CI) | ✓ 10/10 job | CI run [24745062009](https://github.com/turkerurganci/Skinora/actions/runs/24745062009) | Lint + Build + Unit 3× + Contract + Integration + Migration dry-run + Docker build + CI Gate hepsi success |
+| Task branch CI | ✓ | `gh run list --branch task/T30-tos-age-geoblock` | Son 3 run success (`24745435990`, `24745062009`, `24744715105`) |
+
+### Güvenlik Kontrolü
+
+- [x] Secret sızıntısı: Temiz — `WebApiKey` IOptions pattern, no hardcoded secret
+- [x] Auth etkisi: `[Authorize(Policy = AuthPolicies.Authenticated)]` ToS endpoint için mevcut; pipeline ordering geo-block/age gate provisioning öncesi (kullanıcı yaratılmaz)
+- [x] Input validation: Temiz — `tosVersion` length (20 max) + whitespace, `ageOver18=true` zorunlu, CSV parse güvenli (2-char filter + trim), country header multi-value first-value + length check
+- [x] Yeni bağımlılıklar: `FluentValidation` 11.11.0 (Auth modülü, API zaten kullanıyor), `Microsoft.Extensions.TimeProvider.Testing` 9.0.0 (Microsoft resmi test paketi) — ikisi de kabul edilebilir
+
+### Yapım Raporu Karşılaştırması
+
+- **Uyum:** Tam uyumlu, uyuşmazlık yok.
+- **Tek ayar:** Rapor K4'ü `~` vermişti; validator scope ayrımı (T30/T83) 11_IMPLEMENTATION_PLAN.md § T83 ile doküman-destekli olduğundan `✓`e çıkardı. Yapım chat'i scope gap'i notes'da proje sahibi onayıyla kayıt altına almış (notlar §3).
 
 ## Altyapı Değişiklikleri
 
