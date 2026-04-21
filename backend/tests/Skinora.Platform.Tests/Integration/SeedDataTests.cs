@@ -10,8 +10,9 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
-/// Integration tests for the T26 EF Core seed contract (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 28 SystemSetting rows.
+/// Integration tests for the T26 + T30 EF Core seed contracts (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 30 SystemSetting rows
+/// (28 T26 platform parameters + 2 T30 access-control settings).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -50,18 +51,20 @@ public class SeedDataTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task Seed_SystemSettings_Has_28_Rows_With_Unique_Keys()
+    public async Task Seed_SystemSettings_Has_30_Rows_With_Unique_Keys()
     {
+        // 28 T26 platform parameters + 2 T30 access-control settings.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(28, rows.Count);
-        Assert.Equal(28, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(30, rows.Count);
+        Assert.Equal(30, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17: eight rows ship with a documented default.
+        // 06 §3.17 + 02 §21.1: 10 rows ship with a documented default
+        // (8 T26 defaults + 2 T30 access-control settings).
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -69,6 +72,8 @@ public class SeedDataTests : IntegrationTestBase
 
         var expectedConfiguredKeys = new[]
         {
+            "auth.banned_countries",
+            "auth.min_steam_account_age_days",
             "commission_rate",
             "gas_fee_protection_ratio",
             "min_refund_threshold_ratio",

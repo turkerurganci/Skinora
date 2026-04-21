@@ -25,17 +25,43 @@ public class SettingsBasedAgeGateCheckTests : IntegrationTestBase
 
     private async Task SetThresholdAsync(int days)
     {
-        var setting = new SystemSetting
+        // The T30 migration seeds auth.min_steam_account_age_days = 30 on DB
+        // creation. Tests update the existing row rather than insert (unique
+        // Key constraint would reject a duplicate insert).
+        var existing = await Context.Set<SystemSetting>()
+            .SingleOrDefaultAsync(s => s.Key == SettingsBasedAgeGateCheck.SettingKey);
+
+        if (existing is null)
         {
-            Id = Guid.NewGuid(),
-            Key = SettingsBasedAgeGateCheck.SettingKey,
-            Value = days.ToString(),
-            IsConfigured = true,
-            DataType = "int",
-            Category = "AccessControl",
-            Description = "test",
-        };
-        Context.Set<SystemSetting>().Add(setting);
+            Context.Set<SystemSetting>().Add(new SystemSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = SettingsBasedAgeGateCheck.SettingKey,
+                Value = days.ToString(),
+                IsConfigured = true,
+                DataType = "int",
+                Category = "AccessControl",
+                Description = "test",
+            });
+        }
+        else
+        {
+            existing.Value = days.ToString();
+            existing.IsConfigured = true;
+        }
+
+        await Context.SaveChangesAsync();
+    }
+
+    private async Task ClearThresholdAsync()
+    {
+        var existing = await Context.Set<SystemSetting>()
+            .SingleOrDefaultAsync(s => s.Key == SettingsBasedAgeGateCheck.SettingKey);
+        if (existing is null) return;
+
+        // Mark unconfigured so the check's IsConfigured predicate filters it out.
+        existing.Value = null;
+        existing.IsConfigured = false;
         await Context.SaveChangesAsync();
     }
 
@@ -92,7 +118,9 @@ public class SettingsBasedAgeGateCheckTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task EvaluateAsync_SettingMissing_ReturnsAllowed()
     {
-        // No SystemSetting row inserted.
+        // Setting exists but is marked IsConfigured = false → the check's
+        // predicate filters it out and thresholdDays falls back to 0.
+        await ClearThresholdAsync();
         var created = _clock.GetUtcNow().UtcDateTime.AddDays(-1);
 
         var decision = await CreateSut().EvaluateAsync(created, default);

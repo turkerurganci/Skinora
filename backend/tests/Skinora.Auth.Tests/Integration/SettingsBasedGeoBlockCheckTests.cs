@@ -25,17 +25,30 @@ public class SettingsBasedGeoBlockCheckTests : IntegrationTestBase
 
     private async Task SetBannedAsync(string value)
     {
-        var setting = new SystemSetting
+        // The T30 migration seeds auth.banned_countries = "NONE" on DB
+        // creation. Tests update the existing row rather than insert.
+        var existing = await Context.Set<SystemSetting>()
+            .SingleOrDefaultAsync(s => s.Key == SettingsBasedGeoBlockCheck.SettingKey);
+
+        if (existing is null)
         {
-            Id = Guid.NewGuid(),
-            Key = SettingsBasedGeoBlockCheck.SettingKey,
-            Value = value,
-            IsConfigured = true,
-            DataType = "string",
-            Category = "AccessControl",
-            Description = "test",
-        };
-        Context.Set<SystemSetting>().Add(setting);
+            Context.Set<SystemSetting>().Add(new SystemSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = SettingsBasedGeoBlockCheck.SettingKey,
+                Value = value,
+                IsConfigured = true,
+                DataType = "string",
+                Category = "AccessControl",
+                Description = "test",
+            });
+        }
+        else
+        {
+            existing.Value = value;
+            existing.IsConfigured = true;
+        }
+
         await Context.SaveChangesAsync();
     }
 
