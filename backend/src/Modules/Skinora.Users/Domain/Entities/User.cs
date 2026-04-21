@@ -25,6 +25,9 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
     public string? TosAcceptedVersion { get; set; }
     public DateTime? TosAcceptedAt { get; set; }
 
+    // --- Age gate (18+ self-attestation — 02 §21.1, 03 §11a.2) ---
+    public DateTime? AgeConfirmedAt { get; set; }
+
     // --- Steam verification ---
     public bool MobileAuthenticatorVerified { get; set; }
 

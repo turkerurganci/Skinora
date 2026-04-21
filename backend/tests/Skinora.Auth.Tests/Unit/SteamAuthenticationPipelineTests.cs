@@ -19,14 +19,19 @@ public class SteamAuthenticationPipelineTests
     private readonly Mock<ILoginAuditService> _audit = new();
     private readonly Mock<IGeoBlockCheck> _geo = new();
     private readonly Mock<ISanctionsCheck> _sanctions = new();
+    private readonly Mock<IAgeGateCheck> _ageGate = new();
 
     private readonly ILogger<SteamAuthenticationPipeline> _logger =
         NullLogger<SteamAuthenticationPipeline>.Instance;
 
-    private SteamAuthenticationPipeline BuildPipeline() =>
-        new(_validator.Object, _profile.Object, _provisioning.Object,
+    private SteamAuthenticationPipeline BuildPipeline()
+    {
+        _ageGate.Setup(a => a.EvaluateAsync(It.IsAny<DateTime?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgeGateDecision.Allowed());
+        return new(_validator.Object, _profile.Object, _provisioning.Object,
             _access.Object, _refresh.Object, _audit.Object,
-            _geo.Object, _sanctions.Object, _logger);
+            _geo.Object, _sanctions.Object, _ageGate.Object, _logger);
+    }
 
     private static Dictionary<string, string> ValidCallback() => new()
     {
@@ -82,6 +87,36 @@ public class SteamAuthenticationPipelineTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_AgeGateBlocked_ReturnsAgeBlockedAndSkipsProvisioning()
+    {
+        StubValidAssertion();
+        _geo.Setup(g => g.EvaluateAsync(It.IsAny<string?>(), default))
+            .ReturnsAsync(GeoBlockDecision.Allowed());
+        _sanctions.Setup(s => s.EvaluateAsync(SteamId, default))
+            .ReturnsAsync(SanctionsDecision.NoMatch());
+
+        var youngCreated = DateTime.UtcNow.AddDays(-5);
+        _profile.Setup(p => p.GetPlayerSummaryAsync(SteamId, default))
+            .ReturnsAsync(new SteamPlayerSummary(SteamId, "Persona", null, youngCreated));
+
+        _ageGate.Setup(a => a.EvaluateAsync(youngCreated, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(AgeGateDecision.Blocked(accountAgeDays: 5, requiredDays: 30));
+
+        var result = await new SteamAuthenticationPipeline(
+            _validator.Object, _profile.Object, _provisioning.Object,
+            _access.Object, _refresh.Object, _audit.Object,
+            _geo.Object, _sanctions.Object, _ageGate.Object, _logger)
+            .ExecuteAsync(ValidCallback(), null, null, default);
+
+        var blocked = Assert.IsType<AuthenticationOutcome.AgeBlocked>(result);
+        Assert.Equal(5, blocked.AccountAgeDays);
+        Assert.Equal(30, blocked.RequiredDays);
+        _provisioning.Verify(p => p.UpsertFromSteamLoginAsync(
+            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_DeactivatedUser_ReturnsAccountBannedAndSkipsTokenIssuance()
     {
         StubValidAssertion();
@@ -124,7 +159,7 @@ public class SteamAuthenticationPipelineTests
         _sanctions.Setup(s => s.EvaluateAsync(SteamId, default))
             .ReturnsAsync(SanctionsDecision.NoMatch());
 
-        var profile = new SteamPlayerSummary(SteamId, "Persona", "avatar-url");
+        var profile = new SteamPlayerSummary(SteamId, "Persona", "avatar-url", null);
         _profile.Setup(p => p.GetPlayerSummaryAsync(SteamId, default))
             .ReturnsAsync(profile);
 

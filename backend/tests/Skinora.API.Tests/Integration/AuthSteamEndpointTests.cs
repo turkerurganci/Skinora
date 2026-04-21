@@ -126,7 +126,7 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         _factory.ValidatorFake.SteamIdToReturn = SteamId;
         _factory.ValidatorFake.IsValid = true;
         _factory.ProfileFake.SummaryToReturn =
-            new SteamPlayerSummary(SteamId, "NewName", "https://cdn.steam/avatar.jpg");
+            new SteamPlayerSummary(SteamId, "NewName", "https://cdn.steam/avatar.jpg", null);
 
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
         var response = await SendCallbackAsync(client);
@@ -156,6 +156,78 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.False(await db.Set<User>().AnyAsync());
         Assert.False(await db.Set<RefreshToken>().AnyAsync());
+    }
+
+    [Fact]
+    public async Task Callback_GeoBlockedCountry_RedirectsWithGeoBlocked()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<Skinora.Platform.Domain.Entities.SystemSetting>().Add(
+                new Skinora.Platform.Domain.Entities.SystemSetting
+                {
+                    Id = Guid.NewGuid(),
+                    Key = "auth.banned_countries",
+                    Value = "IR",
+                    IsConfigured = true,
+                    DataType = "string",
+                    Category = "AccessControl",
+                    Description = "test",
+                });
+            await db.SaveChangesAsync();
+        }
+
+        _factory.ValidatorFake.SteamIdToReturn = SteamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        var request = new HttpRequestMessage(HttpMethod.Get, BuildCallbackUrl());
+        request.Headers.Add("X-Country-Code", "IR");
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("error=geo_blocked", response.Headers.Location!.ToString());
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await verifyDb.Set<User>().AnyAsync(u => u.SteamId == SteamId));
+    }
+
+    [Fact]
+    public async Task Callback_FreshSteamAccount_AgeBlocked_RedirectsWithAgeBlocked()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<Skinora.Platform.Domain.Entities.SystemSetting>().Add(
+                new Skinora.Platform.Domain.Entities.SystemSetting
+                {
+                    Id = Guid.NewGuid(),
+                    Key = "auth.min_steam_account_age_days",
+                    Value = "30",
+                    IsConfigured = true,
+                    DataType = "int",
+                    Category = "AccessControl",
+                    Description = "test",
+                });
+            await db.SaveChangesAsync();
+        }
+
+        _factory.ValidatorFake.SteamIdToReturn = SteamId;
+        _factory.ValidatorFake.IsValid = true;
+        _factory.ProfileFake.SummaryToReturn = new SteamPlayerSummary(
+            SteamId, "FreshUser", null, DateTime.UtcNow.AddDays(-5));
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        var response = await SendCallbackAsync(client);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("error=age_blocked", response.Headers.Location!.ToString());
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.False(await verifyDb.Set<User>().AnyAsync(u => u.SteamId == SteamId));
     }
 
     [Fact]
@@ -195,12 +267,17 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
 
     private static Task<HttpResponseMessage> SendCallbackAsync(HttpClient client)
     {
+        return client.GetAsync(BuildCallbackUrl());
+    }
+
+    private static string BuildCallbackUrl()
+    {
         var qs = "openid.mode=id_res" +
                  $"&openid.claimed_id={Uri.EscapeDataString(ClaimedId)}" +
                  $"&openid.identity={Uri.EscapeDataString(ClaimedId)}" +
                  "&openid.assoc_handle=1234567890" +
                  "&openid.sig=abcdef";
-        return client.GetAsync($"/api/v1/auth/steam/callback?{qs}");
+        return $"/api/v1/auth/steam/callback?{qs}";
     }
 
     public sealed class FakeSteamOpenIdValidator : ISteamOpenIdValidator
@@ -260,6 +337,8 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             db.Set<RefreshToken>().RemoveRange(db.Set<RefreshToken>());
             db.Set<UserLoginLog>().RemoveRange(db.Set<UserLoginLog>());
             db.Set<User>().RemoveRange(db.Set<User>());
+            db.Set<Skinora.Platform.Domain.Entities.SystemSetting>().RemoveRange(
+                db.Set<Skinora.Platform.Domain.Entities.SystemSetting>());
             db.SaveChanges();
         }
 

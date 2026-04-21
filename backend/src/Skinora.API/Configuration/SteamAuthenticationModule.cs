@@ -1,10 +1,12 @@
 using Skinora.Auth.Application.SteamAuthentication;
+using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
 
 namespace Skinora.API.Configuration;
 
 /// <summary>
-/// DI registration for T29 — Steam OpenID authentication services.
+/// DI registration for T29/T30 — Steam OpenID authentication, access control
+/// pipeline (geo-block, age gate, sanctions), and ToS acceptance.
 /// </summary>
 public static class SteamAuthenticationModule
 {
@@ -30,18 +32,35 @@ public static class SteamAuthenticationModule
         });
 
         services.AddSingleton<IReturnUrlValidator>(new ReturnUrlValidator(settings.DefaultReturnPath));
+        services.TryAddSingletonTimeProvider();
 
         services.AddScoped<IAccessTokenGenerator, AccessTokenGenerator>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
         services.AddScoped<ILoginAuditService, LoginAuditService>();
 
-        // Stub hooks — T30/T82/T83 replace with real implementations.
-        services.AddSingleton<IGeoBlockCheck, AllowAllGeoBlockCheck>();
+        // T30 — Access control pipeline: geo-block (SystemSetting-backed) +
+        // age gate (Steam account-age threshold). HTTP context access is
+        // required by HeaderCountryResolver.
+        services.AddHttpContextAccessor();
+        services.AddSingleton<ICountryResolver, HeaderCountryResolver>();
+        services.AddScoped<IGeoBlockCheck, SettingsBasedGeoBlockCheck>();
+        services.AddScoped<IAgeGateCheck, SettingsBasedAgeGateCheck>();
+
+        // Stub hook — T82 replaces with real sanctions integration.
         services.AddSingleton<ISanctionsCheck, NoMatchSanctionsCheck>();
 
         services.AddScoped<ISteamAuthenticationPipeline, SteamAuthenticationPipeline>();
 
+        // T30 — ToS acceptance + 18+ self-attestation (07 §4.4).
+        services.AddScoped<ITosAcceptanceService, TosAcceptanceService>();
+
         return services;
+    }
+
+    private static void TryAddSingletonTimeProvider(this IServiceCollection services)
+    {
+        if (!services.Any(d => d.ServiceType == typeof(TimeProvider)))
+            services.AddSingleton(TimeProvider.System);
     }
 }

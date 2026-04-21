@@ -18,4 +18,5 @@ public interface ISteamProfileClient
 public sealed record SteamPlayerSummary(
     string SteamId,
     string PersonaName,
-    string? AvatarFull);
+    string? AvatarFull,
+    DateTime? AccountCreatedAt);

@@ -57,6 +57,9 @@ public static class SystemSettingSeed
         Default     (26, "min_refund_threshold_ratio",                  "decimal", "Monitoring",  "2.0",   "Minimum iade eşiği — iade < gas fee × bu oran ise iade yapılmaz"),
         Default     (27, "open_link_enabled",                           "bool",    "Feature",     "false", "Açık link yöntemi aktif mi"),
         Unconfigured(28, "hot_wallet_limit",                            "decimal", "Wallet",      "Hot wallet maksimum bakiye limiti — aşıldığında admin alert (05 §3.3)"),
+        // --- T30: Access control settings (02 §21.1, 03 §11a.1, §11a.2) ---
+        Default     (29, "auth.banned_countries",                       "string",  "AccessControl", "NONE", "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV (örn: 'IR,KP,CU'); 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir."),
+        Default     (30, "auth.min_steam_account_age_days",             "int",     "AccessControl", "30",   "Steam hesap minimum yaş eşiği (gün) — burner/fake hesap caydırıcı. Hesap yaşı bu değerden az ise giriş engellenir (02 §21.1, 03 §11a.2)."),
     ];
 
     private static SystemSetting Unconfigured(

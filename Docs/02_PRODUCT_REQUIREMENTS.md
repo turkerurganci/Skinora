@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v2.4** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-03-22
+**Versiyon: v2.5** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-04-21
 
 ---
 
@@ -477,7 +477,7 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 |---|---|
 | Yasaklı bölgeler | OFAC/AB/BM yaptırım listesindeki ülkelerden erişim engellenir (geo-block). Yasaklı ülke listesi admin tarafından yönetilir ve güncellenebilir |
 | Geo-block mekanizması | IP bazlı coğrafi engelleme uygulanır. Engellenen kullanıcıya bilgilendirme sayfası gösterilir |
-| Yaş kısıtı | Platform kullanımı için minimum 18 yaş gereklidir. MVP'de Steam hesap yaşı ve kullanıcının kendi beyanı ile kontrol edilir |
+| Yaş kısıtı | Platform kullanımı için minimum 18 yaş gereklidir. MVP'de Steam hesap yaşı ve kullanıcının kendi beyanı ile kontrol edilir. Steam hesap yaşı minimum eşiği admin tarafından `auth.min_steam_account_age_days` SystemSetting (default 30 gün) üzerinden yönetilir — burner/fake hesap caydırıcısı, gerçek yaş doğrulaması değildir |
 | Sanctions screening | MVP'de cüzdan adresi bazlı temel tarama uygulanır — bilinen yaptırımlı adreslerle eşleşen adresler engellenir. Eşleşme tespit edildiğinde: yeni işlem/adres kaydı engellenir, hesap flag'lenir, kullanıcının tüm aktif işlemlerine otomatik EMERGENCY_HOLD uygulanır (§7). Tarama listesi admin tarafından güncellenebilir |
 | VPN/proxy tespiti | MVP'de destekleyici sinyal olarak kullanılır — tek başına engelleme sebebi değil, diğer risk sinyalleriyle birlikte değerlendirilir |
 
@@ -499,4 +499,4 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 
 ---
 
-*Skinora — Product Requirements v2.4*
+*Skinora — Product Requirements v2.5*

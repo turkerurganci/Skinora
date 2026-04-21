@@ -68,6 +68,15 @@ public sealed class SteamProfileClient : ISteamProfileClient
         if (steamId is null || persona is null)
             return null;
 
-        return new SteamPlayerSummary(steamId, persona, avatar);
+        DateTime? createdAt = null;
+        if (first.TryGetProperty("timecreated", out var tc) &&
+            tc.ValueKind == JsonValueKind.Number &&
+            tc.TryGetInt64(out var epochSeconds) &&
+            epochSeconds > 0)
+        {
+            createdAt = DateTimeOffset.FromUnixTimeSeconds(epochSeconds).UtcDateTime;
+        }
+
+        return new SteamPlayerSummary(steamId, persona, avatar, createdAt);
     }
 }
