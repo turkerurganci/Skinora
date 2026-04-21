@@ -131,6 +131,8 @@ Build: `dotnet build Skinora.sln` → 0 Warning, 0 Error.
 - **Düzeltme:** [`backend/tests/Skinora.API.Tests/TestAssemblyModuleInitializer.cs`](../../backend/tests/Skinora.API.Tests/TestAssemblyModuleInitializer.cs) yeni dosya — `[ModuleInitializer]` ile assembly yüklemesi sırasında (herhangi bir test sınıfı instantiate edilmeden önce) 10 modül `Register*Module()` çağrısı yapılır. Böylece `_moduleAssemblies` listesi **her zaman** tam, ilk `AppDbContext` hangi test tarafından yaratılırsa yaratılsın cache'lenen model eksik kalmaz. Üretim kodu (Skinora.API/Program.cs) etkilenmez; yalnızca test assembly'sinin yükleme sırası deterministikleştirilir.
 - **Not:** Bu latent flakiness T29'un hatası değil — model cache semantiği entity modülleri eklendiği günden beri olası idi; xUnit discovery/collection sıralamasının şansına bağlı olarak T29'a kadar maskelenmişti. F1 Gate Check (PR #44) bu şansın bir diğer örneği.
 - **Doğrulama:** Release build 0W/0E; `Skinora.API.Tests` tam koşu 105/105 ✓ (3:08); yeni `TestAssemblyModuleInitializer` assembly load'da sessiz çalışır (test/log çıktısı değişmez).
+- **CI:** Run `24740092503` @ `3583c17` ✓ PASS (Integration test 3m31s + CI Gate).
+- **BYPASS_LOG:** T11.2 Layer 2 (ci-failure) 1× entry — `f99d565` push (fix'i içeren commit) pre-push hook tarafından engellendi, `SKINORA_ALLOW_DIRECT_PUSH=1` + reason ile geçildi. Entry hook tarafından otomatik yazıldı, commit `3583c17`.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok — User/RefreshToken/UserLoginLog T18'de mevcut, şema değişmedi.
