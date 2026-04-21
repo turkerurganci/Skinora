@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v2.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-22
+**Versiyon: v2.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-04-21
 
 ---
 
@@ -374,7 +374,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 
 ### 4.4 A3 — `POST /auth/tos/accept`
 
-**Amaç:** Terms of Service kabul (ilk kayıt).
+**Amaç:** Terms of Service kabul + 18+ yaş beyanı (ilk kayıt). Tek adımda ToS kabul ve soft yaş gate self-attestation (02 §21.1, 03 §11a.2).
 
 | Konu | Değer |
 |------|-------|
@@ -382,15 +382,20 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 
 **Request:**
 ```json
-{ "tosVersion": "1.0" }
+{ "tosVersion": "1.0", "ageOver18": true }
 ```
+
+| Field | Açıklama |
+|-------|----------|
+| `tosVersion` | Kabul edilen ToS versiyonu (maks. 20 karakter) |
+| `ageOver18` | 18+ yaş self-attestation — `false` veya eksik ise 400 |
 
 **Response (200) `data`:**
 ```json
 { "accepted": true, "acceptedAt": "2026-03-16T14:32:00Z" }
 ```
 
-**Hatalar:** 409 `TOS_ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`
+**Hatalar:** 409 `TOS_ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR` (ageOver18 false/eksik veya tosVersion eksik)
 
 ### 4.5 A4 — `GET /auth/me`
 
@@ -2289,4 +2294,4 @@ Traceability matrix oluşturulurken tespit edilen ve çözülen GAP'ler:
 
 ---
 
-*Skinora — API Design v2.1*
+*Skinora — API Design v2.2*

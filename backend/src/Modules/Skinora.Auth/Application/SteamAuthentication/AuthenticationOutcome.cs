@@ -23,4 +23,6 @@ public abstract record AuthenticationOutcome
     public sealed record GeoBlocked(string? CountryCode) : AuthenticationOutcome;
 
     public sealed record SanctionsMatch(string? List) : AuthenticationOutcome;
+
+    public sealed record AgeBlocked(int AccountAgeDays, int RequiredDays) : AuthenticationOutcome;
 }

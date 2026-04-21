@@ -1,15 +1,17 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.SteamAuthentication;
+using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
 
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// Steam OpenID authentication endpoints — 07 §4.2, §4.3 (A1, A2).
-/// Refresh / me / logout arrive with T32, ToS with T30, re-verify with T31.
+/// Steam OpenID authentication + ToS endpoints — 07 §4.2–§4.4 (A1, A2, A3).
+/// Refresh / me / logout arrive with T32, re-verify with T31.
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
@@ -23,15 +25,18 @@ public sealed class AuthController : ControllerBase
     private readonly SteamOpenIdSettings _settings;
     private readonly IReturnUrlValidator _returnUrlValidator;
     private readonly ISteamAuthenticationPipeline _pipeline;
+    private readonly ITosAcceptanceService _tosAcceptance;
 
     public AuthController(
         IOptions<SteamOpenIdSettings> settings,
         IReturnUrlValidator returnUrlValidator,
-        ISteamAuthenticationPipeline pipeline)
+        ISteamAuthenticationPipeline pipeline,
+        ITosAcceptanceService tosAcceptance)
     {
         _settings = settings.Value;
         _returnUrlValidator = returnUrlValidator;
         _pipeline = pipeline;
+        _tosAcceptance = tosAcceptance;
     }
 
     /// <summary>A1 — <c>GET /auth/steam</c>. Redirects to Steam OpenID.</summary>
@@ -85,6 +90,7 @@ public sealed class AuthController : ControllerBase
             AuthenticationOutcome.AccountBanned => Redirect(BuildFrontendUrl("error", "account_banned", null)),
             AuthenticationOutcome.GeoBlocked => Redirect(BuildFrontendUrl("error", "geo_blocked", null)),
             AuthenticationOutcome.SanctionsMatch => Redirect(BuildFrontendUrl("error", "sanctions_match", null)),
+            AuthenticationOutcome.AgeBlocked => Redirect(BuildFrontendUrl("error", "age_blocked", null)),
             _ => Redirect(BuildFrontendUrl("error", "auth_failed", null)),
         };
     }
@@ -105,6 +111,25 @@ public sealed class AuthController : ControllerBase
         return Redirect(BuildFrontendUrl("status", status, returnUrl));
     }
 
+    /// <summary>A3 — <c>POST /auth/tos/accept</c>. Captures ToS acceptance and 18+ self-attestation.</summary>
+    [HttpPost("tos/accept")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    public async Task<ActionResult<AcceptTosResponse>> AcceptTos(
+        [FromBody] AcceptTosRequest request, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(AuthClaimTypes.UserId);
+        if (!Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var result = await _tosAcceptance.AcceptAsync(
+            userId,
+            request.TosVersion,
+            request.AgeOver18,
+            cancellationToken);
+
+        return Ok(new AcceptTosResponse(Accepted: true, AcceptedAt: result.AcceptedAt));
+    }
+
     private string BuildFrontendUrl(string key, string value, string? returnUrl)
     {
         var builder = new UriBuilder(_settings.FrontendCallbackUrl);
@@ -117,3 +142,7 @@ public sealed class AuthController : ControllerBase
         return builder.Uri.ToString();
     }
 }
+
+public sealed record AcceptTosRequest(string TosVersion, bool AgeOver18);
+
+public sealed record AcceptTosResponse(bool Accepted, DateTime AcceptedAt);

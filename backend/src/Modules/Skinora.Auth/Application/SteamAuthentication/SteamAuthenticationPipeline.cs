@@ -12,6 +12,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
     private readonly ILoginAuditService _loginAudit;
     private readonly IGeoBlockCheck _geoBlock;
     private readonly ISanctionsCheck _sanctions;
+    private readonly IAgeGateCheck _ageGate;
     private readonly ILogger<SteamAuthenticationPipeline> _logger;
 
     public SteamAuthenticationPipeline(
@@ -23,6 +24,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         ILoginAuditService loginAudit,
         IGeoBlockCheck geoBlock,
         ISanctionsCheck sanctions,
+        IAgeGateCheck ageGate,
         ILogger<SteamAuthenticationPipeline> logger)
     {
         _validator = validator;
@@ -33,6 +35,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         _loginAudit = loginAudit;
         _geoBlock = geoBlock;
         _sanctions = sanctions;
+        _ageGate = ageGate;
         _logger = logger;
     }
 
@@ -60,6 +63,11 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
             return new AuthenticationOutcome.SanctionsMatch(sanctions.MatchedList);
 
         var profile = await _profileClient.GetPlayerSummaryAsync(steamId64, cancellationToken);
+
+        var age = await _ageGate.EvaluateAsync(profile?.AccountCreatedAt, cancellationToken);
+        if (age.IsBlocked)
+            return new AuthenticationOutcome.AgeBlocked(age.AccountAgeDays!.Value, age.RequiredDays!.Value);
+
         var provisioning = await _provisioning.UpsertFromSteamLoginAsync(
             steamId64, profile, cancellationToken);
 
