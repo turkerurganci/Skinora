@@ -98,9 +98,10 @@
 ## Commit & PR
 
 - Branch: `task/T30-tos-age-geoblock`
-- Commit: `b4ec42e`
+- Commit: `b4ec42e` (implementation) + `7fbb043` (CI fix — SeedDataTests 28→30 + Auth integration update-or-insert) + `eae82ac` (BYPASS_LOG)
 - PR: #49 (https://github.com/turkerurganci/Skinora/pull/49)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — run [24745062009](https://github.com/turkerurganci/Skinora/actions/runs/24745062009) 10/10 job (Lint + Build + Unit 3× + Contract + Integration + Migration dry-run + Docker build + CI Gate)
+- BYPASS_LOG: 1× entry (Layer 2 ci-failure — T30 CI fix push için root cause çözüm commit'iyle birlikte geçildi)
 
 ## Known Limitations / Follow-up
 
