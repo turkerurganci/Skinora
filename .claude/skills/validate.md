@@ -150,7 +150,8 @@ grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
 
 17. **Merge:** (sadece PASS durumunda)
     - Branch'i `main`'e squash merge et
-    - Squash commit mesajı: `TXX: Task adı`
+    - Squash commit mesajı: `TXX: Task adı (#NN)`
+    - **Önemli (T30 dersi):** `gh pr merge --squash --subject "..."` kullanılırsa PR numarasını **manuel ekle** — gh CLI `--subject` flag'i verildiğinde `(#NN)` suffix'ini otomatik eklemez. Subject'te `(#NN)` olmadan squash commit'lenirse main CI `0. Guard (direct push)` job'u FAIL verir (commit mesajı PR ref'i veya `[skip-guard]` içermeli). Alternatif: `--subject` flag'ini tamamen atla → gh default'u `(#NN)`'i otomatik ekler.
 
 18. **Post-merge CI watch (ZORUNLU çıkış kapısı):**
     - Squash merge `main` branch'inde yeni bir commit yaratır → bu commit için tüm workflow'lar (CI + Docker Publish) tetiklenir.
