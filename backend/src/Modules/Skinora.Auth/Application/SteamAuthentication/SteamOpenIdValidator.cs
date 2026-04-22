@@ -26,15 +26,21 @@ public sealed class SteamOpenIdValidator : ISteamOpenIdValidator
         _logger = logger;
     }
 
+    public Task<SteamOpenIdValidationResult> ValidateAsync(
+        IReadOnlyDictionary<string, string> callbackParameters,
+        CancellationToken cancellationToken)
+        => ValidateAsync(callbackParameters, _settings.ReturnToUrl, cancellationToken);
+
     public async Task<SteamOpenIdValidationResult> ValidateAsync(
         IReadOnlyDictionary<string, string> callbackParameters,
+        string expectedReturnTo,
         CancellationToken cancellationToken)
     {
         if (!callbackParameters.TryGetValue("openid.mode", out var mode) || mode != "id_res")
             return SteamOpenIdValidationResult.Failure("openid.mode is not id_res");
 
         if (!callbackParameters.TryGetValue("openid.return_to", out var returnTo)
-            || !string.Equals(returnTo, _settings.ReturnToUrl, StringComparison.Ordinal))
+            || !string.Equals(returnTo, expectedReturnTo, StringComparison.Ordinal))
         {
             return SteamOpenIdValidationResult.Failure("openid.return_to mismatch");
         }

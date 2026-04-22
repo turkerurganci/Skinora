@@ -20,6 +20,13 @@ public sealed class SteamOpenIdSettings
     public required string ReturnToUrl { get; init; }
 
     /// <summary>
+    /// <c>openid.return_to</c> for the re-verify flow — A5/A6 (07 §4.6–§4.7).
+    /// Distinct from <see cref="ReturnToUrl"/> so a login-flow assertion cannot
+    /// be replayed against the re-verify callback.
+    /// </summary>
+    public required string ReVerifyReturnToUrl { get; init; }
+
+    /// <summary>
     /// Frontend URL prefix for the post-login redirect landing page
     /// (e.g. <c>https://skinora.com/auth/callback</c>). Server appends
     /// <c>?status=...</c> / <c>?error=...</c> per 07 §4.3.

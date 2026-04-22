@@ -6,8 +6,21 @@ namespace Skinora.Auth.Application.SteamAuthentication;
 /// </summary>
 public interface ISteamOpenIdValidator
 {
+    /// <summary>
+    /// Validates an assertion bound to the configured login <c>return_to</c> URL.
+    /// </summary>
     Task<SteamOpenIdValidationResult> ValidateAsync(
         IReadOnlyDictionary<string, string> callbackParameters,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Validates an assertion bound to an explicit <c>return_to</c> URL — used
+    /// by the re-verify flow (07 §4.7) so a login assertion cannot be replayed
+    /// against the re-verify callback and vice versa.
+    /// </summary>
+    Task<SteamOpenIdValidationResult> ValidateAsync(
+        IReadOnlyDictionary<string, string> callbackParameters,
+        string expectedReturnTo,
         CancellationToken cancellationToken);
 }
 

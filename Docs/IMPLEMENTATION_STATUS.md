@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-21 (T30 ToS kabul + yaş gate + geo-block ✓ PASS — validator verdict ✓ tam uyum, CI 10/10 job run 24745062009, 0 bulgu)
+**Son güncelleme:** 2026-04-23 (T31 Steam re-verify + authenticator kontrolü ⏳ yapım bitti, doğrulama bekleniyor — 7 integration + 12 unit yeni test, build 0W/0E)
 
 ---
 
@@ -79,7 +79,7 @@
 |---|---|---|---|---|
 | T29 | Steam OpenID authentication (login + callback + token üretimi) | ✓ Tamamlandı | ✓ PASS (re-doğrulama; 1. validator FAIL → S1 fix) | `5e6a32e` (#46, pending squash) |
 | T30 | ToS kabul, yaş gate, geo-block | ✓ Tamamlandı | ✓ PASS | `dfebf87` (PR #49, pending squash) |
-| T31 | Steam re-verify ve authenticator kontrolü | ⬚ Bekliyor | — | — |
+| T31 | Steam re-verify ve authenticator kontrolü | ⏳ Devam ediyor | — | (pending) |
 | T32 | Refresh token yönetimi | ⬚ Bekliyor | — | — |
 | T33 | User profil servisi | ⬚ Bekliyor | — | — |
 | T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |

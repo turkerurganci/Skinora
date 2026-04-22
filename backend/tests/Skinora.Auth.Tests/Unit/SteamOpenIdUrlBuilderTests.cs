@@ -9,6 +9,7 @@ public class SteamOpenIdUrlBuilderTests
     {
         Realm = "https://skinora.test",
         ReturnToUrl = "https://skinora.test/api/v1/auth/steam/callback",
+        ReVerifyReturnToUrl = "https://skinora.test/api/v1/auth/steam/re-verify/callback",
         FrontendCallbackUrl = "https://skinora.test/auth/callback",
     };
 

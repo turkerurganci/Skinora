@@ -288,11 +288,15 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         public Task<SteamOpenIdValidationResult> ValidateAsync(
             IReadOnlyDictionary<string, string> callbackParameters,
             CancellationToken cancellationToken)
-        {
-            return Task.FromResult(IsValid
+            => Task.FromResult(IsValid
                 ? SteamOpenIdValidationResult.Success(SteamIdToReturn)
                 : SteamOpenIdValidationResult.Failure("fake-failure"));
-        }
+
+        public Task<SteamOpenIdValidationResult> ValidateAsync(
+            IReadOnlyDictionary<string, string> callbackParameters,
+            string expectedReturnTo,
+            CancellationToken cancellationToken)
+            => ValidateAsync(callbackParameters, cancellationToken);
     }
 
     public sealed class FakeSteamProfileClient : ISteamProfileClient
