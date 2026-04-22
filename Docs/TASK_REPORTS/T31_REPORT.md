@@ -113,5 +113,5 @@
 ## Commit & PR
 
 - **Branch:** `task/T31-steam-reverify-authenticator`
-- **Commit:** _push sonrası eklenecek_
-- **PR:** _push sonrası eklenecek_
+- **Commit:** `e34a68b`
+- **PR:** #52 — https://github.com/turkerurganci/Skinora/pull/52

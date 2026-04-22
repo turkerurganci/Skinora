@@ -79,7 +79,7 @@
 |---|---|---|---|---|
 | T29 | Steam OpenID authentication (login + callback + token üretimi) | ✓ Tamamlandı | ✓ PASS (re-doğrulama; 1. validator FAIL → S1 fix) | `5e6a32e` (#46, pending squash) |
 | T30 | ToS kabul, yaş gate, geo-block | ✓ Tamamlandı | ✓ PASS | `dfebf87` (PR #49, pending squash) |
-| T31 | Steam re-verify ve authenticator kontrolü | ⏳ Devam ediyor | — | (pending) |
+| T31 | Steam re-verify ve authenticator kontrolü | ⏳ Devam ediyor | — | `e34a68b` (#52, pending) |
 | T32 | Refresh token yönetimi | ⬚ Bekliyor | — | — |
 | T33 | User profil servisi | ⬚ Bekliyor | — | — |
 | T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |
