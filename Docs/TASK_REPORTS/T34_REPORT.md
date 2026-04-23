@@ -144,7 +144,7 @@ dotnet format Skinora.sln --verify-no-changes --no-restore
 ## Commit & PR
 
 - **Branch:** `task/T34-wallet-address`
-- **Commit (kod):** _commit sonrası doldurulacak_
-- **Commit (rapor+status+memory):** _commit sonrası doldurulacak_
-- **PR:** _push sonrası doldurulacak_
-- **CI run:** _push sonrası doldurulacak_
+- **Commit (kod):** `2a11ffc`
+- **Commit (rapor+status+memory):** `569d92c`
+- **PR:** [#58](https://github.com/turkerurganci/Skinora/pull/58)
+- **CI run:** [`24843938408`](https://github.com/turkerurganci/Skinora/actions/runs/24843938408) — 10 job, **9 success + 1 skipped** (`0. Guard (direct push)` PR'da beklenen skip). Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration dry-run ✓ Docker build ✓ CI Gate ✓.
