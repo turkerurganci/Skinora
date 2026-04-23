@@ -1,6 +1,6 @@
 # T34 — Cüzdan adresi yönetimi
 
-**Faz:** F2 | **Durum:** ⏳ Yapım tamamlandı, doğrulama bekliyor | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS (bağımsız validator, 2026-04-23) | **Tarih:** 2026-04-23
 
 ---
 
@@ -148,3 +148,63 @@ dotnet format Skinora.sln --verify-no-changes --no-restore
 - **Commit (rapor+status+memory):** `569d92c`
 - **PR:** [#58](https://github.com/turkerurganci/Skinora/pull/58)
 - **CI run:** [`24843938408`](https://github.com/turkerurganci/Skinora/actions/runs/24843938408) — 10 job, **9 success + 1 skipped** (`0. Guard (direct push)` PR'da beklenen skip). Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration dry-run ✓ Docker build ✓ CI Gate ✓.
+
+---
+
+## Doğrulama (bağımsız validator — 2026-04-23)
+
+**Verdict:** ✓ **PASS** — 0 S-bulgu, 2 minor advisory (her ikisi de rapor Known Limitations bölümünde doğru belgelenmiş forward-devir).
+
+### HARD STOP kapıları
+- **Adım -1 Working tree:** `git status --short` boş ✓.
+- **Adım 0 Main CI:** Son 3 run `24841594435` ✓, `24841594207` ✓, `24839671945` ✓ — hepsi success.
+- **Adım 0b Memory drift:** `MEMORY.md` T34 satırı mevcut (Line 11, 29, 30) ✓.
+
+### Bağımsız kabul kriteri verdict'i (yapım raporu okunmadan üretildi, Faz 3'te karşılaştırıldı)
+
+| # | Kriter | Bağımsız verdict | Rapor verdict | Uyum |
+|---|---|---|---|---|
+| 1 | `PUT /users/me/wallet/seller` | ✓ | ✓ | Uyumlu |
+| 2 | `PUT /users/me/wallet/refund` | ✓ | ✓ | Uyumlu |
+| 3 | Merkezi doğrulama pipeline (TRC-20 format + sanctions) | ✓ | ✓ | Uyumlu |
+| 4 | Mevcut adres varsa `X-ReAuth-Token` zorunlu | ✓ | ✓ | Uyumlu |
+| 5 | Cooldown (satıcı/alıcı işlem başlatma engeli) | ⚠ kısmi — T45/T46 devir | ⚠ kısmi — T45/T46 devir | Uyumlu |
+| 6 | Aktif işlemler eski adresle tamamlanır (snapshot) | ✓ | ✓ | Uyumlu |
+| 7 | Adres onay adımı | ⚠ UI scope — T93 devir | ⚠ UI scope — T93 devir | Uyumlu |
+
+### Doğrulama kontrol listesi
+- [x] **02 §12 tüm kurallar uygulanmış mı?** — Merkezi pipeline ✓, re-auth ✓, snapshot ✓. Zorunluluk/cooldown enforcement + onay adımı forward-devir (T45/T46/T93), belgelenmiş.
+- [x] **Sanctions eşleşmesinde hesap flag'leniyor mu?** — **Kısmi.** Yeni adres red (403 `SANCTIONS_MATCH`) ✓; FraudFlag oluşturma (T54) + EMERGENCY_HOLD (T59) + gerçek liste (T82) forward-devir. `FraudFlagType` enum'da `SANCTIONS_MATCH` değeri henüz yok — T54/T82 devri mimari olarak tutarlı. `NoMatchWalletSanctionsCheck` stub kodda açıkça "T82 devir" olarak yorumlanmış.
+- [x] **Cooldown mekanizması çalışıyor mu?** — **Kısmi.** `PayoutAddressChangedAt` / `RefundAddressChangedAt` damgalanıyor + 2 yeni SystemSetting (default 24 saat) seed; `NOW < ChangedAt + cooldown` enforcement T45/T46 devri.
+
+### Test sonuçları (bağımsız koşum)
+
+| Tür | Sonuç | Kanıt |
+|---|---|---|
+| Build (lokal Debug, `dotnet build -warnaserror -v quiet`) | **0W / 0E** | 14.78 s |
+| `WalletAddressEndpointTests` (filter) | **10/10 PASS** | 2 s, `Skinora.API.Tests.dll` |
+| Tüm backend solution testleri (11 proje) | **590 PASS / 0 FAIL / 0 SKIP** | Shared 166, API 148, Auth 85, Transactions 68, Platform 28, Notifications 25, Steam 21, Admin 20, Fraud 12, Disputes 11, Payments 6 |
+| `Skinora.Users.Tests` | **boş** (scaffolding) | Kabul edilebilir — wallet testleri API.Tests içinde |
+| Task branch CI run `24844230495` | **10/10 ✓** | 1 Lint, 2 Build, 3 Unit, 4 Integration, 5 Contract, 6 Migration dry-run, 7 Docker build, CI Gate + Detect changed paths ✓; 0. Guard skipped (PR'da beklenen) |
+| PR #58 status check rollup | **mergeable** | `gh pr view 58` |
+
+### Güvenlik kontrolü
+- **Secret sızıntısı:** ✗ bulgu — kod, test ve migration temiz; token/key hardcoded yok (test stub'ındaki `TestSecret` beklenen symmetric key pattern'ı).
+- **Auth etkisi:** 2 yeni endpoint `[Authorize(Policy=Authenticated)]` + `[RateLimit("user-write")]`; public endpoint açılmamış.
+- **Re-auth token:** single-use (T31 Redis GETDEL / InMemoryReAuthTokenStore kontratı), `payload.UserId != userId` cross-user guard ✓ (controller 137-138).
+- **Input validation:** TRC-20 format validator Base58 alphabet whitelist + uzunluk + prefix; null/whitespace reddediliyor. `UpdateWalletRequest` null body → 400 `VALIDATION_ERROR`.
+- **Yeni dış bağımlılık:** yok (`.csproj` diff boş).
+- **Migration güvenliği:** 2 kolon NULL eklemesi — mevcut satırları etkilemez. Seed user update sadece `Id = SYSTEM_USER_ID`'yi hedefler (deterministik). Down tam reverse.
+
+### Doküman uyumu
+- **07 §5.3 / §5.4:** Response alanları (`walletAddress`, `updatedAt`, `activeTransactionsUsingOldAddress`) tam eşleşiyor. Error code'lar (`VALIDATION_ERROR`, `INVALID_WALLET_ADDRESS`, `SANCTIONS_MATCH`, `RE_AUTH_REQUIRED`, `RE_AUTH_TOKEN_INVALID`) ve HTTP status kodları eksiksiz.
+- **02 §12.3 / 03 §9.1 §9.2:** Merkezi pipeline ve snapshot prensibi doğru; enforcement + flag yan etkileri T45/T46/T54/T59/T82'ye kodda yorum + raporda Known Limitations ile belgelenmiş.
+- **06 §3.1 (User tablosu):** `PayoutAddressChangedAt` + `RefundAddressChangedAt` kolonları v5.0 güncellemesinde tablolandı.
+- **06 §3.17 (SystemSettings):** `wallet.payout_address_cooldown_hours` + `wallet.refund_address_cooldown_hours` eklendi (int, default 24, Category `Wallet`).
+
+### Rapor karşılaştırması
+- **Tam uyumlu** — 7 kabul kriteri, 3 kontrol listesi maddesi, test sonuçları (10/10 wallet + API.Tests 148/148), güvenlik kontrolleri ve doküman deltası rapor ile birebir örtüşüyor. Known Limitations bölümü T45/T46/T54/T59/T82/T93 forward-devirlerini doğru target-task'lara bağlıyor.
+- **Bulgu:** yok.
+
+### Bundled-PR check (Bitiş Kapısı 9)
+`git log main..HEAD --format='%s'` → 3 commit, hepsi `T34:` prefix'li. Yabancı task commit'i yok ✓.
