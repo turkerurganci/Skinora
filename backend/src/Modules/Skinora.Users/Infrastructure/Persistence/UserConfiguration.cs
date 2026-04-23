@@ -45,10 +45,22 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Email)
             .HasMaxLength(256);
 
+        builder.Property(u => u.EmailVerifiedAt);
+
         builder.Property(u => u.PreferredLanguage)
             .IsRequired()
             .HasMaxLength(5)
             .HasDefaultValue("en");
+
+        // --- Steam trade URL (07 §5.16a) ---
+        builder.Property(u => u.SteamTradeUrl)
+            .HasMaxLength(500);
+
+        builder.Property(u => u.SteamTradePartner)
+            .HasMaxLength(20);
+
+        builder.Property(u => u.SteamTradeAccessToken)
+            .HasMaxLength(20);
 
         // --- ToS ---
         builder.Property(u => u.TosAcceptedVersion)
