@@ -81,7 +81,7 @@
 | T30 | ToS kabul, yaş gate, geo-block | ✓ Tamamlandı | ✓ PASS | `dfebf87` (PR #49, pending squash) |
 | T31 | Steam re-verify ve authenticator kontrolü | ✓ Tamamlandı | ✓ PASS (1 minor — MA check stub, T64–T69'a devir) | `e34a68b` (#52, pending squash) |
 | T32 | Refresh token yönetimi | ✓ Tamamlandı | ✓ PASS | `8a22c15` + `b65862d` (PR #55, pending squash) |
-| T33 | User profil servisi | ⏳ Devam ediyor | — | (pending PR) |
+| T33 | User profil servisi | ⏳ Devam ediyor | — | `1ba4604`+`8f52e26` (PR #56) |
 | T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ⬚ Bekliyor | — | — |
 | T36 | Hesap deaktif ve silme | ⬚ Bekliyor | — | — |

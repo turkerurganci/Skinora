@@ -96,9 +96,10 @@ dotnet build -c Release --nologo
 ## Commit & PR
 
 - **Branch:** `task/T33-user-profile`
-- **Commit (kod):** [pending — commit hash aşağıda güncellenecek]
-- **Commit (rapor+status+memory):** [pending]
-- **PR:** [pending — PR numarası CI watch sonrası güncellenecek]
+- **Commit (kod):** `1ba4604`
+- **Commit (rapor+status+memory):** `8f52e26`
+- **PR:** [#56](https://github.com/turkerurganci/Skinora/pull/56)
+- **CI run:** [`24836165946`](https://github.com/turkerurganci/Skinora/actions/runs/24836165946) — 10/10 job ✓ (Lint + Build + Unit + Integration + Contract + Migration dry-run + Docker build + CI Gate).
 
 ## Sırada
 
