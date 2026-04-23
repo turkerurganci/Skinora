@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-23 (T35 ⏳ yapım bitti — Hesap ayarları. 12 endpoint: settings snapshot, dil, bildirim tercihleri, email doğrulama (send+verify), Telegram connect/webhook/delete, Discord OAuth connect/callback/delete, Steam trade-url. Cross-module `INotificationPreferenceStore` (Users interface / Notifications impl, T34 IActiveTransactionCounter mirror). User entity'ye 4 nullable alan + migration. Redis stores (email code 10 dk / telegram 5 dk / discord state 10 dk) + in-memory test swaps. Stub integrasyonlar: LoggingEmailSender (T78), StubDiscordOAuthClient (T80), StubTradeHoldChecker (T64-T69). 613 test PASS (API.Tests 171, AccountSettings 23/23).)
+**Son güncelleme:** 2026-04-23 (T35 ✓ PASS bağımsız validator — Hesap ayarları. 12 endpoint: settings snapshot, dil, bildirim tercihleri, email doğrulama (send+verify), Telegram connect/webhook/delete, Discord OAuth connect/callback/delete, Steam trade-url. Cross-module `INotificationPreferenceStore` (Users interface / Notifications impl, T34 IActiveTransactionCounter mirror). User entity'ye 4 nullable alan + migration. Redis stores (email code 10 dk / telegram 5 dk / discord state 10 dk) + in-memory test swaps. Stub integrasyonlar: LoggingEmailSender (T78), StubDiscordOAuthClient (T80), StubTradeHoldChecker (T64-T69). 613 test PASS (API.Tests 171, AccountSettings 23/23), 0 S-bulgu, 3 minor advisory (503 envelope cosmetic / appsettings config env-var devir / SignalR push T62 devir).)
 
 ---
 
@@ -91,7 +91,7 @@
 | T32 | Refresh token yönetimi | ✓ Tamamlandı | ✓ PASS | `8a22c15` + `b65862d` (PR #55, pending squash) |
 | T33 | User profil servisi | ✓ Tamamlandı | ✓ PASS (1 minor — 06 ↔ 07 fraction/percentage doc inconsistency, T33 dışı) | `1ba4604`+`8f52e26` (PR #56, pending squash) |
 | T34 | Cüzdan adresi yönetimi | ✓ Tamamlandı | ✓ PASS (2 minor — cooldown enforcement T45/T46, sanctions flag yan etkileri T54/T59/T82 devir) | `2a11ffc`+`569d92c`+`eb14c77` (PR #58, pending squash) |
-| T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ⏳ Devam ediyor | — | — |
+| T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ✓ Tamamlandı | ✓ PASS (0 S-bulgu, 3 minor advisory — 503 envelope/appsettings env-var/SignalR T62 devir) | `64ac159`+`7e9032e`+`f23fd3a` (PR #59, pending squash) |
 | T36 | Hesap deaktif ve silme | ⬚ Bekliyor | — | — |
 | T37 | Bildirim altyapı servisi | ⬚ Bekliyor | — | — |
 | T38 | Platform içi bildirim kanalı | ⬚ Bekliyor | — | — |

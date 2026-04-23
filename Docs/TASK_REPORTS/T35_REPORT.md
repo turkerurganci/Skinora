@@ -1,6 +1,6 @@
 # T35 — Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama)
 
-**Faz:** F2 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-04-23
 
 ---
 
@@ -172,3 +172,29 @@ dotnet format Skinora.sln --verify-no-changes --no-restore
 - **Commit (rapor+status+memory):** `7e9032e`
 - **PR:** [#59](https://github.com/turkerurganci/Skinora/pull/59)
 - **CI run:** [`24849600507`](https://github.com/turkerurganci/Skinora/actions/runs/24849600507) — 10 job, **9 success + 1 skipped** (`0. Guard (direct push)` PR'da beklenen skip). Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration dry-run ✓ Docker build ✓ CI Gate ✓.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-04-23) |
+| Bulgu sayısı | 0 S-bulgu, 3 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+**HARD STOP kapıları:**
+- Working tree (Adım -1): Temiz ✓
+- Main CI startup (Adım 0): Son 3 run `24845642208` ✓ + `24845641743` ✓ + `24841594435` ✓ (T34 merge + T34 docker-publish + T33 chore)
+- Repo memory drift (Adım 0b): T35 satırları `MEMORY.md` L11/L30-32 mevcut ✓
+
+**Kabul kriterleri (6/6 ✓):** Kod + integration test kanıtları yapım raporundaki tablo ile bire bir örtüştü. Bağımsız validator 12/12 endpoint'i 07 §5.6–§5.16a anchor'larıyla mapledi; MA check kontratı + 3-branch (active/inactive/503-pending) + fallback `ApiAvailable=false → pending` senaryosunu entegrasyon testlerinde gördü.
+
+**Doğrulama kontrol listesi (2/2 ✓):** 07 §5.6–§5.16a (12 endpoint) ve 08 §2.2 MA kontrolü (`ITradeHoldChecker` + stub + T64–T69 devir).
+
+**Testler:** Lokal Release build 0W/0E + full solution **613/613 PASS** (API 171 + Auth 85 + Shared 166 + Trans 68 + Admin 20 + Notif 25 + Plat 28 + Steam 21 + Fraud 12 + Disp 11 + Pay 6); AccountSettings focus run 23/23 ✓ (3 s); format `--verify-no-changes` 0 değişiklik; task branch CI run `24849866191` (HEAD `f23fd3a`) 10/10 ✓.
+
+**Güvenlik:** Secret sızıntısı yok (code+secret Redis-only, LoggingEmailSender masks recipient, ClientSecret/WebhookSecretToken config-bound); auth 10× `[Authorize(Authenticated)]` + 2× anonymous ordinal-secret header / OAuth state single-use CSRF defense; input validation her yol (language whitelist, email MailAddress+@ check, TradeUrl strict parser, Telegram regex CultureInvariant, Discord state 32-byte random base64url); yeni NuGet'ler (`Microsoft.EntityFrameworkCore 9.0.3` + `StackExchange.Redis 2.8.16`) 1st-party/sürüm mevcut.
+
+**Minor advisory (PASS'i engellemiyor):**
+- **O1** — `503 STEAM_API_UNAVAILABLE` branch'i `ApiResponse<TradeUrlResponse>.Ok(...)` envelope ile 503 status dönüyor (başarı şekilli body). 07 §5.16a "Hatalar" listesi standart error-envelope ima ediyor. Cosmetic contract drift; fonksiyonel sapma yok, test-suite body şeklini assert etmiyor.
+- **O2** — `appsettings.json` / `appsettings.Development.json` içinde `Telegram:*` + `Discord:*` blokları yok; rapor §Altyapı "env-var override ile ship edilmeli" ile kabul ediyor. Webhook secret-empty `ValidateSecret()` fail-closed (401), güvenli default.
+- **O3** — SignalR `TelegramConnected` / `DiscordConnected` push (07 §5.11 + §5.13) emit edilmiyor — T62 SignalR hub scope'una devir, rapor Known Limitations'da belgeliyor.
