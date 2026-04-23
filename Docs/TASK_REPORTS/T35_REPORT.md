@@ -167,4 +167,8 @@ dotnet format Skinora.sln --verify-no-changes --no-restore
 
 ## Commit & PR
 
-(bu bölüm push + PR açılışı sonrası doldurulur)
+- **Branch:** `task/T35-account-settings`
+- **Commit (kod):** `64ac159`
+- **Commit (rapor+status+memory):** `7e9032e`
+- **PR:** [#59](https://github.com/turkerurganci/Skinora/pull/59)
+- **CI run:** [`24849600507`](https://github.com/turkerurganci/Skinora/actions/runs/24849600507) — 10 job, **9 success + 1 skipped** (`0. Guard (direct push)` PR'da beklenen skip). Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration dry-run ✓ Docker build ✓ CI Gate ✓.
