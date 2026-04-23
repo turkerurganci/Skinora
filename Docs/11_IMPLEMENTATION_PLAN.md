@@ -1880,6 +1880,7 @@ Task T93: Profil sayfaları (S08, S09)
   Test beklentisi: Yok
   Doğrulama kontrol listesi:
     - [ ] 04 §7.4–§7.5 tüm alanlar var mı?
+    - [ ] T33 validator M1 bulgusu çözüldü mü? `successfulTransactionRate` 06 §3.1 (fraction 0..1) vs 07 §5.1/§5.2/§5.5 örnek (96.0 yüzde) doc çelişkisi — bu task'a başlamadan önce 07 örnekleri fraction'a çekilsin VEYA backend DTO ×100 dönüşümü eklensin; karar 07 §5'e yansıtılsın
 ```
 
 ```

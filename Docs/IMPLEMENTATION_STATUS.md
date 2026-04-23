@@ -20,6 +20,14 @@
 
 ---
 
+## Açık Bulgular (cross-task)
+
+| # | Kaynak | Bulgu | Çözüm yetkisi / tetikleyici |
+|---|---|---|---|
+| M1 | T33 validator (2026-04-23) | `successfulTransactionRate` API'de 06 §3.1 fraction (0.96) olarak dönüyor; 07 §5.1/§5.2/§5.5 örneklerinde `96.0` (yüzde) gösteriliyor. Doc-level inconsistency — frontend yanlış scale ile yorumlama riski. | T93 (Profil sayfaları S08/S09) öncesi karar: 07 örneklerini fraction'a çek VEYA backend DTO'da ×100 dönüşümü ekle. Tetikleyici 11 §T93 doğrulama listesine eklendi. |
+
+---
+
 ## F0 — Proje İskeleti (T01–T16)
 
 | Task | Ad | Durum | Doğrulama | Commit |
