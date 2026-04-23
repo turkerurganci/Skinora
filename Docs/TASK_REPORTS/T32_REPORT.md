@@ -118,5 +118,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T32-refresh-token`
-- **Commit:** _TBD (post-commit güncellenecek)_
-- **PR:** _TBD_
+- **Commit:** `8a22c15` (T32 implementation) + `b65862d` (dotnet format fix)
+- **PR:** #55 — https://github.com/turkerurganci/Skinora/pull/55
+- **CI runs:**
+  - `24830392733` — FAIL (4 whitespace lint errors; `AddOrUpdateRecurring` no-op stubs `{ }` aynı satırdaydı)
+  - `24830517533` — ✓ 10/10 (Lint/Build/Unit/Integration/Contract/Migration/Docker/CI Gate). Guard skipped (PR context).
+- **BYPASS_LOG entry:** 1× `[ci-failure]` Layer 2 — `b65862d` push'unda (pre-push guard prior-run failed'ı bloklamak istedi, fix commit'i kendi blocker'ıydı; bypass reason "this commit IS the fix — dotnet format applied").
