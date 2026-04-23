@@ -1,6 +1,10 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Skinora.Auth.Application.Session;
+using Skinora.Notifications.Application.Account;
 using Skinora.Notifications.Application.Settings;
+using Skinora.Transactions.Application.Account;
 using Skinora.Transactions.Application.Wallet;
+using Skinora.Users.Application.Account;
 using Skinora.Users.Application.Profiles;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
@@ -74,6 +78,15 @@ public static class UsersModule
 
         services.AddSingleton<ITradeUrlParser, TradeUrlParser>();
         services.AddScoped<ISteamTradeUrlService, SteamTradeUrlService>();
+
+        // T36 — account deactivate + delete (07 §5.17, 02 §19, 06 §6.2).
+        // Cross-module glue mirrors the T34/T35 pattern: the port interface
+        // lives in Skinora.Users and each sibling module registers its impl
+        // here at the composition root.
+        services.AddScoped<IUserActiveTransactionChecker, UserActiveTransactionChecker>();
+        services.AddScoped<INotificationAccountAnonymizer, NotificationAccountAnonymizer>();
+        services.AddScoped<IAuthAccountAnonymizer, AuthAccountAnonymizer>();
+        services.AddScoped<IAccountLifecycleService, AccountLifecycleService>();
 
         return services;
     }
