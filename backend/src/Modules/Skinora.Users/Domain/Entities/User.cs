@@ -21,7 +21,13 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
 
     // --- Profile ---
     public string? Email { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
     public string PreferredLanguage { get; set; } = "en";
+
+    // --- Steam trade URL (07 §5.16a, 08 §2.2) ---
+    public string? SteamTradeUrl { get; set; }
+    public string? SteamTradePartner { get; set; }
+    public string? SteamTradeAccessToken { get; set; }
 
     // --- Terms of Service ---
     public string? TosAcceptedVersion { get; set; }
