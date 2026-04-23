@@ -1,6 +1,6 @@
 # T32 — Refresh token yönetimi
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS (bağımsız validator, 2026-04-23) | **Tarih:** 2026-04-23
 
 ---
 
@@ -124,3 +124,86 @@
   - `24830392733` — FAIL (4 whitespace lint errors; `AddOrUpdateRecurring` no-op stubs `{ }` aynı satırdaydı)
   - `24830517533` — ✓ 10/10 (Lint/Build/Unit/Integration/Contract/Migration/Docker/CI Gate). Guard skipped (PR context).
 - **BYPASS_LOG entry:** 1× `[ci-failure]` Layer 2 — `b65862d` push'unda (pre-push guard prior-run failed'ı bloklamak istedi, fix commit'i kendi blocker'ıydı; bypass reason "this commit IS the fix — dotnet format applied").
+
+---
+
+## Doğrulama (bağımsız validator, 2026-04-23)
+
+### Verdict: ✓ PASS
+
+### Hard-stop kapıları
+
+- **Adım -1 Working tree:** `git status --short` → boş ✓
+- **Adım 0 Main CI startup:** Son 3 run `success` — `24827836299` (chore #54), `24827836274` (chore #54), `24827146834` (T31 #52) ✓
+- **Adım 0b Memory drift:** `.claude/memory/MEMORY.md` T32 satırları mevcut (özet satır + task detay satırı + next) ✓
+- **Adım 8a Task branch CI:** Son 2 tamamlanmış run tümü ✓ — `24831070336` (head `952c980`, 10/10 job), `24832464818` (head `7a9b224`, 10/10 job). Guard skipped (PR context). FAIL'lenen erken run `24830392733` fix commit `b65862d` ile kapatıldı; BYPASS_LOG entry mevcut.
+
+### Kabul kriterleri (bağımsız değerlendirme)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | POST /auth/refresh → access token yenileme (refresh cookie'den) | ✓ | `AuthController.cs:261-287` Refresh endpoint `[AllowAnonymous]` + cookie name `refreshToken` + Path `/api/v1/auth`; `RefreshTokenService.cs:35-99` RotateAsync → `RotateOutcome.Success` branch `AccessTokenGenerator.Generate(user)` + yeni refresh cookie. Integration `AuthSessionEndpointTests.Refresh_ValidCookie_RotatesAndReturnsAccessToken` yeni `accessToken` + `expiresIn>0` + yeni plaintext cookie (httponly, path=/api/v1/auth) doğruladı. |
+| 2 | POST /auth/logout → refresh token revoke, cookie temizleme | ✓ | `AuthController.cs:246-259` Logout `[Authorize(Authenticated)]` + `RefreshTokenService.RevokeAsync` + `ClearRefreshCookie()` (same path/secure/httponly/samesite=strict). Integration `Logout_Authenticated_RevokesTokenAndClearsCookie`: Set-Cookie `expires=` past-tarih + DB `IsRevoked=true, RevokedAt!=null`. `Logout_Authenticated_NoCookie_IsIdempotent` 200. |
+| 3 | GET /auth/me → mevcut oturum bilgisi | ✓ | `AuthController.cs:230-244` Me `[Authorize(Authenticated)]` → `ICurrentUserService.GetAsync(userId, role, ct)` + `CurrentUserService.cs:42-63` maps User → CurrentUserDto. DTO alan haritası 07 §4.5 ile birebir: `id, steamId, displayName, avatarUrl, mobileAuthenticatorActive (=MobileAuthenticatorVerified), tosAccepted (=TosAcceptedAt is not null), role, language (=PreferredLanguage), hasSellerWallet (=DefaultPayoutAddress not empty), hasRefundWallet (=DefaultRefundAddress not empty), createdAt`. Integration `GetMe_Authenticated_ReturnsProfileDto` tüm alanları tek tek assert etti. |
+| 4 | Token rotation: kullanılan refresh token invalidate, yeni üretilir | ✓ | `RefreshTokenService.cs:82-98` — yeni token önce `IRefreshTokenGenerator.IssueAsync` (kendi SaveChangesAsync), sonra eski token `IsRevoked=true + RevokedAt=now + ReplacedByTokenId=new.Id`, 2. SaveChanges. Integration: `RotateAsync_HappyPath_RevokesOldAndIssuesNewPair` + `Refresh_ValidCookie_RotatesAndReturnsAccessToken` ikisi de 2 DB satırı + eski.ReplacedByTokenId == yeni.Id doğrulamasıyla kapandı. |
+| 5 | DB source of truth + Redis cache | ✓ | `IRefreshTokenCache` hash-keyed cache (GetAsync/SetAsync/RemoveAsync); `RedisRefreshTokenCache.cs:59-63` key `skinora:refresh:{hash}`, JSON payload, TTL=refresh kalan ömrü, corrupt-drop mantığı `34-46`. `NullRefreshTokenCache` fallback (tüm GetAsync null → DB okur — "Redis çökerse DB'den okunur" 05 §6.1). Rotate/Revoke her durumda cache invalidation. `SteamAuthenticationModule.cs:83-86` prod'da `IConnectionMultiplexer` ile Redis factory kayıtlı. |
+| 6 | Expired/revoked token cleanup (periyodik) | ✓ | `RefreshTokenCleanupJob.cs:44-67` — `ExpiresAt < now - 7d` VEYA `(IsRevoked && RevokedAt < now - 7d)` → soft-delete. `RefreshTokenCleanupJobRegistrar.cs:22-60` IHostedService `IServiceScopeFactory` + `CreateScope` ile scoped scheduler'ı tüketiyor (singleton → scoped DI regression'ı bilinçli olarak önlenmiş). Cron `0 3 * * *` (günlük 03:00 UTC). `IBackgroundJobScheduler.AddOrUpdateRecurring<T>` shared abstraction'a eklenmiş (`HangfireBackgroundJobScheduler.cs:36-38` `RecurringJob.AddOrUpdate` delegasyonu). Integration `RefreshTokenCleanupJobTests` 5/5 senaryo (expired past/within grace, revoked past/within grace, no-stale). |
+| 7 | OWASP token reuse detection (05 §6.1 bonus) | ✓ | `RefreshTokenService.cs:57-62` `IsRevoked OR ReplacedByTokenId != null` → `RotateOutcome.Reused` + `MassRevokeAsync` kullanıcının tüm aktif token'larını revoke eder. Integration `Refresh_WithRotatedCookie_ReturnsInvalidAndMassRevokes`: 1. rotasyon 200 başarılı, 2. rotasyon (aynı eski token'la) 401 INVALID + aktif token sayısı 0. Unit `RotateAsync_AlreadyRevokedToken_MassRevokesAndReturnsReused` + `RotateAsync_AlreadyRotatedToken_MassRevokesAndReturnsReused`: successor token'un da mass-revoke edildiğini kanıtladı. |
+
+### Doğrulama kontrol listesi (11 §T32)
+
+- [x] 07 §4.9–§4.10 sözleşmeleri doğru — Logout 200 (`Ok()` boş body, minor envelope gözlemi aşağıda); Refresh 200 `{ accessToken, expiresIn }`; hata kodları `REFRESH_TOKEN_MISSING/INVALID/EXPIRED` tamamen eşleşiyor; cookie semantiği (HttpOnly+Secure+SameSite=Strict+Path=/api/v1/auth) doğru.
+- [x] Token rotation çalışıyor — `RotateAsync` Success branch'i önce yeni token basıyor, sonra eski token `IsRevoked=true + ReplacedByTokenId=new.Id` işaretliyor. CI integration testleri ile kanıtlandı.
+- [x] Kullanılmış refresh token ile tekrar istek → 401 — `RotateOutcome.Reused` → 401 `REFRESH_TOKEN_INVALID` + `MassRevokeAsync`. Integration test doğrudan doğruladı.
+
+### Test sonuçları (CI authoritative)
+
+| Tür | Sonuç | Kaynak |
+|---|---|---|
+| Build (Release) | ✓ 0W/0E | CI run `24831070336` job `2. Build` ✓ |
+| Unit | ✓ 328 test (tüm modüller) | CI run `24831070336` job `3. Unit test` ✓ (3 test run successful) |
+| Integration (Auth MsSql) | ✓ 28 test (14 T32 + 14 T29-T31) | CI run `24831070336` job `4. Integration test`: `RefreshTokenServiceTests` 9/9 + `RefreshTokenCleanupJobTests` 5/5 + `AuthSessionEndpointTests` 9/9 tümü PASS. Önceki Auth integration regression yok (`TosAcceptanceServiceTests` 6/6, `ReVerifyCallback_...` 3/3, `SettingsBased*` 11/11). |
+| Integration (API SQLite) | ✓ `AuthSessionEndpointTests` 9/9 + regression yok | CI run `24831070336` ayrıntılı loglarda Auth endpoint test'leri geçti; önceki T29-T31 API integration'ları kırılmadı. |
+| Contract | ✓ | CI run `24831070336` job `5. Contract test` ✓ |
+| Migration dry-run | ✓ | CI run `24831070336` job `6. Migration dry-run` ✓ (T32 migration eklemedi — RefreshToken entity T18'de). |
+| Docker build | ✓ | CI run `24831070336` job `7. Docker build (backend)` ✓ |
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç | Not |
+|---|---|---|
+| Secret sızıntısı | ✓ Temiz | Refresh token plaintext yalnızca client HttpOnly cookie + kısa ömürlü server memory'de; DB `RefreshToken.Token` kolonu SHA-256 hex hash; Redis key de hash. `RefreshTokenCacheEntry` payload'ı `(TokenId, UserId, ExpiresAt)` — plaintext asla cache'de değil. Logger'larda plaintext/hash dahi loglanmıyor. |
+| Auth etkisi | ✓ Temiz | `/auth/me` + `/auth/logout` `[Authorize(Authenticated)]`; `/auth/refresh` `[AllowAnonymous]` ama cookie gerektirir — plaintext → hash → DB lookup, bilinmeyen token 401. Rotation sonrası eski cookie kullanımı `Reused` branch'ı ile blok + mass-revoke. |
+| Input validation | ✓ Temiz | Refresh cookie eksik/whitespace → erken 401 (`REFRESH_TOKEN_MISSING`, `clearCookie=false` — gereksiz Set-Cookie yok). Cookie delete path (`/api/v1/auth`) set path ile aynı — yanlış scope'lu cookie bırakmıyor. Logout cookie'siz çağrıda da 200 (idempotent). |
+| CSRF | ✓ Temiz (minor doc note aşağıda) | Refresh cookie `SameSite=Strict` — cross-site POST /auth/refresh browser tarafından tetiklenemiyor. Logout bearer-auth korunan olduğundan CSRF risk yok. 05 §6.1 "SameSite + anti-forgery token" diyor — implementasyon yalnızca SameSite=Strict (ana savunma) kullanıyor; AntiForgery middleware `Program.cs:60-67` configure'li ama `/auth/refresh` üzerinde `[ValidateAntiForgeryToken]` yok. SameSite=Strict modern CSRF için yeterli (OWASP Session Management Cheat Sheet), defense-in-depth anti-forgery token eklenebilir ama T32 scope dışı. Güvenlik açığı değil, sözleşme sözcüğü eşleşmesi. |
+| Rate limiting | ✓ Temiz | Controller sınıf düzeyinde `[RateLimit("auth")]` — tüm endpoint'ler (refresh/logout/me) auth bucket'ından tüketiyor. |
+| Token reuse detection | ✓ | OWASP refresh token reuse detection kanonu: rotated token replay → tüm kullanıcı oturumları kapatılıyor. Integration ile kanıtlı. |
+| Cache poisoning | ✓ Temiz | Redis `KeyDeleteAsync` rotate + revoke her durumda çağrılıyor; cache hit durumunda bile DB authoritative (service `FirstOrDefaultAsync(Token == hash)` doğrudan DB sorgusu — cache payload'ına güven yok, cache sadece "token active var mı" soğuk uyarısı). Kötü niyetli Redis content injection senaryosunda DB lookup gerçeği söyler. |
+| Yeni dış bağımlılık | Yok | StackExchange.Redis Auth modülünde T31 ile eklenmişti. |
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| — | — | FAIL/S1/S2/S3 yok. | — |
+
+### Minor gözlemler (bilgi amaçlı, PASS'i engellemez)
+
+| # | Gözlem | Etki | Öneri |
+|---|---|---|---|
+| O1 | `/auth/logout` 200 yanıtı boş body döndürüyor (`return Ok();` → `OkResult`, `ObjectResult` değil). `ApiResponseWrapperFilter` yalnızca `ObjectResult` sarmaladığı için envelope `{ success, data, traceId }` eklenmiyor. 07 §4.9 "Response (200) `data`: `null`" envelope'sız da fonksiyonel karşılanıyor ama diğer endpoint'ler (T29-T31) envelope döndürüyor. | UI uyumu: frontend logout response body'yi parse etmiyor; hiçbir integration test envelope assert etmiyor. Backward compat riski: ileride bir consumer envelope bekleyip boş body alırsa parse hatası verir. | Opsiyonel: `return Ok<object?>(null);` ile `OkObjectResult` üret → filter envelope'u sarar. T33+ içinde tutarlılık için yapılabilir; T32'de scope dışı. |
+| O2 | 05 §6.1 CSRF notu "SameSite + anti-forgery token" diyor; implementasyon yalnız SameSite=Strict kullanıyor (anti-forgery token endpoint'te değil). | SameSite=Strict modern tarayıcılarda CSRF için yeterli (OWASP). Eski tarayıcı desteği veya defense-in-depth çok önemliyse ekstra koruma yok. | Opsiyonel: `/auth/refresh` için anti-forgery token ekleme veya 05 §6.1'i "SameSite=Strict yeterli, anti-forgery opsiyonel" şeklinde netleştirme. T32 scope dışı — F2 Gate Check'te karar verilir. |
+
+### Yapım raporu karşılaştırması
+
+- **Uyum:** Tam uyumlu. Yapım raporundaki §"Kabul Kriterleri Kontrolü" + §"Güvenlik Self-Check" validator verdict'iyle satır satır eşleşiyor. Yapım raporu CSRF için "cross-site tetiklenemiyor" demiş, validator da aynı sonuca ulaştı.
+- **Uyuşmazlık:** Yok. Yapım raporu minor O1/O2 gözlemlerini açıkça not etmemiş (rapor çerçevesine uygun — Known Limitations daha kapsamlı şeyler: Redis cache integration testi, Hangfire smoke, T41 admin config), ancak validator minor gözlem olarak eklemeyi tercih etti — F2 Gate Check kayıtı için.
+
+### Dış varsayım doğrulaması (feedback_check_external_assumptions — validator tarafı)
+
+- `IConnectionMultiplexer` singleton — `SteamAuthenticationModule.cs:83-85` `sp.GetRequiredService<IConnectionMultiplexer>()` T31'de de aynı pattern, Redis module startup'ta kayıtlı ✓
+- `RecurringJob.AddOrUpdate` static Hangfire API — `HangfireBackgroundJobScheduler.cs:36-38` ✓
+- `IServiceScopeFactory` singleton (built-in DI) — standart ASP.NET Core pattern, her host'ta mevcut ✓
+- User entity alanları (`MobileAuthenticatorVerified`, `TosAcceptedAt`, `PreferredLanguage`, `DefaultPayoutAddress`, `DefaultRefundAddress`) — T18/T30 sonrası mevcut ✓
+- RefreshToken entity (`ReplacedByTokenId`, `IsRevoked`, `RevokedAt`, soft-delete `IsDeleted/DeletedAt`) — T18 + T29 sonrası mevcut; migration gereksiz ✓
+- Global soft-delete query filter (`AppDbContext.ApplySoftDeleteFilter`) — soft-deleted token'ları sonraki sorgulardan otomatik hariç tutuyor; cleanup job query'si IsDeleted=false satırlarda çalışıyor ✓
