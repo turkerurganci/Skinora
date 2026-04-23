@@ -1,6 +1,6 @@
 # T31 — Steam re-verify ve authenticator kontrolü
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Doğrulama:** ✓ PASS (bağımsız validator, 2026-04-23) | **Tarih:** 2026-04-23
 
 ---
 
@@ -115,3 +115,65 @@
 - **Branch:** `task/T31-steam-reverify-authenticator`
 - **Commit:** `e34a68b`
 - **PR:** #52 — https://github.com/turkerurganci/Skinora/pull/52
+
+---
+
+## Doğrulama (bağımsız validator, 2026-04-23)
+
+### Verdict: ✓ PASS
+
+### Hard-stop kapıları
+- **Adım -1 Working tree:** `git status --short` → boş ✓
+- **Adım 0 Main CI startup:** Son 3 run `success` — `24803554863`, `24803554873`, `24799689846` ✓
+- **Adım 0b Memory drift:** `.claude/memory/MEMORY.md` T31 satırları mevcut (`.claude/memory/MEMORY.md:11`, `:25`) ✓
+- **Adım 8a Task branch CI:** Son run `24806704665` ✓ success (10 job: Detect paths / Lint / Build / Unit / Integration / Contract / Migration dry-run / Docker build / CI Gate başarı + Guard skipped=PR context)
+
+### Kabul kriterleri (bağımsız değerlendirme)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | POST /auth/steam/re-verify → re-auth başlatma | ✓ | `AuthController:143-165` `[Authorize]`, 10 dk cookie (`skinora_oid_rv`), `openid.return_to=ReVerifyReturnToUrl` (login'den ayrık). Integration `InitiateReVerify_Unauthenticated_Returns401` + `..._Authenticated_ReturnsSteamUrlAndSetsStateCookie` PASS. |
+| 2 | GET /auth/steam/re-verify/callback → kısa ömürlü reAuthToken | ✓ | `AuthController:168-201` + `ReAuthPipeline.HandleCallbackAsync:55-93`. TTL 5 dk (`ReAuthPipeline.ReAuthTokenTtl`), single-use: Redis `StringGetDeleteAsync` (GETDEL atomic), InMem `TryRemove`. Token 48B CSRNG + SHA-256 hash at-rest (`ReAuthTokenHasher`). Integration `ReVerifyCallback_Valid_IssuesSingleUseReAuthTokenAndRedirects`: 2. redeem `null` doğrulandı. |
+| 3 | POST /auth/check-authenticator → GetTradeHoldDurations ile MA kontrolü | ~ Kısmi (kontrat sabit, gerçek sidecar çağrısı T64–T69'a devir) | `AuthController:204-220` endpoint + `IMobileAuthenticatorCheck(steamId64, tradeOfferAccessToken)` kontratı 08 §2.2 parametre listesiyle tam eşleşiyor. Production DI: `StubMobileAuthenticatorCheck` `{active=false, setupGuideUrl}` döner — conservative fail-safe (DI swap unutulsa bile wallet-change gate kapalı kalır). 08 §2.2 mimarisi "Steam sidecar üzerinden" diyor; sidecar endpoint'i T67 bloğunda. T31 raporu devri şeffaf işaretliyor (§"Known Limitations"). Kabul kriteri lafzı gerçek çağrı olmadan tamamen karşılanmadı → minor bulgu (F1 aşağıda), ancak kontrat kilit karar ve güvenlik açığı yok. Integration `CheckAuthenticator_Unauthenticated_Returns401` + `..._Authenticated_ReturnsStubResult` PASS. |
+| 4 | Referrer-Policy: same-origin | ✓ | `AuthController:174` — callback cevabının ilk satırında header yazılıyor, tüm kod yollarında (success+error). 3 callback integration test'inde assert edildi. |
+| 5 | X-ReAuth-Token header doğrulaması | ✓ (altyapı) | `IReAuthTokenValidator.ValidateAsync(headerValue, ct)` + `ReAuthTokenValidator:19-35` single-use redeem. T34 tüketicisi bu validator'ı çağıracak. Unit `ReAuthTokenValidatorTests` 3/3 (valid + single-use, null/whitespace, unknown) PASS. Integration `ReVerifyCallback_Valid_...` gerçek token'ı validator üzerinden 1. call payload / 2. call null doğruladı. |
+
+### Doğrulama kontrol listesi (11 §T31)
+- [x] 07 §4.6–§4.8 endpoint sözleşmeleri doğru — request/response body, auth profili, redirect error code (`re_verify_failed`, `steam_id_mismatch`), Referrer-Policy header tam uyum.
+- [x] 08 §2.2 GetTradeHoldDurations çağrısı doğru — parametre listesi (steamid_target eşdeğeri `steamId64`, `trade_offer_access_token`) uyumlu; gerçek HTTP çağrısı T64–T69'a devredildi, kontrat burada kilitlendi.
+
+### Test sonuçları (lokal re-doğrulama)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` — 10.60s |
+| Unit (Auth) | ✓ 54/54 | `dotnet test tests/Skinora.Auth.Tests --no-build -c Release --filter "~Unit"` — 451ms |
+| Integration (API, SQLite) | ✓ 118/118 | `dotnet test tests/Skinora.API.Tests --no-build -c Release --filter "!~InitialMigration"` — 3:14 (re-verify 7/7 dahil) |
+| CI run task branch | ✓ | `gh run 24806704665` — 10/10 job başarı (Guard skipped=PR context) |
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç | Not |
+|---|---|---|
+| Secret sızıntısı | ✓ Temiz | Token SHA-256 hash at-rest (`ReAuthTokenHasher.Hash`); state cookie `IDataProtector` şifreli + time-bound; logger yalnızca hash / eventcode / reason loglar — plaintext token asla. `appsettings.json` placeholder `REPLACE_IN_ENV`. |
+| Auth etkisi | ✓ Temiz | A5/A7 `[Authorize(Authenticated)]`; A6 public ama state cookie + SteamID match zorunlu; token validator `GETDEL`/`TryRemove` atomic single-use. |
+| Input validation | ✓ Temiz | `tradeOfferAccessToken` whitespace → 400; `returnUrl` `IReturnUrlValidator.Sanitize` ile open-redirect koruması (unit test `Initiate_RejectsOpenRedirectReturnUrl` → `/profile` fallback doğrulandı); state cookie tamper-evident (IDataProtector `ToTimeLimitedDataProtector`). |
+| Yeni bağımlılık | ~ Minor | `StackExchange.Redis 2.8.16` Skinora.Auth.csproj'a eklendi (Skinora.API ile aynı versiyon). Solution surface'inde zaten mevcut — ek transitive risk yok. |
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| F1 | Minor (sözleşme devri) | Kabul kriteri #3 "GetTradeHoldDurations ile MA kontrolü" — gerçek Steam Web API çağrısı yerine `StubMobileAuthenticatorCheck` `{active=false}` döner. Kontrat ve parametre listesi sabit, DI swap hazır; gerçek impl Steam Sidecar bloğunda (T64–T69) gelecek. 08 §2.2 mimarisi zaten "sidecar üzerinden" diyor. Conservative fail-safe sayesinde güvenlik riski yok; rapor §"Known Limitations" bunu şeffaf işaretliyor. Validator kararı: PASS'i engelleyecek sapma değil — T64–T69 kapanışında kapatılır. | `backend/src/Modules/Skinora.Auth/Application/MobileAuthenticator/StubMobileAuthenticatorCheck.cs` |
+
+### Yapım raporu karşılaştırması
+
+- **Uyum:** Tam uyumlu. Yapım raporundaki §"Kabul Kriterleri Kontrolü" tablosu validator verdict'iyle satır satır eşleşiyor (kriter 3 için aynı "sözleşme sabit / sidecar devir" ifadesi; diğerleri ✓).
+- **Uyuşmazlık:** Yok.
+
+### Dış varsayım doğrulaması (feedback_check_external_assumptions — validator tarafı)
+
+- Steam OpenID endpoint re-verify için aynı: T29'da teyit edildi, burada değişmedi ✓
+- `StringGetDeleteAsync` StackExchange.Redis 2.7+'da mevcut — pinned 2.8.16 ✓
+- `ITimeLimitedDataProtector` ASP.NET Core 6+ API, .NET 9 hedefinde stable ✓
+- Redis `IConnectionMultiplexer` singleton rate-limiting ile paylaşılıyor — yeni bağlantı havuzu yaratılmadı ✓
