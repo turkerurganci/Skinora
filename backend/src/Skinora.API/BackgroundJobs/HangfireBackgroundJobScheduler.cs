@@ -32,4 +32,8 @@ public sealed class HangfireBackgroundJobScheduler : IBackgroundJobScheduler
 
     public bool Delete(string jobId)
         => _client.Delete(jobId);
+
+    public void AddOrUpdateRecurring<T>(
+        string jobId, Expression<Action<T>> methodCall, string cronExpression)
+        => RecurringJob.AddOrUpdate(jobId, methodCall, cronExpression);
 }

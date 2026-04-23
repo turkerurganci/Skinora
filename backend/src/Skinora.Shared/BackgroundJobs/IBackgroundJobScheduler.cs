@@ -48,4 +48,13 @@ public interface IBackgroundJobScheduler
     /// </summary>
     /// <returns><c>true</c> if the job was found and marked deleted.</returns>
     bool Delete(string jobId);
+
+    /// <summary>
+    /// Registers a recurring job that runs on the given cron schedule. If a
+    /// job with the same <paramref name="jobId"/> already exists it is
+    /// replaced, so callers can invoke this at every startup to keep the
+    /// schedule definition in sync with code.
+    /// </summary>
+    void AddOrUpdateRecurring<T>(
+        string jobId, Expression<Action<T>> methodCall, string cronExpression);
 }

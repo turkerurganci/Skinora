@@ -5,15 +5,17 @@ using Microsoft.Extensions.Options;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
+using Skinora.Auth.Application.Session;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
+using Skinora.Shared.Models;
 
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// Steam OpenID authentication + ToS + re-verify + authenticator endpoints —
-/// 07 §4.2–§4.4, §4.6–§4.8. Refresh / me / logout arrive with T32.
+/// Steam OpenID authentication + ToS + re-verify + authenticator + session
+/// endpoints — 07 §4.2–§4.10.
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
@@ -31,6 +33,8 @@ public sealed class AuthController : ControllerBase
     private readonly ITosAcceptanceService _tosAcceptance;
     private readonly IReAuthPipeline _reAuthPipeline;
     private readonly IMobileAuthenticatorCheck _authenticatorCheck;
+    private readonly IRefreshTokenService _refreshTokenService;
+    private readonly ICurrentUserService _currentUserService;
 
     public AuthController(
         IOptions<SteamOpenIdSettings> settings,
@@ -38,7 +42,9 @@ public sealed class AuthController : ControllerBase
         ISteamAuthenticationPipeline pipeline,
         ITosAcceptanceService tosAcceptance,
         IReAuthPipeline reAuthPipeline,
-        IMobileAuthenticatorCheck authenticatorCheck)
+        IMobileAuthenticatorCheck authenticatorCheck,
+        IRefreshTokenService refreshTokenService,
+        ICurrentUserService currentUserService)
     {
         _settings = settings.Value;
         _returnUrlValidator = returnUrlValidator;
@@ -46,6 +52,8 @@ public sealed class AuthController : ControllerBase
         _tosAcceptance = tosAcceptance;
         _reAuthPipeline = reAuthPipeline;
         _authenticatorCheck = authenticatorCheck;
+        _refreshTokenService = refreshTokenService;
+        _currentUserService = currentUserService;
     }
 
     /// <summary>A1 — <c>GET /auth/steam</c>. Redirects to Steam OpenID.</summary>
@@ -219,6 +227,105 @@ public sealed class AuthController : ControllerBase
         return Ok(new CheckAuthenticatorResponse(result.Active, result.SetupGuideUrl));
     }
 
+    /// <summary>A4 — <c>GET /auth/me</c>. Current session profile (07 §4.5).</summary>
+    [HttpGet("me")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(AuthClaimTypes.UserId);
+        var role = User.FindFirstValue(AuthClaimTypes.Role) ?? AuthRoles.User;
+        if (!Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var dto = await _currentUserService.GetAsync(userId, role, cancellationToken);
+        if (dto is null) return Unauthorized();
+
+        return Ok(dto);
+    }
+
+    /// <summary>A8 — <c>POST /auth/logout</c>. Revokes refresh and clears cookie (07 §4.9).</summary>
+    [HttpPost("logout")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+    {
+        if (Request.Cookies.TryGetValue(RefreshCookieName, out var cookie)
+            && !string.IsNullOrWhiteSpace(cookie))
+        {
+            await _refreshTokenService.RevokeAsync(cookie, cancellationToken);
+        }
+
+        ClearRefreshCookie();
+        return Ok();
+    }
+
+    /// <summary>A9 — <c>POST /auth/refresh</c>. Rotates refresh + returns new access (07 §4.10).</summary>
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
+    {
+        if (!Request.Cookies.TryGetValue(RefreshCookieName, out var cookie)
+            || string.IsNullOrWhiteSpace(cookie))
+        {
+            return RefreshFailure("REFRESH_TOKEN_MISSING", clearCookie: false);
+        }
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+        if (string.IsNullOrWhiteSpace(userAgent)) userAgent = null;
+
+        var outcome = await _refreshTokenService.RotateAsync(
+            cookie, ipAddress, userAgent, cancellationToken);
+
+        return outcome switch
+        {
+            RotateOutcome.Success success => IssueRotatedSession(success),
+            RotateOutcome.Missing => RefreshFailure("REFRESH_TOKEN_MISSING", clearCookie: false),
+            RotateOutcome.Expired => RefreshFailure("REFRESH_TOKEN_EXPIRED"),
+            RotateOutcome.Reused => RefreshFailure("REFRESH_TOKEN_INVALID"),
+            _ => RefreshFailure("REFRESH_TOKEN_INVALID"),
+        };
+    }
+
+    private IActionResult IssueRotatedSession(RotateOutcome.Success success)
+    {
+        Response.Cookies.Append(
+            RefreshCookieName,
+            success.Refresh.PlainTextToken,
+            BuildRefreshCookieOptions(success.Refresh.ExpiresAt));
+
+        var secondsRemaining = Math.Max(
+            0, (int)(success.Access.ExpiresAt - DateTime.UtcNow).TotalSeconds);
+        return Ok(new RefreshResponse(success.Access.Token, secondsRemaining));
+    }
+
+    private IActionResult RefreshFailure(string errorCode, bool clearCookie = true)
+    {
+        if (clearCookie) ClearRefreshCookie();
+        var body = ApiResponse<object>.Fail(
+            errorCode, "Refresh token could not be rotated.", traceId: HttpContext.TraceIdentifier);
+        return StatusCode(StatusCodes.Status401Unauthorized, body);
+    }
+
+    private void ClearRefreshCookie()
+    {
+        Response.Cookies.Delete(RefreshCookieName, new CookieOptions
+        {
+            Path = RefreshCookiePath,
+            Secure = true,
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+        });
+    }
+
+    private static CookieOptions BuildRefreshCookieOptions(DateTime expiresAt) => new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = RefreshCookiePath,
+        Expires = expiresAt,
+    };
+
     private string BuildReVerifyRedirect(ReAuthOutcome.Success success)
     {
         var target = _returnUrlValidator.Sanitize(success.ReturnUrl);
@@ -250,3 +357,5 @@ public sealed record ReVerifyInitiateResponse(string SteamAuthUrl);
 public sealed record CheckAuthenticatorRequest(string TradeOfferAccessToken);
 
 public sealed record CheckAuthenticatorResponse(bool Active, string? SetupGuideUrl);
+
+public sealed record RefreshResponse(string AccessToken, int ExpiresIn);
