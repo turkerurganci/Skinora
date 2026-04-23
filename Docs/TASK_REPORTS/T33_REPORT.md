@@ -1,6 +1,6 @@
 # T33 — User profil servisi
 
-**Faz:** F2 | **Durum:** ⏳ Yapım tamamlandı — doğrulama bekliyor | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ PASS (bağımsız validator, 2026-04-23) | **Tarih:** 2026-04-23
 
 ---
 
@@ -100,6 +100,50 @@ dotnet build -c Release --nologo
 - **Commit (rapor+status+memory):** `8f52e26`
 - **PR:** [#56](https://github.com/turkerurganci/Skinora/pull/56)
 - **CI run:** [`24836165946`](https://github.com/turkerurganci/Skinora/actions/runs/24836165946) — 10/10 job ✓ (Lint + Build + Unit + Integration + Contract + Migration dry-run + Docker build + CI Gate).
+
+## Doğrulama (bağımsız validator, 2026-04-23)
+
+**Verdict:** ✓ **PASS** (1 minor advisory)
+
+### Hard-stop kapıları
+- Adım -1 (working tree): temiz
+- Adım 0 (main CI startup): 3/3 `success` — `24833617580`, `24833617592`, `24827836299`
+- Adım 0b (memory drift): MEMORY.md T33 satırları mevcut
+- Adım 8a (task branch CI): `24836738512` `success` (10/10 job)
+
+### Kabul matrisi
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `GET /users/me` | ✓ | `UsersController.GetMe` + `UserProfileService.GetOwnProfileAsync`; 13 alan 07 §5.1 ile 1:1; `GetMe_Authenticated_ReturnsOwnProfile` (11 alan assert) + `GetMe_Unauthenticated_Returns401` |
+| 2 | `GET /users/me/stats` | ✓ | EF projection `.Select(...)` — 3 alan; `GetMyStats_Authenticated_ReturnsStatsDto` |
+| 3 | `GET /users/{steamId}` | ✓ | Public DTO 7 alan; wallet/cancelRate response'ta yok (`TryGetProperty == false`); 404 `USER_NOT_FOUND` envelope; `GetPublic_ExistingUser_ReturnsLimitedProfile` + `GetPublic_MissingUser_Returns404WithUserNotFoundCode` |
+
+### Doğrulama listesi (11 §T33)
+- [x] 07 §5.1–§5.5 response DTO'ları doğru — alan-alan uyumlu; reputationScore/cancelRate=null T43 forward devir, mobileAuthenticatorActive=User flag T64-T69 forward devir, accountAge Türkçe verbatim T97 forward devir.
+
+### Test sonuçları (validator yeniden çalıştırdı)
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build (Release) | 0 W / 0 E | `dotnet build -c Release --nologo` |
+| API integration (full) | 138/138 ✓ | `dotnet test tests/Skinora.API.Tests` |
+| Auth unit | 85/85 ✓ | `dotnet test tests/Skinora.Auth.Tests` |
+| UserProfileEndpointTests | 5/5 ✓ | `--filter ~UserProfileEndpointTests` |
+
+### Güvenlik
+- Secret sızıntısı: temiz
+- Auth: U1/U2 `Authenticated` + `user-read`, U5 `AllowAnonymous` + `public` — 07 §5 ile uyumlu
+- Public profil leak: wallet/cancelRate yok (test garantili)
+- Soft-delete + IsDeactivated filter: global query filter + servis `!IsDeactivated`
+- Yeni dış bağımlılık: yok
+
+### Bulgular
+| # | Seviye | Açıklama | Çözüm yetkisi |
+|---|---|---|---|
+| 1 | M (advisory) | `successfulTransactionRate` API'de fraction (0.96) olarak dönüyor — 06 §3.1 (`decimal(5,4)`, "0.9500 = %95") storage konvansiyonuyla uyumlu, ancak 07 §5.1/§5.2/§5.5 örneklerinde `96.0` (yüzde) gösteriliyor. Doc-level inconsistency. T33 backend kararı doğru (transformasyon eklemiyor). Frontend (T75+) entegrasyonundan önce 07 örneklerinin fraction olarak güncellenmesi veya DTO'da `*100` çarpılması arasında karar gerekli. | T33 dışı — doc senkronizasyon kararı. |
+
+### Yapım raporu karşılaştırması
+- Tam uyumlu: kabul matrisi 3/3 ✓ ile birebir, test sonuçları + forward-defer listesi bağımsız incelemede onaylandı.
+- Yeni bulgu: M1 yapım raporunda yer almıyordu — fail nedeni değil; doc-resync için kayıt amaçlı eklendi.
 
 ## Sırada
 
