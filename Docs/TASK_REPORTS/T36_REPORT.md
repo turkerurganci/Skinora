@@ -132,10 +132,10 @@ dotnet build Skinora.sln -c Release
 ## Commit & PR
 
 - **Branch:** `task/T36-account-deactivate-delete`
-- **Commit (kod):** (push sırasında doldurulacak)
-- **Commit (rapor+status+memory):** (push sırasında doldurulacak)
-- **PR:** (push sonrası gh pr create çıktısına göre)
-- **CI run:** (push sonrası)
+- **Commit (kod):** `5e383ec`
+- **Commit (rapor+status+memory):** `bd80954`
+- **PR:** [#60](https://github.com/turkerurganci/Skinora/pull/60)
+- **CI run:** (izleme aşağıda)
 
 ## Doğrulama
 
