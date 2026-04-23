@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-23 (T32 Refresh token yönetimi ✓ PASS — `/auth/refresh` rotation + reuse detection + `/auth/logout` + `/auth/me`, Redis cache + null fallback, Hangfire recurring cleanup job (7-gün grace). PR #55, `8a22c15`+`b65862d` (format fix), CI run `24831070336`+`24832464818` 10/10 ✓. Validator ✓ PASS (bağımsız chat, 0 finding, 2 minor gözlem — envelope + anti-forgery doc-wording).)
+**Son güncelleme:** 2026-04-23 (T33 User profil servisi — `GET /users/me` + `GET /users/me/stats` + `GET /users/:steamId`. DTO alanları 07 §5.1/§5.2/§5.5 ile 1:1; `reputationScore`/`cancelRate` T43/T52'ye devir (null), `accountAge` Türkçe verbatim (T97 i18n'e devir). Migration yok. API.Tests 138/138 + unit 219/219 PASS. Branch `task/T33-user-profile`, PR pending.)
 
 ---
 
@@ -81,7 +81,7 @@
 | T30 | ToS kabul, yaş gate, geo-block | ✓ Tamamlandı | ✓ PASS | `dfebf87` (PR #49, pending squash) |
 | T31 | Steam re-verify ve authenticator kontrolü | ✓ Tamamlandı | ✓ PASS (1 minor — MA check stub, T64–T69'a devir) | `e34a68b` (#52, pending squash) |
 | T32 | Refresh token yönetimi | ✓ Tamamlandı | ✓ PASS | `8a22c15` + `b65862d` (PR #55, pending squash) |
-| T33 | User profil servisi | ⬚ Bekliyor | — | — |
+| T33 | User profil servisi | ⏳ Devam ediyor | — | (pending PR) |
 | T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ⬚ Bekliyor | — | — |
 | T36 | Hesap deaktif ve silme | ⬚ Bekliyor | — | — |
