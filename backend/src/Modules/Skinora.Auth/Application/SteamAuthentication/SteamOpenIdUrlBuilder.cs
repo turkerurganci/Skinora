@@ -11,13 +11,15 @@ public static class SteamOpenIdUrlBuilder
     private const string Ns = "http://specs.openid.net/auth/2.0";
     private const string IdentifierSelect = "http://specs.openid.net/auth/2.0/identifier_select";
 
-    public static string Build(SteamOpenIdSettings settings)
+    public static string Build(SteamOpenIdSettings settings) => Build(settings, settings.ReturnToUrl);
+
+    public static string Build(SteamOpenIdSettings settings, string returnToUrl)
     {
         var query = new Dictionary<string, string>
         {
             ["openid.ns"] = Ns,
             ["openid.mode"] = "checkid_setup",
-            ["openid.return_to"] = settings.ReturnToUrl,
+            ["openid.return_to"] = returnToUrl,
             ["openid.realm"] = settings.Realm,
             ["openid.identity"] = IdentifierSelect,
             ["openid.claimed_id"] = IdentifierSelect,

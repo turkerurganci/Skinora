@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Skinora.API.RateLimiting;
+using Skinora.Auth.Application.MobileAuthenticator;
+using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
@@ -10,8 +12,8 @@ using Skinora.Auth.Configuration;
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// Steam OpenID authentication + ToS endpoints — 07 §4.2–§4.4 (A1, A2, A3).
-/// Refresh / me / logout arrive with T32, re-verify with T31.
+/// Steam OpenID authentication + ToS + re-verify + authenticator endpoints —
+/// 07 §4.2–§4.4, §4.6–§4.8. Refresh / me / logout arrive with T32.
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
@@ -19,6 +21,7 @@ namespace Skinora.API.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private const string ReturnUrlStateCookie = "skinora_oid_rt";
+    private const string ReVerifyStateCookie = "skinora_oid_rv";
     private const string RefreshCookieName = "refreshToken";
     private const string RefreshCookiePath = "/api/v1/auth";
 
@@ -26,17 +29,23 @@ public sealed class AuthController : ControllerBase
     private readonly IReturnUrlValidator _returnUrlValidator;
     private readonly ISteamAuthenticationPipeline _pipeline;
     private readonly ITosAcceptanceService _tosAcceptance;
+    private readonly IReAuthPipeline _reAuthPipeline;
+    private readonly IMobileAuthenticatorCheck _authenticatorCheck;
 
     public AuthController(
         IOptions<SteamOpenIdSettings> settings,
         IReturnUrlValidator returnUrlValidator,
         ISteamAuthenticationPipeline pipeline,
-        ITosAcceptanceService tosAcceptance)
+        ITosAcceptanceService tosAcceptance,
+        IReAuthPipeline reAuthPipeline,
+        IMobileAuthenticatorCheck authenticatorCheck)
     {
         _settings = settings.Value;
         _returnUrlValidator = returnUrlValidator;
         _pipeline = pipeline;
         _tosAcceptance = tosAcceptance;
+        _reAuthPipeline = reAuthPipeline;
+        _authenticatorCheck = authenticatorCheck;
     }
 
     /// <summary>A1 — <c>GET /auth/steam</c>. Redirects to Steam OpenID.</summary>
@@ -130,6 +139,93 @@ public sealed class AuthController : ControllerBase
         return Ok(new AcceptTosResponse(Accepted: true, AcceptedAt: result.AcceptedAt));
     }
 
+    /// <summary>A5 — <c>POST /auth/steam/re-verify</c>. Starts Steam re-auth (wallet change).</summary>
+    [HttpPost("steam/re-verify")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    public ActionResult<ReVerifyInitiateResponse> InitiateReVerify(
+        [FromBody] ReVerifyInitiateRequest request)
+    {
+        var userIdClaim = User.FindFirstValue(AuthClaimTypes.UserId);
+        var steamIdClaim = User.FindFirstValue(AuthClaimTypes.SteamId);
+        if (!Guid.TryParse(userIdClaim, out var userId) || string.IsNullOrWhiteSpace(steamIdClaim))
+            return Unauthorized();
+
+        var initiation = _reAuthPipeline.Initiate(userId, steamIdClaim, request.ReturnUrl);
+
+        Response.Cookies.Append(ReVerifyStateCookie, initiation.ProtectedState, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            Path = "/api/v1/auth",
+            MaxAge = ReAuthStateProtector.StateLifetime,
+        });
+
+        return Ok(new ReVerifyInitiateResponse(initiation.SteamAuthUrl));
+    }
+
+    /// <summary>A6 — <c>GET /auth/steam/re-verify/callback</c>. Issues reAuthToken.</summary>
+    [HttpGet("steam/re-verify/callback")]
+    [AllowAnonymous]
+    public async Task<IActionResult> HandleReVerifyCallback(CancellationToken cancellationToken)
+    {
+        // 07 §4.7 — Referrer-Policy: same-origin keeps the reAuthToken query
+        // param from leaking to third-party origins via HTTP Referer.
+        Response.Headers["Referrer-Policy"] = "same-origin";
+
+        var callbackParameters = Request.Query
+            .Where(q => q.Key.StartsWith("openid.", StringComparison.Ordinal))
+            .ToDictionary(q => q.Key, q => q.Value.ToString());
+
+        var protectedState = Request.Cookies.TryGetValue(ReVerifyStateCookie, out var state)
+            ? state
+            : null;
+
+        Response.Cookies.Delete(ReVerifyStateCookie, new CookieOptions
+        {
+            Path = "/api/v1/auth",
+        });
+
+        var outcome = await _reAuthPipeline.HandleCallbackAsync(
+            callbackParameters, protectedState, cancellationToken);
+
+        return outcome switch
+        {
+            ReAuthOutcome.Success success => Redirect(BuildReVerifyRedirect(success)),
+            ReAuthOutcome.SteamIdMismatch => Redirect(
+                BuildFrontendUrl("error", "steam_id_mismatch", null)),
+            ReAuthOutcome.StateMissing => Redirect(
+                BuildFrontendUrl("error", "re_verify_failed", null)),
+            _ => Redirect(BuildFrontendUrl("error", "re_verify_failed", null)),
+        };
+    }
+
+    /// <summary>A7 — <c>POST /auth/check-authenticator</c>. Mobile authenticator check.</summary>
+    [HttpPost("check-authenticator")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    public async Task<ActionResult<CheckAuthenticatorResponse>> CheckAuthenticator(
+        [FromBody] CheckAuthenticatorRequest request, CancellationToken cancellationToken)
+    {
+        var steamIdClaim = User.FindFirstValue(AuthClaimTypes.SteamId);
+        if (string.IsNullOrWhiteSpace(steamIdClaim))
+            return Unauthorized();
+
+        if (string.IsNullOrWhiteSpace(request.TradeOfferAccessToken))
+            return BadRequest(new { error = "tradeOfferAccessToken is required." });
+
+        var result = await _authenticatorCheck.CheckAsync(
+            steamIdClaim, request.TradeOfferAccessToken, cancellationToken);
+
+        return Ok(new CheckAuthenticatorResponse(result.Active, result.SetupGuideUrl));
+    }
+
+    private string BuildReVerifyRedirect(ReAuthOutcome.Success success)
+    {
+        var target = _returnUrlValidator.Sanitize(success.ReturnUrl);
+        var separator = target.Contains('?') ? "&" : "?";
+        return $"{target}{separator}reAuthToken={Uri.EscapeDataString(success.ReAuthToken)}";
+    }
+
     private string BuildFrontendUrl(string key, string value, string? returnUrl)
     {
         var builder = new UriBuilder(_settings.FrontendCallbackUrl);
@@ -146,3 +242,11 @@ public sealed class AuthController : ControllerBase
 public sealed record AcceptTosRequest(string TosVersion, bool AgeOver18);
 
 public sealed record AcceptTosResponse(bool Accepted, DateTime AcceptedAt);
+
+public sealed record ReVerifyInitiateRequest(string Purpose, string? ReturnUrl);
+
+public sealed record ReVerifyInitiateResponse(string SteamAuthUrl);
+
+public sealed record CheckAuthenticatorRequest(string TradeOfferAccessToken);
+
+public sealed record CheckAuthenticatorResponse(bool Active, string? SetupGuideUrl);

@@ -1,12 +1,16 @@
+using Skinora.Auth.Application.MobileAuthenticator;
+using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
+using StackExchange.Redis;
 
 namespace Skinora.API.Configuration;
 
 /// <summary>
-/// DI registration for T29/T30 — Steam OpenID authentication, access control
-/// pipeline (geo-block, age gate, sanctions), and ToS acceptance.
+/// DI registration for T29/T30/T31 — Steam OpenID authentication, access
+/// control pipeline (geo-block, age gate, sanctions), ToS acceptance, Steam
+/// re-verify + Mobile Authenticator check.
 /// </summary>
 public static class SteamAuthenticationModule
 {
@@ -54,6 +58,23 @@ public static class SteamAuthenticationModule
 
         // T30 — ToS acceptance + 18+ self-attestation (07 §4.4).
         services.AddScoped<ITosAcceptanceService, TosAcceptanceService>();
+
+        // T31 — Steam re-verify (07 §4.6–§4.7). Data Protection backs the state
+        // cookie; Redis (shared with rate limiting) stores the single-use
+        // reAuthToken payload.
+        services.AddDataProtection();
+        services.AddSingleton<IReAuthStateProtector, ReAuthStateProtector>();
+        services.AddSingleton<IReAuthTokenStore>(sp =>
+        {
+            var redis = sp.GetRequiredService<IConnectionMultiplexer>();
+            return new RedisReAuthTokenStore(redis, keyPrefix: "skinora");
+        });
+        services.AddScoped<IReAuthPipeline, ReAuthPipeline>();
+        services.AddScoped<IReAuthTokenValidator, ReAuthTokenValidator>();
+
+        // T31 — Mobile Authenticator check (07 §4.8, 08 §2.2). Stub returns
+        // active=false + setup guide URL; Steam sidecar impl arrives with T64–T69.
+        services.AddScoped<IMobileAuthenticatorCheck, StubMobileAuthenticatorCheck>();
 
         return services;
     }
