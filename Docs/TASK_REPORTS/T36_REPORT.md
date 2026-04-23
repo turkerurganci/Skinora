@@ -135,7 +135,7 @@ dotnet build Skinora.sln -c Release
 - **Commit (kod):** `5e383ec`
 - **Commit (rapor+status+memory):** `bd80954`
 - **PR:** [#60](https://github.com/turkerurganci/Skinora/pull/60)
-- **CI run:** (izleme aşağıda)
+- **CI run:** [`24858238481`](https://github.com/turkerurganci/Skinora/actions/runs/24858238481) — 10 job, **9 success + 1 skipped** (`0. Guard (direct push)` PR'da beklenen skip). Lint ✓ Build ✓ Unit ✓ Integration ✓ Contract ✓ Migration dry-run ✓ Docker build ✓ CI Gate ✓.
 
 ## Doğrulama
 
