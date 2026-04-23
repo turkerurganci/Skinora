@@ -16,6 +16,8 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
     // --- Wallet addresses (TRC-20) ---
     public string? DefaultPayoutAddress { get; set; }
     public string? DefaultRefundAddress { get; set; }
+    public DateTime? PayoutAddressChangedAt { get; set; }
+    public DateTime? RefundAddressChangedAt { get; set; }
 
     // --- Profile ---
     public string? Email { get; set; }

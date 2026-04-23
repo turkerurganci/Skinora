@@ -37,6 +37,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.DefaultRefundAddress)
             .HasMaxLength(50);
 
+        builder.Property(u => u.PayoutAddressChangedAt);
+
+        builder.Property(u => u.RefundAddressChangedAt);
+
         // --- Profile ---
         builder.Property(u => u.Email)
             .HasMaxLength(256);

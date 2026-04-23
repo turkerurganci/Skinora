@@ -10,9 +10,10 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
-/// Integration tests for the T26 + T30 EF Core seed contracts (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 30 SystemSetting rows
-/// (28 T26 platform parameters + 2 T30 access-control settings).
+/// Integration tests for the T26 + T30 + T34 EF Core seed contracts (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 32 SystemSetting rows
+/// (28 T26 platform parameters + 2 T30 access-control settings +
+/// 2 T34 wallet address cooldown settings).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -51,20 +52,21 @@ public class SeedDataTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task Seed_SystemSettings_Has_30_Rows_With_Unique_Keys()
+    public async Task Seed_SystemSettings_Has_32_Rows_With_Unique_Keys()
     {
-        // 28 T26 platform parameters + 2 T30 access-control settings.
+        // 28 T26 platform parameters + 2 T30 access-control settings +
+        // 2 T34 wallet address cooldown settings.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(30, rows.Count);
-        Assert.Equal(30, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(32, rows.Count);
+        Assert.Equal(32, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1: 10 rows ship with a documented default
-        // (8 T26 defaults + 2 T30 access-control settings).
+        // 06 §3.17 + 02 §21.1 + 02 §12.3: 12 rows ship with a documented default
+        // (8 T26 defaults + 2 T30 access-control + 2 T34 wallet cooldown).
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -82,6 +84,8 @@ public class SeedDataTests : IntegrationTestBase
             "monitoring_post_cancel_7d_polling_seconds",
             "monitoring_stop_after_days",
             "open_link_enabled",
+            "wallet.payout_address_cooldown_hours",
+            "wallet.refund_address_cooldown_hours",
         };
 
         Assert.Equal(expectedConfiguredKeys, configured.Select(s => s.Key).ToArray());
