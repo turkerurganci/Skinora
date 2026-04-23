@@ -142,7 +142,8 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
             => Guid.NewGuid().ToString("N");
         public bool Delete(string jobId) => true;
         public void AddOrUpdateRecurring<T>(
-            string jobId, System.Linq.Expressions.Expression<Action<T>> methodCall, string cronExpression) { }
+            string jobId, System.Linq.Expressions.Expression<Action<T>> methodCall, string cronExpression)
+        { }
     }
 
     public sealed class Factory : WebApplicationFactory<Program>

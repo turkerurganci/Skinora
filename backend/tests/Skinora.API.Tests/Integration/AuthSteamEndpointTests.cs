@@ -316,7 +316,8 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             => Guid.NewGuid().ToString("N");
         public bool Delete(string jobId) => true;
         public void AddOrUpdateRecurring<T>(
-            string jobId, Expression<Action<T>> methodCall, string cronExpression) { }
+            string jobId, Expression<Action<T>> methodCall, string cronExpression)
+        { }
     }
 
     public sealed class Factory : WebApplicationFactory<Program>
