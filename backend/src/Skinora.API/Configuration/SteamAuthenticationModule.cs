@@ -1,5 +1,6 @@
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
+using Skinora.Auth.Application.Session;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Auth.Configuration;
@@ -8,9 +9,10 @@ using StackExchange.Redis;
 namespace Skinora.API.Configuration;
 
 /// <summary>
-/// DI registration for T29/T30/T31 — Steam OpenID authentication, access
+/// DI registration for T29/T30/T31/T32 — Steam OpenID authentication, access
 /// control pipeline (geo-block, age gate, sanctions), ToS acceptance, Steam
-/// re-verify + Mobile Authenticator check.
+/// re-verify + Mobile Authenticator check, and refresh-token session
+/// management (rotate, revoke, /auth/me, cleanup job).
 /// </summary>
 public static class SteamAuthenticationModule
 {
@@ -75,6 +77,16 @@ public static class SteamAuthenticationModule
         // T31 — Mobile Authenticator check (07 §4.8, 08 §2.2). Stub returns
         // active=false + setup guide URL; Steam sidecar impl arrives with T64–T69.
         services.AddScoped<IMobileAuthenticatorCheck, StubMobileAuthenticatorCheck>();
+
+        // T32 — Session management: refresh-token rotation, logout, /auth/me,
+        // Redis-cached DB source of truth (05 §6.1), daily cleanup job.
+        services.AddSingleton<IRefreshTokenCache>(sp =>
+            new RedisRefreshTokenCache(
+                sp.GetRequiredService<IConnectionMultiplexer>(), keyPrefix: "skinora"));
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<RefreshTokenCleanupJob>();
+        services.AddHostedService<RefreshTokenCleanupJobRegistrar>();
 
         return services;
     }

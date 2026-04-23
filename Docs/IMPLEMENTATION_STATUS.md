@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-23 (T31 Steam re-verify + authenticator kontrolü ✓ PASS — bağımsız validator, 1 minor bulgu: MA check kontratı T64–T69 sidecar devir; CI run `24806704665` 10/10 ✓, lokal build 0W/0E + Auth unit 54/54 + API SQLite 118/118)
+**Son güncelleme:** 2026-04-23 (T32 Refresh token yönetimi ✓ PASS — `/auth/refresh` rotation + reuse detection + `/auth/logout` + `/auth/me`, Redis cache + null fallback, Hangfire recurring cleanup job (7-gün grace). PR #55, `8a22c15`+`b65862d` (format fix), CI run `24831070336`+`24832464818` 10/10 ✓. Validator ✓ PASS (bağımsız chat, 0 finding, 2 minor gözlem — envelope + anti-forgery doc-wording).)
 
 ---
 
@@ -80,7 +80,7 @@
 | T29 | Steam OpenID authentication (login + callback + token üretimi) | ✓ Tamamlandı | ✓ PASS (re-doğrulama; 1. validator FAIL → S1 fix) | `5e6a32e` (#46, pending squash) |
 | T30 | ToS kabul, yaş gate, geo-block | ✓ Tamamlandı | ✓ PASS | `dfebf87` (PR #49, pending squash) |
 | T31 | Steam re-verify ve authenticator kontrolü | ✓ Tamamlandı | ✓ PASS (1 minor — MA check stub, T64–T69'a devir) | `e34a68b` (#52, pending squash) |
-| T32 | Refresh token yönetimi | ⬚ Bekliyor | — | — |
+| T32 | Refresh token yönetimi | ✓ Tamamlandı | ✓ PASS | `8a22c15` + `b65862d` (PR #55, pending squash) |
 | T33 | User profil servisi | ⬚ Bekliyor | — | — |
 | T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ⬚ Bekliyor | — | — |

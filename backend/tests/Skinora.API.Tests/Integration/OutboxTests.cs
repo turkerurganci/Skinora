@@ -81,6 +81,7 @@ public class SpyJobScheduler : IBackgroundJobScheduler
     public List<TimeSpan> ScheduledDelays { get; } = new();
     public int EnqueueCount { get; private set; }
     public int DeleteCount { get; private set; }
+    public int RecurringRegistrationCount { get; private set; }
 
     public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay)
     {
@@ -98,6 +99,12 @@ public class SpyJobScheduler : IBackgroundJobScheduler
     {
         DeleteCount++;
         return true;
+    }
+
+    public void AddOrUpdateRecurring<T>(
+        string jobId, Expression<Action<T>> methodCall, string cronExpression)
+    {
+        RecurringRegistrationCount++;
     }
 }
 
