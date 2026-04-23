@@ -72,6 +72,9 @@ builder.Services.AddAuthModule(builder.Configuration);
 // Steam OpenID authentication services (T29)
 builder.Services.AddSteamAuthenticationModule(builder.Configuration);
 
+// User profile services (T33) — /users/me, /users/me/stats, /users/:steamId
+builder.Services.AddUsersModule();
+
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
 
