@@ -60,6 +60,9 @@ public static class SystemSettingSeed
         // --- T30: Access control settings (02 §21.1, 03 §11a.1, §11a.2) ---
         Default     (29, "auth.banned_countries",                       "string",  "AccessControl", "NONE", "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV (örn: 'IR,KP,CU'); 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir."),
         Default     (30, "auth.min_steam_account_age_days",             "int",     "AccessControl", "30",   "Steam hesap minimum yaş eşiği (gün) — burner/fake hesap caydırıcı. Hesap yaşı bu değerden az ise giriş engellenir (02 §21.1, 03 §11a.2)."),
+        // --- T34: Wallet address change cooldown (02 §12.3, 03 §9.2) ---
+        Default     (31, "wallet.payout_address_cooldown_hours",        "int",     "Wallet",        "24",   "Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3)."),
+        Default     (32, "wallet.refund_address_cooldown_hours",        "int",     "Wallet",        "24",   "Alıcı iade adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma ve işlem kabul etme engellenir (02 §12.3)."),
     ];
 
     private static SystemSetting Unconfigured(

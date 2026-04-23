@@ -51,7 +51,9 @@
       "Bash(gh api:*)",
       "Bash(dotnet test:*)",
       "Bash(dotnet build:*)",
-      "Bash(dotnet restore:*)"
+      "Bash(dotnet restore:*)",
+      "PowerShell(git diff main...HEAD -- 'Backend/src/Skinora.Shared/Persistence/SystemSettingSeed.cs' | Out-String)",
+      "PowerShell(git diff main...HEAD -- 'Docs/06_DATA_MODEL.md' | Out-String)"
     ]
   },
   "hooks": {
@@ -83,8 +85,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
             "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/post-merge-ci-reminder.ps1",
+            "shell": "powershell",
             "timeout": 30
           }
         ]

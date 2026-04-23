@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v4.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-21
+**Versiyon: v5.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-04-23 (T34 — User'a `PayoutAddressChangedAt` + `RefundAddressChangedAt`, SystemSetting'e iki yeni wallet cooldown parametresi eklendi)
 
 ---
 
@@ -384,6 +384,8 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 | `SteamAvatarUrl` | string(500) | NULL | Profil fotoğrafı URL |
 | `DefaultPayoutAddress` | string(50) | NULL | Varsayılan satıcı cüzdan adresi (TRC-20) |
 | `DefaultRefundAddress` | string(50) | NULL | Varsayılan alıcı iade adresi (TRC-20) |
+| `PayoutAddressChangedAt` | datetime | NULL | Satıcı ödeme adresinin son değişiklik zamanı — `wallet.payout_address_cooldown_hours` parametresiyle birlikte cooldown penceresini tanımlar (02 §12.3, 03 §9.2). İlk tanımlamada da güncellenir |
+| `RefundAddressChangedAt` | datetime | NULL | Alıcı iade adresinin son değişiklik zamanı — `wallet.refund_address_cooldown_hours` parametresiyle birlikte cooldown penceresini tanımlar (02 §12.3, 03 §9.2). İlk tanımlamada da güncellenir |
 | `Email` | string(256) | NULL | Kullanıcının profil email adresi — iletişim ve hesap kurtarma amaçlı. **Email bildirim gönderimi için tek otorite `UserNotificationPreference` tablosudur** (EMAIL kanalı, ExternalId field'ı). Bu alan profil bilgisi olarak saklanır; gönderim kararı ve doğrulama durumu preference tablosundan okunur. Kullanıcı email adresini değiştirdiğinde her iki tablo da güncellenir — senkronizasyon uygulama katmanında sağlanır |
 | `PreferredLanguage` | string(5) | NOT NULL, DEFAULT 'en' | UI dili (en, zh, es, tr) |
 | `TosAcceptedVersion` | string(20) | NULL | Kabul edilen ToS versiyonu |
@@ -973,6 +975,8 @@ Admin tarafından yönetilen platform parametreleri.
 | `min_refund_threshold_ratio` | Monitoring | decimal | 2.0 | Minimum iade eşiği — iade < gas fee × bu oran ise iade yapılmaz, admin alert |
 | `open_link_enabled` | Feature | bool | false | Açık link yöntemi aktif mi |
 | `hot_wallet_limit` | Wallet | decimal | — | Hot wallet maksimum bakiye limiti — aşıldığında admin alert, cold wallet transfer gerekir (05 §3.3) |
+| `wallet.payout_address_cooldown_hours` | Wallet | int | 24 | Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3) |
+| `wallet.refund_address_cooldown_hours` | Wallet | int | 24 | Alıcı iade adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma ve işlem kabul etme engellenir (02 §12.3) |
 
 ---
 

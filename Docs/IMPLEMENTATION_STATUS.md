@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-23 (T33 ✓ PASS bağımsız validator — User profil servisi. 3 endpoint (U1/U2/U5) 07 §5.1/§5.2/§5.5 ile birebir, kabul matrisi 3/3 ✓, API.Tests 138/138 + Auth.Tests 85/85, build 0W/0E. 1 minor advisory: `successfulTransactionRate` 06 §3.1 fraction (0.96) ↔ 07 §5 örnek 96.0 doc-level inconsistency, T33 dışı doc senkronizasyon kararı.)
+**Son güncelleme:** 2026-04-23 (T34 ✓ PASS bağımsız validator — Cüzdan adresi yönetimi. PUT /users/me/wallet/seller + /refund, merkezi TRC-20 format + sanctions pipeline, X-ReAuth-Token enforcement, `PayoutAddressChangedAt` + `RefundAddressChangedAt` + 2 yeni SystemSetting + migration. 590 test PASS + task branch CI 10/10 ✓. 2 minor advisory: cooldown enforcement T45/T46 devir, sanctions flag yan etkileri T54/T59/T82 devir — rapor Known Limitations doğru belgeliyor.)
 
 ---
 
@@ -90,7 +90,7 @@
 | T31 | Steam re-verify ve authenticator kontrolü | ✓ Tamamlandı | ✓ PASS (1 minor — MA check stub, T64–T69'a devir) | `e34a68b` (#52, pending squash) |
 | T32 | Refresh token yönetimi | ✓ Tamamlandı | ✓ PASS | `8a22c15` + `b65862d` (PR #55, pending squash) |
 | T33 | User profil servisi | ✓ Tamamlandı | ✓ PASS (1 minor — 06 ↔ 07 fraction/percentage doc inconsistency, T33 dışı) | `1ba4604`+`8f52e26` (PR #56, pending squash) |
-| T34 | Cüzdan adresi yönetimi | ⬚ Bekliyor | — | — |
+| T34 | Cüzdan adresi yönetimi | ✓ Tamamlandı | ✓ PASS (2 minor — cooldown enforcement T45/T46, sanctions flag yan etkileri T54/T59/T82 devir) | `2a11ffc`+`569d92c`+`eb14c77` (PR #58, pending squash) |
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ⬚ Bekliyor | — | — |
 | T36 | Hesap deaktif ve silme | ⬚ Bekliyor | — | — |
 | T37 | Bildirim altyapı servisi | ⬚ Bekliyor | — | — |
