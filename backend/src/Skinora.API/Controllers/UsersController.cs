@@ -6,6 +6,7 @@ using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Models;
+using Skinora.Users.Application.Account;
 using Skinora.Users.Application.Profiles;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
@@ -34,6 +35,15 @@ public sealed class UsersController : ControllerBase
     private readonly ISteamTradeUrlService _tradeUrlService;
     private readonly ITradeHoldChecker _tradeHoldChecker;
     private readonly ITradeUrlParser _tradeUrlParser;
+    private readonly IAccountLifecycleService _accountLifecycle;
+
+    /// <summary>
+    /// Refresh-token cookie name — mirrors <see cref="AuthController"/> so
+    /// deactivate/delete can clear the session cookie when those flows
+    /// terminate the session (07 §5.17 "Oturum sonlandırılır").
+    /// </summary>
+    private const string RefreshCookieName = "refreshToken";
+    private const string RefreshCookiePath = "/api/v1/auth";
 
     public UsersController(
         IUserProfileService profileService,
@@ -47,7 +57,8 @@ public sealed class UsersController : ControllerBase
         IDiscordConnectionService discordService,
         ISteamTradeUrlService tradeUrlService,
         ITradeHoldChecker tradeHoldChecker,
-        ITradeUrlParser tradeUrlParser)
+        ITradeUrlParser tradeUrlParser,
+        IAccountLifecycleService accountLifecycle)
     {
         _profileService = profileService;
         _walletService = walletService;
@@ -61,6 +72,7 @@ public sealed class UsersController : ControllerBase
         _tradeUrlService = tradeUrlService;
         _tradeHoldChecker = tradeHoldChecker;
         _tradeUrlParser = tradeUrlParser;
+        _accountLifecycle = accountLifecycle;
     }
 
     /// <summary>U1 — <c>GET /users/me</c>. Own profile for S08 (07 §5.1).</summary>
@@ -419,6 +431,91 @@ public sealed class UsersController : ControllerBase
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
+    }
+
+    /// <summary>U13 — <c>POST /users/me/deactivate</c> (07 §5.17, 02 §19).</summary>
+    [HttpPost("me/deactivate")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-write")]
+    public async Task<IActionResult> Deactivate(CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        var outcome = await _accountLifecycle.DeactivateAsync(userId, cancellationToken);
+
+        switch (outcome)
+        {
+            case AccountDeactivateOutcome.Success success:
+                ClearRefreshCookie();
+                return Ok(new AccountDeactivateResponse(
+                    success.DeactivatedAt,
+                    "Hesabınız deaktif edildi. Tekrar giriş yaparak aktif edebilirsiniz."));
+
+            case AccountDeactivateOutcome.HasActiveTransactions:
+                return UnprocessableEntity(ApiResponse<object>.Fail(
+                    AccountLifecycleErrorCodes.HasActiveTransactions,
+                    "Aktif işlemleriniz tamamlanmadan hesabınızı deaktif edemezsiniz.",
+                    traceId: HttpContext.TraceIdentifier));
+
+            case AccountDeactivateOutcome.UserNotFound:
+                return Unauthorized();
+
+            default:
+                return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    /// <summary>U14 — <c>DELETE /users/me</c> (07 §5.17, 02 §19, 06 §6.2).</summary>
+    [HttpDelete("me")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-write")]
+    public async Task<IActionResult> DeleteMe(
+        [FromBody] DeleteAccountRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (request is null) return ValidationError("Request body is required.");
+
+        var outcome = await _accountLifecycle.DeleteAsync(
+            userId, request.Confirmation, cancellationToken);
+
+        switch (outcome)
+        {
+            case AccountDeleteOutcome.Success success:
+                ClearRefreshCookie();
+                return Ok(new AccountDeleteResponse(
+                    success.DeletedAt,
+                    "Hesabınız silindi. Kişisel verileriniz temizlendi."));
+
+            case AccountDeleteOutcome.ConfirmationInvalid:
+                return BadRequest(ApiResponse<object>.Fail(
+                    AccountLifecycleErrorCodes.ValidationError,
+                    "Confirmation phrase is invalid. Expected exact value 'SİL'.",
+                    traceId: HttpContext.TraceIdentifier));
+
+            case AccountDeleteOutcome.HasActiveTransactions:
+                return UnprocessableEntity(ApiResponse<object>.Fail(
+                    AccountLifecycleErrorCodes.HasActiveTransactions,
+                    "Aktif işlemleriniz tamamlanmadan hesabınızı silemezsiniz.",
+                    traceId: HttpContext.TraceIdentifier));
+
+            case AccountDeleteOutcome.UserNotFound:
+                return Unauthorized();
+
+            default:
+                return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    private void ClearRefreshCookie()
+    {
+        Response.Cookies.Delete(RefreshCookieName, new CookieOptions
+        {
+            Path = RefreshCookiePath,
+            Secure = true,
+            HttpOnly = true,
+            SameSite = SameSiteMode.Strict,
+        });
     }
 
     private async Task<IActionResult> UpdateWalletAsync(

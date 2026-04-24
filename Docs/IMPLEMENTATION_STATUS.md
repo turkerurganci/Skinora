@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-23 (T35 ✓ PASS bağımsız validator — Hesap ayarları. 12 endpoint: settings snapshot, dil, bildirim tercihleri, email doğrulama (send+verify), Telegram connect/webhook/delete, Discord OAuth connect/callback/delete, Steam trade-url. Cross-module `INotificationPreferenceStore` (Users interface / Notifications impl, T34 IActiveTransactionCounter mirror). User entity'ye 4 nullable alan + migration. Redis stores (email code 10 dk / telegram 5 dk / discord state 10 dk) + in-memory test swaps. Stub integrasyonlar: LoggingEmailSender (T78), StubDiscordOAuthClient (T80), StubTradeHoldChecker (T64-T69). 613 test PASS (API.Tests 171, AccountSettings 23/23), 0 S-bulgu, 3 minor advisory (503 envelope cosmetic / appsettings config env-var devir / SignalR push T62 devir).)
+**Son güncelleme:** 2026-04-24 (T36 ✓ PASS bağımsız validator — Hesap deaktif + silme. 2 endpoint: POST /users/me/deactivate, DELETE /users/me (confirmation="SİL", ordinal match). `AccountLifecycleService` orchestration + 3 cross-module port (`IUserActiveTransactionChecker`/Transactions, `INotificationAccountAnonymizer`/Notifications, `IAuthAccountAnonymizer`/Auth; T34/T35 pattern mirror). Deactivate: IsDeactivated+DeactivatedAt + tüm RefreshToken revoke (row korunur). Delete 06 §6.2: User anonimleştirme (SteamId→ANON_{15hex}, DisplayName→"Deleted User", 7 PII alanı null, IsDeleted+DeletedAt), UserNotificationPreference soft delete + ExternalId null, NotificationDelivery.TargetExternalId channel-masked (`***@***.com` / `tg:***{son4}` / `dsc:***{son4}`), RefreshToken revoke+soft-delete+DeviceInfo/IpAddress null. Transaction/TransactionHistory/AuditLog/UserLoginLog/Notification audit trail korunur. Controller refresh cookie clear (oturum sonlanır). Migration yok (User mevcut alanları yeterli). 628 test PASS (API.Tests 186, AccountLifecycle 15/15), Release 0W/0E. Validator: 7/7 kabul + 2/2 doğrulama listesi ✓, 0 S-bulgu, 2 minor advisory (3-SaveChanges atomicity rapor §Notlar'da belgeli; deactivated→delete önce re-login reactivate gerekir — 07 §5.17 ile uyumlu). Task branch CI run `24858510169` HEAD `943ad45` 10/10 ✓, PR #60 squash merge pending.)
 
 ---
 
@@ -92,7 +92,7 @@
 | T33 | User profil servisi | ✓ Tamamlandı | ✓ PASS (1 minor — 06 ↔ 07 fraction/percentage doc inconsistency, T33 dışı) | `1ba4604`+`8f52e26` (PR #56, pending squash) |
 | T34 | Cüzdan adresi yönetimi | ✓ Tamamlandı | ✓ PASS (2 minor — cooldown enforcement T45/T46, sanctions flag yan etkileri T54/T59/T82 devir) | `2a11ffc`+`569d92c`+`eb14c77` (PR #58, pending squash) |
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ✓ Tamamlandı | ✓ PASS (0 S-bulgu, 3 minor advisory — 503 envelope/appsettings env-var/SignalR T62 devir) | `64ac159`+`7e9032e`+`f23fd3a` (PR #59, pending squash) |
-| T36 | Hesap deaktif ve silme | ⬚ Bekliyor | — | — |
+| T36 | Hesap deaktif ve silme | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — atomicity rapor §Notlar / deactivated→delete reactivate devir) | `5e383ec`+`bd80954`+`99fd5cc`+`943ad45` (PR #60, pending squash) |
 | T37 | Bildirim altyapı servisi | ⬚ Bekliyor | — | — |
 | T38 | Platform içi bildirim kanalı | ⬚ Bekliyor | — | — |
 | T39 | Admin rol ve yetki yönetimi | ⬚ Bekliyor | — | — |
