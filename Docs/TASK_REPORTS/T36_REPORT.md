@@ -1,6 +1,6 @@
 # T36 — Hesap deaktif ve silme
 
-**Faz:** F2 | **Durum:** ⏳ Yapım bitti (doğrulama bekleniyor) | **Tarih:** 2026-04-23
+**Faz:** F2 | **Durum:** ✓ PASS (bağımsız validator, 2026-04-24) | **Tarih:** 2026-04-23
 
 ---
 
@@ -139,10 +139,41 @@ dotnet build Skinora.sln -c Release
 
 ## Doğrulama
 
+**Validator:** Bağımsız chat — 2026-04-24 | **Verdict:** ✓ PASS | **Bulgu:** 0 S-bulgu, 2 minor advisory
+
 | Alan | Sonuç |
 |---|---|
 | Build (Release) | ✓ 0 W / 0 E |
-| Unit + Integration | ✓ 628/628 PASS (15 yeni T36 integration) |
+| Unit + Integration | ✓ 628/628 PASS (15 yeni T36 integration — `AccountLifecycleEndpointTests` 15/15) |
 | Migration | Yok — User mevcut alanlarla yeterli |
 | Security gözden geçirme | Secret sızıntısı yok; confirmation phrase ordinal karşılaştırma; masked format delivery audit leak'i engeller |
 | Dokümansal eşleşme | 06 §6.2 tablosu birebir; 07 §5.17 response body'leri birebir |
+| Task branch CI | ✓ [`24858510169`](https://github.com/turkerurganci/Skinora/actions/runs/24858510169) (HEAD `943ad45`) — 9 success + 1 skipped (`0. Guard` PR'da beklenen) |
+| PR #60 durumu | OPEN, MERGEABLE, `statusCheckRollup` tüm 10 kontrol ✓ |
+| `dotnet format --verify-no-changes` | ✓ 0 değişiklik |
+
+**Validator bağımsız kabul kriterleri (1:1 karşılaştırma):**
+
+| # | Kriter | Validator sonuç | Kanıt |
+|---|---|---|---|
+| 1 | POST /users/me/deactivate + aktif işlem kontrolü | ✓ | `UsersController.Deactivate` → `AccountLifecycleService.DeactivateAsync` → `IUserActiveTransactionChecker.HasActiveTransactionsAsync` (buyer OR seller, non-terminal). Test: `Deactivate_NoActiveTransactions_Succeeds_SetsFlagRevokesTokensClearsCookie` + 2 guard testi + 1 terminal-transaction test PASS. |
+| 2 | DELETE /users/me + confirmation="SİL" ordinal + aktif işlem | ✓ | `DeleteAsync` → `StringComparison.Ordinal` match. Test: 4 inline theory (`sil`/`SIL`/`DELETE`/boş) + body-eksik + active-tx guard PASS. |
+| 3 | Soft delete + PII temizleme (06 §6.2 tablosu) | ✓ | `AnonymizeUserInPlace` 9 alan — `SteamId="ANON_"+Guid[..15]` (UNIQUE + 20-char korunur), `DisplayName="Deleted User"`, Avatar/Email/EmailVerifiedAt/Addresses/TradeUrl+Partner+AccessToken = null, IsDeleted+DeletedAt set. Happy path test asserts her alanı tek tek. |
+| 4 | UserNotificationPreference soft delete + ExternalId=null | ✓ | `NotificationAccountAnonymizer.AnonymizeAsync` `IgnoreQueryFilters()` üzerinden tüm satırları soft-delete + `ExternalId=null + IsEnabled=false`. Happy path 2 preference (Telegram+Email) — ikisi de PASS. |
+| 5 | RefreshToken revoke + soft delete | ✓ | `AuthAccountAnonymizer.AnonymizeSessionsAsync` revoke + soft-delete + `DeviceInfo/IpAddress=null` + `IRefreshTokenCache.RemoveAsync` (delete); deactivate flow revoke-only (row korunur). İki farklı test iki flow'u ayrı ayrı doğrular. |
+| 6 | NotificationDelivery.TargetExternalId masked format | ✓ | `Mask` method — EMAIL→`***@***.com`, TELEGRAM→`tg:***{son4}` (`<4` → `tg:***`), DISCORD→`dsc:***{son4}`. 2 test: Telegram 8-char + Email fixed literal. |
+| 7 | İşlem geçmişi + audit log anonim korunur | ✓ | `Transaction` row'una dokunulmaz (test `Delete_TransactionHistoryPreserved_AuditTrailIntact` — `IsDeleted=false`, `SellerId=user.Id`). `Notification` row korunur (happy path assert). `AuditLog`/`TransactionHistory`/`UserLoginLog` T36 kodunda hiç ele alınmadı → yazmama = korunma. |
+
+**Doğrulama kontrol listesi (11 §T36):**
+
+- [x] **06 §6.2 anonimleştirme formatı birebir eşleşiyor mu?** — Evet. Her alan (User 9 + UNP 3 + ND 1 + RT 4) doğrulandı. 4 korunan entity (Transaction/TransactionHistory/AuditLog/UserLoginLog) kod değişikliği yok.
+- [x] **Silinen kullanıcının audit log'ları korunuyor mu?** — Evet. Transaction test explicit; AuditLog/TransactionHistory/UserLoginLog yazma yok → implicit preservation.
+
+**Minor advisory (FAIL değil):**
+
+1. **Delete flow 3-SaveChanges atomicity (A1):** `DeleteAsync` User → Notification → Auth sırasıyla 3 ayrı `SaveChangesAsync`. Mid-flight hata partial state bırakır (anonim user + live preferences/tokens). Rapor §Notlar'da belgelenmiş: idempotent re-run'da convergent. MVP kabul — explicit `IDbContextTransaction` T36 scope dışı.
+2. **Deactivated kullanıcının delete edememesi (A2):** `LoadLiveUserAsync` `!IsDeactivated` filter'ı yüzünden zaten deaktif hesap direkt silinemez → önce re-login ile reactivate gerekir. 07 §5.17 "Tekrar giriş yaparak aktif edebilirsiniz" ile uyumlu; T29 Steam OpenID upsert reactivate akışını taşır. MVP kabul — davranış spec'e aykırı değil, sadece ima edilmemiş bir kısıt.
+
+**Güvenlik kontrolü:** Secret sızıntısı yok; auth `[Authorize(Authenticated)]` + `user-write` rate bucket; input validation `confirmation` ordinal exact; yeni bağımlılık yok.
+
+**Yapım raporu ↔ validator karşılaştırması:** Tam uyumlu. Yapım raporu 7 kabul kriterini, 2 doğrulama listesi maddesini ve 3 Known Limitations devrini (UserLoginLog KVKK retention T63b, bağımsız Notification retention T63b, reactivate T29) doğru belgelemiş. Validator ek olarak 2 minor advisory ekledi (A1 atomicity zaten rapor §Notlar'da belgeli; A2 deactivated→delete kısıtı yeni).
