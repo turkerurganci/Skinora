@@ -13,6 +13,7 @@ using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Disputes.Infrastructure.Persistence;
 using Skinora.Fraud.Infrastructure.Persistence;
+using Skinora.Notifications;
 using Skinora.Notifications.Infrastructure.Persistence;
 using Skinora.Payments.Infrastructure.Persistence;
 using Skinora.Platform.Infrastructure.Bootstrap;
@@ -75,6 +76,12 @@ builder.Services.AddSteamAuthenticationModule(builder.Configuration);
 // User profile + wallet + account settings (T33 / T34 / T35) —
 // /users/me, /users/me/stats, /users/:steamId, /users/me/wallet/*, /users/me/settings/*
 builder.Services.AddUsersModule(builder.Configuration);
+
+// Notification infrastructure (T37 — 05 §7.1–§7.5): dispatcher orchestration,
+// .resx-backed template resolver, per-channel handlers (Email/Telegram/Discord
+// stubs swapped at T78/T79/T80), exponential-backoff Hangfire delivery job and
+// admin-alert sink for exhausted retries.
+builder.Services.AddNotificationsModule();
 
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
