@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="TRANSACTION_INVITE_Title" xml:space="preserve">
+    <value>您有一个新的交易邀请</value>
+  </data>
+  <data name="TRANSACTION_INVITE_Body" xml:space="preserve">
+    <value>您收到了 {ItemName} 的交易邀请（{Amount} USDT）。</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Title" xml:space="preserve">
+    <value>买家已接受交易</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
+    <value>{BuyerName} 已接受您的交易。</value>
+  </data>
+  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
+    <value>物品已到平台 — 等待付款</value>
+  </data>
+  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+    <value>请向 {PaymentAddress} 发送 {Amount} USDT 以完成交易。</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
+    <value>已收到付款</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
+    <value>已收到您交易的 {Amount} USDT。</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
+    <value>交易已完成</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
+    <value>{ItemName} 的交易已成功完成。</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
+    <value>即将超时</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
+    <value>交易窗口将在 {RemainingMinutes} 分钟后关闭。</value>
+  </data>
+</root>

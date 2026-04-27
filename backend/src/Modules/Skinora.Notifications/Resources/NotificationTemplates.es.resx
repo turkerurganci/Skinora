@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="TRANSACTION_INVITE_Title" xml:space="preserve">
+    <value>Tienes una nueva invitación de transacción</value>
+  </data>
+  <data name="TRANSACTION_INVITE_Body" xml:space="preserve">
+    <value>Recibiste una invitación de transacción para {ItemName} ({Amount} USDT).</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Title" xml:space="preserve">
+    <value>El comprador aceptó la transacción</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
+    <value>{BuyerName} aceptó tu transacción.</value>
+  </data>
+  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
+    <value>El artículo llegó a la plataforma — pago pendiente</value>
+  </data>
+  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+    <value>Envía {Amount} USDT a {PaymentAddress} para completar la transacción.</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
+    <value>Pago recibido</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
+    <value>Recibimos {Amount} USDT para tu transacción.</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
+    <value>Transacción completada</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
+    <value>La transacción de {ItemName} se completó con éxito.</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
+    <value>Tiempo de espera próximo</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
+    <value>La ventana de la transacción cierra en {RemainingMinutes} minutos.</value>
+  </data>
+</root>

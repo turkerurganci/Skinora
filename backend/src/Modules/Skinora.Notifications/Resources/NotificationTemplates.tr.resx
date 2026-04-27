@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="TRANSACTION_INVITE_Title" xml:space="preserve">
+    <value>Yeni işlem davetin var</value>
+  </data>
+  <data name="TRANSACTION_INVITE_Body" xml:space="preserve">
+    <value>{ItemName} için işlem daveti aldın ({Amount} USDT).</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Title" xml:space="preserve">
+    <value>Alıcı işlemi kabul etti</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
+    <value>{BuyerName} işlemini kabul etti.</value>
+  </data>
+  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
+    <value>Item platforma ulaştı — ödeme bekleniyor</value>
+  </data>
+  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+    <value>İşlemi tamamlamak için {PaymentAddress} adresine {Amount} USDT gönder.</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
+    <value>Ödeme alındı</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
+    <value>İşlemin için {Amount} USDT alındı.</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
+    <value>Trade offer gönderildi</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
+    <value>Item'ı almak için Steam trade offer'ını kabul et.</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
+    <value>İşlem tamamlandı</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
+    <value>{ItemName} işlemi başarıyla tamamlandı.</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
+    <value>Süre dolmak üzere</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
+    <value>İşlem süresi {RemainingMinutes} dakika sonra dolacak.</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Title" xml:space="preserve">
+    <value>İşlem iptal edildi</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
+    <value>{ItemName} işlemi iptal edildi: {Reason}.</value>
+  </data>
+</root>

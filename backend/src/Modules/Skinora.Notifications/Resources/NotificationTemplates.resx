@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="TRANSACTION_INVITE_Title" xml:space="preserve">
+    <value>You have a new transaction invitation</value>
+  </data>
+  <data name="TRANSACTION_INVITE_Body" xml:space="preserve">
+    <value>You received a transaction invite for {ItemName} ({Amount} USDT).</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Title" xml:space="preserve">
+    <value>Buyer accepted the transaction</value>
+  </data>
+  <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
+    <value>{BuyerName} accepted your transaction.</value>
+  </data>
+  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
+    <value>Item reached the platform — payment due</value>
+  </data>
+  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+    <value>Send {Amount} USDT to {PaymentAddress} to complete the transaction.</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
+    <value>Payment received</value>
+  </data>
+  <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
+    <value>We received {Amount} USDT for your transaction.</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
+    <value>Trade offer sent</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
+    <value>Accept the Steam trade offer to receive your item.</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
+    <value>Transaction completed</value>
+  </data>
+  <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
+    <value>The transaction for {ItemName} completed successfully.</value>
+  </data>
+  <data name="SELLER_PAYMENT_SENT_Title" xml:space="preserve">
+    <value>Payout sent</value>
+  </data>
+  <data name="SELLER_PAYMENT_SENT_Body" xml:space="preserve">
+    <value>{Amount} USDT was sent to your wallet.</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
+    <value>Timeout approaching</value>
+  </data>
+  <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
+    <value>The transaction window closes in {RemainingMinutes} minutes.</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Title" xml:space="preserve">
+    <value>Transaction cancelled</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
+    <value>The transaction for {ItemName} was cancelled: {Reason}.</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Title" xml:space="preserve">
+    <value>Transaction flagged</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Body" xml:space="preserve">
+    <value>Transaction {TransactionId} is under review.</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Title" xml:space="preserve">
+    <value>Incorrect payment amount</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Body" xml:space="preserve">
+    <value>We received {ReceivedAmount} USDT but expected {ExpectedAmount} USDT.</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Late payment refunded</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{Amount} USDT was refunded to your wallet.</value>
+  </data>
+  <data name="ITEM_RETURNED_Title" xml:space="preserve">
+    <value>Item returned</value>
+  </data>
+  <data name="ITEM_RETURNED_Body" xml:space="preserve">
+    <value>{ItemName} was returned to your inventory.</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Payment refunded</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{Amount} USDT was refunded.</value>
+  </data>
+  <data name="DISPUTE_RESULT_Title" xml:space="preserve">
+    <value>Dispute resolved</value>
+  </data>
+  <data name="DISPUTE_RESULT_Body" xml:space="preserve">
+    <value>The dispute was resolved: {Outcome}.</value>
+  </data>
+  <data name="FLAG_RESOLVED_Title" xml:space="preserve">
+    <value>Flag cleared</value>
+  </data>
+  <data name="FLAG_RESOLVED_Body" xml:space="preserve">
+    <value>Transaction {TransactionId} has been cleared.</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Title" xml:space="preserve">
+    <value>Admin: flag alert</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Body" xml:space="preserve">
+    <value>Transaction {TransactionId} was flagged: {Reason}.</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Title" xml:space="preserve">
+    <value>Admin: escalation</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Body" xml:space="preserve">
+    <value>Transaction {TransactionId} was escalated.</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Title" xml:space="preserve">
+    <value>Admin: payment failure</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Body" xml:space="preserve">
+    <value>Transaction {TransactionId} payment failed ({ErrorCode}).</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
+    <value>Admin: Steam bot issue</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
+    <value>Bot {BotId} reported: {Issue}.</value>
+  </data>
+</root>
