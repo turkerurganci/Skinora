@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Notifications.Application.Channels;
 using Skinora.Notifications.Domain.Entities;
-using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Application.Account;
 
@@ -59,7 +59,7 @@ public sealed class NotificationAccountAnonymizer : INotificationAccountAnonymiz
 
         foreach (var delivery in deliveries)
         {
-            delivery.TargetExternalId = Mask(delivery.Channel, delivery.TargetExternalId);
+            delivery.TargetExternalId = TargetExternalIdMasker.Mask(delivery.Channel, delivery.TargetExternalId);
         }
 
         if (preferences.Count > 0 || deliveries.Count > 0)
@@ -68,27 +68,5 @@ public sealed class NotificationAccountAnonymizer : INotificationAccountAnonymiz
         return new NotificationAnonymizationResult(
             PreferencesSoftDeleted: preferences.Count,
             DeliveriesMasked: deliveries.Count);
-    }
-
-    /// <summary>
-    /// 06 §6.2 masking formats. Examples: <c>***@***.com</c> for email,
-    /// <c>tg:***{last4}</c> for Telegram, <c>dsc:***{last4}</c> for Discord.
-    /// Short inputs fall back to the full-mask literal for the channel so
-    /// we never leak fewer-than-4 trailing characters.
-    /// </summary>
-    private static string Mask(NotificationChannel channel, string targetExternalId)
-        => channel switch
-        {
-            NotificationChannel.EMAIL => "***@***.com",
-            NotificationChannel.TELEGRAM => MaskWithTail(targetExternalId, "tg"),
-            NotificationChannel.DISCORD => MaskWithTail(targetExternalId, "dsc"),
-            _ => "***",
-        };
-
-    private static string MaskWithTail(string value, string prefix)
-    {
-        if (string.IsNullOrEmpty(value) || value.Length < 4)
-            return $"{prefix}:***";
-        return $"{prefix}:***{value[^4..]}";
     }
 }

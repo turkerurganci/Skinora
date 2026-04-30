@@ -17,7 +17,7 @@
   5. Exception → `Status=FAILED`, `LastError` (1000 char truncate), SaveChanges; `attemptNumber > MaxRetryAttempts` ise `INotificationAdminAlertSink.RaiseDeliveryExhaustedAsync` çağır; ardından **rethrow** (Hangfire AutomaticRetry → 60s/300s/900s exponential).
 - **Admin alert sink (05 §7.5 "Tüm kanallar başarısız → Log + admin alert"):** `INotificationAdminAlertSink` interface + `LoggingNotificationAdminAlertSink` default impl — `LogWarning` ile DeliveryId / NotificationId / Channel / AttemptCount / LastError yapısal log entry. Post-MVP'de Slack/PagerDuty/AuditLog impl'i DI swap ile devralır.
 - **Generic consumer base (`NotificationConsumerBase<TEvent>`):** `Skinora.Notifications/Application/EventHandlers/`. `INotificationHandler<TEvent>` (MediatR) + `IDomainEvent` constraint. Boilerplate sağlar: 1) `IProcessedEventStore.ExistsAsync(EventId, ConsumerName)` ile dedup → varsa skip, 2) `BuildRequestsAsync(event)` abstract → derived class event payload'ından `NotificationRequest` koleksiyonu üretir (multi-recipient OK), 3) her request'i `INotificationDispatcher.DispatchAsync` ile dispatch, 4) `MarkAsProcessedAsync` → ProcessedEvents row Add (commit caller'da). T44+ concrete handler'ları bu base'i extend eder; T37'de production handler **yok** (transaction event'leri henüz tanımlı değil).
-- **Lokalizasyon kapsamı:** Neutral (`en`) tüm 20 `NotificationType` enum değerini kapsar (40 string entry). `tr` 11 NotificationType (Title+Body, 22 entry); `zh` 7 (14 entry); `es` 7 (14 entry). Eksik key'ler için fallback chain `<locale> → neutral en → key adı` çalışır (test edildi).
+- **Lokalizasyon kapsamı:** Neutral (`en`) tüm 20 `NotificationType` enum değerini kapsar (40 string entry). `tr` 8 NotificationType (Title+Body, 16 entry); `zh` 6 (12 entry); `es` 6 (12 entry). Eksik key'ler için fallback chain `<locale> → neutral en → key adı` çalışır (test edildi).
 - **Module DI + Program.cs registration:** `Skinora.Notifications/NotificationsModule.cs` → `services.AddNotificationsModule()` extension. `services.AddLocalization()` + 4 scoped (dispatcher, resolver, alert sink, delivery job) + 3 scoped channel handler (`AddScoped<INotificationChannelHandler, ...>` — `IEnumerable<INotificationChannelHandler>` resolution doğru çalışır). Program.cs'te `AddUsersModule` sonrasında çağrılır (T37 sırası modül grafiğine uyumlu — Notifications → Users → Shared).
 
 ## Known Limitations (dokümansal devirler)
@@ -60,9 +60,9 @@
 **Yeni — Skinora.Notifications/Resources/:**
 - `NotificationTemplates.cs` — marker class for IStringLocalizer<T>.
 - `NotificationTemplates.resx` — neutral (en), 40 string entry.
-- `NotificationTemplates.tr.resx` — 22 entry.
-- `NotificationTemplates.zh.resx` — 14 entry.
-- `NotificationTemplates.es.resx` — 14 entry.
+- `NotificationTemplates.tr.resx` — 16 entry (8 type).
+- `NotificationTemplates.zh.resx` — 12 entry (6 type).
+- `NotificationTemplates.es.resx` — 12 entry (6 type).
 
 **Yeni — Skinora.Notifications/`:**
 - `NotificationsModule.cs` — `AddNotificationsModule(IServiceCollection)` DI extension.
