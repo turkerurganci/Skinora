@@ -29,7 +29,7 @@ public sealed class EmailNotificationChannelHandler : INotificationChannelHandle
     {
         _logger.LogInformation(
             "[T37 stub] Email channel send → target={Target} title={Title}",
-            targetExternalId,
+            TargetExternalIdMasker.Mask(Channel, targetExternalId),
             rendered.Title);
 
         return Task.CompletedTask;

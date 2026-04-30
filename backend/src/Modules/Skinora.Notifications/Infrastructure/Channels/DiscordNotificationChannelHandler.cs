@@ -28,7 +28,7 @@ public sealed class DiscordNotificationChannelHandler : INotificationChannelHand
     {
         _logger.LogInformation(
             "[T37 stub] Discord channel send → user={UserId} title={Title}",
-            targetExternalId,
+            TargetExternalIdMasker.Mask(Channel, targetExternalId),
             rendered.Title);
 
         return Task.CompletedTask;

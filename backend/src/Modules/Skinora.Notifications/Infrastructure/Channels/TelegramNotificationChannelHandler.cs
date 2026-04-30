@@ -27,7 +27,7 @@ public sealed class TelegramNotificationChannelHandler : INotificationChannelHan
     {
         _logger.LogInformation(
             "[T37 stub] Telegram channel send → chat={ChatId} title={Title}",
-            targetExternalId,
+            TargetExternalIdMasker.Mask(Channel, targetExternalId),
             rendered.Title);
 
         return Task.CompletedTask;
