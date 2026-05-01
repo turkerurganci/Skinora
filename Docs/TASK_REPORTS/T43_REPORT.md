@@ -107,7 +107,7 @@ BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/tes
 
 # Implementasyon Sonucu
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-02
+**Faz:** F2 | **Durum:** ✓ Tamamlandı (validator PASS) | **Tarih:** 2026-05-02
 
 ## Yapılan İşler
 
@@ -181,9 +181,9 @@ BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/tes
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit (Reputation) | ✓ 17/17 passed | `Skinora.Users.Tests` Reputation namespace — 141 ms |
+| Unit (Reputation) | ✓ 16/16 passed | `Skinora.Users.Tests` Reputation namespace — 25 ms (validator lokal Release re-run; rapor taslağı 17 yazıyordu, gerçek `[Theory]` + `[Fact]` sayımı 16) |
 | Integration (Reputation) | ✓ 14/14 passed | `Skinora.Transactions.Tests` Reputation namespace — 5 s |
-| Integration (Endpoints) | ✓ 6/6 passed | `Skinora.API.Tests.UserProfileEndpointTests` |
+| Integration (Endpoints) | ✓ 6/6 passed | `Skinora.API.Tests.UserProfileEndpointTests` (validator lokal: 9 s) |
 | Tüm test suite | ✓ PASS | Tüm 11 test assembly yeşil |
 | Build | ✓ 0W/0E (Release) | `dotnet build -c Release` |
 | Format | ✓ 0 değişiklik | `dotnet format --verify-no-changes` |
@@ -192,7 +192,16 @@ BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/tes
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Beklemede (validator bağımsız chat) |
+| Doğrulama durumu | ✓ PASS bağımsız validator |
+| Tarih | 2026-05-02 |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory (rapor §Test Sonuçları "17/17" → gerçek 16/16; fonksiyonel etki yok, validator inline düzelti) |
+| Düzeltme gerekli mi | Hayır |
+| Hard-stop kapıları | ✓ working tree temiz, ✓ main CI startup 3/3 (`25232475624`, `25232475615`, `25230739077`), ✓ memory drift T43 satırları mevcut, ✓ task branch CI 9/9 (`25234389032` HEAD `0deee0f`) |
+| Lokal Release çalıştırma (validator) | Build 0W/0E (14.7 s) + Unit Reputation 16/16 + UserProfileEndpoint 6/6 + SystemSettings/Validator 54/54 |
+| Kabul kriterleri | 7/7 ✓ |
+| Doğrulama kontrol listesi | 5/5 ✓ |
+| Güvenlik kontrolü | Temiz (secret/auth/input validation/dış bağımlılık) |
+| Yapım raporu uyumu | Tam uyumlu — yalnız test sayı drift'i (advisory) |
 
 ## Altyapı Değişiklikleri
 
