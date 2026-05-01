@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Skinora.Notifications.Application.Channels;
+using Skinora.Notifications.Application.Inbox;
 using Skinora.Notifications.Application.Notifications;
 using Skinora.Notifications.Application.Templates;
 using Skinora.Notifications.Infrastructure.Channels;
@@ -36,6 +37,9 @@ public static class NotificationsModule
 
         services.AddScoped<INotificationTemplateResolver, ResxNotificationTemplateResolver>();
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
+
+        // T38 — platform-in-app inbox endpoints (07 §8.1–§8.4).
+        services.AddScoped<INotificationInboxService, NotificationInboxService>();
 
         services.AddScoped<INotificationChannelHandler, EmailNotificationChannelHandler>();
         services.AddScoped<INotificationChannelHandler, TelegramNotificationChannelHandler>();
