@@ -204,9 +204,9 @@ BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/tes
 ## Commit & PR
 
 - Branch: `task/T43-user-reputation`
-- Commit: pending
-- PR: pending
-- CI: pending
+- Commit: `7bc3130` — T43: User itibar skoru hesaplama
+- PR: [#72](https://github.com/turkerurganci/Skinora/pull/72)
+- CI: ✓ PASS (run [25234165174](https://github.com/turkerurganci/Skinora/actions/runs/25234165174), 9/9 job — Guard skipped beklenen)
 
 ## Known Limitations / Follow-up
 
