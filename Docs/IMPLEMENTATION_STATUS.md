@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-05-01 (T40 ⏳ yapım bitti — Admin RBAC policy enforcement. JWT issuance artık `AdminAuthorityResolver` ile `AdminUserRole → AdminRole → AdminRolePermission` chain'ini DB'den çözüp `role` + `permission` claim'leri stamp eder; super-admin bypass korundu. `AccessTokenGenerator.Generate` → async `GenerateAsync(User, ct)`; SteamAuthenticationPipeline + RefreshTokenService await edildi. `JwtBearerEvents.OnForbidden` `INSUFFICIENT_PERMISSION` ApiResponse envelope'u yazar (07 §2.4 / §9). 4 yeni dosya (`I/AdminAuthorityResolver`, `AdminAuthorityResolverTests`, `AdminRbacEndpointTests`) + 6 değişiklik. Migration yok. Lokal: 57 Auth unit + 231 API.Tests + 156 Shared + 26 Notifications + 58 Transactions = 528 PASS, 0 W / 0 E. Auth integration (Testcontainers MsSql) lokal Docker yok → CI'da koşacak. Branch `task/T40-admin-rbac-policy` head `b7f8657`, PR pending push. Bağımsız validate chat'i bekleniyor.)
+**Son güncelleme:** 2026-05-01 (T40 ✓ PASS bağımsız validator — Admin RBAC policy enforcement. JWT issuance artık `AdminAuthorityResolver` ile `AdminUserRole → AdminRole → AdminRolePermission` chain'ini DB'den çözüp `role` + `permission` claim'leri stamp eder; super-admin bypass korundu. `AccessTokenGenerator.Generate` → async `GenerateAsync(User, ct)`; SteamAuthenticationPipeline + RefreshTokenService await edildi. `JwtBearerEvents.OnForbidden` `INSUFFICIENT_PERMISSION` ApiResponse envelope'u yazar (07 §2.4 / §9). 4 yeni dosya (`I/AdminAuthorityResolver`, `AdminAuthorityResolverTests`, `AdminRbacEndpointTests`) + 6 değişiklik. Migration yok. Validator: kabul kriterleri 4/4 ✓, doğrulama listesi 1/1 ✓, lokal 30/30 (Auth 25 + API 5) PASS, CI run 25220660821 10/10 ✓, güvenlik temiz, rapor uyumu tam. PR #65 squash merge sonrası.)
 
 ---
 
@@ -96,7 +96,7 @@
 | T37 | Bildirim altyapı servisi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — rapor resx entry count drift / stub handler PII log devri T78–T80) | `b383983`+`7767fc7` (PR pending) |
 | T38 | Platform içi bildirim kanalı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — rapor CI run id drift, fonksiyonel etki yok) | `f961122` (PR #63, pending squash) |
 | T39 | Admin rol ve yetki yönetimi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — admin search LIKE pattern escape T63 standardizasyonu) | `8eb065a` (PR #64, pending squash) |
-| T40 | Admin RBAC (policy-based authorization) | ⏳ Devam ediyor | — | `b7f8657` (PR pending) |
+| T40 | Admin RBAC (policy-based authorization) | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T41 | Admin parametre yönetimi | ⬚ Bekliyor | — | — |
 | T42 | AuditLog servisi | ⬚ Bekliyor | — | — |
 | T43 | User itibar skoru hesaplama | ⬚ Bekliyor | — | — |

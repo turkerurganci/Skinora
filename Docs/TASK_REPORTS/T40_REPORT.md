@@ -1,6 +1,6 @@
 # T40 — Admin RBAC (policy-based authorization)
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, validate chat'i bekleniyor) | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-01
 
 ---
 
@@ -86,9 +86,10 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏸ Validate chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-01) |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Validator kanıtı | Lokal 30/30 (Auth 25 + API 5 AdminRbacEndpointTests) PASS; CI run 25220660821 10/10 ✓ (Lint+Build+Unit+Integration+Contract+Migration+Docker); kabul kriterleri 4/4 ✓; doğrulama listesi 1/1 ✓; güvenlik kontrolü temiz; rapor uyumu tam (sapma yok). |
 
 ## Altyapı Değişiklikleri
 
@@ -102,7 +103,7 @@
 - Branch: `task/T40-admin-rbac-policy`
 - Commit: `b7f8657` (yapım) + `a958218` (rapor + status + memory)
 - PR: [#65](https://github.com/turkerurganci/Skinora/pull/65)
-- CI: izleniyor
+- CI: ✓ PASS (run 25220660821 — 10/10 jobs success)
 
 ## Known Limitations / Follow-up
 
