@@ -100,9 +100,9 @@
 ## Commit & PR
 
 - Branch: `task/T40-admin-rbac-policy`
-- Commit: `b7f8657` — `T40: Admin RBAC policy enforcement`
-- PR: TBD (push sonrası açılacak)
-- CI: TBD
+- Commit: `b7f8657` (yapım) + `a958218` (rapor + status + memory)
+- PR: [#65](https://github.com/turkerurganci/Skinora/pull/65)
+- CI: izleniyor
 
 ## Known Limitations / Follow-up
 
