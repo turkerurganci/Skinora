@@ -1,7 +1,7 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Skinora.Platform.Application.Settings;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Persistence;
 
@@ -20,10 +20,13 @@ namespace Skinora.Platform.Infrastructure.Bootstrap;
 /// admin-configured value, per the doc's security note.
 /// </para>
 /// <para>
-/// Validation: the env-supplied string must parse against the row's
-/// <c>DataType</c> (int, decimal, bool, string). A parse failure aborts
-/// startup — silently ignoring it would leave a malformed value on a
-/// parameter that downstream code relies on.
+/// Validation (T41): every hydrated value runs through
+/// <see cref="SystemSettingsValidator"/> — same type + range + cross-key
+/// pipeline used by the admin update API. This way an admin-blocked value
+/// (e.g. <c>commission_rate = 1.5</c>) cannot sneak in via env var, and
+/// cross-key invariants (<c>payment_timeout_min &lt; payment_timeout_max</c>,
+/// monitoring polling order) are enforced at boot before any feature
+/// reads them.
 /// </para>
 /// </remarks>
 public class SettingsBootstrapService
@@ -33,6 +36,7 @@ public class SettingsBootstrapService
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SettingsBootstrapService> _logger;
+    private readonly SystemSettingsValidator _validator;
 
     public SettingsBootstrapService(
         AppDbContext db,
@@ -42,6 +46,7 @@ public class SettingsBootstrapService
         _db = db;
         _configuration = configuration;
         _logger = logger;
+        _validator = SystemSettingsValidator.Instance;
     }
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
@@ -55,11 +60,12 @@ public class SettingsBootstrapService
             var envValue = LookupEnvValue(setting.Key);
             if (envValue is null) continue;
 
-            if (!TryValidate(envValue, setting.DataType, out var reason))
+            var single = _validator.ValidateSingle(setting.Key, envValue, setting.DataType);
+            if (!single.IsValid)
             {
                 throw new InvalidOperationException(
                     $"SystemSetting '{setting.Key}' env override '{envValue}' " +
-                    $"failed {setting.DataType} validation: {reason}.");
+                    $"failed validation: {single.ErrorMessage}");
             }
 
             setting.Value = envValue;
@@ -83,6 +89,20 @@ public class SettingsBootstrapService
                 $"via admin UI or '{EnvPrefix}KEY_UPPER' env var and restart.");
         }
 
+        // Cross-key invariants run on the post-hydration snapshot. A failure
+        // at this stage is a configuration mismatch rather than a single-row
+        // typo (e.g. payment_timeout_min was hydrated to 60 but max was left
+        // at 30 from a previous admin update).
+        var allRows = await _db.Set<SystemSetting>()
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var cross = _validator.ValidateCrossKey(allRows);
+        if (!cross.IsValid)
+        {
+            throw new InvalidOperationException(
+                $"Startup fail-fast: SystemSetting cross-key invariant violated — {cross.ErrorMessage}");
+        }
+
         _logger.LogInformation(
             "SystemSetting bootstrap complete — {Hydrated} env-hydrated, all required parameters configured.",
             unconfigured.Count(s => s.IsConfigured));
@@ -94,48 +114,5 @@ public class SettingsBootstrapService
         // raw Environment.GetEnvironmentVariable because tests inject config
         // through in-memory providers.
         return _configuration[EnvPrefix + key.ToUpperInvariant()];
-    }
-
-    private static bool TryValidate(string value, string dataType, out string reason)
-    {
-        reason = string.Empty;
-        switch (dataType)
-        {
-            case "int":
-                if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
-                {
-                    reason = "not an integer";
-                    return false;
-                }
-                return true;
-
-            case "decimal":
-                if (!decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
-                {
-                    reason = "not a decimal";
-                    return false;
-                }
-                return true;
-
-            case "bool":
-                if (!bool.TryParse(value, out _))
-                {
-                    reason = "not 'true' or 'false'";
-                    return false;
-                }
-                return true;
-
-            case "string":
-                if (string.IsNullOrEmpty(value))
-                {
-                    reason = "empty string";
-                    return false;
-                }
-                return true;
-
-            default:
-                reason = $"unknown DataType '{dataType}'";
-                return false;
-        }
     }
 }

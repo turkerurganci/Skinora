@@ -17,6 +17,7 @@ using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Notifications;
 using Skinora.Notifications.Infrastructure.Persistence;
 using Skinora.Payments.Infrastructure.Persistence;
+using Skinora.Platform;
 using Skinora.Platform.Infrastructure.Bootstrap;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Shared.Persistence;
@@ -82,6 +83,12 @@ builder.Services.AddUsersModule(builder.Configuration);
 // issuance arrives with T40; until then the dynamic Permission:* policies
 // only succeed for super-admins via PermissionAuthorizationHandler bypass.
 builder.Services.AddAdminModule();
+
+// Platform parameter management (T41 — 07 §9.8–§9.9). ISystemSettingsService
+// reads the SystemSetting catalog and applies type/range/cross-key validation
+// to admin updates. Audit rows write directly to AuditLogs pending T42's
+// centralised pipeline.
+builder.Services.AddPlatformModule();
 
 // Notification infrastructure (T37 — 05 §7.1–§7.5): dispatcher orchestration,
 // .resx-backed template resolver, per-channel handlers (Email/Telegram/Discord
