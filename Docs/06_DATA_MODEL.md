@@ -416,6 +416,36 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 >     - Satıcı trade offer timeout'u (adım 3) → satıcı
 >     - Ödeme timeout'u (adım 4) → alıcı
 >     - Teslim trade offer timeout'u (adım 6) → alıcı
+>
+> **Composite reputationScore formülü (02 §13):**
+> ```
+> reputationScore =
+>   IF (accountAgeDays < reputation.min_account_age_days)
+>      OR (CompletedTransactionCount < reputation.min_completed_transactions)
+>      OR (SuccessfulTransactionRate IS NULL)
+>     → null
+>   ELSE
+>     → ROUND(SuccessfulTransactionRate × 5, 1)
+> ```
+> - **Tip:** `decimal(2,1)` aralık `[0.0, 5.0]`, 1 ondalık basamak. API kontratında nullable (`reputationScore: 4.8 | null`).
+> - **Yuvarlama:** `MidpointRounding.ToZero` (8.3 §8.3 finansal hesaplama kuralıyla uyumlu — kesme/truncation, sıfıra doğru yuvarla). Örnek: `0.964 × 5 = 4.82 → 4.8`.
+> - **Eşik kaynakları (SystemSetting):**
+>   - `reputation.min_account_age_days` — int, default `30`, kategori `reputation`. Yeni hesap koruması: hesap yaşı eşiği.
+>   - `reputation.min_completed_transactions` — int, default `3`, kategori `reputation`. İstatistiksel anlamlılık: minimum işlem sayısı.
+> - **Hesaplama yeri:** Composite skor **denormalized değildir** — User entity'sinde alan olarak tutulmaz. Read path'te (`UserProfileService` ve diğer DTO mapper'lar) `CompletedTransactionCount`, `SuccessfulTransactionRate` ve `CreatedAt` üzerinden runtime hesaplanır. Sebep: eşikler değişebilir (admin SystemSetting), denormalized değer drift'e girer.
+> - **Wash trading etkisi:** §3.1 wash trading penceresi `SuccessfulTransactionRate` paydasını etkiler — composite skor zincirleme bu filtreyi devralır (ek mantık gerekmez).
+
+> **Örnek hesaplamalar:**
+>
+> | Senaryo | CompletedTx | rate | accountAge | reputationScore |
+> |---|---|---|---|---|
+> | Tipik aktif kullanıcı | 24 | 0.9600 | 6 ay | 4.8 |
+> | Mükemmel kullanıcı | 50 | 1.0000 | 1 yıl | 5.0 |
+> | Yeni başlayan | 5 | 0.8000 | 3 ay | 4.0 |
+> | Az işlem | 2 | 1.0000 | 1 yıl | null (CompletedTx < 3) |
+> | Yeni hesap | 5 | 1.0000 | 10 gün | null (accountAge < 30 gün) |
+> | Hiç işlem yok | 0 | NULL | 6 ay | null (rate NULL) |
+> | Düşük başarı | 10 | 0.5000 | 1 yıl | 2.5 |
 
 ### 3.2 UserLoginLog
 

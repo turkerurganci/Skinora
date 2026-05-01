@@ -300,8 +300,11 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 |---|---|
 | İtibar sistemi | Aktif |
 | Kriterler | Tamamlanan işlem sayısı, başarılı işlem oranı, platformdaki hesap yaşı |
-| Wash trading koruması | Aktif — detaylar §14.1'de |
-| İptal etkisi | İptal oranı itibar skorunu olumsuz etkiler |
+| Skor ölçeği | 0-5 ondalık (1 ondalık basamak), ör: `4.8` |
+| Skor formülü | `reputationScore = ROUND(SuccessfulTransactionRate × 5, 1)`. `SuccessfulTransactionRate` formülü ve sorumluluk prensibi 06 §3.1'de tanımlıdır. |
+| Yetersiz veri eşikleri | (a) Hesap yaşı < `reputation.min_account_age_days` (default 30 gün) **VEYA** (b) Tamamlanmış işlem sayısı < `reputation.min_completed_transactions` (default 3) → skor `null` döner ("Yeni kullanıcı" UI durumu). Eşikler admin tarafından SystemSetting üzerinden ayarlanabilir. |
+| Wash trading koruması | Aktif — detaylar §14.1'de. Aynı alıcı-satıcı çifti arasında 1 ay içindeki ardışık işlemler `SuccessfulTransactionRate` paydasına dahil edilmez. |
+| İptal etkisi | İptal oranı itibar skorunu olumsuz etkiler. Sorumluluk prensibi 06 §3.1'de: `CANCELLED_SELLER` satıcının paydasına, `CANCELLED_BUYER` alıcının paydasına eklenir; `CANCELLED_TIMEOUT` adıma göre sorumlu tarafa atanır; `CANCELLED_ADMIN` paydaya dahil edilmez (platform kararı). |
 | Kullanıcı yorumu | MVP'de yok — ileride eklenecek |
 
 ---

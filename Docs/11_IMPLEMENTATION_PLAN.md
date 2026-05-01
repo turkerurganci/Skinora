@@ -998,18 +998,33 @@ Task T42: AuditLog servisi
 ```
 Task T43: User itibar skoru hesaplama
   Bağımlılık: T18, T19
-  Dokümanlar: 02 §13, 06 §8.2
+  Dokümanlar: 02 §13, 06 §3.1, 06 §8.2
   Kabul kriterleri:
     - Tamamlanan işlem sayısı denormalized güncelleme (COMPLETED'da)
     - Başarılı işlem oranı hesaplama (sorumluluk bazlı — kimin iptal ettiğine göre)
     - Hesap yaşı hesaplama
     - İptal oranı skoru etkiliyor
-    - Wash trading: aynı çift arasındaki işlemler skora etki etmiyor
+    - Wash trading: aynı çift arasındaki işlemler skora etki etmiyor (1 ay penceresi, 02 §14.1)
     - CooldownExpiresAt hesaplama (iptal limiti aşıldığında)
-  Test beklentisi: Unit — skor hesaplama formülleri; Integration — denormalized güncelleme
+    - Composite reputationScore (06 §3.1 formülü) read path'te hesaplanır:
+        ROUND(SuccessfulTransactionRate × 5, 1) ya da yetersiz veri eşiklerinden biri
+        karşılanırsa null. Eşikler: reputation.min_account_age_days (default 30) ve
+        reputation.min_completed_transactions (default 3) — yeni SystemSetting (kategori
+        reputation, IsConfigured=true), 32 → 34 seed satırı; SystemSettingsCatalog +
+        SystemSettingsValidator (>0 numeric) ile bağlanır. T33'ün UserProfileDto/
+        UserStatsDto/PublicUserProfileDto null devri kapatılır — UserProfileService
+        composite skoru hesaplayan ortak helper'a bağlanır.
+  Test beklentisi: Unit — skor hesaplama formülleri (rate + composite + wash filter +
+    cooldown); Integration — denormalized güncelleme + UserProfile DTO composite
+    reputationScore (06 §3.1 örnek tablosu birebir).
   Doğrulama kontrol listesi:
-    - [ ] 02 §13 skor kriterleri uygulanmış mı?
+    - [ ] 02 §13 skor kriterleri (formül + eşikler) uygulanmış mı?
+    - [ ] 06 §3.1 composite reputationScore formülü ve örnek tablosu birebir doğrulandı mı?
     - [ ] 06 §8.2 denormalized field güncelleme kuralları doğru mu?
+    - [ ] reputation.min_account_age_days + reputation.min_completed_transactions
+          SystemSetting seed (default 30 / 3) ve catalog/validator entry'leri eklendi mi?
+    - [ ] T33 UserProfileService null devri (reputationScore) composite hesaplamayla
+          kapandı mı? UserProfileEndpointTests güncellendi mi?
 ```
 
 ---
