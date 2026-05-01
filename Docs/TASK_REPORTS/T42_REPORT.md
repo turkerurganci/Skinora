@@ -88,9 +88,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T42-audit-log-service`
-- **Commit:** TBD
-- **PR:** TBD
-- **CI:** TBD
+- **Commit:** `b592a02` (T42: AuditLog merkezi servisi (05 §5.4, 06 §3.20, 09 §18.6))
+- **PR:** [#69](https://github.com/turkerurganci/Skinora/pull/69)
+- **CI:** Run [`25228027892`](https://github.com/turkerurganci/Skinora/actions/runs/25228027892) ✓ success (task branch, 9/9 job ✓ + Guard skipped — Lint + Build + Unit + Contract + Integration + Docker + Migration + CI Gate). Direkt push guard PR akışında by-design skip; main CI startup ardışık 25226007307/297 + 25223615598 ✓.
 
 ## Known Limitations / Follow-up
 
