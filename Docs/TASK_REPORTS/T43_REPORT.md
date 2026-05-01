@@ -59,6 +59,20 @@
 ## Commit & PR
 
 - Branch: `task/T43-blocked-spec-gap`
-- Commit: (rapor + status + memory + açık bulgu, kod yok)
-- PR: (push sonrası eklenecek)
-- CI: doc-only — paths-filter Lint/Build/Unit/Integration/Contract/Migration/Docker job'larını skip eder; Gate yeşil bekleniyor.
+- Commit: `42e5420` — "T43: BLOCKED (SPEC_GAP) — composite reputationScore formülü tanımsız" (rapor + status + memory + M2 açık bulgu, kod yok)
+- PR: [#71](https://github.com/turkerurganci/Skinora/pull/71)
+- CI: ✓ PASS — run [`25231718147`](https://github.com/turkerurganci/Skinora/actions/runs/25231718147) (Detect changed paths ✓ + Lint ✓ + CI Gate ✓; Build/Unit/Integration/Contract/Migration/Docker paths-filter ile doc-only PR'da skip — beklenen davranış)
+- Branch isolation (Layer 3): ✓ temiz — `git log main..HEAD` yalnızca T43 commit'i
+
+## Bitiş Kapısı (skill task.md — BLOCKED edition)
+
+BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/test) uygulanamaz; aşağıdaki adapte versiyon uygulandı:
+
+- [x] Branch push edildi mi? — `task/T43-blocked-spec-gap` push'landı
+- [x] PR açıldı mı? — PR [#71](https://github.com/turkerurganci/Skinora/pull/71)
+- [x] PR numarası rapor footer'a yazıldı mı? — bu bölüm
+- [x] Rapor + status push edildi mi? — `42e5420` ile aynı commit
+- [x] CI run tamamlandı mı? — run `25231718147` concluded
+- [x] CI run sonucu success mi? — ✓ PASS (CI Gate yeşil)
+- [x] Branch izolasyon check temiz mi? — yalnızca T43 commit subject (`git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → `T43`)
+- [x] Repo memory'de T43 satırı eklendi/güncellendi mi? — `.claude/memory/MEMORY.md` Current Status + Next + T43 detay satırı eklendi
