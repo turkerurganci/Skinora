@@ -5,6 +5,7 @@ using Skinora.Admin.Application.Roles;
 using Skinora.Admin.Application.Users;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Application.Settings;
 using Skinora.Shared.Models;
 
@@ -32,19 +33,24 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "VIEW_USERS";
     private const string PolicyManageSettings =
         AuthPolicies.PermissionPrefix + "MANAGE_SETTINGS";
+    private const string PolicyViewAuditLog =
+        AuthPolicies.PermissionPrefix + "VIEW_AUDIT_LOG";
 
     private readonly IAdminRoleService _roles;
     private readonly IAdminUserService _users;
     private readonly ISystemSettingsService _settings;
+    private readonly IAuditLogQueryService _auditLogs;
 
     public AdminController(
         IAdminRoleService roles,
         IAdminUserService users,
-        ISystemSettingsService settings)
+        ISystemSettingsService settings,
+        IAuditLogQueryService auditLogs)
     {
         _roles = roles;
         _users = users;
         _settings = settings;
+        _auditLogs = auditLogs;
     }
 
     // ---------- Roles (07 §9.11–§9.14) ----------
@@ -248,6 +254,35 @@ public sealed class AdminController : ControllerBase
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
+    }
+
+    // ---------- Audit log (07 §9.19) ----------
+
+    /// <summary>AD18 — <c>GET /admin/audit-logs</c>.</summary>
+    [HttpGet("audit-logs")]
+    [Authorize(Policy = PolicyViewAuditLog)]
+    [RateLimit("admin-read")]
+    public async Task<ActionResult<PagedResult<AuditLogListItemDto>>> ListAuditLogs(
+        [FromQuery] string? category,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        [FromQuery] string? search,
+        [FromQuery] Guid? transactionId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new AuditLogListQuery(
+            Category: category,
+            DateFrom: dateFrom,
+            DateTo: dateTo,
+            Search: search,
+            TransactionId: transactionId,
+            Page: page,
+            PageSize: pageSize);
+
+        var result = await _auditLogs.ListAsync(query, cancellationToken);
+        return Ok(result);
     }
 
     // ---------- helpers ----------

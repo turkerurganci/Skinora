@@ -2,10 +2,9 @@ namespace Skinora.Platform.Application.Settings;
 
 /// <summary>
 /// Read + update for admin-managed platform parameters (07 §9.8–§9.9).
-/// Audit log writes use <c>AppDbContext.Set&lt;AuditLog&gt;()</c> directly
-/// pending T42's centralised audit pipeline; the call site already supplies
-/// <c>ActorId</c> + <c>IpAddress</c> so the eventual refactor only needs to
-/// swap the persistence path.
+/// Audit log rows are emitted through <see cref="Audit.IAuditLogger"/>
+/// (T42, 09 §18.6) so the actor invariant (06 §8.6a) and the future audit
+/// query layer share a single write path.
 /// </summary>
 public interface ISystemSettingsService
 {
