@@ -11,15 +11,22 @@ namespace Skinora.Auth.Application.SteamAuthentication;
 public sealed class AccessTokenGenerator : IAccessTokenGenerator
 {
     private readonly JwtSettings _settings;
+    private readonly IAdminAuthorityResolver _authorityResolver;
     private readonly JwtSecurityTokenHandler _handler = new();
 
-    public AccessTokenGenerator(IOptions<JwtSettings> settings)
+    public AccessTokenGenerator(
+        IOptions<JwtSettings> settings,
+        IAdminAuthorityResolver authorityResolver)
     {
         _settings = settings.Value;
+        _authorityResolver = authorityResolver;
     }
 
-    public GeneratedAccessToken Generate(User user)
+    public async Task<GeneratedAccessToken> GenerateAsync(
+        User user, CancellationToken cancellationToken)
     {
+        var authority = await _authorityResolver.ResolveAsync(user.Id, cancellationToken);
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var expires = DateTime.UtcNow.AddMinutes(_settings.AccessTokenExpiryMinutes);
@@ -28,8 +35,16 @@ public sealed class AccessTokenGenerator : IAccessTokenGenerator
         {
             new(AuthClaimTypes.UserId, user.Id.ToString()),
             new(AuthClaimTypes.SteamId, user.SteamId),
-            new(AuthClaimTypes.Role, AuthRoles.User),
+            new(AuthClaimTypes.Role, authority.Role),
         };
+
+        // Permission claims only matter for non-super-admin admins —
+        // PermissionAuthorizationHandler short-circuits on role=super_admin
+        // and a regular user has no admin permissions to grant.
+        foreach (var permission in authority.Permissions)
+        {
+            claims.Add(new Claim(AuthClaimTypes.Permission, permission));
+        }
 
         var descriptor = new SecurityTokenDescriptor
         {

@@ -40,6 +40,9 @@ public static class SteamAuthenticationModule
         services.AddSingleton<IReturnUrlValidator>(new ReturnUrlValidator(settings.DefaultReturnPath));
         services.TryAddSingletonTimeProvider();
 
+        // T40 — Resolves AdminUserRole → AdminRole → AdminRolePermission so
+        // AccessTokenGenerator can stamp role + permission claims into JWTs.
+        services.AddScoped<IAdminAuthorityResolver, AdminAuthorityResolver>();
         services.AddScoped<IAccessTokenGenerator, AccessTokenGenerator>();
         services.AddScoped<IRefreshTokenGenerator, RefreshTokenGenerator>();
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();

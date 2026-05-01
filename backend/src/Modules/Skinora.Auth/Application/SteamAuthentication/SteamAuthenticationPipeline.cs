@@ -74,7 +74,8 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         if (provisioning.User.IsDeactivated)
             return new AuthenticationOutcome.AccountBanned(provisioning.User.Id);
 
-        var access = _accessTokenGenerator.Generate(provisioning.User);
+        var access = await _accessTokenGenerator.GenerateAsync(
+            provisioning.User, cancellationToken);
         var refresh = await _refreshTokenGenerator.IssueAsync(
             provisioning.User.Id, ipAddress, userAgent, cancellationToken);
 

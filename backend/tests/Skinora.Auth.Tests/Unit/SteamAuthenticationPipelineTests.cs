@@ -132,7 +132,8 @@ public class SteamAuthenticationPipelineTests
         var result = await BuildPipeline().ExecuteAsync(ValidCallback(), null, null, default);
 
         Assert.IsType<AuthenticationOutcome.AccountBanned>(result);
-        _access.Verify(a => a.Generate(It.IsAny<User>()), Times.Never);
+        _access.Verify(a => a.GenerateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()),
+            Times.Never);
         _refresh.Verify(r => r.IssueAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), default),
             Times.Never);
         _audit.Verify(a => a.RecordLoginAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), default),
@@ -168,7 +169,8 @@ public class SteamAuthenticationPipelineTests
             .ReturnsAsync(new UserProvisioningResult(user, isNewUser));
 
         var accessToken = new GeneratedAccessToken("access.jwt", DateTime.UtcNow.AddMinutes(15));
-        _access.Setup(a => a.Generate(user)).Returns(accessToken);
+        _access.Setup(a => a.GenerateAsync(user, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(accessToken);
 
         var refreshEntity = new RefreshToken { Id = Guid.NewGuid(), UserId = user.Id };
         var refreshToken = new GeneratedRefreshToken(refreshEntity, "refresh-plain",

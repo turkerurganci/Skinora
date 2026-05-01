@@ -94,7 +94,7 @@ public sealed class RefreshTokenService : IRefreshTokenService
         await _cache.SetAsync(
             newHash, newEntry, newRefresh.ExpiresAt - DateTime.UtcNow, cancellationToken);
 
-        var access = _accessTokenGenerator.Generate(user);
+        var access = await _accessTokenGenerator.GenerateAsync(user, cancellationToken);
         return new RotateOutcome.Success(user, access, newRefresh);
     }
 

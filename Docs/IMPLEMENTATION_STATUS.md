@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-05-01 (T39 ✓ Tamamlandı bağımsız validator PASS — Admin rol ve yetki yönetimi. 8 endpoint (07 §9.11–§9.18) `Skinora.Admin/Application/Roles|Users/`, 11 yetkili `PermissionCatalog`, 07 §9.11 doc-sync `MANAGE_STEAM_RECOVERY` 04 §8.8 hizası. 26/26 admin endpoint integration + 212 API.Tests sweep + 54 Auth.Tests PASS. Migration yok. PR [#64](https://github.com/turkerurganci/Skinora/pull/64) head `8eb065a` CI run [`25212403954`](https://github.com/turkerurganci/Skinora/actions/runs/25212403954) 10/10 ✓. Bağımsız validator: 0 S-bulgu, 1 minor advisory (admin search LIKE pattern escape T63 standardizasyonu). Sırada T40 RBAC policy enforcement.)
+**Son güncelleme:** 2026-05-01 (T40 ✓ PASS bağımsız validator — Admin RBAC policy enforcement. JWT issuance artık `AdminAuthorityResolver` ile `AdminUserRole → AdminRole → AdminRolePermission` chain'ini DB'den çözüp `role` + `permission` claim'leri stamp eder; super-admin bypass korundu. `AccessTokenGenerator.Generate` → async `GenerateAsync(User, ct)`; SteamAuthenticationPipeline + RefreshTokenService await edildi. `JwtBearerEvents.OnForbidden` `INSUFFICIENT_PERMISSION` ApiResponse envelope'u yazar (07 §2.4 / §9). 4 yeni dosya (`I/AdminAuthorityResolver`, `AdminAuthorityResolverTests`, `AdminRbacEndpointTests`) + 6 değişiklik. Migration yok. Validator: kabul kriterleri 4/4 ✓, doğrulama listesi 1/1 ✓, lokal 30/30 (Auth 25 + API 5) PASS, CI run 25220660821 10/10 ✓, güvenlik temiz, rapor uyumu tam. PR #65 squash merge sonrası.)
 
 ---
 
@@ -96,7 +96,7 @@
 | T37 | Bildirim altyapı servisi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — rapor resx entry count drift / stub handler PII log devri T78–T80) | `b383983`+`7767fc7` (PR pending) |
 | T38 | Platform içi bildirim kanalı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — rapor CI run id drift, fonksiyonel etki yok) | `f961122` (PR #63, pending squash) |
 | T39 | Admin rol ve yetki yönetimi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — admin search LIKE pattern escape T63 standardizasyonu) | `8eb065a` (PR #64, pending squash) |
-| T40 | Admin RBAC (policy-based authorization) | ⬚ Bekliyor | — | — |
+| T40 | Admin RBAC (policy-based authorization) | ✓ Tamamlandı | ✓ PASS | (squash) |
 | T41 | Admin parametre yönetimi | ⬚ Bekliyor | — | — |
 | T42 | AuditLog servisi | ⬚ Bekliyor | — | — |
 | T43 | User itibar skoru hesaplama | ⬚ Bekliyor | — | — |

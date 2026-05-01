@@ -1,14 +1,22 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using Skinora.Auth.Authorization;
 using Skinora.Auth.Configuration;
+using Skinora.Shared.Models;
 
 namespace Skinora.API.Configuration;
 
 public static class AuthModule
 {
+    private static readonly JsonSerializerOptions ForbiddenJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+
     public static IServiceCollection AddAuthModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -58,6 +66,27 @@ public static class AuthModule
 
             // Do not map standard claim types to .NET defaults
             options.MapInboundClaims = false;
+
+            // T40 — On a 403 (authenticated but lacks the policy's permission
+            // requirement) the default JwtBearer handler writes an empty body.
+            // 07 §9 mandates a 403 INSUFFICIENT_PERMISSION envelope, so we
+            // serialize the standard ApiResponse failure shape ourselves.
+            options.Events = new JwtBearerEvents
+            {
+                OnForbidden = async context =>
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    context.Response.ContentType = "application/json";
+
+                    var body = ApiResponse<object>.Fail(
+                        "INSUFFICIENT_PERMISSION",
+                        "You do not have permission to access this resource.",
+                        traceId: context.HttpContext.TraceIdentifier);
+
+                    await context.Response.WriteAsync(
+                        JsonSerializer.Serialize(body, ForbiddenJsonOptions));
+                },
+            };
         });
 
         // Authorization policies

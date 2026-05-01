@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Application.Session;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Configuration;
@@ -17,6 +18,7 @@ public class RefreshTokenServiceTests : IntegrationTestBase
     {
         UsersModuleDbRegistration.RegisterUsersModule();
         AuthModuleDbRegistration.RegisterAuthModule();
+        AdminModuleDbRegistration.RegisterAdminModule();
     }
 
     private readonly JwtSettings _settings = new()
@@ -32,7 +34,8 @@ public class RefreshTokenServiceTests : IntegrationTestBase
     {
         var options = Options.Create(_settings);
         var generator = new RefreshTokenGenerator(Context, options);
-        var access = new AccessTokenGenerator(options);
+        var resolver = new AdminAuthorityResolver(Context);
+        var access = new AccessTokenGenerator(options, resolver);
         return new RefreshTokenService(
             Context, cache ?? new NullRefreshTokenCache(), access, generator, options);
     }
