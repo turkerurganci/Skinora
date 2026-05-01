@@ -124,4 +124,4 @@ dotnet test tests/Skinora.Notifications.Tests --filter "Category=Unit"
 - **Commit (kod):** `4f3d95c`
 - **Commit (rapor+status+memory):** `c560d57`
 - **PR:** [#63](https://github.com/turkerurganci/Skinora/pull/63)
-- **CI run (task branch):** TBD (push sonrası izlenecek — CI watch validate chat'inde tamamlanacak)
+- **CI run (task branch):** [`25206507387`](https://github.com/turkerurganci/Skinora/actions/runs/25206507387) ✓ — 9/9 job (Lint + Build + Unit + Integration + Contract + Migration + Docker build + CI Gate; Guard skipped + paths detected). İlk run `25206499968` rapor commit'i tarafından concurrency cancellation ile durduruldu — son tamamlanmış run baz alınır (T11.2 concurrency notu).
