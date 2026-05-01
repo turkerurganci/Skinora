@@ -551,8 +551,8 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
   "createdAt": "2025-09-16T08:00:00Z",
   "reputationScore": 4.8,
   "completedTransactionCount": 24,
-  "successfulTransactionRate": 96.0,
-  "cancelRate": 4.0,
+  "successfulTransactionRate": 0.96,
+  "cancelRate": 0.04,
   "sellerWalletAddress": "TXyz1234567890abcdef1234567890ab",
   "refundWalletAddress": "TAbcdef1234567890abcdef12345678cd",
   "mobileAuthenticatorActive": true
@@ -573,7 +573,7 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
 ```json
 {
   "completedTransactionCount": 24,
-  "successfulTransactionRate": 96.0,
+  "successfulTransactionRate": 0.96,
   "reputationScore": 4.8
 }
 ```
@@ -628,7 +628,7 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
   "accountAge": "6 ay",
   "reputationScore": 4.8,
   "completedTransactionCount": 24,
-  "successfulTransactionRate": 96.0
+  "successfulTransactionRate": 0.96
 }
 ```
 
@@ -1080,7 +1080,7 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
 {
   "minPrice": "10.00",
   "maxPrice": "50000.00",
-  "commissionRate": 2.0,
+  "commissionRate": 0.02,
   "paymentTimeout": { "minHours": 6, "maxHours": 72, "defaultHours": 24 },
   "openLinkEnabled": false,
   "supportedStablecoins": ["USDT", "USDC"]
@@ -1112,7 +1112,7 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
 
   "price": "100.00",
   "stablecoin": "USDT",
-  "commissionRate": 2.0,
+  "commissionRate": 0.02,
   "commissionAmount": "2.00",
   "totalAmount": "102.00",
 
@@ -1992,7 +1992,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     "completedTransactions": 24,
     "cancelledTransactions": 4,
     "flaggedTransactions": 2,
-    "successfulTransactionRate": 80.0,
+    "successfulTransactionRate": 0.80,
     "totalVolume": "5420.00",
     "lastTransactionAt": "2026-03-15T18:00:00Z"
   },
