@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-05-01 (T38 ⏳ yapım bitti — Platform içi bildirim kanalı. 4 endpoint (`GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-all-read`, `PUT /notifications/{id}/read`) `Skinora.Notifications/Application/Inbox/` altında `INotificationInboxService` + `NotificationInboxService` (AppDbContext üstüne kurulu, `Notification` tablosu okuma/yazma; `MarkAllReadAsync` tracking modunda — `AppDbContext.UpdateAuditFields` `UpdatedAt` pipeline'ı korunsun) + `NotificationListItemDto` (Type stringify, 07 §2.8 K8 UPPER_SNAKE_CASE) + `NotificationTargetMapper` (07 §8.1 `targetType` derivation: ADMIN_FLAG_ALERT→"flag", ADMIN_STEAM_BOT_ISSUE→null, diğer 18 tip TransactionId varsa "transaction"). Controller `NotificationsController` (Authenticated + user-read/user-write rate-limit, 404 NOTIFICATION_NOT_FOUND + 403 FORBIDDEN). 14 integration test (SQLite in-memory factory; `TransactionId=null` seed çünkü Transactions FK için ~50 field + 8 CHECK gerek; "transaction" string assertion mapper unit testlerinde) + 12 unit test (NotificationTargetMapper) lokal PASS. Migration yok (T23 entity yeterli). 0 yeni package. Release 0W/0E + format ✓. PR pending.)
+**Son güncelleme:** 2026-05-01 (T38 ✓ PASS bağımsız validator — Platform içi bildirim kanalı. 4 endpoint (`GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-all-read`, `PUT /notifications/{id}/read`) `Skinora.Notifications/Application/Inbox/` altında. Validator: 5/5 kabul + 1/1 doğrulama listesi ✓, 0 S-bulgu, 1 minor advisory (M1 — rapor CI run id drift, fonksiyonel etki yok). Lokal Release 0W/0E + 14 integration + 12 unit PASS. PR #63 head SHA `f961122` CI run [`25206683581`](https://github.com/turkerurganci/Skinora/actions/runs/25206683581) 10/10 ✓. Sırada T39 — Admin rol ve yetki yönetimi.)
 
 ---
 
@@ -94,7 +94,7 @@
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ✓ Tamamlandı | ✓ PASS (0 S-bulgu, 3 minor advisory — 503 envelope/appsettings env-var/SignalR T62 devir) | `64ac159`+`7e9032e`+`f23fd3a` (PR #59, pending squash) |
 | T36 | Hesap deaktif ve silme | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — atomicity rapor §Notlar / deactivated→delete reactivate devir) | `5e383ec`+`bd80954`+`99fd5cc`+`943ad45` (PR #60, pending squash) |
 | T37 | Bildirim altyapı servisi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — rapor resx entry count drift / stub handler PII log devri T78–T80) | `b383983`+`7767fc7` (PR pending) |
-| T38 | Platform içi bildirim kanalı | ⏳ Yapım bitti | — | TBD (PR pending) |
+| T38 | Platform içi bildirim kanalı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — rapor CI run id drift, fonksiyonel etki yok) | `f961122` (PR #63, pending squash) |
 | T39 | Admin rol ve yetki yönetimi | ⬚ Bekliyor | — | — |
 | T40 | Admin RBAC (policy-based authorization) | ⬚ Bekliyor | — | — |
 | T41 | Admin parametre yönetimi | ⬚ Bekliyor | — | — |

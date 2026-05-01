@@ -1,6 +1,6 @@
 # T38 — Platform içi bildirim kanalı
 
-**Faz:** F2 | **Durum:** ⏳ Yapım bitti | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ✓ PASS bağımsız validator | **Tarih:** 2026-05-01
 
 ---
 
@@ -125,3 +125,56 @@ dotnet test tests/Skinora.Notifications.Tests --filter "Category=Unit"
 - **Commit (rapor+status+memory):** `c560d57`
 - **PR:** [#63](https://github.com/turkerurganci/Skinora/pull/63)
 - **CI run (task branch):** [`25206507387`](https://github.com/turkerurganci/Skinora/actions/runs/25206507387) ✓ — 9/9 job (Lint + Build + Unit + Integration + Contract + Migration + Docker build + CI Gate; Guard skipped + paths detected). İlk run `25206499968` rapor commit'i tarafından concurrency cancellation ile durduruldu — son tamamlanmış run baz alınır (T11.2 concurrency notu).
+
+---
+
+## Doğrulama Sonucu — T38 Platform içi bildirim kanalı
+
+**Tarih:** 2026-05-01 | **Branch:** `task/T38-notification-inbox` | **HEAD commit:** `f961122`
+
+### Verdict: ✓ PASS (bağımsız validator)
+
+### Hard-Stop Kapıları
+- **Adım -1 — Working Tree:** `git status --short` boş → ✓ temiz.
+- **Adım 0 — Main CI Startup Check:** Son 3 main run hepsi `success` (`25184605927` Docker, `25184605957` CI — T37 chore PR #62; `25017597051` CI — T37 squash) → ✓ geçti.
+- **Adım 0b — Memory Drift:** `.claude/memory/MEMORY.md` satır 11 + 39–40 (T38 ⏳ + 2 tasarım notu) mevcut → ✓ geçti.
+
+### Kabul Kriterleri (validator)
+| # | Kriter (11 §T38) | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `GET /notifications` → bildirim listesi (paginated) | ✓ | `NotificationsController.List()` route `GET /api/v1/notifications`, `[Authorize(Authenticated)] + [RateLimit("user-read")]`. `INotificationInboxService.ListAsync` `AsNoTracking + Where(UserId==caller) + OrderByDescending(CreatedAt).ThenByDescending(Id) + Skip/Take` + `CountAsync` → `PagedResult<NotificationListItemDto>`. Clamp: page<1→1, pageSize<1→20, pageSize>100→100. Test (lokal Release 14/14 PASS — `GetList_*` 4 senaryo: 401, ownership+ordering, null txid → null target, pagination page=2/pageSize=2, clamp 500→100). |
+| 2 | `GET /notifications/unread-count` → okunmamış sayı | ✓ | `GetUnreadCount()` route `GET /api/v1/notifications/unread-count`, `[Authorize][RateLimit("user-read")]`, `UnreadCountResponse(int UnreadCount)` döner. Test: `UnreadCount_Authenticated_ReturnsOnlyOwnUnread` (4-row seed: 2 unread own + 1 read own + 1 unread stranger → unreadCount=2) + `UnreadCount_Unauthenticated_Returns401`. |
+| 3 | `POST /notifications/mark-all-read` → tümünü okundu | ✓ | `MarkAllRead()` route `POST /api/v1/notifications/mark-all-read`, `[Authorize][RateLimit("user-write")]`, `MarkAllReadResponse(int MarkedCount)`. Service yalnız `UserId==caller && !IsRead` row'ları çeker, tracking modunda flip eder (`UpdateAuditFields`'in `UpdatedAt` stamp'ini bypass etmemek için bilinçli karar — ExecuteUpdate bypass ederdi). Test: `MarkAllRead_FlipsOnlyUnreadAndReturnsCount` (3 own + 1 stranger seed → markedCount=2, stranger row dokunulmadı, all own ReadAt set), `MarkAllRead_NoUnread_ReturnsZero`. |
+| 4 | `PUT /notifications/:id/read` → tek bildirim okundu | ✓ | `MarkRead(id)` route `PUT /api/v1/notifications/{id:guid}/read`, `[Authorize][RateLimit("user-write")]`. Akış: row yok → `MarkReadOutcome.NotFound` → 404 `NOTIFICATION_NOT_FOUND`; `UserId != caller` → 403 `FORBIDDEN`; `IsRead=true` → idempotent OK (timestamp preserve); aksi → flip + `ReadAt=UtcNow` + Save. Test: `MarkRead_OwnUnreadNotification_FlipsToRead`, `MarkRead_AlreadyRead_OkIdempotent` (`Assert.Equal(readAt, persisted.ReadAt, TimeSpan.FromSeconds(1))` preserve doğrulandı), `MarkRead_UnknownId_Returns404WithCode`, `MarkRead_OtherUsersNotification_Returns403`, `MarkRead_Unauthenticated_Returns401`. Hata envelope `success:false + error.code` doğru (`ApiResponseWrapperFilter` 2xx-only sarar; `ApiResponse<object>.Fail` controller'da elle inşa). |
+| 5 | Notification tablosuna yazma | ✓ | `MarkAllReadAsync` ve `MarkReadAsync` `IsRead=true + ReadAt=UtcNow` ile satıra yazar; `SaveChangesAsync` çağırır; tracking pipeline `AppDbContext.UpdateAuditFields` `UpdatedAt`'i de stamp eder. Test seviye: `Assert.NotNull(n.ReadAt)` + `Assert.True(persisted.IsRead)` her iki path'te de doğrulanır. |
+
+### Doğrulama Kontrol Listesi (11 §T38)
+- [x] **07 §8.1–§8.4 endpoint sözleşmeleri doğru mu?**
+  - **8.1 (`GET /notifications`):** Auth=Authenticated ✓; paginated default 20 ✓; `data.items[]` alan kümesi `id`/`type`/`message`/`targetType`/`targetId`/`isRead`/`createdAt` birebir (`NotificationListItemDto.cs:11–18`); `type` UPPER_SNAKE_CASE string (07 §2.8 K8) — proje genel `JsonStringEnumConverter` yok, DTO'da `r.Type.ToString()` ile inşa, test `Assert.Equal("PAYMENT_RECEIVED", first.GetProperty("type").GetString())` doğruladı; `targetType` derivation 07 §8.1 tablosu ile birebir (`NotificationTargetMapper.cs:18–31`: `ADMIN_FLAG_ALERT→"flag"`, `ADMIN_STEAM_BOT_ISSUE→null`, diğer 18 type `TransactionId` varsa `"transaction"`).
+  - **8.2 (`GET /notifications/unread-count`):** Auth ✓; `data: { unreadCount: N }` → `UnreadCountResponse(int UnreadCount)` ✓.
+  - **8.3 (`POST /notifications/mark-all-read`):** Auth ✓; `data: { markedCount: N }` → `MarkAllReadResponse(int MarkedCount)` ✓.
+  - **8.4 (`PUT /notifications/:id/read`):** Auth ✓; `data: null` → `Ok((object?)null)` + `ApiResponseWrapperFilter` `IsAlreadyWrapped(null)=false` → `ApiResponse<object>.Ok(null, traceId)` → JSON `{success:true, data:null, error:null}` ✓; 404 `NOTIFICATION_NOT_FOUND` ✓; 403 `FORBIDDEN` ✓.
+
+### Test Sonuçları (lokal Release validator)
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Build (Release) | ✓ 0W/0E | `Build succeeded. 0 Warning(s) 0 Error(s).` 15.5s |
+| Unit (NotificationTargetMapper) | ✓ 12/12 | `Skinora.Notifications.Tests` `--filter "FullyQualifiedName~NotificationTargetMapper"` 149ms |
+| Integration (NotificationInbox) | ✓ 14/14 | `Skinora.API.Tests` `--filter "FullyQualifiedName~NotificationInbox"` 3s (SQLite in-memory factory) |
+| Task branch CI (Adım 8a) | ✓ 10/10 | PR #63 head SHA `f961122` için CI run [`25206683581`](https://github.com/turkerurganci/Skinora/actions/runs/25206683581) — Detect changed paths, Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker build (backend), CI Gate hepsi `success`; Guard skipped (PR yolu, beklenen). Yapım raporundaki `25206507387` daha önceki commit'in CI'sıydı; head SHA için yeni run otomatik başladı, o da tamamen yeşil. |
+
+### Güvenlik Kontrolü
+- [x] **Secret sızıntısı:** Temiz. `git diff main..HEAD -- backend` üzerinde `password|secret|api.key|connection.string|TODO|HACK` regex grep'i 0 hit.
+- [x] **Auth/authz etkisi:** 4/4 endpoint `[Authorize(Policy = AuthPolicies.Authenticated)]`; ownership filter (`UserId == caller`) DB sorgusunda zorunlu — IDOR kontrolü test ile doğrulandı (stranger 403, list yalnız own row). 401 yolu da test ile kapsandı.
+- [x] **Input validation:** `page` + `pageSize` query param'ları server-side clamp (`page<1→1`, `pageSize<1→20`, `pageSize>100→100`); `id` route constraint `:guid` — invalid guid → routing'de 404. POST/PUT body almadığı için body sanitization N/A.
+- [x] **Rate limiting:** `user-read` (60 req/dk) GET endpoint'lerinde, `user-write` (20 req/dk) POST/PUT'da; T07'den beri tanımlı policy'ler — yeni konfig yok.
+- [x] **Yeni dış bağımlılık:** **Yok** — `INotificationInboxService` sadece `Microsoft.EntityFrameworkCore` (mevcut), `AppDbContext` (mevcut), `Notification` entity (T23). Controller `Microsoft.AspNetCore.Mvc` + `RateLimitAttribute` (T07) + `AuthPolicies` (T06) — hepsi mevcut. Test csproj'larda yeni paket eklenmedi.
+
+### Bulgular
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| M1 | minor advisory (S0) | T38_REPORT.md "Commit & PR" bloğu task branch CI run'ı olarak `25206507387`'yi cite ediyor; bu rapor commit'leri (`d31b7f6`/`c560d57`) zamanındaki CI'ydı. Sonraki rapor commit'i `f961122` (CI run id update) için yeni CI run `25206683581` tetiklendi ve aynı şekilde 10/10 success — head SHA için fonksiyonel sonuç değişmedi, yalnız rapor cite stale. T37'deki resx count drift M1 ile aynı kategoriye giriyor; PASS'i engellemiyor. | `Docs/TASK_REPORTS/T38_REPORT.md:127` |
+
+### Yapım Raporu Karşılaştırması
+- **Uyum:** Tam — 5/5 kabul kriteri ✓, 1/1 doğrulama listesi maddesi ✓, build 0W/0E, 14 integration + 12 unit test PASS, kod ↔ doc 07 §8.1–§8.4 birebir. Yapım raporunun Known Limitations bölümü (SignalR T62 / admin endpoint T39+ / i18n T97 / per-channel mute Post-MVP) doğru ve tam — validator de aynı sonuçlara ulaştı, sapma yok.
+- **Karar gerekçesi:** 0 S1/S2/S3 bulgu; 1 minor advisory (M1, doc drift CI run id). Tüm spec maddeleri kanıt bazlı doğrulandı. Verdict ✓ PASS.
