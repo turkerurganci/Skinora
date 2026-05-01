@@ -1,6 +1,6 @@
 # T39 — Admin rol ve yetki yönetimi
 
-**Faz:** F2 | **Durum:** ⏳ Yapım bitti | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-05-01
 
 ---
 
@@ -176,4 +176,70 @@ dotnet test tests/Skinora.Auth.Tests --filter "FullyQualifiedName!~Integration"
 - **Commit (kod):** `a4ee16d` — `T39: Admin rol ve yetki yönetimi (8 endpoint, 11 yetki)` (15 yeni dosya + 2 modify, 17 toplam değişiklik).
 - **Commit (rapor+status+memory):** `bd2261a` — `docs(T39): rapor + status + memory`.
 - **PR:** [#64](https://github.com/turkerurganci/Skinora/pull/64)
-- **CI run (task branch):** [`25212208286`](https://github.com/turkerurganci/Skinora/actions/runs/25212208286) ✓ **10/10 job** — Detect changed paths, 1. Lint, 2. Build, 3. Unit test, 4. Integration test, 5. Contract test, 6. Migration dry-run, 7. Docker build (backend), CI Gate hepsi `success`; 0. Guard (direct push) skipped (PR path, expected).
+- **CI run (task branch):** [`25212208286`](https://github.com/turkerurganci/Skinora/actions/runs/25212208286) ✓ **10/10 job** — Detect changed paths, 1. Lint, 2. Build, 3. Unit test, 4. Integration test, 5. Contract test, 6. Migration dry-run, 7. Docker build (backend), CI Gate hepsi `success`; 0. Guard (direct push) skipped (PR path, expected). Latest head `8eb065a` run [`25212403954`](https://github.com/turkerurganci/Skinora/actions/runs/25212403954) de 10/10 ✓.
+
+---
+
+## Doğrulama (validator — bağımsız chat, 2026-05-01)
+
+### Verdict: ✓ PASS
+
+### Hard-stop kapıları
+- **Adım -1 Working tree:** Temiz (`git status --short` boş).
+- **Adım 0 Main CI:** Son 3 main run hepsi `success` — `25208725398`, `25208725412` (T38 #63 squash), `25184605927` (T37 chore). Geçildi.
+- **Adım 0b Repo memory drift:** `.claude/memory/MEMORY.md` T39 için 7+ satır içeriyor (Status + tasarım notları + next). Geçildi.
+
+### Bağımsız kabul kriteri doğrulama (yapım raporu okumadan üretildi)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `GET /admin/roles` → rol listesi + mevcut yetkiler | ✓ | `AdminController.ListRoles` `[Authorize(Permission:MANAGE_ROLES)]` + `AdminRoleService.ListAsync` 11-entry catalog projection + assignedUserCount alt sorgu. `ListRoles_SuperAdmin_ReturnsRolesAndCatalog` 11 entry + role+perms doğruladı. |
+| 2 | `POST /admin/roles` | ✓ | `CreateRole` 201 + `RoleDetailDto`. Hatalar: 409 ROLE_NAME_EXISTS, 400 VALIDATION_ERROR (boş name), 400 INVALID_PERMISSION (catalog dışı key). 4 test (1 happy + 3 error path). |
+| 3 | `PUT /admin/roles/:id` | ✓ | Replace-all permission set (tombstone + insert). 404 ROLE_NOT_FOUND, 409 ROLE_NAME_EXISTS (başka rol aynı isim). 2 test + DB doğrulama (eski perm yok, yeni 2 perm var). |
+| 4 | `DELETE /admin/roles/:id` (atanmış kullanıcı engeli) | ✓ | `assignedCount > 0 → HasUsers(count) → 422 ROLE_HAS_USERS` + `details.assignedUserCount` payload. Soft-delete role + permissions atomik. 3 test (success+404+422). |
+| 5 | `GET /admin/users` | ✓ | Paginated + `search`/`roleId` filter. Default mode admin browse, search mode AD17 workflow için tüm aktif kullanıcılara genişler — IAdminUserService docstring'de açık. 4 test. |
+| 6 | `GET /admin/users/:steamId` | ✓ | Profile + Stats + WalletHistory + 3 boş array (T54/T58/T63 forward devir, dokümante). USER_NOT_FOUND 404. ACTIVE/DEACTIVATED status `User.IsDeactivated` türetimi doğru. 3 test. |
+| 7 | `PUT /admin/users/:id/role` | ✓ | Atomic re-assignment: tüm aktif row tombstone + yeni insert. `roleId: null` → tüm assignment temizleme. 404 USER_NOT_FOUND / ROLE_NOT_FOUND. 5 test (new+replace+clear+2 error). |
+| 8 | 11 yetki tanımı | ✓ | `PermissionCatalog.All` 11 entry. 04 §8.8 yetki matrix (11 satır) ↔ 07 §9.11 `availablePermissions` (11 entry) ↔ 11 §T39 ("11 yetki tanımı") doc-sync tam. `MANAGE_STEAM_RECOVERY` drift fix bu PR'da eklendi. |
+
+**Bonus (spec'te var, task tanımı listelememiş):** AD16b `GET /admin/users/:steamId/transactions` (07 §9.17) endpoint'i de implement edilmiş — 8/8 endpoint coverage. Acceptance criteria 7 endpoint listeliyor; task referansı "07 §9.11–§9.18" 8 section kapsadığından bu doğru karar.
+
+### Doğrulama kontrol listesi (11 §T39)
+- [x] **07 §9.11–§9.18 endpoint'leri eksiksiz mi?** 8/8 endpoint mapped + test edilmiş.
+- [x] **Atanmış kullanıcılı rol silinemez mi?** Service-level `assignedCount > 0` kontrolü + `DeleteRole_AssignedToUser_Returns422RoleHasUsers` testi 422 + rol canlı kalır + `assignedUserCount=1` payload doğruladı.
+
+### Test sonuçları
+
+| Tür | Sonuç | Komut / Run |
+|---|---|---|
+| Admin endpoint integration (lokal) | ✓ 26/26 PASS | `dotnet test Skinora.API.Tests --filter "AdminRolesEndpointTests\|AdminUsersEndpointTests"` (2s) |
+| Task branch CI bd2261a | ✓ 10/10 job | run [`25212208286`](https://github.com/turkerurganci/Skinora/actions/runs/25212208286) |
+| Task branch CI 8eb065a (head) | ✓ 10/10 job | run [`25212403954`](https://github.com/turkerurganci/Skinora/actions/runs/25212403954) |
+
+### Mini güvenlik kontrolü
+- **Secret sızıntısı:** Temiz. Test secret'lar test fixtures'da, prod token / API key yok.
+- **Auth/authorization:** Tüm 8 endpoint dynamic `Permission:*` policy ile korumalı (`AuthPolicies.PermissionPrefix + "MANAGE_ROLES"|"VIEW_USERS"`). `PermissionAuthorizationHandler` `super_admin` claim bypass T40 wiring'e kadar tek kapı — task scope ile uyumlu, dokümante. Unauth → 401, non-admin → 403 testleri doğruladı.
+- **Input validation:** Name (zorunlu, ≤100), description (≤500), permissions (catalog membership). EF parametrize ediyor. SteamId/DisplayName arama LIKE pattern parametrize.
+- **Yeni dış bağımlılık:** Yok.
+- **AD17 caller audit:** `User.FindFirstValue(AuthClaimTypes.UserId)` ile caller user id'si `AssignedByAdminId`'a yazılıyor — merkezi AuditLog T42 forward devir, ara çözüm yeterli.
+
+### Doküman uyumu
+- 07 §9.11 `availablePermissions` array'ine `MANAGE_STEAM_RECOVERY` eklenmiş — 04 §8.8 ile birebir hizalı ✓
+- Endpoint path/method/permission/error code'ları 07 §9.11–§9.18 ile birebir ✓
+- 02 §16.1 "Süper admin + özel rol grupları + Yetki yönetimi" gereksinimi karşılanmış ✓ (16.2 parametre yönetimi T41 scope'unda)
+- T06 `PermissionPolicyProvider` + `PermissionAuthorizationHandler` kontratı doğru kullanılıyor ✓
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | M (minor advisory) | `AdminUserService.ListAsync` user-supplied search term'i `EF.Functions.Like($"%{term}%")` ile sarıyor; `%`/`_` literal escape'i yok. Admin endpoint olduğundan + rate-limit 120/dk olduğundan DoS / wildcard explosion riski düşük. T63 (admin transactions read service) ile birlikte search input sanitization (EscapeLikePattern helper) standardizasyonu önerilir. **Blocking değil.** | `Skinora.Admin/Application/Users/AdminUserService.cs:74-76` |
+
+S-bulgu (S1 Sapma / S2 Kırılma / S3 Eksik) yok.
+
+### Yapım raporu karşılaştırması
+- **Uyum:** Tam — 8 kabul kriteri, test sayıları (26/26 admin + 212 sweep + 54 Auth), forward devir listesi (T54/T58/T63/T93/T40/T42), doc-sync ifadesi (10 → 11 entry), 0 S-bulgu hepsi bağımsız analiz ile birebir örtüşüyor.
+- **Uyuşmazlık:** Yok.
+
+### Bağımsız validator chat'inden çıktı
+- **Adım 18 post-merge CI watch:** Squash merge sonrası main branch'e ait CI + Docker Publish run'ları izlenecek; sonuç bu rapora veya MEMORY.md'ye yansıtılacak.
