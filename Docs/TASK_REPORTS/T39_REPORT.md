@@ -173,7 +173,7 @@ dotnet test tests/Skinora.Auth.Tests --filter "FullyQualifiedName!~Integration"
 ## Commit & PR
 
 - **Branch:** `task/T39-admin-roles`
-- **Commit (kod):** _push sonrası eklenir_
-- **Commit (rapor+status+memory):** _push sonrası eklenir_
-- **PR:** _push sonrası eklenir_
-- **CI run (task branch):** _push sonrası eklenir_
+- **Commit (kod):** `a4ee16d` — `T39: Admin rol ve yetki yönetimi (8 endpoint, 11 yetki)` (15 yeni dosya + 2 modify, 17 toplam değişiklik).
+- **Commit (rapor+status+memory):** `bd2261a` — `docs(T39): rapor + status + memory`.
+- **PR:** [#64](https://github.com/turkerurganci/Skinora/pull/64)
+- **CI run (task branch):** [`25212208286`](https://github.com/turkerurganci/Skinora/actions/runs/25212208286) ✓ **10/10 job** — Detect changed paths, 1. Lint, 2. Build, 3. Unit test, 4. Integration test, 5. Contract test, 6. Migration dry-run, 7. Docker build (backend), CI Gate hepsi `success`; 0. Guard (direct push) skipped (PR path, expected).
