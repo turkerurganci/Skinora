@@ -1,6 +1,8 @@
 # T43 — User itibar skoru hesaplama
 
-**Faz:** F2 | **Durum:** ⛔ BLOCKED | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ⛔ BLOCKED → **Çözüldü** (proje sahibi kararı: A) | **Tarih:** 2026-05-01
+
+> **Bu rapor BLOCKED kayıt + çözüm karar arşividir.** T43 implementasyon raporu (`✓ Tamamlandı` durumu, kabul kriterleri kanıtları, test sonuçları) yeni yapım chat'inde implementasyon bittiğinde bu dosyaya **eklenecektir** ("Implementasyon Sonucu" başlığı altında); BLOCKED bölümü tarihsel kayıt olarak korunur.
 
 ---
 
@@ -39,8 +41,32 @@
 
 ## Proje Sahibi Kararı
 
-- **Karar:** Henüz alınmadı
-- **Tarih:** —
+- **Karar:** **(A) Formül 02/06'da yazıldı + plan §T43 güncellendi.** Composite formülü:
+  ```
+  reputationScore =
+    IF (accountAgeDays < reputation.min_account_age_days)
+       OR (CompletedTransactionCount < reputation.min_completed_transactions)
+       OR (SuccessfulTransactionRate IS NULL)
+      → null
+    ELSE
+      → ROUND(SuccessfulTransactionRate × 5, 1)
+  ```
+  - Tip: `decimal(2,1)` aralık `[0.0, 5.0]`, 1 ondalık.
+  - Eşikler SystemSetting: `reputation.min_account_age_days` (default `30`) + `reputation.min_completed_transactions` (default `3`). Kategori `reputation`, admin tarafından runtime ayarlanabilir.
+  - Hesaplama yeri: **read path** (denormalized değil) — User entity'sinde alan tutulmaz, `UserProfileService` ve diğer DTO mapper'ları runtime hesaplar (eşikler değişebildiği için).
+  - Yuvarlama: `MidpointRounding.ToZero` (truncation, 06 §8.3 finansal kuralla uyumlu).
+- **Tarih:** 2026-05-01
+
+## Doküman Yansıması (M2 doc-pass)
+
+| Doküman | Bölüm | Değişiklik |
+|---|---|---|
+| `Docs/02_PRODUCT_REQUIREMENTS.md` | §13 | Skor ölçeği (0-5, 1 ondalık), formül, yetersiz veri eşikleri (30 gün + 3 işlem), wash trading paydası ve sorumluluk prensibi (06 §3.1 referansı) eklendi |
+| `Docs/06_DATA_MODEL.md` | §3.1 | Composite formül + eşik kaynakları (SystemSetting key'leri) + örnek hesaplama tablosu (7 senaryo) + yuvarlama kuralı (`ToZero`) + read-path notu eklendi |
+| `Docs/11_IMPLEMENTATION_PLAN.md` | §T43 | 7. kabul kriteri (composite formül + 2 yeni SystemSetting) + 2 yeni doğrulama kontrol listesi maddesi + dokümana 06 §3.1 referansı eklendi |
+| `Docs/IMPLEMENTATION_STATUS.md` | Açık Bulgular | M2 → "Kapatılanlar" bölümüne taşındı; T43 satırı `⛔ BLOCKED (SPEC_GAP)` → `⬚ Bekliyor` geri çevrildi |
+| `Docs/TASK_REPORTS/T43_REPORT.md` | (bu dosya) | Karar A doldu, BLOCKED → Çözüldü |
+| `.claude/memory/MEMORY.md` | Current Status + T43 satırı | BLOCKED unblock + karar A |
 
 ## Working Tree + CI Kapı Kontrolü (skill task.md Adım -1, Adım 0)
 
@@ -53,8 +79,8 @@
 ## Notlar
 
 - Bu BLOCKED rapor, plan kabul kriterlerinin implementasyon edilebilir olmasına rağmen `reputationScore` kontratının çelişki üretmemesi için **proaktif** olarak açılmıştır. Karar yolu olarak kullanıcı **"Tam C"** seçti: plan kapsamındaki maddeler implement edilebilse bile çelişki kapanmadan T43'e dokunulmaması. Alternatif "C-light" (plan kapsamına daralt + M2 açık bulgu olarak bayrakla) önerildi ama kabul edilmedi.
-- F2 Gate Check'in tetiklenebilmesi için karar zorunludur.
-- Karar verildikten sonra T43 yeni bir yapım chat'inde baştan başlar; bu rapor o zaman finalize edilir (BLOCKED → ✓ Tamamlandı geçişi `T43_REPORT.md`'nin yeniden yazımıyla yapılır, mevcut BLOCKED bölümü "Önceki Karar Geçmişi" başlığı altında tutulur).
+- F2 Gate Check'in tetiklenebilmesi için karar zorunluydu — **2026-05-01'de proje sahibi karar A'yı verdi:** ana formül `ROUND(rate × 5, 1)` + iki SystemSetting eşiği (30 gün hesap yaşı + 3 işlem). Eşik altı veya rate=null durumunda skor null döner ("Yeni kullanıcı" UI durumu).
+- T43 implementasyon **yeni bir yapım chat'inde** baştan başlar (bu PR'ın merge'inden sonra). İmplementasyon raporu bu dosyaya "Implementasyon Sonucu" başlığı altında eklenecek; BLOCKED + Karar bölümleri tarihsel arşiv olarak korunacak.
 
 ## Commit & PR
 
