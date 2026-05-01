@@ -28,7 +28,9 @@
 
 | # | Kaynak | Bulgu | Çözüm yetkisi / tetikleyici |
 |---|---|---|---|
-| M1 | T33 validator (2026-04-23) | `successfulTransactionRate` API'de 06 §3.1 fraction (0.96) olarak dönüyor; 07 §5.1/§5.2/§5.5 örneklerinde `96.0` (yüzde) gösteriliyor. Doc-level inconsistency — frontend yanlış scale ile yorumlama riski. | T93 (Profil sayfaları S08/S09) öncesi karar: 07 örneklerini fraction'a çek VEYA backend DTO'da ×100 dönüşümü ekle. Tetikleyici 11 §T93 doğrulama listesine eklendi. |
+
+**Kapatılanlar:**
+- ~~M1~~ (T33 validator 2026-04-23 → kapanış 2026-05-01): rate-type alan ölçek tutarsızlığı (`successfulTransactionRate`, `cancelRate`, `commissionRate`) — 06 fraction kanonik, 07 örnekleri `0.96 / 0.04 / 0.02 / 0.80` formatına çekildi. T43 öncesi çözüldü; T93 doğrulama listesindeki tetikleyici kaldırıldı. Backend DTO değişimi gerekmedi (T33 zaten fraction döndürüyor; T52 commission fraction tabanı korunur).
 
 ---
 
