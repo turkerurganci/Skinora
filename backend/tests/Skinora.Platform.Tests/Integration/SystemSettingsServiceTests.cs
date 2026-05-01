@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Application.Settings;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
@@ -38,8 +39,12 @@ public class SystemSettingsServiceTests : IntegrationTestBase
         await context.SaveChangesAsync();
     }
 
-    private SystemSettingsService CreateService(AppDbContext? ctx = null) =>
-        new(ctx ?? Context, TimeProvider.System);
+    private SystemSettingsService CreateService(AppDbContext? ctx = null)
+    {
+        var dbContext = ctx ?? Context;
+        var auditLogger = new AuditLogger(dbContext, TimeProvider.System);
+        return new SystemSettingsService(dbContext, TimeProvider.System, auditLogger);
+    }
 
     [Fact]
     [Trait("Category", "Integration")]

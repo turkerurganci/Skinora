@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -17,18 +18,24 @@ public sealed class SystemSettingsService : ISystemSettingsService
 {
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly IAuditLogger _auditLogger;
     private readonly SystemSettingsValidator _validator;
 
-    public SystemSettingsService(AppDbContext db, TimeProvider clock)
-        : this(db, clock, SystemSettingsValidator.Instance)
+    public SystemSettingsService(
+        AppDbContext db, TimeProvider clock, IAuditLogger auditLogger)
+        : this(db, clock, auditLogger, SystemSettingsValidator.Instance)
     {
     }
 
     internal SystemSettingsService(
-        AppDbContext db, TimeProvider clock, SystemSettingsValidator validator)
+        AppDbContext db,
+        TimeProvider clock,
+        IAuditLogger auditLogger,
+        SystemSettingsValidator validator)
     {
         _db = db;
         _clock = clock;
+        _auditLogger = auditLogger;
         _validator = validator;
     }
 
@@ -101,23 +108,21 @@ public sealed class SystemSettingsService : ISystemSettingsService
         // UpdatedAt is set by AppDbContext.UpdateAuditFields on SaveChanges.
 
         // 06 §3.20 — append-only AuditLog row in the same transaction. The
-        // central IAuditLogger arrives with T42 (Skinora.Admin notes the same
-        // forward-devir for AdminRoleService); until then call sites write
-        // raw via DbContext.Set<AuditLog>(). EnforceAppendOnly ignores Added
-        // entries so the INSERT is permitted.
-        _db.Set<AuditLog>().Add(new AuditLog
-        {
-            UserId = actorAdminId,
-            ActorId = actorAdminId,
-            ActorType = ActorType.ADMIN,
-            Action = AuditAction.SYSTEM_SETTING_CHANGED,
-            EntityType = nameof(SystemSetting),
-            EntityId = key,
-            OldValue = JsonSerializer.Serialize(new { value = oldValue, isConfigured = wasConfigured }),
-            NewValue = JsonSerializer.Serialize(new { value = newValue, isConfigured = true }),
-            IpAddress = ipAddress,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
+        // central IAuditLogger (T42, 09 §18.6) stages the row on the same
+        // change tracker; SaveChangesAsync below commits both the SystemSetting
+        // update and the audit row atomically.
+        await _auditLogger.LogAsync(
+            new AuditLogEntry(
+                UserId: actorAdminId,
+                ActorId: actorAdminId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.SYSTEM_SETTING_CHANGED,
+                EntityType: nameof(SystemSetting),
+                EntityId: key,
+                OldValue: JsonSerializer.Serialize(new { value = oldValue, isConfigured = wasConfigured }),
+                NewValue: JsonSerializer.Serialize(new { value = newValue, isConfigured = true }),
+                IpAddress: ipAddress),
+            cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
 
