@@ -1,6 +1,6 @@
 # T42 — AuditLog servisi
 
-**Faz:** F2 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-01 (yapım) / 2026-05-01 (doğrulama)
 
 ---
 
@@ -84,6 +84,23 @@
 - **PII surface:** `Detail` JSON'u `NewValue` ham içeriği — bu T42'de değişmedi. T78–T80 PII redaction devri T37'de mevcuttu, audit log'da PII içeriği kaynak servisin sorumluluğu (örn: `WALLET_ADDRESS_CHANGED` rotation cüzdan adresi yazar — bu zaten admin görünür alan, KVKK/GDPR uyumu T36 hesap silme akışında "kişisel veri anonim, audit log korunur" şeklinde belgeli — 05 §6.5).
 - **Audit immutability:** `EnforceAppendOnly` UPDATE/DELETE'i `InvalidOperationException` ile reddeder; AuditLogger merkezi servisi kullanılsa bile guard yazma yolu dışında da aktiftir (test ile doğrulandı).
 - **Yeni dış bağımlılık:** Yok.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-01) |
+| Bulgu sayısı | 0 S-bulgu |
+| Düzeltme gerekli mi | Hayır |
+| Minor advisory | 1 — architecture-test ile mekanik "doğrudan INSERT yasağı" enforcement T63b/T106'ya forward-devir (rapor Known Limitations'da açıkça belgeli, fonksiyonel etki yok) |
+
+**Validator özeti (bağımsız):**
+- 6/6 kabul kriteri ✓ (1 ✓ kısmi — rule-level + production grep clean; mekanik analyzer guard advisory).
+- 2/2 doğrulama kontrol listesi ✓.
+- Lokal Release build 0W/0E + format ✓; Skinora.Platform.Tests 133/133 ✓; AdminAuditLogEndpointTests 7/7 ✓; tüm solution PASS (Payments 6 / Admin 20 / Auth 93 / Disputes 11 / Fraud 12 / Notifications 63 / Steam 21 / Shared 166 / Transactions 68 / Platform 133 / API 240 — Users.Tests boş).
+- Task branch CI: run [`25228269536`](https://github.com/turkerurganci/Skinora/actions/runs/25228269536) (HEAD `b929ed8`) ✓ success + run [`25228027892`](https://github.com/turkerurganci/Skinora/actions/runs/25228027892) (`b592a02`) ✓ success.
+- Main CI startup ardışık 3 ✓ (25226007307 + 25226007297 + 25223615598).
+- Mini güvenlik temiz; doküman uyumu temiz; rapor uyumu tam (uyuşmazlık yok).
 
 ## Commit & PR
 
