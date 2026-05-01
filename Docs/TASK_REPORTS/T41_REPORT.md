@@ -1,6 +1,6 @@
 # T41 — Admin parametre yönetimi
 
-**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-01
+**Faz:** F2 | **Durum:** ✓ PASS (bağımsız validator, 1 minor advisory) | **Tarih:** 2026-05-01
 
 ---
 
@@ -67,9 +67,37 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (bağımsız validator chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-01) |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory |
+| Düzeltme gerekli mi | Hayır — minor advisory 07 §9.8 kategori listesi güncellemesi sonraki doc-pass'te ele alınır, fonksiyonel etki yok. |
+
+### Validator Bulguları
+
+| # | Seviye | Açıklama | Etkilenen dosya / yer | Devir |
+|---|---|---|---|---|
+| 1 | minor advisory | 07 §9.8 kategori dialect listesi (`timeout, commission, transaction_limits, cancel_rules, new_account, gas_fee, fraud_detection, buyer_identification, geo_blocking, sanctions_screening, age_verification, blockchain_health`) `wallet_security` kategorisini içermiyor; `SystemSettingsCatalog` üç wallet anahtarı (`hot_wallet_limit`, `wallet.payout_address_cooldown_hours`, `wallet.refund_address_cooldown_hours`) için bu yeni dialect değerini döner. Backend API doğru çalışır, fonksiyonel etki yok — yalnız doc-vs-code drift. | `Docs/07_API_DESIGN.md` §9.8 vs `backend/src/Modules/Skinora.Platform/Application/Settings/SystemSettingsCatalog.cs:92-94` | Doc güncellemesi sonraki 07 doc-pass'inde (T34/T41 cluster — yeni kategori `wallet_security` listeye eklenmeli). |
+
+### Validator Adım 0 — Main CI Startup Check
+
+| # | Run ID | Sonuç |
+|---|---|---|
+| 1 | `25223615598` | ✓ success |
+| 2 | `25223615596` | ✓ success |
+| 3 | `25223108325` | ✓ success |
+
+### Validator Adım 8a — Task Branch CI
+
+| Run ID | Sonuç |
+|---|---|
+| `25225434904` | ✓ success (task/T41-admin-settings, head `2034164`) |
+
+### Validator Test Re-doğrulama (Lokal)
+
+| Tür | Sonuç |
+|---|---|
+| `Skinora.Platform.Tests` (89/89) | ✓ Passed (17 s) |
+| `Skinora.API.Tests` AdminSettingsEndpointTests (8/8) | ✓ Passed (3 s) |
+| `dotnet build -c Release` | ✓ 0W/0E (6 s) |
 
 ## Altyapı Değişiklikleri
 
@@ -90,9 +118,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T41-admin-settings`
-- **Commit:** (yapım sonrası tek commit ile push'lanacak, hash branch push sonrası eklenir)
-- **PR:** (yapım sonrası açılacak; numara eklenecek)
-- **CI:** (run ID push sonrası watch edilecek)
+- **Commit:** `2034164` (T41: Admin parametre yönetimi (07 §9.8–§9.9))
+- **PR:** [#68](https://github.com/turkerurganci/Skinora/pull/68)
+- **CI:** Run [`25225434904`](https://github.com/turkerurganci/Skinora/actions/runs/25225434904) ✓ success (task branch); main ardışık CI temiz (`25223615598/596/325` ✓).
 
 ## Known Limitations / Follow-up
 
