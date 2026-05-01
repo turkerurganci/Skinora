@@ -102,3 +102,126 @@ BLOCKED akışında skill 8-madde kapısının kod-merkezli maddeleri (build/tes
 - [x] CI run sonucu success mi? — ✓ PASS (CI Gate yeşil)
 - [x] Branch izolasyon check temiz mi? — yalnızca T43 commit subject (`git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → `T43`)
 - [x] Repo memory'de T43 satırı eklendi/güncellendi mi? — `.claude/memory/MEMORY.md` Current Status + Next + T43 detay satırı eklendi
+
+---
+
+# Implementasyon Sonucu
+
+**Faz:** F2 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-02
+
+## Yapılan İşler
+
+- **Composite reputation skoru (read path)** — `IReputationScoreCalculator` + `ReputationScoreCalculator` (`Skinora.Users.Application.Reputation`). 06 §3.1 formülü `ROUND(SuccessfulTransactionRate × 5, 1)` `MidpointRounding.ToZero` ile (06 §8.3 finansal yuvarlama kuralı). Eşik altı veya rate=null → `null` ("Yeni kullanıcı").
+- **Eşik provider** — `IReputationThresholdsProvider` (port, `Skinora.Users`) + `ReputationThresholdsProvider` (impl, `Skinora.Platform.Infrastructure.Reputation`, SystemSetting okuyucu). `reputation.min_account_age_days` (default 30) + `reputation.min_completed_transactions` (default 3). Admin update'leri restart gerektirmez (her çağrıda re-read).
+- **Denormalized aggregator (write path)** — `IReputationAggregator` + `ReputationAggregator` (`Skinora.Transactions.Application.Reputation`). Per-user `RecomputeAsync(userId)` Transaction + TransactionHistory'i okur, sorumluluk haritalama (06 §3.1) + wash trading filter (02 §14.1) uygular, `User.CompletedTransactionCount` + `User.SuccessfulTransactionRate`'i günceller. UoW disiplini: tracked entity mutate eder, SaveChanges caller'da.
+- **Wash trading filter** — `WashTradingFilter` (`Skinora.Users.Application.Reputation`). Pure helper. Unordered (sellerId, buyerId) çifti üzerinde 1 ay (30 gün) penceresi. İlk işlem her zaman sayılır; sonrakiler son sayılan'a 30+ gün uzakta ise sayılır. Filter denominator + numerator'ı eşit etkiler ("skor etkisi kaldırılır", 02 §14.1) — `CompletedTransactionCount`'a uygulanmaz (raw count, 02 §13).
+- **Sorumluluk haritalama** — `CANCELLED_SELLER` → seller, `CANCELLED_BUYER` → buyer, `CANCELLED_TIMEOUT` → `PreviousStatus`'e göre (CREATED→buyer, ACCEPTED|TRADE_OFFER_SENT_TO_SELLER→seller, ITEM_ESCROWED→buyer, TRADE_OFFER_SENT_TO_BUYER→buyer; eşleşmeyen → no-effect), `CANCELLED_ADMIN` → her iki tarafa skip.
+- **Cancel cooldown evaluator** — `IUserCancelCooldownEvaluator` + `CancelCooldownEvaluator` (`Skinora.Transactions`) + `ICancelCooldownThresholdsProvider` + `CancelCooldownThresholdsProvider` (`Skinora.Platform`). Pencere içinde sorumluluk-attributed iptal sayar, limit aşıldıysa `User.CooldownExpiresAt = now + cancel_cooldown_hours`. Eşik 0 ise rule disabled (no-op, partial-bootstrap güvenli).
+- **SystemSetting seed** — 32 → 34 satır: `reputation.min_account_age_days = 30`, `reputation.min_completed_transactions = 3` (kategori `Reputation`, IsConfigured=true). EF Core `HasData` kanalıyla seed'lendi → migration `20260501210909_T43_AddReputationThresholds` (yalnız 2 `InsertData`, schema değişikliği yok).
+- **SystemSettingsCatalog** — 2 yeni metadata (ApiCategory: `reputation`, label + unit `gün`/`adet`).
+- **T33 entegrasyonu** — `UserProfileService` (3 endpoint: `/users/me`, `/users/me/stats`, `/users/{steamId}`) `IReputationScoreCalculator` injected; `reputationScore` artık composite score, `cancelRate = 1 - successfulTransactionRate` (07 §5.1 example uyumlu, M1 fraction kanonik). T33'ün null devri kapandı.
+- **DI** — `UsersModule.cs`'e 5 yeni kayıt eklendi (composite root, cross-module glue pattern).
+
+## Etkilenen Modüller / Dosyalar
+
+**Yeni dosyalar (12):**
+- `backend/src/Modules/Skinora.Users/Application/Reputation/`
+  - `IReputationScoreCalculator.cs` + `ReputationScoreCalculator.cs`
+  - `IReputationThresholdsProvider.cs` (record `ReputationThresholds`)
+  - `IReputationAggregator.cs` (record `ReputationSnapshot`)
+  - `IUserCancelCooldownEvaluator.cs` (record `CooldownEvaluationResult`)
+  - `ICancelCooldownThresholdsProvider.cs` (record `CancelCooldownThresholds`)
+  - `WashTradingFilter.cs` (record struct `WashTradingResult<T>`)
+- `backend/src/Modules/Skinora.Platform/Infrastructure/Reputation/`
+  - `ReputationThresholdsProvider.cs`
+  - `CancelCooldownThresholdsProvider.cs`
+- `backend/src/Modules/Skinora.Transactions/Application/Reputation/`
+  - `ReputationAggregator.cs`
+  - `CancelCooldownEvaluator.cs`
+- `backend/src/Skinora.Shared/Persistence/Migrations/20260501210909_T43_AddReputationThresholds.cs` (+ Designer)
+
+**Yeni test dosyaları (4):**
+- `backend/tests/Skinora.Users.Tests/Unit/Reputation/ReputationScoreCalculatorTests.cs` (10 test)
+- `backend/tests/Skinora.Users.Tests/Unit/Reputation/WashTradingFilterTests.cs` (7 test)
+- `backend/tests/Skinora.Transactions.Tests/Integration/Reputation/ReputationAggregatorTests.cs` (9 test)
+- `backend/tests/Skinora.Transactions.Tests/Integration/Reputation/CancelCooldownEvaluatorTests.cs` (5 test)
+
+**Değişen dosyalar (9):**
+- `Skinora.Users/Application/Profiles/UserProfileService.cs` — calculator entegrasyonu, cancelRate hesabı
+- `Skinora.Users/Application/Profiles/UserProfileDtos.cs` — `T43 forward devir` notu kaldırıldı
+- `Skinora.Platform/Application/Settings/SystemSettingsCatalog.cs` — 2 yeni metadata
+- `Skinora.Platform/Infrastructure/Persistence/SystemSettingSeed.cs` — 32→34 satır
+- `Skinora.API/Configuration/UsersModule.cs` — 5 yeni DI kaydı
+- `Skinora.Shared/Persistence/Migrations/AppDbContextModelSnapshot.cs` — auto-regenerated
+- `tests/Skinora.Platform.Tests/Integration/SeedDataTests.cs` — count 32→34, configured listesi güncel
+- `tests/Skinora.API.Tests/Integration/UserProfileEndpointTests.cs` — 3 mevcut test reputationScore non-null bekler, +1 yeni test (below-threshold)
+- `tests/Skinora.Transactions.Tests/Skinora.Transactions.Tests.csproj` — `Microsoft.Extensions.TimeProvider.Testing` 9.0.0 eklendi
+
+## Kabul Kriterleri Kontrolü
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | Tamamlanan işlem sayısı denormalized güncelleme (COMPLETED'da) | ✓ | `ReputationAggregator.RecomputeAsync` raw COMPLETED sayısını `User.CompletedTransactionCount`'a yazar (wash filter NOT uygulanır). Test: `Recompute_All_Completed_Yields_Rate_One` (3 COMPLETED → count=3) + `Recompute_Wash_Trading_Removes_Repeat_Pair_From_Rate_Denominator` (3 COMPLETED → count=3 raw) |
+| 2 | Başarılı işlem oranı (sorumluluk bazlı) | ✓ | `ResponsibilityFor` + `ResponsibleForTimeout`. Testler: `Recompute_Cancelled_Seller_Counts_Against_Seller_Only`, `Recompute_Cancelled_Timeout_Maps_To_Responsible_Party` (PreviousStatus=ITEM_ESCROWED→buyer), `Recompute_Cancelled_Timeout_Step3_Hits_Seller` (PreviousStatus=ACCEPTED→seller), `Recompute_Cancelled_Admin_Excludes_Both_Parties` |
+| 3 | Hesap yaşı hesaplama | ✓ | `ReputationScoreCalculator.ComputeAsync` accountAge threshold check. Test: `Compute_When_Threshold_Fails_Returns_Null` (10 günlük hesap → null) + `Compute_Picks_Up_Threshold_Updates_On_Each_Call` |
+| 4 | İptal oranı skoru etkiliyor | ✓ | Inherent — denominator'a sorumlu iptaller eklenir. Test: `Recompute_Cancelled_Seller_Counts_Against_Seller_Only` (1 success / 2 attempts = 0.5) |
+| 5 | Wash trading 1 ay penceresi | ✓ | `WashTradingFilter.Apply`. Unit: `Same_Pair_Within_Window_Drops_Subsequent_Rows`, `Wash_Window_Restarts_From_Last_Counted_Not_From_First_Counted`, `Pair_Order_Does_Not_Matter`, `Different_Pairs_Are_Tracked_Independently`. Integration: `Recompute_Wash_Trading_Hides_Cancelled_From_Denominator` |
+| 6 | CooldownExpiresAt hesaplama | ✓ | `CancelCooldownEvaluator.EvaluateAsync`. Test: `Exceeding_Limit_Stamps_New_CooldownExpiresAt`, `Below_Limit_Leaves_CooldownExpiresAt_Untouched`, `Cancellations_Outside_Window_Are_Ignored`, `Cancellations_For_Other_Party_Do_Not_Count`, `Disabled_Threshold_Returns_Zero_And_Skips_Update` |
+| 7 | Composite reputationScore (06 §3.1) read path + 2 SystemSetting | ✓ | `ReputationScoreCalculator` + 3 endpoint entegrasyonu. SystemSettings 32→34. Tests: `ReputationScoreCalculatorTests.Compute_When_Eligible_Returns_Composite_Score` 4 senaryo (06 §3.1 örnek tablosu birebir: 4.8/5.0/4.0/2.5), `Compute_Truncates_Toward_Zero_Per_06_8_3_Financial_Rounding` (0.964→4.8), `SeedDataTests.Seed_SystemSettings_Has_34_Rows_With_Unique_Keys`, `UserProfileEndpointTests.GetMe_Authenticated_ReturnsOwnProfile` (4.8 + cancelRate 0.04), `GetPublic_ExistingUser_ReturnsLimitedProfile` (4.5), `GetMe_NewAccount_Below_Reputation_Thresholds_ReturnsNullScore` |
+
+## Doğrulama Kontrol Listesi (plan §T43)
+
+- [x] **02 §13 skor kriterleri (formül + eşikler) uygulanmış mı?** — Calculator formülü ve eşikleri 02 §13'le birebir.
+- [x] **06 §3.1 composite reputationScore formülü ve örnek tablosu birebir doğrulandı mı?** — 7 senaryo birebir test edildi.
+- [x] **06 §8.2 denormalized field güncelleme kuralları doğru mu?** — Aggregator idempotent, eventual consistency.
+- [x] **`reputation.min_account_age_days` + `reputation.min_completed_transactions` SystemSetting seed (default 30 / 3) ve catalog/validator entry'leri eklendi mi?** — Seed 33,34. satırlar Default(30)/Default(3); Catalog ApiCategory `reputation`; Validator generic positive-int kuralı yeterli.
+- [x] **T33 UserProfileService null devri composite hesaplamayla kapandı mı? UserProfileEndpointTests güncellendi mi?** — 3 endpoint composite skor + cancelRate döner; UserProfileDtos xmldoc güncellendi; UserProfileEndpointTests 3 test güncellendi + 1 below-threshold testi eklendi.
+
+## Test Sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Unit (Reputation) | ✓ 17/17 passed | `Skinora.Users.Tests` Reputation namespace — 141 ms |
+| Integration (Reputation) | ✓ 14/14 passed | `Skinora.Transactions.Tests` Reputation namespace — 5 s |
+| Integration (Endpoints) | ✓ 6/6 passed | `Skinora.API.Tests.UserProfileEndpointTests` |
+| Tüm test suite | ✓ PASS | Tüm 11 test assembly yeşil |
+| Build | ✓ 0W/0E (Release) | `dotnet build -c Release` |
+| Format | ✓ 0 değişiklik | `dotnet format --verify-no-changes` |
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ⏳ Beklemede (validator bağımsız chat) |
+
+## Altyapı Değişiklikleri
+
+- **Migration:** Var — `20260501210909_T43_AddReputationThresholds.cs`. Sadece 2 `InsertData` (SystemSettings tablosuna), `Down` 2 `DeleteData`. Schema/index değişikliği yok.
+- **Config/env:** Yok. Yeni 2 SystemSetting `IsConfigured=true` default değerle seed.
+- **Docker:** Yok.
+- **Yeni paket:** `Microsoft.Extensions.TimeProvider.Testing` 9.0.0 (yalnız `Skinora.Transactions.Tests`).
+
+## Commit & PR
+
+- Branch: `task/T43-user-reputation`
+- Commit: pending
+- PR: pending
+- CI: pending
+
+## Known Limitations / Follow-up
+
+- **Tetikleme/üretici tarafı (T44+ devir):** `IReputationAggregator.RecomputeAsync` ve `IUserCancelCooldownEvaluator.EvaluateAsync` çağrılma noktaları (Transaction state-machine OnEntry hook veya Outbox event handler) bu task kapsamında DEĞİL. T44 (state machine) ve sonraki task'larda her COMPLETED / CANCELLED_* transition sonrası iki servis çağrılır. Aggregator + cooldown idempotent (re-run aynı sonucu üretir).
+- **Wash trading "1 ay" tanımı:** `WashTradingFilter.WashTradingWindow = 30 gün` olarak sabitlendi. 02 §14.1 "1 ay" diyor — calendar month yerine 30 gün seçildi (deterministik aritmetik).
+- **CANCELLED_TIMEOUT PreviousStatus boşsa:** TransactionHistory'de bu Transaction için CANCELLED_TIMEOUT row'u yoksa veya PreviousStatus null ise transaction "no-effect" sayılır (denominator'a girmez). Production'da T44 state machine her transition için TransactionHistory yazacak.
+- **Threshold provider cache yok:** Her çağrıda DB'ye gider. Read endpoint'leri için negligible.
+
+## Notlar
+
+- **Working tree (Adım -1):** temiz.
+- **Main CI startup (Adım 0):** son 3 run hepsi `success` (25232475624, 25232475615, 25230739077).
+- **Dış varsayım kontrolü:** Yok. Saf hesaplama + mevcut entity'ler + EF Core HasData seed mekanizması (T28+T26+T41).
+- **Mimari hizalama:** Aggregator + threshold provider impl'leri doğru module'e yerleştirildi (Transactions ve Platform), Skinora.Users "leaf" pozisyonunu korudu. T34 IActiveTransactionCounter ve T26 SettingsBootstrapService pattern'leri devralındı.
+- **CancelRate kanonikleşmesi:** 07 §5.1 `cancelRate: 0.04` örneği `successfulTransactionRate: 0.96`'nın komplemanı (M1 closure 2026-05-01 fraction kanonik). Implementation `1 - rate`.
+- **Test isolation çözümü:** `CancelCooldownEvaluatorTests` ve `ReputationAggregatorTests` ilk drafta CHECK constraint `CK_Transactions_Cancel`'a takıldı (CancelledBy + CancelReason zorunluluğu). Helper'lara mapping eklendi.
+- **F2 Gate Check:** Bu task F2 fazının son task'ı (T29-T43). Validator PASS sonrası F2 Gate Check tetiklenebilir.
+

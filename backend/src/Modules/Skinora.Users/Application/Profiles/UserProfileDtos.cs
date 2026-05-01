@@ -6,8 +6,11 @@ namespace Skinora.Users.Application.Profiles;
 /// reorder without updating 07.
 /// </summary>
 /// <remarks>
-/// <para><c>reputationScore</c> / <c>cancelRate</c> remain <c>null</c> until
-/// T43 (reputation calc) wires the real aggregation pipeline.
+/// <para><c>reputationScore</c> is the composite 06 §3.1 score computed at
+/// read time by <c>IReputationScoreCalculator</c>; null when either
+/// reputation threshold (account age, completed-tx count) is not satisfied.
+/// <c>cancelRate</c> is the complement of
+/// <c>successfulTransactionRate</c> (also null when the rate is null).
 /// <c>accountAge</c> is a Turkish relative string — i18n (T97) will localise.
 /// <c>mobileAuthenticatorActive</c> mirrors <c>User.MobileAuthenticatorVerified</c>;
 /// the real MA check arrives with T64–T69 via the Steam sidecar.</para>

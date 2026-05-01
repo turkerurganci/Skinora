@@ -63,6 +63,9 @@ public static class SystemSettingSeed
         // --- T34: Wallet address change cooldown (02 §12.3, 03 §9.2) ---
         Default     (31, "wallet.payout_address_cooldown_hours",        "int",     "Wallet",        "24",   "Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3)."),
         Default     (32, "wallet.refund_address_cooldown_hours",        "int",     "Wallet",        "24",   "Alıcı iade adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma ve işlem kabul etme engellenir (02 §12.3)."),
+        // --- T43: Reputation insufficient-data thresholds (02 §13, 06 §3.1) ---
+        Default     (33, "reputation.min_account_age_days",             "int",     "Reputation",    "30",   "Yeni hesap koruması — hesap yaşı bu eşiğin altındaysa composite reputationScore null döner ('Yeni kullanıcı')."),
+        Default     (34, "reputation.min_completed_transactions",       "int",     "Reputation",    "3",    "İstatistiksel anlamlılık — tamamlanmış işlem sayısı bu eşiğin altındaysa composite reputationScore null döner."),
     ];
 
     private static SystemSetting Unconfigured(

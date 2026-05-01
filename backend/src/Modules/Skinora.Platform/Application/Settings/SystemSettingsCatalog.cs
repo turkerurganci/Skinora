@@ -96,6 +96,10 @@ public static class SystemSettingsCatalog
         // --- Access control (T30 settings — geo + age gate) ---
         new("auth.banned_countries",                      "geo_blocking",         "Yasaklı ülkeler (ISO-3166-1 alpha-2 CSV; NONE = yok)",      null),
         new("auth.min_steam_account_age_days",            "age_verification",     "Steam hesap minimum yaş eşiği",                             "gün"),
+
+        // --- Reputation thresholds (T43 — 02 §13, 06 §3.1) ---
+        new("reputation.min_account_age_days",            "reputation",           "Hesap yaşı eşiği — altında reputationScore null",           "gün"),
+        new("reputation.min_completed_transactions",      "reputation",           "Tamamlanmış işlem eşiği — altında reputationScore null",    "adet"),
     ];
 }
 

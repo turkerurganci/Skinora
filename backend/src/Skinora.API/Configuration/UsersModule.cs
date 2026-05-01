@@ -2,10 +2,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Auth.Application.Session;
 using Skinora.Notifications.Application.Account;
 using Skinora.Notifications.Application.Settings;
+using Skinora.Platform.Infrastructure.Reputation;
 using Skinora.Transactions.Application.Account;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Wallet;
 using Skinora.Users.Application.Account;
 using Skinora.Users.Application.Profiles;
+using Skinora.Users.Application.Reputation;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
 using StackExchange.Redis;
@@ -28,6 +31,17 @@ public static class UsersModule
     {
         if (!services.Any(d => d.ServiceType == typeof(TimeProvider)))
             services.AddSingleton(TimeProvider.System);
+
+        // T43 — reputation scoring + cancel cooldown (02 §13, §14.2, 06 §3.1).
+        // Cross-module glue: ports live in Skinora.Users, the SystemSetting
+        // readers live in Skinora.Platform (owns SystemSetting), the
+        // Transaction-aware aggregator + cooldown evaluator live in
+        // Skinora.Transactions (owns Transaction + TransactionHistory).
+        services.AddScoped<IReputationThresholdsProvider, ReputationThresholdsProvider>();
+        services.AddScoped<ICancelCooldownThresholdsProvider, CancelCooldownThresholdsProvider>();
+        services.AddScoped<IReputationScoreCalculator, ReputationScoreCalculator>();
+        services.AddScoped<IReputationAggregator, ReputationAggregator>();
+        services.AddScoped<IUserCancelCooldownEvaluator, CancelCooldownEvaluator>();
 
         services.AddScoped<IUserProfileService, UserProfileService>();
 

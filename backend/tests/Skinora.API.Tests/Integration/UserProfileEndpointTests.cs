@@ -88,11 +88,40 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
         Assert.Equal("6 ay", data.GetProperty("accountAge").GetString());
         Assert.Equal(24, data.GetProperty("completedTransactionCount").GetInt32());
         Assert.Equal(0.9600m, data.GetProperty("successfulTransactionRate").GetDecimal());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("reputationScore").ValueKind);
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("cancelRate").ValueKind);
+        // T43 composite (06 §3.1): ROUND(0.96 × 5, 1) = 4.8; cancelRate is the
+        // complement of successfulTransactionRate (07 §5.1 example).
+        Assert.Equal(4.8m, data.GetProperty("reputationScore").GetDecimal());
+        Assert.Equal(0.0400m, data.GetProperty("cancelRate").GetDecimal());
         Assert.Equal("TXyz1234567890abcdef1234567890ab", data.GetProperty("sellerWalletAddress").GetString());
         Assert.Equal("TAbcdef1234567890abcdef12345678cd", data.GetProperty("refundWalletAddress").GetString());
         Assert.True(data.GetProperty("mobileAuthenticatorActive").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetMe_NewAccount_Below_Reputation_Thresholds_ReturnsNullScore()
+    {
+        // T43: account younger than reputation.min_account_age_days OR
+        // CompletedTransactionCount below the min_completed threshold ⇒ score
+        // is suppressed to null ("Yeni kullanıcı"). Here we hit both thresholds
+        // (10-day-old account, 1 completed tx).
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.SteamDisplayName = "FreshAccount";
+            u.CompletedTransactionCount = 1;
+            u.SuccessfulTransactionRate = 1.0000m;
+            u.CreatedAt = DateTime.UtcNow.AddDays(-10);
+        });
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.GetAsync("/api/v1/users/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal(JsonValueKind.Null, data.GetProperty("reputationScore").ValueKind);
+        // cancelRate stays defined (mirrors the rate's nullability, not the
+        // composite score's).
+        Assert.Equal(0m, data.GetProperty("cancelRate").GetDecimal());
     }
 
     // ---------- /users/me/stats ----------
@@ -104,6 +133,10 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
         {
             u.CompletedTransactionCount = 24;
             u.SuccessfulTransactionRate = 0.9600m;
+            // Pin CreatedAt clearly above the 30-day reputation threshold so
+            // the test does not depend on the default factory offset (avoids
+            // a flaky boundary at exactly 30 days).
+            u.CreatedAt = DateTime.UtcNow.AddDays(-200);
         });
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
 
@@ -115,7 +148,7 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
         var data = body.GetProperty("data");
         Assert.Equal(24, data.GetProperty("completedTransactionCount").GetInt32());
         Assert.Equal(0.9600m, data.GetProperty("successfulTransactionRate").GetDecimal());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("reputationScore").ValueKind);
+        Assert.Equal(4.8m, data.GetProperty("reputationScore").GetDecimal());
     }
 
     // ---------- /users/{steamId} ----------
@@ -147,7 +180,9 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
         Assert.Equal("1 yıl", data.GetProperty("accountAge").GetString());
         Assert.Equal(10, data.GetProperty("completedTransactionCount").GetInt32());
         Assert.Equal(0.9000m, data.GetProperty("successfulTransactionRate").GetDecimal());
-        Assert.Equal(JsonValueKind.Null, data.GetProperty("reputationScore").ValueKind);
+        // T43: 1-year-old account, 10 completed tx — both thresholds satisfied.
+        // ROUND(0.9 × 5, 1) = 4.5.
+        Assert.Equal(4.5m, data.GetProperty("reputationScore").GetDecimal());
 
         // Wallet + cancelRate must not leak on public profile (07 §5.5).
         Assert.False(data.TryGetProperty("sellerWalletAddress", out _));
