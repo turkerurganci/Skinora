@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-05-01 (T38 ✓ PASS bağımsız validator — Platform içi bildirim kanalı. 4 endpoint (`GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-all-read`, `PUT /notifications/{id}/read`) `Skinora.Notifications/Application/Inbox/` altında. Validator: 5/5 kabul + 1/1 doğrulama listesi ✓, 0 S-bulgu, 1 minor advisory (M1 — rapor CI run id drift, fonksiyonel etki yok). Lokal Release 0W/0E + 14 integration + 12 unit PASS. PR #63 head SHA `f961122` CI run [`25206683581`](https://github.com/turkerurganci/Skinora/actions/runs/25206683581) 10/10 ✓. Sırada T39 — Admin rol ve yetki yönetimi.)
+**Son güncelleme:** 2026-05-01 (T39 ⏳ yapım bitti — Admin rol ve yetki yönetimi. 8 endpoint (07 §9.11–§9.18) `Skinora.Admin/Application/Roles|Users/` altında, 11 yetkili `PermissionCatalog`, doc-sync 07 §9.11 → 11 entry (`MANAGE_STEAM_RECOVERY` 04 §8.8 ile hizalandı). Lokal Release 0W/0E + format clean + 26 integration + 212 API.Tests sweep PASS + 54 Auth.Tests unit PASS. Migration yok. Bağımsız validator + PR sırada.)
 
 ---
 
@@ -95,7 +95,7 @@
 | T36 | Hesap deaktif ve silme | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — atomicity rapor §Notlar / deactivated→delete reactivate devir) | `5e383ec`+`bd80954`+`99fd5cc`+`943ad45` (PR #60, pending squash) |
 | T37 | Bildirim altyapı servisi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — rapor resx entry count drift / stub handler PII log devri T78–T80) | `b383983`+`7767fc7` (PR pending) |
 | T38 | Platform içi bildirim kanalı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — rapor CI run id drift, fonksiyonel etki yok) | `f961122` (PR #63, pending squash) |
-| T39 | Admin rol ve yetki yönetimi | ⬚ Bekliyor | — | — |
+| T39 | Admin rol ve yetki yönetimi | ⏳ Devam ediyor | — | (push pending) |
 | T40 | Admin RBAC (policy-based authorization) | ⬚ Bekliyor | — | — |
 | T41 | Admin parametre yönetimi | ⬚ Bekliyor | — | — |
 | T42 | AuditLog servisi | ⬚ Bekliyor | — | — |
