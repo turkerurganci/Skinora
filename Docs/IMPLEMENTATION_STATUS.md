@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-04-27 (T37 ✓ PASS bağımsız validator — Bildirim altyapı servisi. `Skinora.Notifications` modülünde dispatcher + per-channel sender + .resx-tabanlı template resolver + Hangfire 1m/5m/15m exponential retry job + admin alert sink. `INotificationDispatcher.DispatchAsync` rendering + `Notification` entity write (platform içi her zaman, 05 §7.4) + `UserNotificationPreference` filter ile enabled+ExternalId kanallar için `NotificationDelivery` (PENDING) row + Hangfire enqueue. SaveChangesAsync caller'da (Outbox dispatcher batch). `NotificationDeliveryJob` class-level `[AutomaticRetry(Attempts=3, DelaysInSeconds=[60,300,900])]`; final attempt → `INotificationAdminAlertSink` çağrı + rethrow (Hangfire Fail). `ResxNotificationTemplateResolver` `IStringLocalizer<NotificationTemplates>` üstüne kurulu; 4 dil .resx (en/tr/zh/es), neutral en tüm 20 NotificationType x 2 (Title+Body) = 40 entry; tr 16 (8 type), zh 12 (6 type), es 12 (6 type); native CultureInfo chain fallback en. `NotificationConsumerBase<TEvent>` MediatR INotificationHandler base + IProcessedEventStore idempotency boilerplate (T44+ concrete handler'ları için iskelet). Email/Telegram/Discord stub channel handler'ları (T78/T79/T80 swap). 5 yeni package (Hangfire.Core, MediatR, Microsoft.Extensions.Localization, Logging.Abstractions, EFCore). 6 unit test PASS lokal (Resx resolver) + 12 integration test (Docker yok lokalde, CI'a kalır). Migration yok (T23 entity'leri yeterli). Release 0W/0E + format ✓. PR pending.)
+**Son güncelleme:** 2026-05-01 (T38 ✓ PASS bağımsız validator — Platform içi bildirim kanalı. 4 endpoint (`GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/mark-all-read`, `PUT /notifications/{id}/read`) `Skinora.Notifications/Application/Inbox/` altında. Validator: 5/5 kabul + 1/1 doğrulama listesi ✓, 0 S-bulgu, 1 minor advisory (M1 — rapor CI run id drift, fonksiyonel etki yok). Lokal Release 0W/0E + 14 integration + 12 unit PASS. PR #63 head SHA `f961122` CI run [`25206683581`](https://github.com/turkerurganci/Skinora/actions/runs/25206683581) 10/10 ✓. Sırada T39 — Admin rol ve yetki yönetimi.)
 
 ---
 
@@ -94,7 +94,7 @@
 | T35 | Hesap ayarları (dil, bildirim tercihleri, Telegram/Discord bağlama) | ✓ Tamamlandı | ✓ PASS (0 S-bulgu, 3 minor advisory — 503 envelope/appsettings env-var/SignalR T62 devir) | `64ac159`+`7e9032e`+`f23fd3a` (PR #59, pending squash) |
 | T36 | Hesap deaktif ve silme | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — atomicity rapor §Notlar / deactivated→delete reactivate devir) | `5e383ec`+`bd80954`+`99fd5cc`+`943ad45` (PR #60, pending squash) |
 | T37 | Bildirim altyapı servisi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 2 minor advisory — rapor resx entry count drift / stub handler PII log devri T78–T80) | `b383983`+`7767fc7` (PR pending) |
-| T38 | Platform içi bildirim kanalı | ⬚ Bekliyor | — | — |
+| T38 | Platform içi bildirim kanalı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — rapor CI run id drift, fonksiyonel etki yok) | `f961122` (PR #63, pending squash) |
 | T39 | Admin rol ve yetki yönetimi | ⬚ Bekliyor | — | — |
 | T40 | Admin RBAC (policy-based authorization) | ⬚ Bekliyor | — | — |
 | T41 | Admin parametre yönetimi | ⬚ Bekliyor | — | — |
