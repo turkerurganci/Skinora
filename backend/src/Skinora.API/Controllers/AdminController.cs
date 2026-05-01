@@ -5,6 +5,7 @@ using Skinora.Admin.Application.Roles;
 using Skinora.Admin.Application.Users;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Application.Settings;
 using Skinora.Shared.Models;
 
 namespace Skinora.API.Controllers;
@@ -29,14 +30,21 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "MANAGE_ROLES";
     private const string PolicyViewUsers =
         AuthPolicies.PermissionPrefix + "VIEW_USERS";
+    private const string PolicyManageSettings =
+        AuthPolicies.PermissionPrefix + "MANAGE_SETTINGS";
 
     private readonly IAdminRoleService _roles;
     private readonly IAdminUserService _users;
+    private readonly ISystemSettingsService _settings;
 
-    public AdminController(IAdminRoleService roles, IAdminUserService users)
+    public AdminController(
+        IAdminRoleService roles,
+        IAdminUserService users,
+        ISystemSettingsService settings)
     {
         _roles = roles;
         _users = users;
+        _settings = settings;
     }
 
     // ---------- Roles (07 §9.11–§9.14) ----------
@@ -184,6 +192,58 @@ public sealed class AdminController : ControllerBase
             AssignRoleOutcome.RoleNotFound => NotFound(ApiResponse<object>.Fail(
                 AdminUserErrorCodes.RoleNotFound,
                 "Requested role was not found.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    // ---------- Platform settings (07 §9.8–§9.9) ----------
+
+    /// <summary>AD8 — <c>GET /admin/settings</c>.</summary>
+    [HttpGet("settings")]
+    [Authorize(Policy = PolicyManageSettings)]
+    [RateLimit("admin-read")]
+    public async Task<ActionResult<SettingsListResponse>> ListSettings(
+        CancellationToken cancellationToken)
+    {
+        var result = await _settings.ListAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>AD9 — <c>PUT /admin/settings/:key</c>.</summary>
+    [HttpPut("settings/{key}")]
+    [Authorize(Policy = PolicyManageSettings)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> UpdateSetting(
+        string key,
+        [FromBody] UpdateSettingRequest request,
+        CancellationToken cancellationToken)
+    {
+        var actorId = GetCallerUserId();
+        if (actorId is null)
+        {
+            // Authorize attribute should have rejected anonymous calls, but
+            // defending in depth keeps the audit row's ActorId NOT NULL guarantee.
+            return Unauthorized();
+        }
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var outcome = await _settings.UpdateAsync(
+            key, request, actorId.Value, ipAddress, cancellationToken);
+
+        return outcome switch
+        {
+            UpdateSettingOutcome.Success success => Ok(success.Response),
+
+            UpdateSettingOutcome.NotFound notFound => NotFound(ApiResponse<object>.Fail(
+                SettingsErrorCodes.SettingNotFound,
+                $"Setting '{notFound.Key}' was not found.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            UpdateSettingOutcome.ValidationFailed validation => BadRequest(ApiResponse<object>.Fail(
+                SettingsErrorCodes.ValidationError,
+                validation.Message,
                 traceId: HttpContext.TraceIdentifier)),
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),
