@@ -121,7 +121,7 @@ dotnet test tests/Skinora.Notifications.Tests --filter "Category=Unit"
 ## Commit & PR
 
 - **Branch:** `task/T38-notification-inbox`
-- **Commit (kod):** TBD (commit aşağıdaki adımda atılacak)
-- **Commit (rapor+status+memory):** TBD
-- **PR:** TBD (commit + push'tan sonra `gh pr create`)
-- **CI run (task branch):** TBD (PR push sonrası izlenecek)
+- **Commit (kod):** `4f3d95c`
+- **Commit (rapor+status+memory):** `c560d57`
+- **PR:** [#63](https://github.com/turkerurganci/Skinora/pull/63)
+- **CI run (task branch):** TBD (push sonrası izlenecek — CI watch validate chat'inde tamamlanacak)
