@@ -1907,6 +1907,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     { "key": "VIEW_TRANSACTIONS", "label": "İşlemleri görüntüle" },
     { "key": "MANAGE_SETTINGS", "label": "Parametreleri yönet" },
     { "key": "VIEW_STEAM_ACCOUNTS", "label": "Steam hesaplarını görüntüle" },
+    { "key": "MANAGE_STEAM_RECOVERY", "label": "Steam recovery yönet" },
     { "key": "VIEW_USERS", "label": "Kullanıcı detay görüntüle" },
     { "key": "MANAGE_ROLES", "label": "Rolleri yönet" },
     { "key": "VIEW_AUDIT_LOG", "label": "Audit log görüntüle" },
@@ -1915,6 +1916,8 @@ T5'teki tüm alanlar + admin'e özel bölümler:
   ]
 }
 ```
+
+> **Not:** `MANAGE_STEAM_RECOVERY` 04 §8.8 "Steam recovery yönet" satırının string identifier'ıdır — S18 Manual Recovery Başlat / not düşme / sorumlu admin atama akışlarını kapsar (fon/item güvenliği etkili, salt-okunur `VIEW_STEAM_ACCOUNTS` yetkisinden ayrı). T103 (S18) wire eder; T39 yalnızca katalog girişini sağlar.
 
 ### 9.12 AD12 — `POST /admin/roles`
 

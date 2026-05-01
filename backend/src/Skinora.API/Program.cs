@@ -9,6 +9,7 @@ using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
+using Skinora.Admin;
 using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Disputes.Infrastructure.Persistence;
@@ -76,6 +77,11 @@ builder.Services.AddSteamAuthenticationModule(builder.Configuration);
 // User profile + wallet + account settings (T33 / T34 / T35) —
 // /users/me, /users/me/stats, /users/:steamId, /users/me/wallet/*, /users/me/settings/*
 builder.Services.AddUsersModule(builder.Configuration);
+
+// Admin role + user management (T39 — 07 §9.11–§9.18). Permission claim
+// issuance arrives with T40; until then the dynamic Permission:* policies
+// only succeed for super-admins via PermissionAuthorizationHandler bypass.
+builder.Services.AddAdminModule();
 
 // Notification infrastructure (T37 — 05 §7.1–§7.5): dispatcher orchestration,
 // .resx-backed template resolver, per-channel handlers (Email/Telegram/Discord
