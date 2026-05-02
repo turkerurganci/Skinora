@@ -195,7 +195,7 @@
 ## Commit & PR
 
 - **Branch:** `task/T45-transaction-creation-flow`
-- **Commit:** Henüz oluşturulmadı (rapor + status commit ayrıca yapılacak)
-- **PR:** Henüz oluşturulmadı
-- **CI:** N/A
+- **Commit:** `58b8899` (T45 ana implementasyon + rapor + status + memory bundled tek commit)
+- **PR:** [#75](https://github.com/turkerurganci/Skinora/pull/75)
+- **CI:** Push edildi, run henüz başlatılmadı (push timestamp ile aynı dakikada). Watch sonucu validator chat'inde teyit edilir.
 - **Main CI startup ardışık 3 ✓:** `25248332299` (T44 #74), `25248332298` (T44 #74), `25244910446` (chore F2 #73).
