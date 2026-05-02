@@ -78,11 +78,12 @@ public static class OutboxModule
 
     /// <summary>
     /// Returns the assemblies MediatR should scan for handler registrations.
-    /// Currently the API host only — module assemblies will be added when
-    /// modules introduce their own handlers (T44+).
+    /// The API host plus every module assembly that ships at least one
+    /// production <c>INotificationHandler&lt;T&gt;</c> consumer (T48 onwards).
     /// </summary>
     private static Assembly[] GetMediatRScanAssemblies() =>
     [
         typeof(OutboxModule).Assembly,
+        typeof(Skinora.Notifications.NotificationsModule).Assembly,
     ];
 }

@@ -59,7 +59,10 @@ public static class TransactionsModule
         services.AddScoped<ITimeoutSchedulingService, TimeoutSchedulingService>();
         services.AddScoped<ITimeoutExecutor, TimeoutExecutor>();
         services.AddScoped<IDeadlineScannerJob, DeadlineScannerJob>();
-        services.AddScoped<IWarningDispatcher, StubWarningDispatcher>();
+        // T48 — real warning dispatcher publishes TimeoutWarningEvent to the
+        // outbox; the Notifications consumer fans it out to the buyer through
+        // the in-app + external channel pipeline (T37).
+        services.AddScoped<IWarningDispatcher, WarningDispatcher>();
 
         return services;
     }
