@@ -1,6 +1,6 @@
 # T47 — Timeout Scheduling
 
-**Faz:** F3 | **Durum:** ⏳ Yapım bitti (validate bekliyor) | **Tarih:** 2026-05-02
+**Faz:** F3 | **Durum:** ✓ PASS (bağımsız validator) | **Tarih:** 2026-05-02
 
 ---
 
@@ -184,5 +184,36 @@ Komut: `dotnet test -c Release --no-build` (Release).
 ## Commit & PR
 
 - **Branch**: `task/T47-timeout-scheduling`
-- **Commit**: `f76e0d9`
+- **Commit**: `f76e0d9` (yapım) + `612efc4` (PR ref yansıt) + bağımsız validator commit'i (rapor finalize + status)
 - **PR**: [#77](https://github.com/turkerurganci/Skinora/pull/77)
+
+---
+
+## Bağımsız Doğrulama (validate skill, 2026-05-02)
+
+### Verdict: ✓ PASS
+
+**Kabul kriterleri:** 6/6 — 5 ✓ tam + 1 ~ kısmi (kabul kriteri #1 caller wiring forward-deferred T49/T64–T68'e; T44 plan kabul kriteri #5 ile aynı pattern, dürüst self-disclosure rapor §Known Limitations + tabloda).
+
+**Doğrulama kontrol listesi:** 2/2 ✓ (02 §3 4-phase coverage tam; 05 §4.4 heartbeat + recovery pattern'ları uygulanmış — minor advisory `S1-A1` ile, aşağıda).
+
+**Test:** lokal raporun bildirdiği 1215/1215 ile uyumlu — task branch CI run [`25254429578`](https://github.com/turkerurganci/Skinora/actions/runs/25254429578) (HEAD `612efc4`) `success` ile tamamlandı (önceki run `25254423651` `cancelled` — `f76e0d9` üstüne `612efc4` push edildiğinde superseded; cancel doğal sebep, finding değil).
+
+**Hard-stop kapıları:** working tree clean ✓, main CI startup ardışık 3 ✓ (`25252671939`/`25252671951` T46 + `25250478338` T45), MEMORY drift check ✓ (T47 satırı mevcut).
+
+**Güvenlik kontrolü:** secret sızıntısı yok; auth değişimi yok; input validation gerekmiyor (background job, dış girdi yok); yeni dış bağımlılık yok (TimeProvider.Testing yalnız test paketinde).
+
+**Yapım raporu uyumu:** Tam — 6/6 kabul kriteri tablosu birebir; #1 ~ kısmi notu doğru self-disclosed; test sayıları (29 yeni — 8+7+7 Transactions + 3 Heartbeat + 4 Restart) gerçekle eşleşiyor.
+
+### Bulgular
+
+| # | Seviye | Başlık | Etkilenen | Açıklama |
+|---|---|---|---|---|
+| `S1-A1` | minor (advisory) | Restart recovery AuditLog kaydı eksik | `backend/src/Skinora.API/BackgroundJobs/Timeouts/RestartRecoveryService.cs:138` | 05 §4.4 line 536 "Audit | Maintenance mode giriş/çıkış ve **otomatik timeout uzatma işlemleri AuditLog'a kaydedilir**" diyor. RestartRecoveryService deadline uzatma + Hangfire reschedule yapıyor ama yalnız `ILogger.LogInformation` ile log'luyor — `IAuditLogger` (T42, hazır altyapı) inject edilmemiş, AuditLog satırı atılmıyor. T47 acceptance criteria #6 "outage window hesaplama, aktif işlem timeout'larını uzatma" madde olarak satisfied; doğrulama kontrol listesi item #2 "05 §4.4 recovery pattern'ları uygulanmış mı" pattern'in audit row'unu kapsamıyor. **Çözüm yetkisi:** T50 (timeout freeze/resume + maintenance mode) zaten 05 §4.4 platform-genel downtime politikasının diğer yarısını (admin trigger flow) implement edecek — aynı task'ta `IAuditLogger` injection RestartRecoveryService'e geri eklenebilir veya T108-style ayrı housekeeping task'ında. **Bu PASS'i blocklamaz** — minor advisory, fonksiyonel etki yok (observability ILogger'da mevcut, AuditLog yalnız persist tarafının eksiği). |
+
+**Karşılaştırma tablosu (yapım raporu vs validator):**
+- Self-graded ~ kısmi #1: ✓ uyumlu (validator de aynı sonuca vardı, dürüst disclosure)
+- 0 yapım raporu sapması: validator iddiası ile rapor iddiaları örtüşüyor
+- 1 ek minor finding (`S1-A1` audit log gap): yapım raporunda zikredilmemiş, validator independent inceleme ile tespit etti
+
+**Verdict gerekçesi:** Tüm 6 kabul kriteri ✓ veya kabul edilebilir ~ kısmi (forward-devir dürüst disclosed); doğrulama kontrol listesi 2/2 ✓; testler 1215/1215 PASS; CI yeşil; güvenlik temiz; tek S1 minor advisory (audit log gap) PASS'i blocklamayan kapsamı dar bir bulgu, T50 hot path'inde toplu kapatılabilir. PASS verdict + advisory.
