@@ -470,6 +470,36 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(DeliveryStatus), Enum.Parse<DeliveryStatus>(valueName)));
     }
 
+    // ── TransactionTrigger (15) — 05 §4.2 transition table triggers ───
+
+    [Fact]
+    public void TransactionTrigger_ShouldHave15Values()
+    {
+        var values = Enum.GetValues<TransactionTrigger>();
+        Assert.Equal(15, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(TransactionTrigger.BuyerAccept))]
+    [InlineData(nameof(TransactionTrigger.SendTradeOfferToSeller))]
+    [InlineData(nameof(TransactionTrigger.EscrowItem))]
+    [InlineData(nameof(TransactionTrigger.ConfirmPayment))]
+    [InlineData(nameof(TransactionTrigger.SendTradeOfferToBuyer))]
+    [InlineData(nameof(TransactionTrigger.DeliverItem))]
+    [InlineData(nameof(TransactionTrigger.Complete))]
+    [InlineData(nameof(TransactionTrigger.Timeout))]
+    [InlineData(nameof(TransactionTrigger.SellerCancel))]
+    [InlineData(nameof(TransactionTrigger.BuyerCancel))]
+    [InlineData(nameof(TransactionTrigger.AdminCancel))]
+    [InlineData(nameof(TransactionTrigger.SellerDecline))]
+    [InlineData(nameof(TransactionTrigger.BuyerDecline))]
+    [InlineData(nameof(TransactionTrigger.AdminApprove))]
+    [InlineData(nameof(TransactionTrigger.AdminReject))]
+    public void TransactionTrigger_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(TransactionTrigger), Enum.Parse<TransactionTrigger>(valueName)));
+    }
+
     // ── Cross-cutting ───────────────────────────────────────────────
 
     [Fact]
@@ -480,6 +510,6 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        Assert.Equal(23, enumTypes.Count);
+        Assert.Equal(24, enumTypes.Count);
     }
 }
