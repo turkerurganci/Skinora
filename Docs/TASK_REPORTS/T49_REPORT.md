@@ -104,9 +104,9 @@ T44'ün `Timeout` trigger'ı ve T47'nin scheduling pipeline'ı sonrası, bir `Ti
 ## Commit & PR
 
 - Branch: `task/T49-timeout-execution`
-- Commit: TBD (push sonrası güncellenecek)
-- PR: TBD (push sonrası güncellenecek)
-- CI: TBD (push sonrası izlenecek)
+- Commit: `ef5d54f` — `T49: Timeout execution (02 §3.2, 03 §4.1-§4.5, 09 §13.3)`
+- PR: [#79](https://github.com/turkerurganci/Skinora/pull/79)
+- CI: ⏳ in progress — run [`25258207765`](https://github.com/turkerurganci/Skinora/actions/runs/25258207765) (HEAD `ef5d54f`)
 
 ## Known Limitations / Follow-up
 
