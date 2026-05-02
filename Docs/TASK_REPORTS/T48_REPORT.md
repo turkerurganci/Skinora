@@ -1,6 +1,6 @@
 # T48 — Timeout warning
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-02
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS 2026-05-02) | **Tarih:** 2026-05-02
 
 ---
 
@@ -59,9 +59,20 @@ T47'nin `IWarningDispatcher` portunda forward-deferred bırakılan stub gerçek 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (bağımsız validate chat'i) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-02) |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator özeti:**
+
+- **Working tree** temiz, **main CI startup** ardışık 3 ✓ (`25255400779` + `25255400763` T47 #77, `25252671939` T46 #76), **memory drift kontrolü** ✓ (T48 satırları MEMORY.md'de mevcut).
+- **3/3 kabul kriteri ✓** (raporla 1:1 uyumlu) + **1/1 doğrulama listesi ✓** (02 §3.4 uyarı kuralları: admin oran T47 + event T48 + fan-out T37 zinciri).
+- **Lokal Release 0W/0E + format `--verify-no-changes` exit=0** + tüm 12 test assembly **1224/1224 PASS** (`Skinora.Notifications.Tests` 66/66, `Skinora.Transactions.Tests` 391/391, `Skinora.API.Tests` 265/265, regresyon yok diğer modüllerde).
+- **Task branch CI run** [`25256430139`](https://github.com/turkerurganci/Skinora/actions/runs/25256430139) (HEAD `c3144a8`) 9/9 + Guard (direct push) skipped ✓ — Detect/Lint/Build/Unit/Contract/Integration/Migration/Docker/CI Gate hepsi success. Önceki run `25256296918` (HEAD `3d02fea`) 9/9 ✓ ardışık.
+- **Mini güvenlik:** secret sızıntısı yok; auth/authz etkisi yok (arka plan job, HTTP yüzeyi yok); input validation N/A (Hangfire param trusted); PII fan-out kontratı T37 zincirine devrediliyor; yeni dış bağımlılık yok.
+- **Atomicity (05 §5.1, 09 §9.3):** `IOutboxService.PublishAsync` sadece change-tracker'a ekler; `WarningDispatcher` tek `SaveChangesAsync` ile `TimeoutWarningSentAt` damgası + outbox satırını aynı DB transaction'ında commit eder — outbox sözleşmesi sağlam.
+- **Doc uyumu:** 02 §3.4 (admin oran + tüm kanallar), 05 §4.4 (Hangfire delayed warning job → `TimeoutWarningEvent`), 09 §13.3 (no-op pattern: state ≠ ITEM_ESCROWED, IsOnHold, TimeoutFrozenAt, TimeoutWarningSentAt, BuyerId null, deadline geçmiş → silent no-op) — birebir.
+- **Minor advisory (M1):** 02 §3.4 metni "ilgili tarafa (alıcı veya satıcı)" generic ifade içerir; uygulama sadece ITEM_ESCROWED → buyer dispatch ediyor. Bu 05 §4.4 partition'ına uyumlu — per-tx Hangfire delayed warning yalnız ödeme aşamasında schedule ediliyor (Accept/TradeOfferToSeller/TradeOfferToBuyer deadline'ları `DeadlineScannerJob` ile enforce edilir, warning yok). Tasarım kararı T47'de sabitlenmişti, T48 koruyor. Fonksiyonel etki yok; rapor "Known Limitations" bölümünde explicit disclosed. Yeni kanallarda warning eklenmesi gerekirse spec netleştirme + ayrı task gerekir.
 
 ## Altyapı Değişiklikleri
 
