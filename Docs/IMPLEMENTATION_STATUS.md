@@ -118,7 +118,7 @@
 |---|---|---|---|---|
 | T44 | Transaction State Machine | ✓ Tamamlandı | ✓ PASS (bağımsız) | PR #74 |
 | T45 | İşlem oluşturma akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 3 minor advisory — BUYER_STEAM_ID_NOT_FOUND T67 devir / OPEN_LINK invite path 07 doc-pass / kabul kriteri sayım drift) | PR #75 |
-| T46 | Alıcı kabul akışı | ⏳ Devam ediyor | — | — |
+| T46 | Alıcı kabul akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — concurrency race-loser 500 → ALREADY_ACCEPTED map önerisi, gerçek concurrent yarış nadir) | (squash pending) |
 | T47 | Timeout scheduling | ⬚ Bekliyor | — | — |
 | T48 | Timeout warning | ⬚ Bekliyor | — | — |
 | T49 | Timeout execution | ⬚ Bekliyor | — | — |

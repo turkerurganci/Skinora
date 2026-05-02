@@ -1,6 +1,6 @@
 # T46 — Alıcı kabul akışı
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, validator bekleniyor) | **Tarih:** 2026-05-02
+**Faz:** F3 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-02
 
 ---
 
@@ -100,9 +100,56 @@ Komut: `dotnet test Skinora.sln -c Release --no-build` (Release).
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Validator bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator) |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız validator kanıtları (2026-05-02)
+
+**HARD STOP kapıları:**
+- **Adım -1 Working Tree Hygiene:** `git status --short` boş — temiz.
+- **Adım 0 Main CI Startup:** son 3 main run ✓✓✓ (`25250478338` T45 #75, `25250478269` T45 #75, `25248332299` T44 #74).
+- **Adım 0b Repo Memory Drift:** `MEMORY.md`'de T46 için 5+ satır mevcut (10-14 + 27 + 35 + 89).
+
+**Kabul kriterleri (8/8):**
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | `GET /transactions/:id` public/authenticated | ✓ | `TransactionDetailService.cs:73-127` role resolution (seller/buyer/Steam-ID-pre-acceptance/non-party 403) + `BuildPublicResponse` 07 §7.5 trimmed shape; tests 10/10 + endpoint 4/4 PASS. |
+| 2 | `POST /transactions/:id/accept` | ✓ | `TransactionAcceptanceService.cs:47-177` 7-stage pipeline; controller `TransactionsController.cs:148-192` outcome→200/400/401/403/404/409 pattern-match; tests 12/12 + endpoint 4/4 PASS. |
+| 3 | Yöntem 1 (Steam ID) / Yöntem 2 (open link) | ✓ | `TransactionAcceptanceService.cs:88-107` STEAM_ID branch `StringComparison.Ordinal` match → `STEAM_ID_MISMATCH`; OPEN_LINK branch seller-self-prevention + state guard'la first-comer; tests `Steam_Id_Mismatch`, `Open_Link_Method_First_Comer_Wins`, `Open_Link_Seller_Cannot_Accept_Own_Listing`. |
+| 4 | İade adresi zorunlu (TRC-20 + sanctions) | ✓ | Whitespace strict (`REFUND_ADDRESS_REQUIRED`) → TRC-20 (`INVALID_WALLET_ADDRESS`) → sanctions (`SANCTIONS_MATCH`) layered; tests `Refund_Address_Required_When_Empty`, `Refund_Address_Format_Invalid`, `Sanctions_Match_Rejects_With_403`. |
+| 5 | Refund-address cooldown | ✓ | `wallet.refund_address_cooldown_hours` SystemSetting reader + `User.RefundAddressChangedAt` window karşılaştırma; tests `Wallet_Cooldown_Active`, `Wallet_Cooldown_Expired_Allows`, `Same_Refund_Address_Does_Not_Reset_Cooldown_Timer`. |
+| 6 | State geçişi: CREATED → ACCEPTED | ✓ | `TransactionStateMachine.cs:194` `PermitIf(BuyerAccept, ACCEPTED, HasFieldsForAccepted)`; OnEntry `AcceptedAt` set; servis BuyerId + BuyerRefundAddress'i guard öncesi mutate eder; happy path test'inde `persisted.Status == ACCEPTED` doğrulandı. |
+| 7 | Outbox event: `BuyerAcceptedEvent` | ✓ | `BuyerAcceptedEvent` tipli kayıt (EventId/TransactionId/SellerId/BuyerId/ItemName/AcceptedAt/OccurredAt); `_outbox.PublishAsync(...)` SaveChanges öncesi atomik; integration test typed assertion + endpoint test `OutboxMessage` row sayar. |
+| 8 | Bildirim: satıcıya "alıcı kabul etti" | ~ Kısmi | Outbox event publish ediliyor + `NotificationTemplates.{tr,en,zh,es}.resx`'da `BUYER_ACCEPTED_Title/Body` template'leri hazır; consumer (NotificationConsumerBase subclass) henüz kayıtlı değil — T62 (SignalR) + T78–T80 (Email/Telegram/Discord) forward-devir. T45 (TransactionCreatedEvent) ile aynı pattern. |
+
+**Doğrulama kontrol listesi:**
+- [x] 07 §7.5–§7.6 sözleşmeleri — DTO 07 §7.5 conditional table + sub-record kümesiyle 1:1; status enum string-serialized; error code listesi 07 §7.6 hatalar tablosu ile birebir.
+- [x] 03 §3.1–§3.2 akış adımları — step 1 (detay sayfası) `TransactionDetailService` ile karşılandı (target buyer pre-acceptance dahil); step 2-3 (Yöntem 1/2) servis `Stage 3 party guard`; step 4 (iade adresi zorunlu) `Stage 1 + 4`; step 5 (Kabul Et) endpoint; step 6 (ACCEPTED transition) `Stage 6`; step 7 (satıcı bildirimi) ~ kısmi (outbox + template hazır, consumer T62/T78–T80 devir).
+- [x] Yöntem 1 ve 2 ayrımı doğru — `BuyerIdentificationMethod.STEAM_ID` ↔ `TargetBuyerSteamId`+ Steam ID ordinal match; `OPEN_LINK` ↔ seller self-prevention + state guard ile single-use.
+
+**Test sonuçları (validator yeniden çalıştırma):**
+- `dotnet test Skinora.Transactions.Tests --filter "~Lifecycle.Transaction"` → **52/52** PASS (24s; T45+T46 lifecycle birlikte).
+- `dotnet test Skinora.Transactions.Tests --filter "~Unit.Lifecycle.TransactionAcceptance"` → **9/9** PASS (65ms).
+- `dotnet test Skinora.API.Tests --filter "~TransactionLifecycle"` → **14/14** PASS (4s).
+- `dotnet build Skinora.API -c Release` → **0 Warning, 0 Error** (9s).
+
+**Task branch CI:** run `25251788325` (HEAD `afc3049`) — 10/10 jobs ✓ (Lint / Build / Unit / Integration / Contract / Migration dry-run / Docker build / CI Gate hepsi success; Guard skipped).
+
+**Mini güvenlik kontrolü:**
+- [x] Secret sızıntısı: temiz (kodda hardcoded key/connection string yok).
+- [x] Auth: accept endpoint `Authorize(Authenticated)`, detail endpoint `AllowAnonymous` + servis tarafında role-based 403 NOT_A_PARTY filtreleme; rate-limit `user-write` / `public` policy'leri uygulandı.
+- [x] Input validation: `refundWalletAddress` whitespace + TRC-20 + sanctions + cooldown 4-aşamalı pipeline; bilinmeyen alanlar JSON deserialization ignore.
+- [x] Yeni dış bağımlılık: yok.
+- **Minor advisory (concurrency):** İki eşzamanlı OPEN_LINK kabul isteği state guard'ı paralel geçerse race-loser EF `DbUpdateConcurrencyException` ile 500 döner (sequential test'te `ALREADY_ACCEPTED`'a düşer; gerçek concurrent yarış nadir). Forward improvement: `try/catch` + reload + `ALREADY_ACCEPTED` map. Fonksiyonel etki: minor UX nit, S-finding değil.
+
+**Doküman uyumu:**
+- DTO ↔ 07 §7.5 conditional table 1:1 (timeout, payment, sellerPayout, refund, cancelInfo, flagInfo, holdInfo, dispute, inviteInfo, paymentEvents, escrowBotAssetId, deliveredBuyerAssetId, availableActions tüm alanlar mevcut; durum gerektirmediğinde `WhenWritingNull` suppress).
+- Error code'lar ↔ 07 §7.6 hatalar listesi (`INVALID_STATE_TRANSITION`, `STEAM_ID_MISMATCH`, `ALREADY_ACCEPTED`, `VALIDATION_ERROR`, `INVALID_WALLET_ADDRESS`, `SANCTIONS_MATCH`, `WALLET_CHANGE_COOLDOWN_ACTIVE`) 1:1; ek `TRANSACTION_NOT_FOUND`, `NOT_A_PARTY`, `REFUND_ADDRESS_REQUIRED` sınırda hatalar (07 §7.5 ve 07 §7.6 hatalar bölümleriyle uyumlu).
+- Enum string serialize: `AcceptTransactionResponse_Serializes_Status_As_String_Per_07_7_6` unit test'i doğrular.
+
+**Yapım raporu karşılaştırması:** Tam uyum — yapım raporundaki 8/8 (7 ✓ + 1 ~) sınıflandırması bağımsız değerlendirmeyle birebir; rapor "Known Limitations" bölümündeki "Bildirim fan-out forward-devir" notu validator gözleminde aynı kanıtla doğrulandı (`NotificationConsumerBase` abstract + concrete subclass yok). Test sayıları rapor: 12 acceptance + 10 detail + 5 unit + 8 endpoint; validator filter'lı çalıştırmada hepsi PASS — sayı uyuşmazlığı yok.
 
 ## Altyapı Değişiklikleri
 
@@ -114,9 +161,9 @@ Komut: `dotnet test Skinora.sln -c Release --no-build` (Release).
 ## Commit & PR
 
 - Branch: `task/T46-buyer-acceptance`
-- Commit: (push sonrası)
-- PR: (push sonrası)
-- CI: bekleniyor
+- Commit: `afc3049`
+- PR: pending squash merge
+- CI: ✓ run `25251788325` 10/10 jobs (Lint / Build / Unit / Integration / Contract / Migration / Docker / CI Gate)
 
 ## Known Limitations / Follow-up
 
