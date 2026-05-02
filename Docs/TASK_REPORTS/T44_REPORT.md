@@ -134,6 +134,7 @@
 ## Commit & PR
 
 - **Branch:** `task/T44-transaction-state-machine`
-- **Commit:** _(commit hash push'lanırken doldurulacak)_
-- **PR:** _(PR numarası açılırken doldurulacak)_
-- **CI:** _(task branch CI run ID'leri merge öncesi eklenecek)_
+- **Commit:** `690c751` (T44 ana implementasyon) + `e8ae6e5` (T44 EnumTests guard fix — `AllEnums_ShouldExistInSharedNamespace` 23→24 + `TransactionTrigger` 16-fact guard)
+- **PR:** [#74](https://github.com/turkerurganci/Skinora/pull/74)
+- **CI:** Run [`25247166397`](https://github.com/turkerurganci/Skinora/actions/runs/25247166397) (HEAD `e8ae6e5`) ✓ success — 9/9 job (Lint + Build + Unit + Contract + Integration + Migration + Docker + CI Gate; Guard skipped PR flow). Önceki run [`25247023054`](https://github.com/turkerurganci/Skinora/actions/runs/25247023054) (HEAD `690c751`) FAIL — `Skinora.Shared.Tests.Unit.EnumTests.AllEnums_ShouldExistInSharedNamespace` 23 enum bekliyordu, T44 24'e çıkardı; root cause aynı PR içinde fix'lendi (e8ae6e5). BYPASS_LOG 1× entry (ci-failure Layer 2 — fix-self-pushing same-PR pattern).
+- **Main CI startup ardışık 3 ✓:** `25244910446` (chore F2 #73) + `25244910443` (chore F2 #73) + `25235250426` (T43 #72).
