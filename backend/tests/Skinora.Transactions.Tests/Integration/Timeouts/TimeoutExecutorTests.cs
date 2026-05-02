@@ -13,11 +13,12 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Transactions.Tests.Integration.Timeouts;
 
 /// <summary>
-/// Integration coverage for <see cref="TimeoutExecutor"/> + <see cref="StubWarningDispatcher"/>
-/// (T47, 09 §13.3 no-op pattern). The executor must transition to
-/// <c>CANCELLED_TIMEOUT</c> only when state, hold, freeze and deadline all
-/// align; every other path is a silent no-op so orphan/stale Hangfire jobs
-/// cannot push a transaction off its track.
+/// Integration coverage for <see cref="TimeoutExecutor"/> (T47, 09 §13.3
+/// no-op pattern). The executor must transition to <c>CANCELLED_TIMEOUT</c>
+/// only when state, hold, freeze and deadline all align; every other path is
+/// a silent no-op so orphan/stale Hangfire jobs cannot push a transaction off
+/// its track. Warning-dispatch coverage lives in
+/// <see cref="WarningDispatcherTests"/> (T48).
 /// </summary>
 public class TimeoutExecutorTests : IntegrationTestBase
 {
@@ -157,45 +158,4 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Assert.Equal(TransactionStatus.ITEM_ESCROWED, persisted.Status);
     }
 
-    [Fact]
-    public async Task DispatchWarning_Stamps_TimeoutWarningSentAt()
-    {
-        var nowUtc = _clock.GetUtcNow().UtcDateTime;
-        var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
-            paymentDeadline: nowUtc.AddMinutes(15),
-            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
-            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
-        Context.Set<Transaction>().Add(transaction);
-        await Context.SaveChangesAsync();
-
-        var sut = new StubWarningDispatcher(Context, _clock, NullLogger<StubWarningDispatcher>.Instance);
-        await sut.DispatchWarningAsync(transaction.Id);
-
-        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.NotNull(persisted.TimeoutWarningSentAt);
-    }
-
-    [Fact]
-    public async Task DispatchWarning_NoOp_When_Already_Sent()
-    {
-        var nowUtc = _clock.GetUtcNow().UtcDateTime;
-        var sentAt = nowUtc.AddMinutes(-10);
-        var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
-            paymentDeadline: nowUtc.AddMinutes(15),
-            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
-            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
-        transaction.TimeoutWarningSentAt = sentAt;
-        Context.Set<Transaction>().Add(transaction);
-        await Context.SaveChangesAsync();
-
-        var sut = new StubWarningDispatcher(Context, _clock, NullLogger<StubWarningDispatcher>.Instance);
-        await sut.DispatchWarningAsync(transaction.Id);
-
-        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.Equal(sentAt, persisted.TimeoutWarningSentAt);
-    }
 }
