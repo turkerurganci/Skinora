@@ -80,9 +80,9 @@ T47'nin `IWarningDispatcher` portunda forward-deferred bırakılan stub gerçek 
 ## Commit & PR
 
 - Branch: `task/T48-timeout-warning`
-- Commit: (push sonrası eklenecek)
-- PR: (push sonrası eklenecek)
-- CI: (push sonrası izlenecek)
+- Commit: `9d56719` — `T48: Timeout warning (02 §3.4, 05 §4.4)`
+- PR: [#78](https://github.com/turkerurganci/Skinora/pull/78)
+- CI: ⏳ İzleniyor (sonuç eklenecek)
 
 ## Known Limitations / Follow-up
 
