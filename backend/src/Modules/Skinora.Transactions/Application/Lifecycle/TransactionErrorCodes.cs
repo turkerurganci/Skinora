@@ -23,6 +23,15 @@ public static class TransactionErrorCodes
     public const string PayoutAddressCooldownActive = "PAYOUT_ADDRESS_COOLDOWN_ACTIVE";
     public const string SellerWalletAddressMissing = "SELLER_WALLET_ADDRESS_MISSING";
 
+    // T46 — detail / accept (07 §7.5–§7.6).
+    public const string TransactionNotFound = "TRANSACTION_NOT_FOUND";
+    public const string NotAParty = "NOT_A_PARTY";
+    public const string SteamIdMismatch = "STEAM_ID_MISMATCH";
+    public const string AlreadyAccepted = "ALREADY_ACCEPTED";
+    public const string InvalidStateTransition = "INVALID_STATE_TRANSITION";
+    public const string WalletChangeCooldownActive = "WALLET_CHANGE_COOLDOWN_ACTIVE";
+    public const string RefundAddressRequired = "REFUND_ADDRESS_REQUIRED";
+
     // Eligibility-only reason codes (07 §7.3 reasons array). Mirrors the
     // CreateTransaction error codes so callers can use a single switch.
     public static class EligibilityReasons

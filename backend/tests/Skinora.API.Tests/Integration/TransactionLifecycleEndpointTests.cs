@@ -173,6 +173,147 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     }
 
     [Fact]
+    public async Task Detail_Anonymous_Returns_Public_Variant()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync($"/api/v1/transactions/{transactionId:D}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        // Public variant contract: userRole absent (suppressed via WhenWritingNull),
+        // commission/total absent, availableActions has requiresLogin=true.
+        Assert.False(data.TryGetProperty("commissionAmount", out _));
+        Assert.False(data.TryGetProperty("totalAmount", out _));
+        var actions = data.GetProperty("availableActions");
+        Assert.False(actions.GetProperty("canAccept").GetBoolean());
+        Assert.True(actions.GetProperty("requiresLogin").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Detail_Authenticated_Buyer_Returns_Full_Variant()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        // Steam ID match → service resolves the target buyer as
+        // role="buyer" even before BuyerId is set (03 §3.2 step 1).
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.GetAsync($"/api/v1/transactions/{transactionId:D}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal("buyer", data.GetProperty("userRole").GetString());
+        Assert.Equal("102.00", data.GetProperty("totalAmount").GetString());
+    }
+
+    [Fact]
+    public async Task Detail_Non_Party_Returns_403()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var stranger = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = BuildAuthenticatedClient(stranger.Id, stranger.SteamId);
+        var response = await client.GetAsync($"/api/v1/transactions/{transactionId:D}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("NOT_A_PARTY",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Detail_Not_Found_Returns_404()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync($"/api/v1/transactions/{Guid.NewGuid():D}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("TRANSACTION_NOT_FOUND",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Accept_Unauthenticated_Returns_401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/accept",
+            new { refundWalletAddress = ValidWallet });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Accept_Happy_Path_Transitions_To_Accepted_And_Emits_Outbox()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new { refundWalletAddress = ValidWallet });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal("ACCEPTED", data.GetProperty("status").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Single(db.Set<OutboxMessage>().AsNoTracking().ToList());
+    }
+
+    [Fact]
+    public async Task Accept_Steam_Id_Mismatch_Returns_403()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var stranger = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: "76561198000099999");
+
+        var client = BuildAuthenticatedClient(stranger.Id, stranger.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new { refundWalletAddress = ValidWallet });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("STEAM_ID_MISMATCH",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Accept_Invalid_Wallet_Returns_400()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new { refundWalletAddress = "NOT_A_TRC20_ADDRESS" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_WALLET_ADDRESS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task Create_Eligibility_Fail_Returns_422()
     {
         // No MA → eligibility fails with MOBILE_AUTHENTICATOR_REQUIRED.
@@ -312,6 +453,43 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 existing.IsConfigured = true;
             }
             await db.SaveChangesAsync();
+        }
+
+        public async Task<Guid> SeedTransactionAsync(
+            Guid sellerId,
+            string? targetBuyerSteamId = null,
+            Skinora.Shared.Enums.TransactionStatus status = Skinora.Shared.Enums.TransactionStatus.CREATED)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var nowUtc = DateTime.UtcNow;
+            var transaction = new Skinora.Transactions.Domain.Entities.Transaction
+            {
+                Id = Guid.NewGuid(),
+                Status = status,
+                SellerId = sellerId,
+                BuyerIdentificationMethod = Skinora.Shared.Enums.BuyerIdentificationMethod.STEAM_ID,
+                // CK_Transactions_BuyerMethod_SteamId: STEAM_ID method requires
+                // TargetBuyerSteamId NOT NULL. Tests that don't care about a
+                // specific buyer pass an arbitrary non-matching ID.
+                TargetBuyerSteamId = targetBuyerSteamId ?? "76561198999999999",
+                ItemAssetId = "27348562891",
+                ItemClassId = "abc-class",
+                ItemName = "AK-47 | Redline",
+                StablecoinType = Skinora.Shared.Enums.StablecoinType.USDT,
+                Price = 100m,
+                CommissionRate = 0.02m,
+                CommissionAmount = 2m,
+                TotalAmount = 102m,
+                SellerPayoutAddress = ValidWallet,
+                PaymentTimeoutMinutes = 1440,
+                AcceptDeadline = status == Skinora.Shared.Enums.TransactionStatus.CREATED
+                    ? nowUtc.AddHours(1)
+                    : null,
+            };
+            db.Set<Skinora.Transactions.Domain.Entities.Transaction>().Add(transaction);
+            await db.SaveChangesAsync();
+            return transaction.Id;
         }
 
         public async Task<User> CreateUserAsync(Action<User>? customize = null)

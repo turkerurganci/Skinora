@@ -29,6 +29,10 @@ public static class TransactionsModule
         services.AddScoped<ITransactionCreationService, TransactionCreationService>();
         services.AddSingleton<IInvitationCodeGenerator, InvitationCodeGenerator>();
 
+        // T46 — detail + accept (07 §7.5–§7.6).
+        services.AddScoped<ITransactionDetailService, TransactionDetailService>();
+        services.AddScoped<ITransactionAcceptanceService, TransactionAcceptanceService>();
+
         // T67 forward-deferred — Steam inventory stub. Tests inject their own
         // ISteamInventoryReader; production fails closed
         // (STEAM_INVENTORY_UNAVAILABLE) until T67 wires the real sidecar.

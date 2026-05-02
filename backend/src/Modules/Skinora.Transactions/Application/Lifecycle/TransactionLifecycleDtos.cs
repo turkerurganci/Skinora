@@ -87,3 +87,37 @@ public enum CreateTransactionStatus
     PayoutAddressCooldownActive,
     SellerWalletAddressMissing,
 }
+
+// ---------- POST /transactions/:id/accept (07 §7.6) ----------
+
+/// <summary>Request body for <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
+public sealed record AcceptTransactionRequest(string RefundWalletAddress);
+
+/// <summary>Response body for <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
+public sealed record AcceptTransactionResponse(TransactionStatus Status, DateTime AcceptedAt);
+
+/// <summary>
+/// Outcome of <see cref="ITransactionAcceptanceService.AcceptAsync"/>. The
+/// controller pattern-matches on <see cref="Status"/> to produce 200 / 4xx
+/// responses without leaking implementation details.
+/// </summary>
+public sealed record AcceptTransactionOutcome(
+    AcceptTransactionStatus Status,
+    AcceptTransactionResponse? Body,
+    string? ErrorCode,
+    string? ErrorMessage);
+
+public enum AcceptTransactionStatus
+{
+    Accepted,
+    NotFound,
+    NotAParty,
+    SteamIdMismatch,
+    AlreadyAccepted,
+    InvalidStateTransition,
+    ValidationFailed,
+    InvalidWallet,
+    SanctionsMatch,
+    WalletCooldownActive,
+    BuyerNotFound,
+}
