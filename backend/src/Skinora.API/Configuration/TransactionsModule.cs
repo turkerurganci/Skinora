@@ -1,8 +1,10 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Account;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Transactions.Application.Timeouts;
 
 namespace Skinora.API.Configuration;
 
@@ -16,8 +18,14 @@ namespace Skinora.API.Configuration;
 /// </summary>
 public static class TransactionsModule
 {
-    public static IServiceCollection AddTransactionsModule(this IServiceCollection services)
+    public static IServiceCollection AddTransactionsModule(
+        this IServiceCollection services, IConfiguration configuration)
     {
+        // T47 — timeout scheduling tunables (poll interval, scanner batch,
+        // recovery threshold). Operational config, not SystemSettings.
+        services.Configure<TimeoutSchedulingOptions>(
+            configuration.GetSection(TimeoutSchedulingOptions.SectionName));
+
         if (!services.Any(d => d.ServiceType == typeof(TimeProvider)))
             services.AddSingleton(TimeProvider.System);
 
@@ -46,6 +54,12 @@ public static class TransactionsModule
         // but implemented in Skinora.Fraud (Fraud already references
         // Transactions; the reverse direction would be a project cycle).
         services.AddScoped<IAccountFlagChecker, AccountFlagChecker>();
+
+        // T47 — timeout scheduling primitives + Hangfire job targets.
+        services.AddScoped<ITimeoutSchedulingService, TimeoutSchedulingService>();
+        services.AddScoped<ITimeoutExecutor, TimeoutExecutor>();
+        services.AddScoped<IDeadlineScannerJob, DeadlineScannerJob>();
+        services.AddScoped<IWarningDispatcher, StubWarningDispatcher>();
 
         return services;
     }
