@@ -106,7 +106,7 @@ T44'ün `Timeout` trigger'ı ve T47'nin scheduling pipeline'ı sonrası, bir `Ti
 - Branch: `task/T49-timeout-execution`
 - Commit: `ef5d54f` — `T49: Timeout execution (02 §3.2, 03 §4.1-§4.5, 09 §13.3)`
 - PR: [#79](https://github.com/turkerurganci/Skinora/pull/79)
-- CI: ⏳ in progress — run [`25258207765`](https://github.com/turkerurganci/Skinora/actions/runs/25258207765) (HEAD `ef5d54f`)
+- CI: ✓ PASS — run [`25258220783`](https://github.com/turkerurganci/Skinora/actions/runs/25258220783) (HEAD `93cbfae`) 9/9 + Guard (direct push) skipped. Detect/Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker build/CI Gate hepsi success. Önceki run [`25258207765`](https://github.com/turkerurganci/Skinora/actions/runs/25258207765) (HEAD `ef5d54f`) cancelled (ardışık push concurrency).
 
 ## Known Limitations / Follow-up
 
