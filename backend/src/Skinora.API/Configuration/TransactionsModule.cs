@@ -63,6 +63,11 @@ public static class TransactionsModule
         // outbox; the Notifications consumer fans it out to the buyer through
         // the in-app + external channel pipeline (T37).
         services.AddScoped<IWarningDispatcher, WarningDispatcher>();
+        // T49 — phase-aware side-effect publisher. Both TimeoutExecutor and
+        // DeadlineScannerJob delegate the post-trigger fan-out (notification +
+        // refund + late-payment-monitor events) here so the mapping lives in
+        // one place.
+        services.AddScoped<ITimeoutSideEffectPublisher, TimeoutSideEffectPublisher>();
 
         return services;
     }

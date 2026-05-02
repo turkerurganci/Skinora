@@ -510,6 +510,6 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        Assert.Equal(24, enumTypes.Count);
+        Assert.Equal(25, enumTypes.Count);
     }
 }

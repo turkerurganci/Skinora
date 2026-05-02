@@ -58,7 +58,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -80,7 +80,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -103,7 +103,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -131,7 +131,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -151,7 +151,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
