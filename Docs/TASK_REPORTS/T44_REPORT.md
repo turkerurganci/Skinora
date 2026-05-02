@@ -1,6 +1,6 @@
 # T44 — Transaction State Machine
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-02 (yapım)
+**Faz:** F3 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-02 (yapım) → 2026-05-02 (doğrulama)
 
 ---
 
@@ -138,3 +138,51 @@
 - **PR:** [#74](https://github.com/turkerurganci/Skinora/pull/74)
 - **CI:** Run [`25247166397`](https://github.com/turkerurganci/Skinora/actions/runs/25247166397) (HEAD `e8ae6e5`) ✓ success — 9/9 job (Lint + Build + Unit + Contract + Integration + Migration + Docker + CI Gate; Guard skipped PR flow). Önceki run [`25247023054`](https://github.com/turkerurganci/Skinora/actions/runs/25247023054) (HEAD `690c751`) FAIL — `Skinora.Shared.Tests.Unit.EnumTests.AllEnums_ShouldExistInSharedNamespace` 23 enum bekliyordu, T44 24'e çıkardı; root cause aynı PR içinde fix'lendi (e8ae6e5). BYPASS_LOG 1× entry (ci-failure Layer 2 — fix-self-pushing same-PR pattern).
 - **Main CI startup ardışık 3 ✓:** `25244910446` (chore F2 #73) + `25244910443` (chore F2 #73) + `25235250426` (T43 #72).
+
+## Doğrulama (bağımsız validator, 2026-05-02)
+
+**Verdict: ✓ PASS** — 0 S-bulgu, 1 minor advisory (kabul #5 ~ Kısmi rating yapım raporu ile uyumlu).
+
+### Kabul Kriterleri Bağımsız Doğrulama
+
+| # | Kriter | Sonuç | Bağımsız Kanıt |
+|---|---|---|---|
+| 1 | Stateless ile TransactionStateMachine sınıfı | ✓ | `using Stateless;` + `StateMachine<TransactionStatus, TransactionTrigger>` constructor doğrulandı; `Stateless 5.20.1` PackageReference; lib `~/.nuget/packages/stateless/5.20.1/lib/net9.0/Stateless.dll` restore ✓. |
+| 2 | 13 durum, deklaratif geçişler | ✓ | `ConfigureTransitions()` 13 `Configure(state)` bloğu — CREATED + ACCEPTED + TRADE_OFFER_SENT_TO_SELLER + ITEM_ESCROWED + PAYMENT_RECEIVED + TRADE_OFFER_SENT_TO_BUYER + ITEM_DELIVERED + COMPLETED + CANCELLED_TIMEOUT + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_ADMIN + FLAGGED. 30 Permit/PermitIf 05 §4.2 tablosu ile 1:1 çapraz kontrol edildi (her satır kod referansıyla eşlendi). |
+| 3 | Geçersiz geçişler DomainException | ✓ | `Fire_InvalidTransition_ThrowsDomainExceptionAndDoesNotChangeState` 165 invalid kombinasyon `[Theory]` PASS; `InvalidTransitionErrorCode` ve state değişmediği assert. Stateless `InvalidOperationException` `CanFire` ön-kontrol ile sızdırılmıyor. |
+| 4 | RowVersion guard | ✓ | `EnforceRowVersion()` `Fire`/`ApplyEmergencyHold`/`ReleaseEmergencyHold` başında çağrılıyor; 4 hedefli test PASS (mismatch reject + match success + null skip + hold mismatch reject). |
+| 5 | OnEntry/OnExit handler'ları | ✓ kısmi | OnEntry/OnExit altyapısı 6 state'te aktif (timestamp + warning reset/clear). Hangfire/notification publish 09 §9.2 "side effect üretmez" normatif kuralı gereği T47/T62/T45+ caller'larına forward-devir — yapım raporundaki yorum doğru, devir Known Limitations'da explicit. |
+| 6 | Emergency hold (IsOnHold + dondurma/çözme) | ✓ | `ApplyEmergencyHold` + `ReleaseEmergencyHold` API'ları; 7 hedefli test PASS (stamps-all-fields, non-ITEM_ESCROWED skip-remaining-seconds, double-apply reject, empty-reason reject, RowVersion mismatch, release clears flag/freeze, release without hold reject). 06 §3.5 karşılıklı invariant (`IsOnHold ↔ TimeoutFreezeReason=EMERGENCY_HOLD`) doğrulandı. |
+| 7 | 06 §3.5 status → field matrisi (FLAGGED dahil) | ✓ | `HasFieldsForAccepted`/`HasFieldsForItemEscrowed`/`HasFieldsForItemDelivered` PermitIf guard'ları + `HasFlaggedStateInvariant` (4 deadline + 2 job ID NULL); 6 hedefli test PASS. |
+
+### Bağımsız Test Sonuçları (lokal)
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Unit (`TransactionStateMachineTests`) | ✓ 226/226 | 321 ms — 30 ValidTransition + 165 InvalidTransition + 31 hedefli `[Fact]`/`[Theory]`. |
+| Skinora.Transactions.Tests | ✓ 308/308 | 56 s. |
+| Skinora.Shared.Tests | ✓ 172/172 | 11 s — `TransactionTrigger` 16 guard fact + `AllEnums_ShouldExistInSharedNamespace` 24 dahil. |
+| Skinora.API.Tests | ✓ 247/247 | 3 m 28 s — regresyon yok. |
+| Solution Release build | ✓ 0W/0E | `dotnet build -c Release` Build succeeded. |
+
+### Working Tree + CI Doğrulama Kapıları
+
+| Kapı | Sonuç |
+|---|---|
+| Working tree (Adım -1) | ✓ temiz |
+| Main CI startup (Adım 0) — ardışık 3 ✓ | `25244910446` (chore F2 #73) + `25244910443` (chore F2 #73) + `25235250426` (T43 #72) |
+| Repo memory drift (Adım 0b) | ✓ T44 satırları MEMORY.md'de mevcut |
+| Task branch CI run (Adım 8a) | ✓ son run `25247354271` 10/10 (Lint + Build + Unit + Contract + Integration + Migration + Docker + CI Gate; Guard skipped); önceki `25247166397` 9/9 ✓; ilk run `25247023054` FAIL → aynı PR'da `e8ae6e5` ile fix edildi (BYPASS_LOG ci-failure Layer 2 entry doğrulandı) |
+
+### Güvenlik Mini Kontrolü
+
+- **Secret sızıntısı:** ✓ temiz — pure domain logic, dış servis/credential dokunuşu yok.
+- **Auth etkisi:** ✓ temiz — domain layer; admin emergency hold operasyonel kontrolü `IsOnHold` guard ile uygulanır (05 §4.5).
+- **Input validation:** ✓ temiz — caller-set field guard'ları + RowVersion + reason validation defense-in-depth sağlar.
+- **Yeni dış bağımlılık:** Stateless 5.20.1 (Apache-2.0, NuGet `net9.0` explicit, 09 §9.2 normatif karar) — risk yüzeyi minimal.
+
+### Yapım Raporu Karşılaştırması
+
+- Uyum: **Tam uyumlu**. Yapım raporundaki verdict ve kanıtlar bağımsız değerlendirmemle birebir örtüşüyor.
+- ~ Kısmi rating (kriter #5) yorumu doğru: "OnEntry/OnExit hook **mekanizması**" T44 kapsamında ✓; "bildirim/timeout başlatma **içerikleri**" 09 §9.2 gereği T47/T62/T45+ caller'larına devirli — Known Limitations'da explicit kayıt.
+- BYPASS_LOG entry (`e8ae6e5` ci-failure Layer 2) doğrulandı: aynı PR'da fix-self-pushing pattern, Layer 2 bypass kabul edilebilir kullanım.
