@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using Serilog;
 using Skinora.API.BackgroundJobs;
+using Skinora.API.BackgroundJobs.Timeouts;
 using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Logging;
@@ -87,7 +88,9 @@ builder.Services.AddAdminModule();
 // Platform parameter management (T41 — 07 §9.8–§9.9). ISystemSettingsService
 // reads the SystemSetting catalog and applies type/range/cross-key validation
 // to admin updates. Audit rows write directly to AuditLogs pending T42's
-// centralised pipeline.
+// centralised pipeline. T47 binds Heartbeat options + IHeartbeatJob.
+builder.Services.Configure<Skinora.Platform.Application.Heartbeat.HeartbeatOptions>(
+    builder.Configuration.GetSection(Skinora.Platform.Application.Heartbeat.HeartbeatOptions.SectionName));
 builder.Services.AddPlatformModule();
 
 // Notification infrastructure (T37 — 05 §7.1–§7.5): dispatcher orchestration,
@@ -98,8 +101,14 @@ builder.Services.AddNotificationsModule();
 
 // Transaction lifecycle (T45 — 07 §7.2–§7.4, 03 §2.2): eligibility,
 // params and creation services. Steam inventory + market price ports are
-// registered as forward-deferred stubs (T67/T81 swap them via DI).
-builder.Services.AddTransactionsModule();
+// registered as forward-deferred stubs (T67/T81 swap them via DI). T47
+// adds timeout scheduling (per-tx Hangfire jobs + deadline scanner).
+builder.Services.AddTransactionsModule(builder.Configuration);
+
+// T47 — restart recovery + startup hook for the heartbeat / scanner chains.
+// Order: registered AFTER the outbox hook so the recovery pass observes a
+// settled DB. Hosted services run in registration order (StartAsync sequence).
+builder.Services.AddScoped<IRestartRecoveryService, RestartRecoveryService>();
 
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
@@ -121,6 +130,11 @@ builder.Services.AddHostedService<SettingsBootstrapHook>();
 // receiver-side external idempotency service, MediatR fan-out and the
 // startup hook that primes the dispatcher chain.
 builder.Services.AddOutboxModule(builder.Configuration);
+
+// T47 — primes the restart-recovery + heartbeat + deadline scanner chains
+// at host startup. Registered after Outbox so its hosted-service StartAsync
+// runs after the outbox dispatcher chain is alive.
+builder.Services.AddHostedService<TimeoutSchedulerStartupHook>();
 
 // Health checks (T16) — DB + Redis dependency checks
 builder.Services.AddHealthChecks()
