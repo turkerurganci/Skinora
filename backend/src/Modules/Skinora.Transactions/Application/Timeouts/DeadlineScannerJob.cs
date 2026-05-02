@@ -33,6 +33,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     private readonly AppDbContext _db;
     private readonly IBackgroundJobScheduler _scheduler;
     private readonly TimeProvider _clock;
+    private readonly ITimeoutSideEffectPublisher _sideEffects;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -40,12 +41,14 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         AppDbContext db,
         IBackgroundJobScheduler scheduler,
         TimeProvider clock,
+        ITimeoutSideEffectPublisher sideEffects,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
         _db = db;
         _scheduler = scheduler;
         _clock = clock;
+        _sideEffects = sideEffects;
         _options = options.Value;
         _logger = logger;
     }
@@ -101,6 +104,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
 
         foreach (var transaction in candidates)
         {
+            var previousStatus = transaction.Status;
             var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
             try
             {
@@ -114,6 +118,8 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                     transaction.Id, ex.ErrorCode);
                 continue;
             }
+
+            await _sideEffects.PublishAsync(transaction, previousStatus);
         }
 
         await _db.SaveChangesAsync();

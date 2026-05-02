@@ -19,12 +19,18 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
 {
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly ITimeoutSideEffectPublisher _sideEffects;
     private readonly ILogger<TimeoutExecutor> _logger;
 
-    public TimeoutExecutor(AppDbContext db, TimeProvider clock, ILogger<TimeoutExecutor> logger)
+    public TimeoutExecutor(
+        AppDbContext db,
+        TimeProvider clock,
+        ITimeoutSideEffectPublisher sideEffects,
+        ILogger<TimeoutExecutor> logger)
     {
         _db = db;
         _clock = clock;
+        _sideEffects = sideEffects;
         _logger = logger;
     }
 
@@ -41,6 +47,7 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
         if (transaction.TimeoutFrozenAt is not null) return;
         if (transaction.PaymentDeadline > _clock.GetUtcNow().UtcDateTime) return;
 
+        var previousStatus = transaction.Status;
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
         try
         {
@@ -55,8 +62,7 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
             return;
         }
 
-        // Side effects (refund, notification fan-out) are forward-deferred to
-        // T49 — T47 only flips the state.
+        await _sideEffects.PublishAsync(transaction, previousStatus);
         await _db.SaveChangesAsync();
     }
 }
