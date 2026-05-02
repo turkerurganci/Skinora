@@ -1,6 +1,6 @@
 # T49 — Timeout execution
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-02
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (PASS, 1 minor advisory) | **Tarih:** 2026-05-02
 
 ---
 
@@ -74,7 +74,7 @@ T44'ün `Timeout` trigger'ı ve T47'nin scheduling pipeline'ı sonrası, bir `Ti
 | Unit (TransactionTimedOutNotificationConsumer) | ✓ 7/7 | `TransactionTimedOutNotificationConsumerTests` — accept fan-out, missing buyer skip, 4 phase × role reason text [Theory], idempotency replay. |
 | Integration (TimeoutExecutor) | ✓ 2/2 | `TimeoutExecutorSideEffectsTests` — Payment timeout 3-event publish + state-already-advanced no-op. |
 | Integration (DeadlineScannerJob) | ✓ 3/3 | `DeadlineScannerJobSideEffectsTests` — Accept / TradeOfferToSeller / Delivery phase'leri için doğru event setleri. |
-| Regresyon — tüm test asembly'leri | ✓ 1237/1237 | Skinora.Users 16 + Fraud 17 + Payments 6 + Disputes 11 + Steam 21 + Shared 182 + Platform 136 + Transactions 403 + API 265 + Auth 93 + Notifications 73 + Admin 20 = 1237. T48: 1224 → T49: 1237 (+13 net = 12 yeni Transactions + 7 yeni Notifications + 1 enum count fix − 7 existing tests sayım drift). Skinora.Transactions.Tests 391/391 → 403/403 (+12), Skinora.Notifications.Tests 66/66 → 73/73 (+7). |
+| Regresyon — tüm test asembly'leri | ✓ 1243/1243 | Skinora.Users 16 + Fraud 17 + Payments 6 + Disputes 11 + Steam 21 + Shared 182 + Platform 136 + Transactions 403 + API 265 + Auth 93 + Notifications 73 + Admin 20 = **1243** (yapım raporunda toplam 1237 yazılmıştı — breakdown 1243'e topluyor; validator düzeltti, fonksiyonel etki yok). T48: 1224 → T49: 1243 (+19 net = 12 yeni Transactions + 7 yeni Notifications). Skinora.Transactions.Tests 391/391 → 403/403 (+12), Skinora.Notifications.Tests 66/66 → 73/73 (+7). |
 | Build (Release) | ✓ 0W/0E | `dotnet build -c Release` — `Build succeeded. 0 Warning(s) 0 Error(s)`. |
 | Format verify | ✓ exit=0 | `dotnet format --verify-no-changes` clean. |
 
@@ -82,9 +82,23 @@ T44'ün `Timeout` trigger'ı ve T47'nin scheduling pipeline'ı sonrası, bir `Ti
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı validate chat'inde başlayacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat, 2026-05-02) |
+| Bulgu sayısı | 1 minor advisory (S0/S1/S2/S3 yok) |
+| Düzeltme gerekli mi | Hayır — minor rapor sayım drift'i validator inline düzeltti (1237 → 1243) |
+
+### Bağımsız Validator Bulguları
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| M1 | minor | "Test Sonuçları" satırı toplam **1237** yazılmıştı; per-assembly breakdown (16+17+6+11+21+182+136+403+265+93+73+20) **1243**'e topluyor. Lokal `dotnet test` 1243/1243 PASS. Fonksiyonel etki yok — rapor metin drift'i, validator inline düzeltti (bkz. **Test Sonuçları** tablosu). | `Docs/TASK_REPORTS/T49_REPORT.md` |
+
+### Validator Kanıt Özeti
+
+- **Pre-flight:** working tree temiz, main CI son 3 ardışık ✓ (T48 #78 + T47 #77), MEMORY.md T49 satırı mevcut (drift yok).
+- **Lokal:** `dotnet build -c Release` 0W/0E (24 proje), `dotnet format --verify-no-changes` exit=0, `dotnet test -c Release --no-build` 1243/1243 PASS (12 test assembly).
+- **Task branch CI:** run [25258360678](https://github.com/turkerurganci/Skinora/actions/runs/25258360678) HEAD `393749c` 9/9 + Guard skipped ✓ (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker build/CI Gate). Önceki run [25258220783](https://github.com/turkerurganci/Skinora/actions/runs/25258220783) HEAD `93cbfae` da ✓.
+- **Doc compliance:** Notification reason text 03 §4.1–§4.4'ten verbatim alınmış (4 phase × 2 role = 8 dize); refund mapping `MapPhase(previousStatus)` 02 §3.2 ile birebir; atomicity (state flip + outbox enqueue + tek SaveChanges) 09 §13.3 / §9.3 ile uyumlu.
+- **Güvenlik:** secret leak yok; yeni endpoint yok; user input yok; PII (BuyerRefundAddress) outbox internal kanal, sidecar handler'larında dış kullanım T64–T68 / T73 / T75 forward.
 
 ## Altyapı Değişiklikleri
 
