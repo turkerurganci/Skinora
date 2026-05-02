@@ -1,6 +1,6 @@
 # T45 — İşlem oluşturma akışı
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti) | **Tarih:** 2026-05-02
+**Faz:** F3 | **Durum:** ✓ PASS bağımsız validator | **Tarih:** 2026-05-02
 
 ---
 
@@ -195,7 +195,85 @@
 ## Commit & PR
 
 - **Branch:** `task/T45-transaction-creation-flow`
-- **Commit:** `58b8899` (T45 ana implementasyon + rapor + status + memory bundled tek commit)
-- **PR:** [#75](https://github.com/turkerurganci/Skinora/pull/75)
-- **CI:** Push edildi, run henüz başlatılmadı (push timestamp ile aynı dakikada). Watch sonucu validator chat'inde teyit edilir.
+- **Commit:** `58b8899` (T45 ana implementasyon + rapor + status + memory bundled tek commit) + `032a4442` (rapor PR + commit alanları yansıt)
+- **PR:** [#75](https://github.com/turkerurganci/Skinora/pull/75) — validator merge'inden sonra squash hash güncellenir
+- **Task branch CI:** [`25249321302`](https://github.com/turkerurganci/Skinora/actions/runs/25249321302) (HEAD `032a4442`) — 9 success + 1 skipped (Guard direct-push, beklenen) ✓; önceki run `25249314388` (HEAD `58b8899`) push tarafından auto-cancelled (beklenen)
 - **Main CI startup ardışık 3 ✓:** `25248332299` (T44 #74), `25248332298` (T44 #74), `25244910446` (chore F2 #73).
+
+---
+
+## Doğrulama Sonucu (Bağımsız Validator) — 2026-05-02
+
+**Verdict:** ✓ PASS
+**Validator:** Claude (bağımsız chat, yapım raporunu okumadan kabul kriterlerini önce bağımsız doğruladı)
+**Branch:** `task/T45-transaction-creation-flow` @ `032a4442` (HEAD)
+
+### HARD STOP Kapıları
+| Kapı | Sonuç |
+|---|---|
+| Working tree (Adım -1) | ✓ temiz (`git status --short` boş) |
+| Main CI startup (Adım 0) | ✓ son 3 run success: `25248332299` / `25248332298` / `25244910446` |
+| Repo memory drift (Adım 0b) | ✓ `.claude/memory/MEMORY.md` line 84 T45 next pointer mevcut |
+
+### Lokal Doğrulama
+| Kontrol | Sonuç |
+|---|---|
+| Build (Release, full solution, `-p:TreatWarningsAsErrors=true`) | ✓ 0W/0E (22s) |
+| Format verify (`dotnet format --verify-no-changes`) | ✓ exit 0 |
+| Skinora.Transactions.Tests Lifecycle subset | ✓ 23/23 (37s, MsSqlContainer) |
+| Skinora.API.Tests TransactionLifecycle subset | ✓ 6/6 (6s, SQLite in-memory) |
+| Skinora.Fraud.Tests AccountFlagChecker subset | ✓ 5/5 (13s, MsSqlContainer) |
+| Tam solution test (12 assembly) | ✓ 1146/1146 (Transactions 331 + API 253 + Auth 93 + Notifications 63 + Steam 21 + Fraud 17 + Disputes 11 + Admin 20 + Users 16 + Payments 6 + Shared 182 + Platform 133) |
+
+### Task Branch CI
+- **Run:** [`25249321302`](https://github.com/turkerurganci/Skinora/actions/runs/25249321302) — HEAD `032a4442` — `success`
+- **Job-by-job:** 1. Lint ✓, Detect changed paths ✓, 0. Guard (skipped, PR-aware), 2. Build ✓, 3. Unit test ✓, 4. Integration test ✓, 5. Contract test ✓, 6. Migration dry-run ✓, 7. Docker build (backend) ✓, CI Gate ✓.
+
+### Kabul Kriterleri (Plan 11 §T45 — 10 madde)
+| # | Plan Kriteri | Sonuç | Validator Kanıtı |
+|---|---|---|---|
+| 1 | `GET /transactions/eligibility` → uygunluk kontrolü | ✓ | `TransactionEligibilityServiceTests` 6/6 (MA, account flag, cancel cooldown, concurrent, new-account, payout cooldown, missing wallet) — her reason izole edilmiş. |
+| 2 | `GET /transactions/params` → form parametreleri | ✓ | `TransactionParamsServiceTests` 3/3 unit (configured + defaults + minutes-to-hours integer divide). |
+| 3 | `POST /transactions` → işlem oluşturma | ✓ | `TransactionCreationServiceTests` Happy_Path 201 + atomic outbox row; `TransactionLifecycleEndpointTests.Create_Happy_Path_Returns_201_And_Persists_Transaction` `OutboxMessage` row count assertion. |
+| 4 | Validasyonlar (stablecoin/fiyat/timeout/method/Steam ID/tradeable) | ✓ | 6 ayrı reject path test edildi: Below_Min, Timeout_Range, Open_Link_Disabled, Invalid_Wallet, Item_Not_In_Inventory, Item_Has_Trade_Lock. |
+| 5 | Steam envanter okuma (interface üzerinden, T67) | ✓ | `ISteamInventoryReader` port + `StubSteamInventoryReader` fail-closed; testlerde `FakeSteamInventoryReader` inject edilmiş. T67 DI swap noktası. |
+| 6 | Fraud pre-check fiyat sapması → FLAGGED | ✓ | `Flags_Transaction_When_Price_Deviation_Exceeds_Threshold` (quoted 100 vs market 50, threshold 0.20 → FLAGGED + flagReason `PRICE_DEVIATION` + AcceptDeadline NULL + MarketPriceAtCreation snapshot). |
+| 7 | Alıcı belirleme (Steam ID veya OPEN_LINK admin toggle) | ✓ | `Rejects_Open_Link_When_Disabled` + `Allows_Open_Link_When_Enabled_And_Issues_Invite_Token` + `Resolves_Buyer_Id_When_Steam_Id_Belongs_To_Registered_User`; CK_Transactions_BuyerMethod_* schema invariantı (STEAM_ID ⇒ InviteToken NULL, OPEN_LINK ⇒ InviteToken NOT NULL). |
+| 8 | Cüzdan adresi zorunluluk kontrolü | ✓ | `Returns_Seller_Wallet_Address_Missing_When_DefaultPayout_Null` (eligibility) + `Rejects_Invalid_Wallet_Format` (creation TRC-20 pipeline) + sanctions pipeline reuse (T34). |
+| 9 | Outbox event `TransactionCreatedEvent` | ✓ | Atomik SaveChangesAsync (Stage 9 → Stage 10); `Happy_Path` event payload assertion (TransactionId/SellerId/BuyerId/ItemName/Price/Stablecoin); endpoint testi `OutboxMessages` row sayısı `Single` ✓. |
+| 10 | Bildirim (alıcı/satıcı davet linki) | ~ kısmi | Outbox event publish ✓ (06 §3.5 InviteToken oluşturuluyor; STEAM_ID için `/transactions/{id}`, OPEN_LINK için `/invite/{token}` response'da). Consumer fan-out (mesaj content) T62 SignalR + T78–T80 Email/Telegram/Discord forward-devir — plan-aware split, T37 NotificationConsumerBase altyapısı kayıtlı. |
+
+### Doğrulama Kontrol Listesi
+| # | Plan Madde | Sonuç |
+|---|---|---|
+| 1 | 07 §7.1–§7.4 endpoint sözleşmeleri doğru mu? | ✓ §7.2 request body 7 alan + 12 hata kodu + 4 koşul; §7.3 envelope (eligible+MA+concurrent+cancel+newAccount+reasons-opsiyonel); §7.4 envelope (minPrice/maxPrice/commissionRate/paymentTimeout/openLinkEnabled/supportedStablecoins) — DTO 1:1, `JsonStringEnumConverter` ile enum string isimleri sözleşme örnekleriyle birebir. |
+| 2 | 02 §2, §6, §8, §14.4 iş kuralları eksiksiz mi? | ✓ §2.1 işlem 1. adımı (item snapshot + tradeable + price + timeout + buyer + wallet + onay); §6.1/§6.2 STEAM_ID + OPEN_LINK ayrımı schema constraint'le; §8 min/max/concurrent/new-account; §14.4 fiyat sapma → FLAGGED. |
+| 3 | 03 §2.2 akış adımları karşılanmış mı? | ✓ 1-20 akış adımının tümü implement: limit kontroller (Adım 2-4) eligibility, envanter+tradeable (5-8) Stage 5, stablecoin+fiyat+timeout (9-12) Stage 1+3, alıcı (13) Stage 6, cüzdan+onay (14-16) Stage 4 + entity, fraud (17) Stage 8, CREATED/FLAGGED+bildirim (18-19) Stage 9-11. |
+
+### Mini Güvenlik Kontrolü (Validator)
+- **Secret sızıntısı:** ✓ temiz — yeni credential dokunuşu yok, stub'lar erişimsiz no-op.
+- **Auth/AuthZ:** ✓ — 3 endpoint `[Authorize(Policy = AuthPolicies.Authenticated)]` + `[RateLimit("user-read"/"user-write")]`; userId JWT'den alınır (parametre değil — yetki yükseltme riski yok).
+- **Input validation:** ✓ — enum-strict (`Enum.IsDefined`), Steam ID 17-digit `76561` prefix + numeric-only, `TryParsePositiveDecimal` 2-decimal scale enforcement, TRC-20 format + sanctions screening pipeline (T34 reuse), OPEN_LINK admin toggle.
+- **Concurrency:** ✓ — atomic UoW (`PublishAsync` + `SaveChangesAsync` aynı DbContext); fraud check fail-safe (no-op false negative kabul, false positive yok).
+- **Outbox idempotency:** ✓ — `TransactionCreatedEvent.EventId = Guid.NewGuid()` + consumer-side ProcessedEvents (T10) dedupe.
+- **PII / append-only audit:** ✓ — event payload SteamId/wallet adresi içermiyor (TransactionId/SellerId/BuyerId/ItemName/Price/Stablecoin). User lookup `IsDeleted=false AND IsDeactivated=false` filter'ında.
+- **Yeni dış bağımlılık:** Yok (csproj yalnız `Skinora.Platform` project reference; NuGet paketi eklenmedi).
+
+### Bulgular
+
+**S-seviye (Sapma/Kırılma/Eksik):** Yok.
+
+**Minor advisory (fonksiyonel etki yok, forward-devir):**
+
+| # | Açıklama | Devir |
+|---|---|---|
+| M-1 | `BUYER_STEAM_ID_NOT_FOUND` `TransactionErrorCodes` + `CreateTransactionStatus` enum'unda tanımlı ama service tarafından üretilmiyor — Steam ID **format** check'i (17-digit + `76561` prefix) yapılıyor, ID'nin Steam'de gerçekten var olup olmadığı doğrulanmıyor. Kayıtsız ID için davet linki akışı zaten çalışıyor (User table'da bulamayınca `buyerId = null`). 07 §7.2 hatalar listesi Steam profile lookup yapan T67 sidecar wire-up'tan sonra aktif olur. | T67 (Steam envanter + profile sidecar) DI swap |
+| M-2 | OPEN_LINK için `/invite/{token}` URL path 07 §7.2 sample'da yer almıyor (sample sadece `/transactions/{guid}` STEAM_ID happy path). Implementation güvenlik açısından doğru karar (06 §3.5 InviteToken opaque tek kullanımlık `UQ_Transactions_InviteToken` filtered unique index ile sağlanıyor); aksi halde sadece transaction GUID'i ile herkes kabul edebilirdi. | Sonraki 07 doc-pass §7.2'ye OPEN_LINK için ek sample |
+| M-3 | Yapım raporu **Kabul Kriterleri Kontrolü** tablosunda 11 madde sıralanmış (#11 "Fraud pre-check ve invitation code üretimi" — `InvitationCodeGenerator` testleri için ayrı satır); plan 11 §T45'te 10 madde. Validator overlay plan-aware sayımla 10 maddeyi rapor etti (10 tam + 1 kısmi). Sayım drift, fonksiyonel etki yok. | — |
+
+### Yapım Raporu Karşılaştırması
+- **Verdict uyumu:** Tam uyumlu — yapım raporu "11/11 ✓ (10 tam + 1 kısmi)" validator kanıtlarıyla doğrulandı (plan-aware 10 madde sayımı = 10 tam + 1 kısmi).
+- **Test sayımı uyumu:** Tam uyumlu — yapım "34 yeni T45 testi" (6 unit + 17 integration Transactions + 5 integration Fraud + 6 API endpoint) validator lokal koşturuldu, tüm sayım birebir doğru.
+- **Toplam test sayımı:** Tam uyumlu — 1146/1146 ✓.
+- **CI uyumu:** Yapım raporu "Push edildi, run henüz başlatılmadı, watch validator chat'inde teyit edilir" diyor; validator run `25249321302` ✓ teyitle güncelledi.
+- **Migration / yeni bağımlılık / config:** Tam uyumlu — yok.
