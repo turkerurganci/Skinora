@@ -96,6 +96,11 @@ builder.Services.AddPlatformModule();
 // admin-alert sink for exhausted retries.
 builder.Services.AddNotificationsModule();
 
+// Transaction lifecycle (T45 — 07 §7.2–§7.4, 03 §2.2): eligibility,
+// params and creation services. Steam inventory + market price ports are
+// registered as forward-deferred stubs (T67/T81 swap them via DI).
+builder.Services.AddTransactionsModule();
+
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
 
@@ -132,6 +137,13 @@ builder.Services.AddHealthChecks()
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ApiResponseWrapperFilter>();
+})
+.AddJsonOptions(options =>
+{
+    // T45 — accept enum names ("USDT", "STEAM_ID", "CREATED") on inbound
+    // request bodies and emit them on responses, matching the 07 contract.
+    options.JsonSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 
 // Module entity registrations (T18+) — register module assemblies so their
