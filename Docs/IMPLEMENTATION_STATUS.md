@@ -118,10 +118,10 @@
 |---|---|---|---|---|
 | T44 | Transaction State Machine | ✓ Tamamlandı | ✓ PASS (bağımsız) | PR #74 |
 | T45 | İşlem oluşturma akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 3 minor advisory — BUYER_STEAM_ID_NOT_FOUND T67 devir / OPEN_LINK invite path 07 doc-pass / kabul kriteri sayım drift) | PR #75 |
-| T46 | Alıcı kabul akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — concurrency race-loser 500 → ALREADY_ACCEPTED map önerisi, gerçek concurrent yarış nadir) | (squash pending) |
-| T47 | Timeout scheduling | ✓ Tamamlandı | ✓ PASS | (PR #77 squash pending) |
-| T48 | Timeout warning | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — warning scope ITEM_ESCROWED + buyer; 05 §4.4 partition gereği diğer aşamalar scanner-based, T48 dışı) | (PR #78 squash pending) |
-| T49 | Timeout execution | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — yapım raporunda test toplam 1237 yazılı, breakdown 1243; validator inline düzeltti, fonksiyonel etki yok) | (PR #79 squash pending) |
+| T46 | Alıcı kabul akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — concurrency race-loser 500 → ALREADY_ACCEPTED map önerisi, gerçek concurrent yarış nadir) | `33716e3` (PR #76) |
+| T47 | Timeout scheduling | ✓ Tamamlandı | ✓ PASS | `e00f97a` (PR #77) |
+| T48 | Timeout warning | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — warning scope ITEM_ESCROWED + buyer; 05 §4.4 partition gereği diğer aşamalar scanner-based, T48 dışı) | `a6b38b5` (PR #78) |
+| T49 | Timeout execution | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — yapım raporunda test toplam 1237 yazılı, breakdown 1243; validator inline düzeltti, fonksiyonel etki yok) | `54c07c9` (PR #79) |
 | T50 | Timeout freeze/resume | ⬚ Bekliyor | — | — |
 | T51 | İptal akışı | ⬚ Bekliyor | — | — |
 | T52 | Komisyon ve finansal hesaplamalar | ⬚ Bekliyor | — | — |
