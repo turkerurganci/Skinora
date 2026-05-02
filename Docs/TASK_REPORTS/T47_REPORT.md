@@ -184,5 +184,5 @@ Komut: `dotnet test -c Release --no-build` (Release).
 ## Commit & PR
 
 - **Branch**: `task/T47-timeout-scheduling`
-- **Commit**: pending (yapım bitti, commit + push + PR)
-- **PR**: pending
+- **Commit**: `f76e0d9`
+- **PR**: [#77](https://github.com/turkerurganci/Skinora/pull/77)
