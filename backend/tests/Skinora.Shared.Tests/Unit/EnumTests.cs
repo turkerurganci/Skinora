@@ -500,6 +500,23 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(TransactionTrigger), Enum.Parse<TransactionTrigger>(valueName)));
     }
 
+    [Fact]
+    public void ItemRefundTrigger_ShouldHave4Values()
+    {
+        var values = Enum.GetValues<ItemRefundTrigger>();
+        Assert.Equal(4, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(ItemRefundTrigger.TimeoutPayment))]
+    [InlineData(nameof(ItemRefundTrigger.TimeoutDelivery))]
+    [InlineData(nameof(ItemRefundTrigger.SellerCancel))]
+    [InlineData(nameof(ItemRefundTrigger.BuyerCancel))]
+    public void ItemRefundTrigger_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(ItemRefundTrigger), Enum.Parse<ItemRefundTrigger>(valueName)));
+    }
+
     // ── Cross-cutting ───────────────────────────────────────────────
 
     [Fact]
@@ -510,6 +527,6 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        Assert.Equal(25, enumTypes.Count);
+        Assert.Equal(26, enumTypes.Count);
     }
 }

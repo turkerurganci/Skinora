@@ -313,6 +313,112 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             body.GetProperty("error").GetProperty("code").GetString());
     }
 
+    // ---------- T51: POST /transactions/:id/cancel (07 §7.7) ----------
+
+    [Fact]
+    public async Task Cancel_Unauthenticated_Returns_401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/cancel",
+            new { reason = "Yeterince uzun bir iptal sebebi" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Cancel_Happy_Path_Returns_200_And_Persists_CancelledSeller()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/cancel",
+            new { reason = "Bu işlemi sonlandırmak istiyorum" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal("CANCELLED_SELLER", data.GetProperty("status").GetString());
+        Assert.False(data.GetProperty("itemReturned").GetBoolean());
+        Assert.False(data.GetProperty("paymentRefunded").GetBoolean());
+
+        // Outbox row written in the same SaveChanges (TransactionCancelledEvent).
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.NotEmpty(db.Set<OutboxMessage>().AsNoTracking().ToList());
+    }
+
+    [Fact]
+    public async Task Cancel_Non_Party_Returns_403()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var stranger = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = BuildAuthenticatedClient(stranger.Id, stranger.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/cancel",
+            new { reason = "Bu işlem benim değil ama deniyorum" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("NOT_A_PARTY",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Cancel_Reason_Too_Short_Returns_400_Validation()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/cancel",
+            new { reason = "kısa" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("CANCEL_REASON_REQUIRED",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Cancel_Post_Payment_State_Returns_422_PaymentAlreadySent()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/cancel",
+            new { reason = "Ödeme sonrası iptal denemesi" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("PAYMENT_ALREADY_SENT",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Cancel_Not_Found_Returns_404()
+    {
+        var seller = await _factory.CreateUserAsync();
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/cancel",
+            new { reason = "Geçersiz transaction id testi" });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("TRANSACTION_NOT_FOUND",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task Create_Eligibility_Fail_Returns_422()
     {

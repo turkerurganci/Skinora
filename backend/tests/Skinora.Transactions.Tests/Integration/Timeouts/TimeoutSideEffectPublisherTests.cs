@@ -99,7 +99,7 @@ public class TimeoutSideEffectPublisherTests
         var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Equal(tx.Id, itemRefund.TransactionId);
         Assert.Equal(tx.SellerId, itemRefund.SellerId);
-        Assert.Equal(TimeoutPhase.Payment, itemRefund.Trigger);
+        Assert.Equal(ItemRefundTrigger.TimeoutPayment, itemRefund.Trigger);
 
         var monitor = Assert.Single(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
         Assert.Equal(tx.Id, monitor.TransactionId);
@@ -136,7 +136,7 @@ public class TimeoutSideEffectPublisherTests
         Assert.Equal(TimeoutPhase.Delivery, notify.Phase);
 
         var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(TimeoutPhase.Delivery, itemRefund.Trigger);
+        Assert.Equal(ItemRefundTrigger.TimeoutDelivery, itemRefund.Trigger);
 
         var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Equal(tx.Id, paymentRefund.TransactionId);

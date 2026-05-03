@@ -121,3 +121,36 @@ public enum AcceptTransactionStatus
     WalletCooldownActive,
     BuyerNotFound,
 }
+
+// ---------- POST /transactions/:id/cancel (07 §7.7) ----------
+
+/// <summary>Request body for <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
+public sealed record CancelTransactionRequest(string Reason);
+
+/// <summary>Response body for <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
+public sealed record CancelTransactionResponse(
+    TransactionStatus Status,
+    DateTime CancelledAt,
+    bool ItemReturned,
+    bool PaymentRefunded);
+
+/// <summary>
+/// Outcome of <see cref="ITransactionCancellationService.CancelAsync"/>. The
+/// controller pattern-matches on <see cref="Status"/> to produce 200 / 4xx
+/// responses.
+/// </summary>
+public sealed record CancelTransactionOutcome(
+    CancelTransactionStatus Status,
+    CancelTransactionResponse? Body,
+    string? ErrorCode,
+    string? ErrorMessage);
+
+public enum CancelTransactionStatus
+{
+    Cancelled,
+    NotFound,
+    NotAParty,
+    PaymentAlreadySent,
+    InvalidStateTransition,
+    ValidationFailed,
+}
