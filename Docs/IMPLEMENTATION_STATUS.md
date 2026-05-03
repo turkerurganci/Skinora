@@ -126,7 +126,7 @@
 | T51 | İptal akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor advisory — 9/9 kabul kriteri 8 ✓ + 1 ~ kısmi #5 forward-devir; 2/2 doğrulama listesi ✓; rapor uyumu tam) | PR #82 |
 | T52 | Komisyon ve finansal hesaplamalar | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor — 6/6 kabul kriteri ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; 36/36 FinancialCalculator unit + 1336/1336 sln total + Release 0W/0E + task branch CI ✓) | PR #83 |
 | T53 | Gas fee yönetimi | ✓ Tamamlandı | ✓ PASS bağımsız validator (1 S1 minor — 06 §2.19 REFUND_BLOCKED yansıması — same-PR fix; 4/4 kabul ✓; doğrulama kontrol listesi ✓; lokal 40/40 GasFee unit + 14/14 Shared audit/enum + Release 0W/0E + task branch CI 7/7 ✓) | PR #84 |
-| T54 | Fraud flag sistemi | ⬚ Bekliyor | — | — |
+| T54 | Fraud flag sistemi | ⏳ Devam ediyor | Bekleniyor (bağımsız validator) | task/T54-fraud-flag-system |
 | T55 | AML kontrolü (fiyat sapması, yüksek hacim) | ⬚ Bekliyor | — | — |
 | T56 | Çoklu hesap tespiti | ⬚ Bekliyor | — | — |
 | T57 | Wash trading kontrolü | ⬚ Bekliyor | — | — |

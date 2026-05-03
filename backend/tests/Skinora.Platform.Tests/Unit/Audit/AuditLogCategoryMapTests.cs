@@ -24,6 +24,10 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.ROLE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.SYSTEM_SETTING_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.WALLET_ADDRESS_CHANGED, AuditLogCategoryMap.Categories.SecurityEvent)]
+    [InlineData(AuditAction.FRAUD_FLAG_CREATED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.FRAUD_FLAG_APPROVED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.FRAUD_FLAG_REJECTED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.FRAUD_FLAG_AUTO_HOLD, AuditLogCategoryMap.Categories.AdminAction)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -57,14 +61,19 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Seven_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Eleven_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
-        Assert.Equal(7, actions.Count);
+        // 7 pre-T54 + 4 fraud-flag actions = 11.
+        Assert.Equal(11, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
+        Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
+        Assert.Contains(AuditAction.FRAUD_FLAG_APPROVED, actions);
+        Assert.Contains(AuditAction.FRAUD_FLAG_REJECTED, actions);
+        Assert.Contains(AuditAction.FRAUD_FLAG_AUTO_HOLD, actions);
     }
 
     [Fact]

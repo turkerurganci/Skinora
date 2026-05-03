@@ -3,7 +3,7 @@ using Skinora.Shared.Enums;
 namespace Skinora.Platform.Application.Audit;
 
 /// <summary>
-/// Maps the 13 <see cref="AuditAction"/> values to the 3 admin-facing
+/// Maps every <see cref="AuditAction"/> value to one of the 3 admin-facing
 /// categories surfaced by <c>GET /admin/audit-logs</c> (07 §9.19) and
 /// the 06 §2.19 group column.
 /// </summary>
@@ -42,6 +42,15 @@ public static class AuditLogCategoryMap
 
             // 06 §2.19 "Güvenlik" group.
             [AuditAction.WALLET_ADDRESS_CHANGED] = Categories.SecurityEvent,
+
+            // T54 — fraud flag review actions. Categorised under ADMIN_ACTION
+            // because the create/approve/reject/auto-hold trail is consumed by
+            // the admin queue (07 §9.2 review surface), even though the actor
+            // can be SYSTEM for the auto-detection path.
+            [AuditAction.FRAUD_FLAG_CREATED] = Categories.AdminAction,
+            [AuditAction.FRAUD_FLAG_APPROVED] = Categories.AdminAction,
+            [AuditAction.FRAUD_FLAG_REJECTED] = Categories.AdminAction,
+            [AuditAction.FRAUD_FLAG_AUTO_HOLD] = Categories.AdminAction,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

@@ -14,6 +14,7 @@ using Skinora.Admin;
 using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Infrastructure.Persistence;
 using Skinora.Disputes.Infrastructure.Persistence;
+using Skinora.Fraud;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Notifications;
 using Skinora.Notifications.Infrastructure.Persistence;
@@ -84,6 +85,12 @@ builder.Services.AddUsersModule(builder.Configuration);
 // issuance arrives with T40; until then the dynamic Permission:* policies
 // only succeed for super-admins via PermissionAuthorizationHandler bypass.
 builder.Services.AddAdminModule();
+
+// Fraud flag lifecycle (T54 — 02 §14.0, 07 §9.2–§9.5). Admin review queue
+// + auto-EMERGENCY_HOLD cascade for high-risk account flags. The
+// pre-create flag writer registered here is consumed by
+// TransactionCreationService (FLAGGED → matching FraudFlag row).
+builder.Services.AddFraudModule();
 
 // Platform parameter management (T41 — 07 §9.8–§9.9). ISystemSettingsService
 // reads the SystemSetting catalog and applies type/range/cross-key validation

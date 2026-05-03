@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Skinora.Shared\Skinora.Shared.csproj" />
+    <ProjectReference Include="..\Skinora.Platform\Skinora.Platform.csproj" />
     <ProjectReference Include="..\Skinora.Transactions\Skinora.Transactions.csproj" />
     <ProjectReference Include="..\Skinora.Users\Skinora.Users.csproj" />
   </ItemGroup>
