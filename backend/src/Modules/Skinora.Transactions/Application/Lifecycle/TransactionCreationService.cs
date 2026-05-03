@@ -5,6 +5,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Application.Wallet;
 using Skinora.Users.Domain.Entities;
@@ -28,7 +29,6 @@ public sealed class TransactionCreationService : ITransactionCreationService
     /// </summary>
     public const int DefaultAcceptTimeoutMinutes = 60;
 
-    private const int CommissionScale = 6;
     private const string SteamId64Prefix = "76561";
     private const int SteamId64Length = 17;
 
@@ -167,9 +167,13 @@ public sealed class TransactionCreationService : ITransactionCreationService
         }
 
         // ---------- Stage 7: commission + fraud pre-check ----------
+        // T52: formulae centralised in FinancialCalculator (02 §5, 06 §8.3,
+        // 09 §14.4). Snapshot semantics (09 §9.5) — the rate is captured at
+        // creation, so a later admin change to commission_rate never
+        // re-prices an in-flight transaction.
         var commissionRate = limits.CommissionRate ?? TransactionParamsService.DefaultCommissionRate;
-        var commissionAmount = Math.Round(price * commissionRate, CommissionScale, MidpointRounding.ToZero);
-        var totalAmount = price + commissionAmount;
+        var commissionAmount = FinancialCalculator.CalculateCommission(price, commissionRate);
+        var totalAmount = FinancialCalculator.CalculateTotal(price, commissionAmount);
 
         var fraud = await _fraudPreCheck.EvaluateAsync(
             inventoryItem.ClassId,
