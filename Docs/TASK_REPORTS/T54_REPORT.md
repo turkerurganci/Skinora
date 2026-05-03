@@ -149,10 +149,10 @@ T22, T42, T44 ✓ Tamamlandı tabanı üzerine fraud flag review pipeline'ı kur
 
 ## Commit & PR
 
-- Commit: pending push (yapım finalize)
-- PR: pending (push sonrası açılacak)
-- Task branch CI run: pending
-- Squash merge: pending
+- Commit: `5b1134f` (kod + rapor + status + memory yapım taslağı)
+- PR: [#85](https://github.com/turkerurganci/Skinora/pull/85)
+- Task branch CI run: [`25291605629`](https://github.com/turkerurganci/Skinora/actions/runs/25291605629) ✓ success (CI Gate yeşil — Build/Unit/Integration/Contract/Migration tüm jobs PASS)
+- Squash merge: pending (validator finalize sonrası)
 - Main CI (post-merge): pending watch
 
 ## Known Limitations
