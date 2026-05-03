@@ -1,6 +1,6 @@
 # T52 — Komisyon ve finansal hesaplamalar
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (validate bekliyor) | **Tarih:** 2026-05-03 (yapım)
+**Faz:** F3 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-03 (yapım + bağımsız validator)
 
 ---
 
@@ -76,7 +76,62 @@ T19 Transaction entity'sinde tanımlı `Price`/`CommissionRate`/`CommissionAmoun
 - **Doğrulama kontrol listesi:** 09 §14 hesaplama kuralları (commission, refund, gas fee koruma, overpayment, precision, payment exact) tam karşılandı; 06 §8.3 sıra (1. commission rounding → 2. total → 3. expected) `CreationFlow_RoundTrip` testinde mirror'landı, formüller birebir.
 - **09 §14.3 minor sapma açıklaması:** "Yalnızca son adımda yuvarlama" prensibi — `CalculateCommission` round içerir çünkü `CommissionAmount` snapshot olarak DB'ye kaydedilir (kalıcı son nokta); 06 §8.3 sıra 1 bunu açıkça mandatory yapar. Sonraki tüm adımlar (Total, Refund, Payout, Overpayment) yuvarlamasız `decimal` aritmetiği ile yapılır.
 
+## Doğrulama (bağımsız validator — 2026-05-03)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 (S1/S2/S3) |
+| Düzeltme gerekli mi | Hayır |
+| Yapım raporu uyumu | Tam — bağımsız bulgular birebir uyumlu |
+
+**HARD STOP kontrolleri:**
+- Adım -1 (working tree) ✓ — `git status --short` boş
+- Adım 0 (main CI startup) ✓ — son 3 main run hepsi `success` (run ID 25277906092 / 25277906096 / 25275894773; T51 #82 ×2 + T50 #81)
+- Adım 0b (memory drift) ✓ — `MEMORY.md`'de T52 satırı mevcut (4 referans)
+
+**Kabul kriterleri (validator bağımsız doğrulama):**
+- #1 (commission rounding) ✓ — `Commission_TruncatesTowardZero_NotBankersRound` (`33.333333 × 0.02 = 0.666666`, banker's `0.666667` değil) + `Commission_KnownPairs_MatchSpec` Theory 4 satır
+- #2 (total = price + commission, no re-rounding) ✓ — `Total_HandlesSixDecimalCommission` (`33.333333 + 0.666666 = 33.999999`)
+- #3 (refund = price + commission - gas) ✓ — `Refund_FullCancellation_DeductsGasFee` (`102 - 1 = 101`) + `IsRefundAboveMinimum_RefundEqualsThreshold` boundary `≥` semantic + sub-threshold + negative refund
+- #4 (gas fee koruma %10 default) ✓ — `SellerPayout_GasFeeAtThreshold_PlatformAbsorbs` (boundary `≤`) + `_DeductsExcessFromSeller` (0.50 → 99.70) + `DefaultGasFeeProtectionRatio = 0.10m`
+- #5 (decimal, ara yuvarlama yok) ✓ — tüm method imzaları `decimal`, `float`/`double` import yok, tek yuvarlama `RoundMoney`'de
+- #6 (payment exact match, tolerance yok) ✓ — `IsPaymentExact_OneMicroUnitDelta_ReturnsFalse` + over/under cent
+
+**Doğrulama kontrol listesi:**
+- [x] 09 §14 hesaplama kuralları eksiksiz mi? — Commission, Refund, MinThreshold, SellerPayout (gas koruma), Overpayment, OverpaymentRefund, IsPaymentExact tam karşılandı. `platform_geliri = komisyon - gönderim_gas_fee` derived/reporting metriği — T52 kabul kriterinde yok, ileride raporlama servisi türetebilir, eksik sayılmaz.
+- [x] 06 §8.3 formüller birebir eşleşiyor mu? — Sıra (1. commission ROUND → 2. total → 3. ExpectedAmount) `CreationFlow_RoundTrip_CommissionAndTotalLineUp` testi mirror'lar. `decimal(18,6)` `MoneyScale = 6` const ile, `MidpointRounding.ToZero` `RoundMoney`'de, payment validation tolerance `IsPaymentExact == ` ile birebir.
+
+**Bağımsız test çalıştırması (validator):**
+| Suite | Komut | Sonuç |
+|---|---|---|
+| FinancialCalculator unit | `dotnet test tests/Skinora.Transactions.Tests --filter "FinancialCalculatorTests"` | **36/36 PASS** (Duration: 30 ms) |
+| Skinora.Transactions full | `dotnet test tests/Skinora.Transactions.Tests` | **481/481 PASS** (Duration: 1m 36s) |
+| Skinora.sln total (unit + integration) | `dotnet test Skinora.sln` | **1336/1336 PASS** (Auth 93 + Notifications 77 + Users 16 + Transactions 481 + API 271 + Platform 136 + Shared 187 + Admin 20 + Disputes 11 + Fraud 17 + Steam 21 + Payments 6) |
+| Release build | `dotnet build -c Release` | **0 Warning, 0 Error** (Time Elapsed 19.45 s) |
+| Task branch CI | `gh run list --branch task/T52-financial-calculations` | run **25282373931** ✓ `success` (CI workflow, 2026-05-03 14:53Z) |
+
+**Mini güvenlik kontrolü:**
+- Secret sızıntısı: Temiz — pure-math static class, hiçbir secret yok
+- Auth/authorization etkisi: Yok — domain-katmanı utility, endpoint açmıyor
+- Input validation: Temiz — tüm public method negatif input için `ArgumentOutOfRangeException` fırlatır
+- Yeni dış bağımlılık: Yok — sadece `System` (`Math.Round` + `MidpointRounding`)
+
+**Doküman uyumu:**
+- 09 §14.1 (decimal zorunlu) ✓ | 09 §14.2 (decimal(18,6)) ✓ MoneyScale = 6
+- 09 §14.3 (ToZero, ara yuvarlama yok) ✓ — `RoundMoney` tek noktada; rapor §14.3 minor sapma açıklaması doğru çerçevelendi (CommissionAmount snapshot olduğu için 06 §8.3 sıra 1'de mandatory, sapma değil mandatory adım)
+- 09 §14.4 formüller ✓ birebir | 09 §14.5 BVA test senaryoları ✓ tüm 6 senaryo (normal, boundary, gas edge, fazla, eksik, precision) kapsanmış
+- 02 §5 (komisyon alıcıdan, %2 default, tolerance yok) ✓ | 02 §4.6 (iade tutarı = price + commission - gas) ✓ | 02 §4.7 (gas fee koruma %10 default + admin esnek) ✓ const + SystemSetting çift kayıt
+- 06 §8.3 (sıra + tolerance yok) ✓ | 06 §8.3 vs 09 §14.4 layering: 06 "SellerPayout = Price (komisyon düşülmüş, gas ayrı)" — calculator hem `CalculateTotal` hem `CalculateSellerPayout` ayrımını verir, aynı saf abstraction iki katmana hizmet eder, çelişki yok
+
+**Forward-devir notları (validator onayladı):**
+- `CalculateRefund` / `CalculateSellerPayout` / `CalculateOverpayment*` çağıracak code path henüz yok — T53 (gas fee yönetimi), T57+ (cancel/refund orchestration), T62 (payment webhook) tüketici. Calculator pure + statik, DI swap'a gerek yok.
+- `TransactionLimitsProvider`'a `gas_fee_protection_ratio` + `min_refund_threshold_ratio` okuma → T53 scope. T52 `FinancialCalculator` const default'ları fallback olarak duruyor, T53'te live SystemSetting okuma devreye girer.
+
 ## Commit & PR
 
 - Commit: `a4e7e9a` (branch `task/T52-financial-calculations`)
+- Rapor finalize commit: (validate sonrası)
 - PR: [#83](https://github.com/turkerurganci/Skinora/pull/83)
+- Squash merge: (validate sonrası)
+- Main CI (post-merge): (post-merge watch sonrası)
