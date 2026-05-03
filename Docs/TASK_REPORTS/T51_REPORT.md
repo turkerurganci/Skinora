@@ -156,5 +156,6 @@ Yok — T51 yalnız mevcut altyapıya ekleme yapar (T44 state machine + T46 acce
 ## Commit & PR
 
 - Branch: `task/T51-cancellation-flow`
-- Commit: (push sonrası eklenecek)
-- PR: (oluşturma sonrası eklenecek)
+- Commit: `fb301c8`
+- PR: [#82](https://github.com/turkerurganci/Skinora/pull/82)
+- Task branch CI: Run [`25277455577`](https://github.com/turkerurganci/Skinora/actions/runs/25277455577) ✓ success (9/9 + Guard skipped)
