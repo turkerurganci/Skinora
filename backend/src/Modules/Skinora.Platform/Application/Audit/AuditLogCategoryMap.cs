@@ -3,7 +3,7 @@ using Skinora.Shared.Enums;
 namespace Skinora.Platform.Application.Audit;
 
 /// <summary>
-/// Maps the 12 <see cref="AuditAction"/> values to the 3 admin-facing
+/// Maps the 13 <see cref="AuditAction"/> values to the 3 admin-facing
 /// categories surfaced by <c>GET /admin/audit-logs</c> (07 §9.19) and
 /// the 06 §2.19 group column.
 /// </summary>
@@ -30,6 +30,11 @@ public static class AuditLogCategoryMap
             // 06 §2.19 "Admin" group.
             [AuditAction.DISPUTE_RESOLVED] = Categories.AdminAction,
             [AuditAction.MANUAL_REFUND] = Categories.AdminAction,
+            // REFUND_BLOCKED is platform-driven (SYSTEM actor) but it surfaces in
+            // the same admin queue as MANUAL_REFUND — the operator decides what
+            // to do with the residue. Categorising it under FUND_MOVEMENT would
+            // bury it among the high-volume wallet rows and defeat the alert.
+            [AuditAction.REFUND_BLOCKED] = Categories.AdminAction,
             [AuditAction.USER_BANNED] = Categories.AdminAction,
             [AuditAction.USER_UNBANNED] = Categories.AdminAction,
             [AuditAction.ROLE_CHANGED] = Categories.AdminAction,

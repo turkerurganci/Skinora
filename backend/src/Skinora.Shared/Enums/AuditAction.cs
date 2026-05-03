@@ -12,6 +12,7 @@ public enum AuditAction
     // Admin operasyonları
     DISPUTE_RESOLVED,
     MANUAL_REFUND,
+    REFUND_BLOCKED,
     USER_BANNED,
     USER_UNBANNED,
     ROLE_CHANGED,

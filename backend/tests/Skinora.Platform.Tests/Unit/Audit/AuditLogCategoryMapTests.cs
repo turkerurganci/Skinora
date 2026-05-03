@@ -18,6 +18,7 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.WALLET_REFUND, AuditLogCategoryMap.Categories.FundMovement)]
     [InlineData(AuditAction.DISPUTE_RESOLVED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.MANUAL_REFUND, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.REFUND_BLOCKED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.USER_BANNED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.USER_UNBANNED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.ROLE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
@@ -56,13 +57,14 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Six_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Seven_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
-        Assert.Equal(6, actions.Count);
+        Assert.Equal(7, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
+        Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
     }
 
     [Fact]
