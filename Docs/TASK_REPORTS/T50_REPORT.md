@@ -98,9 +98,9 @@ T44 state machine + T47 scheduling pipeline + T48/T49 timeout side effect altyap
 ## Commit & PR
 
 - Branch: `task/T50-timeout-freeze-resume`
-- Commit: TBD (commit aşamasından sonra güncellenecek)
-- PR: TBD (PR açıldıktan sonra güncellenecek)
-- CI: TBD (CI run beklenecek)
+- Commit: `3143676` — `T50: Timeout freeze/resume (02 §3.3, 05 §4.4-§4.5, 09 §13.3)`
+- PR: [#81](https://github.com/turkerurganci/Skinora/pull/81)
+- CI: ✓ PASS — run [`25274239015`](https://github.com/turkerurganci/Skinora/actions/runs/25274239015) (HEAD `3143676`) 9/9 + Guard (direct push) skipped. Detect/Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker build/CI Gate hepsi success.
 
 ## Known Limitations / Follow-up
 
