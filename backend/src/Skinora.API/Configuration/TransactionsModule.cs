@@ -68,6 +68,11 @@ public static class TransactionsModule
         // refund + late-payment-monitor events) here so the mapping lives in
         // one place.
         services.AddScoped<ITimeoutSideEffectPublisher, TimeoutSideEffectPublisher>();
+        // T50 — timeout freeze/resume engine. Single-tx overloads are consumed
+        // by the T59 emergency-hold orchestrator; bulk overloads are consumed
+        // by the future maintenance / Steam-outage / blockchain-degradation
+        // admin paths.
+        services.AddScoped<ITimeoutFreezeService, TimeoutFreezeService>();
 
         return services;
     }
