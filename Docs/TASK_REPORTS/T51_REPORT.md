@@ -1,6 +1,6 @@
 # T51 — İptal akışı
 
-**Faz:** F3 | **Durum:** ⏳ Yapım bitti | **Tarih:** 2026-05-03
+**Faz:** F3 | **Durum:** ✓ PASS | **Tarih:** 2026-05-03 (yapım) / 2026-05-03 (doğrulama)
 
 ---
 
@@ -156,6 +156,82 @@ Yok — T51 yalnız mevcut altyapıya ekleme yapar (T44 state machine + T46 acce
 ## Commit & PR
 
 - Branch: `task/T51-cancellation-flow`
-- Commit: `fb301c8`
+- Commit: `fb301c8` + docs `55905c2`
 - PR: [#82](https://github.com/turkerurganci/Skinora/pull/82)
-- Task branch CI: Run [`25277455577`](https://github.com/turkerurganci/Skinora/actions/runs/25277455577) ✓ success (9/9 + Guard skipped)
+- Task branch CI: Run [`25277455577`](https://github.com/turkerurganci/Skinora/actions/runs/25277455577) (HEAD `fb301c8`) ✓ + Run [`25277595776`](https://github.com/turkerurganci/Skinora/actions/runs/25277595776) (HEAD `55905c2`) ✓ ardışık 9/9 + Guard skipped.
+
+---
+
+## Doğrulama Sonucu — T51 İptal akışı
+
+**Tarih:** 2026-05-03
+**Branch:** `task/T51-cancellation-flow`
+**Commit:** `55905c2` (HEAD)
+**Verdict:** ✓ **PASS** — 0 S-bulgu, 0 minor advisory.
+
+### Hard-Stop Kapıları
+
+- **Working tree:** `git status --short` boş ✓
+- **Main CI startup ardışık 3 ✓:** `25275894773` (T50 #81 success) + `25275894766` (T50 #81 success) + `25259885322` (chore #80 success)
+- **Repo memory T51 satırı:** `.claude/memory/MEMORY.md` line 11 + 12 + 13 mevcut (project + yapım + dersler) ✓
+
+### Kabul Kriterleri (9 madde, 11_IMPLEMENTATION_PLAN T51)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `POST /transactions/:id/cancel` → satıcı/alıcı iptali | ✓ | `TransactionsController.Cancel` (controller satır 197–236), `Authorize(Authenticated)` + `RateLimit("user-write")`. Servis `ResolveRole` ile caller'ı `SellerId`/`BuyerId`'den belirler. `Cancel_Happy_Path_Returns_200_And_Persists_CancelledSeller` endpoint testi + integration testleri (Seller + Buyer × 4 state) ✓. |
+| 2 | Kontroller: ödeme gönderilmişse iptal engeli, taraf, state | ✓ | `IsPostPaymentState` PAYMENT_RECEIVED/TRADE_OFFER_SENT_TO_BUYER/ITEM_DELIVERED → 422 `PAYMENT_ALREADY_SENT`; `ResolveRole` null → 403 `NOT_A_PARTY`; `ResolveTrigger` null → 409 `INVALID_STATE_TRANSITION`. Theory testleri 3 post-payment + 6 terminal/non-cancellable state için doğrular. |
+| 3 | İptal sebebi zorunlu (min 10 karakter) | ✓ | `Stage 3` reason validation: `(Reason ?? "").Trim().Length < 10` → 400 `CANCEL_REASON_REQUIRED`. `Reason_Below_Minimum_Length_Returns_400_Validation` + `Reason_Whitespace_Padding_Counts_Trimmed_Length` testleri ✓. |
+| 4 | Item platformdaysa → satıcıya iade tetikleme | ✓ | `itemWasOnPlatform = previousStatus == ITEM_ESCROWED` (Fire öncesi snapshot). True ise `ItemRefundToSellerRequestedEvent` (`Trigger=SellerCancel`/`BuyerCancel`) outbox publish; Steam sidecar T64–T68 forward-devirli. `Seller_Cancel_From_ItemEscrowed_Emits_Item_Refund_With_Seller_Cancel_Trigger` + `Buyer_Cancel_*` testleri doğrular. Pre-ITEM_ESCROWED state'lerde refund event yok (item zaten satıcıda). |
+| 5 | Ödeme alınmışsa → alıcıya iade tetikleme (fiyat + komisyon - gas fee) | ~ Kısmi (forward-devir kabul) | T51 user-cancel post-payment 422 ile reddediyor (02 §7 "Alıcı ödemeyi gönderdiyse hiçbir taraf tek taraflı iptal edemez"). Ödeme iadeli iptal yolları forward-devir: **timeout** T49 ✓ (Delivery phase `PaymentRefundToBuyerRequestedEvent`), **admin** T59, **dispute** T58. T51 response'unda `paymentRefunded: false` reserved slot (07 §7.7 zorunlu alan). Plan + 02 §7 ile uyumlu ele alınmış. |
+| 6 | CANCELLED_SELLER / CANCELLED_BUYER / CANCELLED_TIMEOUT / CANCELLED_ADMIN state'leri | ✓ | T51 SELLER + BUYER state geçişlerini kapsar (state machine triggers SellerCancel/SellerDecline/BuyerCancel — `ResolveTrigger` matrisi). TIMEOUT zaten T49 ✓; ADMIN T59 forward-devirli (state machine `AdminCancel` trigger T44'te tanımlı). Plan kabul kriteri çerçevesi içinde T51 sahipliği doğru sınırlanmış. |
+| 7 | İptal kaydı itibar skoruna yansıtılır | ✓ | `Stage 7a` `IReputationAggregator.RecomputeAsync(SellerId)` + (BuyerId varsa) `RecomputeAsync(BuyerId)`. Aggregator 06 §3.1 responsibility map ile sorumlu tarafın rate'ini yeniden hesaplar (CANCELLED_SELLER → seller, CANCELLED_BUYER → buyer); wash filter (02 §14.1) denominator'a uygulanır. `Successful_Seller_Cancel_Recomputes_Reputation_For_Both_Parties` testi seller rate=0 + buyer rate=null doğrular. |
+| 8 | İptal cooldown hesaplama | ✓ | `Stage 7b` `IUserCancelCooldownEvaluator.EvaluateAsync(callerUserId)`. Sorumlu tarafın 02 §14.2 rolling window'da count'u limit aşarsa `User.CooldownExpiresAt` damgalar. `Successful_Buyer_Cancel_Stamps_Cooldown_When_Threshold_Exceeded` testi limit=1 + 1 prior cancel + 1 yeni cancel senaryosunda cooldown stamp'ı doğrular (12h). |
+| 9 | Bildirimler: karşı tarafa iptal bildirimi | ✓ | `TransactionCancelledEvent` outbox publish + `TransactionCancelledNotificationConsumer` role-aware counter-party fan-out. SELLER cancel → buyer notify; BUYER cancel → seller notify; null buyer no-op + processed-event marker (pre-accept seller cancel). 4 unit test (seller→buyer, buyer→seller, null buyer, idempotency) + integration test outbox row sayısını doğrular. |
+
+**Toplam:** 8 ✓ + 1 ~ kısmi (#5 forward-devirli, plan + spec uyumlu). Tüm kabul kriterleri kabul edilebilir durumda.
+
+### Doğrulama Kontrol Listesi
+
+- [x] **02 §7 tüm iptal kuralları uygulanmış mı?** ✓ — Ödeme öncesi seller/buyer cancel ✓; ödeme sonrası iki taraflı yasak ✓ (`PAYMENT_ALREADY_SENT` 422); reason zorunlu ✓ (min 10 char trim); cooldown ✓ (T43 evaluator); admin direct cancel + emergency hold + ITEM_DELIVERED kısıtı T59 forward-devirli (T51 user-endpoint kapsamı dışı — doğru sınırlanmış).
+- [x] **07 §7.7 sözleşmesi doğru mu?** ✓ — Request `{ reason }` min 10 char ✓; Response `{ status, cancelledAt, itemReturned, paymentRefunded }` 4-alan envelope ✓; hata kodları `PAYMENT_ALREADY_SENT` 422 + `INVALID_STATE_TRANSITION` 409 + `NOT_A_PARTY` 403 + `CANCEL_REASON_REQUIRED` 400 ✓; auth `Authenticated` ✓. 6 endpoint testi (401/200/403/400/422/404) envelope + status code + error code'u doğrular.
+
+### Test Sonuçları (validator lokal)
+
+| Tür | Sonuç | Komut | Çıktı |
+|---|---|---|---|
+| Unit (TransactionCancelledNotificationConsumer) | ✓ 4/4 | `dotnet test --filter ~TransactionCancelledNotificationConsumerTests` | 4 PASS / 0 FAIL |
+| Integration (TransactionCancellationService) | ✓ 21/21 | `dotnet test --filter ~TransactionCancellationServiceTests` | 21 PASS / 0 FAIL |
+| API Endpoint (Cancel + lifecycle) | ✓ 20/20 | `dotnet test --filter ~TransactionLifecycleEndpointTests` | 20 PASS / 0 FAIL |
+| Tüm solution (12 assembly) | ✓ 1300/1300 | `dotnet test Skinora.sln -c Release --no-build` | Users 16 + Payments 6 + Admin 20 + Auth 93 + Disputes 11 + Fraud 17 + Notifications 77 + Steam 21 + Shared 187 + Platform 136 + Transactions 445 + API 271 = **1300 PASS / 0 FAIL** |
+| Build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` | `Build succeeded. 0 Warning(s) 0 Error(s)` |
+| Format verify | ✓ exit=0 | `dotnet format --verify-no-changes --severity info` | exit=0 (CA1822/CA1859 info-level uyarıları, error değil) |
+
+### Task Branch CI
+
+- Run [`25277595776`](https://github.com/turkerurganci/Skinora/actions/runs/25277595776) (HEAD `55905c2`, docs commit) — ✓ **success** — 9/9 + Guard skipped (Detect / Lint / Build / Unit / Integration / Contract / Migration dry-run / Docker / CI Gate).
+- Run [`25277455577`](https://github.com/turkerurganci/Skinora/actions/runs/25277455577) (HEAD `fb301c8`, ana commit) — ✓ **success** — 9/9 + Guard skipped.
+
+### Mini Güvenlik Kontrolü
+
+- **Secret sızıntısı:** Temiz — pipeline'da hardcoded secret yok; `CancelReason` kullanıcı input'u DB string(500) (06 §3.5).
+- **Auth/authorization:** Endpoint `Authenticated` policy + servis-içi party guard (caller `SellerId`/`BuyerId` mı?); non-party 403; JWT'siz 401.
+- **Input validation:** Reason min 10 char trim + null body 400; state guards 4 katmanlı (post-payment + role+state mismatch + state machine `CanFire` + DB CK_Transactions_FreezeActive/Passive).
+- **Concurrency:** EF Core RowVersion otomatik optimistic concurrency aktif (`Transaction.RowVersion` `IsRowVersion`); paralel cancel: ikinci `CanFire` false → `INVALID_STATE_TRANSITION`. Explicit RowVersion guard T59 admin akışına forward-devir.
+- **Yeni dış bağımlılık:** Yok (`Directory.Packages.props` diff boş).
+
+### Doküman Uyumu
+
+- **07 §7.7:** Request/Response field'ları + tüm 4 hata kodu eşleşiyor; auth + rate-limit policy + status code mapping doğru.
+- **02 §7:** Post-payment yasak + reason zorunlu + cooldown + admin/emergency-hold ayrımı (T59 forward) doğru ele alınmış.
+- **03 §2.5 / §3.3:** Pipeline adımları (load → reason → state geçişi → item refund → notification) flow scriptleriyle birebir; consumer'ın kullandığı Türkçe metinler 03 §2.5 step 9 + 03 §3.3 step 8 verbatim.
+- **09 §13.3:** Atomicity boundary "state geçişi + outbox event aynı DB transaction" kuralı `BeginTransactionAsync` scope'unda iki SaveChanges + commit ile sağlanmış (aggregator/cooldown AsNoTracking pattern'i için zorunlu çözüm).
+- **05 §4.2:** Role × State → Trigger matrisi (SellerCancel pre-trade-offer, SellerDecline TRADE_OFFER_SENT_TO_SELLER, BuyerCancel) state machine permit tablosuyla 1:1.
+
+### Yapım Raporu Karşılaştırması
+
+**Uyum:** Tam uyumlu — yapım raporundaki 9/9 plan kabul kriteri + 2/2 doğrulama listesi + test sayıları (1300/1300) + CI run ID'leri + mimari kararlar (Trigger generalize, atomic commit two-save, paymentRefunded reserved) + Known Limitations (BuyerDecline kapalı, Türkçe verbatim, RowVersion explicit yok) ile validator bağımsız bulguları **0 uyuşmazlık**. Test breakdown rapor metrikleriyle birebir (Transactions 445 + API 271 + Notifications 77 + Shared 187).
+
+### Bulgular
+
+Yok (S1/S2/S3 sıfır; 0 minor advisory).
