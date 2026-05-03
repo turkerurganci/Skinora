@@ -41,6 +41,9 @@ public static class TransactionsModule
         services.AddScoped<ITransactionDetailService, TransactionDetailService>();
         services.AddScoped<ITransactionAcceptanceService, TransactionAcceptanceService>();
 
+        // T51 — user-initiated cancel (07 §7.7, 02 §7).
+        services.AddScoped<ITransactionCancellationService, TransactionCancellationService>();
+
         // T67 forward-deferred — Steam inventory stub. Tests inject their own
         // ISteamInventoryReader; production fails closed
         // (STEAM_INVENTORY_UNAVAILABLE) until T67 wires the real sidecar.

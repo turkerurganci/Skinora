@@ -32,6 +32,10 @@ public static class TransactionErrorCodes
     public const string WalletChangeCooldownActive = "WALLET_CHANGE_COOLDOWN_ACTIVE";
     public const string RefundAddressRequired = "REFUND_ADDRESS_REQUIRED";
 
+    // T51 — cancel (07 §7.7).
+    public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
+    public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";
+
     // Eligibility-only reason codes (07 §7.3 reasons array). Mirrors the
     // CreateTransaction error codes so callers can use a single switch.
     public static class EligibilityReasons

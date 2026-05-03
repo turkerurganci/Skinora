@@ -56,7 +56,7 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
                         EventId: Guid.NewGuid(),
                         TransactionId: transaction.Id,
                         SellerId: transaction.SellerId,
-                        Trigger: phase,
+                        Trigger: ItemRefundTrigger.TimeoutPayment,
                         OccurredAt: occurredAt),
                     cancellationToken);
 
@@ -87,7 +87,7 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
                         EventId: Guid.NewGuid(),
                         TransactionId: transaction.Id,
                         SellerId: transaction.SellerId,
-                        Trigger: phase,
+                        Trigger: ItemRefundTrigger.TimeoutDelivery,
                         OccurredAt: occurredAt),
                     cancellationToken);
 

@@ -117,7 +117,7 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
         Assert.Equal(TimeoutPhase.Delivery, notify.Phase);
 
         var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(TimeoutPhase.Delivery, itemRefund.Trigger);
+        Assert.Equal(ItemRefundTrigger.TimeoutDelivery, itemRefund.Trigger);
 
         var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Equal(buyer.Id, paymentRefund.BuyerId);
