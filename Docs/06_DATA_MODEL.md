@@ -316,6 +316,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `WALLET_REFUND` | Fon | Alıcıya iade |
 | `DISPUTE_RESOLVED` | Admin | Admin dispute çözümü |
 | `MANUAL_REFUND` | Admin | Admin manual iade |
+| `REFUND_BLOCKED` | Admin | Min iade eşiğinin altında kalan iade bloklandı — admin alert (09 §14.4, T53) |
 | `USER_BANNED` | Admin | Kullanıcı engelleme |
 | `USER_UNBANNED` | Admin | Kullanıcı engel kaldırma |
 | `ROLE_CHANGED` | Admin | Kullanıcıya rol atama/kaldırma |
