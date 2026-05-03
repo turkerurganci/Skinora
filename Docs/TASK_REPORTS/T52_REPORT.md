@@ -78,5 +78,5 @@ T19 Transaction entity'sinde tanımlı `Price`/`CommissionRate`/`CommissionAmoun
 
 ## Commit & PR
 
-- Commit: TBD (push sonrası)
-- PR: TBD
+- Commit: `a4e7e9a` (branch `task/T52-financial-calculations`)
+- PR: [#83](https://github.com/turkerurganci/Skinora/pull/83)
