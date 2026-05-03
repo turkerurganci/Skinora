@@ -369,13 +369,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (12) ────────────────────────────────────────────
+    // ── AuditAction (13) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave12Values()
+    public void AuditAction_ShouldHave13Values()
     {
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(12, values.Length);
+        Assert.Equal(13, values.Length);
     }
 
     [Theory]
@@ -386,6 +386,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.WALLET_REFUND))]
     [InlineData(nameof(AuditAction.DISPUTE_RESOLVED))]
     [InlineData(nameof(AuditAction.MANUAL_REFUND))]
+    [InlineData(nameof(AuditAction.REFUND_BLOCKED))]
     [InlineData(nameof(AuditAction.USER_BANNED))]
     [InlineData(nameof(AuditAction.USER_UNBANNED))]
     [InlineData(nameof(AuditAction.ROLE_CHANGED))]

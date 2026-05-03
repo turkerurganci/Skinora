@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Account;
+using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
@@ -76,6 +77,15 @@ public static class TransactionsModule
         // by the future maintenance / Steam-outage / blockchain-degradation
         // admin paths.
         services.AddScoped<ITimeoutFreezeService, TimeoutFreezeService>();
+
+        // T53 — gas fee management. SystemSetting reader + decision wrapper +
+        // admin-alert side-effect tier. Callers (T57+ refund orchestrator,
+        // T73 blockchain sidecar consumer) compose the trio: read live ratios,
+        // compute refund vs block, raise alert atomically with the business
+        // state change.
+        services.AddScoped<IGasFeeSettingsProvider, GasFeeSettingsProvider>();
+        services.AddScoped<IRefundDecisionService, RefundDecisionService>();
+        services.AddScoped<IRefundBlockedAlertService, RefundBlockedAlertService>();
 
         return services;
     }
