@@ -124,7 +124,7 @@
 | T49 | Timeout execution | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — yapım raporunda test toplam 1237 yazılı, breakdown 1243; validator inline düzeltti, fonksiyonel etki yok) | `54c07c9` (PR #79) |
 | T50 | Timeout freeze/resume | ⏳ Devam ediyor | ⏳ | branch `task/T50-timeout-freeze-resume` |
 | T51 | İptal akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor advisory — 9/9 kabul kriteri 8 ✓ + 1 ~ kısmi #5 forward-devir; 2/2 doğrulama listesi ✓; rapor uyumu tam) | PR #82 |
-| T52 | Komisyon ve finansal hesaplamalar | ⬚ Bekliyor | — | — |
+| T52 | Komisyon ve finansal hesaplamalar | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor — 6/6 kabul kriteri ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; 36/36 FinancialCalculator unit + 1336/1336 sln total + Release 0W/0E + task branch CI ✓) | PR #83 |
 | T53 | Gas fee yönetimi | ⬚ Bekliyor | — | — |
 | T54 | Fraud flag sistemi | ⬚ Bekliyor | — | — |
 | T55 | AML kontrolü (fiyat sapması, yüksek hacim) | ⬚ Bekliyor | — | — |
