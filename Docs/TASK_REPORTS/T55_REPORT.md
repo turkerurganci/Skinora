@@ -1,6 +1,6 @@
 # T55 — AML Kontrolü (fiyat sapması, yüksek hacim, dormant hesap)
 
-**Faz:** F3 | **Durum:** ⏳ Yapım bitti — validator bekliyor | **Tarih:** 2026-05-04
+**Faz:** F3 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-04
 
 ---
 
@@ -140,8 +140,41 @@ T54 fraud flag write-port + T45 transaction creation pipeline üzerine üç AML 
   - **Account age fractional handling:** `(nowUtc - User.CreatedAt).TotalDays` `int` cast; `Math.Max(0, ...)` clock skew defansı. 30 günü dolu eden hesap ekleme saatine bağlı olarak gün-bazında değil saat bazında dahil edilir (TotalDays.Floor → 29 ya da 30). Bu kasıtlı — belirsizlik admin için "yeni hesap" tarafına meyleder.
 - **MSEC migration warning:** `dotnet ef migrations add` sırasında 2 informational warning ("PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning" — Transaction → BlockchainTransaction + Transaction → TransactionHistory). Bu warning T54 + T55 öncesi de mevcuttu, mevcut entity konfigürasyonundan kaynaklanıyor; T55 dokunmadı.
 
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator (bağımsız chat, 2026-05-04):**
+
+- **Verdict:** ✓ PASS — 5/5 kabul kriteri ✓, 2/2 doğrulama listesi ✓, rapor uyumu tam (yapım raporu ile bağımsız verdict birebir).
+- **Adım -1 working tree:** temiz (`git status --short` boş).
+- **Adım 0 main CI startup:** son 3 run ✓ — `25332031310` (T54 #85 CI), `25332031332` (T54 #85 docker-publish), `25289592150` (T53 #84 CI), hepsi `success`.
+- **Adım 0b memory drift:** ✓ — `.claude/memory/MEMORY.md` T55 satırı mevcut (yapım `f67418b`'de eklendi).
+- **Faz 1 testler (lokal Release):**
+  - `FraudDetectionCalculatorTests` (yeni unit suite): **27/27 PASS** — 228 ms.
+  - `TransactionCreationServiceTests` (T45 + T54 + T55 birlikte): **16/16 PASS** — 12 sn.
+  - `Skinora.Platform.Tests` (SeedDataTests + SettingsBootstrapTests subset): **11/11 PASS** — 4 sn.
+  - **Solution sweep:** `dotnet test backend/Skinora.sln -c Release` → **1434/1434 PASS** (12 test projesi, ~16 dk toplam) — Failed: 0, Skipped: 0.
+  - `dotnet build backend/Skinora.sln -c Release` → **0 Warning(s), 0 Error(s)** (26 sn).
+- **Adım 7a task branch CI:** [`25336562637`](https://github.com/turkerurganci/Skinora/actions/runs/25336562637) (head `616e6e1`) `success` — workflow `CI`, tüm 10 job ✓; önceki `25336544911` head `f67418b` cancelled (yeni push tarafından iptal — beklenen davranış).
+- **Mini güvenlik:** secret leak yok (diff scan temiz), yeni endpoint yok (pre-check internal service), input validation `InvariantCulture` strict decimal/int parsing, yeni dış paket yok.
+- **Doküman uyumu:**
+  - 07 §9.3 detail JSON shape'ler birebir: `PRICE_DEVIATION { inputPrice, marketPrice, deviationPercent }`, `HIGH_VOLUME { periodHours, transactionCount, totalVolume }`, `ABNORMAL_BEHAVIOR { pattern, description }`.
+  - 02 §14.4 v2.6 + §16.2 admin parametreleri tablosu güncel; öncelik sırası (`PRICE_DEVIATION → HIGH_VOLUME → ABNORMAL_BEHAVIOR`) hem doc hem kodda.
+  - Migration `20260504172426_T55_AddDormantAccountFraudSettings`: `Up` 2 InsertData / `Down` 2 DeleteData; şema değişikliği yok.
+- **Strict-greater-than semantik:** üç kuralda da `>` (eşik `<=` veya equal at threshold ⇒ no-flag). Spec "eşiği aşan" ifadesinin doğru yorumu; 14 boundary unit test bunu pin'liyor.
+- **Atomicity:** Transaction insert + FraudFlag insert + outbox publish tek `SaveChangesAsync` (T54 contract korundu).
+
+**Minor advisory (FAIL değil, gelecek için not):**
+- A1 — `FraudPreCheckService.EvaluateHighVolumeAsync` aggregation FLAGGED + CANCELLED_* row'ları dahil ediyor. Yapım raporu §"HighVolume status-agnostic aggregation" not'unda gerekçelendirildi (cancellation burst de signal). 02 §14.4 explicit exclusion belirtmiyor — kabul edilebilir tasarım kararı, yapım Known Limitations'da belgelenmiş. T57 wash-trading + T56 multi-account ile birlikte değerlendirildiğinde bu davranış hassasiyeti azaltabilir; T56/T57 yapım chat'lerinde tekrar değerlendirilsin.
+
 ## Commit & PR
 
 - Branch: `task/T55-aml-control`
-- Commit: `f67418b`
+- Commit: `f67418b` (kod) + `616e6e1` (rapor) + finalize commit (validator)
 - PR: [#86](https://github.com/turkerurganci/Skinora/pull/86)
+- CI: ✓ PASS — task branch run [`25336562637`](https://github.com/turkerurganci/Skinora/actions/runs/25336562637)

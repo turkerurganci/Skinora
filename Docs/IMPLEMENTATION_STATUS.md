@@ -127,7 +127,7 @@
 | T52 | Komisyon ve finansal hesaplamalar | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor — 6/6 kabul kriteri ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; 36/36 FinancialCalculator unit + 1336/1336 sln total + Release 0W/0E + task branch CI ✓) | PR #83 |
 | T53 | Gas fee yönetimi | ✓ Tamamlandı | ✓ PASS bağımsız validator (1 S1 minor — 06 §2.19 REFUND_BLOCKED yansıması — same-PR fix; 4/4 kabul ✓; doğrulama kontrol listesi ✓; lokal 40/40 GasFee unit + 14/14 Shared audit/enum + Release 0W/0E + task branch CI 7/7 ✓) | PR #84 |
 | T54 | Fraud flag sistemi | ✓ Tamamlandı | ✓ PASS bağımsız validator + same-PR S1 chore fix (AD3 `FlagPartyDetailDto` reputation/completed/accountAge + `[JsonPropertyName("reviewedBy")]`; 2 advisory Known Limitations'a — accept gate T46/T82 devir + note cap opsiyonel; 6/8 kabul ✓ + 2/8 ~ pre-fix; build 0W/0E + AdminFlagsEndpoint 9/9 + Fraud 34/34 + TxCreation 11/11 + Audit 28/28 + Enum 18/18 PASS) | PR #85 |
-| T55 | AML kontrolü (fiyat sapması, yüksek hacim, dormant hesap) | ⏳ Devam ediyor | ⏳ | branch `task/T55-aml-control` (pending push + PR) |
+| T55 | AML kontrolü (fiyat sapması, yüksek hacim, dormant hesap) | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — HIGH_VOLUME aggregate FLAGGED+CANCELLED dahil, T56/T57 follow-up; 5/5 kabul ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; lokal 27/27 FraudDetectionCalculator unit + 16/16 TxCreation + 11/11 Platform + sln sweep **1434/1434 PASS** + Release 0W/0E + task branch CI 10/10 ✓ run 25336562637) | PR #86 |
 | T56 | Çoklu hesap tespiti | ⬚ Bekliyor | — | — |
 | T57 | Wash trading kontrolü | ⬚ Bekliyor | — | — |
 | T58 | Dispute sistemi | ⬚ Bekliyor | — | — |
