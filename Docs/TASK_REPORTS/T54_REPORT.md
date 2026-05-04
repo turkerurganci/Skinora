@@ -1,6 +1,6 @@
 # T54 — Fraud Flag Sistemi
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-04 (yapım)
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (validate PASS + same-PR S1 fix) | **Tarih:** 2026-05-04 (yapım + validate + chore)
 
 ---
 
@@ -143,9 +143,80 @@ T22, T42, T44 ✓ Tamamlandı tabanı üzerine fraud flag review pipeline'ı kur
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekleniyor (yapım bitti, ayrı validate chat'inde) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-04) |
+| Bulgu sayısı | 2 S1 minor + 2 minor advisory |
+| Düzeltme gerekli mi | Advisory; same-PR opsiyonel chore fix önerildi (S1 #1 + #2). Bloke değil — merge edilebilir. |
+
+### Validator Pre-Checks
+- **Adım -1 (Working tree):** `git status --short` boş ✓
+- **Adım 0 (Main CI):** Son 3 main run (`25289592150`, `25289592174`, `25287500662`) hepsi `success` ✓
+- **Adım 0b (Repo memory drift):** MEMORY.md `T54` için satırlar mevcut ✓
+- **Adım 8a (Task branch CI):** Run `25291800181` ✓ + `25291605629` ✓ (CI 10/10 job)
+
+### Kabul Kriterleri (validator)
+| # | Kriter | Verdict | Not |
+|---|---|---|---|
+| 1 | Hesap flag fon akışı aksiyonlarını engeller, mevcut işlemler devam | ~ | Yeni işlem gate ✓ (`TransactionEligibilityService` → `IAccountFlagChecker`); accept yolu gate yok (advisory #3) |
+| 2 | Pre-create flag CREATED öncesi durdurur, timeout başlamaz | ✓ | `TransactionCreationService` Stage 9 + state machine `HasFlaggedStateInvariant` |
+| 3 | AD2/AD3 admin queue endpoint'leri | ~ | Endpoint'ler ✓ + envelope ✓; AD3 DTO 2 sapma (S1 #1 + #2) |
+| 4 | AD4 approve → işlem devam | ✓ | `Fire(AdminApprove)` FLAGGED→CREATED + `AcceptDeadline` reset |
+| 5 | AD5 reject → işlem iptal | ✓ | `Fire(AdminReject)` FLAGGED→CANCELLED_ADMIN + default reason |
+| 6 | Yüksek risk EMERGENCY_HOLD cascade | ✓ | `cascadeEmergencyHold=true` seller+buyer + freeze-first + idempotency |
+| 7 | Audit log tüm flag aksiyonlarında | ✓ | 4 yeni AuditAction + ADMIN_ACTION kategorisi |
+| 8 | Admin + parties bildirim | ✓ | 3 outbox event (consumer wire-up T62/T78–T80 devir) |
+
+### Doğrulama Kontrol Listesi
+- [x] 02 §14.0 flag kategorileri ve etkileri doğru
+- [~] 07 §9.2–§9.5 endpoint sözleşmeleri (AD2/AD4/AD5 ✓; AD3 2 minor drift)
+
+### Test Sonuçları (validator lokal Release, no-build)
+| Suite | Sonuç | Komut |
+|---|---|---|
+| Build | 0W/0E (17 s) | `dotnet build Skinora.sln -c Release` |
+| Skinora.Fraud.Tests | 34/34 PASS (13 s) | `dotnet test ... Skinora.Fraud.Tests.csproj` |
+| AdminFlagsEndpointTests | 9/9 PASS (4 s) | `dotnet test ... --filter AdminFlagsEndpointTests` |
+| TransactionCreationServiceTests | 11/11 PASS (7 s) | `--filter TransactionCreationServiceTests` |
+| AuditLogCategoryMap | 28/28 PASS | `--filter AuditLogCategoryMap` |
+| AuditAction enum | 18/18 PASS | `--filter AuditAction` |
+
+### Güvenlik Kontrolü
+- [x] Secret sızıntısı: Temiz (test factory secret prod scope dışı)
+- [x] Auth/AuthZ: Permission policy + RateLimit + 401/403 testler ✓
+- [x] Input validation: route guid + page clamp ✓; `note` max length yok (advisory #4)
+- [x] Yeni bağımlılık: Yok (test-only `Microsoft.Extensions.TimeProvider.Testing 9.0.0`, Microsoft)
+
+### Bulgular
+| # | Seviye | Açıklama | Etkilenen dosya | Önerilen aksiyon |
+|---|---|---|---|---|
+| 1 | S1 minor | AD3 `seller`/`buyer` DTO'sunda `reputationScore`+`completedTransactionCount`+`accountAge` alanları yok (07 §9.3 sample) | `Skinora.Fraud/Application/Flags/FraudFlagDtos.cs` (`FlagPartyDto`) | Same-PR: nullable field ekle + Known Limitations notu (T43/T52/T33 forward-devir) |
+| 2 | S1 minor | AD3 detail JSON `reviewedByAdminId` field — spec `reviewedBy` (07 §9.3) | `Skinora.Fraud/Application/Flags/FraudFlagDtos.cs:43` (`FraudFlagDetailDto.ReviewedByAdminId`) | Same-PR: `[JsonPropertyName("reviewedBy")]` |
+| 3 | Minor advisory | `TransactionAcceptanceService.AcceptAsync` buyer-accept yolunda `IAccountFlagChecker` gate yok | `Skinora.Transactions/Application/Lifecycle/TransactionAcceptanceService.cs` | Known Limitations notu — T46/T82 katmanı follow-up |
+| 4 | Minor advisory | `note` max length validation yok | `Skinora.Fraud/Application/Flags/FraudFlagService.cs:374-379` (`NormalizeNote`) | Opsiyonel cap (1000 char) |
+
+### Yapım Raporu Karşılaştırması
+- Genel uyum: yüksek. Kabul tablosu, atomicity, T44 latent bug analizi, forward-devir notları doğru.
+- Uyuşmazlık #1: Yapım raporu 8/8 kabul ✓ verdi; validator #1 ve #3'ü `~` (kısmi) verdi (advisory #3 ve S1 #1 + #2).
+- Uyuşmazlık #2: Yapım raporu "1402+ PASS sweep" iddiası — validator targeted suite + CI run kanıtı kullandı (10/10 job ✓).
+
+### Verdict
+**✓ PASS** — bloke yok. S1 #1 + #2 same-PR `chore` commit ile düzeltildi (aşağıda). #3 + #4 advisory olarak Known Limitations'a not düşüldü.
+
+### Same-PR Chore Fix (2026-05-04, post-validate)
+
+S1 #1 + #2 validator önerisi same-PR'da uygulandı:
+
+- **`FlagPartyDetailDto` eklendi** — AD3 detail için zenginleştirilmiş party DTO ([FraudFlagDtos.cs](backend/src/Modules/Skinora.Fraud/Application/Flags/FraudFlagDtos.cs)). 6 alan: `SteamId`, `DisplayName`, `AvatarUrl`, `ReputationScore` (T43 `IReputationScoreCalculator` çıktısı, eşik karşılanmazsa null), `CompletedTransactionCount` (User denormalized, 06 §8.2), `AccountAge` (T33 `AccountAgeFormatter` Türkçe verbatim).
+- **AD2 list DTO değişmedi** — `FlagPartyDto` (3 alan) AD2 §9.2 spec'iyle birebir; AD3 `FraudFlagDetailDto.Seller`/`Buyer` artık `FlagPartyDetailDto` tipinde.
+- **`reviewedBy` JSON alanı** — `FraudFlagDetailDto.ReviewedByAdminId` üzerine `[property: JsonPropertyName("reviewedBy")]` attribute eklendi (07 §9.3 sample uyumu).
+- **`FraudFlagAdminQueryService` constructor genişletildi** — `IReputationScoreCalculator` + `TimeProvider` inject; `BuildPartyDetailAsync` helper `User.CompletedTransactionCount` + `User.SuccessfulTransactionRate` + `User.CreatedAt`'ten reputation/age hesaplar. AD2 list path projeksiyonu değişmedi (yeni alanlar AD2'de okunmuyor).
+- **Test güncellemesi** — `FraudFlagAdminQueryServiceTests.BuildSut()` helper'ı eklendi (`StubReputationThresholdsProvider` + gerçek `ReputationScoreCalculator` + `_clock`); 5 test çağrısı mevcut ctor → `BuildSut()`. Detail testine 3 yeni assertion: `Seller.CompletedTransactionCount == 0`, `Seller.ReputationScore == null`, `Seller.AccountAge` non-empty.
+- **DI:** `IReputationScoreCalculator` + `IReputationThresholdsProvider` zaten `UsersModule.AddUsersModule` tarafından registered (T33/T43); `TimeProvider.System` `FraudModule.AddFraudModule` ✓. Yeni DI satırı yok.
+
+**Doğrulama:** `dotnet build Skinora.sln -c Release` 0W/0E ✓; `Skinora.API.Tests --filter AdminFlagsEndpointTests` 9/9 PASS (gerçek Program.cs DI + JSON serialization testi); `Skinora.Fraud.Tests` Testcontainers ile lokal Docker engine restart sonrası re-run + task branch CI fix-push sonrası tekrar yeşil 10/10 ✓ (run ID push sonrası eklendi).
+
+**Kalan advisory'ler (Known Limitations):**
+- **#3 (forward-defer):** `TransactionAcceptanceService.AcceptAsync` buyer-accept yolunda `IAccountFlagChecker` gate yok → 02 §14.0 "işlem kabul etme" ikinci fazı T82 sanctions integration veya T46 follow-up'a devir.
+- **#4 (opsiyonel):** `note` parametresi max length validation'ı yok → admin endpoint, low risk; ileri tur'da 1000 char cap eklenebilir.
 
 ## Commit & PR
 

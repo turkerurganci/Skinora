@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Skinora.Shared.Enums;
 
 namespace Skinora.Fraud.Application.Flags;
@@ -37,18 +38,32 @@ public sealed record FraudFlagDetailDto(
     DateTime CreatedAt,
     object? FlagDetail,
     FlagTransactionDto? Transaction,
-    FlagPartyDto? Seller,
-    FlagPartyDto? Buyer,
+    FlagPartyDetailDto? Seller,
+    FlagPartyDetailDto? Buyer,
     int HistoricalTransactionCount,
-    Guid? ReviewedByAdminId,
+    [property: JsonPropertyName("reviewedBy")] Guid? ReviewedByAdminId,
     DateTime? ReviewedAt,
     string? AdminNote);
 
-/// <summary>Lightweight party view used by AD2/AD3 (07 §9.2/§9.3).</summary>
+/// <summary>Lightweight party view used by AD2 list (07 §9.2).</summary>
 public sealed record FlagPartyDto(
     string SteamId,
     string DisplayName,
     string? AvatarUrl);
+
+/// <summary>
+/// Rich party view used by AD3 detail (07 §9.3) — adds the user-trust signals
+/// admins inspect alongside the flag (denormalized <see cref="Skinora.Users.Domain.Entities.User.CompletedTransactionCount"/>,
+/// composite reputation via <c>IReputationScoreCalculator</c>, and the
+/// Turkish-formatted account age from <c>AccountAgeFormatter</c>).
+/// </summary>
+public sealed record FlagPartyDetailDto(
+    string SteamId,
+    string DisplayName,
+    string? AvatarUrl,
+    decimal? ReputationScore,
+    int CompletedTransactionCount,
+    string AccountAge);
 
 /// <summary>Embedded transaction view returned by AD3 (07 §9.3).</summary>
 public sealed record FlagTransactionDto(

@@ -9,6 +9,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
+using Skinora.Users.Application.Reputation;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
 
@@ -67,7 +68,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
             type: FraudFlagType.MULTI_ACCOUNT, status: ReviewStatus.APPROVED,
             adminReviewed: true);
 
-        var sut = new FraudFlagAdminQueryService(Context);
+        var sut = BuildSut();
 
         var result = await sut.ListAsync(
             new FraudFlagListQuery(null, null, null, null, null, null, Page: 1, PageSize: 20),
@@ -89,7 +90,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         await SeedFlagAsync(scope: FraudFlagScope.ACCOUNT_LEVEL,
             type: FraudFlagType.ABNORMAL_BEHAVIOR, status: ReviewStatus.PENDING);
 
-        var sut = new FraudFlagAdminQueryService(Context);
+        var sut = BuildSut();
 
         var byType = await sut.ListAsync(
             new FraudFlagListQuery(FraudFlagType.MULTI_ACCOUNT, null, null, null, null, null, 1, 20),
@@ -106,7 +107,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     [Fact]
     public async Task GetDetailAsync_Returns_Null_For_Unknown_Id()
     {
-        var sut = new FraudFlagAdminQueryService(Context);
+        var sut = BuildSut();
         var result = await sut.GetDetailAsync(Guid.NewGuid(), CancellationToken.None);
         Assert.Null(result);
     }
@@ -132,7 +133,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
 
-        var sut = new FraudFlagAdminQueryService(Context);
+        var sut = BuildSut();
         var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
 
         Assert.NotNull(detail);
@@ -145,6 +146,15 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         Assert.NotNull(detail.Buyer);
         Assert.Equal("Buyer", detail.Buyer!.DisplayName);
         Assert.Equal(2, detail.HistoricalTransactionCount);
+
+        // 07 §9.3 seller block — extended trust-signal fields. Test users were
+        // seeded with default User.CompletedTransactionCount = 0 and a fresh
+        // CreatedAt (now), so account age renders as "0 gün" and the reputation
+        // calculator returns null (T43 thresholds not met). The fields are
+        // present and shaped correctly.
+        Assert.Equal(0, detail.Seller.CompletedTransactionCount);
+        Assert.Null(detail.Seller.ReputationScore);
+        Assert.False(string.IsNullOrEmpty(detail.Seller.AccountAge));
 
         var payload = Assert.IsType<PriceDeviationFlagDetail>(detail.FlagDetail);
         Assert.Equal(120m, payload.InputPrice);
@@ -163,7 +173,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
             transactionId: tx.Id,
             details: "this is not json");
 
-        var sut = new FraudFlagAdminQueryService(Context);
+        var sut = BuildSut();
         var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
 
         Assert.NotNull(detail);
@@ -175,6 +185,25 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    private FraudFlagAdminQueryService BuildSut()
+    {
+        // T43 reputation: thresholds high enough that the test users (no completed
+        // tx, fresh CreatedAt) never satisfy → ReputationScore = null. Detail tests
+        // that exercise the populated branch override `_seller`/`_buyer` state.
+        var thresholds = new StubReputationThresholdsProvider(
+            new ReputationThresholds(MinAccountAgeDays: 30, MinCompletedTransactions: 5));
+        var calculator = new ReputationScoreCalculator(thresholds);
+        return new FraudFlagAdminQueryService(Context, calculator, _clock);
+    }
+
+    private sealed class StubReputationThresholdsProvider : IReputationThresholdsProvider
+    {
+        private readonly ReputationThresholds _values;
+        public StubReputationThresholdsProvider(ReputationThresholds values) => _values = values;
+        public Task<ReputationThresholds> GetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(_values);
+    }
 
     private async Task<FraudFlag> SeedFlagAsync(
         FraudFlagScope scope,

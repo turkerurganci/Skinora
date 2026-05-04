@@ -4,6 +4,8 @@ using Skinora.Fraud.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Users.Application.Profiles;
+using Skinora.Users.Application.Reputation;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Fraud.Application.Flags;
@@ -28,10 +30,17 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
     };
 
     private readonly AppDbContext _db;
+    private readonly IReputationScoreCalculator _reputation;
+    private readonly TimeProvider _clock;
 
-    public FraudFlagAdminQueryService(AppDbContext db)
+    public FraudFlagAdminQueryService(
+        AppDbContext db,
+        IReputationScoreCalculator reputation,
+        TimeProvider clock)
     {
         _db = db;
+        _reputation = reputation;
+        _clock = clock;
     }
 
     public async Task<FraudFlagListResponse> ListAsync(
@@ -170,8 +179,10 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             .FirstOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (flag is null) return null;
 
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
         FlagTransactionDto? txDto = null;
-        FlagPartyDto? buyerDto = null;
+        FlagPartyDetailDto? buyerDto = null;
         if (flag.TransactionId.HasValue)
         {
             var tx = await _db.Set<Transaction>()
@@ -213,20 +224,18 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                             SteamId = u.SteamId,
                             DisplayName = u.SteamDisplayName,
                             AvatarUrl = u.SteamAvatarUrl,
+                            CreatedAt = u.CreatedAt,
+                            CompletedTransactionCount = u.CompletedTransactionCount,
+                            SuccessfulTransactionRate = u.SuccessfulTransactionRate,
                         })
                         .FirstOrDefaultAsync(cancellationToken);
                     if (buyer is not null)
-                    {
-                        buyerDto = new FlagPartyDto(
-                            SteamId: buyer.SteamId,
-                            DisplayName: buyer.DisplayName,
-                            AvatarUrl: buyer.AvatarUrl);
-                    }
+                        buyerDto = await BuildPartyDetailAsync(buyer, nowUtc, cancellationToken);
                 }
             }
         }
 
-        var seller = await _db.Set<User>()
+        var sellerProjection = await _db.Set<User>()
             .AsNoTracking()
             .Where(u => u.Id == flag.UserId)
             .Select(u => new UserPartyProjection
@@ -235,8 +244,15 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 SteamId = u.SteamId,
                 DisplayName = u.SteamDisplayName,
                 AvatarUrl = u.SteamAvatarUrl,
+                CreatedAt = u.CreatedAt,
+                CompletedTransactionCount = u.CompletedTransactionCount,
+                SuccessfulTransactionRate = u.SuccessfulTransactionRate,
             })
             .FirstOrDefaultAsync(cancellationToken);
+
+        var sellerDto = sellerProjection is null
+            ? null
+            : await BuildPartyDetailAsync(sellerProjection, nowUtc, cancellationToken);
 
         // historicalTransactionCount — completed transactions where the
         // flagged user was the seller. Cancelled / in-flight transactions
@@ -258,12 +274,31 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             CreatedAt: flag.CreatedAt,
             FlagDetail: detailPayload,
             Transaction: txDto,
-            Seller: seller is null ? null : new FlagPartyDto(seller.SteamId, seller.DisplayName, seller.AvatarUrl),
+            Seller: sellerDto,
             Buyer: buyerDto,
             HistoricalTransactionCount: historicalCount,
             ReviewedByAdminId: flag.ReviewedByAdminId,
             ReviewedAt: flag.ReviewedAt,
             AdminNote: flag.AdminNote);
+    }
+
+    private async Task<FlagPartyDetailDto> BuildPartyDetailAsync(
+        UserPartyProjection projection, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        var reputation = await _reputation.ComputeAsync(
+            projection.CompletedTransactionCount,
+            projection.SuccessfulTransactionRate,
+            projection.CreatedAt,
+            nowUtc,
+            cancellationToken);
+
+        return new FlagPartyDetailDto(
+            SteamId: projection.SteamId,
+            DisplayName: projection.DisplayName,
+            AvatarUrl: projection.AvatarUrl,
+            ReputationScore: reputation,
+            CompletedTransactionCount: projection.CompletedTransactionCount,
+            AccountAge: AccountAgeFormatter.Format(projection.CreatedAt, nowUtc));
     }
 
     private static IOrderedQueryable<FraudFlag> ApplyOrdering(
@@ -340,5 +375,8 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
         public string SteamId { get; init; } = string.Empty;
         public string DisplayName { get; init; } = string.Empty;
         public string? AvatarUrl { get; init; }
+        public DateTime CreatedAt { get; init; }
+        public int CompletedTransactionCount { get; init; }
+        public decimal? SuccessfulTransactionRate { get; init; }
     }
 }
