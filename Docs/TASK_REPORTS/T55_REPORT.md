@@ -143,5 +143,5 @@ T54 fraud flag write-port + T45 transaction creation pipeline üzerine üç AML 
 ## Commit & PR
 
 - Branch: `task/T55-aml-control`
-- Commit: TBD (rapor ile birlikte commit edilecek)
-- PR: TBD (open after push)
+- Commit: `f67418b`
+- PR: [#86](https://github.com/turkerurganci/Skinora/pull/86)
