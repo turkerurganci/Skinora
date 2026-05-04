@@ -72,11 +72,13 @@ public static class SystemSettingsCatalog
         new("cancel_limit_period_hours",                  "cancel_rules",         "İptal limit periyodu",                                      "saat"),
         new("cancel_cooldown_hours",                      "cancel_rules",         "İptal sonrası cooldown süresi",                             "saat"),
 
-        // --- Fraud detection (price + high-volume) ---
+        // --- Fraud detection (price + high-volume + dormant anomaly T55) ---
         new("price_deviation_threshold",                  "fraud_detection",      "Piyasa fiyatı sapma eşiği",                                 "oran"),
         new("high_volume_amount_threshold",               "fraud_detection",      "Yüksek hacim tutar eşiği",                                  "USDT"),
         new("high_volume_count_threshold",                "fraud_detection",      "Yüksek hacim işlem sayısı eşiği",                           "adet"),
         new("high_volume_period_hours",                   "fraud_detection",      "Yüksek hacim kontrol periyodu",                             "saat"),
+        new("dormant_account_min_age_days",               "fraud_detection",      "Dormant hesap minimum yaş eşiği",                           "gün"),
+        new("dormant_account_value_threshold",            "fraud_detection",      "Dormant hesap işlem tutar eşiği",                           "USDT"),
 
         // --- Blockchain monitoring + refund threshold ---
         new("monitoring_post_cancel_24h_polling_seconds", "blockchain_health",    "İptal sonrası ilk 24 saat polling aralığı",                 "saniye"),

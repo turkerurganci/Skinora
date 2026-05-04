@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -179,14 +178,17 @@ public sealed class TransactionCreationService : ITransactionCreationService
         var commissionAmount = FinancialCalculator.CalculateCommission(price, commissionRate);
         var totalAmount = FinancialCalculator.CalculateTotal(price, commissionAmount);
 
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
         var fraud = await _fraudPreCheck.EvaluateAsync(
+            sellerId,
             inventoryItem.ClassId,
             inventoryItem.InstanceId,
             request.Stablecoin,
             price,
+            nowUtc,
             cancellationToken);
 
-        var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var status = fraud.ShouldFlag ? TransactionStatus.FLAGGED : TransactionStatus.CREATED;
 
         // ---------- Stage 8: build entity ----------
@@ -233,29 +235,20 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         _db.Set<Transaction>().Add(transaction);
 
-        // ---------- Stage 9: pre-create fraud flag row (T54) ----------
+        // ---------- Stage 9: pre-create fraud flag row (T54 / T55) ----------
         // When the pre-check decided FLAGGED, persist the matching FraudFlag
         // row in the same SaveChanges so an admin can never observe a
         // FLAGGED transaction without a flag row to review (02 §14.0,
-        // 06 §3.12 invariant). The flag detail JSON shape is the
-        // PRICE_DEVIATION payload from 07 §9.3 — input price + market
-        // price + deviation percentage rounded to 4 decimal places to keep
-        // the on-disk representation deterministic.
+        // 06 §3.12 invariant). The pre-check service owns the per-rule
+        // detail shape (07 §9.3 — PRICE_DEVIATION / HIGH_VOLUME /
+        // ABNORMAL_BEHAVIOR); the orchestrator just relays the result.
         if (status == TransactionStatus.FLAGGED)
         {
-            var details = JsonSerializer.Serialize(new
-            {
-                inputPrice = price,
-                marketPrice = fraud.MarketPrice ?? 0m,
-                deviationPercent = fraud.DeviationRatio.HasValue
-                    ? Math.Round(fraud.DeviationRatio.Value * 100m, 4)
-                    : 0m,
-            });
             await _flagWriter.StagePreCreateFlagAsync(
                 userId: sellerId,
                 transactionId: transaction.Id,
-                type: FraudFlagType.PRICE_DEVIATION,
-                details: details,
+                type: fraud.FlagType!.Value,
+                details: fraud.FlagDetailsJson!,
                 cancellationToken);
         }
 
@@ -280,7 +273,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
             Status: transaction.Status,
             InviteUrl: BuildInviteUrl(transaction),
             CreatedAt: transaction.CreatedAt,
-            FlagReason: status == TransactionStatus.FLAGGED ? "PRICE_DEVIATION" : null);
+            FlagReason: fraud.FlagType?.ToString());
 
         return new CreateTransactionOutcome(
             CreateTransactionStatus.Created,

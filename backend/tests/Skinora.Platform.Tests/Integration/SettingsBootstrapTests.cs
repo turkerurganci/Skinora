@@ -60,6 +60,7 @@ public class SettingsBootstrapTests : IntegrationTestBase
             ["SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD"] = "10",
             ["SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS"] = "24",
             ["SKINORA_SETTING_HOT_WALLET_LIMIT"] = "100000.0",
+            ["SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD"] = "1000.0",
         };
 
     [Fact]
@@ -88,7 +89,7 @@ public class SettingsBootstrapTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task Execute_Throws_When_Required_Parameter_Missing()
     {
-        // Seed ships 20 mandatory rows; only hydrate 19 and expect fail-fast.
+        // Seed ships 21 mandatory rows; only hydrate 20 and expect fail-fast.
         var env = AllRequiredEnvVars();
         env.Remove("SKINORA_SETTING_HOT_WALLET_LIMIT");
 
