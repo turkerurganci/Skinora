@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -37,6 +38,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
     private readonly ITransactionLimitsProvider _limits;
     private readonly ISteamInventoryReader _inventory;
     private readonly IFraudPreCheckService _fraudPreCheck;
+    private readonly ITransactionFraudFlagWriter _flagWriter;
     private readonly ITrc20AddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
     private readonly IInvitationCodeGenerator _inviteCodes;
@@ -49,6 +51,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         ITransactionLimitsProvider limits,
         ISteamInventoryReader inventory,
         IFraudPreCheckService fraudPreCheck,
+        ITransactionFraudFlagWriter flagWriter,
         ITrc20AddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
         IInvitationCodeGenerator inviteCodes,
@@ -60,6 +63,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         _limits = limits;
         _inventory = inventory;
         _fraudPreCheck = fraudPreCheck;
+        _flagWriter = flagWriter;
         _addressValidator = addressValidator;
         _sanctions = sanctions;
         _inviteCodes = inviteCodes;
@@ -229,7 +233,33 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         _db.Set<Transaction>().Add(transaction);
 
-        // ---------- Stage 9: outbox publish (T62/T78–T80 consume) ----------
+        // ---------- Stage 9: pre-create fraud flag row (T54) ----------
+        // When the pre-check decided FLAGGED, persist the matching FraudFlag
+        // row in the same SaveChanges so an admin can never observe a
+        // FLAGGED transaction without a flag row to review (02 §14.0,
+        // 06 §3.12 invariant). The flag detail JSON shape is the
+        // PRICE_DEVIATION payload from 07 §9.3 — input price + market
+        // price + deviation percentage rounded to 4 decimal places to keep
+        // the on-disk representation deterministic.
+        if (status == TransactionStatus.FLAGGED)
+        {
+            var details = JsonSerializer.Serialize(new
+            {
+                inputPrice = price,
+                marketPrice = fraud.MarketPrice ?? 0m,
+                deviationPercent = fraud.DeviationRatio.HasValue
+                    ? Math.Round(fraud.DeviationRatio.Value * 100m, 4)
+                    : 0m,
+            });
+            await _flagWriter.StagePreCreateFlagAsync(
+                userId: sellerId,
+                transactionId: transaction.Id,
+                type: FraudFlagType.PRICE_DEVIATION,
+                details: details,
+                cancellationToken);
+        }
+
+        // ---------- Stage 10: outbox publish (T62/T78–T80 consume) ----------
         await _outbox.PublishAsync(
             new TransactionCreatedEvent(
                 EventId: Guid.NewGuid(),
@@ -244,7 +274,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        // ---------- Stage 10: response ----------
+        // ---------- Stage 11: response ----------
         var response = new CreateTransactionResponse(
             Id: transaction.Id,
             Status: transaction.Status,

@@ -369,13 +369,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (13) ────────────────────────────────────────────
+    // ── AuditAction (17) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave13Values()
+    public void AuditAction_ShouldHave17Values()
     {
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(13, values.Length);
+        Assert.Equal(17, values.Length);
     }
 
     [Theory]
@@ -392,6 +392,10 @@ public class EnumTests
     [InlineData(nameof(AuditAction.ROLE_CHANGED))]
     [InlineData(nameof(AuditAction.SYSTEM_SETTING_CHANGED))]
     [InlineData(nameof(AuditAction.WALLET_ADDRESS_CHANGED))]
+    [InlineData(nameof(AuditAction.FRAUD_FLAG_CREATED))]
+    [InlineData(nameof(AuditAction.FRAUD_FLAG_APPROVED))]
+    [InlineData(nameof(AuditAction.FRAUD_FLAG_REJECTED))]
+    [InlineData(nameof(AuditAction.FRAUD_FLAG_AUTO_HOLD))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));

@@ -291,6 +291,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             limits,
             _inventory,
             fraud,
+            new RecordingFraudFlagWriter(),
             new Trc20AddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             new InvitationCodeGenerator(),
@@ -320,6 +321,29 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
         {
             Published.Add(domainEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Lightweight stub for <see cref="ITransactionFraudFlagWriter"/> — keeps
+    /// the suite focused on T45 creation behaviour without dragging the
+    /// Fraud module's full audit / outbox dependency graph into the test
+    /// host. T54's own integration suite covers the writer's atomic
+    /// FraudFlag + AuditLog + outbox semantics.
+    /// </summary>
+    private sealed class RecordingFraudFlagWriter : ITransactionFraudFlagWriter
+    {
+        public List<(Guid UserId, Guid TransactionId, FraudFlagType Type)> Calls { get; } = [];
+
+        public Task StagePreCreateFlagAsync(
+            Guid userId,
+            Guid transactionId,
+            FraudFlagType type,
+            string details,
+            CancellationToken cancellationToken)
+        {
+            Calls.Add((userId, transactionId, type));
             return Task.CompletedTask;
         }
     }
