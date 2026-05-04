@@ -164,6 +164,93 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Flags_Transaction_When_High_Volume_Count_Threshold_Exceeded()
+    {
+        // Pre-seed 6 prior transactions inside the 24h window — count threshold is 5.
+        await ConfigureHighVolumeAsync(periodHours: 24, countThreshold: 5, amountThreshold: 1_000_000m);
+        await SeedRecentTransactionsAsync(count: 6, eachAmount: 10m);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.FLAGGED, outcome.Body!.Status);
+        Assert.Equal("HIGH_VOLUME", outcome.Body.FlagReason);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == outcome.Body.Id);
+        Assert.Equal(TransactionStatus.FLAGGED, persisted.Status);
+        Assert.Null(persisted.AcceptDeadline);
+    }
+
+    [Fact]
+    public async Task Flags_Transaction_When_High_Volume_Amount_Threshold_Exceeded()
+    {
+        // 3 prior transactions × 5,000 USDT = 15,000 — amount threshold 10,000.
+        await ConfigureHighVolumeAsync(periodHours: 24, countThreshold: 1000, amountThreshold: 10_000m);
+        await SeedRecentTransactionsAsync(count: 3, eachAmount: 5_000m);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(TransactionStatus.FLAGGED, outcome.Body!.Status);
+        Assert.Equal("HIGH_VOLUME", outcome.Body.FlagReason);
+    }
+
+    [Fact]
+    public async Task Does_Not_Flag_For_High_Volume_When_Prior_Transactions_Outside_Window()
+    {
+        await ConfigureHighVolumeAsync(periodHours: 24, countThreshold: 1, amountThreshold: 1m);
+        // Seed 5 transactions 48h ago — outside the 24h rolling window.
+        var olderUtc = _clock.GetUtcNow().UtcDateTime.AddHours(-48);
+        await SeedRecentTransactionsAsync(count: 5, eachAmount: 100m, createdAtUtc: olderUtc);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+        Assert.Null(outcome.Body.FlagReason);
+    }
+
+    [Fact]
+    public async Task Flags_Transaction_For_Dormant_Account_Anomaly()
+    {
+        // Backdate seller to 90 days old, 0 completed transactions, attempt
+        // a 100 USDT transaction with a 50 USDT dormant value threshold.
+        await BackdateSellerAsync(_seller.Id, ageDays: 90);
+        await Context.ConfigureSettingAsync(FraudPreCheckService.DormantMinAgeDaysKey, "30");
+        await Context.ConfigureSettingAsync(FraudPreCheckService.DormantValueThresholdKey, "50");
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.FLAGGED, outcome.Body!.Status);
+        Assert.Equal("ABNORMAL_BEHAVIOR", outcome.Body.FlagReason);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == outcome.Body.Id);
+        Assert.Equal(TransactionStatus.FLAGGED, persisted.Status);
+        Assert.Null(persisted.AcceptDeadline);
+    }
+
+    [Fact]
+    public async Task Does_Not_Flag_New_Account_For_Dormant_Anomaly()
+    {
+        // Brand-new seller (default CreatedAt) with 0 completed transactions
+        // and a high attempted amount — caught by T39 new-account limits, not
+        // the dormant rule. The dormant rule explicitly requires age >= min.
+        await Context.ConfigureSettingAsync(FraudPreCheckService.DormantMinAgeDaysKey, "30");
+        await Context.ConfigureSettingAsync(FraudPreCheckService.DormantValueThresholdKey, "50");
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+        Assert.Null(outcome.Body.FlagReason);
+    }
+
+    [Fact]
     public async Task Rejects_Below_Minimum_Price()
     {
         var sut = BuildSut();
@@ -307,6 +394,69 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         BuyerIdentificationMethod: BuyerIdentificationMethod.STEAM_ID,
         BuyerSteamId: BuyerSteamId,
         SellerWalletAddress: ValidWallet);
+
+    private async Task ConfigureHighVolumeAsync(int periodHours, int countThreshold, decimal amountThreshold)
+    {
+        await Context.ConfigureSettingAsync(FraudPreCheckService.HighVolumePeriodHoursKey, periodHours.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await Context.ConfigureSettingAsync(FraudPreCheckService.HighVolumeCountThresholdKey, countThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        await Context.ConfigureSettingAsync(FraudPreCheckService.HighVolumeAmountThresholdKey, amountThreshold.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Insert <paramref name="count"/> seller-owned <c>Transaction</c> rows
+    /// inside the high-volume window. Two-stage save (Add → Save → Update
+    /// CreatedAt → Save) so the audit pipeline cannot overwrite our backdated
+    /// timestamps (see MEMORY: T33 yapım notu).
+    /// </summary>
+    private async Task SeedRecentTransactionsAsync(int count, decimal eachAmount, DateTime? createdAtUtc = null)
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var stamp = createdAtUtc ?? nowUtc.AddHours(-1);
+        var ids = new List<Guid>(capacity: count);
+
+        for (var i = 0; i < count; i++)
+        {
+            // COMPLETED so the eligibility max-concurrent check (T39) does
+            // not also reject the new transaction — high-volume rolling
+            // window aggregates by SellerId+CreatedAt regardless of status.
+            var tx = new Transaction
+            {
+                Id = Guid.NewGuid(),
+                Status = TransactionStatus.COMPLETED,
+                SellerId = _seller.Id,
+                BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
+                TargetBuyerSteamId = BuyerSteamId,
+                ItemAssetId = $"asset-{i}",
+                ItemClassId = $"class-{i}",
+                ItemName = $"Backfill Item {i}",
+                StablecoinType = StablecoinType.USDT,
+                Price = eachAmount,
+                CommissionRate = 0.02m,
+                CommissionAmount = 0m,
+                TotalAmount = eachAmount,
+                SellerPayoutAddress = ValidWallet,
+                PaymentTimeoutMinutes = 60,
+                AcceptDeadline = nowUtc.AddHours(1),
+            };
+            Context.Set<Transaction>().Add(tx);
+            ids.Add(tx.Id);
+        }
+        await Context.SaveChangesAsync();
+
+        // Audit pipeline pinned CreatedAt to UtcNow on Add — bring it back.
+        var seeded = await Context.Set<Transaction>().Where(t => ids.Contains(t.Id)).ToListAsync();
+        foreach (var tx in seeded) tx.CreatedAt = stamp;
+        await Context.SaveChangesAsync();
+    }
+
+    private async Task BackdateSellerAsync(Guid sellerId, int ageDays)
+    {
+        // Same two-stage trick — UpdateAuditFields only touches CreatedAt on
+        // Added rows; an explicit Modified update lets us pin the timestamp.
+        var seller = await Context.Set<User>().SingleAsync(u => u.Id == sellerId);
+        seller.CreatedAt = _clock.GetUtcNow().UtcDateTime.AddDays(-ageDays);
+        await Context.SaveChangesAsync();
+    }
 
     private sealed class AlwaysClearFlagChecker : IAccountFlagChecker
     {

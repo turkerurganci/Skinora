@@ -10,10 +10,11 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
-/// Integration tests for the T26 + T30 + T34 + T43 EF Core seed contracts (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 34 SystemSetting rows
+/// Integration tests for the T26 + T30 + T34 + T43 + T55 EF Core seed contracts (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 36 SystemSetting rows
 /// (28 T26 platform parameters + 2 T30 access-control settings +
-/// 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds).
+/// 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
+/// 2 T55 dormant-account fraud thresholds).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -52,21 +53,22 @@ public class SeedDataTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task Seed_SystemSettings_Has_34_Rows_With_Unique_Keys()
+    public async Task Seed_SystemSettings_Has_36_Rows_With_Unique_Keys()
     {
         // 28 T26 platform parameters + 2 T30 access-control settings +
-        // 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds.
+        // 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
+        // 2 T55 dormant-account fraud thresholds.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(34, rows.Count);
-        Assert.Equal(34, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(36, rows.Count);
+        Assert.Equal(36, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13: 14 rows ship with a documented
-        // default (8 T26 + 2 T30 + 2 T34 + 2 T43).
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3: 15 rows ship with a documented
+        // default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55).
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -77,6 +79,7 @@ public class SeedDataTests : IntegrationTestBase
             "auth.banned_countries",
             "auth.min_steam_account_age_days",
             "commission_rate",
+            "dormant_account_min_age_days",
             "gas_fee_protection_ratio",
             "min_refund_threshold_ratio",
             "monitoring_post_cancel_24h_polling_seconds",
@@ -98,14 +101,15 @@ public class SeedDataTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Mandatory_Parameters_Are_Unconfigured_And_Null()
     {
-        // The remaining 20 rows have no default and must ship NULL +
+        // The remaining 21 rows have no default and must ship NULL +
         // IsConfigured = false so startup fail-fast (06 §8.9) refuses to
-        // launch until an admin or env var provides values.
+        // launch until an admin or env var provides values (20 base + 1 T55
+        // dormant_account_value_threshold which is admin-tuned per risk profile).
         var unconfigured = await Context.Set<SystemSetting>()
             .Where(s => !s.IsConfigured)
             .ToListAsync();
 
-        Assert.Equal(20, unconfigured.Count);
+        Assert.Equal(21, unconfigured.Count);
         Assert.All(unconfigured, s => Assert.Null(s.Value));
     }
 

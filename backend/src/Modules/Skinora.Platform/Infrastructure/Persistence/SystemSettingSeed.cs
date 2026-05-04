@@ -66,6 +66,9 @@ public static class SystemSettingSeed
         // --- T43: Reputation insufficient-data thresholds (02 §13, 06 §3.1) ---
         Default     (33, "reputation.min_account_age_days",             "int",     "Reputation",    "30",   "Yeni hesap koruması — hesap yaşı bu eşiğin altındaysa composite reputationScore null döner ('Yeni kullanıcı')."),
         Default     (34, "reputation.min_completed_transactions",       "int",     "Reputation",    "3",    "İstatistiksel anlamlılık — tamamlanmış işlem sayısı bu eşiğin altındaysa composite reputationScore null döner."),
+        // --- T55: Dormant-account anomaly thresholds (02 §14.3, §14.4) ---
+        Default     (35, "dormant_account_min_age_days",                "int",     "Fraud",         "30",   "Dormant kontrolü için minimum hesap yaşı (gün). Bu yaşın altında hesap 'yeni hesap' sayılır ve T39 yeni hesap limitleri uygulanır; bu eşiğin üzerinde 0 işlemli hesabın yüksek tutarlı denemesi ABNORMAL_BEHAVIOR ile flag'lenir (02 §14.3)."),
+        Unconfigured(36, "dormant_account_value_threshold",             "decimal", "Fraud",                  "Dormant hesap için tek işlem tutar eşiği (USDT). Hiç işlem yapmamış hesabın bu tutarın üzerinde işlem denemesi otomatik flag tetikler. Admin tarafından risk profiline göre belirlenir."),
     ];
 
     private static SystemSetting Unconfigured(

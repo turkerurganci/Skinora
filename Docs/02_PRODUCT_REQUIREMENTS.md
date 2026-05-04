@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v2.5** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-04-21
+**Versiyon: v2.6** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-05-04
 
 ---
 
@@ -347,7 +347,9 @@ Platform iki seviyede flag mekanizması kullanır:
 - Platform arka planda item piyasa fiyatını çeker
 - Piyasa fiyatından sapma eşiği admin tarafından belirlenir
 - Eşiği aşan işlemler otomatik flag'lenir ve admin onayı bekler (işlem durdurulur). Flag'leme işlem oluşturma anında (CREATED öncesi) tetiklenir; bu aşamada timeout henüz başlamamıştır. Admin onaylarsa işlem CREATED'a geçer ve normal timeout'lar işlemeye başlar, reddederse işlem iptal olur (state machine detayları: 05 §4.2)
-- Kısa sürede yüksek hacim tespiti — eşikler admin tarafından belirlenir
+- Kısa sürede yüksek hacim tespiti — eşikler admin tarafından belirlenir (toplam tutar veya işlem sayısı; hangisi önce aşılırsa flag tetiklenir, periyot saati admin tarafından ayarlanır)
+- Dormant hesap anomali tespiti (§14.3): minimum hesap yaşı (varsayılan 30 gün) eşiğinin üzerinde, hiç tamamlanmış işlemi olmayan hesabın admin tarafından belirlenen tek işlem tutar eşiğinin üzerinde işlem denemesi otomatik flag'lenir (`ABNORMAL_BEHAVIOR`). Yeni hesap koruması (T39 yeni hesap limitleri) ayrı bir kontrol katmanıdır; minimum yaş eşiği iki kuralın çakışmasını engeller
+- AML kuralları işlem oluşturma anında öncelik sırasıyla değerlendirilir: PRICE_DEVIATION → HIGH_VOLUME → ABNORMAL_BEHAVIOR. İlk eşleşen kural flag tipini belirler — tek işlem için tek FraudFlag yazılır
 
 ---
 
@@ -383,7 +385,8 @@ Platform iki seviyede flag mekanizması kullanır:
 | Yeni hesap işlem limiti | Dinamik belirlenir |
 | Gas fee koruma eşiği | Değiştirilebilir |
 | Fraud sapma eşiği | Piyasa fiyatından sapma yüzdesi |
-| Yüksek hacim eşikleri | Kara para tespiti için |
+| Yüksek hacim eşikleri | Tutar eşiği, işlem sayısı eşiği ve kontrol periyodu (saat) |
+| Dormant hesap anomali eşikleri | Minimum hesap yaşı (gün) ve tek işlem tutar eşiği — birlikte değerlendirilir (§14.3, §14.4) |
 | Alıcı belirleme yöntemi | Yöntem 2'yi aktif/pasif yapabilir |
 | Timeout uyarı eşiği | Süre dolmadan ne zaman uyarı gönderileceği (oran olarak) |
 | Platform Steam hesapları | Durum izleme |
