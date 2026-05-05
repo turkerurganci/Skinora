@@ -249,7 +249,23 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 AdminTransactionErrorCodes.InvalidStateTransition,
                 $"Cannot apply emergency hold to terminal state {transaction.Status}.");
 
-        // ---------- Stage 4: domain stamp via state machine ----------
+        // ---------- Stage 4: T50 freeze pre-pass ----------
+        // Runs BEFORE the state machine because T44 ApplyEmergencyHold leaves
+        // TimeoutRemainingSeconds NULL for non-ITEM_ESCROWED states (T50 report
+        // Known Limitations — flagged for T59), which would trip
+        // CK_Transactions_FreezeActive at SaveChangesAsync. T50 FreezeAsync
+        // resolves the active-phase deadline from the 06 §3.5 matrix and
+        // stamps the freeze trio (TimeoutFrozenAt + TimeoutFreezeReason +
+        // TimeoutRemainingSeconds). It also cancels pending Hangfire jobs.
+        // T54 cascade-hold uses the same pre-pass pattern.
+        await _freeze.FreezeAsync(transaction, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
+
+        // ---------- Stage 5: domain stamp via state machine ----------
+        // ApplyEmergencyHold sets IsOnHold + EmergencyHold* + PreviousStatusBeforeHold.
+        // It also re-stamps TimeoutFrozenAt + TimeoutFreezeReason — same values
+        // already written by FreezeAsync. The clock skew between TimeProvider
+        // (FreezeAsync) and DateTime.UtcNow (state machine) is acceptable; no
+        // CK constraint compares the two timestamps.
         var previousStatus = transaction.Status;
 
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
@@ -266,12 +282,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 ex.ErrorCode,
                 ex.Message);
         }
-
-        // ---------- Stage 5: freeze service — Hangfire job cancel ----------
-        // FreezeAsync is idempotent against the in-place state machine stamp;
-        // the call's side effect here is the Hangfire job cleanup (the freeze
-        // trio is already set by the state machine).
-        await _freeze.FreezeAsync(transaction, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
 
         // ---------- Stage 6: side effects ----------
         var occurredAt = _clock.GetUtcNow().UtcDateTime;
