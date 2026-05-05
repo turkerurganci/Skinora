@@ -1,6 +1,6 @@
 # T58 — Dispute Sistemi
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım tamamlandı, validator bekliyor) | **Tarih:** 2026-05-05
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (✓ PASS bağımsız validator) | **Tarih:** 2026-05-05
 
 ---
 
@@ -186,3 +186,47 @@ T58, alıcı-tetiklemeli dispute (anlaşmazlık) pipeline'ını implementasyona 
 - **Main CI startup check (Adım 0):** son 3 main run `success` (25388029904 / 25388029894 / 25387715247).
 - **Dış varsayım kontrolü (Adım 4):** Yeni dış varsayım yok. Tüm bağımlılıklar (T22 Dispute entity + DisputeConfiguration, T37 INotificationDispatcher, T44 state machine, IOutboxService, MediatR, ISteamInventoryReader) implementasyonda mevcut. Yeni paket eklenmedi, tüm abstraction'lar repo-içi.
 - **Branch izolasyon kontrolü (Bitiş Kapısı):** push sonrası `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` ile yalnızca `T58` görünmeli.
+
+---
+
+## Doğrulama (Bağımsız Validator)
+
+**Verdict:** ✓ PASS · **Tarih:** 2026-05-05 · **Branch HEAD:** `e5817a5` · **PR CI:** [`25392687040`](https://github.com/turkerurganci/Skinora/actions/runs/25392687040) (10/10 job ✓)
+
+### Hard-stop kontrolleri
+- **Adım -1 (working tree):** Validator session başında `git status --short` boş → ✓.
+- **Adım 0 (main CI startup, ardışık 3 SUCCESS):** `25388029904` (chore #89) + `25388029894` (chore #89) + `25387715247` (T57 #88) → ✓.
+- **Adım 0b (memory drift):** `MEMORY.md` T58 satır(lar)ı mevcut → ✓.
+
+### Kabul kriterleri (8/8 ✓)
+- Tüm 8 plan kabul kriteri yapım raporu kanıt zinciriyle 1:1 doğrulandı (Open ▸ buyer-only, 3 tip, otomatik doğrulama, submit-txhash, escalate, timeout durmaz, aynı tür tekrar yasak/farklı tür eşzamanlı serbest, rate limiting). 07 §7.8–§7.10 envelope'ları + hata kodları + HTTP status mapping spec ile tam uyumlu. 02 §10 + 03 §6 akış metinleri (Sonuç A/B/C) auto-checker mesajlarında verbatim.
+- **canDispute envelope (07 §7.4.5)** spec-tam değil — `_disputeAllowedStates` per-tip set'lerinin birleşimi olduğu için "aynı tür daha önce açılmamış" runtime'da DisputeService Stage 4 UQ pre-check'iyle yakalanıyor; envelope tek-bit signal. **Minor advisory** — fonksiyonel etki yok (servis hard-stop), known limitations'a yansıtılabilir.
+
+### Doğrulama kontrol listesi (2/2 ✓)
+- **02 §10:** §10.1 (üç tip auto-checker), §10.2 (buyer-only + timeout durmaz + UQ rate limiting), §10.3 T60 forward-devir, §10.4 T59+ forward-devir → tam uyum.
+- **07 §7.8–§7.10:** Request/response envelope + hata kodları + HTTP status mapping spec ile 1:1.
+
+### Test sonuçları
+| Suite | Sonuç | Kanıt |
+|---|---|---|
+| Lokal Release build | ✓ 0W/0E | `dotnet build -c Release` 16.89 sn |
+| Task branch CI run [`25392687040`](https://github.com/turkerurganci/Skinora/actions/runs/25392687040) | ✓ 10/10 (Lint + Build + Unit + Contract + Migration + Docker + Integration + Gate + Detect + Guard skipped) | `gh run view` |
+| Disputes integration (CI) | ✓ tüm test PASS sonrası | b238c8c fix sonrası |
+
+### Validator bulgu — S2 Kırılma (test seed) — same-PR fix uygulandı
+- **Bulgu:** Yapım raporundaki ilk PR push'unda (HEAD `791a7ca`) CI run `25392121259` "4. Integration test" job'u 5 test FAIL: `Open_Payment_ConfirmedPaymentExists_AutoResolves_AndEmitsEvent`, `Open_DuplicateType_AfterClose_Returns_DuplicateDispute`, `SubmitTxHash_MatchingHash_Resolves_AndClearsActiveDisputeFlag`, `SubmitTxHash_DisputeClosed_Returns_DisputeClosed`, `Escalate_ClosedDispute_Returns_DisputeClosed`. Kök neden: 5 inline `BlockchainTransaction` insert'i `ConfirmationCount = 19` ve `PaymentAddressId` null kullanıyordu — `CK_BlockchainTransactions_Status_Confirmed` (count ≥ 20) ve `CK_BlockchainTransactions_Type_BuyerPayment` (PaymentAddressId NOT NULL) constraint'lerini ihlal ediyor. Lokal SQLite ignore eder, CI SQL Server enforce eder.
+- **Düzeltme (commit `b238c8c`):** 5 inline insert `SeedConfirmedBuyerPaymentAsync` helper'ına swap edildi (T56 `FraudFlagServiceTests.InsertBuyerPaymentAsync` paterni). Helper `PaymentAddress` row + `ConfirmationCount = 20` ile her iki CK constraint'i karşılıyor. Sonraki CI run [`25392687040`](https://github.com/turkerurganci/Skinora/actions/runs/25392687040) (HEAD `e5817a5`) 10/10 job ✓.
+- **BYPASS_LOG entry (commit `e5817a5`):** Layer 2 (`[ci-failure]`) bypass kullanıldı — son CI run failure iken `SKINORA_ALLOW_DIRECT_PUSH=1` ile fix push edildi. Pre-push hook T11.2 paterni; established workflow.
+
+### Mini güvenlik kontrolü
+- **Secret sızıntısı:** Temiz (auto-checker mesajları sabit Türkçe string; user-supplied detail/txHash trimlenip max-length DB CHECK ile sınırlı).
+- **Auth/authorization:** Üç endpoint `Authorize(Authenticated)` + servis Stage 2/3 buyer-only DB guard. Authentication policy değişikliği yok.
+- **Input validation:** `type` enum (whitelist), `txHash` ≥16 char, `detail` ≥10 char (trimmed); `JsonStringEnumConverter` enum hatası → 400.
+- **Yeni dış bağımlılık:** Yok. `Skinora.Steam` project reference eklendi (zaten repo içi).
+
+### Yapım raporu karşılaştırması
+- Yapım raporu kabul kriterleri tablosu, doğrulama kontrol listesi ve known limitations validator verdict'iyle tam uyumlu — 0 uyuşmazlık.
+- Validator yapım raporundaki §"Test Sonuçları" bölümünü güncellemedi; raporun "⏳ CI'da çalışacak" notu artık `25392687040` 10/10 job ✓ olarak gerçekleşti — bu doğrulama bölümünde kayıt altına alındı.
+
+### Sırada
+- T59 Emergency hold (07 §9.20–§9.22, 02 §7; bağımlılık T44 ✓ + T50 ✓ + T40 ✓).
