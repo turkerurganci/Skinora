@@ -1,6 +1,6 @@
 # T56 — Çoklu Hesap Tespiti
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-05
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (PASS bağımsız validator 2026-05-05) | **Tarih:** 2026-05-05
 
 ---
 
@@ -164,6 +164,30 @@ T54 fraud flag pipeline + T18 user/login entity'leri üzerine multi-account dete
 ## Commit & PR
 
 - Branch: `task/T56-multi-account-detection`
-- Commit: `5304199` (kod) + `20df144` (rapor + status + memory)
+- Commit: `5304199` (kod) + `20df144` (rapor + status + memory) + `598361f` (PR + commit hash'ler)
 - PR: [#87](https://github.com/turkerurganci/Skinora/pull/87)
-- CI: ⏳ izleniyor
+- CI: ✓ task branch run [25360451483](https://github.com/turkerurganci/Skinora/actions/runs/25360451483) — Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker build/CI Gate **10/10 SUCCESS**
+
+## Bağımsız Doğrulama (Validator)
+
+**Tarih:** 2026-05-05 | **Verdict:** ✓ PASS | **Validator chat:** ayrı (yapım raporu Phase 3'e kadar görülmedi)
+
+| Kapı | Sonuç |
+|---|---|
+| Adım -1 — Working tree hygiene | ✓ Temiz (`git status --short` boş) |
+| Adım 0 — Main CI startup (son 3 run) | ✓ Hepsi SUCCESS — 25338999719, 25338999692, 25332031310 |
+| Adım 0b — Repo MEMORY drift (T56 satırı) | ✓ Mevcut |
+| Adım 8a — Task branch CI | ✓ Run 25360451483, 10/10 job SUCCESS |
+
+**Kabul kriterleri:** 5/5 ✓ kanıtlı (kriter 1 wallet payout+refund FindWalletMatchesAsync + PickStrongMatchType priority + StageAccountFlagAsync MULTI_ACCOUNT cascade=false; kriter 2 SOURCE_ADDRESS strong-after-control + ParseExchangeAddresses NONE marker; kriter 3 IP/DEVICE_FINGERPRINT supporting-only; kriter 4 supportingSignals JSON shape integration test; kriter 5 AuditLog FRAUD_FLAG_CREATED + Outbox FraudFlagCreatedEvent T54 pipeline). Doğrulama listesi: 1/1 ✓ (02 §14.3 üç sinyal türü implement).
+
+**Test sonuçları (lokal):** Build Release 0W/0E (16.8s); MultiAccountSignalEvaluatorTests 14/14 PASS (26 ms — Theory expansion ile case sayısı). Integration suite Docker gerektiriyor → CI run 25360451483 `4. Integration test` job SUCCESS 6:06:50 ile validate edildi.
+
+**Güvenlik:** 0 bulgu (secret leak yok, auth etkisi yok — internal port; LINQ→EF SQL injection güvenli; yeni dış bağımlılık yok — `*.csproj` diff boş).
+
+**Bulgular:** 0 S-level. **1 minor advisory (non-blocking):**
+- **A1 — Background scan kapsam dışı:** Detector yalnızca wallet update tetiklemesinde çalışır; retroactive IP/login tarama yok. Forward-devir Known Limitations'da yazılı (T63 admin background job). Strong sinyal kategorisi cüzdan-only olduğundan pratik etki sınırlı.
+
+**Cosmetic gözlem (S-level değil):** Yapım raporu "12 unit + 15 integration" yazıyor; gerçek `[Fact]/[Theory]` count 11 unit metot (14 case Theory expansion ile) + 16 integration metot. Test coverage artmış pozitif yön; rapor metni revize gerektirmez.
+
+**Yapım raporu uyumu:** Tam uyumlu — kanıtlar ve verdict yapım raporundaki kabul kriterleri tablosu ile 1:1 örtüşüyor.
