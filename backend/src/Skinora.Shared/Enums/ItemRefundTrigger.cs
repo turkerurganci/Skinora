@@ -25,4 +25,7 @@ public enum ItemRefundTrigger
 
     /// <summary>Buyer-initiated cancellation while the item was on the platform (T51 — 02 §7, 03 §3.3).</summary>
     BuyerCancel,
+
+    /// <summary>Admin-initiated cancellation while the item was on the platform (T59 — 02 §7, 07 §9.20 / §9.22).</summary>
+    AdminCancel,
 }

@@ -240,13 +240,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (20) ───────────────────────────────────────
+    // ── NotificationType (22) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave20Values()
+    public void NotificationType_ShouldHave22Values()
     {
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(20, values.Length);
+        Assert.Equal(22, values.Length);
     }
 
     [Theory]
@@ -270,6 +270,8 @@ public class EnumTests
     [InlineData(nameof(NotificationType.ADMIN_ESCALATION))]
     [InlineData(nameof(NotificationType.ADMIN_PAYMENT_FAILURE))]
     [InlineData(nameof(NotificationType.ADMIN_STEAM_BOT_ISSUE))]
+    [InlineData(nameof(NotificationType.EMERGENCY_HOLD_APPLIED))]
+    [InlineData(nameof(NotificationType.EMERGENCY_HOLD_RELEASED))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationType), Enum.Parse<NotificationType>(valueName)));
@@ -369,13 +371,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (17) ────────────────────────────────────────────
+    // ── AuditAction (20) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave17Values()
+    public void AuditAction_ShouldHave20Values()
     {
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(17, values.Length);
+        Assert.Equal(20, values.Length);
     }
 
     [Theory]
@@ -396,6 +398,9 @@ public class EnumTests
     [InlineData(nameof(AuditAction.FRAUD_FLAG_APPROVED))]
     [InlineData(nameof(AuditAction.FRAUD_FLAG_REJECTED))]
     [InlineData(nameof(AuditAction.FRAUD_FLAG_AUTO_HOLD))]
+    [InlineData(nameof(AuditAction.TRANSACTION_CANCELLED_ADMIN))]
+    [InlineData(nameof(AuditAction.EMERGENCY_HOLD_APPLIED))]
+    [InlineData(nameof(AuditAction.EMERGENCY_HOLD_RELEASED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));
@@ -506,10 +511,10 @@ public class EnumTests
     }
 
     [Fact]
-    public void ItemRefundTrigger_ShouldHave4Values()
+    public void ItemRefundTrigger_ShouldHave5Values()
     {
         var values = Enum.GetValues<ItemRefundTrigger>();
-        Assert.Equal(4, values.Length);
+        Assert.Equal(5, values.Length);
     }
 
     [Theory]
@@ -517,9 +522,25 @@ public class EnumTests
     [InlineData(nameof(ItemRefundTrigger.TimeoutDelivery))]
     [InlineData(nameof(ItemRefundTrigger.SellerCancel))]
     [InlineData(nameof(ItemRefundTrigger.BuyerCancel))]
+    [InlineData(nameof(ItemRefundTrigger.AdminCancel))]
     public void ItemRefundTrigger_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(ItemRefundTrigger), Enum.Parse<ItemRefundTrigger>(valueName)));
+    }
+
+    [Fact]
+    public void EmergencyHoldReleaseAction_ShouldHave2Values()
+    {
+        var values = Enum.GetValues<EmergencyHoldReleaseAction>();
+        Assert.Equal(2, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(EmergencyHoldReleaseAction.RESUME))]
+    [InlineData(nameof(EmergencyHoldReleaseAction.CANCEL))]
+    public void EmergencyHoldReleaseAction_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(EmergencyHoldReleaseAction), Enum.Parse<EmergencyHoldReleaseAction>(valueName)));
     }
 
     // ── Cross-cutting ───────────────────────────────────────────────
@@ -532,6 +553,7 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        Assert.Equal(26, enumTypes.Count);
+        // T59 added EmergencyHoldReleaseAction → 26 + 1 = 27.
+        Assert.Equal(27, enumTypes.Count);
     }
 }

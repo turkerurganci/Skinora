@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Account;
+using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Pricing;
@@ -86,6 +87,11 @@ public static class TransactionsModule
         services.AddScoped<IGasFeeSettingsProvider, GasFeeSettingsProvider>();
         services.AddScoped<IRefundDecisionService, RefundDecisionService>();
         services.AddScoped<IRefundBlockedAlertService, RefundBlockedAlertService>();
+
+        // T59 — admin transaction lifecycle orchestrator. Composes the T44
+        // state machine + T50 freeze service for AD19 / AD19b / AD19c
+        // (07 §9.20–§9.22, 02 §7, 03 §8.8).
+        services.AddScoped<IAdminTransactionService, AdminTransactionService>();
 
         return services;
     }

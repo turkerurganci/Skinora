@@ -104,6 +104,70 @@ public class TransactionCancelledNotificationConsumerTests
     }
 
     [Fact]
+    public async Task Handle_Admin_Cancel_Notifies_Both_Parties()
+    {
+        // T59 — admin cancel publishes TransactionCancelledEvent with
+        // CancelledByType.ADMIN; the consumer fans the notification out to
+        // BOTH seller and buyer (neither initiated the cancel).
+        var dispatcher = new RecordingDispatcher();
+        var processed = new InMemoryProcessedEventStore();
+        var sut = new TransactionCancelledNotificationConsumer(
+            dispatcher, processed,
+            NullLogger<TransactionCancelledNotificationConsumer>.Instance);
+
+        var sellerId = Guid.NewGuid();
+        var buyerId = Guid.NewGuid();
+        var domainEvent = new TransactionCancelledEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            CancelledBy: CancelledByType.ADMIN,
+            SellerId: sellerId,
+            BuyerId: buyerId,
+            ItemName: "Bayonet | Doppler",
+            CancelReason: "Yasal talep",
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == sellerId);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == buyerId);
+        Assert.All(dispatcher.Requests, r =>
+        {
+            Assert.Equal(NotificationType.TRANSACTION_CANCELLED, r.Type);
+            Assert.Equal("İşlem yönetici tarafından iptal edildi", r.Parameters["Reason"]);
+        });
+    }
+
+    [Fact]
+    public async Task Handle_Admin_Cancel_With_Null_Buyer_Notifies_Only_Seller()
+    {
+        // Pre-accept admin cancel (rare but possible — admin acts before any
+        // buyer accepts the invite). Only seller is notified.
+        var dispatcher = new RecordingDispatcher();
+        var processed = new InMemoryProcessedEventStore();
+        var sut = new TransactionCancelledNotificationConsumer(
+            dispatcher, processed,
+            NullLogger<TransactionCancelledNotificationConsumer>.Instance);
+
+        var sellerId = Guid.NewGuid();
+        var domainEvent = new TransactionCancelledEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            CancelledBy: CancelledByType.ADMIN,
+            SellerId: sellerId,
+            BuyerId: null,
+            ItemName: "M9 Bayonet",
+            CancelReason: "Compliance",
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(sellerId, request.UserId);
+    }
+
+    [Fact]
     public async Task Handle_Idempotent_When_EventAlreadyProcessed()
     {
         var dispatcher = new RecordingDispatcher();

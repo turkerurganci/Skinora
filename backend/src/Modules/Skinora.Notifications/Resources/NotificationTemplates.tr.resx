@@ -60,4 +60,16 @@
   <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
     <value>{ItemName} işlemi iptal edildi: {Reason}.</value>
   </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Title" xml:space="preserve">
+    <value>İşleminiz inceleme için geçici olarak donduruldu</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Body" xml:space="preserve">
+    <value>{ItemName} işlemi platform tarafından inceleme nedeniyle geçici olarak donduruldu: {Reason}.</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Title" xml:space="preserve">
+    <value>İnceleme tamamlandı — işlem devam ediyor</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
+    <value>{ItemName} işlemi {ResumedStatus} aşamasından devam ediyor. Sayaç kaldığı yerden işliyor.</value>
+  </data>
 </root>

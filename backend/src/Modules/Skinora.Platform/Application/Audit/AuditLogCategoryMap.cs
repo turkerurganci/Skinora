@@ -51,6 +51,13 @@ public static class AuditLogCategoryMap
             [AuditAction.FRAUD_FLAG_APPROVED] = Categories.AdminAction,
             [AuditAction.FRAUD_FLAG_REJECTED] = Categories.AdminAction,
             [AuditAction.FRAUD_FLAG_AUTO_HOLD] = Categories.AdminAction,
+
+            // T59 — admin transaction lifecycle. Direct admin cancel (AD19),
+            // emergency hold apply/release (AD19b/c) all surface in the admin
+            // queue alongside the other ADMIN_ACTION rows (07 §9.20–§9.22).
+            [AuditAction.TRANSACTION_CANCELLED_ADMIN] = Categories.AdminAction,
+            [AuditAction.EMERGENCY_HOLD_APPLIED] = Categories.AdminAction,
+            [AuditAction.EMERGENCY_HOLD_RELEASED] = Categories.AdminAction,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>
