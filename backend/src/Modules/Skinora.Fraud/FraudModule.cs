@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Flags;
+using Skinora.Fraud.Application.MultiAccount;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Users.Application.MultiAccount;
 
 namespace Skinora.Fraud;
 
@@ -25,6 +27,10 @@ public static class FraudModule
         // pre-create writer port through the Fraud-owned audit / outbox
         // pipeline (mirrors the IAccountFlagChecker pattern).
         services.AddScoped<ITransactionFraudFlagWriter, TransactionFraudFlagWriter>();
+
+        // T56 — multi-account detector. Port lives in Skinora.Users so the
+        // wallet update path can call it without referencing Fraud.
+        services.AddScoped<IMultiAccountDetector, MultiAccountDetector>();
 
         return services;
     }

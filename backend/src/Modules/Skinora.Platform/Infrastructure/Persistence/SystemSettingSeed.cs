@@ -69,6 +69,8 @@ public static class SystemSettingSeed
         // --- T55: Dormant-account anomaly thresholds (02 §14.3, §14.4) ---
         Default     (35, "dormant_account_min_age_days",                "int",     "Fraud",         "30",   "Dormant kontrolü için minimum hesap yaşı (gün). Bu yaşın altında hesap 'yeni hesap' sayılır ve T39 yeni hesap limitleri uygulanır; bu eşiğin üzerinde 0 işlemli hesabın yüksek tutarlı denemesi ABNORMAL_BEHAVIOR ile flag'lenir (02 §14.3)."),
         Unconfigured(36, "dormant_account_value_threshold",             "decimal", "Fraud",                  "Dormant hesap için tek işlem tutar eşiği (USDT). Hiç işlem yapmamış hesabın bu tutarın üzerinde işlem denemesi otomatik flag tetikler. Admin tarafından risk profiline göre belirlenir."),
+        // --- T56: Multi-account detection — known exchange/custodial address allowlist (02 §14.3, 03 §7.4) ---
+        Default     (37, "multi_account.exchange_addresses",            "string",  "Fraud",         "NONE", "Çoklu hesap kontrolünde 'aynı gönderim adresi' destekleyici sinyalinden hariç tutulan bilinen exchange/custodial cüzdan adresleri (CSV). 'NONE' = hiç adres hariç değil. Adresler exact-match (case-sensitive) karşılaştırılır."),
     ];
 
     private static SystemSetting Unconfigured(

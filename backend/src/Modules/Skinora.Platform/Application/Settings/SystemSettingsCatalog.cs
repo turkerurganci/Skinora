@@ -79,6 +79,7 @@ public static class SystemSettingsCatalog
         new("high_volume_period_hours",                   "fraud_detection",      "Yüksek hacim kontrol periyodu",                             "saat"),
         new("dormant_account_min_age_days",               "fraud_detection",      "Dormant hesap minimum yaş eşiği",                           "gün"),
         new("dormant_account_value_threshold",            "fraud_detection",      "Dormant hesap işlem tutar eşiği",                           "USDT"),
+        new("multi_account.exchange_addresses",           "fraud_detection",      "Bilinen exchange/custodial adres listesi (CSV; NONE = yok)", null),
 
         // --- Blockchain monitoring + refund threshold ---
         new("monitoring_post_cancel_24h_polling_seconds", "blockchain_health",    "İptal sonrası ilk 24 saat polling aralığı",                 "saniye"),
