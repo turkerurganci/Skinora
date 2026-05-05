@@ -104,17 +104,17 @@ Bu PR no-op kod olduğu için ek test çalıştırması gerekmez. Validator gere
 ## Commit & PR
 
 - Branch: `task/T57-wash-trading-doc-confirmation`
-- Commit: `9970842`
+- Commit: `9970842` (kod) + `0336fdd` (PR ref güncelleme)
 - PR: [#88](https://github.com/turkerurganci/Skinora/pull/88)
-- CI: <run id + sonuç buraya gelecek (CI watch sonrası)>
+- CI: ✓ PASS — run [`25387160303`](https://github.com/turkerurganci/Skinora/actions/runs/25387160303) (Lint ✓ + Detect changed paths ✓ + CI Gate ✓; Build/Unit/Integration/Contract/Migration/Docker paths-filter ile doc-only PR'da skip — beklenen davranış, T43/T71 doc-only PR pattern mirror)
 
 ## Bitiş Kapısı (skill task.md — doc-only edition)
 
-- [ ] Branch push edildi mi?
-- [ ] PR açıldı mı?
-- [ ] PR numarası rapor footer'a yazıldı mı?
-- [ ] Rapor + status push edildi mi?
-- [ ] CI run tamamlandı mı?
-- [ ] CI run sonucu success mi?
-- [ ] Branch izolasyon check temiz mi?
-- [ ] Repo memory'de T57 satırı eklendi/güncellendi mi?
+- [x] Branch push edildi mi? — `task/T57-wash-trading-doc-confirmation` push'landı (origin tracking ✓)
+- [x] PR açıldı mı? — PR [#88](https://github.com/turkerurganci/Skinora/pull/88)
+- [x] PR numarası rapor footer'a yazıldı mı? — Commit & PR bölümü doldu
+- [x] Rapor + status push edildi mi? — `9970842` + `0336fdd` push'landı
+- [x] CI run tamamlandı mı? — run `25387160303` concluded
+- [x] CI run sonucu success mi? — ✓ PASS (CI Gate yeşil)
+- [x] Branch izolasyon check temiz mi? — yalnızca T57 commit subject (`git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → `T57`)
+- [x] Repo memory'de T57 satırı eklendi/güncellendi mi? — `.claude/memory/MEMORY.md` Current Status + Next satırı güncellendi (commit `9970842`)
