@@ -13,6 +13,7 @@ using Skinora.API.Startup;
 using Skinora.Admin;
 using Skinora.Admin.Infrastructure.Persistence;
 using Skinora.Auth.Infrastructure.Persistence;
+using Skinora.Disputes;
 using Skinora.Disputes.Infrastructure.Persistence;
 using Skinora.Fraud;
 using Skinora.Fraud.Infrastructure.Persistence;
@@ -111,6 +112,11 @@ builder.Services.AddNotificationsModule();
 // registered as forward-deferred stubs (T67/T81 swap them via DI). T47
 // adds timeout scheduling (per-tx Hangfire jobs + deadline scanner).
 builder.Services.AddTransactionsModule(builder.Configuration);
+
+// Buyer-facing dispute pipeline (T58 — 02 §10, 03 §6, 07 §7.8–§7.10).
+// Three endpoints (open / submit-txhash / escalate) backed by
+// IDisputeService + per-type auto-checkers (PAYMENT/DELIVERY/WRONG_ITEM).
+builder.Services.AddDisputesModule();
 
 // T47 — restart recovery + startup hook for the heartbeat / scanner chains.
 // Order: registered AFTER the outbox hook so the recovery pass observes a

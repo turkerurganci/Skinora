@@ -1,0 +1,77 @@
+using Microsoft.Extensions.Logging;
+using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Outbox;
+
+namespace Skinora.Notifications.Application.EventHandlers;
+
+/// <summary>
+/// Translates a <see cref="DisputeEscalatedEvent"/> (T58 — 03 §6.3 / §6.4)
+/// into per-party <see cref="NotificationRequest"/>s.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+///   <item>
+///     <c>AutoEscalated=true</c> (WRONG_ITEM auto, 03 §6.3 step 5) — both
+///     parties receive <see cref="NotificationType.DISPUTE_RESULT"/> with
+///     "İşleminiz incelemeye alındı".
+///   </item>
+///   <item>
+///     <c>AutoEscalated=false</c> (manual escalate, 03 §6.4 step 4) — the
+///     buyer receives <see cref="NotificationType.DISPUTE_RESULT"/> with
+///     "İtirazınız admin ekibine iletildi". Admin queue surfacing is
+///     T63's responsibility.
+///   </item>
+/// </list>
+/// Locale coverage for these phrases is forward-deferred to T97 alongside
+/// the T49 timeout reason strings.
+/// </remarks>
+public sealed class DisputeEscalatedNotificationConsumer
+    : NotificationConsumerBase<DisputeEscalatedEvent>
+{
+    public DisputeEscalatedNotificationConsumer(
+        INotificationDispatcher dispatcher,
+        IProcessedEventStore processedEventStore,
+        ILogger<DisputeEscalatedNotificationConsumer> logger)
+        : base(dispatcher, processedEventStore, logger)
+    {
+    }
+
+    protected override string ConsumerName => "notifications.dispute-escalated";
+
+    protected override Task<IReadOnlyCollection<NotificationRequest>> BuildRequestsAsync(
+        DisputeEscalatedEvent domainEvent,
+        CancellationToken cancellationToken)
+    {
+        var requests = new List<NotificationRequest>(2);
+
+        if (domainEvent.AutoEscalated)
+        {
+            const string AutoOutcome = "İşleminiz incelemeye alındı";
+            requests.Add(BuildRequest(domainEvent, domainEvent.BuyerId, AutoOutcome));
+            requests.Add(BuildRequest(domainEvent, domainEvent.SellerId, AutoOutcome));
+        }
+        else
+        {
+            const string ManualOutcome = "İtirazınız admin ekibine iletildi";
+            requests.Add(BuildRequest(domainEvent, domainEvent.BuyerId, ManualOutcome));
+        }
+
+        return Task.FromResult<IReadOnlyCollection<NotificationRequest>>(requests);
+    }
+
+    private static NotificationRequest BuildRequest(
+        DisputeEscalatedEvent domainEvent,
+        Guid recipientUserId,
+        string outcome) => new()
+        {
+            UserId = recipientUserId,
+            Type = NotificationType.DISPUTE_RESULT,
+            TransactionId = domainEvent.TransactionId,
+            Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Outcome"] = outcome,
+            },
+        };
+}
