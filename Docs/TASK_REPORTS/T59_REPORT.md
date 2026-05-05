@@ -102,7 +102,7 @@ T59, admin tarafından tetiklenen üç işlem-yaşam-döngüsü endpoint'ini ba�
 | Unit (Skinora.Platform.Tests) | ✓ 85/85 | AuditLogCategoryMap +3 InlineData + ADMIN_ACTION 11→14 sayım assertion'ı pass. |
 | Unit (Skinora.Transactions.Tests) | ✓ 333/333 | Mevcut StateMachine + Lifecycle + Timeouts + GasFee + Reputation unit'leri regresyon temiz. |
 | Unit (Skinora.Users.Tests / Auth.Tests / Fraud.Tests) | ✓ 16/16 + 57/57 + 14/14 | Regresyon temiz. |
-| Integration (Skinora.Transactions.Tests / API / Admin / Disputes / Payments / Steam) | ⏸ Lokal Docker yok — CI'de doğrulanacak | Windows Docker Desktop bu env'da çalışmıyor (memory: F1 Gate Check Docker SIGBUS notu). Yeni 17 integration test (`AdminTransactionServiceTests.cs`) CI'de shared services:mssql üzerinde çalışacak. |
+| Integration (CI shared services:mssql) | ✓ PASS | İlk CI run `25399832698` 4× `CK_Transactions_FreezeActive` fail → S2 same-PR fix (`bcab472` — FreezeAsync pre-pass T54 paterni); re-CI run [`25400359096`](https://github.com/turkerurganci/Skinora/actions/runs/25400359096) (HEAD `92dc105`) 10/10 success (Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker/Gate). Lokal Docker yok (Windows env), CI Linux runner shared services:mssql üzerinde 17 yeni `AdminTransactionServiceTests` + tüm regresyon ✓. |
 | Build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` → `Build succeeded. 0 Warning(s) 0 Error(s)`. |
 | Format verify | ✓ exit=0 | `dotnet format Skinora.sln --verify-no-changes` clean. |
 
@@ -126,9 +126,22 @@ T59, admin tarafından tetiklenen üç işlem-yaşam-döngüsü endpoint'ini ba�
 ## Commit & PR
 
 - Branch: `task/T59-emergency-hold`
-- Commit: <commit hash bekleniyor>
-- PR: <PR no bekleniyor>
-- CI: <run id bekleniyor>
+- Commits: `10c58a0` (yapım) + `bcab472` (S2 same-PR fix — CK_Transactions_FreezeActive root cause) + `92dc105` (BYPASS_LOG follow-up).
+- PR: [#92](https://github.com/turkerurganci/Skinora/pull/92)
+- CI: ✓ PASS — son tamamlanmış run [`25400359096`](https://github.com/turkerurganci/Skinora/actions/runs/25400359096) (HEAD `92dc105`) 10/10 success (Detect/Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker/CI Gate hepsi ✓; Guard skipped). Önceki ardışık runlar: `25400333793` cancelled (bcab472 üzerine 92dc105 superseded), `25399832698` failure (root cause, S2 fix `bcab472` ile çözüldü).
+- BYPASS_LOG entry: 1× `[ci-failure]` Layer 2 — `bcab472` push'u son CI failure'i fix'lediği için Layer 2 hook bypass'i zorunluydu (T28 + T29 + T44 + T58 paterni; same-PR S2 fix). `Docs/BYPASS_LOG.md` hook tarafından otomatik güncellendi, `92dc105` follow-up commit'i ile commit'lendi.
+
+## Same-PR S2 Fix (post-initial-CI)
+
+İlk CI run [`25399832698`](https://github.com/turkerurganci/Skinora/actions/runs/25399832698) — `4. Integration test` job'unda 4 `AdminTransactionServiceTests` test fail (`CK_Transactions_FreezeActive` constraint violation). Lokal Docker engine olmadığı için integration testleri yapım sırasında lokal koşturulamamıştı; CI ilk runda root cause'u yakaladı.
+
+**Root cause:** `T44 ApplyEmergencyHold` non-ITEM_ESCROWED state için `TimeoutRemainingSeconds`'i NULL bırakıyor (T50 raporu Known Limitations bölümünde T59 yapım chat'ine flag edilmiş bilinen davranış). Yapımda orchestrator state machine'i FreezeAsync'ten ÖNCE çağırıyordu — state machine `TimeoutFrozenAt`'i set'liyor, FreezeAsync idempotent guard'ı (`if (TimeoutFrozenAt is null)`) erken return ediyor → `TimeoutRemainingSeconds` NULL kalıyor → `CK_Transactions_FreezeActive` (`(TimeoutFrozenAt IS NULL) OR (TimeoutFreezeReason IS NOT NULL AND TimeoutRemainingSeconds IS NOT NULL)`) ihlali → `SaveChangesAsync` reject. ITEM_ESCROWED test geçti çünkü state machine bu state için `TimeoutRemainingSeconds`'i `PaymentDeadline`'dan hesaplıyor.
+
+**Fix:** Sırayı tersine çevirdim — T54 cascade-hold paterni: önce `_freeze.FreezeAsync` (06 §3.5 active-deadline matrix → her aktif state için `TimeoutRemainingSeconds` doğru hesaplanır), sonra `state machine.ApplyEmergencyHold` (`IsOnHold` + `EmergencyHold*` set'ler; freeze trio'yu aynı değerlerle yeniden yazar). State machine'e dokunulmadı — wrapper layer fix.
+
+**Commit:** `bcab472` (`AdminTransactionService.cs` sadece — Stage 4/5 reorder + xmldoc).
+
+**Re-CI:** Run [`25400359096`](https://github.com/turkerurganci/Skinora/actions/runs/25400359096) (HEAD `92dc105`) 10/10 success — tüm 17 `AdminTransactionServiceTests` pass + tam regresyon temiz.
 
 ## Known Limitations / Follow-up
 
