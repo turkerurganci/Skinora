@@ -122,7 +122,7 @@
 | T47 | Timeout scheduling | ✓ Tamamlandı | ✓ PASS | `e00f97a` (PR #77) |
 | T48 | Timeout warning | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — warning scope ITEM_ESCROWED + buyer; 05 §4.4 partition gereği diğer aşamalar scanner-based, T48 dışı) | `a6b38b5` (PR #78) |
 | T49 | Timeout execution | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — yapım raporunda test toplam 1237 yazılı, breakdown 1243; validator inline düzeltti, fonksiyonel etki yok) | `54c07c9` (PR #79) |
-| T50 | Timeout freeze/resume | ⏳ Devam ediyor | ⏳ | branch `task/T50-timeout-freeze-resume` |
+| T50 | Timeout freeze/resume | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor advisory — 6/6 kabul ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; lokal Release 0W/0E + Skinora.Transactions.Tests 424/424 + sln 1264/1264 + task branch CI run 25274389994 9/9 ✓) | `0310a81` (PR #81) |
 | T51 | İptal akışı | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor advisory — 9/9 kabul kriteri 8 ✓ + 1 ~ kısmi #5 forward-devir; 2/2 doğrulama listesi ✓; rapor uyumu tam) | PR #82 |
 | T52 | Komisyon ve finansal hesaplamalar | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 0 minor — 6/6 kabul kriteri ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; 36/36 FinancialCalculator unit + 1336/1336 sln total + Release 0W/0E + task branch CI ✓) | PR #83 |
 | T53 | Gas fee yönetimi | ✓ Tamamlandı | ✓ PASS bağımsız validator (1 S1 minor — 06 §2.19 REFUND_BLOCKED yansıması — same-PR fix; 4/4 kabul ✓; doğrulama kontrol listesi ✓; lokal 40/40 GasFee unit + 14/14 Shared audit/enum + Release 0W/0E + task branch CI 7/7 ✓) | PR #84 |
