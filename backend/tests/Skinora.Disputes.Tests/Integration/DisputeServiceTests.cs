@@ -124,22 +124,7 @@ public class DisputeServiceTests : IntegrationTestBase
     public async Task Open_Payment_ConfirmedPaymentExists_AutoResolves_AndEmitsEvent()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            Type = BlockchainTransactionType.BUYER_PAYMENT,
-            FromAddress = "TBuyer",
-            ToAddress = SellerWallet,
-            Amount = tx.TotalAmount,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            ConfirmationCount = 19,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            TxHash = "abc123def456789012345678",
-        });
-        await Context.SaveChangesAsync();
+        await SeedConfirmedBuyerPaymentAsync(tx, "abc123def456789012345678");
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -358,22 +343,7 @@ public class DisputeServiceTests : IntegrationTestBase
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
         // Force a confirmed payment so the first open auto-resolves to CLOSED.
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            Type = BlockchainTransactionType.BUYER_PAYMENT,
-            FromAddress = "TBuyer",
-            ToAddress = SellerWallet,
-            Amount = tx.TotalAmount,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            ConfirmationCount = 19,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            TxHash = "abc123def456789012345678",
-        });
-        await Context.SaveChangesAsync();
+        await SeedConfirmedBuyerPaymentAsync(tx, "abc123def456789012345678");
 
         var sut = BuildSut();
         var first = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -431,24 +401,9 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Equal(DisputeStatus.OPEN, open.Body!.Status);
 
         // Sidecar (T71) writes a CONFIRMED row with the hash the buyer is
-        // about to submit.
+        // about to submit (canonical lowercase per T71 normalization contract).
         const string hash = "ABC123DEF456789012345678";
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            Type = BlockchainTransactionType.BUYER_PAYMENT,
-            FromAddress = "TBuyer",
-            ToAddress = SellerWallet,
-            Amount = tx.TotalAmount,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            ConfirmationCount = 19,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            TxHash = hash.ToLowerInvariant(),
-        });
-        await Context.SaveChangesAsync();
+        await SeedConfirmedBuyerPaymentAsync(tx, hash.ToLowerInvariant());
 
         var outcome = await sut.SubmitTxHashAsync(_buyer.Id, tx.Id, open.Body.Id,
             new SubmitTxHashRequest(hash), CancellationToken.None);
@@ -523,22 +478,7 @@ public class DisputeServiceTests : IntegrationTestBase
     public async Task SubmitTxHash_DisputeClosed_Returns_DisputeClosed()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            Type = BlockchainTransactionType.BUYER_PAYMENT,
-            FromAddress = "TBuyer",
-            ToAddress = SellerWallet,
-            Amount = tx.TotalAmount,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            ConfirmationCount = 19,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            TxHash = "abc123def456789012345678",
-        });
-        await Context.SaveChangesAsync();
+        await SeedConfirmedBuyerPaymentAsync(tx, "abc123def456789012345678");
 
         var sut = BuildSut();
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -643,22 +583,7 @@ public class DisputeServiceTests : IntegrationTestBase
     public async Task Escalate_ClosedDispute_Returns_DisputeClosed()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            Type = BlockchainTransactionType.BUYER_PAYMENT,
-            FromAddress = "TBuyer",
-            ToAddress = SellerWallet,
-            Amount = tx.TotalAmount,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            ConfirmationCount = 19,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            TxHash = "abc123def456789012345678",
-        });
-        await Context.SaveChangesAsync();
+        await SeedConfirmedBuyerPaymentAsync(tx, "abc123def456789012345678");
 
         var sut = BuildSut();
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -734,6 +659,51 @@ public class DisputeServiceTests : IntegrationTestBase
             deliveryChecker: deliveryChecker,
             wrongItemChecker: wrongItemChecker,
             clock: _clock);
+    }
+
+    /// <summary>
+    /// Inserts a CONFIRMED BUYER_PAYMENT row + the prerequisite PaymentAddress
+    /// row that <c>CK_BlockchainTransactions_Type_BuyerPayment</c> requires
+    /// (PaymentAddressId NOT NULL) and that <c>CK_BlockchainTransactions_Status_Confirmed</c>
+    /// requires (ConfirmationCount >= 20, ConfirmedAt NOT NULL).
+    /// Mirrors the T56 lesson learned in <c>FraudFlagServiceTests.InsertBuyerPaymentAsync</c>.
+    /// </summary>
+    private async Task SeedConfirmedBuyerPaymentAsync(Transaction tx, string txHash)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime;
+
+        var paymentAddress = new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            Address = "TBuyerDepositAddress0000000000000",
+            HdWalletIndex = 1,
+            ExpectedAmount = tx.TotalAmount,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        Context.Set<PaymentAddress>().Add(paymentAddress);
+
+        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            PaymentAddressId = paymentAddress.Id,
+            Type = BlockchainTransactionType.BUYER_PAYMENT,
+            FromAddress = "TBuyer",
+            ToAddress = paymentAddress.Address,
+            Amount = tx.TotalAmount,
+            Token = StablecoinType.USDT,
+            Status = BlockchainTransactionStatus.CONFIRMED,
+            ConfirmationCount = 20,
+            CreatedAt = now,
+            ConfirmedAt = now,
+            TxHash = txHash,
+        });
+
+        await Context.SaveChangesAsync();
     }
 
     private async Task<Transaction> CreateTransactionAsync(
