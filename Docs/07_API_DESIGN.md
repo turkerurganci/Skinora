@@ -1734,7 +1734,10 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 | PRICE_DEVIATION | `{ inputPrice, marketPrice, deviationPercent }` |
 | HIGH_VOLUME | `{ periodHours, transactionCount, totalVolume }` |
 | ABNORMAL_BEHAVIOR | `{ pattern, description }` |
-| MULTI_ACCOUNT | `{ matchType, matchValue, linkedAccounts: [{steamId, displayName}] }` |
+| MULTI_ACCOUNT | `{ matchType, matchValue, linkedAccounts: [{steamId, displayName}], supportingSignals: [{type, value, linkedAccounts: [{steamId, displayName}]}] }` |
+
+`MULTI_ACCOUNT.matchType` değerleri (güçlü sinyal — flag tetikleyici, 02 §14.3, 03 §7.4): `WALLET_PAYOUT`, `WALLET_REFUND`.
+`MULTI_ACCOUNT.supportingSignals[].type` değerleri (destekleyici sinyal — tek başına flag tetiklemez, güçlü sinyal eşliğinde admin kanıtı olarak listelenir): `IP_ADDRESS`, `DEVICE_FINGERPRINT`, `SOURCE_ADDRESS`. Bilinen exchange/custodial adresleri admin tarafından `multi_account.exchange_addresses` SystemSetting'inde tutulur ve `SOURCE_ADDRESS` karşılaştırmasından hariç bırakılır (`NONE` = hariç adres yok).
 
 ### 9.4 AD4 — `POST /admin/flags/:id/approve`
 

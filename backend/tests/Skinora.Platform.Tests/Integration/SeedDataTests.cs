@@ -10,11 +10,12 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
-/// Integration tests for the T26 + T30 + T34 + T43 + T55 EF Core seed contracts (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 36 SystemSetting rows
+/// Integration tests for the T26 + T30 + T34 + T43 + T55 + T56 EF Core seed contracts (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 37 SystemSetting rows
 /// (28 T26 platform parameters + 2 T30 access-control settings +
 /// 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
-/// 2 T55 dormant-account fraud thresholds).
+/// 2 T55 dormant-account fraud thresholds +
+/// 1 T56 multi-account exchange address allowlist).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -53,22 +54,23 @@ public class SeedDataTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task Seed_SystemSettings_Has_36_Rows_With_Unique_Keys()
+    public async Task Seed_SystemSettings_Has_37_Rows_With_Unique_Keys()
     {
         // 28 T26 platform parameters + 2 T30 access-control settings +
         // 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
-        // 2 T55 dormant-account fraud thresholds.
+        // 2 T55 dormant-account fraud thresholds +
+        // 1 T56 multi-account exchange address allowlist.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(36, rows.Count);
-        Assert.Equal(36, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(37, rows.Count);
+        Assert.Equal(37, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3: 15 rows ship with a documented
-        // default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55).
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3: 16 rows ship with a documented
+        // default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55 + 1 T56).
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -86,6 +88,7 @@ public class SeedDataTests : IntegrationTestBase
             "monitoring_post_cancel_30d_polling_seconds",
             "monitoring_post_cancel_7d_polling_seconds",
             "monitoring_stop_after_days",
+            "multi_account.exchange_addresses",
             "open_link_enabled",
             "reputation.min_account_age_days",
             "reputation.min_completed_transactions",
