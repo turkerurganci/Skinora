@@ -129,7 +129,7 @@
 | T54 | Fraud flag sistemi | ✓ Tamamlandı | ✓ PASS bağımsız validator + same-PR S1 chore fix (AD3 `FlagPartyDetailDto` reputation/completed/accountAge + `[JsonPropertyName("reviewedBy")]`; 2 advisory Known Limitations'a — accept gate T46/T82 devir + note cap opsiyonel; 6/8 kabul ✓ + 2/8 ~ pre-fix; build 0W/0E + AdminFlagsEndpoint 9/9 + Fraud 34/34 + TxCreation 11/11 + Audit 28/28 + Enum 18/18 PASS) | PR #85 |
 | T55 | AML kontrolü (fiyat sapması, yüksek hacim, dormant hesap) | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — HIGH_VOLUME aggregate FLAGGED+CANCELLED dahil, T56/T57 follow-up; 5/5 kabul ✓; 2/2 doğrulama listesi ✓; rapor uyumu tam; lokal 27/27 FraudDetectionCalculator unit + 16/16 TxCreation + 11/11 Platform + sln sweep **1434/1434 PASS** + Release 0W/0E + task branch CI 10/10 ✓ run 25336562637) | PR #86 |
 | T56 | Çoklu hesap tespiti | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — background scan T63 forward-devir; 5/5 kabul ✓; 1/1 doğrulama listesi ✓; rapor uyumu tam; lokal MultiAccountSignalEvaluatorTests 14/14 + Build Release 0W/0E; integration CI tarafında doğrulandı — task branch CI run 25360451483 10/10 ✓; main CI startup 25338999719/692 + 25332031310 ardışık SUCCESS) | PR #87 |
-| T57 | Wash trading kontrolü | ⬚ Bekliyor | — | — |
+| T57 | Wash trading kontrolü | ⏳ Devam ediyor | T43 kapsamında implement edildi (PR #72) — doc-only confirmation PR (audit trail simetrisi); validator T43 kanıt zincirini teyit edecek | branch `task/T57-wash-trading-doc-confirmation` |
 | T58 | Dispute sistemi | ⬚ Bekliyor | — | — |
 | T59 | Emergency hold | ⬚ Bekliyor | — | — |
 | T60 | Satıcı payout issue | ⬚ Bekliyor | — | — |
