@@ -168,9 +168,9 @@ T58, alıcı-tetiklemeli dispute (anlaşmazlık) pipeline'ını implementasyona 
 ## Commit & PR
 
 - Branch: `task/T58-dispute-system`
-- Commit: aşağıda push'lanacak
-- PR: aşağıda açılacak
-- CI: izlenecek
+- Commit: `f33648a`
+- PR: [#90](https://github.com/turkerurganci/Skinora/pull/90)
+- CI: izleniyor (task branch run)
 
 ## Known Limitations / Follow-up
 
