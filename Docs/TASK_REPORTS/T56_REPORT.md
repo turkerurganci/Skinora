@@ -164,6 +164,6 @@ T54 fraud flag pipeline + T18 user/login entity'leri üzerine multi-account dete
 ## Commit & PR
 
 - Branch: `task/T56-multi-account-detection`
-- Commit: <pending>
-- PR: <pending>
-- CI: <pending>
+- Commit: `5304199` (kod) + `20df144` (rapor + status + memory)
+- PR: [#87](https://github.com/turkerurganci/Skinora/pull/87)
+- CI: ⏳ izleniyor
