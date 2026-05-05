@@ -1268,7 +1268,7 @@ Task T57: Wash trading kontrolü
   Test beklentisi: Unit — 1 ay kuralı, skor etkisi
   Doğrulama kontrol listesi:
     - [ ] 02 §14.1 kuralları birebir mi?
-  Not: T43 kapsamında implement edildi (PR #72 — `WashTradingFilter` + `ReputationAggregator` wiring + 7 unit + 2 integration test). T57 audit trail'i doc-only confirmation PR (TASK_REPORTS/T57_REPORT.md) ile kapatıldı — kabul kriterleri T43 kanıt zinciriyle 1:1 eşlenmiştir.
+  Not: T43 kapsamında implement edildi (PR #72 — `WashTradingFilter` + `ReputationAggregator` wiring + 7 unit + 2 integration test). T57 audit trail'i doc-only confirmation PR #88 (TASK_REPORTS/T57_REPORT.md) ile kapatıldı — kabul kriterleri T43 kanıt zinciriyle 1:1 eşlenmiştir.
 ```
 
 ```

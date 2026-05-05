@@ -104,9 +104,9 @@ Bu PR no-op kod olduğu için ek test çalıştırması gerekmez. Validator gere
 ## Commit & PR
 
 - Branch: `task/T57-wash-trading-doc-confirmation`
-- Commit: <commit hash buraya gelecek>
-- PR: <PR no buraya gelecek>
-- CI: <run id + sonuç buraya gelecek>
+- Commit: `9970842`
+- PR: [#88](https://github.com/turkerurganci/Skinora/pull/88)
+- CI: <run id + sonuç buraya gelecek (CI watch sonrası)>
 
 ## Bitiş Kapısı (skill task.md — doc-only edition)
 
