@@ -1,6 +1,6 @@
 # T59 — Emergency Hold
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti) | **Tarih:** 2026-05-05
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (validator PASS) | **Tarih:** 2026-05-05 (yapım) / 2026-05-06 (validate)
 
 ---
 
@@ -22,7 +22,7 @@ T59, admin tarafından tetiklenen üç işlem-yaşam-döngüsü endpoint'ini ba�
 3. **`IAdminTransactionService` + `AdminTransactionService` — `Skinora.Transactions/Application/Admin/`:**
    - 3 method orchestrator (~480 satır). Her metot 5-7 stage pipeline + tek `SaveChangesAsync` ile atomik commit (09 §13.3).
    - **`CancelAsync` (AD19):** load → reason ≥10 char trim → state guard (ITEM_DELIVERED 422 / IsOnHold 409 / terminal 409) → `Fire(AdminCancel, ctx)` → `CancelTimeoutJobsAsync` → ItemRefund (ITEM_ESCROWED+) + PaymentRefund (PAYMENT_RECEIVED+) + `TransactionCancelledEvent`(ADMIN) → `IAuditLogger.LogAsync(TRANSACTION_CANCELLED_ADMIN)` → SaveChanges.
-   - **`ApplyEmergencyHoldAsync` (AD19b):** load → reason ≥10 char → state guard (terminal 409 / AlreadyOnHold 409) → `state machine.ApplyEmergencyHold(adminId, reason)` (T44 — IsOnHold + EmergencyHold* + freeze trio + PreviousStatusBeforeHold tek atomik damgalama) → `IFreezeService.FreezeAsync(EMERGENCY_HOLD)` (idempotent — yalnız Hangfire job iptali) → `EmergencyHoldAppliedEvent` outbox → audit `EMERGENCY_HOLD_APPLIED` → SaveChanges. Response `status: "EMERGENCY_HOLD"` (overlay projection — gerçek `Status` alanı değişmez, 06 §3.5).
+   - **`ApplyEmergencyHoldAsync` (AD19b):** load → reason ≥10 char → state guard (terminal 409 / AlreadyOnHold 409) → `IFreezeService.FreezeAsync(EMERGENCY_HOLD)` (T54 cascade-hold paterni — 06 §3.5 active-deadline matrix'inden `TimeoutRemainingSeconds` her aktif state için doldurulur, Hangfire job'ları iptal edilir; **state machine'den ÖNCE** çünkü T44 `ApplyEmergencyHold` non-ITEM_ESCROWED state için `TimeoutRemainingSeconds`'i NULL bırakır → `CK_Transactions_FreezeActive` ihlali olur, bkz. "Same-PR S2 Fix") → `state machine.ApplyEmergencyHold(adminId, reason)` (T44 — IsOnHold + EmergencyHold* + freeze trio re-stamp + PreviousStatusBeforeHold tek atomik damgalama; freeze trio aynı değerlerle yeniden yazılır, idempotent overlap) → `EmergencyHoldAppliedEvent` outbox → audit `EMERGENCY_HOLD_APPLIED` → SaveChanges. Response `status: "EMERGENCY_HOLD"` (overlay projection — gerçek `Status` alanı değişmez, 06 §3.5).
    - **`ReleaseEmergencyHoldAsync` (AD19c):**
      - **RESUME branch:** `IFreezeService.ResumeAsync` (newDeadline=now+TimeoutRemainingSeconds + ITEM_ESCROWED Hangfire reschedule + freeze trio temizle) → `state machine.ReleaseEmergencyHold` (IsOnHold=false) → `EmergencyHoldReleasedEvent`(RESUME) → audit `EMERGENCY_HOLD_RELEASED` → SaveChanges.
      - **CANCEL branch:** `state machine.ReleaseEmergencyHold` → `TimeoutRemainingSeconds = null` (CK_Transactions_FreezePassive zorunluluğu) → `Fire(AdminCancel, "Hold sonrası iptal: …")` → `CancelTimeoutJobsAsync` → ItemRefund + PaymentRefund (PreviousStatusBeforeHold'a göre) + `TransactionCancelledEvent`(ADMIN) → 2 audit row (`EMERGENCY_HOLD_RELEASED` + `TRANSACTION_CANCELLED_ADMIN`) → SaveChanges.
@@ -168,7 +168,67 @@ T59, admin tarafından tetiklenen üç işlem-yaşam-döngüsü endpoint'ini ba�
   1. **Tek service tek tip kompozisyon:** `AdminTransactionService` 3 metot tek sınıfta, T58 `DisputeService` ile aynı pattern (3 method orchestrator). Ayrı sınıflar (CancelService / HoldService / ReleaseService) over-engineering — DI surface büyütüyor, paylaşılan helper'lar (ItemWasOnPlatform, IsTerminalState) duplikasyon.
   2. **CancelledByType.ADMIN reuse:** Admin direct cancel dedicated event (`AdminCancelledEvent` vb.) yerine T51 mevcut `TransactionCancelledEvent` + `CancelledByType.ADMIN` enum genişlemesi. Avantaj: tek consumer infra (TransactionCancelledNotificationConsumer ADMIN dalı eklendi), tek template (`TRANSACTION_CANCELLED_*` resx). Trade-off: T51 raporu "Admin-initiated cancellation (T59)... emit their own dedicated events because the counter-party reason text differs significantly" ifadesi vardı — gerçek implementasyonda reason field zaten event'in içinde, ayrı template gerekmedi; consumer ADMIN dalında prefix metin "İşlem yönetici tarafından iptal edildi" eklendi, body resx aynı kalıyor.
   3. **CANCEL release branch dual-event pattern:** `EmergencyHoldReleasedEvent`(CANCEL) + `TransactionCancelledEvent`(ADMIN) iki event yayılıyor. Released event SignalR T61 forward-aware, ama notification fan-out yalnız Cancel event üzerinden gidiyor (Released consumer CANCEL action'ı skip). Alternatifler: (a) Tek event (Cancel-Only) — SignalR RT1 EmergencyHoldReleased eksik kalır, (b) Notification consumer her iki event'ten fan-out — duplicate notification. Seçilen path future-proof + duplicate-free.
-  4. **Idempotent ApplyEmergencyHold + FreezeAsync:** State machine ApplyEmergencyHold trio'yu zaten damgalar; T50 FreezeAsync idempotent guard (`if (TimeoutFrozenAt is null)` kondisyonu) sayesinde ikinci stamp yapmaz, sadece Hangfire job iptalini yürütür. Bu order kritik: state machine önce, freeze service sonra — yarım state'den kaçınma için.
+  4. **FreezeAsync pre-pass + Idempotent state machine ApplyEmergencyHold:** Sıra **freeze service önce, state machine sonra** (T54 cascade-hold paterni; bkz. "Same-PR S2 Fix"). T50 `FreezeAsync` 06 §3.5 active-deadline matrix'inden `TimeoutRemainingSeconds`'i her aktif state için doldurur + Hangfire job'larını iptal eder. Sonrasında T44 `ApplyEmergencyHold` `IsOnHold` + `EmergencyHold*` + `PreviousStatusBeforeHold` damgalar ve freeze trio'yu aynı değerlerle yeniden yazar — idempotent overlap, CK kısıtları korunur. Tersi sıra (state machine önce) non-ITEM_ESCROWED state için `TimeoutRemainingSeconds`'i NULL bırakır → `CK_Transactions_FreezeActive` ihlali (ilk CI run'da görüldü, `bcab472` ile düzeltildi).
   5. **CK_Transactions_FreezePassive + CANCEL release order:** ReleaseEmergencyHold sadece 2 freeze field temizler (TimeoutFrozenAt, TimeoutFreezeReason) — T47 reschedule consumer için TimeoutRemainingSeconds saklanır. CANCEL release path'inde T47 path tetiklenmiyor (tx CANCELLED_ADMIN'e gidiyor) → orchestrator `TimeoutRemainingSeconds = null` manuel clear eder. Aksi halde DB save SaveChangesAsync sırasında CK_Transactions_FreezePassive ihlali atar.
   6. **ItemWasOnPlatform / PaymentWasReceived state matrix:** `ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER` üçlüsü item escrow'da; `PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER` ikilisi payment received. ITEM_DELIVERED hariç (cancel reachable değil). Bu helper'lar AdminTransactionService static private — T51 `itemWasOnPlatform` lokal değişken paterni genişletilmiş hali.
 - **T50 reference test pattern reuse:** Integration test fixture `CapturingJobScheduler` + `CapturingOutboxService` + `TimeoutTestSupport.cs` mevcut altyapıdan kullanıldı (Skinora.Transactions.Tests project'inde zaten internal). `AdminTransactionServiceTests` 17 test (10 Cancel + 4 Hold + 6 Release) — full lifecycle kapsama. CI'de `AdminTransactionServiceTests` ve `EmergencyHoldApplied/ReleasedNotificationConsumerTests` doğrulanacak.
+
+---
+
+## Doğrulama (validator)
+
+**Tarih:** 2026-05-06
+**Branch:** `task/T59-emergency-hold` @ `a9b4402`
+**PR:** #92 (OPEN, validator çalışırken)
+**Verdict:** ✓ **PASS** (1 minor doc-drift finding — finalize sırasında düzeltildi)
+
+### Ön kapı kontrolleri
+
+- **Working tree:** clean (`git status --short` → boş).
+- **Main CI startup:** son 3 main run ✓ — `25448121070` + `25448119999` (chore #94) + `25420979168` (chore #93). Üçü de `success`.
+- **Repo memory drift:** `.claude/memory/MEMORY.md` T59 satırları mevcut (Next satırı + ilgili referanslar).
+
+### Kabul kriterleri (8/8 ✓)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `POST /admin/transactions/:id/cancel` | ✓ | `AdminTransactionsController.Cancel` + `AdminTransactionService.CancelAsync` (state guard ITEM_DELIVERED 422 / IsOnHold 409 / terminal 409 / refund matrix). `AdminTransactionServiceTests` `CancelAsync_From_*` 9 test ✓. |
+| 2 | `POST /admin/transactions/:id/emergency-hold` | ✓ | Stage 4 freeze pre-pass + Stage 5 state machine.ApplyEmergencyHold + Stage 6 audit + outbox event. AlreadyOnHold 409 + Terminal 409 + Reason min 400. `ApplyEmergencyHoldAsync_*` 4 test ✓. |
+| 3 | `POST /admin/transactions/:id/release-hold` (RESUME / CANCEL) | ✓ | RESUME: ResumeAsync + state machine.ReleaseEmergencyHold + outbox EmergencyHoldReleased + audit. CANCEL: state machine.ReleaseEmergencyHold + TimeoutRemainingSeconds=null + state machine.Fire(AdminCancel) + 2 audit row. `ReleaseEmergencyHoldAsync_*` 6 test ✓. |
+| 4 | `CANCEL_TRANSACTIONS` ve `EMERGENCY_HOLD` ayrı yetkiler | ✓ | Controller iki ayrı `[Authorize(Policy = "Permission:CANCEL_TRANSACTIONS")]` (AD19) ve `[Authorize(Policy = "Permission:EMERGENCY_HOLD")]` (AD19b/c) deklarasyonu. PermissionCatalog.Keys T39'dan beri ayrı kayıtlı. |
+| 5 | `ITEM_DELIVERED` hold'unda CANCEL yasak (yalnız RESUME) | ✓ | `ReleaseEmergencyHoldAsync` Stage 4 — `previousStatus == ITEM_DELIVERED && action == CANCEL → 422 CANNOT_CANCEL_DELIVERED_HOLD`. RESUME aynı state için izinli. 2 integration test (`Cancel_From_ITEM_DELIVERED_Hold_Returns_422` + `Resume_From_ITEM_DELIVERED_Hold_Is_Allowed`) ✓. |
+| 6 | Timeout durur, akış bekler | ✓ | T50 `FreezeAsync` Hangfire job'larını iptal eder + `TimeoutFrozenAt` damgalar. T44 state machine `EnforceNotOnHold` her sonraki `Fire`'i `OnHoldErrorCode` ile reddeder (05 §4.5). RESUME'da T50 `ResumeAsync` `newDeadline = now + TimeoutRemainingSeconds` ile süreyi ileri taşır. CK_Transactions_FreezeActive/FreezePassive/FreezeHold_Forward/Reverse atomik commit'te tutarlı. |
+| 7 | Tüm aksiyonlar AuditLog'a yazılır | ✓ | 3 yeni `AuditAction` enum değeri `ADMIN_ACTION` kategorisinde. CancelAsync → 1 row, ApplyHold → 1 row, RESUME → 1 row, CANCEL release → 2 row (RELEASED + CANCELLED_ADMIN). 06 §2.19 tablosu 3 satır eklenerek senkron. |
+| 8 | Bildirimler taraflara hold/release | ✓ | `EmergencyHoldApplied/ReleasedEvent` outbox → consumer fan-out (seller + buyer varsa). RESX EN+TR. CANCEL dalı `TransactionCancelledEvent`(ADMIN) → `TransactionCancelledNotificationConsumer` ADMIN dalı. Released consumer CANCEL action'ı skip → duplicate-free. |
+
+### Doğrulama kontrol listesi
+
+- [x] **02 §7 emergency hold kuralları eksiksiz mi?** ✓ — Admin emergency hold + ITEM_DELIVERED kısıtı + ayrı yetki (`EMERGENCY_HOLD`) + audit zorunluluğu kodda guard'larla 1:1 eşleşiyor.
+- [x] **07 §9.20–§9.22 sözleşmeleri doğru mu?** ✓ — Request/Response gövdeleri DTO + outcome record'larıyla birebir; tüm hata kodları ve HTTP statuses (200/400/404/409/422) AdminTransactionsController'da yansıtıldı.
+
+### Test sonuçları (lokal, validator)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build (Release) | ✓ 0W/0E | `dotnet build backend/Skinora.sln -c Release` |
+| Format verify | ✓ exit=0 | `dotnet format backend/Skinora.sln --verify-no-changes` |
+| Unit (filtered: !~Integration) | ✓ Notifications 49 + Transactions 333 + Auth 57 + Fraud 14 + Shared 185 + Platform 85 + API 15 + Users 16 | `dotnet test --filter "FullyQualifiedName!~Integration"` |
+| Integration (CI) | ✓ 10/10 — run [`25400810768`](https://github.com/turkerurganci/Skinora/actions/runs/25400810768) HEAD `a9b4402` | shared services:mssql Linux runner (T11.3 paterni) |
+
+### Güvenlik kontrolü
+
+- [x] **Secret sızıntısı:** Temiz — yeni dosyaların hiçbiri secret içermiyor.
+- [x] **Auth etkisi:** Temiz — 3 endpoint zorunlu authentication + ayrı policy. Anonim erişim kapalı. Admin id JWT `sub` claim'inden, IP `RemoteIpAddress`'ten — audit'e geçer.
+- [x] **Input validation:** Temiz — Reason ≥10 char trimmed (Cancel + ApplyHold), note ≥1 char trimmed (ReleaseHold). Action enum `JsonStringEnumConverter` ile string → geçersiz değer 400. RowVersion check state machine içinde aktif. State guard'lar 4 katmanlı (orchestrator → state machine → CK constraint).
+- [x] **Yeni dış bağımlılık:** Yok — IAuditLogger (T42), IOutboxService (F0), TimeoutFreezeService (T50), TransactionStateMachine (T44), TimeoutSchedulingService (T47) hepsi mevcut.
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya | Düzeltme |
+|---|---|---|---|---|
+| 1 | S1 (minor doc-drift) | Yapım raporunun `ApplyEmergencyHoldAsync` adım açıklaması (orijinal satır 25) ve "Mimari kararlar" maddesi 4 (orijinal satır 171) S2 fix öncesi sırayı (state machine → freeze) tarif ediyordu; gerçek kod (S2 fix sonrası) freeze → state machine sıralı. Fix bölümü doğru sırayı söylüyordu, yapım metni güncellenmemiş. | `Docs/TASK_REPORTS/T59_REPORT.md` | Validator finalize sırasında yapım metni + Mimari karar 4 yeniden yazıldı, "freeze pre-pass + idempotent state machine" sırası açıkça belirtildi. |
+
+### Yapım raporu karşılaştırması
+
+- **Uyum:** Tam uyumlu — 8/8 kabul kriteri ve 2/2 doğrulama listesi maddesi rapor + bağımsız okumam arasında 1:1 örtüşüyor.
+- **Tek uyuşmazlık:** Yapım metninin sıra açıklaması S2 fix'i yansıtmıyordu (rapor "Same-PR S2 Fix" bölümü doğruydu, yapım metni eski sırayı tutmuştu). Validator düzeltti — kod tarafında değişiklik yok.
