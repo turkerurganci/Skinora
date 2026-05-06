@@ -54,7 +54,10 @@
       "Bash(dotnet restore:*)",
       "PowerShell(git diff main...HEAD -- 'Backend/src/Skinora.Shared/Persistence/SystemSettingSeed.cs' | Out-String)",
       "PowerShell(git diff main...HEAD -- 'Docs/06_DATA_MODEL.md' | Out-String)",
-      "PowerShell(dotnet test tests/Skinora.API.Tests/Skinora.API.Tests.csproj --filter \"FullyQualifiedName~AdminRbacEndpointTests\" --nologo --verbosity quiet 2>&1)"
+      "PowerShell(dotnet test tests/Skinora.API.Tests/Skinora.API.Tests.csproj --filter \"FullyQualifiedName~AdminRbacEndpointTests\" --nologo --verbosity quiet 2>&1)",
+      "PowerShell(gh pr view 81 --json mergeCommit,title,state,mergedAt)",
+      "PowerShell(git add Docs/IMPLEMENTATION_STATUS.md)",
+      "PowerShell(git checkout -b task/T59-emergency-hold)"
     ]
   },
   "hooks": {
