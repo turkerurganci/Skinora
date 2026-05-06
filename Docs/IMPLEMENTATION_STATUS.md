@@ -131,7 +131,7 @@
 | T56 | Çoklu hesap tespiti | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — background scan T63 forward-devir; 5/5 kabul ✓; 1/1 doğrulama listesi ✓; rapor uyumu tam; lokal MultiAccountSignalEvaluatorTests 14/14 + Build Release 0W/0E; integration CI tarafında doğrulandı — task branch CI run 25360451483 10/10 ✓; main CI startup 25338999719/692 + 25332031310 ardışık SUCCESS) | PR #87 |
 | T57 | Wash trading kontrolü | ✓ Tamamlandı | T43 kapsamında implement edildi (PR #72) — doc-only confirmation PR (audit trail simetrisi); kabul kriterleri T43 kanıt zinciriyle 1:1 eşlendi; task branch CI run 25387160303 ✓, main post-merge CI run 25387715390 ✓ | PR #88 |
 | T58 | Dispute sistemi | ✓ Tamamlandı | ✓ PASS bağımsız validator (0 S-bulgu, 1 minor advisory — canDispute envelope per-tip "aynı tür daha önce açılmamış" eksikliği, runtime UQ pre-check ile yakalanıyor; same-PR S2 fix `b238c8c` BlockchainTransaction CONFIRMED test seed CK constraint ihlali — `SeedConfirmedBuyerPaymentAsync` helper'ına swap; 8/8 kabul ✓; 2/2 doğrulama listesi ✓; lokal Release 0W/0E + task branch CI run 25392687040 10/10 ✓) | PR #90 |
-| T59 | Emergency hold | ⬚ Bekliyor | — | — |
+| T59 | Emergency hold | ⏳ Devam ediyor | ⏳ | branch `task/T59-emergency-hold` ([PR #92](https://github.com/turkerurganci/Skinora/pull/92), CI run 25400810768 10/10 ✓; same-PR S2 fix `bcab472` CK_FreezeActive — FreezeAsync pre-pass T54 paterni; validator bekliyor) |
 | T60 | Satıcı payout issue | ⬚ Bekliyor | — | — |
 | T61 | SignalR hub — işlem real-time güncellemeler | ⬚ Bekliyor | — | — |
 | T62 | SignalR hub — bildirim push | ⬚ Bekliyor | — | — |
