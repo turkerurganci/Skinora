@@ -322,6 +322,9 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `ROLE_CHANGED` | Admin | Kullanıcıya rol atama/kaldırma |
 | `SYSTEM_SETTING_CHANGED` | Admin | Sistem parametresi değişikliği |
 | `WALLET_ADDRESS_CHANGED` | Güvenlik | Kullanıcı cüzdan adresi değişikliği (payout veya refund) |
+| `TRANSACTION_CANCELLED_ADMIN` | Admin | Admin doğrudan işlem iptali (07 §9.20 AD19, 02 §7) |
+| `EMERGENCY_HOLD_APPLIED` | Admin | Admin acil durdurma uyguladı (07 §9.21 AD19b, 02 §7) |
+| `EMERGENCY_HOLD_RELEASED` | Admin | Admin emergency hold kaldırdı (RESUME veya CANCEL — 07 §9.22 AD19c) |
 
 ### 2.20 TimeoutFreezeReason
 

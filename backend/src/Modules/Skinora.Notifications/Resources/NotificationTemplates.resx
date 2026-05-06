@@ -126,6 +126,18 @@
   <data name="ADMIN_PAYMENT_FAILURE_Body" xml:space="preserve">
     <value>Transaction {TransactionId} payment failed ({ErrorCode}).</value>
   </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Title" xml:space="preserve">
+    <value>Transaction temporarily frozen for review</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Body" xml:space="preserve">
+    <value>{ItemName} has been temporarily frozen by the platform for review: {Reason}.</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Title" xml:space="preserve">
+    <value>Review completed — transaction resumed</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
+    <value>{ItemName} has resumed at {ResumedStatus}. The countdown picks up from where it left off.</value>
+  </data>
   <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
     <value>Admin: Steam bot issue</value>
   </data>

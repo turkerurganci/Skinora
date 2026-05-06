@@ -1,0 +1,654 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Skinora.Platform.Application.Audit;
+using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Exceptions;
+using Skinora.Shared.Interfaces;
+using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Domain.StateMachine;
+
+namespace Skinora.Transactions.Application.Admin;
+
+/// <summary>
+/// T59 — 07 §9.20–§9.22 / 02 §7 / 03 §8.8 implementation. Each method commits
+/// (state flip + freeze trio cleanup + timeout job cancel + outbox events +
+/// audit rows) inside a single <see cref="DbContext.SaveChangesAsync"/> so the
+/// admin action is atomic with its observable side effects (09 §13.3).
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>State machine + freeze service composition:</b> the orchestrator drives
+/// the T44 state machine for the status transition and emergency-hold flag
+/// management, then delegates Hangfire job cancellation + reschedule logic to
+/// the T50 <see cref="ITimeoutFreezeService"/>. Both layers respect the 06 §3.5
+/// freeze invariants (CK_Transactions_FreezeActive/FreezePassive/FreezeHold_*).
+/// </para>
+/// <para>
+/// <b>Permission split:</b> AD19 requires <c>CANCEL_TRANSACTIONS</c>; AD19b/c
+/// require <c>EMERGENCY_HOLD</c>. The two are independent (02 §7 not).
+/// </para>
+/// <para>
+/// <b>ITEM_DELIVERED rule:</b> hold may be applied at ITEM_DELIVERED but the
+/// release path forbids <c>CANCEL</c> — only <c>RESUME</c> is permitted, which
+/// matches AD19's "İptal edilemez" list (07 §9.20).
+/// </para>
+/// </remarks>
+public sealed class AdminTransactionService : IAdminTransactionService
+{
+    /// <summary>Minimum trimmed length of <c>reason</c> per 07 §9.20 / §9.21.</summary>
+    public const int MinReasonLength = 10;
+
+    /// <summary>Minimum trimmed length of <c>note</c> per 07 §9.22 (spec says required; we apply ≥1 trim).</summary>
+    public const int MinNoteLength = 1;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = false,
+    };
+
+    private readonly AppDbContext _db;
+    private readonly IOutboxService _outbox;
+    private readonly IAuditLogger _audit;
+    private readonly ITimeoutSchedulingService _scheduling;
+    private readonly ITimeoutFreezeService _freeze;
+    private readonly TimeProvider _clock;
+
+    public AdminTransactionService(
+        AppDbContext db,
+        IOutboxService outbox,
+        IAuditLogger audit,
+        ITimeoutSchedulingService scheduling,
+        ITimeoutFreezeService freeze,
+        TimeProvider clock)
+    {
+        _db = db;
+        _outbox = outbox;
+        _audit = audit;
+        _scheduling = scheduling;
+        _freeze = freeze;
+        _clock = clock;
+    }
+
+    // ---------- AD19 — POST /admin/transactions/:id/cancel ----------
+
+    public async Task<AdminCancelTransactionOutcome> CancelAsync(
+        Guid adminUserId,
+        Guid transactionId,
+        AdminCancelTransactionRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ---------- Stage 1: load transaction ----------
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == transactionId && !t.IsDeleted, cancellationToken);
+        if (transaction is null)
+            return CancelFailure(AdminCancelTransactionStatus.NotFound,
+                AdminTransactionErrorCodes.TransactionNotFound,
+                "Transaction not found.");
+
+        // ---------- Stage 2: reason validation ----------
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < MinReasonLength)
+            return CancelFailure(AdminCancelTransactionStatus.ValidationFailed,
+                AdminTransactionErrorCodes.ValidationError,
+                $"reason must be at least {MinReasonLength} characters (07 §9.20).");
+
+        // ---------- Stage 3: state guards (07 §9.20) ----------
+        if (transaction.Status == TransactionStatus.ITEM_DELIVERED)
+            return CancelFailure(AdminCancelTransactionStatus.CannotCancelAtDeliveryStage,
+                AdminTransactionErrorCodes.CannotCancelAtDeliveryStage,
+                "Item already delivered to buyer; cancel is forbidden after the delivery stage (07 §9.20).");
+
+        if (transaction.IsOnHold)
+            return CancelFailure(AdminCancelTransactionStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                "Transaction is under emergency hold; release the hold first (use AD19c).");
+
+        if (IsTerminalState(transaction.Status))
+            return CancelFailure(AdminCancelTransactionStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                $"Cannot cancel transaction in terminal state {transaction.Status}.");
+
+        // ---------- Stage 4: state transition ----------
+        var previousStatus = transaction.Status;
+        var itemWasOnPlatform = ItemWasOnPlatform(previousStatus);
+        var paymentWasReceived = PaymentWasReceived(previousStatus);
+
+        var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+        try
+        {
+            machine.Fire(TransactionTrigger.AdminCancel, new CancellationContext(trimmedReason));
+        }
+        catch (DomainException ex)
+        {
+            return CancelFailure(AdminCancelTransactionStatus.InvalidStateTransition,
+                ex.ErrorCode,
+                ex.Message);
+        }
+
+        // ---------- Stage 5: side effects ----------
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // 5a. Cancel pending Hangfire timeout / warning jobs (idempotent).
+        await _scheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
+
+        // 5b. Item return when item was on the platform.
+        if (itemWasOnPlatform)
+        {
+            await _outbox.PublishAsync(
+                new ItemRefundToSellerRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    SellerId: transaction.SellerId,
+                    Trigger: ItemRefundTrigger.AdminCancel,
+                    OccurredAt: occurredAt),
+                cancellationToken);
+        }
+
+        // 5c. Payment refund when buyer had paid.
+        if (paymentWasReceived && transaction.BuyerId is { } buyerForRefund
+            && !string.IsNullOrEmpty(transaction.BuyerRefundAddress))
+        {
+            await _outbox.PublishAsync(
+                new PaymentRefundToBuyerRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    BuyerId: buyerForRefund,
+                    BuyerRefundAddress: transaction.BuyerRefundAddress,
+                    OccurredAt: occurredAt),
+                cancellationToken);
+        }
+
+        // 5d. Counter-party notification fan-out via the existing T51 consumer
+        // (extended to handle CancelledByType.ADMIN — both parties notified).
+        await _outbox.PublishAsync(
+            new TransactionCancelledEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                CancelledBy: CancelledByType.ADMIN,
+                SellerId: transaction.SellerId,
+                BuyerId: transaction.BuyerId,
+                ItemName: transaction.ItemName,
+                CancelReason: trimmedReason,
+                OccurredAt: occurredAt),
+            cancellationToken);
+
+        // 5e. Audit row.
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.TRANSACTION_CANCELLED_ADMIN,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: JsonSerializer.Serialize(new { Status = previousStatus.ToString() }, JsonOptions),
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    Status = transaction.Status.ToString(),
+                    Reason = trimmedReason,
+                    ItemReturned = itemWasOnPlatform,
+                    PaymentRefunded = paymentWasReceived,
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        // ---------- Stage 6: atomic commit ----------
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new AdminCancelTransactionOutcome(
+            Status: AdminCancelTransactionStatus.Cancelled,
+            Body: new AdminCancelTransactionResponse(
+                Status: transaction.Status,
+                CancelledAt: transaction.CancelledAt!.Value,
+                ItemReturned: itemWasOnPlatform,
+                PaymentRefunded: paymentWasReceived),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
+    // ---------- AD19b — POST /admin/transactions/:id/emergency-hold ----------
+
+    public async Task<ApplyEmergencyHoldOutcome> ApplyEmergencyHoldAsync(
+        Guid adminUserId,
+        Guid transactionId,
+        ApplyEmergencyHoldRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ---------- Stage 1: load transaction ----------
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == transactionId && !t.IsDeleted, cancellationToken);
+        if (transaction is null)
+            return HoldFailure(ApplyEmergencyHoldStatus.NotFound,
+                AdminTransactionErrorCodes.TransactionNotFound,
+                "Transaction not found.");
+
+        // ---------- Stage 2: reason validation ----------
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < MinReasonLength)
+            return HoldFailure(ApplyEmergencyHoldStatus.ValidationFailed,
+                AdminTransactionErrorCodes.ValidationError,
+                $"reason must be at least {MinReasonLength} characters (07 §9.21).");
+
+        // ---------- Stage 3: state guards (07 §9.21) ----------
+        if (transaction.IsOnHold)
+            return HoldFailure(ApplyEmergencyHoldStatus.AlreadyOnHold,
+                AdminTransactionErrorCodes.AlreadyOnHold,
+                "Transaction is already under emergency hold (07 §9.21).");
+
+        if (IsTerminalState(transaction.Status))
+            return HoldFailure(ApplyEmergencyHoldStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                $"Cannot apply emergency hold to terminal state {transaction.Status}.");
+
+        // ---------- Stage 4: T50 freeze pre-pass ----------
+        // Runs BEFORE the state machine because T44 ApplyEmergencyHold leaves
+        // TimeoutRemainingSeconds NULL for non-ITEM_ESCROWED states (T50 report
+        // Known Limitations — flagged for T59), which would trip
+        // CK_Transactions_FreezeActive at SaveChangesAsync. T50 FreezeAsync
+        // resolves the active-phase deadline from the 06 §3.5 matrix and
+        // stamps the freeze trio (TimeoutFrozenAt + TimeoutFreezeReason +
+        // TimeoutRemainingSeconds). It also cancels pending Hangfire jobs.
+        // T54 cascade-hold uses the same pre-pass pattern.
+        await _freeze.FreezeAsync(transaction, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
+
+        // ---------- Stage 5: domain stamp via state machine ----------
+        // ApplyEmergencyHold sets IsOnHold + EmergencyHold* + PreviousStatusBeforeHold.
+        // It also re-stamps TimeoutFrozenAt + TimeoutFreezeReason — same values
+        // already written by FreezeAsync. The clock skew between TimeProvider
+        // (FreezeAsync) and DateTime.UtcNow (state machine) is acceptable; no
+        // CK constraint compares the two timestamps.
+        var previousStatus = transaction.Status;
+
+        var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+        try
+        {
+            machine.ApplyEmergencyHold(adminUserId, trimmedReason);
+        }
+        catch (DomainException ex)
+        {
+            // ApplyEmergencyHold can throw AlreadyOnHold (covered above) or
+            // EmergencyHoldReasonRequired (covered above) — keep the catch as
+            // a defensive belt against future invariant changes.
+            return HoldFailure(ApplyEmergencyHoldStatus.InvalidStateTransition,
+                ex.ErrorCode,
+                ex.Message);
+        }
+
+        // ---------- Stage 6: side effects ----------
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // 6a. Notification fan-out (seller + buyer when registered).
+        await _outbox.PublishAsync(
+            new EmergencyHoldAppliedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                SellerId: transaction.SellerId,
+                BuyerId: transaction.BuyerId,
+                ItemName: transaction.ItemName,
+                Reason: trimmedReason,
+                OccurredAt: occurredAt),
+            cancellationToken);
+
+        // 6b. Audit row.
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.EMERGENCY_HOLD_APPLIED,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: null,
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    Reason = trimmedReason,
+                    PreviousStatus = previousStatus.ToString(),
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        // ---------- Stage 7: atomic commit ----------
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // 07 §9.21 response surfaces the projected "EMERGENCY_HOLD" status
+        // string (not a real TransactionStatus enum value — overlay only).
+        return new ApplyEmergencyHoldOutcome(
+            Status: ApplyEmergencyHoldStatus.Applied,
+            Body: new ApplyEmergencyHoldResponse(
+                Status: "EMERGENCY_HOLD",
+                FrozenAt: transaction.EmergencyHoldAt!.Value,
+                PreviousStatus: previousStatus),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
+    // ---------- AD19c — POST /admin/transactions/:id/release-hold ----------
+
+    public async Task<ReleaseEmergencyHoldOutcome> ReleaseEmergencyHoldAsync(
+        Guid adminUserId,
+        Guid transactionId,
+        ReleaseEmergencyHoldRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ---------- Stage 1: load transaction ----------
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == transactionId && !t.IsDeleted, cancellationToken);
+        if (transaction is null)
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.NotFound,
+                AdminTransactionErrorCodes.TransactionNotFound,
+                "Transaction not found.");
+
+        // ---------- Stage 2: note validation ----------
+        var trimmedNote = (request.Note ?? string.Empty).Trim();
+        if (trimmedNote.Length < MinNoteLength)
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.ValidationFailed,
+                AdminTransactionErrorCodes.ValidationError,
+                "note is required (07 §9.22).");
+
+        // ---------- Stage 3: hold guard ----------
+        if (!transaction.IsOnHold)
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.NotOnHold,
+                AdminTransactionErrorCodes.NotOnHold,
+                "Transaction is not under emergency hold (07 §9.22).");
+
+        // ---------- Stage 4: previousStatus + ITEM_DELIVERED CANCEL guard ----------
+        // Status is unchanged by ApplyEmergencyHold (it's an overlay) so
+        // tx.Status equals tx.PreviousStatusBeforeHold for active states. We
+        // read the int-stored copy because that field is the explicit
+        // contract surfaced by 06 §3.5 + 07 §9.21 response.
+        var previousStatus = transaction.PreviousStatusBeforeHold.HasValue
+            ? (TransactionStatus)transaction.PreviousStatusBeforeHold.Value
+            : transaction.Status;
+
+        if (request.Action == EmergencyHoldReleaseAction.CANCEL
+            && previousStatus == TransactionStatus.ITEM_DELIVERED)
+        {
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.CannotCancelDeliveredHold,
+                AdminTransactionErrorCodes.CannotCancelDeliveredHold,
+                "Cannot cancel a hold whose pre-hold status was ITEM_DELIVERED — only RESUME is permitted (07 §9.22).");
+        }
+
+        return request.Action switch
+        {
+            EmergencyHoldReleaseAction.RESUME => await ResumeAsync(
+                transaction, adminUserId, trimmedNote, previousStatus, ipAddress, cancellationToken),
+
+            EmergencyHoldReleaseAction.CANCEL => await CancelAfterHoldAsync(
+                transaction, adminUserId, trimmedNote, previousStatus, ipAddress, cancellationToken),
+
+            _ => ReleaseFailure(ReleaseEmergencyHoldStatus.ValidationFailed,
+                AdminTransactionErrorCodes.ValidationError,
+                $"Unknown release action '{request.Action}'."),
+        };
+    }
+
+    // ---------- Internal: RESUME branch ----------
+
+    private async Task<ReleaseEmergencyHoldOutcome> ResumeAsync(
+        Transaction transaction,
+        Guid adminUserId,
+        string trimmedNote,
+        TransactionStatus previousStatus,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        // Resume order matters: T50 ResumeAsync needs TimeoutFrozenAt set to
+        // detect "is frozen?", reschedules Hangfire jobs (ITEM_ESCROWED) and
+        // clears the freeze trio. ReleaseEmergencyHold (state machine) then
+        // flips IsOnHold off — the freeze trio fields it would clear are
+        // already null after ResumeAsync, so the second clear is a no-op.
+        await _freeze.ResumeAsync(transaction, cancellationToken);
+
+        var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+        try
+        {
+            machine.ReleaseEmergencyHold();
+        }
+        catch (DomainException ex)
+        {
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.NotOnHold,
+                ex.ErrorCode,
+                ex.Message);
+        }
+
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // Outbox event — notification fan-out.
+        await _outbox.PublishAsync(
+            new EmergencyHoldReleasedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                SellerId: transaction.SellerId,
+                BuyerId: transaction.BuyerId,
+                ItemName: transaction.ItemName,
+                Action: EmergencyHoldReleaseAction.RESUME,
+                ResumedStatus: previousStatus,
+                OccurredAt: occurredAt),
+            cancellationToken);
+
+        // Audit row.
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.EMERGENCY_HOLD_RELEASED,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: JsonSerializer.Serialize(new { IsOnHold = true }, JsonOptions),
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    Action = nameof(EmergencyHoldReleaseAction.RESUME),
+                    Note = trimmedNote,
+                    ResumedStatus = previousStatus.ToString(),
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new ReleaseEmergencyHoldOutcome(
+            Status: ReleaseEmergencyHoldStatus.Released,
+            Body: new ReleaseEmergencyHoldResponse(
+                Status: previousStatus,
+                ReleasedAt: occurredAt,
+                Action: EmergencyHoldReleaseAction.RESUME,
+                ItemReturned: null,
+                PaymentRefunded: null),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
+    // ---------- Internal: CANCEL branch (release + admin cancel) ----------
+
+    private async Task<ReleaseEmergencyHoldOutcome> CancelAfterHoldAsync(
+        Transaction transaction,
+        Guid adminUserId,
+        string trimmedNote,
+        TransactionStatus previousStatus,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        var itemWasOnPlatform = ItemWasOnPlatform(previousStatus);
+        var paymentWasReceived = PaymentWasReceived(previousStatus);
+
+        // Step 1 — release the hold so the state machine permits AdminCancel
+        // (Fire enforces NOT IsOnHold per 05 §4.5).
+        var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+        try
+        {
+            machine.ReleaseEmergencyHold();
+        }
+        catch (DomainException ex)
+        {
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.NotOnHold,
+                ex.ErrorCode,
+                ex.Message);
+        }
+
+        // Step 2 — clear TimeoutRemainingSeconds so CK_Transactions_FreezePassive
+        // holds when SaveChangesAsync runs (state machine ReleaseEmergencyHold
+        // clears TimeoutFrozenAt + TimeoutFreezeReason but preserves
+        // TimeoutRemainingSeconds for T47 reschedule, which is moot here — we
+        // are about to cancel the transaction).
+        transaction.TimeoutRemainingSeconds = null;
+
+        // Step 3 — fire AdminCancel. Hangfire jobs were already cancelled at
+        // hold-time by FreezeAsync; CancelTimeoutJobsAsync below stays
+        // defensive (idempotent).
+        var cancelReason = $"Hold sonrası iptal: {trimmedNote}";
+        try
+        {
+            machine.Fire(TransactionTrigger.AdminCancel, new CancellationContext(cancelReason));
+        }
+        catch (DomainException ex)
+        {
+            return ReleaseFailure(ReleaseEmergencyHoldStatus.ValidationFailed,
+                ex.ErrorCode,
+                ex.Message);
+        }
+
+        await _scheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
+
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // Step 4 — refund + notification + audit fan-out (same as AD19).
+        if (itemWasOnPlatform)
+        {
+            await _outbox.PublishAsync(
+                new ItemRefundToSellerRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    SellerId: transaction.SellerId,
+                    Trigger: ItemRefundTrigger.AdminCancel,
+                    OccurredAt: occurredAt),
+                cancellationToken);
+        }
+
+        if (paymentWasReceived && transaction.BuyerId is { } buyerForRefund
+            && !string.IsNullOrEmpty(transaction.BuyerRefundAddress))
+        {
+            await _outbox.PublishAsync(
+                new PaymentRefundToBuyerRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    BuyerId: buyerForRefund,
+                    BuyerRefundAddress: transaction.BuyerRefundAddress,
+                    OccurredAt: occurredAt),
+                cancellationToken);
+        }
+
+        await _outbox.PublishAsync(
+            new TransactionCancelledEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                CancelledBy: CancelledByType.ADMIN,
+                SellerId: transaction.SellerId,
+                BuyerId: transaction.BuyerId,
+                ItemName: transaction.ItemName,
+                CancelReason: cancelReason,
+                OccurredAt: occurredAt),
+            cancellationToken);
+
+        // Two audit rows — release + cancel — keep the forensic trail explicit.
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.EMERGENCY_HOLD_RELEASED,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: JsonSerializer.Serialize(new { IsOnHold = true }, JsonOptions),
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    Action = nameof(EmergencyHoldReleaseAction.CANCEL),
+                    Note = trimmedNote,
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.TRANSACTION_CANCELLED_ADMIN,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: JsonSerializer.Serialize(new { Status = previousStatus.ToString() }, JsonOptions),
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    Status = transaction.Status.ToString(),
+                    Reason = cancelReason,
+                    ItemReturned = itemWasOnPlatform,
+                    PaymentRefunded = paymentWasReceived,
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new ReleaseEmergencyHoldOutcome(
+            Status: ReleaseEmergencyHoldStatus.Released,
+            Body: new ReleaseEmergencyHoldResponse(
+                Status: transaction.Status,
+                ReleasedAt: transaction.CancelledAt!.Value,
+                Action: EmergencyHoldReleaseAction.CANCEL,
+                ItemReturned: itemWasOnPlatform,
+                PaymentRefunded: paymentWasReceived),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
+    // ---------- helpers ----------
+
+    private static bool IsTerminalState(TransactionStatus status) => status switch
+    {
+        TransactionStatus.COMPLETED => true,
+        TransactionStatus.CANCELLED_TIMEOUT => true,
+        TransactionStatus.CANCELLED_SELLER => true,
+        TransactionStatus.CANCELLED_BUYER => true,
+        TransactionStatus.CANCELLED_ADMIN => true,
+        _ => false,
+    };
+
+    private static bool ItemWasOnPlatform(TransactionStatus status) => status switch
+    {
+        TransactionStatus.ITEM_ESCROWED => true,
+        TransactionStatus.PAYMENT_RECEIVED => true,
+        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
+        _ => false,
+    };
+
+    private static bool PaymentWasReceived(TransactionStatus status) => status switch
+    {
+        TransactionStatus.PAYMENT_RECEIVED => true,
+        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
+        _ => false,
+    };
+
+    private static AdminCancelTransactionOutcome CancelFailure(
+        AdminCancelTransactionStatus status, string errorCode, string message)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+
+    private static ApplyEmergencyHoldOutcome HoldFailure(
+        ApplyEmergencyHoldStatus status, string errorCode, string message)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+
+    private static ReleaseEmergencyHoldOutcome ReleaseFailure(
+        ReleaseEmergencyHoldStatus status, string errorCode, string message)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+}
