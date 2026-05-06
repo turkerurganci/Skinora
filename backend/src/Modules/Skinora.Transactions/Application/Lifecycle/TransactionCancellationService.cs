@@ -182,6 +182,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 BuyerId: transaction.BuyerId,
                 ItemName: transaction.ItemName,
                 CancelReason: trimmedReason,
+                FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
 

@@ -44,6 +44,7 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
                 SellerId: transaction.SellerId,
                 BuyerId: transaction.BuyerId,
                 ItemName: transaction.ItemName,
+                FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
 

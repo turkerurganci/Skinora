@@ -24,6 +24,7 @@ namespace Skinora.Shared.Events;
 /// <param name="BuyerId">Buyer user id, or <c>null</c> when no buyer had accepted yet (06 §3.5 — pre-accept seller cancel).</param>
 /// <param name="ItemName">Snapshot of the item label, used by templates.</param>
 /// <param name="CancelReason">Free-text reason supplied by the cancelling party (≥10 chars after trim, 02 §7 / 07 §7.7).</param>
+/// <param name="FromStatus">Transaction status snapshot taken before the Cancel trigger fired. Drives the T61 SignalR <c>TransactionStatusChanged.fromStatus</c> field (07 §11.1) which the entity itself can no longer expose post-commit.</param>
 /// <param name="OccurredAt">UTC timestamp the cancellation was committed.</param>
 public record TransactionCancelledEvent(
     Guid EventId,
@@ -33,4 +34,5 @@ public record TransactionCancelledEvent(
     Guid? BuyerId,
     string ItemName,
     string CancelReason,
+    TransactionStatus FromStatus,
     DateTime OccurredAt) : IDomainEvent;

@@ -71,8 +71,24 @@ public static class AuthModule
             // requirement) the default JwtBearer handler writes an empty body.
             // 07 §9 mandates a 403 INSUFFICIENT_PERMISSION envelope, so we
             // serialize the standard ApiResponse failure shape ourselves.
+            // T61 — SignalR JS clients cannot set the Authorization header on
+            // the WebSocket handshake, so 07 §11.1 documents JWT delivery via
+            // a `?access_token=` query param. OnMessageReceived bridges the
+            // query param into the bearer auth pipeline only for /hubs/*
+            // requests so other endpoints keep enforcing header-only tokens.
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken)
+                        && path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                },
                 OnForbidden = async context =>
                 {
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;

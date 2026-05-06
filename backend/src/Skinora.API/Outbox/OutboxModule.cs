@@ -85,5 +85,6 @@ public static class OutboxModule
     [
         typeof(OutboxModule).Assembly,
         typeof(Skinora.Notifications.NotificationsModule).Assembly,
+        typeof(Skinora.Realtime.RealtimeModule).Assembly,
     ];
 }

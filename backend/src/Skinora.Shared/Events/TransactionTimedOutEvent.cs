@@ -19,6 +19,7 @@ namespace Skinora.Shared.Events;
 /// <param name="SellerId">Seller user id (always present — sellers must be registered).</param>
 /// <param name="BuyerId">Buyer user id, or <c>null</c> if the transaction was open-link/invite-only and the buyer never registered (06 §3.5).</param>
 /// <param name="ItemName">Snapshot of the item label, used by templates.</param>
+/// <param name="FromStatus">Transaction status snapshot taken before the Timeout trigger fired. Drives the T61 SignalR <c>TransactionStatusChanged.fromStatus</c> field (07 §11.1) — the publisher already has this in scope as <c>previousStatus</c>.</param>
 /// <param name="OccurredAt">UTC timestamp the timeout was committed.</param>
 public record TransactionTimedOutEvent(
     Guid EventId,
@@ -27,4 +28,5 @@ public record TransactionTimedOutEvent(
     Guid SellerId,
     Guid? BuyerId,
     string ItemName,
+    TransactionStatus FromStatus,
     DateTime OccurredAt) : IDomainEvent;
