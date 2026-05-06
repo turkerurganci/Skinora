@@ -1,6 +1,6 @@
 # T60 — Satıcı Payout Issue
 
-**Faz:** F3 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-05-06 (yapım)
+**Faz:** F3 | **Durum:** ✓ PASS bağımsız validator | **Tarih:** 2026-05-06 (yapım + validate)
 
 ---
 
@@ -85,7 +85,7 @@ T60, satıcının COMPLETED bir işlemde ödemeyi almadığını bildirmesi içi
 | Unit (Skinora.Transactions.Tests) | ✓ 333/333 | Mevcut StateMachine + Lifecycle + Timeouts + GasFee + Reputation unit'leri regresyon temiz. T60 service tests Integration namespace'inde — CI shared services:mssql üzerinde çalışır. |
 | Unit (Skinora.Auth.Tests / Users.Tests / Fraud.Tests) | ✓ 57+16+14 | Regresyon temiz. |
 | Endpoint smoke (Skinora.API.Tests) | ✓ 32/32 | 9 yeni `PayoutIssueEndpointTests` (auth gate / happy path / NotSeller / BuyerAsSeller / TransactionNotCompleted / TransactionNotFound / DuplicateActiveIssue / DetailTooShort / EmptyBody) + 23 mevcut endpoint testi regresyon temiz. SQLite in-memory + Factory + `IPayoutEscalationAdminResolver` override. |
-| Integration (Skinora.Transactions.Tests/Integration/PayoutIssues) | ⏳ CI bekliyor | 13 yeni `PayoutIssueServiceTests` lokal Docker yok (Windows env), CI Linux runner shared services:mssql üzerinde koşacak (T11.3 paterni). Build temiz + lokal compile + endpoint smoke testleri service kontratını dolaylı kanıtlıyor. |
+| Integration (Skinora.Transactions.Tests/Integration/PayoutIssues) | ✓ CI 25456117870 | 13 yeni `PayoutIssueServiceTests` lokal Docker yok (Windows env). CI Linux runner shared services:mssql üzerinde 4. Integration test job ✓ SUCCESS — yapım run [`25455122485`](https://github.com/turkerurganci/Skinora/actions/runs/25455122485) ve rapor commit run [`25456117870`](https://github.com/turkerurganci/Skinora/actions/runs/25456117870) ardışık 10/10 ✓. |
 | Build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` → `Build succeeded. 0 Warning(s) 0 Error(s)`. |
 | Format verify | ✓ exit=0 | `dotnet format Skinora.sln --verify-no-changes` clean. |
 
@@ -130,3 +130,67 @@ T60, satıcının COMPLETED bir işlemde ödemeyi almadığını bildirmesi içi
 - **Scope kararı (Adım 5):** Senaryo A (post-COMPLETED) odaklı; Senaryo B (pre-COMPLETED stuck) mevcut payout retry mekanizmasının sorumluluğunda. Kullanıcı onayladı.
 - **`SellerPayoutIssue` entity T25'ten beri mevcut (PR #29 squash `25ce5b9`); T60 yalnızca service+endpoint+event+stub ekledi.** Entity DDL/CHECK/UQ değişmedi.
 - **Cross-module pattern:** `IPayoutEscalationAdminResolver` Skinora.Transactions'da declare, Skinora.API/Services'te implement (Skinora.Transactions Skinora.Admin'e referans veremez — Disputes/Fraud cross-module port pattern'i).
+
+---
+
+## Doğrulama Sonucu — T60 Satıcı Payout Issue
+
+**Tarih:** 2026-05-06
+**Branch:** `task/T60-seller-payout-issue`
+**Commit (HEAD):** `3d69bc5`
+
+### Verdict: ✓ PASS
+
+### Doğrulama Adımları (validate skill)
+
+| Adım | Sonuç | Kanıt |
+|---|---|---|
+| -1 Working tree hygiene | ✓ | `git status` clean |
+| 0 Main CI startup (son 3 run) | ✓ | `25452094736`, `25452094665`, `25451442626` — hepsi SUCCESS |
+| 0b Repo memory drift (T60) | ✓ | `MEMORY.md` satır 11/13/122/123'te T60 referansları mevcut |
+| 8a Task branch CI | ✓ | PR #96 son run `25456117870` 10/10 SUCCESS (Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker, CI Gate) |
+
+### Kabul Kriterleri (bağımsız doğrulama)
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `POST /transactions/:id/report-payout-issue` → sadece COMPLETED, sadece satıcı | ✓ | `TransactionsController.ReportPayoutIssue` (route + `[Authorize]` + `[RateLimit("user-write")]`); `PayoutIssueService.ReportAsync` Stage 2 (NotSeller) + Stage 3 (TransactionNotCompleted); endpoint test `Report_NonSeller`/`Report_BuyerCallsAsSeller`/`Report_TransactionNotCompleted` ✓ lokal. |
+| 2 | Otomatik doğrulama: tx hash blockchain | ✓ | `IPayoutVerifier` port + service Stage 7 `BlockchainTransaction.SELLER_PAYOUT.TxHash` okur → `VerifyAsync` → outcome'a göre transition. `Report_VerifierConfirms_TransitionsToResolved_AndEmitsResolvedEvent` (CI). Stub T64–T69 forward. |
+| 3 | Retry: stuck/başarısız ise yeniden deneme | ~ kısmi | `StillPending` → `RETRY_SCHEDULED` + `RetryCount=1` + `SellerPayoutIssueReportedEvent` (event hook). Gerçek retry consumer (yeni broadcast) 06 §3.8 BlockchainTransaction retry pipeline / T-future. Bu, T60 task tanımındaki "retry" kelimesinin orchestration scope'una uyar — Senaryo B retry zaten payout pipeline'ında çalışır; Senaryo A retry consumer scope-out. K2 follow-up. |
+| 4 | Eskalasyon: otomatik çözüm başarısızsa admin'e | ✓ | `AnomalyDetected`/`UnableToVerify` → `IPayoutEscalationAdminResolver` → `EscalatedToAdminId` damga + `SellerPayoutIssueEscalatedEvent`. Stub default `UnableToVerify` (fail-closed). `Report_VerifierDetectsAnomaly_…` + `Report_VerifierUnableToVerify_StubProductionDefault_…` + `Report_NoAdminAvailable_…Throws` (CK koruması) ✓. |
+| 5 | State'ler: REPORTED → VERIFYING → RETRY_SCHEDULED / ESCALATED → RESOLVED | ✓ | `PayoutIssueStatus` 5 değer (06 §2.22 1:1). REPORTED entry + verifier outcome → terminal/ara state atomik tek SaveChanges. VERIFYING transient (sync flow'da DB'ye yazılmaz — atomik commit kararı; K5 advisory). 06 §3.8a CK constraint'leri (`ESCALATED → EscalatedToAdminId NOT NULL`, `RESOLVED → ResolvedAt NOT NULL`, `RETRY_SCHEDULED → RetryCount > 0`) `SellerPayoutIssueConfiguration` ile zorlanır; service her transition'da invariant'a uyar. Filtered UQ (`UNIQUE(TransactionId) WHERE != RESOLVED`) + service Stage 4 defensive pre-check. `Report_ReopenAfterResolved_Allowed` ✓. |
+
+### Doğrulama Kontrol Listesi
+
+- [x] **06 §3.8a SellerPayoutIssue yapısı doğru mu?** ✓ — entity field/enum/constraint/UQ kontratı `SellerPayoutIssueConfiguration` ile birebir; service her dalda invariant'a uyar.
+- [x] **07 §7.11 sözleşmesi doğru mu?** ✓ — request `{detail}` ≥10 char trimmed; response `{issueId, status, createdAt, message}`; error code'ları (`TRANSACTION_NOT_COMPLETED`, `ISSUE_ALREADY_REPORTED`, `NOT_SELLER`, `VALIDATION_ERROR`) + ek `TRANSACTION_NOT_FOUND` (sözleşmenin doğal genişlemesi, varlık leak değil — diğer endpoint paterniyle tutarlı); HTTP kodları (201/404/403/409/400) controller switch ile birebir.
+
+### Test Sonuçları (validator lokal koşturma + CI)
+
+| Tür | Sonuç | Komut / Run | Çıktı |
+|---|---|---|---|
+| Build (Debug) | ✓ | `dotnet build` | 0W/0E |
+| Endpoint smoke (Skinora.API.Tests) | ✓ 9/9 | `dotnet test --filter ~PayoutIssue` | 9 yeni T60 endpoint testi PASS |
+| Integration (Skinora.Transactions.Tests) | ✓ CI | run `25456117870` 4. Integration test | CI'de SUCCESS (lokal Windows Docker yok — beklenen kısıt) |
+| Task branch CI 10/10 | ✓ | PR #96 run `25456117870` | Lint + Build + Unit + Integration + Contract + Migration dry-run + Docker + CI Gate hepsi SUCCESS |
+
+### Güvenlik Kontrolü
+
+- [x] **Secret sızıntısı:** Temiz — yeni dosyalarda secret yok; tx hash literal'leri test fixture içinde.
+- [x] **Auth/authorization:** Temiz — `[Authorize(Policy = AuthPolicies.Authenticated)]` + service `SellerId == callerUserId` guard (alıcı dahil hiçbir 3. taraf bildirim atamaz). Rate limit `user-write` per-user.
+- [x] **Input validation:** Temiz — `detail` trim ≥10 char (07 §7.11 floor); whitespace-only → 400; empty body → 400; route `id:guid` constraint; outcome switch default 500.
+- [x] **Yeni dış bağımlılık:** Yok — `IOutboxService` (F0), `AppDbContext` (F0), `Skinora.Admin.AdminUserRole` query (T24/T39 paterni). Migration yok (T25/T28'de mevcut).
+
+### Bulgular
+
+S-seviyesinde bulgu yok. **1 minor advisory** (yapım raporunda K5 olarak zaten belgelenmiş, validator onayı):
+
+| # | Seviye | Açıklama | Etkilenen dosya | Verdict etkisi |
+|---|---|---|---|---|
+| A1 | Advisory | VERIFYING ara state'i sync flow'da DB'ye yazılmaz (atomik tek SaveChanges'te REPORTED → terminal). 06 §2.22 state diagram VERIFYING'i opsiyonel transient olarak tanımlar; 07 §7.11 status alanı için spesifik state zorunluluğu yok. Async/queue pipeline T-future eklenirse REPORTED row write → ayrı job VERIFYING → terminal akışı kontratı bozmaz. | `PayoutIssueService.cs` | Yok — tasarım kararı, sapma değil. |
+
+### Yapım Raporu Karşılaştırması
+
+- **Uyum:** Tam uyumlu. Yapım raporu öz-değerlendirmesi (Kriter 3 "✓ kısmi", K1–K6 forward devirleri, K5 VERIFYING transient açıklaması) gerçekçi ve dürüst — bağımsız incelememle 1:1 örtüşüyor.
+- **Düzeltilen:** Test Sonuçları tablosunda Integration row "⏳ CI bekliyor" → "✓ CI run 25456117870" finalize edildi (CI sonucu zaten gelmişti).
+- **Status değişikliği:** Faz başlığı "⏳ Yapım bitti, doğrulama bekliyor" → "✓ PASS bağımsız validator" güncellendi.
