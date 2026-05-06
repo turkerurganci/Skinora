@@ -57,7 +57,9 @@
       "PowerShell(dotnet test tests/Skinora.API.Tests/Skinora.API.Tests.csproj --filter \"FullyQualifiedName~AdminRbacEndpointTests\" --nologo --verbosity quiet 2>&1)",
       "PowerShell(gh pr view 81 --json mergeCommit,title,state,mergedAt)",
       "PowerShell(git add Docs/IMPLEMENTATION_STATUS.md)",
-      "PowerShell(git checkout -b task/T59-emergency-hold)"
+      "PowerShell(git checkout -b task/T59-emergency-hold)",
+      "PowerShell(dotnet build backend/Skinora.sln -c Release --nologo /clp:Summary 2>&1)",
+      "PowerShell(dotnet format backend/Skinora.sln --verify-no-changes --no-restore 2>&1)"
     ]
   },
   "hooks": {
