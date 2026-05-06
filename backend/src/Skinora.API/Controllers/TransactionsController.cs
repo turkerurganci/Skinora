@@ -5,12 +5,14 @@ using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Models;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PayoutIssues;
 
 namespace Skinora.API.Controllers;
 
 /// <summary>
 /// Transaction lifecycle endpoints — T45 (07 §7.2–§7.4), T46
-/// (07 §7.5–§7.6), and T51 cancel (07 §7.7).
+/// (07 §7.5–§7.6), T51 cancel (07 §7.7), and T60 report-payout-issue
+/// (07 §7.11).
 /// </summary>
 [ApiController]
 [Route("api/v1/transactions")]
@@ -22,6 +24,7 @@ public sealed class TransactionsController : ControllerBase
     private readonly ITransactionDetailService _detail;
     private readonly ITransactionAcceptanceService _acceptance;
     private readonly ITransactionCancellationService _cancellation;
+    private readonly IPayoutIssueService _payoutIssues;
 
     public TransactionsController(
         ITransactionEligibilityService eligibility,
@@ -29,7 +32,8 @@ public sealed class TransactionsController : ControllerBase
         ITransactionCreationService creation,
         ITransactionDetailService detail,
         ITransactionAcceptanceService acceptance,
-        ITransactionCancellationService cancellation)
+        ITransactionCancellationService cancellation,
+        IPayoutIssueService payoutIssues)
     {
         _eligibility = eligibility;
         _params = @params;
@@ -37,6 +41,7 @@ public sealed class TransactionsController : ControllerBase
         _detail = detail;
         _acceptance = acceptance;
         _cancellation = cancellation;
+        _payoutIssues = payoutIssues;
     }
 
     /// <summary>T3 — <c>GET /transactions/eligibility</c> (07 §7.3).</summary>
@@ -251,6 +256,54 @@ public sealed class TransactionsController : ControllerBase
         ApiResponse<object>.Fail(
             outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
             outcome.ErrorMessage ?? "Transaction could not be cancelled.",
+            traceId: HttpContext.TraceIdentifier);
+
+    /// <summary>T11 — <c>POST /transactions/:id/report-payout-issue</c> (07 §7.11).</summary>
+    [HttpPost("{id:guid}/report-payout-issue")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-write")]
+    public async Task<IActionResult> ReportPayoutIssue(
+        Guid id,
+        [FromBody] ReportPayoutIssueRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (request is null)
+            return BadRequest(ApiResponse<object>.Fail(
+                PayoutIssueErrorCodes.ValidationError,
+                "Request body is required.",
+                traceId: HttpContext.TraceIdentifier));
+
+        var outcome = await _payoutIssues.ReportAsync(userId, id, request, cancellationToken);
+
+        return outcome.Status switch
+        {
+            ReportPayoutIssueStatus.Reported => Created(
+                $"/api/v1/transactions/{id:D}/report-payout-issue/{outcome.Body!.IssueId:D}",
+                outcome.Body),
+
+            ReportPayoutIssueStatus.NotFound => NotFound(
+                ReportPayoutIssueErrorEnvelope(outcome)),
+
+            ReportPayoutIssueStatus.NotSeller => StatusCode(
+                StatusCodes.Status403Forbidden,
+                ReportPayoutIssueErrorEnvelope(outcome)),
+
+            ReportPayoutIssueStatus.TransactionNotCompleted
+                or ReportPayoutIssueStatus.IssueAlreadyReported
+                => Conflict(ReportPayoutIssueErrorEnvelope(outcome)),
+
+            ReportPayoutIssueStatus.ValidationFailed => BadRequest(
+                ReportPayoutIssueErrorEnvelope(outcome)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private ApiResponse<object> ReportPayoutIssueErrorEnvelope(ReportPayoutIssueOutcome outcome) =>
+        ApiResponse<object>.Fail(
+            outcome.ErrorCode ?? PayoutIssueErrorCodes.ValidationError,
+            outcome.ErrorMessage ?? "Payout issue could not be reported.",
             traceId: HttpContext.TraceIdentifier);
 
     private bool TryGetUserId(out Guid userId)

@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Skinora.API.Services;
 using Skinora.Fraud.Application.Account;
 using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
@@ -92,6 +94,15 @@ public static class TransactionsModule
         // state machine + T50 freeze service for AD19 / AD19b / AD19c
         // (07 §9.20–§9.22, 02 §7, 03 §8.8).
         services.AddScoped<IAdminTransactionService, AdminTransactionService>();
+
+        // T60 — seller payout issue (07 §7.11, 02 §10.3, 06 §3.8a, 03 §2.4a
+        // Senaryo A). Stub IPayoutVerifier is forward-deferred until the Tron
+        // sidecar lands (T64–T69 devir); the admin resolver lives in
+        // Skinora.API/Services because Skinora.Transactions cannot reference
+        // Skinora.Admin (where AdminUserRole is declared).
+        services.AddScoped<IPayoutIssueService, PayoutIssueService>();
+        services.TryAddScoped<IPayoutVerifier, StubPayoutVerifier>();
+        services.AddScoped<IPayoutEscalationAdminResolver, PayoutEscalationAdminResolver>();
 
         return services;
     }
