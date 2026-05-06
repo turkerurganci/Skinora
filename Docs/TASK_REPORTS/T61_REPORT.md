@@ -136,9 +136,9 @@ T61, 07 §11.1 RT1 kontratını gerçekleyen `/hubs/transactions` SignalR hub'ı
 ## Commit & PR
 
 - Branch: `task/T61-signalr-transactions-hub`
-- Commits: TBD
-- PR: TBD
-- CI: TBD
+- Commits: `9e7841c` (yapım) + `75fd8cc` (Dockerfile layer-cache fix).
+- PR: [#98](https://github.com/turkerurganci/Skinora/pull/98)
+- CI: ✓ PASS — task branch run [`25461540291`](https://github.com/turkerurganci/Skinora/actions/runs/25461540291) (HEAD `75fd8cc`) 10/10 success: Detect/Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker/CI Gate hepsi ✓; Guard skipped. İlk run [`25461173933`](https://github.com/turkerurganci/Skinora/actions/runs/25461173933) Docker job MSB3202 fail döndü (Dockerfile COPY listesi Realtime + Realtime.Tests csproj'larını içermiyordu — tek satır fix `75fd8cc` ile çözüldü). BYPASS_LOG 1× ci-failure entry (Layer 2 — failure root cause çözüldü, push devam etti).
 
 ## Known Limitations / Follow-up
 
