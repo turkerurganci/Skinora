@@ -109,9 +109,9 @@ T60, satıcının COMPLETED bir işlemde ödemeyi almadığını bildirmesi içi
 ## Commit & PR
 
 - Branch: `task/T60-seller-payout-issue`
-- Commits: pending push (yapım tek commit; varsa S2 fix CI sonrası eklenir).
-- PR: pending — `gh pr create` push sonrası.
-- CI: pending — push tetikleyecek.
+- Commits: `3a1c802` (yapım, tek commit).
+- PR: [#96](https://github.com/turkerurganci/Skinora/pull/96)
+- CI: ✓ PASS — run [`25455122485`](https://github.com/turkerurganci/Skinora/actions/runs/25455122485) (HEAD `3a1c802`) 10/10 success: Detect/Lint/Build/Unit/Contract/Integration/Migration dry-run/Docker/CI Gate hepsi ✓; Guard skipped (task branch push). 13 yeni `PayoutIssueServiceTests` Integration job'unda shared services:mssql üzerinde ilk runda PASS — same-PR fix gerekmedi.
 
 ## Known Limitations / Follow-up
 
