@@ -34,6 +34,7 @@ public class TransactionTimedOutNotificationConsumerTests
             SellerId: sellerId,
             BuyerId: buyerId,
             ItemName: "AK-47",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -69,6 +70,7 @@ public class TransactionTimedOutNotificationConsumerTests
             SellerId: Guid.NewGuid(),
             BuyerId: null,
             ItemName: "AWP",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -108,6 +110,7 @@ public class TransactionTimedOutNotificationConsumerTests
             SellerId: sellerId,
             BuyerId: buyerId,
             ItemName: "M4A1",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -132,6 +135,7 @@ public class TransactionTimedOutNotificationConsumerTests
             SellerId: Guid.NewGuid(),
             BuyerId: Guid.NewGuid(),
             ItemName: "Knife",
+            FromStatus: TransactionStatus.ITEM_ESCROWED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);

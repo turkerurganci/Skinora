@@ -23,6 +23,8 @@ using Skinora.Payments.Infrastructure.Persistence;
 using Skinora.Platform;
 using Skinora.Platform.Infrastructure.Bootstrap;
 using Skinora.Platform.Infrastructure.Persistence;
+using Skinora.Realtime;
+using Skinora.Realtime.Hubs;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -117,6 +119,16 @@ builder.Services.AddTransactionsModule(builder.Configuration);
 // Three endpoints (open / submit-txhash / escalate) backed by
 // IDisputeService + per-type auto-checkers (PAYMENT/DELIVERY/WRONG_ITEM).
 builder.Services.AddDisputesModule();
+
+// T61 — SignalR /hubs/transactions hub + ITransactionRealtimePublisher +
+// CountdownSync 30s broadcaster (07 §11.1 RT1). MediatR consumers in this
+// assembly are picked up by the outbox dispatcher's scan list. The JSON
+// protocol uses string enum names so the wire format matches 07 §11.1
+// payload tables (e.g. "CANCELLED_BUYER" rather than the integer ordinal).
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter()));
+builder.Services.AddRealtimeModule(builder.Configuration);
 
 // T47 — restart recovery + startup hook for the heartbeat / scanner chains.
 // Order: registered AFTER the outbox hook so the recovery pass observes a
@@ -233,6 +245,7 @@ app.UseHttpMetrics();
 
 // 14. Endpoints
 app.MapControllers();
+app.MapHub<TransactionsHub>("/hubs/transactions"); // T61 — 07 §11.1 RT1
 app.MapMetrics(); // /metrics endpoint for Prometheus
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {

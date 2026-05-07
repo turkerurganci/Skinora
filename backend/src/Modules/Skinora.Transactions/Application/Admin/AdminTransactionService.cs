@@ -175,6 +175,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 BuyerId: transaction.BuyerId,
                 ItemName: transaction.ItemName,
                 CancelReason: trimmedReason,
+                FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
 
@@ -559,6 +560,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 BuyerId: transaction.BuyerId,
                 ItemName: transaction.ItemName,
                 CancelReason: cancelReason,
+                FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
 

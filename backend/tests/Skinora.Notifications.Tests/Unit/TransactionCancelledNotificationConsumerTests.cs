@@ -35,6 +35,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: buyerId,
             ItemName: "AK-47 | Redline",
             CancelReason: "Fiyat değişti",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -66,6 +67,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: buyerId,
             ItemName: "AWP | Asiimov",
             CancelReason: "Vazgeçtim",
+            FromStatus: TransactionStatus.ACCEPTED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -95,6 +97,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: null,
             ItemName: "M4A1-S",
             CancelReason: "Fikir değişti",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -125,6 +128,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: buyerId,
             ItemName: "Bayonet | Doppler",
             CancelReason: "Yasal talep",
+            FromStatus: TransactionStatus.PAYMENT_RECEIVED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -159,6 +163,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: null,
             ItemName: "M9 Bayonet",
             CancelReason: "Compliance",
+            FromStatus: TransactionStatus.CREATED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
@@ -184,6 +189,7 @@ public class TransactionCancelledNotificationConsumerTests
             BuyerId: Guid.NewGuid(),
             ItemName: "Karambit",
             CancelReason: "Tekrar etmeli",
+            FromStatus: TransactionStatus.ACCEPTED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);
