@@ -9,6 +9,7 @@ using Skinora.Notifications.Domain.Entities;
 using Skinora.Notifications.Infrastructure.Persistence;
 using Skinora.Notifications.Resources;
 using Skinora.Notifications.Tests.TestSupport;
+using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
@@ -45,7 +46,9 @@ public class NotificationDispatcherTests : IntegrationTestBase
         await context.SaveChangesAsync();
     }
 
-    private (NotificationDispatcher Dispatcher, FakeBackgroundJobScheduler Scheduler) CreateSut()
+    private (NotificationDispatcher Dispatcher,
+             FakeBackgroundJobScheduler Scheduler,
+             RecordingNotificationRealtimePublisher RealtimePublisher) CreateSut()
     {
         var services = new ServiceCollection();
         services.AddLocalization();
@@ -57,14 +60,16 @@ public class NotificationDispatcherTests : IntegrationTestBase
             localizer,
             NullLogger<ResxNotificationTemplateResolver>.Instance);
         var scheduler = new FakeBackgroundJobScheduler();
+        var realtimePublisher = new RecordingNotificationRealtimePublisher();
 
         var dispatcher = new NotificationDispatcher(
             Context,
             resolver,
             scheduler,
+            realtimePublisher,
             NullLogger<NotificationDispatcher>.Instance);
 
-        return (dispatcher, scheduler);
+        return (dispatcher, scheduler, realtimePublisher);
     }
 
     private async Task SetPreferenceAsync(NotificationChannel channel, bool enabled, string? externalId)
@@ -86,7 +91,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task DispatchAsync_AlwaysWritesPlatformInAppNotification()
     {
-        var (dispatcher, _) = CreateSut();
+        var (dispatcher, _, _) = CreateSut();
 
         await dispatcher.DispatchAsync(
             new NotificationRequest
@@ -116,7 +121,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
         await SetPreferenceAsync(NotificationChannel.TELEGRAM, enabled: false, externalId: "12345");
         await SetPreferenceAsync(NotificationChannel.DISCORD, enabled: true, externalId: null);
 
-        var (dispatcher, _) = CreateSut();
+        var (dispatcher, _, _) = CreateSut();
         await dispatcher.DispatchAsync(
             new NotificationRequest
             {
@@ -145,7 +150,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
         await SetPreferenceAsync(NotificationChannel.EMAIL, enabled: true, externalId: "user@example.com");
         await SetPreferenceAsync(NotificationChannel.TELEGRAM, enabled: true, externalId: "9876");
 
-        var (dispatcher, scheduler) = CreateSut();
+        var (dispatcher, scheduler, _) = CreateSut();
         await dispatcher.DispatchAsync(
             new NotificationRequest
             {
@@ -169,7 +174,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
     {
         // Seeded user PreferredLanguage = "tr", so the notification body
         // should render the Turkish template.
-        var (dispatcher, _) = CreateSut();
+        var (dispatcher, _, _) = CreateSut();
 
         await dispatcher.DispatchAsync(
             new NotificationRequest
@@ -195,7 +200,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
     {
         // Turkish resource omits TRANSACTION_FLAGGED → English neutral entry
         // is used (05 §7.3).
-        var (dispatcher, _) = CreateSut();
+        var (dispatcher, _, _) = CreateSut();
 
         await dispatcher.DispatchAsync(
             new NotificationRequest
@@ -215,12 +220,60 @@ public class NotificationDispatcherTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task DispatchAsync_PushesNewNotificationAndUnreadCount_ViaRealtimePublisher()
+    {
+        // T62 — every dispatch must result in two /hubs/notifications pushes:
+        // a NewNotification carrying the spec §11.2 payload and an
+        // UnreadCountChanged with the bumped count (existing unread + 1).
+        // Seed one prior unread row so the count assertion is non-trivial.
+        Context.Set<Notification>().Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            UserId = _user.Id,
+            Type = NotificationType.BUYER_ACCEPTED,
+            Title = "prior",
+            Body = "prior body",
+            IsRead = false,
+        });
+        await Context.SaveChangesAsync();
+
+        var (dispatcher, _, realtimePublisher) = CreateSut();
+
+        await dispatcher.DispatchAsync(
+            new NotificationRequest
+            {
+                UserId = _user.Id,
+                Type = NotificationType.PAYMENT_RECEIVED,
+                TransactionId = Guid.NewGuid(),
+                Parameters = new Dictionary<string, string> { ["Amount"] = "42" },
+            },
+            CancellationToken.None);
+
+        Assert.Equal(2, realtimePublisher.Calls.Count);
+
+        var newNotification = realtimePublisher.Calls[0];
+        Assert.Equal("NewNotification", newNotification.Method);
+        Assert.Equal(_user.Id, newNotification.UserId);
+        var newPayload = Assert.IsType<NotificationRealtimePayloads.NewNotification>(newNotification.Payload);
+        Assert.Equal(NotificationType.PAYMENT_RECEIVED.ToString(), newPayload.Type);
+        Assert.Equal("transaction", newPayload.TargetType);
+        Assert.NotNull(newPayload.TargetId);
+
+        var unread = realtimePublisher.Calls[1];
+        Assert.Equal("UnreadCountChanged", unread.Method);
+        Assert.Equal(_user.Id, unread.UserId);
+        var unreadPayload = Assert.IsType<NotificationRealtimePayloads.UnreadCountChanged>(unread.Payload);
+        Assert.Equal(2, unreadPayload.UnreadCount);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task DispatchAsync_DoesNotCallSaveChanges()
     {
         // The dispatcher must leave the unit-of-work boundary to its caller
         // (Outbox dispatcher commits the whole batch). We assert nothing is
         // visible in a fresh context until the test code itself commits.
-        var (dispatcher, _) = CreateSut();
+        var (dispatcher, _, _) = CreateSut();
 
         await dispatcher.DispatchAsync(
             new NotificationRequest

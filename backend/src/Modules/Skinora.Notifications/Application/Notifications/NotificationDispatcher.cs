@@ -1,9 +1,12 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Notifications.Application.Inbox;
 using Skinora.Notifications.Application.Templates;
 using Skinora.Notifications.Domain.Entities;
 using Skinora.Notifications.Infrastructure.DeliveryJobs;
+using Skinora.Realtime.Application;
+using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -53,17 +56,20 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly AppDbContext _dbContext;
     private readonly INotificationTemplateResolver _templateResolver;
     private readonly IBackgroundJobScheduler _jobScheduler;
+    private readonly INotificationRealtimePublisher _realtimePublisher;
     private readonly ILogger<NotificationDispatcher> _logger;
 
     public NotificationDispatcher(
         AppDbContext dbContext,
         INotificationTemplateResolver templateResolver,
         IBackgroundJobScheduler jobScheduler,
+        INotificationRealtimePublisher realtimePublisher,
         ILogger<NotificationDispatcher> logger)
     {
         _dbContext = dbContext;
         _templateResolver = templateResolver;
         _jobScheduler = jobScheduler;
+        _realtimePublisher = realtimePublisher;
         _logger = logger;
     }
 
@@ -84,6 +90,35 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         };
 
         _dbContext.Set<Notification>().Add(notification);
+
+        // T62 — push the new row + the bumped unread count on /hubs/notifications
+        // (07 §11.2 RT2). Best-effort fire-and-forget; the SignalR adapter logs
+        // and swallows transport errors so an outbox-driven dispatch never
+        // surfaces a redelivery signal because no client was listening. The
+        // count is computed pre-commit (existing unread + 1) so a roll-back of
+        // the surrounding transaction yields a transient over-count that the
+        // frontend repairs on its next inbox fetch / reconnect (T96).
+        var existingUnread = await _dbContext.Set<Notification>()
+            .AsNoTracking()
+            .CountAsync(n => n.UserId == request.UserId && !n.IsRead, cancellationToken);
+
+        var (targetType, targetId) = NotificationTargetMapper.Resolve(request.Type, request.TransactionId);
+
+        await _realtimePublisher.PublishNewNotificationAsync(
+            request.UserId,
+            new NotificationRealtimePayloads.NewNotification(
+                Id: notification.Id,
+                Type: notification.Type.ToString(),
+                Message: notification.Title,
+                TargetType: targetType,
+                TargetId: targetId,
+                CreatedAt: DateTime.UtcNow),
+            cancellationToken);
+
+        await _realtimePublisher.PublishUnreadCountChangedAsync(
+            request.UserId,
+            new NotificationRealtimePayloads.UnreadCountChanged(existingUnread + 1),
+            cancellationToken);
 
         var enabledPreferences = await _dbContext.Set<UserNotificationPreference>()
             .Where(p => p.UserId == request.UserId
