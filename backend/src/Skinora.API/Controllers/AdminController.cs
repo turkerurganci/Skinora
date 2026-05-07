@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Skinora.Admin.Application.Roles;
 using Skinora.Admin.Application.Users;
 using Skinora.API.RateLimiting;
+using Skinora.API.Services;
 using Skinora.Auth.Configuration;
 using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Application.Settings;
 using Skinora.Shared.Models;
+using Skinora.Steam.Application.Admin;
+using Skinora.Transactions.Application.Admin;
 
 namespace Skinora.API.Controllers;
 
@@ -35,22 +38,59 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "MANAGE_SETTINGS";
     private const string PolicyViewAuditLog =
         AuthPolicies.PermissionPrefix + "VIEW_AUDIT_LOG";
+    private const string PolicyViewSteamAccounts =
+        AuthPolicies.PermissionPrefix + "VIEW_STEAM_ACCOUNTS";
 
     private readonly IAdminRoleService _roles;
     private readonly IAdminUserService _users;
     private readonly ISystemSettingsService _settings;
     private readonly IAuditLogQueryService _auditLogs;
+    private readonly IAdminTransactionQueryService _txQueries;
+    private readonly IAdminSteamBotQueryService _steamBots;
+    private readonly IAdminDashboardService _dashboard;
 
     public AdminController(
         IAdminRoleService roles,
         IAdminUserService users,
         ISystemSettingsService settings,
-        IAuditLogQueryService auditLogs)
+        IAuditLogQueryService auditLogs,
+        IAdminTransactionQueryService txQueries,
+        IAdminSteamBotQueryService steamBots,
+        IAdminDashboardService dashboard)
     {
         _roles = roles;
         _users = users;
         _settings = settings;
         _auditLogs = auditLogs;
+        _txQueries = txQueries;
+        _steamBots = steamBots;
+        _dashboard = dashboard;
+    }
+
+    // ---------- Dashboard (07 §9.1) ----------
+
+    /// <summary>AD1 — <c>GET /admin/dashboard</c> (07 §9.1, T63).</summary>
+    [HttpGet("dashboard")]
+    [Authorize(Policy = AuthPolicies.AdminAccess)]
+    [RateLimit("admin-read")]
+    public async Task<ActionResult<AdminDashboardResponse>> GetDashboard(
+        CancellationToken cancellationToken)
+    {
+        var result = await _dashboard.GetAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    // ---------- Steam accounts (07 §9.10) ----------
+
+    /// <summary>AD10 — <c>GET /admin/steam-accounts</c> (07 §9.10, T63).</summary>
+    [HttpGet("steam-accounts")]
+    [Authorize(Policy = PolicyViewSteamAccounts)]
+    [RateLimit("admin-read")]
+    public async Task<ActionResult<AdminSteamAccountsResponse>> GetSteamAccounts(
+        CancellationToken cancellationToken)
+    {
+        var result = await _steamBots.ListAsync(cancellationToken);
+        return Ok(result);
     }
 
     // ---------- Roles (07 §9.11–§9.14) ----------
@@ -154,7 +194,12 @@ public sealed class AdminController : ControllerBase
         return Ok(detail);
     }
 
-    /// <summary>AD16b — <c>GET /admin/users/:steamId/transactions</c>.</summary>
+    /// <summary>
+    /// AD16b — <c>GET /admin/users/:steamId/transactions</c>. T39 shipped a
+    /// 0-row placeholder; T63 wires it to the real
+    /// <see cref="IAdminTransactionQueryService"/> so the response shape is
+    /// 1:1 with AD6 narrowed to a single user.
+    /// </summary>
     [HttpGet("users/{steamId}/transactions")]
     [Authorize(Policy = PolicyViewUsers)]
     [RateLimit("admin-read")]
@@ -164,7 +209,7 @@ public sealed class AdminController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var result = await _users.GetTransactionsAsync(steamId, page, pageSize, cancellationToken);
+        var result = await _txQueries.ListForUserAsync(steamId, page, pageSize, cancellationToken);
         if (result is null)
         {
             return NotFound(ApiResponse<object>.Fail(

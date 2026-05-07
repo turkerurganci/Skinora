@@ -189,36 +189,6 @@ public sealed class AdminUserService : IAdminUserService
             FrequentCounterparties: []);
     }
 
-    public async Task<PagedResult<object>?> GetTransactionsAsync(
-        string steamId,
-        int page,
-        int pageSize,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(steamId)) return null;
-
-        var safePage = page < MinPage ? MinPage : page;
-        var safePageSize = pageSize < MinPageSize
-            ? DefaultPageSize
-            : pageSize > MaxPageSize ? MaxPageSize : pageSize;
-
-        var exists = await _db.Set<User>()
-            .AsNoTracking()
-            .AnyAsync(u => u.SteamId == steamId, cancellationToken);
-        if (!exists) return null;
-
-        // T63 forward devir — backing transaction read service lands with
-        // the admin transactions task. Empty paginated payload preserves
-        // the 07 §9.17 contract.
-        return new PagedResult<object>
-        {
-            Items = [],
-            TotalCount = 0,
-            Page = safePage,
-            PageSize = safePageSize,
-        };
-    }
-
     public async Task<AssignRoleOutcome> AssignRoleAsync(
         Guid userId,
         AssignRoleRequest request,
