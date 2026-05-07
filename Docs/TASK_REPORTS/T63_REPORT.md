@@ -140,9 +140,9 @@ Bunlara ek olarak T39'un AD16b placeholder'ı (`GET /admin/users/:steamId/transa
 ## Commit & PR
 
 - Branch: `task/T63-admin-dashboard-api`
-- Commit: `6e3b400`
+- Commits: `6e3b400` (T63 implement + report + status + memory) + `4b42871` (PR no stamp)
 - PR: [#100](https://github.com/turkerurganci/Skinora/pull/100)
-- CI: izleniyor (run aşağıda kayıt edilecek post-watch)
+- CI: task branch run [`25518031002`](https://github.com/turkerurganci/Skinora/actions/runs/25518031002) HEAD `4b42871` — 9/9 job ✓ (Lint / Build / Unit / Integration / Contract / Migration / Docker / CI Gate; Guard skipped)
 
 ## Known Limitations / Follow-up
 
