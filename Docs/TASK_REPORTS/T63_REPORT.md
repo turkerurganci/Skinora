@@ -140,9 +140,9 @@ Bunlara ek olarak T39'un AD16b placeholder'ı (`GET /admin/users/:steamId/transa
 ## Commit & PR
 
 - Branch: `task/T63-admin-dashboard-api`
-- Commit: TBD (commit aşaması)
-- PR: TBD (push aşaması)
-- CI: TBD (CI watch aşaması)
+- Commit: `6e3b400`
+- PR: [#100](https://github.com/turkerurganci/Skinora/pull/100)
+- CI: izleniyor (run aşağıda kayıt edilecek post-watch)
 
 ## Known Limitations / Follow-up
 
