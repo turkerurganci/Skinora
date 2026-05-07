@@ -1,6 +1,6 @@
 # T62 — SignalR hub: bildirim push
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (validate chat'inde PASS bekliyor) | **Tarih:** 2026-05-07
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-05-07
 
 ---
 
@@ -107,9 +107,9 @@ T62, 07 §11.2 RT2 kontratını gerçekleyen `/hubs/notifications` SignalR hub'�
 ## Commit & PR
 
 - Branch: `task/T62-signalr-notifications-hub`
-- Commits: (yapım sırasında doldurulacak)
-- PR: (yapım sonrası açılacak)
-- CI: (yapım sonrası izlenecek)
+- Commits: `e742ba6` (T62 hub + publisher + integration), `7279858` (rapor + status + memory yansıtma)
+- PR: [#99](https://github.com/turkerurganci/Skinora/pull/99) — MERGEABLE / CLEAN
+- CI: task branch run [`25512436428`](https://github.com/turkerurganci/Skinora/actions/runs/25512436428) HEAD `7279858` — 9/9 job ✓ (Lint / Build / Unit / Integration / Contract / Migration / Docker / CI Gate)
 
 ## Known Limitations / Follow-up
 
@@ -122,7 +122,62 @@ T62, 07 §11.2 RT2 kontratını gerçekleyen `/hubs/notifications` SignalR hub'�
 
 ## Bağımsız Validator Sonucu
 
-**TBD — yapım sonrası ayrı validate chat'inde doldurulur.**
+**Verdict:** ✓ PASS — 0 S-bulgu, 0 minor.
+
+**Tarih:** 2026-05-07
+**Validator chat:** ayrı (bu chat)
+**Branch + commit:** `task/T62-signalr-notifications-hub` @ `7279858`
+
+**Kapı kontrolleri:**
+
+- Adım -1 Working tree hygiene: ✓ `git status --short` boş.
+- Adım 0 Main CI startup: ✓ son 3 main run hepsi `success` — `25476326367` (T61 PR #98 CI), `25476326389` (T61 PR #98 Docker Publish), `25458191870` (chore PR #97 memory T60).
+- Adım 0b Repo memory drift: ✓ `.claude/memory/MEMORY.md`'de T62 satırı mevcut (`7279858` commit).
+
+**Kabul kriterleri (bağımsız değerlendirme):**
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `/hubs/notifications` hub'ı | ✓ | `Program.cs:250` `app.MapHub<NotificationsHub>("/hubs/notifications")`; `NotificationsHub.cs:37` `[Authorize]`. Integration `Connect_Without_Token_Returns401` lokal ✓ + CI integration job ✓. |
+| 2 | T38 Notification entity'leri real-time push | ✓ | `NotificationDispatcher.cs:107–121` her dispatch'te `PublishNewNotificationAsync` + `PublishUnreadCountChangedAsync` ikilisi. `NotificationInboxService.MarkAllReadAsync` post-commit `UnreadCount=0`, `MarkReadAsync` first-read branch fresh count push. CI integration job ✓ — `DispatchAsync_PushesNewNotificationAndUnreadCount_ViaRealtimePublisher` + 6 inbox test. |
+| 3 | 5 server→client event tanımı (`NewNotification`, `UnreadCountChanged`, `TelegramConnected`, `DiscordConnected`, `MaintenanceStatusChanged`) | ✓ | `NotificationRealtimePayloads.cs` 5 record + `INotificationRealtimePublisher.cs` 5 metot + `SignalRNotificationRealtimePublisher.cs` 5 implementation. Payload field'ları 07 §11.2 tablosu ile 1:1. NewNotification + UnreadCountChanged + Maintenance round-trip integration test PASS (5/5). TelegramConnected/DiscordConnected callsite'ları K1/K2 forward-deferred (T79/T80) — kontrat (port + payload + adapter) sabitlenmiş, T61'in PaymentDetected paterni aynası. |
+| 4 | User bazlı mesajlaşma (user ID) | ✓ | `NotificationsHub.GroupName(Guid) = "user:{N}"`; `OnConnectedAsync` user'ı gruba otomatik ekler; JWT `sub` claim Guid parse, fail → `HubException("AUTH_INVALID")`. `Publisher_NewNotification_DoesNotReach_OtherUser` integration test fan-out izolasyonunu kanıtlar. |
+
+**Doğrulama kontrol listesi (bağımsız):**
+
+- [x] 07 §11.2 tüm event'ler tanımlı mı? ✓ — 5/5 record şema 1:1; JSON enum converter T61'den miras (wire string).
+- [x] T38 Notification entity'leri real-time push ediliyor mu? ✓ — Dispatcher creation + Inbox read-state mutasyonu kapsamlı.
+
+**Test sonuçları (bağımsız çalıştırma):**
+
+| Tür | Sonuç | Komut | Kaynak |
+|---|---|---|---|
+| Build (Release `-warnaserror`) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release -warnaserror` | Lokal |
+| Unit (Skinora.Realtime.Tests) | ✓ 25/25 | `dotnet test ... Skinora.Realtime.Tests` | Lokal |
+| Unit (Skinora.Notifications.Tests filter `!Integration`) | ✓ 49/49 | `dotnet test ... --filter "Category!=Integration"` | Lokal |
+| Integration (NotificationsHubEndpointTests) | ✓ 5/5 | `dotnet test ... --filter "FullyQualifiedName~NotificationsHubEndpointTests"` | Lokal (SQLite + LongPolling) |
+| Integration (Docker-bağımlı: NotificationDispatcher + NotificationInboxService + InitialMigration + RestartRecovery) | CI'de doğrulandı | Lokal Docker yok | CI run `25512436428` "4. Integration test" ✓ |
+| Task branch CI run | ✓ 9/9 job | `25512436428` HEAD `7279858` | GitHub Actions |
+
+**Güvenlik kontrolü (bağımsız):**
+
+- Secret sızıntısı: ✓ Temiz — yeni dosyalarda secret yok; integration test JWT secret'ı fixture-only.
+- Auth/authorization: ✓ Hub seviyesi `[Authorize]`; JWT bridge `/hubs/*` path-restricted (T61'den miras, `AuthModule.cs:81–91`); `OnConnectedAsync` JWT `sub` Guid parse → fail `HubException`. Per-user grup izolasyonu `Publisher_NewNotification_DoesNotReach_OtherUser` ile kanıtlandı.
+- Input validation: ✓ Hub'ın client→server metodu yok → girdi yüzeyi 0. Publisher tip-sistemi sabitli.
+- Yeni dış bağımlılık: ✓ Yok — T61'de eklenmiş `FrameworkReference="Microsoft.AspNetCore.App"` + SignalR client paketi yeterli.
+- Push atomicity: ✓ `SignalRNotificationRealtimePublisher` try/catch+log+swallow (best-effort) — outbox redelivery sinyali kirletilmiyor; inbox SaveChanges başarısı yan etki atlanırsa rolled back edilmiyor. T61 paterniyle birebir aynı.
+
+**Doküman uyumu:**
+
+- 07 §11.2 RT2: 5 event payload tablosu birebir uygulandı (`NewNotification.{Id, Type, Message, TargetType, TargetId, CreatedAt}`, `UnreadCountChanged.{UnreadCount}`, `TelegramConnected.{Username}`, `DiscordConnected.{Username}`, `MaintenanceStatusChanged.{Active, Type, Message, PlannedEnd}`).
+- 07 §11.2 Auth = JWT query param: ✓ `?access_token=` `OnMessageReceived` bridge `/hubs/*` path-restricted.
+- `Maintenance` `Clients.All` kapsamı: hub `[Authorize]` olduğu için yalnız authenticated connection'lara yayılır — 04 §7.7 C08 banner spec'i için anon kullanıcılar `GET /platform/maintenance` (T63a) polling ile görür; çakışma yok.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — kabul kriterleri tablosu, test sonuçları, K1–K6 known limitations, güvenlik notları bağımsız analizimle örtüşüyor. Rapor 3. kriter için "✓ kısmi" terminolojisi kullanmış; bağımsız değerlendirmemde "✓ Karşılandı" olarak işaretledim çünkü spec metni "tüm event'ler tanımlı mı?" diye soruyor — kontrat (port + payload + adapter) sabitlenmesi yeterli, callsite tetikleme T79/T80/T-future devri spec ile uyumlu (07 §6.2 Telegram = T79 ve §6.3 Discord = T80 referansları). Bu doc-destekli bir terminoloji nüansı, validator finding değil.
+
+**Bulgular:** Yok (S1/S2/S3 = 0).
+
+**Verdict:** ✓ **PASS** — merge'e hazır.
 
 ## Notlar
 
