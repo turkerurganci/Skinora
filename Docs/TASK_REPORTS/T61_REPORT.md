@@ -1,6 +1,6 @@
 # T61 — SignalR hub: işlem real-time güncellemeler
 
-**Faz:** F3 | **Durum:** ⏳ Yapım bitti, bağımsız validator bekleniyor | **Tarih:** 2026-05-07
+**Faz:** F3 | **Durum:** ✓ PASS (bağımsız validator) | **Tarih:** 2026-05-07
 
 ---
 
@@ -148,6 +148,55 @@ T61, 07 §11.1 RT1 kontratını gerçekleyen `/hubs/transactions` SignalR hub'ı
 - **K4 — Backplane (Redis) yok.** SignalR şu an in-memory; multi-instance API host'larda her instance kendi grup üyeliklerini bildiğinden cross-instance push işlemez. T-future scaling task'ı `Microsoft.AspNetCore.SignalR.StackExchangeRedis` eklediğinde tek satır DI değişikliğiyle çoklu instance'a yayılır. Şu an F3 fazında tek host runtime için sorun değil.
 - **K5 — `CountdownSync` sweep her aktif TX için ayrı SignalR send üretir.** Aktif TX sayısı yüksek olunca (binlerce) hub mesaj sayısı artar; ama tek bir abone yokken bile send maliyeti çok düşüktür (group dispatch gerçek client yoksa no-op). Optimizasyon (yalnız subscriber'lı grup'lara push) T-future.
 - **K6 — Notifications hub T62 ayrı task.** Bu task'ta yalnız transactions hub kuruldu; `/hubs/notifications` (NewNotification, UnreadCountChanged, vb. — 07 §11.2) T62'nin sorumluluğu.
+
+## Bağımsız Validator Sonucu
+
+**Tarih:** 2026-05-07 | **Verdict:** ✓ PASS | **Bulgu sayısı:** 0 (S-bulgu yok) | **Düzeltme gerekli mi:** Hayır
+
+**Hard-stop kapıları:**
+- Adım -1 (working tree hygiene): ✓ Clean (`git status` boş).
+- Adım 0 (main CI startup): ✓ Son 3 main run success — `25458191870` + `25458191854` (chore PR #97 memory T60 yansıt) + `25457244523` (T60 PR #96).
+- Adım 0b (repo memory drift): ✓ T61 referansı `.claude/memory/MEMORY.md`'de mevcut (T60 satırı ardından "Next: T61 PR aç → CI izle → ayrı validate chat'i").
+
+**Kabul kriterleri bağımsız doğrulama:**
+
+| # | Kriter | Sonuç | Bağımsız Kanıt |
+|---|---|---|---|
+| 1 | `/hubs/transactions` hub'ı | ✓ | `Skinora.API/Program.cs:248` `app.MapHub<TransactionsHub>("/hubs/transactions")`; `TransactionsHub.cs:39` `[Authorize]`. |
+| 2 | Client→Server: JoinTransaction, LeaveTransaction | ✓ | `TransactionsHub.JoinTransaction(Guid)` üyelik kontrolü TX yoksa `TRANSACTION_NOT_FOUND`, üye değilse `TRANSACTION_FORBIDDEN`; `LeaveTransaction(Guid)` idempotent. Lokal `TransactionsHubEndpointTests` 5/5 PASS (Connect_Without_Token_Returns401 / AsParticipant / AsNonParticipant / UnknownTransaction / Publisher_Push_Reaches_Joined_Member). |
+| 3 | Server→Client: 8 RT1 event'i | ✓ | `TransactionRealtimePayloads.cs` 8 record 07 §11.1 tablosuyla 1:1 eşleşme (`TransactionStatusChanged`, `CountdownSync`, `PaymentDetected`, `PaymentConfirmed`, `DisputeUpdate`, `FlagResolved`, `EmergencyHoldApplied`, `EmergencyHoldReleased`). 7 event canlı consumer'lara bağlı + `CountdownSync` 30 sn periyodik broadcaster. `PaymentDetected` (mempool) için publisher port + payload var ama tetikleyici domain event henüz yok — K1 olarak forward-deferred (T48 blockchain monitor consumer ekleyecek). Spec metni "Blockchain'de ödeme tespiti" diyor ve bu tespit pipeline'ı T48'in scope'unda; T61 publisher altyapısını kuruyor — bu sapma değil, dokümante kapı bırakma. |
+| 4 | JWT authentication (query param) | ✓ | `AuthModule.cs:79–91` `JwtBearerEvents.OnMessageReceived` `?access_token=` query param'ını yalnızca `/hubs/*` path'inde bearer token olarak kabul eder; diğer endpoint'ler header-only kalır. Integration `Connect_Without_Token_Returns401` anon → 401 ✓; `JoinTransaction_AsParticipant_Succeeds` token query → handshake ✓. |
+| 5 | Grup bazlı mesajlaşma (transaction ID) | ✓ | `TransactionsHub.GroupName(Guid) = "tx:{N}"`; `Groups.AddToGroupAsync` ve `IHubContext<TransactionsHub>.Clients.Group(...)` SignalR runtime grup roting'i. `Publisher_Push_Reaches_Joined_Member` integration test publisher → group → client round-trip'i kanıtlar. |
+
+**Doğrulama kontrol listesi (bağımsız):**
+
+- [x] **07 §11.1 tüm event'ler tanımlı mı?** ✓ — 8 payload record şema 1:1 (alan sırası, isimleri, opsiyonelliği). `JoinTransaction`/`LeaveTransaction` Hub metotları client→server tablodaki iki entry'i karşılar. `Program.cs:128-130` `AddJsonProtocol(JsonStringEnumConverter)` enum'ları wire'da string olarak serileştirir → 07 §11.1 örnek değerleri (`CANCELLED_BUYER`, `EMERGENCY_HOLD`, vb.) frontend tarafından gözlemlenir.
+- [x] **Auth doğru çalışıyor mu?** ✓ — Hub seviyesi `[Authorize]` + JWT bridge `/hubs/*` path-restricted. 4 integration test (anon 401 / member join / non-member forbidden / unknown not-found) JWT pipeline'ın hub negotiation'da doğru çalıştığını ve membership guard'ının DB lookup ile zorunlu olduğunu kanıtlar.
+
+**Test sonuçları (bağımsız çalıştırma):**
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
+| Skinora.Realtime.Tests (yeni) | ✓ 25/25 | `dotnet test tests/Skinora.Realtime.Tests/Skinora.Realtime.Tests.csproj -c Release --no-build` |
+| TransactionsHubEndpointTests (yeni) | ✓ 5/5 | `--filter "FullyQualifiedName~TransactionsHubEndpointTests"` |
+| Skinora.Notifications.Tests (unit) | ✓ 49 | Docker-bağımlı 37 integration ortam kaynaklı düştü, lokal Docker yok — CI Linux runner yeşil. |
+| Skinora.Transactions.Tests (unit) | ✓ 340 | Docker-bağımlı 237 integration aynı. |
+| Skinora.Auth.Tests (unit) | ✓ 57 | Docker-bağımlı 36 integration aynı. |
+| Skinora.Shared.Tests (filter !Integration) | ✓ 185/185 | `--filter "FullyQualifiedName!~Integration"` |
+
+**Task branch CI:**
+- Run `25461912780` (HEAD `992c15f` rapor commit) — ✓ PASS 10/10.
+- Run `25461540291` (HEAD `75fd8cc` Dockerfile fix) — ✓ PASS 10/10.
+- Run `25461173933` (HEAD `9e7841c` ilk push) — ✗ FAIL (Docker MSB3202 — Realtime + Realtime.Tests csproj COPY listesinde yoktu); `75fd8cc` tek satır fix ile çözüldü, BYPASS_LOG entry mevcut.
+
+**Mini güvenlik kontrolü (bağımsız):**
+- Secret sızıntısı: temiz — yeni dosyalarda secret yok; integration test JWT secret'ı test fixture içinde sabit, prod'a sızmaz.
+- Auth/authorization: hub seviyesi `[Authorize]` + JoinTransaction body'sinde DB'den buyer/seller verification + reddi `HubException` ile yapısal. JWT bridge path-restricted (`/hubs/*` only). Best-effort publish try/catch outbox'u redelivery sinyaliyle kirletmiyor (kasıtlı).
+- Input validation: `JoinTransaction(Guid.Empty)` reddedilir; geçersiz Guid SignalR protocol seviyesinde reject. `LeaveTransaction` `Guid.Empty` no-op (idempotent).
+- Yeni dış bağımlılık: `Microsoft.AspNetCore.SignalR.Client` 9.0.3 yalnız test projesinde; production yalnız framework reference.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — kabul kriterleri tablosu, test sayıları, K1–K6 forward-deferral'ları doğrulayan bağımsız ölçümlerle örtüşüyor. K1'in (PaymentDetected mempool consumer'ı T48'e devir) "✓ kısmi" işaretlemesi spec conformance lensiyle doğru — port + payload + JSON config tamam, eksik olan tek şey tetikleyici domain event yayınlayan blockchain pipeline'ı. Bu, dokümante kapı bırakma; sapma değil.
 
 ## Notlar
 
