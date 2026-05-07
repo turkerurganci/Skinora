@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Notifications.Domain.Entities;
+using Skinora.Realtime.Application;
+using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
 
@@ -19,10 +21,14 @@ public sealed class NotificationInboxService : INotificationInboxService
     private const int DefaultPageSize = 20;
 
     private readonly AppDbContext _db;
+    private readonly INotificationRealtimePublisher _realtimePublisher;
 
-    public NotificationInboxService(AppDbContext db)
+    public NotificationInboxService(
+        AppDbContext db,
+        INotificationRealtimePublisher realtimePublisher)
     {
         _db = db;
+        _realtimePublisher = realtimePublisher;
     }
 
     public async Task<PagedResult<NotificationListItemDto>> ListAsync(
@@ -106,6 +112,16 @@ public sealed class NotificationInboxService : INotificationInboxService
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // T62 — push the new unread count (always 0 after mark-all-read) on
+        // /hubs/notifications. Best-effort: the SignalR adapter logs and
+        // swallows transport errors; mutating the read state must not roll
+        // back if no listener is connected.
+        await _realtimePublisher.PublishUnreadCountChangedAsync(
+            userId,
+            new NotificationRealtimePayloads.UnreadCountChanged(0),
+            cancellationToken);
+
         return unread.Count;
     }
 
@@ -125,6 +141,15 @@ public sealed class NotificationInboxService : INotificationInboxService
             notification.IsRead = true;
             notification.ReadAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(cancellationToken);
+
+            // T62 — recompute unread count after the mutation and push on
+            // /hubs/notifications. Skipped on the no-op branch (already read)
+            // because count did not change.
+            var unreadCount = await GetUnreadCountAsync(userId, cancellationToken);
+            await _realtimePublisher.PublishUnreadCountChangedAsync(
+                userId,
+                new NotificationRealtimePayloads.UnreadCountChanged(unreadCount),
+                cancellationToken);
         }
 
         return MarkReadOutcome.Success;
