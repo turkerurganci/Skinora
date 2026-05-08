@@ -99,8 +99,10 @@ T63a, 07 §10.1 P1 ve §10.2 P2 contract'larını gerçekleyen iki anonim okuma 
 ## Commit & PR
 
 - Branch: `task/T63a-platform-public-endpoints`
-- Commits: `7acf17e` (T63a kod + test + migration), `<hash>` (rapor + status + memory yansıtma)
-- PR: TBD — push sonrası açılır; CI watch raporda finalize edilir.
+- Commits: `7acf17e` (T63a kod + test + migration), `cb0273e` (rapor + status + memory yansıtma), `82460cb` (SeedDataTests count 37→41 fix — root cause düzeltmesi), `a355dbb` (BYPASS_LOG T63a girdisi)
+- PR: [#101](https://github.com/turkerurganci/Skinora/pull/101)
+- CI: task branch run [`25573845454`](https://github.com/turkerurganci/Skinora/actions/runs/25573845454) HEAD `a355dbb` — 10/10 job ✓ (Lint / Build / Unit / Integration / Contract / Migration / Docker / CI Gate); önceki run [`25573484018`](https://github.com/turkerurganci/Skinora/actions/runs/25573484018) HEAD `82460cb` — 10/10 ✓ (root cause fix sonrası); ilk run [`25573078894`](https://github.com/turkerurganci/Skinora/actions/runs/25573078894) HEAD `cb0273e` SeedDataTests 37→41 assertion fail (root cause T63a'nın 4 yeni configured satırı; fix `82460cb` ile çözüldü).
+- BYPASS_LOG: 1× ci-failure entry (`82460cb` push pre-push guard tarafından bloklandı çünkü prior run kırıktı; root cause fix push'u meşru bypass — T58/T59/T61 paterni aynası).
 
 ## Known Limitations / Follow-up
 
