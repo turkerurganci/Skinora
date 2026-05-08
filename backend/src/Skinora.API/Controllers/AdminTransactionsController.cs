@@ -3,22 +3,28 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Transactions.Application.Admin;
 
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// Admin-facing transaction lifecycle endpoints — T59 (07 §9.20–§9.22,
-/// 02 §7, 03 §8.8). All three actions are protected by the dynamic
-/// <c>Permission:&lt;KEY&gt;</c> policy (T06 / T40):
-/// AD19 requires <c>CANCEL_TRANSACTIONS</c>; AD19b/c require
-/// <c>EMERGENCY_HOLD</c>. Both are independent (02 §7 not).
+/// Admin-facing transaction endpoints — read surfaces from T63 (AD6 / AD7,
+/// 07 §9.6 / §9.7) plus the lifecycle actions from T59 (AD19 / AD19b /
+/// AD19c, 07 §9.20–§9.22, 02 §7, 03 §8.8). Each action is protected by
+/// the dynamic <c>Permission:&lt;KEY&gt;</c> policy (T06 / T40):
+/// reads require <c>VIEW_TRANSACTIONS</c>; AD19 requires
+/// <c>CANCEL_TRANSACTIONS</c>; AD19b/c require <c>EMERGENCY_HOLD</c>.
+/// AD19/AD19b/AD19c are independent (02 §7 not).
 /// </summary>
 [ApiController]
 [Route("api/v1/admin/transactions")]
 public sealed class AdminTransactionsController : ControllerBase
 {
+    private const string PolicyViewTransactions =
+        AuthPolicies.PermissionPrefix + "VIEW_TRANSACTIONS";
+
     private const string PolicyCancelTransactions =
         AuthPolicies.PermissionPrefix + "CANCEL_TRANSACTIONS";
 
@@ -26,10 +32,67 @@ public sealed class AdminTransactionsController : ControllerBase
         AuthPolicies.PermissionPrefix + "EMERGENCY_HOLD";
 
     private readonly IAdminTransactionService _service;
+    private readonly IAdminTransactionQueryService _queries;
 
-    public AdminTransactionsController(IAdminTransactionService service)
+    public AdminTransactionsController(
+        IAdminTransactionService service,
+        IAdminTransactionQueryService queries)
     {
         _service = service;
+        _queries = queries;
+    }
+
+    /// <summary>AD6 — <c>GET /admin/transactions</c> (07 §9.6).</summary>
+    [HttpGet("")]
+    [Authorize(Policy = PolicyViewTransactions)]
+    [RateLimit("admin-read")]
+    public async Task<ActionResult<PagedResult<AdminTransactionListItemDto>>> List(
+        [FromQuery] TransactionStatus? status,
+        [FromQuery] StablecoinType? stablecoin,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        [FromQuery] decimal? minAmount,
+        [FromQuery] decimal? maxAmount,
+        [FromQuery] string? search,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortOrder,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new AdminTransactionListQuery(
+            Status: status,
+            Stablecoin: stablecoin,
+            DateFrom: dateFrom,
+            DateTo: dateTo,
+            MinAmount: minAmount,
+            MaxAmount: maxAmount,
+            Search: search,
+            SortBy: sortBy,
+            SortOrder: sortOrder,
+            Page: page,
+            PageSize: pageSize);
+
+        var result = await _queries.ListAsync(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>AD7 — <c>GET /admin/transactions/:id</c> (07 §9.7).</summary>
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = PolicyViewTransactions)]
+    [RateLimit("admin-read")]
+    public async Task<IActionResult> GetDetail(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var detail = await _queries.GetDetailAsync(id, cancellationToken);
+        if (detail is null)
+        {
+            return NotFound(ApiResponse<object>.Fail(
+                AdminTransactionErrorCodes.TransactionNotFound,
+                $"Transaction '{id}' was not found.",
+                traceId: HttpContext.TraceIdentifier));
+        }
+        return Ok(detail);
     }
 
     /// <summary>AD19 — <c>POST /admin/transactions/:id/cancel</c> (07 §9.20).</summary>

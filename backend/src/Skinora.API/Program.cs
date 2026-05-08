@@ -23,6 +23,7 @@ using Skinora.Payments.Infrastructure.Persistence;
 using Skinora.Platform;
 using Skinora.Platform.Infrastructure.Bootstrap;
 using Skinora.Platform.Infrastructure.Persistence;
+using Skinora.API.Services;
 using Skinora.Realtime;
 using Skinora.Realtime.Hubs;
 using Skinora.Shared.Persistence;
@@ -119,6 +120,14 @@ builder.Services.AddTransactionsModule(builder.Configuration);
 // Three endpoints (open / submit-txhash / escalate) backed by
 // IDisputeService + per-type auto-checkers (PAYMENT/DELIVERY/WRONG_ITEM).
 builder.Services.AddDisputesModule();
+
+// Steam bot read service (T63 — 07 §9.10 AD10). Sidecar wiring + bot
+// failover land with T64–T69 and will register here too.
+builder.Services.AddSteamModule();
+
+// T63 — admin dashboard composer (07 §9.1 AD1). Composes summary counters,
+// the AD10 Steam-bot snapshot and the latest fraud flags in one round-trip.
+builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
 // T61 / T62 — SignalR hubs + realtime publishers (07 §11.1 RT1
 // /hubs/transactions, 07 §11.2 RT2 /hubs/notifications) + the CountdownSync

@@ -95,6 +95,13 @@ public static class TransactionsModule
         // (07 §9.20–§9.22, 02 §7, 03 §8.8).
         services.AddScoped<IAdminTransactionService, AdminTransactionService>();
 
+        // T63 — admin transaction read service backing AD6 / AD7 / AD16b
+        // (07 §9.6 / §9.7 / §9.17). Implementation lives in Skinora.API
+        // because AD7 detail composes data from Skinora.Notifications,
+        // Skinora.Disputes and Skinora.Fraud (modules Skinora.Transactions
+        // cannot reference without a project cycle).
+        services.AddScoped<IAdminTransactionQueryService, AdminTransactionQueryService>();
+
         // T60 — seller payout issue (07 §7.11, 02 §10.3, 06 §3.8a, 03 §2.4a
         // Senaryo A). Stub IPayoutVerifier is forward-deferred until the Tron
         // sidecar lands (T64–T69 devir); the admin resolver lives in

@@ -8,7 +8,9 @@ namespace Skinora.Admin.Application.Users;
 /// and <c>FrequentCounterparties</c> ride along as empty arrays in T39 —
 /// the actual aggregations land with T54 (Fraud), T58 (Dispute) and T63
 /// (admin transactions read service). The contract is shipped now so the
-/// frontend (T105 / S20) can wire the response shape end-to-end.
+/// frontend (T105 / S20) can wire the response shape end-to-end. AD16b
+/// (transaction history) is now served directly by
+/// <c>IAdminTransactionQueryService.ListForUserAsync</c> from the controller.
 /// </summary>
 public interface IAdminUserService
 {
@@ -23,13 +25,6 @@ public interface IAdminUserService
     /// <summary>AD16 — user detail (profile + stats + wallet/flag/dispute/counterparty history).</summary>
     Task<AdminUserDetailDto?> GetDetailAsync(
         string steamId, CancellationToken cancellationToken);
-
-    /// <summary>AD16b — paginated transaction history scoped to the resolved user (T63 will fill).</summary>
-    Task<PagedResult<object>?> GetTransactionsAsync(
-        string steamId,
-        int page,
-        int pageSize,
-        CancellationToken cancellationToken);
 
     /// <summary>AD17 — assign / change / clear (<c>roleId == null</c>) the user's admin role.</summary>
     Task<AssignRoleOutcome> AssignRoleAsync(
