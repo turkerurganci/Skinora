@@ -1,6 +1,6 @@
 # T63 — Admin dashboard ve işlem yönetimi API
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, validate chat'i bekliyor) | **Tarih:** 2026-05-07
+**Faz:** F3 | **Durum:** ✓ PASS bağımsız validator | **Tarih:** 2026-05-08
 
 ---
 
@@ -158,4 +158,16 @@ Bunlara ek olarak T39'un AD16b placeholder'ı (`GET /admin/users/:steamId/transa
 - **Working tree (Adım -1):** temiz (session başında `git status` boş).
 - **Main CI startup (Adım 0):** son 3 main run hepsi `success` — `25513910803`, `25513910844`, `25476326367` (T62 + T61 PR'ları).
 - **Dış varsayım:** yok — tüm bağımlılıklar (T19 Transaction, T40 RBAC, T42 AuditLog, T54 Flag, T58 Dispute, T59 Admin tx) merged ve operasyonel.
-- **Validator chat'inde doğrulanacak:** ayrı chat'te bağımsız validator (test çalıştırma + kabul kriteri kanıtı + spec uyum + güvenlik kontrolü).
+
+## Bağımsız Doğrulama (validator chat — 2026-05-08)
+
+- **Verdict:** ✓ PASS, 0 S-bulgu, 1 minor advisory (M1 — T39 carry-forward).
+- **HARD STOP'lar:** Adım -1 working tree temiz, Adım 0 main CI 3/3 SUCCESS (`25513910803`, `25513910844`, `25476326367`), Adım 0b memory drift yok (T63 5+ satır referansı mevcut).
+- **Task branch CI:** run [`25518418984`](https://github.com/turkerurganci/Skinora/actions/runs/25518418984) HEAD `c0f055e` — 9/9 SUCCESS (Detect / Lint / Build / Unit / Integration / Contract / Migration / Docker / CI Gate; `0. Guard` skipped — direct push olmadığı için doğru davranış).
+- **Lokal test re-run:** `dotnet test --filter "FullyQualifiedName~AdminT63"` → 21/21 PASS.
+- **Spec uyum kontrolü (07 §9):** AD1 / AD6 / AD7 / AD10 / AD16b — DTO field set'leri spec ile 1:1 (paymentDetail, sellerPayoutDetail, refundDetail, statusHistory, notificationHistory, disputeHistory, flagHistory, adminActions, summaryCards, recentFlags, steamAccounts: tüm field adları + tip'leri eşleşti). AD16b `ListForUserAsync` üzerinden T39 placeholder dead-code temizlendi.
+- **Güvenlik:** Tüm endpoint'lerde policy gate (`AdminAccess` / `Permission:VIEW_*`); LIKE search bracket escape (`%`/`_`/`[`); read-only — audit yazımı yok; yeni dış bağımlılık yok; secret sızıntısı yok.
+- **Kabul kriterleri:** 6/6 ✓ (kanıt = controller dosyası + integration test + CI run).
+- **Doğrulama kontrol listesi:** 1/1 ✓ (07 §9.1–§9.19 admin endpoint'leri tam — T39+T41+T42+T54+T59+T63 birleşimi 19 endpoint).
+- **Yapım raporu uyumu:** Tam — uyuşmazlık yok.
+- **M1 advisory (T-future):** AdminUserService.ListAsync hâlâ raw `EF.Functions.Like("%term%")` kullanıyor; T63 transactions search'inde bracket-escape uygulandı ama Skinora.Admin user search dokunulmadı. Shared helper (`Skinora.Shared.Persistence.LikeEscape.Bracket`) ile standardizasyon T-future task. Üretimde işlevsel impact düşük (admin trusted operator); blocking değil.
