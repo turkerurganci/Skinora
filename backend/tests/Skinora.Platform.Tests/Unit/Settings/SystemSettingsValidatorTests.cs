@@ -187,4 +187,75 @@ public class SystemSettingsValidatorTests
         var result = _v.ValidateCrossKey(snapshot);
         Assert.True(result.IsValid);
     }
+
+    // ---- Range — T63a maintenance type enum ----
+
+    [Theory]
+    [InlineData("PLANNED_MAINTENANCE", true)]
+    [InlineData("PLATFORM_MAINTENANCE", true)]
+    [InlineData("STEAM_OUTAGE", true)]
+    [InlineData("BLOCKCHAIN_DEGRADATION", true)]
+    [InlineData("NONE", true)]
+    [InlineData("planned_maintenance", false)] // case-sensitive
+    [InlineData("HARDWARE_FAILURE", false)]
+    [InlineData("", false)]
+    public void ValidateSingle_MaintenanceType_AcceptsKnownEnum(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("platform.maintenance.type", value, "string");
+        Assert.Equal(expected, result.IsValid);
+    }
+
+    // ---- Range — T63a maintenance planned_end ISO 8601 / NONE ----
+
+    [Theory]
+    [InlineData("NONE", true)]
+    [InlineData("2026-03-16T18:00:00Z", true)]
+    [InlineData("2026-03-16T18:00:00+00:00", true)]
+    [InlineData("2026-03-16T18:00:00", true)] // assumed-universal parser accepts naked
+    [InlineData("not-a-date", false)]
+    [InlineData("16/03/2026", false)] // dd/MM/yyyy not ISO
+    public void ValidateSingle_MaintenancePlannedEnd_RequiresIsoOrNone(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("platform.maintenance.planned_end", value, "string");
+        Assert.Equal(expected, result.IsValid);
+    }
+
+    // ---- Cross-key — T63a active=true ⇒ type≠NONE ----
+
+    [Fact]
+    public void ValidateCrossKey_MaintenanceActive_RequiresType()
+    {
+        var snapshot = new Dictionary<string, string?>
+        {
+            ["platform.maintenance.active"] = "true",
+            ["platform.maintenance.type"] = "NONE",
+        };
+        var result = _v.ValidateCrossKey(snapshot);
+        Assert.False(result.IsValid);
+        Assert.Contains("platform.maintenance.type", result.ErrorMessage);
+    }
+
+    [Fact]
+    public void ValidateCrossKey_MaintenanceActive_WithType_Passes()
+    {
+        var snapshot = new Dictionary<string, string?>
+        {
+            ["platform.maintenance.active"] = "true",
+            ["platform.maintenance.type"] = "PLATFORM_MAINTENANCE",
+        };
+        var result = _v.ValidateCrossKey(snapshot);
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void ValidateCrossKey_MaintenanceInactive_TypeNoneIsAllowed()
+    {
+        var snapshot = new Dictionary<string, string?>
+        {
+            ["platform.maintenance.active"] = "false",
+            ["platform.maintenance.type"] = "NONE",
+        };
+        var result = _v.ValidateCrossKey(snapshot);
+        Assert.True(result.IsValid);
+    }
 }

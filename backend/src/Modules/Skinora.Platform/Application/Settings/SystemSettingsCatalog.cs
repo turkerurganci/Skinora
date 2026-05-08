@@ -103,6 +103,14 @@ public static class SystemSettingsCatalog
         // --- Reputation thresholds (T43 — 02 §13, 06 §3.1) ---
         new("reputation.min_account_age_days",            "reputation",           "Hesap yaşı eşiği — altında reputationScore null",           "gün"),
         new("reputation.min_completed_transactions",      "reputation",           "Tamamlanmış işlem eşiği — altında reputationScore null",    "adet"),
+
+        // --- Platform maintenance (T63a — 07 §10.2, 03 §11.1–§11.3) ---
+        // String columns use 'NONE' as the spec sentinel for "not set"; the
+        // /platform/maintenance endpoint maps NONE → JSON null per the contract.
+        new("platform.maintenance.active",                "platform_maintenance", "Bakım/kesinti aktif",                                       null),
+        new("platform.maintenance.type",                  "platform_maintenance", "Bakım/kesinti tipi (enum, NONE = yok)",                     null),
+        new("platform.maintenance.message",              "platform_maintenance", "Kullanıcıya gösterilecek mesaj (NONE = yok)",               null),
+        new("platform.maintenance.planned_end",          "platform_maintenance", "Tahmini bitiş zamanı (ISO 8601 UTC, NONE = yok)",           null),
     ];
 }
 
