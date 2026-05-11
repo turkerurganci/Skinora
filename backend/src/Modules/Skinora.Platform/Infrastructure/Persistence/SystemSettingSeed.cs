@@ -71,6 +71,14 @@ public static class SystemSettingSeed
         Unconfigured(36, "dormant_account_value_threshold",             "decimal", "Fraud",                  "Dormant hesap için tek işlem tutar eşiği (USDT). Hiç işlem yapmamış hesabın bu tutarın üzerinde işlem denemesi otomatik flag tetikler. Admin tarafından risk profiline göre belirlenir."),
         // --- T56: Multi-account detection — known exchange/custodial address allowlist (02 §14.3, 03 §7.4) ---
         Default     (37, "multi_account.exchange_addresses",            "string",  "Fraud",         "NONE", "Çoklu hesap kontrolünde 'aynı gönderim adresi' destekleyici sinyalinden hariç tutulan bilinen exchange/custodial cüzdan adresleri (CSV). 'NONE' = hiç adres hariç değil. Adresler exact-match (case-sensitive) karşılaştırılır."),
+        // --- T63a: Platform maintenance state (07 §10.2, 03 §11.1–§11.3) ---
+        // String columns store the literal "NONE" as the inactive sentinel — the
+        // /platform/maintenance contract emits it as JSON null. Cross-key invariant
+        // (active=true ⇒ type≠NONE) is enforced by SystemSettingsValidator.
+        Default     (38, "platform.maintenance.active",                 "bool",    "Platform",      "false","Platform/Steam/blockchain bakım veya kesinti aktif mi (07 §10.2). true iken type set edilmiş olmalı."),
+        Default     (39, "platform.maintenance.type",                   "string",  "Platform",      "NONE", "Bakım/kesinti tipi: PLANNED_MAINTENANCE | PLATFORM_MAINTENANCE | STEAM_OUTAGE | BLOCKCHAIN_DEGRADATION | NONE (NONE = aktif değil, 07 §10.2)."),
+        Default     (40, "platform.maintenance.message",                "string",  "Platform",      "NONE", "Kullanıcıya gösterilecek bilgilendirme mesajı. 'NONE' = mesaj yok (07 §10.2 maintenance banner)."),
+        Default     (41, "platform.maintenance.planned_end",            "string",  "Platform",      "NONE", "Tahmini bitiş zamanı (ISO 8601 UTC, ör: '2026-03-16T18:00:00Z'). 'NONE' = bilinmiyor / aktif değil (07 §10.2)."),
     ];
 
     private static SystemSetting Unconfigured(

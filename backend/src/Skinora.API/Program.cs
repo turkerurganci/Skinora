@@ -129,6 +129,15 @@ builder.Services.AddSteamModule();
 // the AD10 Steam-bot snapshot and the latest fraud flags in one round-trip.
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
+// T63a — public /platform endpoints (07 §10.1 P1 stats, §10.2 P2 maintenance).
+// IMemoryCache is sufficient for these read paths: stats data drifts slowly
+// (15 min TTL) and maintenance toggles propagate within 30 s through the
+// per-replica cache; cross-replica invalidation is unnecessary at this scale.
+builder.Services.AddMemoryCache();
+builder.Services.Configure<PlatformOptions>(
+    builder.Configuration.GetSection(PlatformOptions.SectionName));
+builder.Services.AddScoped<IPlatformPublicService, PlatformPublicService>();
+
 // T61 / T62 — SignalR hubs + realtime publishers (07 §11.1 RT1
 // /hubs/transactions, 07 §11.2 RT2 /hubs/notifications) + the CountdownSync
 // 30s broadcaster. MediatR consumers in the Realtime assembly are picked up

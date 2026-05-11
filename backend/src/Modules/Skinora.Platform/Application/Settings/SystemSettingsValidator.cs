@@ -25,6 +25,21 @@ public sealed class SystemSettingsValidator
     public static SystemSettingsValidator Instance { get; } = new();
 
     /// <summary>
+    /// Permitted values for <c>platform.maintenance.type</c> (T63a / 07 §10.2).
+    /// <c>NONE</c> is the inactive sentinel — the public endpoint emits it as
+    /// JSON <c>null</c>. Cross-key check rejects <c>type=NONE</c> while
+    /// <c>active=true</c>.
+    /// </summary>
+    public static readonly IReadOnlySet<string> MaintenanceTypes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "PLANNED_MAINTENANCE",
+        "PLATFORM_MAINTENANCE",
+        "STEAM_OUTAGE",
+        "BLOCKCHAIN_DEGRADATION",
+        "NONE",
+    };
+
+    /// <summary>
     /// Validate a single key/value tuple in isolation (type + range only).
     /// Caller is responsible for invoking <see cref="ValidateCrossKey"/>
     /// against the post-write SystemSettings snapshot.
@@ -83,6 +98,17 @@ public sealed class SystemSettingsValidator
         {
             return ValidationResult.Fail(
                 "monitoring_post_cancel_7d_polling_seconds must be strictly less than monitoring_post_cancel_30d_polling_seconds.");
+        }
+
+        // T63a — active maintenance must declare a concrete type (07 §10.2:
+        // C08 banner styling depends on the type discriminator).
+        if (TryReadBool(snapshot, "platform.maintenance.active", out var maintActive) &&
+            maintActive &&
+            snapshot.TryGetValue("platform.maintenance.type", out var maintType) &&
+            string.Equals(maintType, "NONE", StringComparison.Ordinal))
+        {
+            return ValidationResult.Fail(
+                "platform.maintenance.type must be set (not 'NONE') when platform.maintenance.active is true.");
         }
 
         return ValidationResult.Ok();
@@ -170,6 +196,32 @@ public sealed class SystemSettingsValidator
             return null;
         }
 
+        // T63a — platform.maintenance.type must be one of the documented enum
+        // values or the "NONE" sentinel (07 §10.2).
+        if (key == "platform.maintenance.type")
+        {
+            if (!MaintenanceTypes.Contains(value))
+                return $"{key} must be one of {string.Join(", ", MaintenanceTypes.OrderBy(v => v))} (got '{value}').";
+            return null;
+        }
+
+        // T63a — platform.maintenance.planned_end is an ISO-8601 UTC timestamp
+        // or the "NONE" sentinel.
+        if (key == "platform.maintenance.planned_end")
+        {
+            if (string.Equals(value, "NONE", StringComparison.Ordinal))
+                return null;
+            if (!DateTimeOffset.TryParse(
+                    value,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out _))
+            {
+                return $"{key} must be ISO-8601 (e.g. '2026-03-16T18:00:00Z') or 'NONE' (got '{value}').";
+            }
+            return null;
+        }
+
         // Country CSV — uppercase ISO-3166-1 alpha-2 entries or the literal "NONE".
         if (key == "auth.banned_countries")
         {
@@ -211,6 +263,13 @@ public sealed class SystemSettingsValidator
         value = 0;
         if (!snapshot.TryGetValue(key, out var raw) || raw is null) return false;
         return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryReadBool(IReadOnlyDictionary<string, string?> snapshot, string key, out bool value)
+    {
+        value = false;
+        if (!snapshot.TryGetValue(key, out var raw) || raw is null) return false;
+        return bool.TryParse(raw, out value);
     }
 }
 
