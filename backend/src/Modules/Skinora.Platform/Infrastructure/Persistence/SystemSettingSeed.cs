@@ -79,6 +79,19 @@ public static class SystemSettingSeed
         Default     (39, "platform.maintenance.type",                   "string",  "Platform",      "NONE", "Bakım/kesinti tipi: PLANNED_MAINTENANCE | PLATFORM_MAINTENANCE | STEAM_OUTAGE | BLOCKCHAIN_DEGRADATION | NONE (NONE = aktif değil, 07 §10.2)."),
         Default     (40, "platform.maintenance.message",                "string",  "Platform",      "NONE", "Kullanıcıya gösterilecek bilgilendirme mesajı. 'NONE' = mesaj yok (07 §10.2 maintenance banner)."),
         Default     (41, "platform.maintenance.planned_end",            "string",  "Platform",      "NONE", "Tahmini bitiş zamanı (ISO 8601 UTC, ör: '2026-03-16T18:00:00Z'). 'NONE' = bilinmiyor / aktif değil (07 §10.2)."),
+        // --- T63b: Retention job ages + batch sizes (06 §1, §3.18, §3.19, §3.21, §6.1) ---
+        // Age keys store the retention window in days; the cleanup jobs read them
+        // at start of each run and fall back to a code constant if unconfigured.
+        // Batch sizes cap per-iteration DELETE volume so a single sweep cannot
+        // monopolise the connection or saturate the log file.
+        Default     (42, "retention.outbox_message_days",               "int",     "Retention",     "30",   "Processed OutboxMessage retention süresi (gün, 06 §3.18). Status=PROCESSED ve ProcessedAt bu süreden eski kayıtlar OutboxRetentionCleanupJob tarafından toplu hard delete edilir."),
+        Default     (43, "retention.processed_event_days",              "int",     "Retention",     "30",   "ProcessedEvent retention süresi (gün, 06 §3.19). ProcessedAt bu süreden eski kayıtlar — OutboxMessage temizlenmeden önce — toplu hard delete edilir. FK olmadığı için silme sırası uygulama seviyesinde garanti edilir."),
+        Default     (44, "retention.external_idempotency_days",         "int",     "Retention",     "30",   "ExternalIdempotencyRecord retention süresi (gün, 06 §3.21). Status=completed ve CompletedAt bu süreden eski kayıtlar toplu hard delete edilir. in_progress ve failed kayıtlar lease/retry akışına bırakılır."),
+        Default     (45, "retention.orphan_notification_days",          "int",     "Retention",     "365",  "Bağımsız bildirim (Notification, TransactionId IS NULL) retention süresi (gün, 06 §1, §6.1). CreatedAt bu süreden eski kayıtlar bağlı NotificationDelivery kayıtlarıyla birlikte (önce delivery, sonra notification) toplu hard delete edilir."),
+        Default     (46, "retention.user_login_log_days",               "int",     "Retention",     "365",  "UserLoginLog retention süresi (gün, 06 §1, §6.1). CreatedAt bu süreden eski kayıtlar toplu hard delete edilir (soft-delete kontrolü dışındadır — retention IsDeleted flag'inden bağımsız çalışır)."),
+        Default     (47, "retention.batch_size_outbox",                 "int",     "Retention",     "1000", "Outbox retention job'unun tek SELECT+DELETE iterasyonunda işleyebileceği maksimum kayıt sayısı. Job, eligible kayıt kalmayana kadar batch'leri tekrarlar."),
+        Default     (48, "retention.batch_size_notification",           "int",     "Retention",     "500",  "Bağımsız bildirim retention job'unun tek iterasyonda işleyebileceği maksimum Notification sayısı. Bağlı NotificationDelivery kayıtları aynı iterasyon içinde silinir."),
+        Default     (49, "retention.batch_size_user_login_log",         "int",     "Retention",     "1000", "UserLoginLog retention job'unun tek iterasyonda işleyebileceği maksimum kayıt sayısı."),
     ];
 
     private static SystemSetting Unconfigured(

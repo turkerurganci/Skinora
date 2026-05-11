@@ -9,6 +9,7 @@ using Skinora.API.Logging;
 using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
+using Skinora.API.Retention;
 using Skinora.API.Startup;
 using Skinora.Admin;
 using Skinora.Admin.Infrastructure.Persistence;
@@ -179,6 +180,16 @@ builder.Services.AddOutboxModule(builder.Configuration);
 // at host startup. Registered after Outbox so its hosted-service StartAsync
 // runs after the outbox dispatcher chain is alive.
 builder.Services.AddHostedService<TimeoutSchedulerStartupHook>();
+
+// T63b — retention recurring jobs (06 §1, §3.18, §3.19, §3.21, §6.1):
+// outbox tables (daily 03:30 UTC), orphan notifications + user login logs
+// (weekly Sunday 04:00/04:30 UTC). Each job reads its retention window and
+// batch size from SystemSettings on every run so admin tuning takes effect
+// without a redeploy.
+builder.Services.AddScoped<OutboxRetentionCleanupJob>();
+builder.Services.AddScoped<OrphanNotificationRetentionCleanupJob>();
+builder.Services.AddScoped<UserLoginLogRetentionCleanupJob>();
+builder.Services.AddHostedService<RetentionJobsRegistrar>();
 
 // Health checks (T16) — DB + Redis dependency checks
 builder.Services.AddHealthChecks()
