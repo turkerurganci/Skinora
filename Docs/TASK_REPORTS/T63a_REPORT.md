@@ -1,6 +1,6 @@
 # T63a — Platform public endpoint'leri (backend)
 
-**Faz:** F3 | **Durum:** ⏳ Devam ediyor (yapım bitti, validator ayrı chat) | **Tarih:** 2026-05-08
+**Faz:** F3 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-05-08 (yapım) / 2026-05-11 (validator)
 
 ---
 
@@ -125,3 +125,65 @@ T63a, 07 §10.1 P1 ve §10.2 P2 contract'larını gerçekleyen iki anonim okuma 
 - **Cache backend kararı (IMemoryCache vs Redis):** Kullanıcı onayı ile IMemoryCache. Sebep: 15 dk stats / 30 sn maintenance cache window'ları replica başına farklı state için ihmal edilebilir (sözleşmede çapraz-replica tutarlılık yok); IDistributedCache eklenmesi yeni bağımlılık + serialization yüzeyi getirir. K4 forward-devir.
 - **Maintenance store kararı (4 SystemSetting vs singleton entity):** Kullanıcı onayı ile 4 SystemSetting. Sebep: T63 admin SET endpoint'i ile zaten yönetilebilir; ayrı entity + admin endpoint scope'u büyütür. Validator type/range/cross-key zinciri mevcut altyapıyı yeniden kullanır.
 - **`ApiCategory` "platform_maintenance" lowercase:** 07 §9.8 admin GET settings response'unda kullanılan API category dialect (`transaction_limits`, `cancel_rules`, `auth.*` `geo_blocking`/`age_verification` paterni). DB Category column ise `"Platform"` (PascalCase), mevcut `"Limit"`, `"Wallet"`, `"AccessControl"` paterniyle uyumlu.
+
+---
+
+## Doğrulama (bağımsız validator, 2026-05-11)
+
+**Verdict:** ✓ PASS — 3/3 kabul kriteri + 2/2 doğrulama kontrol listesi ✓; 0 S-bulgu; yapım raporu uyumu tam (sıfır uyuşmazlık).
+
+### Hard-stop pre-flight
+
+- **Adım -1 (working tree):** `git status --short` boş ✓.
+- **Adım 0 (main CI):** son 3 main run ✓ — `25570554435` + `25570554411` (T63 PR #100) + `25513910803` (T62 PR #99).
+- **Adım 0b (repo memory):** `MEMORY.md` `T63a` satırı mevcut ✓ (line 130, yapım chat yansıtması).
+
+### Kabul kriterleri (validator kanıtı)
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | `GET /platform/stats` — 15 dk cache | ✓ | `PlatformController:25-32` `[AllowAnonymous]+[RateLimit("public")]`; `PlatformPublicService.GetStatsAsync` `StatsCacheTtl = TimeSpan.FromMinutes(15)`; integration `Stats_AfterCompletedTransactions_AggregatesCount` 4 işlem (2×COMPLETED + CREATED + CANCELLED_BUYER) → count=2 + `Stats_SecondCall_ServesCachedValue` ile cache hit kanıtlandı (lokal Release `dotnet test` 6/6 PASS). |
+| 2 | `GET /platform/maintenance` — aktif/tip/mesaj/planlı bitiş | ✓ | `PlatformController:34-41`; `GetMaintenanceAsync` 4 SystemSetting (`platform.maintenance.{active,type,message,planned_end}`) tek query + `"NONE"` → null normalleştirme; 30 sn TTL (`MaintenanceCacheTtl`); integration `Maintenance_DefaultSeed_ReturnsInactive_WithNullFields` + `Maintenance_ActiveState_ReturnsTypeMessageAndPlannedEnd` + `Maintenance_SecondCall_ServesCachedValue` 3/3 PASS. |
+| 3 | Anonim erişim (auth gerekmez) | ✓ | `[AllowAnonymous]` controller-level (PlatformController:13); `[RateLimit("public")]` IP-bazlı (auth'lı UserScopedPolicies setinde değil); integration `Stats_Anonymous_Returns200_WithUptimeAndZeroCount` token'sız 200 ✓. |
+
+**Doğrulama kontrol listesi:**
+
+- [x] **07 §10.1–§10.2 endpoint sözleşmeleri doğru mu?** ✓ — DTO field adları camelCase JSON üzerinde 07 örneğine 1:1 (`totalCompletedTransactions`, `platformUptimePercent`, `active`, `type`, `message`, `plannedEnd`); 4 enum + NONE sentinel `SystemSettingsValidator.MaintenanceTypes` ile kontrol; cross-key active=true ⇒ type≠NONE 71 unit test ile zorunlu; null semantiği test'lerde `JsonValueKind.Null` ile teyit.
+- [x] **Cache mekanizması çalışıyor mu?** ✓ — 2 cache hit testi (`Stats_SecondCall` ve `Maintenance_SecondCall`): ilk çağrı cache'e yazar, ara DB değişikliği (yeni COMPLETED tx / SystemSetting toggle) sonrası ikinci çağrı stale değeri döner.
+
+### Test sonuçları (bağımsız tekrar)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build Release (sln) | ✓ 0W/0E | `dotnet build backend/Skinora.sln -c Release` |
+| Unit (`SystemSettingsValidatorTests` + `SystemSettingsCatalogTests`) | ✓ 71/71 | `dotnet test backend/tests/Skinora.Platform.Tests/Skinora.Platform.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~SystemSettingsValidatorTests\|FullyQualifiedName~SystemSettingsCatalogTests"` |
+| Integration (`PlatformPublicEndpointTests`) | ✓ 6/6 | `dotnet test backend/tests/Skinora.API.Tests/Skinora.API.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~PlatformPublicEndpointTests"` |
+| Docker-bağımlı (`SeedDataTests`, `InitialMigrationTests`, `RestartRecoveryServiceTests` vb.) | ortam | Lokal Windows Docker Desktop kapalı; CI Linux runner'da 10/10 job ✓ (aşağıda). |
+
+### Task branch CI (Adım 8a)
+
+- HEAD `dbc2342` run [`25577007577`](https://github.com/turkerurganci/Skinora/actions/runs/25577007577) **10/10 job ✓**: 1. Lint, 2. Build, 3. Unit test, 4. Integration test, 5. Contract test, 6. Migration dry-run, 7. Docker build, Detect changed paths, CI Gate (`0. Guard` skipped — PR push olduğu için doğru).
+- Son 3 başarılı run ardışık: `25577007577` (HEAD `dbc2342`) + `25573845454` (HEAD `a355dbb`) + `25573484018` (HEAD `82460cb`). İlk run `25573078894` (HEAD `cb0273e`) SeedDataTests 37→41 assertion FAIL → root cause fix `82460cb` ile kapatıldı (yapım raporu Commit & PR bölümünde belgelendi). BYPASS_LOG entry meşru (T58/T59/T61 paterni aynası).
+
+### Güvenlik mini kontrol
+
+- **Secret sızıntısı:** Yok — yeni dosyalarda secret/credential yok; test fixture JWT secret literal (`t63a-platform-test-secret-key-...`) sadece test bağlamında.
+- **Auth/authorization:** Endpoint'ler `[AllowAnonymous]` (07 §10 spec gereği); rate-limit `public` bucket (30 req/60 sn, IP); maintenance toggle path'i T63 admin SET `Permission:MANAGE_SETTINGS` korumalı.
+- **Input validation:** Endpoint girdi yüzeyi sıfır (no path/query/body). Maintenance value writeback yolu (T63 admin SET) `SystemSettingsValidator` enum + ISO 8601 + cross-key zincirine uğrar (yeni 6 unit test ile kanıtlandı).
+- **Yeni dış bağımlılık:** Yok — `IMemoryCache` `Microsoft.NET.Sdk.Web` ile birlikte gelir; `Directory.Packages.props`/csproj diff'i boş.
+- **Cache poisoning:** Cache key'leri sabit literal; kullanıcı girdisinden türetilmez; TTL bazlı invalidation.
+
+### Yapım raporu karşılaştırması
+
+- **Uyum:** Tam uyumlu — 3/3 kabul kriteri + 2/2 doğrulama listesi kanıtları rapor ile birebir; test sayıları (71 unit + 6 integration) eşleşir; K1–K4 forward-devir notları (cache invalidation hook, uptime heartbeat, MaintenanceStatusChanged push, IDistributedCache scale-out) S-bulgu değil — spec'te sıkı gereksinim yok, dokümante edilmiş.
+- **Uyuşmazlık:** Yok.
+
+### Bulgular
+
+Yok (0 S-bulgu, 0 minor advisory). K1–K4 follow-up notları rapor "Known Limitations" bölümünde uygun şekilde kayıtlı; gerçek implementasyon eksikliği değil, kapsam dışı / forward-devir.
+
+### Commit & PR
+
+- Branch: `task/T63a-platform-public-endpoints`
+- Commits (HEAD'e doğru sırayla): `7acf17e` (T63a kod + test + migration) → `cb0273e` (rapor + status + memory) → `82460cb` (SeedDataTests 37→41 count fix) → `a355dbb` (BYPASS_LOG) → `dbc2342` (docs commit/PR/CI hash yansıtma).
+- PR: [#101](https://github.com/turkerurganci/Skinora/pull/101) — mergeable: MERGEABLE / mergeStateStatus: CLEAN.
