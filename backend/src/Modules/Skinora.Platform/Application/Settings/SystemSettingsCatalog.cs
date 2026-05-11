@@ -111,6 +111,16 @@ public static class SystemSettingsCatalog
         new("platform.maintenance.type",                  "platform_maintenance", "Bakım/kesinti tipi (enum, NONE = yok)",                     null),
         new("platform.maintenance.message",              "platform_maintenance", "Kullanıcıya gösterilecek mesaj (NONE = yok)",               null),
         new("platform.maintenance.planned_end",          "platform_maintenance", "Tahmini bitiş zamanı (ISO 8601 UTC, NONE = yok)",           null),
+
+        // --- Retention jobs (T63b — 06 §1, §3.18, §3.19, §3.21, §6.1) ---
+        new("retention.outbox_message_days",              "retention",            "Outbox mesaj retention süresi",                             "gün"),
+        new("retention.processed_event_days",             "retention",            "ProcessedEvent retention süresi",                           "gün"),
+        new("retention.external_idempotency_days",        "retention",            "ExternalIdempotencyRecord retention süresi",                "gün"),
+        new("retention.orphan_notification_days",         "retention",            "Bağımsız bildirim retention süresi",                        "gün"),
+        new("retention.user_login_log_days",              "retention",            "UserLoginLog retention süresi",                             "gün"),
+        new("retention.batch_size_outbox",                "retention",            "Outbox cleanup batch boyutu",                               "adet"),
+        new("retention.batch_size_notification",          "retention",            "Bildirim cleanup batch boyutu",                             "adet"),
+        new("retention.batch_size_user_login_log",        "retention",            "UserLoginLog cleanup batch boyutu",                         "adet"),
     ];
 }
 
