@@ -1,37 +1,38 @@
 import { Router } from 'express';
-import { healthCheck } from '../health/HealthController.js';
+import { botStatusFactory, healthCheckFactory } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
+import type { BotManager } from '../bot/BotManager.js';
 
-const router = Router();
+export function buildRouter(botManager?: BotManager): Router {
+  const router = Router();
 
-// Health check — no auth required
-router.get('/health', healthCheck);
+  // Health check — no auth required
+  router.get('/health', healthCheckFactory(botManager));
 
-// Prometheus metrics — no auth required (T16)
-router.get('/metrics', metricsHandler);
+  // Prometheus metrics — no auth required (T16)
+  router.get('/metrics', metricsHandler);
 
-// Authenticated API routes (stub — will be implemented in T64–T69)
-const apiRouter = Router();
-apiRouter.use(internalKeyAuth);
+  // Authenticated API routes
+  const apiRouter = Router();
+  apiRouter.use(internalKeyAuth);
 
-// Placeholder routes for future implementation
-apiRouter.post('/trade-offers/send', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T65' });
-});
+  // Placeholder routes for future implementation
+  apiRouter.post('/trade-offers/send', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T65' });
+  });
 
-apiRouter.get('/trade-offers/:offerId/status', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T66' });
-});
+  apiRouter.get('/trade-offers/:offerId/status', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T66' });
+  });
 
-apiRouter.get('/inventory/:steamId', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T67' });
-});
+  apiRouter.get('/inventory/:steamId', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T67' });
+  });
 
-apiRouter.get('/bots/status', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T64' });
-});
+  // Bot pool status (T64)
+  apiRouter.get('/bots/status', botStatusFactory(botManager));
 
-router.use('/api', apiRouter);
-
-export { router };
+  router.use('/api', apiRouter);
+  return router;
+}

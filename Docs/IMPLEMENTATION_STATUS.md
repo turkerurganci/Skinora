@@ -147,7 +147,7 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T64 | Steam Sidecar — bot session yönetimi | ⬚ Bekliyor | — | — |
+| T64 | Steam Sidecar — bot session yönetimi | ⏳ Devam ediyor | ⏳ Bekliyor | `task/T64-steam-bot-session` (PR pending) |
 | T65 | Steam Sidecar — trade offer gönderme | ⬚ Bekliyor | — | — |
 | T66 | Steam Sidecar — trade offer durum izleme | ⬚ Bekliyor | — | — |
 | T67 | Steam Sidecar — envanter okuma | ⬚ Bekliyor | — | — |
