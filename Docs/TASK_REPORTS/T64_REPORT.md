@@ -94,9 +94,9 @@
 ## Commit & PR
 
 - Branch: `task/T64-steam-bot-session`
-- Commit: (pending push)
-- PR: (pending — yapım kapısı sonrası `gh pr create`)
-- CI: ⏳ Bekliyor
+- Commit: `41a5d56` (yapım) + `94abb1c` (memory yansıtma)
+- PR: [#104](https://github.com/turkerurganci/Skinora/pull/104)
+- CI: ✓ PASS — run [`25758469709`](https://github.com/turkerurganci/Skinora/actions/runs/25758469709) 9/9 job success (Guard skipped — direct push olmadığı için doğru); 1. Lint + 2. Build + 3. Unit + 4. Integration + 5. Contract + 6. Migration dry-run + 7. Docker build (sidecar-steam) + CI Gate hepsi ✓
 
 ## Known Limitations / Follow-up
 
