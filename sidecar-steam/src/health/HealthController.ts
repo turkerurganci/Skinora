@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import type { BotManager, BotPoolSnapshot } from '../bot/BotManager.js';
 
 interface HealthCheck {
   name: string;
@@ -14,29 +15,74 @@ interface HealthResponse {
 }
 
 /**
- * Health check endpoint.
- * In skeleton phase: always returns healthy.
- * Future tasks (T64–T69) will add real bot session and Steam API checks.
+ * Factory for the `/health` handler.
+ * `botManager` is optional so tests can exercise the no-bots path easily.
  */
-export function healthCheck(_req: Request, res: Response): void {
-  const checks: HealthCheck[] = [
-    { name: 'steam-api', status: 'healthy', message: 'Skeleton — not yet connected' },
-    { name: 'bot-session', status: 'healthy', message: 'Skeleton — no bots configured' },
-  ];
+export function healthCheckFactory(botManager?: BotManager) {
+  return function healthCheck(_req: Request, res: Response): void {
+    const snapshot = botManager?.snapshot();
+    const checks: HealthCheck[] = [
+      { name: 'steam-api', status: 'healthy', message: 'Connectivity probe deferred to T67' },
+      buildBotSessionCheck(snapshot),
+    ];
 
-  const overallStatus = checks.every((c) => c.status === 'healthy')
-    ? 'healthy'
-    : checks.some((c) => c.status === 'unhealthy')
-      ? 'unhealthy'
-      : 'degraded';
+    const overallStatus = checks.every((c) => c.status === 'healthy')
+      ? 'healthy'
+      : checks.some((c) => c.status === 'unhealthy')
+        ? 'unhealthy'
+        : 'degraded';
 
-  const response: HealthResponse = {
-    status: overallStatus,
-    service: 'skinora-steam-sidecar',
-    uptime: process.uptime(),
-    checks,
+    const response: HealthResponse = {
+      status: overallStatus,
+      service: 'skinora-steam-sidecar',
+      uptime: process.uptime(),
+      checks,
+    };
+
+    const statusCode = overallStatus === 'unhealthy' ? 503 : 200;
+    res.status(statusCode).json(response);
   };
+}
 
-  const statusCode = overallStatus === 'unhealthy' ? 503 : 200;
-  res.status(statusCode).json(response);
+/**
+ * Factory for `/api/bots/status` — detailed pool state.
+ * Mounted behind internalKeyAuth in routes.ts.
+ */
+export function botStatusFactory(botManager?: BotManager) {
+  return function botStatus(_req: Request, res: Response): void {
+    if (!botManager) {
+      res.json({ healthy: 0, total: 0, removed: 0, bots: [] });
+      return;
+    }
+    res.json(botManager.snapshot());
+  };
+}
+
+function buildBotSessionCheck(snapshot?: BotPoolSnapshot): HealthCheck {
+  if (!snapshot || snapshot.total === 0) {
+    return {
+      name: 'bot-session',
+      status: 'degraded',
+      message: 'No bots configured (sidecar idle)',
+    };
+  }
+  if (snapshot.healthy === 0) {
+    return {
+      name: 'bot-session',
+      status: 'unhealthy',
+      message: `0/${snapshot.total} bots ready`,
+    };
+  }
+  if (snapshot.healthy < snapshot.total) {
+    return {
+      name: 'bot-session',
+      status: 'degraded',
+      message: `${snapshot.healthy}/${snapshot.total} bots ready`,
+    };
+  }
+  return {
+    name: 'bot-session',
+    status: 'healthy',
+    message: `${snapshot.healthy}/${snapshot.total} bots ready`,
+  };
 }
