@@ -1,6 +1,6 @@
 # T65 — Steam Sidecar Trade Offer Gönderme
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-05-13
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-13
 
 ---
 
@@ -67,9 +67,11 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (validate chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-13) |
+| Bulgu sayısı | 0 S-bulgu, 1 ~ Kısmi forward-defer (AC5 → T66, K1) |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator notu (bağımsız chat):** 6/6 kabul ✓ (1 ~ Kısmi T66 yapısal devir — counter offer aksiyon mekaniği polling-driven, plan tanımı T65 send + T66 monitör kapsam ayrımına uyumlu) + 1/1 doğrulama listesi ~ kısmi (08 §2.4 send-side eksiksiz, monitör T66). Test: 65/65 sidecar Vitest + 780/780 backend unit (Shared 185 + Auth 57 + Notifications 49 + Transactions 333 + Platform 102 + Fraud 14 + API 15 + Realtime 25) + backend Release 0W/0E (regresyon yok). Adım -1 working tree clean, Adım 0 main CI 3/3 success (`25780470892/880`, `25756831861`), Adım 0b repo memory T65 satırı mevcut. Task branch CI son run `25822603610` HEAD `df703fa` 10/10 ✓ + `25821363758` HEAD `fc95036` 10/10 ✓. Yapım raporu uyumu tam (0 uyuşmazlık). Güvenlik: secret sızıntısı yok, `internalKeyAuth` mevcut, schema validation iki katmanlı, yeni bağımsız dep yok (T14 mirası `steam-tradeoffer-manager@^2.13.0`).
 
 ## Altyapı Değişiklikleri
 
