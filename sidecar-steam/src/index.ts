@@ -5,17 +5,19 @@ import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
 import { BotManager } from './bot/BotManager.js';
 import { BotHealthCheck } from './bot/BotHealthCheck.js';
+import { TradeOfferService } from './trade/TradeOfferService.js';
 
 const app = express();
 const botManager = new BotManager();
 const botHealthCheck = new BotHealthCheck(botManager);
+const tradeOfferService = new TradeOfferService(botManager);
 
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(buildRouter(botManager));
+app.use(buildRouter({ botManager, tradeOfferService }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {

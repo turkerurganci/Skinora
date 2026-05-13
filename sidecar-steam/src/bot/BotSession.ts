@@ -1,6 +1,7 @@
 import SteamUser from 'steam-user';
 import SteamCommunity from 'steamcommunity';
 import SteamTotp from 'steam-totp';
+import TradeOfferManager from 'steam-tradeoffer-manager';
 import type { Logger } from 'pino';
 import { logger as rootLogger } from '../logger.js';
 import type { BotCredentials } from './BotConfig.js';
@@ -93,6 +94,7 @@ export class BotSession {
   private steamId?: string;
   private readonly client: SteamUser;
   private readonly community: SteamCommunity;
+  private readonly tradeManager: TradeOfferManager;
   private readonly log: Logger;
   private confirmationCheckerStarted = false;
 
@@ -100,10 +102,26 @@ export class BotSession {
     public readonly config: BotCredentials,
     private readonly events: BotSessionEvents = {},
     private readonly relogin: ReloginConfig = DEFAULT_RELOGIN_BACKOFF,
-    deps?: { client?: SteamUser; community?: SteamCommunity; logger?: Logger },
+    deps?: {
+      client?: SteamUser;
+      community?: SteamCommunity;
+      tradeManager?: TradeOfferManager;
+      logger?: Logger;
+    },
   ) {
     this.client = deps?.client ?? new SteamUser();
     this.community = deps?.community ?? new SteamCommunity();
+    // pollInterval: -1 disables T66's job until that task wires it up; cancelTime keeps
+    // unconfirmed offers from lingering forever (Steam default is "never" → unsafe).
+    this.tradeManager =
+      deps?.tradeManager ??
+      new TradeOfferManager({
+        steam: this.client,
+        community: this.community,
+        language: 'en',
+        pollInterval: -1,
+        cancelTime: 15 * 60 * 1_000,
+      });
     this.log = (deps?.logger ?? rootLogger).child({ bot: config.accountName });
     this.bindClientEvents();
     this.bindCommunityEvents();
@@ -178,6 +196,46 @@ export class BotSession {
     return SteamTotp.generateAuthCode(this.config.sharedSecret);
   }
 
+  /**
+   * Access the underlying TradeOfferManager (T65: send-only, T66: polling).
+   * Returns null when the session is not READY — callers MUST check.
+   */
+  getTradeManager(): TradeOfferManager | null {
+    return this.isReady() ? this.tradeManager : null;
+  }
+
+  /**
+   * Accept the mobile confirmation for a specific trade offer (08 §2.4).
+   * Uses identity_secret + steam-totp confirmation key, scoped to the offer id
+   * so we do not accidentally confirm market listings or other actions.
+   */
+  acceptTradeConfirmation(offerId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const time = Math.floor(Date.now() / 1_000);
+      const confirmationKey = SteamTotp.getConfirmationKey(
+        this.config.identitySecret,
+        time,
+        'accept',
+      );
+      this.community.acceptConfirmationForObject(
+        this.config.identitySecret,
+        offerId,
+        (err: Error | null) => {
+          if (err) {
+            this.log.error({ err, offerId }, 'acceptConfirmationForObject failed');
+            reject(err);
+            return;
+          }
+          this.log.info(
+            { offerId, confirmationKey: confirmationKey.slice(0, 6) + '…' },
+            'Mobile confirmation accepted',
+          );
+          resolve();
+        },
+      );
+    });
+  }
+
   private bindClientEvents(): void {
     this.client.on('loggedOn', () => {
       this.log.info('steam-user loggedOn');
@@ -186,6 +244,13 @@ export class BotSession {
     this.client.on('webSession', (sessionId: string, cookies: string[]) => {
       this.log.info({ sessionId }, 'webSession received, setting cookies');
       this.community.setCookies(cookies);
+      this.tradeManager.setCookies(cookies, (err) => {
+        if (err) {
+          this.log.error({ err }, 'TradeOfferManager.setCookies failed');
+        } else {
+          this.log.debug('TradeOfferManager cookies refreshed');
+        }
+      });
       this.retryCount = 0;
       this.lastError = undefined;
       this.startConfirmationChecker();
