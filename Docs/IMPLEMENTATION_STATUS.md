@@ -148,7 +148,7 @@
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T64 | Steam Sidecar — bot session yönetimi | ✓ Tamamlandı | ✓ PASS (bağımsız validator 2026-05-12) | [PR #104](https://github.com/turkerurganci/Skinora/pull/104) (CI ✓ run 25758893347 9/9) |
-| T65 | Steam Sidecar — trade offer gönderme | ⏳ Devam ediyor | Validate bekliyor | branch `task/T65-steam-trade-offer-send` |
+| T65 | Steam Sidecar — trade offer gönderme | ⏳ Devam ediyor | Validate bekliyor | [PR #105](https://github.com/turkerurganci/Skinora/pull/105) (CI ✓ run 25821363758 9/9) |
 | T66 | Steam Sidecar — trade offer durum izleme | ⬚ Bekliyor | — | — |
 | T67 | Steam Sidecar — envanter okuma | ⬚ Bekliyor | — | — |
 | T68 | Steam Sidecar — webhook callback ve backend entegrasyonu | ⬚ Bekliyor | — | — |

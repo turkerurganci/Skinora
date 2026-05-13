@@ -81,9 +81,9 @@
 ## Commit & PR
 
 - Branch: `task/T65-steam-trade-offer-send`
-- Commit: (pending)
-- PR: (pending)
-- CI: (pending)
+- Commit: `fc95036`
+- PR: [#105](https://github.com/turkerurganci/Skinora/pull/105)
+- CI: ✓ PASS — [run 25821363758](https://github.com/turkerurganci/Skinora/actions/runs/25821363758) 9/9 job success (1 skipped Guard, PR akışı için beklenen)
 
 ## Known Limitations / Follow-up
 
