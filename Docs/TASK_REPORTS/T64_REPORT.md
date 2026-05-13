@@ -1,6 +1,6 @@
 # T64 — Steam Sidecar Bot Session Yönetimi
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-12
+**Faz:** F4 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS 2026-05-12) | **Tarih:** 2026-05-12
 
 ---
 
@@ -67,11 +67,20 @@
 - [x] Bot health check periyodu ve logic doğru mu? — 60sn (05 §3.2), inFlight guard, recoverable vs terminal ayrımı, recovery sonrası havuzdan çıkarma + webhook alert.
 
 ## Doğrulama
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (bağımsız validator chat'i — INSTRUCTIONS.md §3.3 izolasyon) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız validator chat'i (2026-05-12) |
+| Validator | HARD STOP kapıları temiz: working tree boş, son 3 main CI run ✓ (25756831861, 25756831923, 25695200200), repo memory T64 satır mevcut. |
+| Kabul kriterleri | 5/5 ✓ — `BotSession.loginAttempt` (TOTP via sharedSecret), `community.sessionExpired` → `runReloginLoop` (5s/15s/45s backoff per 08 §2.7), `BotHealthCheck.DEFAULT_INTERVAL_MS=60_000` (05 §3.2), `BotManager.handleFatalFailure` → `bot.session_failed`+`bot.removed_from_pool` HMAC-signed webhook, `community.startConfirmationChecker(20_000, identitySecret)` `webSession` event'inde idempotent. |
+| Doğrulama checklist | 2/2 ✓ — 08 §2.7 retry zinciri (PERMANENT_LOGIN_ERESULTS {5,6,18,56} → FAILED; BANNED_ERESULTS {3,70} → BANNED; transient state'i etkilemez), 60sn periyot + inFlight guard + recoverable/terminal ayrımı. |
+| Testler | ✓ 42/42 vitest PASS (BotConfig 9 + BotSession 13 + BotManager 10 + BotHealthCheck 6 + WebhookPayloads contract 4); `npm run build` 0 hata; `npm run lint` 0 hata; backend .NET kodu hiç etkilenmedi (`git diff --stat -- '*.cs'` boş — regresyon riski yok). |
+| Format check | ~ T64 dosyaları (12) Prettier temiz; 10 dosya pre-existing T14 drift (K1, ayrı chore PR). |
+| Task branch CI | ✓ Son run [`25758893347`](https://github.com/turkerurganci/Skinora/actions/runs/25758893347) 9/9 job success (Detect+Lint+Build+Unit+Integration+Contract+Migration+Docker+CI Gate; Guard skipped — PR path). Önceki run [`25758469709`](https://github.com/turkerurganci/Skinora/actions/runs/25758469709) 9/9 success. |
+| Güvenlik | Secret leak: ✓ Logger redact `*.password`/`*.secret`; BotSession.log = `{bot: accountName}` only; BotConfig.loadBotCredentials sadece `{source, path, count}` log'lar; webhook payload'da sadece accountName+state+retryCount+lastError (eresult). Auth/authz: ✓ `/api/bots/status` `internalKeyAuth` altında, webhook HMAC-SHA256 (05 §3.4). Input validation: ✓ `BotConfig.validate` non-empty string + JSON parse try/catch. Yeni runtime dep: yok (4 yeni devDep: vitest, @types/steam-*). |
+| Advisory | Logger REDACT_PATHS, `sharedSecret`/`identitySecret` field adlarını eşleştirmiyor — bugün BotSession bu alanları log'lamadığı için sızıntı yok, ama defense-in-depth için `*.sharedSecret`/`*.identitySecret` eklenebilir. Blocker değil. |
+| Bulgu sayısı | 0 S1/S2/S3, 1 advisory (yukarıda) |
+| Yapım raporu uyumu | Tam uyumlu — 5/5 kabul, K1-K6 forward-devirler doğru sınıflandırılmış. Tek minör: rapor CI run referansını `25758469709` (commit `94abb1c`) gösteriyordu; rapor commit'i (`97849c6`) sonrası yeni run `25758893347` da PASS — bu Doğrulama bölümü güncel run'a referans veriyor. |
 
 ## Altyapı Değişiklikleri
 
