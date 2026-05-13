@@ -14,8 +14,10 @@ vi.mock('../logger.js', () => ({
 vi.mock('steam-totp', () => ({
   default: {
     generateAuthCode: vi.fn(() => 'TOTP123'),
+    getConfirmationKey: vi.fn(() => 'CONFIRM_KEY'),
   },
   generateAuthCode: vi.fn(() => 'TOTP123'),
+  getConfirmationKey: vi.fn(() => 'CONFIRM_KEY'),
 }));
 
 import {
@@ -35,6 +37,15 @@ class FakeSteamUser extends EventEmitter {
 class FakeSteamCommunity extends EventEmitter {
   setCookies = vi.fn();
   startConfirmationChecker = vi.fn();
+  acceptConfirmationForObject = vi.fn(
+    (_identity: string, _objectId: string, cb: (err: Error | null) => void) => cb(null),
+  );
+}
+
+class FakeTradeOfferManager extends EventEmitter {
+  setCookies = vi.fn((_cookies: string[], cb?: (err: Error | null) => void) => cb?.(null));
+  createOffer = vi.fn();
+  shutdown = vi.fn();
 }
 
 const fakeLogger = {
@@ -62,16 +73,22 @@ function newSession(
 ) {
   const client = new FakeSteamUser();
   const community = new FakeSteamCommunity();
+  const tradeManager = new FakeTradeOfferManager();
   // Cast to never to satisfy the strict steam-user / steamcommunity types
   // — the BotSession only uses event-emitter + a small set of methods that
-  // FakeSteamUser/FakeSteamCommunity implement faithfully.
+  // the fakes implement faithfully.
   const session = new BotSession(
     credentials,
     opts.events ?? {},
     { backoffMs: opts.backoffMs ?? [1, 1, 1] },
-    { client: client as never, community: community as never, logger: fakeLogger },
+    {
+      client: client as never,
+      community: community as never,
+      tradeManager: tradeManager as never,
+      logger: fakeLogger,
+    },
   );
-  return { session, client, community };
+  return { session, client, community, tradeManager };
 }
 
 beforeEach(() => {
@@ -241,5 +258,52 @@ describe('BotSession', () => {
     const status = session.getStatus();
     expect(status.retryCount).toBe(0);
     expect(status.lastError).toContain('boom');
+  });
+
+  describe('T65 — TradeOfferManager wiring', () => {
+    it('webSession event refreshes cookies on the trade manager', async () => {
+      const { session, client, tradeManager } = newSession();
+      await session.start();
+      client.emit('webSession', 'sid', ['c1=v1']);
+      expect(session.isReady()).toBe(true);
+      expect(tradeManager.setCookies).toHaveBeenCalledTimes(1);
+      expect(tradeManager.setCookies).toHaveBeenCalledWith(['c1=v1'], expect.any(Function));
+    });
+
+    it('getTradeManager returns null when not READY, manager when READY', async () => {
+      const { session, client, tradeManager } = newSession();
+      expect(session.getTradeManager()).toBeNull();
+      await session.start();
+      expect(session.getTradeManager()).toBeNull();
+      client.emit('webSession', 'sid', ['c1=v1']);
+      expect(session.getTradeManager()).toBe(tradeManager);
+    });
+
+    it('acceptTradeConfirmation calls community.acceptConfirmationForObject with identity_secret', async () => {
+      const { session, client, community } = newSession();
+      await session.start();
+      client.emit('webSession', 'sid', ['c1=v1']);
+
+      await session.acceptTradeConfirmation('OFFER_99');
+
+      expect(community.acceptConfirmationForObject).toHaveBeenCalledTimes(1);
+      const [identity, objectId] = community.acceptConfirmationForObject.mock.calls[0];
+      expect(identity).toBe('identity');
+      expect(objectId).toBe('OFFER_99');
+    });
+
+    it('acceptTradeConfirmation rejects when community returns an error', async () => {
+      const { session, client, community } = newSession();
+      await session.start();
+      client.emit('webSession', 'sid', ['c1=v1']);
+      community.acceptConfirmationForObject.mockImplementationOnce(
+        (_id: string, _obj: string, cb: (err: Error | null) => void) =>
+          cb(new Error('confirmation rejected')),
+      );
+
+      await expect(session.acceptTradeConfirmation('OFFER_BAD')).rejects.toThrow(
+        /confirmation rejected/,
+      );
+    });
   });
 });
