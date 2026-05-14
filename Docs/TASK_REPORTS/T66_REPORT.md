@@ -1,6 +1,6 @@
 # T66 — Steam Sidecar Trade Offer Durum İzleme
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-14
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-14
 
 ---
 
@@ -66,9 +66,15 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validate chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-14) |
+| Bulgu sayısı | 0 S-bulgu (S1/S2/S3 yok); 1 AK ~ Kısmi (AK3 InvalidItems kullanıcı bildirimi T68 devir, sidecar wire ✓) |
+| Düzeltme gerekli mi | Hayır |
+
+**Adım -1 working tree:** temiz (commit `15ac139` sonrası clean).
+**Adım 0 main CI startup:** son 3 run `success` — `25824801565` + `25824801517` (T65 #105 squash), `25780470892` (T64 #104). HARD STOP yok.
+**Adım 0b repo memory:** `.claude/memory/MEMORY.md` T66 satırı mevcut (T64 sonrası "Next: T66 doğrulama" satırı + T66 detay satırları).
+**Adım 7a task branch CI:** `25845938819` 10/10 job `success` (Lint + Build + Unit + Integration + Contract + Migration dry-run + Docker sidecar-steam + CI Gate).
+**Verdict gerekçesi:** AK1/AK2/AK4 ✓ (pollInterval 10_000, 5 state mapping → 7 webhook event, pollFailure log+swallow built-in retry); AK3 ~ Kısmi (sidecar wire ✓, kullanıcı bildirimi backend T68 devir K2); doğrulama kontrol listesi 2/2 ✓ (08 §2.4 5 task-listed state + 6 kasıtlı unmapped gerekçeli, 08 §2.7 InvalidItems Hayır-retry + session expire auto re-login + pollFailure built-in retry). Mini güvenlik: 4/4 temiz (yeni secret yok, yeni endpoint yok, payload trusted-source Steam, yeni dep yok).
 
 ## Altyapı Değişiklikleri
 
@@ -80,9 +86,9 @@
 ## Commit & PR
 
 - Branch: `task/T66-steam-trade-offer-monitor`
-- Commit: (push aşamasında)
-- PR: (push sonrası açılacak)
-- CI: (PR açılınca izlenecek)
+- Commit: `15ac139` — T66: Steam Sidecar — trade offer durum izleme
+- PR: [#106](https://github.com/turkerurganci/Skinora/pull/106)
+- CI: ✓ PASS (run [25845938819](https://github.com/turkerurganci/Skinora/actions/runs/25845938819) 10/10 job)
 
 ## Known Limitations / Follow-up
 
