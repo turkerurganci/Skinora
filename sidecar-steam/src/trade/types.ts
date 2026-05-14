@@ -1,4 +1,4 @@
-import type { ItemDescriptor } from 'steam-tradeoffer-manager';
+import type { ItemDescriptor, TradeOffer } from 'steam-tradeoffer-manager';
 
 /**
  * Trade direction — drives which side of the offer items are added to and
@@ -69,4 +69,17 @@ export const TRANSIENT_NETWORK_CODES: ReadonlySet<string> = new Set([
 /** Direction → does this side need a mobile confirmation after send? */
 export function requiresMobileConfirmation(direction: TradeDirection): boolean {
   return direction === 'BOT_TO_BUYER' || direction === 'BOT_TO_SELLER_REFUND';
+}
+
+/**
+ * T66 — Handler bridge between BotSession's TradeOfferManager and
+ * TradeOfferMonitor. The monitor binds these on every session so it does not
+ * need access to the private tradeManager instance.
+ *
+ *   onSentOfferChanged : forwarded `sentOfferChanged` (offer, oldState)
+ *   onPollFailure      : forwarded `pollFailure` (err)
+ */
+export interface TradeOfferEventHandler {
+  onSentOfferChanged: (offer: TradeOffer, oldState: number) => void;
+  onPollFailure: (err: Error) => void;
 }

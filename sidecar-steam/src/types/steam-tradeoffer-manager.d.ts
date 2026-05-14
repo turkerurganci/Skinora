@@ -69,5 +69,18 @@ declare module 'steam-tradeoffer-manager' {
     setCookies(cookies: string[], callback?: (err: Error | null) => void): void;
     createOffer(partner: string): TradeOffer;
     shutdown(): void;
+
+    /** T66: emitted by built-in polling when a tracked sent offer changes state. */
+    on(
+      event: 'sentOfferChanged',
+      listener: (offer: TradeOffer, oldState: number) => void,
+    ): this;
+    /** T66: emitted when the polling cycle itself fails (network/HTTP/auth). */
+    on(event: 'pollFailure', listener: (err: Error) => void): this;
+    /** T66: emitted after a successful polling cycle (mostly for diagnostics). */
+    on(event: 'pollSuccess', listener: () => void): this;
+    // Fallback overload — keep the EventEmitter contract for events we do not
+    // explicitly model (newOffer, receivedOfferChanged, debug, etc.).
+    on(event: string | symbol, listener: (...args: unknown[]) => void): this;
   }
 }

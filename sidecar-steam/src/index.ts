@@ -6,11 +6,13 @@ import { buildRouter } from './api/routes.js';
 import { BotManager } from './bot/BotManager.js';
 import { BotHealthCheck } from './bot/BotHealthCheck.js';
 import { TradeOfferService } from './trade/TradeOfferService.js';
+import { TradeOfferMonitor } from './trade/TradeOfferMonitor.js';
 
 const app = express();
 const botManager = new BotManager();
 const botHealthCheck = new BotHealthCheck(botManager);
 const tradeOfferService = new TradeOfferService(botManager);
+const tradeOfferMonitor = new TradeOfferMonitor(botManager);
 
 // Middleware
 app.use(express.json());
@@ -23,6 +25,10 @@ app.use(buildRouter({ botManager, tradeOfferService }));
 const server = app.listen(config.port, '0.0.0.0', async () => {
   logger.info({ port: config.port }, 'Steam sidecar listening');
   await botManager.initialize();
+  // Attach AFTER initialize so the bot pool is populated; the underlying
+  // TradeOfferManager instances exist from BotSession construction and queue
+  // events until the polling cycle kicks in post-webSession.
+  tradeOfferMonitor.start();
   botHealthCheck.start();
 });
 
