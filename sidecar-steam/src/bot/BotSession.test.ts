@@ -306,4 +306,45 @@ describe('BotSession', () => {
       );
     });
   });
+
+  describe('T66 — bindTradeOfferEvents bridge', () => {
+    it('forwards sentOfferChanged to the registered handler', () => {
+      const { session, tradeManager } = newSession();
+      const onSentOfferChanged = vi.fn();
+      const onPollFailure = vi.fn();
+      session.bindTradeOfferEvents({ onSentOfferChanged, onPollFailure });
+
+      const fakeOffer = { id: 'OFFER_1', state: 3 };
+      tradeManager.emit('sentOfferChanged', fakeOffer, 2);
+
+      expect(onSentOfferChanged).toHaveBeenCalledTimes(1);
+      expect(onSentOfferChanged).toHaveBeenCalledWith(fakeOffer, 2);
+      expect(onPollFailure).not.toHaveBeenCalled();
+    });
+
+    it('forwards pollFailure to the registered handler', () => {
+      const { session, tradeManager } = newSession();
+      const onSentOfferChanged = vi.fn();
+      const onPollFailure = vi.fn();
+      session.bindTradeOfferEvents({ onSentOfferChanged, onPollFailure });
+
+      const err = new Error('econn reset');
+      tradeManager.emit('pollFailure', err);
+
+      expect(onPollFailure).toHaveBeenCalledWith(err);
+      expect(onSentOfferChanged).not.toHaveBeenCalled();
+    });
+
+    it('swallows handler exceptions so the EventEmitter loop keeps running', () => {
+      const { session, tradeManager } = newSession();
+      const onSentOfferChanged = vi.fn(() => {
+        throw new Error('handler boom');
+      });
+      const onPollFailure = vi.fn();
+      session.bindTradeOfferEvents({ onSentOfferChanged, onPollFailure });
+
+      expect(() => tradeManager.emit('sentOfferChanged', { id: 'X', state: 3 }, 2)).not.toThrow();
+      expect(onSentOfferChanged).toHaveBeenCalledTimes(1);
+    });
+  });
 });

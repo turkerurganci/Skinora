@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type {
-  WebhookPayload,
-  BotEventName,
-  BotEventPayload,
-  BotSessionFailedData,
-  BotRemovedFromPoolData,
+import {
+  TRADE_OFFER_STATE_EVENT_MAP,
+  type WebhookPayload,
+  type BotEventName,
+  type BotEventPayload,
+  type BotSessionFailedData,
+  type BotRemovedFromPoolData,
+  type TradeOfferEventName,
+  type TradeOfferStatusChangedData,
 } from './WebhookPayloads.js';
 import type { BotSessionStatus } from '../bot/BotSession.js';
 
@@ -63,5 +66,86 @@ describe('Webhook payload contract', () => {
       data: { foo: 'bar' },
     };
     expect(Object.keys(generic).sort()).toEqual(['data', 'event', 'timestamp']);
+  });
+});
+
+/**
+ * T66 — pin the contract for the 5 trade offer status events (08 §2.4) and
+ * the ETradeOfferState → event-name mapping. Backend (T68) deserializes by
+ * event name, so a rename here without a backend update breaks the handshake.
+ */
+describe('T66 trade offer status webhook contract', () => {
+  it('pins the full TradeOfferEventName union', () => {
+    const names: TradeOfferEventName[] = [
+      'trade_offer.sent',
+      'trade_offer.failed',
+      'trade_offer.accepted',
+      'trade_offer.declined',
+      'trade_offer.expired',
+      'trade_offer.countered',
+      'trade_offer.invalid_items',
+    ];
+    expect(names).toHaveLength(7);
+  });
+
+  it('TRADE_OFFER_STATE_EVENT_MAP maps the 08 §2.4 status codes', () => {
+    expect(TRADE_OFFER_STATE_EVENT_MAP.get(3)).toBe('trade_offer.accepted');
+    expect(TRADE_OFFER_STATE_EVENT_MAP.get(4)).toBe('trade_offer.countered');
+    expect(TRADE_OFFER_STATE_EVENT_MAP.get(5)).toBe('trade_offer.expired');
+    expect(TRADE_OFFER_STATE_EVENT_MAP.get(7)).toBe('trade_offer.declined');
+    expect(TRADE_OFFER_STATE_EVENT_MAP.get(8)).toBe('trade_offer.invalid_items');
+    expect(TRADE_OFFER_STATE_EVENT_MAP.size).toBe(5);
+  });
+
+  it.each([1, 2, 6, 9, 10, 11])('state %i is intentionally not mapped', (state) => {
+    expect(TRADE_OFFER_STATE_EVENT_MAP.has(state)).toBe(false);
+  });
+
+  it('TradeOfferStatusChangedData has the wire fields backend expects', () => {
+    const data: TradeOfferStatusChangedData = {
+      offerId: 'offer-123',
+      partnerSteamId: '76561198000000999',
+      botSteamId: '76561198000000001',
+      botAccountName: 'bot1',
+      newState: 3,
+      oldState: 2,
+    };
+    expect(data.offerId).toBe('offer-123');
+    expect(data.newState).toBe(3);
+    expect(data.oldState).toBe(2);
+  });
+
+  it('botSteamId is optional (set only once steam-user emits accountInfo)', () => {
+    const data: TradeOfferStatusChangedData = {
+      offerId: 'offer-123',
+      partnerSteamId: '76561198000000999',
+      botAccountName: 'bot1',
+      newState: 7,
+      oldState: 2,
+    };
+    expect(data.botSteamId).toBeUndefined();
+  });
+
+  it.each([
+    ['trade_offer.accepted', 3],
+    ['trade_offer.declined', 7],
+    ['trade_offer.expired', 5],
+    ['trade_offer.countered', 4],
+    ['trade_offer.invalid_items', 8],
+  ] as const)('%s envelope round-trips a status payload', (event, newState) => {
+    const data: TradeOfferStatusChangedData = {
+      offerId: 'offer-N',
+      partnerSteamId: '76561198000000999',
+      botAccountName: 'bot1',
+      newState,
+      oldState: 2,
+    };
+    const payload: WebhookPayload = {
+      event,
+      timestamp: '2026-05-13T00:00:00Z',
+      data: data as unknown as Record<string, unknown>,
+    };
+    expect(payload.event).toBe(event);
+    expect((payload.data as unknown as TradeOfferStatusChangedData).newState).toBe(newState);
   });
 });

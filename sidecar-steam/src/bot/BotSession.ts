@@ -1,9 +1,10 @@
 import SteamUser from 'steam-user';
 import SteamCommunity from 'steamcommunity';
 import SteamTotp from 'steam-totp';
-import TradeOfferManager from 'steam-tradeoffer-manager';
+import TradeOfferManager, { type TradeOffer } from 'steam-tradeoffer-manager';
 import type { Logger } from 'pino';
 import { logger as rootLogger } from '../logger.js';
+import type { TradeOfferEventHandler } from '../trade/types.js';
 import type { BotCredentials } from './BotConfig.js';
 
 /**
@@ -111,15 +112,15 @@ export class BotSession {
   ) {
     this.client = deps?.client ?? new SteamUser();
     this.community = deps?.community ?? new SteamCommunity();
-    // pollInterval: -1 disables T66's job until that task wires it up; cancelTime keeps
-    // unconfirmed offers from lingering forever (Steam default is "never" → unsafe).
+    // 08 §2.4: built-in polling at 10s drives sentOfferChanged events for T66.
+    // cancelTime keeps unconfirmed offers from lingering forever (Steam default is "never" → unsafe).
     this.tradeManager =
       deps?.tradeManager ??
       new TradeOfferManager({
         steam: this.client,
         community: this.community,
         language: 'en',
-        pollInterval: -1,
+        pollInterval: 10_000,
         cancelTime: 15 * 60 * 1_000,
       });
     this.log = (deps?.logger ?? rootLogger).child({ bot: config.accountName });
@@ -202,6 +203,35 @@ export class BotSession {
    */
   getTradeManager(): TradeOfferManager | null {
     return this.isReady() ? this.tradeManager : null;
+  }
+
+  /**
+   * T66 — Bridge `sentOfferChanged` and `pollFailure` events to a monitor.
+   *
+   * Events bind to the underlying TradeOfferManager instance (created in the
+   * constructor) so they survive SESSION_EXPIRED → RECONNECTING → READY
+   * transitions: the same manager keeps polling once setCookies refreshes the
+   * session. Listener attachment is therefore safe even before the bot reaches
+   * READY — steam-tradeoffer-manager will only emit once cookies are present.
+   *
+   * Idempotent: calling twice rebinds and would double-emit; callers (today
+   * only TradeOfferMonitor) MUST invoke once per session.
+   */
+  bindTradeOfferEvents(handler: TradeOfferEventHandler): void {
+    this.tradeManager.on('sentOfferChanged', (offer: TradeOffer, oldState: number) => {
+      try {
+        handler.onSentOfferChanged(offer, oldState);
+      } catch (err) {
+        this.log.error({ err, offerId: offer.id }, 'sentOfferChanged handler threw');
+      }
+    });
+    this.tradeManager.on('pollFailure', (err: Error) => {
+      try {
+        handler.onPollFailure(err);
+      } catch (handlerErr) {
+        this.log.error({ err: handlerErr }, 'pollFailure handler threw');
+      }
+    });
   }
 
   /**

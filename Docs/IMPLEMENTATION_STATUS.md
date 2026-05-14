@@ -149,7 +149,7 @@
 |---|---|---|---|---|
 | T64 | Steam Sidecar — bot session yönetimi | ✓ Tamamlandı | ✓ PASS (bağımsız validator 2026-05-12) | [PR #104](https://github.com/turkerurganci/Skinora/pull/104) (CI ✓ run 25758893347 9/9) |
 | T65 | Steam Sidecar — trade offer gönderme | ✓ Tamamlandı | ✓ PASS bağımsız validator (2026-05-13) — 6/6 kabul ✓ (AC5 ~ Kısmi → T66 polling devir K1 onaylı 2026-05-13); 1/1 doğrulama listesi ~ kısmi (08 §2.4 send-side eksiksiz, monitör T66); 0 S-bulgu; 65/65 sidecar Vitest + 780/780 backend unit + Release 0W/0E; main CI startup 3/3 success; task branch CI 25822603610/25821363758 10/10 ✓; rapor uyumu tam | [PR #105](https://github.com/turkerurganci/Skinora/pull/105) (CI ✓ run 25821363758 9/9) |
-| T66 | Steam Sidecar — trade offer durum izleme | ⬚ Bekliyor | — | — |
+| T66 | Steam Sidecar — trade offer durum izleme | ✓ Tamamlandı | ✓ PASS bağımsız validator (2026-05-14) — 4/4 kabul (AK1/AK2/AK4 ✓ + AK3 ~ Kısmi sidecar wire ✓/kullanıcı bildirimi T68 devir K2); 2/2 doğrulama listesi ✓ (08 §2.4 + §2.7); 0 S-bulgu; 103/103 sidecar Vitest + Release 0W/0E (sidecar-only); main CI startup 3/3 success; task branch CI 25845938819 10/10 ✓; rapor uyumu tam | [PR #106](https://github.com/turkerurganci/Skinora/pull/106) (CI ✓ run 25845938819 10/10) |
 | T67 | Steam Sidecar — envanter okuma | ⬚ Bekliyor | — | — |
 | T68 | Steam Sidecar — webhook callback ve backend entegrasyonu | ⬚ Bekliyor | — | — |
 | T69 | Steam Sidecar — bot failover ve capacity-based seçim | ⬚ Bekliyor | — | — |
