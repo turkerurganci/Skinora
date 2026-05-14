@@ -10,6 +10,10 @@ export const config = {
   // Steam API
   steamApiKey: process.env.STEAM_API_KEY || '',
 
+  // Inventory cache — 08 §2.3 (Redis-backed, 2 minute TTL). Empty URL falls back
+  // to in-memory cache (suitable for tests and single-process dev runs).
+  redisUrl: process.env.REDIS_URL || '',
+
   // Logging
   lokiUrl: process.env.LOKI_URL || 'http://skinora-loki:3100',
   logLevel: process.env.LOG_LEVEL || 'info',

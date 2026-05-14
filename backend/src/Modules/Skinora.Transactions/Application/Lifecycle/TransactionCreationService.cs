@@ -42,6 +42,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
     private readonly IWalletSanctionsCheck _sanctions;
     private readonly IInvitationCodeGenerator _inviteCodes;
     private readonly IOutboxService _outbox;
+    private readonly ISteamInventoryCacheInvalidator _inventoryCacheInvalidator;
     private readonly TimeProvider _clock;
 
     public TransactionCreationService(
@@ -55,6 +56,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         IWalletSanctionsCheck sanctions,
         IInvitationCodeGenerator inviteCodes,
         IOutboxService outbox,
+        ISteamInventoryCacheInvalidator inventoryCacheInvalidator,
         TimeProvider clock)
     {
         _db = db;
@@ -67,6 +69,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         _sanctions = sanctions;
         _inviteCodes = inviteCodes;
         _outbox = outbox;
+        _inventoryCacheInvalidator = inventoryCacheInvalidator;
         _clock = clock;
     }
 
@@ -266,6 +269,15 @@ public sealed class TransactionCreationService : ITransactionCreationService
             cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // ---------- Stage 10b: best-effort inventory cache invalidation ----------
+        // 08 §2.3 — the seller's inventory snapshot is now stale (the listed
+        // item is about to leave their pool via the SELLER_TO_BOT trade offer
+        // T65 dispatches). The invalidator port is a no-op in tests and HTTP
+        // in production; failures are swallowed inside the implementation
+        // (cache miss costs at most the next 2-minute TTL window — never a
+        // hard failure).
+        await _inventoryCacheInvalidator.InvalidateAsync(seller.SteamId, cancellationToken);
 
         // ---------- Stage 11: response ----------
         var response = new CreateTransactionResponse(

@@ -26,6 +26,11 @@ import { buildRouter } from './routes.js';
 import { correlationMiddleware } from './middleware.js';
 import type { TradeOfferService } from '../trade/TradeOfferService.js';
 import type { SendTradeOfferResponse } from '../trade/types.js';
+import {
+  InventoryPrivateError,
+  SteamUnavailableError,
+  type InventoryService,
+} from '../trade/InventoryService.js';
 
 function buildApp(service: TradeOfferService) {
   const app = express();
@@ -185,6 +190,157 @@ describe('POST /api/trade-offers/send', () => {
       expect(res.status).toBe(503);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T67 — GET /api/inventory/:steamId + DELETE /api/inventory/:steamId/cache
+// ---------------------------------------------------------------------------
+
+const VALID_STEAM_ID = '76561198000000123';
+
+async function startInventoryApp(
+  service: InventoryService,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const app = express();
+  app.use(express.json());
+  app.use(correlationMiddleware);
+  app.use(buildRouter({ inventoryService: service }));
+  const server = await new Promise<import('http').Server>((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  const port = (server.address() as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+describe('GET /api/inventory/:steamId (T67)', () => {
+  it('returns the inventory envelope on success', async () => {
+    const inventory = {
+      items: [
+        {
+          assetId: '27348562891',
+          classId: '310776959',
+          instanceId: '188530139',
+          name: 'AK-47 | Redline',
+          marketHashName: 'AK-47 | Redline (Field-Tested)',
+          type: 'Rifle',
+          exterior: 'Field-Tested',
+          iconUrl: 'https://cdn.test/ak.png',
+          tradable: true,
+          marketable: true,
+        },
+      ],
+      totalCount: 1,
+      tradeableCount: 1,
+    };
+    const getInventory = vi.fn().mockResolvedValue(inventory);
+    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual(inventory);
+      expect(getInventory).toHaveBeenCalledWith(VALID_STEAM_ID);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 422 INVENTORY_PRIVATE when the profile is private', async () => {
+    const getInventory = vi.fn().mockRejectedValue(new InventoryPrivateError(VALID_STEAM_ID));
+    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('INVENTORY_PRIVATE');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 STEAM_UNAVAILABLE on upstream failure', async () => {
+    const getInventory = vi.fn().mockRejectedValue(new SteamUnavailableError('HTTP 503'));
+    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('STEAM_UNAVAILABLE');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('rejects an invalid SteamID64 with 400 without calling the service', async () => {
+    const getInventory = vi.fn();
+    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/not-a-steam-id`);
+      expect(res.status).toBe(400);
+      expect(getInventory).not.toHaveBeenCalled();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 when InventoryService is not initialized', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    app.use(buildRouter({}));
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await fetch(`http://127.0.0.1:${port}/api/inventory/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(503);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('DELETE /api/inventory/:steamId/cache (T67)', () => {
+  it('invokes the service and returns 204', async () => {
+    const invalidate = vi.fn().mockResolvedValue(undefined);
+    const service = { invalidate, getInventory: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}/cache`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(204);
+      expect(invalidate).toHaveBeenCalledWith(VALID_STEAM_ID);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('rejects an invalid SteamID64 with 400', async () => {
+    const invalidate = vi.fn();
+    const service = { invalidate, getInventory: vi.fn() } as unknown as InventoryService;
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/abc/cache`, { method: 'DELETE' });
+      expect(res.status).toBe(400);
+      expect(invalidate).not.toHaveBeenCalled();
+    } finally {
+      await ctx.close();
     }
   });
 });

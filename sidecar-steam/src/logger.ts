@@ -44,7 +44,9 @@ const lokiTransport = pino.transport({
   },
 });
 
-export const logger = pino(
+export type Logger = pino.Logger;
+
+export const logger: Logger = pino(
   {
     level: config.logLevel,
     base: { service: SERVICE_NAME, environment: config.nodeEnv },

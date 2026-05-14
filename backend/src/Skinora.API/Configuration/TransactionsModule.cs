@@ -48,10 +48,13 @@ public static class TransactionsModule
         // T51 — user-initiated cancel (07 §7.7, 02 §7).
         services.AddScoped<ITransactionCancellationService, TransactionCancellationService>();
 
-        // T67 forward-deferred — Steam inventory stub. Tests inject their own
-        // ISteamInventoryReader; production fails closed
-        // (STEAM_INVENTORY_UNAVAILABLE) until T67 wires the real sidecar.
+        // T67 — Steam inventory reader + cache invalidator ports. Stubs are
+        // registered with TryAddScoped so SteamModule.AddSteamModule can
+        // swap them for the sidecar-backed implementations via Replace().
+        // Tests that build TransactionCreationService directly (without DI)
+        // pass a NullSteamInventoryCacheInvalidator to keep the flow closed.
         services.TryAddScoped<ISteamInventoryReader, StubSteamInventoryReader>();
+        services.TryAddScoped<ISteamInventoryCacheInvalidator, NullSteamInventoryCacheInvalidator>();
 
         // T81 forward-deferred — market price stub. Defaults to "no market
         // signal" so the fraud pre-check never fires until T81 ships.
