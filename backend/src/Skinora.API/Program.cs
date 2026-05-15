@@ -158,6 +158,12 @@ builder.Services.AddScoped<IRestartRecoveryService, RestartRecoveryService>();
 // Rate limiting (T07) — Redis-backed fixed window, opt-in via [RateLimit] attribute
 builder.Services.AddRateLimiting(builder.Configuration);
 
+// T68 — webhook signature parameters (HMAC-SHA256 shared secret + replay
+// window). The Steam sidecar reads the same secret from its WEBHOOK_SECRET
+// env var (sidecar-steam/src/config/index.ts).
+builder.Services.Configure<WebhookSettings>(
+    builder.Configuration.GetSection(WebhookSettings.SectionName));
+
 // Hangfire (T09) — SQL Server storage, UTC, AutomaticRetry(3) global filter,
 // IBackgroundJobScheduler abstraction. Dashboard mount happens later in the
 // pipeline (after authentication) via app.UseHangfireModule().
@@ -189,6 +195,7 @@ builder.Services.AddHostedService<TimeoutSchedulerStartupHook>();
 builder.Services.AddScoped<OutboxRetentionCleanupJob>();
 builder.Services.AddScoped<OrphanNotificationRetentionCleanupJob>();
 builder.Services.AddScoped<UserLoginLogRetentionCleanupJob>();
+builder.Services.AddScoped<ProcessedNonceCleanupJob>();
 builder.Services.AddHostedService<RetentionJobsRegistrar>();
 
 // Health checks (T16) — DB + Redis dependency checks
@@ -246,6 +253,12 @@ app.UseSerilogRequestLogging();
 
 // 5. Global exception handler (wraps everything downstream)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+// 5a. Webhook signature verification (T68 — 05 §3.4, 09 §11.3). Path-scoped
+// to /api/v1/webhooks/steam so the legacy Telegram webhook keeps its own
+// secret-header check. Runs after CorrelationId/Logging/Exception so a 401
+// here is still correlated and gracefully reported.
+app.UseMiddleware<WebhookSignatureMiddleware>();
 
 // 6. CORS
 app.UseCors();

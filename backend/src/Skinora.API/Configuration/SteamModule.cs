@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Steam.Application.Admin;
 using Skinora.Steam.Application.Inventory;
+using Skinora.Steam.Application.Webhooks;
 using Skinora.Transactions.Application.Steam;
 
 namespace Skinora.API.Configuration;
@@ -48,6 +49,9 @@ public static class SteamModule
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryReader, SidecarSteamInventoryReader>());
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryCacheInvalidator>(sp =>
             sp.GetRequiredService<HttpSteamSidecarInventoryClient>()));
+
+        // T68 — inbound webhook handler.
+        services.AddScoped<ISteamWebhookHandler, SteamWebhookHandler>();
 
         return services;
     }

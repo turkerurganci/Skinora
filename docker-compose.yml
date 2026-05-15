@@ -17,6 +17,7 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE:-skinora-client}
       - Jwt__AccessTokenExpiryMinutes=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - Jwt__RefreshTokenExpiryDays=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
+      - Webhook__SteamSharedSecret=${WEBHOOK_SECRET}
       - Serilog__WriteTo__1__Args__uri=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-db:
@@ -69,6 +70,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - BACKEND_URL=${STEAM_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
       - STEAM_API_KEY=${STEAM_API_KEY}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-backend:
