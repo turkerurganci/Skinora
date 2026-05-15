@@ -162,9 +162,9 @@
 ## Commit & PR
 
 - Branch: `task/T68-steam-webhook`
-- Commit: TBA (commit sonrası güncellenecek)
-- PR: TBA (PR sonrası güncellenecek)
-- CI: TBA (run sonrası güncellenecek)
+- Commit: `5a34de0`
+- PR: [#109](https://github.com/turkerurganci/Skinora/pull/109)
+- CI: run [`25942543043`](https://github.com/turkerurganci/Skinora/actions/runs/25942543043) — beklemede (watch arka planda)
 
 ## Known Limitations / Follow-up
 
