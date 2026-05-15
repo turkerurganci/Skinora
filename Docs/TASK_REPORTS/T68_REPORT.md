@@ -162,9 +162,9 @@
 ## Commit & PR
 
 - Branch: `task/T68-steam-webhook`
-- Commit: `5a34de0`
+- Commit: `5a34de0` (kod) + `f67e435` (rapor/status metadata)
 - PR: [#109](https://github.com/turkerurganci/Skinora/pull/109)
-- CI: run [`25942543043`](https://github.com/turkerurganci/Skinora/actions/runs/25942543043) — beklemede (watch arka planda)
+- CI: run [`25942576204`](https://github.com/turkerurganci/Skinora/actions/runs/25942576204) ✓ 10/10 job success (Lint + Detect + Guard skipped direct push olmadığı için + Build + Unit + Integration + Migration dry-run + Contract + Docker backend + CI Gate). Önceki run `25942543043` ikinci push ile concurrency policy gereği cancel oldu — son tamamlanmış run otoritedir (T11.2 concurrency notu).
 
 ## Known Limitations / Follow-up
 
