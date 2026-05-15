@@ -124,7 +124,7 @@ builder.Services.AddDisputesModule();
 
 // Steam bot read service (T63 — 07 §9.10 AD10). Sidecar wiring + bot
 // failover land with T64–T69 and will register here too.
-builder.Services.AddSteamModule();
+builder.Services.AddSteamModule(builder.Configuration);
 
 // T63 — admin dashboard composer (07 §9.1 AD1). Composes summary counters,
 // the AD10 Steam-bot snapshot and the latest fraud flags in one round-trip.

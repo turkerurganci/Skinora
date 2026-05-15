@@ -383,6 +383,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             new NoMatchWalletSanctionsCheck(),
             new InvitationCodeGenerator(),
             _outbox,
+            new NullSteamInventoryCacheInvalidator(),
             _clock);
     }
 

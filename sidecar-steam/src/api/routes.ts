@@ -4,6 +4,11 @@ import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import type { BotManager } from '../bot/BotManager.js';
 import type { TradeOfferService } from '../trade/TradeOfferService.js';
+import {
+  InventoryPrivateError,
+  SteamUnavailableError,
+  type InventoryService,
+} from '../trade/InventoryService.js';
 import type { SendTradeOfferRequest, TradeDirection } from '../trade/types.js';
 
 const TRADE_DIRECTIONS: ReadonlySet<TradeDirection> = new Set([
@@ -12,13 +17,17 @@ const TRADE_DIRECTIONS: ReadonlySet<TradeDirection> = new Set([
   'BOT_TO_SELLER_REFUND',
 ]);
 
+/** SteamID64 is a 17-digit decimal — looser regex catches obvious garbage early. */
+const STEAM_ID64_REGEX = /^7656119[0-9]{10}$/;
+
 export interface RouterDeps {
   botManager?: BotManager;
   tradeOfferService?: TradeOfferService;
+  inventoryService?: InventoryService;
 }
 
 export function buildRouter(deps: BotManager | RouterDeps = {}): Router {
-  const { botManager, tradeOfferService } = normalizeDeps(deps);
+  const { botManager, tradeOfferService, inventoryService } = normalizeDeps(deps);
   const router = Router();
 
   // Health check — no auth required
@@ -40,9 +49,8 @@ export function buildRouter(deps: BotManager | RouterDeps = {}): Router {
     res.status(501).json({ error: 'Pull status not implemented — status changes are pushed via webhook (08 §2.4)' });
   });
 
-  apiRouter.get('/inventory/:steamId', (_req, res) => {
-    res.status(501).json({ error: 'Not implemented — see T67' });
-  });
+  apiRouter.get('/inventory/:steamId', inventoryGetHandler(inventoryService));
+  apiRouter.delete('/inventory/:steamId/cache', inventoryInvalidateHandler(inventoryService));
 
   // Bot pool status (T64)
   apiRouter.get('/bots/status', botStatusFactory(botManager));
@@ -79,6 +87,62 @@ function tradeOfferSendHandler(service?: TradeOfferService) {
       res.status(500).json({ error: (err as Error).message });
     }
   };
+}
+
+function inventoryGetHandler(service?: InventoryService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    if (!service) {
+      res.status(503).json({ error: 'InventoryService not initialized' });
+      return;
+    }
+    const steamId = resolveSteamIdParam(req.params.steamId);
+    if (!steamId) {
+      res.status(400).json({ error: 'steamId must be a valid SteamID64' });
+      return;
+    }
+    try {
+      const inventory = await service.getInventory(steamId);
+      res.status(200).json(inventory);
+    } catch (err) {
+      if (err instanceof InventoryPrivateError) {
+        res.status(422).json({ code: err.code, error: err.message });
+        return;
+      }
+      if (err instanceof SteamUnavailableError) {
+        req.log.warn({ steamId, err: err.message }, 'Steam inventory upstream failure');
+        res.status(503).json({ code: err.code, error: err.message });
+        return;
+      }
+      req.log.error({ err, steamId }, 'InventoryService.getInventory threw');
+      res.status(500).json({ error: (err as Error).message });
+    }
+  };
+}
+
+function inventoryInvalidateHandler(service?: InventoryService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    if (!service) {
+      res.status(503).json({ error: 'InventoryService not initialized' });
+      return;
+    }
+    const steamId = resolveSteamIdParam(req.params.steamId);
+    if (!steamId) {
+      res.status(400).json({ error: 'steamId must be a valid SteamID64' });
+      return;
+    }
+    await service.invalidate(steamId);
+    res.status(204).send();
+  };
+}
+
+/**
+ * Express `req.params` values are typed as `string | string[]` to allow array
+ * notation (`?a[]=1&a[]=2`); for a path segment Express always emits a string.
+ * Narrow here so the regex/test sites stay readable.
+ */
+function resolveSteamIdParam(raw: string | string[] | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  return STEAM_ID64_REGEX.test(raw) ? raw : null;
 }
 
 function parseSendRequest(

@@ -1,4 +1,5 @@
 import express from 'express';
+import Redis from 'ioredis';
 import { config } from './config/index.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
@@ -7,6 +8,15 @@ import { BotManager } from './bot/BotManager.js';
 import { BotHealthCheck } from './bot/BotHealthCheck.js';
 import { TradeOfferService } from './trade/TradeOfferService.js';
 import { TradeOfferMonitor } from './trade/TradeOfferMonitor.js';
+import {
+  InventoryService,
+  SteamCommunityInventoryFetcher,
+} from './trade/InventoryService.js';
+import {
+  InMemoryInventoryCache,
+  RedisInventoryCache,
+  type InventoryCache,
+} from './cache/InventoryCache.js';
 
 const app = express();
 const botManager = new BotManager();
@@ -14,12 +24,23 @@ const botHealthCheck = new BotHealthCheck(botManager);
 const tradeOfferService = new TradeOfferService(botManager);
 const tradeOfferMonitor = new TradeOfferMonitor(botManager);
 
+// T67 — inventory service wires:
+//   * Anonymous SteamCommunity instance (read-only; profile auth not required)
+//   * Redis when REDIS_URL is set, else in-memory fallback (dev/test friendly).
+const inventoryCache: InventoryCache = config.redisUrl
+  ? new RedisInventoryCache(new Redis(config.redisUrl))
+  : new InMemoryInventoryCache();
+const inventoryService = new InventoryService(
+  new SteamCommunityInventoryFetcher(),
+  inventoryCache,
+);
+
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(buildRouter({ botManager, tradeOfferService }));
+app.use(buildRouter({ botManager, tradeOfferService, inventoryService }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {
