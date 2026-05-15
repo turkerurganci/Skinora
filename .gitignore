@@ -11,6 +11,7 @@ obj/
 *.sln.docstates
 .vs/
 *.csproj.user
+*.csproj.lscache
 
 # Build
 [Dd]ebug/
