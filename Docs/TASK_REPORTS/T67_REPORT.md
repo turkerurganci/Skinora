@@ -1,6 +1,6 @@
 # T67 — Steam Sidecar Envanter Okuma
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama beklemede) | **Tarih:** 2026-05-14
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-14
 
 ---
 
@@ -115,14 +115,27 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (yapım bitti, validate chat açılacak) |
-| Bulgu sayısı | — (henüz validate edilmedi) |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validate chat, 2026-05-14) |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
 
-**Adım -1 working tree:** temiz (T66 merge sonrası `888b219` fast-forward'lı main).
+**Adım -1 working tree:** temiz.
 **Adım 0 main CI startup:** son 3 main run hepsi `success` — `25881647522` + `25881647526` (T66 #106 merge), `25824801517` (T65 #105 merge). HARD STOP yok.
-**Adım 0b repo memory:** `.claude/memory/MEMORY.md` T66 satırı mevcut (`bb97834`/PR #98 yerine T66 doğru hash `15ac139`/PR #106; memory MEMORY.md T66 detay satırları F4 statüsü hazır). T67 satırı bu PR'da eklenecek.
-**Adım 7a task branch CI:** push sonrası tetiklenecek (PR açılınca run ID görünür → izlenecek).
+**Adım 0b repo memory drift:** `.claude/memory/MEMORY.md` T67 detay + yapım notu satırları mevcut (`fab4093`'ten önce eklenmiş yapım chat'i tarafından). HARD STOP yok.
+**Adım 7a task branch CI:** `task/T67-steam-inventory-read` son run `25884270724` ✓ `success` (head SHA `1c14a4d`).
+
+### Bağımsız Validator Kanıtları (yapım raporu görülmeden)
+
+| Kanıt | Sonuç |
+|---|---|
+| Sidecar Vitest (`npm test`) | ✓ 123/123 PASS — InventoryService 13 + routes 13 (T67 7 inventory: GET 5 + DELETE 2) |
+| Backend Release build (`dotnet build -c Release`) | ✓ 0 Warning / 0 Error (24 proje) |
+| Skinora.Steam.Tests (Unit) | ✓ 34/34 PASS — Http client 8 + SidecarReader 5 (T67 yeni) + T64–T66 21 |
+| Skinora.API.Tests `SteamInventoryEndpointTests` | ✓ 6/6 PASS — auth 401, success 200, private 422, unavailable 503, multi-user claim, rate-limit 6th=429 |
+| Skinora.Transactions.Tests `TransactionCreationServiceTests` | ✓ 16/16 PASS — `ISteamInventoryCacheInvalidator` constructor injection regresyonu yok |
+| Doküman uyumu 07 §6.1 | ✓ items/totalCount/tradeableCount + assetId/name/type/imageUrl/wear/tradeable alanları + 422 `INVENTORY_PRIVATE` / 503 `STEAM_UNAVAILABLE` hata kodları + 5/dk rate limit + Authenticated policy birebir |
+| Doküman uyumu 08 §2.3 | ✓ endpoint `inventory/{steamId}/730/2`, pagination library içi `more_items`/`start_assetid` döngüsü (`node_modules/steamcommunity/components/users.js:585-624`), assets+descriptions merge (`getDescription` join), Redis 2dk TTL (`INVENTORY_CACHE_TTL_SECONDS = 120`), invalidation transaction create sonrası (`TransactionCreationService` Stage 10b) |
+| Mini güvenlik kontrolü | ✓ Secret sızıntısı: yok (config-driven `InternalKey`, logger redact paths apiKey/secret/authorization dahil). Auth: `[Authorize(Policy = Authenticated)]` + 5/dk. Input validation: SteamID JWT claim'den; sidecar regex önkapı. Yeni dış bağımlılık: `ioredis@^5.4.0` (yaygın, MIT, aktif maintain) ✓ |
 
 ## Altyapı Değişiklikleri
 
@@ -136,9 +149,9 @@
 ## Commit & PR
 
 - Branch: `task/T67-steam-inventory-read`
-- Commit: pending (push aşamasında)
-- PR: pending
-- CI: pending
+- Commit: `1c14a4d` — T67: Steam Sidecar — envanter okuma
+- PR: [#107](https://github.com/turkerurganci/Skinora/pull/107)
+- CI: ✓ task branch run `25884270724` PASS (10/10 job)
 
 ## Known Limitations / Follow-up
 
