@@ -18,6 +18,7 @@ services:
       - Jwt__AccessTokenExpiryMinutes=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - Jwt__RefreshTokenExpiryDays=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
       - Webhook__SteamSharedSecret=${WEBHOOK_SECRET}
+      - Webhook__BlockchainSharedSecret=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
       - Serilog__WriteTo__1__Args__uri=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-db:
@@ -100,6 +101,11 @@ services:
       - TRON_NETWORK=${TRON_NETWORK:-nile}
       - TRON_FULL_NODE_URL=${TRON_FULL_NODE_URL}
       - HD_WALLET_MNEMONIC=${HD_WALLET_MNEMONIC}
+      - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY}
+      - WEBHOOK_SECRET=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
+      - TRON_API_KEY=${TRON_API_KEY}
+      - PAYMENT_POLLING_INTERVAL_MS=${PAYMENT_POLLING_INTERVAL_MS:-3000}
+      - MIN_CONFIRMATIONS=${MIN_CONFIRMATIONS:-20}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-backend:

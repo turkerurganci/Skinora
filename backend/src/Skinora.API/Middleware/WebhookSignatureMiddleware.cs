@@ -11,9 +11,10 @@ namespace Skinora.API.Middleware;
 
 /// <summary>
 /// HMAC-SHA256 signature verification for inbound sidecar webhooks
-/// (05 §3.4, 09 §11.3). Applied only to <c>/api/v1/webhooks/steam/*</c>
-/// callbacks; the legacy Telegram bot webhook keeps its own header-secret
-/// check on <c>/api/v1/webhooks/telegram</c>.
+/// (05 §3.4, 09 §11.3). Applied to the Steam (<c>/api/v1/webhooks/steam/*</c>,
+/// T68) and blockchain (<c>/api/v1/webhooks/blockchain/*</c>, T71) sidecar
+/// paths; the legacy Telegram bot webhook keeps its own header-secret check
+/// on <c>/api/v1/webhooks/telegram</c>.
 ///
 /// <para>
 /// Steps per 09 §11.3:
@@ -33,6 +34,7 @@ namespace Skinora.API.Middleware;
 public sealed class WebhookSignatureMiddleware
 {
     private const string SteamWebhookPathPrefix = "/api/v1/webhooks/steam";
+    private const string BlockchainWebhookPathPrefix = "/api/v1/webhooks/blockchain";
     private const string SignatureHeader = "X-Signature";
     private const string TimestampHeader = "X-Timestamp";
     private const string NonceHeader = "X-Nonce";
@@ -41,6 +43,19 @@ public sealed class WebhookSignatureMiddleware
     // per sidecar prevents nonce collisions if blockchain/notification sidecars
     // share the table (see ProcessedNonce.Source).
     public const string SteamNonceSource = "steam-sidecar";
+    public const string BlockchainNonceSource = "blockchain-sidecar";
+
+    /// <summary>
+    /// Per-prefix routing for the sidecar webhook bus. Adding a new sidecar
+    /// here is the only change required to extend HMAC coverage — the verify
+    /// pipeline itself is shape-agnostic. Ordering matters only when one
+    /// prefix is a proper prefix of another; for now they are disjoint.
+    /// </summary>
+    private static readonly (string PathPrefix, string SecretSelector, string NonceSource)[] WebhookRoutes =
+    {
+        (SteamWebhookPathPrefix, "steam", SteamNonceSource),
+        (BlockchainWebhookPathPrefix, "blockchain", BlockchainNonceSource),
+    };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -60,16 +75,20 @@ public sealed class WebhookSignatureMiddleware
         AppDbContext db,
         ILogger<WebhookSignatureMiddleware> logger)
     {
-        if (!context.Request.Path.StartsWithSegments(SteamWebhookPathPrefix))
+        var route = ResolveRoute(context.Request.Path);
+        if (route is null)
         {
             await _next(context);
             return;
         }
 
         var settings = options.Value;
-        if (string.IsNullOrWhiteSpace(settings.SteamSharedSecret))
+        var sharedSecret = SelectSecret(route.Value.SecretSelector, settings);
+        if (string.IsNullOrWhiteSpace(sharedSecret))
         {
-            logger.LogError("Steam webhook secret is not configured — refusing inbound callback.");
+            logger.LogError(
+                "{Source} webhook secret is not configured — refusing inbound callback.",
+                route.Value.NonceSource);
             await WriteUnauthorizedAsync(context, "WEBHOOK_UNAUTHORIZED", "Webhook secret is not configured.");
             return;
         }
@@ -124,7 +143,7 @@ public sealed class WebhookSignatureMiddleware
         }
         context.Request.Body.Position = 0;
 
-        var expected = ComputeSignature(settings.SteamSharedSecret, timestamp, nonce, body);
+        var expected = ComputeSignature(sharedSecret, timestamp, nonce, body);
         if (!FixedTimeEquals(expected, signature))
         {
             logger.LogWarning("Webhook rejected: signature mismatch.");
@@ -141,7 +160,7 @@ public sealed class WebhookSignatureMiddleware
             db.ProcessedNonces.Add(new ProcessedNonce
             {
                 Id = Guid.NewGuid(),
-                Source = SteamNonceSource,
+                Source = route.Value.NonceSource,
                 Nonce = nonce!,
                 ProcessedAt = DateTime.UtcNow,
                 ExpiresAt = expiresAt,
@@ -157,6 +176,25 @@ public sealed class WebhookSignatureMiddleware
 
         await _next(context);
     }
+
+    private static (string PathPrefix, string SecretSelector, string NonceSource)? ResolveRoute(PathString path)
+    {
+        foreach (var route in WebhookRoutes)
+        {
+            if (path.StartsWithSegments(route.PathPrefix))
+            {
+                return route;
+            }
+        }
+        return null;
+    }
+
+    private static string SelectSecret(string selector, WebhookSettings settings) => selector switch
+    {
+        "steam" => settings.SteamSharedSecret,
+        "blockchain" => settings.BlockchainSharedSecret,
+        _ => string.Empty,
+    };
 
     private static string ComputeSignature(string secret, string timestamp, string nonce, string body)
     {
