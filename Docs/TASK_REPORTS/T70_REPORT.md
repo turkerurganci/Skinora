@@ -1,6 +1,6 @@
 # T70 — Blockchain Sidecar HD wallet adres üretimi
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (validate bekleniyor) | **Tarih:** 2026-05-16
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-16
 
 ---
 
@@ -75,9 +75,17 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validate chat'i bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-16) |
+| Bulgu sayısı | 0 S1/S2/S3 + 1 minor advisory (M1 `ethers` direct-dep deklarasyonu eksik) |
+| Düzeltme gerekli mi | Hayır — M1 cosmetic dep hygiene, kod fonksiyonel; gelecekte tronweb upgrade'inde fark edilirse eklenir |
+
+### Validator özet
+- **Hard-stop kapıları:** Adım -1 working tree temiz; Adım 0 son 3 main run ✓ (25959602313 T69, 25959602306 T69, 25957448055 T68); Adım 0b T70 memory satırları mevcut.
+- **Task branch CI (Adım 8a, T11.2 zorunlu):** Run [25960944957](https://github.com/turkerurganci/Skinora/actions/runs/25960944957) (HEAD `ad7581c`) — 11/11 job ✓ (Lint, Detect, Build, Migration dry-run, Unit, Integration, Contract, Docker backend, Docker sidecar-blockchain, CI Gate; Guard skipped).
+- **5/5 kabul kriteri:** Hepsi ✓. Yapım raporu uyumu tam.
+- **Lokal testler:** Sidecar `npm test` 15/15 PASS; Backend Docker-bağımsız 11 PaymentAddress unit test PASS (Docker-bağımlı 32 integration testi lokal env sınırı — CI'da PASS).
+- **Güvenlik:** 0 kritik. Mnemonic log'da `[ REDACTED ]`; `internalKeyAuth` middleware aktif; index validation defense-in-depth.
+- **Bulgu M1 detayı:** `HdWalletService.ts` `import { HDNodeWallet, Mnemonic } from 'ethers'` — `ethers@6.16.0` `tronweb@5.3.5`'in transitive dep'i; `package.json` `dependencies`'e eklenmemiş. Hijenik düzeltme önerisi (follow-up): direct dep olarak deklare etmek. FAIL değil.
 
 ## Altyapı Değişiklikleri
 
@@ -93,9 +101,14 @@
 ## Commit & PR
 
 - Branch: `task/T70-hd-wallet-address-derivation`
-- Commit: `e9874db` — `T70: Blockchain Sidecar — HD wallet adres üretimi`
+- Commits:
+  - `e9874db` — `T70: Blockchain Sidecar — HD wallet adres üretimi`
+  - `083e8d8` — `T70: fixup — PR #111 + commit hash report'a yansıt`
+  - `d37bd54` — `T70: fix EnsurePaymentAddressJobTests — CANCELLED_BUYER seed hits CK_Transactions_Cancel`
+  - `ad7581c` — `chore: BYPASS_LOG — T70 commit d37bd54 ci-failure bypass log satırı`
 - PR: [#111](https://github.com/turkerurganci/Skinora/pull/111)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS (run [25960944957](https://github.com/turkerurganci/Skinora/actions/runs/25960944957), HEAD `ad7581c`, 11/11 job)
+- BYPASS_LOG: 1× `[ci-failure]` entry (Layer 2, d37bd54 — prior run 083e8d8 integration test failed on CANCELLED_BUYER seed CK constraint, d37bd54 fix push'u)
 
 ## Known Limitations / Follow-up
 
