@@ -2,51 +2,61 @@ import { Router } from 'express';
 import { healthCheck } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
+import { deriveAddressHandler } from './walletHandlers.js';
+import { WalletManager } from '../wallet/WalletManager.js';
 
-const router = Router();
+export interface RouterDeps {
+  walletManager: WalletManager;
+}
 
-// Health check — no auth required
-router.get('/health', healthCheck);
+export function createRouter(deps: RouterDeps): Router {
+  const router = Router();
 
-// Prometheus metrics — no auth required (T16)
-router.get('/metrics', metricsHandler);
+  // Health check — no auth required
+  router.get('/health', healthCheck);
 
-// Authenticated API routes (stub — will be implemented in T70–T77)
-const apiRouter = Router();
-apiRouter.use(internalKeyAuth);
+  // Prometheus metrics — no auth required (T16)
+  router.get('/metrics', metricsHandler);
 
-// Wallet management — T70
-apiRouter.post('/wallet/generate-address', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T70' });
-});
+  // Authenticated API routes
+  const apiRouter = Router();
+  apiRouter.use(internalKeyAuth);
 
-// Payment monitoring — T71
-apiRouter.post('/monitor/start', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T71' });
-});
+  // Wallet management — T70
+  // POST /api/wallet/derive { index, transactionId? }
+  //   → 200 { address, derivationPath, index }
+  //   → 400 { error: 'INVALID_DERIVATION_INDEX' }
+  //   → 503 { error: 'HD_WALLET_NOT_CONFIGURED' }
+  apiRouter.post('/wallet/derive', deriveAddressHandler(deps.walletManager));
 
-apiRouter.post('/monitor/stop', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T71' });
-});
+  // Payment monitoring — T71
+  apiRouter.post('/monitor/start', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T71' });
+  });
 
-// Transfers — T73
-apiRouter.post('/transfer/payout', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T73' });
-});
+  apiRouter.post('/monitor/stop', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T71' });
+  });
 
-apiRouter.post('/transfer/refund', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T73' });
-});
+  // Transfers — T73
+  apiRouter.post('/transfer/payout', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T73' });
+  });
 
-apiRouter.post('/transfer/sweep', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T73' });
-});
+  apiRouter.post('/transfer/refund', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T73' });
+  });
 
-// Balance check — T77
-apiRouter.get('/wallet/hot-wallet-balance', (_req, res) => {
-  res.status(501).json({ error: 'Not implemented — see T77' });
-});
+  apiRouter.post('/transfer/sweep', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T73' });
+  });
 
-router.use('/api', apiRouter);
+  // Balance check — T77
+  apiRouter.get('/wallet/hot-wallet-balance', (_req, res) => {
+    res.status(501).json({ error: 'Not implemented — see T77' });
+  });
 
-export { router };
+  router.use('/api', apiRouter);
+
+  return router;
+}

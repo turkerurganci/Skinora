@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 
 namespace Skinora.Transactions.Tests.Integration.Lifecycle;
@@ -73,4 +74,34 @@ internal sealed class FakeMarketPriceProvider : Skinora.Transactions.Application
         string itemClassId, string? itemInstanceId,
         Skinora.Shared.Enums.StablecoinType denomination, CancellationToken cancellationToken)
         => Task.FromResult(Price);
+}
+
+/// <summary>
+/// Test double for <see cref="IPaymentAddressAllocator"/>. Records every
+/// inbound transaction id and, by default, reports
+/// <see cref="PaymentAddressAllocationStatus.TransactionIneligible"/> — the
+/// status TransactionCreationService treats as a soft-skip. Individual
+/// tests can flip <see cref="DefaultStatus"/> or assert on
+/// <see cref="Allocations"/> to exercise allocator behavior.
+/// </summary>
+internal sealed class RecordingPaymentAddressAllocator : IPaymentAddressAllocator
+{
+    public List<Guid> Allocations { get; } = new();
+
+    public PaymentAddressAllocationStatus DefaultStatus { get; set; }
+        = PaymentAddressAllocationStatus.TransactionIneligible;
+
+    public string? DefaultAddress { get; set; }
+
+    public Task<PaymentAddressAllocationResult> AllocateAsync(
+        Guid transactionId, CancellationToken cancellationToken)
+    {
+        Allocations.Add(transactionId);
+        return Task.FromResult(new PaymentAddressAllocationResult(
+            DefaultStatus,
+            transactionId,
+            DefaultAddress,
+            HdWalletIndex: null,
+            ErrorMessage: null));
+    }
 }

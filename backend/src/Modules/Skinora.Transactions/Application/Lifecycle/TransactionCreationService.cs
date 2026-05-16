@@ -1,9 +1,11 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
@@ -43,6 +45,8 @@ public sealed class TransactionCreationService : ITransactionCreationService
     private readonly IInvitationCodeGenerator _inviteCodes;
     private readonly IOutboxService _outbox;
     private readonly ISteamInventoryCacheInvalidator _inventoryCacheInvalidator;
+    private readonly IPaymentAddressAllocator _paymentAddressAllocator;
+    private readonly ILogger<TransactionCreationService> _logger;
     private readonly TimeProvider _clock;
 
     public TransactionCreationService(
@@ -57,6 +61,8 @@ public sealed class TransactionCreationService : ITransactionCreationService
         IInvitationCodeGenerator inviteCodes,
         IOutboxService outbox,
         ISteamInventoryCacheInvalidator inventoryCacheInvalidator,
+        IPaymentAddressAllocator paymentAddressAllocator,
+        ILogger<TransactionCreationService> logger,
         TimeProvider clock)
     {
         _db = db;
@@ -70,6 +76,8 @@ public sealed class TransactionCreationService : ITransactionCreationService
         _inviteCodes = inviteCodes;
         _outbox = outbox;
         _inventoryCacheInvalidator = inventoryCacheInvalidator;
+        _paymentAddressAllocator = paymentAddressAllocator;
+        _logger = logger;
         _clock = clock;
     }
 
@@ -278,6 +286,26 @@ public sealed class TransactionCreationService : ITransactionCreationService
         // (cache miss costs at most the next 2-minute TTL window — never a
         // hard failure).
         await _inventoryCacheInvalidator.InvalidateAsync(seller.SteamId, cancellationToken);
+
+        // ---------- Stage 10c: best-effort payment-address allocation (T70) ----------
+        // 08 §3.2 — derive a Tron deposit address from the HD wallet and
+        // persist a PaymentAddress row. Only runs for CREATED transactions;
+        // FLAGGED transactions wait until admin approval transitions them
+        // back to CREATED (future task entry point). Failures here are NOT
+        // fatal: the EnsurePaymentAddressJob recurring sweep recovers any
+        // transaction whose inline allocation lost the sidecar round-trip.
+        if (status == TransactionStatus.CREATED)
+        {
+            var allocation = await _paymentAddressAllocator.AllocateAsync(
+                transaction.Id, cancellationToken);
+            if (allocation.Status is not PaymentAddressAllocationStatus.Created
+                and not PaymentAddressAllocationStatus.AlreadyExisted)
+            {
+                _logger.LogWarning(
+                    "Inline payment-address allocation skipped for transaction {TransactionId}: {Status} — {Message}. EnsurePaymentAddressJob will retry.",
+                    transaction.Id, allocation.Status, allocation.ErrorMessage);
+            }
+        }
 
         // ---------- Stage 11: response ----------
         var response = new CreateTransactionResponse(
