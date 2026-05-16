@@ -1,11 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Skinora.Platform.Application.Audit;
+using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Persistence;
+using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Steam.Infrastructure.Persistence;
+using Skinora.Steam.Tests.TestSupport;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -28,6 +33,9 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         UsersModuleDbRegistration.RegisterUsersModule();
         TransactionsModuleDbRegistration.RegisterTransactionsModule();
         SteamModuleDbRegistration.RegisterSteamModule();
+        // T69 — AuditLogger writes AuditLog rows; entity lives in Skinora.Platform
+        // module so the test AppDbContext must include its configuration too.
+        PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
     private User _seller = null!;
@@ -77,8 +85,18 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         await context.SaveChangesAsync();
     }
 
-    private SteamWebhookHandler CreateSut() =>
-        new(Context, NullLogger<SteamWebhookHandler>.Instance);
+    private RecordingNotificationRealtimePublisher _recorder = null!;
+
+    private SteamWebhookHandler CreateSut()
+    {
+        _recorder = new RecordingNotificationRealtimePublisher();
+        return new SteamWebhookHandler(
+            Context,
+            new AuditLogger(Context, TimeProvider.System),
+            _recorder,
+            TimeProvider.System,
+            NullLogger<SteamWebhookHandler>.Instance);
+    }
 
     [Fact]
     public async Task TradeOfferSent_PersistsTradeOfferRow()
@@ -393,27 +411,167 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task BotEvent_LogsAndAcks_WithoutDbWrite()
+    public async Task BotEvent_Restricted_UpdatesStatusAuditsAndPushes()
     {
         var sut = CreateSut();
+        var envelope = MakeBotEnvelope(
+            SteamWebhookEvents.BotRemovedFromPool,
+            reason: "restricted",
+            status: "FAILED");
+
+        await sut.HandleBotEventAsync(envelope, "corr-restricted", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
+        Assert.NotNull(refreshed.LastHealthCheckAt);
+
+        var audit = await verify.Set<AuditLog>()
+            .SingleAsync(a => a.EntityType == nameof(PlatformSteamBot) && a.EntityId == _bot.Id.ToString());
+        Assert.Equal(AuditAction.BOT_STATUS_CHANGED, audit.Action);
+        Assert.Equal(ActorType.SYSTEM, audit.ActorType);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), audit.OldValue);
+        Assert.Contains("RESTRICTED", audit.NewValue);
+        Assert.Contains("reason=restricted", audit.NewValue);
+
+        var push = Assert.Single(_recorder.Calls);
+        Assert.Equal("AdminBotStatusChanged", push.Method);
+        var payload = Assert.IsType<NotificationRealtimePayloads.AdminBotStatusChanged>(push.Payload);
+        Assert.Equal(_bot.Id, payload.BotId);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), payload.PreviousStatus);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), payload.NewStatus);
+        Assert.Equal("restricted", payload.Reason);
+    }
+
+    [Fact]
+    public async Task BotEvent_Banned_UpdatesStatusToBanned()
+    {
+        var sut = CreateSut();
+        var envelope = MakeBotEnvelope(
+            SteamWebhookEvents.BotSessionFailed,
+            reason: "banned",
+            status: "BANNED");
+
+        await sut.HandleBotEventAsync(envelope, "corr-banned", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.BANNED, refreshed.Status);
+
+        var payload = Assert.IsType<NotificationRealtimePayloads.AdminBotStatusChanged>(_recorder.Calls.Single().Payload);
+        Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), payload.NewStatus);
+        Assert.Equal("banned", payload.Reason);
+    }
+
+    [Fact]
+    public async Task BotEvent_SessionRecoveryFailed_SetsOffline()
+    {
+        var sut = CreateSut();
+        var envelope = MakeBotEnvelope(
+            SteamWebhookEvents.BotRemovedFromPool,
+            reason: "session_recovery_failed",
+            status: "FAILED");
+
+        await sut.HandleBotEventAsync(envelope, "corr-offline", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.OFFLINE, refreshed.Status);
+    }
+
+    [Fact]
+    public async Task BotEvent_IdempotentSameStatus_DoesNotAuditOrPush()
+    {
+        // Pre-set the bot to RESTRICTED so a second "restricted" event collides.
+        await using (var arrange = CreateContext())
+        {
+            var b = await arrange.Set<PlatformSteamBot>().SingleAsync(x => x.Id == _bot.Id);
+            b.Status = PlatformSteamBotStatus.RESTRICTED;
+            await arrange.SaveChangesAsync();
+        }
+
+        var sut = CreateSut();
+        var envelope = MakeBotEnvelope(
+            SteamWebhookEvents.BotRemovedFromPool,
+            reason: "restricted",
+            status: "FAILED");
+
+        await sut.HandleBotEventAsync(envelope, "corr-idem", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
+        Assert.NotNull(refreshed.LastHealthCheckAt); // probe observation kept
+
+        // No new audit row, no SignalR push.
+        Assert.False(await verify.Set<AuditLog>()
+            .AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
+        Assert.Empty(_recorder.Calls);
+    }
+
+    [Fact]
+    public async Task BotEvent_UnknownAccount_LogsAndAcksWithoutStateChange()
+    {
+        var sut = CreateSut();
+        var envelope = MakeBotEnvelope(
+            SteamWebhookEvents.BotSessionFailed,
+            reason: "restricted",
+            status: "FAILED",
+            accountName: "GhostBot-Unknown");
+
+        await sut.HandleBotEventAsync(envelope, "corr-unknown", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE, refreshed.Status);
+        Assert.False(await verify.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
+        Assert.Empty(_recorder.Calls);
+    }
+
+    [Fact]
+    public async Task BotEvent_MissingAccountName_LogsAndAcks()
+    {
+        var sut = CreateSut();
+        // Direct envelope construction — the helper applies a `?? BotAccount`
+        // fallback so it cannot exercise the truly-null code path.
         var envelope = new SteamWebhookEnvelope<BotEventData>
         {
             Event = SteamWebhookEvents.BotSessionFailed,
             Timestamp = DateTime.UtcNow.ToString("O"),
             Data = new BotEventData
             {
-                AccountName = BotAccount,
-                Reason = "InvalidPassword",
+                AccountName = null,
+                Reason = "restricted",
                 Status = "FAILED",
             },
         };
 
-        await sut.HandleBotEventAsync(envelope, "corr-bot", CancellationToken.None);
+        await sut.HandleBotEventAsync(envelope, "corr-missing", CancellationToken.None);
 
-        // No DB row is expected — bot events are log-only in T68.
+        Assert.Empty(_recorder.Calls);
+
         await using var verify = CreateContext();
-        Assert.Equal(0, verify.ChangeTracker.Entries().Count(e => e.State != EntityState.Unchanged));
+        // No state mutation: the seeded bot stays ACTIVE and no audit row is added.
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE, refreshed.Status);
+        Assert.False(await verify.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
     }
+
+    private SteamWebhookEnvelope<BotEventData> MakeBotEnvelope(
+        string @event,
+        string reason,
+        string status,
+        string? accountName = null) => new()
+        {
+            Event = @event,
+            Timestamp = DateTime.UtcNow.ToString("O"),
+            Data = new BotEventData
+            {
+                AccountName = accountName ?? BotAccount,
+                Reason = reason,
+                Status = status,
+            },
+        };
 
     private static SteamWebhookEnvelope<TradeOfferEventData> MakeTradeEnvelope(
         string @event, TradeOfferEventData data) => new()

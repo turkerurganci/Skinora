@@ -43,7 +43,8 @@ export type BotFailureReason =
   | 'login_failed'
   | 'session_recovery_failed'
   | 'banned'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'restricted';
 
 export interface ReloginConfig {
   /** Backoff schedule from 08 §2.7 retry table; ms. */
@@ -68,10 +69,46 @@ const PERMANENT_LOGIN_ERESULTS = new Set<number>([
   56, // RevokedAccessToken
 ]);
 
+/**
+ * T69 — Steam EResults that mean the account is permanently banned. The bot
+ * is removed from the pool and reported to the backend as BANNED. Backend
+ * maps the resulting <c>bot.removed_from_pool</c> webhook to
+ * <c>PlatformSteamBotStatus.BANNED</c>.
+ */
 const BANNED_ERESULTS = new Set<number>([
   3, // AccountBanned (rare; usually surfaced via different channel)
-  // EResult 70: AccountLockedDown — not always banned but operationally equivalent
-  70,
+  17, // Banned (community/trade ban surfaced as login error)
+  40, // Blocked
+  43, // AccountDisabled
+  51, // Suspended
+  70, // AccountLockedDown
+  73, // AccountLockedDown (alternate code observed in 2018+ Steam responses)
+  105, // IPBanned
+]);
+
+/**
+ * T69 — Steam EResults that mean the account still authenticates but trade /
+ * community privileges are revoked or rate-limited beyond what an in-process
+ * retry can recover. Bot is taken out of the pool so future trade dispatches
+ * route to other bots (acceptance criterion #2). Backend maps the resulting
+ * <c>bot.removed_from_pool</c> webhook to
+ * <c>PlatformSteamBotStatus.RESTRICTED</c>.
+ *
+ * Note that EResult 84 (RateLimitExceeded) is intentionally NOT here — the
+ * trade-offer service treats it as a transient retry (08 §2.7 backoff
+ * schedule). Only persistent rate-limits (95, 96, 97) trigger pool removal.
+ */
+const RESTRICTED_ERESULTS = new Set<number>([
+  11, // InvalidState — frequently observed when account has an active trade ban
+  15, // AccessDenied
+  25, // LimitExceeded
+  82, // RestrictedDevice
+  85, // AccountLoginDeniedNeedTwoFactor (operator must re-enrol the bot)
+  95, // AccountLimitExceeded
+  96, // AccountActivityLimitExceeded
+  97, // PhoneActivityLimitExceeded
+  112, // LimitedUserAccount
+  116, // CommunityCooldown
 ]);
 
 type SteamUserError = Error & { eresult?: number };
@@ -301,6 +338,17 @@ export class BotSession {
       if (BANNED_ERESULTS.has(eresult)) {
         this.transition('BANNED');
         this.emitFatal('banned');
+        return;
+      }
+      if (RESTRICTED_ERESULTS.has(eresult)) {
+        // Login succeeded mechanically but trade/community privileges are
+        // revoked or rate-limited beyond what an in-process retry can
+        // recover. Treat as terminal for this session (T69 acceptance #2 +
+        // #4): bot is dropped from the pool, backend mirrors the status
+        // onto PlatformSteamBot.Status = RESTRICTED and pushes an admin
+        // notification.
+        this.transition('FAILED');
+        this.emitFatal('restricted');
         return;
       }
       if (PERMANENT_LOGIN_ERESULTS.has(eresult)) {

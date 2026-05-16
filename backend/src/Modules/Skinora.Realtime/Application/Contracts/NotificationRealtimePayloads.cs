@@ -50,4 +50,19 @@ public static class NotificationRealtimePayloads
         string? Type,
         string? Message,
         DateTime? PlannedEnd);
+
+    /// <summary>
+    /// Pushed when a platform Steam bot transitions to RESTRICTED / BANNED /
+    /// OFFLINE or is removed from the pool (T69 — 02 §15, 05 §3.2). Frontend
+    /// admin dashboard (S18 — bound in T103) renders the alert; non-admin
+    /// clients ignore the event but receive the broadcast.
+    /// </summary>
+    public sealed record AdminBotStatusChanged(
+        Guid BotId,
+        string SteamId,
+        string DisplayName,
+        string PreviousStatus,
+        string NewStatus,
+        string Reason,
+        DateTime ChangedAt);
 }

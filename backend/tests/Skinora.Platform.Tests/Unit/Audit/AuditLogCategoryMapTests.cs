@@ -83,12 +83,16 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed()
+    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_And_Bot_Status_Changed()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.SecurityEvent);
 
-        Assert.Equal(new[] { AuditAction.WALLET_ADDRESS_CHANGED }, actions);
+        // T69 added BOT_STATUS_CHANGED next to WALLET_ADDRESS_CHANGED; ordering
+        // mirrors the dictionary insertion order in AuditLogCategoryMap.
+        Assert.Equal(
+            new[] { AuditAction.WALLET_ADDRESS_CHANGED, AuditAction.BOT_STATUS_CHANGED },
+            actions);
     }
 
     [Fact]

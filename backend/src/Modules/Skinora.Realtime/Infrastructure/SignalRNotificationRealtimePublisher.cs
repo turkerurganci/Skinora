@@ -21,6 +21,7 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
     private const string TelegramConnectedEvent = "TelegramConnected";
     private const string DiscordConnectedEvent = "DiscordConnected";
     private const string MaintenanceStatusChangedEvent = "MaintenanceStatusChanged";
+    private const string AdminBotStatusChangedEvent = "AdminBotStatusChanged";
 
     private readonly IHubContext<NotificationsHub> _hub;
     private readonly ILogger<SignalRNotificationRealtimePublisher> _logger;
@@ -72,6 +73,28 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
             _logger.LogWarning(
                 ex,
                 "SignalR maintenance push failed.");
+        }
+    }
+
+    public async Task PublishAdminBotStatusChangedAsync(
+        NotificationRealtimePayloads.AdminBotStatusChanged payload,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _hub.Clients
+                .All
+                .SendAsync(AdminBotStatusChangedEvent, payload, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Persistence (PlatformSteamBot.Status update + AuditLog row) is
+            // the source of truth; a missed push is recovered on admin
+            // dashboard refresh.
+            _logger.LogWarning(
+                ex,
+                "SignalR admin bot status push failed (botId={BotId}, status={Status}).",
+                payload.BotId, payload.NewStatus);
         }
     }
 

@@ -58,6 +58,13 @@ public static class AuditLogCategoryMap
             [AuditAction.TRANSACTION_CANCELLED_ADMIN] = Categories.AdminAction,
             [AuditAction.EMERGENCY_HOLD_APPLIED] = Categories.AdminAction,
             [AuditAction.EMERGENCY_HOLD_RELEASED] = Categories.AdminAction,
+
+            // T69 — Steam bot lifecycle. Sidecar-driven RESTRICTED/BANNED
+            // transitions are platform infrastructure changes, but they
+            // signal an operational security event (a bot just lost trade
+            // privileges) so they live next to WALLET_ADDRESS_CHANGED in
+            // the security queue.
+            [AuditAction.BOT_STATUS_CHANGED] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>
