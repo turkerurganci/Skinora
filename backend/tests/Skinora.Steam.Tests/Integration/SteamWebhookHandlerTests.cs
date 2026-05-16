@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -32,6 +33,9 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         UsersModuleDbRegistration.RegisterUsersModule();
         TransactionsModuleDbRegistration.RegisterTransactionsModule();
         SteamModuleDbRegistration.RegisterSteamModule();
+        // T69 — AuditLogger writes AuditLog rows; entity lives in Skinora.Platform
+        // module so the test AppDbContext must include its configuration too.
+        PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
     private User _seller = null!;
