@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence.Converters;
 using Skinora.Shared.Persistence.Outbox;
+using Skinora.Shared.Persistence.Webhooks;
 
 namespace Skinora.Shared.Persistence;
 
@@ -43,6 +44,9 @@ public class AppDbContext : DbContext
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
     public DbSet<ExternalIdempotencyRecord> ExternalIdempotencyRecords
         => Set<ExternalIdempotencyRecord>();
+
+    // T68 — inbound webhook replay protection (05 §3.4, 09 §11.3).
+    public DbSet<ProcessedNonce> ProcessedNonces => Set<ProcessedNonce>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

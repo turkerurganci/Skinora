@@ -29,6 +29,9 @@ public sealed class RetentionJobsRegistrar : IHostedService
     /// <summary>04:30 UTC every Sunday — user login log sweep (weekly, same reason).</summary>
     public const string UserLoginLogCron = "30 4 * * 0";
 
+    /// <summary>Every 15 minutes — expired webhook nonces (T68, retention ≥ replay window).</summary>
+    public const string ProcessedNonceCron = "*/15 * * * *";
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<RetentionJobsRegistrar> _logger;
 
@@ -61,6 +64,11 @@ public sealed class RetentionJobsRegistrar : IHostedService
                 UserLoginLogRetentionCleanupJob.RecurringJobId,
                 job => job.Execute(),
                 UserLoginLogCron);
+
+            scheduler.AddOrUpdateRecurring<ProcessedNonceCleanupJob>(
+                ProcessedNonceCleanupJob.RecurringJobId,
+                job => job.Execute(),
+                ProcessedNonceCron);
         }
         catch (Exception ex)
         {
