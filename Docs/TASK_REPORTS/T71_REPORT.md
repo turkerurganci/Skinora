@@ -1,6 +1,6 @@
 # T71 — Blockchain Sidecar — ödeme izleme
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-16
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-16
 
 ---
 
@@ -89,9 +89,20 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat'i, 2026-05-16) |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator bağımsız değerlendirme:**
+- HARD STOP kapıları (Adım -1/0/0b) tümü temiz.
+- 8 kabul kriteri: 7 ✓ + 1 ~ Kısmi (K3 event_index — TronGrid v1 endpoint dış API limit, proje sahibi onaylı Yaklaşım A, mitigation backend UNIQUE TxHash defense, multi-event-per-tx edge case T-future events API devri).
+- Doğrulama kontrol listesi (08 §3.4 + finality): tam karşılandı.
+- Test kanıtları: sidecar Vitest 63/63 ✓, backend `BlockchainWebhookEndpointTests` 9/9 ✓, `SteamWebhookEndpointTests` regresyon 6/6 ✓, Realtime 25/25 ✓, backend Release build 0W/0E, dotnet format Δ=0.
+- Task branch CI run [25966028065](https://github.com/turkerurganci/Skinora/actions/runs/25966028065) (HEAD `91e6bcc`): **10/10 job SUCCESS** (1.Lint, 2.Build, 3.Unit, 4.Integration, 5.Contract, 6.Migration dry-run, 7.Docker backend + sidecar-blockchain, CI Gate, Detect changed paths; 0.Guard skip — PR-only beklenen).
+- Lokal Testcontainers integration fail (Docker Desktop yokluğu) — F3 Gate Check'te dokümante edilmiş env limit, CI Linux runner'da 4.Integration job ✓.
+- Güvenlik: secret sızıntısı yok, yeni dış bağımlılık yok, sidecar internal-key + backend HMAC-SHA256 + replay window + nonce SETNX katmanları test'le doğrulandı (MissingHeaders/InvalidSignature/SteamSecretRejection→401).
+- Doküman uyumu: 06 §2.5/2.6/3.8 enum + CHECK constraint + token field semantiği (WRONG → ExpectedToken), 05 §3.3 (3sn polling + 20 blok solid finality), 08 §3.4 (phase 1/2 + Transfer filter + wrong/spam tablosu) birebir.
+- Yapım raporu uyumu: tam — bağımsız verdict rapordaki kriter sonuçlarıyla örtüşüyor; K3'ün `~ Kısmi` işaretlemesi sapma değil, dış API kısıt + proje sahibi onaylı scope kararı.
 
 ## Altyapı Değişiklikleri
 
@@ -104,9 +115,9 @@
 ## Commit & PR
 
 - Branch: `task/T71-blockchain-payment-monitoring`
-- Commit: `e97a26c`
+- Commit: `e97a26c` (yapım) + `91e6bcc` (rapor PR/commit referansı) + validator finalize commit (bu commit)
 - PR: #112 — https://github.com/turkerurganci/Skinora/pull/112
-- CI: izleniyor
+- CI: ✓ 10/10 PASS (run [25966028065](https://github.com/turkerurganci/Skinora/actions/runs/25966028065))
 
 ## Known Limitations / Follow-up
 
