@@ -15,10 +15,18 @@ function buildFakeTronWeb({
   broadcastMessage?: string;
   txid?: string;
 } = {}) {
-  const triggerSmartContract = vi.fn(async () => ({
-    result: { result: buildOk, message: buildMessage },
-    transaction: { raw_data: { ref: 'fake' } },
-  }));
+  const triggerSmartContract = vi.fn(
+    async (
+      _contract: string,
+      _fn: string,
+      _options: { feeLimit: number; callValue: number },
+      _params: Array<{ type: string; value: string }>,
+      _from: string,
+    ) => ({
+      result: { result: buildOk, message: buildMessage },
+      transaction: { raw_data: { ref: 'fake' } },
+    }),
+  );
   const sign = vi.fn(async (tx: unknown) => ({ ...(tx as object), signature: ['sig'] }));
   const sendRawTransaction = vi.fn(async () => ({
     result: broadcastOk,
@@ -52,15 +60,15 @@ describe('TronTransferClient.sendTransfer()', () => {
 
     expect(result.txHash).toBe('fake-txid-001');
     expect(triggerSmartContract).toHaveBeenCalledOnce();
-    const [contract, fn, options, params, from] = triggerSmartContract.mock.calls[0];
-    expect(contract).toBe('TContractAddress');
-    expect(fn).toBe('transfer(address,uint256)');
-    expect(options.feeLimit).toBeGreaterThan(0);
-    expect(params).toEqual([
+    const call = triggerSmartContract.mock.calls[0]!;
+    expect(call[0]).toBe('TContractAddress');
+    expect(call[1]).toBe('transfer(address,uint256)');
+    expect(call[2].feeLimit).toBeGreaterThan(0);
+    expect(call[3]).toEqual([
       { type: 'address', value: 'TToAddress' },
       { type: 'uint256', value: '100500000' },
     ]);
-    expect(from).toBe('TFromAddress');
+    expect(call[4]).toBe('TFromAddress');
     expect(sign).toHaveBeenCalledOnce();
     expect(sendRawTransaction).toHaveBeenCalledOnce();
   });
@@ -118,8 +126,8 @@ describe('TronTransferClient.sendTransfer()', () => {
 
 describe('TronTransferClient.getTransactionStatus()', () => {
   function buildFetchMock(infoResponse: unknown, blockResponse: unknown) {
-    return async (input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : (input as URL).toString();
+    return async (input: Parameters<typeof fetch>[0]) => {
+      const url = typeof input === 'string' ? input : input.toString();
       const body = url.endsWith('gettransactioninfobyid') ? infoResponse : blockResponse;
       return new Response(JSON.stringify(body), {
         status: 200,
