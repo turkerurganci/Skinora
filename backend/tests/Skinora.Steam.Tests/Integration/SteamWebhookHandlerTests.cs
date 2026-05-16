@@ -532,15 +532,29 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
     public async Task BotEvent_MissingAccountName_LogsAndAcks()
     {
         var sut = CreateSut();
-        var envelope = MakeBotEnvelope(
-            SteamWebhookEvents.BotSessionFailed,
-            reason: "restricted",
-            status: "FAILED",
-            accountName: null);
+        // Direct envelope construction — the helper applies a `?? BotAccount`
+        // fallback so it cannot exercise the truly-null code path.
+        var envelope = new SteamWebhookEnvelope<BotEventData>
+        {
+            Event = SteamWebhookEvents.BotSessionFailed,
+            Timestamp = DateTime.UtcNow.ToString("O"),
+            Data = new BotEventData
+            {
+                AccountName = null,
+                Reason = "restricted",
+                Status = "FAILED",
+            },
+        };
 
         await sut.HandleBotEventAsync(envelope, "corr-missing", CancellationToken.None);
 
         Assert.Empty(_recorder.Calls);
+
+        await using var verify = CreateContext();
+        // No state mutation: the seeded bot stays ACTIVE and no audit row is added.
+        var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE, refreshed.Status);
+        Assert.False(await verify.Set<AuditLog>().AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
     }
 
     private SteamWebhookEnvelope<BotEventData> MakeBotEnvelope(
