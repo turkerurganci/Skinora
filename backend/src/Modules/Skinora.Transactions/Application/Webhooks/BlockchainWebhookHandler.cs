@@ -10,7 +10,8 @@ namespace Skinora.Transactions.Application.Webhooks;
 /// <summary>
 /// Default <see cref="IBlockchainWebhookHandler"/>. Each method owns a single
 /// <see cref="AppDbContext"/> transaction so the BlockchainTransaction row
-/// and any future state-machine flip share the same SaveChanges
+/// and the T72 amount validation side effects (state-machine flip, refund
+/// intent row, outbox events) share the same SaveChanges
 /// (mirrors <see cref="Skinora.Steam.Application.Webhooks.SteamWebhookHandler"/>).
 ///
 /// <para>
@@ -21,9 +22,10 @@ namespace Skinora.Transactions.Application.Webhooks;
 /// </para>
 ///
 /// <para>
-/// T71 scope: persistence only. Transaction state-machine trigger
-/// (<c>PAYMENT_RECEIVED</c>) and refund execution are forward-deferred
-/// (T72 / T73) — see <c>Docs/TASK_REPORTS/T71_REPORT.md</c>.
+/// T72 (this task) wires <see cref="IAmountValidationService"/> into
+/// <see cref="HandlePaymentConfirmedAsync"/> and
+/// <see cref="HandleWrongTokenIncomingAsync"/>; T73 picks up the refund-intent
+/// rows queued at <c>Status=PENDING</c> and performs the TRC-20 broadcast.
 /// </para>
 /// </summary>
 public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
@@ -35,15 +37,18 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
     private const int SpamConfirmationFloor = 20;
 
     private readonly AppDbContext _db;
+    private readonly IAmountValidationService _amountValidation;
     private readonly TimeProvider _clock;
     private readonly ILogger<BlockchainWebhookHandler> _logger;
 
     public BlockchainWebhookHandler(
         AppDbContext db,
+        IAmountValidationService amountValidation,
         TimeProvider clock,
         ILogger<BlockchainWebhookHandler> logger)
     {
         _db = db;
+        _amountValidation = amountValidation;
         _clock = clock;
         _logger = logger;
     }
@@ -177,11 +182,19 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
         existing.ConfirmationCount = Math.Max(data.ConfirmationCount, 20);
         existing.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
 
+        // T72 — amount validation pipeline runs INSIDE this unit of work so
+        // the CONFIRMED flip + state-machine fire + refund-intent row + outbox
+        // events all commit atomically via the single SaveChangesAsync below.
+        var validationOutcome = await _amountValidation.ValidateConfirmedBuyerPaymentAsync(
+            existing,
+            correlationId,
+            cancellationToken);
+
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "PaymentConfirmed applied: txHash={TxHash} block={Block} confirmations={Confirmations} transactionId={TransactionId} correlationId={CorrelationId}",
-            data.TxHash, data.BlockNumber, existing.ConfirmationCount, existing.TransactionId, correlationId);
+            "PaymentConfirmed applied: txHash={TxHash} block={Block} confirmations={Confirmations} transactionId={TransactionId} outcome={Outcome} correlationId={CorrelationId}",
+            data.TxHash, data.BlockNumber, existing.ConfirmationCount, existing.TransactionId, validationOutcome, correlationId);
         return BlockchainWebhookResult.Applied;
     }
 
@@ -248,11 +261,20 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
         };
 
         _db.Set<BlockchainTransaction>().Add(entity);
+
+        // T72 — wrong-token validation: classify against refund threshold and
+        // either queue a WRONG_TOKEN_REFUND PENDING row or raise the admin
+        // alert. Shares the SaveChangesAsync below with the incoming row write.
+        var validationOutcome = await _amountValidation.ValidateWrongTokenIncomingAsync(
+            entity,
+            correlationId,
+            cancellationToken);
+
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogWarning(
-            "WrongTokenIncoming recorded: txHash={TxHash} actual={ActualToken} expected={ExpectedToken} transactionId={TransactionId} correlationId={CorrelationId} — refund dispatch deferred to T72/T73",
-            data.TxHash, actualToken, paymentAddress.ExpectedToken, paymentAddress.TransactionId, correlationId);
+            "WrongTokenIncoming recorded: txHash={TxHash} actual={ActualToken} expected={ExpectedToken} transactionId={TransactionId} outcome={Outcome} correlationId={CorrelationId}",
+            data.TxHash, actualToken, paymentAddress.ExpectedToken, paymentAddress.TransactionId, validationOutcome, correlationId);
         return BlockchainWebhookResult.Applied;
     }
 

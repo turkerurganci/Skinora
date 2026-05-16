@@ -19,6 +19,7 @@ using Skinora.API.Tests.Common;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Persistence.Outbox;
 using Skinora.Shared.Persistence.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
@@ -219,6 +220,147 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.Equal(BlockchainTransactionStatus.DETECTED, row.Status);
     }
 
+    // ─── T72 — Amount validation end-to-end (02 §4.4, 08 §3.4) ─────────
+
+    [Fact]
+    public async Task PaymentConfirmed_ExactAmount_AdvancesStateAndPublishesPaymentReceivedEvent()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx!.Status);
+        Assert.NotNull(tx.PaymentReceivedAt);
+
+        // PaymentReceivedEvent on outbox (T44 K2 wiring).
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("PaymentReceivedEvent", outbox);
+        // No refund-intent rows.
+        var refundCount = await _factory.CountRefundIntentsAsync(ids.TransactionId);
+        Assert.Equal(0, refundCount);
+    }
+
+    [Fact]
+    public async Task PaymentConfirmed_Underpayment_QueuesIncorrectAmountRefundAndBuyerEvent()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        // Buyer sends 50 USDT when 100 was expected — under-payment branch.
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "50.000000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        // 02 §4.4 — state stays in ITEM_ESCROWED so the timeout countdown continues.
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx!.Status);
+
+        var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
+        Assert.Equal(50m, refund.Amount);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
+        Assert.Equal(detected.data.fromAddress, refund.ToAddress);
+        Assert.Null(refund.PaymentAddressId);
+
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("BuyerPaymentInsufficientEvent", outbox);
+        Assert.DoesNotContain("PaymentReceivedEvent", outbox);
+    }
+
+    [Fact]
+    public async Task PaymentConfirmed_UnderpaymentBelowThreshold_RaisesAdminAlertOnly()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        // Below threshold: received 3 USDT, gas fee estimate 2, threshold = 2×2 = 4 ⇒ no refund.
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "3.000000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var refundCount = await _factory.CountRefundIntentsAsync(ids.TransactionId);
+        Assert.Equal(0, refundCount);
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("RefundBlockedAdminAlertEvent", outbox);
+        Assert.DoesNotContain("BuyerPaymentInsufficientEvent", outbox);
+    }
+
+    [Fact]
+    public async Task PaymentConfirmed_Overpayment_AdvancesStateAndQueuesExcessRefund()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        // Buyer overpays by 10 USDT.
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "110.000000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx!.Status);
+
+        var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.EXCESS_REFUND);
+        Assert.Equal(10m, refund.Amount);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
+
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("PaymentReceivedEvent", outbox);
+        Assert.Contains("BuyerPaymentExcessRefundedEvent", outbox);
+    }
+
+    [Fact]
+    public async Task WrongTokenIncoming_AboveThreshold_QueuesWrongTokenRefundAndBuyerEvent()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        var envelope = MakeWrongTokenEnvelope(ids.PaymentAddressId, ids.TransactionId, ids.PaymentAddress, amount: "50.000000");
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/wrong-token", envelope);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.WRONG_TOKEN_REFUND);
+        Assert.Equal(50m, refund.Amount);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
+        Assert.Equal(envelope.data.actualContractAddress, refund.ActualTokenAddress);
+        // 06 §3.8 — refund row carries the *expected* stablecoin for the txn.
+        Assert.Equal(StablecoinType.USDT, refund.Token);
+
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("WrongTokenRefundRequestedEvent", outbox);
+    }
+
+    [Fact]
+    public async Task WrongTokenIncoming_BelowThreshold_RaisesAdminAlertOnly()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+
+        var envelope = MakeWrongTokenEnvelope(ids.PaymentAddressId, ids.TransactionId, ids.PaymentAddress, amount: "3.000000");
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/wrong-token", envelope);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var refundCount = await _factory.CountRefundIntentsAsync(ids.TransactionId);
+        Assert.Equal(0, refundCount);
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("RefundBlockedAdminAlertEvent", outbox);
+        Assert.DoesNotContain("WrongTokenRefundRequestedEvent", outbox);
+    }
+
     [Fact]
     public async Task SpamTokenIncoming_PersistsRowAtTerminalConfirmed()
     {
@@ -286,24 +428,66 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         return Convert.ToHexString(HMACSHA256.HashData(key, payload)).ToLowerInvariant();
     }
 
-    private static DetectedEnvelopeShape MakeDetectedEnvelope(Guid paymentAddressId, Guid transactionId) => new()
-    {
-        @event = "payment.detected",
-        timestamp = DateTime.UtcNow.ToString("O"),
-        data = new DetectedDataShape
+    private static DetectedEnvelopeShape MakeDetectedEnvelope(
+        Guid paymentAddressId,
+        Guid transactionId,
+        string amount = "100.000000") => new()
         {
-            paymentAddressId = paymentAddressId,
-            transactionId = transactionId,
-            txHash = "0xDet" + Guid.NewGuid().ToString("N"),
-            fromAddress = "TFromX1234567890123456789012345678",
-            toAddress = "TToX1234567890123456789012345678901",
-            contractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-            tokenSymbol = "USDT",
-            amount = "100.000000",
-            blockTimestampMs = 1_778_000_000_000L,
-            detectedAt = DateTime.UtcNow.ToString("O"),
+            @event = "payment.detected",
+            timestamp = DateTime.UtcNow.ToString("O"),
+            data = new DetectedDataShape
+            {
+                paymentAddressId = paymentAddressId,
+                transactionId = transactionId,
+                txHash = "0xDet" + Guid.NewGuid().ToString("N"),
+                fromAddress = "TFromX1234567890123456789012345678",
+                toAddress = "TToX1234567890123456789012345678901",
+                contractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+                tokenSymbol = "USDT",
+                amount = amount,
+                blockTimestampMs = 1_778_000_000_000L,
+                detectedAt = DateTime.UtcNow.ToString("O"),
+            },
+        };
+
+    private static object MakeConfirmedEnvelope(Guid paymentAddressId, Guid transactionId, string txHash) => new
+    {
+        @event = "payment.confirmed",
+        timestamp = DateTime.UtcNow.ToString("O"),
+        data = new
+        {
+            paymentAddressId,
+            transactionId,
+            txHash,
+            blockNumber = 1_500_000L,
+            confirmationCount = 20,
+            confirmedAt = DateTime.UtcNow.ToString("O"),
         },
     };
+
+    private static dynamic MakeWrongTokenEnvelope(
+        Guid paymentAddressId,
+        Guid transactionId,
+        string paymentAddress,
+        string amount) => new
+        {
+            @event = "payment.wrong_token",
+            timestamp = DateTime.UtcNow.ToString("O"),
+            data = new
+            {
+                paymentAddressId,
+                transactionId,
+                txHash = "0xWrongToken" + Guid.NewGuid().ToString("N"),
+                fromAddress = "TFromX1234567890123456789012345678",
+                toAddress = paymentAddress,
+                expectedContractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+                actualContractAddress = "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+                actualTokenSymbol = "USDC",
+                amount,
+                blockTimestampMs = 1_778_000_000_000L,
+                detectedAt = DateTime.UtcNow.ToString("O"),
+            },
+        };
 
 #pragma warning disable IDE1006 // Naming style — JSON wire shape mirrors camelCase
     private sealed class DetectedEnvelopeShape
@@ -419,15 +603,83 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             return await db.Set<BlockchainTransaction>().CountAsync(b => b.TxHash == txHash);
         }
 
+        // ─── T72 amount validation helpers ──────────────────────────
+
+        public async Task<Transaction?> GetTransactionAsync(Guid transactionId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<Transaction>().AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == transactionId);
+        }
+
+        public async Task<int> CountRefundIntentsAsync(Guid transactionId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<BlockchainTransaction>()
+                .Where(b => b.TransactionId == transactionId
+                    && (b.Type == BlockchainTransactionType.BUYER_REFUND
+                     || b.Type == BlockchainTransactionType.EXCESS_REFUND
+                     || b.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
+                     || b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND
+                     || b.Type == BlockchainTransactionType.LATE_PAYMENT_REFUND))
+                .CountAsync();
+        }
+
+        public async Task<BlockchainTransaction> GetSingleRefundIntentAsync(
+            Guid transactionId, BlockchainTransactionType type)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<BlockchainTransaction>().AsNoTracking()
+                .SingleAsync(b => b.TransactionId == transactionId && b.Type == type);
+        }
+
+        public async Task<List<string>> GetOutboxEventTypesForTransactionAsync(Guid transactionId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            // Outbox payload is JSON; cheap LIKE on the serialized TransactionId
+            // is enough for an integration assertion (avoids deserialising every
+            // event type discriminator).
+            var marker = "\"TransactionId\":\"" + transactionId.ToString("D") + "\"";
+            var rows = await db.Set<OutboxMessage>().AsNoTracking()
+                .Where(m => m.Payload.Contains(marker))
+                .Select(m => m.EventType)
+                .ToListAsync();
+            // EventType is "Namespace.Type, Assembly" — extract the
+            // unqualified type name for assertion convenience.
+            static string Simple(string fullyQualified)
+            {
+                // Strip ", Assembly" suffix first, then split on '.' for the
+                // type name.
+                var commaIdx = fullyQualified.IndexOf(',', StringComparison.Ordinal);
+                var typeName = commaIdx > 0 ? fullyQualified[..commaIdx] : fullyQualified;
+                var dotIdx = typeName.LastIndexOf('.');
+                return dotIdx >= 0 ? typeName[(dotIdx + 1)..] : typeName;
+            }
+            return rows.Select(Simple).ToList();
+        }
+
         public void Reset()
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.Set<ProcessedNonce>().ExecuteDelete();
+            db.Set<OutboxMessage>().ExecuteDelete();
+            // AuditLog rows (T72 below-threshold paths write them) reference
+            // the SYSTEM user via ActorId — clear them before truncating users.
+            db.Set<Skinora.Platform.Domain.Entities.AuditLog>().ExecuteDelete();
             db.Set<BlockchainTransaction>().ExecuteDelete();
             db.Set<PaymentAddress>().IgnoreQueryFilters().ExecuteDelete();
             db.Set<Transaction>().IgnoreQueryFilters().ExecuteDelete();
-            db.Set<User>().IgnoreQueryFilters().ExecuteDelete();
+            // Preserve the EF-seeded SYSTEM user (06 §8.9, SeedConstants) —
+            // RefundBlockedAlertService writes AuditLog with ActorId = SystemUserId
+            // and AuditLog.ActorId is FK→User.
+            db.Set<User>().IgnoreQueryFilters()
+                .Where(u => u.Id != Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId)
+                .ExecuteDelete();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)

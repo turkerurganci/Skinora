@@ -144,4 +144,22 @@
   <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
     <value>Bot {BotId} reported: {Issue}.</value>
   </data>
+  <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
+    <value>Insufficient payment — please re-send the correct amount</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
+    <value>We received {ReceivedAmount} {Stablecoin} but expected {ExpectedAmount} {Stablecoin}. The received amount will be refunded to {SourceAddress}; please send the full {ExpectedAmount} {Stablecoin} again before the timeout.</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Excess payment refunded</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>You sent {ReceivedAmount} {Stablecoin} but only {ExpectedAmount} {Stablecoin} was required. The {ExcessAmount} {Stablecoin} excess is being refunded to {SourceAddress}.</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
+    <value>Wrong token detected — refunding</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
+    <value>The transaction expected {ExpectedStablecoin} but received {ReceivedAmount} {ActualStablecoin}. The amount is being refunded to {SourceAddress}; please send the correct token.</value>
+  </data>
 </root>

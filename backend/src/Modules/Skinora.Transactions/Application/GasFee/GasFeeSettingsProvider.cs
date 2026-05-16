@@ -17,11 +17,20 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
 {
     public const string ProtectionRatioKey = "gas_fee_protection_ratio";
     public const string MinRefundThresholdRatioKey = "min_refund_threshold_ratio";
+    public const string RefundGasFeeEstimateKey = "blockchain.refund_gas_fee_estimate_usdt";
+
+    /// <summary>
+    /// Code-side fallback for <see cref="RefundGasFeeEstimateKey"/> — mirrors
+    /// the seeded default of <c>2.0</c> USDT (T72 MVP). Provider falls back
+    /// to this when the row is missing, unconfigured, or malformed.
+    /// </summary>
+    public const decimal DefaultRefundGasFeeEstimateUsdt = 2.0m;
 
     private static readonly string[] _allKeys =
     [
         ProtectionRatioKey,
         MinRefundThresholdRatioKey,
+        RefundGasFeeEstimateKey,
     ];
 
     private readonly AppDbContext _db;
@@ -41,7 +50,24 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
 
         return new GasFeeSettings(
             ProtectionRatio: ReadProtectionRatio(rows),
-            MinRefundThresholdRatio: ReadMinRefundThresholdRatio(rows));
+            MinRefundThresholdRatio: ReadMinRefundThresholdRatio(rows),
+            RefundGasFeeEstimateUsdt: ReadRefundGasFeeEstimate(rows));
+    }
+
+    private static decimal ReadRefundGasFeeEstimate(IReadOnlyDictionary<string, string?> rows)
+    {
+        // Validator stage 2 enforces > 0 (generic positive-number rule —
+        // SystemSettingsValidator.cs default branch). Mirror that envelope
+        // on the read side so a row poisoned out-of-band cannot drag the
+        // refund threshold below the documented MVP floor.
+        if (rows.TryGetValue(RefundGasFeeEstimateKey, out var raw)
+            && raw is not null
+            && decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0m)
+        {
+            return parsed;
+        }
+        return DefaultRefundGasFeeEstimateUsdt;
     }
 
     private static decimal ReadProtectionRatio(IReadOnlyDictionary<string, string?> rows)
