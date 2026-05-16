@@ -1,6 +1,39 @@
 # T68 — Steam Sidecar Webhook Callback ve Backend Entegrasyonu
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-15
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-15 (yapım) / 2026-05-16 (validate)
+
+## Doğrulama (Validate Chat — 2026-05-16)
+
+**Verdict:** ✓ PASS bağımsız validator | **Bulgu:** 0 | **Düzeltme gerekli:** Yok
+
+| Kapı | Sonuç | Kanıt |
+|---|---|---|
+| Adım -1 Working tree | ✓ | `git status --short` boş |
+| Adım 0 Main CI | ✓ 3/3 success | runs `25939547135`, `25939547150`, `25903519112` |
+| Adım 0b Repo memory | ✓ | MEMORY.md `Next: T68 doğrulama` satırı + birden çok T68 mention mevcut |
+| Adım 8a Task branch CI | ✓ 10/10 success | run [`25942876338`](https://github.com/turkerurganci/Skinora/actions/runs/25942876338) — Lint/Build/Unit/Integration/Contract/Migration/Docker/Gate |
+
+**Kabul kriterleri (5/5 ✓):**
+1. HMAC-SHA256 + 3 header — sidecar [`WebhookClient.ts:19-22`](../../sidecar-steam/src/webhook/WebhookClient.ts) ile backend [`WebhookSignatureMiddleware.cs:161-167`](../../backend/src/Skinora.API/Middleware/WebhookSignatureMiddleware.cs) string-birleşim + hex-lowercase tam eşleşme; sidecar 4 header gönderiyor (X-Signature/X-Timestamp/X-Nonce/X-Correlation-Id).
+2. Middleware doğrulama — `Program.cs:261` pipeline 5a (CorrelationId/Logging/Exception sonrası, controllers/auth öncesi). Path-scope `/api/v1/webhooks/steam` (spec'teki `/api/v1/webhooks`'tan dar; Telegram legacy webhook ayrı header-secret korunsun diye — doc-comment'te gerekçe).
+3. Replay koruması — timestamp ±300sn (`middleware:101-109`) + ProcessedNonce DB UNIQUE `UX_ProcessedNonces_Source_Nonce` insert-first/catch pattern (line 141-156). Lokal log: `skew=900s>300s → 401`, `UNIQUE constraint failed → 401`.
+4. State machine — `SteamWebhookHandler` 7 alt-handler: accepted→EscrowItem/DeliverItem (yön), declined→SellerDecline/BuyerDecline, expired→Timeout, countered+invalid_items→cancellation (08 §2.4). Lokal test: `offer 8800 → ACCEPTED; transaction → EscrowItem` log doğruladı.
+5. Idempotent — 3 katman: nonce UNIQUE / TradeOffer UQ + `existing` lookup / aynı-status early-return + `CanFire==false`.
+
+**Doğrulama kontrol listesi (2/2 ✓):**
+- [x] 05 §3.4 güvenlik kuralları eksiksiz (Payload signing ✓ Doğrulama ✓ Replay ✓ Network docker-internal `skinora-backend` ✓)
+- [x] Replay koruması çalışıyor (timestamp skew + nonce UNIQUE testleri)
+
+**Test sonuçları (validator-bağımsız):**
+- `dotnet build Release` ✓ 0W/0E (24 proje, 26.88s)
+- `dotnet test --filter SteamWebhookEndpointTests` ✓ 6/6 PASS (lokal SQLite, 9.49s)
+- CI run `25942876338` Integration job ✓ — `SteamWebhookHandlerTests` 10/10 + `ProcessedNonceCleanupJobTests` 2/2 (SQL Server testcontainer)
+
+**Güvenlik kontrolü:** Secret sızıntısı ✓ temiz (SecretMaskingEnricher) | Auth ✓ middleware HMAC + replay = authenticated denginde | Input validation ✓ 6 fail-path + 400 deserialize | Constant-time ✓ `FixedTimeEquals` | Fail-safe ✓ boş secret → 401 | Yeni dış bağımlılık ✓ yok.
+
+**Doküman uyumu notu / K-future:** Middleware path-scope blockchain sidecar webhook'ları (T70–T77) için genişletilmeli. T68 scope dışı, ileride takip edilecek.
+
+---
 
 ---
 
