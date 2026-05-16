@@ -72,4 +72,22 @@
   <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
     <value>{ItemName} işlemi {ResumedStatus} aşamasından devam ediyor. Sayaç kaldığı yerden işliyor.</value>
   </data>
+  <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
+    <value>Eksik ödeme — doğru tutarı tekrar gönder</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
+    <value>{ReceivedAmount} {Stablecoin} aldık ama beklenen {ExpectedAmount} {Stablecoin} idi. Alınan tutar {SourceAddress} adresine iade ediliyor; lütfen timeout dolmadan önce {ExpectedAmount} {Stablecoin} tutarını tek seferde tekrar gönder.</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Fazla ödeme iade ediliyor</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{ReceivedAmount} {Stablecoin} gönderdin ama yalnızca {ExpectedAmount} {Stablecoin} gerekliydi. Aradaki {ExcessAmount} {Stablecoin} farkı {SourceAddress} adresine iade ediliyor.</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
+    <value>Yanlış token tespit edildi — iade ediliyor</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
+    <value>İşlem {ExpectedStablecoin} bekliyordu ama {ReceivedAmount} {ActualStablecoin} alındı. Tutar {SourceAddress} adresine iade ediliyor; lütfen doğru token ile tekrar gönder.</value>
+  </data>
 </root>

@@ -92,6 +92,11 @@ public static class SystemSettingSeed
         Default     (47, "retention.batch_size_outbox",                 "int",     "Retention",     "1000", "Outbox retention job'unun tek SELECT+DELETE iterasyonunda işleyebileceği maksimum kayıt sayısı. Job, eligible kayıt kalmayana kadar batch'leri tekrarlar."),
         Default     (48, "retention.batch_size_notification",           "int",     "Retention",     "500",  "Bağımsız bildirim retention job'unun tek iterasyonda işleyebileceği maksimum Notification sayısı. Bağlı NotificationDelivery kayıtları aynı iterasyon içinde silinir."),
         Default     (49, "retention.batch_size_user_login_log",         "int",     "Retention",     "1000", "UserLoginLog retention job'unun tek iterasyonda işleyebileceği maksimum kayıt sayısı."),
+        // --- T72: Blockchain amount validation — refund gas fee estimate (08 §3.4, 02 §4.4, 09 §14.4) ---
+        // T74 will replace this MVP estimate with a live TronGrid-derived value; for now
+        // the refund-decision path uses this admin-tunable USDT amount when classifying
+        // under/over/wrong-token cases against the 2× gas fee minimum threshold.
+        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "T72 MVP iade gas fee tahmini (USDT). RefundDecisionService bu değeri kullanarak iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine karar verir. T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
     ];
 
     private static SystemSetting Unconfigured(

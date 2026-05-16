@@ -87,6 +87,7 @@ public static class SystemSettingsCatalog
         new("monitoring_post_cancel_30d_polling_seconds", "blockchain_health",    "İptal sonrası 7-30 gün polling aralığı",                    "saniye"),
         new("monitoring_stop_after_days",                 "blockchain_health",    "İzleme durdurma süresi",                                    "gün"),
         new("min_refund_threshold_ratio",                 "blockchain_health",    "Minimum iade eşiği — gas fee × bu oran altı iade yapılmaz", "oran"),
+        new("blockchain.refund_gas_fee_estimate_usdt",    "blockchain_health",    "İade gas fee tahmini (T72 MVP, T74 sonrası runtime)",       "USDT"),
 
         // --- Buyer identification (open link toggle, 02 §16.2 "Yöntem 2'yi aktif/pasif") ---
         new("open_link_enabled",                          "buyer_identification", "Açık link yöntemi aktif",                                   null),

@@ -143,8 +143,11 @@ public static class TransactionsModule
         // T71 — inbound blockchain webhook handler (08 §3.4). The signature
         // envelope is verified by WebhookSignatureMiddleware (extended to
         // cover /api/v1/webhooks/blockchain in T71); the handler persists
-        // BlockchainTransaction rows (06 §3.8). State-machine advancement
-        // (PAYMENT_RECEIVED) is forward-deferred to T72.
+        // BlockchainTransaction rows (06 §3.8). T72 wires the amount
+        // validation pipeline (state-machine advance + refund intent rows +
+        // outbox events) into the handler's PaymentConfirmed and
+        // WrongTokenIncoming paths.
+        services.AddScoped<IAmountValidationService, AmountValidationService>();
         services.AddScoped<IBlockchainWebhookHandler, BlockchainWebhookHandler>();
 
         return services;

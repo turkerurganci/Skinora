@@ -240,13 +240,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (22) ───────────────────────────────────────
+    // ── NotificationType (25) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave22Values()
+    public void NotificationType_ShouldHave25Values()
     {
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(22, values.Length);
+        Assert.Equal(25, values.Length);
     }
 
     [Theory]
@@ -272,6 +272,9 @@ public class EnumTests
     [InlineData(nameof(NotificationType.ADMIN_STEAM_BOT_ISSUE))]
     [InlineData(nameof(NotificationType.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(NotificationType.EMERGENCY_HOLD_RELEASED))]
+    [InlineData(nameof(NotificationType.INSUFFICIENT_PAYMENT))]
+    [InlineData(nameof(NotificationType.OVERPAYMENT_REFUNDED))]
+    [InlineData(nameof(NotificationType.WRONG_TOKEN_REFUND))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationType), Enum.Parse<NotificationType>(valueName)));

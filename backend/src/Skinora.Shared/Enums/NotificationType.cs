@@ -23,5 +23,10 @@ public enum NotificationType
     ADMIN_PAYMENT_FAILURE,
     ADMIN_STEAM_BOT_ISSUE,
     EMERGENCY_HOLD_APPLIED,
-    EMERGENCY_HOLD_RELEASED
+    EMERGENCY_HOLD_RELEASED,
+
+    // --- T72: Blockchain amount validation outcomes (02 §4.4, 08 §3.4) ---
+    INSUFFICIENT_PAYMENT,
+    OVERPAYMENT_REFUNDED,
+    WRONG_TOKEN_REFUND
 }
