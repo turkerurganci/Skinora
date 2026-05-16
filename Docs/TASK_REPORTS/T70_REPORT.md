@@ -93,8 +93,8 @@
 ## Commit & PR
 
 - Branch: `task/T70-hd-wallet-address-derivation`
-- Commit: [bu commit'in hash'i] — `T70: Blockchain Sidecar — HD wallet adres üretimi`
-- PR: #[doldurulacak — push sonrası]
+- Commit: `e9874db` — `T70: Blockchain Sidecar — HD wallet adres üretimi`
+- PR: [#111](https://github.com/turkerurganci/Skinora/pull/111)
 - CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
