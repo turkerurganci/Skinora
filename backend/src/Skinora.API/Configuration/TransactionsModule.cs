@@ -11,6 +11,7 @@ using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Application.Webhooks;
 
 namespace Skinora.API.Configuration;
 
@@ -138,6 +139,13 @@ public static class TransactionsModule
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
+
+        // T71 — inbound blockchain webhook handler (08 §3.4). The signature
+        // envelope is verified by WebhookSignatureMiddleware (extended to
+        // cover /api/v1/webhooks/blockchain in T71); the handler persists
+        // BlockchainTransaction rows (06 §3.8). State-machine advancement
+        // (PAYMENT_RECEIVED) is forward-deferred to T72.
+        services.AddScoped<IBlockchainWebhookHandler, BlockchainWebhookHandler>();
 
         return services;
     }

@@ -4,16 +4,27 @@ import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
+import { MonitorRegistry } from './monitor/MonitorRegistry.js';
+import { TronGridClient } from './tron/TronGridClient.js';
 
 const app = express();
 const walletManager = new WalletManager();
+const tronGridClient = new TronGridClient();
+const monitorRegistry = new MonitorRegistry({
+  client: tronGridClient,
+  allowlist: { USDT: config.allowlist.USDT, USDC: config.allowlist.USDC },
+  intervalMs: config.paymentPollingIntervalMs,
+  minConfirmations: config.minConfirmations,
+  pageLimit: config.monitorPageLimit,
+  webhookEndpoints: config.webhookEndpoints,
+});
 
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(createRouter({ walletManager }));
+app.use(createRouter({ walletManager, monitorRegistry }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {
@@ -30,10 +41,13 @@ async function shutdown(signal: string): Promise<void> {
     logger.info('HTTP server closed');
   });
 
-  // 2. Shutdown wallet manager
+  // 2. Stop active monitors
+  await monitorRegistry.shutdown();
+
+  // 3. Shutdown wallet manager
   await walletManager.shutdown();
 
-  // 3. Force exit after timeout
+  // 4. Force exit after timeout
   const forceTimer = setTimeout(() => {
     logger.error('Forced shutdown — timeout exceeded');
     process.exit(1);

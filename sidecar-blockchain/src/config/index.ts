@@ -83,8 +83,23 @@ export const config = {
   tronGridRequestsPerSecond: parseInt(process.env.TRONGRID_RPS || '10', 10),
 
   // Monitoring intervals (seconds)
-  paymentPollingIntervalMs: 3_000, // 05 §3.3 — 3 second active monitoring
-  minConfirmations: 20, // 05 §3.3 — 20 blocks (~60s)
+  paymentPollingIntervalMs: parseInt(process.env.PAYMENT_POLLING_INTERVAL_MS || '3000', 10), // 05 §3.3 — 3 second active monitoring
+  minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '20', 10), // 05 §3.3 — 20 blocks (~60s)
+  monitorPageLimit: parseInt(process.env.MONITOR_PAGE_LIMIT || '20', 10), // 08 §3.4
+
+  // Webhook callback endpoints — match BlockchainWebhooksController routes
+  webhookEndpoints: {
+    paymentDetected: '/api/v1/webhooks/blockchain/payment-detected',
+    paymentConfirmed: '/api/v1/webhooks/blockchain/payment-confirmed',
+    wrongTokenIncoming: '/api/v1/webhooks/blockchain/wrong-token',
+    spamTokenIncoming: '/api/v1/webhooks/blockchain/spam-token',
+  },
+
+  // Supported stablecoin allowlist (08 §3.4 wrong-token classification)
+  allowlist: {
+    USDT: TOKEN_CONTRACTS[network].USDT,
+    USDC: TOKEN_CONTRACTS[network].USDC,
+  },
 
   // Graceful shutdown
   shutdownTimeoutMs: 10_000,
