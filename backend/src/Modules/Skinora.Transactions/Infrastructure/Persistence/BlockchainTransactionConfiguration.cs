@@ -111,6 +111,10 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             .IsRequired()
             .HasDefaultValue(0);
 
+        // NextAttemptAt — T73 retry scheduling. NULL = eligible immediately;
+        // dispatcher sets it to `now + retryInterval` after a transient failure.
+        builder.Property(b => b.NextAttemptAt);
+
         builder.Property(b => b.ErrorMessage)
             .HasMaxLength(500);
 
@@ -140,6 +144,14 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.HasIndex(b => b.Status)
             .HasFilter("[Status] = 'PENDING'")
             .HasDatabaseName("IX_BlockchainTransactions_Status_Pending");
+
+        // T73 dispatcher hot path — composite covers the "Status=PENDING AND
+        // (NextAttemptAt IS NULL OR NextAttemptAt <= @now)" lookup that runs
+        // every minute. ORDER BY CreatedAt keeps the dispatcher fair (oldest
+        // refund first) on backlogs.
+        builder.HasIndex(b => new { b.Status, b.NextAttemptAt, b.CreatedAt })
+            .HasFilter("[Status] = 'PENDING'")
+            .HasDatabaseName("IX_BlockchainTransactions_DispatchScan");
 
         builder.HasIndex(b => b.FromAddress)
             .HasDatabaseName("IX_BlockchainTransactions_FromAddress");

@@ -23,6 +23,17 @@ public class BlockchainTransaction
     public long? BlockNumber { get; set; }
     public int ConfirmationCount { get; set; }
     public int RetryCount { get; set; }
+
+    /// <summary>
+    /// Earliest UTC instant at which the outgoing-transfer dispatcher will
+    /// pick this row up again (T73). NULL means "eligible immediately" — set
+    /// to <c>now + retryInterval[RetryCount]</c> after a transient failure.
+    /// Inbound rows (BUYER_PAYMENT / WRONG_TOKEN_INCOMING / SPAM_TOKEN_INCOMING)
+    /// leave this NULL; the dispatcher's WHERE clause filters them out by
+    /// <c>Type</c> regardless.
+    /// </summary>
+    public DateTime? NextAttemptAt { get; set; }
+
     public string? ErrorMessage { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ConfirmedAt { get; set; }

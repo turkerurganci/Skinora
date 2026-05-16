@@ -4,12 +4,22 @@ import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
 import { startMonitorHandler, stopMonitorHandler } from './monitorHandlers.js';
+import {
+  payoutHandler,
+  refundHandler,
+  sweepHandler,
+  transferStatusHandler,
+} from './transferHandlers.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import type { MonitorRegistry } from '../monitor/MonitorRegistry.js';
+import type { TransferService } from '../transfer/TransferService.js';
+import type { RefundService } from '../transfer/RefundService.js';
 
 export interface RouterDeps {
   walletManager: WalletManager;
   monitorRegistry: MonitorRegistry;
+  transferService: TransferService;
+  refundService: RefundService;
 }
 
 export function createRouter(deps: RouterDeps): Router {
@@ -43,17 +53,25 @@ export function createRouter(deps: RouterDeps): Router {
   apiRouter.post('/monitor/stop', stopMonitorHandler(deps.monitorRegistry));
 
   // Transfers — T73
-  apiRouter.post('/transfer/payout', (_req, res) => {
-    res.status(501).json({ error: 'Not implemented — see T73' });
-  });
+  // POST /api/transfer/payout { blockchainTransactionId, toAddress, amount, token }
+  //   → 200 { txHash }
+  //   → 400 { error: 'INVALID_TRANSFER_REQUEST' | 'HOT_WALLET_NOT_CONFIGURED' | 'INVALID_TRANSFER_AMOUNT' | 'TOKEN_CONTRACT_NOT_CONFIGURED' }
+  //   → 502 { error: 'TRANSFER_BROADCAST_REJECTED' | 'TRANSFER_BROADCAST_FAILED' }  (retryable)
+  apiRouter.post('/transfer/payout', payoutHandler(deps.transferService));
 
-  apiRouter.post('/transfer/refund', (_req, res) => {
-    res.status(501).json({ error: 'Not implemented — see T73' });
-  });
+  // POST /api/transfer/refund { blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token }
+  //   → 200 { txHash }
+  //   Same error shape as /payout (plus DEPOSIT_ADDRESS_MISMATCH 400).
+  apiRouter.post('/transfer/refund', refundHandler(deps.refundService));
 
-  apiRouter.post('/transfer/sweep', (_req, res) => {
-    res.status(501).json({ error: 'Not implemented — see T73' });
-  });
+  // POST /api/transfer/sweep { blockchainTransactionId, depositIndex, depositAddress, toHotWalletAddress, amount, token }
+  //   → 200 { txHash }
+  apiRouter.post('/transfer/sweep', sweepHandler(deps.transferService));
+
+  // GET /api/transfer/status/:txHash
+  //   → 200 { txHash, blockNumber?, contractRet?, confirmations }
+  //   → 502 { error: 'TRANSFER_STATUS_HTTP_ERROR' }
+  apiRouter.get('/transfer/status/:txHash', transferStatusHandler(deps.transferService));
 
   // Balance check — T77
   apiRouter.get('/wallet/hot-wallet-balance', (_req, res) => {

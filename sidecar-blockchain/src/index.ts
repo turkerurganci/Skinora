@@ -6,6 +6,9 @@ import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
 import { MonitorRegistry } from './monitor/MonitorRegistry.js';
 import { TronGridClient } from './tron/TronGridClient.js';
+import { TronTransferClient } from './tron/TronTransferClient.js';
+import { TransferService } from './transfer/TransferService.js';
+import { RefundService } from './transfer/RefundService.js';
 
 const app = express();
 const walletManager = new WalletManager();
@@ -18,13 +21,33 @@ const monitorRegistry = new MonitorRegistry({
   pageLimit: config.monitorPageLimit,
   webhookEndpoints: config.webhookEndpoints,
 });
+const tronTransferClient = new TronTransferClient(
+  config.tronFullNodeUrl,
+  config.tronSolidityUrl,
+  config.tronApiKey,
+);
+const tokenContracts = { USDT: config.usdtContract, USDC: config.usdcContract };
+const transferService = new TransferService({
+  walletManager,
+  client: tronTransferClient,
+  tokenContracts,
+  hotWalletAddress: config.hotWalletAddress,
+  hotWalletPrivateKey: config.hotWalletPrivateKey,
+  tokenDecimals: config.tokenDecimals,
+});
+const refundService = new RefundService({
+  walletManager,
+  client: tronTransferClient,
+  tokenContracts,
+  tokenDecimals: config.tokenDecimals,
+});
 
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(createRouter({ walletManager, monitorRegistry }));
+app.use(createRouter({ walletManager, monitorRegistry, transferService, refundService }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {
