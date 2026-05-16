@@ -104,9 +104,9 @@
 ## Commit & PR
 
 - Branch: `task/T71-blockchain-payment-monitoring`
-- Commit: (bu PR'da)
-- PR: (henüz açılmadı — Bitiş Kapısı'nda push + PR + CI watch)
-- CI: bekleniyor
+- Commit: `e97a26c`
+- PR: #112 — https://github.com/turkerurganci/Skinora/pull/112
+- CI: izleniyor
 
 ## Known Limitations / Follow-up
 
