@@ -162,6 +162,60 @@ describe('BotSession', () => {
     );
   });
 
+  // T69 — 17 (Banned), 40 (Blocked), 43 (AccountDisabled), 51 (Suspended),
+  // 73 (AccountLockedDown), 105 (IPBanned) were added to BANNED_ERESULTS so
+  // sidecar can take banned bots out of the pool without operator action.
+  it.each([17, 40, 43, 51, 73, 105])(
+    'banned eresult %s (community/trade ban) transitions BANNED',
+    async (code) => {
+      const onFatalFailure = vi.fn();
+      const { session, client } = newSession({ events: { onFatalFailure } });
+      await session.start();
+      const err: Error & { eresult?: number } = new Error(`Banned eresult=${code}`);
+      err.eresult = code;
+      client.emit('error', err);
+      expect(session.getStatus().state).toBe('BANNED');
+      expect(onFatalFailure).toHaveBeenCalledWith(
+        expect.objectContaining({ state: 'BANNED' }),
+        'banned',
+      );
+    },
+  );
+
+  // T69 — RESTRICTED_ERESULTS: account authenticates but trade/community
+  // privileges are gone. Sidecar drops the bot from the pool with reason
+  // 'restricted'; backend mirrors onto PlatformSteamBotStatus.RESTRICTED.
+  it.each([11, 15, 25, 82, 85, 95, 96, 97, 112, 116])(
+    'restricted eresult %s transitions FAILED with reason=restricted',
+    async (code) => {
+      const onFatalFailure = vi.fn();
+      const { session, client } = newSession({ events: { onFatalFailure } });
+      await session.start();
+      const err: Error & { eresult?: number } = new Error(`Restricted eresult=${code}`);
+      err.eresult = code;
+      client.emit('error', err);
+      expect(session.getStatus().state).toBe('FAILED');
+      expect(session.isTerminal()).toBe(true);
+      expect(onFatalFailure).toHaveBeenCalledTimes(1);
+      const [, reason] = onFatalFailure.mock.calls[0] as [BotSessionStatus, BotFailureReason];
+      expect(reason).toBe('restricted');
+    },
+  );
+
+  it('rate-limit eresult 84 stays transient (does NOT trigger restricted)', async () => {
+    // 84 (RateLimitExceeded) is intentionally NOT in RESTRICTED_ERESULTS — the
+    // trade-offer service handles it with 08 §2.7 backoff. BotSession should
+    // leave the state alone so the relogin loop can retry.
+    const onFatalFailure = vi.fn();
+    const { session, client } = newSession({ events: { onFatalFailure } });
+    await session.start();
+    const err: Error & { eresult?: number } = new Error('RateLimitExceeded');
+    err.eresult = 84;
+    client.emit('error', err);
+    expect(session.getStatus().state).toBe('LOGGING_IN');
+    expect(onFatalFailure).not.toHaveBeenCalled();
+  });
+
   it('transient error does not transition state', async () => {
     const { session, client } = newSession();
     await session.start();

@@ -371,13 +371,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (20) ────────────────────────────────────────────
+    // ── AuditAction (21) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave20Values()
+    public void AuditAction_ShouldHave21Values()
     {
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(20, values.Length);
+        Assert.Equal(21, values.Length);
     }
 
     [Theory]
@@ -401,6 +401,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.TRANSACTION_CANCELLED_ADMIN))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_RELEASED))]
+    [InlineData(nameof(AuditAction.BOT_STATUS_CHANGED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));

@@ -30,5 +30,11 @@ public enum AuditAction
     // Admin transaction lifecycle (T59 — 02 §7, 07 §9.20-§9.22, 03 §8.8)
     TRANSACTION_CANCELLED_ADMIN,
     EMERGENCY_HOLD_APPLIED,
-    EMERGENCY_HOLD_RELEASED
+    EMERGENCY_HOLD_RELEASED,
+
+    // Steam bot lifecycle (T69 — 02 §15, 05 §3.2). Sidecar reports bot
+    // restriction / ban / pool removal via signed webhook; backend mirrors
+    // it onto PlatformSteamBot.Status and records the transition here so
+    // the SECURITY_EVENT queue surfaces it alongside wallet-address events.
+    BOT_STATUS_CHANGED
 }

@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Platform.Application.Audit;
+using Skinora.Realtime.Application;
+using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
@@ -10,10 +14,11 @@ using Skinora.Transactions.Domain.StateMachine;
 namespace Skinora.Steam.Application.Webhooks;
 
 /// <summary>
-/// T68 webhook dispatcher. Each invocation runs in a single
-/// <see cref="AppDbContext"/> transaction so the TradeOffer upsert and the
-/// state-machine flip share the same SaveChanges — a partial commit cannot
-/// leave the system with an offer row but no state advance.
+/// T68 webhook dispatcher (T69 extended bot lifecycle handling). Each
+/// invocation runs in a single <see cref="AppDbContext"/> transaction so the
+/// TradeOffer upsert and the state-machine flip share the same SaveChanges —
+/// a partial commit cannot leave the system with an offer row but no state
+/// advance.
 /// </summary>
 public sealed class SteamWebhookHandler : ISteamWebhookHandler
 {
@@ -21,31 +26,124 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     private const string DirectionDelivery = "delivery";
 
     private readonly AppDbContext _db;
+    private readonly IAuditLogger _auditLogger;
+    private readonly INotificationRealtimePublisher _realtime;
+    private readonly TimeProvider _clock;
     private readonly ILogger<SteamWebhookHandler> _logger;
 
-    public SteamWebhookHandler(AppDbContext db, ILogger<SteamWebhookHandler> logger)
+    public SteamWebhookHandler(
+        AppDbContext db,
+        IAuditLogger auditLogger,
+        INotificationRealtimePublisher realtime,
+        TimeProvider clock,
+        ILogger<SteamWebhookHandler> logger)
     {
         _db = db;
+        _auditLogger = auditLogger;
+        _realtime = realtime;
+        _clock = clock;
         _logger = logger;
     }
 
-    public Task HandleBotEventAsync(
+    public async Task HandleBotEventAsync(
         SteamWebhookEnvelope<BotEventData> envelope,
         string correlationId,
         CancellationToken cancellationToken)
     {
-        // Admin notification integration is forward-deferred to T96; for now
-        // Serilog (with the structured correlationId/event fields) is the
-        // single source of truth. Anyone tailing logs sees the lifecycle.
+        // T69 — sidecar reports BotFailureReason via signed webhook; we map
+        // it onto PlatformSteamBotStatus and persist the transition with an
+        // audit row, then push the change to admin SignalR clients. Bot
+        // events keep their structured Warning log even after mutation —
+        // operators tailing Loki still see the full lifecycle.
+        var data = envelope.Data;
         _logger.LogWarning(
             "Steam bot event received: {Event} account={Account} reason={Reason} status={Status} correlationId={CorrelationId}",
             envelope.Event,
-            envelope.Data?.AccountName,
-            envelope.Data?.Reason,
-            envelope.Data?.Status,
+            data?.AccountName,
+            data?.Reason,
+            data?.Status,
             correlationId);
-        return Task.CompletedTask;
+
+        if (data is null || string.IsNullOrWhiteSpace(data.AccountName))
+        {
+            _logger.LogWarning(
+                "Bot event payload missing accountName — skipping status update. correlationId={CorrelationId}",
+                correlationId);
+            return;
+        }
+
+        var bot = await _db.Set<PlatformSteamBot>()
+            .FirstOrDefaultAsync(b => b.DisplayName == data.AccountName, cancellationToken);
+        if (bot is null)
+        {
+            _logger.LogWarning(
+                "Bot event references unknown account {Account} — no PlatformSteamBot row, skipping update. correlationId={CorrelationId}",
+                data.AccountName, correlationId);
+            return;
+        }
+
+        var targetStatus = MapReasonToStatus(data.Reason);
+        var previousStatus = bot.Status;
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        // Idempotent — same status arrives a second time (sidecar retry,
+        // duplicate health-probe failure). Still refresh LastHealthCheckAt
+        // because the probe observation is fresh, but skip audit + push so
+        // we do not flood the admin dashboard with duplicate banners.
+        if (previousStatus == targetStatus)
+        {
+            bot.LastHealthCheckAt = nowUtc;
+            await _db.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation(
+                "Bot {Account} already at status {Status} — idempotent ack. correlationId={CorrelationId}",
+                data.AccountName, targetStatus, correlationId);
+            return;
+        }
+
+        bot.Status = targetStatus;
+        bot.LastHealthCheckAt = nowUtc;
+
+        await _auditLogger.LogAsync(new AuditLogEntry(
+            UserId: null,
+            ActorId: SeedConstants.SystemUserId,
+            ActorType: ActorType.SYSTEM,
+            Action: AuditAction.BOT_STATUS_CHANGED,
+            EntityType: nameof(PlatformSteamBot),
+            EntityId: bot.Id.ToString(),
+            OldValue: previousStatus.ToString(),
+            NewValue: $"{targetStatus};reason={data.Reason};event={envelope.Event}",
+            IpAddress: null), cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _realtime.PublishAdminBotStatusChangedAsync(
+            new NotificationRealtimePayloads.AdminBotStatusChanged(
+                BotId: bot.Id,
+                SteamId: bot.SteamId,
+                DisplayName: bot.DisplayName,
+                PreviousStatus: previousStatus.ToString(),
+                NewStatus: targetStatus.ToString(),
+                Reason: data.Reason ?? string.Empty,
+                ChangedAt: nowUtc),
+            cancellationToken);
     }
+
+    /// <summary>
+    /// Translate the sidecar <c>BotFailureReason</c> (TypeScript union, see
+    /// <c>sidecar-steam/src/bot/BotSession.ts</c>) into the persisted
+    /// <see cref="PlatformSteamBotStatus"/>. Unknown reasons collapse to
+    /// <see cref="PlatformSteamBotStatus.OFFLINE"/> rather than ACTIVE so we
+    /// never silently re-eligibilise a bot the sidecar took out of the pool.
+    /// </summary>
+    private static PlatformSteamBotStatus MapReasonToStatus(string? reason) => reason switch
+    {
+        "banned" => PlatformSteamBotStatus.BANNED,
+        "restricted" => PlatformSteamBotStatus.RESTRICTED,
+        "rate_limited" => PlatformSteamBotStatus.RESTRICTED,
+        "login_failed" => PlatformSteamBotStatus.OFFLINE,
+        "session_recovery_failed" => PlatformSteamBotStatus.OFFLINE,
+        _ => PlatformSteamBotStatus.OFFLINE,
+    };
 
     public async Task<TradeWebhookResult> HandleTradeEventAsync(
         SteamWebhookEnvelope<TradeOfferEventData> envelope,

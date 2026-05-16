@@ -1,23 +1,24 @@
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 
-namespace Skinora.Notifications.Tests.TestSupport;
+namespace Skinora.Steam.Tests.TestSupport;
 
 /// <summary>
-/// Test double recording every <see cref="INotificationRealtimePublisher"/>
-/// call so dispatcher / inbox tests can assert payload content without
-/// spinning up SignalR. Captures (method, userId, payload) tuples.
+/// Local recording double used by T69 webhook tests so we can assert that the
+/// admin bot-status SignalR broadcast actually fired without spinning up the
+/// SignalR runtime. Mirrors the Notifications.Tests recorder but lives here
+/// to keep the test-project dependency graph minimal.
 /// </summary>
 public sealed class RecordingNotificationRealtimePublisher : INotificationRealtimePublisher
 {
-    public List<(string Method, Guid? UserId, object Payload)> Calls { get; } = [];
+    public List<(string Method, object Payload)> Calls { get; } = [];
 
     public Task PublishNewNotificationAsync(
         Guid userId,
         NotificationRealtimePayloads.NewNotification payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("NewNotification", userId, payload));
+        Calls.Add(("NewNotification", payload));
         return Task.CompletedTask;
     }
 
@@ -26,7 +27,7 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         NotificationRealtimePayloads.UnreadCountChanged payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("UnreadCountChanged", userId, payload));
+        Calls.Add(("UnreadCountChanged", payload));
         return Task.CompletedTask;
     }
 
@@ -35,7 +36,7 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         NotificationRealtimePayloads.TelegramConnected payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("TelegramConnected", userId, payload));
+        Calls.Add(("TelegramConnected", payload));
         return Task.CompletedTask;
     }
 
@@ -44,7 +45,7 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         NotificationRealtimePayloads.DiscordConnected payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("DiscordConnected", userId, payload));
+        Calls.Add(("DiscordConnected", payload));
         return Task.CompletedTask;
     }
 
@@ -52,7 +53,7 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         NotificationRealtimePayloads.MaintenanceStatusChanged payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("MaintenanceStatusChanged", null, payload));
+        Calls.Add(("MaintenanceStatusChanged", payload));
         return Task.CompletedTask;
     }
 
@@ -60,7 +61,7 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         NotificationRealtimePayloads.AdminBotStatusChanged payload,
         CancellationToken cancellationToken)
     {
-        Calls.Add(("AdminBotStatusChanged", null, payload));
+        Calls.Add(("AdminBotStatusChanged", payload));
         return Task.CompletedTask;
     }
 }

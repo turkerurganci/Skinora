@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Steam.Application.Admin;
+using Skinora.Steam.Application.BotSelection;
 using Skinora.Steam.Application.Inventory;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Transactions.Application.Steam;
@@ -52,6 +53,11 @@ public static class SteamModule
 
         // T68 — inbound webhook handler.
         services.AddScoped<ISteamWebhookHandler, SteamWebhookHandler>();
+
+        // T69 — capacity-based bot selector. Caller (TransactionStateMachine
+        // EscrowItem trigger forwarding to the sidecar trade-offer endpoint)
+        // is forward-deferred — see Docs/TASK_REPORTS/T69_REPORT.md K-list.
+        services.AddScoped<IBotSelectionService, SqlBotSelectionService>();
 
         return services;
     }
