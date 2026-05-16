@@ -1,6 +1,8 @@
 # T69 — Steam Sidecar — Bot Failover ve Capacity-Based Seçim
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-16
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-16
+
+> **Doğrulama (bağımsız validator chat, 2026-05-16):** ✓ PASS — 4/4 kabul kriteri (2 ✓ + 2 ~ Kısmi infrastructure-ready K-list disclosure'ı ile kabul edildi), 2/2 doğrulama listesi maddesi, 0 S-bulgu, 2 minor advisory (M1 + M2 — aşağıda). Backend Release 0W/0E + lokal unit 243+ ✓ (Shared 181 + Steam 13 + Notifications.Tests unit-portion 49) + sidecar Vitest 140/140 ✓. Main CI startup 3/3 success (`25957448055` T68 squash / `25957448051` T68 docker / `25939547135` chore #108). Task branch CI son run `25959087523` (commit `bf9b854` chore BYPASS_LOG) 10/10 ✓; T69 işin son CI'sı `25958779785` (commit `36196a3` test fix) 10/10 ✓. Memory drift kontrolü temiz (T69 satırları repo memory'de mevcut).
 
 ---
 
@@ -106,12 +108,73 @@
 - **Yeni dış bağımlılık:** Yok.
 - **Yeni cross-module reference:** `Skinora.Steam → Skinora.Platform` ve `Skinora.Steam → Skinora.Realtime` (audit + admin notification için). Döngüsel değil — Platform ve Realtime, Steam'i referans almıyor.
 
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat) |
+| Bulgu sayısı | 0 S-bulgu, 2 minor advisory (M1, M2) |
+| Düzeltme gerekli mi | Hayır — advisory'ler K-list ile zaten dokümante edildi |
+| Doğrulama tarihi | 2026-05-16 |
+| Validator commit ref | `bf9b854` (HEAD task/T69-bot-failover-capacity, BYPASS_LOG fixup sonrası) |
+| Main CI startup | 3/3 success (`25957448055`, `25957448051`, `25939547135`) |
+| Task branch CI | son run `25959087523` 10/10 ✓; T69 implementation CI'sı `25958779785` (commit `36196a3`) 10/10 ✓ |
+| Repo memory drift | Temiz (T69 satırları mevcut) |
+
+### Validator Bağımsız Verdict — Kriter Yorumu
+
+- **#1 Capacity-based seçim:** Algorithm + 5/5 integration test eksiksiz; production dispatch caller K1 ile T-future devir. Bu acceptance kriteri infrastructure-ready (T64-T68 forward-defer pattern precedent'i) anlamında karşılandı.
+- **#2 Kısıtlı bot tespiti + yönlendirme:** İki katman (sidecar pool removal + backend Status filter) implement edildi; gerçek "yönlendirme" K1 dispatch caller'ı eklenince otomatik aktif olur. Kabul: infrastructure-ready.
+- **#3 Recovery/manual intervention:** Audit + admin SignalR push (manual intervention path). Tam otomatik recovery state machine K2 ile T-future.
+- **#4 Admin bildirim:** Tam karşılandı.
+
+### Doğrulama Kontrol Listesi (11_IMPLEMENTATION_PLAN.md)
+
+- [x] **02 §15 bot yönetimi kuralları doğru mu?** ✓ — Çoklu bot ile risk dağıtımı (PlatformSteamBot tablosu çoklu satır destekler), kısıtlanan hesap aktif olanlara yönlendirme (ACTIVE-only selection filter), admin izleme (T63 AdminSteamBotQueryService + T69 real-time push).
+
+### Validator Advisory'leri (M1, M2)
+
+| # | Seviye | Açıklama | Etki | Etkilenen dosya |
+|---|---|---|---|---|
+| M1 | Minor advisory | `AdminBotStatusChanged` SignalR push `Clients.All` ile broadcast — non-admin client WebSocket frame'lerinde admin operasyonel telemetri (botId/SteamId/DisplayName/Reason) görür. K4 ile T96'ya devir dokümante. T96'da per-role group abstraction eklenmeli. Bilgi sızıntısı düşük etki (steam id'ler zaten public). | Düşük — fixable T96'da | `Skinora.Realtime/Infrastructure/SignalRNotificationRealtimePublisher.cs` |
+| M2 | Cosmetic | Sidecar `BotSession.test.ts` `transient error` testinde `err.eresult = 3` sonrası `err.eresult = 84` çift atama (önce yazılan değer kullanılmadan üzerine yazılıyor). Functional impact yok — final değer 84 doğru. Yorum satırlarında refactor edilmesi gereken açık. | Sıfır — kozmetik | `sidecar-steam/src/bot/BotSession.test.ts:222-226` |
+
+### Bağımsız Test Doğrulaması
+
+| Tür | Sonuç | Komut | Çıktı özeti |
+|---|---|---|---|
+| Backend Release build | ✓ 0W/0E | `dotnet build -c Release --nologo` | Build succeeded. 0 Warning(s) / 0 Error(s) (33.47s) |
+| Skinora.Shared.Tests (unit) | ✓ 181/181 | `dotnet test ... --filter "FullyQualifiedName~EnumTests|FullyQualifiedName~AuditLogCategoryMapTests"` ek olarak `dotnet test --filter "FullyQualifiedName~Unit"` | Passed! Failed: 0, Passed: 181 |
+| Skinora.Steam.Tests (non-integration) | ✓ 13/13 | `dotnet test ... --filter "FullyQualifiedName!~Integration"` | Passed! Failed: 0, Passed: 13 |
+| Skinora.Notifications.Tests (unit) | ✓ 49/49 | `dotnet test ...` (44 Docker-dependent integration lokalde skip — CI'da `25958779785` PASS) | Failed: 44 (Docker), Passed: 49 unit |
+| Sidecar Vitest | ✓ 140/140 | `npm test` (vitest run) | 9 test file, 140 test (BotSession.test.ts 37 — T69 RESTRICTED 10 + BANNED 6 + rate-limit 1 dahil) |
+| Task branch CI (commit `36196a3`) | ✓ 10/10 | `gh run view 25958779785` | Lint/Build/Unit/Integration/Contract/Migration/Docker(×2)/Gate hepsi success |
+
+### Güvenlik Kontrolü
+
+- [x] Secret sızıntısı: Temiz — Steam credentials sidecar runtime'da (env/config mount), backend kodunda credential yok
+- [x] Auth etkisi: Temiz — webhook handler T68'in HMAC-SHA256 + replay-protected `/api/v1/webhooks/steam` endpoint'i üzerinden invoke ediliyor
+- [x] Input validation: Temiz — `BotEventData.AccountName` null/empty handled, `MapReasonToStatus` unknown reason → OFFLINE (conservative — never auto-ACTIVE)
+- [x] Yeni dış bağımlılık: Yok — sadece intra-project reference (Skinora.Steam → Skinora.Platform + Skinora.Realtime)
+- [~] AdminBotStatusChanged broadcast (M1 advisory): operasyonel telemetri Clients.All'a açık (per K4 T96 devir)
+
+### Yapım Raporu Karşılaştırması
+
+- **Uyum:** Tam uyumlu. Yapım raporundaki tüm K1-K5 forward-defer'ler bağımsız validator tarafından da gerekçeli görüldü.
+- **Verdict farkı yok:** Yapım raporu kabul kriterleri #1 ve #2'yi ✓ olarak işaretlemiş; validator katı okumayla ~ Kısmi diyebilirdi ama K-list disclosure + proje sahibi onaylı minimal scope + T64-T68 forward-defer precedent ile ✓ kabul edildi. Bağımsız değerlendirme bu yorumu raporun "Validator Bağımsız Verdict" bölümüne işledi.
+- **Kanıt zenginleştirmesi:** Validator lokal test komutları ve çıktı özetlerini "Bağımsız Test Doğrulaması" tablosuna ekledi.
+
 ## Commit & PR
 
 - Branch: `task/T69-bot-failover-capacity`
-- Commit: TBD (T69 push sonrası)
-- PR: TBD (push sonrası `gh pr create`)
-- CI: TBD (gh run watch)
+- Commits:
+  - `06df6f1` T69: Steam Sidecar — bot failover ve capacity-based seçim (ana implementation)
+  - `3c536aa` T69: fix AuditLog DbSet model registration in SteamWebhookHandlerTests (CI fixup — bypass [ci-failure])
+  - `36196a3` T69: fix BotEvent_MissingAccountName test to actually send null (CI fixup — bypass [ci-failure])
+  - `bf9b854` chore: BYPASS_LOG — T69 commit 36196a3 ci-failure bypass log satırı (validator working-tree hygiene)
+- PR: [#110](https://github.com/turkerurganci/Skinora/pull/110)
+- CI: ✓ task branch CI `25958779785` (commit `36196a3`) 10/10 + post-chore `25959087523` (commit `bf9b854`) 10/10
+- BYPASS_LOG kayıtları: 2 entry `[ci-failure]` (`3c536aa` + `36196a3`) — root cause incremental test fix'leri
 
 ## Known Limitations / Follow-up
 
