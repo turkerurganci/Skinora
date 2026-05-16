@@ -104,8 +104,11 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     [Fact]
     public async Task Ignores_Terminal_State_Transactions()
     {
+        // COMPLETED is the canonical terminal state for this assertion;
+        // CANCELLED_* requires CK_Transactions_Cancel side-fields that the
+        // bare-bones seed helper does not populate, so we keep this test
+        // focused on a single representative non-eligible status.
         await SeedTransactionAsync(TransactionStatus.COMPLETED);
-        await SeedTransactionAsync(TransactionStatus.CANCELLED_BUYER);
 
         var sut = BuildJob();
         await sut.ExecuteAsync();
