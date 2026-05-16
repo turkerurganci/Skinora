@@ -1,6 +1,6 @@
 # T72 — Blockchain Sidecar — tutar doğrulama ve edge case'ler
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti (doğrulama bekleniyor) | **Tarih:** 2026-05-16
+**Faz:** F4 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-05-16
 
 ---
 
@@ -88,9 +88,25 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekleniyor (validate chat'i ayrı oturum) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-16) |
+| Kabul kriterleri | **8/8 ✓** (tümü tam) |
+| Doğrulama kontrol listesi | 1/1 ✓ (02 §4.4 edge case kapsama; Timeout sonrası gecikmeli ödeme satırı T75 forward devir K2) |
+| Bulgu sayısı | **0 S-bulgu** (S1/S2/S3 yok) |
+| Düzeltme gerekli mi | Hayır |
+
+**Kanıt özeti:**
+
+- **Working tree hygiene (Adım -1):** temiz.
+- **Main CI startup (Adım 0):** son 3 main run 3/3 SUCCESS — [`25967060890`](https://github.com/turkerurganci/Skinora/actions/runs/25967060890), [`25967060883`](https://github.com/turkerurganci/Skinora/actions/runs/25967060883), [`25962252835`](https://github.com/turkerurganci/Skinora/actions/runs/25962252835).
+- **Repo memory drift (Adım 0b):** `.claude/memory/MEMORY.md`'de T72 satırları mevcut (T72 + T72 dış varsayım notu + Next).
+- **Build:** `dotnet build backend/Skinora.sln -c Release` — 0 Warning / 0 Error.
+- **Unit tests:** `dotnet test backend/Skinora.sln -c Release --filter "FullyQualifiedName!~Integration & FullyQualifiedName!~InitialMigration"` — **833/833 PASS** (Shared 189 + Users 16 + Auth 57 + Platform 102 + Fraud 14 + Transactions 353 + Notifications 49 + Steam 13 + Realtime 25 + API 15).
+- **AmountValidationServiceTests:** 9/9 PASS (SQLite in-memory + capturing outbox + FakeTimeProvider; 9 branch).
+- **Lint:** `dotnet format --verify-no-changes` Δ=0.
+- **Task branch CI:** [`25971513588`](https://github.com/turkerurganci/Skinora/actions/runs/25971513588) — **10/10 job ✓** (Detect/Lint/Build/Unit/Integration/Contract/Migration/Docker/CI Gate). Lokal Testcontainers Docker Desktop yokluğunda skip; CI Linux runner 4. Integration ✓.
+- **Güvenlik:** secret sızıntısı yok, auth etkisi yok (webhook HMAC pipeline değişmedi), input validation kontrol guard'ları yerinde (`InvalidOperationException` for wrong entity type), prod dependency eklenmedi (test-only `Microsoft.Data.Sqlite` + `Microsoft.EntityFrameworkCore.Sqlite` 9.0.3, csproj `IsPackable=false`).
+- **Doküman uyumu:** 02 §4.4 tablosu 6/6 satır kapsama (4 implement + 1 unchanged spam + 1 forward T75); 08 §3.4 tutar tablosu 5/5 + minimum eşik; 06 §3.8 token semantiği + outbound CHECK constraint'leri (`PaymentAddressId NULL`, `WRONG_TOKEN_REFUND` `ActualTokenAddress NOT NULL`) eşleşiyor. SystemSettingsCatalog + SystemSettingSeed 50/50 satır.
+- **Yapım raporu uyumu:** Validator bağımsız verdict'i (8/8 ✓) yapım raporunun verdict tablosu ile birebir; hiçbir uyuşmazlık tespit edilmedi.
 
 ## Altyapı Değişiklikleri
 
@@ -102,9 +118,9 @@
 ## Commit & PR
 
 - Branch: `task/T72-blockchain-amount-validation`
-- Commit(ler): (yapım komiti yapılacak)
-- PR: (henüz oluşturulmadı — bu raporu da içeren commit'ten sonra `gh pr create`)
-- CI: (PR sonrası izlenecek)
+- Yapım commit'i: `370faee` (T72: Blockchain Sidecar — tutar doğrulama ve edge case'ler)
+- PR: [#113](https://github.com/turkerurganci/Skinora/pull/113) — squash merge `main`
+- Task branch CI: [`25971513588`](https://github.com/turkerurganci/Skinora/actions/runs/25971513588) ✓ 10/10 (Lint/Build/Unit/Integration/Contract/Migration/Docker/CI Gate)
 
 ## Known Limitations / Follow-up
 
