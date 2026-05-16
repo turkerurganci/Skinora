@@ -2,7 +2,7 @@ import express from 'express';
 import { config } from './config/index.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
-import { router } from './api/routes.js';
+import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
 
 const app = express();
@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(router);
+app.use(createRouter({ walletManager }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {

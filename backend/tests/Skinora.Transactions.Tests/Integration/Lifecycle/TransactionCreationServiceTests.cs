@@ -42,6 +42,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     private FakeSteamInventoryReader _inventory = null!;
     private FakeMarketPriceProvider _marketPrice = null!;
     private RecordingOutboxService _outbox = null!;
+    private RecordingPaymentAddressAllocator _allocator = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -71,6 +72,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         _inventory = new FakeSteamInventoryReader();
         _marketPrice = new FakeMarketPriceProvider();
         _outbox = new RecordingOutboxService();
+        _allocator = new RecordingPaymentAddressAllocator();
 
         _inventory.Register(SellerSteamId, new InventoryItemSnapshot(
             AssetId: ItemAssetId,
@@ -363,6 +365,56 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(TransactionErrorCodes.MobileAuthenticatorRequired, outcome.ErrorCode);
     }
 
+    // ---- T70 — payment-address inline allocation -----------------------------
+
+    [Fact]
+    public async Task Invokes_PaymentAddress_Allocator_For_CREATED_Transactions()
+    {
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+        Assert.Single(_allocator.Allocations);
+        Assert.Equal(outcome.Body.Id, _allocator.Allocations[0]);
+    }
+
+    [Fact]
+    public async Task Skips_PaymentAddress_Allocator_For_FLAGGED_Transactions()
+    {
+        // Price deviation forces FLAGGED — payment-address allocation must
+        // wait until admin approval transitions the row back to CREATED
+        // (future task entry point).
+        _marketPrice.Price = 50m;
+        var sut = BuildSut();
+
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.FLAGGED, outcome.Body!.Status);
+        Assert.Empty(_allocator.Allocations);
+    }
+
+    [Fact]
+    public async Task Transaction_Is_Still_Created_When_Allocator_Reports_SidecarUnavailable()
+    {
+        // Best-effort semantics: a sidecar outage during creation must not
+        // bubble up as a transaction failure — EnsurePaymentAddressJob will
+        // retry the allocation on its next sweep.
+        _allocator.DefaultStatus = Skinora.Transactions.Application.PaymentAddresses
+            .PaymentAddressAllocationStatus.SidecarUnavailable;
+        var sut = BuildSut();
+
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == outcome.Body.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Single(_allocator.Allocations);
+    }
+
     private TransactionCreationService BuildSut()
     {
         var limits = new TransactionLimitsProvider(Context);
@@ -384,6 +436,8 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             new InvitationCodeGenerator(),
             _outbox,
             new NullSteamInventoryCacheInvalidator(),
+            _allocator,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<TransactionCreationService>.Instance,
             _clock);
     }
 

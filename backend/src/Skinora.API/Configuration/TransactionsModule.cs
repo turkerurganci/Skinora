@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Skinora.API.Services;
 using Skinora.Fraud.Application.Account;
 using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
@@ -113,6 +115,29 @@ public static class TransactionsModule
         services.AddScoped<IPayoutIssueService, PayoutIssueService>();
         services.TryAddScoped<IPayoutVerifier, StubPayoutVerifier>();
         services.AddScoped<IPayoutEscalationAdminResolver, PayoutEscalationAdminResolver>();
+
+        // T70 — blockchain sidecar HD wallet wiring (08 §3.2, 05 §3.3).
+        services.Configure<BlockchainSidecarOptions>(
+            configuration.GetSection(BlockchainSidecarOptions.SectionName));
+
+        services.AddHttpClient<HttpBlockchainSidecarClient>(
+            HttpBlockchainSidecarClient.HttpClientName,
+            (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                client.Timeout = TimeSpan.FromSeconds(
+                    options.TimeoutSeconds <= 0 ? 10 : options.TimeoutSeconds);
+            });
+        services.AddScoped<IBlockchainSidecarClient>(sp =>
+            sp.GetRequiredService<HttpBlockchainSidecarClient>());
+
+        services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
+        services.AddScoped<EnsurePaymentAddressJob>();
+        services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
 
         return services;
     }
