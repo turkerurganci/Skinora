@@ -12,7 +12,7 @@ using Skinora.Shared.Persistence;
 namespace Skinora.Shared.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260516213003_T73_AddNextAttemptAt")]
+    [Migration("20260516221505_T73_AddNextAttemptAt")]
     partial class T73_AddNextAttemptAt
     {
         /// <inheritdoc />
@@ -1412,6 +1412,19 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "2.0"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-000000000033"),
+                            Category = "Monitoring",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "string",
+                            Description = "Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV). Her transient failure NextAttemptAt'i listedeki sıradaki değerle ileriye iter; liste bittiğinde transfer FAILED + admin alert. Default '1,5,15' = T73 plan'ı.",
+                            IsConfigured = true,
+                            Key = "blockchain.transfer_retry_intervals_minutes",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "1,5,15"
                         });
                 });
 
