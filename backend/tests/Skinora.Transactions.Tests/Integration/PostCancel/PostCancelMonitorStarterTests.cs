@@ -158,6 +158,8 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
             UpdatedAt = nowUtc,
             SellerId = _seller.Id,
             BuyerId = _buyer.Id,
+            BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
+            TargetBuyerSteamId = _buyer.SteamId,
             Status = TransactionStatus.CANCELLED_TIMEOUT,
             CancelledBy = CancelledByType.TIMEOUT,
             CancelReason = "Test cancellation",
