@@ -74,7 +74,10 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         var scheduling = new TimeoutSchedulingService(Context, _scheduler, _clock);
         var freeze = new TimeoutFreezeService(Context, _scheduler, scheduling, _clock);
         var audit = new AuditLogger(Context, _clock);
-        return new AdminTransactionService(Context, _outbox, audit, scheduling, freeze, _clock);
+        return new AdminTransactionService(
+            Context, _outbox, audit, scheduling, freeze,
+            new Skinora.Transactions.Tests.Helpers.NoOpPostCancelMonitorStarter(),
+            _clock);
     }
 
     // ─────────────────────────────────────────────────────────────────────

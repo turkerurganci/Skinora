@@ -8,6 +8,7 @@ using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.PayoutIssues;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
@@ -179,6 +180,19 @@ public static class TransactionsModule
         services.AddScoped<OutgoingTransferDispatchJob>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddHostedService<OutgoingTransferJobsRegistrar>();
+
+        // T75 — post-cancel monitoring (02 §4.4, 08 §3.4). Starter is the
+        // shared entry point used by every cancel handler (T49 timeout,
+        // T51 user-cancel, T59 admin-cancel + emergency-hold release CANCEL,
+        // T47 DeadlineScannerJob). The MediatR notification handler picks
+        // up the outbox event and calls the sidecar; the recovery hook
+        // replays persisted POST_CANCEL_* state on host start.
+        services.AddScoped<IPostCancelMonitorStarter, PostCancelMonitorStarter>();
+        services.AddScoped<PostCancelMonitorStartDispatcher>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.PostCancelMonitorStartRequestedEvent>>(sp =>
+            sp.GetRequiredService<PostCancelMonitorStartDispatcher>());
+        services.AddHostedService<PostCancelMonitorRecoveryHook>();
 
         return services;
     }

@@ -15,6 +15,21 @@ public static class BlockchainWebhookEvents
     public const string PaymentConfirmed = "payment.confirmed";
     public const string WrongTokenIncoming = "payment.wrong_token";
     public const string SpamTokenIncoming = "payment.spam_token";
+    public const string LatePaymentDetected = "payment.late_detected";
+    public const string PostCancelMonitorStateChanged = "monitor.post_cancel_state_changed";
+}
+
+/// <summary>
+/// Post-cancel monitor state values (06 §2.16 / 08 §3.4). Wire-format mirror
+/// of <see cref="Skinora.Shared.Enums.MonitoringStatus"/> so payloads can be
+/// validated before the enum parse.
+/// </summary>
+public static class PostCancelMonitorStates
+{
+    public const string PostCancel24h = "POST_CANCEL_24H";
+    public const string PostCancel7d = "POST_CANCEL_7D";
+    public const string PostCancel30d = "POST_CANCEL_30D";
+    public const string Stopped = "STOPPED";
 }
 
 /// <summary>
@@ -134,6 +149,85 @@ public sealed class WrongTokenIncomingData
 
     [JsonPropertyName("detectedAt")]
     public string DetectedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Late payment detected at a cancelled transaction's deposit address
+/// (T75 — 02 §4.4, 08 §3.4 gecikmeli ödeme). Carries the same transfer
+/// fields as <see cref="PaymentDetectedData"/> plus the post-cancel state
+/// in which the transfer was observed. Backend persists a
+/// <c>BUYER_PAYMENT</c> row + queues a <c>LATE_PAYMENT_REFUND</c> refund
+/// intent (T73 pipeline reused).
+/// </summary>
+public sealed class LatePaymentDetectedData
+{
+    [JsonPropertyName("paymentAddressId")]
+    public Guid PaymentAddressId { get; set; }
+
+    [JsonPropertyName("transactionId")]
+    public Guid TransactionId { get; set; }
+
+    [JsonPropertyName("txHash")]
+    public string TxHash { get; set; } = string.Empty;
+
+    [JsonPropertyName("fromAddress")]
+    public string FromAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("toAddress")]
+    public string ToAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("contractAddress")]
+    public string ContractAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("tokenSymbol")]
+    public string TokenSymbol { get; set; } = string.Empty;
+
+    [JsonPropertyName("amount")]
+    public string Amount { get; set; } = string.Empty;
+
+    [JsonPropertyName("blockTimestampMs")]
+    public long BlockTimestampMs { get; set; }
+
+    [JsonPropertyName("detectedAt")]
+    public string DetectedAt { get; set; } = string.Empty;
+
+    /// <summary>Post-cancel state at the moment of detection — audit field.</summary>
+    [JsonPropertyName("monitorState")]
+    public string MonitorState { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Sidecar post-cancel monitor state-machine advanced (T75 — 06 §2.16).
+/// Backend mirrors <c>PaymentAddress.MonitoringStatus</c> and
+/// <c>MonitoringExpiresAt</c>; on the <c>STOPPED</c> terminal a
+/// notification + audit log are emitted for the admin.
+/// </summary>
+public sealed class PostCancelMonitorStateChangedData
+{
+    [JsonPropertyName("paymentAddressId")]
+    public Guid PaymentAddressId { get; set; }
+
+    [JsonPropertyName("transactionId")]
+    public Guid TransactionId { get; set; }
+
+    [JsonPropertyName("address")]
+    public string Address { get; set; } = string.Empty;
+
+    [JsonPropertyName("previousState")]
+    public string PreviousState { get; set; } = string.Empty;
+
+    [JsonPropertyName("newState")]
+    public string NewState { get; set; } = string.Empty;
+
+    /// <summary>Null when <c>NewState == STOPPED</c>.</summary>
+    [JsonPropertyName("newStateExpiresAt")]
+    public string? NewStateExpiresAt { get; set; }
+
+    [JsonPropertyName("cancelledAt")]
+    public string CancelledAt { get; set; } = string.Empty;
+
+    [JsonPropertyName("changedAt")]
+    public string ChangedAt { get; set; } = string.Empty;
 }
 
 /// <summary>

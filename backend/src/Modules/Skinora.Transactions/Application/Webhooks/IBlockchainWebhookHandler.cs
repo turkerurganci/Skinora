@@ -33,6 +33,28 @@ public interface IBlockchainWebhookHandler
         BlockchainWebhookEnvelope<SpamTokenIncomingData> envelope,
         string correlationId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Late buyer transfer arrived at a cancelled transaction's deposit
+    /// address (T75 — 02 §4.4). Backend persists the incoming row and
+    /// queues a <c>LATE_PAYMENT_REFUND</c> intent for the existing T73
+    /// transfer pipeline.
+    /// </summary>
+    Task<BlockchainWebhookResult> HandleLatePaymentDetectedAsync(
+        BlockchainWebhookEnvelope<LatePaymentDetectedData> envelope,
+        string correlationId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sidecar advanced the post-cancel state machine (T75 — 06 §2.16).
+    /// Backend mirrors <c>PaymentAddress.MonitoringStatus</c> /
+    /// <c>MonitoringExpiresAt</c> and raises an admin notification when
+    /// the terminal <c>STOPPED</c> is reached.
+    /// </summary>
+    Task<BlockchainWebhookResult> HandlePostCancelMonitorStateChangedAsync(
+        BlockchainWebhookEnvelope<PostCancelMonitorStateChangedData> envelope,
+        string correlationId,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

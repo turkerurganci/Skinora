@@ -50,6 +50,7 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
     private TimeoutExecutor CreateSut() =>
         new(Context, _clock,
             new TimeoutSideEffectPublisher(_outbox, _clock, NullLogger<TimeoutSideEffectPublisher>.Instance),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
             NullLogger<TimeoutExecutor>.Instance);
 
     [Fact]

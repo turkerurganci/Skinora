@@ -443,6 +443,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
             _timeouts,
             new ReputationAggregator(Context),
             new CancelCooldownEvaluator(Context, new SettingsBackedThresholdsProvider(Context), _clock),
+            new Skinora.Transactions.Tests.Helpers.NoOpPostCancelMonitorStarter(),
             _clock);
 
     private sealed class RecordingOutboxService : IOutboxService

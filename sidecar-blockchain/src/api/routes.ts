@@ -3,7 +3,12 @@ import { healthCheck } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
-import { startMonitorHandler, stopMonitorHandler } from './monitorHandlers.js';
+import {
+  postCancelStartHandler,
+  postCancelStopHandler,
+  startMonitorHandler,
+  stopMonitorHandler,
+} from './monitorHandlers.js';
 import {
   payoutHandler,
   refundHandler,
@@ -12,12 +17,14 @@ import {
 } from './transferHandlers.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import type { MonitorRegistry } from '../monitor/MonitorRegistry.js';
+import type { PostCancelMonitorRegistry } from '../monitor/PostCancelMonitor.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { RefundService } from '../transfer/RefundService.js';
 
 export interface RouterDeps {
   walletManager: WalletManager;
   monitorRegistry: MonitorRegistry;
+  postCancelMonitorRegistry: PostCancelMonitorRegistry;
   transferService: TransferService;
   refundService: RefundService;
 }
@@ -51,6 +58,26 @@ export function createRouter(deps: RouterDeps): Router {
   // POST /api/monitor/stop { address }
   //   → 200 { acknowledged: true, stopped: boolean, address }
   apiRouter.post('/monitor/stop', stopMonitorHandler(deps.monitorRegistry));
+
+  // Post-cancel monitoring — T75 (08 §3.4 gecikmeli ödeme)
+  // POST /api/monitor/post-cancel-start
+  //   { address, paymentAddressId, transactionId, expectedContract, expectedSymbol,
+  //     cancelledAt, initialState?, initialStateExpiresAt? }
+  //   → 200 { acknowledged: true, started: boolean, state: 'POST_CANCEL_*' | 'STOPPED', address }
+  //   → 400 { error: 'INVALID_POST_CANCEL_REQUEST' | 'UNSUPPORTED_SYMBOL' |
+  //                  'INVALID_CANCELLED_AT' | 'INVALID_INITIAL_STATE' |
+  //                  'INVALID_STATE_EXPIRES_AT' }
+  apiRouter.post(
+    '/monitor/post-cancel-start',
+    postCancelStartHandler(deps.postCancelMonitorRegistry),
+  );
+
+  // POST /api/monitor/post-cancel-stop { address }
+  //   → 200 { acknowledged: true, stopped: boolean, address }
+  apiRouter.post(
+    '/monitor/post-cancel-stop',
+    postCancelStopHandler(deps.postCancelMonitorRegistry),
+  );
 
   // Transfers — T73
   // POST /api/transfer/payout { blockchainTransactionId, toAddress, amount, token }

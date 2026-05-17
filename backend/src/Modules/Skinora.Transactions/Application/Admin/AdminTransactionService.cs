@@ -6,6 +6,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -54,6 +55,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
     private readonly IAuditLogger _audit;
     private readonly ITimeoutSchedulingService _scheduling;
     private readonly ITimeoutFreezeService _freeze;
+    private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly TimeProvider _clock;
 
     public AdminTransactionService(
@@ -62,12 +64,14 @@ public sealed class AdminTransactionService : IAdminTransactionService
         IAuditLogger audit,
         ITimeoutSchedulingService scheduling,
         ITimeoutFreezeService freeze,
+        IPostCancelMonitorStarter postCancelMonitor,
         TimeProvider clock)
     {
         _db = db;
         _outbox = outbox;
         _audit = audit;
         _scheduling = scheduling;
+        _postCancelMonitor = postCancelMonitor;
         _freeze = freeze;
         _clock = clock;
     }
@@ -178,6 +182,10 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
+
+        // 5d.1 T75 — post-cancel monitor start (idempotent on missing
+        // PaymentAddress for CREATED-cancel without allocation).
+        await _postCancelMonitor.RequestStartAsync(transaction.Id, occurredAt, cancellationToken);
 
         // 5e. Audit row.
         await _audit.LogAsync(
@@ -563,6 +571,10 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
+
+        // T75 — emergency-hold release with CANCEL action also opens the
+        // post-cancel monitor window. Same idempotency contract as AD19.
+        await _postCancelMonitor.RequestStartAsync(transaction.Id, occurredAt, cancellationToken);
 
         // Two audit rows — release + cancel — keep the forensic trail explicit.
         await _audit.LogAsync(

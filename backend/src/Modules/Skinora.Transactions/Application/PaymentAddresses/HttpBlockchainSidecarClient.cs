@@ -127,6 +127,95 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         }
     }
 
+    public async Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
+        PostCancelMonitorStartRequest request,
+        CancellationToken cancellationToken)
+    {
+        var body = new PostCancelStartRequestBody(
+            Address: request.Address,
+            PaymentAddressId: request.PaymentAddressId.ToString("D"),
+            TransactionId: request.TransactionId.ToString("D"),
+            ExpectedContract: request.ExpectedContract,
+            ExpectedSymbol: request.ExpectedSymbol,
+            CancelledAt: request.CancelledAt.ToUniversalTime().ToString("O"),
+            InitialState: request.InitialState,
+            InitialStateExpiresAt: request.InitialStateExpiresAt?.ToUniversalTime().ToString("O"));
+
+        return await SendCommandAsync(
+            "api/monitor/post-cancel-start",
+            body,
+            logContext: $"address={request.Address} transactionId={request.TransactionId}",
+            cancellationToken);
+    }
+
+    public async Task<BlockchainSidecarStatus> StopPostCancelMonitoringAsync(
+        string address,
+        CancellationToken cancellationToken)
+    {
+        var body = new PostCancelStopRequestBody(Address: address);
+        return await SendCommandAsync(
+            "api/monitor/post-cancel-stop",
+            body,
+            logContext: $"address={address}",
+            cancellationToken);
+    }
+
+    private async Task<BlockchainSidecarStatus> SendCommandAsync<TBody>(
+        string path,
+        TBody body,
+        string logContext,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        if (!string.IsNullOrEmpty(_options.InternalKey))
+        {
+            request.Headers.TryAddWithoutValidation(InternalKeyHeader, _options.InternalKey);
+        }
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Blockchain sidecar {Path} failed ({Context})", path, logContext);
+            return BlockchainSidecarStatus.Unavailable;
+        }
+
+        using (response)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return BlockchainSidecarStatus.Success;
+            }
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar {Path} rejected payload ({Context})", path, logContext);
+                return BlockchainSidecarStatus.InvalidRequest;
+            }
+
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar {Path} reports not configured ({Context})", path, logContext);
+                return BlockchainSidecarStatus.NotConfigured;
+            }
+
+            _logger.LogWarning(
+                "Blockchain sidecar {Path} returned {StatusCode} ({Context})",
+                path, (int)response.StatusCode, logContext);
+            return BlockchainSidecarStatus.Unavailable;
+        }
+    }
+
     private sealed record DeriveRequest(
         [property: JsonPropertyName("index")] int Index,
         [property: JsonPropertyName("transactionId")] string TransactionId);
@@ -135,4 +224,17 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("address")] string? Address,
         [property: JsonPropertyName("derivationPath")] string? DerivationPath,
         [property: JsonPropertyName("index")] int Index);
+
+    private sealed record PostCancelStartRequestBody(
+        [property: JsonPropertyName("address")] string Address,
+        [property: JsonPropertyName("paymentAddressId")] string PaymentAddressId,
+        [property: JsonPropertyName("transactionId")] string TransactionId,
+        [property: JsonPropertyName("expectedContract")] string ExpectedContract,
+        [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol,
+        [property: JsonPropertyName("cancelledAt")] string CancelledAt,
+        [property: JsonPropertyName("initialState")] string? InitialState,
+        [property: JsonPropertyName("initialStateExpiresAt")] string? InitialStateExpiresAt);
+
+    private sealed record PostCancelStopRequestBody(
+        [property: JsonPropertyName("address")] string Address);
 }

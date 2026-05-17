@@ -5,6 +5,7 @@ using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -34,6 +35,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     private readonly IBackgroundJobScheduler _scheduler;
     private readonly TimeProvider _clock;
     private readonly ITimeoutSideEffectPublisher _sideEffects;
+    private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -42,6 +44,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         IBackgroundJobScheduler scheduler,
         TimeProvider clock,
         ITimeoutSideEffectPublisher sideEffects,
+        IPostCancelMonitorStarter postCancelMonitor,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
@@ -49,6 +52,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         _scheduler = scheduler;
         _clock = clock;
         _sideEffects = sideEffects;
+        _postCancelMonitor = postCancelMonitor;
         _options = options.Value;
         _logger = logger;
     }
@@ -120,6 +124,13 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             }
 
             await _sideEffects.PublishAsync(transaction, previousStatus);
+
+            // T75 — post-cancel monitor stamp. The starter is idempotent on
+            // missing PaymentAddress (CREATED / TRADE_OFFER_SENT_TO_SELLER
+            // timeouts that never allocated a deposit address).
+            var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;
+            await _postCancelMonitor.RequestStartAsync(
+                transaction.Id, cancelledAt, CancellationToken.None);
         }
 
         await _db.SaveChangesAsync();
