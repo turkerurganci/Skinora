@@ -52,7 +52,44 @@ public interface IBlockchainSidecarClient
     Task<BlockchainSidecarBalancesResult> GetWalletBalancesAsync(
         IReadOnlyList<string> addresses,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Broadcast a hot-wallet → cold-wallet TRC-20 transfer (T77 — 05 §3.3
+    /// admin manuel cold wallet transfer flow). The sidecar signs with the
+    /// shared <c>HOT_WALLET_PRIVATE_KEY</c> and returns the transaction
+    /// hash on success; the backend persists the
+    /// <see cref="Skinora.Payments.Domain.Entities.ColdWalletTransfer"/>
+    /// ledger row using that hash. Validation errors (missing config,
+    /// invalid amount) surface as <see cref="BlockchainSidecarStatus.InvalidRequest"/>;
+    /// transport / broadcast retries surface as
+    /// <see cref="BlockchainSidecarStatus.Unavailable"/>. The admin-facing
+    /// HotWalletService must not write the ledger row when the status is
+    /// anything other than <see cref="BlockchainSidecarStatus.Success"/>.
+    /// </summary>
+    Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
+        HotToColdTransferRequest request,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Input payload for the sidecar <c>POST /api/transfer/cold-wallet</c>
+/// endpoint (T77 — 05 §3.3). <paramref name="ColdTransferId"/> is the
+/// backend's pre-allocated <c>ColdWalletTransfer</c> row id, surfaced in
+/// sidecar logs for correlation; the sidecar does not persist it.
+/// </summary>
+public sealed record HotToColdTransferRequest(
+    Guid ColdTransferId,
+    string ToColdAddress,
+    string Amount,
+    string Token);
+
+/// <summary>
+/// Discriminated outcome of <see cref="IBlockchainSidecarClient.SendHotToColdTransferAsync"/>.
+/// <c>TxHash</c> is populated only when <c>Status = Success</c>.
+/// </summary>
+public sealed record BlockchainSidecarTransferResult(
+    BlockchainSidecarStatus Status,
+    string? TxHash);
 
 /// <summary>
 /// Input payload for the sidecar <c>POST /api/monitor/post-cancel-start</c>

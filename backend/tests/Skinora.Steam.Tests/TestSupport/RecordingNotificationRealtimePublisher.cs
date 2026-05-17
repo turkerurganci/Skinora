@@ -72,4 +72,12 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         Calls.Add(("AdminReconciliationMismatch", payload));
         return Task.CompletedTask;
     }
+
+    public Task PublishAdminHotWalletThresholdBreachedAsync(
+        NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload,
+        CancellationToken cancellationToken)
+    {
+        Calls.Add(("AdminHotWalletThresholdBreached", payload));
+        return Task.CompletedTask;
+    }
 }

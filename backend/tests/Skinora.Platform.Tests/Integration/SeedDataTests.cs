@@ -72,22 +72,24 @@ public class SeedDataTests : IntegrationTestBase
         // 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
         // 1 T73 blockchain.transfer_retry_intervals_minutes setting +
         // 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
-        // 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings.
+        // 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings +
+        // 2 T77 hot_wallet.{monitor_cron,trx_balance_minimum} settings.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(56, rows.Count);
-        Assert.Equal(56, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(58, rows.Count);
+        Assert.Equal(58, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses:
-        // 35 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
-        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76). T76 hot/cold
-        // wallet addresses follow the auth.banned_countries NONE-sentinel
-        // pattern: shipped configured with "NONE", treated as skipped scope
-        // by ReconciliationService until production deploy overrides them.
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses + T77 hot wallet monitor + TRX floor:
+        // 37 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
+        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76 + 2 T77).
+        // T76 hot/cold wallet addresses follow the auth.banned_countries
+        // NONE-sentinel pattern: shipped configured with "NONE", treated as
+        // skipped scope by ReconciliationService until production deploy
+        // overrides them.
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -104,6 +106,8 @@ public class SeedDataTests : IntegrationTestBase
             "commission_rate",
             "dormant_account_min_age_days",
             "gas_fee_protection_ratio",
+            "hot_wallet.monitor_cron",
+            "hot_wallet.trx_balance_minimum",
             "min_refund_threshold_ratio",
             "monitoring_post_cancel_24h_polling_seconds",
             "monitoring_post_cancel_30d_polling_seconds",

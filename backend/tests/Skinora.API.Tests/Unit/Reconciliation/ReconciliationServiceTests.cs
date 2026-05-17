@@ -604,6 +604,10 @@ public sealed class ReconciliationServiceTests : IDisposable
                 : BlockchainSidecarBalancesResult.Unavailable);
         }
 
+        public Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
+            HotToColdTransferRequest request, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
         public void QueueSnapshot(
             long blockNumber,
             Dictionary<string, IReadOnlyDictionary<string, string>> addressTokens)
@@ -658,5 +662,9 @@ public sealed class ReconciliationServiceTests : IDisposable
             Mismatches.Add(payload);
             return Task.CompletedTask;
         }
+
+        public Task PublishAdminHotWalletThresholdBreachedAsync(
+            NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

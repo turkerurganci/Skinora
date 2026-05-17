@@ -94,6 +94,8 @@ public static class SystemSettingsCatalog
         new("reconciliation.schedule_cron",               "blockchain_health",    "Reconciliation job cron ifadesi (T76)",                     null),
         new("reconciliation.hot_wallet_address",          "blockchain_health",    "Reconciliation hot wallet adresi (T76)",                    null),
         new("reconciliation.cold_wallet_address",         "blockchain_health",    "Reconciliation cold wallet adresi (T76, opsiyonel)",        null),
+        new("hot_wallet.monitor_cron",                    "blockchain_health",    "Hot wallet monitor job cron ifadesi (T77)",                 null),
+        new("hot_wallet.trx_balance_minimum",             "wallet_security",      "Hot wallet TRX bakiye alt eşiği (gas için)",                "TRX"),
 
         // --- Buyer identification (open link toggle, 02 §16.2 "Yöntem 2'yi aktif/pasif") ---
         new("open_link_enabled",                          "buyer_identification", "Açık link yöntemi aktif",                                   null),

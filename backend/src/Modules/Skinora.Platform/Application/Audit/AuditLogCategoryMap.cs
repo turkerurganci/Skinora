@@ -71,6 +71,18 @@ public static class AuditLogCategoryMap
             // security queue so the same operators who watch wallet-address
             // and bot-status events see it on the same dashboard.
             [AuditAction.RECONCILIATION_MISMATCH] = Categories.SecurityEvent,
+
+            // T77 — admin-initiated hot→cold operational consolidation
+            // (05 §3.3). Real fund movement out of the hot wallet — it
+            // belongs next to the customer-facing WALLET_* rows in the
+            // fund movement queue.
+            [AuditAction.COLD_WALLET_TRANSFER_INITIATED] = Categories.FundMovement,
+
+            // T77 — periodic hot wallet balance monitor detected a
+            // threshold crossing (05 §3.3). Mirrors RECONCILIATION_MISMATCH
+            // shape and audience: a custody-integrity alarm visible on the
+            // same admin dashboard.
+            [AuditAction.HOT_WALLET_THRESHOLD_BREACHED] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>
