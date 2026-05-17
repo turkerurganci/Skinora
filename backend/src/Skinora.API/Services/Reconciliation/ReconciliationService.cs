@@ -155,6 +155,11 @@ public sealed class ReconciliationService : IReconciliationService
             var value = row.IsConfigured && !string.IsNullOrWhiteSpace(row.Value)
                 ? row.Value!.Trim()
                 : null;
+            // String settings use the documented "NONE" sentinel for "not set"
+            // (auth.banned_countries pattern, 06 §3.17 + T63a maintenance
+            // string columns). Production deploy replaces NONE with the real
+            // Tron address; until then we treat it as unconfigured.
+            if (string.Equals(value, "NONE", StringComparison.Ordinal)) value = null;
             if (row.Key == HotWalletAddressKey) hotWallet = value;
             if (row.Key == ColdWalletAddressKey) coldWallet = value;
         }

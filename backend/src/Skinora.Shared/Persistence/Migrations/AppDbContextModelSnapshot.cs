@@ -1468,11 +1468,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Monitoring",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "string",
-                            Description = "Reconciliation karşılaştırması için hot wallet Tron adresi. NULL ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3).",
-                            IsConfigured = false,
+                            Description = "Reconciliation karşılaştırması için hot wallet Tron adresi. 'NONE' ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3) — auth.banned_countries NONE sentinel pattern.",
+                            IsConfigured = true,
                             Key = "reconciliation.hot_wallet_address",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "NONE"
                         },
                         new
                         {
@@ -1480,11 +1481,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Monitoring",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "string",
-                            Description = "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). NULL ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir.",
-                            IsConfigured = false,
+                            Description = "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). 'NONE' ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir.",
+                            IsConfigured = true,
                             Key = "reconciliation.cold_wallet_address",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "NONE"
                         });
                 });
 

@@ -117,8 +117,8 @@ public static class SystemSettingSeed
         // via SystemSetting before the first run, otherwise that scope is
         // skipped with a warn log.
         Default     (54, "reconciliation.schedule_cron",                 "string",  "Monitoring",    "0 3 * * *", "Reconciliation job cron ifadesi (05 §3.3). Default '0 3 * * *' (03:00 UTC günlük). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
-        Unconfigured(55, "reconciliation.hot_wallet_address",            "string",  "Monitoring",                  "Reconciliation karşılaştırması için hot wallet Tron adresi. NULL ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3)."),
-        Unconfigured(56, "reconciliation.cold_wallet_address",           "string",  "Monitoring",                  "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). NULL ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir."),
+        Default     (55, "reconciliation.hot_wallet_address",            "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için hot wallet Tron adresi. 'NONE' ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3) — auth.banned_countries NONE sentinel pattern."),
+        Default     (56, "reconciliation.cold_wallet_address",           "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). 'NONE' ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir."),
     ];
 
     private static SystemSetting Unconfigured(
