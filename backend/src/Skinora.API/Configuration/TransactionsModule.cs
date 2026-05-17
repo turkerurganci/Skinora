@@ -8,8 +8,10 @@ using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.PayoutIssues;
+using Skinora.API.Services.Reconciliation;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Pricing;
+using Skinora.Transactions.Application.Reconciliation;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Application.Transfers;
@@ -193,6 +195,13 @@ public static class TransactionsModule
             Skinora.Shared.Events.PostCancelMonitorStartRequestedEvent>>(sp =>
             sp.GetRequiredService<PostCancelMonitorStartDispatcher>());
         services.AddHostedService<PostCancelMonitorRecoveryHook>();
+
+        // T76 — daily on-chain vs ledger reconciliation (05 §3.3). The
+        // sidecar batch-snapshot endpoint, the Hangfire recurring job, and
+        // the registrar that reads the cron from SystemSettings at startup.
+        services.AddScoped<IReconciliationService, ReconciliationService>();
+        services.AddScoped<ReconciliationJob>();
+        services.AddHostedService<ReconciliationJobRegistrar>();
 
         return services;
     }

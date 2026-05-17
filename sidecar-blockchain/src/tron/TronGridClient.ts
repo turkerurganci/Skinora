@@ -47,6 +47,20 @@ export interface TransactionInfo {
 }
 
 /**
+ * Raw balances at a single Tron account, as observed by reconciliation (T76 —
+ * 05 §3.3). `trx` is in SUN (1 TRX = 1_000_000 SUN); `trc20` keys are the
+ * token contract addresses and values are the raw integer amounts (apply the
+ * token's decimals to convert). Snapshot block height is captured once per
+ * batch by the caller (see `walletBalancesHandler`) and shared across every
+ * address in the same request.
+ */
+export interface AccountBalances {
+  address: string;
+  trx: string;
+  trc20: Record<string, string>;
+}
+
+/**
  * TronGrid REST client scoped to the three calls the active monitor needs
  * (08 §3.4). Keeps the wire surface narrow so unit tests can mock
  * `globalThis.fetch` without pulling tronweb into the rule layer.
@@ -107,6 +121,54 @@ export class TronGridClient {
       throw new Error('TronGrid getnowblock returned no block number');
     }
     return block;
+  }
+
+  /**
+   * Returns the TRX + TRC-20 balances at a single Tron account, taken from
+   * the TronGrid extended-account endpoint (`GET /v1/accounts/{address}`).
+   * Used by the reconciliation job (T76 — 05 §3.3) to compare on-chain state
+   * against the platform ledger. Raw integer amounts are returned verbatim;
+   * the caller applies the token's <c>decimals</c> to convert to a
+   * human-scale amount. Empty TRX balance is reported as <c>'0'</c>;
+   * missing TRC-20 entries reflect "no balance for that token at this
+   * address" — the caller decides whether that is a finding.
+   */
+  async getAccountBalances(address: string): Promise<AccountBalances> {
+    const url = `${this.fullNodeUrl}/v1/accounts/${encodeURIComponent(address)}`;
+    const json = await this.getJson<{
+      data?: Array<{
+        balance?: number | string;
+        trc20?: Array<Record<string, string>>;
+      }>;
+    }>(url, 'accounts.get');
+
+    const data = Array.isArray(json.data) && json.data.length > 0 ? json.data[0] : undefined;
+    if (!data) {
+      // TronGrid returns `data: []` for an address with no on-chain footprint.
+      // Treat this as a zero-balance account so reconciliation can still
+      // produce a comparison (expected may also be zero).
+      return { address, trx: '0', trc20: {} };
+    }
+
+    const trx = typeof data.balance === 'number'
+      ? Math.trunc(data.balance).toString()
+      : typeof data.balance === 'string' && data.balance.length > 0
+        ? data.balance
+        : '0';
+
+    const trc20: Record<string, string> = {};
+    if (Array.isArray(data.trc20)) {
+      for (const entry of data.trc20) {
+        if (!entry || typeof entry !== 'object') continue;
+        for (const [contractAddress, rawValue] of Object.entries(entry)) {
+          if (typeof rawValue === 'string') {
+            trc20[contractAddress] = rawValue;
+          }
+        }
+      }
+    }
+
+    return { address, trx, trc20 };
   }
 
   /**

@@ -65,6 +65,12 @@ public static class AuditLogCategoryMap
             // privileges) so they live next to WALLET_ADDRESS_CHANGED in
             // the security queue.
             [AuditAction.BOT_STATUS_CHANGED] = Categories.SecurityEvent,
+
+            // T76 — daily reconciliation discrepancy (05 §3.3). An on-chain
+            // vs ledger gap is a custody-integrity alarm: it sits in the
+            // security queue so the same operators who watch wallet-address
+            // and bot-status events see it on the same dashboard.
+            [AuditAction.RECONCILIATION_MISMATCH] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

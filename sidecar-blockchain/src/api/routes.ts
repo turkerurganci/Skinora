@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { healthCheck } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
-import { deriveAddressHandler } from './walletHandlers.js';
+import { deriveAddressHandler, walletBalancesHandler } from './walletHandlers.js';
 import {
   postCancelStartHandler,
   postCancelStopHandler,
@@ -100,7 +100,14 @@ export function createRouter(deps: RouterDeps): Router {
   //   → 502 { error: 'TRANSFER_STATUS_HTTP_ERROR' }
   apiRouter.get('/transfer/status/:txHash', transferStatusHandler(deps.transferService));
 
-  // Balance check — T77
+  // Reconciliation snapshot — T76 (05 §3.3)
+  // POST /api/wallet/balances { addresses: string[] }
+  //   → 200 { blockNumber, balances: [{ address, tokens: { TRX, USDT, USDC } }] }
+  //   → 400 { error: 'INVALID_BALANCES_REQUEST' }
+  //   → 502 { error: 'BALANCE_SNAPSHOT_FAILED' }
+  apiRouter.post('/wallet/balances', walletBalancesHandler());
+
+  // Hot-wallet-specific limit alert — T77 (kept for forward-deferral)
   apiRouter.get('/wallet/hot-wallet-balance', (_req, res) => {
     res.status(501).json({ error: 'Not implemented — see T77' });
   });

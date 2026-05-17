@@ -52,6 +52,22 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
         return Task.FromResult(response);
     }
 
+    public Queue<BlockchainSidecarBalancesResult> WalletBalanceResponses { get; } = new();
+    public List<IReadOnlyList<string>> WalletBalanceCalls { get; } = new();
+
+    public Task<BlockchainSidecarBalancesResult> GetWalletBalancesAsync(
+        IReadOnlyList<string> addresses, CancellationToken cancellationToken)
+    {
+        WalletBalanceCalls.Add(addresses);
+        var response = WalletBalanceResponses.Count > 0
+            ? WalletBalanceResponses.Dequeue()
+            : new BlockchainSidecarBalancesResult(
+                BlockchainSidecarStatus.Success,
+                BlockNumber: 0,
+                Balances: Array.Empty<BlockchainSidecarAddressBalances>());
+        return Task.FromResult(response);
+    }
+
     public static string DeterministicAddress(int index)
         // Synthetic 34-char Tron-like base58 address. Real validation against
         // the live derivation is covered by the sidecar's own Vitest suite —

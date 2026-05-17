@@ -63,4 +63,12 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         Calls.Add(("AdminBotStatusChanged", null, payload));
         return Task.CompletedTask;
     }
+
+    public Task PublishAdminReconciliationMismatchAsync(
+        NotificationRealtimePayloads.AdminReconciliationMismatch payload,
+        CancellationToken cancellationToken)
+    {
+        Calls.Add(("AdminReconciliationMismatch", null, payload));
+        return Task.CompletedTask;
+    }
 }

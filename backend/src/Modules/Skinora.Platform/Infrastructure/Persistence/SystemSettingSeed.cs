@@ -110,6 +110,15 @@ public static class SystemSettingSeed
         // backend to sidecar is a T-future task (see T74 K1).
         Default     (52, "blockchain.sweep_energy_delegation_sun",       "string",  "Monitoring",    "200000000", "Sweep / deposit-sourced refund öncesi sweeper hot wallet'tan deposit adresine geçici Energy delegation tutarı (SUN, 1 TRX = 1_000_000 SUN). Default 200 TRX — Stake 2.0 ile ~16.000 Energy headroom (TRC-20 transfer ~65k Energy, dış API oran dalgalanması payı dahil). 08 §3.3."),
         Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Energy delegation başarısız olursa deposit adresine fallback olarak gönderilen TRX tutarı (SUN). Default 15 TRX (08 §3.3 — TRC-20 transferin gas için yaklaşık üst sınırı). Deposit bu TRX'i kendi gas'ı için yakar."),
+        // --- T76: Blockchain reconciliation job (05 §3.3) ---
+        // Daily on-chain vs ledger reconciliation. Cron default is 03:00 UTC
+        // (admin-tunable, host restart required to re-register). Hot/cold
+        // wallet addresses ship unconfigured — production deploy sets them
+        // via SystemSetting before the first run, otherwise that scope is
+        // skipped with a warn log.
+        Default     (54, "reconciliation.schedule_cron",                 "string",  "Monitoring",    "0 3 * * *", "Reconciliation job cron ifadesi (05 §3.3). Default '0 3 * * *' (03:00 UTC günlük). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
+        Unconfigured(55, "reconciliation.hot_wallet_address",            "string",  "Monitoring",                  "Reconciliation karşılaştırması için hot wallet Tron adresi. NULL ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3)."),
+        Unconfigured(56, "reconciliation.cold_wallet_address",           "string",  "Monitoring",                  "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). NULL ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir."),
     ];
 
     private static SystemSetting Unconfigured(

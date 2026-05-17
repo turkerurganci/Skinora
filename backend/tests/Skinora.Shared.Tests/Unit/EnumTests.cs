@@ -85,13 +85,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(CancelledByType), Enum.Parse<CancelledByType>(valueName)));
     }
 
-    // ── BlockchainTransactionType (9) ───────────────────────────────
+    // ── BlockchainTransactionType (10) ──────────────────────────────
 
     [Fact]
-    public void BlockchainTransactionType_ShouldHave9Values()
+    public void BlockchainTransactionType_ShouldHave10Values()
     {
         var values = Enum.GetValues<BlockchainTransactionType>();
-        Assert.Equal(9, values.Length);
+        Assert.Equal(10, values.Length);
     }
 
     [Theory]
@@ -104,6 +104,7 @@ public class EnumTests
     [InlineData(nameof(BlockchainTransactionType.SPAM_TOKEN_INCOMING))]
     [InlineData(nameof(BlockchainTransactionType.LATE_PAYMENT_REFUND))]
     [InlineData(nameof(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND))]
+    [InlineData(nameof(BlockchainTransactionType.SWEEP))]
     public void BlockchainTransactionType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(BlockchainTransactionType), Enum.Parse<BlockchainTransactionType>(valueName)));
@@ -374,13 +375,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (21) ────────────────────────────────────────────
+    // ── AuditAction (22) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave21Values()
+    public void AuditAction_ShouldHave22Values()
     {
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(21, values.Length);
+        Assert.Equal(22, values.Length);
     }
 
     [Theory]
@@ -405,6 +406,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_RELEASED))]
     [InlineData(nameof(AuditAction.BOT_STATUS_CHANGED))]
+    [InlineData(nameof(AuditAction.RECONCILIATION_MISMATCH))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));
