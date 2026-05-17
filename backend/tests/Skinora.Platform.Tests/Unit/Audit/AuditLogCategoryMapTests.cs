@@ -31,6 +31,8 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.TRANSACTION_CANCELLED_ADMIN, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.EMERGENCY_HOLD_APPLIED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.EMERGENCY_HOLD_RELEASED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.COLD_WALLET_TRANSFER_INITIATED, AuditLogCategoryMap.Categories.FundMovement)]
+    [InlineData(AuditAction.HOT_WALLET_THRESHOLD_BREACHED, AuditLogCategoryMap.Categories.SecurityEvent)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -50,17 +52,19 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_FUND_MOVEMENT_Returns_Five_Wallet_Actions()
+    public void ActionsInCategory_FUND_MOVEMENT_Returns_Wallet_Actions_And_ColdWalletTransfer()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.FundMovement);
 
-        Assert.Equal(5, actions.Count);
+        // 5 wallet base + 1 T77 hot→cold consolidation = 6.
+        Assert.Equal(6, actions.Count);
         Assert.Contains(AuditAction.WALLET_DEPOSIT, actions);
         Assert.Contains(AuditAction.WALLET_WITHDRAW, actions);
         Assert.Contains(AuditAction.WALLET_ESCROW_LOCK, actions);
         Assert.Contains(AuditAction.WALLET_ESCROW_RELEASE, actions);
         Assert.Contains(AuditAction.WALLET_REFUND, actions);
+        Assert.Contains(AuditAction.COLD_WALLET_TRANSFER_INITIATED, actions);
     }
 
     [Fact]
@@ -83,20 +87,22 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Bot_Status_And_Reconciliation()
+    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Bot_Status_Reconciliation_And_HotWalletBreach()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.SecurityEvent);
 
         // Ordering mirrors the dictionary insertion order in
         // AuditLogCategoryMap: WALLET_ADDRESS_CHANGED (initial) →
-        // BOT_STATUS_CHANGED (T69) → RECONCILIATION_MISMATCH (T76).
+        // BOT_STATUS_CHANGED (T69) → RECONCILIATION_MISMATCH (T76) →
+        // HOT_WALLET_THRESHOLD_BREACHED (T77).
         Assert.Equal(
             new[]
             {
                 AuditAction.WALLET_ADDRESS_CHANGED,
                 AuditAction.BOT_STATUS_CHANGED,
                 AuditAction.RECONCILIATION_MISMATCH,
+                AuditAction.HOT_WALLET_THRESHOLD_BREACHED,
             },
             actions);
     }

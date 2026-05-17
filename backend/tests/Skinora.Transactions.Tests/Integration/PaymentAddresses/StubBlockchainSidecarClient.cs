@@ -68,6 +68,24 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
         return Task.FromResult(response);
     }
 
+    public Queue<BlockchainSidecarTransferResult> HotToColdResponses { get; } = new();
+    public List<HotToColdTransferRequest> HotToColdCalls { get; } = new();
+
+    public Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
+        HotToColdTransferRequest request, CancellationToken cancellationToken)
+    {
+        HotToColdCalls.Add(request);
+        var response = HotToColdResponses.Count > 0
+            ? HotToColdResponses.Dequeue()
+            : new BlockchainSidecarTransferResult(
+                BlockchainSidecarStatus.Success,
+                TxHash: DeterministicTxHash(HotToColdCalls.Count));
+        return Task.FromResult(response);
+    }
+
+    public static string DeterministicTxHash(int seed) =>
+        $"0xstub{seed:x}".PadRight(64, '0');
+
     public static string DeterministicAddress(int index)
         // Synthetic 34-char Tron-like base58 address. Real validation against
         // the live derivation is covered by the sidecar's own Vitest suite —

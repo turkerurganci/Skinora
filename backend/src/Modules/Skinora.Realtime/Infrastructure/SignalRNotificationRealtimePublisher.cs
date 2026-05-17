@@ -23,6 +23,7 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
     private const string MaintenanceStatusChangedEvent = "MaintenanceStatusChanged";
     private const string AdminBotStatusChangedEvent = "AdminBotStatusChanged";
     private const string AdminReconciliationMismatchEvent = "AdminReconciliationMismatch";
+    private const string AdminHotWalletThresholdBreachedEvent = "AdminHotWalletThresholdBreached";
 
     private readonly IHubContext<NotificationsHub> _hub;
     private readonly ILogger<SignalRNotificationRealtimePublisher> _logger;
@@ -118,6 +119,28 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
                 ex,
                 "SignalR reconciliation mismatch push failed (scope={Scope}, address={Address}, token={Token}).",
                 payload.Scope, payload.Address, payload.Token);
+        }
+    }
+
+    public async Task PublishAdminHotWalletThresholdBreachedAsync(
+        NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _hub.Clients
+                .All
+                .SendAsync(AdminHotWalletThresholdBreachedEvent, payload, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Persistence (HOT_WALLET_THRESHOLD_BREACHED AuditLog row) is the
+            // source of truth; a missed push is recovered on admin dashboard
+            // refresh.
+            _logger.LogWarning(
+                ex,
+                "SignalR hot wallet threshold breach push failed (token={Token}, direction={Direction}).",
+                payload.Token, payload.Direction);
         }
     }
 

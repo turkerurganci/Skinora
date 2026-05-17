@@ -251,6 +251,98 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         }
     }
 
+    public async Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
+        HotToColdTransferRequest request,
+        CancellationToken cancellationToken)
+    {
+        var body = new ColdTransferRequestBody(
+            ColdTransferId: request.ColdTransferId.ToString("D"),
+            ToColdAddress: request.ToColdAddress,
+            Amount: request.Amount,
+            Token: request.Token);
+
+        using var http = new HttpRequestMessage(HttpMethod.Post, "api/transfer/cold-wallet")
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        if (!string.IsNullOrEmpty(_options.InternalKey))
+        {
+            http.Headers.TryAddWithoutValidation(InternalKeyHeader, _options.InternalKey);
+        }
+        http.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(http, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Blockchain sidecar cold-wallet transfer request failed (coldTransferId={Id}, token={Token})",
+                request.ColdTransferId, request.Token);
+            return new BlockchainSidecarTransferResult(
+                BlockchainSidecarStatus.Unavailable, null);
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar rejected cold-wallet transfer (coldTransferId={Id}, token={Token})",
+                    request.ColdTransferId, request.Token);
+                return new BlockchainSidecarTransferResult(
+                    BlockchainSidecarStatus.InvalidRequest, null);
+            }
+
+            if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar reports hot wallet not configured for cold-wallet transfer (coldTransferId={Id})",
+                    request.ColdTransferId);
+                return new BlockchainSidecarTransferResult(
+                    BlockchainSidecarStatus.NotConfigured, null);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar cold-wallet transfer returned {StatusCode} (coldTransferId={Id})",
+                    (int)response.StatusCode, request.ColdTransferId);
+                return new BlockchainSidecarTransferResult(
+                    BlockchainSidecarStatus.Unavailable, null);
+            }
+
+            ColdTransferResponse? payload;
+            try
+            {
+                payload = await response.Content
+                    .ReadFromJsonAsync<ColdTransferResponse>(JsonOptions, cancellationToken);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Blockchain sidecar cold-wallet transfer payload unparsable (coldTransferId={Id})",
+                    request.ColdTransferId);
+                return new BlockchainSidecarTransferResult(
+                    BlockchainSidecarStatus.Unavailable, null);
+            }
+
+            if (payload is null || string.IsNullOrWhiteSpace(payload.TxHash))
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar cold-wallet transfer returned empty txHash (coldTransferId={Id})",
+                    request.ColdTransferId);
+                return new BlockchainSidecarTransferResult(
+                    BlockchainSidecarStatus.Unavailable, null);
+            }
+
+            return new BlockchainSidecarTransferResult(
+                BlockchainSidecarStatus.Success, payload.TxHash);
+        }
+    }
+
     private async Task<BlockchainSidecarStatus> SendCommandAsync<TBody>(
         string path,
         TBody body,
@@ -339,4 +431,13 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     private sealed record BalancesRow(
         [property: JsonPropertyName("address")] string Address,
         [property: JsonPropertyName("tokens")] Dictionary<string, string>? Tokens);
+
+    private sealed record ColdTransferRequestBody(
+        [property: JsonPropertyName("coldTransferId")] string ColdTransferId,
+        [property: JsonPropertyName("toColdAddress")] string ToColdAddress,
+        [property: JsonPropertyName("amount")] string Amount,
+        [property: JsonPropertyName("token")] string Token);
+
+    private sealed record ColdTransferResponse(
+        [property: JsonPropertyName("txHash")] string? TxHash);
 }

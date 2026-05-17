@@ -30,6 +30,13 @@ interface SweepBody {
   token?: unknown;
 }
 
+interface ColdWalletTransferBody {
+  coldTransferId?: unknown;
+  toColdAddress?: unknown;
+  amount?: unknown;
+  token?: unknown;
+}
+
 const TOKEN_SYMBOLS: readonly TokenSymbol[] = ['USDT', 'USDC'];
 
 function asTokenSymbol(value: unknown): TokenSymbol | null {
@@ -119,6 +126,38 @@ export function refundHandler(service: RefundService) {
   };
 }
 
+export function coldWalletTransferHandler(service: TransferService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const body = (req.body ?? {}) as ColdWalletTransferBody;
+    if (
+      !isNonEmptyString(body.coldTransferId) ||
+      !isNonEmptyString(body.toColdAddress) ||
+      !isNonEmptyString(body.amount) ||
+      asTokenSymbol(body.token) === null
+    ) {
+      res.status(400).json({
+        error: 'INVALID_TRANSFER_REQUEST',
+        message:
+          'Fields {coldTransferId, toColdAddress, amount, token=USDT|USDC} are required.',
+      });
+      return;
+    }
+
+    try {
+      const result = await service.coldWalletTransfer({
+        coldTransferId: body.coldTransferId,
+        toColdAddress: body.toColdAddress,
+        amount: body.amount,
+        token: asTokenSymbol(body.token)!,
+        correlationId: req.correlationId,
+      });
+      res.status(200).json({ txHash: result.txHash });
+    } catch (err) {
+      handleTransferError(err, res, req, 'cold-wallet-transfer');
+    }
+  };
+}
+
 export function sweepHandler(service: TransferService) {
   return async (req: Request, res: Response): Promise<void> => {
     const body = (req.body ?? {}) as SweepBody;
@@ -191,7 +230,7 @@ function handleTransferError(
   err: unknown,
   res: Response,
   req: Request,
-  flow: 'payout' | 'refund' | 'sweep',
+  flow: 'payout' | 'refund' | 'sweep' | 'cold-wallet-transfer',
 ): void {
   transfersTotal.inc({ type: flow, status: 'error' });
   if (err instanceof SidecarError) {

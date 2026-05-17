@@ -85,4 +85,23 @@ public static class NotificationRealtimePayloads
         decimal Delta,
         long? BlockNumber,
         DateTime DetectedAt);
+
+    /// <summary>
+    /// Pushed when the hot wallet monitor job (T77 — 05 §3.3) detects a
+    /// balance crossing an admin-configured threshold. <c>Direction</c> ∈
+    /// {<c>Upper</c>, <c>Lower</c>}: <c>Upper</c> = stablecoin balance
+    /// (USDT/USDC) exceeded <c>hot_wallet_limit</c> — admin should sweep to
+    /// cold wallet; <c>Lower</c> = TRX balance dropped below
+    /// <c>hot_wallet.trx_balance_minimum</c> — admin should top up TRX
+    /// reserves for gas. Best-effort like <c>AdminReconciliationMismatch</c>;
+    /// the <c>HOT_WALLET_THRESHOLD_BREACHED</c> AuditLog row is the durable
+    /// record.
+    /// </summary>
+    public sealed record AdminHotWalletThresholdBreached(
+        string Token,
+        string Direction,
+        decimal Threshold,
+        decimal Actual,
+        long? BlockNumber,
+        DateTime DetectedAt);
 }

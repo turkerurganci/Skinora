@@ -23,6 +23,20 @@ export interface PayoutRequest {
   correlationId: string;
 }
 
+export interface ColdWalletTransferRequest {
+  /** Logical id from the .NET backend's <c>ColdWalletTransfer</c> pre-allocation
+   * — used in logs and correlation only; nothing is persisted on the sidecar
+   * (the backend owns the ledger row, T77 — 05 §3.3, 06 §3.22). */
+  coldTransferId: string;
+  /** Destination cold wallet address — backend reads it from the
+   * <c>reconciliation.cold_wallet_address</c> SystemSetting (T76) and passes
+   * it through; the sidecar does not store it. */
+  toColdAddress: string;
+  amount: string;
+  token: TokenSymbol;
+  correlationId: string;
+}
+
 export interface SweepRequest {
   blockchainTransactionId: string;
   /** Derivation index from `PaymentAddress.HdWalletIndex`. */
@@ -71,6 +85,13 @@ export interface SweepResult extends SendTransferResult {
  * <list type="bullet">
  *   <item><c>payout</c> — hot wallet → seller (SELLER_PAYOUT row).
  *     Signing key: <c>HOT_WALLET_PRIVATE_KEY</c> (Docker secret).</item>
+ *   <item><c>coldWalletTransfer</c> — hot wallet → cold wallet (admin-driven
+ *     operational consolidation, T77 — 05 §3.3 hot wallet limit alert flow).
+ *     Same signing key as payout; mechanically a TRC-20 transfer from the
+ *     hot wallet to an admin-supplied cold address. Distinct from
+ *     <c>payout</c> only at the logging / metrics layer so the admin
+ *     dashboards can separate operational ledger movement from
+ *     customer-facing payouts.</item>
  *   <item><c>sweep</c> — deposit address → hot wallet
  *     (operational consolidation, 05 §3.3 sweep mechanism).
  *     Signing key: derived from <c>HD_WALLET_MNEMONIC</c> at index N,
@@ -131,6 +152,37 @@ export class TransferService {
       privateKey: this.hotWalletPrivateKey,
       contractAddress: contract,
       toAddress: request.toAddress,
+      amountUnits,
+    });
+  }
+
+  async coldWalletTransfer(request: ColdWalletTransferRequest): Promise<SendTransferResult> {
+    if (!this.hotWalletAddress || !this.hotWalletPrivateKey) {
+      throw new SidecarError(
+        'Hot wallet credentials are not configured (HOT_WALLET_ADDRESS + HOT_WALLET_PRIVATE_KEY).',
+        'HOT_WALLET_NOT_CONFIGURED',
+        false,
+      );
+    }
+    const contract = this.resolveContract(request.token);
+    const amountUnits = TransferService.toRawUnits(request.amount, this.decimalsPower);
+
+    logger.info(
+      {
+        coldTransferId: request.coldTransferId,
+        correlationId: request.correlationId,
+        token: request.token,
+        amount: request.amount,
+        toColdAddress: request.toColdAddress,
+      },
+      'Broadcasting COLD_WALLET_TRANSFER (hot -> cold)',
+    );
+
+    return this.client.sendTransfer({
+      fromAddress: this.hotWalletAddress,
+      privateKey: this.hotWalletPrivateKey,
+      contractAddress: contract,
+      toAddress: request.toColdAddress,
       amountUnits,
     });
   }

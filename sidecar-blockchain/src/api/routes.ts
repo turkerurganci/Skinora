@@ -10,6 +10,7 @@ import {
   stopMonitorHandler,
 } from './monitorHandlers.js';
 import {
+  coldWalletTransferHandler,
   payoutHandler,
   refundHandler,
   sweepHandler,
@@ -95,6 +96,16 @@ export function createRouter(deps: RouterDeps): Router {
   //   → 200 { txHash }
   apiRouter.post('/transfer/sweep', sweepHandler(deps.transferService));
 
+  // Hot wallet → cold wallet operational transfer — T77 (05 §3.3 hot wallet limit
+  // alert flow). Backend orchestrates and persists the ColdWalletTransfer
+  // ledger row using the returned txHash; the sidecar is signing-only.
+  // POST /api/transfer/cold-wallet { coldTransferId, toColdAddress, amount, token }
+  //   → 200 { txHash }
+  //   → 400 { error: 'INVALID_TRANSFER_REQUEST' | 'HOT_WALLET_NOT_CONFIGURED' |
+  //                  'INVALID_TRANSFER_AMOUNT' | 'TOKEN_CONTRACT_NOT_CONFIGURED' }
+  //   → 502 { error: 'TRANSFER_BROADCAST_REJECTED' | 'TRANSFER_BROADCAST_FAILED' }
+  apiRouter.post('/transfer/cold-wallet', coldWalletTransferHandler(deps.transferService));
+
   // GET /api/transfer/status/:txHash
   //   → 200 { txHash, blockNumber?, contractRet?, confirmations }
   //   → 502 { error: 'TRANSFER_STATUS_HTTP_ERROR' }
@@ -106,11 +117,6 @@ export function createRouter(deps: RouterDeps): Router {
   //   → 400 { error: 'INVALID_BALANCES_REQUEST' }
   //   → 502 { error: 'BALANCE_SNAPSHOT_FAILED' }
   apiRouter.post('/wallet/balances', walletBalancesHandler());
-
-  // Hot-wallet-specific limit alert — T77 (kept for forward-deferral)
-  apiRouter.get('/wallet/hot-wallet-balance', (_req, res) => {
-    res.status(501).json({ error: 'Not implemented — see T77' });
-  });
 
   router.use('/api', apiRouter);
 

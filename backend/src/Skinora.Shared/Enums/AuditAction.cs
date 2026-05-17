@@ -44,5 +44,21 @@ public enum AuditAction
     // the address; NewValue is a JSON envelope {token, expected, actual,
     // delta, blockNumber}. Append-only; the audit trail is the durable
     // record even when the realtime SignalR push to admins is lost.
-    RECONCILIATION_MISMATCH
+    RECONCILIATION_MISMATCH,
+
+    // Hot wallet management (T77 — 05 §3.3). Admin-initiated hot→cold
+    // operational consolidation. EntityType = "ColdWalletTransfer";
+    // EntityId = ColdWalletTransfer.Id; NewValue is a JSON envelope
+    // {token, amount, fromAddress, toAddress, txHash}. Logged from
+    // HotWalletService alongside the ColdWalletTransfer ledger row so the
+    // FUND_MOVEMENT queue mirrors customer-facing wallet activity.
+    COLD_WALLET_TRANSFER_INITIATED,
+
+    // Hot wallet management (T77 — 05 §3.3). Periodic monitor detected a
+    // balance crossing an admin-configured threshold. EntityType =
+    // "HotWallet"; EntityId = hot wallet address; NewValue is a JSON
+    // envelope {token, direction (Upper|Lower), threshold, actual,
+    // blockNumber}. SECURITY_EVENT category — sits alongside reconciliation
+    // mismatches on the admin dashboard.
+    HOT_WALLET_THRESHOLD_BREACHED
 }

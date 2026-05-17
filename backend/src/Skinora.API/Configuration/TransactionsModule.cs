@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Skinora.API.Services;
+using Skinora.API.Services.HotWallet;
 using Skinora.Fraud.Application.Account;
 using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.GasFee;
@@ -15,6 +16,7 @@ using Skinora.Transactions.Application.Reconciliation;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Application.Transfers;
+using Skinora.Transactions.Application.Wallets;
 using Skinora.Transactions.Application.Webhooks;
 
 namespace Skinora.API.Configuration;
@@ -202,6 +204,15 @@ public static class TransactionsModule
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<ReconciliationJob>();
         services.AddHostedService<ReconciliationJobRegistrar>();
+
+        // T77 — admin-initiated hot→cold consolidation + periodic hot
+        // wallet balance monitor (05 §3.3). HotWalletService writes the
+        // ColdWalletTransfer ledger row alongside an audit entry; the
+        // monitor job broadcasts threshold breaches over SignalR.
+        services.AddScoped<IHotWalletService, HotWalletService>();
+        services.AddScoped<IHotWalletMonitorService, HotWalletMonitorService>();
+        services.AddScoped<HotWalletMonitorJob>();
+        services.AddHostedService<HotWalletMonitorJobRegistrar>();
 
         return services;
     }

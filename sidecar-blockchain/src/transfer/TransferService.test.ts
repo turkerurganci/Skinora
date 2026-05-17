@@ -150,6 +150,89 @@ describe('TransferService.payout()', () => {
   });
 });
 
+describe('TransferService.coldWalletTransfer()', () => {
+  it('broadcasts from hot wallet to admin-supplied cold address with the requested token', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      hotWalletAddress: 'THotWallet',
+      hotWalletPrivateKey: SIGNER_HOT_KEY,
+    });
+
+    const result = await service.coldWalletTransfer({
+      coldTransferId: 'cwt-77',
+      toColdAddress: 'TColdVault',
+      amount: '10000',
+      token: 'USDC',
+      correlationId: 'corr-cwt',
+    });
+
+    expect(result.txHash).toBe('tx-fake');
+    expect(client.sendTransfer).toHaveBeenCalledWith({
+      fromAddress: 'THotWallet',
+      privateKey: SIGNER_HOT_KEY,
+      contractAddress: TOKEN_USDC,
+      toAddress: 'TColdVault',
+      amountUnits: '10000000000',
+    });
+  });
+
+  it('refuses to broadcast when hot wallet credentials are unset', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      hotWalletAddress: '',
+      hotWalletPrivateKey: '',
+    });
+
+    await expect(
+      service.coldWalletTransfer({
+        coldTransferId: 'cwt-77',
+        toColdAddress: 'TCold',
+        amount: '100',
+        token: 'USDT',
+        correlationId: 'corr-cwt',
+      }),
+    ).rejects.toMatchObject({ code: 'HOT_WALLET_NOT_CONFIGURED', retryable: false });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('rejects fractional amounts beyond 6 decimals', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      hotWalletAddress: 'THotWallet',
+      hotWalletPrivateKey: SIGNER_HOT_KEY,
+    });
+
+    await expect(
+      service.coldWalletTransfer({
+        coldTransferId: 'cwt-77',
+        toColdAddress: 'TCold',
+        amount: '1.0000001',
+        token: 'USDT',
+        correlationId: 'corr-cwt',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSFER_AMOUNT' });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+});
+
 describe('TransferService.sweep()', () => {
   it('derives signer, delegates Energy, broadcasts deposit -> hot wallet and reports delegated mode', async () => {
     const client = buildStubClient();

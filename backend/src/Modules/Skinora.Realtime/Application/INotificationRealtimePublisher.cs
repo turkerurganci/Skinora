@@ -69,4 +69,16 @@ public interface INotificationRealtimePublisher
     Task PublishAdminReconciliationMismatchAsync(
         NotificationRealtimePayloads.AdminReconciliationMismatch payload,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Broadcast variant: hot wallet threshold breaches surface on every
+    /// admin client (T77 — 05 §3.3). Fired once per (token, direction)
+    /// finding by the
+    /// <see cref="Skinora.Transactions.Application.Wallets.IHotWalletMonitorService"/>
+    /// run. Best-effort; the <c>HOT_WALLET_THRESHOLD_BREACHED</c> AuditLog
+    /// row written next to the publish is the durable record.
+    /// </summary>
+    Task PublishAdminHotWalletThresholdBreachedAsync(
+        NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload,
+        CancellationToken cancellationToken);
 }

@@ -119,6 +119,14 @@ public static class SystemSettingSeed
         Default     (54, "reconciliation.schedule_cron",                 "string",  "Monitoring",    "0 3 * * *", "Reconciliation job cron ifadesi (05 §3.3). Default '0 3 * * *' (03:00 UTC günlük). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
         Default     (55, "reconciliation.hot_wallet_address",            "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için hot wallet Tron adresi. 'NONE' ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3) — auth.banned_countries NONE sentinel pattern."),
         Default     (56, "reconciliation.cold_wallet_address",           "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). 'NONE' ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir."),
+        // --- T77: Hot wallet monitoring job (05 §3.3) ---
+        // Periodic hot wallet balance monitor (independent of the daily
+        // reconciliation pass). Default 15 dakika — operationally adequate
+        // without burning TronGrid quota; admin-tunable. TRX minimum is
+        // 100 TRX (~50 stablecoin transfers' worth of gas headroom); below
+        // that threshold a SECURITY_EVENT audit + admin SignalR alert fires.
+        Default     (57, "hot_wallet.monitor_cron",                       "string",  "Monitoring",    "*/15 * * * *", "Hot wallet bakiye monitor job'unun cron ifadesi (T77 — 05 §3.3). Default '*/15 * * * *' (her 15 dakikada bir). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
+        Default     (58, "hot_wallet.trx_balance_minimum",                "decimal", "Wallet",        "100",          "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). MVP ölçeğinde 100 TRX ≈ 50 TRC-20 transfer gas worst-case headroom."),
     ];
 
     private static SystemSetting Unconfigured(
