@@ -4,6 +4,7 @@ using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -20,17 +21,20 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
     private readonly ITimeoutSideEffectPublisher _sideEffects;
+    private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly ILogger<TimeoutExecutor> _logger;
 
     public TimeoutExecutor(
         AppDbContext db,
         TimeProvider clock,
         ITimeoutSideEffectPublisher sideEffects,
+        IPostCancelMonitorStarter postCancelMonitor,
         ILogger<TimeoutExecutor> logger)
     {
         _db = db;
         _clock = clock;
         _sideEffects = sideEffects;
+        _postCancelMonitor = postCancelMonitor;
         _logger = logger;
     }
 
@@ -63,6 +67,14 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
         }
 
         await _sideEffects.PublishAsync(transaction, previousStatus);
+
+        // T75 — post-cancel monitoring start request. The timeout path always
+        // happens from ITEM_ESCROWED, so PaymentAddress is guaranteed to be
+        // allocated (T44). Use CancelledAt as the anchor when set; otherwise
+        // fall back to wall-clock now (defensive — state machine stamps it).
+        var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;
+        await _postCancelMonitor.RequestStartAsync(transaction.Id, cancelledAt, CancellationToken.None);
+
         await _db.SaveChangesAsync();
     }
 }

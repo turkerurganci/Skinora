@@ -5,6 +5,7 @@ import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
 import { MonitorRegistry } from './monitor/MonitorRegistry.js';
+import { PostCancelMonitorRegistry } from './monitor/PostCancelMonitor.js';
 import { TronGridClient } from './tron/TronGridClient.js';
 import { TronTransferClient } from './tron/TronTransferClient.js';
 import { TronDelegationClient } from './tron/TronDelegationClient.js';
@@ -23,15 +24,34 @@ const monitorRegistry = new MonitorRegistry({
   pageLimit: config.monitorPageLimit,
   webhookEndpoints: config.webhookEndpoints,
 });
+const postCancelMonitorRegistry = new PostCancelMonitorRegistry({
+  client: tronGridClient,
+  allowlist: { USDT: config.allowlist.USDT, USDC: config.allowlist.USDC },
+  tickIntervalMs: config.postCancelTickIntervalMs,
+  pageLimit: config.monitorPageLimit,
+  webhookEndpoints: {
+    latePaymentDetected: config.webhookEndpoints.latePaymentDetected,
+    postCancelMonitorStateChanged: config.webhookEndpoints.postCancelMonitorStateChanged,
+    wrongTokenIncoming: config.webhookEndpoints.wrongTokenIncoming,
+    spamTokenIncoming: config.webhookEndpoints.spamTokenIncoming,
+  },
+  cadences: {
+    POST_CANCEL_24H: config.postCancelCadence24hMs,
+    POST_CANCEL_7D: config.postCancelCadence7dMs,
+    POST_CANCEL_30D: config.postCancelCadence30dMs,
+  },
+  windows: {
+    POST_CANCEL_24H: config.postCancelWindow24hMs,
+    POST_CANCEL_7D: config.postCancelWindow7dMs,
+    POST_CANCEL_30D: config.postCancelWindow30dMs,
+  },
+});
 const tronTransferClient = new TronTransferClient(
   config.tronFullNodeUrl,
   config.tronSolidityUrl,
   config.tronApiKey,
 );
-const tronDelegationClient = new TronDelegationClient(
-  config.tronFullNodeUrl,
-  config.tronApiKey,
-);
+const tronDelegationClient = new TronDelegationClient(config.tronFullNodeUrl, config.tronApiKey);
 const energyDelegation = new EnergyDelegationService({
   client: tronDelegationClient,
   sweeperAddress: config.hotWalletAddress,
@@ -62,7 +82,15 @@ app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(createRouter({ walletManager, monitorRegistry, transferService, refundService }));
+app.use(
+  createRouter({
+    walletManager,
+    monitorRegistry,
+    postCancelMonitorRegistry,
+    transferService,
+    refundService,
+  }),
+);
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {
@@ -81,6 +109,7 @@ async function shutdown(signal: string): Promise<void> {
 
   // 2. Stop active monitors
   await monitorRegistry.shutdown();
+  await postCancelMonitorRegistry.shutdown();
 
   // 3. Shutdown wallet manager
   await walletManager.shutdown();

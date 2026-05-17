@@ -67,6 +67,28 @@ public sealed class BlockchainWebhooksController : ControllerBase
         CancellationToken cancellationToken)
         => DispatchAsync(envelope, _handler.HandleSpamTokenIncomingAsync, cancellationToken);
 
+    /// <summary>
+    /// Late buyer transfer detected at a cancelled transaction's deposit
+    /// address (T75 — 02 §4.4 gecikmeli ödeme). Backend persists the
+    /// incoming row + queues a <c>LATE_PAYMENT_REFUND</c> via the T73
+    /// refund pipeline.
+    /// </summary>
+    [HttpPost("late-payment-detected")]
+    public Task<IActionResult> LatePaymentDetected(
+        [FromBody] BlockchainWebhookEnvelope<LatePaymentDetectedData> envelope,
+        CancellationToken cancellationToken)
+        => DispatchAsync(envelope, _handler.HandleLatePaymentDetectedAsync, cancellationToken);
+
+    /// <summary>
+    /// Sidecar post-cancel monitor advanced to the next state — backend
+    /// mirrors <c>PaymentAddress.MonitoringStatus</c> (T75 — 06 §2.16).
+    /// </summary>
+    [HttpPost("post-cancel-monitor-state-changed")]
+    public Task<IActionResult> PostCancelMonitorStateChanged(
+        [FromBody] BlockchainWebhookEnvelope<PostCancelMonitorStateChangedData> envelope,
+        CancellationToken cancellationToken)
+        => DispatchAsync(envelope, _handler.HandlePostCancelMonitorStateChangedAsync, cancellationToken);
+
     private async Task<IActionResult> DispatchAsync<TData>(
         BlockchainWebhookEnvelope<TData>? envelope,
         Func<BlockchainWebhookEnvelope<TData>, string, CancellationToken, Task<BlockchainWebhookResult>> handler,

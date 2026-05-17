@@ -17,7 +17,46 @@ public interface IBlockchainSidecarClient
         int index,
         Guid transactionId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Register a deposit address for post-cancel monitoring (T75 — 08 §3.4).
+    /// Idempotent on <c>request.Address</c>: a duplicate call returns
+    /// <c>BlockchainSidecarStatus.Success</c> without disturbing the
+    /// sidecar's existing cursor/dedup state.
+    /// </summary>
+    Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
+        PostCancelMonitorStartRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Drop a deposit address from post-cancel monitoring (manual admin
+    /// stop, successful late refund, or transaction terminal cleanup —
+    /// T75). Idempotent: returns Success whether or not the entry was
+    /// being tracked.
+    /// </summary>
+    Task<BlockchainSidecarStatus> StopPostCancelMonitoringAsync(
+        string address,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Input payload for the sidecar <c>POST /api/monitor/post-cancel-start</c>
+/// endpoint (T75). All timestamps are UTC.
+/// </summary>
+public sealed record PostCancelMonitorStartRequest(
+    string Address,
+    Guid PaymentAddressId,
+    Guid TransactionId,
+    string ExpectedContract,
+    string ExpectedSymbol,
+    DateTime CancelledAt,
+    /// <summary>Recovery override — null when the cancel pipeline starts
+    /// monitoring fresh. The startup recovery job passes the persisted
+    /// <c>PaymentAddress.MonitoringStatus</c> here so the sidecar resumes
+    /// at the same state instead of recomputing from <c>cancelledAt</c>.
+    /// </summary>
+    string? InitialState = null,
+    DateTime? InitialStateExpiresAt = null);
 
 /// <summary>
 /// Discriminated outcome — distinguishes a successful derivation (200) from

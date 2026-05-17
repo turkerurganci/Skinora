@@ -62,6 +62,24 @@ public interface IAmountValidationService
         BlockchainTransaction wrongTokenIncoming,
         string correlationId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Classify a late buyer transfer detected by the T75 post-cancel
+    /// monitor (02 §4.4 timeout-sonrası gecikmeli ödeme). Mirrors the
+    /// multi-payment branch of <see cref="ValidateConfirmedBuyerPaymentAsync"/>
+    /// but emits <c>LATE_PAYMENT_REFUND</c> rather than <c>EXCESS_REFUND</c>
+    /// so dispatch + audit can distinguish the two flows.
+    /// </summary>
+    /// <param name="latePayment">
+    /// The <see cref="BlockchainTransaction"/> row the caller has just
+    /// persisted at <c>Type=BUYER_PAYMENT</c> / <c>Status=DETECTED</c>.
+    /// </param>
+    /// <param name="correlationId">Webhook correlation id for log fan-out.</param>
+    /// <param name="cancellationToken"/>
+    Task<AmountValidationOutcome> ValidateLatePaymentDetectedAsync(
+        BlockchainTransaction latePayment,
+        string correlationId,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -96,6 +114,14 @@ public enum AmountValidationOutcome
 
     /// <summary>Wrong-token transfer below threshold → admin alert only.</summary>
     WrongTokenAdminAlert,
+
+    /// <summary>Late buyer transfer above threshold (T75) → refund row queued
+    /// at <c>LATE_PAYMENT_REFUND</c>.</summary>
+    LatePaymentRefundQueued,
+
+    /// <summary>Late buyer transfer below threshold (T75) → admin alert only,
+    /// no refund attempted (08 §3.4 minimum eşik).</summary>
+    LatePaymentAdminAlert,
 
     /// <summary>State machine refused the trigger (emergency hold, cancelled,
     /// terminal state). No refund row written; admin operations resume on

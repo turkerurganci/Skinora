@@ -4,6 +4,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -66,6 +67,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
     private readonly ITimeoutSchedulingService _timeouts;
     private readonly IReputationAggregator _reputation;
     private readonly IUserCancelCooldownEvaluator _cooldown;
+    private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly TimeProvider _clock;
 
     public TransactionCancellationService(
@@ -74,6 +76,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         ITimeoutSchedulingService timeouts,
         IReputationAggregator reputation,
         IUserCancelCooldownEvaluator cooldown,
+        IPostCancelMonitorStarter postCancelMonitor,
         TimeProvider clock)
     {
         _db = db;
@@ -81,6 +84,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         _timeouts = timeouts;
         _reputation = reputation;
         _cooldown = cooldown;
+        _postCancelMonitor = postCancelMonitor;
         _clock = clock;
     }
 
@@ -185,6 +189,11 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 FromStatus: previousStatus,
                 OccurredAt: occurredAt),
             cancellationToken);
+
+        // 6d. T75 — stamp PaymentAddress for post-cancel monitoring + queue
+        // the sidecar start event. Idempotent on transactions without a
+        // PaymentAddress (CREATED-cancel before allocation).
+        await _postCancelMonitor.RequestStartAsync(transaction.Id, occurredAt, cancellationToken);
 
         // ---------- Stage 7: atomic commit + denormalized projection update ----------
         // The reputation aggregator + cooldown evaluator both query Transaction

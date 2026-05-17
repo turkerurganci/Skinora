@@ -103,12 +103,34 @@ export const config = {
   minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '20', 10), // 05 §3.3 — 20 blocks (~60s)
   monitorPageLimit: parseInt(process.env.MONITOR_PAGE_LIMIT || '20', 10), // 08 §3.4
 
+  // Post-cancel monitoring cadences — 08 §3.4 / 06 §2.16 (T75). All in ms.
+  // Defaults match the spec verbatim (30 s / 5 min / 1 h); admin tuning via
+  // SystemSetting is sidecar-restart-bound (forward-deferred to T96).
+  postCancelTickIntervalMs: parseInt(process.env.POST_CANCEL_TICK_INTERVAL_MS || '30000', 10),
+  postCancelCadence24hMs: parseInt(process.env.POST_CANCEL_CADENCE_24H_MS || '30000', 10),
+  postCancelCadence7dMs: parseInt(process.env.POST_CANCEL_CADENCE_7D_MS || '300000', 10),
+  postCancelCadence30dMs: parseInt(process.env.POST_CANCEL_CADENCE_30D_MS || '3600000', 10),
+  postCancelWindow24hMs: parseInt(
+    process.env.POST_CANCEL_WINDOW_24H_MS || String(24 * 60 * 60 * 1000),
+    10,
+  ),
+  postCancelWindow7dMs: parseInt(
+    process.env.POST_CANCEL_WINDOW_7D_MS || String(7 * 24 * 60 * 60 * 1000),
+    10,
+  ),
+  postCancelWindow30dMs: parseInt(
+    process.env.POST_CANCEL_WINDOW_30D_MS || String(30 * 24 * 60 * 60 * 1000),
+    10,
+  ),
+
   // Webhook callback endpoints — match BlockchainWebhooksController routes
   webhookEndpoints: {
     paymentDetected: '/api/v1/webhooks/blockchain/payment-detected',
     paymentConfirmed: '/api/v1/webhooks/blockchain/payment-confirmed',
     wrongTokenIncoming: '/api/v1/webhooks/blockchain/wrong-token',
     spamTokenIncoming: '/api/v1/webhooks/blockchain/spam-token',
+    latePaymentDetected: '/api/v1/webhooks/blockchain/late-payment-detected',
+    postCancelMonitorStateChanged: '/api/v1/webhooks/blockchain/post-cancel-monitor-state-changed',
   },
 
   // Supported stablecoin allowlist (08 §3.4 wrong-token classification)

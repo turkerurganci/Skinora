@@ -186,6 +186,15 @@ internal static class TimeoutTestFixtures
     /// </summary>
     public static ITimeoutSideEffectPublisher NoOpSideEffects() => new NoOpTimeoutSideEffectPublisher();
 
+    /// <summary>
+    /// Default <see cref="Skinora.Transactions.Application.PostCancel.IPostCancelMonitorStarter"/>
+    /// for tests that exercise cancel/timeout flows without asserting on the
+    /// post-cancel side effect. Dedicated T75 tests construct the real
+    /// <c>PostCancelMonitorStarter</c> directly.
+    /// </summary>
+    public static Skinora.Transactions.Tests.Helpers.NoOpPostCancelMonitorStarter NoOpPostCancelMonitor()
+        => new();
+
     public static IOptions<TimeoutSchedulingOptions> Options(
         int scannerSeconds = 30,
         int batchSize = 200,

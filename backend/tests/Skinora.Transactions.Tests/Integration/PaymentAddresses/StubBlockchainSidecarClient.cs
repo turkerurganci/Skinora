@@ -14,6 +14,11 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
     public Queue<BlockchainSidecarDeriveResult> Responses { get; } = new();
     public List<(int Index, Guid TransactionId)> Calls { get; } = new();
 
+    public Queue<BlockchainSidecarStatus> PostCancelStartResponses { get; } = new();
+    public List<PostCancelMonitorStartRequest> PostCancelStartCalls { get; } = new();
+    public Queue<BlockchainSidecarStatus> PostCancelStopResponses { get; } = new();
+    public List<string> PostCancelStopCalls { get; } = new();
+
     public Task<BlockchainSidecarDeriveResult> DeriveAddressAsync(
         int index, Guid transactionId, CancellationToken cancellationToken)
     {
@@ -24,6 +29,26 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
                 BlockchainSidecarStatus.Success,
                 DeterministicAddress(index),
                 $"m/44'/195'/0'/0/{index}");
+        return Task.FromResult(response);
+    }
+
+    public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
+        PostCancelMonitorStartRequest request, CancellationToken cancellationToken)
+    {
+        PostCancelStartCalls.Add(request);
+        var response = PostCancelStartResponses.Count > 0
+            ? PostCancelStartResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
+        return Task.FromResult(response);
+    }
+
+    public Task<BlockchainSidecarStatus> StopPostCancelMonitoringAsync(
+        string address, CancellationToken cancellationToken)
+    {
+        PostCancelStopCalls.Add(address);
+        var response = PostCancelStopResponses.Count > 0
+            ? PostCancelStopResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
         return Task.FromResult(response);
     }
 

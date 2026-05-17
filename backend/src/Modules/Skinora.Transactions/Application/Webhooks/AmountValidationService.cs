@@ -196,6 +196,81 @@ public sealed class AmountValidationService : IAmountValidationService
         return AmountValidationOutcome.WrongTokenRefundQueued;
     }
 
+    public async Task<AmountValidationOutcome> ValidateLatePaymentDetectedAsync(
+        BlockchainTransaction latePayment,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (latePayment.Type != BlockchainTransactionType.BUYER_PAYMENT)
+        {
+            throw new InvalidOperationException(
+                $"AmountValidationService.ValidateLatePaymentDetectedAsync expects BUYER_PAYMENT; got {latePayment.Type}.");
+        }
+
+        var paymentAddress = await LoadPaymentAddressAsync(latePayment.PaymentAddressId, cancellationToken);
+        if (paymentAddress is null)
+        {
+            _logger.LogWarning(
+                "Late-payment validation skipped — payment address {PaymentAddressId} missing for BlockchainTransaction {Id}. correlationId={CorrelationId}",
+                latePayment.PaymentAddressId, latePayment.Id, correlationId);
+            return AmountValidationOutcome.MissingNavigation;
+        }
+
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == latePayment.TransactionId, cancellationToken);
+        if (transaction is null || transaction.BuyerId is null)
+        {
+            _logger.LogWarning(
+                "Late-payment validation skipped — transaction {TransactionId} or buyer missing. correlationId={CorrelationId}",
+                latePayment.TransactionId, correlationId);
+            return AmountValidationOutcome.MissingNavigation;
+        }
+
+        var settings = await _gasFeeSettings.GetAsync(cancellationToken);
+        var gasFee = settings.RefundGasFeeEstimateUsdt;
+        var received = latePayment.Amount;
+
+        // 02 §4.4 / 08 §3.4 — refund decision is the same minimum-threshold
+        // rule used for underpayment / wrong-token: net < 2× gas blocks the
+        // refund. The post-cancel transaction never advances; this purely
+        // queues a refund intent for T73 dispatch.
+        var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
+        if (decision.Outcome == RefundOutcome.Block)
+        {
+            await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
+            _logger.LogWarning(
+                "Late-payment refund blocked — txHash={TxHash} received={Received} reason={Reason} correlationId={CorrelationId}",
+                latePayment.TxHash, received, decision.Reason, correlationId);
+            return AmountValidationOutcome.LatePaymentAdminAlert;
+        }
+
+        var refundRow = QueueRefundIntent(
+            transaction.Id,
+            BlockchainTransactionType.LATE_PAYMENT_REFUND,
+            latePayment.FromAddress,
+            received,
+            paymentAddress.ExpectedToken);
+
+        await _outbox.PublishAsync(
+            new LatePaymentRefundRequestedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                BuyerId: transaction.BuyerId.Value,
+                RefundTransactionId: refundRow.Id,
+                ReceivedAmount: received,
+                Stablecoin: paymentAddress.ExpectedToken,
+                SourceAddress: latePayment.FromAddress,
+                TxHash: latePayment.TxHash ?? string.Empty,
+                MonitorState: paymentAddress.MonitoringStatus,
+                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+            cancellationToken);
+
+        _logger.LogInformation(
+            "Late-payment refund queued — txHash={TxHash} received={Received} monitorState={State} refundId={RefundId} correlationId={CorrelationId}",
+            latePayment.TxHash, received, paymentAddress.MonitoringStatus, refundRow.Id, correlationId);
+        return AmountValidationOutcome.LatePaymentRefundQueued;
+    }
+
     private async Task<AmountValidationOutcome> HandleUnderpaymentAsync(
         BlockchainTransaction confirmedPayment,
         PaymentAddress paymentAddress,
@@ -493,8 +568,22 @@ public sealed class AmountValidationService : IAmountValidationService
 /// rather than crashing, and the row's <c>ActualTokenAddress</c> already
 /// carries the raw contract for downstream investigation.
 /// </remarks>
-internal static class KnownStablecoinContracts
+public static class KnownStablecoinContracts
 {
     public const string Usdt = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
     public const string Usdc = "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8";
+
+    /// <summary>
+    /// Resolve the canonical TRC-20 contract address for a backend
+    /// stablecoin enum value (T75 dispatcher uses this to satisfy the
+    /// sidecar's <c>expectedContract</c> field). Sidecar's own allowlist
+    /// is the source of truth; this is a backend mirror for cases where
+    /// the sidecar is not in the call chain.
+    /// </summary>
+    public static string ResolveContractAddress(StablecoinType token) => token switch
+    {
+        StablecoinType.USDT => Usdt,
+        StablecoinType.USDC => Usdc,
+        _ => throw new ArgumentOutOfRangeException(nameof(token), token, "Unsupported stablecoin."),
+    };
 }
