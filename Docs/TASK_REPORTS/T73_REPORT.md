@@ -1,6 +1,6 @@
 # T73 — Blockchain Sidecar — TRC-20 transfer (payout, refund, sweep)
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-17
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-17
 
 ---
 
@@ -128,10 +128,17 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Doğrulama bekliyor |
-| Kabul kriterleri | Yapım: 4 ✓ + 2 ~ (Sweep & Sweep hata — T74 delegation devri belirgin) |
-| Doğrulama kontrol listesi | Yapım: 2/2 ✓ |
-| Bulgu sayısı | Henüz doğrulanmadı |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-17) |
+| Kabul kriterleri | 4 ✓ (1 payout, 2 refund, 5 broadcasttransaction, 6 gettransactioninfobyid finality) + 2 ~ Kısmi (3 sweep delegation geri alımı + 4 sweep hata fallback — T74 energy delegation forward devir, plan'da T74 explicit `delegateresource`/`undelegateresource` tanımlı; sidecar sweep primitive + endpoint ready) |
+| Doğrulama kontrol listesi | 2/2 ✓ (08 §3.1 TronGrid API çağrıları doğru — triggersmartcontract + broadcasttransaction + gettransactioninfobyid + getnowblock + retry stratejisi 1,5,15 dk doğru) |
+| Bulgu sayısı | 0 S-bulgu (S1/S2/S3 yok); 2 minor advisory: M1 rapor migration filename drift (`20260516213003` → gerçek `20260516221505`, kozmetik); M2 dispatcher OutboundTypes listesinde SWEEP enum yok (K2 forward-devir ile uyumlu — sidecar `/api/transfer/sweep` primitive olarak hazır, backend orkestrasyon T-future) |
+| Validator izolasyonu | Yapım raporu read'i Faz 3 Adım 13'te yapıldı; kabul kriterleri ve verdict bağımsız oluşturuldu — yapım raporuyla 1:1 uyumlu (4 ✓ + 2 ~ aynı sınıflama). |
+| Adım 0 main CI startup | ✓ 3/3 success (`25972872805` T72 + `25972872809` T72 + `25967060890` T71) |
+| Adım 0b memory drift | ✓ T73 satırları MEMORY.md "Current Status" bloğunda mevcut (post-merge `T73 yansıt` satırı eklenecek) |
+| Adım 8a task branch CI | ✓ Son run [`25974588707`](https://github.com/turkerurganci/Skinora/actions/runs/25974588707) 11/11 SUCCESS (Detect changed + Guard + Lint + Build + Unit + Integration + Contract + Migration + Docker×2 + CI Gate) |
+| Lokal test çalıştırma | Sidecar Vitest 79/79 PASS (1.25s); Backend `dotnet test --filter Transfers` 33/33 PASS |
+| Mini güvenlik | Secret leak temiz (env-only HOT_WALLET_PRIVATE_KEY + HD_WALLET_MNEMONIC, private key local scope); auth temiz (`X-Internal-Key` middleware tüm yeni endpoint'lerde); input validation tam (handler tip + token enum + `DEPOSIT_ADDRESS_MISMATCH` defense-in-depth); yeni dep yok (TronWeb T70'te zaten kullanımda, ethers transitive) |
+| Doküman uyumu | TronGrid endpoint isimleri 08 §3.1 birebir; 20-blok finality 05 §3.3 + 08 §3.4 ile uyumlu; retry cadence 08 §3.5 (1dk/5dk/15dk) birebir; token decimals 6 (USDT/USDC) 08 §3.3 ile uyumlu; HMAC/InternalKey auth 05 §3.4 |
 
 ## Altyapı Değişiklikleri
 
@@ -144,9 +151,10 @@
 ## Commit & PR
 
 - Branch: `task/T73-trc20-transfer`
-- Yapım commit'i: (bekleniyor — push'tan önce)
-- PR: pending
-- CI: pending
+- Yapım commit'leri: `4dbc981` (ana implementasyon) + `8aa8576` (sidecar typecheck fix) + `8a4dfdc` (BYPASS_LOG) + `454cfc3` (CI fix — migration seed + ModuleInitializer test order) + `ae2ec55` (BYPASS_LOG #2 + IMPLEMENTATION_STATUS CI ✓ rapor)
+- PR: [#114](https://github.com/turkerurganci/Skinora/pull/114)
+- CI: ✓ PASS — son task branch run [`25974588707`](https://github.com/turkerurganci/Skinora/actions/runs/25974588707) 11/11 SUCCESS
+- BYPASS_LOG: 2× `[ci-failure]` entry (Layer 2 lokal hook bypass — CI'da geçen sonraki fix push'ları)
 
 ## Known Limitations / Follow-up
 
