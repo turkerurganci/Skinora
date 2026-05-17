@@ -52,3 +52,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-05-16 11:37 UTC | Türker urgancı | task/T70-hd-wallet-address-derivation | `d37bd54` | [ci-failure] T70 CI integration fix: CANCELLED_BUYER seed CK_Transactions_Cancel constraint |
 | 2026-05-16 21:59 UTC | Türker urgancı | task/T73-trc20-transfer | `8aa8576` | [ci-failure] T73 CI fix push: previous run 25973961564 failed (sidecar tsc strict tuple/RequestInfo), this commit fixes those exact errors |
 | 2026-05-16 22:17 UTC | Türker urgancı | task/T73-trc20-transfer | `454cfc3` | [ci-failure] T73 CI fix push #2: previous run 25974058183 failed (unit test order race for Platform module + migration snapshot drift); this commit fixes both root causes |
+| 2026-05-17 11:33 UTC | Türker urgancı | task/T74-energy-delegation | `b7cc726` | [ci-failure] T74 lint TS2322 fix (vi.fn generic erasure) — yeni push CI'yi yeniden tetikler |
