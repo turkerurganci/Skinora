@@ -118,9 +118,10 @@
 ## Commit & PR
 
 - Branch: `task/T75-blockchain-post-cancel-monitor`
-- Commit: TBD (push sonrası)
-- PR: TBD
-- CI: TBD
+- Commit (HEAD): `c9abdb8` — `T75: BYPASS_LOG entry — integration test fixture fix push` (3253504 ana T75 implementation + ad68d9d test fixture fix + c9abdb8 BYPASS_LOG entry)
+- PR: [#116](https://github.com/turkerurganci/Skinora/pull/116)
+- CI: ✓ PASS — run [`25992156986`](https://github.com/turkerurganci/Skinora/actions/runs/25992156986) 10/10 jobs success (Lint + Build + Unit + Integration + Contract + Migration + Docker backend + Docker sidecar-blockchain + CI Gate + Detect)
+- BYPASS_LOG: 1× `[ci-failure]` entry (BuyerIdentificationMethod test fixture fix push, önceki run 25991927813 — sadece integration test fail)
 
 ## Known Limitations / Follow-up
 
