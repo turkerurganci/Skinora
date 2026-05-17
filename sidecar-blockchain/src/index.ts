@@ -7,6 +7,8 @@ import { WalletManager } from './wallet/WalletManager.js';
 import { MonitorRegistry } from './monitor/MonitorRegistry.js';
 import { TronGridClient } from './tron/TronGridClient.js';
 import { TronTransferClient } from './tron/TronTransferClient.js';
+import { TronDelegationClient } from './tron/TronDelegationClient.js';
+import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
 import { TransferService } from './transfer/TransferService.js';
 import { RefundService } from './transfer/RefundService.js';
 
@@ -26,6 +28,17 @@ const tronTransferClient = new TronTransferClient(
   config.tronSolidityUrl,
   config.tronApiKey,
 );
+const tronDelegationClient = new TronDelegationClient(
+  config.tronFullNodeUrl,
+  config.tronApiKey,
+);
+const energyDelegation = new EnergyDelegationService({
+  client: tronDelegationClient,
+  sweeperAddress: config.hotWalletAddress,
+  sweeperPrivateKey: config.hotWalletPrivateKey,
+  delegationAmountSun: config.sweepEnergyDelegationSun,
+  fallbackAmountSun: config.sweepTrxFallbackSun,
+});
 const tokenContracts = { USDT: config.usdtContract, USDC: config.usdcContract };
 const transferService = new TransferService({
   walletManager,
@@ -34,12 +47,14 @@ const transferService = new TransferService({
   hotWalletAddress: config.hotWalletAddress,
   hotWalletPrivateKey: config.hotWalletPrivateKey,
   tokenDecimals: config.tokenDecimals,
+  energyDelegation,
 });
 const refundService = new RefundService({
   walletManager,
   client: tronTransferClient,
   tokenContracts,
   tokenDecimals: config.tokenDecimals,
+  energyDelegation,
 });
 
 // Middleware

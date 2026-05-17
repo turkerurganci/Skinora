@@ -103,6 +103,13 @@ public static class SystemSettingSeed
         // edilir ve TransferDispatchFailedEvent yayınlanır. Default "1,5,15" = 3 deneme
         // exponential backoff (1dk, 5dk, 15dk). Admin tarafından değiştirilebilir.
         Default     (51, "blockchain.transfer_retry_intervals_minutes",  "string",  "Monitoring",    "1,5,15", "Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV). Her transient failure NextAttemptAt'i listedeki sıradaki değerle ileriye iter; liste bittiğinde transfer FAILED + admin alert. Default '1,5,15' = T73 plan'ı."),
+        // --- T74: Sweep / refund Energy delegation amounts (08 §3.3, 11 T74) ---
+        // Both stored as SUN strings (1 TRX = 1_000_000 SUN). Sidecar reads matching env vars
+        // (SWEEP_ENERGY_DELEGATION_SUN, SWEEP_TRX_FALLBACK_SUN) at startup; these SystemSetting
+        // rows give admin visibility and a single canonical source — runtime propagation from
+        // backend to sidecar is a T-future task (see T74 K1).
+        Default     (52, "blockchain.sweep_energy_delegation_sun",       "string",  "Monitoring",    "200000000", "Sweep / deposit-sourced refund öncesi sweeper hot wallet'tan deposit adresine geçici Energy delegation tutarı (SUN, 1 TRX = 1_000_000 SUN). Default 200 TRX — Stake 2.0 ile ~16.000 Energy headroom (TRC-20 transfer ~65k Energy, dış API oran dalgalanması payı dahil). 08 §3.3."),
+        Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Energy delegation başarısız olursa deposit adresine fallback olarak gönderilen TRX tutarı (SUN). Default 15 TRX (08 §3.3 — TRC-20 transferin gas için yaklaşık üst sınırı). Deposit bu TRX'i kendi gas'ı için yakar."),
     ];
 
     private static SystemSetting Unconfigured(

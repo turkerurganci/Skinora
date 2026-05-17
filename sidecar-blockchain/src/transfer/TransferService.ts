@@ -6,6 +6,10 @@ import {
   SendTransferResult,
   TransactionStatusResult,
 } from '../tron/TronTransferClient.js';
+import {
+  EnergyDelegationService,
+  DelegationOutcome,
+} from '../wallet/EnergyDelegationService.js';
 
 export type TokenSymbol = 'USDT' | 'USDC';
 
@@ -44,6 +48,19 @@ export interface TransferServiceDeps {
   hotWalletPrivateKey: string;
   /** Token decimals — 6 for USDT and USDC per 08 §3.3 (mainnet + testnet). */
   tokenDecimals?: number;
+  /** Energy delegation orchestrator (T74). Optional so unit tests that focus
+   * on payout (hot-wallet-sourced, no delegation needed) can omit it. Sweep
+   * requires it — calling <c>sweep()</c> without one throws
+   * <c>DELEGATION_NOT_WIRED</c>. */
+  energyDelegation?: EnergyDelegationService;
+}
+
+export interface SweepResult extends SendTransferResult {
+  /** Delegation path used: <c>delegated</c> (delegateresource) or
+   * <c>fallback</c> (TRX prefund). 08 §3.3 audit field. */
+  delegationMode: 'delegated' | 'fallback';
+  delegationAmountSun: number;
+  fallbackAmountSun: number;
 }
 
 /**
@@ -75,6 +92,7 @@ export class TransferService {
   private readonly hotWalletAddress: string;
   private readonly hotWalletPrivateKey: string;
   private readonly decimalsPower: bigint;
+  private readonly energyDelegation?: EnergyDelegationService;
 
   constructor(deps: TransferServiceDeps) {
     this.wallet = deps.walletManager;
@@ -83,6 +101,7 @@ export class TransferService {
     this.hotWalletAddress = deps.hotWalletAddress;
     this.hotWalletPrivateKey = deps.hotWalletPrivateKey;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
+    this.energyDelegation = deps.energyDelegation;
   }
 
   async payout(request: PayoutRequest): Promise<SendTransferResult> {
@@ -116,11 +135,18 @@ export class TransferService {
     });
   }
 
-  async sweep(request: SweepRequest): Promise<SendTransferResult> {
+  async sweep(request: SweepRequest): Promise<SweepResult> {
     if (!this.hotWalletAddress) {
       throw new SidecarError(
         'Hot wallet address is not configured.',
         'HOT_WALLET_NOT_CONFIGURED',
+        false,
+      );
+    }
+    if (!this.energyDelegation) {
+      throw new SidecarError(
+        'Energy delegation service is not wired — sweep requires delegateresource/undelegateresource (08 §3.3).',
+        'DELEGATION_NOT_WIRED',
         false,
       );
     }
@@ -144,16 +170,32 @@ export class TransferService {
         token: request.token,
         amount: request.amount,
       },
-      'Broadcasting SWEEP (deposit -> hot wallet)',
+      'Broadcasting SWEEP (deposit -> hot wallet) with Energy delegation',
     );
 
-    return this.client.sendTransfer({
-      fromAddress: signer.address,
-      privateKey: signer.privateKey,
-      contractAddress: contract,
-      toAddress: request.toHotWalletAddress,
-      amountUnits,
-    });
+    const outcome: DelegationOutcome<SendTransferResult> =
+      await this.energyDelegation.withDelegation(
+        request.depositAddress,
+        () =>
+          this.client.sendTransfer({
+            fromAddress: signer.address,
+            privateKey: signer.privateKey,
+            contractAddress: contract,
+            toAddress: request.toHotWalletAddress,
+            amountUnits,
+          }),
+        {
+          blockchainTransactionId: request.blockchainTransactionId,
+          correlationId: request.correlationId,
+        },
+      );
+
+    return {
+      txHash: outcome.action.txHash,
+      delegationMode: outcome.mode,
+      delegationAmountSun: outcome.delegationAmountSun,
+      fallbackAmountSun: outcome.fallbackAmountSun,
+    };
   }
 
   async getStatus(txHash: string): Promise<TransactionStatusResult> {
