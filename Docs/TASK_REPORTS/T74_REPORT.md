@@ -112,9 +112,9 @@
 ## Commit & PR
 
 - Branch: `task/T74-energy-delegation`
-- Commit: (yapım commit hash TBD — push öncesi)
-- PR: (TBD — push sonrası `gh pr create`)
-- CI: (TBD — PR açılınca `gh run watch` ile izlenir)
+- Yapım commit: `f04327e` — "T74: Blockchain Sidecar — energy delegation (sweep/refund)"
+- PR: [#115](https://github.com/turkerurganci/Skinora/pull/115)
+- CI: ⏳ izleniyor (run [`25989543388`](https://github.com/turkerurganci/Skinora/actions/runs/25989543388), `gh run watch` background)
 
 ## Known Limitations / Follow-up
 
