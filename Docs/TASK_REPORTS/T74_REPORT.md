@@ -1,6 +1,6 @@
 # T74 — Blockchain Sidecar — energy delegation
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-17
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-17
 
 ---
 
@@ -97,9 +97,16 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Yapım bitti, validate chat'ine geçilebilir (validator izolasyon — INSTRUCTIONS.md §3.3) |
-| Bulgu sayısı | — (validator değerlendirmesinden önce) |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (2026-05-17, ayrı chat) |
+| Bulgu sayısı | 0 S-bulgu (S1/S2/S3 yok); 3 minor advisory — hepsi Known Limitations'da dokümante (K1/K4/K5) |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator özeti:** Hard-stop kapıları temiz (working tree clean / main CI 3/3 success `25987227889`+`25987227898`+`25972872805` / memory T74 satırı mevcut). 4/4 kabul kriteri ✓ (delegate pre-broadcast + delegateresource 5-arg ENERGY+lock=false + undelegateresource 4-arg Stake 2.0 reclaim + sendTrx min TRX fallback + DELEGATION_AND_FALLBACK_FAILED retryable). 1/1 doğrulama listesi ✓ (08 §3.3 akış birebir + sweeper=hot wallet scope kararı 2026-05-17 + admin-tunable SystemSetting). Test kanıtları: Sidecar Vitest **104/104 PASS** (1.76s, 25 yeni T74 testi) + Backend Release **0W/0E** (50s) + `dotnet format --verify-no-changes` Δ=0. Task branch CI [`25989682641`](https://github.com/turkerurganci/Skinora/actions/runs/25989682641) 11/11 SUCCESS (8fe3394) + HEAD [`25989915168`](https://github.com/turkerurganci/Skinora/actions/runs/25989915168) 10/10 SUCCESS (a79f686). 0 kritik güvenlik bulgusu (HOT_WALLET_PRIVATE_KEY env-only + private field + log scrub + no new endpoint + no new runtime dep). Doküman uyumu tam (08 §3.3 endpoint isimleri delegateresource/undelegateresource + 05 §3.3 sweeper account modeli + SystemSetting seed sıralaması + Stake 2.0 imza ayrımı). Yapım raporu uyumu tam (4 ✓ aynı sınıflama).
+
+**Minor advisory'ler (FAIL değil, Known Limitations zaten kapsıyor):**
+- M1 ↔ K1: Backend SystemSetting → Sidecar runtime propagation eksik (env restart gerekir, T-future).
+- M2 ↔ K4: Sidecar pre-existing prettier drift (T73 K6 ile aynı havuz, ayrı chore PR).
+- M3 ↔ K5: Default 200 TRX delegation Stake 2.0 oran volatilitesinde TRC-20 transfer için yetersiz olabilir (admin runtime tune önerilir, dokümante).
 
 ## Altyapı Değişiklikleri
 
