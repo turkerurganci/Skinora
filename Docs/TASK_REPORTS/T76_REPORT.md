@@ -106,9 +106,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T76-blockchain-reconciliation-job`
-- **Commit:** TBD (commit'lenecek)
-- **PR:** TBD
-- **CI:** TBD
+- **Commit:** `069c86d`
+- **PR:** [#117](https://github.com/turkerurganci/Skinora/pull/117)
+- **CI:** ⏳ Çalışıyor
 
 ## Known Limitations / Follow-up
 
