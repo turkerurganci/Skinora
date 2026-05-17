@@ -11,6 +11,7 @@ using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Application.Webhooks;
 
 namespace Skinora.API.Configuration;
@@ -149,6 +150,35 @@ public static class TransactionsModule
         // WrongTokenIncoming paths.
         services.AddScoped<IAmountValidationService, AmountValidationService>();
         services.AddScoped<IBlockchainWebhookHandler, BlockchainWebhookHandler>();
+
+        // T73 — outbound transfer dispatcher (08 §3.1, §3.3, 05 §3.3). Two
+        // recurring Hangfire jobs (per-minute) plus the sidecar HTTP port
+        // and SystemSetting-backed retry policy. The dispatcher picks up
+        // PENDING BlockchainTransaction rows (refund/payout/sweep) and asks
+        // the sidecar to broadcast them; the confirmation job flips
+        // DETECTED → CONFIRMED / FAILED based on solidity-node finality.
+        services.AddHttpClient<HttpBlockchainTransferClient>(
+            HttpBlockchainTransferClient.HttpClientName,
+            (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                // Transfer broadcast may serialize behind the sidecar's
+                // RateLimitedQueue (TronGrid RPS budget) — give the call a
+                // longer budget than the cheap derive endpoint.
+                var seconds = options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds * 3;
+                client.Timeout = TimeSpan.FromSeconds(seconds);
+            });
+        services.AddScoped<IBlockchainTransferClient>(sp =>
+            sp.GetRequiredService<HttpBlockchainTransferClient>());
+
+        services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
+        services.AddScoped<OutgoingTransferDispatchJob>();
+        services.AddScoped<OutgoingTransferConfirmationJob>();
+        services.AddHostedService<OutgoingTransferJobsRegistrar>();
 
         return services;
     }

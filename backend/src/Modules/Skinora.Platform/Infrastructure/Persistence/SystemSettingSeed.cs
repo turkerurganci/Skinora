@@ -97,6 +97,12 @@ public static class SystemSettingSeed
         // the refund-decision path uses this admin-tunable USDT amount when classifying
         // under/over/wrong-token cases against the 2× gas fee minimum threshold.
         Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "T72 MVP iade gas fee tahmini (USDT). RefundDecisionService bu değeri kullanarak iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine karar verir. T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // --- T73: Outbound transfer dispatcher retry intervals (08 §3.3, 05 §3.3, 11 T73) ---
+        // CSV (dakika) — sıralı; her transient failure'da `RetryCount` artırılır ve bu listenin
+        // RetryCount'inci elemanı `NextAttemptAt`'a eklenir. Liste tükendiğinde transfer FAILED
+        // edilir ve TransferDispatchFailedEvent yayınlanır. Default "1,5,15" = 3 deneme
+        // exponential backoff (1dk, 5dk, 15dk). Admin tarafından değiştirilebilir.
+        Default     (51, "blockchain.transfer_retry_intervals_minutes",  "string",  "Monitoring",    "1,5,15", "Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV). Her transient failure NextAttemptAt'i listedeki sıradaki değerle ileriye iter; liste bittiğinde transfer FAILED + admin alert. Default '1,5,15' = T73 plan'ı."),
     ];
 
     private static SystemSetting Unconfigured(

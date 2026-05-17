@@ -11,7 +11,7 @@ namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
 /// Integration tests for the T26 + T30 + T34 + T43 + T55 + T56 + T63a + T63b + T72 EF Core seed contracts (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 50 SystemSetting rows
+/// SYSTEM user, SystemHeartbeat singleton, and 51 SystemSetting rows
 /// (28 T26 platform parameters + 2 T30 access-control settings +
 /// 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
 /// 2 T55 dormant-account fraud thresholds +
@@ -66,19 +66,20 @@ public class SeedDataTests : IntegrationTestBase
         // 1 T56 multi-account exchange address allowlist +
         // 4 T63a platform.maintenance.{active,type,message,planned_end} settings +
         // 8 T63b retention.* settings (5 age windows + 3 batch sizes) +
-        // 1 T72 blockchain.refund_gas_fee_estimate_usdt setting.
+        // 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
+        // 1 T73 blockchain.transfer_retry_intervals_minutes setting.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(50, rows.Count);
-        Assert.Equal(50, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(51, rows.Count);
+        Assert.Equal(51, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate:
-        // 29 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
-        // + 1 T56 + 4 T63a + 8 T63b + 1 T72).
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals:
+        // 30 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
+        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73).
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -89,6 +90,7 @@ public class SeedDataTests : IntegrationTestBase
             "auth.banned_countries",
             "auth.min_steam_account_age_days",
             "blockchain.refund_gas_fee_estimate_usdt",
+            "blockchain.transfer_retry_intervals_minutes",
             "commission_rate",
             "dormant_account_min_age_days",
             "gas_fee_protection_ratio",

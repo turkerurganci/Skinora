@@ -72,8 +72,13 @@ export const config = {
   // HD Wallet — 08 §3.2, derivation path: m/44'/195'/0'/0/{index}
   hdWalletMnemonic: process.env.HD_WALLET_MNEMONIC || '',
 
-  // Hot wallet
+  // Hot wallet — operationally distinct from HD wallet master mnemonic
+  // (05 §3.3 + 05 §3.5). Signing material is mounted as a Docker secret in
+  // production. Sidecar refuses to broadcast SELLER_PAYOUT transfers when
+  // the key is unset, but otherwise starts so the rest of the API surface
+  // (monitor, derive) remains usable in development.
   hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
+  hotWalletPrivateKey: process.env.HOT_WALLET_PRIVATE_KEY || '',
 
   // Logging
   lokiUrl: process.env.LOKI_URL || 'http://skinora-loki:3100',

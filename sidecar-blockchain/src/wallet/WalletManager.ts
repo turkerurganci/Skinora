@@ -1,6 +1,11 @@
 import { logger } from '../logger.js';
 import { config } from '../config/index.js';
-import { DeriveResult, HdWalletNotConfiguredError, HdWalletService } from './HdWalletService.js';
+import {
+  DeriveResult,
+  DeriveSignerResult,
+  HdWalletNotConfiguredError,
+  HdWalletService,
+} from './HdWalletService.js';
 
 export class WalletManager {
   private readonly hd: HdWalletService;
@@ -45,5 +50,16 @@ export class WalletManager {
       throw new HdWalletNotConfiguredError();
     }
     return this.hd.derive(index);
+  }
+
+  /**
+   * T73: derive private-key material for an outbound transfer originating
+   * from a deposit address. Caller must invoke once and discard.
+   */
+  deriveSigner(index: number): DeriveSignerResult {
+    if (!this.hd.isConfigured()) {
+      throw new HdWalletNotConfiguredError();
+    }
+    return this.hd.deriveSigner(index);
   }
 }
