@@ -112,9 +112,14 @@
 ## Commit & PR
 
 - Branch: `task/T74-energy-delegation`
-- Yapım commit: `f04327e` — "T74: Blockchain Sidecar — energy delegation (sweep/refund)"
+- Yapım commit'leri:
+  - `f04327e` — "T74: Blockchain Sidecar — energy delegation (sweep/refund)" (ana implementasyon)
+  - `ec6d039` — "T74: report — fill PR #115 + commit hash + CI run reference" (rapor PR fill)
+  - `b7cc726` — "T74: sidecar typecheck fix — strict generic erasure in vi.fn" (CI Lint TS2322 fix)
+  - `8fe3394` — "chore: T74 BYPASS_LOG entry — lint TS2322 fix push" (BYPASS_LOG kayıt)
 - PR: [#115](https://github.com/turkerurganci/Skinora/pull/115)
-- CI: ⏳ izleniyor (run [`25989543388`](https://github.com/turkerurganci/Skinora/actions/runs/25989543388), `gh run watch` background)
+- CI: ✓ PASS — son task branch run [`25989682641`](https://github.com/turkerurganci/Skinora/actions/runs/25989682641) **10/10 SUCCESS** (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker×2 + CI Gate; Guard skipped çünkü task branch)
+- BYPASS_LOG: 1× `[ci-failure]` entry (`b7cc726` — Layer 2 lokal hook bypass: CI Lint TS2322 fix push, CI'da geçen sonraki run yeşil)
 
 ## Known Limitations / Follow-up
 
