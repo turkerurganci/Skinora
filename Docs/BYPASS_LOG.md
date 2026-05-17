@@ -54,3 +54,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-05-16 22:17 UTC | Türker urgancı | task/T73-trc20-transfer | `454cfc3` | [ci-failure] T73 CI fix push #2: previous run 25974058183 failed (unit test order race for Platform module + migration snapshot drift); this commit fixes both root causes |
 | 2026-05-17 11:33 UTC | Türker urgancı | task/T74-energy-delegation | `b7cc726` | [ci-failure] T74 lint TS2322 fix (vi.fn generic erasure) — yeni push CI'yi yeniden tetikler |
 | 2026-05-17 13:26 UTC | Türker urgancı | task/T75-blockchain-post-cancel-monitor | `ad68d9d` | [ci-failure] T75 integration test fixture fix (BuyerIdentificationMethod) for previous CI failure on run 25991927813 |
+| 2026-05-17 16:56 UTC | Türker urgancı | task/T76-blockchain-reconciliation-job | `7490743` | [ci-failure] T76 NONE-sentinel fix — CI integration test seed count drift'i için fix push |
