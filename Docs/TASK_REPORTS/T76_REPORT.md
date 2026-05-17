@@ -91,9 +91,23 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Doğrulama chat'i bekleniyor |
-| Bulgu sayısı | 0 (self-check) |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-17) |
+| Verdict | ✓ PASS — 2/2 kabul kriteri ✓, 1/1 doğrulama listesi ✓, 0 S-bulgu, 3 minor advisory (M1 migration filename report drift, M2 NONE-sentinel commit sonrası seed mekanizması Default+IsConfigured=true ile değişti — Unconfigured değil, M3 Skinora.API.Tests sayısı post-report integration ekiyle 374 → 391) |
+| Bulgu sayısı | 0 S-bulgu |
 | Düzeltme gerekli mi | Hayır |
+
+### Doğrulama Sonuçları
+
+- **Adım -1 Working tree:** ✓ temiz (`nothing to commit`)
+- **Adım 0 Main CI startup:** ✓ 3/3 success ([`25993624687`](https://github.com/turkerurganci/Skinora/actions/runs/25993624687), [`25993624655`](https://github.com/turkerurganci/Skinora/actions/runs/25993624655), [`25990227493`](https://github.com/turkerurganci/Skinora/actions/runs/25990227493))
+- **Adım 0b Repo memory drift:** ✓ T76 satırı `.claude/memory/MEMORY.md`'de mevcut (6 eşleşme)
+- **Task branch CI:** ✓ [run `25997038500`](https://github.com/turkerurganci/Skinora/actions/runs/25997038500) 10/10 job success + Guard skipped (PR doğru davranış)
+- **Sidecar Vitest:** ✓ 141/141 (10 file, regresyon yok)
+- **Backend dotnet test (tüm modüller, no-filter):** ✓ 1823/1823 (Users 16 + Payments 6 + Admin 20 + Notifications 93 + Auth 93 + Realtime 25 + Fraud 64 + Steam 54 + Disputes 36 + Shared 207 + Platform 161 + API 391 + Transactions 657)
+- **Backend Release build:** ✓ 0 Warning, 0 Error
+- **dotnet format --verify-no-changes:** ✓ Δ=0
+- **Mini güvenlik kontrolü:** ✓ Secret sızıntısı yok (changed file scan temiz), auth pipeline değişikliği yok, input validation sidecar handler'da var (`addresses` array tip/uzunluk check), yeni dış bağımlılık yok
+- **05 §3.3 uyum:** ✓ Günlük cron, 3 scope (deposit/hot/cold), ColdWalletTransfer eşleştirme (false mismatch önleme), USDT+USDC allowlist, tolerans 0, in-flight koruma (CONFIRMED-only), admin alert (AuditLog SECURITY_EVENT + SignalR broadcast), AuditLog append-only invariant korunuyor
 
 ## Altyapı Değişiklikleri
 
@@ -106,9 +120,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T76-blockchain-reconciliation-job`
-- **Commit:** `069c86d`
+- **Commits:** `069c86d` (ana iş) + `92a4732` (rapor) + `7490743` (NONE-sentinel) + `e0f7afa` (BYPASS_LOG)
 - **PR:** [#117](https://github.com/turkerurganci/Skinora/pull/117)
-- **CI:** ⏳ Çalışıyor
+- **CI:** ✓ [run `25997038500`](https://github.com/turkerurganci/Skinora/actions/runs/25997038500) 10/10 ✓ + Guard skipped
 
 ## Known Limitations / Follow-up
 
