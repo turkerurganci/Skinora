@@ -1,6 +1,6 @@
 # T75 — Blockchain Sidecar gecikmeli ödeme izleme
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (doğrulama bekleniyor) | **Tarih:** 2026-05-17
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-17
 
 ---
 
@@ -103,9 +103,9 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Doğrulama chat'ine geçilecek |
-| Bulgu sayısı | TBD |
-| Düzeltme gerekli mi | TBD |
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat 2026-05-17) |
+| Bulgu sayısı | 0 S-bulgu, 1 minor cosmetic (rapor HEAD `c9abdb8` yazımı vs gerçek branch HEAD `62b11f74` — finalize sırasında düzeltildi) |
+| Düzeltme gerekli mi | Hayır |
 
 ## Altyapı Değişiklikleri
 
@@ -118,9 +118,11 @@
 ## Commit & PR
 
 - Branch: `task/T75-blockchain-post-cancel-monitor`
-- Commit (HEAD): `c9abdb8` — `T75: BYPASS_LOG entry — integration test fixture fix push` (3253504 ana T75 implementation + ad68d9d test fixture fix + c9abdb8 BYPASS_LOG entry)
+- Commit zinciri: `3253504` ana T75 implementation + `ad68d9d` integration test fixture fix + `c9abdb8` BYPASS_LOG entry + `62b11f74` chore: report finalize (PR #116 + CI ✓ 10/10 + status + memory)
 - PR: [#116](https://github.com/turkerurganci/Skinora/pull/116)
-- CI: ✓ PASS — run [`25992156986`](https://github.com/turkerurganci/Skinora/actions/runs/25992156986) 10/10 jobs success (Lint + Build + Unit + Integration + Contract + Migration + Docker backend + Docker sidecar-blockchain + CI Gate + Detect)
+- CI:
+  - HEAD `62b11f74` (chore finalize) — run [`25992654466`](https://github.com/turkerurganci/Skinora/actions/runs/25992654466) 10/10 SUCCESS (Lint + Build + Unit + Integration + Contract + Migration + Docker backend + Docker sidecar-blockchain + CI Gate + Detect)
+  - HEAD `c9abdb8` — run [`25992156986`](https://github.com/turkerurganci/Skinora/actions/runs/25992156986) 10/10 SUCCESS
 - BYPASS_LOG: 1× `[ci-failure]` entry (BuyerIdentificationMethod test fixture fix push, önceki run 25991927813 — sadece integration test fail)
 
 ## Known Limitations / Follow-up
@@ -165,4 +167,12 @@ Son 3 main CI run 3/3 success:
 - `PostCancelMonitorStartDispatcher` Skinora.Transactions modülünde olduğu için MediatR PackageReference modüle eklendi.
 
 ### BYPASS_LOG
-Henüz CI fail yok. Push sonrası CI takip edilecek.
+1× `[ci-failure]` entry (`ad68d9d`, BuyerIdentificationMethod test fixture fix push — önceki run 25991927813 integration fail). Validator re-run sonrası ek bypass yok.
+
+### Bağımsız Validator Notu (2026-05-17, ayrı chat)
+- Hard-stop kapıları temiz: working tree clean / main CI 3/3 success (`25990227493` + `25990227492` + `25987227889`) / memory T75 satırları mevcut.
+- 3/3 kabul kriteri ✓ + 2/2 doğrulama checklist ✓.
+- Lokal kanıtlar: Sidecar Vitest **130/130** + Backend Release **0W/0E** + non-integration unit **866/866** + T75-relevant integration **33/33** (SQLite/InMemory) + `dotnet format` **Δ=0**.
+- Task branch CI HEAD `62b11f74` **10/10 SUCCESS** ([`25992654466`](https://github.com/turkerurganci/Skinora/actions/runs/25992654466)).
+- Mini güvenlik temiz: 4 yeni endpoint (2 sidecar internalKeyAuth + 2 backend WebhookSignatureMiddleware), strict payload validation, yeni env secret yok, MediatR 12.4.1 MIT.
+- Yapım raporu uyumu tam — kabul tablosu/checklist/test sayıları/scope kararları/K-list bağımsız değerlendirmeyle birebir.
