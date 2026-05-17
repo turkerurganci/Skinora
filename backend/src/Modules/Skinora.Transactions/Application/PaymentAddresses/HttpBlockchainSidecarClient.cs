@@ -160,6 +160,97 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             cancellationToken);
     }
 
+    public async Task<BlockchainSidecarBalancesResult> GetWalletBalancesAsync(
+        IReadOnlyList<string> addresses,
+        CancellationToken cancellationToken)
+    {
+        if (addresses.Count == 0)
+        {
+            return new BlockchainSidecarBalancesResult(
+                BlockchainSidecarStatus.Success,
+                BlockNumber: null,
+                Balances: Array.Empty<BlockchainSidecarAddressBalances>());
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/wallet/balances")
+        {
+            Content = JsonContent.Create(
+                new BalancesRequest(addresses),
+                options: JsonOptions),
+        };
+        if (!string.IsNullOrEmpty(_options.InternalKey))
+        {
+            request.Headers.TryAddWithoutValidation(InternalKeyHeader, _options.InternalKey);
+        }
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Blockchain sidecar balances request failed (addressCount={Count})",
+                addresses.Count);
+            return BlockchainSidecarBalancesResult.Unavailable;
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar rejected balances payload (addressCount={Count})",
+                    addresses.Count);
+                return new BlockchainSidecarBalancesResult(
+                    BlockchainSidecarStatus.InvalidRequest, null, null);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar balances returned {StatusCode} (addressCount={Count})",
+                    (int)response.StatusCode, addresses.Count);
+                return BlockchainSidecarBalancesResult.Unavailable;
+            }
+
+            BalancesResponse? payload;
+            try
+            {
+                payload = await response.Content
+                    .ReadFromJsonAsync<BalancesResponse>(JsonOptions, cancellationToken);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Blockchain sidecar balances payload unparsable (addressCount={Count})",
+                    addresses.Count);
+                return BlockchainSidecarBalancesResult.Unavailable;
+            }
+
+            if (payload is null || payload.Balances is null)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar balances returned empty payload (addressCount={Count})",
+                    addresses.Count);
+                return BlockchainSidecarBalancesResult.Unavailable;
+            }
+
+            var rows = new List<BlockchainSidecarAddressBalances>(payload.Balances.Count);
+            foreach (var row in payload.Balances)
+            {
+                if (row is null || string.IsNullOrWhiteSpace(row.Address)) continue;
+                var tokens = row.Tokens ?? new Dictionary<string, string>(StringComparer.Ordinal);
+                rows.Add(new BlockchainSidecarAddressBalances(row.Address, tokens));
+            }
+
+            return new BlockchainSidecarBalancesResult(
+                BlockchainSidecarStatus.Success, payload.BlockNumber, rows);
+        }
+    }
+
     private async Task<BlockchainSidecarStatus> SendCommandAsync<TBody>(
         string path,
         TBody body,
@@ -237,4 +328,15 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
 
     private sealed record PostCancelStopRequestBody(
         [property: JsonPropertyName("address")] string Address);
+
+    private sealed record BalancesRequest(
+        [property: JsonPropertyName("addresses")] IReadOnlyList<string> Addresses);
+
+    private sealed record BalancesResponse(
+        [property: JsonPropertyName("blockNumber")] long BlockNumber,
+        [property: JsonPropertyName("balances")] List<BalancesRow>? Balances);
+
+    private sealed record BalancesRow(
+        [property: JsonPropertyName("address")] string Address,
+        [property: JsonPropertyName("tokens")] Dictionary<string, string>? Tokens);
 }

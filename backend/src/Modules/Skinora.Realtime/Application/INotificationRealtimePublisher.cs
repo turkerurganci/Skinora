@@ -57,4 +57,16 @@ public interface INotificationRealtimePublisher
     Task PublishAdminBotStatusChangedAsync(
         NotificationRealtimePayloads.AdminBotStatusChanged payload,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Broadcast variant: reconciliation mismatches are visible to every admin
+    /// client (T76 — 05 §3.3). Fired once per (scope, token) finding by
+    /// <see cref="Skinora.Transactions.Application.Reconciliation.IReconciliationService"/>.
+    /// Best-effort like all realtime pushes — the
+    /// <c>RECONCILIATION_MISMATCH</c> AuditLog row written next to the
+    /// publish is the durable record.
+    /// </summary>
+    Task PublishAdminReconciliationMismatchAsync(
+        NotificationRealtimePayloads.AdminReconciliationMismatch payload,
+        CancellationToken cancellationToken);
 }

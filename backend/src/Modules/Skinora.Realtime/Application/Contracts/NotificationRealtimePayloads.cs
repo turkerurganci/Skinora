@@ -65,4 +65,24 @@ public static class NotificationRealtimePayloads
         string NewStatus,
         string Reason,
         DateTime ChangedAt);
+
+    /// <summary>
+    /// Pushed when the daily reconciliation job (T76 — 05 §3.3) detects an
+    /// on-chain vs ledger mismatch. One push per (scope, token) finding.
+    /// <c>Scope</c> ∈ {<c>DepositAddress</c>, <c>HotWallet</c>, <c>ColdWallet</c>};
+    /// <c>Address</c> is the on-chain address that failed reconciliation;
+    /// <c>Delta</c> is <c>Actual − Expected</c> (positive = surplus on chain,
+    /// negative = missing). Admin dashboard surfaces this alongside the
+    /// matching AuditLog row (RECONCILIATION_MISMATCH). Non-admin clients
+    /// receive the broadcast but ignore it (no per-role group yet).
+    /// </summary>
+    public sealed record AdminReconciliationMismatch(
+        string Scope,
+        string Address,
+        string Token,
+        decimal Expected,
+        decimal Actual,
+        decimal Delta,
+        long? BlockNumber,
+        DateTime DetectedAt);
 }

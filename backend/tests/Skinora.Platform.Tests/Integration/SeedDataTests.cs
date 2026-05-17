@@ -10,8 +10,8 @@ using Skinora.Users.Infrastructure.Persistence;
 namespace Skinora.Platform.Tests.Integration;
 
 /// <summary>
-/// Integration tests for the T26 + T30 + T34 + T43 + T55 + T56 + T63a + T63b + T72 + T73 + T74 EF Core seed contracts (06 §8.9):
-/// SYSTEM user, SystemHeartbeat singleton, and 53 SystemSetting rows
+/// Integration tests for the T26 + T30 + T34 + T43 + T55 + T56 + T63a + T63b + T72 + T73 + T74 + T76 EF Core seed contracts (06 §8.9):
+/// SYSTEM user, SystemHeartbeat singleton, and 56 SystemSetting rows
 /// (28 T26 platform parameters + 2 T30 access-control settings +
 /// 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
 /// 2 T55 dormant-account fraud thresholds +
@@ -21,7 +21,8 @@ namespace Skinora.Platform.Tests.Integration;
 /// and retention.batch_size_{outbox,notification,user_login_log} settings +
 /// 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
 /// 1 T73 blockchain.transfer_retry_intervals_minutes setting +
-/// 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings).
+/// 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
+/// 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -60,7 +61,7 @@ public class SeedDataTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task Seed_SystemSettings_Has_53_Rows_With_Unique_Keys()
+    public async Task Seed_SystemSettings_Has_56_Rows_With_Unique_Keys()
     {
         // 28 T26 platform parameters + 2 T30 access-control settings +
         // 2 T34 wallet address cooldown settings + 2 T43 reputation thresholds +
@@ -70,19 +71,23 @@ public class SeedDataTests : IntegrationTestBase
         // 8 T63b retention.* settings (5 age windows + 3 batch sizes) +
         // 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
         // 1 T73 blockchain.transfer_retry_intervals_minutes setting +
-        // 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings.
+        // 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
+        // 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(53, rows.Count);
-        Assert.Equal(53, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(56, rows.Count);
+        Assert.Equal(56, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts:
-        // 32 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
-        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74).
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses:
+        // 35 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
+        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76). T76 hot/cold
+        // wallet addresses follow the auth.banned_countries NONE-sentinel
+        // pattern: shipped configured with "NONE", treated as skipped scope
+        // by ReconciliationService until production deploy overrides them.
         var configured = await Context.Set<SystemSetting>()
             .Where(s => s.IsConfigured)
             .OrderBy(s => s.Key)
@@ -110,6 +115,9 @@ public class SeedDataTests : IntegrationTestBase
             "platform.maintenance.message",
             "platform.maintenance.planned_end",
             "platform.maintenance.type",
+            "reconciliation.cold_wallet_address",
+            "reconciliation.hot_wallet_address",
+            "reconciliation.schedule_cron",
             "reputation.min_account_age_days",
             "reputation.min_completed_transactions",
             "retention.batch_size_notification",
@@ -134,8 +142,11 @@ public class SeedDataTests : IntegrationTestBase
     {
         // The remaining 21 rows have no default and must ship NULL +
         // IsConfigured = false so startup fail-fast (06 §8.9) refuses to
-        // launch until an admin or env var provides values (20 base + 1 T55
+        // launch until an admin or env var provides values (20 T26 base + 1 T55
         // dormant_account_value_threshold which is admin-tuned per risk profile).
+        // T76 reconciliation hot/cold wallet addresses follow the NONE-sentinel
+        // pattern (Default("NONE")) instead of Unconfigured because their env
+        // var key includes a dot which the env var provider cannot bind safely.
         var unconfigured = await Context.Set<SystemSetting>()
             .Where(s => !s.IsConfigured)
             .ToListAsync();

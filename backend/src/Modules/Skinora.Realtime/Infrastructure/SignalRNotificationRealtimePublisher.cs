@@ -22,6 +22,7 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
     private const string DiscordConnectedEvent = "DiscordConnected";
     private const string MaintenanceStatusChangedEvent = "MaintenanceStatusChanged";
     private const string AdminBotStatusChangedEvent = "AdminBotStatusChanged";
+    private const string AdminReconciliationMismatchEvent = "AdminReconciliationMismatch";
 
     private readonly IHubContext<NotificationsHub> _hub;
     private readonly ILogger<SignalRNotificationRealtimePublisher> _logger;
@@ -95,6 +96,28 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
                 ex,
                 "SignalR admin bot status push failed (botId={BotId}, status={Status}).",
                 payload.BotId, payload.NewStatus);
+        }
+    }
+
+    public async Task PublishAdminReconciliationMismatchAsync(
+        NotificationRealtimePayloads.AdminReconciliationMismatch payload,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _hub.Clients
+                .All
+                .SendAsync(AdminReconciliationMismatchEvent, payload, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // The AuditLog RECONCILIATION_MISMATCH row written next to the
+            // push is the durable record; a dropped push surfaces on the
+            // next admin dashboard refresh.
+            _logger.LogWarning(
+                ex,
+                "SignalR reconciliation mismatch push failed (scope={Scope}, address={Address}, token={Token}).",
+                payload.Scope, payload.Address, payload.Token);
         }
     }
 

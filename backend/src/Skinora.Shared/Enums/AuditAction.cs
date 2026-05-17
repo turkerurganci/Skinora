@@ -36,5 +36,13 @@ public enum AuditAction
     // restriction / ban / pool removal via signed webhook; backend mirrors
     // it onto PlatformSteamBot.Status and records the transition here so
     // the SECURITY_EVENT queue surfaces it alongside wallet-address events.
-    BOT_STATUS_CHANGED
+    BOT_STATUS_CHANGED,
+
+    // Blockchain reconciliation (T76 — 05 §3.3). The daily reconciliation
+    // job emits one row per (scope, token) mismatch — scope ∈ {DepositAddress,
+    // HotWallet, ColdWallet}. EntityType encodes the scope; EntityId carries
+    // the address; NewValue is a JSON envelope {token, expected, actual,
+    // delta, blockNumber}. Append-only; the audit trail is the durable
+    // record even when the realtime SignalR push to admins is lost.
+    RECONCILIATION_MISMATCH
 }

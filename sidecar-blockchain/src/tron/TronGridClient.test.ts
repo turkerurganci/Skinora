@@ -171,3 +171,83 @@ describe('TronGridClient error paths', () => {
     );
   });
 });
+
+describe('TronGridClient.getAccountBalances() — T76 reconciliation', () => {
+  it('returns trx balance and trc20 contract→raw map from /v1/accounts/{addr}', async () => {
+    const { mock, calls } = buildFetchMock([
+      {
+        status: 200,
+        body: {
+          data: [
+            {
+              address: 'TDeposit',
+              balance: 123_456_789,
+              trc20: [
+                { TUSDT: '100500000' },
+                { TUSDC: '50000000' },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    const snapshot = await client.getAccountBalances('TDeposit');
+    expect(snapshot.address).toBe('TDeposit');
+    expect(snapshot.trx).toBe('123456789');
+    expect(snapshot.trc20).toEqual({ TUSDT: '100500000', TUSDC: '50000000' });
+    expect(calls[0].url).toBe('https://full/v1/accounts/TDeposit');
+    expect(calls[0].init?.method).toBe('GET');
+  });
+
+  it('returns zero balances when TronGrid reports data: []', async () => {
+    const { mock } = buildFetchMock([{ status: 200, body: { data: [] } }]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    const snapshot = await client.getAccountBalances('TUntouched');
+    expect(snapshot.trx).toBe('0');
+    expect(snapshot.trc20).toEqual({});
+  });
+
+  it('coerces string balance fields into a stable string representation', async () => {
+    const { mock } = buildFetchMock([
+      { status: 200, body: { data: [{ balance: '99', trc20: [] }] } },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    const snapshot = await client.getAccountBalances('TDeposit');
+    expect(snapshot.trx).toBe('99');
+  });
+
+  it('ignores malformed trc20 entries instead of throwing', async () => {
+    const { mock } = buildFetchMock([
+      {
+        status: 200,
+        body: {
+          data: [
+            {
+              balance: 0,
+              // Mix of valid and malformed: only the string-valued entries
+              // should survive into the result map.
+              trc20: [
+                { TUSDT: '100' },
+                null,
+                { TNULL: null },
+                'junk',
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    const snapshot = await client.getAccountBalances('TDeposit');
+    expect(snapshot.trc20).toEqual({ TUSDT: '100' });
+  });
+
+  it('raises TronGridHttpError on upstream 5xx', async () => {
+    const { mock } = buildFetchMock([
+      { status: 503, body: {}, statusText: 'Unavailable' },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    await expect(client.getAccountBalances('TDeposit')).rejects.toBeInstanceOf(TronGridHttpError);
+  });
+});
