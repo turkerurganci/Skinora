@@ -2,10 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { TransferService } from './TransferService.js';
 import { RefundService } from './RefundService.js';
 import { SidecarError } from '../errors/SidecarError.js';
-import {
-  EnergyDelegationService,
-  DelegationOutcome,
-} from '../wallet/EnergyDelegationService.js';
 
 const SIGNER_HOT_KEY = '01'.padStart(64, '0');
 const TOKEN_USDT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
@@ -43,18 +39,32 @@ function buildStubWallet(map: Record<number, { address: string; privateKey: stri
  * without touching the on-chain client. Tests that exercise specific
  * delegation paths (fallback, undelegate failure) override
  * <c>withDelegation</c> directly via vi.fn().
+ *
+ * <para>
+ * Return type is inferred: <c>vi.fn</c> erases the generic parameter on the
+ * mocked implementation, so we cannot annotate the return as
+ * <c>Pick&lt;EnergyDelegationService, 'withDelegation'&gt;</c> (TS2322 — the
+ * generic implementation does not satisfy the generic interface signature
+ * after the mock wrap). Callers cast via <c>as any</c> at the injection
+ * site, which is the established stub pattern across this test suite.
+ * </para>
  */
 function buildStubDelegation(
   mode: 'delegated' | 'fallback' = 'delegated',
   options: { delegationAmountSun?: number; fallbackAmountSun?: number } = {},
-): Pick<EnergyDelegationService, 'withDelegation'> {
+) {
   return {
     withDelegation: vi.fn(
-      async <T>(_: string, action: () => Promise<T>): Promise<DelegationOutcome<T>> => {
+      async (
+        _depositAddress: string,
+        action: () => Promise<unknown>,
+        _context: { blockchainTransactionId: string; correlationId: string },
+      ) => {
         const result = await action();
         return {
           mode,
-          delegationAmountSun: mode === 'delegated' ? (options.delegationAmountSun ?? 200_000_000) : 0,
+          delegationAmountSun:
+            mode === 'delegated' ? (options.delegationAmountSun ?? 200_000_000) : 0,
           fallbackAmountSun: mode === 'fallback' ? (options.fallbackAmountSun ?? 15_000_000) : 0,
           action: result,
         };
