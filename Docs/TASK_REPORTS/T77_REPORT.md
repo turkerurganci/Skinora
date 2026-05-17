@@ -1,6 +1,6 @@
 # T77 — Blockchain Sidecar hot wallet yönetimi
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti (doğrulama bekliyor) | **Tarih:** 2026-05-17
+**Faz:** F4 | **Durum:** ✓ Tamamlandı (validator PASS 2026-05-17) | **Tarih:** 2026-05-17
 
 ---
 
@@ -147,3 +147,40 @@
   - Tüm dış varsayımlar doğrulandı; BLOCKED durumu yok.
 - **Scope kararı (2026-05-17):** Proje sahibi onayı ile A seçildi (backend orchestrate eder + sidecar TRC-20 transfer + atomic ledger insert); monitor cadence `*/15 * * * *`; TRX default eşiği 100. `MANAGE_WALLETS` ayrımı yerine `MANAGE_SETTINGS` reuse (K1 K-future).
 - **Mimari yerleşim:** HotWalletService + HotWalletMonitorService Skinora.API/Services/HotWallet altında (ReconciliationService pattern — Skinora.Transactions modülü Payments/Realtime'ı ref etmez, cross-module impl Skinora.API'de yer alır). Interface (`IHotWalletService`) Skinora.Transactions altında kalır.
+
+## Validator Bağımsız Verdict (2026-05-17, ayrı chat)
+
+**Verdict:** ✓ PASS — 4/4 kabul ✓, 1/1 doğrulama listesi ✓, 0 S-bulgu, 2 minor advisory (M1+M2).
+
+**Hard-stop kapıları:**
+- Working tree temiz (0 dosya).
+- Main CI son 3 run hepsi success: [`25997787137`](https://github.com/turkerurganci/Skinora/actions/runs/25997787137) + [`25997787138`](https://github.com/turkerurganci/Skinora/actions/runs/25997787138) (T76 squash) + [`25993624687`](https://github.com/turkerurganci/Skinora/actions/runs/25993624687) (T75).
+- Repo memory T77 satırı (Next pointer) mevcut.
+
+**Kabul kriterleri kanıtları:**
+1. ✓ Hot wallet balance monitoring — `HotWalletMonitorService.RunAsync` sidecar `GetWalletBalancesAsync` ile USDT/USDC/TRX okuma + per-token threshold; `RunAsync_BalancesAllWithinThresholds_NoBreach` PASS.
+2. ✓ Limit aşımında admin alert + manuel transfer endpoint — Upper breach (`RunAsync_UsdtAboveLimit_EmitsUpperBreach`, `RunAsync_BothStablecoinsExceedLimit_EmitsTwoUpperBreaches`) + `AdminWalletsController` `[Authorize MANAGE_SETTINGS]` + `[RateLimit admin-write]`.
+3. ✓ ColdWalletTransfer ledger kaydı — `HotWalletService.InitiateColdTransferAsync` atomik SaveChanges; ledger field-by-field doğrulanıyor (`_SidecarSuccess_WritesLedgerAndAudit`); sidecar fail durumunda ledger+audit YAZILMAZ (`_SidecarUnavailable_NoLedgerOrAuditWritten`).
+4. ✓ TRX eşik altı → admin alert — Lower breach (`RunAsync_TrxBelowMinimum_EmitsLowerBreach`), SystemSetting `hot_wallet.trx_balance_minimum` default 100.
+
+**Test kanıtları (lokal validator):**
+- Build Release 0W/0E (50s).
+- API.Tests full **407/407 PASS** (Reconciliation + HotWallet + tüm regresyon).
+- Platform.Tests full **163/163 PASS** (SeedData 58 + configured 37 + AuditLogCategoryMap FUND_MOVEMENT 6 + SECURITY_EVENT 4).
+- Shared.Tests full **209/209 PASS** (AuditAction 24 değer + InlineData T77).
+- Sidecar Vitest **144/144 PASS** (3 yeni `coldWalletTransfer` test + regresyon).
+- Task branch CI HEAD `e46047e` [`25999225779`](https://github.com/turkerurganci/Skinora/actions/runs/25999225779) **10/10 SUCCESS** (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+Docker sidecar-blockchain+CI Gate).
+
+**Mini güvenlik (validator bağımsız):**
+- Secret: Hot wallet private key sidecar-only (T73 Docker secret), backend orchestrator key görmez.
+- Auth: `MANAGE_SETTINGS` permission + admin-write rate limit; admin claim Guid parse fail → 401.
+- Input validation: amount > 0 + scale-6 (`MidpointRounding.ToZero` 09 §14.3) + `AmountScaleQuantum` multiple kontrolü; token `Enum.TryParse(ignoreCase: false)`; request body null guard.
+- Yeni dış bağımlılık: Yok.
+
+**Doküman uyumu:** 05 §3.3 hot wallet limit (manuel admin transfer) + reconciliation cold ledger satırı + 06 §3.22 ColdWalletTransfer 8 alan birebir + 06 §2.19 FUND_MOVEMENT/SECURITY_EVENT eşleme + 02 §10 enum eşitleme.
+
+**Minor advisory (S-bulgu değil):**
+- **M1** — `AuditAction.COLD_WALLET_TRANSFER_INITIATED` XML doc comment'i "EntityId = ColdWalletTransfer.Id" der ama `HotWalletService` `EntityId = sidecarResult.TxHash` yazıyor. Pratikte doğru tercih (transfer.Id SaveChanges öncesi 0; TxHash UNIQUE). Sadece XML doc kozmetik drift; düzeltme kod davranışını değiştirmez.
+- **M2** — `SendHotToColdTransferAsync` `HttpBlockchainSidecarClient` üstünde (10s default timeout) yerine T73 `HttpBlockchainTransferClient` (3× timeout broadcast için) üstünde olabilirdi. Functional impact minimum; refactor adayı T-future.
+
+**Yapım raporu uyumu:** Tam uyum — 4 ✓ verdict + K1–K7 known limitations validator bağımsız değerlendirmeyle birebir. Rapor Platform için 115 unit-only sayısı yazmış; full Platform.Tests (integration dahil) 163 ve hepsi lokal de geçti — kategori farkı, çakışma değil.
