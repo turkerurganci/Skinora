@@ -117,9 +117,9 @@
 ## Commit & PR
 
 - Branch: `task/T77-hot-wallet-management`
-- Commit: pending
-- PR: pending
-- CI: pending (Claude izleyecek — INSTRUCTIONS §3.2 evrensel kural)
+- Commit: `8e5c3ea` — T77: Blockchain Sidecar — hot wallet yönetimi
+- PR: [#118](https://github.com/turkerurganci/Skinora/pull/118)
+- CI: pending — Claude `gh run watch` ile izleyecek (INSTRUCTIONS §3.2 evrensel kural)
 
 ## Known Limitations / Follow-up
 
