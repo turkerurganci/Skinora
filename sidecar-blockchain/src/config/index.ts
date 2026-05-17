@@ -76,9 +76,20 @@ export const config = {
   // (05 §3.3 + 05 §3.5). Signing material is mounted as a Docker secret in
   // production. Sidecar refuses to broadcast SELLER_PAYOUT transfers when
   // the key is unset, but otherwise starts so the rest of the API surface
-  // (monitor, derive) remains usable in development.
+  // (monitor, derive) remains usable in development. In MVP the hot wallet
+  // doubles as the sweeper account that issues `delegateresource` to
+  // deposit addresses (T74 scope decision 2026-05-17).
   hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
   hotWalletPrivateKey: process.env.HOT_WALLET_PRIVATE_KEY || '',
+
+  // Energy delegation amounts — 08 §3.3 (T74). Both values are in SUN
+  // (1 TRX = 1_000_000 SUN). Admin can override via SystemSetting at the
+  // backend layer; sidecar reads from env at startup. Defaults follow
+  // 08 §3.3 ("TRC-20 transfer ~65.000 Energy"), with headroom — Stake 2.0
+  // converts ~1 TRX delegated to ~80 Energy on mainnet, so 200 TRX
+  // comfortably covers a single sweep / refund.
+  sweepEnergyDelegationSun: parseInt(process.env.SWEEP_ENERGY_DELEGATION_SUN || '200000000', 10),
+  sweepTrxFallbackSun: parseInt(process.env.SWEEP_TRX_FALLBACK_SUN || '15000000', 10),
 
   // Logging
   lokiUrl: process.env.LOKI_URL || 'http://skinora-loki:3100',

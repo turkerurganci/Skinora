@@ -107,7 +107,12 @@ export function refundHandler(service: RefundService) {
         token: asTokenSymbol(body.token)!,
         correlationId: req.correlationId,
       });
-      res.status(200).json({ txHash: result.txHash });
+      res.status(200).json({
+        txHash: result.txHash,
+        delegationMode: result.delegationMode,
+        delegationAmountSun: result.delegationAmountSun,
+        fallbackAmountSun: result.fallbackAmountSun,
+      });
     } catch (err) {
       handleTransferError(err, res, req, 'refund');
     }
@@ -143,7 +148,12 @@ export function sweepHandler(service: TransferService) {
         token: asTokenSymbol(body.token)!,
         correlationId: req.correlationId,
       });
-      res.status(200).json({ txHash: result.txHash });
+      res.status(200).json({
+        txHash: result.txHash,
+        delegationMode: result.delegationMode,
+        delegationAmountSun: result.delegationAmountSun,
+        fallbackAmountSun: result.fallbackAmountSun,
+      });
     } catch (err) {
       handleTransferError(err, res, req, 'sweep');
     }
