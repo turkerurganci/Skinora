@@ -29,6 +29,7 @@ public enum TelegramWebhookStatus
     Linked,
     InvalidOrExpiredCode,
     AlreadyLinkedToAnotherUser,
+    BruteForceLocked,
     Ignored,
 }
 

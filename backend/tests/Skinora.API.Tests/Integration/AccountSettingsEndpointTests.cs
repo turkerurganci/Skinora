@@ -262,6 +262,10 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         var body = await connectResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var code = body.GetProperty("data").GetProperty("verificationCode").GetString();
         Assert.StartsWith("SKN-", code, StringComparison.Ordinal);
+        // T79 spec-gap fix — 128-bit CSPRNG opaque token (32 hex chars
+        // after the SKN- prefix). 08 §5.1 requires 122+ bit entropy.
+        Assert.Equal(36, code!.Length);
+        Assert.Matches("^SKN-[0-9a-f]{32}$", code);
 
         var webhookClient = _factory.CreateClient();
         webhookClient.DefaultRequestHeaders.Add("X-Telegram-Bot-Api-Secret-Token", WebhookSecret);
@@ -294,6 +298,107 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
             new { message = new { text = "/start SKN-000000" } });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TelegramWebhook_DuplicateUpdateId_AcknowledgesIdempotent()
+    {
+        // T79 — middleware INSERTs (Source=telegram, Nonce=update_id);
+        // the second delivery hits the unique violation and returns
+        // 200 with the Idempotent marker.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var connectResponse = await client.PostAsync(
+            "/api/v1/users/me/settings/telegram/connect", content: null);
+        Assert.Equal(HttpStatusCode.OK, connectResponse.StatusCode);
+        var body = await connectResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var code = body.GetProperty("data").GetProperty("verificationCode").GetString();
+
+        var webhookClient = _factory.CreateClient();
+        webhookClient.DefaultRequestHeaders.Add(
+            "X-Telegram-Bot-Api-Secret-Token", WebhookSecret);
+
+        var payload = new
+        {
+            update_id = 8675309L,
+            message = new
+            {
+                text = $"/start {code}",
+                from = new { id = 8675309L, username = "dupe-test" },
+            },
+        };
+
+        var first = await webhookClient.PostAsJsonAsync(
+            "/api/v1/webhooks/telegram", payload);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await webhookClient.PostAsJsonAsync(
+            "/api/v1/webhooks/telegram", payload);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        var secondBody = await second.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal(
+            "Idempotent",
+            secondBody.GetProperty("data").GetProperty("result").GetString());
+    }
+
+    [Fact]
+    public async Task TelegramWebhook_FailedAttemptsAtLimit_LocksFurtherRedemption()
+    {
+        // T79 spec-gap fix — 08 §5.1 brute-force protection. After
+        // MaxFailedAttempts failed redemptions from the same Telegram
+        // user id the next /start is silently dropped (controller still
+        // 200s so Telegram stops retrying). Fixture overrides
+        // MaxFailedAttempts to 2 to keep this test within the per-IP
+        // /webhooks/telegram rate limit budget.
+        var attacker = await _factory.CreateUserAsync();
+        var attackerClient = BuildAuthenticatedClient(attacker.Id, attacker.SteamId);
+        var attackerConnect = await attackerClient.PostAsync(
+            "/api/v1/users/me/settings/telegram/connect", content: null);
+        var attackerBody = await attackerConnect.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var validCode = attackerBody.GetProperty("data").GetProperty("verificationCode").GetString();
+
+        var webhookClient = _factory.CreateClient();
+        webhookClient.DefaultRequestHeaders.Add(
+            "X-Telegram-Bot-Api-Secret-Token", WebhookSecret);
+
+        const long tgUserId = 9_001_001L;
+
+        for (var i = 0; i < 2; i++)
+        {
+            var bad = await webhookClient.PostAsJsonAsync(
+                "/api/v1/webhooks/telegram",
+                new
+                {
+                    update_id = 4_000_000L + i,
+                    message = new
+                    {
+                        text = "/start SKN-deadbeefdeadbeefdeadbeefdeadbe" + i,
+                        from = new { id = tgUserId, username = "bruter" },
+                    },
+                });
+            Assert.Equal(HttpStatusCode.OK, bad.StatusCode);
+        }
+
+        // Third attempt uses the (legitimate) attacker-issued code from
+        // the same Telegram user id; brute-force gate now skips
+        // consumption so the preference is NOT linked.
+        var locked = await webhookClient.PostAsJsonAsync(
+            "/api/v1/webhooks/telegram",
+            new
+            {
+                update_id = 4_999_999L,
+                message = new
+                {
+                    text = $"/start {validCode}",
+                    from = new { id = tgUserId, username = "bruter" },
+                },
+            });
+        Assert.Equal(HttpStatusCode.OK, locked.StatusCode);
+
+        var prefs = await _factory.GetPreferencesAsync(attacker.Id);
+        Assert.DoesNotContain(prefs, p => p.Channel == NotificationChannel.TELEGRAM);
     }
 
     [Fact]
@@ -628,6 +733,10 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
             builder.UseSetting("Telegram:BotUrl", "https://t.me/SkinoraBot");
             builder.UseSetting("Telegram:WebhookSecretToken", WebhookSecret);
             builder.UseSetting("Telegram:CodeTtlSeconds", "300");
+            // T79 — keep the brute-force gate aggressive in tests so the
+            // integration coverage doesn't have to burn the per-IP
+            // /webhooks/telegram rate limit budget.
+            builder.UseSetting("Telegram:MaxFailedAttempts", "2");
 
             builder.UseSetting("Discord:ClientId", "discord-test-client");
             builder.UseSetting("Discord:ClientSecret", "discord-test-secret");

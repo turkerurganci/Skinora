@@ -70,7 +70,7 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
         var handlers = new List<INotificationChannelHandler>
         {
             spy ?? new SpyNotificationChannelHandler(NotificationChannel.EMAIL),
-            new TelegramNotificationChannelHandler(NullLogger<TelegramNotificationChannelHandler>.Instance),
+            new LoggingTelegramNotificationChannelHandler(NullLogger<LoggingTelegramNotificationChannelHandler>.Instance),
             new DiscordNotificationChannelHandler(NullLogger<DiscordNotificationChannelHandler>.Instance),
         };
 

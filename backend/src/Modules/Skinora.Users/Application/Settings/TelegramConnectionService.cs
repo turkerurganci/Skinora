@@ -3,12 +3,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Telegram;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Application.Settings;
 
 public sealed class TelegramConnectionService : ITelegramConnectionService
 {
+    /// <summary>
+    /// 08 §5.1 — connect-code TTL floor. The integration tests configure
+    /// values shorter than the spec'd 10 minutes, so the service clamps
+    /// any value below this floor to keep production-shaped behaviour
+    /// without breaking the test rigs.
+    /// </summary>
+    private static readonly TimeSpan MinCodeTtl = TimeSpan.FromSeconds(60);
+
     private readonly ITelegramVerificationStore _store;
     private readonly INotificationPreferenceStore _preferences;
     private readonly AppDbContext _db;
@@ -30,7 +39,7 @@ public sealed class TelegramConnectionService : ITelegramConnectionService
         Guid userId, CancellationToken cancellationToken)
     {
         var code = GenerateCode();
-        var ttl = TimeSpan.FromSeconds(Math.Max(60, _settings.CodeTtlSeconds));
+        var ttl = ResolveTtl();
         await _store.IssueAsync(code, userId, ttl, cancellationToken);
         return new TelegramConnectResult(code, _settings.BotUrl, ttl);
     }
@@ -41,9 +50,31 @@ public sealed class TelegramConnectionService : ITelegramConnectionService
         if (string.IsNullOrWhiteSpace(payload.Code))
             return new TelegramWebhookResult(TelegramWebhookStatus.Ignored, null);
 
+        // 08 §5.1 brute-force gate — if the Telegram user has already
+        // failed MaxFailedAttempts times within the TTL window, drop
+        // further redemption attempts silently. Telegram still receives
+        // a 200 from the controller so it stops retrying.
+        var maxFails = Math.Max(_settings.MaxFailedAttempts, 1);
+        if (payload.TelegramUserId is long lockTgId)
+        {
+            var fails = await _store.GetFailedAttemptsAsync(lockTgId, cancellationToken);
+            if (fails >= maxFails)
+            {
+                return new TelegramWebhookResult(TelegramWebhookStatus.BruteForceLocked, null);
+            }
+        }
+
         var userId = await _store.ConsumeAsync(payload.Code, cancellationToken);
         if (userId is null)
+        {
+            if (payload.TelegramUserId is long failTgId)
+            {
+                await _store.RegisterFailedAttemptAsync(
+                    failTgId, ResolveTtl(), cancellationToken);
+            }
+
             return new TelegramWebhookResult(TelegramWebhookStatus.InvalidOrExpiredCode, null);
+        }
 
         // External id = the Telegram user id (stable, unlike @username). The
         // username is stored alongside for display; if absent we keep only the
@@ -91,12 +122,22 @@ public sealed class TelegramConnectionService : ITelegramConnectionService
             removed ? TelegramDisconnectStatus.Removed : TelegramDisconnectStatus.NotConnected);
     }
 
+    private TimeSpan ResolveTtl()
+    {
+        var configured = TimeSpan.FromSeconds(_settings.CodeTtlSeconds);
+        return configured < MinCodeTtl ? MinCodeTtl : configured;
+    }
+
+    /// <summary>
+    /// 08 §5.1 — 128-bit CSPRNG opaque token (32 hex chars) with the
+    /// <c>SKN-</c> prefix the webhook regex already recognises.
+    /// Replaces the legacy <c>SKN-XXXXXX</c> 20-bit code so the entropy
+    /// budget meets the spec's 122+ bit floor.
+    /// </summary>
     private static string GenerateCode()
     {
-        // 07 §5.11 — "SKN-" + 6-digit numeric, pasted into the Telegram bot.
-        Span<byte> bytes = stackalloc byte[4];
+        Span<byte> bytes = stackalloc byte[16];
         RandomNumberGenerator.Fill(bytes);
-        var value = BitConverter.ToUInt32(bytes) % 1_000_000u;
-        return "SKN-" + value.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+        return "SKN-" + Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }
