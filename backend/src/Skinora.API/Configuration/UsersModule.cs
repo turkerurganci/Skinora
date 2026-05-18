@@ -3,6 +3,7 @@ using Skinora.Auth.Application.Session;
 using Skinora.Notifications.Application.Account;
 using Skinora.Notifications.Application.Settings;
 using Skinora.Platform.Infrastructure.Reputation;
+using Skinora.Shared.Discord;
 using Skinora.Shared.Email;
 using Skinora.Transactions.Application.Account;
 using Skinora.Transactions.Application.Reputation;
@@ -17,6 +18,9 @@ using StackExchange.Redis;
 // settings + bot transport + connection service share a single config
 // source. Bound here as well as in Program.cs so legacy callers see the
 // same instance.
+// T80 — DiscordSettings + IDiscordOAuthClient moved to
+// Skinora.Shared.Discord; binding lives in Program.cs alongside the
+// rate limiter + typed HttpClient registrations.
 
 namespace Skinora.API.Configuration;
 
@@ -59,9 +63,9 @@ public static class UsersModule
         // T35 — account settings (07 §5.6–§5.16a). Cross-module glue:
         // INotificationPreferenceStore implementation lives in
         // Skinora.Notifications because that module owns UserNotificationPreference.
-        // TelegramSettings is bound at the API composition root (Program.cs)
-        // since T79 added the bot-transport consumers in Skinora.Shared.Telegram.
-        services.Configure<DiscordSettings>(configuration.GetSection(DiscordSettings.SectionName));
+        // TelegramSettings (T79) + DiscordSettings (T80) are bound at the
+        // API composition root (Program.cs) since the bot-transport
+        // consumers live in Skinora.Shared.{Telegram,Discord}.
 
         services.AddScoped<INotificationPreferenceStore, NotificationPreferenceStore>();
         services.AddScoped<IAccountSettingsService, AccountSettingsService>();
@@ -100,9 +104,18 @@ public static class UsersModule
             services.TryAddScoped<IEmailSender, LoggingEmailSender>();
         }
 
-        // Discord OAuth HTTP client — T80 swaps the stub for a real
-        // Discord token-exchange call.
-        services.TryAddScoped<IDiscordOAuthClient, StubDiscordOAuthClient>();
+        // Discord OAuth HTTP client — T80 swap. When
+        // Discord:Provider == "discord", Program.cs registered the
+        // typed HttpClient for DiscordOAuthClient already; this branch
+        // just registers the stub fallback so logging-mode environments
+        // keep working without contacting Discord.
+        var discordProvider = configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
+            ?? DiscordSettings.ProviderLogging;
+
+        if (!string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+        {
+            services.TryAddScoped<IDiscordOAuthClient, StubDiscordOAuthClient>();
+        }
 
         // Steam trade-hold check — T64–T69 swap the stub for a sidecar
         // call (GetTradeHoldDurations). See 08 §2.2.

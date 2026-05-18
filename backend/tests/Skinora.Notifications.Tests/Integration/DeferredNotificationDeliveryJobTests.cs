@@ -80,7 +80,7 @@ public sealed class DeferredNotificationDeliveryJobTests : IntegrationTestBase
         {
             spy,
             new LoggingTelegramNotificationChannelHandler(NullLogger<LoggingTelegramNotificationChannelHandler>.Instance),
-            new DiscordNotificationChannelHandler(NullLogger<DiscordNotificationChannelHandler>.Instance),
+            new LoggingDiscordNotificationChannelHandler(NullLogger<LoggingDiscordNotificationChannelHandler>.Instance),
         };
 
         return new DeferredNotificationDeliveryJob(

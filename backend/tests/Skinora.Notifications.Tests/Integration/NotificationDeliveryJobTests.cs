@@ -71,7 +71,7 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
         {
             spy ?? new SpyNotificationChannelHandler(NotificationChannel.EMAIL),
             new LoggingTelegramNotificationChannelHandler(NullLogger<LoggingTelegramNotificationChannelHandler>.Instance),
-            new DiscordNotificationChannelHandler(NullLogger<DiscordNotificationChannelHandler>.Instance),
+            new LoggingDiscordNotificationChannelHandler(NullLogger<LoggingDiscordNotificationChannelHandler>.Instance),
         };
 
         var services = new ServiceCollection();

@@ -13,6 +13,14 @@
     <PackageReference Include="Microsoft.Extensions.Localization" Version="9.0.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.3" />
+    <!--
+      T80: StackExchange.Redis powers the Discord DM channel id cache
+      (RedisDiscordDmChannelCache, 08 §6.3). The cache is consumed by
+      the Discord notification channel handler so the package stays in
+      this module rather than Skinora.Shared, mirroring how the
+      Redis-backed Telegram + Discord OAuth stores live in Skinora.Users.
+    -->
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
   </ItemGroup>
 
   <PropertyGroup>

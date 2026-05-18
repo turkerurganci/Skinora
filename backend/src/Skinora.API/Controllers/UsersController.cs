@@ -5,6 +5,7 @@ using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Configuration;
+using Skinora.Shared.Discord;
 using Skinora.Shared.Models;
 using Skinora.Users.Application.Account;
 using Skinora.Users.Application.Profiles;
@@ -346,6 +347,8 @@ public sealed class UsersController : ControllerBase
                 $"{settings.FailureRedirectUrl}&reason=already_linked",
             DiscordCallbackStatus.InvalidState =>
                 $"{settings.FailureRedirectUrl}&reason=invalid_state",
+            DiscordCallbackStatus.InvalidGrant =>
+                $"{settings.FailureRedirectUrl}&reason=expired",
             _ => $"{settings.FailureRedirectUrl}&reason=exchange_failed",
         };
 
