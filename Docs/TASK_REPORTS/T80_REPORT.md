@@ -1,6 +1,6 @@
 # T80 — Discord entegrasyonu (Bot API + OAuth2 + DM channel cache)
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-05-18
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-18
 
 ---
 
@@ -128,7 +128,76 @@
 | Skinora.Notifications.Tests (tam suite) | **137/137 PASS** | Unit/Channels/Discord 9 + diğer 128 |
 | Skinora.Notifications.Tests Unit/Channels Discord filter | **10/10 PASS** | (1 ekstra `Unknown`-fallback fakulte test) |
 | Skinora.API.Tests AccountSettings filter | **27/27 PASS** | T35 23 + T79 +2 + T80 +2 (InvalidGrant + TransportFailure) |
-| **CI run** | ⏳ push sonrası | — |
+| **CI run** | ✓ **10/10 SUCCESS** | run [`26035069276`](https://github.com/turkerurganci/Skinora/actions/runs/26035069276) (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate) |
+
+## Doğrulama Sonucu — Bağımsız Validator
+
+**Tarih:** 2026-05-18
+**Branch:** `task/T80-discord-bot-integration`
+**Commit:** `2c8bfa3` (validator inceleme noktası)
+
+### Verdict: ✓ PASS
+
+### HARD STOP Kapıları (Adım -1 / 0 / 0b)
+
+- **Adım -1 — Working tree:** ✓ Temiz (`git status --short` boş).
+- **Adım 0 — Main CI startup:** ✓ 3/3 success — T79 main (run [`26027258676`](https://github.com/turkerurganci/Skinora/actions/runs/26027258676) + [`26027258705`](https://github.com/turkerurganci/Skinora/actions/runs/26027258705)) + T78 main (run [`26021262104`](https://github.com/turkerurganci/Skinora/actions/runs/26021262104)).
+- **Adım 0b — Repo memory drift:** ✓ T80 satırları MEMORY.md'de mevcut (yapım chat'i memory'i güncellemiş — Bitiş Kapısı 8. madde'ye uydu).
+
+### Kabul Kriterleri (08 §6.1–§6.5) — Bağımsız Kanıt
+
+| # | Kriter | Sonuç | Bağımsız Kanıt |
+|---|--------|-------|----------------|
+| 1 | Bot Developer Portal + OAuth2 scope `identify` | ✓ | `DiscordSettings.Scope = "identify"` default ([`DiscordSettings.cs:92`](../../backend/src/Skinora.Shared/Discord/DiscordSettings.cs#L92)) + appsettings + DISCORD_SETUP §1 |
+| 2 | MVP Guild Install: Skinora sunucusu, bot invite | ✓ | DISCORD_SETUP §2 — `scope: bot`, permissions 0, "Skinora Community" |
+| 3 | OAuth2 bağlantı: identify scope, callback, discord_user_id kayıt | ✓ | [`DiscordOAuthClient.cs:71-83`](../../backend/src/Skinora.Shared/Discord/DiscordOAuthClient.cs#L71-L83) 2-step exchange + FetchProfile + [`DiscordConnectionService.cs:102-108`](../../backend/src/Modules/Skinora.Users/Application/Settings/DiscordConnectionService.cs#L102-L108) `UpsertPreferenceAsync(ExternalId=profile.DiscordUserId)` |
+| 4 | State parametresi: CSRF koruması (server-side correlation) | ✓ | [`DiscordConnectionService.cs:132-138`](../../backend/src/Modules/Skinora.Users/Application/Settings/DiscordConnectionService.cs#L132-L138) 32-byte `RandomNumberGenerator.Fill` + `IDiscordOAuthStateStore.IssueAsync(ttl)` + callback `ConsumeAsync` (T35 Redis GETDEL infra) + min 60s floor |
+| 5 | DM kanal: `POST /users/@me/channels` → `POST /channels/{id}/messages` | ✓ | [`DiscordBotClient.cs:105-141`](../../backend/src/Skinora.Shared/Discord/DiscordBotClient.cs#L105-L141) iki endpoint + `Authorization: Bot {token}` |
+| 6 | Mention koruması: `allowed_mentions: { "parse": [] }` | ✓ | [`DiscordBotClient.cs:128`](../../backend/src/Skinora.Shared/Discord/DiscordBotClient.cs#L128) payload `AllowedMentions = new AllowedMentionsPayload()` (`Parse = Array.Empty<string>()`) hard-coded |
+| 7 | Rate limit: header-driven (X-RateLimit-*), kuyruk + throttle | ✓ | [`DiscordRateLimiter.cs`](../../backend/src/Skinora.Shared/Discord/DiscordRateLimiter.cs) per-bucket `SemaphoreSlim(1,1)` + `NextSendAtUtc` + global sliding window + `RegisterBucket`/`RegisterReset`/`RegisterRetryAfter` + [`DiscordBotClient.cs:306-331`](../../backend/src/Skinora.Shared/Discord/DiscordBotClient.cs#L306-L331) her response header parse |
+| 8 | Hata: 401 admin alert / 403 DM-guild / 404 disable / 5xx 3 retry | ✓ | [`DiscordBotClient.PostAsync`](../../backend/src/Skinora.Shared/Discord/DiscordBotClient.cs#L143-L282) 4-way map + [`DiscordNotificationChannelHandler.cs:96-157`](../../backend/src/Modules/Skinora.Notifications/Infrastructure/Channels/DiscordNotificationChannelHandler.cs#L96-L157) 401 keep-pref / 403 disable / 404-cache retry once / 404 no-cache disable + 5xx T78 deferred-tier 3 retry |
+| 9 | DM channel ID cache: Redis | ✓ | [`RedisDiscordDmChannelCache.cs`](../../backend/src/Modules/Skinora.Notifications/Infrastructure/Channels/RedisDiscordDmChannelCache.cs) `{prefix}:discord:dm_channel:{userId}` + `DmChannelCacheTtlHours=24` + 404 auto-invalidate + handler `GetAsync`/`SetAsync`/`ForgetAsync` |
+
+### Doğrulama Kontrol Listesi (11 §T80)
+
+- [x] **08 §6.1–§6.5 tüm entegrasyon detayları uygulanmış mı?** — §6.1 connection (Developer Portal + guild + OAuth state CSRF) ✓ / §6.2 4 endpoint + allowed_mentions ✓ / §6.3 header-driven + Redis DM cache ✓ / §6.4 OAuth hata 6/6 + Bot hata 5/5 (50007 reason ayrımı dahil) ✓ / §6.5 secret rotation runbook ✓.
+
+### Bağımsız Test Sonuçları (validator re-run)
+
+| Tür | Sonuç | Komut | Kanıt |
+|-----|-------|-------|-------|
+| Build | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` | "Build succeeded. 0 Warning(s) 0 Error(s)" 31.50s |
+| Format | ✓ Δ=0 | `dotnet format --verify-no-changes` | exit 0, çıktı yok |
+| Shared.Tests Discord filter | ✓ 45/45 | `dotnet test --filter ~Discord` | DiscordMarkdownEscaper + DiscordOAuthClient + DiscordBotClient + DiscordRateLimiter |
+| Notifications.Tests Discord filter | ✓ 10/10 | `dotnet test --filter ~Discord` | DiscordNotificationChannelHandlerTests |
+| API.Tests AccountSettings filter | ✓ 27/27 | `dotnet test --filter ~AccountSettings` | T80 yeni: `DiscordCallback_InvalidGrant_RedirectsExpired` + `DiscordCallback_TransportFailure_RedirectsExchangeFailed` |
+| Task branch CI | ✓ 10/10 | `gh run list --branch task/T80-*` | run [`26035069276`](https://github.com/turkerurganci/Skinora/actions/runs/26035069276) tüm 10 check SUCCESS |
+
+### Güvenlik Kontrolü
+
+- [x] **Secret sızıntısı:** Temiz — `ClientId`/`ClientSecret`/`BotToken` default `REPLACE_IN_ENV` trip-wire (`DiscordOAuthClient` + `DiscordBotClient` ctor `InvalidOperationException` fail-closed); access_token kalıcı saklanmaz; bot token `Authorization: Bot` header'a inject; webhook signature gerekli değil (OAuth2 callback HTTPS + state CSRF).
+- [x] **Auth etkisi:** Temiz — OAuth scope minimum `identify`; Bearer vs Bot ayrımı; state Redis GETDEL single-use atomic; `User.IsDeactivated` callback guard; `already_linked` check (06 §3.4) `ExternalIdInUseByAnotherUserAsync`.
+- [x] **Input validation:** Temiz — `discordUserId` `IsNullOrWhiteSpace` guard; createDM response `channel.Id` empty kontrolü; `DiscordMarkdownEscaper` 7 reserved char escape; mention koruması; URL `Uri.EscapeDataString`.
+- [x] **Yeni dış bağımlılık:** `StackExchange.Redis 2.8.16` Notifications'a eklendi (Users'ta zaten vardı, yeni paket değil transitive). Discord NuGet **eklenmedi** — raw HttpClient + System.Text.Json (T78/T79 precedent).
+
+### Doküman Uyumu
+
+- ✓ **Enum:** `DiscordCallbackStatus.InvalidGrant` 08 §6.4 invalid_grant satırı 1:1; `DiscordForbiddenReason` (Mutual/DmClosed/Unknown) 08 §6.4 403 ayrıştırması 1:1.
+- ✓ **Field/header:** `discord_user_id` UNP.ExternalId; `recipient_id` Discord docs; `allowed_mentions.parse` Discord message schema; `X-RateLimit-Bucket`/`-Reset-After`/`Retry-After` rate-limit docs; error code `50007` (Cannot send messages to this user) Discord error code reference.
+- ✓ **İş kuralları:** Spec §6.1 minimum scope `identify` ✓; §6.2 `application/x-www-form-urlencoded` zorunlu ✓; §6.3 header-driven hard-code yok ✓; §6.4 mutual guild OR user-install — MVP mutual path + user-install K7 forward-deferred ✓.
+
+### Bulgular
+
+**S-bulgu yok.**
+
+### Minor Advisory
+
+- **A1 — `DiscordRateLimiter.WaitAsync` semaphore release semantiği** ([`DiscordRateLimiter.cs:57-80`](../../backend/src/Skinora.Shared/Discord/DiscordRateLimiter.cs#L57-L80)): `released` değişkeni hiçbir zaman `true` set edilmiyor → finally bloğunda her zaman release yapılıyor. Per-bucket semaphore sadece wait-for-reset state'ini serileştirir, HTTP call sırasında concurrent request'lere izin verir. Header-driven `NextSendAtUtc` ile pace doğru, ama strict FIFO kuyruk değil. `released = false` ölü kod kalıntısı. Spec "kuyruk + throttle" diyor; throttle ✓, strict kuyruk semantiği bir tık zayıf. **T-future** cleanup: dead var kaldır veya release HTTP call sonrasına taşı.
+- **A2 — 2000 char inline defense-in-depth yok:** Spec §6.2 `Maksimum uzunluk: 2000 karakter`. Template'ten kısa içerik beklensin diye explicit length check eklenmemiş; >2000 karakter Discord 400 → `DiscordPermanentException` → preference auto-disable (bir kerelik uzun template kullanıcı tercihini siler — heavy side-effect). **T-future** template-side audit (K5 advisory'nin parçası).
+
+### Yapım Raporu Karşılaştırması
+
+- **Uyum:** Tam uyumlu — yapım raporu 9/9 kabul kriterini ✓ ile listeliyor, bağımsız doğrulama 9/9 ✓ ile aynı sonuçta. Test sayıları (Shared 45/45, Notifications 10/10, API 27/27), CI 10/10, Build 0W/0E, format Δ=0 hepsi bağımsız re-run ile eşleşti. K1–K9 forward-deferred limitations yapım raporunda dokümante. A1+A2 advisory'ler validator-side yeni gözlemler — FAIL eşiğine çıkmıyor, T-future cleanup adayları.
 
 ## Altyapı Değişiklikleri
 
