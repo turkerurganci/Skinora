@@ -1,6 +1,6 @@
 # T79 — Telegram entegrasyonu (Bot API + spec-gap fix)
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (validate bekliyor) | **Tarih:** 2026-05-18
+**Faz:** F4 | **Durum:** ✓ Tamamlandı (PASS) | **Tarih:** 2026-05-18
 
 ---
 
@@ -147,15 +147,84 @@
 
 ---
 
-## Validate Bekliyor
+## Doğrulama Sonucu — Bağımsız Validator
 
-Yapım bitti. Validate chat'ine geçilebilir. Bitiş kapısı **(8/8 ✓)**:
+**Tarih:** 2026-05-18
+**Branch:** `task/T79-telegram-bot-integration`
+**Commit:** `9878486` (validate öncesi HEAD)
+
+### Verdict: ✓ PASS
+
+### Adım -1 / 0 / 0b Hard-stop kontrolleri
+- Working tree temiz (`git status --short` boş) ✓
+- Main CI son 3 run conclusion=success (T78 `26021262104` + `26021262112` + T77 `26000220452`) ✓
+- Repo memory'de T79 satırı mevcut (`.claude/memory/MEMORY.md` L181 vd.) ✓
+
+### Kabul Kriterleri (8/8 ✓)
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | BotFather setup + token alma | ✓ | `TELEGRAM_SETUP.md §1` + `appsettings.json` `Telegram__BotToken=REPLACE_IN_ENV` fail-closed trip-wire |
+| 2 | Deep link (10dk TTL, single-use, 122+ bit entropy, /start eşleşme, chat_id kayıt) | ✓ | `TelegramConnectionService.GenerateCode` 16-byte RNG hex (128 bit) + `CodeTtlSeconds=600` + `RedisTelegramVerificationStore.ConsumeAsync` GETDEL single-use + `WebhooksController.StartCommandRegex` `^/start\s+(SKN-[A-Za-z0-9]+)\s*$` + `_preferences.UpsertPreferenceAsync` chat_id=`payload.TelegramUserId.ToString` + brute-force 5 fail counter (`MaxFailedAttempts=5`) |
+| 3 | POST /webhooks/telegram + secret_token doğrulaması | ✓ | `WebhooksController.Telegram` `[HttpPost("telegram")]` + `TelegramWebhookSignatureMiddleware` `CryptographicOperations.FixedTimeEquals` constant-time compare; secret unset → 401 fail-closed |
+| 4 | Webhook idempotency (update_id, 24sa TTL) | ✓ (advisory) | `TelegramWebhookSignatureMiddleware` `ProcessedNonces(Source="telegram", Nonce=update_id, ExpiresAt=Now+IdempotencyTtlHours)` + SQL Server UNIQUE → 200 Idempotent. **Storage divergence:** spec §5.2 "Redis"; impl ProcessedNonces SQL Server (T68 paterni — sidecar webhook tek dedup tablosunda buluşur, T63b retention job temizliyor). Semantik (dedup + 24h TTL) eşdeğer; K3 doc'lu architectural choice |
+| 5 | sendMessage MarkdownV2 + escape helper | ✓ | `TelegramBotClient.SendMessageAsync` `parse_mode=MarkdownV2` + `MarkdownV2Escaper.Escape` 18 reserved char + backslash; `TelegramNotificationChannelHandler.FormatMessage` title+body iki kanal escape |
+| 6 | Rate limit (1 msg/s per chat, 30 msg/s global, sıralı kuyruk) | ✓ | `TelegramRateLimiter` `ChatGate` SemaphoreSlim(1,1) + per-chat `MinInterval = 1/PerChatRatePerSecond` + global `LinkedList<DateTimeOffset>` sliding window 1s + `Func<DateTimeOffset>` injected clock |
+| 7 | Hata yönetimi (429 retry_after, 403 4-way reason, 400 disconnect, 5xx 3 retry) | ✓ | `TelegramBotClient.PostAsync` 5xx/429 → `TelegramTransientException(retry_after)`, 403 → `ClassifyForbidden` 4-way (`BotBlockedByUser`/`UserDeactivated`/`CannotMessageBots`/`CannotInitiateConversation`/Unknown), 400+4xx → `TelegramPermanentException`; channel handler 403→preference auto-disable + 429→`RegisterRetryAfter`; 3 retry immediate-tier `NotificationDeliveryJob` (T78 paterni) |
+| 8 | setWebhook (url + secret_token + max_connections=40 + allowed_updates=["message"]) | ✓ | `TelegramSetWebhookRequest` defaults `MaxConnections=40`, `AllowedUpdates=["message"]`, `DropPendingUpdates` opsiyonel; `ITelegramBotClient.SetWebhookAsync` `setWebhook` HTTP POST; runbook §4 curl örneği parametre listesi tam |
+
+### Doğrulama Kontrol Listesi (2/2 ✓)
+- [x] 08 §5.1–§5.5 tüm entegrasyon detayları uygulanmış mı? — 5.1 connection ✓ / 5.2 API ✓ / 5.3 limits ✓ / 5.4 errors ✓ / 5.5 dependency risk runbook §6 secret rotation ✓; K3 idempotency storage advisory (semantik eşdeğer)
+- [x] 403 neden ayrıştırma doğru mu? — `ClassifyForbidden` 4 case + Unknown fallback, plan §5.4 tablosuyla 1:1 + `TelegramBotClientTests` `[Theory]` UserDeactivated/CannotMessageBots/CannotInitiateConversation/BotBlockedByUser
+
+### Test Sonuçları (bağımsız re-run)
+
+| Tür | Sonuç | Komut | Çıktı |
+|---|---|---|---|
+| Build Release | 0W/0E | `dotnet build Skinora.sln -c Release` | `Build succeeded. 0 Warning(s) 0 Error(s)` (7.83s) |
+| Format | Δ=0 | `dotnet format Skinora.sln --verify-no-changes` | exit=0, no output |
+| Unit (Shared/Telegram) | 41/41 ✓ | `dotnet test Skinora.Shared.Tests --filter ~Telegram` | `Passed! - Failed: 0, Passed: 41, Skipped: 0, Total: 41, Duration: 79 ms` |
+| Integration (AccountSettings) | 25/25 ✓ | `dotnet test Skinora.API.Tests --filter ~AccountSettings` | `Passed! - Failed: 0, Passed: 25, Skipped: 0, Total: 25, Duration: 10 s` |
+| Unit (Notifications/Telegram) | 6/6 ✓ | `dotnet test Skinora.Notifications.Tests --filter ~Telegram` | `Passed! - Failed: 0, Passed: 6, Skipped: 0, Total: 6, Duration: 17 s` |
+| Task branch CI HEAD `9878486` | n/a (rapor finalize) | — | T79 rapor finalize commit'i; merge öncesi yeni run tetiklenecek |
+| Task branch CI HEAD `2504310` | 10/10 ✓ | `gh run view 26025772241` | Detect/Lint/Build/Unit/Integration/Contract/Migration/Docker/CI Gate ✓, Guard skipped (PR) |
+
+### Güvenlik Kontrolü
+- [x] Secret sızıntısı: temiz — `BotToken` + `WebhookSecretToken` env var via `REPLACE_IN_ENV` trip-wire, Provider=`logging` default fail-closed; HttpClient BaseAddress'a embed olan token Information log seviyesinde dışarı çıkmıyor (log mesajları yalnız `{Method}` argüman alıyor)
+- [x] Auth etkisi: temiz — webhook controller `[AllowAnonymous]` ama middleware secret_token + idempotency önce çalışıyor; constant-time compare (`FixedTimeEquals`) timing attack'a kapalı; secret unset → 401 fail-closed
+- [x] Input validation: temiz — `update_id` JSON parse defensive (`TryGetProperty` + `TryGetInt64`), body stream `EnableBuffering` + rewind; malformed body → 200 noop (Telegram retry storm yok); `StartCommandRegex` constrained `^/start\s+(SKN-[A-Za-z0-9]+)\s*$`
+- [x] Yeni dış bağımlılık: **yok** — `git diff main...HEAD -- "*.csproj"` 0Δ; raw HttpClient + System.Text.Json + Microsoft.Data.SqlClient (mevcut bağımlılıklar)
+
+### Bulgular
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| A1 | advisory | Webhook idempotency storage spec §5.2'de Redis; impl ProcessedNonces SQL Server. T68 sidecar webhook paterniyle tutarlı, semantik (dedup + 24h TTL) eşdeğer, T63b retention job temizliyor. K3 Known Limitations'da doc'lu, FAIL değil. | `TelegramWebhookSignatureMiddleware.cs` |
+
+**S-bulgu yok** (S1/S2/S3 hiçbiri).
+
+### Yapım Raporu Karşılaştırması
+- **Uyum:** Tam uyumlu. Yapım raporundaki 8/8 ✓ ve K1–K7 listesi bağımsız doğrulama bulgularıyla bire bir eşleşiyor; ek S-bulgu yok.
+- **Test count:** Notifications.Tests filter `~Telegram` bağımsız run'da 6/6 PASS (rapor "5 test" yazıyor — 5 `TelegramNotificationChannelHandlerTests` + 1 başka Telegram-isimli test; semantik fark yok).
+- **CI sonucu:** Rapor `26025772241` 10/10 ✓ kanıtladı; bağımsız `gh pr view 120` rollup aynı sonucu gösteriyor.
+
+### Merge öncesi durum
+- PR #120 `MERGEABLE`, base=`main`, head=`9878486` (rapor finalize)
+- Branch isolation: ✓ (`git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız T79)
+- Task branch CI HEAD `2504310` ardından `9878486` finalize commit'i için run merge sonrası post-merge CI watch ile takip edilecek
+
+---
+
+## Validate Bitiş Kapısı (12/12 ✓)
 
 - [x] Branch push edildi (`task/T79-telegram-bot-integration`)
 - [x] PR açıldı (#120)
 - [x] PR numarası raporda yazılı
-- [x] Rapor + status push edildi (`d56f6ef` + `2504310`)
+- [x] Rapor + status push edildi (`d56f6ef` + `2504310` + bu finalize commit)
 - [x] CI run tamamlandı (run `26025772241` concluded)
 - [x] CI sonucu `success` (10/10 ✓)
 - [x] Branch isolation check temiz (`T79` tek başına)
-- [x] Repo memory'de T79 satırı eklendi (`.claude/memory/MEMORY.md` T78 sonrasında)
+- [x] Repo memory'de T79 satırı eklendi
+- [x] Bağımsız validator hard-stop kontrolleri PASS (-1/0/0b)
+- [x] 8/8 kabul kriteri ✓ + 2/2 doğrulama listesi ✓ + 0 S-bulgu
+- [x] Lokal Build 0W/0E + Format Δ=0 + 72/72 hedef test PASS
+- [x] Verdict: ✓ PASS
