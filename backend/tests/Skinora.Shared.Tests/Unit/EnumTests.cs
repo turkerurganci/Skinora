@@ -470,18 +470,19 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(PayoutIssueStatus), Enum.Parse<PayoutIssueStatus>(valueName)));
     }
 
-    // ── DeliveryStatus (3) ──────────────────────────────────────────
+    // ── DeliveryStatus (4) — T78 added DEFERRED ─────────────────────
 
     [Fact]
-    public void DeliveryStatus_ShouldHave3Values()
+    public void DeliveryStatus_ShouldHave4Values()
     {
         var values = Enum.GetValues<DeliveryStatus>();
-        Assert.Equal(3, values.Length);
+        Assert.Equal(4, values.Length);
     }
 
     [Theory]
     [InlineData(nameof(DeliveryStatus.PENDING))]
     [InlineData(nameof(DeliveryStatus.SENT))]
+    [InlineData(nameof(DeliveryStatus.DEFERRED))]
     [InlineData(nameof(DeliveryStatus.FAILED))]
     public void DeliveryStatus_ShouldContainExpectedValue(string valueName)
     {
