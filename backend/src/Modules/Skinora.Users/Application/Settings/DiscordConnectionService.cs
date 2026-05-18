@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Skinora.Shared.Discord;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -62,7 +63,24 @@ public sealed class DiscordConnectionService : IDiscordConnectionService
         if (string.IsNullOrWhiteSpace(code))
             return new DiscordCallbackResult(DiscordCallbackStatus.ExchangeFailed, null, null);
 
-        var profile = await _oauthClient.ExchangeAsync(code, cancellationToken);
+        DiscordProfile? profile;
+        try
+        {
+            profile = await _oauthClient.ExchangeAsync(code, cancellationToken);
+        }
+        catch (DiscordOAuthExchangeException ex)
+        {
+            // 08 §6.4 OAuth2 hata tablosu — invalid_grant has its own
+            // documented redirect (?reason=expired); transport / 5xx /
+            // /users/@me failures fall back to the generic
+            // exchange_failed redirect with no PII leakage in the URL.
+            var status = ex.Reason == DiscordOAuthFailureReason.InvalidGrant
+                ? DiscordCallbackStatus.InvalidGrant
+                : DiscordCallbackStatus.ExchangeFailed;
+
+            return new DiscordCallbackResult(status, null, null);
+        }
+
         if (profile is null)
             return new DiscordCallbackResult(DiscordCallbackStatus.ExchangeFailed, null, null);
 

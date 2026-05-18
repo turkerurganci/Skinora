@@ -27,6 +27,7 @@ using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.API.Services;
 using Skinora.Realtime;
 using Skinora.Realtime.Hubs;
+using Skinora.Shared.Discord;
 using Skinora.Shared.Email;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Telegram;
@@ -104,6 +105,35 @@ if (string.Equals(telegramProvider, TelegramSettings.ProviderTelegram, StringCom
     builder.Services.AddHttpClient<ITelegramBotClient, TelegramBotClient>((sp, client) =>
     {
         var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TelegramSettings>>().Value;
+        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+    });
+}
+
+// T80 — Discord transport (08 §6.1–§6.5). DiscordSettings drives
+// both the OAuth callback (Skinora.Users → /users/me/settings/discord/callback)
+// and the notification DM channel handler (Skinora.Notifications →
+// createDM + sendMessage). Two typed HttpClients: OAuth uses Bearer
+// access_tokens, Bot uses the "Bot {token}" authorization header — the
+// concrete clients set those headers themselves so the registrations
+// stay symmetric. Both clients are only registered when
+// Discord:Provider == "discord", so a misconfigured stub-mode build
+// cannot accidentally reach the network.
+builder.Services.Configure<DiscordSettings>(
+    builder.Configuration.GetSection(DiscordSettings.SectionName));
+builder.Services.AddSingleton<IDiscordRateLimiter, DiscordRateLimiter>();
+
+var discordProvider = builder.Configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
+    ?? DiscordSettings.ProviderLogging;
+if (string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IDiscordOAuthClient, DiscordOAuthClient>((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DiscordSettings>>().Value;
+        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+    });
+    builder.Services.AddHttpClient<IDiscordBotClient, DiscordBotClient>((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DiscordSettings>>().Value;
         client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
     });
 }

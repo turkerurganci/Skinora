@@ -483,6 +483,49 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         Assert.Contains("denied", response.Headers.Location!.OriginalString, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task DiscordCallback_InvalidGrant_RedirectsExpired()
+    {
+        // T80 — when Discord returns invalid_grant (stale or replayed
+        // authorization code) the callback redirect must surface the
+        // documented ?reason=expired path rather than the generic
+        // exchange_failed fallback (08 §6.4 OAuth2 hata tablosu).
+        var user = await _factory.CreateUserAsync();
+        var state = await _factory.IssueDiscordStateAsync(user.Id);
+
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+        });
+
+        var response = await client.GetAsync(
+            $"/api/v1/users/me/settings/discord/callback?code=invalid-stale-code&state={state}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("reason=expired", response.Headers.Location!.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DiscordCallback_TransportFailure_RedirectsExchangeFailed()
+    {
+        // Non-4xx OAuth failures (transport, 5xx) keep the generic
+        // ?reason=exchange_failed redirect — the user retries from
+        // scratch and Discord state isn't leaked to the URL.
+        var user = await _factory.CreateUserAsync();
+        var state = await _factory.IssueDiscordStateAsync(user.Id);
+
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+        });
+
+        var response = await client.GetAsync(
+            $"/api/v1/users/me/settings/discord/callback?code=transport-fail-code&state={state}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("reason=exchange_failed", response.Headers.Location!.OriginalString, StringComparison.Ordinal);
+    }
+
     // ---------- Steam trade URL ----------
 
     [Fact]

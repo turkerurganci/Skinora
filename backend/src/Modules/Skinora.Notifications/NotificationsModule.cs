@@ -7,8 +7,10 @@ using Skinora.Notifications.Application.Templates;
 using Skinora.Notifications.Application.Webhooks;
 using Skinora.Notifications.Infrastructure.Channels;
 using Skinora.Notifications.Infrastructure.DeliveryJobs;
+using Skinora.Shared.Discord;
 using Skinora.Shared.Email;
 using Skinora.Shared.Telegram;
+using StackExchange.Redis;
 
 namespace Skinora.Notifications;
 
@@ -90,7 +92,29 @@ public static class NotificationsModule
             services.AddScoped<INotificationChannelHandler, LoggingTelegramNotificationChannelHandler>();
         }
 
-        services.AddScoped<INotificationChannelHandler, DiscordNotificationChannelHandler>();
+        // T80 — Discord channel handler swap. Mirrors the T79
+        // Telegram + T78 Resend provider switches: <c>discord</c>
+        // wires the real Bot API handler + Redis DM channel cache;
+        // anything else (default <c>logging</c>) keeps the T37 stub
+        // so CI never reaches the network. The DM channel cache is
+        // registered unconditionally — the stub doesn't use it, and
+        // tests rely on it being override-able to inject the
+        // in-memory cache.
+        services.AddSingleton<IDiscordDmChannelCache>(sp =>
+            new RedisDiscordDmChannelCache(
+                sp.GetRequiredService<IConnectionMultiplexer>(), keyPrefix: "skinora"));
+
+        var discordProvider = configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
+            ?? DiscordSettings.ProviderLogging;
+
+        if (string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<INotificationChannelHandler, DiscordNotificationChannelHandler>();
+        }
+        else
+        {
+            services.AddScoped<INotificationChannelHandler, LoggingDiscordNotificationChannelHandler>();
+        }
 
         services.AddScoped<INotificationAdminAlertSink, LoggingNotificationAdminAlertSink>();
 

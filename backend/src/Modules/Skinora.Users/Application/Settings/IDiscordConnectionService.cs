@@ -31,6 +31,14 @@ public enum DiscordCallbackStatus
     InvalidState,
     AlreadyLinkedToAnotherUser,
     ExchangeFailed,
+    /// <summary>
+    /// Discord returned <c>invalid_grant</c> on the token endpoint —
+    /// the authorization code expired or was already used. T80 added
+    /// this distinction so the callback redirect can surface the
+    /// documented <c>?reason=expired</c> instead of the generic
+    /// failure path (08 §6.4 OAuth2 hata tablosu).
+    /// </summary>
+    InvalidGrant,
 }
 
 public sealed record DiscordCallbackResult(
