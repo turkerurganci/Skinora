@@ -27,6 +27,7 @@ using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.API.Services;
 using Skinora.Realtime;
 using Skinora.Realtime.Hubs;
+using Skinora.Shared.Email;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -105,11 +106,37 @@ builder.Services.Configure<Skinora.Platform.Application.Heartbeat.HeartbeatOptio
     builder.Configuration.GetSection(Skinora.Platform.Application.Heartbeat.HeartbeatOptions.SectionName));
 builder.Services.AddPlatformModule();
 
+// T78 — Resend email transport (08 §4.1–§4.3). ResendSettings drives both
+// the notification email channel handler (Skinora.Notifications) and the
+// verification-email sender (Skinora.Users); registering the options +
+// HttpClient + Svix verifier here before the module wiring lets the
+// per-module composition pick the right concrete based on the provider
+// flag. The HttpClient is only registered for the Resend provider so a
+// misconfigured stub-mode build cannot accidentally reach the network.
+builder.Services.Configure<ResendSettings>(
+    builder.Configuration.GetSection(ResendSettings.SectionName));
+builder.Services.AddSingleton<SvixSignatureVerifier>();
+
+var resendProvider = builder.Configuration[$"{ResendSettings.SectionName}:{nameof(ResendSettings.Provider)}"]
+    ?? ResendSettings.ProviderLogging;
+if (string.Equals(resendProvider, ResendSettings.ProviderResend, StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<IResendEmailClient, ResendEmailClient>((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ResendSettings>>().Value;
+        client.BaseAddress = new Uri(settings.BaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", settings.ApiKey);
+    });
+}
+
 // Notification infrastructure (T37 — 05 §7.1–§7.5): dispatcher orchestration,
 // .resx-backed template resolver, per-channel handlers (Email/Telegram/Discord
 // stubs swapped at T78/T79/T80), exponential-backoff Hangfire delivery job and
-// admin-alert sink for exhausted retries.
-builder.Services.AddNotificationsModule();
+// admin-alert sink for exhausted retries. T78 added the deferred-tier
+// delivery job + Resend webhook handler + HTML wrapper.
+builder.Services.AddNotificationsModule(builder.Configuration);
 
 // Transaction lifecycle (T45 — 07 §7.2–§7.4, 03 §2.2): eligibility,
 // params and creation services. Steam inventory + market price ports are
@@ -259,6 +286,11 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 // secret-header check. Runs after CorrelationId/Logging/Exception so a 401
 // here is still correlated and gracefully reported.
 app.UseMiddleware<WebhookSignatureMiddleware>();
+
+// 5b. Resend webhook signature verification (T78 — 08 §4.3, Svix-style).
+// Path-scoped to /api/v1/webhooks/resend; runs before MVC routing so the
+// controller never sees an unsigned / replayed / duplicate event.
+app.UseMiddleware<ResendWebhookSignatureMiddleware>();
 
 // 6. CORS
 app.UseCors();

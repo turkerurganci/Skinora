@@ -54,5 +54,13 @@ public class NotificationDeliveryConfiguration : IEntityTypeConfiguration<Notifi
         // FAILED → LastError NOT NULL
         builder.ToTable(t => t.HasCheckConstraint("CK_NotificationDeliveries_Failed_LastError",
             "(Status <> 'FAILED') OR (LastError IS NOT NULL)"));
+
+        // T78 — DEFERRED (transient failure exhausted the immediate retry
+        // budget, the deferred-tier job will retry on 30 dk / 1 sa / 4 sa
+        // delays per 08 §4.3). The transition path is FAILED-shaped: the
+        // job sets LastError before flipping to DEFERRED, so the same
+        // invariant applies.
+        builder.ToTable(t => t.HasCheckConstraint("CK_NotificationDeliveries_Deferred_LastError",
+            "(Status <> 'DEFERRED') OR (LastError IS NOT NULL)"));
     }
 }

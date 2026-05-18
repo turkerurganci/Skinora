@@ -60,9 +60,12 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
         await context.SaveChangesAsync();
     }
 
+    private FakeBackgroundJobScheduler _lastScheduler = new();
+
     private NotificationDeliveryJob CreateSut(
         SpyNotificationChannelHandler? spy = null,
-        SpyNotificationAdminAlertSink? alertSink = null)
+        SpyNotificationAdminAlertSink? alertSink = null,
+        FakeBackgroundJobScheduler? scheduler = null)
     {
         var handlers = new List<INotificationChannelHandler>
         {
@@ -80,11 +83,14 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
             localizer,
             NullLogger<ResxNotificationTemplateResolver>.Instance);
 
+        _lastScheduler = scheduler ?? new FakeBackgroundJobScheduler();
+
         return new NotificationDeliveryJob(
             Context,
             handlers,
             resolver,
             alertSink ?? new SpyNotificationAdminAlertSink(),
+            _lastScheduler,
             NullLogger<NotificationDeliveryJob>.Instance);
     }
 
@@ -178,11 +184,15 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task RunAsync_FinalAttemptFailure_RaisesAdminAlertAndThrows()
+    public async Task RunAsync_FinalAttemptTransientFailure_DefersAndSchedulesDeferredJob()
     {
+        // T78 — immediate-tier budget exhausted on a transient failure flips
+        // the row to DEFERRED and hands off to the deferred-tier job. No
+        // throw (Hangfire would mark "Failed"); no admin alert (deferred
+        // tier may still succeed).
         var spy = new SpyNotificationChannelHandler(NotificationChannel.EMAIL)
         {
-            ExceptionFactory = () => new InvalidOperationException("permanent"),
+            ExceptionFactory = () => new InvalidOperationException("transient"),
         };
         var alertSink = new SpyNotificationAdminAlertSink();
         var delivery = await AddDeliveryAsync(NotificationChannel.EMAIL, "user@example.com");
@@ -193,11 +203,46 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
         // the 1m/5m/15m budget is exhausted (05 §7.5).
         var finalAttempt = NotificationDeliveryJob.MaxRetryAttempts + 1;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            sut.RunAsync(delivery.Id, finalAttempt, CancellationToken.None));
+        // Should NOT throw — the row is deferred, no Hangfire re-throw.
+        await sut.RunAsync(delivery.Id, finalAttempt, CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var reloaded = await verify.Set<NotificationDelivery>().SingleAsync(d => d.Id == delivery.Id);
+        Assert.Equal(DeliveryStatus.DEFERRED, reloaded.Status);
+        Assert.Contains("transient", reloaded.LastError);
+
+        // No admin alert at this point — deferred tier may still recover.
+        Assert.Empty(alertSink.Alerts);
+
+        // Scheduler captured a DeferredNotificationDeliveryJob.Execute call.
+        Assert.Single(_lastScheduler.ScheduledCalls);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task RunAsync_PermanentFailure_MarksFailedAlertsAndSwallows()
+    {
+        // T78 — PermanentChannelDeliveryException short-circuits both the
+        // immediate retry tier (no re-throw) and the deferred tier (no
+        // schedule). Admin alert fires immediately.
+        var spy = new SpyNotificationChannelHandler(NotificationChannel.EMAIL)
+        {
+            ExceptionFactory = () => new PermanentChannelDeliveryException("invalid recipient"),
+        };
+        var alertSink = new SpyNotificationAdminAlertSink();
+        var delivery = await AddDeliveryAsync(NotificationChannel.EMAIL, "user@example.com");
+
+        var sut = CreateSut(spy, alertSink);
+
+        await sut.RunAsync(delivery.Id, attemptNumber: 1, CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var reloaded = await verify.Set<NotificationDelivery>().SingleAsync(d => d.Id == delivery.Id);
+        Assert.Equal(DeliveryStatus.FAILED, reloaded.Status);
+        Assert.Contains("invalid recipient", reloaded.LastError);
 
         Assert.Single(alertSink.Alerts);
-        Assert.Equal(delivery.Id, alertSink.Alerts[0].Id);
+        Assert.Empty(_lastScheduler.ScheduledCalls);
     }
 
     [Fact]
@@ -223,6 +268,7 @@ public class NotificationDeliveryJobTests : IntegrationTestBase
             handlers,
             resolver,
             alertSink,
+            new FakeBackgroundJobScheduler(),
             NullLogger<NotificationDeliveryJob>.Instance);
 
         var telegramDelivery = await AddDeliveryAsync(NotificationChannel.TELEGRAM, "12345");

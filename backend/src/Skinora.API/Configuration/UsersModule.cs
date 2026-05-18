@@ -3,6 +3,7 @@ using Skinora.Auth.Application.Session;
 using Skinora.Notifications.Application.Account;
 using Skinora.Notifications.Application.Settings;
 using Skinora.Platform.Infrastructure.Reputation;
+using Skinora.Shared.Email;
 using Skinora.Transactions.Application.Account;
 using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Wallet;
@@ -78,9 +79,21 @@ public static class UsersModule
         services.AddScoped<IDiscordConnectionService, DiscordConnectionService>();
 
         // Email sender — T78 swaps LoggingEmailSender for the Resend-backed
-        // implementation. IEmailSender lives in Users so the interface is
-        // available without pulling Resend into this module.
-        services.TryAddScoped<IEmailSender, LoggingEmailSender>();
+        // implementation when Resend:Provider == "resend". IEmailSender lives
+        // in Users so the interface is available without pulling Resend into
+        // this module; the concrete Resend sender lives in the same namespace
+        // and is selected here at composition time.
+        var emailProvider = configuration[$"{ResendSettings.SectionName}:{nameof(ResendSettings.Provider)}"]
+            ?? ResendSettings.ProviderLogging;
+
+        if (string.Equals(emailProvider, ResendSettings.ProviderResend, StringComparison.OrdinalIgnoreCase))
+        {
+            services.TryAddScoped<IEmailSender, ResendVerificationEmailSender>();
+        }
+        else
+        {
+            services.TryAddScoped<IEmailSender, LoggingEmailSender>();
+        }
 
         // Discord OAuth HTTP client — T80 swaps the stub for a real
         // Discord token-exchange call.
