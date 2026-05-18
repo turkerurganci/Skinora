@@ -30,6 +30,7 @@ using Skinora.Realtime.Hubs;
 using Skinora.Shared.Discord;
 using Skinora.Shared.Email;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.SteamMarket;
 using Skinora.Shared.Telegram;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -136,6 +137,32 @@ if (string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringCompar
         var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<DiscordSettings>>().Value;
         client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
     });
+}
+
+// T81 — Steam Market price API transport (08 §7.1–§7.4). The shared
+// settings + sliding-window rate limiter live across every consumer; the
+// real HttpClient is wired only when Provider == "steam-market" so a
+// fresh checkout / CI build cannot hit steamcommunity.com by accident.
+// Provider == "logging" (default) resolves a NoPrice stub instead, which
+// makes the fraud price-deviation pipeline degrade per 08 §7.4 karar
+// ağacı adım 3b without producing real outbound traffic.
+builder.Services.Configure<SteamMarketSettings>(
+    builder.Configuration.GetSection(SteamMarketSettings.SectionName));
+builder.Services.AddSingleton<ISteamMarketRateLimiter, SteamMarketRateLimiter>();
+
+var steamMarketProvider = builder.Configuration[$"{SteamMarketSettings.SectionName}:{nameof(SteamMarketSettings.Provider)}"]
+    ?? SteamMarketSettings.ProviderLogging;
+if (string.Equals(steamMarketProvider, SteamMarketSettings.ProviderSteamMarket, StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<ISteamMarketPriceClient, SteamMarketPriceClient>((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<SteamMarketSettings>>().Value;
+        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+    });
+}
+else
+{
+    builder.Services.AddSingleton<ISteamMarketPriceClient, LoggingSteamMarketPriceClient>();
 }
 
 // User profile + wallet + account settings (T33 / T34 / T35) —
