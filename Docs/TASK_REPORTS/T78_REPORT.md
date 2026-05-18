@@ -1,6 +1,6 @@
 # T78 — Email entegrasyonu (Resend)
 
-**Faz:** F4 | **Durum:** ⏳ Devam ediyor (yapım bitti — validate chat bekliyor) | **Tarih:** 2026-05-17
+**Faz:** F4 | **Durum:** ✓ Tamamlandı (validate ✓ PASS) | **Tarih:** 2026-05-18
 
 ---
 
@@ -129,9 +129,28 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validate chat'inde bağımsız PASS bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-18) |
+| Bulgu sayısı | 0 S-bulgu, 3 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+### Validator Notları
+
+- **Adım -1 working tree:** temiz.
+- **Adım 0 main CI startup:** son 3 main run conclusion=success ([`26000220452`](https://github.com/turkerurganci/Skinora/actions/runs/26000220452) T77 push, [`26000220451`](https://github.com/turkerurganci/Skinora/actions/runs/26000220451) T77 docker-publish, [`25997787137`](https://github.com/turkerurganci/Skinora/actions/runs/25997787137) T76). PASS.
+- **Adım 0b memory drift:** `.claude/memory/MEMORY.md` `Next:` satırı T78 doğrulamayı işaret ediyor (drift yok).
+- **Task branch CI:** [`26019861162`](https://github.com/turkerurganci/Skinora/actions/runs/26019861162) (commit `6132ee6`) 10/10 SUCCESS + [`26020235380`](https://github.com/turkerurganci/Skinora/actions/runs/26020235380) (commit `689afbf` rapor finalize-only) 10/10 SUCCESS (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker backend + CI Gate; Guard skipped — PR).
+- **Lokal kanıt:** `dotnet test` filtered runs `Skinora.Shared.Tests` Email/Enum **221/221 ✓**, `Skinora.Notifications.Tests` Email/Webhook/Deferred/NotificationDeliveryJob **39/39 ✓**, `Skinora.API.Tests.Integration.ResendWebhookEndpointTests` **9/9 ✓**. Full suite CI üzerinden 10/10.
+- **8/8 kabul kriteri ✓:** IResendEmailClient + Resend channel handler + ResendVerificationEmailSender provider switch; POST /emails Bearer (ResendEmailClient.SendAsync unit-tested); 4-dil .resx + 4 EmailCategory accent/banner/footer; immediate retry [60,300,900]s + 422→PermanentChannelDeliveryException no-throw + 5xx/429/timeout→re-throw; DEFERRED state machine 30dk/1sa/4sa tier 1→2→3→FAILED; 5 event handler + Unknown forward-compat; Svix `whsec_` HMAC + 5dk replay + svix-id idempotency via ProcessedNonces UNIQUE; RESEND_SETUP runbook §2 DKIM×2 + SPF + DMARC + Return-Path + dig CLI.
+- **Mini güvenlik:** Secret sızıntısı yok (sadece test fixture `whsec_dGVzdC1zZWNyZXQt...` placeholder), webhook `AllowAnonymous` + middleware Svix-gated, raw body `EnableBuffering()` ile signature verify + `Position=0` reset, `FixedTimeEquals` constant-time compare, recipient → DB lookup by email (LINQ parameterized — no injection), envelope `[JsonPropertyName]` strict + null-safe; yeni dış dep yok (raw HttpClient + System.Net.Http.Json + BCL HMACSHA256).
+- **Minor advisory (no FAIL):**
+  - **M1 — Verification email .resx-bağımsız:** `ResendVerificationEmailSender.ResolveCopy()` 4-dil subject/body inline switch (en/tr/es/zh) yapıyor — Notifications modülünün `NotificationTemplates.*.resx` zincirine bağlı değil. 4 dil tam destekli, sadece kaynak farklı. Sebep: verification email Users modülünden, Notifications `ResxNotificationTemplateResolver` cross-module taşımak ek refactor. T97 i18n consolidation adayı.
+  - **M2 — `email.failed` alert log-warning kanalında:** `ResendWebhookHandler.HandleFailed()` `LogWarning("Admin attention required.")` ile log yazıyor; `INotificationAdminAlertSink.RaiseDeliveryExhaustedAsync` çağrılmıyor. NotificationDelivery FAILED'a yine immediate/deferred pipeline tarafından çekiliyor (event'in idempotent şekilde aynı işi tekrarlamasının önüne geçilmiş). Production'da Grafana/Loki alert kuralı `Resend webhook (email.failed)` üzerinden tetiklenecek (RESEND_SETUP §6 izleme tablosuyla tutarlı).
+  - **M3 — Webhook endpoint rate-limit yok:** `/api/v1/webhooks/resend` Svix sig + replay + idempotency gateway'iyle korumalı; brute-force imza denemesi 401 spam'i potansiyel. Mevcut `RateLimitMiddleware` policy'leri webhook için tanımlı değil — post-MVP DDoS hardening adayı (M-future). Resend dashboard zaten retry'ı kendi bekçiliyor.
+
+### Doğrulama Kontrol Listesi
+
+- [x] 08 §4.1–§4.3 tüm webhook event'leri ele alınmış mı? — Evet, 5 explicit (bounced/delivery_delayed/complained/failed/suppressed) + Unknown forward-compat.
+- [x] Güvenlik kuralları eksiksiz mi? — Svix sig + 5dk replay + svix-id ProcessedNonces idempotency + 401 specific error codes + constant-time compare + raw body preservation. Yeni dış dep yok.
 
 ## Altyapı Değişiklikleri
 
