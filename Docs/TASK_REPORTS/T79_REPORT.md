@@ -113,9 +113,13 @@
 
 ## Commit & PR
 
-- **Commit:** `d305df8` — `T79: Telegram entegrasyonu (Bot API + spec-gap fix)`
+- **Commits:**
+  - `d305df8` — `T79: Telegram entegrasyonu (Bot API + spec-gap fix)` (yapım)
+  - `d56f6ef` — `T79: rapor + status + memory yansıt`
+  - `2504310` — `T79: fix Notifications.Tests FK violation` (CI fix push, 1× `[ci-failure]` BYPASS_LOG)
 - **PR:** [#120](https://github.com/turkerurganci/Skinora/pull/120) — `task/T79-telegram-bot-integration` → `main`
-- **CI:** ⏳ in_progress (run [26024944336](https://github.com/turkerurganci/Skinora/actions/runs/26024944336))
+- **CI:** ✓ **HEAD `2504310` run [`26025772241`](https://github.com/turkerurganci/Skinora/actions/runs/26025772241) 10/10 SUCCESS** (Detect+Lint+Build+Unit+Integration+Contract+Migration+Docker+CI Gate, Guard skipped); önceki run `d305df8` [`26024944336`](https://github.com/turkerurganci/Skinora/actions/runs/26024944336) cancelled (paralel push tetikledi) + `d56f6ef` [`26025237043`](https://github.com/turkerurganci/Skinora/actions/runs/26025237043) FAIL (Notifications.Tests TelegramNotificationChannelHandler 5 test FK violation — `UserNotificationPreference.UserId` için User satırı seed edilmemişti; lokal'de SQL Server bağlantı problemi nedeniyle test çalışmamış, root cause CI'da görüldü).
+- **CI fix push (`2504310`):** `SeedPreferenceAsync` artık önce User satırını seed eder (random SteamId + PreferredLanguage="en") + SaveChanges, sonra preference o User.Id ile yazılır. Pattern T33 yapım notunda dokümante edilmiş ("AppDbContext.UpdateAuditFields Added state'te CreatedAt'i UtcNow'a çekiyor" — burada problem audit field değil FK, ama seed-then-link pattern aynı).
 - **Branch izolasyon check:** ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T79`.
 
 ## Known Limitations
@@ -145,13 +149,13 @@
 
 ## Validate Bekliyor
 
-Yapım bitti. Validate chat'ine geçilebilir. Bitiş kapısı (8/8):
+Yapım bitti. Validate chat'ine geçilebilir. Bitiş kapısı **(8/8 ✓)**:
 
 - [x] Branch push edildi (`task/T79-telegram-bot-integration`)
 - [x] PR açıldı (#120)
 - [x] PR numarası raporda yazılı
-- [ ] Rapor + status push edildi (yapılıyor)
-- [ ] CI run tamamlandı (in_progress)
-- [ ] CI sonucu `success` (bekleniyor)
+- [x] Rapor + status push edildi (`d56f6ef` + `2504310`)
+- [x] CI run tamamlandı (run `26025772241` concluded)
+- [x] CI sonucu `success` (10/10 ✓)
 - [x] Branch isolation check temiz (`T79` tek başına)
-- [ ] Repo memory'de TXX satırı eklendi/güncellendi (yapılıyor)
+- [x] Repo memory'de T79 satırı eklendi (`.claude/memory/MEMORY.md` T78 sonrasında)
