@@ -9,6 +9,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Telegram;
 using Skinora.Shared.Tests.Integration;
+using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
 
 namespace Skinora.Notifications.Tests.Unit.Channels;
@@ -165,10 +166,24 @@ public class TelegramNotificationChannelHandlerTests : IntegrationTestBase
 
     private async Task SeedPreferenceAsync(string chatId, bool isEnabled)
     {
+        // Seed a User first so the FK on UserNotificationPreference.UserId
+        // resolves — IntegrationTestBase wipes the per-class DB before
+        // each test, so we always start from a clean slate.
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198" + Random.Shared.Next(100_000_000, 999_999_999)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture),
+            SteamDisplayName = "Telegram Test " + chatId,
+            PreferredLanguage = "en",
+        };
+        Context.Set<User>().Add(user);
+        await Context.SaveChangesAsync();
+
         var entity = new UserNotificationPreference
         {
             Id = Guid.NewGuid(),
-            UserId = Guid.NewGuid(),
+            UserId = user.Id,
             Channel = NotificationChannel.TELEGRAM,
             ExternalId = chatId,
             IsEnabled = isEnabled,
