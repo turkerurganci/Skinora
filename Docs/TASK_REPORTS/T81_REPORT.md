@@ -1,6 +1,17 @@
 # T81 — Steam Market fiyat API + on-demand cache + fraud hookpoint
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-05-18
+**Faz:** F4 | **Durum:** ⏳ Yapım bitti — bağımsız doğrulama bekliyor | **Tarih:** 2026-05-18
+
+> **Bitiş Kapısı (task.md §"Bitiş Kapısı") — 8/8 ✓**
+>
+> 1. ✓ Branch push edildi (`task/T81-steam-market-price-api`)
+> 2. ✓ PR açıldı ([PR #123](https://github.com/turkerurganci/Skinora/pull/123))
+> 3. ✓ PR numarası rapora yazıldı (bkz. "Commit & PR")
+> 4. ✓ Rapor + status + memory commit edilip push edildi (`b031aeb`)
+> 5. ✓ CI run tamamlandı (`conclusion=success`)
+> 6. ✓ CI run sonucu **success** — `aa48028` run [`26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) 10/10 + `b031aeb` run [`26054842163`](https://github.com/turkerurganci/Skinora/actions/runs/26054842163) 10/10
+> 7. ✓ Branch izolasyon check temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T81`
+> 8. ✓ Repo memory'de T81 satırı eklendi ([`.claude/memory/MEMORY.md`](../../.claude/memory/MEMORY.md))
 
 ---
 
@@ -135,10 +146,11 @@
 | Unit (Skinora.Shared.Tests/Unit/SteamMarket) | ✓ **42/42 PASS** | `dotnet test --filter ~SteamMarket` (Release, no-build, 77ms). Parser 15 + RateLimiter 9 + Client 13 + 5 ek edge (Empty/Lowest etc.) |
 | Unit (Skinora.Shared.Tests tam suite) | ✓ **370/370 PASS** | `dotnet test Skinora.Shared.Tests --no-build` (Release, 22s). T80 sonrası 328 + T81 yeni 42 |
 | Unit (Skinora.Fraud.Tests non-integration) | ✓ **14/14 PASS** | `dotnet test --filter "FullyQualifiedName!~Integration"` (Release, 190ms) — regresyon yok |
-| Integration (Skinora.Fraud.Tests Integration) | ⏳ CI bekleniyor | Lokal Docker Desktop yok (F4 envelope) → CI Linux runner Testcontainers'da `PriceServiceTests` 10 test PASS bekleniyor |
+| Integration (Skinora.Fraud.Tests Integration) | ✓ CI testcontainer PASS | `PriceServiceTests` 10 test — `4. Integration test` job ✓ (HEAD `aa48028` run [`26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) + HEAD `b031aeb` run [`26054842163`](https://github.com/turkerurganci/Skinora/actions/runs/26054842163)) |
 | Build | ✓ **0W/0E** | `dotnet build Skinora.sln -c Release` (18.76s) |
 | Format | ✓ **Δ=0** | `dotnet format Skinora.sln --verify-no-changes` (0 diff) |
-| CI run | ⏳ İzleniyor | [run `26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) (`gh run watch --exit-status`) |
+| CI run (impl `aa48028`) | ✓ **10/10 SUCCESS** | [run `26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker backend + CI Gate; Guard skipped — PR) |
+| CI run (docs `b031aeb`) | ✓ **10/10 SUCCESS** | [run `26054842163`](https://github.com/turkerurganci/Skinora/actions/runs/26054842163) (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker backend + CI Gate; Guard skipped — PR) |
 
 ## Doğrulama
 
@@ -162,8 +174,9 @@
 - **Branch:** `task/T81-steam-market-price-api`
 - **Commits:**
   - `aa48028` — `T81: Steam Market fiyat API + on-demand cache + fraud price-deviation hookpoint` (24 dosya / +4864 / 0)
+  - `b031aeb` — `T81: rapor + status + memory yansıt` (3 dosya / +203 / -2)
 - **PR:** [#123](https://github.com/turkerurganci/Skinora/pull/123) — `task/T81-steam-market-price-api` → `main`
-- **CI:** ⏳ İzleniyor — run [`26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680)
+- **CI:** ✓ **HEAD `b031aeb` run [`26054842163`](https://github.com/turkerurganci/Skinora/actions/runs/26054842163) 10/10 SUCCESS** (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker backend + CI Gate; Guard skipped — PR). Impl HEAD `aa48028` run [`26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) da 10/10 ✓ — yeni docs commit concurrency cancel etmedi (full job suite docs commit'te de tetiklendi, integration testleri yine PASS).
 - **Branch izolasyon check:** `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T81` (PR #122 zaten main'e merge edilmiş, izolasyon temiz).
 - **Spec drift kapama PR:** [PR #122](https://github.com/turkerurganci/Skinora/pull/122) — `chore/docs-itemprice-cache-spec` → `main`, squash `9dce181`, CI run [`26052987351`](https://github.com/turkerurganci/Skinora/actions/runs/26052987351) ✓ (docs-only — Detect+Lint+CI Gate, build/test jobs skipped).
 
