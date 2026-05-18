@@ -143,9 +143,10 @@
 ## Commit & PR
 
 - **Branch:** `task/T78-resend-email-integration`
-- **Commit:** `347b061` — `T78: Email entegrasyonu (Resend)`
+- **Commit (impl):** `347b061` — `T78: Email entegrasyonu (Resend)`
+- **Commit (HEAD, rapor finalize):** `6132ee6` — `T78: PR #119 ve commit hash raporda`
 - **PR:** [#119](https://github.com/turkerurganci/Skinora/pull/119)
-- **CI:** ⏳ izlemede (push edildi, son CI run sonucu PR/status güncellenirken yansıtılır)
+- **CI:** ✓ Her iki run 10/10 SUCCESS — implementation [`26017277542`](https://github.com/turkerurganci/Skinora/actions/runs/26017277542) (Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate; Guard skipped; sidecar Docker'lar trigger değil — backend-only diff) + doc HEAD [`26019861162`](https://github.com/turkerurganci/Skinora/actions/runs/26019861162) (aynı 10/10 + CI Gate Verify all jobs passed)
 
 ## Known Limitations / Follow-up
 
