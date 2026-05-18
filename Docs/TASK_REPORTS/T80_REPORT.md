@@ -141,11 +141,11 @@
 ## Commit & PR
 
 - **Commits:**
-  - `TBD` — `T80: Discord entegrasyonu (Bot API + OAuth2 + DM channel cache)` (yapım)
-  - `TBD` — `T80: rapor + status + memory yansıt`
-- **PR:** **TBD** — `task/T80-discord-bot-integration` → `main`
-- **CI:** ⏳ push sonrası
-- **Branch izolasyon check:** ✓ temiz — yalnız `T80`
+  - `d00eef2` — `T80: Discord entegrasyonu (Bot API + OAuth2 + DM channel cache)` (yapım, 35 dosya / +3481 / -61)
+  - `e92fb69` — `T80: rapor + status + memory yansıt` (3 dosya / +184 / -2)
+- **PR:** [#121](https://github.com/turkerurganci/Skinora/pull/121) — `task/T80-discord-bot-integration` → `main`
+- **CI:** ⏳ izleniyor (HEAD `e92fb69`)
+- **Branch izolasyon check:** ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T80`
 
 ## Known Limitations
 
