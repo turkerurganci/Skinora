@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Flags;
 using Skinora.Fraud.Application.MultiAccount;
+using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Users.Application.MultiAccount;
 
@@ -31,6 +32,13 @@ public static class FraudModule
         // T56 — multi-account detector. Port lives in Skinora.Users so the
         // wallet update path can call it without referencing Fraud.
         services.AddScoped<IMultiAccountDetector, MultiAccountDetector>();
+
+        // T81 — Steam Market price cache orchestrator (08 §7.3).
+        // PriceService is registered concretely so Hangfire can resolve
+        // the type from a fresh scope when the stale-refresh background
+        // job runs (Enqueue<PriceService>(s => s.RefreshAsync(...))).
+        services.AddScoped<PriceService>();
+        services.AddScoped<IPriceService>(sp => sp.GetRequiredService<PriceService>());
 
         return services;
     }
