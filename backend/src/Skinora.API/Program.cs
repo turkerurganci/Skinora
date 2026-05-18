@@ -29,6 +29,7 @@ using Skinora.Realtime;
 using Skinora.Realtime.Hubs;
 using Skinora.Shared.Email;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Telegram;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Infrastructure.Persistence;
@@ -82,6 +83,30 @@ builder.Services.AddAuthModule(builder.Configuration);
 
 // Steam OpenID authentication services (T29)
 builder.Services.AddSteamAuthenticationModule(builder.Configuration);
+
+// T79 — Telegram bot transport (08 §5.1–§5.5). TelegramSettings drives
+// both the connection service (Skinora.Users → /start deep-link
+// handler) and the notification channel handler
+// (Skinora.Notifications → outbound sendMessage). Registering the
+// options + rate limiter + HttpClient here before the module wiring
+// lets per-module composition pick the right concrete based on the
+// provider flag. The HttpClient is only registered for the telegram
+// provider so a misconfigured stub-mode build cannot accidentally
+// reach the network.
+builder.Services.Configure<TelegramSettings>(
+    builder.Configuration.GetSection(TelegramSettings.SectionName));
+builder.Services.AddSingleton<ITelegramRateLimiter, TelegramRateLimiter>();
+
+var telegramProvider = builder.Configuration[$"{TelegramSettings.SectionName}:{nameof(TelegramSettings.Provider)}"]
+    ?? TelegramSettings.ProviderLogging;
+if (string.Equals(telegramProvider, TelegramSettings.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddHttpClient<ITelegramBotClient, TelegramBotClient>((sp, client) =>
+    {
+        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TelegramSettings>>().Value;
+        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+    });
+}
 
 // User profile + wallet + account settings (T33 / T34 / T35) —
 // /users/me, /users/me/stats, /users/:steamId, /users/me/wallet/*, /users/me/settings/*
@@ -291,6 +316,11 @@ app.UseMiddleware<WebhookSignatureMiddleware>();
 // Path-scoped to /api/v1/webhooks/resend; runs before MVC routing so the
 // controller never sees an unsigned / replayed / duplicate event.
 app.UseMiddleware<ResendWebhookSignatureMiddleware>();
+
+// 5c. Telegram webhook secret-token + update_id idempotency (T79 —
+// 08 §5.2). Path-scoped to /api/v1/webhooks/telegram; the controller
+// runs only after the secret check and dedup gate have passed.
+app.UseMiddleware<TelegramWebhookSignatureMiddleware>();
 
 // 6. CORS
 app.UseCors();

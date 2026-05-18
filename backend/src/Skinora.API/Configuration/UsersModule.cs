@@ -13,6 +13,10 @@ using Skinora.Users.Application.Reputation;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
 using StackExchange.Redis;
+// T79 — TelegramSettings consolidated into Skinora.Shared.Telegram so the
+// settings + bot transport + connection service share a single config
+// source. Bound here as well as in Program.cs so legacy callers see the
+// same instance.
 
 namespace Skinora.API.Configuration;
 
@@ -55,7 +59,8 @@ public static class UsersModule
         // T35 — account settings (07 §5.6–§5.16a). Cross-module glue:
         // INotificationPreferenceStore implementation lives in
         // Skinora.Notifications because that module owns UserNotificationPreference.
-        services.Configure<TelegramSettings>(configuration.GetSection(TelegramSettings.SectionName));
+        // TelegramSettings is bound at the API composition root (Program.cs)
+        // since T79 added the bot-transport consumers in Skinora.Shared.Telegram.
         services.Configure<DiscordSettings>(configuration.GetSection(DiscordSettings.SectionName));
 
         services.AddScoped<INotificationPreferenceStore, NotificationPreferenceStore>();

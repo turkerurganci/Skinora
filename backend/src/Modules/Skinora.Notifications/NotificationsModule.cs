@@ -8,6 +8,7 @@ using Skinora.Notifications.Application.Webhooks;
 using Skinora.Notifications.Infrastructure.Channels;
 using Skinora.Notifications.Infrastructure.DeliveryJobs;
 using Skinora.Shared.Email;
+using Skinora.Shared.Telegram;
 
 namespace Skinora.Notifications;
 
@@ -73,7 +74,22 @@ public static class NotificationsModule
             services.AddScoped<INotificationChannelHandler, EmailNotificationChannelHandler>();
         }
 
-        services.AddScoped<INotificationChannelHandler, TelegramNotificationChannelHandler>();
+        // T79 — Telegram channel handler swap. Mirrors the T78 email
+        // provider switch: <c>telegram</c> wires the real Bot API
+        // handler, anything else (default <c>logging</c>) keeps the
+        // T37 stub so CI never reaches the network.
+        var telegramProvider = configuration[$"{TelegramSettings.SectionName}:{nameof(TelegramSettings.Provider)}"]
+            ?? TelegramSettings.ProviderLogging;
+
+        if (string.Equals(telegramProvider, TelegramSettings.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddScoped<INotificationChannelHandler, TelegramNotificationChannelHandler>();
+        }
+        else
+        {
+            services.AddScoped<INotificationChannelHandler, LoggingTelegramNotificationChannelHandler>();
+        }
+
         services.AddScoped<INotificationChannelHandler, DiscordNotificationChannelHandler>();
 
         services.AddScoped<INotificationAdminAlertSink, LoggingNotificationAdminAlertSink>();
