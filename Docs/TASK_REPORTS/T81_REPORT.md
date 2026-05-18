@@ -156,9 +156,13 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (validator ayrı chat'te başlatılacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS bağımsız validator (2026-05-18)** |
+| Bulgu sayısı | 0 S-bulgu, 3 minor advisory (A1 IMarketPriceProvider köprüsü T-future K1 ile aynı / A2 singleton limiter local state K2 / A3 Provider=logging default K4) |
+| Düzeltme gerekli mi | Hayır |
+| Validator CI kanıtı | HEAD `8713fba` run [`26055607338`](https://github.com/turkerurganci/Skinora/actions/runs/26055607338) **10/10 SUCCESS** (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate); önceki commit `b031aeb` run [`26054842163`](https://github.com/turkerurganci/Skinora/actions/runs/26054842163) 10/10 ✓; impl `aa48028` run [`26054430680`](https://github.com/turkerurganci/Skinora/actions/runs/26054430680) 10/10 ✓ |
+| Validator lokal re-run | Shared.Tests SteamMarket filter **42/42 PASS** (191 ms) + Fraud.Tests non-int **14/14 PASS** (42 ms) + Release build **0W/0E** (57.67 s) + `dotnet format` **Δ=0** |
+| Main CI startup (Adım 0) | ✓ 3/3 success ([`26053127683`](https://github.com/turkerurganci/Skinora/actions/runs/26053127683) + [`26053123083`](https://github.com/turkerurganci/Skinora/actions/runs/26053123083) + [`26037146810`](https://github.com/turkerurganci/Skinora/actions/runs/26037146810)) |
+| Rapor uyumu | Tam — 8 kabul + 1 doğrulama listesi + 8 K1–K8 rapor ile bağımsız değerlendirme arasında sapma yok |
 
 ## Altyapı Değişiklikleri
 
