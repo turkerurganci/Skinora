@@ -144,7 +144,7 @@
   - `d00eef2` — `T80: Discord entegrasyonu (Bot API + OAuth2 + DM channel cache)` (yapım, 35 dosya / +3481 / -61)
   - `e92fb69` — `T80: rapor + status + memory yansıt` (3 dosya / +184 / -2)
 - **PR:** [#121](https://github.com/turkerurganci/Skinora/pull/121) — `task/T80-discord-bot-integration` → `main`
-- **CI:** ⏳ izleniyor (HEAD `e92fb69`)
+- **CI:** ✓ **HEAD `0f3453b` run [`26033729167`](https://github.com/turkerurganci/Skinora/actions/runs/26033729167) 10/10 SUCCESS** (Detect + Lint + Build + Unit + Integration + Contract + Migration + Docker backend + CI Gate, Guard skipped — PR). Önceki run `26033518126` (HEAD `e92fb69`) yeni push concurrency ile cancel oldu — task.md "son tamamlanmış run" kuralı geçerli.
 - **Branch izolasyon check:** ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T80`
 
 ## Known Limitations
