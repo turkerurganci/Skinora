@@ -143,9 +143,9 @@
 ## Commit & PR
 
 - **Branch:** `task/T78-resend-email-integration`
-- **Commit:** sıraya alınıyor (sonraki adımda)
-- **PR:** sıraya alınıyor (sonraki adımda)
-- **CI:** sıraya alınıyor (PR sonrası watch)
+- **Commit:** `347b061` — `T78: Email entegrasyonu (Resend)`
+- **PR:** [#119](https://github.com/turkerurganci/Skinora/pull/119)
+- **CI:** ⏳ izlemede (push edildi, son CI run sonucu PR/status güncellenirken yansıtılır)
 
 ## Known Limitations / Follow-up
 
