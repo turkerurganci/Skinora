@@ -1029,7 +1029,7 @@ GET https://steamcommunity.com/market/priceoverview/?appid=730&currency=1&market
 | Konu | Karar |
 |------|-------|
 | Yaklaşım | **On-demand + cache** — işlem oluşturulduğunda ilgili item'ın fiyatı sorgulanır ve cache'lenir |
-| Cache yeri | SQL Server (ItemPriceCache tablosu) |
+| Cache yeri | SQL Server — `ItemPriceCache` tablosu (06 §3.24) |
 | Cache süresi | 24 saat (normal), 48 saat (stale ama kullanılabilir), 48+ saat (expired) |
 | Batch fetch | MVP'de yok — on-demand yeterli. Büyüme aşamasında batch job eklenebilir |
 

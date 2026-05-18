@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v5.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-04-23 (T34 — User'a `PayoutAddressChangedAt` + `RefundAddressChangedAt`, SystemSetting'e iki yeni wallet cooldown parametresi eklendi)
+**Versiyon: v5.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-05-18 (T81 ön-çalışması — `ItemPriceCache` §3.24 olarak envantere ve indeks tablolarına eklendi. Plan 11 §F4/T81 ve 08 §7.3 zaten "SQL Server ItemPriceCache tablosu" referansı veriyordu; data model spec drift'i bu PR ile kapatıldı.)
 
 ---
 
@@ -37,6 +37,7 @@ Bu doküman, Skinora platformundaki tüm veri yapılarını tanımlar. Entity'le
 | 23 | Audit | **AuditLog** | Fon hareketleri, admin aksiyonları, güvenlik olayları — kalıcı audit trail |
 | 24 | Ödeme & Blockchain | **SellerPayoutIssue** | Satıcı payout sorun bildirimi ve çözüm takibi (02 §10.3) |
 | 25 | Bildirim | **NotificationDelivery** | Dış kanal bildirim teslimat kaydı (email, Telegram, Discord) |
+| 26 | Fraud | **ItemPriceCache** | Steam Market `priceoverview` fiyat sonuçlarının on-demand cache'i — fraud fiyat sapma kontrolü için (08 §7.3) |
 
 ### 1.2 İlişki Diyagramı
 
@@ -1164,6 +1165,42 @@ Platform uptime takibi. Beklenmedik kesinti sonrası outage window hesaplaması 
 >
 > **Silme politikası:** Güncellenir, silinmez — tek satırlık sistem tablosu.
 
+### 3.24 ItemPriceCache
+
+Steam Market `priceoverview` API çağrılarının on-demand cache'i (08 §7.3). Fraud modülünün fiyat sapma (`PRICE_DEVIATION`) kontrolü için kullanılır. Kullanıcıya fiyat **gösterilmez** — yalnızca arka uç fraud kontrolünde değerlendirilir (08 §7.1, 02 §14.1).
+
+| Field | Tip | Kısıt | Açıklama |
+|-------|-----|-------|----------|
+| `Id` | uniqueidentifier | PK | Guid |
+| `MarketHashName` | nvarchar(450) | NOT NULL, UQ | Steam Market kanonik item adı (URL-encoded olmadan ham hali — örn. `AK-47 \| Redline (Field-Tested)`) |
+| `MedianPrice` | decimal(18,6) | NULL | `median_price` parse sonucu (08 §7.2 öncelik 1) — currency sembolü strip, binlik ayracı kaldır, nokta ondalık |
+| `LowestPrice` | decimal(18,6) | NULL | `lowest_price` parse sonucu (08 §7.2 öncelik 2 — `median_price` yoksa fallback) |
+| `FetchedAt` | datetime2 | NOT NULL | Son başarılı Steam Market API çağrısının zamanı — TTL hesabı bu alana göre yapılır |
+| `Source` | nvarchar(20) | NOT NULL, CHECK | Veri kaynağı: `'STEAM_MARKET'` (MVP tek kaynak). Büyüme aşamasında alternatif agregator için (08 §7.5) |
+| `CreatedAt` | datetime2 | NOT NULL | Audit |
+| `UpdatedAt` | datetime2 | NOT NULL | Audit (upsert ile güncellenir) |
+
+**Sabitler (kolon değil):**
+
+| Konu | Değer | Gerekçe |
+|------|-------|---------|
+| App ID | `730` (CS2) | 08 §7.2 sabit endpoint parametresi — kolon olarak modellenmedi; MVP tek oyun |
+| Currency | `USD` (`currency=1`) | 08 §7.2 sabit endpoint parametresi — kolon olarak modellenmedi; MVP tek para birimi |
+
+**TTL semantiği (08 §7.3, §7.4):**
+
+| Yaş | Durum | Aksiyon |
+|-----|-------|---------|
+| `≤ 24 saat` | Fresh | Cache değeri kullanılır |
+| `24–48 saat` | Stale | Cache değeri kullanılır + arka planda yenileme tetiklenir |
+| `> 48 saat` | Expired | Cache değeri kullanılmaz, API çağrısı zorunlu — başarısızsa fiyat kontrolü atlanır |
+
+> **Negative caching:** API `success: true` ama `median_price`/`lowest_price` boş döndüğünde (no-price item) cache satırı **MedianPrice/LowestPrice = NULL** ile yazılır; `FetchedAt` yine güncellenir. Böylece $1800+ item'lar veya nadir item'lar için her sorguda Steam Market'a gidilmez (08 §7.1 bilinen kısıtlama — rate limit israfı önleme).
+>
+> **Silme politikası:** Update edilir (upsert), silinmez. Saklama politikası için bkz. §6.1.
+>
+> **Kaynak:** 08 §7.3 cache stratejisi (SQL Server, 24/48/48+ TTL) + 02 §14.1 fraud fiyat kontrolü.
+
 ---
 
 ## 4. İlişkiler
@@ -1256,6 +1293,7 @@ Platform uptime takibi. Beklenmedik kesinti sonrası outage window hesaplaması 
 | ExternalIdempotencyRecord | ServiceName + IdempotencyKey | Servis bazlı idempotency — aynı key farklı servisler için bağımsız |
 | SellerPayoutIssue | TransactionId (WHERE VerificationStatus != RESOLVED) | Bir transaction için aynı anda en fazla bir aktif payout issue |
 | NotificationDelivery | NotificationId + Channel | Bir bildirim için kanal başına tek delivery kaydı — tek satır workflow modeli (§3.13a) |
+| ItemPriceCache | MarketHashName | Steam Market item başına tek cache satırı — upsert garantisi (§3.24, 08 §7.3) |
 
 ### 5.2 Performans İndeksleri
 
@@ -1296,6 +1334,7 @@ Platform uptime takibi. Beklenmedik kesinti sonrası outage window hesaplaması 
 | SellerPayoutIssue | SellerId | Standard | Satıcının payout sorunları |
 | SellerPayoutIssue | VerificationStatus | Filtered (aktif durumlar) | Çözülmemiş payout sorunları — `WHERE VerificationStatus NOT IN (RESOLVED)` |
 | AuditLog | CreatedAt | Standard | Tarih bazlı sorgular, kronolojik listeleme |
+| ItemPriceCache | FetchedAt | Standard | Stale cache satırlarını tarama — arka plan yenileme job'ı için (§3.24, 08 §7.3) |
 
 > **Not:** Filtered index'ler SQL Server'a özgüdür. EF Core migration'larında `HasFilter()` ile tanımlanır.
 >
