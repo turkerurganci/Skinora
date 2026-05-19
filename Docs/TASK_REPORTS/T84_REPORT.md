@@ -1,6 +1,6 @@
 # T84 — Ortak UI Bileşenleri (C01–C17)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-05-19
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-19
 
 ---
 
@@ -104,9 +104,11 @@ Plan: **Yok** (görsel bileşenler — E2E'de test edilecek).
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı validate chat'i) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat'i, 2026-05-19) |
+| Bulgu sayısı | 0 S-bulgu, 0 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator notu (2026-05-19, bağımsız chat):** Hard-stop kapıları geçildi — working tree clean, main CI son 3 run hepsi `success` (`26106824890` + `26106824879` Docker rerun + `26106252282`), MEMORY.md T84 satırları mevcut. 17/17 kabul kriteri kanıtla doğrulandı (her bileşen dosyası okundu, spec 04 §5 ile 1:1 karşılaştırıldı, showcase route 17 bileşeni de exhibit ediyor). 1/1 doğrulama listesi (04 §5 tüm bileşenler+varyantlar) ✓. Task branch CI HEAD `b148976` run [`26110668740`](https://github.com/turkerurganci/Skinora/actions/runs/26110668740) **10/10 SUCCESS** (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker frontend+CI Gate). i18n 4 dilde 13 namespace tutarlı eklendi (en/tr/zh/es). Mini güvenlik temiz (secret/inj kalıbı yok, yeni dış dep yok, package.json/lock değişmedi). Yapım raporu öz-değerlendirmesi (17/17 + K1-K9 forward-devirleri) bağımsız değerlendirmeyle birebir; rapor + status tablosu finalize edildi.
 
 ## Altyapı Değişiklikleri
 
@@ -118,9 +120,9 @@ Plan: **Yok** (görsel bileşenler — E2E'de test edilecek).
 ## Commit & PR
 
 - Branch: `task/T84-common-ui-components`
-- Commits: `0f36d01` (T84: Ortak UI bileşenleri) + `f733452` (T84: report PR# back-fill)
+- Commits: `0f36d01` (T84: Ortak UI bileşenleri) + `f733452` (T84: report PR# back-fill) + `b148976` (T84: CI ✓ back-fill report)
 - PR: [#129](https://github.com/turkerurganci/Skinora/pull/129)
-- CI: ✓ PASS — run [`26110153569`](https://github.com/turkerurganci/Skinora/actions/runs/26110153569) 9/9 job success + 1 skipped (guard direct-push, beklenen)
+- CI: ✓ PASS — task branch HEAD `b148976` run [`26110668740`](https://github.com/turkerurganci/Skinora/actions/runs/26110668740) 9/9 job success + 1 skipped (guard direct-push, beklenen)
 
 ## Known Limitations / Follow-up
 
