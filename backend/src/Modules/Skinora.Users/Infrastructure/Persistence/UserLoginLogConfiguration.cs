@@ -31,6 +31,11 @@ public class UserLoginLogConfiguration : IEntityTypeConfiguration<UserLoginLog>
         builder.Property(l => l.UserAgent)
             .HasMaxLength(500);
 
+        // --- T83 supportive signal (02 §21.1) ---
+        builder.Property(l => l.HasVpnSignal)
+            .IsRequired()
+            .HasDefaultValue(false);
+
         // --- Soft delete ---
         builder.Property(l => l.IsDeleted)
             .IsRequired()

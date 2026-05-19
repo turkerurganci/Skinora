@@ -29,4 +29,10 @@
     <ProjectReference Include="..\Skinora.Shared.Tests\Skinora.Shared.Tests.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="TestData\GeoIP2-Country-Test.mmdb">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

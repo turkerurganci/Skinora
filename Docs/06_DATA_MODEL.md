@@ -464,6 +464,7 @@ IP ve cihaz parmak izi kaydı — çoklu hesap tespiti ve güvenlik audit'i içi
 | `IpAddress` | string(45) | NOT NULL | IPv4 veya IPv6 |
 | `DeviceFingerprint` | string(256) | NULL | Cihaz parmak izi hash'i |
 | `UserAgent` | string(500) | NULL | Browser user agent |
+| `HasVpnSignal` | bool | NOT NULL, DEFAULT 0 | T83 destekleyici sinyal — login anında IP adresi Tor exit node listesindeyse `true`. Tek başına engelleme sebebi değildir; gelecekteki fraud kuralları bu alanı tüketir (02 §21.1) |
 | `IsDeleted` | bool | NOT NULL, DEFAULT 0 | Soft delete flag |
 | `DeletedAt` | datetime | NULL | Silinme zamanı |
 | `CreatedAt` | datetime | NOT NULL | Login zamanı |

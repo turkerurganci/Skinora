@@ -15,6 +15,7 @@
 7. [Piyasa Fiyat Verisi](#7-piyasa-fiyat-verisi)
 8. [Bağımlılık Risk Matrisi](#8-bağımlılık-risk-matrisi)
 9. [Ortam Konfigürasyonu](#9-ortam-konfigürasyonu)
+10. [Geolocation ve VPN Sinyali (Geo-block)](#10-geolocation-ve-vpn-sinyali-geo-block--02-211-03-11a1)
 
 ---
 
@@ -1176,4 +1177,92 @@ Her ortam için gerekli credential'lar ve saklama yeri:
 
 ---
 
-*Skinora — Integration Specifications v2.5*
+## 10. Geolocation ve VPN Sinyali (Geo-block — 02 §21.1, 03 §11a.1)
+
+### 10.1 Provider Seçimi (T83)
+
+| Karar | Detay |
+|---|---|
+| IP → Ülke | MaxMind GeoLite2-Country MMDB (embedded reader). `MaxMind.GeoIP2` 5.4.x (Apache 2.0). Periyodik güncelleme: ops MMDB dosyasını MaxMind'tan indirir, mount eder. Repo'ya commit edilmez (license terms). |
+| Edge fallback | `X-Country-Code` header (Cloudflare `CF-IPCountry`, AWS CloudFront viewer country, nginx GeoIP modülü). MMDB yoklukta veya edge tarafından set edilmişse öncelikli. |
+| Resolver zinciri | `ChainedCountryResolver`: header → MaxMind → null. Header en güvenilir (edge zaten kullanıcıya en yakın); MMDB self-hosted/testcontainers fallback. Her iki katman da `null` döndüğünde geo-block **fail-open** olur (`SettingsBasedGeoBlockCheck` semantiği — misconfiguration kullanıcıyı kilitlemez). |
+| Yasaklı liste | `auth.banned_countries` SystemSetting (T26 seed, default `NONE`). ISO-3166-1 alpha-2 CSV. Admin AdminSettings endpoint (07 §9.16) üzerinden yönetir. |
+| VPN/proxy sinyali | Tor exit node listesi (`check.torproject.org/torbulkexitlist`). 1 saat in-memory cache, ETag/Last-Modified destekli. **02 §21.1 — destekleyici sinyal**: tek başına engelleme sebebi değildir; `UserLoginLog.HasVpnSignal` kolonuna yazılır (06 §3.2), gelecek fraud kuralları tüketir. |
+
+### 10.2 MaxMind GeoLite2-Country MMDB
+
+**Lisans:** MaxMind GeoLite2 — ücretsiz, kullanıcı sözleşmesi MaxMind hesap kaydı sonrası onaylanır. Dosya redistribution kısıtlı → repo'ya commit edilmez; ops indirir + mount eder. Detay: `Docs/INTEGRATION_RUNBOOKS/GEOIP_SETUP.md`.
+
+**Konfigürasyon:**
+
+```jsonc
+"Geolocation": {
+  "DatabasePath": ""   // Boş veya dosya yoksa header-only fallback
+}
+```
+
+**Runtime davranışı:**
+
+| Durum | Sonuç |
+|---|---|
+| `DatabasePath` boş veya dosya yok | MaxMind katmanı registrasyona girmez, info-level log "header-only resolution" |
+| MMDB yüklenir | Info-level log "MaxMind GeoLite2 resolver enabled" |
+| MMDB yüklenirken hata | Warn-level log + fail-open header-only (DI'ya eklenmez) |
+| Lookup miss (private IP, malformed) | `null` döner, sonraki katmana düşer veya geo-block fail-open |
+| Lookup exception | Warn-level log + `null` döner — login bloke olmaz |
+
+### 10.3 VPN/Proxy Destekleyici Sinyal
+
+**Tor exit node listesi:**
+
+- Kaynak: `https://check.torproject.org/torbulkexitlist`
+- Format: satır başına bir IPv4/IPv6
+- Cache: 1 saat (torproject hourly publish)
+- Refresh: lazy on first request, 24 saatte yenilenir veya cache miss
+- Timeout: 10 saniye
+- Soft failure: tüm hata yolları `false` döner (network outage login'i kilitlemez)
+- Cache eski snapshot korunur ve refresh fail olsa bile sunulur (stale-better-than-locked-out)
+
+**Konfigürasyon:**
+
+```jsonc
+"VpnDetection": {
+  "Enabled": false,                                         // Default kapalı (Provider=logging pattern)
+  "TorExitListUrl": "https://check.torproject.org/torbulkexitlist",
+  "CacheDurationMinutes": 60,
+  "RefreshTimeoutSeconds": 10
+}
+```
+
+**Davranış:**
+
+| Durum | Sonuç |
+|---|---|
+| `Enabled=false` (default) | `NoOpVpnProxyDetector` — her zaman `false` döner |
+| `Enabled=true` + IP listede | `HasVpnSignal=true` → `UserLoginLog` |
+| `Enabled=true` + IP listede değil | `HasVpnSignal=false` |
+| Network/parse hata | `false` döner, login bloke olmaz |
+
+**Tüketici:** Fraud module (T54+) `UserLoginLog.HasVpnSignal` kolonunu okur. MVP'de doğrudan flag tetikleyicisi değil — risk skorlamasında supportive feature olarak kullanılır.
+
+### 10.4 Hata Senaryoları
+
+| Senaryo | Davranış |
+|---|---|
+| MMDB dosyası bozuk | Module DI'a eklenmez (warn log), header-only çalışır |
+| Tor exit list 5xx | Detector eski cache'i sunmaya devam eder; cache yoksa `false` |
+| Tor exit list timeout | Aynı — soft fail |
+| `auth.banned_countries` malformed | `SettingsBasedGeoBlockCheck` fail-open (T30 semantiği) |
+| Header ve MMDB ikisi de null | Geo-block "country could not be resolved" log + login devam |
+
+### 10.5 Bağımlılık Riski
+
+| Senaryo | Etki | Fallback |
+|---|---|---|
+| MaxMind MMDB downstream taze değil | Yeni ülke kodları eksik → eski liste kullanılır | Aylık MMDB güncellemesi ops cron'unda |
+| torproject.org outage | VPN sinyali stale veya `false` | Soft fail — login bloke olmaz, supportive nature |
+| Cloudflare CF-IPCountry header gelmemesi | MaxMind katmanına düşer veya `null` → fail-open | Operasyonel: edge config check |
+
+---
+
+*Skinora — Integration Specifications v2.6*
