@@ -57,3 +57,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-05-17 16:56 UTC | Türker urgancı | task/T76-blockchain-reconciliation-job | `7490743` | [ci-failure] T76 NONE-sentinel fix — CI integration test seed count drift'i için fix push |
 | 2026-05-18 09:42 UTC | Türker urgancı | task/T79-telegram-bot-integration | `2504310` | [ci-failure] [ci-failure] T79 FK fix push — prior run 26025237043 failed (UserNotificationPreference seed FK violation, lokal SQLite-bypass test çalışmamış); commit 2504310 IS the fix (SeedPreferenceAsync artık User satırını önce seed eder) |
 | 2026-05-19 09:00 UTC | Türker urgancı | task/T82-sanctions-screening | `1b027ae` | [ci-failure] T82 Auth.Tests ctor fix — CI failure remediation push (Layer 2 bypass) |
+| 2026-05-19 09:12 UTC | Türker urgancı | task/T82-sanctions-screening | `ded3a96` | [ci-failure] T82 Platform.Tests ordering fix — CI failure remediation push (Layer 2 bypass) |
