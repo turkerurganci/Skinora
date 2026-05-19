@@ -177,7 +177,7 @@
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T84 | Ortak UI bileşenleri (C01–C17) | ✓ Tamamlandı | ✓ PASS | b148976 |
-| T85 | Global layout (header, navigation, footer) | ⬚ Bekliyor | — | — |
+| T85 | Global layout (header, navigation, footer) | ⏳ Devam ediyor | — | — |
 | T86 | Landing page (S01) | ⬚ Bekliyor | — | — |
 | T87 | Auth akışı ekranları | ⬚ Bekliyor | — | — |
 | T88 | Dashboard (S05) | ⬚ Bekliyor | — | — |

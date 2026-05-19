@@ -20,11 +20,33 @@
     "authenticating": "Autenticando..."
   },
   "nav": {
+    "primary": "Menú principal",
+    "suspendedNav": "Menú restringido",
     "dashboard": "Panel",
     "transactions": "Transacciones",
     "profile": "Perfil",
     "notifications": "Notificaciones",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "support": "Soporte",
+    "signOut": "Cerrar sesión",
+    "unread": "no leídas",
+    "adminFallback": "Administrador"
+  },
+  "adminNav": {
+    "ariaLabel": "Menú de administración",
+    "dashboard": "Panel",
+    "flags": "Marcadas",
+    "transactions": "Transacciones",
+    "settings": "Configuración",
+    "steamAccounts": "Cuentas de Steam",
+    "roles": "Roles",
+    "users": "Usuarios",
+    "auditLog": "Registro de auditoría"
+  },
+  "footer": {
+    "tos": "Términos de servicio",
+    "privacy": "Política de privacidad",
+    "privacyComingSoon": "Próximamente"
   },
   "status": {
     "CREATED": "Creado",
