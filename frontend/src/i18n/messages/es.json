@@ -11,7 +11,9 @@
     "confirm": "Confirmar",
     "save": "Guardar",
     "back": "Volver",
-    "next": "Siguiente"
+    "next": "Siguiente",
+    "copy": "Copiar",
+    "copied": "Copiado"
   },
   "auth": {
     "loginWithSteam": "Iniciar sesión con Steam",
@@ -23,5 +25,148 @@
     "profile": "Perfil",
     "notifications": "Notificaciones",
     "settings": "Configuración"
+  },
+  "status": {
+    "CREATED": "Creado",
+    "ACCEPTED": "Aceptado",
+    "TRADE_OFFER_SENT_TO_SELLER": "Esperando ítem",
+    "ITEM_ESCROWED": "Esperando pago",
+    "PAYMENT_RECEIVED": "Pago recibido",
+    "TRADE_OFFER_SENT_TO_BUYER": "Esperando entrega",
+    "ITEM_DELIVERED": "Ítem entregado",
+    "COMPLETED": "Completado",
+    "CANCELLED_TIMEOUT": "Tiempo agotado",
+    "CANCELLED_SELLER": "Cancelado por vendedor",
+    "CANCELLED_BUYER": "Cancelado por comprador",
+    "CANCELLED_ADMIN": "Cancelado por admin",
+    "FLAGGED": "En revisión",
+    "EMERGENCY_HOLD": "Congelado"
+  },
+  "countdown": {
+    "frozen": "Congelado",
+    "expired": "Expirado",
+    "warning": "Tu tiempo se está agotando",
+    "verboseDays": "{days}d {hours}h",
+    "verboseHours": "{hours}h {minutes}m",
+    "verboseMinutes": "{minutes}m {seconds}s",
+    "freezeReason": {
+      "MAINTENANCE": "Mantenimiento",
+      "STEAM_OUTAGE": "Caída de Steam",
+      "BLOCKCHAIN_DEGRADATION": "Pago lento",
+      "EMERGENCY_HOLD": "Retención de emergencia"
+    }
+  },
+  "itemCard": {
+    "tradeable": "Intercambiable",
+    "nonTradeable": "No intercambiable",
+    "type": "Tipo",
+    "wear": "Desgaste"
+  },
+  "userCard": {
+    "completedTransactions": "{count} transacciones completadas",
+    "accountAge": "Antigüedad de la cuenta: {age}"
+  },
+  "timeline": {
+    "ariaLabel": "Flujo de transacción",
+    "step": {
+      "CREATED": "Creado",
+      "ACCEPTED": "Aceptado",
+      "ITEM_ESCROWED": "Ítem en custodia",
+      "PAYMENT_RECEIVED": "Pago",
+      "PAYMENT_VERIFIED": "Pago verificado",
+      "ITEM_DELIVERED": "Entrega",
+      "DELIVERY_VERIFIED": "Entrega verificada",
+      "COMPLETED": "Completado"
+    }
+  },
+  "cancelModal": {
+    "title": "¿Seguro que quieres cancelar esta transacción?",
+    "reasonLabel": "Motivo de cancelación",
+    "minChars": "mínimo {count} caracteres",
+    "tooShort": "El motivo es demasiado corto",
+    "dismiss": "Mantener",
+    "confirm": "Cancelar"
+  },
+  "disputeForm": {
+    "title": "Abrir disputa",
+    "stepLabel": {
+      "type": "1/3 — Selección de tipo",
+      "checking": "2/3 — Comprobación",
+      "result": "2/3 — Resultado",
+      "escalation": "3/3 — Escalado",
+      "done": "Hecho"
+    },
+    "typeLegend": "¿Sobre qué es tu disputa?",
+    "type": {
+      "PAYMENT": {
+        "title": "Disputa de pago",
+        "description": "Se envió el pago pero no se verificó"
+      },
+      "DELIVERY": {
+        "title": "Disputa de entrega",
+        "description": "El ítem no fue entregado"
+      },
+      "WRONG_ITEM": {
+        "title": "Ítem incorrecto",
+        "description": "Se entregó un ítem incorrecto"
+      }
+    },
+    "cancel": "Cancelar",
+    "continue": "Continuar",
+    "checking": "El sistema está comprobando...",
+    "result": {
+      "resolved": {
+        "title": "Resolución automática",
+        "description": "El sistema resolvió el problema automáticamente. Los detalles fueron registrados."
+      },
+      "unresolved": {
+        "title": "Sin resolución automática",
+        "description": "Listo para escalar a revisión administrativa."
+      }
+    },
+    "escalate": "Escalar a admin",
+    "close": "Cerrar",
+    "detailLabel": "Detalle de la disputa",
+    "back": "Volver",
+    "submit": "Enviar",
+    "submittedTitle": "Disputa recibida",
+    "submittedDescription": "Un administrador la revisará en breve."
+  },
+  "maintenanceBanner": {
+    "plannedMaintenance": "Mantenimiento programado. Los temporizadores activos se congelarán.",
+    "plannedMaintenanceWithSchedule": "Mantenimiento: {scheduledAt}. Los temporizadores se congelarán.",
+    "activeMaintenance": "La plataforma está en mantenimiento. Los temporizadores están congelados.",
+    "activeMaintenanceWithSchedule": "En mantenimiento ({scheduledAt}). Los temporizadores están congelados.",
+    "steamOutage": "Servicios de Steam no disponibles. Los temporizadores están congelados.",
+    "steamOutageWithSchedule": "Caída de Steam ({scheduledAt}). Los temporizadores están congelados.",
+    "blockchainDegradation": "Verificación de pago lenta. Los temporizadores del paso de pago están congelados.",
+    "blockchainDegradationWithSchedule": "Pago lento ({scheduledAt}). Los temporizadores están congelados.",
+    "dismiss": "Cerrar"
+  },
+  "languageSelector": {
+    "ariaLabel": "Seleccionar idioma"
+  },
+  "walletAddress": {
+    "label": "Dirección de billetera TRC-20",
+    "hint": "Debe comenzar con T, 34 caracteres",
+    "invalidFormat": "Dirección TRC-20 inválida",
+    "sanctioned": "Esta dirección está en una lista de sanciones. Por favor, usa otra.",
+    "validationError": "Ocurrió un error durante la validación",
+    "edit": "Editar",
+    "confirm": "Confirmar",
+    "validating": "Validando",
+    "continue": "Continuar",
+    "confirmTitle": "¿Es correcta esta dirección?"
+  },
+  "pagination": {
+    "ariaLabel": "Paginación",
+    "previous": "Anterior",
+    "next": "Siguiente"
+  },
+  "filterBar": {
+    "any": "Cualquiera",
+    "apply": "Aplicar",
+    "clear": "Limpiar",
+    "removeFilter": "Eliminar filtro de {label}"
   }
 }

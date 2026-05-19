@@ -11,7 +11,9 @@
     "confirm": "Confirm",
     "save": "Save",
     "back": "Back",
-    "next": "Next"
+    "next": "Next",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "auth": {
     "loginWithSteam": "Login with Steam",
@@ -23,5 +25,148 @@
     "profile": "Profile",
     "notifications": "Notifications",
     "settings": "Settings"
+  },
+  "status": {
+    "CREATED": "Created",
+    "ACCEPTED": "Accepted",
+    "TRADE_OFFER_SENT_TO_SELLER": "Awaiting Item",
+    "ITEM_ESCROWED": "Awaiting Payment",
+    "PAYMENT_RECEIVED": "Payment Received",
+    "TRADE_OFFER_SENT_TO_BUYER": "Awaiting Delivery",
+    "ITEM_DELIVERED": "Item Delivered",
+    "COMPLETED": "Completed",
+    "CANCELLED_TIMEOUT": "Timed Out",
+    "CANCELLED_SELLER": "Seller Cancelled",
+    "CANCELLED_BUYER": "Buyer Cancelled",
+    "CANCELLED_ADMIN": "Admin Cancelled",
+    "FLAGGED": "Under Review",
+    "EMERGENCY_HOLD": "On Hold"
+  },
+  "countdown": {
+    "frozen": "Frozen",
+    "expired": "Expired",
+    "warning": "Your time is running out",
+    "verboseDays": "{days}d {hours}h",
+    "verboseHours": "{hours}h {minutes}m",
+    "verboseMinutes": "{minutes}m {seconds}s",
+    "freezeReason": {
+      "MAINTENANCE": "Maintenance",
+      "STEAM_OUTAGE": "Steam outage",
+      "BLOCKCHAIN_DEGRADATION": "Payment slowdown",
+      "EMERGENCY_HOLD": "Emergency hold"
+    }
+  },
+  "itemCard": {
+    "tradeable": "Tradeable",
+    "nonTradeable": "Non-tradeable",
+    "type": "Type",
+    "wear": "Wear"
+  },
+  "userCard": {
+    "completedTransactions": "{count} completed transactions",
+    "accountAge": "Account age: {age}"
+  },
+  "timeline": {
+    "ariaLabel": "Transaction flow",
+    "step": {
+      "CREATED": "Created",
+      "ACCEPTED": "Accepted",
+      "ITEM_ESCROWED": "Item Escrowed",
+      "PAYMENT_RECEIVED": "Payment",
+      "PAYMENT_VERIFIED": "Payment Verified",
+      "ITEM_DELIVERED": "Delivery",
+      "DELIVERY_VERIFIED": "Delivery Verified",
+      "COMPLETED": "Completed"
+    }
+  },
+  "cancelModal": {
+    "title": "Are you sure you want to cancel this transaction?",
+    "reasonLabel": "Cancellation reason",
+    "minChars": "minimum {count} characters",
+    "tooShort": "Reason is too short",
+    "dismiss": "Keep",
+    "confirm": "Cancel"
+  },
+  "disputeForm": {
+    "title": "File a Dispute",
+    "stepLabel": {
+      "type": "1/3 — Type selection",
+      "checking": "2/3 — Auto-check",
+      "result": "2/3 — Result",
+      "escalation": "3/3 — Escalation",
+      "done": "Done"
+    },
+    "typeLegend": "What is your dispute about?",
+    "type": {
+      "PAYMENT": {
+        "title": "Payment dispute",
+        "description": "Payment was sent but not verified"
+      },
+      "DELIVERY": {
+        "title": "Delivery dispute",
+        "description": "Item was not delivered"
+      },
+      "WRONG_ITEM": {
+        "title": "Wrong item",
+        "description": "Wrong item was delivered"
+      }
+    },
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "checking": "System is checking...",
+    "result": {
+      "resolved": {
+        "title": "Auto-resolution applied",
+        "description": "The system resolved the issue automatically. Details have been recorded."
+      },
+      "unresolved": {
+        "title": "No automatic resolution available",
+        "description": "Ready to escalate to admin review."
+      }
+    },
+    "escalate": "Escalate to Admin",
+    "close": "Close",
+    "detailLabel": "Dispute detail",
+    "back": "Back",
+    "submit": "Submit",
+    "submittedTitle": "Dispute received",
+    "submittedDescription": "An admin will review this shortly."
+  },
+  "maintenanceBanner": {
+    "plannedMaintenance": "Platform maintenance is scheduled. Active transaction timers will be frozen.",
+    "plannedMaintenanceWithSchedule": "Platform maintenance: {scheduledAt}. Active transaction timers will be frozen.",
+    "activeMaintenance": "Platform is under maintenance. Transaction timers are frozen.",
+    "activeMaintenanceWithSchedule": "Platform is under maintenance ({scheduledAt}). Transaction timers are frozen.",
+    "steamOutage": "Steam services are temporarily unavailable. Transaction timers are frozen.",
+    "steamOutageWithSchedule": "Steam outage ({scheduledAt}). Transaction timers are frozen.",
+    "blockchainDegradation": "Payment verification may be slow. Payment-step transaction timers are frozen.",
+    "blockchainDegradationWithSchedule": "Payment verification slow ({scheduledAt}). Timers are frozen.",
+    "dismiss": "Dismiss"
+  },
+  "languageSelector": {
+    "ariaLabel": "Select language"
+  },
+  "walletAddress": {
+    "label": "TRC-20 wallet address",
+    "hint": "Must start with T, 34 characters",
+    "invalidFormat": "Invalid TRC-20 address",
+    "sanctioned": "This address is on a sanctions list. Please use a different one.",
+    "validationError": "An error occurred during validation",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "validating": "Validating",
+    "continue": "Continue",
+    "confirmTitle": "Is this address correct?"
+  },
+  "pagination": {
+    "ariaLabel": "Pagination",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "filterBar": {
+    "any": "Any",
+    "apply": "Apply",
+    "clear": "Clear",
+    "removeFilter": "Remove {label} filter"
   }
 }
