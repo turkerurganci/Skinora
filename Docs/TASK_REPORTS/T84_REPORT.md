@@ -118,9 +118,9 @@ Plan: **Yok** (görsel bileşenler — E2E'de test edilecek).
 ## Commit & PR
 
 - Branch: `task/T84-common-ui-components`
-- Commit: `0f36d01` — T84: Ortak UI bileşenleri (C01-C17)
+- Commits: `0f36d01` (T84: Ortak UI bileşenleri) + `f733452` (T84: report PR# back-fill)
 - PR: [#129](https://github.com/turkerurganci/Skinora/pull/129)
-- CI: ⏳ Bekliyor (watch sonrası güncellenir)
+- CI: ✓ PASS — run [`26110153569`](https://github.com/turkerurganci/Skinora/actions/runs/26110153569) 9/9 job success + 1 skipped (guard direct-push, beklenen)
 
 ## Known Limitations / Follow-up
 
