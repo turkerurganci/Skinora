@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Sanctions;
 
 namespace Skinora.Auth.Application.SteamAuthentication;
 
@@ -12,6 +13,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
     private readonly ILoginAuditService _loginAudit;
     private readonly IGeoBlockCheck _geoBlock;
     private readonly ISanctionsCheck _sanctions;
+    private readonly ISanctionsViolationHandler _sanctionsViolation;
     private readonly IAgeGateCheck _ageGate;
     private readonly ILogger<SteamAuthenticationPipeline> _logger;
 
@@ -24,6 +26,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         ILoginAuditService loginAudit,
         IGeoBlockCheck geoBlock,
         ISanctionsCheck sanctions,
+        ISanctionsViolationHandler sanctionsViolation,
         IAgeGateCheck ageGate,
         ILogger<SteamAuthenticationPipeline> logger)
     {
@@ -35,6 +38,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         _loginAudit = loginAudit;
         _geoBlock = geoBlock;
         _sanctions = sanctions;
+        _sanctionsViolation = sanctionsViolation;
         _ageGate = ageGate;
         _logger = logger;
     }
@@ -60,7 +64,17 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
 
         var sanctions = await _sanctions.EvaluateAsync(steamId64, cancellationToken);
         if (sanctions.IsMatch)
+        {
+            // T82 — 02 §21.1, 03 §11a.3, 03 §2.1 step 6: mevcut profil
+            // adresi yaptırımlı → hesap flag'lenir + aktif işlemler
+            // EMERGENCY_HOLD'a alınır. Handler User'ı SteamId üzerinden
+            // çözer; yeni kullanıcı (henüz provisioning olmamış) için
+            // no-op.
+            await _sanctionsViolation.RecordLoginAttemptAsync(
+                steamId64, sanctions.MatchedList ?? "UNKNOWN", cancellationToken);
+
             return new AuthenticationOutcome.SanctionsMatch(sanctions.MatchedList);
+        }
 
         var profile = await _profileClient.GetPlayerSummaryAsync(steamId64, cancellationToken);
 

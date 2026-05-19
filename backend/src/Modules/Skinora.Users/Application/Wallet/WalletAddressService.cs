@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Sanctions;
 using Skinora.Users.Application.MultiAccount;
 using Skinora.Users.Domain.Entities;
 
@@ -11,6 +12,7 @@ public sealed class WalletAddressService : IWalletAddressService
     private readonly AppDbContext _db;
     private readonly ITrc20AddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
+    private readonly ISanctionsViolationHandler _sanctionsViolation;
     private readonly IActiveTransactionCounter _activeCounter;
     private readonly IMultiAccountDetector _multiAccountDetector;
     private readonly TimeProvider _clock;
@@ -20,6 +22,7 @@ public sealed class WalletAddressService : IWalletAddressService
         AppDbContext db,
         ITrc20AddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
+        ISanctionsViolationHandler sanctionsViolation,
         IActiveTransactionCounter activeCounter,
         IMultiAccountDetector multiAccountDetector,
         TimeProvider clock,
@@ -28,6 +31,7 @@ public sealed class WalletAddressService : IWalletAddressService
         _db = db;
         _addressValidator = addressValidator;
         _sanctions = sanctions;
+        _sanctionsViolation = sanctionsViolation;
         _activeCounter = activeCounter;
         _multiAccountDetector = multiAccountDetector;
         _clock = clock;
@@ -66,8 +70,17 @@ public sealed class WalletAddressService : IWalletAddressService
 
         var sanctions = await _sanctions.EvaluateAsync(candidate, cancellationToken);
         if (sanctions.IsMatch)
+        {
+            // T82 — 02 §21.1, 03 §11a.3: yeni adres reddedilir + hesap
+            // flag'lenir + aktif işlemler EMERGENCY_HOLD'a alınır. Aday
+            // adres saklanmaz (User.DefaultPayoutAddress / DefaultRefundAddress
+            // değişmez); ihlal kaydı flag.details içine yazılır.
+            await _sanctionsViolation.RecordWalletAttemptAsync(
+                userId, candidate, sanctions.MatchedList ?? "UNKNOWN", cancellationToken);
+
             return WalletUpdateResult.Failure(
                 WalletUpdateStatus.SanctionsMatch, sanctions.MatchedList);
+        }
 
         var activeUsingOld = 0;
         if (!string.IsNullOrEmpty(previous) && previous != candidate)

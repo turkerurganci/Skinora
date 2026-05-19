@@ -56,8 +56,11 @@ public static class SteamAuthenticationModule
         services.AddScoped<IGeoBlockCheck, SettingsBasedGeoBlockCheck>();
         services.AddScoped<IAgeGateCheck, SettingsBasedAgeGateCheck>();
 
-        // Stub hook — T82 replaces with real sanctions integration.
-        services.AddSingleton<ISanctionsCheck, NoMatchSanctionsCheck>();
+        // T82 — DbLoginSanctionsCheck queries User by SteamId64, then runs
+        // both DefaultPayoutAddress + DefaultRefundAddress against the
+        // SanctionedAddress list (Skinora.Shared.Sanctions.ISanctionedAddressLookup;
+        // Platform owns the impl). Replaces the T29 NoMatchSanctionsCheck stub.
+        services.AddScoped<ISanctionsCheck, DbLoginSanctionsCheck>();
 
         services.AddScoped<ISteamAuthenticationPipeline, SteamAuthenticationPipeline>();
 

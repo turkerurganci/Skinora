@@ -83,6 +83,13 @@ public static class AuditLogCategoryMap
             // shape and audience: a custody-integrity alarm visible on the
             // same admin dashboard.
             [AuditAction.HOT_WALLET_THRESHOLD_BREACHED] = Categories.SecurityEvent,
+
+            // T82 — sanctions list mutation events (02 §21.1, 07 §9.24–§9.25).
+            // Admin AD23 / AD24 adres ekleme / deaktive aksiyonları
+            // wallet-address-changed / reconciliation-mismatch ile aynı
+            // güvenlik kuyruğunda görünür.
+            [AuditAction.SANCTIONS_LIST_ADDRESS_ADDED] = Categories.SecurityEvent,
+            [AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

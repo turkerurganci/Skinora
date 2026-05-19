@@ -21,18 +21,32 @@ using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.API.Tests.Integration;
 
-/// <summary>Integration tests for 07 §9.11–§9.14 (T39 — admin role CRUD).</summary>
-public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Factory>
+/// <summary>
+/// Integration tests for T82 admin sanctions endpoints (07 §9.23–§9.25
+/// AD22 / AD23 / AD24, 02 §21.1, 03 §11a.3, 06 §3.25).
+/// </summary>
+public class AdminSanctionsEndpointTests
+    : IClassFixture<AdminSanctionsEndpointTests.Factory>
 {
-    private const string TestSecret = "admin-roles-test-secret-key-minimum-32-chars!";
+    private const string TestSecret = "admin-sanctions-test-secret-key-minimum-32-chars!";
     private const string TestIssuer = "skinora";
     private const string TestAudience = "skinora-client";
+    private const string SteamIdPrefix = "76561198777666";
+
+    // 34-char, T-prefixed, Base58 (alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZ
+    // abcdefghijkmnopqrstuvwxyz — excludes 0/O/I/l).
+    private const string SanctionedAddress1 = "TtestSnc123456789abcdefghJKMNPQRSt";
+    private const string SanctionedAddress2 = "TtestSnc9876541abcdefghZYXWVUmnpqr";
+    private const string UnsanctionedAddress = "TtestCln123456789abcdefghJKMNPQRSt";
+    private const string InvalidShortAddress = "TShort";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -41,247 +55,239 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
 
     private readonly Factory _factory;
 
-    public AdminRolesEndpointTests(Factory factory)
+    public AdminSanctionsEndpointTests(Factory factory)
     {
         _factory = factory;
         _factory.Reset();
     }
 
-    // ---------- AD11 GET /admin/roles ----------
+    // ---------- AD22 GET /admin/sanctions/addresses ----------
 
     [Fact]
-    public async Task ListRoles_Unauthenticated_Returns401()
+    public async Task ListAddresses_Unauthenticated_Returns401()
     {
         var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/admin/roles");
+        var response = await client.GetAsync("/api/v1/admin/sanctions/addresses");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task ListRoles_NonAdmin_Returns403()
+    public async Task ListAddresses_NonAdmin_Returns403()
     {
         var user = await _factory.CreateUserAsync();
         var client = BuildClient(user.Id, user.SteamId, AuthRoles.User);
 
-        var response = await client.GetAsync("/api/v1/admin/roles");
+        var response = await client.GetAsync("/api/v1/admin/sanctions/addresses");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task ListRoles_SuperAdmin_ReturnsRolesAndCatalog()
+    public async Task ListAddresses_AdminWithoutPermission_Returns403()
     {
         var admin = await _factory.CreateUserAsync();
-        var role = await _factory.CreateRoleAsync("Flag Yöneticisi", "Flag yönetimi",
-            ["VIEW_FLAGS", "MANAGE_FLAGS"]);
+        // Admin role that does NOT include MANAGE_SANCTIONS.
+        var role = await _factory.CreateRoleAsync("View Only", null, ["VIEW_FLAGS"]);
         await _factory.AssignRoleAsync(admin.Id, role.Id);
 
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin);
+        var response = await client.GetAsync("/api/v1/admin/sanctions/addresses");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListAddresses_SuperAdmin_ReturnsActiveOnlyByDefault()
+    {
+        var admin = await _factory.CreateUserAsync();
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress1, admin.Id, isActive: true);
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress2, admin.Id, isActive: false);
+
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-        var response = await client.GetAsync("/api/v1/admin/roles");
+        var response = await client.GetAsync("/api/v1/admin/sanctions/addresses");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
-
-        var available = data.GetProperty("availablePermissions");
-        // 12 permissions after T82 added MANAGE_SANCTIONS (07 §9.11, 04 §8.8).
-        Assert.Equal(12, available.GetArrayLength());
-        var keys = new List<string>();
-        foreach (var entry in available.EnumerateArray())
-            keys.Add(entry.GetProperty("key").GetString()!);
-        Assert.Contains("MANAGE_STEAM_RECOVERY", keys);
-        Assert.Contains("MANAGE_ROLES", keys);
-        Assert.Contains("EMERGENCY_HOLD", keys);
-        Assert.Contains("MANAGE_SANCTIONS", keys);
-
-        var roles = data.GetProperty("roles");
-        Assert.Equal(1, roles.GetArrayLength());
-        var first = roles[0];
-        Assert.Equal("Flag Yöneticisi", first.GetProperty("name").GetString());
-        Assert.Equal(1, first.GetProperty("assignedUserCount").GetInt32());
-        var perms = first.GetProperty("permissions");
-        Assert.Equal(2, perms.GetArrayLength());
+        var items = data.GetProperty("items");
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(SanctionedAddress1, items[0].GetProperty("address").GetString());
+        Assert.True(items[0].GetProperty("isActive").GetBoolean());
     }
 
-    // ---------- AD12 POST /admin/roles ----------
+    [Fact]
+    public async Task ListAddresses_IsActiveFalse_ReturnsInactiveOnly()
+    {
+        var admin = await _factory.CreateUserAsync();
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress1, admin.Id, isActive: true);
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress2, admin.Id, isActive: false);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync(
+            "/api/v1/admin/sanctions/addresses?isActive=false");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        var items = data.GetProperty("items");
+        Assert.Equal(1, items.GetArrayLength());
+        Assert.Equal(SanctionedAddress2, items[0].GetProperty("address").GetString());
+        Assert.False(items[0].GetProperty("isActive").GetBoolean());
+    }
+
+    // ---------- AD23 POST /admin/sanctions/addresses ----------
 
     [Fact]
-    public async Task CreateRole_Valid_Returns201WithDetail()
+    public async Task AddAddress_Valid_Returns201AndPersists()
     {
         var admin = await _factory.CreateUserAsync();
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
 
-        var response = await client.PostAsJsonAsync("/api/v1/admin/roles", new
-        {
-            name = "İşlem Denetçisi",
-            description = "İşlemleri görüntüleyebilir",
-            permissions = new[] { "VIEW_TRANSACTIONS", "VIEW_FLAGS" },
-        });
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = SanctionedAddress1,
+                network = "TRC-20",
+                source = "MANUAL",
+                reason = "Test bildirim no. 2026-05-19",
+            });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
-        Assert.Equal("İşlem Denetçisi", data.GetProperty("name").GetString());
-        Assert.False(data.GetProperty("isSuperAdmin").GetBoolean());
-        var perms = data.GetProperty("permissions");
-        Assert.Equal(2, perms.GetArrayLength());
+        Assert.Equal(SanctionedAddress1, data.GetProperty("address").GetString());
+        Assert.Equal("MANUAL", data.GetProperty("source").GetString());
+        Assert.True(data.GetProperty("isActive").GetBoolean());
+
+        // Persisted.
+        var live = await _factory.GetActiveSanctionsCountAsync(SanctionedAddress1);
+        Assert.Equal(1, live);
     }
 
     [Fact]
-    public async Task CreateRole_DuplicateName_Returns409RoleNameExists()
+    public async Task AddAddress_InvalidTrc20_Returns400InvalidWalletAddress()
     {
         var admin = await _factory.CreateUserAsync();
-        await _factory.CreateRoleAsync("Flag Yöneticisi", null, []);
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
 
-        var response = await client.PostAsJsonAsync("/api/v1/admin/roles", new
-        {
-            name = "Flag Yöneticisi",
-            description = (string?)null,
-            permissions = Array.Empty<string>(),
-        });
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = InvalidShortAddress,
+                network = "TRC-20",
+                source = "MANUAL",
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_WALLET_ADDRESS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddAddress_DuplicateActive_Returns409AlreadyListed()
+    {
+        var admin = await _factory.CreateUserAsync();
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress1, admin.Id, isActive: true);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = SanctionedAddress1,
+                network = "TRC-20",
+                source = "MANUAL",
+            });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("ROLE_NAME_EXISTS",
+        Assert.Equal("SANCTIONS_ADDRESS_ALREADY_LISTED",
             body.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
-    public async Task CreateRole_EmptyName_Returns400ValidationError()
+    public async Task AddAddress_RetroactiveScan_FlagsExistingUserWithSanctionedWallet()
     {
         var admin = await _factory.CreateUserAsync();
-        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-
-        var response = await client.PostAsJsonAsync("/api/v1/admin/roles", new
+        var holder = await _factory.CreateUserAsync(u =>
         {
-            name = "  ",
-            description = (string?)null,
-            permissions = Array.Empty<string>(),
+            u.DefaultPayoutAddress = SanctionedAddress1;
         });
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("VALIDATION_ERROR",
-            body.GetProperty("error").GetProperty("code").GetString());
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = SanctionedAddress1,
+                network = "TRC-20",
+                source = "MANUAL",
+                reason = "Retroactive scan test",
+            });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var fraudFlagged = await _factory.HasPendingSanctionsFlagAsync(holder.Id);
+        Assert.True(fraudFlagged,
+            "Retroactive scan should have staged a PENDING account-level SANCTIONS_MATCH flag.");
     }
 
-    [Fact]
-    public async Task CreateRole_UnknownPermission_Returns400InvalidPermission()
-    {
-        var admin = await _factory.CreateUserAsync();
-        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-
-        var response = await client.PostAsJsonAsync("/api/v1/admin/roles", new
-        {
-            name = "Yeni rol",
-            description = (string?)null,
-            permissions = new[] { "VIEW_FLAGS", "DOES_NOT_EXIST" },
-        });
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("INVALID_PERMISSION",
-            body.GetProperty("error").GetProperty("code").GetString());
-    }
-
-    // ---------- AD13 PUT /admin/roles/:id ----------
+    // ---------- AD24 DELETE /admin/sanctions/addresses/:id ----------
 
     [Fact]
-    public async Task UpdateRole_ChangesNameDescriptionAndPermissions()
+    public async Task DeactivateAddress_Active_Returns200AndSoftDeactivates()
     {
         var admin = await _factory.CreateUserAsync();
-        var role = await _factory.CreateRoleAsync("Eski İsim", "eski açıklama",
-            ["VIEW_FLAGS"]);
+        var sanctionedId = await _factory.AddSanctionedAddressAsync(
+            SanctionedAddress1, admin.Id, isActive: true);
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-        var response = await client.PutAsJsonAsync($"/api/v1/admin/roles/{role.Id}", new
-        {
-            name = "Yeni İsim",
-            description = "yeni açıklama",
-            permissions = new[] { "MANAGE_FLAGS", "VIEW_AUDIT_LOG" },
-        });
+        var response = await client.DeleteAsync(
+            $"/api/v1/admin/sanctions/addresses/{sanctionedId}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
-        Assert.Equal("Yeni İsim", data.GetProperty("name").GetString());
-        Assert.Equal("yeni açıklama", data.GetProperty("description").GetString());
+        Assert.False(data.GetProperty("isActive").GetBoolean());
 
-        var permissions = await _factory.GetRolePermissionsAsync(role.Id);
-        Assert.Equal(2, permissions.Count);
-        Assert.Contains("MANAGE_FLAGS", permissions);
-        Assert.Contains("VIEW_AUDIT_LOG", permissions);
-        Assert.DoesNotContain("VIEW_FLAGS", permissions);
+        // Filtered UQ allows re-adding the same address.
+        Assert.Equal(0, await _factory.GetActiveSanctionsCountAsync(SanctionedAddress1));
     }
 
     [Fact]
-    public async Task UpdateRole_UnknownId_Returns404RoleNotFound()
+    public async Task DeactivateAddress_AlreadyInactive_Returns409AlreadyInactive()
     {
         var admin = await _factory.CreateUserAsync();
+        var sanctionedId = await _factory.AddSanctionedAddressAsync(
+            SanctionedAddress1, admin.Id, isActive: false);
+
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.DeleteAsync(
+            $"/api/v1/admin/sanctions/addresses/{sanctionedId}");
 
-        var response = await client.PutAsJsonAsync($"/api/v1/admin/roles/{Guid.NewGuid()}", new
-        {
-            name = "X",
-            description = (string?)null,
-            permissions = Array.Empty<string>(),
-        });
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("ROLE_NOT_FOUND",
+        Assert.Equal("SANCTIONS_ADDRESS_ALREADY_INACTIVE",
             body.GetProperty("error").GetProperty("code").GetString());
     }
 
-    // ---------- AD14 DELETE /admin/roles/:id ----------
-
     [Fact]
-    public async Task DeleteRole_Unassigned_Returns200AndSoftDeletes()
-    {
-        var admin = await _factory.CreateUserAsync();
-        var role = await _factory.CreateRoleAsync("Geçici", null, ["VIEW_FLAGS"]);
-
-        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-        var response = await client.DeleteAsync($"/api/v1/admin/roles/{role.Id}");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(await _factory.RoleIsLiveAsync(role.Id));
-    }
-
-    [Fact]
-    public async Task DeleteRole_AssignedToUser_Returns422RoleHasUsers()
-    {
-        var admin = await _factory.CreateUserAsync();
-        var assignedUser = await _factory.CreateUserAsync();
-        var role = await _factory.CreateRoleAsync("Aktif Rol", null, []);
-        await _factory.AssignRoleAsync(assignedUser.Id, role.Id);
-
-        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
-        var response = await client.DeleteAsync($"/api/v1/admin/roles/{role.Id}");
-
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("ROLE_HAS_USERS",
-            body.GetProperty("error").GetProperty("code").GetString());
-        Assert.Equal(1,
-            body.GetProperty("error").GetProperty("details")
-                .GetProperty("assignedUserCount").GetInt32());
-
-        Assert.True(await _factory.RoleIsLiveAsync(role.Id));
-    }
-
-    [Fact]
-    public async Task DeleteRole_UnknownId_Returns404RoleNotFound()
+    public async Task DeactivateAddress_NotFound_Returns404()
     {
         var admin = await _factory.CreateUserAsync();
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
 
-        var response = await client.DeleteAsync($"/api/v1/admin/roles/{Guid.NewGuid()}");
+        var response = await client.DeleteAsync(
+            $"/api/v1/admin/sanctions/addresses/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-        Assert.Equal("ROLE_NOT_FOUND",
+        Assert.Equal("SANCTIONS_ADDRESS_NOT_FOUND",
             body.GetProperty("error").GetProperty("code").GetString());
     }
 
@@ -332,7 +338,6 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
     {
         private readonly SqliteConnection _connection;
         private int _userSuffix;
-        private const string SteamIdPrefix = "76561198555444";
 
         public Factory()
         {
@@ -349,7 +354,7 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
             {
                 Id = Guid.NewGuid(),
                 SteamId = $"{SteamIdPrefix}{suffix:D3}",
-                SteamDisplayName = $"Tester{suffix:D3}",
+                SteamDisplayName = $"SanctionsTester{suffix:D3}",
                 PreferredLanguage = "en",
                 CreatedAt = DateTime.UtcNow.AddDays(-30),
             };
@@ -401,42 +406,61 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
             await db.SaveChangesAsync();
         }
 
-        public async Task<List<string>> GetRolePermissionsAsync(Guid roleId)
+        public async Task<Guid> AddSanctionedAddressAsync(
+            string address, Guid adminId, bool isActive)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            return await db.Set<AdminRolePermission>()
-                .AsNoTracking()
-                .Where(p => p.AdminRoleId == roleId)
-                .Select(p => p.Permission)
-                .ToListAsync();
+            var nowUtc = DateTime.UtcNow;
+            var entity = new SanctionedAddress
+            {
+                Id = Guid.NewGuid(),
+                Address = address,
+                Network = SanctionedAddressNetworks.Trc20,
+                Source = SanctionedAddressSources.Manual,
+                Reason = "Test seed",
+                ListedAt = nowUtc,
+                AddedByAdminId = adminId,
+                IsActive = isActive,
+            };
+            db.Set<SanctionedAddress>().Add(entity);
+            await db.SaveChangesAsync();
+            return entity.Id;
         }
 
-        public async Task<bool> RoleIsLiveAsync(Guid roleId)
+        public async Task<int> GetActiveSanctionsCountAsync(string address)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            return await db.Set<AdminRole>()
+            return await db.Set<SanctionedAddress>()
                 .AsNoTracking()
-                .AnyAsync(r => r.Id == roleId);
+                .CountAsync(s => s.IsActive && s.Address == address);
+        }
+
+        public async Task<bool> HasPendingSanctionsFlagAsync(Guid userId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<Skinora.Fraud.Domain.Entities.FraudFlag>()
+                .AsNoTracking()
+                .AnyAsync(f =>
+                    f.UserId == userId
+                    && f.Type == FraudFlagType.SANCTIONS_MATCH
+                    && f.Scope == FraudFlagScope.ACCOUNT_LEVEL
+                    && f.Status == ReviewStatus.PENDING
+                    && !f.IsDeleted);
         }
 
         public void Reset()
         {
+            // Full schema rebuild — granular RemoveRange is fragile across the
+            // 30+ entity graph with FK / RowVersion concurrency interactions.
+            // EnsureDeleted + EnsureCreated restores the SqliteConnection's
+            // in-memory schema with seed data in <50ms.
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-            db.Set<AdminUserRole>().RemoveRange(
-                db.Set<AdminUserRole>().IgnoreQueryFilters().ToList());
-            db.Set<AdminRolePermission>().RemoveRange(
-                db.Set<AdminRolePermission>().IgnoreQueryFilters().ToList());
-            db.Set<AdminRole>().RemoveRange(
-                db.Set<AdminRole>().IgnoreQueryFilters().ToList());
-
-            var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
-            db.Set<User>().RemoveRange(
-                db.Set<User>().IgnoreQueryFilters().Where(u => !seedIds.Contains(u.Id)));
-            db.SaveChanges();
+            db.Database.EnsureDeleted();
+            db.Database.EnsureCreated();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)

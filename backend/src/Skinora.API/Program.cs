@@ -180,6 +180,15 @@ builder.Services.AddAdminModule();
 // TransactionCreationService (FLAGGED → matching FraudFlag row).
 builder.Services.AddFraudModule();
 
+// T82 — Admin sanctions list management (07 §9.23–§9.25 AD22/AD23/AD24,
+// 02 §21.1, 03 §11a.3). Cross-module orchestrator (Skinora.API/Services/
+// AdminSanctions): SanctionedAddress CRUD + AuditLog + retroaktif eşleşme
+// cascade via ISanctionsViolationHandler. Registration sits after
+// AddFraudModule so ISanctionsViolationHandler is wired before consumption.
+builder.Services.AddScoped<
+    Skinora.API.Services.AdminSanctions.IAdminSanctionsService,
+    Skinora.API.Services.AdminSanctions.AdminSanctionsService>();
+
 // Platform parameter management (T41 — 07 §9.8–§9.9). ISystemSettingsService
 // reads the SystemSetting catalog and applies type/range/cross-key validation
 // to admin updates. Audit rows write directly to AuditLogs pending T42's

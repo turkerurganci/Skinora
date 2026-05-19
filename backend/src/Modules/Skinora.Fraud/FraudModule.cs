@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Fraud.Application.Flags;
 using Skinora.Fraud.Application.MultiAccount;
 using Skinora.Fraud.Application.Pricing;
+using Skinora.Fraud.Application.Sanctions;
+using Skinora.Shared.Sanctions;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Users.Application.MultiAccount;
 
@@ -39,6 +41,13 @@ public static class FraudModule
         // job runs (Enqueue<PriceService>(s => s.RefreshAsync(...))).
         services.AddScoped<PriceService>();
         services.AddScoped<IPriceService>(sp => sp.GetRequiredService<PriceService>());
+
+        // T82 — sanctions violation handler. Port lives in Skinora.Shared
+        // so the wallet pipeline (Users) ve login pipeline (Auth) consume it
+        // without taking a dependency on Fraud (one-way Fraud → Users/Auth).
+        // Impl stages an account-level SANCTIONS_MATCH FraudFlag via
+        // FraudFlagService and persists immediately.
+        services.AddScoped<ISanctionsViolationHandler, SanctionsViolationHandler>();
 
         return services;
     }

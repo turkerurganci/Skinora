@@ -60,5 +60,19 @@ public enum AuditAction
     // envelope {token, direction (Upper|Lower), threshold, actual,
     // blockNumber}. SECURITY_EVENT category — sits alongside reconciliation
     // mismatches on the admin dashboard.
-    HOT_WALLET_THRESHOLD_BREACHED
+    HOT_WALLET_THRESHOLD_BREACHED,
+
+    // Sanctions list management (T82 — 02 §21.1, 03 §11a.3, 07 §9.24).
+    // Admin AD23 POST /admin/sanctions/addresses ile yeni adres eklediğinde
+    // yazılır. EntityType = "SanctionedAddress"; EntityId = SanctionedAddress.Id
+    // (Guid); NewValue is a JSON envelope {address, network, source, reason}.
+    // SECURITY_EVENT category — wallet-address-changed / reconciliation-mismatch
+    // ile aynı admin güvenlik kuyruğunda görünür.
+    SANCTIONS_LIST_ADDRESS_ADDED,
+
+    // Sanctions list management (T82 — 07 §9.25). Admin AD24
+    // DELETE /admin/sanctions/addresses/:id ile satırı deaktive ettiğinde
+    // yazılır. EntityType = "SanctionedAddress"; EntityId = SanctionedAddress.Id;
+    // NewValue is a JSON envelope {address, source}. SECURITY_EVENT category.
+    SANCTIONS_LIST_ADDRESS_REMOVED
 }
