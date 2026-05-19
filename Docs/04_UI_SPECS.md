@@ -1769,6 +1769,7 @@ Bu ayrım sayfanın üstünde bir bilgi kutusu olarak gösterilir. Her parametre
 | Audit log görüntüle | S21'e erişim |
 | İşlemleri iptal et | S16'da aktif işlemleri doğrudan iptal etme — CREATED → TRADE_OFFER_SENT_TO_BUYER arası (03 §8.7) |
 | Emergency hold uygula/kaldır | S16'da aktif işlemlere emergency hold uygulama ve kaldırma (03 §8.8) |
+| Sanctions listesi yönet | Yaptırımlı cüzdan adresleri listesinin yönetimi — ekleme/listeleme/deaktive (02 §21.1, 03 §11a.3, 07 §9.23–§9.25 AD22/AD23/AD24). `MANAGE_SETTINGS`'ten ayrıdır: sanctions admin'i sistem ayarlarına dokunmaz (least-privilege) |
 
 #### Kullanıcı-Rol Atama
 

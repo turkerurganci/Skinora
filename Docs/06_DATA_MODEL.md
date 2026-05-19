@@ -224,6 +224,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `HIGH_VOLUME` | Kısa sürede yüksek işlem hacmi |
 | `ABNORMAL_BEHAVIOR` | Anormal davranış örüntüsü |
 | `MULTI_ACCOUNT` | Çoklu hesap tespiti (cüzdan/IP/cihaz) |
+| `SANCTIONS_MATCH` | Yaptırımlı cüzdan adresi eşleşmesi (02 §21.1, 03 §11a.3) — `cascadeEmergencyHold = true` ile tetiklenen yüksek risk tipi |
 
 ### 2.12 ReviewStatus
 
@@ -1201,6 +1202,45 @@ Steam Market `priceoverview` API çağrılarının on-demand cache'i (08 §7.3).
 >
 > **Kaynak:** 08 §7.3 cache stratejisi (SQL Server, 24/48/48+ TTL) + 02 §14.1 fraud fiyat kontrolü.
 
+### 3.25 SanctionedAddress
+
+Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3). MVP'de yalnız admin tarafından yönetilen manuel kayıt — OFAC SDN / EU / BM feed auto-sync entegrasyonu post-MVP (K-future). Hem cüzdan adresi pipeline'ında (02 §12.3 — `WalletAddressService`, `TransactionCreationService`, `TransactionAcceptanceService`) hem de Steam login pipeline'ında (07 §4.1 — `SteamAuthenticationPipeline`, mevcut wallet adresleri üzerinden) match kontrolü için kullanılır. Eşleşme tespit edildiğinde `FraudFlagType.SANCTIONS_MATCH` (`cascadeEmergencyHold = true`) tetiklenir.
+
+| Field | Tip | Kısıt | Açıklama |
+|-------|-----|-------|----------|
+| `Id` | uniqueidentifier | PK | Guid |
+| `Address` | nvarchar(64) | NOT NULL | Yaptırımlı cüzdan adresi (case-sensitive). MVP'de yalnız TRC-20 base58 — diğer ağlar T-future genişleme |
+| `Network` | nvarchar(20) | NOT NULL, CHECK | Ağ kimliği: `'TRC-20'` (MVP tek değer). Büyüme aşamasında ERC-20 / BTC için (08 §3 referansı). CHECK constraint MVP'de sabit |
+| `Source` | nvarchar(20) | NOT NULL, CHECK | Liste kaynağı: `'OFAC'`, `'EU'`, `'UN'`, `'MANUAL'`. MVP'de yalnız `'MANUAL'` admin entry; OFAC/EU/UN auto-sync K-future |
+| `Reason` | nvarchar(500) | NULL | Admin tarafından girilen serbest metin sebep (ör. OFAC SDN list referansı, FBI bildirim no, vb.) |
+| `ListedAt` | datetime2 | NOT NULL | Adresin listeye eklendiği orijinal tarih (admin entry için `CreatedAt` ile eşit; auto-sync için kaynak feed'in `listing_date`'i — T-future) |
+| `AddedByAdminId` | uniqueidentifier | NULL, FK → User.Id | MANUAL kaynak için admin guid; auto-sync (OFAC/EU/UN) için NULL — SYSTEM aktör |
+| `IsActive` | bit | NOT NULL, default 1 | Soft deactivation — `DELETE /admin/sanctions/addresses/:id` bu flag'i `false` yapar (audit izi korunur). Match sorguları yalnız `IsActive = true` satırları arar |
+| `CreatedAt` | datetime2 | NOT NULL | Audit |
+| `UpdatedAt` | datetime2 | NOT NULL | Audit (deactivate sırasında güncellenir) |
+
+**İndeksler:**
+
+| İndeks | Tip | Gerekçe |
+|--------|-----|---------|
+| `UQ_SanctionedAddresses_Address_Active` | UNIQUE, filtered (`WHERE IsActive = 1`) | Aktif bir adres iki kez listede olamaz. Deactivate edilen adres yeniden eklenebilir (filtered UQ izin verir, audit izi olarak deaktif satır kalır) |
+| `IX_SanctionedAddresses_Address` | NONCLUSTERED on `Address` | Match lookup hot-path — pipeline her cüzdan adresi girişinde sorgular (07 §5.3, §5.4, §6.4, §6.6) |
+
+**Soft deactivation semantiği:**
+
+| Durum | Etki |
+|-------|------|
+| `IsActive = true` | Match sorguları satırı bulur. Yeni adres kaydı / login pipeline match → fraud flag + emergency hold cascade |
+| `IsActive = false` | Match sorguları satırı görmez. Adres tekrar listeye eklenebilir (filtered UQ izin verir). Geçmiş deaktif satır audit kanıt amaçlı korunur |
+
+> **MVP scope:** Yalnız admin-managed manuel liste. OFAC SDN / EU / BM feed JSON auto-sync (günlük Hangfire job) post-MVP — `Source = OFAC`/`EU`/`UN` değerleri reserved.
+>
+> **Silme politikası:** Hard delete tanımlı değil. Soft deactivation (`IsActive = false`) ile audit izi korunur (07 AD24 endpoint'i).
+>
+> **Append-only mu?** Hayır — `IsActive` flag'i ve `UpdatedAt` güncellenebilir. Ancak `Address` ve `ListedAt` immutable: bir kez yazıldıktan sonra UPDATE ile değiştirilmez (uygulama seviyesinde — `AdminSanctionsService` yalnız `IsActive`/`Reason`/`UpdatedAt` günceller).
+>
+> **Kaynak:** 02 §21.1 sanctions screening + 03 §11a.3 (eşleşme → flag + EMERGENCY_HOLD cascade) + 07 §9.23–§9.25 admin endpoint'leri.
+
 ---
 
 ## 4. İlişkiler
@@ -1242,6 +1282,7 @@ Steam Market `priceoverview` API çağrılarının on-demand cache'i (08 §7.3).
 | SellerPayoutIssue | SellerId | User | N:1 |
 | SellerPayoutIssue | EscalatedToAdminId | User | N:1 (opsiyonel) |
 | ColdWalletTransfer | InitiatedByAdminId | User | N:1 |
+| SanctionedAddress | AddedByAdminId | User | N:1 (opsiyonel — MANUAL kaynak için admin; auto-sync için NULL/SYSTEM) |
 | AuditLog | ActorId | User | N:1 |
 | AuditLog | UserId | User | N:1 (opsiyonel) |
 

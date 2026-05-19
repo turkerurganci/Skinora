@@ -290,7 +290,7 @@ X-RateLimit-Reset: 1710600000
 | §9.1-9.2 Cüzdan yönetimi | U3, U4, A5, A6 |
 | §9.3 Profil görüntüleme | U1, U5 |
 | §10.1-10.2 Hesap yönetimi | U13, U14 |
-| §11a.3 Sanctions screening | AD19b, AD19c |
+| §11a.3 Sanctions screening | AD19b, AD19c (otomatik tetikleme), AD22, AD23, AD24 (admin liste yönetimi) |
 | §12 Bildirimler | N1, N2, N3, N4 (real-time: RT2) |
 | Telegram webhook | W1 (dış tetikleme — 08 §5.2) |
 
@@ -1915,12 +1915,15 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     { "key": "MANAGE_ROLES", "label": "Rolleri yönet" },
     { "key": "VIEW_AUDIT_LOG", "label": "Audit log görüntüle" },
     { "key": "CANCEL_TRANSACTIONS", "label": "İşlemleri iptal et" },
-    { "key": "EMERGENCY_HOLD", "label": "İşlemleri acil dondurma/kaldırma" }
+    { "key": "EMERGENCY_HOLD", "label": "İşlemleri acil dondurma/kaldırma" },
+    { "key": "MANAGE_SANCTIONS", "label": "Sanctions listesi yönet" }
   ]
 }
 ```
 
 > **Not:** `MANAGE_STEAM_RECOVERY` 04 §8.8 "Steam recovery yönet" satırının string identifier'ıdır — S18 Manual Recovery Başlat / not düşme / sorumlu admin atama akışlarını kapsar (fon/item güvenliği etkili, salt-okunur `VIEW_STEAM_ACCOUNTS` yetkisinden ayrı). T103 (S18) wire eder; T39 yalnızca katalog girişini sağlar.
+>
+> **Not:** `MANAGE_SANCTIONS` 04 §8.8 "Sanctions listesi yönet" satırının string identifier'ıdır — 02 §21.1 sanctions screening listesinin admin CRUD'unu (AD22/AD23/AD24) kapsar. `MANAGE_SETTINGS`'ten ayrıdır (least-privilege): sanctions listesi yöneten admin sistem ayarlarına dokunmaz. T82 wire eder; T39 yalnızca katalog girişini sağlar.
 
 ### 9.12 AD12 — `POST /admin/roles`
 
@@ -2164,6 +2167,80 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 > **Tasarım kararı:** ITEM_DELIVERED → EMERGENCY_HOLD → CANCEL zinciri yasaktır. Bu, AD19'daki "ITEM_DELIVERED'da standart iptal uygulanamaz" kuralıyla tutarlıdır. Admin bu durumda yalnızca RESUME yapabilir; exceptional resolution (ör. yanlış item teslimi) ayrı bir manuel süreçle ele alınır.
 
 **Hatalar:** 409 `NOT_ON_HOLD`, 400 `VALIDATION_ERROR`, 422 `CANNOT_CANCEL_DELIVERED_HOLD` (ITEM_DELIVERED hold'unda CANCEL denemesi)
+
+### 9.23 AD22 — `GET /admin/sanctions/addresses`
+
+**Amaç:** Sanctions listesindeki cüzdan adreslerini sayfalı görüntüleme (02 §21.1, 03 §11a.3, 06 §3.25). Permission: `MANAGE_SANCTIONS`. Paginated.
+
+**Query Params:** `network` (`TRC-20`, default `TRC-20`), `source` (`OFAC` | `EU` | `UN` | `MANUAL`), `search` (adres substring eşleşmesi), `isActive` (default `true` — admin paneli aktif satırları gösterir, deaktif arşiv görmek için `false`), `sortBy` (`listedAt` default, `address`), `sortOrder` (`asc`, `desc` default), `page`, `pageSize` (max 100).
+
+**Response (200) `data.items[]`:**
+```json
+{
+  "id": "guid",
+  "address": "TXyz1234567890abcdef1234567890abcd",
+  "network": "TRC-20",
+  "source": "MANUAL",
+  "reason": "FBI bildirim no. 2026-04-12 / sahtekarlık şikayeti",
+  "listedAt": "2026-04-12T10:00:00Z",
+  "addedBy": { "id": "admin-guid", "displayName": "AdminUser1" },
+  "isActive": true,
+  "createdAt": "2026-04-12T10:00:00Z",
+  "updatedAt": "2026-04-12T10:00:00Z"
+}
+```
+
+`addedBy`: MANUAL kaynak için admin objesi (`null` döndürülmez); OFAC/EU/UN auto-sync için `null` (SYSTEM aktör — post-MVP).
+
+**Hatalar:** 403 `INSUFFICIENT_PERMISSION`, 400 `VALIDATION_ERROR` (sayfalama parametreleri)
+
+### 9.24 AD23 — `POST /admin/sanctions/addresses`
+
+**Amaç:** Listeye yeni yaptırımlı adres ekleme. Permission: `MANAGE_SANCTIONS`.
+
+**Request:**
+```json
+{
+  "address": "TXyz1234567890abcdef1234567890abcd",
+  "network": "TRC-20",
+  "source": "MANUAL",
+  "reason": "FBI bildirim no. 2026-04-12 / sahtekarlık şikayeti"
+}
+```
+
+`address`: Zorunlu. MVP'de TRC-20 base58 format doğrulanır (`T` + 33 karakter, case-sensitive — 02 §12.3 ile aynı validator). `network`: Zorunlu, MVP'de yalnız `'TRC-20'`. `source`: Zorunlu, `'OFAC' | 'EU' | 'UN' | 'MANUAL'` — MVP'de admin yalnız `'MANUAL'` set'ler; OFAC/EU/UN auto-sync job (post-MVP) için reserved. `reason`: Opsiyonel, max 500 karakter.
+
+**Response (201) `data`:** AD22 satır formatı (`isActive: true`).
+
+**Yan etkiler:**
+- 06 §3.25 `SanctionedAddress` satırı yazılır (`ListedAt = CreatedAt`, `AddedByAdminId = caller`).
+- `AuditLog` SECURITY_EVENT kategorisinde yeni `SANCTIONS_LIST_ADDRESS_ADDED` aksiyon yazılır (06 §3.20).
+- **Retroaktif eşleşme kontrolü:** Yeni adres mevcut bir kullanıcının `DefaultPayoutAddress` veya `DefaultRefundAddress` ile eşleşirse → o kullanıcı için `FraudFlagType.SANCTIONS_MATCH` (`cascadeEmergencyHold = true`) tetiklenir; tüm aktif işlemleri EMERGENCY_HOLD'a alınır (03 §11a.3 ile aynı kural — admin tarafından adres eklemek de retro pipeline'ı tetikler).
+
+**Hatalar:** 400 `VALIDATION_ERROR` (format / network / source / reason uzunluğu), 400 `INVALID_WALLET_ADDRESS` (TRC-20 format başarısız), 409 `SANCTIONS_ADDRESS_ALREADY_LISTED` (aktif olarak listede), 403 `INSUFFICIENT_PERMISSION`
+
+### 9.25 AD24 — `DELETE /admin/sanctions/addresses/:id`
+
+**Amaç:** Adresi listeden çıkarma (soft deactivate). Permission: `MANAGE_SANCTIONS`.
+
+**Davranış:** Hard delete uygulanmaz — satırın `IsActive = false` olur, `UpdatedAt` güncellenir. Audit izi korunur; aynı adres daha sonra tekrar eklenebilir (06 §3.25 filtered UQ izin verir).
+
+**Response (200) `data`:**
+```json
+{
+  "id": "guid",
+  "address": "TXyz...",
+  "isActive": false,
+  "deactivatedAt": "2026-04-20T15:00:00Z"
+}
+```
+
+**Yan etkiler:**
+- 06 §3.25 satırı `IsActive = false`, `UpdatedAt` set edilir.
+- `AuditLog` SECURITY_EVENT kategorisinde yeni `SANCTIONS_LIST_ADDRESS_REMOVED` aksiyon yazılır.
+- **Mevcut hold'lar kalkmaz:** Deactivation, daha önce sanctions match nedeniyle uygulanmış EMERGENCY_HOLD'ları otomatik kaldırmaz. Admin AD19c (`/release-hold`) ile hold'u manuel kaldırır (incelemeyi tamamladıktan sonra).
+
+**Hatalar:** 404 `SANCTIONS_ADDRESS_NOT_FOUND` (kayıt yok), 409 `SANCTIONS_ADDRESS_ALREADY_INACTIVE` (zaten deaktif), 403 `INSUFFICIENT_PERMISSION`
 
 ---
 
