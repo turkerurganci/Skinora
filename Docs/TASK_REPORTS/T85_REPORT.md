@@ -84,9 +84,9 @@ Plan: **Yok** (görsel chrome — E2E'de test edilecek).
 ## Commit & PR
 
 - Branch: `task/T85-global-layout`
-- Commit: `300c139` — `T85: Global layout (header, navigation, footer)`
+- Commits: `300c139` (T85: Global layout) + `89f45f1` (T85: report PR# + commit back-fill)
 - PR: [#130](https://github.com/turkerurganci/Skinora/pull/130)
-- CI: ⏳ Watching (push sonrası izleniyor — `gh run watch <ID> --exit-status`)
+- CI: ✓ PASS — HEAD `89f45f1` run [`26115822113`](https://github.com/turkerurganci/Skinora/actions/runs/26115822113) 9/9 job success + 1 expected skip (guard direct-push). Önceki commit `300c139` run `26115760614` newer push ile cancelled (concurrency, beklendik).
 
 ## Known Limitations / Follow-up
 
