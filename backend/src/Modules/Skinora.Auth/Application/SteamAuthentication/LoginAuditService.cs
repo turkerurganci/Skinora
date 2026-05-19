@@ -16,6 +16,7 @@ public sealed class LoginAuditService : ILoginAuditService
         Guid userId,
         string? ipAddress,
         string? userAgent,
+        bool hasVpnSignal,
         CancellationToken cancellationToken)
     {
         var entry = new UserLoginLog
@@ -23,6 +24,7 @@ public sealed class LoginAuditService : ILoginAuditService
             UserId = userId,
             IpAddress = string.IsNullOrWhiteSpace(ipAddress) ? "unknown" : TruncateRequired(ipAddress, 45),
             UserAgent = Truncate(userAgent, 256),
+            HasVpnSignal = hasVpnSignal,
             CreatedAt = DateTime.UtcNow,
         };
 

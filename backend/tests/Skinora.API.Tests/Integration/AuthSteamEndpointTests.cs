@@ -265,6 +265,48 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         Assert.False(await verifyDb.Set<RefreshToken>().AnyAsync());
     }
 
+    [Fact]
+    public async Task Callback_VpnSignalDetected_StillSucceedsAndPersistsFlag()
+    {
+        // T83 — supportive signal only, never blocks the login. The flag
+        // lands on UserLoginLog.HasVpnSignal for future fraud rules.
+        _factory.VpnDetectorFake.NextResult = true;
+        _factory.ValidatorFake.SteamIdToReturn = SteamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        var response = await SendCallbackAsync(client);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("status=new_user", response.Headers.Location!.ToString());
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await verifyDb.Set<User>().SingleAsync(u => u.SteamId == SteamId);
+        var loginLog = await verifyDb.Set<UserLoginLog>().SingleAsync(l => l.UserId == user.Id);
+        Assert.True(loginLog.HasVpnSignal);
+    }
+
+    [Fact]
+    public async Task Callback_NoVpnSignal_RecordsHasVpnSignalFalse()
+    {
+        _factory.VpnDetectorFake.NextResult = false;
+        _factory.ValidatorFake.SteamIdToReturn = SteamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        var response = await SendCallbackAsync(client);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("status=new_user", response.Headers.Location!.ToString());
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await verifyDb.Set<User>().SingleAsync(u => u.SteamId == SteamId);
+        var loginLog = await verifyDb.Set<UserLoginLog>().SingleAsync(l => l.UserId == user.Id);
+        Assert.False(loginLog.HasVpnSignal);
+    }
+
     private static Task<HttpResponseMessage> SendCallbackAsync(HttpClient client)
     {
         return client.GetAsync(BuildCallbackUrl());
@@ -308,6 +350,14 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             => Task.FromResult(SummaryToReturn);
     }
 
+    public sealed class FakeVpnProxyDetector : IVpnProxyDetector
+    {
+        public bool NextResult { get; set; }
+
+        public Task<bool> IsVpnOrProxyAsync(string? ipAddress, CancellationToken cancellationToken)
+            => Task.FromResult(NextResult);
+    }
+
     private sealed class NoopBackgroundJobScheduler : IBackgroundJobScheduler
     {
         public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay)
@@ -326,6 +376,7 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
 
         public FakeSteamOpenIdValidator ValidatorFake { get; } = new();
         public FakeSteamProfileClient ProfileFake { get; } = new();
+        public FakeVpnProxyDetector VpnDetectorFake { get; } = new();
 
         public Factory()
         {
@@ -338,6 +389,7 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             ValidatorFake.IsValid = true;
             ValidatorFake.SteamIdToReturn = "76561198000000000";
             ProfileFake.SummaryToReturn = null;
+            VpnDetectorFake.NextResult = false;
 
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -443,6 +495,10 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
                 services.RemoveAll<ISteamProfileClient>();
                 services.AddSingleton<ISteamOpenIdValidator>(ValidatorFake);
                 services.AddSingleton<ISteamProfileClient>(ProfileFake);
+
+                // --- T83 VPN detector fake (production wires NoOp or Tor) ---
+                services.RemoveAll<IVpnProxyDetector>();
+                services.AddSingleton<IVpnProxyDetector>(VpnDetectorFake);
             });
         }
 

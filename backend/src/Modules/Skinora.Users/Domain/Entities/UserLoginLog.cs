@@ -14,6 +14,13 @@ public class UserLoginLog : ISoftDeletable
     public string? DeviceFingerprint { get; set; }
     public string? UserAgent { get; set; }
 
+    /// <summary>
+    /// T83 supportive signal (02 §21.1) — true when the login IP matches a
+    /// Tor exit node at login time. Never blocks the login by itself;
+    /// future fraud rules consume the flag via this column.
+    /// </summary>
+    public bool HasVpnSignal { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

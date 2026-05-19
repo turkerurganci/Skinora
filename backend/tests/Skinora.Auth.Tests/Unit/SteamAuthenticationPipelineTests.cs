@@ -22,6 +22,7 @@ public class SteamAuthenticationPipelineTests
     private readonly Mock<ISanctionsCheck> _sanctions = new();
     private readonly Mock<ISanctionsViolationHandler> _sanctionsViolation = new();
     private readonly Mock<IAgeGateCheck> _ageGate = new();
+    private readonly Mock<IVpnProxyDetector> _vpnDetector = new();
 
     private readonly ILogger<SteamAuthenticationPipeline> _logger =
         NullLogger<SteamAuthenticationPipeline>.Instance;
@@ -33,7 +34,7 @@ public class SteamAuthenticationPipelineTests
         return new(_validator.Object, _profile.Object, _provisioning.Object,
             _access.Object, _refresh.Object, _audit.Object,
             _geo.Object, _sanctions.Object, _sanctionsViolation.Object,
-            _ageGate.Object, _logger);
+            _ageGate.Object, _vpnDetector.Object, _logger);
     }
 
     private static Dictionary<string, string> ValidCallback() => new()
@@ -109,7 +110,7 @@ public class SteamAuthenticationPipelineTests
             _validator.Object, _profile.Object, _provisioning.Object,
             _access.Object, _refresh.Object, _audit.Object,
             _geo.Object, _sanctions.Object, _sanctionsViolation.Object,
-            _ageGate.Object, _logger)
+            _ageGate.Object, _vpnDetector.Object, _logger)
             .ExecuteAsync(ValidCallback(), null, null, default);
 
         var blocked = Assert.IsType<AuthenticationOutcome.AgeBlocked>(result);
@@ -140,7 +141,7 @@ public class SteamAuthenticationPipelineTests
             Times.Never);
         _refresh.Verify(r => r.IssueAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), default),
             Times.Never);
-        _audit.Verify(a => a.RecordLoginAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), default),
+        _audit.Verify(a => a.RecordLoginAsync(It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(), default),
             Times.Never);
     }
 
@@ -154,6 +155,43 @@ public class SteamAuthenticationPipelineTests
     public async Task ExecuteAsync_ExistingUser_ReturnsSuccessWithIsNewUserFalse()
     {
         await RunHappyPath(isNewUser: false);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_VpnSignalDetected_StillSucceedsButRecordsFlag()
+    {
+        // T83 — supportive signal must not block login. The pipeline records
+        // the flag via ILoginAuditService for future fraud rules.
+        StubValidAssertion();
+        _geo.Setup(g => g.EvaluateAsync(It.IsAny<string?>(), default))
+            .ReturnsAsync(GeoBlockDecision.Allowed());
+        _sanctions.Setup(s => s.EvaluateAsync(SteamId, default))
+            .ReturnsAsync(SanctionsDecision.NoMatch());
+
+        var profile = new SteamPlayerSummary(SteamId, "Persona", null, null);
+        _profile.Setup(p => p.GetPlayerSummaryAsync(SteamId, default))
+            .ReturnsAsync(profile);
+
+        var user = new User { Id = Guid.NewGuid(), SteamId = SteamId };
+        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, profile, default))
+            .ReturnsAsync(new UserProvisioningResult(user, IsNewUser: true));
+
+        _access.Setup(a => a.GenerateAsync(user, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GeneratedAccessToken("access.jwt", DateTime.UtcNow.AddMinutes(15)));
+
+        _refresh.Setup(r => r.IssueAsync(user.Id, "9.9.9.9", "agent", default))
+            .ReturnsAsync(new GeneratedRefreshToken(
+                new RefreshToken { Id = Guid.NewGuid(), UserId = user.Id },
+                "refresh-plain",
+                DateTime.UtcNow.AddDays(7)));
+
+        _vpnDetector.Setup(v => v.IsVpnOrProxyAsync("9.9.9.9", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "9.9.9.9", "agent", default);
+
+        Assert.IsType<AuthenticationOutcome.Success>(result);
+        _audit.Verify(a => a.RecordLoginAsync(user.Id, "9.9.9.9", "agent", true, default), Times.Once);
     }
 
     private async Task RunHappyPath(bool isNewUser)
@@ -189,7 +227,7 @@ public class SteamAuthenticationPipelineTests
         Assert.Equal(accessToken, success.AccessToken);
         Assert.Equal(refreshToken, success.RefreshToken);
         Assert.Equal(isNewUser, success.IsNewUser);
-        _audit.Verify(a => a.RecordLoginAsync(user.Id, "1.2.3.4", "agent", default), Times.Once);
+        _audit.Verify(a => a.RecordLoginAsync(user.Id, "1.2.3.4", "agent", false, default), Times.Once);
     }
 
     private void StubValidAssertion()

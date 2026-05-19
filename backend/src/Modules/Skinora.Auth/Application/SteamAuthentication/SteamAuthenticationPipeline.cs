@@ -15,6 +15,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
     private readonly ISanctionsCheck _sanctions;
     private readonly ISanctionsViolationHandler _sanctionsViolation;
     private readonly IAgeGateCheck _ageGate;
+    private readonly IVpnProxyDetector _vpnDetector;
     private readonly ILogger<SteamAuthenticationPipeline> _logger;
 
     public SteamAuthenticationPipeline(
@@ -28,6 +29,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         ISanctionsCheck sanctions,
         ISanctionsViolationHandler sanctionsViolation,
         IAgeGateCheck ageGate,
+        IVpnProxyDetector vpnDetector,
         ILogger<SteamAuthenticationPipeline> logger)
     {
         _validator = validator;
@@ -40,6 +42,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         _sanctions = sanctions;
         _sanctionsViolation = sanctionsViolation;
         _ageGate = ageGate;
+        _vpnDetector = vpnDetector;
         _logger = logger;
     }
 
@@ -93,8 +96,16 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         var refresh = await _refreshTokenGenerator.IssueAsync(
             provisioning.User.Id, ipAddress, userAgent, cancellationToken);
 
+        // T83 — Supportive signal only. The detector returns false on any
+        // error path, so a torproject outage cannot lock users out.
+        var hasVpnSignal = await _vpnDetector.IsVpnOrProxyAsync(ipAddress, cancellationToken);
+        if (hasVpnSignal)
+            _logger.LogInformation(
+                "VPN signal detected for user {UserId} from IP {IpAddress} (supportive only).",
+                provisioning.User.Id, ipAddress);
+
         await _loginAudit.RecordLoginAsync(
-            provisioning.User.Id, ipAddress, userAgent, cancellationToken);
+            provisioning.User.Id, ipAddress, userAgent, hasVpnSignal, cancellationToken);
 
         return new AuthenticationOutcome.Success(
             provisioning.User, access, refresh, provisioning.IsNewUser);

@@ -1,3 +1,5 @@
+using MaxMind.GeoIP2;
+using Microsoft.Extensions.Logging;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Application.Session;
@@ -48,13 +50,82 @@ public static class SteamAuthenticationModule
         services.AddScoped<IUserProvisioningService, UserProvisioningService>();
         services.AddScoped<ILoginAuditService, LoginAuditService>();
 
-        // T30 — Access control pipeline: geo-block (SystemSetting-backed) +
-        // age gate (Steam account-age threshold). HTTP context access is
-        // required by HeaderCountryResolver.
+        // T30 / T83 — Access control pipeline: geo-block + age gate.
+        // ChainedCountryResolver tries each registered ICountryResolver
+        // (HeaderCountryResolver → MaxMindCountryResolver) and returns the
+        // first non-null code. The MaxMind reader is only registered when
+        // the MMDB file actually exists on disk — keeps dev/CI environments
+        // running on header-only resolution. HTTP context access required
+        // by HeaderCountryResolver.
         services.AddHttpContextAccessor();
-        services.AddSingleton<ICountryResolver, HeaderCountryResolver>();
+        services.Configure<GeolocationSettings>(configuration.GetSection(GeolocationSettings.SectionName));
+        services.AddSingleton<HeaderCountryResolver>();
+        services.AddSingleton<IEnumerable<ICountryResolver>>(sp =>
+        {
+            var resolvers = new List<ICountryResolver>
+            {
+                sp.GetRequiredService<HeaderCountryResolver>(),
+            };
+
+            var geoSettings = configuration
+                .GetSection(GeolocationSettings.SectionName)
+                .Get<GeolocationSettings>();
+            var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+            var moduleLogger = loggerFactory.CreateLogger("Skinora.Auth.Geolocation");
+
+            if (geoSettings is not null
+                && !string.IsNullOrWhiteSpace(geoSettings.DatabasePath)
+                && File.Exists(geoSettings.DatabasePath))
+            {
+                try
+                {
+                    var reader = new DatabaseReader(geoSettings.DatabasePath);
+                    var maxMindLogger = loggerFactory.CreateLogger<MaxMindCountryResolver>();
+                    resolvers.Add(new MaxMindCountryResolver(reader, maxMindLogger));
+                    moduleLogger.LogInformation(
+                        "MaxMind GeoLite2 resolver enabled (db: {DatabasePath}).",
+                        geoSettings.DatabasePath);
+                }
+                catch (Exception ex)
+                {
+                    moduleLogger.LogWarning(
+                        ex,
+                        "MaxMind GeoLite2 reader failed to load (path: {DatabasePath}); falling back to header-only resolution.",
+                        geoSettings.DatabasePath);
+                }
+            }
+            else
+            {
+                moduleLogger.LogInformation(
+                    "MaxMind GeoLite2 database not configured (Geolocation:DatabasePath empty or missing); header-only resolution.");
+            }
+
+            return resolvers;
+        });
+        services.AddSingleton<ICountryResolver>(sp =>
+            new ChainedCountryResolver(sp.GetRequiredService<IEnumerable<ICountryResolver>>()));
         services.AddScoped<IGeoBlockCheck, SettingsBasedGeoBlockCheck>();
         services.AddScoped<IAgeGateCheck, SettingsBasedAgeGateCheck>();
+
+        // T83 — VPN/proxy supportive signal. Disabled by default
+        // (VpnDetection:Enabled=false → NoOpVpnProxyDetector); production
+        // sets the flag to true and the Tor exit list is fetched on first
+        // login + cached for VpnDetection:CacheDurationMinutes.
+        services.Configure<VpnDetectionSettings>(configuration.GetSection(VpnDetectionSettings.SectionName));
+        var vpnSettings = configuration
+            .GetSection(VpnDetectionSettings.SectionName)
+            .Get<VpnDetectionSettings>() ?? new VpnDetectionSettings();
+        if (vpnSettings.Enabled)
+        {
+            services.AddHttpClient<IVpnProxyDetector, TorExitNodeVpnDetector>(client =>
+            {
+                client.Timeout = vpnSettings.RefreshTimeout;
+            });
+        }
+        else
+        {
+            services.AddSingleton<IVpnProxyDetector, NoOpVpnProxyDetector>();
+        }
 
         // T82 — DbLoginSanctionsCheck queries User by SteamId64, then runs
         // both DefaultPayoutAddress + DefaultRefundAddress against the
