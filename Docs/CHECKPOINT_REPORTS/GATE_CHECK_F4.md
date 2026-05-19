@@ -363,7 +363,7 @@ Frontend (`frontend/package.json`) F4 süresince değişmedi (`git diff phase/F3
 ### Faz Tag
 
 - Tag: `phase/F4-pass`
-- Commit: `3e71172` (T83 PR #126 squash, main HEAD)
+- Commit: `75957c0` (chore PR #127 squash — F4 gate check artifact'larını + T83 validator finalize'i içerir, post-merge main HEAD; gate check başlangıç anında main HEAD `3e71172` T83 PR #126 squash idi)
 
 ---
 
