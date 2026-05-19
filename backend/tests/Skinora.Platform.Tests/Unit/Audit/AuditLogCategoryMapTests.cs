@@ -87,7 +87,7 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Bot_Status_Reconciliation_And_HotWalletBreach()
+    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Bot_Status_Reconciliation_HotWalletBreach_And_Sanctions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.SecurityEvent);
@@ -95,7 +95,8 @@ public class AuditLogCategoryMapTests
         // Ordering mirrors the dictionary insertion order in
         // AuditLogCategoryMap: WALLET_ADDRESS_CHANGED (initial) →
         // BOT_STATUS_CHANGED (T69) → RECONCILIATION_MISMATCH (T76) →
-        // HOT_WALLET_THRESHOLD_BREACHED (T77).
+        // HOT_WALLET_THRESHOLD_BREACHED (T77) →
+        // SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED (T82).
         Assert.Equal(
             new[]
             {
@@ -103,6 +104,8 @@ public class AuditLogCategoryMapTests
                 AuditAction.BOT_STATUS_CHANGED,
                 AuditAction.RECONCILIATION_MISMATCH,
                 AuditAction.HOT_WALLET_THRESHOLD_BREACHED,
+                AuditAction.SANCTIONS_LIST_ADDRESS_ADDED,
+                AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED,
             },
             actions);
     }
