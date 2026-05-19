@@ -11,7 +11,9 @@
     "confirm": "Onayla",
     "save": "Kaydet",
     "back": "Geri",
-    "next": "İleri"
+    "next": "İleri",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı"
   },
   "auth": {
     "loginWithSteam": "Steam ile Giriş Yap",
@@ -23,5 +25,148 @@
     "profile": "Profil",
     "notifications": "Bildirimler",
     "settings": "Ayarlar"
+  },
+  "status": {
+    "CREATED": "Oluşturuldu",
+    "ACCEPTED": "Kabul Edildi",
+    "TRADE_OFFER_SENT_TO_SELLER": "Item Bekleniyor",
+    "ITEM_ESCROWED": "Ödeme Bekleniyor",
+    "PAYMENT_RECEIVED": "Ödeme Alındı",
+    "TRADE_OFFER_SENT_TO_BUYER": "Teslim Bekleniyor",
+    "ITEM_DELIVERED": "Teslim Edildi",
+    "COMPLETED": "Tamamlandı",
+    "CANCELLED_TIMEOUT": "Zaman Aşımı",
+    "CANCELLED_SELLER": "Satıcı İptal",
+    "CANCELLED_BUYER": "Alıcı İptal",
+    "CANCELLED_ADMIN": "Admin İptal",
+    "FLAGGED": "İnceleniyor",
+    "EMERGENCY_HOLD": "Donduruldu"
+  },
+  "countdown": {
+    "frozen": "Donduruldu",
+    "expired": "Süre doldu",
+    "warning": "Süreniz dolmak üzere",
+    "verboseDays": "{days}g {hours}sa",
+    "verboseHours": "{hours}sa {minutes}dk",
+    "verboseMinutes": "{minutes}dk {seconds}sn",
+    "freezeReason": {
+      "MAINTENANCE": "Bakım",
+      "STEAM_OUTAGE": "Steam kesintisi",
+      "BLOCKCHAIN_DEGRADATION": "Ödeme yavaşlığı",
+      "EMERGENCY_HOLD": "Acil durum"
+    }
+  },
+  "itemCard": {
+    "tradeable": "Takas edilebilir",
+    "nonTradeable": "Takas dışı",
+    "type": "Tür",
+    "wear": "Aşınma"
+  },
+  "userCard": {
+    "completedTransactions": "{count} tamamlanmış işlem",
+    "accountAge": "Hesap yaşı: {age}"
+  },
+  "timeline": {
+    "ariaLabel": "İşlem akışı",
+    "step": {
+      "CREATED": "Oluşturuldu",
+      "ACCEPTED": "Kabul Edildi",
+      "ITEM_ESCROWED": "Item Emanet",
+      "PAYMENT_RECEIVED": "Ödeme",
+      "PAYMENT_VERIFIED": "Ödeme Doğrulama",
+      "ITEM_DELIVERED": "Teslim",
+      "DELIVERY_VERIFIED": "Teslim Doğrulama",
+      "COMPLETED": "Tamamlandı"
+    }
+  },
+  "cancelModal": {
+    "title": "İşlemi iptal etmek istediğinize emin misiniz?",
+    "reasonLabel": "İptal sebebi",
+    "minChars": "en az {count} karakter",
+    "tooShort": "Sebep çok kısa",
+    "dismiss": "Vazgeç",
+    "confirm": "İptal Et"
+  },
+  "disputeForm": {
+    "title": "İtiraz Aç",
+    "stepLabel": {
+      "type": "1/3 — Tür seçimi",
+      "checking": "2/3 — Otomatik kontrol",
+      "result": "2/3 — Sonuç",
+      "escalation": "3/3 — Admin'e iletim",
+      "done": "Tamamlandı"
+    },
+    "typeLegend": "Hangi konuda itiraz ediyorsunuz?",
+    "type": {
+      "PAYMENT": {
+        "title": "Ödeme itirazı",
+        "description": "Ödeme gönderildi ama doğrulanmadı"
+      },
+      "DELIVERY": {
+        "title": "Teslim itirazı",
+        "description": "Item teslim edilmedi"
+      },
+      "WRONG_ITEM": {
+        "title": "Yanlış item",
+        "description": "Yanlış item teslim edildi"
+      }
+    },
+    "cancel": "Vazgeç",
+    "continue": "Devam",
+    "checking": "Sistem kontrol ediliyor...",
+    "result": {
+      "resolved": {
+        "title": "Otomatik çözüm bulundu",
+        "description": "Sisteminiz sorunu otomatik olarak çözdü. Detaylar bildirildi."
+      },
+      "unresolved": {
+        "title": "Otomatik çözüm bulunamadı",
+        "description": "Konu admin incelemesine iletilmek üzere hazır."
+      }
+    },
+    "escalate": "Admin'e İlet",
+    "close": "Kapat",
+    "detailLabel": "İtiraz detayı",
+    "back": "Geri",
+    "submit": "Gönder",
+    "submittedTitle": "İtiraz alındı",
+    "submittedDescription": "Bir admin en kısa sürede incelemeye alacak."
+  },
+  "maintenanceBanner": {
+    "plannedMaintenance": "Platform bakımı planlanıyor. Aktif işlemlerin süreleri dondurulacaktır.",
+    "plannedMaintenanceWithSchedule": "Platform bakımı: {scheduledAt}. Aktif işlemlerin süreleri dondurulacaktır.",
+    "activeMaintenance": "Platform şu an bakımda. İşlem süreleri donduruldu.",
+    "activeMaintenanceWithSchedule": "Platform bakımda ({scheduledAt}). İşlem süreleri donduruldu.",
+    "steamOutage": "Steam servisleri geçici olarak kullanılamıyor. İşlem süreleri donduruldu.",
+    "steamOutageWithSchedule": "Steam kesintisi ({scheduledAt}). İşlem süreleri donduruldu.",
+    "blockchainDegradation": "Ödeme doğrulama geçici olarak yavaşlayabilir. Ödeme adımındaki işlem süreleri donduruldu.",
+    "blockchainDegradationWithSchedule": "Ödeme doğrulama yavaş ({scheduledAt}). Süreler donduruldu.",
+    "dismiss": "Kapat"
+  },
+  "languageSelector": {
+    "ariaLabel": "Dil seç"
+  },
+  "walletAddress": {
+    "label": "TRC-20 cüzdan adresi",
+    "hint": "T ile başlamalı, 34 karakter",
+    "invalidFormat": "Geçersiz TRC-20 adresi",
+    "sanctioned": "Bu adres yaptırım listesinde. Lütfen başka bir adres girin.",
+    "validationError": "Doğrulama sırasında bir hata oluştu",
+    "edit": "Düzenle",
+    "confirm": "Onayla",
+    "validating": "Kontrol ediliyor",
+    "continue": "Devam",
+    "confirmTitle": "Bu adres doğru mu?"
+  },
+  "pagination": {
+    "ariaLabel": "Sayfalama",
+    "previous": "Önceki",
+    "next": "Sonraki"
+  },
+  "filterBar": {
+    "any": "Tümü",
+    "apply": "Filtrele",
+    "clear": "Temizle",
+    "removeFilter": "{label} filtresini kaldır"
   }
 }
