@@ -2,6 +2,19 @@
 
 **Faz:** F4 | **Durum:** ⏳ Yapım bitti — bağımsız doğrulama bekliyor | **Tarih:** 2026-05-19
 
+> **Bitiş Kapısı (task.md §"Bitiş Kapısı") — 8/8 ✓**
+>
+> 1. ✓ Branch push edildi (`task/T82-sanctions-screening`)
+> 2. ✓ PR açıldı ([PR #125](https://github.com/turkerurganci/Skinora/pull/125))
+> 3. ✓ PR numarası rapora yazıldı (bkz. "Commit & PR")
+> 4. ✓ Rapor + status + memory commit edilip push edildi (`9b6c52e` + `1b027ae` + `df96739` + `ded3a96` + `3739cdd`)
+> 5. ✓ CI run tamamlandı (`conclusion=success`)
+> 6. ✓ CI run sonucu **success** — HEAD `3739cdd` run [`26087784183`](https://github.com/turkerurganci/Skinora/actions/runs/26087784183) **10/10 SUCCESS** (Detect+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate)
+> 7. ✓ Branch izolasyon check temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız `T82`
+> 8. ✓ Repo memory'de T82 satırı eklendi ([`.claude/memory/MEMORY.md`](../../.claude/memory/MEMORY.md))
+
+> **2× ci-failure remediation push:** İlk impl push `9b6c52e` Auth.Tests `SteamAuthenticationPipelineTests` ctor yeni `ISanctionsViolationHandler` arg eksikti (run [`26086942610`](https://github.com/turkerurganci/Skinora/actions/runs/26086942610) Build job fail) → `1b027ae` fix; ikinci push `1b027ae` Platform.Tests `AuditLogCategoryMapTests.ActionsInCategory_SECURITY_EVENT` ordering assertion T82'nin 2 yeni audit action'ını yansıtmıyordu (run [`26087230040`](https://github.com/turkerurganci/Skinora/actions/runs/26087230040) Unit test job fail) → `ded3a96` fix. Her ikisi de aynı kök neden — task `dotnet build src/Skinora.API` sonrası ayrı test proje build'i atlandı; tüm test projeleri `dotnet test --filter Category!=Integration` ile birlikte koşulmadığı için isabetsiz kaldı. 2× `[ci-failure]` BYPASS_LOG entry.
+
 ---
 
 ## Yapılan İşler
@@ -177,9 +190,14 @@ Plan kabul kriterleri ([`Docs/11_IMPLEMENTATION_PLAN.md`](../../Docs/11_IMPLEMEN
 
 - Branch: `task/T82-sanctions-screening`
 - Docs PR: [PR #124](https://github.com/turkerurganci/Skinora/pull/124) (`7cd4a95` squash, CI ✓ `26083956756` 3/3 docs-only)
-- Impl commit: TBD (bu rapor + status + memory commit sonrası)
-- Impl PR: TBD (push sonrası açılacak)
-- CI: TBD
+- Impl PR: [PR #125](https://github.com/turkerurganci/Skinora/pull/125) (MERGEABLE)
+- Commits:
+  - `9b6c52e` — T82 ana impl
+  - `1b027ae` — Auth.Tests `SteamAuthenticationPipelineTests` ctor fix (CI failure remediation)
+  - `df96739` — BYPASS_LOG entry (Auth fix)
+  - `ded3a96` — Platform.Tests `AuditLogCategoryMapTests` SECURITY_EVENT ordering fix (CI failure remediation)
+  - `3739cdd` — BYPASS_LOG entry (Platform.Tests fix) — HEAD
+- CI: ✓ HEAD `3739cdd` run [`26087784183`](https://github.com/turkerurganci/Skinora/actions/runs/26087784183) **10/10 SUCCESS**
 
 ## Known Limitations / Follow-up
 
