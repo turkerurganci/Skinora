@@ -20,11 +20,33 @@
     "authenticating": "Doğrulanıyor..."
   },
   "nav": {
+    "primary": "Ana menü",
+    "suspendedNav": "Kısıtlı menü",
     "dashboard": "Kontrol Paneli",
     "transactions": "İşlemler",
     "profile": "Profil",
     "notifications": "Bildirimler",
-    "settings": "Ayarlar"
+    "settings": "Ayarlar",
+    "support": "Destek",
+    "signOut": "Çıkış",
+    "unread": "okunmamış",
+    "adminFallback": "Admin"
+  },
+  "adminNav": {
+    "ariaLabel": "Admin menü",
+    "dashboard": "Kontrol Paneli",
+    "flags": "Flag'ler",
+    "transactions": "İşlemler",
+    "settings": "Ayarlar",
+    "steamAccounts": "Steam Hesapları",
+    "roles": "Roller",
+    "users": "Kullanıcılar",
+    "auditLog": "Audit Log"
+  },
+  "footer": {
+    "tos": "Kullanıcı Sözleşmesi",
+    "privacy": "Gizlilik Politikası",
+    "privacyComingSoon": "Yakında"
   },
   "status": {
     "CREATED": "Oluşturuldu",

@@ -20,11 +20,33 @@
     "authenticating": "Authenticating..."
   },
   "nav": {
+    "primary": "Main menu",
+    "suspendedNav": "Restricted menu",
     "dashboard": "Dashboard",
     "transactions": "Transactions",
     "profile": "Profile",
     "notifications": "Notifications",
-    "settings": "Settings"
+    "settings": "Settings",
+    "support": "Support",
+    "signOut": "Sign out",
+    "unread": "unread",
+    "adminFallback": "Admin"
+  },
+  "adminNav": {
+    "ariaLabel": "Admin menu",
+    "dashboard": "Dashboard",
+    "flags": "Flags",
+    "transactions": "Transactions",
+    "settings": "Settings",
+    "steamAccounts": "Steam Accounts",
+    "roles": "Roles",
+    "users": "Users",
+    "auditLog": "Audit Log"
+  },
+  "footer": {
+    "tos": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "privacyComingSoon": "Coming soon"
   },
   "status": {
     "CREATED": "Created",

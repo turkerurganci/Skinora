@@ -20,11 +20,33 @@
     "authenticating": "认证中..."
   },
   "nav": {
+    "primary": "主菜单",
+    "suspendedNav": "受限菜单",
     "dashboard": "仪表盘",
     "transactions": "交易",
     "profile": "个人资料",
     "notifications": "通知",
-    "settings": "设置"
+    "settings": "设置",
+    "support": "支持",
+    "signOut": "退出",
+    "unread": "未读",
+    "adminFallback": "管理员"
+  },
+  "adminNav": {
+    "ariaLabel": "管理员菜单",
+    "dashboard": "仪表盘",
+    "flags": "标记",
+    "transactions": "交易",
+    "settings": "设置",
+    "steamAccounts": "Steam 账户",
+    "roles": "角色",
+    "users": "用户",
+    "auditLog": "审计日志"
+  },
+  "footer": {
+    "tos": "服务条款",
+    "privacy": "隐私政策",
+    "privacyComingSoon": "即将推出"
   },
   "status": {
     "CREATED": "已创建",
