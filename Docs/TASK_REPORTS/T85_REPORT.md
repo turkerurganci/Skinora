@@ -1,6 +1,6 @@
 # T85 — Global Layout (header, navigation, footer)
 
-**Faz:** F5 | **Durum:** ⏳ Yapım bitti, validator bekleniyor | **Tarih:** 2026-05-19
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-19
 
 ---
 
@@ -70,9 +70,19 @@ Plan: **Yok** (görsel chrome — E2E'de test edilecek).
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator chat'i bekleniyor |
-| Bulgu sayısı | TBD |
-| Düzeltme gerekli mi | TBD |
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator çıktısı (bağımsız spec conformance review, 2026-05-19):**
+
+- **Hard-stop kapıları:** Adım -1 working tree temiz ✓, Adım 0 main CI son 3 run hepsi success (`26113451017`/`26113451018`/`26106824890`) ✓, Adım 0b memory drift kontrolü T85 satırları MEMORY.md L199-L203 mevcut ✓, Adım 8a task branch CI run [`26116320346`](https://github.com/turkerurganci/Skinora/actions/runs/26116320346) HEAD `2fb208c` 10/10 job success ✓.
+- **Kabul kriterleri:** 4/4 ✓ — Header.tsx 5 öğe (logo+bildirim+profil+dil+ayarlar) §7.1 ascii birebir, SuspendedHeader.tsx 4 öğe (logo+dil+destek+çıkış) MainShell `isSuspended` koşullu, AdminHeader.tsx 3 öğe (logo+ad+çıkış) §8.1 birebir, AdminSidebar.tsx 8 öğe (plan supersede ascii 7).
+- **Test:** Plan beklentisi yok. Lint 0E/0W, type-check ✓ ("Finished TypeScript in 2.5s"), build ✓ ("Compiled successfully in 2.9s", 18 route).
+- **Güvenlik:** Secret sızıntısı temiz, auth-impact yok (chrome-only), input validation yok, yeni dış bağımlılık yok (`package.json` diff boş).
+- **i18n:** 4 locale (en/tr/es/zh) anahtar simetrisi tam — `nav.{primary,suspendedNav,support,signOut,unread,adminFallback}` + `adminNav.{ariaLabel + 8 menu key}` + `footer.{tos,privacy,privacyComingSoon}`.
+- **Rapor karşılaştırması:** Tam uyumlu — yapım raporunun 4 kabul kriteri tablosu, dosya envanteri (7 yeni + 7 güncel), lint/build/TS claim'leri, PR #130 + CI run referansı bağımsız bulgularla 1:1 eşleşti.
+- **Notlar:** §7.1 strict "Suspended header variant" tanımlamıyor; plan T85 kabul kriteri ayrı variant istiyor, build plan'ı izledi (spec-vs-plan farkı plan onayında implicit kabul). §8.1 ascii 7 öğe vs plan 8 öğe drift'i memory L202'de "plan supersede" onayı ile kayıtlı.
 
 ## Altyapı Değişiklikleri
 
