@@ -84,9 +84,9 @@ Plan: **Yok** (görsel chrome — E2E'de test edilecek).
 ## Commit & PR
 
 - Branch: `task/T85-global-layout`
-- Commit: TBD (push sırasında doldurulacak)
-- PR: TBD (push sonrası `gh pr create` ile açılacak)
-- CI: TBD (push sonrası CI run izlenecek)
+- Commit: `300c139` — `T85: Global layout (header, navigation, footer)`
+- PR: [#130](https://github.com/turkerurganci/Skinora/pull/130)
+- CI: ⏳ Watching (push sonrası izleniyor — `gh run watch <ID> --exit-status`)
 
 ## Known Limitations / Follow-up
 
