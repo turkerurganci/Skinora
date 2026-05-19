@@ -1,6 +1,6 @@
 # T82 — Sanctions screening servisi
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti — bağımsız doğrulama bekliyor | **Tarih:** 2026-05-19
+**Faz:** F4 | **Durum:** ✓ PASS — bağımsız doğrulama tamamlandı (2 minor S1 drift, non-blocking) | **Tarih:** 2026-05-19
 
 > **Bitiş Kapısı (task.md §"Bitiş Kapısı") — 8/8 ✓**
 >
@@ -175,9 +175,34 @@ Plan kabul kriterleri ([`Docs/11_IMPLEMENTATION_PLAN.md`](../../Docs/11_IMPLEMEN
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** (bağımsız validator chat'i, 2026-05-19) |
+| Bulgu sayısı | 2 minor (S1 — non-blocking; merge sonrası follow-up cleanup) |
+| Düzeltme gerekli mi | Hayır (PASS verdict). Follow-up chore PR önerilir. |
+
+### Validator Bulguları
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | S1 (minor) | 06 §3.25 indeks tablosunda 2. satır (`IX_SanctionedAddresses_Address` NONCLUSTERED non-filtered) artık geçerli değil — K8 ile filtered UQ tek indeksin hot-path'i kapsadığı doğrulandı (SQL Server filtered UQ `WHERE IsActive=1` lookup query `WHERE Address=@ AND IsActive=1` ile birebir örtüşür, ayrı non-filtered indeks marjinal yarar sağlardı). Doc güncellenmeli (satırı sil veya "duplicate of filtered UQ" notu ekle). | `Docs/06_DATA_MODEL.md` §3.25 indeks tablosu |
+| 2 | S1 (minor) | `PermissionCatalog.IsKnown` XML doc-comment'ı "Returns true if `key` is one of the 11 catalog entries" diyor, kod 12 entry içeriyor (T82 ile `ManageSanctions` eklendi). | `backend/src/Modules/Skinora.Admin/Application/Permissions/PermissionCatalog.cs:52` |
+
+### Validator Adımları
+
+| Adım | Sonuç | Kanıt |
+|---|---|---|
+| -1. Working tree hygiene | ✓ Temiz | `git status --short` boş |
+| 0. Main CI startup check | ✓ 3/3 success | Son 3 main run: 26084081478 + 26084081483 + 26056251831 hepsi `success` |
+| 0b. Repo memory drift check | ✓ T82 satırı var | `.claude/memory/MEMORY.md` Current Status bloğu |
+| 1-2. Task tanımı + referans dokümanlar | ✓ Okundu | 11_IMPLEMENTATION_PLAN §T82 + 02 §21.1 + §12.3 + 03 §11a.3 + 06 §3.25 + 07 §9.11 + §9.23-§9.25 + 04 §8.8 |
+| 3. Remote fetch | ✓ Tamamlandı | `git fetch origin` |
+| 4. Branch kodu | ✓ İncelendi | 40 dosya 5164+ / 26− (`git diff --stat main...HEAD`) |
+| 5. Kabul kriterleri | ✓ 5/5 | Tablo yukarıda |
+| 6. Doğrulama kontrol listesi | ✓ 02 §21.1 sanctions kuralları eksiksiz (cüzdan adresi bazlı tarama + match → engelleme + flag + EMERGENCY_HOLD + admin yönetimi + MANAGE_SANCTIONS + MVP MANUAL scope) |
+| 7. Test sonuçları | ✓ PASS | Yerel: Shared 373/373 + Auth `SteamAuthenticationPipelineTests` 7/7 + Platform `AuditLogCategoryMapTests` 33/33; PR #125 CI integration 4. Integration test job ✓ (12/12 AdminSanctions + WalletAddress regresyon + AdminRoles 11→12) |
+| 8. Build | ✓ Release 0W/0E | `dotnet build Skinora.sln -c Release` 15.92s |
+| 8a. Task branch CI | ✓ 10/10 SUCCESS | HEAD `5737171` üzerinde son run [`26088367258`](https://github.com/turkerurganci/Skinora/actions/runs/26088367258): Detect/Guard(skipped)/Lint/Build/Unit/Integration/Contract/Migration/Docker backend/CI Gate |
+| 9. Mini güvenlik kontrolü | ✓ Temiz | Secret sızıntısı: yok (test JWT sabit, prod değil). Auth: tüm 3 endpoint `[Authorize(Policy = "Permission:MANAGE_SANCTIONS")]` + rate limit. Input validation: address whitespace + TRC-20 format + network/source allowlist + reason ≤500 + paging clamp + sortBy switch allowlist + EF.Functions.Like parametreli. Yeni dış bağımlılık: yok |
+| 10. Doküman uyumu | ✓ Tutarlı (2 minor doc drift yukarıda) | AuditAction/FraudFlagType/AuditLogCategoryMap/Migration/Error codes/Permission catalog 12. entry/AD22-AD24 kontrat tamam |
 
 ## Altyapı Değişiklikleri
 
