@@ -1,6 +1,6 @@
 # T83 — Geo-block servisi
 
-**Faz:** F4 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-05-19
+**Faz:** F4 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-19
 
 ---
 
@@ -78,9 +78,19 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (validate chat ayrı session) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS bağımsız validator (2026-05-19, ayrı chat) |
+| Bulgu sayısı | 0 S-bulgu, 0 advisory |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator kanıtları:**
+- 4/4 kabul kriteri ✓ (1 MaxMind+Chained resolver IP→ülke lookup; 2 T30'dan devralındı + regresyon temiz; 3 T26+T30+T63 admin SystemSetting endpoint zinciri; 4 supportive only — `Callback_VpnSignalDetected_StillSucceedsAndPersistsFlag` Redirect+HasVpnSignal=true).
+- 1/1 doğrulama kontrol listesi ✓ (02 §21.1 dört madde tam karşılandı).
+- Yeniden çalıştırılan testler: Auth T83 filter 29/29 (`MaxMind` 6 + `Chained` 5 + `TorExit` 9 + `Pipeline` 9 dahil), API `AuthSteamEndpointTests` 10/10, Build Release 0W/0E (12s), dotnet format Δ=0.
+- Task branch CI HEAD `40e47f6` run [`26093016874`](https://github.com/turkerurganci/Skinora/actions/runs/26093016874) **10/10 SUCCESS** (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate).
+- Main CI startup 3/3 success ([`26090069234`](https://github.com/turkerurganci/Skinora/actions/runs/26090069234) + [`26090069233`](https://github.com/turkerurganci/Skinora/actions/runs/26090069233) + [`26084081478`](https://github.com/turkerurganci/Skinora/actions/runs/26084081478)).
+- Mini güvenlik temiz (license key ops-only env, MaxMind.GeoIP2 5.3.0 Apache 2.0 first-party, Tor exit list public/no-auth/soft-fail, fail-open misconfiguration, IPAddress.TryParse + 2-char ISO normalize + Tor parse defensive).
+- Doküman uyumu tam (02 §21.1 + 03 §11a.1 + 06 §3.2 `HasVpnSignal` + 08 §10 yeni section + GEOIP_SETUP.md runbook kodla birebir).
+- Rapor uyumu: Bağımsız validator verdict ile yapım raporu **tam uyumlu** — kabul kriteri matrisi, test isimleri, migration adı, K1–K8 forward-deferred sınırları eşleşiyor.
 
 ## Altyapı Değişiklikleri
 
@@ -99,9 +109,9 @@
 ## Commit & PR
 
 - Branch: `task/T83-geo-block-service`
-- Commit: pending push
-- PR: pending
-- CI: pending
+- HEAD: `40e47f6` ("T83: update status with PR #126 link") + `e712ab3` ("T83: Geo-block servisi — real IP geolocation + VPN supportive signal")
+- PR: [#126](https://github.com/turkerurganci/Skinora/pull/126) MERGEABLE
+- CI: ✓ run [`26093016874`](https://github.com/turkerurganci/Skinora/actions/runs/26093016874) **10/10 SUCCESS**
 
 ## Known Limitations / Follow-up
 
