@@ -457,12 +457,16 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
         {
             SanctionsStub.ShouldMatch = false;
 
+            // Full schema rebuild — T82 wallet sanctions match path now stages
+            // a FraudFlag + EMERGENCY_HOLD cascade + AuditLog rows when the
+            // stub returns Match=true. Granular RemoveRange across that chain
+            // is fragile (FK + RowVersion). EnsureDeleted + EnsureCreated
+            // restores the SqliteConnection's in-memory schema with seed data
+            // in <50ms.
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.Set<Transaction>().RemoveRange(db.Set<Transaction>());
-            var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
-            db.Set<User>().RemoveRange(db.Set<User>().Where(u => !seedIds.Contains(u.Id)));
-            db.SaveChanges();
+            db.Database.EnsureDeleted();
+            db.Database.EnsureCreated();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)

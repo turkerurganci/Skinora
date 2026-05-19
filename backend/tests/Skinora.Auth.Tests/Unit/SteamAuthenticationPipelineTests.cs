@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Skinora.Auth.Application.SteamAuthentication;
 using Skinora.Auth.Domain.Entities;
+using Skinora.Shared.Sanctions;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Auth.Tests.Unit;
@@ -19,6 +20,7 @@ public class SteamAuthenticationPipelineTests
     private readonly Mock<ILoginAuditService> _audit = new();
     private readonly Mock<IGeoBlockCheck> _geo = new();
     private readonly Mock<ISanctionsCheck> _sanctions = new();
+    private readonly Mock<ISanctionsViolationHandler> _sanctionsViolation = new();
     private readonly Mock<IAgeGateCheck> _ageGate = new();
 
     private readonly ILogger<SteamAuthenticationPipeline> _logger =
@@ -30,7 +32,8 @@ public class SteamAuthenticationPipelineTests
             .ReturnsAsync(AgeGateDecision.Allowed());
         return new(_validator.Object, _profile.Object, _provisioning.Object,
             _access.Object, _refresh.Object, _audit.Object,
-            _geo.Object, _sanctions.Object, _ageGate.Object, _logger);
+            _geo.Object, _sanctions.Object, _sanctionsViolation.Object,
+            _ageGate.Object, _logger);
     }
 
     private static Dictionary<string, string> ValidCallback() => new()
@@ -105,7 +108,8 @@ public class SteamAuthenticationPipelineTests
         var result = await new SteamAuthenticationPipeline(
             _validator.Object, _profile.Object, _provisioning.Object,
             _access.Object, _refresh.Object, _audit.Object,
-            _geo.Object, _sanctions.Object, _ageGate.Object, _logger)
+            _geo.Object, _sanctions.Object, _sanctionsViolation.Object,
+            _ageGate.Object, _logger)
             .ExecuteAsync(ValidCallback(), null, null, default);
 
         var blocked = Assert.IsType<AuthenticationOutcome.AgeBlocked>(result);

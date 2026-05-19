@@ -207,10 +207,11 @@ public class EnumTests
     // ── FraudFlagType (4) ───────────────────────────────────────────
 
     [Fact]
-    public void FraudFlagType_ShouldHave4Values()
+    public void FraudFlagType_ShouldHave5Values()
     {
+        // 5 after T82 added SANCTIONS_MATCH (02 §21.1, 06 §2.11).
         var values = Enum.GetValues<FraudFlagType>();
-        Assert.Equal(4, values.Length);
+        Assert.Equal(5, values.Length);
     }
 
     [Theory]
@@ -218,6 +219,7 @@ public class EnumTests
     [InlineData(nameof(FraudFlagType.HIGH_VOLUME))]
     [InlineData(nameof(FraudFlagType.ABNORMAL_BEHAVIOR))]
     [InlineData(nameof(FraudFlagType.MULTI_ACCOUNT))]
+    [InlineData(nameof(FraudFlagType.SANCTIONS_MATCH))]
     public void FraudFlagType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(FraudFlagType), Enum.Parse<FraudFlagType>(valueName)));
@@ -375,13 +377,14 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (24) ────────────────────────────────────────────
+    // ── AuditAction (26) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave24Values()
+    public void AuditAction_ShouldHave26Values()
     {
+        // 26 after T82 added SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(24, values.Length);
+        Assert.Equal(26, values.Length);
     }
 
     [Theory]
@@ -409,6 +412,8 @@ public class EnumTests
     [InlineData(nameof(AuditAction.RECONCILIATION_MISMATCH))]
     [InlineData(nameof(AuditAction.COLD_WALLET_TRANSFER_INITIATED))]
     [InlineData(nameof(AuditAction.HOT_WALLET_THRESHOLD_BREACHED))]
+    [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_ADDED))]
+    [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));

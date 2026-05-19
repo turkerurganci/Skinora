@@ -1,7 +1,7 @@
 namespace Skinora.Admin.Application.Permissions;
 
 /// <summary>
-/// Static catalog of the 11 admin permissions defined by 07 §9.11
+/// Static catalog of the 12 admin permissions defined by 07 §9.11
 /// <c>availablePermissions</c> (kept 1:1 with the 04 §8.8 yetki matrix).
 /// Single source of truth in code — the AD11 response, role validation
 /// (INVALID_PERMISSION) and the Permission constants used by
@@ -23,6 +23,7 @@ public static class PermissionCatalog
         public const string ViewAuditLog = "VIEW_AUDIT_LOG";
         public const string CancelTransactions = "CANCEL_TRANSACTIONS";
         public const string EmergencyHold = "EMERGENCY_HOLD";
+        public const string ManageSanctions = "MANAGE_SANCTIONS";
     }
 
     /// <summary>
@@ -42,6 +43,7 @@ public static class PermissionCatalog
         new(Keys.ViewAuditLog, "Audit log görüntüle"),
         new(Keys.CancelTransactions, "İşlemleri iptal et"),
         new(Keys.EmergencyHold, "İşlemleri acil dondurma/kaldırma"),
+        new(Keys.ManageSanctions, "Sanctions listesi yönet"),
     ];
 
     private static readonly HashSet<string> KeySet =
