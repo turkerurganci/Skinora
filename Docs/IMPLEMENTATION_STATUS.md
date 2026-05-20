@@ -179,7 +179,7 @@
 | T84 | Ortak UI bileşenleri (C01–C17) | ✓ Tamamlandı | ✓ PASS | b148976 |
 | T85 | Global layout (header, navigation, footer) | ✓ Tamamlandı | ✓ PASS | 2fb208c |
 | T86 | Landing page (S01) | ✓ Tamamlandı | ✓ PASS | 1088c2a |
-| T87 | Auth akışı ekranları | ⬚ Bekliyor | — | — |
+| T87 | Auth akışı ekranları | ⏳ Devam ediyor | ⏳ | — |
 | T88 | Dashboard (S05) | ⬚ Bekliyor | — | — |
 | T89 | İşlem oluşturma (S06) | ⬚ Bekliyor | — | — |
 | T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⬚ Bekliyor | — | — |
