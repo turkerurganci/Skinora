@@ -1,7 +1,41 @@
 {
   "landing": {
-    "title": "Skinora",
-    "subtitle": "Plataforma segura de custodia de ítems CS2"
+    "hero": {
+      "title": "Custodia segura para el comercio de ítems de CS2",
+      "subtitle": "Tu ítem y tu pago cambian de manos mediante una custodia automática y neutral.",
+      "cta": "Iniciar sesión con Steam",
+      "ctaDisabledHint": "La plataforma está en mantenimiento. Inténtalo de nuevo más tarde."
+    },
+    "howItWorks": {
+      "title": "Cómo funciona",
+      "steps": {
+        "sellerStarts": {
+          "title": "El vendedor inicia la operación",
+          "description": "Crea una nueva transacción con el ítem, el precio y los datos del comprador."
+        },
+        "itemEscrowed": {
+          "title": "El ítem entra en custodia",
+          "description": "El ítem se envía al bot de la plataforma en Steam y se conserva de forma segura."
+        },
+        "buyerPays": {
+          "title": "El comprador envía el pago",
+          "description": "Se envían USDT/USDC a la dirección indicada y la cadena verifica automáticamente."
+        },
+        "autoSettle": {
+          "title": "Entrega y pago automáticos",
+          "description": "El ítem se entrega al comprador y el pago del vendedor se libera en el mismo paso."
+        }
+      }
+    },
+    "trust": {
+      "title": "Por qué Skinora",
+      "totalTransactions": "Transacciones completadas",
+      "uptime": "Disponibilidad de la plataforma",
+      "automation": {
+        "title": "Verificación automática",
+        "body": "Los pasos de pago y entrega son verificados por el sistema, no por una persona."
+      }
+    }
   },
   "common": {
     "loading": "Cargando...",

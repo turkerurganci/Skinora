@@ -1,7 +1,41 @@
 {
   "landing": {
-    "title": "Skinora",
-    "subtitle": "安全的CS2物品托管平台"
+    "hero": {
+      "title": "安全的 CS2 物品交易托管",
+      "subtitle": "您的物品与款项通过一个自动且中立的托管完成交换。",
+      "cta": "使用 Steam 登录",
+      "ctaDisabledHint": "平台正在维护中,请稍后再试。"
+    },
+    "howItWorks": {
+      "title": "运作方式",
+      "steps": {
+        "sellerStarts": {
+          "title": "卖家发起交易",
+          "description": "填写物品、价格和买家信息,创建一笔新交易。"
+        },
+        "itemEscrowed": {
+          "title": "物品进入托管",
+          "description": "物品通过 Steam 发送至平台机器人并安全保管。"
+        },
+        "buyerPays": {
+          "title": "买家完成付款",
+          "description": "将 USDT/USDC 发送到指定地址,系统在链上自动验证。"
+        },
+        "autoSettle": {
+          "title": "自动交付与放款",
+          "description": "物品交付给买家,卖家的款项在同一步骤中自动释放。"
+        }
+      }
+    },
+    "trust": {
+      "title": "为什么选择 Skinora",
+      "totalTransactions": "已完成交易",
+      "uptime": "平台正常运行时间",
+      "automation": {
+        "title": "自动验证",
+        "body": "支付与交付步骤由系统自动验证,而非人工处理。"
+      }
+    }
   },
   "common": {
     "loading": "加载中...",

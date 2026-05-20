@@ -1,14 +1,21 @@
-import { useTranslations } from "next-intl";
+"use client";
+
+import { Footer } from "@/components/layout/Footer";
+import { HeroSection, HowItWorks, MaintenanceGate, TrustSignals } from "@/components/landing";
 
 export default function LandingPage() {
-  const t = useTranslations("landing");
-
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold">{t("title")}</h1>
-        <p className="mt-4 text-lg text-gray-600">{t("subtitle")}</p>
-      </div>
+    <div className="flex min-h-screen flex-col bg-white">
+      <MaintenanceGate>
+        {({ ctaDisabled }) => (
+          <main className="flex-1">
+            <HeroSection ctaDisabled={ctaDisabled} />
+            <HowItWorks />
+            <TrustSignals />
+          </main>
+        )}
+      </MaintenanceGate>
+      <Footer />
     </div>
   );
 }
