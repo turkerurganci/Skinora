@@ -88,7 +88,7 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 - Branch: `task/T86-landing-page`
 - Commit: `1088c2a` — T86: Landing page (S01)
 - PR: #131
-- CI: ⏳ in_progress (run [`26178397649`](https://github.com/turkerurganci/Skinora/actions/runs/26178397649))
+- CI: ✓ PASS — run [`26178654662`](https://github.com/turkerurganci/Skinora/actions/runs/26178654662) (HEAD `6cfdb43`, 2026-05-20). Önceki run [`26178397649`](https://github.com/turkerurganci/Skinora/actions/runs/26178397649) (`1088c2a`) rapor commit push'u tarafından concurrency-cancel edildi (task.md "Concurrency notu" beklenen davranış).
 
 ## Mimari Kararlar (Notlar)
 
