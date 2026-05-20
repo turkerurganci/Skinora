@@ -100,9 +100,9 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 ## Commit & PR
 
 - Branch: `task/T87-auth-flow-screens`
-- Commit: `17d01d5` — T87: Auth akışı ekranları (S02, S03, S03a-d, ToS modal)
+- Commits: `17d01d5` (T87 changes) + `2b7c305` (docs: PR #132 + CI run ID)
 - PR: [#132](https://github.com/turkerurganci/Skinora/pull/132)
-- CI: in_progress — run [`26184225581`](https://github.com/turkerurganci/Skinora/actions/runs/26184225581) (HEAD `17d01d5`)
+- CI: ✓ PASS — run [`26184253616`](https://github.com/turkerurganci/Skinora/actions/runs/26184253616) (HEAD `2b7c305`) 10/10 job (Guard skipped — direct push, normal). Önceki run [`26184225581`](https://github.com/turkerurganci/Skinora/actions/runs/26184225581) (`17d01d5`) rapor commit push'u tarafından concurrency-cancel edildi (task.md "Concurrency notu" beklenen davranış).
 
 ## Mimari Kararlar (Notlar)
 
@@ -133,11 +133,11 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 
 ## Bitiş Kapısı (T11.2)
 
-- [ ] Branch push edildi mi? → post-push
-- [ ] PR açıldı mı? → post-push
-- [ ] PR numarası rapora yazıldı mı? → post-PR
-- [ ] Rapor + status push edildi mi? → post-push
-- [ ] CI run tamamlandı mı? → post-push
-- [ ] CI run sonucu `success` mi? → post-CI
-- [ ] Branch izolasyon check temiz mi? → `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → yalnız T87
-- [ ] Repo memory'de TXX satırı eklendi/güncellendi mi? → bu commit'te
+- [x] Branch push edildi mi? → `task/T87-auth-flow-screens` → `origin` ✓
+- [x] PR açıldı mı? → PR #132 ✓
+- [x] PR numarası rapora yazıldı mı? → "Commit & PR" bölümü ✓
+- [x] Rapor + status push edildi mi? → `2b7c305` ✓
+- [x] CI run tamamlandı mı? → run `26184253616` `completed` ✓
+- [x] CI run sonucu `success` mi? → 10/10 job (Guard skipped, normal) ✓
+- [x] Branch izolasyon check temiz mi? → `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → `T87` tek başına ✓
+- [x] Repo memory'de T87 satırı eklendi mi? → `.claude/memory/MEMORY.md` aynı commit'te ✓
