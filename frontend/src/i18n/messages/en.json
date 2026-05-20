@@ -1,7 +1,41 @@
 {
   "landing": {
-    "title": "Skinora",
-    "subtitle": "Secure CS2 Item Escrow Platform"
+    "hero": {
+      "title": "Secure escrow for CS2 item trades",
+      "subtitle": "Your item and your payment change hands through an automatic, neutral escrow.",
+      "cta": "Sign in with Steam",
+      "ctaDisabledHint": "Platform is under maintenance. Please try again later."
+    },
+    "howItWorks": {
+      "title": "How it works",
+      "steps": {
+        "sellerStarts": {
+          "title": "Seller starts the trade",
+          "description": "Create a new transaction with the item, price, and buyer details."
+        },
+        "itemEscrowed": {
+          "title": "Item goes into escrow",
+          "description": "The item is sent to the platform bot on Steam and held safely."
+        },
+        "buyerPays": {
+          "title": "Buyer sends payment",
+          "description": "USDT/USDC is sent to the provided address and verified on-chain automatically."
+        },
+        "autoSettle": {
+          "title": "Automatic delivery & payout",
+          "description": "The item is delivered to the buyer and the seller's payout is released in the same step."
+        }
+      }
+    },
+    "trust": {
+      "title": "Why Skinora",
+      "totalTransactions": "Completed transactions",
+      "uptime": "Platform uptime",
+      "automation": {
+        "title": "Automatic verification",
+        "body": "Payment and delivery steps are verified by the system, not by a human."
+      }
+    }
   },
   "common": {
     "loading": "Loading...",

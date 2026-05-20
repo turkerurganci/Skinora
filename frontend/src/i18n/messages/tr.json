@@ -1,7 +1,41 @@
 {
   "landing": {
-    "title": "Skinora",
-    "subtitle": "Güvenli CS2 Eşya Emanet Platformu"
+    "hero": {
+      "title": "CS2 Eşya Ticaretinde Güvenli Emanet",
+      "subtitle": "Eşyanız ve ödemeniz, otomatik doğrulanan tarafsız bir emanet üzerinden el değiştirir.",
+      "cta": "Steam ile Giriş Yap",
+      "ctaDisabledHint": "Platform şu an bakımda. Daha sonra tekrar deneyin."
+    },
+    "howItWorks": {
+      "title": "Nasıl Çalışır",
+      "steps": {
+        "sellerStarts": {
+          "title": "Satıcı işlemi başlatır",
+          "description": "Eşya, fiyat ve alıcı bilgileri ile yeni bir işlem oluşturulur."
+        },
+        "itemEscrowed": {
+          "title": "Eşya emanete alınır",
+          "description": "Steam üzerinden eşya platform botuna gönderilir ve güvenle bekletilir."
+        },
+        "buyerPays": {
+          "title": "Alıcı ödemeyi gönderir",
+          "description": "Belirtilen adrese USDT/USDC gönderilir, blok zinciri otomatik doğrular."
+        },
+        "autoSettle": {
+          "title": "Otomatik teslim ve ödeme",
+          "description": "Eşya alıcıya iletilir, satıcının ödemesi aynı adımda otomatik aktarılır."
+        }
+      }
+    },
+    "trust": {
+      "title": "Neden Skinora",
+      "totalTransactions": "Tamamlanan işlem",
+      "uptime": "Platform çalışma süresi",
+      "automation": {
+        "title": "Otomatik doğrulama",
+        "body": "Ödeme ve teslim adımları sistem tarafından otomatik doğrulanır."
+      }
+    }
   },
   "common": {
     "loading": "Yükleniyor...",
