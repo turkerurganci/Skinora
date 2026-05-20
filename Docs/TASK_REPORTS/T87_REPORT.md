@@ -1,6 +1,6 @@
 # T87 — Auth Akışı Ekranları
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekleniyor) | **Tarih:** 2026-05-20
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (Doğrulama ✓ PASS bağımsız validator 2026-05-20, 0 S-bulgu) | **Tarih:** 2026-05-20
 
 ---
 
@@ -130,6 +130,34 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 - **Adım 0 (Main CI):** Son 3 main run `success` (T85 #130, T86 #131 ×2) — `gh run list --branch main --limit 3` çıktı ✓
 - **Adım -1 (Working tree):** `git status --short` boş ✓
 - **Memory drift check:** `.claude/memory/MEMORY.md` T87 satırı bu rapor ile birlikte eklenir.
+
+## Doğrulama Sonucu (Bağımsız Validator, 2026-05-20)
+
+**Verdict:** ✓ **PASS** — 0 S-bulgu, 0 advisory.
+
+| Kontrol | Sonuç | Kanıt |
+|---|---|---|
+| Pre-check -1 Working tree | ✓ | `git status --short` boş |
+| Pre-check 0 Main CI son 3 | ✓ | runs `26181175543` `26181175571` `26121364633` hepsi `success` |
+| Pre-check 0b Memory drift | ✓ | `.claude/memory/MEMORY.md` T87 satırları (build chat'inde eklendi) |
+| Kabul kriteri 1 (S02 pre-redirect+callback+auth fail) | ✓ | `login/page.tsx` setRedirecting → loading button + `callback/page.tsx` 4-state machine, 5 hata kodu (retryAfter dakika hesabı dahil) |
+| Kabul kriteri 2 (S03 MA adım+kontrol et) | ✓ | 4-adımlı `<ol>` + Steam mobile dış link + recheck button (transient 600ms) + Dashboard + blocker-değil note |
+| Kabul kriteri 3 (S03a Geo-Block) | ✓ | `InfoScreen` danger + 🚫 + destek linki |
+| Kabul kriteri 4 (S03b Yaş Gate) | ✓ | `InfoScreen` danger + 🔞 + back-to-home; TosModal `onAgeRejected` bu sayfaya yönlendirir |
+| Kabul kriteri 5 (S03c Sanctions) | ✓ | `InfoScreen` danger + ⛔ + EMERGENCY_HOLD i18n notu + destek |
+| Kabul kriteri 6 (S03d Suspended kısıtlı oturum) | ✓ | warning tone + 🚷 + 04 §6.7 birebir aktif işlem salt-okunur notu + Dashboard + destek; T85 `SuspendedHeader` flag-driven chrome implement edilmiş |
+| Kabul kriteri 7 (ToS modal 18+ + ToS checkbox) | ✓ | İki checkbox + disabled CTA + `t.rich("tosCheckbox", {link})` + 5-mad. özet + focus + `role="dialog"` |
+| Build | ✓ | `npm run build` 22 route, TypeScript 0 error, Compiled 3.1s |
+| Lint | ✓ | `npm run lint` 0 error 0 warning |
+| Prettier | ✓ | `prettier --check` T87 dosyaları + i18n 4 dil "All matched files use Prettier code style!" |
+| i18n parity | ✓ | `auth.*` 66 key × 4 dil (en/tr/zh/es), 0 missing 0 extra |
+| Task branch CI | ✓ | run [`26184737231`](https://github.com/turkerurganci/Skinora/actions/runs/26184737231) HEAD `aa02461` 10/10 success (Guard skipped — direct push, normal) |
+| Mini güvenlik | ✓ | Secret/auth/input/yeni bağımlılık — hepsi temiz; `returnUrl` sanitize 07 §4.2 uyumu |
+| Doc uyumu (04 §6.2–§6.7) | ✓ | Pipeline gate'leri, içerik hiyerarşileri, davranış kuralları birebir |
+| Mimari karar (`(auth)` → `auth/` restructure) | ✓ | T13 stub URL drift fix; T86 HeroSection CTA href ile uyumlu; T86 K2 disclosed 404 kapatıldı |
+| Yapım raporu karşılaştırması | ✓ | Tam uyum — 7/7 kabul kriter ve test kanıtları bağımsız doğrulamada eşleşiyor |
+
+**Düzeltme gerekli:** Hayır. Merge'e hazır.
 
 ## Bitiş Kapısı (T11.2)
 
