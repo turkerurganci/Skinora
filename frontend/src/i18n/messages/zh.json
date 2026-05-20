@@ -50,8 +50,102 @@
     "copied": "已复制"
   },
   "auth": {
-    "loginWithSteam": "使用Steam登录",
-    "authenticating": "认证中..."
+    "loginWithSteam": "使用 Steam 登录",
+    "authenticating": "正在认证...",
+    "login": {
+      "title": "登录 Skinora",
+      "subtitle": "Skinora 通过您的 Steam 账户验证身份。您将被重定向到 Steam 完成登录。",
+      "redirecting": "正在跳转到 Steam,请稍候...",
+      "benefitSecurity": "您的 Steam 密码不会发送给 Skinora。",
+      "benefitNoPassword": "无需记住新密码 — 一键登录。",
+      "benefitNoRegistration": "无需单独注册:您的 Steam 资料即您的账户。",
+      "backToHome": "返回首页"
+    },
+    "callback": {
+      "loading": "正在完成登录...",
+      "redirecting": "登录成功,正在跳转...",
+      "preparing": "正在准备您的账户...",
+      "backToHome": "返回首页",
+      "error": {
+        "auth_failed": {
+          "title": "登录失败",
+          "body": "Steam 无法验证您的登录。请重试。"
+        },
+        "steam_unavailable": {
+          "title": "Steam 不可用",
+          "body": "Steam 暂时无法访问。请几分钟后重试。"
+        },
+        "temporarily_locked": {
+          "title": "尝试次数过多",
+          "body": "为了您的账户安全,登录暂时被锁定。请稍后重试。",
+          "bodyWithMinutes": "为了您的账户安全,登录暂时被锁定。请在 {minutes} 分钟后重试。"
+        },
+        "account_banned": {
+          "title": "账户已被封禁",
+          "body": "您的 Skinora 账户已被封禁。如认为是误判,请联系支持。"
+        },
+        "unknown": {
+          "title": "登录错误",
+          "body": "登录过程中出现问题。请重试。"
+        }
+      }
+    },
+    "tos": {
+      "title": "欢迎使用 Skinora",
+      "description": "继续前请阅读并接受以下条款。",
+      "summaryHeading": "要点",
+      "summary": {
+        "escrow": "在双方完成交易之前,您的物品和付款将由托管保管。",
+        "commission": "交易完成时将从卖家收取佣金。",
+        "crypto": "付款仅通过 TRON 网络使用 USDT 或 USDC。",
+        "disputes": "争议由 Skinora 管理员审核。",
+        "kyc": "受制裁的钱包和受制裁地区将被阻止。"
+      },
+      "ageCheckbox": "我确认我已年满 18 岁。",
+      "tosCheckbox": "我已阅读并接受<link>用户协议</link>。",
+      "continue": "继续",
+      "submitting": "提交中...",
+      "notEligible": "我不符合继续条件"
+    },
+    "mobileAuthenticator": {
+      "title": "需要 Steam 手机令牌",
+      "description": "您必须启用 Steam 手机令牌才能在 Skinora 上发起交易。",
+      "stepsTitle": "如何启用",
+      "step1": "在手机上安装 Steam 手机应用。",
+      "step2": "使用您的 Steam 账户登录。",
+      "step3": "打开 Steam 令牌并完成手机令牌设置。",
+      "step4": "在发起交易前至少等待 7 天(Steam 等待期)。",
+      "steamMobileLink": "获取 Steam 手机应用",
+      "recheck": "重新检查",
+      "rechecking": "检查中...",
+      "goToDashboard": "进入控制台",
+      "dashboardNote": "您可以浏览平台,但在令牌启用前无法发起交易。",
+      "backToHome": "返回首页"
+    },
+    "geoBlock": {
+      "title": "访问受限",
+      "description": "您所在地区无法访问 Skinora。",
+      "info": "由于法律和合规要求,平台在某些地区不可用。具体国家名单不公开。",
+      "support": "联系支持"
+    },
+    "ageGate": {
+      "title": "未达到年龄要求",
+      "description": "使用 Skinora 需年满 18 岁。",
+      "backToHome": "返回首页"
+    },
+    "sanctions": {
+      "title": "操作被阻止",
+      "description": "由于平台合规政策,您的账户已受限制。",
+      "info": "您的活跃交易已被紧急冻结,管理员将审核您的情况。",
+      "support": "联系支持"
+    },
+    "suspended": {
+      "title": "账户已被暂停",
+      "description": "您的 Skinora 账户已被暂停。您无法发起新交易或接受现有交易。",
+      "activeTransactionsNote": "部分活跃交易可能会自动继续。需要您操作的步骤可能无法推进并超时。您仍可只读查看详情。",
+      "goToDashboard": "查看控制台",
+      "support": "联系支持"
+    }
   },
   "nav": {
     "primary": "主菜单",

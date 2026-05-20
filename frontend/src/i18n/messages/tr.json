@@ -51,7 +51,101 @@
   },
   "auth": {
     "loginWithSteam": "Steam ile Giriş Yap",
-    "authenticating": "Doğrulanıyor..."
+    "authenticating": "Doğrulanıyor...",
+    "login": {
+      "title": "Skinora'ya Giriş Yap",
+      "subtitle": "Skinora kimliğinizi Steam hesabınız üzerinden doğrular. Giriş için Steam'e yönlendirileceksiniz.",
+      "redirecting": "Steam'e yönlendiriliyor, lütfen bekleyin...",
+      "benefitSecurity": "Steam şifreniz Skinora'ya hiçbir zaman gönderilmez.",
+      "benefitNoPassword": "Yeni bir şifre yok — tek tıkla giriş yapın.",
+      "benefitNoRegistration": "Ayrı kayıt gerekmez: Steam profiliniz hesabınızdır.",
+      "backToHome": "Ana sayfaya dön"
+    },
+    "callback": {
+      "loading": "Giriş tamamlanıyor...",
+      "redirecting": "Giriş başarılı. Yönlendiriliyorsunuz...",
+      "preparing": "Hesabınız hazırlanıyor...",
+      "backToHome": "Ana sayfaya dön",
+      "error": {
+        "auth_failed": {
+          "title": "Giriş başarısız",
+          "body": "Steam girişinizi doğrulayamadı. Lütfen tekrar deneyin."
+        },
+        "steam_unavailable": {
+          "title": "Steam erişilemiyor",
+          "body": "Steam geçici olarak erişilemiyor. Lütfen birkaç dakika sonra tekrar deneyin."
+        },
+        "temporarily_locked": {
+          "title": "Çok fazla deneme",
+          "body": "Güvenliğiniz için giriş geçici olarak kilitlendi. Lütfen daha sonra tekrar deneyin.",
+          "bodyWithMinutes": "Güvenliğiniz için giriş geçici olarak kilitlendi. {minutes} dakika sonra tekrar deneyin."
+        },
+        "account_banned": {
+          "title": "Hesap yasaklandı",
+          "body": "Skinora hesabınız yasaklanmıştır. Bunun bir hata olduğunu düşünüyorsanız destek ile iletişime geçin."
+        },
+        "unknown": {
+          "title": "Giriş hatası",
+          "body": "Giriş sırasında bir hata oluştu. Lütfen tekrar deneyin."
+        }
+      }
+    },
+    "tos": {
+      "title": "Skinora'ya Hoş Geldiniz",
+      "description": "Devam etmeden önce lütfen aşağıdakileri inceleyin ve onaylayın.",
+      "summaryHeading": "Önemli noktalar",
+      "summary": {
+        "escrow": "Eşyanız ve ödemeniz, her iki taraf da yükümlülüğünü yerine getirene kadar emanette tutulur.",
+        "commission": "İşlem tamamlandığında satıcıdan komisyon kesilir.",
+        "crypto": "Ödemeler yalnızca TRON ağı üzerinden USDT veya USDC ile yapılır.",
+        "disputes": "İtirazlar Skinora yöneticileri tarafından incelenir.",
+        "kyc": "Yaptırım listesindeki cüzdanlar ve ambargolu bölgeler engellenir."
+      },
+      "ageCheckbox": "En az 18 yaşında olduğumu beyan ederim.",
+      "tosCheckbox": "<link>Kullanıcı Sözleşmesi'ni</link> okudum ve kabul ediyorum.",
+      "continue": "Devam Et",
+      "submitting": "Gönderiliyor...",
+      "notEligible": "Devam etmeye uygun değilim"
+    },
+    "mobileAuthenticator": {
+      "title": "Steam Mobile Authenticator Gerekli",
+      "description": "Skinora'da işlem başlatabilmek için Steam Mobile Authenticator'ınızın aktif olması gerekiyor.",
+      "stepsTitle": "Nasıl aktif edilir",
+      "step1": "Telefonunuza Steam mobil uygulamasını yükleyin.",
+      "step2": "Steam hesabınızla giriş yapın.",
+      "step3": "Menüden Steam Guard'ı açın ve Mobile Authenticator kurulumunu tamamlayın.",
+      "step4": "İşlem başlatmadan önce en az 7 gün bekleyin (Steam bekleme süresi).",
+      "steamMobileLink": "Steam mobil uygulamasını indir",
+      "recheck": "Tekrar Kontrol Et",
+      "rechecking": "Kontrol ediliyor...",
+      "goToDashboard": "Panele Devam Et",
+      "dashboardNote": "Platformu gezebilirsiniz, ancak authenticator'ınız aktif olana kadar işlem başlatamazsınız.",
+      "backToHome": "Ana sayfaya dön"
+    },
+    "geoBlock": {
+      "title": "Erişim Engellendi",
+      "description": "Bulunduğunuz bölgeden Skinora'ya erişim kısıtlanmıştır.",
+      "info": "Platform, yasal ve uyum gereklilikleri nedeniyle bazı bölgelerde kullanılamaz. Spesifik ülke listesi gösterilmez.",
+      "support": "Destek ile iletişime geç"
+    },
+    "ageGate": {
+      "title": "Yaş Gereksinimi Karşılanmıyor",
+      "description": "Skinora'yı kullanmak için en az 18 yaşında olmanız gerekmektedir.",
+      "backToHome": "Ana sayfaya dön"
+    },
+    "sanctions": {
+      "title": "İşlem Engellenmiştir",
+      "description": "Platform uyum politikaları nedeniyle hesabınız kısıtlanmıştır.",
+      "info": "Aktif işlemleriniz acil durum hold'una alınmıştır ve bir yönetici durumunuzu inceleyecektir.",
+      "support": "Destek ile iletişime geç"
+    },
+    "suspended": {
+      "title": "Hesabınız Askıya Alındı",
+      "description": "Hesabınız Skinora tarafından askıya alınmıştır. Yeni işlem başlatamaz veya mevcut işlemleri kabul edemezsiniz.",
+      "activeTransactionsNote": "Bazı aktif işlemleriniz otomatik olarak devam edebilir. Sizden aksiyon gerektiren adımlarda işlem ilerlemeyebilir veya süre aşımına düşebilir. Detayları salt okunur olarak görüntüleyebilirsiniz.",
+      "goToDashboard": "Paneli Görüntüle",
+      "support": "Destek ile iletişime geç"
+    }
   },
   "nav": {
     "primary": "Ana menü",

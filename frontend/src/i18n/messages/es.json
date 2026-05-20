@@ -51,7 +51,101 @@
   },
   "auth": {
     "loginWithSteam": "Iniciar sesión con Steam",
-    "authenticating": "Autenticando..."
+    "authenticating": "Autenticando...",
+    "login": {
+      "title": "Inicia sesión en Skinora",
+      "subtitle": "Skinora verifica tu identidad mediante tu cuenta de Steam. Serás redirigido a Steam para completar el inicio de sesión.",
+      "redirecting": "Redirigiendo a Steam, por favor espera...",
+      "benefitSecurity": "Tu contraseña de Steam nunca se envía a Skinora.",
+      "benefitNoPassword": "Sin contraseñas nuevas que recordar — un clic basta.",
+      "benefitNoRegistration": "Sin registro aparte: tu perfil de Steam es tu cuenta.",
+      "backToHome": "Volver al inicio"
+    },
+    "callback": {
+      "loading": "Completando inicio de sesión...",
+      "redirecting": "Inicio de sesión correcto. Redirigiendo...",
+      "preparing": "Preparando tu cuenta...",
+      "backToHome": "Volver al inicio",
+      "error": {
+        "auth_failed": {
+          "title": "Error al iniciar sesión",
+          "body": "Steam no pudo verificar tu inicio de sesión. Inténtalo de nuevo."
+        },
+        "steam_unavailable": {
+          "title": "Steam no está disponible",
+          "body": "Steam no está disponible temporalmente. Inténtalo en unos minutos."
+        },
+        "temporarily_locked": {
+          "title": "Demasiados intentos",
+          "body": "Por tu seguridad, el inicio de sesión está bloqueado temporalmente. Inténtalo más tarde.",
+          "bodyWithMinutes": "Por tu seguridad, el inicio de sesión está bloqueado temporalmente. Inténtalo en {minutes} minutos."
+        },
+        "account_banned": {
+          "title": "Cuenta baneada",
+          "body": "Tu cuenta de Skinora ha sido baneada. Contacta con soporte si crees que es un error."
+        },
+        "unknown": {
+          "title": "Error de inicio de sesión",
+          "body": "Algo salió mal al iniciar sesión. Inténtalo de nuevo."
+        }
+      }
+    },
+    "tos": {
+      "title": "Bienvenido a Skinora",
+      "description": "Revisa y acepta antes de continuar.",
+      "summaryHeading": "Puntos clave",
+      "summary": {
+        "escrow": "Tu artículo y tu pago se mantienen en depósito hasta que ambas partes cumplan.",
+        "commission": "Se cobra una comisión al vendedor al completarse la operación.",
+        "crypto": "Los pagos se hacen en USDT o USDC únicamente en la red TRON.",
+        "disputes": "Las disputas son revisadas por administradores de Skinora.",
+        "kyc": "Las carteras sancionadas y las regiones embargadas están bloqueadas."
+      },
+      "ageCheckbox": "Confirmo que tengo al menos 18 años.",
+      "tosCheckbox": "He leído y acepto los <link>Términos del Servicio</link>.",
+      "continue": "Continuar",
+      "submitting": "Enviando...",
+      "notEligible": "No cumplo los requisitos para continuar"
+    },
+    "mobileAuthenticator": {
+      "title": "Se requiere Steam Mobile Authenticator",
+      "description": "Necesitas un Steam Mobile Authenticator activo para iniciar una transacción en Skinora.",
+      "stepsTitle": "Cómo activarlo",
+      "step1": "Instala la app móvil de Steam en tu teléfono.",
+      "step2": "Inicia sesión con tu cuenta de Steam.",
+      "step3": "Abre Steam Guard y completa la configuración del Mobile Authenticator.",
+      "step4": "Espera al menos 7 días antes de iniciar una operación (período de retención de Steam).",
+      "steamMobileLink": "Descargar la app móvil de Steam",
+      "recheck": "Volver a comprobar",
+      "rechecking": "Comprobando...",
+      "goToDashboard": "Ir al panel",
+      "dashboardNote": "Puedes explorar Skinora, pero no podrás iniciar transacciones hasta que el authenticator esté activo.",
+      "backToHome": "Volver al inicio"
+    },
+    "geoBlock": {
+      "title": "Acceso restringido",
+      "description": "El acceso a Skinora está restringido en tu región.",
+      "info": "La plataforma no está disponible en ciertas jurisdicciones por motivos legales y de cumplimiento. No se listan países específicos.",
+      "support": "Contactar con soporte"
+    },
+    "ageGate": {
+      "title": "No se cumple el requisito de edad",
+      "description": "Debes tener al menos 18 años para usar Skinora.",
+      "backToHome": "Volver al inicio"
+    },
+    "sanctions": {
+      "title": "Acción bloqueada",
+      "description": "Tu cuenta está restringida por la política de cumplimiento de Skinora.",
+      "info": "Tus transacciones activas han sido puestas en hold de emergencia y un administrador revisará tu caso.",
+      "support": "Contactar con soporte"
+    },
+    "suspended": {
+      "title": "Cuenta suspendida",
+      "description": "Tu cuenta de Skinora ha sido suspendida. No puedes iniciar nuevas transacciones ni aceptar existentes.",
+      "activeTransactionsNote": "Algunas transacciones activas pueden continuar automáticamente. Los pasos que requieran tu acción pueden no avanzar y caducar. Aun así puedes consultar los detalles (solo lectura).",
+      "goToDashboard": "Ver el panel",
+      "support": "Contactar con soporte"
+    }
   },
   "nav": {
     "primary": "Menú principal",
