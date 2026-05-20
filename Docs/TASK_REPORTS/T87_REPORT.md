@@ -100,9 +100,9 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 ## Commit & PR
 
 - Branch: `task/T87-auth-flow-screens`
-- Commit: `<eklenecek>` — T87: Auth akışı ekranları
-- PR: `<eklenecek>`
-- CI: `<post-push>`
+- Commit: `17d01d5` — T87: Auth akışı ekranları (S02, S03, S03a-d, ToS modal)
+- PR: [#132](https://github.com/turkerurganci/Skinora/pull/132)
+- CI: in_progress — run [`26184225581`](https://github.com/turkerurganci/Skinora/actions/runs/26184225581) (HEAD `17d01d5`)
 
 ## Mimari Kararlar (Notlar)
 
