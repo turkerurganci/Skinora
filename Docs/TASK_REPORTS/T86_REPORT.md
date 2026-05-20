@@ -1,6 +1,6 @@
 # T86 — Landing Page (S01)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-20
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-20
 
 ---
 
@@ -62,8 +62,49 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekleniyor (validate chat) |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-20) |
+| Bulgu sayısı | 0 S-bulgu (1 minor advisory — K6) |
+| Düzeltme gerekli mi | Hayır (advisory follow-up) |
 | PR | #131 |
+
+**Bağımsız Verdict:**
+
+| # | Kriter | Sonuç | Validator Kanıtı |
+|---|---|---|---|
+| 1 | Hero + HowItWorks + TrustSignals + Footer | ✓ | `[locale]/page.tsx:6-21` 4 bölüm + Footer T85 reuse; `npm run build` 18 route ✓ |
+| 2 | `GET /platform/stats` (15dk cache) | ✓ | `usePlatformStats.ts:6,15` `staleTime: 15 * 60 * 1000` + `gcTime` aynı; `apiClient<PlatformStats>("/platform/stats")` 07 §10.1 field birebir (`totalCompletedTransactions`, `platformUptimePercent`) |
+| 3 | `GET /platform/maintenance` → bakım gösterimi | ✓ | `usePlatformMaintenance.ts:6,15` `staleTime: 30 * 1000`; `MaintenanceGate.tsx:8-13` `VARIANT_MAP` 4 type → C08 4 varyant birebir; `plannedEnd` `toLocaleString(locale)` |
+| 4 | Bakım state: C08 aktif, CTA devre dışı | ✓ | `MaintenanceGate.tsx:29` `ctaDisabled = active && type === "PLATFORM_MAINTENANCE"`; `HeroSection.tsx:27-48` disabled `<button>` + `ctaDisabledHint`. 07 §10.2 PLANNED tam işlevsel nuance — proje sahibi onaylı disambiguation |
+
+**Validator Test Sonuçları:**
+
+| Tür | Sonuç | Komut | Çıktı |
+|---|---|---|---|
+| Build | ✓ | `npm run build` | 18 route, TypeScript Finished 2.5s, 0 error |
+| Lint | ✓ | `npm run lint` | 0 error, 0 warning |
+| Prettier | ✓ | `npx prettier --check` (T86 dosyaları) | "All matched files use Prettier code style!" |
+| i18n parity | ✓ | node JSON traverse | landing namespace 18 key × 4 dil (en/tr/zh/es), 0 missing |
+| Branch CI | ✓ | `gh run list --branch task/T86-landing-page` | run [`26179217789`](https://github.com/turkerurganci/Skinora/actions/runs/26179217789) `success` 10/10 job (HEAD `feb0fe9`) |
+
+**Validator Güvenlik Kontrolü:**
+
+- Secret sızıntısı: ✓ Temiz (landing/platform dosyalarında `apiKey|secret|password|token|private_key` grep 0 match)
+- Auth etkisi: ✓ Temiz (S01 public, T63a backend `[AllowAnonymous]` + `RateLimit("public")` — değişmedi)
+- Input validation: ✓ Temiz (landing'de kullanıcı input'u yok)
+- Yeni bağımlılık: ✓ Yok (`git diff main...task/T86 -- frontend/package*.json` boş)
+
+**Validator Doküman Uyumu:**
+
+- 07 §10.1 field birebir: `totalCompletedTransactions` (int), `platformUptimePercent` (decimal) — `platform.ts:7-9` ✓
+- 07 §10.2 field birebir: `active` (bool), `type` (MaintenanceType | null), `message` (string | null), `plannedEnd` (string | null) — `platform.ts:22-27` ✓
+- `MaintenanceType` enum 4 değer: `PLANNED_MAINTENANCE`, `PLATFORM_MAINTENANCE`, `STEAM_OUTAGE`, `BLOCKCHAIN_DEGRADATION` — 07 §10.2 birebir ✓
+- 04 §6.1 4 bölüm: Hero, HowItWorks, TrustSignals, Footer — hepsi mevcut ✓
+
+**Adım 0 (Main CI):** son 3 main run `success` (T84 #129, T85 #130 ×2) ✓
+**Adım -1 (Working tree):** `git status --short` boş ✓
+**Adım 0b (Memory drift):** MEMORY.md T86 satırı mevcut (yapım chat'i T85 PASS sonrası eklemiş) ✓
+
+**Yapım Raporu Karşılaştırması:** Tam uyum. Validator'ın bağımsız bulguları yapım raporundaki açıklamaları doğrular (3 mimari karar + 5 K-item). Validator ek olarak K6 advisory ekler (ToS new-tab) — yapım raporu bu detayı listelememiş.
 
 ## Doğrulama Kontrol Listesi (plan)
 
@@ -105,3 +146,10 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları, E2E T107+ devirli).
 - **K3 — Pre-existing prettier drift (T84/T85 dönemi 60+ dosya):** `npm run format` global çağrısı bu drift'leri yakaladı, ancak T86 PR'ına bundled edilmedi (bundled-PR yasağı). Ayrı chore PR'a aittir (T64-T76 sidecar drift paterni).
 - **K4 — TrustSignals "uptime" 99.9% sabit veri:** Backend `PlatformPublicService` T63a'da `platformUptimePercent` sabit dönüyor (gerçek SLA telemetry T-future). Frontend kontratı doğru, gösterim doğru — backend devirli.
 - **K5 — Pulse skeleton 3 kart yerine grid-flex shift:** TrustSignals veri gelirken value placeholder pulse `<span>` boyutu `w-24` sabit — büyük sayılarda micro-shift olabilir. F6 visual QA tarama.
+- **K6 (validator advisory) — ToS linki "new tab" davranışı eksik:** 04 §6.1 Aksiyonlar tablosu "ToS linki | Yeni sekmede açılır" der. `components/layout/Footer.tsx` (T85'ten reuse) `<Link href="/terms">` kullanıyor, `target="_blank" rel="noopener noreferrer"` yok. Etki: cosmetik (route 404 — K2 ile ToS sayfası T-future). Tek satır Footer fix'i ile çözülür, ancak Footer global olduğu için kapsam değerlendirmesi gerek (landing-only davranış mı vs. global). Validator advisory: yapım raporunda listelenmemişti — chore PR veya T87 yanında ekle.
+
+## Commit & PR (validator update)
+
+- Validator commit: `<eklenecek>` — T86: validator PASS (rapor + status finalize)
+- Validator CI: `<post-push>` — task branch'e son push, ardından squash merge
+- Squash merge sonrası post-merge CI watch (validate.md Adım 18 zorunlu) — main + Docker Publish
