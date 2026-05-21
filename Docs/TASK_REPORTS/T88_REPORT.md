@@ -1,6 +1,6 @@
 # T88 — Dashboard (S05)
 
-**Faz:** F5 | **Durum:** ⏳ Yapım bitti (validator chat'e devir) | **Tarih:** 2026-05-21
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-21
 
 ---
 
@@ -121,9 +121,28 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 ## Commit & PR
 
 - Branch: `task/T88-dashboard-s05`
-- Commit: `af2e618`
+- Commit: `7163102` (HEAD), önceki `af2e618`
 - PR: [#134](https://github.com/turkerurganci/Skinora/pull/134)
-- CI: ✓ SUCCESS — run [`26248435301`](https://github.com/turkerurganci/Skinora/actions/runs/26248435301) (HEAD `af2e618`) 10/10 job (Guard skipped — PR'da `direct push` job çalışmaz, normal). 9 PASS + 1 SKIP = 10/10 effective.
+- CI: ✓ SUCCESS — son run [`26248880671`](https://github.com/turkerurganci/Skinora/actions/runs/26248880671) HEAD `7163102` 10/10 (9 PASS + Guard skipped); önceki run [`26248435301`](https://github.com/turkerurganci/Skinora/actions/runs/26248435301) HEAD `af2e618` 10/10.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız validator chat 2026-05-21) |
+| Bulgu sayısı | 0 (S1/S2/S3) |
+| Düzeltme gerekli mi | Hayır |
+| Advisory | A1 — rapor "32 anahtar" beyanı kozmetik; `dashboard.*` leaf count 4 dilde **24** (validator script doğruladı: en=tr=zh=es=24, 0 missing 0 extra). Doc spec / kabul kriterleri etkilenmez. |
+| Adım 0 (Main CI) | ✓ Son 3 run success: `26247008809`, `26247008811`, `26186153921` |
+| Adım -1 (Working tree) | ✓ `git status --short` boş |
+| Adım 0b (Memory drift) | ✓ `.claude/memory/MEMORY.md` T88 satırı present (yapım commit'iyle ekli) |
+| Task branch CI (Adım 8a) | ✓ [`26248880671`](https://github.com/turkerurganci/Skinora/actions/runs/26248880671) HEAD `7163102` 10/10 + önceki [`26248435301`](https://github.com/turkerurganci/Skinora/actions/runs/26248435301) HEAD `af2e618` 10/10 |
+| Build / Lint / Tsc | ✓ `npm run build` 24 route Compiled 6.1s + `npm run lint` 0 error 0 warning + `npx tsc --noEmit` 0 error |
+| i18n parity | ✓ `dashboard.*` 24 leaf × 4 dil, 0 missing 0 extra |
+| Mini güvenlik | ✓ Temiz — secret sızıntısı yok, auth etkisi yok (sunucu `Authenticated` policy + client `isAuthenticated` gate + 401 → tek login CTA), input validation client-side TS literal + server clamp, yeni dış bağımlılık yok (`@tanstack/react-query` zaten mevcut) |
+| Rapor uyumu | Tam — kabul kriterleri 4/4 ✓, doğrulama listesi ✓, 1 kozmetik advisory (A1) |
+| 4/4 kabul kriteri | ✓ İşlem listesi tab+satır+countdown / ✓ Stats kartları / ✓ State varyantları (empty/active/loading/error/suspended) / ✓ U2 + T1 çağrıları |
+| 04 §7.1 doğrulama listesi | ✓ Tüm state'ler (yeni kullanıcı, aktif, yükleniyor, hata, suspended) implemented |
 
 ## Mimari Kararlar (Notlar)
 
