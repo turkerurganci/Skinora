@@ -1729,6 +1729,30 @@ Task T83: Geo-block servisi
     - [ ] 02 §21.1 geo-block kuralları eksiksiz mi?
 ```
 
+```
+Task T83a: Kullanıcı işlem listesi endpoint'i (T1)
+  Bağımlılık: T44, T19
+  Not: F4 retro kurtarma. T45 doc-ref'i 07 §7.1–§7.4 demesine rağmen kabul
+       kriterleri §7.2–§7.4'ü implement etmiş; §7.1 (T1 list endpoint) hiçbir
+       backend task'ında üretilmemişti. T88 (Dashboard) BLOCKED bulgusunun
+       PLAN_CORRECTION_REQUIRED düzeltmesi. T88 yapım'a dönmek için PASS şart.
+  Dokümanlar: 07 §7.1, 02 §3 (tab→status), 09 §13 (atomicity / pagination paterni)
+  Kabul kriterleri:
+    - GET /api/v1/transactions endpoint'i, Authenticated, RateLimit("user-read")
+    - Query param: tab ∈ {active, completed, cancelled} (zorunlu; tanımsızsa varsayılan active)
+    - Tab → status mapping (07 §7.1 tablosu): active = CREATED..ITEM_DELIVERED + FLAGGED, completed = COMPLETED, cancelled = CANCELLED_*
+    - Yalnız çağıranın taraf olduğu işlemler (SellerId veya BuyerId = caller)
+    - Response satırı: id, itemName, itemImageUrl, status (EMERGENCY_HOLD projection: IsOnHold=true ise "EMERGENCY_HOLD"), price, stablecoin, counterparty {steamId, displayName, avatarUrl} | null, userRole ∈ {"seller","buyer"}, activeTimeout {type, expiresAt, remainingSeconds, warningThresholdPercent} | null, createdAt
+    - activeTimeout resolution 06 §3.5 state→active deadline matrix kullanır; aktif olmayan tab'larda null
+    - Pagination: standart PagedResult<T> envelope (page, pageSize, total, items)
+    - Order: createdAt DESC (en yeni en üstte)
+  Test beklentisi: Unit — tab→status mapping, EMERGENCY_HOLD projection, activeTimeout resolver, userRole resolver; Integration — yetkilendirme + party filter + 3 tab filtre + pagination + EMERGENCY_HOLD projection
+  Doğrulama kontrol listesi:
+    - [ ] 07 §7.1 sözleşmesi (query param, tab→status, response shape, EMERGENCY_HOLD projection) doğru mu?
+    - [ ] Authenticated guard + party filter (yalnız caller'ın taraf olduğu işlemler) doğru mu?
+    - [ ] activeTimeout 06 §3.5 deadline matrix ile uyumlu mu?
+```
+
 ---
 
 ### F5 — Kullanıcı Arayüzü (T84–T106)
@@ -2277,7 +2301,7 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | User profil ve wallet | API-010 – API-014 | T33, T34 | |
 | User settings | API-015 – API-027 | T35, T36 | |
 | Steam inventory | API-028 | T67 | |
-| Transactions (list, create, eligibility, params, detail, accept, cancel) | API-029 – API-035 | T45, T46, T51 | |
+| Transactions (list, create, eligibility, params, detail, accept, cancel) | API-029 – API-035 | T45, T46, T51, T83a (list — F4 retro kurtarma) | |
 | Disputes | API-036 – API-038 | T58 | |
 | Payout issue | API-039 | T60 | |
 | Notifications | API-040 – API-043 | T38 | |
