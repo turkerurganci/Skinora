@@ -1,6 +1,6 @@
 # T83a — Kullanıcı işlem listesi endpoint'i (T1)
 
-**Faz:** F4 (retro kurtarma) | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-21
+**Faz:** F4 (retro kurtarma) | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-21
 
 ---
 
@@ -99,6 +99,27 @@
 - **K5 — Ordering tie-breaker `Id ASC`:** Aynı milisaniyede iki tx oluşursa Id ASC ile deterministik; CreatedAt scale 7 (datetime2) milli/mikro precision SQL Server'da kazanır, tie nadir.
 - **K6 — Pagination cap 100:** AdminTransactionQueryService ile aynı clamp; UI tipik sayfa 20, max 100 hard limit DoS koruması.
 - **K7 — Skinora.Fraud.Tests parallel race condition (pre-existing):** İlk CI koşumunda 16 Fraud Integration testi `"Cannot create a DbSet for 'SystemSetting'/'AuditLog'"` ile FAIL verdi. Root cause: `Skinora.Fraud.Tests/Integration/` altındaki 4 sınıf (`AccountFlagCheckerTests`, `FraudFlagAdminQueryServiceTests`, `FraudFlagEntityTests`, `PriceServiceTests`) static ctor'da `PlatformModuleDbRegistration.RegisterPlatformModule()` çağırmıyor; xUnit'in test class load sırası random olduğundan bu sınıflardan biri ilk `EnsureCreatedAsync` ile EF Core model'i SystemSetting/AuditLog olmadan freeze edebiliyor → `FraudFlagServiceTests`/`MultiAccountDetectorTests` (Platform registration'lı) çalıştığında model zaten cached. Re-run ile farklı load order → temiz pass. Pre-existing latent bug: T83 merge (`3e71172`) ile backend kod identical, T84-T87 frontend PR'ları path-filter ile Integration job'unu skip ettiği için manifest olmamıştı. T83a kod değişikliklerinden bağımsız. Kalıcı çözüm T-future chore PR: 4 sınıfa Platform registration ekleme — T83a scope dışı.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-05-21) |
+| Bulgu sayısı | 0 S-bulgu; 1 advisory (T46 BuildTimeout matrix subset — T83a scope dışı, validator-side gözlem) |
+| Düzeltme gerekli mi | Hayır |
+| Kabul kriteri sonuç | 8/8 ✓ (07 §7.1 normatif tablosundan türetilen 12 atomik kontrol kanıtlandı) |
+| Doğrulama kontrol listesi | 3/3 ✓ |
+| Validator Adım -1 (working tree) | ✓ temiz |
+| Validator Adım 0 (main CI startup) | ✓ 3/3 success — `26186153921`, `26186153991`, `26181175543` |
+| Validator Adım 0b (memory drift) | ✓ T83a satırı `MEMORY.md:209`'da mevcut |
+| Validator Adım 7 (testler) | Unit (Lifecycle.TransactionListServiceTests) 31/31 ✓ + Unit (Transactions full Unit folder) 417/417 ✓ + API endpoint (TransactionLifecycleEndpointTests) 25/25 ✓ + dotnet format Δ=0 + build Release 0W/0E (27.99s); integration CI-devir (lokal Docker yokluğu, K1) |
+| Validator Adım 8a (task branch CI) | ✓ run [`26244846522`](https://github.com/turkerurganci/Skinora/actions/runs/26244846522) HEAD `fe41c26` 10/10 SUCCESS (Detect+Lint+Build+Unit+Integration+Contract+Migration+Docker backend+CI Gate; Guard skipped PR) + önceki [`26243629346`](https://github.com/turkerurganci/Skinora/actions/runs/26243629346) `b1b91a1` 10/10 ✓ |
+| Validator Adım 9 (mini güvenlik) | ✓ temiz — secret yok, Authenticated+RateLimit("user-read"), party filter IDOR'u kapatır, tab whitelisted parse + page/pageSize clamp (DoS), yeni dış dep yok |
+| Validator Adım 10 (doc uyumu) | ✓ 07 §7.1 endpoint/tab/status/response shape birebir; 06 §3.5 EMERGENCY_HOLD invariant (overlay ≠ state) korunur; 06 §3.5 state→deadline matrix 6/6 phase (CREATED/ACCEPTED/TRADE_OFFER_SENT_TO_SELLER/ITEM_ESCROWED/PAYMENT_RECEIVED/TRADE_OFFER_SENT_TO_BUYER) mapping `TimeoutFreezeService.GetActiveDeadline` canonical mirror |
+| Yapım raporu uyumu | Tam — 8 kabul kriteri + 7 K1-K7 + test sonuçları + mini güvenlik + altyapı validator bağımsız bulgularıyla 1:1 |
+
+**Validator-side advisory (FAIL değil, gözlem):**
+- **A1 — T46 BuildTimeout matrix subset:** `TransactionDetailService.BuildTimeout` ACCEPTED + PAYMENT_RECEIVED state'lerini içermiyor; T83a 06 §3.5 normatif matrise ve `TimeoutFreezeService.GetActiveDeadline` canonical reference'a daha sadık (6/6 phase). T83a doğru pozisyonda; T46 ayrı bir incelemeye konu olabilir. T83a scope dışı.
 
 ## Notlar
 
