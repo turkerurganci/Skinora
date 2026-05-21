@@ -86,9 +86,9 @@
 ## Commit & PR
 
 - Branch: `task/T83a-user-transaction-list-endpoint`
-- Commit: TBD (push'tan sonra dolacak)
-- PR: TBD (Bitiş Kapısı'ndan önce açılacak)
-- CI: TBD (Bitiş Kapısı kapı 5–6)
+- Commit: `f3699a1`
+- PR: [#133](https://github.com/turkerurganci/Skinora/pull/133)
+- CI: ⏳ izleniyor (run [`26243390920`](https://github.com/turkerurganci/Skinora/actions/runs/26243390920))
 
 ## Known Limitations / Follow-up
 
