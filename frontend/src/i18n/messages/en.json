@@ -318,5 +318,51 @@
     "apply": "Apply",
     "clear": "Clear",
     "removeFilter": "Remove {label} filter"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "newTransaction": "+ Start a new transaction",
+    "tabs": {
+      "ariaLabel": "Transaction list tabs",
+      "active": "Active",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "stats": {
+      "completed": "Transactions",
+      "successRate": "Success rate",
+      "score": "Score"
+    },
+    "row": {
+      "noCounterparty": "No counterparty yet",
+      "rowAriaLabel": "Transaction {id} {itemName}"
+    },
+    "empty": {
+      "active": {
+        "title": "You have no active transactions",
+        "description": "Use the button below to start your first transaction.",
+        "cta": "Start your first transaction"
+      },
+      "completed": {
+        "title": "No completed transactions",
+        "description": "Your completed transactions will appear here."
+      },
+      "cancelled": {
+        "title": "No cancelled transactions",
+        "description": "Your cancelled transactions will appear here."
+      }
+    },
+    "error": {
+      "title": "Could not load transactions",
+      "message": "Check your connection and try again."
+    },
+    "suspended": {
+      "banner": "Your account is suspended. You can view your transactions but cannot start new ones or take action on existing ones."
+    },
+    "authRequired": {
+      "title": "Sign-in required",
+      "description": "Sign in with Steam to view your dashboard.",
+      "cta": "Sign in with Steam"
+    }
   }
 }
