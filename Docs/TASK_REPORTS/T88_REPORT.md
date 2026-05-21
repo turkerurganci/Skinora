@@ -121,9 +121,9 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 ## Commit & PR
 
 - Branch: `task/T88-dashboard-s05`
-- Commit: [eklenecek]
-- PR: [eklenecek]
-- CI: [eklenecek]
+- Commit: `af2e618`
+- PR: [#134](https://github.com/turkerurganci/Skinora/pull/134)
+- CI: ✓ SUCCESS — run [`26248435301`](https://github.com/turkerurganci/Skinora/actions/runs/26248435301) (HEAD `af2e618`) 10/10 job (Guard skipped — PR'da `direct push` job çalışmaz, normal). 9 PASS + 1 SKIP = 10/10 effective.
 
 ## Mimari Kararlar (Notlar)
 
@@ -154,11 +154,11 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 
 ## Bitiş Kapısı (T11.2)
 
-- [ ] Branch push edildi mi?
-- [ ] PR açıldı mı?
-- [ ] PR numarası rapora yazıldı mı?
-- [ ] Rapor + status push edildi mi?
-- [ ] CI run tamamlandı mı?
-- [ ] CI run sonucu `success` mi?
-- [ ] Branch izolasyon check temiz mi?
-- [ ] Repo memory'de T88 satırı eklendi mi?
+- [x] Branch push edildi mi? → `task/T88-dashboard-s05` → `origin` ✓
+- [x] PR açıldı mı? → PR [#134](https://github.com/turkerurganci/Skinora/pull/134) ✓
+- [x] PR numarası rapora yazıldı mı? → "Commit & PR" bölümü ✓
+- [x] Rapor + status push edildi mi? → bu güncellemeden sonra push edilecek (PR ref reflection commit)
+- [x] CI run tamamlandı mı? → run [`26248435301`](https://github.com/turkerurganci/Skinora/actions/runs/26248435301) `completed` ✓
+- [x] CI run sonucu `success` mi? → 9/9 PASS + Guard skipped (PR'da normal) ✓
+- [x] Branch izolasyon check temiz mi? → `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+'` → `T88` tek başına ✓
+- [x] Repo memory'de T88 satırı eklendi mi? → `.claude/memory/MEMORY.md` aynı commit ✓
