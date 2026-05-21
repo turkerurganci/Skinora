@@ -318,5 +318,51 @@
     "apply": "Aplicar",
     "clear": "Limpiar",
     "removeFilter": "Eliminar filtro de {label}"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "newTransaction": "+ Iniciar una nueva transacción",
+    "tabs": {
+      "ariaLabel": "Pestañas de la lista de transacciones",
+      "active": "Activas",
+      "completed": "Completadas",
+      "cancelled": "Canceladas"
+    },
+    "stats": {
+      "completed": "Transacciones",
+      "successRate": "Tasa de éxito",
+      "score": "Puntuación"
+    },
+    "row": {
+      "noCounterparty": "Sin contraparte aún",
+      "rowAriaLabel": "Transacción {id} {itemName}"
+    },
+    "empty": {
+      "active": {
+        "title": "No tienes transacciones activas",
+        "description": "Usa el botón de abajo para iniciar tu primera transacción.",
+        "cta": "Iniciar tu primera transacción"
+      },
+      "completed": {
+        "title": "Sin transacciones completadas",
+        "description": "Tus transacciones completadas aparecerán aquí."
+      },
+      "cancelled": {
+        "title": "Sin transacciones canceladas",
+        "description": "Tus transacciones canceladas aparecerán aquí."
+      }
+    },
+    "error": {
+      "title": "No se pudieron cargar las transacciones",
+      "message": "Verifica tu conexión e inténtalo de nuevo."
+    },
+    "suspended": {
+      "banner": "Tu cuenta está suspendida. Puedes ver tus transacciones pero no puedes iniciar nuevas ni tomar acciones sobre las existentes."
+    },
+    "authRequired": {
+      "title": "Inicio de sesión requerido",
+      "description": "Inicia sesión con Steam para ver tu panel.",
+      "cta": "Iniciar sesión con Steam"
+    }
   }
 }

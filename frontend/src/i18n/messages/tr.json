@@ -318,5 +318,51 @@
     "apply": "Filtrele",
     "clear": "Temizle",
     "removeFilter": "{label} filtresini kaldır"
+  },
+  "dashboard": {
+    "title": "Kontrol Paneli",
+    "newTransaction": "+ Yeni İşlem Başlat",
+    "tabs": {
+      "ariaLabel": "İşlem listesi sekmeleri",
+      "active": "Aktif",
+      "completed": "Tamamlanan",
+      "cancelled": "İptal"
+    },
+    "stats": {
+      "completed": "İşlem",
+      "successRate": "Başarı",
+      "score": "Skor"
+    },
+    "row": {
+      "noCounterparty": "Karşı taraf yok",
+      "rowAriaLabel": "İşlem {id} {itemName}"
+    },
+    "empty": {
+      "active": {
+        "title": "Henüz aktif işleminiz yok",
+        "description": "İlk işleminizi başlatmak için aşağıdaki butonu kullanın.",
+        "cta": "İlk İşleminizi Başlatın"
+      },
+      "completed": {
+        "title": "Tamamlanmış işlem yok",
+        "description": "Tamamlanan işlemleriniz burada listelenecek."
+      },
+      "cancelled": {
+        "title": "İptal edilmiş işlem yok",
+        "description": "İptal edilen işlemleriniz burada listelenecek."
+      }
+    },
+    "error": {
+      "title": "İşlemler yüklenemedi",
+      "message": "Bağlantınızı kontrol edip tekrar deneyin."
+    },
+    "suspended": {
+      "banner": "Hesabınız askıya alınmıştır. İşlemlerinizi görüntüleyebilirsiniz ancak yeni işlem başlatamaz veya mevcut işlemlere müdahale edemezsiniz."
+    },
+    "authRequired": {
+      "title": "Giriş yapmanız gerekiyor",
+      "description": "Kontrol panelini görmek için Steam ile giriş yapın.",
+      "cta": "Steam ile Giriş Yap"
+    }
   }
 }

@@ -318,5 +318,51 @@
     "apply": "筛选",
     "clear": "清除",
     "removeFilter": "移除 {label} 筛选"
+  },
+  "dashboard": {
+    "title": "控制面板",
+    "newTransaction": "+ 发起新交易",
+    "tabs": {
+      "ariaLabel": "交易列表标签",
+      "active": "进行中",
+      "completed": "已完成",
+      "cancelled": "已取消"
+    },
+    "stats": {
+      "completed": "交易数",
+      "successRate": "成功率",
+      "score": "信誉分"
+    },
+    "row": {
+      "noCounterparty": "暂无对方",
+      "rowAriaLabel": "交易 {id} {itemName}"
+    },
+    "empty": {
+      "active": {
+        "title": "您还没有进行中的交易",
+        "description": "使用下方按钮发起您的第一笔交易。",
+        "cta": "发起第一笔交易"
+      },
+      "completed": {
+        "title": "暂无已完成的交易",
+        "description": "您已完成的交易将显示在这里。"
+      },
+      "cancelled": {
+        "title": "暂无已取消的交易",
+        "description": "您已取消的交易将显示在这里。"
+      }
+    },
+    "error": {
+      "title": "无法加载交易",
+      "message": "请检查网络连接后重试。"
+    },
+    "suspended": {
+      "banner": "您的账户已被暂停。您可以查看交易,但无法发起新交易或对现有交易采取操作。"
+    },
+    "authRequired": {
+      "title": "需要登录",
+      "description": "请使用 Steam 登录以查看您的控制面板。",
+      "cta": "使用 Steam 登录"
+    }
   }
 }
