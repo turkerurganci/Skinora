@@ -86,9 +86,9 @@
 ## Commit & PR
 
 - Branch: `task/T83a-user-transaction-list-endpoint`
-- Commit: `f3699a1`
+- Commit: `f3699a1` (kod) + `b1b91a1` (PR ref reflection)
 - PR: [#133](https://github.com/turkerurganci/Skinora/pull/133)
-- CI: ⏳ izleniyor (run [`26243390920`](https://github.com/turkerurganci/Skinora/actions/runs/26243390920))
+- CI: ✓ SUCCESS — run [`26243629346`](https://github.com/turkerurganci/Skinora/actions/runs/26243629346) 10/10 (initial koşum integration testlerinde xUnit parallel test-class scheduling race condition'ı tetikledi → `Skinora.Fraud.Tests.Integration` 16 test `"Cannot create a DbSet for 'SystemSetting'/'AuditLog'"` ile FAIL — pre-existing latent race, T83a kod değişikliklerinden bağımsız: backend kodu T83 merge (3e71172) ile identical, T84-T87 path-filter ile Integration job'unu atlamış; `gh run rerun --failed` ile aynı SHA üzerinde re-run → 10/10 SUCCESS. T84_REPORT `gh run rerun --failed` audit trail paterni). Önceki koşum [`26243390920`](https://github.com/turkerurganci/Skinora/actions/runs/26243390920) push concurrency ile cancel oldu (`b1b91a1` doc push'u higher priority).
 
 ## Known Limitations / Follow-up
 
@@ -98,6 +98,7 @@
 - **K4 — Counterparty `null` durumları:** OPEN_LINK pre-acceptance ve seller-side CREATED rows (BuyerId null) — DTO `WhenWritingNull` ile field tamamen suppress edilir, frontend kontrolü `if (item.counterparty)` paterniyle yapacak (S05 dashboard T88).
 - **K5 — Ordering tie-breaker `Id ASC`:** Aynı milisaniyede iki tx oluşursa Id ASC ile deterministik; CreatedAt scale 7 (datetime2) milli/mikro precision SQL Server'da kazanır, tie nadir.
 - **K6 — Pagination cap 100:** AdminTransactionQueryService ile aynı clamp; UI tipik sayfa 20, max 100 hard limit DoS koruması.
+- **K7 — Skinora.Fraud.Tests parallel race condition (pre-existing):** İlk CI koşumunda 16 Fraud Integration testi `"Cannot create a DbSet for 'SystemSetting'/'AuditLog'"` ile FAIL verdi. Root cause: `Skinora.Fraud.Tests/Integration/` altındaki 4 sınıf (`AccountFlagCheckerTests`, `FraudFlagAdminQueryServiceTests`, `FraudFlagEntityTests`, `PriceServiceTests`) static ctor'da `PlatformModuleDbRegistration.RegisterPlatformModule()` çağırmıyor; xUnit'in test class load sırası random olduğundan bu sınıflardan biri ilk `EnsureCreatedAsync` ile EF Core model'i SystemSetting/AuditLog olmadan freeze edebiliyor → `FraudFlagServiceTests`/`MultiAccountDetectorTests` (Platform registration'lı) çalıştığında model zaten cached. Re-run ile farklı load order → temiz pass. Pre-existing latent bug: T83 merge (`3e71172`) ile backend kod identical, T84-T87 frontend PR'ları path-filter ile Integration job'unu skip ettiği için manifest olmamıştı. T83a kod değişikliklerinden bağımsız. Kalıcı çözüm T-future chore PR: 4 sınıfa Platform registration ekleme — T83a scope dışı.
 
 ## Notlar
 
