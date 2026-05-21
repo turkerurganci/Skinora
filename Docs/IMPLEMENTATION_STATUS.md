@@ -180,7 +180,7 @@
 | T85 | Global layout (header, navigation, footer) | ✓ Tamamlandı | ✓ PASS | 2fb208c |
 | T86 | Landing page (S01) | ✓ Tamamlandı | ✓ PASS | 1088c2a |
 | T87 | Auth akışı ekranları | ✓ Tamamlandı | ✓ PASS | aa02461 |
-| T88 | Dashboard (S05) | ⬚ Bekliyor | — | — |
+| T88 | Dashboard (S05) | ⛔ BLOCKED | ⛔ PLAN_CORRECTION_REQUIRED — `GET /api/v1/transactions` (T1, 07 §7.1) eksik; [T88_REPORT.md](TASK_REPORTS/T88_REPORT.md) | — |
 | T89 | İşlem oluşturma (S06) | ⬚ Bekliyor | — | — |
 | T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⬚ Bekliyor | — | — |
 | T91 | Ödeme bilgileri ve edge case UI | ⬚ Bekliyor | — | — |
