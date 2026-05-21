@@ -30,10 +30,10 @@ using Skinora.Users.Domain.Entities;
 namespace Skinora.API.Tests.Integration;
 
 /// <summary>
-/// HTTP-level smoke coverage for the T45 transaction lifecycle endpoints
-/// (07 §7.2–§7.4): wiring, auth gate, rate-limit policy, response envelope.
-/// Deeper service logic is verified by
-/// <c>Skinora.Transactions.Tests/Integration/Lifecycle/*</c>.
+/// HTTP-level smoke coverage for the T83a list endpoint (07 §7.1) and the
+/// T45/T46/T51/T60 lifecycle endpoints (07 §7.2–§7.7, §7.11): wiring, auth
+/// gate, rate-limit policy, response envelope. Deeper service logic is
+/// verified by <c>Skinora.Transactions.Tests/{Unit,Integration}/Lifecycle/*</c>.
 /// </summary>
 public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecycleEndpointTests.Factory>
 {
@@ -64,6 +64,92 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var response = await client.GetAsync("/api/v1/transactions/eligibility");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    // ---------- T83a: GET /transactions (07 §7.1) ----------
+
+    [Fact]
+    public async Task List_Unauthenticated_Returns_401()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/v1/transactions");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task List_Authenticated_Returns_PagedResult_Envelope()
+    {
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.GetAsync("/api/v1/transactions?tab=active");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.True(data.TryGetProperty("items", out _));
+        Assert.True(data.TryGetProperty("totalCount", out _));
+        Assert.Equal(1, data.GetProperty("page").GetInt32());
+        Assert.Equal(20, data.GetProperty("pageSize").GetInt32());
+    }
+
+    [Fact]
+    public async Task List_Default_Tab_Is_Active_When_Query_Param_Omitted()
+    {
+        var seller = await _factory.CreateUserAsync();
+        await _factory.SeedTransactionAsync(seller.Id,
+            status: Skinora.Shared.Enums.TransactionStatus.CREATED);
+        await _factory.SeedTransactionAsync(seller.Id,
+            status: Skinora.Shared.Enums.TransactionStatus.COMPLETED);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.GetAsync("/api/v1/transactions");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal(1, data.GetProperty("totalCount").GetInt32());
+        var item = data.GetProperty("items")[0];
+        Assert.Equal("CREATED", item.GetProperty("status").GetString());
+        Assert.Equal("seller", item.GetProperty("userRole").GetString());
+    }
+
+    [Fact]
+    public async Task List_Cancelled_Tab_Returns_Only_Cancelled_Rows()
+    {
+        var seller = await _factory.CreateUserAsync();
+        await _factory.SeedTransactionAsync(seller.Id,
+            status: Skinora.Shared.Enums.TransactionStatus.CANCELLED_SELLER);
+        await _factory.SeedTransactionAsync(seller.Id,
+            status: Skinora.Shared.Enums.TransactionStatus.CREATED);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.GetAsync("/api/v1/transactions?tab=cancelled");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal(1, data.GetProperty("totalCount").GetInt32());
+        Assert.Equal("CANCELLED_SELLER",
+            data.GetProperty("items")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task List_Excludes_Other_Users_Transactions()
+    {
+        var caller = await _factory.CreateUserAsync();
+        var someoneElse = await _factory.CreateUserAsync();
+        await _factory.SeedTransactionAsync(someoneElse.Id,
+            status: Skinora.Shared.Enums.TransactionStatus.CREATED);
+
+        var client = BuildAuthenticatedClient(caller.Id, caller.SteamId);
+        var response = await client.GetAsync("/api/v1/transactions?tab=active");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal(0, body.GetProperty("data").GetProperty("totalCount").GetInt32());
     }
 
     [Fact]
@@ -569,6 +655,11 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var nowUtc = DateTime.UtcNow;
+            var isCancelled =
+                status is Skinora.Shared.Enums.TransactionStatus.CANCELLED_TIMEOUT
+                    or Skinora.Shared.Enums.TransactionStatus.CANCELLED_SELLER
+                    or Skinora.Shared.Enums.TransactionStatus.CANCELLED_BUYER
+                    or Skinora.Shared.Enums.TransactionStatus.CANCELLED_ADMIN;
             var transaction = new Skinora.Transactions.Domain.Entities.Transaction
             {
                 Id = Guid.NewGuid(),
@@ -591,6 +682,14 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 PaymentTimeoutMinutes = 1440,
                 AcceptDeadline = status == Skinora.Shared.Enums.TransactionStatus.CREATED
                     ? nowUtc.AddHours(1)
+                    : null,
+                // CK_Transactions_Cancel — CANCELLED_* requires the trio
+                // {CancelledBy, CancelReason, CancelledAt} NOT NULL.
+                CancelledAt = isCancelled ? nowUtc.AddMinutes(-1) : null,
+                CancelledBy = isCancelled ? Skinora.Shared.Enums.CancelledByType.BUYER : null,
+                CancelReason = isCancelled ? "Test iptal sebebi (>=10 char)" : null,
+                CompletedAt = status == Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-1)
                     : null,
             };
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>().Add(transaction);

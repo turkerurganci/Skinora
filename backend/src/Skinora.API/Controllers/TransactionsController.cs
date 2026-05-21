@@ -10,14 +10,15 @@ using Skinora.Transactions.Application.PayoutIssues;
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// Transaction lifecycle endpoints — T45 (07 §7.2–§7.4), T46
-/// (07 §7.5–§7.6), T51 cancel (07 §7.7), and T60 report-payout-issue
-/// (07 §7.11).
+/// Transaction lifecycle endpoints — T83a list (07 §7.1), T45
+/// (07 §7.2–§7.4), T46 (07 §7.5–§7.6), T51 cancel (07 §7.7), and T60
+/// report-payout-issue (07 §7.11).
 /// </summary>
 [ApiController]
 [Route("api/v1/transactions")]
 public sealed class TransactionsController : ControllerBase
 {
+    private readonly ITransactionListService _list;
     private readonly ITransactionEligibilityService _eligibility;
     private readonly ITransactionParamsService _params;
     private readonly ITransactionCreationService _creation;
@@ -27,6 +28,7 @@ public sealed class TransactionsController : ControllerBase
     private readonly IPayoutIssueService _payoutIssues;
 
     public TransactionsController(
+        ITransactionListService list,
         ITransactionEligibilityService eligibility,
         ITransactionParamsService @params,
         ITransactionCreationService creation,
@@ -35,6 +37,7 @@ public sealed class TransactionsController : ControllerBase
         ITransactionCancellationService cancellation,
         IPayoutIssueService payoutIssues)
     {
+        _list = list;
         _eligibility = eligibility;
         _params = @params;
         _creation = creation;
@@ -42,6 +45,48 @@ public sealed class TransactionsController : ControllerBase
         _acceptance = acceptance;
         _cancellation = cancellation;
         _payoutIssues = payoutIssues;
+    }
+
+    /// <summary>T1 — <c>GET /transactions</c> (07 §7.1, T83a).</summary>
+    /// <remarks>
+    /// <para>
+    /// Returns the caller's own transactions (seller or buyer) filtered by
+    /// <c>tab</c>: <c>active</c>, <c>completed</c>, <c>cancelled</c>. The
+    /// query parameter is optional; an unset or unrecognised value defaults
+    /// to <c>active</c> per the 11 §T83a kabul kriteri.
+    /// </para>
+    /// <para>
+    /// Pagination defaults: <c>page=1</c>, <c>pageSize=20</c> (clamped 1–100
+    /// at the service). Order is <c>CreatedAt DESC</c>.
+    /// </para>
+    /// </remarks>
+    [HttpGet("")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-read")]
+    public async Task<IActionResult> List(
+        [FromQuery] string? tab,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        var resolvedTab = ParseTab(tab);
+        var query = new TransactionListQuery(resolvedTab, page, pageSize);
+        var result = await _list.ListAsync(userId, query, cancellationToken);
+        return Ok(result);
+    }
+
+    private static TransactionListTab ParseTab(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return TransactionListTab.Active;
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "active" => TransactionListTab.Active,
+            "completed" => TransactionListTab.Completed,
+            "cancelled" => TransactionListTab.Cancelled,
+            _ => TransactionListTab.Active,
+        };
     }
 
     /// <summary>T3 — <c>GET /transactions/eligibility</c> (07 §7.3).</summary>

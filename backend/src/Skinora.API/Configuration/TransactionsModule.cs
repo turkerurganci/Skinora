@@ -54,6 +54,11 @@ public static class TransactionsModule
         services.AddScoped<ITransactionDetailService, TransactionDetailService>();
         services.AddScoped<ITransactionAcceptanceService, TransactionAcceptanceService>();
 
+        // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
+        // doc-ref claimed §7.1–§7.4 but the list endpoint was never
+        // implemented; T88 dashboard surfaced the gap.
+        services.AddScoped<ITransactionListService, TransactionListService>();
+
         // T51 — user-initiated cancel (07 §7.7, 02 §7).
         services.AddScoped<ITransactionCancellationService, TransactionCancellationService>();
 
