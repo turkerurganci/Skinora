@@ -182,7 +182,7 @@
 | T86 | Landing page (S01) | ✓ Tamamlandı | ✓ PASS | 1088c2a |
 | T87 | Auth akışı ekranları | ✓ Tamamlandı | ✓ PASS | aa02461 |
 | T88 | Dashboard (S05) | ✓ Tamamlandı | ✓ PASS | 7163102 |
-| T89 | İşlem oluşturma (S06) | ⏳ Devam ediyor (FAIL) | ✗ FAIL bağımsız validator (F1 S2 Kırılma — ZH+ES locale `newTransaction.*` namespace eksik, runtime'da raw key render; F2 S1 Sapma — rapor factual error düzeltildi; F3 advisory — prettier drift) | PR [#135](https://github.com/turkerurganci/Skinora/pull/135) OPEN |
+| T89 | İşlem oluşturma (S06) | ⏳ Re-validate bekliyor | F1 fix uygulandı 2026-05-22 — ZH+ES `newTransaction.*` 104 leaf eklendi (4-locale parity 344/344); F2 finalize commit'iyle düzeltildi; F3 advisory blocking değil; lokal `tsc --noEmit` 0 hata, JSON parse 4/4 ✓; re-validate ayrı chat'te | PR [#135](https://github.com/turkerurganci/Skinora/pull/135) OPEN |
 | T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⬚ Bekliyor | — | — |
 | T91 | Ödeme bilgileri ve edge case UI | ⬚ Bekliyor | — | — |
 | T92 | Dispute UI | ⬚ Bekliyor | — | — |

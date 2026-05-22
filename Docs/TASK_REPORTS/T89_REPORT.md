@@ -1,6 +1,6 @@
 # T89 — İşlem Oluşturma (S06)
 
-**Faz:** F5 | **Durum:** ✗ FAIL (validator, 2026-05-22) — düzeltme yeni yapım chat'inde | **Tarih:** 2026-05-22
+**Faz:** F5 | **Durum:** ⏳ Re-validate bekliyor (F1 fix uygulandı 2026-05-22) | **Tarih:** 2026-05-22
 
 ---
 
@@ -233,3 +233,32 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 - Düzeltme sonrası yeni validate chat'i açılır.
 - F2 (S1 Sapma) bu finalize commit'iyle düzeltildi (rapor K2 + locale parity notu güncellendi).
 - F3 (Advisory) blocking değil, F5 sonu chore PR backlog'una kalır.
+
+---
+
+## F1 Düzeltme — Yapım Chat'i 2 (2026-05-22)
+
+**Verdict ön-koşulu:** F1 (S2 Kırılma) — ZH+ES locale `newTransaction.*` 104 leaf eksik → raw key render.
+
+**Düzeltme:**
+
+- `frontend/src/i18n/messages/zh.json` — `newTransaction.*` namespace eklendi, 104 leaf (mainland Simplified Chinese çevirisi; teknik terimler EN: Steam, Mobile Authenticator, TRC-20, Stablecoin korundu)
+- `frontend/src/i18n/messages/es.json` — `newTransaction.*` namespace eklendi, 104 leaf (neutral Spanish, "tú" form ile mevcut zh/es dashboard paterni mirror; teknik terimler EN korundu)
+- Mevcut `dashboard.newTransaction` leaf (zh: "+ 发起新交易", es: "+ Iniciar una nueva transacción") aynen korundu — `dashboard.*` namespace'inden bağımsız bir leaf
+
+**Doğrulama (lokal):**
+
+- `node` JSON.parse → 4 dosya temiz parse (syntax error yok)
+- Leaf parity: TR=344, EN=344, ZH=344, ES=344 — birebir eşleşme
+- `newTransaction.*` namespace: TR=104, EN=104, ZH=104, ES=104 — birebir eşleşme
+- `npx tsc --noEmit` → ExitCode=0 (frontend type-check temiz)
+- Diff stat: `es.json +168` / `zh.json +168` — sadece namespace ekleme, mevcut leaf'lere dokunulmadı
+
+**Re-validate gereken kontrol noktaları:**
+
+- `curl /zh/transactions/new` ve `/es/transactions/new` runtime smoke — raw key görünmemeli
+- `npm run build` Next.js production build temiz
+- Task branch CI run yeniden tetiklenmeli
+- ICU placeholder'lar (`{tradeable}`, `{total}`, `{query}`, `{current}`, `{max}`, `{percent}`, `{amount}`, `{min}`, `{max}`, `{hours}`, `{steamId}`) ZH+ES'de korunuyor — manuel review
+
+**Re-validate bu yapım chat'inde değil, ayrı bir validate chat'inde yapılır** (feedback: validation_separate_chat).
