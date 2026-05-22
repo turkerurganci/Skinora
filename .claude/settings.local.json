@@ -107,6 +107,19 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/powershell-allow.ps1",
+            "shell": "powershell",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
