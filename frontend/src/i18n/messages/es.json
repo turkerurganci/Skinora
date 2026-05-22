@@ -364,5 +364,173 @@
       "description": "Inicia sesión con Steam para ver tu panel.",
       "cta": "Iniciar sesión con Steam"
     }
+  },
+  "newTransaction": {
+    "title": "Iniciar una nueva transacción",
+    "subtitle": "Elige el artículo que quieres vender e introduce el precio y los datos del comprador.",
+    "authRequired": {
+      "title": "Inicio de sesión requerido",
+      "description": "Inicia sesión con Steam para iniciar una nueva transacción.",
+      "cta": "Iniciar sesión con Steam"
+    },
+    "loadError": {
+      "title": "No se pudo cargar el formulario",
+      "message": "No se pudieron leer los parámetros del formulario ni el estado de la cuenta. Comprueba tu conexión e inténtalo de nuevo."
+    },
+    "steps": {
+      "indicatorLabel": "Indicador de pasos",
+      "step1": "Elegir artículo",
+      "step2": "Detalles",
+      "step3": "Comprador y monedero",
+      "step4": "Resumen"
+    },
+    "nav": {
+      "back": "Atrás",
+      "next": "Siguiente",
+      "cancel": "Cancelar"
+    },
+    "gate": {
+      "regionLabel": "Bloqueos para iniciar transacciones",
+      "backToDashboard": "← Volver al panel",
+      "ma": {
+        "title": "Mobile Authenticator no está activo",
+        "description": "Steam Mobile Authenticator no está habilitado en tu cuenta. Por motivos de seguridad no puedes iniciar una transacción sin MA.",
+        "cta": "Activar MA"
+      },
+      "flagged": {
+        "title": "Cuenta en revisión",
+        "description": "Tu cuenta está en revisión. No puedes iniciar nuevas transacciones. Te avisaremos cuando termine la revisión."
+      },
+      "concurrent": {
+        "title": "Límite de transacciones activas alcanzado",
+        "description": "Has alcanzado el límite de transacciones activas ({current}/{max}). Podrás iniciar una nueva cuando se completen las existentes."
+      },
+      "newAccount": {
+        "title": "Límite de cuenta nueva alcanzado",
+        "description": "Has alcanzado el límite de transacciones para cuentas nuevas ({current}/{max})."
+      },
+      "cancelCooldown": {
+        "title": "Restricción temporal de transacciones",
+        "description": "Hay un periodo de espera por cancelación activo. Podrás intentarlo de nuevo cuando termine."
+      },
+      "payoutCooldown": {
+        "title": "Periodo de espera de la dirección de pago",
+        "description": "Tu dirección de pago se cambió recientemente. Por motivos de seguridad no puedes iniciar nuevas transacciones durante el periodo de espera."
+      },
+      "unknown": {
+        "title": "No se puede iniciar la transacción"
+      }
+    },
+    "step1": {
+      "title": "Elige el artículo que quieres vender",
+      "counts": "{tradeable} intercambiables / {total} artículos en total",
+      "searchPlaceholder": "Buscar artículos...",
+      "nonTradeableTooltip": "No intercambiable",
+      "empty": {
+        "title": "Tu inventario de Steam está vacío",
+        "description": "No se encontraron artículos intercambiables en tu inventario de Steam."
+      },
+      "noMatch": {
+        "title": "No se encontraron artículos",
+        "description": "No hay artículos que coincidan con \"{query}\"."
+      },
+      "error": {
+        "title": "No se pudo cargar el inventario",
+        "message": "No se pudo leer tu inventario de Steam en este momento. Inténtalo de nuevo.",
+        "privateTitle": "Tu inventario es privado",
+        "privateMessage": "Tu inventario de Steam está configurado como privado. Para iniciar una transacción debes hacerlo 'público'."
+      }
+    },
+    "step2": {
+      "title": "Detalles de la transacción",
+      "selectedItem": "Artículo seleccionado",
+      "changeItem": "Cambiar",
+      "stablecoin": {
+        "label": "Stablecoin"
+      },
+      "price": {
+        "label": "Precio",
+        "range": "Mín: {min} — Máx: {max}",
+        "errors": {
+          "notNumber": "Introduce un número válido.",
+          "belowMin": "El precio debe ser al menos {min}.",
+          "aboveMax": "El precio puede ser como máximo {max}."
+        }
+      },
+      "timeout": {
+        "label": "Plazo de pago",
+        "hours": "{hours} horas",
+        "hint": "Tiempo del que dispone el comprador para pagar."
+      },
+      "commission": {
+        "label": "Comisión (la paga el comprador)",
+        "value": "El comprador paga el {percent}% de comisión: {amount}",
+        "placeholder": "Se calcula cuando introduzcas el precio ({percent}%)"
+      }
+    },
+    "step3": {
+      "title": "Comprador y monedero",
+      "buyer": {
+        "label": "¿Cómo vas a identificar al comprador?",
+        "steamId": {
+          "title": "Steam ID del comprador",
+          "description": "Invita a un usuario concreto a esta transacción.",
+          "inputLabel": "Steam ID (17 dígitos)",
+          "hint": "Puedes encontrar el SteamID64 de 17 dígitos en la URL del perfil de Steam.",
+          "errors": {
+            "format": "El Steam ID debe tener 17 dígitos."
+          }
+        },
+        "openLink": {
+          "title": "Crear un enlace abierto",
+          "description": "El primer usuario que acepte se convierte en comprador.",
+          "disabled": "Este método está deshabilitado actualmente por el administrador."
+        }
+      },
+      "wallet": {
+        "label": "Dirección del monedero para recibir el pago",
+        "description": "Si la venta se completa, recibirás el pago en esta dirección TRC-20.",
+        "confirmed": "Dirección de pago confirmada",
+        "change": "Cambiar"
+      }
+    },
+    "step4": {
+      "title": "Resumen de la transacción",
+      "rows": {
+        "item": "Artículo",
+        "price": "Precio",
+        "commission": "Comisión",
+        "commissionPayer": "la paga el comprador",
+        "token": "Token",
+        "timeout": "Plazo de pago",
+        "timeoutValue": "{hours} horas",
+        "buyer": "Comprador",
+        "buyerSteamId": "Steam ID: {steamId}",
+        "buyerOpenLink": "Enlace abierto (el primero que acepte)",
+        "wallet": "Dirección de pago"
+      },
+      "back": "Atrás",
+      "submit": "Iniciar transacción",
+      "submitting": "Iniciando...",
+      "errors": {
+        "generic": "No se pudo iniciar la transacción. Inténtalo de nuevo.",
+        "VALIDATION_ERROR": "Hay un error en los datos del formulario. Revisa todos los campos.",
+        "INVALID_WALLET_ADDRESS": "La dirección de pago no es válida. Introduce una dirección TRC-20.",
+        "SANCTIONS_MATCH": "Esta dirección de monedero está en la lista de sanciones. Usa otra dirección.",
+        "CONCURRENT_LIMIT_REACHED": "Has alcanzado el límite de transacciones activas. Podrás iniciar una nueva cuando se completen las existentes.",
+        "CANCEL_COOLDOWN_ACTIVE": "Hay un periodo de espera por cancelación activo. No puedes iniciar nuevas transacciones hasta que termine.",
+        "NEW_ACCOUNT_LIMIT_REACHED": "Has alcanzado el límite de transacciones para cuentas nuevas.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Steam Mobile Authenticator debe estar activo en tu cuenta.",
+        "ACCOUNT_FLAGGED": "Tu cuenta está en revisión. No puedes iniciar nuevas transacciones.",
+        "ITEM_NOT_TRADEABLE": "El artículo seleccionado no es intercambiable. Elige otro.",
+        "ITEM_NOT_IN_INVENTORY": "El artículo seleccionado no se encontró en tu inventario. Actualiza el inventario e inténtalo de nuevo.",
+        "PRICE_OUT_OF_RANGE": "El precio está fuera de los límites de la plataforma. Vuelve a introducirlo.",
+        "TIMEOUT_OUT_OF_RANGE": "El plazo de pago está fuera de los límites de la plataforma.",
+        "OPEN_LINK_DISABLED": "El método de enlace abierto está deshabilitado actualmente. Usa el método de Steam ID.",
+        "BUYER_STEAM_ID_NOT_FOUND": "El Steam ID que introdujiste no pertenece a un usuario registrado.",
+        "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "El periodo de espera de la dirección de pago sigue activo.",
+        "SELLER_WALLET_ADDRESS_MISSING": "Se requiere una dirección de pago. Introduce una dirección TRC-20 válida."
+      }
+    }
   }
 }

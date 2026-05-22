@@ -1,6 +1,10 @@
 import { apiClient } from "./client";
 import type { PagedResult } from "@/types/api";
-import type { StablecoinType } from "@/types/enums";
+import type {
+  BuyerIdentificationMethod,
+  StablecoinType,
+  TransactionStatus,
+} from "@/types/enums";
 import type { ExtendedStatus } from "@/components/common";
 
 /**
@@ -66,4 +70,115 @@ export function listTransactions(
   if (query.page !== undefined) params.set("page", String(query.page));
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
   return apiClient<PagedResult<TransactionListItem>>(`/transactions?${params.toString()}`);
+}
+
+// ---------- GET /transactions/eligibility (07 §7.3) ----------
+
+export interface EligibilityConcurrentLimit {
+  current: number;
+  max: number;
+}
+
+export interface EligibilityCancelCooldown {
+  active: boolean;
+  expiresAt: string | null;
+}
+
+export interface EligibilityNewAccountLimit {
+  isNewAccount: boolean;
+  current: number | null;
+  max: number | null;
+}
+
+/**
+ * Eligibility envelope returned by `GET /transactions/eligibility` (07 §7.3).
+ *
+ * `reasons` is the canonical source for the S06 "Form Öncesi Engeller" panel
+ * (04 §7.2): each string is one of the codes defined by the backend
+ * `TransactionErrorCodes.EligibilityReasons` static class — i.e.
+ * MOBILE_AUTHENTICATOR_REQUIRED, ACCOUNT_FLAGGED, CANCEL_COOLDOWN_ACTIVE,
+ * CONCURRENT_LIMIT_REACHED, NEW_ACCOUNT_LIMIT_REACHED,
+ * PAYOUT_ADDRESS_COOLDOWN_ACTIVE, SELLER_WALLET_ADDRESS_MISSING.
+ *
+ * Backend omits the field with `WhenWritingNull` when the user is eligible,
+ * so the client must treat `undefined` as "no blockers".
+ */
+export interface EligibilityResponse {
+  eligible: boolean;
+  mobileAuthenticatorActive: boolean;
+  concurrentLimit: EligibilityConcurrentLimit;
+  cancelCooldown: EligibilityCancelCooldown;
+  newAccountLimit: EligibilityNewAccountLimit;
+  reasons?: string[];
+}
+
+export function getEligibility(): Promise<EligibilityResponse> {
+  return apiClient<EligibilityResponse>("/transactions/eligibility");
+}
+
+// ---------- GET /transactions/params (07 §7.4) ----------
+
+export interface PaymentTimeoutWindow {
+  minHours: number;
+  maxHours: number;
+  defaultHours: number;
+}
+
+/**
+ * Form parameters envelope returned by `GET /transactions/params` (07 §7.4).
+ *
+ * `minPrice` / `maxPrice` are strings to preserve scale-2 decimal fidelity
+ * across the JSON boundary. `commissionRate` is a fraction (0.02 → 2%).
+ */
+export interface TransactionParamsResponse {
+  minPrice: string;
+  maxPrice: string;
+  commissionRate: number;
+  paymentTimeout: PaymentTimeoutWindow;
+  openLinkEnabled: boolean;
+  supportedStablecoins: StablecoinType[];
+}
+
+export function getTransactionParams(): Promise<TransactionParamsResponse> {
+  return apiClient<TransactionParamsResponse>("/transactions/params");
+}
+
+// ---------- POST /transactions (07 §7.2) ----------
+
+/**
+ * Request body for `POST /transactions` (07 §7.2). `buyerSteamId` is only
+ * required when `buyerIdentificationMethod === STEAM_ID`; for `OPEN_LINK` the
+ * field is omitted entirely (backend rejects the combination).
+ */
+export interface CreateTransactionRequest {
+  itemAssetId: string;
+  stablecoin: StablecoinType;
+  price: string;
+  paymentTimeoutHours: number;
+  buyerIdentificationMethod: BuyerIdentificationMethod;
+  buyerSteamId?: string;
+  sellerWalletAddress: string;
+}
+
+/**
+ * Response body for `POST /transactions` (07 §7.2). When the transaction is
+ * auto-flagged by fraud rules the response contains `status: "FLAGGED"` +
+ * `flagReason: "PRICE_DEVIATION"`; the form treats this as a successful
+ * creation and redirects to the detail page where the FLAGGED banner shows.
+ */
+export interface CreateTransactionResponse {
+  id: string;
+  status: TransactionStatus;
+  inviteUrl: string;
+  createdAt: string;
+  flagReason?: string;
+}
+
+export function createTransaction(
+  body: CreateTransactionRequest,
+): Promise<CreateTransactionResponse> {
+  return apiClient<CreateTransactionResponse>("/transactions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
