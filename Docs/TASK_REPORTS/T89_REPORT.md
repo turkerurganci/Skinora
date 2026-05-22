@@ -1,6 +1,6 @@
 # T89 — İşlem Oluşturma (S06)
 
-**Faz:** F5 | **Durum:** ⏳ Re-validate bekliyor (F1 fix uygulandı 2026-05-22) | **Tarih:** 2026-05-22
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (re-validate PASS 2026-05-22) | **Tarih:** 2026-05-22
 
 ---
 
@@ -262,3 +262,91 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 - ICU placeholder'lar (`{tradeable}`, `{total}`, `{query}`, `{current}`, `{max}`, `{percent}`, `{amount}`, `{min}`, `{max}`, `{hours}`, `{steamId}`) ZH+ES'de korunuyor — manuel review
 
 **Re-validate bu yapım chat'inde değil, ayrı bir validate chat'inde yapılır** (feedback: validation_separate_chat).
+
+---
+
+## Re-validate Sonucu (Validator chat 2)
+
+**Tarih:** 2026-05-22
+**Validator:** Türker Urgancı + Claude (Opus 4.7) bağımsız chat 2
+**Verdict:** ✓ **PASS** — F1 düzeltme runtime'da doğrulandı, merge edilebilir
+
+### Faz 1 — Ön Kontroller
+
+- **Working tree (Adım -1):** `.claude/settings.local.json` modified → kullanıcı kararı: stash → doğrulama, sonra pop. Temiz state'te başlandı.
+- **Main CI startup (Adım 0):** ✓ Son 3 main run hepsi success — [26253085726](https://github.com/turkerurganci/Skinora/actions/runs/26253085726) (T88 CI), [26253085766](https://github.com/turkerurganci/Skinora/actions/runs/26253085766) (T88 Docker), [26247008809](https://github.com/turkerurganci/Skinora/actions/runs/26247008809) (T83a Docker)
+- **Repo memory drift (Adım 0b):** ✓ MEMORY.md'de T89 için 6+ satır mevcut (212, 213, 214, 215, 216, 217 — F1 fix + working tree olayı dahil)
+
+### Faz 2 — F1 (S2 Kırılma) Re-doğrulaması
+
+**Bağımsız kanıt — i18n leaf parity (`node` script):**
+
+| Locale | Toplam leaf | `newTransaction.*` leaf | EN'a karşı missing | EN'a karşı extra |
+|---|---|---|---|---|
+| en | 344 | 104 | (referans) | (referans) |
+| tr | 344 | 104 | 0 | 0 |
+| zh | 344 | 104 | 0 | 0 |
+| es | 344 | 104 | 0 | 0 |
+
+**Bağımsız kanıt — runtime smoke (önceki FAIL'ın tetikleyicisi):**
+
+```
+GET /en/transactions/new → h1: "Sign-in required"            (raw key count: 0)
+GET /tr/transactions/new → h1: "Giriş yapmanız gerekiyor"    (raw key count: 0)
+GET /zh/transactions/new → h1: "需要登录"                    (raw key count: 0)  ← önce raw idi
+GET /es/transactions/new → h1: "Inicio de sesión requerido"  (raw key count: 0)  ← önce raw idi
+```
+
+**İçerik kalite kontrolü (sample 22 leaf path × 4 locale):** ZH Simplified mainland (例: "稳定币" = stablecoin, "买家支付 {percent}% 佣金"), ES neutral "tú" form (例: "El comprador paga el {percent}% de comisión"), teknik terimler EN olarak korunmuş (Steam, Mobile Authenticator, TRC-20, Stablecoin), ICU placeholder'lar (`{min}/{max}/{percent}/{amount}/{tradeable}/{total}/{hours}/{steamId}/{current}/{max}/{query}`) 4 dilde de korunmuş.
+
+**Sonuç:** F1 (S2 Kırılma) ✗→✓ — kapatıldı, regresyon yok.
+
+### Faz 2 — Kabul Kriterleri Re-verdict
+
+| # | Kriter | Verdict | Kanıt |
+|---|---|---|---|
+| 1 | 4 adımlı form | ✓ | `NewTransactionForm.tsx:141-228` step state + 4 component render guard'ları (önceki validate'te ✓) |
+| 2 | Adım göstergesi | ✓ | `StepIndicator.tsx` aria-current="step" (önceki validate'te ✓) |
+| 3 | Envanter grid | ✓ | `Step1ItemSelection.tsx` 4 state branch + IntersectionObserver (önceki validate'te ✓) |
+| 4 | Validasyonlar | ✓ | regex + range + non-tradeable disable + walletConfirmed gate (önceki validate'te ✓) |
+| 5 | Engel state'leri (6 surface + 1 filtered) | ✓ | `EligibilityGate.tsx` 7/7 backend `TransactionErrorCodes.EligibilityReasons.cs` ile 1:1 (önceki validate'te ✓) |
+| 6 | GET eligibility/params/inventory çağrıları | ✓ | 3 TanStack Query hook backend `T45/T67` endpoint'lerine vurur (önceki validate'te ✓) |
+| 7 | POST /transactions | ✓ | `useMutation(createTransaction)` 201→redirect, 4xx→inline banner (önceki validate'te ✓) |
+
+### Faz 2 — Kalite Gate'leri (Re-koşum)
+
+- ✓ `npx tsc --noEmit` ExitCode=0 (silent stdout, 0 hata)
+- ✓ `npx eslint .` ExitCode=0
+- ✓ `npx next build` Compiled successfully in 2.9s + TypeScript Finished in 2.8s + 3/3 static pages 131ms + 24 route — lokal Windows build temiz (önceki rapor "lokal Windows flaky" iddiası reproduce edilemedi)
+- ✓ Runtime smoke 4 locale × `/transactions/new` 0 raw key (validator FAIL'ın somut tetikleyicisi düzeltildi)
+- ✓ Task branch CI son run [26306070134](https://github.com/turkerurganci/Skinora/actions/runs/26306070134) HEAD `8670b90` **9/10 success** (Guard skipped — PR normal): Lint+Build+Unit+Integration+Contract+Migration dry-run+Docker (frontend)+CI Gate. Önceki commit'ler de yeşil: `eea91b4` → [26304880319](https://github.com/turkerurganci/Skinora/actions/runs/26304880319), `6fa4a9a` → [26300957458](https://github.com/turkerurganci/Skinora/actions/runs/26300957458). Ara commit `9bf919a` CI cancelled — daha yeni commit push edilince auto-cancelled, kırılma değil.
+- ✓ Backend kontrat 1:1 değişmedi (`TransactionErrorCodes.cs` 16 POST code + 7 EligibilityReason)
+- ✓ JSON syntax 4 dosya temiz parse
+- ⚠ Prettier `--check` drift advisory (F5 sonu chore PR backlog — F3 önceki validate'te raporlandı)
+
+### Faz 2 — Güvenlik Kontrolü
+
+- ✓ Secret sızıntısı: `apiKey|secret|password|token=` literal 0 match yeni dosyalarda
+- ✓ Auth/authorization: store gate + 401 detect → tek login CTA; sanctions check sunucu tarafında (POST sırasında); `dangerouslySetInnerHTML/eval/new Function` 0 match
+- ✓ Input validation: client + server defense-in-depth (regex + range + sanctions delegation)
+- ✓ Yeni dış bağımlılık: yok (`package.json` değişmemiş)
+
+### Faz 2 — Re-validate Spesifik Bulgular
+
+| # | Seviye | Açıklama | Etkilenen | Düzeltme |
+|---|---|---|---|---|
+| — | — | F1 (S2) kapandı | — | F1 fix `9bf919a` ile çözüldü, runtime'da doğrulandı |
+| — | — | F2 (S1) kapandı | — | Rapor finalize (`eea91b4`) ile düzeltildi |
+| F3' | Advisory | Prettier drift devam ediyor (T89 dosyaları + repo-wide pre-existing) | 16 T89 + 86 pre-existing | F5 sonu toplu chore PR — PASS engeli değil |
+
+### Faz 3 — Yapım Raporu Karşılaştırması
+
+- **Tam uyum.** F1 fix bölümü (rapor satır 239+) validator'ın doğruladığı leaf parity + ICU placeholder + JSON parse + TSC sonuçlarını birebir bildirmiş. Re-validate sırasında ek bağımsız kanıt üretildi (runtime smoke 4 locale, build 24 route, CI run son commit) — uyuşmazlık yok.
+- **Önceki "lokal Windows build flaky" iddiası:** validator chat 1'de reproduce edilemedi, chat 2'de de reproduce edilemedi (3-4s temiz build). Pre-mevcut env state farkı olabilir, ileriki task'larda izlenmeli — kozmetik kayıt.
+
+### Karar
+
+- ✓ **PASS** — merge edilebilir. F1 (S2 Kırılma) düzeltildi, regresyon yok, 7/7 kabul + 8/8 doğrulama listesi + tüm kalite gate'leri ✓.
+- IMPLEMENTATION_STATUS güncellenir: `⏳ Re-validate bekliyor` → `✓ Tamamlandı`.
+- Branch `task/T89-transaction-creation-ui` → main squash merge.
+- Post-merge CI watch (Adım 18 zorunlu çıkış kapısı) izlenir.
