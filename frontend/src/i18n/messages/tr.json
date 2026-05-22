@@ -364,5 +364,173 @@
       "description": "Kontrol panelini görmek için Steam ile giriş yapın.",
       "cta": "Steam ile Giriş Yap"
     }
+  },
+  "newTransaction": {
+    "title": "Yeni İşlem Başlat",
+    "subtitle": "Satmak istediğiniz item'ı seçin, fiyat ve alıcı bilgilerini girin.",
+    "authRequired": {
+      "title": "Giriş yapmanız gerekiyor",
+      "description": "Yeni işlem başlatmak için Steam ile giriş yapın.",
+      "cta": "Steam ile Giriş Yap"
+    },
+    "loadError": {
+      "title": "Form yüklenemedi",
+      "message": "Form parametreleri veya hesap durumu okunamadı. Bağlantınızı kontrol edip tekrar deneyin."
+    },
+    "steps": {
+      "indicatorLabel": "Adım göstergesi",
+      "step1": "Item Seç",
+      "step2": "Detaylar",
+      "step3": "Alıcı & Cüzdan",
+      "step4": "Özet"
+    },
+    "nav": {
+      "back": "Geri",
+      "next": "İleri",
+      "cancel": "Vazgeç"
+    },
+    "gate": {
+      "regionLabel": "İşlem başlatma engelleri",
+      "backToDashboard": "← Kontrol paneline dön",
+      "ma": {
+        "title": "Mobile Authenticator aktif değil",
+        "description": "Hesabınızda Steam Mobile Authenticator etkinleştirilmemiş. Güvenlik nedeniyle MA aktif olmadan işlem başlatamazsınız.",
+        "cta": "MA'yı aktifleştir"
+      },
+      "flagged": {
+        "title": "Hesap inceleme altında",
+        "description": "Hesabınız inceleme altında. Yeni işlem başlatılamaz. İnceleme tamamlandığında bilgilendirileceksiniz."
+      },
+      "concurrent": {
+        "title": "Aktif işlem limitine ulaştınız",
+        "description": "Aktif işlem limitinize ulaştınız ({current}/{max}). Mevcut işlemleriniz tamamlandığında yeni işlem başlatabilirsiniz."
+      },
+      "newAccount": {
+        "title": "Yeni hesap limitine ulaştınız",
+        "description": "Yeni hesap işlem limitinize ulaştınız ({current}/{max})."
+      },
+      "cancelCooldown": {
+        "title": "Geçici işlem yasağı",
+        "description": "İptal cooldown'u devam ediyor. Süre dolduğunda tekrar deneyebilirsiniz."
+      },
+      "payoutCooldown": {
+        "title": "Ödeme adresi cooldown'u",
+        "description": "Ödeme adresiniz yakın zamanda değiştirildi. Güvenlik nedeniyle bekleme süresi boyunca yeni işlem başlatılamaz."
+      },
+      "unknown": {
+        "title": "İşlem başlatılamıyor"
+      }
+    },
+    "step1": {
+      "title": "Satmak istediğiniz item'ı seçin",
+      "counts": "{tradeable} takas edilebilir / toplam {total} item",
+      "searchPlaceholder": "Item ara...",
+      "nonTradeableTooltip": "Takas edilemez",
+      "empty": {
+        "title": "Steam envanteriniz boş",
+        "description": "Steam envanterinizde tradeable item bulunamadı."
+      },
+      "noMatch": {
+        "title": "Eşleşen item bulunamadı",
+        "description": "\"{query}\" aramasıyla eşleşen item bulunamadı."
+      },
+      "error": {
+        "title": "Envanter okunamadı",
+        "message": "Steam envanteriniz şu an okunamadı. Lütfen tekrar deneyin.",
+        "privateTitle": "Envanteriniz gizli",
+        "privateMessage": "Steam envanteriniz gizli olarak ayarlanmış. İşlem başlatmak için envanterinizi 'public' yapmalısınız."
+      }
+    },
+    "step2": {
+      "title": "İşlem Detayları",
+      "selectedItem": "Seçili item",
+      "changeItem": "Değiştir",
+      "stablecoin": {
+        "label": "Stablecoin"
+      },
+      "price": {
+        "label": "Fiyat",
+        "range": "Min: {min} — Max: {max}",
+        "errors": {
+          "notNumber": "Geçerli bir sayı girin.",
+          "belowMin": "Fiyat en az {min} olmalıdır.",
+          "aboveMax": "Fiyat en fazla {max} olmalıdır."
+        }
+      },
+      "timeout": {
+        "label": "Ödeme süresi",
+        "hours": "{hours} saat",
+        "hint": "Alıcının ödeme yapması gereken süre."
+      },
+      "commission": {
+        "label": "Komisyon (alıcı öder)",
+        "value": "Alıcı %{percent} komisyon ödeyecek: {amount}",
+        "placeholder": "Fiyatı girince hesaplanacak (%{percent})"
+      }
+    },
+    "step3": {
+      "title": "Alıcı ve Cüzdan",
+      "buyer": {
+        "label": "Alıcıyı nasıl belirleyeceksiniz?",
+        "steamId": {
+          "title": "Alıcının Steam ID'si",
+          "description": "Belirli bir kullanıcıyı işleme davet edin.",
+          "inputLabel": "Steam ID (17 haneli)",
+          "hint": "Steam profil URL'sinden 17 haneli SteamID64'ü bulabilirsiniz.",
+          "errors": {
+            "format": "Steam ID 17 haneli rakamlardan oluşmalıdır."
+          }
+        },
+        "openLink": {
+          "title": "Açık link oluştur",
+          "description": "İlk kabul eden kullanıcı alıcı olur.",
+          "disabled": "Bu yöntem şu an yönetici tarafından kapatılmıştır."
+        }
+      },
+      "wallet": {
+        "label": "Ödeme Alacağınız Cüzdan Adresi",
+        "description": "Satışın tamamlanması durumunda ödemenizi bu TRC-20 adresinden alacaksınız.",
+        "confirmed": "Ödeme adresi onaylandı",
+        "change": "Değiştir"
+      }
+    },
+    "step4": {
+      "title": "İşlem Özeti",
+      "rows": {
+        "item": "Item",
+        "price": "Fiyat",
+        "commission": "Komisyon",
+        "commissionPayer": "alıcı öder",
+        "token": "Token",
+        "timeout": "Ödeme süresi",
+        "timeoutValue": "{hours} saat",
+        "buyer": "Alıcı",
+        "buyerSteamId": "Steam ID: {steamId}",
+        "buyerOpenLink": "Açık link (ilk kabul eden alır)",
+        "wallet": "Ödeme adresi"
+      },
+      "back": "Geri",
+      "submit": "İşlemi Başlat",
+      "submitting": "Başlatılıyor...",
+      "errors": {
+        "generic": "İşlem başlatılamadı. Lütfen tekrar deneyin.",
+        "VALIDATION_ERROR": "Form bilgilerinde hata var. Lütfen tüm alanları kontrol edin.",
+        "INVALID_WALLET_ADDRESS": "Ödeme adresi geçersiz. TRC-20 formatında bir adres girin.",
+        "SANCTIONS_MATCH": "Bu cüzdan adresi yaptırım listesindedir. Lütfen başka bir adres kullanın.",
+        "CONCURRENT_LIMIT_REACHED": "Aktif işlem limitine ulaştınız. Mevcut işlemleriniz tamamlandığında yeni işlem başlatabilirsiniz.",
+        "CANCEL_COOLDOWN_ACTIVE": "İptal cooldown'u devam ediyor. Süre dolana kadar yeni işlem başlatamazsınız.",
+        "NEW_ACCOUNT_LIMIT_REACHED": "Yeni hesap işlem limitinize ulaştınız.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Hesabınızda Steam Mobile Authenticator aktif olmalıdır.",
+        "ACCOUNT_FLAGGED": "Hesabınız inceleme altında. Yeni işlem başlatılamaz.",
+        "ITEM_NOT_TRADEABLE": "Seçtiğiniz item takas edilemez. Lütfen başka bir item seçin.",
+        "ITEM_NOT_IN_INVENTORY": "Seçtiğiniz item envanterinizde bulunamadı. Envanteri yenileyip tekrar deneyin.",
+        "PRICE_OUT_OF_RANGE": "Fiyat platform sınırlarının dışında. Lütfen yeniden girin.",
+        "TIMEOUT_OUT_OF_RANGE": "Ödeme süresi platform sınırlarının dışında.",
+        "OPEN_LINK_DISABLED": "Açık link yöntemi şu an kapalı. Lütfen Steam ID yöntemini kullanın.",
+        "BUYER_STEAM_ID_NOT_FOUND": "Belirttiğiniz Steam ID kayıtlı bir kullanıcıya ait değil.",
+        "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "Ödeme adresi cooldown'u devam ediyor.",
+        "SELLER_WALLET_ADDRESS_MISSING": "Ödeme adresi zorunludur. Lütfen geçerli bir TRC-20 adresi girin."
+      }
+    }
   }
 }

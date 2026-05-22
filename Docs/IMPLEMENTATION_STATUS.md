@@ -182,7 +182,7 @@
 | T86 | Landing page (S01) | ✓ Tamamlandı | ✓ PASS | 1088c2a |
 | T87 | Auth akışı ekranları | ✓ Tamamlandı | ✓ PASS | aa02461 |
 | T88 | Dashboard (S05) | ✓ Tamamlandı | ✓ PASS | 7163102 |
-| T89 | İşlem oluşturma (S06) | ⬚ Bekliyor | — | — |
+| T89 | İşlem oluşturma (S06) | ⏳ Devam ediyor | ⏳ | — |
 | T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⬚ Bekliyor | — | — |
 | T91 | Ödeme bilgileri ve edge case UI | ⬚ Bekliyor | — | — |
 | T92 | Dispute UI | ⬚ Bekliyor | — | — |

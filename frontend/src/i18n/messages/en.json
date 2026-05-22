@@ -364,5 +364,173 @@
       "description": "Sign in with Steam to view your dashboard.",
       "cta": "Sign in with Steam"
     }
+  },
+  "newTransaction": {
+    "title": "Start a new transaction",
+    "subtitle": "Pick the item you want to sell, then enter the price and buyer details.",
+    "authRequired": {
+      "title": "Sign-in required",
+      "description": "Sign in with Steam to start a new transaction.",
+      "cta": "Sign in with Steam"
+    },
+    "loadError": {
+      "title": "Could not load the form",
+      "message": "Form parameters or account status could not be loaded. Check your connection and try again."
+    },
+    "steps": {
+      "indicatorLabel": "Form step indicator",
+      "step1": "Select item",
+      "step2": "Details",
+      "step3": "Buyer & wallet",
+      "step4": "Review"
+    },
+    "nav": {
+      "back": "Back",
+      "next": "Next",
+      "cancel": "Cancel"
+    },
+    "gate": {
+      "regionLabel": "Transaction creation blockers",
+      "backToDashboard": "← Back to dashboard",
+      "ma": {
+        "title": "Mobile Authenticator not active",
+        "description": "Steam Mobile Authenticator is not enabled on your account. For security reasons you cannot start a transaction without MA.",
+        "cta": "Enable MA"
+      },
+      "flagged": {
+        "title": "Account under review",
+        "description": "Your account is under review. You cannot start a new transaction. You will be notified once the review is complete."
+      },
+      "concurrent": {
+        "title": "Active transaction limit reached",
+        "description": "You have reached your active transaction limit ({current}/{max}). You can start a new transaction once existing ones are completed."
+      },
+      "newAccount": {
+        "title": "New-account limit reached",
+        "description": "You have reached the new-account transaction limit ({current}/{max})."
+      },
+      "cancelCooldown": {
+        "title": "Temporary transaction ban",
+        "description": "A cancellation cooldown is in effect. You can try again once the cooldown expires."
+      },
+      "payoutCooldown": {
+        "title": "Payout address cooldown",
+        "description": "Your payout address was changed recently. For security reasons you cannot start a new transaction during the cooldown."
+      },
+      "unknown": {
+        "title": "Cannot start a transaction"
+      }
+    },
+    "step1": {
+      "title": "Select the item you want to sell",
+      "counts": "{tradeable} tradeable / {total} total items",
+      "searchPlaceholder": "Search items...",
+      "nonTradeableTooltip": "Non-tradeable",
+      "empty": {
+        "title": "Your Steam inventory is empty",
+        "description": "No tradeable items were found in your Steam inventory."
+      },
+      "noMatch": {
+        "title": "No items match",
+        "description": "No items match the search \"{query}\"."
+      },
+      "error": {
+        "title": "Inventory could not be loaded",
+        "message": "Could not read your Steam inventory right now. Please try again.",
+        "privateTitle": "Your inventory is private",
+        "privateMessage": "Your Steam inventory is set to private. Make it public to start a transaction."
+      }
+    },
+    "step2": {
+      "title": "Transaction details",
+      "selectedItem": "Selected item",
+      "changeItem": "Change",
+      "stablecoin": {
+        "label": "Stablecoin"
+      },
+      "price": {
+        "label": "Price",
+        "range": "Min: {min} — Max: {max}",
+        "errors": {
+          "notNumber": "Enter a valid number.",
+          "belowMin": "Price must be at least {min}.",
+          "aboveMax": "Price must be at most {max}."
+        }
+      },
+      "timeout": {
+        "label": "Payment window",
+        "hours": "{hours} hours",
+        "hint": "How long the buyer has to pay."
+      },
+      "commission": {
+        "label": "Commission (paid by buyer)",
+        "value": "Buyer pays {percent}% commission: {amount}",
+        "placeholder": "Calculated once you enter a price ({percent}%)"
+      }
+    },
+    "step3": {
+      "title": "Buyer and wallet",
+      "buyer": {
+        "label": "How will you identify the buyer?",
+        "steamId": {
+          "title": "Buyer's Steam ID",
+          "description": "Invite a specific user to this transaction.",
+          "inputLabel": "Steam ID (17 digits)",
+          "hint": "You can find the 17-digit SteamID64 in the Steam profile URL.",
+          "errors": {
+            "format": "Steam ID must be 17 digits."
+          }
+        },
+        "openLink": {
+          "title": "Create an open link",
+          "description": "The first user who accepts becomes the buyer.",
+          "disabled": "This method is currently disabled by the administrator."
+        }
+      },
+      "wallet": {
+        "label": "Wallet address to receive payment",
+        "description": "If the sale completes, you will receive payment at this TRC-20 address.",
+        "confirmed": "Payout address confirmed",
+        "change": "Change"
+      }
+    },
+    "step4": {
+      "title": "Transaction summary",
+      "rows": {
+        "item": "Item",
+        "price": "Price",
+        "commission": "Commission",
+        "commissionPayer": "buyer pays",
+        "token": "Token",
+        "timeout": "Payment window",
+        "timeoutValue": "{hours} hours",
+        "buyer": "Buyer",
+        "buyerSteamId": "Steam ID: {steamId}",
+        "buyerOpenLink": "Open link (first to accept)",
+        "wallet": "Payout address"
+      },
+      "back": "Back",
+      "submit": "Start transaction",
+      "submitting": "Starting...",
+      "errors": {
+        "generic": "Could not start the transaction. Please try again.",
+        "VALIDATION_ERROR": "There is an error in the form data. Please check all fields.",
+        "INVALID_WALLET_ADDRESS": "The payout address is invalid. Enter a TRC-20 address.",
+        "SANCTIONS_MATCH": "This wallet address is sanctioned. Please use a different address.",
+        "CONCURRENT_LIMIT_REACHED": "You have reached your active transaction limit. You can start a new transaction once existing ones are completed.",
+        "CANCEL_COOLDOWN_ACTIVE": "A cancellation cooldown is in effect. You cannot start a new transaction until it expires.",
+        "NEW_ACCOUNT_LIMIT_REACHED": "You have reached the new-account transaction limit.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Steam Mobile Authenticator must be active on your account.",
+        "ACCOUNT_FLAGGED": "Your account is under review. You cannot start a new transaction.",
+        "ITEM_NOT_TRADEABLE": "The item you selected is not tradeable. Please pick a different item.",
+        "ITEM_NOT_IN_INVENTORY": "The item was not found in your inventory. Refresh the inventory and try again.",
+        "PRICE_OUT_OF_RANGE": "The price is outside the platform limits. Please re-enter.",
+        "TIMEOUT_OUT_OF_RANGE": "The payment window is outside the platform limits.",
+        "OPEN_LINK_DISABLED": "The open-link method is currently disabled. Please use the Steam ID method.",
+        "BUYER_STEAM_ID_NOT_FOUND": "The Steam ID you entered does not belong to a registered user.",
+        "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "The payout address cooldown is still in effect.",
+        "SELLER_WALLET_ADDRESS_MISSING": "A payout address is required. Please enter a valid TRC-20 address."
+      }
+    }
   }
 }
