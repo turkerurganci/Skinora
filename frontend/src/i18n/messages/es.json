@@ -532,5 +532,221 @@
         "SELLER_WALLET_ADDRESS_MISSING": "Se requiere una dirección de pago. Introduce una dirección TRC-20 válida."
       }
     }
+  },
+  "transactionDetail": {
+    "header": {
+      "title": "Transacción #{id}"
+    },
+    "info": {
+      "price": "Precio",
+      "commission": "Comisión",
+      "total": "Total",
+      "token": "Token",
+      "createdAt": "Creada"
+    },
+    "parties": {
+      "seller": "Vendedor",
+      "buyer": "Comprador",
+      "buyerPending": "Esperando a que un comprador acepte esta transacción."
+    },
+    "paymentInfo": {
+      "title": "Detalles del pago",
+      "addressLabel": "Dirección de pago",
+      "amountLabel": "Importe a enviar",
+      "tokenLabel": "Token",
+      "networkLabel": "Red",
+      "remainingLabel": "Tiempo restante",
+      "warnings": {
+        "title": "Importante",
+        "onlyTrc20": "Envía únicamente {token} en la red TRC-20.",
+        "fullAmount": "Envía el importe exacto en una sola transferencia.",
+        "noOtherToken": "No envíes ningún otro token.",
+        "noExchange": "No envíes desde un exchange — tu dirección de reembolso podría no ser accesible."
+      }
+    },
+    "paymentEvents": {
+      "INCORRECT_AMOUNT": {
+        "title": "Importe incorrecto recibido",
+        "body": "Recibimos {received} {token} pero se esperaba {expected} {token}. El pago fue reembolsado — envía el importe correcto."
+      },
+      "EXCESS_AMOUNT": {
+        "title": "Importe excedente recibido",
+        "body": "Se reembolsó el importe por encima de {expected} {token}. La transacción continúa."
+      },
+      "WRONG_TOKEN": {
+        "title": "Token incorrecto recibido",
+        "body": "Se recibió un token no admitido y fue reembolsado. Envía únicamente {token} (TRC-20)."
+      },
+      "LATE_PAYMENT": {
+        "title": "Pago tardío detectado",
+        "body": "Un pago llegó después de la cancelación y fue reembolsado."
+      },
+      "unknown": {
+        "body": "Se registró un evento relacionado con el pago."
+      },
+      "refundTxHashLabel": "TX de reembolso"
+    },
+    "sellerPayout": {
+      "title": "Resumen del pago",
+      "grossAmount": "Precio del ítem",
+      "gasFeeFromSeller": "Gas a tu cargo",
+      "netAmount": "Pago neto",
+      "gasFeeDetail": {
+        "title": "Detalle del gas",
+        "total": "Gas total: {value} {token}",
+        "fromCommission": "Cubierto por la comisión: {value} {token}",
+        "fromSeller": "Cobrado al vendedor: {value} {token}"
+      },
+      "walletAddress": "Dirección de envío",
+      "txHash": "Hash de TX",
+      "sentAt": "Enviado"
+    },
+    "cancelInfo": {
+      "cancelledBy": {
+        "TIMEOUT": "Transacción cancelada (tiempo agotado)",
+        "SELLER": "Cancelada por el vendedor",
+        "BUYER": "Cancelada por el comprador",
+        "ADMIN": "Cancelada por un administrador"
+      },
+      "cancelledAt": "Cancelada el",
+      "reason": "Motivo",
+      "itemReturned": "Ítem devuelto",
+      "paymentRefunded": "Pago reembolsado",
+      "yes": "Sí",
+      "no": "No",
+      "refund": {
+        "title": "Resumen del reembolso",
+        "originalAmount": "Importe original",
+        "gasFee": "Gas",
+        "netRefundAmount": "Reembolso neto",
+        "refundAddress": "Dirección de reembolso",
+        "txHash": "Hash de TX",
+        "refundedAt": "Reembolsado el"
+      }
+    },
+    "flagHold": {
+      "flag": {
+        "title": "Transacción en revisión"
+      },
+      "hold": {
+        "title": "Transacción congelada temporalmente",
+        "frozenAt": "Congelada el {value}"
+      }
+    },
+    "dispute": {
+      "title": "Disputa activa",
+      "type": "Tipo",
+      "status": "Estado",
+      "createdAt": "Abierta el",
+      "autoCheckResult": "Resultado de la comprobación automática",
+      "types": {
+        "PAYMENT": "Disputa de pago",
+        "DELIVERY": "Disputa de entrega",
+        "WRONG_ITEM": "Disputa de ítem incorrecto"
+      },
+      "statuses": {
+        "OPEN": "Abierta",
+        "ESCALATED": "Escalada al administrador",
+        "CLOSED": "Cerrada"
+      },
+      "submitTxHash": "Enviar hash de TX",
+      "escalate": "Escalar al administrador",
+      "comingInT92": "El flujo de disputa llega en una tarea posterior."
+    },
+    "invite": {
+      "shareLinkLabel": "Comparte este enlace con el comprador",
+      "description": "El primer usuario que inicie sesión con este enlace puede aceptar la transacción.",
+      "buyerNotified": "Se notificó al comprador.",
+      "buyerWillBeNotified": "Se notificará al comprador."
+    },
+    "accept": {
+      "addressLabel": "Tu dirección de reembolso",
+      "addressHint": "Si algo falla, el pago se reembolsa a esta dirección TRC-20.",
+      "submit": "Acepto esta transacción",
+      "submitting": "Aceptando...",
+      "change": "Cambiar",
+      "changeUnavailable": "El cambio por transacción llega en una tarea posterior.",
+      "usingDefault": "Usando la dirección de reembolso de tu perfil.",
+      "errors": {
+        "REFUND_ADDRESS_REQUIRED": "La dirección de reembolso es obligatoria.",
+        "INVALID_WALLET_ADDRESS": "La dirección de reembolso es inválida. Introduce una dirección TRC-20.",
+        "SANCTIONS_MATCH": "Esta dirección está en lista de sanciones. Usa otra dirección.",
+        "WALLET_COOLDOWN_ACTIVE": "Cambiaste tu dirección de reembolso recientemente. Espera a que termine el periodo.",
+        "STEAM_ID_MISMATCH": "Esta transacción se creó para otra cuenta de Steam.",
+        "ALREADY_ACCEPTED": "Esta transacción ya fue aceptada.",
+        "INVALID_STATE_TRANSITION": "Esta transacción ya no se puede aceptar.",
+        "BUYER_NOT_FOUND": "Tu cuenta no coincide como comprador. Contacta con soporte.",
+        "VALIDATION_ERROR": "Los datos enviados son inválidos. Comprueba la dirección.",
+        "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo."
+      }
+    },
+    "actions": {
+      "countdownLabel": "Restante",
+      "frozenInfo": "Las acciones están deshabilitadas mientras la transacción está en revisión.",
+      "cancel": "Cancelar transacción",
+      "dispute": "Abrir disputa",
+      "disputeComingInT92": "El flujo de disputa llega en una tarea posterior.",
+      "comingSoon": "pronto",
+      "suspendedReadOnly": "Tu cuenta está suspendida. Puedes ver esta transacción pero no realizar acciones.",
+      "completed": {
+        "seller": "Transacción completada. Tu pago se ha enviado.",
+        "buyer": "Transacción completada con éxito."
+      },
+      "public": {
+        "acceptHint": "Inicia sesión para aceptar esta transacción.",
+        "loginCta": "Iniciar sesión y aceptar"
+      },
+      "created": {
+        "seller": "Esperando a que el comprador acepte la transacción.",
+        "buyer": {
+          "cannotAcceptReason": "Aún no puedes aceptar esta transacción. Comprueba el Mobile Authenticator y el periodo de espera."
+        }
+      },
+      "accepted": {
+        "seller": "El comprador aceptó. La plataforma está preparando tu oferta de intercambio.",
+        "buyer": "Esperando a que el vendedor envíe el ítem."
+      },
+      "tradeOfferToSeller": {
+        "seller": "Acepta la oferta en Steam para depositar el ítem en garantía.",
+        "buyer": "Esperando a que el vendedor envíe el ítem."
+      },
+      "itemEscrowed": {
+        "seller": "Ítem en garantía. Esperando el pago del comprador.",
+        "buyer": "Envía el pago usando los detalles a continuación."
+      },
+      "paymentReceived": {
+        "seller": "Pago verificado. El ítem se está entregando al comprador.",
+        "buyer": "Tu pago fue verificado. El ítem está en camino."
+      },
+      "tradeOfferToBuyer": {
+        "seller": "El ítem fue enviado al comprador. Esperando su aceptación.",
+        "buyer": "Acepta la oferta en Steam para recibir el ítem."
+      },
+      "itemDelivered": {
+        "seller": "Ítem entregado. Tu pago se está procesando.",
+        "buyer": "Tu ítem ha sido entregado."
+      },
+      "cancelErrors": {
+        "generic": "No se pudo cancelar la transacción. Inténtalo de nuevo.",
+        "PAYMENT_ALREADY_SENT": "El pago ya fue enviado — esta transacción ya no puede cancelarse.",
+        "INVALID_STATE_TRANSITION": "Esta transacción ya no se puede cancelar.",
+        "NOT_A_PARTY": "No formas parte de esta transacción.",
+        "VALIDATION_ERROR": "El motivo de cancelación es inválido. Proporciona más detalle."
+      }
+    },
+    "errors": {
+      "notFound": {
+        "title": "Transacción no encontrada",
+        "message": "La transacción que buscas no existe o fue eliminada."
+      },
+      "forbidden": {
+        "title": "Acceso denegado",
+        "message": "No tienes acceso a esta transacción."
+      },
+      "generic": {
+        "title": "No se pudo cargar la transacción",
+        "message": "No se pudieron cargar los detalles. Inténtalo de nuevo."
+      }
+    }
   }
 }
