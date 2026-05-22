@@ -532,5 +532,221 @@
         "SELLER_WALLET_ADDRESS_MISSING": "A payout address is required. Please enter a valid TRC-20 address."
       }
     }
+  },
+  "transactionDetail": {
+    "header": {
+      "title": "Transaction #{id}"
+    },
+    "info": {
+      "price": "Price",
+      "commission": "Commission",
+      "total": "Total",
+      "token": "Token",
+      "createdAt": "Created at"
+    },
+    "parties": {
+      "seller": "Seller",
+      "buyer": "Buyer",
+      "buyerPending": "Waiting for a buyer to accept this transaction."
+    },
+    "paymentInfo": {
+      "title": "Payment details",
+      "addressLabel": "Payment address",
+      "amountLabel": "Amount to send",
+      "tokenLabel": "Token",
+      "networkLabel": "Network",
+      "remainingLabel": "Time remaining",
+      "warnings": {
+        "title": "Important",
+        "onlyTrc20": "Only send {token} on the TRC-20 network.",
+        "fullAmount": "Send the exact amount in a single transfer.",
+        "noOtherToken": "Do not send any other token.",
+        "noExchange": "Do not send from an exchange — your refund address may not be reachable."
+      }
+    },
+    "paymentEvents": {
+      "INCORRECT_AMOUNT": {
+        "title": "Incorrect amount received",
+        "body": "We received {received} {token} but expected {expected} {token}. The payment was refunded — please send the correct amount."
+      },
+      "EXCESS_AMOUNT": {
+        "title": "Excess amount received",
+        "body": "An extra amount above {expected} {token} was refunded. The transaction is still in progress."
+      },
+      "WRONG_TOKEN": {
+        "title": "Wrong token received",
+        "body": "An unsupported token was received and refunded. Please send {token} (TRC-20) only."
+      },
+      "LATE_PAYMENT": {
+        "title": "Late payment detected",
+        "body": "A late payment arrived after cancellation and was refunded."
+      },
+      "unknown": {
+        "body": "A payment-side event was recorded."
+      },
+      "refundTxHashLabel": "Refund TX"
+    },
+    "sellerPayout": {
+      "title": "Payout summary",
+      "grossAmount": "Item price",
+      "gasFeeFromSeller": "Gas fee (your share)",
+      "netAmount": "Net payout",
+      "gasFeeDetail": {
+        "title": "Gas fee detail",
+        "total": "Total gas fee: {value} {token}",
+        "fromCommission": "Covered by commission: {value} {token}",
+        "fromSeller": "Charged to seller: {value} {token}"
+      },
+      "walletAddress": "Payout address",
+      "txHash": "TX hash",
+      "sentAt": "Sent at"
+    },
+    "cancelInfo": {
+      "cancelledBy": {
+        "TIMEOUT": "Transaction cancelled (timeout)",
+        "SELLER": "Cancelled by the seller",
+        "BUYER": "Cancelled by the buyer",
+        "ADMIN": "Cancelled by an administrator"
+      },
+      "cancelledAt": "Cancelled at",
+      "reason": "Reason",
+      "itemReturned": "Item returned",
+      "paymentRefunded": "Payment refunded",
+      "yes": "Yes",
+      "no": "No",
+      "refund": {
+        "title": "Refund summary",
+        "originalAmount": "Original amount",
+        "gasFee": "Gas fee",
+        "netRefundAmount": "Net refund",
+        "refundAddress": "Refund address",
+        "txHash": "TX hash",
+        "refundedAt": "Refunded at"
+      }
+    },
+    "flagHold": {
+      "flag": {
+        "title": "Transaction is under review"
+      },
+      "hold": {
+        "title": "Transaction temporarily frozen",
+        "frozenAt": "Frozen at {value}"
+      }
+    },
+    "dispute": {
+      "title": "Active dispute",
+      "type": "Type",
+      "status": "Status",
+      "createdAt": "Opened at",
+      "autoCheckResult": "Automatic check result",
+      "types": {
+        "PAYMENT": "Payment dispute",
+        "DELIVERY": "Delivery dispute",
+        "WRONG_ITEM": "Wrong item dispute"
+      },
+      "statuses": {
+        "OPEN": "Open",
+        "ESCALATED": "Escalated to admin",
+        "CLOSED": "Closed"
+      },
+      "submitTxHash": "Submit TX hash",
+      "escalate": "Escalate to admin",
+      "comingInT92": "The dispute workflow ships in a follow-up task."
+    },
+    "invite": {
+      "shareLinkLabel": "Share this link with the buyer",
+      "description": "The first user who signs in via this link can accept the transaction.",
+      "buyerNotified": "The buyer has been notified.",
+      "buyerWillBeNotified": "The buyer will be notified."
+    },
+    "accept": {
+      "addressLabel": "Your refund address",
+      "addressHint": "If anything goes wrong, the payment is refunded to this TRC-20 address.",
+      "submit": "I accept this transaction",
+      "submitting": "Accepting...",
+      "change": "Change",
+      "changeUnavailable": "Per-transaction override ships in a follow-up task.",
+      "usingDefault": "Using the refund address from your profile.",
+      "errors": {
+        "REFUND_ADDRESS_REQUIRED": "A refund address is required.",
+        "INVALID_WALLET_ADDRESS": "The refund address is invalid. Enter a TRC-20 address.",
+        "SANCTIONS_MATCH": "This wallet address is sanctioned. Please use a different address.",
+        "WALLET_COOLDOWN_ACTIVE": "Your refund address was changed recently. Please wait for the cooldown to end.",
+        "STEAM_ID_MISMATCH": "This transaction was created for a different Steam account.",
+        "ALREADY_ACCEPTED": "This transaction has already been accepted.",
+        "INVALID_STATE_TRANSITION": "This transaction can no longer be accepted.",
+        "BUYER_NOT_FOUND": "Your account could not be matched as the buyer. Please contact support.",
+        "VALIDATION_ERROR": "The submitted data is invalid. Please check the address.",
+        "generic": "Could not accept the transaction. Please try again."
+      }
+    },
+    "actions": {
+      "countdownLabel": "Remaining",
+      "frozenInfo": "Actions are disabled while this transaction is under review.",
+      "cancel": "Cancel transaction",
+      "dispute": "Open a dispute",
+      "disputeComingInT92": "The dispute workflow ships in a follow-up task.",
+      "comingSoon": "soon",
+      "suspendedReadOnly": "Your account is suspended. You can view this transaction but cannot take actions.",
+      "completed": {
+        "seller": "Transaction completed. Your payout has been sent.",
+        "buyer": "Transaction completed successfully."
+      },
+      "public": {
+        "acceptHint": "Sign in to accept this transaction.",
+        "loginCta": "Sign in and accept"
+      },
+      "created": {
+        "seller": "Waiting for the buyer to accept this transaction.",
+        "buyer": {
+          "cannotAcceptReason": "You cannot accept this transaction yet. Check the Mobile Authenticator and cooldown requirements."
+        }
+      },
+      "accepted": {
+        "seller": "The buyer accepted. The platform is preparing your trade offer.",
+        "buyer": "Waiting for the seller to send the item."
+      },
+      "tradeOfferToSeller": {
+        "seller": "Accept the trade offer in Steam to escrow the item.",
+        "buyer": "Waiting for the seller to send the item."
+      },
+      "itemEscrowed": {
+        "seller": "Item is in escrow. Waiting for the buyer's payment.",
+        "buyer": "Send the payment using the details below."
+      },
+      "paymentReceived": {
+        "seller": "Payment verified. The item is being delivered to the buyer.",
+        "buyer": "Your payment was verified. The item is on its way."
+      },
+      "tradeOfferToBuyer": {
+        "seller": "The item has been sent to the buyer. Waiting for them to accept.",
+        "buyer": "Accept the trade offer in Steam to receive the item."
+      },
+      "itemDelivered": {
+        "seller": "Item delivered. Your payout is being processed.",
+        "buyer": "Your item has been delivered."
+      },
+      "cancelErrors": {
+        "generic": "Could not cancel the transaction. Please try again.",
+        "PAYMENT_ALREADY_SENT": "Payment has already been sent — this transaction can no longer be cancelled.",
+        "INVALID_STATE_TRANSITION": "This transaction can no longer be cancelled.",
+        "NOT_A_PARTY": "You are not a party to this transaction.",
+        "VALIDATION_ERROR": "The cancellation reason is invalid. Please provide more detail."
+      }
+    },
+    "errors": {
+      "notFound": {
+        "title": "Transaction not found",
+        "message": "The transaction you are looking for does not exist or has been removed."
+      },
+      "forbidden": {
+        "title": "Access denied",
+        "message": "You do not have access to this transaction."
+      },
+      "generic": {
+        "title": "Could not load the transaction",
+        "message": "The transaction details could not be loaded. Please try again."
+      }
+    }
   }
 }

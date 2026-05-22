@@ -1,10 +1,6 @@
 import { apiClient } from "./client";
 import type { PagedResult } from "@/types/api";
-import type {
-  BuyerIdentificationMethod,
-  StablecoinType,
-  TransactionStatus,
-} from "@/types/enums";
+import type { BuyerIdentificationMethod, StablecoinType, TransactionStatus } from "@/types/enums";
 import type { ExtendedStatus } from "@/components/common";
 
 /**
@@ -178,6 +174,218 @@ export function createTransaction(
   body: CreateTransactionRequest,
 ): Promise<CreateTransactionResponse> {
   return apiClient<CreateTransactionResponse>("/transactions", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// ---------- GET /transactions/:id (07 §7.5, T5 / T90 detail page) ----------
+
+export interface TransactionDetailItem {
+  assetId?: string;
+  name: string;
+  type?: string;
+  imageUrl?: string;
+  wear?: string;
+}
+
+export interface TransactionDetailParty {
+  steamId?: string;
+  displayName: string;
+  avatarUrl?: string;
+  reputationScore?: number | null;
+  completedTransactionCount?: number;
+}
+
+/**
+ * Timeout block (07 §7.5). When `frozen` is true, the countdown stops
+ * decrementing and 04 §7.3 EMERGENCY_HOLD / maintenance freeze banners
+ * take over. `warningThresholdPercent` is the boundary (1-100) at which
+ * the C02 timer flips red.
+ */
+export interface TransactionDetailTimeout {
+  type: string;
+  expiresAt: string;
+  remainingSeconds: number;
+  warningThresholdPercent?: number | null;
+  frozen: boolean;
+  frozenReason?: string | null;
+  frozenAt?: string | null;
+}
+
+export interface TransactionDetailPayment {
+  address: string;
+  expectedAmount: string;
+  stablecoin: StablecoinType;
+  network: string;
+  status?: string | null;
+  txHash?: string | null;
+  confirmedAt?: string | null;
+}
+
+export interface TransactionDetailSellerPayout {
+  grossAmount: string;
+  gasFee: string;
+  gasFeeFromCommission: string;
+  gasFeeFromSeller: string;
+  netAmount: string;
+  walletAddress: string;
+  txHash: string;
+  sentAt: string;
+}
+
+export interface TransactionDetailRefund {
+  originalAmount: string;
+  gasFee: string;
+  netRefundAmount: string;
+  refundAddress: string;
+  txHash?: string | null;
+  refundedAt?: string | null;
+}
+
+export interface TransactionDetailCancelInfo {
+  cancelledBy: string;
+  reason: string;
+  cancelledAt: string;
+  itemReturned: boolean;
+  paymentRefunded: boolean;
+}
+
+export interface TransactionDetailFlagInfo {
+  flagType: string;
+  message: string;
+}
+
+export interface TransactionDetailHoldInfo {
+  previousStatus: string;
+  reason: string;
+  frozenAt: string;
+  message: string;
+}
+
+export interface TransactionDetailDispute {
+  id: string;
+  type: string;
+  status: string;
+  autoCheckResult?: string | null;
+  canSubmitTxHash: boolean;
+  canEscalate: boolean;
+  createdAt: string;
+}
+
+export interface TransactionDetailInviteInfo {
+  inviteUrl: string;
+  buyerRegistered: boolean;
+  buyerNotified: boolean;
+}
+
+/**
+ * Payment edge case event (07 §7.5 paymentEvents). The 04 §7.3 banner copy
+ * branches on `type`; INCORRECT_AMOUNT/EXCESS surface received vs expected
+ * amounts, WRONG_TOKEN/LATE_PAYMENT are diagnostic-only.
+ */
+export interface TransactionDetailPaymentEvent {
+  type: "INCORRECT_AMOUNT" | "EXCESS_AMOUNT" | "WRONG_TOKEN" | "LATE_PAYMENT" | string;
+  receivedAmount?: string | null;
+  expectedAmount?: string | null;
+  refundTxHash?: string | null;
+  occurredAt: string;
+}
+
+/**
+ * Authoritative action surface (07 §7.5 availableActions). The detail page
+ * mirrors these flags onto the conditional buttons in 04 §7.3 — the client
+ * never re-derives them locally, server is the source of truth (mobile
+ * authenticator, cooldown, Steam ID match etc. all roll into these).
+ *
+ * `requiresLogin` is only set on the public surface; authenticated callers
+ * receive the four boolean flags instead.
+ */
+export interface TransactionDetailAvailableActions {
+  canAccept: boolean;
+  canCancel?: boolean | null;
+  canDispute?: boolean | null;
+  canEscalate?: boolean | null;
+  requiresLogin?: boolean | null;
+}
+
+/**
+ * Full T5 response (07 §7.5). Fields beyond `id/status/item/price/stablecoin/seller`
+ * are conditional — see the spec table. `userRole` is null for the public
+ * unauthenticated surface; the page uses that as the public/auth switch.
+ */
+export interface TransactionDetailResponse {
+  id: string;
+  status: ExtendedStatus;
+  userRole?: "seller" | "buyer" | null;
+  item: TransactionDetailItem;
+  price: string;
+  stablecoin: StablecoinType;
+  commissionRate?: number | null;
+  commissionAmount?: string | null;
+  totalAmount?: string | null;
+  seller: TransactionDetailParty;
+  buyer?: TransactionDetailParty | null;
+  timeout?: TransactionDetailTimeout | null;
+  payment?: TransactionDetailPayment | null;
+  sellerPayout?: TransactionDetailSellerPayout | null;
+  refund?: TransactionDetailRefund | null;
+  cancelInfo?: TransactionDetailCancelInfo | null;
+  flagInfo?: TransactionDetailFlagInfo | null;
+  holdInfo?: TransactionDetailHoldInfo | null;
+  dispute?: TransactionDetailDispute | null;
+  inviteInfo?: TransactionDetailInviteInfo | null;
+  paymentEvents?: TransactionDetailPaymentEvent[] | null;
+  escrowBotAssetId?: string | null;
+  deliveredBuyerAssetId?: string | null;
+  availableActions: TransactionDetailAvailableActions;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export function getTransactionDetail(id: string): Promise<TransactionDetailResponse> {
+  return apiClient<TransactionDetailResponse>(`/transactions/${encodeURIComponent(id)}`);
+}
+
+// ---------- POST /transactions/:id/accept (07 §7.6) ----------
+
+export interface AcceptTransactionRequest {
+  refundWalletAddress: string;
+}
+
+export interface AcceptTransactionResponse {
+  status: TransactionStatus;
+  acceptedAt: string;
+}
+
+export function acceptTransaction(
+  id: string,
+  body: AcceptTransactionRequest,
+): Promise<AcceptTransactionResponse> {
+  return apiClient<AcceptTransactionResponse>(`/transactions/${encodeURIComponent(id)}/accept`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// ---------- POST /transactions/:id/cancel (07 §7.7) ----------
+
+export interface CancelTransactionRequest {
+  reason: string;
+}
+
+export interface CancelTransactionResponse {
+  status: TransactionStatus;
+  cancelledAt: string;
+  itemReturned: boolean;
+  paymentRefunded: boolean;
+}
+
+export function cancelTransaction(
+  id: string,
+  body: CancelTransactionRequest,
+): Promise<CancelTransactionResponse> {
+  return apiClient<CancelTransactionResponse>(`/transactions/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
     body: JSON.stringify(body),
   });

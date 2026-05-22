@@ -532,5 +532,221 @@
         "SELLER_WALLET_ADDRESS_MISSING": "收款地址为必填项。请输入有效的 TRC-20 地址。"
       }
     }
+  },
+  "transactionDetail": {
+    "header": {
+      "title": "交易 #{id}"
+    },
+    "info": {
+      "price": "价格",
+      "commission": "手续费",
+      "total": "总计",
+      "token": "代币",
+      "createdAt": "创建时间"
+    },
+    "parties": {
+      "seller": "卖家",
+      "buyer": "买家",
+      "buyerPending": "等待买家接受此交易。"
+    },
+    "paymentInfo": {
+      "title": "付款详情",
+      "addressLabel": "付款地址",
+      "amountLabel": "应付金额",
+      "tokenLabel": "代币",
+      "networkLabel": "网络",
+      "remainingLabel": "剩余时间",
+      "warnings": {
+        "title": "重要提示",
+        "onlyTrc20": "请仅在 TRC-20 网络上发送 {token}。",
+        "fullAmount": "请一次性转账完整金额。",
+        "noOtherToken": "请勿发送任何其他代币。",
+        "noExchange": "请勿从交易所发送——退款地址可能无法到达。"
+      }
+    },
+    "paymentEvents": {
+      "INCORRECT_AMOUNT": {
+        "title": "收到金额不正确",
+        "body": "收到 {received} {token}，但需要 {expected} {token}。款项已退还——请发送正确的金额。"
+      },
+      "EXCESS_AMOUNT": {
+        "title": "收到超额金额",
+        "body": "超过 {expected} {token} 的部分已退还。交易继续进行。"
+      },
+      "WRONG_TOKEN": {
+        "title": "收到错误代币",
+        "body": "检测到不支持的代币并已退还。请仅发送 {token} (TRC-20)。"
+      },
+      "LATE_PAYMENT": {
+        "title": "检测到迟到付款",
+        "body": "取消后到达的付款已退还。"
+      },
+      "unknown": {
+        "body": "已记录一项付款相关事件。"
+      },
+      "refundTxHashLabel": "退款 TX"
+    },
+    "sellerPayout": {
+      "title": "结算摘要",
+      "grossAmount": "物品价格",
+      "gasFeeFromSeller": "您承担的 gas",
+      "netAmount": "净额",
+      "gasFeeDetail": {
+        "title": "Gas 费用明细",
+        "total": "总 gas：{value} {token}",
+        "fromCommission": "由手续费承担：{value} {token}",
+        "fromSeller": "由卖家承担：{value} {token}"
+      },
+      "walletAddress": "收款地址",
+      "txHash": "交易哈希",
+      "sentAt": "发送时间"
+    },
+    "cancelInfo": {
+      "cancelledBy": {
+        "TIMEOUT": "交易已取消（超时）",
+        "SELLER": "由卖家取消",
+        "BUYER": "由买家取消",
+        "ADMIN": "由管理员取消"
+      },
+      "cancelledAt": "取消时间",
+      "reason": "原因",
+      "itemReturned": "物品已退回",
+      "paymentRefunded": "款项已退还",
+      "yes": "是",
+      "no": "否",
+      "refund": {
+        "title": "退款摘要",
+        "originalAmount": "原始金额",
+        "gasFee": "Gas 费用",
+        "netRefundAmount": "净退款",
+        "refundAddress": "退款地址",
+        "txHash": "交易哈希",
+        "refundedAt": "退款时间"
+      }
+    },
+    "flagHold": {
+      "flag": {
+        "title": "交易已进入审核"
+      },
+      "hold": {
+        "title": "交易已临时冻结",
+        "frozenAt": "冻结时间：{value}"
+      }
+    },
+    "dispute": {
+      "title": "进行中的争议",
+      "type": "类型",
+      "status": "状态",
+      "createdAt": "开启时间",
+      "autoCheckResult": "自动检查结果",
+      "types": {
+        "PAYMENT": "付款争议",
+        "DELIVERY": "交付争议",
+        "WRONG_ITEM": "物品错误争议"
+      },
+      "statuses": {
+        "OPEN": "开启",
+        "ESCALATED": "已升级至管理员",
+        "CLOSED": "已关闭"
+      },
+      "submitTxHash": "提交 TX 哈希",
+      "escalate": "升级至管理员",
+      "comingInT92": "争议流程将在后续任务中提供。"
+    },
+    "invite": {
+      "shareLinkLabel": "将此链接分享给买家",
+      "description": "通过此链接登录的第一位用户可以接受交易。",
+      "buyerNotified": "已通知买家。",
+      "buyerWillBeNotified": "将通知买家。"
+    },
+    "accept": {
+      "addressLabel": "您的退款地址",
+      "addressHint": "如有任何问题，款项将退还至该 TRC-20 地址。",
+      "submit": "接受此交易",
+      "submitting": "接受中...",
+      "change": "更改",
+      "changeUnavailable": "按交易覆盖功能将在后续任务中提供。",
+      "usingDefault": "使用个人资料中的退款地址。",
+      "errors": {
+        "REFUND_ADDRESS_REQUIRED": "退款地址为必填项。",
+        "INVALID_WALLET_ADDRESS": "退款地址无效。请输入 TRC-20 地址。",
+        "SANCTIONS_MATCH": "此钱包地址在制裁名单中。请使用其他地址。",
+        "WALLET_COOLDOWN_ACTIVE": "您最近更改过退款地址。请等待冷却期结束。",
+        "STEAM_ID_MISMATCH": "此交易是为另一个 Steam 账户创建的。",
+        "ALREADY_ACCEPTED": "此交易已被接受。",
+        "INVALID_STATE_TRANSITION": "此交易无法再被接受。",
+        "BUYER_NOT_FOUND": "您的账户未匹配为买家。请联系支持。",
+        "VALIDATION_ERROR": "提交的数据无效。请检查地址。",
+        "generic": "无法接受此交易。请重试。"
+      }
+    },
+    "actions": {
+      "countdownLabel": "剩余",
+      "frozenInfo": "交易处于审核中时操作被禁用。",
+      "cancel": "取消交易",
+      "dispute": "开启争议",
+      "disputeComingInT92": "争议流程将在后续任务中提供。",
+      "comingSoon": "敬请期待",
+      "suspendedReadOnly": "您的账户已被暂停。您可以查看此交易但无法执行操作。",
+      "completed": {
+        "seller": "交易已完成。款项已发送。",
+        "buyer": "交易已成功完成。"
+      },
+      "public": {
+        "acceptHint": "登录以接受此交易。",
+        "loginCta": "登录并接受"
+      },
+      "created": {
+        "seller": "等待买家接受此交易。",
+        "buyer": {
+          "cannotAcceptReason": "您暂时无法接受此交易。请检查 Mobile Authenticator 和冷却期要求。"
+        }
+      },
+      "accepted": {
+        "seller": "买家已接受。平台正在准备您的交易报价。",
+        "buyer": "等待卖家发送物品。"
+      },
+      "tradeOfferToSeller": {
+        "seller": "请在 Steam 中接受交易报价以将物品存入托管。",
+        "buyer": "等待卖家发送物品。"
+      },
+      "itemEscrowed": {
+        "seller": "物品已托管。等待买家付款。",
+        "buyer": "请使用下方信息发送付款。"
+      },
+      "paymentReceived": {
+        "seller": "付款已确认。物品正在送达买家。",
+        "buyer": "您的付款已确认。物品正在送达。"
+      },
+      "tradeOfferToBuyer": {
+        "seller": "物品已发送给买家。等待其接受。",
+        "buyer": "请在 Steam 中接受交易报价以收取物品。"
+      },
+      "itemDelivered": {
+        "seller": "物品已送达。您的款项正在处理。",
+        "buyer": "您的物品已送达。"
+      },
+      "cancelErrors": {
+        "generic": "无法取消交易。请重试。",
+        "PAYMENT_ALREADY_SENT": "款项已发送——此交易无法再取消。",
+        "INVALID_STATE_TRANSITION": "此交易无法再取消。",
+        "NOT_A_PARTY": "您不是此交易的当事方。",
+        "VALIDATION_ERROR": "取消原因无效。请提供更多详情。"
+      }
+    },
+    "errors": {
+      "notFound": {
+        "title": "未找到交易",
+        "message": "您查找的交易不存在或已被删除。"
+      },
+      "forbidden": {
+        "title": "访问被拒绝",
+        "message": "您无权访问此交易。"
+      },
+      "generic": {
+        "title": "无法加载交易",
+        "message": "无法加载交易详情。请重试。"
+      }
+    }
   }
 }

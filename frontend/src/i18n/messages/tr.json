@@ -532,5 +532,221 @@
         "SELLER_WALLET_ADDRESS_MISSING": "Ödeme adresi zorunludur. Lütfen geçerli bir TRC-20 adresi girin."
       }
     }
+  },
+  "transactionDetail": {
+    "header": {
+      "title": "İşlem #{id}"
+    },
+    "info": {
+      "price": "Fiyat",
+      "commission": "Komisyon",
+      "total": "Toplam",
+      "token": "Token",
+      "createdAt": "Oluşturulma"
+    },
+    "parties": {
+      "seller": "Satıcı",
+      "buyer": "Alıcı",
+      "buyerPending": "İşlemi kabul edecek alıcı bekleniyor."
+    },
+    "paymentInfo": {
+      "title": "Ödeme bilgileri",
+      "addressLabel": "Ödeme adresi",
+      "amountLabel": "Gönderilecek tutar",
+      "tokenLabel": "Token",
+      "networkLabel": "Ağ",
+      "remainingLabel": "Kalan süre",
+      "warnings": {
+        "title": "Uyarılar",
+        "onlyTrc20": "Yalnızca {token} (TRC-20) ağı üzerinden gönderin.",
+        "fullAmount": "Tam tutarı tek seferde gönderin.",
+        "noOtherToken": "Farklı bir token göndermeyin.",
+        "noExchange": "Exchange'den gönderim yapmayın — iade adresinize ulaşılamayabilir."
+      }
+    },
+    "paymentEvents": {
+      "INCORRECT_AMOUNT": {
+        "title": "Eksik tutar gönderildi",
+        "body": "{received} {token} alındı, beklenen tutar {expected} {token}. Ödemeniz iade edildi — lütfen doğru tutarı gönderin."
+      },
+      "EXCESS_AMOUNT": {
+        "title": "Fazla tutar gönderildi",
+        "body": "{expected} {token} üstündeki kısım iade edildi. İşlem devam ediyor."
+      },
+      "WRONG_TOKEN": {
+        "title": "Yanlış token gönderildi",
+        "body": "Desteklenmeyen token tespit edildi ve iade edildi. Lütfen yalnızca {token} (TRC-20) gönderin."
+      },
+      "LATE_PAYMENT": {
+        "title": "Gecikmeli ödeme tespit edildi",
+        "body": "İptal sonrası gelen ödeme iade edildi."
+      },
+      "unknown": {
+        "body": "Ödeme tarafında bir olay kaydedildi."
+      },
+      "refundTxHashLabel": "İade TX"
+    },
+    "sellerPayout": {
+      "title": "Ödeme özeti",
+      "grossAmount": "Item fiyatı",
+      "gasFeeFromSeller": "Sizden kesilen gas",
+      "netAmount": "Net ödeme",
+      "gasFeeDetail": {
+        "title": "Gas fee detayı",
+        "total": "Toplam gas fee: {value} {token}",
+        "fromCommission": "Komisyondan karşılanan: {value} {token}",
+        "fromSeller": "Sizden kesilen: {value} {token}"
+      },
+      "walletAddress": "Gönderim adresi",
+      "txHash": "TX hash",
+      "sentAt": "Gönderim tarihi"
+    },
+    "cancelInfo": {
+      "cancelledBy": {
+        "TIMEOUT": "İşlem iptal edildi (süre doldu)",
+        "SELLER": "Satıcı tarafından iptal edildi",
+        "BUYER": "Alıcı tarafından iptal edildi",
+        "ADMIN": "Admin tarafından iptal edildi"
+      },
+      "cancelledAt": "İptal tarihi",
+      "reason": "Sebep",
+      "itemReturned": "Item iade edildi",
+      "paymentRefunded": "Ödeme iade edildi",
+      "yes": "Evet",
+      "no": "Hayır",
+      "refund": {
+        "title": "İade özeti",
+        "originalAmount": "Orijinal tutar",
+        "gasFee": "Gas fee",
+        "netRefundAmount": "Net iade",
+        "refundAddress": "İade adresi",
+        "txHash": "TX hash",
+        "refundedAt": "İade tarihi"
+      }
+    },
+    "flagHold": {
+      "flag": {
+        "title": "İşleminiz incelemeye alındı"
+      },
+      "hold": {
+        "title": "İşleminiz geçici olarak donduruldu",
+        "frozenAt": "Donma tarihi: {value}"
+      }
+    },
+    "dispute": {
+      "title": "Aktif itiraz",
+      "type": "Tür",
+      "status": "Durum",
+      "createdAt": "Açılış tarihi",
+      "autoCheckResult": "Otomatik kontrol sonucu",
+      "types": {
+        "PAYMENT": "Ödeme itirazı",
+        "DELIVERY": "Teslim itirazı",
+        "WRONG_ITEM": "Yanlış item itirazı"
+      },
+      "statuses": {
+        "OPEN": "Açık",
+        "ESCALATED": "Admin'e iletildi",
+        "CLOSED": "Kapatıldı"
+      },
+      "submitTxHash": "TX hash gir",
+      "escalate": "Admin'e ilet",
+      "comingInT92": "İtiraz akışı bir sonraki task'ta eklenecek."
+    },
+    "invite": {
+      "shareLinkLabel": "Bu linki alıcıyla paylaşın",
+      "description": "Bu link üzerinden giriş yapan ilk kullanıcı işlemi kabul edebilir.",
+      "buyerNotified": "Alıcıya bildirim gönderildi.",
+      "buyerWillBeNotified": "Alıcıya bildirim gönderilecek."
+    },
+    "accept": {
+      "addressLabel": "İade adresiniz",
+      "addressHint": "Sorun çıkarsa ödeme bu TRC-20 adresine iade edilir.",
+      "submit": "Kabul Ediyorum",
+      "submitting": "Kabul ediliyor...",
+      "change": "Değiştir",
+      "changeUnavailable": "İşlem bazlı değiştirme bir sonraki task'ta eklenecek.",
+      "usingDefault": "Profil iade adresiniz kullanılıyor.",
+      "errors": {
+        "REFUND_ADDRESS_REQUIRED": "İade adresi zorunludur.",
+        "INVALID_WALLET_ADDRESS": "İade adresi geçersiz. TRC-20 formatında bir adres girin.",
+        "SANCTIONS_MATCH": "Bu cüzdan adresi yaptırım listesindedir. Lütfen başka bir adres kullanın.",
+        "WALLET_COOLDOWN_ACTIVE": "İade adresiniz yakın zamanda değiştirildi. Cooldown süresinin bitmesini bekleyin.",
+        "STEAM_ID_MISMATCH": "Bu işlem başka bir Steam hesabı için oluşturulmuş.",
+        "ALREADY_ACCEPTED": "Bu işlem zaten kabul edildi.",
+        "INVALID_STATE_TRANSITION": "Bu işlem artık kabul edilemez.",
+        "BUYER_NOT_FOUND": "Hesabınız alıcı olarak eşleşmedi. Lütfen destek ekibiyle iletişime geçin.",
+        "VALIDATION_ERROR": "Gönderilen veri geçersiz. Lütfen adresi kontrol edin.",
+        "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin."
+      }
+    },
+    "actions": {
+      "countdownLabel": "Kalan",
+      "frozenInfo": "İşlem incelemede olduğu için aksiyonlar devre dışı.",
+      "cancel": "İşlemi İptal Et",
+      "dispute": "İtiraz Et",
+      "disputeComingInT92": "İtiraz akışı bir sonraki task'ta eklenecek.",
+      "comingSoon": "yakında",
+      "suspendedReadOnly": "Hesabınız askıya alındı. Bu işlemi görüntüleyebilirsiniz ancak aksiyon alamazsınız.",
+      "completed": {
+        "seller": "İşlem tamamlandı. Ödemeniz gönderildi.",
+        "buyer": "İşlem başarıyla tamamlandı."
+      },
+      "public": {
+        "acceptHint": "Bu işlemi kabul etmek için giriş yapın.",
+        "loginCta": "Giriş Yap ve Kabul Et"
+      },
+      "created": {
+        "seller": "Alıcının kabul etmesi bekleniyor.",
+        "buyer": {
+          "cannotAcceptReason": "Bu işlemi şu an kabul edemezsiniz. Mobile Authenticator ve cooldown gereksinimlerini kontrol edin."
+        }
+      },
+      "accepted": {
+        "seller": "Alıcı kabul etti. Platform trade offer'ınızı hazırlıyor.",
+        "buyer": "Satıcının item'ı göndermesi bekleniyor."
+      },
+      "tradeOfferToSeller": {
+        "seller": "Item'ı emanete almak için Steam'de trade offer'ı kabul edin.",
+        "buyer": "Satıcının item'ı göndermesi bekleniyor."
+      },
+      "itemEscrowed": {
+        "seller": "Item emanete alındı. Alıcının ödemesi bekleniyor.",
+        "buyer": "Aşağıdaki bilgileri kullanarak ödemeyi gönderin."
+      },
+      "paymentReceived": {
+        "seller": "Ödeme doğrulandı. Item alıcıya teslim ediliyor.",
+        "buyer": "Ödemeniz doğrulandı. Item'ınız gönderiliyor."
+      },
+      "tradeOfferToBuyer": {
+        "seller": "Item alıcıya gönderildi. Kabul etmesi bekleniyor.",
+        "buyer": "Item'ı almak için Steam'de trade offer'ı kabul edin."
+      },
+      "itemDelivered": {
+        "seller": "Item teslim edildi. Ödemeniz işleniyor.",
+        "buyer": "Item'ınız teslim edildi."
+      },
+      "cancelErrors": {
+        "generic": "İşlem iptal edilemedi. Lütfen tekrar deneyin.",
+        "PAYMENT_ALREADY_SENT": "Ödeme gönderildiği için bu işlem artık iptal edilemez.",
+        "INVALID_STATE_TRANSITION": "Bu işlem artık iptal edilemez.",
+        "NOT_A_PARTY": "Bu işlemin tarafı değilsiniz.",
+        "VALIDATION_ERROR": "İptal sebebi geçersiz. Lütfen daha açıklayıcı yazın."
+      }
+    },
+    "errors": {
+      "notFound": {
+        "title": "İşlem bulunamadı",
+        "message": "Aradığınız işlem mevcut değil veya kaldırılmış."
+      },
+      "forbidden": {
+        "title": "Erişim reddedildi",
+        "message": "Bu işleme erişiminiz yok."
+      },
+      "generic": {
+        "title": "İşlem yüklenemedi",
+        "message": "İşlem detayları yüklenemedi. Lütfen tekrar deneyin."
+      }
+    }
   }
 }

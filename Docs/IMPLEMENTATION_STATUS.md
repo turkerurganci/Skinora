@@ -183,7 +183,7 @@
 | T87 | Auth akışı ekranları | ✓ Tamamlandı | ✓ PASS | aa02461 |
 | T88 | Dashboard (S05) | ✓ Tamamlandı | ✓ PASS | 7163102 |
 | T89 | İşlem oluşturma (S06) | ✓ Tamamlandı | ✓ Re-validate PASS (4-locale parity 104×4 + runtime 0 raw key) | 8670b90 |
-| T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⬚ Bekliyor | — | — |
+| T90 | İşlem detay sayfası (S07) — tüm state varyantları | ⏳ Devam ediyor | — | branch `task/T90-transaction-detail-page` |
 | T91 | Ödeme bilgileri ve edge case UI | ⬚ Bekliyor | — | — |
 | T92 | Dispute UI | ⬚ Bekliyor | — | — |
 | T93 | Profil sayfaları (S08, S09) | ⬚ Bekliyor | — | — |
