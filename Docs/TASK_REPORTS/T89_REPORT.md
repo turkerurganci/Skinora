@@ -1,6 +1,6 @@
 # T89 — İşlem Oluşturma (S06)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-22
+**Faz:** F5 | **Durum:** ✗ FAIL (validator, 2026-05-22) — düzeltme yeni yapım chat'inde | **Tarih:** 2026-05-22
 
 ---
 
@@ -38,7 +38,7 @@
 - `newTransaction.*` namespace eklendi: title/subtitle/authRequired/loadError/steps/nav/gate (7 reason × title/description) /step1 (title/counts/search/non-tradeable tooltip/empty/no-match/error{title,message,private*}) /step2 (selectedItem/changeItem/stablecoin/price{label,range,errors×3}/timeout{label,hours,hint}/commission{label,value,placeholder}) /step3 (buyer{label,steamId+openLink alt blokları+format error}/wallet{label,description,confirmed,change}) /step4 (rows×7 + back/submit/submitting + errors×17 — generic + 16 backend code mapping)
 - TR (referans) + EN — her iki dosyada da aynı leaf yapısı
 
-> **Not — locale parite:** Mevcut repo'da yalnız `tr.json` ve `en.json` var (T84-T88 boyunca bu iki dil active). T88 raporundaki "4 dil" referansı (zh.json/es.json) aslında var olmayan dosyalara atıf — repo'da `i18n/messages` 2 dosyaya sahip. T89 mevcut pariteyi (TR+EN) korur, ZH/ES T97 (i18n 4 dil desteği) task'ında eklenecek.
+> **Not — locale parite (validator düzeltmesi 2026-05-22):** Yapım chat'inin "yalnız tr.json + en.json var" iddiası **factual error**. Repo'da `frontend/src/i18n/messages/` altında **4 dosya** var: tr.json + en.json (T89 sonrası 344 leaf), zh.json + es.json (240 leaf — T87/T88 boyunca eşit parity ile dolduruldu, Çince ve İspanyolca çeviriler içeride). T89, `newTransaction.*` namespace'ini sadece TR+EN'e ekledi → ZH+ES 104 leaf eksik. Sonuç: `/zh/transactions/new` ve `/es/transactions/new` runtime'da raw key render ediyor (validator curl smoke: `<h1>newTransaction.authRequired.title</h1>`). Bu T87/T88 4-locale parity pattern'ini bozan regresyon — T97'ye forward-devir doğru değil çünkü T97 yeni locale ekleme görevi, mevcut locale regresyonunu fix etme görevi değil. **Düzeltme:** ZH+ES'ye `newTransaction.*` 104 leaf eklenmeli (gerçek çeviri veya EN fallback stub). Bkz. `## Doğrulama Sonucu (Validator)` bölümü.
 
 ## Etkilenen Modüller / Dosyalar
 
@@ -141,14 +141,14 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 ## Commit & PR
 
 - Branch: `task/T89-transaction-creation-ui`
-- Commit: (push sonrası dolacak)
-- PR: (açılacak)
-- CI: (run id push sonrası)
+- Commit: `6fa4a9a`
+- PR: [#135](https://github.com/turkerurganci/Skinora/pull/135) (OPEN — FAIL nedeniyle merge yok)
+- CI: [26300957458](https://github.com/turkerurganci/Skinora/actions/runs/26300957458) ✓ 10/10 job success
 
 ## Known Limitations / Follow-up
 
 - **K1 — Manuel UI smoke yapılamadı:** Lokal Windows build prerender flake + headless browser yok. Validator chat'inde yapılacak (T88 paterni).
-- **K2 — ZH/ES locale eksik:** T97 forward-devir; mevcut repo 2 dil (TR+EN), T84-T88 hep 2-dil pariteyle gitti. T88 raporundaki "4 dil" beyanı drift — gerçek state 2 dil.
+- **K2 — ZH/ES locale `newTransaction.*` namespace eksik (validator finding F1):** Yapım chat'i ZH/ES dosyalarının var olmadığını sanmıştı — yanlış premise. Gerçek: 4 locale dosyası mevcut (TR/EN/ZH/ES), T87/T88 boyunca 240-leaf parity ile gidildi. T89 yalnız TR+EN'e `newTransaction.*` ekledi → ZH+ES'de 104 leaf eksik → runtime'da `/zh|/es/transactions/new` raw i18n key render ediyor. Düzeltme yeni yapım chat'ine devredildi.
 - **K3 — Satıcı payout adresi profil pre-fill yok:** 04 §7.2 Step 3 "Profilde kayıtlı satıcı adresi varsa: ön doldurulmuş" diyor ama `users/me` endpoint'i + profile API entegrasyonu T93 (Profil sayfaları) görevi. T89'da her zaman boş başlar; kullanıcı C11 ile girer. Backend `DefaultPayoutAddress` zaten mevcut, T93 fetch eklendiğinde 1 satır prop yeterli.
 - **K4 — URL state persistence yok:** Tarayıcı hard refresh + tab kapatma sonrası form sıfırlanır; spec "tarayıcı geri butonu → önceki adıma döner (veri kaybı yok)" client-side router'la otomatik (route değişmediği için unmount yok), ama hard refresh için query-param state T-future.
 - **K5 — Step1 IntersectionObserver scroll-load küçük envanterlerde no-op:** Backend tek seferde tüm envanteri döner; <50 item için sentinel hiç görünmez, sorunsuz. Spec "ilk 50, scroll ile daha fazla" pattern karşılanır.
@@ -167,3 +167,69 @@ Plan "Test beklentisi: Yok" (F5 frontend task'ları; E2E T107+ devirli).
 - **Mimari karar 3 — POST error map'leme `step4.errors.<CODE>`:** Backend `TransactionErrorCodes.cs` 16 string sabiti var; UI bu code'ları i18n key olarak doğrudan kullanır (`step4.errors.CONCURRENT_LIMIT_REACHED`). `POST_ERROR_CODES` set'i fallback guard. Bu pattern T90+ tx detail/cancel akışlarında genişletilebilir.
 - **Mimari karar 4 — `Step1ItemSelection` "reset state on prop change" inline pattern:** `useEffect(() => setVisibleCount(50), [query])` ESLint `react-hooks/set-state-in-effect` ile flagged → React doc'larındaki "store the previous state inline" pattern'iyle (`prevQuery` state + render-time check) değiştirildi. Effect cascade rendering önlenir.
 - **Mimari karar 5 — `WalletAddressInput.onValidate=undefined`:** Sanctions check sunucu tarafında POST sırasında; client-side validate path opsiyonel. T89'da skip edildi (`onValidate` undefined → C11 doğrudan confirm phase'ine geçer); T93 profil'de address change için onValidate eklenebilir (sanctions API çağrısı).
+
+---
+
+## Doğrulama Sonucu (Validator)
+
+**Tarih:** 2026-05-22
+**Validator:** Türker Urgancı + Claude (Opus 4.7) bağımsız chat
+**Verdict:** ✗ **FAIL** — düzeltme yeni yapım chat'inde
+
+### Faz 1 — Ön Kontroller
+
+- **Working tree (Adım -1):** `.claude/settings.local.json` modified → kullanıcı kararı: stash → doğrulama, sonra pop. Temiz state'te başlandı.
+- **Main CI startup (Adım 0):** ✓ Son 3 main run hepsi success — [26253085726](https://github.com/turkerurganci/Skinora/actions/runs/26253085726) (T88), [26253085766](https://github.com/turkerurganci/Skinora/actions/runs/26253085766) (T88), [26247008809](https://github.com/turkerurganci/Skinora/actions/runs/26247008809) (T83a)
+- **Repo memory drift (Adım 0b):** ✓ MEMORY.md'de T89 için 4 satır mevcut (210, 212, 213, 214)
+
+### Faz 2 — Kabul Kriterleri Verdict
+
+| # | Kriter | Verdict | Bağımsız Kanıt |
+|---|---|---|---|
+| 1 | 4 adımlı form | ✓ | `NewTransactionForm.tsx:141-228` step state + 4 component render guard'ları |
+| 2 | Adım göstergesi | ✓ | `StepIndicator.tsx` aria-current="step", completed/active/upcoming görsel state'leri doğrulandı |
+| 3 | Envanter grid (arama/filtre/skeleton/empty/error) | ✓ | `Step1ItemSelection.tsx:90-180` 4 state branch + IntersectionObserver pagination |
+| 4 | Validasyonlar | ✓ | `STEAM_ID_REGEX = /^\d{17}$/` + priceError min/max + timeout select admin range + non-tradeable `pointer-events-none` + walletConfirmed gate |
+| 5 | Engel state'leri (6 surface + 1 filtered) | ✓ | `EligibilityGate.tsx` 7/7 backend `TransactionErrorCodes.EligibilityReasons` ile 1:1 doğrulandı; `SELLER_WALLET_ADDRESS_MISSING` 04 §7.2 Step 3 inline-input gerekçesiyle filter'landı (mimari karar makul) |
+| 6 | GET eligibility/params/inventory çağrıları | ✓ | 3 TanStack Query hook (`useEligibility`/`useTransactionParams`/`useSteamInventory`) backend `T45/T67` endpoint'lerine vurur |
+| 7 | POST /transactions | ✓ | `useMutation(createTransaction)` 201→redirect, 4xx→inline banner (16 error code mapped + generic fallback) |
+
+### Faz 2 — Kalite Gate'leri
+
+- ✓ `npx tsc --noEmit` ExitCode=0 (silent)
+- ✓ `npm run lint` ExitCode=0
+- ✓ `npm run build` ExitCode=0 — Compiled successfully in 3.5s + TS 3.2s + static gen 3/3 137ms. **Rapor'daki "lokal Windows flaky" iddiası validator makinesinde üretilemedi** (env-spesifik veya pre-mevcut farklı bir state)
+- ✓ Task branch CI run [26300957458](https://github.com/turkerurganci/Skinora/actions/runs/26300957458) 10/10 success: Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker (frontend), CI Gate
+- ✓ Backend kontrat: `TransactionErrorCodes.cs` 16 POST code + 7 EligibilityReason kaynak kod ile 1:1
+- ✓ JSON syntax: 4 locale dosyası parse oluyor
+- ⚠ Prettier `--check`: 16/19 T89 dosya fail (broader repo-wide drift, advisory only)
+- ⚠ TR/EN parity 104/104 ✓ **ama ZH/ES parity 0/104 — F1 bulgusu**
+
+### Faz 2 — Güvenlik Kontrolü
+
+- ✓ Secret sızıntısı: temiz
+- ✓ Auth: store gate + 401 detect + sunucu Authenticated policy
+- ✓ Input validation: client + server defense-in-depth (regex + range + sanctions)
+- ✓ Yeni dış bağımlılık: yok
+
+### Faz 2 — Bulgular
+
+| # | Seviye | Açıklama | Etkilenen | Düzeltme |
+|---|---|---|---|---|
+| F1 | **S2 Kırılma** | **ZH+ES locale i18n parity regression.** Runtime kanıt: `curl http://localhost:3000/zh/transactions/new` → HTML'de `<h1>newTransaction.authRequired.title</h1>` (raw key, çevirisiz). `/es/...` aynı 3 raw key gösterdi (curl smoke confirmed). TR'da Türkçe string doğru render ("Giriş yapmanız"). T89 `newTransaction.*` namespace'ini yalnız TR+EN'e ekledi; ZH+ES 240 leaf'te kaldı (104 eksik). T87/T88 4-locale parity pattern'i kırıldı. Auth-gate path'te 3 raw key görünür; auth sonrası form path'te 104 raw key görünür. | `frontend/src/i18n/messages/zh.json` + `es.json` — +104 leaf gerekli; `/zh/transactions/new` + `/es/transactions/new` rotaları | Yeni yapım chat'i — ZH+ES'ye `newTransaction.*` 104 leaf ekle (Recommended: gerçek çeviri; minimal: EN passthrough stub) |
+| F2 | **S1 Sapma** | **Yapım raporunda factual error.** Önceki rapor "yalnız tr+en var" + K2 "mevcut repo 2 dil" dedi — yanlış. Glob doğruladı: 4 dosya mevcut, ZH/ES her biri 240 leaf'le dolu (Çince + İspanyolca çeviriler T87/T88'den). Yanlış premise'a dayalı T97 forward-deferral hatalı yön gösteriyordu (T97 yeni locale ekleme task'ı, regresyon fix değil). | `T89_REPORT.md` 41, 152 (validator tarafından düzeltildi) | Bu finalize commit'iyle düzeltildi |
+| F3 | Advisory | **Prettier format drift.** 16/19 T89 dosya `prettier --check` fail. Pre-existing repo-wide drift (102 dosya). T71 K6 / T73 K6 / T79 K7 chore PR backlog'una eklenmişti. T89'a özel kırılma değil. | 16 T89 dosyası + 86 pre-existing | F5 sonu toplu chore PR (`chore: prettier --write` sweep) — PASS engeli değil |
+
+### Faz 3 — Rapor Karşılaştırma
+
+- **F1 uyuşmazlığı:** Yapım raporu K2 "ZH/ES T97 devir" diyor; runtime regresyonunu surface etmiyor + yanlış premise (dosyalar var olmadığı sanılmış). Validator runtime smoke ile gerçek davranışı kanıtladı.
+- **Lokal build:** Rapor "Lokal Windows flaky" diyor; validator aynı Windows makinesinde 3.5s'de temiz build aldı. Pre-mevcut bir env state farkı olabilir (Docker Desktop, Node version, vb.), F5'in sonraki task'larında izlenmeli.
+- **Test sonuçları:** Rapor unit test "Yok" diyor (plan F5 frontend için doğru); validator runtime smoke (curl) ile manuel kontrol yaptı, build/lint/typecheck/CI tümü ✓.
+
+### Karar
+
+- ✗ **FAIL** — F1 (S2 Kırılma) nedeniyle merge yapılmaz.
+- Düzeltme yeni yapım chat'inde: `zh.json` + `es.json` dosyalarına `newTransaction.*` 104 leaf ekle (104 = TR/EN parity).
+- Düzeltme sonrası yeni validate chat'i açılır.
+- F2 (S1 Sapma) bu finalize commit'iyle düzeltildi (rapor K2 + locale parity notu güncellendi).
+- F3 (Advisory) blocking değil, F5 sonu chore PR backlog'una kalır.
