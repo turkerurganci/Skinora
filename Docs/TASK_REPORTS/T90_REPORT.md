@@ -1,6 +1,6 @@
 # T90 — İşlem Detay Sayfası (S07) — Tüm State Varyantları
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (validate pending) | **Tarih:** 2026-05-23
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-23 | **Doğrulama:** ✓ PASS (bağımsız validator)
 
 ---
 
@@ -151,8 +151,39 @@ Dış varsayım kırığı yok.
 ## Commit & PR
 
 - Branch: `task/T90-transaction-detail-page`
-- Commit: pending (Bitiş Kapısı 8/8 push + PR)
-- PR: pending
+- Commits: `25b41e4` (yapım), `2a32bb6` (memory yansıtma), validator finalize commit (bu commit)
+- PR: [#136](https://github.com/turkerurganci/Skinora/pull/136) `MERGEABLE`
+- Task branch CI: run [`26313228495`](https://github.com/turkerurganci/Skinora/actions/runs/26313228495) 10/10 job ✓ (Lint+Build+Unit+Integration+Contract+Migration+Docker+CI Gate)
+
+## Doğrulama (validator, 2026-05-23)
+
+**Verdict:** ✓ PASS — bağımsız re-doğrulama; bulgu yok.
+
+**Hard stop kontrolleri:**
+
+- Adım -1 (working tree hygiene): ✓ `git status --short` boş
+- Adım 0 (main CI startup): ✓ 3/3 success — run [`26309843043`](https://github.com/turkerurganci/Skinora/actions/runs/26309843043) (T89), [`26309843044`](https://github.com/turkerurganci/Skinora/actions/runs/26309843044) (T89 push), [`26253085726`](https://github.com/turkerurganci/Skinora/actions/runs/26253085726) (T88)
+- Adım 0b (repo memory drift): ✓ MEMORY.md T90 satırları mevcut (`2a32bb6` commit)
+
+**Kabul kriterleri:** 7/7 ✓ + 1 (SignalR) plan tarafından T96 forward-deferral olarak işaretli (kabul kriteri "T96 ile bağlantılı" wording'i).
+
+**Doğrulama kontrol listesi:** 2/2 ✓ — 04 §7.3 state × role matrisi tam + 07 §7.5 TransactionDetailResponse 13 alt-blok ekrana yansıdı.
+
+**Test/build:**
+
+- `npx tsc --noEmit` → exit 0 (lokal Windows)
+- `npx eslint src --max-warnings=0` → exit 0
+- i18n parity tr/en/es/zh = 476/476/476/476, missing 0 extra 0
+- Task branch CI 10/10 ✓
+
+**Güvenlik:** Secret sızıntısı / auth / input validation / XSS — hepsi temiz; yeni dış bağımlılık yok.
+
+**Known Limitations (devir kabul):**
+
+- K1 SignalR → T96 (plan bağımlılığı)
+- K2 Dispute butonları disabled → T92 (plan bağımlısı)
+- K3 Steam trade offer URL (DTO'da yok) → T-future
+- K4 İade adresi "Değiştir" linki (per-tx override field'ı yok) → T-future
 
 ## Known Limitations / Follow-up
 
