@@ -978,5 +978,29 @@
         "generic": "İşlem tamamlanamadı. Lütfen tekrar deneyin."
       }
     }
+  },
+  "notificationsInbox": {
+    "title": "Bildirimler",
+    "markAllRead": {
+      "label": "Tüm Bildirimleri Okundu İşaretle",
+      "pending": "İşaretleniyor…"
+    },
+    "row": {
+      "unreadAriaPrefix": "Okunmamış"
+    },
+    "empty": {
+      "title": "Bildiriminiz yok",
+      "description": "Yeni bildirimleriniz olduğunda burada görünür."
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Erişim engellendi",
+        "message": "Bildirimleri görüntülemek için giriş yapın."
+      },
+      "generic": {
+        "title": "Bildirimler yüklenemedi",
+        "message": "Bildirimler yüklenemedi. Lütfen tekrar deneyin."
+      }
+    }
   }
 }

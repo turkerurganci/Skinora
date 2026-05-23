@@ -978,5 +978,29 @@
         "generic": "The operation could not be completed. Please try again."
       }
     }
+  },
+  "notificationsInbox": {
+    "title": "Notifications",
+    "markAllRead": {
+      "label": "Mark All as Read",
+      "pending": "Marking…"
+    },
+    "row": {
+      "unreadAriaPrefix": "Unread"
+    },
+    "empty": {
+      "title": "No notifications",
+      "description": "New notifications will appear here."
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Access denied",
+        "message": "Please sign in to view your notifications."
+      },
+      "generic": {
+        "title": "Could not load notifications",
+        "message": "We couldn’t load your notifications. Please try again."
+      }
+    }
   }
 }
