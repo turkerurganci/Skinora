@@ -1,6 +1,6 @@
 # T94 — Hesap ayarları (S10)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-23
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-23
 
 ---
 
@@ -143,3 +143,32 @@ Sayfa dört bölüm halinde sıralı render edilir:
 - **`<dialog>` modal pattern:** `CancelModal.tsx` (T19 pattern) + `DisputeModal.tsx` (T92 pattern) ile birebir — `useEffect` ile `dialog.showModal()/close()` + `cancel` event handler + body component'i separate edip `open && payload` guard ile yalnız aktifken render.
 - **Email address change soft re-verify reset:** Email adresini değiştirip kaydederken backend `verified=false` set eder (T35 davranışı). UI bunu otomatik fark eder (`emailAddressChanged` derived state) ve "Doğrulama Kodu Gönder" butonunu gizler (kullanıcı önce kaydetmeli) — yeniden gösterir kayıt sonrası fetch'te.
 - **Pre-existing C10 LanguageSelector vs LanguagePreferenceSection drift:** Header'daki `LanguageSelector` `window.location.assign` ile full reload yaparken T94 `LanguagePreferenceSection` `router.replace` ile soft navigation kullanır. Drift T-future K5; şimdilik kabul edilebilir çünkü settings sayfasında zaten React Query state cache az ve 60s staleTime sonrası yenilenir.
+
+## Doğrulama
+
+**Validator chat (bağımsız, 2026-05-23):** ✓ PASS — 0 bulgu, 1 minor advisory.
+
+| Kontrol | Sonuç | Kanıt |
+|---|---|---|
+| Adım -1 — Working tree hygiene | ✓ | `git status --short` boş |
+| Adım 0 — Main CI son 3 run | ✓ | 26333984865 success / 26333984859 success / 26331943296 success |
+| Adım 0b — Repo memory T94 satırı | ✓ | `.claude/memory/MEMORY.md` line 223 mevcut |
+| Kabul kriterleri 1–7 | ✓ | 7/7 karşılandı, kanıtlar §"Kabul Kriterleri Kontrolü" tablosunda |
+| 04 §7.6 doğrulama maddesi | ✓ | Tüm 6 bölüm (bildirim 4-kanal / bağlı hesaplar / Telegram 5-adım / dil / deaktif / sil "SİL") implement |
+| Backend "SİL" verbatim | ✓ | `AccountLifecycleService.cs:21` `DeleteConfirmationPhrase = "SİL"` Ordinal compare; client const `settings.ts:182` aynı string |
+| TypeScript | ✓ | `npx tsc --noEmit` exit 0 |
+| ESLint | ✓ | `npx eslint src/**/*.{ts,tsx}` exit 0 (0 warning, 0 error) |
+| Prettier (T94 dosyaları) | ✓ | `npx prettier --check` T94 dosyaları üzerinde "All matched files use Prettier code style!"; tüm src 125 pre-existing drift (main baseline 129 → T94 sonrası 125, regresyon yok) |
+| Next build | ✓ | `npx next build` PASS, `/[locale]/settings` route üretildi |
+| i18n parity | ✓ | en 622 / tr 622 / es 622 / zh 622, settings.* 95 leaf-key ×4 locale = 380 yeni |
+| Task branch CI | ✓ | run [26336582873](https://github.com/turkerurganci/Skinora/actions/runs/26336582873) success (commit `37d9c11`) |
+| Güvenlik — secret sızıntısı | ✓ | Yok |
+| Güvenlik — auth | ✓ | Sayfa `isAuthenticated` guard + backend `[Authorize(Policy = AuthPolicies.Authenticated)]` defense-in-depth |
+| Güvenlik — input validation | ✓ | Confirmation phrase backend Ordinal compare; email backend tarafında validate; client trim'den fazlasını yapmaz |
+| Yeni dış bağımlılık | ✓ | Yok |
+
+**Minor advisory (S1 değil, kayıt amaçlı):**
+
+- **A1 — Endpoint count cosmetic drift:** Rapor + memory "12 endpoint client" diyor; `settings.ts` aslında 11 HTTP wrapper barındırıyor (U6, U7, U8, U9, U10, U11, U12, U13, U14, U15, U16). U10b `/discord/callback` backend redirect endpoint'i client HTTP çağrısı değil — `captureDiscordCallback()` URL query handler ile karşılanır; 12 sayısı bu URL handler'ı sayarsa doğru. İmplementasyon eksiği yok; kabul kriterlerini etkilemez.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu, uyuşmazlık yok. Kabul kriterleri tablosu validator bağımsız okumasıyla 1:1 örtüşür.
