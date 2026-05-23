@@ -110,9 +110,9 @@
 ## Commit & PR
 
 - Branch: `task/T95-notifications-page`
-- Commit: `<hash>` — `T95: Bildirimler sayfası (S11)`
-- PR: TBD
-- CI: TBD
+- Commit: `464bbe2` — `T95: Bildirimler sayfası (S11) — list + mark-all-read + header badge`
+- PR: [#142](https://github.com/turkerurganci/Skinora/pull/142)
+- CI: ✓ PASS — run [`26339316183`](https://github.com/turkerurganci/Skinora/actions/runs/26339316183) 10/10 success (1. Lint / 2. Build / 3. Unit / 4. Integration / 5. Contract / 6. Migration / 7. Docker frontend / CI Gate + Detect changed paths + Guard skipped)
 
 ## Known Limitations / Follow-up
 
