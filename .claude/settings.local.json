@@ -61,6 +61,7 @@
       "PowerShell(dotnet test:*)",
       "PowerShell(dotnet build:*)",
       "PowerShell(dotnet format --verify-no-changes:*)",
+      "PowerShell(Set-Location c:/projects/Escrow/frontend; npx tsc --noEmit:*)",
       "PowerShell(git diff main...HEAD -- 'Backend/src/Skinora.Shared/Persistence/SystemSettingSeed.cs' | Out-String)",
       "PowerShell(git diff main...HEAD -- 'Docs/06_DATA_MODEL.md' | Out-String)",
       "PowerShell(dotnet test tests/Skinora.API.Tests/Skinora.API.Tests.csproj --filter \"FullyQualifiedName~AdminRbacEndpointTests\" --nologo --verbosity quiet 2>&1)",
@@ -103,6 +104,19 @@
             "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/post-merge-ci-reminder.ps1",
             "shell": "powershell",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -File .claude/hooks/powershell-allow.ps1",
+            "shell": "powershell",
+            "timeout": 5
           }
         ]
       }
