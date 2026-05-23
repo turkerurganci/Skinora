@@ -1,6 +1,6 @@
 # T93 — Profil sayfaları (S08, S09)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-23
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-23
 
 ---
 
@@ -118,9 +118,77 @@ zh OK
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Pending (validator chat'inde doğrulanacak) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (2026-05-23) |
+| Verdict | ✓ PASS |
+| S-bulgu sayısı | 0 (S1/S2/S3 yok) |
+| Minor advisory | 2 (M1, M2 — PASS engellemiyor) |
+| Düzeltme gerekli mi | Hayır |
+
+**Hard-stop gates (validate.md Adım -1, 0, 0b):**
+
+- **Adım -1 — Working tree:** `git status --short` → boş ✓
+- **Adım 0 — Main CI startup:** Son 3 run `success/success/success` (T92 PR #139 squash `6188f18` run [26331943296](https://github.com/turkerurganci/Skinora/actions/runs/26331943296) ✓, T92 docker [26331943298](https://github.com/turkerurganci/Skinora/actions/runs/26331943298) ✓, T91 subsume PR #138 [26330594495](https://github.com/turkerurganci/Skinora/actions/runs/26330594495) ✓) ✓
+- **Adım 0b — Repo memory drift:** `MEMORY.md` line 222 T93 satırı mevcut ✓
+
+**Task branch CI (Adım 8a):**
+
+- Run [26332984558](https://github.com/turkerurganci/Skinora/actions/runs/26332984558) HEAD `874d891` — 10/10 job ✓ (Lint / Build / Unit / Integration / Contract / Migration dry-run / Docker frontend + CI Gate; 0. Guard skipped expected for PR branch).
+
+**Kabul kriterleri (bağımsız doğrulama):**
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | S08 Kendi profil: avatar, ad, Steam ID, skor, istatistikler, cüzdan adresleri (C11 ile yönetim) | ✓ | `frontend/src/app/[locale]/(main)/profile/page.tsx:137-179` → ProfileHeader(avatar+displayName+steamId+CopyButton+accountAge, variant="own") + ReputationCard(variant="own", score+completed+success+cancel) + 2× WalletSection(role={seller,refund}, C11 `WalletAddressInput`) + QuickLinks. Backend `GET /api/v1/users/me` → `UserProfileDto` 13 field 07 §5.1 birebir (`backend/src/Modules/Skinora.Users/Application/Profiles/UserProfileDtos.cs:18-31`). |
+| 2 | S09 Public profil: sınırlı bilgi (avatar, ad, skor, işlem sayısı, hesap yaşı) | ✓ | `frontend/src/app/[locale]/(main)/users/[steamId]/page.tsx:65-82` → ProfileHeader(steamId={null}, variant="public") + ReputationCard(variant="public", cancelRate prop yok). Backend `GET /api/v1/users/{steamId}` → `PublicUserProfileDto` 7 field, sensitive (wallet/cancelRate) DTO seviyesinde kesilir (`UserProfileDtos.cs:46-53`). 04 §7.5 "Gösterilmeyenler" listesi (cüzdan/cancelRate/SteamID tam/ayarlar) hem DTO hem variant guard ile uygulanır. |
+| 3 | Cüzdan adresi değişikliği: Steam re-auth akışı tetikleme | ✓ | `frontend/src/components/profile/WalletSection.tsx:72-93` → `handleChangeAddress` → `initiateSteamReVerify("wallet_change", returnUrl)` → `window.location.href = steamAuthUrl`. Backend `POST /auth/steam/re-verify` 07 §4.6 birebir (`backend/src/Skinora.API/Controllers/AuthController.cs:151-172` + `ReVerifyInitiateRequest(Purpose, ReturnUrl)` / `ReVerifyInitiateResponse(SteamAuthUrl)`). Callback `?reAuthToken=<token>` → `captureReAuthFromUrl()` lazy `useState` initializer (`profile/page.tsx:25-36`) + `useEffect` `router.replace()` URL temizleme (`profile/page.tsx:81-90`) + `WalletSection.handleConfirm:95-118` token'ı `X-ReAuth-Token` header ile `PUT /users/me/wallet/{role}` (`backend/src/Skinora.API/Controllers/UsersController.cs:547-562`). Yeni adres ekleme (`currentAddress === null`) re-auth bypass — backend `WalletAddressService.UpdateWalletAsync` `previous != null` guard. |
+
+**Doğrulama kontrol listesi (11_IMPLEMENTATION_PLAN.md T93):**
+
+- [x] **04 §7.4–§7.5 tüm alanlar var mı?** — Evet. 04 §7.4 hiyerarşi 1-4 + Cüzdan Değişiklik Akışı step 1-7 ✓; 04 §7.5 hiyerarşi 1-2 + "Gösterilmeyenler" 4-madde ✓.
+
+**Test sonuçları (frontend yalnız):**
+
+| Tür | Sonuç | Komut | Çıktı |
+|---|---|---|---|
+| TypeScript | ✓ | `npx tsc --noEmit` | Exit 0, 0 hata |
+| Lint | ✓ | `npm run lint` | Exit 0, 0 warning |
+| Build | ✓ | `npm run build` | Compiled successfully; `/[locale]/profile` + `/[locale]/users/[steamId]` route üretildi |
+| i18n parity | ✓ | leaf-key sayımı | en:527 / tr:527 / es:527 / zh:527 (profile+publicProfile = 37 leaf × 4 = 148) |
+| Task branch CI | ✓ | run 26332984558 | 10/10 job (Lint/Build/Unit/Integration/Contract/Migration/Docker/Gate) |
+| Backend regresyon | ✓ | (T93 frontend-only — backend dokunulmadı) | Branch diff `frontend/`+`Docs/`+`.claude/memory/` ile sınırlı |
+
+**Güvenlik kontrolü:**
+
+- [x] **Secret sızıntısı:** Temiz — kod içinde hardcoded credential yok; `localStorage.access_token` mevcut T29 paterni (T93 introduce etmedi).
+- [x] **Auth/authorization etkisi:** Temiz — S08 `useAuthStore.isAuthenticated` guard + ErrorState; S09 AllowAnonymous (spec gereği 04 §7.5 + 07 §5.5 "Auth: Public").
+- [x] **Input validation:** Temiz — wallet address backend pipeline (T34 `ITrc20AddressValidator` + sanctions); frontend C11 `WalletAddressInput` mevcut kullanım.
+- [x] **reAuthToken URL leak:** İki katman defense — backend A6 `Referrer-Policy: same-origin` (07 §4.7 mitigasyon listesi) + frontend `router.replace()` query param strip + backend single-use Redis GETDEL 5dk TTL.
+- [x] **Yeni bağımlılık:** Yok (next/react/next-intl/react-query/zustand zaten kurulu).
+
+**Doküman uyumu kontrolü:**
+
+- [x] 04 §7.4 hiyerarşi 1-4 + Cüzdan Değişikliği Akışı 7-adım birebir;
+- [x] 04 §7.5 hiyerarşi 1-2 + "Gösterilmeyenler" 4-madde birebir;
+- [x] 07 §5.1 U1 DTO 13 field eşleşme (UserProfile interface ↔ UserProfileDto record);
+- [x] 07 §5.3-§5.4 U3/U4 wallet PUT + `X-ReAuth-Token` ek auth + `RE_AUTH_REQUIRED`/`RE_AUTH_TOKEN_INVALID` hatalar mapErrorCode'da var;
+- [x] 07 §5.5 U5 DTO 7 field eşleşme (PublicUserProfile interface ↔ PublicUserProfileDto record), sensitive field'lar yok;
+- [x] 07 §4.6 A5 request/response şeması birebir (purpose+returnUrl → steamAuthUrl);
+- [x] 07 §4.7 A6 security mitigations 3/3 (history.replaceState eşdeğeri router.replace ✓ / single-use TTL backend ✓ / Referrer-Policy:same-origin backend ✓).
+
+**Minor advisory (PASS engellemiyor):**
+
+| # | Seviye | Açıklama | Etkilenen | Etki |
+|---|---|---|---|---|
+| M1 | Minor | `npx prettier --check` 5 dosyada line-width drift bildirir (`ProfileHeader.tsx`, `WalletSection.tsx`, `ReputationCard.tsx`, `profile/page.tsx`, `users/[steamId]/page.tsx`) — JSX prop'ları tek satırda, prettier multi-line format ister. Repo CI prettier --check job'u içermez (`.github/workflows/` grep `prettier` = 0 hit), squash merge engellenmez. Önceki T64-T76 sidecar paterni "prettier drift T-future chore PR" advisory'ı ile aynı yaklaşım. | 5 yeni TSX dosya | Cosmetic; CI yeşil; runtime davranışı etkilemez. T93 PASS'ini engellemez; istenirse `npx prettier --write` + ayrı chore PR ile temizlenebilir (5 dosya ~15 satır biçim değişikliği). |
+| M2 | Minor | T93_REPORT.md "+45 net key" sayımı (line 77-80, 115) ile gerçek leaf-key delta `+37` (T92 baseline 490 → 527; profile namespace 33 + publicProfile namespace 4 = 37). Memory line 222 da "+45" ifadesi taşıyor. | Rapor + memory metni | Belge sayımı drift, kod doğru. PASS sonrası rapor + memory `+37` netleştirilebilir; gerçek key sayısı tüm 4 locale eşit (527/527/527/527) — parity bozulmuyor. |
+
+**Yapım raporu karşılaştırması:**
+
+- Yapım raporu (line 1-156) ile validator bağımsız bulguları tam uyumlu — yapım raporu acceptance kriterleri, dosya envanteri, K1-K6 Known Limitations, security/build/locale sonuçları validator kanıtlarıyla 1:1 eşleşir.
+- 2 uyuşmazlık:
+  1. Sayım drift (M2 — rapor "+45" iken gerçek "+37");
+  2. "prettier verified on touched files" raporda örtülü ima (Notlar bölümü explicit söz etmiyor) ama gerçek `prettier --check` 5 dosyada FAIL (M1 — CI enforce yok).
+- Verdict uyuşması: yapım raporu "⏳ Devam ediyor" → validator "✓ PASS" promote.
 
 ## Altyapı Değişiklikleri
 
@@ -132,9 +200,9 @@ zh OK
 ## Commit & PR
 
 - Branch: `task/T93-profile-pages`
-- Commit: pending (commit + push aşamasına geçiliyor)
-- PR: pending
-- CI: pending
+- Commit: `874d891` "T93: Profil sayfaları (S08 + S09) — re-auth flow ile cüzdan yönetimi"
+- PR: [#140](https://github.com/turkerurganci/Skinora/pull/140)
+- CI: run [26332984558](https://github.com/turkerurganci/Skinora/actions/runs/26332984558) — 10/10 job ✓
 
 ## Known Limitations / Follow-up
 
