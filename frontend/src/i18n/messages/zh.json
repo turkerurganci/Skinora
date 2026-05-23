@@ -829,5 +829,154 @@
         "message": "无法加载个人资料。请重试。"
       }
     }
+  },
+  "settings": {
+    "pageTitle": "账户设置",
+    "errors": {
+      "forbidden": {
+        "title": "访问被拒绝",
+        "message": "您必须登录才能查看账户设置。"
+      },
+      "generic": {
+        "title": "无法加载设置",
+        "message": "无法加载账户设置。请重试。"
+      }
+    },
+    "notifications": {
+      "title": "通知偏好",
+      "channels": {
+        "platform": {
+          "label": "应用内",
+          "description": "通知将显示在应用内。",
+          "locked": "应用内通知无法关闭。"
+        },
+        "email": {
+          "label": "邮件",
+          "description": "通过邮件接收通知。",
+          "noAddress": "请先设置邮箱地址。"
+        },
+        "telegram": {
+          "label": "Telegram",
+          "description": "通过 Telegram 接收通知。",
+          "connected": "已连接:{username}",
+          "notConnected": "请先连接您的 Telegram 账户以接收通知。"
+        },
+        "discord": {
+          "label": "Discord",
+          "description": "通过 Discord 接收通知。",
+          "connected": "已连接:{username}",
+          "notConnected": "请先连接您的 Discord 账户以接收通知。"
+        }
+      },
+      "email": {
+        "addressLabel": "邮箱地址",
+        "placeholder": "user@example.com",
+        "verifiedBadge": "✓ 邮箱已验证",
+        "unverifiedBadge": "邮箱尚未验证。",
+        "save": "保存",
+        "saving": "正在保存…",
+        "errors": {
+          "required": "邮箱地址为必填项。",
+          "invalid": "请输入有效的邮箱地址。",
+          "generic": "无法保存邮箱地址。请重试。"
+        }
+      },
+      "verify": {
+        "sendButton": "发送验证码",
+        "sending": "正在发送…",
+        "sentTo": "验证码已发送至 {address}。请输入邮件中的验证码。",
+        "codePlaceholder": "验证码",
+        "verify": "验证",
+        "verifying": "正在验证…",
+        "cancel": "取消",
+        "errors": {
+          "noEmail": "请先保存您的邮箱地址。",
+          "cooldown": "请求过于频繁。请稍后再试。",
+          "invalidCode": "验证码不正确。",
+          "expired": "验证码已过期。请重新发送。",
+          "generic": "无法验证验证码。请重试。"
+        }
+      }
+    },
+    "linkedAccounts": {
+      "title": "已关联账户",
+      "connect": "连接",
+      "connecting": "正在连接…",
+      "disconnect": "断开连接",
+      "disconnecting": "正在断开…",
+      "status": {
+        "connected": "已连接",
+        "notConnected": "未连接"
+      },
+      "telegram": {
+        "label": "Telegram",
+        "modal": {
+          "title": "连接到 Telegram",
+          "steps": {
+            "openBot": "使用下方按钮打开 Telegram 机器人。",
+            "sendCode": "将下方验证码作为消息发送给机器人。",
+            "wait": "请稍等几秒。",
+            "check": "完成后点击\"检查\"。"
+          },
+          "verificationCode": "验证码",
+          "copy": "复制",
+          "copied": "已复制",
+          "expiresIn": "验证码 {seconds} 秒内有效。",
+          "openBot": "打开 Telegram 机器人",
+          "stillNotConnected": "尚未检测到连接。请确认已将验证码发送至 Telegram,然后重试。",
+          "dismiss": "关闭",
+          "check": "检查",
+          "checking": "正在检查…"
+        }
+      },
+      "discord": {
+        "label": "Discord",
+        "callback": {
+          "connected": "您的 Discord 账户已成功连接。",
+          "denied": "Discord 授权已取消。",
+          "already_linked": "此 Discord 账户已关联到其他用户。",
+          "expired": "Discord 会话已过期。请重试。",
+          "exchange_failed": "无法连接到 Discord。请重试。",
+          "invalid_state": "Discord 验证会话无效。请重试。",
+          "error": "连接 Discord 时发生错误。",
+          "dismiss": "关闭"
+        }
+      },
+      "errors": {
+        "telegramConnect": "无法启动 Telegram 连接。请重试。",
+        "telegramDisconnect": "无法断开 Telegram 连接。请重试。",
+        "discordConnect": "无法启动 Discord 连接。请重试。",
+        "discordDisconnect": "无法断开 Discord 连接。请重试。"
+      }
+    },
+    "language": {
+      "title": "语言偏好",
+      "description": "选择界面语言。更改将立即生效。",
+      "error": "无法保存语言偏好。请重试。"
+    },
+    "accountManagement": {
+      "title": "账户管理",
+      "description": "您可以暂时停用账户或永久删除。",
+      "dismiss": "取消",
+      "submitting": "正在处理…",
+      "deactivate": {
+        "button": "停用账户",
+        "modalTitle": "停用账户",
+        "modalDescription": "您的账户将被停用。您可以重新登录以重新激活。",
+        "confirmButton": "停用"
+      },
+      "delete": {
+        "button": "删除账户",
+        "modalTitle": "删除账户",
+        "modalWarning": "此操作无法撤销。您的所有个人数据将被删除。您的交易历史将以匿名方式保留。",
+        "confirmLabel": "输入 \"{phrase}\" 以确认。",
+        "confirmButton": "删除账户"
+      },
+      "errors": {
+        "hasActiveTransactions": "您有活跃的交易。请先完成或取消。",
+        "invalidConfirmation": "确认文本不正确。",
+        "generic": "操作无法完成。请重试。"
+      }
+    }
   }
 }

@@ -829,5 +829,154 @@
         "message": "Profile details could not be loaded. Please try again."
       }
     }
+  },
+  "settings": {
+    "pageTitle": "Account Settings",
+    "errors": {
+      "forbidden": {
+        "title": "Access denied",
+        "message": "You must sign in to view your account settings."
+      },
+      "generic": {
+        "title": "Settings could not be loaded",
+        "message": "Account settings could not be loaded. Please try again."
+      }
+    },
+    "notifications": {
+      "title": "Notification Preferences",
+      "channels": {
+        "platform": {
+          "label": "In-app",
+          "description": "Notifications are shown inside the app.",
+          "locked": "In-app notifications cannot be turned off."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Receive notifications by email.",
+          "noAddress": "Set your email address first."
+        },
+        "telegram": {
+          "label": "Telegram",
+          "description": "Receive notifications via Telegram.",
+          "connected": "Connected: {username}",
+          "notConnected": "Connect your Telegram account first to receive notifications."
+        },
+        "discord": {
+          "label": "Discord",
+          "description": "Receive notifications via Discord.",
+          "connected": "Connected: {username}",
+          "notConnected": "Connect your Discord account first to receive notifications."
+        }
+      },
+      "email": {
+        "addressLabel": "Email address",
+        "placeholder": "user@example.com",
+        "verifiedBadge": "✓ Email verified",
+        "unverifiedBadge": "Email not verified yet.",
+        "save": "Save",
+        "saving": "Saving…",
+        "errors": {
+          "required": "Email address is required.",
+          "invalid": "Enter a valid email address.",
+          "generic": "Email address could not be saved. Please try again."
+        }
+      },
+      "verify": {
+        "sendButton": "Send Verification Code",
+        "sending": "Sending…",
+        "sentTo": "Code sent to {address}. Enter the code from your email.",
+        "codePlaceholder": "Verification code",
+        "verify": "Verify",
+        "verifying": "Verifying…",
+        "cancel": "Cancel",
+        "errors": {
+          "noEmail": "Save your email address first.",
+          "cooldown": "Too many requests. Please wait and try again.",
+          "invalidCode": "Verification code is incorrect.",
+          "expired": "Verification code has expired. Send a new one.",
+          "generic": "Code could not be verified. Please try again."
+        }
+      }
+    },
+    "linkedAccounts": {
+      "title": "Linked Accounts",
+      "connect": "Connect",
+      "connecting": "Connecting…",
+      "disconnect": "Disconnect",
+      "disconnecting": "Disconnecting…",
+      "status": {
+        "connected": "Connected",
+        "notConnected": "Not connected"
+      },
+      "telegram": {
+        "label": "Telegram",
+        "modal": {
+          "title": "Connect to Telegram",
+          "steps": {
+            "openBot": "Open the Telegram bot using the button below.",
+            "sendCode": "Send the verification code below to the bot as a message.",
+            "wait": "Wait a few seconds.",
+            "check": "Click \"Check\" when done."
+          },
+          "verificationCode": "Verification code",
+          "copy": "Copy",
+          "copied": "Copied",
+          "expiresIn": "Code valid for {seconds} seconds.",
+          "openBot": "Open Telegram Bot",
+          "stillNotConnected": "Connection not detected yet. Make sure you sent the code to Telegram, then try again.",
+          "dismiss": "Close",
+          "check": "Check",
+          "checking": "Checking…"
+        }
+      },
+      "discord": {
+        "label": "Discord",
+        "callback": {
+          "connected": "Your Discord account has been connected successfully.",
+          "denied": "Discord authorization was cancelled.",
+          "already_linked": "This Discord account is already linked to another user.",
+          "expired": "Discord session expired. Please try again.",
+          "exchange_failed": "Could not connect to Discord. Please try again.",
+          "invalid_state": "Discord verification session is invalid. Please try again.",
+          "error": "An error occurred while connecting to Discord.",
+          "dismiss": "Dismiss"
+        }
+      },
+      "errors": {
+        "telegramConnect": "Could not start Telegram connection. Please try again.",
+        "telegramDisconnect": "Could not disconnect Telegram. Please try again.",
+        "discordConnect": "Could not start Discord connection. Please try again.",
+        "discordDisconnect": "Could not disconnect Discord. Please try again."
+      }
+    },
+    "language": {
+      "title": "Language Preference",
+      "description": "Choose the interface language. Changes apply immediately.",
+      "error": "Language preference could not be saved. Please try again."
+    },
+    "accountManagement": {
+      "title": "Account Management",
+      "description": "You can temporarily deactivate your account or permanently delete it.",
+      "dismiss": "Cancel",
+      "submitting": "Processing…",
+      "deactivate": {
+        "button": "Deactivate Account",
+        "modalTitle": "Deactivate Account",
+        "modalDescription": "Your account will be deactivated. You can reactivate it by signing in again.",
+        "confirmButton": "Deactivate"
+      },
+      "delete": {
+        "button": "Delete Account",
+        "modalTitle": "Delete Account",
+        "modalWarning": "This action cannot be undone. All your personal data will be deleted. Your transaction history will be kept anonymously.",
+        "confirmLabel": "Type \"{phrase}\" to confirm.",
+        "confirmButton": "Delete Account"
+      },
+      "errors": {
+        "hasActiveTransactions": "You have active transactions. Please complete or cancel them first.",
+        "invalidConfirmation": "Confirmation text is incorrect.",
+        "generic": "The operation could not be completed. Please try again."
+      }
+    }
   }
 }
