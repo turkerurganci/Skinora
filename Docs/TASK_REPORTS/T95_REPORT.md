@@ -1,6 +1,6 @@
 # T95 — Bildirimler sayfası (S11)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-23
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-23
 
 ---
 
@@ -96,9 +96,36 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validate chat bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator 2026-05-23) |
+| Verdict | ✓ PASS |
+| Kabul kriterleri | 4/4 ✓ |
+| Doğrulama kontrol listesi | 1/1 ✓ |
+| Bulgu sayısı | 0 S-bulgu, 1 minor advisory |
+| Düzeltme gerekli mi | Hayır |
+
+### Validator Kanıtları
+
+- **Adım -1 (Working tree hygiene):** `git status --short` çıktısız ✓
+- **Adım 0 (Main CI startup):** son 3 run `success` — `26337997661`, `26337997668` (T94 #141 ×2), `26333984865` (T93 #140) ✓
+- **Adım 0b (Repo memory drift):** `.claude/memory/MEMORY.md` T95 satırı mevcut ✓
+- **Task branch CI:** run [`26339505745`](https://github.com/turkerurganci/Skinora/actions/runs/26339505745) (rapor+status finalize, en son) 10/10 ✓ + [`26339316183`](https://github.com/turkerurganci/Skinora/actions/runs/26339316183) (yapım, ilk) 10/10 ✓
+- **TypeScript:** `npx tsc --noEmit` `EXIT=0` ✓
+- **ESLint:** `npx eslint .` `EXIT=0` (warning/error yok) ✓
+- **Next build:** `npx next build` `BUILD_EXIT=0`; `/[locale]/notifications` ƒ route üretildi ✓
+- **4-locale parity:** Node script `count(o)` → en/tr/es/zh = 632/632/632/632 ✓
+- **04 §7.7 spec eşleşmesi:** 6 ikon kategorisi (🔄/💰/⚠/✅/❌/🔍) `notification-icons.ts:47-54` birebir; üst bar "Tüm Bildirimleri Okundu İşaretle" linki + 3 state (empty C13 / data vurgulu / loading Skeleton C14) + 20 bildirim sayfa pagination birebir ✓
+- **Mini güvenlik:**
+  - Secret sızıntısı: Temiz ✓
+  - Auth: standart `apiClient` Bearer token + `useAuthStore` UI gate ✓
+  - Input validation: `parsePage` NaN/negatif → 1 sanitize ✓
+  - Yeni bağımlılık: yok (package.json/lock değişmedi) ✓
+  - XSS: React text rendering; `dangerouslySetInnerHTML` / `eval` / `innerHTML` / `new Function` kullanımı yok ✓
+
+### Minor Advisory
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| M1 | minor (cosmetic) | `prettier --check` 4 dosyada line-width drift bildirir (`page.tsx`, `NotificationList.tsx`, `NotificationRow.tsx`, `useNotificationMutations.ts`). CI prettier enforce etmiyor (T93 M1 ile aynı tabiat); ileride `npm run format` ile toplu giderilebilir. Kabul kriterlerini etkilemez. | yukarıdaki 4 dosya |
 
 ## Altyapı Değişiklikleri
 
