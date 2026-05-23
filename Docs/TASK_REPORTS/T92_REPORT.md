@@ -138,9 +138,9 @@ Dış varsayım kırığı yok.
 ## Commit & PR
 
 - Branch: `task/T92-dispute-ui`
-- Commit: `<hash>` — `T92: Dispute UI (#PR)`
-- PR: #<TBD — pending push>
-- CI: ⏳ pending
+- Commit: `34d58e5` — `T92: Dispute UI (C07 + S07 action wiring)`
+- PR: [#139](https://github.com/turkerurganci/Skinora/pull/139)
+- CI: ✓ PASS — run [`26331452400`](https://github.com/turkerurganci/Skinora/actions/runs/26331452400) 9/9 job ✓ (Lint + Build + Unit + Integration + Contract + Migration dry-run + Docker (frontend) + CI Gate; Guard skipped)
 
 ## Known Limitations / Follow-up
 
