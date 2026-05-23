@@ -829,5 +829,154 @@
         "message": "Profil bilgileri yüklenemedi. Lütfen tekrar deneyin."
       }
     }
+  },
+  "settings": {
+    "pageTitle": "Hesap Ayarları",
+    "errors": {
+      "forbidden": {
+        "title": "Erişim reddedildi",
+        "message": "Hesap ayarlarını görmek için giriş yapmalısınız."
+      },
+      "generic": {
+        "title": "Ayarlar yüklenemedi",
+        "message": "Hesap ayarları yüklenemedi. Lütfen tekrar deneyin."
+      }
+    },
+    "notifications": {
+      "title": "Bildirim Tercihleri",
+      "channels": {
+        "platform": {
+          "label": "Platform İçi",
+          "description": "Bildirimler uygulama içinde gösterilir.",
+          "locked": "Platform içi bildirimler kapatılamaz."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Bildirimleri email ile al.",
+          "noAddress": "Önce email adresinizi tanımlayın."
+        },
+        "telegram": {
+          "label": "Telegram",
+          "description": "Bildirimleri Telegram üzerinden al.",
+          "connected": "Bağlı: {username}",
+          "notConnected": "Bildirim almak için önce Telegram hesabınızı bağlayın."
+        },
+        "discord": {
+          "label": "Discord",
+          "description": "Bildirimleri Discord üzerinden al.",
+          "connected": "Bağlı: {username}",
+          "notConnected": "Bildirim almak için önce Discord hesabınızı bağlayın."
+        }
+      },
+      "email": {
+        "addressLabel": "Email adresi",
+        "placeholder": "kullanici@example.com",
+        "verifiedBadge": "✓ Email doğrulandı",
+        "unverifiedBadge": "Email henüz doğrulanmadı.",
+        "save": "Kaydet",
+        "saving": "Kaydediliyor…",
+        "errors": {
+          "required": "Email adresi zorunlu.",
+          "invalid": "Geçerli bir email adresi girin.",
+          "generic": "Email adresi kaydedilemedi. Lütfen tekrar deneyin."
+        }
+      },
+      "verify": {
+        "sendButton": "Doğrulama Kodu Gönder",
+        "sending": "Gönderiliyor…",
+        "sentTo": "Kod gönderildi: {address}. Mailinizdeki kodu girin.",
+        "codePlaceholder": "Doğrulama kodu",
+        "verify": "Doğrula",
+        "verifying": "Doğrulanıyor…",
+        "cancel": "Vazgeç",
+        "errors": {
+          "noEmail": "Önce email adresinizi kaydedin.",
+          "cooldown": "Çok sık deneme. Bir süre bekleyip tekrar deneyin.",
+          "invalidCode": "Doğrulama kodu hatalı.",
+          "expired": "Doğrulama kodunun süresi doldu. Yeniden gönderin.",
+          "generic": "Kod doğrulanamadı. Lütfen tekrar deneyin."
+        }
+      }
+    },
+    "linkedAccounts": {
+      "title": "Bağlı Hesaplar",
+      "connect": "Bağla",
+      "connecting": "Bağlanıyor…",
+      "disconnect": "Bağlantıyı Kaldır",
+      "disconnecting": "Kaldırılıyor…",
+      "status": {
+        "connected": "Bağlı",
+        "notConnected": "Bağlı değil"
+      },
+      "telegram": {
+        "label": "Telegram",
+        "modal": {
+          "title": "Telegram'a Bağla",
+          "steps": {
+            "openBot": "Aşağıdaki butonla Telegram bot'unu açın.",
+            "sendCode": "Bot'a aşağıdaki doğrulama kodunu mesaj olarak gönderin.",
+            "wait": "Birkaç saniye bekleyin.",
+            "check": "Tamamlandığında \"Kontrol Et\" tıklayın."
+          },
+          "verificationCode": "Doğrulama kodu",
+          "copy": "Kopyala",
+          "copied": "Kopyalandı",
+          "expiresIn": "Kod {seconds} saniye geçerli.",
+          "openBot": "Telegram Bot'u Aç",
+          "stillNotConnected": "Henüz bağlantı görünmüyor. Kodu Telegram'a gönderdiğinizden emin olun, sonra tekrar deneyin.",
+          "dismiss": "Kapat",
+          "check": "Kontrol Et",
+          "checking": "Kontrol ediliyor…"
+        }
+      },
+      "discord": {
+        "label": "Discord",
+        "callback": {
+          "connected": "Discord hesabınız başarıyla bağlandı.",
+          "denied": "Discord yetkilendirme iptal edildi.",
+          "already_linked": "Bu Discord hesabı başka bir kullanıcıya bağlı.",
+          "expired": "Discord oturumu süresi doldu. Lütfen tekrar deneyin.",
+          "exchange_failed": "Discord ile bağlantı kurulamadı. Lütfen tekrar deneyin.",
+          "invalid_state": "Discord doğrulama oturumu geçersiz. Lütfen tekrar deneyin.",
+          "error": "Discord bağlantısı sırasında bir hata oluştu.",
+          "dismiss": "Kapat"
+        }
+      },
+      "errors": {
+        "telegramConnect": "Telegram bağlantısı başlatılamadı. Lütfen tekrar deneyin.",
+        "telegramDisconnect": "Telegram bağlantısı kaldırılamadı. Lütfen tekrar deneyin.",
+        "discordConnect": "Discord bağlantısı başlatılamadı. Lütfen tekrar deneyin.",
+        "discordDisconnect": "Discord bağlantısı kaldırılamadı. Lütfen tekrar deneyin."
+      }
+    },
+    "language": {
+      "title": "Dil Tercihi",
+      "description": "Arayüz dilini seçin. Değişiklik anında uygulanır.",
+      "error": "Dil tercihi kaydedilemedi. Lütfen tekrar deneyin."
+    },
+    "accountManagement": {
+      "title": "Hesap Yönetimi",
+      "description": "Hesabınızı geçici olarak deaktif edebilir veya kalıcı olarak silebilirsiniz.",
+      "dismiss": "Vazgeç",
+      "submitting": "İşleniyor…",
+      "deactivate": {
+        "button": "Hesabı Deaktif Et",
+        "modalTitle": "Hesabı Deaktif Et",
+        "modalDescription": "Hesabınız deaktif edilecek. Tekrar giriş yaparak aktif edebilirsiniz.",
+        "confirmButton": "Deaktif Et"
+      },
+      "delete": {
+        "button": "Hesabı Sil",
+        "modalTitle": "Hesabı Sil",
+        "modalWarning": "Bu işlem geri alınamaz. Tüm kişisel verileriniz silinecek. İşlem geçmişiniz anonim olarak saklanacaktır.",
+        "confirmLabel": "Onaylamak için \"{phrase}\" yazın.",
+        "confirmButton": "Hesabı Sil"
+      },
+      "errors": {
+        "hasActiveTransactions": "Aktif işlemleriniz mevcut. Lütfen önce tamamlayın ya da iptal edin.",
+        "invalidConfirmation": "Onay metni hatalı.",
+        "generic": "İşlem tamamlanamadı. Lütfen tekrar deneyin."
+      }
+    }
   }
 }

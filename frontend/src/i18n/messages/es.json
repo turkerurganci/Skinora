@@ -829,5 +829,154 @@
         "message": "No se pudieron cargar los detalles del perfil. Inténtalo de nuevo."
       }
     }
+  },
+  "settings": {
+    "pageTitle": "Configuración de la Cuenta",
+    "errors": {
+      "forbidden": {
+        "title": "Acceso denegado",
+        "message": "Debes iniciar sesión para ver la configuración de tu cuenta."
+      },
+      "generic": {
+        "title": "No se pudo cargar la configuración",
+        "message": "No se pudo cargar la configuración de la cuenta. Inténtalo de nuevo."
+      }
+    },
+    "notifications": {
+      "title": "Preferencias de Notificación",
+      "channels": {
+        "platform": {
+          "label": "En la app",
+          "description": "Las notificaciones se muestran dentro de la aplicación.",
+          "locked": "Las notificaciones en la app no se pueden desactivar."
+        },
+        "email": {
+          "label": "Email",
+          "description": "Recibir notificaciones por email.",
+          "noAddress": "Primero define tu dirección de email."
+        },
+        "telegram": {
+          "label": "Telegram",
+          "description": "Recibir notificaciones a través de Telegram.",
+          "connected": "Conectado: {username}",
+          "notConnected": "Conecta tu cuenta de Telegram para recibir notificaciones."
+        },
+        "discord": {
+          "label": "Discord",
+          "description": "Recibir notificaciones a través de Discord.",
+          "connected": "Conectado: {username}",
+          "notConnected": "Conecta tu cuenta de Discord para recibir notificaciones."
+        }
+      },
+      "email": {
+        "addressLabel": "Dirección de email",
+        "placeholder": "usuario@ejemplo.com",
+        "verifiedBadge": "✓ Email verificado",
+        "unverifiedBadge": "Email aún no verificado.",
+        "save": "Guardar",
+        "saving": "Guardando…",
+        "errors": {
+          "required": "La dirección de email es obligatoria.",
+          "invalid": "Introduce una dirección de email válida.",
+          "generic": "No se pudo guardar la dirección de email. Inténtalo de nuevo."
+        }
+      },
+      "verify": {
+        "sendButton": "Enviar Código de Verificación",
+        "sending": "Enviando…",
+        "sentTo": "Código enviado a {address}. Introduce el código de tu email.",
+        "codePlaceholder": "Código de verificación",
+        "verify": "Verificar",
+        "verifying": "Verificando…",
+        "cancel": "Cancelar",
+        "errors": {
+          "noEmail": "Guarda primero tu dirección de email.",
+          "cooldown": "Demasiadas solicitudes. Espera e inténtalo de nuevo.",
+          "invalidCode": "El código de verificación es incorrecto.",
+          "expired": "El código de verificación ha caducado. Envía uno nuevo.",
+          "generic": "No se pudo verificar el código. Inténtalo de nuevo."
+        }
+      }
+    },
+    "linkedAccounts": {
+      "title": "Cuentas Vinculadas",
+      "connect": "Conectar",
+      "connecting": "Conectando…",
+      "disconnect": "Desconectar",
+      "disconnecting": "Desconectando…",
+      "status": {
+        "connected": "Conectado",
+        "notConnected": "No conectado"
+      },
+      "telegram": {
+        "label": "Telegram",
+        "modal": {
+          "title": "Conectar a Telegram",
+          "steps": {
+            "openBot": "Abre el bot de Telegram usando el botón de abajo.",
+            "sendCode": "Envía el siguiente código de verificación al bot como mensaje.",
+            "wait": "Espera unos segundos.",
+            "check": "Haz clic en \"Comprobar\" cuando termines."
+          },
+          "verificationCode": "Código de verificación",
+          "copy": "Copiar",
+          "copied": "Copiado",
+          "expiresIn": "Código válido durante {seconds} segundos.",
+          "openBot": "Abrir Bot de Telegram",
+          "stillNotConnected": "Aún no se detecta conexión. Asegúrate de haber enviado el código a Telegram e inténtalo de nuevo.",
+          "dismiss": "Cerrar",
+          "check": "Comprobar",
+          "checking": "Comprobando…"
+        }
+      },
+      "discord": {
+        "label": "Discord",
+        "callback": {
+          "connected": "Tu cuenta de Discord se ha conectado correctamente.",
+          "denied": "Autorización de Discord cancelada.",
+          "already_linked": "Esta cuenta de Discord ya está vinculada a otro usuario.",
+          "expired": "La sesión de Discord ha caducado. Inténtalo de nuevo.",
+          "exchange_failed": "No se pudo conectar con Discord. Inténtalo de nuevo.",
+          "invalid_state": "La sesión de verificación de Discord no es válida. Inténtalo de nuevo.",
+          "error": "Ha ocurrido un error al conectar con Discord.",
+          "dismiss": "Cerrar"
+        }
+      },
+      "errors": {
+        "telegramConnect": "No se pudo iniciar la conexión con Telegram. Inténtalo de nuevo.",
+        "telegramDisconnect": "No se pudo desconectar Telegram. Inténtalo de nuevo.",
+        "discordConnect": "No se pudo iniciar la conexión con Discord. Inténtalo de nuevo.",
+        "discordDisconnect": "No se pudo desconectar Discord. Inténtalo de nuevo."
+      }
+    },
+    "language": {
+      "title": "Preferencia de Idioma",
+      "description": "Elige el idioma de la interfaz. Los cambios se aplican de inmediato.",
+      "error": "No se pudo guardar la preferencia de idioma. Inténtalo de nuevo."
+    },
+    "accountManagement": {
+      "title": "Gestión de la Cuenta",
+      "description": "Puedes desactivar temporalmente tu cuenta o eliminarla permanentemente.",
+      "dismiss": "Cancelar",
+      "submitting": "Procesando…",
+      "deactivate": {
+        "button": "Desactivar Cuenta",
+        "modalTitle": "Desactivar Cuenta",
+        "modalDescription": "Tu cuenta será desactivada. Puedes reactivarla iniciando sesión de nuevo.",
+        "confirmButton": "Desactivar"
+      },
+      "delete": {
+        "button": "Eliminar Cuenta",
+        "modalTitle": "Eliminar Cuenta",
+        "modalWarning": "Esta acción no se puede deshacer. Todos tus datos personales serán eliminados. Tu historial de transacciones se conservará de forma anónima.",
+        "confirmLabel": "Escribe \"{phrase}\" para confirmar.",
+        "confirmButton": "Eliminar Cuenta"
+      },
+      "errors": {
+        "hasActiveTransactions": "Tienes transacciones activas. Complétalas o cancélalas primero.",
+        "invalidConfirmation": "El texto de confirmación es incorrecto.",
+        "generic": "No se pudo completar la operación. Inténtalo de nuevo."
+      }
+    }
   }
 }
