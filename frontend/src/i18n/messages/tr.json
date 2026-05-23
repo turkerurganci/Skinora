@@ -243,6 +243,8 @@
       "type": "1/3 — Tür seçimi",
       "checking": "2/3 — Otomatik kontrol",
       "result": "2/3 — Sonuç",
+      "txhash": "2/3 — TX hash yeniden doğrulama",
+      "txhashChecking": "2/3 — TX hash kontrol ediliyor",
       "escalation": "3/3 — Admin'e iletim",
       "done": "Tamamlandı"
     },
@@ -266,21 +268,40 @@
     "checking": "Sistem kontrol ediliyor...",
     "result": {
       "resolved": {
-        "title": "Otomatik çözüm bulundu",
-        "description": "Sisteminiz sorunu otomatik olarak çözdü. Detaylar bildirildi."
+        "title": "Otomatik çözüm bulundu"
       },
       "unresolved": {
-        "title": "Otomatik çözüm bulunamadı",
-        "description": "Konu admin incelemesine iletilmek üzere hazır."
+        "title": "Otomatik çözüm bulunamadı"
+      },
+      "existing": {
+        "title": "Açık itiraz"
       }
     },
+    "submitTxHash": "TX hash gir",
+    "submitTxHashConfirm": "Doğrula",
+    "txHashLabel": "İşlem hash'i",
+    "txHashPlaceholder": "TRC-20 işlem hash'ini yapıştır...",
+    "txHashHint": "Bu hash'i blockchain doğrulamaları ile yeniden eşleştireceğiz.",
     "escalate": "Admin'e İlet",
     "close": "Kapat",
     "detailLabel": "İtiraz detayı",
+    "detailHint": "Sorunu kendi sözlerinle açıkla. En az 10 karakter.",
     "back": "Geri",
     "submit": "Gönder",
     "submittedTitle": "İtiraz alındı",
-    "submittedDescription": "Bir admin en kısa sürede incelemeye alacak."
+    "submittedDescription": "Bir admin en kısa sürede incelemeye alacak.",
+    "errors": {
+      "generic": "Bir sorun oluştu. Lütfen tekrar deneyin.",
+      "NOT_BUYER": "Bu işlem için yalnızca alıcı itiraz açabilir veya güncelleyebilir.",
+      "INVALID_STATE_TRANSITION": "İşlemin mevcut durumunda itiraz açılamaz.",
+      "DUPLICATE_DISPUTE": "Bu işlem için aynı türde itiraz zaten açılmış.",
+      "NOT_PAYMENT_DISPUTE": "TX hash yalnızca ödeme itirazlarında gönderilebilir.",
+      "DISPUTE_CLOSED": "Bu itiraz kapatılmış ve güncellenemez.",
+      "ALREADY_ESCALATED": "Bu itiraz zaten admin ekibine iletilmiş.",
+      "VALIDATION_ERROR": "Gönderilen veri geçersiz.",
+      "TRANSACTION_NOT_FOUND": "İşlem bulunamadı.",
+      "DISPUTE_NOT_FOUND": "İtiraz bulunamadı."
+    }
   },
   "maintenanceBanner": {
     "plannedMaintenance": "Platform bakımı planlanıyor. Aktif işlemlerin süreleri dondurulacaktır.",
@@ -650,8 +671,7 @@
         "CLOSED": "Kapatıldı"
       },
       "submitTxHash": "TX hash gir",
-      "escalate": "Admin'e ilet",
-      "comingInT92": "İtiraz akışı bir sonraki task'ta eklenecek."
+      "escalate": "Admin'e ilet"
     },
     "invite": {
       "shareLinkLabel": "Bu linki alıcıyla paylaşın",
@@ -685,8 +705,6 @@
       "frozenInfo": "İşlem incelemede olduğu için aksiyonlar devre dışı.",
       "cancel": "İşlemi İptal Et",
       "dispute": "İtiraz Et",
-      "disputeComingInT92": "İtiraz akışı bir sonraki task'ta eklenecek.",
-      "comingSoon": "yakında",
       "suspendedReadOnly": "Hesabınız askıya alındı. Bu işlemi görüntüleyebilirsiniz ancak aksiyon alamazsınız.",
       "completed": {
         "seller": "İşlem tamamlandı. Ödemeniz gönderildi.",

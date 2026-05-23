@@ -243,6 +243,8 @@
       "type": "1/3 — Type selection",
       "checking": "2/3 — Auto-check",
       "result": "2/3 — Result",
+      "txhash": "2/3 — TX hash retry",
+      "txhashChecking": "2/3 — Verifying TX hash",
       "escalation": "3/3 — Escalation",
       "done": "Done"
     },
@@ -266,21 +268,40 @@
     "checking": "System is checking...",
     "result": {
       "resolved": {
-        "title": "Auto-resolution applied",
-        "description": "The system resolved the issue automatically. Details have been recorded."
+        "title": "Auto-resolution applied"
       },
       "unresolved": {
-        "title": "No automatic resolution available",
-        "description": "Ready to escalate to admin review."
+        "title": "No automatic resolution available"
+      },
+      "existing": {
+        "title": "Open dispute"
       }
     },
+    "submitTxHash": "Submit TX hash",
+    "submitTxHashConfirm": "Verify",
+    "txHashLabel": "Transaction hash",
+    "txHashPlaceholder": "Paste TRC-20 transaction hash...",
+    "txHashHint": "We'll re-check this hash against blockchain confirmations.",
     "escalate": "Escalate to Admin",
     "close": "Close",
     "detailLabel": "Dispute detail",
+    "detailHint": "Describe the issue in your own words. Minimum 10 characters.",
     "back": "Back",
     "submit": "Submit",
     "submittedTitle": "Dispute received",
-    "submittedDescription": "An admin will review this shortly."
+    "submittedDescription": "An admin will review this shortly.",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "NOT_BUYER": "Only the buyer can open or update disputes for this transaction.",
+      "INVALID_STATE_TRANSITION": "Disputes cannot be opened in the transaction's current state.",
+      "DUPLICATE_DISPUTE": "A dispute of this type has already been opened for this transaction.",
+      "NOT_PAYMENT_DISPUTE": "TX hash can only be submitted for payment disputes.",
+      "DISPUTE_CLOSED": "This dispute has been closed and can no longer be updated.",
+      "ALREADY_ESCALATED": "This dispute has already been escalated to an admin.",
+      "VALIDATION_ERROR": "The submitted data is invalid.",
+      "TRANSACTION_NOT_FOUND": "Transaction not found.",
+      "DISPUTE_NOT_FOUND": "Dispute not found."
+    }
   },
   "maintenanceBanner": {
     "plannedMaintenance": "Platform maintenance is scheduled. Active transaction timers will be frozen.",
@@ -650,8 +671,7 @@
         "CLOSED": "Closed"
       },
       "submitTxHash": "Submit TX hash",
-      "escalate": "Escalate to admin",
-      "comingInT92": "The dispute workflow ships in a follow-up task."
+      "escalate": "Escalate to admin"
     },
     "invite": {
       "shareLinkLabel": "Share this link with the buyer",
@@ -685,8 +705,6 @@
       "frozenInfo": "Actions are disabled while this transaction is under review.",
       "cancel": "Cancel transaction",
       "dispute": "Open a dispute",
-      "disputeComingInT92": "The dispute workflow ships in a follow-up task.",
-      "comingSoon": "soon",
       "suspendedReadOnly": "Your account is suspended. You can view this transaction but cannot take actions.",
       "completed": {
         "seller": "Transaction completed. Your payout has been sent.",

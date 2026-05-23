@@ -17,7 +17,12 @@ export { CancelModal } from "./CancelModal";
 export type { CancelModalProps } from "./CancelModal";
 
 export { DisputeForm } from "./DisputeForm";
-export type { DisputeFormProps, DisputeAutoCheckOutcome } from "./DisputeForm";
+export type {
+  DisputeFormProps,
+  DisputeAutoCheckPayload,
+  DisputeTxHashPayload,
+  ExistingDisputeContext,
+} from "./DisputeForm";
 
 export { MaintenanceBanner } from "./MaintenanceBanner";
 export type { MaintenanceBannerProps, MaintenanceVariant } from "./MaintenanceBanner";

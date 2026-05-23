@@ -243,6 +243,8 @@
       "type": "1/3 — Selección de tipo",
       "checking": "2/3 — Comprobación",
       "result": "2/3 — Resultado",
+      "txhash": "2/3 — Reenvío del hash TX",
+      "txhashChecking": "2/3 — Verificando hash TX",
       "escalation": "3/3 — Escalado",
       "done": "Hecho"
     },
@@ -266,21 +268,40 @@
     "checking": "El sistema está comprobando...",
     "result": {
       "resolved": {
-        "title": "Resolución automática",
-        "description": "El sistema resolvió el problema automáticamente. Los detalles fueron registrados."
+        "title": "Resolución automática"
       },
       "unresolved": {
-        "title": "Sin resolución automática",
-        "description": "Listo para escalar a revisión administrativa."
+        "title": "Sin resolución automática"
+      },
+      "existing": {
+        "title": "Disputa abierta"
       }
     },
+    "submitTxHash": "Enviar hash TX",
+    "submitTxHashConfirm": "Verificar",
+    "txHashLabel": "Hash de la transacción",
+    "txHashPlaceholder": "Pega el hash TRC-20...",
+    "txHashHint": "Volveremos a comprobar este hash con las confirmaciones de la blockchain.",
     "escalate": "Escalar a admin",
     "close": "Cerrar",
     "detailLabel": "Detalle de la disputa",
+    "detailHint": "Describe el problema con tus propias palabras. Mínimo 10 caracteres.",
     "back": "Volver",
     "submit": "Enviar",
     "submittedTitle": "Disputa recibida",
-    "submittedDescription": "Un administrador la revisará en breve."
+    "submittedDescription": "Un administrador la revisará en breve.",
+    "errors": {
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "NOT_BUYER": "Solo el comprador puede abrir o actualizar disputas para esta transacción.",
+      "INVALID_STATE_TRANSITION": "No se pueden abrir disputas en el estado actual de la transacción.",
+      "DUPLICATE_DISPUTE": "Ya existe una disputa de este tipo para esta transacción.",
+      "NOT_PAYMENT_DISPUTE": "El hash TX solo puede enviarse para disputas de pago.",
+      "DISPUTE_CLOSED": "Esta disputa está cerrada y no puede actualizarse.",
+      "ALREADY_ESCALATED": "Esta disputa ya ha sido escalada a un administrador.",
+      "VALIDATION_ERROR": "Los datos enviados no son válidos.",
+      "TRANSACTION_NOT_FOUND": "Transacción no encontrada.",
+      "DISPUTE_NOT_FOUND": "Disputa no encontrada."
+    }
   },
   "maintenanceBanner": {
     "plannedMaintenance": "Mantenimiento programado. Los temporizadores activos se congelarán.",
@@ -650,8 +671,7 @@
         "CLOSED": "Cerrada"
       },
       "submitTxHash": "Enviar hash de TX",
-      "escalate": "Escalar al administrador",
-      "comingInT92": "El flujo de disputa llega en una tarea posterior."
+      "escalate": "Escalar al administrador"
     },
     "invite": {
       "shareLinkLabel": "Comparte este enlace con el comprador",
@@ -685,8 +705,6 @@
       "frozenInfo": "Las acciones están deshabilitadas mientras la transacción está en revisión.",
       "cancel": "Cancelar transacción",
       "dispute": "Abrir disputa",
-      "disputeComingInT92": "El flujo de disputa llega en una tarea posterior.",
-      "comingSoon": "pronto",
       "suspendedReadOnly": "Tu cuenta está suspendida. Puedes ver esta transacción pero no realizar acciones.",
       "completed": {
         "seller": "Transacción completada. Tu pago se ha enviado.",

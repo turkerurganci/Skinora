@@ -263,9 +263,21 @@ function ContentInner() {
 
       <Section id="c07" title="C07 — Dispute Form (3 adım)">
         <DisputeForm
-          onAutoCheck={async (type) => {
+          onOpen={async (type) => {
             await new Promise((r) => setTimeout(r, 1000));
-            return type === DisputeType.PAYMENT ? "resolved" : "unresolved";
+            const isPayment = type === DisputeType.PAYMENT;
+            return {
+              disputeId: "dev-dispute-id",
+              type,
+              resolved: false,
+              message: "Blockchain üzerinde ödeme bulunamadı (demo)",
+              canSubmitTxHash: isPayment,
+              canEscalate: true,
+            };
+          }}
+          onSubmitTxHash={async () => {
+            await new Promise((r) => setTimeout(r, 800));
+            return { resolved: true, message: "Ödemeniz doğrulandı, işlem devam ediyor" };
           }}
           onEscalate={async () => {
             await new Promise((r) => setTimeout(r, 500));
