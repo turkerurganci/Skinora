@@ -8,5 +8,6 @@ export { SellerPayoutSummary } from "./SellerPayoutSummary";
 export { CancelInfoBlock } from "./CancelInfoBlock";
 export { FlagHoldBanner } from "./FlagHoldBanner";
 export { DisputeBlock } from "./DisputeBlock";
+export { DisputeModal } from "./DisputeModal";
 export { InviteLinkBlock } from "./InviteLinkBlock";
 export { AcceptForm } from "./AcceptForm";

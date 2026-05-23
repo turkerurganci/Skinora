@@ -243,6 +243,8 @@
       "type": "1/3 — 类型选择",
       "checking": "2/3 — 自动检查",
       "result": "2/3 — 结果",
+      "txhash": "2/3 — 提交 TX 哈希",
+      "txhashChecking": "2/3 — 正在验证 TX 哈希",
       "escalation": "3/3 — 上报",
       "done": "完成"
     },
@@ -266,21 +268,40 @@
     "checking": "系统正在检查...",
     "result": {
       "resolved": {
-        "title": "已自动解决",
-        "description": "系统已自动解决问题。详情已记录。"
+        "title": "已自动解决"
       },
       "unresolved": {
-        "title": "无法自动解决",
-        "description": "可上报至管理员审核。"
+        "title": "无法自动解决"
+      },
+      "existing": {
+        "title": "已开启争议"
       }
     },
+    "submitTxHash": "提交 TX 哈希",
+    "submitTxHashConfirm": "验证",
+    "txHashLabel": "交易哈希",
+    "txHashPlaceholder": "粘贴 TRC-20 交易哈希...",
+    "txHashHint": "我们将根据区块链确认重新核对此哈希。",
     "escalate": "上报管理员",
     "close": "关闭",
     "detailLabel": "争议详情",
+    "detailHint": "用您自己的话描述问题。至少 10 个字符。",
     "back": "返回",
     "submit": "提交",
     "submittedTitle": "争议已收到",
-    "submittedDescription": "管理员将尽快审核。"
+    "submittedDescription": "管理员将尽快审核。",
+    "errors": {
+      "generic": "出现问题，请重试。",
+      "NOT_BUYER": "仅买家可以为此交易开启或更新争议。",
+      "INVALID_STATE_TRANSITION": "在交易当前状态下无法开启争议。",
+      "DUPLICATE_DISPUTE": "此交易已存在相同类型的争议。",
+      "NOT_PAYMENT_DISPUTE": "TX 哈希仅适用于付款争议。",
+      "DISPUTE_CLOSED": "此争议已关闭，无法更新。",
+      "ALREADY_ESCALATED": "此争议已升级至管理员。",
+      "VALIDATION_ERROR": "提交的数据无效。",
+      "TRANSACTION_NOT_FOUND": "未找到交易。",
+      "DISPUTE_NOT_FOUND": "未找到争议。"
+    }
   },
   "maintenanceBanner": {
     "plannedMaintenance": "平台计划维护。活跃交易计时器将被冻结。",
@@ -650,8 +671,7 @@
         "CLOSED": "已关闭"
       },
       "submitTxHash": "提交 TX 哈希",
-      "escalate": "升级至管理员",
-      "comingInT92": "争议流程将在后续任务中提供。"
+      "escalate": "升级至管理员"
     },
     "invite": {
       "shareLinkLabel": "将此链接分享给买家",
@@ -685,8 +705,6 @@
       "frozenInfo": "交易处于审核中时操作被禁用。",
       "cancel": "取消交易",
       "dispute": "开启争议",
-      "disputeComingInT92": "争议流程将在后续任务中提供。",
-      "comingSoon": "敬请期待",
       "suspendedReadOnly": "您的账户已被暂停。您可以查看此交易但无法执行操作。",
       "completed": {
         "seller": "交易已完成。款项已发送。",

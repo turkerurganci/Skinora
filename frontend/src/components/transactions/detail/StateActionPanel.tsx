@@ -16,6 +16,7 @@ import {
   isTerminalStatus,
 } from "./helpers";
 import { AcceptForm } from "./AcceptForm";
+import { DisputeModal } from "./DisputeModal";
 
 export interface StateActionPanelProps {
   detail: TransactionDetailResponse;
@@ -49,6 +50,7 @@ export function StateActionPanel({
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
 
   const { status, timeout, userRole, availableActions } = detail;
   const role = userRole;
@@ -133,10 +135,12 @@ export function StateActionPanel({
 
   const cancelButtonShown = availableActions.canCancel != null;
   const cancelButtonEnabled = Boolean(availableActions.canCancel) && !isSuspended && !cancelling;
-  // Dispute button is shown whenever the server says canDispute != null;
-  // T92 will wire up the active/disabled enable path. Until then the button
-  // stays disabled regardless of the flag's value (K2 forward-deferred).
+  // T92 — server's `canDispute` flag drives both visibility and enablement.
+  // The button is shown whenever the server surfaces the flag (i.e. the
+  // user is the buyer + transaction is in a disputable state — 02 §10.2)
+  // and enabled only when it's true + the session isn't suspended.
   const disputeButtonShown = availableActions.canDispute != null;
+  const disputeButtonEnabled = Boolean(availableActions.canDispute) && !isSuspended;
 
   return (
     <div className="space-y-4">
@@ -183,14 +187,11 @@ export function StateActionPanel({
           {disputeButtonShown && (
             <button
               type="button"
-              disabled
-              title={t("disputeComingInT92")}
-              className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!disputeButtonEnabled}
+              onClick={() => setDisputeOpen(true)}
+              className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {t("dispute")}{" "}
-              <span className="text-[10px] uppercase tracking-wide text-gray-500">
-                ({t("comingSoon")})
-              </span>
+              {t("dispute")}
             </button>
           )}
         </div>
@@ -214,6 +215,14 @@ export function StateActionPanel({
           {cancelError}
         </p>
       )}
+      <DisputeModal
+        open={disputeOpen}
+        transactionId={detail.id}
+        onClose={() => {
+          setDisputeOpen(false);
+          onRefetch();
+        }}
+      />
     </div>
   );
 }

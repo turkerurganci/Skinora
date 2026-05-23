@@ -42,7 +42,9 @@ interface TransactionDetailPageProps {
  * Known limitations (T-future devir):
  *   K1 — SignalR real-time güncellemeler (T96). Şimdilik React Query
  *        staleTime=5s + window-focus refetch + onSuccess invalidate.
- *   K2 — Dispute butonu disabled, T92 DisputeForm wiring devir.
+ *   K2 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
+ *        modal; DisputeBlock "TX Hash Gir" / "Admin'e İlet" → C07 modal
+ *        in existing-dispute resume mode.
  *   K3 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri). DTO'da
  *        link yok; spec'deki "Steam'e git" CTA T-future devir.
  *   K4 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
@@ -172,7 +174,9 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
         />
       )}
 
-      {data.dispute && <DisputeBlock dispute={data.dispute} />}
+      {data.dispute && (
+        <DisputeBlock transactionId={data.id} dispute={data.dispute} isSuspended={isSuspended} />
+      )}
 
       <StateActionPanel
         detail={data}

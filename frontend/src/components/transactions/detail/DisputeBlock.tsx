@@ -1,24 +1,37 @@
+"use client";
+
+import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailDispute } from "@/lib/api/transactions";
+import { DisputeType } from "@/types/enums";
+import { DisputeModal } from "./DisputeModal";
 
 export interface DisputeBlockProps {
+  transactionId: string;
   dispute: TransactionDetailDispute;
+  isSuspended: boolean;
 }
 
 /**
  * 04 §7.3 — Aktif dispute aktif olduğunda ek bölüm: tür, durum, otomatik
  * kontrol sonucu, eylem butonları.
  *
- * Butonlar (TX Hash Gir, Admin'e İlet) burada görünür ama disabled kalır
- * — DisputeForm 3-step UX'ini T92 wires (K2). Tooltip / hint bunu açıklar.
+ * T92 — "TX Hash Gir" ve "Admin'e İlet" butonları artık aktif. Tıklanınca
+ * DisputeModal'ı `existingDispute` modunda açar (DisputeForm step 2'den
+ * devam eder). Sunucudan gelen `canSubmitTxHash` / `canEscalate` flag'leri
+ * butonların görünürlüğünü ve aktivasyonunu yönetir.
  */
-export function DisputeBlock({ dispute }: DisputeBlockProps) {
+export function DisputeBlock({ transactionId, dispute, isSuspended }: DisputeBlockProps) {
   const t = useTranslations("transactionDetail.dispute");
   const locale = useLocale();
+  const [modalOpen, setModalOpen] = useState(false);
   const dateFmt = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   });
+
+  const anyActionShown = dispute.canSubmitTxHash || dispute.canEscalate;
+
   return (
     <section className="space-y-2 rounded-lg border border-orange-300 bg-orange-50 p-4">
       <h2 className="text-base font-semibold text-orange-900">{t("title")}</h2>
@@ -42,28 +55,42 @@ export function DisputeBlock({ dispute }: DisputeBlockProps) {
           </div>
         )}
       </dl>
-      <div className="flex flex-wrap gap-2">
-        {dispute.canSubmitTxHash && (
-          <button
-            type="button"
-            disabled
-            title={t("comingInT92")}
-            className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-900 opacity-60"
-          >
-            {t("submitTxHash")}
-          </button>
-        )}
-        {dispute.canEscalate && (
-          <button
-            type="button"
-            disabled
-            title={t("comingInT92")}
-            className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white opacity-60"
-          >
-            {t("escalate")}
-          </button>
-        )}
-      </div>
+      {anyActionShown && (
+        <div className="flex flex-wrap gap-2">
+          {dispute.canSubmitTxHash && (
+            <button
+              type="button"
+              disabled={isSuspended}
+              onClick={() => setModalOpen(true)}
+              className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-900 hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t("submitTxHash")}
+            </button>
+          )}
+          {dispute.canEscalate && (
+            <button
+              type="button"
+              disabled={isSuspended}
+              onClick={() => setModalOpen(true)}
+              className="rounded-md bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t("escalate")}
+            </button>
+          )}
+        </div>
+      )}
+      <DisputeModal
+        open={modalOpen}
+        transactionId={transactionId}
+        existingDispute={{
+          disputeId: dispute.id,
+          type: dispute.type as DisputeType,
+          autoCheckMessage: dispute.autoCheckResult ?? null,
+          canSubmitTxHash: dispute.canSubmitTxHash,
+          canEscalate: dispute.canEscalate,
+        }}
+        onClose={() => setModalOpen(false)}
+      />
     </section>
   );
 }
