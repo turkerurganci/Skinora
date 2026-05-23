@@ -81,7 +81,7 @@ T91 kod yazımı içermediği için yeni dış varsayım yok. T90'ın dış vars
 - Branch: `task/T91-subsume-by-T90`
 - Commit: `a8d2f5a` — `T91: Ödeme bilgileri ve edge case UI — T90 PR #136 ile subsume edildi`
 - PR: [#138](https://github.com/turkerurganci/Skinora/pull/138)
-- CI: run [`26330356414`](https://github.com/turkerurganci/Skinora/actions/runs/26330356414) (izleniyor)
+- CI: run [`26330362927`](https://github.com/turkerurganci/Skinora/actions/runs/26330362927) **success** ✓ (HEAD `77826ba`; Detect+1.Lint+CI Gate ✓ + 7 job path-filter skip — kod Δ=0). Önceki run [`26330356414`](https://github.com/turkerurganci/Skinora/actions/runs/26330356414) `cancelled` (concurrency — `77826ba` push superseded `a8d2f5a`, task.md "Concurrency notu" normal davranış)
 
 ## Known Limitations / Follow-up
 
