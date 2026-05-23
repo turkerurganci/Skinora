@@ -120,8 +120,8 @@ Sayfa dört bölüm halinde sıralı render edilir:
 ## Commit & PR
 
 - Branch: `task/T94-account-settings`
-- Commit: (henüz oluşturulmadı, bu rapor sonrası push edilecek)
-- PR: (henüz açılmadı)
+- Commit: `67e8372` "T94: Hesap ayarları (S10) — bildirim tercihleri + bağlı hesaplar + dil + hesap yönetimi"
+- PR: [#141](https://github.com/turkerurganci/Skinora/pull/141)
 
 ## Known Limitations / Follow-up
 
