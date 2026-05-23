@@ -766,5 +766,68 @@
         "message": "The transaction details could not be loaded. Please try again."
       }
     }
+  },
+  "profile": {
+    "header": {
+      "steamIdLabel": "Steam ID:",
+      "copySteamId": "Copy Steam ID",
+      "accountAge": "Account age: {age}"
+    },
+    "reputation": {
+      "title": "Reputation",
+      "score": "Score",
+      "completedCount": "Completed transactions",
+      "successRate": "Success rate",
+      "cancelRate": "Cancel rate"
+    },
+    "wallet": {
+      "sellerTitle": "Seller payout address",
+      "sellerNote": "As a seller, payment for your transactions is sent to this address.",
+      "refundTitle": "Buyer refund address",
+      "refundNote": "As a buyer, refunds are sent to this address. You cannot accept transactions without a refund address.",
+      "showFull": "Show full address",
+      "hideFull": "Mask",
+      "notSet": "No address has been set yet.",
+      "changeButton": "Change address",
+      "addButton": "Add address",
+      "redirecting": "Redirecting to Steam…",
+      "cancel": "Cancel",
+      "activeTransactionsNotice": "{count} active transaction(s) will continue using the previous address.",
+      "errors": {
+        "invalidAddress": "The wallet address is not a valid TRC-20 address.",
+        "sanctioned": "This address is on a sanctions list and cannot be used.",
+        "reAuthRequired": "You must re-authenticate with Steam to change this address.",
+        "reAuthTokenInvalid": "The verification session has expired or is invalid. Please try again.",
+        "validation": "Invalid request. Please try again.",
+        "generic": "The address could not be updated. Please try again."
+      }
+    },
+    "quickLinks": {
+      "title": "Quick links",
+      "settings": "Account settings",
+      "transactions": "Transaction history"
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Access denied",
+        "message": "You must sign in to view your profile."
+      },
+      "generic": {
+        "title": "Could not load profile",
+        "message": "Profile details could not be loaded. Please try again."
+      }
+    }
+  },
+  "publicProfile": {
+    "errors": {
+      "notFound": {
+        "title": "User not found",
+        "message": "The user you are looking for does not exist."
+      },
+      "generic": {
+        "title": "Could not load profile",
+        "message": "Profile details could not be loaded. Please try again."
+      }
+    }
   }
 }

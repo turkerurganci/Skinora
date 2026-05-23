@@ -1,0 +1,27 @@
+import { apiClient } from "./client";
+
+/**
+ * Response body for A5 — POST /auth/steam/re-verify (07 §4.7).
+ *
+ * Caller redirects the browser to `steamAuthUrl`; Steam authenticates the
+ * user and redirects back to the backend callback (A6), which in turn
+ * redirects to `returnUrl` with `?reAuthToken=<token>` appended.
+ *
+ * The token is single-use (Redis GETDEL, 5 min TTL) and is bound to the
+ * current user — it is consumed on the next wallet update call and must
+ * not be reused. Browser history will retain the URL so the page should
+ * strip the param after capture (router.replace).
+ */
+export interface ReVerifyInitiateResponse {
+  steamAuthUrl: string;
+}
+
+export function initiateSteamReVerify(
+  purpose: string,
+  returnUrl: string,
+): Promise<ReVerifyInitiateResponse> {
+  return apiClient<ReVerifyInitiateResponse>("/auth/steam/re-verify", {
+    method: "POST",
+    body: JSON.stringify({ purpose, returnUrl }),
+  });
+}
