@@ -978,5 +978,29 @@
         "generic": "No se pudo completar la operación. Inténtalo de nuevo."
       }
     }
+  },
+  "notificationsInbox": {
+    "title": "Notificaciones",
+    "markAllRead": {
+      "label": "Marcar todo como leído",
+      "pending": "Marcando…"
+    },
+    "row": {
+      "unreadAriaPrefix": "No leída"
+    },
+    "empty": {
+      "title": "Sin notificaciones",
+      "description": "Las notificaciones nuevas aparecerán aquí."
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Acceso denegado",
+        "message": "Inicia sesión para ver tus notificaciones."
+      },
+      "generic": {
+        "title": "No se pudieron cargar las notificaciones",
+        "message": "No pudimos cargar las notificaciones. Inténtalo de nuevo."
+      }
+    }
   }
 }

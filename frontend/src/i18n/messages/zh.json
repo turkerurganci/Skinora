@@ -978,5 +978,29 @@
         "generic": "操作无法完成。请重试。"
       }
     }
+  },
+  "notificationsInbox": {
+    "title": "通知",
+    "markAllRead": {
+      "label": "全部标记为已读",
+      "pending": "处理中…"
+    },
+    "row": {
+      "unreadAriaPrefix": "未读"
+    },
+    "empty": {
+      "title": "暂无通知",
+      "description": "有新通知时将显示在此处。"
+    },
+    "errors": {
+      "forbidden": {
+        "title": "拒绝访问",
+        "message": "请登录以查看通知。"
+      },
+      "generic": {
+        "title": "通知加载失败",
+        "message": "无法加载通知，请重试。"
+      }
+    }
   }
 }
