@@ -766,5 +766,68 @@
         "message": "İşlem detayları yüklenemedi. Lütfen tekrar deneyin."
       }
     }
+  },
+  "profile": {
+    "header": {
+      "steamIdLabel": "Steam ID:",
+      "copySteamId": "Steam ID kopyala",
+      "accountAge": "Hesap yaşı: {age}"
+    },
+    "reputation": {
+      "title": "İtibar",
+      "score": "Skor",
+      "completedCount": "Tamamlanan İşlem",
+      "successRate": "Başarı Oranı",
+      "cancelRate": "İptal Oranı"
+    },
+    "wallet": {
+      "sellerTitle": "Satıcı Ödeme Adresi",
+      "sellerNote": "Satıcı olarak işlem ödemesi bu adrese gönderilir.",
+      "refundTitle": "Alıcı İade Adresi",
+      "refundNote": "Alıcı olarak iade durumunda ödemeniz bu adrese gönderilir. İade adresi olmadan işlem kabul edemezsiniz.",
+      "showFull": "Tüm Adresi Göster",
+      "hideFull": "Maskele",
+      "notSet": "Henüz adres tanımlı değil.",
+      "changeButton": "Adresi Değiştir",
+      "addButton": "Adres Ekle",
+      "redirecting": "Steam'e yönlendiriliyor…",
+      "cancel": "Vazgeç",
+      "activeTransactionsNotice": "Aktif {count} işleminiz mevcut eski adresle tamamlanacaktır.",
+      "errors": {
+        "invalidAddress": "Cüzdan adresi geçerli bir TRC-20 adresi değil.",
+        "sanctioned": "Bu adres yaptırım listesinde, kullanılamaz.",
+        "reAuthRequired": "Adresi değiştirmek için Steam ile yeniden doğrulamanız gerekir.",
+        "reAuthTokenInvalid": "Doğrulama oturumu süresi doldu veya geçersiz. Lütfen tekrar deneyin.",
+        "validation": "Geçersiz istek. Lütfen tekrar deneyin.",
+        "generic": "Adres güncellenemedi. Lütfen tekrar deneyin."
+      }
+    },
+    "quickLinks": {
+      "title": "Hızlı Linkler",
+      "settings": "Hesap Ayarları",
+      "transactions": "İşlem Geçmişi"
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Erişim reddedildi",
+        "message": "Profili görmek için giriş yapmalısınız."
+      },
+      "generic": {
+        "title": "Profil yüklenemedi",
+        "message": "Profil bilgileri yüklenemedi. Lütfen tekrar deneyin."
+      }
+    }
+  },
+  "publicProfile": {
+    "errors": {
+      "notFound": {
+        "title": "Kullanıcı bulunamadı",
+        "message": "Aradığınız kullanıcı mevcut değil."
+      },
+      "generic": {
+        "title": "Profil yüklenemedi",
+        "message": "Profil bilgileri yüklenemedi. Lütfen tekrar deneyin."
+      }
+    }
   }
 }

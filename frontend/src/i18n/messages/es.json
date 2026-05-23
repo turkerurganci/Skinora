@@ -766,5 +766,68 @@
         "message": "No se pudieron cargar los detalles. Inténtalo de nuevo."
       }
     }
+  },
+  "profile": {
+    "header": {
+      "steamIdLabel": "Steam ID:",
+      "copySteamId": "Copiar Steam ID",
+      "accountAge": "Antigüedad de la cuenta: {age}"
+    },
+    "reputation": {
+      "title": "Reputación",
+      "score": "Puntuación",
+      "completedCount": "Transacciones completadas",
+      "successRate": "Tasa de éxito",
+      "cancelRate": "Tasa de cancelación"
+    },
+    "wallet": {
+      "sellerTitle": "Dirección de pago del vendedor",
+      "sellerNote": "Como vendedor, los pagos de tus transacciones se envían a esta dirección.",
+      "refundTitle": "Dirección de reembolso del comprador",
+      "refundNote": "Como comprador, los reembolsos se envían a esta dirección. No puedes aceptar transacciones sin una dirección de reembolso.",
+      "showFull": "Mostrar dirección completa",
+      "hideFull": "Ocultar",
+      "notSet": "Aún no se ha definido ninguna dirección.",
+      "changeButton": "Cambiar dirección",
+      "addButton": "Añadir dirección",
+      "redirecting": "Redirigiendo a Steam…",
+      "cancel": "Cancelar",
+      "activeTransactionsNotice": "{count} transacción(es) activa(s) seguirán usando la dirección anterior.",
+      "errors": {
+        "invalidAddress": "La dirección no es una dirección TRC-20 válida.",
+        "sanctioned": "Esta dirección está en una lista de sanciones y no se puede usar.",
+        "reAuthRequired": "Debes volver a autenticarte con Steam para cambiar esta dirección.",
+        "reAuthTokenInvalid": "La sesión de verificación expiró o no es válida. Inténtalo de nuevo.",
+        "validation": "Solicitud inválida. Inténtalo de nuevo.",
+        "generic": "No se pudo actualizar la dirección. Inténtalo de nuevo."
+      }
+    },
+    "quickLinks": {
+      "title": "Enlaces rápidos",
+      "settings": "Ajustes de la cuenta",
+      "transactions": "Historial de transacciones"
+    },
+    "errors": {
+      "forbidden": {
+        "title": "Acceso denegado",
+        "message": "Debes iniciar sesión para ver tu perfil."
+      },
+      "generic": {
+        "title": "No se pudo cargar el perfil",
+        "message": "No se pudieron cargar los detalles del perfil. Inténtalo de nuevo."
+      }
+    }
+  },
+  "publicProfile": {
+    "errors": {
+      "notFound": {
+        "title": "Usuario no encontrado",
+        "message": "El usuario que buscas no existe."
+      },
+      "generic": {
+        "title": "No se pudo cargar el perfil",
+        "message": "No se pudieron cargar los detalles del perfil. Inténtalo de nuevo."
+      }
+    }
   }
 }

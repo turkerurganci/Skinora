@@ -766,5 +766,68 @@
         "message": "无法加载交易详情。请重试。"
       }
     }
+  },
+  "profile": {
+    "header": {
+      "steamIdLabel": "Steam ID：",
+      "copySteamId": "复制 Steam ID",
+      "accountAge": "账户年龄：{age}"
+    },
+    "reputation": {
+      "title": "信誉",
+      "score": "评分",
+      "completedCount": "已完成交易",
+      "successRate": "成功率",
+      "cancelRate": "取消率"
+    },
+    "wallet": {
+      "sellerTitle": "卖家收款地址",
+      "sellerNote": "作为卖家时，交易款项将发送至此地址。",
+      "refundTitle": "买家退款地址",
+      "refundNote": "作为买家时，退款将发送至此地址。未设置退款地址将无法接受交易。",
+      "showFull": "显示完整地址",
+      "hideFull": "隐藏",
+      "notSet": "尚未设置地址。",
+      "changeButton": "更改地址",
+      "addButton": "添加地址",
+      "redirecting": "正在跳转到 Steam…",
+      "cancel": "取消",
+      "activeTransactionsNotice": "{count} 个进行中的交易将继续使用旧地址。",
+      "errors": {
+        "invalidAddress": "钱包地址不是有效的 TRC-20 地址。",
+        "sanctioned": "该地址在制裁列表中，无法使用。",
+        "reAuthRequired": "更改此地址需要重新通过 Steam 验证。",
+        "reAuthTokenInvalid": "验证会话已过期或无效，请重试。",
+        "validation": "请求无效，请重试。",
+        "generic": "无法更新地址，请重试。"
+      }
+    },
+    "quickLinks": {
+      "title": "快捷链接",
+      "settings": "账户设置",
+      "transactions": "交易历史"
+    },
+    "errors": {
+      "forbidden": {
+        "title": "访问被拒绝",
+        "message": "您必须登录才能查看个人资料。"
+      },
+      "generic": {
+        "title": "无法加载个人资料",
+        "message": "无法加载个人资料。请重试。"
+      }
+    }
+  },
+  "publicProfile": {
+    "errors": {
+      "notFound": {
+        "title": "用户未找到",
+        "message": "您查找的用户不存在。"
+      },
+      "generic": {
+        "title": "无法加载个人资料",
+        "message": "无法加载个人资料。请重试。"
+      }
+    }
   }
 }
