@@ -79,9 +79,9 @@ T91 kod yazımı içermediği için yeni dış varsayım yok. T90'ın dış vars
 ## Commit & PR
 
 - Branch: `task/T91-subsume-by-T90`
-- Commit: `<chore PR>` — `chore(T91): subsume by T90 — report + status` (mapping + status row update)
-- PR: `<chore PR>` — açılış sonrası burada hash + numarası güncellenir
-- CI: beklenen ✓ (kod değişikliği yok, sadece doc + status)
+- Commit: `a8d2f5a` — `T91: Ödeme bilgileri ve edge case UI — T90 PR #136 ile subsume edildi`
+- PR: [#138](https://github.com/turkerurganci/Skinora/pull/138)
+- CI: run [`26330356414`](https://github.com/turkerurganci/Skinora/actions/runs/26330356414) (izleniyor)
 
 ## Known Limitations / Follow-up
 
