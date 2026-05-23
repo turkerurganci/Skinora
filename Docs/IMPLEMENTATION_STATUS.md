@@ -185,7 +185,7 @@
 | T89 | İşlem oluşturma (S06) | ✓ Tamamlandı | ✓ Re-validate PASS (4-locale parity 104×4 + runtime 0 raw key) | 8670b90 |
 | T90 | İşlem detay sayfası (S07) — tüm state varyantları | ✓ Tamamlandı | ✓ Validator PASS (476×4 locale parity + 25 state×role branch + 7/7 kabul; K1 SignalR→T96 / K2 Dispute→T92 / K3 trade URL T-future / K4 refund override T-future) | PR #136 |
 | T91 | Ödeme bilgileri ve edge case UI | ✓ Tamamlandı | ✓ PASS — T90 PR #136 ile subsume (T91_REPORT subsume haritalama: PaymentInfoBlock + PaymentEventBanners + SellerPayoutSummary + CancelInfoBlock refund; 4/4 kriter kanıtlı, sıfır-kod, proje sahibi onayı 2026-05-23 "A — Subsume task") | T90 PR #136 (subsume) |
-| T92 | Dispute UI | ⏳ Devam ediyor | ⏳ | task/T92-dispute-ui |
+| T92 | Dispute UI | ✓ Tamamlandı | ✓ Validator PASS (6/6 kabul + 1/1 kontrol + 490×4 locale parity + 9/10 CI job; K1 SignalR DisputeUpdate→T96 / K2 lokal mesaj→T97 backend / K3-K8 advisory) | PR #139 |
 | T93 | Profil sayfaları (S08, S09) | ⬚ Bekliyor | — | — |
 | T94 | Hesap ayarları (S10) | ⬚ Bekliyor | — | — |
 | T95 | Bildirimler sayfası (S11) | ⬚ Bekliyor | — | — |
