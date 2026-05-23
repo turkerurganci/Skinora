@@ -161,7 +161,7 @@ Sayfa dört bölüm halinde sıralı render edilir:
 | Prettier (T94 dosyaları) | ✓ | `npx prettier --check` T94 dosyaları üzerinde "All matched files use Prettier code style!"; tüm src 125 pre-existing drift (main baseline 129 → T94 sonrası 125, regresyon yok) |
 | Next build | ✓ | `npx next build` PASS, `/[locale]/settings` route üretildi |
 | i18n parity | ✓ | en 622 / tr 622 / es 622 / zh 622, settings.* 95 leaf-key ×4 locale = 380 yeni |
-| Task branch CI | ✓ | run [26336582873](https://github.com/turkerurganci/Skinora/actions/runs/26336582873) success (commit `37d9c11`) |
+| Task branch CI | ✓ | run [26336582873](https://github.com/turkerurganci/Skinora/actions/runs/26336582873) success (commit `37d9c11` — implementation), run [26337521516](https://github.com/turkerurganci/Skinora/actions/runs/26337521516) success (commit `575fb20` — validator finalize; 1× BYPASS_LOG `[ci-failure]` — Fraud.Tests parallel race `SystemSetting DbSet not in model` pre-existing flake T83a K7 / T84 precedent, `gh run rerun --failed` → tüm jobs success, kod tarafı değişmedi yalnız docs/memory) |
 | Güvenlik — secret sızıntısı | ✓ | Yok |
 | Güvenlik — auth | ✓ | Sayfa `isAuthenticated` guard + backend `[Authorize(Policy = AuthPolicies.Authenticated)]` defense-in-depth |
 | Güvenlik — input validation | ✓ | Confirmation phrase backend Ordinal compare; email backend tarafında validate; client trim'den fazlasını yapmaz |
