@@ -1,6 +1,6 @@
 # T99 — Admin Dashboard (S12)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-24
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-24
 
 ---
 
@@ -62,9 +62,36 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator chat'ine geçilecek |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS bağımsız 2026-05-24 |
+| Bulgu sayısı | 0 S-bulgu (S1/S2/S3 yok), 1 minor terminoloji nit |
+| Düzeltme gerekli mi | Hayır (nit isteğe bağlı) |
+
+### Validator Bağımsız Kontroller
+
+| # | Kontrol | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | Working tree clean | ✓ | `git status --short` boş |
+| 2 | Main CI startup ardışık 3 | ✓ | `26369407170` + `26369407194` (T98 #146) + `26362494599` (T97 #145) — hepsi success |
+| 3 | Repo memory drift | ✓ | `.claude/memory/MEMORY.md` T99 satırı 10 ve 229'da mevcut |
+| 4 | Backend AdminT63 regresyon | ✓ 21/21 PASS | `dotnet test --filter AdminT63` 6.5s, `Dashboard_Anonymous_Returns401` ✓ |
+| 5 | Frontend `tsc --noEmit` | ✓ Exit 0 | T99 dosyaları tip-temiz |
+| 6 | Frontend `eslint <T99 files>` | ✓ Exit 0 | 7 dosya 0 problem |
+| 7 | Frontend `prettier --check <T99 files>` | ✓ Clean | "All matched files use Prettier code style!" |
+| 8 | `next build` | ✓ Compiled successfully (3.1s) | `/admin/dashboard` ƒ Dynamic route |
+| 9 | 4-locale leaf parity (strict) | ✓ 665×4 | tr/en/es/zh = 665 anahtar, 0 missing/extra |
+| 10 | adminDashboard namespace anahtar sayısı | ✓ 31 anahtar | summary 4 + steamAccounts 10 + recentFlags 8 + flagType 5 + flagStatus 3 + title 1 |
+| 11 | Secret leak scan | ✓ Temiz | `process.env`/API_KEY/SECRET/password match yok T99 dosyalarında |
+| 12 | ResponsiveTable T98 tüketici (K2 kapanışı) | ✓ | `RecentFlagsTable` `ResponsiveTable<AdminDashboardRecentFlag>` `<dl>`/`<dt>`/`<dd>` mobil card list 04 §9.4 |
+| 13 | Task branch CI HEAD | ✓ 9/9 SUCCESS | run [`26371274406`](https://github.com/turkerurganci/Skinora/actions/runs/26371274406) commit `1417f2e` |
+| 14 | PR mergeable | ✓ MERGEABLE | PR #147 OPEN, 9/9 check success, Guard skipped |
+
+### Yapım Raporu Karşılaştırması
+
+- **5/5 kabul kriteri eşit verdict** — bağımsız kontrol ile yapım raporu sonuçları örtüşüyor.
+- **Test sonuçları eşit** — `next build` PASS, `tsc/eslint/prettier` clean, leaf parity 4×665.
+- **CI run ID'leri uyumlu** — Rapor `26370766445` (kod) + `26370958533` (docs flaky re-run); validator HEAD'i `26371274406` ek olarak gözledi (ikinci docs commit'i).
+- **Minor nit (M1):** Rapor "Leaf parity: 1055/1055/1055/1055" yazıyor — bu **JSON dosya satır sayısı** (line count), leaf sayısı değil. Strict leaf count = 665/lokal. Parity iddiası kendisi (4 dosya eşit) doğru, yalnız etiket terminolojisi. Bulgu değil, ileride raporlarda "line parity" ya da "leaf parity" net ayrımı istenirse düzeltilebilir.
+- **Uyuşmazlık yok** — Tüm K1–K7 forward-deferred kalemler validate edilen kod tabanıyla tutarlı (route stub'lar var, query param hot-link mantıklı, AD1 sözleşmesi backend ile birebir).
 
 ## Altyapı Değişiklikleri
 
