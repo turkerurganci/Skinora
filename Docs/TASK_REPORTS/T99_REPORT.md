@@ -75,9 +75,9 @@
 ## Commit & PR
 
 - Branch: `task/T99-admin-dashboard`
-- Commit: (push sonrası eklenecek)
-- PR: (push sonrası eklenecek)
-- CI: (PR sonrası izlenecek)
+- Commit: `774525d` — T99: Admin Dashboard (S12)
+- PR: [#147](https://github.com/turkerurganci/Skinora/pull/147)
+- CI: ✓ PASS — run [`26370766445`](https://github.com/turkerurganci/Skinora/actions/runs/26370766445) **9/9 SUCCESS** + Guard skipped (Detect ✓ / Lint ✓ / Build ✓ / Unit ✓ / Integration ✓ / Contract ✓ / Migration dry-run ✓ / Docker frontend ✓ / CI Gate ✓)
 
 ## Known Limitations / Follow-up
 
