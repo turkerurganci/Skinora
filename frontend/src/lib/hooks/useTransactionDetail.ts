@@ -7,10 +7,12 @@ import { getTransactionDetail } from "@/lib/api/transactions";
  * S07 detail page hook (07 §7.5).
  *
  * `staleTime` is low (5s) because the detail surface is state-driven —
- * SignalR push (T96) will invalidate this query on every transition.
- * Until T96 ships, the user can manually refetch via mutations
- * (accept/cancel onSuccess) and a window-focus refetch handles short
- * polling needs. `refetchOnWindowFocus` defaults to true in React Query.
+ * `RealtimeProvider` (T96 — 07 §11.1) invalidates this cache key on every
+ * `TransactionStatusChanged` / `PaymentDetected` / `PaymentConfirmed` /
+ * `DisputeUpdate` / `FlagResolved` / `EmergencyHoldApplied` /
+ * `EmergencyHoldReleased` push. `CountdownSync` patches the timeout block
+ * in place (no refetch). Mutations (accept/cancel) still invalidate on
+ * success as a defensive fallback when the SignalR channel is down.
  */
 export function useTransactionDetail(id: string | undefined) {
   return useQuery({

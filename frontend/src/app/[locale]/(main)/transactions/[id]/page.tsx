@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useTransactionDetail } from "@/lib/hooks/useTransactionDetail";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
+import { useTransactionRealtime } from "@/lib/hooks/useTransactionRealtime";
 import { ErrorState, ItemCard, Skeleton, TransactionTimeline } from "@/components/common";
 import { SuspendedBanner } from "@/components/dashboard";
 import {
@@ -39,15 +40,19 @@ interface TransactionDetailPageProps {
  *     dispute, invite link, payment edge case banners.
  *   • Suspended session override: banner + tüm aksiyonlar disabled.
  *
+ * Real-time updates: `useTransactionRealtime(id)` joins the per-transaction
+ * SignalR room (T96 — 07 §11.1). Global cache invalidation for every event
+ * lives in `RealtimeProvider`; the hook keeps room membership tight to the
+ * mounted detail surface so the server stops pushing once the user navigates
+ * away.
+ *
  * Known limitations (T-future devir):
- *   K1 — SignalR real-time güncellemeler (T96). Şimdilik React Query
- *        staleTime=5s + window-focus refetch + onSuccess invalidate.
- *   K2 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
+ *   K1 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
  *        modal; DisputeBlock "TX Hash Gir" / "Admin'e İlet" → C07 modal
  *        in existing-dispute resume mode.
- *   K3 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri). DTO'da
+ *   K2 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri). DTO'da
  *        link yok; spec'deki "Steam'e git" CTA T-future devir.
- *   K4 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
+ *   K3 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
  *        adres alanı + cooldown check yapıyor; per-transaction override
  *        field T-future.
  */
@@ -61,6 +66,8 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
 
   const detail = useTransactionDetail(id);
   const profile = useMyProfile(isAuthenticated);
+
+  useTransactionRealtime(id);
 
   function handleRefetch() {
     queryClient.invalidateQueries({ queryKey: ["transactions", "detail", id] });
