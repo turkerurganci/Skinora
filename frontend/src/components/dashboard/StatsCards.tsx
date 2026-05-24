@@ -33,9 +33,10 @@ export function StatsCards({ stats, isLoading, isError, className }: StatsCardsP
   const locale = useLocale();
 
   const wrapper = cn(
+    // Mobile (<sm, ~<640): single column to avoid 3-up crush on ~360px viewports.
+    // Tablet (sm..lg): 3-up horizontal grid above the list.
     // Desktop (>=lg): vertical stack inside the right rail.
-    // Mobile / tablet: 3-up horizontal grid above the list.
-    "grid grid-cols-3 gap-3 lg:grid-cols-1",
+    "grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1",
     className,
   );
 

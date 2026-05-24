@@ -9,3 +9,5 @@ export type { AdminSidebarProps } from "./AdminSidebar";
 export { Footer } from "./Footer";
 export type { FooterProps } from "./Footer";
 export { MainShell } from "./MainShell";
+export { AdminShell } from "./AdminShell";
+export type { AdminShellProps } from "./AdminShell";

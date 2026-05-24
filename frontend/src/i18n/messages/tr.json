@@ -162,6 +162,8 @@
   },
   "adminNav": {
     "ariaLabel": "Admin menü",
+    "openMenu": "Admin menüyü aç",
+    "closeMenu": "Admin menüyü kapat",
     "dashboard": "Kontrol Paneli",
     "flags": "Flag'ler",
     "transactions": "İşlemler",

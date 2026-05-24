@@ -53,3 +53,6 @@ export type { PaginationProps } from "./Pagination";
 
 export { FilterBar } from "./FilterBar";
 export type { FilterBarProps, FilterField, FilterFieldOption, ActiveFilter } from "./FilterBar";
+
+export { ResponsiveTable } from "./ResponsiveTable";
+export type { ResponsiveTableProps, ResponsiveTableColumn } from "./ResponsiveTable";
