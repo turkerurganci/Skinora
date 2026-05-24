@@ -129,9 +129,9 @@ T13'te `frontend/src/lib/signalr/connection.ts` factory iskeleti olarak inmişti
 ## Commit & PR
 
 - Branch: `task/T96-signalr-client-integration`
-- Commit: `<TBD-after-commit>`
-- PR: #<TBD>
-- CI: ⏳ Pending
+- Commit: `f5a45eb` — `T96: SignalR client entegrasyonu`
+- PR: [#143](https://github.com/turkerurganci/Skinora/pull/143)
+- CI: ✓ PASS — run [`26357488379`](https://github.com/turkerurganci/Skinora/actions/runs/26357488379) 10/10 success (Detect + Guard skipped + 1. Lint + 2. Build + 3. Unit + 4. Integration + 5. Contract + 6. Migration + 7. Docker frontend + CI Gate)
 
 ## Known Limitations / Follow-up
 
