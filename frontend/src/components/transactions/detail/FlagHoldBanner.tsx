@@ -1,5 +1,6 @@
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailFlagInfo, TransactionDetailHoldInfo } from "@/lib/api/transactions";
+import { formatDateTime } from "@/lib/utils/format";
 
 export interface FlagHoldBannerProps {
   flagInfo?: TransactionDetailFlagInfo | null;
@@ -17,10 +18,6 @@ export interface FlagHoldBannerProps {
 export function FlagHoldBanner({ flagInfo, holdInfo }: FlagHoldBannerProps) {
   const t = useTranslations("transactionDetail.flagHold");
   const locale = useLocale();
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   if (holdInfo) {
     return (
       <div
@@ -30,7 +27,7 @@ export function FlagHoldBanner({ flagInfo, holdInfo }: FlagHoldBannerProps) {
         <p className="font-semibold">{t("hold.title")}</p>
         <p>{holdInfo.message}</p>
         <p className="mt-1 text-xs text-orange-800">
-          {t("hold.frozenAt", { value: dateFmt.format(new Date(holdInfo.frozenAt)) })}
+          {t("hold.frozenAt", { value: formatDateTime(holdInfo.frozenAt, locale) })}
         </p>
       </div>
     );

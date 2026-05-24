@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { usePlatformStats } from "@/lib/hooks/usePlatformStats";
 import { cn } from "@/lib/utils/cn";
+import { formatNumber, formatPercent } from "@/lib/utils/format";
 
 export interface TrustSignalsProps {
   className?: string;
@@ -18,9 +19,9 @@ export function TrustSignals({ className }: TrustSignalsProps) {
   }
 
   const formattedCount =
-    data !== undefined ? data.totalCompletedTransactions.toLocaleString(locale) : null;
+    data !== undefined ? formatNumber(data.totalCompletedTransactions, locale) : null;
   const formattedUptime =
-    data !== undefined ? `${data.platformUptimePercent.toLocaleString(locale)}%` : null;
+    data !== undefined ? formatPercent(data.platformUptimePercent, locale) : null;
 
   return (
     <section

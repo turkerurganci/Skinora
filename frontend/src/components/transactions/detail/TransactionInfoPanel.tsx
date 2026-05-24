@@ -1,5 +1,6 @@
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailResponse } from "@/lib/api/transactions";
+import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 
 export interface TransactionInfoPanelProps {
   detail: TransactionDetailResponse;
@@ -13,23 +14,19 @@ export interface TransactionInfoPanelProps {
 export function TransactionInfoPanel({ detail }: TransactionInfoPanelProps) {
   const t = useTranslations("transactionDetail.info");
   const locale = useLocale();
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   return (
     <dl className="space-y-2 rounded-lg border border-gray-200 bg-white p-4 text-sm">
       <div className="flex justify-between gap-3">
         <dt className="text-gray-600">{t("price")}</dt>
         <dd className="font-semibold text-gray-900">
-          {detail.price} {detail.stablecoin}
+          {formatStablecoin(detail.price, detail.stablecoin)}
         </dd>
       </div>
       {detail.commissionAmount != null && (
         <div className="flex justify-between gap-3">
           <dt className="text-gray-600">{t("commission")}</dt>
           <dd className="text-gray-900">
-            {detail.commissionAmount} {detail.stablecoin}
+            {formatStablecoin(detail.commissionAmount, detail.stablecoin)}
           </dd>
         </div>
       )}
@@ -37,7 +34,7 @@ export function TransactionInfoPanel({ detail }: TransactionInfoPanelProps) {
         <div className="flex justify-between gap-3 border-t border-gray-100 pt-2">
           <dt className="font-medium text-gray-700">{t("total")}</dt>
           <dd className="font-semibold text-gray-900">
-            {detail.totalAmount} {detail.stablecoin}
+            {formatStablecoin(detail.totalAmount, detail.stablecoin)}
           </dd>
         </div>
       )}
@@ -48,7 +45,7 @@ export function TransactionInfoPanel({ detail }: TransactionInfoPanelProps) {
       {detail.createdAt && (
         <div className="flex justify-between gap-3">
           <dt className="text-gray-600">{t("createdAt")}</dt>
-          <dd className="text-gray-900">{dateFmt.format(new Date(detail.createdAt))}</dd>
+          <dd className="text-gray-900">{formatDateTime(detail.createdAt, locale)}</dd>
         </div>
       )}
     </dl>

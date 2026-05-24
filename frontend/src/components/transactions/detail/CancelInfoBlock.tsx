@@ -1,6 +1,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailCancelInfo, TransactionDetailRefund } from "@/lib/api/transactions";
 import { CopyButton } from "@/components/common";
+import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 
 export interface CancelInfoBlockProps {
@@ -17,10 +18,6 @@ export interface CancelInfoBlockProps {
 export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBlockProps) {
   const t = useTranslations("transactionDetail.cancelInfo");
   const locale = useLocale();
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   return (
     <section className="space-y-3 rounded-lg border border-red-300 bg-red-50 p-4">
       <h2 className="text-base font-semibold text-red-900">
@@ -29,7 +26,7 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
       <dl className="space-y-1 text-sm">
         <div className="flex justify-between gap-3">
           <dt className="text-gray-600">{t("cancelledAt")}</dt>
-          <dd className="text-gray-900">{dateFmt.format(new Date(cancelInfo.cancelledAt))}</dd>
+          <dd className="text-gray-900">{formatDateTime(cancelInfo.cancelledAt, locale)}</dd>
         </div>
         {cancelInfo.reason && (
           <div className="flex flex-col gap-1">
@@ -51,20 +48,16 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
           <h3 className="font-medium text-gray-900">{t("refund.title")}</h3>
           <div className="flex justify-between gap-3">
             <dt className="text-gray-600">{t("refund.originalAmount")}</dt>
-            <dd className="text-gray-900">
-              {refund.originalAmount} {stablecoin}
-            </dd>
+            <dd className="text-gray-900">{formatStablecoin(refund.originalAmount, stablecoin)}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-gray-600">{t("refund.gasFee")}</dt>
-            <dd className="text-red-700">
-              −{refund.gasFee} {stablecoin}
-            </dd>
+            <dd className="text-red-700">−{formatStablecoin(refund.gasFee, stablecoin)}</dd>
           </div>
           <div className="flex justify-between gap-3 border-t border-red-200 pt-1 font-semibold">
             <dt className="text-gray-700">{t("refund.netRefundAmount")}</dt>
             <dd className="text-gray-900">
-              {refund.netRefundAmount} {stablecoin}
+              {formatStablecoin(refund.netRefundAmount, stablecoin)}
             </dd>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -92,7 +85,7 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
           {refund.refundedAt && (
             <div className="flex justify-between gap-3">
               <dt className="text-gray-600">{t("refund.refundedAt")}</dt>
-              <dd className="text-gray-900">{dateFmt.format(new Date(refund.refundedAt))}</dd>
+              <dd className="text-gray-900">{formatDateTime(refund.refundedAt, locale)}</dd>
             </div>
           )}
         </div>

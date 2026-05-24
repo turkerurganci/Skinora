@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailDispute } from "@/lib/api/transactions";
+import { formatDateTime } from "@/lib/utils/format";
 import { DisputeType } from "@/types/enums";
 import { DisputeModal } from "./DisputeModal";
 
@@ -25,10 +26,6 @@ export function DisputeBlock({ transactionId, dispute, isSuspended }: DisputeBlo
   const t = useTranslations("transactionDetail.dispute");
   const locale = useLocale();
   const [modalOpen, setModalOpen] = useState(false);
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 
   const anyActionShown = dispute.canSubmitTxHash || dispute.canEscalate;
 
@@ -46,7 +43,7 @@ export function DisputeBlock({ transactionId, dispute, isSuspended }: DisputeBlo
         </div>
         <div>
           <dt className="text-gray-600">{t("createdAt")}</dt>
-          <dd className="text-gray-900">{dateFmt.format(new Date(dispute.createdAt))}</dd>
+          <dd className="text-gray-900">{formatDateTime(dispute.createdAt, locale)}</dd>
         </div>
         {dispute.autoCheckResult && (
           <div className="sm:col-span-2">
