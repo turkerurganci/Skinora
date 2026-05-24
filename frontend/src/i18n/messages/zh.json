@@ -173,6 +173,53 @@
     "users": "用户",
     "auditLog": "审计日志"
   },
+  "adminDashboard": {
+    "title": "仪表盘",
+    "summary": {
+      "activeTransactions": "活跃交易",
+      "pendingFlags": "待处理标记",
+      "dailyCompleted": "今日完成",
+      "weeklyCompleted": "本周完成"
+    },
+    "steamAccounts": {
+      "title": "Steam 账户",
+      "manage": "管理",
+      "warning": "{count} 个机器人账户需要关注。",
+      "cardAriaLabel": "{name} 账户 — {status}",
+      "empty": "尚未配置 Steam 机器人。",
+      "loadError": "无法加载 Steam 账户。",
+      "status": {
+        "ACTIVE": "活跃",
+        "RESTRICTED": "受限",
+        "BANNED": "已封禁",
+        "OFFLINE": "离线"
+      }
+    },
+    "recentFlags": {
+      "title": "最近标记",
+      "viewAll": "查看全部",
+      "empty": "暂无标记。",
+      "loadError": "无法加载标记。",
+      "columns": {
+        "id": "ID",
+        "type": "类型",
+        "createdAt": "日期",
+        "status": "状态"
+      }
+    },
+    "flagType": {
+      "PRICE_DEVIATION": "价格偏差",
+      "HIGH_VOLUME": "高额交易量",
+      "ABNORMAL_BEHAVIOR": "异常行为",
+      "MULTI_ACCOUNT": "多账户",
+      "SANCTIONS_MATCH": "制裁匹配"
+    },
+    "flagStatus": {
+      "PENDING": "待处理",
+      "APPROVED": "已继续",
+      "REJECTED": "已取消"
+    }
+  },
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",

@@ -173,6 +173,53 @@
     "users": "Kullanıcılar",
     "auditLog": "Audit Log"
   },
+  "adminDashboard": {
+    "title": "Kontrol Paneli",
+    "summary": {
+      "activeTransactions": "Aktif İşlemler",
+      "pendingFlags": "Bekleyen Flag'ler",
+      "dailyCompleted": "Günlük Tamamlanan",
+      "weeklyCompleted": "Haftalık Tamamlanan"
+    },
+    "steamAccounts": {
+      "title": "Steam Hesapları",
+      "manage": "Yönet",
+      "warning": "{count} bot hesabı dikkat gerektiriyor.",
+      "cardAriaLabel": "{name} hesabı — {status}",
+      "empty": "Tanımlı Steam botu yok.",
+      "loadError": "Steam hesapları yüklenemedi.",
+      "status": {
+        "ACTIVE": "Aktif",
+        "RESTRICTED": "Kısıtlı",
+        "BANNED": "Yasaklı",
+        "OFFLINE": "Çevrimdışı"
+      }
+    },
+    "recentFlags": {
+      "title": "Son Flag'lenmiş İşlemler",
+      "viewAll": "Tümünü Gör",
+      "empty": "Henüz flag yok.",
+      "loadError": "Flag'ler yüklenemedi.",
+      "columns": {
+        "id": "ID",
+        "type": "Tür",
+        "createdAt": "Tarih",
+        "status": "Durum"
+      }
+    },
+    "flagType": {
+      "PRICE_DEVIATION": "Fiyat Sapması",
+      "HIGH_VOLUME": "Yüksek Hacim",
+      "ABNORMAL_BEHAVIOR": "Anormal Davranış",
+      "MULTI_ACCOUNT": "Çoklu Hesap",
+      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi"
+    },
+    "flagStatus": {
+      "PENDING": "Bekliyor",
+      "APPROVED": "Devam Etti",
+      "REJECTED": "İptal Edildi"
+    }
+  },
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",

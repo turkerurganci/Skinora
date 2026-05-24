@@ -173,6 +173,53 @@
     "users": "Usuarios",
     "auditLog": "Registro de auditoría"
   },
+  "adminDashboard": {
+    "title": "Panel",
+    "summary": {
+      "activeTransactions": "Transacciones activas",
+      "pendingFlags": "Marcadas pendientes",
+      "dailyCompleted": "Completadas hoy",
+      "weeklyCompleted": "Completadas en la semana"
+    },
+    "steamAccounts": {
+      "title": "Cuentas de Steam",
+      "manage": "Gestionar",
+      "warning": "{count} cuenta(s) de bot requieren atención.",
+      "cardAriaLabel": "Cuenta {name} — {status}",
+      "empty": "No hay bots de Steam configurados.",
+      "loadError": "No se pudieron cargar las cuentas de Steam.",
+      "status": {
+        "ACTIVE": "Activa",
+        "RESTRICTED": "Restringida",
+        "BANNED": "Bloqueada",
+        "OFFLINE": "Sin conexión"
+      }
+    },
+    "recentFlags": {
+      "title": "Últimas marcadas",
+      "viewAll": "Ver todas",
+      "empty": "Aún no hay marcadas.",
+      "loadError": "No se pudieron cargar las marcadas.",
+      "columns": {
+        "id": "ID",
+        "type": "Tipo",
+        "createdAt": "Fecha",
+        "status": "Estado"
+      }
+    },
+    "flagType": {
+      "PRICE_DEVIATION": "Desviación de precio",
+      "HIGH_VOLUME": "Alto volumen",
+      "ABNORMAL_BEHAVIOR": "Comportamiento anormal",
+      "MULTI_ACCOUNT": "Multi-cuenta",
+      "SANCTIONS_MATCH": "Coincidencia de sanciones"
+    },
+    "flagStatus": {
+      "PENDING": "Pendiente",
+      "APPROVED": "Continuada",
+      "REJECTED": "Cancelada"
+    }
+  },
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",
