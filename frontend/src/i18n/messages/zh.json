@@ -162,6 +162,8 @@
   },
   "adminNav": {
     "ariaLabel": "管理员菜单",
+    "openMenu": "打开管理菜单",
+    "closeMenu": "关闭管理菜单",
     "dashboard": "仪表盘",
     "flags": "标记",
     "transactions": "交易",

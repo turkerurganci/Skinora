@@ -1,0 +1,133 @@
+"use client";
+
+import { Fragment, type ReactNode } from "react";
+import { cn } from "@/lib/utils/cn";
+
+export interface ResponsiveTableColumn<T> {
+  key: string;
+  header: ReactNode;
+  cell: (row: T) => ReactNode;
+  headerClassName?: string;
+  cellClassName?: string;
+  /**
+   * If true, the column is omitted from the mobile card list.
+   * Use for low-value columns that already appear in the primary header line.
+   */
+  mobileHidden?: boolean;
+}
+
+export interface ResponsiveTableProps<T> {
+  data: readonly T[];
+  columns: ReadonlyArray<ResponsiveTableColumn<T>>;
+  getRowKey: (row: T) => string;
+  ariaLabel: string;
+  emptyMessage?: ReactNode;
+  className?: string;
+  /**
+   * Override the entire mobile card body for a row. When supplied, the default
+   * label/value list rendering is skipped (column headers are still consulted
+   * for the desktop <table> view).
+   */
+  mobileRender?: (row: T) => ReactNode;
+}
+
+/**
+ * Renders a list of records as a semantic `<table>` on desktop / tablet
+ * (>= md, 768px) and as a stack of cards on mobile (< md). Each card uses
+ * column headers as field labels — this implements 04 §9.4 "Tablo → Kart
+ * Dönüşümü". Pass `mobileRender` to fully customize the mobile body.
+ */
+export function ResponsiveTable<T>({
+  data,
+  columns,
+  getRowKey,
+  ariaLabel,
+  emptyMessage,
+  className,
+  mobileRender,
+}: ResponsiveTableProps<T>) {
+  if (data.length === 0 && emptyMessage !== undefined) {
+    return (
+      <div
+        className={cn(
+          "rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500",
+          className,
+        )}
+      >
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  const mobileColumns = columns.filter((c) => !c.mobileHidden);
+
+  return (
+    <div className={className}>
+      <div className="hidden md:block">
+        <table
+          className="w-full table-auto border-collapse text-left text-sm"
+          aria-label={ariaLabel}
+        >
+          <thead>
+            <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  scope="col"
+                  className={cn("px-3 py-2 align-middle", col.headerClassName)}
+                >
+                  {col.header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row) => (
+              <tr key={getRowKey(row)} className="border-b border-gray-100 last:border-b-0">
+                {columns.map((col) => (
+                  <td
+                    key={col.key}
+                    className={cn("px-3 py-2 align-middle text-gray-900", col.cellClassName)}
+                  >
+                    {col.cell(row)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <ul role="list" aria-label={ariaLabel} className="flex flex-col gap-3 md:hidden">
+        {data.map((row) => (
+          <li
+            key={getRowKey(row)}
+            className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm"
+          >
+            {mobileRender ? (
+              mobileRender(row)
+            ) : (
+              <dl className="flex flex-col gap-1">
+                {mobileColumns.map((col, idx) => (
+                  <Fragment key={col.key}>
+                    <div
+                      className={cn(
+                        "flex items-start justify-between gap-3 text-sm",
+                        idx === 0 && "font-semibold text-gray-900",
+                      )}
+                    >
+                      <dt className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                        {col.header}
+                      </dt>
+                      <dd className="text-right text-gray-900">{col.cell(row)}</dd>
+                    </div>
+                  </Fragment>
+                ))}
+              </dl>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

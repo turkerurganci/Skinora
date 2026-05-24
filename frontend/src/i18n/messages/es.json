@@ -162,6 +162,8 @@
   },
   "adminNav": {
     "ariaLabel": "Menú de administración",
+    "openMenu": "Abrir menú de administración",
+    "closeMenu": "Cerrar menú de administración",
     "dashboard": "Panel",
     "flags": "Marcadas",
     "transactions": "Transacciones",
