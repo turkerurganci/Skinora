@@ -77,7 +77,7 @@
 - Branch: `task/T99-admin-dashboard`
 - Commit: `774525d` — T99: Admin Dashboard (S12)
 - PR: [#147](https://github.com/turkerurganci/Skinora/pull/147)
-- CI: ✓ PASS — run [`26370766445`](https://github.com/turkerurganci/Skinora/actions/runs/26370766445) **9/9 SUCCESS** + Guard skipped (Detect ✓ / Lint ✓ / Build ✓ / Unit ✓ / Integration ✓ / Contract ✓ / Migration dry-run ✓ / Docker frontend ✓ / CI Gate ✓)
+- CI: ✓ PASS — run [`26370766445`](https://github.com/turkerurganci/Skinora/actions/runs/26370766445) (kod commit `774525d`) **9/9 SUCCESS** + Guard skipped. Docs commit `b7a25d6` follow-up run [`26370958533`](https://github.com/turkerurganci/Skinora/actions/runs/26370958533) ilk geçişte Integration test "Test Run Successful 395/395 Passed" yazmasına rağmen Hangfire InMemory `Dispatcher.ThrowObjectDisposedException` shutdown race nedeniyle process exit 1 (flaky; T20+ döneminden bilinen pattern; bu commit'te kod path'i değişmedi). `gh run rerun --failed` ile re-run → 9/9 SUCCESS, flaky doğrulandı.
 
 ## Known Limitations / Follow-up
 
