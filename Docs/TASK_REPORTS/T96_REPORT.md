@@ -1,6 +1,6 @@
 # T96 — SignalR client entegrasyonu
 
-**Faz:** F5 | **Durum:** ⏳ Yapım bitti | **Tarih:** 2026-05-24
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-24
 
 ---
 
@@ -112,12 +112,16 @@ T13'te `frontend/src/lib/signalr/connection.ts` factory iskeleti olarak inmişti
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Validator chat'i bekliyor |
-| Verdict | — |
-| Kabul kriterleri | 8/8 self-check ✓ |
-| Doğrulama kontrol listesi | 1/1 self-check ✓ |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator 2026-05-24) |
+| Verdict | ✓ PASS |
+| Kabul kriterleri | 8/8 ✓ bağımsız doğrulandı (1 join/leave + 8 RT1 event listener + 2 RT2 hub auto-join + 5 RT2 event listener / 2 CountdownSync setQueryData patch — backend 30sn cadence T61 / 3 PaymentDetected+PaymentConfirmed invalidate / 4 TransactionStatusChanged detail + 3 list tab invalidate / 5 MaintenanceStatusChanged platform.maintenance invalidate / 6 accessTokenFactory `useAuthStore.getState().accessToken` `?access_token=` query param + backend `JwtBearerEvents.OnMessageReceived` hub path filter / 7 `.withAutomaticReconnect([0,2000,5000,10000,30000])` + `onreconnected` → `rejoinAll()`) |
+| Doğrulama kontrol listesi | 1/1 ✓ bağımsız doğrulandı — `TransactionsHubClient.attachEventListeners` 8/8 RT1 event + `NotificationsHubClient.attachEventListeners` 5/5 RT2 event + 2 client→server method (Join/LeaveTransaction) backend `TransactionsHub.cs:61,96` ile birebir |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Validator bağımsız kontroller | Working tree temiz (Adım -1) + main CI 3/3 success (`26342225204`/`26342225156`/`26337997661` — Adım 0) + MEMORY.md T96 ≥1 satır (Adım 0b) + lokal Next build PASS + ESLint 0/0 + `npx tsc --noEmit` 0 + task branch CI HEAD `e1967ef` [`26357679827`](https://github.com/turkerurganci/Skinora/actions/runs/26357679827) **10/10 SUCCESS** (Detect+Guard skipped+Lint+Build+Unit+Integration+Contract+Migration+Docker frontend+CI Gate) + önceki `f5a45eb` [`26357488379`](https://github.com/turkerurganci/Skinora/actions/runs/26357488379) 10/10 ✓ |
+| Mini güvenlik | Temiz — secret sızıntısı 0 (token auth store'dan), backend `[Authorize]` + JWT query-param bridge `/hubs/*` path-scope, `transactionId` `Guid.Empty` + participant guard backend tarafında HubException, `XSS` riski yok (event payload string'leri React text node), yeni dış bağımlılık 0 (`@microsoft/signalr@^10.0.0` T13'ten) |
+| Doküman uyumu | ✓ Tam — backend event isimleri (`TransactionsHub.cs:27-30` ve `NotificationsHub.cs:28-29` remarks) ile frontend `TransactionHubEvents` + `NotificationHubEvents` constant'ları 1:1; method imzaları (`JoinTransaction(Guid)`, `LeaveTransaction(Guid)`) frontend `TransactionHubMethods.JoinTransaction`/`LeaveTransaction` ile birebir; 07 §11.1 + §11.2 spec event tabloları + auth (JWT query-param) + bağlantı (S07 mount/login) kuralları kod'da karşılandı; 04 §7.3 CountdownSync frozen/freezeReason TimeoutFreezeReason enum (MAINTENANCE/STEAM_OUTAGE/BLOCKCHAIN_DEGRADATION/EMERGENCY_HOLD) `events.ts` üzerinden referans alındı |
+| Yapım raporu karşılaştırma | Tam uyumlu — bağımsız 8/8 ✓ + 1/1 ✓ self-check ile aynı sınıflama, K1–K6 forward-defer'lar validator-side onaylandı (toast C09 T-future / admin event'ler T103+ / per-tx handler API kullanılmıyor opt-in / server-side group failure log-only no-side-effect / Vitest yok plan onaylı / 149 pre-existing prettier drift T80 K7 havuzu) |
 
 ## Altyapı Değişiklikleri
 
