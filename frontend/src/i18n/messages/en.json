@@ -173,6 +173,53 @@
     "users": "Users",
     "auditLog": "Audit Log"
   },
+  "adminDashboard": {
+    "title": "Dashboard",
+    "summary": {
+      "activeTransactions": "Active Transactions",
+      "pendingFlags": "Pending Flags",
+      "dailyCompleted": "Daily Completed",
+      "weeklyCompleted": "Weekly Completed"
+    },
+    "steamAccounts": {
+      "title": "Steam Accounts",
+      "manage": "Manage",
+      "warning": "{count} bot account(s) need attention.",
+      "cardAriaLabel": "{name} account — {status}",
+      "empty": "No Steam bots configured.",
+      "loadError": "Could not load Steam accounts.",
+      "status": {
+        "ACTIVE": "Active",
+        "RESTRICTED": "Restricted",
+        "BANNED": "Banned",
+        "OFFLINE": "Offline"
+      }
+    },
+    "recentFlags": {
+      "title": "Recent Flags",
+      "viewAll": "View all",
+      "empty": "No flags yet.",
+      "loadError": "Could not load flags.",
+      "columns": {
+        "id": "ID",
+        "type": "Type",
+        "createdAt": "Date",
+        "status": "Status"
+      }
+    },
+    "flagType": {
+      "PRICE_DEVIATION": "Price Deviation",
+      "HIGH_VOLUME": "High Volume",
+      "ABNORMAL_BEHAVIOR": "Abnormal Behavior",
+      "MULTI_ACCOUNT": "Multi-Account",
+      "SANCTIONS_MATCH": "Sanctions Match"
+    },
+    "flagStatus": {
+      "PENDING": "Pending",
+      "APPROVED": "Proceeded",
+      "REJECTED": "Cancelled"
+    }
+  },
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",
