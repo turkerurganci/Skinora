@@ -1,6 +1,6 @@
 # T97 — i18n (4 dil desteği)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-05-24
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-05-24
 
 ---
 
@@ -97,6 +97,21 @@ Sonuç: 04 §10.1 spec'ine ek CSS/Tailwind override gerekmiyor. Mevcut layout 4 
 |---|---|---|---|
 | 1 | 04 §10 tüm lokalizasyon kuralları uygulanmış mı? | ✓ Karşılandı | §10.1 text-length audit: `StatusBadge`/buttons inline-flex auto-expand ✓. §10.2 tarih/saat: `formatDate/Time/DateTime/DateLong` Intl spec-compliant ✓. §10.3 sayı: `formatNumber`/`formatPercent` locale-aware + `formatStablecoin` locale-invariant ✓. §10.4 çevrilmeyecek terimler: `UNTRANSLATABLE_TERMS` 10/10 ✓. |
 
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız validator 2026-05-24) |
+| Verdict | ✓ PASS |
+| Kabul kriterleri | 6/6 ✓ bağımsız doğrulandı — (1) `routing.locales=["en","zh","es","tr"]` + `request.ts` `messages/${locale}.json` dynamic import + `LanguageSelector` 4 opsiyon ✓; (2) `formatDate/Time/DateTime/DateLong` `Intl.DateTimeFormat({dateStyle/timeStyle})` 7 call site (Cancel/Dispute/FlagHold/SellerPayout/TxInfoPanel/TxRow/MaintenanceGate) migrate, runtime Intl ölçümü 04 §10.2 birebir (en "Mar 14, 2026, 2:30 PM" / tr "14 Mar 2026 14:30" / es "14 mar 2026, 14:30" / zh "2026年3月14日 14:30") ✓; (3) `formatNumber`/`formatPercent` `Intl.NumberFormat(locale)` 4 non-stablecoin call site (StatsCards/TrustSignals/ReputationCard/profile.helpers) + `formatStablecoin` 9 stablecoin call site `Intl.NumberFormat("en-US",{useGrouping:false})` locale-invariant dot decimal §10.3 birebir ✓; (4) `UNTRANSLATABLE_TERMS` 10/10 `as const` tuple (USDT/USDC/TRC-20/Tron/Steam/Steam ID/Mobile Authenticator/Trade offer/CS2/Gas fee) + `isUntranslatable()` case-insensitive 04 §10.4 birebir ✓; (5) `grep "Intl\\.DateTimeFormat\\|Intl\\.NumberFormat\\|toLocaleString" frontend/src` 0 inline kullanım (yalnız `format.ts` helper içi) + audit: StatusBadge `inline-flex … whitespace-nowrap` auto-expand / button `px-4 py-2` fixed-w yok ✓; (6) 632×4 leaf parity (en/zh/es/tr) `walk(JSON)` script ✓ + `next build` 25 ƒ route × 4 locale = 100 sayfa kombinasyonu success ✓ |
+| Doğrulama kontrol listesi | 1/1 ✓ bağımsız doğrulandı — 04 §10 dört alt-bölümü (§10.1 layout audit / §10.2 Intl date+time / §10.3 Intl number + stablecoin invariant / §10.4 untranslatable list) kod referansları + runtime Intl ölçümü ile birebir |
+| Bulgu sayısı | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Validator bağımsız kontroller | Working tree temiz (Adım -1) + main CI 3/3 success (`26358603651`/`26358603644`/`26358310975` chore #144 + T96 #143 — Adım 0) + MEMORY.md T97 ≥1 satır (Adım 0b) + lokal `next build` PASS 3.1s + ESLint 0/0 + `npx tsc --noEmit` exit 0 + Prettier T97 15 dosya clean + task branch CI HEAD `ead6064` [`26359346213`](https://github.com/turkerurganci/Skinora/actions/runs/26359346213) **SUCCESS** |
+| Mini güvenlik | Temiz — secret sızıntısı 0 (yeni env/sabit yok), auth/authorization etkisi 0 (frontend display layer), input validation etkisi 0 (Intl.NumberFormat numeric coerce + React text node XSS-safe), yeni dış bağımlılık 0 (`Intl.*` Node 22 + modern tarayıcı built-in, `next-intl@^4.9.0` T84'ten) |
+| Doküman uyumu | ✓ Tam — 04 §10.2 tarih/saat tablosu Intl `dateStyle:"medium"`+`timeStyle:"short"` çıktıları ile birebir (4 locale runtime ölçüldü); 04 §10.3 sayı tablosu Intl default'u ile birebir (ES için CLDR konvansiyonu: 4-haneli sayılarda binlik ayracı yok — örnek "1234,56" / 5+ haneli "12.345,67" — spec örneği "1.234,56" stilize, CLDR `Intl.NumberFormat("es")` davranışı standart; advisory M1, finding değil); §10.3 stablecoin not'u (`.` dot decimal) `formatStablecoin` `useGrouping:false` ile karşılandı; §10.4 untranslatable 10/10 birebir |
+| Yapım raporu karşılaştırma | Tam uyumlu — bağımsız 6/6 ✓ + 1/1 ✓ self-check ile aynı sınıflama, K1–K6 forward-defer'lar validator-side onaylandı (UNTRANSLATABLE_TERMS lint CI yok / formatDateLong call site T-future / formatAmount deprecated alias / AdminSidebar truncate gerçek risk yok / LanguageSelector localStorage path-based standart / 149 pre-existing prettier drift T80 K7 havuzu). Rapor ES CLDR M1 advisory'sini eklemiyor — validator notu yukarıda. |
+
 ## Test Sonuçları
 
 | Tür | Sonuç | Detay |
@@ -119,9 +134,9 @@ Sonuç: 04 §10.1 spec'ine ek CSS/Tailwind override gerekmiyor. Mevcut layout 4 
 ## Commit & PR
 
 - Branch: `task/T97-i18n-localization`
-- Commit: (push sonrası eklenecek)
-- PR: (push sonrası eklenecek)
-- CI: (push sonrası izlenecek)
+- Commit: `ead6064` — `T97: i18n (4 dil desteği)`
+- PR: [#145](https://github.com/turkerurganci/Skinora/pull/145)
+- CI: ✓ PASS — run [`26359346213`](https://github.com/turkerurganci/Skinora/actions/runs/26359346213) success
 
 ## Known Limitations / Follow-up
 
