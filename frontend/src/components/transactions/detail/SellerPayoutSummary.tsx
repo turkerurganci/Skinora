@@ -1,6 +1,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import type { TransactionDetailSellerPayout } from "@/lib/api/transactions";
 import { CopyButton } from "@/components/common";
+import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 
 export interface SellerPayoutSummaryProps {
@@ -18,10 +19,6 @@ export interface SellerPayoutSummaryProps {
 export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryProps) {
   const t = useTranslations("transactionDetail.sellerPayout");
   const locale = useLocale();
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
   const sellerCovered = parseFloat(payout.gasFeeFromSeller) > 0;
   return (
     <section className="space-y-3 rounded-lg border border-green-300 bg-green-50 p-4">
@@ -29,22 +26,20 @@ export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryP
       <dl className="space-y-1 text-sm">
         <div className="flex justify-between gap-3">
           <dt className="text-gray-600">{t("grossAmount")}</dt>
-          <dd className="text-gray-900">
-            {payout.grossAmount} {stablecoin}
-          </dd>
+          <dd className="text-gray-900">{formatStablecoin(payout.grossAmount, stablecoin)}</dd>
         </div>
         {sellerCovered && (
           <div className="flex justify-between gap-3">
             <dt className="text-gray-600">{t("gasFeeFromSeller")}</dt>
             <dd className="text-red-700">
-              −{payout.gasFeeFromSeller} {stablecoin}
+              −{formatStablecoin(payout.gasFeeFromSeller, stablecoin)}
             </dd>
           </div>
         )}
         <div className="flex justify-between gap-3 border-t border-green-200 pt-2 text-base">
           <dt className="font-semibold text-gray-700">{t("netAmount")}</dt>
           <dd className="font-bold text-green-700">
-            {payout.netAmount} {stablecoin}
+            {formatStablecoin(payout.netAmount, stablecoin)}
           </dd>
         </div>
         {sellerCovered && (
@@ -88,7 +83,7 @@ export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryP
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-gray-600">{t("sentAt")}</dt>
-            <dd className="text-gray-900">{dateFmt.format(new Date(payout.sentAt))}</dd>
+            <dd className="text-gray-900">{formatDateTime(payout.sentAt, locale)}</dd>
           </div>
         </div>
       </dl>

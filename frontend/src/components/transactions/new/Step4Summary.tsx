@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Spinner } from "@/components/common/LoadingState";
 import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { formatStablecoin } from "@/lib/utils/format";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 
 export interface Step4SummaryProps {
@@ -41,9 +42,9 @@ export function Step4Summary({
 }: Step4SummaryProps) {
   const t = useTranslations("newTransaction.step4");
   const priceNumber = Number(price);
-  const commissionAmount = Number.isFinite(priceNumber)
-    ? (priceNumber * commissionRate).toFixed(2)
-    : "—";
+  const commissionDisplay = Number.isFinite(priceNumber)
+    ? formatStablecoin(priceNumber * commissionRate, stablecoin)
+    : `— ${stablecoin}`;
 
   return (
     <div className="space-y-5">
@@ -54,29 +55,20 @@ export function Step4Summary({
           <div className="flex items-center gap-3">
             {item.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                className="h-10 w-14 rounded object-cover"
-              />
+              <img src={item.imageUrl} alt={item.name} className="h-10 w-14 rounded object-cover" />
             )}
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-gray-900">{item.name}</p>
-              {item.wear && (
-                <p className="truncate text-xs text-gray-500">{item.wear}</p>
-              )}
+              {item.wear && <p className="truncate text-xs text-gray-500">{item.wear}</p>}
             </div>
           </div>
         </Row>
         <Row label={t("rows.price")}>
-          <span className="text-sm text-gray-900">
-            {price} {stablecoin}
-          </span>
+          <span className="text-sm text-gray-900">{formatStablecoin(price, stablecoin)}</span>
         </Row>
         <Row label={t("rows.commission")}>
           <span className="text-sm text-gray-600">
-            {commissionAmount} {stablecoin}{" "}
-            <span className="text-xs">({t("rows.commissionPayer")})</span>
+            {commissionDisplay} <span className="text-xs">({t("rows.commissionPayer")})</span>
           </span>
         </Row>
         <Row label={t("rows.token")}>

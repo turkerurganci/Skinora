@@ -3,6 +3,7 @@
 import { useLocale } from "next-intl";
 import { MaintenanceBanner, type MaintenanceVariant } from "@/components/common/MaintenanceBanner";
 import { usePlatformMaintenance } from "@/lib/hooks/usePlatformMaintenance";
+import { formatDateTime } from "@/lib/utils/format";
 import type { MaintenanceType } from "@/lib/api/platform";
 
 const VARIANT_MAP: Record<MaintenanceType, MaintenanceVariant> = {
@@ -28,12 +29,7 @@ export function MaintenanceGate({ children }: MaintenanceGateProps) {
   const variant = data?.type ? VARIANT_MAP[data.type] : null;
   const ctaDisabled = data?.active === true && data.type === "PLATFORM_MAINTENANCE";
 
-  const scheduledAt = data?.plannedEnd
-    ? new Date(data.plannedEnd).toLocaleString(locale, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : undefined;
+  const scheduledAt = data?.plannedEnd ? formatDateTime(data.plannedEnd, locale) : undefined;
 
   return (
     <>

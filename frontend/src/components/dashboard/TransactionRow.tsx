@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { CountdownTimer, StatusBadge } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
-import { formatDate } from "@/lib/utils/format";
+import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import type { TransactionListItem } from "@/lib/api/transactions";
 
 const AVATAR_PLACEHOLDER =
@@ -33,9 +33,7 @@ export function TransactionRow({ item, readOnly, className }: TransactionRowProp
     ? Math.max(
         60,
         Math.round(
-          (item.activeTimeout.remainingSeconds *
-            item.activeTimeout.warningThresholdPercent) /
-            100,
+          (item.activeTimeout.remainingSeconds * item.activeTimeout.warningThresholdPercent) / 100,
         ),
       )
     : 0;
@@ -60,9 +58,7 @@ export function TransactionRow({ item, readOnly, className }: TransactionRowProp
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900">
-              {item.itemName}
-            </p>
+            <p className="truncate text-sm font-semibold text-gray-900">{item.itemName}</p>
             <p className="mt-0.5 text-xs text-gray-500">{shortenId(item.id)}</p>
           </div>
           <StatusBadge status={item.status} className="flex-none" />
@@ -70,7 +66,7 @@ export function TransactionRow({ item, readOnly, className }: TransactionRowProp
 
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
           <span className="font-medium text-gray-900 tabular-nums">
-            {item.price} {item.stablecoin}
+            {formatStablecoin(item.price, item.stablecoin)}
           </span>
 
           {counterparty ? (
@@ -88,7 +84,7 @@ export function TransactionRow({ item, readOnly, className }: TransactionRowProp
             <span className="italic text-gray-400">{t("noCounterparty")}</span>
           )}
 
-          <span className="text-gray-500">{formatDate(item.createdAt, locale)}</span>
+          <span className="text-gray-500">{formatDateTime(item.createdAt, locale)}</span>
         </div>
       </div>
 

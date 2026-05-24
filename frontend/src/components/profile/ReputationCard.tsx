@@ -1,6 +1,7 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { formatNumber } from "@/lib/utils/format";
 import { formatPercent, formatScore } from "./helpers";
 
 export interface ReputationCardProps {
@@ -25,24 +26,25 @@ export function ReputationCard({
   cancelRate,
 }: ReputationCardProps) {
   const t = useTranslations("profile.reputation");
+  const locale = useLocale();
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-6">
       <h2 className="mb-4 text-lg font-semibold text-gray-900">{t("title")}</h2>
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <ReputationStat label={t("score")} value={formatScore(reputationScore)} />
+        <ReputationStat label={t("score")} value={formatScore(reputationScore, locale)} />
         <ReputationStat
           label={t("completedCount")}
-          value={completedTransactionCount.toString()}
+          value={formatNumber(completedTransactionCount, locale)}
         />
         <ReputationStat
           label={t("successRate")}
-          value={formatPercent(successfulTransactionRate)}
+          value={formatPercent(successfulTransactionRate, locale)}
         />
         {variant === "own" && (
           <ReputationStat
             label={t("cancelRate")}
-            value={formatPercent(cancelRate ?? null)}
+            value={formatPercent(cancelRate ?? null, locale)}
           />
         )}
       </dl>

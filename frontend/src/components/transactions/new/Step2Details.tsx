@@ -3,11 +3,10 @@
 import { useTranslations } from "next-intl";
 import { ItemCard, type ItemCardItem } from "@/components/common";
 import { StablecoinType } from "@/types/enums";
-import type {
-  TransactionParamsResponse,
-} from "@/lib/api/transactions";
+import type { TransactionParamsResponse } from "@/lib/api/transactions";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 import { cn } from "@/lib/utils/cn";
+import { formatStablecoin } from "@/lib/utils/format";
 
 export interface Step2DetailsProps {
   item: SteamInventoryItem;
@@ -39,15 +38,10 @@ function parseDecimal(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function commissionPreview(
-  price: string,
-  rate: number,
-  stablecoin: StablecoinType,
-): string | null {
+function commissionPreview(price: string, rate: number, stablecoin: StablecoinType): string | null {
   const n = parseDecimal(price);
   if (n === null || n <= 0) return null;
-  const commission = (n * rate).toFixed(2);
-  return `${commission} ${stablecoin}`;
+  return formatStablecoin(n * rate, stablecoin);
 }
 
 export function Step2Details({
@@ -67,11 +61,7 @@ export function Step2Details({
   const commissionPercent = (params.commissionRate * 100).toFixed(0);
 
   const timeoutOptions: number[] = [];
-  for (
-    let h = params.paymentTimeout.minHours;
-    h <= params.paymentTimeout.maxHours;
-    h += 1
-  ) {
+  for (let h = params.paymentTimeout.minHours; h <= params.paymentTimeout.maxHours; h += 1) {
     timeoutOptions.push(h);
   }
 
@@ -96,9 +86,7 @@ export function Step2Details({
       </div>
 
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-gray-700">
-          {t("stablecoin.label")}
-        </legend>
+        <legend className="text-sm font-medium text-gray-700">{t("stablecoin.label")}</legend>
         <div className="flex gap-2" role="radiogroup">
           {params.supportedStablecoins.map((coin) => {
             const isActive = coin === stablecoin;
