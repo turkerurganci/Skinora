@@ -7,7 +7,10 @@ const THIRTY_SECONDS_MS = 30 * 1000;
 
 /**
  * Platform bakım/kesinti durumu (07 §10.2). 30 sn TTL.
- * Anlık değişiklikler RT2 (T96) ile push edilir.
+ *
+ * `RealtimeProvider` (T96 — 07 §11.2) invalidates this cache key on every
+ * `MaintenanceStatusChanged` push, so the C08 banner reflects the new
+ * state on the next render without waiting for the 30 sn refetch.
  */
 export function usePlatformMaintenance() {
   return useQuery<PlatformMaintenance>({

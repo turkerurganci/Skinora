@@ -7,10 +7,12 @@ import { ApiError } from "@/lib/api/client";
 /**
  * Header zil badge count hook (07 §8.2).
  *
- * Polling cadence is intentionally absent — T96 will wire SignalR push so
- * the badge updates live. Until then mutations (`useMarkAllRead`,
- * `useMarkRead`) invalidate this query so the badge stays correct within
- * the same session, and `staleTime: 30s` keeps it fresh across navigations.
+ * Polling cadence is intentionally absent — `RealtimeProvider` (T96 —
+ * 07 §11.2) writes the cache directly on every `UnreadCountChanged` push
+ * and invalidates it on `NewNotification`. Mutations (`useMarkAllRead`,
+ * `useMarkRead`) keep the badge correct as a defensive fallback when the
+ * SignalR channel is down, and `staleTime: 30s` smooths first-paint after
+ * navigations.
  */
 export function useUnreadCount(enabled: boolean) {
   return useQuery({
