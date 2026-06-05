@@ -93,6 +93,32 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
         Assert.Equal(2, data.GetProperty("items").GetArrayLength());
     }
 
+    [Fact]
+    public async Task ListFlags_ScopeFilter_BindsEnumAndFilters()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        await _factory.SeedAccountFlagAsync(seller.Id, ReviewStatus.PENDING);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        // scope=ACCOUNT_LEVEL binds and returns the seeded account flag.
+        var accountResp = await client.GetAsync("/api/v1/admin/flags?scope=ACCOUNT_LEVEL");
+        Assert.Equal(HttpStatusCode.OK, accountResp.StatusCode);
+        var accountData = (await accountResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(1, accountData.GetProperty("totalCount").GetInt32());
+        Assert.Equal("ACCOUNT_LEVEL",
+            accountData.GetProperty("items")[0].GetProperty("scope").GetString());
+
+        // scope=TRANSACTION_PRE_CREATE binds (string→enum) and filters the account flag out.
+        var txResp = await client.GetAsync("/api/v1/admin/flags?scope=TRANSACTION_PRE_CREATE");
+        Assert.Equal(HttpStatusCode.OK, txResp.StatusCode);
+        var txData = (await txResp.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(0, txData.GetProperty("totalCount").GetInt32());
+    }
+
     // ---------- AD3 GET /admin/flags/:id ----------
 
     [Fact]

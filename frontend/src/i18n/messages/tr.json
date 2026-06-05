@@ -220,6 +220,110 @@
       "REJECTED": "İptal Edildi"
     }
   },
+  "adminFlags": {
+    "title": "Flag Kuyruğu",
+    "titleWithPending": "Flag Kuyruğu ({count} bekleyen)",
+    "tableAriaLabel": "Flag listesi",
+    "empty": "Flag bulunamadı.",
+    "loadError": "Flag'ler yüklenemedi.",
+    "actionError": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
+    "columns": {
+      "id": "ID",
+      "category": "Kategori",
+      "type": "Flag Türü",
+      "user": "Kullanıcı",
+      "item": "Item",
+      "amount": "Tutar",
+      "marketPrice": "Piyasa Fiyatı",
+      "date": "Tarih",
+      "status": "Durum"
+    },
+    "filters": {
+      "category": "Kategori",
+      "allCategories": "Tümü",
+      "type": "Flag Türü",
+      "status": "Durum",
+      "dateFrom": "Başlangıç",
+      "dateTo": "Bitiş"
+    },
+    "scope": {
+      "ACCOUNT_LEVEL": "Hesap Flag'i",
+      "TRANSACTION_PRE_CREATE": "İşlem Flag'i"
+    },
+    "type": {
+      "PRICE_DEVIATION": "Fiyat Sapması",
+      "HIGH_VOLUME": "Yüksek Hacim",
+      "ABNORMAL_BEHAVIOR": "Anormal Davranış",
+      "MULTI_ACCOUNT": "Çoklu Hesap",
+      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi"
+    },
+    "reviewStatus": {
+      "PENDING": "Bekliyor",
+      "APPROVED": "Onaylandı",
+      "REJECTED": "Reddedildi"
+    },
+    "detail": {
+      "back": "← Flag Kuyruğu",
+      "flagInfo": "Flag Bilgisi",
+      "transactionInfo": "İşlem Detayları",
+      "parties": "Taraf Bilgileri",
+      "user": "Kullanıcı",
+      "seller": "Satıcı",
+      "buyer": "Alıcı",
+      "historicalCount": "Aralarındaki Geçmiş İşlem",
+      "actions": "Aksiyonlar",
+      "reviewInfo": "İnceleme Bilgisi",
+      "enforcement": "Yaptırım",
+      "decision": "Karar",
+      "reviewedAt": "İnceleme Tarihi",
+      "status": "Durum",
+      "amount": "Tutar",
+      "timeout": "Süre",
+      "timeoutHours": "{count} saat",
+      "createdAt": "Oluşturulma",
+      "loadError": "Flag detayı yüklenemedi.",
+      "noSignal": "Bu flag için ek sinyal detayı yok.",
+      "sanctionsNote": "Yaptırım eşleşmesi — detaylar audit kaydında ve yaptırım listesinde.",
+      "inputPrice": "Girilen Fiyat",
+      "marketPrice": "Piyasa Fiyatı",
+      "deviationPercent": "Sapma",
+      "periodHours": "Dönem (saat)",
+      "transactionCount": "İşlem Sayısı",
+      "totalVolume": "Toplam Hacim",
+      "pattern": "Patern",
+      "description": "Açıklama",
+      "matchType": "Eşleşme Türü",
+      "matchValue": "Eşleşen Değer",
+      "linkedAccounts": "İlişkili Hesaplar"
+    },
+    "actions": {
+      "continue": "İşleme Devam Et",
+      "cancelTx": "İptal Et",
+      "removeFlag": "Flag Kaldır",
+      "suspend": "Askıya Al",
+      "suspendDeferred": "Yakında",
+      "suspendDeferredHint": "Hesap askıya alma ayrı bir görevde geliyor.",
+      "hold": "Aktif İşlemleri Hold'a Al"
+    },
+    "confirm": {
+      "continue": "Bu işlemi devam ettirmek istediğinize emin misiniz?",
+      "cancelTx": "Bu işlemi iptal etmek istediğinize emin misiniz?",
+      "removeFlag": "Bu flag'i kaldırmak istediğinize emin misiniz?",
+      "hold": "Bu kullanıcının tüm aktif işlemleri hold'a alınacak. Devam edilsin mi?",
+      "dismiss": "Vazgeç"
+    },
+    "adminNote": {
+      "label": "Admin Notu (opsiyonel)",
+      "placeholder": "İncelemeye dair bir not ekleyin..."
+    },
+    "hold": {
+      "reasonLabel": "Hold sebebi",
+      "reasonPlaceholder": "Hold sebebini açıklayın...",
+      "reasonTooShort": "en az {count} karakter",
+      "reasonHint": "Sebep taraflara gönderilen bildirimde kullanılır.",
+      "success": "{count} işlem hold'a alındı."
+    }
+  },
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",

@@ -1665,7 +1665,9 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 
 **Amaç:** Flag listesi (S13). Permission: `VIEW_FLAGS`. Paginated.
 
-**Query Params:** `type`, `reviewStatus`, `dateFrom`, `dateTo`, `sortBy`, `sortOrder`
+**Query Params:** `scope`, `type`, `reviewStatus`, `dateFrom`, `dateTo`, `sortBy`, `sortOrder`
+
+`scope` (04 §8.2 "Flag kategorisi" filtresi — T100): `ACCOUNT_LEVEL` | `TRANSACTION_PRE_CREATE` (06 §2.21). Boş bırakılırsa tüm kategoriler döner; sunucu tarafı filtre olduğu için sayfalama + `totalCount` kategori seçiminde tutarlı kalır.
 
 **Response (200) `data.items[]`:**
 ```json
@@ -1693,6 +1695,7 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 ```json
 {
   "id": "flag-guid",
+  "userId": "flagged-user-guid",
   "type": "PRICE_DEVIATION",
   "reviewStatus": "PENDING",
   "createdAt": "2026-03-16T13:00:00Z",
@@ -2167,6 +2170,32 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 > **Tasarım kararı:** ITEM_DELIVERED → EMERGENCY_HOLD → CANCEL zinciri yasaktır. Bu, AD19'daki "ITEM_DELIVERED'da standart iptal uygulanamaz" kuralıyla tutarlıdır. Admin bu durumda yalnızca RESUME yapabilir; exceptional resolution (ör. yanlış item teslimi) ayrı bir manuel süreçle ele alınır.
 
 **Hatalar:** 409 `NOT_ON_HOLD`, 400 `VALIDATION_ERROR`, 422 `CANNOT_CANCEL_DELIVERED_HOLD` (ITEM_DELIVERED hold'unda CANCEL denemesi)
+
+### 9.22a AD19d — `POST /admin/transactions/hold-by-user/:userId`
+
+**Amaç:** Bir kullanıcının **tüm aktif işlemlerine** toplu EMERGENCY_HOLD uygulama (04 §8.3 hesap-flag "Hold" aksiyonu, 03 §8.8 — T100). Permission: `EMERGENCY_HOLD` (AD19b/c ile aynı yetki). `:userId`, flag detayında (AD3 `userId`) dönen flag'lenmiş kullanıcının iç Guid'idir.
+
+**Request:**
+```json
+{ "reason": "Çoklu hesap tespiti — tüm aktif işlemler donduruldu" }
+```
+
+`reason`: Zorunlu, ≥ 10 karakter (AD19b ile tutarlı).
+
+**Response (200) `data`:**
+```json
+{
+  "heldCount": 3,
+  "appliedAt": "2026-03-20T12:00:00Z",
+  "heldTransactionIds": ["tx-guid-1", "tx-guid-2", "tx-guid-3"]
+}
+```
+
+**Davranış:** Kullanıcının (satıcı **veya** alıcı olduğu) silinmemiş, hold'da olmayan, terminal olmayan işlemleri seçilir; her biri için AD19b ile birebir aynı sıra uygulanır (T50 freeze pre-pass → state machine `ApplyEmergencyHold` → `EmergencyHoldAppliedEvent` bildirim fan-out → `EMERGENCY_HOLD_APPLIED` audit), tek `SaveChanges` ile atomik commit. Zaten hold'da olan işlemler `!IsOnHold` filtresiyle atlanır → çağrı **idempotent**'tir (tekrar koşumu `heldCount: 0` döner). Aktif işlem yoksa 200 + `heldCount: 0` (no-op). Mevcut T54 `FraudFlagService` sanctions otomatik cascade'i ile aynı seçim mantığını paylaşır.
+
+**Hatalar:** 400 `VALIDATION_ERROR` (reason < 10 karakter)
+
+> **Not:** Hesap-flag varyantının diğer iki aksiyonu — "Flag Kaldır" (AD4 approve) ve "Askıya Al" (hesap askıya alma) — bu endpoint kapsamı dışındadır. "Askıya Al" için kullanıcı durum modeli + auth pipeline enforcement gerektiğinden ayrı bir görevde (S20 / kullanıcı yönetimi, AD20) ele alınır.
 
 ### 9.23 AD22 — `GET /admin/sanctions/addresses`
 

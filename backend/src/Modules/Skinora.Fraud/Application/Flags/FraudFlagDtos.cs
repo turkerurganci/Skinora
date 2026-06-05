@@ -32,6 +32,10 @@ public sealed record FraudFlagListResponse(
 /// <summary>Detail body for AD3 (07 §9.3).</summary>
 public sealed record FraudFlagDetailDto(
     Guid Id,
+    // Internal id of the flagged user — lets the admin UI target user-level
+    // actions (e.g. the §8.3 "Hold" bulk emergency-hold, AD19d) without a
+    // separate steamId→id lookup round-trip.
+    Guid UserId,
     FraudFlagScope Scope,
     FraudFlagType Type,
     ReviewStatus ReviewStatus,

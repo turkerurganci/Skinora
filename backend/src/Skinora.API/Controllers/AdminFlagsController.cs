@@ -53,6 +53,7 @@ public sealed class AdminFlagsController : ControllerBase
     [Authorize(Policy = PolicyViewFlags)]
     [RateLimit("admin-read")]
     public async Task<ActionResult<FraudFlagListResponse>> ListFlags(
+        [FromQuery] FraudFlagScope? scope,
         [FromQuery] FraudFlagType? type,
         [FromQuery] ReviewStatus? reviewStatus,
         [FromQuery] DateTime? dateFrom,
@@ -64,6 +65,7 @@ public sealed class AdminFlagsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var query = new FraudFlagListQuery(
+            Scope: scope,
             Type: type,
             ReviewStatus: reviewStatus,
             DateFrom: dateFrom,

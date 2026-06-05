@@ -568,6 +568,88 @@ public class AdminTransactionServiceTests : IntegrationTestBase
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    //  AD19d — POST /admin/transactions/hold-by-user/:userId
+    // ─────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task HoldAllUserTransactionsAsync_Holds_Active_And_Skips_Held_And_Terminal()
+    {
+        var active1 = await CreateTransactionAsync(TransactionStatus.CREATED, withBuyer: true);
+        var active2 = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
+        var preHeld = await CreateTransactionAsync(TransactionStatus.ACCEPTED, withBuyer: true);
+        var terminal = await CreateTransactionAsync(TransactionStatus.COMPLETED, withBuyer: true);
+
+        var sut = BuildSut();
+        // Pre-hold one transaction individually — the bulk call must skip it.
+        await sut.ApplyEmergencyHoldAsync(
+            _admin.Id, preHeld.Id,
+            new ApplyEmergencyHoldRequest("Önceden uygulanmış hold"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        var outcome = await sut.HoldAllUserTransactionsAsync(
+            _admin.Id, _seller.Id,
+            new HoldUserTransactionsRequest("Çoklu hesap — tüm aktif işlemler donduruldu"),
+            ipAddress: "127.0.0.1",
+            CancellationToken.None);
+
+        Assert.Equal(HoldUserTransactionsStatus.Applied, outcome.Status);
+        Assert.Equal(2, outcome.Body!.HeldCount);
+        Assert.Contains(active1.Id, outcome.Body.HeldTransactionIds);
+        Assert.Contains(active2.Id, outcome.Body.HeldTransactionIds);
+        Assert.DoesNotContain(preHeld.Id, outcome.Body.HeldTransactionIds);
+        Assert.DoesNotContain(terminal.Id, outcome.Body.HeldTransactionIds);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .Where(t => t.Id == active1.Id || t.Id == active2.Id || t.Id == terminal.Id)
+            .ToListAsync();
+        Assert.True(persisted.Single(t => t.Id == active1.Id).IsOnHold);
+        Assert.True(persisted.Single(t => t.Id == active2.Id).IsOnHold);
+        Assert.False(persisted.Single(t => t.Id == terminal.Id).IsOnHold);
+
+        // Each newly-held transaction emits its own EMERGENCY_HOLD_APPLIED audit row.
+        var auditCount = await Context.Set<AuditLog>().AsNoTracking()
+            .CountAsync(a => a.Action == AuditAction.EMERGENCY_HOLD_APPLIED
+                             && (a.EntityId == active1.Id.ToString()
+                                 || a.EntityId == active2.Id.ToString()));
+        Assert.Equal(2, auditCount);
+    }
+
+    [Fact]
+    public async Task HoldAllUserTransactionsAsync_Reason_Below_Min_Returns_Validation()
+    {
+        await CreateTransactionAsync(TransactionStatus.CREATED, withBuyer: true);
+
+        var sut = BuildSut();
+        var outcome = await sut.HoldAllUserTransactionsAsync(
+            _admin.Id, _seller.Id,
+            new HoldUserTransactionsRequest("kısa"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(HoldUserTransactionsStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(AdminTransactionErrorCodes.ValidationError, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task HoldAllUserTransactionsAsync_No_Active_Transactions_Returns_Zero()
+    {
+        // Only a terminal transaction exists for the user → nothing to hold.
+        await CreateTransactionAsync(TransactionStatus.COMPLETED, withBuyer: true);
+
+        var sut = BuildSut();
+        var outcome = await sut.HoldAllUserTransactionsAsync(
+            _admin.Id, _seller.Id,
+            new HoldUserTransactionsRequest("Aktif işlem yok ama hold dene"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(HoldUserTransactionsStatus.Applied, outcome.Status);
+        Assert.Equal(0, outcome.Body!.HeldCount);
+        Assert.Empty(outcome.Body.HeldTransactionIds);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     //  fixtures
     // ─────────────────────────────────────────────────────────────────────
 
