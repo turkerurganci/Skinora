@@ -71,8 +71,9 @@
 
 ## Commit & PR
 - Branch: `task/T100-admin-flag-queue-detail`
-- PR: #(pending)
-- CI: (pending)
+- Commit: `fbae70c`
+- PR: [#148](https://github.com/turkerurganci/Skinora/pull/148)
+- CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
 - **K1 — "Askıya Al" (hesap askıya alma) deferred:** State modeli yok (User yalnız `IsDeactivated`); migration + auth pipeline enforcement + suspended-session + S03d gerektirir (~40-60h) ve traceability matrisinde **S20 = T105**'e ait. Proje sahibi onayıyla **ayrı bir task/PR** olarak yapılacak (S14'teki buton disabled + "Yakında"; suspend task aktive edecek).
