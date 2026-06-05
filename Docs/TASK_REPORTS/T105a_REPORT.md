@@ -56,8 +56,8 @@ Hesap askıya alma 02 §14.0/§16.2 + 03 §2.1/§8.3 + 04 §8.3/§16.2/S03d'de t
 
 ## Commit & PR
 - Branch: `task/T105a-account-suspension`
-- PR: #(pending)
-- CI: ⏳ izlenecek
+- PR: [#149](https://github.com/turkerurganci/Skinora/pull/149)
+- CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
 - **K1 — S14 "Askıya Al" buton wiring T100 merge sonrası:** T100 (PR #148) merge olunca `FlagDetailView`'daki disabled buton AD20'ye bağlanır (dal main'e rebase + 1 dosyalık follow-up). Şu an T105a `main`'den dallandığı için `FlagDetailView` bu dalda yok.
