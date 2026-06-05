@@ -1678,14 +1678,16 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
   "reviewStatus": "PENDING",
   "seller": { "steamId": "...", "displayName": "...", "avatarUrl": "..." },
   "itemName": "AK-47 | Redline",
-  "price": "100.00",
+  "price": 100.00,
   "stablecoin": "USDT",
-  "marketPrice": "50.00",
+  "marketPrice": 50.00,
   "createdAt": "2026-03-16T13:00:00Z"
 }
 ```
 
 Ek field: `pendingCount` — bekleyen flag sayısı (badge).
+
+> **Para alanları (T100 netleştirme):** AD2/AD3 flag yüzeyindeki para alanları (`price`, `marketPrice`, `flagDetail` sayısal alanları) JSON **number** olarak serialize olur (`decimal` DTO, kayıtlı `flagDetail` JSON'u zaten number). Bu, işlem (S07/S15) DTO'larındaki `string Price` (scale-6 string) konvansiyonundan **farklıdır** — flag fiyatları 2 ondalıklı item fiyatları olduğundan double precision riski ihmal edilebilir; flag yüzeyi kendi içinde tutarlıdır.
 
 ### 9.3 AD3 — `GET /admin/flags/:id`
 
@@ -1701,8 +1703,8 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
   "createdAt": "2026-03-16T13:00:00Z",
 
   "flagDetail": {
-    "inputPrice": "100.00",
-    "marketPrice": "50.00",
+    "inputPrice": 100.00,
+    "marketPrice": 50.00,
     "deviationPercent": 100.0
   },
 
@@ -1711,7 +1713,7 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
     "status": "FLAGGED",
     "itemName": "AK-47 | Redline",
     "itemImageUrl": "https://steamcdn.../abc.png",
-    "price": "100.00",
+    "price": 100.00,
     "stablecoin": "USDT",
     "paymentTimeoutHours": 24,
     "createdAt": "2026-03-16T12:55:00Z"

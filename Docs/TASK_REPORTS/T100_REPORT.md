@@ -71,9 +71,9 @@
 
 ## Commit & PR
 - Branch: `task/T100-admin-flag-queue-detail`
-- Commit: `fbae70c`
+- Commit: `fbae70c` (+ `51fdf1c` PR ref)
 - PR: [#148](https://github.com/turkerurganci/Skinora/pull/148)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — run [`27032782994`](https://github.com/turkerurganci/Skinora/actions/runs/27032782994) (CI Gate ✓, tüm job'lar; SQL-Server integration testleri shared mssql üzerinde yeşil + migration dry-run ✓)
 
 ## Known Limitations / Follow-up
 - **K1 — "Askıya Al" (hesap askıya alma) deferred:** State modeli yok (User yalnız `IsDeactivated`); migration + auth pipeline enforcement + suspended-session + S03d gerektirir (~40-60h) ve traceability matrisinde **S20 = T105**'e ait. Proje sahibi onayıyla **ayrı bir task/PR** olarak yapılacak (S14'teki buton disabled + "Yakında"; suspend task aktive edecek).
@@ -82,6 +82,11 @@
 - **K4 — `pendingCount` global:** Kategori filtresinden bağımsız toplam bekleyen backlog'u gösterir (T54 sözleşmesi korundu).
 - **K5 — Frontend test runner yok** (F5 plan-onaylı); UI doğrulaması next build + tsc + manuel.
 - **K6 — dateTo gün-sonu:** Backend `CreatedAt <= dateTo` (gece yarısı) — mevcut admin audit/tx listesiyle tutarlı platform davranışı.
+- **K7 — Flag para alanları JSON number:** AD2/AD3 `price`/`marketPrice`/`flagDetail` sayısalları `decimal`→JSON number (07 §9.2 note); işlem DTO'larının `string Price` scale-6 konvansiyonundan farklı (T54 mirası + `flagDetail` kayıtlı JSON number olduğundan zorunlu). 2-ondalıklı item fiyatlarında double precision riski ihmal edilebilir; flag yüzeyi kendi içinde tutarlı. 07 doc örnekleri number'a düzeltildi.
+- **K8 — Bulk hold Hangfire delete EF-tx dışı:** AD19d döngüsünde `FreezeAsync` Hangfire `Delete`'i anında commit eder (EF transaction'a dahil değil); döngü ortasında throw olursa (pratikte ~imkansız — reason validate + `!IsOnHold` pre-filter) DB tarafı atomik rollback olur ama silinmiş job'lar geri gelmez. AD19b + T54 cascade ile **birebir aynı mevcut patern** — yeni defect değil; T-future cross-cutting iyileştirme adayı.
+
+## Çok-Ajanlı Diff Review (ultracode)
+4-boyutlu (backend correctness / frontend correctness / spec-conformance / security) paralel review + adversarial verify: **3 bulgu → 0 gerçek defect** (verify ile doğrulandı). 3 bulgu da low-severity gözlem: (1) Hangfire delete tx-dışı = mevcut patern (K8), (2) money-as-number = doğru wire eşleşmesi + intra-tutarlı (K7), (3) FilterBar history-nav resync = masked (tüm nav `router.replace`, T84 component davranışı, kullanıcıya görünür değil). Kod değişikliği gerekmedi.
 
 ## Notlar
 - **Working tree (Adım -1):** temiz.
