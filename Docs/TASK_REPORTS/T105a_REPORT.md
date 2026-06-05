@@ -57,7 +57,8 @@ Hesap askıya alma 02 §14.0/§16.2 + 03 §2.1/§8.3 + 04 §8.3/§16.2/S03d'de t
 ## Commit & PR
 - Branch: `task/T105a-account-suspension`
 - PR: [#149](https://github.com/turkerurganci/Skinora/pull/149)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — run [`27037408161`](https://github.com/turkerurganci/Skinora/actions/runs/27037408161) (HEAD `8cba072`, tüm job'lar: Build/Unit/Integration/Contract/Migration dry-run/Docker/CI Gate). Integration test SQL Server'da suspension endpoint + create/accept/cancel enforcement + AutoUnsuspendJob testlerini doğruladı.
+- BYPASS_LOG: 1 kayıt (`ci-failure` Layer 2) — önceki run'ın CI Unit-test failure'ını (EmailCategoryMap) düzelten commit'i push ederken; bu commit o failure'ı çözdü.
 
 ## Known Limitations / Follow-up
 - **K1 — S14 "Askıya Al" buton wiring T100 merge sonrası:** T100 (PR #148) merge olunca `FlagDetailView`'daki disabled buton AD20'ye bağlanır (dal main'e rebase + 1 dosyalık follow-up). Şu an T105a `main`'den dallandığı için `FlagDetailView` bu dalda yok.
