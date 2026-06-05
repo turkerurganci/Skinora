@@ -9,6 +9,7 @@ using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Reputation;
+using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Lifecycle;
 
@@ -110,6 +111,21 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
             return Failure(CancelTransactionStatus.NotAParty,
                 TransactionErrorCodes.NotAParty,
                 "Caller is not a party to this transaction.");
+
+        // ---------- Stage 2a: suspension guard (T105a, 02 §14.0) ----------
+        // A suspended user cannot take the cancel action. For ITEM_ESCROWED this
+        // would otherwise publish ItemRefundToSellerRequestedEvent and pull the
+        // escrowed item back out of platform custody (the wallet-address freeze
+        // does not cover the Steam inventory return channel). Under the
+        // restricted-session model the caller's pending steps fall to timeout
+        // instead; admin can drive the lifecycle via the hold/cancel orchestrator.
+        var caller = await _db.Set<User>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == callerUserId, cancellationToken);
+        if (caller is { IsSuspended: true })
+            return Failure(CancelTransactionStatus.AccountSuspended,
+                TransactionErrorCodes.AccountSuspended,
+                "Your account is suspended; this action is not permitted (02 §14.0).");
 
         // ---------- Stage 3: reason validation (≥10 chars trimmed) ----------
         var trimmedReason = (request.Reason ?? string.Empty).Trim();

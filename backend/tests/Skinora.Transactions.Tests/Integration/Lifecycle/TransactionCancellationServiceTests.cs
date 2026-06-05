@@ -99,6 +99,28 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_Cancel_When_Caller_Suspended_And_Does_Not_Release_Escrow()
+    {
+        // T105a — a suspended seller must not be able to cancel an ITEM_ESCROWED
+        // transaction (which would pull the escrowed item back out of custody).
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        var seller = await Context.Set<User>().SingleAsync(u => u.Id == _seller.Id);
+        seller.IsSuspended = true;
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.CancelAsync(
+            _seller.Id, tx.Id,
+            new CancelTransactionRequest("İşlemi durdurmak istiyorum"),
+            CancellationToken.None);
+
+        Assert.Equal(CancelTransactionStatus.AccountSuspended, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.AccountSuspended, outcome.ErrorCode);
+        // No item-return event was published — escrow stays frozen.
+        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
+    }
+
+    [Fact]
     public async Task Seller_Cancel_From_ItemEscrowed_Emits_Item_Refund_With_Seller_Cancel_Trigger()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);

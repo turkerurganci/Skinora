@@ -46,6 +46,9 @@ public static class EmailCategoryMap
             [NotificationType.FLAG_RESOLVED] = EmailCategory.Security,
             [NotificationType.EMERGENCY_HOLD_APPLIED] = EmailCategory.Security,
             [NotificationType.EMERGENCY_HOLD_RELEASED] = EmailCategory.Security,
+            // T105a — account suspension lifecycle (security/account event).
+            [NotificationType.ACCOUNT_SUSPENDED] = EmailCategory.Security,
+            [NotificationType.ACCOUNT_UNSUSPENDED] = EmailCategory.Security,
 
             // --- Admin operational alerts (08 §4.2 — "Hesap", admin tools) ---
             // Admin-targeted notifications use the account wrapper since

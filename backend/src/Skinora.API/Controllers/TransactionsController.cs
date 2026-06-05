@@ -272,6 +272,10 @@ public sealed class TransactionsController : ControllerBase
                 StatusCodes.Status403Forbidden,
                 CancelErrorEnvelope(outcome)),
 
+            CancelTransactionStatus.AccountSuspended => StatusCode(
+                StatusCodes.Status403Forbidden,
+                CancelErrorEnvelope(outcome)),
+
             CancelTransactionStatus.PaymentAlreadySent => UnprocessableEntity(
                 CancelErrorEnvelope(outcome)),
 

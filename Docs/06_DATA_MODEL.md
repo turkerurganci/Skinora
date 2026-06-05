@@ -258,6 +258,13 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `ADMIN_ESCALATION` | Admin | Yeni dispute eskalasyonu |
 | `ADMIN_PAYMENT_FAILURE` | Admin | Satıcıya ödeme gönderim hatası (tekrarlayan) |
 | `ADMIN_STEAM_BOT_ISSUE` | Admin | Platform Steam hesabı sorunu |
+| `EMERGENCY_HOLD_APPLIED` | Her ikisi | Admin işlemi acil dondurma uyguladı (T59, 07 §9.21) |
+| `EMERGENCY_HOLD_RELEASED` | Her ikisi | Admin acil dondurmayı kaldırdı (T59, 07 §9.22) |
+| `INSUFFICIENT_PAYMENT` | Alıcı | Eksik ödeme tespit edildi (T72, 02 §4.4) |
+| `OVERPAYMENT_REFUNDED` | Alıcı | Fazla ödeme iade edildi (T72) |
+| `WRONG_TOKEN_REFUND` | Alıcı | Yanlış token iade edildi (T72, 08 §3.4) |
+| `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (T105a, 02 §14.0) |
+| `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı (T105a) |
 
 ### 2.14 NotificationChannel
 
