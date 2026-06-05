@@ -50,6 +50,17 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
     public bool IsDeactivated { get; set; }
     public DateTime? DeactivatedAt { get; set; }
 
+    // --- Admin suspension (T105a — 02 §14.0/§16.2, 03 §2.1/§8.3).
+    // Distinct from IsDeactivated (user self-deactivation): suspension is
+    // admin-enforced. Restricted-session model — a suspended user can still
+    // log in and read, but fund-flow mutations are rejected.
+    // SuspensionExpiresAt set for a temporary block (auto-unsuspended by
+    // AutoUnsuspendJob); null = permanent.
+    public bool IsSuspended { get; set; }
+    public DateTime? SuspendedAt { get; set; }
+    public string? SuspensionReason { get; set; }
+    public DateTime? SuspensionExpiresAt { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

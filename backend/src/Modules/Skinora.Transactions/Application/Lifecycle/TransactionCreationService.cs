@@ -150,8 +150,13 @@ public sealed class TransactionCreationService : ITransactionCreationService
                 $"sellerWalletAddress matched sanctions list '{sanctions.MatchedList}'.");
 
         // ---------- Stage 5: seller lookup + Steam inventory ----------
+        // T105a: a suspended seller cannot start a transaction (02 §14.0
+        // fund-flow restriction) — treated as not-eligible at the guard
+        // (defense-in-depth; the frontend restricted session is the primary gate).
         var seller = await _db.Set<User>()
-            .FirstOrDefaultAsync(u => u.Id == sellerId && !u.IsDeleted && !u.IsDeactivated, cancellationToken);
+            .FirstOrDefaultAsync(
+                u => u.Id == sellerId && !u.IsDeleted && !u.IsDeactivated && !u.IsSuspended,
+                cancellationToken);
         if (seller is null)
             return Failure(CreateTransactionStatus.SellerNotFound, TransactionErrorCodes.AccountFlagged,
                 "Seller not found.");

@@ -90,4 +90,16 @@
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
     <value>İşlem {ExpectedStablecoin} bekliyordu ama {ReceivedAmount} {ActualStablecoin} alındı. Tutar {SourceAddress} adresine iade ediliyor; lütfen doğru token ile tekrar gönder.</value>
   </data>
+  <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
+    <value>Hesabınız askıya alındı</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Body" xml:space="preserve">
+    <value>Skinora hesabınız askıya alındı: {Reason}. Aktif işlemlerinizi görüntülemeye devam edebilirsiniz ancak askı kaldırılana kadar işlem başlatamaz veya kabul edemezsiniz.</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Title" xml:space="preserve">
+    <value>Hesap askınız kaldırıldı</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
+    <value>Skinora hesabınız yeniden aktif. Artık normal şekilde işlem başlatıp kabul edebilirsiniz.</value>
+  </data>
 </root>

@@ -418,7 +418,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
   "language": "tr",
   "hasSellerWallet": true,
   "hasRefundWallet": false,
-  "createdAt": "2026-03-10T08:00:00Z"
+  "createdAt": "2026-03-10T08:00:00Z",
+  "isSuspended": false
 }
 ```
 
@@ -427,6 +428,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 | `role` | `"user"` veya `"admin"` — routing kararı |
 | `mobileAuthenticatorActive` | İşlem başlatma kontrolü |
 | `tosAccepted` | `false` → ToS modal |
+| `isSuspended` | `true` → kısıtlı oturum (SuspendedHeader + S03d), fon-akışı mutation'ları reddedilir (T105a, 02 §14.0, 03 §2.1) |
 
 ### 4.6 A5 — `POST /auth/steam/re-verify`
 
@@ -2241,6 +2243,43 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 - **Mevcut hold'lar kalkmaz:** Deactivation, daha önce sanctions match nedeniyle uygulanmış EMERGENCY_HOLD'ları otomatik kaldırmaz. Admin AD19c (`/release-hold`) ile hold'u manuel kaldırır (incelemeyi tamamladıktan sonra).
 
 **Hatalar:** 404 `SANCTIONS_ADDRESS_NOT_FOUND` (kayıt yok), 409 `SANCTIONS_ADDRESS_ALREADY_INACTIVE` (zaten deaktif), 403 `INSUFFICIENT_PERMISSION`
+
+### 9.26 AD20 — `POST /admin/users/:userId/suspend`
+
+**Amaç:** Hesabı askıya alma (02 §14.0/§16.2, 03 §8.3 — T105a). Permission: `MANAGE_FLAGS` (flag'lenmiş hesap yönetimi kapsamı). `:userId` kullanıcının iç Guid'idir.
+
+**Enforcement modeli — kısıtlı oturum:** Askıya alma login'i engellemez (`IsDeactivated`'dan farklı). Suspended kullanıcı giriş yapar + aktif işlemlerini salt-okunur görür, ancak fon-akışı mutation'ları (işlem oluştur/kabul + cüzdan adresi değiştir) reddedilir; `/auth/me` `isSuspended=true` döner → istemci SuspendedHeader + S03d gösterir.
+
+**Request:**
+```json
+{ "reason": "Çoklu hesap tespiti", "durationDays": 7 }
+```
+
+`reason`: Zorunlu, ≥10 karakter. `durationDays`: `null` = kalıcı; pozitif sayı = geçici blok (süre dolunca `AutoUnsuspendJob` otomatik kaldırır, 6 saatte bir tarar).
+
+**Response (200) `data`:**
+```json
+{ "userId": "guid", "suspendedAt": "2026-06-05T12:00:00Z", "reason": "Çoklu hesap tespiti", "expiresAt": "2026-06-12T12:00:00Z" }
+```
+
+**Yan etkiler:** `User.IsSuspended/SuspendedAt/SuspensionReason/SuspensionExpiresAt` set edilir; `AuditLog` ADMIN_ACTION kategorisinde `USER_BANNED`; `AccountSuspendedEvent` → kullanıcıya `ACCOUNT_SUSPENDED` bildirimi. Tek `SaveChanges` ile atomik.
+
+**Hatalar:** 400 `VALIDATION_ERROR` (reason <10 veya durationDays ≤0), 404 `USER_NOT_FOUND`, 409 `ALREADY_SUSPENDED`, 403 `INSUFFICIENT_PERMISSION`
+
+> **Not:** Askıya alma, otomatik EMERGENCY_HOLD uygulamaz (S14 "Hold" ayrı aksiyon — AD19d). SignalR canlı force-restrict ertelendi; kullanıcının sonraki isteği/login'i suspended durumu algılar.
+
+### 9.27 AD21 — `DELETE /admin/users/:userId/suspend`
+
+**Amaç:** Askıyı kaldırma. Permission: `MANAGE_FLAGS`. (Geçici blok süresi dolduğunda aynı yol `AutoUnsuspendJob` tarafından SYSTEM aktörü ile otomatik çağrılır.)
+
+**Response (200) `data`:**
+```json
+{ "userId": "guid", "unsuspendedAt": "2026-06-08T09:00:00Z" }
+```
+
+**Yan etkiler:** Suspension alanları temizlenir; `AuditLog` `USER_UNBANNED`; `AccountUnsuspendedEvent` → `ACCOUNT_UNSUSPENDED` bildirimi.
+
+**Hatalar:** 404 `USER_NOT_FOUND`, 409 `NOT_SUSPENDED`, 403 `INSUFFICIENT_PERMISSION`
 
 ---
 

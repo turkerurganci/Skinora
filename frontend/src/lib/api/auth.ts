@@ -25,3 +25,27 @@ export function initiateSteamReVerify(
     body: JSON.stringify({ purpose, returnUrl }),
   });
 }
+
+/**
+ * A4 — `GET /auth/me` current-session profile (07 §4.5). Mirrors the backend
+ * `CurrentUserDto`. `isSuspended` (T105a) drives the restricted session
+ * (SuspendedHeader + S03d).
+ */
+export interface MeResponse {
+  id: string;
+  steamId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  mobileAuthenticatorActive: boolean;
+  tosAccepted: boolean;
+  role: string;
+  language: string;
+  hasSellerWallet: boolean;
+  hasRefundWallet: boolean;
+  createdAt: string;
+  isSuspended: boolean;
+}
+
+export function getMe(): Promise<MeResponse> {
+  return apiClient<MeResponse>("/auth/me");
+}

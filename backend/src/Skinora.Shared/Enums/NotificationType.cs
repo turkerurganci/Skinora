@@ -28,5 +28,9 @@ public enum NotificationType
     // --- T72: Blockchain amount validation outcomes (02 §4.4, 08 §3.4) ---
     INSUFFICIENT_PAYMENT,
     OVERPAYMENT_REFUNDED,
-    WRONG_TOKEN_REFUND
+    WRONG_TOKEN_REFUND,
+
+    // --- T105a: Account suspension lifecycle (02 §14.0/§16.2, 03 §2.1/§8.3) ---
+    ACCOUNT_SUSPENDED,
+    ACCOUNT_UNSUSPENDED
 }

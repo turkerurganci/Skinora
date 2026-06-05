@@ -84,6 +84,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasDefaultValue(false);
 
+        // --- Admin suspension (T105a) ---
+        builder.Property(u => u.IsSuspended)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(u => u.SuspensionReason)
+            .HasMaxLength(500);
+
         // --- Soft delete ---
         builder.Property(u => u.IsDeleted)
             .IsRequired()

@@ -65,9 +65,11 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 TransactionErrorCodes.TransactionNotFound,
                 "Transaction not found.");
 
+        // T105a: a suspended buyer cannot accept a transaction (incl. via open
+        // link) — 02 §14.0 fund-flow restriction; treated as not-eligible at the guard.
         var buyer = await _db.Set<User>()
             .FirstOrDefaultAsync(
-                u => u.Id == buyerId && !u.IsDeleted && !u.IsDeactivated,
+                u => u.Id == buyerId && !u.IsDeleted && !u.IsDeactivated && !u.IsSuspended,
                 cancellationToken);
         if (buyer is null)
             return Failure(AcceptTransactionStatus.BuyerNotFound,

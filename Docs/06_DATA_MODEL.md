@@ -400,8 +400,12 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 | `CompletedTransactionCount` | int | NOT NULL, DEFAULT 0 | Tamamlanan işlem sayısı (denormalized) |
 | `SuccessfulTransactionRate` | decimal(5,4) | NULL | Başarılı işlem oranı (denormalized, ör: 0.9500 = %95). Formül aşağıda |
 | `CooldownExpiresAt` | datetime | NULL | İptal sonrası geçici yasak bitiş zamanı |
-| `IsDeactivated` | bool | NOT NULL, DEFAULT 0 | Hesap deaktif mi |
+| `IsDeactivated` | bool | NOT NULL, DEFAULT 0 | Hesap deaktif mi (kullanıcı kaynaklı, login engellenir) |
 | `DeactivatedAt` | datetime | NULL | Deaktif edilme zamanı |
+| `IsSuspended` | bool | NOT NULL, DEFAULT 0 | Admin askıya alma (T105a, 02 §14.0). Deaktiften bağımsız — login serbest, fon-akışı mutation'ları reddedilir (kısıtlı oturum) |
+| `SuspendedAt` | datetime | NULL | Askıya alınma zamanı |
+| `SuspensionReason` | nvarchar(500) | NULL | Admin askı sebebi |
+| `SuspensionExpiresAt` | datetime | NULL | Geçici blok bitişi (NULL = kalıcı; `AutoUnsuspendJob` süre dolunca kaldırır) |
 | `IsDeleted` | bool | NOT NULL, DEFAULT 0 | Soft delete flag |
 | `DeletedAt` | datetime | NULL | Silinme zamanı |
 | `CreatedAt` | datetime | NOT NULL | Hesap oluşturulma zamanı |
