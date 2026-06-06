@@ -235,6 +235,9 @@
       "item": "Ítem",
       "amount": "Importe",
       "marketPrice": "Precio de Mercado",
+      "signal": "Detalle de Señal",
+      "linkedAccounts": "Cuentas Vinculadas",
+      "activeTransactions": "Transacciones Activas",
       "date": "Fecha",
       "status": "Estado"
     },
@@ -294,7 +297,20 @@
       "description": "Descripción",
       "matchType": "Tipo de Coincidencia",
       "matchValue": "Valor Coincidente",
-      "linkedAccounts": "Cuentas Vinculadas"
+      "linkedAccounts": "Cuentas Vinculadas",
+      "supportingSignals": "Señales de Apoyo",
+      "activeTransactions": "Transacciones Activas ({count})",
+      "noActiveTransactions": "Sin transacciones activas.",
+      "onHold": "En Espera"
+    },
+    "signalType": {
+      "IP_ADDRESS": "Dirección IP",
+      "DEVICE_FINGERPRINT": "Huella del Dispositivo",
+      "SOURCE_ADDRESS": "Dirección de Origen"
+    },
+    "role": {
+      "SELLER": "Vendedor",
+      "BUYER": "Comprador"
     },
     "actions": {
       "continue": "Continuar Transacción",

@@ -235,6 +235,9 @@
       "item": "Item",
       "amount": "Tutar",
       "marketPrice": "Piyasa Fiyatı",
+      "signal": "Sinyal Detayı",
+      "linkedAccounts": "İlişkili Hesaplar",
+      "activeTransactions": "Aktif İşlem Sayısı",
       "date": "Tarih",
       "status": "Durum"
     },
@@ -294,7 +297,20 @@
       "description": "Açıklama",
       "matchType": "Eşleşme Türü",
       "matchValue": "Eşleşen Değer",
-      "linkedAccounts": "İlişkili Hesaplar"
+      "linkedAccounts": "İlişkili Hesaplar",
+      "supportingSignals": "Destekleyici Sinyaller",
+      "activeTransactions": "Aktif İşlemler ({count})",
+      "noActiveTransactions": "Aktif işlem yok.",
+      "onHold": "Hold'da"
+    },
+    "signalType": {
+      "IP_ADDRESS": "IP Adresi",
+      "DEVICE_FINGERPRINT": "Cihaz Parmak İzi",
+      "SOURCE_ADDRESS": "Kaynak Adres"
+    },
+    "role": {
+      "SELLER": "Satıcı",
+      "BUYER": "Alıcı"
     },
     "actions": {
       "continue": "İşleme Devam Et",

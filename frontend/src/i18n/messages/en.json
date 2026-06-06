@@ -235,6 +235,9 @@
       "item": "Item",
       "amount": "Amount",
       "marketPrice": "Market Price",
+      "signal": "Signal Detail",
+      "linkedAccounts": "Linked Accounts",
+      "activeTransactions": "Active Transactions",
       "date": "Date",
       "status": "Status"
     },
@@ -294,7 +297,20 @@
       "description": "Description",
       "matchType": "Match Type",
       "matchValue": "Matched Value",
-      "linkedAccounts": "Linked Accounts"
+      "linkedAccounts": "Linked Accounts",
+      "supportingSignals": "Supporting Signals",
+      "activeTransactions": "Active Transactions ({count})",
+      "noActiveTransactions": "No active transactions.",
+      "onHold": "On Hold"
+    },
+    "signalType": {
+      "IP_ADDRESS": "IP Address",
+      "DEVICE_FINGERPRINT": "Device Fingerprint",
+      "SOURCE_ADDRESS": "Source Address"
+    },
+    "role": {
+      "SELLER": "Seller",
+      "BUYER": "Buyer"
     },
     "actions": {
       "continue": "Continue Transaction",

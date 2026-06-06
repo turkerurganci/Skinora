@@ -15,6 +15,15 @@ public sealed record FraudFlagListItemDto(
     decimal? Price,
     StablecoinType? Stablecoin,
     decimal? MarketPrice,
+    // K2 (07 §9.2, 04 §8.2 hesap-flag kolonları) — populated only for
+    // ACCOUNT_LEVEL rows (null for transaction flags). SignalSummary is the
+    // raw matched identifier (wallet address / pattern) — non-translatable, so
+    // the frontend just labels the column; the full IP/device evidence lives in
+    // the AD3 detail (supportingSignals). LinkedAccountCount comes from the
+    // parsed flagDetail; ActiveTransactionCount is the per-user active count.
+    string? SignalSummary,
+    int? LinkedAccountCount,
+    int? ActiveTransactionCount,
     DateTime CreatedAt);
 
 /// <summary>
@@ -45,9 +54,38 @@ public sealed record FraudFlagDetailDto(
     FlagPartyDetailDto? Seller,
     FlagPartyDetailDto? Buyer,
     int HistoricalTransactionCount,
+    // K9 (07 §9.3, 04 §8.3 hesap-flag madde 4) — the flagged user's current
+    // active (non-terminal) transactions; count = list length. Populated for
+    // every flag but primarily consumed by the account-flag S14 variant.
+    IReadOnlyList<FlagActiveTransactionDto> ActiveTransactions,
     [property: JsonPropertyName("reviewedBy")] Guid? ReviewedByAdminId,
     DateTime? ReviewedAt,
     string? AdminNote);
+
+/// <summary>
+/// One active (non-terminal) transaction of the flagged user, surfaced by AD3
+/// for the account-flag S14 variant (K9 — 04 §8.3 "Aktif İşlemler"). "Active"
+/// mirrors the AD19d hold predicate (07 §9.22a): any non-terminal status
+/// (<see cref="TransactionStatus.FLAGGED"/> included), either party.
+/// <see cref="IsOnHold"/> tells the admin which rows a subsequent bulk-hold
+/// would skip (the hold is idempotent and only affects the non-held subset).
+/// </summary>
+public sealed record FlagActiveTransactionDto(
+    Guid Id,
+    TransactionStatus Status,
+    string ItemName,
+    decimal Price,
+    StablecoinType Stablecoin,
+    FlagTransactionRole Role,
+    bool IsOnHold,
+    DateTime CreatedAt);
+
+/// <summary>Role of the flagged user in a <see cref="FlagActiveTransactionDto"/> (07 §9.3).</summary>
+public enum FlagTransactionRole
+{
+    SELLER,
+    BUYER,
+}
 
 /// <summary>Lightweight party view used by AD2 list (07 §9.2).</summary>
 public sealed record FlagPartyDto(
@@ -112,9 +150,24 @@ public sealed record AbnormalBehaviorFlagDetail(
 public sealed record MultiAccountFlagDetail(
     string MatchType,
     string MatchValue,
-    IReadOnlyList<MultiAccountLinkedAccount> LinkedAccounts);
+    IReadOnlyList<MultiAccountLinkedAccount> LinkedAccounts,
+    // K10 (07 §9.3:1742) — supporting evidence (IP_ADDRESS / DEVICE_FINGERPRINT /
+    // SOURCE_ADDRESS). MultiAccountDetector already serialises these into
+    // FraudFlag.Details; the DTO now deserialises them so S14 can render the
+    // IP/device evidence alongside the strong wallet-address signal.
+    IReadOnlyList<MultiAccountSupportingSignal> SupportingSignals);
 
 /// <summary>Linked account entry inside <see cref="MultiAccountFlagDetail"/>.</summary>
 public sealed record MultiAccountLinkedAccount(
     string SteamId,
     string DisplayName);
+
+/// <summary>
+/// Supporting-signal entry inside <see cref="MultiAccountFlagDetail"/> (07 §9.3).
+/// <c>Type</c> is one of <c>IP_ADDRESS</c> / <c>DEVICE_FINGERPRINT</c> /
+/// <c>SOURCE_ADDRESS</c>; these are evidence only and never flag on their own.
+/// </summary>
+public sealed record MultiAccountSupportingSignal(
+    string Type,
+    string Value,
+    IReadOnlyList<MultiAccountLinkedAccount> LinkedAccounts);
