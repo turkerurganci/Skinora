@@ -119,6 +119,37 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
         Assert.Equal(0, txData.GetProperty("totalCount").GetInt32());
     }
 
+    [Fact]
+    public async Task ListFlags_AccountFlag_SerializesSignalFields()
+    {
+        // T100a — account-flag rows carry signalSummary / linkedAccountCount /
+        // activeTransactionCount through the wire (07 §9.2, 04 §8.2).
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_PAYOUT",
+            matchValue = "TWireAddr999",
+            linkedAccounts = new[]
+            {
+                new { steamId = "1", displayName = "A" },
+                new { steamId = "2", displayName = "B" },
+            },
+            supportingSignals = Array.Empty<object>(),
+        });
+        await _factory.SeedAccountFlagAsync(seller.Id, ReviewStatus.PENDING, details: details);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync("/api/v1/admin/flags?scope=ACCOUNT_LEVEL");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var item = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("items")[0];
+        Assert.Equal("TWireAddr999", item.GetProperty("signalSummary").GetString());
+        Assert.Equal(2, item.GetProperty("linkedAccountCount").GetInt32());
+        Assert.Equal(0, item.GetProperty("activeTransactionCount").GetInt32());
+    }
+
     // ---------- AD3 GET /admin/flags/:id ----------
 
     [Fact]
@@ -307,7 +338,8 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
         public async Task<Guid> SeedAccountFlagAsync(
             Guid userId,
             ReviewStatus status,
-            Guid? reviewerAdminId = null)
+            Guid? reviewerAdminId = null,
+            string? details = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -319,7 +351,7 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
                 Scope = FraudFlagScope.ACCOUNT_LEVEL,
                 Type = FraudFlagType.MULTI_ACCOUNT,
                 Status = status,
-                Details = "{\"matchType\":\"wallet\"}",
+                Details = details ?? "{\"matchType\":\"wallet\"}",
                 ReviewedAt = status != ReviewStatus.PENDING ? DateTime.UtcNow : null,
                 ReviewedByAdminId = status != ReviewStatus.PENDING
                     ? reviewerAdminId ?? throw new InvalidOperationException(

@@ -2011,6 +2011,32 @@ Task T100: Admin Flag kuyruğu + detay (S13, S14)
 ```
 
 ```
+Task T100a: Admin Flag hesap-varyant DTO genişletme (AD2/AD3, S13/S14)
+  Bağımlılık: T100
+  Dokümanlar: 04 §8.2–§8.3, 07 §9.2–§9.3
+  Bağlam: T100 validasyonunda hesap-flag içerik tamlığı eksiklikleri (K2/K9/K10)
+          backend AD2/AD3 projeksiyonuna ertelendi (proje sahibi onayı 2026-06-06).
+          Bu task o projeksiyon boşluklarını full-stack kapatır (backend DTO + frontend render).
+  Kabul kriterleri:
+    - K10: AD3 MULTI_ACCOUNT flagDetail.supportingSignals (IP_ADDRESS / DEVICE_FINGERPRINT /
+      SOURCE_ADDRESS — type, value, linkedAccounts[]) backend DTO'da projekte edilir ve S14'te
+      gösterilir (07 §9.3:1742; veri zaten FraudFlag.Details JSON'unda mevcut)
+    - K9: AD3 hesap-flag "Aktif İşlemler" — flag'lenen kullanıcının aktif (terminal-olmayan)
+      işlem sayısı + listesi backend DTO'da projekte edilir ve S14'te gösterilir (04 §8.3 madde 4)
+    - K2: AD2 hesap-flag liste kolonları — Sinyal Detayı / İlişkili Hesaplar / Aktif İşlem Sayısı
+      backend liste projeksiyonunda doldurulur (yalnız ACCOUNT_LEVEL) ve S13 hesap-varyant
+      tablosunda gösterilir (04 §8.2)
+    - Aktif işlem tanımı AD19d (07 §9.22a) predikatıyla tutarlı: her iki taraf, 5 terminal-state
+      hariç (FLAGGED aktif sayılır)
+  Test beklentisi: Backend integration (Fraud) — supportingSignals roundtrip, AD3 activeTransactions
+    sayı+liste, AD2 hesap-flag alanları (signalSummary/linkedAccountCount/activeTransactionCount)
+  Doğrulama kontrol listesi:
+    - [ ] 07 §9.3 MULTI_ACCOUNT supportingSignals kontratı backend↔frontend birebir mi?
+    - [ ] 04 §8.3 hesap-varyant "Aktif İşlemler" (sayı+liste) gösteriliyor mu?
+    - [ ] 04 §8.2 hesap-flag tablo kolonları (Sinyal/İlişkili/Aktif) dolu mu?
+```
+
+```
 Task T101: Admin İşlem listesi + detay (S15, S16)
   Bağımlılık: T85
   Dokümanlar: 04 §8.4–§8.5

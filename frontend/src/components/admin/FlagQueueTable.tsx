@@ -37,13 +37,9 @@ export interface FlagQueueTableProps {
 
 /**
  * S13 flag-queue table (04 §8.2). Column set adapts to the selected category:
- * transaction flags surface item / amount / market-price; account flags drop
- * those tx-only columns; "Tümü" adds a category column. The account-flag
- * signal columns (Sinyal Detayı / İlişkili Hesaplar / Aktif İşlem Sayısı) are
- * not carried by the AD2 list projection (07 §9.2). The S14 detail surfaces
- * the multi-account signal + linked accounts only; the per-user active-tx
- * count/list and the IP/device signal are not yet projected by AD2/AD3 and
- * are deferred to a backend DTO-expansion task (see T100 report K2/K9/K10).
+ * transaction flags surface item / amount / market-price; account flags swap
+ * in the signal columns (Sinyal Detayı / İlişkili Hesaplar / Aktif İşlem Sayısı)
+ * carried by the AD2 projection (07 §9.2 — T100a); "Tümü" adds a category column.
  */
 export function FlagQueueTable({ flags, category, className }: FlagQueueTableProps) {
   const t = useTranslations("adminFlags");
@@ -103,6 +99,32 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
       </span>
     ),
   };
+  const signalColumn: ResponsiveTableColumn<AdminFlagListItem> = {
+    key: "signal",
+    header: t("columns.signal"),
+    cell: (row) =>
+      row.signalSummary ? (
+        <span className="break-all font-mono text-xs text-gray-700">{row.signalSummary}</span>
+      ) : (
+        <span className="text-sm text-gray-400">—</span>
+      ),
+  };
+  const linkedColumn: ResponsiveTableColumn<AdminFlagListItem> = {
+    key: "linked",
+    header: t("columns.linkedAccounts"),
+    cell: (row) => (
+      <span className="text-sm tabular-nums text-gray-700">{row.linkedAccountCount ?? "—"}</span>
+    ),
+  };
+  const activeColumn: ResponsiveTableColumn<AdminFlagListItem> = {
+    key: "active",
+    header: t("columns.activeTransactions"),
+    cell: (row) => (
+      <span className="text-sm tabular-nums text-gray-700">
+        {row.activeTransactionCount ?? "—"}
+      </span>
+    ),
+  };
   const dateColumn: ResponsiveTableColumn<AdminFlagListItem> = {
     key: "createdAt",
     header: t("columns.date"),
@@ -131,7 +153,16 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
       statusColumn,
     ];
   } else if (category === "ACCOUNT_LEVEL") {
-    columns = [idColumn, userColumn, typeColumn, dateColumn, statusColumn];
+    columns = [
+      idColumn,
+      userColumn,
+      typeColumn,
+      signalColumn,
+      linkedColumn,
+      activeColumn,
+      dateColumn,
+      statusColumn,
+    ];
   } else {
     columns = [idColumn, scopeColumn, typeColumn, userColumn, dateColumn, statusColumn];
   }

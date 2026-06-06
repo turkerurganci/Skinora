@@ -197,6 +197,38 @@ export function FlagDetailView({ flag }: FlagDetailViewProps) {
               </ul>
             </div>
           )}
+          {p.supportingSignals && p.supportingSignals.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+                {t("detail.supportingSignals")}
+              </p>
+              <ul className="flex flex-col gap-2">
+                {p.supportingSignals.map((s, i) => (
+                  <li
+                    key={`${s.type}-${i}`}
+                    className="rounded border border-gray-100 bg-gray-50 p-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-gray-700">
+                        {t(`signalType.${s.type}`)}
+                      </span>
+                      <span className="break-all font-mono text-xs text-gray-500">{s.value}</span>
+                    </div>
+                    {s.linkedAccounts.length > 0 && (
+                      <ul className="mt-1 flex flex-col gap-0.5">
+                        {s.linkedAccounts.map((a) => (
+                          <li key={a.steamId} className="text-xs text-gray-700">
+                            {a.displayName}{" "}
+                            <span className="font-mono text-gray-400">({a.steamId})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       );
     }
@@ -297,6 +329,47 @@ export function FlagDetailView({ flag }: FlagDetailViewProps) {
               />
             </div>
           </Section>
+
+          {/* Active transactions — account-flag variant (04 §8.3 madde 4) */}
+          {isAccount && (
+            <Section
+              title={t("detail.activeTransactions", {
+                count: flag.activeTransactions.length,
+              })}
+            >
+              {flag.activeTransactions.length === 0 ? (
+                <p className="text-sm text-gray-500">{t("detail.noActiveTransactions")}</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {flag.activeTransactions.map((tx) => (
+                    <li
+                      key={tx.id}
+                      className="flex flex-col gap-1 rounded border border-gray-100 p-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{tx.itemName}</span>
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gray-600">
+                          {t(`role.${tx.role}`)}
+                        </span>
+                        {tx.isOnHold && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">
+                            {t("detail.onHold")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
+                        <StatusBadge status={tx.status} />
+                        <span className="tabular-nums">
+                          {formatStablecoin(tx.price, tx.stablecoin)}
+                        </span>
+                        <time dateTime={tx.createdAt}>{formatDateTime(tx.createdAt, locale)}</time>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+          )}
         </div>
 
         {/* Action rail */}

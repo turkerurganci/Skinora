@@ -1687,6 +1687,8 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 
 Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 
+> **Hesap-flag kolonları (T100a — 04 §8.2):** `scope = ACCOUNT_LEVEL` satırlarında üç ek alan dolar (işlem flag'lerinde `null`): `signalSummary` (eşleşen ham tanımlayıcı — MULTI_ACCOUNT için cüzdan adresi, ABNORMAL_BEHAVIOR için patern; çevrilebilir değildir, frontend yalnız kolonu etiketler; tam IP/cihaz kanıtı AD3 `supportingSignals`'tedir), `linkedAccountCount` (MULTI_ACCOUNT eşleşen hesap sayısı; tipte yoksa `null`), `activeTransactionCount` (kullanıcının aktif işlem sayısı — AD3 `activeTransactions` ile aynı predikat).
+
 > **Para alanları (T100 netleştirme):** AD2/AD3 flag yüzeyindeki para alanları (`price`, `marketPrice`, `flagDetail` sayısal alanları) JSON **number** olarak serialize olur (`decimal` DTO, kayıtlı `flagDetail` JSON'u zaten number). Bu, işlem (S07/S15) DTO'larındaki `string Price` (scale-6 string) konvansiyonundan **farklıdır** — flag fiyatları 2 ondalıklı item fiyatları olduğundan double precision riski ihmal edilebilir; flag yüzeyi kendi içinde tutarlıdır.
 
 ### 9.3 AD3 — `GET /admin/flags/:id`
@@ -1726,11 +1728,27 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
   "buyer": null,
 
   "historicalTransactionCount": 2,
+
+  "activeTransactions": [
+    {
+      "id": "tx-guid",
+      "status": "PAYMENT_RECEIVED",
+      "itemName": "AWP | Asiimov",
+      "price": 80.00,
+      "stablecoin": "USDT",
+      "role": "SELLER",
+      "isOnHold": false,
+      "createdAt": "2026-03-16T11:00:00Z"
+    }
+  ],
+
   "reviewedBy": null,
   "reviewedAt": null,
   "adminNote": null
 }
 ```
+
+> **`activeTransactions` (T100a — 04 §8.3 hesap-flag madde 4):** Flag'lenen kullanıcının aktif (terminal-olmayan) işlemleri; sayı = liste uzunluğu. "Aktif" tanımı AD19d (§9.22a) ile birebir: her iki taraf (`role` ∈ `SELLER` | `BUYER`), beş terminal durum (`COMPLETED`, `CANCELLED_TIMEOUT`/`_SELLER`/`_BUYER`/`_ADMIN`) hariç, `FLAGGED` dahil. `isOnHold = true` satırlar hâlâ aktiftir (listede kalır) ama bir sonraki toplu Hold'un (idempotent) atlayacağı satırları gösterir. Tüm flag türleri için döner; öncelikle hesap-flag S14 varyantı tüketir.
 
 **`flagDetail` türe göre:**
 

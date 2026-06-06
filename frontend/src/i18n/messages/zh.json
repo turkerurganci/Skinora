@@ -235,6 +235,9 @@
       "item": "物品",
       "amount": "金额",
       "marketPrice": "市场价格",
+      "signal": "信号详情",
+      "linkedAccounts": "关联账户",
+      "activeTransactions": "活跃交易数",
       "date": "日期",
       "status": "状态"
     },
@@ -294,7 +297,20 @@
       "description": "描述",
       "matchType": "匹配类型",
       "matchValue": "匹配值",
-      "linkedAccounts": "关联账户"
+      "linkedAccounts": "关联账户",
+      "supportingSignals": "辅助信号",
+      "activeTransactions": "活跃交易（{count}）",
+      "noActiveTransactions": "无活跃交易。",
+      "onHold": "已冻结"
+    },
+    "signalType": {
+      "IP_ADDRESS": "IP 地址",
+      "DEVICE_FINGERPRINT": "设备指纹",
+      "SOURCE_ADDRESS": "来源地址"
+    },
+    "role": {
+      "SELLER": "卖方",
+      "BUYER": "买方"
     },
     "actions": {
       "continue": "继续交易",

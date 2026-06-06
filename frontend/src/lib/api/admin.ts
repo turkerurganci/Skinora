@@ -99,6 +99,11 @@ export interface AdminFlagListItem {
   price: number | null;
   stablecoin: StablecoinType | null;
   marketPrice: number | null;
+  // Account-flag columns (07 §9.2, 04 §8.2) — populated only for ACCOUNT_LEVEL
+  // rows; null on transaction flags.
+  signalSummary: string | null;
+  linkedAccountCount: number | null;
+  activeTransactionCount: number | null;
   createdAt: string;
 }
 
@@ -147,10 +152,33 @@ export interface MultiAccountLinkedAccount {
   displayName: string;
 }
 
+/** Supporting-signal entry (07 §9.3) — IP_ADDRESS / DEVICE_FINGERPRINT / SOURCE_ADDRESS. */
+export interface MultiAccountSupportingSignal {
+  type: string;
+  value: string;
+  linkedAccounts: MultiAccountLinkedAccount[];
+}
+
 export interface MultiAccountFlagDetail {
   matchType: string;
   matchValue: string;
   linkedAccounts: MultiAccountLinkedAccount[];
+  supportingSignals: MultiAccountSupportingSignal[];
+}
+
+/** Role of the flagged user in a {@link FlagActiveTransaction} (07 §9.3). */
+export type FlagTransactionRole = "SELLER" | "BUYER";
+
+/** One active (non-terminal) transaction of the flagged user (AD3 — 04 §8.3). */
+export interface FlagActiveTransaction {
+  id: string;
+  status: TransactionStatus;
+  itemName: string;
+  price: number;
+  stablecoin: StablecoinType;
+  role: FlagTransactionRole;
+  isOnHold: boolean;
+  createdAt: string;
 }
 
 /** AD3 detail body (07 §9.3). `flagDetail` is narrowed by `type` at the call site. */
@@ -166,6 +194,7 @@ export interface AdminFlagDetail {
   seller: AdminFlagPartyDetail | null;
   buyer: AdminFlagPartyDetail | null;
   historicalTransactionCount: number;
+  activeTransactions: FlagActiveTransaction[];
   reviewedBy: string | null;
   reviewedAt: string | null;
   adminNote: string | null;
