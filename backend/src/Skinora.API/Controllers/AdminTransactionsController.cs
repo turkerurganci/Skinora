@@ -48,6 +48,7 @@ public sealed class AdminTransactionsController : ControllerBase
     [RateLimit("admin-read")]
     public async Task<ActionResult<PagedResult<AdminTransactionListItemDto>>> List(
         [FromQuery] TransactionStatus? status,
+        [FromQuery] AdminTransactionStatusGroup? statusGroup,
         [FromQuery] StablecoinType? stablecoin,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
@@ -62,6 +63,7 @@ public sealed class AdminTransactionsController : ControllerBase
     {
         var query = new AdminTransactionListQuery(
             Status: status,
+            StatusGroup: statusGroup,
             Stablecoin: stablecoin,
             DateFrom: dateFrom,
             DateTo: dateTo,

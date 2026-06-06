@@ -52,6 +52,30 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
         TransactionStatus.FLAGGED,
     ];
 
+    /// <summary>
+    /// Terminal states — mirrors <c>AdminDashboardService._terminalStates</c>
+    /// so the <see cref="AdminTransactionStatusGroup.ACTIVE"/> bucket
+    /// (= "not terminal") matches the AD1 dashboard active-transaction counter
+    /// exactly (07 §9.6 / §9.1).
+    /// </summary>
+    private static readonly TransactionStatus[] _terminalStates =
+    [
+        TransactionStatus.COMPLETED,
+        TransactionStatus.CANCELLED_TIMEOUT,
+        TransactionStatus.CANCELLED_SELLER,
+        TransactionStatus.CANCELLED_BUYER,
+        TransactionStatus.CANCELLED_ADMIN,
+    ];
+
+    /// <summary>The four CANCELLED_* states behind the S15 "İptal" group (04 §8.4).</summary>
+    private static readonly TransactionStatus[] _cancelledStates =
+    [
+        TransactionStatus.CANCELLED_TIMEOUT,
+        TransactionStatus.CANCELLED_SELLER,
+        TransactionStatus.CANCELLED_BUYER,
+        TransactionStatus.CANCELLED_ADMIN,
+    ];
+
     private readonly AppDbContext _db;
 
     public AdminTransactionQueryService(AppDbContext db)
@@ -277,6 +301,21 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
 
         if (q.Status.HasValue)
             query = query.Where(t => t.Status == q.Status.Value);
+        if (q.StatusGroup.HasValue)
+        {
+            query = q.StatusGroup.Value switch
+            {
+                AdminTransactionStatusGroup.ACTIVE =>
+                    query.Where(t => !_terminalStates.Contains(t.Status)),
+                AdminTransactionStatusGroup.COMPLETED =>
+                    query.Where(t => t.Status == TransactionStatus.COMPLETED),
+                AdminTransactionStatusGroup.CANCELLED =>
+                    query.Where(t => _cancelledStates.Contains(t.Status)),
+                AdminTransactionStatusGroup.FLAGGED =>
+                    query.Where(t => t.Status == TransactionStatus.FLAGGED),
+                _ => query,
+            };
+        }
         if (q.Stablecoin.HasValue)
             query = query.Where(t => t.StablecoinType == q.Stablecoin.Value);
         if (q.DateFrom.HasValue)

@@ -1806,7 +1806,18 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 
 **Amaç:** Tüm işlem listesi (S15). Permission: `VIEW_TRANSACTIONS`. Paginated.
 
-**Query Params:** `status`, `stablecoin`, `dateFrom`, `dateTo`, `minAmount`, `maxAmount`, `search`, `sortBy`, `sortOrder`
+**Query Params:** `status`, `statusGroup`, `stablecoin`, `dateFrom`, `dateTo`, `minAmount`, `maxAmount`, `search`, `sortBy`, `sortOrder`
+
+`statusGroup` — 04 §8.4 "Durum" filtresinin çok-durumlu gruplarını sunucu tarafında ifade eder (tek `status` paramı yetmediği için). Değerler:
+
+| `statusGroup` | Kapsadığı durumlar |
+|---|---|
+| `ACTIVE` | Terminal olmayan tüm durumlar (CREATED…ITEM_DELIVERED + FLAGGED) — AD1 dashboard `activeTransactions` sayacı ile birebir (`?tab=active` deep-link tutarlılığı). |
+| `COMPLETED` | `COMPLETED` |
+| `CANCELLED` | `CANCELLED_TIMEOUT`, `CANCELLED_SELLER`, `CANCELLED_BUYER`, `CANCELLED_ADMIN` |
+| `FLAGGED` | `FLAGGED` (ACTIVE'in daralan alt kümesi) |
+
+`status` ve `statusGroup` birlikte verilirse ikisi de uygulanır (AND); S15 UI yalnızca birini gönderir.
 
 **Response (200) `data.items[]`:**
 ```json

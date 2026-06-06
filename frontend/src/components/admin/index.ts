@@ -22,3 +22,9 @@ export type {
   FlagActionTone,
   FlagActionReasonConfig,
 } from "./FlagActionModal";
+
+export { TransactionListTable } from "./TransactionListTable";
+export type { TransactionListTableProps } from "./TransactionListTable";
+
+export { TransactionDetailView } from "./TransactionDetailView";
+export type { TransactionDetailViewProps } from "./TransactionDetailView";

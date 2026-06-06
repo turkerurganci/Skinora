@@ -263,6 +263,91 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
     }
 
     [Fact]
+    public async Task ListTransactions_StatusGroupActive_ExcludesTerminalIncludesFlagged()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CREATED);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.ITEM_ESCROWED);
+        // FLAGGED is non-terminal → counted as ACTIVE (mirrors AD1 dashboard).
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.FLAGGED);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_BUYER);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin,
+            ["VIEW_TRANSACTIONS"]);
+        var response = await client.GetAsync(
+            "/api/v1/admin/transactions?statusGroup=ACTIVE");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        // CREATED + ITEM_ESCROWED + FLAGGED; COMPLETED + CANCELLED_BUYER excluded.
+        Assert.Equal(3, data.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task ListTransactions_StatusGroupCancelled_ReturnsAllCancelledVariants()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_TIMEOUT);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_SELLER);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_BUYER);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_ADMIN);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.FLAGGED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin,
+            ["VIEW_TRANSACTIONS"]);
+        var response = await client.GetAsync(
+            "/api/v1/admin/transactions?statusGroup=CANCELLED");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(4, data.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task ListTransactions_StatusGroupFlagged_ReturnsOnlyFlagged()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.FLAGGED);
+        await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CREATED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin,
+            ["VIEW_TRANSACTIONS"]);
+        var response = await client.GetAsync(
+            "/api/v1/admin/transactions?statusGroup=FLAGGED");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(1, data.GetProperty("totalCount").GetInt32());
+        Assert.Equal("FLAGGED",
+            data.GetProperty("items")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task ListTransactions_SearchByItemName_FindsMatch()
     {
         var admin = await _factory.CreateUserAsync();
