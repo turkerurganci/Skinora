@@ -28,7 +28,13 @@ public sealed record AdminUserDetailProfileDto(
     string AccountStatus,
     string AccountAge,
     DateTime CreatedAt,
-    decimal? ReputationScore);
+    decimal? ReputationScore,
+    // T105a — admin suspension visibility (04 §8.9). IsSuspended is independent
+    // of IsDeactivated; SuspensionExpiresAt null = permanent.
+    bool IsSuspended,
+    DateTime? SuspendedAt,
+    string? SuspensionReason,
+    DateTime? SuspensionExpiresAt);
 
 public sealed record AdminUserDetailStatsDto(
     int TotalTransactions,
@@ -78,6 +84,7 @@ public sealed record AssignRoleResponse(
 public static class AdminAccountStatus
 {
     public const string Active = "ACTIVE";
+    public const string Suspended = "SUSPENDED";
     public const string Deactivated = "DEACTIVATED";
     public const string Deleted = "DELETED";
 }

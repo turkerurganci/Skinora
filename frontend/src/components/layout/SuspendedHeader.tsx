@@ -11,12 +11,18 @@ export interface SuspendedHeaderProps {
   supportUrl?: string;
 }
 
-export function SuspendedHeader({ className, supportUrl = "/support" }: SuspendedHeaderProps) {
+export function SuspendedHeader({
+  className,
+  // Align with the S03d / sanctions / geo-block info screens (env-or-mailto)
+  // instead of the previous "/support" default, which had no matching route (404).
+  supportUrl = process.env.NEXT_PUBLIC_SUPPORT_URL ?? "mailto:support@skinora.app",
+}: SuspendedHeaderProps) {
   const t = useTranslations("nav");
   const locale = useLocale();
   const logout = useAuthStore((s) => s.logout);
 
   const href = (path: string) => `/${locale}${path}`;
+  const isExternalSupport = supportUrl.startsWith("http") || supportUrl.startsWith("mailto:");
 
   return (
     <header
@@ -38,7 +44,7 @@ export function SuspendedHeader({ className, supportUrl = "/support" }: Suspende
         <LanguageSelector />
 
         <Link
-          href={supportUrl.startsWith("http") ? supportUrl : href(supportUrl)}
+          href={isExternalSupport ? supportUrl : href(supportUrl)}
           className="inline-flex items-center rounded-md px-2 py-1 text-sm text-gray-700 hover:bg-orange-100"
           aria-label={t("support")}
         >

@@ -20,6 +20,8 @@ public static class TransactionErrorCodes
     public const string OpenLinkDisabled = "OPEN_LINK_DISABLED";
     public const string BuyerSteamIdNotFound = "BUYER_STEAM_ID_NOT_FOUND";
     public const string AccountFlagged = "ACCOUNT_FLAGGED";
+    // T105a — suspended account cannot take fund/asset-flow action.
+    public const string AccountSuspended = "ACCOUNT_SUSPENDED";
     public const string PayoutAddressCooldownActive = "PAYOUT_ADDRESS_COOLDOWN_ACTIVE";
     public const string SellerWalletAddressMissing = "SELLER_WALLET_ADDRESS_MISSING";
 

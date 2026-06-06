@@ -243,13 +243,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (25) ───────────────────────────────────────
+    // ── NotificationType (27) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave25Values()
+    public void NotificationType_ShouldHave27Values()
     {
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(25, values.Length);
+        Assert.Equal(27, values.Length);
     }
 
     [Theory]
@@ -278,6 +278,8 @@ public class EnumTests
     [InlineData(nameof(NotificationType.INSUFFICIENT_PAYMENT))]
     [InlineData(nameof(NotificationType.OVERPAYMENT_REFUNDED))]
     [InlineData(nameof(NotificationType.WRONG_TOKEN_REFUND))]
+    [InlineData(nameof(NotificationType.ACCOUNT_SUSPENDED))]
+    [InlineData(nameof(NotificationType.ACCOUNT_UNSUSPENDED))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationType), Enum.Parse<NotificationType>(valueName)));

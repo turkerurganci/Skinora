@@ -162,4 +162,16 @@
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
     <value>The transaction expected {ExpectedStablecoin} but received {ReceivedAmount} {ActualStablecoin}. The amount is being refunded to {SourceAddress}; please send the correct token.</value>
   </data>
+  <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
+    <value>Your account has been suspended</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Body" xml:space="preserve">
+    <value>Your Skinora account has been suspended: {Reason}. You can still view your active transactions, but you cannot start or accept transactions until the suspension is lifted.</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Title" xml:space="preserve">
+    <value>Your account suspension has been lifted</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
+    <value>Your Skinora account is active again. You can now start and accept transactions normally.</value>
+  </data>
 </root>

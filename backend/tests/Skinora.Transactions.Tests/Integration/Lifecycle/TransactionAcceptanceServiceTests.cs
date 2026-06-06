@@ -103,6 +103,24 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_Accept_When_Buyer_Suspended()
+    {
+        // T105a — a suspended buyer cannot accept a transaction (02 §14.0).
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+        var buyer = await Context.Set<User>().SingleAsync(u => u.Id == _buyer.Id);
+        buyer.IsSuspended = true;
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.BuyerNotFound, outcome.Status);
+    }
+
+    [Fact]
     public async Task Steam_Id_Mismatch_Rejects_With_403()
     {
         var transaction = await CreateTransactionAsync(

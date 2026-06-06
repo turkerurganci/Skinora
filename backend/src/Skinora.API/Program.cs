@@ -316,6 +316,13 @@ builder.Services.AddScoped<UserLoginLogRetentionCleanupJob>();
 builder.Services.AddScoped<ProcessedNonceCleanupJob>();
 builder.Services.AddHostedService<RetentionJobsRegistrar>();
 
+// Account suspension (T105a) — admin suspend/unsuspend service + the temp-block
+// auto-unsuspend recurring job (lifts expired suspensions every 6h).
+builder.Services.AddScoped<Skinora.API.Services.UserSuspension.IAdminUserSuspensionService,
+    Skinora.API.Services.UserSuspension.AdminUserSuspensionService>();
+builder.Services.AddScoped<Skinora.API.Services.UserSuspension.AutoUnsuspendJob>();
+builder.Services.AddHostedService<Skinora.API.Services.UserSuspension.AutoUnsuspendJobRegistrar>();
+
 // Health checks (T16) — DB + Redis dependency checks
 builder.Services.AddHealthChecks()
     .AddSqlServer(

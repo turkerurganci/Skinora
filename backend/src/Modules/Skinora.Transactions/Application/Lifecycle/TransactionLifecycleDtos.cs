@@ -153,4 +153,6 @@ public enum CancelTransactionStatus
     PaymentAlreadySent,
     InvalidStateTransition,
     ValidationFailed,
+    // T105a — caller's account is suspended (restricted session, 02 §14.0).
+    AccountSuspended,
 }

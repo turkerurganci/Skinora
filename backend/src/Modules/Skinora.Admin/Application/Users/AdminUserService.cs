@@ -146,9 +146,13 @@ public sealed class AdminUserService : IAdminUserService
 
         if (user is null) return null;
 
+        // Deactivated (user self-deactivation, blocks login) takes precedence
+        // over Suspended (admin-enforced restricted session) — T105a.
         var status = user.IsDeactivated
             ? AdminAccountStatus.Deactivated
-            : AdminAccountStatus.Active;
+            : user.IsSuspended
+                ? AdminAccountStatus.Suspended
+                : AdminAccountStatus.Active;
 
         var profile = new AdminUserDetailProfileDto(
             Id: user.Id,
@@ -161,7 +165,11 @@ public sealed class AdminUserService : IAdminUserService
             CreatedAt: user.CreatedAt,
             // T43 forward devir — reputation calculation lands with the
             // dedicated task; until then admins see null (06 §3.1).
-            ReputationScore: null);
+            ReputationScore: null,
+            IsSuspended: user.IsSuspended,
+            SuspendedAt: user.SuspendedAt,
+            SuspensionReason: user.SuspensionReason,
+            SuspensionExpiresAt: user.SuspensionExpiresAt);
 
         var stats = new AdminUserDetailStatsDto(
             // T63 forward devir — admin transaction aggregates land with the

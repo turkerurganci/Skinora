@@ -253,6 +253,20 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_Create_When_Seller_Suspended()
+    {
+        // T105a — a suspended seller cannot start a transaction (02 §14.0).
+        var seller = await Context.Set<User>().SingleAsync(u => u.Id == _seller.Id);
+        seller.IsSuspended = true;
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SellerNotFound, outcome.Status);
+    }
+
+    [Fact]
     public async Task Rejects_Below_Minimum_Price()
     {
         var sut = BuildSut();

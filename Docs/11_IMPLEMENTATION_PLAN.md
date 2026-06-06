@@ -2109,6 +2109,30 @@ Task T105: Admin Kullanıcı detay (S20)
 ```
 
 ```
+Task T105a: Hesap askıya alma (backend + S03d) [PLAN DÜZELTMESİ — T100 sonrası eklendi]
+  Bağımlılık: T54 (flag review), T37 (notification dispatcher), T32 (/auth/me)
+  Dokümanlar: 02 §14.0 + §16.2, 03 §2.1 + §8.3, 04 §8.3 + §16.2 + S03d
+  Gerekçe: Hesap askıya alma 02/03/04'te tarif edilir ama F5'te hiçbir task'a
+    atanmamıştı (plan boşluğu). T100 S14 "Askıya Al" butonunu bu task'a devretti.
+    Proje sahibi onayı (2026-06-05): ayrı adanmış task; enforcement = kısıtlı oturum.
+  Kabul kriterleri:
+    - User suspension state: IsSuspended/SuspendedAt/SuspensionReason/SuspensionExpiresAt + migration
+    - POST /admin/users/:userId/suspend (reason ≥10, durationDays null=kalıcı / N=geçici) — MANAGE_FLAGS
+    - DELETE /admin/users/:userId/suspend (unsuspend) — MANAGE_FLAGS
+    - Enforcement: kısıtlı oturum — login serbest, fon-akışı mutation'ları (işlem
+      oluştur/kabul/iptal + cüzdan/ayar) suspended kullanıcıyı reddeder; read'ler serbest;
+      /auth/me isSuspended flag'i
+    - Geçici blok auto-unsuspend Hangfire job'u (SuspensionExpiresAt geçince kaldırır)
+    - ACCOUNT_SUSPENDED/ACCOUNT_UNSUSPENDED bildirim (kullanıcıyı bilgilendir) + USER_BANNED/USER_UNBANNED audit
+    - S03d /auth/suspended ekranı + /auth/me isSuspended → SuspendedHeader (kısıtlı oturum)
+  Test beklentisi: Suspend/unsuspend + enforcement + auto-unsuspend integration testleri
+  Doğrulama kontrol listesi:
+    - [ ] 02 §14.0/§16.2 askıya alma kuralları + 03 §2.1 kısıtlı oturum + 04 S03d karşılandı mı?
+  Notlar: SignalR canlı force-restrict ertelendi (sonraki istek/login suspended'ı algılar).
+    S14 "Askıya Al" buton wiring'i T100 merge sonrası ayrı küçük adımda eklenir.
+```
+
+```
 Task T106: Admin Audit log (S21)
   Bağımlılık: T85
   Dokümanlar: 04 §8.10

@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { RealtimeProvider } from "@/lib/signalr/RealtimeProvider";
+import { AuthInitializer } from "@/lib/auth/AuthInitializer";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,6 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthInitializer />
       <RealtimeProvider>{children}</RealtimeProvider>
     </QueryClientProvider>
   );

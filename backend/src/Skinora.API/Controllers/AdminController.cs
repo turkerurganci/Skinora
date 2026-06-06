@@ -5,9 +5,11 @@ using Skinora.Admin.Application.Roles;
 using Skinora.Admin.Application.Users;
 using Skinora.API.RateLimiting;
 using Skinora.API.Services;
+using Skinora.API.Services.UserSuspension;
 using Skinora.Auth.Configuration;
 using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Application.Settings;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Steam.Application.Admin;
 using Skinora.Transactions.Application.Admin;
@@ -40,6 +42,8 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "VIEW_AUDIT_LOG";
     private const string PolicyViewSteamAccounts =
         AuthPolicies.PermissionPrefix + "VIEW_STEAM_ACCOUNTS";
+    private const string PolicyManageFlags =
+        AuthPolicies.PermissionPrefix + "MANAGE_FLAGS";
 
     private readonly IAdminRoleService _roles;
     private readonly IAdminUserService _users;
@@ -48,6 +52,7 @@ public sealed class AdminController : ControllerBase
     private readonly IAdminTransactionQueryService _txQueries;
     private readonly IAdminSteamBotQueryService _steamBots;
     private readonly IAdminDashboardService _dashboard;
+    private readonly IAdminUserSuspensionService _suspension;
 
     public AdminController(
         IAdminRoleService roles,
@@ -56,7 +61,8 @@ public sealed class AdminController : ControllerBase
         IAuditLogQueryService auditLogs,
         IAdminTransactionQueryService txQueries,
         IAdminSteamBotQueryService steamBots,
-        IAdminDashboardService dashboard)
+        IAdminDashboardService dashboard,
+        IAdminUserSuspensionService suspension)
     {
         _roles = roles;
         _users = users;
@@ -65,6 +71,7 @@ public sealed class AdminController : ControllerBase
         _txQueries = txQueries;
         _steamBots = steamBots;
         _dashboard = dashboard;
+        _suspension = suspension;
     }
 
     // ---------- Dashboard (07 §9.1) ----------
@@ -243,6 +250,85 @@ public sealed class AdminController : ControllerBase
             AssignRoleOutcome.RoleNotFound => NotFound(ApiResponse<object>.Fail(
                 AdminUserErrorCodes.RoleNotFound,
                 "Requested role was not found.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    // ---------- Account suspension (07 §9.26–§9.27, T105a) ----------
+
+    /// <summary>AD20 — <c>POST /admin/users/:userId/suspend</c> (02 §14.0/§16.2, 03 §8.3).</summary>
+    [HttpPost("users/{userId:guid}/suspend")]
+    [Authorize(Policy = PolicyManageFlags)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> SuspendUser(
+        Guid userId,
+        [FromBody] SuspendUserRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var adminId = GetCallerUserId();
+        if (adminId is null) return Unauthorized();
+        if (request is null)
+            return BadRequest(ApiResponse<object>.Fail(
+                UserSuspensionErrorCodes.ValidationError,
+                "Request body is required.",
+                traceId: HttpContext.TraceIdentifier));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var outcome = await _suspension.SuspendAsync(
+            adminId.Value, userId, request, ipAddress, cancellationToken);
+
+        return outcome.Status switch
+        {
+            SuspendUserStatus.Suspended => Ok(outcome.Body),
+
+            SuspendUserStatus.NotFound => NotFound(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? UserSuspensionErrorCodes.UserNotFound,
+                outcome.ErrorMessage ?? "User not found.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            SuspendUserStatus.ValidationFailed => BadRequest(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? UserSuspensionErrorCodes.ValidationError,
+                outcome.ErrorMessage ?? "Validation failed.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            SuspendUserStatus.AlreadySuspended => Conflict(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? UserSuspensionErrorCodes.AlreadySuspended,
+                outcome.ErrorMessage ?? "User is already suspended.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    /// <summary>AD21 — <c>DELETE /admin/users/:userId/suspend</c> (un-suspend).</summary>
+    [HttpDelete("users/{userId:guid}/suspend")]
+    [Authorize(Policy = PolicyManageFlags)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> UnsuspendUser(
+        Guid userId, CancellationToken cancellationToken)
+    {
+        var adminId = GetCallerUserId();
+        if (adminId is null) return Unauthorized();
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var outcome = await _suspension.UnsuspendAsync(
+            adminId.Value, userId, ActorType.ADMIN,
+            automatic: false, ipAddress, cancellationToken);
+
+        return outcome.Status switch
+        {
+            UnsuspendUserStatus.Unsuspended => Ok(outcome.Body),
+
+            UnsuspendUserStatus.NotFound => NotFound(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? UserSuspensionErrorCodes.UserNotFound,
+                outcome.ErrorMessage ?? "User not found.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            UnsuspendUserStatus.NotSuspended => Conflict(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? UserSuspensionErrorCodes.NotSuspended,
+                outcome.ErrorMessage ?? "User is not suspended.",
                 traceId: HttpContext.TraceIdentifier)),
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),

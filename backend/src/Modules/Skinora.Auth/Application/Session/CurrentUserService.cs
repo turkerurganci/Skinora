@@ -28,7 +28,11 @@ public sealed record CurrentUserDto(
     string Language,
     bool HasSellerWallet,
     bool HasRefundWallet,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    // T105a — restricted-session flag (02 §14.0, 03 §2.1). When true the client
+    // renders the suspended session (SuspendedHeader + S03d) and fund-flow
+    // mutations are rejected server-side.
+    bool IsSuspended);
 
 public sealed class CurrentUserService : ICurrentUserService
 {
@@ -59,6 +63,7 @@ public sealed class CurrentUserService : ICurrentUserService
             Language: user.PreferredLanguage,
             HasSellerWallet: !string.IsNullOrWhiteSpace(user.DefaultPayoutAddress),
             HasRefundWallet: !string.IsNullOrWhiteSpace(user.DefaultRefundAddress),
-            CreatedAt: user.CreatedAt);
+            CreatedAt: user.CreatedAt,
+            IsSuspended: user.IsSuspended);
     }
 }

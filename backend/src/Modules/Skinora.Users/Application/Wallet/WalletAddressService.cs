@@ -51,9 +51,12 @@ public sealed class WalletAddressService : IWalletAddressService
         // Validator guarantees non-null, trimmed-equivalent content when IsValid returns true.
         var candidate = newAddress!;
 
+        // T105a: a suspended user cannot change payout/refund addresses
+        // (defense-in-depth for a fraud-suspended account — prevents redirecting
+        // funds while under review). Treated as not-eligible at the guard.
         var user = await _db.Set<User>()
             .FirstOrDefaultAsync(
-                u => u.Id == userId && !u.IsDeactivated, cancellationToken);
+                u => u.Id == userId && !u.IsDeactivated && !u.IsSuspended, cancellationToken);
 
         if (user is null)
             return WalletUpdateResult.Failure(WalletUpdateStatus.UserNotFound);
