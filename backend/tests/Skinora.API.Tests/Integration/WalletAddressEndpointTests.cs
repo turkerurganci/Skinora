@@ -310,6 +310,32 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // ---------- suspended-account enforcement (T105a AC4) ----------
+
+    [Fact]
+    public async Task UpdateSellerWallet_SuspendedUser_IsRejected_AndLeavesAddressUnchanged()
+    {
+        // T105a AC4 — a suspended user cannot change payout/refund addresses.
+        // The guard lives in WalletAddressService's user lookup
+        // (!IsDeactivated && !IsSuspended) → UserNotFound → 401. Mirrors the
+        // create/accept/cancel suspended-rejection tests so every fund-flow
+        // mutation guard has a negative test.
+        var user = await _factory.CreateUserAsync(u => u.IsSuspended = true);
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
+        {
+            walletAddress = ValidSellerAddress,
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+
+        // No mutation on the rejected path.
+        var persisted = await _factory.GetUserAsync(user.Id);
+        Assert.Null(persisted.DefaultPayoutAddress);
+        Assert.Null(persisted.PayoutAddressChangedAt);
+    }
+
     // ---------- helpers ----------
 
     private HttpClient BuildAuthenticatedClient(Guid userId, string steamId)

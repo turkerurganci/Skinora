@@ -22,8 +22,7 @@ export default function NewTransactionPage() {
 
   const eligibilityAuthError =
     eligibility.error instanceof ApiError && eligibility.error.status === 401;
-  const paramsAuthError =
-    params.error instanceof ApiError && params.error.status === 401;
+  const paramsAuthError = params.error instanceof ApiError && params.error.status === 401;
 
   if (!isAuthenticated || eligibilityAuthError || paramsAuthError) {
     return (
@@ -40,14 +39,24 @@ export default function NewTransactionPage() {
     );
   }
 
+  // T105a AC4 / 04 §6.7 — a suspended user cannot start a new transaction
+  // (a blocked fund-flow action). Show the restriction banner instead of the
+  // interactive form; the backend create guard (TransactionCreationService) is
+  // the defense-in-depth. Consistent with the dashboard hiding the start button.
+  if (isSuspended) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        <header className="mb-6 space-y-1">
+          <h1 className="text-2xl font-semibold text-gray-900">{t("title")}</h1>
+          <p className="text-sm text-gray-600">{t("subtitle")}</p>
+        </header>
+        <SuspendedBanner />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
-      {isSuspended && (
-        <div className="mb-4">
-          <SuspendedBanner />
-        </div>
-      )}
-
       <header className="mb-6 space-y-1">
         <h1 className="text-2xl font-semibold text-gray-900">{t("title")}</h1>
         <p className="text-sm text-gray-600">{t("subtitle")}</p>

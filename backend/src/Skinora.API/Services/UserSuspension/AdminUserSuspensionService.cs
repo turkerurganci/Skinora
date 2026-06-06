@@ -23,6 +23,20 @@ public sealed class AdminUserSuspensionService : IAdminUserSuspensionService
     /// <summary>Minimum trimmed length of the suspension reason (mirrors AD19b).</summary>
     public const int MinReasonLength = 10;
 
+    /// <summary>
+    /// Maximum suspension reason length — matches the <c>nvarchar(500)</c> column
+    /// (UserConfiguration) and the sibling <c>AdminSanctionsService</c> guard, so an
+    /// over-long reason returns a clean 400 instead of a SaveChanges truncation 500.
+    /// </summary>
+    public const int MaxReasonLength = 500;
+
+    /// <summary>
+    /// Upper bound for a temporary suspension (≈27 years). Caps <c>durationDays</c>
+    /// so an absurd value returns a clean 400 rather than overflowing
+    /// <see cref="DateTime"/> inside <c>AddDays</c> (which would surface as a 500).
+    /// </summary>
+    public const int MaxDurationDays = 10_000;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = false,
@@ -61,10 +75,20 @@ public sealed class AdminUserSuspensionService : IAdminUserSuspensionService
                 UserSuspensionErrorCodes.ValidationError,
                 $"reason must be at least {MinReasonLength} characters.");
 
+        if (trimmedReason.Length > MaxReasonLength)
+            return SuspendFailure(SuspendUserStatus.ValidationFailed,
+                UserSuspensionErrorCodes.ValidationError,
+                $"reason must not exceed {MaxReasonLength} characters.");
+
         if (request.DurationDays is <= 0)
             return SuspendFailure(SuspendUserStatus.ValidationFailed,
                 UserSuspensionErrorCodes.ValidationError,
                 "durationDays must be a positive number, or null for a permanent suspension.");
+
+        if (request.DurationDays > MaxDurationDays)
+            return SuspendFailure(SuspendUserStatus.ValidationFailed,
+                UserSuspensionErrorCodes.ValidationError,
+                $"durationDays must not exceed {MaxDurationDays}.");
 
         // ---------- Stage 2: load + guard ----------
         var user = await _db.Set<User>()

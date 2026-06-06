@@ -21,9 +21,11 @@ using Skinora.API.Services.UserSuspension;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Persistence.Outbox;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.API.Tests.Integration;
@@ -134,6 +136,44 @@ public class AdminUserSuspensionEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         Assert.Equal("VALIDATION_ERROR", body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task SuspendUser_LongReason_Returns400()
+    {
+        // Upper-bound guard (mirrors sibling AdminSanctionsService) — a reason
+        // over the nvarchar(500) column returns a clean 400, not a SaveChanges 500.
+        var admin = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/admin/users/{target.Id}/suspend",
+            new { reason = new string('x', 501) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("VALIDATION_ERROR", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.False((await GetUserAsync(target.Id)).IsSuspended);
+    }
+
+    [Fact]
+    public async Task SuspendUser_DurationDaysTooLarge_Returns400()
+    {
+        // Upper-bound guard — an absurd durationDays returns a clean 400 instead
+        // of overflowing DateTime.AddDays into a 500 INTERNAL_ERROR.
+        var admin = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/admin/users/{target.Id}/suspend",
+            new { reason = "Temporary block for review", durationDays = int.MaxValue });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("VALIDATION_ERROR", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.False((await GetUserAsync(target.Id)).IsSuspended);
     }
 
     [Fact]
@@ -258,6 +298,49 @@ public class AdminUserSuspensionEndpointTests
         Assert.True((await GetUserAsync(future.Id)).IsSuspended);
     }
 
+    // ---------- side effects: audit + notification event (AC6) ----------
+
+    [Fact]
+    public async Task SuspendUser_WritesAudit_AndPublishesNotificationEvent()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/admin/users/{target.Id}/suspend",
+            new { reason = "Multi-account fraud detected" });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var audits = await GetAuditLogsForUserAsync(target.Id);
+        Assert.Contains(audits, a => a.Action == AuditAction.USER_BANNED);
+
+        var outbox = await GetOutboxAsync();
+        Assert.Contains(outbox, m => m.EventType.Contains("AccountSuspendedEvent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnsuspendUser_WritesAudit_AndPublishesNotificationEvent()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync(u =>
+        {
+            u.IsSuspended = true;
+            u.SuspendedAt = DateTime.UtcNow.AddDays(-1);
+            u.SuspensionReason = "earlier suspension";
+        });
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.DeleteAsync($"/api/v1/admin/users/{target.Id}/suspend");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var audits = await GetAuditLogsForUserAsync(target.Id);
+        Assert.Contains(audits, a => a.Action == AuditAction.USER_UNBANNED);
+
+        var outbox = await GetOutboxAsync();
+        Assert.Contains(outbox, m => m.EventType.Contains("AccountUnsuspendedEvent", StringComparison.Ordinal));
+    }
+
     // ---------- helpers ----------
 
     private async Task<User> GetUserAsync(Guid id)
@@ -265,6 +348,20 @@ public class AdminUserSuspensionEndpointTests
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.Set<User>().AsNoTracking().IgnoreQueryFilters().SingleAsync(u => u.Id == id);
+    }
+
+    private async Task<List<AuditLog>> GetAuditLogsForUserAsync(Guid userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Set<AuditLog>().AsNoTracking().Where(a => a.UserId == userId).ToListAsync();
+    }
+
+    private async Task<List<OutboxMessage>> GetOutboxAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Set<OutboxMessage>().AsNoTracking().ToListAsync();
     }
 
     private HttpClient BuildClient(Guid userId, string steamId, string role)

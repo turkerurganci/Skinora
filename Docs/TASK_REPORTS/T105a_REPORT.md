@@ -1,6 +1,6 @@
 # T105a — Hesap Askıya Alma (backend + S03d)
 
-**Faz:** F5 | **Durum:** ⏳ Yapım bitti (doğrulama bekliyor) | **Tarih:** 2026-06-05
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-05 (doğrulama 2026-06-06)
 
 ---
 
@@ -38,16 +38,50 @@ Hesap askıya alma 02 §14.0/§16.2 + 03 §2.1/§8.3 + 04 §8.3/§16.2/S03d'de t
 | 6 | ACCOUNT_SUSPENDED/UNSUSPENDED bildirim + USER_BANNED/UNBANNED audit | ✓ | 2 event + 2 consumer + resx; audit reuse |
 | 7 | S03d + /auth/me isSuspended → SuspendedHeader | ✓ | T85/T87 S03d + AuthInitializer wiring |
 
+## Doğrulama (Bağımsız Validator — 2026-06-06)
+
+> Validator yapım raporunu **görmeden** bağımsız verdict oluşturdu: HARD STOP kapıları → 25-ajanlı (7 boyut + adversarial verify, refute-default) spec-conformance + güvenlik review → sentez. Sonra rapor karşılaştırıldı.
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** (bloklayıcı yok) |
+| Verdict yöntemi | Bağımsız; 7/7 kabul kriteri fonksiyonel ✓; S1/S2 yok; kritik güvenlik yok; CI 11/11 |
+| Reconciliation | T105a `main`@T99 üzerine kuruluydu → main (T100 #148 + T100a #150) merge edildi (3 doc/memory çatışması çözüldü); reconciled CI `27067117970` 11/11 ✓ |
+| Bulgular | 9 (5 S3 + 4 advisory); **#1–#7 aynı branch'te düzeltildi**, #8/#9 KL'ye devredildi |
+
+**"ayar/settings guard'sız" sorusu — spec-uygun (bulgu değil):** AC4 literal "cüzdan/ayar" dese de spec 04 §6.7:694 kısıtlı-oturum fund-flow setini "yeni işlem, kabul, açık link" ile sınırlar; settings (Discord/Telegram/dil/bildirim-tercihi/email/Steam-trade-URL) non-fund-flow → doğru biçimde serbest ("read'ler serbest"). Kod spec'ten *fazlasını* bile guard'lar (wallet adres + cancel). 02-10 source-of-truth (INSTRUCTIONS §4) → settings guard'sızlığı doğru; "ayar" = cüzdan ayarı (guard'lı adres).
+
+**Düzeltilen bulgular (validator review → aynı branch fix):**
+- **#1 (S3)** `durationDays` üst sınır yok → `AddDays` overflow → 500. **Fix:** `MaxDurationDays=10_000` validasyonu → temiz 400 (`AdminUserSuspensionService`). Test: `SuspendUser_DurationDaysTooLarge_Returns400`.
+- **#6 (adv)** `reason` üst sınır yok → >500 char 500 (sibling `AdminSanctionsService`'te guard vardı). **Fix:** `MaxReasonLength=500` validasyonu → 400. Test: `SuspendUser_LongReason_Returns400`.
+- **#2 (S3)** wallet-adres enforcement guard'ı testsizdi (4 fund-flow guard'ından tek testsiz). **Fix:** `WalletAddressEndpointTests.UpdateSellerWallet_SuspendedUser_IsRejected_AndLeavesAddressUnchanged`.
+- **#3 (S3)** AD20/AD21 testleri audit + notification event yan etkilerini assert etmiyordu. **Fix:** `Suspend/UnsuspendUser_WritesAudit_AndPublishesNotificationEvent` (USER_BANNED/UNBANNED + AccountSuspended/Unsuspended outbox).
+- **#4 (S3)** Account(Un)Suspended consumer davranış testi yoktu. **Fix:** yeni `AccountSuspensionNotificationConsumerTests` (4 test — ACCOUNT_SUSPENDED+Reason / ACCOUNT_UNSUSPENDED + idempotency).
+- **#5 (S3)** S06 (yeni işlem) suspended kullanıcıda form gate edilmemişti (S07 ile tutarsız). **Fix:** `transactions/new/page.tsx` suspended'da SuspendedBanner gösterir, formu render etmez (backend create-guard defense-in-depth korunur).
+- **#7 (adv)** `SuspendedHeader` default `supportUrl='/support'` = 404 route. **Fix:** `NEXT_PUBLIC_SUPPORT_URL ?? "mailto:..."` (sibling info-ekranlarıyla hizalı) + mailto scheme handling.
+
+**Known Limitations (devredilen, bloklamaz):**
+- **#8 (adv)** Suspend/unsuspend testleri `MANAGE_FLAGS` permission'ını izole etmiyor (happy-path SuperAdmin token → bypass; sadece NonAdmin 403 var); cancel suspended-**buyer** yolu testsiz. Prod gate doğru; konvansiyon-aykırı test boşluğu → follow-up.
+- **#9 (adv)** S03d route `/auth/suspended` vs spec 04 §2.2 `/account-suspended` — T87'den miras, tüm S03a-d ailesi `/auth/*` konvansiyonu izliyor; T105a'ya özgü değil → doc-vs-kod uzlaştırma T-future.
+
+**Adversarial verify ile elenen (bilgi):** 401-vs-403 tutarsızlığı (spec status dayatmıyor), notification reason echo (spec-conformant, cross-user değil), auto-unsuspend loop izolasyonu (design-as-intended self-healing), mid-session SignalR redirect (plan K2 onaylı deferral), S03d başlık paraphrase. **Temiz boyutlar (0 gerçek bulgu):** migration/entity/enum, AutoUnsuspendJob, suspension servis correctness.
+
+**Güvenlik:** auth değişmedi (Admin + MANAGE_FLAGS policy, bare [Authorize] değil); IDOR yok (server-türetimli userId); kalıcı ban auto-lift edilemez (AutoUnsuspendJob `SuspensionExpiresAt != null` guard); notification yalnız affected user'a (cross-user PII yok); 0 yeni dış bağımlılık.
+
+**Rapor karşılaştırması:** Verdict uyumlu (ikisi de PASS). Rapor #1/#2/#3/#4/#5/#7'yi belgelememişti; validator review yüzeye çıkardı ve aynı branch'te düzeltildi. Raporun kendi review'ı 2 gerçek defect yakalamış (ITEM_ESCROWED cancel guard — önemli güvenlik fix'i + 06 NotificationType doc parity) ✓.
+
 ## Test Sonuçları
 
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Backend build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
 | dotnet format | ✓ Δ=0 | whole-solution `--verify-no-changes` exit 0 |
-| AdminUserSuspensionEndpointTests (SQLite) | ✓ 11/11 | AD20/AD21 + temp + /auth/me + AutoUnsuspendJob — lokal |
+| AdminUserSuspensionEndpointTests (SQLite, **validator +4**) | ✓ 15/15 | AD20/AD21 + temp + /auth/me + AutoUnsuspendJob + LongReason/DurationDaysTooLarge 400 + Suspend/Unsuspend audit+outbox side-effect (lokal) |
+| WalletAddressEndpointTests (SQLite, **validator +1**) | ✓ 12/12 | + `UpdateSellerWallet_SuspendedUser` (401, adres değişmez) |
+| AccountSuspensionNotificationConsumerTests (**validator yeni**) | ✓ 4/4 | ACCOUNT_SUSPENDED+Reason / ACCOUNT_UNSUSPENDED + idempotency (lokal) |
 | Shared EnumTests | ✓ 194/194 | NotificationType 27 + 2 yeni InlineData |
-| Frontend | ✓ | `tsc` 0 + eslint 0 + prettier clean + `next build` 24 route (`/auth/suspended`) |
-| Enforcement (create/accept suspended-reject) | ⏳ CI | SQL Server (Docker lokal yok, T11.3) |
+| Frontend | ✓ | `tsc` 0 + eslint 0 + prettier clean + `next build` 25 route (S06 suspended-gate + `/auth/suspended`) |
+| Reconciled CI (main merged + validator fixes) | ✓ 11/11 | run [`27067117970`](https://github.com/turkerurganci/Skinora/actions/runs/27067117970) — Lint/Build/Unit/Integration/Contract/Migration/Docker×2/Gate (SQL Server) |
 
 ## Altyapı Değişiklikleri
 - Migration: **Var** — `T105a_AddUserSuspension` (Users: +4 nullable/bool kolon).
