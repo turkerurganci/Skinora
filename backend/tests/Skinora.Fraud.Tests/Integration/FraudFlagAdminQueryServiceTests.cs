@@ -409,10 +409,15 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             Status = status,
             IsOnHold = isOnHold,
-            // SQL Server enforces CK_Transactions_FreezeHold_Reverse/Forward +
-            // Freeze{Active,Passive}: a held row must carry the EMERGENCY_HOLD
-            // freeze trio. (SQLite ignores these CHECKs, so this only matters on
-            // the CI mssql runner.) Mirrors the T44/T50 emergency-hold stamp.
+            // SQL Server enforces the full emergency-hold invariant set
+            // (CK_Transactions_Hold + Freeze{Active,Passive} + FreezeHold_{Forward,Reverse}):
+            // a held row must carry BOTH the EmergencyHold trio AND the
+            // EMERGENCY_HOLD freeze trio. (SQLite ignores these CHECKs, so this
+            // only bites on the CI mssql runner.) Mirrors the T44 ApplyEmergencyHold stamp.
+            EmergencyHoldAt = isOnHold ? nowUtc : null,
+            EmergencyHoldReason = isOnHold ? "test hold" : null,
+            EmergencyHoldByAdminId = isOnHold ? buyerId : null,
+            PreviousStatusBeforeHold = isOnHold ? (int)status : null,
             TimeoutFrozenAt = isOnHold ? nowUtc : null,
             TimeoutFreezeReason = isOnHold ? Skinora.Shared.Enums.TimeoutFreezeReason.EMERGENCY_HOLD : null,
             TimeoutRemainingSeconds = isOnHold ? 3600 : null,
