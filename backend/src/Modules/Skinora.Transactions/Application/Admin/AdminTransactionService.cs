@@ -627,6 +627,111 @@ public sealed class AdminTransactionService : IAdminTransactionService
             ErrorMessage: null);
     }
 
+    // ---------- AD19d — POST /admin/transactions/hold-by-user/:userId ----------
+
+    public async Task<HoldUserTransactionsOutcome> HoldAllUserTransactionsAsync(
+        Guid adminUserId,
+        Guid targetUserId,
+        HoldUserTransactionsRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ---------- Stage 1: reason validation ----------
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < MinReasonLength)
+            return new HoldUserTransactionsOutcome(
+                HoldUserTransactionsStatus.ValidationFailed,
+                Body: null,
+                ErrorCode: AdminTransactionErrorCodes.ValidationError,
+                ErrorMessage: $"reason must be at least {MinReasonLength} characters (03 §8.8).");
+
+        // ---------- Stage 2: load the user's active transactions ----------
+        // Active = not deleted, not already on hold, not terminal. The user may
+        // be on either side of the trade — an account/sanctions flag freezes
+        // that user's transactions regardless of side (03 §11a.3). Mirrors the
+        // T54 FraudFlagService.ApplyEmergencyHoldCascadeAsync selection. The
+        // !IsOnHold filter makes the call idempotent (a re-run holds 0).
+        var activeTxs = await _db.Set<Transaction>()
+            .Where(t =>
+                (t.SellerId == targetUserId || t.BuyerId == targetUserId)
+                && !t.IsDeleted
+                && !t.IsOnHold
+                && t.Status != TransactionStatus.COMPLETED
+                && t.Status != TransactionStatus.CANCELLED_TIMEOUT
+                && t.Status != TransactionStatus.CANCELLED_SELLER
+                && t.Status != TransactionStatus.CANCELLED_BUYER
+                && t.Status != TransactionStatus.CANCELLED_ADMIN)
+            .ToListAsync(cancellationToken);
+
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+        var heldIds = new List<Guid>(activeTxs.Count);
+
+        // ---------- Stage 3: per-transaction hold (same sequence as AD19b) ----------
+        foreach (var transaction in activeTxs)
+        {
+            var previousStatus = transaction.Status;
+
+            // Freeze pre-pass before the state machine — resolves the active-phase
+            // deadline from the 06 §3.5 matrix and stamps the freeze trio so
+            // CK_Transactions_FreezeActive holds for non-ITEM_ESCROWED states; it
+            // also cancels the pending Hangfire jobs (T50).
+            await _freeze.FreezeAsync(transaction, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
+
+            var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+            machine.ApplyEmergencyHold(adminUserId, trimmedReason);
+
+            // Per-transaction notification fan-out (seller + buyer when registered)
+            // — same EmergencyHoldAppliedEvent as AD19b so each party is told why
+            // their transaction was frozen (03 §8.8).
+            await _outbox.PublishAsync(
+                new EmergencyHoldAppliedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    SellerId: transaction.SellerId,
+                    BuyerId: transaction.BuyerId,
+                    ItemName: transaction.ItemName,
+                    Reason: trimmedReason,
+                    OccurredAt: occurredAt),
+                cancellationToken);
+
+            await _audit.LogAsync(
+                new AuditLogEntry(
+                    UserId: targetUserId,
+                    ActorId: adminUserId,
+                    ActorType: ActorType.ADMIN,
+                    Action: AuditAction.EMERGENCY_HOLD_APPLIED,
+                    EntityType: nameof(Transaction),
+                    EntityId: transaction.Id.ToString(),
+                    OldValue: null,
+                    NewValue: JsonSerializer.Serialize(new
+                    {
+                        Reason = trimmedReason,
+                        PreviousStatus = previousStatus.ToString(),
+                        BulkUserHold = true,
+                    }, JsonOptions),
+                    IpAddress: ipAddress),
+                cancellationToken);
+
+            heldIds.Add(transaction.Id);
+        }
+
+        // ---------- Stage 4: atomic commit ----------
+        // No active transactions → heldIds empty, SaveChanges flushes nothing:
+        // a safe idempotent no-op (HeldCount = 0).
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new HoldUserTransactionsOutcome(
+            Status: HoldUserTransactionsStatus.Applied,
+            Body: new HoldUserTransactionsResponse(
+                HeldCount: heldIds.Count,
+                AppliedAt: occurredAt,
+                HeldTransactionIds: heldIds),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
     // ---------- helpers ----------
 
     private static bool IsTerminalState(TransactionStatus status) => status switch

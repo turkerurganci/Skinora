@@ -55,6 +55,11 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
 
         var baseQuery = _db.Set<FraudFlag>().AsNoTracking();
 
+        // Scope filter backs the 04 §8.2 "Flag kategorisi" control
+        // (Tümü / İşlem Flag'leri / Hesap Flag'leri). Server-side so the
+        // page slice + totalCount stay correct under the category filter.
+        if (query.Scope.HasValue)
+            baseQuery = baseQuery.Where(f => f.Scope == query.Scope.Value);
         if (query.Type.HasValue)
             baseQuery = baseQuery.Where(f => f.Type == query.Type.Value);
         if (query.ReviewStatus.HasValue)
@@ -268,6 +273,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
 
         return new FraudFlagDetailDto(
             Id: flag.Id,
+            UserId: flag.UserId,
             Scope: flag.Scope,
             Type: flag.Type,
             ReviewStatus: flag.Status,

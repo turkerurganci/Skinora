@@ -71,7 +71,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var sut = BuildSut();
 
         var result = await sut.ListAsync(
-            new FraudFlagListQuery(null, null, null, null, null, null, Page: 1, PageSize: 20),
+            new FraudFlagListQuery(null, null, null, null, null, null, null, Page: 1, PageSize: 20),
             CancellationToken.None);
 
         Assert.Equal(3, result.TotalCount);
@@ -93,15 +93,41 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var sut = BuildSut();
 
         var byType = await sut.ListAsync(
-            new FraudFlagListQuery(FraudFlagType.MULTI_ACCOUNT, null, null, null, null, null, 1, 20),
+            new FraudFlagListQuery(null, FraudFlagType.MULTI_ACCOUNT, null, null, null, null, null, 1, 20),
             CancellationToken.None);
         Assert.Single(byType.Items);
         Assert.Equal(FraudFlagType.MULTI_ACCOUNT, byType.Items[0].Type);
 
         var byStatus = await sut.ListAsync(
-            new FraudFlagListQuery(null, ReviewStatus.PENDING, null, null, null, null, 1, 20),
+            new FraudFlagListQuery(null, null, ReviewStatus.PENDING, null, null, null, null, 1, 20),
             CancellationToken.None);
         Assert.Equal(2, byStatus.Items.Count);
+    }
+
+    [Fact]
+    public async Task ListAsync_Filters_By_Scope()
+    {
+        // One account-level flag + one transaction-level flag.
+        await SeedFlagAsync(scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT, status: ReviewStatus.PENDING);
+        var tx = await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
+        await SeedFlagAsync(scope: FraudFlagScope.TRANSACTION_PRE_CREATE,
+            type: FraudFlagType.PRICE_DEVIATION, status: ReviewStatus.PENDING,
+            transactionId: tx.Id);
+
+        var sut = BuildSut();
+
+        var accountFlags = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.ACCOUNT_LEVEL, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+        Assert.Single(accountFlags.Items);
+        Assert.Equal(FraudFlagScope.ACCOUNT_LEVEL, accountFlags.Items[0].Scope);
+
+        var txFlags = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.TRANSACTION_PRE_CREATE, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+        Assert.Single(txFlags.Items);
+        Assert.Equal(FraudFlagScope.TRANSACTION_PRE_CREATE, txFlags.Items[0].Scope);
     }
 
     [Fact]
@@ -138,6 +164,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
 
         Assert.NotNull(detail);
         Assert.Equal(flag.Id, detail!.Id);
+        Assert.Equal(_seller.Id, detail.UserId);
         Assert.Equal(FraudFlagScope.TRANSACTION_PRE_CREATE, detail.Scope);
         Assert.NotNull(detail.Transaction);
         Assert.Equal(tx.Id, detail.Transaction!.Id);
