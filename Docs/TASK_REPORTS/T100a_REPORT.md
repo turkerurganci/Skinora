@@ -54,9 +54,9 @@ T100a bu üçünü **full-stack** kapatır (backend DTO + frontend render). Numa
 |---|---|---|
 | Backend build (Release) | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
 | dotnet format | ✓ Δ=0 | `dotnet format --verify-no-changes` exit 0 |
-| AdminFlagsEndpointTests (SQLite, lokal) | ✓ 11/11 | yeni `ListFlags_AccountFlag_SerializesSignalFields` dahil; minimal-Details 500 regresyonu `NormalizeMultiAccount` ile giderildi |
-| FraudFlagAdminQueryServiceTests (SQL Server → CI) | ⏳ CI | +4 yeni test (supportingSignals roundtrip + activeTransactions role/hold + list signal/active + tx-flag null) — lokal Windows Docker yok (T11.3) |
-| API.Tests tam suite (SQLite) | ⏳ | regresyon koşusu |
+| AdminFlagsEndpointTests (SQLite, lokal) | ✓ 12/12 | `ListFlags_AccountFlag_SerializesSignalFields` + `GetFlag_MultiAccount_SerializesSupportingSignals`; minimal-Details 500 regresyonu `NormalizeMultiAccount` ile giderildi |
+| FraudFlagAdminQueryServiceTests (SQL Server, CI) | ✓ 11/11 | +5 yeni (supportingSignals roundtrip + null-coercion top/nested + activeTransactions role/hold/FLAGGED/5-terminal + list signal/active-held + tx-flag null) — CI run `27061575158` |
+| API.Tests tam suite (SQLite, lokal) | ✓ 414/414 | 27 Testcontainers/SQL-Server testi lokal Docker yok → CI'de yeşil (T11.3) |
 | Frontend tsc / eslint / prettier | ✓ 0 / 0 / clean | T100a dosyaları |
 | Frontend next build | ✓ | 26 route PASS |
 | i18n locale parity | ✓ 759×4 | 0 missing/extra |
@@ -67,10 +67,11 @@ T100a bu üçünü **full-stack** kapatır (backend DTO + frontend render). Numa
 - Config/env: Yok. Docker: Yok. Yeni dış bağımlılık: Yok.
 
 ## Commit & PR
-- Branch: `task/T100a-flag-dto-expansion`
-- Commit: `a8d8eeb` — T100a: Admin Flag hesap-varyant DTO genişletme (AD2/AD3, S13/S14)
+- Branch: `task/T100a-flag-dto-expansion` (HEAD `c409c2c`)
+- Ana commit: `a8d8eeb` (yapım) + `dabe2bd`/`82d9600` (mssql CK test-seed fix) + `c409c2c` (adversarial review fix)
 - PR: [#150](https://github.com/turkerurganci/Skinora/pull/150)
-- CI: ⏳ izleniyor
+- CI: ✓ **PASS** — run [`27061575158`](https://github.com/turkerurganci/Skinora/actions/runs/27061575158) (HEAD `c409c2c`) **10/10 job success** (Lint/Build/Unit/Integration/Contract/Migration/Docker×2/Gate). FraudFlagAdminQueryServiceTests 11/11 (5 yeni dahil) + AdminFlagsEndpointTests 12/12 gerçek SQL Server'da yeşil.
+- **Bypass:** push'lar Layer 2 (önceki run failure) nedeniyle `SKINORA_ALLOW_DIRECT_PUSH=1` ile geçildi (kendi kırığının fix iterasyonu) — `Docs/BYPASS_LOG.md`'ye 3 `ci-failure` kaydı.
 
 ## Known Limitations / Follow-up
 - **K1 (önceki) — "Askıya Al" / hesap askıya alma** hâlâ T105 (S20) kapsamında; T100a yalnız flag içerik projeksiyonunu kapatır.
@@ -84,4 +85,25 @@ T100a bu üçünü **full-stack** kapatır (backend DTO + frontend render). Numa
 - **Main CI startup (Adım 0):** son 3 run success — `27059637345`, `27059637341` (T100 #148), `26371774696` (T99 #147).
 - **Dış varsayımlar (Adım 4):** Yok — yeni paket/dış API yok; mevcut EF Core + `Transaction` entity + STJ yeniden kullanıldı.
 - **Mimari karar:** Aktif-işlem EF predikatı Fraud sorgusunda inline yazıldı (AD19d ile birebir) — EF Core custom extension metodunu `.Where()` içinde çeviremediğinden paylaşılan helper yerine inline + cross-ref yorum tercih edildi.
-- **T100'den taşınan latent düzeltme:** `NormalizeMultiAccount` minimal MULTI_ACCOUNT `Details` için detay/liste yollarını NRE'den korur (T100'de bir MULTI_ACCOUNT detay testi olmadığından gözlenmemişti).
+- **T100'den taşınan latent düzeltme:** `NormalizeMultiAccount` minimal MULTI_ACCOUNT `Details` için detay/liste yollarını NRE'den korur (T100'de bir MULTI_ACCOUNT detay testi olmadığından gözlenmemişti). Adversarial review sonrası nested `supportingSignal.linkedAccounts` da boşa çevrilir hale getirildi (FE-1).
+
+## CI İterasyonu (SQL Server CHECK constraint zinciri)
+
+Lokal Windows'ta Docker olmadığından (T11.3) `Transaction` CHECK constraint'leri yalnız CI'nin shared mssql'inde enforce edilir (SQLite yok sayar). K9 testi held + cancelled işlem seed'lediğinden, her tur bir sonraki eksik invariant'ı ortaya çıkardı — **hepsi tek testin seed verisi, production kodu değil** (K10/K2'nin 3 ana integration testi ilk turdan beri yeşildi):
+
+| Run | HEAD | Kırılan CHECK | Düzeltme |
+|---|---|---|---|
+| [`27060695530`](https://github.com/turkerurganci/Skinora/actions/runs/27060695530) | `ed63f07` | `CK_Transactions_FreezeHold_Reverse` | held seed'e freeze trio (TimeoutFrozenAt + EMERGENCY_HOLD + RemainingSeconds) |
+| [`27060958264`](https://github.com/turkerurganci/Skinora/actions/runs/27060958264) | `82d9600` | `CK_Transactions_Hold` | held seed'e EmergencyHold trio (At + Reason + ByAdminId, FK→user) |
+| [`27061212260`](https://github.com/turkerurganci/Skinora/actions/runs/27061212260) | `dabe2bd` | `CK_Transactions_Cancel` | CANCELLED_* seed'e cancel trio (CancelledBy + Reason + At) |
+| [`27061575158`](https://github.com/turkerurganci/Skinora/actions/runs/27061575158) | `c409c2c` | — | **✓ 10/10 PASS** (8 CHECK'in hepsi sağlandı) |
+
+Ders: `Transaction` entity'sini seed eden integration testler 8 CHECK constraint'i (Cancel/Hold/Freeze×4/BuyerMethod×2) bilmeli; SQLite fixture bunları yakalamaz, yalnız CI mssql yakalar.
+
+## Çok-Ajanlı Adversarial Review (ultracode)
+
+Bağımsız validator öncesi proaktif 5-boyut (backend correctness / spec-conformance / security / frontend / test adequacy) + adversarial verify (21 ajan): **16 bulgu → 10 gerçek** (verify refute-default). Ele alınanlar:
+- **FE-1 (S2):** `NormalizeMultiAccount` nested `supportingSignal.linkedAccounts` null-coercion eksikti → recursive coerce eklendi (minimal/legacy JSON frontend null-deref koruması).
+- **BK-1/BK-2/T100a-10 (S2):** K9/K2 "AD19d ile aynı predikat" yorumları yanıltıcıydı (AD19d idempotency için `!IsOnHold` filtreler; K9/K2 held dahil eder) → yorumlar düzeltildi.
+- **T100a-2/3, BK-3, BK-4/T100a-4, T100a-7 (test gap):** K9 testi FLAGGED + 5 terminal; K2 held-count ayırt edici; null-coercion (top+nested); AD3 supportingSignals wire testi eklendi.
+- **Reddedilenler (verify ile):** T100a-1/5/6/8/9 (test-enhancement, defect değil) + BE-1 (yanlış mekanizma — STJ eksik üye için JsonException atmaz, null atar; gerçek konu FE-1'de yakalandı). Güvenlik boyutu 0 gerçek bulgu (IDOR yok — activeTransactions flag.UserId server-türetimli; signalSummary ham adres/patern, XSS yok; auth değişmedi).
