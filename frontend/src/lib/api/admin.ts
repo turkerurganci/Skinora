@@ -268,3 +268,252 @@ export function holdUserTransactions(
     { method: "POST", body: JSON.stringify({ reason }) },
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD6 / AD7 + AD19 / AD19b / AD19c — Admin transaction list + detail (S15 / S16).
+ * Wire format mirrors `PagedResult<AdminTransactionListItemDto>` (07 §9.6) and
+ * `AdminTransactionDetailDto` (07 §9.7), plus the AD19 / AD19b / AD19c lifecycle
+ * responses (07 §9.20–§9.22, T59). Enums serialize as strings
+ * (`JsonStringEnumConverter`); `decimal` money fields serialize as JSON numbers.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Coarse S15 "Durum" group (04 §8.4). The single `status` filter cannot express
+ * the multi-status ACTIVE / CANCELLED buckets, so AD6 resolves the group
+ * server-side (07 §9.6, T101 backend addition). ACTIVE = non-terminal (includes
+ * FLAGGED, matches the AD1 dashboard `activeTransactions` counter).
+ */
+export type AdminTransactionStatusGroup = "ACTIVE" | "COMPLETED" | "CANCELLED" | "FLAGGED";
+
+/** RESUME or CANCEL — the AD19c release-hold action (07 §9.22). */
+export type EmergencyHoldReleaseAction = "RESUME" | "CANCEL";
+
+/** Buyer/seller view shared by AD6 + AD7 (07 §9.6 / §9.7). */
+export interface AdminTransactionParty {
+  steamId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** One row of the AD6 list (07 §9.6). */
+export interface AdminTransactionListItem {
+  id: string;
+  itemName: string;
+  itemImageUrl: string | null;
+  price: number;
+  stablecoin: StablecoinType;
+  status: TransactionStatus;
+  seller: AdminTransactionParty;
+  buyer: AdminTransactionParty | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+/** AD6 page envelope — `PagedResult<T>` (07 §2.4 / §9.6). */
+export interface AdminTransactionListResponse {
+  items: AdminTransactionListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminTransactionListQuery {
+  status?: TransactionStatus;
+  statusGroup?: AdminTransactionStatusGroup;
+  stablecoin?: StablecoinType;
+  dateFrom?: string;
+  dateTo?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+}
+
+// ── AD7 detail sub-records (07 §9.7) ─────────────────────────────────────────
+
+export interface AdminTxStatusHistory {
+  fromStatus: TransactionStatus | null;
+  toStatus: TransactionStatus;
+  changedAt: string;
+  trigger: string;
+}
+
+export interface AdminTxPaymentDetail {
+  paymentAddress: string | null;
+  receivedAmount: number;
+  receivedTxHash: string | null;
+  blockConfirmations: number;
+  confirmedAt: string | null;
+}
+
+export interface AdminTxSellerPayoutDetail {
+  grossAmount: number;
+  commission: number;
+  gasFee: number | null;
+  gasFeeFromCommission: number;
+  gasFeeFromSeller: number;
+  netAmount: number;
+  txHash: string | null;
+  sentAt: string | null;
+}
+
+export interface AdminTxRefundDetail {
+  originalAmount: number;
+  gasFee: number | null;
+  netRefundAmount: number;
+  refundAddress: string | null;
+  txHash: string | null;
+  refundedAt: string | null;
+}
+
+export interface AdminTxNotification {
+  type: string;
+  recipient: string;
+  channels: string[];
+  sentAt: string;
+}
+
+export interface AdminTxDispute {
+  id: string;
+  type: string;
+  status: string;
+  autoCheckResult: string | null;
+  escalatedAt: string;
+  closedAt: string | null;
+}
+
+export interface AdminTxFlag {
+  id: string;
+  type: string;
+  reviewStatus: string;
+  adminNote: string | null;
+  reviewedAt: string | null;
+}
+
+/** Derived from current state (07 §9.7). */
+export interface AdminTxAdminActions {
+  canApproveFlag: boolean;
+  canRejectFlag: boolean;
+  canCancel: boolean;
+}
+
+/** AD7 detail body (07 §9.7). */
+export interface AdminTransactionDetail {
+  id: string;
+  status: TransactionStatus;
+  itemName: string;
+  itemImageUrl: string | null;
+  itemExterior: string | null;
+  itemInspectLink: string | null;
+  price: number;
+  stablecoin: StablecoinType;
+  commissionRate: number;
+  commissionAmount: number;
+  totalAmount: number;
+  paymentTimeoutMinutes: number;
+  seller: AdminTransactionParty;
+  buyer: AdminTransactionParty | null;
+  createdAt: string;
+  acceptedAt: string | null;
+  itemEscrowedAt: string | null;
+  paymentReceivedAt: string | null;
+  itemDeliveredAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  isOnHold: boolean;
+  emergencyHoldAt: string | null;
+  emergencyHoldReason: string | null;
+  statusHistory: AdminTxStatusHistory[];
+  paymentDetail: AdminTxPaymentDetail | null;
+  sellerPayoutDetail: AdminTxSellerPayoutDetail | null;
+  refundDetail: AdminTxRefundDetail | null;
+  notificationHistory: AdminTxNotification[];
+  disputeHistory: AdminTxDispute[];
+  flagHistory: AdminTxFlag[];
+  adminActions: AdminTxAdminActions;
+}
+
+// ── AD19 / AD19b / AD19c lifecycle responses (07 §9.20–§9.22) ────────────────
+
+export interface AdminCancelTransactionResult {
+  status: TransactionStatus;
+  cancelledAt: string;
+  itemReturned: boolean;
+  paymentRefunded: boolean;
+}
+
+export interface ApplyEmergencyHoldResult {
+  status: string;
+  frozenAt: string;
+  previousStatus: TransactionStatus;
+}
+
+export interface ReleaseEmergencyHoldResult {
+  status: TransactionStatus;
+  releasedAt: string;
+  action: EmergencyHoldReleaseAction;
+  itemReturned: boolean | null;
+  paymentRefunded: boolean | null;
+}
+
+export function listAdminTransactions(
+  query: AdminTransactionListQuery,
+): Promise<AdminTransactionListResponse> {
+  const params = new URLSearchParams();
+  if (query.status) params.set("status", query.status);
+  if (query.statusGroup) params.set("statusGroup", query.statusGroup);
+  if (query.stablecoin) params.set("stablecoin", query.stablecoin);
+  if (query.dateFrom) params.set("dateFrom", query.dateFrom);
+  if (query.dateTo) params.set("dateTo", query.dateTo);
+  if (query.minAmount !== undefined) params.set("minAmount", String(query.minAmount));
+  if (query.maxAmount !== undefined) params.set("maxAmount", String(query.maxAmount));
+  if (query.search) params.set("search", query.search);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.sortOrder) params.set("sortOrder", query.sortOrder);
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return apiClient<AdminTransactionListResponse>(`/admin/transactions${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminTransaction(id: string): Promise<AdminTransactionDetail> {
+  return apiClient<AdminTransactionDetail>(`/admin/transactions/${encodeURIComponent(id)}`);
+}
+
+/** AD19 — admin cancel ("İşlemi İptal Et", 03 §8.7). `reason` must be ≥10 chars. */
+export function cancelAdminTransaction(
+  id: string,
+  reason: string,
+): Promise<AdminCancelTransactionResult> {
+  return apiClient<AdminCancelTransactionResult>(
+    `/admin/transactions/${encodeURIComponent(id)}/cancel`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  );
+}
+
+/** AD19b — apply emergency hold ("Emergency Hold Uygula", 03 §8.8). `reason` ≥10 chars. */
+export function applyEmergencyHold(id: string, reason: string): Promise<ApplyEmergencyHoldResult> {
+  return apiClient<ApplyEmergencyHoldResult>(
+    `/admin/transactions/${encodeURIComponent(id)}/emergency-hold`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  );
+}
+
+/**
+ * AD19c — release an emergency hold ("Hold Kaldır", 03 §8.8). `action` = RESUME
+ * (continue) or CANCEL (cancel the transaction); `note` must be ≥1 char.
+ */
+export function releaseEmergencyHold(
+  id: string,
+  action: EmergencyHoldReleaseAction,
+  note: string,
+): Promise<ReleaseEmergencyHoldResult> {
+  return apiClient<ReleaseEmergencyHoldResult>(
+    `/admin/transactions/${encodeURIComponent(id)}/release-hold`,
+    { method: "POST", body: JSON.stringify({ action, note }) },
+  );
+}

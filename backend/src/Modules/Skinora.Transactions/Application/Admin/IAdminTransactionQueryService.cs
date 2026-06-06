@@ -36,8 +36,35 @@ public interface IAdminTransactionQueryService
         Guid transactionId, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Coarse status grouping for the S15 admin transaction filter (04 §8.4
+/// "Durum: Tümü / Aktif / Tamamlanan / İptal / Flag'lenmiş"). The
+/// single-status <see cref="AdminTransactionListQuery.Status"/> param cannot
+/// express the multi-status <c>ACTIVE</c> / <c>CANCELLED</c> buckets, so this
+/// group is resolved to a status set server-side (07 §9.6).
+/// </summary>
+/// <remarks>
+/// <c>ACTIVE</c> is defined as "not terminal" so it matches the AD1 dashboard
+/// <c>activeTransactions</c> counter exactly (mirrors
+/// <c>AdminDashboardService</c>'s terminal-state set) — that keeps the
+/// dashboard "Active Transactions" card and its <c>?tab=active</c> deep-link
+/// consistent. ACTIVE therefore includes <c>FLAGGED</c>; the separate
+/// <c>FLAGGED</c> group narrows to just flagged transactions.
+/// </remarks>
+public enum AdminTransactionStatusGroup
+{
+    ACTIVE,
+    COMPLETED,
+    CANCELLED,
+    FLAGGED,
+}
+
 /// <summary>Filter inputs for AD6 (07 §9.6).</summary>
-/// <param name="Status">Optional status filter.</param>
+/// <param name="Status">Optional single-status filter.</param>
+/// <param name="StatusGroup">
+/// Optional coarse status bucket (04 §8.4 S15 filter). Applied in addition to
+/// <see cref="Status"/> when both are supplied — the S15 UI sends only one.
+/// </param>
 /// <param name="Stablecoin">Optional stablecoin filter.</param>
 /// <param name="DateFrom">Optional inclusive lower bound on <c>CreatedAt</c>.</param>
 /// <param name="DateTo">Optional inclusive upper bound on <c>CreatedAt</c>.</param>
@@ -53,6 +80,7 @@ public interface IAdminTransactionQueryService
 /// <param name="PageSize">Page size (clamped to 1–100, default 20).</param>
 public sealed record AdminTransactionListQuery(
     TransactionStatus? Status,
+    AdminTransactionStatusGroup? StatusGroup,
     StablecoinType? Stablecoin,
     DateTime? DateFrom,
     DateTime? DateTo,
