@@ -68,9 +68,9 @@ T100a bu üçünü **full-stack** kapatır (backend DTO + frontend render). Numa
 
 ## Commit & PR
 - Branch: `task/T100a-flag-dto-expansion`
-- Commit: <push sonrası>
-- PR: <oluşturulacak>
-- CI: ⏳
+- Commit: `a8d8eeb` — T100a: Admin Flag hesap-varyant DTO genişletme (AD2/AD3, S13/S14)
+- PR: [#150](https://github.com/turkerurganci/Skinora/pull/150)
+- CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
 - **K1 (önceki) — "Askıya Al" / hesap askıya alma** hâlâ T105 (S20) kapsamında; T100a yalnız flag içerik projeksiyonunu kapatır.
