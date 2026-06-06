@@ -1,6 +1,6 @@
 # T101 — Admin İşlem listesi + detay (S15, S16)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-06-06
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-06 (doğrulama 2026-06-06)
 
 ---
 
@@ -65,9 +65,21 @@ Frontend S15 (İşlem Listesi & Arama) + S16 (İşlem Detay — Admin), mevcut A
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validate chat'i bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✅ **PASS** (bağımsız validate chat'i, 2026-06-06) |
+| Bulgu sayısı | 9 (4× S3 + 5× advisory) — **hiçbiri bloke edici değil** (0× S2 kırılma, 0× kabul kriteri ✗, güvenlik temiz) |
+| Düzeltme gerekli mi | Hayır — 9 bulgu K-notes/forward; proje sahibi "şimdi merge + K-notes" onayı (2026-06-06) |
+
+**Validator metodu:** Adım -1/0/0b hard-stop'lar ✓ (working tree temiz · main CI son-3 success · repo memory T101 mevcut). Bağımsız spec-conformance review (yapım raporu görülmeden) + 4-boyut × adversarial doğrulama workflow'u (17 ajan: S15 liste / S16 detay / S16 aksiyon-modal / güvenlik-wiring, her bulgu refute-default doğrulandı). Kendi build/test koşumları:
+- Backend `dotnet build Skinora.sln -c Release` → **0W/0E** (19 proje).
+- `dotnet test --filter AdminT63EndpointTests` (SQLite) → **24/24 PASS** (3 yeni statusGroup testi dahil: ACTIVE terminal-hariç+FLAGGED-dahil=3, CANCELLED 4-varyant=4, FLAGGED=1).
+- Frontend `tsc --noEmit` 0 · `eslint src` 0 · `next build` ✓ (`/admin/transactions` + `/[id]` ƒ) · `prettier --check` LF git-blob içeriğinde **temiz** (lokal Windows CRLF "13 dosya" uyarısı autocrlf artefaktı — bulgu değil, kanıtlandı).
+- i18n leaf parity 859×4 (0 drift), `adminTransactions` 100×4.
+- Task-branch CI HEAD `92e387e` [`27071230219`](https://github.com/turkerurganci/Skinora/actions/runs/27071230219) **11/11 SUCCESS** (Lint/Build/Unit/**Integration**/Contract/Migration/Docker×2/Gate — SQL-Server integration CI'de doğrulandı, T11.3).
+- Backend AD7 party DTO doğrudan okundu: `AdminTransactionPartyDto` yalnız SteamId/DisplayName/AvatarUrl → K3 (taraf skoru) T63 AD7 kontrat daralması, T101 kusuru değil; frontend kontratı sadık yansıtıyor.
+
+**Kabul kriterleri:** 4/4 ✓ (yukarıdaki tablo bağımsız doğrulandı). **Doğrulama kontrol listesi (04 §8.4–§8.5 tüm bileşenler ve aksiyonlar):** ~ **Kısmi** — çoğu mevcut; aşağıdaki K-notes'ta listelenen alt-öğeler eksik.
+
+**Yapım raporu karşılaştırması:** Kabul-kriteri tablosu (4/4 ✓) ve K1–K9 tam uyumlu — yapım raporu K1/K3/K4/K6/K7'yi zaten dürüstçe açıklamış. Validator ek olarak yapım raporunda açıklanmayan 5 sapma buldu (aşağıda K10–K14); uyuşmazlık yok, yalnızca kapsam genişletme.
 
 ## Altyapı Değişiklikleri
 - Migration: Yok (yeni domain enum/kolon yok; `AdminTransactionStatusGroup` API query-param enum'u, DB'de saklanmaz).
@@ -77,9 +89,9 @@ Frontend S15 (İşlem Listesi & Arama) + S16 (İşlem Detay — Admin), mevcut A
 
 ## Commit & PR
 - Branch: `task/T101-admin-transactions`
-- Commit: `4a9c4e0` — T101: Admin İşlem listesi + detay (S15, S16)
+- Commit: `4a9c4e0` — T101: Admin İşlem listesi + detay (S15, S16) · `92e387e` — rapor+status+memory
 - PR: #152
-- CI: ⏳ izleniyor
+- CI: ✓ task-branch HEAD `92e387e` [`27071230219`](https://github.com/turkerurganci/Skinora/actions/runs/27071230219) **11/11 SUCCESS**; squash merge sonrası main CI + Docker Publish izlendi (aşağıda doğrulama notu).
 
 ## Known Limitations / Follow-up
 - **K1 — Exceptional Resolution:** ITEM_DELIVERED'da standart iptal + EMERGENCY_HOLD release→CANCEL@ITEM_DELIVERED için backend endpoint yok (AD19 422 `CANNOT_CANCEL_AT_DELIVERY_STAGE` / AD19c 422 `CANNOT_CANCEL_DELIVERED_HOLD`). Buton disabled "Yakında" — ayrı task'a forward (04 §8.5 line 1566).
@@ -91,6 +103,19 @@ Frontend S15 (İşlem Listesi & Arama) + S16 (İşlem Detay — Admin), mevcut A
 - **K7 — Auto-Hold sanctions etiketi:** `emergencyHoldReason` üzerinde `/sanction/i` heuristic; AD7'de `isAutomatic`/sanctions bayrağı yok → forward.
 - **K8 — TX hash explorer:** Tronscan (`tronscan.org/#/transaction/`) hard-coded; env-config forward.
 - **K9 — Frontend test runner yok:** F5 plan-onaylı (T97–T100 ile aynı).
+
+### Validator ek bulguları (yapım raporunda açıklanmamıştı — proje sahibi merge-with-K-notes onayı 2026-06-06)
+- **K10 — Kolon-başlığı sıralama UI'sı yok (S3, 04 §8.4):** Spec "Sıralama: Kolon başlıklarına tıklanarak. Varsayılan: en yeni üstte." `sortBy`/`sortOrder` API + query-key'de plumbing mevcut ama UI hiç göndermiyor; `ResponsiveTable` başlıkları statik `<th>` (sort affordance'ı T98'den beri hiç yok — platform geneli). **"En yeni üstte" varsayılanı backend default'u ile karşılanıyor** (`AdminTransactionQueryService.ApplyOrdering` default → `OrderByDescending(CreatedAt).ThenBy(Id)`); eksik olan yalnız tıklamalı yeniden-sıralama. Kabul kriterinde değil. Forward: `ResponsiveTable` sortable kolon desteği (tüm admin tabloları).
+- **K11 — İptal modal'ı "iade bilgisi" göstermiyor (S3, 04 §8.5 / 03 §8.7):** Cancel modal yalnız onay sorusu (`confirm.cancelTx`) + sebep textarea içeriyor; "neyin kime iade edileceği" özeti yok. İade backend'de (AD19) doğru uygulanıyor; bu UX-tamlık eksiği. Reuse paterni mevcut: kullanıcı-tarafı `CancelModal` `refundDescription` prop'u + AD7 DTO price/commission/total ileri-bakışlı özet için yeterli. Forward.
+- **K12 — Hold paneli "süresi" göstermiyor (S3, 04 §8.5):** EMERGENCY_HOLD bilgisi sebep + `heldAt` gösteriyor ama elapsed/süre yok. `emergencyHoldAt`'tan client-side türetilebilir. Forward (küçük).
+- **K13 — Detay'dan flag çözümü liste cache'ini invalidate etmiyor (advisory):** `useApproveFlag`/`useRejectFlag` yalnız `["admin","flags"]`+`["admin","dashboard"]` invalidate eder, `["admin","transactions"]` etmez → açık detay refetch olur ama S15 liste 30s staleTime + `refetchOnWindowFocus:false` nedeniyle bir süre stale durum gösterebilir. Düşük etki, kendi kendine düzelir. Forward: detay-bağlamı flag mutasyonlarına `["admin","transactions"]` invalidation ekle.
+- **K14 — `TransactionListTable` detay link'i `row.id`'yi encode etmiyor (advisory):** `page.tsx:59` `encodeURIComponent` kullanmıyor (diğer tüm id/steamId interpolasyonları kullanıyor). GUID'ler pratikte güvenli; tutarlılık nit'i. Forward.
+
+### Doc-vs-kontrat tutarsızlıkları (04 §8.4–§8.5 ↔ 07 §9.6/§9.7) — T63 AD6/AD7 kontrat daralmaları, T101 kusuru değil
+Frontend bu üç alanda kontratı sadık yansıtıyor; kaynak doc tutarsızlığı ayrı doc-reconciliation gerektirir (proje sahibine sunuldu):
+- **K4 (= advisory):** liste kolonu "Tamamlanma/İptal" yalnız `completedAt` taşır; CANCELLED satırlar "—" (AD6 list DTO'da `cancelledAt` yok — 07 §9.6 vs 04 §8.4).
+- **K3 (= S3 attrib. düzeltildi):** taraf "skor"u AD7 `AdminTransactionPartyDto`'da yok (07 §9.7 vs 04 §8.5 item 3). Frontend gösteremez çünkü backend döndürmüyor.
+- **K6/notification (= advisory):** bildirim "içerik"i AD7 `AdminTxNotification`'da yok (07 §9.7 vs 04 §8.5 item 7).
 
 ## Notlar
 - **Working tree:** Session başında temiz. Yapım sırasında `.claude/settings.json` working-tree'de değişti (T101 dışı, harness/permission kaynaklı) — commit'e dahil EDİLMEDİ (yalnız T101 dosyaları stage'lendi), proje sahibine ayrıca bildirildi.
