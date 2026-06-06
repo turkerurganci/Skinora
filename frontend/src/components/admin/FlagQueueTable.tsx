@@ -40,7 +40,10 @@ export interface FlagQueueTableProps {
  * transaction flags surface item / amount / market-price; account flags drop
  * those tx-only columns; "Tümü" adds a category column. The account-flag
  * signal columns (Sinyal Detayı / İlişkili Hesaplar / Aktif İşlem Sayısı) are
- * not in the AD2 list projection — they appear on the S14 detail instead.
+ * not carried by the AD2 list projection (07 §9.2). The S14 detail surfaces
+ * the multi-account signal + linked accounts only; the per-user active-tx
+ * count/list and the IP/device signal are not yet projected by AD2/AD3 and
+ * are deferred to a backend DTO-expansion task (see T100 report K2/K9/K10).
  */
 export function FlagQueueTable({ flags, category, className }: FlagQueueTableProps) {
   const t = useTranslations("adminFlags");
