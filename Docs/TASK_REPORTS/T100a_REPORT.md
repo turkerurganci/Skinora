@@ -1,6 +1,6 @@
 # T100a — Admin Flag hesap-varyant DTO genişletme (AD2/AD3, S13/S14)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-06-06
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-06
 
 ---
 
@@ -48,6 +48,28 @@ T100a bu üçünü **full-stack** kapatır (backend DTO + frontend render). Numa
 | 2 | K9 — AD3 hesap-flag "Aktif İşlemler" sayı+liste + S14 render | ✓ | `FraudFlagDetailDto.ActiveTransactions` + `GetDetailAsync_Returns_ActiveTransactions_With_Role_And_Hold`; FlagDetailView "Aktif İşlemler" bölümü |
 | 3 | K2 — AD2 hesap-flag kolonları (Sinyal/İlişkili/Aktif) + S13 render | ✓ | `FraudFlagListItemDto` 3 alan + `ListAsync_Account_Flag_Populates_Signal_And_ActiveCount` + `ListFlags_AccountFlag_SerializesSignalFields`; FlagQueueTable ACCOUNT_LEVEL kolonları |
 | 4 | Aktif işlem tanımı AD19d predikatıyla tutarlı (her iki taraf, 5 terminal hariç, FLAGGED aktif) | ✓ | GetDetailAsync + ListAsync where klozları AD19d `HoldAllUserTransactionsAsync` ile birebir; `ListAsync_Transaction_Flag_Leaves_Account_Fields_Null` + role/hold testi |
+
+## Doğrulama (Bağımsız Validator — 2026-06-06)
+
+> Validator, yapım raporunu **görmeden** bağımsız verdict oluşturdu (kod + spec + test + producer roundtrip). Sonradan rapor karşılaştırıldı: **tam uyum, 0 uyuşmazlık.**
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** |
+| Verdict yöntemi | Bağımsız (rapor görülmeden); 4/4 kabul kriteri kanıtlı ✓ + 3/3 kontrol listesi ✓ |
+| Bulgu sayısı (S1/S2/S3) | 0 |
+| Düzeltme gerekli mi | Hayır |
+| Minor advisory (bloklamaz) | 1 — `FraudFlagAdminQueryServiceTests.SeedTransactionAsync` yorumları "SQLite ignores it" diyor; bu proje (Fraud.Tests) `IntegrationTestBase` → Testcontainers **MsSql** kullanıyor (SQLite yolu yok). Yorum kozmetik olarak yanıltıcı, davranışı etkilemiyor (CHECK'ler hem lokal-Docker hem CI'de geçerli). |
+
+**Bağımsız doğrulama kanıtları:**
+- **HARD STOP kapıları:** Working tree temiz (Adım -1); main son 3 CI run success — `27059637341`/`27059637345` (T100 #148) + `26371774696` (T99 #147) (Adım 0); repo memory T100a satırı mevcut (Adım 0b).
+- **K10:** `MultiAccountFlagDetail.SupportingSignals` deserialize + `NormalizeMultiAccount` top+nested null-coerce; **producer doğrulandı** — `MultiAccountDetector` (satır 129-142) `Details` JSON'unu `{matchType, matchValue, linkedAccounts[], supportingSignals[{type,value,linkedAccounts[]}]}` şekliyle yazıyor → roundtrip gerçek, K10 premisi ("veri zaten Details'te") doğru.
+- **K9:** `GetDetailAsync` aktif-işlem predikatı (satır 332-340) — her iki taraf, `!IsDeleted`, 5 terminal hariç, FLAGGED aktif, **hold dahil** (`!IsOnHold` filtre YOK) + `IsOnHold`/`Role` projekte. Spec 07 §9.3:1751 ile birebir.
+- **K2:** `ListAsync` (satır 155-172) K9 ile **özdeş** predikat → `activeTransactionCount` == `activeTransactions.length`; yalnız ACCOUNT_LEVEL doldurulur (satır 197-204), işlem-flag'lerde null.
+- **Frontend↔backend kontrat 1:1:** `admin.ts` tipleri + `FlagDetailView` (supportingSignals + "Aktif İşlemler" bloğu) + `FlagQueueTable` (ACCOUNT_LEVEL signal/linked/active kolonları) tutarlı; i18n 4-locale parity (12 yeni leaf × 4 doğrulandı).
+- **Test (CI authoritative — lokal Docker yok):** task branch CI run [`27061799552`](https://github.com/turkerurganci/Skinora/actions/runs/27061799552) (HEAD `fa69919`) **11/11 job success**; Integration job: `Skinora.Fraud.Tests` **36 passed** + `Skinora.API.Tests` **398 passed**; tüm run'da **0 Failed**. (Lokal Fraud.Tests çalıştırılamadı — Testcontainers MsSql + Docker kapalı; CI mssql authoritative.)
+- **Güvenlik:** Secret sızıntısı yok; yeni endpoint/auth değişikliği yok (mevcut Admin + `VIEW_FLAGS`); `signalSummary`/`supportingSignals` yalnız admin yüzeyi; defensive JSON parse (try/catch); 0 yeni bağımlılık; IDOR yok (`activeTransactions` server-türetimli `flag.UserId`).
+- **CI iterasyonu:** 3 erken failure (FreezeHold_Reverse → Hold → Cancel CHECK zinciri) **test seed verisi** kaynaklı, doğru biçimde düzeltildi (invariant'lar tam dolduruldu, test zayıflatılmadı); son 2 run yeşil. 3 BYPASS_LOG kaydı Layer-2 `[ci-failure]` (task branch kendi kırığı fix push'u — meşru).
 
 ## Test Sonuçları
 | Tür | Sonuç | Detay |
