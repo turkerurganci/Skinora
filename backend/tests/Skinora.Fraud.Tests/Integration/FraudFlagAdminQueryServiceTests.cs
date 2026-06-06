@@ -259,15 +259,55 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task GetDetailAsync_MultiAccount_Coerces_Null_Collections_To_Empty()
+    {
+        // K10 defense — minimal/legacy Details: no top-level linkedAccounts AND a
+        // supportingSignal missing its nested linkedAccounts. NormalizeMultiAccount
+        // must coerce every collection to empty (never null) so the wire shape is
+        // stable and the frontend never dereferences null.
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_REFUND",
+            matchValue = "TMinimalAddr",
+            supportingSignals = new[]
+            {
+                new { type = "IP_ADDRESS", value = "198.51.100.4" }, // no linkedAccounts
+            },
+        });
+        var flag = await SeedFlagAsync(
+            scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT,
+            status: ReviewStatus.PENDING,
+            details: details);
+
+        var sut = BuildSut();
+        var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        var payload = Assert.IsType<MultiAccountFlagDetail>(detail!.FlagDetail);
+        Assert.NotNull(payload.LinkedAccounts);
+        Assert.Empty(payload.LinkedAccounts);
+        var signal = Assert.Single(payload.SupportingSignals);
+        Assert.NotNull(signal.LinkedAccounts);
+        Assert.Empty(signal.LinkedAccounts);
+    }
+
+    [Fact]
     public async Task GetDetailAsync_Returns_ActiveTransactions_With_Role_And_Hold()
     {
         // K9 — flagged user's active (non-terminal) transactions; either party;
-        // terminal states excluded; held rows kept and marked.
+        // FLAGGED is active; all five terminal states excluded; held rows kept
+        // and marked. Active: CREATED + ITEM_ESCROWED(hold) + PAYMENT_RECEIVED(buyer)
+        // + FLAGGED = 4. Terminal (excluded): the 5 below.
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
         await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.PAYMENT_RECEIVED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_ADMIN);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_SELLER);
+        await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.CANCELLED_BUYER);
 
         var flag = await SeedFlagAsync(
             scope: FraudFlagScope.ACCOUNT_LEVEL,
@@ -278,9 +318,16 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
 
         Assert.NotNull(detail);
-        Assert.Equal(3, detail!.ActiveTransactions.Count);
+        Assert.Equal(4, detail!.ActiveTransactions.Count);
+        // All five terminal states excluded.
         Assert.DoesNotContain(detail.ActiveTransactions,
-            t => t.Status is TransactionStatus.COMPLETED or TransactionStatus.CANCELLED_ADMIN);
+            t => t.Status is TransactionStatus.COMPLETED
+                or TransactionStatus.CANCELLED_TIMEOUT
+                or TransactionStatus.CANCELLED_SELLER
+                or TransactionStatus.CANCELLED_BUYER
+                or TransactionStatus.CANCELLED_ADMIN);
+        // FLAGGED is active (not terminal).
+        Assert.Contains(detail.ActiveTransactions, t => t.Status == TransactionStatus.FLAGGED);
 
         var held = Assert.Single(detail.ActiveTransactions, t => t.IsOnHold);
         Assert.Equal(FlagTransactionRole.SELLER, held.Role);
@@ -313,9 +360,12 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
             status: ReviewStatus.PENDING,
             details: details);
 
-        // Two active + one terminal for the flagged user.
+        // Two active (one of them held) + one terminal for the flagged user.
+        // The held row must still be counted (07 §9.2 = same predicate as AD3,
+        // which keeps held rows) — if the count wrongly filtered !IsOnHold it
+        // would be 1, so expecting 2 proves held rows are included.
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
-        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
 
         var sut = BuildSut();
@@ -404,10 +454,26 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         Guid sellerId, Guid buyerId, TransactionStatus status, bool isOnHold = false)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        // SQL Server enforces CK_Transactions_Cancel: any CANCELLED_* status must
+        // carry the cancel trio (CancelledBy/CancelReason/CancelledAt). SQLite
+        // ignores it, so this only matters on the CI mssql runner.
+        CancelledByType? cancelledBy = status switch
+        {
+            TransactionStatus.CANCELLED_TIMEOUT => CancelledByType.TIMEOUT,
+            TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
+            TransactionStatus.CANCELLED_BUYER => CancelledByType.BUYER,
+            TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+            _ => null,
+        };
+
         var tx = new Transaction
         {
             Id = Guid.NewGuid(),
             Status = status,
+            CancelledBy = cancelledBy,
+            CancelReason = cancelledBy is null ? null : "test cancel",
+            CancelledAt = cancelledBy is null ? null : nowUtc,
             IsOnHold = isOnHold,
             // SQL Server enforces the full emergency-hold invariant set
             // (CK_Transactions_Hold + Freeze{Active,Passive} + FreezeHold_{Forward,Reverse}):

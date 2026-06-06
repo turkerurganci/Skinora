@@ -183,6 +183,43 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
         Assert.Equal("PENDING", data.GetProperty("reviewStatus").GetString());
     }
 
+    [Fact]
+    public async Task GetFlag_MultiAccount_SerializesSupportingSignals()
+    {
+        // T100a / K10 — AD3 detail must serialize flagDetail.supportingSignals
+        // (07 §9.3) over the wire, not just at the service layer.
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_PAYOUT",
+            matchValue = "TDetailAddr",
+            linkedAccounts = new[] { new { steamId = "9", displayName = "Alt" } },
+            supportingSignals = new[]
+            {
+                new
+                {
+                    type = "IP_ADDRESS",
+                    value = "203.0.113.9",
+                    linkedAccounts = new[] { new { steamId = "10", displayName = "Alt2" } },
+                },
+            },
+        });
+        var flagId = await _factory.SeedAccountFlagAsync(seller.Id, ReviewStatus.PENDING, details: details);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/flags/{flagId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        var signals = data.GetProperty("flagDetail").GetProperty("supportingSignals");
+        Assert.Equal(JsonValueKind.Array, signals.ValueKind);
+        var first = signals[0];
+        Assert.Equal("IP_ADDRESS", first.GetProperty("type").GetString());
+        Assert.Equal("203.0.113.9", first.GetProperty("value").GetString());
+        Assert.Equal("Alt2", first.GetProperty("linkedAccounts")[0].GetProperty("displayName").GetString());
+    }
+
     // ---------- AD4 POST /admin/flags/:id/approve ----------
 
     [Fact]

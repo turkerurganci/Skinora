@@ -139,9 +139,10 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 .ToDictionaryAsync(u => u.Id, cancellationToken);
 
         // K2 — per-user active transaction counts for the account-level rows on
-        // this page (04 §8.2 "Aktif İşlem Sayısı"). Same active predicate as the
-        // AD3 detail / AD19d bulk-hold; one query keyed by the flagged users,
-        // bounded by at most pageSize distinct ids.
+        // this page (04 §8.2 "Aktif İşlem Sayısı"). Same predicate as the AD3
+        // detail activeTransactions (07 §9.2 — "AD3 ile aynı predikat"): includes
+        // held rows (NOT idempotency-filtered like AD19d's bulk-hold). One query
+        // keyed by the flagged users, bounded by at most pageSize distinct ids.
         var accountUserIds = pageRows
             .Where(r => r.Scope == FraudFlagScope.ACCOUNT_LEVEL)
             .Select(r => r.UserId)
@@ -322,10 +323,12 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 cancellationToken);
 
         // K9 — active (non-terminal) transactions of the flagged user (04 §8.3
-        // hesap-flag madde 4). Same predicate as the AD19d bulk-hold (07 §9.22a):
+        // hesap-flag madde 4). Same *active definition* as AD19d (07 §9.22a):
         // either party, FLAGGED still active, the five terminal states excluded.
-        // Held rows are intentionally kept (still active) and flagged via
-        // IsOnHold so the admin sees what a subsequent hold would skip.
+        // NOTE: unlike AD19d's bulk-hold selection, this does NOT apply the
+        // `!IsOnHold` idempotency filter — held rows are intentionally kept (still
+        // active) and marked via IsOnHold so the admin sees what a subsequent
+        // hold would skip (07 §9.3 activeTransactions footnote).
         var activeTransactions = await _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => (t.SellerId == flag.UserId || t.BuyerId == flag.UserId)
@@ -465,7 +468,12 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             : detail with
             {
                 LinkedAccounts = detail.LinkedAccounts ?? [],
-                SupportingSignals = detail.SupportingSignals ?? [],
+                // Coerce nested collections too: a supportingSignals[] element can
+                // itself omit linkedAccounts in minimal/legacy JSON, which would
+                // otherwise reach the frontend as null and break its .length read.
+                SupportingSignals = (detail.SupportingSignals ?? [])
+                    .Select(s => s with { LinkedAccounts = s.LinkedAccounts ?? [] })
+                    .ToList(),
             };
 
     /// <summary>
