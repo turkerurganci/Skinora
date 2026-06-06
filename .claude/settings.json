@@ -3,7 +3,10 @@
   "permissions": {
     "allow": [
       "Edit(.claude/**)",
-      "Write(.claude/**)"
+      "Write(.claude/**)",
+      "PowerShell(cd \"c:/projects/Escrow/frontend\"; npx tsc --noEmit; Write-Output \"tsc exit=$LASTEXITCODE\")",
+      "PowerShell(cd \"c:/projects/Escrow/frontend\"; npx next build 2>&1 | Select-String -Pattern \"Compiled|Failed|error|Error|admin/transactions|Route \\\\\\(app\\\\\\)|warn|✓|✗\" | Select-Object -First 60; Write-Output \"build exit=$LASTEXITCODE\")",
+      "PowerShell(cd \"c:/projects/Escrow/backend\"; dotnet format Skinora.sln --verify-no-changes --no-restore 2>&1 | Select-Object -Last 15; Write-Output \"format exit=$LASTEXITCODE\")"
     ]
   }
 }
