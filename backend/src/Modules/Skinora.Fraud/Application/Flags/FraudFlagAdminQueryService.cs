@@ -55,6 +55,11 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
 
         var baseQuery = _db.Set<FraudFlag>().AsNoTracking();
 
+        // Scope filter backs the 04 §8.2 "Flag kategorisi" control
+        // (Tümü / İşlem Flag'leri / Hesap Flag'leri). Server-side so the
+        // page slice + totalCount stay correct under the category filter.
+        if (query.Scope.HasValue)
+            baseQuery = baseQuery.Where(f => f.Scope == query.Scope.Value);
         if (query.Type.HasValue)
             baseQuery = baseQuery.Where(f => f.Type == query.Type.Value);
         if (query.ReviewStatus.HasValue)
@@ -87,6 +92,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 f.Type,
                 f.Status,
                 f.UserId,
+                f.Details,
                 f.CreatedAt,
             })
             .ToListAsync(cancellationToken);
@@ -132,6 +138,40 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 })
                 .ToDictionaryAsync(u => u.Id, cancellationToken);
 
+        // K2 — per-user active transaction counts for the account-level rows on
+        // this page (04 §8.2 "Aktif İşlem Sayısı"). Same predicate as the AD3
+        // detail activeTransactions (07 §9.2 — "AD3 ile aynı predikat"): includes
+        // held rows (NOT idempotency-filtered like AD19d's bulk-hold). One query
+        // keyed by the flagged users, bounded by at most pageSize distinct ids.
+        var accountUserIds = pageRows
+            .Where(r => r.Scope == FraudFlagScope.ACCOUNT_LEVEL)
+            .Select(r => r.UserId)
+            .Distinct()
+            .ToList();
+
+        var activeCountByUser = new Dictionary<Guid, int>();
+        if (accountUserIds.Count > 0)
+        {
+            var activeRows = await _db.Set<Transaction>()
+                .AsNoTracking()
+                .Where(t => !t.IsDeleted
+                            && t.Status != TransactionStatus.COMPLETED
+                            && t.Status != TransactionStatus.CANCELLED_TIMEOUT
+                            && t.Status != TransactionStatus.CANCELLED_SELLER
+                            && t.Status != TransactionStatus.CANCELLED_BUYER
+                            && t.Status != TransactionStatus.CANCELLED_ADMIN
+                            && (accountUserIds.Contains(t.SellerId)
+                                || (t.BuyerId.HasValue && accountUserIds.Contains(t.BuyerId.Value))))
+                .Select(t => new { t.SellerId, t.BuyerId })
+                .ToListAsync(cancellationToken);
+
+            foreach (var userId in accountUserIds)
+            {
+                activeCountByUser[userId] = activeRows.Count(
+                    t => t.SellerId == userId || t.BuyerId == userId);
+            }
+        }
+
         var items = pageRows
             .Select(r =>
             {
@@ -148,6 +188,21 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                         AvatarUrl: sellerHit.AvatarUrl);
                 }
 
+                // Account-flag columns (04 §8.2) — populated only for
+                // ACCOUNT_LEVEL rows; left null on transaction flags so the
+                // frontend column set stays scope-driven.
+                string? signalSummary = null;
+                int? linkedAccountCount = null;
+                int? activeTransactionCount = null;
+                if (r.Scope == FraudFlagScope.ACCOUNT_LEVEL)
+                {
+                    var (summary, linkedCount) = ParseAccountSignal(r.Type, r.Details);
+                    signalSummary = summary;
+                    linkedAccountCount = linkedCount;
+                    activeTransactionCount =
+                        activeCountByUser.TryGetValue(r.UserId, out var c) ? c : 0;
+                }
+
                 return new FraudFlagListItemDto(
                     Id: r.Id,
                     TransactionId: r.TransactionId,
@@ -159,6 +214,9 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                     Price: tx?.Price,
                     Stablecoin: tx?.Stablecoin,
                     MarketPrice: tx?.MarketPrice,
+                    SignalSummary: signalSummary,
+                    LinkedAccountCount: linkedAccountCount,
+                    ActiveTransactionCount: activeTransactionCount,
                     CreatedAt: r.CreatedAt);
             })
             .ToList();
@@ -264,10 +322,55 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                           && t.Status == TransactionStatus.COMPLETED,
                 cancellationToken);
 
+        // K9 — active (non-terminal) transactions of the flagged user (04 §8.3
+        // hesap-flag madde 4). Same *active definition* as AD19d (07 §9.22a):
+        // either party, FLAGGED still active, the five terminal states excluded.
+        // NOTE: unlike AD19d's bulk-hold selection, this does NOT apply the
+        // `!IsOnHold` idempotency filter — held rows are intentionally kept (still
+        // active) and marked via IsOnHold so the admin sees what a subsequent
+        // hold would skip (07 §9.3 activeTransactions footnote).
+        var activeTransactions = await _db.Set<Transaction>()
+            .AsNoTracking()
+            .Where(t => (t.SellerId == flag.UserId || t.BuyerId == flag.UserId)
+                        && !t.IsDeleted
+                        && t.Status != TransactionStatus.COMPLETED
+                        && t.Status != TransactionStatus.CANCELLED_TIMEOUT
+                        && t.Status != TransactionStatus.CANCELLED_SELLER
+                        && t.Status != TransactionStatus.CANCELLED_BUYER
+                        && t.Status != TransactionStatus.CANCELLED_ADMIN)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new
+            {
+                t.Id,
+                t.Status,
+                t.ItemName,
+                t.Price,
+                t.StablecoinType,
+                t.SellerId,
+                t.IsOnHold,
+                t.CreatedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        var activeTransactionDtos = activeTransactions
+            .Select(t => new FlagActiveTransactionDto(
+                Id: t.Id,
+                Status: t.Status,
+                ItemName: t.ItemName,
+                Price: t.Price,
+                Stablecoin: t.StablecoinType,
+                Role: t.SellerId == flag.UserId
+                    ? FlagTransactionRole.SELLER
+                    : FlagTransactionRole.BUYER,
+                IsOnHold: t.IsOnHold,
+                CreatedAt: t.CreatedAt))
+            .ToList();
+
         var detailPayload = ParseDetail(flag);
 
         return new FraudFlagDetailDto(
             Id: flag.Id,
+            UserId: flag.UserId,
             Scope: flag.Scope,
             Type: flag.Type,
             ReviewStatus: flag.Status,
@@ -277,6 +380,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             Seller: sellerDto,
             Buyer: buyerDto,
             HistoricalTransactionCount: historicalCount,
+            ActiveTransactions: activeTransactionDtos,
             ReviewedByAdminId: flag.ReviewedByAdminId,
             ReviewedAt: flag.ReviewedAt,
             AdminNote: flag.AdminNote);
@@ -337,7 +441,8 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 FraudFlagType.ABNORMAL_BEHAVIOR =>
                     JsonSerializer.Deserialize<AbnormalBehaviorFlagDetail>(flag.Details, DetailJsonOptions),
                 FraudFlagType.MULTI_ACCOUNT =>
-                    JsonSerializer.Deserialize<MultiAccountFlagDetail>(flag.Details, DetailJsonOptions),
+                    NormalizeMultiAccount(
+                        JsonSerializer.Deserialize<MultiAccountFlagDetail>(flag.Details, DetailJsonOptions)),
                 _ => null,
             };
         }
@@ -348,6 +453,59 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             // on a malformed legacy row. Keys lower-cased so frontend
             // contracts stay predictable.
             return new { raw = flag.Details };
+        }
+    }
+
+    /// <summary>
+    /// Guards against minimal / legacy <c>Details</c> JSON (e.g. a row carrying
+    /// only <c>matchType</c>) where the optional collections deserialise to
+    /// <c>null</c>. Coercing them to empty keeps the API response shape stable so
+    /// the frontend never dereferences a null <c>linkedAccounts</c>/<c>supportingSignals</c>.
+    /// </summary>
+    private static MultiAccountFlagDetail? NormalizeMultiAccount(MultiAccountFlagDetail? detail)
+        => detail is null
+            ? null
+            : detail with
+            {
+                LinkedAccounts = detail.LinkedAccounts ?? [],
+                // Coerce nested collections too: a supportingSignals[] element can
+                // itself omit linkedAccounts in minimal/legacy JSON, which would
+                // otherwise reach the frontend as null and break its .length read.
+                SupportingSignals = (detail.SupportingSignals ?? [])
+                    .Select(s => s with { LinkedAccounts = s.LinkedAccounts ?? [] })
+                    .ToList(),
+            };
+
+    /// <summary>
+    /// Lightweight parse used by the AD2 list (K2 — 04 §8.2 "Sinyal Detayı" /
+    /// "İlişkili Hesaplar"). Returns the raw matched identifier (wallet address /
+    /// behaviour pattern — non-translatable, so the frontend just labels the
+    /// column) and the linked-account count. SANCTIONS_MATCH and any future
+    /// account type without a typed payload return <c>(null, null)</c>.
+    /// </summary>
+    private static (string? Summary, int? LinkedCount) ParseAccountSignal(
+        FraudFlagType type, string? details)
+    {
+        if (string.IsNullOrWhiteSpace(details)) return (null, null);
+
+        try
+        {
+            switch (type)
+            {
+                case FraudFlagType.MULTI_ACCOUNT:
+                    var ma = NormalizeMultiAccount(
+                        JsonSerializer.Deserialize<MultiAccountFlagDetail>(details, DetailJsonOptions));
+                    return ma is null ? (null, null) : (ma.MatchValue, ma.LinkedAccounts.Count);
+                case FraudFlagType.ABNORMAL_BEHAVIOR:
+                    var ab = JsonSerializer.Deserialize<AbnormalBehaviorFlagDetail>(details, DetailJsonOptions);
+                    return (ab?.Pattern, null);
+                default:
+                    return (null, null);
+            }
+        }
+        catch (JsonException)
+        {
+            return (null, null);
         }
     }
 

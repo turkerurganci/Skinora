@@ -220,6 +220,126 @@
       "REJECTED": "已取消"
     }
   },
+  "adminFlags": {
+    "title": "标记队列",
+    "titleWithPending": "标记队列（{count} 个待处理）",
+    "tableAriaLabel": "标记列表",
+    "empty": "未找到标记。",
+    "loadError": "无法加载标记。",
+    "actionError": "操作无法完成。请重试。",
+    "columns": {
+      "id": "ID",
+      "category": "类别",
+      "type": "标记类型",
+      "user": "用户",
+      "item": "物品",
+      "amount": "金额",
+      "marketPrice": "市场价格",
+      "signal": "信号详情",
+      "linkedAccounts": "关联账户",
+      "activeTransactions": "活跃交易数",
+      "date": "日期",
+      "status": "状态"
+    },
+    "filters": {
+      "category": "类别",
+      "allCategories": "全部",
+      "type": "标记类型",
+      "status": "状态",
+      "dateFrom": "起始",
+      "dateTo": "结束"
+    },
+    "scope": {
+      "ACCOUNT_LEVEL": "账户标记",
+      "TRANSACTION_PRE_CREATE": "交易标记"
+    },
+    "type": {
+      "PRICE_DEVIATION": "价格偏差",
+      "HIGH_VOLUME": "高交易量",
+      "ABNORMAL_BEHAVIOR": "异常行为",
+      "MULTI_ACCOUNT": "多账户",
+      "SANCTIONS_MATCH": "制裁匹配"
+    },
+    "reviewStatus": {
+      "PENDING": "待处理",
+      "APPROVED": "已批准",
+      "REJECTED": "已拒绝"
+    },
+    "detail": {
+      "back": "← 标记队列",
+      "flagInfo": "标记信息",
+      "transactionInfo": "交易详情",
+      "parties": "相关方",
+      "user": "用户",
+      "seller": "卖方",
+      "buyer": "买方",
+      "historicalCount": "双方历史交易数",
+      "actions": "操作",
+      "reviewInfo": "审查信息",
+      "enforcement": "强制措施",
+      "decision": "决定",
+      "reviewedAt": "审查时间",
+      "status": "状态",
+      "amount": "金额",
+      "timeout": "超时",
+      "timeoutHours": "{count} 小时",
+      "createdAt": "创建时间",
+      "loadError": "无法加载标记详情。",
+      "noSignal": "此标记没有额外的信号详情。",
+      "sanctionsNote": "制裁匹配 —— 详情见审计日志和制裁名单。",
+      "inputPrice": "输入价格",
+      "marketPrice": "市场价格",
+      "deviationPercent": "偏差",
+      "periodHours": "周期（小时）",
+      "transactionCount": "交易数",
+      "totalVolume": "总交易量",
+      "pattern": "模式",
+      "description": "描述",
+      "matchType": "匹配类型",
+      "matchValue": "匹配值",
+      "linkedAccounts": "关联账户",
+      "supportingSignals": "辅助信号",
+      "activeTransactions": "活跃交易（{count}）",
+      "noActiveTransactions": "无活跃交易。",
+      "onHold": "已冻结"
+    },
+    "signalType": {
+      "IP_ADDRESS": "IP 地址",
+      "DEVICE_FINGERPRINT": "设备指纹",
+      "SOURCE_ADDRESS": "来源地址"
+    },
+    "role": {
+      "SELLER": "卖方",
+      "BUYER": "买方"
+    },
+    "actions": {
+      "continue": "继续交易",
+      "cancelTx": "取消",
+      "removeFlag": "清除标记",
+      "suspend": "暂停账户",
+      "suspendDeferred": "即将推出",
+      "suspendDeferredHint": "账户暂停将在单独的任务中提供。",
+      "hold": "冻结活跃交易"
+    },
+    "confirm": {
+      "continue": "确定要继续此交易吗？",
+      "cancelTx": "确定要取消此交易吗？",
+      "removeFlag": "确定要清除此标记吗？",
+      "hold": "该用户的所有活跃交易将被冻结。是否继续？",
+      "dismiss": "取消"
+    },
+    "adminNote": {
+      "label": "管理员备注（可选）",
+      "placeholder": "添加关于此次审查的备注……"
+    },
+    "hold": {
+      "reasonLabel": "冻结原因",
+      "reasonPlaceholder": "请说明冻结原因……",
+      "reasonTooShort": "至少 {count} 个字符",
+      "reasonHint": "该原因将用于发送给双方的通知。",
+      "success": "已冻结 {count} 笔交易。"
+    }
+  },
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",

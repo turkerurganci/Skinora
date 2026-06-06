@@ -85,3 +85,34 @@ public sealed record ReleaseEmergencyHoldOutcome(
     ReleaseEmergencyHoldResponse? Body,
     string? ErrorCode,
     string? ErrorMessage);
+
+// ---------- AD19d — POST /admin/transactions/hold-by-user/:userId ----------
+
+/// <summary>
+/// Bulk emergency hold over every active transaction of a single user — backs
+/// the 04 §8.3 account-flag "Hold" action (03 §8.8). Reuses the same per-tx
+/// freeze + state-machine + audit + outbox sequence as AD19b.
+/// </summary>
+public sealed record HoldUserTransactionsRequest(string? Reason);
+
+/// <summary>
+/// Result of a bulk hold. <see cref="HeldCount"/> is the number of transactions
+/// transitioned to EMERGENCY_HOLD on this call (already-held transactions are
+/// skipped, so the call is idempotent — a re-run returns 0).
+/// </summary>
+public sealed record HoldUserTransactionsResponse(
+    int HeldCount,
+    DateTime AppliedAt,
+    IReadOnlyList<Guid> HeldTransactionIds);
+
+public enum HoldUserTransactionsStatus
+{
+    Applied,
+    ValidationFailed,
+}
+
+public sealed record HoldUserTransactionsOutcome(
+    HoldUserTransactionsStatus Status,
+    HoldUserTransactionsResponse? Body,
+    string? ErrorCode,
+    string? ErrorMessage);

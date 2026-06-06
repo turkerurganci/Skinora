@@ -202,6 +202,44 @@ public sealed class AdminTransactionsController : ControllerBase
         };
     }
 
+    /// <summary>
+    /// AD19d — <c>POST /admin/transactions/hold-by-user/:userId</c>. Bulk
+    /// emergency hold over every active transaction of the given user — backs
+    /// the 04 §8.3 account-flag "Hold" action (03 §8.8). Same
+    /// <c>EMERGENCY_HOLD</c> permission as AD19b/c.
+    /// </summary>
+    [HttpPost("hold-by-user/{userId:guid}")]
+    [Authorize(Policy = PolicyEmergencyHold)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> HoldByUser(
+        Guid userId,
+        [FromBody] HoldUserTransactionsRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return Unauthorized();
+        if (request is null)
+            return BadRequest(ApiResponse<object>.Fail(
+                AdminTransactionErrorCodes.ValidationError,
+                "Request body is required.",
+                traceId: HttpContext.TraceIdentifier));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var outcome = await _service.HoldAllUserTransactionsAsync(
+            adminId, userId, request, ipAddress, cancellationToken);
+
+        return outcome.Status switch
+        {
+            HoldUserTransactionsStatus.Applied => Ok(outcome.Body),
+
+            HoldUserTransactionsStatus.ValidationFailed => BadRequest(ApiResponse<object>.Fail(
+                outcome.ErrorCode ?? AdminTransactionErrorCodes.ValidationError,
+                outcome.ErrorMessage ?? "Bulk emergency hold could not be applied.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
     private ApiResponse<object> CancelEnvelope(AdminCancelTransactionOutcome outcome) =>
         ApiResponse<object>.Fail(
             outcome.ErrorCode ?? AdminTransactionErrorCodes.ValidationError,

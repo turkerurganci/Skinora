@@ -59,3 +59,6 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-05-19 09:00 UTC | Türker urgancı | task/T82-sanctions-screening | `1b027ae` | [ci-failure] T82 Auth.Tests ctor fix — CI failure remediation push (Layer 2 bypass) |
 | 2026-05-19 09:12 UTC | Türker urgancı | task/T82-sanctions-screening | `ded3a96` | [ci-failure] T82 Platform.Tests ordering fix — CI failure remediation push (Layer 2 bypass) |
 | 2026-06-05 20:06 UTC | Türker urgancı | task/T105a-account-suspension | `8cba072` | [ci-failure] T105a: pushing the fix for the prior CI Unit-test failure (EmailCategoryMap missing 2 new NotificationType mappings) + review-confirmed cancel suspended-guard; prior run failure is the one this commit resolves |
+| 2026-06-06 11:23 UTC | Türker urgancı | task/T100a-flag-dto-expansion | `82d9600` | [ci-failure] T100a CK_Transactions_FreezeHold_Reverse test-seed fix; onceki run'in tek failure'ini cozen push, ayni branch kendi kirigi |
+| 2026-06-06 11:35 UTC | Türker urgancı | task/T100a-flag-dto-expansion | `dabe2bd` | [ci-failure] T100a CK_Transactions_Hold test-seed fix; onceki run'in tek failure'ini cozen push, ayni branch kendi kirigi |
+| 2026-06-06 11:53 UTC | Türker urgancı | task/T100a-flag-dto-expansion | `c409c2c` | [ci-failure] T100a adversarial-review fixes; onceki run failure'ini cozen iterasyon, ayni branch kendi kirigi |

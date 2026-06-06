@@ -46,4 +46,18 @@ public interface IAdminTransactionService
         ReleaseEmergencyHoldRequest request,
         string? ipAddress,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// AD19d — apply emergency hold to every active transaction of
+    /// <paramref name="targetUserId"/> (the user is either the seller or the
+    /// buyer). Backs the 04 §8.3 account-flag "Hold" action (03 §8.8); reuses
+    /// the AD19b per-transaction freeze + hold + notify sequence. Idempotent:
+    /// already-held and terminal transactions are skipped.
+    /// </summary>
+    Task<HoldUserTransactionsOutcome> HoldAllUserTransactionsAsync(
+        Guid adminUserId,
+        Guid targetUserId,
+        HoldUserTransactionsRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken);
 }

@@ -20,6 +20,7 @@ public interface IFraudFlagAdminQueryService
 
 /// <summary>Filter inputs for <see cref="IFraudFlagAdminQueryService.ListAsync"/>.</summary>
 public sealed record FraudFlagListQuery(
+    FraudFlagScope? Scope,
     FraudFlagType? Type,
     ReviewStatus? ReviewStatus,
     DateTime? DateFrom,

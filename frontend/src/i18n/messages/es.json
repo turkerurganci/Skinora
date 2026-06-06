@@ -220,6 +220,126 @@
       "REJECTED": "Cancelada"
     }
   },
+  "adminFlags": {
+    "title": "Cola de Flags",
+    "titleWithPending": "Cola de Flags ({count} pendientes)",
+    "tableAriaLabel": "Lista de flags",
+    "empty": "No se encontraron flags.",
+    "loadError": "No se pudieron cargar los flags.",
+    "actionError": "No se pudo completar la acción. Inténtalo de nuevo.",
+    "columns": {
+      "id": "ID",
+      "category": "Categoría",
+      "type": "Tipo de Flag",
+      "user": "Usuario",
+      "item": "Ítem",
+      "amount": "Importe",
+      "marketPrice": "Precio de Mercado",
+      "signal": "Detalle de Señal",
+      "linkedAccounts": "Cuentas Vinculadas",
+      "activeTransactions": "Transacciones Activas",
+      "date": "Fecha",
+      "status": "Estado"
+    },
+    "filters": {
+      "category": "Categoría",
+      "allCategories": "Todos",
+      "type": "Tipo de Flag",
+      "status": "Estado",
+      "dateFrom": "Desde",
+      "dateTo": "Hasta"
+    },
+    "scope": {
+      "ACCOUNT_LEVEL": "Flag de Cuenta",
+      "TRANSACTION_PRE_CREATE": "Flag de Transacción"
+    },
+    "type": {
+      "PRICE_DEVIATION": "Desviación de Precio",
+      "HIGH_VOLUME": "Alto Volumen",
+      "ABNORMAL_BEHAVIOR": "Comportamiento Anormal",
+      "MULTI_ACCOUNT": "Multicuenta",
+      "SANCTIONS_MATCH": "Coincidencia de Sanciones"
+    },
+    "reviewStatus": {
+      "PENDING": "Pendiente",
+      "APPROVED": "Aprobado",
+      "REJECTED": "Rechazado"
+    },
+    "detail": {
+      "back": "← Cola de Flags",
+      "flagInfo": "Información del Flag",
+      "transactionInfo": "Detalles de la Transacción",
+      "parties": "Partes",
+      "user": "Usuario",
+      "seller": "Vendedor",
+      "buyer": "Comprador",
+      "historicalCount": "Transacciones previas entre ellos",
+      "actions": "Acciones",
+      "reviewInfo": "Información de Revisión",
+      "enforcement": "Aplicación",
+      "decision": "Decisión",
+      "reviewedAt": "Revisado el",
+      "status": "Estado",
+      "amount": "Importe",
+      "timeout": "Tiempo límite",
+      "timeoutHours": "{count} h",
+      "createdAt": "Creado",
+      "loadError": "No se pudo cargar el detalle del flag.",
+      "noSignal": "No hay detalle de señal adicional para este flag.",
+      "sanctionsNote": "Coincidencia de sanciones — los detalles están en el registro de auditoría y la lista de sanciones.",
+      "inputPrice": "Precio Introducido",
+      "marketPrice": "Precio de Mercado",
+      "deviationPercent": "Desviación",
+      "periodHours": "Período (horas)",
+      "transactionCount": "Número de Transacciones",
+      "totalVolume": "Volumen Total",
+      "pattern": "Patrón",
+      "description": "Descripción",
+      "matchType": "Tipo de Coincidencia",
+      "matchValue": "Valor Coincidente",
+      "linkedAccounts": "Cuentas Vinculadas",
+      "supportingSignals": "Señales de Apoyo",
+      "activeTransactions": "Transacciones Activas ({count})",
+      "noActiveTransactions": "Sin transacciones activas.",
+      "onHold": "En Espera"
+    },
+    "signalType": {
+      "IP_ADDRESS": "Dirección IP",
+      "DEVICE_FINGERPRINT": "Huella del Dispositivo",
+      "SOURCE_ADDRESS": "Dirección de Origen"
+    },
+    "role": {
+      "SELLER": "Vendedor",
+      "BUYER": "Comprador"
+    },
+    "actions": {
+      "continue": "Continuar Transacción",
+      "cancelTx": "Cancelar",
+      "removeFlag": "Quitar Flag",
+      "suspend": "Suspender",
+      "suspendDeferred": "Pronto",
+      "suspendDeferredHint": "La suspensión de cuenta llega en una tarea aparte.",
+      "hold": "Retener Transacciones Activas"
+    },
+    "confirm": {
+      "continue": "¿Seguro que quieres continuar esta transacción?",
+      "cancelTx": "¿Seguro que quieres cancelar esta transacción?",
+      "removeFlag": "¿Seguro que quieres quitar este flag?",
+      "hold": "Se retendrán todas las transacciones activas de este usuario. ¿Continuar?",
+      "dismiss": "Descartar"
+    },
+    "adminNote": {
+      "label": "Nota de Admin (opcional)",
+      "placeholder": "Añade una nota sobre la revisión..."
+    },
+    "hold": {
+      "reasonLabel": "Motivo de la retención",
+      "reasonPlaceholder": "Explica el motivo de la retención...",
+      "reasonTooShort": "al menos {count} caracteres",
+      "reasonHint": "El motivo se usa en la notificación enviada a las partes.",
+      "success": "{count} transacciones retenidas."
+    }
+  },
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",

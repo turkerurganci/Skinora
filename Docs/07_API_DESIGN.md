@@ -1667,7 +1667,9 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 
 **Amaç:** Flag listesi (S13). Permission: `VIEW_FLAGS`. Paginated.
 
-**Query Params:** `type`, `reviewStatus`, `dateFrom`, `dateTo`, `sortBy`, `sortOrder`
+**Query Params:** `scope`, `type`, `reviewStatus`, `dateFrom`, `dateTo`, `sortBy`, `sortOrder`
+
+`scope` (04 §8.2 "Flag kategorisi" filtresi — T100): `ACCOUNT_LEVEL` | `TRANSACTION_PRE_CREATE` (06 §2.21). Boş bırakılırsa tüm kategoriler döner; sunucu tarafı filtre olduğu için sayfalama + `totalCount` kategori seçiminde tutarlı kalır.
 
 **Response (200) `data.items[]`:**
 ```json
@@ -1678,14 +1680,18 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
   "reviewStatus": "PENDING",
   "seller": { "steamId": "...", "displayName": "...", "avatarUrl": "..." },
   "itemName": "AK-47 | Redline",
-  "price": "100.00",
+  "price": 100.00,
   "stablecoin": "USDT",
-  "marketPrice": "50.00",
+  "marketPrice": 50.00,
   "createdAt": "2026-03-16T13:00:00Z"
 }
 ```
 
 Ek field: `pendingCount` — bekleyen flag sayısı (badge).
+
+> **Hesap-flag kolonları (T100a — 04 §8.2):** `scope = ACCOUNT_LEVEL` satırlarında üç ek alan dolar (işlem flag'lerinde `null`): `signalSummary` (eşleşen ham tanımlayıcı — MULTI_ACCOUNT için cüzdan adresi, ABNORMAL_BEHAVIOR için patern; çevrilebilir değildir, frontend yalnız kolonu etiketler; tam IP/cihaz kanıtı AD3 `supportingSignals`'tedir), `linkedAccountCount` (MULTI_ACCOUNT eşleşen hesap sayısı; tipte yoksa `null`), `activeTransactionCount` (kullanıcının aktif işlem sayısı — AD3 `activeTransactions` ile aynı predikat).
+
+> **Para alanları (T100 netleştirme):** AD2/AD3 flag yüzeyindeki para alanları (`price`, `marketPrice`, `flagDetail` sayısal alanları) JSON **number** olarak serialize olur (`decimal` DTO, kayıtlı `flagDetail` JSON'u zaten number). Bu, işlem (S07/S15) DTO'larındaki `string Price` (scale-6 string) konvansiyonundan **farklıdır** — flag fiyatları 2 ondalıklı item fiyatları olduğundan double precision riski ihmal edilebilir; flag yüzeyi kendi içinde tutarlıdır.
 
 ### 9.3 AD3 — `GET /admin/flags/:id`
 
@@ -1695,13 +1701,14 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 ```json
 {
   "id": "flag-guid",
+  "userId": "flagged-user-guid",
   "type": "PRICE_DEVIATION",
   "reviewStatus": "PENDING",
   "createdAt": "2026-03-16T13:00:00Z",
 
   "flagDetail": {
-    "inputPrice": "100.00",
-    "marketPrice": "50.00",
+    "inputPrice": 100.00,
+    "marketPrice": 50.00,
     "deviationPercent": 100.0
   },
 
@@ -1710,7 +1717,7 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
     "status": "FLAGGED",
     "itemName": "AK-47 | Redline",
     "itemImageUrl": "https://steamcdn.../abc.png",
-    "price": "100.00",
+    "price": 100.00,
     "stablecoin": "USDT",
     "paymentTimeoutHours": 24,
     "createdAt": "2026-03-16T12:55:00Z"
@@ -1723,11 +1730,27 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
   "buyer": null,
 
   "historicalTransactionCount": 2,
+
+  "activeTransactions": [
+    {
+      "id": "tx-guid",
+      "status": "PAYMENT_RECEIVED",
+      "itemName": "AWP | Asiimov",
+      "price": 80.00,
+      "stablecoin": "USDT",
+      "role": "SELLER",
+      "isOnHold": false,
+      "createdAt": "2026-03-16T11:00:00Z"
+    }
+  ],
+
   "reviewedBy": null,
   "reviewedAt": null,
   "adminNote": null
 }
 ```
+
+> **`activeTransactions` (T100a — 04 §8.3 hesap-flag madde 4):** Flag'lenen kullanıcının aktif (terminal-olmayan) işlemleri; sayı = liste uzunluğu. "Aktif" tanımı AD19d (§9.22a) ile birebir: her iki taraf (`role` ∈ `SELLER` | `BUYER`), beş terminal durum (`COMPLETED`, `CANCELLED_TIMEOUT`/`_SELLER`/`_BUYER`/`_ADMIN`) hariç, `FLAGGED` dahil. `isOnHold = true` satırlar hâlâ aktiftir (listede kalır) ama bir sonraki toplu Hold'un (idempotent) atlayacağı satırları gösterir. Tüm flag türleri için döner; öncelikle hesap-flag S14 varyantı tüketir.
 
 **`flagDetail` türe göre:**
 
@@ -2169,6 +2192,32 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 > **Tasarım kararı:** ITEM_DELIVERED → EMERGENCY_HOLD → CANCEL zinciri yasaktır. Bu, AD19'daki "ITEM_DELIVERED'da standart iptal uygulanamaz" kuralıyla tutarlıdır. Admin bu durumda yalnızca RESUME yapabilir; exceptional resolution (ör. yanlış item teslimi) ayrı bir manuel süreçle ele alınır.
 
 **Hatalar:** 409 `NOT_ON_HOLD`, 400 `VALIDATION_ERROR`, 422 `CANNOT_CANCEL_DELIVERED_HOLD` (ITEM_DELIVERED hold'unda CANCEL denemesi)
+
+### 9.22a AD19d — `POST /admin/transactions/hold-by-user/:userId`
+
+**Amaç:** Bir kullanıcının **tüm aktif işlemlerine** toplu EMERGENCY_HOLD uygulama (04 §8.3 hesap-flag "Hold" aksiyonu, 03 §8.8 — T100). Permission: `EMERGENCY_HOLD` (AD19b/c ile aynı yetki). `:userId`, flag detayında (AD3 `userId`) dönen flag'lenmiş kullanıcının iç Guid'idir.
+
+**Request:**
+```json
+{ "reason": "Çoklu hesap tespiti — tüm aktif işlemler donduruldu" }
+```
+
+`reason`: Zorunlu, ≥ 10 karakter (AD19b ile tutarlı).
+
+**Response (200) `data`:**
+```json
+{
+  "heldCount": 3,
+  "appliedAt": "2026-03-20T12:00:00Z",
+  "heldTransactionIds": ["tx-guid-1", "tx-guid-2", "tx-guid-3"]
+}
+```
+
+**Davranış:** Kullanıcının (satıcı **veya** alıcı olduğu) silinmemiş, hold'da olmayan, terminal olmayan işlemleri seçilir; her biri için AD19b ile birebir aynı sıra uygulanır (T50 freeze pre-pass → state machine `ApplyEmergencyHold` → `EmergencyHoldAppliedEvent` bildirim fan-out → `EMERGENCY_HOLD_APPLIED` audit), tek `SaveChanges` ile atomik commit. Zaten hold'da olan işlemler `!IsOnHold` filtresiyle atlanır → çağrı **idempotent**'tir (tekrar koşumu `heldCount: 0` döner). Aktif işlem yoksa 200 + `heldCount: 0` (no-op). Mevcut T54 `FraudFlagService` sanctions otomatik cascade'i ile aynı seçim mantığını paylaşır.
+
+**Hatalar:** 400 `VALIDATION_ERROR` (reason < 10 karakter)
+
+> **Not:** Hesap-flag varyantının diğer iki aksiyonu — "Flag Kaldır" (AD4 approve) ve "Askıya Al" (hesap askıya alma) — bu endpoint kapsamı dışındadır. "Askıya Al" için kullanıcı durum modeli + auth pipeline enforcement gerektiğinden ayrı bir görevde (S20 / kullanıcı yönetimi, AD20) ele alınır.
 
 ### 9.23 AD22 — `GET /admin/sanctions/addresses`
 

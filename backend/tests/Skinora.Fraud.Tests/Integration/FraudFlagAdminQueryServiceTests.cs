@@ -71,7 +71,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var sut = BuildSut();
 
         var result = await sut.ListAsync(
-            new FraudFlagListQuery(null, null, null, null, null, null, Page: 1, PageSize: 20),
+            new FraudFlagListQuery(null, null, null, null, null, null, null, Page: 1, PageSize: 20),
             CancellationToken.None);
 
         Assert.Equal(3, result.TotalCount);
@@ -93,15 +93,41 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var sut = BuildSut();
 
         var byType = await sut.ListAsync(
-            new FraudFlagListQuery(FraudFlagType.MULTI_ACCOUNT, null, null, null, null, null, 1, 20),
+            new FraudFlagListQuery(null, FraudFlagType.MULTI_ACCOUNT, null, null, null, null, null, 1, 20),
             CancellationToken.None);
         Assert.Single(byType.Items);
         Assert.Equal(FraudFlagType.MULTI_ACCOUNT, byType.Items[0].Type);
 
         var byStatus = await sut.ListAsync(
-            new FraudFlagListQuery(null, ReviewStatus.PENDING, null, null, null, null, 1, 20),
+            new FraudFlagListQuery(null, null, ReviewStatus.PENDING, null, null, null, null, 1, 20),
             CancellationToken.None);
         Assert.Equal(2, byStatus.Items.Count);
+    }
+
+    [Fact]
+    public async Task ListAsync_Filters_By_Scope()
+    {
+        // One account-level flag + one transaction-level flag.
+        await SeedFlagAsync(scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT, status: ReviewStatus.PENDING);
+        var tx = await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
+        await SeedFlagAsync(scope: FraudFlagScope.TRANSACTION_PRE_CREATE,
+            type: FraudFlagType.PRICE_DEVIATION, status: ReviewStatus.PENDING,
+            transactionId: tx.Id);
+
+        var sut = BuildSut();
+
+        var accountFlags = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.ACCOUNT_LEVEL, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+        Assert.Single(accountFlags.Items);
+        Assert.Equal(FraudFlagScope.ACCOUNT_LEVEL, accountFlags.Items[0].Scope);
+
+        var txFlags = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.TRANSACTION_PRE_CREATE, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+        Assert.Single(txFlags.Items);
+        Assert.Equal(FraudFlagScope.TRANSACTION_PRE_CREATE, txFlags.Items[0].Scope);
     }
 
     [Fact]
@@ -138,6 +164,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
 
         Assert.NotNull(detail);
         Assert.Equal(flag.Id, detail!.Id);
+        Assert.Equal(_seller.Id, detail.UserId);
         Assert.Equal(FraudFlagScope.TRANSACTION_PRE_CREATE, detail.Scope);
         Assert.NotNull(detail.Transaction);
         Assert.Equal(tx.Id, detail.Transaction!.Id);
@@ -182,6 +209,195 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         var rawProperty = detail.FlagDetail!.GetType().GetProperty("raw");
         Assert.NotNull(rawProperty);
         Assert.Equal("this is not json", rawProperty!.GetValue(detail.FlagDetail));
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_Returns_MultiAccount_SupportingSignals()
+    {
+        // K10 — supportingSignals persisted by MultiAccountDetector must round-trip
+        // through the AD3 DTO (07 §9.3:1742).
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_PAYOUT",
+            matchValue = "TWalletAddr123",
+            linkedAccounts = new[]
+            {
+                new { steamId = "76561198000000010", displayName = "Alt One" },
+            },
+            supportingSignals = new[]
+            {
+                new
+                {
+                    type = "IP_ADDRESS",
+                    value = "203.0.113.7",
+                    linkedAccounts = new[]
+                    {
+                        new { steamId = "76561198000000011", displayName = "Alt Two" },
+                    },
+                },
+            },
+        });
+        var flag = await SeedFlagAsync(
+            scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT,
+            status: ReviewStatus.PENDING,
+            details: details);
+
+        var sut = BuildSut();
+        var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        var payload = Assert.IsType<MultiAccountFlagDetail>(detail!.FlagDetail);
+        Assert.Equal("WALLET_PAYOUT", payload.MatchType);
+        Assert.Equal("TWalletAddr123", payload.MatchValue);
+        Assert.Single(payload.LinkedAccounts);
+        var signal = Assert.Single(payload.SupportingSignals);
+        Assert.Equal("IP_ADDRESS", signal.Type);
+        Assert.Equal("203.0.113.7", signal.Value);
+        var signalLinked = Assert.Single(signal.LinkedAccounts);
+        Assert.Equal("Alt Two", signalLinked.DisplayName);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_MultiAccount_Coerces_Null_Collections_To_Empty()
+    {
+        // K10 defense — minimal/legacy Details: no top-level linkedAccounts AND a
+        // supportingSignal missing its nested linkedAccounts. NormalizeMultiAccount
+        // must coerce every collection to empty (never null) so the wire shape is
+        // stable and the frontend never dereferences null.
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_REFUND",
+            matchValue = "TMinimalAddr",
+            supportingSignals = new[]
+            {
+                new { type = "IP_ADDRESS", value = "198.51.100.4" }, // no linkedAccounts
+            },
+        });
+        var flag = await SeedFlagAsync(
+            scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT,
+            status: ReviewStatus.PENDING,
+            details: details);
+
+        var sut = BuildSut();
+        var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        var payload = Assert.IsType<MultiAccountFlagDetail>(detail!.FlagDetail);
+        Assert.NotNull(payload.LinkedAccounts);
+        Assert.Empty(payload.LinkedAccounts);
+        var signal = Assert.Single(payload.SupportingSignals);
+        Assert.NotNull(signal.LinkedAccounts);
+        Assert.Empty(signal.LinkedAccounts);
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_Returns_ActiveTransactions_With_Role_And_Hold()
+    {
+        // K9 — flagged user's active (non-terminal) transactions; either party;
+        // FLAGGED is active; all five terminal states excluded; held rows kept
+        // and marked. Active: CREATED + ITEM_ESCROWED(hold) + PAYMENT_RECEIVED(buyer)
+        // + FLAGGED = 4. Terminal (excluded): the 5 below.
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
+        await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.PAYMENT_RECEIVED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_ADMIN);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_SELLER);
+        await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.CANCELLED_BUYER);
+
+        var flag = await SeedFlagAsync(
+            scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT,
+            status: ReviewStatus.PENDING);
+
+        var sut = BuildSut();
+        var detail = await sut.GetDetailAsync(flag.Id, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        Assert.Equal(4, detail!.ActiveTransactions.Count);
+        // All five terminal states excluded.
+        Assert.DoesNotContain(detail.ActiveTransactions,
+            t => t.Status is TransactionStatus.COMPLETED
+                or TransactionStatus.CANCELLED_TIMEOUT
+                or TransactionStatus.CANCELLED_SELLER
+                or TransactionStatus.CANCELLED_BUYER
+                or TransactionStatus.CANCELLED_ADMIN);
+        // FLAGGED is active (not terminal).
+        Assert.Contains(detail.ActiveTransactions, t => t.Status == TransactionStatus.FLAGGED);
+
+        var held = Assert.Single(detail.ActiveTransactions, t => t.IsOnHold);
+        Assert.Equal(FlagTransactionRole.SELLER, held.Role);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, held.Status);
+
+        var asBuyer = Assert.Single(detail.ActiveTransactions, t => t.Role == FlagTransactionRole.BUYER);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, asBuyer.Status);
+        Assert.False(asBuyer.IsOnHold);
+    }
+
+    [Fact]
+    public async Task ListAsync_Account_Flag_Populates_Signal_And_ActiveCount()
+    {
+        // K2 — account-flag rows carry signalSummary / linkedAccountCount /
+        // activeTransactionCount (04 §8.2).
+        var details = JsonSerializer.Serialize(new
+        {
+            matchType = "WALLET_PAYOUT",
+            matchValue = "TListAddr",
+            linkedAccounts = new[]
+            {
+                new { steamId = "1", displayName = "A" },
+                new { steamId = "2", displayName = "B" },
+            },
+            supportingSignals = Array.Empty<object>(),
+        });
+        await SeedFlagAsync(
+            scope: FraudFlagScope.ACCOUNT_LEVEL,
+            type: FraudFlagType.MULTI_ACCOUNT,
+            status: ReviewStatus.PENDING,
+            details: details);
+
+        // Two active (one of them held) + one terminal for the flagged user.
+        // The held row must still be counted (07 §9.2 = same predicate as AD3,
+        // which keeps held rows) — if the count wrongly filtered !IsOnHold it
+        // would be 1, so expecting 2 proves held rows are included.
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
+
+        var sut = BuildSut();
+        var result = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.ACCOUNT_LEVEL, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("TListAddr", item.SignalSummary);
+        Assert.Equal(2, item.LinkedAccountCount);
+        Assert.Equal(2, item.ActiveTransactionCount);
+    }
+
+    [Fact]
+    public async Task ListAsync_Transaction_Flag_Leaves_Account_Fields_Null()
+    {
+        var tx = await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
+        await SeedFlagAsync(
+            scope: FraudFlagScope.TRANSACTION_PRE_CREATE,
+            type: FraudFlagType.PRICE_DEVIATION,
+            status: ReviewStatus.PENDING,
+            transactionId: tx.Id);
+
+        var sut = BuildSut();
+        var result = await sut.ListAsync(
+            new FraudFlagListQuery(FraudFlagScope.TRANSACTION_PRE_CREATE, null, null, null, null, null, null, 1, 20),
+            CancellationToken.None);
+
+        var item = Assert.Single(result.Items);
+        Assert.Null(item.SignalSummary);
+        Assert.Null(item.LinkedAccountCount);
+        Assert.Null(item.ActiveTransactionCount);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -235,13 +451,42 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     }
 
     private async Task<Transaction> SeedTransactionAsync(
-        Guid sellerId, Guid buyerId, TransactionStatus status)
+        Guid sellerId, Guid buyerId, TransactionStatus status, bool isOnHold = false)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        // SQL Server enforces CK_Transactions_Cancel: any CANCELLED_* status must
+        // carry the cancel trio (CancelledBy/CancelReason/CancelledAt). SQLite
+        // ignores it, so this only matters on the CI mssql runner.
+        CancelledByType? cancelledBy = status switch
+        {
+            TransactionStatus.CANCELLED_TIMEOUT => CancelledByType.TIMEOUT,
+            TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
+            TransactionStatus.CANCELLED_BUYER => CancelledByType.BUYER,
+            TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+            _ => null,
+        };
+
         var tx = new Transaction
         {
             Id = Guid.NewGuid(),
             Status = status,
+            CancelledBy = cancelledBy,
+            CancelReason = cancelledBy is null ? null : "test cancel",
+            CancelledAt = cancelledBy is null ? null : nowUtc,
+            IsOnHold = isOnHold,
+            // SQL Server enforces the full emergency-hold invariant set
+            // (CK_Transactions_Hold + Freeze{Active,Passive} + FreezeHold_{Forward,Reverse}):
+            // a held row must carry BOTH the EmergencyHold trio AND the
+            // EMERGENCY_HOLD freeze trio. (SQLite ignores these CHECKs, so this
+            // only bites on the CI mssql runner.) Mirrors the T44 ApplyEmergencyHold stamp.
+            EmergencyHoldAt = isOnHold ? nowUtc : null,
+            EmergencyHoldReason = isOnHold ? "test hold" : null,
+            EmergencyHoldByAdminId = isOnHold ? buyerId : null,
+            PreviousStatusBeforeHold = isOnHold ? (int)status : null,
+            TimeoutFrozenAt = isOnHold ? nowUtc : null,
+            TimeoutFreezeReason = isOnHold ? Skinora.Shared.Enums.TimeoutFreezeReason.EMERGENCY_HOLD : null,
+            TimeoutRemainingSeconds = isOnHold ? 3600 : null,
             SellerId = sellerId,
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,

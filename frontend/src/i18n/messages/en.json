@@ -220,6 +220,126 @@
       "REJECTED": "Cancelled"
     }
   },
+  "adminFlags": {
+    "title": "Flag Queue",
+    "titleWithPending": "Flag Queue ({count} pending)",
+    "tableAriaLabel": "Flag list",
+    "empty": "No flags found.",
+    "loadError": "Could not load flags.",
+    "actionError": "The action could not be completed. Please try again.",
+    "columns": {
+      "id": "ID",
+      "category": "Category",
+      "type": "Flag Type",
+      "user": "User",
+      "item": "Item",
+      "amount": "Amount",
+      "marketPrice": "Market Price",
+      "signal": "Signal Detail",
+      "linkedAccounts": "Linked Accounts",
+      "activeTransactions": "Active Transactions",
+      "date": "Date",
+      "status": "Status"
+    },
+    "filters": {
+      "category": "Category",
+      "allCategories": "All",
+      "type": "Flag Type",
+      "status": "Status",
+      "dateFrom": "From",
+      "dateTo": "To"
+    },
+    "scope": {
+      "ACCOUNT_LEVEL": "Account Flag",
+      "TRANSACTION_PRE_CREATE": "Transaction Flag"
+    },
+    "type": {
+      "PRICE_DEVIATION": "Price Deviation",
+      "HIGH_VOLUME": "High Volume",
+      "ABNORMAL_BEHAVIOR": "Abnormal Behavior",
+      "MULTI_ACCOUNT": "Multi-Account",
+      "SANCTIONS_MATCH": "Sanctions Match"
+    },
+    "reviewStatus": {
+      "PENDING": "Pending",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "detail": {
+      "back": "← Flag Queue",
+      "flagInfo": "Flag Info",
+      "transactionInfo": "Transaction Details",
+      "parties": "Parties",
+      "user": "User",
+      "seller": "Seller",
+      "buyer": "Buyer",
+      "historicalCount": "Prior transactions between them",
+      "actions": "Actions",
+      "reviewInfo": "Review Info",
+      "enforcement": "Enforcement",
+      "decision": "Decision",
+      "reviewedAt": "Reviewed At",
+      "status": "Status",
+      "amount": "Amount",
+      "timeout": "Timeout",
+      "timeoutHours": "{count}h",
+      "createdAt": "Created",
+      "loadError": "Could not load flag detail.",
+      "noSignal": "No additional signal detail for this flag.",
+      "sanctionsNote": "Sanctions match — details are in the audit log and the sanctions list.",
+      "inputPrice": "Entered Price",
+      "marketPrice": "Market Price",
+      "deviationPercent": "Deviation",
+      "periodHours": "Period (hours)",
+      "transactionCount": "Transaction Count",
+      "totalVolume": "Total Volume",
+      "pattern": "Pattern",
+      "description": "Description",
+      "matchType": "Match Type",
+      "matchValue": "Matched Value",
+      "linkedAccounts": "Linked Accounts",
+      "supportingSignals": "Supporting Signals",
+      "activeTransactions": "Active Transactions ({count})",
+      "noActiveTransactions": "No active transactions.",
+      "onHold": "On Hold"
+    },
+    "signalType": {
+      "IP_ADDRESS": "IP Address",
+      "DEVICE_FINGERPRINT": "Device Fingerprint",
+      "SOURCE_ADDRESS": "Source Address"
+    },
+    "role": {
+      "SELLER": "Seller",
+      "BUYER": "Buyer"
+    },
+    "actions": {
+      "continue": "Continue Transaction",
+      "cancelTx": "Cancel",
+      "removeFlag": "Clear Flag",
+      "suspend": "Suspend",
+      "suspendDeferred": "Soon",
+      "suspendDeferredHint": "Account suspension ships in a separate task.",
+      "hold": "Hold Active Transactions"
+    },
+    "confirm": {
+      "continue": "Are you sure you want to continue this transaction?",
+      "cancelTx": "Are you sure you want to cancel this transaction?",
+      "removeFlag": "Are you sure you want to clear this flag?",
+      "hold": "All active transactions of this user will be put on hold. Continue?",
+      "dismiss": "Dismiss"
+    },
+    "adminNote": {
+      "label": "Admin Note (optional)",
+      "placeholder": "Add a note about the review..."
+    },
+    "hold": {
+      "reasonLabel": "Hold reason",
+      "reasonPlaceholder": "Explain the reason for the hold...",
+      "reasonTooShort": "at least {count} characters",
+      "reasonHint": "The reason is used in the notification sent to the parties.",
+      "success": "{count} transactions put on hold."
+    }
+  },
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",
