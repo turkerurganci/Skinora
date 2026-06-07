@@ -70,7 +70,7 @@ S19 rol & yetki yönetimi ekranı (04 §8.8), mevcut AD11–AD17 backend'ine ba�
 - Branch: `task/T104-admin-roles`
 - Commit: `e4eb42f` — T104: Admin Rol & yetki yönetimi (S19) — frontend page (AD11–AD17)
 - PR: **#159**
-- CI: ⏳ izleniyor (sonuç bu rapora işlenecek)
+- CI: ✓ **PASS** — kod commit `e4eb42f` → run [`27104250643`](https://github.com/turkerurganci/Skinora/actions/runs/27104250643) **success**; HEAD docs commit `9d24e67` → run [`27104477305`](https://github.com/turkerurganci/Skinora/actions/runs/27104477305) **success**. Branch izolasyon check temiz (yalnız T104).
 
 ## Known Limitations / Follow-up
 
