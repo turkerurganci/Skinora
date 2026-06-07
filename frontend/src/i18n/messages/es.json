@@ -556,6 +556,83 @@
       }
     }
   },
+  "adminRoles": {
+    "title": "Gestión de Roles y Permisos",
+    "loadError": "No se pudieron cargar los roles.",
+    "roles": {
+      "heading": "Roles",
+      "createButton": "Crear Nuevo Rol",
+      "empty": "Aún no hay roles definidos.",
+      "columns": {
+        "name": "Nombre del Rol",
+        "description": "Descripción",
+        "assignedUsers": "Usuarios Asignados",
+        "actions": "Acciones"
+      },
+      "superAdminBadge": "Súper Admin",
+      "noDescription": "—",
+      "permissionCount": "{count} permisos",
+      "assignedCount": "{count} usuarios",
+      "edit": "Editar",
+      "delete": "Eliminar"
+    },
+    "form": {
+      "createTitle": "Crear Nuevo Rol",
+      "editTitle": "Editar Rol",
+      "nameLabel": "Nombre del Rol",
+      "namePlaceholder": "Ej. Gestor de Flags",
+      "nameRequired": "El nombre del rol es obligatorio.",
+      "descriptionLabel": "Descripción",
+      "descriptionPlaceholder": "Breve descripción del rol (opcional)",
+      "permissionsLabel": "Permisos",
+      "permissionsHint": "Seleccione los permisos que se otorgarán a este rol.",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "nameExists": "Ya existe un rol con este nombre.",
+      "saveError": "No se pudo guardar el rol. Verifique los datos e inténtelo de nuevo.",
+      "created": "Rol creado.",
+      "updated": "Rol actualizado."
+    },
+    "deleteConfirm": {
+      "title": "Eliminar Rol",
+      "message": "¿Está seguro de que desea eliminar el rol {name}? Esta acción no se puede deshacer.",
+      "confirm": "Eliminar",
+      "cancel": "Cancelar",
+      "hasUsers": "Este rol tiene usuarios asignados; elimine primero las asignaciones.",
+      "deleteError": "No se pudo eliminar el rol.",
+      "deleted": "Rol eliminado."
+    },
+    "permissions": {
+      "VIEW_FLAGS": "Ver flags",
+      "MANAGE_FLAGS": "Gestionar flags",
+      "VIEW_TRANSACTIONS": "Ver transacciones",
+      "MANAGE_SETTINGS": "Gestionar parámetros",
+      "VIEW_STEAM_ACCOUNTS": "Ver cuentas de Steam",
+      "MANAGE_STEAM_RECOVERY": "Gestionar recuperación de Steam",
+      "VIEW_USERS": "Ver detalles de usuario",
+      "MANAGE_ROLES": "Gestionar roles",
+      "VIEW_AUDIT_LOG": "Ver registro de auditoría",
+      "CANCEL_TRANSACTIONS": "Cancelar transacciones",
+      "EMERGENCY_HOLD": "Aplicar/retirar retención de emergencia",
+      "MANAGE_SANCTIONS": "Gestionar lista de sanciones"
+    },
+    "assignment": {
+      "heading": "Asignación de Usuario-Rol",
+      "description": "Asigne roles a los usuarios administradores o cambie sus roles actuales.",
+      "searchPlaceholder": "Buscar por nombre o Steam ID",
+      "loadError": "No se pudieron cargar los usuarios.",
+      "empty": "No se encontraron usuarios.",
+      "columns": {
+        "user": "Usuario",
+        "steamId": "Steam ID",
+        "role": "Rol"
+      },
+      "noRole": "Sin rol asignado",
+      "assignLabel": "Asignar rol para {name}",
+      "assigned": "Rol actualizado.",
+      "assignError": "No se pudo asignar el rol."
+    }
+  },
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",

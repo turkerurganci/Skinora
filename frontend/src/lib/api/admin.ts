@@ -589,3 +589,136 @@ export function updateAdminSetting(key: string, value: string): Promise<UpdateSe
     body: JSON.stringify({ value }),
   });
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD11–AD17 — Admin role & permission management (S19).
+ * Wire format mirrors the backend `RolesListResponse` / `RoleSummaryDto` /
+ * `RoleDetailDto` (07 §9.11–§9.14, `Skinora.Admin/Application/Roles`) and the
+ * AD15/AD17 user-role flow (`PagedResult<AdminUserListItemDto>` + `AssignRole*`,
+ * 07 §9.15/§9.18). `availablePermissions` is the source of truth for which
+ * permissions render and in what order — the UI localizes each label by `key`
+ * (the server label is Turkish-fixed; see `lib/admin/permissionCatalog`).
+ * `isSuperAdmin` is a backend addition (not in the 07 §9.11 JSON): super-admin
+ * roles are rendered read-only so MANAGE_ROLES can't be stripped by accident.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** One entry of the AD11 `availablePermissions` catalog (07 §9.11). */
+export interface AvailablePermission {
+  key: string;
+  label: string;
+}
+
+/** One row of the AD11 roles list (07 §9.11). */
+export interface AdminRoleSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  isSuperAdmin: boolean;
+  permissions: string[];
+  assignedUserCount: number;
+  createdAt: string;
+}
+
+/** AD11 envelope (07 §9.11). */
+export interface AdminRolesResponse {
+  roles: AdminRoleSummary[];
+  availablePermissions: AvailablePermission[];
+}
+
+/** AD12 / AD13 request body (07 §9.12 / §9.13 — identical shape). */
+export interface RoleWriteRequest {
+  name: string;
+  description: string | null;
+  permissions: string[];
+}
+
+/** AD12 / AD13 success body (07 §9.12 / §9.13). */
+export interface AdminRoleDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  isSuperAdmin: boolean;
+  permissions: string[];
+  createdAt: string;
+}
+
+export function listAdminRoles(): Promise<AdminRolesResponse> {
+  return apiClient<AdminRolesResponse>("/admin/roles");
+}
+
+/** AD12 — create a role (07 §9.12). Errors: 409 ROLE_NAME_EXISTS, 400 VALIDATION_ERROR/INVALID_PERMISSION. */
+export function createAdminRole(request: RoleWriteRequest): Promise<AdminRoleDetail> {
+  return apiClient<AdminRoleDetail>("/admin/roles", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+/** AD13 — update a role (07 §9.13). Errors: AD12 + 404 ROLE_NOT_FOUND. */
+export function updateAdminRole(id: string, request: RoleWriteRequest): Promise<AdminRoleDetail> {
+  return apiClient<AdminRoleDetail>(`/admin/roles/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(request),
+  });
+}
+
+/** AD14 — delete a role (07 §9.14). Errors: 404 ROLE_NOT_FOUND, 422 ROLE_HAS_USERS. */
+export function deleteAdminRole(id: string): Promise<void> {
+  return apiClient<void>(`/admin/roles/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+/** Inline role summary on an AD15 user row / AD17 result (07 §9.15 / §9.18). */
+export interface AdminUserAssignedRole {
+  id: string;
+  name: string;
+}
+
+/** One row of the AD15 user list (07 §9.15). */
+export interface AdminUserListItem {
+  id: string;
+  steamId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: AdminUserAssignedRole | null;
+}
+
+/** AD15 page envelope — `PagedResult<T>` (07 §2.4 / §9.15). */
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminUserListQuery {
+  search?: string;
+  roleId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** AD17 success body (07 §9.18). `role`/`assignedAt` are null when the role is cleared. */
+export interface AssignRoleResult {
+  userId: string;
+  role: AdminUserAssignedRole | null;
+  assignedAt: string | null;
+}
+
+/** AD15 — paginated admin-user list for the S19 role-assignment section (07 §9.15). */
+export function listAdminUsers(query: AdminUserListQuery): Promise<AdminUserListResponse> {
+  const params = new URLSearchParams();
+  if (query.search) params.set("search", query.search);
+  if (query.roleId) params.set("roleId", query.roleId);
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return apiClient<AdminUserListResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+}
+
+/** AD17 — assign or clear a user's role (07 §9.18). `roleId = null` removes the role. */
+export function assignUserRole(userId: string, roleId: string | null): Promise<AssignRoleResult> {
+  return apiClient<AssignRoleResult>(`/admin/users/${encodeURIComponent(userId)}/role`, {
+    method: "PUT",
+    body: JSON.stringify({ roleId }),
+  });
+}

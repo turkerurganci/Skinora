@@ -556,6 +556,83 @@
       }
     }
   },
+  "adminRoles": {
+    "title": "Role & Permission Management",
+    "loadError": "Failed to load roles.",
+    "roles": {
+      "heading": "Roles",
+      "createButton": "Create New Role",
+      "empty": "No roles defined yet.",
+      "columns": {
+        "name": "Role Name",
+        "description": "Description",
+        "assignedUsers": "Assigned Users",
+        "actions": "Actions"
+      },
+      "superAdminBadge": "Super Admin",
+      "noDescription": "—",
+      "permissionCount": "{count} permissions",
+      "assignedCount": "{count} users",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "form": {
+      "createTitle": "Create New Role",
+      "editTitle": "Edit Role",
+      "nameLabel": "Role Name",
+      "namePlaceholder": "e.g. Flag Manager",
+      "nameRequired": "Role name is required.",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Short description of the role (optional)",
+      "permissionsLabel": "Permissions",
+      "permissionsHint": "Select the permissions to grant this role.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "nameExists": "A role with this name already exists.",
+      "saveError": "Could not save the role. Check the details and try again.",
+      "created": "Role created.",
+      "updated": "Role updated."
+    },
+    "deleteConfirm": {
+      "title": "Delete Role",
+      "message": "Are you sure you want to delete the role {name}? This action cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel",
+      "hasUsers": "This role has assigned users; remove the assignments first.",
+      "deleteError": "Could not delete the role.",
+      "deleted": "Role deleted."
+    },
+    "permissions": {
+      "VIEW_FLAGS": "View flags",
+      "MANAGE_FLAGS": "Manage flags",
+      "VIEW_TRANSACTIONS": "View transactions",
+      "MANAGE_SETTINGS": "Manage parameters",
+      "VIEW_STEAM_ACCOUNTS": "View Steam accounts",
+      "MANAGE_STEAM_RECOVERY": "Manage Steam recovery",
+      "VIEW_USERS": "View user details",
+      "MANAGE_ROLES": "Manage roles",
+      "VIEW_AUDIT_LOG": "View audit log",
+      "CANCEL_TRANSACTIONS": "Cancel transactions",
+      "EMERGENCY_HOLD": "Apply/release emergency hold",
+      "MANAGE_SANCTIONS": "Manage sanctions list"
+    },
+    "assignment": {
+      "heading": "User-Role Assignment",
+      "description": "Assign roles to admin users or change their existing roles.",
+      "searchPlaceholder": "Search by name or Steam ID",
+      "loadError": "Failed to load users.",
+      "empty": "No users found.",
+      "columns": {
+        "user": "User",
+        "steamId": "Steam ID",
+        "role": "Role"
+      },
+      "noRole": "No role assigned",
+      "assignLabel": "Assign role for {name}",
+      "assigned": "Role updated.",
+      "assignError": "Could not assign the role."
+    }
+  },
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",

@@ -556,6 +556,83 @@
       }
     }
   },
+  "adminRoles": {
+    "title": "角色与权限管理",
+    "loadError": "无法加载角色。",
+    "roles": {
+      "heading": "角色",
+      "createButton": "新建角色",
+      "empty": "尚未定义任何角色。",
+      "columns": {
+        "name": "角色名称",
+        "description": "描述",
+        "assignedUsers": "已分配用户",
+        "actions": "操作"
+      },
+      "superAdminBadge": "超级管理员",
+      "noDescription": "—",
+      "permissionCount": "{count} 项权限",
+      "assignedCount": "{count} 名用户",
+      "edit": "编辑",
+      "delete": "删除"
+    },
+    "form": {
+      "createTitle": "新建角色",
+      "editTitle": "编辑角色",
+      "nameLabel": "角色名称",
+      "namePlaceholder": "例如：标记管理员",
+      "nameRequired": "角色名称为必填项。",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "角色的简短描述（可选）",
+      "permissionsLabel": "权限",
+      "permissionsHint": "选择要授予该角色的权限。",
+      "save": "保存",
+      "cancel": "取消",
+      "nameExists": "已存在同名角色。",
+      "saveError": "无法保存角色。请检查信息后重试。",
+      "created": "角色已创建。",
+      "updated": "角色已更新。"
+    },
+    "deleteConfirm": {
+      "title": "删除角色",
+      "message": "确定要删除角色 {name} 吗？此操作无法撤销。",
+      "confirm": "删除",
+      "cancel": "取消",
+      "hasUsers": "该角色已分配用户；请先取消这些分配。",
+      "deleteError": "无法删除角色。",
+      "deleted": "角色已删除。"
+    },
+    "permissions": {
+      "VIEW_FLAGS": "查看标记",
+      "MANAGE_FLAGS": "管理标记",
+      "VIEW_TRANSACTIONS": "查看交易",
+      "MANAGE_SETTINGS": "管理参数",
+      "VIEW_STEAM_ACCOUNTS": "查看 Steam 账户",
+      "MANAGE_STEAM_RECOVERY": "管理 Steam 恢复",
+      "VIEW_USERS": "查看用户详情",
+      "MANAGE_ROLES": "管理角色",
+      "VIEW_AUDIT_LOG": "查看审计日志",
+      "CANCEL_TRANSACTIONS": "取消交易",
+      "EMERGENCY_HOLD": "应用/解除紧急冻结",
+      "MANAGE_SANCTIONS": "管理制裁名单"
+    },
+    "assignment": {
+      "heading": "用户角色分配",
+      "description": "为管理员用户分配角色或更改其现有角色。",
+      "searchPlaceholder": "按名称或 Steam ID 搜索",
+      "loadError": "无法加载用户。",
+      "empty": "未找到用户。",
+      "columns": {
+        "user": "用户",
+        "steamId": "Steam ID",
+        "role": "角色"
+      },
+      "noRole": "未分配角色",
+      "assignLabel": "为 {name} 分配角色",
+      "assigned": "角色已更新。",
+      "assignError": "无法分配角色。"
+    }
+  },
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",
