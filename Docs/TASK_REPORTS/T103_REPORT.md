@@ -1,6 +1,6 @@
 # T103 — Admin Steam Hesapları (S18)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-07
+**Faz:** F5 | **Durum:** ✓ Tamamlandı — bağımsız validator PASS | **Tarih:** 2026-06-07
 
 ---
 
@@ -47,7 +47,34 @@
 |---|---|
 | Doğrulama durumu (yapım self-check) | ✓ 4/4 kabul (AC2/AC3 emanet-listesi + recovery satır verisi owner-onaylı deferred) |
 | Adversarial review (ultracode, yapım-içi) | 6-boyut/11-ajan: 5 ham → 3 onaylandı (düzeltildi) + 2 çürütüldü |
-| Bağımsız validator | Bekliyor (ayrı chat) |
+| Bağımsız validator | ✓ **PASS** (ayrı chat, 2026-06-07) — aşağıya bak |
+
+### Bağımsız Validator Sonucu — PASS (2026-06-07)
+
+**Verdict: ✓ PASS** (4/4 kabul; iki kriter owner-onaylı kısmi/deferred, bağımsız doğrulanmış backend boşluğuna dayalı).
+
+**HARD STOP kapıları:** Adım -1 working tree temiz ✓ · Adım 0 main CI son-3 success (`27097121138`/`27097121144`/`27092817285`) ✓ · Adım 0b repo memory T103 satırı mevcut ✓.
+
+**Kabul kriterleri (bağımsız kanıt):**
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | Hesap kartları (Steam ID, durum, emanet, günlük trade, son kontrol) | ✓ | `SteamAccountCard.tsx` 5 alanı AD10'dan bağlar; `next build` route ✓. |
+| 2 | State'ler (aktif yeşil / kısıtlı turuncu+banner+emanet listesi / banned kırmızı+acil) | ✓ (~ emanet **listesi** deferred) | `statusTone` 4 ton + `STATUS_ICON` ✅/⚠/❌ (spec §8.7 tablosu birebir); `role="alert"` kart uyarısı + banner. Emanet item **listesi** AD10'da yok (yalnız `EscrowedItemCount`) → owner-onaylı deferred (K3). |
+| 3 | Recovery queue (7 kolon + veri + aksiyonlar) | ✓ (yapısal) / veri deferred | `RecoveryQueuePanel.tsx` 7 kolon (sıra+etiket §8.7 birebir) + boş state. **Backend bağımsız doğrulandı:** `AdminSteamAccountDto` recovery satır verisi içermez (`RecoveryTransactionCount`=0 sabit, `AdminSteamBotQueryService.cs:57-59`) → veri+MANAGE_STEAM_RECOVERY aksiyonları owner-onaylı deferred (K1/K2). |
+| 4 | GET /admin/steam-accounts | ✓ | `getAdminSteamAccounts()` → `apiClient("/admin/steam-accounts")`. |
+
+**Doğrulama kontrol listesi (04 §8.7):** state'ler ✓ / recovery queue **yapısal** ✓ (veri owner-onaylı deferred — genuine backend boşluğu).
+
+**Test/kalite kanıtı (validator-çalıştırıldı):** `npx tsc --noEmit` 0 ✓ · `npx eslint` (T103 dosyaları) 0/0 ✓ · `npx prettier --check` clean (LF) ✓ · `npm run build` success, `/[locale]/admin/steam-accounts` ƒ Dynamic ✓ · i18n parity `adminSteamAccounts` 32×4 **IDENTICAL** (0 missing/extra) ✓. Backend dokunulmadı (diff'te 0 backend dosyası) → regresyon riski yok; frontend test runner yok (F5 plan-onaylı).
+
+**Kontrat/enum:** Frontend `AdminSteamAccount` ↔ backend `AdminSteamAccountDto` alan-alan birebir; `PlatformSteamBotStatus` enum (ACTIVE/RESTRICTED/BANNED/OFFLINE) ↔ TS union birebir.
+
+**Güvenlik:** Salt-okunur sayfa (mutation/form/secret yok) · 0 yeni bağımlılık (package.json diff boş) · AD10 backend `VIEW_STEAM_ACCOUNTS` policy-protected · tüm metin React-escaped/i18n. Temiz.
+
+**Bağımsız adversarial doğrulama (validator-çalıştırıldı):** 6-boyut workflow (her bulgu refute-default verify) → **0 bloke-edici bulgu**. 1 non-blocking gözlem onaylandı → **K7** (aşağıda).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — yapım raporu K1-K6 + AC tablosu bağımsız bulgularla örtüşüyor; uyuşmazlık yok. CI kanıtı güncel HEAD'e güncellendi (`27099329648` HEAD `313ab77` success).
 
 ## Altyapı Değişiklikleri
 - Migration: Yok.
@@ -59,7 +86,7 @@
 - Branch: `task/T103-admin-steam-accounts`
 - Commit: `caacde3` — T103: Admin Steam hesapları (S18) — frontend page (AD10) (+ rapor/status/memory ayrı commit)
 - PR: #158
-- CI: ✓ **PASS** — run [27098246704](https://github.com/turkerurganci/Skinora/actions/runs/27098246704) (HEAD `aa7f345`) success (10 job: 9 success + 1 skipped — backend integration frontend-only PR'da skip)
+- CI: ✓ **PASS** — güncel HEAD `313ab77` run [27099329648](https://github.com/turkerurganci/Skinora/actions/runs/27099329648) success; önceki `aa7f345` run [27098246704](https://github.com/turkerurganci/Skinora/actions/runs/27098246704) success (10 job: 9 success + 1 skipped — backend integration frontend-only PR'da skip)
 
 ## Known Limitations / Follow-up
 - **K1 — Recovery Queue veri deferred:** Satır verisi (işlem/item/taraf/state/recovery durumu/sorumlu admin/not) ve MANAGE_STEAM_RECOVERY aksiyonları (Manual Recovery / not / sorumlu admin atama) AD10'da yok; recovery-state domain modeli yok. T69 bot-health/failover pipeline AD10'a bağlanınca (veya adanmış endpoint) dolar. `RecoveryQueueRow` forward-compatible (tip aktif olunca `lib/api/admin.ts`'e taşınır, UI değişmez).
@@ -68,6 +95,7 @@
 - **K4 — Banner Türkçe-sabit `warningMessage` kullanılmadı:** AD10'un server `warningMessage`'ı Türkçe-sabit (`AdminSteamBotQueryService.BuildWarning`) → 4-locale sayfada client-side lokalize banner türetildi (T99 K6 precedent).
 - **K5 — Frontend permission guard yok:** Backend `VIEW_STEAM_ACCOUNTS` policy enforce eder (T99 K5 deseni); client-side guard T-future.
 - **K6 — Frontend test runner yok:** F5 plan-onaylı; doğrulama tsc/eslint/build/parity ile.
+- **K7 — (validator) Durum kart başlığında badge, spec mock'ta gövde dl satırı:** 04 §8.7 mock'u kartı 4-satırlı gövde listesi gösterir (Durum/Emanet/Günlük Trade/Son Kontrol); implementasyon `Durum`'u kart **başlığında** renkli badge (✅/⚠/❌ + etiket) olarak, gövdede 3 satır render eder. AC1 alanı **karşılanıyor** (durum mevcut ve gösteriliyor) — yalnız wireframe konum farkı, layout-only, fonksiyonel/erişilebilirlik/i18n etkisi yok. Non-blocking (S3 değil; alan implement edilmiş). Status badge'i §8.7 "Durum Göstergeleri" tablosundaki ✅/⚠/❌ + renk gösterimiyle tutarlı.
 
 ## Notlar
 - **Working tree (Adım -1):** Session başı temiz (`git status --short` boş).
