@@ -464,6 +464,50 @@
       "flagResolved": "Marca resuelta."
     }
   },
+  "adminSettings": {
+    "title": "Gestión de Parámetros",
+    "loadError": "No se pudieron cargar los parámetros.",
+    "empty": "No se encontraron parámetros.",
+    "operationalHeading": "Parámetros Operativos",
+    "operationalNote": "Ajustes de tiempo de ejecución / operativos no listados en la especificación 04 §8.6.",
+    "saved": "Parámetro actualizado.",
+    "saveError": "No se pudo guardar el parámetro. Verifica el valor e inténtalo de nuevo.",
+    "edit": "Editar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "unconfigured": "Sin definir",
+    "boolean": {
+      "yes": "Activado",
+      "no": "Desactivado"
+    },
+    "impact": {
+      "title": "Alcance del Impacto",
+      "intro": "¿Dónde surte efecto el cambio de un parámetro?",
+      "newTransaction": "Nueva transacción",
+      "newTransactionDesc": "Afecta solo a las transacciones creadas tras el cambio; las existentes no se ven afectadas.",
+      "runtime": "Tiempo de ejecución",
+      "runtimeDesc": "Surte efecto de inmediato en sesiones y transacciones activas (p. ej. reglas de acceso/cumplimiento, control de salud de blockchain, modo de mantenimiento).",
+      "supportingSignal": "Señal de apoyo",
+      "supportingSignalDesc": "Se usa solo para puntuación de riesgo y revisión de marcas; no es un bloqueador por sí solo."
+    },
+    "groups": {
+      "timeout": "Tiempos de Espera",
+      "commission": "Comisión",
+      "transactionLimits": "Límites de Transacción",
+      "cancelRules": "Reglas de Cancelación",
+      "newAccount": "Cuenta Nueva",
+      "gasFee": "Tarifa de Gas",
+      "fraudDetection": "Detección de Fraude",
+      "buyerIdentification": "Identificación del Comprador",
+      "accessCompliance": "Acceso y Cumplimiento",
+      "blockchainHealth": "Control de Salud de Blockchain",
+      "wallet": "Billetera",
+      "reputation": "Reputación",
+      "platformMaintenance": "Mantenimiento de la Plataforma",
+      "retention": "Retención de Datos",
+      "other": "Otros"
+    }
+  },
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",

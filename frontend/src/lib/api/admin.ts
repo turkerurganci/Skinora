@@ -517,3 +517,52 @@ export function releaseEmergencyHold(
     { method: "POST", body: JSON.stringify({ action, note }) },
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD8 / AD9 — Admin system-settings management (S17).
+ * Wire format mirrors the backend `SettingsListResponse` / `SettingItemDto`
+ * (07 §9.8) and the AD9 update response (07 §9.9). The `SystemSettingsCatalog`
+ * (58 keys) is the source of truth for which keys are returned — keys absent
+ * from the catalog are omitted. `category` is the lowercase API dialect; the
+ * DTO carries no impact-scope field, so the UI derives it from `category`
+ * (04 §8.6 — see `lib/admin/settingsCatalog`). `value` is `null` for keys that
+ * have not been configured yet (06 §3.17 `IsConfigured = false`).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** API valueType (07 §9.8) — `int`/`decimal` collapse to `number`. */
+export type AdminSettingValueType = "number" | "boolean" | "string";
+
+/** One setting row of the AD8 list (07 §9.8). */
+export interface AdminSettingItem {
+  key: string;
+  value: string | null;
+  category: string;
+  label: string;
+  description: string | null;
+  unit: string | null;
+  valueType: AdminSettingValueType;
+}
+
+/** AD8 envelope (07 §9.8). */
+export interface AdminSettingsListResponse {
+  settings: AdminSettingItem[];
+}
+
+/** AD9 success body (07 §9.9). */
+export interface UpdateSettingResult {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+export function listAdminSettings(): Promise<AdminSettingsListResponse> {
+  return apiClient<AdminSettingsListResponse>("/admin/settings");
+}
+
+/** AD9 — update a single setting by key (07 §9.9). Backend validates `value`. */
+export function updateAdminSetting(key: string, value: string): Promise<UpdateSettingResult> {
+  return apiClient<UpdateSettingResult>(`/admin/settings/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+}

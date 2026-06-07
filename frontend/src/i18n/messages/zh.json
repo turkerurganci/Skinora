@@ -464,6 +464,50 @@
       "flagResolved": "标记已处理。"
     }
   },
+  "adminSettings": {
+    "title": "参数管理",
+    "loadError": "无法加载参数。",
+    "empty": "未找到参数。",
+    "operationalHeading": "运营参数",
+    "operationalNote": "规范 04 §8.6 未列出的运行时/运营设置。",
+    "saved": "参数已更新。",
+    "saveError": "无法保存参数。请检查值后重试。",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "unconfigured": "未设置",
+    "boolean": {
+      "yes": "开",
+      "no": "关"
+    },
+    "impact": {
+      "title": "影响范围",
+      "intro": "更改参数将在何处生效？",
+      "newTransaction": "新交易",
+      "newTransactionDesc": "仅影响更改后创建的交易；现有交易不受影响。",
+      "runtime": "运行时",
+      "runtimeDesc": "立即对活动会话和交易生效（例如访问/合规规则、区块链健康检查、维护模式）。",
+      "supportingSignal": "辅助信号",
+      "supportingSignalDesc": "仅用于风险评分和标记审查；本身不是阻断器。"
+    },
+    "groups": {
+      "timeout": "超时设置",
+      "commission": "佣金",
+      "transactionLimits": "交易限额",
+      "cancelRules": "取消规则",
+      "newAccount": "新账户",
+      "gasFee": "Gas 费",
+      "fraudDetection": "欺诈检测",
+      "buyerIdentification": "买家识别",
+      "accessCompliance": "访问与合规",
+      "blockchainHealth": "区块链健康检查",
+      "wallet": "钱包",
+      "reputation": "信誉",
+      "platformMaintenance": "平台维护",
+      "retention": "数据保留",
+      "other": "其他"
+    }
+  },
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",

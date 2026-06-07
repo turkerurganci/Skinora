@@ -993,6 +993,8 @@ Admin tarafından yönetilen platform parametreleri.
 
 **Başlangıç parametreleri (02 §16.2):** Varsayılan sütununda "—" olan parametreler seed'de `Value = NULL, IsConfigured = false` olarak oluşturulur; lansman öncesi admin tarafından yapılandırılması zorunludur.
 
+Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. `Category`, DB kolonudur (07 §9.8'in API lehçesinden daha kaba — eşleme `SystemSettingsCatalog` kodundadır).
+
 | Key | Category | DataType | Varsayılan | Açıklama |
 |-----|----------|----------|------------|----------|
 | `accept_timeout_minutes` | Timeout | int | — | Alıcı kabul timeout süresi |
@@ -1023,8 +1025,38 @@ Admin tarafından yönetilen platform parametreleri.
 | `min_refund_threshold_ratio` | Monitoring | decimal | 2.0 | Minimum iade eşiği — iade < gas fee × bu oran ise iade yapılmaz, admin alert |
 | `open_link_enabled` | Feature | bool | false | Açık link yöntemi aktif mi |
 | `hot_wallet_limit` | Wallet | decimal | — | Hot wallet maksimum bakiye limiti — aşıldığında admin alert, cold wallet transfer gerekir (05 §3.3) |
+| `auth.banned_countries` | AccessControl | string | NONE | Geo-block ülke kodları CSV (ISO-3166-1 alpha-2); 'NONE' = engelsiz (T30, 02 §21.1, 03 §11a.1) |
+| `auth.min_steam_account_age_days` | AccessControl | int | 30 | Steam hesap minimum yaş eşiği (gün) — altındaysa giriş engellenir (T30, 02 §21.1, 03 §11a.2) |
 | `wallet.payout_address_cooldown_hours` | Wallet | int | 24 | Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3) |
 | `wallet.refund_address_cooldown_hours` | Wallet | int | 24 | Alıcı iade adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma ve işlem kabul etme engellenir (02 §12.3) |
+| `reputation.min_account_age_days` | Reputation | int | 30 | Hesap yaşı bu eşiğin altındaysa composite reputationScore null döner (T43, 02 §13) |
+| `reputation.min_completed_transactions` | Reputation | int | 3 | Tamamlanmış işlem sayısı bu eşiğin altındaysa reputationScore null döner (T43) |
+| `dormant_account_min_age_days` | Fraud | int | 30 | Dormant anomali kontrolü için minimum hesap yaşı (gün); altı 'yeni hesap' sayılır (T55, 02 §14.3) |
+| `dormant_account_value_threshold` | Fraud | decimal | — | Dormant hesap tek işlem tutar eşiği (USDT) — 0 işlemli hesabın üzerinde denemesi flag tetikler (T55) |
+| `multi_account.exchange_addresses` | Fraud | string | NONE | Çoklu hesap kontrolünde hariç tutulan bilinen exchange/custodial adres listesi (CSV); 'NONE' = yok (T56, 02 §14.3) |
+| `platform.maintenance.active` | Platform | bool | false | Platform/Steam/blockchain bakım veya kesinti aktif mi (T63a, 07 §10.2) |
+| `platform.maintenance.type` | Platform | string | NONE | Bakım/kesinti tipi (PLANNED_MAINTENANCE \| PLATFORM_MAINTENANCE \| STEAM_OUTAGE \| BLOCKCHAIN_DEGRADATION \| NONE) (T63a, 07 §10.2) |
+| `platform.maintenance.message` | Platform | string | NONE | Kullanıcıya gösterilecek bilgilendirme mesajı; 'NONE' = yok (T63a, 07 §10.2) |
+| `platform.maintenance.planned_end` | Platform | string | NONE | Tahmini bitiş zamanı (ISO 8601 UTC); 'NONE' = bilinmiyor/aktif değil (T63a, 07 §10.2) |
+| `retention.outbox_message_days` | Retention | int | 30 | Processed OutboxMessage retention süresi (gün) (T63b, 06 §3.18) |
+| `retention.processed_event_days` | Retention | int | 30 | ProcessedEvent retention süresi (gün) (T63b, 06 §3.19) |
+| `retention.external_idempotency_days` | Retention | int | 30 | ExternalIdempotencyRecord retention süresi (gün) (T63b, 06 §3.21) |
+| `retention.orphan_notification_days` | Retention | int | 365 | Bağımsız bildirim (TransactionId IS NULL) retention süresi (gün) (T63b, 06 §6.1) |
+| `retention.user_login_log_days` | Retention | int | 365 | UserLoginLog retention süresi (gün) (T63b, 06 §6.1) |
+| `retention.batch_size_outbox` | Retention | int | 1000 | Outbox retention job batch boyutu (tek iterasyon max kayıt) (T63b) |
+| `retention.batch_size_notification` | Retention | int | 500 | Bağımsız bildirim retention job batch boyutu (T63b) |
+| `retention.batch_size_user_login_log` | Retention | int | 1000 | UserLoginLog retention job batch boyutu (T63b) |
+| `blockchain.refund_gas_fee_estimate_usdt` | Monitoring | decimal | 2.0 | İade gas fee tahmini (USDT) — RefundDecisionService eşik kararı; T74 sonrası runtime (T72, 08 §3.4) |
+| `blockchain.transfer_retry_intervals_minutes` | Monitoring | string | `1,5,15` | Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV); biter → FAILED + alert (T73, 08 §3.3) |
+| `blockchain.sweep_energy_delegation_sun` | Monitoring | string | 200000000 | Sweep/refund öncesi deposit adresine geçici Energy delegation tutarı (SUN, 1 TRX = 1e6 SUN) (T74, 08 §3.3) |
+| `blockchain.sweep_trx_fallback_sun` | Monitoring | string | 15000000 | Energy delegation başarısızsa deposit adresine fallback TRX tutarı (SUN) (T74, 08 §3.3) |
+| `reconciliation.schedule_cron` | Monitoring | string | `0 3 * * *` | Reconciliation job cron ifadesi (03:00 UTC); değişince host restart (T76, 05 §3.3) |
+| `reconciliation.hot_wallet_address` | Monitoring | string | NONE | Reconciliation hot wallet Tron adresi; 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
+| `reconciliation.cold_wallet_address` | Monitoring | string | NONE | Reconciliation cold wallet Tron adresi (opsiyonel); 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
+| `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
+| `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
+
+> **API lehçesi:** `GET /admin/settings` (07 §9.8) bu satırları daha ince bir **API kategori** kümesiyle döndürür (ör. `Limit` → `transaction_limits` / `cancel_rules` / `new_account`; `AccessControl` → `geo_blocking` / `age_verification`; `Wallet` → `wallet_security`; `Feature` → `buyer_identification`). DB `Category` kolonu index hedefidir (`IX_SystemSettings_Category`); sunum (label/unit/API kategori) eşlemesi `SystemSettingsCatalog` kodundadır. Sanctions taraması (yaptırımlı adres listesi) ayrı admin yüzeyinden yönetilir (T82) — SystemSetting değildir.
 
 ---
 
