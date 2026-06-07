@@ -59,7 +59,7 @@
 - Branch: `task/T103-admin-steam-accounts`
 - Commit: `caacde3` — T103: Admin Steam hesapları (S18) — frontend page (AD10) (+ rapor/status/memory ayrı commit)
 - PR: #158
-- CI: izleniyor (push sonrası)
+- CI: ✓ **PASS** — run [27098246704](https://github.com/turkerurganci/Skinora/actions/runs/27098246704) (HEAD `aa7f345`) success (10 job: 9 success + 1 skipped — backend integration frontend-only PR'da skip)
 
 ## Known Limitations / Follow-up
 - **K1 — Recovery Queue veri deferred:** Satır verisi (işlem/item/taraf/state/recovery durumu/sorumlu admin/not) ve MANAGE_STEAM_RECOVERY aksiyonları (Manual Recovery / not / sorumlu admin atama) AD10'da yok; recovery-state domain modeli yok. T69 bot-health/failover pipeline AD10'a bağlanınca (veya adanmış endpoint) dolar. `RecoveryQueueRow` forward-compatible (tip aktif olunca `lib/api/admin.ts`'e taşınır, UI değişmez).
