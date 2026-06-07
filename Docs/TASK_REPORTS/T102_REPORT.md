@@ -1,6 +1,6 @@
 # T102 — Admin Parametre Yönetimi (S17)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-06-07
+**Faz:** F5 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-07
 
 ---
 
@@ -29,7 +29,7 @@ S17 — Admin Parametre Yönetimi ekranı (04 §8.6). **Salt frontend** — AD8 
 
 | # | Kriter (11 plan) | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | Parametre grupları: timeout, komisyon, işlem limitleri, iptal kuralları, yeni hesap, gas fee, fraud, alıcı belirleme, erişim/uyumluluk, blockchain health | ✓ | `SETTING_GROUPS` (settingsCatalog.ts) — 11 belgeli grup + 3 operasyonel; `adminSettings.groups` 4-locale. `accessCompliance` = geo_blocking+age_verification. |
+| 1 | Parametre grupları: timeout, komisyon, işlem limitleri, iptal kuralları, yeni hesap, gas fee, fraud, alıcı belirleme, erişim/uyumluluk, blockchain health | ✓ | `SETTING_GROUPS` (settingsCatalog.ts) — 10 belgeli grup + 4 operasyonel (wallet_security/reputation/platform_maintenance/retention); `adminSettings.groups` 4-locale. `accessCompliance` = geo_blocking+age_verification. |
 | 2 | Inline edit: düzenle → kaydet/iptal | ✓ | `SettingRow` — Düzenle → value-type input → Kaydet (AD9 mutate) / İptal; başarı → toast "Parametre güncellendi". |
 | 3 | Etki kapsamı bilgi kutusu (yeni işlem vs. runtime) | ✓ | `ImpactScopeInfoBox` (3-sınıf legend) + her satırda `ImpactBadge` (`impactForCategory`). |
 | 4 | `GET /admin/settings`, `PUT /admin/settings/:key` çağrıları | ✓ | `listAdminSettings()` + `updateAdminSetting()` (admin.ts); apiClient envelope. |
@@ -51,9 +51,11 @@ S17 — Admin Parametre Yönetimi ekranı (04 §8.6). **Salt frontend** — AD8 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Yapım bitti — bağımsız validator chat'i bekliyor |
-| Bulgu sayısı | — (validator) |
-| Düzeltme gerekli mi | — (validator) |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, 2026-06-07) |
+| Bulgu sayısı | 1 × S1 (iç-tutarlılık — validator-fix ile çözüldü); 13 ham bulgu adversarial doğrulamada çürütüldü |
+| Düzeltme gerekli mi | Çözüldü — `wallet_security` `documented`→`operational` (settingsCatalog.ts:79 + modül yorumu 3→4); rapor "10 belgeli + 4 operasyonel" |
+
+**Validator notu (2026-06-07):** Bağımsız spec-conformance review (6 boyut × adversarial doğrulama). 4/4 kabul kriteri + doğrulama kontrol listesi ✓; lokal `tsc --noEmit` + `eslint` ✓ (fix sonrası tekrar ✓); main CI son-3 + task branch CI (`27094671627`) `success`; 4-locale i18n parity (36 leaf) ✓; 06 §3.17 "58 anahtar" + 15 API kategorisi tam kapsama ✓; güvenlik temiz (backend `MANAGE_SETTINGS`, input backend-doğrulanır, `:key` URL-encoded). Tek S1: `wallet_security` `documented` bölümdeyken 04 §8.6'da wallet grubu yok → modül yorumu ("Three categories"), `operationalNote` i18n ("§8.6'da listelenmeyen"), owner "3 operasyonel" ve rapor (11-vs-10) ile çelişiyordu. Proje sahibi kararıyla (Operasyonel'e taşı, AskUserQuestion 2026-06-07) validator-fix olarak kapatıldı; documented artık birebir §8.6'nın 10 grubu, operasyonel = 4 kategori.
 
 ## Altyapı Değişiklikleri
 
@@ -67,7 +69,7 @@ S17 — Admin Parametre Yönetimi ekranı (04 §8.6). **Salt frontend** — AD8 
 - Branch: `task/T102-admin-settings`
 - Commit: `695e957` — T102: Admin Parametre yönetimi (S17) (kod + doc)
 - PR: **#157**
-- CI: ⏳ izleniyor
+- CI: ✓ task branch run `27094671627` `success`; validator-fix + merge sonrası main CI izlenir
 
 ## Known Limitations / Follow-up
 
