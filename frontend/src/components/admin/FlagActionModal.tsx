@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
 export type FlagActionTone = "approve" | "reject" | "hold";
@@ -34,6 +34,12 @@ export interface FlagActionModalProps {
    * (04 §8.3).
    */
   reason?: FlagActionReasonConfig;
+  /**
+   * Optional informational block rendered between the prompt and the reason
+   * field — e.g. the admin-cancel refund summary (04 §8.5 "iade bilgisi",
+   * 03 §8.7). Purely presentational; does not affect submission.
+   */
+  infoBlock?: ReactNode;
   pending?: boolean;
   onConfirm: (reason?: string) => void;
   onClose: () => void;
@@ -46,6 +52,7 @@ interface FlagActionFormProps {
   cancelLabel: string;
   tone: FlagActionTone;
   reason?: FlagActionReasonConfig;
+  infoBlock?: ReactNode;
   pending?: boolean;
   onConfirm: (reason?: string) => void;
   onClose: () => void;
@@ -57,6 +64,7 @@ function FlagActionForm({
   cancelLabel,
   tone,
   reason,
+  infoBlock,
   pending,
   onConfirm,
   onClose,
@@ -83,6 +91,8 @@ function FlagActionForm({
       <h2 id="flag-action-modal-title" className="text-lg font-semibold text-gray-900">
         {description}
       </h2>
+
+      {infoBlock}
 
       {reason && (
         <label className="flex flex-col gap-1 text-sm">
@@ -147,6 +157,7 @@ export function FlagActionModal({
   cancelLabel,
   tone,
   reason,
+  infoBlock,
   pending,
   onConfirm,
   onClose,
@@ -190,6 +201,7 @@ export function FlagActionModal({
           cancelLabel={cancelLabel}
           tone={tone}
           reason={reason}
+          infoBlock={infoBlock}
           pending={pending}
           onConfirm={onConfirm}
           onClose={onClose}
