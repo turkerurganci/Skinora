@@ -451,6 +451,12 @@
       "releasePlaceholder": "Añade una nota...",
       "minChars": "al menos {count} caracteres"
     },
+    "cancelRefund": {
+      "title": "Resumen de reembolso",
+      "itemToSeller": "El artículo en depósito se devolverá al vendedor.",
+      "paymentToBuyer": "El pago recibido se reembolsará al comprador (precio + comisión − tarifa de gas).",
+      "none": "No hay nada que reembolsar: el artículo no está en depósito y no se recibió ningún pago."
+    },
     "success": {
       "cancelled": "Transacción cancelada.",
       "held": "Retención de emergencia aplicada.",

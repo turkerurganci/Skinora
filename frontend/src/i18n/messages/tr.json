@@ -451,6 +451,12 @@
       "releasePlaceholder": "Bir not ekleyin...",
       "minChars": "en az {count} karakter"
     },
+    "cancelRefund": {
+      "title": "İade bilgisi",
+      "itemToSeller": "Emanetteki item satıcıya iade edilecek.",
+      "paymentToBuyer": "Alınan ödeme alıcıya iade edilecek (fiyat + komisyon − Gas fee).",
+      "none": "İade edilecek varlık yok — item emanette değil, ödeme alınmadı."
+    },
     "success": {
       "cancelled": "İşlem iptal edildi.",
       "held": "Emergency hold uygulandı.",

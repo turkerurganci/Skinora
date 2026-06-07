@@ -451,6 +451,12 @@
       "releasePlaceholder": "添加备注……",
       "minChars": "至少 {count} 个字符"
     },
+    "cancelRefund": {
+      "title": "退款摘要",
+      "itemToSeller": "托管中的物品将退还给卖家。",
+      "paymentToBuyer": "已收款项将退还给买家（价格 + 佣金 − Gas 费）。",
+      "none": "无需退款——物品未托管，且未收到付款。"
+    },
     "success": {
       "cancelled": "交易已取消。",
       "held": "已应用紧急冻结。",

@@ -37,6 +37,19 @@ const TERMINAL_STATES: ReadonlySet<TransactionStatus> = new Set([
   TransactionStatus.CANCELLED_ADMIN,
 ]);
 
+// Admin-cancel refund preview (04 §8.5 "iade bilgisi" / 03 §8.7 / AD19): the
+// item sits in escrow from ITEM_ESCROWED onward → returned to the seller; the
+// buyer's payment is held from PAYMENT_RECEIVED onward → refunded to the buyer.
+const ITEM_ESCROWED_STATES: ReadonlySet<TransactionStatus> = new Set([
+  TransactionStatus.ITEM_ESCROWED,
+  TransactionStatus.PAYMENT_RECEIVED,
+  TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+]);
+const PAYMENT_HELD_STATES: ReadonlySet<TransactionStatus> = new Set([
+  TransactionStatus.PAYMENT_RECEIVED,
+  TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+]);
+
 type Action =
   | { kind: "cancel" }
   | { kind: "hold" }
@@ -160,6 +173,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
   let modalConfirm = "";
   let modalTone: FlagActionTone = "reject";
   let modalReason: FlagActionReasonConfig | undefined;
+  let modalInfo: ReactNode = undefined;
 
   if (action?.kind === "cancel") {
     modalTitle = t("actions.cancelTx");
@@ -172,6 +186,19 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
       minLength: CANCEL_REASON_MIN,
       tooShort: t("reason.minChars", { count: CANCEL_REASON_MIN }),
     };
+    // 04 §8.5 / 03 §8.7 — show what will be returned to whom before confirming.
+    const itemEscrowed = ITEM_ESCROWED_STATES.has(tx.status);
+    const paymentHeld = PAYMENT_HELD_STATES.has(tx.status);
+    modalInfo = (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+        <p className="mb-1 font-medium text-amber-800">{t("cancelRefund.title")}</p>
+        <ul className="list-disc space-y-0.5 pl-4 text-amber-900">
+          {itemEscrowed && <li>{t("cancelRefund.itemToSeller")}</li>}
+          {paymentHeld && <li>{t("cancelRefund.paymentToBuyer")}</li>}
+          {!itemEscrowed && <li>{t("cancelRefund.none")}</li>}
+        </ul>
+      </div>
+    );
   } else if (action?.kind === "hold") {
     modalTitle = t("actions.emergencyHold");
     modalDescription = t("confirm.emergencyHold");
@@ -674,6 +701,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
         cancelLabel={t("confirm.dismiss")}
         tone={modalTone}
         reason={modalReason}
+        infoBlock={modalInfo}
         pending={actionPending}
         onConfirm={confirmAction}
         onClose={() => setAction(null)}

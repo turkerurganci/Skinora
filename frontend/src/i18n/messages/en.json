@@ -451,6 +451,12 @@
       "releasePlaceholder": "Add a note...",
       "minChars": "at least {count} characters"
     },
+    "cancelRefund": {
+      "title": "Refund summary",
+      "itemToSeller": "The escrowed item will be returned to the seller.",
+      "paymentToBuyer": "The received payment will be refunded to the buyer (price + commission − gas fee).",
+      "none": "Nothing to refund — the item is not in escrow and no payment was received."
+    },
     "success": {
       "cancelled": "Transaction cancelled.",
       "held": "Emergency hold applied.",
