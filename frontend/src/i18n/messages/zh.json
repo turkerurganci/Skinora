@@ -508,6 +508,54 @@
       "other": "其他"
     }
   },
+  "adminSteamAccounts": {
+    "title": "Steam 账户",
+    "loadError": "无法加载 Steam 账户。",
+    "empty": "未配置 Steam 机器人。",
+    "banner": {
+      "warning": "{count} 个机器人账户需要关注。",
+      "diverted": "新交易已转移至其他账户。"
+    },
+    "status": {
+      "ACTIVE": "正常",
+      "RESTRICTED": "受限",
+      "BANNED": "已封禁",
+      "OFFLINE": "离线"
+    },
+    "card": {
+      "steamId": "Steam ID",
+      "escrow": "托管",
+      "escrowValue": "{count} 件物品",
+      "dailyTrade": "每日交易",
+      "dailyTradeValue": "{count} / {limit}",
+      "lastCheck": "上次检查",
+      "neverChecked": "从未检查"
+    },
+    "restricted": {
+      "warning": "此账户受限。新交易将转移至其他账户。",
+      "escrowWarning": "此账户托管了 {count} 件物品——这些交易无法自动继续，需要恢复/人工介入。",
+      "escrowItemsDeferred": "托管物品列表将在机器人健康流程（T69）接入 AD10 后显示。"
+    },
+    "banned": {
+      "warning": "此账户已封禁。需要紧急介入。"
+    },
+    "recovery": {
+      "title": "恢复队列",
+      "description": "与受限/已封禁账户托管物品相关的活跃交易。",
+      "ariaLabel": "恢复队列",
+      "empty": "当前没有处于恢复中的交易。",
+      "deferred": "恢复队列的行和操作（人工恢复、指派负责管理员、备注——MANAGE_STEAM_RECOVERY）将在机器人健康/故障转移流程（T69）接入 AD10 后启用。",
+      "columns": {
+        "transactionId": "交易 ID",
+        "item": "物品",
+        "parties": "卖家 / 买家",
+        "state": "交易状态",
+        "recoveryStatus": "恢复状态",
+        "responsibleAdmin": "负责管理员",
+        "note": "管理员备注"
+      }
+    }
+  },
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",

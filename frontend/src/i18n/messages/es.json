@@ -508,6 +508,54 @@
       "other": "Otros"
     }
   },
+  "adminSteamAccounts": {
+    "title": "Cuentas de Steam",
+    "loadError": "No se pudieron cargar las cuentas de Steam.",
+    "empty": "No hay bots de Steam configurados.",
+    "banner": {
+      "warning": "{count} cuenta(s) de bot requieren atención.",
+      "diverted": "Las nuevas transacciones se han redirigido a otras cuentas."
+    },
+    "status": {
+      "ACTIVE": "Activa",
+      "RESTRICTED": "Restringida",
+      "BANNED": "Baneada",
+      "OFFLINE": "Sin conexión"
+    },
+    "card": {
+      "steamId": "Steam ID",
+      "escrow": "Custodia",
+      "escrowValue": "{count} ítems",
+      "dailyTrade": "Intercambio diario",
+      "dailyTradeValue": "{count} / {limit}",
+      "lastCheck": "Última comprobación",
+      "neverChecked": "Nunca comprobada"
+    },
+    "restricted": {
+      "warning": "Esta cuenta está restringida. Las nuevas transacciones se redirigen a otras cuentas.",
+      "escrowWarning": "Esta cuenta tiene {count} ítems en custodia — esas transacciones no pueden continuar automáticamente y requieren recuperación/intervención manual.",
+      "escrowItemsDeferred": "La lista de ítems en custodia aparecerá cuando el flujo de estado de los bots (T69) alimente AD10."
+    },
+    "banned": {
+      "warning": "Esta cuenta está baneada. Se requiere intervención urgente."
+    },
+    "recovery": {
+      "title": "Cola de recuperación",
+      "description": "Transacciones activas vinculadas a ítems en custodia en cuentas restringidas/baneadas.",
+      "ariaLabel": "Cola de recuperación",
+      "empty": "No hay transacciones en recuperación actualmente.",
+      "deferred": "Las filas y acciones de la cola de recuperación (Recuperación manual, asignar administrador responsable, notas — MANAGE_STEAM_RECOVERY) se activan cuando el flujo de estado/conmutación por error de los bots (T69) alimenta AD10.",
+      "columns": {
+        "transactionId": "ID de transacción",
+        "item": "Ítem",
+        "parties": "Vendedor / Comprador",
+        "state": "Estado de la transacción",
+        "recoveryStatus": "Estado de recuperación",
+        "responsibleAdmin": "Administrador responsable",
+        "note": "Nota del administrador"
+      }
+    }
+  },
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",

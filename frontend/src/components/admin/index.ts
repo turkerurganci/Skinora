@@ -4,6 +4,15 @@ export type { SummaryCardsProps } from "./SummaryCards";
 export { SteamAccountsStatus } from "./SteamAccountsStatus";
 export type { SteamAccountsStatusProps } from "./SteamAccountsStatus";
 
+export { SteamAccountsView } from "./SteamAccountsView";
+export type { SteamAccountsViewProps } from "./SteamAccountsView";
+
+export { SteamAccountCard } from "./SteamAccountCard";
+export type { SteamAccountCardProps } from "./SteamAccountCard";
+
+export { RecoveryQueuePanel } from "./RecoveryQueuePanel";
+export type { RecoveryQueuePanelProps, RecoveryQueueRow } from "./RecoveryQueuePanel";
+
 export { RecentFlagsTable } from "./RecentFlagsTable";
 export type { RecentFlagsTableProps } from "./RecentFlagsTable";
 
