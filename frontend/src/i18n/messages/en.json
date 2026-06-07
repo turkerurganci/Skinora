@@ -508,6 +508,54 @@
       "other": "Other"
     }
   },
+  "adminSteamAccounts": {
+    "title": "Steam Accounts",
+    "loadError": "Failed to load Steam accounts.",
+    "empty": "No Steam bots configured.",
+    "banner": {
+      "warning": "{count} bot account(s) need attention.",
+      "diverted": "New transactions have been routed to other accounts."
+    },
+    "status": {
+      "ACTIVE": "Active",
+      "RESTRICTED": "Restricted",
+      "BANNED": "Banned",
+      "OFFLINE": "Offline"
+    },
+    "card": {
+      "steamId": "Steam ID",
+      "escrow": "Escrow",
+      "escrowValue": "{count} items",
+      "dailyTrade": "Daily Trade",
+      "dailyTradeValue": "{count} / {limit}",
+      "lastCheck": "Last Check",
+      "neverChecked": "Never checked"
+    },
+    "restricted": {
+      "warning": "This account is restricted. New transactions are routed to other accounts.",
+      "escrowWarning": "This account holds {count} escrowed items — those transactions cannot continue automatically and require recovery/manual intervention.",
+      "escrowItemsDeferred": "The escrowed item list will appear once the bot health pipeline (T69) feeds AD10."
+    },
+    "banned": {
+      "warning": "This account is banned. Urgent intervention required."
+    },
+    "recovery": {
+      "title": "Recovery Queue",
+      "description": "Active transactions tied to items escrowed on restricted/banned accounts.",
+      "ariaLabel": "Recovery queue",
+      "empty": "No transactions are currently in recovery.",
+      "deferred": "Recovery queue rows and actions (Manual Recovery, assign responsible admin, notes — MANAGE_STEAM_RECOVERY) activate once the bot health/failover pipeline (T69) feeds AD10.",
+      "columns": {
+        "transactionId": "Transaction ID",
+        "item": "Item",
+        "parties": "Seller / Buyer",
+        "state": "Transaction State",
+        "recoveryStatus": "Recovery Status",
+        "responsibleAdmin": "Responsible Admin",
+        "note": "Admin Note"
+      }
+    }
+  },
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",

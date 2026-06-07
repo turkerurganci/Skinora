@@ -508,6 +508,54 @@
       "other": "Diğer"
     }
   },
+  "adminSteamAccounts": {
+    "title": "Steam Hesapları",
+    "loadError": "Steam hesapları yüklenemedi.",
+    "empty": "Tanımlı Steam botu yok.",
+    "banner": {
+      "warning": "{count} bot hesabı dikkat gerektiriyor.",
+      "diverted": "Yeni işlemler diğer hesaplara yönlendirildi."
+    },
+    "status": {
+      "ACTIVE": "Aktif",
+      "RESTRICTED": "Kısıtlı",
+      "BANNED": "Yasaklı",
+      "OFFLINE": "Çevrimdışı"
+    },
+    "card": {
+      "steamId": "Steam ID",
+      "escrow": "Emanet",
+      "escrowValue": "{count} item",
+      "dailyTrade": "Günlük Trade",
+      "dailyTradeValue": "{count} / {limit}",
+      "lastCheck": "Son Kontrol",
+      "neverChecked": "Hiç kontrol edilmedi"
+    },
+    "restricted": {
+      "warning": "Bu hesap kısıtlı. Yeni işlemler diğer hesaplara yönlendirilir.",
+      "escrowWarning": "Bu hesapta {count} item emanette — bu işlemler otomatik devam ettirilemez, recovery/manuel müdahale gerektirir.",
+      "escrowItemsDeferred": "Emanetteki item listesi, bot sağlık akışı (T69) AD10'a bağlandığında listelenecek."
+    },
+    "banned": {
+      "warning": "Bu hesap yasaklı. Acil müdahale gerekiyor."
+    },
+    "recovery": {
+      "title": "Recovery Kuyruğu",
+      "description": "Kısıtlı/yasaklı hesapların emanetindeki item'larla ilgili aktif işlemler.",
+      "ariaLabel": "Recovery kuyruğu",
+      "empty": "Şu anda recovery'de işlem yok.",
+      "deferred": "Recovery kuyruğu satırları ve aksiyonları (Manual Recovery, sorumlu admin atama, not — MANAGE_STEAM_RECOVERY) bot sağlık/failover akışı (T69) AD10'a bağlandığında etkinleşir.",
+      "columns": {
+        "transactionId": "İşlem ID",
+        "item": "Item",
+        "parties": "Satıcı / Alıcı",
+        "state": "İşlem State",
+        "recoveryStatus": "Recovery Durumu",
+        "responsibleAdmin": "Sorumlu Admin",
+        "note": "Admin Notu"
+      }
+    }
+  },
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",

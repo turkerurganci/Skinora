@@ -63,6 +63,29 @@ export function getAdminDashboard(): Promise<AdminDashboardResponse> {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+ * AD10 — Admin Steam-account monitoring (S18, 07 §9.10).
+ * Wire format mirrors the backend `AdminSteamAccountsResponse`
+ * (`Skinora.Steam/Application/Admin/AdminSteamBotDtos.cs`, T63). The per-account
+ * shape is the shared {@link AdminSteamAccount} already consumed by the S12
+ * dashboard. `warningMessage` is a server-built Turkish summary, non-null when
+ * at least one bot is not ACTIVE. NOTE (T103 deferred, owner-approved Option A):
+ * `recoveryTransactionCount` / `failoverStatus` / `restrictionReason` are
+ * forward-deferred to the T69 bot-health/failover pipeline — the backend still
+ * reports `0` / `"NONE"` / `null` for every row, so the S18 recovery queue
+ * renders structurally but stays empty until that pipeline feeds AD10.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** AD10 envelope (07 §9.10). */
+export interface AdminSteamAccountsResponse {
+  accounts: AdminSteamAccount[];
+  warningMessage: string | null;
+}
+
+export function getAdminSteamAccounts(): Promise<AdminSteamAccountsResponse> {
+  return apiClient<AdminSteamAccountsResponse>("/admin/steam-accounts");
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
  * AD2–AD5 + AD19d — Admin fraud-flag review (S13 / S14).
  * Wire format mirrors the backend `FraudFlagListResponse` / `FraudFlagDetailDto`
  * (T54 — 07 §9.2–§9.5) and the AD19d `HoldUserTransactionsResponse` (T100).
