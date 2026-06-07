@@ -464,6 +464,50 @@
       "flagResolved": "Flag resolved."
     }
   },
+  "adminSettings": {
+    "title": "Parameter Management",
+    "loadError": "Could not load parameters.",
+    "empty": "No parameters found.",
+    "operationalHeading": "Operational Parameters",
+    "operationalNote": "Runtime / operational settings not listed in spec 04 §8.6.",
+    "saved": "Parameter updated.",
+    "saveError": "Could not save the parameter. Check the value and try again.",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "unconfigured": "Not set",
+    "boolean": {
+      "yes": "On",
+      "no": "Off"
+    },
+    "impact": {
+      "title": "Impact Scope",
+      "intro": "Where does changing a parameter take effect?",
+      "newTransaction": "New transaction",
+      "newTransactionDesc": "Affects only transactions created after the change; existing transactions are unaffected.",
+      "runtime": "Runtime",
+      "runtimeDesc": "Takes effect immediately on active sessions and transactions (e.g. access/compliance rules, blockchain health check, maintenance mode).",
+      "supportingSignal": "Supporting signal",
+      "supportingSignalDesc": "Used only for risk scoring and flag review; not a standalone blocker."
+    },
+    "groups": {
+      "timeout": "Timeouts",
+      "commission": "Commission",
+      "transactionLimits": "Transaction Limits",
+      "cancelRules": "Cancellation Rules",
+      "newAccount": "New Account",
+      "gasFee": "Gas Fee",
+      "fraudDetection": "Fraud Detection",
+      "buyerIdentification": "Buyer Identification",
+      "accessCompliance": "Access & Compliance",
+      "blockchainHealth": "Blockchain Health Check",
+      "wallet": "Wallet",
+      "reputation": "Reputation",
+      "platformMaintenance": "Platform Maintenance",
+      "retention": "Data Retention",
+      "other": "Other"
+    }
+  },
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",

@@ -1863,19 +1863,25 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 {
   "settings": [
     {
-      "key": "buyer_accept_timeout_hours",
-      "value": "48",
-      "category": "timeout",
-      "label": "Alıcı kabul timeout'u",
-      "description": "Alıcının işlemi kabul etme süresi",
-      "unit": "saat",
+      "key": "commission_rate",
+      "value": "0.02",
+      "category": "commission",
+      "label": "Komisyon oranı",
+      "description": "Komisyon oranı (%2)",
+      "unit": "oran",
       "valueType": "number"
     }
   ]
 }
 ```
 
-**Kategoriler:** `timeout`, `commission`, `transaction_limits`, `cancel_rules`, `new_account`, `gas_fee`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `sanctions_screening`, `age_verification`, `blockchain_health`
+**Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`
+
+> **Notlar:**
+> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (58 anahtar). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
+> - `valueType` ∈ `number` (int/decimal) | `boolean` | `string`. `value`, henüz yapılandırılmamış anahtarlarda `null` döner (06 §3.17 `IsConfigured = false`).
+> - DTO **etki-kapsamı** alanı taşımaz; S17 UI etkiyi (yeni işlem / runtime) kategoriden türetir (04 §8.6).
+> - Sanctions taraması (yaptırımlı adres listesi) ayrı bir admin yüzeyinden yönetilir (T82) — SystemSetting değildir; bu yüzden kategori listesinde `sanctions_screening` yoktur.
 
 ### 9.9 AD9 — `PUT /admin/settings/:key`
 

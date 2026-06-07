@@ -464,6 +464,50 @@
       "flagResolved": "Flag çözümlendi."
     }
   },
+  "adminSettings": {
+    "title": "Parametre Yönetimi",
+    "loadError": "Parametreler yüklenemedi.",
+    "empty": "Parametre bulunamadı.",
+    "operationalHeading": "Operasyonel Parametreler",
+    "operationalNote": "04 §8.6'da listelenmeyen, çalışma zamanı/operasyonel ayarlar.",
+    "saved": "Parametre güncellendi.",
+    "saveError": "Parametre kaydedilemedi. Değeri kontrol edip tekrar deneyin.",
+    "edit": "Düzenle",
+    "save": "Kaydet",
+    "cancel": "İptal",
+    "unconfigured": "Tanımlanmadı",
+    "boolean": {
+      "yes": "Açık",
+      "no": "Kapalı"
+    },
+    "impact": {
+      "title": "Etki Kapsamı",
+      "intro": "Bir parametrenin değişikliği nereye yansır?",
+      "newTransaction": "Yeni işlem",
+      "newTransactionDesc": "Yalnızca değişiklikten sonra oluşturulan işlemleri etkiler; mevcut işlemler etkilenmez.",
+      "runtime": "Runtime",
+      "runtimeDesc": "Aktif oturum ve işlemlere anında yansır (ör. erişim/uyumluluk kuralları, blockchain sağlık kontrolü, bakım modu).",
+      "supportingSignal": "Destekleyici sinyal",
+      "supportingSignalDesc": "Yalnızca risk skorlama ve flag değerlendirmesinde kullanılır; tek başına engelleyici değildir."
+    },
+    "groups": {
+      "timeout": "Timeout Süreleri",
+      "commission": "Komisyon",
+      "transactionLimits": "İşlem Limitleri",
+      "cancelRules": "İptal Kuralları",
+      "newAccount": "Yeni Hesap",
+      "gasFee": "Gas Fee",
+      "fraudDetection": "Fraud Tespiti",
+      "buyerIdentification": "Alıcı Belirleme",
+      "accessCompliance": "Erişim ve Uyumluluk",
+      "blockchainHealth": "Blockchain Health Check",
+      "wallet": "Cüzdan",
+      "reputation": "İtibar",
+      "platformMaintenance": "Platform Bakımı",
+      "retention": "Veri Saklama",
+      "other": "Diğer"
+    }
+  },
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",

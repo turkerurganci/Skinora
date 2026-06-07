@@ -28,3 +28,15 @@ export type { TransactionListTableProps } from "./TransactionListTable";
 
 export { TransactionDetailView } from "./TransactionDetailView";
 export type { TransactionDetailViewProps } from "./TransactionDetailView";
+
+export { ImpactScopeInfoBox, ImpactBadge } from "./ImpactScopeInfoBox";
+export type { ImpactBadgeProps } from "./ImpactScopeInfoBox";
+
+export { SettingRow } from "./SettingRow";
+export type { SettingRowProps } from "./SettingRow";
+
+export { SettingsGroupTable } from "./SettingsGroupTable";
+export type { SettingsGroupTableProps } from "./SettingsGroupTable";
+
+export { SettingsManager } from "./SettingsManager";
+export type { SettingsManagerProps } from "./SettingsManager";
