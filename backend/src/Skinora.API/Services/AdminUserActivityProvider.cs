@@ -185,13 +185,19 @@ public sealed class AdminUserActivityProvider : IAdminUserActivityProvider
             .Select(u => new { u.Id, u.SteamId, u.SteamDisplayName })
             .ToDictionaryAsync(u => u.Id, cancellationToken);
 
+        // A counterparty anonymized/soft-deleted after the trade landed is dropped
+        // by the global User query filter (!IsDeleted), so the lookup misses it.
+        // Fall back to the "Deleted User" placeholder with an empty SteamId — the
+        // same convention as the sibling AD7 AdminTransactionQueryService.UnknownParty()
+        // (02 §19). The S20 §8.9.7 cell renders an empty-SteamId counterparty as plain
+        // text rather than a broken link.
         return groups
             .Select(g =>
             {
                 users.TryGetValue(g.CounterpartyId, out var info);
                 return new AdminUserCounterpartyDto(
                     SteamId: info?.SteamId ?? string.Empty,
-                    DisplayName: info?.SteamDisplayName ?? string.Empty,
+                    DisplayName: info?.SteamDisplayName ?? "Deleted User",
                     TransactionCount: g.Count,
                     LastTransactionAt: g.LastAt);
             })

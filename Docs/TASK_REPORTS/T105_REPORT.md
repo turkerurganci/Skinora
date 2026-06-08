@@ -83,6 +83,13 @@ S20 Admin Kullanıcı Detay ekranı **full-stack** olarak tamamlandı. Plan T105
 
 **Sonraki adım:** Yapım chat'i B1'i düzeltir + push'lar → yeni bağımsız doğrulama turu (PASS hedefi) → merge. B2/B3 plana eklenen T105b'ye (WalletAddressHistory entity+migration + reputation breakdown DTO) devredildi.
 
+### B1 Düzeltme — uygulandı (yapım chat, 2026-06-08)
+Owner reçetesi (AD7 desenini yansıt) birebir uygulandı; **verdict hâlâ FAIL** — final flip bağımsız re-validation turuna ait.
+- **Backend** [`AdminUserActivityProvider.cs`](../../backend/src/Skinora.API/Services/AdminUserActivityProvider.cs): counterparty isim fallback `string.Empty` → `"Deleted User"` (kardeş AD7 `AdminTransactionQueryService.UnknownParty()` ile birebir, 02 §19). `IgnoreQueryFilters` **bilinçli olarak kullanılmadı** — anonimleştirme zaten `IsDeleted=true` yapıyor; satır query-filter ile düşüyor ve boş steamId fallback'i FE'nin düz-metin dalını tetikliyor (ANON_ steamId'li tıklanabilir-ama-404 link bırakmaz).
+- **Frontend** [`UserDetailView.tsx`](../../frontend/src/components/admin/UserDetailView.tsx): §8.9.7 counterparty hücresi boş steamId'de `<Link>` yerine düz `<span>` ("Deleted User") render eder; `getRowKey` boş steamId'de `deleted-${index}` fallback'i ile birden fazla silinmiş karşı tarafta React duplicate-key'i önler.
+- **Test** [`AdminUsersEndpointTests.cs`](../../backend/tests/Skinora.API.Tests/Integration/AdminUsersEndpointTests.cs): `AnonymizeUserAsync` factory helper + `GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser` regresyon testi (silinmiş counterparty → "Deleted User" + boş steamId). **AdminUsers 19→20/20.**
+- **Mekanik yeniden doğrulama:** backend Release **0W/0E** + AdminUsers **20/20** (SQLite); FE **tsc 0 / eslint 0 / prettier clean** (`--end-of-line auto`) / **next build ✓** (`/admin/users/[steamId]` ƒ). i18n/kontrat değişmedi ("Deleted User" backend-sabit; `AdminUserCounterpartyDto` 4 alan aynı). Docker-bağımlı 27 Fraud/integration testi lokal Docker kapalı → CI authoritative (bilinen kısıt).
+
 ## Altyapı Değişiklikleri
 - Migration: **Yok** (computed agregasyon; yeni alan/tablo yok).
 - Config/env: Yok.

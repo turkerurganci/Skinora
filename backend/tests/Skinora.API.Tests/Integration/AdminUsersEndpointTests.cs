@@ -320,6 +320,34 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
     }
 
     [Fact]
+    public async Task GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser()
+    {
+        // B1 regression — a counterparty that deletes their account after the trade
+        // is soft-deleted and hidden by the global User query filter, so the lookup
+        // misses it. The §8.9.7 row must still resolve to the "Deleted User"
+        // placeholder (empty SteamId → plain text, not a blank/broken link) the same
+        // way the sibling AD7 UnknownParty() does (02 §19), so the wash-trading
+        // counterparty that left the platform stays visible to the admin.
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Trader");
+        var gone = await _factory.CreateUserAsync(displayName: "WillLeave");
+
+        await _factory.CreateTransactionAsync(target.Id, gone.Id, TransactionStatus.COMPLETED);
+        await _factory.AnonymizeUserAsync(gone.Id);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var cps = data.GetProperty("frequentCounterparties");
+        Assert.Equal(1, cps.GetArrayLength());
+        Assert.Equal("Deleted User", cps[0].GetProperty("displayName").GetString());
+        Assert.Equal(string.Empty, cps[0].GetProperty("steamId").GetString());
+        Assert.Equal(1, cps[0].GetProperty("transactionCount").GetInt32());
+    }
+
+    [Fact]
     public async Task GetUserDetail_Reputation_ComputedFromDenormalizedCounters()
     {
         var admin = await _factory.CreateUserAsync(displayName: "Admin");
@@ -601,6 +629,25 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var user = await db.Set<User>().FirstAsync(u => u.Id == userId);
             user.CreatedAt = createdAt;
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Mirror <c>AccountLifecycleService.AnonymizeUserInPlace</c> (02 §19): flip
+        /// the row to soft-deleted with the "Deleted User" placeholder + an ANON_
+        /// SteamId, so a counterparty that left after the trade is hidden by the
+        /// global <c>!IsDeleted</c> query filter exactly the way production hides it.
+        /// </summary>
+        public async Task AnonymizeUserAsync(Guid userId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Set<User>().FirstAsync(u => u.Id == userId);
+            user.SteamId = $"ANON_{Guid.NewGuid():N}"[..20];
+            user.SteamDisplayName = "Deleted User";
+            user.SteamAvatarUrl = null;
+            user.IsDeleted = true;
+            user.DeletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
         }
 

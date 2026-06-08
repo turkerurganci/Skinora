@@ -208,14 +208,20 @@ export function UserDetailView({ steamId, detail }: UserDetailViewProps) {
     {
       key: "user",
       header: t("counterparties.columns.user"),
-      cell: (r) => (
-        <Link
-          href={`/${locale}/admin/users/${encodeURIComponent(r.steamId)}`}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          {r.displayName || r.steamId}
-        </Link>
-      ),
+      cell: (r) =>
+        r.steamId ? (
+          <Link
+            href={`/${locale}/admin/users/${encodeURIComponent(r.steamId)}`}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {r.displayName || r.steamId}
+          </Link>
+        ) : (
+          // Anonymized/deleted counterparty (02 §19): no profile to link to, so
+          // render the "Deleted User" placeholder as plain text instead of a
+          // blank, broken link — same treatment as the sibling AD7 deleted party.
+          <span className="text-sm text-gray-500">{r.displayName}</span>
+        ),
     },
     {
       key: "count",
@@ -271,7 +277,7 @@ export function UserDetailView({ steamId, detail }: UserDetailViewProps) {
         <ResponsiveTable
           data={detail.frequentCounterparties}
           columns={counterpartyColumns}
-          getRowKey={(r) => r.steamId}
+          getRowKey={(r) => r.steamId || `deleted-${detail.frequentCounterparties.indexOf(r)}`}
           ariaLabel={t("counterparties.heading")}
           emptyMessage={t("counterparties.empty")}
         />
