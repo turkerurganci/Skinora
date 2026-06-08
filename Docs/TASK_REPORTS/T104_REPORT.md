@@ -1,6 +1,6 @@
 # T104 — Admin Rol & Yetki Yönetimi (S19)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-06-07
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-07 (yapım) · 2026-06-08 (doğrulama)
 
 ---
 
@@ -55,9 +55,23 @@ S19 rol & yetki yönetimi ekranı (04 §8.8), mevcut AD11–AD17 backend'ine ba�
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
-| Bulgu sayısı (self) | 0 |
+| Doğrulama durumu | ✓ **PASS** (bağımsız validator chat, 2026-06-08) |
+| Bulgu sayısı | 0 bloke-edici (1 ham bulgu çürütüldü) |
 | Düzeltme gerekli mi | Hayır |
+
+**Bağımsız validator özeti (2026-06-08):**
+
+- **Startup gate'ler:** working tree temiz (Adım -1); main CI son-3 `success` — `27101235529`/`27101235527` (T103 #158) + `27097121138` (T102 #157) (Adım 0); repo memory T104 satırı mevcut (Adım 0b).
+- **Kabul kriterleri:** 4/4 (AC1–AC5) bağımsız ✓ — kod birebir okundu, 04 §8.8 bileşen listesi tam. AC "11 yetki" stale; canlı kaynak (04 §8.8 + 07 §9.11 + backend `PermissionCatalog.cs` = **12**) doğrulandı, frontend `availablePermissions`'tan dinamik render ettiği için sayı koddan değil backend'den gelir.
+- **Kontrat doğrulama:** `admin.ts` TS tipleri ↔ backend `RoleSummaryDto`/`RoleDetailDto`/`AdminUserListItemDto`/`AssignRoleResponse` birebir; AD11–AD17 route'ları `AdminController.cs`'de mevcut (`roles` GET/POST + `roles/{id:guid}` PUT/DELETE + `users` GET + `users/{id:guid}/role` PUT). `isSuperAdmin` origin/main backend'inde **önceden mevcut** (bu branch'te 0 backend dosyası değişti — `git diff origin/main` ile doğrulandı).
+- **Build kanıtı (validator-çalıştırıldı):** `tsc --noEmit` exit 0 · `eslint .` exit 0 · `prettier --check --end-of-line auto` (T104 dosyaları) clean (185-dosya uyarısı tüm repo'yu etkileyen Windows CRLF artifaktı; `core.autocrlf=true`, CI Linux/LF yeşil) · `next build` exit 0, `/[locale]/admin/roles` ƒ Dynamic · i18n `adminRoles` 61 leaf × 4 dil IDENTICAL + 12 yetki key'i 4 dilde de mevcut + gerçekten çevrili (EN==TR yalnız 2 çakışma: "—" ve "Steam ID").
+- **Task branch CI:** [`27104692078`](https://github.com/turkerurganci/Skinora/actions/runs/27104692078) HEAD `8770eb4` **success**.
+- **Mini güvenlik:** secret yok · yeni endpoint yok (server-protected mevcut AD'ler) · input client+server doğrulanır · 0 yeni bağımlılık · React-escaped çıktı. **Temiz.**
+- **Adversarial review (6 ajan / 5 boyut: AC-conformance · contract-drift · spec-deviation · security-regression · i18n-a11y; refute-default):** 1 ham bulgu → **0 onaylandı, 0 bloke-edici**. Tek bulgu (süper admin read-only "spec deviation") bağımsız doğrulamada **çürütüldü** — owner-onaylı tasarım kararı (commit `e4eb42f` + MEMORY 2026-06-07), 04 §8.8 süper admin rolünün düzenlenmesini zorunlu kılmaz.
+
+**Validator K-not (yeni — bloke-edici değil):**
+
+- **K4 — Süper admin read-only fiilen yalnız frontend guard'ı:** `RolesTable.tsx:17-18` yorumu "backend remains the enforcer of last resort" der, ancak backend `UpdateAsync`/`DeleteAsync` süper admin rolünün düzenlenmesini/silinmesini **kısıtlamaz** (MANAGE_ROLES olan her çağıran düzenleyebilir). Read-only davranışı bu PR'da yalnız UI katmanında uygulanır; backend-enforcement iddiası fazla iddialı. Owner-onaylı UX güvenlik önlemi olduğundan ve T104 salt-frontend olduğundan bloke-edici değil; ileride backend tarafı isteniyorsa ayrı backend task'ı gerekir.
 
 ## Altyapı Değişiklikleri
 
