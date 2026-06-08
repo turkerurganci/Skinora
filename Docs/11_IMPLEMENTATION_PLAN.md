@@ -2133,6 +2133,22 @@ Task T105a: Hesap askıya alma (backend + S03d) [PLAN DÜZELTMESİ — T100 sonr
 ```
 
 ```
+Task T105b: Kullanıcı detay backend tamamlama (S20 — wallet history + reputation breakdown)
+  [PLAN DÜZELTMESİ — T105 validator sonrası eklendi (2026-06-08, proje sahibi onayı).
+   Plan T105'i "salt frontend" sanıyordu; AD16 backend boşlukları validator'da doğrulandı.]
+  Bağımlılık: T105, T34 (cüzdan yönetimi), T54 (profil/reputation)
+  Dokümanlar: 04 §8.9.1 + §8.9.3, 06 §3.1, 07 §9.16
+  Kabul kriterleri:
+    - WalletAddressHistory entity + migration; payout/refund adres değişimi tarihçeye yazılır
+    - AD16 walletHistory[] geçmiş adresleri döndürür (current=false + setAt) → §8.9.3 "önceki adresler (tarihlerle)"
+    - Reputation breakdown DTO: tamamlanan işlem sayısı + başarı oranı % + iptal oranı % (04 §7.4.2 deseni)
+    - AD16 profile breakdown alanlarını expose eder; FE UserProfileCard breakdown'u render eder
+  Test beklentisi: walletHistory geçmiş + reputation breakdown integration testleri
+  Doğrulama kontrol listesi:
+    - [ ] 04 §8.9.3 önceki adresler (tarihlerle) + §8.9.1 reputation breakdown karşılandı mı?
+```
+
+```
 Task T106: Admin Audit log (S21)
   Bağımlılık: T85
   Dokümanlar: 04 §8.10

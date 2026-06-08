@@ -1,6 +1,6 @@
 # T105 — Admin Kullanıcı Detay (S20)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-08
+**Faz:** F5 | **Durum:** ✗ FAIL (bağımsız validator 2026-06-08 — B1 düzeltme yapım chat'inde + B2/B3 → T105b) | **Tarih:** 2026-06-08
 
 ---
 
@@ -65,11 +65,23 @@ S20 Admin Kullanıcı Detay ekranı **full-stack** olarak tamamlandı. Plan T105
 
 ## Doğrulama
 
+**Bağımsız validator (ayrı chat, 2026-06-08):** ✗ **FAIL.** Yapım raporu görülmeden bağımsız verdict oluşturuldu; 5-boyut/10-ajan adversarial workflow (refute-default) ile çapraz doğrulandı. Mekanik kapıların hepsi yeşil (19/19 test, tsc/eslint/prettier/next build, i18n 67×4, kontrat DTO↔07 §9.16↔FE 1:1, enum birebir, task CI `27157472471` ✓, main 3-3 ✓); 6/7 §8.9 bileşeni tam doğru. `formatPercent(rate*100)` (0-100 bekler, doğru) ve on-hold badge'in terminal işlemde yanlış yanması adayları **çürütüldü** (`IsOnHold` terminal geçişten önce `TransactionStateMachine.cs:108`'de temizlenir + `CK_Transactions_FreezeHold_Reverse` invariant'ı).
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✗ FAIL |
+| Bulgu sayısı | 1× S1 (düzeltilmeli) + 2× ~Kısmi (owner-onaylı defer → T105b) |
+| Düzeltme gerekli mi | Evet — B1 yapım chat'inde; B2/B3 follow-up T105b |
+
+### Validator Bulguları
+
+| # | Seviye | Açıklama | Dosya | Karar |
+|---|---|---|---|---|
+| B1 | S1 (düzeltilmeli) | Silinmiş/anonimleştirilmiş karşı taraf, S20 counterparty tablosunda **boş/kırık link** olarak görünüyor: `BuildCounterpartiesAsync` User lookup'ı `IgnoreQueryFilters()` kullanmıyor + isim fallback `string.Empty`. Kardeş servis AD7 (`AdminTransactionQueryService.UnknownParty()`) aynı durumu `DisplayName="Deleted User"` ile çözüyor (06 §1.3 tarihsel/audit query standardı + 02 §19 anonimleştirme). Wash-trading analizinde (§8.9.7) hesap silen taraf tam da görünmesi gereken aktör — bu yüzden temiz PASS verilemedi. | `AdminUserActivityProvider.cs:182-198` + `UserDetailView.tsx:207-219` | Yapım chat'inde düzelt (AD7 desenini yansıt: backend "Deleted User" + FE boş steamId'de link yerine düz metin) + 1 integration testi → yeni validator turu |
+| B2 | ~ Kısmi | AC#3 "önceki adresler (tarihlerle)" — veri modelinde adres-geçmişi entity'si yok (=K1). Mevcut adresler ✓ + UI disclosure (`wallet.historyNote`). Kırık planlama varsayımı (plan T105'i salt-frontend sanıyordu). | `AdminUserService.cs:290-308` / `User.cs:17-20` | Owner kararı (2026-06-08): **follow-up T105b** |
+| B3 | ~ Kısmi / K | §8.9.1 "itibar skoru (detaylı breakdown)" tek skor olarak gösteriliyor (=K2; breakdown metrikleri — tamamlanan/iptal/başarı — stats kartında zaten mevcut). | `UserProfileCard.tsx:83-87` | Owner kararı (2026-06-08): **follow-up T105b** |
+
+**Sonraki adım:** Yapım chat'i B1'i düzeltir + push'lar → yeni bağımsız doğrulama turu (PASS hedefi) → merge. B2/B3 plana eklenen T105b'ye (WalletAddressHistory entity+migration + reputation breakdown DTO) devredildi.
 
 ## Altyapı Değişiklikleri
 - Migration: **Yok** (computed agregasyon; yeni alan/tablo yok).
