@@ -556,6 +556,83 @@
       }
     }
   },
+  "adminRoles": {
+    "title": "Rol & Yetki Yönetimi",
+    "loadError": "Roller yüklenemedi.",
+    "roles": {
+      "heading": "Roller",
+      "createButton": "Yeni Rol Oluştur",
+      "empty": "Henüz rol tanımlanmadı.",
+      "columns": {
+        "name": "Rol Adı",
+        "description": "Açıklama",
+        "assignedUsers": "Atanmış Kullanıcı",
+        "actions": "Aksiyonlar"
+      },
+      "superAdminBadge": "Süper Admin",
+      "noDescription": "—",
+      "permissionCount": "{count} yetki",
+      "assignedCount": "{count} kullanıcı",
+      "edit": "Düzenle",
+      "delete": "Sil"
+    },
+    "form": {
+      "createTitle": "Yeni Rol Oluştur",
+      "editTitle": "Rolü Düzenle",
+      "nameLabel": "Rol Adı",
+      "namePlaceholder": "Örn. Flag Yöneticisi",
+      "nameRequired": "Rol adı zorunludur.",
+      "descriptionLabel": "Açıklama",
+      "descriptionPlaceholder": "Rolün kısa tanımı (opsiyonel)",
+      "permissionsLabel": "Yetkiler",
+      "permissionsHint": "Bu role atanacak yetkileri seçin.",
+      "save": "Kaydet",
+      "cancel": "İptal",
+      "nameExists": "Bu isimde bir rol zaten var.",
+      "saveError": "Rol kaydedilemedi. Bilgileri kontrol edip tekrar deneyin.",
+      "created": "Rol oluşturuldu.",
+      "updated": "Rol güncellendi."
+    },
+    "deleteConfirm": {
+      "title": "Rolü Sil",
+      "message": "{name} rolünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+      "confirm": "Sil",
+      "cancel": "Vazgeç",
+      "hasUsers": "Bu role atanmış kullanıcılar var; önce atamaları kaldırın.",
+      "deleteError": "Rol silinemedi.",
+      "deleted": "Rol silindi."
+    },
+    "permissions": {
+      "VIEW_FLAGS": "Flag'leri görüntüle",
+      "MANAGE_FLAGS": "Flag'leri yönet",
+      "VIEW_TRANSACTIONS": "İşlemleri görüntüle",
+      "MANAGE_SETTINGS": "Parametreleri yönet",
+      "VIEW_STEAM_ACCOUNTS": "Steam hesaplarını görüntüle",
+      "MANAGE_STEAM_RECOVERY": "Steam recovery yönet",
+      "VIEW_USERS": "Kullanıcı detay görüntüle",
+      "MANAGE_ROLES": "Rolleri yönet",
+      "VIEW_AUDIT_LOG": "Audit log görüntüle",
+      "CANCEL_TRANSACTIONS": "İşlemleri iptal et",
+      "EMERGENCY_HOLD": "Emergency hold uygula/kaldır",
+      "MANAGE_SANCTIONS": "Sanctions listesi yönet"
+    },
+    "assignment": {
+      "heading": "Kullanıcı-Rol Atama",
+      "description": "Admin kullanıcılarına rol atayın veya mevcut rollerini değiştirin.",
+      "searchPlaceholder": "İsim veya Steam ID ile ara",
+      "loadError": "Kullanıcılar yüklenemedi.",
+      "empty": "Kullanıcı bulunamadı.",
+      "columns": {
+        "user": "Kullanıcı",
+        "steamId": "Steam ID",
+        "role": "Rol"
+      },
+      "noRole": "Rol atanmadı",
+      "assignLabel": "{name} için rol ata",
+      "assigned": "Rol güncellendi.",
+      "assignError": "Rol atanamadı."
+    }
+  },
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",

@@ -49,3 +49,14 @@ export type { SettingsGroupTableProps } from "./SettingsGroupTable";
 
 export { SettingsManager } from "./SettingsManager";
 export type { SettingsManagerProps } from "./SettingsManager";
+
+export { RolesManager } from "./RolesManager";
+
+export { RolesTable } from "./RolesTable";
+export type { RolesTableProps } from "./RolesTable";
+
+export { RoleFormModal } from "./RoleFormModal";
+export type { RoleFormModalProps } from "./RoleFormModal";
+
+export { UserRoleAssignment } from "./UserRoleAssignment";
+export type { UserRoleAssignmentProps } from "./UserRoleAssignment";
