@@ -1464,5 +1464,110 @@
         "message": "We couldn’t load your notifications. Please try again."
       }
     }
+  },
+  "adminUserDetail": {
+    "loadError": "Could not load the user detail.",
+    "profile": {
+      "status": {
+        "ACTIVE": "Active",
+        "SUSPENDED": "Suspended",
+        "DEACTIVATED": "Deactivated",
+        "DELETED": "Deleted"
+      },
+      "badge": {
+        "activeTransactions": "Active transaction",
+        "onHold": "Active transaction on hold"
+      },
+      "accountAge": "Account age",
+      "joinedAt": "Joined",
+      "reputation": "Reputation",
+      "reputationNew": "New user",
+      "suspendedUntil": "Suspended until {date}",
+      "suspendedPermanent": "Suspended permanently"
+    },
+    "stats": {
+      "heading": "Statistics",
+      "total": "Total transactions",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "flagged": "Flagged",
+      "successRate": "Success rate",
+      "volume": "Total volume",
+      "lastTransaction": "Last transaction",
+      "none": "—",
+      "volumeValue": "{value} USD"
+    },
+    "wallet": {
+      "heading": "Wallet address history",
+      "columns": {
+        "type": "Type",
+        "address": "Address",
+        "setAt": "Set at"
+      },
+      "type": {
+        "seller": "Payout (seller)",
+        "buyer": "Refund (buyer)"
+      },
+      "current": "Current",
+      "empty": "No wallet address recorded.",
+      "historyNote": "Only current addresses are shown; previous-address history is not yet recorded."
+    },
+    "transactions": {
+      "heading": "Transaction history",
+      "viewAll": "View all",
+      "empty": "This user has no transactions."
+    },
+    "flags": {
+      "heading": "Flag history",
+      "columns": {
+        "type": "Type",
+        "transaction": "Transaction",
+        "status": "Result",
+        "date": "Date"
+      },
+      "type": {
+        "PRICE_DEVIATION": "Price deviation",
+        "HIGH_VOLUME": "High volume",
+        "ABNORMAL_BEHAVIOR": "Abnormal behavior",
+        "MULTI_ACCOUNT": "Multi-account",
+        "SANCTIONS_MATCH": "Sanctions match"
+      },
+      "status": {
+        "PENDING": "Pending",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected"
+      },
+      "accountLevel": "Account-level",
+      "empty": "No flags involve this user."
+    },
+    "disputes": {
+      "heading": "Dispute history",
+      "columns": {
+        "type": "Type",
+        "transaction": "Transaction",
+        "status": "Result",
+        "date": "Date"
+      },
+      "type": {
+        "PAYMENT": "Payment",
+        "DELIVERY": "Delivery",
+        "WRONG_ITEM": "Wrong item"
+      },
+      "status": {
+        "OPEN": "Open",
+        "ESCALATED": "Escalated",
+        "CLOSED": "Closed"
+      },
+      "empty": "This user has no disputes."
+    },
+    "counterparties": {
+      "heading": "Frequent counterparties",
+      "columns": {
+        "user": "User",
+        "count": "Transactions",
+        "lastTransaction": "Last transaction"
+      },
+      "empty": "No counterparties yet."
+    }
   }
 }

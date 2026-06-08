@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import { StablecoinType, TransactionStatus } from "@/types/enums";
+import { DisputeStatus, DisputeType, StablecoinType, TransactionStatus } from "@/types/enums";
 
 /**
  * AD1 — `GET /admin/dashboard` (07 §9.1). Wire format matches the backend
@@ -721,4 +721,112 @@ export function assignUserRole(userId: string, roleId: string | null): Promise<A
     method: "PUT",
     body: JSON.stringify({ roleId }),
   });
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD16 / AD16b — Admin user detail (S20).
+ * Wire format mirrors `AdminUserDetailDto` (07 §9.16) and the AD16b per-user
+ * transaction list (07 §9.17 — `PagedResult<AdminTransactionListItemDto>`,
+ * identical to AD6 so it reuses `TransactionListTable`). Enums serialize as
+ * strings; `reputationScore` is a JSON number or null; `totalVolume` is a
+ * decimal string (or null when the user has no completed transaction).
+ * `flagHistory[].transactionId` is null for ACCOUNT_LEVEL flags (06 §3.12).
+ * `walletHistory` carries only current addresses — previous-address history is
+ * not persisted in the data model (T39 known limitation, see AdminUserService).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type AdminAccountStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED" | "DELETED";
+export type AdminWalletEntryType = "seller" | "buyer";
+
+/** Profile block of AD16 (07 §9.16 / 04 §8.9.1). */
+export interface AdminUserDetailProfile {
+  id: string;
+  steamId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  accountStatus: AdminAccountStatus;
+  accountAge: string;
+  createdAt: string;
+  reputationScore: number | null;
+  isSuspended: boolean;
+  suspendedAt: string | null;
+  suspensionReason: string | null;
+  suspensionExpiresAt: string | null;
+  /** Non-terminal transaction count + emergency-hold flag → 04 §8.9.1 badges. */
+  activeTransactionCount: number;
+  hasTransactionOnHold: boolean;
+}
+
+/** Statistics block of AD16 (07 §9.16 / 04 §8.9.2). */
+export interface AdminUserDetailStats {
+  totalTransactions: number;
+  completedTransactions: number;
+  cancelledTransactions: number;
+  flaggedTransactions: number;
+  successfulTransactionRate: number | null;
+  totalVolume: string | null;
+  lastTransactionAt: string | null;
+}
+
+/** One wallet-address row (04 §8.9.3). Only current addresses are emitted. */
+export interface AdminUserWalletEntry {
+  type: AdminWalletEntryType;
+  address: string;
+  setAt: string | null;
+  current: boolean;
+}
+
+/** One flag-history row (04 §8.9.5). `transactionId` null = account-level. */
+export interface AdminUserFlagEntry {
+  id: string;
+  type: AdminFlagType;
+  transactionId: string | null;
+  reviewStatus: AdminFlagReviewStatus;
+  createdAt: string;
+}
+
+/** One dispute-history row (04 §8.9.6). */
+export interface AdminUserDisputeEntry {
+  id: string;
+  type: DisputeType;
+  transactionId: string;
+  status: DisputeStatus;
+  createdAt: string;
+}
+
+/** One frequent-counterparty row — wash-trading signal (04 §8.9.7). */
+export interface AdminUserCounterparty {
+  steamId: string;
+  displayName: string;
+  transactionCount: number;
+  lastTransactionAt: string | null;
+}
+
+/** AD16 body — `AdminUserDetailDto` (07 §9.16). */
+export interface AdminUserDetail {
+  profile: AdminUserDetailProfile;
+  stats: AdminUserDetailStats;
+  walletHistory: AdminUserWalletEntry[];
+  flagHistory: AdminUserFlagEntry[];
+  disputeHistory: AdminUserDisputeEntry[];
+  frequentCounterparties: AdminUserCounterparty[];
+}
+
+/** AD16 — user detail for S20 (07 §9.16). `steamId` is path-encoded. */
+export function getAdminUserDetail(steamId: string): Promise<AdminUserDetail> {
+  return apiClient<AdminUserDetail>(`/admin/users/${encodeURIComponent(steamId)}`);
+}
+
+/** AD16b — a user's transaction history (07 §9.17), reusing the AD6 list shape. */
+export function getAdminUserTransactions(
+  steamId: string,
+  page = 1,
+  pageSize = 20,
+): Promise<AdminTransactionListResponse> {
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  return apiClient<AdminTransactionListResponse>(
+    `/admin/users/${encodeURIComponent(steamId)}/transactions?${params.toString()}`,
+  );
 }

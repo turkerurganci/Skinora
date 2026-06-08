@@ -1464,5 +1464,110 @@
         "message": "Bildirimler yüklenemedi. Lütfen tekrar deneyin."
       }
     }
+  },
+  "adminUserDetail": {
+    "loadError": "Kullanıcı detayı yüklenemedi.",
+    "profile": {
+      "status": {
+        "ACTIVE": "Aktif",
+        "SUSPENDED": "Askıya Alındı",
+        "DEACTIVATED": "Deaktif",
+        "DELETED": "Silindi"
+      },
+      "badge": {
+        "activeTransactions": "Aktif İşlem Var",
+        "onHold": "Hold Altında Aktif İşlem Var"
+      },
+      "accountAge": "Hesap yaşı",
+      "joinedAt": "Katılım",
+      "reputation": "İtibar",
+      "reputationNew": "Yeni kullanıcı",
+      "suspendedUntil": "Askı bitişi: {date}",
+      "suspendedPermanent": "Kalıcı olarak askıya alındı"
+    },
+    "stats": {
+      "heading": "İstatistikler",
+      "total": "Toplam işlem",
+      "completed": "Tamamlanan",
+      "cancelled": "İptal",
+      "flagged": "Flag'lenen",
+      "successRate": "Başarı oranı",
+      "volume": "Toplam hacim",
+      "lastTransaction": "Son işlem",
+      "none": "—",
+      "volumeValue": "{value} USD"
+    },
+    "wallet": {
+      "heading": "Cüzdan adresi geçmişi",
+      "columns": {
+        "type": "Tür",
+        "address": "Adres",
+        "setAt": "Tarih"
+      },
+      "type": {
+        "seller": "Ödeme (satıcı)",
+        "buyer": "İade (alıcı)"
+      },
+      "current": "Mevcut",
+      "empty": "Kayıtlı cüzdan adresi yok.",
+      "historyNote": "Yalnızca mevcut adresler gösterilir; önceki adres geçmişi henüz kaydedilmiyor."
+    },
+    "transactions": {
+      "heading": "İşlem geçmişi",
+      "viewAll": "Tümünü Gör",
+      "empty": "Bu kullanıcının işlemi yok."
+    },
+    "flags": {
+      "heading": "Flag geçmişi",
+      "columns": {
+        "type": "Tür",
+        "transaction": "İşlem",
+        "status": "Sonuç",
+        "date": "Tarih"
+      },
+      "type": {
+        "PRICE_DEVIATION": "Fiyat sapması",
+        "HIGH_VOLUME": "Yüksek hacim",
+        "ABNORMAL_BEHAVIOR": "Anormal davranış",
+        "MULTI_ACCOUNT": "Çoklu hesap",
+        "SANCTIONS_MATCH": "Yaptırım eşleşmesi"
+      },
+      "status": {
+        "PENDING": "Bekliyor",
+        "APPROVED": "Onaylandı",
+        "REJECTED": "Reddedildi"
+      },
+      "accountLevel": "Hesap düzeyi",
+      "empty": "Bu kullanıcıyı içeren flag yok."
+    },
+    "disputes": {
+      "heading": "Dispute geçmişi",
+      "columns": {
+        "type": "Tür",
+        "transaction": "İşlem",
+        "status": "Sonuç",
+        "date": "Tarih"
+      },
+      "type": {
+        "PAYMENT": "Ödeme",
+        "DELIVERY": "Teslimat",
+        "WRONG_ITEM": "Yanlış item"
+      },
+      "status": {
+        "OPEN": "Açık",
+        "ESCALATED": "Eskalasyon",
+        "CLOSED": "Kapalı"
+      },
+      "empty": "Bu kullanıcının dispute'u yok."
+    },
+    "counterparties": {
+      "heading": "Sık işlem yapılan taraflar",
+      "columns": {
+        "user": "Kullanıcı",
+        "count": "İşlem sayısı",
+        "lastTransaction": "Son işlem"
+      },
+      "empty": "Henüz karşı taraf yok."
+    }
   }
 }

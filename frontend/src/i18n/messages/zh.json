@@ -1464,5 +1464,110 @@
         "message": "无法加载通知，请重试。"
       }
     }
+  },
+  "adminUserDetail": {
+    "loadError": "无法加载用户详情。",
+    "profile": {
+      "status": {
+        "ACTIVE": "活跃",
+        "SUSPENDED": "已暂停",
+        "DEACTIVATED": "已停用",
+        "DELETED": "已删除"
+      },
+      "badge": {
+        "activeTransactions": "有活跃交易",
+        "onHold": "有被冻结的活跃交易"
+      },
+      "accountAge": "账户年龄",
+      "joinedAt": "加入时间",
+      "reputation": "信誉",
+      "reputationNew": "新用户",
+      "suspendedUntil": "暂停至 {date}",
+      "suspendedPermanent": "永久暂停"
+    },
+    "stats": {
+      "heading": "统计",
+      "total": "总交易数",
+      "completed": "已完成",
+      "cancelled": "已取消",
+      "flagged": "已标记",
+      "successRate": "成功率",
+      "volume": "总交易额",
+      "lastTransaction": "最近交易",
+      "none": "—",
+      "volumeValue": "{value} USD"
+    },
+    "wallet": {
+      "heading": "钱包地址历史",
+      "columns": {
+        "type": "类型",
+        "address": "地址",
+        "setAt": "时间"
+      },
+      "type": {
+        "seller": "收款（卖家）",
+        "buyer": "退款（买家）"
+      },
+      "current": "当前",
+      "empty": "没有记录的钱包地址。",
+      "historyNote": "仅显示当前地址；以前的地址历史尚未记录。"
+    },
+    "transactions": {
+      "heading": "交易历史",
+      "viewAll": "查看全部",
+      "empty": "该用户没有交易。"
+    },
+    "flags": {
+      "heading": "标记历史",
+      "columns": {
+        "type": "类型",
+        "transaction": "交易",
+        "status": "结果",
+        "date": "日期"
+      },
+      "type": {
+        "PRICE_DEVIATION": "价格偏差",
+        "HIGH_VOLUME": "高交易量",
+        "ABNORMAL_BEHAVIOR": "异常行为",
+        "MULTI_ACCOUNT": "多账户",
+        "SANCTIONS_MATCH": "制裁匹配"
+      },
+      "status": {
+        "PENDING": "待处理",
+        "APPROVED": "已批准",
+        "REJECTED": "已拒绝"
+      },
+      "accountLevel": "账户级",
+      "empty": "没有涉及该用户的标记。"
+    },
+    "disputes": {
+      "heading": "争议历史",
+      "columns": {
+        "type": "类型",
+        "transaction": "交易",
+        "status": "结果",
+        "date": "日期"
+      },
+      "type": {
+        "PAYMENT": "付款",
+        "DELIVERY": "交付",
+        "WRONG_ITEM": "物品错误"
+      },
+      "status": {
+        "OPEN": "未解决",
+        "ESCALATED": "已升级",
+        "CLOSED": "已关闭"
+      },
+      "empty": "该用户没有争议。"
+    },
+    "counterparties": {
+      "heading": "高频交易对手",
+      "columns": {
+        "user": "用户",
+        "count": "交易次数",
+        "lastTransaction": "最近交易"
+      },
+      "empty": "暂无交易对手。"
+    }
   }
 }

@@ -21,8 +21,12 @@ using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
+using Skinora.Disputes.Domain.Entities;
+using Skinora.Fraud.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.API.Tests.Integration;
@@ -188,6 +192,152 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         Assert.Equal("USER_NOT_FOUND",
             body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_WithActivity_AggregatesStatsAndBadgeSignals()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Active");
+        var cp = await _factory.CreateUserAsync(displayName: "Counterparty");
+
+        // 2 completed (volume = 2 × 102.00), 1 cancelled, 1 flagged (active),
+        // 1 accepted (active), 1 on-hold (active). total = 6, terminal = 3.
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.CANCELLED_BUYER);
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.FLAGGED);
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.ACCEPTED);
+        await _factory.CreateTransactionAsync(
+            target.Id, cp.Id, TransactionStatus.PAYMENT_RECEIVED, isOnHold: true);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+
+        var stats = data.GetProperty("stats");
+        Assert.Equal(6, stats.GetProperty("totalTransactions").GetInt32());
+        Assert.Equal(2, stats.GetProperty("completedTransactions").GetInt32());
+        Assert.Equal(1, stats.GetProperty("cancelledTransactions").GetInt32());
+        Assert.Equal(1, stats.GetProperty("flaggedTransactions").GetInt32());
+        Assert.Equal("204.00", stats.GetProperty("totalVolume").GetString());
+        Assert.Equal(JsonValueKind.String, stats.GetProperty("lastTransactionAt").ValueKind);
+
+        var profile = data.GetProperty("profile");
+        Assert.Equal(3, profile.GetProperty("activeTransactionCount").GetInt32());
+        Assert.True(profile.GetProperty("hasTransactionOnHold").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_FlagHistory_IncludesAccountAndTransactionLevel()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Flagged");
+        var seller = await _factory.CreateUserAsync(displayName: "Seller");
+
+        var tx = await _factory.CreateTransactionAsync(
+            seller.Id, target.Id, TransactionStatus.FLAGGED);
+
+        await _factory.CreateFraudFlagAsync(target.Id, null,
+            FraudFlagType.MULTI_ACCOUNT, FraudFlagScope.ACCOUNT_LEVEL, ReviewStatus.PENDING);
+        await _factory.CreateFraudFlagAsync(target.Id, tx.Id,
+            FraudFlagType.PRICE_DEVIATION, FraudFlagScope.TRANSACTION_PRE_CREATE, ReviewStatus.APPROVED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var flags = data.GetProperty("flagHistory");
+        Assert.Equal(2, flags.GetArrayLength());
+
+        var account = flags.EnumerateArray()
+            .Single(f => f.GetProperty("type").GetString() == "MULTI_ACCOUNT");
+        Assert.Equal(JsonValueKind.Null, account.GetProperty("transactionId").ValueKind);
+        Assert.Equal("PENDING", account.GetProperty("reviewStatus").GetString());
+
+        var txnFlag = flags.EnumerateArray()
+            .Single(f => f.GetProperty("type").GetString() == "PRICE_DEVIATION");
+        Assert.Equal(tx.Id.ToString(), txnFlag.GetProperty("transactionId").GetString());
+        Assert.Equal("APPROVED", txnFlag.GetProperty("reviewStatus").GetString());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_DisputeHistory_IncludesSellerSideViaTransactionJoin()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var seller = await _factory.CreateUserAsync(displayName: "SellerParty");
+        var buyer = await _factory.CreateUserAsync(displayName: "BuyerOpener");
+
+        var tx = await _factory.CreateTransactionAsync(
+            seller.Id, buyer.Id, TransactionStatus.COMPLETED);
+        // Dispute opened by the buyer; the seller is equally a party and must
+        // see it (proves the transaction-join, not an OpenedByUserId filter).
+        await _factory.CreateDisputeAsync(
+            tx.Id, buyer.Id, DisputeType.DELIVERY, DisputeStatus.CLOSED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{seller.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var disputes = data.GetProperty("disputeHistory");
+        Assert.Equal(1, disputes.GetArrayLength());
+        Assert.Equal(tx.Id.ToString(), disputes[0].GetProperty("transactionId").GetString());
+        Assert.Equal("DELIVERY", disputes[0].GetProperty("type").GetString());
+        Assert.Equal("CLOSED", disputes[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_FrequentCounterparties_RankedBySharedCount()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Trader");
+        var freq = await _factory.CreateUserAsync(displayName: "FrequentPartner");
+        var rare = await _factory.CreateUserAsync(displayName: "RarePartner");
+
+        // target↔freq share 3 (2 as seller, 1 as buyer); target↔rare share 1.
+        await _factory.CreateTransactionAsync(target.Id, freq.Id, TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(target.Id, freq.Id, TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(freq.Id, target.Id, TransactionStatus.COMPLETED);
+        await _factory.CreateTransactionAsync(target.Id, rare.Id, TransactionStatus.COMPLETED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var cps = data.GetProperty("frequentCounterparties");
+        Assert.Equal(2, cps.GetArrayLength());
+        Assert.Equal(freq.SteamId, cps[0].GetProperty("steamId").GetString());
+        Assert.Equal("FrequentPartner", cps[0].GetProperty("displayName").GetString());
+        Assert.Equal(3, cps[0].GetProperty("transactionCount").GetInt32());
+        Assert.Equal(rare.SteamId, cps[1].GetProperty("steamId").GetString());
+        Assert.Equal(1, cps[1].GetProperty("transactionCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_Reputation_ComputedFromDenormalizedCounters()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Reputable", c =>
+        {
+            c.CompletedTransactionCount = 5;              // > 3 default threshold
+            c.SuccessfulTransactionRate = 0.80m;          // → ROUND(0.80 × 5, 1) = 4.0
+        });
+        // > 30-day default age threshold (re-stamped — see SetUserCreatedAtAsync).
+        await _factory.SetUserCreatedAtAsync(target.Id, DateTime.UtcNow.AddDays(-60));
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(4.0m,
+            data.GetProperty("profile").GetProperty("reputationScore").GetDecimal());
     }
 
     // ---------- AD16b GET /admin/users/:steamId/transactions ----------
@@ -439,6 +589,149 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         public Task AssignActiveRoleAsync(Guid userId, Guid roleId)
             => AssignRoleAsync(userId, roleId);
 
+        /// <summary>
+        /// Re-stamp CreatedAt after creation. The audit pipeline overwrites
+        /// CreatedAt to "now" on Add, so a back-dated account age (reputation
+        /// threshold) only survives as a Modified update (same trick as the
+        /// transaction helper's createdAtOverride).
+        /// </summary>
+        public async Task SetUserCreatedAtAsync(Guid userId, DateTime createdAt)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Set<User>().FirstAsync(u => u.Id == userId);
+            user.CreatedAt = createdAt;
+            await db.SaveChangesAsync();
+        }
+
+        // --- T105 activity seeding (mirrors AdminT63EndpointTests so the seeded
+        // rows satisfy every Transaction CHECK constraint on SQL Server CI) ---
+
+        public async Task<Transaction> CreateTransactionAsync(
+            Guid sellerId,
+            Guid? buyerId,
+            TransactionStatus status,
+            decimal price = 100m,
+            DateTime? createdAtOverride = null,
+            bool isOnHold = false)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            string? buyerSteamId = null;
+            if (buyerId.HasValue)
+            {
+                buyerSteamId = await db.Set<User>()
+                    .AsNoTracking()
+                    .Where(u => u.Id == buyerId.Value)
+                    .Select(u => u.SteamId)
+                    .FirstAsync();
+            }
+
+            var nowUtc = DateTime.UtcNow;
+            var tx = new Transaction
+            {
+                Id = Guid.NewGuid(),
+                Status = status,
+                SellerId = sellerId,
+                BuyerId = buyerId,
+                TargetBuyerSteamId = buyerSteamId,
+                BuyerIdentificationMethod = buyerId.HasValue
+                    ? BuyerIdentificationMethod.STEAM_ID
+                    : BuyerIdentificationMethod.OPEN_LINK,
+                BuyerRefundAddress = buyerId.HasValue ? "TXBuyerRefund000000" : null,
+                InviteToken = buyerId.HasValue ? null : Guid.NewGuid().ToString("N")[..8],
+                ItemAssetId = "100200300",
+                ItemClassId = "abc-class",
+                ItemName = "AK-47 | Redline",
+                ItemIconUrl = "https://steamcdn.example/img/test.png",
+                StablecoinType = StablecoinType.USDT,
+                Price = price,
+                CommissionRate = 0.02m,
+                CommissionAmount = price * 0.02m,
+                TotalAmount = price * 1.02m,
+                SellerPayoutAddress = "TXSellerPayout00000",
+                PaymentTimeoutMinutes = 1440,
+                IsOnHold = isOnHold,
+                EmergencyHoldAt = isOnHold ? nowUtc : null,
+                EmergencyHoldReason = isOnHold ? "Test hold" : null,
+                EmergencyHoldByAdminId = isOnHold ? sellerId : null,
+                TimeoutFrozenAt = isOnHold ? nowUtc : null,
+                TimeoutFreezeReason = isOnHold ? TimeoutFreezeReason.EMERGENCY_HOLD : null,
+                TimeoutRemainingSeconds = isOnHold ? 3600 : null,
+                CompletedAt = status == TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-10)
+                    : null,
+                CancelledAt = status >= TransactionStatus.CANCELLED_TIMEOUT
+                              && status != TransactionStatus.FLAGGED
+                    ? nowUtc.AddMinutes(-5)
+                    : null,
+                CancelledBy = status switch
+                {
+                    TransactionStatus.CANCELLED_BUYER => CancelledByType.BUYER,
+                    TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
+                    TransactionStatus.CANCELLED_TIMEOUT => CancelledByType.TIMEOUT,
+                    TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+                    _ => null,
+                },
+                CancelReason = status >= TransactionStatus.CANCELLED_TIMEOUT
+                               && status != TransactionStatus.FLAGGED
+                    ? "Fixture cancel reason"
+                    : null,
+            };
+
+            db.Set<Transaction>().Add(tx);
+            await db.SaveChangesAsync();
+
+            if (createdAtOverride.HasValue)
+            {
+                tx.CreatedAt = createdAtOverride.Value;
+                await db.SaveChangesAsync();
+            }
+            return tx;
+        }
+
+        public async Task CreateFraudFlagAsync(
+            Guid userId, Guid? transactionId, FraudFlagType type,
+            FraudFlagScope flagScope, ReviewStatus status)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var reviewed = status != ReviewStatus.PENDING;
+            db.Set<FraudFlag>().Add(new FraudFlag
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                TransactionId = transactionId,
+                Scope = flagScope,
+                Type = type,
+                Details = "{}",
+                Status = status,
+                ReviewedAt = reviewed ? DateTime.UtcNow.AddMinutes(-1) : null,
+                ReviewedByAdminId = reviewed ? userId : null,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        public async Task CreateDisputeAsync(
+            Guid transactionId, Guid openedByUserId, DisputeType type, DisputeStatus status)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<Dispute>().Add(new Dispute
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = transactionId,
+                OpenedByUserId = openedByUserId,
+                Type = type,
+                Status = status,
+                ResolvedAt = status == DisputeStatus.CLOSED
+                    ? DateTime.UtcNow.AddMinutes(-1)
+                    : null,
+            });
+            await db.SaveChangesAsync();
+        }
+
         public async Task<List<Guid>> GetActiveAssignmentRoleIdsAsync(Guid userId)
         {
             using var scope = Services.CreateScope();
@@ -466,6 +759,15 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // T105 — child activity rows reference users; delete them before the
+            // User sweep below so the FK chain (SQL Server CI) doesn't trip.
+            db.Set<Dispute>().RemoveRange(
+                db.Set<Dispute>().IgnoreQueryFilters().ToList());
+            db.Set<FraudFlag>().RemoveRange(
+                db.Set<FraudFlag>().IgnoreQueryFilters().ToList());
+            db.Set<Transaction>().RemoveRange(
+                db.Set<Transaction>().IgnoreQueryFilters().ToList());
 
             db.Set<AdminUserRole>().RemoveRange(
                 db.Set<AdminUserRole>().IgnoreQueryFilters().ToList());

@@ -60,3 +60,12 @@ export type { RoleFormModalProps } from "./RoleFormModal";
 
 export { UserRoleAssignment } from "./UserRoleAssignment";
 export type { UserRoleAssignmentProps } from "./UserRoleAssignment";
+
+export { UserDetailView } from "./UserDetailView";
+export type { UserDetailViewProps } from "./UserDetailView";
+
+export { UserProfileCard } from "./UserProfileCard";
+export type { UserProfileCardProps } from "./UserProfileCard";
+
+export { UserStatsCard } from "./UserStatsCard";
+export type { UserStatsCardProps } from "./UserStatsCard";
