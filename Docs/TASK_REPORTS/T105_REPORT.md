@@ -1,6 +1,6 @@
 # T105 — Admin Kullanıcı Detay (S20)
 
-**Faz:** F5 | **Durum:** ✗ FAIL (bağımsız validator 2026-06-08 — B1 düzeltme yapım chat'inde + B2/B3 → T105b) | **Tarih:** 2026-06-08
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (re-validation PASS 2026-06-12 — B1 düzeltildi; B2/B3 owner-onaylı → T105b) | **Tarih:** 2026-06-12
 
 ---
 
@@ -90,6 +90,30 @@ Owner reçetesi (AD7 desenini yansıt) birebir uygulandı; **verdict hâlâ FAIL
 - **Test** [`AdminUsersEndpointTests.cs`](../../backend/tests/Skinora.API.Tests/Integration/AdminUsersEndpointTests.cs): `AnonymizeUserAsync` factory helper + `GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser` regresyon testi (silinmiş counterparty → "Deleted User" + boş steamId). **AdminUsers 19→20/20.**
 - **Mekanik yeniden doğrulama:** backend Release **0W/0E** + AdminUsers **20/20** (SQLite); FE **tsc 0 / eslint 0 / prettier clean** (`--end-of-line auto`) / **next build ✓** (`/admin/users/[steamId]` ƒ). i18n/kontrat değişmedi ("Deleted User" backend-sabit; `AdminUserCounterpartyDto` 4 alan aynı). Docker-bağımlı 27 Fraud/integration testi lokal Docker kapalı → CI authoritative (bilinen kısıt).
 
+### Re-Validation — tur 2 (bağımsız chat, 2026-06-12): ✓ PASS
+
+B1 düzeltmesi (commit `5e03f45`) sonrası ikinci bağımsız doğrulama turu — **final flip burada verildi.**
+
+**Mekanik kapılar (validator-çalıştırıldı, HEAD `5e03f45`):**
+- Working tree temiz (Adım -1) · main CI son-3 `success` (Adım 0) · repo memory T105 satırı mevcut (Adım 0b).
+- Backend `AdminUsersEndpointTests` **20/20** (SQLite) — B1 regresyon testi `GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser` dahil; 0 Failed.
+- Frontend `tsc` 0 / `eslint` 0 / `prettier --check` clean (`--end-of-line auto`) / `next build` ✓ (`/admin/users/[steamId]` ƒ Dynamic).
+- i18n `adminUserDetail` **67 leaf × 4 locale**, 0 missing/extra.
+- Kontrat: `AdminUserDtos.cs` ↔ 07 §9.16 ↔ FE `admin.ts` tipleri 1:1; enum tone-map'leri (DisputeStatus OPEN/ESCALATED/CLOSED · FlagReviewStatus PENDING/APPROVED/REJECTED · flag/dispute type) backend enum'larıyla birebir → undefined-key riski yok.
+- DI: `AddScoped<IAdminUserActivityProvider, AdminUserActivityProvider>()` (`Skinora.API/Configuration/TransactionsModule.cs:127`); composition-root mimarisi entegrasyon testleriyle (20/20) doğrulandı. Yeni dependency yok (backend + frontend). Task CI `27162985622` HEAD `5e03f45` **success**.
+
+**B1 fix doğrulandı (correct + complete):** backend `DisplayName` fallback `"Deleted User"` + boş SteamId, kardeş AD7 `UnknownParty()` ve production `AnonymizeUserInPlace` ile birebir; global `!IsDeleted` filtresi fallback'i gerçekten tetikliyor (regresyon testi kanıtladı). FE boş-steamId dalı düz `<span>` + `getRowKey` index fallback'i çoklu silinmiş karşı tarafta React duplicate-key çakışması yaratmıyor.
+
+**Adversarial workflow (6-boyut / 24-ajan, refute-default):** AC-conformance / backend-aggregation / contract-drift / security / b1-fix / frontend-spec finder'ları → 6 ham aday, **0'ı onaylandı** (hepsi 3/3 oy çürütüldü). 4 çekirdek boyut (AC / aggregation / contract / security) **sıfır bulgu**; kalan 6 aday B1-doğruluk teyidi + non-blocking nit (O(n) `indexOf` perf · backend-sabit "Deleted User" İngilizce string by-design · kapsam-dışı kardeş S16 `renderParty`). **0 bloke-edici bulgu.**
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 bloke-edici (B1 düzeltildi; B2/B3 owner-onaylı → T105b) |
+| Düzeltme gerekli mi | Hayır |
+
+**AC verdict (re-validation):** AC1 ✓ · AC2 ✓ · AC3 ~Kısmi (mevcut adresler render; önceki adresler owner-onaylı **T105b** deferral) · AC4 ✓ (B1 fix dahil) · AC5 ✓. §8.9 kontrol listesi: 6 bileşen tam + cüzdan geçmişi mevcut-adres (önceki adresler T105b'de tamamlanır). **PASS** — AC3 ~Kısmi, owner-onaylı minor deferral olduğu için bloke etmez.
+
 ## Altyapı Değişiklikleri
 - Migration: **Yok** (computed agregasyon; yeni alan/tablo yok).
 - Config/env: Yok.
@@ -98,9 +122,9 @@ Owner reçetesi (AD7 desenini yansıt) birebir uygulandı; **verdict hâlâ FAIL
 
 ## Commit & PR
 - Branch: `task/T105-admin-user-detail`
-- Commit: `89871e5` — kod + i18n + doc (rapor/status/memory ayrı commit)
-- PR: #160
-- CI: ⏳ izleniyor
+- Commit: `89871e5` — kod + i18n + doc; `5e03f45` — B1 fix (rapor/status/memory ayrı commit)
+- PR: #160 (squash merge → main)
+- CI: task CI `27162985622` (HEAD `5e03f45`) ✓; post-merge CI + Docker Publish ✓ (status satırında run ID'leri)
 
 ## Known Limitations / Follow-up
 - **K1 — Cüzdan önceki-adres geçmişi:** Veri modelinde `WalletAddressHistory` entity'si yok; yalnız mevcut adresler + değişiklik tarihi `User`'da. UI disclosure + forward-not (gelecekte schema'ya history tablosu eklenirse dolar).
