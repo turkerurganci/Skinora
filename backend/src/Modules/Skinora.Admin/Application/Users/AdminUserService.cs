@@ -3,6 +3,7 @@ using Skinora.Admin.Domain.Entities;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Application.Profiles;
+using Skinora.Users.Application.Reputation;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Admin.Application.Users;
@@ -19,10 +20,13 @@ namespace Skinora.Admin.Application.Users;
 ///   <item><b><c>search</c></b> — broadens to all non-deactivated users so the
 ///         admin can locate a non-admin to promote via AD17.</item>
 /// </list>
-/// AD16 stat / history aggregations land with downstream tasks (T54 fraud,
-/// T58 dispute, T63 admin transactions read service); the empty-array
-/// placeholders here ship the contract end-to-end so frontend (T105) can
-/// wire response handling against the final shape.
+/// AD16 stat / flag / dispute / counterparty aggregations are wired (T105) via
+/// <see cref="IAdminUserActivityProvider"/> — its implementation lives at the
+/// API composition root because those reads span Skinora.Transactions /
+/// Skinora.Fraud / Skinora.Disputes (modules this one cannot reference).
+/// Reputation is computed on demand via <see cref="IReputationScoreCalculator"/>.
+/// The single remaining placeholder is past wallet addresses (no history table
+/// in the data model — see <see cref="BuildCurrentWalletEntries"/>).
 /// </remarks>
 public sealed class AdminUserService : IAdminUserService
 {
@@ -33,11 +37,19 @@ public sealed class AdminUserService : IAdminUserService
 
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly IReputationScoreCalculator _reputation;
+    private readonly IAdminUserActivityProvider _activity;
 
-    public AdminUserService(AppDbContext db, TimeProvider clock)
+    public AdminUserService(
+        AppDbContext db,
+        TimeProvider clock,
+        IReputationScoreCalculator reputation,
+        IAdminUserActivityProvider activity)
     {
         _db = db;
         _clock = clock;
+        _reputation = reputation;
+        _activity = activity;
     }
 
     public async Task<PagedResult<AdminUserListItemDto>> ListAsync(
@@ -146,6 +158,23 @@ public sealed class AdminUserService : IAdminUserService
 
         if (user is null) return null;
 
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        // Cross-module activity (transactions / flags / disputes / counterparties)
+        // + the two conditional badge signals — aggregated at the composition
+        // root (07 §9.16).
+        var activity = await _activity.GetAsync(user.Id, cancellationToken);
+
+        // Reputation is computed on demand from the denormalized counters so
+        // admin-tunable thresholds take effect without a backfill (06 §3.1);
+        // null = "Yeni kullanıcı".
+        var reputationScore = await _reputation.ComputeAsync(
+            user.CompletedTransactionCount,
+            user.SuccessfulTransactionRate,
+            user.CreatedAt,
+            nowUtc,
+            cancellationToken);
+
         // Deactivated (user self-deactivation, blocks login) takes precedence
         // over Suspended (admin-enforced restricted session) — T105a.
         var status = user.IsDeactivated
@@ -160,28 +189,24 @@ public sealed class AdminUserService : IAdminUserService
             DisplayName: user.SteamDisplayName,
             AvatarUrl: user.SteamAvatarUrl,
             AccountStatus: status,
-            AccountAge: AccountAgeFormatter.Format(
-                user.CreatedAt, _clock.GetUtcNow().UtcDateTime),
+            AccountAge: AccountAgeFormatter.Format(user.CreatedAt, nowUtc),
             CreatedAt: user.CreatedAt,
-            // T43 forward devir — reputation calculation lands with the
-            // dedicated task; until then admins see null (06 §3.1).
-            ReputationScore: null,
+            ReputationScore: reputationScore,
             IsSuspended: user.IsSuspended,
             SuspendedAt: user.SuspendedAt,
             SuspensionReason: user.SuspensionReason,
-            SuspensionExpiresAt: user.SuspensionExpiresAt);
+            SuspensionExpiresAt: user.SuspensionExpiresAt,
+            ActiveTransactionCount: activity.ActiveTransactionCount,
+            HasTransactionOnHold: activity.HasTransactionOnHold);
 
         var stats = new AdminUserDetailStatsDto(
-            // T63 forward devir — admin transaction aggregates land with the
-            // admin transactions read service. Denormalized counters on User
-            // (CompletedTransactionCount) are the only signal available now.
-            TotalTransactions: user.CompletedTransactionCount,
-            CompletedTransactions: user.CompletedTransactionCount,
-            CancelledTransactions: 0,
-            FlaggedTransactions: 0,
+            TotalTransactions: activity.TotalTransactions,
+            CompletedTransactions: activity.CompletedTransactions,
+            CancelledTransactions: activity.CancelledTransactions,
+            FlaggedTransactions: activity.FlaggedTransactions,
             SuccessfulTransactionRate: user.SuccessfulTransactionRate,
-            TotalVolume: null,
-            LastTransactionAt: null);
+            TotalVolume: activity.TotalVolume,
+            LastTransactionAt: activity.LastTransactionAt);
 
         var walletHistory = BuildCurrentWalletEntries(user).ToList();
 
@@ -189,12 +214,9 @@ public sealed class AdminUserService : IAdminUserService
             Profile: profile,
             Stats: stats,
             WalletHistory: walletHistory,
-            // T54 / T58 / T63 forward devir — empty until the backing
-            // services land (07 §9.16 contract shipped now so the frontend
-            // can wire response parsing).
-            FlagHistory: [],
-            DisputeHistory: [],
-            FrequentCounterparties: []);
+            FlagHistory: activity.FlagHistory,
+            DisputeHistory: activity.DisputeHistory,
+            FrequentCounterparties: activity.FrequentCounterparties);
     }
 
     public async Task<AssignRoleOutcome> AssignRoleAsync(

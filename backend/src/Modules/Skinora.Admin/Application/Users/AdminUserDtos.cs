@@ -34,7 +34,15 @@ public sealed record AdminUserDetailProfileDto(
     bool IsSuspended,
     DateTime? SuspendedAt,
     string? SuspensionReason,
-    DateTime? SuspensionExpiresAt);
+    DateTime? SuspensionExpiresAt,
+    // T105 — 04 §8.9 conditional status badges. ActiveTransactionCount counts
+    // the user's non-terminal transactions (same "active" definition as the
+    // AD1 dashboard / AD19d); HasTransactionOnHold is true when any of those
+    // carry an EMERGENCY_HOLD. Suspended + active → "Aktif İşlem Var" (amber);
+    // on-hold → "Hold Altında Aktif İşlem Var" (red). Suspension never applies
+    // a hold automatically — they are independent signals (04 §8.9.1).
+    int ActiveTransactionCount,
+    bool HasTransactionOnHold);
 
 public sealed record AdminUserDetailStatsDto(
     int TotalTransactions,
@@ -54,7 +62,8 @@ public sealed record AdminUserWalletEntryDto(
 public sealed record AdminUserFlagEntryDto(
     Guid Id,
     string Type,
-    Guid TransactionId,
+    // Null for ACCOUNT_LEVEL flags (no backing transaction) — 06 §3.12.
+    Guid? TransactionId,
     string ReviewStatus,
     DateTime CreatedAt);
 

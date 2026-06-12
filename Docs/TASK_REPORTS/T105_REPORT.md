@@ -1,0 +1,141 @@
+# T105 — Admin Kullanıcı Detay (S20)
+
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (re-validation PASS 2026-06-12 — B1 düzeltildi; B2/B3 owner-onaylı → T105b) | **Tarih:** 2026-06-12
+
+---
+
+## Yapılan İşler
+
+S20 Admin Kullanıcı Detay ekranı **full-stack** olarak tamamlandı. Plan T105'i "salt frontend, test yok" varsayıyordu; ancak inceleme sırasında **AD16 `GetDetailAsync`'in baştan sona T39'dan kalma bir contract-only placeholder olduğu** ortaya çıktı (İstatistikler kısmen sıfır, Flag/Dispute/Counterparty listeleri hardcoded `[]`, ReputationScore `null`). T54/T58/T63 backing service'leri F3/F4'te tamamlanmış ama hiçbiri geri dönüp `AdminUserService`'i bağlamamıştı. Proje sahibi iki AskUserQuestion ile (1) badge boşluğu → "C full-stack", (2) genel sınır → "1) Tam wire-up" kararını verdi.
+
+### Backend (AD16 wire-up)
+- **Yeni `IAdminUserActivityProvider`** (`Skinora.Admin`) + impl **`AdminUserActivityProvider`** (`Skinora.API.Services`, composition root). Cross-module agregasyon (Transactions/Fraud/Disputes) — `AdminTransactionQueryService` (AD7) ile aynı "composition-root, çünkü Skinora.Admin bu modülleri referans edemez" gerekçesi.
+  - **İstatistikler:** `Transaction` üzerinden gerçek toplam/tamamlanan/iptal(4 CANCELLED_*)/flag(FLAGGED) sayıları + tamamlanan işlem hacmi (invariant 2-ondalık string, yoksa null) + son işlem tarihi (max CreatedAt).
+  - **Badge sinyalleri:** `ActiveTransactionCount` = terminal-olmayan işlem sayısı (5 terminal hariç; FLAGGED aktif; `IsOnHold` dahil — AD1 dashboard / AD19d "aktif" tanımıyla birebir) + `HasTransactionOnHold` = herhangi bir işlemde EMERGENCY_HOLD.
+  - **FrequentCounterparties:** karşı taraf = diğer taraf (alıcısı olmayan satırlar atlanır), paylaşılan işlem sayısına göre top-10, isimler tek dictionary lookup ile çözülür (wash-trading sinyali, §8.9.7).
+  - **FlagHistory:** `FraudFlag.UserId` ile (account+transaction level; `transactionId` ACCOUNT_LEVEL'de null).
+  - **DisputeHistory:** Dispute→Transaction join ile (kullanıcı alıcı **veya** satıcı taraf; sadece OpenedByUserId değil — satıcı tarafı da kapsanır).
+- **`AdminUserService.GetDetailAsync`** provider'ı + `IReputationScoreCalculator`'ı inject edip AD16 DTO'sunu birleştirir; reputation on-demand hesaplanır (06 §3.1).
+- **DTO değişikliği:** `AdminUserDetailProfileDto` → `ActiveTransactionCount` + `HasTransactionOnHold` eklendi; `AdminUserFlagEntryDto.TransactionId` → `Guid?` (account-level).
+- **DI:** `IAdminUserActivityProvider` → `TransactionsModule.cs`'de kaydedildi.
+- **Doc:** 07 §9.16 — profile badge alanları + `isSuspended` grubu + `accountStatus` SUSPENDED + transactionId-null/totalVolume/counterparty notları.
+
+### Frontend (S20)
+- **Yeni route** `app/[locale]/admin/users/[steamId]/page.tsx` (T99/T101 forward-link hedefi; T101 K2'de 404'tü, artık karşılanıyor).
+- **`lib/api/admin.ts`:** AD16 (`getAdminUserDetail` + tipler) + AD16b (`getAdminUserTransactions`, AD6 list shape reuse) katmanı.
+- **Hook'lar:** `useAdminUserDetail` (30s staleTime), `useAdminUserTransactions` (keepPreviousData, sayfalı).
+- **Bileşenler:** `UserDetailView` (orchestrator) + `UserProfileCard` (avatar/kimlik/§8.9.1 koşullu badge'ler/reputation) + `UserStatsCard` + cüzdan/flag/dispute/counterparty `ResponsiveTable`'ları + **`TransactionListTable` reuse** (T101) §8.9.4 işlem tablosu için.
+- **i18n:** `adminUserDetail` namespace, **67 leaf × 4 locale** (en/tr/es/zh, parity doğrulandı).
+
+## Etkilenen Modüller / Dosyalar
+
+**Backend (yeni):** `IAdminUserActivityProvider.cs`, `AdminUserActivityProvider.cs`
+**Backend (değişen):** `AdminUserDtos.cs`, `AdminUserService.cs`, `TransactionsModule.cs`, `AdminUsersEndpointTests.cs`
+**Doc:** `07_API_DESIGN.md` §9.16
+**Frontend (yeni):** `admin/users/[steamId]/page.tsx`, `UserDetailView.tsx`, `UserProfileCard.tsx`, `UserStatsCard.tsx`, `useAdminUserDetail.ts`, `useAdminUserTransactions.ts`
+**Frontend (değişen):** `lib/api/admin.ts`, `components/admin/index.ts`, `i18n/messages/{en,tr,es,zh}.json`
+
+## Kabul Kriterleri Kontrolü
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | Profil bilgileri: avatar, ad, Steam ID, hesap yaşı, durum badge'leri | ✓ | `UserProfileCard` — avatar/displayName/steamId/accountAge + base 4-durum badge + §8.9.1 koşullu badge'ler (Aktif İşlem Var / Hold Altında); profile DTO gerçek veri |
+| 2 | İstatistikler kartı: toplam/başarı/iptal/flag, hacim, son işlem | ✓ | `UserStatsCard` + `AdminUserActivityProvider` gerçek agregasyon; test `GetUserDetail_WithActivity` (6/2/1/1, volume 204.00, lastTransaction) |
+| 3 | Cüzdan adresi geçmişi (mevcut + önceki, tarihlerle) | ~ Kısmi | Mevcut adresler render + tarih; **önceki adresler defer** (history entity yok — açık K-not + UI disclosure `wallet.historyNote`) |
+| 4 | Alıcı-satıcı ilişkileri tablosu | ✓ | `FrequentCounterparties` provider + counterparty tablosu; test `GetUserDetail_FrequentCounterparties_RankedBySharedCount` (3 vs 1 sıralama) |
+| 5 | `GET /admin/users/:steamId` çağrısı | ✓ | `getAdminUserDetail` (AD16) + AD16b işlem tablosu; route canlı (`next build` ƒ Dynamic) |
+
+**Doğrulama kontrol listesi — 04 §8.9 tüm bileşenler:** Profil ✓ / İstatistikler ✓ / Cüzdan geçmişi ~ (mevcut) / İşlem tablosu ✓ (AD16b reuse) / Flag geçmişi ✓ / Dispute geçmişi ✓ / Alıcı-satıcı ilişkileri ✓.
+
+## Test Sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Backend Release build | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
+| Integration (AdminUsers) | ✓ 19/19 | SQLite; 5 yeni AD16 testi (stats/badge, flag account+txn level, dispute seller-side join, counterparty ranking, reputation 4.0) |
+| Integration (tüm Admin) | ✓ 127/127 | `--filter ~Admin` (regresyon yok) |
+| dotnet format | ✓ Δ=0 | `--verify-no-changes` exit 0 |
+| Frontend tsc | ✓ 0 | `tsc --noEmit` |
+| Frontend eslint | ✓ 0 | T105 dosyaları |
+| Frontend prettier | ✓ clean | `--check --end-of-line auto` (Windows CRLF working-copy artefaktı; git LF saklar) |
+| Frontend next build | ✓ | `/[locale]/admin/users/[steamId]` ƒ Dynamic |
+| i18n parity | ✓ 67×4 | en/tr/es/zh 0 missing/extra |
+
+> Not: SQL Server'a özel Fraud/Transactions Testcontainers testleri lokalde (Docker yok, T11.3) çalışmaz → CI'da koşar.
+
+## Doğrulama
+
+**Bağımsız validator (ayrı chat, 2026-06-08):** ✗ **FAIL.** Yapım raporu görülmeden bağımsız verdict oluşturuldu; 5-boyut/10-ajan adversarial workflow (refute-default) ile çapraz doğrulandı. Mekanik kapıların hepsi yeşil (19/19 test, tsc/eslint/prettier/next build, i18n 67×4, kontrat DTO↔07 §9.16↔FE 1:1, enum birebir, task CI `27157472471` ✓, main 3-3 ✓); 6/7 §8.9 bileşeni tam doğru. `formatPercent(rate*100)` (0-100 bekler, doğru) ve on-hold badge'in terminal işlemde yanlış yanması adayları **çürütüldü** (`IsOnHold` terminal geçişten önce `TransactionStateMachine.cs:108`'de temizlenir + `CK_Transactions_FreezeHold_Reverse` invariant'ı).
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✗ FAIL |
+| Bulgu sayısı | 1× S1 (düzeltilmeli) + 2× ~Kısmi (owner-onaylı defer → T105b) |
+| Düzeltme gerekli mi | Evet — B1 yapım chat'inde; B2/B3 follow-up T105b |
+
+### Validator Bulguları
+
+| # | Seviye | Açıklama | Dosya | Karar |
+|---|---|---|---|---|
+| B1 | S1 (düzeltilmeli) | Silinmiş/anonimleştirilmiş karşı taraf, S20 counterparty tablosunda **boş/kırık link** olarak görünüyor: `BuildCounterpartiesAsync` User lookup'ı `IgnoreQueryFilters()` kullanmıyor + isim fallback `string.Empty`. Kardeş servis AD7 (`AdminTransactionQueryService.UnknownParty()`) aynı durumu `DisplayName="Deleted User"` ile çözüyor (06 §1.3 tarihsel/audit query standardı + 02 §19 anonimleştirme). Wash-trading analizinde (§8.9.7) hesap silen taraf tam da görünmesi gereken aktör — bu yüzden temiz PASS verilemedi. | `AdminUserActivityProvider.cs:182-198` + `UserDetailView.tsx:207-219` | Yapım chat'inde düzelt (AD7 desenini yansıt: backend "Deleted User" + FE boş steamId'de link yerine düz metin) + 1 integration testi → yeni validator turu |
+| B2 | ~ Kısmi | AC#3 "önceki adresler (tarihlerle)" — veri modelinde adres-geçmişi entity'si yok (=K1). Mevcut adresler ✓ + UI disclosure (`wallet.historyNote`). Kırık planlama varsayımı (plan T105'i salt-frontend sanıyordu). | `AdminUserService.cs:290-308` / `User.cs:17-20` | Owner kararı (2026-06-08): **follow-up T105b** |
+| B3 | ~ Kısmi / K | §8.9.1 "itibar skoru (detaylı breakdown)" tek skor olarak gösteriliyor (=K2; breakdown metrikleri — tamamlanan/iptal/başarı — stats kartında zaten mevcut). | `UserProfileCard.tsx:83-87` | Owner kararı (2026-06-08): **follow-up T105b** |
+
+**Sonraki adım:** Yapım chat'i B1'i düzeltir + push'lar → yeni bağımsız doğrulama turu (PASS hedefi) → merge. B2/B3 plana eklenen T105b'ye (WalletAddressHistory entity+migration + reputation breakdown DTO) devredildi.
+
+### B1 Düzeltme — uygulandı (yapım chat, 2026-06-08)
+Owner reçetesi (AD7 desenini yansıt) birebir uygulandı; **verdict hâlâ FAIL** — final flip bağımsız re-validation turuna ait.
+- **Backend** [`AdminUserActivityProvider.cs`](../../backend/src/Skinora.API/Services/AdminUserActivityProvider.cs): counterparty isim fallback `string.Empty` → `"Deleted User"` (kardeş AD7 `AdminTransactionQueryService.UnknownParty()` ile birebir, 02 §19). `IgnoreQueryFilters` **bilinçli olarak kullanılmadı** — anonimleştirme zaten `IsDeleted=true` yapıyor; satır query-filter ile düşüyor ve boş steamId fallback'i FE'nin düz-metin dalını tetikliyor (ANON_ steamId'li tıklanabilir-ama-404 link bırakmaz).
+- **Frontend** [`UserDetailView.tsx`](../../frontend/src/components/admin/UserDetailView.tsx): §8.9.7 counterparty hücresi boş steamId'de `<Link>` yerine düz `<span>` ("Deleted User") render eder; `getRowKey` boş steamId'de `deleted-${index}` fallback'i ile birden fazla silinmiş karşı tarafta React duplicate-key'i önler.
+- **Test** [`AdminUsersEndpointTests.cs`](../../backend/tests/Skinora.API.Tests/Integration/AdminUsersEndpointTests.cs): `AnonymizeUserAsync` factory helper + `GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser` regresyon testi (silinmiş counterparty → "Deleted User" + boş steamId). **AdminUsers 19→20/20.**
+- **Mekanik yeniden doğrulama:** backend Release **0W/0E** + AdminUsers **20/20** (SQLite); FE **tsc 0 / eslint 0 / prettier clean** (`--end-of-line auto`) / **next build ✓** (`/admin/users/[steamId]` ƒ). i18n/kontrat değişmedi ("Deleted User" backend-sabit; `AdminUserCounterpartyDto` 4 alan aynı). Docker-bağımlı 27 Fraud/integration testi lokal Docker kapalı → CI authoritative (bilinen kısıt).
+
+### Re-Validation — tur 2 (bağımsız chat, 2026-06-12): ✓ PASS
+
+B1 düzeltmesi (commit `5e03f45`) sonrası ikinci bağımsız doğrulama turu — **final flip burada verildi.**
+
+**Mekanik kapılar (validator-çalıştırıldı, HEAD `5e03f45`):**
+- Working tree temiz (Adım -1) · main CI son-3 `success` (Adım 0) · repo memory T105 satırı mevcut (Adım 0b).
+- Backend `AdminUsersEndpointTests` **20/20** (SQLite) — B1 regresyon testi `GetUserDetail_AnonymizedCounterparty_ShownAsDeletedUser` dahil; 0 Failed.
+- Frontend `tsc` 0 / `eslint` 0 / `prettier --check` clean (`--end-of-line auto`) / `next build` ✓ (`/admin/users/[steamId]` ƒ Dynamic).
+- i18n `adminUserDetail` **67 leaf × 4 locale**, 0 missing/extra.
+- Kontrat: `AdminUserDtos.cs` ↔ 07 §9.16 ↔ FE `admin.ts` tipleri 1:1; enum tone-map'leri (DisputeStatus OPEN/ESCALATED/CLOSED · FlagReviewStatus PENDING/APPROVED/REJECTED · flag/dispute type) backend enum'larıyla birebir → undefined-key riski yok.
+- DI: `AddScoped<IAdminUserActivityProvider, AdminUserActivityProvider>()` (`Skinora.API/Configuration/TransactionsModule.cs:127`); composition-root mimarisi entegrasyon testleriyle (20/20) doğrulandı. Yeni dependency yok (backend + frontend). Task CI `27162985622` HEAD `5e03f45` **success**.
+
+**B1 fix doğrulandı (correct + complete):** backend `DisplayName` fallback `"Deleted User"` + boş SteamId, kardeş AD7 `UnknownParty()` ve production `AnonymizeUserInPlace` ile birebir; global `!IsDeleted` filtresi fallback'i gerçekten tetikliyor (regresyon testi kanıtladı). FE boş-steamId dalı düz `<span>` + `getRowKey` index fallback'i çoklu silinmiş karşı tarafta React duplicate-key çakışması yaratmıyor.
+
+**Adversarial workflow (6-boyut / 24-ajan, refute-default):** AC-conformance / backend-aggregation / contract-drift / security / b1-fix / frontend-spec finder'ları → 6 ham aday, **0'ı onaylandı** (hepsi 3/3 oy çürütüldü). 4 çekirdek boyut (AC / aggregation / contract / security) **sıfır bulgu**; kalan 6 aday B1-doğruluk teyidi + non-blocking nit (O(n) `indexOf` perf · backend-sabit "Deleted User" İngilizce string by-design · kapsam-dışı kardeş S16 `renderParty`). **0 bloke-edici bulgu.**
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS |
+| Bulgu sayısı | 0 bloke-edici (B1 düzeltildi; B2/B3 owner-onaylı → T105b) |
+| Düzeltme gerekli mi | Hayır |
+
+**AC verdict (re-validation):** AC1 ✓ · AC2 ✓ · AC3 ~Kısmi (mevcut adresler render; önceki adresler owner-onaylı **T105b** deferral) · AC4 ✓ (B1 fix dahil) · AC5 ✓. §8.9 kontrol listesi: 6 bileşen tam + cüzdan geçmişi mevcut-adres (önceki adresler T105b'de tamamlanır). **PASS** — AC3 ~Kısmi, owner-onaylı minor deferral olduğu için bloke etmez.
+
+## Altyapı Değişiklikleri
+- Migration: **Yok** (computed agregasyon; yeni alan/tablo yok).
+- Config/env: Yok.
+- Docker: Yok.
+- Yeni dependency: **Yok** (backend + frontend).
+
+## Commit & PR
+- Branch: `task/T105-admin-user-detail`
+- Commit: `89871e5` — kod + i18n + doc; `5e03f45` — B1 fix (rapor/status/memory ayrı commit)
+- PR: #160 (squash merge → main)
+- CI: task CI `27162985622` (HEAD `5e03f45`) ✓; post-merge CI + Docker Publish ✓ (status satırında run ID'leri)
+
+## Known Limitations / Follow-up
+- **K1 — Cüzdan önceki-adres geçmişi:** Veri modelinde `WalletAddressHistory` entity'si yok; yalnız mevcut adresler + değişiklik tarihi `User`'da. UI disclosure + forward-not (gelecekte schema'ya history tablosu eklenirse dolar).
+- **K2 — Reputation "detaylı breakdown":** AD16 yalnız tek skor (`reputationScore`) verir; §8.9.1 "detaylı breakdown" tek skor olarak gösterilir (breakdown DTO'da yok).
+- **K3 — FE permission guard yok:** Backend `VIEW_USERS` policy ile korunur (T99 K5 / T103 K5 / T104 K1 emsali).
+- **K4 — DELETED hesap durumu:** Soft-delete query filter anonimleştirilmiş kullanıcıları zaten dışlar; `DELETED` badge forward-compat placeholder (AD16 normalde ACTIVE/SUSPENDED/DEACTIVATED döndürür).
+- **K5 — `/admin/users` (index) stub:** T105 yalnız detay ekranı; users-liste ekranı plan kapsamında değil.
+
+## Notlar
+- **Adım -1 (working tree):** Session başı temiz.
+- **Adım 0 (main CI startup):** Son 3 main run `success` (`27152338399`/`27152338402` T104 #159 + `27101235527` T103 #158).
+- **Dış varsayım (Adım 4 — KIRIK):** Plan AD16'nın downstream task'larca (T54/T58/T63) doldurulduğunu varsayıyordu; gerçekte `GetDetailAsync` T39 placeholder olarak kaldı (Stats kısmi, Flag/Dispute/Counterparty `[]`, Reputation null). Proje sahibine sunuldu → "Tam wire-up" onaylandı (PLAN_CORRECTION niteliğinde, ayrı task'a bölünmedi).
+- **Tasarım kararları (AskUserQuestion, 2026-06-08):** (1) §8.9.1 badge boşluğu → C full-stack; (2) T105 sınırı → 1) Tam wire-up (cüzdan geçmişi hariç hepsi bağlandı).
+- **Mimari:** `AdminUserActivityProvider` composition-root'ta (Skinora.Admin → Transactions/Fraud/Disputes referans edemez); `IReputationScoreCalculator` Skinora.Users'tan doğrudan inject (Skinora.Admin referans ediyor).

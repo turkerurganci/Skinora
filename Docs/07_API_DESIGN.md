@@ -2033,7 +2033,13 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     "accountStatus": "ACTIVE",
     "accountAge": "6 ay",
     "createdAt": "2025-09-16T08:00:00Z",
-    "reputationScore": 4.8
+    "reputationScore": 4.8,
+    "isSuspended": false,
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "suspensionExpiresAt": null,
+    "activeTransactionCount": 1,
+    "hasTransactionOnHold": false
   },
   "stats": {
     "totalTransactions": 30,
@@ -2059,7 +2065,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 }
 ```
 
-`accountStatus`: `ACTIVE`, `DEACTIVATED`, `DELETED`. İşlem geçmişi bu response'a dahil değil — AD16b.
+`accountStatus`: `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `DELETED`. `flagHistory[].transactionId` ACCOUNT_LEVEL flag'lerde `null` (06 §3.12). `stats.totalVolume` tamamlanan işlemlerin toplamı (invariant 2-ondalık string); tamamlanan işlem yoksa `null`. `frequentCounterparties` en sık işlem yapılan en fazla 10 karşı taraf (wash-trading sinyali, 04 §8.9.7). `profile.activeTransactionCount` / `hasTransactionOnHold` → 04 §8.9.1 koşullu durum badge'leri (terminal-olmayan işlem sayısı + EMERGENCY_HOLD; AD1/AD19d "aktif" tanımıyla birebir). İşlem geçmişi bu response'a dahil değil — AD16b.
 
 ### 9.17 AD16b — `GET /admin/users/:steamId/transactions`
 

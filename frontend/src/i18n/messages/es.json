@@ -1464,5 +1464,110 @@
         "message": "No pudimos cargar las notificaciones. Inténtalo de nuevo."
       }
     }
+  },
+  "adminUserDetail": {
+    "loadError": "No se pudo cargar el detalle del usuario.",
+    "profile": {
+      "status": {
+        "ACTIVE": "Activo",
+        "SUSPENDED": "Suspendido",
+        "DEACTIVATED": "Desactivado",
+        "DELETED": "Eliminado"
+      },
+      "badge": {
+        "activeTransactions": "Transacción activa",
+        "onHold": "Transacción activa en espera"
+      },
+      "accountAge": "Antigüedad de la cuenta",
+      "joinedAt": "Registrado",
+      "reputation": "Reputación",
+      "reputationNew": "Usuario nuevo",
+      "suspendedUntil": "Suspendido hasta {date}",
+      "suspendedPermanent": "Suspendido permanentemente"
+    },
+    "stats": {
+      "heading": "Estadísticas",
+      "total": "Transacciones totales",
+      "completed": "Completadas",
+      "cancelled": "Canceladas",
+      "flagged": "Marcadas",
+      "successRate": "Tasa de éxito",
+      "volume": "Volumen total",
+      "lastTransaction": "Última transacción",
+      "none": "—",
+      "volumeValue": "{value} USD"
+    },
+    "wallet": {
+      "heading": "Historial de direcciones de billetera",
+      "columns": {
+        "type": "Tipo",
+        "address": "Dirección",
+        "setAt": "Fecha"
+      },
+      "type": {
+        "seller": "Pago (vendedor)",
+        "buyer": "Reembolso (comprador)"
+      },
+      "current": "Actual",
+      "empty": "No hay direcciones de billetera registradas.",
+      "historyNote": "Solo se muestran las direcciones actuales; el historial de direcciones anteriores aún no se registra."
+    },
+    "transactions": {
+      "heading": "Historial de transacciones",
+      "viewAll": "Ver todo",
+      "empty": "Este usuario no tiene transacciones."
+    },
+    "flags": {
+      "heading": "Historial de marcas",
+      "columns": {
+        "type": "Tipo",
+        "transaction": "Transacción",
+        "status": "Resultado",
+        "date": "Fecha"
+      },
+      "type": {
+        "PRICE_DEVIATION": "Desviación de precio",
+        "HIGH_VOLUME": "Volumen alto",
+        "ABNORMAL_BEHAVIOR": "Comportamiento anómalo",
+        "MULTI_ACCOUNT": "Multicuenta",
+        "SANCTIONS_MATCH": "Coincidencia de sanciones"
+      },
+      "status": {
+        "PENDING": "Pendiente",
+        "APPROVED": "Aprobada",
+        "REJECTED": "Rechazada"
+      },
+      "accountLevel": "Nivel de cuenta",
+      "empty": "Ninguna marca involucra a este usuario."
+    },
+    "disputes": {
+      "heading": "Historial de disputas",
+      "columns": {
+        "type": "Tipo",
+        "transaction": "Transacción",
+        "status": "Resultado",
+        "date": "Fecha"
+      },
+      "type": {
+        "PAYMENT": "Pago",
+        "DELIVERY": "Entrega",
+        "WRONG_ITEM": "Artículo incorrecto"
+      },
+      "status": {
+        "OPEN": "Abierta",
+        "ESCALATED": "Escalada",
+        "CLOSED": "Cerrada"
+      },
+      "empty": "Este usuario no tiene disputas."
+    },
+    "counterparties": {
+      "heading": "Contrapartes frecuentes",
+      "columns": {
+        "user": "Usuario",
+        "count": "Transacciones",
+        "lastTransaction": "Última transacción"
+      },
+      "empty": "Aún no hay contrapartes."
+    }
   }
 }

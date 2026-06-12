@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Skinora.Admin.Application.Users;
 using Skinora.API.Services;
 using Skinora.API.Services.HotWallet;
 using Skinora.Fraud.Application.Account;
@@ -118,6 +119,12 @@ public static class TransactionsModule
         // Skinora.Disputes and Skinora.Fraud (modules Skinora.Transactions
         // cannot reference without a project cycle).
         services.AddScoped<IAdminTransactionQueryService, AdminTransactionQueryService>();
+
+        // T105 — AD16 user-detail cross-module activity aggregation (07 §9.16,
+        // 04 §8.9). Same composition-root rationale as the read service above:
+        // fans out into Transactions / Fraud / Disputes, which Skinora.Admin
+        // cannot reference without a project cycle.
+        services.AddScoped<IAdminUserActivityProvider, AdminUserActivityProvider>();
 
         // T60 — seller payout issue (07 §7.11, 02 §10.3, 06 §3.8a, 03 §2.4a
         // Senaryo A). Stub IPayoutVerifier is forward-deferred until the Tron
