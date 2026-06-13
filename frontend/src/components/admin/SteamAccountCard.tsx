@@ -69,8 +69,8 @@ export interface SteamAccountCardProps {
  * item count, daily trade-offer usage (x / 200 ToS limit) and last health
  * check (relative). RESTRICTED / BANNED cards are highlighted and carry an
  * inline warning; if the bot holds escrowed items, the recovery/manual-
- * intervention note (02 §15, 03 §11.2a) is shown. The escrowed-item *list*
- * itself is deferred (AD10 exposes only a count — T103 Option A).
+ * intervention note (02 §15, 03 §11.2a) is shown and the items themselves are
+ * listed in the per-bot recovery queue below the grid (T103b-2 — AD25).
  */
 export function SteamAccountCard({ account, className }: SteamAccountCardProps) {
   const t = useTranslations("adminSteamAccounts");
@@ -163,7 +163,7 @@ export function SteamAccountCard({ account, className }: SteamAccountCardProps) 
                 {t("restricted.escrowWarning", { count: account.escrowedItemCount })}
               </p>
               <p className="mt-1 text-[11px] text-gray-500">
-                {t("restricted.escrowItemsDeferred")}
+                {t("restricted.escrowItemsInQueue")}
               </p>
             </>
           )}

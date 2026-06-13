@@ -5,7 +5,9 @@ using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Transactions.Domain.Entities;
@@ -40,6 +42,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     private readonly AppDbContext _db;
     private readonly IAuditLogger _auditLogger;
     private readonly INotificationRealtimePublisher _realtime;
+    private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<SteamWebhookHandler> _logger;
 
@@ -47,12 +50,14 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         AppDbContext db,
         IAuditLogger auditLogger,
         INotificationRealtimePublisher realtime,
+        IOutboxService outbox,
         TimeProvider clock,
         ILogger<SteamWebhookHandler> logger)
     {
         _db = db;
         _auditLogger = auditLogger;
         _realtime = realtime;
+        _outbox = outbox;
         _clock = clock;
         _logger = logger;
     }
@@ -114,6 +119,11 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
 
         bot.Status = targetStatus;
         bot.LastHealthCheckAt = nowUtc;
+        // T103b-2 — surface the sidecar reason for non-ACTIVE statuses (07 §9.10
+        // restrictionReason); cleared if a bot ever returns to ACTIVE.
+        bot.RestrictionReason = targetStatus == PlatformSteamBotStatus.ACTIVE
+            ? null
+            : Truncate(data.Reason, 200);
 
         await _auditLogger.LogAsync(new AuditLogEntry(
             UserId: null,
@@ -125,6 +135,26 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
             OldValue: previousStatus.ToString(),
             NewValue: $"{targetStatus};reason={data.Reason};event={envelope.Event}",
             IpAddress: null), cancellationToken);
+
+        // T103b-2 — a durable restriction (RESTRICTED/BANNED) puts every item
+        // still in this bot's custody at risk. Raise BotRestrictedEvent so the
+        // recovery consumer materialises the queue + auto-holds those
+        // transactions. Published in the same unit of work as the status flip
+        // (outbox row commits atomically with the SaveChanges below). OFFLINE is
+        // treated as transient (see BotRestrictedEvent remarks) and excluded.
+        if (targetStatus is PlatformSteamBotStatus.RESTRICTED or PlatformSteamBotStatus.BANNED)
+        {
+            await _outbox.PublishAsync(
+                new BotRestrictedEvent(
+                    EventId: Guid.NewGuid(),
+                    PlatformSteamBotId: bot.Id,
+                    SteamId: bot.SteamId,
+                    DisplayName: bot.DisplayName,
+                    Status: targetStatus.ToString(),
+                    Reason: data.Reason,
+                    OccurredAt: nowUtc),
+                cancellationToken);
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
 

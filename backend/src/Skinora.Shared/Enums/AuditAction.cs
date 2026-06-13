@@ -38,6 +38,20 @@ public enum AuditAction
     // the SECURITY_EVENT queue surfaces it alongside wallet-address events.
     BOT_STATUS_CHANGED,
 
+    // Bot recovery queue (T103b-2 — 02 §15, 03 §11.2a, 04 §8.7). Written
+    // when a stuck-escrow BotRecoveryItem is materialised after a bot is
+    // restricted/banned. EntityType = "BotRecoveryItem"; EntityId =
+    // BotRecoveryItem.Id; NewValue is a JSON envelope {botId, transactionId,
+    // statusAtRestriction, autoHeld}. ActorType = SYSTEM.
+    BOT_RECOVERY_ITEM_CREATED,
+
+    // Bot recovery queue (T103b-2 — 04 §8.7). Written when an admin updates a
+    // recovery item (note / responsible admin / status — Manual Recovery
+    // Başlat → IN_REVIEW, Çözüldü → RESOLVED) via PATCH AD26. EntityType =
+    // "BotRecoveryItem"; EntityId = BotRecoveryItem.Id; Old/NewValue capture
+    // the changed fields. ActorType = ADMIN.
+    BOT_RECOVERY_UPDATED,
+
     // Blockchain reconciliation (T76 — 05 §3.3). The daily reconciliation
     // job emits one row per (scope, token) mismatch — scope ∈ {DepositAddress,
     // HotWallet, ColdWallet}. EntityType encodes the scope; EntityId carries

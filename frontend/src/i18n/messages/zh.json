@@ -610,17 +610,24 @@
     "restricted": {
       "warning": "此账户受限。新交易将转移至其他账户。",
       "escrowWarning": "此账户托管了 {count} 件物品——这些交易无法自动继续，需要恢复/人工介入。",
-      "escrowItemsDeferred": "托管物品列表将在机器人健康流程（T69）接入 AD10 后显示。"
+      "escrowItemsInQueue": "这些物品列在下方的恢复队列中。"
     },
     "banned": {
       "warning": "此账户已封禁。需要紧急介入。"
     },
     "recovery": {
-      "title": "恢复队列",
-      "description": "与受限/已封禁账户托管物品相关的活跃交易。",
+      "titleFor": "恢复队列 — {bot}",
+      "description": "仍托管在此受限/已封禁机器人上的物品——每行是一笔无法自动继续的交易。",
       "ariaLabel": "恢复队列",
-      "empty": "当前没有处于恢复中的交易。",
-      "deferred": "恢复队列的行和操作（人工恢复、指派负责管理员、备注——MANAGE_STEAM_RECOVERY）将在机器人健康/故障转移流程（T69）接入 AD10 后启用。",
+      "empty": "此机器人没有待恢复的物品。",
+      "loading": "正在加载恢复队列…",
+      "loadError": "加载恢复队列失败。",
+      "onHold": "已冻结",
+      "statusValue": {
+        "PENDING": "待处理",
+        "IN_REVIEW": "审查中",
+        "RESOLVED": "已解决"
+      },
       "columns": {
         "transactionId": "交易 ID",
         "item": "物品",
@@ -628,7 +635,16 @@
         "state": "交易状态",
         "recoveryStatus": "恢复状态",
         "responsibleAdmin": "负责管理员",
-        "note": "管理员备注"
+        "note": "管理员备注",
+        "actions": "操作"
+      },
+      "actions": {
+        "manualRecovery": "开始人工恢复",
+        "resolve": "标记为已解决",
+        "done": "已解决",
+        "editNote": "编辑",
+        "save": "保存",
+        "cancel": "取消"
       }
     }
   },

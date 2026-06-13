@@ -5,6 +5,7 @@ using Skinora.Steam.Application.Admin;
 using Skinora.Steam.Application.BotSelection;
 using Skinora.Steam.Application.Dispatch;
 using Skinora.Steam.Application.Inventory;
+using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Transactions.Application.Steam;
 
@@ -23,6 +24,9 @@ public static class SteamModule
         this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IAdminSteamBotQueryService, AdminSteamBotQueryService>();
+
+        // T103b-2 — S18 recovery queue read + triage service (AD25/AD26).
+        services.AddScoped<IAdminBotRecoveryService, AdminBotRecoveryService>();
 
         // T67 — sidecar inventory wiring ----------------------------------
         services.Configure<SteamSidecarOptions>(
@@ -89,6 +93,13 @@ public static class SteamModule
         services.AddScoped<MediatR.INotificationHandler<
             Skinora.Shared.Events.ItemRefundToSellerRequestedEvent>>(sp =>
             sp.GetRequiredService<ItemRefundDispatchConsumer>());
+
+        // T103b-2 — bot restriction → recovery queue materialisation + auto-hold.
+        // Consumes the outbox BotRestrictedEvent published by the webhook handler.
+        services.AddScoped<BotRestrictionRecoveryConsumer>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.BotRestrictedEvent>>(sp =>
+            sp.GetRequiredService<BotRestrictionRecoveryConsumer>());
 
         return services;
     }

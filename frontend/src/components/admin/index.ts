@@ -11,7 +11,10 @@ export { SteamAccountCard } from "./SteamAccountCard";
 export type { SteamAccountCardProps } from "./SteamAccountCard";
 
 export { RecoveryQueuePanel } from "./RecoveryQueuePanel";
-export type { RecoveryQueuePanelProps, RecoveryQueueRow } from "./RecoveryQueuePanel";
+export type { RecoveryQueuePanelProps } from "./RecoveryQueuePanel";
+
+export { BotRecoveryQueue } from "./BotRecoveryQueue";
+export type { BotRecoveryQueueProps } from "./BotRecoveryQueue";
 
 export { RecentFlagsTable } from "./RecentFlagsTable";
 export type { RecentFlagsTableProps } from "./RecentFlagsTable";

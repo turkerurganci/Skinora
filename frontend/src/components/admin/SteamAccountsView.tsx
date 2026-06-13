@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
 import type { AdminSteamAccountsResponse } from "@/lib/api/admin";
 import { SteamAccountCard } from "./SteamAccountCard";
-import { RecoveryQueuePanel, type RecoveryQueueRow } from "./RecoveryQueuePanel";
+import { BotRecoveryQueue } from "./BotRecoveryQueue";
 
 export interface SteamAccountsViewProps {
   data: AdminSteamAccountsResponse;
@@ -12,14 +12,9 @@ export interface SteamAccountsViewProps {
 }
 
 /**
- * T103 Option A: no endpoint populates recovery rows yet, so a stable empty
- * reference is shared across renders (avoids a new array identity each render).
- */
-const EMPTY_RECOVERY_ROWS: readonly RecoveryQueueRow[] = [];
-
-/**
  * S18 — Platform Steam Hesapları (04 §8.7). Composes the warning banner +
- * account-card grid + recovery-queue panel from a single AD10 response.
+ * account-card grid + a recovery-queue panel per restricted/banned bot from a
+ * single AD10 response (the per-bot queues fetch AD25 lazily).
  *
  * The banner is DERIVED CLIENT-SIDE from the degraded accounts rather than
  * rendering AD10's `warningMessage`: that server field is Turkish-only
@@ -28,9 +23,8 @@ const EMPTY_RECOVERY_ROWS: readonly RecoveryQueueRow[] = [];
  * S12 dashboard, which also derives its banner client-side (T99 K6).
  *
  * The "yeni işlemler diğer hesaplara yönlendirildi" line is shown only when the
- * failover pipeline actually reports diversion; that field is deferred to T69
- * (always "NONE" today), so the line stays hidden but is forward-correct rather
- * than fabricated.
+ * failover pipeline reports diversion (RESTRICTED_NEW_TXN_DIVERTED), which is now
+ * populated live by the T103b-2 recovery domain.
  */
 export function SteamAccountsView({ data, className }: SteamAccountsViewProps) {
   const t = useTranslations("adminSteamAccounts");
@@ -57,7 +51,9 @@ export function SteamAccountsView({ data, className }: SteamAccountsViewProps) {
         ))}
       </ul>
 
-      <RecoveryQueuePanel rows={EMPTY_RECOVERY_ROWS} />
+      {degraded.map((account) => (
+        <BotRecoveryQueue key={account.id} botId={account.id} botName={account.name} />
+      ))}
     </div>
   );
 }

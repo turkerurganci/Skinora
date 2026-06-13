@@ -68,11 +68,10 @@ export function getAdminDashboard(): Promise<AdminDashboardResponse> {
  * (`Skinora.Steam/Application/Admin/AdminSteamBotDtos.cs`, T63). The per-account
  * shape is the shared {@link AdminSteamAccount} already consumed by the S12
  * dashboard. `warningMessage` is a server-built Turkish summary, non-null when
- * at least one bot is not ACTIVE. NOTE (T103 deferred, owner-approved Option A):
- * `recoveryTransactionCount` / `failoverStatus` / `restrictionReason` are
- * forward-deferred to the T69 bot-health/failover pipeline — the backend still
- * reports `0` / `"NONE"` / `null` for every row, so the S18 recovery queue
- * renders structurally but stays empty until that pipeline feeds AD10.
+ * at least one bot is not ACTIVE. `recoveryTransactionCount` / `failoverStatus`
+ * / `restrictionReason` are populated live by the T103b-2 recovery domain
+ * (`recoveryTransactionCount` = open recovery items; `failoverStatus` ∈ NONE /
+ * RESTRICTED_NEW_TXN_DIVERTED / ACTIVE_TXN_IN_RECOVERY).
  * ────────────────────────────────────────────────────────────────────────── */
 
 /** AD10 envelope (07 §9.10). */
@@ -83,6 +82,64 @@ export interface AdminSteamAccountsResponse {
 
 export function getAdminSteamAccounts(): Promise<AdminSteamAccountsResponse> {
   return apiClient<AdminSteamAccountsResponse>("/admin/steam-accounts");
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD25 / AD26 — Bot recovery queue (S18, T103b-2; 04 §8.7, 02 §15, 03 §11.2a).
+ * AD25 lists the stuck-escrow recovery items for one bot; AD26 applies an admin
+ * triage update (status / responsible admin / note — MANAGE_STEAM_RECOVERY).
+ * Mirrors `BotRecoveryQueueResponse` / `BotRecoveryQueueItemDto` /
+ * `UpdateRecoveryItemRequest` in `Skinora.Steam/Application/Admin`.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type BotRecoveryStatus = "PENDING" | "IN_REVIEW" | "RESOLVED";
+
+export interface BotRecoveryQueueItem {
+  id: string;
+  transactionId: string;
+  itemName: string;
+  itemIconUrl: string | null;
+  sellerSteamId: string;
+  sellerDisplayName: string | null;
+  buyerSteamId: string | null;
+  buyerDisplayName: string | null;
+  currentStatus: TransactionStatus;
+  statusAtRestriction: TransactionStatus;
+  isOnHold: boolean;
+  recoveryStatus: BotRecoveryStatus;
+  responsibleAdminId: string | null;
+  responsibleAdminName: string | null;
+  adminNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface BotRecoveryQueueResponse {
+  botId: string;
+  botStatus: AdminSteamAccountStatus;
+  items: BotRecoveryQueueItem[];
+}
+
+export function getBotRecoveryQueue(botId: string): Promise<BotRecoveryQueueResponse> {
+  return apiClient<BotRecoveryQueueResponse>(
+    `/admin/steam-accounts/${encodeURIComponent(botId)}/recovery-queue`,
+  );
+}
+
+export interface UpdateBotRecoveryRequest {
+  recoveryStatus?: BotRecoveryStatus;
+  responsibleAdminId?: string;
+  adminNote?: string;
+}
+
+export function updateBotRecoveryItem(
+  id: string,
+  body: UpdateBotRecoveryRequest,
+): Promise<BotRecoveryQueueItem> {
+  return apiClient<BotRecoveryQueueItem>(
+    `/admin/steam-accounts/recovery/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

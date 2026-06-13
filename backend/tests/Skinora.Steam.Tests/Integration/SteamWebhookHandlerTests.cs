@@ -4,7 +4,10 @@ using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Steam.Application.Webhooks;
@@ -86,16 +89,30 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
     }
 
     private RecordingNotificationRealtimePublisher _recorder = null!;
+    private RecordingOutbox _outbox = null!;
 
     private SteamWebhookHandler CreateSut()
     {
         _recorder = new RecordingNotificationRealtimePublisher();
+        _outbox = new RecordingOutbox();
         return new SteamWebhookHandler(
             Context,
             new AuditLogger(Context, TimeProvider.System),
             _recorder,
+            _outbox,
             TimeProvider.System,
             NullLogger<SteamWebhookHandler>.Instance);
+    }
+
+    private sealed class RecordingOutbox : IOutboxService
+    {
+        public List<IDomainEvent> Events { get; } = [];
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            Events.Add(domainEvent);
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]
@@ -627,6 +644,8 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
         Assert.NotNull(refreshed.LastHealthCheckAt);
+        // T103b-2 — the sidecar reason is surfaced for the admin S18 card.
+        Assert.Equal("restricted", refreshed.RestrictionReason);
 
         var audit = await verify.Set<AuditLog>()
             .SingleAsync(a => a.EntityType == nameof(PlatformSteamBot) && a.EntityId == _bot.Id.ToString());
@@ -643,6 +662,12 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), payload.PreviousStatus);
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), payload.NewStatus);
         Assert.Equal("restricted", payload.Reason);
+
+        // T103b-2 — a restriction raises BotRestrictedEvent for the recovery consumer.
+        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        Assert.Equal(_bot.Id, restricted.PlatformSteamBotId);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), restricted.Status);
+        Assert.Equal("restricted", restricted.Reason);
     }
 
     [Fact]
@@ -663,6 +688,10 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var payload = Assert.IsType<NotificationRealtimePayloads.AdminBotStatusChanged>(_recorder.Calls.Single().Payload);
         Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), payload.NewStatus);
         Assert.Equal("banned", payload.Reason);
+
+        // T103b-2 — a ban also raises BotRestrictedEvent.
+        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), restricted.Status);
     }
 
     [Fact]
@@ -679,6 +708,9 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         await using var verify = CreateContext();
         var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
         Assert.Equal(PlatformSteamBotStatus.OFFLINE, refreshed.Status);
+        // T103b-2 — OFFLINE is treated as transient: no recovery event is raised
+        // (new traffic is already diverted by the ACTIVE-only selector).
+        Assert.Empty(_outbox.Events);
     }
 
     [Fact]
@@ -705,10 +737,11 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
         Assert.NotNull(refreshed.LastHealthCheckAt); // probe observation kept
 
-        // No new audit row, no SignalR push.
+        // No new audit row, no SignalR push, no recovery event (idempotent ack).
         Assert.False(await verify.Set<AuditLog>()
             .AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
         Assert.Empty(_recorder.Calls);
+        Assert.Empty(_outbox.Events);
     }
 
     [Fact]

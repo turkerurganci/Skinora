@@ -15,8 +15,10 @@ public sealed class AdminSteamBotQueryService : IAdminSteamBotQueryService
     /// </summary>
     public const int SteamDailyTradeOfferLimit = 200;
 
-    /// <summary>Forward-deferred to T69 (Steam Sidecar failover).</summary>
+    // 07 §9.10 failoverStatus vocabulary (T103b-2).
     private const string FailoverStatusNone = "NONE";
+    private const string FailoverStatusDiverted = "RESTRICTED_NEW_TXN_DIVERTED";
+    private const string FailoverStatusInRecovery = "ACTIVE_TXN_IN_RECOVERY";
 
     private readonly AppDbContext _db;
 
@@ -42,21 +44,36 @@ public sealed class AdminSteamBotQueryService : IAdminSteamBotQueryService
                 b.ActiveEscrowCount,
                 b.DailyTradeOfferCount,
                 b.LastHealthCheckAt,
+                b.RestrictionReason,
             })
             .ToListAsync(cancellationToken);
 
-        var accounts = rows.Select(b => new AdminSteamAccountDto(
-                Id: b.Id,
-                Name: b.DisplayName,
-                SteamId: b.SteamId,
-                Status: b.Status,
-                EscrowedItemCount: b.ActiveEscrowCount,
-                DailyTradeOfferCount: b.DailyTradeOfferCount,
-                DailyTradeOfferLimit: SteamDailyTradeOfferLimit,
-                LastHealthCheck: b.LastHealthCheckAt,
-                RestrictionReason: null,
-                FailoverStatus: FailoverStatusNone,
-                RecoveryTransactionCount: 0))
+        // Live recovery counts (T103b-2): open (non-RESOLVED) recovery items per
+        // bot. Drives RecoveryTransactionCount + the FailoverStatus derivation.
+        var recoveryByBot = (await _db.Set<BotRecoveryItem>()
+                .AsNoTracking()
+                .Where(r => r.RecoveryStatus != BotRecoveryStatus.RESOLVED)
+                .GroupBy(r => r.PlatformSteamBotId)
+                .Select(g => new { BotId = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken))
+            .ToDictionary(x => x.BotId, x => x.Count);
+
+        var accounts = rows.Select(b =>
+            {
+                var recoveryCount = recoveryByBot.GetValueOrDefault(b.Id, 0);
+                return new AdminSteamAccountDto(
+                    Id: b.Id,
+                    Name: b.DisplayName,
+                    SteamId: b.SteamId,
+                    Status: b.Status,
+                    EscrowedItemCount: b.ActiveEscrowCount,
+                    DailyTradeOfferCount: b.DailyTradeOfferCount,
+                    DailyTradeOfferLimit: SteamDailyTradeOfferLimit,
+                    LastHealthCheck: b.LastHealthCheckAt,
+                    RestrictionReason: b.RestrictionReason,
+                    FailoverStatus: DeriveFailoverStatus(b.Status, recoveryCount),
+                    RecoveryTransactionCount: recoveryCount);
+            })
             .ToList();
 
         var warning = BuildWarning(accounts);
@@ -64,6 +81,20 @@ public sealed class AdminSteamBotQueryService : IAdminSteamBotQueryService
         return new AdminSteamAccountsResponse(
             Accounts: accounts,
             WarningMessage: warning);
+    }
+
+    /// <summary>
+    /// 07 §9.10 — ACTIVE bots report NONE; a degraded bot with no open recovery
+    /// items has only had its new traffic diverted (RESTRICTED_NEW_TXN_DIVERTED),
+    /// while one still holding stuck escrows is ACTIVE_TXN_IN_RECOVERY.
+    /// </summary>
+    private static string DeriveFailoverStatus(PlatformSteamBotStatus status, int openRecoveryCount)
+    {
+        if (status == PlatformSteamBotStatus.ACTIVE)
+        {
+            return FailoverStatusNone;
+        }
+        return openRecoveryCount > 0 ? FailoverStatusInRecovery : FailoverStatusDiverted;
     }
 
     /// <summary>
