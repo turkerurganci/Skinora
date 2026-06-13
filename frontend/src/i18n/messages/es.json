@@ -1482,6 +1482,10 @@
       "joinedAt": "Registrado",
       "reputation": "Reputación",
       "reputationNew": "Usuario nuevo",
+      "completedCount": "Transacciones completadas",
+      "successRate": "Tasa de éxito",
+      "cancelRate": "Tasa de cancelación",
+      "rateNone": "—",
       "suspendedUntil": "Suspendido hasta {date}",
       "suspendedPermanent": "Suspendido permanentemente"
     },
@@ -1510,7 +1514,7 @@
       },
       "current": "Actual",
       "empty": "No hay direcciones de billetera registradas.",
-      "historyNote": "Solo se muestran las direcciones actuales; el historial de direcciones anteriores aún no se registra."
+      "historyNote": "Las direcciones actuales provienen del registro del usuario; las direcciones anteriores se registran en cada cambio a partir de ahora."
     },
     "transactions": {
       "heading": "Historial de transacciones",

@@ -1482,6 +1482,10 @@
       "joinedAt": "Katılım",
       "reputation": "İtibar",
       "reputationNew": "Yeni kullanıcı",
+      "completedCount": "Tamamlanan işlem",
+      "successRate": "Başarı oranı",
+      "cancelRate": "İptal oranı",
+      "rateNone": "—",
       "suspendedUntil": "Askı bitişi: {date}",
       "suspendedPermanent": "Kalıcı olarak askıya alındı"
     },
@@ -1510,7 +1514,7 @@
       },
       "current": "Mevcut",
       "empty": "Kayıtlı cüzdan adresi yok.",
-      "historyNote": "Yalnızca mevcut adresler gösterilir; önceki adres geçmişi henüz kaydedilmiyor."
+      "historyNote": "Mevcut adresler kullanıcı kaydından gelir; önceki adresler bu noktadan itibaren her değişiklikte kaydedilir."
     },
     "transactions": {
       "heading": "İşlem geçmişi",

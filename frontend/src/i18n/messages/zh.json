@@ -1482,6 +1482,10 @@
       "joinedAt": "加入时间",
       "reputation": "信誉",
       "reputationNew": "新用户",
+      "completedCount": "已完成交易",
+      "successRate": "成功率",
+      "cancelRate": "取消率",
+      "rateNone": "—",
       "suspendedUntil": "暂停至 {date}",
       "suspendedPermanent": "永久暂停"
     },
@@ -1510,7 +1514,7 @@
       },
       "current": "当前",
       "empty": "没有记录的钱包地址。",
-      "historyNote": "仅显示当前地址；以前的地址历史尚未记录。"
+      "historyNote": "当前地址来自用户记录；从此以后每次更改都会记录以前的地址。"
     },
     "transactions": {
       "heading": "交易历史",

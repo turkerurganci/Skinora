@@ -244,7 +244,9 @@ export function UserDetailView({ steamId, detail }: UserDetailViewProps) {
         <ResponsiveTable
           data={detail.walletHistory}
           columns={walletColumns}
-          getRowKey={(r) => `${r.type}-${r.address}`}
+          // Index-suffixed: an address can recur as both current and a previous
+          // entry (e.g. A→B→A), so type+address alone is not unique.
+          getRowKey={(r) => `${r.type}-${r.address}-${detail.walletHistory.indexOf(r)}`}
           ariaLabel={t("wallet.heading")}
           emptyMessage={t("wallet.empty")}
         />
