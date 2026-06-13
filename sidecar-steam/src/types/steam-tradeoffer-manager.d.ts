@@ -22,6 +22,16 @@ declare module 'steam-tradeoffer-manager' {
     cause?: string;
   }
 
+  /**
+   * Post-exchange item descriptor returned by {@link TradeOffer.getExchangeDetails}.
+   * `new_assetid` is the id the item now carries in the recipient's inventory
+   * after the trade settled (the original `assetid` is stale once moved).
+   */
+  export interface ExchangeDetailsItem extends ItemDescriptor {
+    new_assetid?: string;
+    new_contextid?: string;
+  }
+
   export class TradeOffer {
     id?: string;
     state: number;
@@ -35,6 +45,22 @@ declare module 'steam-tradeoffer-manager' {
     setMessage(message: string): void;
     send(callback: (err: TradeOfferError | null, status: 'pending' | 'sent') => void): void;
     cancel(callback: (err: TradeOfferError | null) => void): void;
+
+    /**
+     * T106a — resolve the post-settlement asset ids for an Accepted offer
+     * (08 §2.4). `receivedItems` are the items the bot received; `sentItems`
+     * are the items the bot sent out (now in the counterparty's inventory).
+     * Each carries `new_assetid`.
+     */
+    getExchangeDetails(
+      callback: (
+        err: Error | null,
+        status: number,
+        tradeInitTime: Date,
+        receivedItems: ExchangeDetailsItem[],
+        sentItems: ExchangeDetailsItem[],
+      ) => void,
+    ): void;
   }
 
   /** ETradeOfferState — 08 §2.4 status table. */

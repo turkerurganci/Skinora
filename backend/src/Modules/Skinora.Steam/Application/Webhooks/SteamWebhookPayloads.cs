@@ -112,4 +112,19 @@ public sealed class TradeOfferEventData
 
     [JsonPropertyName("newState")]
     public int? NewState { get; set; }
+
+    /// <summary>
+    /// T106a — <c>trade_offer.accepted</c> only: new Steam asset id of the item
+    /// the BOT received (escrow leg). Populates <c>Transaction.EscrowBotAssetId</c>.
+    /// </summary>
+    [JsonPropertyName("receivedAssetId")]
+    public string? ReceivedAssetId { get; set; }
+
+    /// <summary>
+    /// T106a — <c>trade_offer.accepted</c> only: new Steam asset id of the item
+    /// the COUNTERPARTY received (delivery / refund legs — bot sent the item).
+    /// Populates <c>Transaction.DeliveredBuyerAssetId</c> on the delivery leg.
+    /// </summary>
+    [JsonPropertyName("deliveredAssetId")]
+    public string? DeliveredAssetId { get; set; }
 }

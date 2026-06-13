@@ -210,7 +210,7 @@ public sealed class SteamWebhookEndpointTests : IClassFixture<SteamWebhookEndpoi
         data = new
         {
             transactionId,
-            direction = "escrow",
+            direction = "SELLER_TO_BOT",
             botAccountName = "EscrowBot-99",
             offerId = "1234",
             status = "sent",

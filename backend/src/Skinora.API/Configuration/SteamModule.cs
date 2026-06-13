@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Skinora.Steam.Application.Admin;
 using Skinora.Steam.Application.BotSelection;
+using Skinora.Steam.Application.Dispatch;
 using Skinora.Steam.Application.Inventory;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Transactions.Application.Steam;
@@ -54,10 +56,39 @@ public static class SteamModule
         // T68 — inbound webhook handler.
         services.AddScoped<ISteamWebhookHandler, SteamWebhookHandler>();
 
-        // T69 — capacity-based bot selector. Caller (TransactionStateMachine
-        // EscrowItem trigger forwarding to the sidecar trade-offer endpoint)
-        // is forward-deferred — see Docs/TASK_REPORTS/T69_REPORT.md K-list.
+        // T69 — capacity-based bot selector. Consumed by the T106a dispatch job.
         services.AddScoped<IBotSelectionService, SqlBotSelectionService>();
+
+        // T106a — escrow trade-offer dispatch engine (formalises T69-K1).
+        // The dispatch client shares SteamSidecarOptions with the inventory
+        // client (same container, same X-Internal-Key) but is its own typed
+        // HttpClient so the trade endpoint carries a longer timeout — the
+        // sidecar may run a 5/15/45s internal retry before answering (08 §2.7).
+        services.AddHttpClient<HttpTradeOfferDispatchClient>(
+            HttpTradeOfferDispatchClient.HttpClientName, (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<SteamSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                var seconds = options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds * 3;
+                client.Timeout = TimeSpan.FromSeconds(seconds);
+            });
+        services.AddScoped<ITradeOfferDispatchClient>(sp =>
+            sp.GetRequiredService<HttpTradeOfferDispatchClient>());
+
+        // Per-minute dispatch job (escrow + delivery legs) + its registrar.
+        services.AddScoped<TradeOfferDispatchJob>();
+        services.AddHostedService<TradeOfferDispatchJobRegistrar>();
+
+        // Refund leg — MediatR notification handler consumes the outbox
+        // ItemRefundToSellerRequestedEvent (timeout / user-cancel / admin-cancel
+        // publishers) and dispatches RETURN_TO_SELLER.
+        services.AddScoped<ItemRefundDispatchConsumer>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.ItemRefundToSellerRequestedEvent>>(sp =>
+            sp.GetRequiredService<ItemRefundDispatchConsumer>());
 
         return services;
     }

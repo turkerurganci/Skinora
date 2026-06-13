@@ -152,7 +152,7 @@ function parseSendRequest(
     return { ok: false, error: 'Request body must be a JSON object' };
   }
   const obj = body as Record<string, unknown>;
-  const { transactionId, direction, partnerSteamId, items, message } = obj;
+  const { transactionId, direction, partnerSteamId, items, message, botAccountName } = obj;
   if (typeof transactionId !== 'string' || !transactionId)
     return { ok: false, error: 'transactionId is required' };
   if (typeof direction !== 'string' || !TRADE_DIRECTIONS.has(direction as TradeDirection))
@@ -162,6 +162,8 @@ function parseSendRequest(
     };
   if (typeof partnerSteamId !== 'string' || !partnerSteamId)
     return { ok: false, error: 'partnerSteamId is required' };
+  if (botAccountName !== undefined && typeof botAccountName !== 'string')
+    return { ok: false, error: 'botAccountName must be a string when present' };
   if (!Array.isArray(items) || items.length === 0)
     return { ok: false, error: 'items must be a non-empty array' };
   for (const [i, item] of items.entries()) {
@@ -186,6 +188,7 @@ function parseSendRequest(
       partnerSteamId,
       items: items as SendTradeOfferRequest['items'],
       message: message as string | undefined,
+      botAccountName: botAccountName as string | undefined,
     },
   };
 }

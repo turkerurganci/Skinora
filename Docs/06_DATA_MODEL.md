@@ -811,7 +811,9 @@ Platform Steam bot hesapları ve durumları.
 | `CreatedAt` | datetime | NOT NULL | |
 | `UpdatedAt` | datetime | NOT NULL | |
 
-> **Bot seçimi:** Yeni trade offer gönderirken `ActiveEscrowCount` en düşük olan aktif bot seçilir (capacity-based, 05 §3.2).
+> **Bot seçimi:** Yeni trade offer gönderirken `ActiveEscrowCount` en düşük olan aktif bot seçilir (capacity-based, 05 §3.2). Eşitlik durumunda en eski `LastHealthCheckAt`, sonra `Id` (deterministik) — `SqlBotSelectionService`.
+>
+> **`ActiveEscrowCount` yaşam döngüsü (T106a):** Backend tek-yazardır (sidecar asla yazmaz; negatife düşmez). **+1** item bot'a emanet edildiğinde (`ITEM_ESCROWED` — `trade_offer.accepted` escrow yönü). **−1** item bot'tan ayrıldığında: alıcıya teslim (`ITEM_DELIVERED`) **veya** satıcıya iade (`RETURN_TO_SELLER` accepted). Dispatch anında (`TRADE_OFFER_SENT_TO_SELLER`) sayaç değişmez — yalnızca `EscrowBotId` atanır; sayaç gerçek tutuş anını yansıtır. **Delivery + refund bacakları aynı escrow botunu yeniden kullanır** (yalnız o bot item'ı tutar — `Transaction.EscrowBotId`).
 
 ---
 

@@ -20,9 +20,9 @@
 |---|---|---|---|
 | 🔴 | T58-AdminDisputeQueue | Escalate edilen dispute'lar çıkmaz sokak: `GET /admin/disputes` + review/resolve komutu yok | Admin dispute çözüm akışı |
 | 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` seed'siz → env/admin verilmeden prod startup fail-fast | **Production startup** |
-| 🟡 | T69-DispatchCaller | `SelectAsync` çağıransız, `EscrowBotId` atanmıyor, `ActiveEscrowCount` ölü sayaç | Canlı escrow→bot devri |
-| 🟡 | T69-BotRecoveryStateMachine | Recovery/failover domaini yok; AD10 satır verisi sabit null/NONE/0 | Admin bot triajı |
-| 🟡 | T103b | Steam backend tamamlama umbrella (Option C ertele) | T103 K1/K2/K3 |
+| ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
+| 🟡 | T69-BotRecoveryStateMachine | Recovery/failover domaini yok; AD10 satır verisi sabit null/NONE/0 → **T103b-2/-3** | Admin bot triajı |
+| 🟡 | T103b-2/-3 | Steam backend tamamlama: recovery/failover spec (discovery) + recovery queue domain + MANAGE_STEAM_RECOVERY + emanet item listesi (ön-koşul (a)=T106a ✓) | T103 K1/K2/K3 |
 | 🟡 | SWEEP-dispatcher | SWEEP satırı üreten consumer yok → hot-wallet mutabakatı tek-taraflı | Hot-wallet mutabakat doğruluğu |
 | 🟡 | T81-PriceConsumerWireup | `NullMarketPriceProvider` → PRICE_DEVIATION fraud kuralı inert | PRICE_DEVIATION kuralı |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
@@ -45,7 +45,7 @@
 
 | Önc. | ID | Açıklama | Tip | Hedef | Kaynak |
 |---|---|---|---|---|---|
-| 🟡 | T69-DispatchCaller | escrow→bot wiring: `SelectAsync` çağrısı + `EscrowBotId` persist + `ActiveEscrowCount` artırım; sidecar `selectBot()` hâlâ round-robin | backend-gap | T103b / sidecar pipeline | `SqlBotSelectionService` (çağıransız), 05 §3.2 |
+| ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + sidecar `selectBot(botAccountName)` hint'i onurlandırır (round-robin yalnız fallback) | done | — | T106a |
 | 🟡 | T69-BotRecoveryStateMachine | Recovery/failover domain modeli yok; AD10 `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` sabit null/NONE/0 | backend-gap | T103b | `AdminSteamBotQueryService.cs:57-59` |
 | ⚪ | T69-K4 | `AdminBotStatusChanged` `Clients.All` yayını; admin-only group scope daraltma | k-note | T-future | T69 K4 |
 | ⚪ | FE-RecoveryQueue-T69 | `RecoveryQueuePanel` 7 kolon render eder ama `EMPTY_RECOVERY_ROWS` alır; `MANAGE_STEAM_RECOVERY` aksiyonları yok | k-note | T103b | T103 K1/K4 |

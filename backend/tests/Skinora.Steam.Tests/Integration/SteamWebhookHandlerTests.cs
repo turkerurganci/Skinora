@@ -107,7 +107,7 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             new TradeOfferEventData
             {
                 TransactionId = _transaction.Id,
-                Direction = "escrow",
+                Direction = "SELLER_TO_BOT",
                 BotAccountName = BotAccount,
                 OfferId = "9001",
                 Status = "sent",
@@ -137,7 +137,7 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             new TradeOfferEventData
             {
                 TransactionId = _transaction.Id,
-                Direction = "escrow",
+                Direction = "SELLER_TO_BOT",
                 BotAccountName = BotAccount,
                 OfferId = "9002",
                 Status = "sent",
@@ -163,7 +163,7 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             new TradeOfferEventData
             {
                 TransactionId = Guid.NewGuid(),
-                Direction = "escrow",
+                Direction = "SELLER_TO_BOT",
                 BotAccountName = BotAccount,
                 OfferId = "9003",
                 Status = "sent",
@@ -408,6 +408,208 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
 
         var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
         Assert.Equal(TradeWebhookResult.Idempotent, result);
+    }
+
+    // ---------- T106a — asset-id capture + escrow-count lifecycle ----------
+
+    [Fact]
+    public async Task TradeOfferAccepted_Escrow_SetsAssetIdFromPayloadAndIncrementsCount()
+    {
+        await StageOfferAsync(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TradeOfferDirection.TO_SELLER, "A100");
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A100",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+            ReceivedAssetId = "bot-asset-x",
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Applied, result);
+        await using var verify = CreateContext();
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx.Status);
+        Assert.Equal("bot-asset-x", tx.EscrowBotAssetId);
+        var bot = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(1, bot.ActiveEscrowCount);
+    }
+
+    [Fact]
+    public async Task TradeOfferAccepted_Escrow_MissingAssetId_DoesNotAdvance()
+    {
+        await StageOfferAsync(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TradeOfferDirection.TO_SELLER, "A101");
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A101",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+            // No ReceivedAssetId — the sidecar exchange-details fetch failed.
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Idempotent, result);
+        await using var verify = CreateContext();
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, tx.Status);
+        Assert.Null(tx.EscrowBotAssetId);
+        var offer = await verify.Set<TradeOffer>().SingleAsync(o => o.SteamTradeOfferId == "A101");
+        Assert.Equal(TradeOfferStatus.ACCEPTED, offer.Status);
+        var bot = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(0, bot.ActiveEscrowCount);
+    }
+
+    [Fact]
+    public async Task TradeOfferAccepted_Delivery_SetsDeliveredAssetIdAndDecrementsCount()
+    {
+        await using (var arrange = CreateContext())
+        {
+            var arrangeTx = await arrange.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+            arrangeTx.Status = TransactionStatus.TRADE_OFFER_SENT_TO_BUYER;
+            arrangeTx.EscrowBotAssetId = "bot-asset-x"; // set when the item was escrowed
+            var arrangeBot = await arrange.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+            arrangeBot.ActiveEscrowCount = 1;
+            arrange.Set<TradeOffer>().Add(new TradeOffer
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = _transaction.Id,
+                PlatformSteamBotId = _bot.Id,
+                Direction = TradeOfferDirection.TO_BUYER,
+                SteamTradeOfferId = "A102",
+                Status = TradeOfferStatus.SENT,
+                SentAt = DateTime.UtcNow,
+            });
+            await arrange.SaveChangesAsync();
+        }
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A102",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+            DeliveredAssetId = "buyer-asset-y",
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Applied, result);
+        await using var verify = CreateContext();
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, tx.Status);
+        Assert.Equal("buyer-asset-y", tx.DeliveredBuyerAssetId);
+        var bot = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(0, bot.ActiveEscrowCount);
+    }
+
+    [Fact]
+    public async Task TradeOfferAccepted_Refund_DecrementsCountWithoutTrigger()
+    {
+        await using (var arrange = CreateContext())
+        {
+            var arrangeTx = await arrange.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+            arrangeTx.Status = TransactionStatus.CANCELLED_TIMEOUT;
+            arrangeTx.CancelledBy = CancelledByType.TIMEOUT;
+            arrangeTx.CancelReason = "Payment timeout";
+            arrangeTx.CancelledAt = DateTime.UtcNow;
+            var arrangeBot = await arrange.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+            arrangeBot.ActiveEscrowCount = 1;
+            arrange.Set<TradeOffer>().Add(new TradeOffer
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = _transaction.Id,
+                PlatformSteamBotId = _bot.Id,
+                Direction = TradeOfferDirection.RETURN_TO_SELLER,
+                SteamTradeOfferId = "A103",
+                Status = TradeOfferStatus.SENT,
+                SentAt = DateTime.UtcNow,
+            });
+            await arrange.SaveChangesAsync();
+        }
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A103",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Applied, result);
+        await using var verify = CreateContext();
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, tx.Status); // unchanged — terminal
+        var offer = await verify.Set<TradeOffer>().SingleAsync(o => o.SteamTradeOfferId == "A103");
+        Assert.Equal(TradeOfferStatus.ACCEPTED, offer.Status);
+        var bot = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+        Assert.Equal(0, bot.ActiveEscrowCount);
+    }
+
+    [Fact]
+    public async Task TradeOfferFailed_DuplicateForDirection_IsIdempotent()
+    {
+        await using (var arrange = CreateContext())
+        {
+            arrange.Set<TradeOffer>().Add(new TradeOffer
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = _transaction.Id,
+                PlatformSteamBotId = _bot.Id,
+                Direction = TradeOfferDirection.TO_SELLER,
+                SteamTradeOfferId = null,
+                Status = TradeOfferStatus.FAILED,
+                RetryCount = 3,
+            });
+            await arrange.SaveChangesAsync();
+        }
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferFailed, new TradeOfferEventData
+        {
+            TransactionId = _transaction.Id,
+            Direction = "SELLER_TO_BOT",
+            BotAccountName = BotAccount,
+            Reason = "permanent",
+            Attempts = 3,
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-1", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Idempotent, result);
+        await using var verify = CreateContext();
+        var count = await verify.Set<TradeOffer>()
+            .CountAsync(o => o.TransactionId == _transaction.Id && o.Direction == TradeOfferDirection.TO_SELLER);
+        Assert.Equal(1, count);
+    }
+
+    /// <summary>Stage a transaction in <paramref name="status"/> with a SENT offer of the given direction.</summary>
+    private async Task StageOfferAsync(TransactionStatus status, TradeOfferDirection direction, string offerId)
+    {
+        await using var arrange = CreateContext();
+        var tx = await arrange.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        tx.Status = status;
+        arrange.Set<TradeOffer>().Add(new TradeOffer
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = _transaction.Id,
+            PlatformSteamBotId = _bot.Id,
+            Direction = direction,
+            SteamTradeOfferId = offerId,
+            Status = TradeOfferStatus.SENT,
+            SentAt = DateTime.UtcNow,
+        });
+        await arrange.SaveChangesAsync();
     }
 
     [Fact]

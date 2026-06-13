@@ -282,6 +282,90 @@ describe('TradeOfferMonitor webhook error handling', () => {
   });
 });
 
+describe('TradeOfferMonitor — T106a asset-id capture (Accepted only)', () => {
+  function makeOfferWithExchange(
+    state: number,
+    exchange: {
+      err?: Error;
+      receivedItems?: Array<{ new_assetid?: string; assetid: string }>;
+      sentItems?: Array<{ new_assetid?: string; assetid: string }>;
+    },
+  ): TradeOffer {
+    const offer = makeOffer({ id: 'offer-EX', state });
+    (offer as unknown as { getExchangeDetails: unknown }).getExchangeDetails = (
+      cb: (
+        err: Error | null,
+        status: number,
+        tradeInitTime: Date,
+        receivedItems: unknown[],
+        sentItems: unknown[],
+      ) => void,
+    ) =>
+      cb(
+        exchange.err ?? null,
+        3,
+        new Date(0),
+        exchange.receivedItems ?? [],
+        exchange.sentItems ?? [],
+      );
+    return offer;
+  }
+
+  it('includes receivedAssetId + deliveredAssetId from getExchangeDetails', async () => {
+    const bot = makeBot('bot1');
+    const monitor = new TradeOfferMonitor(makeBotManager([bot]), {
+      webhookSender: recordedWebhook,
+    });
+    monitor.start();
+
+    bot.fire(
+      makeOfferWithExchange(3, {
+        receivedItems: [{ new_assetid: 'recv-1', assetid: 'old-r' }],
+        sentItems: [{ new_assetid: 'deliv-1', assetid: 'old-s' }],
+      }),
+      2,
+    );
+    await new Promise((r) => setImmediate(r));
+
+    const [, payload] = recordedWebhook.mock.calls[0] as [string, WebhookPayload, string];
+    expect(payload.data).toMatchObject({ receivedAssetId: 'recv-1', deliveredAssetId: 'deliv-1' });
+  });
+
+  it('emits without asset ids when getExchangeDetails errors', async () => {
+    const bot = makeBot('bot1');
+    const monitor = new TradeOfferMonitor(makeBotManager([bot]), {
+      webhookSender: recordedWebhook,
+    });
+    monitor.start();
+
+    bot.fire(makeOfferWithExchange(3, { err: new Error('exchange unavailable') }), 2);
+    await new Promise((r) => setImmediate(r));
+
+    expect(recordedWebhook).toHaveBeenCalledOnce();
+    const [, payload] = recordedWebhook.mock.calls[0] as [string, WebhookPayload, string];
+    expect(payload.data).not.toHaveProperty('receivedAssetId');
+    expect(payload.data).not.toHaveProperty('deliveredAssetId');
+  });
+
+  it('does not call getExchangeDetails for non-accept states', async () => {
+    const bot = makeBot('bot1');
+    const monitor = new TradeOfferMonitor(makeBotManager([bot]), {
+      webhookSender: recordedWebhook,
+    });
+    monitor.start();
+
+    const getExchangeDetails = vi.fn();
+    const offer = makeOffer({ id: 'offer-decline', state: 7 });
+    (offer as unknown as { getExchangeDetails: unknown }).getExchangeDetails = getExchangeDetails;
+    bot.fire(offer, 2);
+    await new Promise((r) => setImmediate(r));
+
+    expect(getExchangeDetails).not.toHaveBeenCalled();
+    const [, payload] = recordedWebhook.mock.calls[0] as [string, WebhookPayload, string];
+    expect(payload.data).not.toHaveProperty('receivedAssetId');
+  });
+});
+
 /**
  * Integration-style: verify the BotSession.bindTradeOfferEvents bridge actually
  * forwards real EventEmitter events to the monitor handler.

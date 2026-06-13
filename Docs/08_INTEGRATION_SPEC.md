@@ -234,6 +234,11 @@ Trade offer yaşam döngüsü tamamen Node.js sidecar'da `steam-tradeoffer-manag
 7. Sidecar → .NET backend'e webhook callback
 ```
 
+> **Dispatch sözleşmesi (T106a):** Backend `POST /api/v1/sidecar/steam/api/trade-offers/send` ile şu gövdeyi yollar: `{ transactionId, direction, partnerSteamId, items[{assetid,appid,contextid}], botAccountName?, message? }`.
+> - **`direction`** sözlüğü: `SELLER_TO_BOT` (escrow — bot item alır, `addTheirItem`), `BOT_TO_BUYER` (teslim — bot item verir, `addMyItem` + MA), `BOT_TO_SELLER_REFUND` (iade — bot item verir, `addMyItem` + MA). Aynı sözlük `trade_offer.sent`/`failed` webhook'larının `direction` alanında da taşınır; backend `TradeOfferDirection` (`TO_SELLER`/`TO_BUYER`/`RETURN_TO_SELLER`) enum'una çözer.
+> - **`botAccountName` (capacity hint):** Bot seçimini **backend** yapar (`IBotSelectionService`, 06 §3.10) ve seçtiği botun `DisplayName`'ini hint olarak geçer; sidecar `selectBot(hint)` READY ise onu kullanır, değilse round-robin'e düşer. Delivery + refund bacakları item'ı tutan **aynı** botu (`Transaction.EscrowBotId`) yeniden kullanmak zorundadır.
+> - **Asset-id yakalama:** `trade_offer.accepted` (state 3) payload'u `receivedAssetId` (bot'un aldığı item'ın yeni id'si — escrow) ve/veya `deliveredAssetId` (karşı tarafın aldığı item'ın yeni id'si — delivery/refund) taşır; sidecar `TradeOffer.getExchangeDetails` ile çözer. Backend bunları `Transaction.EscrowBotAssetId`/`DeliveredBuyerAssetId`'ye yazar (`ITEM_ESCROWED`/`ITEM_DELIVERED` guard'ları zorunlu kılar). Fetch başarısızsa payload asset-id'siz gelir → backend ilerletmez, log + ack (sessiz takılma yok; gerçek-Steam doğrulama T107 E2E).
+
 **Trade offer durumları (Steam tarafı):**
 
 | Durum | Kod | Skinora karşılığı |
