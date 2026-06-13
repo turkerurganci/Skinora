@@ -134,7 +134,8 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 ## Commit & PR
 
 - Branch: `task/T103b-2-bot-recovery`
-- PR: #167 (placeholder — push sonrası güncellenecek)
+- PR: [#167](https://github.com/turkerurganci/Skinora/pull/167)
+- Commit: `dbac988` (kod+migration+test) + `048a013` (rapor+status+doc+memory)
 - CI: ⏳ (Claude izler — [[feedback_claude_watches_ci_always]])
 
 ## Known Limitations / Follow-up
