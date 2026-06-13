@@ -1,6 +1,6 @@
 # T106a — Escrow Trade-Offer Dispatch Engine
 
-**Faz:** F5/F6 sınırı (T69-K1 resmileştirme) | **Durum:** ⏳ Yapım tamam, bağımsız doğrulama bekliyor | **Tarih:** 2026-06-13
+**Faz:** F5/F6 sınırı (T69-K1 resmileştirme) | **Durum:** ✓ Tamamlandı — bağımsız validator PASS | **Tarih:** 2026-06-13
 
 ---
 
@@ -63,10 +63,23 @@ Proje sahibi kararı (3 tur AskUserQuestion, 2026-06-13): **T106a olarak tanıml
 
 ## Doğrulama
 
+**Bağımsız validator (ayrı chat, 2026-06-13) — VERDICT: ✓ PASS.** Yapan ≠ denetleyen; rapor okunmadan önce bağımsız verdict üretildi, sonra karşılaştırıldı (tam uyumlu).
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator chat'i bekliyor (yapan ≠ denetleyen) |
-| Yapım-tarafı self-check | Tüm AC kanıtlı; lokal testler yeşil |
+| Adım -1 Working tree | ✓ Temiz (`git status --short` boş) |
+| Adım 0 Main CI (son 3) | ✓ success — `27471077378` / `27471077361` / `27468789964` |
+| Adım 0b Repo memory drift | ✓ T106a satırı mevcut (`.claude/memory/MEMORY.md`) |
+| Task branch CI (#166, run `27475659788`) | ✓ Tüm job'lar success: Lint / Build / Unit / Integration / **Contract** / **Migration dry-run** / Docker×2 / Gate |
+| Backend Steam.Tests | ✓ 76/76 (validator yeniden çalıştırdı, gerçek SQL Server, 49 s) |
+| Backend API webhook endpoint | ✓ 6/6 (`SteamWebhookEndpointTests`) |
+| Sidecar (vitest) | ✓ 145/145 + `tsc --noEmit` temiz (validator yeniden çalıştırdı) |
+| Kabul kriterleri (plan 6 madde) | ✓ Hepsi kanıtlı (escrow/delivery/refund + asset-id + sayaç ±1 + transient/idempotency) |
+| Direction sözleşmesi (backend↔sidecar↔webhook) | ✓ `SELLER_TO_BOT`/`BOT_TO_BUYER`/`BOT_TO_SELLER_REFUND` üç katmanda birebir (önceki kırık seam onarıldı) |
+| Güvenlik | ✓ Temiz — secret yok; auth `X-Internal-Key` mevcut options'tan; yeni dış bağımlılık yok; migration yok; csproj yalnız iç `Skinora.Users` referansı |
+| Mimari sapma (Steam'e yerleşim) | Kabul — cycle önleme; plan dokümanları (05 §3.2) modülü pinlemiyor; bloke-edici değil |
+| Bulgular | 0 bloke-edici (S1/S2/S3 yok). K1–K5 owner-onaylı forward-deferral. |
+| Yapım raporu karşılaştırması | Tam uyumlu (AC tablosu plan'ı yeniden sıralıyor ama 6 kriterin hepsi kapsanmış — kozmetik) |
 
 ## Altyapı Değişiklikleri
 
