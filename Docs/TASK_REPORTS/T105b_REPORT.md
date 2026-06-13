@@ -1,6 +1,6 @@
 # T105b — Kullanıcı detay backend tamamlama (S20 — wallet history + reputation breakdown)
 
-**Faz:** F5 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-06-13
+**Faz:** F5 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS 2026-06-13) | **Tarih:** 2026-06-13
 
 ---
 
@@ -54,11 +54,21 @@ T105 bağımsız validator'ında doğrulanan iki AD16 boşluğunu (B2 cüzdan ö
 
 ## Doğrulama
 
+**Bağımsız validator (ayrı chat, 2026-06-13): ✓ PASS.** Yapım raporu görülmeden bağımsız verdict üretildi; rapor karşılaştırması tam uyumlu (0 uyuşmazlık).
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız doğrulama chat'i bekliyor (yapan ≠ denetleyen) |
+| Verdict | ✓ **PASS** |
+| Doğrulama durumu | Tamamlandı (yapan ≠ denetleyen) |
+| Hard-stop kapıları | Adım -1 working tree temiz ✓ · Adım 0 main son-3 success (`27441971891`/`27441971936` T105 #160 + `27152338399` T104 #159) ✓ · Adım 0b repo memory T105b satırı mevcut ✓ |
+| Kabul kriterleri | 4/4 ✓ (AC1 entity+migration+write-hook · AC2 walletHistory current+previous · AC3 reputation breakdown DTO · AC4 FE render) — hepsi geçen integration testleriyle kanıtlı |
+| Doğrulama kontrol listesi | 04 §8.9.3 önceki adresler (tarihlerle, `setAt` kolonu + Current badge ayrımı) ✓ + §8.9.1 reputation breakdown (3 metrik `<dl>`) ✓ |
+| Mekanik kapılar (validator-çalıştırıldı) | Backend build Release 0W/0E · **API.Tests 475/475** (0 Failed, regresyon yok) · FE tsc 0 · eslint 0 · prettier `--end-of-line auto` clean · `next build` ✓ (`/admin/users/[steamId]` ƒ) · i18n 1063×4 (0 missing/extra) |
+| Mimari doğrulama | `IAppendOnly` → `AppDbContext.EnforceAppendOnly` UPDATE/DELETE reddeder · FK global `NoAction` (AppDbContext.cs:129) · config `ApplyConfigurationsFromAssembly` ile otomatik kayıtlı · `cancelRate = 1 − rate` kanonik `UserProfileService.CancelRateFrom` (07 §5.1) ile birebir · migration HEAD'de CI Migration adımı yeşil |
+| Güvenlik mini-kontrol | Temiz — yeni endpoint yok; önceki adres yalnız AD16 `VIEW_USERS`-korumalı admin'e; wallet endpoint auth değişmedi; 0 yeni bağımlılık; test `Reset()` raw-SQL sabit string (injection yok); secret sızıntısı yok |
+| Task branch CI | `27462986930` HEAD `37b862e` (final commit) → **success** ✓ (`d00b79f` run'ı yeni push ile cancelled, normal) |
 | Yapım-içi adversarial review | 6-boyut / refute-default (AC-conformance, append-only integrity, wallet hook, reputation breakdown, contract/migration drift, security/regression) → **0 bulgu** |
-| Bulgu sayısı | 0 |
+| Bulgu sayısı | **0** (bloke-edici 0) |
 
 ## Altyapı Değişiklikleri
 
@@ -73,7 +83,8 @@ T105 bağımsız validator'ında doğrulanan iki AD16 boşluğunu (B2 cüzdan ö
 - Commit: `d00b79f` — T105b implementation (kod + migration + test + doc + i18n)
 - Rapor + status + memory: ayrı commit
 - PR: #161
-- CI: ⏳ Claude izliyor (concluded + success beklenir)
+- Task CI: `27462986930` HEAD `37b862e` → success ✓
+- Validator finalize (rapor + status): ayrı commit (merge öncesi, squash'a dahil)
 
 ## Known Limitations / Follow-up
 
