@@ -2149,6 +2149,23 @@ Task T105b: Kullanıcı detay backend tamamlama (S20 — wallet history + reputa
 ```
 
 ```
+Task T103b: Steam hesapları backend tamamlama (S18 — emanet item listesi + Recovery Queue) — ⬚ ERTELENDİ
+  [PLAN DÜZELTMESİ — T103 deferral'ı incelendi (2026-06-13, proje sahibi onayı = Option C "ertele + belgele").
+   T103 raporu bu boşluğu "→ T69 forward" diyordu; ancak T69 (PR #110) MERGED ve admin projeksiyonunu bağlamadı.
+   Kod incelemesi (2026-06-13) gösterdi ki bu bir "salt-UI gap-fill" DEĞİL:
+     - Transaction.EscrowBotId hiçbir yerde atanmıyor (SqlBotSelectionService.SelectAsync'in çağıranı yok) → emanet→bot bağı kurulmamış.
+     - PlatformSteamBot.ActiveEscrowCount hiç artırılmıyor (ölü sayaç; kartta "Emanet: N" pratikte 0).
+     - RestrictionReason / FailoverStatus / recovery queue domain'i (recoveryStatus/responsibleAdmin/adminNote) HİÇ kurulmadı; T69 failover'ı bilinçli K-list'e attı.
+     - Tek gerçek bot↔işlem bağı: TradeOffer.PlatformSteamBotId (webhook handler doldurur) — dolaylı.]
+  Bağımlılık: T64–T69 (Steam bot + escrow akışı wiring), recovery/failover feature spec
+  Dokümanlar: 04 §8.7 (S18 emanet listesi + Recovery Queue), 02 §15, 03 §11.2a, 07 §9.10
+  Ertelenme ön-koşulları: (a) escrow akışına bot-atama wiring'i (SelectAsync çağrısı + EscrowBotId persist + ActiveEscrowCount artırımı); (b) recovery/failover feature spec'i (discovery turu olası).
+  Kapsam (açıldığında): kısıtlı/banned hesabın emanet item listesi + Recovery Queue satır verisi + MANAGE_STEAM_RECOVERY aksiyonları (Manual Recovery / not / sorumlu admin).
+  Not: T103 (S18 UI) zaten 4/4 PASS — owner-onaylı boş/structural Recovery Queue + emanet sayısı kalır; bu erteleme F5 Gate Check'i BLOKLAMAZ.
+  Yeniden ele alma: F6 E2E (tam escrow akışı egzersiz edilir) veya ayrı backend task.
+```
+
+```
 Task T106: Admin Audit log (S21)
   Bağımlılık: T85
   Dokümanlar: 04 §8.10
