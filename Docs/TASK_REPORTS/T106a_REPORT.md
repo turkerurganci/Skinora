@@ -78,8 +78,9 @@ Proje sahibi kararı (3 tur AskUserQuestion, 2026-06-13): **T106a olarak tanıml
 ## Commit & PR
 
 - Branch: `task/T106a-escrow-dispatch-engine`
-- PR: #TBD (yapım chat'i sonunda açılır; CI Claude izler)
-- CI: ⏳
+- Commit: `252185a` — feat(T106a): escrow trade-offer dispatch engine (T69-K1)
+- PR: [#166](https://github.com/turkerurganci/Skinora/pull/166)
+- CI: ⏳ Claude izliyor ([[feedback_claude_watches_ci_always]])
 
 ## Known Limitations / Follow-up
 
