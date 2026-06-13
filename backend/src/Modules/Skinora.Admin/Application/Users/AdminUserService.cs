@@ -24,9 +24,10 @@ namespace Skinora.Admin.Application.Users;
 /// <see cref="IAdminUserActivityProvider"/> — its implementation lives at the
 /// API composition root because those reads span Skinora.Transactions /
 /// Skinora.Fraud / Skinora.Disputes (modules this one cannot reference).
-/// Reputation is computed on demand via <see cref="IReputationScoreCalculator"/>.
-/// The single remaining placeholder is past wallet addresses (no history table
-/// in the data model — see <see cref="BuildCurrentWalletEntries"/>).
+/// Reputation is computed on demand via <see cref="IReputationScoreCalculator"/>;
+/// the profile also surfaces its breakdown (completed count / success / cancel
+/// rate — 04 §8.9.1). Past wallet addresses come from the append-only
+/// WalletAddressHistory (T105b — see <see cref="BuildWalletEntriesAsync"/>).
 /// </remarks>
 public sealed class AdminUserService : IAdminUserService
 {
@@ -197,7 +198,14 @@ public sealed class AdminUserService : IAdminUserService
             SuspensionReason: user.SuspensionReason,
             SuspensionExpiresAt: user.SuspensionExpiresAt,
             ActiveTransactionCount: activity.ActiveTransactionCount,
-            HasTransactionOnHold: activity.HasTransactionOnHold);
+            HasTransactionOnHold: activity.HasTransactionOnHold,
+            // 04 §8.9.1 reputation breakdown — same fraction convention as
+            // UserProfileDto (07 §5.1). CancelRate = complement of the rate.
+            CompletedTransactionCount: user.CompletedTransactionCount,
+            SuccessfulTransactionRate: user.SuccessfulTransactionRate,
+            CancelRate: user.SuccessfulTransactionRate is null
+                ? null
+                : 1m - user.SuccessfulTransactionRate.Value);
 
         var stats = new AdminUserDetailStatsDto(
             TotalTransactions: activity.TotalTransactions,
@@ -208,7 +216,7 @@ public sealed class AdminUserService : IAdminUserService
             TotalVolume: activity.TotalVolume,
             LastTransactionAt: activity.LastTransactionAt);
 
-        var walletHistory = BuildCurrentWalletEntries(user).ToList();
+        var walletHistory = await BuildWalletEntriesAsync(user, cancellationToken);
 
         return new AdminUserDetailDto(
             Profile: profile,
@@ -280,30 +288,44 @@ public sealed class AdminUserService : IAdminUserService
     }
 
     /// <summary>
-    /// AD16 walletHistory[]: T34 carries only current addresses + change
-    /// timestamps on <see cref="User"/>; a separate WalletAddressHistory
-    /// entity isn't part of the data model. Emit one entry per non-null
-    /// current address with <c>current = true</c> (T39 known limitation —
-    /// historical past-addresses arrive when/if the schema gains a
-    /// dedicated history table).
+    /// AD16 walletHistory[] (04 §8.9.3): current addresses (<c>current = true</c>)
+    /// come from the <see cref="User"/> row; previous addresses
+    /// (<c>current = false</c>, newest first) come from the append-only
+    /// WalletAddressHistory recorded on each change (T105b). "current" is never a
+    /// stored flag — it is derived here, so the history table stays append-only.
     /// </summary>
-    private static IEnumerable<AdminUserWalletEntryDto> BuildCurrentWalletEntries(User user)
+    private async Task<List<AdminUserWalletEntryDto>> BuildWalletEntriesAsync(
+        User user, CancellationToken cancellationToken)
     {
+        var entries = new List<AdminUserWalletEntryDto>();
+
         if (!string.IsNullOrEmpty(user.DefaultPayoutAddress))
         {
-            yield return new AdminUserWalletEntryDto(
+            entries.Add(new AdminUserWalletEntryDto(
                 Type: AdminWalletEntryType.Seller,
                 Address: user.DefaultPayoutAddress,
                 SetAt: user.PayoutAddressChangedAt,
-                Current: true);
+                Current: true));
         }
         if (!string.IsNullOrEmpty(user.DefaultRefundAddress))
         {
-            yield return new AdminUserWalletEntryDto(
+            entries.Add(new AdminUserWalletEntryDto(
                 Type: AdminWalletEntryType.Buyer,
                 Address: user.DefaultRefundAddress,
                 SetAt: user.RefundAddressChangedAt,
-                Current: true);
+                Current: true));
         }
+
+        // Superseded addresses, newest replacement first. Type is stored as the
+        // AD16 wire value ("seller"/"buyer") so it projects straight through.
+        var past = await _db.Set<WalletAddressHistory>()
+            .AsNoTracking()
+            .Where(h => h.UserId == user.Id)
+            .OrderByDescending(h => h.Id)
+            .Select(h => new AdminUserWalletEntryDto(h.Type, h.Address, h.SetAt, false))
+            .ToListAsync(cancellationToken);
+
+        entries.AddRange(past);
+        return entries;
     }
 }

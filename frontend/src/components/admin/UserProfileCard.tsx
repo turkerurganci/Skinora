@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
-import { formatDateLong } from "@/lib/utils/format";
+import { formatDateLong, formatPercent } from "@/lib/utils/format";
 import type { AdminAccountStatus, AdminUserDetailProfile } from "@/lib/api/admin";
 
 const STATUS_TONE: Record<AdminAccountStatus, string> = {
@@ -85,6 +85,31 @@ export function UserProfileCard({ profile }: UserProfileCardProps) {
                 {profile.reputationScore === null
                   ? t("profile.reputationNew")
                   : profile.reputationScore.toFixed(1)}
+              </dd>
+            </div>
+          </dl>
+
+          {/* 04 §8.9.1 / §7.4.2 — reputation breakdown: the figures the score is
+              built from. Rates are fractions 0..1 → rendered as percentages. */}
+          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 border-t border-gray-100 pt-3 sm:grid-cols-3">
+            <div>
+              <dt className="text-xs text-gray-500">{t("profile.completedCount")}</dt>
+              <dd className="text-sm text-gray-900">{profile.completedTransactionCount}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-gray-500">{t("profile.successRate")}</dt>
+              <dd className="text-sm text-gray-900">
+                {profile.successfulTransactionRate === null
+                  ? t("profile.rateNone")
+                  : formatPercent(profile.successfulTransactionRate * 100, locale)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-gray-500">{t("profile.cancelRate")}</dt>
+              <dd className="text-sm text-gray-900">
+                {profile.cancelRate === null
+                  ? t("profile.rateNone")
+                  : formatPercent(profile.cancelRate * 100, locale)}
               </dd>
             </div>
           </dl>

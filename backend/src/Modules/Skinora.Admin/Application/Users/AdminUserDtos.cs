@@ -42,7 +42,15 @@ public sealed record AdminUserDetailProfileDto(
     // on-hold → "Hold Altında Aktif İşlem Var" (red). Suspension never applies
     // a hold automatically — they are independent signals (04 §8.9.1).
     int ActiveTransactionCount,
-    bool HasTransactionOnHold);
+    bool HasTransactionOnHold,
+    // T105b — reputation breakdown (04 §8.9.1 / §7.4.2). The denormalized
+    // counters that feed ReputationScore, surfaced so the admin sees what the
+    // score is built from. Mirrors UserProfileDto (07 §5.1): CancelRate is the
+    // complement of SuccessfulTransactionRate — both are fractions 0..1 and
+    // both null when the rate is null.
+    int CompletedTransactionCount,
+    decimal? SuccessfulTransactionRate,
+    decimal? CancelRate);
 
 public sealed record AdminUserDetailStatsDto(
     int TotalTransactions,

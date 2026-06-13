@@ -67,4 +67,7 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
 
     // --- Navigation properties ---
     public ICollection<UserLoginLog> LoginLogs { get; set; } = [];
+
+    // T105b — append-only trail of superseded payout/refund addresses (06 §3.1).
+    public ICollection<WalletAddressHistory> WalletAddressHistory { get; set; } = [];
 }

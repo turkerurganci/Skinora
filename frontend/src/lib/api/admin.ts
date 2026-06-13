@@ -731,8 +731,8 @@ export function assignUserRole(userId: string, roleId: string | null): Promise<A
  * strings; `reputationScore` is a JSON number or null; `totalVolume` is a
  * decimal string (or null when the user has no completed transaction).
  * `flagHistory[].transactionId` is null for ACCOUNT_LEVEL flags (06 §3.12).
- * `walletHistory` carries only current addresses — previous-address history is
- * not persisted in the data model (T39 known limitation, see AdminUserService).
+ * `walletHistory` carries current addresses (`current: true`) plus previous
+ * addresses (`current: false`, newest first) recorded on each change (T105b).
  * ────────────────────────────────────────────────────────────────────────── */
 
 export type AdminAccountStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED" | "DELETED";
@@ -755,6 +755,14 @@ export interface AdminUserDetailProfile {
   /** Non-terminal transaction count + emergency-hold flag → 04 §8.9.1 badges. */
   activeTransactionCount: number;
   hasTransactionOnHold: boolean;
+  /**
+   * Reputation breakdown (04 §8.9.1) — the counters that build `reputationScore`.
+   * `cancelRate` is the complement of `successfulTransactionRate`; both are
+   * fractions 0..1 and both null when the rate is null.
+   */
+  completedTransactionCount: number;
+  successfulTransactionRate: number | null;
+  cancelRate: number | null;
 }
 
 /** Statistics block of AD16 (07 §9.16 / 04 §8.9.2). */
@@ -768,7 +776,7 @@ export interface AdminUserDetailStats {
   lastTransactionAt: string | null;
 }
 
-/** One wallet-address row (04 §8.9.3). Only current addresses are emitted. */
+/** One wallet-address row (04 §8.9.3). `current: false` = a previous address. */
 export interface AdminUserWalletEntry {
   type: AdminWalletEntryType;
   address: string;

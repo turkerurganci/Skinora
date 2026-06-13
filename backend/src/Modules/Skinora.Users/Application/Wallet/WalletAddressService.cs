@@ -65,6 +65,12 @@ public sealed class WalletAddressService : IWalletAddressService
             ? user.DefaultPayoutAddress
             : user.DefaultRefundAddress;
 
+        // T105b — captured before the overwrite below so a history row can record
+        // the date the superseded address had originally been set.
+        var previousChangedAt = role == WalletRole.Seller
+            ? user.PayoutAddressChangedAt
+            : user.RefundAddressChangedAt;
+
         // 02 §12.3 / 07 §5.3 "Ek Auth": changing an existing address requires
         // a valid X-ReAuth-Token. The controller consumes the token and passes
         // the outcome via reAuthValidated — see UsersController.
@@ -93,6 +99,29 @@ public sealed class WalletAddressService : IWalletAddressService
         }
 
         var now = _clock.GetUtcNow().UtcDateTime;
+
+        // T105b — record the superseded address to the append-only wallet
+        // history before overwriting it (04 §8.9.3 "önceki adresler"). Only an
+        // actual replacement of an existing, different address is recorded — a
+        // first-time set (previous is null) or a no-op re-save (previous ==
+        // candidate) leaves no history row. The row carries the previous
+        // address + the date it had been set so the admin detail view can show
+        // the full address timeline. It is inserted into the same SaveChanges as
+        // the User mutation, so the two commit atomically.
+        if (!string.IsNullOrEmpty(previous) && previous != candidate)
+        {
+            _db.Set<WalletAddressHistory>().Add(new WalletAddressHistory
+            {
+                UserId = user.Id,
+                Type = role == WalletRole.Seller
+                    ? WalletAddressHistoryType.Seller
+                    : WalletAddressHistoryType.Buyer,
+                Address = previous,
+                SetAt = previousChangedAt,
+                CreatedAt = now,
+            });
+        }
+
         if (role == WalletRole.Seller)
         {
             user.DefaultPayoutAddress = candidate;

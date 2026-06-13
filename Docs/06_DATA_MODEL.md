@@ -418,6 +418,8 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 | `CreatedAt` | datetime | NOT NULL | Hesap oluşturulma zamanı |
 | `UpdatedAt` | datetime | NOT NULL | Son güncelleme zamanı |
 
+> **Cüzdan adresi geçmişi (`WalletAddressHistory` — T105b):** `DefaultPayoutAddress` / `DefaultRefundAddress` yalnızca **mevcut** adresleri taşır. Bir adres değiştirildiğinde, değiştirilen (önceki) adres ayrı bir **append-only** `WalletAddressHistory` tablosuna yazılır: `Id` (bigint, IDENTITY PK), `UserId` (guid, FK → User), `Type` (string(10), `"seller"` = payout / `"buyer"` = refund), `Address` (string(50)), `SetAt` (datetime, NULL — önceki adresin atanma zamanı), `CreatedAt` (datetime — değişim anı). Index: `(UserId)`, `(UserId, Type)`. 06 §4.2 append-only — UPDATE/DELETE reddedilir. İlk adres tanımlaması (önceki yok) veya aynı adresin yeniden kaydı geçmiş satırı **üretmez**. Admin kullanıcı detayında (07 §9.16 `walletHistory[]`) mevcut adresler User kaydından (`current: true`), önceki adresler bu tablodan (`current: false`, en yeni önce) sunulur — `current` saklanan bir bayrak değil, okuma anında türetilir.
+
 > **İtibar skoru:** `CompletedTransactionCount`, `SuccessfulTransactionRate` ve `CreatedAt` (hesap yaşı) alanlarından oluşur. Denormalized field'lar işlem tamamlandığında veya iptal olduğunda güncellenir.
 >
 > **SuccessfulTransactionRate formülü:**

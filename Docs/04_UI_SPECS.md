@@ -1791,7 +1791,7 @@ Bu ayrım sayfanın üstünde bir bilgi kutusu olarak gösterilir. Her parametre
    - Steam avatar, ad, Steam ID
    - Platformdaki hesap yaşı
    - Hesap durumu: Aktif / Askıya Alındı / Deaktif / Silinmiş. Badge'ler ayrı: askıya alınmış + aktif işlem varsa "Aktif İşlem Var" (sarı); gerçekten EMERGENCY_HOLD uygulanmışsa "Hold Altında Aktif İşlem Var" (kırmızı). İkisi farklı durumlar — askıya alma otomatik hold uygulamaz (S14 ayrı aksiyon)
-   - İtibar skoru (detaylı breakdown)
+   - İtibar skoru (detaylı breakdown): genel skor + tamamlanan işlem sayısı, başarılı işlem oranı (%), iptal oranı (%) — 04 §7.4 / 07 §5.1 deseni (oranlar 0..1 kesir, UI'da % gösterilir)
 
 2. **İstatistikler**
    - Toplam işlem sayısı
@@ -1802,7 +1802,7 @@ Bu ayrım sayfanın üstünde bir bilgi kutusu olarak gösterilir. Her parametre
 
 3. **Cüzdan Adresi Geçmişi**
    - Mevcut adres
-   - Önceki adresler (değişiklik tarihleriyle)
+   - Önceki adresler (değişiklik tarihleriyle) — her adres değişiminde kaydedilir (06 §3.1 `WalletAddressHistory`); özellik etkinleştirilmeden önceki değişiklikler geçmişe dahil değildir
 
 4. **İşlem Geçmişi (Tablo)**
    - Son işlemler listesi (tablo formatı, S15 ile aynı kolonlar)

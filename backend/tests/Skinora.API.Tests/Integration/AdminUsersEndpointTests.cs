@@ -368,6 +368,76 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
             data.GetProperty("profile").GetProperty("reputationScore").GetDecimal());
     }
 
+    [Fact]
+    public async Task GetUserDetail_WalletHistory_IncludesCurrentAndPreviousAddresses()
+    {
+        // T105b — current addresses (current=true) come from the User row,
+        // previous addresses (current=false) from the append-only history.
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Trader", c =>
+        {
+            c.DefaultPayoutAddress = "TCurrentSeller";
+            c.PayoutAddressChangedAt = DateTime.UtcNow.AddDays(-1);
+        });
+        await _factory.SeedWalletHistoryAsync(
+            target.Id, "seller", "TOldSeller", DateTime.UtcNow.AddDays(-10));
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var wallet = data.GetProperty("walletHistory");
+        Assert.Equal(2, wallet.GetArrayLength());
+
+        // Current entry first.
+        Assert.Equal("TCurrentSeller", wallet[0].GetProperty("address").GetString());
+        Assert.True(wallet[0].GetProperty("current").GetBoolean());
+
+        // Then the superseded address with its set date.
+        Assert.Equal("seller", wallet[1].GetProperty("type").GetString());
+        Assert.Equal("TOldSeller", wallet[1].GetProperty("address").GetString());
+        Assert.False(wallet[1].GetProperty("current").GetBoolean());
+        Assert.Equal(JsonValueKind.String, wallet[1].GetProperty("setAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task GetUserDetail_ReputationBreakdown_MirrorsDenormalizedCounters()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Reputable", c =>
+        {
+            c.CompletedTransactionCount = 8;
+            c.SuccessfulTransactionRate = 0.75m;          // cancel = 1 - 0.75 = 0.25
+        });
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var profile = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("profile");
+        Assert.Equal(8, profile.GetProperty("completedTransactionCount").GetInt32());
+        Assert.Equal(0.75m, profile.GetProperty("successfulTransactionRate").GetDecimal());
+        Assert.Equal(0.25m, profile.GetProperty("cancelRate").GetDecimal());
+    }
+
+    [Fact]
+    public async Task GetUserDetail_ReputationBreakdown_NullRate_YieldsNullCancelRate()
+    {
+        // Mirrors UserProfileService.CancelRateFrom: cancel is null when rate is null.
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Fresh");
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        var profile = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("profile");
+        Assert.Equal(0, profile.GetProperty("completedTransactionCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, profile.GetProperty("successfulTransactionRate").ValueKind);
+        Assert.Equal(JsonValueKind.Null, profile.GetProperty("cancelRate").ValueKind);
+    }
+
     // ---------- AD16b GET /admin/users/:steamId/transactions ----------
 
     [Fact]
@@ -738,6 +808,22 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
             return tx;
         }
 
+        public async Task SeedWalletHistoryAsync(
+            Guid userId, string type, string address, DateTime? setAt)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<WalletAddressHistory>().Add(new WalletAddressHistory
+            {
+                UserId = userId,
+                Type = type,
+                Address = address,
+                SetAt = setAt,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
         public async Task CreateFraudFlagAsync(
             Guid userId, Guid? transactionId, FraudFlagType type,
             FraudFlagScope flagScope, ReviewStatus status)
@@ -806,6 +892,12 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // T105b — WalletAddressHistory is append-only (IAppendOnly), so a
+            // tracked RemoveRange would trip EnforceAppendOnly. Purge it with raw
+            // SQL (bypasses the ChangeTracker guard); runs immediately, before the
+            // User sweep below, so the FK chain (SQL Server CI) stays satisfied.
+            db.Database.ExecuteSqlRaw("DELETE FROM WalletAddressHistory");
 
             // T105 — child activity rows reference users; delete them before the
             // User sweep below so the FK chain (SQL Server CI) doesn't trip.

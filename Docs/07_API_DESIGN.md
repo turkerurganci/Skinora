@@ -2039,7 +2039,10 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     "suspensionReason": null,
     "suspensionExpiresAt": null,
     "activeTransactionCount": 1,
-    "hasTransactionOnHold": false
+    "hasTransactionOnHold": false,
+    "completedTransactionCount": 24,
+    "successfulTransactionRate": 0.80,
+    "cancelRate": 0.20
   },
   "stats": {
     "totalTransactions": 30,
@@ -2051,7 +2054,8 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     "lastTransactionAt": "2026-03-15T18:00:00Z"
   },
   "walletHistory": [
-    { "type": "seller", "address": "TXyz...", "setAt": "...", "current": true }
+    { "type": "seller", "address": "TXyz...", "setAt": "2026-03-01T00:00:00Z", "current": true },
+    { "type": "seller", "address": "TPrev...", "setAt": "2025-11-01T00:00:00Z", "current": false }
   ],
   "flagHistory": [
     { "id": "...", "type": "PRICE_DEVIATION", "transactionId": "...", "reviewStatus": "APPROVED", "createdAt": "..." }
@@ -2065,7 +2069,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 }
 ```
 
-`accountStatus`: `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `DELETED`. `flagHistory[].transactionId` ACCOUNT_LEVEL flag'lerde `null` (06 §3.12). `stats.totalVolume` tamamlanan işlemlerin toplamı (invariant 2-ondalık string); tamamlanan işlem yoksa `null`. `frequentCounterparties` en sık işlem yapılan en fazla 10 karşı taraf (wash-trading sinyali, 04 §8.9.7). `profile.activeTransactionCount` / `hasTransactionOnHold` → 04 §8.9.1 koşullu durum badge'leri (terminal-olmayan işlem sayısı + EMERGENCY_HOLD; AD1/AD19d "aktif" tanımıyla birebir). İşlem geçmişi bu response'a dahil değil — AD16b.
+`accountStatus`: `ACTIVE`, `SUSPENDED`, `DEACTIVATED`, `DELETED`. `flagHistory[].transactionId` ACCOUNT_LEVEL flag'lerde `null` (06 §3.12). `stats.totalVolume` tamamlanan işlemlerin toplamı (invariant 2-ondalık string); tamamlanan işlem yoksa `null`. `frequentCounterparties` en sık işlem yapılan en fazla 10 karşı taraf (wash-trading sinyali, 04 §8.9.7). `profile.activeTransactionCount` / `hasTransactionOnHold` → 04 §8.9.1 koşullu durum badge'leri (terminal-olmayan işlem sayısı + EMERGENCY_HOLD; AD1/AD19d "aktif" tanımıyla birebir). `profile.completedTransactionCount` / `successfulTransactionRate` / `cancelRate` → 04 §8.9.1 itibar skoru breakdown'u (skoru oluşturan denormalize sayaçlar; `cancelRate = 1 − successfulTransactionRate`, ikisi de 0..1 kesir, oran `null` ise ikisi de `null` — 07 §5.1 deseni). `walletHistory` mevcut adresleri (`current: true`, User kaydından) + her değişimde kaydedilen önceki adresleri (`current: false`, en yeni önce; 04 §8.9.3, WalletAddressHistory T105b) içerir. İşlem geçmişi bu response'a dahil değil — AD16b.
 
 ### 9.17 AD16b — `GET /admin/users/:steamId/transactions`
 

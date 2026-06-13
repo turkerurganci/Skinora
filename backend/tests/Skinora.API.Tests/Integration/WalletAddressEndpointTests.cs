@@ -336,6 +336,129 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
         Assert.Null(persisted.PayoutAddressChangedAt);
     }
 
+    // ---------- T105b: wallet address history ----------
+
+    [Fact]
+    public async Task UpdateSellerWallet_FirstTimeSet_WritesNoHistory()
+    {
+        // A first-ever set (previous is null) records nothing — only an actual
+        // replacement produces a previous-address row.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
+        {
+            walletAddress = ValidSellerAddress,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await _factory.GetWalletHistoryAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task UpdateSellerWallet_Replacement_WritesPreviousAddressToHistory()
+    {
+        var setAt = DateTime.UtcNow.AddDays(-10);
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.DefaultPayoutAddress = ValidSellerAddress;
+            u.PayoutAddressChangedAt = setAt;
+        });
+        var token = await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId);
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        client.DefaultRequestHeaders.Add("X-ReAuth-Token", token);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
+        {
+            walletAddress = ValidSecondSellerAddress,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Exactly one history row recording the SUPERSEDED address + its set date.
+        var row = Assert.Single(await _factory.GetWalletHistoryAsync(user.Id));
+        Assert.Equal("seller", row.Type);
+        Assert.Equal(ValidSellerAddress, row.Address);
+        Assert.NotNull(row.SetAt);
+        Assert.Equal(setAt, row.SetAt!.Value, TimeSpan.FromSeconds(1));
+        Assert.NotEqual(default, row.CreatedAt);
+
+        // The new address is current on the User row, not in history.
+        var persisted = await _factory.GetUserAsync(user.Id);
+        Assert.Equal(ValidSecondSellerAddress, persisted.DefaultPayoutAddress);
+    }
+
+    [Fact]
+    public async Task UpdateSellerWallet_TwoReplacements_AppendsTwoRowsOldestFirst()
+    {
+        // Append-only: each replacement INSERTs; prior rows are never updated.
+        var user = await _factory.CreateUserAsync(u => u.DefaultPayoutAddress = ValidSellerAddress);
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        client.DefaultRequestHeaders.Add(
+            "X-ReAuth-Token", await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId));
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(
+            "/api/v1/users/me/wallet/seller", new { walletAddress = ValidSecondSellerAddress }))
+            .StatusCode);
+
+        client.DefaultRequestHeaders.Remove("X-ReAuth-Token");
+        client.DefaultRequestHeaders.Add(
+            "X-ReAuth-Token", await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId));
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(
+            "/api/v1/users/me/wallet/seller", new { walletAddress = UnrelatedSellerAddress }))
+            .StatusCode);
+
+        var history = await _factory.GetWalletHistoryAsync(user.Id);
+        Assert.Equal(2, history.Count);
+        Assert.Equal(ValidSellerAddress, history[0].Address);
+        Assert.Equal(ValidSecondSellerAddress, history[1].Address);
+        Assert.All(history, h => Assert.Equal("seller", h.Type));
+    }
+
+    [Fact]
+    public async Task UpdateRefundWallet_Replacement_WritesBuyerRow_SellerTrailUntouched()
+    {
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.DefaultRefundAddress = ValidRefundAddress;
+            u.RefundAddressChangedAt = DateTime.UtcNow.AddDays(-2);
+        });
+        var token = await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId);
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        client.DefaultRequestHeaders.Add("X-ReAuth-Token", token);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/refund", new
+        {
+            walletAddress = ValidSecondSellerAddress,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var row = Assert.Single(await _factory.GetWalletHistoryAsync(user.Id));
+        Assert.Equal("buyer", row.Type);
+        Assert.Equal(ValidRefundAddress, row.Address);
+    }
+
+    [Fact]
+    public async Task UpdateSellerWallet_SuspendedUser_WritesNoHistory()
+    {
+        // The suspended guard rejects before persistence, so no history is written.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.DefaultPayoutAddress = ValidSellerAddress;
+            u.IsSuspended = true;
+        });
+        var token = await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId);
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        client.DefaultRequestHeaders.Add("X-ReAuth-Token", token);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
+        {
+            walletAddress = ValidSecondSellerAddress,
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await _factory.GetWalletHistoryAsync(user.Id));
+    }
+
     // ---------- helpers ----------
 
     private HttpClient BuildAuthenticatedClient(Guid userId, string steamId)
@@ -464,6 +587,17 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             return await db.Set<User>().AsNoTracking().FirstAsync(u => u.Id == userId);
+        }
+
+        public async Task<List<WalletAddressHistory>> GetWalletHistoryAsync(Guid userId)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<WalletAddressHistory>()
+                .AsNoTracking()
+                .Where(h => h.UserId == userId)
+                .OrderBy(h => h.Id)
+                .ToListAsync();
         }
 
         public async Task<string> IssueReAuthTokenAsync(Guid userId, string steamId)

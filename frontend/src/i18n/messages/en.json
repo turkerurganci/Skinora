@@ -1482,6 +1482,10 @@
       "joinedAt": "Joined",
       "reputation": "Reputation",
       "reputationNew": "New user",
+      "completedCount": "Completed transactions",
+      "successRate": "Success rate",
+      "cancelRate": "Cancellation rate",
+      "rateNone": "—",
       "suspendedUntil": "Suspended until {date}",
       "suspendedPermanent": "Suspended permanently"
     },
@@ -1510,7 +1514,7 @@
       },
       "current": "Current",
       "empty": "No wallet address recorded.",
-      "historyNote": "Only current addresses are shown; previous-address history is not yet recorded."
+      "historyNote": "Current addresses come from the user record; previous addresses are recorded on each change from this point on."
     },
     "transactions": {
       "heading": "Transaction history",
