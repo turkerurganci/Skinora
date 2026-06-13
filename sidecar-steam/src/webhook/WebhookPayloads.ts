@@ -101,6 +101,23 @@ export interface TradeOfferStatusChangedData {
   newState: number;
   /** ETradeOfferState code of the previous state, for diagnostics. */
   oldState: number;
+  /**
+   * T106a — post-acceptance asset lineage (Accepted/state 3 only). After a
+   * trade completes the moved item gets a NEW Steam asset id in the recipient's
+   * inventory; the send-time descriptor is stale. The backend needs these to
+   * populate `Transaction.EscrowBotAssetId` (escrow leg — item now in the bot)
+   * and `Transaction.DeliveredBuyerAssetId` (delivery leg — item now with the
+   * buyer), which the ITEM_ESCROWED / ITEM_DELIVERED state-machine guards
+   * require. Resolved via `TradeOffer.getExchangeDetails`; absent for non-accept
+   * states or when the exchange-details fetch fails (backend logs + acks rather
+   * than advancing — never a silent stall).
+   *
+   * `receivedAssetId`  : new id of the item the BOT received (escrow leg).
+   * `deliveredAssetId` : new id of the item the COUNTERPARTY received
+   *                      (delivery + refund legs — bot sent the item out).
+   */
+  receivedAssetId?: string;
+  deliveredAssetId?: string;
 }
 
 /** Maps the T66-tracked ETradeOfferState values to the webhook event name. */

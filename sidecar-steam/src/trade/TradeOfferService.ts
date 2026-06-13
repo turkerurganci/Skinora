@@ -73,7 +73,10 @@ export class TradeOfferService {
   async sendOffer(request: SendTradeOfferRequest): Promise<SendTradeOfferResponse> {
     this.validateRequest(request);
 
-    const bot = this.botManager.selectBot();
+    // T106a — honour the backend's escrow-bot hint so the delivery + refund
+    // legs route through the bot that actually holds the item; falls back to
+    // round-robin inside BotManager when the hint is absent / not READY.
+    const bot = this.botManager.selectBot(request.botAccountName);
     if (!bot) {
       const reason = 'No READY bots available';
       this.log.error({ transactionId: request.transactionId }, reason);

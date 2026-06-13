@@ -20,6 +20,15 @@ export interface SendTradeOfferRequest {
   partnerSteamId: string;
   items: ItemDescriptor[];
   message?: string;
+  /**
+   * T106a — backend-chosen escrow bot hint (its Steam `accountName` /
+   * `DisplayName`). The backend owns capacity-based bot selection
+   * (`IBotSelectionService`, 06 §3.10) and persists `Transaction.EscrowBotId`
+   * before dispatch, so the delivery + refund legs MUST route through the same
+   * bot that holds the item. When the hint is absent or the named bot is not
+   * READY the sidecar falls back to round-robin (`BotManager.selectBot`).
+   */
+  botAccountName?: string;
 }
 
 /**

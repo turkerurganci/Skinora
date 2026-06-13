@@ -5,6 +5,7 @@
     <ProjectReference Include="..\Skinora.Platform\Skinora.Platform.csproj" />
     <ProjectReference Include="..\Skinora.Realtime\Skinora.Realtime.csproj" />
     <ProjectReference Include="..\Skinora.Transactions\Skinora.Transactions.csproj" />
+    <ProjectReference Include="..\Skinora.Users\Skinora.Users.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

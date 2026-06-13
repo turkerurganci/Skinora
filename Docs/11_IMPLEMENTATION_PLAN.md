@@ -2162,7 +2162,9 @@ Task T103b: Steam hesapları backend tamamlama (S18 — emanet item listesi + Re
   Ertelenme ön-koşulları: (a) escrow akışına bot-atama wiring'i (SelectAsync çağrısı + EscrowBotId persist + ActiveEscrowCount artırımı); (b) recovery/failover feature spec'i (discovery turu olası).
   Kapsam (açıldığında): kısıtlı/banned hesabın emanet item listesi + Recovery Queue satır verisi + MANAGE_STEAM_RECOVERY aksiyonları (Manual Recovery / not / sorumlu admin).
   Not: T103 (S18 UI) zaten 4/4 PASS — owner-onaylı boş/structural Recovery Queue + emanet sayısı kalır; bu erteleme F5 Gate Check'i BLOKLAMAZ.
-  Yeniden ele alma: F6 E2E (tam escrow akışı egzersiz edilir) veya ayrı backend task.
+  GÜNCELLEME 2026-06-13: ön-koşul (a) escrow→bot wiring = T106a (Escrow Trade-Offer Dispatch Engine) ile KARŞILANDI.
+    Kalan = T103b-2 (recovery/failover discovery + spec) / T103b-3 (recovery queue domain + MANAGE_STEAM_RECOVERY + emanet item listesi impl).
+  Yeniden ele alma: T103b-2 discovery turu (recovery/failover priorite olduğunda) → T103b-3 impl.
 ```
 
 ```
@@ -2177,6 +2179,30 @@ Task T106: Admin Audit log (S21)
   Test beklentisi: Yok
   Doğrulama kontrol listesi:
     - [ ] 04 §8.10 tüm bileşenler ve state'ler var mı?
+```
+
+```
+Task T106a: Escrow Trade-Offer Dispatch Engine (T69-K1 resmileştirme)
+  [PLAN EKLEMESİ 2026-06-13 — "task 103b" yeniden ele alınırken keşfedildi: T103b ön-koşul (a)
+   "escrow→bot wiring" aslında T69-K1 dispatch caller'ıdır (T69 raporu 2026-05-16'da "plan'da
+   ayrı task olarak tanımsız, T-future devir" diye proje sahibi onayıyla ertelemişti). Doğrulama:
+   SendTradeOfferToSeller/ToBuyer hiç fire edilmiyor, sidecar /trade-offers/send'i çağıran client
+   yok, trade_offer.accepted asset-id taşımıyor → escrow happy-path motoru tümüyle kurulmamış.
+   Owner kararı (3-tur AskUserQuestion 2026-06-13): tanımla+tasarla+uygula; kapsam = 3 yön +
+   sidecar değişiklikleri dahil; tetikleyici = Hangfire per-minute scan.]
+  Bağımlılık: T64–T69 (Steam bot pipeline), T73 (dispatch job deseni)
+  Dokümanlar: 05 §3.2, 06 §3.9/§3.10, 08 §2.4/§2.7
+  Kabul kriterleri:
+    - Escrow bacağı: ACCEPTED → SelectAsync bot seç + EscrowBotId persist + SendTradeOfferToSeller fire + SELLER_TO_BOT POST (botAccountName hint, atomik)
+    - Delivery bacağı: PAYMENT_RECEIVED → escrow botunu yeniden kullan + SendTradeOfferToBuyer fire + BOT_TO_BUYER POST
+    - Refund bacağı: ItemRefundToSellerRequestedEvent tüketicisi → BOT_TO_SELLER_REFUND dispatch
+    - Asset-id yakalama (sidecar getExchangeDetails → trade_offer.accepted) → EscrowBotAssetId/DeliveredBuyerAssetId; guard'lar geçer, sessiz takılma yok
+    - ActiveEscrowCount: +1 ITEM_ESCROWED, −1 delivery & refund accepted; negatif olmaz; yalnız backend yazar
+    - Transient retry (sidecar unavailable) / kalıcı hata → TradeOfferDispatchFailedEvent; idempotency (state-flip + yön-bazlı TradeOffer satır varlığı)
+  Test beklentisi: dispatch job + webhook handler + dispatch client + refund consumer + sidecar (hint, asset-id) testleri
+  Doğrulama kontrol listesi:
+    - [ ] 3 yön de uçtan uca dispatch ediliyor + asset-id yakalama + sayaç yaşam döngüsü doğru mu?
+  Not: T103b ön-koşul (a)'yı kapatır. (b) recovery/failover spec + recovery queue = T103b-2/-3 ertelenmiş kalır.
 ```
 
 ---

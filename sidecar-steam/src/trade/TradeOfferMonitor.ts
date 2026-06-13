@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import type { TradeOffer } from 'steam-tradeoffer-manager';
+import type { ExchangeDetailsItem, TradeOffer } from 'steam-tradeoffer-manager';
 import { logger as rootLogger } from '../logger.js';
 import { sendCallback } from '../webhook/WebhookClient.js';
 import {
@@ -156,11 +156,60 @@ export class TradeOfferMonitor {
       newState,
       oldState,
     };
+
+    // T106a — on Accepted (state 3) resolve the post-settlement asset ids so
+    // the backend can populate EscrowBotAssetId / DeliveredBuyerAssetId (the
+    // ITEM_ESCROWED / ITEM_DELIVERED guards require them). On fetch failure we
+    // still emit the event without ids — the backend logs + acks rather than
+    // advancing, and reconciliation/admin recovers (never a silent stall).
+    if (eventName === 'trade_offer.accepted') {
+      const assetIds = await this.resolveExchangeAssetIds(session, offer);
+      if (assetIds.receivedAssetId) data.receivedAssetId = assetIds.receivedAssetId;
+      if (assetIds.deliveredAssetId) data.deliveredAssetId = assetIds.deliveredAssetId;
+    }
+
     this.log.info(
       { event: eventName, bot: session.accountName, offerId: offer.id, oldState, newState },
       'Trade offer state changed',
     );
     await this.publish(eventName, data as unknown as Record<string, unknown>);
+  }
+
+  /**
+   * Resolve the new (post-settlement) asset ids for an Accepted offer. The bot
+   * RECEIVES on the escrow (SELLER_TO_BOT) leg → `receivedItems`; the bot SENDS
+   * on the delivery / refund legs → `sentItems`. We surface both and let the
+   * backend pick by the stored TradeOffer.Direction. Errors degrade to empty
+   * (logged) so the webhook still fires.
+   */
+  private resolveExchangeAssetIds(
+    session: BotSession,
+    offer: TradeOffer,
+  ): Promise<{ receivedAssetId?: string; deliveredAssetId?: string }> {
+    return new Promise((resolve) => {
+      try {
+        offer.getExchangeDetails((err, _status, _tradeInitTime, receivedItems, sentItems) => {
+          if (err) {
+            this.log.warn(
+              { err: err.message, bot: session.accountName, offerId: offer.id },
+              'getExchangeDetails failed — emitting accepted event without asset ids',
+            );
+            resolve({});
+            return;
+          }
+          resolve({
+            receivedAssetId: firstNewAssetId(receivedItems),
+            deliveredAssetId: firstNewAssetId(sentItems),
+          });
+        });
+      } catch (err) {
+        this.log.warn(
+          { err: (err as Error).message, bot: session.accountName, offerId: offer.id },
+          'getExchangeDetails threw — emitting accepted event without asset ids',
+        );
+        resolve({});
+      }
+    });
   }
 
   private async publish(event: TradeOfferEventName, data: Record<string, unknown>): Promise<void> {
@@ -180,4 +229,16 @@ export class TradeOfferMonitor {
       );
     }
   }
+}
+
+/**
+ * Pick the new (post-settlement) asset id of the first item in an exchange-
+ * details slice. Skinora trades are single-item, so the first entry is the
+ * relevant one. Falls back to the original `assetid` only if `new_assetid` is
+ * absent, and returns undefined for an empty slice.
+ */
+function firstNewAssetId(items: ExchangeDetailsItem[] | undefined): string | undefined {
+  const first = items?.[0];
+  if (!first) return undefined;
+  return first.new_assetid ?? first.assetid;
 }

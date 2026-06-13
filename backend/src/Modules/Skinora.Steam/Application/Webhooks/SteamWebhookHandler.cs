@@ -22,8 +22,20 @@ namespace Skinora.Steam.Application.Webhooks;
 /// </summary>
 public sealed class SteamWebhookHandler : ISteamWebhookHandler
 {
+    // Internal direction strings used by the shared status-change pipeline to
+    // pick the forward trigger (computed from the persisted TradeOffer.Direction,
+    // NOT from the wire payload).
     private const string DirectionEscrow = "escrow";
     private const string DirectionDelivery = "delivery";
+
+    // T106a — the sidecar's on-the-wire `direction` vocabulary (matches its
+    // TradeDirection union, sidecar-steam/src/trade/types.ts). Carried on
+    // trade_offer.sent / trade_offer.failed; reconciled to TradeOfferDirection
+    // by ParseDirection. (Status-change events carry no direction — the backend
+    // resolves it from the stored TradeOffer row.)
+    private const string SidecarDirectionEscrow = "SELLER_TO_BOT";
+    private const string SidecarDirectionDelivery = "BOT_TO_BUYER";
+    private const string SidecarDirectionRefund = "BOT_TO_SELLER_REFUND";
 
     private readonly AppDbContext _db;
     private readonly IAuditLogger _auditLogger;
@@ -244,6 +256,23 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
             return TradeWebhookResult.Unknown;
         }
 
+        // T106a — the dispatch job records a FAILED row synchronously on a
+        // terminal sidecar response; this async webhook reports the same
+        // failure. Dedupe so a single dispatch failure does not stack two
+        // FAILED rows for one leg (the candidate scan keys off row existence).
+        var alreadyRecorded = await _db.Set<TradeOffer>().AnyAsync(
+            t => t.TransactionId == transactionId
+                && t.Direction == direction
+                && t.Status == TradeOfferStatus.FAILED,
+            cancellationToken);
+        if (alreadyRecorded)
+        {
+            _logger.LogInformation(
+                "trade_offer.failed: a FAILED {Direction} offer already recorded for transaction {TransactionId} — idempotent. correlationId={CorrelationId}",
+                direction, transactionId, correlationId);
+            return TradeWebhookResult.Idempotent;
+        }
+
         Guid? botId = null;
         if (!string.IsNullOrWhiteSpace(botAccountName))
         {
@@ -282,17 +311,176 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         return TradeWebhookResult.Applied;
     }
 
-    private Task<TradeWebhookResult> HandleAcceptedAsync(
+    /// <summary>
+    /// T106a — trade_offer.accepted. Unlike the generic status-change pipeline
+    /// this path must (1) capture the post-settlement asset id into the
+    /// transaction before firing the guard-protected forward trigger and
+    /// (2) maintain the bot's denormalized <c>ActiveEscrowCount</c>. Handles all
+    /// three directions; the refund leg has no forward trigger (the transaction
+    /// is already terminal) — it only releases the bot's escrow slot.
+    /// </summary>
+    private async Task<TradeWebhookResult> HandleAcceptedAsync(
         TradeOfferEventData data, string correlationId, CancellationToken cancellationToken)
     {
-        return ApplyStatusChangeAsync(
-            data, correlationId, cancellationToken,
-            newStatus: TradeOfferStatus.ACCEPTED,
-            forwardTrigger: direction => direction == DirectionEscrow
-                ? TransactionTrigger.EscrowItem
-                : TransactionTrigger.DeliverItem,
-            // ACCEPTED is the forward path — no cancellation reason needed.
-            cancelReason: null);
+        var offerId = RequireOfferId(data, SteamWebhookEvents.TradeOfferAccepted);
+
+        var tradeOffer = await _db.Set<TradeOffer>().FirstOrDefaultAsync(
+            t => t.SteamTradeOfferId == offerId, cancellationToken);
+        if (tradeOffer is null)
+        {
+            _logger.LogWarning(
+                "trade_offer.accepted: offer {OfferId} not found locally — sidecar may have fired before sent landed. correlationId={CorrelationId}",
+                offerId, correlationId);
+            return TradeWebhookResult.Unknown;
+        }
+
+        if (tradeOffer.Status == TradeOfferStatus.ACCEPTED)
+        {
+            _logger.LogInformation(
+                "trade_offer.accepted: offer {OfferId} already ACCEPTED — idempotent. correlationId={CorrelationId}",
+                offerId, correlationId);
+            return TradeWebhookResult.Idempotent;
+        }
+
+        var transaction = await _db.Set<Transaction>().FirstOrDefaultAsync(
+            t => t.Id == tradeOffer.TransactionId, cancellationToken);
+        if (transaction is null)
+        {
+            _logger.LogWarning(
+                "trade_offer.accepted: transaction {TransactionId} missing for offer {OfferId}. correlationId={CorrelationId}",
+                tradeOffer.TransactionId, offerId, correlationId);
+            tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+            tradeOffer.RespondedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            return TradeWebhookResult.Unknown;
+        }
+
+        return tradeOffer.Direction switch
+        {
+            TradeOfferDirection.TO_SELLER => await AcceptEscrowAsync(
+                tradeOffer, transaction, data, offerId, correlationId, cancellationToken),
+            TradeOfferDirection.TO_BUYER => await AcceptDeliveryAsync(
+                tradeOffer, transaction, data, offerId, correlationId, cancellationToken),
+            TradeOfferDirection.RETURN_TO_SELLER => await AcceptRefundAsync(
+                tradeOffer, offerId, correlationId, cancellationToken),
+            _ => TradeWebhookResult.Idempotent,
+        };
+    }
+
+    private async Task<TradeWebhookResult> AcceptEscrowAsync(
+        TradeOffer tradeOffer, Transaction transaction, TradeOfferEventData data,
+        string offerId, string correlationId, CancellationToken cancellationToken)
+    {
+        // 06 §3.5 — the ITEM_ESCROWED guard requires EscrowBotAssetId. Capture
+        // the bot's new asset id from the sidecar before firing.
+        if (!string.IsNullOrWhiteSpace(data.ReceivedAssetId))
+        {
+            transaction.EscrowBotAssetId = data.ReceivedAssetId;
+        }
+
+        var machine = new TransactionStateMachine(transaction);
+        if (!machine.CanFire(TransactionTrigger.EscrowItem))
+        {
+            // Either a replay (already advanced) or EscrowBotAssetId is still
+            // missing because the sidecar exchange-details fetch failed. Persist
+            // the offer flip and ack — never silently advance without the asset
+            // lineage. A missing asset id is logged loudly for ops follow-up.
+            tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+            tradeOffer.RespondedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(transaction.EscrowBotAssetId))
+            {
+                _logger.LogError(
+                    "trade_offer.accepted (escrow): EscrowBotAssetId missing for transaction {TransactionId} (offer {OfferId}) — cannot advance to ITEM_ESCROWED. correlationId={CorrelationId}",
+                    transaction.Id, offerId, correlationId);
+            }
+            return TradeWebhookResult.Idempotent;
+        }
+
+        tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+        tradeOffer.RespondedAt = DateTime.UtcNow;
+        await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, +1, cancellationToken);
+        machine.Fire(TransactionTrigger.EscrowItem);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "trade_offer.accepted (escrow): transaction {TransactionId} → ITEM_ESCROWED, bot {BotId} escrow count +1. correlationId={CorrelationId}",
+            transaction.Id, tradeOffer.PlatformSteamBotId, correlationId);
+        return TradeWebhookResult.Applied;
+    }
+
+    private async Task<TradeWebhookResult> AcceptDeliveryAsync(
+        TradeOffer tradeOffer, Transaction transaction, TradeOfferEventData data,
+        string offerId, string correlationId, CancellationToken cancellationToken)
+    {
+        // 06 §3.5 — the ITEM_DELIVERED guard requires DeliveredBuyerAssetId.
+        if (!string.IsNullOrWhiteSpace(data.DeliveredAssetId))
+        {
+            transaction.DeliveredBuyerAssetId = data.DeliveredAssetId;
+        }
+
+        var machine = new TransactionStateMachine(transaction);
+        if (!machine.CanFire(TransactionTrigger.DeliverItem))
+        {
+            tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+            tradeOffer.RespondedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(transaction.DeliveredBuyerAssetId))
+            {
+                _logger.LogError(
+                    "trade_offer.accepted (delivery): DeliveredBuyerAssetId missing for transaction {TransactionId} (offer {OfferId}) — cannot advance to ITEM_DELIVERED. correlationId={CorrelationId}",
+                    transaction.Id, offerId, correlationId);
+            }
+            return TradeWebhookResult.Idempotent;
+        }
+
+        tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+        tradeOffer.RespondedAt = DateTime.UtcNow;
+        // Item left the bot — release its escrow slot.
+        await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, -1, cancellationToken);
+        machine.Fire(TransactionTrigger.DeliverItem);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "trade_offer.accepted (delivery): transaction {TransactionId} → ITEM_DELIVERED, bot {BotId} escrow count -1. correlationId={CorrelationId}",
+            transaction.Id, tradeOffer.PlatformSteamBotId, correlationId);
+        return TradeWebhookResult.Applied;
+    }
+
+    private async Task<TradeWebhookResult> AcceptRefundAsync(
+        TradeOffer tradeOffer, string offerId, string correlationId, CancellationToken cancellationToken)
+    {
+        // Refund (RETURN_TO_SELLER) accepted by the seller — the transaction is
+        // already terminal (CANCELLED_*), so there is no forward trigger. The
+        // item left the bot back to the seller: release its escrow slot.
+        tradeOffer.Status = TradeOfferStatus.ACCEPTED;
+        tradeOffer.RespondedAt = DateTime.UtcNow;
+        await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, -1, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "trade_offer.accepted (refund): offer {OfferId} returned item to seller, bot {BotId} escrow count -1. correlationId={CorrelationId}",
+            offerId, tradeOffer.PlatformSteamBotId, correlationId);
+        return TradeWebhookResult.Applied;
+    }
+
+    /// <summary>
+    /// Adjust a bot's denormalized <c>ActiveEscrowCount</c> (06 §3.10) within the
+    /// caller's unit of work. The backend is the single writer; the count never
+    /// goes negative. No-op when the bot id is empty or the row is gone.
+    /// </summary>
+    private async Task AdjustEscrowCountAsync(Guid botId, int delta, CancellationToken cancellationToken)
+    {
+        if (botId == Guid.Empty) return;
+        var bot = await _db.Set<PlatformSteamBot>().FirstOrDefaultAsync(b => b.Id == botId, cancellationToken);
+        if (bot is null)
+        {
+            _logger.LogWarning(
+                "AdjustEscrowCountAsync: bot {BotId} not found — escrow count {Delta} skipped.", botId, delta);
+            return;
+        }
+        var next = bot.ActiveEscrowCount + delta;
+        bot.ActiveEscrowCount = next < 0 ? 0 : next;
     }
 
     private Task<TradeWebhookResult> HandleDeclinedAsync(
@@ -452,8 +640,9 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     {
         return data.Direction switch
         {
-            DirectionEscrow => TradeOfferDirection.TO_SELLER,
-            DirectionDelivery => TradeOfferDirection.TO_BUYER,
+            SidecarDirectionEscrow => TradeOfferDirection.TO_SELLER,
+            SidecarDirectionDelivery => TradeOfferDirection.TO_BUYER,
+            SidecarDirectionRefund => TradeOfferDirection.RETURN_TO_SELLER,
             _ => throw new BusinessRuleException("WEBHOOK_DIRECTION_INVALID", $"direction '{data.Direction}' invalid for {eventName}."),
         };
     }

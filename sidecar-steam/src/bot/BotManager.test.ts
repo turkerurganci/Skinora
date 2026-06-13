@@ -173,6 +173,33 @@ describe('BotManager', () => {
     expect(manager.selectBot()?.accountName).toBe('ready');
   });
 
+  it('selectBot honours a READY preferred bot hint (T106a)', async () => {
+    const factory = vi.fn((c: BotCredentials) => makeFakeSession(c.accountName, true));
+    const manager = new BotManager({
+      credentials: [cred('a'), cred('b'), cred('c')],
+      sessionFactory: factory,
+      webhookSender: vi.fn().mockResolvedValue(undefined),
+    });
+    await manager.initialize();
+    // Repeated picks always return the hinted bot regardless of round-robin cursor.
+    expect(manager.selectBot('b')?.accountName).toBe('b');
+    expect(manager.selectBot('b')?.accountName).toBe('b');
+    expect(manager.selectBot('c')?.accountName).toBe('c');
+  });
+
+  it('selectBot falls back to round-robin when the hinted bot is not READY (T106a)', async () => {
+    const hinted = makeFakeSession('hinted', false);
+    const other = makeFakeSession('other', true);
+    const factory = vi.fn((c: BotCredentials) => (c.accountName === 'hinted' ? hinted : other));
+    const manager = new BotManager({
+      credentials: [cred('hinted'), cred('other')],
+      sessionFactory: factory,
+      webhookSender: vi.fn().mockResolvedValue(undefined),
+    });
+    await manager.initialize();
+    expect(manager.selectBot('hinted')?.accountName).toBe('other');
+  });
+
   it('onFatalFailure callback removes the bot and emits webhook events', async () => {
     const sessions: ReturnType<typeof makeFakeSession>[] = [];
     const factory = vi.fn((c: BotCredentials, onFatal) => {

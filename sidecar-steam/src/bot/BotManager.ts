@@ -103,15 +103,26 @@ export class BotManager {
   /**
    * Select a ready bot for trade-offer operations.
    *
-   * T64: round-robin among READY sessions — adequate for first-pass capacity
-   * distribution across the pool. T69 replaces this with capacity-based scoring
-   * (lowest `ActiveEscrowCount` per 06 §3.10 / 05 §3.2).
+   * T106a: when `preferredAccountName` is supplied (the backend's
+   * capacity-based escrow-bot choice — 06 §3.10 / 05 §3.2) the named bot is
+   * returned if it is READY. The delivery + refund legs rely on this so the
+   * item is sent from the very bot that holds it. When the hint is absent or
+   * the named bot is not READY we fall back to round-robin (T64 behaviour) so
+   * a transient health blip does not strand a dispatch.
    */
-  selectBot(): BotSession | null {
+  selectBot(preferredAccountName?: string): BotSession | null {
     const ready = [...this.sessions.values()].filter((s) => s.isReady());
     if (ready.length === 0) {
       this.log.warn('selectBot called but no bots are READY');
       return null;
+    }
+    if (preferredAccountName) {
+      const preferred = ready.find((s) => s.accountName === preferredAccountName);
+      if (preferred) return preferred;
+      this.log.warn(
+        { preferredAccountName },
+        'preferred escrow bot is not READY — falling back to round-robin',
+      );
     }
     const index = this.roundRobinCursor % ready.length;
     this.roundRobinCursor = (this.roundRobinCursor + 1) % ready.length;
