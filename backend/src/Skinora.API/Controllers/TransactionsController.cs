@@ -197,6 +197,45 @@ public sealed class TransactionsController : ControllerBase
         };
     }
 
+    /// <summary>T46 — <c>GET /transactions/by-invite/:token</c> (07 §7.5a).</summary>
+    /// <remarks>
+    /// Resolves the OPEN_LINK opaque invite token to the public-invite consume
+    /// surface (04 §7.3 public variant). Public + authenticated; an
+    /// authenticated token holder who is not yet a party is treated as a
+    /// prospective buyer (<c>canAccept=true</c>). Accept stays id-based via
+    /// <c>POST /transactions/:id/accept</c>. The literal <c>by-invite</c>
+    /// segment never collides with the <c>{id:guid}</c> detail route.
+    /// </remarks>
+    [HttpGet("by-invite/{token}")]
+    [AllowAnonymous]
+    [RateLimit("public")]
+    public async Task<IActionResult> GetByInvite(string token, CancellationToken cancellationToken)
+    {
+        Guid? callerId = TryGetUserId(out var userId) ? userId : null;
+        var callerSteamId = User.FindFirstValue(AuthClaimTypes.SteamId);
+        var outcome = await _detail.GetByInviteTokenAsync(token, callerId, callerSteamId, cancellationToken);
+
+        return outcome.Status switch
+        {
+            TransactionDetailStatus.Found => Ok(outcome.Body),
+
+            TransactionDetailStatus.NotFound => NotFound(
+                ApiResponse<object>.Fail(
+                    outcome.ErrorCode!,
+                    outcome.ErrorMessage!,
+                    traceId: HttpContext.TraceIdentifier)),
+
+            TransactionDetailStatus.NotAParty => StatusCode(
+                StatusCodes.Status403Forbidden,
+                ApiResponse<object>.Fail(
+                    outcome.ErrorCode!,
+                    outcome.ErrorMessage!,
+                    traceId: HttpContext.TraceIdentifier)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
     /// <summary>T6 — <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
     [HttpPost("{id:guid}/accept")]
     [Authorize(Policy = AuthPolicies.Authenticated)]

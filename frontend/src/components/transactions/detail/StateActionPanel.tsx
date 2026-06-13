@@ -24,6 +24,14 @@ export interface StateActionPanelProps {
   isAuthenticated: boolean;
   isSuspended: boolean;
   onRefetch: () => void;
+  /**
+   * Relative path (locale-less) the public login CTA returns to after Steam
+   * auth. Defaults to the id-based detail route; the OPEN_LINK invite page
+   * passes `/invite/:token` so the visitor lands back on the invite as a
+   * prospective buyer. The auth flow reads this as the `returnUrl` query
+   * param and prepends the locale (auth/callback localePath).
+   */
+  loginReturnTo?: string;
 }
 
 /**
@@ -44,6 +52,7 @@ export function StateActionPanel({
   isAuthenticated,
   isSuspended,
   onRefetch,
+  loginReturnTo,
 }: StateActionPanelProps) {
   const t = useTranslations("transactionDetail.actions");
   const locale = useLocale();
@@ -98,11 +107,14 @@ export function StateActionPanel({
   // Public (unauthenticated, CREATED only — 07 §7.5)
   if (!role) {
     if (status !== TransactionStatus.CREATED) return null;
+    // The auth flow reads `returnUrl` (login + callback both) and prepends the
+    // locale on success; pass a locale-less relative path.
+    const returnTarget = loginReturnTo ?? `/transactions/${detail.id}`;
     return (
       <div className="space-y-3 rounded-lg border border-blue-300 bg-blue-50 p-4">
         <p className="text-sm text-gray-800">{t("public.acceptHint")}</p>
         <Link
-          href={`/${locale}/auth/login?returnTo=${encodeURIComponent(`/transactions/${detail.id}`)}`}
+          href={`/${locale}/auth/login?returnUrl=${encodeURIComponent(returnTarget)}`}
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
         >
           {t("public.loginCta")}

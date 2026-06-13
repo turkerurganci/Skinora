@@ -1040,6 +1040,8 @@ Kişisel veriler temizlenir, işlem geçmişi + AuditLog anonim korunur (03 §10
 }
 ```
 
+> **`inviteUrl` formatı:** STEAM_ID yönteminde `/transactions/{id}`, OPEN_LINK yönteminde opaque token'lı `/invite/{token}` döner (04 §7.2 — enumeration koruması). OPEN_LINK linki §7.5a `GET /transactions/by-invite/:token` ile çözülür. Backend host-agnostic relative path döndürür; mutlak origin'i frontend ekler.
+
 FLAGGED olursa `status: "FLAGGED"` + `flagReason: "PRICE_DEVIATION"` döner.
 
 Response header: `Location: /api/v1/transactions/guid`
@@ -1306,11 +1308,13 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 **`inviteInfo` (CREATED, satıcı):**
 ```json
 {
-  "inviteUrl": "https://skinora.com/transactions/guid",
+  "inviteUrl": "/invite/{token}",
   "buyerRegistered": false,
   "buyerNotified": false
 }
 ```
+
+> `inviteUrl` relative path'tir: OPEN_LINK'te `/invite/{token}` (§7.5a ile çözülür), STEAM_ID'de `/transactions/{id}`. Mutlak origin frontend tarafından eklenir.
 
 **`availableActions` kuralları:**
 
@@ -1338,6 +1342,22 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 ```
 
 **Hatalar:** 404 `TRANSACTION_NOT_FOUND`, 403 `NOT_A_PARTY`
+
+### 7.5a T5a — `GET /transactions/by-invite/:token`
+
+**Amaç:** OPEN_LINK davet linkini (opaque token) çözer ve S07 public-invite kabul yüzeyini döndürür (04 §7.3 public varyant, 03 §3.2). Token enumeration-safe olduğundan link işlem ID'sini sızdırmaz. Literal `by-invite` segmenti `{id:guid}` detay route'u ile çakışmaz.
+
+**Yetki:** Public + authenticated (token erişim anahtarıdır).
+
+**Davranış (rol çözümü §7.5'ten farklı):**
+- **Unauthenticated:** §7.5 ile aynı trimlenmiş public shape (`userRole: null`, `availableActions.requiresLogin: true`). "Giriş Yap ve Kabul Et" CTA aynı `/invite/:token`'a döner (giriş sonrası locale eklenir).
+- **Authenticated, taraf değil, davet hâlâ açık (CREATED + alıcı yok):** *prospective buyer* — tam kabul yüzeyi (`userRole: "buyer"`, `availableActions.canAccept: true`; `canCancel`/`canDispute` null, çünkü bunlar gerçek taraflara aittir). Kabul yine ID-bazlı `POST /transactions/:id/accept` ile yapılır; 02 §6.2 ilk-gelen-alır kuralını acceptance servisi uygular.
+- **Authenticated satıcı:** satıcı görünümü ("alıcı bekleniyor" + davet linki bloğu).
+- **Harcanmış / kabul edilmiş davet, taraf değil:** trimlenmiş public shape (FE "davet artık geçerli değil" gösterir); taraf olan alıcı/satıcı canonical `/transactions/:id`'e yönlendirilir.
+
+**Response (200):** §7.5 ile aynı `TransactionDetail` şeması.
+
+**Hatalar:** 404 `TRANSACTION_NOT_FOUND` (geçersiz/bilinmeyen/boş token)
 
 ### 7.6 T6 — `POST /transactions/:id/accept`
 

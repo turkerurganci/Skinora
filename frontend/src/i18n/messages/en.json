@@ -1,4 +1,22 @@
 {
+  "invitePage": {
+    "title": "You're invited to a transaction",
+    "subtitle": "Review the item and price below, then sign in with Steam to accept. The first person to accept becomes the buyer.",
+    "errors": {
+      "notFound": {
+        "title": "Invite not found",
+        "message": "This invite link is invalid or has expired. Ask the seller for a new link."
+      },
+      "generic": {
+        "title": "Something went wrong",
+        "message": "We couldn't load this invite. Please try again."
+      }
+    },
+    "unavailable": {
+      "title": "Invite no longer available",
+      "message": "This transaction has already been accepted by another user."
+    }
+  },
   "landing": {
     "hero": {
       "title": "Secure escrow for CS2 item trades",

@@ -1,4 +1,22 @@
 {
+  "invitePage": {
+    "title": "您受邀参与一笔交易",
+    "subtitle": "请查看下方的物品和价格，然后使用 Steam 登录以接受。第一个接受的人将成为买家。",
+    "errors": {
+      "notFound": {
+        "title": "未找到邀请",
+        "message": "此邀请链接无效或已过期。请向卖家索取新链接。"
+      },
+      "generic": {
+        "title": "出现错误",
+        "message": "无法加载此邀请。请重试。"
+      }
+    },
+    "unavailable": {
+      "title": "邀请已失效",
+      "message": "此交易已被其他用户接受。"
+    }
+  },
   "landing": {
     "hero": {
       "title": "安全的 CS2 物品交易托管",

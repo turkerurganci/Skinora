@@ -141,6 +141,7 @@
 | ⚪ | dev-route-visibility | `/dev/components` public-but-unindexed (dev-menü kararı); responsive audit (T98'de büyük ölçüde çözüldü) | T84 K |
 | ⚪ | T97-NEXT_LOCALE-cookie 🆕 | `LanguageSelector` localStorage+path; next-intl `NEXT_LOCALE` cookie migration | `MEMORY_ARCHIVE.md:219` (T97 K5) |
 | ⚪ | T97-formatAmount-deprecated-alias 🆕 | `format.ts:133-139` deprecated `formatAmount` alias kaldırılacak (call-site migration tamam) | `MEMORY_ARCHIVE.md:219` (T97 K3) |
+| ⚪ | FE-enums-ts-lag 🆕 | `types/enums.ts` backend'in gerisinde: `NotificationType` (-7), `AuditAction` (-14), `FraudFlagType` (-`SANCTIONS_MATCH`). Runtime kırılmaz (icon `?? "transactionUpdate"` fallback / admin ekranları `admin.ts` union'larını kullanır / audit `action` serbest string); F0 enums'tan miras, kozmetik. | `GATE_CHECK_F5.md` / EnumTests 27/26/5 |
 
 ## 6. Doküman / spec borcu
 
@@ -157,6 +158,7 @@
 | ⚪ | like-escape-helper | `AdminUserService.ListAsync` + audit/sanctions search raw `EF.Functions.Like` (parametrize, injection değil); paylaşılan escape helper + no-direct-INSERT arch rule | T63 K6 / T106 K8 / T42 K1 |
 | ⚪ | permissioncatalog-xmldoc-drift 🆕 | `IsKnown()` xmldoc "11 catalog entries" der, `All` 12 içerir (runtime doğru) | `PermissionCatalog.cs:52`, `GATE_CHECK_F4.md:340` |
 | ⚪ | datamodel-sanctioned-index-drift 🆕 | 06 §3.25 obsolete `IX_SanctionedAddresses_Address` listeler (filtered UQ'ya merge edildi) | `06_DATA_MODEL.md:1273`, `GATE_CHECK_F4.md:340` |
+| ⚪ | admin-route-table-drift 🆕 | 04 §1 route tablosu `/admin`,`/admin/audit-log` + auth ekran yolları, impl `/admin/dashboard`,`/admin/audit-logs` vb. ile uyuşmuyor (tüm ekranlar mevcut, yalnız doc-yolu farkı; S12/S21 path drift) | `GATE_CHECK_F5.md` |
 | ⚪ | T84-emergencyhold-status-doc-drift 🆕 | 04 §5 status tablosu `EMERGENCY_HOLD`'u status sanıyor (freeze overlay label) — **`audit-doc-drift` ile birlikte tek doc-pass'te ele al** | `MEMORY_ARCHIVE.md` T84 K6 |
 | ⚪ | T58-ActiveDisputeExistsUnreachable 🆕 | 07 §7.8 `ACTIVE_DISPUTE_EXISTS` hiç emit edilmiyor (03 §6 farklı-tip eşzamanlı dispute'a izin verir) | `T58_REPORT.md:177` |
 

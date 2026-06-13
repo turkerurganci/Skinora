@@ -1,4 +1,22 @@
 {
+  "invitePage": {
+    "title": "Bir işleme davet edildiniz",
+    "subtitle": "Aşağıdaki ürünü ve fiyatı inceleyin, ardından kabul etmek için Steam ile giriş yapın. İlk kabul eden kişi alıcı olur.",
+    "errors": {
+      "notFound": {
+        "title": "Davet bulunamadı",
+        "message": "Bu davet bağlantısı geçersiz veya süresi dolmuş. Satıcıdan yeni bir bağlantı isteyin."
+      },
+      "generic": {
+        "title": "Bir şeyler ters gitti",
+        "message": "Bu davet yüklenemedi. Lütfen tekrar deneyin."
+      }
+    },
+    "unavailable": {
+      "title": "Davet artık geçerli değil",
+      "message": "Bu işlem başka bir kullanıcı tarafından kabul edildi."
+    }
+  },
   "landing": {
     "hero": {
       "title": "CS2 Eşya Ticaretinde Güvenli Emanet",
