@@ -1,6 +1,6 @@
 # T106 — Admin Audit Log (S21)
 
-**Durum:** ⏳ Yapım bitti — bağımsız doğrulama bekliyor
+**Durum:** ✓ Tamamlandı — bağımsız validator PASS (2026-06-13)
 **Branch:** `task/T106-admin-audit-log`
 **PR:** #163
 **Tip:** Full-stack (frontend ağırlıklı + minimal backend search genişletme; migration YOK)
@@ -106,6 +106,31 @@ Migration YOK. Yeni paket bağımlılığı YOK. Yeni endpoint YOK (AD18 mevcut)
 
 ---
 
+## 8b. Bağımsız Doğrulama (Validator — ayrı chat, 2026-06-13)
+
+**Verdict: ✓ PASS.** Yapım raporu görülmeden bağımsız verdict oluşturuldu, sonra karşılaştırıldı (tam uyum).
+
+**Hard-stop kapıları:** Adım -1 working tree temiz; Adım 0 main son-3 run `success` (`27464744799`/`27464744804` docs(T103b) + `27463601800` T105b); Adım 0b repo memory T106 satırı mevcut.
+
+**Mekanik kapılar (validator-çalıştırıldı, HEAD `d95209d`):**
+- Backend: `Skinora.Platform.Tests` **166/166 PASS** (0 Failed; 3 yeni search testi dahil).
+- Frontend: `tsc --noEmit` **0** · `eslint` (T106 dosyaları) **0** · `prettier --check` **clean** · `next build` ✓ (`/[locale]/admin/audit-logs` ƒ Dynamic).
+- i18n parity: `adminAuditLog` **48 / 48 / 48 / 48** (en/tr/es/zh, 0 missing / 0 extra).
+- Kontrat: `AuditLogListItemDto` ↔ 07 §9.19 ↔ FE `AdminAuditLogItem` 1:1 (alan adı/nullability/casing); `AuditAction` enum **26 ↔ 26** i18n aksiyon etiketi (exact-name match, 4 dil); AD18 endpoint `VIEW_AUDIT_LOG` server-korumalı, tüm query param wire'lı.
+- Task CI `27465633952` HEAD `d95209d` **success**.
+
+**Kabul kriterleri:** AC1 ✓ / AC2 ✓ / AC3 ✓ / AC4 ✓. Doğrulama kontrol listesi ("04 §8.10 tüm bileşenler ve state'ler") = **~ Kısmi**: tüm bileşen ve state'ler mevcut, **tek istisna interaktif kolon-sıralama** (varsayılan en-yeni-üstte var; kolon-tık sıralama yok — AD18 07 §9.19 sort param tanımlamıyor + paylaşılan tablo affordance T98'den beri yok; emsal T101 K10 / kardeş S15-S16 aynı). **Bloke-edici değil.**
+
+**Adversarial review (6-boyut/refute-default workflow, gerçek dosya okuması):** 3 ham bulgu → **2 onaylandı (ikisi de non-blocking) → 0 bloke-edici.** Kolon-sıralama adayı çürütüldü (pre-existing shared-component + sort-less API contract + kardeş S15/S16 aynı boşluk). Onaylanan iki non-blocking: (1) LIKE wildcard escape edilmiyor (precision note — kardeş AD16 T105 `AdminUserService.cs:88-89` + sanctions search ile birebir aynı, önceden doğrulanmış desen; injection değil, parametrize); (2) **TR `title` çevrilmemiş** (aşağıda K7 — validator-fix ile kapatıldı).
+
+**Validator-fix (proje sahibi kararı 2026-06-13):** `tr.json` `adminAuditLog.title` `"Audit Log"` → `"Denetim Kaydı"` (blok terimi `tableAriaLabel`/`loadError` "Denetim kaydı" ile + ES/ZH çevirisiyle tutarlı). Fix sonrası FE gate'leri yeniden koşuldu: i18n 48×4 ✓ · prettier clean ✓ · next build ✓.
+
+**Güvenlik:** Temiz (yeni endpoint yok—AD18 `VIEW_AUDIT_LOG` server-korumalı; `EF.Functions.Like` parametrize—injection yok; `IgnoreQueryFilters` anonimleştirilmiş kimliği sızdırmaz—02 §19 scrub eşleşmeyi durdurur; detay React-escaped; 0 yeni dep; secret yok).
+
+**Yapım raporu karşılaştırması:** Tam uyum — AC1-4 ve K1-K6 birebir örtüşür. Validator ek olarak K7'yi (TR title) yakaladı; construction chat'in K-not'larında yoktu (i18n parity kapısı yalnız key-yapısını kontrol eder, değer çevirisini değil).
+
+---
+
 ## 9. Known Limitations (K-notes)
 
 - **K1 (AC-1, S3): İnteraktif kolon-sıralama yok.** 04 §8.10 "kolon başlıkları tıklanarak sıralama" istiyor; yalnız varsayılan en-yeni-üstte (`OrderByDescending(Id)`) karşılanıyor. `ResponsiveTable`'da sort affordance T98'den beri yok + backend sort param gerektirir. **T101 K10 emsali** — owner-onaylı bilinçli sapma.
@@ -114,6 +139,8 @@ Migration YOK. Yeni paket bağımlılığı YOK. Yeni endpoint YOK (AD18 mevcut)
 - **K4: FE permission guard yok.** Backend `VIEW_AUDIT_LOG` enforce eder (T99 K5 / T103 K5 emsali).
 - **K5: Frontend test runner yok** (F5 plan-onaylı).
 - **K6: Aksiyon etiketleri client-lokalize.** Backend ham enum adı döndürür; FE 26 AuditAction'ı `adminAuditLog.action.*` ile lokalize eder, eksik/gelecekteki enum'da `t.has` fallback ham isim gösterir (T104 permission deseni).
+- **K7 (validator-caught, ÇÖZÜLDÜ): TR `title` çevrilmemişti.** `adminAuditLog.title` = "Audit Log" (İngilizce) iken ES/ZH çevrilmiş + aynı TR blok "Denetim kaydı" kullanıyordu. Bağımsız validator yakaladı (i18n parity kapısı yalnız key-yapısını kontrol eder). Proje sahibi kararı: validator-fix → "Denetim Kaydı". **Bloke-edici değildi (S3 cosmetic page-H1).**
+- **K8 (LIKE precision note): Serbest-metin `search` LIKE wildcard escape etmiyor.** `_`/`%`/`[` içeren nadir girdide over-match olur (Steam ID numerik / tipik kullanıcı adı bu karakterleri içermez). Kardeş AD16 (`AdminUserService.cs:88-89`, T105) + sanctions search ile birebir aynı, önceden doğrulanmış desen; `EF.Functions.Like` parametrize → SQL injection değil. `EscapeLike` helper (T63) yalnız user-typed `ItemName` aramasında benimsenmiş. Repo-geneli tutarlılık chore'una defer.
 
 ---
 

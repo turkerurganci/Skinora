@@ -341,7 +341,7 @@
     }
   },
   "adminAuditLog": {
-    "title": "Audit Log",
+    "title": "Denetim Kaydı",
     "tableAriaLabel": "Denetim kaydı listesi",
     "empty": "Filtrelere uygun kayıt bulunamadı.",
     "loadError": "Denetim kaydı yüklenemedi.",
