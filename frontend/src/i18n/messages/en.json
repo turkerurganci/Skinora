@@ -340,6 +340,64 @@
       "success": "{count} transactions put on hold."
     }
   },
+  "adminAuditLog": {
+    "title": "Audit Log",
+    "tableAriaLabel": "Audit log list",
+    "empty": "No records match the filters.",
+    "loadError": "Failed to load the audit log.",
+    "subjectLabel": "Subject",
+    "columns": {
+      "createdAt": "Date/Time",
+      "category": "Category",
+      "action": "Action",
+      "user": "User",
+      "transactionId": "Transaction ID",
+      "detail": "Detail"
+    },
+    "filters": {
+      "category": "Category",
+      "allCategories": "All",
+      "search": "User",
+      "searchPlaceholder": "Steam ID or username",
+      "transactionId": "Transaction ID",
+      "transactionIdPlaceholder": "Transaction ID",
+      "dateFrom": "From",
+      "dateTo": "To"
+    },
+    "category": {
+      "FUND_MOVEMENT": "Fund Movements",
+      "ADMIN_ACTION": "Admin Actions",
+      "SECURITY_EVENT": "Security Events"
+    },
+    "action": {
+      "WALLET_DEPOSIT": "Wallet deposit",
+      "WALLET_WITHDRAW": "Wallet withdrawal",
+      "WALLET_ESCROW_LOCK": "Escrow lock",
+      "WALLET_ESCROW_RELEASE": "Escrow release",
+      "WALLET_REFUND": "Refund",
+      "DISPUTE_RESOLVED": "Dispute resolved",
+      "MANUAL_REFUND": "Manual refund",
+      "REFUND_BLOCKED": "Refund blocked",
+      "USER_BANNED": "User banned",
+      "USER_UNBANNED": "User unbanned",
+      "ROLE_CHANGED": "Role changed",
+      "SYSTEM_SETTING_CHANGED": "System setting changed",
+      "WALLET_ADDRESS_CHANGED": "Wallet address changed",
+      "FRAUD_FLAG_CREATED": "Fraud flag created",
+      "FRAUD_FLAG_APPROVED": "Fraud flag approved",
+      "FRAUD_FLAG_REJECTED": "Fraud flag rejected",
+      "FRAUD_FLAG_AUTO_HOLD": "Auto-hold applied",
+      "TRANSACTION_CANCELLED_ADMIN": "Transaction cancelled by admin",
+      "EMERGENCY_HOLD_APPLIED": "Emergency hold applied",
+      "EMERGENCY_HOLD_RELEASED": "Emergency hold released",
+      "BOT_STATUS_CHANGED": "Bot status changed",
+      "RECONCILIATION_MISMATCH": "Reconciliation mismatch",
+      "COLD_WALLET_TRANSFER_INITIATED": "Cold wallet transfer initiated",
+      "HOT_WALLET_THRESHOLD_BREACHED": "Hot wallet threshold breached",
+      "SANCTIONS_LIST_ADDRESS_ADDED": "Sanctions list address added",
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed"
+    }
+  },
   "adminTransactions": {
     "title": "Transactions",
     "tableAriaLabel": "Transaction list",

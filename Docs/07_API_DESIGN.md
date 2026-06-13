@@ -2117,6 +2117,8 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 
 `category`: `FUND_MOVEMENT`, `ADMIN_ACTION`, `SECURITY_EVENT`. `subject`: Opsiyonel.
 
+`search`: serbest metin filtresi — hem `EntityId` (ayar anahtarı, işlem/varlık ID) hem de ilgili kullanıcının (actor veya subject) Steam ID'si / görünen adı üzerinde eşleşir; böylece 04 §8.10 "Kullanıcı: Steam ID veya kullanıcı adı" filtresi gerçek kişilere çözümlenir (EntityId bir Guid taşısa bile). Kullanıcı eşleşmesi soft-delete query filter'ını yok sayar (anonimleştirilmiş kullanıcı kimliği silindiği için eşleşmeyi durdurur — 02 §19). (T106)
+
 ### 9.20 AD19 — `POST /admin/transactions/:id/cancel`
 
 **Amaç:** Admin doğrudan işlem iptali. Permission: `CANCEL_TRANSACTIONS`.

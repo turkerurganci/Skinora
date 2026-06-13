@@ -340,6 +340,64 @@
       "success": "已冻结 {count} 笔交易。"
     }
   },
+  "adminAuditLog": {
+    "title": "审计日志",
+    "tableAriaLabel": "审计日志列表",
+    "empty": "没有符合筛选条件的记录。",
+    "loadError": "无法加载审计日志。",
+    "subjectLabel": "对象",
+    "columns": {
+      "createdAt": "日期/时间",
+      "category": "类别",
+      "action": "操作",
+      "user": "用户",
+      "transactionId": "交易 ID",
+      "detail": "详情"
+    },
+    "filters": {
+      "category": "类别",
+      "allCategories": "全部",
+      "search": "用户",
+      "searchPlaceholder": "Steam ID 或用户名",
+      "transactionId": "交易 ID",
+      "transactionIdPlaceholder": "交易 ID",
+      "dateFrom": "起始",
+      "dateTo": "结束"
+    },
+    "category": {
+      "FUND_MOVEMENT": "资金流动",
+      "ADMIN_ACTION": "管理操作",
+      "SECURITY_EVENT": "安全事件"
+    },
+    "action": {
+      "WALLET_DEPOSIT": "钱包充值",
+      "WALLET_WITHDRAW": "钱包提现",
+      "WALLET_ESCROW_LOCK": "托管锁定",
+      "WALLET_ESCROW_RELEASE": "托管释放",
+      "WALLET_REFUND": "退款",
+      "DISPUTE_RESOLVED": "争议已解决",
+      "MANUAL_REFUND": "手动退款",
+      "REFUND_BLOCKED": "退款被阻止",
+      "USER_BANNED": "用户被封禁",
+      "USER_UNBANNED": "用户解封",
+      "ROLE_CHANGED": "角色已更改",
+      "SYSTEM_SETTING_CHANGED": "系统设置已更改",
+      "WALLET_ADDRESS_CHANGED": "钱包地址已更改",
+      "FRAUD_FLAG_CREATED": "欺诈标记已创建",
+      "FRAUD_FLAG_APPROVED": "欺诈标记已批准",
+      "FRAUD_FLAG_REJECTED": "欺诈标记已拒绝",
+      "FRAUD_FLAG_AUTO_HOLD": "自动暂停已应用",
+      "TRANSACTION_CANCELLED_ADMIN": "管理员取消交易",
+      "EMERGENCY_HOLD_APPLIED": "紧急暂停已应用",
+      "EMERGENCY_HOLD_RELEASED": "紧急暂停已解除",
+      "BOT_STATUS_CHANGED": "机器人状态已更改",
+      "RECONCILIATION_MISMATCH": "对账不一致",
+      "COLD_WALLET_TRANSFER_INITIATED": "冷钱包转账已发起",
+      "HOT_WALLET_THRESHOLD_BREACHED": "热钱包阈值被突破",
+      "SANCTIONS_LIST_ADDRESS_ADDED": "已添加制裁名单地址",
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "已移除制裁名单地址"
+    }
+  },
   "adminTransactions": {
     "title": "交易",
     "tableAriaLabel": "交易列表",

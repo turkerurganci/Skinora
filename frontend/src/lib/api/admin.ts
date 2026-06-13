@@ -838,3 +838,64 @@ export function getAdminUserTransactions(
     `/admin/users/${encodeURIComponent(steamId)}/transactions?${params.toString()}`,
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD18 — Admin audit log list (S21). Wire format mirrors
+ * `PagedResult<AuditLogListItemDto>` (07 §9.19). `category` + `action` serialize
+ * as enum strings; `detail` is an opaque JSON object (the backend forwards the
+ * audit row's stored value verbatim). `search` spans the entity id AND the
+ * actor/subject user's Steam ID / display name (04 §8.10 "Kullanıcı" filter —
+ * T106 backend addition).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** The three audit categories (07 §9.19 / 06 §2.19). */
+export type AdminAuditCategory = "FUND_MOVEMENT" | "ADMIN_ACTION" | "SECURITY_EVENT";
+
+/** Actor / subject reference (07 §9.19). `steamId` is null for the SYSTEM account. */
+export interface AuditLogParticipant {
+  steamId: string | null;
+  displayName: string;
+}
+
+/** One row of the AD18 list (07 §9.19). */
+export interface AdminAuditLogItem {
+  id: string;
+  category: AdminAuditCategory;
+  action: string;
+  actor: AuditLogParticipant;
+  subject: AuditLogParticipant | null;
+  transactionId: string | null;
+  detail: unknown | null;
+  createdAt: string;
+}
+
+/** AD18 page envelope — `PagedResult<T>` (07 §2.4 / §9.19). */
+export interface AdminAuditLogResponse {
+  items: AdminAuditLogItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminAuditLogQuery {
+  category?: AdminAuditCategory;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  transactionId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export function listAdminAuditLogs(query: AdminAuditLogQuery): Promise<AdminAuditLogResponse> {
+  const params = new URLSearchParams();
+  if (query.category) params.set("category", query.category);
+  if (query.dateFrom) params.set("dateFrom", query.dateFrom);
+  if (query.dateTo) params.set("dateTo", query.dateTo);
+  if (query.search) params.set("search", query.search);
+  if (query.transactionId) params.set("transactionId", query.transactionId);
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return apiClient<AdminAuditLogResponse>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+}
