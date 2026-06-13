@@ -256,10 +256,142 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Null(outcome.Body.Timeout); // FLAGGED has no active deadline
     }
 
+    // ---- GET /transactions/by-invite/:token (07 §7.5a, F-INVITE-01) ----
+
+    [Fact]
+    public async Task GetByInvite_Unauthenticated_Returns_Public_Variant()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CREATED,
+            method: BuyerIdentificationMethod.OPEN_LINK,
+            inviteToken: "inv-unauth-token");
+
+        var sut = BuildSut();
+        var outcome = await sut.GetByInviteTokenAsync(
+            "inv-unauth-token", callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.NotNull(outcome.Body);
+        Assert.Equal(transaction.Id, outcome.Body.Id);
+        Assert.Null(outcome.Body.UserRole);
+        Assert.Equal("100.00", outcome.Body.Price);
+        // Trimmed public shape — no commission/total/timeout, requiresLogin.
+        Assert.Null(outcome.Body.CommissionAmount);
+        Assert.Null(outcome.Body.TotalAmount);
+        Assert.Null(outcome.Body.Timeout);
+        Assert.False(outcome.Body.AvailableActions.CanAccept);
+        Assert.True(outcome.Body.AvailableActions.RequiresLogin!.Value);
+        Assert.Equal("SellerPlayer", outcome.Body.Seller.DisplayName);
+        Assert.Null(outcome.Body.Seller.SteamId);
+    }
+
+    [Fact]
+    public async Task GetByInvite_Authenticated_Stranger_Is_Prospective_Buyer()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CREATED,
+            method: BuyerIdentificationMethod.OPEN_LINK,
+            inviteToken: "inv-prospect-token");
+        var prospectiveBuyerId = Guid.NewGuid(); // token holder, not yet a party
+
+        var sut = BuildSut();
+        var outcome = await sut.GetByInviteTokenAsync(
+            "inv-prospect-token", prospectiveBuyerId, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Equal(transaction.Id, outcome.Body!.Id);
+        Assert.Equal("buyer", outcome.Body.UserRole);
+        // Prospective buyer sees the full acceptance surface...
+        Assert.Equal("2.00", outcome.Body.CommissionAmount);
+        Assert.Equal("102.00", outcome.Body.TotalAmount);
+        Assert.Equal(4.8m, outcome.Body.Seller.ReputationScore);
+        Assert.True(outcome.Body.AvailableActions.CanAccept);
+        // ...but cancel/dispute belong to actual parties only.
+        Assert.Null(outcome.Body.AvailableActions.CanCancel);
+        Assert.Null(outcome.Body.AvailableActions.CanDispute);
+        Assert.Null(outcome.Body.AvailableActions.RequiresLogin);
+        // Not yet a party → no buyer block, no seller-only invite link.
+        Assert.Null(outcome.Body.Buyer);
+        Assert.Null(outcome.Body.InviteInfo);
+    }
+
+    [Fact]
+    public async Task GetByInvite_Seller_Sees_Seller_View_With_Invite_Link()
+    {
+        await CreateTransactionAsync(
+            TransactionStatus.CREATED,
+            method: BuyerIdentificationMethod.OPEN_LINK,
+            inviteToken: "inv-seller-token");
+
+        var sut = BuildSut();
+        var outcome = await sut.GetByInviteTokenAsync(
+            "inv-seller-token", _seller.Id, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Equal("seller", outcome.Body!.UserRole);
+        Assert.NotNull(outcome.Body.InviteInfo);
+        Assert.StartsWith("/invite/", outcome.Body.InviteInfo.InviteUrl);
+        // Seller cannot accept their own listing.
+        Assert.False(outcome.Body.AvailableActions.CanAccept);
+    }
+
+    [Fact]
+    public async Task GetByInvite_Unknown_Token_Returns_404()
+    {
+        var sut = BuildSut();
+        var outcome = await sut.GetByInviteTokenAsync(
+            "no-such-token", callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.NotFound, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.TransactionNotFound, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetByInvite_Empty_Token_Returns_404_Without_Matching_SteamId_Rows()
+    {
+        // A blank token must NOT translate to "InviteToken IS NULL" and match
+        // STEAM_ID transactions — defensive guard in the service.
+        await CreateTransactionAsync(TransactionStatus.CREATED); // STEAM_ID, InviteToken null
+
+        var sut = BuildSut();
+        var outcome = await sut.GetByInviteTokenAsync(
+            string.Empty, callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.NotFound, outcome.Status);
+    }
+
+    [Fact]
+    public async Task GetByInvite_Spent_Invite_NonParty_Falls_Back_To_Public_Shape()
+    {
+        // Already accepted (BuyerId set, status ACCEPTED). A non-party token
+        // holder gets the trimmed public shape (FE renders "unavailable"),
+        // while the buyer who accepted still gets their buyer view.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.ACCEPTED,
+            buyerId: _buyer.Id,
+            method: BuyerIdentificationMethod.OPEN_LINK,
+            inviteToken: "inv-spent-token");
+
+        var sut = BuildSut();
+
+        var stranger = await sut.GetByInviteTokenAsync(
+            "inv-spent-token", Guid.NewGuid(), callerSteamId: null, CancellationToken.None);
+        Assert.Equal(TransactionDetailStatus.Found, stranger.Status);
+        Assert.Null(stranger.Body!.UserRole); // public/unavailable shape
+        Assert.False(stranger.Body.AvailableActions.CanAccept);
+
+        var buyer = await sut.GetByInviteTokenAsync(
+            "inv-spent-token", _buyer.Id, callerSteamId: null, CancellationToken.None);
+        Assert.Equal(TransactionDetailStatus.Found, buyer.Status);
+        Assert.Equal("buyer", buyer.Body!.UserRole);
+        Assert.Equal(transaction.Id, buyer.Body.Id);
+    }
+
     private async Task<Transaction> CreateTransactionAsync(
         TransactionStatus status,
         Guid? buyerId = null,
-        BuyerIdentificationMethod method = BuyerIdentificationMethod.STEAM_ID)
+        BuyerIdentificationMethod method = BuyerIdentificationMethod.STEAM_ID,
+        string? inviteToken = null)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
@@ -270,7 +402,9 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             BuyerId = buyerId,
             BuyerIdentificationMethod = method,
             TargetBuyerSteamId = method == BuyerIdentificationMethod.STEAM_ID ? BuyerSteamId : null,
-            InviteToken = method == BuyerIdentificationMethod.OPEN_LINK ? "T46-detail-test" : null,
+            InviteToken = method == BuyerIdentificationMethod.OPEN_LINK
+                ? (inviteToken ?? "T46-detail-test")
+                : null,
             ItemAssetId = "27348562891",
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",

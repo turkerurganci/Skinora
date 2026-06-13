@@ -2430,6 +2430,7 @@ Kaynak envanteri taraması ve traceability matrix eşlemesi sonucunda tespit edi
 | # | Açıklama | Durum |
 |---|---|---|
 | — | Tüm kaynak öğeleri en az bir task'a eşlenmiştir | ✓ Boşluk yok |
+| F-INVITE-01 | F5 Gate Check'te tespit edildi: S07 OPEN_LINK `/invite/:token` davet-tüketim rotası uçtan uca eksikti (FE rota + backend token-çözümleme endpoint'i). §7.4 S07→T90/T91/T92 eşlemesinin alt-özelliği; F3'te "T45 OPEN_LINK invitation path → backlog" forward-deferred edilmişti. | ✓ Kapatıldı (F5 gate, 2026-06-13): backend `GET /transactions/by-invite/:token` + FE `/invite/[token]` + 07 §7.5a + 6 test. Detay [`GATE_CHECK_F5.md`](CHECKPOINT_REPORTS/GATE_CHECK_F5.md). |
 
 > **Not:** Bu bölüm ilk yazılım sırasında boştur. İmplementasyon sürecinde yeni boşluklar tespit edilirse buraya eklenir ve ilgili düzeltme task'ları oluşturulur.
 

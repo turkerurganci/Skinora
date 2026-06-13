@@ -347,6 +347,20 @@ export function getTransactionDetail(id: string): Promise<TransactionDetailRespo
   return apiClient<TransactionDetailResponse>(`/transactions/${encodeURIComponent(id)}`);
 }
 
+/**
+ * Resolve an OPEN_LINK invite by its opaque token (07 §7.5a, F-INVITE-01).
+ * Returns the same {@link TransactionDetailResponse} shape as the id route:
+ * unauthenticated callers get the trimmed public surface (`userRole: null`,
+ * `requiresLogin: true`); an authenticated token holder who is not yet a
+ * party becomes a prospective buyer (`userRole: "buyer"`, `canAccept: true`).
+ * Acceptance still goes through the id-based {@link acceptTransaction}.
+ */
+export function getTransactionByInvite(token: string): Promise<TransactionDetailResponse> {
+  return apiClient<TransactionDetailResponse>(
+    `/transactions/by-invite/${encodeURIComponent(token)}`,
+  );
+}
+
 // ---------- POST /transactions/:id/accept (07 §7.6) ----------
 
 export interface AcceptTransactionRequest {

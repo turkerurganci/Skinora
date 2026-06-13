@@ -98,6 +98,76 @@ public sealed class TransactionDetailService : ITransactionDetailService
             }
         }
 
+        return await BuildResponseAsync(transaction, role, prospectiveBuyer: false, cancellationToken);
+    }
+
+    public async Task<TransactionDetailOutcome> GetByInviteTokenAsync(
+        string inviteToken,
+        Guid? callerId,
+        string? callerSteamId,
+        CancellationToken cancellationToken)
+    {
+        // Defensive: an empty token would translate to "InviteToken IS NULL"
+        // and match STEAM_ID rows — short-circuit to NotFound instead.
+        if (string.IsNullOrEmpty(inviteToken))
+            return new TransactionDetailOutcome(
+                TransactionDetailStatus.NotFound,
+                Body: null,
+                ErrorCode: TransactionErrorCodes.TransactionNotFound,
+                ErrorMessage: "Invitation not found.");
+
+        var transaction = await _db.Set<Transaction>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                t => t.InviteToken == inviteToken && !t.IsDeleted,
+                cancellationToken);
+
+        if (transaction is null)
+            return new TransactionDetailOutcome(
+                TransactionDetailStatus.NotFound,
+                Body: null,
+                ErrorCode: TransactionErrorCodes.TransactionNotFound,
+                ErrorMessage: "Invitation not found.");
+
+        // Invite role resolution (differs from the id path). The token is the
+        // access grant: an authenticated holder who is not yet a party is a
+        // prospective buyer while the invite is still joinable (CREATED, no
+        // buyer) — 02 §6.2 first-comer. Spent / already-accepted invites fall
+        // back to the trimmed public shape for non-parties so the FE renders
+        // an "unavailable" surface instead of a bare 403.
+        string? role;
+        var prospectiveBuyer = false;
+        if (!callerId.HasValue)
+        {
+            role = null;
+        }
+        else if (callerId.Value == transaction.SellerId)
+        {
+            role = "seller";
+        }
+        else if (callerId.Value == transaction.BuyerId)
+        {
+            role = "buyer";
+        }
+        else if (transaction.Status == TransactionStatus.CREATED && transaction.BuyerId is null)
+        {
+            role = "buyer";
+            prospectiveBuyer = true;
+        }
+        else
+        {
+            role = null;
+        }
+
+        return await BuildResponseAsync(transaction, role, prospectiveBuyer, cancellationToken);
+    }
+
+    private async Task<TransactionDetailOutcome> BuildResponseAsync(
+        Transaction transaction,
+        string? role,
+        bool prospectiveBuyer,
+        CancellationToken cancellationToken)
+    {
         // Single batched party lookup. Buyer FK is nullable until the buyer
         // accepts; we still want their snapshot once they do.
         var partyIds = new List<Guid> { transaction.SellerId };
@@ -121,7 +191,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             ? parties.FirstOrDefault(p => p.Id == transaction.BuyerId.Value)
             : null;
 
-        if (callerId is null)
+        if (role is null)
         {
             return BuildPublicResponse(transaction, sellerRow.SteamDisplayName);
         }
@@ -205,7 +275,18 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 Message: "İşleminiz güvenlik incelemesi nedeniyle donduruldu. Süreç admin tarafından yönetilmektedir.");
         }
 
-        var actions = BuildAuthenticatedActions(transaction, role!, nowUtc);
+        // Prospective buyers (token holder, not yet a party) only get
+        // canAccept — cancel/dispute belong to actual parties. Accept itself
+        // stays id-based (POST /transactions/:id/accept), where the
+        // acceptance service enforces the 02 §6.2 first-comer guard.
+        var actions = prospectiveBuyer
+            ? new AvailableActionsDto(
+                CanAccept: !transaction.IsOnHold,
+                CanCancel: null,
+                CanDispute: null,
+                CanEscalate: null,
+                RequiresLogin: null)
+            : BuildAuthenticatedActions(transaction, role!, nowUtc);
 
         var dto = new TransactionDetailDto(
             Id: transaction.Id,

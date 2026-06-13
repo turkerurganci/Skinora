@@ -24,4 +24,26 @@ public interface ITransactionDetailService
         Guid? callerId,
         string? callerSteamId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves an OPEN_LINK invitation by its opaque token and builds the
+    /// public-invite consume surface (04 §7.3 / 03 §3.2 step 1). Mirrors
+    /// <see cref="GetAsync"/> but keys on <c>Transaction.InviteToken</c>
+    /// instead of the id, so the seller-shared <c>/invite/:token</c> link
+    /// resolves without leaking the enumerable transaction id.
+    /// </summary>
+    /// <remarks>
+    /// Role resolution differs from the id path: an authenticated caller who
+    /// is neither party and the invite is still joinable (CREATED, no buyer)
+    /// is treated as a <b>prospective buyer</b> — they receive the buyer
+    /// acceptance surface (<c>canAccept=true</c>, accept stays id-based via
+    /// <c>POST /transactions/:id/accept</c>). Unauthenticated callers get the
+    /// trimmed public shape with <c>requiresLogin=true</c>. Spent / non-CREATED
+    /// invites fall back to the trimmed public shape for non-parties.
+    /// </remarks>
+    Task<TransactionDetailOutcome> GetByInviteTokenAsync(
+        string inviteToken,
+        Guid? callerId,
+        string? callerSteamId,
+        CancellationToken cancellationToken);
 }

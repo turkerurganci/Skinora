@@ -1,4 +1,22 @@
 {
+  "invitePage": {
+    "title": "Has sido invitado a una transacción",
+    "subtitle": "Revisa el artículo y el precio a continuación, luego inicia sesión con Steam para aceptar. La primera persona en aceptar se convierte en el comprador.",
+    "errors": {
+      "notFound": {
+        "title": "Invitación no encontrada",
+        "message": "Este enlace de invitación no es válido o ha caducado. Pide al vendedor un nuevo enlace."
+      },
+      "generic": {
+        "title": "Algo salió mal",
+        "message": "No pudimos cargar esta invitación. Inténtalo de nuevo."
+      }
+    },
+    "unavailable": {
+      "title": "La invitación ya no está disponible",
+      "message": "Esta transacción ya ha sido aceptada por otro usuario."
+    }
+  },
   "landing": {
     "hero": {
       "title": "Custodia segura para el comercio de ítems de CS2",
