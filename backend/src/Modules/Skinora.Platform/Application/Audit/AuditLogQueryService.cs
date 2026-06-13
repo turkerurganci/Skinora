@@ -71,13 +71,30 @@ public sealed class AuditLogQueryService : IAuditLogQueryService
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            // EntityId is the most operator-useful free-text scope — settings
-            // keys, transaction ids, user ids all surface there. Action enum
-            // is also matched as string because the column is stored as text
-            // (T17 EnumToStringConverter).
+            // Free-text search spans two scopes so the "Kullanıcı: Steam ID veya
+            // kullanıcı adı" filter (04 §8.10) actually resolves people, not just
+            // raw ids: (1) EntityId substring — settings keys, transaction ids,
+            // and entity ids all surface there; (2) the actor or subject user's
+            // SteamId / display name, resolved through a Users sub-query so an
+            // operator who types a Steam ID or username finds every row about
+            // that user (whose EntityId is a Guid, not the SteamId). The Users
+            // filter uses IgnoreQueryFilters to keep the search domain aligned
+            // with the actor/subject hydration below (deleted/anonymized users
+            // resolve there too — 02 §19 scrubs identity, so a scrubbed user
+            // simply stops matching, which is correct).
             var searchTerm = query.Search.Trim();
+            var pattern = $"%{searchTerm}%";
+
+            var matchingUserIds = _db.Set<User>()
+                .IgnoreQueryFilters()
+                .Where(u => EF.Functions.Like(u.SteamId, pattern)
+                    || EF.Functions.Like(u.SteamDisplayName, pattern))
+                .Select(u => u.Id);
+
             dbQuery = dbQuery.Where(a =>
-                EF.Functions.Like(a.EntityId, $"%{searchTerm}%"));
+                EF.Functions.Like(a.EntityId, pattern)
+                || matchingUserIds.Contains(a.ActorId)
+                || (a.UserId.HasValue && matchingUserIds.Contains(a.UserId.Value)));
         }
 
         var total = await dbQuery.CountAsync(cancellationToken);

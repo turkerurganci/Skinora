@@ -340,6 +340,64 @@
       "success": "{count} işlem hold'a alındı."
     }
   },
+  "adminAuditLog": {
+    "title": "Denetim Kaydı",
+    "tableAriaLabel": "Denetim kaydı listesi",
+    "empty": "Filtrelere uygun kayıt bulunamadı.",
+    "loadError": "Denetim kaydı yüklenemedi.",
+    "subjectLabel": "Konu",
+    "columns": {
+      "createdAt": "Tarih/Saat",
+      "category": "Kategori",
+      "action": "Aksiyon",
+      "user": "Kullanıcı",
+      "transactionId": "İşlem ID",
+      "detail": "Detay"
+    },
+    "filters": {
+      "category": "Kategori",
+      "allCategories": "Tümü",
+      "search": "Kullanıcı",
+      "searchPlaceholder": "Steam ID veya kullanıcı adı",
+      "transactionId": "İşlem ID",
+      "transactionIdPlaceholder": "İşlem ID",
+      "dateFrom": "Başlangıç",
+      "dateTo": "Bitiş"
+    },
+    "category": {
+      "FUND_MOVEMENT": "Fon Hareketleri",
+      "ADMIN_ACTION": "Admin Aksiyonları",
+      "SECURITY_EVENT": "Güvenlik Olayları"
+    },
+    "action": {
+      "WALLET_DEPOSIT": "Cüzdana yatırma",
+      "WALLET_WITHDRAW": "Cüzdandan çekme",
+      "WALLET_ESCROW_LOCK": "Emanet kilidi",
+      "WALLET_ESCROW_RELEASE": "Emanet serbest bırakma",
+      "WALLET_REFUND": "İade",
+      "DISPUTE_RESOLVED": "Anlaşmazlık çözüldü",
+      "MANUAL_REFUND": "Manuel iade",
+      "REFUND_BLOCKED": "İade engellendi",
+      "USER_BANNED": "Kullanıcı yasaklandı",
+      "USER_UNBANNED": "Kullanıcı yasağı kaldırıldı",
+      "ROLE_CHANGED": "Rol değiştirildi",
+      "SYSTEM_SETTING_CHANGED": "Sistem ayarı değiştirildi",
+      "WALLET_ADDRESS_CHANGED": "Cüzdan adresi değiştirildi",
+      "FRAUD_FLAG_CREATED": "Fraud flag oluşturuldu",
+      "FRAUD_FLAG_APPROVED": "Fraud flag onaylandı",
+      "FRAUD_FLAG_REJECTED": "Fraud flag reddedildi",
+      "FRAUD_FLAG_AUTO_HOLD": "Otomatik hold uygulandı",
+      "TRANSACTION_CANCELLED_ADMIN": "İşlem admin tarafından iptal edildi",
+      "EMERGENCY_HOLD_APPLIED": "Acil hold uygulandı",
+      "EMERGENCY_HOLD_RELEASED": "Acil hold kaldırıldı",
+      "BOT_STATUS_CHANGED": "Bot durumu değişti",
+      "RECONCILIATION_MISMATCH": "Mutabakat uyuşmazlığı",
+      "COLD_WALLET_TRANSFER_INITIATED": "Soğuk cüzdan transferi başlatıldı",
+      "HOT_WALLET_THRESHOLD_BREACHED": "Sıcak cüzdan eşiği aşıldı",
+      "SANCTIONS_LIST_ADDRESS_ADDED": "Yaptırım listesine adres eklendi",
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Yaptırım listesinden adres çıkarıldı"
+    }
+  },
   "adminTransactions": {
     "title": "İşlemler",
     "tableAriaLabel": "İşlem listesi",

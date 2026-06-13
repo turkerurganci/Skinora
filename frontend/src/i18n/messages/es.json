@@ -340,6 +340,64 @@
       "success": "{count} transacciones retenidas."
     }
   },
+  "adminAuditLog": {
+    "title": "Registro de auditoría",
+    "tableAriaLabel": "Lista de registro de auditoría",
+    "empty": "No hay registros que coincidan con los filtros.",
+    "loadError": "No se pudo cargar el registro de auditoría.",
+    "subjectLabel": "Sujeto",
+    "columns": {
+      "createdAt": "Fecha/Hora",
+      "category": "Categoría",
+      "action": "Acción",
+      "user": "Usuario",
+      "transactionId": "ID de transacción",
+      "detail": "Detalle"
+    },
+    "filters": {
+      "category": "Categoría",
+      "allCategories": "Todas",
+      "search": "Usuario",
+      "searchPlaceholder": "Steam ID o nombre de usuario",
+      "transactionId": "ID de transacción",
+      "transactionIdPlaceholder": "ID de transacción",
+      "dateFrom": "Desde",
+      "dateTo": "Hasta"
+    },
+    "category": {
+      "FUND_MOVEMENT": "Movimientos de fondos",
+      "ADMIN_ACTION": "Acciones de administrador",
+      "SECURITY_EVENT": "Eventos de seguridad"
+    },
+    "action": {
+      "WALLET_DEPOSIT": "Depósito en cartera",
+      "WALLET_WITHDRAW": "Retiro de cartera",
+      "WALLET_ESCROW_LOCK": "Bloqueo de depósito en garantía",
+      "WALLET_ESCROW_RELEASE": "Liberación de depósito en garantía",
+      "WALLET_REFUND": "Reembolso",
+      "DISPUTE_RESOLVED": "Disputa resuelta",
+      "MANUAL_REFUND": "Reembolso manual",
+      "REFUND_BLOCKED": "Reembolso bloqueado",
+      "USER_BANNED": "Usuario bloqueado",
+      "USER_UNBANNED": "Usuario desbloqueado",
+      "ROLE_CHANGED": "Rol cambiado",
+      "SYSTEM_SETTING_CHANGED": "Configuración del sistema cambiada",
+      "WALLET_ADDRESS_CHANGED": "Dirección de cartera cambiada",
+      "FRAUD_FLAG_CREATED": "Marca de fraude creada",
+      "FRAUD_FLAG_APPROVED": "Marca de fraude aprobada",
+      "FRAUD_FLAG_REJECTED": "Marca de fraude rechazada",
+      "FRAUD_FLAG_AUTO_HOLD": "Retención automática aplicada",
+      "TRANSACTION_CANCELLED_ADMIN": "Transacción cancelada por administrador",
+      "EMERGENCY_HOLD_APPLIED": "Retención de emergencia aplicada",
+      "EMERGENCY_HOLD_RELEASED": "Retención de emergencia liberada",
+      "BOT_STATUS_CHANGED": "Estado del bot cambiado",
+      "RECONCILIATION_MISMATCH": "Discrepancia de conciliación",
+      "COLD_WALLET_TRANSFER_INITIATED": "Transferencia a cartera fría iniciada",
+      "HOT_WALLET_THRESHOLD_BREACHED": "Umbral de cartera caliente superado",
+      "SANCTIONS_LIST_ADDRESS_ADDED": "Dirección añadida a la lista de sanciones",
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones"
+    }
+  },
   "adminTransactions": {
     "title": "Transacciones",
     "tableAriaLabel": "Lista de transacciones",

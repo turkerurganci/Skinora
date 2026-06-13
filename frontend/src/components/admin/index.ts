@@ -69,3 +69,9 @@ export type { UserProfileCardProps } from "./UserProfileCard";
 
 export { UserStatsCard } from "./UserStatsCard";
 export type { UserStatsCardProps } from "./UserStatsCard";
+
+export { AuditLogTable } from "./AuditLogTable";
+export type { AuditLogTableProps } from "./AuditLogTable";
+
+export { AuditCategoryBadge } from "./AuditCategoryBadge";
+export type { AuditCategoryBadgeProps } from "./AuditCategoryBadge";

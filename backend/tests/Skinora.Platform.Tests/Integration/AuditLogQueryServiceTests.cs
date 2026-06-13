@@ -218,6 +218,57 @@ public class AuditLogQueryServiceTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task ListAsync_Search_Matches_Subject_SteamId()
+    {
+        // 04 §8.10 "Kullanıcı: Steam ID veya kullanıcı adı" — searching a Steam ID
+        // must find the audit rows about that user even though EntityId stores a
+        // Guid, not the Steam ID. _subject is the affected user of USER_BANNED.
+        var service = CreateService();
+
+        var result = await service.ListAsync(
+            DefaultQuery(search: "76561198555000701"), CancellationToken.None);
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(nameof(AuditAction.USER_BANNED), result.Items[0].Action);
+        Assert.Equal("BannedUser", result.Items[0].Subject!.DisplayName);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ListAsync_Search_Matches_Subject_DisplayName()
+    {
+        // Display-name half of the §8.10 user filter. "BannedUser" only appears
+        // as _subject's display name (never in an EntityId), so a match proves
+        // the Users sub-query is wired, not an EntityId coincidence.
+        var service = CreateService();
+
+        var result = await service.ListAsync(
+            DefaultQuery(search: "BannedUser"), CancellationToken.None);
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(nameof(AuditAction.USER_BANNED), result.Items[0].Action);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ListAsync_Search_Matches_User_As_Actor_Across_Rows()
+    {
+        // _admin is the actor on three rows (wallet-change, ban, setting-change)
+        // and the subject on two of them. Searching the admin's display name must
+        // surface all three — proving both ActorId and UserId scopes are matched
+        // and de-duplicated to one row each (not double-counted).
+        var service = CreateService();
+
+        var result = await service.ListAsync(
+            DefaultQuery(search: "QueryAdmin"), CancellationToken.None);
+
+        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(3, result.Items.Count);
+        Assert.DoesNotContain(result.Items, i => i.Action == nameof(AuditAction.WALLET_REFUND));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task ListAsync_TransactionId_Matches_EntityType_Transaction_Only()
     {
         var service = CreateService();
