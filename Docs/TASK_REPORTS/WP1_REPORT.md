@@ -1,6 +1,6 @@
 # WP1 — Escrow Tamamlama: Satıcı Payout + COMPLETED
 
-**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (kabul kriterleri PASS; **F1 S2 sertleştirildi** — bağımsız yeniden doğrulama bekliyor, merge yok) | **Tarih:** 2026-06-14
+**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (kabul kriterleri **PASS 8/8**; **F1 S2 sertleştirme bağımsız yeniden doğrulama PASS** — F1 fix + tüm zincir) | **Tarih:** 2026-06-14
 
 ---
 
@@ -97,6 +97,32 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 **Bağımsız ön-doğrulama (yapım-içi adversarial review workflow, 5-boyut/21-ajan, refute-default):** 16 ham bulgu → **15 çürütüldü, 1 onaylı S2** (catch-yolu test kapsamı yoktu — `RunTwice` `AnyAsync` guard'ı sayesinde yeşildi, catch'i hiç çalıştırmıyordu; index testi job'ı baypas ediyordu → false confidence). Onaylı bulgu **bu PR'da kapatıldı** (yukarıdaki 2 catch-yolu testi swallow + re-throw branch'lerini deterministik olarak çalıştırır). Çürütülen önemliler: named-index overload'ın mevcut index'i ezdiği (EF ikisini de üretir — snapshot+migration teyit), filtre `[Type]='SELLER_PAYOUT'` SQLite↔SQL Server taşınabilirliği (her iki provider'da çalışır — test yeşil), Hangfire.Core version conflict (Notifications zaten 1.8.18), index'in refund satırlarını kısıtladığı (yalnız SELLER_PAYOUT filtresi), catch'in ilgisiz hatayı yuttuğu (re-throw branch + test).
 
 **Lokal kapılar:** Transactions unit **80/80** (`Category=Unit`, +4) · Debug + Release build **0W/0E** · `dotnet format --verify-no-changes --severity error` temiz · `has-pending-model-changes` → drift yok.
+
+## Bağımsız Yeniden Doğrulama (F1 + tüm zincir) — VERDICT: ✓ PASS
+
+**İkinci bağımsız validator (2026-06-14, ayrı chat, izolasyon §3.3 — yapım raporu görülmeden kendi verdict'i oluşturuldu, sonra rapor ile karşılaştırıldı). Owner "önce sertleştir" sonrası F1 sertleştirmenin + WP1 zincirinin yeniden doğrulaması.**
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI `success` (`27500668387`/`27500668384`/`27498092438`) · Adım 0b repo memory WP1 satırı mevcut · Adım 8a task branch CI HEAD `8f476d6` run [27507929137](https://github.com/turkerurganci/Skinora/actions/runs/27507929137) **tüm job success** + F1 commit `21bc790` run [27507547831](https://github.com/turkerurganci/Skinora/actions/runs/27507547831) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate; `0. Guard` PR'da doğru biçimde `skipped`). Lokal kanıt (bu doğrulama anında üretildi): Release build **0 error**, Transactions unit **80/80**.
+
+**F1 fix bağımsız onayı — 3 katmanın her biri kanıtla doğrulandı:**
+- **Katman 1 (`[DisableConcurrentExecution(50)]`):** Attribute, registrar'ın Hangfire'a verdiği tam metoda (`OutgoingTransferJobsRegistrar.cs:49` `job => job.Execute()`) uygulanmış. Hangfire SqlServer storage yapılandırılmış (`HangfireModule.cs:53` `UseSqlServerStorage` + `AddHangfireServer`) → distributed lock **çok-instance'da da** çalışır. 50sn timeout < 60sn cron → waiter yığılmaz. Tek başına yeterli değil (yalnız pencereyi daraltır) → Katman 2/3 gerekçeli.
+- **Katman 2 (filtered unique index):** `Type` global `EnumToStringConverter` ile **nvarchar** saklanır (`AppDbContext.cs:66`; snapshot `nvarchar`; mevcut CK constraint'ler string literal kullanır) → `[Type]='SELLER_PAYOUT'` filtresi eşleşir. Backend genelinde SELLER_PAYOUT satırını **INSERT eden tek yol producer**'dır — `PayoutIssueService` yalnız **okur** (`:149-155`), dispatch/confirmation job'ları aynı satırı **UPDATE** eder, `RefundDecisionService` yalnız hesaplar. Index hiçbir meşru ikinci satırı bloklamaz. Refund/diğer outbound tipler kısıtlanmaz (filtre SELLER_PAYOUT-only). Snapshot'ta index mevcut (`:2108`) → drift yok; migration en yeni timestamp (gas-seed `…160541` sonrası); CI Integration + Migration dry-run yeşil → SQL Server'da temiz uygulanır.
+- **Katman 3 (`catch(DbUpdateException)`):** Re-query yalnızca SELLER_PAYOUT satırı **gerçekten varsa** yutar; yoksa `if(!nowQueued) throw` ile ilgisiz hatayı maskelemeden yüzeye çıkarır. `BlockchainTransaction` `ISoftDeletable` **değil** (sade class, RowVersion da yok) → re-query query-filter ile kandırılamaz; detach yalnız `payoutRow`'u temizler, batch DbContext sonraki adaylar için temiz kalır.
+
+**Test sadakati:** 4 yeni test doğru şeyi kanıtlıyor — `SecondSellerPayoutRow_…RejectedByUniqueIndex` (SQLite EnsureCreated partial index'i gerçekten oluşturur+uygular), `ConcurrentInsertRace_SwallowsDuplicate` (paylaşılan `:memory:` connection üzerinde rakip commit → gerçek index reddeder → catch swallow-yolu deterministik çalışır), `NonDuplicateDbUpdateException_IsRethrown` (re-throw yolu), `RunTwice` (`AnyAsync` idempotency). Yapım chat'inin kendi "false confidence" bulgusu kapatılmış. SQL Server tarafı CI Integration/Migration ile kapsanır (SQLite↔SQL Server ayrımı bilinçli).
+
+**Zincir regresyonu:** producer → `OutgoingTransferDispatchJob` (F1'de **değişmedi**) → `OutgoingTransferConfirmationJob` (CONFIRMED + `PayoutCompletedEvent` **atomik**) → `PayoutCompletedConsumer` (üretimde **tek** `.Fire(Complete)` çağıranı, `PayoutCompletedConsumer.cs:92`, domain-idempotent + hold-guard) → COMPLETED. Finansal hesap F1'de dokunulmadı; testler kanonik 99.70/100 değerlerini kanıtlar. F1 yalnız producer eşzamanlılığı + index + test'e dokundu → refund/diğer akışlar etkilenmez.
+
+**Kendi adversarial pass'im (refute-default, subagent altyapısı org-policy ile bloklandığı için inline yürütüldü):** Tüm aday endişeler çürütüldü (Type-as-int, meşru-ikinci-satır, catch-masking, detach-corruption, multi-instance-lock, test-false-confidence, drift/dependency-conflict, zincir/math regresyonu) → **0 bloke-edici/onaylı bulgu**.
+
+| Kabul Kriteri | İlk val. | Bu yeniden val. |
+|---|---|---|
+| AC1–AC5, AC7, AC8 | ✓ | ✓ (F1 dokunmadı; testler yeşil) |
+| **AC6 (idempotency / çift-pay yok)** | ~Kısmi | **✓** (3-katman; eşzamanlı INSERT yarışı DB-seviyesinde imkansız) |
+
+**Açık (bloke etmeyen, documented):** G1 (soft-delete query-filter asimetrisi) — bağımsız teyit: `BlockchainTransaction` soft-deletable değil → ilgili `IgnoreQueryFilters` no-op; risk yalnız **Transaction** soft-delete edilirse broadcast↔confirm penceresinde stranded state kaydı (satıcı doğru biçimde **bir kez** ödenmiştir, **çift-pay/para kaybı yok**), F1 tarafından oluşturulmadı, **S3 edge**. G2 — COMPLETED bildirim/realtime push WP9 kapsamında (PRE_F6_PLAN ile uyumlu, payload hazır). İkisi de KRİTİK değil → §8.4 documented risk, merge'i bloklamaz.
+
+**Rapor karşılaştırması:** Tam uyumlu — bağımsız verdict yapım raporundaki AC 8/8 + 3-katman + G1/G2 değerlendirmesiyle birebir örtüşüyor; uyuşmazlık yok.
 
 ## Altyapı Değişiklikleri
 - **Migration (F1 sertleştirme):** **Var** — `20260614173940_WP1_AddSellerPayoutUniqueIndex` (yalnız `CreateIndex`/`DropIndex`; **şema-only**, filtered unique index `(TransactionId) WHERE Type='SELLER_PAYOUT'`).
