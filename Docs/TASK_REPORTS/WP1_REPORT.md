@@ -88,9 +88,9 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 ## Commit & PR
 - Branch: `task/WP1-escrow-completion-payout`
-- Commit: (aşağıda)
-- PR: (aşağıda)
-- CI: ⏳ izlenecek
+- Commit: `972a793` — WP1: Escrow completion — seller payout + COMPLETED
+- PR: [#169](https://github.com/turkerurganci/Skinora/pull/169)
+- CI: ⏳ izleniyor
 
 ## Notlar
 - **Working tree:** Oturum başında temiz.
