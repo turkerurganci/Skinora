@@ -1,6 +1,6 @@
 # T103b-2 — Bot Recovery/Failover (Steam hesapları backend tamamlama, S18)
 
-**Faz:** F5 (geç-ekleme) | **Durum:** ✓ Yapım bitti — bağımsız doğrulama bekliyor | **Tarih:** 2026-06-13
+**Faz:** F5 (geç-ekleme) | **Durum:** ✗ FAIL — bağımsız validator (2026-06-14), 4 bulgu, düzeltme bekliyor | **Tarih:** 2026-06-13 (yapım) · 2026-06-14 (doğrulama)
 
 ---
 
@@ -99,7 +99,7 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 | 1 | Kısıtlı/banned bot kısıtlandığında recovery kuyruğu materyalize olur | ✓ | `BotRestrictionRecoveryConsumerTests.Restriction_MaterialisesAndHolds_StuckEscrows` |
 | 2 | Emanetteki item'lar listelenir (kısıtlı hesap) | ✓ | AD25 `GetQueue_ReturnsRows_WithJoinedTransactionAndParties` + FE `RecoveryQueuePanel` |
 | 3 | Recovery Queue satır verisi (state/recovery durumu/sorumlu admin/not) | ✓ | `BotRecoveryQueueItemDto` + FE 8 kolon |
-| 4 | `MANAGE_STEAM_RECOVERY` aksiyonları (Manual Recovery / not / sorumlu admin) | ✓ | AD26 PATCH + `UpdateRecovery_WithViewButNotManage_Returns403` (enforcement) |
+| 4 | `MANAGE_STEAM_RECOVERY` aksiyonları (Manual Recovery / not / sorumlu admin) | ~ Kısmi | Manual Recovery + Not + permission-split ✓ (AD26 PATCH + `UpdateRecovery_WithViewButNotManage_Returns403`); **"Sorumlu Admin Ata/Değiştir" UI aksiyonu eksik** — backend AD26 `responsibleAdminId` destekler ama FE'de dropdown yok (04 §8.7 satır 1727 açık aksiyon). → Validator **F2**. |
 | 5 | Otomatik bildirim + otomatik EMERGENCY_HOLD | ✓ | Consumer auto-hold + `AdminBotStatusChanged` push + RecoveryTransactionCount badge |
 | 6 | AD10 RestrictionReason/FailoverStatus/RecoveryTransactionCount canlı | ✓ | `QueryService_DerivesFailoverStatusAndRecoveryCount` |
 
@@ -120,9 +120,20 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Yapım bitti — bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✗ **FAIL** (bağımsız validator, ayrı chat, 2026-06-14) |
+| Bulgu sayısı | 4 (1×S1 + 2×S3 + 1×NOTE); adversarial review 21 ham → 4 onaylı / 17 çürütüldü |
+| Düzeltme gerekli mi | Evet — owner kararı: 4 bulgunun **hepsi** düzeltilecek (erteleme yok) |
+
+**Kanıt tabanı:** Task-branch CI HEAD `d129c86` run [`27479328219`](https://github.com/turkerurganci/Skinora/actions/runs/27479328219) tüm job success (Lint/Build/Unit/**Integration**/**Contract**/**Migration dry-run**/Docker×2/Gate). Entegrasyon testleri lokalde Docker yokluğundan çalışmadı → CI authoritative. Lokal: unit yeşil (Shared 361 / Realtime 25 / Steam unit 20 / Platform unit 106), FE tsc 0 / eslint 0 / `next build` ✓ / i18n parity **1131×4** (recovery alt-ağacı **24×4** — rapordaki "44" miscount, parite korunuyor). Güvenlik: secret/dep yok, permission split testli — istisna F1.
+
+### Validator Bulguları
+
+- **F1 — S1 Sapma — AD26 enum range guard yok** (`AdminBotRecoveryService.cs:122-129`). `JsonStringEnumConverter` default (`allowIntegerValues=true`) + `Enum.IsDefined` guard yokluğu → `{"recoveryStatus":99}` bağlanır ve `"99"` persist edilir. 07 §9.29 `VALIDATION_ERROR` kontratını + kod tabanı `Enum.IsDefined` emsalini (`TransactionCreationService.cs:92`) ihlal eder; bozuk satır `RecoveryTransactionCount`/`FailoverStatus` canlı metriğini kirletir (99 ≠ RESOLVED → açık sayılır). **Fix:** `UpdateAsync`'te status atamasından önce `if (request.RecoveryStatus is { } s && !Enum.IsDefined(s)) return Failure(... VALIDATION_ERROR ...)` + test. **MANAGE_STEAM_RECOVERY-gated → auth bypass değil; düşük exploitability ama gerçek kontrat sapması.**
+- **F2 — S3 Eksik — "Sorumlu Admin Ata/Değiştir" UI aksiyonu yok** (`RecoveryQueuePanel.tsx:122-126,174-204`). AC#4'ün açık parçası (plan satır 2163) + 04 §8.7 satır 1727 spec aksiyonu. Backend AD26 tam destekler, UI'da yalnız okuma kolonu var. Rapor K1 deferral'ı **owner-onaylı değildi** (DEFERRED_BACKLOG'da kayıtsız). **Owner kararı (2026-06-14): şimdi uygula** — FE'ye admin-seçim dropdown'u (`useAdminUsers` hook mevcut) eklenecek.
+- **F3 — S3 Eksik (dar/edge) — Boundary race** (`BotRestrictionRecoveryConsumer.cs:88-96`). Consumer'ın nokta-zaman stuck sorgusundan SONRA gelen escrow `trade_offer.accepted` (kısıtlama anında uçuşta olan teklif) `AcceptEscrowAsync`'te restricted-bot kontrolü olmadan item'ı bota yerleştirir → recovery satırı + auto-hold OLUŞMAZ; reconciliation safety-net yok (delivery dispatch hatasıyla kısmen yüzeye çıkar). 03 §11.2a step 3 garanti edilmiyor. **Owner kararı (2026-06-14): çöz** — reconciliation/safety-net (ör. `BotHealthCheck`'te periyodik custody re-scan, VEYA `AcceptEscrowAsync` sonrası bot RESTRICTED/BANNED ise tek-tx recovery materyalizasyonu). Tasarım yapım chat'inde owner ile netleşir.
+- **F4 — NOTE — Stale docstring** (`app/[locale]/admin/steam-accounts/page.tsx:11-13`). Recovery kuyruğu "boş kalır / T69'a deferred" diyor — T103b-2 sonrası yanlış (kardeş `SteamAccountsView.tsx` doğru güncel; `page.tsx` bu branch'te dokunulmamış). JSDoc-only, runtime etkisi yok. **Fix:** docstring güncelle.
+
+**Çürütülen dikkate değer bulgular (17/21):** consumer'ın `SaveChangesAsync`'i kendi çağırması "S2 batch-rollback coupling" iddiasıyla raporlandı → **çürütüldü** (OutboxDispatcher per-message try/catch, batch rollback yok; idempotent consumer at-least-once kontratına uygun) — ancak no-self-commit yazma-consumer konvansiyonundan bir **deviation** + sınıf doc-comment'inin "tek SaveChanges tüm batch'i rollback eder" ifadesinin dispatcher bağlamında **yanlış** olduğu not edildi (cleanup-grade; yapım chat'i ele alabilir). Diğer çürütülenler: enum string-persist (mid-enum AuditAction güvenli), 3. FK index EF-convention ile mevcut, AD10 kontratı S12 için korunuyor, atomik outbox commit, RESTRICTED/BANNED trigger + OFFLINE exclusion doğru, TS↔DTO 17-alan birebir.
 
 ## Altyapı Değişiklikleri
 
