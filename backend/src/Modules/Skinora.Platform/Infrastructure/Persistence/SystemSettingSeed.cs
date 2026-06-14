@@ -127,6 +127,14 @@ public static class SystemSettingSeed
         // that threshold a SECURITY_EVENT audit + admin SignalR alert fires.
         Default     (57, "hot_wallet.monitor_cron",                       "string",  "Monitoring",    "*/15 * * * *", "Hot wallet bakiye monitor job'unun cron ifadesi (T77 — 05 §3.3). Default '*/15 * * * *' (her 15 dakikada bir). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
         Default     (58, "hot_wallet.trx_balance_minimum",                "decimal", "Wallet",        "100",          "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). MVP ölçeğinde 100 TRX ≈ 50 TRC-20 transfer gas worst-case headroom."),
+        // --- WP1: Seller-payout gas fee estimate (02 §4.7, 09 §14.4, 04 §7.3) ---
+        // Separate from blockchain.refund_gas_fee_estimate_usdt because the
+        // seller-send gas is the quantity the protection split measures against
+        // the commission threshold (04 §7.3 worked example uses 0.50). Fed to
+        // CalculateSellerPayout when SellerPayoutQueueJob enqueues the
+        // SELLER_PAYOUT row. T74 energy delegation replaces this MVP estimate
+        // with a runtime Energy/Bandwidth-derived value.
+        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "WP1 MVP satıcı payout gas fee tahmini (USDT). SellerPayoutQueueJob bu değeri gas-fee koruma split'inde (02 §4.7) kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30). T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
     ];
 
     private static SystemSetting Unconfigured(

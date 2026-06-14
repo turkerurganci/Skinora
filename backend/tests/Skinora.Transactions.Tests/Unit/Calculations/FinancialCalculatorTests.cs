@@ -245,6 +245,51 @@ public class FinancialCalculatorTests
     }
 
     // ===================================================================
+    // Seller payout split reconstruction (WP1 — 07 §7.5)
+    // ===================================================================
+
+    [Fact]
+    public void ReconstructSplit_GasOverThreshold_DerivesExactShares()
+    {
+        // price 100, net 99.70 (overage 0.30 deducted), gas snapshot 0.50.
+        // fromSeller = 0.30; fromCommission = 0.50 - 0.30 = 0.20.
+        var split = FinancialCalculator.ReconstructSellerPayoutSplit(
+            price: 100m, netAmount: 99.70m, gasFeeSnapshot: 0.50m);
+
+        Assert.Equal(100m, split.GrossAmount);
+        Assert.Equal(99.70m, split.NetAmount);
+        Assert.Equal(0.30m, split.GasFeeFromSeller);
+        Assert.Equal(0.20m, split.GasFeeFromCommission);
+        Assert.Equal(0.50m, split.TotalGasFee);
+    }
+
+    [Fact]
+    public void ReconstructSplit_GasAbsorbed_AllFromCommission()
+    {
+        // Platform absorbed the gas: net == price, fromSeller = 0, the whole
+        // snapshot is the commission-borne share.
+        var split = FinancialCalculator.ReconstructSellerPayoutSplit(
+            price: 100m, netAmount: 100m, gasFeeSnapshot: 0.50m);
+
+        Assert.Equal(0m, split.GasFeeFromSeller);
+        Assert.Equal(0.50m, split.GasFeeFromCommission);
+        Assert.Equal(0.50m, split.TotalGasFee);
+    }
+
+    [Fact]
+    public void ReconstructSplit_NoSnapshot_FallsBackToSellerShareOnly()
+    {
+        // Legacy row with no gas snapshot — total = fromSeller, commission
+        // share reported as 0 rather than guessed.
+        var split = FinancialCalculator.ReconstructSellerPayoutSplit(
+            price: 100m, netAmount: 99.70m, gasFeeSnapshot: null);
+
+        Assert.Equal(0.30m, split.GasFeeFromSeller);
+        Assert.Equal(0m, split.GasFeeFromCommission);
+        Assert.Equal(0.30m, split.TotalGasFee);
+    }
+
+    // ===================================================================
     // Overpayment (09 §14.4)
     // ===================================================================
 

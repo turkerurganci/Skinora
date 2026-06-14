@@ -137,6 +137,17 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             .HasFilter("[TxHash] IS NOT NULL")
             .HasDatabaseName("UQ_BlockchainTransactions_TxHash");
 
+        // WP1 F1 (S2 money-safety) — at most one SELLER_PAYOUT row per
+        // transaction. Database-level backstop behind SellerPayoutQueueJob's
+        // [DisableConcurrentExecution] lock: two overlapping producer ticks
+        // cannot queue duplicate payouts → no double-pay. Refund / other
+        // outbound types are intentionally unconstrained (a transaction may
+        // legitimately accumulate several refund rows). Named overload so this
+        // coexists with the non-unique IX_BlockchainTransactions_TransactionId.
+        builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_SellerPayout_TransactionId")
+            .IsUnique()
+            .HasFilter("[Type] = 'SELLER_PAYOUT'");
+
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(b => b.TransactionId)
             .HasDatabaseName("IX_BlockchainTransactions_TransactionId");

@@ -163,6 +163,28 @@ public static class FinancialCalculator
     }
 
     /// <summary>
+    /// Reconstructs the 07 §7.5 seller-payout breakdown from stored data for
+    /// the read path. The amount the seller actually lost to gas is exact
+    /// (<c>price − netAmount</c>); the total gas estimate used at payout time
+    /// was snapshotted onto <c>BlockchainTransaction.GasFee</c>, so the
+    /// commission-borne share is <c>total − fromSeller</c>. A legacy row with
+    /// no snapshot falls back to <c>total = fromSeller</c> (commission share
+    /// reported as zero) rather than guessing.
+    /// </summary>
+    public static SellerPayoutSplit ReconstructSellerPayoutSplit(
+        decimal price, decimal netAmount, decimal? gasFeeSnapshot)
+    {
+        var fromSeller = Math.Max(0m, price - netAmount);
+        var total = gasFeeSnapshot is { } g && g >= fromSeller ? g : fromSeller;
+        return new SellerPayoutSplit(
+            GrossAmount: price,
+            NetAmount: netAmount,
+            GasFeeFromSeller: fromSeller,
+            GasFeeFromCommission: total - fromSeller,
+            TotalGasFee: total);
+    }
+
+    /// <summary>
     /// Overpayment amount: <c>received - expected</c> when positive,
     /// otherwise zero. Caller decides what to do with the residue
     /// (refund vs admin alert).
@@ -202,3 +224,16 @@ public static class FinancialCalculator
     public static bool IsPaymentExact(decimal expected, decimal received) =>
         expected == received;
 }
+
+/// <summary>
+/// Reconstructed seller-payout breakdown (07 §7.5). All values are full
+/// <see cref="decimal"/> precision; the read path formats them at the wire
+/// boundary. Invariants: <c>NetAmount = GrossAmount − GasFeeFromSeller</c> and
+/// <c>TotalGasFee = GasFeeFromCommission + GasFeeFromSeller</c>.
+/// </summary>
+public readonly record struct SellerPayoutSplit(
+    decimal GrossAmount,
+    decimal NetAmount,
+    decimal GasFeeFromSeller,
+    decimal GasFeeFromCommission,
+    decimal TotalGasFee);

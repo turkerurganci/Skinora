@@ -126,4 +126,36 @@ public class GasFeeSettingsProviderTests : IntegrationTestBase
         Assert.Equal(FinancialCalculator.DefaultGasFeeProtectionRatio, settings.ProtectionRatio);
         Assert.Equal(FinancialCalculator.DefaultMinimumRefundThresholdRatio, settings.MinRefundThresholdRatio);
     }
+
+    [Fact]
+    public async Task GetAsync_PayoutEstimate_AdminCustomisedValue_IsReadLive()
+    {
+        await SetSettingAsync(GasFeeSettingsProvider.PayoutGasFeeEstimateKey, "0.75");
+
+        var settings = await CreateSut().GetAsync(default);
+
+        Assert.Equal(0.75m, settings.PayoutGasFeeEstimateUsdt);
+    }
+
+    [Fact]
+    public async Task GetAsync_MissingPayoutEstimate_FallsBackToDefault()
+    {
+        await SetSettingAsync(GasFeeSettingsProvider.PayoutGasFeeEstimateKey, value: null, isConfigured: false);
+
+        var settings = await CreateSut().GetAsync(default);
+
+        Assert.Equal(GasFeeSettingsProvider.DefaultPayoutGasFeeEstimateUsdt, settings.PayoutGasFeeEstimateUsdt);
+    }
+
+    [Fact]
+    public async Task GetAsync_MalformedPayoutEstimate_FallsBackToDefault()
+    {
+        // Non-positive value (validator stage 2 enforces > 0) — read side
+        // mirrors that envelope so a poisoned row cannot zero out the split.
+        await SetSettingAsync(GasFeeSettingsProvider.PayoutGasFeeEstimateKey, "0");
+
+        var settings = await CreateSut().GetAsync(default);
+
+        Assert.Equal(GasFeeSettingsProvider.DefaultPayoutGasFeeEstimateUsdt, settings.PayoutGasFeeEstimateUsdt);
+    }
 }

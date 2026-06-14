@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Hangfire.Core supplies the [DisableConcurrentExecution] server filter
+         that serialises the SellerPayoutQueueJob producer (money-safety, WP1
+         F1). Mirrors Skinora.Notifications, which already references
+         Hangfire.Core for its [AutomaticRetry] job filter. -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.18" />
     <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="Stateless" Version="5.20.1" />
   </ItemGroup>

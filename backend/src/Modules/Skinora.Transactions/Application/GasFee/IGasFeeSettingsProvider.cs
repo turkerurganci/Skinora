@@ -33,7 +33,18 @@ public interface IGasFeeSettingsProvider
 /// <c>value &gt; 0</c>; the seeded default is <c>2.0</c>. T74 energy
 /// delegation will replace this estimate with a runtime-measured value.
 /// </param>
+/// <param name="PayoutGasFeeEstimateUsdt">
+/// WP1 MVP seller-payout gas fee estimate in USDT (02 §4.7, 09 §14.4). Fed
+/// to <c>CalculateSellerPayout</c> as the seller-send gas in the protection
+/// split when queueing the SELLER_PAYOUT row. Kept separate from
+/// <see cref="RefundGasFeeEstimateUsdt"/> because the seller-send gas is the
+/// quantity 02 §4.7 measures against the commission threshold (the 04 §7.3
+/// worked example uses <c>0.50</c>). Validator stage 2 enforces
+/// <c>value &gt; 0</c>; the seeded default is <c>0.50</c>. T74 energy
+/// delegation will replace this estimate with a runtime-measured value.
+/// </param>
 public sealed record GasFeeSettings(
     decimal ProtectionRatio,
     decimal MinRefundThresholdRatio,
-    decimal RefundGasFeeEstimateUsdt);
+    decimal RefundGasFeeEstimateUsdt,
+    decimal PayoutGasFeeEstimateUsdt);

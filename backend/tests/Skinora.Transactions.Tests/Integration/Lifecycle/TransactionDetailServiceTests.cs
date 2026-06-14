@@ -387,6 +387,67 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Equal(transaction.Id, buyer.Body.Id);
     }
 
+    [Fact]
+    public async Task Completed_SellerView_Surfaces_PayoutBreakdown()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.COMPLETED, buyerId: _buyer.Id);
+        await AddConfirmedPayoutAsync(transaction.Id, netAmount: 99.70m, gasSnapshot: 0.50m);
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(
+            transaction.Id, callerId: _seller.Id, callerSteamId: SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        var payout = outcome.Body!.SellerPayout;
+        Assert.NotNull(payout);
+        Assert.Equal("100.00", payout!.GrossAmount);
+        Assert.Equal("99.70", payout.NetAmount);
+        Assert.Equal("0.30", payout.GasFeeFromSeller);
+        Assert.Equal("0.20", payout.GasFeeFromCommission);
+        Assert.Equal("0.50", payout.GasFee);
+        Assert.Equal(ValidWallet, payout.WalletAddress);
+        Assert.Equal("0xPayoutConfirmed", payout.TxHash);
+    }
+
+    [Fact]
+    public async Task Completed_BuyerView_Omits_PayoutBreakdown()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.COMPLETED, buyerId: _buyer.Id);
+        await AddConfirmedPayoutAsync(transaction.Id, netAmount: 99.70m, gasSnapshot: 0.50m);
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(
+            transaction.Id, callerId: _buyer.Id, callerSteamId: BuyerSteamId, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Null(outcome.Body!.SellerPayout);
+    }
+
+    private async Task AddConfirmedPayoutAsync(Guid transactionId, decimal netAmount, decimal gasSnapshot)
+    {
+        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            Type = BlockchainTransactionType.SELLER_PAYOUT,
+            TxHash = "0xPayoutConfirmed",
+            FromAddress = "THotWallet0000000000000000000000000",
+            ToAddress = ValidWallet,
+            Amount = netAmount,
+            Token = StablecoinType.USDT,
+            GasFee = gasSnapshot,
+            Status = BlockchainTransactionStatus.CONFIRMED,
+            BlockNumber = 1_500_000L,
+            ConfirmationCount = 20,
+            RetryCount = 0,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+        await Context.SaveChangesAsync();
+    }
+
     private async Task<Transaction> CreateTransactionAsync(
         TransactionStatus status,
         Guid? buyerId = null,

@@ -40,6 +40,14 @@ public sealed class OutgoingTransferJobsRegistrar : IHostedService
                 OutgoingTransferConfirmationJob.RecurringJobId,
                 job => job.Execute(),
                 OutgoingTransferConfirmationJob.Cron);
+
+            // WP1 — produce the SELLER_PAYOUT row once a transaction reaches
+            // ITEM_DELIVERED so the dispatch + confirmation jobs above can
+            // settle it and drive the transaction to COMPLETED.
+            scheduler.AddOrUpdateRecurring<SellerPayoutQueueJob>(
+                SellerPayoutQueueJob.RecurringJobId,
+                job => job.Execute(),
+                SellerPayoutQueueJob.Cron);
         }
         catch (Exception ex)
         {
