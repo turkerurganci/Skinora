@@ -11,7 +11,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 1. **Producer (yeni)** — `SellerPayoutQueueJob`: per-minute Hangfire job, `ITEM_DELIVERED` (ve `!IsOnHold`, `!HasActiveDispute`, henüz SELLER_PAYOUT satırı olmayan) transaction'ları tarar; gas-fee koruma net tutarını hesaplar (`ResolveSellerPayoutAsync` → `CalculateSellerPayout`); `PENDING SELLER_PAYOUT` `BlockchainTransaction` satırı oluşturur. `OutgoingTransferDispatchJob` (mevcut) bu satırı yayınlar — **değiştirilmedi**.
 2. **Completion event (yeni)** — `OutgoingTransferConfirmationJob` SELLER_PAYOUT satırını `CONFIRMED` (20-blok finality) yapınca `PayoutCompletedEvent` outbox'a yayınlar (aynı SaveChanges). `IOutboxService` ctor'a eklendi. Refund satırları event üretmez.
 3. **Completion consumer (yeni)** — `PayoutCompletedConsumer` (MediatR `INotificationHandler`), `Fire(Complete)` → `COMPLETED` (`CompletedAt` OnEntry'de stamp'lenir). Domain-idempotent (`Status==ITEM_DELIVERED` guard), hold-guard'lı, explicit DI kaydı.
-4. **Gas estimate ayarı (yeni)** — `blockchain.payout_gas_fee_estimate_usdt` (default **0.50** USDT, 04 §7.3 örneğiyle birebir). `GasFeeSettings`'e + `SystemSettingSeed`'e (Id 59) + `SystemSettingsCatalog`'a eklendi. Migration yok (seed default; CK constraint SELLER_PAYOUT'u zaten kapsıyor). Owner kararı.
+4. **Gas estimate ayarı (yeni)** — `blockchain.payout_gas_fee_estimate_usdt` (default **0.50** USDT, 04 §7.3 örneğiyle birebir). `GasFeeSettings`'e + `SystemSettingSeed`'e (Id 59) + `SystemSettingsCatalog`'a eklendi. **Migration `WP1_AddPayoutGasFeeEstimateSetting`** — seed `HasData` model'in parçası olduğu için yeni satır `InsertData` migration'ı gerektirir (şema değişikliği YOK; CK constraint SELLER_PAYOUT'u zaten kapsıyor). Owner kararı.
 5. **Payout breakdown DTO (07 §7.5)** — `TransactionDetailService` `SellerPayout` artık COMPLETED + satıcı görünümünde dolduruluyor (önceden `null`). Split, kayıttan tam türetiliyor: producer kullanılan gas estimate'i `BlockchainTransaction.GasFee`'ye snapshot'lar → `FinancialCalculator.ReconstructSellerPayoutSplit` saf aritmetikle `gasFeeFromSeller = price − net`, `gasFeeFromCommission = total − fromSeller` (drift yok). Admin DTO (`AdminTransactionQueryService.BuildPayoutDetail`) da aynı paylaşılan helper'la 0-yer-tutucudan gerçek split'e geçirildi.
 
 ## Etkilenen Modüller / Dosyalar
@@ -65,7 +65,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 | Düzeltme gerekli mi | — |
 
 ## Altyapı Değişiklikleri
-- **Migration:** Yok. `SELLER_PAYOUT` zaten `CK_BlockchainTransactions_Type_Outbound` kapsamında; yeni ayar seed-default (mandatory değil → 21-mandatory startup gate etkilenmez).
+- **Migration:** **Var** — `20260614160541_WP1_AddPayoutGasFeeEstimateSetting` (yalnızca `InsertData`/`DeleteData` yeni seed satırı için; **şema değişikliği YOK**). Seed `HasData(SystemSettingSeed.All)` model snapshot'ının parçası olduğundan yeni satır migration gerektirir (ilk "migration yok" varsayımı bu seed-data noktasında yanlıştı; CI migration dry-run + `Model_HasNoPendingChanges` yakaladı, eklendi). `SELLER_PAYOUT` CHECK constraint'i `CK_BlockchainTransactions_Type_Outbound` zaten kapsar; yeni ayar seed-default (mandatory değil → 21-mandatory startup gate etkilenmez).
 - **Config/env:** Yeni SystemSetting `blockchain.payout_gas_fee_estimate_usdt` (default 0.50, admin-tunable). Yeni recurring job `seller-payout-queue` (cron `* * * * *`).
 - **Docker:** Yok.
 
