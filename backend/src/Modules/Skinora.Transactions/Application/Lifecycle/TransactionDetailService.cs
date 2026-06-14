@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
@@ -288,6 +289,8 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 RequiresLogin: null)
             : BuildAuthenticatedActions(transaction, role!, nowUtc);
 
+        var sellerPayout = await BuildSellerPayoutAsync(transaction, role, cancellationToken);
+
         var dto = new TransactionDetailDto(
             Id: transaction.Id,
             Status: transaction.Status,
@@ -302,7 +305,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Buyer: buyerParty,
             Timeout: timeout,
             Payment: null,           // T70+ blockchain monitoring
-            SellerPayout: null,      // T73 payout
+            SellerPayout: sellerPayout, // WP1 — COMPLETED seller view (07 §7.5)
             Refund: null,            // T49/T51 refunds
             CancelInfo: cancel,
             FlagInfo: flag,
@@ -475,6 +478,38 @@ public sealed class TransactionDetailService : ITransactionDetailService
         || status == TransactionStatus.CANCELLED_SELLER
         || status == TransactionStatus.CANCELLED_BUYER
         || status == TransactionStatus.CANCELLED_ADMIN;
+
+    private async Task<SellerPayoutDto?> BuildSellerPayoutAsync(
+        Transaction transaction,
+        string? role,
+        CancellationToken cancellationToken)
+    {
+        // 07 §7.5 — the seller payout breakdown is surfaced only in the
+        // seller's view of a COMPLETED transaction.
+        if (role != "seller" || transaction.Status != TransactionStatus.COMPLETED)
+            return null;
+
+        var payout = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .Where(b => b.TransactionId == transaction.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT)
+            .OrderByDescending(b => b.ConfirmedAt ?? b.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (payout is null) return null;
+
+        var split = FinancialCalculator.ReconstructSellerPayoutSplit(
+            transaction.Price, payout.Amount, payout.GasFee);
+
+        return new SellerPayoutDto(
+            GrossAmount: FormatMoney(split.GrossAmount),
+            GasFee: FormatMoney(split.TotalGasFee),
+            GasFeeFromCommission: FormatMoney(split.GasFeeFromCommission),
+            GasFeeFromSeller: FormatMoney(split.GasFeeFromSeller),
+            NetAmount: FormatMoney(split.NetAmount),
+            WalletAddress: payout.ToAddress,
+            TxHash: payout.TxHash ?? string.Empty,
+            SentAt: payout.ConfirmedAt ?? payout.CreatedAt);
+    }
 
     private static decimal? ComputeReputation(decimal? successRate)
     {

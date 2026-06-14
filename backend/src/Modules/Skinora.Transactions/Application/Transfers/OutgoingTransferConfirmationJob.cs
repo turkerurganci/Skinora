@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
 
@@ -40,17 +42,20 @@ public sealed class OutgoingTransferConfirmationJob
 
     private readonly AppDbContext _db;
     private readonly IBlockchainTransferClient _client;
+    private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferConfirmationJob> _logger;
 
     public OutgoingTransferConfirmationJob(
         AppDbContext db,
         IBlockchainTransferClient client,
+        IOutboxService outbox,
         TimeProvider clock,
         ILogger<OutgoingTransferConfirmationJob> logger)
     {
         _db = db;
         _client = client;
+        _outbox = outbox;
         _clock = clock;
         _logger = logger;
     }
@@ -92,6 +97,24 @@ public sealed class OutgoingTransferConfirmationJob
                 row.ConfirmationCount = status.Confirmations ?? 20;
                 row.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
                 row.ErrorMessage = null;
+
+                // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
+                // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the
+                // same unit of work as the CONFIRMED flip so the completion
+                // consumer can fire Complete → COMPLETED. Refund rows do not
+                // drive a state transition, so they are not announced here.
+                if (row.Type == BlockchainTransactionType.SELLER_PAYOUT)
+                {
+                    await _outbox.PublishAsync(
+                        new PayoutCompletedEvent(
+                            EventId: Guid.NewGuid(),
+                            TransactionId: row.TransactionId,
+                            PayoutTxHash: row.TxHash,
+                            NetAmount: row.Amount,
+                            OccurredAt: row.ConfirmedAt.Value),
+                        cancellationToken);
+                }
+
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
                     "Outbound transfer CONFIRMED — row {Id} ({Type}) tx {TxHash} @ block {Block}",

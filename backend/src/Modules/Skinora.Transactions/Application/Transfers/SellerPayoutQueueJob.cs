@@ -1,0 +1,175 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Skinora.Shared.Enums;
+using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Domain.Entities;
+
+namespace Skinora.Transactions.Application.Transfers;
+
+/// <summary>
+/// WP1 producer leg — per-minute Hangfire job that closes the post-delivery
+/// gap in the escrow happy path (03 §2.4, PRE_F6_PLAN WP1). A transaction
+/// that reaches ITEM_DELIVERED has no other path forward: the only permitted
+/// trigger is <c>Complete</c>, which fires once the seller payout confirms on
+/// chain. This job creates the missing PENDING <c>SELLER_PAYOUT</c>
+/// <c>BlockchainTransaction</c> row; the existing
+/// <see cref="OutgoingTransferDispatchJob"/> then broadcasts it and
+/// <see cref="OutgoingTransferConfirmationJob"/> confirms it.
+///
+/// <para>
+/// The payout amount is the gas-fee-protection net (02 §4.7):
+/// <c>CalculateSellerPayout(price, commissionAmount, gasEstimate, ratio)</c>.
+/// The estimate used is snapshotted onto <c>BlockchainTransaction.GasFee</c>
+/// so the COMPLETED-view split (07 §7.5) is reconstructable from stored data
+/// without re-reading a possibly-changed setting.
+/// </para>
+///
+/// <para>
+/// Money-safety gate (03 §2.4): a transaction that is on emergency hold or
+/// has an active dispute is skipped — its payout is deferred to the
+/// admin-resolution path (WP5) / hold release. Idempotency is keyed on the
+/// existence of a SELLER_PAYOUT row, so a re-tick before the transaction
+/// leaves ITEM_DELIVERED never double-pays the seller.
+/// </para>
+/// </summary>
+public sealed class SellerPayoutQueueJob
+{
+    public const string RecurringJobId = "seller-payout-queue";
+
+    /// <summary>Cron — every minute. Mirrors <c>OutgoingTransferDispatchJob.Cron</c>.</summary>
+    public const string Cron = "* * * * *";
+
+    public const int BatchSize = 20;
+
+    private readonly AppDbContext _db;
+    private readonly IRefundDecisionService _refundDecisionService;
+    private readonly IGasFeeSettingsProvider _gasFeeSettings;
+    private readonly TimeProvider _clock;
+    private readonly ILogger<SellerPayoutQueueJob> _logger;
+
+    public SellerPayoutQueueJob(
+        AppDbContext db,
+        IRefundDecisionService refundDecisionService,
+        IGasFeeSettingsProvider gasFeeSettings,
+        TimeProvider clock,
+        ILogger<SellerPayoutQueueJob> logger)
+    {
+        _db = db;
+        _refundDecisionService = refundDecisionService;
+        _gasFeeSettings = gasFeeSettings;
+        _clock = clock;
+        _logger = logger;
+    }
+
+    public async Task ExecuteAsync(CancellationToken cancellationToken = default)
+    {
+        // Soft-delete query filter excludes IsDeleted rows. Skip held /
+        // disputed transactions and any that already have a payout row queued.
+        var candidateIds = await _db.Set<Transaction>()
+            .AsNoTracking()
+            .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
+                && !t.IsOnHold
+                && !t.HasActiveDispute
+                && !t.BlockchainTransactions.Any(
+                    b => b.Type == BlockchainTransactionType.SELLER_PAYOUT))
+            .OrderBy(t => t.ItemDeliveredAt)
+            .Take(BatchSize)
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+
+        if (candidateIds.Count == 0) return;
+
+        _logger.LogInformation(
+            "SellerPayoutQueueJob picked up {Count} delivered transactions awaiting payout", candidateIds.Count);
+
+        foreach (var id in candidateIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await QueuePayoutAsync(id, cancellationToken);
+        }
+    }
+
+    private async Task QueuePayoutAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+        // Re-validate inside the loop (09 §13.3): a concurrent admin hold,
+        // dispute, or completion must not be overwritten by a stale tick.
+        if (transaction is null
+            || transaction.Status != TransactionStatus.ITEM_DELIVERED
+            || transaction.IsOnHold
+            || transaction.HasActiveDispute)
+        {
+            return;
+        }
+
+        // Idempotency — never queue a second payout for the same transaction.
+        var alreadyQueued = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .AnyAsync(
+                b => b.TransactionId == transaction.Id
+                    && b.Type == BlockchainTransactionType.SELLER_PAYOUT,
+                cancellationToken);
+        if (alreadyQueued) return;
+
+        if (string.IsNullOrWhiteSpace(transaction.SellerPayoutAddress))
+        {
+            _logger.LogError(
+                "SellerPayout: transaction {TransactionId} has no SellerPayoutAddress — cannot queue payout.",
+                transaction.Id);
+            return;
+        }
+
+        var gasSettings = await _gasFeeSettings.GetAsync(cancellationToken);
+        var gasEstimate = gasSettings.PayoutGasFeeEstimateUsdt;
+
+        // Gas-fee-protection split (02 §4.7) — ResolveSellerPayoutAsync reads
+        // the live gas_fee_protection_ratio internally.
+        var payout = await _refundDecisionService.ResolveSellerPayoutAsync(
+            transaction.Price, transaction.CommissionAmount, gasEstimate, cancellationToken);
+
+        if (payout <= 0m)
+        {
+            // Pathological: gas estimate consumed the whole price. Do not
+            // broadcast a non-positive transfer — leave the transaction in
+            // ITEM_DELIVERED for operator review (03 §2.4a Senaryo B).
+            _logger.LogError(
+                "SellerPayout: computed payout {Payout} for transaction {TransactionId} (price={Price}, commission={Commission}, gasEstimate={Gas}) is non-positive — skipping.",
+                payout, transaction.Id, transaction.Price, transaction.CommissionAmount, gasEstimate);
+            return;
+        }
+
+        var payoutRow = new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transaction.Id,
+            PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for SELLER_PAYOUT.
+            Type = BlockchainTransactionType.SELLER_PAYOUT,
+            TxHash = null,
+            FromAddress = string.Empty,        // Hot-wallet address set at broadcast time.
+            ToAddress = transaction.SellerPayoutAddress,
+            Amount = payout,
+            Token = transaction.StablecoinType,
+            ActualTokenAddress = null,         // CK_..._Type_Outbound: NULL for SELLER_PAYOUT.
+            GasFee = gasEstimate,              // Snapshot the split input (07 §7.5 reconstruction).
+            Status = BlockchainTransactionStatus.PENDING,
+            BlockNumber = null,
+            ConfirmationCount = 0,
+            RetryCount = 0,
+            NextAttemptAt = null,              // Eligible for dispatch immediately.
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        };
+
+        _db.Set<BlockchainTransaction>().Add(payoutRow);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "SellerPayout queued — transaction {TransactionId} payout row {RowId} amount {Amount} {Token} (gasEstimate {Gas})",
+            transaction.Id, payoutRow.Id, payout, transaction.StablecoinType, gasEstimate);
+    }
+
+    // Hangfire serializes Expression<Action<T>>; expose a sync wrapper.
+    public void Execute() => ExecuteAsync().GetAwaiter().GetResult();
+}

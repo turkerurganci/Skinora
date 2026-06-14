@@ -6,6 +6,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Admin;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
@@ -470,15 +471,18 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
 
         if (payout is null) return null;
 
-        // gasFeeFromCommission / gasFeeFromSeller — T57 (gas fee management)
-        // and T73 (Tron sidecar) are responsible for the split. Until those
-        // ship, surface zeros so the contract shape is stable.
+        // WP1 — the seller-send gas estimate used at payout time is snapshotted
+        // onto BlockchainTransaction.GasFee, so the split is reconstructable
+        // from stored data (07 §7.5). Legacy rows with no snapshot report the
+        // commission share as 0.
+        var split = FinancialCalculator.ReconstructSellerPayoutSplit(
+            tx.Price, payout.Amount, payout.GasFee);
         return new AdminTxSellerPayoutDetailDto(
             GrossAmount: tx.Price,
             Commission: tx.CommissionAmount,
             GasFee: payout.GasFee,
-            GasFeeFromCommission: 0m,
-            GasFeeFromSeller: 0m,
+            GasFeeFromCommission: split.GasFeeFromCommission,
+            GasFeeFromSeller: split.GasFeeFromSeller,
             NetAmount: payout.Amount,
             TxHash: payout.TxHash,
             SentAt: payout.ConfirmedAt ?? payout.CreatedAt);

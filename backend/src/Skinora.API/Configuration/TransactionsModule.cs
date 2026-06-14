@@ -195,7 +195,18 @@ public static class TransactionsModule
         services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
         services.AddScoped<OutgoingTransferDispatchJob>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
+        services.AddScoped<SellerPayoutQueueJob>();
         services.AddHostedService<OutgoingTransferJobsRegistrar>();
+
+        // WP1 — seller payout completion. The confirmation job emits
+        // PayoutCompletedEvent; this consumer fires Complete → COMPLETED.
+        // Explicit registration: the Transactions assembly is NOT in the
+        // OutboxModule MediatR scan list (only API host / Notifications /
+        // Realtime are), so a missing line here would silently drop the event.
+        services.AddScoped<PayoutCompletedConsumer>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.PayoutCompletedEvent>>(sp =>
+            sp.GetRequiredService<PayoutCompletedConsumer>());
 
         // T75 — post-cancel monitoring (02 §4.4, 08 §3.4). Starter is the
         // shared entry point used by every cancel handler (T49 timeout,

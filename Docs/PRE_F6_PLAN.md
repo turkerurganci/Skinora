@@ -52,6 +52,8 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 ## 2. İş paketleri — detay
 
 ### WP1 — Escrow tamamlama: satıcı payout + `COMPLETED`
+> **Durum: ⏳ Devam ediyor (2026-06-14)** — `task/WP1-escrow-completion-payout`, doğrulama bekliyor. Uygulama: `SellerPayoutQueueJob` (producer) + `PayoutCompletedEvent`/`PayoutCompletedConsumer` (completion) + `blockchain.payout_gas_fee_estimate_usdt` (0.50) + 07 §7.5 payout DTO. Rapor: [`TASK_REPORTS/WP1_REPORT.md`](TASK_REPORTS/WP1_REPORT.md).
+
 **Backlog:** payout-completed-consumer · calculator-caller-wiring (payout kısmı) · energy-gas-token-config (gas-split) — *İkincil, COMPLETED'i bloklamaz:* StubPayoutVerifier · payout-retry-consumer
 **Kanıt:** `SteamWebhookHandler.cs:497` `DeliverItem` sonrası durur; `TransactionStateMachine.cs:251-253` `Complete` çağıransız (`.Fire(Complete)` grep=0); `RefundDecisionService.ResolveSellerPayoutAsync` (`:48`) çağıransız. **On-chain finality ZATEN var:** `OutgoingTransferConfirmationJob.cs:31-39,89-99` `SELLER_PAYOUT` satırını DETECTED→CONFIRMED 20-blok eşiğinde işler.
 **İş (T107'yi açan çekirdek):** Teslim sonrası `SELLER_PAYOUT` PENDING satırı kuyruğa al (mevcut `OutgoingTransferDispatchJob` yayınlar) → `CalculateSellerPayout`+gas-split aktifleşir → mevcut confirmation job `SELLER_PAYOUT` CONFIRMED olunca **`PayoutCompletedEvent` emit** → consumer `Complete`→`COMPLETED` ateşler. **Yeni `IPayoutVerifier` GEREKMEZ** — mevcut confirmation job on-chain doğrulamayı yapar.

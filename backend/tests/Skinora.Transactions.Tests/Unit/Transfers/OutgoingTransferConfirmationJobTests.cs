@@ -2,7 +2,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
@@ -29,6 +32,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
+    private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly OutgoingTransferConfirmationJob _sut;
 
@@ -43,12 +47,14 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         _db.Database.EnsureCreated();
 
         _client = new StubBlockchainTransferClient();
+        _outbox = new CapturingOutboxService();
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
         _sut = new OutgoingTransferConfirmationJob(
             _db,
             _client,
+            _outbox,
             _clock,
             NullLogger<OutgoingTransferConfirmationJob>.Instance);
     }
@@ -132,6 +138,46 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
             .FirstAsync(b => b.Id == row.Id);
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+    }
+
+    [Fact]
+    public async Task SellerPayoutConfirmed_PublishesPayoutCompletedEvent()
+    {
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_030L, 22, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        var evt = Assert.Single(_outbox.Events.OfType<PayoutCompletedEvent>());
+        Assert.Equal(row.TransactionId, evt.TransactionId);
+        Assert.Equal(row.TxHash, evt.PayoutTxHash);
+        Assert.Equal(row.Amount, evt.NetAmount);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, evt.OccurredAt);
+    }
+
+    [Fact]
+    public async Task RefundConfirmed_DoesNotPublishPayoutCompletedEvent()
+    {
+        await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_031L, 22, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_outbox.Events.OfType<PayoutCompletedEvent>());
+    }
+
+    [Fact]
+    public async Task SellerPayoutFailed_DoesNotPublishPayoutCompletedEvent()
+    {
+        await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Failed, 1_500_032L, 22, "REVERT", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_outbox.Events.OfType<PayoutCompletedEvent>());
     }
 
     private async Task<BlockchainTransaction> SeedDetectedAsync(BlockchainTransactionType type)
@@ -235,6 +281,17 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         {
             StatusCalls.Add(txHash);
             return Task.FromResult(NextStatus);
+        }
+    }
+
+    private sealed class CapturingOutboxService : IOutboxService
+    {
+        public List<IDomainEvent> Events { get; } = new();
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            Events.Add(domainEvent);
+            return Task.CompletedTask;
         }
     }
 }

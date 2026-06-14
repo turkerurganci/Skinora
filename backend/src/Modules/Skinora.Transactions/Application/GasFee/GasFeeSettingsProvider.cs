@@ -18,6 +18,7 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
     public const string ProtectionRatioKey = "gas_fee_protection_ratio";
     public const string MinRefundThresholdRatioKey = "min_refund_threshold_ratio";
     public const string RefundGasFeeEstimateKey = "blockchain.refund_gas_fee_estimate_usdt";
+    public const string PayoutGasFeeEstimateKey = "blockchain.payout_gas_fee_estimate_usdt";
 
     /// <summary>
     /// Code-side fallback for <see cref="RefundGasFeeEstimateKey"/> — mirrors
@@ -26,11 +27,20 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
     /// </summary>
     public const decimal DefaultRefundGasFeeEstimateUsdt = 2.0m;
 
+    /// <summary>
+    /// Code-side fallback for <see cref="PayoutGasFeeEstimateKey"/> — mirrors
+    /// the seeded default of <c>0.50</c> USDT (WP1 MVP, 04 §7.3 worked
+    /// example). Provider falls back to this when the row is missing,
+    /// unconfigured, or malformed.
+    /// </summary>
+    public const decimal DefaultPayoutGasFeeEstimateUsdt = 0.50m;
+
     private static readonly string[] _allKeys =
     [
         ProtectionRatioKey,
         MinRefundThresholdRatioKey,
         RefundGasFeeEstimateKey,
+        PayoutGasFeeEstimateKey,
     ];
 
     private readonly AppDbContext _db;
@@ -51,7 +61,8 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
         return new GasFeeSettings(
             ProtectionRatio: ReadProtectionRatio(rows),
             MinRefundThresholdRatio: ReadMinRefundThresholdRatio(rows),
-            RefundGasFeeEstimateUsdt: ReadRefundGasFeeEstimate(rows));
+            RefundGasFeeEstimateUsdt: ReadRefundGasFeeEstimate(rows),
+            PayoutGasFeeEstimateUsdt: ReadPayoutGasFeeEstimate(rows));
     }
 
     private static decimal ReadRefundGasFeeEstimate(IReadOnlyDictionary<string, string?> rows)
@@ -68,6 +79,22 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
             return parsed;
         }
         return DefaultRefundGasFeeEstimateUsdt;
+    }
+
+    private static decimal ReadPayoutGasFeeEstimate(IReadOnlyDictionary<string, string?> rows)
+    {
+        // Same read-side envelope as the refund estimate (generic positive-
+        // number validator rule): a missing / unconfigured / poisoned row
+        // falls back to the documented WP1 MVP default so the seller-payout
+        // split can never run against a non-positive gas estimate.
+        if (rows.TryGetValue(PayoutGasFeeEstimateKey, out var raw)
+            && raw is not null
+            && decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0m)
+        {
+            return parsed;
+        }
+        return DefaultPayoutGasFeeEstimateUsdt;
     }
 
     private static decimal ReadProtectionRatio(IReadOnlyDictionary<string, string?> rows)
