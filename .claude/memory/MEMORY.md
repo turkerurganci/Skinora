@@ -62,6 +62,7 @@
 - [feedback_clean_worktree_before_work.md](feedback_clean_worktree_before_work.md) — Session basinda dirty working tree'yi gormezden gelme, commit/stash/discard kararini kullanicidan al
 - [feedback_verify_status_before_quoting.md](feedback_verify_status_before_quoting.md) — "Sirada ne var / nerede kaldik" sorularinda MEMORY snapshot'a guvenme, IMPLEMENTATION_STATUS.md'yi oku
 - [feedback_no_edit_permission_asks.md](feedback_no_edit_permission_asks.md) — Onay verildikten sonra edit/commit/push/PR adimlari icin ara onay isteme, tek akista uygula
+- [feedback_respond_in_turkish.md](feedback_respond_in_turkish.md) — Sohbet/aciklama/rapor iletisimi Turkce; kod ve kod yorumlari Ingilizce kalir
 
 ## Project
 - [project_gpt_review_workflow.md](project_gpt_review_workflow.md) — GPT cross-review sureci ve etki yansitma akisi
