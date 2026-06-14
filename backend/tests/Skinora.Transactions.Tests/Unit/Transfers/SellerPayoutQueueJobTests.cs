@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Enums;
@@ -29,6 +30,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     }
 
     private readonly SqliteConnection _connection;
+    private readonly DbContextOptions<AppDbContext> _options;
     private readonly AppDbContext _db;
     private readonly StubGasFeeSettingsProvider _settings;
     private readonly FakeTimeProvider _clock;
@@ -38,10 +40,10 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
+        _options = new DbContextOptionsBuilder<AppDbContext>()
             .UseSqlite(_connection)
             .Options;
-        _db = new AppDbContext(options);
+        _db = new AppDbContext(_options);
         _db.Database.EnsureCreated();
 
         _settings = new StubGasFeeSettingsProvider
@@ -182,6 +184,93 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     }
 
     [Fact]
+    public async Task SecondSellerPayoutRow_ForSameTransaction_IsRejectedByUniqueIndex()
+    {
+        // WP1 F1 money-safety backstop. The filtered unique index
+        // (TransactionId WHERE Type='SELLER_PAYOUT') guarantees a transaction
+        // can never hold two SELLER_PAYOUT rows, so a producer insert that
+        // slips past the [DisableConcurrentExecution] lock cannot double-pay.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
+
+        _db.Set<BlockchainTransaction>().Add(NewSellerPayoutRow(tx));
+        await _db.SaveChangesAsync();
+
+        _db.Set<BlockchainTransaction>().Add(NewSellerPayoutRow(tx));
+        await Assert.ThrowsAsync<DbUpdateException>(() => _db.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task RunTwice_QueuesExactlyOneSellerPayoutRow()
+    {
+        // End-to-end producer idempotency: a second tick on the same delivered
+        // transaction is a no-op (AnyAsync guard), and the unique index ensures
+        // the invariant even if that guard were ever bypassed.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
+
+        await _sut.ExecuteAsync();
+        await _sut.ExecuteAsync();
+
+        var count = await _db.Set<BlockchainTransaction>().CountAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task ConcurrentInsertRace_SwallowsDuplicate_AndDoesNotDoublePay()
+    {
+        // Drives the producer's catch(DbUpdateException) backstop (WP1 F1). A
+        // competing tick commits the SELLER_PAYOUT row in the window between
+        // this tick's AnyAsync guard and its SaveChanges, so the filtered
+        // unique index rejects this insert. The catch must detach, re-query,
+        // confirm the row now exists, and swallow as an idempotent no-op —
+        // exactly one row, no escaping exception.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        var logger = new ListLogger<SellerPayoutQueueJob>();
+
+        // Injected mid-SaveChanges: a separate context on the same connection
+        // commits the competing payout, mirroring a parallel tick that won the
+        // race after this tick's idempotency check already passed.
+        await using var raceDb = new RaceDbContext(_options, injectBeforeSave: async () =>
+        {
+            await using var competing = new AppDbContext(_options);
+            competing.Set<BlockchainTransaction>().Add(NewSellerPayoutRow(tx));
+            await competing.SaveChangesAsync();
+        });
+        var sut = new SellerPayoutQueueJob(
+            raceDb, new RefundDecisionService(_settings), _settings, _clock, logger);
+
+        await sut.ExecuteAsync();   // must not throw
+
+        var count = await _db.Set<BlockchainTransaction>().CountAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
+        Assert.Equal(1, count);
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Warning && e.Message.Contains("concurrent insert race"));
+    }
+
+    [Fact]
+    public async Task NonDuplicateDbUpdateException_IsRethrown_NotMasked()
+    {
+        // The catch must only swallow when a SELLER_PAYOUT row genuinely now
+        // exists. An unrelated DbUpdateException (no row created) must surface
+        // unchanged — never be masked as an idempotent no-op. Locks in the
+        // `if (!nowQueued) throw` branch.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
+        var sut = new SellerPayoutQueueJob(
+            throwingDb, new RefundDecisionService(_settings), _settings, _clock,
+            NullLogger<SellerPayoutQueueJob>.Instance);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
+
+        Assert.Equal(0, await _db.Set<BlockchainTransaction>().CountAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
+    [Fact]
     public async Task EmptySellerPayoutAddress_IsSkipped()
     {
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
@@ -192,6 +281,22 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
             b => b.TransactionId == tx.Id));
     }
+
+    private BlockchainTransaction NewSellerPayoutRow(Transaction tx) => new()
+    {
+        Id = Guid.NewGuid(),
+        TransactionId = tx.Id,
+        Type = BlockchainTransactionType.SELLER_PAYOUT,
+        FromAddress = string.Empty,
+        ToAddress = tx.SellerPayoutAddress,
+        Amount = 99.70m,
+        Token = StablecoinType.USDT,
+        GasFee = 0.50m,
+        Status = BlockchainTransactionStatus.PENDING,
+        ConfirmationCount = 0,
+        RetryCount = 0,
+        CreatedAt = _clock.GetUtcNow().UtcDateTime,
+    };
 
     private async Task<Transaction> SeedDeliveredAsync(
         decimal price, decimal commission, Action<Transaction>? configure = null)
@@ -247,5 +352,69 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Settings);
+    }
+
+    /// <summary>
+    /// Test seam exercising <see cref="SellerPayoutQueueJob"/>'s
+    /// catch(DbUpdateException) backstop (WP1 F1). On the first SaveChanges that
+    /// adds a SELLER_PAYOUT row it either commits a competing row out-of-band
+    /// (so the real filtered unique index rejects the job's insert → swallow
+    /// branch) or throws an unrelated DbUpdateException with no row created
+    /// (→ re-throw branch).
+    /// </summary>
+    private sealed class RaceDbContext : AppDbContext
+    {
+        private readonly Func<Task>? _injectBeforeSave;
+        private readonly bool _throwUnrelated;
+        private bool _fired;
+
+        public RaceDbContext(
+            DbContextOptions<AppDbContext> options,
+            Func<Task>? injectBeforeSave = null,
+            bool throwUnrelated = false)
+            : base(options)
+        {
+            _injectBeforeSave = injectBeforeSave;
+            _throwUnrelated = throwUnrelated;
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var addingPayout = !_fired && ChangeTracker.Entries<BlockchainTransaction>()
+                .Any(e => e.State == EntityState.Added
+                    && e.Entity.Type == BlockchainTransactionType.SELLER_PAYOUT);
+            if (addingPayout)
+            {
+                _fired = true;
+                if (_throwUnrelated)
+                {
+                    throw new DbUpdateException(
+                        "simulated non-duplicate failure", new InvalidOperationException());
+                }
+                if (_injectBeforeSave is not null)
+                {
+                    await _injectBeforeSave();
+                }
+            }
+
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

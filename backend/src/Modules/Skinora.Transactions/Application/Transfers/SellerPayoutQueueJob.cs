@@ -1,3 +1,4 @@
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
@@ -32,6 +33,23 @@ namespace Skinora.Transactions.Application.Transfers;
 /// existence of a SELLER_PAYOUT row, so a re-tick before the transaction
 /// leaves ITEM_DELIVERED never double-pays the seller.
 /// </para>
+///
+/// <para>
+/// Concurrency hardening (WP1 F1 — S2 money-safety). The <c>AnyAsync</c>
+/// idempotency check is not atomic with the subsequent insert, so two
+/// overlapping ticks could both pass it and queue two PENDING payouts →
+/// double-pay. Two layers close the race:
+/// <list type="number">
+///   <item><see cref="DisableConcurrentExecutionAttribute"/> on
+///         <see cref="Execute"/> serialises ticks via a Hangfire distributed
+///         lock (single- and multi-instance).</item>
+///   <item>The filtered unique index
+///         <c>UQ_BlockchainTransactions_SellerPayout_TransactionId</c>
+///         (<c>(TransactionId) WHERE Type = 'SELLER_PAYOUT'</c>) is the
+///         database-level backstop: a second insert that slips past the lock
+///         is rejected, caught here, and treated as an idempotent no-op.</item>
+/// </list>
+/// </para>
 /// </summary>
 public sealed class SellerPayoutQueueJob
 {
@@ -41,6 +59,14 @@ public sealed class SellerPayoutQueueJob
     public const string Cron = "* * * * *";
 
     public const int BatchSize = 20;
+
+    /// <summary>
+    /// Distributed-lock acquisition timeout for
+    /// <see cref="DisableConcurrentExecutionAttribute"/>. Kept shorter than the
+    /// 1-minute cron cadence so a contending tick that cannot acquire the lock
+    /// abandons before the next tick fires — overlapping waiters never pile up.
+    /// </summary>
+    public const int ConcurrencyLockTimeoutSeconds = 50;
 
     private readonly AppDbContext _db;
     private readonly IRefundDecisionService _refundDecisionService;
@@ -163,7 +189,33 @@ public sealed class SellerPayoutQueueJob
         };
 
         _db.Set<BlockchainTransaction>().Add(payoutRow);
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Money-safety backstop (WP1 F1). A concurrent tick that slipped
+            // past the AnyAsync check inserted the SELLER_PAYOUT row first; the
+            // filtered unique index rejected this one. Detach the rejected row
+            // so the shared job-scope DbContext stays clean for the remaining
+            // candidates, then confirm a SELLER_PAYOUT row now exists before
+            // swallowing — any unrelated failure re-throws unchanged.
+            _db.Entry(payoutRow).State = EntityState.Detached;
+
+            var nowQueued = await _db.Set<BlockchainTransaction>()
+                .AsNoTracking()
+                .AnyAsync(
+                    b => b.TransactionId == transaction.Id
+                        && b.Type == BlockchainTransactionType.SELLER_PAYOUT,
+                    cancellationToken);
+            if (!nowQueued) throw;
+
+            _logger.LogWarning(
+                "SellerPayout: concurrent insert race for transaction {TransactionId} — payout already queued by another tick; skipping (idempotent).",
+                transaction.Id);
+            return;
+        }
 
         _logger.LogInformation(
             "SellerPayout queued — transaction {TransactionId} payout row {RowId} amount {Amount} {Token} (gasEstimate {Gas})",
@@ -171,5 +223,8 @@ public sealed class SellerPayoutQueueJob
     }
 
     // Hangfire serializes Expression<Action<T>>; expose a sync wrapper.
+    // [DisableConcurrentExecution] serialises overlapping ticks via a Hangfire
+    // distributed lock so two producers cannot queue duplicate payouts (WP1 F1).
+    [DisableConcurrentExecution(ConcurrencyLockTimeoutSeconds)]
     public void Execute() => ExecuteAsync().GetAwaiter().GetResult();
 }

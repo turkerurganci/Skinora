@@ -1,6 +1,6 @@
 # WP1 — Escrow Tamamlama: Satıcı Payout + COMPLETED
 
-**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (validator: kabul kriterleri PASS, S2 sertleştirme bekliyor — merge yok) | **Tarih:** 2026-06-14
+**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (kabul kriterleri PASS; **F1 S2 sertleştirildi** — bağımsız yeniden doğrulama bekliyor, merge yok) | **Tarih:** 2026-06-14
 
 ---
 
@@ -43,7 +43,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 | 3 | SELLER_PAYOUT CONFIRMED → `PayoutCompletedEvent` emit | ✓ | `SellerPayoutConfirmed_PublishesPayoutCompletedEvent`; refund/failed emit etmez |
 | 4 | Consumer `Complete`→`COMPLETED`, `CompletedAt` stamp | ✓ | `DeliveredTransaction_FiresComplete_AndStampsCompletedAt` |
 | 5 | Para-güvenliği: held / disputed payout almaz (03 §2.4) | ✓ | `HeldTransaction_IsSkipped`, `DisputedTransaction_IsSkipped`, consumer `HeldTransaction_IsNotCompleted` |
-| 6 | İdempotent (çift-pay yok, replay no-op) | ~ Kısmi | Sıralı replay/re-tick ✓ (`ExistingPayoutRow_IsNotDuplicated`, `AlreadyCompleted_IsNoOp`); **eşzamanlı çalıştırmada korumasız** → validator bulgusu F1 (aşağıda) |
+| 6 | İdempotent (çift-pay yok, replay no-op) | ✓ | Sıralı replay/re-tick ✓ (`ExistingPayoutRow_IsNotDuplicated`, `RunTwice_QueuesExactlyOneSellerPayoutRow`, `AlreadyCompleted_IsNoOp`); **eşzamanlı çalıştırma artık 3-katman korumalı** (F1 sertleştirme aşağıda) — DB-seviyesi backstop test `SecondSellerPayoutRow_..._IsRejectedByUniqueIndex` + catch-yol testleri (swallow/re-throw) |
 | 7 | Ödeme başarısızsa COMPLETED'a geçmez (03 §2.4 adım 4) | ✓ | event yalnız CONFIRMED'da; FAILED'da emit yok (`SellerPayoutFailed_DoesNotPublish...`) |
 | 8 | COMPLETED satıcı görünümü payout breakdown (07 §7.5) | ✓ | `Completed_SellerView_Surfaces_PayoutBreakdown`; buyer view `null` |
 
@@ -51,7 +51,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit (Transactions) | ✓ 76/76 | `dotnet test Skinora.Transactions.Tests --filter Category=Unit` — yeni: producer 7, consumer 5, confirmation emit 3, calculator split 3 |
+| Unit (Transactions) | ✓ 80/80 | `dotnet test Skinora.Transactions.Tests --filter Category=Unit` — yeni: producer 7→11 (F1 sertleştirme +4: DB-backstop, run-twice, catch swallow, catch re-throw), consumer 5, confirmation emit 3, calculator split 3 |
 | Unit (Platform catalog) | ✓ 7/7 | `SystemSettingsCatalogTests` — catalog↔seed kapsama korunuyor |
 | Build | ✓ | `dotnet build Skinora.sln` — 0 warning, 0 error |
 | Integration | ⏳ CI | SeedData (59 satır), GasFeeSettingsProvider (payout estimate 3 test), TransactionDetailService (payout breakdown 2 test) — Docker lokal yok, CI'da koşar |
@@ -74,12 +74,33 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 | # | Seviye | Açıklama | Dosya | Durum |
 |---|---|---|---|---|
-| F1 | S2 (para) | **Producer çift-INSERT yarışı.** `(TransactionId, Type)` üzerinde DB unique constraint yok, recurring job `[DisableConcurrentExecution]` değil, `BlockchainTransaction`'da RowVersion yok → iki örtüşen tick `AnyAsync` kontrolünü ikisi de geçip iki PENDING SELLER_PAYOUT yazabilir → dispatcher ikisini de yayınlar → satıcıya çift ödeme. Olasılık düşük; T73'ten beri tüm per-minute money-job'larının ortak modeli (dispatch/confirmation de RowVersion'sız), ama producer'ın INSERT-yarışı mevcut hiçbir mekanizmayla dedup edilemez. **Önerilen düzeltme:** producer `Execute()` → `[DisableConcurrentExecution]` (migrationsız, tek+çok-instance) + opsiyonel filtered unique index `(TransactionId) WHERE Type='SELLER_PAYOUT'`. | `SellerPayoutQueueJob.cs:109-166`, `BlockchainTransactionConfiguration.cs:133-157` | Açık → yapım chat'i |
+| F1 | S2 (para) | **Producer çift-INSERT yarışı.** `(TransactionId, Type)` üzerinde DB unique constraint yok, recurring job `[DisableConcurrentExecution]` değil, `BlockchainTransaction`'da RowVersion yok → iki örtüşen tick `AnyAsync` kontrolünü ikisi de geçip iki PENDING SELLER_PAYOUT yazabilir → dispatcher ikisini de yayınlar → satıcıya çift ödeme. | `SellerPayoutQueueJob.cs`, `BlockchainTransactionConfiguration.cs` | ✅ **Düzeltildi — 3-katman defense-in-depth** (owner "tam savunma" kararı, aşağıdaki "F1 Sertleştirme" bölümü) |
 | G1 | S3 (edge) | Soft-delete query-filter asimetrisi: `OutgoingTransferConfirmationJob` `.IgnoreQueryFilters()` kullanır (soft-deleted tx'in payout'unu confirm+emit eder), `PayoutCompletedConsumer` kullanmaz → broadcast↔confirm arası soft-delete edilen tx satıcıya ödenir ama COMPLETED'a geçemez (stranded; para kaybı yok). | `OutgoingTransferConfirmationJob.cs:67` ↔ `PayoutCompletedConsumer.cs:47` | Açık (düşük öncelik) |
 | G2 | Gözlem | Satıcı "Ödemeniz gönderildi" push bildirimi WP9'a ertelenmiş; veri COMPLETED-view DTO pull'undan geliyor. WP1 AC'sinin push bildirimi kapsam-dışı bıraktığı teyit edilmeli. | `PayoutCompletedEvent.cs` | Teyit bekliyor |
 
+## F1 Sertleştirme (S2 — producer çift-INSERT yarışı)
+
+**Owner kararı (AskUserQuestion 2026-06-14): "Tam savunma"** — `[DisableConcurrentExecution]` + DB-seviyesi filtered unique index + producer catch (defense-in-depth). Üç katman birlikte çift-pay'i kapatır:
+
+1. **Hangfire kilidi (uygulama seviyesi).** `SellerPayoutQueueJob.Execute()` artık `[DisableConcurrentExecution(50)]`. Örtüşen tick'ler Hangfire distributed lock'u ile serialize edilir (tek + çok-instance). Lock timeout (50sn) cron aralığından (60sn) kısa tutuldu → kilidi alamayan bekleyen tick bir sonraki tick fire etmeden vazgeçer, waiter yığılmaz. `Skinora.Transactions.csproj`'a `Hangfire.Core 1.8.18` ref eklendi (kardeş `Skinora.Notifications` `[AutomaticRetry]` için zaten Hangfire.Core referans ediyor → modül-içi job-filter emsali mevcut).
+2. **DB-seviyesi backstop (ironclad).** Yeni filtered unique index `UQ_BlockchainTransactions_SellerPayout_TransactionId` = `(TransactionId) WHERE Type = 'SELLER_PAYOUT'`. Kilidi atlayan ikinci INSERT veritabanı tarafından reddedilir → çift-pay **imkansız**. Refund / diğer outbound tipler bilinçli olarak kısıtlanmaz (bir işlemin meşru biçimde birden çok refund satırı olabilir). SELLER_PAYOUT satırını üreten **tek production yazıcı** producer'dır ve retry'lar aynı satırı yeniden kullanır → unique index hiçbir meşru ikinci satırı bloklamaz. Named-index overload ile mevcut non-unique `IX_BlockchainTransactions_TransactionId` ile yan yana yaşar. (`UQ_BotRecoveryItems_TransactionId` T103b-2 emsaliyle aynı backstop deseni.)
+3. **Producer catch (zarif degrade).** `QueuePayoutAsync` SaveChanges artık `catch (DbUpdateException)`: reddedilen satırı **detach** eder (paylaşılan batch DbContext'i sonraki adaylar için temiz bırakır), SELLER_PAYOUT satırının artık var olduğunu re-query ile doğrular → varsa idempotent **no-op** olarak yutar + warning log, yoksa **re-throw** (ilgisiz bir DB hatasını maskelemez). Re-query, mevcut `alreadyQueued` ön-kontrolüyle birebir aynı non-navigating predicate (`BlockchainTransaction` `ISoftDeletable` değil → query filter yok → yanlış re-throw imkansız).
+
+**Migration:** `20260614173940_WP1_AddSellerPayoutUniqueIndex` — yalnız `CreateIndex` (Up) / `DropIndex` (Down); **şema-only, seed yok**. Pre-launch → mevcut SELLER_PAYOUT verisi yok → temiz uygulanır (backfill/duplicate riski yok). `has-pending-model-changes` → "No changes" (snapshot drift yok).
+
+**Test (+4 → SellerPayoutQueueJobTests 7→11):**
+- `SecondSellerPayoutRow_ForSameTransaction_IsRejectedByUniqueIndex` — DB-seviyesi backstop: ikinci SELLER_PAYOUT INSERT'ü filtered unique index `DbUpdateException` ile reddeder (SQLite EnsureCreated partial index'i gerçekten oluşturur ve uygular → backstop kanıtlı).
+- `RunTwice_QueuesExactlyOneSellerPayoutRow` — uçtan uca sıralı idempotency.
+- `ConcurrentInsertRace_SwallowsDuplicate_AndDoesNotDoublePay` — **catch swallow yolu**: rakip tick `AnyAsync` ile `SaveChanges` arasındaki pencerede satırı commit eder (mid-SaveChanges test seam) → gerçek index reddeder → catch detach + re-query + idempotent no-op + warning; tam olarak 1 satır, exception sızmaz.
+- `NonDuplicateDbUpdateException_IsRethrown_NotMasked` — **catch re-throw yolu**: SELLER_PAYOUT satırı oluşmamış ilgisiz `DbUpdateException` → `if (!nowQueued) throw` ile yüzeye çıkar, maskelenmiz.
+
+**Bağımsız ön-doğrulama (yapım-içi adversarial review workflow, 5-boyut/21-ajan, refute-default):** 16 ham bulgu → **15 çürütüldü, 1 onaylı S2** (catch-yolu test kapsamı yoktu — `RunTwice` `AnyAsync` guard'ı sayesinde yeşildi, catch'i hiç çalıştırmıyordu; index testi job'ı baypas ediyordu → false confidence). Onaylı bulgu **bu PR'da kapatıldı** (yukarıdaki 2 catch-yolu testi swallow + re-throw branch'lerini deterministik olarak çalıştırır). Çürütülen önemliler: named-index overload'ın mevcut index'i ezdiği (EF ikisini de üretir — snapshot+migration teyit), filtre `[Type]='SELLER_PAYOUT'` SQLite↔SQL Server taşınabilirliği (her iki provider'da çalışır — test yeşil), Hangfire.Core version conflict (Notifications zaten 1.8.18), index'in refund satırlarını kısıtladığı (yalnız SELLER_PAYOUT filtresi), catch'in ilgisiz hatayı yuttuğu (re-throw branch + test).
+
+**Lokal kapılar:** Transactions unit **80/80** (`Category=Unit`, +4) · Debug + Release build **0W/0E** · `dotnet format --verify-no-changes --severity error` temiz · `has-pending-model-changes` → drift yok.
+
 ## Altyapı Değişiklikleri
-- **Migration:** **Var** — `20260614160541_WP1_AddPayoutGasFeeEstimateSetting` (yalnızca `InsertData`/`DeleteData` yeni seed satırı için; **şema değişikliği YOK**). Seed `HasData(SystemSettingSeed.All)` model snapshot'ının parçası olduğundan yeni satır migration gerektirir (ilk "migration yok" varsayımı bu seed-data noktasında yanlıştı; CI migration dry-run + `Model_HasNoPendingChanges` yakaladı, eklendi). `SELLER_PAYOUT` CHECK constraint'i `CK_BlockchainTransactions_Type_Outbound` zaten kapsar; yeni ayar seed-default (mandatory değil → 21-mandatory startup gate etkilenmez).
+- **Migration (F1 sertleştirme):** **Var** — `20260614173940_WP1_AddSellerPayoutUniqueIndex` (yalnız `CreateIndex`/`DropIndex`; **şema-only**, filtered unique index `(TransactionId) WHERE Type='SELLER_PAYOUT'`).
+- **Migration (gas estimate seed):** **Var** — `20260614160541_WP1_AddPayoutGasFeeEstimateSetting` (yalnızca `InsertData`/`DeleteData` yeni seed satırı için; **şema değişikliği YOK**). Seed `HasData(SystemSettingSeed.All)` model snapshot'ının parçası olduğundan yeni satır migration gerektirir (ilk "migration yok" varsayımı bu seed-data noktasında yanlıştı; CI migration dry-run + `Model_HasNoPendingChanges` yakaladı, eklendi). `SELLER_PAYOUT` CHECK constraint'i `CK_BlockchainTransactions_Type_Outbound` zaten kapsar; yeni ayar seed-default (mandatory değil → 21-mandatory startup gate etkilenmez).
 - **Config/env:** Yeni SystemSetting `blockchain.payout_gas_fee_estimate_usdt` (default 0.50, admin-tunable). Yeni recurring job `seller-payout-queue` (cron `* * * * *`).
 - **Docker:** Yok.
 
@@ -87,7 +108,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 - **Secret sızıntısı:** Yok (yeni secret/connection string yok).
 - **Auth/authorization:** Yeni endpoint yok (background job + consumer). DTO `SellerPayout` yalnız satıcı görünümünde döner (07 §7.5).
 - **Input validation:** Negative-payout guard (≤0 → satır oluşturmaz, error log); gas estimate read-side `>0` fallback; `ToAddress` boşsa skip.
-- **Yeni dış bağımlılık:** Yok (0 yeni NuGet).
+- **Yeni dış bağımlılık:** `Hangfire.Core 1.8.18` `Skinora.Transactions.csproj`'a eklendi (`[DisableConcurrentExecution]` job-filter için). Çözümde zaten kullanımda (Skinora.Notifications doğrudan, Skinora.API transitif → yeni paket/sürüm değil, transitive collision yok). Başka yeni NuGet yok.
 - **Para-güvenliği:** held/disputed gate; idempotent (çift-pay yok); SaveChanges atomik; COMPLETED yalnız on-chain finality (20-blok) sonrası.
 
 ## Tasarım Kararları (owner-onaylı)
@@ -102,9 +123,10 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 ## Commit & PR
 - Branch: `task/WP1-escrow-completion-payout`
-- Commit: `8c5f91a` (HEAD) — WP1 zinciri + seed migration + Layer-2 bypass log
+- Commit: `8c5f91a` — WP1 zinciri + seed migration + Layer-2 bypass log
+- Commit (F1 sertleştirme): `<hardening-commit>` — `[DisableConcurrentExecution]` + filtered unique index + producer catch + migration + 4 test (CI watch sonrası hash + run ID finalize edilir)
 - PR: [#169](https://github.com/turkerurganci/Skinora/pull/169)
-- CI: ✓ HEAD run [27504561183](https://github.com/turkerurganci/Skinora/actions/runs/27504561183) tüm job'lar success
+- CI: WP1 zinciri HEAD `8c5f91a` run [27504561183](https://github.com/turkerurganci/Skinora/actions/runs/27504561183) tüm job'lar success; F1 sertleştirme commit CI'sı push sonrası izlenir
 
 ## Notlar
 - **Working tree:** Oturum başında temiz.
