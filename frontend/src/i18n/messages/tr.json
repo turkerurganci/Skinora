@@ -610,17 +610,24 @@
     "restricted": {
       "warning": "Bu hesap kısıtlı. Yeni işlemler diğer hesaplara yönlendirilir.",
       "escrowWarning": "Bu hesapta {count} item emanette — bu işlemler otomatik devam ettirilemez, recovery/manuel müdahale gerektirir.",
-      "escrowItemsDeferred": "Emanetteki item listesi, bot sağlık akışı (T69) AD10'a bağlandığında listelenecek."
+      "escrowItemsInQueue": "Bu item'lar aşağıdaki recovery kuyruğunda listelenir."
     },
     "banned": {
       "warning": "Bu hesap yasaklı. Acil müdahale gerekiyor."
     },
     "recovery": {
-      "title": "Recovery Kuyruğu",
-      "description": "Kısıtlı/yasaklı hesapların emanetindeki item'larla ilgili aktif işlemler.",
+      "titleFor": "Recovery Kuyruğu — {bot}",
+      "description": "Bu kısıtlı/yasaklı botun emanetinde duran item'lar — her satır otomatik devam ettirilemeyen bir işlem.",
       "ariaLabel": "Recovery kuyruğu",
-      "empty": "Şu anda recovery'de işlem yok.",
-      "deferred": "Recovery kuyruğu satırları ve aksiyonları (Manual Recovery, sorumlu admin atama, not — MANAGE_STEAM_RECOVERY) bot sağlık/failover akışı (T69) AD10'a bağlandığında etkinleşir.",
+      "empty": "Bu bot için recovery'de item yok.",
+      "loading": "Recovery kuyruğu yükleniyor…",
+      "loadError": "Recovery kuyruğu yüklenemedi.",
+      "onHold": "Hold'da",
+      "statusValue": {
+        "PENDING": "Bekliyor",
+        "IN_REVIEW": "İnceleniyor",
+        "RESOLVED": "Çözüldü"
+      },
       "columns": {
         "transactionId": "İşlem ID",
         "item": "Item",
@@ -628,7 +635,17 @@
         "state": "İşlem State",
         "recoveryStatus": "Recovery Durumu",
         "responsibleAdmin": "Sorumlu Admin",
-        "note": "Admin Notu"
+        "note": "Admin Notu",
+        "actions": "Aksiyonlar"
+      },
+      "actions": {
+        "manualRecovery": "Manual Recovery Başlat",
+        "resolve": "Çözüldü İşaretle",
+        "done": "Çözüldü",
+        "editNote": "Düzenle",
+        "save": "Kaydet",
+        "cancel": "İptal",
+        "assignAdmin": "Ata…"
       }
     }
   },

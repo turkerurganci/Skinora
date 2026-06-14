@@ -610,17 +610,24 @@
     "restricted": {
       "warning": "This account is restricted. New transactions are routed to other accounts.",
       "escrowWarning": "This account holds {count} escrowed items — those transactions cannot continue automatically and require recovery/manual intervention.",
-      "escrowItemsDeferred": "The escrowed item list will appear once the bot health pipeline (T69) feeds AD10."
+      "escrowItemsInQueue": "Those items are listed in the recovery queue below."
     },
     "banned": {
       "warning": "This account is banned. Urgent intervention required."
     },
     "recovery": {
-      "title": "Recovery Queue",
-      "description": "Active transactions tied to items escrowed on restricted/banned accounts.",
+      "titleFor": "Recovery Queue — {bot}",
+      "description": "Items still escrowed on this restricted/banned bot — each row is a transaction that cannot continue automatically.",
       "ariaLabel": "Recovery queue",
-      "empty": "No transactions are currently in recovery.",
-      "deferred": "Recovery queue rows and actions (Manual Recovery, assign responsible admin, notes — MANAGE_STEAM_RECOVERY) activate once the bot health/failover pipeline (T69) feeds AD10.",
+      "empty": "No items in recovery for this bot.",
+      "loading": "Loading recovery queue…",
+      "loadError": "Failed to load the recovery queue.",
+      "onHold": "On hold",
+      "statusValue": {
+        "PENDING": "Pending",
+        "IN_REVIEW": "In review",
+        "RESOLVED": "Resolved"
+      },
       "columns": {
         "transactionId": "Transaction ID",
         "item": "Item",
@@ -628,7 +635,17 @@
         "state": "Transaction State",
         "recoveryStatus": "Recovery Status",
         "responsibleAdmin": "Responsible Admin",
-        "note": "Admin Note"
+        "note": "Admin Note",
+        "actions": "Actions"
+      },
+      "actions": {
+        "manualRecovery": "Start manual recovery",
+        "resolve": "Resolve",
+        "done": "Resolved",
+        "editNote": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "assignAdmin": "Assign…"
       }
     }
   },

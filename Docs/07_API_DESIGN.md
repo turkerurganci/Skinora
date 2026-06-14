@@ -1949,6 +1949,8 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 
 `failoverStatus`: `NONE` (normal), `RESTRICTED_NEW_TXN_DIVERTED` (yeni işlemler diğer botlara yönlendirildi), `ACTIVE_TXN_IN_RECOVERY` (aktif işlemler recovery/manual intervention'da). `recoveryTransactionCount`: Recovery'deki aktif işlem sayısı (02 §15).
 
+> **T103b-2:** `restrictionReason`, `failoverStatus`, `recoveryTransactionCount` artık **canlı** doldurulur. `restrictionReason` = sidecar'ın bildirdiği güncel non-ACTIVE sebep (`PlatformSteamBot.RestrictionReason`); `recoveryTransactionCount` = botun açık (non-RESOLVED) `BotRecoveryItem` sayısı; `failoverStatus` türetilir (ACTIVE→`NONE`; non-ACTIVE & 0 recovery→`RESTRICTED_NEW_TXN_DIVERTED`; non-ACTIVE & >0→`ACTIVE_TXN_IN_RECOVERY`). Recovery kuyruğu satırları için AD25 (§9.28), triage için AD26 (§9.29).
+
 ### 9.11 AD11 — `GET /admin/roles`
 
 **Amaç:** Rol listesi (S19). Permission: `MANAGE_ROLES`.
@@ -2378,6 +2380,60 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 **Yan etkiler:** Suspension alanları temizlenir; `AuditLog` `USER_UNBANNED`; `AccountUnsuspendedEvent` → `ACCOUNT_UNSUSPENDED` bildirimi.
 
 **Hatalar:** 404 `USER_NOT_FOUND`, 409 `NOT_SUSPENDED`, 403 `INSUFFICIENT_PERMISSION`
+
+---
+
+### 9.28 AD25 — `GET /admin/steam-accounts/:botId/recovery-queue`
+
+**Amaç:** Kısıtlı/banned bir botun emanetinde stuck kalan item'ların recovery kuyruğu (S18, 04 §8.7, 02 §15, 03 §11.2a). Permission: `VIEW_STEAM_ACCOUNTS`. Kuyruk, bot RESTRICTED/BANNED'e geçince `BotRestrictionRecoveryConsumer` tarafından eager materyalize edilir (T103b-2).
+
+**Response (200) `data`:**
+```json
+{
+  "botId": "guid",
+  "botStatus": "RESTRICTED",
+  "items": [
+    {
+      "id": "recovery-guid",
+      "transactionId": "tx-guid",
+      "itemName": "AK-47 | Redline",
+      "itemIconUrl": "https://…",
+      "sellerSteamId": "765…",
+      "sellerDisplayName": "Seller",
+      "buyerSteamId": "765…",
+      "buyerDisplayName": "Buyer",
+      "currentStatus": "ITEM_ESCROWED",
+      "statusAtRestriction": "ITEM_ESCROWED",
+      "isOnHold": true,
+      "recoveryStatus": "PENDING",
+      "responsibleAdminId": null,
+      "responsibleAdminName": null,
+      "adminNote": null,
+      "createdAt": "2026-06-13T20:00:00Z",
+      "resolvedAt": null
+    }
+  ]
+}
+```
+
+`recoveryStatus`: `PENDING` / `IN_REVIEW` / `RESOLVED` (06 §3.10a). `statusAtRestriction` kısıtlama anındaki işlem state snapshot'ı; `currentStatus` işlemin güncel state'i. Liste oldest-first (en uzun süredir stuck üstte).
+
+**Hatalar:** 404 `STEAM_ACCOUNT_NOT_FOUND`, 403 `INSUFFICIENT_PERMISSION`
+
+### 9.29 AD26 — `PATCH /admin/steam-accounts/recovery/:id`
+
+**Amaç:** Recovery item triage güncellemesi (04 §8.7 aksiyonları: Not Ekle / Sorumlu Admin Ata / Manual Recovery Başlat → `IN_REVIEW` / Çözüldü → `RESOLVED`). Permission: **`MANAGE_STEAM_RECOVERY`** (salt-okunur `VIEW_STEAM_ACCOUNTS`'tan ayrı; fon/item güvenliği etkili). EMERGENCY_HOLD / İptal AD19b/AD19 ile (S16) yapılır.
+
+**Request (PATCH semantiği — null/eksik alan = değiştirme):**
+```json
+{ "recoveryStatus": "IN_REVIEW", "responsibleAdminId": "admin-guid", "adminNote": "Steam support ticket açıldı." }
+```
+
+**Response (200) `data`:** Güncellenmiş `BotRecoveryQueueItem` (AD25 satır şekli).
+
+**Kurallar:** RESOLVED terminaldir (değiştirilemez → 409). `responsibleAdminId` mevcut bir kullanıcıya işaret etmeli. En az bir alan gerekli. `RESOLVED`'e geçişte `resolvedAt` damgalanır. `BOT_RECOVERY_UPDATED` audit satırı yazılır.
+
+**Hatalar:** 404 `RECOVERY_ITEM_NOT_FOUND`, 409 `RECOVERY_ALREADY_RESOLVED`, 400 `VALIDATION_ERROR` / `RESPONSIBLE_ADMIN_NOT_FOUND` / `NO_CHANGE`, 403 `INSUFFICIENT_PERMISSION`
 
 ---
 

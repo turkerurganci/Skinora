@@ -33,6 +33,8 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.EMERGENCY_HOLD_RELEASED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.COLD_WALLET_TRANSFER_INITIATED, AuditLogCategoryMap.Categories.FundMovement)]
     [InlineData(AuditAction.HOT_WALLET_THRESHOLD_BREACHED, AuditLogCategoryMap.Categories.SecurityEvent)]
+    [InlineData(AuditAction.BOT_RECOVERY_ITEM_CREATED, AuditLogCategoryMap.Categories.SecurityEvent)]
+    [InlineData(AuditAction.BOT_RECOVERY_UPDATED, AuditLogCategoryMap.Categories.AdminAction)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -68,13 +70,14 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Fourteen_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Fifteen_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
-        // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59) = 14.
-        Assert.Equal(14, actions.Count);
+        // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59)
+        // + 1 bot recovery triage (T103b-2) = 15.
+        Assert.Equal(15, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
         Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
@@ -84,6 +87,7 @@ public class AuditLogCategoryMapTests
         Assert.Contains(AuditAction.TRANSACTION_CANCELLED_ADMIN, actions);
         Assert.Contains(AuditAction.EMERGENCY_HOLD_APPLIED, actions);
         Assert.Contains(AuditAction.EMERGENCY_HOLD_RELEASED, actions);
+        Assert.Contains(AuditAction.BOT_RECOVERY_UPDATED, actions);
     }
 
     [Fact]
@@ -94,14 +98,15 @@ public class AuditLogCategoryMapTests
 
         // Ordering mirrors the dictionary insertion order in
         // AuditLogCategoryMap: WALLET_ADDRESS_CHANGED (initial) →
-        // BOT_STATUS_CHANGED (T69) → RECONCILIATION_MISMATCH (T76) →
-        // HOT_WALLET_THRESHOLD_BREACHED (T77) →
+        // BOT_STATUS_CHANGED (T69) → BOT_RECOVERY_ITEM_CREATED (T103b-2) →
+        // RECONCILIATION_MISMATCH (T76) → HOT_WALLET_THRESHOLD_BREACHED (T77) →
         // SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED (T82).
         Assert.Equal(
             new[]
             {
                 AuditAction.WALLET_ADDRESS_CHANGED,
                 AuditAction.BOT_STATUS_CHANGED,
+                AuditAction.BOT_RECOVERY_ITEM_CREATED,
                 AuditAction.RECONCILIATION_MISMATCH,
                 AuditAction.HOT_WALLET_THRESHOLD_BREACHED,
                 AuditAction.SANCTIONS_LIST_ADDRESS_ADDED,

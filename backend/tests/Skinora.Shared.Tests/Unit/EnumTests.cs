@@ -379,14 +379,14 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (26) ────────────────────────────────────────────
+    // ── AuditAction (28) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave26Values()
+    public void AuditAction_ShouldHave28Values()
     {
-        // 26 after T82 added SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED.
+        // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(26, values.Length);
+        Assert.Equal(28, values.Length);
     }
 
     [Theory]
@@ -416,6 +416,8 @@ public class EnumTests
     [InlineData(nameof(AuditAction.HOT_WALLET_THRESHOLD_BREACHED))]
     [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_ADDED))]
     [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED))]
+    [InlineData(nameof(AuditAction.BOT_RECOVERY_ITEM_CREATED))]
+    [InlineData(nameof(AuditAction.BOT_RECOVERY_UPDATED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));
@@ -569,7 +571,7 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        // T59 added EmergencyHoldReleaseAction → 26 + 1 = 27.
-        Assert.Equal(27, enumTypes.Count);
+        // T59 added EmergencyHoldReleaseAction → 27; T103b-2 added BotRecoveryStatus → 28.
+        Assert.Equal(28, enumTypes.Count);
     }
 }

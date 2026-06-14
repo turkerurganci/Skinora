@@ -610,17 +610,24 @@
     "restricted": {
       "warning": "Esta cuenta está restringida. Las nuevas transacciones se redirigen a otras cuentas.",
       "escrowWarning": "Esta cuenta tiene {count} ítems en custodia — esas transacciones no pueden continuar automáticamente y requieren recuperación/intervención manual.",
-      "escrowItemsDeferred": "La lista de ítems en custodia aparecerá cuando el flujo de estado de los bots (T69) alimente AD10."
+      "escrowItemsInQueue": "Esos ítems se listan en la cola de recuperación de abajo."
     },
     "banned": {
       "warning": "Esta cuenta está baneada. Se requiere intervención urgente."
     },
     "recovery": {
-      "title": "Cola de recuperación",
-      "description": "Transacciones activas vinculadas a ítems en custodia en cuentas restringidas/baneadas.",
+      "titleFor": "Cola de recuperación — {bot}",
+      "description": "Ítems aún en custodia en este bot restringido/baneado — cada fila es una transacción que no puede continuar automáticamente.",
       "ariaLabel": "Cola de recuperación",
-      "empty": "No hay transacciones en recuperación actualmente.",
-      "deferred": "Las filas y acciones de la cola de recuperación (Recuperación manual, asignar administrador responsable, notas — MANAGE_STEAM_RECOVERY) se activan cuando el flujo de estado/conmutación por error de los bots (T69) alimenta AD10.",
+      "empty": "No hay ítems en recuperación para este bot.",
+      "loading": "Cargando la cola de recuperación…",
+      "loadError": "No se pudo cargar la cola de recuperación.",
+      "onHold": "En espera",
+      "statusValue": {
+        "PENDING": "Pendiente",
+        "IN_REVIEW": "En revisión",
+        "RESOLVED": "Resuelto"
+      },
       "columns": {
         "transactionId": "ID de transacción",
         "item": "Ítem",
@@ -628,7 +635,17 @@
         "state": "Estado de la transacción",
         "recoveryStatus": "Estado de recuperación",
         "responsibleAdmin": "Administrador responsable",
-        "note": "Nota del administrador"
+        "note": "Nota del administrador",
+        "actions": "Acciones"
+      },
+      "actions": {
+        "manualRecovery": "Iniciar recuperación manual",
+        "resolve": "Marcar como resuelto",
+        "done": "Resuelto",
+        "editNote": "Editar",
+        "save": "Guardar",
+        "cancel": "Cancelar",
+        "assignAdmin": "Asignar…"
       }
     }
   },

@@ -66,6 +66,14 @@ public static class AuditLogCategoryMap
             // the security queue.
             [AuditAction.BOT_STATUS_CHANGED] = Categories.SecurityEvent,
 
+            // T103b-2 — bot recovery queue. Materialisation is SYSTEM-driven and
+            // signals the same operational-security situation as BOT_STATUS_CHANGED
+            // (a restricted bot is now holding stuck items), so it sits in the
+            // security queue. The admin triage update (note / responsible admin /
+            // status) is a deliberate operator action → ADMIN_ACTION.
+            [AuditAction.BOT_RECOVERY_ITEM_CREATED] = Categories.SecurityEvent,
+            [AuditAction.BOT_RECOVERY_UPDATED] = Categories.AdminAction,
+
             // T76 — daily reconciliation discrepancy (05 §3.3). An on-chain
             // vs ledger gap is a custody-integrity alarm: it sits in the
             // security queue so the same operators who watch wallet-address

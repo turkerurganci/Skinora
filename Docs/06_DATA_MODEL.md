@@ -22,6 +22,7 @@ Bu doküman, Skinora platformundaki tüm veri yapılarını tanımlar. Entity'le
 | 8 | | **BlockchainTransaction** | Gelen/giden tüm blockchain transferleri |
 | 9 | Steam Entegrasyonu | **TradeOffer** | Steam trade offer takibi |
 | 10 | | **PlatformSteamBot** | Platform Steam bot hesapları |
+| 10a | | **BotRecoveryItem** | Kısıtlı bota stuck kalan emanet item'ının recovery kuyruğu (T103b-2) |
 | 11 | Güven & Güvenlik | **Dispute** | İtiraz kaydı, otomatik çözüm, eskalasyon |
 | 12 | | **FraudFlag** | Fraud tespiti, admin inceleme |
 | 13 | Bildirim | **Notification** | Platform içi bildirimler |
@@ -803,6 +804,7 @@ Platform Steam bot hesapları ve durumları.
 | `SteamId` | string(20) | UNIQUE, NOT NULL | Bot'un Steam ID'si |
 | `DisplayName` | string(100) | NOT NULL | Bot adı |
 | `Status` | int | NOT NULL | Enum: PlatformSteamBotStatus |
+| `RestrictionReason` | string(200) | NULL | Sidecar'ın bildirdiği güncel non-ACTIVE sebep; ACTIVE iken null (T103b-2, 07 §9.10) |
 | `ActiveEscrowCount` | int | NOT NULL, DEFAULT 0 | Aktif emanet item sayısı (denormalized) |
 | `DailyTradeOfferCount` | int | NOT NULL, DEFAULT 0 | Günlük trade offer sayısı (denormalized) |
 | `LastHealthCheckAt` | datetime | NULL | Son sağlık kontrolü zamanı |
@@ -814,6 +816,29 @@ Platform Steam bot hesapları ve durumları.
 > **Bot seçimi:** Yeni trade offer gönderirken `ActiveEscrowCount` en düşük olan aktif bot seçilir (capacity-based, 05 §3.2). Eşitlik durumunda en eski `LastHealthCheckAt`, sonra `Id` (deterministik) — `SqlBotSelectionService`.
 >
 > **`ActiveEscrowCount` yaşam döngüsü (T106a):** Backend tek-yazardır (sidecar asla yazmaz; negatife düşmez). **+1** item bot'a emanet edildiğinde (`ITEM_ESCROWED` — `trade_offer.accepted` escrow yönü). **−1** item bot'tan ayrıldığında: alıcıya teslim (`ITEM_DELIVERED`) **veya** satıcıya iade (`RETURN_TO_SELLER` accepted). Dispatch anında (`TRADE_OFFER_SENT_TO_SELLER`) sayaç değişmez — yalnızca `EscrowBotId` atanır; sayaç gerçek tutuş anını yansıtır. **Delivery + refund bacakları aynı escrow botunu yeniden kullanır** (yalnız o bot item'ı tutar — `Transaction.EscrowBotId`).
+
+---
+
+### 3.10a BotRecoveryItem
+
+Kısıtlı/banned bir bota stuck kalan emanet item'ının recovery kuyruğu satırı (T103b-2 — 02 §15, 03 §11.2a, 04 §8.7). Bot RESTRICTED/BANNED'e geçince, custody'sinde item duran (escrow kabul edilmiş, teslim/iade edilmemiş) her işlem için `BotRestrictionRecoveryConsumer` tarafından **eager materyalize** edilir.
+
+| Field | Tip | Kısıt | Açıklama |
+|-------|-----|-------|----------|
+| `Id` | guid | PK | |
+| `PlatformSteamBotId` | guid | FK → PlatformSteamBot, NOT NULL | Item'ı tutan kısıtlı bot |
+| `TransactionId` | guid | FK → Transaction, UNIQUE, NOT NULL | Stuck işlem (işlem başına tek satır) |
+| `RecoveryStatus` | int | NOT NULL | Enum: BotRecoveryStatus (PENDING / IN_REVIEW / RESOLVED) |
+| `StatusAtRestriction` | int | NOT NULL | Kısıtlama anındaki işlem state snapshot'ı (TransactionStatus) |
+| `ResponsibleAdminId` | guid | FK → User, NULL | Atanan sorumlu admin (opsiyonel) |
+| `AdminNote` | string(2000) | NULL | Admin inceleme notu |
+| `ResolvedAt` | datetime | NULL | RESOLVED'e geçiş zamanı |
+| `CreatedAt` | datetime | NOT NULL | |
+| `UpdatedAt` | datetime | NOT NULL | |
+
+> **Idempotent materyalizasyon:** `TransactionId` UNIQUE + consumer'ın var-olan kontrolü → bot tekrar kısıtlansa / outbox yeniden teslim etse satır çiftlenmez. Mutable + `IAuditableEntity` (append-only DEĞİL — admin triage durumunu günceller). `RESOLVED` terminaldir (AD26 değiştirmez). Liste/görünüm verisi (item adı, taraflar, güncel state) okuma anında Transaction'dan join edilir — snapshot edilmez (drift önlenir; yalnız `StatusAtRestriction` snapshot).
+>
+> **İndeksler:** `UQ_BotRecoveryItems_TransactionId`, `IX_BotRecoveryItems_PlatformSteamBotId_RecoveryStatus` (açık-recovery sayımı + kuyruk taraması), `IX_BotRecoveryItems_ResponsibleAdminId` (FK).
 
 ---
 
@@ -1312,6 +1337,9 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | BlockchainTransaction | PaymentAddressId | PaymentAddress | N:1 (opsiyonel) |
 | TradeOffer | TransactionId | Transaction | N:1 |
 | TradeOffer | PlatformSteamBotId | PlatformSteamBot | N:1 |
+| BotRecoveryItem | PlatformSteamBotId | PlatformSteamBot | N:1 |
+| BotRecoveryItem | TransactionId | Transaction | 1:1 (UNIQUE) |
+| BotRecoveryItem | ResponsibleAdminId | User | N:1 (opsiyonel) |
 | Dispute | TransactionId | Transaction | N:1 |
 | Dispute | OpenedByUserId | User | N:1 |
 | Dispute | AdminId | User | N:1 (opsiyonel) |
@@ -1371,6 +1399,7 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | TradeOffer | SteamTradeOfferId (WHERE NOT NULL) | Steam trade offer tekrar kontrolü — retry/entegrasyon hatalarında çift kayıt engeli |
 | Transaction | InviteToken (WHERE NOT NULL) | Açık link token benzersizliği |
 | PlatformSteamBot | SteamId | Benzersiz bot hesabı |
+| BotRecoveryItem | TransactionId | İşlem başına tek recovery satırı (idempotent materyalizasyon) |
 | AdminRole | Name | Benzersiz rol adı |
 | SystemSetting | Key | Benzersiz parametre anahtarı |
 | UserNotificationPreference | UserId + Channel (WHERE IsDeleted = 0) | Kullanıcı başına kanal başına tek kayıt |

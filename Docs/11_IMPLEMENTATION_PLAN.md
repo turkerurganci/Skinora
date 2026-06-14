@@ -2164,7 +2164,12 @@ Task T103b: Steam hesapları backend tamamlama (S18 — emanet item listesi + Re
   Not: T103 (S18 UI) zaten 4/4 PASS — owner-onaylı boş/structural Recovery Queue + emanet sayısı kalır; bu erteleme F5 Gate Check'i BLOKLAMAZ.
   GÜNCELLEME 2026-06-13: ön-koşul (a) escrow→bot wiring = T106a (Escrow Trade-Offer Dispatch Engine) ile KARŞILANDI.
     Kalan = T103b-2 (recovery/failover discovery + spec) / T103b-3 (recovery queue domain + MANAGE_STEAM_RECOVERY + emanet item listesi impl).
-  Yeniden ele alma: T103b-2 discovery turu (recovery/failover priorite olduğunda) → T103b-3 impl.
+  GÜNCELLEME 2026-06-13 (T103b-2): owner kararı "tasarla+uygula birleşik" → T103b-2 + T103b-3 TEK task'ta uygulandı.
+    Yapıldı: BotRecoveryItem entity + migration; SteamWebhookHandler RESTRICTED/BANNED tetik → BotRestrictedEvent;
+    BotRestrictionRecoveryConsumer (eager materyalize + otomatik EMERGENCY_HOLD, idempotent); AdminSteamBotQueryService
+    canlı RestrictionReason/FailoverStatus/RecoveryTransactionCount; AD25 GET recovery-queue (VIEW_STEAM_ACCOUNTS) +
+    AD26 PATCH (MANAGE_STEAM_RECOVERY enforcement); FE recovery kuyruğu + aksiyonlar + i18n. Tetik = RESTRICTED+BANNED
+    (OFFLINE geçici). Rapor Docs/TASK_REPORTS/T103b-2_REPORT.md. Durum: yapım bitti, bağımsız validator bekliyor.
 ```
 
 ```

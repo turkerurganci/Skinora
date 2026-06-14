@@ -27,6 +27,10 @@ public class PlatformSteamBotConfiguration : IEntityTypeConfiguration<PlatformSt
         builder.Property(b => b.Status)
             .IsRequired();
 
+        // T103b-2 — sidecar restriction reason for the current non-ACTIVE status.
+        builder.Property(b => b.RestrictionReason)
+            .HasMaxLength(200);
+
         builder.Property(b => b.ActiveEscrowCount)
             .IsRequired()
             .HasDefaultValue(0);

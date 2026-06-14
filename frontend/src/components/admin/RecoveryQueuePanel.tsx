@@ -1,75 +1,268 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import { ResponsiveTable } from "@/components/common";
+import { useState } from "react";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { ResponsiveTable, StatusBadge } from "@/components/common";
 import type { ResponsiveTableColumn } from "@/components/common";
+import { useAdminUsers } from "@/lib/hooks/useAdminUsers";
 import { cn } from "@/lib/utils/cn";
+import type {
+  BotRecoveryQueueItem,
+  BotRecoveryStatus,
+  UpdateBotRecoveryRequest,
+} from "@/lib/api/admin";
 
-/**
- * Forward-declared shape of one S18 recovery-queue row (04 §8.7). NO endpoint
- * populates this yet: AD10 returns only an aggregate `recoveryTransactionCount`
- * (always 0 — deferred to the T69 bot-health / failover pipeline). Under the
- * owner-approved T103 Option A the panel renders structurally (columns visible
- * for spec traceability) but always receives an empty list. When a future task
- * wires the recovery pipeline into AD10 (or a dedicated endpoint), this type
- * moves to `lib/api/admin.ts` and the table populates with no UI change.
- */
-export interface RecoveryQueueRow {
-  transactionId: string;
-  itemName: string;
-  seller: string;
-  buyer: string;
-  transactionState: string;
-  recoveryStatus: string;
-  responsibleAdmin: string | null;
-  adminNote: string | null;
+function shortId(id: string): string {
+  return id.slice(0, 8);
 }
 
+const RECOVERY_TONE: Record<BotRecoveryStatus, string> = {
+  PENDING: "bg-amber-100 text-amber-800",
+  IN_REVIEW: "bg-blue-100 text-blue-800",
+  RESOLVED: "bg-emerald-100 text-emerald-700",
+};
+
 export interface RecoveryQueuePanelProps {
-  rows: readonly RecoveryQueueRow[];
+  botName: string;
+  items: readonly BotRecoveryQueueItem[];
+  onUpdate: (id: string, body: UpdateBotRecoveryRequest) => void;
+  pendingId: string | null;
   className?: string;
 }
 
 /**
- * S18 recovery queue (04 §8.7) — active transactions tied to items escrowed on
- * a restricted/banned bot. Columns: İşlem ID (→ S16), Item, Satıcı/Alıcı,
- * İşlem State, Recovery Durumu, Sorumlu Admin, Admin Notu. The row data and the
- * MANAGE_STEAM_RECOVERY actions (Manual Recovery / not ekle / sorumlu admin
- * atama) are deferred to T69 (see {@link RecoveryQueueRow}); the panel shows
- * the empty state today and a footnote explaining when it activates.
+ * S18 recovery queue for one restricted/banned bot (04 §8.7, T103b-2). Lists the
+ * items still escrowed on the bot (each row = one stuck transaction) with the
+ * MANAGE_STEAM_RECOVERY triage actions: İncele (→ S16 link), Manual Recovery
+ * (→ IN_REVIEW), Çözüldü (→ RESOLVED) and Not Ekle (inline note editor).
+ * EMERGENCY_HOLD / İptal are reached via the S16 transaction detail (the ID link).
  */
-export function RecoveryQueuePanel({ rows, className }: RecoveryQueuePanelProps) {
+export function RecoveryQueuePanel({
+  botName,
+  items,
+  onUpdate,
+  pendingId,
+  className,
+}: RecoveryQueuePanelProps) {
   const t = useTranslations("adminSteamAccounts.recovery");
+  const locale = useLocale();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftNote, setDraftNote] = useState("");
 
-  const columns: ReadonlyArray<ResponsiveTableColumn<RecoveryQueueRow>> = [
-    { key: "transactionId", header: t("columns.transactionId"), cell: (r) => r.transactionId },
+  // Reuse the S19 admin-user list (AD15) for the "assign responsible admin"
+  // dropdown — only role-holders (platform staff) are eligible targets. A larger
+  // page covers the full staff roster in one fetch; react-query dedupes the
+  // identical query across the per-bot panels.
+  const { data: adminUsersData } = useAdminUsers({ pageSize: 100 });
+  const staffOptions = (adminUsersData?.items ?? [])
+    .filter((u) => u.role !== null)
+    .map((u) => ({ id: u.id, name: u.displayName }));
+
+  // Keep an already-assigned admin selectable even if they are not in the
+  // fetched staff slice (e.g. role later cleared) so the current value renders.
+  function adminOptionsFor(item: BotRecoveryQueueItem) {
+    if (item.responsibleAdminId && !staffOptions.some((o) => o.id === item.responsibleAdminId)) {
+      return [
+        { id: item.responsibleAdminId, name: item.responsibleAdminName ?? item.responsibleAdminId },
+        ...staffOptions,
+      ];
+    }
+    return staffOptions;
+  }
+
+  function startEdit(item: BotRecoveryQueueItem) {
+    setEditingId(item.id);
+    setDraftNote(item.adminNote ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraftNote("");
+  }
+
+  function saveNote(item: BotRecoveryQueueItem) {
+    onUpdate(item.id, { adminNote: draftNote });
+    setEditingId(null);
+  }
+
+  function partyLabel(displayName: string | null, steamId: string | null): string {
+    return displayName ?? steamId ?? "—";
+  }
+
+  const columns: ReadonlyArray<ResponsiveTableColumn<BotRecoveryQueueItem>> = [
+    {
+      key: "transactionId",
+      header: t("columns.transactionId"),
+      cell: (r) => (
+        <Link
+          href={`/${locale}/admin/transactions/${r.transactionId}`}
+          className="font-mono text-xs text-blue-600 hover:text-blue-700"
+        >
+          {shortId(r.transactionId)}
+        </Link>
+      ),
+    },
     { key: "item", header: t("columns.item"), cell: (r) => r.itemName },
-    { key: "parties", header: t("columns.parties"), cell: (r) => `${r.seller} / ${r.buyer}` },
-    { key: "state", header: t("columns.state"), cell: (r) => r.transactionState },
-    { key: "recoveryStatus", header: t("columns.recoveryStatus"), cell: (r) => r.recoveryStatus },
+    {
+      key: "parties",
+      header: t("columns.parties"),
+      cell: (r) =>
+        `${partyLabel(r.sellerDisplayName, r.sellerSteamId)} / ${partyLabel(
+          r.buyerDisplayName,
+          r.buyerSteamId,
+        )}`,
+    },
+    {
+      key: "state",
+      header: t("columns.state"),
+      cell: (r) => (
+        <span className="inline-flex items-center gap-1">
+          <StatusBadge status={r.statusAtRestriction} />
+          {r.isOnHold && (
+            <span className="rounded bg-gray-100 px-1 text-[10px] font-medium text-gray-600">
+              {t("onHold")}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "recoveryStatus",
+      header: t("columns.recoveryStatus"),
+      cell: (r) => (
+        <span
+          className={cn(
+            "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+            RECOVERY_TONE[r.recoveryStatus],
+          )}
+        >
+          {t(`statusValue.${r.recoveryStatus}`)}
+        </span>
+      ),
+    },
     {
       key: "responsibleAdmin",
       header: t("columns.responsibleAdmin"),
-      cell: (r) => r.responsibleAdmin ?? "—",
+      cell: (r) =>
+        // RESOLVED is terminal — show the assignee read-only (no reassignment).
+        r.recoveryStatus === "RESOLVED" ? (
+          <span className="text-gray-700">{r.responsibleAdminName ?? "—"}</span>
+        ) : (
+          <select
+            aria-label={t("columns.responsibleAdmin")}
+            value={r.responsibleAdminId ?? ""}
+            disabled={pendingId === r.id}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value && value !== r.responsibleAdminId) {
+                onUpdate(r.id, { responsibleAdminId: value });
+              }
+            }}
+            className="w-full rounded border border-gray-300 bg-white px-1 py-0.5 text-xs disabled:opacity-50"
+          >
+            <option value="">{t("actions.assignAdmin")}</option>
+            {adminOptionsFor(r).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        ),
     },
-    { key: "note", header: t("columns.note"), cell: (r) => r.adminNote ?? "—" },
+    {
+      key: "note",
+      header: t("columns.note"),
+      cell: (r) =>
+        editingId === r.id ? (
+          <div className="flex flex-col gap-1">
+            <textarea
+              value={draftNote}
+              onChange={(e) => setDraftNote(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              className="w-full rounded border border-gray-300 p-1 text-xs"
+              aria-label={t("columns.note")}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => saveNote(r)}
+                disabled={pendingId === r.id}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+              >
+                {t("actions.save")}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                {t("actions.cancel")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-1">
+            <span className="text-gray-700">{r.adminNote ?? "—"}</span>
+            {r.recoveryStatus !== "RESOLVED" && (
+              <button
+                type="button"
+                onClick={() => startEdit(r)}
+                className="shrink-0 text-[11px] text-blue-600 hover:text-blue-700"
+              >
+                {t("actions.editNote")}
+              </button>
+            )}
+          </div>
+        ),
+    },
+    {
+      key: "actions",
+      header: t("columns.actions"),
+      cell: (r) => (
+        <div className="flex flex-col gap-1">
+          {r.recoveryStatus === "PENDING" && (
+            <button
+              type="button"
+              onClick={() => onUpdate(r.id, { recoveryStatus: "IN_REVIEW" })}
+              disabled={pendingId === r.id}
+              className="text-left text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
+            >
+              {t("actions.manualRecovery")}
+            </button>
+          )}
+          {r.recoveryStatus !== "RESOLVED" && (
+            <button
+              type="button"
+              onClick={() => onUpdate(r.id, { recoveryStatus: "RESOLVED" })}
+              disabled={pendingId === r.id}
+              className="text-left text-xs font-medium text-emerald-700 hover:text-emerald-800 disabled:opacity-50"
+            >
+              {t("actions.resolve")}
+            </button>
+          )}
+          {r.recoveryStatus === "RESOLVED" && (
+            <span className="text-xs text-gray-400">{t("actions.done")}</span>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
     <section className={cn("rounded-lg border border-gray-200 bg-white p-4 shadow-sm", className)}>
-      <h2 className="text-sm font-semibold text-gray-900">{t("title")}</h2>
+      <h3 className="text-sm font-semibold text-gray-900">{t("titleFor", { bot: botName })}</h3>
       <p className="mt-1 text-xs text-gray-500">{t("description")}</p>
 
       <ResponsiveTable
-        data={rows}
+        data={items}
         columns={columns}
-        getRowKey={(r) => r.transactionId}
+        getRowKey={(r) => r.id}
         ariaLabel={t("ariaLabel")}
         emptyMessage={t("empty")}
         className="mt-3"
       />
-
-      <p className="mt-2 text-[11px] text-gray-400">{t("deferred")}</p>
     </section>
   );
 }

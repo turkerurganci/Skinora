@@ -21,8 +21,8 @@
 | 🔴 | T58-AdminDisputeQueue | Escalate edilen dispute'lar çıkmaz sokak: `GET /admin/disputes` + review/resolve komutu yok | Admin dispute çözüm akışı |
 | 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` seed'siz → env/admin verilmeden prod startup fail-fast | **Production startup** |
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
-| 🟡 | T69-BotRecoveryStateMachine | Recovery/failover domaini yok; AD10 satır verisi sabit null/NONE/0 → **T103b-2/-3** | Admin bot triajı |
-| 🟡 | T103b-2/-3 | Steam backend tamamlama: recovery/failover spec (discovery) + recovery queue domain + MANAGE_STEAM_RECOVERY + emanet item listesi (ön-koşul (a)=T106a ✓) | T103 K1/K2/K3 |
+| ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2** — `BotRecoveryItem` recovery domaini + AD10 canlı `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` | — |
+| ✅ | T103b-2/-3 | **ÇÖZÜLDÜ → T103b-2 (birleşik)** — recovery queue domain + MANAGE_STEAM_RECOVERY enforcement + emanet item listesi + otomatik EMERGENCY_HOLD | — |
 | 🟡 | SWEEP-dispatcher | SWEEP satırı üreten consumer yok → hot-wallet mutabakatı tek-taraflı | Hot-wallet mutabakat doğruluğu |
 | 🟡 | T81-PriceConsumerWireup | `NullMarketPriceProvider` → PRICE_DEVIATION fraud kuralı inert | PRICE_DEVIATION kuralı |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
@@ -46,11 +46,11 @@
 | Önc. | ID | Açıklama | Tip | Hedef | Kaynak |
 |---|---|---|---|---|---|
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + sidecar `selectBot(botAccountName)` hint'i onurlandırır (round-robin yalnız fallback) | done | — | T106a |
-| 🟡 | T69-BotRecoveryStateMachine | Recovery/failover domain modeli yok; AD10 `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` sabit null/NONE/0 | backend-gap | T103b | `AdminSteamBotQueryService.cs:57-59` |
+| ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2:** `BotRecoveryItem` domaini + AD10 canlı alanlar (`AdminSteamBotQueryService` türetir) | done | — | T103b-2 |
 | ⚪ | T69-K4 | `AdminBotStatusChanged` `Clients.All` yayını; admin-only group scope daraltma | k-note | T-future | T69 K4 |
-| ⚪ | FE-RecoveryQueue-T69 | `RecoveryQueuePanel` 7 kolon render eder ama `EMPTY_RECOVERY_ROWS` alır; `MANAGE_STEAM_RECOVERY` aksiyonları yok | k-note | T103b | T103 K1/K4 |
-| ⚪ | FE-SteamAccountCard-EscrowList-T69 | Bozuk bot kartında yalnız emanet **sayısı** + deferred not (item listesi yok) | k-note | T103b | T103 K3 |
-| ⚪ | FE-admin-ts-RecoveryFields-T69 | `admin.ts` AD10 kontrat yorumu recovery alanlarını deferred işaretliyor; failover banner gizli kalıyor | backend-gap | T103b | `lib/api/admin.ts` AD10 |
+| ✅ | FE-RecoveryQueue-T69 | **ÇÖZÜLDÜ → T103b-2:** `RecoveryQueuePanel` canlı AD25 satırları + Manual Recovery/Resolve/Not aksiyonları (AD26) | done | — | T103b-2 |
+| ✅ | FE-SteamAccountCard-EscrowList-T69 | **ÇÖZÜLDÜ → T103b-2:** emanet item'lar per-bot recovery kuyruğunda listelenir | done | — | T103b-2 |
+| ✅ | FE-admin-ts-RecoveryFields-T69 | **ÇÖZÜLDÜ → T103b-2:** AD10 alanları canlı; failover banner `RESTRICTED_NEW_TXN_DIVERTED` ile görünür | done | — | T103b-2 |
 | ⚪ | T68-K1 | Bot lifecycle event → admin notification + `BOT_SESSION_FAILED` AuditAction; şu an yalnız Warning log | backend-gap | admin notification track | T68 K1 |
 | ⚪ | T64-BotWebhookHandler | `bot.session_failed`/`removed_from_pool` backend handler (T68 log-only ötesi) | backend-gap | T68/T69 | T64 |
 | 🟡 | TradeOfferMonitor-hotadd-T69 🆕 | Dinamik pool hot-add'de `TradeOfferMonitor` re-attach (idempotent `attachToSession`) çağıranı yok | k-note | T69 | `sidecar-steam/src/trade/TradeOfferMonitor.ts:50-53` |
@@ -59,7 +59,7 @@
 
 | Önc. | ID | Açıklama | Tip | Hedef | Kaynak |
 |---|---|---|---|---|---|
-| 🟡 | T103b | Emanet item listesi + Recovery Queue satır verisi + `MANAGE_STEAM_RECOVERY`. **Owner Option C ertele** (2026-06-13). Ön-koşul: (a) escrow→bot wiring, (b) recovery/failover spec | task | F6 E2E / ayrı backend task | `IMPLEMENTATION_STATUS.md:201` |
+| ✅ | T103b | **ÇÖZÜLDÜ → T103b-2 (birleşik impl, 2026-06-13):** emanet item listesi + Recovery Queue satır verisi + `MANAGE_STEAM_RECOVERY` enforcement + otomatik EMERGENCY_HOLD | done | — | T103b-2_REPORT |
 | ⚪ | T103-K4 | AD10 TR-sabit `warningMessage` yerine client-lokalize banner | backend-gap | backend i18n migration | T103 K4 |
 
 ## 3. F6 — Uçtan uca testler (T107–T114)

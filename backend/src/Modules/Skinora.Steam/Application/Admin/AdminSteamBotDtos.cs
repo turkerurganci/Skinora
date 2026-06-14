@@ -10,11 +10,11 @@ public sealed record AdminSteamAccountsResponse(
 /// <summary>One row of <c>data.accounts</c> for AD10 (07 §9.10).</summary>
 /// <remarks>
 /// <para>
-/// <c>FailoverStatus</c>, <c>RecoveryTransactionCount</c> and
-/// <c>RestrictionReason</c> are forward-deferred to T69 (Steam Sidecar
-/// failover + capacity-based selection). Until T69 wires the bot health
-/// pipeline, every row reports <c>"NONE"</c> / <c>0</c> / <c>null</c>
-/// — see <see cref="AdminSteamBotQueryService"/>.
+/// <c>RestrictionReason</c> is the sidecar reason for the current non-ACTIVE
+/// status; <c>FailoverStatus</c> ∈ NONE / RESTRICTED_NEW_TXN_DIVERTED /
+/// ACTIVE_TXN_IN_RECOVERY; <c>RecoveryTransactionCount</c> is the number of open
+/// (non-RESOLVED) recovery items for the bot. All three are populated live by
+/// <see cref="AdminSteamBotQueryService"/> from the T103b-2 recovery domain.
 /// </para>
 /// <para>
 /// <c>DailyTradeOfferLimit</c> is the Steam protocol limit (200 outgoing

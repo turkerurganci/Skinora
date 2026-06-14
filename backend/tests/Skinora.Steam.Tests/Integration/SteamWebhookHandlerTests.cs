@@ -1,16 +1,23 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
+using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Steam.Tests.TestSupport;
+using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -86,16 +93,60 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
     }
 
     private RecordingNotificationRealtimePublisher _recorder = null!;
+    private RecordingOutbox _outbox = null!;
 
     private SteamWebhookHandler CreateSut()
     {
         _recorder = new RecordingNotificationRealtimePublisher();
+        _outbox = new RecordingOutbox();
+        // Real materialiser so the F3 boundary-race safety net is exercised
+        // end-to-end (recovery row + EMERGENCY_HOLD actually persisted). It is a
+        // no-op for the ACTIVE-bot tests since AcceptEscrowAsync only invokes it
+        // when the receiving bot is RESTRICTED/BANNED.
+        var freeze = new TimeoutFreezeService(
+            Context, new NoOpJobScheduler(), new NoOpScheduling(), TimeProvider.System);
+        var materialiser = new BotRecoveryMaterialiser(
+            Context, freeze, _outbox, new AuditLogger(Context, TimeProvider.System), TimeProvider.System);
         return new SteamWebhookHandler(
             Context,
             new AuditLogger(Context, TimeProvider.System),
             _recorder,
+            _outbox,
+            materialiser,
             TimeProvider.System,
             NullLogger<SteamWebhookHandler>.Instance);
+    }
+
+    private sealed class RecordingOutbox : IOutboxService
+    {
+        public List<IDomainEvent> Events { get; } = [];
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            Events.Add(domainEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpJobScheduler : IBackgroundJobScheduler
+    {
+        public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay) => Guid.NewGuid().ToString("N");
+        public string Enqueue<T>(Expression<Action<T>> methodCall) => Guid.NewGuid().ToString("N");
+        public bool Delete(string jobId) => true;
+        public void AddOrUpdateRecurring<T>(string jobId, Expression<Action<T>> methodCall, string cronExpression) { }
+    }
+
+    private sealed class NoOpScheduling : ITimeoutSchedulingService
+    {
+        public Task<TimeoutJobIds> SchedulePaymentTimeoutAsync(Guid transactionId, CancellationToken cancellationToken)
+            => Task.FromResult(new TimeoutJobIds("p", "w"));
+
+        public Task CancelTimeoutJobsAsync(Guid transactionId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<TimeoutJobIds> ReschedulePaymentTimeoutAsync(
+            Guid transactionId, TimeSpan remaining, DateTime newPaymentDeadlineUtc, CancellationToken cancellationToken)
+            => Task.FromResult(new TimeoutJobIds("p", "w"));
     }
 
     [Fact]
@@ -439,6 +490,83 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task TradeOfferAccepted_Escrow_OnRestrictedBot_OpensRecoveryAndHolds()
+    {
+        // T103b-2 F3 boundary race — the seller accepted while the bot was
+        // already RESTRICTED, so the item lands on a degraded bot the recovery
+        // sweep had already snapshotted past. The inline safety net must open the
+        // recovery queue + auto-hold in the same unit of work.
+        await StageOfferAsync(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TradeOfferDirection.TO_SELLER, "A200");
+        await using (var arrange = CreateContext())
+        {
+            var arrangeBot = await arrange.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
+            arrangeBot.Status = PlatformSteamBotStatus.RESTRICTED;
+            arrangeBot.RestrictionReason = "restricted";
+            await arrange.SaveChangesAsync();
+        }
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A200",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+            ReceivedAssetId = "bot-asset-restricted",
+        });
+
+        var result = await sut.HandleTradeEventAsync(envelope, "corr-race", CancellationToken.None);
+
+        Assert.Equal(TradeWebhookResult.Applied, result);
+        await using var verify = CreateContext();
+
+        // The item still advanced to ITEM_ESCROWED (it physically reached the bot)…
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx.Status);
+        Assert.Equal("bot-asset-restricted", tx.EscrowBotAssetId);
+        // …but is now auto-held so its timeout clock is frozen.
+        Assert.True(tx.IsOnHold);
+        Assert.Equal(TimeoutFreezeReason.EMERGENCY_HOLD, tx.TimeoutFreezeReason);
+
+        // A PENDING recovery row was materialised for the stuck transaction.
+        var recovery = Assert.Single(
+            await verify.Set<BotRecoveryItem>().Where(r => r.PlatformSteamBotId == _bot.Id).ToListAsync());
+        Assert.Equal(_transaction.Id, recovery.TransactionId);
+        Assert.Equal(BotRecoveryStatus.PENDING, recovery.RecoveryStatus);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, recovery.StatusAtRestriction);
+
+        // Auto-hold raised its notification event.
+        Assert.Single(_outbox.Events.OfType<EmergencyHoldAppliedEvent>());
+    }
+
+    [Fact]
+    public async Task TradeOfferAccepted_Escrow_OnActiveBot_DoesNotOpenRecovery()
+    {
+        // Control for the F3 test: the common ACTIVE-bot accept must NOT touch the
+        // recovery queue or hold the transaction.
+        await StageOfferAsync(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TradeOfferDirection.TO_SELLER, "A201");
+
+        var sut = CreateSut();
+        var envelope = MakeTradeEnvelope(SteamWebhookEvents.TradeOfferAccepted, new TradeOfferEventData
+        {
+            OfferId = "A201",
+            BotAccountName = BotAccount,
+            NewState = 3,
+            OldState = 2,
+            ReceivedAssetId = "bot-asset-active",
+        });
+
+        await sut.HandleTradeEventAsync(envelope, "corr-active", CancellationToken.None);
+
+        await using var verify = CreateContext();
+        var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx.Status);
+        Assert.False(tx.IsOnHold);
+        Assert.Empty(await verify.Set<BotRecoveryItem>().ToListAsync());
+        Assert.Empty(_outbox.Events.OfType<EmergencyHoldAppliedEvent>());
+    }
+
+    [Fact]
     public async Task TradeOfferAccepted_Escrow_MissingAssetId_DoesNotAdvance()
     {
         await StageOfferAsync(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TradeOfferDirection.TO_SELLER, "A101");
@@ -627,6 +755,8 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
         Assert.NotNull(refreshed.LastHealthCheckAt);
+        // T103b-2 — the sidecar reason is surfaced for the admin S18 card.
+        Assert.Equal("restricted", refreshed.RestrictionReason);
 
         var audit = await verify.Set<AuditLog>()
             .SingleAsync(a => a.EntityType == nameof(PlatformSteamBot) && a.EntityId == _bot.Id.ToString());
@@ -643,6 +773,12 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), payload.PreviousStatus);
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), payload.NewStatus);
         Assert.Equal("restricted", payload.Reason);
+
+        // T103b-2 — a restriction raises BotRestrictedEvent for the recovery consumer.
+        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        Assert.Equal(_bot.Id, restricted.PlatformSteamBotId);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), restricted.Status);
+        Assert.Equal("restricted", restricted.Reason);
     }
 
     [Fact]
@@ -663,6 +799,10 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var payload = Assert.IsType<NotificationRealtimePayloads.AdminBotStatusChanged>(_recorder.Calls.Single().Payload);
         Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), payload.NewStatus);
         Assert.Equal("banned", payload.Reason);
+
+        // T103b-2 — a ban also raises BotRestrictedEvent.
+        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), restricted.Status);
     }
 
     [Fact]
@@ -679,6 +819,9 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         await using var verify = CreateContext();
         var refreshed = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
         Assert.Equal(PlatformSteamBotStatus.OFFLINE, refreshed.Status);
+        // T103b-2 — OFFLINE is treated as transient: no recovery event is raised
+        // (new traffic is already diverted by the ACTIVE-only selector).
+        Assert.Empty(_outbox.Events);
     }
 
     [Fact]
@@ -705,10 +848,11 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED, refreshed.Status);
         Assert.NotNull(refreshed.LastHealthCheckAt); // probe observation kept
 
-        // No new audit row, no SignalR push.
+        // No new audit row, no SignalR push, no recovery event (idempotent ack).
         Assert.False(await verify.Set<AuditLog>()
             .AnyAsync(a => a.Action == AuditAction.BOT_STATUS_CHANGED));
         Assert.Empty(_recorder.Calls);
+        Assert.Empty(_outbox.Events);
     }
 
     [Fact]

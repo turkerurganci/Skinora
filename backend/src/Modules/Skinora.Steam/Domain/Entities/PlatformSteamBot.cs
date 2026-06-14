@@ -15,6 +15,13 @@ public class PlatformSteamBot : BaseEntity, ISoftDeletable, IAuditableEntity
     public string DisplayName { get; set; } = string.Empty;
     public PlatformSteamBotStatus Status { get; set; }
 
+    /// <summary>
+    /// Sidecar reason for the current non-ACTIVE status (T103b-2 — 07 §9.10
+    /// <c>restrictionReason</c>). Set when the webhook flips the bot to
+    /// RESTRICTED/BANNED/OFFLINE; null while ACTIVE.
+    /// </summary>
+    public string? RestrictionReason { get; set; }
+
     // --- Denormalized counters ---
     public int ActiveEscrowCount { get; set; }
     public int DailyTradeOfferCount { get; set; }

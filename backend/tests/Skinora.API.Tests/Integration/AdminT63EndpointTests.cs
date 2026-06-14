@@ -631,6 +631,119 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
     }
 
     // ============================================================
+    // AD25 — GET /admin/steam-accounts/{botId}/recovery-queue (T103b-2)
+    // ============================================================
+
+    [Fact]
+    public async Task RecoveryQueue_AdminWithoutViewPermission_Returns403()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var bot = await _factory.AddBotAsync("Bot R1", "76561198900000030", PlatformSteamBotStatus.RESTRICTED);
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["VIEW_FLAGS"]);
+
+        var response = await client.GetAsync($"/api/v1/admin/steam-accounts/{bot.Id}/recovery-queue");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoveryQueue_UnknownBot_Returns404()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["VIEW_STEAM_ACCOUNTS"]);
+
+        var response = await client.GetAsync($"/api/v1/admin/steam-accounts/{Guid.NewGuid()}/recovery-queue");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecoveryQueue_ReturnsMaterialisedRows()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync(displayName: "Seller");
+        var buyer = await _factory.CreateUserAsync(displayName: "Buyer");
+        var bot = await _factory.AddBotAsync(
+            "Bot R2", "76561198900000031", PlatformSteamBotStatus.RESTRICTED, "restricted");
+        var tx = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        await _factory.AddBotRecoveryItemAsync(
+            bot.Id, tx.Id, BotRecoveryStatus.PENDING, TransactionStatus.ITEM_ESCROWED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["VIEW_STEAM_ACCOUNTS"]);
+        var response = await client.GetAsync($"/api/v1/admin/steam-accounts/{bot.Id}/recovery-queue");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal(bot.Id, data.GetProperty("botId").GetGuid());
+        var items = data.GetProperty("items");
+        Assert.Equal(1, items.GetArrayLength());
+        var row = items[0];
+        Assert.Equal(tx.Id, row.GetProperty("transactionId").GetGuid());
+        Assert.Equal("PENDING", row.GetProperty("recoveryStatus").GetString());
+        Assert.Equal(seller.SteamId, row.GetProperty("sellerSteamId").GetString());
+    }
+
+    // ============================================================
+    // AD26 — PATCH /admin/steam-accounts/recovery/{id} (T103b-2)
+    // ============================================================
+
+    [Fact]
+    public async Task UpdateRecovery_WithViewButNotManage_Returns403()
+    {
+        // The MANAGE_STEAM_RECOVERY gate is separate from the read-only
+        // VIEW_STEAM_ACCOUNTS — a viewer cannot mutate recovery state.
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var bot = await _factory.AddBotAsync("Bot R3", "76561198900000032", PlatformSteamBotStatus.RESTRICTED);
+        var tx = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        var recoveryId = await _factory.AddBotRecoveryItemAsync(
+            bot.Id, tx.Id, BotRecoveryStatus.PENDING, TransactionStatus.ITEM_ESCROWED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["VIEW_STEAM_ACCOUNTS"]);
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/admin/steam-accounts/recovery/{recoveryId}",
+            new { recoveryStatus = "IN_REVIEW" }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateRecovery_WithManagePermission_UpdatesAndReturns200()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var bot = await _factory.AddBotAsync("Bot R4", "76561198900000033", PlatformSteamBotStatus.RESTRICTED);
+        var tx = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        var recoveryId = await _factory.AddBotRecoveryItemAsync(
+            bot.Id, tx.Id, BotRecoveryStatus.PENDING, TransactionStatus.ITEM_ESCROWED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_STEAM_RECOVERY"]);
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/admin/steam-accounts/recovery/{recoveryId}",
+            new { recoveryStatus = "IN_REVIEW", adminNote = "Investigating with Steam support." }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("IN_REVIEW", data.GetProperty("recoveryStatus").GetString());
+        Assert.Equal("Investigating with Steam support.", data.GetProperty("adminNote").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateRecovery_UnknownItem_Returns404()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_STEAM_RECOVERY"]);
+
+        var response = await client.PatchAsJsonAsync(
+            $"/api/v1/admin/steam-accounts/recovery/{Guid.NewGuid()}",
+            new { recoveryStatus = "IN_REVIEW" }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // ============================================================
     // Helpers
     // ============================================================
 
@@ -947,21 +1060,46 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
 
         public async Task CreatePlatformSteamBotAsync(
             string displayName, string steamId, PlatformSteamBotStatus status)
+            => await AddBotAsync(displayName, steamId, status);
+
+        public async Task<PlatformSteamBot> AddBotAsync(
+            string displayName, string steamId, PlatformSteamBotStatus status, string? restrictionReason = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             Interlocked.Increment(ref _botSuffix);
-            db.Set<PlatformSteamBot>().Add(new PlatformSteamBot
+            var bot = new PlatformSteamBot
             {
                 Id = Guid.NewGuid(),
                 DisplayName = displayName,
                 SteamId = steamId,
                 Status = status,
+                RestrictionReason = restrictionReason,
                 ActiveEscrowCount = 0,
                 DailyTradeOfferCount = 0,
                 LastHealthCheckAt = DateTime.UtcNow,
-            });
+            };
+            db.Set<PlatformSteamBot>().Add(bot);
             await db.SaveChangesAsync();
+            return bot;
+        }
+
+        public async Task<Guid> AddBotRecoveryItemAsync(
+            Guid botId, Guid transactionId, BotRecoveryStatus status, TransactionStatus statusAtRestriction)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var item = new BotRecoveryItem
+            {
+                Id = Guid.NewGuid(),
+                PlatformSteamBotId = botId,
+                TransactionId = transactionId,
+                RecoveryStatus = status,
+                StatusAtRestriction = statusAtRestriction,
+            };
+            db.Set<BotRecoveryItem>().Add(item);
+            await db.SaveChangesAsync();
+            return item.Id;
         }
 
         public void Reset()
@@ -977,6 +1115,9 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
                 db.Set<Dispute>().IgnoreQueryFilters().ToList());
             db.Set<FraudFlag>().RemoveRange(
                 db.Set<FraudFlag>().IgnoreQueryFilters().ToList());
+            // T103b-2 — clear recovery items before their Transaction / bot / user FKs.
+            db.Set<BotRecoveryItem>().RemoveRange(
+                db.Set<BotRecoveryItem>().IgnoreQueryFilters().ToList());
             db.Set<BlockchainTransaction>().RemoveRange(
                 db.Set<BlockchainTransaction>().ToList());
             db.Set<PaymentAddress>().RemoveRange(
