@@ -5,6 +5,8 @@
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
 > **Durum:** ~90 aktif ertelenmiş kalem · **F5 Gate Check'i bloklayan: 0**. Bu dosya bir kalem ele alındıkça güncellenmelidir (satırı **✓ Çözüldü** işaretle veya kaldır).
+>
+> **Sıralama/sahiplik:** F6 öncesi MVP-içi kalemler [`PRE_F6_PLAN.md`](PRE_F6_PLAN.md)'de 19 iş paketine (WP1–WP18) bağlandı. Aşağıdaki bazı satırlar 2026-06-14 kod taramasıyla **kısmen stale** bulundu ve düzeltildi (emergency-hold, blockchain-monitor, item-refund, steam-sidecar, T55).
 
 ## Lejant
 
@@ -19,7 +21,7 @@
 | Önc. | ID | Özet | Bloklar mı |
 |---|---|---|---|
 | 🔴 | T58-AdminDisputeQueue | Escalate edilen dispute'lar çıkmaz sokak: `GET /admin/disputes` + review/resolve komutu yok | Admin dispute çözüm akışı |
-| 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` seed'siz → env/admin verilmeden prod startup fail-fast | **Production startup** |
+| 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` dahil **21 zorunlu SystemSetting** seed'siz → env/admin verilmeden prod fail-fast (deploy runbook işi) → WP14 | **Production startup** |
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
 | ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2** — `BotRecoveryItem` recovery domaini + AD10 canlı `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` | — |
 | ✅ | T103b-2/-3 | **ÇÖZÜLDÜ → T103b-2 (birleşik)** — recovery queue domain + MANAGE_STEAM_RECOVERY enforcement + emanet item listesi + otomatik EMERGENCY_HOLD | — |
@@ -27,7 +29,7 @@
 | 🟡 | T81-PriceConsumerWireup | `NullMarketPriceProvider` → PRICE_DEVIATION fraud kuralı inert | PRICE_DEVIATION kuralı |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
 | 🟡 | steam-sidecar-stubs | Trade-hold + MA checker gerçek impl yok (fail-closed) | DELIVERY/WRONG_ITEM auto-resolve |
-| 🟡 | item-refund-consumers | İade event'leri yayınlanıyor, consumer'lar bağlı değil | Otomatik item/payment iadesi |
+| 🟡 | item-refund-consumers | Yalnız `BUYER_REFUND` kopuk (diğer 4 iade inline/T106a bağlı) → WP2 | Alıcı iadesi (delivery-timeout + admin-cancel) |
 | 🟡 | T50-OutageFreezeCallers | Outage/degradation bulk-freeze motoru var, çağıran yok | Outage dayanıklılığı |
 | 🟡 | T56-MultiAccountRetroScan | Multi-account tespiti yalnız wallet-update'te; retroaktif tarama yok | Fraud tespit kapsamı |
 | 🟡 | T61-SteamTransitionRealtimePush | Steam pipeline geçişlerinde SignalR push yok | — (T96 refetch maskeliyor) |
@@ -86,8 +88,8 @@
 | 🟡 | SWEEP-dispatcher | `PaymentReceivedEvent` consumer'ı SWEEP ledger satırı üretmiyor; `OutgoingTransferDispatchJob` SWEEP picker yok | backend-gap | T73/T76/T77 K |
 | 🟡 | T81-PriceConsumerWireup | `IMarketPriceProvider`=`NullMarketPriceProvider`; `MarketPriceAtCreation` set + PRICE_DEVIATION FraudFlag yok | backend-gap | T81 K1, `NullMarketPriceProvider` |
 | 🟡 | StubPayoutVerifier | `IPayoutVerifier`=stub (her zaman `UnableToVerify`→manuel admin) | backend-gap | T60 K1, `StubPayoutVerifier` |
-| 🟡 | steam-sidecar-stubs | `StubTradeHoldChecker` (Available=true) + `IMobileAuthenticatorCheck` stub; envanter reader zaten DI-swap'li (`SteamModule.cs:50`) | backend-gap | T35/T31/T58 K |
-| 🟡 | item-refund-consumers | `ItemRefundToSeller`/`PaymentRefundToBuyer`/`LatePaymentMonitor`/`WrongTokenIncoming` consumer'ları bağlı değil | backend-gap | T49/T51/T71 K |
+| 🟡 | steam-sidecar-stubs | Gerçek stub yalnız `StubTradeHoldChecker` (Available=true) + `StubMobileAuthenticatorCheck`; **envanter reader gerçek** (`SidecarSteamInventoryReader` T67, `SteamModule.cs:56` swap) → WP6 | backend-gap | T35/T31/T58 K |
+| 🟡 | item-refund-consumers | **Yalnız `BUYER_REFUND` kopuk** (delivery-timeout + admin-cancel `PaymentRefundToBuyerRequestedEvent` yayınlar, satır-üreten consumer yok). Wrong-token/late-payment/excess/incorrect inline `QueueRefundIntent` üretir; item-iade T106a bağlı → **WP2** | backend-gap | T49/T51/T71 K |
 | 🟡 | T50-OutageFreezeCallers 🆕 | `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` `FreezeManyAsync`/`ResumeManyAsync` çağıransız (02 §3.3 auto-detect + admin manual) | backend-gap | `T50_REPORT.md:124-125` |
 | 🟡 | T56-MultiAccountRetroScan 🆕 | `MultiAccountDetector` yalnız wallet-update'te; retroaktif IP/cihaz/login taraması yok | backend-gap | `T56_REPORT.md:150` |
 | 🟡 | T61-SteamTransitionRealtimePush 🆕 | Steam pipeline geçişleri için `TransactionStatusChanged` push yok (her biri T67 event'iyle RealtimeConsumer ister) | backend-gap | `T61_REPORT.md:146` (K2) |
@@ -102,9 +104,9 @@
 | payout-retry-consumer | `RETRY_SCHEDULED` set ediliyor ama broadcast retry consumer'ı yok | T60 K2/K3 |
 | calculator-caller-wiring | `CalculateRefund`/`SellerPayout`/`IRefundDecisionService` tüketilmiyor; gas/refund ratios deferred; AD7 gas split=0 | T52/T53/T63 K |
 | reputation-aggregator-trigger | `IReputationAggregator.RecomputeAsync`/cooldown + state-machine OnEntry/History caller'ları bağlı değil | T43/T44/T68 K |
-| blockchain-monitor-consumers | `PaymentDetected` mempool consumer + monitoring→PAYMENT_RECEIVED geçiş/iade tetikleyici yok | T61/T71/T72 K |
+| blockchain-monitor-consumers | `payment-confirmed`→PAYMENT_RECEIVED **bağlı** (finality webhook); kalan: mempool `PaymentDetected` consumer (by-design opsiyonel) + DROPPED metrik → WP16 | T61/T71/T72 K |
 | flagged-allocation-detail | Payment-address allocate yalnız CREATED'de (FLAGGED-approval atlanıyor); tx-detail payment/payout/refund/dispute alt-DTO'ları null | T70/T46 K |
-| emergency-hold-callers | Bulk EMERGENCY_HOLD admin caller, direct cancel, post-payment refund tetik, RowVersion guard, dispute-queue surfacing | T50/T51/T58 K |
+| emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; kalan: post-payment refund tetik → WP2, dispute-queue surfacing → WP5 | T50/T51/T58 K |
 | fraud-acceptance-gate | `AcceptAsync`'te `IAccountFlagChecker` gate yok; otomatik sinyal üreticileri + background scan + note max-length | T54/T56 K |
 | energy-gas-token-config | Statik gas fee, USDC/USDT 1:1, hardcoded 6-decimal, HD cache yok, tek-sweeper (T74 multi-sweeper buraya katlanır), 20-blok finality yok | T72-T76 K |
 | setting-sidecar-propagation | Admin `PATCH /admin/settings` `blockchain.*` + cadence/cron sidecar'a runtime yansımıyor (env restart gerek) | T74/T75/T76/T77 K |
@@ -178,7 +180,7 @@
 
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
-| 🟡 | T55-DormantThresholdMandatoryUnconfigured 🆕 | `dormant_account_value_threshold` seed'siz; `SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD` (veya admin) verilene kadar prod startup fail-fast, dormant-AML kuralı çalışmaz | `T55_REPORT.md:37` |
+| 🟡 | T55-DormantThresholdMandatoryUnconfigured 🆕 | `dormant_account_value_threshold` seed'siz; `SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD` (veya admin) verilene kadar prod startup fail-fast, dormant-AML kuralı çalışmaz. **Not: tekil değil — aynı fail-fast'le 21 zorunlu ayar (`SettingsBootstrapTests.cs:92`); deploy runbook → WP14** | `T55_REPORT.md:37` |
 
 ---
 

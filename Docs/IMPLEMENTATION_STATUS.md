@@ -213,6 +213,8 @@
 
 ## F6 — Uçtan Uca Doğrulama (T107–T114)
 
+> **F6 öncesi (owner kararı 2026-06-14):** MVP kapsamındaki tüm ertelenmiş/yarım iş kapatılacak — bkz. [`PRE_F6_PLAN.md`](PRE_F6_PLAN.md) (19 iş paketi WP1–WP18, ~30–45 gün). Happy-path bugün `ITEM_DELIVERED`'da çıkmaz sokak (payout+`COMPLETED` eksik) → WP1 olmadan T107 yazılamaz. **F6 bunun ardından başlar.**
+
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
 | T107 | E2E — Happy path (tam escrow akışı) | ⬚ Bekliyor | — | — |
