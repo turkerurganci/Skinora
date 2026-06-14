@@ -124,9 +124,9 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 ## Commit & PR
 - Branch: `task/WP1-escrow-completion-payout`
 - Commit: `8c5f91a` — WP1 zinciri + seed migration + Layer-2 bypass log
-- Commit (F1 sertleştirme): `<hardening-commit>` — `[DisableConcurrentExecution]` + filtered unique index + producer catch + migration + 4 test (CI watch sonrası hash + run ID finalize edilir)
+- Commit (F1 sertleştirme): `21bc790` — `[DisableConcurrentExecution]` + filtered unique index + producer catch + migration + 4 test + rapor/status/memory
 - PR: [#169](https://github.com/turkerurganci/Skinora/pull/169)
-- CI: WP1 zinciri HEAD `8c5f91a` run [27504561183](https://github.com/turkerurganci/Skinora/actions/runs/27504561183) tüm job'lar success; F1 sertleştirme commit CI'sı push sonrası izlenir
+- CI: F1 sertleştirme HEAD `21bc790` run [27507547831](https://github.com/turkerurganci/Skinora/actions/runs/27507547831) **tüm job'lar success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate) — yeni filtered unique index SQL Server'da temiz uygulandı, `Model_HasNoPendingChanges` yeşil (drift yok), integration testler geçti
 
 ## Notlar
 - **Working tree:** Oturum başında temiz.
