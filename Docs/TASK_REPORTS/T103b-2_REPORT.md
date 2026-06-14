@@ -1,6 +1,6 @@
 # T103b-2 — Bot Recovery/Failover (Steam hesapları backend tamamlama, S18)
 
-**Faz:** F5 (geç-ekleme) | **Durum:** ⟳ 4 bulgu düzeltildi (2026-06-14) — bağımsız yeniden-doğrulama bekliyor | **Tarih:** 2026-06-13 (yapım) · 2026-06-14 (doğrulama ✗ FAIL → düzeltme)
+**Faz:** F5 (geç-ekleme) | **Durum:** ✓ Tamamlandı (re-validation PASS 2026-06-14) | **Tarih:** 2026-06-13 (yapım) · 2026-06-14 (doğrulama ✗ FAIL → düzeltme → re-validation ✓ PASS)
 
 ---
 
@@ -173,6 +173,65 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 --verify-no-changes --severity error` temiz; FE `tsc --noEmit` 0 + `eslint` 0 + `next build` ✓
 + touched i18n/TSX prettier (`--end-of-line auto`) temiz. Yeni backend testleri **entegrasyon**
 (SQL Server gerekir) → lokalde Docker yok, CI authoritative.
+
+### Yeniden-Doğrulama (bağımsız validator, ayrı chat 2026-06-14)
+
+**Verdict: ✓ PASS.** Dört bulgunun (F1–F4) hepsi doğru ve tam düzeltildi; düzeltmeler yeni
+hata getirmedi; daha önce çürütülen bulgular ölü kaldı. Merge'e hazır.
+
+**Mekanik kapılar (validator-çalıştırıldı, HEAD `031f88f`):**
+- Backend `dotnet build Skinora.sln -c Release` → **0W/0E**; `dotnet format --verify-no-changes
+  --severity error` → temiz.
+- FE `tsc --noEmit` 0 + `eslint .` 0 + `next build` ✓ (30 route) + prettier (`--end-of-line auto`,
+  touched dosyalar) temiz.
+- i18n parite **1132×4, 0 missing / 0 extra** (recovery alt-ağacı **25 leaf×4**; yapım-bölümündeki
+  "44 / 1131" pre-fix sayımdır — güncel doğru değer 1132 / 25).
+- Task-branch CI HEAD `031f88f` run [`27497124230`](https://github.com/turkerurganci/Skinora/actions/runs/27497124230)
+  **tüm job success**: Lint / Build / Unit / **Integration** / **Contract** / **Migration dry-run** /
+  Docker×2 / Gate. Entegrasyon testleri SQL Server gerektirir, lokalde Docker yok → CI authoritative.
+
+**Bulgu-bazlı doğrulama:**
+- **F1 ✓** `AdminBotRecoveryService.cs:96` `Enum.IsDefined` guard'ı her mutasyondan önce çalışır →
+  `VALIDATION_ERROR` (07 §9.29) → `AdminController.cs:162` `BadRequest` (400). Test
+  `Update_OutOfRangeRecoveryStatus_ReturnsValidationError` geçersiz bind reddini **ve** satırın
+  PENDING kaldığını assert eder. Guard status-only / kombine yolların hepsinden önce; bypass yok.
+- **F2 ✓** `RecoveryQueuePanel.tsx:144-172` Sorumlu Admin kolonu `<select>` (← `useAdminUsers`
+  rol-filtreli staff + zaten-atanmış admin fallback), değişimde AD26 `responsibleAdminId` PATCH,
+  RESOLVED satırlarda salt-okunur. FE↔BE contract 1:1; AC#4 tam (04 §8.7 "Sorumlu Admin Ata/Değiştir").
+- **F3 ✓** Ortak `BotRecoveryMaterialiser` (consumer ona delege eder = tek doğru kaynak);
+  `SteamWebhookHandler.AcceptEscrowAsync:439-458` escrow ITEM_ESCROWED'a ilerledikten sonra alıcı bot
+  RESTRICTED/BANNED ise **aynı UoW'da** recovery satırı + auto-EMERGENCY_HOLD materyalize eder.
+  İdempotent (`AnyAsync(TransactionId)` + `UQ_BotRecoveryItems_TransactionId` backstop); bot `Local`'dan
+  okunur (ekstra sorgu yok). Testler `…_OnRestrictedBot_OpensRecoveryAndHolds` (ITEM_ESCROWED + IsOnHold
+  + EMERGENCY_HOLD freeze + PENDING recovery + EmergencyHoldAppliedEvent) + `…_OnActiveBot_DoesNotOpenRecovery`
+  (kontrol) gerçek materialiser ile end-to-end. 03 §11.2a step 3 artık garanti.
+- **F4 ✓** `page.tsx:8-15` docstring güncel (recovery kuyruğu her kısıtlı/yasaklı bot için canlı —
+  "stays empty / T69 deferred" kaldırıldı).
+
+**Çürütülen-ölü-kalır teyidi:** consumer self-`SaveChanges` "batch-coupling" → çürütülü kalır
+(`OutboxDispatcher.cs:133-193` per-message try/catch, batch rollback yok; F3 webhook yolu kendi tek
+`SaveChanges`'inde atomik); mid-enum AuditAction güvenli (enum string-persist; migration `nvarchar`);
+FK + unique/IX index'ler mevcut (`BotRecoveryItemConfiguration.cs` + migration); AD10 ek alanları
+additive (S12 kontratı korunur); consumer doc-comment artık dispatcher davranışını **doğru** tanımlar.
+
+**Adversarial workflow (6-boyut, refute-default, 36 ajan / ~2.2M token):** 15 ham aday → **0 onaylı
+bloke-edici / 0 onaylı gerçek bulgu / 15 çürütüldü** (her aday 2 perspektif-çeşitli çürütücü ile).
+
+**Bloke-edici-olmayan gözlemler (merge'i engellemez — owner bilgisi / olası takip):**
+- **N1** — F2 staff dropdown `useAdminUsers({pageSize:100})` ile 100 admin'de kesilir; gerçekçi staff
+  sayısı « 100 (NOTE).
+- **N2** — F3 eşzamanlı sweep + webhook çift-insert teorik olarak geçici 500 üretebilir (UQ ihlali) ama
+  at-least-once self-healing / idempotent (tasarım gereği).
+- **N3** — F3 webhook yolunda freeze, PaymentDeadline aynı UoW'da henüz set değilse `remaining=0`
+  saklayabilir; işlem zaten EMERGENCY_HOLD'da (clock durur), manuel RESUME admin'e bağlı (K4) → ileride
+  rafine edilebilir.
+- **N4** — F2 dropdown AD15 (`VIEW_USERS`) gerektirir; yalnız `MANAGE_STEAM_RECOVERY` yetkili admin'de
+  zarif şekilde boş staff listesi (regresyon değil).
+
+Dördü de iki çürütücü lens tarafından bloke-edici-değil bulundu; takip için K-list / DEFERRED_BACKLOG adayları.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — raporun düzeltme anlatımı (F1–F4 + temizlik) bağımsız
+kod incelemesiyle birebir örtüşür. 0 uyuşmazlık.
 
 ## Altyapı Değişiklikleri
 
