@@ -237,12 +237,15 @@ public sealed class BotRestrictionRecoveryConsumerTests : IntegrationTestBase
         outbox = new RecordingOutbox();
         var freeze = new TimeoutFreezeService(
             Context, new NoOpJobScheduler(), new NoOpScheduling(), TimeProvider.System);
-        return new BotRestrictionRecoveryConsumer(
+        var materialiser = new BotRecoveryMaterialiser(
             Context,
             freeze,
             outbox,
             new AuditLogger(Context, TimeProvider.System),
-            TimeProvider.System,
+            TimeProvider.System);
+        return new BotRestrictionRecoveryConsumer(
+            Context,
+            materialiser,
             NullLogger<BotRestrictionRecoveryConsumer>.Instance);
     }
 

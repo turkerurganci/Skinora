@@ -8,10 +8,10 @@ import { useAdminSteamAccounts } from "@/lib/hooks/useAdminSteamAccounts";
 /**
  * S18 — Platform Steam Hesapları (04 §8.7). Loads the AD10 bot fleet in one
  * request and hands it to {@link SteamAccountsView}. Account cards + status
- * states + warning banner are fully data-backed by AD10; the recovery queue
- * renders structurally but stays empty (T103 Option A — the recovery fields are
- * deferred to the T69 bot-health/failover pipeline). No filters/pagination —
- * the bot fleet is small and bounded.
+ * states + warning banner are fully data-backed by AD10; each restricted/banned
+ * bot also renders a live recovery queue (AD25/AD26, T103b-2) of the items still
+ * stuck in its custody. No filters/pagination — the bot fleet is small and
+ * bounded.
  */
 export default function AdminSteamAccountsPage() {
   const t = useTranslations("adminSteamAccounts");

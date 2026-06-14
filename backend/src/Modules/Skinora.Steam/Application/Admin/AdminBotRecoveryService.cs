@@ -87,6 +87,19 @@ public sealed class AdminBotRecoveryService : IAdminBotRecoveryService
                 "At least one of recoveryStatus, responsibleAdminId or adminNote is required.");
         }
 
+        // Reject out-of-range enum values before any mutation. JsonStringEnumConverter
+        // binds with allowIntegerValues:true by default, so {"recoveryStatus":99}
+        // deserialises to an undefined enum that would persist a garbage status and
+        // pollute the live RecoveryTransactionCount / FailoverStatus metrics (a 99 is
+        // counted as "open" because it is not RESOLVED). 07 §9.29 mandates
+        // VALIDATION_ERROR here; mirrors the TransactionCreationService stage-1 guard.
+        if (request.RecoveryStatus is { } requestedStatus && !Enum.IsDefined(requestedStatus))
+        {
+            return Failure(UpdateRecoveryItemStatus.ValidationFailed,
+                BotRecoveryErrorCodes.ValidationError,
+                "recoveryStatus is not a recognised value.");
+        }
+
         var oldStatus = item.RecoveryStatus;
         var oldResponsible = item.ResponsibleAdminId;
         var oldNote = item.AdminNote;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { ResponsiveTable, StatusBadge } from "@/components/common";
 import type { ResponsiveTableColumn } from "@/components/common";
+import { useAdminUsers } from "@/lib/hooks/useAdminUsers";
 import { cn } from "@/lib/utils/cn";
 import type {
   BotRecoveryQueueItem,
@@ -48,6 +49,27 @@ export function RecoveryQueuePanel({
   const locale = useLocale();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState("");
+
+  // Reuse the S19 admin-user list (AD15) for the "assign responsible admin"
+  // dropdown — only role-holders (platform staff) are eligible targets. A larger
+  // page covers the full staff roster in one fetch; react-query dedupes the
+  // identical query across the per-bot panels.
+  const { data: adminUsersData } = useAdminUsers({ pageSize: 100 });
+  const staffOptions = (adminUsersData?.items ?? [])
+    .filter((u) => u.role !== null)
+    .map((u) => ({ id: u.id, name: u.displayName }));
+
+  // Keep an already-assigned admin selectable even if they are not in the
+  // fetched staff slice (e.g. role later cleared) so the current value renders.
+  function adminOptionsFor(item: BotRecoveryQueueItem) {
+    if (item.responsibleAdminId && !staffOptions.some((o) => o.id === item.responsibleAdminId)) {
+      return [
+        { id: item.responsibleAdminId, name: item.responsibleAdminName ?? item.responsibleAdminId },
+        ...staffOptions,
+      ];
+    }
+    return staffOptions;
+  }
 
   function startEdit(item: BotRecoveryQueueItem) {
     setEditingId(item.id);
@@ -122,7 +144,31 @@ export function RecoveryQueuePanel({
     {
       key: "responsibleAdmin",
       header: t("columns.responsibleAdmin"),
-      cell: (r) => r.responsibleAdminName ?? "—",
+      cell: (r) =>
+        // RESOLVED is terminal — show the assignee read-only (no reassignment).
+        r.recoveryStatus === "RESOLVED" ? (
+          <span className="text-gray-700">{r.responsibleAdminName ?? "—"}</span>
+        ) : (
+          <select
+            aria-label={t("columns.responsibleAdmin")}
+            value={r.responsibleAdminId ?? ""}
+            disabled={pendingId === r.id}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value && value !== r.responsibleAdminId) {
+                onUpdate(r.id, { responsibleAdminId: value });
+              }
+            }}
+            className="w-full rounded border border-gray-300 bg-white px-1 py-0.5 text-xs disabled:opacity-50"
+          >
+            <option value="">{t("actions.assignAdmin")}</option>
+            {adminOptionsFor(r).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        ),
     },
     {
       key: "note",

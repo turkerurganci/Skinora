@@ -1,6 +1,6 @@
 # T103b-2 — Bot Recovery/Failover (Steam hesapları backend tamamlama, S18)
 
-**Faz:** F5 (geç-ekleme) | **Durum:** ✗ FAIL — bağımsız validator (2026-06-14), 4 bulgu, düzeltme bekliyor | **Tarih:** 2026-06-13 (yapım) · 2026-06-14 (doğrulama)
+**Faz:** F5 (geç-ekleme) | **Durum:** ⟳ 4 bulgu düzeltildi (2026-06-14) — bağımsız yeniden-doğrulama bekliyor | **Tarih:** 2026-06-13 (yapım) · 2026-06-14 (doğrulama ✗ FAIL → düzeltme)
 
 ---
 
@@ -79,10 +79,13 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 
 - **Yeni (backend):** `BotRecoveryStatus.cs`, `BotRestrictedEvent.cs`, `BotRecoveryItem.cs`,
   `BotRecoveryItemConfiguration.cs`, `BotRestrictionRecoveryConsumer.cs`,
+  `BotRecoveryMaterialiser.cs` (F3 — ortak tek-tx materyalizasyon: consumer + webhook),
   `AdminBotRecoveryDtos.cs`, `IAdminBotRecoveryService.cs`, `AdminBotRecoveryService.cs`,
   migration `20260613201648_T103b2_AddBotRecovery`.
 - **Değişen (backend):** `AuditAction.cs`, `PlatformSteamBot.cs`,
-  `PlatformSteamBotConfiguration.cs`, `SteamWebhookHandler.cs`,
+  `PlatformSteamBotConfiguration.cs`, `SteamWebhookHandler.cs` (F3 inline safety-net),
+  `BotRestrictionRecoveryConsumer.cs` (materialiser'a delege + doc-comment fix),
+  `AdminBotRecoveryService.cs` (F1 enum guard),
   `AdminSteamBotQueryService.cs`, `AdminSteamBotDtos.cs`, `AdminController.cs`, `SteamModule.cs`.
 - **Yeni (frontend):** `BotRecoveryQueue.tsx`.
 - **Değişen (frontend):** `lib/api/admin.ts`, `useAdminSteamAccounts.ts`,
@@ -99,7 +102,7 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 | 1 | Kısıtlı/banned bot kısıtlandığında recovery kuyruğu materyalize olur | ✓ | `BotRestrictionRecoveryConsumerTests.Restriction_MaterialisesAndHolds_StuckEscrows` |
 | 2 | Emanetteki item'lar listelenir (kısıtlı hesap) | ✓ | AD25 `GetQueue_ReturnsRows_WithJoinedTransactionAndParties` + FE `RecoveryQueuePanel` |
 | 3 | Recovery Queue satır verisi (state/recovery durumu/sorumlu admin/not) | ✓ | `BotRecoveryQueueItemDto` + FE 8 kolon |
-| 4 | `MANAGE_STEAM_RECOVERY` aksiyonları (Manual Recovery / not / sorumlu admin) | ~ Kısmi | Manual Recovery + Not + permission-split ✓ (AD26 PATCH + `UpdateRecovery_WithViewButNotManage_Returns403`); **"Sorumlu Admin Ata/Değiştir" UI aksiyonu eksik** — backend AD26 `responsibleAdminId` destekler ama FE'de dropdown yok (04 §8.7 satır 1727 açık aksiyon). → Validator **F2**. |
+| 4 | `MANAGE_STEAM_RECOVERY` aksiyonları (Manual Recovery / not / sorumlu admin) | ✓ | Manual Recovery + Not + permission-split ✓ (AD26 PATCH + `UpdateRecovery_WithViewButNotManage_Returns403`); **"Sorumlu Admin Ata/Değiştir" dropdown F2 düzeltmesiyle eklendi** (`RecoveryQueuePanel` `<select>` ← `useAdminUsers`, 04 §8.7 satır 1727). |
 | 5 | Otomatik bildirim + otomatik EMERGENCY_HOLD | ✓ | Consumer auto-hold + `AdminBotStatusChanged` push + RecoveryTransactionCount badge |
 | 6 | AD10 RestrictionReason/FailoverStatus/RecoveryTransactionCount canlı | ✓ | `QueryService_DerivesFailoverStatusAndRecoveryCount` |
 
@@ -135,6 +138,42 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 
 **Çürütülen dikkate değer bulgular (17/21):** consumer'ın `SaveChangesAsync`'i kendi çağırması "S2 batch-rollback coupling" iddiasıyla raporlandı → **çürütüldü** (OutboxDispatcher per-message try/catch, batch rollback yok; idempotent consumer at-least-once kontratına uygun) — ancak no-self-commit yazma-consumer konvansiyonundan bir **deviation** + sınıf doc-comment'inin "tek SaveChanges tüm batch'i rollback eder" ifadesinin dispatcher bağlamında **yanlış** olduğu not edildi (cleanup-grade; yapım chat'i ele alabilir). Diğer çürütülenler: enum string-persist (mid-enum AuditAction güvenli), 3. FK index EF-convention ile mevcut, AD10 kontratı S12 için korunuyor, atomik outbox commit, RESTRICTED/BANNED trigger + OFFLINE exclusion doğru, TS↔DTO 17-alan birebir.
 
+### Düzeltmeler (2026-06-14, yapım chat'i — owner: erteleme yok)
+
+- **F1 ✓ (S1) Enum range guard.** `AdminBotRecoveryService.UpdateAsync` artık değişiklik
+  uygulamadan önce `if (request.RecoveryStatus is { } s && !Enum.IsDefined(s)) → VALIDATION_ERROR`
+  döner (`TransactionCreationService.cs:92` emsali; 07 §9.29 kontratı). `{"recoveryStatus":99}`
+  artık reddedilir, canlı `RecoveryTransactionCount`/`FailoverStatus` metrikleri kirletilmez.
+  Test: `AdminBotRecoveryServiceTests.Update_OutOfRangeRecoveryStatus_ReturnsValidationError`
+  (geçersiz bind reddedilir + satır PENDING kalır).
+- **F2 ✓ (S3) "Sorumlu Admin Ata/Değiştir" dropdown.** `RecoveryQueuePanel` Sorumlu Admin
+  kolonu artık `useAdminUsers` (AD15, pageSize 100) ile beslenen bir `<select>`: rol sahibi
+  (staff) kullanıcılar + zaten-atanmış admin fallback (rolü sonradan kaldırılsa bile görünür);
+  değişimde AD26 `responsibleAdminId` PATCH'i. RESOLVED satırlarda salt-okunur. i18n
+  `recovery.actions.assignAdmin` 4-locale eklendi. AC#4 artık tam karşılanıyor (Manual Recovery
+  + Not + **Sorumlu Admin** + permission-split).
+- **F3 ✓ (S3 edge) Boundary race safety-net — owner kararı Option B (inline, AskUserQuestion
+  2026-06-14).** Tek-tx materyalizasyon mantığı ortak `IBotRecoveryMaterialiser` /
+  `BotRecoveryMaterialiser`'a çıkarıldı; consumer ona delege eder (tek doğru kaynak, sapma yok).
+  `SteamWebhookHandler.AcceptEscrowAsync`: escrow baca­ğı ITEM_ESCROWED'a ilerledikten sonra
+  alıcı bot RESTRICTED/BANNED ise **aynı UoW'da** recovery satırı + auto-EMERGENCY_HOLD
+  materyalize eder (idempotent — `TransactionId` UQ backstop; `AdjustEscrowCountAsync`'in zaten
+  yüklediği bot `Local`'dan okunur, ekstra sorgu yok). DI `SteamModule`. Tests:
+  `SteamWebhookHandlerTests.TradeOfferAccepted_Escrow_OnRestrictedBot_OpensRecoveryAndHolds`
+  + `…_OnActiveBot_DoesNotOpenRecovery` (ACTIVE kontrol). 03 §11.2a step 3 artık garanti.
+  *(Option A — periyodik custody re-scan — reddedildi: auto-hold'un ortadan kaldırmak için var
+  olduğu hold-gecikmesini geri getirir + backend'de olmayan yeni hosted-service yükü.)*
+- **F4 ✓ (NOTE) Stale docstring.** `app/[locale]/admin/steam-accounts/page.tsx` JSDoc'u
+  güncellendi (recovery kuyruğu artık her kısıtlı/yasaklı bot için canlı — AD25/AD26).
+- **Opsiyonel temizlik ✓:** `BotRestrictionRecoveryConsumer` sınıf doc-comment'i düzeltildi
+  (yanlış "tek SaveChanges tüm batch'i rollback eder" → outbox dispatcher per-message try/catch;
+  yalnız bu consumer'ın kendi UoW'u geri alınır). `SteamAccountCard.tsx` prettier sarımı düzeltildi.
+
+**Düzeltme sonrası lokal doğrulama:** backend `dotnet build` 0W/0E (sln) + `dotnet format
+--verify-no-changes --severity error` temiz; FE `tsc --noEmit` 0 + `eslint` 0 + `next build` ✓
++ touched i18n/TSX prettier (`--end-of-line auto`) temiz. Yeni backend testleri **entegrasyon**
+(SQL Server gerekir) → lokalde Docker yok, CI authoritative.
+
 ## Altyapı Değişiklikleri
 
 - **Migration:** Var — `T103b2_AddBotRecovery` (BotRecoveryItems tablosu + PlatformSteamBots.RestrictionReason kolonu).
@@ -151,9 +190,9 @@ zaten emanette duran item'ların kurtarılması** (recovery kuyruğu + triage + 
 
 ## Known Limitations / Follow-up
 
-- **K1 — Sorumlu admin atama UI'sı (dropdown) ertelendi:** Backend AD26
-  `responsibleAdminId` tam destekler ve `responsibleAdminName` okunur; FE şimdilik
-  yalnız note + status aksiyonlarını açar. Admin-listesi dropdown'u polish follow-up.
+- **K1 — Sorumlu admin atama UI'sı (dropdown):** ✓ **F2 ile kapatıldı (2026-06-14).**
+  `RecoveryQueuePanel` Sorumlu Admin kolonu `useAdminUsers` (AD15) ile beslenen bir
+  `<select>` oldu → AD26 `responsibleAdminId` PATCH'i. Artık ertelenmiş değil.
 - **K2 — OFFLINE bot recovery tetiklemez:** Geçici session kaybı kabul edilir
   (owner kararı). Kalıcı OFFLINE'da emanet item'lar BotHealthCheck'in restricted/banned'e
   yükseltmesine veya gelecekteki manuel tetiğe bağlı.

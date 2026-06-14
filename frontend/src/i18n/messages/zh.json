@@ -644,7 +644,8 @@
         "done": "已解决",
         "editNote": "编辑",
         "save": "保存",
-        "cancel": "取消"
+        "cancel": "取消",
+        "assignAdmin": "分配…"
       }
     }
   },

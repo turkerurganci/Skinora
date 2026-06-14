@@ -162,9 +162,7 @@ export function SteamAccountCard({ account, className }: SteamAccountCardProps) 
               <p className="mt-1">
                 {t("restricted.escrowWarning", { count: account.escrowedItemCount })}
               </p>
-              <p className="mt-1 text-[11px] text-gray-500">
-                {t("restricted.escrowItemsInQueue")}
-              </p>
+              <p className="mt-1 text-[11px] text-gray-500">{t("restricted.escrowItemsInQueue")}</p>
             </>
           )}
         </div>

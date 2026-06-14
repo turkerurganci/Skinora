@@ -95,6 +95,10 @@ public static class SteamModule
             sp.GetRequiredService<ItemRefundDispatchConsumer>());
 
         // T103b-2 — bot restriction → recovery queue materialisation + auto-hold.
+        // Shared materialiser drives both the event-driven sweep below and the
+        // boundary-race safety net in SteamWebhookHandler.AcceptEscrowAsync (F3).
+        services.AddScoped<IBotRecoveryMaterialiser, BotRecoveryMaterialiser>();
+
         // Consumes the outbox BotRestrictedEvent published by the webhook handler.
         services.AddScoped<BotRestrictionRecoveryConsumer>();
         services.AddScoped<MediatR.INotificationHandler<

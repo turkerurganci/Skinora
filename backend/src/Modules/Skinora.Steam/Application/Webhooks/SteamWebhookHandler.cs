@@ -9,6 +9,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -43,6 +44,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     private readonly IAuditLogger _auditLogger;
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IOutboxService _outbox;
+    private readonly IBotRecoveryMaterialiser _recovery;
     private readonly TimeProvider _clock;
     private readonly ILogger<SteamWebhookHandler> _logger;
 
@@ -51,6 +53,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         IAuditLogger auditLogger,
         INotificationRealtimePublisher realtime,
         IOutboxService outbox,
+        IBotRecoveryMaterialiser recovery,
         TimeProvider clock,
         ILogger<SteamWebhookHandler> logger)
     {
@@ -58,6 +61,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         _auditLogger = auditLogger;
         _realtime = realtime;
         _outbox = outbox;
+        _recovery = recovery;
         _clock = clock;
         _logger = logger;
     }
@@ -431,6 +435,28 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         tradeOffer.RespondedAt = DateTime.UtcNow;
         await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, +1, cancellationToken);
         machine.Fire(TransactionTrigger.EscrowItem);
+
+        // T103b-2 F3 — boundary race: the seller accepted while (or just after)
+        // the bot flipped RESTRICTED/BANNED, so this item landed on a bot the
+        // recovery sweep already snapshotted past (BotRestrictionRecoveryConsumer
+        // took its in-custody query before this offer was accepted). Without a
+        // safety net the item would sit in a degraded bot with no recovery row and
+        // no auto-hold. Materialise the recovery entry + freeze the clock in THIS
+        // unit of work (idempotent — skipped if the sweep already opened it; the
+        // TransactionId unique index is the backstop). AdjustEscrowCountAsync just
+        // loaded + tracked the bot, so read it from Local with no extra query.
+        var bot = _db.Set<PlatformSteamBot>().Local
+            .FirstOrDefault(b => b.Id == tradeOffer.PlatformSteamBotId);
+        if (bot is not null
+            && bot.Status is PlatformSteamBotStatus.RESTRICTED or PlatformSteamBotStatus.BANNED)
+        {
+            await _recovery.TryMaterialiseAsync(
+                transaction, bot.Id, bot.DisplayName, bot.Status.ToString(), cancellationToken);
+            _logger.LogWarning(
+                "trade_offer.accepted (escrow): transaction {TransactionId} landed on {Status} bot {BotId} — recovery safety net engaged. correlationId={CorrelationId}",
+                transaction.Id, bot.Status, bot.Id, correlationId);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

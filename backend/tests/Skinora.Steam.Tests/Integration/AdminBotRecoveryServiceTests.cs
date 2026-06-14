@@ -192,6 +192,29 @@ public sealed class AdminBotRecoveryServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Update_OutOfRangeRecoveryStatus_ReturnsValidationError()
+    {
+        var txId = await AddTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var recoveryId = await AddRecoveryItemAsync(txId, BotRecoveryStatus.PENDING, TransactionStatus.ITEM_ESCROWED);
+
+        var sut = CreateSut();
+        // Simulates {"recoveryStatus":99} — JsonStringEnumConverter binds undefined
+        // integers by default; the guard must reject before persisting (07 §9.29).
+        var outcome = await sut.UpdateAsync(
+            _admin.Id, recoveryId,
+            new UpdateRecoveryItemRequest((BotRecoveryStatus)99, null, null),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(UpdateRecoveryItemStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(BotRecoveryErrorCodes.ValidationError, outcome.ErrorCode);
+
+        // Nothing persisted — the row keeps its original status (no garbage value).
+        await using var verify = CreateContext();
+        var item = await verify.Set<BotRecoveryItem>().SingleAsync(r => r.Id == recoveryId);
+        Assert.Equal(BotRecoveryStatus.PENDING, item.RecoveryStatus);
+    }
+
+    [Fact]
     public async Task QueryService_DerivesFailoverStatusAndRecoveryCount()
     {
         // Restricted bot _bot gets 2 open + 1 resolved recovery item → IN_RECOVERY / 2.
