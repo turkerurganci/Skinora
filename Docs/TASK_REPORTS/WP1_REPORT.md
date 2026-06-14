@@ -1,6 +1,6 @@
 # WP1 — Escrow Tamamlama: Satıcı Payout + COMPLETED
 
-**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-14
+**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (validator: kabul kriterleri PASS, S2 sertleştirme bekliyor — merge yok) | **Tarih:** 2026-06-14
 
 ---
 
@@ -43,7 +43,7 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 | 3 | SELLER_PAYOUT CONFIRMED → `PayoutCompletedEvent` emit | ✓ | `SellerPayoutConfirmed_PublishesPayoutCompletedEvent`; refund/failed emit etmez |
 | 4 | Consumer `Complete`→`COMPLETED`, `CompletedAt` stamp | ✓ | `DeliveredTransaction_FiresComplete_AndStampsCompletedAt` |
 | 5 | Para-güvenliği: held / disputed payout almaz (03 §2.4) | ✓ | `HeldTransaction_IsSkipped`, `DisputedTransaction_IsSkipped`, consumer `HeldTransaction_IsNotCompleted` |
-| 6 | İdempotent (çift-pay yok, replay no-op) | ✓ | `ExistingPayoutRow_IsNotDuplicated`, `AlreadyCompleted_IsNoOp` |
+| 6 | İdempotent (çift-pay yok, replay no-op) | ~ Kısmi | Sıralı replay/re-tick ✓ (`ExistingPayoutRow_IsNotDuplicated`, `AlreadyCompleted_IsNoOp`); **eşzamanlı çalıştırmada korumasız** → validator bulgusu F1 (aşağıda) |
 | 7 | Ödeme başarısızsa COMPLETED'a geçmez (03 §2.4 adım 4) | ✓ | event yalnız CONFIRMED'da; FAILED'da emit yok (`SellerPayoutFailed_DoesNotPublish...`) |
 | 8 | COMPLETED satıcı görünümü payout breakdown (07 §7.5) | ✓ | `Completed_SellerView_Surfaces_PayoutBreakdown`; buyer view `null` |
 
@@ -58,11 +58,25 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 ## Doğrulama
 
+**Bağımsız validator (2026-06-14, ayrı chat — rapor görülmeden, 13-ajan adversarial refute-default workflow + lokal build/test + CI kanıtı).**
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | Kabul kriterleri PASS (7/8 ✓, AC6 ~Kısmi); 1 onaylanmış S2 para-güvenliği bulgusu → **merge öncesi sertleştirme** (owner kararı 2026-06-14: "önce sertleştir") |
+| Bulgu sayısı | 1 (S2) + 2 küçük gözlem (S3 edge, WP9 deferral teyidi) |
+| Düzeltme gerekli mi | Evet — F1 (producer çift-INSERT yarışı); ayrı yapım chat'inde, sonra yeniden doğrulama |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI `success` (`27500668384`/`27500668387`/`27498092438`) · Adım 0b repo memory WP1 satırı mevcut. **Task branch CI HEAD `8c5f91a` run [27504561183](https://github.com/turkerurganci/Skinora/actions/runs/27504561183) — tüm job'lar success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate).** Lokal: Release build 0W/0E; Transactions unit 435/435; Platform unit 106/106 (Shared.Tests'teki 16 "fail" = Docker-endpoint, WP1-dışı/ortamsal). Migration seed-only + snapshot tutarlı (CI migration dry-run yeşil → "no pending model changes").
+
+**Uçtan uca zincir bağımsız doğrulandı:** ITEM_DELIVERED → `SellerPayoutQueueJob` (PENDING SELLER_PAYOUT) → `OutgoingTransferDispatchJob` (broadcast, hot-wallet'tan; `SellerPayout_DoesNotRequireDepositAddress` test) → `OutgoingTransferConfirmationJob` (CONFIRMED + `PayoutCompletedEvent` outbox, **atomik**) → `OutboxDispatcher` (`Type.GetType` çözümü, allow-list yok → `IPublisher.Publish` DI handler'a) → `PayoutCompletedConsumer` (`Fire(Complete)`) → COMPLETED (OnEntry `CompletedAt`). Üretimde tek `.Fire(Complete)` çağıranı = consumer (çift-fire yok). Finansal hesap 02 §4.7 / 07 §7.5 kanonik örnek (0.20/0.30/99.70) birebir. Gas ayarı/seed/catalog/migration doğru ve refund estimate'ten (2.0) ayrı.
+
+### Validator Bulguları
+
+| # | Seviye | Açıklama | Dosya | Durum |
+|---|---|---|---|---|
+| F1 | S2 (para) | **Producer çift-INSERT yarışı.** `(TransactionId, Type)` üzerinde DB unique constraint yok, recurring job `[DisableConcurrentExecution]` değil, `BlockchainTransaction`'da RowVersion yok → iki örtüşen tick `AnyAsync` kontrolünü ikisi de geçip iki PENDING SELLER_PAYOUT yazabilir → dispatcher ikisini de yayınlar → satıcıya çift ödeme. Olasılık düşük; T73'ten beri tüm per-minute money-job'larının ortak modeli (dispatch/confirmation de RowVersion'sız), ama producer'ın INSERT-yarışı mevcut hiçbir mekanizmayla dedup edilemez. **Önerilen düzeltme:** producer `Execute()` → `[DisableConcurrentExecution]` (migrationsız, tek+çok-instance) + opsiyonel filtered unique index `(TransactionId) WHERE Type='SELLER_PAYOUT'`. | `SellerPayoutQueueJob.cs:109-166`, `BlockchainTransactionConfiguration.cs:133-157` | Açık → yapım chat'i |
+| G1 | S3 (edge) | Soft-delete query-filter asimetrisi: `OutgoingTransferConfirmationJob` `.IgnoreQueryFilters()` kullanır (soft-deleted tx'in payout'unu confirm+emit eder), `PayoutCompletedConsumer` kullanmaz → broadcast↔confirm arası soft-delete edilen tx satıcıya ödenir ama COMPLETED'a geçemez (stranded; para kaybı yok). | `OutgoingTransferConfirmationJob.cs:67` ↔ `PayoutCompletedConsumer.cs:47` | Açık (düşük öncelik) |
+| G2 | Gözlem | Satıcı "Ödemeniz gönderildi" push bildirimi WP9'a ertelenmiş; veri COMPLETED-view DTO pull'undan geliyor. WP1 AC'sinin push bildirimi kapsam-dışı bıraktığı teyit edilmeli. | `PayoutCompletedEvent.cs` | Teyit bekliyor |
 
 ## Altyapı Değişiklikleri
 - **Migration:** **Var** — `20260614160541_WP1_AddPayoutGasFeeEstimateSetting` (yalnızca `InsertData`/`DeleteData` yeni seed satırı için; **şema değişikliği YOK**). Seed `HasData(SystemSettingSeed.All)` model snapshot'ının parçası olduğundan yeni satır migration gerektirir (ilk "migration yok" varsayımı bu seed-data noktasında yanlıştı; CI migration dry-run + `Model_HasNoPendingChanges` yakaladı, eklendi). `SELLER_PAYOUT` CHECK constraint'i `CK_BlockchainTransactions_Type_Outbound` zaten kapsar; yeni ayar seed-default (mandatory değil → 21-mandatory startup gate etkilenmez).
@@ -88,9 +102,9 @@ Happy-path'in `ITEM_DELIVERED`'da kalan çıkmaz sokağı kapatıldı (03 §2.4,
 
 ## Commit & PR
 - Branch: `task/WP1-escrow-completion-payout`
-- Commit: `972a793` — WP1: Escrow completion — seller payout + COMPLETED
+- Commit: `8c5f91a` (HEAD) — WP1 zinciri + seed migration + Layer-2 bypass log
 - PR: [#169](https://github.com/turkerurganci/Skinora/pull/169)
-- CI: ⏳ izleniyor
+- CI: ✓ HEAD run [27504561183](https://github.com/turkerurganci/Skinora/actions/runs/27504561183) tüm job'lar success
 
 ## Notlar
 - **Working tree:** Oturum başında temiz.

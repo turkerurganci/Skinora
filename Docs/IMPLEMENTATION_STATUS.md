@@ -215,7 +215,7 @@
 
 > **F6 öncesi (owner kararı 2026-06-14):** MVP kapsamındaki tüm ertelenmiş/yarım iş kapatılacak — bkz. [`PRE_F6_PLAN.md`](PRE_F6_PLAN.md) (19 iş paketi WP1–WP18, ~30–45 gün). Happy-path bugün `ITEM_DELIVERED`'da çıkmaz sokak (payout+`COMPLETED` eksik) → WP1 olmadan T107 yazılamaz. **F6 bunun ardından başlar.**
 >
-> **WP ilerleme:** **WP1** (Escrow tamamlama: satıcı payout + `COMPLETED`) ⏳ **Devam ediyor** — PR [#169](https://github.com/turkerurganci/Skinora/pull/169), doğrulama bekliyor (rapor: [`TASK_REPORTS/WP1_REPORT.md`](TASK_REPORTS/WP1_REPORT.md)). WP2–WP18 ⬚ Bekliyor.
+> **WP ilerleme:** **WP1** (Escrow tamamlama: satıcı payout + `COMPLETED`) ⏳ **Devam ediyor — validator PASS-koşullu** — PR [#169](https://github.com/turkerurganci/Skinora/pull/169). Bağımsız validator (2026-06-14): kabul kriterleri PASS (7/8 ✓, AC6 idempotency ~Kısmi), CI HEAD tüm job'lar yeşil; **1 onaylanmış S2 para-güvenliği bulgusu (producer çift-INSERT yarışı)** → owner kararı "önce sertleştir" → merge yok, ayrı yapım chat'inde düzeltme + yeniden doğrulama bekliyor (rapor: [`TASK_REPORTS/WP1_REPORT.md`](TASK_REPORTS/WP1_REPORT.md) Doğrulama §). WP2–WP18 ⬚ Bekliyor.
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
