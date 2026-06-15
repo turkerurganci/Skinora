@@ -16,8 +16,9 @@ namespace Skinora.Transactions.Application.Transfers;
 /// <c>BlockchainTransactionType</c> to the matching sidecar endpoint:
 /// <list type="bullet">
 ///   <item><c>SELLER_PAYOUT</c> → <c>POST /api/transfer/payout</c></item>
-///   <item><c>SWEEP</c> (composite — implicit on backend-emitted sweep rows) →
-///     <c>POST /api/transfer/sweep</c></item>
+///   <item><c>SWEEP</c> → <c>POST /api/transfer/sweep</c> (deposit → hot
+///     wallet; the dispatcher resolves the deposit index/address and the row's
+///     <c>ToAddress</c> carries the hot-wallet destination)</item>
 ///   <item>everything else (refund family) → <c>POST /api/transfer/refund</c></item>
 /// </list>
 /// Service-to-service auth piggybacks on the shared
@@ -227,6 +228,21 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                 or BlockchainTransactionType.SPAM_TOKEN_INCOMING =>
                 throw new InvalidOperationException(
                     $"Type {request.Type} is incoming — dispatcher should not broadcast it."),
+            // WP3 — sweep is deposit → hot wallet. Same deposit-sourced signing
+            // model as a refund (deposit index/address), but the destination is
+            // the platform hot wallet (the row's ToAddress) and the sidecar runs
+            // it through energy delegation, so it gets its own endpoint + body.
+            BlockchainTransactionType.SWEEP => (
+                "api/transfer/sweep",
+                new SweepBody(
+                    idStr,
+                    request.DepositIndex ?? throw new InvalidOperationException(
+                        "DepositIndex is required for SWEEP."),
+                    request.DepositAddress ?? throw new InvalidOperationException(
+                        "DepositAddress is required for SWEEP."),
+                    request.ToAddress,
+                    amountStr,
+                    tokenStr)),
             _ => (
                 "api/transfer/refund",
                 new RefundBody(
@@ -252,6 +268,14 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("depositIndex")] int DepositIndex,
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
         [property: JsonPropertyName("toBuyerAddress")] string ToBuyerAddress,
+        [property: JsonPropertyName("amount")] string Amount,
+        [property: JsonPropertyName("token")] string Token);
+
+    private sealed record SweepBody(
+        [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
+        [property: JsonPropertyName("depositIndex")] int DepositIndex,
+        [property: JsonPropertyName("depositAddress")] string DepositAddress,
+        [property: JsonPropertyName("toHotWalletAddress")] string ToHotWalletAddress,
         [property: JsonPropertyName("amount")] string Amount,
         [property: JsonPropertyName("token")] string Token);
 

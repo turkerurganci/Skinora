@@ -170,6 +170,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `SPAM_TOKEN_INCOMING` | Bilinmeyen/desteklenmeyen token transferi tespiti — allowlist dışı token. Otomatik iade yapılmaz, ignore + log (08 §3.4). Admin dashboard'da görünür. |
 | `LATE_PAYMENT_REFUND` | Gecikmeli ödeme iadesi |
 | `INCORRECT_AMOUNT_REFUND` | Eksik tutar iadesi |
+| `SWEEP` | Depozit adresinden hot wallet'a fon sweep'i (deposit → hot wallet konsolidasyonu, 05 §3.3). Reconciliation'da hot wallet inflow'u olarak sayılır; `ITEM_DELIVERED` anında üretilir (iade penceresi sonrası — WP3). |
 
 ### 2.6 BlockchainTransactionStatus
 
@@ -700,7 +701,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 |-------|-----|-------|----------|
 | `Id` | guid | PK | |
 | `TransactionId` | guid | FK → Transaction, NOT NULL | |
-| `PaymentAddressId` | guid | FK → PaymentAddress, NULL | Gelen ödemelerde ilgili adres |
+| `PaymentAddressId` | guid | FK → PaymentAddress, NULL | Gelen ödemelerde ve `SWEEP`'te ilgili depozit adresi (giden payout/iade'de NULL) |
 | `Type` | int | NOT NULL | Enum: BlockchainTransactionType |
 | `TxHash` | string(100) | NULL, UNIQUE | Blockchain transaction hash (broadcast sonrası) |
 | `FromAddress` | string(50) | NOT NULL | Gönderen adres |
@@ -712,7 +713,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 | `Status` | int | NOT NULL | Enum: BlockchainTransactionStatus |
 | `BlockNumber` | long | NULL | Blockchain blok numarası |
 | `ConfirmationCount` | int | NOT NULL, DEFAULT 0 | Onay sayısı |
-| `RetryCount` | int | NOT NULL, DEFAULT 0 | Giden transfer yeniden deneme sayısı (SELLER_PAYOUT, BUYER_REFUND vb.) — 05 §3.3 retry stratejisi ile tutarlı |
+| `RetryCount` | int | NOT NULL, DEFAULT 0 | Giden transfer yeniden deneme sayısı (SELLER_PAYOUT, BUYER_REFUND, SWEEP vb.) — 05 §3.3 retry stratejisi ile tutarlı |
 | `ErrorMessage` | string(500) | NULL | Giden transfer hata durumunda mesaj |
 | `CreatedAt` | datetime | NOT NULL | Tespit/oluşturma zamanı |
 | `ConfirmedAt` | datetime | NULL | Onaylanma zamanı (≥ 20 blok) |
@@ -721,7 +722,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 >
 > **Silme politikası:** Workflow Record (Arşivlenebilir) — DELETE tanımlı değil; yaşam döngüsü boyunca Status, ConfirmationCount, RetryCount güncellenir. Terminal state sonrası frozen. Archive tabloya taşınabilir (§8.8).
 >
-> **Retry notu:** Giden transferlerde (SELLER_PAYOUT, BUYER_REFUND, EXCESS_REFUND, WRONG_TOKEN_REFUND, LATE_PAYMENT_REFUND, INCORRECT_AMOUNT_REFUND) başarısız olursa exponential backoff ile yeniden denenir (3 deneme: 1dk, 5dk, 15dk — 05 §3.3). RetryCount ve ErrorMessage bu süreci takip eder.
+> **Retry notu:** Giden transferlerde (SELLER_PAYOUT, BUYER_REFUND, EXCESS_REFUND, WRONG_TOKEN_REFUND, LATE_PAYMENT_REFUND, INCORRECT_AMOUNT_REFUND, SWEEP) başarısız olursa exponential backoff ile yeniden denenir (3 deneme: 1dk, 5dk, 15dk — 05 §3.3). RetryCount ve ErrorMessage bu süreci takip eder.
 >
 > **Type-dependent CHECK constraint'ler:**
 > - **Gelen ödeme** (`BUYER_PAYMENT`): `PaymentAddressId NOT NULL`, `ActualTokenAddress NULL`.
@@ -729,8 +730,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 > - **Wrong-token refund** (`WRONG_TOKEN_REFUND`): `ActualTokenAddress NOT NULL`, `PaymentAddressId NULL` — giden refund transfer, ödeme adresine değil alıcının refund adresine gider.
 > - **Spam-token incoming** (`SPAM_TOKEN_INCOMING`): `ActualTokenAddress NOT NULL`, `PaymentAddressId NOT NULL` — bilinmeyen token belirli bir ödeme adresine gelmiştir. Otomatik iade yapılmaz, yalnızca audit kaydı. Status doğrudan `CONFIRMED` olarak yazılır (terminal).
 > - **Giden transfer** (`SELLER_PAYOUT`, `BUYER_REFUND`, `EXCESS_REFUND`, `LATE_PAYMENT_REFUND`, `INCORRECT_AMOUNT_REFUND`): `PaymentAddressId NULL`, `ActualTokenAddress NULL`.
->
-> **Status-dependent CHECK constraint'ler:**
+> - **Sweep** (`SWEEP`): `PaymentAddressId NOT NULL`, `ActualTokenAddress NULL` — deposit → hot wallet transferi kaynak depozit adresine bağlıdır (reconciliation deposit-outflow attribution `PaymentAddressId` üzerinden yapılır), kanonik stablecoin transferidir. Giden transfer grubunun (`PaymentAddressId NULL`) **aksine** `PaymentAddressId` zorunludur; bu yüzden ayrı bir CHECK constraint'tir (`CK_BlockchainTransactions_Type_Sweep`), Outbound constraint'ine eklenmez (WP3).
 > - **CONFIRMED**: `ConfirmationCount >= 20`, `ConfirmedAt NOT NULL`.
 > - **PENDING**: `ConfirmationCount < 20`.
 > - **DETECTED**: `ConfirmationCount = 0`.

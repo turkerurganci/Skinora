@@ -49,6 +49,11 @@ public sealed class OutgoingTransferDispatchJob
         BlockchainTransactionType.WRONG_TOKEN_REFUND,
         BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
         BlockchainTransactionType.LATE_PAYMENT_REFUND,
+        // WP3 — deposit → hot wallet sweep. Reuses the non-SELLER_PAYOUT
+        // source-resolution branch below (deposit index/address from the
+        // sibling BUYER_PAYMENT row); BuildRequest routes it to the sidecar's
+        // /api/transfer/sweep endpoint (HttpBlockchainTransferClient).
+        BlockchainTransactionType.SWEEP,
     ];
 
     private readonly AppDbContext _db;
@@ -125,8 +130,8 @@ public sealed class OutgoingTransferDispatchJob
             if (sourcePayment is null || sourcePayment.PaymentAddressId is null)
             {
                 _logger.LogWarning(
-                    "Dispatcher could not resolve deposit address for refund row {Id} (transaction {TransactionId}) — skipping",
-                    row.Id, row.TransactionId);
+                    "Dispatcher could not resolve deposit address for outbound row {Id} ({Type}, transaction {TransactionId}) — skipping",
+                    row.Id, row.Type, row.TransactionId);
                 return;
             }
             var addressRow = await _db.Set<PaymentAddress>()
@@ -137,8 +142,8 @@ public sealed class OutgoingTransferDispatchJob
             if (addressRow is null)
             {
                 _logger.LogWarning(
-                    "Dispatcher could not resolve PaymentAddress row {PaymentAddressId} for refund {Id}",
-                    sourcePayment.PaymentAddressId, row.Id);
+                    "Dispatcher could not resolve PaymentAddress row {PaymentAddressId} for outbound {Id} ({Type})",
+                    sourcePayment.PaymentAddressId, row.Id, row.Type);
                 return;
             }
             depositIndex = addressRow.HdWalletIndex;
