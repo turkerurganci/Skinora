@@ -48,6 +48,16 @@ public sealed class OutgoingTransferJobsRegistrar : IHostedService
                 SellerPayoutQueueJob.RecurringJobId,
                 job => job.Execute(),
                 SellerPayoutQueueJob.Cron);
+
+            // WP3 — produce the deposit → hot wallet SWEEP row at the same
+            // ITEM_DELIVERED gate (deferred past the buyer-refund window). The
+            // dispatch + confirmation jobs above broadcast it to the sidecar's
+            // /api/transfer/sweep endpoint and drive it to CONFIRMED so the
+            // daily reconciliation (T76) is two-sided for the hot wallet.
+            scheduler.AddOrUpdateRecurring<SweepQueueJob>(
+                SweepQueueJob.RecurringJobId,
+                job => job.Execute(),
+                SweepQueueJob.Cron);
         }
         catch (Exception ex)
         {

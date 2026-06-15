@@ -221,6 +221,61 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Empty(_client.Calls);
     }
 
+    [Fact]
+    public async Task Sweep_ResolvesDepositSource_AndBroadcastsToHotWallet()
+    {
+        // WP3 — a PENDING SWEEP is now in OutboundTypes, so the dispatcher picks
+        // it up, resolves the deposit index/address via the sibling
+        // BUYER_PAYMENT row (the non-SELLER_PAYOUT branch), and passes the row's
+        // ToAddress (hot wallet) through. HttpBlockchainTransferClient then routes
+        // it to /api/transfer/sweep (covered separately).
+        var fixture = await SeedSweepAsync(amount: 100m, hotWallet: "THotWalletDispatch00000000000000000");
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-sweep", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(BlockchainTransactionType.SWEEP, call.Type);
+        Assert.Equal(fixture.PaymentAddress.HdWalletIndex, call.DepositIndex);
+        Assert.Equal(fixture.PaymentAddress.Address, call.DepositAddress);
+        Assert.Equal("THotWalletDispatch00000000000000000", call.ToAddress);
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.SweepRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Equal("tx-hash-sweep", reloaded.TxHash);
+        Assert.Equal(fixture.PaymentAddress.Address, reloaded.FromAddress);
+    }
+
+    private async Task<SweepFixture> SeedSweepAsync(decimal amount, string hotWallet)
+    {
+        var (tx, paymentAddress, _) = await SeedTransactionAsync();
+
+        var sweep = new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            PaymentAddressId = paymentAddress.Id,   // CK_..._Type_Sweep: NOT NULL.
+            Type = BlockchainTransactionType.SWEEP,
+            TxHash = null,
+            FromAddress = paymentAddress.Address,
+            ToAddress = hotWallet,
+            Amount = amount,
+            Token = StablecoinType.USDT,
+            ActualTokenAddress = null,
+            GasFee = null,
+            Status = BlockchainTransactionStatus.PENDING,
+            ConfirmationCount = 0,
+            RetryCount = 0,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        };
+        _db.Set<BlockchainTransaction>().Add(sweep);
+        await _db.SaveChangesAsync();
+
+        return new SweepFixture(tx, paymentAddress, sweep);
+    }
+
     private async Task<RefundFixture> SeedRefundAsync(
         BlockchainTransactionType refundType,
         decimal amount)
@@ -360,6 +415,11 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         BlockchainTransaction RefundRow);
 
     private sealed record PayoutFixture(Transaction Transaction, BlockchainTransaction PayoutRow);
+
+    private sealed record SweepFixture(
+        Transaction Transaction,
+        PaymentAddress PaymentAddress,
+        BlockchainTransaction SweepRow);
 
     private sealed class StubBlockchainTransferClient : IBlockchainTransferClient
     {

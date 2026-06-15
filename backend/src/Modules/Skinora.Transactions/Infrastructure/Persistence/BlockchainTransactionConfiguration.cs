@@ -42,6 +42,17 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
                 "(Type NOT IN ('SELLER_PAYOUT', 'BUYER_REFUND', 'EXCESS_REFUND', 'LATE_PAYMENT_REFUND', 'INCORRECT_AMOUNT_REFUND')) " +
                 "OR (PaymentAddressId IS NULL AND ActualTokenAddress IS NULL)");
 
+            // SWEEP (WP3): deposit → hot wallet, so it is anchored to the source
+            // deposit PaymentAddress (PaymentAddressId NOT NULL) and is a
+            // canonical-stablecoin transfer (ActualTokenAddress NULL). SWEEP is
+            // intentionally NOT in the Outbound constraint above — that mandates
+            // PaymentAddressId IS NULL, the opposite invariant. This positive
+            // invariant mirrors BUYER_PAYMENT's shape and keeps the reconciliation
+            // deposit-outflow attribution (which keys on PaymentAddressId) exact.
+            t.HasCheckConstraint("CK_BlockchainTransactions_Type_Sweep",
+                "(Type <> 'SWEEP') " +
+                "OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL)");
+
             // ===== Status-dependent CHECK constraints (06 §3.8) =====
 
             // CONFIRMED: ConfirmationCount >= 20, ConfirmedAt NOT NULL
@@ -161,6 +172,17 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_BuyerRefund_TransactionId")
             .IsUnique()
             .HasFilter("[Type] = 'BUYER_REFUND'");
+
+        // WP3 (S2 money-safety) — at most one SWEEP row per transaction.
+        // Database-level backstop behind SweepQueueJob's [DisableConcurrentExecution]
+        // lock + AnyAsync guard: two overlapping producer ticks cannot queue
+        // duplicate sweeps → no double-sweep of the same deposit (which would
+        // double-credit the hot wallet in reconciliation). A transaction sweeps
+        // exactly one deposit (its 1:1 PaymentAddress). Named overload so it
+        // coexists with the non-unique IX_BlockchainTransactions_TransactionId.
+        builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_Sweep_TransactionId")
+            .IsUnique()
+            .HasFilter("[Type] = 'SWEEP'");
 
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(b => b.TransactionId)

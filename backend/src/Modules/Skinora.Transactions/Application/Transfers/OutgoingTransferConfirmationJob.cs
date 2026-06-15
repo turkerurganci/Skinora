@@ -38,6 +38,12 @@ public sealed class OutgoingTransferConfirmationJob
         BlockchainTransactionType.WRONG_TOKEN_REFUND,
         BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
         BlockchainTransactionType.LATE_PAYMENT_REFUND,
+        // WP3 — a broadcast SWEEP must be driven DETECTED → CONFIRMED here too,
+        // otherwise it sits in DETECTED forever and the CONFIRMED-only daily
+        // reconciliation (T76) never credits the hot wallet inflow. SWEEP drives
+        // no transaction-state transition (only SELLER_PAYOUT emits
+        // PayoutCompletedEvent below), so it simply flips to CONFIRMED.
+        BlockchainTransactionType.SWEEP,
     ];
 
     private readonly AppDbContext _db;

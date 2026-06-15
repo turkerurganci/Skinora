@@ -196,6 +196,11 @@ public static class TransactionsModule
         services.AddScoped<OutgoingTransferDispatchJob>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
+        // WP3 — deposit → hot wallet sweep producer. Queues the PENDING SWEEP
+        // row once a transaction reaches ITEM_DELIVERED (deferred past the
+        // buyer-refund window, owner decision); the dispatch + confirmation
+        // jobs above settle it and reconciliation credits the hot wallet inflow.
+        services.AddScoped<SweepQueueJob>();
         services.AddHostedService<OutgoingTransferJobsRegistrar>();
 
         // WP1 — seller payout completion. The confirmation job emits

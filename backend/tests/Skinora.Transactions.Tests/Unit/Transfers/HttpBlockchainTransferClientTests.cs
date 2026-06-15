@@ -10,10 +10,10 @@ using Skinora.Transactions.Application.Transfers;
 namespace Skinora.Transactions.Tests.Unit.Transfers;
 
 /// <summary>
-/// Unit coverage for <see cref="HttpBlockchainTransferClient"/> (T73).
-/// Drives every routing branch (payout / refund / sweep — sweep is mapped
-/// onto refund path on backend, see implementation note) and the response
-/// surface via a stub <see cref="HttpMessageHandler"/>.
+/// Unit coverage for <see cref="HttpBlockchainTransferClient"/> (T73, WP3).
+/// Drives every routing branch (payout → /payout, refund family → /refund,
+/// SWEEP → /sweep) and the response surface via a stub
+/// <see cref="HttpMessageHandler"/>.
 /// </summary>
 public class HttpBlockchainTransferClientTests
 {
@@ -82,6 +82,70 @@ public class HttpBlockchainTransferClientTests
         Assert.Contains("\"depositIndex\":7", capturedBody);
         Assert.Contains("TDeposit000000000000000000000000000000", capturedBody);
         Assert.Contains("\"token\":\"USDC\"", capturedBody);
+    }
+
+    [Fact]
+    public async Task Sweep_Routes_To_SweepEndpoint_WithDepositSourceAndHotDestination()
+    {
+        // WP3 — SWEEP must hit the dedicated /api/transfer/sweep endpoint with a
+        // SweepBody (toHotWalletAddress + deposit index/address), NOT the refund
+        // path. The row's ToAddress carries the hot-wallet destination.
+        HttpRequestMessage? observed = null;
+        string? capturedBody = null;
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            observed = req;
+            capturedBody = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { txHash = "tx-sweep-1" }),
+            };
+        });
+        var sut = BuildClient(handler);
+
+        var request = new TransferBroadcastRequest(
+            BlockchainTransactionId: Guid.NewGuid(),
+            Type: BlockchainTransactionType.SWEEP,
+            Token: StablecoinType.USDT,
+            Amount: 102m,
+            ToAddress: "THotWallet000000000000000000000000000",
+            DepositIndex: 7,
+            DepositAddress: "TDeposit000000000000000000000000000000");
+
+        var result = await sut.BroadcastAsync(request, CancellationToken.None);
+
+        Assert.Equal(TransferBroadcastStatus.Success, result.Status);
+        Assert.Equal("tx-sweep-1", result.TxHash);
+        Assert.NotNull(observed);
+        Assert.EndsWith("/api/transfer/sweep", observed!.RequestUri!.ToString());
+        Assert.NotNull(capturedBody);
+        Assert.Contains("\"toHotWalletAddress\":\"THotWallet000000000000000000000000000\"", capturedBody);
+        Assert.Contains("\"depositIndex\":7", capturedBody);
+        Assert.Contains("TDeposit000000000000000000000000000000", capturedBody);
+        Assert.DoesNotContain("toBuyerAddress", capturedBody);
+    }
+
+    [Fact]
+    public async Task Sweep_Throws_When_DepositIndex_Missing()
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { txHash = "tx" }),
+            }));
+        var sut = BuildClient(handler);
+
+        var request = new TransferBroadcastRequest(
+            BlockchainTransactionId: Guid.NewGuid(),
+            Type: BlockchainTransactionType.SWEEP,
+            Token: StablecoinType.USDT,
+            Amount: 102m,
+            ToAddress: "THotWallet000000000000000000000000000",
+            DepositIndex: null,
+            DepositAddress: "TDeposit000000000000000000000000000000");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.BroadcastAsync(request, CancellationToken.None));
     }
 
     [Fact]

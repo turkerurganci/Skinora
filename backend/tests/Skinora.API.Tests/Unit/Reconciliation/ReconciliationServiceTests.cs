@@ -35,6 +35,7 @@ public sealed class ReconciliationServiceTests : IDisposable
     private readonly RecordingPublisher _publisher = new();
     private readonly FakeTimeProvider _clock = new();
     private readonly ReconciliationService _sut;
+    private int _syntheticSweepSeq;
 
     public ReconciliationServiceTests()
     {
@@ -385,6 +386,34 @@ public sealed class ReconciliationServiceTests : IDisposable
         return pa;
     }
 
+    private async Task<Guid> SeedSyntheticStoppedDepositAsync()
+    {
+        // A STOPPED deposit + its own parent transaction (PaymentAddress has a
+        // 1:1 unique TransactionId). STOPPED keeps it out of the deposit
+        // reconciliation scan; it exists only to anchor a hot-scope SWEEP row
+        // to a valid PaymentAddressId (WP3 CK_..._Type_Sweep).
+        var seq = ++_syntheticSweepSeq;
+        var txId = Guid.NewGuid();
+        await SeedParentTransactionAsync(txId);
+
+        var paId = Guid.NewGuid();
+        _db.Set<PaymentAddress>().Add(new PaymentAddress
+        {
+            Id = paId,
+            TransactionId = txId,
+            Address = $"TSyntheticSweepDeposit-{seq}",
+            HdWalletIndex = 900_000 + seq,
+            ExpectedAmount = 0m,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.STOPPED,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
+            RowVersion = new byte[8],
+        });
+        await _db.SaveChangesAsync();
+        return paId;
+    }
+
     private async Task SeedParentTransactionAsync(Guid txId)
     {
         // Minimal Transaction row to satisfy PaymentAddress FK. The reconciliation
@@ -431,6 +460,17 @@ public sealed class ReconciliationServiceTests : IDisposable
         string fromAddress = "",
         Guid? paymentAddressId = null)
     {
+        // WP3 — CK_BlockchainTransactions_Type_Sweep requires every SWEEP row to
+        // carry a deposit PaymentAddressId. Hot-wallet-scope fixtures that don't
+        // model a specific deposit get a synthetic STOPPED deposit: it satisfies
+        // the constraint while staying out of the deposit reconciliation scan
+        // (which excludes MonitoringStatus.STOPPED), so the hot-scope assertions
+        // are unaffected.
+        if (type == BlockchainTransactionType.SWEEP && paymentAddressId is null)
+        {
+            paymentAddressId = await SeedSyntheticStoppedDepositAsync();
+        }
+
         var txId = paymentAddressId is null
             ? await EnsureFloatingParentTransactionAsync()
             : await _db.Set<PaymentAddress>().AsNoTracking()

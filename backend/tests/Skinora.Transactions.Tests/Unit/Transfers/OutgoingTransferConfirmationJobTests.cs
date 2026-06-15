@@ -169,6 +169,25 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     }
 
     [Fact]
+    public async Task SweepConfirmed_FlipsToConfirmed_AndDoesNotPublishPayoutCompletedEvent()
+    {
+        // WP3 — a broadcast SWEEP must be driven DETECTED → CONFIRMED here (it is
+        // now in OutboundTypes) so reconciliation's CONFIRMED-only filter credits
+        // the hot wallet inflow. SWEEP drives no transaction-state transition, so
+        // it must NOT emit PayoutCompletedEvent.
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SWEEP);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_040L, 22, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Empty(_outbox.Events.OfType<PayoutCompletedEvent>());
+    }
+
+    [Fact]
     public async Task SellerPayoutFailed_DoesNotPublishPayoutCompletedEvent()
     {
         await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
@@ -218,9 +237,11 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
         };
 
-        // Inbound rows need a PaymentAddress to satisfy the CK_*_BuyerPayment constraint.
+        // BUYER_PAYMENT needs a PaymentAddress (CK_*_BuyerPayment); SWEEP is
+        // deposit-anchored too (CK_*_Type_Sweep requires PaymentAddressId NOT NULL).
         Guid? paymentAddressId = null;
-        if (type == BlockchainTransactionType.BUYER_PAYMENT)
+        if (type == BlockchainTransactionType.BUYER_PAYMENT
+            || type == BlockchainTransactionType.SWEEP)
         {
             var pa = new PaymentAddress
             {
