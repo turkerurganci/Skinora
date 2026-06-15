@@ -1,6 +1,6 @@
 # WP3 — Hot-wallet/ledger doğruluğu: SWEEP dispatcher
 
-**Faz:** PRE_F6_PLAN (F6 öncesi MVP borç kapatma) | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-06-15
+**Faz:** PRE_F6_PLAN (F6 öncesi MVP borç kapatma) | **Durum:** ✓ Tamamlandı (bağımsız doğrulama PASS) | **Tarih:** 2026-06-16
 
 ---
 
@@ -63,11 +63,23 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ **Bağımsız doğrulama bekliyor** (ayrı chat — `feedback_validation_separate_chat`) |
+| Doğrulama durumu | ✓ **PASS** (bağımsız validator chat, 2026-06-16 — `feedback_validation_separate_chat`) |
+| Bloke-edici bulgu | **0** |
 | Yapım-içi adversarial self-check | ✓ PASS — 5-boyut/refute-default workflow (15 ajan), **9 ham → 0 onaylı bloke-edici/major** |
-| Düzeltme gerekli mi | Hayır (0 bloke-edici; 2 non-blocking gözlem WP17/WP13'e not edildi) |
+| Düzeltme gerekli mi | Validator-fix: 06 doc-conformance (owner onaylı, bu PR'a katıldı). CC-03 + FE enums.ts ertelendi. |
 
-> **Not:** Aşağıdaki adversarial review **yapım chat'i içi** kalite kapısıdır (WP1 deseni), bağımsız validator'ın yerine geçmez. Resmi PASS ayrı doğrulama chat'inde verilir.
+### Bağımsız Doğrulama (ayrı chat, 2026-06-16) — VERDICT ✓ PASS
+
+Validator rapor görülmeden kendi verdict'ini oluşturdu (izolasyon §3.3). **Kapılar:** Adım -1 temiz · Adım 0 main son-3 success (`27567370074`/`27567370227`/`27509836014`) · Adım 0b repo memory mevcut · **Adım 8a task CI HEAD `bcfd3e1` run [`27574022583`](https://github.com/turkerurganci/Skinora/actions/runs/27574022583) tüm job success** (Lint/Build/**Unit**/**Integration**/Contract/**Migration-dry-run**/Docker; Guard skipped). **Lokal yeniden çalıştırma:** Transactions unit **101/101** + API reconciliation+hotwallet **29/29** + full Release build **0W/0E** + snapshot drift yok (CK + UQ index). **Sidecar kontrat teyidi:** `POST /api/transfer/sweep { blockchainTransactionId, depositIndex, depositAddress, toHotWalletAddress, amount, token }` ↔ backend `SweepBody` **birebir**; `sweep()` gerçek (T74), `request.amount`'ı **tam** sweepler (full-balance değil) → ledger `SWEEP.Amount = TotalAmount` = on-chain swept değer → reconciliation iki-taraflı kapanır.
+
+**6-boyut/refute-default adversarial workflow (23 ajan: money-idempotency · reconciliation · trigger-wp2 · constraint-migration · sidecar-routing · state-events-di + completeness critic) → 0 onaylı bloke-edici bulgu.** 8 kabul kriteri ✓. Money-safety (3-katman idempotency, double-sweep yolu yok) + reconciliation matematiği (overpayment/multi/under hepsi net) + state-machine (SWEEP geçiş tetiklemez, PayoutCompletedEvent yok) + DI/registrar bağımsız doğrulandı.
+
+**Validator net-yeni bulgular (hepsi non-blocking):**
+- **06_DATA_MODEL.md doc-drift (S1)** — §2.5 tip tablosu + §3.8 CHECK-listesi/retry notu SWEEP'i belgelemiyordu (kod+migration+EnumTests 10 değer güncel). **Owner kararı (AskUserQuestion 2026-06-16): bu PR'a kat** → §2.5'e SWEEP satırı + §3.8'e `CK_..._Type_Sweep` bullet + retry/RetryCount/PaymentAddressId notlarına SWEEP eklendi.
+- **CC-03 (S3, düşük olasılık)** — dispatcher SWEEP kaynağını kardeş BUYER_PAYMENT'tan çözüyor; o lookup null dönerse satır RetryCount/FAILED/alert olmadan sonsuz PENDING döner. Teslim edilmiş tx'te onaylı BUYER_PAYMENT hep var → canlı risk değil; terminal/alert yolu + test **follow-up'a ertelendi** (owner onaylı).
+- **FE `enums.ts` SWEEP yok** → mevcut `FE-enums-ts-lag` / **WP13** (değişiklik yok, owner onaylı erteleme).
+
+Yapım raporuyla tam uyumlu (rapor 05 §3.3 trigger-drift→WP17, FE enums.ts→WP13, teslim-sonrası dispute iadesi→WP5/WP12 known-limitation'larını zaten kaydetmişti; 06 doc-drift + CC-03 yalnız validator tarafından bulundu).
 
 **Yapım-içi adversarial review (5-boyut: money-safety/ordering · idempotency/concurrency · constraint/migration · dispatch/confirm/client wiring · spec/reconciliation; refute-default + bağımsız verify):**
 - **VERDICT PASS — 9 ham bulgu → 0 onaylanmış bloke-edici/major.** Bağımsız teyit edilenler:
@@ -86,9 +98,9 @@
 ## Commit & PR
 
 - Branch: `task/WP3-sweep-dispatcher`
-- Commit: `97d6dff` (implementation) + docs finalize commit
+- Commit: `97d6dff` (implementation) + `cb0fe40`/`bcfd3e1` (docs) + validator-fix commit (06 doc-conformance + rapor/status/memory finalize)
 - PR: [#171](https://github.com/turkerurganci/Skinora/pull/171)
-- CI: ✓ **success** — HEAD `cb0fe40` run [`27573363980`](https://github.com/turkerurganci/Skinora/actions/runs/27573363980) **tüm job success** (Lint/Build/**Unit**/**Integration**/Contract/**Migration dry-run**/Docker/CI Gate; Guard skipped). Integration + Migration dry-run = yeni `CK_..._Type_Sweep` + filtered unique index'in SQL Server'da temiz uygulandığını teyit eder. (Önceki `97d6dff` run'ı cancelled — docs commit'i supersede etti.) Sonraki docs commit'in CI'sı da izlenir.
+- CI: ✓ **success** — HEAD `bcfd3e1` run [`27574022583`](https://github.com/turkerurganci/Skinora/actions/runs/27574022583) **tüm job success** (Lint/Build/**Unit**/**Integration**/Contract/**Migration dry-run**/Docker/CI Gate; Guard skipped). Integration + Migration dry-run = yeni `CK_..._Type_Sweep` + filtered unique index'in SQL Server'da temiz uygulandığını teyit eder. Validator-fix commit'i (yalnız `Docs/`) ek CI tetikler — izlenir.
 
 ## Known Limitations / Follow-up
 
@@ -96,6 +108,7 @@
 - **Sweep başarısızlık fallback'i (05 §3.3 satır 322):** Tüm denemeler başarısızsa admin'e alert + depozitten doğrudan gönderim — `OutgoingTransferDispatchJob` retry/FAILED + `TransferDispatchFailedEvent` mevcut; özel sweep-fallback orkestrasyonu MVP-sonrası.
 - **05 §3.3 satır 316 doc reconciliation:** Tetik "PaymentReceivedEvent" diyor ama uygulama (owner kararı) ITEM_DELIVERED'a erteliyor; enum doc-comment güncellendi, spec doc-drift **WP17** (doc/spec mutabakat) için not edildi. Satır 317 "iade hot wallet'tan" da uygulanan depozit-kaynaklı iadeyle çelişir (WP17).
 - **Overpayment kenar durumu:** SWEEP `Amount = TotalAmount` (beklenen); fazla-ödeme depozitte kalan kısmı ayrı EXCESS_REFUND ile boşaltılır (her ikisi de depozitten, toplamları bakiyeyi aşmaz).
+- **CC-03 (validator follow-up, owner onaylı erteleme):** Dispatcher SWEEP kaynağını SWEEP satırının kendi `PaymentAddressId`'si yerine kardeş BUYER_PAYMENT satırından çözüyor (`OutgoingTransferDispatchJob.cs:119-152`). O lookup null dönerse satır `RetryCount`/`FAILED`/`TransferDispatchFailedEvent` olmadan sonsuza kadar PENDING döner (o işlem için hot-wallet kredilenmez, log spam). Teslim edilmiş bir tx'te onaylı BUYER_PAYMENT daima mevcut olduğundan düşük olasılık; ama terminal/alert yolu + regresyon testi yok. **Follow-up:** ya SWEEP'in kendi `PaymentAddressId`'sini kullan (DIM3-N1, indirection'ı kaldırır), ya da unresolvable-source dalını RetryCount/FAILED'a bağla + test.
 
 ## Notlar
 
