@@ -290,6 +290,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             : BuildAuthenticatedActions(transaction, role!, nowUtc);
 
         var sellerPayout = await BuildSellerPayoutAsync(transaction, role, cancellationToken);
+        var refund = await BuildRefundAsync(transaction, role, cancellationToken);
 
         var dto = new TransactionDetailDto(
             Id: transaction.Id,
@@ -306,7 +307,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Timeout: timeout,
             Payment: null,           // T70+ blockchain monitoring
             SellerPayout: sellerPayout, // WP1 — COMPLETED seller view (07 §7.5)
-            Refund: null,            // T49/T51 refunds
+            Refund: refund,          // WP2 — buyer payment-refund view (07 §7.5)
             CancelInfo: cancel,
             FlagInfo: flag,
             HoldInfo: hold,
@@ -509,6 +510,39 @@ public sealed class TransactionDetailService : ITransactionDetailService
             WalletAddress: payout.ToAddress,
             TxHash: payout.TxHash ?? string.Empty,
             SentAt: payout.ConfirmedAt ?? payout.CreatedAt);
+    }
+
+    private async Task<RefundDto?> BuildRefundAsync(
+        Transaction transaction,
+        string? role,
+        CancellationToken cancellationToken)
+    {
+        // WP2 / 07 §7.5 — the refund breakdown is surfaced in the buyer's view
+        // once a payment refund (BUYER_REFUND) has been queued for a cancelled
+        // transaction. Reconstructed from the row exactly as the admin detail
+        // does (AdminTransactionQueryService.BuildRefundDetail): the gas
+        // estimate was snapshotted onto GasFee, so originalAmount = Amount +
+        // GasFee = TotalAmount (02 §4.6). TxHash / RefundedAt stay null until
+        // the dispatcher broadcasts and the confirmation job finalises on chain.
+        if (role != "buyer")
+            return null;
+
+        var refund = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .Where(b => b.TransactionId == transaction.Id
+                && b.Type == BlockchainTransactionType.BUYER_REFUND)
+            .OrderByDescending(b => b.ConfirmedAt ?? b.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (refund is null) return null;
+
+        var gasFee = refund.GasFee ?? 0m;
+        return new RefundDto(
+            OriginalAmount: FormatMoney(refund.Amount + gasFee),
+            GasFee: FormatMoney(gasFee),
+            NetRefundAmount: FormatMoney(refund.Amount),
+            RefundAddress: refund.ToAddress,
+            TxHash: refund.TxHash,
+            RefundedAt: refund.ConfirmedAt);
     }
 
     private static decimal? ComputeReputation(decimal? successRate)
