@@ -67,9 +67,9 @@
 ## Commit & PR
 
 - Branch: `task/WP2-buyer-refund`
-- Commit: (bkz. PR)
-- PR: #(TBD — push sonrası)
-- CI: ⏳ (push sonrası izlenecek)
+- Commit: `d277860`
+- PR: [#170](https://github.com/turkerurganci/Skinora/pull/170)
+- CI: ⏳ (izleniyor)
 
 ## Known Limitations / Follow-up
 
