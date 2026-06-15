@@ -1,6 +1,6 @@
 # WP2 — İade yürütme: `BUYER_REFUND` (+ canlı admin-cancel defekti)
 
-**Faz:** PRE_F6_PLAN (F6 öncesi MVP borç kapatma) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-15
+**Faz:** PRE_F6_PLAN (F6 öncesi MVP borç kapatma) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS 2026-06-15) | **Tarih:** 2026-06-15
 
 ---
 
@@ -44,7 +44,7 @@
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Unit (Transactions) | ✓ **446/446** (+7 yeni) | `dotnet test --filter "...!~.Integration&...!~.Contract"` — `PaymentRefundToBuyerConsumerTests` 7/7 |
-| Integration (Transactions) | ⏳ CI-authoritative | +2 refund-breakdown testi (`TransactionDetailServiceTests`) — lokal Docker/SQL Server yok; CI'da çalışır |
+| Integration (Transactions) | ✓ CI-confirmed | +2 refund-breakdown testi (`TransactionDetailServiceTests`) — lokal Docker/SQL Server yok; CI `4. Integration test` job success (HEAD `b43fe03` run `27561695471`) |
 | Build | ✓ 0W/0E | `dotnet build Skinora.sln` Debug **ve** Release |
 | Format | ✓ temiz | `dotnet format --verify-no-changes --severity error` — çıktı yok |
 | Migration drift | ✓ yok | `dotnet ef migrations has-pending-model-changes` → "No changes have been made to the model since the last migration." |
@@ -53,9 +53,19 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-15) |
+| Verdict | ✓ PASS — 8/8 kabul kriteri ✓, 0 bloke-edici bulgu |
+| Bulgu sayısı | 0 (6-boyut adversarial workflow, refute-default: hiçbir boyut bulgu üretmedi) |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator kanıtları (bağımsız üretildi, rapor görülmeden):**
+- **Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 run success (`27509836014`/`27509836010`/`27500668387`) · Adım 0b repo memory WP2 satırı mevcut · Adım 8a task branch CI HEAD `b43fe03` run [`27561695471`](https://github.com/turkerurganci/Skinora/actions/runs/27561695471) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate). (Önceki `d277860` run'ı cancelled — docs commit'i tarafından supersede edildi.)
+- **Lokal yeniden çalıştırma:** Transactions `--filter "...!~.Integration&...!~.Contract"` **446/446** + `Category=Unit` 87/87 (7 consumer testi dahil) · `dotnet build Skinora.sln -c Release` **0W/0E** · `dotnet format --verify-no-changes --severity error` temiz · model snapshot BUYER_REFUND filtered unique index içeriyor (`AppDbContextModelSnapshot.cs:2108`), drift yok.
+- **Spec uyumu (primary kaynaktan bağımsız teyit):** İade tutarı net = `TotalAmount − gas` = 02 §4.6 line 126 "Fiyat + komisyon − gas fee" + §4.7 (alıcı gas'ı karşılar, platform maliyeti sıfır); `TotalAmount = Price + CommissionAmount` (06 §3.5:560 = `PaymentAddress.ExpectedAmount` = alıcının gerçekten ödediği) → fazla-ödeme ayrı EXCESS_REFUND ile döner, çift-iade yok; refund DTO `BuildRefundAsync` 07 §7.5 birebir (originalAmount=Amount+GasFee, netRefundAmount=Amount, yalnız alıcı görünümü).
+- **Money-safety:** 3 publish yolu yalnız `PaymentWasReceived` (PAYMENT_RECEIVED / TRADE_OFFER_SENT_TO_BUYER) + non-empty TRC-20 refund adresinde fire eder → ödenmemiş işleme iade yok. Idempotency 3-katman (AnyAsync + filtered unique index gerçekten enforce — `ConcurrentInsertRace` SQLite testi kanıtlar + catch detach/re-query/re-throw). Constraint: BUYER_REFUND satırı `CK_..._Type_Outbound`'u (PaymentAddressId/ActualTokenAddress null) + 4 status CHECK'i sağlar. Dispatch: `OutgoingTransferDispatchJob.OutboundTypes` BUYER_REFUND içerir → satır PENDING'de takılı kalmaz.
+- **6-boyut adversarial workflow (6 ajan refute + adversarial verify, refute-default):** money / idempotency / activation / constraints / dto / wiring — **6/6 PASS, 0 onaylanmış bloke-edici bulgu, 0 ham bulgu**.
+- **Güvenlik mini-kontrol:** Secret sızıntısı yok · yeni dış bağımlılık yok (csproj değişmedi) · refund yolu server-side, adres upstream TRC-20-doğrulanmış · auth etkisi yok.
+- **Yapım raporu karşılaştırması:** Tam uyumlu — 8/8 AC ve test numaraları (446/446) bağımsız teyit edildi, uyuşmazlık yok.
 
 ## Altyapı Değişiklikleri
 
@@ -67,9 +77,9 @@
 ## Commit & PR
 
 - Branch: `task/WP2-buyer-refund`
-- Commit: `d277860`
+- Commit: `d277860` (+ docs `b43fe03`)
 - PR: [#170](https://github.com/turkerurganci/Skinora/pull/170)
-- CI: ⏳ (izleniyor)
+- CI: ✓ HEAD `b43fe03` run [`27561695471`](https://github.com/turkerurganci/Skinora/actions/runs/27561695471) tüm job success
 
 ## Known Limitations / Follow-up
 
