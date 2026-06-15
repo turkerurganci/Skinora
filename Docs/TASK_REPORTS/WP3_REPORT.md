@@ -88,7 +88,7 @@
 - Branch: `task/WP3-sweep-dispatcher`
 - Commit: `97d6dff` (implementation) + docs finalize commit
 - PR: [#171](https://github.com/turkerurganci/Skinora/pull/171)
-- CI: ⏳ izleniyor (yapım chat'i CI'yı concluded+success olana kadar izler — [[feedback_claude_watches_ci_always]])
+- CI: ✓ **success** — HEAD `cb0fe40` run [`27573363980`](https://github.com/turkerurganci/Skinora/actions/runs/27573363980) **tüm job success** (Lint/Build/**Unit**/**Integration**/Contract/**Migration dry-run**/Docker/CI Gate; Guard skipped). Integration + Migration dry-run = yeni `CK_..._Type_Sweep` + filtered unique index'in SQL Server'da temiz uygulandığını teyit eder. (Önceki `97d6dff` run'ı cancelled — docs commit'i supersede etti.) Sonraki docs commit'in CI'sı da izlenir.
 
 ## Known Limitations / Follow-up
 
