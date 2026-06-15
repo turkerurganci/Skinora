@@ -208,6 +208,18 @@ public static class TransactionsModule
             Skinora.Shared.Events.PayoutCompletedEvent>>(sp =>
             sp.GetRequiredService<PayoutCompletedConsumer>());
 
+        // WP2 — buyer payment refund. The three terminal-cancel paths
+        // (delivery timeout, admin-cancel AD19, emergency-hold-release-cancel
+        // AD19c) publish PaymentRefundToBuyerRequestedEvent; this consumer
+        // queues the PENDING BUYER_REFUND row the dispatcher broadcasts.
+        // Explicit registration: the Transactions assembly is NOT in the
+        // OutboxModule MediatR scan list, so a missing line here would silently
+        // drop the event (the live admin-cancel refund defect WP2 closes).
+        services.AddScoped<PaymentRefundToBuyerConsumer>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.PaymentRefundToBuyerRequestedEvent>>(sp =>
+            sp.GetRequiredService<PaymentRefundToBuyerConsumer>());
+
         // T75 — post-cancel monitoring (02 §4.4, 08 §3.4). Starter is the
         // shared entry point used by every cancel handler (T49 timeout,
         // T51 user-cancel, T59 admin-cancel + emergency-hold release CANCEL,

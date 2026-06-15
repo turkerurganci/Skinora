@@ -425,6 +425,74 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Null(outcome.Body!.SellerPayout);
     }
 
+    [Fact]
+    public async Task Cancelled_BuyerView_Surfaces_RefundBreakdown()
+    {
+        // WP2 — the buyer's view of a cancelled, payment-refunded transaction
+        // reconstructs the 07 §7.5 refund breakdown from the BUYER_REFUND row:
+        // originalAmount = net (100) + gas snapshot (2) = 102 = TotalAmount.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CANCELLED_ADMIN, buyerId: _buyer.Id);
+        await AddConfirmedRefundAsync(transaction.Id, netAmount: 100m, gasSnapshot: 2m);
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(
+            transaction.Id, callerId: _buyer.Id, callerSteamId: BuyerSteamId, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        var refund = outcome.Body!.Refund;
+        Assert.NotNull(refund);
+        Assert.Equal("102.00", refund!.OriginalAmount);
+        Assert.Equal("2.00", refund.GasFee);
+        Assert.Equal("100.00", refund.NetRefundAmount);
+        Assert.Equal(ValidWallet, refund.RefundAddress);
+        Assert.Equal("0xRefundConfirmed", refund.TxHash);
+    }
+
+    [Fact]
+    public async Task Cancelled_SellerView_Omits_RefundBreakdown()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CANCELLED_ADMIN, buyerId: _buyer.Id);
+        await AddConfirmedRefundAsync(transaction.Id, netAmount: 100m, gasSnapshot: 2m);
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(
+            transaction.Id, callerId: _seller.Id, callerSteamId: SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Null(outcome.Body!.Refund);
+    }
+
+    private async Task AddConfirmedRefundAsync(Guid transactionId, decimal netAmount, decimal gasSnapshot)
+    {
+        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            Type = BlockchainTransactionType.BUYER_REFUND,
+            TxHash = "0xRefundConfirmed",
+            FromAddress = "THotWallet0000000000000000000000000",
+            ToAddress = ValidWallet,
+            Amount = netAmount,
+            Token = StablecoinType.USDT,
+            GasFee = gasSnapshot,
+            Status = BlockchainTransactionStatus.CONFIRMED,
+            BlockNumber = 1_500_000L,
+            ConfirmationCount = 20,
+            RetryCount = 0,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+        await Context.SaveChangesAsync();
+    }
+
+    private static bool IsCancelledStatus(TransactionStatus status) =>
+        status is TransactionStatus.CANCELLED_TIMEOUT
+            or TransactionStatus.CANCELLED_SELLER
+            or TransactionStatus.CANCELLED_BUYER
+            or TransactionStatus.CANCELLED_ADMIN;
+
     private async Task AddConfirmedPayoutAsync(Guid transactionId, decimal netAmount, decimal gasSnapshot)
     {
         Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
@@ -482,6 +550,10 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
+            // CK_Transactions_Cancel — CANCELLED_* requires these three.
+            CancelledBy = IsCancelledStatus(status) ? CancelledByType.ADMIN : null,
+            CancelReason = IsCancelledStatus(status) ? "admin cancel (test)" : null,
+            CancelledAt = IsCancelledStatus(status) ? nowUtc.AddMinutes(-2) : null,
         };
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();

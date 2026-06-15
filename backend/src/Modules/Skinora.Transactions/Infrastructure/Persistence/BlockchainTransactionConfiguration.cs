@@ -148,6 +148,20 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             .IsUnique()
             .HasFilter("[Type] = 'SELLER_PAYOUT'");
 
+        // WP2 F1-parity (S2 money-safety) — at most one BUYER_REFUND row per
+        // transaction. Database-level backstop behind PaymentRefundToBuyerConsumer's
+        // AnyAsync + catch(DbUpdateException) guards: an at-least-once outbox
+        // redelivery that slips past the existence check cannot queue a duplicate
+        // refund → no double-refund. Legitimate because all three publish sites
+        // (delivery timeout, admin-cancel, emergency-hold-release-cancel) are
+        // terminal transitions and a transaction is cancelled exactly once. The
+        // OTHER outbound refund types stay unconstrained (a transaction may
+        // legitimately accumulate several refund rows of different types). Named
+        // overload so it coexists with IX_BlockchainTransactions_TransactionId.
+        builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_BuyerRefund_TransactionId")
+            .IsUnique()
+            .HasFilter("[Type] = 'BUYER_REFUND'");
+
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(b => b.TransactionId)
             .HasDatabaseName("IX_BlockchainTransactions_TransactionId");
