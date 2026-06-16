@@ -84,6 +84,8 @@ WP4a, plana göre **iki bağımsız değişiklik**tir (spec birbirine karıştı
 
 **CI-authoritative entegrasyon:** `TransactionAcceptanceServiceTests`, `TransactionCreationServiceTests`, `SeedDataTests`, `SettingsBootstrapTests`, `DisputeServiceTests`, `TransactionLifecycleEndpointTests` → CI (Integration + Migration dry-run job'ları).
 
+**Task CI HEAD `63b8a6b` run [`27639903294`](https://github.com/turkerurganci/Skinora/actions/runs/27639903294) — TÜM JOB SUCCESS** (Lint / Build / **Unit** / **Integration** / Contract / **Migration dry-run** / Docker / Gate). Integration yeşil → S1 fix (`SeedDataTests` 21→20) + accept-gate/creation entegrasyonu + seed `UpdateData` migration SQL Server'da temiz uygulandı.
+
 ## 7. Migration / altyapı
 
 - `20260616153550_WP4a_SeedPriceDeviationThreshold` — **seed-only** (`UpdateData` Id `…0012`, şema değişikliği YOK). Up: Value=`1.0`/IsConfigured=true; Down: null/false. Seed key COUNT değişmez (1-for-1 swap, toplam 59).
