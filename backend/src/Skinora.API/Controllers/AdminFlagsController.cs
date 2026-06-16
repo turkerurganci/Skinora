@@ -131,6 +131,11 @@ public sealed class AdminFlagsController : ControllerBase
                 "Linked transaction is no longer in FLAGGED state.",
                 traceId: HttpContext.TraceIdentifier)),
 
+            ApproveFlagOutcome.ValidationFailed validation => BadRequest(ApiResponse<object>.Fail(
+                FraudFlagErrorCodes.ValidationError,
+                validation.Message,
+                traceId: HttpContext.TraceIdentifier)),
+
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
@@ -167,6 +172,11 @@ public sealed class AdminFlagsController : ControllerBase
             RejectFlagOutcome.TransactionNotFlagged => Conflict(ApiResponse<object>.Fail(
                 FraudFlagErrorCodes.TransactionNotFlagged,
                 "Linked transaction is no longer in FLAGGED state.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            RejectFlagOutcome.ValidationFailed validation => BadRequest(ApiResponse<object>.Fail(
+                FraudFlagErrorCodes.ValidationError,
+                validation.Message,
                 traceId: HttpContext.TraceIdentifier)),
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),

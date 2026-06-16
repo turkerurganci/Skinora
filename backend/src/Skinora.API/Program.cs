@@ -323,6 +323,11 @@ builder.Services.AddScoped<Skinora.API.Services.UserSuspension.IAdminUserSuspens
 builder.Services.AddScoped<Skinora.API.Services.UserSuspension.AutoUnsuspendJob>();
 builder.Services.AddHostedService<Skinora.API.Services.UserSuspension.AutoUnsuspendJobRegistrar>();
 
+// Multi-account retro-scan (WP4b) — daily sweep that re-runs IMultiAccountDetector
+// across wallet-bearing active users, closing the "only fires at wallet-update" gap.
+builder.Services.AddScoped<Skinora.API.Services.Fraud.MultiAccountRetroScanJob>();
+builder.Services.AddHostedService<Skinora.API.Services.Fraud.MultiAccountRetroScanJobRegistrar>();
+
 // Health checks (T16) — DB + Redis dependency checks
 builder.Services.AddHealthChecks()
     .AddSqlServer(

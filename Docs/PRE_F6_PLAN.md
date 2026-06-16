@@ -28,7 +28,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP2 | İade yürütme: `BUYER_REFUND` (+ canlı admin-cancel defekti) | Alıcı parası gerçekten iade olur | **T108** | M |
 | | WP3 | Hot-wallet/ledger doğruluğu: SWEEP dispatcher *(migration)* | Mutabakat iki-taraflı doğru | **T110** | M |
 | **P2 — Fraud/uyum** | WP4a | Fraud accept-gate + canlı fiyat (wiring) | Flag'li hesap engellenir, PRICE_DEVIATION çalışır | **T111** | M |
-| | WP4b | Retro-scan + FLAGGED-approve timeout + alloc + note-limit | Fraud kapsam tamlığı | T111 | M |
+| | WP4b ✅ | Retro-scan + FLAGGED-approve timeout (by-design) + alloc + note-limit | Fraud kapsam tamlığı | T111 | M |
 | | WP5 | Dispute çözüm (admin): `/admin/disputes` + resolve | ESCALATED çıkmaz sokak kapanır | **T113** | M–L |
 | | WP6 | Steam dispute checker'ları (trade-hold + MA) + auto-resolve doğrula | DELIVERY/WRONG_ITEM otomatik çözülür | T111/T113 | M |
 | **P3 — Operasyon** | WP7 | Outage/maintenance: bulk-freeze çağıran + toggle push | Platform dondurulabilir | **T114** | M |
@@ -82,10 +82,11 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **İş:** Accept yoluna `IAccountFlagChecker` gate ekle; **fiyat = SADECE WIRING:** Transactions `IMarketPriceProvider` → mevcut Fraud `PriceService`/`ISteamMarketPriceClient` köprüsü + `classId/instanceId`→`marketHashName` çözümü. **T81'i yeniden yazma** (harici API + cache + rate-limit hazır).
 **Efor:** M · **Açar:** T111
 
-### WP4b — Fraud kapsam tamlığı (retro-scan + FLAGGED yolları)
+### WP4b — Fraud kapsam tamlığı (retro-scan + FLAGGED yolları) — ✅ Çözüldü (validator bekliyor)
 **Backlog:** T56-MultiAccountRetroScan · T54-FlaggedApproveNoTimeoutJob · flagged-allocation-detail (backend) · T54-FraudNoteNoMaxLength · fraud-acceptance-gate (sinyal üreticileri/background scan kısmı)
 **Kanıt:** `MultiAccountDetector` yalnız `WalletAddressService.cs:144` (wallet-update); FLAGGED-approve (FLAGGED→CREATED) per-tx accept-timeout job kaydetmiyor (poll'a güveniyor); payment-address allocate yalnız CREATED'de (FLAGGED-approval atlanıyor); fraud-note max-length yok.
 **İş:** Periyodik MultiAccount retro-scan Hangfire job; FLAGGED-approve per-tx timeout job; FLAGGED-approval'da payment-address allocate; fraud-note max-length validasyonu.
+**Çözüm (owner kararları, AskUserQuestion):** (1) **retro-scan** = günlük const cron `MultiAccountRetroScanJob` (Skinora.API, `AutoUnsuspendJob` deseni), cüzdanlı aktif kullanıcıları `IMultiAccountDetector` ile tarar (kaba per-user dedup, mevcut gate). (2) **FLAGGED-approve timeout** = **sadece-doğrula, yeni job YOK** — 05 §4.4 + 06 §3.5:650 accept-deadline'ları bilinçli poller-driven yapar (yalnız ITEM_ESCROWED per-tx job alır); `DeadlineScannerJob` `ApproveAsync`'in setlediği `AcceptDeadline`'ı zaten enforce ediyor → regresyon testi + resolved-by-design. (3) **allocation** = `FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync` (best-effort; `EnsurePaymentAddressJob` recovery'yi tamamlar). (4) **note max-length** = 2000 char (kolon genişliği) → 400 `VALIDATION_ERROR`. **Migration YOK** (model değişmedi).
 **Efor:** M · **Açar:** T111
 
 ### WP5 — Dispute çözüm (admin)
