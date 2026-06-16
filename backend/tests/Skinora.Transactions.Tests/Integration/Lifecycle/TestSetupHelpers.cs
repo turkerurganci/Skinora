@@ -71,7 +71,7 @@ internal sealed class FakeMarketPriceProvider : Skinora.Transactions.Application
     public decimal? Price { get; set; }
 
     public Task<decimal?> TryGetMarketPriceAsync(
-        string itemClassId, string? itemInstanceId,
+        string marketHashName,
         Skinora.Shared.Enums.StablecoinType denomination, CancellationToken cancellationToken)
         => Task.FromResult(Price);
 }

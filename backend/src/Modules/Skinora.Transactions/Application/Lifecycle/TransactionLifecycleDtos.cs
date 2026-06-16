@@ -120,6 +120,7 @@ public enum AcceptTransactionStatus
     SanctionsMatch,
     WalletCooldownActive,
     BuyerNotFound,
+    AccountFlagged,
 }
 
 // ---------- POST /transactions/:id/cancel (07 §7.7) ----------

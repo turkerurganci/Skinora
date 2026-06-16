@@ -55,7 +55,8 @@ public class SettingsBootstrapTests : IntegrationTestBase
             ["SKINORA_SETTING_CANCEL_LIMIT_COUNT"] = "3",
             ["SKINORA_SETTING_CANCEL_LIMIT_PERIOD_HOURS"] = "24",
             ["SKINORA_SETTING_CANCEL_COOLDOWN_HOURS"] = "1",
-            ["SKINORA_SETTING_PRICE_DEVIATION_THRESHOLD"] = "0.25",
+            // WP4a — price_deviation_threshold now ships with a seeded default
+            // (1.0), so it is no longer a deploy-mandatory env var.
             ["SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD"] = "5000.0",
             ["SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD"] = "10",
             ["SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS"] = "24",
@@ -89,7 +90,8 @@ public class SettingsBootstrapTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task Execute_Throws_When_Required_Parameter_Missing()
     {
-        // Seed ships 21 mandatory rows; only hydrate 20 and expect fail-fast.
+        // Seed ships 20 mandatory (unconfigured) rows after WP4a seeded
+        // price_deviation_threshold; hydrate all but hot_wallet_limit → fail-fast.
         var env = AllRequiredEnvVars();
         env.Remove("SKINORA_SETTING_HOT_WALLET_LIMIT");
 

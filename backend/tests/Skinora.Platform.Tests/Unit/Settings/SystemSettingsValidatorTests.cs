@@ -59,8 +59,6 @@ public class SystemSettingsValidatorTests
     [InlineData("commission_rate", "1.5", false)]
     [InlineData("timeout_warning_ratio", "0.75", true)]
     [InlineData("timeout_warning_ratio", "1.0", false)]
-    [InlineData("price_deviation_threshold", "0.25", true)]
-    [InlineData("price_deviation_threshold", "0", false)]
     [InlineData("gas_fee_protection_ratio", "0.10", true)]
     [InlineData("gas_fee_protection_ratio", "1", false)]
     public void ValidateSingle_RatioKeys_Enforce_OpenZeroOne(string key, string value, bool expected)
@@ -79,6 +77,24 @@ public class SystemSettingsValidatorTests
     public void ValidateSingle_MinRefundThresholdRatio_AllowsAboveOne(string value, bool expected)
     {
         var result = _v.ValidateSingle("min_refund_threshold_ratio", value, "decimal");
+        Assert.Equal(expected, result.IsValid);
+    }
+
+    // ---- Range — price deviation threshold may exceed 1 (WP4a) ----
+    // deviation = |quoted-market|/market can be >100% (08 §7.3 = 282%), and the
+    // spec recommends a WIDE threshold (≥100% = ≥1.0). It is a positive ratio,
+    // NOT an open-(0,1) fraction — 1.0 and 1.5 must validate.
+
+    [Theory]
+    [InlineData("0.25", true)]
+    [InlineData("1.0", true)]
+    [InlineData("1.5", true)]
+    [InlineData("2.82", true)]
+    [InlineData("0", false)]
+    [InlineData("-1", false)]
+    public void ValidateSingle_PriceDeviationThreshold_AllowsAboveOne(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("price_deviation_threshold", value, "decimal");
         Assert.Equal(expected, result.IsValid);
     }
 

@@ -34,8 +34,7 @@ public interface IFraudPreCheckService
 {
     Task<FraudPreCheckOutcome> EvaluateAsync(
         Guid sellerId,
-        string itemClassId,
-        string? itemInstanceId,
+        string marketHashName,
         StablecoinType stablecoin,
         decimal quotedPrice,
         DateTime nowUtc,

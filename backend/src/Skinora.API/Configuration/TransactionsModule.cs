@@ -5,6 +5,7 @@ using Skinora.Admin.Application.Users;
 using Skinora.API.Services;
 using Skinora.API.Services.HotWallet;
 using Skinora.Fraud.Application.Account;
+using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
@@ -71,9 +72,16 @@ public static class TransactionsModule
         services.TryAddScoped<ISteamInventoryReader, StubSteamInventoryReader>();
         services.TryAddScoped<ISteamInventoryCacheInvalidator, NullSteamInventoryCacheInvalidator>();
 
-        // T81 forward-deferred — market price stub. Defaults to "no market
-        // signal" so the fraud pre-check never fires until T81 ships.
-        services.TryAddScoped<IMarketPriceProvider, NullMarketPriceProvider>();
+        // WP4a — wire the fraud pre-check price seam to the T81 Steam Market
+        // stack. PriceServiceMarketPriceProvider (Skinora.Fraud) bridges the
+        // Transactions IMarketPriceProvider port to Fraud's IPriceService
+        // (cache-first, rate-limited). Explicit AddScoped (not TryAdd) so it
+        // deterministically wins — a TryAdd could silently leave the rule inert
+        // (NullMarketPriceProvider). Same cross-module placement rationale as
+        // IAccountFlagChecker below. NOTE: the rule still only fires live when
+        // SteamMarket:Provider=steam-market AND price_deviation_threshold is
+        // configured (seeded default 1.0 = 100%).
+        services.AddScoped<IMarketPriceProvider, PriceServiceMarketPriceProvider>();
 
         // Cross-module: IAccountFlagChecker is declared in Skinora.Transactions
         // but implemented in Skinora.Fraud (Fraud already references

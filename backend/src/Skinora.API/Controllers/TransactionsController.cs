@@ -265,6 +265,7 @@ public sealed class TransactionsController : ControllerBase
                 or AcceptTransactionStatus.SteamIdMismatch
                 or AcceptTransactionStatus.SanctionsMatch
                 or AcceptTransactionStatus.WalletCooldownActive
+                or AcceptTransactionStatus.AccountFlagged
                 => StatusCode(StatusCodes.Status403Forbidden,
                     AcceptErrorEnvelope(outcome)),
 

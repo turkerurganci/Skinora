@@ -594,6 +594,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 ClassId: "test-class",
                 InstanceId: "test-instance",
                 Name: name,
+                MarketHashName: name,
                 IconUrl: null,
                 Exterior: null,
                 Type: null,

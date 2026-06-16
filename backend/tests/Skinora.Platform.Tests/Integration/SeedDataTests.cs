@@ -85,8 +85,9 @@ public class SeedDataTests : IntegrationTestBase
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
         // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses + T77 hot wallet monitor + TRX floor:
-        // 38 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
-        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76 + 2 T77 + 1 WP1).
+        // 39 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
+        // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76 + 2 T77 + 1 WP1
+        // + 1 WP4a price_deviation_threshold=1.0).
         // T76 hot/cold wallet addresses follow the auth.banned_countries
         // NONE-sentinel pattern: shipped configured with "NONE", treated as
         // skipped scope by ReconciliationService until production deploy
@@ -121,6 +122,7 @@ public class SeedDataTests : IntegrationTestBase
             "platform.maintenance.message",
             "platform.maintenance.planned_end",
             "platform.maintenance.type",
+            "price_deviation_threshold",
             "reconciliation.cold_wallet_address",
             "reconciliation.hot_wallet_address",
             "reconciliation.schedule_cron",
@@ -146,10 +148,12 @@ public class SeedDataTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Mandatory_Parameters_Are_Unconfigured_And_Null()
     {
-        // The remaining 21 rows have no default and must ship NULL +
+        // The remaining 20 rows have no default and must ship NULL +
         // IsConfigured = false so startup fail-fast (06 §8.9) refuses to
-        // launch until an admin or env var provides values (20 T26 base + 1 T55
-        // dormant_account_value_threshold which is admin-tuned per risk profile).
+        // launch until an admin or env var provides values (20 T26 base; T55
+        // dormant_account_value_threshold stays admin-tuned, but WP4a flipped
+        // price_deviation_threshold from Unconfigured to a seeded default 1.0,
+        // dropping the mandatory count from 21 to 20).
         // T76 reconciliation hot/cold wallet addresses follow the NONE-sentinel
         // pattern (Default("NONE")) instead of Unconfigured because their env
         // var key includes a dot which the env var provider cannot bind safely.
@@ -157,7 +161,7 @@ public class SeedDataTests : IntegrationTestBase
             .Where(s => !s.IsConfigured)
             .ToListAsync();
 
-        Assert.Equal(21, unconfigured.Count);
+        Assert.Equal(20, unconfigured.Count);
         Assert.All(unconfigured, s => Assert.Null(s.Value));
     }
 

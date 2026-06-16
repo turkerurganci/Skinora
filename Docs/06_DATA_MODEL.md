@@ -1017,6 +1017,8 @@ Admin tarafından yönetilen platform parametreleri.
    - `payment_timeout_min_minutes < payment_timeout_max_minutes`
    - `commission_rate`: `0 < x < 1`
    - `timeout_warning_ratio`: `0 < x < 1`
+   - `price_deviation_threshold`: `> 0` (sapma oranı; `|girilen−piyasa|/piyasa` 1'i aşabilir — 08 §7.3 örneği %282 — bu nedenle açık-`(0,1)` ratio **değildir**, yalnız pozitif tabanı uygulanır)
+   - `min_refund_threshold_ratio`: `> 0` (çarpan; 1'i aşar — varsayılan 2.0)
    - Monitoring süreleri: `> 0`, mantıksal sıra (24h < 7d < 30d polling aralıkları)
 3. **Uygulama noktaları:** Startup fail-fast (§8.9) hem `IsConfigured = false` hem doğrulama hatalarını yakalar. Admin güncelleme API'si de aynı doğrulamayı uygular — geçersiz değer kaydedilemez.
 
@@ -1043,7 +1045,7 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `cancel_limit_period_hours` | Limit | int | — | İptal limit periyodu |
 | `cancel_cooldown_hours` | Limit | int | — | İptal sonrası cooldown süresi |
 | `gas_fee_protection_ratio` | Commission | decimal | 0.10 | Gas fee koruma eşiği (%10) |
-| `price_deviation_threshold` | Fraud | decimal | — | Piyasa fiyat sapma eşiği |
+| `price_deviation_threshold` | Fraud | decimal | 1.0 | Piyasa fiyat sapma eşiği (oran; 1.0 = %100, WP4a). 08 §7.3 tek-kaynak varyansı için geniş tutulmasını önerir; `> 0` (open-`(0,1)` ratio değil) |
 | `high_volume_amount_threshold` | Fraud | decimal | — | Yüksek hacim tutar eşiği |
 | `high_volume_count_threshold` | Fraud | int | — | Yüksek hacim işlem sayısı eşiği |
 | `high_volume_period_hours` | Fraud | int | — | Yüksek hacim kontrol periyodu |

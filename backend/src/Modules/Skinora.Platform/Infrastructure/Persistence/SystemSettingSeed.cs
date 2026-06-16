@@ -46,7 +46,13 @@ public static class SystemSettingSeed
         Unconfigured(15, "cancel_limit_period_hours",                   "int",     "Limit",       "İptal limit periyodu"),
         Unconfigured(16, "cancel_cooldown_hours",                       "int",     "Limit",       "İptal sonrası cooldown süresi"),
         Default     (17, "gas_fee_protection_ratio",                    "decimal", "Commission",  "0.10",  "Gas fee koruma eşiği (%10)"),
-        Unconfigured(18, "price_deviation_threshold",                   "decimal", "Fraud",       "Piyasa fiyat sapma eşiği"),
+        // WP4a — seeded wide (1.0 = %100) per 08 §7.3: deviation =
+        // |quoted-market|/market is a ratio that legitimately exceeds 1, and a
+        // wide threshold absorbs Steam single-source variance. Admin-tunable
+        // (>0, NOT an open-(0,1) ratio — SystemSettingsValidator). The
+        // PRICE_DEVIATION rule fires only when both this is configured AND
+        // SteamMarket:Provider=steam-market supplies a live price.
+        Default     (18, "price_deviation_threshold",                   "decimal", "Fraud",       "1.0",   "Piyasa fiyat sapma eşiği (oran; 1.0 = %100). |girilen−piyasa|/piyasa bu oranı aşarsa işlem FLAGGED. 08 §7.3 tek-kaynak varyansı için geniş tutulmasını önerir; >0 olmalı (open-(0,1) ratio değil)."),
         Unconfigured(19, "high_volume_amount_threshold",                "decimal", "Fraud",       "Yüksek hacim tutar eşiği"),
         Unconfigured(20, "high_volume_count_threshold",                 "int",     "Fraud",       "Yüksek hacim işlem sayısı eşiği"),
         Unconfigured(21, "high_volume_period_hours",                    "int",     "Fraud",       "Yüksek hacim kontrol periyodu"),

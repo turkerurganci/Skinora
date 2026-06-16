@@ -121,6 +121,29 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Flagged_Buyer_Cannot_Accept_Returns_AccountFlagged()
+    {
+        // WP4a — an account-flagged buyer is blocked from accepting (02 §14.0).
+        // The gate fires before any wallet/state work, so the transaction stays
+        // CREATED and no outbox event is emitted (fail-fast, no DB mutation).
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(flagChecker: new StubAccountFlagChecker(true));
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.AccountFlagged, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.AccountFlagged, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.BuyerId);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
     public async Task Steam_Id_Mismatch_Rejects_With_403()
     {
         var transaction = await CreateTransactionAsync(
@@ -385,11 +408,14 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         return transaction;
     }
 
-    private TransactionAcceptanceService BuildSut(IWalletSanctionsCheck? sanctions = null) =>
+    private TransactionAcceptanceService BuildSut(
+        IWalletSanctionsCheck? sanctions = null,
+        IAccountFlagChecker? flagChecker = null) =>
         new(
             Context,
             new Trc20AddressValidator(),
             sanctions ?? new NoMatchWalletSanctionsCheck(),
+            flagChecker ?? new StubAccountFlagChecker(false),
             _outbox,
             _clock);
 
@@ -410,5 +436,16 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         public MatchingSanctionsCheck(string list) => _list = list;
         public Task<WalletSanctionsDecision> EvaluateAsync(string address, CancellationToken cancellationToken)
             => Task.FromResult(WalletSanctionsDecision.Match(_list));
+    }
+
+    // WP4a — drives the account-flag accept gate. The production
+    // AccountFlagChecker (Skinora.Fraud) queries FraudFlag rows; the gate logic
+    // under test only needs the boolean verdict.
+    private sealed class StubAccountFlagChecker : IAccountFlagChecker
+    {
+        private readonly bool _flagged;
+        public StubAccountFlagChecker(bool flagged) => _flagged = flagged;
+        public Task<bool> HasActiveAccountFlagAsync(Guid userId, CancellationToken cancellationToken)
+            => Task.FromResult(_flagged);
     }
 }

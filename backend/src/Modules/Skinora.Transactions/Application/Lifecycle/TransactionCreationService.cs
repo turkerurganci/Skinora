@@ -198,8 +198,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         var fraud = await _fraudPreCheck.EvaluateAsync(
             sellerId,
-            inventoryItem.ClassId,
-            inventoryItem.InstanceId,
+            inventoryItem.MarketHashName,
             request.Stablecoin,
             price,
             nowUtc,

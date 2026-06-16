@@ -1379,7 +1379,7 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 
 **Doğrulama:** `refundWalletAddress` merkezi doğrulama pipeline'ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (02 §12.3). Geçersiz veya yaptırımlı adres → ilgili hata.
 
-**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`, 403 `ACCOUNT_FLAGGED` (hesap-flag accept gate, 02 §14.0 — WP4a), 403 `NOT_A_PARTY` (OPEN_LINK'te satıcı kendi listesini kabul edemez, 02 §6.2)
 
 ### 7.7 T7 — `POST /transactions/:id/cancel`
 
