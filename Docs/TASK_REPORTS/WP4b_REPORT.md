@@ -81,9 +81,9 @@ Diğer integration test (regresyon geniş kapsam) → CI authoritative.
 ## Commit & PR
 
 - Branch: `task/WP4b-fraud-coverage-completeness`
-- Commit: `<impl>` — WP4b: Fraud kapsam tamlığı
-- PR: #<açılıyor>
-- CI: ⏳ bekleniyor
+- Commit: `35fb09f` — WP4b: Fraud kapsam tamlığı — retro-scan + FLAGGED allocation + note-limit + accept-timeout doğrulama
+- PR: [#173](https://github.com/turkerurganci/Skinora/pull/173)
+- CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
 
