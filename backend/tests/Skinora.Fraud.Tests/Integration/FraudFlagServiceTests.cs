@@ -1,8 +1,10 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Fraud.Application.Flags;
+using Skinora.Fraud.Tests.TestSupport;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Platform.Application.Audit;
@@ -16,7 +18,9 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
+using Microsoft.Extensions.Options;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -340,6 +344,99 @@ public class FraudFlagServiceTests : IntegrationTestBase
         Assert.Equal(ReviewStatus.PENDING, refreshedFlag.Status);
     }
 
+    // ── WP4b #4 — note max-length validation ─────────────────────────────
+
+    [Fact]
+    public async Task Approve_NoteTooLong_ReturnsValidationFailed_WithoutMutating()
+    {
+        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
+            status: TransactionStatus.FLAGGED);
+        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
+
+        var sut = BuildSut();
+        var longNote = new string('x', FraudFlagService.MaxNoteLength + 1);
+        var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, longNote, CancellationToken.None);
+
+        Assert.IsType<ApproveFlagOutcome.ValidationFailed>(outcome);
+
+        // Rejected before any state change — flag stays PENDING, tx stays FLAGGED.
+        var refreshedFlag = await Context.Set<FraudFlag>().FirstAsync(f => f.Id == flag.Id);
+        Assert.Equal(ReviewStatus.PENDING, refreshedFlag.Status);
+        Assert.Null(refreshedFlag.AdminNote);
+        var refreshedTx = await Context.Set<Transaction>().FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.FLAGGED, refreshedTx.Status);
+    }
+
+    [Fact]
+    public async Task Approve_NoteAtMaxLength_IsAccepted()
+    {
+        var flag = await StageAccountFlagDirectlyAsync(_seller.Id);
+
+        var sut = BuildSut();
+        var note = new string('x', FraudFlagService.MaxNoteLength);
+        var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, note, CancellationToken.None);
+
+        Assert.IsType<ApproveFlagOutcome.Success>(outcome);
+        var refreshedFlag = await Context.Set<FraudFlag>().FirstAsync(f => f.Id == flag.Id);
+        Assert.Equal(note, refreshedFlag.AdminNote);
+    }
+
+    // ── WP4b #3 — eager payment-address allocation on approve ─────────────
+
+    [Fact]
+    public async Task Approve_TransactionFlag_AllocatesPaymentAddress_PostCommit()
+    {
+        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
+            status: TransactionStatus.FLAGGED);
+        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
+
+        var allocator = new StubPaymentAddressAllocator();
+        var sut = BuildSut(allocator);
+        var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, "ok", CancellationToken.None);
+
+        Assert.IsType<ApproveFlagOutcome.Success>(outcome);
+        Assert.Equal(new[] { tx.Id }, allocator.Allocations);
+    }
+
+    [Fact]
+    public async Task Approve_AccountFlag_DoesNotAllocatePaymentAddress()
+    {
+        var flag = await StageAccountFlagDirectlyAsync(_seller.Id);
+
+        var allocator = new StubPaymentAddressAllocator();
+        var sut = BuildSut(allocator);
+        await sut.ApproveAsync(flag.Id, _admin.Id, note: null, CancellationToken.None);
+
+        // Account flag → no transaction promotion → no allocation.
+        Assert.Empty(allocator.Allocations);
+    }
+
+    [Fact]
+    public async Task Approve_TransactionFlag_AllocatorThrows_ApprovalStillCommits()
+    {
+        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
+            status: TransactionStatus.FLAGGED);
+        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
+
+        var allocator = new StubPaymentAddressAllocator
+        {
+            Throw = new InvalidOperationException("sidecar down"),
+        };
+        var sut = BuildSut(allocator);
+        var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, "ok", CancellationToken.None);
+
+        // Best-effort: a sidecar outage must NOT turn the committed approval
+        // into a failure — EnsurePaymentAddressJob recovers the address later.
+        var success = Assert.IsType<ApproveFlagOutcome.Success>(outcome);
+        Assert.Equal(TransactionStatus.CREATED, success.Result.TransactionStatus);
+        Assert.Contains(tx.Id, allocator.Allocations);
+
+        var refreshedTx = await Context.Set<Transaction>().FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.CREATED, refreshedTx.Status);
+        var refreshedFlag = await Context.Set<FraudFlag>().FirstAsync(f => f.Id == flag.Id);
+        Assert.Equal(ReviewStatus.APPROVED, refreshedFlag.Status);
+    }
+
     // ── RejectAsync ──────────────────────────────────────────────────────
 
     [Fact]
@@ -380,16 +477,88 @@ public class FraudFlagServiceTests : IntegrationTestBase
         Assert.Equal("Confirmed", refreshedFlag.AdminNote);
     }
 
+    [Fact]
+    public async Task Reject_NoteTooLong_ReturnsValidationFailed_WithoutMutating()
+    {
+        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
+            status: TransactionStatus.FLAGGED);
+        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
+
+        var sut = BuildSut();
+        var longNote = new string('x', FraudFlagService.MaxNoteLength + 1);
+        var outcome = await sut.RejectAsync(flag.Id, _admin.Id, longNote, CancellationToken.None);
+
+        Assert.IsType<RejectFlagOutcome.ValidationFailed>(outcome);
+
+        // Rejected before any state change — flag stays PENDING, tx stays FLAGGED.
+        var refreshedFlag = await Context.Set<FraudFlag>().FirstAsync(f => f.Id == flag.Id);
+        Assert.Equal(ReviewStatus.PENDING, refreshedFlag.Status);
+        var refreshedTx = await Context.Set<Transaction>().FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.FLAGGED, refreshedTx.Status);
+    }
+
+    // ── WP4b #2 — FLAGGED-approve accept-deadline enforced by the scanner ──
+    // 05 §4.4: accept-deadlines are poller-driven (no per-tx Hangfire job — only
+    // ITEM_ESCROWED gets one). This proves the AcceptDeadline that ApproveAsync
+    // stamps is enforced by DeadlineScannerJob exactly like a native CREATED tx,
+    // so no new per-tx timeout job is needed (T54-FlaggedApproveNoTimeoutJob).
+
+    [Fact]
+    public async Task FlaggedApprove_AcceptDeadline_IsEnforcedByDeadlineScanner()
+    {
+        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
+            status: TransactionStatus.FLAGGED);
+        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
+
+        var approve = await BuildSut().ApproveAsync(flag.Id, _admin.Id, "ok", CancellationToken.None);
+        Assert.IsType<ApproveFlagOutcome.Success>(approve);
+
+        // Advance past the accept deadline and run the (poller) scanner.
+        _clock.Advance(TimeSpan.FromMinutes(FraudFlagService.DefaultAcceptTimeoutMinutes + 1));
+        var scanner = new DeadlineScannerJob(
+            Context,
+            new NoopJobScheduler(),
+            _clock,
+            new NoOpTimeoutSideEffectPublisher(),
+            new NoOpPostCancelMonitorStarter(),
+            Options.Create(new TimeoutSchedulingOptions()),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await scanner.ScanAndRescheduleAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
+        Assert.Equal(CancelledByType.TIMEOUT, persisted.CancelledBy);
+    }
+
+    private sealed class NoOpTimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
+    {
+        public Task PublishAsync(
+            Transaction transaction, TransactionStatus previousStatus,
+            CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class NoOpPostCancelMonitorStarter : IPostCancelMonitorStarter
+    {
+        public Task RequestStartAsync(
+            Guid transactionId, DateTime cancelledAt,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private FraudFlagService BuildSut()
+    private FraudFlagService BuildSut(StubPaymentAddressAllocator? allocator = null)
     {
         var auditLogger = new AuditLogger(Context, _clock);
         var limits = new TransactionLimitsProvider(Context);
         var scheduler = new NoopJobScheduler();
         var scheduling = new TimeoutSchedulingService(Context, scheduler, _clock);
         var freeze = new TimeoutFreezeService(Context, scheduler, scheduling, _clock);
-        return new FraudFlagService(Context, auditLogger, _outbox, limits, freeze, _clock);
+        return new FraudFlagService(
+            Context, auditLogger, _outbox, limits, freeze,
+            allocator ?? new StubPaymentAddressAllocator(),
+            _clock,
+            NullLogger<FraudFlagService>.Instance);
     }
 
     private async Task<Transaction> CreateActiveTransactionAsync(

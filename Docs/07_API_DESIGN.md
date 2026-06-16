@@ -1793,14 +1793,14 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 { "note": "Fiyat makul, geçmişi temiz" }
 ```
 
-`note`: Opsiyonel.
+`note`: Opsiyonel. Maksimum 2000 karakter (06 §3.12 `AdminNote` kolon genişliği); aşılırsa 400 `VALIDATION_ERROR`.
 
 **Response (200) `data`:**
 ```json
 { "reviewStatus": "APPROVED", "transactionStatus": "CREATED", "reviewedAt": "..." }
 ```
 
-**Hatalar:** 409 `ALREADY_REVIEWED`, 404 `FLAG_NOT_FOUND`
+**Hatalar:** 409 `ALREADY_REVIEWED`, 404 `FLAG_NOT_FOUND`, 400 `VALIDATION_ERROR` (note > 2000 karakter)
 
 > **UI terminoloji notu:** API endpoint `/approve` kullanır, UI'da bu aksiyonun karşılığı **"İşleme Devam Et"** butonudur (flag false positive). Frontend mapping: `approve` → "İşleme Devam Et" (04 §S14).
 
@@ -1815,12 +1815,14 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 { "note": "Fiyat manipülasyonu şüphesi" }
 ```
 
+`note`: Opsiyonel. Maksimum 2000 karakter; aşılırsa 400 `VALIDATION_ERROR`.
+
 **Response (200) `data`:**
 ```json
 { "reviewStatus": "REJECTED", "transactionStatus": "CANCELLED_ADMIN", "reviewedAt": "..." }
 ```
 
-**Hatalar:** AD4 ile aynı.
+**Hatalar:** AD4 ile aynı (404 `FLAG_NOT_FOUND`, 409 `ALREADY_REVIEWED`, 400 `VALIDATION_ERROR`).
 
 ### 9.6 AD6 — `GET /admin/transactions`
 

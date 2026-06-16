@@ -31,7 +31,7 @@
 | 🟡 | steam-sidecar-stubs | Trade-hold + MA checker gerçek impl yok (fail-closed) | DELIVERY/WRONG_ITEM auto-resolve |
 | 🟡 | item-refund-consumers | Yalnız `BUYER_REFUND` kopuk (diğer 4 iade inline/T106a bağlı) → WP2 | Alıcı iadesi (delivery-timeout + admin-cancel) |
 | 🟡 | T50-OutageFreezeCallers | Outage/degradation bulk-freeze motoru var, çağıran yok | Outage dayanıklılığı |
-| 🟡 | T56-MultiAccountRetroScan | Multi-account tespiti yalnız wallet-update'te; retroaktif tarama yok | Fraud tespit kapsamı |
+| ✅ | T56-MultiAccountRetroScan | **ÇÖZÜLDÜ → WP4b** — günlük `MultiAccountRetroScanJob` cüzdanlı aktif kullanıcıları retroaktif tarar (`IMultiAccountDetector` yeniden çağrılır) | — |
 | 🟡 | T61-SteamTransitionRealtimePush | Steam pipeline geçişlerinde SignalR push yok | — (T96 refetch maskeliyor) |
 | 🟡 | T38-AdminFlagAlert-FlagId | `Notification` entity'de `FlagId` yok → admin flag-link bozuk | Admin flag inbox linki |
 | 🟡 | T30-TosVersionReprompt | ToS versiyon değişiminde re-prompt yok | ToS yeniden onay akışı |
@@ -91,7 +91,7 @@
 | 🟡 | steam-sidecar-stubs | Gerçek stub yalnız `StubTradeHoldChecker` (Available=true) + `StubMobileAuthenticatorCheck`; **envanter reader gerçek** (`SidecarSteamInventoryReader` T67, `SteamModule.cs:56` swap) → WP6 | backend-gap | T35/T31/T58 K |
 | 🟡 | item-refund-consumers | **Yalnız `BUYER_REFUND` kopuk** (delivery-timeout + admin-cancel `PaymentRefundToBuyerRequestedEvent` yayınlar, satır-üreten consumer yok). Wrong-token/late-payment/excess/incorrect inline `QueueRefundIntent` üretir; item-iade T106a bağlı → **WP2** | backend-gap | T49/T51/T71 K |
 | 🟡 | T50-OutageFreezeCallers 🆕 | `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` `FreezeManyAsync`/`ResumeManyAsync` çağıransız (02 §3.3 auto-detect + admin manual) | backend-gap | `T50_REPORT.md:124-125` |
-| 🟡 | T56-MultiAccountRetroScan 🆕 | `MultiAccountDetector` yalnız wallet-update'te; retroaktif IP/cihaz/login taraması yok | backend-gap | `T56_REPORT.md:150` |
+| ✅ | T56-MultiAccountRetroScan 🆕 | **ÇÖZÜLDÜ → WP4b** — günlük retro-scan Hangfire job (`MultiAccountRetroScanJob`, `AutoUnsuspendJob` deseni) | backend-gap | `T56_REPORT.md:150` |
 | 🟡 | T61-SteamTransitionRealtimePush 🆕 | Steam pipeline geçişleri için `TransactionStatusChanged` push yok (her biri T67 event'iyle RealtimeConsumer ister) | backend-gap | `T61_REPORT.md:146` (K2) |
 | 🟡 | T38-AdminFlagAlert-FlagId 🆕 | `Notification` entity'de `FlagId` kolonu yok (yalnız `TransactionId`); admin flag-link reinterpret/extend gerek | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
 | 🟡 | T30-TosVersionReprompt 🆕 | ToS tek-versiyon; versiyon değişiminde kabul etmiş kullanıcı yeniden sorulmuyor | backend-gap | `T30_REPORT.md:155` |
@@ -105,9 +105,9 @@
 | calculator-caller-wiring | `CalculateRefund`/`SellerPayout`/`IRefundDecisionService` tüketilmiyor; gas/refund ratios deferred; AD7 gas split=0 | T52/T53/T63 K |
 | reputation-aggregator-trigger | `IReputationAggregator.RecomputeAsync`/cooldown + state-machine OnEntry/History caller'ları bağlı değil | T43/T44/T68 K |
 | blockchain-monitor-consumers | `payment-confirmed`→PAYMENT_RECEIVED **bağlı** (finality webhook); kalan: mempool `PaymentDetected` consumer (by-design opsiyonel) + DROPPED metrik → WP16 | T61/T71/T72 K |
-| flagged-allocation-detail | Payment-address allocate yalnız CREATED'de (FLAGGED-approval atlanıyor); tx-detail payment/payout/refund/dispute alt-DTO'ları null | T70/T46 K |
+| flagged-allocation-detail | **payment-address ✅ ÇÖZÜLDÜ → WP4b** (`FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync`, best-effort); **tx-detail payment/payout/refund/dispute alt-DTO'ları null kısmı → WP13** | T70/T46 K |
 | emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; kalan: post-payment refund tetik → WP2, dispute-queue surfacing → WP5 | T50/T51/T58 K |
-| fraud-acceptance-gate | `AcceptAsync`'te `IAccountFlagChecker` gate yok; otomatik sinyal üreticileri + background scan + note max-length | T54/T56 K |
+| fraud-acceptance-gate | **✅ ÇÖZÜLDÜ** — accept-gate → WP4a; background scan (retro-scan) + note max-length → WP4b. (Sinyal üreticileri PRICE_DEVIATION T45/multi-account T56 zaten mevcut) | T54/T56 K |
 | energy-gas-token-config | Statik gas fee, USDC/USDT 1:1, hardcoded 6-decimal, HD cache yok, tek-sweeper (T74 multi-sweeper buraya katlanır), 20-blok finality yok | T72-T76 K |
 | setting-sidecar-propagation | Admin `PATCH /admin/settings` `blockchain.*` + cadence/cron sidecar'a runtime yansımıyor (env restart gerek) | T74/T75/T76/T77 K |
 | admin-alert-consumers | `RefundBlockedAdminAlert`/`TransferDispatchFailed`/stranded-delegation/STOPPED/spam-token/payout-issue alert kanal consumer'ları yok | T53/T60/T72-T77 K |
@@ -121,8 +121,8 @@
 | misc-user-features | Per-tx refund override, trade-offer URL DTO, multi-account user UI, brute-force lock, delete atomicity, OPEN_LINK race | T90/T29/T36/T46 K |
 | timeout-warning-setting | `DefaultTimeoutWarningPercent`=75 private const; `accept_timeout_minutes` seed'siz | T83a/T45 K |
 | T61-AdminHubJoinBypass 🆕 | `TransactionsHub.JoinTransaction` admin bypass yok (yalnız seller/buyer) | `T61_REPORT.md:147` (K3) |
-| T54-FlaggedApproveNoTimeoutJob 🆕 | `ApproveAsync` (FLAGGED→CREATED) per-tx Hangfire accept-timeout job kaydetmiyor; poll'a (~15s) güveniyor | `T54_REPORT.md:234` |
-| T54-FraudNoteNoMaxLength 🆕 | FraudFlag approve/reject admin notu max-length validasyonu yok | `T54_REPORT.md:194,219` |
+| T54-FlaggedApproveNoTimeoutJob 🆕 | **✅ ÇÖZÜLDÜ-by-design → WP4b** — 05 §4.4 + 06 §3.5:650: accept-deadline'lar **bilinçli olarak poller-driven** (yalnız ITEM_ESCROWED per-tx job alır); `DeadlineScannerJob` `ApproveAsync`'in setlediği `AcceptDeadline`'ı zaten enforce ediyor (regresyon testi eklendi). Yeni per-tx job spec'i ihlal ederdi → kurulmadı | `T54_REPORT.md:234` |
+| T54-FraudNoteNoMaxLength 🆕 | **✅ ÇÖZÜLDÜ → WP4b** — `ApproveAsync`/`RejectAsync` 2000 char (kolon genişliği) validasyonu → 400 `VALIDATION_ERROR`; rapordaki "1000" stale | `T54_REPORT.md:194,219` |
 | T58-canDisputeEnvelopeBit 🆕 | `availableActions.canDispute` tek-bit; per-type dispute uygunluğunu ifade edemiyor | `T58_REPORT.md:203` |
 | T46-OpenLinkConcurrentAcceptRace 🆕 | Eşzamanlı OPEN_LINK accept'te race-loser `DbUpdateConcurrencyException`→HTTP 500 (409 ALREADY_ACCEPTED yerine) | `T46_REPORT.md:145` |
 | T40-PermClaimCache 🆕 | JWT permission-claim resolver her login+refresh'te DB lookup; per-user TTL cache deferred ("sonraki sprint") | `T40_REPORT.md:113` |

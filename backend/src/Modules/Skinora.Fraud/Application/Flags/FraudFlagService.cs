@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Platform.Application.Audit;
 using Skinora.Shared.Enums;
@@ -6,6 +7,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -25,12 +27,23 @@ public sealed class FraudFlagService : IFraudFlagService
     public const int DefaultAcceptTimeoutMinutes =
         TransactionCreationService.DefaultAcceptTimeoutMinutes;
 
+    /// <summary>
+    /// Maximum trimmed length of an admin review note — matches the
+    /// <c>AdminNote nvarchar(2000)</c> column (FraudFlagConfiguration, 06 §3.12)
+    /// and the sibling <c>AdminUserSuspensionService</c> guard, so an over-long
+    /// note returns a clean 400 VALIDATION_ERROR instead of a SaveChanges
+    /// truncation 500 (07 §9.4–§9.5).
+    /// </summary>
+    public const int MaxNoteLength = 2000;
+
     private readonly AppDbContext _db;
     private readonly IAuditLogger _auditLogger;
     private readonly IOutboxService _outbox;
     private readonly ITransactionLimitsProvider _limits;
     private readonly ITimeoutFreezeService _freeze;
+    private readonly IPaymentAddressAllocator _paymentAddressAllocator;
     private readonly TimeProvider _clock;
+    private readonly ILogger<FraudFlagService> _logger;
 
     public FraudFlagService(
         AppDbContext db,
@@ -38,14 +51,18 @@ public sealed class FraudFlagService : IFraudFlagService
         IOutboxService outbox,
         ITransactionLimitsProvider limits,
         ITimeoutFreezeService freeze,
-        TimeProvider clock)
+        IPaymentAddressAllocator paymentAddressAllocator,
+        TimeProvider clock,
+        ILogger<FraudFlagService> logger)
     {
         _db = db;
         _auditLogger = auditLogger;
         _outbox = outbox;
         _limits = limits;
         _freeze = freeze;
+        _paymentAddressAllocator = paymentAddressAllocator;
         _clock = clock;
+        _logger = logger;
     }
 
     // ── Staging path (caller-owned SaveChanges) ──────────────────────────
@@ -174,60 +191,83 @@ public sealed class FraudFlagService : IFraudFlagService
         if (flag.Status != ReviewStatus.PENDING)
             return new ApproveFlagOutcome.AlreadyReviewed();
 
+        var normalizedNote = NormalizeNote(note);
+        if (normalizedNote is { Length: > MaxNoteLength })
+            return new ApproveFlagOutcome.ValidationFailed(
+                $"note must not exceed {MaxNoteLength} characters.");
+
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         TransactionStatus? finalTxStatus = null;
 
-        await using var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken);
+        // Set when a TRANSACTION_PRE_CREATE flag promotes its transaction
+        // FLAGGED → CREATED, so the post-commit eager payment-address
+        // allocation (WP4b) runs only for that path.
+        Guid? promotedTransactionId = null;
 
-        if (flag.Scope == FraudFlagScope.TRANSACTION_PRE_CREATE)
+        await using (var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken))
         {
-            var transaction = await _db.Set<Transaction>()
-                .FirstOrDefaultAsync(
-                    t => t.Id == flag.TransactionId!.Value && !t.IsDeleted,
-                    cancellationToken);
-            if (transaction is null)
-                return new ApproveFlagOutcome.TransactionNotFlagged();
-            if (transaction.Status != TransactionStatus.FLAGGED)
-                return new ApproveFlagOutcome.TransactionNotFlagged();
+            if (flag.Scope == FraudFlagScope.TRANSACTION_PRE_CREATE)
+            {
+                var transaction = await _db.Set<Transaction>()
+                    .FirstOrDefaultAsync(
+                        t => t.Id == flag.TransactionId!.Value && !t.IsDeleted,
+                        cancellationToken);
+                if (transaction is null)
+                    return new ApproveFlagOutcome.TransactionNotFlagged();
+                if (transaction.Status != TransactionStatus.FLAGGED)
+                    return new ApproveFlagOutcome.TransactionNotFlagged();
 
-            var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
-            machine.Fire(TransactionTrigger.AdminApprove);
+                var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
+                machine.Fire(TransactionTrigger.AdminApprove);
 
-            var limits = await _limits.GetAsync(cancellationToken);
-            transaction.AcceptDeadline = nowUtc + TimeSpan.FromMinutes(
-                limits.AcceptTimeoutMinutes ?? DefaultAcceptTimeoutMinutes);
+                var limits = await _limits.GetAsync(cancellationToken);
+                transaction.AcceptDeadline = nowUtc + TimeSpan.FromMinutes(
+                    limits.AcceptTimeoutMinutes ?? DefaultAcceptTimeoutMinutes);
 
-            finalTxStatus = transaction.Status;
+                finalTxStatus = transaction.Status;
+                promotedTransactionId = transaction.Id;
+            }
+
+            flag.Status = ReviewStatus.APPROVED;
+            flag.ReviewedAt = nowUtc;
+            flag.ReviewedByAdminId = adminId;
+            flag.AdminNote = normalizedNote;
+
+            await _auditLogger.LogAsync(new AuditLogEntry(
+                UserId: flag.UserId,
+                ActorId: adminId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.FRAUD_FLAG_APPROVED,
+                EntityType: nameof(FraudFlag),
+                EntityId: flag.Id.ToString(),
+                OldValue: ReviewStatus.PENDING.ToString(),
+                NewValue: ReviewStatus.APPROVED.ToString(),
+                IpAddress: null), cancellationToken);
+
+            await _outbox.PublishAsync(new FraudFlagApprovedEvent(
+                EventId: Guid.NewGuid(),
+                FraudFlagId: flag.Id,
+                UserId: flag.UserId,
+                TransactionId: flag.TransactionId,
+                Scope: flag.Scope,
+                Type: flag.Type,
+                ReviewedByAdminId: adminId,
+                OccurredAt: nowUtc), cancellationToken);
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await dbTx.CommitAsync(cancellationToken);
         }
 
-        flag.Status = ReviewStatus.APPROVED;
-        flag.ReviewedAt = nowUtc;
-        flag.ReviewedByAdminId = adminId;
-        flag.AdminNote = NormalizeNote(note);
-
-        await _auditLogger.LogAsync(new AuditLogEntry(
-            UserId: flag.UserId,
-            ActorId: adminId,
-            ActorType: ActorType.ADMIN,
-            Action: AuditAction.FRAUD_FLAG_APPROVED,
-            EntityType: nameof(FraudFlag),
-            EntityId: flag.Id.ToString(),
-            OldValue: ReviewStatus.PENDING.ToString(),
-            NewValue: ReviewStatus.APPROVED.ToString(),
-            IpAddress: null), cancellationToken);
-
-        await _outbox.PublishAsync(new FraudFlagApprovedEvent(
-            EventId: Guid.NewGuid(),
-            FraudFlagId: flag.Id,
-            UserId: flag.UserId,
-            TransactionId: flag.TransactionId,
-            Scope: flag.Scope,
-            Type: flag.Type,
-            ReviewedByAdminId: adminId,
-            OccurredAt: nowUtc), cancellationToken);
-
-        await _db.SaveChangesAsync(cancellationToken);
-        await dbTx.CommitAsync(cancellationToken);
+        // ---------- Post-commit: eager payment-address allocation (WP4b) ----------
+        // The FLAGGED → CREATED transition has committed, so the allocator's
+        // CREATED/ACCEPTED eligibility guard now passes. Mirrors the inline
+        // allocation TransactionCreationService runs for natively-CREATED
+        // transactions — whose comment names this approve path the "future task
+        // entry point". Best-effort/non-fatal: a sidecar outage must never turn
+        // a committed approval into a 500 — EnsurePaymentAddressJob recovers any
+        // transaction this inline call could not allocate.
+        if (promotedTransactionId is { } promotedTxId)
+            await TryAllocatePaymentAddressAsync(promotedTxId, cancellationToken);
 
         return new ApproveFlagOutcome.Success(new FraudFlagReviewResultDto(
             ReviewStatus: ReviewStatus.APPROVED,
@@ -244,6 +284,11 @@ public sealed class FraudFlagService : IFraudFlagService
             return new RejectFlagOutcome.NotFound();
         if (flag.Status != ReviewStatus.PENDING)
             return new RejectFlagOutcome.AlreadyReviewed();
+
+        var normalizedNote = NormalizeNote(note);
+        if (normalizedNote is { Length: > MaxNoteLength })
+            return new RejectFlagOutcome.ValidationFailed(
+                $"note must not exceed {MaxNoteLength} characters.");
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         TransactionStatus? finalTxStatus = null;
@@ -270,7 +315,7 @@ public sealed class FraudFlagService : IFraudFlagService
         flag.Status = ReviewStatus.REJECTED;
         flag.ReviewedAt = nowUtc;
         flag.ReviewedByAdminId = adminId;
-        flag.AdminNote = NormalizeNote(note);
+        flag.AdminNote = normalizedNote;
 
         await _auditLogger.LogAsync(new AuditLogEntry(
             UserId: flag.UserId,
@@ -369,6 +414,43 @@ public sealed class FraudFlagService : IFraudFlagService
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Best-effort eager payment-address allocation for a just-approved
+    /// transaction (WP4b). Runs OUTSIDE the approve DB transaction (the
+    /// FLAGGED → CREATED transition must be committed before the allocator's
+    /// CREATED/ACCEPTED eligibility guard passes). Mirrors
+    /// <see cref="Skinora.Users.Application.Wallet"/>'s swallow pattern: rethrow
+    /// cancellation, swallow everything else so a sidecar outage never turns a
+    /// committed approval into a 500 — <c>EnsurePaymentAddressJob</c> recovers
+    /// any transaction this call could not allocate.
+    /// </summary>
+    private async Task TryAllocatePaymentAddressAsync(
+        Guid transactionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var allocation = await _paymentAddressAllocator.AllocateAsync(
+                transactionId, cancellationToken);
+            if (allocation.Status is not PaymentAddressAllocationStatus.Created
+                and not PaymentAddressAllocationStatus.AlreadyExisted)
+            {
+                _logger.LogWarning(
+                    "Inline payment-address allocation skipped for approved transaction {TransactionId}: {Status} — {Message}. EnsurePaymentAddressJob will retry.",
+                    transactionId, allocation.Status, allocation.ErrorMessage);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Inline payment-address allocation threw for approved transaction {TransactionId}. EnsurePaymentAddressJob will retry.",
+                transactionId);
+        }
     }
 
     private static string? NormalizeNote(string? note)

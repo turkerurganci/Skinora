@@ -16,6 +16,9 @@ public abstract record ApproveFlagOutcome
 
     /// <summary>Linked transaction is no longer in <c>FLAGGED</c> state.</summary>
     public sealed record TransactionNotFlagged : ApproveFlagOutcome;
+
+    /// <summary>Note exceeded the max length (07 §9.4: 400 VALIDATION_ERROR).</summary>
+    public sealed record ValidationFailed(string Message) : ApproveFlagOutcome;
 }
 
 /// <summary>Result of a <c>FraudFlagService.RejectAsync</c> call.</summary>
@@ -34,4 +37,7 @@ public abstract record RejectFlagOutcome
 
     /// <summary>Linked transaction is no longer in <c>FLAGGED</c> state.</summary>
     public sealed record TransactionNotFlagged : RejectFlagOutcome;
+
+    /// <summary>Note exceeded the max length (07 §9.5: 400 VALIDATION_ERROR).</summary>
+    public sealed record ValidationFailed(string Message) : RejectFlagOutcome;
 }
