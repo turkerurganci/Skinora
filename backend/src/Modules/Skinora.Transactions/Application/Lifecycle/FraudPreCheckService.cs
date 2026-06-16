@@ -36,8 +36,7 @@ public sealed class FraudPreCheckService : IFraudPreCheckService
 
     public async Task<FraudPreCheckOutcome> EvaluateAsync(
         Guid sellerId,
-        string itemClassId,
-        string? itemInstanceId,
+        string marketHashName,
         StablecoinType stablecoin,
         decimal quotedPrice,
         DateTime nowUtc,
@@ -47,7 +46,7 @@ public sealed class FraudPreCheckService : IFraudPreCheckService
         // onto Transaction.MarketPriceAtCreation regardless of which rule
         // (if any) trips, so admins always see the comparison value.
         var marketPrice = await _marketPrice.TryGetMarketPriceAsync(
-            itemClassId, itemInstanceId, stablecoin, cancellationToken);
+            marketHashName, stablecoin, cancellationToken);
 
         // ---------- Rule 1: PRICE_DEVIATION (most specific) ----------
         var priceDeviation = await EvaluatePriceDeviationAsync(

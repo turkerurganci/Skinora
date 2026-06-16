@@ -26,11 +26,24 @@ public interface ISteamInventoryReader
 /// <c>ItemClassId</c>, <c>ItemName</c>, etc.) plus the tradeability flag
 /// enforced before <c>POST /transactions</c> succeeds (03 §2.2 step 8).
 /// </summary>
+/// <remarks>
+/// <para>
+/// <c>MarketHashName</c> is the canonical Steam market key (e.g.
+/// "AK-47 | Redline (Field-Tested)") — distinct from the display
+/// <c>Name</c> ("AK-47 | Redline"), which drops the wear/variant suffix and
+/// is locale-dependent. WP4a threads it from the sidecar (which already
+/// merges it from the item descriptions) into the fraud pre-check so the
+/// PRICE_DEVIATION rule can look up the market price. It is consumed
+/// transiently at creation and is <em>not</em> a persisted 06 §3.5 column —
+/// the price rule runs only at creation (02 §14.4), never at accept.
+/// </para>
+/// </remarks>
 public sealed record InventoryItemSnapshot(
     string AssetId,
     string ClassId,
     string? InstanceId,
     string Name,
+    string MarketHashName,
     string? IconUrl,
     string? Exterior,
     string? Type,

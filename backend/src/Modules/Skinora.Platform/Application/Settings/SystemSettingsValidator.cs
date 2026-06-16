@@ -196,6 +196,20 @@ public sealed class SystemSettingsValidator
             return null;
         }
 
+        // WP4a — price_deviation_threshold is a deviation ratio that
+        // legitimately exceeds 1: |quoted - market| / market can be > 100%
+        // (08 §7.3 worked example is 282%), and the spec recommends a WIDE
+        // threshold (≥ 100%, i.e. ≥ 1.0) to absorb Steam single-source
+        // variance. It is therefore NOT an open-(0,1) ratio key — only the
+        // positive floor applies (mirrors min_refund_threshold_ratio above).
+        if (key == "price_deviation_threshold")
+        {
+            var d = decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
+            if (d <= 0m)
+                return $"{key} must be greater than 0 (got {value}).";
+            return null;
+        }
+
         // T63a — platform.maintenance.type must be one of the documented enum
         // values or the "NONE" sentinel (07 §10.2).
         if (key == "platform.maintenance.type")
@@ -250,11 +264,13 @@ public sealed class SystemSettingsValidator
         return null;
     }
 
+    // NOTE: price_deviation_threshold is intentionally NOT here — it is a
+    // deviation ratio that legitimately exceeds 1 (see the explicit >0 branch
+    // in ValidateRange). The open-(0,1) keys below are genuine fractions.
     private static bool IsRatioKey(string key) => key
         is "commission_rate"
         or "gas_fee_protection_ratio"
-        or "timeout_warning_ratio"
-        or "price_deviation_threshold";
+        or "timeout_warning_ratio";
 
     // ---- Stage 3: cross-key helpers ----
 

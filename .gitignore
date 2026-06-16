@@ -31,6 +31,9 @@ publish/
 *.swp
 *.swo
 *~
+# VS Code: per-developer settings stay local (incl. Claude Code permission mode).
+# Shared .vscode files (extensions.json, launch.json) can be force-added if needed.
+.vscode/settings.json
 
 # OS
 Thumbs.db

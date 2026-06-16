@@ -27,6 +27,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     private readonly AppDbContext _db;
     private readonly ITrc20AddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
+    private readonly IAccountFlagChecker _flagChecker;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
 
@@ -34,12 +35,14 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         AppDbContext db,
         ITrc20AddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
+        IAccountFlagChecker flagChecker,
         IOutboxService outbox,
         TimeProvider clock)
     {
         _db = db;
         _addressValidator = addressValidator;
         _sanctions = sanctions;
+        _flagChecker = flagChecker;
         _outbox = outbox;
         _clock = clock;
     }
@@ -75,6 +78,22 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             return Failure(AcceptTransactionStatus.BuyerNotFound,
                 TransactionErrorCodes.AccountFlagged,
                 "Buyer not found.");
+
+        // WP4a — account-flag accept gate. 02 §14.0 (line 320): an account
+        // flag blocks the flagged user's own fund-flow actions, explicitly
+        // including "işlem kabul etme". This promotes the create-path seller
+        // gate (TransactionEligibilityService.cs:56 → TransactionCreationService)
+        // to the buyer/accept side, where the flag was previously never
+        // consulted. Buyer-only by design (owner decision): a flagged account's
+        // *own* accept is blocked; an existing active tx whose counterparty was
+        // later flagged still continues (02 §14.0). Fail-fast here — after the
+        // buyer is resolved but before the wallet/sanctions/cooldown work and
+        // before the BuyerId/BuyerRefundAddress mutations (Stage 6) — so a
+        // flagged accept makes no DB write (Failure() emits nothing).
+        if (await _flagChecker.HasActiveAccountFlagAsync(buyerId, cancellationToken))
+            return Failure(AcceptTransactionStatus.AccountFlagged,
+                TransactionErrorCodes.AccountFlagged,
+                "Account is flagged and cannot accept transactions (02 §14.0).");
 
         // ---------- Stage 2: state guard (CREATED only) ----------
         if (transaction.Status == TransactionStatus.ACCEPTED)

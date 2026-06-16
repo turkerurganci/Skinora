@@ -48,6 +48,11 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     ClassId: item.ClassId,
                     InstanceId: item.InstanceId,
                     Name: item.Name,
+                    // WP4a — carry the canonical Steam market key through to the
+                    // fraud pre-check price lookup (08 §7.3). The sidecar already
+                    // merged it from the item descriptions; it was previously
+                    // dropped here, leaving PRICE_DEVIATION without a usable key.
+                    MarketHashName: item.MarketHashName,
                     IconUrl: item.ImageUrl,
                     Exterior: item.Wear,
                     Type: item.Type,

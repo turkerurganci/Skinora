@@ -45,7 +45,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP18 | Test/CI sertleştirme (FE runner, prettier CI, npm audit) | Regresyon güvenliği | gate | M–L |
 
 **Bağımlılıklar:** WP1 her şeyin temeli (ilk). **WP5 → WP1 + WP2** (satıcı-lehine release WP1'in `Complete`→payout yolunu, alıcı-lehine refund WP2'nin `BUYER_REFUND`'ünü kullanır). WP4a accept-gate ucuz/yüksek-değer (erken). WP12'deki **OPEN_LINK 409 fix bağımsız** — P1'de WP1 ile inebilir. WP18 sürekli/son.
-**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint) ve **WP8** (`Notification.FlagId` kolonu) — gate-check yeni migration dosyası bekler.
+**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu) ve **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir) — gate-check yeni migration dosyası bekler.
 
 ---
 
@@ -197,6 +197,6 @@ Aşağıdakiler bu plana **dahil değil** çünkü MVP-dışı (10_MVP_SCOPE / 0
 
 - **19 iş paketi** (WP1–WP18, WP4 = WP4a+WP4b), her biri sizin metodolojinizde ayrı **task** (plan→uygula→**ayrı chat** validate). Kabaca **30–45 geliştirme-günü** (validate chat'leri hariç). Bu, ürünün gerçek MVP-tamamlanması — F6 bunun üzerine sağlam test yazabilsin diye.
 - **Her task ayrı PR + CI yeşil + bağımsız validator** (mevcut disiplin; gate-check öncesi kalite).
-- **Migration taşıyan paketler:** WP3 (SWEEP CHECK constraint) · WP8 (`Notification.FlagId`) — gate-check yeni migration dosyası bekler.
+- **Migration taşıyan paketler:** WP3 (SWEEP CHECK constraint) · WP8 (`Notification.FlagId`) · WP4a (seed `price_deviation_threshold`=1.0 `UpdateData`, owner kararı) — gate-check yeni migration dosyası bekler.
 - **Önerilen ilk hamle:** WP1 (escrow tamamlama) — ürünün tamamlanamadığı tek nokta; geri kalan her şey bunun üstüne oturur. OPEN_LINK 409 fix'i (WP12) ucuz/bağımsız, WP1 ile paralel inebilir.
 - Bu plan ilerledikçe güncellenir; her WP biten için backlog satırı **✓ Çözüldü** işaretlenir.

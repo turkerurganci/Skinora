@@ -79,6 +79,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             ClassId: "abc-class",
             InstanceId: "abc-instance",
             Name: "AK-47 | Redline",
+            MarketHashName: "AK-47 | Redline (Field-Tested)",
             IconUrl: "https://example/icon.png",
             Exterior: "Field-Tested",
             Type: "Rifle",
@@ -353,7 +354,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     public async Task Rejects_When_Item_Has_Trade_Lock()
     {
         _inventory.Register(SellerSteamId, new InventoryItemSnapshot(
-            "locked", "c", null, "Locked Item", null, null, null, null, IsTradeable: false));
+            "locked", "c", null, "Locked Item", "Locked Item", null, null, null, null, IsTradeable: false));
 
         var sut = BuildSut();
         var outcome = await sut.CreateAsync(
