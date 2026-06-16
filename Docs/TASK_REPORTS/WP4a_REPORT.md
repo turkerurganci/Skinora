@@ -6,7 +6,7 @@
 | **Branch** | `task/WP4a-fraud-gate-price-wiring` |
 | **PR** | #172 |
 | **Tarih** | 2026-06-16 |
-| **Durum** | Yapım bitti — bağımsız doğrulama bekliyor |
+| **Durum** | ✓ Tamamlandı — bağımsız validator PASS (2026-06-16) |
 | **Açtığı** | T111 (E2E — Fraud/flag senaryoları) |
 | **Tamamladığı yetenek** | Flag'li hesap accept'te engellenir, PRICE_DEVIATION kuralı canlı çalışır |
 
@@ -94,7 +94,8 @@ WP4a, plana göre **iki bağımsız değişiklik**tir (spec birbirine karıştı
 
 ## 8. Mini güvenlik kontrolü
 
-- **Secret:** yok. **Auth/authorization:** Part A accept-gate'i **güçlendirir** (flag'li hesap fon-akışı engellenir); gate backend-enforced. **Input validation:** validator `price_deviation_threshold` için `>0` korur (geçersiz değer kaydedilemez). **Yeni dep:** yok.
+- **Secret:** yok. **Auth/authorization:** Part A accept-gate'i **güçlendirir** (flag'li hesap fon-akışı engellenir); gate backend-enforced. **Input validation:** validator `price_deviation_threshold` için `>0` korur (geçersiz değer kaydedilemez); `marketHashName` parametreli EF predicate (injection yok). **Yeni dep:** yok.
+- **Validator bulgusu (düzeltildi):** docs commit `7582fb3`'e kapsam-dışı **`.vscode/settings.json`** (`claudeCode.allowDangerouslySkipPermissions=true` + `initialPermissionMode=bypassPermissions`) bundle edilmişti — bu yapım raporunun ilk "Secret/Adım -1 temiz" anlatısıyla çelişiyordu (dosya anılmıyordu). Owner kararıyla (AskUserQuestion 2026-06-16) **branch'ten untrack edildi (`git rm --cached`, lokal disk'te kalır) + `.gitignore`'a `.vscode/settings.json` eklendi**; özellik kodu değişmedi.
 
 ## 9. Yapım-içi adversarial review (6-boyut/refute-default + bağımsız verify)
 
@@ -127,3 +128,23 @@ WP4a, plana göre **iki bağımsız değişiklik**tir (spec birbirine karıştı
 - **PR:** #172
 - **Migration:** var (`WP4a_SeedPriceDeviationThreshold`, seed-only)
 - **memory:** WP4a satırı `.claude/memory/MEMORY.md`'ye yansıtıldı
+
+## 13. Bağımsız doğrulama (ayrı chat, 2026-06-16)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (özellik kodu) — 1 bloke-edici scope/güvenlik bulgusu owner kararıyla bu doğrulamada kapatıldı |
+| Bulgu sayısı | 1 bloke-edici (çözüldü) + 2 NOTE (pre-existing, non-blocking) |
+| Düzeltme gerekli mi | Hayır (özellik kodu); `.vscode/settings.json` untrack+gitignore uygulandı |
+
+**Kapılar:** Adım -1 temiz · Adım 0 main son-3 `success` (`27577316206`/`...202`/`27567370074`) · Adım 0b memory mevcut · Adım 8a task CI HEAD `7582fb3` run `27640502932` + `63b8a6b` run `27639903294` **tüm job success** (Integration + Migration dry-run dahil).
+
+**Kabul kriterleri — 8/8 ✓ bağımsız doğrulandı** (kanıt: AC tablosu §5; rapor görülmeden kendi verdict'i oluşturuldu, sonra karşılaştırıldı). Lokal yeniden çalıştırma: build **0W/0E**, validator+catalog **75/75**, köprü **4/4**, `has-pending-model-changes` → **drift yok**.
+
+**Money/spec teyidi:** Part A gate `buyerId`-only, buyer-load sonrası / tek `SaveChangesAsync` (`:189`) + tek outbox `PublishAsync` (`:178`) öncesi → reddedilen accept sıfır yazım; STEAM_ID **ve** OPEN_LINK için method-agnostic (gate Stage-3 party-branch'ten önce) → 02 §14.0 "işlem kabul etme" + "açık link kabulü" birebir; `AccountFlagChecker` ACCOUNT_LEVEL && Status≠REJECTED → false-block/false-pass yok. Part B uçtan uca canlı (tek `IMarketPriceProvider` kaydı = explicit `AddScoped`; `NullMarketPriceProvider` hiçbir yerde kayıtlı değil), create-only (`EvaluateAsync` tek çağıran `:199`), fail-open, cycle yok. Threshold `>0` parse-safe (Stage-1 tip-gate önce), seed/migration Id `…0012`=IdFor(18) tutarlı; sayı yan-etkisi (21→20) yalnız 2 güncellenen test dosyasında.
+
+**6-ajan adversarial workflow (5 boyut refute-default + completeness critic):** 4 boyut PASS (0 bulgu), güvenlik boyutu + critic tek bloke-edici (`.vscode/settings.json`) üzerinde yakınsadı → owner kararıyla kapatıldı.
+
+**NOT bulgular (non-blocking, pre-existing — WP4a regresyonu değil):** (1) 06 §3.17 "58 anahtar" aslında 59 (WP1 key 59 drift; rapor §10 zaten kaydetmiş) → WP17. (2) `PriceService.UpsertAsync` eşzamanlı cache-miss yarışında `DbUpdateException` create hot-path'e sızabilir — pre-existing T81, WP4a dokunmadı; köprü "no exception leaks" yorumu bu dar kenarı bir tık abartıyor → follow-up.
+
+**Yapım raporu karşılaştırması:** Özellik kısmı tam uyumlu (8/8 AC, build/test/CI, known-limitations). Tek uyuşmazlık = §8/§11'in `.vscode/settings.json`'ı atlaması → bu doğrulamada düzeltildi (§8 güncellendi).
