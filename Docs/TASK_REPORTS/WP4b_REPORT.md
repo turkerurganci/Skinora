@@ -83,7 +83,7 @@ Diğer integration test (regresyon geniş kapsam) → CI authoritative.
 - Branch: `task/WP4b-fraud-coverage-completeness`
 - Commit: `35fb09f` — WP4b: Fraud kapsam tamlığı — retro-scan + FLAGGED allocation + note-limit + accept-timeout doğrulama
 - PR: [#173](https://github.com/turkerurganci/Skinora/pull/173)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — HEAD `e262cab` run [`27648552366`](https://github.com/turkerurganci/Skinora/actions/runs/27648552366) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate; Guard skipped). Integration yeşil → 8 Fraud + 2 API testi SQL Server'da geçti; Migration dry-run → model drift-free temiz uygulandı.
 
 ## Known Limitations / Follow-up
 
