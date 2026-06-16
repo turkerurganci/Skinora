@@ -1,6 +1,6 @@
 # WP4b — Fraud kapsam tamlığı (retro-scan + FLAGGED yolları)
 
-**Faz:** PRE_F6_PLAN (P2 — Fraud/uyum) | **Durum:** ⏳ Devam ediyor (validator bekliyor) | **Tarih:** 2026-06-17
+**Faz:** PRE_F6_PLAN (P2 — Fraud/uyum) | **Durum:** ✓ Tamamlandı — bağımsız validator PASS | **Tarih:** 2026-06-17
 
 ---
 
@@ -67,9 +67,34 @@ Diğer integration test (regresyon geniş kapsam) → CI authoritative.
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator chat'i bekliyor |
+| Doğrulama durumu | ✓ PASS |
 | Yapım-içi self-check | 8/8 ✓ |
+| Bulgu sayısı | 0 bloke-edici (S1/S2/S3) · 2 NOTE (non-blocking) |
 | Düzeltme gerekli mi | Hayır |
+
+### Bağımsız Validator (ayrı chat, 2026-06-17 — rapor görülmeden kendi verdict'i)
+
+**VERDICT: ✓ PASS — 8/8 AC, 0 bloke-edici bulgu.**
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27644750670`/`27644750649`/`27577316206`) · Adım 0b repo memory WP4b mevcut · Adım 8a task CI HEAD `2357347` run [`27649130700`](https://github.com/turkerurganci/Skinora/actions/runs/27649130700) **tüm job success** (+ `e262cab` run `27648552366` success).
+
+**Validator lokal yeniden çalıştırma (gerçek SQL Server / TestContainers, Docker mevcut):** `dotnet build -c Release` **0W/0E** · **Skinora.Fraud.Tests tam proje 91/91** (raporun `--filter` 35/35'ini kapsar + Fraud regresyon yok) · **Skinora.API.Tests `~MultiAccountRetroScanJob|~AdminFlags` 14/14**.
+
+**Bağımsız spec/kod teyidi (4 kalem):**
+- **#1 retro-scan** — `MultiAccountRetroScanJob` + registrar `AutoUnsuspendJob`/`AutoUnsuspendJobRegistrar` desenini birebir izler; aday filtresi (cüzdanlı + silinmemiş + deaktive-olmayan) doğru çünkü detector **strong** wallet-match sinyali gerektirir (supporting sinyaller `MultiAccountDetector.cs:125` "evidence only — never flag alone" → cüzdansız kullanıcı zaten flag'lenemez); dedup detector idempotency gate'i (`MultiAccountDetector.cs:76-86`); per-user hata izolasyonu; cron `0 2 * * *` geçerli; `Program.cs:327-328` kayıtlı.
+- **#2 accept-timeout (verify-only)** — 05 §4.4:513 + 06 §3.5 (`AcceptDeadline` poller-driven, yalnız ITEM_ESCROWED per-tx job) bağımsız okundu → owner kararı spec-doğru; CREATED state→deadline invariant'ı (`AcceptDeadline NOT NULL`) ApproveAsync commit öncesi sağlanır; regresyon testi gerçek `DeadlineScannerJob`'u koşturup `CANCELLED_TIMEOUT` üretir.
+- **#3 allocation** — post-commit zorunlu çünkü `PaymentAddressAllocator.cs:25-29` eligibility = {CREATED,ACCEPTED} (yalnız commit sonrası görünür); best-effort swallow (yalnız `OperationCanceledException` rethrow); idempotent `AlreadyExisted` (`PaymentAddressAllocator.cs:66-81`) → eager inline + `EnsurePaymentAddressJob` (`EligibleStates`+`PaymentAddress==null`, dakikalık) çift-allocate etmez; yalnız `TRANSACTION_PRE_CREATE` promosyonunda çalışır.
+- **#4 note-limit** — `MaxNoteLength=2000` = `FraudFlagConfiguration.HasMaxLength(2000)` kolon genişliği birebir; kontrol **normalize-edilmiş** (trim'li, persist edilen) not üzerinde, **herhangi bir DB yazımından önce** → `ValidationFailed` → controller 400 `VALIDATION_ERROR`; off-by-one yok (=2000 kabul, 2001 red, testlerle kanıtlı); 07 §9.4/§9.5 güncel.
+
+**Constructor değişikliği:** `new FraudFlagService(` yalnız 2 test call-site (ikisi de güncel); prod DI (`FraudModule.cs:26`) + `IPaymentAddressAllocator` (`TransactionsModule.cs:165`) çözülür; Fraud→Transactions referansı zaten var (yeni cycle yok). Build temiz teyit eder.
+
+**Güvenlik:** secret sızıntısı yok · auth etkisi yok (AdminFlags approve/reject zaten `MANAGE_FLAGS` gated; retro-scan endpoint'siz background job) · input validation **iyileştirildi** (note max-length) · yeni dış bağımlılık yok (modül-içi `IPaymentAddressAllocator`/`ILogger`).
+
+**Adversarial workflow (11 ajan, 5 boyut refute-default + adversarial verify):** 6 ham aday → **0 onaylı bloke-edici**; 5 çürütüldü (detector idempotency read-then-write race = WP4b-dışı pre-existing, zarar benign; no-wallet filtresi doğru; 02 §14.3 doc ambiguity benign pre-existing; #2 verify-only spec-doğru). 1 "confirmed" = NOTE (flagged-allocation-detail split'inin meşruiyetini **teyit eder** — payment-address yarısı WP4b'de gerçekten teslim edildi, tx-detail yarısı WP13'e meşru forward).
+
+**Validator NOTE (non-blocking follow-up):** allocator'ın non-success status dalı (`FraudFlagService` `TryAllocatePaymentAddressAsync` içinde `Created`/`AlreadyExisted` dışı → yalnız warning log) Fraud tarafında ayrı testle kapsanmıyor; davranışsal olarak test edilen throw-yoluyla özdeş (her ikisi de swallow+log+`EnsurePaymentAddressJob` recovery) → bloke etmez.
+
+**Yapım raporuyla uyum:** Tam uyumlu — AC tablosu, known-limitations (retro-scan dedup granülaritesi/ölçek, tx-detail→WP13, #2 resolved-by-design), test kanıtları bağımsız verdict'le örtüşüyor. (Tek fark: validator tam Fraud projesini koştu 91/91; rapor `--filter` 35/35 koşmuş — ikisi de yeşil, çelişki değil.)
 
 ## Altyapı Değişiklikleri
 
@@ -83,7 +108,7 @@ Diğer integration test (regresyon geniş kapsam) → CI authoritative.
 - Branch: `task/WP4b-fraud-coverage-completeness`
 - Commit: `35fb09f` — WP4b: Fraud kapsam tamlığı — retro-scan + FLAGGED allocation + note-limit + accept-timeout doğrulama
 - PR: [#173](https://github.com/turkerurganci/Skinora/pull/173)
-- CI: ✓ PASS — HEAD `e262cab` run [`27648552366`](https://github.com/turkerurganci/Skinora/actions/runs/27648552366) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate; Guard skipped). Integration yeşil → 8 Fraud + 2 API testi SQL Server'da geçti; Migration dry-run → model drift-free temiz uygulandı.
+- CI: ✓ PASS — HEAD `2357347` run [`27649130700`](https://github.com/turkerurganci/Skinora/actions/runs/27649130700) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate; Guard skipped) — validator doğruladı; önceki `e262cab` run `27648552366` de success. Integration yeşil → 8 Fraud + 2 API testi SQL Server'da geçti; Migration dry-run → model drift-free temiz uygulandı.
 
 ## Known Limitations / Follow-up
 
