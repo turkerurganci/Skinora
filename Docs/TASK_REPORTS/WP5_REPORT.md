@@ -1,6 +1,6 @@
 # WP5 — Dispute çözüm (admin)
 
-**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (bağımsız validator bekliyor) | **Tarih:** 2026-06-17
+**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-17
 
 ---
 
@@ -65,9 +65,25 @@ ESCALATED dispute **çıkmaz sokağı** kapatıldı: bir dispute ESCALATED'a dü
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (ayrı chat 2026-06-17, kendi verdict'i yapım raporu görülmeden) |
+| Bulgu sayısı | 0 bloke-edici (4 non-blocking K-note) |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator kapıları:** Adım -1 working tree temiz · Adım 0 main son-3 run `success` (`27650617814`/`27650617812` WP4b #173, `27644750670` WP4a #172) · Adım 0b repo memory WP5 satırı mevcut · Adım 8a task branch CI HEAD `7387d5c` run [`27676766046`](https://github.com/turkerurganci/Skinora/actions/runs/27676766046) **success** (+ `184a2e4` run `27676159228` success).
+
+**Validator kanıtı (bağımsız çalıştırıldı):** `dotnet build Skinora.sln` 0W/0E; `dotnet test Skinora.sln` (gerçek SQL Server) **2384/2384 pass, 0 fail, 0 skip** — Transactions 788 / API 494 / Shared 383 / Platform 172 / Notifications 141 / Steam 95 / Fraud 91 / Disputes 38 / Realtime 25 / Admin 20 / Users 16 / Auth 115 / Payments 6. FE: `tsc --noEmit` 0 + `eslint` 0 + WP5 dosyaları `prettier --check` temiz + `next build` (`/admin/disputes` ƒ) + i18n parity 1177×4 (adminDisputes ×4). Migration `WP5_AddDisputeResolution` iki CHECK recreate / seed yok / yeni dep yok.
+
+**Bağımsız teyit edilen tasarım noktaları:** (1) `AdminResolveRefund` `ApplyCancellationFields`→`CancelledByType.ADMIN`+reason ve REFUNDED `OnEntry` `CancelledAt` → `CK_Transactions_Cancel` runtime'da tutar (integration test gerçek SQL Server'da doğruladı); (2) `DisputeEligibility` matrisi **relocate** — DELIVERY@TRADE_OFFER_SENT_TO_BUYER WP5 öncesinde de `DisputeService`'te vardı, eligibility değişmedi; (3) `UpdateActiveDisputeFlag` `OPEN||ESCALATED` → RESOLVED_FOR_* resolved sayılır; (4) `DisputeResolvedNotificationConsumer` MediatR auto-scan (Notifications assembly) ile kayıtlı; (5) `ApiResponseWrapperFilter` yalnız 2xx+sarılmamış'ı sarar → `Ok(rawDto)` sarılır, explicit `.Fail` çift-sarılmaz; (6) REFUNDED ripple terminal/cancelled/bulk-hold dört yerde (`AdminTransactionService`/`AdminTransactionQueryService`/`AdminDashboardService`/`TransactionListService`).
+
+**Güvenlik kontrolü:** Secret sızıntısı yok · auth server-enforced (`[Authorize(Policy=Permission:VIEW_DISPUTES/MANAGE_DISPUTES)]`) · input validation (adminNote 1..2000 + `Enum.IsDefined` outcome range-guard + page/pageSize clamp) · yeni dış bağımlılık yok.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — yapım raporunun 8/8 AC iddiası bağımsız doğrulandı, uyuşmazlık yok.
+
+**Validator non-blocking K-note'ları:**
+- **K1:** AD27/28/29 controller route'u için ayrı HTTP-seviye (WebApplicationFactory) testi yok — service+DB integration (`AdminDisputeServiceTests` gerçek SQL Server) + thin controller + standart `Permission:<KEY>` policy + `next build` route'u kapsar. Coverage gözlemi, defekt değil.
+- **K2:** `DisputeResolvedNotificationConsumer` mesajları hard-coded TR (mevcut T49/T58 deseni) → WP17 backend i18n migration. By-design.
+- **K3:** Pre-existing prettier drift 16 **non-WP5** FE dosyasında (`format:check` CI'da değil) → WP18. WP5 dosyaları temiz; regresyon değil.
+- **K4:** FE client-side permission guard yok (backend enforce ediyor) → WP13 FE-permission-guard. Scope-fence dahilinde.
 
 ## Altyapı Değişiklikleri
 
