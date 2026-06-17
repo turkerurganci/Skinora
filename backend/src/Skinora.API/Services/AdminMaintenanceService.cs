@@ -81,6 +81,14 @@ public sealed class AdminMaintenanceService : IAdminMaintenanceService
         var message = NormaliseToSentinel(request.Message);
         var plannedEnd = NormaliseToSentinel(request.PlannedEnd);
 
+        // Reuse the shared SystemSetting string rules (notably the nvarchar(500)
+        // column cap) so an admin can never persist a message the bootstrap/
+        // validator would later reject or the column would truncate.
+        var messageCheck = SystemSettingsValidator.Instance.ValidateSingle(
+            KeyMessage, message, "string");
+        if (!messageCheck.IsValid)
+            return MaintenanceOperationOutcome.Invalid(messageCheck.ErrorMessage!);
+
         // Reuse the shared ISO-8601-or-NONE rule so an admin can never persist a
         // planned_end the bootstrap/validator would later reject.
         var plannedEndCheck = SystemSettingsValidator.Instance.ValidateSingle(

@@ -34,7 +34,7 @@ namespace Skinora.API.Tests.Integration;
 
 /// <summary>
 /// WP7 — End-to-end coverage for the admin maintenance/outage control surface
-/// (<c>POST /admin/maintenance/freeze|resume</c>, 07 §10.3) plus the generic
+/// (<c>POST /admin/maintenance/freeze|resume</c>, 07 §9.31) plus the generic
 /// settings-PUT cache refresh. Exercises the real DI graph through the SQLite +
 /// JWT factory: the MANAGE_SETTINGS gate, the four <c>platform.maintenance.*</c>
 /// settings, the type→reason timeout-freeze scope, the AuditLog INSERT, the
@@ -270,6 +270,25 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
             new { type = "PLATFORM_MAINTENANCE", plannedEnd = "not-a-date" }, JsonOptions);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Freeze_MessageExceedsMaxLength_Returns400()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
+
+        // message > nvarchar(500) column cap must be rejected by the shared
+        // SystemSettingsValidator (clean 400) rather than truncated / 500 at
+        // SaveChanges. SQLite ignores the column width, so this proves the
+        // validator gate, not the DB.
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/maintenance/freeze",
+            new { type = "PLATFORM_MAINTENANCE", message = new string('x', 501) }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("VALIDATION_ERROR", json.GetProperty("error").GetProperty("code").GetString());
     }
 
     // ============================================================

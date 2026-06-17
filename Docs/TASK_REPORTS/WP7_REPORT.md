@@ -37,6 +37,7 @@ Uygulama:
 - `backend/src/Skinora.Shared/Enums/AuditAction.cs` (+`MAINTENANCE_MODE_CHANGED`)
 - `backend/src/Skinora.API/Controllers/AdminController.cs` (`UpdateSetting` → maintenance-key refresh; ctor +`IAdminMaintenanceService`)
 - `backend/src/Skinora.API/Program.cs` (DI kaydı)
+- `backend/src/Modules/Skinora.Platform/Application/Settings/SystemSettingsValidator.cs` (F4 — string `nvarchar(500)` max-length kuralı; AD9 + AD30 ortak)
 - `Docs/07_API_DESIGN.md` (§9.31 AD30/AD31 + permission tablosu)
 
 ## Kabul Kriterleri Kontrolü
@@ -56,7 +57,8 @@ Uygulama:
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Integration (WP7) | ✓ 13/13 | `AdminMaintenanceEndpointTests` (freeze×4 tip + scope, resume×2, validation×2, auth×3, cache-evict, raw-key refresh) |
+| Integration (WP7) | ✓ 14/14 | `AdminMaintenanceEndpointTests` (freeze×4 tip + scope, resume×2, validation×3 [type/plannedEnd/**message-maxlen**], auth×3, cache-evict, raw-key refresh) |
+| Unit (validator) | ✓ 70/70 | `SystemSettingsValidatorTests` (+2: string `nvarchar(500)` cap sınırı 500✓/501✗) |
 | Integration (regresyon) | ✓ 507/507 | `dotnet test Skinora.API.Tests` tam suite |
 | Unit (CI parite) | ✓ tümü yeşil | `dotnet test Skinora.sln -c Release --filter "FQN!~.Integration&FQN!~.Contract"` (Shared 363/363 + Platform 111/111 + Transactions 492 + Notifications 90 + Steam 28 + Realtime 25 + Fraud 18 + API 44) — ilk push'ta atlanmıştı, Unit-fix sonrası eklendi |
 | Build | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
@@ -97,6 +99,8 @@ Uygulama:
 - **Tek-instance cache:** 30 sn cache per-replica; cross-replica invalidation MVP-dışı (Program.cs:258 notu) — tek-instance MVP için yeterli.
 
 ## Notlar
+- **F3 düzeltmesi (validator K-note):** `AdminMaintenanceEndpointTests` XML doc'unda yanlış doküman referansı `07 §10.3` (yok) → `07 §9.31` (admin endpoint'leri). Salt yorum.
+- **F4 düzeltmesi (validator K-note → owner kararı: paylaşılan validator'da çöz):** `message` (ve tüm string ayarlar) için uzunluk doğrulaması yoktu → >500 karakter `SystemSetting.Value` `nvarchar(500)` kolonunda `SaveChanges` 500 fırlatırdı. `SystemSettingsValidator.TryValidateType` "string" dalına `MaxStringValueLength=500` kuralı eklendi (kolon genişliğiyle birebir) → hem AD9 (`SystemSettingsService.UpdateAsync` zaten `ValidateSingle` çağırır) hem AD30 (`FreezeAsync` artık `message`'ı da `ValidateSingle`'dan geçirir) temiz **400 VALIDATION_ERROR** döner. Testler: validator unit +2 (500✓/501✗), WP7 integration +1 (`Freeze_MessageExceedsMaxLength_Returns400` — SQLite kolon genişliğini yok saydığından bu test DB'yi değil **validator kapısını** kanıtlar).
 - **F1 düzeltmesi (bağımsız validator turu, 2026-06-17):** Validator, audit `Old/NewValue`'nun 07 §9.31'in (+ `AuditAction` yorumunun) vaat ettiği **işlem sayısını** içermediğini tespit etti — count, audit satırı yazıldıktan *sonra* hesaplanıyordu. Owner kararı (AskUserQuestion): count'u audit'e ekle + re-validate. Fix: `AdminMaintenanceService.ApplyAsync` sıralaması değişti (settings flush → freeze/resume → **audit**, hepsi tek transaction'da → atomiklik korunur) ve envelope `{ settings, affectedTransactions }` yapısına geçti; freeze (AD30, count=2) + resume (AD31, count=1) testlerine `affectedTransactions` assertion eklendi. Doküman/yorum değişmedi (zaten count'u söylüyordu). Re-validation ayrı chat'te.
 - **Working tree:** Adım -1 temiz.
 - **Main CI startup (Adım 0):** son 3 run success (`27686562037` WP6 / `27686562073` WP6 / `27679584356` WP5).
