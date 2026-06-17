@@ -83,7 +83,7 @@ WP6 üç kalemden oluşur (PRE_F6_PLAN §2 WP6): (1) gerçek sidecar-destekli **
 - Branch: `task/WP6-steam-dispute-checkers`
 - Commit: `9bc822d` — WP6 implementation
 - PR: [#175](https://github.com/turkerurganci/Skinora/pull/175)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — HEAD `fd3eafb` run [`27684482228`](https://github.com/turkerurganci/Skinora/actions/runs/27684482228) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker×2/Gate; Guard skipped — PR)
 
 ## Known Limitations / Follow-up
 
