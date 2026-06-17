@@ -162,11 +162,13 @@ public sealed class AdminMaintenanceService : IAdminMaintenanceService
     }
 
     /// <summary>
-    /// Persist the four settings + audit row and run the bulk freeze or resume
-    /// inside a single explicit DB transaction so the banner and freeze states
-    /// commit together (no split-brain). Returns the number of transactions
-    /// affected by the freeze/resume. The cache eviction happens after commit;
-    /// the realtime push is the caller's responsibility (post-commit).
+    /// Persist the four settings, run the bulk freeze or resume, then write the
+    /// audit row — all inside a single explicit DB transaction so the banner and
+    /// freeze states commit together (no split-brain). The audit envelope records
+    /// the affected-transaction count (07 §9.31), which is only known after the
+    /// bulk operation, so the audit row is written last. Returns the number of
+    /// transactions affected. The cache eviction happens after commit; the
+    /// realtime push is the caller's responsibility (post-commit).
     /// </summary>
     private async Task<int> ApplyAsync(
         Guid adminId,
@@ -201,6 +203,22 @@ public sealed class AdminMaintenanceService : IAdminMaintenanceService
             k => byKey.TryGetValue(k, out var r) ? r.Value : null,
             StringComparer.Ordinal);
 
+        // Flush the staged settings into the open transaction first. The bulk
+        // freeze/resume below enlists in the same transaction but may early-out
+        // without its own SaveChanges when nothing matches, so persist the
+        // settings explicitly before the audit row is written.
+        await _db.SaveChangesAsync(cancellationToken);
+
+        var affected = 0;
+        if (freezeReason is { } fr)
+            affected = await _freeze.FreezeManyAsync(fr, cancellationToken);
+        else if (resumeReason is { } rr)
+            affected = await _freeze.ResumeManyAsync(rr, cancellationToken);
+
+        // 07 §9.31 — the audit envelope records the old/new four settings plus
+        // the number of transactions the freeze/resume touched. The count is
+        // only known after the bulk operation, so the row is written here (still
+        // inside the open transaction) rather than alongside the settings flush.
         await _audit.LogAsync(
             new AuditLogEntry(
                 UserId: null,
@@ -209,21 +227,12 @@ public sealed class AdminMaintenanceService : IAdminMaintenanceService
                 Action: AuditAction.MAINTENANCE_MODE_CHANGED,
                 EntityType: "Maintenance",
                 EntityId: type,
-                OldValue: JsonSerializer.Serialize(oldValues),
-                NewValue: JsonSerializer.Serialize(newValues),
+                OldValue: JsonSerializer.Serialize(new { settings = oldValues }),
+                NewValue: JsonSerializer.Serialize(new { settings = newValues, affectedTransactions = affected }),
                 IpAddress: ipAddress),
             cancellationToken);
 
-        // Flush the settings + audit row into the open transaction. The bulk
-        // freeze/resume below enlists in the same transaction (and may early-out
-        // without its own SaveChanges when nothing matches), so commit once.
         await _db.SaveChangesAsync(cancellationToken);
-
-        var affected = 0;
-        if (freezeReason is { } fr)
-            affected = await _freeze.FreezeManyAsync(fr, cancellationToken);
-        else if (resumeReason is { } rr)
-            affected = await _freeze.ResumeManyAsync(rr, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 

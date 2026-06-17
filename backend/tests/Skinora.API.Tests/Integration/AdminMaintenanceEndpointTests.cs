@@ -152,6 +152,15 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         Assert.Equal(ActorType.ADMIN, audit.ActorType);
         Assert.Equal(admin.Id, audit.ActorId);
         Assert.Contains("PLATFORM_MAINTENANCE", audit.NewValue);
+
+        // 07 §9.31 — the audit envelope carries the four settings plus the
+        // affected-transaction count (both transactions were frozen → 2).
+        using var auditEnvelope = JsonDocument.Parse(audit.NewValue!);
+        Assert.Equal(2, auditEnvelope.RootElement.GetProperty("affectedTransactions").GetInt32());
+        Assert.Equal(
+            "PLATFORM_MAINTENANCE",
+            auditEnvelope.RootElement.GetProperty("settings")
+                .GetProperty("platform.maintenance.type").GetString());
     }
 
     [Fact]
@@ -293,6 +302,16 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         Assert.Null(escrowedRow.TimeoutFrozenAt);
         Assert.Null(escrowedRow.TimeoutFreezeReason);
         Assert.Null(escrowedRow.TimeoutRemainingSeconds);
+
+        // 07 §9.31 — the resume audit row records the resumed-transaction count.
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var resumeAudit = await db.Set<Skinora.Platform.Domain.Entities.AuditLog>()
+            .AsNoTracking()
+            .OrderByDescending(a => a.Id)
+            .FirstAsync(a => a.EntityType == "Maintenance");
+        using var resumeEnvelope = JsonDocument.Parse(resumeAudit.NewValue!);
+        Assert.Equal(1, resumeEnvelope.RootElement.GetProperty("affectedTransactions").GetInt32());
 
         // Two pushes total: freeze (active) then resume (inactive).
         var pushes = _factory.Publisher.MaintenancePushes;

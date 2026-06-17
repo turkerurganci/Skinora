@@ -48,7 +48,7 @@ Uygulama:
 | 3 | `platform.maintenance.*` update'inde cache-evict + `PublishMaintenanceStatusChangedAsync` | ✓ | `PublicMaintenance_ReflectsFreezeState_AfterCacheEvict` (GET önce inactive → freeze → GET active); `DirectSettingEdit_...` (raw-key → push fired) |
 | 4 | `PLANNED_MAINTENANCE` banner-only (freeze yok) | ✓ | `Freeze_PlannedMaintenance_...` `affectedTransactions=0`, işlem donmadı, banner+push aktif |
 | 5 | Permission `MANAGE_SETTINGS` enforce | ✓ | `Freeze_Anonymous_Returns401`, `Freeze_AdminWithoutManageSettings_Returns403`, `Resume_..._Returns403` |
-| 6 | Audit (05 §4.4 maintenance giriş/çıkış) | ✓ | `MAINTENANCE_MODE_CHANGED` satırı `EntityType=Maintenance`, ActorType=ADMIN |
+| 6 | Audit (05 §4.4 maintenance giriş/çıkış) | ✓ | `MAINTENANCE_MODE_CHANGED` satırı `EntityType=Maintenance`, ActorType=ADMIN; envelope `OldValue={settings:{4 ayar}}` / `NewValue={settings:{4 ayar}, affectedTransactions:N}` (07 §9.31 işlem sayısı dahil — F1 fix) |
 | 7 | Atomiklik (banner ↔ freeze ayrışmaz) | ✓ | `ApplyAsync` tek explicit transaction; settings+audit+freeze tek commit |
 | 8 | STEAM_OUTAGE/BLOCKCHAIN_DEGRADATION auto-detect | ⬚ WP16'ya ertelendi | Owner kararı — health-probe altyapısı WP16 kapsamı, eşik tanımsız (SPEC_GAP) |
 
@@ -97,6 +97,7 @@ Uygulama:
 - **Tek-instance cache:** 30 sn cache per-replica; cross-replica invalidation MVP-dışı (Program.cs:258 notu) — tek-instance MVP için yeterli.
 
 ## Notlar
+- **F1 düzeltmesi (bağımsız validator turu, 2026-06-17):** Validator, audit `Old/NewValue`'nun 07 §9.31'in (+ `AuditAction` yorumunun) vaat ettiği **işlem sayısını** içermediğini tespit etti — count, audit satırı yazıldıktan *sonra* hesaplanıyordu. Owner kararı (AskUserQuestion): count'u audit'e ekle + re-validate. Fix: `AdminMaintenanceService.ApplyAsync` sıralaması değişti (settings flush → freeze/resume → **audit**, hepsi tek transaction'da → atomiklik korunur) ve envelope `{ settings, affectedTransactions }` yapısına geçti; freeze (AD30, count=2) + resume (AD31, count=1) testlerine `affectedTransactions` assertion eklendi. Doküman/yorum değişmedi (zaten count'u söylüyordu). Re-validation ayrı chat'te.
 - **Working tree:** Adım -1 temiz.
 - **Main CI startup (Adım 0):** son 3 run success (`27686562037` WP6 / `27686562073` WP6 / `27679584356` WP5).
 - **Owner kararları (AskUserQuestion 2026-06-17):** (1) auto-detect → WP16'ya ertele (manuel-only) · (2) birleşik atomik set/clear endpoint · (3) MANAGE_SETTINGS reuse.
