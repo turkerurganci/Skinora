@@ -113,6 +113,8 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Efor:** M · **Açar:** T114
 
 ### WP8 — Admin bildirim/alert + audit tamamlama
+> **Durum: ✓ Tamamlandı — bağımsız validator PASS (2026-06-17)** — PR [#177](https://github.com/turkerurganci/Skinora/pull/177). 4 admin NotificationType gerçek üretici event'lere bağlandı (owner: tüm adminler · `BOT_SESSION_FAILED` additive · audit-detail dar kapsam · 4 tip · TradeOfferDispatchFailed hariç). Migration `WP8_AddNotificationFlagId`. Validator: 6/6 AC, 0 bloke-edici; Release 0W/0E + Notifications unit 36/36 + EnumTests 204/204 + AuditLogCategoryMap 38/38 + drift yok; task CI `fdeddb8`/`dd245da` success. Rapor: [`TASK_REPORTS/WP8_REPORT.md`](TASK_REPORTS/WP8_REPORT.md).
+
 **Backlog:** T68-K1 · T64-BotWebhookHandler · T38-AdminFlagAlert-FlagId · admin-alert-consumers · audit-detail-schema (central wiring)
 **Kanıt:** bot lifecycle yalnız Warning log; `Notification` entity'de `FlagId` yok (`Notification.cs:12-25`; `ADMIN_FLAG_ALERT` `TransactionId`'yi flag-link olarak suistimal eder, `NotificationTargetMapper.cs:24-27`); `RefundBlockedAdminAlert`/`TransferDispatchFailed`/payout-issue alert consumer'ları yok.
 **İş:** Bot lifecycle → admin notification + `BOT_SESSION_FAILED` audit + `bot.session_failed`/`removed_from_pool` handler; `Notification.FlagId` ekle (flag inbox link); admin-alert kanal consumer'ları; central AuditLog wiring + OldValue.

@@ -7,24 +7,22 @@ namespace Skinora.Notifications.Application.Inbox;
 /// The spec table maps each <see cref="NotificationType"/> to either
 /// <c>"transaction"</c>, <c>"flag"</c> or <c>null</c>; user-facing types in
 /// the MVP all carry a Transaction reference, so the storage column
-/// <see cref="Domain.Entities.Notification.TransactionId"/> is the only
-/// payload we need today. Admin-only types (<c>ADMIN_FLAG_ALERT</c>,
-/// <c>ADMIN_STEAM_BOT_ISSUE</c>) only show up on admin inboxes — the
-/// dedicated mapping is documented here so the same helper covers them
-/// when admin notification listing lands (T39+).
+/// <see cref="Domain.Entities.Notification.TransactionId"/> covers them.
+/// Admin-only types (<c>ADMIN_FLAG_ALERT</c>, <c>ADMIN_STEAM_BOT_ISSUE</c>)
+/// only show up on admin inboxes — <c>ADMIN_FLAG_ALERT</c> resolves to its
+/// dedicated <see cref="Domain.Entities.Notification.FlagId"/> column (WP8).
 /// </summary>
 public static class NotificationTargetMapper
 {
     public static (string? TargetType, Guid? TargetId) Resolve(
-        NotificationType type, Guid? transactionId) => type switch
+        NotificationType type, Guid? transactionId, Guid? flagId = null) => type switch
         {
             // Admin-only — Steam bot incident is a platform-wide alert.
             NotificationType.ADMIN_STEAM_BOT_ISSUE => (null, null),
 
-            // Admin-only — flag queue link. TransactionId column doubles as
-            // FlagId today; admin endpoints (T39+) will swap in a dedicated
-            // column if/when required.
-            NotificationType.ADMIN_FLAG_ALERT => ("flag", transactionId),
+            // Admin-only — flag queue link, keyed by the dedicated FlagId
+            // column (WP8 replaced the earlier TransactionId reinterpretation).
+            NotificationType.ADMIN_FLAG_ALERT => flagId is null ? (null, null) : ("flag", flagId),
 
             // Every other type targets a Transaction when one is attached.
             _ => transactionId is null ? (null, null) : ("transaction", transactionId),

@@ -1,7 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Skinora.Admin.Application.Notifications;
 using Skinora.Admin.Application.Roles;
 using Skinora.Admin.Application.Users;
+using Skinora.Shared.Interfaces;
 
 namespace Skinora.Admin;
 
@@ -17,6 +19,11 @@ public static class AdminModule
 
         services.AddScoped<IAdminRoleService, AdminRoleService>();
         services.AddScoped<IAdminUserService, AdminUserService>();
+
+        // WP8 — admin-alert recipient resolution (broadcast to all admins).
+        // Implemented here because the Admin module owns AdminUserRole; the
+        // Notifications-module consumers depend only on the Shared abstraction.
+        services.AddScoped<IAdminRecipientResolver, AdminRecipientResolver>();
 
         return services;
     }

@@ -23,6 +23,14 @@ public sealed class NotificationRequest
     public Guid? TransactionId { get; init; }
 
     /// <summary>
+    /// WP8 — the <c>FraudFlag</c> id an <c>ADMIN_FLAG_ALERT</c> notification
+    /// links to (07 §8.1 flag target). Persisted onto
+    /// <see cref="Domain.Entities.Notification.FlagId"/> and surfaced as the
+    /// <c>("flag", FlagId)</c> inbox target. NULL for every other type.
+    /// </summary>
+    public Guid? FlagId { get; init; }
+
+    /// <summary>
     /// Template parameter map used by <see cref="Templates.INotificationTemplateResolver"/>
     /// to substitute <c>{Placeholder}</c> tokens in the resource string.
     /// Keys match the placeholder name without the braces; values are
