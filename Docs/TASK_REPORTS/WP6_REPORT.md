@@ -1,6 +1,6 @@
 # WP6 — Steam dispute checker'ları + auto-resolve doğrulama
 
-**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Doğrulama bekliyor | **Tarih:** 2026-06-17
+**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı — bağımsız validator PASS | **Tarih:** 2026-06-17
 
 ---
 
@@ -67,9 +67,30 @@ WP6 üç kalemden oluşur (PRE_F6_PLAN §2 WP6): (1) gerçek sidecar-destekli **
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
-| Bulgu sayısı (yapım self-check) | 0 bloke-edici |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat 2026-06-17, kendi verdict'i rapor görülmeden) |
+| Kabul kriterleri | 8/8 ✓ |
+| Bulgu sayısı | 0 bloke-edici |
 | Düzeltme gerekli mi | Hayır |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 `success` (`27679584356`/`27679583169`/`27650617814`) · Adım 0b repo memory WP6 mevcut · Adım 8a task CI HEAD `de23eef` run [`27685067989`](https://github.com/turkerurganci/Skinora/actions/runs/27685067989) **success** (+ `fd3eafb` run `27684482228` success).
+
+**Validator kanıtları (bağımsız çalıştırıldı, Docker UP):**
+- **Backend build** `dotnet build Skinora.sln -c Debug` → **0 Warning / 0 Error**.
+- **WP6 unit:** `HttpSteamTradeHoldClientTests` **8/8** · `SidecarTradeHoldCheckerTests` **4/4** · `SidecarMobileAuthenticatorCheckTests` **4/4** (toplam 16/16, no-DB).
+- **Disputes integration (gerçek SQL Server/TestContainers):** `DisputeServiceTests` **26/26** — yeni fail-closed regresyonu `Open_WrongItem_DeliveredAssetSet_ButSidecarProbeNull_StaysOpen` dahil (ayrıca tek-test koşumu 1/1).
+- **API.Tests integration (gerçek SQL Server):** `AuthReVerifyEndpointTests` **7/7** — A7 `..._SidecarUnreachable_FailsClosed` dahil (rapor CI-authoritative bırakmıştı; validator lokal Docker ile doğruladı).
+- **Sidecar:** `vitest run` **158/158** · `tsc --noEmit` exit 0.
+- **DI teyit:** `IMobileAuthenticatorCheck` için tek kayıt = `SidecarMobileAuthenticatorCheck` (`SteamAuthenticationModule.cs:159`); `ITradeHoldChecker` Users-stub `TryAddScoped` → `SteamModule.cs:83` `Replace`→Sidecar. Stub'lar yalnız `DefaultSetupGuideUrl` sabiti için yaşıyor, kayıtlı değil → gerçek checker'lar bağlı.
+- **Spec uyumu:** 08 §2.2 (x-webapi-key header tercih, `GetTradeHoldDurations/v1`, `trade_offer_access_token` zorunlu, `escrow_end_duration_seconds=0`→aktif) + 07 §5.16a (U17 503 `STEAM_API_UNAVAILABLE`) kod ile birebir.
+- **Güvenlik:** secret sızıntısı yok (STEAM_API_KEY `x-webapi-key` header'da, query'de değil — sidecar testi assert ediyor); 0 yeni dep (package.json/csproj değişmedi); 0 migration; auth zayıflatması yok (fail-closed konservatif).
+
+**Non-blocking K-notlar (bloklamadı):**
+- **K1 — Sidecar prettier drift:** repo-geneli pre-existing (CI sidecar'da yalnız `tsc` gate'ler, `format:check` değil). WP6 dosyalarının **commit'lenmiş (LF) içeriği prettier-clean'dir** (lokal `--check` hataları yalnız `core.autocrlf=true` CRLF artefaktı). → WP18.
+- **K2 — A7 "unavailable" ayrımı yok:** ikili kontrat by-design fail-closed; scope-fence (kontrat reshape WP6 dışı).
+- **K3 — Rapor "lokal SQLite" der (satır 59):** Docker UP iken Disputes gerçek SQL Server/TestContainers'da koşar; sonuç aynı (kozmetik).
+- **K4 — Prod aktivasyon:** gerçek kontrol `STEAM_API_KEY` + erişilebilir sidecar ile canlanır; aksi halde fail-closed. T111/T113 staging E2E.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — 8/8 AC ✓, yapım self-check'i (0 bloke-edici) bağımsız doğrulandı.
 
 ## Altyapı Değişiklikleri
 
