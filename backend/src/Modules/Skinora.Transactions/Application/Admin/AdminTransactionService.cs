@@ -662,7 +662,8 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 && t.Status != TransactionStatus.CANCELLED_TIMEOUT
                 && t.Status != TransactionStatus.CANCELLED_SELLER
                 && t.Status != TransactionStatus.CANCELLED_BUYER
-                && t.Status != TransactionStatus.CANCELLED_ADMIN)
+                && t.Status != TransactionStatus.CANCELLED_ADMIN
+                && t.Status != TransactionStatus.REFUNDED)
             .ToListAsync(cancellationToken);
 
         var occurredAt = _clock.GetUtcNow().UtcDateTime;
@@ -741,6 +742,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
         TransactionStatus.CANCELLED_SELLER => true,
         TransactionStatus.CANCELLED_BUYER => true,
         TransactionStatus.CANCELLED_ADMIN => true,
+        TransactionStatus.REFUNDED => true,
         _ => false,
     };
 

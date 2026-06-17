@@ -1323,6 +1323,7 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 | `canAccept` | buyer + CREATED + Steam ID eşleşme (veya açık link) |
 | `canCancel` | (seller veya buyer) + aktif state + ödeme gönderilmemiş |
 | `canDispute` | buyer + {ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED} + aktif dispute yok + aynı tür daha önce açılmamış |
+| `disputableTypes` | (WP5) buyer + aktif dispute yok iken işlemin mevcut state'inde açılabilen dispute türleri: `DisputeType[]` (PAYMENT→{ITEM_ESCROWED, PAYMENT_RECEIVED}, DELIVERY→{TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED}, WRONG_ITEM→{ITEM_DELIVERED}). `canDispute` = `disputableTypes` boş değil. Public/prospective/hold zarflarında omit. |
 | `canEscalate` | dispute var + otomatik kontrol tamamlanmış + henüz eskalasyon yok |
 
 > **EMERGENCY_HOLD kısıtlaması:** EMERGENCY_HOLD state'inde tüm `availableActions` `false` döner. Kullanıcı hiçbir aksiyon alamaz — işlem admin tarafından yönetilir.
@@ -1441,7 +1442,9 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 
 Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true` ise dispute anında çözülmüş demektir.
 
-**Hatalar:** 403 `NOT_BUYER`, 409 `INVALID_STATE_TRANSITION`, 409 `DUPLICATE_DISPUTE`, 409 `ACTIVE_DISPUTE_EXISTS`
+**Hatalar:** 403 `NOT_BUYER`, 409 `INVALID_STATE_TRANSITION`, 409 `DUPLICATE_DISPUTE`
+
+> **Not (WP5):** `ACTIVE_DISPUTE_EXISTS` bu listeden kaldırıldı — 03 §6 farklı türde eşzamanlı aktif dispute'a bilinçli izin verir, dolayısıyla bu kod tasarım gereği erişilemezdir (yalnızca aynı türün tekrarı `DUPLICATE_DISPUTE` ile engellenir).
 
 ### 7.9 T9 — `POST /transactions/:id/disputes/:disputeId/submit-txhash`
 
@@ -1646,6 +1649,8 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 | `VIEW_AUDIT_LOG` | Audit log görüntüle |
 | `CANCEL_TRANSACTIONS` | İşlemleri iptal et |
 | `EMERGENCY_HOLD` | İşlemleri acil dondurma/kaldırma (AD19b, AD19c) |
+| `VIEW_DISPUTES` | İtiraz kuyruğunu görüntüle (AD27, AD28) |
+| `MANAGE_DISPUTES` | İtirazları çöz (AD29) |
 
 ### 9.1 AD1 — `GET /admin/dashboard`
 
@@ -1982,6 +1987,8 @@ T5'teki tüm alanlar + admin'e özel bölümler:
     { "key": "VIEW_AUDIT_LOG", "label": "Audit log görüntüle" },
     { "key": "CANCEL_TRANSACTIONS", "label": "İşlemleri iptal et" },
     { "key": "EMERGENCY_HOLD", "label": "İşlemleri acil dondurma/kaldırma" },
+    { "key": "VIEW_DISPUTES", "label": "İtirazları görüntüle" },
+    { "key": "MANAGE_DISPUTES", "label": "İtirazları çöz" },
     { "key": "MANAGE_SANCTIONS", "label": "Sanctions listesi yönet" }
   ]
 }
@@ -2242,7 +2249,7 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 | FLAGGED | Evet | Hold öncesi duruma göre yukarıdaki kurallar uygulanır |
 | ITEM_DELIVERED | **Hayır** | Item zaten alıcıda — standart iptal/iade uygulanamaz. CANCEL reddedilir, yalnızca RESUME izinli. Exceptional durumlar admin tarafından manuel çözülür (AD19 §İptal edilemez ile tutarlı) |
 
-> **Tasarım kararı:** ITEM_DELIVERED → EMERGENCY_HOLD → CANCEL zinciri yasaktır. Bu, AD19'daki "ITEM_DELIVERED'da standart iptal uygulanamaz" kuralıyla tutarlıdır. Admin bu durumda yalnızca RESUME yapabilir; exceptional resolution (ör. yanlış item teslimi) ayrı bir manuel süreçle ele alınır.
+> **Tasarım kararı:** ITEM_DELIVERED → EMERGENCY_HOLD → CANCEL zinciri yasaktır. Bu, AD19'daki "ITEM_DELIVERED'da standart iptal uygulanamaz" kuralıyla tutarlıdır. Admin bu durumda yalnızca RESUME yapabilir; exceptional resolution (ör. yanlış item teslimi) ayrı bir süreçle ele alınır. **(WP5)** Bu yetkilendirilmiş "ayrı süreç" admin dispute çözümüdür (AD29 §9.30): ITEM_DELIVERED'da açılan WRONG_ITEM/DELIVERY dispute'u buyer-favor çözüldüğünde işlem `AdminResolveRefund` ile `REFUNDED`'a geçer (alıcıya iade). Fiziksel item geri-alma WP6/manuel kapsamındadır.
 
 **Hatalar:** 409 `NOT_ON_HOLD`, 400 `VALIDATION_ERROR`, 422 `CANNOT_CANCEL_DELIVERED_HOLD` (ITEM_DELIVERED hold'unda CANCEL denemesi)
 
@@ -2345,6 +2352,26 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 - **Mevcut hold'lar kalkmaz:** Deactivation, daha önce sanctions match nedeniyle uygulanmış EMERGENCY_HOLD'ları otomatik kaldırmaz. Admin AD19c (`/release-hold`) ile hold'u manuel kaldırır (incelemeyi tamamladıktan sonra).
 
 **Hatalar:** 404 `SANCTIONS_ADDRESS_NOT_FOUND` (kayıt yok), 409 `SANCTIONS_ADDRESS_ALREADY_INACTIVE` (zaten deaktif), 403 `INSUFFICIENT_PERMISSION`
+
+### 9.30 AD27 / AD28 / AD29 — Admin dispute çözümü (`/admin/disputes`, WP5)
+
+**Amaç:** ESCALATED dispute çıkmaz sokağını kapatma (02 §10.4, 03 §6.4). Admin eskalasyon kuyruğunu listeler, itirazı inceler ve **satıcı lehine** (işlem onaylanır) veya **alıcı lehine** (işlem `REFUNDED` + iade) çözer. SLA/atama/şablon-kural MVP-dışıdır (minimal çıkmaz-sokak-açıcı).
+
+#### AD27 — `GET /admin/disputes`
+Permission: `VIEW_DISPUTES`. Query: `status` (DisputeStatus, **default ESCALATED**), `type` (DisputeType), `page`, `pageSize`. Response: `PagedResult` — `items[]`: `{ id, transactionId, type, status, itemName, transactionStatus, openedBy { userId, steamId, displayName }, createdAt }`.
+
+#### AD28 — `GET /admin/disputes/:id`
+Permission: `VIEW_DISPUTES`. Response: `{ id, type, status, systemCheckResult?, userDescription?, adminId?, adminNote?, resolvedAt?, createdAt, updatedAt, transaction { id, status, itemName, price, stablecoin, isOnHold, hasActiveDispute, seller, buyer? } }`. **Hatalar:** 404 `DISPUTE_NOT_FOUND`.
+
+#### AD29 — `POST /admin/disputes/:id/resolve`
+Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR", adminNote (1..2000) }`.
+- **SELLER_FAVOR:** dispute → `RESOLVED_FOR_SELLER`; `HasActiveDispute` temizlenir (başka aktif dispute yoksa) → WP1 satıcı payout ITEM_DELIVERED'da devam eder. Transaction state geçişi yok.
+- **BUYER_FAVOR:** dispute → `RESOLVED_FOR_BUYER`; işlem `AdminResolveRefund` tetikleyicisiyle `REFUNDED`'a geçer; alıcı ödediyse `PaymentRefundToBuyerRequestedEvent` (WP2), item platformdaysa `ItemRefundToSellerRequestedEvent` yayınlanır. ITEM_DELIVERED'da item alıcıdadır → fiziksel geri-alma ayrı manuel/WP6 sürecidir.
+- Her iki sonuç: `AdminId`/`AdminNote`/`ResolvedAt` set; `DISPUTE_RESOLVED` audit; `DisputeResolvedEvent` → buyer + seller `DISPUTE_RESULT` bildirimi. Tüm yan etkiler tek `SaveChanges` ile atomik.
+
+**Response (200) `data`:** `{ id, status, transactionStatus, resolvedAt, buyerRefunded }`.
+
+**Hatalar:** 400 `VALIDATION_ERROR` (adminNote eksik / > 2000 / geçersiz outcome), 404 `DISPUTE_NOT_FOUND`, 409 `DISPUTE_NOT_ESCALATED` (yalnız ESCALATED çözülebilir), 409 `TRANSACTION_ON_HOLD` (önce AD19c ile hold release), 409 `INVALID_STATE_TRANSITION`.
 
 ### 9.26 AD20 — `POST /admin/users/:userId/suspend`
 

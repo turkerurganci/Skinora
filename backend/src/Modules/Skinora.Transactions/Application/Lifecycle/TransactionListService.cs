@@ -50,6 +50,8 @@ public sealed class TransactionListService : ITransactionListService
         TransactionStatus.CANCELLED_SELLER,
         TransactionStatus.CANCELLED_BUYER,
         TransactionStatus.CANCELLED_ADMIN,
+        // WP5 — buyer-favor dispute refund; surfaced in the user "Cancelled" tab.
+        TransactionStatus.REFUNDED,
     ];
 
     private readonly AppDbContext _db;

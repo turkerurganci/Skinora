@@ -53,6 +53,12 @@ public class TransactionStateMachineTests
 
         (TransactionStatus.ITEM_DELIVERED, TransactionTrigger.Complete, TransactionStatus.COMPLETED),
 
+        // WP5 — buyer-favor admin dispute resolution unwinds the escrow to REFUNDED.
+        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
+        (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
+        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
+        (TransactionStatus.ITEM_DELIVERED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
+
         (TransactionStatus.FLAGGED, TransactionTrigger.AdminApprove, TransactionStatus.CREATED),
         (TransactionStatus.FLAGGED, TransactionTrigger.AdminReject, TransactionStatus.CANCELLED_ADMIN),
         (TransactionStatus.FLAGGED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
@@ -349,6 +355,22 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
+    public void Fire_AdminResolveRefund_FromItemDelivered_StampsRefundedAndCancelFields()
+    {
+        // WP5 — buyer-favor dispute resolution; REFUNDED reuses the cancellation
+        // fields (CancelledBy=ADMIN, reason, CancelledAt) so CK_Transactions_Cancel holds.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_DELIVERED);
+        var sm = new TransactionStateMachine(transaction);
+
+        sm.Fire(TransactionTrigger.AdminResolveRefund, new CancellationContext("Dispute refund"));
+
+        Assert.Equal(TransactionStatus.REFUNDED, transaction.Status);
+        Assert.Equal(CancelledByType.ADMIN, transaction.CancelledBy);
+        Assert.Equal("Dispute refund", transaction.CancelReason);
+        Assert.NotNull(transaction.CancelledAt);
+    }
+
+    [Fact]
     public void ApplyEmergencyHold_StampsAllFields()
     {
         var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_ESCROWED);
@@ -565,5 +587,7 @@ public class TransactionStateMachineTests
         or TransactionTrigger.BuyerCancel
         or TransactionTrigger.AdminCancel
         or TransactionTrigger.SellerDecline
-        or TransactionTrigger.BuyerDecline;
+        or TransactionTrigger.BuyerDecline
+        // WP5 — reason-required (no default), stamped CancelledBy=ADMIN.
+        or TransactionTrigger.AdminResolveRefund;
 }

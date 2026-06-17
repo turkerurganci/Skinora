@@ -35,6 +35,15 @@ export type {
   FlagActionReasonConfig,
 } from "./FlagActionModal";
 
+export { DisputeStatusBadge } from "./DisputeStatusBadge";
+export type { DisputeStatusBadgeProps } from "./DisputeStatusBadge";
+
+export { DisputeQueueTable } from "./DisputeQueueTable";
+export type { DisputeQueueTableProps } from "./DisputeQueueTable";
+
+export { DisputeResolveModal } from "./DisputeResolveModal";
+export type { DisputeResolveModalProps } from "./DisputeResolveModal";
+
 export { TransactionListTable } from "./TransactionListTable";
 export type { TransactionListTableProps } from "./TransactionListTable";
 

@@ -243,7 +243,8 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 ### 10.4 Eskalasyon
 
 - Otomatik çözüm kullanıcıyı tatmin etmezse admin'e eskalasyon yolu var
-- Eskalasyon sürecinin detayları ileriye bırakıldı
+- **Admin çözümü (WP5 — minimal):** Admin eskale edilmiş itirazı **satıcı lehine** (işlem onaylanır, satıcı ödenir) veya **alıcı lehine** (işlem geri alınır, alıcıya iade) sonuçlandırır; her iki tarafa bildirim gider, audit kaydı tutulur (03 §6.4, 07 §9.30 AD27–AD29).
+- SLA/atama/şablon-kural gibi gelişmiş süreç detayları MVP-sonrasına bırakıldı.
 
 ---
 

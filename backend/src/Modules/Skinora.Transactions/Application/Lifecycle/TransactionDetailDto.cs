@@ -145,6 +145,10 @@ public sealed record AvailableActionsDto(
     bool CanAccept,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanCancel,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanDispute,
+    // WP5 (T58-canDisputeEnvelopeBit) — per-type dispute eligibility so the FE
+    // surfaces only the dispute types currently openable (07 §7.5). Omitted for
+    // public / prospective-buyer / on-hold envelopes.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DisputeType>? DisputableTypes,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanEscalate,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? RequiresLogin);
 

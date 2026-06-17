@@ -1,5 +1,11 @@
 import { apiClient } from "./client";
-import { DisputeStatus, DisputeType, StablecoinType, TransactionStatus } from "@/types/enums";
+import {
+  DisputeResolutionOutcome,
+  DisputeStatus,
+  DisputeType,
+  StablecoinType,
+  TransactionStatus,
+} from "@/types/enums";
 
 /**
  * AD1 — `GET /admin/dashboard` (07 §9.1). Wire format matches the backend
@@ -347,6 +353,108 @@ export function holdUserTransactions(
     `/admin/transactions/hold-by-user/${encodeURIComponent(userId)}`,
     { method: "POST", body: JSON.stringify({ reason }) },
   );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD27 / AD28 / AD29 — Admin dispute resolution (WP5 / T58, 07 §9.x).
+ * Closes the ESCALATED dead-end: list the queue, inspect a dispute, resolve it
+ * in favor of the seller (uphold) or the buyer (unwind → REFUNDED + refund).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Party summary (buyer / seller) on an admin dispute row. */
+export interface AdminDisputeParty {
+  userId: string;
+  steamId: string | null;
+  displayName: string;
+}
+
+/** One row of the AD27 dispute queue (07 §9.x). */
+export interface AdminDisputeListItem {
+  id: string;
+  transactionId: string;
+  type: DisputeType;
+  status: DisputeStatus;
+  itemName: string;
+  transactionStatus: TransactionStatus;
+  openedBy: AdminDisputeParty;
+  createdAt: string;
+}
+
+/** AD27 page envelope (PagedResult). */
+export interface AdminDisputeListResponse {
+  items: AdminDisputeListItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Embedded transaction view returned by AD28 (07 §9.x). */
+export interface AdminDisputeTransaction {
+  id: string;
+  status: TransactionStatus;
+  itemName: string;
+  price: number;
+  stablecoin: StablecoinType;
+  isOnHold: boolean;
+  hasActiveDispute: boolean;
+  seller: AdminDisputeParty;
+  buyer: AdminDisputeParty | null;
+}
+
+/** AD28 detail body (07 §9.x). */
+export interface AdminDisputeDetail {
+  id: string;
+  type: DisputeType;
+  status: DisputeStatus;
+  systemCheckResult: string | null;
+  userDescription: string | null;
+  adminId: string | null;
+  adminNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  transaction: AdminDisputeTransaction;
+}
+
+/** AD29 success body (07 §9.x). */
+export interface AdminResolveDisputeResult {
+  id: string;
+  status: DisputeStatus;
+  transactionStatus: TransactionStatus;
+  resolvedAt: string;
+  buyerRefunded: boolean;
+}
+
+export interface AdminDisputeListQuery {
+  status?: DisputeStatus;
+  type?: DisputeType;
+  page?: number;
+  pageSize?: number;
+}
+
+export function listAdminDisputes(query: AdminDisputeListQuery): Promise<AdminDisputeListResponse> {
+  const params = new URLSearchParams();
+  if (query.status) params.set("status", query.status);
+  if (query.type) params.set("type", query.type);
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
+  const qs = params.toString();
+  return apiClient<AdminDisputeListResponse>(`/admin/disputes${qs ? `?${qs}` : ""}`);
+}
+
+export function getAdminDispute(id: string): Promise<AdminDisputeDetail> {
+  return apiClient<AdminDisputeDetail>(`/admin/disputes/${encodeURIComponent(id)}`);
+}
+
+export function resolveAdminDispute(
+  id: string,
+  outcome: DisputeResolutionOutcome,
+  adminNote: string,
+): Promise<AdminResolveDisputeResult> {
+  return apiClient<AdminResolveDisputeResult>(`/admin/disputes/${encodeURIComponent(id)}/resolve`, {
+    method: "POST",
+    body: JSON.stringify({ outcome, adminNote }),
+  });
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

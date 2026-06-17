@@ -131,6 +131,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `CANCELLED_BUYER` | Alıcı tarafından iptal |
 | `CANCELLED_ADMIN` | Admin tarafından iptal (flag reddi veya admin doğrudan iptali — 03 §8.7) |
 | `FLAGGED` | Fraud tespiti nedeniyle durduruldu, admin onayı bekleniyor |
+| `REFUNDED` | Alıcı-lehine admin dispute çözümü ile işlem geri alındı, alıcıya iade yapıldı (WP5 — 03 §6.4). Terminal. |
 
 > **Kaynak:** 03 §1.2 — birebir aynı durum listesi.
 
@@ -216,7 +217,11 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 |-------|----------|
 | `OPEN` | Açıldı, otomatik kontrol yapılıyor/yapıldı |
 | `ESCALATED` | Kullanıcı admin'e iletti |
-| `CLOSED` | Çözüldü (herhangi bir yolla) |
+| `CLOSED` | Sistem tarafından otomatik çözüldü (auto-checker / submit-txhash) |
+| `RESOLVED_FOR_SELLER` | Admin satıcı lehine çözdü (WP5 — işlem onaylanır, satıcı payout devam eder). Terminal. |
+| `RESOLVED_FOR_BUYER` | Admin alıcı lehine çözdü (WP5 — işlem REFUNDED, alıcıya iade). Terminal. |
+
+> **Not (WP5):** `RESOLVED_FOR_*` admin dispute çözümünün sonucudur (`AdminId`/`AdminNote`/`ResolvedAt` set). `CLOSED` yalnız sistem otomatik çözümü için ayrılmıştır. Çözüm kararı (satıcı/alıcı lehine) ayrı bir input enum'la (`DisputeResolutionOutcome { SELLER_FAVOR, BUYER_FAVOR }`, uygulama katmanı — kalıcı değil) alınır.
 
 ### 2.11 FraudFlagType
 
@@ -605,7 +610,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `CancelledAt` | datetime | NULL | İptal zamanı |
 
 > **State-dependent CHECK constraint'ler:**
-> - **İptal state'lerinde** (`Status IN (CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN)`): `CancelledBy NOT NULL`, `CancelReason NOT NULL`, `CancelledAt NOT NULL`.
+> - **İptal/iade terminal state'lerinde** (`Status IN (CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN, REFUNDED)`): `CancelledBy NOT NULL`, `CancelReason NOT NULL`, `CancelledAt NOT NULL`. (WP5 — `REFUNDED` buyer-favor dispute çözümünde aynı alanları kullanır: `CancelledBy=ADMIN`.)
 > - **Emergency hold aktifken** (`IsOnHold = 1`): `EmergencyHoldAt NOT NULL`, `EmergencyHoldReason NOT NULL`, `EmergencyHoldByAdminId NOT NULL`.
 > - **Timeout freeze aktifken** (`TimeoutFrozenAt IS NOT NULL`): `TimeoutFreezeReason NOT NULL`, `TimeoutRemainingSeconds NOT NULL`.
 > - **Timeout freeze pasifken** (`TimeoutFrozenAt IS NULL`): `TimeoutFreezeReason IS NULL`, `TimeoutRemainingSeconds IS NULL` — yarım freeze kaydı engellenr.
@@ -864,10 +869,12 @@ Alıcı tarafından açılan itiraz kaydı.
 
 > **Kural:** Bir işlem için aynı türde dispute tekrar açılamaz (02 §10.2). Kontrol: TransactionId + Type çifti unique — status'tan ve IsDeleted'dan bağımsız (unfiltered unique index). Bir dispute kapatıldıktan veya soft delete edildikten sonra da aynı türde yenisi açılamaz.
 >
-> **Çoklu aktif dispute:** 02 §10.2 yalnızca aynı türde tekrarı yasaklar; farklı türlerde eşzamanlı aktif dispute'lar (ör: PAYMENT + WRONG_ITEM) mümkündür. `Transaction.HasActiveDispute` boolean'ı en az bir dispute OPEN/ESCALATED olduğunda true, tümü CLOSED olduğunda false olur. Birden fazla aktif dispute'un admin kuyruğunda birlikte görünmesi beklenen davranıştır.
+> **Çoklu aktif dispute:** 02 §10.2 yalnızca aynı türde tekrarı yasaklar; farklı türlerde eşzamanlı aktif dispute'lar (ör: PAYMENT + WRONG_ITEM) mümkündür. `Transaction.HasActiveDispute` boolean'ı en az bir dispute OPEN/ESCALATED olduğunda true, tümü çözüldüğünde (CLOSED / RESOLVED_FOR_*) false olur. Birden fazla aktif dispute'un admin kuyruğunda birlikte görünmesi beklenen davranıştır.
+>
+> **Admin çözümü (WP5 — 03 §6.4):** ESCALATED dispute'u admin `RESOLVED_FOR_SELLER` (işlem onaylanır → satıcı payout) veya `RESOLVED_FOR_BUYER` (işlem `REFUNDED` → alıcı iade + item platformdaysa satıcıya iade) ile kapatır; `AdminId`/`AdminNote`/`ResolvedAt` set edilir. Emergency hold altındaki işlem önce AD19c ile release edilmelidir.
 >
 > **State-dependent CHECK constraint'ler:**
-> - **CLOSED**: `ResolvedAt NOT NULL`.
+> - **CLOSED / RESOLVED_FOR_SELLER / RESOLVED_FOR_BUYER**: `ResolvedAt NOT NULL` (`CK_Disputes_Resolved_ResolvedAt`).
 
 ### 3.12 FraudFlag
 

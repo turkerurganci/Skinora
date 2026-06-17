@@ -19,5 +19,10 @@ public enum TransactionTrigger
     SellerDecline,
     BuyerDecline,
     AdminApprove,
-    AdminReject
+    AdminReject,
+
+    // WP5 / T58 — buyer-favor admin dispute resolution. Permitted from the
+    // disputed states (ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER,
+    // ITEM_DELIVERED) into the terminal REFUNDED state.
+    AdminResolveRefund
 }

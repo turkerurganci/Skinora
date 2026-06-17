@@ -184,12 +184,76 @@
     "closeMenu": "关闭管理菜单",
     "dashboard": "仪表盘",
     "flags": "标记",
+    "disputes": "争议",
     "transactions": "交易",
     "settings": "设置",
     "steamAccounts": "Steam 账户",
     "roles": "角色",
     "users": "用户",
     "auditLog": "审计日志"
+  },
+  "adminDisputes": {
+    "title": "争议队列",
+    "loadError": "加载争议失败。",
+    "empty": "未找到争议。",
+    "tableAriaLabel": "争议队列",
+    "filters": {
+      "status": "状态",
+      "type": "类型",
+      "statusDefault": "升级队列",
+      "allTypes": "所有类型"
+    },
+    "columns": {
+      "id": "ID",
+      "type": "类型",
+      "item": "物品",
+      "transactionStatus": "交易",
+      "openedBy": "发起人",
+      "date": "日期",
+      "status": "状态",
+      "actions": "操作"
+    },
+    "type": {
+      "PAYMENT": "付款",
+      "DELIVERY": "交付",
+      "WRONG_ITEM": "错误物品"
+    },
+    "status": {
+      "OPEN": "进行中",
+      "ESCALATED": "已升级",
+      "CLOSED": "已关闭",
+      "RESOLVED_FOR_SELLER": "已解决（卖家）",
+      "RESOLVED_FOR_BUYER": "已解决（买家）"
+    },
+    "actions": {
+      "resolve": "解决"
+    },
+    "resolve": {
+      "title": "解决争议",
+      "fields": {
+        "type": "类型",
+        "item": "物品",
+        "openedBy": "发起人",
+        "userDescription": "用户描述",
+        "systemCheckResult": "系统检查"
+      },
+      "outcomeLabel": "裁决",
+      "outcome": {
+        "SELLER_FAVOR": "支持卖家",
+        "BUYER_FAVOR": "支持买家"
+      },
+      "outcomeHint": {
+        "SELLER_FAVOR": "维持交易；卖家付款继续。",
+        "BUYER_FAVOR": "撤销交易；向买家退款。"
+      },
+      "outcomeRequired": "请选择裁决。",
+      "noteLabel": "管理员备注",
+      "notePlaceholder": "决定原因",
+      "noteRequired": "管理员备注为必填项。",
+      "error": "解决争议失败。",
+      "cancel": "取消",
+      "confirm": "解决"
+    }
   },
   "adminDashboard": {
     "title": "仪表盘",
@@ -745,6 +809,7 @@
     "CANCELLED_BUYER": "买家取消",
     "CANCELLED_ADMIN": "管理员取消",
     "FLAGGED": "审核中",
+    "REFUNDED": "已退款",
     "EMERGENCY_HOLD": "已冻结"
   },
   "countdown": {

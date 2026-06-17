@@ -29,7 +29,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP3 | Hot-wallet/ledger doğruluğu: SWEEP dispatcher *(migration)* | Mutabakat iki-taraflı doğru | **T110** | M |
 | **P2 — Fraud/uyum** | WP4a | Fraud accept-gate + canlı fiyat (wiring) | Flag'li hesap engellenir, PRICE_DEVIATION çalışır | **T111** | M |
 | | WP4b ✅ | Retro-scan + FLAGGED-approve timeout (by-design) + alloc + note-limit | Fraud kapsam tamlığı | T111 | M |
-| | WP5 | Dispute çözüm (admin): `/admin/disputes` + resolve | ESCALATED çıkmaz sokak kapanır | **T113** | M–L |
+| | WP5 ✅ | Dispute çözüm (admin): `/admin/disputes` + resolve *(migration)* | ESCALATED çıkmaz sokak kapanır | **T113** | M–L |
 | | WP6 | Steam dispute checker'ları (trade-hold + MA) + auto-resolve doğrula | DELIVERY/WRONG_ITEM otomatik çözülür | T111/T113 | M |
 | **P3 — Operasyon** | WP7 | Outage/maintenance: bulk-freeze çağıran + toggle push | Platform dondurulabilir | **T114** | M |
 | | WP8 | Admin bildirim/alert + audit tamamlama *(migration)* | Admin olayları görür/aksiyon alır | T113 | M |
@@ -45,7 +45,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP18 | Test/CI sertleştirme (FE runner, prettier CI, npm audit) | Regresyon güvenliği | gate | M–L |
 
 **Bağımlılıklar:** WP1 her şeyin temeli (ilk). **WP5 → WP1 + WP2** (satıcı-lehine release WP1'in `Complete`→payout yolunu, alıcı-lehine refund WP2'nin `BUYER_REFUND`'ünü kullanır). WP4a accept-gate ucuz/yüksek-değer (erken). WP12'deki **OPEN_LINK 409 fix bağımsız** — P1'de WP1 ile inebilir. WP18 sürekli/son.
-**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu) ve **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir) — gate-check yeni migration dosyası bekler.
+**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu), **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir) ve **WP5** (owner kararı: yapısal statü — `CK_Disputes_Resolved_ResolvedAt` + `CK_Transactions_Cancel` REFUNDED, iki CHECK recreate, seed yok) — gate-check yeni migration dosyası bekler.
 
 ---
 
@@ -89,7 +89,9 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Çözüm (owner kararları, AskUserQuestion):** (1) **retro-scan** = günlük const cron `MultiAccountRetroScanJob` (Skinora.API, `AutoUnsuspendJob` deseni), cüzdanlı aktif kullanıcıları `IMultiAccountDetector` ile tarar (kaba per-user dedup, mevcut gate). (2) **FLAGGED-approve timeout** = **sadece-doğrula, yeni job YOK** — 05 §4.4 + 06 §3.5:650 accept-deadline'ları bilinçli poller-driven yapar (yalnız ITEM_ESCROWED per-tx job alır); `DeadlineScannerJob` `ApproveAsync`'in setlediği `AcceptDeadline`'ı zaten enforce ediyor → regresyon testi + resolved-by-design. (3) **allocation** = `FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync` (best-effort; `EnsurePaymentAddressJob` recovery'yi tamamlar). (4) **note max-length** = 2000 char (kolon genişliği) → 400 `VALIDATION_ERROR`. **Migration YOK** (model değişmedi).
 **Efor:** M · **Açar:** T111
 
-### WP5 — Dispute çözüm (admin)
+### WP5 — Dispute çözüm (admin) — ✅ Çözüldü (validator bekliyor)
+> **Durum: ⏳ Devam ediyor (2026-06-17)** — yapım tamam, bağımsız validator bekliyor. **Owner kararları (AskUserQuestion):** çözüm modeli = **yapısal statü + migration** (yeni `DisputeStatus` `RESOLVED_FOR_SELLER`/`RESOLVED_FOR_BUYER` + yeni terminal `TransactionStatus.REFUNDED` + `AdminResolveRefund` trigger) · kapsam = **full-stack** · permission = **VIEW_DISPUTES + MANAGE_DISPUTES çifti** · minör kalemler = **ikisi de WP5'te** (per-type `disputableTypes` + `ACTIVE_DISPUTE_EXISTS` 07'den kaldırıldı). Uygulama: `AdminDisputeService` (AD27/28/29, API katmanı) + `DisputeResolvedEvent`/consumer + FE `/admin/disputes` ekranı. **Migration `WP5_AddDisputeResolution`** (iki CHECK recreate; seed yok). Rapor: [`TASK_REPORTS/WP5_REPORT.md`](TASK_REPORTS/WP5_REPORT.md).
+
 **Backlog:** T58-AdminDisputeQueue · T58-canDisputeEnvelopeBit · T58-ActiveDisputeExistsUnreachable · emergency-hold-callers (dispute-queue surfacing)
 **Kanıt:** `GET /admin/disputes` yok; `IDisputeService` yalnız buyer-facing; `Dispute.AdminId/AdminNote` (`Dispute.cs:16,23`) hiç atanmıyor; ESCALATED→CLOSED yolu yok. DELIVERY/WRONG_ITEM dispute yalnız `ITEM_DELIVERED`'da açılır (`DisputeService.cs:73-81`) → satıcı-lehine resolve `Complete`→`COMPLETED` (WP1), alıcı-lehine resolve `BUYER_REFUND` (WP2) gerektirir.
 **İş:** `GET /admin/disputes` (ESCALATED liste) + `POST /admin/disputes/{id}/resolve` → `AdminResolveAsync` (CLOSED + AdminId/AdminNote/ResolvedAt + item-release **[WP1]** veya iade **[WP2]** çıktısı + audit + notify). Per-type `canDispute`.

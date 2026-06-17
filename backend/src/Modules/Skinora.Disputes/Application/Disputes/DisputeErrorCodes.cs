@@ -20,4 +20,8 @@ public static class DisputeErrorCodes
 
     // T10 — escalate (07 §7.10).
     public const string AlreadyEscalated = "ALREADY_ESCALATED";
+
+    // WP5 — admin dispute resolution (07 §9.x).
+    public const string NotEscalated = "DISPUTE_NOT_ESCALATED";
+    public const string TransactionOnHold = "TRANSACTION_ON_HOLD";
 }

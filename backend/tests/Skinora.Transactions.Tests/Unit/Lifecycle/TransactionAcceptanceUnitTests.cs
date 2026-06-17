@@ -39,6 +39,7 @@ public class TransactionAcceptanceUnitTests
             CanAccept: false,
             CanCancel: null,
             CanDispute: null,
+            DisputableTypes: null,
             CanEscalate: null,
             RequiresLogin: true);
 
@@ -58,6 +59,7 @@ public class TransactionAcceptanceUnitTests
             CanAccept: false,
             CanCancel: true,
             CanDispute: false,
+            DisputableTypes: null,
             CanEscalate: false,
             RequiresLogin: null);
 

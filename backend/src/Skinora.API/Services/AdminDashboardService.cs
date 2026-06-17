@@ -25,6 +25,7 @@ public sealed class AdminDashboardService : IAdminDashboardService
         TransactionStatus.CANCELLED_SELLER,
         TransactionStatus.CANCELLED_BUYER,
         TransactionStatus.CANCELLED_ADMIN,
+        TransactionStatus.REFUNDED,
     ];
 
     private readonly AppDbContext _db;

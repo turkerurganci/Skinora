@@ -159,7 +159,8 @@ public class TransactionStateMachine
             TransactionTrigger.Timeout => CancelledByType.TIMEOUT,
             TransactionTrigger.SellerCancel or TransactionTrigger.SellerDecline => CancelledByType.SELLER,
             TransactionTrigger.BuyerCancel or TransactionTrigger.BuyerDecline => CancelledByType.BUYER,
-            TransactionTrigger.AdminCancel or TransactionTrigger.AdminReject => CancelledByType.ADMIN,
+            TransactionTrigger.AdminCancel or TransactionTrigger.AdminReject
+                or TransactionTrigger.AdminResolveRefund => CancelledByType.ADMIN,
             _ => (CancelledByType?)null,
         };
 
@@ -232,25 +233,35 @@ public class TransactionStateMachine
             // ITEM_ESCROWED tanımı gereği ödeme henüz yok; guard 09 §9.2 örneğindeki açık kuralla
             // korunur (PAYMENT_RECEIVED state'ine geçildiğinde alıcı iptali otomatik yasak olur).
             .PermitIf(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER, () => _transaction.PaymentReceivedAt is null, "Ödeme yapıldıktan sonra alıcı iptal edemez (02 §7).")
-            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
+            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
+            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
+            .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
         // PAYMENT_RECEIVED — alıcıya teslim aşaması; tek taraflı iptal kapalı (02 §7)
         _machine.Configure(TransactionStatus.PAYMENT_RECEIVED)
             .OnEntry(() => _transaction.PaymentReceivedAt = DateTime.UtcNow)
             .Permit(TransactionTrigger.SendTradeOfferToBuyer, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
-            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
+            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
+            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
+            .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
         // TRADE_OFFER_SENT_TO_BUYER
         _machine.Configure(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
             .PermitIf(TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED, HasFieldsForItemDelivered, "DeliveredBuyerAssetId zorunlu (06 §3.5).")
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
             .Permit(TransactionTrigger.BuyerDecline, TransactionStatus.CANCELLED_BUYER)
-            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
+            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
+            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
+            .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
-        // ITEM_DELIVERED — admin cancel kullanılamaz (05 §4.2 not)
+        // ITEM_DELIVERED — standart admin-cancel kullanılamaz (05 §4.2 not).
+        // WP5 — admin dispute çözümü "ayrı manuel süreç"tir (07 §9.x exceptional
+        // resolution): buyer-favor kararı AdminResolveRefund ile REFUNDED'a geçer
+        // (item alıcıdadır → fiziksel geri-alma WP6/manuel kapsamı).
         _machine.Configure(TransactionStatus.ITEM_DELIVERED)
             .OnEntry(() => _transaction.ItemDeliveredAt = DateTime.UtcNow)
-            .Permit(TransactionTrigger.Complete, TransactionStatus.COMPLETED);
+            .Permit(TransactionTrigger.Complete, TransactionStatus.COMPLETED)
+            .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
         // COMPLETED — terminal
         _machine.Configure(TransactionStatus.COMPLETED)
@@ -264,6 +275,12 @@ public class TransactionStateMachine
         _machine.Configure(TransactionStatus.CANCELLED_BUYER)
             .OnEntry(() => _transaction.CancelledAt = DateTime.UtcNow);
         _machine.Configure(TransactionStatus.CANCELLED_ADMIN)
+            .OnEntry(() => _transaction.CancelledAt = DateTime.UtcNow);
+
+        // REFUNDED — terminal (WP5 buyer-favor dispute resolution). Reuses the
+        // cancellation fields (CancelledBy=ADMIN, CancelReason, CancelledAt) so
+        // CK_Transactions_Cancel holds; OnEntry stamps CancelledAt like CANCELLED_*.
+        _machine.Configure(TransactionStatus.REFUNDED)
             .OnEntry(() => _transaction.CancelledAt = DateTime.UtcNow);
 
         // FLAGGED — yalnızca işlem oluşturma anında set edilir (05 §4.2 not).

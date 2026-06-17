@@ -4,13 +4,14 @@ namespace Skinora.Shared.Tests.Unit;
 
 public class EnumTests
 {
-    // ── TransactionStatus (13) ──────────────────────────────────────
+    // ── TransactionStatus (14) ──────────────────────────────────────
 
     [Fact]
-    public void TransactionStatus_ShouldHave13Values()
+    public void TransactionStatus_ShouldHave14Values()
     {
+        // 14 after WP5 added REFUNDED (buyer-favor admin dispute resolution).
         var values = Enum.GetValues<TransactionStatus>();
-        Assert.Equal(13, values.Length);
+        Assert.Equal(14, values.Length);
     }
 
     [Theory]
@@ -27,6 +28,7 @@ public class EnumTests
     [InlineData(nameof(TransactionStatus.CANCELLED_BUYER))]
     [InlineData(nameof(TransactionStatus.CANCELLED_ADMIN))]
     [InlineData(nameof(TransactionStatus.FLAGGED))]
+    [InlineData(nameof(TransactionStatus.REFUNDED))]
     public void TransactionStatus_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(TransactionStatus), Enum.Parse<TransactionStatus>(valueName)));
@@ -186,22 +188,43 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(DisputeType), Enum.Parse<DisputeType>(valueName)));
     }
 
-    // ── DisputeStatus (3) ───────────────────────────────────────────
+    // ── DisputeStatus (5) ───────────────────────────────────────────
 
     [Fact]
-    public void DisputeStatus_ShouldHave3Values()
+    public void DisputeStatus_ShouldHave5Values()
     {
+        // 5 after WP5 added RESOLVED_FOR_SELLER / RESOLVED_FOR_BUYER
+        // (admin dispute resolution terminals).
         var values = Enum.GetValues<DisputeStatus>();
-        Assert.Equal(3, values.Length);
+        Assert.Equal(5, values.Length);
     }
 
     [Theory]
     [InlineData(nameof(DisputeStatus.OPEN))]
     [InlineData(nameof(DisputeStatus.ESCALATED))]
     [InlineData(nameof(DisputeStatus.CLOSED))]
+    [InlineData(nameof(DisputeStatus.RESOLVED_FOR_SELLER))]
+    [InlineData(nameof(DisputeStatus.RESOLVED_FOR_BUYER))]
     public void DisputeStatus_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(DisputeStatus), Enum.Parse<DisputeStatus>(valueName)));
+    }
+
+    // ── DisputeResolutionOutcome (2) ────────────────────────────────
+
+    [Fact]
+    public void DisputeResolutionOutcome_ShouldHave2Values()
+    {
+        var values = Enum.GetValues<DisputeResolutionOutcome>();
+        Assert.Equal(2, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(DisputeResolutionOutcome.SELLER_FAVOR))]
+    [InlineData(nameof(DisputeResolutionOutcome.BUYER_FAVOR))]
+    public void DisputeResolutionOutcome_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(DisputeResolutionOutcome), Enum.Parse<DisputeResolutionOutcome>(valueName)));
     }
 
     // ── FraudFlagType (4) ───────────────────────────────────────────
@@ -498,13 +521,14 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(DeliveryStatus), Enum.Parse<DeliveryStatus>(valueName)));
     }
 
-    // ── TransactionTrigger (15) — 05 §4.2 transition table triggers ───
+    // ── TransactionTrigger (16) — 05 §4.2 transition table triggers ───
 
     [Fact]
-    public void TransactionTrigger_ShouldHave15Values()
+    public void TransactionTrigger_ShouldHave16Values()
     {
+        // 16 after WP5 added AdminResolveRefund (buyer-favor dispute resolution).
         var values = Enum.GetValues<TransactionTrigger>();
-        Assert.Equal(15, values.Length);
+        Assert.Equal(16, values.Length);
     }
 
     [Theory]
@@ -571,7 +595,8 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        // T59 added EmergencyHoldReleaseAction → 27; T103b-2 added BotRecoveryStatus → 28.
-        Assert.Equal(28, enumTypes.Count);
+        // T59 added EmergencyHoldReleaseAction → 27; T103b-2 added BotRecoveryStatus → 28;
+        // WP5 added DisputeResolutionOutcome → 29.
+        Assert.Equal(29, enumTypes.Count);
     }
 }

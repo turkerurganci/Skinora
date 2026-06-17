@@ -84,8 +84,9 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
         var data = body.GetProperty("data");
 
         var available = data.GetProperty("availablePermissions");
-        // 12 permissions after T82 added MANAGE_SANCTIONS (07 §9.11, 04 §8.8).
-        Assert.Equal(12, available.GetArrayLength());
+        // 14 permissions after WP5 added VIEW_DISPUTES / MANAGE_DISPUTES
+        // (07 §9.11, 04 §8.8).
+        Assert.Equal(14, available.GetArrayLength());
         var keys = new List<string>();
         foreach (var entry in available.EnumerateArray())
             keys.Add(entry.GetProperty("key").GetString()!);
@@ -93,6 +94,8 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
         Assert.Contains("MANAGE_ROLES", keys);
         Assert.Contains("EMERGENCY_HOLD", keys);
         Assert.Contains("MANAGE_SANCTIONS", keys);
+        Assert.Contains("VIEW_DISPUTES", keys);
+        Assert.Contains("MANAGE_DISPUTES", keys);
 
         var roles = data.GetProperty("roles");
         Assert.Equal(1, roles.GetArrayLength());

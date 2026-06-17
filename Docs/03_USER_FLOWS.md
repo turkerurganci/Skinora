@@ -428,9 +428,13 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 1. Kullanıcı otomatik çözüm sonrası "Admin'e İlet" butonuna tıklar
 2. Kullanıcı itiraz detayını yazar
-3. İşlem admin kuyruğuna düşer
+3. İşlem admin kuyruğuna düşer (dispute `ESCALATED`)
 4. Kullanıcıya "İtirazınız admin ekibine iletildi" bildirimi gider
-5. *Admin eskalasyon sürecinin detayları ileriye bırakıldı*
+5. **Admin çözümü (WP5 — minimal):** Admin eskalasyon kuyruğunu (`GET /admin/disputes`, AD27) görür, itirazı inceler (AD28) ve karar verir (AD29):
+   - **Satıcı lehine** → dispute `RESOLVED_FOR_SELLER`; işlem onaylanır, satıcı payout devam eder.
+   - **Alıcı lehine** → dispute `RESOLVED_FOR_BUYER`; işlem `REFUNDED`, alıcıya iade (item platformdaysa satıcıya iade). ITEM_DELIVERED'da fiziksel item geri-alma WP6/manuel.
+   - Her iki tarafa `DISPUTE_RESULT` bildirimi gider; `DISPUTE_RESOLVED` audit kaydı yazılır. Emergency hold altındaki işlem önce AD19c ile release edilir.
+   - **Kapsam dışı (MVP-sonrası):** SLA, sorumlu-admin atama, yanıt şablonu, çok-adımlı state machine.
 
 ---
 

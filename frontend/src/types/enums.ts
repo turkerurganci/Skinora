@@ -3,7 +3,7 @@
  * Values are string literals to match EF Core string storage (HasConversion).
  */
 
-// §2.1 — 13 values
+// §2.1 — 14 values
 export enum TransactionStatus {
   CREATED = "CREATED",
   ACCEPTED = "ACCEPTED",
@@ -18,6 +18,8 @@ export enum TransactionStatus {
   CANCELLED_BUYER = "CANCELLED_BUYER",
   CANCELLED_ADMIN = "CANCELLED_ADMIN",
   FLAGGED = "FLAGGED",
+  // WP5 — buyer-favor admin dispute resolution terminal.
+  REFUNDED = "REFUNDED",
 }
 
 // §2.2 — 2 values
@@ -85,11 +87,20 @@ export enum DisputeType {
   WRONG_ITEM = "WRONG_ITEM",
 }
 
-// §2.10 — 3 values
+// §2.10 — 5 values
 export enum DisputeStatus {
   OPEN = "OPEN",
   ESCALATED = "ESCALATED",
   CLOSED = "CLOSED",
+  // WP5 — admin resolution terminals.
+  RESOLVED_FOR_SELLER = "RESOLVED_FOR_SELLER",
+  RESOLVED_FOR_BUYER = "RESOLVED_FOR_BUYER",
+}
+
+// WP5 — admin dispute resolution decision (resolve request).
+export enum DisputeResolutionOutcome {
+  SELLER_FAVOR = "SELLER_FAVOR",
+  BUYER_FAVOR = "BUYER_FAVOR",
 }
 
 // §2.11 — 4 values

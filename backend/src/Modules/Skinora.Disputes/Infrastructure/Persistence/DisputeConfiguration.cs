@@ -67,8 +67,10 @@ public class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
             .HasDatabaseName("IX_Disputes_Status_Active");
 
         // --- State-dependent CHECK constraints (06 §3.11) ---
-        // CLOSED → ResolvedAt NOT NULL
-        builder.ToTable(t => t.HasCheckConstraint("CK_Disputes_Closed_ResolvedAt",
-            "(Status <> 'CLOSED') OR (ResolvedAt IS NOT NULL)"));
+        // Any resolved terminal (CLOSED auto-resolution, or admin RESOLVED_FOR_*)
+        // → ResolvedAt NOT NULL (WP5 admin dispute resolution).
+        builder.ToTable(t => t.HasCheckConstraint("CK_Disputes_Resolved_ResolvedAt",
+            "(Status <> 'CLOSED' AND Status <> 'RESOLVED_FOR_SELLER' AND Status <> 'RESOLVED_FOR_BUYER') " +
+            "OR (ResolvedAt IS NOT NULL)"));
     }
 }

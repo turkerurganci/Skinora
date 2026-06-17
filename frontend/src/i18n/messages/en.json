@@ -184,12 +184,76 @@
     "closeMenu": "Close admin menu",
     "dashboard": "Dashboard",
     "flags": "Flags",
+    "disputes": "Disputes",
     "transactions": "Transactions",
     "settings": "Settings",
     "steamAccounts": "Steam Accounts",
     "roles": "Roles",
     "users": "Users",
     "auditLog": "Audit Log"
+  },
+  "adminDisputes": {
+    "title": "Dispute Queue",
+    "loadError": "Failed to load disputes.",
+    "empty": "No disputes found.",
+    "tableAriaLabel": "Dispute queue",
+    "filters": {
+      "status": "Status",
+      "type": "Type",
+      "statusDefault": "Escalation queue",
+      "allTypes": "All types"
+    },
+    "columns": {
+      "id": "ID",
+      "type": "Type",
+      "item": "Item",
+      "transactionStatus": "Transaction",
+      "openedBy": "Opened by",
+      "date": "Date",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "type": {
+      "PAYMENT": "Payment",
+      "DELIVERY": "Delivery",
+      "WRONG_ITEM": "Wrong item"
+    },
+    "status": {
+      "OPEN": "Open",
+      "ESCALATED": "Escalated",
+      "CLOSED": "Closed",
+      "RESOLVED_FOR_SELLER": "Resolved (seller)",
+      "RESOLVED_FOR_BUYER": "Resolved (buyer)"
+    },
+    "actions": {
+      "resolve": "Resolve"
+    },
+    "resolve": {
+      "title": "Resolve dispute",
+      "fields": {
+        "type": "Type",
+        "item": "Item",
+        "openedBy": "Opened by",
+        "userDescription": "User description",
+        "systemCheckResult": "System check"
+      },
+      "outcomeLabel": "Resolution",
+      "outcome": {
+        "SELLER_FAVOR": "In favor of seller",
+        "BUYER_FAVOR": "In favor of buyer"
+      },
+      "outcomeHint": {
+        "SELLER_FAVOR": "Uphold the transaction; the seller payout proceeds.",
+        "BUYER_FAVOR": "Unwind the transaction; the buyer is refunded."
+      },
+      "outcomeRequired": "Select a resolution.",
+      "noteLabel": "Admin note",
+      "notePlaceholder": "Reason for the decision",
+      "noteRequired": "An admin note is required.",
+      "error": "Failed to resolve the dispute.",
+      "cancel": "Cancel",
+      "confirm": "Resolve"
+    }
   },
   "adminDashboard": {
     "title": "Dashboard",
@@ -745,6 +809,7 @@
     "CANCELLED_BUYER": "Buyer Cancelled",
     "CANCELLED_ADMIN": "Admin Cancelled",
     "FLAGGED": "Under Review",
+    "REFUNDED": "Refunded",
     "EMERGENCY_HOLD": "On Hold"
   },
   "countdown": {

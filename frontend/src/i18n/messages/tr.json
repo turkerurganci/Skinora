@@ -184,12 +184,76 @@
     "closeMenu": "Admin menüyü kapat",
     "dashboard": "Kontrol Paneli",
     "flags": "Flag'ler",
+    "disputes": "İtirazlar",
     "transactions": "İşlemler",
     "settings": "Ayarlar",
     "steamAccounts": "Steam Hesapları",
     "roles": "Roller",
     "users": "Kullanıcılar",
     "auditLog": "Audit Log"
+  },
+  "adminDisputes": {
+    "title": "İtiraz Kuyruğu",
+    "loadError": "İtirazlar yüklenemedi.",
+    "empty": "İtiraz bulunamadı.",
+    "tableAriaLabel": "İtiraz kuyruğu",
+    "filters": {
+      "status": "Durum",
+      "type": "Tür",
+      "statusDefault": "Eskalasyon kuyruğu",
+      "allTypes": "Tüm türler"
+    },
+    "columns": {
+      "id": "ID",
+      "type": "Tür",
+      "item": "Ürün",
+      "transactionStatus": "İşlem",
+      "openedBy": "Açan",
+      "date": "Tarih",
+      "status": "Durum",
+      "actions": "İşlemler"
+    },
+    "type": {
+      "PAYMENT": "Ödeme",
+      "DELIVERY": "Teslimat",
+      "WRONG_ITEM": "Yanlış ürün"
+    },
+    "status": {
+      "OPEN": "Açık",
+      "ESCALATED": "Eskalasyon",
+      "CLOSED": "Kapalı",
+      "RESOLVED_FOR_SELLER": "Çözüldü (satıcı)",
+      "RESOLVED_FOR_BUYER": "Çözüldü (alıcı)"
+    },
+    "actions": {
+      "resolve": "Çöz"
+    },
+    "resolve": {
+      "title": "İtirazı çöz",
+      "fields": {
+        "type": "Tür",
+        "item": "Ürün",
+        "openedBy": "Açan",
+        "userDescription": "Kullanıcı açıklaması",
+        "systemCheckResult": "Sistem kontrolü"
+      },
+      "outcomeLabel": "Karar",
+      "outcome": {
+        "SELLER_FAVOR": "Satıcı lehine",
+        "BUYER_FAVOR": "Alıcı lehine"
+      },
+      "outcomeHint": {
+        "SELLER_FAVOR": "İşlemi onayla; satıcı ödemesi devam eder.",
+        "BUYER_FAVOR": "İşlemi geri al; alıcıya iade yapılır."
+      },
+      "outcomeRequired": "Bir karar seçin.",
+      "noteLabel": "Admin notu",
+      "notePlaceholder": "Karar gerekçesi",
+      "noteRequired": "Admin notu zorunludur.",
+      "error": "İtiraz çözülemedi.",
+      "cancel": "İptal",
+      "confirm": "Çöz"
+    }
   },
   "adminDashboard": {
     "title": "Kontrol Paneli",
@@ -745,6 +809,7 @@
     "CANCELLED_BUYER": "Alıcı İptal",
     "CANCELLED_ADMIN": "Admin İptal",
     "FLAGGED": "İnceleniyor",
+    "REFUNDED": "İade edildi",
     "EMERGENCY_HOLD": "Donduruldu"
   },
   "countdown": {

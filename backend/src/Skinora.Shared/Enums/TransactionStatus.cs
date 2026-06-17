@@ -14,5 +14,10 @@ public enum TransactionStatus
     CANCELLED_SELLER,
     CANCELLED_BUYER,
     CANCELLED_ADMIN,
-    FLAGGED
+    FLAGGED,
+
+    // Terminal — buyer-favor admin dispute resolution (WP5 / T58). The
+    // transaction is unwound and the buyer refunded; distinct from
+    // CANCELLED_ADMIN so dispute-driven refunds are first-class in reporting.
+    REFUNDED
 }
