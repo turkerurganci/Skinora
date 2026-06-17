@@ -916,6 +916,7 @@ Platform içi bildirimler — kullanıcı dashboard'unda gösterilir.
 | `Id` | guid | PK | |
 | `UserId` | guid | FK → User, NOT NULL | Bildirimi alan kullanıcı |
 | `TransactionId` | guid | FK → Transaction, NULL | İlgili işlem (varsa) |
+| `FlagId` | guid | NULL | İlgili fraud flag — yalnız `ADMIN_FLAG_ALERT` admin bildiriminde dolu (07 §8.1 `flag` hedefi). Filtreli index (`WHERE FlagId IS NOT NULL`); FK kısıtı **yok** — FraudFlag, Fraud modülünde ve soft-delete olduğundan mantıksal link (id ile). WP8. |
 | `Type` | int | NOT NULL | Enum: NotificationType |
 | `Title` | string(256) | NOT NULL | Lokalize edilmiş başlık |
 | `Body` | string(2000) | NOT NULL | Lokalize edilmiş içerik |
@@ -1439,6 +1440,7 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | TradeOffer | PlatformSteamBotId | Standard | Bot bazlı trade offer sorguları |
 | Notification | UserId + IsRead | Composite | Okunmamış bildirim sorguları |
 | Notification | CreatedAt | Standard | Kronolojik listeleme |
+| Notification | FlagId | Filtered (FlagId IS NOT NULL) | `ADMIN_FLAG_ALERT` flag-link sorguları (WP8) |
 | FraudFlag | Status | Filtered (Pending) | Admin inceleme kuyruğu |
 | FraudFlag | TransactionId | Standard | İşleme ait flag'ler |
 | FraudFlag | UserId | Standard | Kullanıcıya ait flag'ler |
