@@ -18,6 +18,8 @@ const STATUS_COLOR_MAP: Record<ExtendedStatus, string> = {
   [TransactionStatus.CANCELLED_BUYER]: "bg-red-100 text-red-800 ring-red-200",
   [TransactionStatus.CANCELLED_ADMIN]: "bg-orange-100 text-orange-900 ring-orange-300",
   [TransactionStatus.FLAGGED]: "bg-orange-100 text-orange-800 ring-orange-200",
+  // WP5 — buyer-favor dispute refund terminal.
+  [TransactionStatus.REFUNDED]: "bg-purple-100 text-purple-800 ring-purple-200",
   EMERGENCY_HOLD: "bg-red-200 text-orange-900 ring-orange-400",
 };
 

@@ -66,15 +66,22 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
         TransactionStatus.CANCELLED_SELLER,
         TransactionStatus.CANCELLED_BUYER,
         TransactionStatus.CANCELLED_ADMIN,
+        TransactionStatus.REFUNDED,
     ];
 
-    /// <summary>The four CANCELLED_* states behind the S15 "İptal" group (04 §8.4).</summary>
+    /// <summary>
+    /// Terminal cancelled/unwound states behind the S15 "İptal" group (04 §8.4).
+    /// REFUNDED (WP5 buyer-favor dispute resolution) buckets here so it is
+    /// reachable via the CANCELLED status-group filter while keeping its own
+    /// distinct status value/badge in the row.
+    /// </summary>
     private static readonly TransactionStatus[] _cancelledStates =
     [
         TransactionStatus.CANCELLED_TIMEOUT,
         TransactionStatus.CANCELLED_SELLER,
         TransactionStatus.CANCELLED_BUYER,
         TransactionStatus.CANCELLED_ADMIN,
+        TransactionStatus.REFUNDED,
     ];
 
     private readonly AppDbContext _db;

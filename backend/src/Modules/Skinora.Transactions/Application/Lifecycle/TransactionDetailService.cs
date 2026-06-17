@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Calculations;
@@ -28,14 +29,6 @@ public sealed class TransactionDetailService : ITransactionDetailService
         TransactionStatus.ACCEPTED,
         TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
         TransactionStatus.ITEM_ESCROWED,
-    ];
-
-    private static readonly TransactionStatus[] _disputeAllowedStates =
-    [
-        TransactionStatus.ITEM_ESCROWED,
-        TransactionStatus.PAYMENT_RECEIVED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
-        TransactionStatus.ITEM_DELIVERED,
     ];
 
     private readonly AppDbContext _db;
@@ -285,6 +278,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 CanAccept: !transaction.IsOnHold,
                 CanCancel: null,
                 CanDispute: null,
+                DisputableTypes: null,
                 CanEscalate: null,
                 RequiresLogin: null)
             : BuildAuthenticatedActions(transaction, role!, nowUtc);
@@ -372,6 +366,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 CanAccept: false,
                 CanCancel: null,
                 CanDispute: null,
+                DisputableTypes: null,
                 CanEscalate: null,
                 RequiresLogin: true),
             CreatedAt: null,
@@ -445,6 +440,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 CanAccept: false,
                 CanCancel: false,
                 CanDispute: false,
+                DisputableTypes: Array.Empty<DisputeType>(),
                 CanEscalate: false,
                 RequiresLogin: null);
         }
@@ -457,9 +453,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
             && _activeStatesForCancel.Contains(transaction.Status)
             && transaction.PaymentReceivedAt is null;
 
-        var canDispute = role == "buyer"
-            && _disputeAllowedStates.Contains(transaction.Status)
-            && !transaction.HasActiveDispute;
+        // WP5 (T58-canDisputeEnvelopeBit) — per-type eligibility from the shared
+        // matrix; CanDispute stays as the any-type convenience bit. The duplicate
+        // -type guard (already-opened types) is enforced by the open endpoint.
+        var disputableTypes = role == "buyer" && !transaction.HasActiveDispute
+            ? DisputeEligibility.DisputableTypesFor(transaction.Status)
+            : Array.Empty<DisputeType>();
+        var canDispute = disputableTypes.Count > 0;
 
         // canEscalate only meaningful once a dispute exists and auto-check
         // completed; T58 is the producer of this signal — false until then.
@@ -469,6 +469,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             CanAccept: canAccept,
             CanCancel: canCancel,
             CanDispute: canDispute,
+            DisputableTypes: disputableTypes,
             CanEscalate: canEscalate,
             RequiresLogin: null);
     }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Disputes.Application.AutoCheckers;
 using Skinora.Disputes.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
@@ -49,37 +50,16 @@ namespace Skinora.Disputes.Application.Disputes;
 /// <see cref="DisputeEscalatedEvent"/> with <c>AutoEscalated=true</c>.
 /// </para>
 /// <para>
-/// <b>ACTIVE_DISPUTE_EXISTS (07 §7.8 Hatalar):</b> the spec lists this code
-/// alongside DUPLICATE_DISPUTE, but 03 §6 explicitly allows concurrent
-/// disputes of different types. The code therefore stays unreachable in
-/// T58 and is documented in TXX_REPORT.md "Known Limitations / Follow-up"
-/// as forward-deferred (07 doc-pass + admin escalation lock T59 owns the
-/// real "system-locked" state where this fires).
+/// <b>ACTIVE_DISPUTE_EXISTS:</b> 03 §6 explicitly allows concurrent disputes
+/// of different types, so this code is unreachable by design. WP5 removed it
+/// from the 07 §7.8 Hatalar list — only the same-type repeat is blocked
+/// (DUPLICATE_DISPUTE). No code path emits it.
 /// </para>
 /// </remarks>
 public sealed class DisputeService : IDisputeService
 {
     public const int MinEscalateDetailLength = 10;
     public const int MinTxHashLength = 16;
-
-    private static readonly Dictionary<DisputeType, TransactionStatus[]> _allowedStatesByType =
-        new()
-        {
-            [DisputeType.PAYMENT] = new[]
-            {
-                TransactionStatus.ITEM_ESCROWED,
-                TransactionStatus.PAYMENT_RECEIVED,
-            },
-            [DisputeType.DELIVERY] = new[]
-            {
-                TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
-                TransactionStatus.ITEM_DELIVERED,
-            },
-            [DisputeType.WRONG_ITEM] = new[]
-            {
-                TransactionStatus.ITEM_DELIVERED,
-            },
-        };
 
     private readonly AppDbContext _db;
     private readonly IOutboxService _outbox;
@@ -126,8 +106,8 @@ public sealed class DisputeService : IDisputeService
                 DisputeErrorCodes.NotBuyer,
                 "Only the buyer can open a dispute on this transaction.");
 
-        // Stage 3 — per-type state guard.
-        if (!_allowedStatesByType.TryGetValue(request.Type, out var allowedStates)
+        // Stage 3 — per-type state guard (shared canonical matrix).
+        if (!DisputeEligibility.AllowedStatesByType.TryGetValue(request.Type, out var allowedStates)
             || !allowedStates.Contains(transaction.Status))
         {
             return OpenFailure(OpenDisputeStatus.InvalidStateTransition,
@@ -428,15 +408,17 @@ public sealed class DisputeService : IDisputeService
         Guid currentDisputeId,
         CancellationToken cancellationToken)
     {
-        // The current dispute is being mutated to CLOSED in-flight; the DB
-        // still sees its old status, so exclude it from the "any other
-        // active" probe to reflect the post-commit state. Local change
-        // tracker entries for sibling disputes are observed via EF.
+        // The current dispute is being mutated to a resolved terminal in-flight;
+        // the DB still sees its old status, so exclude it from the "any other
+        // active" probe to reflect the post-commit state. Local change tracker
+        // entries for sibling disputes are observed via EF. Active = OPEN or
+        // ESCALATED only — CLOSED (auto) and RESOLVED_FOR_* (admin, WP5) are
+        // resolved terminals.
         var otherActiveExist = await _db.Set<Dispute>()
             .AnyAsync(
                 d => d.TransactionId == transaction.Id
                      && d.Id != currentDisputeId
-                     && d.Status != DisputeStatus.CLOSED,
+                     && (d.Status == DisputeStatus.OPEN || d.Status == DisputeStatus.ESCALATED),
                 cancellationToken);
 
         transaction.HasActiveDispute = otherActiveExist;

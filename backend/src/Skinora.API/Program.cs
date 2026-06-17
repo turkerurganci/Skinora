@@ -248,6 +248,11 @@ builder.Services.AddSteamModule(builder.Configuration);
 // the AD10 Steam-bot snapshot and the latest fraud flags in one round-trip.
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
+// WP5 / T58 — admin dispute resolution (AD27–AD29, 07 §9.x). Closes the
+// ESCALATED dead-end; orchestrates Disputes + Transactions (state machine /
+// refund events) + Platform (audit) at the composition root.
+builder.Services.AddScoped<Skinora.Disputes.Application.Admin.IAdminDisputeService, AdminDisputeService>();
+
 // T63a — public /platform endpoints (07 §10.1 P1 stats, §10.2 P2 maintenance).
 // IMemoryCache is sufficient for these read paths: stats data drifts slowly
 // (15 min TTL) and maintenance toggles propagate within 30 s through the

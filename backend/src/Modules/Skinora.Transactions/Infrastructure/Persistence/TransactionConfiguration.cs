@@ -14,9 +14,11 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
     {
         builder.ToTable("Transactions", t =>
         {
-            // --- CHECK: Cancel states require CancelledBy, CancelReason, CancelledAt ---
+            // --- CHECK: Cancel/refund terminal states require CancelledBy, CancelReason, CancelledAt ---
+            // REFUNDED (WP5 buyer-favor dispute resolution) reuses the cancellation
+            // fields (CancelledBy=ADMIN, dispute reason) — same forensic trail.
             t.HasCheckConstraint("CK_Transactions_Cancel",
-                "(Status <> 'CANCELLED_TIMEOUT' AND Status <> 'CANCELLED_SELLER' AND Status <> 'CANCELLED_BUYER' AND Status <> 'CANCELLED_ADMIN') " +
+                "(Status <> 'CANCELLED_TIMEOUT' AND Status <> 'CANCELLED_SELLER' AND Status <> 'CANCELLED_BUYER' AND Status <> 'CANCELLED_ADMIN' AND Status <> 'REFUNDED') " +
                 "OR (CancelledBy IS NOT NULL AND CancelReason IS NOT NULL AND CancelledAt IS NOT NULL)");
 
             // --- CHECK: Emergency hold active → hold fields required ---

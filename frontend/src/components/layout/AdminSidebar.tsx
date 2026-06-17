@@ -9,6 +9,7 @@ interface AdminMenuItem {
   key:
     | "dashboard"
     | "flags"
+    | "disputes"
     | "transactions"
     | "settings"
     | "steamAccounts"
@@ -21,6 +22,7 @@ interface AdminMenuItem {
 const MENU: readonly AdminMenuItem[] = [
   { key: "dashboard", path: "/admin/dashboard" },
   { key: "flags", path: "/admin/flags" },
+  { key: "disputes", path: "/admin/disputes" },
   { key: "transactions", path: "/admin/transactions" },
   { key: "settings", path: "/admin/settings" },
   { key: "steamAccounts", path: "/admin/steam-accounts" },

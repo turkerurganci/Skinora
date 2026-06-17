@@ -264,7 +264,23 @@ public class DisputeEntityTests : IntegrationTestBase
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
-        Assert.Contains("CK_Disputes_Closed_ResolvedAt", ex.InnerException?.Message ?? ex.Message);
+        Assert.Contains("CK_Disputes_Resolved_ResolvedAt", ex.InnerException?.Message ?? ex.Message);
+    }
+
+    [Theory]
+    [Trait("Category", "Integration")]
+    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER)]
+    public async Task Dispute_AdminResolved_Without_ResolvedAt_Rejected(DisputeStatus status)
+    {
+        // WP5 — RESOLVED_FOR_* terminals also require ResolvedAt (CK_Disputes_Resolved_ResolvedAt).
+        await using var ctx = CreateContext();
+        var dispute = CreateValidDispute(DisputeType.WRONG_ITEM, status);
+        // ResolvedAt deliberately left null
+        ctx.Set<Dispute>().Add(dispute);
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => ctx.SaveChangesAsync());
+        Assert.Contains("CK_Disputes_Resolved_ResolvedAt", ex.InnerException?.Message ?? ex.Message);
     }
 
     [Fact]

@@ -20,7 +20,7 @@
 
 | Önc. | ID | Özet | Bloklar mı |
 |---|---|---|---|
-| 🔴 | T58-AdminDisputeQueue | Escalate edilen dispute'lar çıkmaz sokak: `GET /admin/disputes` + review/resolve komutu yok | Admin dispute çözüm akışı |
+| ✅ | T58-AdminDisputeQueue | **ÇÖZÜLDÜ → WP5** — `GET /admin/disputes` (AD27) + resolve (AD29) + ESCALATED→RESOLVED_FOR_* | — |
 | 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` dahil **21 zorunlu SystemSetting** seed'siz → env/admin verilmeden prod fail-fast (deploy runbook işi) → WP14 | **Production startup** |
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
 | ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2** — `BotRecoveryItem` recovery domaini + AD10 canlı `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` | — |
@@ -84,7 +84,7 @@
 
 | Önc. | ID | Açıklama | Tip | Kaynak |
 |---|---|---|---|---|
-| 🔴 | T58-AdminDisputeQueue 🆕 | `GET /admin/disputes` yok, admin escalation review/resolve komutu yok; `ESCALATED→CLOSED-by-admin` döngüsü uygulanmamış | backend-gap | `T58_REPORT.md:178` |
+| ✅ | T58-AdminDisputeQueue 🆕 | **ÇÖZÜLDÜ → WP5** — `AdminDisputeService` (AD27/28/29) + `RESOLVED_FOR_*`/`REFUNDED` + audit/notify; FE `/admin/disputes` | backend-gap | `T58_REPORT.md:178` |
 | 🟡 | SWEEP-dispatcher | `PaymentReceivedEvent` consumer'ı SWEEP ledger satırı üretmiyor; `OutgoingTransferDispatchJob` SWEEP picker yok | backend-gap | T73/T76/T77 K |
 | 🟡 | T81-PriceConsumerWireup | `IMarketPriceProvider`=`NullMarketPriceProvider`; `MarketPriceAtCreation` set + PRICE_DEVIATION FraudFlag yok | backend-gap | T81 K1, `NullMarketPriceProvider` |
 | 🟡 | StubPayoutVerifier | `IPayoutVerifier`=stub (her zaman `UnableToVerify`→manuel admin) | backend-gap | T60 K1, `StubPayoutVerifier` |
@@ -106,7 +106,7 @@
 | reputation-aggregator-trigger | `IReputationAggregator.RecomputeAsync`/cooldown + state-machine OnEntry/History caller'ları bağlı değil | T43/T44/T68 K |
 | blockchain-monitor-consumers | `payment-confirmed`→PAYMENT_RECEIVED **bağlı** (finality webhook); kalan: mempool `PaymentDetected` consumer (by-design opsiyonel) + DROPPED metrik → WP16 | T61/T71/T72 K |
 | flagged-allocation-detail | **payment-address ✅ ÇÖZÜLDÜ → WP4b** (`FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync`, best-effort); **tx-detail payment/payout/refund/dispute alt-DTO'ları null kısmı → WP13** | T70/T46 K |
-| emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; kalan: post-payment refund tetik → WP2, dispute-queue surfacing → WP5 | T50/T51/T58 K |
+| emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; post-payment refund tetik **✅ WP2**, dispute-queue surfacing **✅ WP5** (AD27 kuyruğu). Kalan kalem yok. | T50/T51/T58 K |
 | fraud-acceptance-gate | **✅ ÇÖZÜLDÜ** — accept-gate → WP4a; background scan (retro-scan) + note max-length → WP4b. (Sinyal üreticileri PRICE_DEVIATION T45/multi-account T56 zaten mevcut) | T54/T56 K |
 | energy-gas-token-config | Statik gas fee, USDC/USDT 1:1, hardcoded 6-decimal, HD cache yok, tek-sweeper (T74 multi-sweeper buraya katlanır), 20-blok finality yok | T72-T76 K |
 | setting-sidecar-propagation | Admin `PATCH /admin/settings` `blockchain.*` + cadence/cron sidecar'a runtime yansımıyor (env restart gerek) | T74/T75/T76/T77 K |
@@ -123,7 +123,7 @@
 | T61-AdminHubJoinBypass 🆕 | `TransactionsHub.JoinTransaction` admin bypass yok (yalnız seller/buyer) | `T61_REPORT.md:147` (K3) |
 | T54-FlaggedApproveNoTimeoutJob 🆕 | **✅ ÇÖZÜLDÜ-by-design → WP4b** — 05 §4.4 + 06 §3.5:650: accept-deadline'lar **bilinçli olarak poller-driven** (yalnız ITEM_ESCROWED per-tx job alır); `DeadlineScannerJob` `ApproveAsync`'in setlediği `AcceptDeadline`'ı zaten enforce ediyor (regresyon testi eklendi). Yeni per-tx job spec'i ihlal ederdi → kurulmadı | `T54_REPORT.md:234` |
 | T54-FraudNoteNoMaxLength 🆕 | **✅ ÇÖZÜLDÜ → WP4b** — `ApproveAsync`/`RejectAsync` 2000 char (kolon genişliği) validasyonu → 400 `VALIDATION_ERROR`; rapordaki "1000" stale | `T54_REPORT.md:194,219` |
-| T58-canDisputeEnvelopeBit 🆕 | `availableActions.canDispute` tek-bit; per-type dispute uygunluğunu ifade edemiyor | `T58_REPORT.md:203` |
+| T58-canDisputeEnvelopeBit 🆕 | **✅ ÇÖZÜLDÜ → WP5** — `availableActions.disputableTypes: DisputeType[]` eklendi (per-type), `canDispute` korunur (07 §7.5) | `T58_REPORT.md:203` |
 | T46-OpenLinkConcurrentAcceptRace 🆕 | Eşzamanlı OPEN_LINK accept'te race-loser `DbUpdateConcurrencyException`→HTTP 500 (409 ALREADY_ACCEPTED yerine) | `T46_REPORT.md:145` |
 | T40-PermClaimCache 🆕 | JWT permission-claim resolver her login+refresh'te DB lookup; per-user TTL cache deferred ("sonraki sprint") | `T40_REPORT.md:113` |
 | discord-interactions-userinstall 🆕 | Discord slash commands/interactions (Ed25519 webhook) + user-install; şu an yalnız Bot DM + OAuth2 | `MEMORY_ARCHIVE.md:178` (T80 K6-K8) |
@@ -162,7 +162,7 @@
 | ⚪ | datamodel-sanctioned-index-drift 🆕 | 06 §3.25 obsolete `IX_SanctionedAddresses_Address` listeler (filtered UQ'ya merge edildi) | `06_DATA_MODEL.md:1273`, `GATE_CHECK_F4.md:340` |
 | ⚪ | admin-route-table-drift 🆕 | 04 §1 route tablosu `/admin`,`/admin/audit-log` + auth ekran yolları, impl `/admin/dashboard`,`/admin/audit-logs` vb. ile uyuşmuyor (tüm ekranlar mevcut, yalnız doc-yolu farkı; S12/S21 path drift) | `GATE_CHECK_F5.md` |
 | ⚪ | T84-emergencyhold-status-doc-drift 🆕 | 04 §5 status tablosu `EMERGENCY_HOLD`'u status sanıyor (freeze overlay label) — **`audit-doc-drift` ile birlikte tek doc-pass'te ele al** | `MEMORY_ARCHIVE.md` T84 K6 |
-| ⚪ | T58-ActiveDisputeExistsUnreachable 🆕 | 07 §7.8 `ACTIVE_DISPUTE_EXISTS` hiç emit edilmiyor (03 §6 farklı-tip eşzamanlı dispute'a izin verir) | `T58_REPORT.md:177` |
+| ✅ | T58-ActiveDisputeExistsUnreachable 🆕 | **ÇÖZÜLDÜ → WP5** — 07 §7.8 Hatalar'dan kaldırıldı (03 §6 farklı-tip eşzamanlı dispute'a izin verdiği için tasarım-gereği erişilemez) | `T58_REPORT.md:177` |
 
 ## 7. Test / CI borcu
 

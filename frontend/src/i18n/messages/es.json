@@ -184,12 +184,76 @@
     "closeMenu": "Cerrar menú de administración",
     "dashboard": "Panel",
     "flags": "Marcadas",
+    "disputes": "Disputas",
     "transactions": "Transacciones",
     "settings": "Configuración",
     "steamAccounts": "Cuentas de Steam",
     "roles": "Roles",
     "users": "Usuarios",
     "auditLog": "Registro de auditoría"
+  },
+  "adminDisputes": {
+    "title": "Cola de disputas",
+    "loadError": "No se pudieron cargar las disputas.",
+    "empty": "No se encontraron disputas.",
+    "tableAriaLabel": "Cola de disputas",
+    "filters": {
+      "status": "Estado",
+      "type": "Tipo",
+      "statusDefault": "Cola de escalación",
+      "allTypes": "Todos los tipos"
+    },
+    "columns": {
+      "id": "ID",
+      "type": "Tipo",
+      "item": "Artículo",
+      "transactionStatus": "Transacción",
+      "openedBy": "Abierta por",
+      "date": "Fecha",
+      "status": "Estado",
+      "actions": "Acciones"
+    },
+    "type": {
+      "PAYMENT": "Pago",
+      "DELIVERY": "Entrega",
+      "WRONG_ITEM": "Artículo incorrecto"
+    },
+    "status": {
+      "OPEN": "Abierta",
+      "ESCALATED": "Escalada",
+      "CLOSED": "Cerrada",
+      "RESOLVED_FOR_SELLER": "Resuelta (vendedor)",
+      "RESOLVED_FOR_BUYER": "Resuelta (comprador)"
+    },
+    "actions": {
+      "resolve": "Resolver"
+    },
+    "resolve": {
+      "title": "Resolver disputa",
+      "fields": {
+        "type": "Tipo",
+        "item": "Artículo",
+        "openedBy": "Abierta por",
+        "userDescription": "Descripción del usuario",
+        "systemCheckResult": "Comprobación del sistema"
+      },
+      "outcomeLabel": "Resolución",
+      "outcome": {
+        "SELLER_FAVOR": "A favor del vendedor",
+        "BUYER_FAVOR": "A favor del comprador"
+      },
+      "outcomeHint": {
+        "SELLER_FAVOR": "Mantener la transacción; el pago al vendedor continúa.",
+        "BUYER_FAVOR": "Revertir la transacción; se reembolsa al comprador."
+      },
+      "outcomeRequired": "Selecciona una resolución.",
+      "noteLabel": "Nota del administrador",
+      "notePlaceholder": "Motivo de la decisión",
+      "noteRequired": "La nota del administrador es obligatoria.",
+      "error": "No se pudo resolver la disputa.",
+      "cancel": "Cancelar",
+      "confirm": "Resolver"
+    }
   },
   "adminDashboard": {
     "title": "Panel",
@@ -745,6 +809,7 @@
     "CANCELLED_BUYER": "Cancelado por comprador",
     "CANCELLED_ADMIN": "Cancelado por admin",
     "FLAGGED": "En revisión",
+    "REFUNDED": "Reembolsada",
     "EMERGENCY_HOLD": "Congelado"
   },
   "countdown": {
