@@ -184,6 +184,43 @@ public class AdminAlertNotificationConsumerTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task TransferDispatchFailed_NullLastErrorCode_FallsBackToDefaultCode()
+    {
+        var dispatcher = new RecordingDispatcher();
+        var sut = new TransferDispatchFailedAdminNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            NullLogger<TransferDispatchFailedAdminNotificationConsumer>.Instance);
+
+        var transactionId = Guid.NewGuid();
+        var domainEvent = new TransferDispatchFailedEvent(
+            EventId: Guid.NewGuid(),
+            BlockchainTransactionId: Guid.NewGuid(),
+            TransactionId: transactionId,
+            Type: BlockchainTransactionType.BUYER_REFUND,
+            Token: StablecoinType.USDC,
+            Amount: 50.0m,
+            ToAddress: "TKnEzG4qX5n6ZRBuyer7B9C2D3E4F5G6H7",
+            // Sidecar gave no error code on the final attempt — the consumer must
+            // substitute the TRANSFER_DISPATCH_FAILED sentinel rather than emit
+            // "BUYER_REFUND:" with a dangling separator.
+            LastErrorCode: null,
+            LastErrorMessage: null,
+            RetryCount: 3,
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.All(dispatcher.Requests, r =>
+        {
+            Assert.Equal(NotificationType.ADMIN_PAYMENT_FAILURE, r.Type);
+            Assert.Equal(transactionId, r.TransactionId);
+            Assert.Equal("BUYER_REFUND:TRANSFER_DISPATCH_FAILED", r.Parameters["ErrorCode"]);
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task BotSessionFailed_FansOutSteamBotIssue_WithBotAndIssue()
     {
         var dispatcher = new RecordingDispatcher();
