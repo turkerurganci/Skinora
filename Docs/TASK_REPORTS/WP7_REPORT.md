@@ -58,6 +58,7 @@ Uygulama:
 |---|---|---|
 | Integration (WP7) | ✓ 13/13 | `AdminMaintenanceEndpointTests` (freeze×4 tip + scope, resume×2, validation×2, auth×3, cache-evict, raw-key refresh) |
 | Integration (regresyon) | ✓ 507/507 | `dotnet test Skinora.API.Tests` tam suite |
+| Unit (CI parite) | ✓ tümü yeşil | `dotnet test Skinora.sln -c Release --filter "FQN!~.Integration&FQN!~.Contract"` (Shared 363/363 + Platform 111/111 + Transactions 492 + Notifications 90 + Steam 28 + Realtime 25 + Fraud 18 + API 44) — ilk push'ta atlanmıştı, Unit-fix sonrası eklendi |
 | Build | ✓ 0W/0E | `dotnet build Skinora.sln -c Release` |
 | Format | ✓ clean | `dotnet format Skinora.sln --verify-no-changes --severity error` (exit 0) |
 | Migration drift | ✓ yok | `dotnet ef migrations has-pending-model-changes` → "No changes have been made to the model" |
@@ -78,9 +79,9 @@ Uygulama:
 
 ## Commit & PR
 - Branch: `task/WP7-maintenance-toggle`
-- Commit: `8fba943` — WP7: Outage/maintenance — admin freeze/resume toggle + push/cache + audit
+- Commit'ler: `8fba943` (özellik) · `0a5cbcb` (rapor/status/memory) · `3a36f2a` (CI Unit-fix — aşağıdaki Notlar)
 - PR: #176
-- CI: ⏳ izleniyor
+- CI: ✓ **PASS** — run [`27692508663`](https://github.com/turkerurganci/Skinora/actions/runs/27692508663) (HEAD `3a36f2a`) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate). Önceki run `27691506749` yalnız Unit job'da fail'di (aşağı bkz.).
 
 ## Dış Varsayımlar (Ön-uçuş)
 - `FreezeManyAsync`/`ResumeManyAsync` mevcut + çalışır (T50, testlerle teyit) ✓
@@ -100,3 +101,5 @@ Uygulama:
 - **Main CI startup (Adım 0):** son 3 run success (`27686562037` WP6 / `27686562073` WP6 / `27679584356` WP5).
 - **Owner kararları (AskUserQuestion 2026-06-17):** (1) auto-detect → WP16'ya ertele (manuel-only) · (2) birleşik atomik set/clear endpoint · (3) MANAGE_SETTINGS reuse.
 - **Atomiklik kararı:** `FreezeManyAsync` count==0'da kendi SaveChanges'ini atlar → staged ayarları flush etmez; bu yüzden explicit DB transaction ile sarıldı (settings SaveChanges + bulk freeze aynı transaction'da commit) — hem count==0 hem freeze-failure split-brain'ini kapatır.
+- **CI Unit-fix (`3a36f2a`):** İlk push (`0a5cbcb`) CI'ı **yalnız Unit job'da** fail'di — yeni `AuditAction.MAINTENANCE_MODE_CHANGED` değeri iki **kardeş test projesindeki** exact-count parity guard'ını bozdu: (1) `Skinora.Shared.Tests.EnumTests` `AuditAction_ShouldHave28Values` (→29 + value theory), (2) `Skinora.Platform.Tests.AuditLogCategoryMapTests` `Every_AuditAction_Has_A_Category` — `AuditLogCategoryMap.CategoryFor` eşlenmemiş değerde **throw** ediyordu (yalnız test değil, `GET /admin/audit-logs` kategorize yolunda **latent prod bug**). Fix: yeni değer `AuditLogCategoryMap`'te `ADMIN_ACTION`'a eşlendi (SYSTEM_SETTING_CHANGED yanı) + iki parity testi (count 28→29, AdminAction 15→16). Ders: enum değeri eklerken push'tan önce tam Unit-filter suite koşulmalı (parity guard'ları başka projelerde); ilk push'ta yalnız `Skinora.API.Tests` koşulmuştu (Integration job → etkilenmedi).
+- **BYPASS_LOG:** `3a36f2a` push'u Layer-2 (son CI run failure) guard'ına takıldı; **fix-for-the-red-run** olduğundan `SKINORA_ALLOW_DIRECT_PUSH=1` ile geçildi (BYPASS_LOG.md otomatik `ci-failure` kaydı, bu commit ile commit'lendi).
