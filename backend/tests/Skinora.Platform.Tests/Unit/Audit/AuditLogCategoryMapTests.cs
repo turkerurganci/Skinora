@@ -35,6 +35,7 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.HOT_WALLET_THRESHOLD_BREACHED, AuditLogCategoryMap.Categories.SecurityEvent)]
     [InlineData(AuditAction.BOT_RECOVERY_ITEM_CREATED, AuditLogCategoryMap.Categories.SecurityEvent)]
     [InlineData(AuditAction.BOT_RECOVERY_UPDATED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.MAINTENANCE_MODE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -70,14 +71,14 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Fifteen_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Sixteen_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
         // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59)
-        // + 1 bot recovery triage (T103b-2) = 15.
-        Assert.Equal(15, actions.Count);
+        // + 1 bot recovery triage (T103b-2) + 1 maintenance toggle (WP7) = 16.
+        Assert.Equal(16, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
         Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
@@ -88,6 +89,7 @@ public class AuditLogCategoryMapTests
         Assert.Contains(AuditAction.EMERGENCY_HOLD_APPLIED, actions);
         Assert.Contains(AuditAction.EMERGENCY_HOLD_RELEASED, actions);
         Assert.Contains(AuditAction.BOT_RECOVERY_UPDATED, actions);
+        Assert.Contains(AuditAction.MAINTENANCE_MODE_CHANGED, actions);
     }
 
     [Fact]

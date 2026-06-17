@@ -402,14 +402,15 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (28) ────────────────────────────────────────────
+    // ── AuditAction (29) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave28Values()
+    public void AuditAction_ShouldHave29Values()
     {
-        // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED.
+        // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
+        // 29 after WP7 added MAINTENANCE_MODE_CHANGED.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(28, values.Length);
+        Assert.Equal(29, values.Length);
     }
 
     [Theory]
@@ -441,6 +442,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED))]
     [InlineData(nameof(AuditAction.BOT_RECOVERY_ITEM_CREATED))]
     [InlineData(nameof(AuditAction.BOT_RECOVERY_UPDATED))]
+    [InlineData(nameof(AuditAction.MAINTENANCE_MODE_CHANGED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));
