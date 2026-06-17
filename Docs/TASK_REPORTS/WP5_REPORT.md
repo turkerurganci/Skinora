@@ -79,9 +79,9 @@ ESCALATED dispute **çıkmaz sokağı** kapatıldı: bir dispute ESCALATED'a dü
 ## Commit & PR
 
 - Branch: `task/WP5-admin-dispute-resolution`
-- Commit: `<impl>` — WP5: Admin dispute çözüm (yapısal statü + REFUNDED + AD27-29 + FE) · `<docs>` — rapor/status/backlog/plan
-- PR: #TBD
-- CI: ⏳ izlenecek (Claude izler — [[feedback_claude_watches_ci_always]])
+- Commit: `2529338` — WP5: Admin dispute çözüm (yapısal statü + REFUNDED + AD27-29 + FE)
+- PR: [#174](https://github.com/turkerurganci/Skinora/pull/174)
+- CI: ⏳ izleniyor (Claude izler — [[feedback_claude_watches_ci_always]])
 
 ## Known Limitations / Follow-up
 
