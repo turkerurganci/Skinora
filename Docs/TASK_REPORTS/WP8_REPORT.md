@@ -85,8 +85,9 @@
 
 - Branch: `task/WP8-admin-alerts-audit`
 - Commit (kod+test+migration): `df6b38b` — WP8: admin notification/alert + audit completion
+- Docs commit: `fdeddb8` — WP8: report + status + plan + repo memory + 06 §3.13
 - PR: **#177**
-- CI: ⏳ izleniyor (Claude)
+- CI: ✓ PASS — task CI HEAD `fdeddb8` run [`27716215159`](https://github.com/turkerurganci/Skinora/actions/runs/27716215159) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate — gerçek SQL Server'da integration + migration uygulandı)
 
 ## Known Limitations / Follow-up
 
