@@ -56,6 +56,7 @@ public sealed class AdminController : ControllerBase
     private readonly IAdminBotRecoveryService _botRecovery;
     private readonly IAdminDashboardService _dashboard;
     private readonly IAdminUserSuspensionService _suspension;
+    private readonly IAdminMaintenanceService _maintenance;
 
     public AdminController(
         IAdminRoleService roles,
@@ -66,7 +67,8 @@ public sealed class AdminController : ControllerBase
         IAdminSteamBotQueryService steamBots,
         IAdminBotRecoveryService botRecovery,
         IAdminDashboardService dashboard,
-        IAdminUserSuspensionService suspension)
+        IAdminUserSuspensionService suspension,
+        IAdminMaintenanceService maintenance)
     {
         _roles = roles;
         _users = users;
@@ -77,6 +79,7 @@ public sealed class AdminController : ControllerBase
         _botRecovery = botRecovery;
         _dashboard = dashboard;
         _suspension = suspension;
+        _maintenance = maintenance;
     }
 
     // ---------- Dashboard (07 §9.1) ----------
@@ -441,6 +444,17 @@ public sealed class AdminController : ControllerBase
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var outcome = await _settings.UpdateAsync(
             key, request, actorId.Value, ipAddress, cancellationToken);
+
+        // WP7 — a direct edit of a platform.maintenance.* key bypasses the
+        // dedicated /admin/maintenance endpoint, so the 30s public cache and the
+        // C08 banner would otherwise go stale. Evict + re-broadcast the read
+        // model. (The dedicated endpoint also freezes/resumes timeouts; a raw
+        // key edit intentionally does not — see WP7_REPORT known limitations.)
+        if (outcome is UpdateSettingOutcome.Success &&
+            key.StartsWith("platform.maintenance.", StringComparison.Ordinal))
+        {
+            await _maintenance.RefreshPublicStateAsync(cancellationToken);
+        }
 
         return outcome switch
         {

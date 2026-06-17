@@ -98,6 +98,11 @@ public static class AuditLogCategoryMap
             // güvenlik kuyruğunda görünür.
             [AuditAction.SANCTIONS_LIST_ADDRESS_ADDED] = Categories.SecurityEvent,
             [AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED] = Categories.SecurityEvent,
+
+            // WP7 — platform maintenance/outage toggle (AD30/AD31). Entering or
+            // leaving maintenance is a deliberate operator action on platform
+            // settings, so it sits with SYSTEM_SETTING_CHANGED in the admin queue.
+            [AuditAction.MAINTENANCE_MODE_CHANGED] = Categories.AdminAction,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

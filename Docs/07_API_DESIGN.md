@@ -1642,7 +1642,7 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 | `VIEW_FLAGS` | Flag'leri görüntüle |
 | `MANAGE_FLAGS` | Flag onayla/reddet |
 | `VIEW_TRANSACTIONS` | İşlemleri görüntüle |
-| `MANAGE_SETTINGS` | Parametreleri yönet |
+| `MANAGE_SETTINGS` | Parametreleri yönet (AD9) + bakım/kesinti kontrolü (AD30, AD31) |
 | `VIEW_STEAM_ACCOUNTS` | Steam hesaplarını görüntüle |
 | `VIEW_USERS` | Kullanıcı detay görüntüle |
 | `MANAGE_ROLES` | Rolleri yönet (süper admin) |
@@ -2463,6 +2463,55 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 **Kurallar:** RESOLVED terminaldir (değiştirilemez → 409). `responsibleAdminId` mevcut bir kullanıcıya işaret etmeli. En az bir alan gerekli. `RESOLVED`'e geçişte `resolvedAt` damgalanır. `BOT_RECOVERY_UPDATED` audit satırı yazılır.
 
 **Hatalar:** 404 `RECOVERY_ITEM_NOT_FOUND`, 409 `RECOVERY_ALREADY_RESOLVED`, 400 `VALIDATION_ERROR` / `RESPONSIBLE_ADMIN_NOT_FOUND` / `NO_CHANGE`, 403 `INSUFFICIENT_PERMISSION`
+
+---
+
+### 9.31 AD30 / AD31 — Admin bakım/kesinti kontrolü (`/admin/maintenance`, WP7)
+
+**Amaç:** Platform bakımı veya Steam/blockchain kesintisi penceresini admin tarafından başlatma/bitirme (02 §3.3, 05 §4.4). Tek bir atomik işlemde: (1) dört `platform.maintenance.*` ayarını yazar (P2 `GET /platform/maintenance` banner read-model'i), (2) tipe göre aktif işlemlerin timeout'larını topluca dondurur/çözer (`TimeoutFreezeService.FreezeManyAsync`/`ResumeManyAsync`), (3) 30 sn public cache'i invalidate eder, (4) RT2 `MaintenanceStatusChanged` push'unu yayınlar. Permission: **`MANAGE_SETTINGS`** (bakım bir platform-ayar işlemidir; AD9 ile aynı yetki).
+
+> **Tip → freeze eşlemesi (07 §10.2 birebir):** `PLANNED_MAINTENANCE` → freeze YOK (yalnız banner); `PLATFORM_MAINTENANCE` → tüm aktif timeout'lar (`MAINTENANCE`); `STEAM_OUTAGE` → Steam-bağımlı state'ler (`STEAM_OUTAGE`); `BLOCKCHAIN_DEGRADATION` → ödeme adımı (`BLOCKCHAIN_DEGRADATION`). Freeze enum değerleri 06 §2.20 `TimeoutFreezeReason` ile birebir.
+
+> **MVP notu (WP7):** Otomatik tespit (Steam/blockchain health check → otomatik freeze, 02 §3.3) bu sürümde **manuel-only**; health-probe altyapısı WP16'da kurulunca bu endpoint'lerin üstüne biner. `suspend-signalr` canlı force-restrict MVP-dışı (§9.22a).
+
+#### AD30 — `POST /admin/maintenance/freeze`
+
+**Request:**
+```json
+{ "type": "PLATFORM_MAINTENANCE", "message": "Platform şu an bakımda.", "plannedEnd": "2026-07-01T18:00:00Z" }
+```
+
+| Alan | Zorunlu | Açıklama |
+|------|---------|----------|
+| `type` | Evet | `PLANNED_MAINTENANCE` \| `PLATFORM_MAINTENANCE` \| `STEAM_OUTAGE` \| `BLOCKCHAIN_DEGRADATION`. `NONE` reddedilir (çıkış için AD31). |
+| `message` | Hayır | Kullanıcıya gösterilecek mesaj. Boş/eksik → `"NONE"` sentinel (banner mesajsız). |
+| `plannedEnd` | Hayır | ISO-8601 UTC. Boş/eksik → `"NONE"`. |
+
+**Response (200) `data`:**
+```json
+{ "active": true, "type": "PLATFORM_MAINTENANCE", "message": "Platform şu an bakımda.", "plannedEnd": "2026-07-01T18:00:00Z", "affectedTransactions": 12 }
+```
+`affectedTransactions` = dondurulan işlem sayısı (`PLANNED_MAINTENANCE`'te 0).
+
+**Hatalar:** 400 `VALIDATION_ERROR` (geçersiz `type` veya `plannedEnd`), 403 `INSUFFICIENT_PERMISSION`, 401.
+
+#### AD31 — `POST /admin/maintenance/resume`
+
+**Amaç:** Aktif bakım/kesinti penceresini bitir: mevcut tipe ait dondurulmuş timeout'ları çöz (kalan süre korunarak ileri kaydırılır, 05 §4.4), dört ayarı `active=false`/`type=NONE` yap, cache invalidate + push. Bakım aktif değilken **idempotent** (no-op, 200).
+
+**Request:** Gövde yok.
+
+**Response (200) `data`:**
+```json
+{ "active": false, "type": null, "message": null, "plannedEnd": null, "affectedTransactions": 8 }
+```
+`affectedTransactions` = çözülen işlem sayısı.
+
+**Hatalar:** 403 `INSUFFICIENT_PERMISSION`, 401.
+
+> **Audit:** AD30/AD31 her ikisi de `MAINTENANCE_MODE_CHANGED` audit satırı yazar (`EntityType=Maintenance`, `EntityId`=yeni tip, eski/yeni dört ayar + işlem sayısı). 05 §4.4 "maintenance mode giriş/çıkış AuditLog'a kaydedilir".
+
+> **Doğrudan ayar düzenleme:** `platform.maintenance.*` anahtarları AD9 (`PUT /admin/settings/:key`) ile de düzenlenebilir; bu yolda da cache invalidate + push yapılır (banner stale kalmaz) ama **freeze tetiklenmez** (freeze AD30/AD31'e özgü). `active=true` + `type=NONE` kombinasyonu cross-key invariant ile reddedilir → bakıma giriş AD30 üzerinden yapılır.
 
 ---
 

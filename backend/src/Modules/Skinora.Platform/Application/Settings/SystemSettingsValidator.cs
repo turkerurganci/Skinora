@@ -25,6 +25,16 @@ public sealed class SystemSettingsValidator
     public static SystemSettingsValidator Instance { get; } = new();
 
     /// <summary>
+    /// Hard cap for string SystemSetting values — matches the
+    /// <c>SystemSetting.Value</c> column width (<c>nvarchar(500)</c>,
+    /// <c>SystemSettingConfiguration</c>). Enforced here so an over-long value is
+    /// rejected with a clean VALIDATION_ERROR (400) on both the admin update path
+    /// (AD9) and the maintenance toggle (AD30) instead of a DB truncation error
+    /// (500) on SaveChanges.
+    /// </summary>
+    public const int MaxStringValueLength = 500;
+
+    /// <summary>
     /// Permitted values for <c>platform.maintenance.type</c> (T63a / 07 §10.2).
     /// <c>NONE</c> is the inactive sentinel — the public endpoint emits it as
     /// JSON <c>null</c>. Cross-key check rejects <c>type=NONE</c> while
@@ -161,6 +171,11 @@ public sealed class SystemSettingsValidator
                 if (string.IsNullOrEmpty(value))
                 {
                     reason = "string value cannot be empty.";
+                    return false;
+                }
+                if (value.Length > MaxStringValueLength)
+                {
+                    reason = $"string value exceeds the {MaxStringValueLength}-character limit (got {value.Length}).";
                     return false;
                 }
                 return true;

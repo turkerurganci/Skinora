@@ -88,5 +88,14 @@ public enum AuditAction
     // DELETE /admin/sanctions/addresses/:id ile satırı deaktive ettiğinde
     // yazılır. EntityType = "SanctionedAddress"; EntityId = SanctionedAddress.Id;
     // NewValue is a JSON envelope {address, source}. SECURITY_EVENT category.
-    SANCTIONS_LIST_ADDRESS_REMOVED
+    SANCTIONS_LIST_ADDRESS_REMOVED,
+
+    // Platform maintenance / outage toggle (WP7 — 02 §3.3, 05 §4.4, 07 §10.2).
+    // Written when an admin enters or leaves maintenance mode via
+    // POST /admin/maintenance/freeze|resume. EntityType = "Maintenance";
+    // EntityId = the new maintenance type ("PLATFORM_MAINTENANCE",
+    // "STEAM_OUTAGE", "BLOCKCHAIN_DEGRADATION", "PLANNED_MAINTENANCE" or
+    // "NONE" on resume); Old/NewValue capture the four platform.maintenance.*
+    // settings plus the number of transactions frozen/resumed. ActorType = ADMIN.
+    MAINTENANCE_MODE_CHANGED
 }

@@ -49,6 +49,18 @@ public class SystemSettingsValidatorTests
         Assert.False(result.IsValid);
     }
 
+    [Theory]
+    [InlineData(500, true)]   // exactly the nvarchar(500) column cap — allowed
+    [InlineData(501, false)]  // one over — rejected before it reaches the DB
+    public void ValidateSingle_String_EnforcesColumnLengthCap(int length, bool expected)
+    {
+        // platform.maintenance.message has no per-key range rule, so only the
+        // type-stage string rules apply (non-empty + the 500-char column cap).
+        var value = new string('x', length);
+        var result = _v.ValidateSingle("platform.maintenance.message", value, "string");
+        Assert.Equal(expected, result.IsValid);
+    }
+
     // ---- Range — ratio keys (0 < x < 1) ----
 
     [Theory]
