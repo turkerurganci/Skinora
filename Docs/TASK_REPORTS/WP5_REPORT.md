@@ -79,9 +79,9 @@ ESCALATED dispute **çıkmaz sokağı** kapatıldı: bir dispute ESCALATED'a dü
 ## Commit & PR
 
 - Branch: `task/WP5-admin-dispute-resolution`
-- Commit: `2529338` — WP5: Admin dispute çözüm (yapısal statü + REFUNDED + AD27-29 + FE)
+- Commit: `2529338` — WP5: Admin dispute çözüm (impl) · `887998a` — Steam.Tests model-cache race fix (CI) · `184a2e4` — BYPASS_LOG
 - PR: [#174](https://github.com/turkerurganci/Skinora/pull/174)
-- CI: ⏳ izleniyor (Claude izler — [[feedback_claude_watches_ci_always]])
+- CI: ✓ **PASS** — HEAD `184a2e4` run [`27676159228`](https://github.com/turkerurganci/Skinora/actions/runs/27676159228) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate). İlk run `27674985725` failure (Steam.Tests model-cache race — WP5 kodu değil, pre-existing flaky yarış); `887998a` fix sonrası yeşil. Push: Layer-2 (önceki run failure) `SKINORA_ALLOW_DIRECT_PUSH=1` ile geçildi (BYPASS_LOG'a kaydedildi).
 
 ## Known Limitations / Follow-up
 
@@ -93,6 +93,7 @@ ESCALATED dispute **çıkmaz sokağı** kapatıldı: bir dispute ESCALATED'a dü
 
 ## Notlar
 
+- **CI fix (WP5 dışı, test-infra):** İlk CI integration run'ı `Skinora.Steam.Tests` (`BotRestrictionRecoveryConsumerTests`/`SteamWebhookHandlerTests`) `Cannot create a DbSet for 'AuditLog'` ile kırıldı — pre-existing EF model-cache yarışı (Steam.Tests'te sınıf-bazlı modül kaydı; Platform'suz bir sınıf modeli önce kurarsa AuditLog eksik). Kanonik düzeltme: `Skinora.Steam.Tests/TestAssemblyModuleInitializer.cs` ([ModuleInitializer], API.Tests emsali) Users/Transactions/Steam/Platform'u assembly-load'da kaydeder. Steam.Tests integration 75/75 lokal. WP5 özellik kodunu etkilemez.
 - **Adım -1 (working tree):** temiz.
 - **Adım 0 (main CI):** son 3 run `success` (WP4b #173 ×2 `27650617814`/`27650617812`, WP4a #172 `27644750670`).
 - **Adım 2 (bağımlılık):** WP1 + WP2 **merged** ✓.
