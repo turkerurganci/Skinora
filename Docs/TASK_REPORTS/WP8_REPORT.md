@@ -1,6 +1,6 @@
 # WP8 — Admin bildirim/alert + audit tamamlama
 
-**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-17
+**Faz:** F6-öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-17
 
 ---
 
@@ -70,9 +70,30 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, ayrı chat 2026-06-17, kendi verdict'i rapor görülmeden) |
+| Bulgu sayısı | 0 bloke-edici |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız validator notları (2026-06-17)
+
+**Verdict: ✓ PASS — 6/6 kabul kriteri (WP8 "İş"), 0 bloke-edici bulgu.**
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27712112694`/`27712112969`/`27686562037`) · Adım 0b repo memory WP8 satırı mevcut · Adım 8a task CI HEAD `dd245da` run `27716867921` **success** + kod-ağacı `fdeddb8` run `27716215159` **tüm job success** (Integration + Migration dry-run dahil).
+
+**Validator lokal koşumu (kendi makinem):** `dotnet build Skinora.sln -c Release` **0W/0E** · Notifications `Category=Unit` **36/36** · Shared `~EnumTests` **204/204** · Platform `~AuditLogCategoryMap` **38/38** · `dotnet ef migrations has-pending-model-changes` → **"No changes"** (drift yok). Integration suite'leri (AdminRecipientResolver 2/2, dispatcher FlagId 1/1, Steam bot-event 6/6) lokal Docker olmadığından CI-authoritative — fdeddb8 run'ında geçti.
+
+**Bağımsız uçtan-uca teyit (rapor görülmeden):**
+- **5 mevcut event + 1 yeni event gerçekten üretiliyor:** `DisputeService` (`:179`/`:368`), `FraudFlagService` (`:120`/`:169`), `RefundBlockedAlertService` (`:55`), `PayoutIssueService` (`:219`), `OutgoingTransferDispatchJob` (`:236`), `SteamWebhookHandler` (BotSessionFailedEvent `:192`). Consumer alan kullanımı event sözleşmeleriyle birebir.
+- **Wiring tam:** consumer'lar `INotificationHandler<TEvent>` → MediatR `OutboxModule.GetMediatRScanAssemblies()` Notifications assembly'sini tarar → auto-register; `IAdminRecipientResolver` → `AdminRecipientResolver` (Admin modülü) `Program.cs:175 AddAdminModule()` ile kayıtlı; cross-module dep yok (Shared abstraction).
+- **4 admin `NotificationType`'ın tamamı pre-existing enum'da; başka hiçbir üretici/consumer bu tipleri emit etmiyor → çift-bildirim yok.** Template'ler (resx) 4 tip için var, placeholder'lar consumer parametreleriyle eşleşiyor; `EmailCategoryMap` 4 tipi de Account'a map'liyor (composition-time throw yok).
+- **FlagId:** entity + filtreli index + migration + config + mapper + dispatcher + inbox uçtan uca; integration testi FlagId round-trip + ("flag",flagId) push'u doğruluyor (TransactionId kasıtlı atlanmış → FK ihlali yok).
+- **Atomiklik:** `IAuditLogger.LogAsync` yalnız UoW'a stage eder (SaveChanges yok); iki audit satırı + status flip + outbox event tek `SaveChangesAsync`'te commit edilir.
+- **Tekil-admin payout consumer FK-güvenli:** `EscalatedToAdminId` = `AdminUserRole.UserId` (geçerli User id) → `Notification.UserId` FK tutar.
+- **Güvenlik temiz:** secret yok · yeni endpoint/auth değişikliği yok · girdi güvenilir üreticilerden · yeni dependency yok · 06 §3.13/07 §8.1 doc-uyumu birebir.
+
+**Owner kararları doğrulandı:** tüm adminler (broadcast resolver) · `BOT_SESSION_FAILED` additive (`BOT_STATUS_CHANGED` korunmuş, ikisi de yazılıyor) · audit-detail dar kapsam · 4 tip · `TradeOfferDispatchFailedEvent` hariç (trade_offer.failed yolunda admin notification yok — teyit).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu. Tek kozmetik uyuşmazlık — rapor `AdminAlertNotificationConsumerTests (10)` diyor; dosyada **9** `[Fact]` var (suite yeşil, verdict'i etkilemez). Non-blocking gözlemler: (N2) `BotSessionFailedEvent` doc-comment'i "AWAY from ACTIVE" der ama handler herhangi bir non-idempotent non-ACTIVE geçişte (örn. RESTRICTED→OFFLINE) tetikler — küçük doc imprecision/over-alert, tasarımca makul; (N3) bot incident başına iki SECURITY_EVENT satırı (owner-onaylı additive). Rapor'un Known Limitations'ı (TradeOfferDispatchFailed hariç, i18n→WP17, FE enums.ts→WP13, audit-detail dar kapsam) zaten kaydedilmiş.
 
 ## Altyapı Değişiklikleri
 
