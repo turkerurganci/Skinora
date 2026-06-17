@@ -4,9 +4,12 @@ namespace Skinora.Shared.Events;
 
 /// <summary>
 /// Emitted by the Steam webhook handler (WP8 — 02 §15, 05 §3.2, 08 §3.3) on
-/// every non-idempotent platform-bot lifecycle transition AWAY from ACTIVE
-/// (the sidecar <c>bot.session_failed</c> / <c>bot.removed_from_pool</c>
-/// events). The Notifications consumer fans out an
+/// every non-idempotent platform-bot lifecycle transition INTO a non-ACTIVE
+/// status (OFFLINE / RESTRICTED / BANNED) — the sidecar
+/// <c>bot.session_failed</c> / <c>bot.removed_from_pool</c> events never map a
+/// bot back to ACTIVE, so each processed transition is a fresh incident
+/// (including degraded-to-degraded hops such as RESTRICTED → OFFLINE). The
+/// Notifications consumer fans out an
 /// <see cref="Skinora.Shared.Enums.NotificationType.ADMIN_STEAM_BOT_ISSUE"/>
 /// in-app notification to every admin so a degraded platform Steam account is
 /// visible on the admin inbox — not only in Loki logs and the transient

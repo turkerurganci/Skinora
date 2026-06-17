@@ -95,6 +95,8 @@
 
 **Yapım raporu karşılaştırması:** Tam uyumlu. Tek kozmetik uyuşmazlık — rapor `AdminAlertNotificationConsumerTests (10)` diyor; dosyada **9** `[Fact]` var (suite yeşil, verdict'i etkilemez). Non-blocking gözlemler: (N2) `BotSessionFailedEvent` doc-comment'i "AWAY from ACTIVE" der ama handler herhangi bir non-idempotent non-ACTIVE geçişte (örn. RESTRICTED→OFFLINE) tetikler — küçük doc imprecision/over-alert, tasarımca makul; (N3) bot incident başına iki SECURITY_EVENT satırı (owner-onaylı additive). Rapor'un Known Limitations'ı (TradeOfferDispatchFailed hariç, i18n→WP17, FE enums.ts→WP13, audit-detail dar kapsam) zaten kaydedilmiş.
 
+**Follow-up (`task/WP8-followup-nonblocking`):** N1 + N2 kapatıldı. **N1** — `TransferDispatchFailed_NullLastErrorCode_FallsBackToDefaultCode` testi eklendi (`?? "TRANSFER_DISPATCH_FAILED"` fallback dalını kapsar; consumer-test dosyası 9→**10** `[Fact]`, Notifications `Category=Unit` 36→**37**). **N2** — doc-comment "INTO a non-ACTIVE status (OFFLINE / RESTRICTED / BANNED)" olarak düzeltildi. Lokal: Release 0W/0E + Notifications unit 37/37 + `dotnet format --verify-no-changes` exit 0. **Bilinçli bırakıldı:** N3 (owner-onaylı additive, GUARDRAILS §6) · i18n tr/es/zh → WP17 · FE `enums.ts` → WP13 · `TradeOfferDispatchFailed` → owner-excluded.
+
 ## Altyapı Değişiklikleri
 
 - **Migration:** Var — `WP8_AddNotificationFlagId` (`Notification.FlagId` nullable Guid + filtreli index `IX_Notifications_FlagId WHERE [FlagId] IS NOT NULL`; FK yok; şema-only, seed yok). 21-mandatory etkilenmez.
