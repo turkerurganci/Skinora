@@ -9,6 +9,8 @@ import {
   SteamUnavailableError,
   type InventoryService,
 } from '../trade/InventoryService.js';
+import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
+import { SteamApiError } from '../errors/SidecarError.js';
 import type { SendTradeOfferRequest, TradeDirection } from '../trade/types.js';
 
 const TRADE_DIRECTIONS: ReadonlySet<TradeDirection> = new Set([
@@ -24,10 +26,12 @@ export interface RouterDeps {
   botManager?: BotManager;
   tradeOfferService?: TradeOfferService;
   inventoryService?: InventoryService;
+  tradeHoldService?: TradeHoldService;
 }
 
 export function buildRouter(deps: BotManager | RouterDeps = {}): Router {
-  const { botManager, tradeOfferService, inventoryService } = normalizeDeps(deps);
+  const { botManager, tradeOfferService, inventoryService, tradeHoldService } =
+    normalizeDeps(deps);
   const router = Router();
 
   // Health check — no auth required
@@ -51,6 +55,10 @@ export function buildRouter(deps: BotManager | RouterDeps = {}): Router {
 
   apiRouter.get('/inventory/:steamId', inventoryGetHandler(inventoryService));
   apiRouter.delete('/inventory/:steamId/cache', inventoryInvalidateHandler(inventoryService));
+
+  // Trade-hold / Mobile Authenticator check (08 §2.2, 07 §5.16a + §4.8).
+  // Web-API-key call (no bot session) → IEconService/GetTradeHoldDurations/v1.
+  apiRouter.get('/trade-hold/:steamId', tradeHoldGetHandler(tradeHoldService));
 
   // Bot pool status (T64)
   apiRouter.get('/bots/status', botStatusFactory(botManager));
@@ -132,6 +140,44 @@ function inventoryInvalidateHandler(service?: InventoryService) {
     }
     await service.invalidate(steamId);
     res.status(204).send();
+  };
+}
+
+function tradeHoldGetHandler(service?: TradeHoldService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    if (!service) {
+      res.status(503).json({ error: 'TradeHoldService not initialized' });
+      return;
+    }
+    const steamId = resolveSteamIdParam(req.params.steamId);
+    if (!steamId) {
+      res.status(400).json({ error: 'steamId must be a valid SteamID64' });
+      return;
+    }
+    // 08 §2.2 — non-friend targets require the trade_offer_access_token parsed
+    // from the user's trade URL; the platform always supplies it.
+    const accessToken = typeof req.query.accessToken === 'string' ? req.query.accessToken : '';
+    if (!accessToken) {
+      res.status(400).json({ error: 'accessToken query parameter is required' });
+      return;
+    }
+    try {
+      const result = await service.getTradeHold(steamId, accessToken);
+      res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof SteamApiKeyMissingError) {
+        req.log.error('Trade-hold check requested but STEAM_API_KEY is not configured');
+        res.status(503).json({ code: err.code, error: err.message });
+        return;
+      }
+      if (err instanceof SteamApiError) {
+        req.log.warn({ steamId, err: err.message }, 'Trade-hold upstream failure');
+        res.status(503).json({ code: err.code, error: err.message });
+        return;
+      }
+      req.log.error({ err, steamId }, 'TradeHoldService.getTradeHold threw');
+      res.status(500).json({ error: (err as Error).message });
+    }
   };
 }
 

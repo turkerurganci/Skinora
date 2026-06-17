@@ -47,10 +47,17 @@ export interface TradeOfferMonitorOptions {
  *   - Across restarts: state lost. Steam persists state durably; backend handles
  *     cross-restart idempotency on its end (T68 webhook handler).
  *
- * Pool dynamics (Known Limitation, T69):
+ * Pool dynamics (verified WP6 — resolved by design):
  *   - start() iterates the static pool loaded by BotManager.initialize().
- *   - Bots added dynamically (T69 capacity scaling, future hot-add) need the
- *     monitor re-attached. Out of scope for T66.
+ *     BotManager exposes no dynamic-add path (only initialize/removeFromPool),
+ *     so every live bot is attached at startup and nothing is ever hot-added.
+ *   - Session recovery (SESSION_EXPIRED → RECONNECTING → READY) reuses the same
+ *     BotSession + TradeOfferManager instance, so the listener bound here
+ *     survives reconnects without re-attaching.
+ *   - The idempotent {@link attachToSession} hook is already in place for a
+ *     future dynamic pool (T69 capacity scaling): when BotManager grows a
+ *     hot-add path, it calls attachToSession(newSession) once. No re-attach is
+ *     needed today — there is no dynamic pool to re-attach to.
  */
 export class TradeOfferMonitor {
   private readonly log = rootLogger.child({ component: 'TradeOfferMonitor' });

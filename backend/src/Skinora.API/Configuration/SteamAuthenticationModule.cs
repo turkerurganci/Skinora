@@ -151,9 +151,12 @@ public static class SteamAuthenticationModule
         services.AddScoped<IReAuthPipeline, ReAuthPipeline>();
         services.AddScoped<IReAuthTokenValidator, ReAuthTokenValidator>();
 
-        // T31 — Mobile Authenticator check (07 §4.8, 08 §2.2). Stub returns
-        // active=false + setup guide URL; Steam sidecar impl arrives with T64–T69.
-        services.AddScoped<IMobileAuthenticatorCheck, StubMobileAuthenticatorCheck>();
+        // T31 / WP6 — Mobile Authenticator check (07 §4.8, 08 §2.2). Real impl
+        // delegates to the shared ISteamTradeHoldProbe (HttpSteamTradeHoldClient
+        // registered in SteamModule → sidecar GetTradeHoldDurations). Fails closed
+        // to active=false + setup guide URL when Steam is unreachable, matching
+        // the conservative StubMobileAuthenticatorCheck default it replaces.
+        services.AddScoped<IMobileAuthenticatorCheck, SidecarMobileAuthenticatorCheck>();
 
         // T32 — Session management: refresh-token rotation, logout, /auth/me,
         // Redis-cached DB source of truth (05 §6.1), daily cleanup job.

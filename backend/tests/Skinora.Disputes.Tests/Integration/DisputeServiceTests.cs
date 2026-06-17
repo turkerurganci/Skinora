@@ -297,6 +297,36 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.True(refreshedTx.HasActiveDispute);
     }
 
+    [Fact]
+    public async Task Open_WrongItem_DeliveredAssetSet_ButSidecarProbeNull_StaysOpen()
+    {
+        // WP6 harden — when the real SidecarSteamInventoryReader cannot resolve
+        // the delivered asset (sidecar 503 / private inventory both map to null),
+        // a class-id mismatch CANNOT be concluded. The checker must fail closed:
+        // leave the dispute OPEN for manual escalation rather than auto-escalate
+        // (or auto-resolve) off missing data.
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
+            deliveredAssetId: "delivered-asset-9");
+        _inventory.Snapshot = null; // simulates sidecar Unavailable / InventoryPrivate
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.WRONG_ITEM), CancellationToken.None);
+
+        // OPEN status + no escalation event proves the checker did NOT auto-
+        // escalate off missing data (AutoEscalated is internal-only; the DTO
+        // surfaces it as "stays OPEN, can escalate manually").
+        Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
+        Assert.False(outcome.Body.AutoCheckResult.Resolved);
+        Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
+        Assert.Empty(_outbox.Published.OfType<DisputeEscalatedEvent>());
+        Assert.Empty(_outbox.Published.OfType<DisputeAutoResolvedEvent>());
+
+        var refreshedTx = await Context.Set<Transaction>().AsNoTracking()
+            .FirstAsync(t => t.Id == tx.Id);
+        Assert.True(refreshedTx.HasActiveDispute);
+    }
+
     // ---------- Open ▸ guards ----------
 
     [Fact]

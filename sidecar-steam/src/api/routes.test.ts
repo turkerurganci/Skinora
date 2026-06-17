@@ -31,6 +31,11 @@ import {
   SteamUnavailableError,
   type InventoryService,
 } from '../trade/InventoryService.js';
+import {
+  SteamApiKeyMissingError,
+  type TradeHoldService,
+} from '../trade/TradeHoldService.js';
+import { SteamApiError } from '../errors/SidecarError.js';
 
 function buildApp(service: TradeOfferService) {
   const app = express();
@@ -341,6 +346,127 @@ describe('DELETE /api/inventory/:steamId/cache (T67)', () => {
       expect(invalidate).not.toHaveBeenCalled();
     } finally {
       await ctx.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WP6 — GET /api/trade-hold/:steamId (08 §2.2 trade-hold / MA check)
+// ---------------------------------------------------------------------------
+
+async function startTradeHoldApp(
+  service: TradeHoldService,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const app = express();
+  app.use(express.json());
+  app.use(correlationMiddleware);
+  app.use(buildRouter({ tradeHoldService: service }));
+  const server = await new Promise<import('http').Server>((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  const port = (server.address() as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+describe('GET /api/trade-hold/:steamId (WP6)', () => {
+  it('returns the trade-hold result on success', async () => {
+    const getTradeHold = vi
+      .fn()
+      .mockResolvedValue({ active: true, escrowEndDurationSeconds: 0 });
+    const service = { getTradeHold } as unknown as TradeHoldService;
+
+    const ctx = await startTradeHoldApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok123`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ active: true, escrowEndDurationSeconds: 0 });
+      expect(getTradeHold).toHaveBeenCalledWith(VALID_STEAM_ID, 'tok123');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('rejects an invalid SteamID64 with 400 without calling the service', async () => {
+    const getTradeHold = vi.fn();
+    const service = { getTradeHold } as unknown as TradeHoldService;
+
+    const ctx = await startTradeHoldApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/trade-hold/not-a-steam-id?accessToken=tok123`);
+      expect(res.status).toBe(400);
+      expect(getTradeHold).not.toHaveBeenCalled();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('rejects a missing accessToken with 400 without calling the service', async () => {
+    const getTradeHold = vi.fn();
+    const service = { getTradeHold } as unknown as TradeHoldService;
+
+    const ctx = await startTradeHoldApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/trade-hold/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toMatch(/accessToken/);
+      expect(getTradeHold).not.toHaveBeenCalled();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 STEAM_API_KEY_MISSING when the key is not configured', async () => {
+    const getTradeHold = vi.fn().mockRejectedValue(new SteamApiKeyMissingError());
+    const service = { getTradeHold } as unknown as TradeHoldService;
+
+    const ctx = await startTradeHoldApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok123`);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('STEAM_API_KEY_MISSING');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 on a Steam upstream failure', async () => {
+    const getTradeHold = vi
+      .fn()
+      .mockRejectedValue(new SteamApiError('upstream', 429));
+    const service = { getTradeHold } as unknown as TradeHoldService;
+
+    const ctx = await startTradeHoldApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok123`);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('STEAM_API_ERROR');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 when TradeHoldService is not initialized', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    app.use(buildRouter({}));
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok123`,
+      );
+      expect(res.status).toBe(503);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });
