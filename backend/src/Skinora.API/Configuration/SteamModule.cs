@@ -7,7 +7,9 @@ using Skinora.Steam.Application.Dispatch;
 using Skinora.Steam.Application.Inventory;
 using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Application.Webhooks;
+using Skinora.Shared.Steam;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Users.Application.Settings;
 
 namespace Skinora.API.Configuration;
 
@@ -56,6 +58,29 @@ public static class SteamModule
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryReader, SidecarSteamInventoryReader>());
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryCacheInvalidator>(sp =>
             sp.GetRequiredService<HttpSteamSidecarInventoryClient>()));
+
+        // WP6 — sidecar trade-hold / Mobile Authenticator probe (08 §2.2).
+        // Own typed client (separate timeout from inventory pagination) sharing
+        // SteamSidecarOptions + the X-Internal-Key header. Bridged to the shared
+        // ISteamTradeHoldProbe port that both checkers below consume.
+        services.AddHttpClient<HttpSteamTradeHoldClient>(
+            HttpSteamTradeHoldClient.HttpClientName, (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<SteamSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds);
+            });
+        services.AddScoped<ISteamTradeHoldProbe>(sp =>
+            sp.GetRequiredService<HttpSteamTradeHoldClient>());
+
+        // Swap the stub `ITradeHoldChecker` registered by Users module
+        // (TryAddScoped → first wins) with the sidecar-backed checker (U17
+        // trade-URL save). The IMobileAuthenticatorCheck swap (A7) lives in
+        // SteamAuthenticationModule — Skinora.Steam does not reference Skinora.Auth.
+        services.Replace(ServiceDescriptor.Scoped<ITradeHoldChecker, SidecarTradeHoldChecker>());
 
         // T68 — inbound webhook handler.
         services.AddScoped<ISteamWebhookHandler, SteamWebhookHandler>();

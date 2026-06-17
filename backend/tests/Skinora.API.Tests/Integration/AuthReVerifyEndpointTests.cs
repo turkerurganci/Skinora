@@ -169,8 +169,14 @@ public class AuthReVerifyEndpointTests : IClassFixture<AuthReVerifyEndpointTests
     }
 
     [Fact]
-    public async Task CheckAuthenticator_Authenticated_ReturnsStubResult()
+    public async Task CheckAuthenticator_Authenticated_SidecarUnreachable_FailsClosed()
     {
+        // WP6 — A7 now resolves the real SidecarMobileAuthenticatorCheck → the
+        // shared ISteamTradeHoldProbe → HttpSteamTradeHoldClient. No sidecar is
+        // running for the test (SteamSidecar:BaseUrl points at a dead host), so
+        // the probe fails closed to Unavailable and the checker maps it to
+        // active=false + the conservative setup-guide URL — never a 500 and
+        // never a spurious "MA active". Identical contract to the stub it replaced.
         var userId = await _factory.CreateUserAsync();
         var client = BuildAuthenticatedClient(userId, SteamId);
 

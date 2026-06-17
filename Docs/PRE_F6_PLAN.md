@@ -99,7 +99,9 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Efor:** M–L · **Açar:** T113 · **Bağımlı:** **WP1 + WP2**
 
 ### WP6 — Steam dispute checker'ları + auto-resolve doğrulama
-**Backlog:** steam-sidecar-stubs (trade-hold + MA checker) · TradeOfferMonitor-hotadd-T69
+> **Durum: ⏳ Devam ediyor (2026-06-17)** — yapım tamam, bağımsız validator bekliyor. **Owner kararları (AskUserQuestion):** sidecar = **doğrudan Steam Web API** (`GetTradeHoldDurations`, bot session yok) · Item 2/3 = **doğrula + regresyon + by-design**. Sidecar `GET /api/trade-hold/:steamId` + paylaşılan `ISteamTradeHoldProbe`/`HttpSteamTradeHoldClient` + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7, fail-closed); auto-resolve yolu doğrulandı + null-probe regresyonu; TradeOfferMonitor hot-add resolved-by-design (statik pool). MIGRATION YOK. Rapor: [`TASK_REPORTS/WP6_REPORT.md`](TASK_REPORTS/WP6_REPORT.md).
+
+**Backlog:** steam-sidecar-stubs (trade-hold + MA checker) ✅ · TradeOfferMonitor-hotadd-T69 ✅ (resolved-by-design)
 **Kanıt:** DELIVERY/WRONG_ITEM auto-checker'lar `ISteamInventoryReader` tüketir — bu **zaten gerçek** (`SidecarSteamInventoryReader`, T67; `SteamModule.cs:56` DI-swap). Gerçek stub'lar yalnız: `StubTradeHoldChecker` (`UsersModule.cs:124`, Available=true) + `StubMobileAuthenticatorCheck` (`SteamAuthenticationModule.cs:156`).
 **İş:** Gerçek sidecar-destekli trade-hold + MA checker; mevcut `SidecarSteamInventoryReader` auto-resolve yolunu **doğrula/sertleştir** (sıfırdan kurma DEĞİL); `TradeOfferMonitor` hot-add re-attach (yalnız dinamik pool — statik pool'da sorun yok). Not: bu checker'lar WP1 teslim-confirmation ve WP4a creation-check yollarına da dokunur.
 **Efor:** M · **Açar:** T111/T113 dispute kapsamı

@@ -28,7 +28,7 @@
 | 🟡 | SWEEP-dispatcher | SWEEP satırı üreten consumer yok → hot-wallet mutabakatı tek-taraflı | Hot-wallet mutabakat doğruluğu |
 | 🟡 | T81-PriceConsumerWireup | `NullMarketPriceProvider` → PRICE_DEVIATION fraud kuralı inert | PRICE_DEVIATION kuralı |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
-| 🟡 | steam-sidecar-stubs | Trade-hold + MA checker gerçek impl yok (fail-closed) | DELIVERY/WRONG_ITEM auto-resolve |
+| ✅ | steam-sidecar-stubs | **ÇÖZÜLDÜ → WP6** — sidecar `GET /api/trade-hold/:steamId` (`GetTradeHoldDurations`) + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7); envanter reader zaten gerçekti | — |
 | 🟡 | item-refund-consumers | Yalnız `BUYER_REFUND` kopuk (diğer 4 iade inline/T106a bağlı) → WP2 | Alıcı iadesi (delivery-timeout + admin-cancel) |
 | 🟡 | T50-OutageFreezeCallers | Outage/degradation bulk-freeze motoru var, çağıran yok | Outage dayanıklılığı |
 | ✅ | T56-MultiAccountRetroScan | **ÇÖZÜLDÜ → WP4b** — günlük `MultiAccountRetroScanJob` cüzdanlı aktif kullanıcıları retroaktif tarar (`IMultiAccountDetector` yeniden çağrılır) | — |
@@ -37,7 +37,7 @@
 | 🟡 | T30-TosVersionReprompt | ToS versiyon değişiminde re-prompt yok | ToS yeniden onay akışı |
 | 🟡 | T87-K1 | Gerçek auth akışı (steam/tos/refresh/me) ekranlara bağlanmamış | — (query-state çalışıyor) |
 | 🟡 | FE-admin-signalr-subscription | `RealtimeProvider.tsx:40-43` üç admin event'ini abone etmiyor | Canlı admin event'leri |
-| 🟡 | TradeOfferMonitor-hotadd-T69 | Dinamik bot hot-add'de monitor re-attach çağıranı yok | — (statik pool'da sorun yok) |
+| ✅ | TradeOfferMonitor-hotadd-T69 | **ÇÖZÜLDÜ → WP6 (resolved-by-design)** — statik pool (`BotManager` dinamik-add yok); idempotent `attachToSession` hook'u T69 dinamik pool için hazır + test edilmiş | — (statik pool'da sorun yok) |
 | 🟡 | T33-SuccessRate-FractionVsPercent | `successfulTransactionRate` fraction (06) vs percent (07) | FE entegrasyonu öncesi karar |
 | 🟡 | T107 | E2E happy-path testi (başlamadı) | — |
 
@@ -55,7 +55,7 @@
 | ✅ | FE-admin-ts-RecoveryFields-T69 | **ÇÖZÜLDÜ → T103b-2:** AD10 alanları canlı; failover banner `RESTRICTED_NEW_TXN_DIVERTED` ile görünür | done | — | T103b-2 |
 | ⚪ | T68-K1 | Bot lifecycle event → admin notification + `BOT_SESSION_FAILED` AuditAction; şu an yalnız Warning log | backend-gap | admin notification track | T68 K1 |
 | ⚪ | T64-BotWebhookHandler | `bot.session_failed`/`removed_from_pool` backend handler (T68 log-only ötesi) | backend-gap | T68/T69 | T64 |
-| 🟡 | TradeOfferMonitor-hotadd-T69 🆕 | Dinamik pool hot-add'de `TradeOfferMonitor` re-attach (idempotent `attachToSession`) çağıranı yok | k-note | T69 | `sidecar-steam/src/trade/TradeOfferMonitor.ts:50-53` |
+| ✅ | TradeOfferMonitor-hotadd-T69 🆕 | **ÇÖZÜLDÜ → WP6 (resolved-by-design)** — statik pool, dinamik-add yolu yok; idempotent `attachToSession` hook'u T69 için hazır + test edilmiş; doc-comment WP6 doğrulamasıyla güncellendi | k-note | T69 | `sidecar-steam/src/trade/TradeOfferMonitor.ts` |
 
 ## 2. T103b — Steam hesapları backend tamamlama (S18)
 
@@ -88,7 +88,7 @@
 | 🟡 | SWEEP-dispatcher | `PaymentReceivedEvent` consumer'ı SWEEP ledger satırı üretmiyor; `OutgoingTransferDispatchJob` SWEEP picker yok | backend-gap | T73/T76/T77 K |
 | 🟡 | T81-PriceConsumerWireup | `IMarketPriceProvider`=`NullMarketPriceProvider`; `MarketPriceAtCreation` set + PRICE_DEVIATION FraudFlag yok | backend-gap | T81 K1, `NullMarketPriceProvider` |
 | 🟡 | StubPayoutVerifier | `IPayoutVerifier`=stub (her zaman `UnableToVerify`→manuel admin) | backend-gap | T60 K1, `StubPayoutVerifier` |
-| 🟡 | steam-sidecar-stubs | Gerçek stub yalnız `StubTradeHoldChecker` (Available=true) + `StubMobileAuthenticatorCheck`; **envanter reader gerçek** (`SidecarSteamInventoryReader` T67, `SteamModule.cs:56` swap) → WP6 | backend-gap | T35/T31/T58 K |
+| ✅ | steam-sidecar-stubs | **ÇÖZÜLDÜ → WP6** — sidecar `GET /api/trade-hold/:steamId` (`GetTradeHoldDurations`, 08 §2.2) + paylaşılan `ISteamTradeHoldProbe`/`HttpSteamTradeHoldClient` + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7); fail-closed; envanter reader zaten gerçekti (`SidecarSteamInventoryReader`) | backend-gap | T35/T31/T58 K |
 | 🟡 | item-refund-consumers | **Yalnız `BUYER_REFUND` kopuk** (delivery-timeout + admin-cancel `PaymentRefundToBuyerRequestedEvent` yayınlar, satır-üreten consumer yok). Wrong-token/late-payment/excess/incorrect inline `QueueRefundIntent` üretir; item-iade T106a bağlı → **WP2** | backend-gap | T49/T51/T71 K |
 | 🟡 | T50-OutageFreezeCallers 🆕 | `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` `FreezeManyAsync`/`ResumeManyAsync` çağıransız (02 §3.3 auto-detect + admin manual) | backend-gap | `T50_REPORT.md:124-125` |
 | ✅ | T56-MultiAccountRetroScan 🆕 | **ÇÖZÜLDÜ → WP4b** — günlük retro-scan Hangfire job (`MultiAccountRetroScanJob`, `AutoUnsuspendJob` deseni) | backend-gap | `T56_REPORT.md:150` |

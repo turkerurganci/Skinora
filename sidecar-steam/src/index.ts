@@ -12,6 +12,8 @@ import {
   InventoryService,
   SteamCommunityInventoryFetcher,
 } from './trade/InventoryService.js';
+import { TradeHoldService } from './trade/TradeHoldService.js';
+import { RateLimitedQueue } from './queue/RateLimitedQueue.js';
 import {
   InMemoryInventoryCache,
   RedisInventoryCache,
@@ -23,6 +25,11 @@ const botManager = new BotManager();
 const botHealthCheck = new BotHealthCheck(botManager);
 const tradeOfferService = new TradeOfferService(botManager);
 const tradeOfferMonitor = new TradeOfferMonitor(botManager);
+
+// Trade-hold / MA check (08 §2.2) — Steam Web API call rate-limited to the
+// documented 1 req/s budget shared with other Web API usage.
+const steamWebApiQueue = new RateLimitedQueue(config.steamWebApiRequestsPerSecond, 1_000);
+const tradeHoldService = new TradeHoldService(config.steamApiKey, steamWebApiQueue);
 
 // T67 — inventory service wires:
 //   * Anonymous SteamCommunity instance (read-only; profile auth not required)
@@ -40,7 +47,7 @@ app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(buildRouter({ botManager, tradeOfferService, inventoryService }));
+app.use(buildRouter({ botManager, tradeOfferService, inventoryService, tradeHoldService }));
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', async () => {
