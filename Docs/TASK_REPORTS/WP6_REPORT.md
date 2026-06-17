@@ -81,8 +81,8 @@ WP6 üç kalemden oluşur (PRE_F6_PLAN §2 WP6): (1) gerçek sidecar-destekli **
 ## Commit & PR
 
 - Branch: `task/WP6-steam-dispute-checkers`
-- Commit: `<hash>` — WP6 implementation
-- PR: #<TBD>
+- Commit: `9bc822d` — WP6 implementation
+- PR: [#175](https://github.com/turkerurganci/Skinora/pull/175)
 - CI: ⏳ izleniyor
 
 ## Known Limitations / Follow-up
