@@ -1,6 +1,6 @@
 # WP7 — Outage/maintenance (admin freeze/resume toggle)
 
-**Faz:** Pre-F6 (P3 — Operasyon) | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-17
+**Faz:** Pre-F6 (P3 — Operasyon) | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-17
 
 ---
 
@@ -69,9 +69,23 @@ Uygulama:
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-17, rapor görülmeden) |
+| Bulgu sayısı | 0 bloke-edici (2 non-blocking gözlem) |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız Validator Sonucu (2026-06-17)
+
+**Verdict: ✓ PASS** — kabul kriterleri 7/8 ✓ + 1 ~ (AC8 auto-detect owner-onaylı WP16 ertelemesi, bloke etmez), 0 bloke-edici bulgu.
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 success (`27686562037`/`27686562073`/`27679584356`) · Adım 0b memory WP7 satırı mevcut · Adım 8a task CI HEAD `f525ddf` run [`27709860380`](https://github.com/turkerurganci/Skinora/actions/runs/27709860380) **tüm job success**.
+
+**Validator lokal koşumu (HEAD `f525ddf`):** API.Tests `~AdminMaintenance` **14/14** · Platform `~AuditLogCategoryMap|~SystemSettingsValidator` **106/106** · Shared `~EnumTests` **203/203** — hepsi pass. (Tam regresyon + gerçek SQL Server integration CI-authoritative; task CI yeşil.)
+
+**Bağımsız teyitler:** tip→freeze map `FreezeReasonFor` + `TimeoutFreezeReasonScopes.For` 07 §10.2 birebir; atomiklik tek explicit DB transaction (settings flush → freeze/resume → audit → commit; cache-evict + push post-commit); F1 audit envelope `affectedTransactions` mevcut; F3 (test doc ref) + F4 (`nvarchar(500)` cap, AD9+AD30 ortak `ValidateSingle`) düzeltmeleri doğrulandı; 4 `platform.maintenance.*` ayarı `SystemSettingsCatalog` ile seeded; güvenlik temiz (MANAGE_SETTINGS + admin-write rate-limit, 0 dep, migration yok, drift yok).
+
+**Non-blocking gözlemler:**
+- **O1 — Tip-değiştirme stranding:** resume yapmadan tip değiştirilirse eski-reason donmuş tx'ler yeni-tip resume'da çözülmez → manuel eski-tip resume gerekir. Sonuç fazla-donma (güvenli taraf), para kaybı/erken-timeout yok; spec stacked-type semantiğini tanımlamıyor. Operasyonel kenar, MVP kabul edilebilir.
+- **O2 — Tek-instance cache/push:** Bilinen `Program.cs:258` MVP kısıtı (Redis backplane §3 kapsamı dışı), 30 sn TTL ile sınırlı.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok (yalnız string-backed `AuditAction` değeri eklendi; ayarlar T63a'dan seeded; yeni entity/kolon/index yok). `has-pending-model-changes` drift yok ile teyit.
