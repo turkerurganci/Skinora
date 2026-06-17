@@ -262,6 +262,11 @@ builder.Services.Configure<PlatformOptions>(
     builder.Configuration.GetSection(PlatformOptions.SectionName));
 builder.Services.AddScoped<IPlatformPublicService, PlatformPublicService>();
 
+// WP7 — admin maintenance/outage control (07 §9.31). Spans Platform settings,
+// Transactions timeout-freeze and Realtime push, so it lives at the API
+// composition root alongside the public maintenance read service.
+builder.Services.AddScoped<IAdminMaintenanceService, AdminMaintenanceService>();
+
 // T61 / T62 — SignalR hubs + realtime publishers (07 §11.1 RT1
 // /hubs/transactions, 07 §11.2 RT2 /hubs/notifications) + the CountdownSync
 // 30s broadcaster. MediatR consumers in the Realtime assembly are picked up
