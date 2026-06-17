@@ -53,5 +53,12 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
 
         builder.HasIndex(n => n.CreatedAt)
             .HasDatabaseName("IX_Notifications_CreatedAt");
+
+        // --- WP8 — admin flag-alert link (07 §8.1) ---
+        // Filtered: only ADMIN_FLAG_ALERT rows carry a FlagId, so the index
+        // stays small and is used to resolve a flag → its alert notifications.
+        builder.HasIndex(n => n.FlagId)
+            .HasDatabaseName("IX_Notifications_FlagId")
+            .HasFilter("[FlagId] IS NOT NULL");
     }
 }

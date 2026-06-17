@@ -402,15 +402,16 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (29) ────────────────────────────────────────────
+    // ── AuditAction (30) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave29Values()
+    public void AuditAction_ShouldHave30Values()
     {
         // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
-        // 29 after WP7 added MAINTENANCE_MODE_CHANGED.
+        // 29 after WP7 added MAINTENANCE_MODE_CHANGED;
+        // 30 after WP8 added BOT_SESSION_FAILED.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(29, values.Length);
+        Assert.Equal(30, values.Length);
     }
 
     [Theory]
@@ -435,6 +436,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_RELEASED))]
     [InlineData(nameof(AuditAction.BOT_STATUS_CHANGED))]
+    [InlineData(nameof(AuditAction.BOT_SESSION_FAILED))]
     [InlineData(nameof(AuditAction.RECONCILIATION_MISMATCH))]
     [InlineData(nameof(AuditAction.COLD_WALLET_TRANSFER_INITIATED))]
     [InlineData(nameof(AuditAction.HOT_WALLET_THRESHOLD_BREACHED))]

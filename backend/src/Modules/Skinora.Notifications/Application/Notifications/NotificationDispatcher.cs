@@ -83,6 +83,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
             Id = Guid.NewGuid(),
             UserId = request.UserId,
             TransactionId = request.TransactionId,
+            FlagId = request.FlagId,
             Type = request.Type,
             Title = rendered.Title,
             Body = rendered.Body,
@@ -102,7 +103,8 @@ public sealed class NotificationDispatcher : INotificationDispatcher
             .AsNoTracking()
             .CountAsync(n => n.UserId == request.UserId && !n.IsRead, cancellationToken);
 
-        var (targetType, targetId) = NotificationTargetMapper.Resolve(request.Type, request.TransactionId);
+        var (targetType, targetId) = NotificationTargetMapper.Resolve(
+            request.Type, request.TransactionId, request.FlagId);
 
         await _realtimePublisher.PublishNewNotificationAsync(
             request.UserId,

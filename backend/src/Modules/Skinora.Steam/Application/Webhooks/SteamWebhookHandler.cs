@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Platform.Application.Audit;
@@ -140,6 +141,28 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
             NewValue: $"{targetStatus};reason={data.Reason};event={envelope.Event}",
             IpAddress: null), cancellationToken);
 
+        // WP8 — alongside the terse BOT_STATUS_CHANGED transition record, write a
+        // dedicated BOT_SESSION_FAILED incident row capturing the sidecar event +
+        // reason as a JSON envelope. It pairs 1:1 with the ADMIN_STEAM_BOT_ISSUE
+        // admin notification raised by BotSessionFailedEvent below.
+        var incidentDetail = JsonSerializer.Serialize(new
+        {
+            @event = envelope.Event,
+            reason = data.Reason,
+            status = targetStatus.ToString(),
+        });
+
+        await _auditLogger.LogAsync(new AuditLogEntry(
+            UserId: null,
+            ActorId: SeedConstants.SystemUserId,
+            ActorType: ActorType.SYSTEM,
+            Action: AuditAction.BOT_SESSION_FAILED,
+            EntityType: nameof(PlatformSteamBot),
+            EntityId: bot.Id.ToString(),
+            OldValue: previousStatus.ToString(),
+            NewValue: incidentDetail,
+            IpAddress: null), cancellationToken);
+
         // T103b-2 — a durable restriction (RESTRICTED/BANNED) puts every item
         // still in this bot's custody at risk. Raise BotRestrictedEvent so the
         // recovery consumer materialises the queue + auto-holds those
@@ -159,6 +182,25 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
                     OccurredAt: nowUtc),
                 cancellationToken);
         }
+
+        // WP8 — raise the admin-alert event for every lifecycle incident
+        // (including transient OFFLINE session failures), independently of the
+        // RESTRICTED/BANNED-only recovery event above. The Notifications consumer
+        // fans out an ADMIN_STEAM_BOT_ISSUE in-app notification to every admin.
+        // Published in the same unit of work as the status flip — the outbox row
+        // commits atomically with the SaveChanges below.
+        await _outbox.PublishAsync(
+            new BotSessionFailedEvent(
+                EventId: Guid.NewGuid(),
+                PlatformSteamBotId: bot.Id,
+                SteamId: bot.SteamId,
+                DisplayName: bot.DisplayName,
+                PreviousStatus: previousStatus.ToString(),
+                NewStatus: targetStatus.ToString(),
+                Reason: data.Reason,
+                WebhookEvent: envelope.Event,
+                OccurredAt: nowUtc),
+            cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
 

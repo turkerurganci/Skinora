@@ -758,13 +758,23 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         // T103b-2 — the sidecar reason is surfaced for the admin S18 card.
         Assert.Equal("restricted", refreshed.RestrictionReason);
 
-        var audit = await verify.Set<AuditLog>()
-            .SingleAsync(a => a.EntityType == nameof(PlatformSteamBot) && a.EntityId == _bot.Id.ToString());
-        Assert.Equal(AuditAction.BOT_STATUS_CHANGED, audit.Action);
-        Assert.Equal(ActorType.SYSTEM, audit.ActorType);
-        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), audit.OldValue);
-        Assert.Contains("RESTRICTED", audit.NewValue);
-        Assert.Contains("reason=restricted", audit.NewValue);
+        var auditRows = await verify.Set<AuditLog>()
+            .Where(a => a.EntityType == nameof(PlatformSteamBot) && a.EntityId == _bot.Id.ToString())
+            .ToListAsync();
+        // WP8 — two rows now: the terse BOT_STATUS_CHANGED transition plus the
+        // dedicated BOT_SESSION_FAILED incident record (JSON envelope).
+        var statusAudit = auditRows.Single(a => a.Action == AuditAction.BOT_STATUS_CHANGED);
+        Assert.Equal(ActorType.SYSTEM, statusAudit.ActorType);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), statusAudit.OldValue);
+        Assert.Contains("RESTRICTED", statusAudit.NewValue);
+        Assert.Contains("reason=restricted", statusAudit.NewValue);
+
+        var incidentAudit = auditRows.Single(a => a.Action == AuditAction.BOT_SESSION_FAILED);
+        Assert.Equal(ActorType.SYSTEM, incidentAudit.ActorType);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), incidentAudit.OldValue);
+        Assert.Contains("RESTRICTED", incidentAudit.NewValue);
+        Assert.Contains("restricted", incidentAudit.NewValue);
+        Assert.Contains(SteamWebhookEvents.BotRemovedFromPool, incidentAudit.NewValue);
 
         var push = Assert.Single(_recorder.Calls);
         Assert.Equal("AdminBotStatusChanged", push.Method);
@@ -775,10 +785,18 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal("restricted", payload.Reason);
 
         // T103b-2 — a restriction raises BotRestrictedEvent for the recovery consumer.
-        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        var restricted = Assert.Single(_outbox.Events.OfType<BotRestrictedEvent>());
         Assert.Equal(_bot.Id, restricted.PlatformSteamBotId);
         Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), restricted.Status);
         Assert.Equal("restricted", restricted.Reason);
+
+        // WP8 — and a BotSessionFailedEvent for the ADMIN_STEAM_BOT_ISSUE alert.
+        var incident = Assert.Single(_outbox.Events.OfType<BotSessionFailedEvent>());
+        Assert.Equal(_bot.Id, incident.PlatformSteamBotId);
+        Assert.Equal(PlatformSteamBotStatus.ACTIVE.ToString(), incident.PreviousStatus);
+        Assert.Equal(PlatformSteamBotStatus.RESTRICTED.ToString(), incident.NewStatus);
+        Assert.Equal("restricted", incident.Reason);
+        Assert.Equal(SteamWebhookEvents.BotRemovedFromPool, incident.WebhookEvent);
     }
 
     [Fact]
@@ -801,8 +819,10 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal("banned", payload.Reason);
 
         // T103b-2 — a ban also raises BotRestrictedEvent.
-        var restricted = Assert.IsType<BotRestrictedEvent>(Assert.Single(_outbox.Events));
+        var restricted = Assert.Single(_outbox.Events.OfType<BotRestrictedEvent>());
         Assert.Equal(PlatformSteamBotStatus.BANNED.ToString(), restricted.Status);
+        // WP8 — and the BotSessionFailedEvent admin alert.
+        Assert.Single(_outbox.Events.OfType<BotSessionFailedEvent>());
     }
 
     [Fact]
@@ -821,7 +841,10 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal(PlatformSteamBotStatus.OFFLINE, refreshed.Status);
         // T103b-2 — OFFLINE is treated as transient: no recovery event is raised
         // (new traffic is already diverted by the ACTIVE-only selector).
-        Assert.Empty(_outbox.Events);
+        Assert.Empty(_outbox.Events.OfType<BotRestrictedEvent>());
+        // WP8 — but the lifecycle incident still raises the admin alert event.
+        var incident = Assert.Single(_outbox.Events.OfType<BotSessionFailedEvent>());
+        Assert.Equal(PlatformSteamBotStatus.OFFLINE.ToString(), incident.NewStatus);
     }
 
     [Fact]

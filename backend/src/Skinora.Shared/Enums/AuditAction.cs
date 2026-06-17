@@ -38,6 +38,18 @@ public enum AuditAction
     // the SECURITY_EVENT queue surfaces it alongside wallet-address events.
     BOT_STATUS_CHANGED,
 
+    // Steam bot session failure (WP8 — 02 §15, 05 §3.2, 08 §3.3). Written by the
+    // Steam webhook handler for the bot.session_failed / bot.removed_from_pool
+    // lifecycle events, capturing the sidecar incident (event + reason) that took
+    // the bot out of the active pool. Distinct from BOT_STATUS_CHANGED (the terse
+    // status transition X→Y record kept for the T69 contract): this row is the
+    // incident record paired 1:1 with the ADMIN_STEAM_BOT_ISSUE admin
+    // notification. EntityType = "PlatformSteamBot"; EntityId = PlatformSteamBot.Id;
+    // OldValue = previous status; NewValue is a JSON envelope {event, reason,
+    // status}. ActorType = SYSTEM. SECURITY_EVENT category — sits beside
+    // BOT_STATUS_CHANGED in the admin security queue.
+    BOT_SESSION_FAILED,
+
     // Bot recovery queue (T103b-2 — 02 §15, 03 §11.2a, 04 §8.7). Written
     // when a stuck-escrow BotRecoveryItem is materialised after a bot is
     // restricted/banned. EntityType = "BotRecoveryItem"; EntityId =

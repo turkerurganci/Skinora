@@ -66,6 +66,13 @@ public static class AuditLogCategoryMap
             // the security queue.
             [AuditAction.BOT_STATUS_CHANGED] = Categories.SecurityEvent,
 
+            // WP8 — Steam bot session failure / pool removal. The sidecar
+            // bot.session_failed / bot.removed_from_pool incident sits beside
+            // BOT_STATUS_CHANGED in the operational security queue (a bot just
+            // dropped out of the active pool) and pairs 1:1 with the
+            // ADMIN_STEAM_BOT_ISSUE admin notification.
+            [AuditAction.BOT_SESSION_FAILED] = Categories.SecurityEvent,
+
             // T103b-2 — bot recovery queue. Materialisation is SYSTEM-driven and
             // signals the same operational-security situation as BOT_STATUS_CHANGED
             // (a restricted bot is now holding stuck items), so it sits in the

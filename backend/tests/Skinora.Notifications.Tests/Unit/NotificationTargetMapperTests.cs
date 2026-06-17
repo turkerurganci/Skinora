@@ -45,15 +45,29 @@ public class NotificationTargetMapperTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void Resolve_AdminFlagAlert_ReturnsFlagTargetType()
+    public void Resolve_AdminFlagAlert_WithFlagId_ReturnsFlagTarget()
     {
-        var id = Guid.NewGuid();
+        var flagId = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
 
         var (targetType, targetId) = NotificationTargetMapper.Resolve(
-            NotificationType.ADMIN_FLAG_ALERT, id);
+            NotificationType.ADMIN_FLAG_ALERT, transactionId, flagId);
 
+        // WP8 — flag alert resolves to its dedicated FlagId column, not the
+        // TransactionId the earlier implementation reinterpreted as a flag id.
         Assert.Equal("flag", targetType);
-        Assert.Equal(id, targetId);
+        Assert.Equal(flagId, targetId);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void Resolve_AdminFlagAlert_WithoutFlagId_ReturnsNullPair()
+    {
+        var (targetType, targetId) = NotificationTargetMapper.Resolve(
+            NotificationType.ADMIN_FLAG_ALERT, transactionId: Guid.NewGuid(), flagId: null);
+
+        Assert.Null(targetType);
+        Assert.Null(targetId);
     }
 
     [Fact]

@@ -115,6 +115,47 @@ public class NotificationDispatcherTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task DispatchAsync_AdminFlagAlert_PersistsFlagId_AndPushesFlagTarget()
+    {
+        var (dispatcher, _, realtimePublisher) = CreateSut();
+
+        var flagId = Guid.NewGuid();
+        await dispatcher.DispatchAsync(
+            new NotificationRequest
+            {
+                UserId = _user.Id,
+                Type = NotificationType.ADMIN_FLAG_ALERT,
+                // TransactionId intentionally omitted — the flag alert links via
+                // FlagId (no FK), and a random TransactionId would violate
+                // FK_Notifications_Transaction.
+                FlagId = flagId,
+                Parameters = new Dictionary<string, string>
+                {
+                    ["TransactionId"] = "(account-level)",
+                    ["Reason"] = "PRICE_DEVIATION",
+                },
+            },
+            CancellationToken.None);
+
+        await Context.SaveChangesAsync();
+
+        await using var verify = CreateContext();
+        var notification = await verify.Set<Notification>().SingleAsync(n => n.UserId == _user.Id);
+        Assert.Equal(NotificationType.ADMIN_FLAG_ALERT, notification.Type);
+        // WP8 — FlagId round-trips through the new column.
+        Assert.Equal(flagId, notification.FlagId);
+
+        // WP8 — the realtime push resolves the inbox flag target from FlagId.
+        var newNotification = realtimePublisher.Calls
+            .Where(c => c.Method == "NewNotification")
+            .Select(c => (NotificationRealtimePayloads.NewNotification)c.Payload)
+            .Single();
+        Assert.Equal("flag", newNotification.TargetType);
+        Assert.Equal(flagId, newNotification.TargetId);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task DispatchAsync_OnlyEnabledChannelsWithExternalId_GetDeliveryRows()
     {
         await SetPreferenceAsync(NotificationChannel.EMAIL, enabled: true, externalId: "user@example.com");

@@ -59,6 +59,7 @@ public sealed class NotificationInboxService : INotificationInboxService
                 n.Type,
                 n.Title,
                 n.TransactionId,
+                n.FlagId,
                 n.IsRead,
                 n.CreatedAt,
             })
@@ -67,7 +68,8 @@ public sealed class NotificationInboxService : INotificationInboxService
         var items = rows
             .Select(r =>
             {
-                var (targetType, targetId) = NotificationTargetMapper.Resolve(r.Type, r.TransactionId);
+                var (targetType, targetId) = NotificationTargetMapper.Resolve(
+                    r.Type, r.TransactionId, r.FlagId);
                 return new NotificationListItemDto(
                     Id: r.Id,
                     Type: r.Type.ToString(),
