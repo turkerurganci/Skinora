@@ -1,6 +1,6 @@
 # WP10 — Tron dayanıklılık (TronGrid resilience + per-event dedup + HD cache + gas config)
 
-**Faz:** Pre-F6 (P3 — Operasyon) | **Durum:** ⏳ Devam ediyor (yapım tamam, bağımsız validator bekliyor) | **Tarih:** 2026-06-18
+**Faz:** Pre-F6 (P3 — Operasyon) | **Durum:** ✓ Tamamlandı — bağımsız validator PASS (2026-06-18) | **Tarih:** 2026-06-18
 
 ---
 
@@ -69,9 +69,25 @@ WP10, blockchain para-katmanının dayanıklılığını dört eksende tamamlar 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-18, kendi verdict'i rapor görülmeden) |
+| Bulgu sayısı | 0 bloke-edici (3 non-blocking gözlem) |
+| Düzeltme gerekli mi | Hayır |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 success (`27746724695`/`27746724678`/`27719423184`) · Adım 0b repo memory mevcut · Adım 8a task CI HEAD `a087dbf` run [`27752117542`](https://github.com/turkerurganci/Skinora/actions/runs/27752117542) **11/11 job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker×2/Gate) + `00c26d1b` run `27751540086`.
+
+**Validator lokal koşumu:** sidecar `tsc --noEmit` exit 0 + **vitest 161/161**; backend `dotnet build -c Release` **0W/0E** + Transactions `Category=Unit` **101/101**; snapshot diff = migration ile birebir (EventIndex kolon + `UQ_BlockchainTransactions_TxHash`→`_TxHash_EventIndex` + `CK_..._EventIndex`) → **drift yok**. Integration + Migration dry-run gerçek SQL Server'da CI-authoritative (lokal Docker yok).
+
+**Bağımsız teyit (4 kalem):**
+- **(1) Resilience okuma-yolu:** `fetchResilient` her okuma çağrısını sarar (`listTrc20`/`getNowSolidBlock`/`getAccountBalances`/`getTransactionInfoById`/`resolveTransferEventIndices`); 429/403'te `keysTriedThisThrottle < keys.length` iken anında failover (sleep yok, `keyIndex++`), her iki key throttled olunca `backoffAttempts <= maxRetries` sınırlı backoff → `TronGridRateLimitError` (alt-tip `TronGridHttpError` → mevcut `instanceof` korunur); 5xx aynı key bounded retry; döngü `backoffAttempts` ile sınırlı (sonsuz döngü yok). Transfer/broadcast yolu (`TronTransferClient.getTransactionStatus`) bilinçli **hariç** (owner Q2, çift-retry önleme, 08 §3.5 not).
+- **(2) Per-event dedup:** `resolveEventIndex` log entry'sini `value` ile eşler + **iç `seenEvents` kontrolü** aynı-değerli çoklu transferi ayrı index'lere ayırır; `(txHash,eventIndex)` dedup MonitorRegistry + PostCancelMonitor'da simetrik; backend `ExistsByTxHashAndEventIndexAsync` + confirmation lookup `(TxHash,EventIndex)`-keyed (çok-event'te yanlış satır flip edilmez); per-row amount validation değişmedi. Composite UNIQUE `(TxHash,EventIndex) WHERE TxHash IS NOT NULL`: outbound NULL EventIndex + distinct TxHash → SQL Server NULL-equal farkı irrelevant (çakışma yok); inbound EventIndex hep ≥0.
+- **(3) HD cache:** `derive` yalnız `DeriveResult` (public adres) memoize eder (aynı instance döner); `deriveSigner` private key'i her çağrıda yeniden hesaplar, cache'lemez (05 §3.3 signing isolation korunur).
+- **(4) Gas config:** `feeLimit = request.options?.feeLimitSun ?? config.transferFeeLimitSun` (`TRANSFER_FEE_LIMIT_SUN` default 100 TRX); per-request override korunur; hardcoded magic number kaldırıldı.
+
+**Mini güvenlik:** secret sızıntısı yok (API key `TRON-PRO-API-KEY` header'da, log'larda key yok; mnemonic redact'li); auth/endpoint değişmedi (webhook'lar signature-gated); EventIndex DB CHECK `>= 0` ile backstop'lu; **0 yeni bağımlılık** (built-in fetch + mevcut TronWeb/ethers; package.json/csproj değişmedi).
+
+**Non-blocking gözlemler (bloke etmez):** N1 — çok-transfer + solidity log-lag'de index 0 fallback 2.+ event'i status-quo gibi davranır (owner-onaylı, para kaybı yok, doc'lu). N2 — `RateLimitedQueue` hâlâ ölü kod (pre-existing, WP10 kapsamı dışı, follow-up). N3 — `measure()` hata yolunda 'ok'-timer'ı bırakıp ~0ms 'error' gözlemi kaydeder (yalnız observability, sızıntı yok).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — AC tablosu (8/8 ✓) bağımsız verdict'imle örtüşüyor; uyuşmazlık yok.
 
 ## Altyapı Değişiklikleri
 
