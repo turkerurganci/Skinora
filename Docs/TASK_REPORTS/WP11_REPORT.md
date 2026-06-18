@@ -79,7 +79,7 @@ WP11, kullanıcının **UI'dan gerçekten login olmasını** sağlar. Tarama, ü
 - Branch: `task/WP11-auth-ui-wireup`
 - Commit: `ce95cf7` — WP11: Auth UI wire-up
 - PR: #182
-- CI: ⏳ İzleniyor
+- CI: ✓ PASS — HEAD `ccd1e77` run [27780917297](https://github.com/turkerurganci/Skinora/actions/runs/27780917297) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker×2/Gate)
 
 ## Known Limitations / Follow-up
 - **Permission TTL cache eklenmedi** (owner kararı — T40 "dinamiklik > performans" korundu); perf darboğazı kanıtı yoksa post-MVP.
