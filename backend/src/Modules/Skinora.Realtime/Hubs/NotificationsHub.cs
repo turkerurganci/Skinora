@@ -39,6 +39,15 @@ public class NotificationsHub : Hub
 {
     public const string GroupPrefix = "user:";
 
+    /// <summary>
+    /// Group that receives the admin-scoped pushes (T69 K4 — bot status,
+    /// reconciliation mismatch, hot-wallet threshold). Admins are auto-joined on
+    /// <see cref="OnConnectedAsync"/>; non-admin connections never join, so these
+    /// payloads (bot SteamIds, wallet balances, reconciliation deltas) no longer
+    /// fan out to every client via <c>Clients.All</c>.
+    /// </summary>
+    public const string AdminGroup = "admins";
+
     private readonly ILogger<NotificationsHub> _logger;
 
     public NotificationsHub(ILogger<NotificationsHub> logger)
@@ -54,6 +63,16 @@ public class NotificationsHub : Hub
         var userId = ResolveUserId();
 
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupName(userId), Context.ConnectionAborted);
+
+        // WP9 — admins also join the admin broadcast group so the three
+        // admin-scoped events reach them without leaking to non-admin clients.
+        if (HubClaims.IsAdmin(Context.User))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, AdminGroup, Context.ConnectionAborted);
+            _logger.LogDebug(
+                "NotificationsHub connection {ConnectionId} joined the admin group (user {UserId}).",
+                Context.ConnectionId, userId);
+        }
 
         _logger.LogDebug(
             "NotificationsHub connection {ConnectionId} joined group for user {UserId}.",

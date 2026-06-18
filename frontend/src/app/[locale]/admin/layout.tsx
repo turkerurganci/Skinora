@@ -1,10 +1,7 @@
 import { AdminShell } from "@/components/layout";
-import { ToastProvider } from "@/components/common";
 
+// ToastProvider is mounted globally in `Providers` (WP9) so the realtime layer
+// can raise toasts everywhere; admin components consume that same context.
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <ToastProvider>
-      <AdminShell>{children}</AdminShell>
-    </ToastProvider>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

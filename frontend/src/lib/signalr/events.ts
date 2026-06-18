@@ -126,6 +126,40 @@ export interface MaintenanceStatusChangedPayload {
   plannedEnd: string | null;
 }
 
+/**
+ * Admin-scoped events (07 §11.2 — WP9). Delivered only to connections in the
+ * NotificationsHub admin group, so non-admin clients never receive them.
+ */
+export interface AdminBotStatusChangedPayload {
+  botId: string;
+  steamId: string;
+  displayName: string;
+  previousStatus: string;
+  newStatus: string;
+  reason: string;
+  changedAt: string;
+}
+
+export interface AdminReconciliationMismatchPayload {
+  scope: string;
+  address: string;
+  token: string;
+  expected: number;
+  actual: number;
+  delta: number;
+  blockNumber: number | null;
+  detectedAt: string;
+}
+
+export interface AdminHotWalletThresholdBreachedPayload {
+  token: string;
+  direction: string;
+  threshold: number;
+  actual: number;
+  blockNumber: number | null;
+  detectedAt: string;
+}
+
 // ---------- Event name constants ----------
 
 /**
@@ -149,6 +183,9 @@ export const NotificationHubEvents = {
   TelegramConnected: "TelegramConnected",
   DiscordConnected: "DiscordConnected",
   MaintenanceStatusChanged: "MaintenanceStatusChanged",
+  AdminBotStatusChanged: "AdminBotStatusChanged",
+  AdminReconciliationMismatch: "AdminReconciliationMismatch",
+  AdminHotWalletThresholdBreached: "AdminHotWalletThresholdBreached",
 } as const;
 
 export const TransactionHubMethods = {

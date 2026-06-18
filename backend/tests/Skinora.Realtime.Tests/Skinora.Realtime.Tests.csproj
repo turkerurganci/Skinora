@@ -24,7 +24,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- WP9 — IHubContext / IClientProxy fakes for the notification publisher
+       routing tests (admin-group scoping) need the ASP.NET SignalR types. -->
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\Skinora.Auth\Skinora.Auth.csproj" />
     <ProjectReference Include="..\..\src\Modules\Skinora.Realtime\Skinora.Realtime.csproj" />
     <ProjectReference Include="..\..\src\Modules\Skinora.Transactions\Skinora.Transactions.csproj" />
     <ProjectReference Include="..\..\src\Modules\Skinora.Users\Skinora.Users.csproj" />

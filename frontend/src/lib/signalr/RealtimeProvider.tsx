@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useToast } from "@/components/common";
 import { notificationsHubClient } from "./NotificationsHubClient";
 import { transactionsHubClient } from "./TransactionsHubClient";
 import type { TransactionDetailResponse } from "@/lib/api/transactions";
@@ -27,25 +28,21 @@ import type { UnreadCountResponse } from "@/lib/api/notifications";
  *     payload contains the new `remainingSeconds` + frozen flag verbatim).
  *   • `PaymentDetected/PaymentConfirmed/DisputeUpdate/FlagResolved/
  *     EmergencyHoldApplied/EmergencyHoldReleased` → invalidate detail.
- *   • `NewNotification` → invalidate inbox lists + unread count.
+ *   • `NewNotification` → invalidate inbox lists + unread count AND surface a
+ *     C09 toast (WP9) with the notification text.
  *   • `UnreadCountChanged` → patch unread-count cache directly.
  *   • `TelegramConnected/DiscordConnected` → invalidate account settings.
  *   • `MaintenanceStatusChanged` → invalidate platform maintenance cache.
- *
- * Known limitations (forward-deferred):
- *   K1 — Toast notification UI (C09) is not surfaced; `NewNotification`
- *        only invalidates the inbox + unread-count cache. The C09 component
- *        is not yet defined — T-future toast component task will subscribe
- *        to the same hub and render the toast.
- *   K2 — Admin-scoped events (`AdminBotStatusChanged`,
- *        `AdminReconciliationMismatch`, `AdminHotWalletThresholdBreached`)
- *        are not subscribed here — the spec table (07 §11.2) doesn't list
- *        them and the admin dashboard surfaces land in T99–T106 / T103.
+ *   • Admin-scoped (WP9, only delivered to admin connections):
+ *     `AdminBotStatusChanged` → invalidate Steam-account + dashboard caches;
+ *     `AdminReconciliationMismatch` / `AdminHotWalletThresholdBreached` →
+ *     invalidate the audit-log + dashboard caches (where they surface durably).
  */
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const accessToken = useAuthStore((s) => s.accessToken);
   const queryClient = useQueryClient();
+  const { push } = useToast();
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) {
@@ -114,9 +111,11 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     });
 
     const unsubNot = notificationsHubClient.subscribe({
-      onNewNotification: () => {
+      onNewNotification: (p) => {
         queryClient.invalidateQueries({ queryKey: ["notifications", "list"] });
         queryClient.invalidateQueries({ queryKey: ["notifications", "unread-count"] });
+        // WP9 — C09 toast: the message is server-rendered, so surface it verbatim.
+        push({ variant: "info", message: p.message });
       },
       onUnreadCountChanged: (p) => {
         queryClient.setQueryData<UnreadCountResponse>(["notifications", "unread-count"], {
@@ -132,13 +131,27 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       onMaintenanceStatusChanged: () => {
         queryClient.invalidateQueries({ queryKey: ["platform", "maintenance"] });
       },
+      // WP9 — admin-scoped events. The backend only delivers these to admin
+      // connections (admin group), so the handlers are inert for regular users.
+      onAdminBotStatusChanged: () => {
+        queryClient.invalidateQueries({ queryKey: ["admin", "steam-accounts"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      },
+      onAdminReconciliationMismatch: () => {
+        queryClient.invalidateQueries({ queryKey: ["admin", "audit-logs"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      },
+      onAdminHotWalletThresholdBreached: () => {
+        queryClient.invalidateQueries({ queryKey: ["admin", "audit-logs"] });
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      },
     });
 
     return () => {
       unsubTx();
       unsubNot();
     };
-  }, [isAuthenticated, accessToken, queryClient]);
+  }, [isAuthenticated, accessToken, queryClient, push]);
 
   return <>{children}</>;
 }
