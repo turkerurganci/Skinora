@@ -95,9 +95,9 @@ WP9, realtime (SignalR) katmanının altı boşluğunu kapatır (kaynak: [`PRE_F
 ## Commit & PR
 
 - Branch: `task/WP9-realtime-completeness`
-- Commit: `8d62c56`
+- Commit: `8d62c56` (kod) + `ed186c8` (rapor/PR refs)
 - PR: [#179](https://github.com/turkerurganci/Skinora/pull/179)
-- CI: ⏳ (watch)
+- CI: ✓ PASS — HEAD `ed186c8` run [`27744298511`](https://github.com/turkerurganci/Skinora/actions/runs/27744298511) tüm job success (Detect/Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker×2/Gate). Integration + migration dry-run gerçek SQL Server'da geçti.
 
 ## Known Limitations / Follow-up
 
