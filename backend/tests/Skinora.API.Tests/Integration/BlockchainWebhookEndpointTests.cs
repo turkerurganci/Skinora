@@ -137,6 +137,65 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
     }
 
     [Fact]
+    public async Task PaymentDetected_SameTxHashDifferentEventIndex_CreatesSeparateRows()
+    {
+        // WP10 (08 §3.4) — a transaction carrying two Transfer events to the
+        // deposit address is recorded once per (TxHash, EventIndex). The former
+        // TxHash-only dedup collapsed these to a single row, silently dropping
+        // the second transfer.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+        var txHash = "0xMulti" + Guid.NewGuid().ToString("N");
+
+        var event0 = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId,
+            amount: "60.000000", eventIndex: 0, txHash: txHash);
+        var event1 = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId,
+            amount: "40.000000", eventIndex: 1, txHash: txHash);
+
+        var r0 = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", event0);
+        var r1 = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", event1);
+        Assert.Equal(HttpStatusCode.OK, r0.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, r1.StatusCode);
+
+        // Re-delivering event0 is still idempotent on its own (TxHash, EventIndex).
+        var r0Again = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", event0);
+        var json = await r0Again.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Idempotent", json.GetProperty("data").GetProperty("result").GetString());
+
+        Assert.Equal(2, await _factory.CountBlockchainTransactionsAsync(txHash));
+        var row0 = await _factory.GetBlockchainTransactionByEventAsync(txHash, 0);
+        var row1 = await _factory.GetBlockchainTransactionByEventAsync(txHash, 1);
+        Assert.Equal(60m, row0!.Amount);
+        Assert.Equal(40m, row1!.Amount);
+    }
+
+    [Fact]
+    public async Task PaymentConfirmed_MatchesTheRowForItsEventIndex()
+    {
+        // WP10 — confirmation must flip the row for the specific event index,
+        // not the first row sharing the TxHash (which would mis-validate the
+        // amount in a multi-transfer transaction).
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+        var txHash = "0xMulti" + Guid.NewGuid().ToString("N");
+
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected",
+            MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "100.000000", eventIndex: 0, txHash: txHash));
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected",
+            MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "100.000000", eventIndex: 1, txHash: txHash));
+
+        // Confirm only event index 1.
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed",
+            MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, txHash, eventIndex: 1));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var row1 = await _factory.GetBlockchainTransactionByEventAsync(txHash, 1);
+        var row0 = await _factory.GetBlockchainTransactionByEventAsync(txHash, 0);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, row1!.Status);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, row0!.Status); // untouched
+    }
+
+    [Fact]
     public async Task PaymentDetected_UnknownPaymentAddress_ReturnsUnknown()
     {
         var client = _factory.CreateClient();
@@ -431,7 +490,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
     private static DetectedEnvelopeShape MakeDetectedEnvelope(
         Guid paymentAddressId,
         Guid transactionId,
-        string amount = "100.000000") => new()
+        string amount = "100.000000",
+        int eventIndex = 0,
+        string? txHash = null) => new()
         {
             @event = "payment.detected",
             timestamp = DateTime.UtcNow.ToString("O"),
@@ -439,7 +500,8 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             {
                 paymentAddressId = paymentAddressId,
                 transactionId = transactionId,
-                txHash = "0xDet" + Guid.NewGuid().ToString("N"),
+                txHash = txHash ?? "0xDet" + Guid.NewGuid().ToString("N"),
+                eventIndex = eventIndex,
                 fromAddress = "TFromX1234567890123456789012345678",
                 toAddress = "TToX1234567890123456789012345678901",
                 contractAddress = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
@@ -450,20 +512,22 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             },
         };
 
-    private static object MakeConfirmedEnvelope(Guid paymentAddressId, Guid transactionId, string txHash) => new
-    {
-        @event = "payment.confirmed",
-        timestamp = DateTime.UtcNow.ToString("O"),
-        data = new
+    private static object MakeConfirmedEnvelope(
+        Guid paymentAddressId, Guid transactionId, string txHash, int eventIndex = 0) => new
         {
-            paymentAddressId,
-            transactionId,
-            txHash,
-            blockNumber = 1_500_000L,
-            confirmationCount = 20,
-            confirmedAt = DateTime.UtcNow.ToString("O"),
-        },
-    };
+            @event = "payment.confirmed",
+            timestamp = DateTime.UtcNow.ToString("O"),
+            data = new
+            {
+                paymentAddressId,
+                transactionId,
+                txHash,
+                eventIndex,
+                blockNumber = 1_500_000L,
+                confirmationCount = 20,
+                confirmedAt = DateTime.UtcNow.ToString("O"),
+            },
+        };
 
     private static dynamic MakeWrongTokenEnvelope(
         Guid paymentAddressId,
@@ -502,6 +566,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         public Guid paymentAddressId { get; set; }
         public Guid transactionId { get; set; }
         public string txHash { get; set; } = string.Empty;
+        public int eventIndex { get; set; }
         public string fromAddress { get; set; } = string.Empty;
         public string toAddress { get; set; } = string.Empty;
         public string contractAddress { get; set; } = string.Empty;
@@ -601,6 +666,18 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             return await db.Set<BlockchainTransaction>().CountAsync(b => b.TxHash == txHash);
+        }
+
+        // WP10 — fetch the row for a specific (txHash, eventIndex) so per-event
+        // dedup / confirmation-matching can be asserted independently.
+        public async Task<BlockchainTransaction?> GetBlockchainTransactionByEventAsync(
+            string txHash, int eventIndex)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            return await db.Set<BlockchainTransaction>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.TxHash == txHash && b.EventIndex == eventIndex);
         }
 
         // ─── T72 amount validation helpers ──────────────────────────

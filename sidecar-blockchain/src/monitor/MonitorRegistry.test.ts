@@ -5,6 +5,7 @@ import type {
   Trc20ListResponse,
   Trc20Record,
   TransactionInfo,
+  TransferLogEntry,
 } from '../tron/TronGridClient.js';
 import { WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type { AnyBlockchainWebhookPayload } from '../webhook/WebhookPayloads.js';
@@ -26,6 +27,8 @@ interface FakeTronClient {
   enqueuePhase2(response: Trc20ListResponse): void;
   setSolidBlock(block: number): void;
   setTxInfo(txHash: string, info: TransactionInfo | null): void;
+  /** Override the on-chain log entries resolved for a (txHash, contract) pair. */
+  setEventIndices(txHash: string, contract: string, entries: TransferLogEntry[]): void;
   client: MonitorRegistryDeps['client'];
   callsPhase1: ListCall[];
   callsPhase2: ListCall[];
@@ -36,6 +39,7 @@ function createFakeClient(): FakeTronClient {
   const phase1Queue: Trc20ListResponse[] = [];
   const phase2Queue: Trc20ListResponse[] = [];
   const txInfo = new Map<string, TransactionInfo | null>();
+  const eventIndices = new Map<string, TransferLogEntry[]>();
   const callsPhase1: ListCall[] = [];
   const callsPhase2: ListCall[] = [];
   const txInfoCalls: string[] = [];
@@ -56,6 +60,9 @@ function createFakeClient(): FakeTronClient {
     },
     setTxInfo(h, info) {
       txInfo.set(h, info);
+    },
+    setEventIndices(txHash, contract, entries) {
+      eventIndices.set(`${txHash}:${contract}`, entries);
     },
     client: {
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -78,6 +85,13 @@ function createFakeClient(): FakeTronClient {
       async getTransactionInfoById(txHash: string): Promise<TransactionInfo | null> {
         txInfoCalls.push(txHash);
         return txInfo.get(txHash) ?? null;
+      },
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async resolveTransferEventIndices(
+        txHash: string,
+        contractAddress: string,
+      ): Promise<TransferLogEntry[]> {
+        return eventIndices.get(`${txHash}:${contractAddress}`) ?? [];
       },
     } as unknown as MonitorRegistryDeps['client'],
   };
@@ -502,5 +516,142 @@ describe('MonitorRegistry', () => {
         expectedSymbol: 'USDT',
       }),
     ).toThrow(/shut down/);
+  });
+});
+
+describe('MonitorRegistry — per-event dedup (WP10, 08 §3.4)', () => {
+  let fake: FakeTronClient;
+  let sender: ReturnType<typeof createFakeSender>;
+
+  beforeEach(() => {
+    fake = createFakeClient();
+    sender = createFakeSender();
+  });
+
+  function startMonitor(registry: MonitorRegistry): void {
+    registry.start({
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+    });
+  }
+
+  it('stamps the real on-chain event index on a single-transfer detection', async () => {
+    const registry = buildRegistry({ client: fake.client, sender: sender.sender });
+    startMonitor(registry);
+    fake.setEventIndices('tx-1', USDT, [{ index: 0, value: '100000000' }]);
+    fake.enqueuePhase1({
+      records: [transferRecord({ transaction_id: 'tx-1' })],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+
+    await registry.tick();
+
+    expect(sender.sent).toHaveLength(1);
+    const data = (sender.sent[0].envelope as { data: { eventIndex: number } }).data;
+    expect(data.eventIndex).toBe(0);
+  });
+
+  it('emits one detection per Transfer event for a multi-transfer transaction', async () => {
+    const registry = buildRegistry({ client: fake.client, sender: sender.sender });
+    startMonitor(registry);
+    // One tx (tx-multi) carrying two transfers to the deposit address with
+    // distinct amounts and distinct on-chain log indices.
+    fake.setEventIndices('tx-multi', USDT, [
+      { index: 0, value: '50000000' },
+      { index: 1, value: '30000000' },
+    ]);
+    fake.enqueuePhase1({
+      records: [
+        transferRecord({ transaction_id: 'tx-multi', value: '50000000' }),
+        transferRecord({ transaction_id: 'tx-multi', value: '30000000' }),
+      ],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+
+    await registry.tick();
+
+    expect(sender.sent).toHaveLength(2);
+    const events = sender.sent.map((s) => {
+      const d = (s.envelope as { data: { eventIndex: number; amount: string } }).data;
+      return { eventIndex: d.eventIndex, amount: d.amount };
+    });
+    expect(events).toEqual([
+      { eventIndex: 0, amount: '50.000000' },
+      { eventIndex: 1, amount: '30.000000' },
+    ]);
+  });
+
+  it('does not re-emit the same (txHash, eventIndex) across ticks', async () => {
+    const registry = buildRegistry({ client: fake.client, sender: sender.sender });
+    startMonitor(registry);
+    fake.setEventIndices('tx-1', USDT, [{ index: 0, value: '100000000' }]);
+    fake.enqueuePhase1({
+      records: [transferRecord({ transaction_id: 'tx-1' })],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+    await registry.tick();
+
+    // Same record returns again next tick (polling overlap).
+    fake.setEventIndices('tx-1', USDT, [{ index: 0, value: '100000000' }]);
+    fake.enqueuePhase1({
+      records: [transferRecord({ transaction_id: 'tx-1' })],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+    await registry.tick();
+
+    const detected = sender.sent.filter((s) => s.endpoint === ENDPOINTS.paymentDetected);
+    expect(detected).toHaveLength(1);
+  });
+
+  it('falls back to index 0 when the solidity node has no logs yet (no regression)', async () => {
+    const registry = buildRegistry({ client: fake.client, sender: sender.sender });
+    startMonitor(registry);
+    // No setEventIndices → resolver returns [] → status-quo single-event index 0.
+    fake.enqueuePhase1({
+      records: [transferRecord({ transaction_id: 'tx-lag' })],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+
+    await registry.tick();
+
+    expect(sender.sent).toHaveLength(1);
+    const data = (sender.sent[0].envelope as { data: { eventIndex: number } }).data;
+    expect(data.eventIndex).toBe(0);
+  });
+
+  it('confirms each event of a multi-transfer transaction with its own event index', async () => {
+    const registry = buildRegistry({ client: fake.client, sender: sender.sender });
+    startMonitor(registry);
+    fake.setEventIndices('tx-multi', USDT, [
+      { index: 0, value: '50000000' },
+      { index: 1, value: '30000000' },
+    ]);
+    fake.enqueuePhase1({
+      records: [
+        transferRecord({ transaction_id: 'tx-multi', value: '50000000' }),
+        transferRecord({ transaction_id: 'tx-multi', value: '30000000' }),
+      ],
+      fingerprint: null,
+    });
+    fake.enqueuePhase2({ records: [], fingerprint: null });
+    // Block is solid + far enough for 20-confirmation finality.
+    fake.setTxInfo('tx-multi', { blockNumber: 1000, contractRet: 'SUCCESS' });
+    fake.setSolidBlock(1100);
+
+    await registry.tick();
+
+    const confirmed = sender.sent.filter((s) => s.endpoint === ENDPOINTS.paymentConfirmed);
+    const indices = confirmed.map(
+      (s) => (s.envelope as { data: { eventIndex: number } }).data.eventIndex,
+    );
+    expect(indices.sort()).toEqual([0, 1]);
   });
 });

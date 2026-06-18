@@ -34,7 +34,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | **P3 — Operasyon** | WP7 | Outage/maintenance: bulk-freeze çağıran + toggle push | Platform dondurulabilir | **T114** | M |
 | | WP8 | Admin bildirim/alert + audit tamamlama *(migration)* | Admin olayları görür/aksiyon alır | T113 | M |
 | | WP9 | Realtime tamlık: Steam push + FE admin abonelik | Canlı durum/admin event'leri | — | M |
-| | WP10 | Tron dayanıklılık: 429 failover + ikincil key + dedup | Para-katmanı dayanıklı (MVP, 08 §3.6/§3.7) | — | M |
+| | WP10 ⏳ | Tron dayanıklılık: 429 failover + ikincil key + per-event dedup *(migration)* | Para-katmanı dayanıklı (MVP, 08 §3.6/§3.7) | — | M |
 | **P4 — Kullanıcı/FE** | WP11 | Auth UI wire-up + ToS reprompt + brute-force lock | Kullanıcı UI'dan gerçekten login olur | T107 (browser) | M |
 | | WP12 | Kullanıcı kenar durumları (OPEN_LINK 409 *bağımsız*, refund override) | Eşzamanlılık/UX doğruluğu | T108/T110 | M |
 | | WP13 | FE tamlık: yasal sayfalar + polish + enum sync | /privacy /terms /support + UX | T113 | M–L |
@@ -45,7 +45,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP18 | Test/CI sertleştirme (FE runner, prettier CI, npm audit) | Regresyon güvenliği | gate | M–L |
 
 **Bağımlılıklar:** WP1 her şeyin temeli (ilk). **WP5 → WP1 + WP2** (satıcı-lehine release WP1'in `Complete`→payout yolunu, alıcı-lehine refund WP2'nin `BUYER_REFUND`'ünü kullanır). WP4a accept-gate ucuz/yüksek-değer (erken). WP12'deki **OPEN_LINK 409 fix bağımsız** — P1'de WP1 ile inebilir. WP18 sürekli/son.
-**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu), **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir) ve **WP5** (owner kararı: yapısal statü — `CK_Disputes_Resolved_ResolvedAt` + `CK_Transactions_Cancel` REFUNDED, iki CHECK recreate, seed yok) — gate-check yeni migration dosyası bekler.
+**Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu), **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir), **WP5** (owner kararı: yapısal statü — `CK_Disputes_Resolved_ResolvedAt` + `CK_Transactions_Cancel` REFUNDED, iki CHECK recreate, seed yok) ve **WP10** (owner Q1=full-per-event: `BlockchainTransaction.EventIndex` kolonu + `(TxHash,EventIndex)` UNIQUE recreate + `CK_..._EventIndex`, şema-only) — gate-check yeni migration dosyası bekler.
 
 ---
 
@@ -128,10 +128,13 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Efor:** M
 
 ### WP10 — Tron dayanıklılık
+> **Durum: ⏳ Devam ediyor (2026-06-18)** — yapım tamam, bağımsız validator bekliyor. **Owner kararları (AskUserQuestion):** event_index = **full per-event (sidecar + backend migration)**, index kaynağı = **gerçek on-chain log index** (`gettransactioninfobyid` `log[]`) · 429/failover kapsamı = **yalnız okuma yolu (TronGridClient)** · backoff = **poll-dostu kısa retry** (08 §3.5 doc reconciliation). **Dış varsayım bulgusu:** TronGrid trc20 list endpoint'i `event_index` döndürmüyor (canlı probe doğrulandı) → log dizisinden çözüldü. **MIGRATION TAŞIR** (`WP10_AddBlockchainTxEventIndex`). Rapor: [`TASK_REPORTS/WP10_REPORT.md`](TASK_REPORTS/WP10_REPORT.md).
+
 **Backlog:** tron-resilience · energy-gas-token-config (HD cache, gas config)
 **Kapsam notu:** **MVP** — `08_INTEGRATION_SPEC.md:597` "MVP | TronGrid (primary) + ikinci TronGrid API key (rate limit fallback)"; §3.6/§3.7 5xx 3×-retry + 429 exponential backoff. (Multi-sweeper/Redis backplane bu DEĞİL → §3.)
-**İş:** TronGrid 429 + `TRON_API_KEY_SECONDARY` failover + retry; event_index dedup (txid+index); HD address cache; gas fee config'lenebilir.
-**Efor:** M
+**İş:** TronGrid 429 + `TRON_API_KEY_SECONDARY` failover + retry (okuma yolu); event_index dedup **txid+event_index** (gerçek on-chain log index, 08 §3.4 / 06 §3.8 `(TxHash,EventIndex)` UNIQUE + migration); HD address cache; gas fee config'lenebilir (`TRANSFER_FEE_LIMIT_SUN`).
+**Migration:** `WP10_AddBlockchainTxEventIndex` — yeni nullable `EventIndex` kolonu + `UQ_BlockchainTransactions_TxHash` → `UQ_BlockchainTransactions_TxHash_EventIndex` (recreate) + `CK_BlockchainTransactions_EventIndex` (`>= 0`); şema-only, seed yok.
+**Efor:** M (owner Q1=full-per-event ile full-stack'e büyüdü)
 
 ### WP11 — Auth UI wire-up
 **Backlog:** T87-K1 · T30-TosVersionReprompt · misc-user-features (brute-force lock) · T40-PermClaimCache
@@ -204,6 +207,6 @@ Aşağıdakiler bu plana **dahil değil** çünkü MVP-dışı (10_MVP_SCOPE / 0
 
 - **19 iş paketi** (WP1–WP18, WP4 = WP4a+WP4b), her biri sizin metodolojinizde ayrı **task** (plan→uygula→**ayrı chat** validate). Kabaca **30–45 geliştirme-günü** (validate chat'leri hariç). Bu, ürünün gerçek MVP-tamamlanması — F6 bunun üzerine sağlam test yazabilsin diye.
 - **Her task ayrı PR + CI yeşil + bağımsız validator** (mevcut disiplin; gate-check öncesi kalite).
-- **Migration taşıyan paketler:** WP3 (SWEEP CHECK constraint) · WP8 (`Notification.FlagId`) · WP4a (seed `price_deviation_threshold`=1.0 `UpdateData`, owner kararı) — gate-check yeni migration dosyası bekler.
+- **Migration taşıyan paketler:** WP3 (SWEEP CHECK constraint) · WP8 (`Notification.FlagId`) · WP4a (seed `price_deviation_threshold`=1.0 `UpdateData`, owner kararı) · WP5 (dispute/REFUNDED CHECK recreate) · WP10 (`BlockchainTransaction.EventIndex` + `(TxHash,EventIndex)` UNIQUE recreate, owner Q1=full-per-event) — gate-check yeni migration dosyası bekler.
 - **Önerilen ilk hamle:** WP1 (escrow tamamlama) — ürünün tamamlanamadığı tek nokta; geri kalan her şey bunun üstüne oturur. OPEN_LINK 409 fix'i (WP12) ucuz/bağımsız, WP1 ile paralel inebilir.
 - Bu plan ilerledikçe güncellenir; her WP biten için backlog satırı **✓ Çözüldü** işaretlenir.

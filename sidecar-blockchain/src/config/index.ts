@@ -98,6 +98,24 @@ export const config = {
   // Rate limiting — 08 §3.1 (TronGrid plan-based)
   tronGridRequestsPerSecond: parseInt(process.env.TRONGRID_RPS || '10', 10),
 
+  // TronGrid read-path resilience — 08 §3.5 / §3.6 (WP10). On a 429 /
+  // key-suspension (403) the TronGridClient fails over to the secondary
+  // API key immediately (separate rate-limit pool), then applies a short,
+  // bounded exponential backoff. The schedule is intentionally kept well
+  // under the payment-polling interval so a single stalled request never
+  // blocks the whole monitor tick — the loop re-polls naturally every
+  // `paymentPollingIntervalMs`. 5xx provider errors reuse the same bounded
+  // retry without rotating keys (the key is fine; the provider is degraded).
+  tronGridMaxRetries: parseInt(process.env.TRONGRID_MAX_RETRIES || '3', 10),
+  tronGridRetryBackoffBaseMs: parseInt(process.env.TRONGRID_RETRY_BACKOFF_BASE_MS || '250', 10),
+  tronGridRetryBackoffCapMs: parseInt(process.env.TRONGRID_RETRY_BACKOFF_CAP_MS || '2000', 10),
+
+  // Outbound TRC-20 transfer fee cap (08 §3.3, WP10). Previously a hardcoded
+  // 100 TRX magic number in TronTransferClient; now configurable so an
+  // operator can tune the broadcast fee ceiling without a code change. In
+  // SUN (1 TRX = 1_000_000 SUN). Per-request `feeLimitSun` still overrides.
+  transferFeeLimitSun: parseInt(process.env.TRANSFER_FEE_LIMIT_SUN || '100000000', 10),
+
   // Monitoring intervals (seconds)
   paymentPollingIntervalMs: parseInt(process.env.PAYMENT_POLLING_INTERVAL_MS || '3000', 10), // 05 §3.3 — 3 second active monitoring
   minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '20', 10), // 05 §3.3 — 20 blocks (~60s)

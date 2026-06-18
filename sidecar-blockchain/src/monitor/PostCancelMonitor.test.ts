@@ -68,6 +68,12 @@ function createFakeClient(): FakeTronClient {
       async getTransactionInfoById() {
         return null;
       },
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async resolveTransferEventIndices() {
+        // Post-cancel tests exercise the txid-level paths; the resolver falls
+        // back to index 0 (status-quo single-event behaviour) when empty.
+        return [];
+      },
     } as unknown as PostCancelMonitorRegistryDeps['client'],
   };
 }

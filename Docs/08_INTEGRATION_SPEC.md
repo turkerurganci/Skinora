@@ -534,6 +534,8 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 
 **İdempotent işleme kuralı:** Her iki aşamada da eşleşen transfer, `txid` + `event_index` (aynı transaction'da birden fazla TRC-20 event olabilir) bileşik anahtarıyla işlenir. Bu anahtar `BlockchainTransaction` tablosunda unique olarak saklanır (06 §3.8). Daha önce işlenmiş txid+event_index tekrar görülürse skip edilir. Final kabul formülü: `walletsolidity/gettransactioninfobyid` ile tx'in `blockNumber`'ı alınır, `walletsolidity/getnowblock` ile mevcut solid block yüksekliği alınır. `currentSolidBlock - txBlock >= 20` ise transfer kesinleşmiş sayılır → PAYMENT_RECEIVED state geçişi tetiklenir.
 
+> **`event_index` çözüm kaynağı (WP10):** TronGrid'in `/v1/accounts/{address}/transactions/trc20` list endpoint'i `event_index` alanı **döndürmez** (canlı probe + resmi doküman ile doğrulandı — yalnız `transaction_id, token_info, block_timestamp, from, to, type, value`). Bu yüzden sidecar, list kaydını **`walletsolidity/gettransactioninfobyid`'nin `log[]` dizisindeki** ilgili `Transfer` log'una eşleyerek (kontrat + alıcı + `value`) gerçek on-chain log index'ini türetir; bu index `(txid, event_index)` bileşik anahtarını besler. `only_confirmed=true` kayıtlar solidleştiği için log'lar detection anında erişilebilirdir; solidity node henüz log'u yüzeye çıkarmamışsa index `0`'a düşülür (status-quo tek-event davranışı, regresyonsuz). Backend `(TxHash, EventIndex)` UNIQUE indeksi defence-in-depth olarak çift-krediyi engeller.
+
 **Gecikmeli ödeme izleme (iptal sonrası) — 05 §3.3 ile tutarlı:**
 
 | Süre | Polling aralığı |
@@ -573,6 +575,8 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 | İade transferi başarısız | Exponential backoff (05 §3.3) | Evet — 3 deneme (1dk, 5dk, 15dk) |
 | Satıcıya ödeme başarısız | Exponential backoff (05 §3.3) | Evet — 3 deneme (1dk, 5dk, 15dk), sonra admin alert |
 | Kontrat çağrısı revert | Log + hata analizi | Duruma göre — genelde hayır |
+
+> **Okuma yolu (TronGrid `TronGridClient`) dayanıklılık uygulaması (WP10):** 429 / key-suspension (403) durumunda istek **anında** ikincil `TRON_API_KEY`'e geçer (ayrı rate-limit havuzu, §3.6) — backoff yok; yalnız her iki key de throttled olduğunda kısa, sınırlı exponential backoff uygulanır. 5xx sağlayıcı hatalarında aynı key üzerinde sınırlı retry yapılır (key değil, sağlayıcı bozuk). **Tasarım sapması:** Yukarıdaki `5s/15s/45s` şeması transfer/broadcast retry'ı için uygundur; aktif ödeme izleme **zaten `paymentPollingIntervalMs` (3 sn) aralığında yeniden poll** ettiğinden, tek bir isteği 45 sn'ye kadar bloke eden in-request backoff tüm monitor tick'ini durdururdu. Bu yüzden okuma yolunda backoff, poll aralığının çok altında tutulur (`TRONGRID_RETRY_BACKOFF_BASE_MS`/`_CAP_MS`, `TRONGRID_MAX_RETRIES`) ve kalıcı throttle bir sonraki tick'e bırakılır. Broadcast yolu (transfer/refund/payout) backend dispatch job'ı tarafından `5s/15s/45s` ile retry edilmeye devam eder — çift-retry olmaması için sidecar transfer yolu bu dayanıklılık katmanına dahil edilmedi.
 
 ### 3.6 Bağımlılık Riski — "Blockchain Erişilemezse Ne Olur?"
 

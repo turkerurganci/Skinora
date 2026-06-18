@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { logger } from '../logger.js';
 import { activeMonitors, transfersTotal } from '../metrics.js';
-import type { Trc20Record, TronGridClient } from '../tron/TronGridClient.js';
+import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
   AnyBlockchainWebhookPayload,
@@ -100,7 +100,13 @@ interface PostCancelMonitorEntry {
   nextPollAt: Date;
   phase1Fingerprint?: string;
   phase2Fingerprint?: string;
-  seenTxHashes: Set<string>;
+  /** `${txHash}:${eventIndex}` keys already emitted — per-event dedup (08 §3.4, WP10). */
+  seenEvents: Set<string>;
+}
+
+/** Composite dedup key (08 §3.4 — WP10). */
+function eventKey(txHash: string, eventIndex: number): string {
+  return `${txHash}:${eventIndex}`;
 }
 
 /**
@@ -215,7 +221,7 @@ export class PostCancelMonitorRegistry {
       state: initialState,
       stateExpiresAt,
       nextPollAt: now,
-      seenTxHashes: new Set(),
+      seenEvents: new Set(),
     };
     this.monitors.set(options.address, entry);
     activeMonitors.set(this.monitors.size);
@@ -281,8 +287,11 @@ export class PostCancelMonitorRegistry {
       }
       const now = this.clock();
       if (now.getTime() < entry.nextPollAt.getTime()) return;
-      await this.pollPhase1(entry);
-      await this.pollPhase2(entry);
+      // Per-tick cache of resolved transfer-log entries keyed by
+      // `${txHash}:${contract}` (08 §3.4 — WP10), shared across both phases.
+      const logCache = new Map<string, TransferLogEntry[]>();
+      await this.pollPhase1(entry, logCache);
+      await this.pollPhase2(entry, logCache);
       entry.nextPollAt = new Date(now.getTime() + this.cadenceFor(entry.state));
     } catch (err) {
       logger.error(
@@ -394,7 +403,10 @@ export class PostCancelMonitorRegistry {
     return PostCancelMonitorStates.Stopped;
   }
 
-  private async pollPhase1(entry: PostCancelMonitorEntry): Promise<void> {
+  private async pollPhase1(
+    entry: PostCancelMonitorEntry,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<void> {
     const response = await this.deps.client.listTrc20({
       address: entry.options.address,
       contractAddress: entry.options.expectedContract,
@@ -413,12 +425,18 @@ export class PostCancelMonitorRegistry {
         );
         continue;
       }
-      await this.emitLatePaymentDetected(entry, record);
-      entry.seenTxHashes.add(record.transaction_id);
+      const eventIndex = await this.resolveEventIndex(entry, record, logCache);
+      const key = eventKey(record.transaction_id, eventIndex);
+      if (entry.seenEvents.has(key)) continue;
+      await this.emitLatePaymentDetected(entry, record, eventIndex);
+      entry.seenEvents.add(key);
     }
   }
 
-  private async pollPhase2(entry: PostCancelMonitorEntry): Promise<void> {
+  private async pollPhase2(
+    entry: PostCancelMonitorEntry,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<void> {
     const response = await this.deps.client.listTrc20({
       address: entry.options.address,
       fingerprint: entry.phase2Fingerprint,
@@ -434,16 +452,47 @@ export class PostCancelMonitorRegistry {
         expectedContract: entry.options.expectedContract,
         allowlist: this.deps.allowlist,
       });
+      const eventIndex = await this.resolveEventIndex(entry, record, logCache);
+      const key = eventKey(record.transaction_id, eventIndex);
+      if (entry.seenEvents.has(key)) continue;
       if (classification.kind === 'expected') {
         // Late catch — phase 1's cursor passed this row. Treat as detected.
-        await this.emitLatePaymentDetected(entry, record);
+        await this.emitLatePaymentDetected(entry, record, eventIndex);
       } else if (classification.kind === 'wrong_token') {
-        await this.emitWrongTokenIncoming(entry, record, classification.symbol);
+        await this.emitWrongTokenIncoming(entry, record, classification.symbol, eventIndex);
       } else {
-        await this.emitSpamTokenIncoming(entry, record);
+        await this.emitSpamTokenIncoming(entry, record, eventIndex);
       }
-      entry.seenTxHashes.add(record.transaction_id);
+      entry.seenEvents.add(key);
     }
+  }
+
+  /**
+   * Resolve the on-chain log index for a record (08 §3.4 — WP10), correlating
+   * by transfer value and falling back to index 0 when logs are unavailable.
+   * Mirrors <c>MonitorRegistry.resolveEventIndex</c>.
+   */
+  private async resolveEventIndex(
+    entry: PostCancelMonitorEntry,
+    record: Trc20Record,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<number> {
+    const cacheKey = `${record.transaction_id}:${record.token_info.address}`;
+    let entries = logCache.get(cacheKey);
+    if (entries === undefined) {
+      entries = await this.deps.client.resolveTransferEventIndices(
+        record.transaction_id,
+        record.token_info.address,
+        entry.options.address,
+      );
+      logCache.set(cacheKey, entries);
+    }
+    for (const logEntry of entries) {
+      if (logEntry.value !== record.value) continue;
+      if (entry.seenEvents.has(eventKey(record.transaction_id, logEntry.index))) continue;
+      return logEntry.index;
+    }
+    return 0;
   }
 
   private shouldEmit(record: Trc20Record, entry: PostCancelMonitorEntry): boolean {
@@ -455,19 +504,21 @@ export class PostCancelMonitorRegistry {
       return false;
     }
     if (!isIncomingFor(record, entry.options.address)) return false;
-    if (entry.seenTxHashes.has(record.transaction_id)) return false;
+    // Per-event dedup happens after the event index is resolved (08 §3.4).
     return true;
   }
 
   private async emitLatePaymentDetected(
     entry: PostCancelMonitorEntry,
     record: Trc20Record,
+    eventIndex: number,
   ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: LatePaymentDetectedData = {
       paymentAddressId: entry.options.paymentAddressId,
       transactionId: entry.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       contractAddress: record.token_info.address,
@@ -490,12 +541,14 @@ export class PostCancelMonitorRegistry {
     entry: PostCancelMonitorEntry,
     record: Trc20Record,
     actualSymbol: StablecoinSymbol,
+    eventIndex: number,
   ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: WrongTokenIncomingData = {
       paymentAddressId: entry.options.paymentAddressId,
       transactionId: entry.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       expectedContractAddress: entry.options.expectedContract,
@@ -517,12 +570,14 @@ export class PostCancelMonitorRegistry {
   private async emitSpamTokenIncoming(
     entry: PostCancelMonitorEntry,
     record: Trc20Record,
+    eventIndex: number,
   ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: SpamTokenIncomingData = {
       paymentAddressId: entry.options.paymentAddressId,
       transactionId: entry.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       expectedContractAddress: entry.options.expectedContract,

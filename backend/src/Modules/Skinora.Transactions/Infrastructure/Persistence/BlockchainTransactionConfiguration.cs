@@ -74,6 +74,11 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Pending",
                 "(Status <> 'PENDING') " +
                 "OR (ConfirmationCount < 20)");
+
+            // EventIndex (WP10 — 08 §3.4): NULL for outbound rows, otherwise a
+            // non-negative on-chain log index for inbound monitored transfers.
+            t.HasCheckConstraint("CK_BlockchainTransactions_EventIndex",
+                "([EventIndex] IS NULL) OR ([EventIndex] >= 0)");
         });
 
         // --- Primary key ---
@@ -89,6 +94,9 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
 
         builder.Property(b => b.TxHash)
             .HasMaxLength(100);
+
+        // WP10 (08 §3.4) — on-chain event index; nullable for outbound rows.
+        builder.Property(b => b.EventIndex);
 
         builder.Property(b => b.FromAddress)
             .IsRequired()
@@ -142,11 +150,17 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         // Configured in PaymentAddressConfiguration via HasMany
 
         // --- Unique constraints (06 §5.1) ---
-        // TxHash filtered unique — NULL allowed (before broadcast)
-        builder.HasIndex(b => b.TxHash)
+        // WP10 (08 §3.4) — per-event uniqueness on (TxHash, EventIndex) so a
+        // single transaction carrying several Transfer events to the deposit
+        // address is recorded once per event rather than collapsed to one row.
+        // Filtered on [TxHash] IS NOT NULL (NULL before broadcast). Outbound
+        // rows have EventIndex NULL but each broadcast yields a distinct TxHash,
+        // so (distinctTxHash, NULL) pairs never collide; inbound rows carry a
+        // real >= 0 index. Replaces the former TxHash-only UQ index.
+        builder.HasIndex(b => new { b.TxHash, b.EventIndex })
             .IsUnique()
             .HasFilter("[TxHash] IS NOT NULL")
-            .HasDatabaseName("UQ_BlockchainTransactions_TxHash");
+            .HasDatabaseName("UQ_BlockchainTransactions_TxHash_EventIndex");
 
         // WP1 F1 (S2 money-safety) — at most one SELLER_PAYOUT row per
         // transaction. Database-level backstop behind SellerPayoutQueueJob's

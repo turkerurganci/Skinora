@@ -73,6 +73,33 @@ describe('TronTransferClient.sendTransfer()', () => {
     expect(sendRawTransaction).toHaveBeenCalledOnce();
   });
 
+  it('defaults feeLimit to the configurable transferFeeLimitSun, override wins (WP10)', async () => {
+    const fixtureA = buildFakeTronWeb();
+    const clientA = new TronTransferClient('h', 's', '', () => fixtureA.fakeTronWeb);
+    await clientA.sendTransfer({
+      fromAddress: 'TFrom',
+      privateKey: '01'.padStart(64, '0'),
+      contractAddress: 'TC',
+      toAddress: 'TTo',
+      amountUnits: '1',
+    });
+    // Default comes from config (TRANSFER_FEE_LIMIT_SUN, 100 TRX) — no longer a
+    // hardcoded magic number.
+    expect(fixtureA.triggerSmartContract.mock.calls[0]![2].feeLimit).toBe(100_000_000);
+
+    const fixtureB = buildFakeTronWeb();
+    const clientB = new TronTransferClient('h', 's', '', () => fixtureB.fakeTronWeb);
+    await clientB.sendTransfer({
+      fromAddress: 'TFrom',
+      privateKey: '01'.padStart(64, '0'),
+      contractAddress: 'TC',
+      toAddress: 'TTo',
+      amountUnits: '1',
+      options: { feeLimitSun: 7_000_000 },
+    });
+    expect(fixtureB.triggerSmartContract.mock.calls[0]![2].feeLimit).toBe(7_000_000);
+  });
+
   it('throws TRANSFER_NO_PRIVATE_KEY (non-retryable) when privateKey is empty', async () => {
     const client = new TronTransferClient('h', 's', '', () => ({
       transactionBuilder: { triggerSmartContract: vi.fn() },

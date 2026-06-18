@@ -58,6 +58,16 @@ describe('HdWalletService', () => {
       expect(first.address).toBe(second.address);
     });
 
+    it('caches the derived address per index (WP10 — returns the same instance)', () => {
+      const fresh = new HdWalletService(TREZOR_MNEMONIC);
+      const first = fresh.derive(42);
+      const second = fresh.derive(42);
+      // Same object reference proves the cache hit (no re-derivation).
+      expect(second).toBe(first);
+      // A different index is still derived independently.
+      expect(fresh.derive(43)).not.toBe(first);
+    });
+
     it('produces distinct addresses for adjacent indices', () => {
       const a = service.derive(100);
       const b = service.derive(101);

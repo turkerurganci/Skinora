@@ -45,6 +45,16 @@ export class HdWalletService {
   private root: HDNodeWallet | null = null;
   private readonly mnemonic: string;
 
+  /**
+   * Per-index derived-address cache (08 §3.2 — WP10 HD address cache). BIP-32
+   * derivation is deterministic, so once an index → address is computed it
+   * never changes for the configured mnemonic; caching it avoids re-running
+   * the keccak/secp256k1 work on every monitor/derive request. Only the
+   * **public address** is cached — <see cref="deriveSigner"/> recomputes the
+   * private key on demand and never persists it (05 §3.3 signing isolation).
+   */
+  private readonly addressCache = new Map<number, DeriveResult>();
+
   constructor(mnemonic: string) {
     this.mnemonic = mnemonic.trim();
   }
@@ -63,25 +73,26 @@ export class HdWalletService {
       throw new HdWalletNotConfiguredError();
     }
 
+    const cached = this.addressCache.get(index);
+    if (cached) {
+      return cached;
+    }
+
     const root = this.getRoot();
     const child = root.derivePath(this.relativePath(index));
 
     const privateKeyHex = child.privateKey.slice(2);
-    try {
-      const address = TronWeb.address.fromPrivateKey(privateKeyHex);
-      if (typeof address !== 'string' || !address.startsWith('T')) {
-        throw new SidecarError(
-          'TronWeb returned an invalid Tron address for the derived key.',
-          'DERIVATION_FAILED',
-          false,
-        );
-      }
-      return { address, derivationPath: derivationPath(index), index };
-    } finally {
-      // Private key string is short-lived. We can't truly zero a JS string
-      // (immutable), but clearing the local reference helps GC and avoids
-      // accidental retention in any closure created in this scope.
+    const address = TronWeb.address.fromPrivateKey(privateKeyHex);
+    if (typeof address !== 'string' || !address.startsWith('T')) {
+      throw new SidecarError(
+        'TronWeb returned an invalid Tron address for the derived key.',
+        'DERIVATION_FAILED',
+        false,
+      );
     }
+    const result: DeriveResult = { address, derivationPath: derivationPath(index), index };
+    this.addressCache.set(index, result);
+    return result;
   }
 
   /**
