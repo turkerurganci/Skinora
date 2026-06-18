@@ -35,7 +35,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP8 | Admin bildirim/alert + audit tamamlama *(migration)* | Admin olayları görür/aksiyon alır | T113 | M |
 | | WP9 | Realtime tamlık: Steam push + FE admin abonelik | Canlı durum/admin event'leri | — | M |
 | | WP10 ⏳ | Tron dayanıklılık: 429 failover + ikincil key + per-event dedup *(migration)* | Para-katmanı dayanıklı (MVP, 08 §3.6/§3.7) | — | M |
-| **P4 — Kullanıcı/FE** | WP11 | Auth UI wire-up + ToS reprompt + brute-force lock | Kullanıcı UI'dan gerçekten login olur | T107 (browser) | M |
+| **P4 — Kullanıcı/FE** | WP11 ✅ | Auth UI wire-up + ToS reprompt + brute-force lock | Kullanıcı UI'dan gerçekten login olur | T107 (browser) | M |
 | | WP12 | Kullanıcı kenar durumları (OPEN_LINK 409 *bağımsız*, refund override) | Eşzamanlılık/UX doğruluğu | T108/T110 | M |
 | | WP13 | FE tamlık: yasal sayfalar + polish + enum sync | /privacy /terms /support + UX | T113 | M–L |
 | **P5 — Config/altyapı** | WP14 | Settings runtime propagasyon + 21 ayar seed/runbook | Ayar değişimi yansır, prod açılır | T114 | M |
@@ -136,11 +136,12 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Migration:** `WP10_AddBlockchainTxEventIndex` — yeni nullable `EventIndex` kolonu + `UQ_BlockchainTransactions_TxHash` → `UQ_BlockchainTransactions_TxHash_EventIndex` (recreate) + `CK_BlockchainTransactions_EventIndex` (`>= 0`); şema-only, seed yok.
 **Efor:** M (owner Q1=full-per-event ile full-stack'e büyüdü)
 
-### WP11 — Auth UI wire-up
+### WP11 — Auth UI wire-up ✅
 **Backlog:** T87-K1 · T30-TosVersionReprompt · misc-user-features (brute-force lock) · T40-PermClaimCache
 **Kanıt:** Callback yalnız `?status` okur (`callback/page.tsx:48`), `POST /auth/refresh` çağırmaz → `localStorage["access_token"]` hiç yazılmaz → `isAuthenticated` daima false. ToS-accept/authenticator UI-only. Backend endpoint'leri hazır.
 **İş:** Callback→`/auth/refresh`→token store; ToS-accept→`POST /auth/tos/accept`; authenticator→`POST /auth/check-authenticator`; 401→refresh interceptor; ToS-versiyon reprompt; login brute-force lock; per-user permission TTL cache.
 **Efor:** M · **Açar:** T107 (full-stack/browser E2E ise)
+> **Durum: ✅ Tamamlandı (PR #—, doğrulama bekliyor).** Owner kararları (AskUserQuestion): **MA recheck = /auth/me ile** (A7 trade-URL akışına ait, login'de değil — 03 §2.1/07 §4.8; standalone recheck `mobileAuthenticatorActive`'i yeniden okur) · **brute-force = mevcut rate-limit'i `temporarily_locked` redirect'ine bağla** (05 §6.3 klasik brute-force N/A; `GET /auth/steam` 429 yerine callback'e redirect; migration yok) · **permission TTL cache = T40 kararı korunur (cache YOK)** (dinamiklik > performans, by-design) · **ToS reprompt = tam** (CurrentUserDto += `tosAcceptedVersion`, `tos/accept` versiyon-upgrade'e izin verir, FE `TosRepromptGate`). **MIGRATION YOK** (DTO + logic). Uygulama: FE callback→refresh→token store + 401 single-flight refresh interceptor + `acceptTos` wire-up + `TosRepromptGate` + MA recheck via /auth/me; BE `CurrentUserDto.TosAcceptedVersion` + `TosAcceptanceService` versiyon-upgrade + `RateLimitAttribute.RedirectToSteamCallbackOnReject` + middleware redirect. Rapor: [`TASK_REPORTS/WP11_REPORT.md`](TASK_REPORTS/WP11_REPORT.md).
 
 ### WP12 — Kullanıcı kenar durumları
 **Backlog:** T46-OpenLinkConcurrentAcceptRace · misc-user-features (per-tx refund override, trade-offer URL DTO, delete atomicity) · timeout-warning-setting

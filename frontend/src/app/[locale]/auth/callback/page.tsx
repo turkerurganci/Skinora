@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { InfoScreen, TosModal } from "@/components/auth";
+import { ApiError, refreshAccessToken } from "@/lib/api/client";
+import { acceptTos } from "@/lib/api/auth";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 type CallbackStatus = "loading" | "success" | "new_user" | "error";
 type CallbackErrorCode =
@@ -44,6 +47,8 @@ export default function SteamCallbackPage() {
   const locale = useLocale();
   const t = useTranslations("auth.callback");
   const tCommon = useTranslations("common");
+  const tTos = useTranslations("auth.tos");
+  const setAccessToken = useAuthStore((s) => s.setAccessToken);
 
   const rawStatus = searchParams.get("status");
   const rawError = searchParams.get("error");
@@ -59,17 +64,61 @@ export default function SteamCallbackPage() {
     return "loading";
   }, [rawStatus, rawError]);
 
+  const [tokenReady, setTokenReady] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [tosSubmitting, setTosSubmitting] = useState(false);
   const [tosError, setTosError] = useState<string | null>(null);
 
-  // Success → redirect into the app's return URL.
+  // success / new_user → exchange the HttpOnly refresh cookie (set by the
+  // backend on the Steam callback) for an access token and store it (WP11,
+  // 07 §4.3). Without this the token was never written and isAuthenticated
+  // stayed false forever.
   useEffect(() => {
-    if (status !== "success") return;
-    const target = localePath(returnUrl);
-    router.replace(target);
-  }, [status, returnUrl, router, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (status !== "success" && status !== "new_user") return;
+    let cancelled = false;
+    void (async () => {
+      const token = await refreshAccessToken();
+      if (cancelled) return;
+      if (!token) {
+        setRefreshFailed(true);
+        return;
+      }
+      setAccessToken(token);
+      setTokenReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, setAccessToken]);
 
-  if (status === "loading") {
+  // success → once the token is stored, redirect into the app's return URL.
+  useEffect(() => {
+    if (status !== "success" || !tokenReady) return;
+    router.replace(localePath(returnUrl));
+  }, [status, tokenReady, returnUrl, router, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAcceptTos = async (tosVersion: string) => {
+    setTosSubmitting(true);
+    setTosError(null);
+    try {
+      await acceptTos(tosVersion);
+      router.replace(localePath(returnUrl));
+    } catch (err) {
+      // Already accepted this version (e.g. double-submit) → treat as done.
+      if (err instanceof ApiError && err.code === "TOS_ALREADY_ACCEPTED") {
+        router.replace(localePath(returnUrl));
+        return;
+      }
+      setTosError(tTos("acceptError"));
+      setTosSubmitting(false);
+    }
+  };
+
+  // Loading spinner while completing sign-in OR exchanging the refresh cookie.
+  const exchangingToken =
+    (status === "success" || status === "new_user") && !tokenReady && !refreshFailed;
+
+  if (status === "loading" || (status === "success" && exchangingToken)) {
     return (
       <div
         role="status"
@@ -85,7 +134,7 @@ export default function SteamCallbackPage() {
     );
   }
 
-  if (status === "success") {
+  if (status === "success" && tokenReady) {
     return (
       <div
         role="status"
@@ -101,7 +150,7 @@ export default function SteamCallbackPage() {
     );
   }
 
-  if (status === "new_user") {
+  if (status === "new_user" && !refreshFailed) {
     return (
       <>
         <div
@@ -111,27 +160,23 @@ export default function SteamCallbackPage() {
           <div className="h-10 w-10 animate-pulse rounded-full bg-blue-100" />
           <p className="text-sm text-gray-500">{t("preparing")}</p>
         </div>
-        <TosModal
-          open
-          tosVersion={DEFAULT_TOS_VERSION}
-          tosHref={localePath("/terms")}
-          submitting={tosSubmitting}
-          errorMessage={tosError}
-          onAccept={() => {
-            // Real POST /auth/tos/accept wire-up is deferred (T29/T34 integration).
-            // For now we surface a UI-only acknowledgement path: navigate to dashboard.
-            setTosSubmitting(true);
-            setTosError(null);
-            router.replace(localePath(returnUrl));
-          }}
-          onAgeRejected={() => router.replace(localePath("/auth/age-gate"))}
-        />
+        {tokenReady && (
+          <TosModal
+            open
+            tosVersion={DEFAULT_TOS_VERSION}
+            tosHref={localePath("/terms")}
+            submitting={tosSubmitting}
+            errorMessage={tosError}
+            onAccept={({ tosVersion }) => void handleAcceptTos(tosVersion)}
+            onAgeRejected={() => router.replace(localePath("/auth/age-gate"))}
+          />
+        )}
       </>
     );
   }
 
-  // status === "error"
-  const code = asErrorCode(rawError);
+  // status === "error" OR the refresh-cookie exchange failed.
+  const code = asErrorCode(refreshFailed ? "auth_failed" : rawError);
   const errorTitle = t(`error.${code}.title`);
   const retryAfterMinutes = (() => {
     if (code !== "temporarily_locked") return null;

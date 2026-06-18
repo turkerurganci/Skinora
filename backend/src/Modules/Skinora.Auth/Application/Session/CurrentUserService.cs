@@ -24,6 +24,10 @@ public sealed record CurrentUserDto(
     string? AvatarUrl,
     bool MobileAuthenticatorActive,
     bool TosAccepted,
+    // WP11 — accepted ToS version (07 §4.5). null until first acceptance. The
+    // client compares this against the current ToS version to decide whether a
+    // re-acceptance prompt is required on a version bump (T30 reprompt).
+    string? TosAcceptedVersion,
     string Role,
     string Language,
     bool HasSellerWallet,
@@ -59,6 +63,7 @@ public sealed class CurrentUserService : ICurrentUserService
             AvatarUrl: user.SteamAvatarUrl,
             MobileAuthenticatorActive: user.MobileAuthenticatorVerified,
             TosAccepted: user.TosAcceptedAt is not null,
+            TosAcceptedVersion: user.TosAcceptedVersion,
             Role: role,
             Language: user.PreferredLanguage,
             HasSellerWallet: !string.IsNullOrWhiteSpace(user.DefaultPayoutAddress),

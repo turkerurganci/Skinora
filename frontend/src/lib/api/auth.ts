@@ -38,6 +38,13 @@ export interface MeResponse {
   avatarUrl: string | null;
   mobileAuthenticatorActive: boolean;
   tosAccepted: boolean;
+  /**
+   * Accepted ToS version (07 §4.5, WP11). `null` until first acceptance. The
+   * client compares this against the current ToS version
+   * (`NEXT_PUBLIC_TOS_VERSION`) to decide whether to re-prompt on a version bump
+   * (T30) — see {@link TosRepromptGate}.
+   */
+  tosAcceptedVersion: string | null;
   role: string;
   language: string;
   hasSellerWallet: boolean;
@@ -48,4 +55,25 @@ export interface MeResponse {
 
 export function getMe(): Promise<MeResponse> {
   return apiClient<MeResponse>("/auth/me");
+}
+
+/**
+ * Response body for A3 — POST /auth/tos/accept (07 §4.4).
+ */
+export interface AcceptTosResponse {
+  accepted: boolean;
+  acceptedAt: string;
+}
+
+/**
+ * A3 — `POST /auth/tos/accept` (07 §4.4, WP11). Captures ToS acceptance + 18+
+ * self-attestation for the given version. Re-accepting the SAME version yields
+ * a 409 `TOS_ALREADY_ACCEPTED` (callers treat that as already-satisfied); a new
+ * (bumped) version is accepted as a re-acceptance.
+ */
+export function acceptTos(tosVersion: string): Promise<AcceptTosResponse> {
+  return apiClient<AcceptTosResponse>("/auth/tos/accept", {
+    method: "POST",
+    body: JSON.stringify({ tosVersion, ageOver18: true }),
+  });
 }

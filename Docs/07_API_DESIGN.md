@@ -374,11 +374,11 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 
 ### 4.4 A3 — `POST /auth/tos/accept`
 
-**Amaç:** Terms of Service kabul + 18+ yaş beyanı (ilk kayıt). Tek adımda ToS kabul ve soft yaş gate self-attestation (02 §21.1, 03 §11a.2).
+**Amaç:** Terms of Service kabul + 18+ yaş beyanı (ilk kayıt **veya versiyon değişiminde yeniden kabul**). Tek adımda ToS kabul ve soft yaş gate self-attestation (02 §21.1, 03 §11a.2).
 
 | Konu | Değer |
 |------|-------|
-| Auth | Authenticated (henüz ToS kabul etmemiş) |
+| Auth | Authenticated |
 
 **Request:**
 ```json
@@ -395,7 +395,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 { "accepted": true, "acceptedAt": "2026-03-16T14:32:00Z" }
 ```
 
-**Hatalar:** 409 `TOS_ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR` (ageOver18 false/eksik veya tosVersion eksik)
+**Versiyon davranışı (WP11 — T30 reprompt):** İstenen `tosVersion` kullanıcının kayıtlı `tosAcceptedVersion`'ından **farklıysa** (ilk kabul veya versiyon yükseltme) kabul kaydedilir/güncellenir; `tosAcceptedVersion` + `tosAcceptedAt` yeniden damgalanır, ilk kabuldeki 18+ beyanı (`ageConfirmedAt`) **korunur**. İstenen versiyon **aynı** ise 409 döner (gerçek mükerrer). İstemci, mevcut sürümle eşleşmeyen kabulde re-prompt eder (`tosAcceptedVersion` `/auth/me`'den okunur, §4.5).
+
+**Hatalar:** 409 `TOS_ALREADY_ACCEPTED` (yalnızca **aynı** versiyon yeniden gönderildiğinde), 400 `VALIDATION_ERROR` (ageOver18 false/eksik veya tosVersion eksik)
 
 ### 4.5 A4 — `GET /auth/me`
 
@@ -414,6 +416,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
   "avatarUrl": "https://steamcdn.../abc.jpg",
   "mobileAuthenticatorActive": true,
   "tosAccepted": true,
+  "tosAcceptedVersion": "1.0",
   "role": "user",
   "language": "tr",
   "hasSellerWallet": true,
@@ -428,6 +431,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 | `role` | `"user"` veya `"admin"` — routing kararı |
 | `mobileAuthenticatorActive` | İşlem başlatma kontrolü |
 | `tosAccepted` | `false` → ToS modal |
+| `tosAcceptedVersion` | Kabul edilen ToS versiyonu (`null` = hiç kabul edilmemiş). İstemci mevcut sürümle karşılaştırır; uyuşmazsa re-prompt (WP11/T30, §4.4) |
 | `isSuspended` | `true` → kısıtlı oturum (SuspendedHeader + S03d), fon-akışı mutation'ları reddedilir (T105a, 02 §14.0, 03 §2.1) |
 
 ### 4.6 A5 — `POST /auth/steam/re-verify`

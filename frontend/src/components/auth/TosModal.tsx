@@ -10,6 +10,10 @@ export interface TosModalProps {
   tosHref?: string;
   submitting?: boolean;
   errorMessage?: string | null;
+  /** Overrides the default heading — used by the version-bump re-prompt (WP11). */
+  title?: string;
+  /** Overrides the default sub-heading — used by the version-bump re-prompt. */
+  description?: string;
   onAccept: (payload: { tosVersion: string; ageOver18: true }) => void;
   onAgeRejected?: () => void;
   className?: string;
@@ -21,6 +25,8 @@ export function TosModal({
   tosHref = "/terms",
   submitting = false,
   errorMessage,
+  title,
+  description,
   onAccept,
   onAgeRejected,
   className,
@@ -57,10 +63,10 @@ export function TosModal({
     >
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
         <h2 id={titleId} className="text-xl font-semibold text-gray-900">
-          {t("title")}
+          {title ?? t("title")}
         </h2>
         <p id={descId} className="mt-2 text-sm text-gray-600">
-          {t("description")}
+          {description ?? t("description")}
         </p>
 
         <div className="mt-4 rounded-md bg-gray-50 p-4">

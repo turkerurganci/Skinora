@@ -68,6 +68,7 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
         {
             u.MobileAuthenticatorVerified = true;
             u.TosAcceptedAt = DateTime.UtcNow.AddDays(-1);
+            u.TosAcceptedVersion = "1.0";
             u.PreferredLanguage = "tr";
             u.DefaultPayoutAddress = "TRC20xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
             u.SteamAvatarUrl = "https://steamcdn/avatar.jpg";
@@ -86,6 +87,7 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
         Assert.Equal("https://steamcdn/avatar.jpg", data.GetProperty("avatarUrl").GetString());
         Assert.True(data.GetProperty("mobileAuthenticatorActive").GetBoolean());
         Assert.True(data.GetProperty("tosAccepted").GetBoolean());
+        Assert.Equal("1.0", data.GetProperty("tosAcceptedVersion").GetString());
         Assert.Equal("user", data.GetProperty("role").GetString());
         Assert.Equal("tr", data.GetProperty("language").GetString());
         Assert.True(data.GetProperty("hasSellerWallet").GetBoolean());

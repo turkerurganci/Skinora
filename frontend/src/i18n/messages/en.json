@@ -123,7 +123,12 @@
       "tosCheckbox": "I have read and accept the <link>Terms of Service</link>.",
       "continue": "Continue",
       "submitting": "Submitting...",
-      "notEligible": "I am not eligible to continue"
+      "notEligible": "I am not eligible to continue",
+      "acceptError": "We couldn't save your acceptance. Please try again.",
+      "reprompt": {
+        "title": "Updated Terms of Service",
+        "description": "Our Terms of Service have been updated. Please review and accept the new version to continue."
+      }
     },
     "mobileAuthenticator": {
       "title": "Steam Mobile Authenticator required",
@@ -138,7 +143,8 @@
       "rechecking": "Checking...",
       "goToDashboard": "Continue to dashboard",
       "dashboardNote": "You can browse Skinora, but cannot start a transaction until your authenticator is active.",
-      "backToHome": "Back to home"
+      "backToHome": "Back to home",
+      "stillInactive": "Authenticator still not detected. If you just enabled it, wait a moment and check again."
     },
     "geoBlock": {
       "title": "Access restricted",
