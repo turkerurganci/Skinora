@@ -108,7 +108,9 @@ WP10, blockchain para-katmanının dayanıklılığını dört eksende tamamlar 
 - **Çok-transfer + log lag:** Solidity node detection anında log'u yüzeye çıkarmamışsa index 0'a düşülür; bu nadir durumda çok-transferli tek-txid'in 2.+ event'i status-quo (txid-collapse) gibi davranır — **para kaybı/çift-kredi yok** (mevcut davranışla aynı). `only_confirmed=true` kayıtlar solidleştiği için pratikte log mevcuttur.
 - **429 resilience yalnız okuma yolu (owner Q2):** Transfer/delegation broadcast 429'ları backend dispatch job'ı tarafından retry edilir (08 §3.5 `5s/15s/45s`); sidecar transfer yoluna eklenmedi (çift-retry önleme).
 - **Sidecar→backend runtime ayar propagasyonu** (gas/key/cadence) hâlâ restart-bound → WP14 (`setting-sidecar-propagation`).
-- **`RateLimitedQueue` ölü kod** (hiçbir yerde wire değil) — pre-existing; WP10 kapsamı değil (429 *handling* eklendi, proaktif rate-limit değil). Temizlik follow-up.
+- **`RateLimitedQueue` ölü kod** (hiçbir yerde wire değil) — pre-existing; WP10 kapsamı değil (429 *handling* eklendi, proaktif rate-limit değil). ✅ **Çözüldü** (validator non-blocking N2, follow-up PR `task/WP10-followup-nonblocking`): dosya silindi (0 referans, test yok).
+- **`measure()` metrik hata yolu** (validator non-blocking N3, pre-existing): hata yolunda başlatılan 'ok'-timer terk edilip ~0 ms 'error' gözlemi kaydediliyordu → error-süre histogramı 0'a çarpıtılıyordu. ✅ **Çözüldü** (aynı follow-up PR): timer `endpoint` ile başlatılır, `status` end-time'da çözülür → her iki yol gerçek süreyi kaydeder.
+- **N1 (multi-transfer + log-lag)** — owner-onaylı limitasyon olarak **bilinçli bırakıldı** (para-yolu davranış değişikliği; `only_confirmed=true` solid → log pratikte mevcut, edge erişilemez).
 
 ## Notlar
 

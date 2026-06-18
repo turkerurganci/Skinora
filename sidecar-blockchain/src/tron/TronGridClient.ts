@@ -469,13 +469,18 @@ export class TronGridClient {
   }
 
   private async measure<T>(endpointLabel: string, fn: () => Promise<T>): Promise<T> {
-    const stop = tronApiRequestDuration.startTimer({ endpoint: endpointLabel, status: 'ok' });
+    // Start the timer with only the endpoint label and resolve `status` at end
+    // time (prom-client merges the end labels), so both the success and the
+    // failure path record the real elapsed duration. The former code abandoned
+    // the started 'ok' timer on error and logged a fresh ~0 ms 'error'
+    // observation, skewing the error-duration histogram toward zero.
+    const stop = tronApiRequestDuration.startTimer({ endpoint: endpointLabel });
     try {
       const value = await fn();
-      stop();
+      stop({ status: 'ok' });
       return value;
     } catch (err) {
-      tronApiRequestDuration.startTimer({ endpoint: endpointLabel, status: 'error' })();
+      stop({ status: 'error' });
       throw err;
     }
   }
