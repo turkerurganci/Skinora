@@ -4,21 +4,41 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useQuery } from "@tanstack/react-query";
+import { getMe } from "@/lib/api/auth";
+import { useAuthStore } from "@/lib/stores/auth-store";
 
 export default function MobileAuthenticatorPage() {
   const t = useTranslations("auth.mobileAuthenticator");
   const locale = useLocale();
   const router = useRouter();
-  const [checking, setChecking] = useState(false);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const [rechecked, setRechecked] = useState(false);
 
   const localePath = (path: string) => `/${locale}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const handleRecheck = () => {
-    // Real POST /auth/check-authenticator wire-up is deferred (T31 integration).
-    // The screen exposes the recheck affordance with a transient loading state so the
-    // surrounding UX is wired and ready for the backend call once T87 lands downstream.
-    setChecking(true);
-    window.setTimeout(() => setChecking(false), 600);
+  // MA verification itself runs at trade-URL save (U17 → A7, 03 §2.1 / 07 §4.8),
+  // not at login — so "recheck" just re-reads the latest verified state from
+  // /auth/me (WP11 decision). Shared ["auth","me"] query (no extra request).
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: ["auth", "me"],
+    queryFn: getMe,
+    enabled: !!accessToken,
+    staleTime: 60_000,
+  });
+
+  const active = data?.mobileAuthenticatorActive ?? false;
+  const stillInactive = rechecked && !active;
+
+  const handleRecheck = async () => {
+    setRechecked(false);
+    const result = await refetch();
+    if (result.data?.mobileAuthenticatorActive) {
+      // Active now → forward to the app (S03 → continue, 04 §6.3).
+      router.replace(localePath("/dashboard"));
+    } else {
+      setRechecked(true);
+    }
   };
 
   return (
@@ -62,13 +82,13 @@ export default function MobileAuthenticatorPage() {
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          onClick={handleRecheck}
-          disabled={checking}
-          aria-busy={checking || undefined}
+          onClick={() => void handleRecheck()}
+          disabled={isFetching}
+          aria-busy={isFetching || undefined}
           data-testid="ma-recheck"
           className="inline-flex flex-1 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-blue-300"
         >
-          {checking ? t("rechecking") : t("recheck")}
+          {isFetching ? t("rechecking") : t("recheck")}
         </button>
         <button
           type="button"
@@ -78,6 +98,12 @@ export default function MobileAuthenticatorPage() {
           {t("goToDashboard")}
         </button>
       </div>
+
+      {stillInactive && (
+        <p className="mt-4 text-sm text-amber-700" role="status" aria-live="polite">
+          {t("stillInactive")}
+        </p>
+      )}
 
       <p className="mt-4 text-xs text-gray-500">{t("dashboardNote")}</p>
 

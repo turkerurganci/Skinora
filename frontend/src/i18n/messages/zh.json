@@ -123,7 +123,12 @@
       "tosCheckbox": "我已阅读并接受<link>用户协议</link>。",
       "continue": "继续",
       "submitting": "提交中...",
-      "notEligible": "我不符合继续条件"
+      "notEligible": "我不符合继续条件",
+      "acceptError": "无法保存您的接受。请重试。",
+      "reprompt": {
+        "title": "服务条款已更新",
+        "description": "我们的服务条款已更新。请查看并接受新版本以继续。"
+      }
     },
     "mobileAuthenticator": {
       "title": "需要 Steam 手机令牌",
@@ -138,7 +143,8 @@
       "rechecking": "检查中...",
       "goToDashboard": "进入控制台",
       "dashboardNote": "您可以浏览平台,但在令牌启用前无法发起交易。",
-      "backToHome": "返回首页"
+      "backToHome": "返回首页",
+      "stillInactive": "仍未检测到验证器。如果您刚刚启用，请稍等片刻后重试。"
     },
     "geoBlock": {
       "title": "访问受限",

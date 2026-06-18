@@ -80,18 +80,39 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
     }
 
     [Fact]
-    public async Task Accept_AlreadyAccepted_Returns409()
+    public async Task Accept_SameVersionAlreadyAccepted_Returns409()
     {
+        // WP11 — CreateUserAsync(alreadyAccepted) stores "0.9"; re-accepting the
+        // same version is a duplicate → 409 (07 §4.4).
         var userId = await _factory.CreateUserAsync(alreadyAccepted: true);
         var client = BuildClient(userId);
 
         var response = await client.PostAsJsonAsync(
             "/api/v1/auth/tos/accept",
-            new { tosVersion = "1.0", ageOver18 = true });
+            new { tosVersion = "0.9", ageOver18 = true });
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("TOS_ALREADY_ACCEPTED", body);
+    }
+
+    [Fact]
+    public async Task Accept_NewVersionAfterBump_Returns200AndUpgrades()
+    {
+        // WP11 — re-accepting a DIFFERENT (bumped) version succeeds (T30 reprompt).
+        var userId = await _factory.CreateUserAsync(alreadyAccepted: true); // "0.9"
+        var client = BuildClient(userId);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/tos/accept",
+            new { tosVersion = "2.0", ageOver18 = true });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Set<User>().SingleAsync(u => u.Id == userId);
+        Assert.Equal("2.0", user.TosAcceptedVersion);
     }
 
     [Fact]

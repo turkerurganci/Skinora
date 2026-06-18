@@ -91,14 +91,47 @@ public class TosAcceptanceServiceTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task AcceptAsync_AlreadyAccepted_ThrowsDomainException()
+    public async Task AcceptAsync_SameVersionAlreadyAccepted_ThrowsDomainException()
     {
+        // WP11 — re-accepting the EXACT version already on file is a no-op
+        // duplicate → 409 (07 §4.4). CreateUserAsync(alreadyAccepted) stores "0.9".
         var userId = await CreateUserAsync(alreadyAccepted: true);
 
         var ex = await Assert.ThrowsAsync<DomainException>(() =>
-            CreateSut().AcceptAsync(userId, "1.0", ageOver18: true, default));
+            CreateSut().AcceptAsync(userId, "0.9", ageOver18: true, default));
 
         Assert.Equal("TOS_ALREADY_ACCEPTED", ex.ErrorCode);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task AcceptAsync_NewVersionAfterBump_UpgradesAndPreservesAgeConfirmation()
+    {
+        // WP11 — a user who accepted an OLD version must be able to re-accept a
+        // NEW version (T30 reprompt). The accepted version + timestamp re-stamp,
+        // but the original 18+ attestation (AgeConfirmedAt) is preserved.
+        var ageConfirmedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198000000009",
+            SteamDisplayName = "Upgrader",
+            TosAcceptedVersion = "0.9",
+            TosAcceptedAt = DateTime.UtcNow.AddDays(-1),
+            AgeConfirmedAt = ageConfirmedAt,
+        };
+        Context.Set<User>().Add(user);
+        await Context.SaveChangesAsync();
+
+        var result = await CreateSut().AcceptAsync(user.Id, "2.0", ageOver18: true, default);
+
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, result.AcceptedAt);
+
+        await using var verify = CreateContext();
+        var updated = await verify.Set<User>().SingleAsync(u => u.Id == user.Id);
+        Assert.Equal("2.0", updated.TosAcceptedVersion);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, updated.TosAcceptedAt);
+        Assert.Equal(ageConfirmedAt, updated.AgeConfirmedAt); // NOT re-stamped
     }
 
     [Fact]

@@ -59,6 +59,7 @@ public sealed class AuthController : ControllerBase
     /// <summary>A1 — <c>GET /auth/steam</c>. Redirects to Steam OpenID.</summary>
     [HttpGet("steam")]
     [AllowAnonymous]
+    [RateLimit("auth", RedirectToSteamCallbackOnReject = true)]
     public IActionResult InitiateLogin([FromQuery(Name = "returnUrl")] string? returnUrl)
     {
         var sanitized = _returnUrlValidator.Sanitize(returnUrl);

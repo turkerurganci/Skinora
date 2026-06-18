@@ -41,13 +41,22 @@ public sealed class TosAcceptanceService : ITosAcceptanceService
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken)
             ?? throw new NotFoundException($"User {userId} not found.");
 
-        if (user.TosAcceptedAt is not null)
-            throw new DomainException("TOS_ALREADY_ACCEPTED", "Terms of Service have already been accepted.");
+        // WP11 — version-aware acceptance (T30 reprompt, 07 §4.4). Re-accepting
+        // the SAME version is a true duplicate no-op → 409. A DIFFERENT version
+        // is a re-acceptance after a ToS version bump → allowed: the accepted
+        // version + timestamp are re-stamped, but the original 18+ attestation
+        // (AgeConfirmedAt) is the first-acceptance age gate and is preserved.
+        if (user.TosAcceptedAt is not null
+            && string.Equals(user.TosAcceptedVersion, tosVersion, StringComparison.Ordinal))
+        {
+            throw new DomainException("TOS_ALREADY_ACCEPTED",
+                "This Terms of Service version has already been accepted.");
+        }
 
         var now = _clock.GetUtcNow().UtcDateTime;
         user.TosAcceptedVersion = tosVersion;
         user.TosAcceptedAt = now;
-        user.AgeConfirmedAt = now;
+        user.AgeConfirmedAt ??= now;
 
         await _db.SaveChangesAsync(cancellationToken);
 

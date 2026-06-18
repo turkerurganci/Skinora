@@ -34,8 +34,8 @@
 | ✅ | T56-MultiAccountRetroScan | **ÇÖZÜLDÜ → WP4b** — günlük `MultiAccountRetroScanJob` cüzdanlı aktif kullanıcıları retroaktif tarar (`IMultiAccountDetector` yeniden çağrılır) | — |
 | 🟡 | T61-SteamTransitionRealtimePush | Steam pipeline geçişlerinde SignalR push yok | — (T96 refetch maskeliyor) |
 | 🟡 | T38-AdminFlagAlert-FlagId | `Notification` entity'de `FlagId` yok → admin flag-link bozuk | Admin flag inbox linki |
-| 🟡 | T30-TosVersionReprompt | ToS versiyon değişiminde re-prompt yok | ToS yeniden onay akışı |
-| 🟡 | T87-K1 | Gerçek auth akışı (steam/tos/refresh/me) ekranlara bağlanmamış | — (query-state çalışıyor) |
+| ✅ | T30-TosVersionReprompt | **ÇÖZÜLDÜ → WP11** — CurrentUserDto += `tosAcceptedVersion`, `tos/accept` versiyon-upgrade'e izin verir (409 yalnız aynı versiyonda), FE `TosRepromptGate` versiyon uyuşmazlığında re-prompt | — |
+| ✅ | T87-K1 | **ÇÖZÜLDÜ → WP11** — callback `/auth/refresh`→token store + `acceptTos` wire-up + 401 refresh interceptor; MA recheck /auth/me ile (A7 trade-URL akışına ait) | — |
 | 🟡 | FE-admin-signalr-subscription | `RealtimeProvider.tsx:40-43` üç admin event'ini abone etmiyor | Canlı admin event'leri |
 | ✅ | TradeOfferMonitor-hotadd-T69 | **ÇÖZÜLDÜ → WP6 (resolved-by-design)** — statik pool (`BotManager` dinamik-add yok); idempotent `attachToSession` hook'u T69 dinamik pool için hazır + test edilmiş | — (statik pool'da sorun yok) |
 | 🟡 | T33-SuccessRate-FractionVsPercent | `successfulTransactionRate` fraction (06) vs percent (07) | FE entegrasyonu öncesi karar |
@@ -76,7 +76,7 @@
 | ⚪ | T112 | E2E — Emergency hold | task | F6 |
 | ⚪ | T113 | E2E — Admin akışları | task | F6 |
 | ⚪ | T114 | E2E — Downtime ve bakım senaryoları | task | F6 |
-| 🟡 | T87-K1 | Auth backend wire-up (steam/tos/check-authenticator/refresh/me) + callback refresh; ekranlar query-string ile çalışıyor | k-note | T87 K1-K3 / T85 K1 |
+| ✅ | T87-K1 | **ÇÖZÜLDÜ → WP11** — callback refresh→token store + ToS-accept wire-up + 401 refresh interceptor; check-authenticator owner-kararıyla /auth/me recheck'ine bağlandı (A7 trade-URL/U17 akışına ait, login'de değil) | k-note | T87 K1-K3 / T85 K1 |
 
 ## 4. T-future — Backend orkestrasyon (caller/consumer wire-up)
 
@@ -94,7 +94,7 @@
 | ✅ | T56-MultiAccountRetroScan 🆕 | **ÇÖZÜLDÜ → WP4b** — günlük retro-scan Hangfire job (`MultiAccountRetroScanJob`, `AutoUnsuspendJob` deseni) | backend-gap | `T56_REPORT.md:150` |
 | 🟡 | T61-SteamTransitionRealtimePush 🆕 | Steam pipeline geçişleri için `TransactionStatusChanged` push yok (her biri T67 event'iyle RealtimeConsumer ister) | backend-gap | `T61_REPORT.md:146` (K2) |
 | 🟡 | T38-AdminFlagAlert-FlagId 🆕 | `Notification` entity'de `FlagId` kolonu yok (yalnız `TransactionId`); admin flag-link reinterpret/extend gerek | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
-| 🟡 | T30-TosVersionReprompt 🆕 | ToS tek-versiyon; versiyon değişiminde kabul etmiş kullanıcı yeniden sorulmuyor | backend-gap | `T30_REPORT.md:155` |
+| ✅ | T30-TosVersionReprompt 🆕 | **ÇÖZÜLDÜ → WP11** — `tosAcceptedVersion` /auth/me'de sunulur + `tos/accept` versiyon-upgrade (409 yalnız aynı versiyon) + FE `TosRepromptGate` | backend-gap | `T30_REPORT.md:155` |
 
 ### Düşük öncelik
 
@@ -118,14 +118,14 @@
 | tron-resilience | **✅ ÇÖZÜLDÜ → WP10** — TronGrid 429/403 → ikincil `TRON_API_KEY` anında failover + sınırlı poll-dostu backoff (okuma yolu, `TronGridClient`); **event_index dedup** txid+gerçek-on-chain-log-index'e yükseltildi (06 §3.8 `(TxHash,EventIndex)` UNIQUE + migration; sidecar `gettransactioninfobyid` `log[]`'tan çözer — trc20 list endpoint event_index vermiyor). Büyüme backup node (Ankr/GetBlock) MVP-dışı (§3). | T71/T72 K |
 | sanctions-expansion | `SanctionedAddress` MANUAL-only (OFAC/EU/UN feed auto-sync yok); Network TRC-20 sabit; AD22 reason UI | T82/T34 K |
 | vpn-fraud | `VpnDetection:Enabled` default off; fraud-modül entegrasyonu + datacenter ASN / commercial VPN listeleri | T83 K |
-| misc-user-features | Per-tx refund override, trade-offer URL DTO, multi-account user UI, brute-force lock, delete atomicity, OPEN_LINK race | T90/T29/T36/T46 K |
+| misc-user-features | Per-tx refund override, trade-offer URL DTO, multi-account user UI, **brute-force lock (✅ ÇÖZÜLDÜ → WP11** — `GET /auth/steam` rate-limit aşımı 429 yerine `?error=temporarily_locked&retryAfter=N` redirect; 05 §6.3/07 §4.2**)**, delete atomicity, OPEN_LINK race | T90/T29/T36/T46 K |
 | timeout-warning-setting | `DefaultTimeoutWarningPercent`=75 private const; `accept_timeout_minutes` seed'siz | T83a/T45 K |
 | T61-AdminHubJoinBypass 🆕 | `TransactionsHub.JoinTransaction` admin bypass yok (yalnız seller/buyer) | `T61_REPORT.md:147` (K3) |
 | T54-FlaggedApproveNoTimeoutJob 🆕 | **✅ ÇÖZÜLDÜ-by-design → WP4b** — 05 §4.4 + 06 §3.5:650: accept-deadline'lar **bilinçli olarak poller-driven** (yalnız ITEM_ESCROWED per-tx job alır); `DeadlineScannerJob` `ApproveAsync`'in setlediği `AcceptDeadline`'ı zaten enforce ediyor (regresyon testi eklendi). Yeni per-tx job spec'i ihlal ederdi → kurulmadı | `T54_REPORT.md:234` |
 | T54-FraudNoteNoMaxLength 🆕 | **✅ ÇÖZÜLDÜ → WP4b** — `ApproveAsync`/`RejectAsync` 2000 char (kolon genişliği) validasyonu → 400 `VALIDATION_ERROR`; rapordaki "1000" stale | `T54_REPORT.md:194,219` |
 | T58-canDisputeEnvelopeBit 🆕 | **✅ ÇÖZÜLDÜ → WP5** — `availableActions.disputableTypes: DisputeType[]` eklendi (per-type), `canDispute` korunur (07 §7.5) | `T58_REPORT.md:203` |
 | T46-OpenLinkConcurrentAcceptRace 🆕 | Eşzamanlı OPEN_LINK accept'te race-loser `DbUpdateConcurrencyException`→HTTP 500 (409 ALREADY_ACCEPTED yerine) | `T46_REPORT.md:145` |
-| T40-PermClaimCache 🆕 | JWT permission-claim resolver her login+refresh'te DB lookup; per-user TTL cache deferred ("sonraki sprint") | `T40_REPORT.md:113` |
+| T40-PermClaimCache 🆕 | **✅ ÇÖZÜLDÜ-by-design → WP11** — owner kararı: T40'ın "dinamiklik > performans" kararı korunur, cache **EKLENMEZ** (her login/refresh DB lookup; perf darboğazı kanıtı yok, ≤2dk staleness istenmedi) | `T40_REPORT.md:113` |
 | discord-interactions-userinstall 🆕 | Discord slash commands/interactions (Ed25519 webhook) + user-install; şu an yalnız Bot DM + OAuth2 | `MEMORY_ARCHIVE.md:178` (T80 K6-K8) |
 
 ## 5. T-future — Frontend polish / enhancements

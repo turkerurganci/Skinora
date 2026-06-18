@@ -263,6 +263,32 @@ public class RateLimitTests
 
     #endregion
 
+    #region Brute-force redirect (WP11 — 05 §6.3, 07 §4.2 A1)
+
+    [Fact]
+    public async Task AuthRefresh_WhenRateLimited_Returns429Json_NotRedirect()
+    {
+        // POST /auth/refresh shares the "auth" policy but is NOT flagged for the
+        // brute-force redirect — it must still surface the 429 JSON the FE
+        // interceptor reads. The flagged GET /auth/steam redirect path is covered
+        // by the focused RateLimitMiddlewareTests unit test (the full Steam OpenID
+        // controller is not serviceable in this generic factory).
+        var client = CreateClient();
+
+        for (var i = 0; i < 10; i++)
+        {
+            await client.PostAsync("/api/v1/auth/refresh", content: null);
+        }
+
+        var blocked = await client.PostAsync("/api/v1/auth/refresh", content: null);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
+        var body = await DeserializeResponse(blocked);
+        Assert.Equal("RATE_LIMIT_EXCEEDED", body.Error!.Code);
+    }
+
+    #endregion
+
     #region Helpers
 
     private static async Task<TestApiResponse> DeserializeResponse(HttpResponseMessage response)

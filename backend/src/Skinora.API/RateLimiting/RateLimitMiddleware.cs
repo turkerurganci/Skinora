@@ -22,6 +22,7 @@ public sealed class RateLimitMiddleware
     private readonly RequestDelegate _next;
     private readonly IRateLimiterStore _store;
     private readonly RateLimitOptions _options;
+    private readonly SteamOpenIdSettings _steamOpenId;
     private readonly ILogger<RateLimitMiddleware> _logger;
 
     /// <summary>Error code returned in the envelope when the limit is hit.</summary>
@@ -46,11 +47,13 @@ public sealed class RateLimitMiddleware
         RequestDelegate next,
         IRateLimiterStore store,
         IOptions<RateLimitOptions> options,
+        IOptions<SteamOpenIdSettings> steamOpenId,
         ILogger<RateLimitMiddleware> logger)
     {
         _next = next;
         _store = store;
         _options = options.Value;
+        _steamOpenId = steamOpenId.Value;
         _logger = logger;
     }
 
@@ -92,7 +95,7 @@ public sealed class RateLimitMiddleware
             return;
         }
 
-        await WriteRateLimitedResponseAsync(context, result);
+        await WriteRateLimitedResponseAsync(context, result, attribute);
     }
 
     /// <summary>
@@ -131,7 +134,8 @@ public sealed class RateLimitMiddleware
         context.Response.Headers["X-RateLimit-Reset"] = result.ResetAtUnixSeconds.ToString();
     }
 
-    private async Task WriteRateLimitedResponseAsync(HttpContext context, RateLimitResult result)
+    private async Task WriteRateLimitedResponseAsync(
+        HttpContext context, RateLimitResult result, RateLimitAttribute attribute)
     {
         _logger.LogWarning(
             "Rate limit exceeded. Path: {Path} Limit: {Limit} RetryAfter: {RetryAfter}s TraceId: {TraceId}",
@@ -139,6 +143,17 @@ public sealed class RateLimitMiddleware
             result.Limit,
             result.RetryAfterSeconds,
             context.TraceIdentifier);
+
+        // WP11 — brute-force UX (05 §6.3, 07 §4.2 A1). Browser-navigation auth
+        // endpoints (GET /auth/steam) cannot show a 429 JSON envelope to the
+        // user, so redirect to the frontend callback with the spec'd
+        // temporarily_locked error and a retry timer instead.
+        if (attribute.RedirectToSteamCallbackOnReject)
+        {
+            context.Response.Headers["Retry-After"] = result.RetryAfterSeconds.ToString();
+            context.Response.Redirect(BuildLockedRedirectUrl(result.RetryAfterSeconds));
+            return;
+        }
 
         context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.Response.ContentType = "application/json";
@@ -151,5 +166,20 @@ public sealed class RateLimitMiddleware
             traceId: context.TraceIdentifier);
 
         await context.Response.WriteAsync(JsonSerializer.Serialize(envelope, JsonOptions));
+    }
+
+    /// <summary>
+    /// Builds the frontend callback URL carrying the temporarily_locked brute-force
+    /// signal (07 §4.2 A1). Mirrors <c>AuthController.BuildFrontendUrl</c> so the
+    /// callback screen receives the same shape it already parses.
+    /// </summary>
+    private string BuildLockedRedirectUrl(int retryAfterSeconds)
+    {
+        var builder = new UriBuilder(_steamOpenId.FrontendCallbackUrl);
+        var existing = string.IsNullOrEmpty(builder.Query)
+            ? string.Empty
+            : builder.Query.TrimStart('?') + "&";
+        builder.Query = $"{existing}error=temporarily_locked&retryAfter={retryAfterSeconds}";
+        return builder.Uri.ToString();
     }
 }
