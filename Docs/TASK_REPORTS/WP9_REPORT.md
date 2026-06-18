@@ -1,6 +1,6 @@
 # WP9 — Realtime tamlık (Steam push + admin abonelik + hub bypass)
 
-**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-18
+**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS 2026-06-18) | **Tarih:** 2026-06-18
 
 ---
 
@@ -81,9 +81,17 @@ WP9, realtime (SignalR) katmanının altı boşluğunu kapatır (kaynak: [`PRE_F
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, ayrı chat, 2026-06-18) |
+| Bulgu sayısı | 0 bloke-edici |
+| Düzeltme gerekli mi | Hayır |
+
+**Bağımsız validator (yapım raporu görülmeden kendi verdict'i oluşturuldu):**
+- **Kapılar:** Adım -1 working tree temiz ✓ · Adım 0 main son-3 CI success (`27719423184`/`27719423181`/`27717764161`) ✓ · Adım 0b repo memory WP9 satırı mevcut ✓ · Adım 8a task CI HEAD `38e7f30` run [`27744825726`](https://github.com/turkerurganci/Skinora/actions/runs/27744825726) **tüm job success** (+ `ed186c8` run `27744298511` success).
+- **Validator lokal koşumu:** Realtime unit **41/41** + Steam **103/103** (değişen producer integration testleri dahil) + Shared unit **364/364** (`~Unit` filtre; regresyon temiz) + Release build **0W/0E** + FE tsc 0 / eslint 0 (WP9 yolları) / prettier temiz (WP9 dosyaları) / `next build` ✓.
+- **Bağımsız teyit — 6 kalem:** (1) generic `TransactionStatusChangedEvent` 4 Steam geçişinde producer'larca `fromStatus` Fire() öncesi yakalanıp atomik olarak (SaveChanges öncesi) outbox'a yazılır; consumer saf relay; **çift-push yok** (4 geçişin hiçbirinin önceden realtime consumer'ı yoktu; COMPLETED yalnız yeni `PayoutCompletedRealtimeConsumer`'da, WP1 `PayoutCompletedEvent` tek tüketici). Producer integration testleri başarısız dalda status event'i **yazmadığını** da kanıtlar. (2) Admin-group scope güvenlik düzeltmesi gerçek: `NotificationsHub.OnConnectedAsync` admin'i `admins` grubuna katar, publisher 3 admin event'ini `Clients.Group(admins)`'e yollar (önceden `Clients.All` → bot/cüzdan/reconciliation sızıntısı). (3) `HubClaims.IsAdmin` JWT `role` claim'ini **ham** okur — `AuthModule.cs:68 MapInboundClaims=false` ile claim remap yok; `AuthRoles.Admin`/`SuperAdmin` aynı değerleri admin REST policy (`AuthModule.cs:114 RequireClaim`) ve `AdminAuthorityResolver` üretir → hub kapısı REST yetkisiyle **birebir tutarlı**. (4) TransactionsHub admin-bypass `JoinTransaction_AsAdmin_NonParticipant_Succeeds` ile gerçek SignalR bağlantısı + admin JWT üzerinden uçtan uca test edilir. (5) C09 toast `ToastProvider` global hoist'i [`[locale]/layout.tsx:32`](../../frontend/src/app/[locale]/layout.tsx#L32) `<Providers>` ile admin'in atası → regresyon yok. (6) group-failure observability tek-tip `LogWarning(group, method)`.
+- **Mini güvenlik:** Secret sızıntısı yok · Auth **iyileşti** (T69-K4 sızıntı kapatıldı, gate REST ile tutarlı) · input typed-enum (free-text yok) · yeni runtime bağımlılık yok (yalnız test-only FrameworkReference + Auth ProjectReference).
+- **Doc/contract uyumu:** 07 §11.2 admin-group tablosu (3 event + scope notu) FE `events.ts` payload'larıyla ve backend record'larıyla birebir; `NotificationRealtimePayloads.cs` stale "no per-role group yet" yorumu güncellendi. Migration yok (doğrulandı — diff'te migration dosyası yok).
+- **Yapım raporu karşılaştırması:** Tam uyumlu, 0 uyuşmazlık. (Tek kozmetik: rapor Shared "369/369" `!~Integration` filtresini, validator "364/364" `~Unit` filtresini kullandı — ikisi de yeşil, kapsam farkı; substansif fark değil.)
 
 ## Altyapı Değişiklikleri
 
