@@ -83,9 +83,9 @@ WP10, blockchain para-katmanının dayanıklılığını dört eksende tamamlar 
 ## Commit & PR
 
 - Branch: `task/WP10-tron-resilience`
-- Commit: (push sonrası)
-- PR: (push sonrası)
-- CI: (push sonrası)
+- Commit: `89a2a15` — WP10: Tron dayanıklılık — 429 failover + per-event dedup + HD cache + gas config
+- PR: [#180](https://github.com/turkerurganci/Skinora/pull/180)
+- CI: ⏳ izleniyor (push sonrası)
 
 ## Known Limitations / Follow-up
 
