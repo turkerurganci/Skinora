@@ -95,8 +95,8 @@ WP9, realtime (SignalR) katmanının altı boşluğunu kapatır (kaynak: [`PRE_F
 ## Commit & PR
 
 - Branch: `task/WP9-realtime-completeness`
-- Commit: (push sonrası)
-- PR: #— (oluşturulacak)
+- Commit: `8d62c56`
+- PR: [#179](https://github.com/turkerurganci/Skinora/pull/179)
 - CI: ⏳ (watch)
 
 ## Known Limitations / Follow-up
