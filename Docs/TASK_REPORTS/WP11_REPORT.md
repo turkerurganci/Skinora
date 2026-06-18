@@ -1,6 +1,6 @@
 # WP11 — Auth UI wire-up + ToS reprompt + brute-force lock
 
-**Faz:** PRE_F6 (P4 — Kullanıcı/FE) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-18
+**Faz:** PRE_F6 (P4 — Kullanıcı/FE) | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-18
 
 ---
 
@@ -66,9 +66,30 @@ WP11, kullanıcının **UI'dan gerçekten login olmasını** sağlar. Tarama, ü
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (ayrı chat, 2026-06-18, rapor görülmeden kendi verdict'i) |
+| Bulgu sayısı | 0 bloke-edici (S1/S2/S3 yok) |
+| Düzeltme gerekli mi | Hayır |
+
+**Validator kapıları:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27756292902`/`27756292918`/`27754449178`) · Adım 0b repo memory WP11 satırı mevcut · Adım 8a task CI HEAD `6f71a97` run [`27781552553`](https://github.com/turkerurganci/Skinora/actions/runs/27781552553) tüm job success (+ `ccd1e77` run `27780917297`).
+
+**Validator lokal kanıt (Release, gerçek SQL Server / Docker UP):** `dotnet build -c Release` **0W/0E**; `RateLimitMiddlewareTests` **3/3** (redirect / 429-JSON / allowed); `TosAcceptanceServiceTests` **7/7** (same-version 409 + new-version-upgrade-preserves-`AgeConfirmedAt`); API.Tests `TosAccept|RateLimit|AuthSession` **25/25**; regresyon `AuthSteam|Authentication|AuthReVerify` **34/34** (`GET /auth/steam`'e eklenen `[RateLimit]` mevcut auth akışını kırmadı) → toplam **69 test green**. FE: `tsc --noEmit` 0 + `eslint` 0 + prettier (WP11 dosyaları) clean + `next build` ✓ (`/auth/callback`, `/auth/mobile-authenticator` dahil).
+
+**Bağımsız spec/kod teyidi:**
+- **Brute-force redirect** spec-birebir: 07 §4.2 A1 literal `redirect: /auth/callback?error=temporarily_locked&retryAfter=300` + 05 §6.3 "klasik login brute-force Steam OpenID'de geçersiz → abuse throttling". `RateLimitMiddleware` bayraklı endpoint'te 302→`{FrontendCallbackUrl}?error=temporarily_locked&retryAfter=N` (server-config URL, kullanıcı girdisi değil; `BuildFrontendUrl` deseni); bayraksız `/auth/refresh` 429-JSON kalır (FE interceptor okur — `RateLimitTests` teyit). `GetMetadata<RateLimitAttribute>()` method-level attribute'u (redirect=true) class-level `[RateLimit("auth")]`'in üzerine çözer (ASP.NET action-after-controller metadata sırası).
+- **ToS versiyon-upgrade**: 409 yalnız **aynı** versiyon; **farklı** versiyon re-stamp eder ama `AgeConfirmedAt ??= now` ilk 18+ beyanını korur (test `NewVersionAfterBump...UpgradesAndPreservesAgeConfirmation` birebir asserts). DTO `tosAcceptedVersion` `/auth/me`'de sunulur (07 §4.5; `AuthSessionEndpointTests` asserts).
+- **401 interceptor** tek-uçuş (`refreshInFlight`) + tek retry (`isRetry`) + `/auth/refresh` özyineleme guard'ı; refresh-fail→`logout()`+login redirect (auth-flow redirect-loop guard). `access_token` localStorage tek-yazıcı (`auth-store`).
+- **MA recheck** owner-kararı spec-uyumlu (/auth/me `mobileAuthenticatorActive`; gerçek MA doğrulaması U17→A7 trade-URL akışında — 03 §2.1/07 §4.8).
+- **Migration yok**: `User.TosAcceptedVersion` kolonu InitialCreate'ten mevcut; diff'te migration/entity/`UserConfiguration`/snapshot değişikliği **yok** → model drift yok.
+
+**Güvenlik kontrolü:** Secret sızıntısı yok · redirect URL server-config (open-redirect yok; callback `returnUrl` `RELATIVE_PATH_RE` ile sanitize) · ToS input validation (max 20 char, ageOver18 zorunlu) · yeni dış bağımlılık yok (package.json/csproj değişmedi).
+
+**Non-blocking gözlemler (PASS'i etkilemez):**
+1. 07 §4.2 wording "başarısız login denemesi sonrası" — implementasyon `GET /auth/steam` başlatmalarının **tümünü** sayar (Steam OpenID başlatma anında başarı/başarısızlık ayırt edilemez); davranış (N denemeden sonra geçici kilit → redirect) spec-uyumlu, owner-onaylı. Doc-precision NOTE → WP17.
+2. `GET /auth/steam` redirect yolu integration test'te değil (Steam OpenID controller generic factory'de serviceable değil — middleware unit testi branch'i deterministik kapsar; attribute çözümü framework davranışı). Build bunu belgeledi.
+3. `apiClient` refresh-fail sonrası `response.json()` fall-through boş gövdede SyntaxError verebilir — backend 401'de her zaman JSON envelope döner (pratikte erişilmez). Trivial robustness.
+4. `AccountManagementSection` logout `localStorage.removeItem` artık `logout()` ile mükerrer (zararsız) → WP13 (rapor zaten kaydetti).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — rapor kabul tablosu, test sayıları (Auth.Tests 120/120 tam suite CI-authoritative; validator WP11-spesifik 69 alt-kümeyi bağımsız koştu), known-limitations ve owner kararları bağımsız verdict'le birebir örtüşür; uyuşmazlık yok.
 
 ## Altyapı Değişiklikleri
 - **Migration: Yok** — `CurrentUserDto` plain record (EF model değil); ToS logic + rate-limit attribute/middleware; EF entity/config değişmedi.
