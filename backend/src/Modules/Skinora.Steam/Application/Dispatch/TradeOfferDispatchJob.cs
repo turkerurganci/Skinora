@@ -152,12 +152,14 @@ public sealed class TradeOfferDispatchJob
             BotAccountName: bot.DisplayName);
 
         var result = await _client.SendAsync(request, cancellationToken);
+        var fromStatus = transaction.Status;
         switch (result.Status)
         {
             case TradeOfferDispatchStatus.Sent:
             case TradeOfferDispatchStatus.Pending:
                 transaction.EscrowBotId = bot.Id;
                 FireForward(transaction, TransactionTrigger.SendTradeOfferToSeller);
+                await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
                     "Escrow dispatch OK — transaction {TransactionId} → TRADE_OFFER_SENT_TO_SELLER via bot {BotId} (offer {OfferId})",
@@ -236,11 +238,13 @@ public sealed class TradeOfferDispatchJob
             BotAccountName: botAccountName);
 
         var result = await _client.SendAsync(request, cancellationToken);
+        var fromStatus = transaction.Status;
         switch (result.Status)
         {
             case TradeOfferDispatchStatus.Sent:
             case TradeOfferDispatchStatus.Pending:
                 FireForward(transaction, TransactionTrigger.SendTradeOfferToBuyer);
+                await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
                     "Delivery dispatch OK — transaction {TransactionId} → TRADE_OFFER_SENT_TO_BUYER via bot {BotId} (offer {OfferId})",
@@ -275,6 +279,21 @@ public sealed class TradeOfferDispatchJob
         var machine = new TransactionStateMachine(transaction);
         machine.Fire(trigger);
     }
+
+    // WP9 — stage the RT1 TransactionStatusChanged push (07 §11.1) on the same
+    // outbox/SaveChanges as the dispatch transition. FromStatus is captured by
+    // the caller before the Fire(); ToStatus is read post-Fire. Best-effort: the
+    // realtime consumer swallows transport errors so a missed push never blocks.
+    private Task PublishStatusChangedAsync(
+        Transaction transaction, TransactionStatus fromStatus, CancellationToken cancellationToken)
+        => _outbox.PublishAsync(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                FromStatus: fromStatus,
+                ToStatus: transaction.Status,
+                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+            cancellationToken);
 
     private async Task RecordDispatchFailureAsync(
         Transaction transaction, TradeOfferDirection direction, Guid botId,

@@ -476,6 +476,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         tradeOffer.Status = TradeOfferStatus.ACCEPTED;
         tradeOffer.RespondedAt = DateTime.UtcNow;
         await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, +1, cancellationToken);
+        var fromStatus = transaction.Status;
         machine.Fire(TransactionTrigger.EscrowItem);
 
         // T103b-2 F3 — boundary race: the seller accepted while (or just after)
@@ -499,6 +500,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
                 transaction.Id, bot.Status, bot.Id, correlationId);
         }
 
+        await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -536,7 +538,9 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         tradeOffer.RespondedAt = DateTime.UtcNow;
         // Item left the bot — release its escrow slot.
         await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, -1, cancellationToken);
+        var fromStatus = transaction.Status;
         machine.Fire(TransactionTrigger.DeliverItem);
+        await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
@@ -561,6 +565,23 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
             offerId, tradeOffer.PlatformSteamBotId, correlationId);
         return TradeWebhookResult.Applied;
     }
+
+    // WP9 — stage the RT1 TransactionStatusChanged push (07 §11.1) on the same
+    // outbox/SaveChanges as the Steam pipeline transition (EscrowItem /
+    // DeliverItem), closing T61 K2. Routed through the outbox so
+    // TransactionStatusChangedRealtimeConsumer delivers it to the per-transaction
+    // group; best-effort like every RT1 push (consumer swallows transport errors).
+    // FromStatus is captured by the caller before the Fire(); ToStatus is post-Fire.
+    private Task PublishStatusChangedAsync(
+        Transaction transaction, TransactionStatus fromStatus, CancellationToken cancellationToken)
+        => _outbox.PublishAsync(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                FromStatus: fromStatus,
+                ToStatus: transaction.Status,
+                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+            cancellationToken);
 
     /// <summary>
     /// Adjust a bot's denormalized <c>ActiveEscrowCount</c> (06 §3.10) within the

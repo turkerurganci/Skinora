@@ -61,7 +61,8 @@ public sealed class TradeOfferDispatchJobTests : IntegrationTestBase
         var txId = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         var client = new FakeDispatchClient(new TradeOfferDispatchResult(
             TradeOfferDispatchStatus.Sent, "off-1", false, 1, null));
-        var sut = CreateSut(client);
+        var outbox = new RecordingOutbox();
+        var sut = CreateSut(client, outbox);
 
         await sut.ExecuteAsync();
 
@@ -69,6 +70,12 @@ public sealed class TradeOfferDispatchJobTests : IntegrationTestBase
         var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == txId);
         Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, tx.Status);
         Assert.Equal(_bot.Id, tx.EscrowBotId);
+
+        // WP9 — RT1 TransactionStatusChanged push staged on the same outbox/SaveChanges.
+        var statusEvent = Assert.IsType<TransactionStatusChangedEvent>(Assert.Single(outbox.Events));
+        Assert.Equal(txId, statusEvent.TransactionId);
+        Assert.Equal(TransactionStatus.ACCEPTED, statusEvent.FromStatus);
+        Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, statusEvent.ToStatus);
 
         var request = Assert.Single(client.Requests);
         Assert.Equal(TradeOfferDispatchDirection.SellerToBot, request.Direction);
@@ -174,13 +181,20 @@ public sealed class TradeOfferDispatchJobTests : IntegrationTestBase
         var txId = await SeedTransactionAsync(
             TransactionStatus.PAYMENT_RECEIVED, escrowBotAssetId: "asset-on-bot", escrowBotId: true);
         var client = new FakeDispatchClient(SentResult());
-        var sut = CreateSut(client);
+        var outbox = new RecordingOutbox();
+        var sut = CreateSut(client, outbox);
 
         await sut.ExecuteAsync();
 
         await using var verify = CreateContext();
         var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == txId);
         Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, tx.Status);
+
+        // WP9 — RT1 TransactionStatusChanged push staged on the same outbox/SaveChanges.
+        var statusEvent = Assert.IsType<TransactionStatusChangedEvent>(Assert.Single(outbox.Events));
+        Assert.Equal(txId, statusEvent.TransactionId);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, statusEvent.FromStatus);
+        Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, statusEvent.ToStatus);
 
         var request = Assert.Single(client.Requests);
         Assert.Equal(TradeOfferDispatchDirection.BotToBuyer, request.Direction);

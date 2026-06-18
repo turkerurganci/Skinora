@@ -92,6 +92,20 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
     }
 
     [Fact]
+    public async Task JoinTransaction_AsAdmin_NonParticipant_Succeeds()
+    {
+        // WP9 (T61 K3) — an admin who is neither buyer nor seller may join any
+        // transaction room so the admin tx-detail surface (S16) gets live updates.
+        var (_, _, tx) = await _factory.SeedTransactionAsync();
+        var admin = await _factory.CreateUserAsync("76561198000077777");
+
+        await using var connection = await ConnectAsync(admin.Id, admin.SteamId, AuthRoles.Admin);
+
+        await connection.InvokeAsync("JoinTransaction", tx.Id);
+        // No exception ⇒ the admin role bypassed the participant check.
+    }
+
+    [Fact]
     public async Task JoinTransaction_UnknownTransaction_ThrowsNotFound()
     {
         var user = await _factory.CreateUserAsync("76561198000088888");
@@ -146,7 +160,7 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
         string ToStatus,
         DateTime Timestamp);
 
-    private async Task<HubConnection> ConnectAsync(Guid userId, string steamId)
+    private async Task<HubConnection> ConnectAsync(Guid userId, string steamId, string role = AuthRoles.User)
     {
         var url = new Uri(_factory.Server.BaseAddress, "hubs/transactions");
         var connection = new HubConnectionBuilder()
@@ -154,7 +168,7 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
             {
                 ConfigureTransport(options, _factory);
                 options.AccessTokenProvider = () => Task.FromResult<string?>(
-                    IssueAccessToken(userId, steamId));
+                    IssueAccessToken(userId, steamId, role));
             })
             .Build();
         await connection.StartAsync();
@@ -169,7 +183,7 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
         options.Transports = HttpTransportType.LongPolling;
     }
 
-    private static string IssueAccessToken(Guid userId, string steamId)
+    private static string IssueAccessToken(Guid userId, string steamId, string role = AuthRoles.User)
     {
         var handler = new JwtSecurityTokenHandler();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
@@ -182,7 +196,7 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
             [
                 new Claim(AuthClaimTypes.UserId, userId.ToString()),
                 new Claim(AuthClaimTypes.SteamId, steamId),
-                new Claim(AuthClaimTypes.Role, AuthRoles.User),
+                new Claim(AuthClaimTypes.Role, role),
             ]),
             Expires = DateTime.UtcNow.AddMinutes(15),
             SigningCredentials = creds,

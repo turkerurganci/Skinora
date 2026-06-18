@@ -53,9 +53,9 @@ public static class NotificationRealtimePayloads
 
     /// <summary>
     /// Pushed when a platform Steam bot transitions to RESTRICTED / BANNED /
-    /// OFFLINE or is removed from the pool (T69 — 02 §15, 05 §3.2). Frontend
-    /// admin dashboard (S18 — bound in T103) renders the alert; non-admin
-    /// clients ignore the event but receive the broadcast.
+    /// OFFLINE or is removed from the pool (T69 — 02 §15, 05 §3.2). Delivered to
+    /// the <see cref="Skinora.Realtime.Hubs.NotificationsHub.AdminGroup"/> only
+    /// (WP9 T69 K4); the frontend admin dashboard (S18) renders the alert.
     /// </summary>
     public sealed record AdminBotStatusChanged(
         Guid BotId,
@@ -73,8 +73,8 @@ public static class NotificationRealtimePayloads
     /// <c>Address</c> is the on-chain address that failed reconciliation;
     /// <c>Delta</c> is <c>Actual − Expected</c> (positive = surplus on chain,
     /// negative = missing). Admin dashboard surfaces this alongside the
-    /// matching AuditLog row (RECONCILIATION_MISMATCH). Non-admin clients
-    /// receive the broadcast but ignore it (no per-role group yet).
+    /// matching AuditLog row (RECONCILIATION_MISMATCH). Delivered to the
+    /// admin-only group (WP9 T69 K4), not broadcast to all clients.
     /// </summary>
     public sealed record AdminReconciliationMismatch(
         string Scope,

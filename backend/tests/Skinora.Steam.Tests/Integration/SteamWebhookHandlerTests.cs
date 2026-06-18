@@ -277,6 +277,12 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
         Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx.Status);
         Assert.NotNull(tx.ItemEscrowedAt);
+
+        // WP9 — RT1 TransactionStatusChanged push staged on the same SaveChanges.
+        var statusEvent = Assert.Single(_outbox.Events.OfType<TransactionStatusChangedEvent>());
+        Assert.Equal(_transaction.Id, statusEvent.TransactionId);
+        Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, statusEvent.FromStatus);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, statusEvent.ToStatus);
     }
 
     [Fact]
@@ -636,6 +642,12 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         Assert.Equal("buyer-asset-y", tx.DeliveredBuyerAssetId);
         var bot = await verify.Set<PlatformSteamBot>().SingleAsync(b => b.Id == _bot.Id);
         Assert.Equal(0, bot.ActiveEscrowCount);
+
+        // WP9 — RT1 TransactionStatusChanged push staged on the same SaveChanges.
+        var statusEvent = Assert.Single(_outbox.Events.OfType<TransactionStatusChangedEvent>());
+        Assert.Equal(_transaction.Id, statusEvent.TransactionId);
+        Assert.Equal(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, statusEvent.FromStatus);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, statusEvent.ToStatus);
     }
 
     [Fact]

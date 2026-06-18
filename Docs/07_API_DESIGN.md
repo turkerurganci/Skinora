@@ -2629,6 +2629,14 @@ Frontend sayfa yüklemesinde P2'yi çağırır. Anlık değişiklikler RT2 ile p
 | `DiscordConnected` | `{ username }` | Discord bağlantısı tamamlandı |
 | `MaintenanceStatusChanged` | `{ active, type, message, plannedEnd }` | Bakım/kesinti durumu değişti (C08 banner) |
 
+**Admin grubu (WP9):** Aşağıdaki üç olay yalnızca **admin grubuna** (`admins`) push edilir — admin (`role ∈ {admin, super_admin}`) bağlantıları RT2'ye bağlanırken otomatik bu gruba katılır; admin olmayan istemciler bu payload'ları almaz (`Clients.All` yerine grup kapsamı). Kalıcı kayıt: ilgili AuditLog satırı (`RECONCILIATION_MISMATCH` / `HOT_WALLET_THRESHOLD_BREACHED`) ve `PlatformSteamBot.Status`.
+
+| Event | Payload | Tetikleyici |
+|-------|---------|-------------|
+| `AdminBotStatusChanged` | `{ botId, steamId, displayName, previousStatus, newStatus, reason, changedAt }` | Platform Steam bot RESTRICTED/BANNED/OFFLINE'a geçti veya havuzdan çıkarıldı (T69) |
+| `AdminReconciliationMismatch` | `{ scope, address, token, expected, actual, delta, blockNumber, detectedAt }` | Günlük mutabakat zincir↔ledger uyuşmazlığı tespit etti (T76) |
+| `AdminHotWalletThresholdBreached` | `{ token, direction, threshold, actual, blockNumber, detectedAt }` | Hot wallet bakiyesi eşik aştı/altına düştü (T77) |
+
 ---
 
 ## 12. GAP Kararları

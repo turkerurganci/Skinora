@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { RealtimeProvider } from "@/lib/signalr/RealtimeProvider";
 import { AuthInitializer } from "@/lib/auth/AuthInitializer";
+import { ToastProvider } from "@/components/common";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -22,7 +23,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthInitializer />
-      <RealtimeProvider>{children}</RealtimeProvider>
+      {/* ToastProvider wraps RealtimeProvider so the realtime layer can surface
+          C09 toasts (WP9 — NewNotification). Hoisted from the admin layout to
+          the global tree so a single toast stack serves every authenticated page. */}
+      <ToastProvider>
+        <RealtimeProvider>{children}</RealtimeProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

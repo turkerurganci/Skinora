@@ -10,9 +10,12 @@ namespace Skinora.Realtime.Infrastructure;
 /// SignalR-backed implementation of <see cref="INotificationRealtimePublisher"/>.
 /// Resolves <see cref="IHubContext{T}"/> for <see cref="NotificationsHub"/> and
 /// pushes payloads to the per-user group named by
-/// <see cref="NotificationsHub.GroupName(Guid)"/>. The <c>Maintenance</c>
-/// variant fans out to <see cref="IHubClients.All"/> because the C08 banner
-/// is platform-wide.
+/// <see cref="NotificationsHub.GroupName(Guid)"/>. The three admin-scoped events
+/// target <see cref="NotificationsHub.AdminGroup"/> (T69 K4 — only admins join
+/// it). The <c>Maintenance</c> variant fans out to <see cref="IHubClients.All"/>
+/// because the C08 banner is platform-wide. Every send is best-effort: failures
+/// are logged uniformly (WP9 group-failure observability) and swallowed so a
+/// dropped push never propagates to the outbox dispatcher as a redelivery signal.
 /// </summary>
 public sealed class SignalRNotificationRealtimePublisher : INotificationRealtimePublisher
 {
@@ -60,92 +63,36 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
         CancellationToken cancellationToken) =>
         SendToUserAsync(userId, DiscordConnectedEvent, payload, cancellationToken);
 
-    public async Task PublishMaintenanceStatusChangedAsync(
+    public Task PublishMaintenanceStatusChangedAsync(
         NotificationRealtimePayloads.MaintenanceStatusChanged payload,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _hub.Clients
-                .All
-                .SendAsync(MaintenanceStatusChangedEvent, payload, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "SignalR maintenance push failed.");
-        }
-    }
+        CancellationToken cancellationToken) =>
+        // Platform-wide banner — genuinely everyone (07 §11.2 C08).
+        SendToAllAsync(MaintenanceStatusChangedEvent, payload, cancellationToken);
 
-    public async Task PublishAdminBotStatusChangedAsync(
+    public Task PublishAdminBotStatusChangedAsync(
         NotificationRealtimePayloads.AdminBotStatusChanged payload,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _hub.Clients
-                .All
-                .SendAsync(AdminBotStatusChangedEvent, payload, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Persistence (PlatformSteamBot.Status update + AuditLog row) is
-            // the source of truth; a missed push is recovered on admin
-            // dashboard refresh.
-            _logger.LogWarning(
-                ex,
-                "SignalR admin bot status push failed (botId={BotId}, status={Status}).",
-                payload.BotId, payload.NewStatus);
-        }
-    }
+        CancellationToken cancellationToken) =>
+        SendToGroupAsync(NotificationsHub.AdminGroup, AdminBotStatusChangedEvent, payload, cancellationToken);
 
-    public async Task PublishAdminReconciliationMismatchAsync(
+    public Task PublishAdminReconciliationMismatchAsync(
         NotificationRealtimePayloads.AdminReconciliationMismatch payload,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _hub.Clients
-                .All
-                .SendAsync(AdminReconciliationMismatchEvent, payload, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // The AuditLog RECONCILIATION_MISMATCH row written next to the
-            // push is the durable record; a dropped push surfaces on the
-            // next admin dashboard refresh.
-            _logger.LogWarning(
-                ex,
-                "SignalR reconciliation mismatch push failed (scope={Scope}, address={Address}, token={Token}).",
-                payload.Scope, payload.Address, payload.Token);
-        }
-    }
+        CancellationToken cancellationToken) =>
+        SendToGroupAsync(NotificationsHub.AdminGroup, AdminReconciliationMismatchEvent, payload, cancellationToken);
 
-    public async Task PublishAdminHotWalletThresholdBreachedAsync(
+    public Task PublishAdminHotWalletThresholdBreachedAsync(
         NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _hub.Clients
-                .All
-                .SendAsync(AdminHotWalletThresholdBreachedEvent, payload, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            // Persistence (HOT_WALLET_THRESHOLD_BREACHED AuditLog row) is the
-            // source of truth; a missed push is recovered on admin dashboard
-            // refresh.
-            _logger.LogWarning(
-                ex,
-                "SignalR hot wallet threshold breach push failed (token={Token}, direction={Direction}).",
-                payload.Token, payload.Direction);
-        }
-    }
+        CancellationToken cancellationToken) =>
+        SendToGroupAsync(NotificationsHub.AdminGroup, AdminHotWalletThresholdBreachedEvent, payload, cancellationToken);
 
-    private async Task SendToUserAsync(
+    private Task SendToUserAsync(
         Guid userId,
+        string method,
+        object payload,
+        CancellationToken cancellationToken) =>
+        SendToGroupAsync(NotificationsHub.GroupName(userId), method, payload, cancellationToken);
+
+    private async Task SendToGroupAsync(
+        string group,
         string method,
         object payload,
         CancellationToken cancellationToken)
@@ -153,19 +100,39 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
         try
         {
             await _hub.Clients
-                .Group(NotificationsHub.GroupName(userId))
+                .Group(group)
                 .SendAsync(method, payload, cancellationToken);
         }
         catch (Exception ex)
         {
-            // Realtime delivery is best-effort — frontend re-fetches the inbox
-            // on reconnect (T96), so the caller (dispatcher / inbox service)
-            // must not surface this as a failure that aborts the surrounding
-            // unit of work.
+            // Best-effort: the durable record (Notification row / AuditLog row)
+            // is the source of truth; a dropped push is recovered on the next
+            // page refresh / reconnect (T96). Uniform structured logging (WP9
+            // group-failure observability) keeps every miss queryable in Loki.
             _logger.LogWarning(
                 ex,
-                "SignalR push failed for user {UserId} method {Method}.",
-                userId, method);
+                "SignalR group push failed for group {Group} method {Method}.",
+                group, method);
+        }
+    }
+
+    private async Task SendToAllAsync(
+        string method,
+        object payload,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _hub.Clients
+                .All
+                .SendAsync(method, payload, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "SignalR broadcast push failed for method {Method}.",
+                method);
         }
     }
 }

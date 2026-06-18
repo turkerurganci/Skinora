@@ -321,6 +321,68 @@ public class RealtimeConsumerTests
         Assert.Equal(TransactionStatus.ITEM_ESCROWED, payload.ResumedStatus);
     }
 
+    [Theory]
+    [InlineData(TransactionStatus.ACCEPTED, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER)]
+    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionStatus.ITEM_ESCROWED)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)]
+    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionStatus.ITEM_DELIVERED)]
+    public async Task TransactionStatusChanged_RelaysFromAndToVerbatim(
+        TransactionStatus from, TransactionStatus to)
+    {
+        // WP9 — the generic Steam-transition event is a pure relay: the producer
+        // (dispatch job / webhook handler) captured from/to around the Fire().
+        var publisher = new RecordingRealtimePublisher();
+        var sut = new TransactionStatusChangedRealtimeConsumer(
+            publisher, new InMemoryProcessedEventStore(),
+            NullLogger<TransactionStatusChangedRealtimeConsumer>.Instance);
+
+        var occurredAt = new DateTime(2026, 6, 18, 9, 0, 0, DateTimeKind.Utc);
+        var ev = new TransactionStatusChangedEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            FromStatus: from,
+            ToStatus: to,
+            OccurredAt: occurredAt);
+
+        await sut.Handle(ev, CancellationToken.None);
+
+        var (method, payload) = Assert.Single(publisher.Calls);
+        Assert.Equal("StatusChanged", method);
+        var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(payload);
+        Assert.Equal(ev.TransactionId, status.TransactionId);
+        Assert.Equal(from, status.FromStatus);
+        Assert.Equal(to, status.ToStatus);
+        Assert.Equal(occurredAt, status.Timestamp);
+    }
+
+    [Fact]
+    public async Task PayoutCompleted_PushesStatusChanged_ItemDelivered_To_Completed()
+    {
+        // WP9 — reuses WP1's PayoutCompletedEvent for the Complete → COMPLETED push.
+        var publisher = new RecordingRealtimePublisher();
+        var sut = new PayoutCompletedRealtimeConsumer(
+            publisher, new InMemoryProcessedEventStore(),
+            NullLogger<PayoutCompletedRealtimeConsumer>.Instance);
+
+        var occurredAt = new DateTime(2026, 6, 18, 10, 0, 0, DateTimeKind.Utc);
+        var ev = new PayoutCompletedEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            PayoutTxHash: "0xpayout",
+            NetAmount: 42.5m,
+            OccurredAt: occurredAt);
+
+        await sut.Handle(ev, CancellationToken.None);
+
+        var (method, payload) = Assert.Single(publisher.Calls);
+        Assert.Equal("StatusChanged", method);
+        var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(payload);
+        Assert.Equal(ev.TransactionId, status.TransactionId);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, status.FromStatus);
+        Assert.Equal(TransactionStatus.COMPLETED, status.ToStatus);
+        Assert.Equal(occurredAt, status.Timestamp);
+    }
+
     [Fact]
     public async Task BuyerAccepted_Idempotent_When_EventAlreadyProcessed()
     {

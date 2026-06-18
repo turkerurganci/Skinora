@@ -32,8 +32,9 @@ namespace Skinora.Realtime.Hubs;
 /// <para>
 /// Membership is enforced on <see cref="JoinTransaction(Guid)"/> by checking
 /// that the caller is the buyer or the seller of the transaction. Admins
-/// (T63 forward-deferred) will be permitted via the role claim once the admin
-/// dashboard's transaction-detail surface lands.
+/// (WP9 — T61 K3) are permitted via the JWT role claim
+/// (<see cref="HubClaims.IsAdmin"/>) so the admin transaction-detail surface
+/// (S16) can subscribe to live updates for any transaction.
 /// </para>
 /// </remarks>
 [Authorize]
@@ -78,7 +79,13 @@ public class TransactionsHub : Hub
             throw new HubException("TRANSACTION_NOT_FOUND");
         }
 
-        if (participation.SellerId != userId && participation.BuyerId != userId)
+        // WP9 (T61 K3) — admins join any transaction room (the admin
+        // transaction-detail surface, S16, subscribes to the same hub). Role is
+        // read from the JWT claim, matching the permission gate the admin REST
+        // endpoints already enforce.
+        if (participation.SellerId != userId
+            && participation.BuyerId != userId
+            && !HubClaims.IsAdmin(Context.User))
         {
             _logger.LogWarning(
                 "TransactionsHub join refused: user {UserId} is not a participant of transaction {TransactionId}.",
