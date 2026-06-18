@@ -108,14 +108,14 @@
 | flagged-allocation-detail | **payment-address ✅ ÇÖZÜLDÜ → WP4b** (`FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync`, best-effort); **tx-detail payment/payout/refund/dispute alt-DTO'ları null kısmı → WP13** | T70/T46 K |
 | emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; post-payment refund tetik **✅ WP2**, dispute-queue surfacing **✅ WP5** (AD27 kuyruğu). Kalan kalem yok. | T50/T51/T58 K |
 | fraud-acceptance-gate | **✅ ÇÖZÜLDÜ** — accept-gate → WP4a; background scan (retro-scan) + note max-length → WP4b. (Sinyal üreticileri PRICE_DEVIATION T45/multi-account T56 zaten mevcut) | T54/T56 K |
-| energy-gas-token-config | Statik gas fee, USDC/USDT 1:1, hardcoded 6-decimal, HD cache yok, tek-sweeper (T74 multi-sweeper buraya katlanır), 20-blok finality yok | T72-T76 K |
+| energy-gas-token-config | **Kısmen ✅ → WP10:** gas fee config'lenebilir (`TRANSFER_FEE_LIMIT_SUN` — hardcoded 100 TRX kaldırıldı) + HD address cache (per-index `derive` memoization, private-key cache'lenmez) çözüldü. **By-design/kapsam-dışı:** USDC/USDT 1:1 + hardcoded 6-decimal (by-design TRC-20, §3); tek-sweeper/T74 multi-sweeper (post-MVP ölçek, §3); 20-blok finality **zaten var** (`minConfirmations=20`, stale not). | T72-T76 K |
 | setting-sidecar-propagation | Admin `PATCH /admin/settings` `blockchain.*` + cadence/cron sidecar'a runtime yansımıyor (env restart gerek) | T74/T75/T76/T77 K |
 | admin-alert-consumers | `RefundBlockedAdminAlert`/`TransferDispatchFailed`/stranded-delegation/STOPPED/spam-token/payout-issue alert kanal consumer'ları yok | T53/T60/T72-T77 K |
 | misc-monitoring-probes | Steam/Telegram health probe, Redis webhook idempotency, in-app dispatch, timeout reschedule, ItemEscrowed publish, DROPPED metric | T64/T68/T78/T79 K |
 | signalr-scaling | SignalR in-memory (multi-instance Redis backplane tek-satır DI); CountdownSync/handler/group-failure obs. | T61/T62/T96 K |
 | maintenance-toggle | `PublishMaintenanceStatusChangedAsync` wired ama hiç tetiklenmiyor; admin maintenance-toggle endpoint + setting yok | T62/T84 K |
 | uptime-cache-scaleout | `platformUptimePercent` config sabiti (heartbeat tablo/job yok); `IMemoryCache` (Redis scale-out yok); SET invalidation hook yok | T63a/T86 K |
-| tron-resilience | TronGrid 429 / `TRON_API_KEY_SECONDARY` failover + retry; event_index dedup (txid-only); backup node | T71/T72 K |
+| tron-resilience | **✅ ÇÖZÜLDÜ → WP10** — TronGrid 429/403 → ikincil `TRON_API_KEY` anında failover + sınırlı poll-dostu backoff (okuma yolu, `TronGridClient`); **event_index dedup** txid+gerçek-on-chain-log-index'e yükseltildi (06 §3.8 `(TxHash,EventIndex)` UNIQUE + migration; sidecar `gettransactioninfobyid` `log[]`'tan çözer — trc20 list endpoint event_index vermiyor). Büyüme backup node (Ankr/GetBlock) MVP-dışı (§3). | T71/T72 K |
 | sanctions-expansion | `SanctionedAddress` MANUAL-only (OFAC/EU/UN feed auto-sync yok); Network TRC-20 sabit; AD22 reason UI | T82/T34 K |
 | vpn-fraud | `VpnDetection:Enabled` default off; fraud-modül entegrasyonu + datacenter ASN / commercial VPN listeleri | T83 K |
 | misc-user-features | Per-tx refund override, trade-offer URL DTO, multi-account user UI, brute-force lock, delete atomicity, OPEN_LINK race | T90/T29/T36/T46 K |

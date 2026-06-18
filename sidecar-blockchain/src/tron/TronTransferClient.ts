@@ -1,4 +1,5 @@
 import TronWeb from 'tronweb';
+import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { transfersTotal } from '../metrics.js';
@@ -97,7 +98,9 @@ export class TronTransferClient {
       privateKey: request.privateKey,
     }) as TronWebShape;
 
-    const feeLimit = request.options?.feeLimitSun ?? 100_000_000; // 100 TRX cap, see 08 §3.3
+    // Fee cap (08 §3.3). Per-request override wins; otherwise the operator-tunable
+    // `transferFeeLimitSun` config (WP10 — `TRANSFER_FEE_LIMIT_SUN`, default 100 TRX).
+    const feeLimit = request.options?.feeLimitSun ?? config.transferFeeLimitSun;
     const callValue = request.options?.callValue ?? 0;
 
     try {

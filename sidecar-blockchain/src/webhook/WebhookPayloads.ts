@@ -44,6 +44,13 @@ export interface PaymentDetectedData {
   paymentAddressId: string;
   transactionId: string;
   txHash: string;
+  /**
+   * On-chain log index of this Transfer event within `txHash` (08 §3.4 — WP10).
+   * Together with `txHash` it forms the per-event dedup key on the backend
+   * (`BlockchainTransaction (TxHash, EventIndex)` UNIQUE). The common
+   * single-transfer transaction reports `0`.
+   */
+  eventIndex: number;
   fromAddress: string;
   toAddress: string;
   contractAddress: string;
@@ -64,6 +71,8 @@ export interface PaymentConfirmedData {
   paymentAddressId: string;
   transactionId: string;
   txHash: string;
+  /** On-chain log index — matches the DETECTED row's `(txHash, eventIndex)` (08 §3.4 — WP10). */
+  eventIndex: number;
   blockNumber: number;
   confirmationCount: number;
   confirmedAt: string;
@@ -78,6 +87,8 @@ export interface WrongTokenIncomingData {
   paymentAddressId: string;
   transactionId: string;
   txHash: string;
+  /** On-chain log index of this Transfer event within `txHash` (08 §3.4 — WP10). */
+  eventIndex: number;
   fromAddress: string;
   toAddress: string;
   expectedContractAddress: string;
@@ -97,6 +108,8 @@ export interface SpamTokenIncomingData {
   paymentAddressId: string;
   transactionId: string;
   txHash: string;
+  /** On-chain log index of this Transfer event within `txHash` (08 §3.4 — WP10). */
+  eventIndex: number;
   fromAddress: string;
   toAddress: string;
   expectedContractAddress: string;
@@ -121,6 +134,8 @@ export interface LatePaymentDetectedData {
   paymentAddressId: string;
   transactionId: string;
   txHash: string;
+  /** On-chain log index of this Transfer event within `txHash` (08 §3.4 — WP10). */
+  eventIndex: number;
   fromAddress: string;
   toAddress: string;
   contractAddress: string;

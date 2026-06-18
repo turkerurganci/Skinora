@@ -62,6 +62,14 @@ public sealed class PaymentDetectedData
     [JsonPropertyName("txHash")]
     public string TxHash { get; set; } = string.Empty;
 
+    /// <summary>
+    /// On-chain log index of this Transfer event within <c>txHash</c>
+    /// (08 §3.4 — WP10). With <c>txHash</c> forms the per-event dedup key;
+    /// the common single-transfer transaction reports 0.
+    /// </summary>
+    [JsonPropertyName("eventIndex")]
+    public int EventIndex { get; set; }
+
     [JsonPropertyName("fromAddress")]
     public string FromAddress { get; set; } = string.Empty;
 
@@ -101,6 +109,10 @@ public sealed class PaymentConfirmedData
     [JsonPropertyName("txHash")]
     public string TxHash { get; set; } = string.Empty;
 
+    /// <summary>On-chain log index — matches the DETECTED row's (TxHash, EventIndex) (08 §3.4 — WP10).</summary>
+    [JsonPropertyName("eventIndex")]
+    public int EventIndex { get; set; }
+
     [JsonPropertyName("blockNumber")]
     public long BlockNumber { get; set; }
 
@@ -125,6 +137,10 @@ public sealed class WrongTokenIncomingData
 
     [JsonPropertyName("txHash")]
     public string TxHash { get; set; } = string.Empty;
+
+    /// <summary>On-chain log index of this Transfer event within <c>txHash</c> (08 §3.4 — WP10).</summary>
+    [JsonPropertyName("eventIndex")]
+    public int EventIndex { get; set; }
 
     [JsonPropertyName("fromAddress")]
     public string FromAddress { get; set; } = string.Empty;
@@ -169,6 +185,10 @@ public sealed class LatePaymentDetectedData
 
     [JsonPropertyName("txHash")]
     public string TxHash { get; set; } = string.Empty;
+
+    /// <summary>On-chain log index of this Transfer event within <c>txHash</c> (08 §3.4 — WP10).</summary>
+    [JsonPropertyName("eventIndex")]
+    public int EventIndex { get; set; }
 
     [JsonPropertyName("fromAddress")]
     public string FromAddress { get; set; } = string.Empty;
@@ -245,6 +265,10 @@ public sealed class SpamTokenIncomingData
 
     [JsonPropertyName("txHash")]
     public string TxHash { get; set; } = string.Empty;
+
+    /// <summary>On-chain log index of this Transfer event within <c>txHash</c> (08 §3.4 — WP10).</summary>
+    [JsonPropertyName("eventIndex")]
+    public int EventIndex { get; set; }
 
     [JsonPropertyName("fromAddress")]
     public string FromAddress { get; set; } = string.Empty;

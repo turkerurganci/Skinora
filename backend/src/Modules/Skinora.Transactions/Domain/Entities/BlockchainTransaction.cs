@@ -13,6 +13,20 @@ public class BlockchainTransaction
     public Guid? PaymentAddressId { get; set; }
     public BlockchainTransactionType Type { get; set; }
     public string? TxHash { get; set; }
+
+    /// <summary>
+    /// On-chain log index of the TRC-20 Transfer event within <see cref="TxHash"/>
+    /// (08 §3.4 — WP10 event-index dedup). For inbound monitored rows
+    /// (BUYER_PAYMENT / WRONG_TOKEN_INCOMING / SPAM_TOKEN_INCOMING) this is the
+    /// sidecar-resolved event index — together with <see cref="TxHash"/> it forms
+    /// the per-event uniqueness key, so a single transaction carrying several
+    /// transfers to the deposit address is credited per event. The common
+    /// single-transfer payment reports 0. Outbound rows (refunds / payouts /
+    /// sweep) leave it NULL — they have no inbound event and each carries a
+    /// distinct broadcast TxHash.
+    /// </summary>
+    public int? EventIndex { get; set; }
+
     public string FromAddress { get; set; } = string.Empty;
     public string ToAddress { get; set; } = string.Empty;
     public decimal Amount { get; set; }

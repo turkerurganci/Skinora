@@ -15,10 +15,11 @@ namespace Skinora.Transactions.Application.Webhooks;
 /// (mirrors <see cref="Skinora.Steam.Application.Webhooks.SteamWebhookHandler"/>).
 ///
 /// <para>
-/// Idempotency is enforced by the <c>UQ_BlockchainTransactions_TxHash</c>
-/// unique index (06 §3.8). Duplicate webhook deliveries surface as
-/// <see cref="BlockchainWebhookResult.Idempotent"/> after a row-existence
-/// lookup, which keeps the happy path free of unique-violation exceptions.
+/// Idempotency is enforced by the <c>UQ_BlockchainTransactions_TxHash_EventIndex</c>
+/// unique index (06 §3.8, WP10 — 08 §3.4). Duplicate webhook deliveries surface
+/// as <see cref="BlockchainWebhookResult.Idempotent"/> after a per-event
+/// (TxHash, EventIndex) row-existence lookup, which keeps the happy path free
+/// of unique-violation exceptions.
 /// </para>
 ///
 /// <para>
@@ -75,7 +76,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
-        if (await ExistsByTxHashAsync(data.TxHash, cancellationToken))
+        if (await ExistsByTxHashAndEventIndexAsync(data.TxHash, data.EventIndex, cancellationToken))
         {
             _logger.LogInformation(
                 "PaymentDetected for {TxHash} already recorded — idempotent ack. correlationId={CorrelationId}",
@@ -99,6 +100,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             PaymentAddressId = paymentAddress.Id,
             Type = BlockchainTransactionType.BUYER_PAYMENT,
             TxHash = data.TxHash,
+            EventIndex = data.EventIndex,
             FromAddress = data.FromAddress,
             ToAddress = data.ToAddress,
             Amount = amount,
@@ -140,8 +142,13 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
+        // WP10 (08 §3.4) — match on (TxHash, EventIndex). A transaction with
+        // multiple Transfer events to the deposit address has one DETECTED row
+        // per event; confirming the wrong row would mis-validate the amount.
         var existing = await _db.Set<BlockchainTransaction>()
-            .FirstOrDefaultAsync(b => b.TxHash == data.TxHash, cancellationToken);
+            .FirstOrDefaultAsync(
+                b => b.TxHash == data.TxHash && b.EventIndex == data.EventIndex,
+                cancellationToken);
 
         if (existing is null)
         {
@@ -223,7 +230,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
-        if (await ExistsByTxHashAsync(data.TxHash, cancellationToken))
+        if (await ExistsByTxHashAndEventIndexAsync(data.TxHash, data.EventIndex, cancellationToken))
         {
             _logger.LogInformation(
                 "WrongTokenIncoming for {TxHash} already recorded — idempotent ack. correlationId={CorrelationId}",
@@ -247,6 +254,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             PaymentAddressId = paymentAddress.Id,
             Type = BlockchainTransactionType.WRONG_TOKEN_INCOMING,
             TxHash = data.TxHash,
+            EventIndex = data.EventIndex,
             FromAddress = data.FromAddress,
             ToAddress = data.ToAddress,
             Amount = amount,
@@ -302,7 +310,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
-        if (await ExistsByTxHashAsync(data.TxHash, cancellationToken))
+        if (await ExistsByTxHashAndEventIndexAsync(data.TxHash, data.EventIndex, cancellationToken))
         {
             _logger.LogInformation(
                 "SpamTokenIncoming for {TxHash} already recorded — idempotent ack. correlationId={CorrelationId}",
@@ -327,6 +335,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             PaymentAddressId = paymentAddress.Id,
             Type = BlockchainTransactionType.SPAM_TOKEN_INCOMING,
             TxHash = data.TxHash,
+            EventIndex = data.EventIndex,
             FromAddress = data.FromAddress,
             ToAddress = data.ToAddress,
             Amount = amount,
@@ -373,7 +382,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
-        if (await ExistsByTxHashAsync(data.TxHash, cancellationToken))
+        if (await ExistsByTxHashAndEventIndexAsync(data.TxHash, data.EventIndex, cancellationToken))
         {
             _logger.LogInformation(
                 "LatePaymentDetected for {TxHash} already recorded — idempotent ack. correlationId={CorrelationId}",
@@ -407,6 +416,7 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             PaymentAddressId = paymentAddress.Id,
             Type = BlockchainTransactionType.BUYER_PAYMENT,
             TxHash = data.TxHash,
+            EventIndex = data.EventIndex,
             FromAddress = data.FromAddress,
             ToAddress = data.ToAddress,
             Amount = amount,
@@ -516,8 +526,14 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
     private Task<PaymentAddress?> LoadPaymentAddressAsync(Guid id, CancellationToken cancellationToken)
         => _db.Set<PaymentAddress>().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
-    private Task<bool> ExistsByTxHashAsync(string txHash, CancellationToken cancellationToken)
-        => _db.Set<BlockchainTransaction>().AnyAsync(b => b.TxHash == txHash, cancellationToken);
+    // WP10 (08 §3.4) — idempotency is keyed on (TxHash, EventIndex) so a
+    // transaction carrying several Transfer events to the deposit address is
+    // recorded once per event. The common single-transfer payment uses
+    // EventIndex 0 and behaves exactly as the former TxHash-only check.
+    private Task<bool> ExistsByTxHashAndEventIndexAsync(
+        string txHash, int eventIndex, CancellationToken cancellationToken)
+        => _db.Set<BlockchainTransaction>()
+            .AnyAsync(b => b.TxHash == txHash && b.EventIndex == eventIndex, cancellationToken);
 
     private static bool TryParseAmount(string raw, out decimal amount)
         => decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out amount)

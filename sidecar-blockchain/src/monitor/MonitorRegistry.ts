@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { logger } from '../logger.js';
 import { activeMonitors, transfersTotal } from '../metrics.js';
-import type { Trc20Record, TronGridClient } from '../tron/TronGridClient.js';
+import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
   AnyBlockchainWebhookPayload,
@@ -52,6 +52,7 @@ export interface MonitorRegistryDeps {
 
 interface PendingFinality {
   txHash: string;
+  eventIndex: number;
   blockNumber: number | null;
   firstSeenAt: number;
 }
@@ -61,9 +62,20 @@ interface MonitorState {
   correlationId: string;
   phase1Fingerprint?: string;
   phase2Fingerprint?: string;
-  /** TxHashes for which any event has been emitted — guards against re-emit on polling overlap. */
-  seenTxHashes: Set<string>;
+  /**
+   * `${txHash}:${eventIndex}` keys for which an event has been emitted —
+   * guards against re-emit on polling overlap. WP10 dedups at event-index
+   * granularity (08 §3.4) so a single transaction carrying several Transfer
+   * events to the deposit address surfaces each one exactly once. The common
+   * single-transfer case is `${txHash}:0`.
+   */
+  seenEvents: Set<string>;
   pendingFinality: Map<string, PendingFinality>;
+}
+
+/** Composite dedup / pending-finality key (08 §3.4 — WP10). */
+function eventKey(txHash: string, eventIndex: number): string {
+  return `${txHash}:${eventIndex}`;
 }
 
 /**
@@ -79,11 +91,15 @@ interface MonitorState {
  * </para>
  *
  * <para>
- * Idempotency: per-address `seenTxHashes` is the in-memory dedup layer
- * (sidecar lifetime). Backend defence-in-depth comes from
- * `BlockchainTransaction.TxHash` UNIQUE (06 §3.8). Multi-event TRC-20
- * transactions are not handled at event-index granularity in T71 — see
- * K3 in TASK_REPORTS/T71_REPORT.md.
+ * Idempotency: per-address `seenEvents` is the in-memory dedup layer
+ * (sidecar lifetime), keyed by `${txHash}:${eventIndex}`. Backend
+ * defence-in-depth comes from `BlockchainTransaction (TxHash, EventIndex)`
+ * UNIQUE (06 §3.8). WP10 (08 §3.4) closes the T71 K3 gap: a single TRC-20
+ * transaction carrying multiple Transfer events to the deposit address is
+ * now dedup'd at event-index granularity, with the real on-chain log index
+ * resolved via `TronGridClient.resolveTransferEventIndices`. When the
+ * solidity node has not yet surfaced the logs the resolver falls back to
+ * index 0 (status-quo single-event behaviour) so it never regresses.
  * </para>
  */
 export class MonitorRegistry {
@@ -117,7 +133,7 @@ export class MonitorRegistry {
     this.monitors.set(options.address, {
       options,
       correlationId: crypto.randomUUID(),
-      seenTxHashes: new Set(),
+      seenEvents: new Set(),
       pendingFinality: new Map(),
     });
     activeMonitors.set(this.monitors.size);
@@ -195,9 +211,13 @@ export class MonitorRegistry {
   }
 
   private async pollOne(state: MonitorState): Promise<void> {
+    // Per-tick cache of resolved transfer-log entries keyed by
+    // `${txHash}:${contract}` so multiple list records of the same
+    // transaction share a single `gettransactioninfobyid` lookup (08 §3.4).
+    const logCache = new Map<string, TransferLogEntry[]>();
     try {
-      await this.pollPhase1(state);
-      await this.pollPhase2(state);
+      await this.pollPhase1(state, logCache);
+      await this.pollPhase2(state, logCache);
       if (state.pendingFinality.size > 0) {
         await this.checkFinality(state);
       }
@@ -213,7 +233,10 @@ export class MonitorRegistry {
     }
   }
 
-  private async pollPhase1(state: MonitorState): Promise<void> {
+  private async pollPhase1(
+    state: MonitorState,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<void> {
     const response = await this.deps.client.listTrc20({
       address: state.options.address,
       contractAddress: state.options.expectedContract,
@@ -233,17 +256,24 @@ export class MonitorRegistry {
         );
         continue;
       }
-      await this.emitPaymentDetected(state, record);
-      state.seenTxHashes.add(record.transaction_id);
-      state.pendingFinality.set(record.transaction_id, {
+      const eventIndex = await this.resolveEventIndex(state, record, logCache);
+      const key = eventKey(record.transaction_id, eventIndex);
+      if (state.seenEvents.has(key)) continue;
+      await this.emitPaymentDetected(state, record, eventIndex);
+      state.seenEvents.add(key);
+      state.pendingFinality.set(key, {
         txHash: record.transaction_id,
+        eventIndex,
         blockNumber: null,
         firstSeenAt: this.clock().getTime(),
       });
     }
   }
 
-  private async pollPhase2(state: MonitorState): Promise<void> {
+  private async pollPhase2(
+    state: MonitorState,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<void> {
     const response = await this.deps.client.listTrc20({
       address: state.options.address,
       fingerprint: state.phase2Fingerprint,
@@ -259,35 +289,79 @@ export class MonitorRegistry {
         expectedContract: state.options.expectedContract,
         allowlist: this.deps.allowlist,
       });
+      const eventIndex = await this.resolveEventIndex(state, record, logCache);
+      const key = eventKey(record.transaction_id, eventIndex);
+      if (state.seenEvents.has(key)) continue;
       if (classification.kind === 'expected') {
         // Late catch — phase 1's fingerprint advanced past this record (rare
         // but possible if phase 1's first call missed it). Treat as detected.
-        await this.emitPaymentDetected(state, record);
-        state.pendingFinality.set(record.transaction_id, {
+        await this.emitPaymentDetected(state, record, eventIndex);
+        state.pendingFinality.set(key, {
           txHash: record.transaction_id,
+          eventIndex,
           blockNumber: null,
           firstSeenAt: this.clock().getTime(),
         });
       } else if (classification.kind === 'wrong_token') {
-        await this.emitWrongTokenIncoming(state, record, classification.symbol);
+        await this.emitWrongTokenIncoming(state, record, classification.symbol, eventIndex);
       } else {
-        await this.emitSpamTokenIncoming(state, record);
+        await this.emitSpamTokenIncoming(state, record, eventIndex);
       }
-      state.seenTxHashes.add(record.transaction_id);
+      state.seenEvents.add(key);
     }
+  }
+
+  /**
+   * Resolve the on-chain log index for a trc20-list record (08 §3.4 — WP10).
+   * The record is correlated to its log entry by matching the raw transfer
+   * value, so the per-event amount stays authoritative while a stable, real
+   * event index is assigned. Falls back to index 0 (status-quo single-event
+   * behaviour) when the solidity node has not yet surfaced the logs or the
+   * value cannot be matched — this never regresses the common single-transfer
+   * case and degrades gracefully to today's txid-level behaviour.
+   */
+  private async resolveEventIndex(
+    state: MonitorState,
+    record: Trc20Record,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<number> {
+    const cacheKey = `${record.transaction_id}:${record.token_info.address}`;
+    let entries = logCache.get(cacheKey);
+    if (entries === undefined) {
+      entries = await this.deps.client.resolveTransferEventIndices(
+        record.transaction_id,
+        record.token_info.address,
+        state.options.address,
+      );
+      logCache.set(cacheKey, entries);
+    }
+    for (const entry of entries) {
+      if (entry.value !== record.value) continue;
+      if (state.seenEvents.has(eventKey(record.transaction_id, entry.index))) continue;
+      return entry.index;
+    }
+    return 0;
   }
 
   private async checkFinality(state: MonitorState): Promise<void> {
     const currentSolid = await this.deps.client.getNowSolidBlock();
-    const txs = [...state.pendingFinality.values()];
-    for (const pending of txs) {
+    const pendings = [...state.pendingFinality.values()];
+    // Finality is per-transaction (every event in a tx confirms together), so
+    // resolve each unique txHash's block height exactly once per tick.
+    const blockByTx = new Map<string, number | null>();
+    for (const pending of pendings) {
       if (pending.blockNumber === null) {
-        const info = await this.deps.client.getTransactionInfoById(pending.txHash);
-        if (!info || info.blockNumber === undefined) {
+        let block = blockByTx.get(pending.txHash);
+        if (block === undefined) {
+          const info = await this.deps.client.getTransactionInfoById(pending.txHash);
+          block = info && info.blockNumber !== undefined ? info.blockNumber : null;
+          blockByTx.set(pending.txHash, block);
+        }
+        if (block === null) {
           // Not yet on the solid node — try again next tick.
           continue;
         }
-        pending.blockNumber = info.blockNumber;
+        pending.blockNumber = block;
       }
       if (
         isFinalized({
@@ -301,7 +375,7 @@ export class MonitorRegistry {
           txBlock: pending.blockNumber,
         });
         await this.emitPaymentConfirmed(state, pending, conf);
-        state.pendingFinality.delete(pending.txHash);
+        state.pendingFinality.delete(eventKey(pending.txHash, pending.eventIndex));
       }
     }
   }
@@ -317,18 +391,21 @@ export class MonitorRegistry {
     if (!isIncomingFor(record, state.options.address)) {
       return false;
     }
-    if (state.seenTxHashes.has(record.transaction_id)) {
-      return false;
-    }
+    // Per-event dedup happens after the event index is resolved (08 §3.4).
     return true;
   }
 
-  private async emitPaymentDetected(state: MonitorState, record: Trc20Record): Promise<void> {
+  private async emitPaymentDetected(
+    state: MonitorState,
+    record: Trc20Record,
+    eventIndex: number,
+  ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: PaymentDetectedData = {
       paymentAddressId: state.options.paymentAddressId,
       transactionId: state.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       contractAddress: record.token_info.address,
@@ -358,6 +435,7 @@ export class MonitorRegistry {
       paymentAddressId: state.options.paymentAddressId,
       transactionId: state.options.transactionId,
       txHash: pending.txHash,
+      eventIndex: pending.eventIndex,
       blockNumber: pending.blockNumber,
       confirmationCount: confirmations,
       confirmedAt: this.clock().toISOString(),
@@ -375,12 +453,14 @@ export class MonitorRegistry {
     state: MonitorState,
     record: Trc20Record,
     actualSymbol: StablecoinSymbol,
+    eventIndex: number,
   ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: WrongTokenIncomingData = {
       paymentAddressId: state.options.paymentAddressId,
       transactionId: state.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       expectedContractAddress: state.options.expectedContract,
@@ -399,12 +479,17 @@ export class MonitorRegistry {
     transfersTotal.inc({ type: 'WRONG_TOKEN_INCOMING', status: 'DETECTED' });
   }
 
-  private async emitSpamTokenIncoming(state: MonitorState, record: Trc20Record): Promise<void> {
+  private async emitSpamTokenIncoming(
+    state: MonitorState,
+    record: Trc20Record,
+    eventIndex: number,
+  ): Promise<void> {
     const decimals = record.token_info.decimals ?? 6;
     const data: SpamTokenIncomingData = {
       paymentAddressId: state.options.paymentAddressId,
       transactionId: state.options.transactionId,
       txHash: record.transaction_id,
+      eventIndex,
       fromAddress: record.from,
       toAddress: record.to,
       expectedContractAddress: state.options.expectedContract,

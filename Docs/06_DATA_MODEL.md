@@ -708,7 +708,8 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 | `TransactionId` | guid | FK → Transaction, NOT NULL | |
 | `PaymentAddressId` | guid | FK → PaymentAddress, NULL | Gelen ödemelerde ve `SWEEP`'te ilgili depozit adresi (giden payout/iade'de NULL) |
 | `Type` | int | NOT NULL | Enum: BlockchainTransactionType |
-| `TxHash` | string(100) | NULL, UNIQUE | Blockchain transaction hash (broadcast sonrası) |
+| `TxHash` | string(100) | NULL, UNIQUE (`TxHash`+`EventIndex`) | Blockchain transaction hash (broadcast sonrası) |
+| `EventIndex` | int | NULL, CHECK (`>= 0`) | Gelen TRC-20 Transfer event'inin tx içindeki **on-chain log index**'i (08 §3.4 — WP10). Gelen izlenen kayıtlarda (`BUYER_PAYMENT`/`WRONG_TOKEN_INCOMING`/`SPAM_TOKEN_INCOMING`) `TxHash` ile birlikte per-event tekilliği sağlar — tek bir tx'in depozit adresine birden fazla transfer'i her event için ayrı kredilenir. Tek-transfer'li yaygın ödeme `0`. Giden kayıtlarda (iade/payout/sweep) NULL — gelen event'leri yoktur ve her biri ayrı broadcast `TxHash`'i taşır |
 | `FromAddress` | string(50) | NOT NULL | Gönderen adres |
 | `ToAddress` | string(50) | NOT NULL | Alıcı adres |
 | `Amount` | decimal(18,6) | NOT NULL | Transfer tutarı |
@@ -740,6 +741,9 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 > - **PENDING**: `ConfirmationCount < 20`.
 > - **DETECTED**: `ConfirmationCount = 0`.
 > - **FAILED**: `ConfirmedAt NULL` — başarısız transfer onaylanmış olamaz. `ConfirmationCount` son bilinen değerde kalabilir (kısmi ilerleme sonrası failure); sıfırlanmaz, audit amaçlı korunur.
+> - **EventIndex** (`CK_BlockchainTransactions_EventIndex`, WP10): `EventIndex IS NULL OR EventIndex >= 0`.
+>
+> **Tekillik (WP10 — 08 §3.4):** Tekil indeks `UQ_BlockchainTransactions_TxHash_EventIndex` = `(TxHash, EventIndex) WHERE TxHash IS NOT NULL` (eski yalnız-`TxHash` tekil indeksinin yerine). Tek bir blockchain transaction'ı depozit adresine birden fazla TRC-20 Transfer event'i taşıdığında, kayıt tek satıra daraltılmak yerine **her event için ayrı** tutulur (idempotency `(TxHash, EventIndex)` üzerinden). Giden kayıtlar `EventIndex` NULL taşır ama her broadcast farklı bir `TxHash` ürettiği için `(TxHash, NULL)` çiftleri çakışmaz. On-chain event index, sidecar tarafında `gettransactioninfobyid` log dizisinden çözülür; solidity node henüz log'u yüzeye çıkarmamışsa index 0'a düşülür (status-quo tek-event davranışı — regresyon yok).
 
 ---
 
@@ -1405,7 +1409,7 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | PaymentAddress | TransactionId | 1:1 ilişki garantisi |
 | PaymentAddress | Address | Benzersiz blockchain adresi |
 | PaymentAddress | HdWalletIndex | Derivation index reuse engeli — monoton artan, arşivleme sonrası da global tekillik korunur |
-| BlockchainTransaction | TxHash (WHERE NOT NULL) | Blockchain transaction tekrar kontrolü |
+| BlockchainTransaction | TxHash + EventIndex (WHERE TxHash NOT NULL) | Blockchain transaction tekrar kontrolü — per-event (WP10, 08 §3.4); tek tx'in birden fazla Transfer event'i her event için ayrı kredilenir |
 | TradeOffer | SteamTradeOfferId (WHERE NOT NULL) | Steam trade offer tekrar kontrolü — retry/entegrasyon hatalarında çift kayıt engeli |
 | Transaction | InviteToken (WHERE NOT NULL) | Açık link token benzersizliği |
 | PlatformSteamBot | SteamId | Benzersiz bot hesabı |
