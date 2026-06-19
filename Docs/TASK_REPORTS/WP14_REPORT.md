@@ -80,9 +80,9 @@ WP14'ün üç iş kolu, owner kararları (AskUserQuestion 2026-06-19: B=runbook+
 ## Commit & PR
 
 - Branch: `task/WP14-settings-propagation`
-- Commit: `<hash>` — WP14: settings propagation
-- PR: #<PR>
-- CI: ⏳
+- Commit: `28c7ffa` — WP14: Settings propagasyon — cron re-register + cron validation + deploy runbook
+- PR: #187
+- CI: ⏳ (izleniyor)
 
 ## Known Limitations / Follow-up
 
