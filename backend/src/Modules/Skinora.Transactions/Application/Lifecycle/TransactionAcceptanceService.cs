@@ -165,14 +165,19 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 ex.Message);
         }
 
-        // 02 §12.3 — accepting the transaction sets the refund-address change
-        // timestamp so the cooldown window starts ticking from this moment
-        // for the buyer (mirrors T34 wallet-change semantics for the wire path).
-        if (!string.Equals(buyer.DefaultRefundAddress, request.RefundWalletAddress, StringComparison.Ordinal))
-        {
-            buyer.DefaultRefundAddress = request.RefundWalletAddress;
-            buyer.RefundAddressChangedAt = nowUtc;
-        }
+        // WP12 (T90 K4) — the accept-time refund address is a PER-TRANSACTION
+        // snapshot only. 02 §12.2 ("işlem bazlı adres") + 04 §7.3 ("yalnızca bu
+        // işlem için geçerli adres değişikliği, profil adresi etkilenmez") +
+        // 02 §12.3 snapshot prensibi: entering a different address while
+        // accepting must NOT mutate the buyer's profile default
+        // (User.DefaultRefundAddress) and must NOT start the profile-level
+        // refund-address cooldown. The Stage-5 cooldown gate above still READS
+        // the profile cooldown — an in-progress *profile* address change (T34
+        // wallet flow) still blocks acceptance per 02 §12.3 — but acceptance
+        // itself only fixes transaction.BuyerRefundAddress (Stage 6). The prior
+        // T46 implementation wrote DefaultRefundAddress + RefundAddressChangedAt
+        // here, which contradicted the snapshot principle and could lock the
+        // buyer out of accepting other open invites within the cooldown window.
 
         // ---------- Stage 7: outbox publish (T62/T78–T80 consume) ----------
         await _outbox.PublishAsync(
@@ -186,7 +191,34 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 OccurredAt: nowUtc),
             cancellationToken);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // WP12 (T46) — OPEN_LINK first-comer race. Two concurrent accepts
+            // both pass the CREATED state guard (Stage 2), both mutate the row
+            // in their own tracked context, and both reach SaveChanges. The
+            // RowVersion optimistic-concurrency token (AppDbContext
+            // OnModelCreating) lets exactly one win; the loser's UPDATE matches
+            // zero rows → DbUpdateConcurrencyException. Surface it as the same
+            // 409 ALREADY_ACCEPTED the sequential guard (Stage 2) returns, not
+            // an unhandled 500. Re-read the persisted status with a fresh
+            // no-tracking query (the tracked entity is stale) and only swallow
+            // when the row really did reach ACCEPTED — any other state is
+            // unexpected and re-throws unchanged.
+            var persistedStatus = await _db.Set<Transaction>()
+                .AsNoTracking()
+                .Where(t => t.Id == transactionId)
+                .Select(t => (TransactionStatus?)t.Status)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (persistedStatus == TransactionStatus.ACCEPTED)
+                return Failure(AcceptTransactionStatus.AlreadyAccepted,
+                    TransactionErrorCodes.AlreadyAccepted,
+                    "Transaction has already been accepted.");
+            throw;
+        }
 
         return new AcceptTransactionOutcome(
             AcceptTransactionStatus.Accepted,

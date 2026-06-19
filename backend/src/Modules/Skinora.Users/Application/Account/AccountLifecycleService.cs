@@ -82,6 +82,20 @@ public sealed class AccountLifecycleService : IAccountLifecycleService
 
         var now = _clock.GetUtcNow().UtcDateTime;
 
+        // WP12 (T36) — account deletion fans PII anonymization across three
+        // SaveChanges round-trips (User, then notification preferences/
+        // deliveries, then auth refresh tokens). All three services share the
+        // same scoped AppDbContext, so wrapping them in one explicit DB
+        // transaction makes the whole 06 §6.2 anonymization atomic: a failure
+        // between steps can no longer leave the User anonymized while
+        // notification ExternalIds or refresh-token DeviceInfo/IpAddress still
+        // carry PII. No retry execution strategy is configured on AppDbContext,
+        // so BeginTransactionAsync is used directly (same pattern as
+        // TransactionCancellationService). Cache eviction inside the auth
+        // anonymizer is not transactional, but a rolled-back delete only forces
+        // a benign DB re-read of a token that is, in fact, still valid.
+        await using var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken);
+
         // 06 §6.2 — anonymize User fields that carry PII. Transaction /
         // TransactionHistory / AuditLog / UserLoginLog rows are untouched
         // (kept as anonymous audit trail).
@@ -94,6 +108,8 @@ public sealed class AccountLifecycleService : IAccountLifecycleService
 
         await _notificationAnonymizer.AnonymizeAsync(userId, cancellationToken);
         await _authAnonymizer.AnonymizeSessionsAsync(userId, cancellationToken);
+
+        await dbTx.CommitAsync(cancellationToken);
 
         return new AccountDeleteOutcome.Success(now);
     }

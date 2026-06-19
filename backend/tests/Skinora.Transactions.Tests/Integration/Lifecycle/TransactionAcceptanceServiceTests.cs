@@ -96,10 +96,13 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(_seller.Id, evt.SellerId);
         Assert.Equal(_buyer.Id, evt.BuyerId);
 
-        // RefundAddressChangedAt updated → cooldown timer starts ticking.
+        // WP12 (T90 K3) — the accept-time refund address is a per-transaction
+        // snapshot only (asserted on Transaction.BuyerRefundAddress above).
+        // Accepting must NOT mutate the buyer's profile default or start the
+        // profile-level cooldown (02 §12.2, 04 §7.3 "profil adresi etkilenmez").
         var buyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _buyer.Id);
-        Assert.Equal(ValidWallet2, buyer.DefaultRefundAddress);
-        Assert.NotNull(buyer.RefundAddressChangedAt);
+        Assert.Null(buyer.DefaultRefundAddress);
+        Assert.Null(buyer.RefundAddressChangedAt);
     }
 
     [Fact]
@@ -197,6 +200,102 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
         Assert.Equal(AcceptTransactionStatus.AlreadyAccepted, second.Status);
         Assert.Equal(TransactionErrorCodes.AlreadyAccepted, second.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Open_Link_Concurrent_Accept_Race_Loser_Returns_AlreadyAccepted_Not_500()
+    {
+        // WP12 (T46) — two buyers accept the same OPEN_LINK invite at once: both
+        // pass the CREATED state guard, then the race-loser's SaveChanges hits
+        // the RowVersion optimistic-concurrency token. RaceAcceptDbContext
+        // commits a competing accept (bumping RowVersion) in the window just
+        // before the SUT saves, so the SUT's UPDATE matches zero rows →
+        // DbUpdateConcurrencyException. The service must surface that as 409
+        // ALREADY_ACCEPTED, not an unhandled 500.
+        var transaction = await CreateTransactionAsync(
+            BuyerIdentificationMethod.OPEN_LINK, targetSteamId: null);
+        var winner = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198000000777",
+            SteamDisplayName = "RaceWinner",
+        };
+        Context.Set<User>().Add(winner);
+        await Context.SaveChangesAsync();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(ConnectionString)
+            .Options;
+        await using var raceDb = new RaceAcceptDbContext(options, async () =>
+        {
+            await using var competing = new AppDbContext(options);
+            var row = await competing.Set<Transaction>().SingleAsync(t => t.Id == transaction.Id);
+            row.BuyerId = winner.Id;
+            row.BuyerRefundAddress = ValidWallet1;
+            row.Status = TransactionStatus.ACCEPTED;
+            row.AcceptedAt = _clock.GetUtcNow().UtcDateTime;
+            await competing.SaveChangesAsync();
+        });
+
+        var sut = new TransactionAcceptanceService(
+            raceDb,
+            new Trc20AddressValidator(),
+            new NoMatchWalletSanctionsCheck(),
+            new StubAccountFlagChecker(false),
+            _outbox,
+            _clock);
+
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.AlreadyAccepted, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.AlreadyAccepted, outcome.ErrorCode);
+
+        // The winner's accept stuck; the loser overwrote nothing.
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(winner.Id, persisted.BuyerId);
+    }
+
+    [Fact]
+    public async Task Concurrent_Cancel_During_Accept_Rethrows_Not_Masked_As_AlreadyAccepted()
+    {
+        // WP12 (T46) — the concurrency catch only swallows when the row really
+        // reached ACCEPTED. A competing CANCEL during the accept save flips the
+        // row to a non-ACCEPTED terminal state; the re-query then fails the
+        // ACCEPTED check and the original DbUpdateConcurrencyException re-throws
+        // unmasked (it must not be mislabelled ALREADY_ACCEPTED / swallowed).
+        var transaction = await CreateTransactionAsync(
+            BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(ConnectionString)
+            .Options;
+        await using var raceDb = new RaceAcceptDbContext(options, async () =>
+        {
+            await using var competing = new AppDbContext(options);
+            var row = await competing.Set<Transaction>().SingleAsync(t => t.Id == transaction.Id);
+            row.Status = TransactionStatus.CANCELLED_ADMIN;
+            row.CancelledBy = CancelledByType.ADMIN;
+            row.CancelReason = "admin cancel during accept (test)";
+            row.CancelledAt = _clock.GetUtcNow().UtcDateTime;
+            await competing.SaveChangesAsync();
+        });
+
+        var sut = new TransactionAcceptanceService(
+            raceDb,
+            new Trc20AddressValidator(),
+            new NoMatchWalletSanctionsCheck(),
+            new StubAccountFlagChecker(false),
+            _outbox,
+            _clock);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            sut.AcceptAsync(
+                _buyer.Id, transaction.Id,
+                new AcceptTransactionRequest(ValidWallet2),
+                CancellationToken.None));
     }
 
     [Fact]
@@ -353,11 +452,17 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Same_Refund_Address_Does_Not_Reset_Cooldown_Timer()
+    public async Task Accept_With_Different_Address_Does_Not_Mutate_Profile_Default()
     {
-        // Buyer's existing default address matches the request → no
-        // RefundAddressChangedAt update; cooldown remains untouched.
-        _buyer.DefaultRefundAddress = ValidWallet2;
+        // WP12 (T90 K3) — even when the accept-time address differs from the
+        // buyer's profile default, accepting leaves User.DefaultRefundAddress +
+        // RefundAddressChangedAt untouched (02 §12.2, 04 §7.3 "profil adresi
+        // etkilenmez"). The per-transaction address lives only on
+        // Transaction.BuyerRefundAddress. This replaces the prior
+        // "same address does not reset cooldown" test — the accept path no
+        // longer writes the profile at all, so the differentiating branch is
+        // gone and the meaningful invariant is "profile is never touched".
+        _buyer.DefaultRefundAddress = ValidWallet1;
         _buyer.RefundAddressChangedAt = null;
         Context.Set<User>().Update(_buyer);
         await Context.SaveChangesAsync();
@@ -372,8 +477,11 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(ValidWallet2, persisted.BuyerRefundAddress); // snapshot = request
         var buyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _buyer.Id);
-        Assert.Null(buyer.RefundAddressChangedAt);
+        Assert.Equal(ValidWallet1, buyer.DefaultRefundAddress);   // profile unchanged
+        Assert.Null(buyer.RefundAddressChangedAt);                // no cooldown started
     }
 
     private async Task<Transaction> CreateTransactionAsync(
@@ -447,5 +555,28 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         public StubAccountFlagChecker(bool flagged) => _flagged = flagged;
         public Task<bool> HasActiveAccountFlagAsync(Guid userId, CancellationToken cancellationToken)
             => Task.FromResult(_flagged);
+    }
+
+    // WP12 (T46) — fires the injected hook once, immediately before the first
+    // Transaction-modifying SaveChanges, to commit a competing write that bumps
+    // the row's RowVersion and force the optimistic-concurrency conflict the
+    // accept path must translate (mirrors the WP1/WP2 RaceDbContext seam).
+    private sealed class RaceAcceptDbContext : AppDbContext
+    {
+        private readonly Func<Task> _injectBeforeSave;
+        private bool _fired;
+
+        public RaceAcceptDbContext(DbContextOptions<AppDbContext> options, Func<Task> injectBeforeSave)
+            : base(options) => _injectBeforeSave = injectBeforeSave;
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (!_fired && ChangeTracker.Entries<Transaction>().Any(e => e.State == EntityState.Modified))
+            {
+                _fired = true;
+                await _injectBeforeSave();
+            }
+            return await base.SaveChangesAsync(cancellationToken);
+        }
     }
 }

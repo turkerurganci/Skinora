@@ -6,6 +6,7 @@ using Skinora.Steam.Application.BotSelection;
 using Skinora.Steam.Application.Dispatch;
 using Skinora.Steam.Application.Inventory;
 using Skinora.Steam.Application.Recovery;
+using Skinora.Steam.Application.Trade;
 using Skinora.Steam.Application.Webhooks;
 using Skinora.Shared.Steam;
 using Skinora.Transactions.Application.Steam;
@@ -58,6 +59,11 @@ public static class SteamModule
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryReader, SidecarSteamInventoryReader>());
         services.Replace(ServiceDescriptor.Scoped<ISteamInventoryCacheInvalidator>(sp =>
             sp.GetRequiredService<HttpSteamSidecarInventoryClient>()));
+
+        // WP12 (T90 K3) — swap the Transactions-side null trade-offer URL
+        // resolver (TryAddScoped) with the DB-backed resolver. Skinora.Steam
+        // owns the TradeOffer entity (06 §3.9) so the query lives here.
+        services.Replace(ServiceDescriptor.Scoped<ISteamTradeOfferUrlResolver, SteamTradeOfferUrlResolver>());
 
         // WP6 — sidecar trade-hold / Mobile Authenticator probe (08 §2.2).
         // Own typed client (separate timeout from inventory pagination) sharing

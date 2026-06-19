@@ -3,6 +3,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -560,5 +561,62 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         return transaction;
     }
 
-    private TransactionDetailService BuildSut() => new(Context, _clock);
+    private TransactionDetailService BuildSut(ISteamTradeOfferUrlResolver? tradeOfferUrls = null)
+        => new(Context, _clock, tradeOfferUrls ?? new NullSteamTradeOfferUrlResolver());
+
+    // WP12 (T90 K3) — records the direction it was asked for so the wiring test
+    // can assert the detail service requests the correct offer per state.
+    private sealed class RecordingTradeOfferUrlResolver(string? url) : ISteamTradeOfferUrlResolver
+    {
+        public TradeOfferDirection? CalledWith { get; private set; }
+
+        public Task<string?> ResolveUrlAsync(
+            Guid transactionId, TradeOfferDirection direction, CancellationToken cancellationToken)
+        {
+            CalledWith = direction;
+            return Task.FromResult(url);
+        }
+    }
+
+    [Fact]
+    public async Task SteamTradeOfferUrl_Surfaced_For_TradeOfferSentToSeller()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, buyerId: _buyer.Id);
+        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/9988/");
+
+        var outcome = await BuildSut(resolver)
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Equal(TradeOfferDirection.TO_SELLER, resolver.CalledWith);
+        Assert.Equal("https://steamcommunity.com/tradeoffer/9988/", outcome.Body!.SteamTradeOfferUrl);
+    }
+
+    [Fact]
+    public async Task SteamTradeOfferUrl_Surfaced_For_TradeOfferSentToBuyer()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, buyerId: _buyer.Id);
+        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/7766/");
+
+        var outcome = await BuildSut(resolver)
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Equal(TradeOfferDirection.TO_BUYER, resolver.CalledWith);
+        Assert.Equal("https://steamcommunity.com/tradeoffer/7766/", outcome.Body!.SteamTradeOfferUrl);
+    }
+
+    [Fact]
+    public async Task SteamTradeOfferUrl_Null_And_Resolver_Untouched_For_NonTradeOffer_State()
+    {
+        var transaction = await CreateTransactionAsync(TransactionStatus.ACCEPTED, buyerId: _buyer.Id);
+        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/0/");
+
+        var outcome = await BuildSut(resolver)
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Null(resolver.CalledWith);
+        Assert.Null(outcome.Body!.SteamTradeOfferUrl);
+    }
 }

@@ -35,7 +35,12 @@ public static class SystemSettingSeed
         Unconfigured( 4, "payment_timeout_max_minutes",                 "int",     "Timeout",     "Ödeme timeout maksimum"),
         Unconfigured( 5, "payment_timeout_default_minutes",             "int",     "Timeout",     "Ödeme timeout varsayılan"),
         Unconfigured( 6, "trade_offer_buyer_timeout_minutes",           "int",     "Timeout",     "Alıcı trade offer timeout süresi"),
-        Unconfigured( 7, "timeout_warning_ratio",                       "decimal", "Timeout",     "Uyarı gönderim oranı (ör: 0.75)"),
+        // WP12 (T83a/T45) — seeded with the 06 §3.17 documented default (0.75)
+        // so it is no longer deploy-mandatory. Consumed two ways: the warning
+        // notification job (TimeoutSchedulingService) schedules at ratio × window,
+        // and the read-path timeout DTOs (07 §7.1/§7.5 WarningThresholdPercent)
+        // surface ratio × 100. Admin-tunable open-(0,1) ratio (SystemSettingsValidator).
+        Default     ( 7, "timeout_warning_ratio",                       "decimal", "Timeout",     "0.75",  "Uyarı gönderim oranı (ör: 0.75)"),
         Default     ( 8, "commission_rate",                             "decimal", "Commission",  "0.02",  "Komisyon oranı (%2)"),
         Unconfigured( 9, "min_transaction_amount",                      "decimal", "Limit",       "Minimum işlem tutarı"),
         Unconfigured(10, "max_transaction_amount",                      "decimal", "Limit",       "Maksimum işlem tutarı"),

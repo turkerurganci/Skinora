@@ -37,6 +37,10 @@ public sealed record TransactionDetailDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<PaymentEventDto>? PaymentEvents,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EscrowBotAssetId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DeliveredBuyerAssetId,
+    // WP12 (T90 K3) — Steam trade-offer URL, surfaced only in
+    // TRADE_OFFER_SENT_TO_SELLER / TRADE_OFFER_SENT_TO_BUYER (04 §7.3 "Steam'e
+    // git linki"); null in every other state and the public/trimmed shape.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SteamTradeOfferUrl,
     AvailableActionsDto AvailableActions,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CreatedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? UpdatedAt);

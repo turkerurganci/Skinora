@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Lifecycle;
@@ -205,6 +206,30 @@ public sealed class TransactionListServiceTests : IDisposable
         Assert.NotNull(item.ActiveTimeout);
         Assert.Equal(expectedType, item.ActiveTimeout.Type);
         Assert.Equal(75, item.ActiveTimeout.WarningThresholdPercent);
+    }
+
+    [Fact]
+    public async Task ActiveTimeout_WarningThreshold_Reflects_Configured_Ratio()
+    {
+        // WP12 (T83a) — the read-path now derives WarningThresholdPercent from
+        // the timeout_warning_ratio SystemSetting (ratio × 100), not a hardcoded
+        // 75. Lower the seeded 0.75 to 0.50 and the surfaced percent follows.
+        await SeedUsersAsync();
+        var tx = await SeedTxAsync(TransactionStatus.CREATED, sellerId: _seller.Id, buyerId: _buyer.Id);
+        tx.AcceptDeadline = _clock.GetUtcNow().UtcDateTime.AddMinutes(10);
+        await _db.SaveChangesAsync();
+
+        var ratioRow = await _db.Set<SystemSetting>()
+            .SingleAsync(s => s.Key == "timeout_warning_ratio");
+        ratioRow.Value = "0.50";
+        ratioRow.IsConfigured = true;
+        await _db.SaveChangesAsync();
+
+        var result = await _sut.ListAsync(_seller.Id, Query(TransactionListTab.Active), default);
+
+        var item = Assert.Single(result.Items);
+        Assert.NotNull(item.ActiveTimeout);
+        Assert.Equal(50, item.ActiveTimeout.WarningThresholdPercent);
     }
 
     [Fact]

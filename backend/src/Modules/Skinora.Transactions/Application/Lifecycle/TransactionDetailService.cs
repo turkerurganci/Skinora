@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
@@ -21,7 +22,6 @@ namespace Skinora.Transactions.Application.Lifecycle;
 public sealed class TransactionDetailService : ITransactionDetailService
 {
     private const string TronNetworkLabel = "Tron (TRC-20)";
-    private const int DefaultTimeoutWarningPercent = 75;
 
     private static readonly TransactionStatus[] _activeStatesForCancel =
     [
@@ -33,11 +33,14 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly ISteamTradeOfferUrlResolver _tradeOfferUrls;
 
-    public TransactionDetailService(AppDbContext db, TimeProvider clock)
+    public TransactionDetailService(
+        AppDbContext db, TimeProvider clock, ISteamTradeOfferUrlResolver tradeOfferUrls)
     {
         _db = db;
         _clock = clock;
+        _tradeOfferUrls = tradeOfferUrls;
     }
 
     public async Task<TransactionDetailOutcome> GetAsync(
@@ -219,7 +222,22 @@ public sealed class TransactionDetailService : ITransactionDetailService
             ImageUrl: transaction.ItemIconUrl,
             Wear: transaction.ItemExterior);
 
-        var timeout = BuildTimeout(transaction, nowUtc);
+        var warningPercent = await TimeoutWarningThreshold.ReadPercentAsync(_db, cancellationToken);
+        var timeout = BuildTimeout(transaction, nowUtc, warningPercent);
+
+        // WP12 (T90 K3) — surface the Steam "go to Steam" trade-offer link only
+        // in the two states 04 §7.3 calls for it. The resolver returns null when
+        // the dispatch row carries no SteamTradeOfferId yet (PENDING) or the
+        // Steam module is not composed.
+        var tradeOfferDirection = transaction.Status switch
+        {
+            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => (TradeOfferDirection?)TradeOfferDirection.TO_SELLER,
+            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => TradeOfferDirection.TO_BUYER,
+            _ => null,
+        };
+        var tradeOfferUrl = tradeOfferDirection is { } direction
+            ? await _tradeOfferUrls.ResolveUrlAsync(transaction.Id, direction, cancellationToken)
+            : null;
 
         InviteInfoDto? invite = null;
         if (role == "seller"
@@ -310,6 +328,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             PaymentEvents: ProducePaymentEventsArray(transaction),
             EscrowBotAssetId: transaction.EscrowBotAssetId,
             DeliveredBuyerAssetId: transaction.DeliveredBuyerAssetId,
+            SteamTradeOfferUrl: tradeOfferUrl,
             AvailableActions: actions,
             CreatedAt: transaction.CreatedAt,
             UpdatedAt: transaction.UpdatedAt);
@@ -362,6 +381,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             PaymentEvents: null,
             EscrowBotAssetId: null,
             DeliveredBuyerAssetId: null,
+            SteamTradeOfferUrl: null,
             AvailableActions: new AvailableActionsDto(
                 CanAccept: false,
                 CanCancel: null,
@@ -392,7 +412,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
         return Array.Empty<PaymentEventDto>();
     }
 
-    private static TransactionTimeoutDto? BuildTimeout(Transaction transaction, DateTime nowUtc)
+    private static TransactionTimeoutDto? BuildTimeout(Transaction transaction, DateTime nowUtc, int warningPercent)
     {
         // 07 §7.5 timeout block — surfaced when an active deadline is in
         // play. Terminal states (COMPLETED, CANCELLED_*) hide the block.
@@ -422,7 +442,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Type: type,
             ExpiresAt: expiresAt,
             RemainingSeconds: remaining,
-            WarningThresholdPercent: DefaultTimeoutWarningPercent,
+            WarningThresholdPercent: warningPercent,
             Frozen: frozen,
             FrozenReason: transaction.TimeoutFreezeReason?.ToString(),
             FrozenAt: transaction.TimeoutFrozenAt);
