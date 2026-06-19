@@ -104,9 +104,9 @@ Genesis/transition History yazımı 3 API endpoint factory'sinin `Reset()`'ini k
 ## Commit & PR
 
 - Branch: `task/WP15-reputation-trigger`
-- Commit: (push'ta)
+- Commit: `144f12e` (kod+test) + `5079e0e` (PR no docs)
 - PR: [#188](https://github.com/turkerurganci/Skinora/pull/188)
-- CI: ⏳
+- CI: ✓ PASS — HEAD `5079e0e` run [`27846588488`](https://github.com/turkerurganci/Skinora/actions/runs/27846588488) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/Migration dry-run/Docker/Gate)
 
 ## Known Limitations / Follow-up
 
