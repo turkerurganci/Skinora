@@ -15,9 +15,12 @@ namespace Skinora.API.Services.HotWallet;
 /// the hosted service is a singleton, so the scheduler is resolved through
 /// an <see cref="IServiceScopeFactory"/> to keep the DI validator happy.
 /// </summary>
-public sealed class HotWalletMonitorJobRegistrar : IHostedService
+public sealed class HotWalletMonitorJobRegistrar : IHostedService, ICronJobReconfigurer
 {
     public const string ScheduleCronKey = "hot_wallet.monitor_cron";
+
+    /// <inheritdoc />
+    public string CronSettingKey => ScheduleCronKey;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<HotWalletMonitorJobRegistrar> _logger;
@@ -40,10 +43,7 @@ public sealed class HotWalletMonitorJobRegistrar : IHostedService
 
             var cron = await ReadCronAsync(db, cancellationToken);
 
-            scheduler.AddOrUpdateRecurring<HotWalletMonitorJob>(
-                HotWalletMonitorJob.RecurringJobId,
-                job => job.Execute(),
-                cron);
+            RegisterRecurring(scheduler, cron);
 
             _logger.LogInformation(
                 "HotWalletMonitorJob registered with cron '{Cron}'.", cron);
@@ -56,6 +56,20 @@ public sealed class HotWalletMonitorJobRegistrar : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public void Reconfigure(string cronExpression)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var scheduler = scope.ServiceProvider.GetRequiredService<IBackgroundJobScheduler>();
+        RegisterRecurring(scheduler, cronExpression);
+    }
+
+    private static void RegisterRecurring(IBackgroundJobScheduler scheduler, string cron) =>
+        scheduler.AddOrUpdateRecurring<HotWalletMonitorJob>(
+            HotWalletMonitorJob.RecurringJobId,
+            job => job.Execute(),
+            cron);
 
     private static async Task<string> ReadCronAsync(
         AppDbContext db, CancellationToken cancellationToken)

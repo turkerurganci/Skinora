@@ -203,4 +203,86 @@ public class SystemSettingsServiceTests : IntegrationTestBase
         var failed = Assert.IsType<UpdateSettingOutcome.ValidationFailed>(outcome);
         Assert.Contains("payment_timeout_min_minutes", failed.Message);
     }
+
+    // ---- WP14 — cron-schedule keys + settings-change propagation ----
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task UpdateAsync_Cron_Key_Invalid_Returns_ValidationFailed_And_Does_Not_Save()
+    {
+        var service = CreateService();
+
+        var outcome = await service.UpdateAsync(
+            "reconciliation.schedule_cron",
+            new UpdateSettingRequest("not a cron"),
+            _admin.Id,
+            ipAddress: null,
+            CancellationToken.None);
+
+        var failed = Assert.IsType<UpdateSettingOutcome.ValidationFailed>(outcome);
+        Assert.Contains("reconciliation.schedule_cron", failed.Message);
+
+        await using var readCtx = CreateContext();
+        var setting = await readCtx.Set<SystemSetting>()
+            .FirstAsync(s => s.Key == "reconciliation.schedule_cron");
+        Assert.Equal("0 3 * * *", setting.Value); // unchanged seed default
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task UpdateAsync_Cron_Key_Valid_Saves_And_Invokes_Propagator_With_New_Value()
+    {
+        var spy = new SpyPropagator();
+        var service = new SystemSettingsService(
+            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy);
+
+        var outcome = await service.UpdateAsync(
+            "reconciliation.schedule_cron",
+            new UpdateSettingRequest("0 4 * * *"),
+            _admin.Id,
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.IsType<UpdateSettingOutcome.Success>(outcome);
+
+        var call = Assert.Single(spy.Calls);
+        Assert.Equal("reconciliation.schedule_cron", call.Key);
+        Assert.Equal("0 4 * * *", call.Value);
+
+        await using var readCtx = CreateContext();
+        var setting = await readCtx.Set<SystemSetting>()
+            .FirstAsync(s => s.Key == "reconciliation.schedule_cron");
+        Assert.Equal("0 4 * * *", setting.Value);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task UpdateAsync_Invalid_Value_Does_Not_Invoke_Propagator()
+    {
+        // Propagation must run only after a committed write — a rejected value
+        // never reaches the side-effect hook.
+        var spy = new SpyPropagator();
+        var service = new SystemSettingsService(
+            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy);
+
+        await service.UpdateAsync(
+            "commission_rate",
+            new UpdateSettingRequest("not-a-decimal"),
+            _admin.Id,
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Empty(spy.Calls);
+    }
+
+    private sealed class SpyPropagator : ISettingChangePropagator
+    {
+        public List<(string Key, string Value)> Calls { get; } = new();
+
+        public Task PropagateAsync(string key, string value, CancellationToken cancellationToken)
+        {
+            Calls.Add((key, value));
+            return Task.CompletedTask;
+        }
+    }
 }

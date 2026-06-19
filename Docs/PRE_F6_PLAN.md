@@ -158,10 +158,11 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **İş:** Yasal sayfalar (/privacy /terms /support) + login→dashboard redirect; admin tablo tıkla-sırala (API hazır); url-state-sync; profil pre-fill + next/image; dispute-detail polish; client permission guard; enum sync; NEXT_LOCALE cookie; deprecated alias temizliği.
 **Efor:** M–L
 
-### WP14 — Settings propagasyon + 21 ayar
-**Backlog:** setting-sidecar-propagation · T55-DormantThreshold (21 zorunlu) · timeout-warning-setting
-**Kanıt:** `SystemSettingsService.UpdateAsync` (`:68`) yalnız DB+audit; sidecar env-only boot; cron `StartAsync`'te register; `SettingsBootstrapTests.cs:92` "21 mandatory rows".
-**İş:** cron key update'inde job re-register; sidecar `blockchain.*`/cadence runtime push/pull; 21 zorunlu ayar için seed-default veya **deploy runbook** (env var listesi belgelenir).
+### WP14 — Settings propagasyon + 19 ayar ✅
+**Backlog:** setting-sidecar-propagation ✅ · T55-DormantThreshold ✅ · ~~timeout-warning-setting~~ (zaten WP12 ✅)
+**Kanıt:** `SystemSettingsService.UpdateAsync` (`:68`) yalnız DB+audit; sidecar env-only boot; cron `StartAsync`'te register; `SettingsBootstrapTests.cs:92` "19 mandatory rows" (plan "21" stale → WP4a+WP12 ikisini düşürdü).
+**İş (yapıldı):** (1) **cron re-register** — `reconciliation.schedule_cron` + `hot_wallet.monitor_cron` admin değişiminde restart'sız re-register (`ISettingChangePropagator`→`CronSettingChangePropagator`→`ICronJobReconfigurer.Reconfigure`); geçersiz cron → 400 (`SystemSettingsValidator` + Cronos). (2) **sidecar cadence/sweep** → owner kararı **env parity + runbook** (runtime push/pull DEĞİL; post-MVP T74 K1/T96). (3) **19 zorunlu ayar** → owner kararı **deploy runbook** (seed-default DEĞİL; fail-fast korundu) → `Docs/DEPLOY_RUNBOOK.md` + `.env.example`.
+**Migration:** YOK (cron re-register + runbook; seed-default seçilmedi).
 **Efor:** M
 
 ### WP15 — Reputation aggregation tetik

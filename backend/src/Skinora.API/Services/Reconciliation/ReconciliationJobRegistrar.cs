@@ -24,9 +24,12 @@ namespace Skinora.API.Services.Reconciliation;
 /// (forward-deferred to T96 admin tooling).
 /// </para>
 /// </summary>
-public sealed class ReconciliationJobRegistrar : IHostedService
+public sealed class ReconciliationJobRegistrar : IHostedService, ICronJobReconfigurer
 {
     public const string ScheduleCronKey = "reconciliation.schedule_cron";
+
+    /// <inheritdoc />
+    public string CronSettingKey => ScheduleCronKey;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ReconciliationJobRegistrar> _logger;
@@ -49,10 +52,7 @@ public sealed class ReconciliationJobRegistrar : IHostedService
 
             var cron = await ReadCronAsync(db, cancellationToken);
 
-            scheduler.AddOrUpdateRecurring<ReconciliationJob>(
-                ReconciliationJob.RecurringJobId,
-                job => job.Execute(),
-                cron);
+            RegisterRecurring(scheduler, cron);
 
             _logger.LogInformation(
                 "ReconciliationJob registered with cron '{Cron}'.", cron);
@@ -65,6 +65,20 @@ public sealed class ReconciliationJobRegistrar : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    public void Reconfigure(string cronExpression)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var scheduler = scope.ServiceProvider.GetRequiredService<IBackgroundJobScheduler>();
+        RegisterRecurring(scheduler, cronExpression);
+    }
+
+    private static void RegisterRecurring(IBackgroundJobScheduler scheduler, string cron) =>
+        scheduler.AddOrUpdateRecurring<ReconciliationJob>(
+            ReconciliationJob.RecurringJobId,
+            job => job.Execute(),
+            cron);
 
     private static async Task<string> ReadCronAsync(
         AppDbContext db, CancellationToken cancellationToken)

@@ -19,11 +19,26 @@ public sealed class SystemSettingsService : ISystemSettingsService
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
     private readonly IAuditLogger _auditLogger;
+    private readonly ISettingChangePropagator _propagator;
     private readonly SystemSettingsValidator _validator;
 
+    /// <summary>
+    /// Convenience constructor used by tests and non-API hosts — propagation is
+    /// a no-op (no cron-scheduled jobs to re-register).
+    /// </summary>
     public SystemSettingsService(
         AppDbContext db, TimeProvider clock, IAuditLogger auditLogger)
-        : this(db, clock, auditLogger, SystemSettingsValidator.Instance)
+        : this(db, clock, auditLogger, NoOpSettingChangePropagator.Instance, SystemSettingsValidator.Instance)
+    {
+    }
+
+    /// <summary>
+    /// DI constructor — the API host supplies a real
+    /// <see cref="ISettingChangePropagator"/> (cron job re-registration, WP14).
+    /// </summary>
+    public SystemSettingsService(
+        AppDbContext db, TimeProvider clock, IAuditLogger auditLogger, ISettingChangePropagator propagator)
+        : this(db, clock, auditLogger, propagator, SystemSettingsValidator.Instance)
     {
     }
 
@@ -31,11 +46,13 @@ public sealed class SystemSettingsService : ISystemSettingsService
         AppDbContext db,
         TimeProvider clock,
         IAuditLogger auditLogger,
+        ISettingChangePropagator propagator,
         SystemSettingsValidator validator)
     {
         _db = db;
         _clock = clock;
         _auditLogger = auditLogger;
+        _propagator = propagator;
         _validator = validator;
     }
 
@@ -125,6 +142,13 @@ public sealed class SystemSettingsService : ISystemSettingsService
             cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // WP14 — propagate the committed change to side-effect targets that live
+        // outside this module (Hangfire cron-job re-registration in the API
+        // host). Best-effort by contract: the authoritative write above already
+        // succeeded, so a propagation failure is logged, not surfaced.
+        // setting.Value is non-null here — ValidateSingle rejects a null value.
+        await _propagator.PropagateAsync(setting.Key, setting.Value!, cancellationToken);
 
         return new UpdateSettingOutcome.Success(new UpdateSettingResponse(
             Key: setting.Key,

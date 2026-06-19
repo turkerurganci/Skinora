@@ -248,6 +248,27 @@ public class SystemSettingsValidatorTests
         Assert.Equal(expected, result.IsValid);
     }
 
+    // ---- Range — WP14 cron-schedule keys ----
+    // reconciliation.schedule_cron / hot_wallet.monitor_cron must parse as a
+    // standard 5-field (or 6-field with seconds) cron so a typo is rejected with
+    // a 400 here instead of silently failing later at Hangfire registration.
+
+    [Theory]
+    [InlineData("reconciliation.schedule_cron", "0 3 * * *", true)]    // daily 03:00 — seed default
+    [InlineData("hot_wallet.monitor_cron", "*/15 * * * *", true)]      // every 15 min — seed default
+    [InlineData("reconciliation.schedule_cron", "0 0 * * 0", true)]    // weekly (Sunday)
+    [InlineData("hot_wallet.monitor_cron", "0 */15 * * * *", true)]    // 6-field (leading seconds)
+    [InlineData("reconciliation.schedule_cron", "not a cron", false)]  // gibberish
+    [InlineData("hot_wallet.monitor_cron", "99 99 * * *", false)]      // out-of-range fields
+    [InlineData("reconciliation.schedule_cron", "* * *", false)]       // too few fields
+    public void ValidateSingle_CronKeys_RejectMalformedExpressions(string key, string value, bool expected)
+    {
+        var result = _v.ValidateSingle(key, value, "string");
+        Assert.Equal(expected, result.IsValid);
+        if (!expected)
+            Assert.Contains("cron", result.ErrorMessage!);
+    }
+
     // ---- Cross-key — T63a active=true ⇒ type≠NONE ----
 
     [Fact]

@@ -23,6 +23,11 @@ public static class PlatformModule
     {
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ISystemSettingsService, SystemSettingsService>();
+
+        // WP14 — default no-op settings-change propagator. The API host replaces
+        // this with CronSettingChangePropagator (cron job re-registration); the
+        // TryAdd keeps the bootstrap, unit tests, and non-API hosts resolving.
+        services.TryAddSingleton<ISettingChangePropagator>(NoOpSettingChangePropagator.Instance);
         services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<IAuditLogQueryService, AuditLogQueryService>();
 
