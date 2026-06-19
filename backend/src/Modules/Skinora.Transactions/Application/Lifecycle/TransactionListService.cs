@@ -19,12 +19,6 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// </summary>
 public sealed class TransactionListService : ITransactionListService
 {
-    /// <summary>
-    /// 07 §7.1 default. <c>TransactionDetailService</c> (T46) also hard-codes
-    /// 75 — keep the two in sync until a SystemSetting-backed reader lands.
-    /// </summary>
-    private const int DefaultTimeoutWarningPercent = 75;
-
     private const int MinPage = 1;
     private const int MinPageSize = 1;
     private const int MaxPageSize = 100;
@@ -110,8 +104,11 @@ public sealed class TransactionListService : ITransactionListService
 
         var counterpartyById = await LoadCounterpartiesAsync(pageRows, callerId, cancellationToken);
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        // WP12 (T83a) — resolve the warning threshold once per page (not per
+        // row) from the admin-tunable timeout_warning_ratio setting; fallback 75.
+        var warningPercent = await TimeoutWarningThreshold.ReadPercentAsync(_db, cancellationToken);
         var items = pageRows
-            .Select(r => MapRow(r, callerId, counterpartyById, nowUtc))
+            .Select(r => MapRow(r, callerId, counterpartyById, nowUtc, warningPercent))
             .ToList();
 
         return new PagedResult<TransactionListItemDto>
@@ -157,7 +154,8 @@ public sealed class TransactionListService : ITransactionListService
         TxListProjection row,
         Guid callerId,
         IReadOnlyDictionary<Guid, TransactionListCounterpartyDto> counterpartyById,
-        DateTime nowUtc)
+        DateTime nowUtc,
+        int warningPercent)
     {
         var userRole = row.SellerId == callerId ? "seller" : "buyer";
 
@@ -175,7 +173,7 @@ public sealed class TransactionListService : ITransactionListService
             Stablecoin: row.Stablecoin,
             Counterparty: counterparty,
             UserRole: userRole,
-            ActiveTimeout: BuildActiveTimeout(row, nowUtc),
+            ActiveTimeout: BuildActiveTimeout(row, nowUtc, warningPercent),
             CreatedAt: row.CreatedAt);
     }
 
@@ -194,7 +192,7 @@ public sealed class TransactionListService : ITransactionListService
     /// return null. Frozen rows surface the persisted remainder; live rows
     /// compute from (deadline − now).
     /// </summary>
-    private static TransactionListActiveTimeoutDto? BuildActiveTimeout(TxListProjection row, DateTime nowUtc)
+    private static TransactionListActiveTimeoutDto? BuildActiveTimeout(TxListProjection row, DateTime nowUtc, int warningPercent)
     {
         var (type, expiresAt) = row.Status switch
         {
@@ -223,7 +221,7 @@ public sealed class TransactionListService : ITransactionListService
             Type: type,
             ExpiresAt: expiresAt,
             RemainingSeconds: remaining,
-            WarningThresholdPercent: DefaultTimeoutWarningPercent);
+            WarningThresholdPercent: warningPercent);
     }
 
     private static IReadOnlyList<TransactionStatus> ResolveStatusFilter(TransactionListTab tab) => tab switch

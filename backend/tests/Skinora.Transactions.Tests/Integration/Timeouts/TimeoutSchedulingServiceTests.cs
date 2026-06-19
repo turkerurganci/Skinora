@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
@@ -86,6 +87,15 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
     [Fact]
     public async Task SchedulePaymentTimeout_NoWarning_When_Ratio_Unconfigured()
     {
+        // WP12 — the seed now ships timeout_warning_ratio configured (0.75), so
+        // explicitly unconfigure it to exercise the "no ratio → only payment
+        // job" branch (an admin may clear the value).
+        var ratioRow = await Context.Set<SystemSetting>()
+            .SingleAsync(s => s.Key == TimeoutSchedulingService.WarningRatioKey);
+        ratioRow.IsConfigured = false;
+        ratioRow.Value = null;
+        await Context.SaveChangesAsync();
+
         // No SystemSetting configured for timeout_warning_ratio → only payment job.
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(

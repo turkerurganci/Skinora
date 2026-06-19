@@ -46,7 +46,8 @@ public class SettingsBootstrapTests : IntegrationTestBase
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES"] = "60",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES"] = "30",
             ["SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES"] = "60",
-            ["SKINORA_SETTING_TIMEOUT_WARNING_RATIO"] = "0.75",
+            // WP12 — timeout_warning_ratio now ships with a seeded default (0.75),
+            // so it is no longer a deploy-mandatory env var.
             ["SKINORA_SETTING_MIN_TRANSACTION_AMOUNT"] = "1.0",
             ["SKINORA_SETTING_MAX_TRANSACTION_AMOUNT"] = "10000.0",
             ["SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS"] = "5",
@@ -90,8 +91,9 @@ public class SettingsBootstrapTests : IntegrationTestBase
     [Trait("Category", "Integration")]
     public async Task Execute_Throws_When_Required_Parameter_Missing()
     {
-        // Seed ships 20 mandatory (unconfigured) rows after WP4a seeded
-        // price_deviation_threshold; hydrate all but hot_wallet_limit → fail-fast.
+        // Seed ships 19 mandatory (unconfigured) rows after WP4a seeded
+        // price_deviation_threshold and WP12 seeded timeout_warning_ratio;
+        // hydrate all but hot_wallet_limit → fail-fast.
         var env = AllRequiredEnvVars();
         env.Remove("SKINORA_SETTING_HOT_WALLET_LIMIT");
 
