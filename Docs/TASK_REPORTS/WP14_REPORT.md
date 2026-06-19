@@ -82,7 +82,7 @@ WP14'ün üç iş kolu, owner kararları (AskUserQuestion 2026-06-19: B=runbook+
 - Branch: `task/WP14-settings-propagation`
 - Commit: `28c7ffa` — WP14: Settings propagasyon — cron re-register + cron validation + deploy runbook
 - PR: #187
-- CI: ⏳ (izleniyor)
+- CI: ✓ PASS — Task CI HEAD `c83bf3b` run [`27837597559`](https://github.com/turkerurganci/Skinora/actions/runs/27837597559) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate). Integration job yeşil = `SystemSettingsServiceTests` spy/cron testleri gerçek SQL Server'da geçti; Migration dry-run yeşil = drift yok (migration yok).
 
 ## Known Limitations / Follow-up
 
