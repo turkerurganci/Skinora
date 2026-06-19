@@ -1,7 +1,7 @@
 import { NotificationType } from "@/types/enums";
 
 /**
- * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 20 backend
+ * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 27 backend
  * `NotificationType` values (07 §8.1 / 06 §2.13) are projected onto these
  * categories so the row UI renders the canonical icon set.
  *
@@ -29,11 +29,20 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.LATE_PAYMENT_REFUNDED]: "payment",
   [NotificationType.PAYMENT_REFUNDED]: "payment",
 
+  [NotificationType.INSUFFICIENT_PAYMENT]: "payment",
+  [NotificationType.OVERPAYMENT_REFUNDED]: "payment",
+  [NotificationType.WRONG_TOKEN_REFUND]: "payment",
+
   [NotificationType.TIMEOUT_WARNING]: "warning",
+  [NotificationType.EMERGENCY_HOLD_APPLIED]: "warning",
+  [NotificationType.ACCOUNT_SUSPENDED]: "warning",
 
   [NotificationType.TRANSACTION_COMPLETED]: "completion",
 
   [NotificationType.TRANSACTION_CANCELLED]: "cancellation",
+
+  [NotificationType.EMERGENCY_HOLD_RELEASED]: "transactionUpdate",
+  [NotificationType.ACCOUNT_UNSUSPENDED]: "transactionUpdate",
 
   [NotificationType.TRANSACTION_FLAGGED]: "flag",
   [NotificationType.FLAG_RESOLVED]: "flag",

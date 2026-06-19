@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { ResponsiveTable } from "@/components/common";
-import type { ResponsiveTableColumn } from "@/components/common";
+import type { ResponsiveTableColumn, ResponsiveTableSort } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import type { AdminFlagListItem, AdminFlagParty, AdminFlagScope } from "@/lib/api/admin";
@@ -33,6 +33,8 @@ export interface FlagQueueTableProps {
   /** Selected category filter — drives the column set (undefined = "Tümü"). */
   category?: AdminFlagScope;
   className?: string;
+  /** Optional click-to-sort wiring (AD2 supports createdAt / type / reviewStatus). */
+  sort?: ResponsiveTableSort;
 }
 
 /**
@@ -41,7 +43,7 @@ export interface FlagQueueTableProps {
  * in the signal columns (Sinyal Detayı / İlişkili Hesaplar / Aktif İşlem Sayısı)
  * carried by the AD2 projection (07 §9.2 — T100a); "Tümü" adds a category column.
  */
-export function FlagQueueTable({ flags, category, className }: FlagQueueTableProps) {
+export function FlagQueueTable({ flags, category, className, sort }: FlagQueueTableProps) {
   const t = useTranslations("adminFlags");
   const tType = useTranslations("adminFlags.type");
   const tScope = useTranslations("adminFlags.scope");
@@ -67,6 +69,7 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
   const typeColumn: ResponsiveTableColumn<AdminFlagListItem> = {
     key: "type",
     header: t("columns.type"),
+    sortKey: "type",
     cell: (row) => <span className="text-sm text-gray-900">{tType(row.type)}</span>,
   };
   const userColumn: ResponsiveTableColumn<AdminFlagListItem> = {
@@ -128,6 +131,7 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
   const dateColumn: ResponsiveTableColumn<AdminFlagListItem> = {
     key: "createdAt",
     header: t("columns.date"),
+    sortKey: "createdAt",
     cell: (row) => (
       <time dateTime={row.createdAt} className="text-sm tabular-nums text-gray-700">
         {formatDateTime(row.createdAt, locale)}
@@ -137,6 +141,7 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
   const statusColumn: ResponsiveTableColumn<AdminFlagListItem> = {
     key: "status",
     header: t("columns.status"),
+    sortKey: "reviewStatus",
     cell: (row) => <FlagReviewStatusBadge status={row.reviewStatus} />,
   };
 
@@ -175,6 +180,7 @@ export function FlagQueueTable({ flags, category, className }: FlagQueueTablePro
       ariaLabel={t("tableAriaLabel")}
       emptyMessage={t("empty")}
       className={cn(className)}
+      sort={sort}
     />
   );
 }

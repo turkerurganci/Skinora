@@ -306,6 +306,10 @@ export interface AdminFlagListQuery {
   reviewStatus?: AdminFlagReviewStatus;
   dateFrom?: string;
   dateTo?: string;
+  /** AD2 sort column: createdAt (default), type, reviewStatus (07 §9.2). */
+  sortBy?: string;
+  /** asc | desc (default desc). */
+  sortOrder?: string;
   page?: number;
   pageSize?: number;
 }
@@ -317,6 +321,8 @@ export function listAdminFlags(query: AdminFlagListQuery): Promise<AdminFlagList
   if (query.reviewStatus) params.set("reviewStatus", query.reviewStatus);
   if (query.dateFrom) params.set("dateFrom", query.dateFrom);
   if (query.dateTo) params.set("dateTo", query.dateTo);
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.sortOrder) params.set("sortOrder", query.sortOrder);
   if (query.page !== undefined) params.set("page", String(query.page));
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
   const qs = params.toString();

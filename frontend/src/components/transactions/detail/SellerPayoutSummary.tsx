@@ -3,6 +3,7 @@ import type { TransactionDetailSellerPayout } from "@/lib/api/transactions";
 import { CopyButton } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
+import { TxHashLink } from "./TxHashLink";
 
 export interface SellerPayoutSummaryProps {
   payout: TransactionDetailSellerPayout;
@@ -77,8 +78,7 @@ export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryP
               className="flex items-center gap-2 font-mono text-xs text-gray-900"
               title={payout.txHash}
             >
-              {maskAddress(payout.txHash, 8, 6)}
-              <CopyButton value={payout.txHash} />
+              <TxHashLink txHash={payout.txHash} />
             </dd>
           </div>
           <div className="flex justify-between gap-3">

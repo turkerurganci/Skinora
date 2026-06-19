@@ -50,8 +50,9 @@ interface TransactionDetailPageProps {
  *   K1 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
  *        modal; DisputeBlock "TX Hash Gir" / "Admin'e İlet" → C07 modal
  *        in existing-dispute resume mode.
- *   K2 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri). DTO'da
- *        link yok; spec'deki "Steam'e git" CTA T-future devir.
+ *   K2 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri) WP13'te
+ *        bağlandı: `steamTradeOfferUrl` DTO alanı (WP12 backend) →
+ *        StateActionPanel "Steam takas teklifine git" CTA.
  *   K3 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
  *        adres alanı + cooldown check yapıyor; per-transaction override
  *        field T-future.

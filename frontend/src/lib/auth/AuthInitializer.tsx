@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMe } from "@/lib/api/auth";
+import { isAdminRole } from "@/lib/auth/roles";
 import { useAuthStore } from "@/lib/stores/auth-store";
 
 /**
@@ -36,7 +37,10 @@ export function AuthInitializer() {
 
   useEffect(() => {
     if (!data) return;
-    setProfile({ isSuspended: data.isSuspended });
+    // WP13 — populate isAdmin from the /auth/me role claim. Previously the store
+    // field stayed false for everyone; the admin route guard and any role-aware
+    // UI now have a reliable signal (backend stays authoritative).
+    setProfile({ isSuspended: data.isSuspended, isAdmin: isAdminRole(data.role) });
   }, [data, setProfile]);
 
   return null;

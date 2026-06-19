@@ -3,6 +3,8 @@ export type { StatusBadgeProps, ExtendedStatus } from "./StatusBadge";
 
 export { CountdownTimer } from "./CountdownTimer";
 export type { CountdownTimerProps } from "./CountdownTimer";
+export { InlineCountdown } from "./InlineCountdown";
+export type { InlineCountdownProps } from "./InlineCountdown";
 
 export { ItemCard } from "./ItemCard";
 export type { ItemCardProps, ItemCardVariant, ItemCardItem } from "./ItemCard";
@@ -55,4 +57,9 @@ export { FilterBar } from "./FilterBar";
 export type { FilterBarProps, FilterField, FilterFieldOption, ActiveFilter } from "./FilterBar";
 
 export { ResponsiveTable } from "./ResponsiveTable";
-export type { ResponsiveTableProps, ResponsiveTableColumn } from "./ResponsiveTable";
+export type {
+  ResponsiveTableProps,
+  ResponsiveTableColumn,
+  ResponsiveTableSort,
+  TableSortOrder,
+} from "./ResponsiveTable";

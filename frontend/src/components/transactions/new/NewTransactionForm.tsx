@@ -1,14 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import {
-  BuyerIdentificationMethod,
-  StablecoinType,
-} from "@/types/enums";
+import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
 import { ApiError } from "@/lib/api/client";
 import {
   createTransaction,
@@ -38,11 +35,12 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
   const t = useTranslations("newTransaction");
   const locale = useLocale();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const gateReasons = useMemo(() => getBlockingReasons(eligibility), [eligibility]);
   const isGated = gateReasons.length > 0;
 
-  const [step, setStep] = useState<StepNumber>(1);
   const [item, setItem] = useState<SteamInventoryItem | null>(null);
   const [stablecoin, setStablecoin] = useState<StablecoinType>(
     params.supportedStablecoins[0] ?? StablecoinType.USDT,
@@ -60,8 +58,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
 
   const inventory = useSteamInventory(!isGated);
 
-  const inventoryErrorCode =
-    inventory.error instanceof ApiError ? inventory.error.code : null;
+  const inventoryErrorCode = inventory.error instanceof ApiError ? inventory.error.code : null;
 
   const priceError = useMemo(() => {
     if (price === "") return null;
@@ -95,6 +92,36 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
       ? params.openLinkEnabled
       : STEAM_ID_REGEX.test(buyerSteamId));
 
+  // Wizard step is mirrored in the URL (WP13 url-state-sync) so the browser
+  // back button moves between steps instead of leaving the wizard. The form
+  // data itself stays in memory (it includes a live-inventory item + wallet
+  // address — not URL-safe), so on a hard refresh the data is gone; clamping
+  // the shown step to the furthest one the current data supports makes the
+  // wizard restart cleanly at step 1 instead of resuming on an empty later step.
+  const stepParam = Number(searchParams.get("step"));
+  const urlStep: StepNumber =
+    Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= 4 ? (stepParam as StepNumber) : 1;
+  const maxReachableStep: StepNumber = !isStep1Valid
+    ? 1
+    : !isStep2Valid
+      ? 2
+      : !isStep3Valid
+        ? 3
+        : 4;
+  const step = Math.min(urlStep, maxReachableStep) as StepNumber;
+
+  const setStep = useCallback(
+    (next: StepNumber) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next > 1) params.set("step", String(next));
+      else params.delete("step");
+      const qs = params.toString();
+      // push (not replace) so each step is a history entry → back navigates steps.
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [router, pathname, searchParams],
+  );
+
   const mutation = useMutation({
     mutationFn: () => {
       if (!item) throw new Error("item required");
@@ -104,8 +131,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
         price,
         paymentTimeoutHours,
         buyerIdentificationMethod: method,
-        buyerSteamId:
-          method === BuyerIdentificationMethod.STEAM_ID ? buyerSteamId : undefined,
+        buyerSteamId: method === BuyerIdentificationMethod.STEAM_ID ? buyerSteamId : undefined,
         sellerWalletAddress,
       });
     },
@@ -245,13 +271,7 @@ interface NavButtonsProps {
   backHref?: string;
 }
 
-function NavButtons({
-  onBack,
-  onNext,
-  backDisabled,
-  nextDisabled,
-  backHref,
-}: NavButtonsProps) {
+function NavButtons({ onBack, onNext, backDisabled, nextDisabled, backHref }: NavButtonsProps) {
   const t = useTranslations("newTransaction.nav");
   return (
     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">

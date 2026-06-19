@@ -115,6 +115,11 @@ export function ItemCard({ item, variant, selected, onSelect, className }: ItemC
             {t("wear")}: {item.wear}
           </p>
         )}
+        {item.steamItemId && (
+          <p className="text-sm text-gray-600">
+            {t("assetId")}: <span className="font-mono text-xs">{item.steamItemId}</span>
+          </p>
+        )}
       </div>
       <div>{tradeableBadge}</div>
     </div>

@@ -338,6 +338,9 @@ export interface TransactionDetailResponse {
   paymentEvents?: TransactionDetailPaymentEvent[] | null;
   escrowBotAssetId?: string | null;
   deliveredBuyerAssetId?: string | null;
+  // WP12 backend / WP13 FE — Steam trade-offer deep link. Populated only in the
+  // two TRADE_OFFER_SENT_TO_* states (null on the public surface and elsewhere).
+  steamTradeOfferUrl?: string | null;
   availableActions: TransactionDetailAvailableActions;
   createdAt?: string | null;
   updatedAt?: string | null;

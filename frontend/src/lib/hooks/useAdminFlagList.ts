@@ -19,6 +19,8 @@ export function useAdminFlagList(query: AdminFlagListQuery, enabled = true) {
       query.reviewStatus ?? null,
       query.dateFrom ?? null,
       query.dateTo ?? null,
+      query.sortBy ?? null,
+      query.sortOrder ?? null,
       query.page ?? 1,
       query.pageSize ?? 20,
     ],

@@ -10,6 +10,7 @@ import {
   updateNotifications,
   verifyEmail,
 } from "@/lib/api/settings";
+import { InlineCountdown } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
 
 type Channel = "email" | "telegram" | "discord";
@@ -93,6 +94,11 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
   const [verifyCode, setVerifyCode] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  // WP13 — code-validity countdown (from the send response `expiresIn`) and the
+  // resend-cooldown countdown (from the rate-limit `Retry-After`, when present).
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const cooldownActive = cooldownUntil !== null;
 
   const email = settings.notifications.email;
   const telegram = settings.notifications.telegram;
@@ -140,15 +146,29 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
     }
   }
 
+  function startCooldown(seconds: number) {
+    const until = Date.now() + seconds * 1000;
+    setCooldownUntil(until);
+    window.setTimeout(
+      () => setCooldownUntil((current) => (current === until ? null : current)),
+      seconds * 1000,
+    );
+  }
+
   async function handleSendVerification() {
     setVerifySending(true);
     setVerifyError(null);
     try {
       const result = await sendEmailVerification();
       setVerifySentTo(result.sentTo);
+      setCodeExpiresAt(Date.now() + result.expiresIn * 1000);
       setVerifyOpen(true);
     } catch (err) {
       if (err instanceof ApiError) {
+        // Any rate-limited 429 that carried a Retry-After → live resend cooldown.
+        if (err.status === 429 && err.retryAfterSeconds) {
+          startCooldown(err.retryAfterSeconds);
+        }
         if (err.code === "NO_EMAIL_SET") {
           setVerifyError(t("verify.errors.noEmail"));
         } else if (err.code === "VERIFICATION_COOLDOWN") {
@@ -257,7 +277,7 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
                 <button
                   type="button"
                   onClick={handleSendVerification}
-                  disabled={verifySending}
+                  disabled={verifySending || cooldownActive}
                   className="rounded-md border border-blue-600 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                 >
                   {verifySending ? t("verify.sending") : t("verify.sendButton")}
@@ -265,6 +285,13 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
               )}
             </div>
           </form>
+
+          {cooldownActive && cooldownUntil !== null && (
+            <p className="mt-2 text-xs text-gray-600" role="status" aria-live="polite">
+              {t("verify.resendInLabel")}{" "}
+              <InlineCountdown deadline={cooldownUntil} className="font-medium text-gray-900" />
+            </p>
+          )}
 
           {verifyOpen && (
             <form
@@ -274,6 +301,16 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
               {verifySentTo && (
                 <p className="mb-2 text-sm text-blue-900">
                   {t("verify.sentTo", { address: verifySentTo })}
+                </p>
+              )}
+              {codeExpiresAt !== null && (
+                <p className="mb-2 text-xs text-blue-800">
+                  {t("verify.expiresInLabel")}{" "}
+                  <InlineCountdown
+                    deadline={codeExpiresAt}
+                    expiredLabel={t("verify.expiredLabel")}
+                    className="font-medium"
+                  />
                 </p>
               )}
               <div className="flex gap-2">

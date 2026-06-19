@@ -130,14 +130,6 @@ export function formatStablecoin(
   return `${fixed} ${symbol}`;
 }
 
-/**
- * @deprecated Use {@link formatStablecoin}. Kept for any pre-T97 callers
- * still in the tree; new code MUST use `formatStablecoin`.
- */
-export function formatAmount(amount: number, token: string = "USDT"): string {
-  return formatStablecoin(amount, token);
-}
-
 function toDate(value: string | Date): Date {
   return value instanceof Date ? value : new Date(value);
 }

@@ -173,10 +173,10 @@ export function AccountManagementSection() {
       } else if (mode === "delete") {
         await deleteAccount(DELETE_ACCOUNT_CONFIRMATION);
       }
+      // logout() already clears the persisted access_token via the auth store
+      // (the single token writer — WP11); the manual removeItem here was
+      // redundant (WP13 cleanup).
       logout();
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem("access_token");
-      }
       router.replace(`/${locale}`);
     } catch (err) {
       if (err instanceof ApiError) {
