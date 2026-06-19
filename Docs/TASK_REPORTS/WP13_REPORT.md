@@ -1,6 +1,6 @@
 # WP13 — FE Tamlık (yasal sayfalar + polish + enum sync)
 
-**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-19
+**Faz:** F6 öncesi (PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-19
 
 ---
 
@@ -58,9 +58,31 @@ WP13, frontend tamlık paketidir — MVP yasal gereklilik (yasal sayfalar), enum
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (ayrı chat, rapor görülmeden) |
 | Yapım self-check | 9/9 kabul kriteri ✓ |
-| Düzeltme gerekli mi | — |
+| Bulgu sayısı | 0 bloke-edici (3 non-blocking gözlem — aşağı bkz.) |
+| Düzeltme gerekli mi | Hayır |
+
+### Validator Sonucu — 2026-06-19 (bağımsız chat, yapım raporu görülmeden)
+
+**Verdict: ✓ PASS.** Bağımsız verdict önce oluşturuldu, sonra yapım raporuyla karşılaştırıldı → **tam uyumlu**.
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27825433288`/`27825433282`/`27824841350`) · Adım 0b repo memory WP13 satırı mevcut · Adım 8a task branch CI **iki run da success** (HEAD `568569e` → run [`27831840011`](https://github.com/turkerurganci/Skinora/actions/runs/27831840011) + HEAD `37e770c` → [`27831329203`](https://github.com/turkerurganci/Skinora/actions/runs/27831329203)).
+
+**Statik kapılar (validator çalıştırdı):** `npx tsc --noEmit` exit 0 · `npx eslint` exit 0 · `prettier --check` (dokunulan dosyalar) "All matched files use Prettier code style!" · `npx next build` exit 0 (3 yeni yasal route dahil tüm route'lar derlendi) · i18n leaf-key parity **1230×4 birebir** (en/tr/es/zh anahtar setleri identical; legal namespace **42×4** dahil).
+
+**Kanıt-bazlı kriter doğrulaması:**
+- **Enum sync** — backend kaynak dosyalarla (`Skinora.Shared/Enums/*.cs`) **birebir** karşılaştırıldı: `NotificationType` 27/27, `AuditAction` 30/30, `FraudFlagType` 5/5 (+SANCTIONS_MATCH), `BlockchainTransactionType` 10/10 (+SWEEP) — isim+sıra+sayı eşleşti. `notification-icons.ts` `Record<NotificationType,…>` 27 tip tam (tsc tarafından exhaustive-enforce). 06_DATA_MODEL §2.13 de 27 değer doğruladı (FE==backend==doc).
+- **Yasal sayfalar** — `/privacy`+`/terms`+`/support` build'de route olarak çıktı; `LegalPage` shell; 42 legal i18n anahtarının tümü mevcut, sayfaların referans verdiği tüm section-key'ler çözülüyor (runtime-miss yok). Footer 3 linke çözülüyor → kırık `/terms` 404 kapandı.
+- **AdminGuard** — client-side route guard; token localStorage'tan (hidrasyon yarışı atlanır), `["auth","me"]` paylaşımlı query; non-admin→`/dashboard`, oturum yok→`/`; backend authoritative (yorum + kod teyit).
+- **admin-table-sort / url-state-sync / NEXT_LOCALE cookie / dispute-polish / countdown+cooldown / steamTradeOfferUrl href / ACCOUNT_FLAGGED i18n / formatAmount+logout cleanup** — hepsi kodda kanıtla doğrulandı (sort allow-list `tableSort.parseTableSort`; dashboard `?tab=&page=` clamp; `setLocaleCookie` NEXT_LOCALE soft-nav; `TxHashLink`+`tronscanTxUrl`; `InlineCountdown`←`expiresIn`/`retryAfterSeconds`; `StateActionPanel` TRADE_OFFER_SENT_TO_* CTA; `ACCOUNT_FLAGGED` ×4; `formatAmount` 0 referans; `logout()` token'ı temizliyor → manuel removeItem kaldırma güvenli).
+
+**Mini güvenlik:** Secret sızıntısı eklenen satırlarda yok · dependency/lockfile değişmedi (yeni bağımlılık yok) · `target="_blank"` linklerde `rel="noopener noreferrer"` · sort param allow-list ile doğrulanıyor · AdminGuard güvenlik sınırı değil (backend enforce). **Temiz.**
+
+**Non-blocking gözlemler (verdict'i etkilemez):**
+1. `DeliveryStatus` backend↔doc drift'i: backend `DEFERRED` ile 4 değer, 06 §2.23 + FE 3 değer. **FE doğru** — kaynak-doğru dokümanla (06) eşleşiyor; drift backend-vs-doc, WP13 kapsamı dışı → WP17 doc-recon.
+2. Rapor "36 route" diyor; build çıktısı 35 app route + 1 middleware gösteriyor (sayım nüansı, kozmetik).
+3. `SteamTradeOfferLink` backend-üretimi URL'i doğrudan href render eder (`_blank`+noopener); scheme (`https`-only) sertleştirmesi opsiyonel ileride.
 
 ## Altyapı Değişiklikleri
 
