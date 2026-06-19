@@ -87,9 +87,8 @@
 
 ## Commit & PR
 - Branch: `task/WP16-monitoring-timeout`
-- Commit: (aşağıda)
-- PR: #— (aşağıda)
-- CI: ⏳
+- PR: [#189](https://github.com/turkerurganci/Skinora/pull/189)
+- CI: ⏳ (Claude izliyor — [[feedback_claude_watches_ci_always]])
 
 ## Known Limitations / Follow-up
 - **Health-probe state singleton** = tek-instance MVP; multi-instance Redis paylaşımı **post-MVP** (PRE_F6_PLAN §3). Restart'ta state sıfırlanır → en kötü hâlâ-degraded bileşen için bir kez yeniden alarm (kabul edilebilir).
