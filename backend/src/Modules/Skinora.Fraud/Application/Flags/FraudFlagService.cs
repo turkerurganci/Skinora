@@ -6,6 +6,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
@@ -217,8 +218,15 @@ public sealed class FraudFlagService : IFraudFlagService
                 if (transaction.Status != TransactionStatus.FLAGGED)
                     return new ApproveFlagOutcome.TransactionNotFlagged();
 
+                var previousTxStatus = transaction.Status;
                 var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
                 machine.Fire(TransactionTrigger.AdminApprove);
+
+                // WP15 — audit-trail row (06 §3.6) for the FLAGGED → CREATED
+                // promotion. Admin actor; not reputation-affecting.
+                TransactionHistoryRecorder.Record(
+                    _db, transaction, previousTxStatus, TransactionTrigger.AdminApprove,
+                    ActorType.ADMIN, adminId, nowUtc);
 
                 var limits = await _limits.GetAsync(cancellationToken);
                 transaction.AcceptDeadline = nowUtc + TimeSpan.FromMinutes(
@@ -306,8 +314,15 @@ public sealed class FraudFlagService : IFraudFlagService
             if (transaction.Status != TransactionStatus.FLAGGED)
                 return new RejectFlagOutcome.TransactionNotFlagged();
 
+            var previousTxStatus = transaction.Status;
             var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
             machine.Fire(TransactionTrigger.AdminReject);
+
+            // WP15 — audit-trail row (06 §3.6) for the FLAGGED → CANCELLED_ADMIN
+            // rejection. CANCELLED_ADMIN is excluded from reputation (02 §13).
+            TransactionHistoryRecorder.Record(
+                _db, transaction, previousTxStatus, TransactionTrigger.AdminReject,
+                ActorType.ADMIN, adminId, nowUtc);
 
             finalTxStatus = transaction.Status;
         }

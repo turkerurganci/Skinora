@@ -6,6 +6,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
@@ -137,6 +138,13 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
         // ---------- Stage 5: side effects ----------
         var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // WP15 — audit-trail row (06 §3.6). Admin-cancel is excluded from the
+        // reputation formula (02 §13), so only the history row is written here —
+        // no reputation/cooldown recompute.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.AdminCancel,
+            ActorType.ADMIN, adminUserId, occurredAt);
 
         // 5a. Cancel pending Hangfire timeout / warning jobs (idempotent).
         await _scheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
@@ -532,6 +540,12 @@ public sealed class AdminTransactionService : IAdminTransactionService
         await _scheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
 
         var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // WP15 — audit-trail row (06 §3.6) for the hold-release-then-cancel path.
+        // CANCELLED_ADMIN is excluded from reputation (02 §13) — history only.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.AdminCancel,
+            ActorType.ADMIN, adminUserId, occurredAt);
 
         // Step 4 — refund + notification + audit fan-out (same as AD19).
         if (itemWasOnPlatform)

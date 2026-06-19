@@ -5,6 +5,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Wallet;
@@ -153,6 +154,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         transaction.BuyerId = buyerId;
         transaction.BuyerRefundAddress = request.RefundWalletAddress;
 
+        var previousStatus = transaction.Status;
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
         try
         {
@@ -164,6 +166,11 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 ex.ErrorCode,
                 ex.Message);
         }
+
+        // WP15 — audit-trail row (06 §3.6). The buyer is the actor (USER).
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.BuyerAccept,
+            ActorType.USER, buyerId, nowUtc);
 
         // WP12 (T90 K4) — the accept-time refund address is a PER-TRANSACTION
         // snapshot only. 02 §12.2 ("işlem bazlı adres") + 04 §7.3 ("yalnızca bu

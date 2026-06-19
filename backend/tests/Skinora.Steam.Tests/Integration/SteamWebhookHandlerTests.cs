@@ -17,6 +17,7 @@ using Skinora.Steam.Application.Webhooks;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Steam.Tests.TestSupport;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -113,6 +114,7 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             _recorder,
             _outbox,
             materialiser,
+            new NoOpReputationRefresher(),
             TimeProvider.System,
             NullLogger<SteamWebhookHandler>.Instance);
     }
@@ -126,6 +128,13 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             Events.Add(domainEvent);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class NoOpReputationRefresher : ITransactionReputationRefresher
+    {
+        public Task RefreshAsync(
+            Guid sellerId, Guid? buyerId, bool evaluateCooldown,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class NoOpJobScheduler : IBackgroundJobScheduler

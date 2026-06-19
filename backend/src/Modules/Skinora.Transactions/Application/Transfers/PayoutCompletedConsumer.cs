@@ -1,10 +1,13 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -31,13 +34,16 @@ public sealed class PayoutCompletedConsumer
     : INotificationHandler<PayoutCompletedEvent>
 {
     private readonly AppDbContext _db;
+    private readonly ITransactionReputationRefresher _reputation;
     private readonly ILogger<PayoutCompletedConsumer> _logger;
 
     public PayoutCompletedConsumer(
         AppDbContext db,
+        ITransactionReputationRefresher reputation,
         ILogger<PayoutCompletedConsumer> logger)
     {
         _db = db;
+        _reputation = reputation;
         _logger = logger;
     }
 
@@ -87,6 +93,7 @@ public sealed class PayoutCompletedConsumer
             return;
         }
 
+        var previousStatus = transaction.Status;
         try
         {
             machine.Fire(TransactionTrigger.Complete);
@@ -99,6 +106,24 @@ public sealed class PayoutCompletedConsumer
             return;
         }
 
+        // WP15 — audit-trail row (06 §3.6) for the SYSTEM-driven completion.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.Complete,
+            ActorType.SYSTEM, SeedConstants.SystemUserId,
+            transaction.CompletedAt ?? DateTime.UtcNow);
+
+        // Flush COMPLETED + history first; the reputation aggregator reads
+        // Transaction rows AsNoTracking so it must observe the committed status.
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // WP15 — recompute the denormalized reputation snapshot for both parties:
+        // a successful trade bumps each side's CompletedTransactionCount and
+        // SuccessfulTransactionRate (06 §8.2). No cooldown — completion is not a
+        // cancellation. This consumer shares the AppDbContext with the outbox
+        // dispatcher, so it deliberately avoids an explicit transaction; the
+        // recompute is idempotent + eventual (06 §8.2) and self-heals on retry.
+        await _reputation.RefreshAsync(
+            transaction.SellerId, transaction.BuyerId, evaluateCooldown: false, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(

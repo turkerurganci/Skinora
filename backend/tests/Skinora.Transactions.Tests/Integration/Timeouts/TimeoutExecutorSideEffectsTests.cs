@@ -51,6 +51,7 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
         new(Context, _clock,
             new TimeoutSideEffectPublisher(_outbox, _clock, NullLogger<TimeoutSideEffectPublisher>.Instance),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             NullLogger<TimeoutExecutor>.Instance);
 
     [Fact]

@@ -7,8 +7,10 @@ using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Users.Application.Reputation;
 
 namespace Skinora.Transactions.Tests.Integration.Timeouts;
 
@@ -187,6 +189,24 @@ internal static class TimeoutTestFixtures
     public static ITimeoutSideEffectPublisher NoOpSideEffects() => new NoOpTimeoutSideEffectPublisher();
 
     /// <summary>
+    /// Default <see cref="ITransactionReputationRefresher"/> for tests that
+    /// exercise the timeout/completion flow without asserting on the reputation
+    /// projection (WP15). Dedicated reputation-trigger tests construct the real
+    /// <see cref="TransactionReputationRefresher"/> with a live aggregator +
+    /// cooldown evaluator.
+    /// </summary>
+    public static ITransactionReputationRefresher NoOpReputationRefresher() => new NoOpTransactionReputationRefresher();
+
+    /// <summary>
+    /// Real <see cref="TransactionReputationRefresher"/> backed by a live
+    /// <see cref="ReputationAggregator"/> over <paramref name="db"/> and a no-op
+    /// cooldown evaluator. For tests that assert the reputation projection
+    /// without exercising the cooldown rule (e.g. COMPLETED).
+    /// </summary>
+    public static ITransactionReputationRefresher RealReputationRefresher(AppDbContext db)
+        => new TransactionReputationRefresher(new ReputationAggregator(db), new NoOpCooldownEvaluator());
+
+    /// <summary>
     /// Default <see cref="Skinora.Transactions.Application.PostCancel.IPostCancelMonitorStarter"/>
     /// for tests that exercise cancel/timeout flows without asserting on the
     /// post-cancel side effect. Dedicated T75 tests construct the real
@@ -206,5 +226,20 @@ internal static class TimeoutTestFixtures
             HeartbeatIntervalSeconds = 30,
             RecoveryThresholdSeconds = recoveryThresholdSeconds,
         });
+}
+
+/// <summary>No-op <see cref="ITransactionReputationRefresher"/> (WP15).</summary>
+internal sealed class NoOpTransactionReputationRefresher : ITransactionReputationRefresher
+{
+    public Task RefreshAsync(Guid sellerId, Guid? buyerId, bool evaluateCooldown, CancellationToken cancellationToken)
+        => Task.CompletedTask;
+}
+
+/// <summary>No-op <see cref="IUserCancelCooldownEvaluator"/> (WP15) — used when a
+/// reputation test does not exercise the cooldown rule.</summary>
+internal sealed class NoOpCooldownEvaluator : IUserCancelCooldownEvaluator
+{
+    public Task<CooldownEvaluationResult> EvaluateAsync(Guid userId, CancellationToken cancellationToken)
+        => Task.FromResult(new CooldownEvaluationResult(0, 0, 0, null));
 }
 

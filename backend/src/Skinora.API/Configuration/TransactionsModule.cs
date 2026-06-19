@@ -67,6 +67,14 @@ public static class TransactionsModule
         // T51 — user-initiated cancel (07 §7.7, 02 §7).
         services.AddScoped<ITransactionCancellationService, TransactionCancellationService>();
 
+        // WP15 — shared post-terminal reputation projector. Wraps the T43
+        // aggregator + cooldown evaluator so every terminal-transition caller
+        // (COMPLETED, CANCELLED_TIMEOUT, Steam-driven cancel, user-cancel)
+        // refreshes the denormalized reputation/cooldown fields identically
+        // (06 §8.2). The wrapped services live in UsersModule.
+        services.AddScoped<Skinora.Transactions.Application.Reputation.ITransactionReputationRefresher,
+            Skinora.Transactions.Application.Reputation.TransactionReputationRefresher>();
+
         // T67 — Steam inventory reader + cache invalidator ports. Stubs are
         // registered with TryAddScoped so SteamModule.AddSteamModule can
         // swap them for the sidecar-backed implementations via Replace().

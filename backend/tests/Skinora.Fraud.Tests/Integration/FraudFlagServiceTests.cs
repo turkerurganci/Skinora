@@ -20,6 +20,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Microsoft.Extensions.Options;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
@@ -521,6 +522,7 @@ public class FraudFlagServiceTests : IntegrationTestBase
             _clock,
             new NoOpTimeoutSideEffectPublisher(),
             new NoOpPostCancelMonitorStarter(),
+            new NoOpReputationRefresher(),
             Options.Create(new TimeoutSchedulingOptions()),
             NullLogger<DeadlineScannerJob>.Instance);
         await scanner.ScanAndRescheduleAsync();
@@ -542,6 +544,13 @@ public class FraudFlagServiceTests : IntegrationTestBase
     {
         public Task RequestStartAsync(
             Guid transactionId, DateTime cancelledAt,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class NoOpReputationRefresher : ITransactionReputationRefresher
+    {
+        public Task RefreshAsync(
+            Guid sellerId, Guid? buyerId, bool evaluateCooldown,
             CancellationToken cancellationToken) => Task.CompletedTask;
     }
 

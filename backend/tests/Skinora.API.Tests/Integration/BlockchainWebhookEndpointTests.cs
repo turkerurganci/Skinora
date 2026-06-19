@@ -750,6 +750,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             db.Set<Skinora.Platform.Domain.Entities.AuditLog>().ExecuteDelete();
             db.Set<BlockchainTransaction>().ExecuteDelete();
             db.Set<PaymentAddress>().IgnoreQueryFilters().ExecuteDelete();
+            // WP15 — TransactionHistory FK→Transaction/User is NO ACTION (06 §3.6);
+            // clear it before truncating transactions/users.
+            db.Set<Skinora.Transactions.Domain.Entities.TransactionHistory>().ExecuteDelete();
             db.Set<Transaction>().IgnoreQueryFilters().ExecuteDelete();
             // Preserve the EF-seeded SYSTEM user (06 §8.9, SeedConstants) —
             // RefundBlockedAlertService writes AuditLog with ActorId = SystemUserId

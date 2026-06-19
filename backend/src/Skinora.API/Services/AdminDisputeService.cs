@@ -10,6 +10,7 @@ using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Domain.Entities;
@@ -270,6 +271,13 @@ public sealed class AdminDisputeService : IAdminDisputeService
             {
                 return Fail(AdminResolveDisputeStatus.InvalidStateTransition, ex.ErrorCode, ex.Message);
             }
+
+            // WP15 — audit-trail row (06 §3.6) for the buyer-favor REFUNDED
+            // resolution. Admin actor; REFUNDED is excluded from reputation
+            // (not in the 06 §3.1 responsibility map) — history only.
+            TransactionHistoryRecorder.Record(
+                _db, transaction, previousTxStatus, TransactionTrigger.AdminResolveRefund,
+                ActorType.ADMIN, adminUserId, now);
 
             // Item return to the seller when the item was still on the platform
             // (false at ITEM_DELIVERED — item is with the buyer).
