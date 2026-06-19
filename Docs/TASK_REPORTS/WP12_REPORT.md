@@ -157,3 +157,4 @@ FE href wiring **WP13'e** (FE tamlık) bırakıldı — backend DTO alanı bu PR
 
 - **Branch:** `task/WP12-user-edge-cases`
 - **PR:** [#184](https://github.com/turkerurganci/Skinora/pull/184)
+- **Task CI:** HEAD `8753449` run [`27823238832`](https://github.com/turkerurganci/Skinora/actions/runs/27823238832) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate) — integration + seed migration SQL Server'da temiz.
