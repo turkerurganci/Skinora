@@ -1,7 +1,7 @@
 # WP12 — Kullanıcı kenar durumları (User edge cases)
 
 **Durum:** ✅ Yapım tamamlandı — bağımsız doğrulama bekliyor
-**Branch:** `task/WP12-user-edge-cases`
+**Branch:** `task/WP12-user-edge-cases` · **PR:** [#184](https://github.com/turkerurganci/Skinora/pull/184)
 **Kaynak plan:** `PRE_F6_PLAN.md` WP12 (P4)
 **Tarih:** 2026-06-19
 
@@ -156,4 +156,4 @@ FE href wiring **WP13'e** (FE tamlık) bırakıldı — backend DTO alanı bu PR
 ## 11. Commit & PR
 
 - **Branch:** `task/WP12-user-edge-cases`
-- **PR:** #— *(push sonrası doldurulacak)*
+- **PR:** [#184](https://github.com/turkerurganci/Skinora/pull/184)
