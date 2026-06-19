@@ -75,6 +75,30 @@ public sealed class PlatformHealthMonitorState
         }
     }
 
+    /// <summary>
+    /// Undoes the in-memory effect of a <see cref="HealthTransition"/> that was
+    /// returned by <see cref="Record"/> but whose durable alert (audit + outbox)
+    /// failed to persist. Restoring the <c>InOutage</c> flag lets the next probe
+    /// re-detect the same edge instead of silently swallowing the alert
+    /// (WP16 — the singleton survives a Hangfire retry / next cron tick while the
+    /// rolled-back DbContext does not). The consecutive-failure counter is left
+    /// as-is: a still-degraded component re-crosses the threshold on the next
+    /// failing probe, and a recovered component re-reports on the next healthy
+    /// probe.
+    /// </summary>
+    public void Revert(string component, HealthTransition transition)
+    {
+        if (transition == HealthTransition.None) return;
+        lock (_lock)
+        {
+            if (!_state.TryGetValue(component, out var health)) return;
+            // Degraded set InOutage=true → clear it so the next failing probe
+            // re-detects Degraded. Recovered cleared it → set it back so the next
+            // healthy probe re-detects Recovered.
+            health.InOutage = transition == HealthTransition.Recovered;
+        }
+    }
+
     /// <summary>Current consecutive-failure count for the component (0 if unknown/healthy).</summary>
     public int ConsecutiveFailures(string component)
     {

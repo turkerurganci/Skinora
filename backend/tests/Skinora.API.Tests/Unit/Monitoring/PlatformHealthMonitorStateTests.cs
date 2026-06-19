@@ -73,6 +73,43 @@ public sealed class PlatformHealthMonitorStateTests
     }
 
     [Fact]
+    public void Revert_Degraded_Lets_Next_Failing_Probe_Redetect()
+    {
+        var state = new PlatformHealthMonitorState();
+        for (var i = 0; i < Threshold; i++) state.Record(Component, healthy: false, Threshold);
+        // Degraded was reported but its durable alert failed → revert.
+        state.Revert(Component, HealthTransition.Degraded);
+
+        // The next failing probe must re-report Degraded (alert not swallowed).
+        Assert.Equal(HealthTransition.Degraded, state.Record(Component, healthy: false, Threshold));
+    }
+
+    [Fact]
+    public void Revert_Recovered_Lets_Next_Healthy_Probe_Redetect()
+    {
+        var state = new PlatformHealthMonitorState();
+        for (var i = 0; i < Threshold; i++) state.Record(Component, healthy: false, Threshold);
+        state.Record(Component, healthy: true, Threshold); // Recovered
+        // Recovery alert failed to persist → revert.
+        state.Revert(Component, HealthTransition.Recovered);
+
+        // The next healthy probe must re-report Recovered.
+        Assert.Equal(HealthTransition.Recovered, state.Record(Component, healthy: true, Threshold));
+    }
+
+    [Fact]
+    public void Revert_None_Is_A_Noop()
+    {
+        var state = new PlatformHealthMonitorState();
+        state.Record(Component, healthy: false, Threshold); // below threshold, None
+        state.Revert(Component, HealthTransition.None);
+
+        // Counter untouched; still below threshold.
+        Assert.Equal(1, state.ConsecutiveFailures(Component));
+        Assert.Equal(HealthTransition.None, state.Record(Component, healthy: false, Threshold));
+    }
+
+    [Fact]
     public void Components_Are_Tracked_Independently()
     {
         var state = new PlatformHealthMonitorState();

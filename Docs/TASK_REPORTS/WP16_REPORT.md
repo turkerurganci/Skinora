@@ -78,6 +78,9 @@
 |---|---|
 | Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
 | Yapım-içi self-check | Build 0W/0E · dokunulan 5 BE suite + FE tsc/eslint yeşil |
+| Yapım-içi adversarial review (6-boyut/refute-default workflow) | 2 ham → **1 onaylı S2 + 1 NOTE**; S2 düzeltildi |
+
+**Adversarial self-review (yapım-içi, validator'dan önce):** 4-boyut refute-default workflow + verify. **S2 (onaylı, düzeltildi):** `PlatformHealthMonitorState.InOutage` durable SaveChanges'ten önce mutate ediliyordu → SaveChanges geçici hata verirse audit+outbox rollback olur ama singleton "alerted" kalır → retry'da `Record` `None` döner → **DEGRADED alert kalıcı kaybolur**. **Fix:** `PlatformHealthMonitorState.Revert(component, transition)` (edge'i geri al → sonraki probe yeniden tespit eder) + `ProbeAsync` SaveChanges try/catch → hata durumunda revert + LogError (recurring job sonraki tick'te yeniden tespit eder). Testler: 3 revert-kontrat unit + 1 job-seviyesi failure integration (`ThrowingOnceDbContext` → run1 fail+revert, run2 fresh-scope re-detect+persist; scoped-per-run prod gerçekliği modellendi). **NOTE (gerçek değil, bırakıldı):** `[DisableConcurrentExecution]` yok — lock atomik edge-detection çift-alert'i imkânsız kılar + recurring job'ların çoğu zaten kullanmıyor.
 
 ## Altyapı Değişiklikleri
 - **Migration: YOK** — tüm kolonlar mevcut; `AuditAction`/`NotificationType` değerleri **sona eklendi** (CHECK constraint yok, WP8 emsali → şema değişmez).

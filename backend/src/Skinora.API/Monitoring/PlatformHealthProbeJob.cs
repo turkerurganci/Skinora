@@ -65,7 +65,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
 
     public async Task ProbeAsync()
     {
-        var transitions = 0;
+        var applied = new List<(string Component, HealthTransition Transition)>();
 
         foreach (var component in PlatformComponents.All)
         {
@@ -109,12 +109,34 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
                     OccurredAt: now),
                 CancellationToken.None);
 
-            transitions++;
+            applied.Add((component, transition));
             _logger.LogWarning(
                 "Platform health transition — component={Component} status={Status} consecutiveFailures={Failures}.",
                 component, status, consecutiveFailures);
         }
 
-        if (transitions > 0) await _db.SaveChangesAsync(CancellationToken.None);
+        if (applied.Count == 0) return;
+
+        try
+        {
+            await _db.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // The durable alert write failed (deadlock / connection drop / timeout)
+            // → EF discarded the staged audit + outbox rows, but the in-memory
+            // edge was already consumed. Roll the singleton back so the next probe
+            // re-detects the same transition; otherwise the alert is lost for the
+            // whole outage (the state would report "already alerted" forever).
+            // Swallowed — the recurring job re-runs every ProbeCron tick.
+            foreach (var (component, transition) in applied)
+                _state.Revert(component, transition);
+
+            _logger.LogError(
+                ex,
+                "Platform health probe could not persist {Count} outage transition(s) — "
+                + "reverted in-memory state for re-detection on the next run.",
+                applied.Count);
+        }
     }
 }

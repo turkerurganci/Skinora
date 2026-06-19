@@ -105,6 +105,64 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
             .AnyAsync(a => a.Action == AuditAction.PLATFORM_OUTAGE_DETECTED));
     }
 
+    [Fact]
+    public async Task Failed_Persist_Reverts_State_So_Next_Probe_Redetects()
+    {
+        // WP16 adversarial-review S2: a transient SaveChanges failure on the
+        // degradation edge must NOT swallow the alert. Models production faithfully
+        // — the monitor state is a singleton, but each Hangfire run gets its own
+        // scoped AppDbContext (so the failed run's change tracker is discarded with
+        // its disposed context; only the state survives to drive re-detection).
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(ConnectionString)
+            .Options;
+        var probeOptions = Options.Create(new HealthProbeOptions { FailureThreshold = 1 });
+        _health.SteamHealthy = false;
+
+        // Run 1 — Degraded edge, but SaveChanges throws → caught + state reverted.
+        await using (var throwingContext = new ThrowingOnceDbContext(options))
+        {
+            var failingSut = new PlatformHealthProbeJob(
+                _health, _state, _outbox, new AuditLogger(throwingContext, _clock),
+                throwingContext, _clock, probeOptions,
+                NullLogger<PlatformHealthProbeJob>.Instance);
+            await failingSut.ProbeAsync();
+        }
+        Assert.False(await Context.Set<AuditLog>().AsNoTracking()
+            .AnyAsync(a => a.Action == AuditAction.PLATFORM_OUTAGE_DETECTED));
+
+        // Run 2 — fresh scoped context; the reverted state re-detects the outage
+        // and the alert is finally persisted exactly once.
+        await using (var freshContext = CreateContext())
+        {
+            var healthySut = new PlatformHealthProbeJob(
+                _health, _state, _outbox, new AuditLogger(freshContext, _clock),
+                freshContext, _clock, probeOptions,
+                NullLogger<PlatformHealthProbeJob>.Instance);
+            await healthySut.ProbeAsync();
+        }
+        Assert.Equal(1, await Context.Set<AuditLog>().AsNoTracking()
+            .CountAsync(a => a.Action == AuditAction.PLATFORM_OUTAGE_DETECTED));
+    }
+
+    private sealed class ThrowingOnceDbContext : AppDbContext
+    {
+        private bool _thrown;
+
+        public ThrowingOnceDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (!_thrown)
+            {
+                _thrown = true;
+                throw new DbUpdateException("Simulated transient persistence failure.");
+            }
+
+            return base.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     private sealed class FakeSidecarHealthClient : ISidecarHealthClient
     {
         public bool? SteamHealthy { get; set; } = true;
