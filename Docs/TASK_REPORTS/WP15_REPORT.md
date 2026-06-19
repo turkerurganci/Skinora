@@ -105,7 +105,7 @@ Genesis/transition History yazımı 3 API endpoint factory'sinin `Reset()`'ini k
 
 - Branch: `task/WP15-reputation-trigger`
 - Commit: (push'ta)
-- PR: #TBD
+- PR: [#188](https://github.com/turkerurganci/Skinora/pull/188)
 - CI: ⏳
 
 ## Known Limitations / Follow-up
