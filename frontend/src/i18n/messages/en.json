@@ -799,7 +799,97 @@
   "footer": {
     "tos": "Terms of Service",
     "privacy": "Privacy Policy",
-    "privacyComingSoon": "Coming soon"
+    "support": "Support"
+  },
+  "legal": {
+    "draftNotice": "This page is being finalized ahead of launch. The summary below outlines what the full policy will cover.",
+    "backToHome": "Back to home",
+    "privacy": {
+      "title": "Privacy Policy",
+      "intro": "Skinora processes the minimum personal data needed to operate the CS2 item escrow service. This summary explains what we collect, why, and the choices you have.",
+      "sections": {
+        "dataWeCollect": {
+          "heading": "Data we collect",
+          "body": "Your Steam public profile (Steam ID, display name, avatar), the wallet addresses you provide, and your transaction activity on the platform."
+        },
+        "howWeUse": {
+          "heading": "How we use your data",
+          "body": "To authenticate you, run escrow transactions, prevent fraud, and meet our legal and security obligations."
+        },
+        "dataSharing": {
+          "heading": "Data sharing",
+          "body": "We share data only with the third parties required to deliver the service (such as Steam and blockchain infrastructure) and where the law requires it. We do not sell personal data."
+        },
+        "dataRetention": {
+          "heading": "Data retention",
+          "body": "Transaction and audit records are kept as long as needed for accounting, dispute resolution, and legal compliance; account data is removed on a deletion request where permitted."
+        },
+        "yourRights": {
+          "heading": "Your rights",
+          "body": "You may request access to, correction of, or deletion of your personal data, subject to legal limits, from your account settings or by contacting support."
+        },
+        "contact": {
+          "heading": "Contact",
+          "body": "For privacy questions, reach us through the support page."
+        }
+      }
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "intro": "These terms govern your use of Skinora's CS2 item escrow platform. By using the service you agree to them.",
+      "sections": {
+        "acceptance": {
+          "heading": "Acceptance of terms",
+          "body": "By creating or accepting a transaction you confirm that you are at least 18 years old and agree to these terms and the Privacy Policy."
+        },
+        "serviceDescription": {
+          "heading": "The service",
+          "body": "Skinora holds a CS2 item and a stablecoin payment in escrow and releases each side to its counterparty once both have been verified on-chain and in Steam."
+        },
+        "userObligations": {
+          "heading": "Your obligations",
+          "body": "You must provide accurate wallet addresses, use only accounts you own, and not attempt fraud, market manipulation, or circumvention of platform controls."
+        },
+        "fees": {
+          "heading": "Fees",
+          "body": "A platform commission and network gas fees apply to each transaction and are shown to you before you confirm."
+        },
+        "liability": {
+          "heading": "Liability",
+          "body": "The service is provided on an as-is basis. Skinora is not liable for losses arising from Steam, blockchain, or other third-party failures outside its control."
+        },
+        "termination": {
+          "heading": "Suspension and termination",
+          "body": "We may suspend or close accounts that violate these terms or applicable law, including our sanctions and fraud rules."
+        },
+        "contact": {
+          "heading": "Contact",
+          "body": "Questions about these terms can be sent through the support page."
+        }
+      }
+    },
+    "support": {
+      "title": "Support",
+      "intro": "Need help with a transaction or your account? Here is how to reach us and what to expect.",
+      "sections": {
+        "contact": {
+          "heading": "Contact us",
+          "body": "Email support@skinora.app with your transaction ID and a description of the issue."
+        },
+        "responseTimes": {
+          "heading": "Response times",
+          "body": "We aim to respond within one business day. Time-sensitive escrow issues are prioritized."
+        },
+        "disputes": {
+          "heading": "Transaction disputes",
+          "body": "If a trade does not complete as expected, open a dispute from the transaction page; our team reviews escalated cases."
+        },
+        "faq": {
+          "heading": "Common questions",
+          "body": "Guidance on payments, trade offers, refunds, and account safety will be available here."
+        }
+      }
+    }
   },
   "status": {
     "CREATED": "Created",
@@ -836,7 +926,8 @@
     "tradeable": "Tradeable",
     "nonTradeable": "Non-tradeable",
     "type": "Type",
-    "wear": "Wear"
+    "wear": "Wear",
+    "assetId": "Asset ID"
   },
   "userCard": {
     "completedTransactions": "{count} completed transactions",
@@ -1181,6 +1272,7 @@
     }
   },
   "transactionDetail": {
+    "viewOnTronscan": "View on Tronscan",
     "header": {
       "title": "Transaction #{id}"
     },
@@ -1323,6 +1415,7 @@
         "INVALID_STATE_TRANSITION": "This transaction can no longer be accepted.",
         "BUYER_NOT_FOUND": "Your account could not be matched as the buyer. Please contact support.",
         "VALIDATION_ERROR": "The submitted data is invalid. Please check the address.",
+        "ACCOUNT_FLAGGED": "Your account is under review and can't accept transactions right now. Please contact support.",
         "generic": "Could not accept the transaction. Please try again."
       }
     },
@@ -1350,6 +1443,7 @@
         "seller": "The buyer accepted. The platform is preparing your trade offer.",
         "buyer": "Waiting for the seller to send the item."
       },
+      "viewTradeOffer": "Go to Steam trade offer",
       "tradeOfferToSeller": {
         "seller": "Accept the trade offer in Steam to escrow the item.",
         "buyer": "Waiting for the seller to send the item."
@@ -1515,6 +1609,9 @@
         "verify": "Verify",
         "verifying": "Verifying…",
         "cancel": "Cancel",
+        "expiresInLabel": "Code expires in",
+        "expiredLabel": "Code expired",
+        "resendInLabel": "You can resend in",
         "errors": {
           "noEmail": "Save your email address first.",
           "cooldown": "Too many requests. Please wait and try again.",

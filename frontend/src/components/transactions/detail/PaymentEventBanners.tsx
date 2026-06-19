@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import type { TransactionDetailPaymentEvent } from "@/lib/api/transactions";
 import { cn } from "@/lib/utils/cn";
+import { TxHashLink } from "./TxHashLink";
 
 export interface PaymentEventBannersProps {
   events: TransactionDetailPaymentEvent[];
@@ -43,8 +44,9 @@ export function PaymentEventBanners({ events, stablecoin, cancelled }: PaymentEv
             <p className="font-medium">{t(`${event.type}.title`)}</p>
             <p>{messageFor(event, stablecoin, t)}</p>
             {event.refundTxHash && (
-              <p className="mt-1 font-mono text-xs">
-                {t("refundTxHashLabel")}: {event.refundTxHash}
+              <p className="mt-1 flex items-center gap-1 font-mono text-xs">
+                <span>{t("refundTxHashLabel")}:</span>
+                <TxHashLink txHash={event.refundTxHash} />
               </p>
             )}
           </div>

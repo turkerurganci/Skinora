@@ -26,13 +26,11 @@ export function Footer({ className }: FooterProps) {
         <Link href={href("/terms")} className="hover:text-gray-900 hover:underline">
           {t("tos")}
         </Link>
-        <Link
-          href={href("/privacy")}
-          className="hover:text-gray-900 hover:underline"
-          aria-disabled="true"
-          title={t("privacyComingSoon")}
-        >
+        <Link href={href("/privacy")} className="hover:text-gray-900 hover:underline">
           {t("privacy")}
+        </Link>
+        <Link href={href("/support")} className="hover:text-gray-900 hover:underline">
+          {t("support")}
         </Link>
       </div>
       <LanguageSelector />

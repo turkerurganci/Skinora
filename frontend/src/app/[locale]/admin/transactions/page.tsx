@@ -8,9 +8,13 @@ import type { FilterField } from "@/components/common";
 import { TransactionListTable } from "@/components/admin";
 import { useAdminTransactionList } from "@/lib/hooks/useAdminTransactionList";
 import type { AdminTransactionListQuery, AdminTransactionStatusGroup } from "@/lib/api/admin";
+import { parseTableSort, nextTableSort } from "@/lib/admin/tableSort";
 import { StablecoinType } from "@/types/enums";
 
 const PAGE_SIZE = 20;
+
+// AD6 sort columns (07 §9.6 — server falls back to createdAt desc for others).
+const SORT_KEYS = ["createdAt", "price", "status"] as const;
 
 const STATUS_GROUP_VALUES = ["ACTIVE", "COMPLETED", "CANCELLED", "FLAGGED"] as const;
 const STABLECOIN_VALUES = [StablecoinType.USDT, StablecoinType.USDC] as const;
@@ -62,6 +66,7 @@ export default function AdminTransactionsPage() {
   const search = searchParams.get("search") ?? undefined;
   const pageParam = Number(searchParams.get("page"));
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+  const sort = parseTableSort(searchParams, SORT_KEYS);
 
   const query: AdminTransactionListQuery = useMemo(
     () => ({
@@ -72,10 +77,23 @@ export default function AdminTransactionsPage() {
       minAmount,
       maxAmount,
       search,
+      sortBy: sort.by ?? undefined,
+      sortOrder: sort.by ? sort.order : undefined,
       page,
       pageSize: PAGE_SIZE,
     }),
-    [statusGroup, stablecoin, dateFrom, dateTo, minAmount, maxAmount, search, page],
+    [
+      statusGroup,
+      stablecoin,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+      search,
+      sort.by,
+      sort.order,
+      page,
+    ],
   );
 
   const { data, isLoading, isError, refetch } = useAdminTransactionList(query);
@@ -154,6 +172,12 @@ export default function AdminTransactionsPage() {
     pushParams({ page: next > 1 ? String(next) : undefined });
   }
 
+  function handleSort(sortKey: string) {
+    // Sorting changes reset to page 1 so the first slice of the new order shows.
+    const next = nextTableSort(sort, sortKey);
+    pushParams({ sortBy: next.by ?? undefined, sortOrder: next.order, page: undefined });
+  }
+
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1;
 
   return (
@@ -178,7 +202,10 @@ export default function AdminTransactionsPage() {
         </div>
       ) : (
         <>
-          <TransactionListTable transactions={data?.items ?? []} />
+          <TransactionListTable
+            transactions={data?.items ?? []}
+            sort={{ by: sort.by, order: sort.order, onSort: handleSort }}
+          />
           <Pagination
             currentPage={data?.page ?? 1}
             totalPages={totalPages}

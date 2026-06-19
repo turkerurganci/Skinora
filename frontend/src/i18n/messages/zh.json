@@ -799,7 +799,97 @@
   "footer": {
     "tos": "服务条款",
     "privacy": "隐私政策",
-    "privacyComingSoon": "即将推出"
+    "support": "支持"
+  },
+  "legal": {
+    "draftNotice": "本页面正在上线前完善。以下摘要概述了完整政策将涵盖的内容。",
+    "backToHome": "返回首页",
+    "privacy": {
+      "title": "隐私政策",
+      "intro": "Skinora 仅处理运营 CS2 物品托管服务所需的最少个人数据。本摘要说明我们收集哪些数据、原因以及您拥有的选择。",
+      "sections": {
+        "dataWeCollect": {
+          "heading": "我们收集的数据",
+          "body": "您的 Steam 公开资料（Steam ID、显示名称、头像）、您提供的钱包地址以及您在平台上的交易活动。"
+        },
+        "howWeUse": {
+          "heading": "我们如何使用您的数据",
+          "body": "用于对您进行身份验证、执行托管交易、防范欺诈，以及履行我们的法律和安全义务。"
+        },
+        "dataSharing": {
+          "heading": "数据共享",
+          "body": "我们仅与提供服务所需的第三方（如 Steam 和区块链基础设施）以及法律要求的情况下共享数据。我们不会出售个人数据。"
+        },
+        "dataRetention": {
+          "heading": "数据保留",
+          "body": "交易和审计记录将在会计、争议解决和法律合规所需的期间内保留；在允许的情况下，账户数据将在删除请求后被移除。"
+        },
+        "yourRights": {
+          "heading": "您的权利",
+          "body": "在法律限制范围内，您可以从账户设置中或通过联系支持团队，请求访问、更正或删除您的个人数据。"
+        },
+        "contact": {
+          "heading": "联系方式",
+          "body": "如有隐私相关问题，请通过支持页面与我们联系。"
+        }
+      }
+    },
+    "terms": {
+      "title": "服务条款",
+      "intro": "本条款规范您对 Skinora CS2 物品托管平台的使用。使用本服务即表示您同意这些条款。",
+      "sections": {
+        "acceptance": {
+          "heading": "条款的接受",
+          "body": "通过创建或接受交易，您确认您已年满 18 周岁，并同意本条款和隐私政策。"
+        },
+        "serviceDescription": {
+          "heading": "服务",
+          "body": "Skinora 将一件 CS2 物品和一笔稳定币付款托管，待双方均在链上和 Steam 中验证后，将各方资产释放给其交易对手。"
+        },
+        "userObligations": {
+          "heading": "您的义务",
+          "body": "您必须提供准确的钱包地址，仅使用您本人拥有的账户，且不得尝试欺诈、操纵市场或规避平台控制。"
+        },
+        "fees": {
+          "heading": "费用",
+          "body": "每笔交易均适用平台佣金和网络 gas 费用，并在您确认前向您显示。"
+        },
+        "liability": {
+          "heading": "责任",
+          "body": "本服务按现状提供。对于因 Steam、区块链或其控制之外的其他第三方故障而造成的损失，Skinora 概不负责。"
+        },
+        "termination": {
+          "heading": "暂停与终止",
+          "body": "对于违反本条款或适用法律（包括我们的制裁和欺诈规则）的账户，我们可以将其暂停或关闭。"
+        },
+        "contact": {
+          "heading": "联系方式",
+          "body": "有关本条款的问题可通过支持页面发送给我们。"
+        }
+      }
+    },
+    "support": {
+      "title": "支持",
+      "intro": "在交易或账户方面需要帮助吗？以下是联系我们的方式以及您可以期待的内容。",
+      "sections": {
+        "contact": {
+          "heading": "联系我们",
+          "body": "请发送电子邮件至 support@skinora.app，并附上您的交易编号和问题描述。"
+        },
+        "responseTimes": {
+          "heading": "响应时间",
+          "body": "我们力求在一个工作日内回复。时间紧迫的托管问题将被优先处理。"
+        },
+        "disputes": {
+          "heading": "交易争议",
+          "body": "如果交易未按预期完成，请从交易页面发起争议；我们的团队会审查升级的案件。"
+        },
+        "faq": {
+          "heading": "常见问题",
+          "body": "有关付款、交易报价、退款和账户安全的指南将在此处提供。"
+        }
+      }
+    }
   },
   "status": {
     "CREATED": "已创建",
@@ -836,7 +926,8 @@
     "tradeable": "可交易",
     "nonTradeable": "不可交易",
     "type": "类型",
-    "wear": "磨损"
+    "wear": "磨损",
+    "assetId": "资产 ID"
   },
   "userCard": {
     "completedTransactions": "{count} 笔已完成交易",
@@ -1181,6 +1272,7 @@
     }
   },
   "transactionDetail": {
+    "viewOnTronscan": "在 Tronscan 上查看",
     "header": {
       "title": "交易 #{id}"
     },
@@ -1323,6 +1415,7 @@
         "INVALID_STATE_TRANSITION": "此交易无法再被接受。",
         "BUYER_NOT_FOUND": "您的账户未匹配为买家。请联系支持。",
         "VALIDATION_ERROR": "提交的数据无效。请检查地址。",
+        "ACCOUNT_FLAGGED": "您的账户正在审核中，暂时无法接受交易。请联系支持团队。",
         "generic": "无法接受此交易。请重试。"
       }
     },
@@ -1350,6 +1443,7 @@
         "seller": "买家已接受。平台正在准备您的交易报价。",
         "buyer": "等待卖家发送物品。"
       },
+      "viewTradeOffer": "前往 Steam 交易报价",
       "tradeOfferToSeller": {
         "seller": "请在 Steam 中接受交易报价以将物品存入托管。",
         "buyer": "等待卖家发送物品。"
@@ -1515,6 +1609,9 @@
         "verify": "验证",
         "verifying": "正在验证…",
         "cancel": "取消",
+        "expiresInLabel": "验证码有效期",
+        "expiredLabel": "验证码已过期",
+        "resendInLabel": "可重新发送倒计时",
         "errors": {
           "noEmail": "请先保存您的邮箱地址。",
           "cooldown": "请求过于频繁。请稍后再试。",

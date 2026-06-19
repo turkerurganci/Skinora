@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { ResponsiveTable, StatusBadge } from "@/components/common";
-import type { ResponsiveTableColumn } from "@/components/common";
+import type { ResponsiveTableColumn, ResponsiveTableSort } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import type { AdminTransactionListItem, AdminTransactionParty } from "@/lib/api/admin";
@@ -38,6 +38,8 @@ function TxPartyCell({ party, locale }: { party: AdminTransactionParty | null; l
 export interface TransactionListTableProps {
   transactions: readonly AdminTransactionListItem[];
   className?: string;
+  /** Optional click-to-sort wiring (AD6 supports createdAt / price / status). */
+  sort?: ResponsiveTableSort;
 }
 
 /**
@@ -46,7 +48,7 @@ export interface TransactionListTableProps {
  * Desktop renders a semantic table; mobile collapses to cards via
  * {@link ResponsiveTable} (04 §9.4).
  */
-export function TransactionListTable({ transactions, className }: TransactionListTableProps) {
+export function TransactionListTable({ transactions, className, sort }: TransactionListTableProps) {
   const t = useTranslations("adminTransactions");
   const locale = useLocale();
 
@@ -85,6 +87,7 @@ export function TransactionListTable({ transactions, className }: TransactionLis
     {
       key: "price",
       header: t("columns.price"),
+      sortKey: "price",
       cell: (row) => (
         <span className="text-sm tabular-nums text-gray-900">
           {formatStablecoin(row.price, row.stablecoin)}
@@ -104,11 +107,13 @@ export function TransactionListTable({ transactions, className }: TransactionLis
     {
       key: "status",
       header: t("columns.status"),
+      sortKey: "status",
       cell: (row) => <StatusBadge status={row.status} />,
     },
     {
       key: "createdAt",
       header: t("columns.createdAt"),
+      sortKey: "createdAt",
       cell: (row) => (
         <time dateTime={row.createdAt} className="text-sm tabular-nums text-gray-700">
           {formatDateTime(row.createdAt, locale)}
@@ -137,6 +142,7 @@ export function TransactionListTable({ transactions, className }: TransactionLis
       ariaLabel={t("tableAriaLabel")}
       emptyMessage={t("empty")}
       className={cn(className)}
+      sort={sort}
     />
   );
 }

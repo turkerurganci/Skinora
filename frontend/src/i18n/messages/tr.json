@@ -799,7 +799,97 @@
   "footer": {
     "tos": "Kullanıcı Sözleşmesi",
     "privacy": "Gizlilik Politikası",
-    "privacyComingSoon": "Yakında"
+    "support": "Destek"
+  },
+  "legal": {
+    "draftNotice": "Bu sayfa lansman öncesi tamamlanıyor. Aşağıdaki özet, tam politikanın neleri kapsayacağını anlatır.",
+    "backToHome": "Ana sayfaya dön",
+    "privacy": {
+      "title": "Gizlilik Politikası",
+      "intro": "Skinora, CS2 eşya emanet hizmetini yürütmek için gereken asgari kişisel veriyi işler. Bu özet neyi, neden topladığımızı ve sahip olduğunuz seçenekleri açıklar.",
+      "sections": {
+        "dataWeCollect": {
+          "heading": "Topladığımız veriler",
+          "body": "Steam genel profiliniz (Steam ID, görünen ad, avatar), sağladığınız cüzdan adresleri ve platformdaki işlem aktiviteniz."
+        },
+        "howWeUse": {
+          "heading": "Verilerinizi nasıl kullanırız",
+          "body": "Sizi doğrulamak, emanet işlemlerini yürütmek, dolandırıcılığı önlemek ve yasal ve güvenlik yükümlülüklerimizi yerine getirmek için."
+        },
+        "dataSharing": {
+          "heading": "Veri paylaşımı",
+          "body": "Verileri yalnızca hizmeti sunmak için gereken üçüncü taraflarla (Steam ve blok zinciri altyapısı gibi) ve yasaların gerektirdiği durumlarda paylaşırız. Kişisel veri satmıyoruz."
+        },
+        "dataRetention": {
+          "heading": "Veri saklama",
+          "body": "İşlem ve denetim kayıtları muhasebe, uyuşmazlık çözümü ve yasal uyum için gerekli olduğu sürece tutulur; hesap verileri izin verilen durumlarda silme talebiyle kaldırılır."
+        },
+        "yourRights": {
+          "heading": "Haklarınız",
+          "body": "Yasal sınırlara tabi olarak kişisel verilerinize erişim, düzeltme veya silme talebinde bulunabilirsiniz; bunu hesap ayarlarınızdan veya destekle iletişime geçerek yapabilirsiniz."
+        },
+        "contact": {
+          "heading": "İletişim",
+          "body": "Gizlilikle ilgili sorularınız için destek sayfası üzerinden bize ulaşın."
+        }
+      }
+    },
+    "terms": {
+      "title": "Kullanıcı Sözleşmesi",
+      "intro": "Bu şartlar, Skinora'nın CS2 eşya emanet platformunu kullanımınızı düzenler. Hizmeti kullanarak bunları kabul etmiş olursunuz.",
+      "sections": {
+        "acceptance": {
+          "heading": "Şartların kabulü",
+          "body": "Bir işlem oluşturarak veya kabul ederek, en az 18 yaşında olduğunuzu ve bu şartları ile Gizlilik Politikası'nı kabul ettiğinizi onaylarsınız."
+        },
+        "serviceDescription": {
+          "heading": "Hizmet",
+          "body": "Skinora, bir CS2 eşyasını ve bir stablecoin ödemesini emanette tutar ve her ikisi de zincir üzerinde ve Steam'de doğrulandığında her tarafı karşı tarafına serbest bırakır."
+        },
+        "userObligations": {
+          "heading": "Yükümlülükleriniz",
+          "body": "Doğru cüzdan adresleri sağlamalı, yalnızca size ait hesapları kullanmalı ve dolandırıcılık, piyasa manipülasyonu veya platform kontrollerini aşma girişiminde bulunmamalısınız."
+        },
+        "fees": {
+          "heading": "Ücretler",
+          "body": "Her işleme bir platform komisyonu ve ağ gas ücretleri uygulanır ve onaylamadan önce size gösterilir."
+        },
+        "liability": {
+          "heading": "Sorumluluk",
+          "body": "Hizmet olduğu gibi sunulur. Skinora; Steam, blok zinciri veya kontrolü dışındaki diğer üçüncü taraf arızalarından kaynaklanan kayıplardan sorumlu değildir."
+        },
+        "termination": {
+          "heading": "Askıya alma ve fesih",
+          "body": "Bu şartları veya yürürlükteki yasaları ihlal eden hesapları, yaptırım ve dolandırıcılık kurallarımız dâhil, askıya alabilir veya kapatabiliriz."
+        },
+        "contact": {
+          "heading": "İletişim",
+          "body": "Bu şartlarla ilgili sorularınızı destek sayfası üzerinden gönderebilirsiniz."
+        }
+      }
+    },
+    "support": {
+      "title": "Destek",
+      "intro": "İşleminiz veya hesabınızla ilgili yardıma mı ihtiyacınız var? Bize nasıl ulaşacağınız ve ne bekleyeceğiniz aşağıda.",
+      "sections": {
+        "contact": {
+          "heading": "Bize ulaşın",
+          "body": "İşlem numaranız ve sorunun açıklamasıyla support@skinora.app adresine e-posta gönderin."
+        },
+        "responseTimes": {
+          "heading": "Yanıt süreleri",
+          "body": "Bir iş günü içinde yanıt vermeyi hedefliyoruz. Zaman açısından kritik emanet sorunlarına öncelik verilir."
+        },
+        "disputes": {
+          "heading": "İşlem uyuşmazlıkları",
+          "body": "Bir takas beklendiği gibi tamamlanmazsa işlem sayfasından bir uyuşmazlık açın; ekibimiz yükseltilen vakaları inceler."
+        },
+        "faq": {
+          "heading": "Sık sorulan sorular",
+          "body": "Ödemeler, takas teklifleri, iadeler ve hesap güvenliği hakkında rehberlik burada yer alacaktır."
+        }
+      }
+    }
   },
   "status": {
     "CREATED": "Oluşturuldu",
@@ -836,7 +926,8 @@
     "tradeable": "Takas edilebilir",
     "nonTradeable": "Takas dışı",
     "type": "Tür",
-    "wear": "Aşınma"
+    "wear": "Aşınma",
+    "assetId": "Varlık ID"
   },
   "userCard": {
     "completedTransactions": "{count} tamamlanmış işlem",
@@ -1181,6 +1272,7 @@
     }
   },
   "transactionDetail": {
+    "viewOnTronscan": "Tronscan'de görüntüle",
     "header": {
       "title": "İşlem #{id}"
     },
@@ -1323,6 +1415,7 @@
         "INVALID_STATE_TRANSITION": "Bu işlem artık kabul edilemez.",
         "BUYER_NOT_FOUND": "Hesabınız alıcı olarak eşleşmedi. Lütfen destek ekibiyle iletişime geçin.",
         "VALIDATION_ERROR": "Gönderilen veri geçersiz. Lütfen adresi kontrol edin.",
+        "ACCOUNT_FLAGGED": "Hesabınız incelemede; şu anda işlem kabul edemezsiniz. Lütfen destek ile iletişime geçin.",
         "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin."
       }
     },
@@ -1350,6 +1443,7 @@
         "seller": "Alıcı kabul etti. Platform trade offer'ınızı hazırlıyor.",
         "buyer": "Satıcının item'ı göndermesi bekleniyor."
       },
+      "viewTradeOffer": "Steam takas teklifine git",
       "tradeOfferToSeller": {
         "seller": "Item'ı emanete almak için Steam'de trade offer'ı kabul edin.",
         "buyer": "Satıcının item'ı göndermesi bekleniyor."
@@ -1515,6 +1609,9 @@
         "verify": "Doğrula",
         "verifying": "Doğrulanıyor…",
         "cancel": "Vazgeç",
+        "expiresInLabel": "Kodun geçerlilik süresi",
+        "expiredLabel": "Kodun süresi doldu",
+        "resendInLabel": "Tekrar gönderebilmeniz için kalan süre",
         "errors": {
           "noEmail": "Önce email adresinizi kaydedin.",
           "cooldown": "Çok sık deneme. Bir süre bekleyip tekrar deneyin.",

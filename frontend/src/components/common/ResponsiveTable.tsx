@@ -3,6 +3,20 @@
 import { Fragment, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
+export type TableSortOrder = "asc" | "desc";
+
+/**
+ * Optional click-to-sort wiring for the desktop header (WP13 admin-table-sort).
+ * `by` is the active column's {@link ResponsiveTableColumn.sortKey} (or null
+ * when the list uses its default server order); `onSort` is called with a
+ * column's sortKey when its header is clicked — the caller decides the toggle.
+ */
+export interface ResponsiveTableSort {
+  by: string | null;
+  order: TableSortOrder;
+  onSort: (sortKey: string) => void;
+}
+
 export interface ResponsiveTableColumn<T> {
   key: string;
   header: ReactNode;
@@ -14,6 +28,12 @@ export interface ResponsiveTableColumn<T> {
    * Use for low-value columns that already appear in the primary header line.
    */
   mobileHidden?: boolean;
+  /**
+   * Backend sort key for this column. When set and the table receives a
+   * {@link ResponsiveTableProps.sort} handler, the desktop header becomes a
+   * sort toggle button. Omit for non-sortable columns.
+   */
+  sortKey?: string;
 }
 
 export interface ResponsiveTableProps<T> {
@@ -29,6 +49,8 @@ export interface ResponsiveTableProps<T> {
    * for the desktop <table> view).
    */
   mobileRender?: (row: T) => ReactNode;
+  /** Enables desktop click-to-sort on columns that declare a `sortKey`. */
+  sort?: ResponsiveTableSort;
 }
 
 /**
@@ -45,6 +67,7 @@ export function ResponsiveTable<T>({
   emptyMessage,
   className,
   mobileRender,
+  sort,
 }: ResponsiveTableProps<T>) {
   if (data.length === 0 && emptyMessage !== undefined) {
     return (
@@ -70,15 +93,38 @@ export function ResponsiveTable<T>({
         >
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  scope="col"
-                  className={cn("px-3 py-2 align-middle", col.headerClassName)}
-                >
-                  {col.header}
-                </th>
-              ))}
+              {columns.map((col) => {
+                const sortable = !!sort && !!col.sortKey;
+                const active = sortable && sort!.by === col.sortKey;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={
+                      active ? (sort!.order === "asc" ? "ascending" : "descending") : undefined
+                    }
+                    className={cn("px-3 py-2 align-middle", col.headerClassName)}
+                  >
+                    {sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => sort!.onSort(col.sortKey!)}
+                        className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-gray-900"
+                      >
+                        {col.header}
+                        <span
+                          aria-hidden="true"
+                          className={cn(active ? "text-gray-900" : "text-gray-400")}
+                        >
+                          {active ? (sort!.order === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </button>
+                    ) : (
+                      col.header
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

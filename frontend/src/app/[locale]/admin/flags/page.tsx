@@ -8,8 +8,12 @@ import type { FilterField } from "@/components/common";
 import { FlagQueueTable } from "@/components/admin";
 import { useAdminFlagList } from "@/lib/hooks/useAdminFlagList";
 import type { AdminFlagListQuery } from "@/lib/api/admin";
+import { parseTableSort, nextTableSort } from "@/lib/admin/tableSort";
 
 const PAGE_SIZE = 20;
+
+// AD2 sort columns (07 §9.2 — server falls back to createdAt desc for others).
+const SORT_KEYS = ["createdAt", "type", "reviewStatus"] as const;
 
 const SCOPE_VALUES = ["ACCOUNT_LEVEL", "TRANSACTION_PRE_CREATE"] as const;
 const TYPE_VALUES = [
@@ -46,10 +50,21 @@ export default function AdminFlagsPage() {
   const dateTo = searchParams.get("dateTo") ?? undefined;
   const pageParam = Number(searchParams.get("page"));
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+  const sort = parseTableSort(searchParams, SORT_KEYS);
 
   const query: AdminFlagListQuery = useMemo(
-    () => ({ scope, type, reviewStatus, dateFrom, dateTo, page, pageSize: PAGE_SIZE }),
-    [scope, type, reviewStatus, dateFrom, dateTo, page],
+    () => ({
+      scope,
+      type,
+      reviewStatus,
+      dateFrom,
+      dateTo,
+      sortBy: sort.by ?? undefined,
+      sortOrder: sort.by ? sort.order : undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [scope, type, reviewStatus, dateFrom, dateTo, sort.by, sort.order, page],
   );
 
   const { data, isLoading, isError, refetch } = useAdminFlagList(query);
@@ -118,6 +133,11 @@ export default function AdminFlagsPage() {
     pushParams({ page: next > 1 ? String(next) : undefined });
   }
 
+  function handleSort(sortKey: string) {
+    const next = nextTableSort(sort, sortKey);
+    pushParams({ sortBy: next.by ?? undefined, sortOrder: next.order, page: undefined });
+  }
+
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1;
   const pendingCount = data?.pendingCount ?? 0;
 
@@ -145,7 +165,11 @@ export default function AdminFlagsPage() {
         </div>
       ) : (
         <>
-          <FlagQueueTable flags={data?.items ?? []} category={scope} />
+          <FlagQueueTable
+            flags={data?.items ?? []}
+            category={scope}
+            sort={{ by: sort.by, order: sort.order, onSort: handleSort }}
+          />
           <Pagination
             currentPage={data?.page ?? 1}
             totalPages={totalPages}

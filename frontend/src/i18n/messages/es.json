@@ -799,7 +799,97 @@
   "footer": {
     "tos": "Términos de servicio",
     "privacy": "Política de privacidad",
-    "privacyComingSoon": "Próximamente"
+    "support": "Soporte"
+  },
+  "legal": {
+    "draftNotice": "Esta página se está finalizando antes del lanzamiento. El resumen siguiente describe lo que cubrirá la política completa.",
+    "backToHome": "Volver al inicio",
+    "privacy": {
+      "title": "Política de privacidad",
+      "intro": "Skinora procesa los datos personales mínimos necesarios para operar el servicio de custodia de objetos de CS2. Este resumen explica qué recopilamos, por qué y las opciones que tienes.",
+      "sections": {
+        "dataWeCollect": {
+          "heading": "Datos que recopilamos",
+          "body": "Tu perfil público de Steam (Steam ID, nombre visible, avatar), las direcciones de billetera que proporcionas y tu actividad de transacciones en la plataforma."
+        },
+        "howWeUse": {
+          "heading": "Cómo usamos tus datos",
+          "body": "Para autenticarte, ejecutar transacciones de custodia, prevenir el fraude y cumplir nuestras obligaciones legales y de seguridad."
+        },
+        "dataSharing": {
+          "heading": "Intercambio de datos",
+          "body": "Compartimos datos únicamente con los terceros necesarios para prestar el servicio (como Steam y la infraestructura blockchain) y cuando la ley lo exige. No vendemos datos personales."
+        },
+        "dataRetention": {
+          "heading": "Conservación de datos",
+          "body": "Los registros de transacciones y auditoría se conservan el tiempo necesario para contabilidad, resolución de disputas y cumplimiento legal; los datos de la cuenta se eliminan tras una solicitud de eliminación cuando está permitido."
+        },
+        "yourRights": {
+          "heading": "Tus derechos",
+          "body": "Puedes solicitar el acceso, la corrección o la eliminación de tus datos personales, sujeto a límites legales, desde la configuración de tu cuenta o contactando con soporte."
+        },
+        "contact": {
+          "heading": "Contacto",
+          "body": "Para preguntas sobre privacidad, contáctanos a través de la página de soporte."
+        }
+      }
+    },
+    "terms": {
+      "title": "Términos de servicio",
+      "intro": "Estos términos rigen tu uso de la plataforma de custodia de objetos de CS2 de Skinora. Al usar el servicio, los aceptas.",
+      "sections": {
+        "acceptance": {
+          "heading": "Aceptación de los términos",
+          "body": "Al crear o aceptar una transacción confirmas que tienes al menos 18 años y aceptas estos términos y la Política de privacidad."
+        },
+        "serviceDescription": {
+          "heading": "El servicio",
+          "body": "Skinora mantiene en custodia un objeto de CS2 y un pago en stablecoin, y libera cada parte a su contraparte una vez que ambas se han verificado en la cadena y en Steam."
+        },
+        "userObligations": {
+          "heading": "Tus obligaciones",
+          "body": "Debes proporcionar direcciones de billetera precisas, usar solo cuentas de tu propiedad y no intentar fraude, manipulación del mercado ni eludir los controles de la plataforma."
+        },
+        "fees": {
+          "heading": "Tarifas",
+          "body": "Se aplican una comisión de la plataforma y las tarifas de gas de la red a cada transacción, y se te muestran antes de confirmar."
+        },
+        "liability": {
+          "heading": "Responsabilidad",
+          "body": "El servicio se ofrece tal cual. Skinora no es responsable de las pérdidas derivadas de fallos de Steam, blockchain u otros terceros fuera de su control."
+        },
+        "termination": {
+          "heading": "Suspensión y cancelación",
+          "body": "Podemos suspender o cerrar las cuentas que infrinjan estos términos o la ley aplicable, incluidas nuestras reglas de sanciones y fraude."
+        },
+        "contact": {
+          "heading": "Contacto",
+          "body": "Las preguntas sobre estos términos pueden enviarse a través de la página de soporte."
+        }
+      }
+    },
+    "support": {
+      "title": "Soporte",
+      "intro": "¿Necesitas ayuda con una transacción o tu cuenta? Aquí te explicamos cómo contactarnos y qué esperar.",
+      "sections": {
+        "contact": {
+          "heading": "Contáctanos",
+          "body": "Escribe a support@skinora.app con el ID de tu transacción y una descripción del problema."
+        },
+        "responseTimes": {
+          "heading": "Tiempos de respuesta",
+          "body": "Nuestro objetivo es responder en un día hábil. Los problemas de custodia urgentes tienen prioridad."
+        },
+        "disputes": {
+          "heading": "Disputas de transacciones",
+          "body": "Si un intercambio no se completa como se esperaba, abre una disputa desde la página de la transacción; nuestro equipo revisa los casos escalados."
+        },
+        "faq": {
+          "heading": "Preguntas frecuentes",
+          "body": "Aquí estará disponible orientación sobre pagos, ofertas de intercambio, reembolsos y seguridad de la cuenta."
+        }
+      }
+    }
   },
   "status": {
     "CREATED": "Creado",
@@ -836,7 +926,8 @@
     "tradeable": "Intercambiable",
     "nonTradeable": "No intercambiable",
     "type": "Tipo",
-    "wear": "Desgaste"
+    "wear": "Desgaste",
+    "assetId": "ID de activo"
   },
   "userCard": {
     "completedTransactions": "{count} transacciones completadas",
@@ -1181,6 +1272,7 @@
     }
   },
   "transactionDetail": {
+    "viewOnTronscan": "Ver en Tronscan",
     "header": {
       "title": "Transacción #{id}"
     },
@@ -1323,6 +1415,7 @@
         "INVALID_STATE_TRANSITION": "Esta transacción ya no se puede aceptar.",
         "BUYER_NOT_FOUND": "Tu cuenta no coincide como comprador. Contacta con soporte.",
         "VALIDATION_ERROR": "Los datos enviados son inválidos. Comprueba la dirección.",
+        "ACCOUNT_FLAGGED": "Tu cuenta está en revisión y no puede aceptar transacciones por ahora. Contacta con soporte.",
         "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo."
       }
     },
@@ -1350,6 +1443,7 @@
         "seller": "El comprador aceptó. La plataforma está preparando tu oferta de intercambio.",
         "buyer": "Esperando a que el vendedor envíe el ítem."
       },
+      "viewTradeOffer": "Ir a la oferta de intercambio de Steam",
       "tradeOfferToSeller": {
         "seller": "Acepta la oferta en Steam para depositar el ítem en garantía.",
         "buyer": "Esperando a que el vendedor envíe el ítem."
@@ -1515,6 +1609,9 @@
         "verify": "Verificar",
         "verifying": "Verificando…",
         "cancel": "Cancelar",
+        "expiresInLabel": "El código caduca en",
+        "expiredLabel": "Código caducado",
+        "resendInLabel": "Podrás reenviar en",
         "errors": {
           "noEmail": "Guarda primero tu dirección de email.",
           "cooldown": "Demasiadas solicitudes. Espera e inténtalo de nuevo.",

@@ -295,8 +295,11 @@ function PrimaryActionPanel({
 
   if (status === TransactionStatus.TRADE_OFFER_SENT_TO_SELLER) {
     return (
-      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-        {role === "seller" ? t("tradeOfferToSeller.seller") : t("tradeOfferToSeller.buyer")}
+      <div className="space-y-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+        <p>{role === "seller" ? t("tradeOfferToSeller.seller") : t("tradeOfferToSeller.buyer")}</p>
+        {detail.steamTradeOfferUrl && (
+          <SteamTradeOfferLink url={detail.steamTradeOfferUrl} label={t("viewTradeOffer")} />
+        )}
       </div>
     );
   }
@@ -319,8 +322,11 @@ function PrimaryActionPanel({
 
   if (status === TransactionStatus.TRADE_OFFER_SENT_TO_BUYER) {
     return (
-      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-        {role === "seller" ? t("tradeOfferToBuyer.seller") : t("tradeOfferToBuyer.buyer")}
+      <div className="space-y-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
+        <p>{role === "seller" ? t("tradeOfferToBuyer.seller") : t("tradeOfferToBuyer.buyer")}</p>
+        {detail.steamTradeOfferUrl && (
+          <SteamTradeOfferLink url={detail.steamTradeOfferUrl} label={t("viewTradeOffer")} />
+        )}
       </div>
     );
   }
@@ -334,4 +340,23 @@ function PrimaryActionPanel({
   }
 
   return null;
+}
+
+/**
+ * WP12 backend / WP13 FE — "Go to Steam trade offer" deep link, shown in the
+ * TRADE_OFFER_SENT_TO_* states when the backend populated `steamTradeOfferUrl`
+ * (07 §7.5). Opens the offer in a new tab so the recipient can accept it.
+ */
+function SteamTradeOfferLink({ url, label }: { url: string; label: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 rounded-md bg-yellow-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-700"
+    >
+      {label}
+      <span aria-hidden="true">↗</span>
+    </a>
+  );
 }

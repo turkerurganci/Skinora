@@ -2,7 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { usePathname, useRouter, setLocaleCookie } from "@/i18n/navigation";
 import { cn } from "@/lib/utils/cn";
 
 const LOCALE_LABELS: Record<string, { code: string; label: string }> = {
@@ -20,6 +22,9 @@ export interface LanguageSelectorProps {
 export function LanguageSelector({ className, onSelect }: LanguageSelectorProps) {
   const t = useTranslations("languageSelector");
   const currentLocale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -41,16 +46,12 @@ export function LanguageSelector({ className, onSelect }: LanguageSelectorProps)
       onSelect(locale);
       return;
     }
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("preferredLocale", locale);
-      const segments = window.location.pathname.split("/");
-      const hasLocaleSegment =
-        segments.length > 1 && (routing.locales as readonly string[]).includes(segments[1]);
-      const targetPath = hasLocaleSegment
-        ? [segments[0], locale, ...segments.slice(2)].join("/")
-        : `/${locale}${window.location.pathname}`;
-      window.location.assign(targetPath);
-    }
+    // WP13 — persist the choice in the NEXT_LOCALE cookie and switch locale with
+    // a next-intl soft navigation (preserving the current path + query) instead
+    // of the legacy localStorage + manual path-splice + full reload.
+    setLocaleCookie(locale);
+    const qs = searchParams.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { locale });
   }
 
   const current = LOCALE_LABELS[currentLocale] ?? LOCALE_LABELS.en;

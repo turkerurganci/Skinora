@@ -11,6 +11,12 @@ export class ApiError extends Error {
     public readonly error: ApiErrorDetail,
     public readonly traceId: string,
     public readonly status: number,
+    /**
+     * Parsed `Retry-After` response header in seconds (WP13). Set on rate-limit
+     * 429s emitted by the platform RateLimitMiddleware; null when the header is
+     * absent. Lets callers render a live cooldown countdown.
+     */
+    public readonly retryAfterSeconds: number | null = null,
   ) {
     super(error.message);
     this.name = "ApiError";
@@ -24,6 +30,13 @@ export class ApiError extends Error {
   get code(): string {
     return this.error.code;
   }
+}
+
+/** Parse a `Retry-After` header (delta-seconds form) into a positive integer. */
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null;
 }
 
 /**
@@ -133,6 +146,7 @@ export async function apiClient<T>(
       body.error ?? { code: "UNKNOWN", message: "Unknown error", details: null },
       body.traceId,
       response.status,
+      parseRetryAfter(response.headers.get("Retry-After")),
     );
   }
 

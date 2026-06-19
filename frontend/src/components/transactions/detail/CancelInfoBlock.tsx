@@ -3,6 +3,7 @@ import type { TransactionDetailCancelInfo, TransactionDetailRefund } from "@/lib
 import { CopyButton } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
+import { TxHashLink } from "./TxHashLink";
 
 export interface CancelInfoBlockProps {
   cancelInfo: TransactionDetailCancelInfo;
@@ -77,8 +78,7 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
                 className="flex items-center gap-2 font-mono text-xs text-gray-900"
                 title={refund.txHash}
               >
-                {maskAddress(refund.txHash, 8, 6)}
-                <CopyButton value={refund.txHash} />
+                <TxHashLink txHash={refund.txHash} />
               </dd>
             </div>
           )}

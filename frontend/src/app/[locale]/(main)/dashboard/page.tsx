@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/stores/auth-store";
@@ -17,25 +18,50 @@ import type { TransactionListTab } from "@/lib/api/transactions";
 
 const PAGE_SIZE = 20;
 
+const TAB_VALUES: readonly TransactionListTab[] = ["active", "completed", "cancelled"];
+
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isSuspended = useAuthStore((s) => s.isSuspended);
 
-  const [tab, setTab] = useState<TransactionListTab>("active");
-  const [page, setPage] = useState(1);
+  // T1 list state is synced to the URL (WP13 url-state-sync) so a tab/page view
+  // is shareable, survives refresh, and consumes deep-links (e.g. ?tab=completed).
+  const tabParam = searchParams.get("tab");
+  const tab: TransactionListTab = (TAB_VALUES as readonly string[]).includes(tabParam ?? "")
+    ? (tabParam as TransactionListTab)
+    : "active";
+  const pageParam = Number(searchParams.get("page"));
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
   const statsQuery = useUserStats(isAuthenticated);
-  const listQuery = useTransactionList(
-    { tab, page, pageSize: PAGE_SIZE },
-    isAuthenticated,
+  const listQuery = useTransactionList({ tab, page, pageSize: PAGE_SIZE }, isAuthenticated);
+
+  const pushParams = useCallback(
+    (next: Record<string, string | undefined>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(next)) {
+        if (v && v.length > 0) params.set(k, v);
+        else params.delete(k);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [router, pathname, searchParams],
   );
 
   const onTabChange = (next: TransactionListTab) => {
-    setTab(next);
-    setPage(1);
+    // Tab change resets to page 1; "active" is the canonical default (drop param).
+    pushParams({ tab: next === "active" ? undefined : next, page: undefined });
+  };
+
+  const onPageChange = (next: number) => {
+    pushParams({ page: next > 1 ? String(next) : undefined });
   };
 
   const statsIsAuthError = useMemo(
@@ -107,7 +133,7 @@ export default function DashboardPage() {
             isLoading={listQuery.isLoading || listQuery.isFetching}
             isError={listQuery.isError}
             readOnly={isSuspended}
-            onPageChange={setPage}
+            onPageChange={onPageChange}
             onRetry={() => listQuery.refetch()}
           />
         </div>

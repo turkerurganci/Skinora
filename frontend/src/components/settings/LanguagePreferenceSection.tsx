@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { routing } from "@/i18n/routing";
+import { usePathname, useRouter, setLocaleCookie } from "@/i18n/navigation";
 import { AccountSettings, SupportedLanguage, updateLanguage } from "@/lib/api/settings";
 import { cn } from "@/lib/utils/cn";
 
@@ -32,6 +32,8 @@ export interface LanguagePreferenceSectionProps {
 export function LanguagePreferenceSection({ settings }: LanguagePreferenceSectionProps) {
   const t = useTranslations("settings.language");
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,16 +47,11 @@ export function LanguagePreferenceSection({ settings }: LanguagePreferenceSectio
     setError(null);
     try {
       await updateLanguage(next);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("preferredLocale", next);
-        const segments = window.location.pathname.split("/");
-        const hasLocaleSegment =
-          segments.length > 1 && (routing.locales as readonly string[]).includes(segments[1]);
-        const targetPath = hasLocaleSegment
-          ? [segments[0], next, ...segments.slice(2)].join("/")
-          : `/${next}${window.location.pathname}`;
-        router.replace(targetPath);
-      }
+      // WP13 — persist in the NEXT_LOCALE cookie + switch locale via next-intl
+      // soft navigation (replaces the legacy localStorage + path-splice).
+      setLocaleCookie(next);
+      const qs = searchParams.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { locale: next });
     } catch {
       setError(t("error"));
     } finally {
