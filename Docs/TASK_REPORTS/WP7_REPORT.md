@@ -69,7 +69,7 @@ Uygulama:
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-17, rapor görülmeden) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-17, rapor görülmeden) + bağımsız **re-validation** (2026-06-19, current main, regresyonsuz — bkz. aşağı) |
 | Bulgu sayısı | 0 bloke-edici (2 non-blocking gözlem) |
 | Düzeltme gerekli mi | Hayır |
 
@@ -86,6 +86,18 @@ Uygulama:
 **Non-blocking gözlemler:**
 - **O1 — Tip-değiştirme stranding:** resume yapmadan tip değiştirilirse eski-reason donmuş tx'ler yeni-tip resume'da çözülmez → manuel eski-tip resume gerekir. Sonuç fazla-donma (güvenli taraf), para kaybı/erken-timeout yok; spec stacked-type semantiğini tanımlamıyor. Operasyonel kenar, MVP kabul edilebilir.
 - **O2 — Tek-instance cache/push:** Bilinen `Program.cs:258` MVP kısıtı (Redis backplane §3 kapsamı dışı), 30 sn TTL ile sınırlı.
+
+### Bağımsız Re-Validation (2026-06-19)
+
+**Verdict: ✓ PASS** — owner talebiyle ayrı chat'te tam bağımsız re-validation (rapor görülmeden kendi verdict'i önce). İlk validator'ın (2026-06-17) sonucuna **bağımsız olarak aynı yere varıldı** + WP8–WP11 main'e indikten sonra WP7'nin **regresyonsuz** kaldığı teyit edildi.
+
+**İncelenen kod:** current main `bd49f5d` (PR #176 squash). **Kapılar:** Adım -1 temiz · Adım 0 main son-3 success (`27784885109`/`27784884990`/`27756292902`) · Adım 0b repo memory WP7 mevcut · Adım 8a task CI HEAD `0ef99ce` run [`27711509569`](https://github.com/turkerurganci/Skinora/actions/runs/27711509569) + `f525ddf`/`9918c56`/`3a36f2a` tüm job success.
+
+**Lokal kanıt (current main):** `dotnet build Skinora.sln -c Release` **0W/0E** · Shared `~EnumTests` **204/204** · Platform `~AuditLogCategoryMap|~SystemSettingsValidator` **108/108** · `dotnet ef migrations has-pending-model-changes` → **"No changes have been made to the model"** (drift yok). `AdminMaintenanceEndpointTests` 14/14 integration → Docker lokalde yok, CI-authoritative (task CI + main CI yeşil).
+
+**Bağımsız teyitler:** (1) **Atomiklik** — `AdminMaintenanceService` + `TimeoutFreezeService` + `AuditLogger` **aynı scoped `AppDbContext`'i** paylaşır; `IAuditLogger.LogAsync` yalnız stage eder (caller `SaveChanges` sahibi) → settings flush + freeze/resume + audit **tek explicit transaction**'da commit, push/cache-evict yalnız commit sonrası → split-brain yok. (2) **Tip→freeze** `FreezeReasonFor` + `TimeoutFreezeReasonScopes.For` (AllActive 8 / SteamBound 2 / PaymentOnly ITEM_ESCROWED) 07 §10.2 birebir. (3) **Seed** — 4 `platform.maintenance.*` ayarı `SystemSettingSeed` Id 38–41 + Catalog'da → `ApplyValue` sessiz-skip yok. (4) **Migration-free** — yeni `AuditAction` string-backed (`AuditLog.Action` `HasMaxLength(100)`, CHECK yok), EF drift bağımsız temiz. (5) **Cross-key invariant** `active=true & type=NONE` → validator Fail (raw AD9 yolu). Güvenlik temiz (MANAGE_SETTINGS + admin-write rate-limit, 0 dep, migration yok).
+
+**Non-blocking:** O1 (tip-değiştirme stranding = fazla-donma/güvenli taraf) + O2 (tek-instance cache) ilk validator ile aynı; yeni bulgu yok. **Sayı farkı (lehte):** ilk validator `f525ddf`'te EnumTests 203 / Platform 106 koşmuştu; current main'de 204 / 108 — artış WP8 `BOT_SESSION_FAILED` enum'u + sonraki WP test büyümesinden, **WP7 regresyonu değil**. Yapım raporuyla tam uyumlu.
 
 ## Altyapı Değişiklikleri
 - **Migration:** Yok (yalnız string-backed `AuditAction` değeri eklendi; ayarlar T63a'dan seeded; yeni entity/kolon/index yok). `has-pending-model-changes` drift yok ile teyit.
