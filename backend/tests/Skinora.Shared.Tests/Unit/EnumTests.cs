@@ -266,13 +266,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (27) ───────────────────────────────────────
+    // ── NotificationType (28) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave27Values()
+    public void NotificationType_ShouldHave28Values()
     {
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(27, values.Length);
+        Assert.Equal(28, values.Length);
     }
 
     [Theory]
@@ -303,6 +303,7 @@ public class EnumTests
     [InlineData(nameof(NotificationType.WRONG_TOKEN_REFUND))]
     [InlineData(nameof(NotificationType.ACCOUNT_SUSPENDED))]
     [InlineData(nameof(NotificationType.ACCOUNT_UNSUSPENDED))]
+    [InlineData(nameof(NotificationType.ADMIN_PLATFORM_OUTAGE))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationType), Enum.Parse<NotificationType>(valueName)));
@@ -402,16 +403,17 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (30) ────────────────────────────────────────────
+    // ── AuditAction (32) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave30Values()
+    public void AuditAction_ShouldHave32Values()
     {
         // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
         // 29 after WP7 added MAINTENANCE_MODE_CHANGED;
-        // 30 after WP8 added BOT_SESSION_FAILED.
+        // 30 after WP8 added BOT_SESSION_FAILED;
+        // 32 after WP16 added TIMEOUT_AUTO_EXTENDED / PLATFORM_OUTAGE_DETECTED.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(30, values.Length);
+        Assert.Equal(32, values.Length);
     }
 
     [Theory]
@@ -445,6 +447,8 @@ public class EnumTests
     [InlineData(nameof(AuditAction.BOT_RECOVERY_ITEM_CREATED))]
     [InlineData(nameof(AuditAction.BOT_RECOVERY_UPDATED))]
     [InlineData(nameof(AuditAction.MAINTENANCE_MODE_CHANGED))]
+    [InlineData(nameof(AuditAction.TIMEOUT_AUTO_EXTENDED))]
+    [InlineData(nameof(AuditAction.PLATFORM_OUTAGE_DETECTED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));

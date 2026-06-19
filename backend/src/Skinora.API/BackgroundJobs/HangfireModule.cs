@@ -80,9 +80,43 @@ public static class HangfireModule
         // in UTC by default; explicit DateTime overloads are restricted via
         // code review (09 §7.1).
 
-        // Hangfire processing server (worker). For T09 the API host runs both
-        // web and worker; a dedicated worker container can be split out later
-        // (T16 / post-MVP) without changing application code.
+        // Public abstraction consumed by other modules (Shared). Registered here
+        // (the client side) so the startup priming hooks can enqueue/schedule
+        // jobs into SQL storage. The processing server (worker) is registered
+        // separately via AddHangfireProcessingServer so it can be ordered AFTER
+        // the restart-recovery hook (WP16 resume-gate — see below).
+        services.AddScoped<IBackgroundJobScheduler, HangfireBackgroundJobScheduler>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the Hangfire processing server (worker) as a hosted service.
+    /// </summary>
+    /// <remarks>
+    /// WP16 (05 §4.4 step 3) — the worker is registered SEPARATELY from
+    /// <see cref="AddHangfireModule"/> and AFTER
+    /// <c>TimeoutSchedulerStartupHook</c> so that, on a cold start following an
+    /// outage, restart-recovery extends the active deadlines and re-issues the
+    /// per-tx jobs BEFORE any worker begins draining the queue. Hosted-service
+    /// StartAsync runs in registration order, so this is the explicit
+    /// "resume processing only after the extension completes" gate the spec
+    /// requires — overdue jobs queued in SQL Server cannot fire against stale
+    /// deadlines during the recovery window. The client (job scheduler) is still
+    /// registered early in <see cref="AddHangfireModule"/> so the priming hooks
+    /// can enqueue while the worker is held back.
+    /// </remarks>
+    public static IServiceCollection AddHangfireProcessingServer(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var hangfireOptions =
+            configuration.GetSection(HangfireOptions.SectionName).Get<HangfireOptions>()
+            ?? new HangfireOptions();
+
+        // For T09 the API host runs both web and worker; a dedicated worker
+        // container can be split out later (T16 / post-MVP) without changing
+        // application code.
         services.AddHangfireServer(serverOptions =>
         {
             if (hangfireOptions.WorkerCount is int workerCount)
@@ -92,9 +126,6 @@ public static class HangfireModule
             // Server name left to default (machine + GUID) so multiple
             // instances coexist without manual configuration.
         });
-
-        // Public abstraction consumed by other modules (Shared)
-        services.AddScoped<IBackgroundJobScheduler, HangfireBackgroundJobScheduler>();
 
         return services;
     }

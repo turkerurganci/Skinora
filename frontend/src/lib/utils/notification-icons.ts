@@ -1,7 +1,7 @@
 import { NotificationType } from "@/types/enums";
 
 /**
- * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 27 backend
+ * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 28 backend
  * `NotificationType` values (07 §8.1 / 06 §2.13) are projected onto these
  * categories so the row UI renders the canonical icon set.
  *
@@ -36,6 +36,7 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.TIMEOUT_WARNING]: "warning",
   [NotificationType.EMERGENCY_HOLD_APPLIED]: "warning",
   [NotificationType.ACCOUNT_SUSPENDED]: "warning",
+  [NotificationType.ADMIN_PLATFORM_OUTAGE]: "warning",
 
   [NotificationType.TRANSACTION_COMPLETED]: "completion",
 

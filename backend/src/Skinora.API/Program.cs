@@ -7,6 +7,7 @@ using Skinora.API.Configuration;
 using Skinora.API.Filters;
 using Skinora.API.Logging;
 using Skinora.API.Middleware;
+using Skinora.API.Monitoring;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Retention;
@@ -315,6 +316,17 @@ builder.Services.AddOutboxModule(builder.Configuration);
 // runs after the outbox dispatcher chain is alive.
 builder.Services.AddHostedService<TimeoutSchedulerStartupHook>();
 
+// WP16 (05 §4.4 step 3) — start the Hangfire processing server AFTER the
+// restart-recovery hook above. Hosted-service StartAsync runs in registration
+// order, so on a cold start following an outage the recovery pass extends all
+// active deadlines and re-issues the per-tx jobs BEFORE any worker begins
+// draining the queue. This is the explicit "resume processing only after the
+// extension completes" gate: overdue jobs queued in SQL Server cannot fire
+// against stale deadlines during the recovery window. The Hangfire client
+// (IBackgroundJobScheduler) was already registered in AddHangfireModule so the
+// priming hooks above could enqueue while the worker is held back.
+builder.Services.AddHangfireProcessingServer(builder.Configuration);
+
 // T63b — retention recurring jobs (06 §1, §3.18, §3.19, §3.21, §6.1):
 // outbox tables (daily 03:30 UTC), orphan notifications + user login logs
 // (weekly Sunday 04:00/04:30 UTC). Each job reads its retention window and
@@ -325,6 +337,24 @@ builder.Services.AddScoped<OrphanNotificationRetentionCleanupJob>();
 builder.Services.AddScoped<UserLoginLogRetentionCleanupJob>();
 builder.Services.AddScoped<ProcessedNonceCleanupJob>();
 builder.Services.AddHostedService<RetentionJobsRegistrar>();
+
+// WP16 — platform health probe (05 §4.4, 02 §3.3). Periodic Hangfire job sweeps
+// the Steam + blockchain sidecar /health endpoints and raises an admin alert
+// (in-app + audit) on each outage / recovery transition. Alert-only — the admin
+// applies the maintenance freeze (WP7) if warranted. Single-instance MVP state
+// (Redis scale-out is post-MVP, PRE_F6_PLAN §3).
+builder.Services.Configure<HealthProbeOptions>(
+    builder.Configuration.GetSection(HealthProbeOptions.SectionName));
+builder.Services.AddSingleton<PlatformHealthMonitorState>();
+builder.Services.AddHttpClient(SidecarHealthClient.HttpClientName, client =>
+{
+    // Tight timeout — a stuck sidecar must surface as an outage, not hang the
+    // probe sweep.
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+builder.Services.AddScoped<ISidecarHealthClient, SidecarHealthClient>();
+builder.Services.AddScoped<IPlatformHealthProbeJob, PlatformHealthProbeJob>();
+builder.Services.AddHostedService<HealthProbeRegistrar>();
 
 // Account suspension (T105a) — admin suspend/unsuspend service + the temp-block
 // auto-unsuspend recurring job (lifts expired suspensions every 6h).

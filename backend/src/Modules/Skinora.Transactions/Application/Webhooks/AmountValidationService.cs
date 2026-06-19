@@ -8,6 +8,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -21,6 +22,7 @@ public sealed class AmountValidationService : IAmountValidationService
     private readonly IRefundDecisionService _refundDecision;
     private readonly IRefundBlockedAlertService _refundBlockedAlert;
     private readonly IOutboxService _outbox;
+    private readonly ITimeoutSchedulingService _timeoutScheduling;
     private readonly TimeProvider _clock;
     private readonly ILogger<AmountValidationService> _logger;
 
@@ -30,6 +32,7 @@ public sealed class AmountValidationService : IAmountValidationService
         IRefundDecisionService refundDecision,
         IRefundBlockedAlertService refundBlockedAlert,
         IOutboxService outbox,
+        ITimeoutSchedulingService timeoutScheduling,
         TimeProvider clock,
         ILogger<AmountValidationService> logger)
     {
@@ -38,6 +41,7 @@ public sealed class AmountValidationService : IAmountValidationService
         _refundDecision = refundDecision;
         _refundBlockedAlert = refundBlockedAlert;
         _outbox = outbox;
+        _timeoutScheduling = timeoutScheduling;
         _clock = clock;
         _logger = logger;
     }
@@ -490,6 +494,15 @@ public sealed class AmountValidationService : IAmountValidationService
         TransactionHistoryRecorder.Record(
             _db, transaction, previousStatus, TransactionTrigger.ConfirmPayment,
             ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
+
+        // WP16 — payment arrived, so cancel the per-tx payment-timeout job armed
+        // on the ITEM_ESCROWED transition (06 §3.5). Mirrors the cancel-after-fire
+        // convention in TransactionCancellationService / AdminTransactionService:
+        // the payment job (PaymentTimeoutJobId, untouched by the ITEM_ESCROWED
+        // OnExit) is deleted now; the warning job is already a self-guarding no-op
+        // (WarningDispatcher rejects a non-ITEM_ESCROWED state). Without this the
+        // payment-timeout job would sit until its deadline and fire a silent no-op.
+        await _timeoutScheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
 
         // PaymentReceivedEvent — T44 K2 wiring: realtime push (T61) consumes
         // this event; the surrounding SaveChanges commits both the state

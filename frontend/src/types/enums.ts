@@ -122,7 +122,7 @@ export enum ReviewStatus {
   REJECTED = "REJECTED",
 }
 
-// §2.13 — 27 values
+// §2.13 — 28 values
 export enum NotificationType {
   TRANSACTION_INVITE = "TRANSACTION_INVITE",
   BUYER_ACCEPTED = "BUYER_ACCEPTED",
@@ -154,6 +154,8 @@ export enum NotificationType {
   // T105a — account suspension lifecycle.
   ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED",
   ACCOUNT_UNSUSPENDED = "ACCOUNT_UNSUSPENDED",
+  // WP16 — platform health probe outage alert (admin-only).
+  ADMIN_PLATFORM_OUTAGE = "ADMIN_PLATFORM_OUTAGE",
 }
 
 // §2.14 — 3 values
@@ -195,7 +197,7 @@ export enum ActorType {
   ADMIN = "ADMIN",
 }
 
-// §2.19 — 30 values
+// §2.19 — 32 values
 export enum AuditAction {
   // Fund operations
   WALLET_DEPOSIT = "WALLET_DEPOSIT",
@@ -236,6 +238,9 @@ export enum AuditAction {
   SANCTIONS_LIST_ADDRESS_REMOVED = "SANCTIONS_LIST_ADDRESS_REMOVED",
   // WP7 — platform maintenance / outage toggle
   MAINTENANCE_MODE_CHANGED = "MAINTENANCE_MODE_CHANGED",
+  // WP16 — restart-recovery auto timeout extension & health probe outage
+  TIMEOUT_AUTO_EXTENDED = "TIMEOUT_AUTO_EXTENDED",
+  PLATFORM_OUTAGE_DETECTED = "PLATFORM_OUTAGE_DETECTED",
 }
 
 // §2.20 — 4 values

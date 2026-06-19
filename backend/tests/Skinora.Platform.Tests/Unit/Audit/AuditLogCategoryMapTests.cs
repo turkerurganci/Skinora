@@ -38,6 +38,8 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.BOT_RECOVERY_ITEM_CREATED, AuditLogCategoryMap.Categories.SecurityEvent)]
     [InlineData(AuditAction.BOT_RECOVERY_UPDATED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.MAINTENANCE_MODE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.TIMEOUT_AUTO_EXTENDED, AuditLogCategoryMap.Categories.AdminAction)]
+    [InlineData(AuditAction.PLATFORM_OUTAGE_DETECTED, AuditLogCategoryMap.Categories.SecurityEvent)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -73,14 +75,15 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Sixteen_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Seventeen_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
         // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59)
-        // + 1 bot recovery triage (T103b-2) + 1 maintenance toggle (WP7) = 16.
-        Assert.Equal(16, actions.Count);
+        // + 1 bot recovery triage (T103b-2) + 1 maintenance toggle (WP7)
+        // + 1 restart-recovery auto-extension (WP16) = 17.
+        Assert.Equal(17, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
         Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
@@ -92,6 +95,7 @@ public class AuditLogCategoryMapTests
         Assert.Contains(AuditAction.EMERGENCY_HOLD_RELEASED, actions);
         Assert.Contains(AuditAction.BOT_RECOVERY_UPDATED, actions);
         Assert.Contains(AuditAction.MAINTENANCE_MODE_CHANGED, actions);
+        Assert.Contains(AuditAction.TIMEOUT_AUTO_EXTENDED, actions);
     }
 
     [Fact]
@@ -105,7 +109,8 @@ public class AuditLogCategoryMapTests
         // BOT_STATUS_CHANGED (T69) → BOT_SESSION_FAILED (WP8) →
         // BOT_RECOVERY_ITEM_CREATED (T103b-2) → RECONCILIATION_MISMATCH (T76) →
         // HOT_WALLET_THRESHOLD_BREACHED (T77) →
-        // SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED (T82).
+        // SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED (T82) →
+        // PLATFORM_OUTAGE_DETECTED (WP16, inserted last).
         Assert.Equal(
             new[]
             {
@@ -117,6 +122,7 @@ public class AuditLogCategoryMapTests
                 AuditAction.HOT_WALLET_THRESHOLD_BREACHED,
                 AuditAction.SANCTIONS_LIST_ADDRESS_ADDED,
                 AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED,
+                AuditAction.PLATFORM_OUTAGE_DETECTED,
             },
             actions);
     }

@@ -109,5 +109,25 @@ public enum AuditAction
     // "STEAM_OUTAGE", "BLOCKCHAIN_DEGRADATION", "PLANNED_MAINTENANCE" or
     // "NONE" on resume); Old/NewValue capture the four platform.maintenance.*
     // settings plus the number of transactions frozen/resumed. ActorType = ADMIN.
-    MAINTENANCE_MODE_CHANGED
+    MAINTENANCE_MODE_CHANGED,
+
+    // Restart-recovery auto timeout extension (WP16 — 05 §4.4:533-536). Written
+    // once per restart-recovery pass when the detected outage window crosses the
+    // RecoveryThresholdSeconds gate and active timeouts are extended. EntityType =
+    // "SystemHeartbeat"; EntityId = "1" (the singleton that drove the outage
+    // calculation); NewValue is a JSON envelope {outageSeconds, extendedCount,
+    // rescheduledPaymentJobs}. ActorType = SYSTEM. ADMIN_ACTION category — sits
+    // with MAINTENANCE_MODE_CHANGED so operators see automatic + manual downtime
+    // handling on the same queue.
+    TIMEOUT_AUTO_EXTENDED,
+
+    // Platform health probe outage / recovery (WP16 — 05 §4.4, 02 §3.3). Written
+    // once per state transition by the periodic health probe when a Steam /
+    // blockchain sidecar crosses the consecutive-failure threshold (DEGRADED) or
+    // recovers (RECOVERED). EntityType = "PlatformHealth"; EntityId = the
+    // component ("STEAM" / "BLOCKCHAIN"); NewValue is a JSON envelope
+    // {component, status, consecutiveFailures}. ActorType = SYSTEM. SECURITY_EVENT
+    // category — sits beside the bot-status / reconciliation operational alarms;
+    // pairs 1:1 with the ADMIN_PLATFORM_OUTAGE admin notification.
+    PLATFORM_OUTAGE_DETECTED
 }

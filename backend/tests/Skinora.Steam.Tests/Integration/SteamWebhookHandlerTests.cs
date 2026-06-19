@@ -115,6 +115,10 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
             _outbox,
             materialiser,
             new NoOpReputationRefresher(),
+            // Real scheduling service over a no-op Hangfire scheduler so the WP16
+            // escrow → payment-timeout arming is exercised end-to-end (PaymentDeadline
+            // set by the handler, PaymentTimeoutJobId stamped by the service).
+            new TimeoutSchedulingService(Context, new NoOpJobScheduler(), TimeProvider.System),
             TimeProvider.System,
             NullLogger<SteamWebhookHandler>.Instance);
     }
@@ -286,6 +290,12 @@ public class SteamWebhookHandlerTests : IntegrationTestBase
         var tx = await verify.Set<Transaction>().SingleAsync(t => t.Id == _transaction.Id);
         Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx.Status);
         Assert.NotNull(tx.ItemEscrowedAt);
+
+        // WP16 — the payment-phase timeout must be armed on entry to ITEM_ESCROWED
+        // (06 §3.5 invariant: PaymentDeadline + PaymentTimeoutJobId NOT NULL).
+        Assert.NotNull(tx.PaymentDeadline);
+        Assert.True(tx.PaymentDeadline >= tx.ItemEscrowedAt);
+        Assert.False(string.IsNullOrEmpty(tx.PaymentTimeoutJobId));
 
         // WP9 — RT1 TransactionStatusChanged push staged on the same SaveChanges.
         var statusEvent = Assert.Single(_outbox.Events.OfType<TransactionStatusChangedEvent>());

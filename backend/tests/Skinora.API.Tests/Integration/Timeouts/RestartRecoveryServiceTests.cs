@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.API.BackgroundJobs.Timeouts;
+using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Shared.BackgroundJobs;
@@ -77,6 +78,11 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
 
         var heartbeat = await Context.Set<SystemHeartbeat>().AsNoTracking().SingleAsync();
         Assert.Equal(nowUtc, heartbeat.LastHeartbeat);
+
+        // WP16 — a sub-threshold restart is a fresh start, not an outage, so no
+        // auto-extension audit row is written (05 §4.4:536).
+        Assert.False(await Context.Set<AuditLog>()
+            .AnyAsync(a => a.Action == AuditAction.TIMEOUT_AUTO_EXTENDED));
     }
 
     [Fact]
@@ -139,6 +145,18 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
         Assert.NotEqual("old-payment", persisted.PaymentTimeoutJobId);
         Assert.Contains("old-payment", _scheduler.DeletedJobIds);
         Assert.Contains("old-warning", _scheduler.DeletedJobIds);
+
+        // WP16 — the automatic extension is audited (05 §4.4:536): one SYSTEM row
+        // capturing the outage window + extended/rescheduled counts.
+        var audit = await Context.Set<AuditLog>().AsNoTracking()
+            .SingleAsync(a => a.Action == AuditAction.TIMEOUT_AUTO_EXTENDED);
+        Assert.Equal(ActorType.SYSTEM, audit.ActorType);
+        Assert.Equal(SeedConstants.SystemUserId, audit.ActorId);
+        Assert.Equal("SystemHeartbeat", audit.EntityType);
+        Assert.Equal(SeedConstants.SystemHeartbeatId.ToString(), audit.EntityId);
+        Assert.NotNull(audit.NewValue);
+        Assert.Contains("\"extendedCount\":1", audit.NewValue);
+        Assert.Contains("\"rescheduledPaymentJobs\":1", audit.NewValue);
     }
 
     [Fact]
@@ -252,7 +270,7 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
         });
         var scheduling = new TimeoutSchedulingService(Context, _scheduler, _clock);
         return new RestartRecoveryService(
-            Context, scheduling, _clock, options,
+            Context, scheduling, new AuditLogger(Context, _clock), _clock, options,
             NullLogger<RestartRecoveryService>.Instance);
     }
 
