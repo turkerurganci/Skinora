@@ -1,6 +1,6 @@
 # WP14 — Settings propagasyon + 19 zorunlu ayar (runbook)
 
-**Faz:** Pre-F6 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-19
+**Faz:** Pre-F6 | **Durum:** ✓ Tamamlandı — bağımsız validator PASS (2026-06-19) | **Tarih:** 2026-06-19
 
 ---
 
@@ -66,9 +66,33 @@ WP14'ün üç iş kolu, owner kararları (AskUserQuestion 2026-06-19: B=runbook+
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat 2026-06-19, kendi verdict'i önce oluşturuldu) |
+| Bulgu sayısı | 0 bloke-edici · 2 non-blocking gözlem (N1, N2) |
+| Düzeltme gerekli mi | Hayır (N1/N2 → WP17 doc-drift) |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 success (`27834306341`/`27825433288` + WP13 #186) · Adım 0b repo memory mevcut (WP14 satırı) · Adım 8a task CI HEAD `4143e79` run [`27838064641`](https://github.com/turkerurganci/Skinora/actions/runs/27838064641) **tüm job success** (+ `c83bf3b` run `27837597559`).
+
+**Validator lokal (Docker UP — yapım ortamında yoktu, integration de lokal koştu):**
+- `dotnet build -c Release` **0W/0E**
+- Platform validator unit **77/77** (`--filter SystemSettingsValidatorTests`, +7 cron InlineData: 5-field/6-field-seconds/weekly geçerli + gibberish/out-of-range/too-few-fields reddi)
+- API BackgroundJobs unit **5/5** (`CronJobReconfigurerTests` 2 + `CronSettingChangePropagatorTests` 3)
+- Platform **`SystemSettingsServiceTests` 10/10** (gerçek SQL Server) — raporda "⏳ CI" idi; validator ortamında lokal yeşil: invalid-cron→ValidationFailed+no-save · valid-cron→save+SpyPropagator new-value ile çağrılır · invalid-value→propagator hiç çağrılmaz
+- API `AdminSettingsEndpointTests` **10/10** (cron 400 + `Wiring_RegistersBothCronReconfigurers_AndRealPropagator`)
+
+**Bağımsız kod/spec teyidi:**
+- **Cron re-register:** `SystemSettingsService.UpdateAsync` post-save (`:151`) `_propagator.PropagateAsync` çağırır → `CronSettingChangePropagator` `IEnumerable<ICronJobReconfigurer>`'dan key-eşleşen registrar'ı bulur → `Reconfigure(value)` yeni cron'u `IBackgroundJobScheduler.AddOrUpdateRecurring` (Hangfire upsert) ile **restart'sız** re-register eder. Reconfigure DB'yi tekrar okumaz, propagator'ın geçirdiği taze değeri kullanır.
+- **DI composition:** `Program.cs:198 AddPlatformModule` (TryAddSingleton NoOp) → `:236 AddTransactionsModule` (`Replace(Singleton CronSettingChangePropagator)`) → tam olarak bir `CronSettingChangePropagator` ayakta kalır (sıra-bağımsız, deterministik). Her registrar `AddSingleton<Concrete>` + `AddHostedService(sp=>concrete)` + `AddSingleton<ICronJobReconfigurer>(sp=>concrete)` → aynı tekil instance üç rolde. Scoped service → Singleton propagator (captive dependency yok); registrar'lar `IServiceScopeFactory` ile kendi scope'larını açar.
+- **Cron 400:** `SystemSettingsValidator.IsCronKey` → `TryValidateCron` (Cronos `CronExpression.Parse`, Standard + IncludeSeconds) → geçersiz cron `ValidationFailed` → `AdminController.cs:468` `BadRequest`. Hem admin update path hem bootstrap (`SettingsBootstrapService.cs:63` `ValidateSingle`). Cron anahtarları seed'de `string` tip (satır 130/139) → tip-gate geçer, range-gate'te cron branch çalışır.
+- **19 zorunlu ayar:** seed'de tam **19** `Unconfigured(` satırı (toplam 59 = 40 Default + 19 Unconfigured); runbook §A tablosu 19 anahtarla **birebir**; `SeedDataTests` `Assert.Equal(19, unconfigured.Count)` + `.env.example` 19 `SKINORA_SETTING_*`. "21" stale → WP4a `price_deviation_threshold` + WP12 `timeout_warning_ratio` seed-default ile düştü.
+- **Migration YOK:** diff'te migration dosyası yok; CI Migration dry-run yeşil + lokal build drift'siz. Owner seed-default'u reddetti → şema/seed değişmedi.
+
+**Mini güvenlik:** Secret sızıntısı yok (`.env.example` yalnız placeholder/dev-default); auth surface değişmedi (controller diff'te yok — endpoint izin guard'ı korunur); input validation **iyileşti** (cron artık 400, sessiz Hangfire patlaması değil); yeni dep `Cronos` 0.8.4 (Hangfire'ın embed ettiği parser, 0 transitive, MIT — Hangfire referanssız Platform'a çakışmasız).
+
+**Non-blocking gözlemler (yeni — rapor değinmedi, davranışı etkilemez):**
+- **N1 (S1 doc-drift):** İki cron anahtarının seed `Description`'ı (`SystemSettingSeed.cs:130`/`:139`) hâlâ "Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)" diyor — WP14 sonrası **yanlış** (artık restart'sız re-register). Bu Description `GET /admin/settings` ile admin'e gösterilir (`ListAsync` → `row.Description`). Yapım bunu bilinçle `DEPLOY_RUNBOOK.md §E` notunda (satır 114) kapattı ve migration eklemekten kaçındı (owner "Migration YOK"). → **WP17** (audit-doc-drift) veya küçük `UpdateData` migration.
+- **N2 (yorum-drift):** `ReconciliationJobRegistrar` sınıf docstring'i (`:18-25`) hâlâ "read once at startup; runtime cadence overrides require a host restart (T96)" diyor — `Reconfigure` eklendi, artık stale. Kozmetik.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu. AC tablosu (5/5 ✓) bağımsız teyitle örtüşür; test sayıları birebir; raporun "⏳ CI" bıraktığı `SystemSettingsServiceTests` validator ortamında lokal yeşil (ek kanıt). Rapor N1/N2'ye değinmemişti — non-blocking, WP17'ye eklendi.
 
 ## Altyapı Değişiklikleri
 
