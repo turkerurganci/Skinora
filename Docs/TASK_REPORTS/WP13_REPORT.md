@@ -72,8 +72,9 @@ WP13, frontend tamlık paketidir — MVP yasal gereklilik (yasal sayfalar), enum
 ## Commit & PR
 
 - Branch: `task/WP13-fe-completeness`
+- Commit: `37e770c` — WP13: FE tamlık — yasal sayfalar + polish + enum sync
 - PR: #186
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — HEAD `37e770c` run [`27831329203`](https://github.com/turkerurganci/Skinora/actions/runs/27831329203) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate)
 
 ## Known Limitations / Follow-up
 
