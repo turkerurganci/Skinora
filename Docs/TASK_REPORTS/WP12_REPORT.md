@@ -1,6 +1,6 @@
 # WP12 — Kullanıcı kenar durumları (User edge cases)
 
-**Durum:** ✅ Yapım tamamlandı — bağımsız doğrulama bekliyor
+**Durum:** ✓ Tamamlandı — bağımsız validator PASS (2026-06-19)
 **Branch:** `task/WP12-user-edge-cases` · **PR:** [#184](https://github.com/turkerurganci/Skinora/pull/184)
 **Kaynak plan:** `PRE_F6_PLAN.md` WP12 (P4)
 **Tarih:** 2026-06-19
@@ -157,4 +157,41 @@ FE href wiring **WP13'e** (FE tamlık) bırakıldı — backend DTO alanı bu PR
 
 - **Branch:** `task/WP12-user-edge-cases`
 - **PR:** [#184](https://github.com/turkerurganci/Skinora/pull/184)
-- **Task CI:** HEAD `8753449` run [`27823238832`](https://github.com/turkerurganci/Skinora/actions/runs/27823238832) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate) — integration + seed migration SQL Server'da temiz.
+- **Task CI:** HEAD `8753449` run [`27823238832`](https://github.com/turkerurganci/Skinora/actions/runs/27823238832) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate) — integration + seed migration SQL Server'da temiz. Sonraki HEAD `58c6153` (CI sonucu commit'i) run [`27823682521`](https://github.com/turkerurganci/Skinora/actions/runs/27823682521) de **tüm job success** (validator teyit).
+
+---
+
+## 12. Bağımsız Doğrulama Sonucu (Validator — ayrı chat, rapor görülmeden)
+
+**Tarih:** 2026-06-19 · **Branch:** `task/WP12-user-edge-cases` · **HEAD commit:** `58c6153`
+
+### Verdict: ✓ PASS — 8/8 AC, 0 bloke-edici bulgu
+
+**Kapılar:**
+- **Adım -1 (working tree):** temiz (`git status --short` boş).
+- **Adım 0 (main CI son 3):** hepsi `success` (`27815897497` / `27815897107` docs(WP7) / `27784885109` WP11).
+- **Adım 0b (repo memory drift):** WP12 satırı `.claude/memory/MEMORY.md`'de mevcut.
+- **Adım 8a (task CI):** HEAD `58c6153` run [`27823682521`](https://github.com/turkerurganci/Skinora/actions/runs/27823682521) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker/Gate). Önceki HEAD `8753449` run `27823238832` de success.
+
+**Validator lokal yeniden çalıştırma (Release; Docker UP — bu ortamda integration testleri de koştu, yapım ortamında Docker yoktu):**
+- `dotnet build Skinora.sln -c Release` → **0 Warning / 0 Error**.
+- `dotnet ef migrations has-pending-model-changes` → **"No changes have been made to the model since the last migration."** (3 uyarı pre-existing global-query-filter — WP12 kaynaklı değil).
+- `dotnet format Skinora.sln --verify-no-changes` → **temiz** (exit 0).
+- **Skinora.Transactions.Tests → 794/794** (Integration dahil; race→409 swallow + concurrent-cancel re-throw + no-mutate-profile hedefli filtre 3/3).
+- **Skinora.Users.Tests → 22/22** (delete atomicity SQLite rollback + happy hedefli filtre 2/2).
+- **Skinora.Platform.Tests → 177/177** (SeedData configured 40 / unconfigured 19 + SettingsBootstrap fail-fast).
+- **Skinora.Steam.Tests → 106/106** (SteamTradeOfferUrlResolver: direction filter / null / latest-by-SentAt).
+
+**Bağımsız kod/spec teyidi (5 kalem):**
+1. **#1 OPEN_LINK 409** — `try/catch(DbUpdateConcurrencyException)` no-tracking re-query → yalnız persisted=ACCEPTED'de `AlreadyAccepted` (controller 409), aksi re-throw (maskeleme yok). Mekanizma RowVersion concurrency token'a dayanır → `AppDbContext.OnModelCreating` SQL Server `IsRowVersion()` / SQLite `IsConcurrencyToken()` doğrulandı.
+2. **#2 Saf snapshot** — eski `User.DefaultRefundAddress`+`RefundAddressChangedAt` mutasyonu kaldırıldı (diff teyit); Stage-6 yalnız `Transaction.BuyerRefundAddress` set eder; Stage-5 cooldown gate profil cooldown'unu yalnız **okur** (02 §12.2 / 04 §7.3 / 02 §12.3 birebir).
+3. **#3 Trade-offer URL** — `TradeOfferDirection` Shared enum (TO_SELLER/TO_BUYER mevcut), `TradeOffer` entity Direction/SteamTradeOfferId/SentAt/TransactionId mevcut. Port Transactions'ta, DB-backed impl Steam'de (`services.Replace`), null default `TryAddScoped` → bağımlılık yönü Steam→Transactions, cycle yok. Detail yalnız iki TRADE_OFFER state'inde çağırır, public view null. 07 §7.5 doc + DTO `WhenWritingNull` uyumlu.
+4. **#4 Delete atomicity** — `NotificationAccountAnonymizer` + `AuthAccountAnonymizer` ikisi de aynı scoped `AppDbContext`'i inject eder → `BeginTransactionAsync` üç `SaveChanges`'i gerçekten kapsar; cache eviction non-transactional ama rollback yalnız geçerli token'ın zararsız re-read'ine yol açar (yorum doğru).
+5. **#5 Timeout ratio** — `TimeoutWarningThreshold` `timeout_warning_ratio` okur (0<x<1 → ×100, fallback 75); Detail + List const'ları kaldırıldı (List sayfa başına bir okuma). Seed `Unconfigured`→`Default("0.75")`; migration `WP12_SeedTimeoutWarningRatio` saf `UpdateData` (Id …0007 IsConfigured=true/Value="0.75"; Down false/null) — seed sayısı 59 sabit, mandatory 20→19, configured 39→40 (SeedData/SettingsBootstrap assert'leri tutarlı güncellenmiş). `accept_timeout_minutes` Unconfigured (env-mandatory by-design) teyit.
+
+**Güvenlik mini-kontrol:** secret sızıntısı yok (yalnız test connection-string referansı); auth yüzeyi #4 ile **iyileşti** (PII anonimleştirme atomik), `steamTradeOfferUrl` yalnız taraflara döner; input validation değişmedi; yeni dış bağımlılık yok (Users.Tests'e test-only `Microsoft.Data.Sqlite`/`EFCore.Sqlite` 9.0.3, kardeş projelerle aynı sürüm).
+
+**Non-blocking gözlem (bloke etmez, verdict'i etkilemez):**
+- **N1 (doc-drift, pre-existing → WP17):** 06 §3.17 başlığı "toplam **58 anahtar**" diyor; gerçek seed 59 (40 configured + 19 unconfigured). Bu +1 drift **WP1'den** gelir (`payout_gas_fee_estimate_usdt` eklendi, başlık T102'den beri 58'de kaldı) — WP12 hiç anahtar eklemedi (yalnız bir satırı flip etti), dolayısıyla drift'i ne yarattı ne de büyüttü. PRE_F6_PLAN doc-drift'i zaten WP17'ye yönlendiriyor (`audit-doc-drift`).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu. Rapordaki 8/8 AC self-check'i kanıtla doğrulandı; test sayıları tutarlı (rapor Transactions Unit 102 / validator full project 794 superset; Platform validator-catalog 77 / validator full 177 superset; Users 22 = 22; Steam resolver CI-authoritative / validator full 106). Yapım ortamında Docker yoktu (rapor integration'ı CI-authoritative işaretledi); validator ortamında Docker UP → integration testleri de lokal yeşil (daha güçlü kanıt). Rapor N1 doc-drift'ine değinmiyordu (WP12 kapsamı dışı, WP1 borcu).
