@@ -1170,6 +1170,7 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
 
   "escrowBotAssetId": null,
   "deliveredBuyerAssetId": null,
+  "steamTradeOfferUrl": null,
 
   "availableActions": {
     "canAccept": false,
@@ -1201,6 +1202,7 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
 | `paymentEvents` | ITEM_ESCROWED'dan itibaren — ödeme edge case olayları (eksik/fazla/yanlış tutar, gecikmeli ödeme) |
 | `escrowBotAssetId` | ITEM_ESCROWED'dan itibaren — bot envanterine alınan asset ID |
 | `deliveredBuyerAssetId` | COMPLETED'da — alıcıya teslim edilen asset ID |
+| `steamTradeOfferUrl` | TRADE_OFFER_SENT_TO_SELLER / TRADE_OFFER_SENT_TO_BUYER state'lerinde — kullanıcının "Steam'e git" CTA'sı için Steam trade offer URL'i (04 §7.3). Diğer state'lerde + public view'de `null` (WP12) |
 
 > **Not:** Steam trade sonrası asset ID değişir — `escrowBotAssetId` ve `deliveredBuyerAssetId` field'ları audit ve dispute doğrulaması için döndürülür (06 §8.4).
 

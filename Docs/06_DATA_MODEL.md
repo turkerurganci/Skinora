@@ -1046,7 +1046,7 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `payment_timeout_max_minutes` | Timeout | int | — | Ödeme timeout maksimum |
 | `payment_timeout_default_minutes` | Timeout | int | — | Ödeme timeout varsayılan |
 | `trade_offer_buyer_timeout_minutes` | Timeout | int | — | Alıcı trade offer timeout süresi |
-| `timeout_warning_ratio` | Timeout | decimal | — | Uyarı gönderim oranı (ör: 0.75) |
+| `timeout_warning_ratio` | Timeout | decimal | 0.75 | Uyarı gönderim oranı (ör: 0.75) — WP12'de seeded default; admin-tunable (0<x<1). Read-path `warningThresholdPercent`=oran×100 (07 §7.1/§7.5) + uyarı bildirimi job zamanlaması bu oranı kullanır |
 | `commission_rate` | Commission | decimal | 0.02 | Komisyon oranı (%2) |
 | `min_transaction_amount` | Limit | decimal | — | Minimum işlem tutarı |
 | `max_transaction_amount` | Limit | decimal | — | Maksimum işlem tutarı |
