@@ -46,6 +46,52 @@ public class TimeoutExecutorTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task ExecutePaymentTimeout_Writes_History_And_Attributes_Reputation_To_Buyer()
+    {
+        // WP15 — the timeout attribution chain. The payment timeout fires from
+        // ITEM_ESCROWED, which 06 §3.1 attributes to the BUYER. The aggregator
+        // can only resolve that responsibility from the TransactionHistory
+        // PreviousStatus this path now writes — without it the timeout would be
+        // silently dropped from reputation (the bug WP15 closes).
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            paymentDeadline: nowUtc.AddMinutes(-1),
+            buyerId: buyer.Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        transaction.EscrowBotAssetId = "100200300-bot";
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        var sut = new TimeoutExecutor(
+            Context, _clock, TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.RealReputationRefresher(Context),
+            NullLogger<TimeoutExecutor>.Instance);
+        await sut.ExecutePaymentTimeoutAsync(transaction.Id);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
+
+        var history = await Context.Set<TransactionHistory>().AsNoTracking()
+            .SingleAsync(h => h.TransactionId == transaction.Id);
+        Assert.Equal(TransactionStatus.ITEM_ESCROWED, history.PreviousStatus);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, history.NewStatus);
+        Assert.Equal("Timeout", history.Trigger);
+        Assert.Equal(ActorType.SYSTEM, history.ActorType);
+
+        // Buyer is the at-fault party: 1 responsible cancel, 0 successes → 0.0.
+        var reloadedBuyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == buyer.Id);
+        Assert.Equal(0m, reloadedBuyer.SuccessfulTransactionRate);
+        Assert.Equal(0, reloadedBuyer.CompletedTransactionCount);
+
+        // Seller is not responsible for a payment timeout → unaffected (null rate).
+        var reloadedSeller = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _seller.Id);
+        Assert.Null(reloadedSeller.SuccessfulTransactionRate);
+    }
+
+    [Fact]
     public async Task ExecutePaymentTimeout_Transitions_To_CANCELLED_TIMEOUT_When_Overdue()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
@@ -58,7 +104,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -80,7 +126,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -103,7 +149,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -131,7 +177,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
@@ -151,7 +197,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
-        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), NullLogger<TimeoutExecutor>.Instance);
+        var sut = new TimeoutExecutor(Context, _clock, TimeoutTestFixtures.NoOpSideEffects(), TimeoutTestFixtures.NoOpPostCancelMonitor(), TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<TimeoutExecutor>.Instance);
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);

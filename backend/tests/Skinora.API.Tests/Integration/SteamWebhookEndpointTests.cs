@@ -326,9 +326,18 @@ public sealed class SteamWebhookEndpointTests : IClassFixture<SteamWebhookEndpoi
             // which is acceptable in test fixtures.
             db.Set<ProcessedNonce>().ExecuteDelete();
             db.Set<TradeOffer>().ExecuteDelete();
+            // WP15 — TransactionHistory FK→Transaction/User is NO ACTION (06 §3.6);
+            // clear it before truncating transactions/users.
+            db.Set<Skinora.Transactions.Domain.Entities.TransactionHistory>().ExecuteDelete();
             db.Set<Transaction>().IgnoreQueryFilters().ExecuteDelete();
             db.Set<PlatformSteamBot>().IgnoreQueryFilters().ExecuteDelete();
-            db.Set<User>().IgnoreQueryFilters().ExecuteDelete();
+            // WP15 — preserve the EF-seeded SYSTEM user (06 §8.9, SeedConstants):
+            // the escrow/deliver transitions now write TransactionHistory rows
+            // with ActorId = SystemUserId, and TransactionHistory.ActorId is
+            // FK→User. Truncating it would 500 the next webhook.
+            db.Set<User>().IgnoreQueryFilters()
+                .Where(u => u.Id != Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId)
+                .ExecuteDelete();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)

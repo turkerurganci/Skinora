@@ -103,7 +103,7 @@
 | payout-completed-consumer | `PayoutCompletedEvent`→COMPLETED geçişi yok (T73 yalnız finality flush) | T73 K4 |
 | payout-retry-consumer | `RETRY_SCHEDULED` set ediliyor ama broadcast retry consumer'ı yok | T60 K2/K3 |
 | calculator-caller-wiring | `CalculateRefund`/`SellerPayout`/`IRefundDecisionService` tüketilmiyor; gas/refund ratios deferred; AD7 gas split=0 | T52/T53/T63 K |
-| reputation-aggregator-trigger | `IReputationAggregator.RecomputeAsync`/cooldown + state-machine OnEntry/History caller'ları bağlı değil | T43/T44/T68 K |
+| reputation-aggregator-trigger | **✅ WP15** — COMPLETED/CANCELLED_TIMEOUT/Steam-cancel recompute+cooldown bağlandı; ön-koşul **TransactionHistory yazımı** (06 §3.6, hiç yazılmıyordu) tüm geçişlere eklendi (timeout sorumluluk-atfı buna bağımlıydı, sessizce kopuktu). | T43/T44/T68 K |
 | blockchain-monitor-consumers | `payment-confirmed`→PAYMENT_RECEIVED **bağlı** (finality webhook); kalan: mempool `PaymentDetected` consumer (by-design opsiyonel) + DROPPED metrik → WP16 | T61/T71/T72 K |
 | flagged-allocation-detail | **payment-address ✅ ÇÖZÜLDÜ → WP4b** (`FraudFlagService.ApproveAsync` post-commit eager `AllocateAsync`, best-effort); **tx-detail payment/payout/refund/dispute alt-DTO'ları null kısmı → WP13** | T70/T46 K |
 | emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; post-payment refund tetik **✅ WP2**, dispute-queue surfacing **✅ WP5** (AD27 kuyruğu). Kalan kalem yok. | T50/T51/T58 K |

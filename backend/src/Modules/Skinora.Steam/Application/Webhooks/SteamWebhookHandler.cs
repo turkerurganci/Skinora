@@ -12,6 +12,8 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Domain.Entities;
+using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -46,6 +48,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IOutboxService _outbox;
     private readonly IBotRecoveryMaterialiser _recovery;
+    private readonly ITransactionReputationRefresher _reputation;
     private readonly TimeProvider _clock;
     private readonly ILogger<SteamWebhookHandler> _logger;
 
@@ -55,6 +58,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         INotificationRealtimePublisher realtime,
         IOutboxService outbox,
         IBotRecoveryMaterialiser recovery,
+        ITransactionReputationRefresher reputation,
         TimeProvider clock,
         ILogger<SteamWebhookHandler> logger)
     {
@@ -63,6 +67,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         _realtime = realtime;
         _outbox = outbox;
         _recovery = recovery;
+        _reputation = reputation;
         _clock = clock;
         _logger = logger;
     }
@@ -478,6 +483,10 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, +1, cancellationToken);
         var fromStatus = transaction.Status;
         machine.Fire(TransactionTrigger.EscrowItem);
+        // WP15 — audit-trail row (06 §3.6). SYSTEM-driven (sidecar webhook).
+        TransactionHistoryRecorder.Record(
+            _db, transaction, fromStatus, TransactionTrigger.EscrowItem,
+            ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
 
         // T103b-2 F3 — boundary race: the seller accepted while (or just after)
         // the bot flipped RESTRICTED/BANNED, so this item landed on a bot the
@@ -540,6 +549,10 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         await AdjustEscrowCountAsync(tradeOffer.PlatformSteamBotId, -1, cancellationToken);
         var fromStatus = transaction.Status;
         machine.Fire(TransactionTrigger.DeliverItem);
+        // WP15 — audit-trail row (06 §3.6). SYSTEM-driven (sidecar webhook).
+        TransactionHistoryRecorder.Record(
+            _db, transaction, fromStatus, TransactionTrigger.DeliverItem,
+            ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
         await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -697,6 +710,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
 
         var trigger = forwardTrigger(direction);
         var machine = new TransactionStateMachine(transaction);
+        var previousStatus = transaction.Status;
 
         if (!machine.CanFire(trigger))
         {
@@ -730,7 +744,28 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
             return TradeWebhookResult.Idempotent;
         }
 
+        // WP15 — audit-trail row (06 §3.6) for the SYSTEM-driven cancel/expire
+        // transition (SellerDecline/BuyerDecline → CANCELLED_SELLER/BUYER, or
+        // Timeout → CANCELLED_TIMEOUT). Actor is SYSTEM — Steam reported it; the
+        // responsible-party attribution the reputation map reads comes from the
+        // resulting Status + this row's PreviousStatus, not the ActorId.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, trigger,
+            ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
+
+        // WP15 — flush the TradeOffer flip + transaction transition + history
+        // row, then recompute reputation/cooldown for both parties. The
+        // aggregator reads AsNoTracking, so the cancel must be flushed first;
+        // both writes share one DB transaction so they commit or roll back
+        // together (09 §13.3). Cooldown is evaluated — every trigger reaching
+        // here is a cancellation-class transition.
+        await using var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
+        await _reputation.RefreshAsync(
+            transaction.SellerId, transaction.BuyerId, evaluateCooldown: true, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+        await dbTx.CommitAsync(cancellationToken);
+
         _logger.LogInformation(
             "Trade status change applied: offer {OfferId} → {Status}; transaction {TransactionId} fired {Trigger}. correlationId={CorrelationId}",
             offerId, newStatus, transaction.Id, trigger, correlationId);

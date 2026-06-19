@@ -52,6 +52,7 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
         new(Context, _scheduler, _clock,
             new TimeoutSideEffectPublisher(_outbox, _clock, NullLogger<TimeoutSideEffectPublisher>.Instance),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 

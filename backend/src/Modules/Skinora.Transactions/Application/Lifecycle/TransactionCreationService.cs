@@ -5,6 +5,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
@@ -249,6 +250,14 @@ public sealed class TransactionCreationService : ITransactionCreationService
         };
 
         _db.Set<Transaction>().Add(transaction);
+
+        // WP15 — genesis audit-trail row (06 §3.6 "ilk kayıtta null"). Records the
+        // origin status (CREATED or FLAGGED) with PreviousStatus = null so the
+        // TransactionHistory trail is complete from creation. The seller is the
+        // actor (USER). Committed in the Stage-11 SaveChanges below.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus: null, TransactionHistoryRecorder.GenesisTrigger,
+            ActorType.USER, sellerId, nowUtc);
 
         // ---------- Stage 9: pre-create fraud flag row (T54 / T55) ----------
         // When the pre-check decided FLAGGED, persist the matching FraudFlag

@@ -2,10 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -36,6 +39,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     private readonly TimeProvider _clock;
     private readonly ITimeoutSideEffectPublisher _sideEffects;
     private readonly IPostCancelMonitorStarter _postCancelMonitor;
+    private readonly ITransactionReputationRefresher _reputation;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -45,6 +49,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         TimeProvider clock,
         ITimeoutSideEffectPublisher sideEffects,
         IPostCancelMonitorStarter postCancelMonitor,
+        ITransactionReputationRefresher reputation,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
@@ -53,6 +58,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         _clock = clock;
         _sideEffects = sideEffects;
         _postCancelMonitor = postCancelMonitor;
+        _reputation = reputation;
         _options = options.Value;
         _logger = logger;
     }
@@ -106,6 +112,10 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
 
         if (candidates.Count == 0) return;
 
+        // WP15 — collect the parties of every transaction that actually timed
+        // out so reputation/cooldown can be recomputed after the batch flush.
+        var affected = new List<(Guid SellerId, Guid? BuyerId)>();
+
         foreach (var transaction in candidates)
         {
             var previousStatus = transaction.Status;
@@ -131,9 +141,29 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;
             await _postCancelMonitor.RequestStartAsync(
                 transaction.Id, cancelledAt, CancellationToken.None);
+
+            // WP15 — audit-trail row (06 §3.6). PreviousStatus is the only source
+            // the reputation/cooldown responsibility map reads to attribute the
+            // timeout to the at-fault party (06 §3.1).
+            TransactionHistoryRecorder.Record(
+                _db, transaction, previousStatus, TransactionTrigger.Timeout,
+                ActorType.SYSTEM, SeedConstants.SystemUserId, cancelledAt);
+            affected.Add((transaction.SellerId, transaction.BuyerId));
         }
 
+        if (affected.Count == 0) return;
+
+        // WP15 — flush every timeout transition + history row, then recompute
+        // reputation/cooldown for all affected parties. The aggregator/cooldown
+        // read AsNoTracking and resolve timeout responsibility from the freshly
+        // written history rows, so the flips must be committed-in-transaction
+        // first. One DB transaction wraps the whole batch (09 §13.3).
+        await using var dbTx = await _db.Database.BeginTransactionAsync();
         await _db.SaveChangesAsync();
+        foreach (var (sellerId, buyerId) in affected)
+            await _reputation.RefreshAsync(sellerId, buyerId, evaluateCooldown: true, CancellationToken.None);
+        await _db.SaveChangesAsync();
+        await dbTx.CommitAsync();
     }
 }
 

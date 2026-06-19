@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -470,6 +472,7 @@ public sealed class AmountValidationService : IAmountValidationService
             return false;
         }
 
+        var previousStatus = transaction.Status;
         try
         {
             machine.Fire(TransactionTrigger.ConfirmPayment);
@@ -481,6 +484,12 @@ public sealed class AmountValidationService : IAmountValidationService
                 transaction.Id, transaction.Status, correlationId);
             return false;
         }
+
+        // WP15 — audit-trail row (06 §3.6). Payment confirmation is a SYSTEM
+        // transition (driven by the on-chain finality webhook).
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.ConfirmPayment,
+            ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
 
         // PaymentReceivedEvent — T44 K2 wiring: realtime push (T61) consumes
         // this event; the surrounding SaveChanges commits both the state

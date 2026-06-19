@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Steam.Application.BotSelection;
 using Skinora.Steam.Domain.Entities;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Domain.Entities;
@@ -159,6 +161,10 @@ public sealed class TradeOfferDispatchJob
             case TradeOfferDispatchStatus.Pending:
                 transaction.EscrowBotId = bot.Id;
                 FireForward(transaction, TransactionTrigger.SendTradeOfferToSeller);
+                // WP15 — audit-trail row (06 §3.6). SYSTEM-driven dispatch transition.
+                TransactionHistoryRecorder.Record(
+                    _db, transaction, fromStatus, TransactionTrigger.SendTradeOfferToSeller,
+                    ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
                 await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
@@ -244,6 +250,10 @@ public sealed class TradeOfferDispatchJob
             case TradeOfferDispatchStatus.Sent:
             case TradeOfferDispatchStatus.Pending:
                 FireForward(transaction, TransactionTrigger.SendTradeOfferToBuyer);
+                // WP15 — audit-trail row (06 §3.6). SYSTEM-driven dispatch transition.
+                TransactionHistoryRecorder.Record(
+                    _db, transaction, fromStatus, TransactionTrigger.SendTradeOfferToBuyer,
+                    ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
                 await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(

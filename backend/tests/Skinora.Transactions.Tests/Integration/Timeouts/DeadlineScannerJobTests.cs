@@ -57,6 +57,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -82,6 +83,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -106,6 +108,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -131,6 +134,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -161,6 +165,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -178,6 +183,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(scannerSeconds: 45),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -202,6 +208,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             Context, _scheduler, _clock,
             TimeoutTestFixtures.NoOpSideEffects(),
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();

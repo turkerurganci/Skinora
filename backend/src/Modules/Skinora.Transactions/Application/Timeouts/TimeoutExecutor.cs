@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -22,6 +25,7 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
     private readonly TimeProvider _clock;
     private readonly ITimeoutSideEffectPublisher _sideEffects;
     private readonly IPostCancelMonitorStarter _postCancelMonitor;
+    private readonly ITransactionReputationRefresher _reputation;
     private readonly ILogger<TimeoutExecutor> _logger;
 
     public TimeoutExecutor(
@@ -29,12 +33,14 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
         TimeProvider clock,
         ITimeoutSideEffectPublisher sideEffects,
         IPostCancelMonitorStarter postCancelMonitor,
+        ITransactionReputationRefresher reputation,
         ILogger<TimeoutExecutor> logger)
     {
         _db = db;
         _clock = clock;
         _sideEffects = sideEffects;
         _postCancelMonitor = postCancelMonitor;
+        _reputation = reputation;
         _logger = logger;
     }
 
@@ -75,6 +81,24 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
         var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;
         await _postCancelMonitor.RequestStartAsync(transaction.Id, cancelledAt, CancellationToken.None);
 
+        // WP15 — audit-trail row (06 §3.6). PreviousStatus is the ONLY source the
+        // reputation/cooldown responsibility map reads to attribute the timeout to
+        // the at-fault party (06 §3.1) — without this row, timeouts are silently
+        // dropped from reputation.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, TransactionTrigger.Timeout,
+            ActorType.SYSTEM, SeedConstants.SystemUserId, cancelledAt);
+
+        // WP15 — flush the timeout transition + history, then recompute
+        // reputation/cooldown. The aggregator/cooldown read AsNoTracking and
+        // resolve the responsible party from the just-written history
+        // PreviousStatus, so the flip must be committed-in-transaction first.
+        // Both writes share one DB transaction (09 §13.3).
+        await using var dbTx = await _db.Database.BeginTransactionAsync();
         await _db.SaveChangesAsync();
+        await _reputation.RefreshAsync(
+            transaction.SellerId, transaction.BuyerId, evaluateCooldown: true, CancellationToken.None);
+        await _db.SaveChangesAsync();
+        await dbTx.CommitAsync();
     }
 }

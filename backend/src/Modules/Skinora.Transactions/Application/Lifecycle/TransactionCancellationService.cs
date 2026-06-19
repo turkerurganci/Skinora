@@ -4,6 +4,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
@@ -170,6 +171,14 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
 
         // ---------- Stage 6: side effects ----------
         var occurredAt = _clock.GetUtcNow().UtcDateTime;
+
+        // WP15 — audit-trail row (06 §3.6). The cancelling party is the actor
+        // (USER). Reputation + cooldown are recomputed inline in Stage 7 below;
+        // CANCELLED_SELLER/BUYER attribution reads the resulting Status directly,
+        // so this history row is for the audit trail (06 §3.6), not the formula.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, previousStatus, trigger.Value,
+            ActorType.USER, callerUserId, occurredAt);
 
         // 6a. Cancel pending Hangfire timeout / warning jobs (idempotent).
         await _timeouts.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);

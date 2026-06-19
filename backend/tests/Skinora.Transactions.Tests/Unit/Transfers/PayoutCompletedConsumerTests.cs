@@ -7,6 +7,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Tests.Integration.Timeouts;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
@@ -47,7 +48,7 @@ public sealed class PayoutCompletedConsumerTests : IDisposable
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
         _sut = new PayoutCompletedConsumer(
-            _db, NullLogger<PayoutCompletedConsumer>.Instance);
+            _db, TimeoutTestFixtures.NoOpReputationRefresher(), NullLogger<PayoutCompletedConsumer>.Instance);
     }
 
     public void Dispose()
@@ -70,6 +71,36 @@ public sealed class PayoutCompletedConsumerTests : IDisposable
         // other lifecycle milestones), so assert it is set rather than equal to
         // the fake clock.
         Assert.NotNull(reloaded.CompletedAt);
+    }
+
+    [Fact]
+    public async Task Completion_Recomputes_Reputation_For_Both_Parties_And_Writes_History()
+    {
+        // WP15 — the headline fix: a completed trade must bump both parties'
+        // denormalized reputation and leave a Complete history row.
+        var tx = await SeedAsync(TransactionStatus.ITEM_DELIVERED);
+        var sut = new PayoutCompletedConsumer(
+            _db, TimeoutTestFixtures.RealReputationRefresher(_db),
+            NullLogger<PayoutCompletedConsumer>.Instance);
+
+        await sut.Handle(EventFor(tx.Id), CancellationToken.None);
+
+        var reloaded = await _db.Set<Transaction>().AsNoTracking().FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.COMPLETED, reloaded.Status);
+
+        var seller = await _db.Set<User>().AsNoTracking().FirstAsync(u => u.Id == tx.SellerId);
+        var buyer = await _db.Set<User>().AsNoTracking().FirstAsync(u => u.Id == tx.BuyerId!.Value);
+        Assert.Equal(1, seller.CompletedTransactionCount);
+        Assert.Equal(1, buyer.CompletedTransactionCount);
+        Assert.Equal(1.0m, seller.SuccessfulTransactionRate);
+        Assert.Equal(1.0m, buyer.SuccessfulTransactionRate);
+
+        var history = await _db.Set<TransactionHistory>().AsNoTracking()
+            .SingleAsync(h => h.TransactionId == tx.Id);
+        Assert.Equal("Complete", history.Trigger);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, history.PreviousStatus);
+        Assert.Equal(TransactionStatus.COMPLETED, history.NewStatus);
+        Assert.Equal(ActorType.SYSTEM, history.ActorType);
     }
 
     [Fact]

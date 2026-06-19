@@ -721,6 +721,10 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            // WP15 — TransactionHistory (IAppendOnly; FK→Transaction/User = NO
+            // ACTION, 06 §3.6) must be cleared before its parents. ExecuteDelete
+            // bypasses the EnforceAppendOnly guard the ChangeTracker path enforces.
+            db.Set<Skinora.Transactions.Domain.Entities.TransactionHistory>().ExecuteDelete();
             db.Set<OutboxMessage>().RemoveRange(db.Set<OutboxMessage>());
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
                 .RemoveRange(db.Set<Skinora.Transactions.Domain.Entities.Transaction>());
