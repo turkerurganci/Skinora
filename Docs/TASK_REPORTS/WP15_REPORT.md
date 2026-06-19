@@ -1,6 +1,6 @@
 # WP15 — Reputation aggregation tetik
 
-**Faz:** Pre-F6 (P5 — Config/altyapı) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-06-19
+**Faz:** Pre-F6 (P5 — Config/altyapı) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-19
 
 ---
 
@@ -83,8 +83,27 @@ bağlandı.
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-19, kendi verdict'i rapor görülmeden) |
 | Yapım-içi self-review | 0 bloke-edici (idempotency status-guard'larla; DI tam container boot'ta API.Tests ile doğrulandı; tüm 12 caller yeşil testlerle exercise edildi) |
+
+**BAĞIMSIZ VALIDATOR — ✓ PASS (4/4 AC, 0 bloke-edici, 4 non-blocking).**
+
+**Kapılar:** Adım -1 temiz · Adım 0 main son-3 success (`27839380260`/`27839380245`/`27834306362`) · Adım 0b memory mevcut · Adım 8a task CI HEAD `6af9ae0` run [`27847024321`](https://github.com/turkerurganci/Skinora/actions/runs/27847024321) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate).
+
+**Validator-çalıştırıldı:** `dotnet build -c Release` **0W/0E** · `dotnet format --verify-no-changes` **EXIT=0** · yeni WP15 unit testleri (Recorder/Refresher/PayoutCompleted) **11/11** · Transactions `Category=Unit` **108/108**. Integration (timeout-atfı + History yazımı + 3 Reset-fix) lokal Docker yok → **CI-authoritative** (Integration job yeşil).
+
+**Bağımsız kod/spec teyidi:**
+- **Bağımlılık zinciri** — `ReputationAggregator` ve `CancelCooldownEvaluator` CANCELLED_TIMEOUT atfını **yalnız** `TransactionHistory.PreviousStatus`'tan çözüyor (`OrderByDescending(CreatedAt).First()`); satır yoksa `previousStatusByTx` boş → timeout iptali numerator+denominator dışı kalır. Kritik fix iddiası prensipte doğrulandı; `ExecutePaymentTimeout_..._To_Buyer` integration testi gerçek `ReputationAggregator` + gerçek History okumasıyla uçtan uca kanıtlıyor (buyer `rate=0.0` sorumlu, seller `null`, History `PreviousStatus=ITEM_ESCROWED`/Trigger="Timeout"/SYSTEM).
+- **12 caller** firsthand diff incelendi: `previousStatus` her zaman `Fire()`'dan önce yakalanmış; genesis `PreviousStatus=null`+`GenesisTrigger="Create"`; actor haritası (USER/SYSTEM/ADMIN) tutarlı, SYSTEM→`SeedConstants.SystemUserId` (06 §8.5 sentinel + §3.6 ActorType-ActorId invariantı).
+- **Merkezi yazım invariantı (06 §3.6):** "audit kaydı tek merkezi method üzerinden, doğrudan INSERT yasak" → `TransactionHistoryRecorder` static helper bunu karşılıyor.
+- **`ApplyStatusChangeAsync`** 3 çağıranın (Declined/Expired/Cancelling) hepsi iptal-sınıfı trigger geçiriyor (`cancelReason` hep dolu) → `evaluateCooldown:true` semantik doğru, forward yol yok.
+- **Recompute sıralaması** (Fire→History→flush→Refresh→save) dedicated-scope caller'larda `BeginTransactionAsync` ile atomik; `AsNoTracking` okuma flush sonrası transaction-içi flushed satırı görür. Retry-strategy yok varsayımı CI Integration job'unun SQL Server'da geçmesiyle doğrulandı.
+- **Güvenlik temiz:** yeni dependency YOK (csproj diff boş), migration YOK (Migrations/ diff boş + dry-run yeşil), secret yok, yeni auth/endpoint yüzeyi yok.
+
+**Validator net-yeni non-blocking (rapor değinmedi):**
+- **N1 (S3, çok düşük olasılık):** `PayoutCompletedConsumer` yorumu "retry'da self-heal eder" (§Yapılan İşler) tam doğru değil — ilk `SaveChanges` (COMPLETED commit) başarılı + ikinci `SaveChanges` (reputation) başarısız olursa, retry'da `Status != ITEM_DELIVERED` guard'ı recompute'tan **önce** kısa-devre yapar → bu event'in retry'ında recompute çalışmaz. Pratikte düzelme kullanıcının **sonraki** reputation-etkileyen olayında olur (aggregator sıfırdan yeniden hesaplar). Denormalize/türetilen alan, para/state etkisi yok, eventual-consistent (06 §8.2) → bloke etmez; yorum hassasiyeti WP17.
+
+**Rapordaki 3 known-limitation bağımsız teyit edildi** (trigger enum-adı vs 06 §3.6 "ör:" geçmiş-zaman → WP17 · `AdditionalData` null · REFUNDED 06 §3.1 haritasında yok → spec-sadık). Yapım raporuyla tam uyumlu.
 
 ## Altyapı Değişiklikleri
 
