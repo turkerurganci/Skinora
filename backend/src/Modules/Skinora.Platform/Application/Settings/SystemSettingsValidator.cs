@@ -1,4 +1,5 @@
 using System.Globalization;
+using Cronos;
 using Skinora.Platform.Domain.Entities;
 
 namespace Skinora.Platform.Application.Settings;
@@ -268,6 +269,21 @@ public sealed class SystemSettingsValidator
             return null;
         }
 
+        // WP14 — cron-schedule keys must parse as a standard 5-field (or
+        // 6-field with seconds) cron expression. Rejecting a typo here returns
+        // a clean 400 on BOTH the admin update path (AD9) and the env-var
+        // bootstrap, instead of silently failing later at Hangfire
+        // RecurringJob.AddOrUpdate (which would log a warning and leave the job
+        // on its previous schedule). The CronSettingChangePropagator re-registers
+        // the job after a successful write, so a value that passes here must be
+        // one Hangfire will accept.
+        if (IsCronKey(key))
+        {
+            if (!TryValidateCron(value, out var cronReason))
+                return $"{key} is not a valid cron expression ({cronReason}).";
+            return null;
+        }
+
         // Generic positive-number rule for everything else numeric.
         if (dataType is "int" or "decimal")
         {
@@ -277,6 +293,37 @@ public sealed class SystemSettingsValidator
         }
 
         return null;
+    }
+
+    // WP14 — settings whose value is a cron expression consumed by a Hangfire
+    // recurring-job registrar (ReconciliationJobRegistrar, HotWalletMonitorJobRegistrar).
+    private static bool IsCronKey(string key) => key
+        is "reconciliation.schedule_cron"
+        or "hot_wallet.monitor_cron";
+
+    /// <summary>
+    /// Parse <paramref name="value"/> as a cron expression, accepting both the
+    /// standard 5-field form and the 6-field (leading seconds) form that
+    /// Hangfire also supports. Returns <c>true</c> when either format parses.
+    /// </summary>
+    private static bool TryValidateCron(string value, out string reason)
+    {
+        var trimmed = value.Trim();
+        reason = string.Empty;
+        foreach (var format in new[] { CronFormat.Standard, CronFormat.IncludeSeconds })
+        {
+            try
+            {
+                CronExpression.Parse(trimmed, format);
+                return true;
+            }
+            catch (CronFormatException ex)
+            {
+                reason = ex.Message;
+            }
+        }
+
+        return false;
     }
 
     // NOTE: price_deviation_threshold is intentionally NOT here — it is a

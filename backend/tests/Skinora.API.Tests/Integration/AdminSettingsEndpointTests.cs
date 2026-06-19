@@ -16,11 +16,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Skinora.Admin.Domain.Entities;
+using Skinora.API.BackgroundJobs;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Application.Settings;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
@@ -192,6 +194,53 @@ public class AdminSettingsEndpointTests : IClassFixture<AdminSettingsEndpointTes
             new { value = "0.03" });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // ---- WP14 — cron-schedule key end-to-end + propagation wiring ----
+    //
+    // NOTE: the happy-path "valid cron PUT re-registers the job" is intentionally
+    // NOT asserted through this endpoint fixture. The real propagation path
+    // (CronSettingChangePropagator → registrar.Reconfigure → IServiceScopeFactory
+    // .CreateScope) is incompatible with this harness's single shared in-memory
+    // SQLite connection — disposing the nested scope tears down the connection's
+    // schema for subsequent tests. That coupling is a harness artifact, not a
+    // production concern (production uses SQL Server with per-scope pooled
+    // connections). The valid-cron re-registration is covered without the shared
+    // connection by CronJobReconfigurerTests (registrar → AddOrUpdateRecurring),
+    // CronSettingChangePropagatorTests (routing) and SystemSettingsServiceTests
+    // (propagator invoked post-save, real SQL Server). Below we keep the cheap
+    // endpoint assertions that do NOT trigger Reconfigure: cron rejection (400)
+    // and the DI composition check.
+
+    [Fact]
+    public async Task UpdateSetting_CronKey_InvalidExpression_Returns400()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/v1/admin/settings/hot_wallet.monitor_cron",
+            new { value = "not a cron" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal("VALIDATION_ERROR",
+            json.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public void Wiring_RegistersBothCronReconfigurers_AndRealPropagator()
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        var keys = scope.ServiceProvider.GetServices<ICronJobReconfigurer>()
+            .Select(r => r.CronSettingKey)
+            .ToList();
+        Assert.Contains("reconciliation.schedule_cron", keys);
+        Assert.Contains("hot_wallet.monitor_cron", keys);
+
+        Assert.IsType<CronSettingChangePropagator>(
+            scope.ServiceProvider.GetRequiredService<ISettingChangePropagator>());
     }
 
     private HttpClient BuildClient(

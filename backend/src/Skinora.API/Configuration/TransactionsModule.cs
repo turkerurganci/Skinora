@@ -2,8 +2,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Skinora.Admin.Application.Users;
+using Skinora.API.BackgroundJobs;
 using Skinora.API.Services;
 using Skinora.API.Services.HotWallet;
+using Skinora.Platform.Application.Settings;
+using Skinora.Shared.BackgroundJobs;
 using Skinora.Fraud.Application.Account;
 using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Admin;
@@ -256,7 +259,14 @@ public static class TransactionsModule
         // the registrar that reads the cron from SystemSettings at startup.
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<ReconciliationJob>();
-        services.AddHostedService<ReconciliationJobRegistrar>();
+        // WP14 — the registrar is also an ICronJobReconfigurer so an admin
+        // change to reconciliation.schedule_cron re-registers the recurring job
+        // at runtime instead of waiting for the next host restart. Register the
+        // concrete once and forward it to both IHostedService and the
+        // reconfigurer so all three resolve the same singleton instance.
+        services.AddSingleton<ReconciliationJobRegistrar>();
+        services.AddHostedService(sp => sp.GetRequiredService<ReconciliationJobRegistrar>());
+        services.AddSingleton<ICronJobReconfigurer>(sp => sp.GetRequiredService<ReconciliationJobRegistrar>());
 
         // T77 — admin-initiated hot→cold consolidation + periodic hot
         // wallet balance monitor (05 §3.3). HotWalletService writes the
@@ -265,7 +275,17 @@ public static class TransactionsModule
         services.AddScoped<IHotWalletService, HotWalletService>();
         services.AddScoped<IHotWalletMonitorService, HotWalletMonitorService>();
         services.AddScoped<HotWalletMonitorJob>();
-        services.AddHostedService<HotWalletMonitorJobRegistrar>();
+        // WP14 — same reconfigurer wiring as ReconciliationJobRegistrar above
+        // (hot_wallet.monitor_cron).
+        services.AddSingleton<HotWalletMonitorJobRegistrar>();
+        services.AddHostedService(sp => sp.GetRequiredService<HotWalletMonitorJobRegistrar>());
+        services.AddSingleton<ICronJobReconfigurer>(sp => sp.GetRequiredService<HotWalletMonitorJobRegistrar>());
+
+        // WP14 — replace the Platform module's no-op settings-change propagator
+        // with the real one that re-registers the cron jobs above when their
+        // schedule setting changes. Replace is order-independent w.r.t.
+        // AddPlatformModule so exactly one registration survives.
+        services.Replace(ServiceDescriptor.Singleton<ISettingChangePropagator, CronSettingChangePropagator>());
 
         return services;
     }

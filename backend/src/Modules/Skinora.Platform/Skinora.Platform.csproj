@@ -5,6 +5,17 @@
     <ProjectReference Include="..\Skinora.Users\Skinora.Users.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Cronos is the de-facto .NET cron parser (zero transitive dependencies,
+         the same library Hangfire embeds internally). Used by
+         SystemSettingsValidator to reject a malformed cron expression for the
+         schedule keys (reconciliation.schedule_cron, hot_wallet.monitor_cron)
+         with a clean 400 on BOTH the admin update path and env-var bootstrap —
+         WP14. This module does not reference Hangfire, so referencing Cronos
+         directly here is conflict-free. -->
+    <PackageReference Include="Cronos" Version="0.8.4" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

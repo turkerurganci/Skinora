@@ -21,7 +21,7 @@
 | Önc. | ID | Özet | Bloklar mı |
 |---|---|---|---|
 | ✅ | T58-AdminDisputeQueue | **ÇÖZÜLDÜ → WP5** — `GET /admin/disputes` (AD27) + resolve (AD29) + ESCALATED→RESOLVED_FOR_* | — |
-| 🟡 | T55-DormantThreshold | `dormant_account_value_threshold` dahil **21 zorunlu SystemSetting** seed'siz → env/admin verilmeden prod fail-fast (deploy runbook işi) → WP14 | **Production startup** |
+| ✅ | T55-DormantThreshold | **ÇÖZÜLDÜ → WP14:** `dormant_account_value_threshold` dahil **19 zorunlu SystemSetting** (plan "21" stale — WP4a `price_deviation_threshold` + WP12 `timeout_warning_ratio` seed-default ile düştü) `Docs/DEPLOY_RUNBOOK.md §A`'da `SKINORA_SETTING_*` env listesi olarak belgelendi + `.env.example`'a eklendi. Owner kararı: seed-default DEĞİL → fail-fast bilinçli güvenlik korundu (06 §8.9 iş-kritik değerler). | — |
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
 | ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2** — `BotRecoveryItem` recovery domaini + AD10 canlı `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` | — |
 | ✅ | T103b-2/-3 | **ÇÖZÜLDÜ → T103b-2 (birleşik)** — recovery queue domain + MANAGE_STEAM_RECOVERY enforcement + emanet item listesi + otomatik EMERGENCY_HOLD | — |
@@ -109,7 +109,7 @@
 | emergency-hold-callers | **Bulk/per-user hold/release/cancel bağlı** (T59/T100/T103b-2, stale); RowVersion guard mevcut; post-payment refund tetik **✅ WP2**, dispute-queue surfacing **✅ WP5** (AD27 kuyruğu). Kalan kalem yok. | T50/T51/T58 K |
 | fraud-acceptance-gate | **✅ ÇÖZÜLDÜ** — accept-gate → WP4a; background scan (retro-scan) + note max-length → WP4b. (Sinyal üreticileri PRICE_DEVIATION T45/multi-account T56 zaten mevcut) | T54/T56 K |
 | energy-gas-token-config | **Kısmen ✅ → WP10:** gas fee config'lenebilir (`TRANSFER_FEE_LIMIT_SUN` — hardcoded 100 TRX kaldırıldı) + HD address cache (per-index `derive` memoization, private-key cache'lenmez) çözüldü. **By-design/kapsam-dışı:** USDC/USDT 1:1 + hardcoded 6-decimal (by-design TRC-20, §3); tek-sweeper/T74 multi-sweeper (post-MVP ölçek, §3); 20-blok finality **zaten var** (`minConfirmations=20`, stale not). | T72-T76 K |
-| setting-sidecar-propagation | Admin `PATCH /admin/settings` `blockchain.*` + cadence/cron sidecar'a runtime yansımıyor (env restart gerek) | T74/T75/T76/T77 K |
+| setting-sidecar-propagation | **WP14 ✅ ÇÖZÜLDÜ:** (1) **cron** (`reconciliation.schedule_cron`, `hot_wallet.monitor_cron`) admin değişiminde Hangfire job **restart'sız re-register** olur (`ISettingChangePropagator`→`CronSettingChangePropagator`→registrar `ICronJobReconfigurer.Reconfigure`; geçersiz cron → 400 validator). (2) **sidecar cadence/sweep** (`monitoring_post_cancel_*`, `blockchain.sweep_*`) owner kararı = **env parity + runbook** (runtime push/pull post-MVP, T74 K1/T96): `Docs/DEPLOY_RUNBOOK.md §D` + `.env.example` — sidecar env otoriter, değişim sidecar restart gerektirir, backend SystemSetting kopyası admin-görünür. Backend gas/retry zaten her run'da taze okunuyor (propagasyon gerektirmiyor). | T74/T75/T76/T77 K |
 | admin-alert-consumers | `RefundBlockedAdminAlert`/`TransferDispatchFailed`/stranded-delegation/STOPPED/spam-token/payout-issue alert kanal consumer'ları yok | T53/T60/T72-T77 K |
 | misc-monitoring-probes | Steam/Telegram health probe, Redis webhook idempotency, in-app dispatch, timeout reschedule, ItemEscrowed publish, DROPPED metric | T64/T68/T78/T79 K |
 | signalr-scaling | SignalR in-memory (multi-instance Redis backplane tek-satır DI); CountdownSync/handler/group-failure obs. | T61/T62/T96 K |
@@ -180,7 +180,7 @@
 
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
-| 🟡 | T55-DormantThresholdMandatoryUnconfigured 🆕 | `dormant_account_value_threshold` seed'siz; `SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD` (veya admin) verilene kadar prod startup fail-fast, dormant-AML kuralı çalışmaz. **Not: tekil değil — aynı fail-fast'le 21 zorunlu ayar (`SettingsBootstrapTests.cs:92`); deploy runbook → WP14** | `T55_REPORT.md:37` |
+| ✅ | T55-DormantThresholdMandatoryUnconfigured 🆕 | **ÇÖZÜLDÜ → WP14:** 19 zorunlu ayar (gerçek sayı; "21" stale) `Docs/DEPLOY_RUNBOOK.md §A` + `.env.example`'da belgelendi. Fail-fast (06 §8.9) bilinçli olarak korundu — owner kararı seed-default DEĞİL. | `T55_REPORT.md:37` |
 
 ---
 
