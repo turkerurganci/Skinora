@@ -57,9 +57,9 @@
 ## Commit & PR
 
 - Branch: `task/WP18-2-fe-test-runner`
-- Commits: FE Vitest+seed · BC ethers override · CI frontend-test+BC-critical · (+docs)
-- PR: #TBD
-- CI: ⏳ bekleniyor
+- Commits: FE Vitest+seed · BC ethers override · CI frontend-test+BC-critical · form-data override+düzeltme · (+docs)
+- PR: [#192](https://github.com/turkerurganci/Skinora/pull/192)
+- CI: ⏳ izleniyor (push sonrası)
 
 ## Notlar
 
