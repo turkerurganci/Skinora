@@ -157,7 +157,8 @@
 | ⚪ | mvp-scope-postmvp | Bilinçli MVP-dışı: reviews, KYC, mobil, diğer oyunlar, multi-item/barter, ek blockchain, fiat, premium, Discord guild, Sentry vb. | 10_MVP_SCOPE / 02_PRD |
 | ~ | content-authoring | **WP17 (taslak):** ToS/Privacy/Support `legal.*` taslak metin 4 dil yazıldı (owner "taslak yaz" kararı) — **otoriter metin hukuk review gerektirir** (jurisdiction/governing-law/entity belirsiz) | SPEC |
 | ⚪ | suspend-signalr-spec | Suspension'da otomatik EMERGENCY_HOLD/live force-restrict yok (request-time enforce); `/auth/suspended` vs `/account-suspended` | T105a K2 |
-| ⚪ | like-escape-helper | `AdminUserService.ListAsync` + audit/sanctions search raw `EF.Functions.Like` (parametrize, injection değil); paylaşılan escape helper + no-direct-INSERT arch rule | T63 K6 / T106 K8 / T42 K1 |
+| 🟡 | like-escape-helper | `AdminUserService.ListAsync` + audit/sanctions search raw `EF.Functions.Like` (parametrize, injection değil) — kanonik `EscapeLike` zaten `AdminTransactionQueryService` private'ında var; `Skinora.Shared`'a çıkar + 3 raw call-site'a uygula + no-direct-INSERT arch rule (hafif reflection testi; NetArchTest yok) → **WP18 PR-3** | T63 K6 / T106 K8 / T42 K1 |
+| ~ | i18n-untranslatable-localized 🆕 | **WP18 (advisory, PR-1):** `check-i18n.mjs` 15 anahtarın 04 §10.4 "untranslatable" terimini yerelleştirdiğini buldu — yalnız **"Gas fee"** (es `Tarifa de gas` / zh `Gas 费` / tr `…gas` — 12 anahtar) + **"Mobile Authenticator"** (zh `手机令牌` — 3 anahtar). Sert marka token'ları (USDT/USDC/TRC-20/Tron/Steam/Steam ID/CS2/Trade offer) temiz. Owner kararı: çeviriler **değiştirilmedi** (zh'de Steam'in resmî terimi olabilir, İngilizce'ye zorlamak UX'i bozar), kural **advisory** kaldı; spec-vs-çeviri uzlaşısı (çeviri düzelt **veya** 04 §10.4 listesini daralt) follow-up'a bırakıldı. | `check-i18n.mjs` |
 | ✅ | permissioncatalog-xmldoc-drift | **ÇÖZÜLDÜ → WP17 (no-op):** xmldoc zaten "14 catalog entries", `All` 14 içerir (T82 sonrası güncel); aksiyon gerekmedi | `PermissionCatalog.cs:56` |
 | ✅ | datamodel-sanctioned-index-drift | **ÇÖZÜLDÜ → WP17:** 06 §3.25 obsolete `IX_SanctionedAddresses_Address` satırı kaldırıldı; filtered UQ `WHERE IsActive=1` hot-path'i karşılar | `06_DATA_MODEL.md` |
 | ✅ | admin-route-table-drift | **ÇÖZÜLDÜ → WP17:** 04 §1 S12 `/admin`→`/admin/dashboard`, S21 `/admin/audit-log`→`/admin/audit-logs` | `GATE_CHECK_F5.md` |
@@ -169,11 +170,11 @@
 | ID | Açıklama | Kaynak |
 |---|---|---|
 | FE-test-runner | Frontend unit-test runner / Vitest yok (F5 plan-onaylı; yalnız validator smoke) | T92/T98/T99-T106 K |
-| prettier-drift | Repo-geneli ~149 + sidecar 10-36 dosya prettier drift; CI `format:check` yok (bloke etmez) | T84 K8 / T64 K1 |
-| filterbar-dateto-chore | `dateTo` end-of-day off-by-one yalnız audit log'da düzeltildi; S13/S15 FilterBar'da repo-geneli kalıyor | T106 K2 / T100 K6 |
-| test-infra-misc | TestContainers Redis/SQL, `AdminWalletsController` endpoint testi, suspend permission isolation, migration verify | T07/T82/T77/T105a K |
-| i18n-lint-ci | `UNTRANSLATABLE_TERMS`/`isUntranslatable()` var ama CI lint scripti yok | T97 K1 |
-| sidecar-npm-audit | 20 transitive npm-audit açığı; `ethers@6.16.0` dolaylı dep; ESLint hermes-parser kırılganlığı | T64 K5 / T70 / T84 K9 |
+| ✅ prettier-drift | **ÇÖZÜLDÜ → WP18 (PR-1):** FE + 2 sidecar `format:check` **blocking** CI gate'i mevcut lint job'a eklendi (backend `dotnet format` paritesi). Gerçek LF drift 25 dosya (FE 13 / steam 7 / BC 5) `prettier --write` ile normalize edildi; görünen 144 CRLF working-tree artefaktıydı. 3 `.prettierrc` alan-bazlı bilinçli farkla korundu (FE singleQuote:false vs sidecar:true). | T84 K8 / T64 K1 |
+| filterbar-dateto-chore | `dateTo` end-of-day off-by-one yalnız audit log'da düzeltildi; S13/S15 FilterBar'da repo-geneli kalıyor → **WP18 PR-3** | T106 K2 / T100 K6 |
+| test-infra-misc | `AdminWalletsController` endpoint testi + suspend permission isolation (2 gerçek boşluk); TestContainers/Redis/migration-verify zaten kapsanmış (no-op) → **WP18 PR-3** | T07/T82/T77/T105a K |
+| ✅ i18n-lint-ci | **ÇÖZÜLDÜ → WP18 (PR-1):** `frontend/scripts/check-i18n.mjs` + `npm run i18n:check` CI lint job'da. Key-parity **blocking** (1291×4 anahtar, identical key-set); untranslatable kuralı (`UNTRANSLATABLE_TERMS` `untranslatable.ts`'ten tek-kaynak parse) **advisory** (owner kararı — bkz. `i18n-untranslatable-localized`). | T97 K1 |
+| ~ sidecar-npm-audit | **Kısmen → WP18:** advisory `npm audit --omit=dev --audit-level=high` CI adımı eklendi (PR-1, `continue-on-error`, her iki sidecar). Steam 4 critical (`request@2.88.2`/`protobufjs`) **upstream-fix yok** → `--force` yıkıcı `steam-user` downgrade → **kalıcı advisory** (owner accept-risk). Blockchain `ethers 6.17` override (ws high-sev'i kırılmasız kapatır) + blocking gate → **WP18 PR-2**. hermes-parser yalnız frontend-lock'ta (sidecar değil; not düzeltildi). | T64 K5 / T70 / T84 K9 |
 | template-side-escape-audit 🆕 | Notification template'lerinin escaper'la kötü etkileşen rezerve karakter denetimi (defense-in-depth) + Discord 2000-char | `T79_REPORT.md:131` K5 / `T80_REPORT.md:225` K5 |
 
 ## 8. Operasyonel config
