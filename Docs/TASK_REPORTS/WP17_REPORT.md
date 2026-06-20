@@ -116,7 +116,7 @@ WP17'nin formal AC listesi yok; "Doküman↔kod hizalı" yeteneği DEFERRED_BACK
 - Branch: `task/WP17-doc-spec-i18n`
 - Commit: `ef4719c` (impl) + PR-ref commit
 - PR: [#190](https://github.com/turkerurganci/Skinora/pull/190)
-- CI: ⏳ izleniyor
+- CI: ✓ run [`27870277748`](https://github.com/turkerurganci/Skinora/actions/runs/27870277748) (`0287f20`) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker BE+FE/Gate) — CI-fix sonrası. İlk run (`3b1041b`) 2 fallback testinde fail'di → düzeltildi (bkz. CI-fix bölümü).
 
 ## Known Limitations / Follow-up
 - **Notification `{Outcome}` fragment per-recipient lokalizasyonu (kalan):** `DisputeEscalatedNotificationConsumer`'ın **auto-escalated (iki-taraf)** dalı + `DisputeResolvedNotificationConsumer` hâlâ TR-sabit outcome fragment'ı enjekte ediyor. Dispatcher template'i recipient-locale'inde render eder ama `{Outcome}` param'ını verbatim enjekte eder; iki-recipient'te her tarafın kendi locale'i gerektiği için bu, notification-mimari düzeltmesi gerektirir (ertelendi). **WP17'de lokalize edilenler:** API response'ları (open/submit/escalate `message`) + auto-resolved bildirimi + **manual-escalate bildirimi** (tek-recipient buyer; `DisputeEscalatedEvent.OutcomeText` ile produce-time buyer-locale pre-localize — yapım-içi review F1 düzeltmesi).
