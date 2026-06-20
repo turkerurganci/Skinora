@@ -120,6 +120,38 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Empty(_outbox.Published);
     }
 
+    // WP17 — a non-default buyer locale flows through DisputeService end-to-end
+    // (proves the ResolveLocaleAsync -> DisputeAutoCheckMessages.Localize wiring,
+    // not just the "en" default the other tests exercise).
+    [Fact]
+    public async Task Open_Then_Escalate_BuyerLocaleTr_LocalizesStoredResponseAndEvent()
+    {
+        var buyer = await Context.Set<User>().FirstAsync(u => u.Id == _buyer.Id);
+        buyer.PreferredLanguage = "tr";
+        await Context.SaveChangesAsync();
+
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var sut = BuildSut();
+
+        // Open PAYMENT (no confirmed payment) → unresolved, Turkish message stored + returned.
+        var open = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.PAYMENT), CancellationToken.None);
+        Assert.Equal("Blockchain üzerinde ödeme bulunamadı", open.Body!.AutoCheckResult.Message);
+
+        var persisted = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == open.Body.Id);
+        Assert.Equal("Blockchain üzerinde ödeme bulunamadı", persisted.SystemCheckResult);
+
+        // Escalate → response message AND the emitted event OutcomeText both Turkish.
+        var esc = await sut.EscalateAsync(_buyer.Id, tx.Id, open.Body.Id,
+            new EscalateDisputeRequest("Ödemeyi gönderdim ama sistem görmüyor"),
+            CancellationToken.None);
+        Assert.Equal("İtirazınız admin ekibine iletildi", esc.Body!.Message);
+
+        var escEvent = Assert.Single(_outbox.Published.OfType<DisputeEscalatedEvent>());
+        Assert.Equal("İtirazınız admin ekibine iletildi", escEvent.OutcomeText);
+    }
+
     [Fact]
     public async Task Open_Payment_ConfirmedPaymentExists_AutoResolves_AndEmitsEvent()
     {
@@ -574,7 +606,8 @@ public class DisputeServiceTests : IntegrationTestBase
 
         Assert.Equal(EscalateDisputeStatus.Escalated, outcome.Status);
         Assert.Equal(DisputeStatus.ESCALATED, outcome.Body!.Status);
-        Assert.Equal("İtirazınız admin ekibine iletildi", outcome.Body.Message);
+        // WP17 — escalate response is localized to the buyer's locale ("en" here).
+        Assert.Equal("Your dispute has been forwarded to the admin team", outcome.Body.Message);
 
         var refreshedDispute = await Context.Set<Dispute>().AsNoTracking()
             .FirstAsync(d => d.Id == open.Body.Id);

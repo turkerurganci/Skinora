@@ -181,6 +181,8 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **Efor:** M
 
 ### WP17 — Doc/spec/i18n mutabakat
+> **Durum: ⏳ Devam ediyor (2026-06-20)** — yapım tamam, bağımsız validator bekliyor. branch `task/WP17-doc-spec-i18n`. **4 küme:** (A) mekanik doc-drift (06 §3.25 index, 04 §1 route + §5 overlay notu, 05 §3.3 sweep tetik/iade, 07 §9.19 audit action); (B) stale-doğrula (T33 fraction + permissioncatalog xmldoc — no-op); (C) AD6-AD7 kontrat recon (owner: kodu spec'e hizala — AD6 `cancelledAt` + AD7 `reputationScore` + notification `content`); (D) i18n hibrit (notification resx tr/es/zh→56 · dispute auto-check buyer-locale lokalizasyon · settings 59 + permission 2 FE-key-mapping · T103-K4 ölü `warningMessage` kaldır · ToS/Privacy/Support **taslak** metin 4 dil). Owner kararları (AskUserQuestion): ToS=taslak yaz · backend i18n=tam · AD6-AD7=kodu spec'e hizala · mekanizma=hibrit. Migration/yeni-paket/config YOK. Yapım-içi adversarial review (Workflow): 7 ham → 4 onaylı (1×S2 doc + 3×S3), dördü kapatıldı. Rapor: [`TASK_REPORTS/WP17_REPORT.md`](TASK_REPORTS/WP17_REPORT.md).
+
 **Backlog:** T33-SuccessRate-FractionVsPercent · AD6-AD7-contract-recon · audit-doc-drift · backend-i18n-migration · T103-K4 · content-authoring (ToS/Privacy metni) · permissioncatalog-xmldoc-drift · datamodel-sanctioned-index-drift · admin-route-table-drift · T84-emergencyhold-status-doc-drift
 **İş:** successRate fraction/percent kararı; AD6-AD7 kontrat recon; audit doc-drift; backend notification/fraud/dispute mesajları es/zh çeviri + AD10 `warningMessage`; ToS/Privacy gerçek metin; tüm xmldoc/datamodel/route drift'leri tek doc-pass'te.
 **Efor:** M

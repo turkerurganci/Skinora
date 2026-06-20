@@ -36,16 +36,148 @@
   <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
     <value>Recibimos {Amount} USDT para tu transacción.</value>
   </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
+    <value>Oferta de intercambio enviada</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
+    <value>Acepta la oferta de intercambio de Steam para recibir tu artículo.</value>
+  </data>
   <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
     <value>Transacción completada</value>
   </data>
   <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
     <value>La transacción de {ItemName} se completó con éxito.</value>
   </data>
+  <data name="SELLER_PAYMENT_SENT_Title" xml:space="preserve">
+    <value>Pago enviado</value>
+  </data>
+  <data name="SELLER_PAYMENT_SENT_Body" xml:space="preserve">
+    <value>Se enviaron {Amount} USDT a tu billetera.</value>
+  </data>
   <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
     <value>Tiempo de espera próximo</value>
   </data>
   <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
     <value>La ventana de la transacción cierra en {RemainingMinutes} minutos.</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Title" xml:space="preserve">
+    <value>Transacción cancelada</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
+    <value>La transacción de {ItemName} fue cancelada: {Reason}.</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Title" xml:space="preserve">
+    <value>Transacción marcada</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Body" xml:space="preserve">
+    <value>La transacción {TransactionId} está bajo revisión.</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Title" xml:space="preserve">
+    <value>Importe de pago incorrecto</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Body" xml:space="preserve">
+    <value>Recibimos {ReceivedAmount} USDT pero esperábamos {ExpectedAmount} USDT.</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Pago tardío reembolsado</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>Se reembolsaron {Amount} USDT a tu billetera.</value>
+  </data>
+  <data name="ITEM_RETURNED_Title" xml:space="preserve">
+    <value>Artículo devuelto</value>
+  </data>
+  <data name="ITEM_RETURNED_Body" xml:space="preserve">
+    <value>{ItemName} fue devuelto a tu inventario.</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Pago reembolsado</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>Se reembolsaron {Amount} USDT.</value>
+  </data>
+  <data name="DISPUTE_RESULT_Title" xml:space="preserve">
+    <value>Disputa resuelta</value>
+  </data>
+  <data name="DISPUTE_RESULT_Body" xml:space="preserve">
+    <value>La disputa se resolvió: {Outcome}.</value>
+  </data>
+  <data name="FLAG_RESOLVED_Title" xml:space="preserve">
+    <value>Marca eliminada</value>
+  </data>
+  <data name="FLAG_RESOLVED_Body" xml:space="preserve">
+    <value>La transacción {TransactionId} ha sido aprobada.</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Title" xml:space="preserve">
+    <value>Admin: alerta de marca</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Body" xml:space="preserve">
+    <value>La transacción {TransactionId} fue marcada: {Reason}.</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Title" xml:space="preserve">
+    <value>Admin: escalamiento</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Body" xml:space="preserve">
+    <value>La transacción {TransactionId} fue escalada.</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Title" xml:space="preserve">
+    <value>Admin: fallo de pago</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Body" xml:space="preserve">
+    <value>El pago de la transacción {TransactionId} falló ({ErrorCode}).</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Title" xml:space="preserve">
+    <value>Transacción congelada temporalmente para revisión</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Body" xml:space="preserve">
+    <value>{ItemName} ha sido congelado temporalmente por la plataforma para su revisión: {Reason}.</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Title" xml:space="preserve">
+    <value>Revisión completada — transacción reanudada</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
+    <value>{ItemName} se reanudó en {ResumedStatus}. La cuenta regresiva continúa desde donde se detuvo.</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
+    <value>Admin: problema del bot de Steam</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
+    <value>El bot {BotId} reportó: {Issue}.</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
+    <value>Admin: alerta de salud de la plataforma</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Body" xml:space="preserve">
+    <value>Estado de salud del sidecar {Component}: {Status}.</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
+    <value>Pago insuficiente — vuelve a enviar el importe correcto</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
+    <value>Recibimos {ReceivedAmount} {Stablecoin} pero esperábamos {ExpectedAmount} {Stablecoin}. El importe recibido será reembolsado a {SourceAddress}; vuelve a enviar el total de {ExpectedAmount} {Stablecoin} antes de que expire el tiempo.</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Pago excedente reembolsado</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>Enviaste {ReceivedAmount} {Stablecoin} pero solo se requerían {ExpectedAmount} {Stablecoin}. El excedente de {ExcessAmount} {Stablecoin} se está reembolsando a {SourceAddress}.</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
+    <value>Token incorrecto detectado — reembolsando</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
+    <value>La transacción esperaba {ExpectedStablecoin} pero recibió {ReceivedAmount} {ActualStablecoin}. El importe se está reembolsando a {SourceAddress}; envía el token correcto.</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
+    <value>Tu cuenta ha sido suspendida</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Body" xml:space="preserve">
+    <value>Tu cuenta de Skinora ha sido suspendida: {Reason}. Aún puedes ver tus transacciones activas, pero no puedes iniciar ni aceptar transacciones hasta que se levante la suspensión.</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Title" xml:space="preserve">
+    <value>Se ha levantado la suspensión de tu cuenta</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
+    <value>Tu cuenta de Skinora está activa de nuevo. Ahora puedes iniciar y aceptar transacciones con normalidad.</value>
   </data>
 </root>

@@ -26,12 +26,9 @@ namespace Skinora.Disputes.Application.AutoCheckers;
 /// </remarks>
 public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
 {
-    private const string MatchMessage =
-        "Teslim edilen item, işlemdeki item ile eşleşiyor";
-    private const string AutoEscalatedMessage =
-        "Teslim edilen item beklenen item ile eşleşmiyor — işleminiz incelemeye alındı";
-    private const string NoDeliveryMessage =
-        "Teslim verisi bulunamadı; teslim aşamasına gelinmedi";
+    private const string MatchMessage = DisputeAutoCheckMessages.WrongItemMatch;
+    private const string AutoEscalatedMessage = DisputeAutoCheckMessages.WrongItemMismatch;
+    private const string NoDeliveryMessage = DisputeAutoCheckMessages.WrongItemNoDelivery;
 
     private readonly AppDbContext _db;
     private readonly ISteamInventoryReader _inventory;
@@ -83,24 +80,24 @@ public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
         return AutoEscalated(AutoEscalatedMessage);
     }
 
-    private static AutoCheckResult Resolved(string message) =>
+    private static AutoCheckResult Resolved(string messageKey) =>
         new(Resolved: true,
             AutoEscalated: false,
-            Message: message,
+            MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: false);
 
-    private static AutoCheckResult Unresolved(string message) =>
+    private static AutoCheckResult Unresolved(string messageKey) =>
         new(Resolved: false,
             AutoEscalated: false,
-            Message: message,
+            MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: true);
 
-    private static AutoCheckResult AutoEscalated(string message) =>
+    private static AutoCheckResult AutoEscalated(string messageKey) =>
         new(Resolved: false,
             AutoEscalated: true,
-            Message: message,
+            MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: false);
 }

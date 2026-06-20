@@ -2,10 +2,14 @@ using Skinora.Shared.Enums;
 
 namespace Skinora.Steam.Application.Admin;
 
-/// <summary>Top-level body for AD10 (07 §9.10).</summary>
+/// <summary>
+/// Top-level body for AD10 (07 §9.10). The degraded-account banner is derived
+/// client-side from each account's <c>status</c> (so it localizes per UI
+/// locale); the previously server-built Turkish <c>warningMessage</c> was
+/// removed in WP17 (T103-K4) — it was unused by the frontend and leaked Turkish.
+/// </summary>
 public sealed record AdminSteamAccountsResponse(
-    IReadOnlyList<AdminSteamAccountDto> Accounts,
-    string? WarningMessage);
+    IReadOnlyList<AdminSteamAccountDto> Accounts);
 
 /// <summary>One row of <c>data.accounts</c> for AD10 (07 §9.10).</summary>
 /// <remarks>

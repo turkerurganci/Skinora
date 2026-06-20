@@ -117,6 +117,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 BuyerId = t.BuyerId,
                 CreatedAt = t.CreatedAt,
                 CompletedAt = t.CompletedAt,
+                CancelledAt = t.CancelledAt,
             })
             .ToListAsync(cancellationToken);
 
@@ -169,6 +170,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 BuyerId = t.BuyerId,
                 CreatedAt = t.CreatedAt,
                 CompletedAt = t.CompletedAt,
+                CancelledAt = t.CancelledAt,
             })
             .ToListAsync(cancellationToken);
 
@@ -275,7 +277,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             CommissionAmount: tx.CommissionAmount,
             TotalAmount: tx.TotalAmount,
             PaymentTimeoutMinutes: tx.PaymentTimeoutMinutes,
-            Seller: sellerSnapshot ?? UnknownParty(),
+            Seller: sellerSnapshot ?? UnknownPartyDetail(),
             Buyer: buyerSnapshot,
             CreatedAt: tx.CreatedAt,
             AcceptedAt: tx.AcceptedAt,
@@ -401,16 +403,41 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             u => new AdminTransactionPartyDto(u.SteamId, u.SteamDisplayName, u.SteamAvatarUrl));
     }
 
-    private async Task<AdminTransactionPartyDto?> LoadPartyAsync(
+    private async Task<AdminTransactionPartyDetailDto?> LoadPartyAsync(
         Guid userId, CancellationToken cancellationToken)
     {
         var user = await _db.Set<User>()
             .AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new AdminTransactionPartyDto(u.SteamId, u.SteamDisplayName, u.SteamAvatarUrl))
+            .Select(u => new
+            {
+                u.SteamId,
+                u.SteamDisplayName,
+                u.SteamAvatarUrl,
+                u.SuccessfulTransactionRate,
+            })
             .FirstOrDefaultAsync(cancellationToken);
-        return user;
+
+        return user is null
+            ? null
+            : new AdminTransactionPartyDetailDto(
+                user.SteamId,
+                user.SteamDisplayName,
+                user.SteamAvatarUrl,
+                ComputeReputation(user.SuccessfulTransactionRate));
     }
+
+    /// <summary>
+    /// Composite reputation score for the AD7 party snapshot — mirrors the
+    /// user-facing <c>TransactionDetailService.ComputeReputation</c>
+    /// (06 §3.1 / T43 closure): <c>ROUND(SuccessfulTransactionRate × 5, 1,
+    /// ToZero)</c>; null when no rate is denormalized yet (T33 contract:
+    /// rate=null ⇒ reputationScore=null).
+    /// </summary>
+    private static decimal? ComputeReputation(decimal? successRate)
+        => successRate.HasValue
+            ? Math.Round(successRate.Value * 5m, 1, MidpointRounding.ToZero)
+            : null;
 
     private static AdminTransactionListItemDto MapListItem(
         TxListProjection row, IReadOnlyDictionary<Guid, AdminTransactionPartyDto> partyById)
@@ -429,7 +456,8 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             Seller: seller,
             Buyer: buyer,
             CreatedAt: row.CreatedAt,
-            CompletedAt: row.CompletedAt);
+            CompletedAt: row.CompletedAt,
+            CancelledAt: row.CancelledAt);
     }
 
     /// <summary>
@@ -439,6 +467,10 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
     /// </summary>
     private static AdminTransactionPartyDto UnknownParty() =>
         new(SteamId: string.Empty, DisplayName: "Deleted User", AvatarUrl: null);
+
+    /// <summary>AD7 detail variant of <see cref="UnknownParty"/> (06 §3.1 score null).</summary>
+    private static AdminTransactionPartyDetailDto UnknownPartyDetail() =>
+        new(SteamId: string.Empty, DisplayName: "Deleted User", AvatarUrl: null, ReputationScore: null);
 
     private async Task<AdminTxPaymentDetailDto?> BuildPaymentDetailAsync(
         Guid transactionId,
@@ -533,6 +565,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 n.UserId,
                 n.Type,
                 n.CreatedAt,
+                n.Body,
             })
             .ToListAsync(cancellationToken);
 
@@ -576,7 +609,8 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 Type: n.Type.ToString(),
                 Recipient: recipient,
                 Channels: channels,
-                SentAt: n.CreatedAt);
+                SentAt: n.CreatedAt,
+                Content: n.Body);
         }).ToList();
     }
 
@@ -630,5 +664,6 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
         public Guid? BuyerId { get; init; }
         public DateTime CreatedAt { get; init; }
         public DateTime? CompletedAt { get; init; }
+        public DateTime? CancelledAt { get; init; }
     }
 }

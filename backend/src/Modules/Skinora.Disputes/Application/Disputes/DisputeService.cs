@@ -7,6 +7,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Disputes.Application.Disputes;
 
@@ -131,6 +132,13 @@ public sealed class DisputeService : IDisputeService
         // Stage 5 — run the type-specific auto-checker.
         var autoCheck = await RunAutoCheckerAsync(request.Type, transaction, cancellationToken);
 
+        // WP17 — render the auto-checker result key in the disputing buyer's
+        // locale. The buyer is the sole recipient of the open response, the
+        // stored SystemCheckResult and the DISPUTE_RESULT notification, so a
+        // single produce-time localization keeps all three in one language.
+        var buyerLocale = await ResolveLocaleAsync(callerUserId, cancellationToken);
+        var autoCheckText = DisputeAutoCheckMessages.Localize(autoCheck.MessageKey, buyerLocale);
+
         // Stage 6 — build the dispute row + decide initial status.
         var now = _clock.GetUtcNow().UtcDateTime;
         var status = autoCheck.Resolved
@@ -146,7 +154,7 @@ public sealed class DisputeService : IDisputeService
             OpenedByUserId = callerUserId,
             Type = request.Type,
             Status = status,
-            SystemCheckResult = autoCheck.Message,
+            SystemCheckResult = autoCheckText,
             ResolvedAt = autoCheck.Resolved ? now : null,
             CreatedAt = now,
             UpdatedAt = now,
@@ -169,7 +177,7 @@ public sealed class DisputeService : IDisputeService
                     TransactionId: transactionId,
                     Type: dispute.Type,
                     BuyerId: callerUserId,
-                    Outcome: autoCheck.Message,
+                    Outcome: autoCheckText,
                     OccurredAt: now),
                 cancellationToken);
         }
@@ -198,7 +206,7 @@ public sealed class DisputeService : IDisputeService
             Status: dispute.Status,
             AutoCheckResult: new AutoCheckResultDto(
                 Resolved: autoCheck.Resolved,
-                Message: autoCheck.Message,
+                Message: autoCheckText,
                 CanSubmitTxHash: autoCheck.CanSubmitTxHash,
                 CanEscalate: autoCheck.CanEscalate),
             CreatedAt: now);
@@ -266,8 +274,12 @@ public sealed class DisputeService : IDisputeService
         var autoCheck = await _paymentChecker.CheckWithTxHashAsync(
             transaction, trimmedHash, cancellationToken);
 
+        // WP17 — localize the result key in the buyer's locale (see OpenAsync).
+        var buyerLocale = await ResolveLocaleAsync(callerUserId, cancellationToken);
+        var autoCheckText = DisputeAutoCheckMessages.Localize(autoCheck.MessageKey, buyerLocale);
+
         var now = _clock.GetUtcNow().UtcDateTime;
-        dispute.SystemCheckResult = autoCheck.Message;
+        dispute.SystemCheckResult = autoCheckText;
         dispute.UpdatedAt = now;
 
         if (autoCheck.Resolved)
@@ -286,7 +298,7 @@ public sealed class DisputeService : IDisputeService
                     TransactionId: transactionId,
                     Type: dispute.Type,
                     BuyerId: callerUserId,
-                    Outcome: autoCheck.Message,
+                    Outcome: autoCheckText,
                     OccurredAt: now),
                 cancellationToken);
         }
@@ -296,7 +308,7 @@ public sealed class DisputeService : IDisputeService
         var body = new SubmitTxHashResponse(
             CheckResult: new TxHashCheckResultDto(
                 Resolved: autoCheck.Resolved,
-                Message: autoCheck.Message));
+                Message: autoCheckText));
 
         return new SubmitTxHashOutcome(
             Status: SubmitTxHashStatus.Processed,
@@ -363,6 +375,15 @@ public sealed class DisputeService : IDisputeService
         if (!transaction.HasActiveDispute)
             transaction.HasActiveDispute = true;
 
+        // WP17 — localize the manual-escalate outcome in the buyer's locale once.
+        // The buyer is the sole recipient of BOTH the notification and the API
+        // response, so the pre-localized text flows to both (matching the
+        // auto-resolved single-recipient pattern); it rides on the event as
+        // OutcomeText so the DISPUTE_RESULT notification body is localized too.
+        var buyerLocale = await ResolveLocaleAsync(callerUserId, cancellationToken);
+        var escalateMessage = DisputeAutoCheckMessages.Localize(
+            DisputeAutoCheckMessages.ManualEscalated, buyerLocale);
+
         // Stage 6 — outbox event (manual escalation, single buyer notification).
         await _outbox.PublishAsync(
             new DisputeEscalatedEvent(
@@ -374,7 +395,8 @@ public sealed class DisputeService : IDisputeService
                 BuyerId: callerUserId,
                 AutoEscalated: false,
                 Detail: trimmedDetail,
-                OccurredAt: now),
+                OccurredAt: now,
+                OutcomeText: escalateMessage),
             cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -382,13 +404,30 @@ public sealed class DisputeService : IDisputeService
         var body = new EscalateDisputeResponse(
             Status: dispute.Status,
             EscalatedAt: now,
-            Message: "İtirazınız admin ekibine iletildi");
+            Message: escalateMessage);
 
         return new EscalateDisputeOutcome(
             Status: EscalateDisputeStatus.Escalated,
             Body: body,
             ErrorCode: null,
             ErrorMessage: null);
+    }
+
+    /// <summary>
+    /// Resolve a user's stored UI locale (06 §3.1 <c>PreferredLanguage</c>),
+    /// defaulting to English when unset — same source the notification
+    /// dispatcher uses, so the dispute result and the DISPUTE_RESULT
+    /// notification land in one language (WP17).
+    /// </summary>
+    private async Task<string> ResolveLocaleAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var locale = await _db.Set<User>()
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.PreferredLanguage)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return string.IsNullOrWhiteSpace(locale) ? "en" : locale;
     }
 
     private Task<AutoCheckResult> RunAutoCheckerAsync(

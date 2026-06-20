@@ -612,6 +612,67 @@
   },
   "adminSettings": {
     "title": "Gestión de Parámetros",
+    "labels": {
+      "accept_timeout_minutes": "Timeout de aceptación del comprador",
+      "trade_offer_seller_timeout_minutes": "Timeout de trade offer del vendedor",
+      "payment_timeout_min_minutes": "Timeout de pago mínimo",
+      "payment_timeout_max_minutes": "Timeout de pago máximo",
+      "payment_timeout_default_minutes": "Timeout de pago predeterminado",
+      "trade_offer_buyer_timeout_minutes": "Timeout de trade offer del comprador",
+      "timeout_warning_ratio": "Proporción de envío de aviso de timeout",
+      "commission_rate": "Tasa de comisión",
+      "gas_fee_protection_ratio": "Umbral de protección de gas fee",
+      "min_transaction_amount": "Importe mínimo de transacción",
+      "max_transaction_amount": "Importe máximo de transacción",
+      "max_concurrent_transactions": "Límite de transacciones activas simultáneas",
+      "new_account_transaction_limit": "Límite de transacciones de cuenta nueva",
+      "new_account_period_days": "Periodo de aceptación de cuenta nueva",
+      "cancel_limit_count": "Límite de cancelaciones — cancelaciones permitidas por periodo",
+      "cancel_limit_period_hours": "Periodo del límite de cancelaciones",
+      "cancel_cooldown_hours": "Periodo de espera tras cancelación",
+      "price_deviation_threshold": "Umbral de desviación del precio de mercado",
+      "high_volume_amount_threshold": "Umbral de importe de alto volumen",
+      "high_volume_count_threshold": "Umbral de número de transacciones de alto volumen",
+      "high_volume_period_hours": "Periodo de control de alto volumen",
+      "dormant_account_min_age_days": "Umbral de antigüedad mínima de cuenta inactiva",
+      "dormant_account_value_threshold": "Umbral de importe de transacción de cuenta inactiva",
+      "multi_account_exchange_addresses": "Lista de direcciones exchange/custodial conocidas (CSV; NONE = ninguna)",
+      "monitoring_post_cancel_24h_polling_seconds": "Intervalo de polling primeras 24h tras cancelación",
+      "monitoring_post_cancel_7d_polling_seconds": "Intervalo de polling de 1-7 días tras cancelación",
+      "monitoring_post_cancel_30d_polling_seconds": "Intervalo de polling de 7-30 días tras cancelación",
+      "monitoring_stop_after_days": "Periodo de detención del monitoreo",
+      "min_refund_threshold_ratio": "Umbral mínimo de reembolso — sin reembolso por debajo de gas fee × esta proporción",
+      "blockchain_refund_gas_fee_estimate_usdt": "Estimación de gas fee de reembolso (T72 MVP, runtime tras T74)",
+      "blockchain_payout_gas_fee_estimate_usdt": "Estimación de gas fee de payout del vendedor (WP1 MVP, runtime tras T74)",
+      "blockchain_transfer_retry_intervals_minutes": "Intervalos de reintento de transferencia saliente (CSV, minutos — T73)",
+      "blockchain_sweep_energy_delegation_sun": "Importe de Energy delegation de sweep/refund (T74)",
+      "blockchain_sweep_trx_fallback_sun": "Importe TRX de respaldo de Energy delegation (T74)",
+      "reconciliation_schedule_cron": "Expresión cron del job de reconciliation (T76)",
+      "reconciliation_hot_wallet_address": "Dirección hot wallet de reconciliation (T76)",
+      "reconciliation_cold_wallet_address": "Dirección cold wallet de reconciliation (T76, opcional)",
+      "hot_wallet_monitor_cron": "Expresión cron del job de monitor de hot wallet (T77)",
+      "hot_wallet_trx_balance_minimum": "Umbral mínimo de saldo TRX de hot wallet (para gas)",
+      "open_link_enabled": "Método de enlace abierto activo",
+      "hot_wallet_limit": "Límite máximo de saldo de hot wallet",
+      "wallet_payout_address_cooldown_hours": "Espera de cambio de dirección de pago del vendedor",
+      "wallet_refund_address_cooldown_hours": "Espera de cambio de dirección de reembolso del comprador",
+      "auth_banned_countries": "Países prohibidos (ISO-3166-1 alpha-2 CSV; NONE = ninguno)",
+      "auth_min_steam_account_age_days": "Umbral de antigüedad mínima de cuenta Steam",
+      "reputation_min_account_age_days": "Umbral de antigüedad de cuenta — por debajo reputationScore es null",
+      "reputation_min_completed_transactions": "Umbral de transacciones completadas — por debajo reputationScore es null",
+      "platform_maintenance_active": "Mantenimiento/interrupción activo",
+      "platform_maintenance_type": "Tipo de mantenimiento/interrupción (enum, NONE = ninguno)",
+      "platform_maintenance_message": "Mensaje mostrado a los usuarios (NONE = ninguno)",
+      "platform_maintenance_planned_end": "Hora estimada de finalización (ISO 8601 UTC, NONE = ninguna)",
+      "retention_outbox_message_days": "Periodo de retención de mensaje Outbox",
+      "retention_processed_event_days": "Periodo de retención de ProcessedEvent",
+      "retention_external_idempotency_days": "Periodo de retención de ExternalIdempotencyRecord",
+      "retention_orphan_notification_days": "Periodo de retención de notificación huérfana",
+      "retention_user_login_log_days": "Periodo de retención de UserLoginLog",
+      "retention_batch_size_outbox": "Tamaño de lote de limpieza de Outbox",
+      "retention_batch_size_notification": "Tamaño de lote de limpieza de notificaciones",
+      "retention_batch_size_user_login_log": "Tamaño de lote de limpieza de UserLoginLog"
+    },
     "loadError": "No se pudieron cargar los parámetros.",
     "empty": "No se encontraron parámetros.",
     "operationalHeading": "Parámetros Operativos",
@@ -777,6 +838,8 @@
       "VIEW_AUDIT_LOG": "Ver registro de auditoría",
       "CANCEL_TRANSACTIONS": "Cancelar transacciones",
       "EMERGENCY_HOLD": "Aplicar/retirar retención de emergencia",
+      "VIEW_DISPUTES": "Ver disputas",
+      "MANAGE_DISPUTES": "Resolver disputas",
       "MANAGE_SANCTIONS": "Gestionar lista de sanciones"
     },
     "assignment": {
@@ -802,91 +865,91 @@
     "support": "Soporte"
   },
   "legal": {
-    "draftNotice": "Esta página se está finalizando antes del lanzamiento. El resumen siguiente describe lo que cubrirá la política completa.",
+    "draftNotice": "Este es un BORRADOR preparado para su revisión y no constituye asesoramiento legal. Será revisado y finalizado por asesores legales cualificados antes del lanzamiento, y la versión final publicada regirá tu uso de Skinora.",
     "backToHome": "Volver al inicio",
     "privacy": {
       "title": "Política de privacidad",
-      "intro": "Skinora procesa los datos personales mínimos necesarios para operar el servicio de custodia de objetos de CS2. Este resumen explica qué recopilamos, por qué y las opciones que tienes.",
+      "intro": "Skinora es un servicio de custodia de objetos de CS2 que conecta a compradores y vendedores y retiene el pago hasta que un objeto se entrega a través de Steam. Esta política describe los datos personales que procesamos para operar ese servicio y las opciones que tienes. Buscamos recopilar solo lo necesario y tratar los datos conforme a las leyes de protección de datos aplicables, incluidas la KVKK en Turquía y el GDPR en la UE cuando correspondan.",
       "sections": {
         "dataWeCollect": {
           "heading": "Datos que recopilamos",
-          "body": "Tu perfil público de Steam (Steam ID, nombre visible, avatar), las direcciones de billetera que proporcionas y tu actividad de transacciones en la plataforma."
+          "body": "Cuando inicias sesión con Steam (Steam OpenID), recibimos tu perfil público de Steam, incluidos tu Steam ID, nombre visible y avatar. También almacenamos las direcciones de billetera que proporcionas para pagos en stablecoins TRC-20 (USDT, USDC) en la red TRON, y un registro de tu actividad de transacciones en la plataforma, como ofertas, estado de custodia, pagos, reembolsos y disputas. No recibimos tu contraseña de Steam ni las credenciales de tu Steam Mobile Authenticator."
         },
         "howWeUse": {
           "heading": "Cómo usamos tus datos",
-          "body": "Para autenticarte, ejecutar transacciones de custodia, prevenir el fraude y cumplir nuestras obligaciones legales y de seguridad."
+          "body": "Usamos tus datos para autenticarte, crear y liquidar transacciones de custodia, enviar y verificar ofertas de intercambio de Steam, y procesar pagos en stablecoin, comisiones, pagos y reembolsos. También los usamos para detectar y prevenir el fraude, aplicar reglas de elegibilidad como la edad, el geobloqueo y el cribado de sanciones, resolver disputas y cumplir nuestras obligaciones legales, contables y de seguridad."
         },
         "dataSharing": {
           "heading": "Intercambio de datos",
-          "body": "Compartimos datos únicamente con los terceros necesarios para prestar el servicio (como Steam y la infraestructura blockchain) y cuando la ley lo exige. No vendemos datos personales."
+          "body": "Compartimos datos únicamente con las partes necesarias para prestar el servicio, como Steam para la verificación de intercambios y la red blockchain TRON para los pagos en cadena, y con proveedores de servicios que actúan en nuestro nombre. Ten en cuenta que las transacciones registradas en una blockchain pública son inherentemente visibles para otros. También podemos divulgar datos cuando la ley lo exija o para hacer cumplir nuestros términos, y no vendemos datos personales."
         },
         "dataRetention": {
           "heading": "Conservación de datos",
-          "body": "Los registros de transacciones y auditoría se conservan el tiempo necesario para contabilidad, resolución de disputas y cumplimiento legal; los datos de la cuenta se eliminan tras una solicitud de eliminación cuando está permitido."
+          "body": "Conservamos los datos personales durante el tiempo necesario para prestar el servicio y cumplir obligaciones legales, contables, de auditoría y de resolución de disputas. Los registros de transacciones y auditoría suelen conservarse más tiempo que los datos de la cuenta activa para cumplir estas obligaciones. Puedes solicitar la eliminación o anonimización de tu cuenta, y la atenderemos cuando no exista un requisito legal prevalente."
         },
         "yourRights": {
           "heading": "Tus derechos",
-          "body": "Puedes solicitar el acceso, la corrección o la eliminación de tus datos personales, sujeto a límites legales, desde la configuración de tu cuenta o contactando con soporte."
+          "body": "Según dónde residas, puedes tener derecho a acceder, corregir, eliminar o restringir el tratamiento de tus datos personales, a oponerte a ciertos tratamientos y a la portabilidad de los datos, según lo previsto por la KVKK, el GDPR u otra ley aplicable. Puedes ejercer estos derechos desde la configuración de tu cuenta o contactando con soporte, y podríamos necesitar verificar tu identidad antes de atender una solicitud. Los derechos pueden estar limitados cuando la conservación sea legalmente obligatoria."
         },
         "contact": {
           "heading": "Contacto",
-          "body": "Para preguntas sobre privacidad, contáctanos a través de la página de soporte."
+          "body": "Para preguntas sobre privacidad o para ejercer tus derechos de protección de datos, contáctanos a través de la página de soporte. El responsable del tratamiento y cualquier representante local se identificarán en la política final publicada."
         }
       }
     },
     "terms": {
       "title": "Términos de servicio",
-      "intro": "Estos términos rigen tu uso de la plataforma de custodia de objetos de CS2 de Skinora. Al usar el servicio, los aceptas.",
+      "intro": "Estos términos rigen tu uso de Skinora, una plataforma de custodia de objetos de CS2 que conecta a un comprador y un vendedor y retiene el pago del comprador hasta que el vendedor entrega el objeto mediante un intercambio de Steam. Al iniciar sesión y usar el servicio, aceptas estos términos. Estos términos se rigen por la ley aplicable de la jurisdicción del operador, que se especificará en la versión final publicada.",
       "sections": {
         "acceptance": {
-          "heading": "Aceptación de los términos",
-          "body": "Al crear o aceptar una transacción confirmas que tienes al menos 18 años y aceptas estos términos y la Política de privacidad."
+          "heading": "Aceptación y elegibilidad",
+          "body": "Al crear o aceptar una transacción, confirmas que tienes al menos 18 años y que aceptas estos términos y la Política de privacidad. También confirmas que no te encuentras en una jurisdicción bloqueada o sancionada y que no figuras en ninguna lista de sanciones aplicable. Usamos geobloqueo y cribado, y podemos rechazar el servicio cuando no pueda confirmarse la elegibilidad."
         },
         "serviceDescription": {
           "heading": "El servicio",
-          "body": "Skinora mantiene en custodia un objeto de CS2 y un pago en stablecoin, y libera cada parte a su contraparte una vez que ambas se han verificado en la cadena y en Steam."
+          "body": "Skinora actúa como intermediario que retiene en custodia el pago en stablecoin TRC-20 del comprador hasta que el vendedor entrega el objeto de CS2 acordado mediante un intercambio de Steam. Una vez confirmada la entrega, liberamos el pago al vendedor tras deducir la comisión de la plataforma y la tarifa de gas de la red. El intercambio suele requerir una cuenta de Steam en buen estado y puede requerir un Steam Mobile Authenticator. Skinora es un servicio independiente y no está afiliado, respaldado ni operado por Valve o Steam."
         },
         "userObligations": {
           "heading": "Tus obligaciones",
-          "body": "Debes proporcionar direcciones de billetera precisas, usar solo cuentas de tu propiedad y no intentar fraude, manipulación del mercado ni eludir los controles de la plataforma."
+          "body": "Debes proporcionar direcciones de billetera precisas, usar solo cuentas de Steam y de billetera de tu propiedad y bajo tu control, y completar los intercambios de forma honesta y puntual. No debes intentar fraude, blanqueo de capitales, manipulación del mercado ni eludir los controles de la plataforma, las comprobaciones de elegibilidad o el cribado de sanciones. Eres responsable de la seguridad de tus credenciales de Steam y de billetera, y de verificar los datos del destinatario y la dirección antes de confirmar."
         },
         "fees": {
           "heading": "Tarifas",
-          "body": "Se aplican una comisión de la plataforma y las tarifas de gas de la red a cada transacción, y se te muestran antes de confirmar."
+          "body": "Cada transacción está sujeta a una comisión de la plataforma y a una tarifa de red blockchain (gas). Los importes aplicables se te muestran en la aplicación antes de que confirmes una transacción, y las tarifas exactas son configurables y pueden cambiar con el tiempo. Las tarifas de la red blockchain las determina la red TRON y están fuera de nuestro control."
         },
         "liability": {
           "heading": "Responsabilidad",
-          "body": "El servicio se ofrece tal cual. Skinora no es responsable de las pérdidas derivadas de fallos de Steam, blockchain u otros terceros fuera de su control."
+          "body": "Skinora presta un servicio de custodia e intermediación tal cual y según disponibilidad, y no garantiza el valor de mercado, la autenticidad ni la futura comerciabilidad de ningún objeto. En la máxima medida permitida por la ley aplicable, Skinora no es responsable de las pérdidas derivadas de interrupciones de Steam, problemas de la red blockchain, fallos de terceros o errores del usuario, como enviar fondos a una dirección incorrecta. Nada en estos términos excluye la responsabilidad que no pueda excluirse por ley."
         },
         "termination": {
           "heading": "Suspensión y cancelación",
-          "body": "Podemos suspender o cerrar las cuentas que infrinjan estos términos o la ley aplicable, incluidas nuestras reglas de sanciones y fraude."
+          "body": "Podemos suspender o cerrar las cuentas que infrinjan estos términos o la ley aplicable, incluidas nuestras reglas de fraude, elegibilidad y sanciones, y podemos retener o revertir transacciones cuando sea necesario para investigar. Cuando se suspende una cuenta, por lo general conservas acceso de solo lectura a tus transacciones activas para que puedas seguir su resolución. Gestionaremos los fondos retenidos en custodia conforme a estos términos y a la ley aplicable."
         },
         "contact": {
           "heading": "Contacto",
-          "body": "Las preguntas sobre estos términos pueden enviarse a través de la página de soporte."
+          "body": "Las preguntas sobre estos términos, incluida la ley aplicable y la entidad operadora una vez finalizadas, pueden enviarse a través de la página de soporte."
         }
       }
     },
     "support": {
       "title": "Soporte",
-      "intro": "¿Necesitas ayuda con una transacción o tu cuenta? Aquí te explicamos cómo contactarnos y qué esperar.",
+      "intro": "¿Necesitas ayuda con una transacción o tu cuenta? Esta página explica cómo contactar con nuestro equipo, cuánto suele tardar una respuesta y cómo se gestionan las disputas.",
       "sections": {
         "contact": {
           "heading": "Contáctanos",
-          "body": "Escribe a support@skinora.app con el ID de tu transacción y una descripción del problema."
+          "body": "Puedes contactar con soporte a través del flujo de soporte en la aplicación o escribiendo a support@skinora.app. Por favor, incluye el ID de tu transacción y una descripción clara del problema para que podamos ayudarte más rápido. Nunca compartas tu contraseña de Steam ni las claves privadas o la frase de recuperación de tu billetera con nadie, incluido el soporte."
         },
         "responseTimes": {
           "heading": "Tiempos de respuesta",
-          "body": "Nuestro objetivo es responder en un día hábil. Los problemas de custodia urgentes tienen prioridad."
+          "body": "Nuestro objetivo es responder en un día hábil, y los problemas de custodia y pago urgentes tienen prioridad. Los tiempos de respuesta son objetivos, no garantías, y pueden ser mayores en periodos de alta demanda, interrupciones de Steam o congestión de la blockchain."
         },
         "disputes": {
           "heading": "Disputas de transacciones",
-          "body": "Si un intercambio no se completa como se esperaba, abre una disputa desde la página de la transacción; nuestro equipo revisa los casos escalados."
+          "body": "Si un intercambio no se completa como se esperaba, el comprador puede abrir una disputa desde la página de la transacción por problemas como el pago, la entrega o la recepción de un objeto incorrecto. Primero se ejecutan comprobaciones automáticas, y los casos no resueltos se escalan a los administradores de la plataforma para revisión manual. Una disputa puede resolverse a favor del comprador o del vendedor, incluido el reembolso de los fondos en custodia a la billetera del comprador cuando proceda."
         },
         "faq": {
           "heading": "Preguntas frecuentes",
-          "body": "Aquí estará disponible orientación sobre pagos, ofertas de intercambio, reembolsos y seguridad de la cuenta."
+          "body": "Aquí estará disponible orientación sobre el inicio de sesión con Steam, el envío y la aceptación de ofertas de intercambio, los pagos y confirmaciones en stablecoin, las comisiones y tarifas de gas, los reembolsos y la seguridad de la cuenta. Hasta entonces, contacta con soporte para obtener ayuda con cualquiera de estos temas."
         }
       }
     }

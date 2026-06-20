@@ -192,7 +192,8 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
         Assert.Equal("ESCALATED", data.GetProperty("status").GetString());
-        Assert.Equal("İtirazınız admin ekibine iletildi",
+        // WP17 — escalate response localized to the buyer's locale ("en" here).
+        Assert.Equal("Your dispute has been forwarded to the admin team",
             data.GetProperty("message").GetString());
 
         using var scope = _factory.Services.CreateScope();

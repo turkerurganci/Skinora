@@ -612,6 +612,67 @@
   },
   "adminSettings": {
     "title": "Parametre Yönetimi",
+    "labels": {
+      "accept_timeout_minutes": "Alıcı kabul timeout süresi",
+      "trade_offer_seller_timeout_minutes": "Satıcı trade offer timeout süresi",
+      "payment_timeout_min_minutes": "Ödeme timeout minimum",
+      "payment_timeout_max_minutes": "Ödeme timeout maksimum",
+      "payment_timeout_default_minutes": "Ödeme timeout varsayılan",
+      "trade_offer_buyer_timeout_minutes": "Alıcı trade offer timeout süresi",
+      "timeout_warning_ratio": "Timeout uyarı gönderim oranı",
+      "commission_rate": "Komisyon oranı",
+      "gas_fee_protection_ratio": "Gas fee koruma eşiği",
+      "min_transaction_amount": "Minimum işlem tutarı",
+      "max_transaction_amount": "Maksimum işlem tutarı",
+      "max_concurrent_transactions": "Eşzamanlı aktif işlem limiti",
+      "new_account_transaction_limit": "Yeni hesap işlem limiti",
+      "new_account_period_days": "Yeni hesap kabul edilme süresi",
+      "cancel_limit_count": "İptal limiti — periyot içinde izin verilen iptal sayısı",
+      "cancel_limit_period_hours": "İptal limit periyodu",
+      "cancel_cooldown_hours": "İptal sonrası cooldown süresi",
+      "price_deviation_threshold": "Piyasa fiyatı sapma eşiği",
+      "high_volume_amount_threshold": "Yüksek hacim tutar eşiği",
+      "high_volume_count_threshold": "Yüksek hacim işlem sayısı eşiği",
+      "high_volume_period_hours": "Yüksek hacim kontrol periyodu",
+      "dormant_account_min_age_days": "Dormant hesap minimum yaş eşiği",
+      "dormant_account_value_threshold": "Dormant hesap işlem tutar eşiği",
+      "multi_account_exchange_addresses": "Bilinen exchange/custodial adres listesi (CSV; NONE = yok)",
+      "monitoring_post_cancel_24h_polling_seconds": "İptal sonrası ilk 24 saat polling aralığı",
+      "monitoring_post_cancel_7d_polling_seconds": "İptal sonrası 1-7 gün polling aralığı",
+      "monitoring_post_cancel_30d_polling_seconds": "İptal sonrası 7-30 gün polling aralığı",
+      "monitoring_stop_after_days": "İzleme durdurma süresi",
+      "min_refund_threshold_ratio": "Minimum iade eşiği — gas fee × bu oran altı iade yapılmaz",
+      "blockchain_refund_gas_fee_estimate_usdt": "İade gas fee tahmini (T72 MVP, T74 sonrası runtime)",
+      "blockchain_payout_gas_fee_estimate_usdt": "Satıcı payout gas fee tahmini (WP1 MVP, T74 sonrası runtime)",
+      "blockchain_transfer_retry_intervals_minutes": "Outbound transfer retry aralıkları (CSV, dakika — T73)",
+      "blockchain_sweep_energy_delegation_sun": "Sweep/refund Energy delegation tutarı (T74)",
+      "blockchain_sweep_trx_fallback_sun": "Energy delegation fallback TRX tutarı (T74)",
+      "reconciliation_schedule_cron": "Reconciliation job cron ifadesi (T76)",
+      "reconciliation_hot_wallet_address": "Reconciliation hot wallet adresi (T76)",
+      "reconciliation_cold_wallet_address": "Reconciliation cold wallet adresi (T76, opsiyonel)",
+      "hot_wallet_monitor_cron": "Hot wallet monitor job cron ifadesi (T77)",
+      "hot_wallet_trx_balance_minimum": "Hot wallet TRX bakiye alt eşiği (gas için)",
+      "open_link_enabled": "Açık link yöntemi aktif",
+      "hot_wallet_limit": "Hot wallet maksimum bakiye limiti",
+      "wallet_payout_address_cooldown_hours": "Satıcı ödeme adresi değişikliği cooldown",
+      "wallet_refund_address_cooldown_hours": "Alıcı iade adresi değişikliği cooldown",
+      "auth_banned_countries": "Yasaklı ülkeler (ISO-3166-1 alpha-2 CSV; NONE = yok)",
+      "auth_min_steam_account_age_days": "Steam hesap minimum yaş eşiği",
+      "reputation_min_account_age_days": "Hesap yaşı eşiği — altında reputationScore null",
+      "reputation_min_completed_transactions": "Tamamlanmış işlem eşiği — altında reputationScore null",
+      "platform_maintenance_active": "Bakım/kesinti aktif",
+      "platform_maintenance_type": "Bakım/kesinti tipi (enum, NONE = yok)",
+      "platform_maintenance_message": "Kullanıcıya gösterilecek mesaj (NONE = yok)",
+      "platform_maintenance_planned_end": "Tahmini bitiş zamanı (ISO 8601 UTC, NONE = yok)",
+      "retention_outbox_message_days": "Outbox mesaj retention süresi",
+      "retention_processed_event_days": "ProcessedEvent retention süresi",
+      "retention_external_idempotency_days": "ExternalIdempotencyRecord retention süresi",
+      "retention_orphan_notification_days": "Bağımsız bildirim retention süresi",
+      "retention_user_login_log_days": "UserLoginLog retention süresi",
+      "retention_batch_size_outbox": "Outbox cleanup batch boyutu",
+      "retention_batch_size_notification": "Bildirim cleanup batch boyutu",
+      "retention_batch_size_user_login_log": "UserLoginLog cleanup batch boyutu"
+    },
     "loadError": "Parametreler yüklenemedi.",
     "empty": "Parametre bulunamadı.",
     "operationalHeading": "Operasyonel Parametreler",
@@ -777,6 +838,8 @@
       "VIEW_AUDIT_LOG": "Audit log görüntüle",
       "CANCEL_TRANSACTIONS": "İşlemleri iptal et",
       "EMERGENCY_HOLD": "Emergency hold uygula/kaldır",
+      "VIEW_DISPUTES": "İtirazları görüntüle",
+      "MANAGE_DISPUTES": "İtirazları çöz",
       "MANAGE_SANCTIONS": "Sanctions listesi yönet"
     },
     "assignment": {
@@ -802,91 +865,91 @@
     "support": "Destek"
   },
   "legal": {
-    "draftNotice": "Bu sayfa lansman öncesi tamamlanıyor. Aşağıdaki özet, tam politikanın neleri kapsayacağını anlatır.",
+    "draftNotice": "Bu metin inceleme amacıyla hazırlanmış bir TASLAKTIR ve hukuki danışmanlık niteliği taşımaz. Lansmandan önce yetkili hukuk müşavirlerince gözden geçirilip son hâline getirilecektir; yayımlanan nihai sürüm Skinora'yı kullanımınızı düzenleyecektir.",
     "backToHome": "Ana sayfaya dön",
     "privacy": {
       "title": "Gizlilik Politikası",
-      "intro": "Skinora, CS2 eşya emanet hizmetini yürütmek için gereken asgari kişisel veriyi işler. Bu özet neyi, neden topladığımızı ve sahip olduğunuz seçenekleri açıklar.",
+      "intro": "Skinora, alıcı ile satıcıyı bir araya getiren ve eşya Steam üzerinden teslim edilene kadar ödemeyi emanette tutan bir CS2 eşya emanet hizmetidir. Bu politika, hizmeti yürütmek için işlediğimiz kişisel verileri ve sahip olduğunuz seçenekleri açıklar. Yalnızca gerekli olanı toplamayı ve verileri, geçerli olduğu durumlarda Türkiye'deki KVKK ve AB'deki GDPR dâhil yürürlükteki veri koruma yasalarına uygun şekilde işlemeyi amaçlarız.",
       "sections": {
         "dataWeCollect": {
           "heading": "Topladığımız veriler",
-          "body": "Steam genel profiliniz (Steam ID, görünen ad, avatar), sağladığınız cüzdan adresleri ve platformdaki işlem aktiviteniz."
+          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON ağı üzerinde TRC-20 stablecoin (USDT, USDC) ödemeleri için sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
         },
         "howWeUse": {
           "heading": "Verilerinizi nasıl kullanırız",
-          "body": "Sizi doğrulamak, emanet işlemlerini yürütmek, dolandırıcılığı önlemek ve yasal ve güvenlik yükümlülüklerimizi yerine getirmek için."
+          "body": "Verilerinizi sizi doğrulamak, emanet işlemleri oluşturup tamamlamak, Steam takas tekliflerini göndermek ve doğrulamak ve stablecoin ödemelerini, komisyonları, ödemeleri ve iadeleri işlemek için kullanırız. Ayrıca dolandırıcılığı tespit edip önlemek; yaş, coğrafi engelleme ve yaptırım taraması gibi uygunluk kurallarını uygulamak; uyuşmazlıkları çözmek ve yasal, muhasebe ve güvenlik yükümlülüklerimizi yerine getirmek için kullanırız."
         },
         "dataSharing": {
           "heading": "Veri paylaşımı",
-          "body": "Verileri yalnızca hizmeti sunmak için gereken üçüncü taraflarla (Steam ve blok zinciri altyapısı gibi) ve yasaların gerektirdiği durumlarda paylaşırız. Kişisel veri satmıyoruz."
+          "body": "Verileri yalnızca hizmeti sunmak için gereken taraflarla (takas doğrulaması için Steam ve zincir üstü ödemeler için TRON blok zinciri ağı gibi) ve adımıza hareket eden hizmet sağlayıcılarla paylaşırız. Genel bir blok zincirine kaydedilen işlemlerin doğası gereği başkalarınca görülebileceğini unutmayın. Yasaların gerektirdiği veya şartlarımızı uygulamak için gerekli olduğu durumlarda da veri açıklayabiliriz; kişisel veri satmıyoruz."
         },
         "dataRetention": {
           "heading": "Veri saklama",
-          "body": "İşlem ve denetim kayıtları muhasebe, uyuşmazlık çözümü ve yasal uyum için gerekli olduğu sürece tutulur; hesap verileri izin verilen durumlarda silme talebiyle kaldırılır."
+          "body": "Kişisel verileri hizmeti sunmak için ve yasal, muhasebe, denetim ve uyuşmazlık çözümü yükümlülüklerimizi yerine getirmek için gerekli olduğu sürece saklarız. İşlem ve denetim kayıtları, bu yükümlülükleri karşılamak için genellikle aktif hesap verilerinden daha uzun süre tutulur. Hesabınızın silinmesini veya anonimleştirilmesini talep edebilirsiniz; üstün gelen bir yasal zorunluluk bulunmadığı sürece bu talebi yerine getiririz."
         },
         "yourRights": {
           "heading": "Haklarınız",
-          "body": "Yasal sınırlara tabi olarak kişisel verilerinize erişim, düzeltme veya silme talebinde bulunabilirsiniz; bunu hesap ayarlarınızdan veya destekle iletişime geçerek yapabilirsiniz."
+          "body": "Bulunduğunuz yere bağlı olarak KVKK, GDPR veya diğer yürürlükteki mevzuat kapsamında kişisel verilerinize erişme, bunları düzeltme, silme veya işlenmesini kısıtlama, belirli işlemelere itiraz etme ve veri taşınabilirliği haklarına sahip olabilirsiniz. Bu hakları hesap ayarlarınızdan veya destekle iletişime geçerek kullanabilirsiniz; bir talebi yerine getirmeden önce kimliğinizi doğrulamamız gerekebilir. Saklamanın yasal olarak zorunlu olduğu durumlarda haklar sınırlanabilir."
         },
         "contact": {
           "heading": "İletişim",
-          "body": "Gizlilikle ilgili sorularınız için destek sayfası üzerinden bize ulaşın."
+          "body": "Gizlilikle ilgili sorularınız veya veri koruma haklarınızı kullanmak için destek sayfası üzerinden bize ulaşın. Veri sorumlusu ve varsa yerel temsilci, yayımlanacak nihai politikada belirtilecektir."
         }
       }
     },
     "terms": {
       "title": "Kullanıcı Sözleşmesi",
-      "intro": "Bu şartlar, Skinora'nın CS2 eşya emanet platformunu kullanımınızı düzenler. Hizmeti kullanarak bunları kabul etmiş olursunuz.",
+      "intro": "Bu şartlar, alıcı ile satıcıyı bir araya getiren ve satıcı eşyayı bir Steam takası yoluyla teslim edene kadar alıcının ödemesini emanette tutan CS2 eşya emanet platformu Skinora'yı kullanımınızı düzenler. Oturum açıp hizmeti kullanarak bu şartları kabul etmiş olursunuz. Bu şartlar, nihai yayımlanan sürümde belirtilecek olan işletmecinin yargı çevresinin yürürlükteki yasalarına tabidir.",
       "sections": {
         "acceptance": {
-          "heading": "Şartların kabulü",
-          "body": "Bir işlem oluşturarak veya kabul ederek, en az 18 yaşında olduğunuzu ve bu şartları ile Gizlilik Politikası'nı kabul ettiğinizi onaylarsınız."
+          "heading": "Kabul ve uygunluk",
+          "body": "Bir işlem oluşturarak veya kabul ederek, en az 18 yaşında olduğunuzu ve bu şartları ile Gizlilik Politikası'nı kabul ettiğinizi onaylarsınız. Ayrıca engellenmiş veya yaptırım uygulanan bir yargı çevresinde bulunmadığınızı ve geçerli herhangi bir yaptırım listesinde yer almadığınızı onaylarsınız. Coğrafi engelleme ve tarama uygularız ve uygunluk doğrulanamadığında hizmeti reddedebiliriz."
         },
         "serviceDescription": {
           "heading": "Hizmet",
-          "body": "Skinora, bir CS2 eşyasını ve bir stablecoin ödemesini emanette tutar ve her ikisi de zincir üzerinde ve Steam'de doğrulandığında her tarafı karşı tarafına serbest bırakır."
+          "body": "Skinora, satıcı kararlaştırılan CS2 eşyasını bir Steam takası aracılığıyla teslim edene kadar alıcının TRC-20 stablecoin ödemesini emanette tutan bir aracı olarak hareket eder. Teslimat doğrulandığında, platform komisyonu ve ağ gas ücretini düştükten sonra ödemeyi satıcıya serbest bırakırız. Takas genellikle iyi durumda bir Steam hesabı gerektirir ve Steam Mobile Authenticator gerekebilir. Skinora bağımsız bir hizmettir; Valve veya Steam ile bağlantılı değildir, onlar tarafından desteklenmez veya işletilmez."
         },
         "userObligations": {
           "heading": "Yükümlülükleriniz",
-          "body": "Doğru cüzdan adresleri sağlamalı, yalnızca size ait hesapları kullanmalı ve dolandırıcılık, piyasa manipülasyonu veya platform kontrollerini aşma girişiminde bulunmamalısınız."
+          "body": "Doğru cüzdan adresleri sağlamalı, yalnızca size ait ve kontrolünüzde olan Steam ve cüzdan hesaplarını kullanmalı ve takasları dürüstçe ve gecikmeden tamamlamalısınız. Dolandırıcılık, kara para aklama, piyasa manipülasyonu ya da platform kontrollerini, uygunluk denetimlerini veya yaptırım taramasını aşma girişiminde bulunmamalısınız. Steam ve cüzdan kimlik bilgilerinizin güvenliğinden ve onaylamadan önce alıcı ile adres bilgilerini doğrulamaktan siz sorumlusunuz."
         },
         "fees": {
           "heading": "Ücretler",
-          "body": "Her işleme bir platform komisyonu ve ağ gas ücretleri uygulanır ve onaylamadan önce size gösterilir."
+          "body": "Her işleme bir platform komisyonu ve bir blok zinciri ağ (gas) ücreti uygulanır. Geçerli tutarlar, bir işlemi onaylamadan önce uygulama içinde size gösterilir; kesin oranlar yapılandırılabilir ve zamanla değişebilir. Blok zinciri ağ ücretleri TRON ağı tarafından belirlenir ve kontrolümüz dışındadır."
         },
         "liability": {
           "heading": "Sorumluluk",
-          "body": "Hizmet olduğu gibi sunulur. Skinora; Steam, blok zinciri veya kontrolü dışındaki diğer üçüncü taraf arızalarından kaynaklanan kayıplardan sorumlu değildir."
+          "body": "Skinora, emanet ve aracılık hizmetini olduğu gibi ve mevcut hâliyle sunar ve hiçbir eşyanın piyasa değerini, gerçekliğini veya gelecekteki takas edilebilirliğini garanti etmez. Yürürlükteki yasaların izin verdiği azami ölçüde Skinora; Steam kesintileri, blok zinciri ağ sorunları, üçüncü taraf arızaları veya yanlış adrese gönderim gibi kullanıcı hatalarından doğan kayıplardan sorumlu değildir. Bu şartlardaki hiçbir hüküm, yasa gereği hariç tutulamayan sorumluluğu ortadan kaldırmaz."
         },
         "termination": {
           "heading": "Askıya alma ve fesih",
-          "body": "Bu şartları veya yürürlükteki yasaları ihlal eden hesapları, yaptırım ve dolandırıcılık kurallarımız dâhil, askıya alabilir veya kapatabiliriz."
+          "body": "Bu şartları veya yürürlükteki yasaları ihlal eden hesapları, dolandırıcılık, uygunluk ve yaptırım kurallarımız dâhil, askıya alabilir veya kapatabiliriz; gerektiğinde inceleme amacıyla işlemleri tutabilir veya geri alabiliriz. Bir hesap askıya alındığında, çözüm sürecini takip edebilmeniz için genellikle aktif işlemlerinize salt okunur erişiminizi koruruz. Emanette tutulan fonları bu şartlara ve yürürlükteki yasalara uygun şekilde işleme alırız."
         },
         "contact": {
           "heading": "İletişim",
-          "body": "Bu şartlarla ilgili sorularınızı destek sayfası üzerinden gönderebilirsiniz."
+          "body": "Bu şartlarla ilgili sorularınızı, son hâline getirildiğinde geçerli yasa ve işletmeci kuruluş dâhil, destek sayfası üzerinden gönderebilirsiniz."
         }
       }
     },
     "support": {
       "title": "Destek",
-      "intro": "İşleminiz veya hesabınızla ilgili yardıma mı ihtiyacınız var? Bize nasıl ulaşacağınız ve ne bekleyeceğiniz aşağıda.",
+      "intro": "İşleminiz veya hesabınızla ilgili yardıma mı ihtiyacınız var? Bu sayfa, ekibimize nasıl ulaşacağınızı, yanıtın genellikle ne kadar süreceğini ve uyuşmazlıkların nasıl ele alındığını açıklar.",
       "sections": {
         "contact": {
           "heading": "Bize ulaşın",
-          "body": "İşlem numaranız ve sorunun açıklamasıyla support@skinora.app adresine e-posta gönderin."
+          "body": "Desteğe uygulama içindeki destek akışı üzerinden veya support@skinora.app adresine e-posta göndererek ulaşabilirsiniz. Size daha hızlı yardımcı olabilmemiz için lütfen işlem numaranızı ve sorunun açık bir açıklamasını ekleyin. Steam parolanızı veya cüzdanınızın özel anahtarlarını ya da kurtarma ifadesini destek dâhil hiç kimseyle paylaşmayın."
         },
         "responseTimes": {
           "heading": "Yanıt süreleri",
-          "body": "Bir iş günü içinde yanıt vermeyi hedefliyoruz. Zaman açısından kritik emanet sorunlarına öncelik verilir."
+          "body": "Bir iş günü içinde yanıt vermeyi hedefliyoruz ve zaman açısından kritik emanet ve ödeme sorunlarına öncelik verilir. Yanıt süreleri garanti değil hedeftir; yoğun talep, Steam kesintileri veya blok zinciri tıkanıklığı dönemlerinde daha uzun olabilir."
         },
         "disputes": {
           "heading": "İşlem uyuşmazlıkları",
-          "body": "Bir takas beklendiği gibi tamamlanmazsa işlem sayfasından bir uyuşmazlık açın; ekibimiz yükseltilen vakaları inceler."
+          "body": "Bir takas beklendiği gibi tamamlanmazsa alıcı, işlem sayfasından ödeme, teslimat veya yanlış eşya alma gibi sorunlar için bir uyuşmazlık açabilir. Önce otomatik kontroller çalışır; çözülemeyen vakalar manuel inceleme için platform yöneticilerine yükseltilir. Bir uyuşmazlık, uygun durumlarda emanetteki fonların alıcının cüzdanına iadesi dâhil, alıcı veya satıcı lehine çözülebilir."
         },
         "faq": {
           "heading": "Sık sorulan sorular",
-          "body": "Ödemeler, takas teklifleri, iadeler ve hesap güvenliği hakkında rehberlik burada yer alacaktır."
+          "body": "Steam ile oturum açma, takas tekliflerini gönderme ve kabul etme, stablecoin ödemeleri ve onayları, komisyonlar ve gas ücretleri, iadeler ve hesap güvenliği hakkında rehberlik burada yer alacaktır. O zamana kadar bu konuların herhangi birinde yardım için destekle iletişime geçin."
         }
       }
     }

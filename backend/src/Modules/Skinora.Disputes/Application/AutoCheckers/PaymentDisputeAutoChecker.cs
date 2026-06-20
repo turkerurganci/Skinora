@@ -31,8 +31,8 @@ namespace Skinora.Disputes.Application.AutoCheckers;
 /// </remarks>
 public sealed class PaymentDisputeAutoChecker : IPaymentDisputeAutoChecker
 {
-    private const string ResolvedMessage = "Ödemeniz doğrulandı, işlem devam ediyor";
-    private const string UnresolvedMessage = "Blockchain üzerinde ödeme bulunamadı";
+    private const string ResolvedMessage = DisputeAutoCheckMessages.PaymentResolved;
+    private const string UnresolvedMessage = DisputeAutoCheckMessages.PaymentNotFound;
 
     private readonly AppDbContext _db;
 
@@ -58,13 +58,13 @@ public sealed class PaymentDisputeAutoChecker : IPaymentDisputeAutoChecker
             ? new AutoCheckResult(
                 Resolved: true,
                 AutoEscalated: false,
-                Message: ResolvedMessage,
+                MessageKey: ResolvedMessage,
                 CanSubmitTxHash: false,
                 CanEscalate: false)
             : new AutoCheckResult(
                 Resolved: false,
                 AutoEscalated: false,
-                Message: UnresolvedMessage,
+                MessageKey: UnresolvedMessage,
                 CanSubmitTxHash: true,
                 CanEscalate: true);
     }
@@ -97,13 +97,13 @@ public sealed class PaymentDisputeAutoChecker : IPaymentDisputeAutoChecker
             ? new AutoCheckResult(
                 Resolved: true,
                 AutoEscalated: false,
-                Message: ResolvedMessage,
+                MessageKey: ResolvedMessage,
                 CanSubmitTxHash: false,
                 CanEscalate: false)
             : new AutoCheckResult(
                 Resolved: false,
                 AutoEscalated: false,
-                Message: UnresolvedMessage,
+                MessageKey: UnresolvedMessage,
                 CanSubmitTxHash: true,
                 CanEscalate: true);
     }

@@ -15,13 +15,26 @@ public sealed record AdminTransactionListItemDto(
     AdminTransactionPartyDto Seller,
     AdminTransactionPartyDto? Buyer,
     DateTime CreatedAt,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    DateTime? CancelledAt);
 
-/// <summary>Buyer/seller view used by AD6 + AD7 (07 §9.6 / §9.7).</summary>
+/// <summary>Buyer/seller view used by the AD6 list (07 §9.6) — light snapshot.</summary>
 public sealed record AdminTransactionPartyDto(
     string SteamId,
     string DisplayName,
     string? AvatarUrl);
+
+/// <summary>
+/// Buyer/seller view used by the AD7 detail (07 §9.7 / 04 §8.5 "Taraf
+/// Detayları — skor"). Extends the list snapshot with the composite
+/// reputation score (06 §3.1) so the admin sees the same score the parties
+/// see on the user-facing T5 detail.
+/// </summary>
+public sealed record AdminTransactionPartyDetailDto(
+    string SteamId,
+    string DisplayName,
+    string? AvatarUrl,
+    decimal? ReputationScore);
 
 // ---------- AD7 — GET /admin/transactions/:id (07 §9.7) ----------
 
@@ -45,8 +58,8 @@ public sealed record AdminTransactionDetailDto(
     decimal CommissionAmount,
     decimal TotalAmount,
     int PaymentTimeoutMinutes,
-    AdminTransactionPartyDto Seller,
-    AdminTransactionPartyDto? Buyer,
+    AdminTransactionPartyDetailDto Seller,
+    AdminTransactionPartyDetailDto? Buyer,
     DateTime CreatedAt,
     DateTime? AcceptedAt,
     DateTime? ItemEscrowedAt,
@@ -111,12 +124,13 @@ public sealed record AdminTxRefundDetailDto(
     string? TxHash,
     DateTime? RefundedAt);
 
-/// <summary>One row of <c>notificationHistory</c> (07 §9.7).</summary>
+/// <summary>One row of <c>notificationHistory</c> (07 §9.7 / 04 §8.5 "içerik").</summary>
 public sealed record AdminTxNotificationDto(
     string Type,
     string Recipient,
     IReadOnlyList<string> Channels,
-    DateTime SentAt);
+    DateTime SentAt,
+    string? Content);
 
 /// <summary>One row of <c>disputeHistory</c> (07 §9.7).</summary>
 public sealed record AdminTxDisputeDto(

@@ -36,16 +36,148 @@
   <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
     <value>已收到您交易的 {Amount} USDT。</value>
   </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
+    <value>交易报价已发送</value>
+  </data>
+  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
+    <value>请接受 Steam 交易报价以领取您的物品。</value>
+  </data>
   <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
     <value>交易已完成</value>
   </data>
   <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
     <value>{ItemName} 的交易已成功完成。</value>
   </data>
+  <data name="SELLER_PAYMENT_SENT_Title" xml:space="preserve">
+    <value>款项已发放</value>
+  </data>
+  <data name="SELLER_PAYMENT_SENT_Body" xml:space="preserve">
+    <value>{Amount} USDT 已发送至您的钱包。</value>
+  </data>
   <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
     <value>即将超时</value>
   </data>
   <data name="TIMEOUT_WARNING_Body" xml:space="preserve">
     <value>交易窗口将在 {RemainingMinutes} 分钟后关闭。</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Title" xml:space="preserve">
+    <value>交易已取消</value>
+  </data>
+  <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
+    <value>{ItemName} 的交易已取消：{Reason}。</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Title" xml:space="preserve">
+    <value>交易已被标记</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Body" xml:space="preserve">
+    <value>交易 {TransactionId} 正在审核中。</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Title" xml:space="preserve">
+    <value>付款金额有误</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Body" xml:space="preserve">
+    <value>我们收到了 {ReceivedAmount} USDT，但应为 {ExpectedAmount} USDT。</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>逾期付款已退款</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{Amount} USDT 已退回您的钱包。</value>
+  </data>
+  <data name="ITEM_RETURNED_Title" xml:space="preserve">
+    <value>物品已退回</value>
+  </data>
+  <data name="ITEM_RETURNED_Body" xml:space="preserve">
+    <value>{ItemName} 已退回您的库存。</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>付款已退款</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{Amount} USDT 已退款。</value>
+  </data>
+  <data name="DISPUTE_RESULT_Title" xml:space="preserve">
+    <value>争议已解决</value>
+  </data>
+  <data name="DISPUTE_RESULT_Body" xml:space="preserve">
+    <value>争议已解决：{Outcome}。</value>
+  </data>
+  <data name="FLAG_RESOLVED_Title" xml:space="preserve">
+    <value>标记已解除</value>
+  </data>
+  <data name="FLAG_RESOLVED_Body" xml:space="preserve">
+    <value>交易 {TransactionId} 已解除标记。</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Title" xml:space="preserve">
+    <value>管理员：标记警报</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Body" xml:space="preserve">
+    <value>交易 {TransactionId} 已被标记：{Reason}。</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Title" xml:space="preserve">
+    <value>管理员：升级处理</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Body" xml:space="preserve">
+    <value>交易 {TransactionId} 已升级处理。</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Title" xml:space="preserve">
+    <value>管理员：付款失败</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Body" xml:space="preserve">
+    <value>交易 {TransactionId} 付款失败（{ErrorCode}）。</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Title" xml:space="preserve">
+    <value>交易已临时冻结以待审核</value>
+  </data>
+  <data name="EMERGENCY_HOLD_APPLIED_Body" xml:space="preserve">
+    <value>{ItemName} 已被平台临时冻结以待审核：{Reason}。</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Title" xml:space="preserve">
+    <value>审核已完成 — 交易已恢复</value>
+  </data>
+  <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
+    <value>{ItemName} 已在 {ResumedStatus} 阶段恢复。倒计时从中断处继续。</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
+    <value>管理员：Steam 机器人异常</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
+    <value>机器人 {BotId} 报告：{Issue}。</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
+    <value>管理员：平台健康警报</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Body" xml:space="preserve">
+    <value>{Component} sidecar 健康状态：{Status}。</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
+    <value>付款不足 — 请重新发送正确金额</value>
+  </data>
+  <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
+    <value>我们收到了 {ReceivedAmount} {Stablecoin}，但应为 {ExpectedAmount} {Stablecoin}。已收到的金额将退回至 {SourceAddress}；请在超时之前重新发送完整的 {ExpectedAmount} {Stablecoin}。</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>超额付款已退款</value>
+  </data>
+  <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>您发送了 {ReceivedAmount} {Stablecoin}，但仅需 {ExpectedAmount} {Stablecoin}。超出的 {ExcessAmount} {Stablecoin} 正在退回至 {SourceAddress}。</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
+    <value>检测到错误代币 — 正在退款</value>
+  </data>
+  <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
+    <value>该交易应为 {ExpectedStablecoin}，但收到的是 {ReceivedAmount} {ActualStablecoin}。该金额正在退回至 {SourceAddress}；请发送正确的代币。</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
+    <value>您的账户已被暂停</value>
+  </data>
+  <data name="ACCOUNT_SUSPENDED_Body" xml:space="preserve">
+    <value>您的 Skinora 账户已被暂停：{Reason}。您仍可查看进行中的交易，但在暂停解除之前无法发起或接受交易。</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Title" xml:space="preserve">
+    <value>您的账户暂停已解除</value>
+  </data>
+  <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
+    <value>您的 Skinora 账户已重新激活。现在您可以正常发起和接受交易。</value>
   </data>
 </root>

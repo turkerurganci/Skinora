@@ -73,17 +73,17 @@ export function getAdminDashboard(): Promise<AdminDashboardResponse> {
  * Wire format mirrors the backend `AdminSteamAccountsResponse`
  * (`Skinora.Steam/Application/Admin/AdminSteamBotDtos.cs`, T63). The per-account
  * shape is the shared {@link AdminSteamAccount} already consumed by the S12
- * dashboard. `warningMessage` is a server-built Turkish summary, non-null when
- * at least one bot is not ACTIVE. `recoveryTransactionCount` / `failoverStatus`
- * / `restrictionReason` are populated live by the T103b-2 recovery domain
- * (`recoveryTransactionCount` = open recovery items; `failoverStatus` ∈ NONE /
- * RESTRICTED_NEW_TXN_DIVERTED / ACTIVE_TXN_IN_RECOVERY).
+ * dashboard. The degraded-account banner is derived client-side from each
+ * account's `status` (WP17 removed the server-built Turkish `warningMessage`).
+ * `recoveryTransactionCount` / `failoverStatus` / `restrictionReason` are
+ * populated live by the T103b-2 recovery domain (`recoveryTransactionCount` =
+ * open recovery items; `failoverStatus` ∈ NONE / RESTRICTED_NEW_TXN_DIVERTED /
+ * ACTIVE_TXN_IN_RECOVERY).
  * ────────────────────────────────────────────────────────────────────────── */
 
 /** AD10 envelope (07 §9.10). */
 export interface AdminSteamAccountsResponse {
   accounts: AdminSteamAccount[];
-  warningMessage: string | null;
 }
 
 export function getAdminSteamAccounts(): Promise<AdminSteamAccountsResponse> {
@@ -487,6 +487,11 @@ export interface AdminTransactionParty {
   steamId: string;
   displayName: string;
   avatarUrl: string | null;
+  /**
+   * Composite reputation score (06 §3.1) — AD7 detail only (07 §9.7 /
+   * 04 §8.5 "Taraf Detayları — skor"); absent on the AD6 list snapshot.
+   */
+  reputationScore?: number | null;
 }
 
 /** One row of the AD6 list (07 §9.6). */
@@ -501,6 +506,7 @@ export interface AdminTransactionListItem {
   buyer: AdminTransactionParty | null;
   createdAt: string;
   completedAt: string | null;
+  cancelledAt: string | null;
 }
 
 /** AD6 page envelope — `PagedResult<T>` (07 §2.4 / §9.6). */
@@ -568,6 +574,7 @@ export interface AdminTxNotification {
   recipient: string;
   channels: string[];
   sentAt: string;
+  content: string | null;
 }
 
 export interface AdminTxDispute {
