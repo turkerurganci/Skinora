@@ -32,5 +32,13 @@ public enum NotificationType
 
     // --- T105a: Account suspension lifecycle (02 §14.0/§16.2, 03 §2.1/§8.3) ---
     ACCOUNT_SUSPENDED,
-    ACCOUNT_UNSUSPENDED
+    ACCOUNT_UNSUSPENDED,
+
+    // --- WP16: platform health probe alert (05 §4.4, 02 §3.3) ---
+    // Admin-only operational alert raised when the periodic health probe detects
+    // a Steam/blockchain sidecar outage (or its recovery). Alert-only — the admin
+    // decides whether to apply a maintenance freeze (WP7). Fanned out to every
+    // admin via the WP8 AdminBroadcast pattern; pairs with the
+    // PLATFORM_OUTAGE_DETECTED audit row.
+    ADMIN_PLATFORM_OUTAGE
 }

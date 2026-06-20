@@ -110,6 +110,18 @@ public static class AuditLogCategoryMap
             // leaving maintenance is a deliberate operator action on platform
             // settings, so it sits with SYSTEM_SETTING_CHANGED in the admin queue.
             [AuditAction.MAINTENANCE_MODE_CHANGED] = Categories.AdminAction,
+
+            // WP16 — restart-recovery automatic timeout extension (05 §4.4:536).
+            // SYSTEM-driven, but it is the automatic counterpart of the manual
+            // MAINTENANCE_MODE_CHANGED downtime handling, so operators review it on
+            // the same admin queue.
+            [AuditAction.TIMEOUT_AUTO_EXTENDED] = Categories.AdminAction,
+
+            // WP16 — platform health probe outage/recovery (05 §4.4, 02 §3.3).
+            // A sidecar going down is an operational integrity alarm, so it sits
+            // in the security queue beside BOT_STATUS_CHANGED and the
+            // reconciliation/hot-wallet alarms.
+            [AuditAction.PLATFORM_OUTAGE_DETECTED] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

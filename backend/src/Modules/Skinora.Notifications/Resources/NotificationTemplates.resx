@@ -144,6 +144,12 @@
   <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
     <value>Bot {BotId} reported: {Issue}.</value>
   </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
+    <value>Admin: platform health alert</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Body" xml:space="preserve">
+    <value>{Component} sidecar health: {Status}.</value>
+  </data>
   <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
     <value>Insufficient payment — please re-send the correct amount</value>
   </data>

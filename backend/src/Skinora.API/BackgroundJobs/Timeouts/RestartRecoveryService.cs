@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Domain.Seed;
@@ -35,6 +37,7 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
 {
     private readonly AppDbContext _db;
     private readonly ITimeoutSchedulingService _scheduling;
+    private readonly IAuditLogger _auditLogger;
     private readonly TimeProvider _clock;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<RestartRecoveryService> _logger;
@@ -42,12 +45,14 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
     public RestartRecoveryService(
         AppDbContext db,
         ITimeoutSchedulingService scheduling,
+        IAuditLogger auditLogger,
         TimeProvider clock,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<RestartRecoveryService> logger)
     {
         _db = db;
         _scheduling = scheduling;
+        _auditLogger = auditLogger;
         _clock = clock;
         _options = options.Value;
         _logger = logger;
@@ -130,6 +135,30 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
         }
 
         if (rescheduledPaymentJobs > 0) await _db.SaveChangesAsync(cancellationToken);
+
+        // WP16 — 05 §4.4:536 requires the automatic timeout extension to be
+        // audited (the automatic counterpart of the manual MAINTENANCE_MODE_CHANGED
+        // downtime trail). One summary row per recovery pass; SYSTEM actor; the
+        // heartbeat singleton that drove the outage calculation is the entity.
+        // Staged on the change tracker and committed by the heartbeat SaveChanges
+        // below so the audit row is atomic with the recovery write.
+        await _auditLogger.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: SeedConstants.SystemUserId,
+                ActorType: ActorType.SYSTEM,
+                Action: AuditAction.TIMEOUT_AUTO_EXTENDED,
+                EntityType: "SystemHeartbeat",
+                EntityId: SeedConstants.SystemHeartbeatId.ToString(),
+                OldValue: null,
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    outageSeconds = (long)outage.TotalSeconds,
+                    extendedCount = actives.Count,
+                    rescheduledPaymentJobs,
+                }),
+                IpAddress: null),
+            cancellationToken);
 
         heartbeat.LastHeartbeat = now;
         heartbeat.UpdatedAt = now;

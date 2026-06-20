@@ -58,6 +58,8 @@ public static class EmailCategoryMap
             [NotificationType.ADMIN_ESCALATION] = EmailCategory.Account,
             [NotificationType.ADMIN_PAYMENT_FAILURE] = EmailCategory.Account,
             [NotificationType.ADMIN_STEAM_BOT_ISSUE] = EmailCategory.Account,
+            // WP16 — platform health outage alert is an admin operational tool.
+            [NotificationType.ADMIN_PLATFORM_OUTAGE] = EmailCategory.Account,
         };
 
     public static EmailCategory Resolve(NotificationType type)

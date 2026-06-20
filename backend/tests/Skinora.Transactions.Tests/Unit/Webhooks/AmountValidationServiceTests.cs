@@ -8,6 +8,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -37,6 +38,7 @@ public sealed class AmountValidationServiceTests : IDisposable
     private readonly StubGasFeeSettingsProvider _settings;
     private readonly StubRefundBlockedAlertService _alerts;
     private readonly CapturingOutboxService _outbox;
+    private readonly RecordingTimeoutScheduling _timeoutScheduling;
     private readonly FakeTimeProvider _clock;
     private readonly AmountValidationService _sut;
 
@@ -60,6 +62,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         };
         _alerts = new StubRefundBlockedAlertService();
         _outbox = new CapturingOutboxService();
+        _timeoutScheduling = new RecordingTimeoutScheduling();
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
@@ -71,6 +74,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             decisionService,
             _alerts,
             _outbox,
+            _timeoutScheduling,
             _clock,
             NullLogger<AmountValidationService>.Instance);
     }
@@ -79,6 +83,27 @@ public sealed class AmountValidationServiceTests : IDisposable
     {
         _db.Dispose();
         _connection.Dispose();
+    }
+
+    // WP16 — records CancelTimeoutJobsAsync so tests can assert the payment-timeout
+    // job is cancelled when (and only when) the payment confirmation advances the
+    // state machine to PAYMENT_RECEIVED.
+    private sealed class RecordingTimeoutScheduling : ITimeoutSchedulingService
+    {
+        public List<Guid> Cancelled { get; } = [];
+
+        public Task<TimeoutJobIds> SchedulePaymentTimeoutAsync(Guid transactionId, CancellationToken cancellationToken)
+            => Task.FromResult(new TimeoutJobIds("p", "w"));
+
+        public Task CancelTimeoutJobsAsync(Guid transactionId, CancellationToken cancellationToken)
+        {
+            Cancelled.Add(transactionId);
+            return Task.CompletedTask;
+        }
+
+        public Task<TimeoutJobIds> ReschedulePaymentTimeoutAsync(
+            Guid transactionId, TimeSpan remaining, DateTime newPaymentDeadlineUtc, CancellationToken cancellationToken)
+            => Task.FromResult(new TimeoutJobIds("p", "w"));
     }
 
     // ─── Correct amount ─────────────────────────────────────────────────
@@ -95,6 +120,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, fixture.Transaction.Status);
         Assert.NotNull(fixture.Transaction.PaymentReceivedAt);
         Assert.Single(_outbox.Events.OfType<PaymentReceivedEvent>());
+        // WP16 — payment arrived → the per-tx payment-timeout job is cancelled.
+        Assert.Contains(fixture.Transaction.Id, _timeoutScheduling.Cancelled);
         Assert.Empty(_outbox.Events.OfType<BuyerPaymentInsufficientEvent>());
         Assert.Empty(_outbox.Events.OfType<BuyerPaymentExcessRefundedEvent>());
         // No refund row written when amount is exact.
@@ -117,6 +144,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(AmountValidationOutcome.Underpaid, outcome);
         // State machine MUST NOT advance — timeout continues per 02 §4.4.
         Assert.Equal(TransactionStatus.ITEM_ESCROWED, fixture.Transaction.Status);
+        // WP16 — the payment-timeout job stays armed (no advance → no cancel).
+        Assert.DoesNotContain(fixture.Transaction.Id, _timeoutScheduling.Cancelled);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);

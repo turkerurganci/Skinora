@@ -14,6 +14,7 @@ using Skinora.Steam.Application.Recovery;
 using Skinora.Steam.Domain.Entities;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Reputation;
+using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -49,6 +50,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
     private readonly IOutboxService _outbox;
     private readonly IBotRecoveryMaterialiser _recovery;
     private readonly ITransactionReputationRefresher _reputation;
+    private readonly ITimeoutSchedulingService _timeoutScheduling;
     private readonly TimeProvider _clock;
     private readonly ILogger<SteamWebhookHandler> _logger;
 
@@ -59,6 +61,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         IOutboxService outbox,
         IBotRecoveryMaterialiser recovery,
         ITransactionReputationRefresher reputation,
+        ITimeoutSchedulingService timeoutScheduling,
         TimeProvider clock,
         ILogger<SteamWebhookHandler> logger)
     {
@@ -68,6 +71,7 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
         _outbox = outbox;
         _recovery = recovery;
         _reputation = reputation;
+        _timeoutScheduling = timeoutScheduling;
         _clock = clock;
         _logger = logger;
     }
@@ -509,12 +513,26 @@ public sealed class SteamWebhookHandler : ISteamWebhookHandler
                 transaction.Id, bot.Status, bot.Id, correlationId);
         }
 
+        // WP16 — arm the payment-phase timeout + warning. ITEM_ESCROWED requires
+        // PaymentDeadline AND PaymentTimeoutJobId NOT NULL (06 §3.5); set the
+        // deadline here (service-layer convention, mirrors AcceptDeadline in
+        // TransactionCreationService) then schedule the per-tx Hangfire jobs.
+        // Without this the buyer's payment window never expires — a buyer who
+        // never pays would leave the seller's item escrowed indefinitely, and the
+        // timeout-warning (T48 / WP12 ratio) would never fire. Scheduled last so
+        // the Hangfire write sits as close as possible to the SaveChanges below
+        // (the DeadlineScannerJob is the belt-and-suspenders fallback for the
+        // residual atomicity gap).
+        transaction.PaymentDeadline =
+            _clock.GetUtcNow().UtcDateTime + TimeSpan.FromMinutes(transaction.PaymentTimeoutMinutes);
+        await _timeoutScheduling.SchedulePaymentTimeoutAsync(transaction.Id, cancellationToken);
+
         await PublishStatusChangedAsync(transaction, fromStatus, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "trade_offer.accepted (escrow): transaction {TransactionId} → ITEM_ESCROWED, bot {BotId} escrow count +1. correlationId={CorrelationId}",
-            transaction.Id, tradeOffer.PlatformSteamBotId, correlationId);
+            "trade_offer.accepted (escrow): transaction {TransactionId} → ITEM_ESCROWED, bot {BotId} escrow count +1, payment deadline {PaymentDeadline:o}. correlationId={CorrelationId}",
+            transaction.Id, tradeOffer.PlatformSteamBotId, transaction.PaymentDeadline, correlationId);
         return TradeWebhookResult.Applied;
     }
 
