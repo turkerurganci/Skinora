@@ -198,11 +198,13 @@ jobs:
       # (continue-on-error) permanently: it carries upstream-unfixable transitive
       # criticals (request@2.88.2 / protobufjs) whose only npm "fix" is a
       # destructive steam-user downgrade (owner accept-risk, see DEFERRED_BACKLOG).
-      # Blockchain is BLOCKING at --audit-level=critical (WP18 PR-2): the ethers
-      # 6.17 override cleared the high-sev ws chain; the residual highs (lodash
-      # _.template under tronweb) are unfixable without the breaking tronweb 6.x
-      # bump (accept-risk + follow-up), so the gate is scoped to prod criticals
-      # (0 today). A new prod critical fails CI.
+      # Blockchain is BLOCKING at --audit-level=critical (WP18 PR-2). Two
+      # non-breaking npm overrides cleared the fixable highs: ethers 6.17 (→ ws
+      # 8.21, GHSA-58qx) and form-data 4.0.6 (GHSA-hmw2 CRLF injection). The
+      # residual prod highs (axios + lodash, both under tronweb 5.3.5) have no
+      # non-breaking fix — npm offers only the breaking tronweb 6.x bump — so
+      # they are accept-risk + follow-up, and the gate is scoped to prod
+      # criticals (0 today). A new prod critical fails CI.
       - name: Sidecar-steam npm audit (advisory)
         working-directory: sidecar-steam
         continue-on-error: true
