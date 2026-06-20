@@ -67,6 +67,7 @@
 - **Dış varsayım kırılması (Adım 4):** ethers override `ws` high'ını kapattı ama tronweb-altı high'lar kaldı — npm'in fix'i breaking `tronweb@6.0.2`. Owner'a sunuldu (AskUserQuestion) → karar: **BC audit blocking@critical** (residual high'lar accept-risk, tronweb 6.x follow-up). Pratik risk düşük (`lodash._template` güvenilmez girdiyle çağrılmıyor).
 - **Yapım-içi adversarial review bulgusu (1 major, onaylandı + bu PR'da kapatıldı):** ilk accept-risk gerekçem residual high'ları "yalnız lodash, breaking-only" diye yanlış tanımlamıştı; review `form-data@4.0.5`'in de high (CRLF injection) **ama non-breaking fix'i (4.0.6) olduğunu** kanıtladı → `form-data 4.0.6` override eklendi (high 4→3, tronweb 5.3.5 korundu), gerekçe gerçek residual'a (axios+lodash) düzeltildi.
 - **CRLF:** yeni test dosyaları prettier-clean yazıldı (Write LF); `--end-of-line=auto` CI-eşdeğeri temiz.
+- **npm sürüm skew dersi (CI-fix):** ilk PR-2 CI run'ı (`27886274863`) **Frontend lint `npm ci`**'da fail'di — lokal **npm 11.6.2** (Node 24) ile üretilen lockfile, CI'nin **npm 10.x** (Node 20) `npm ci`'ı tarafından reddedildi (`@emnapi/*`/`@swc/helpers` missing/invalid). Frontend + sidecar-blockchain lockfile'ları **`npx npm@10 install`** ile yeniden üretildi; `npm@10 ci` exit 0 ile doğrulandı (CI'nin tam yaptığı). Override'lar (ethers/ws/form-data) + BC critical audit korundu. Kalıcı çözüm (CI Node 20→24 npm-11 paritesi veya `engines`/`.nvmrc`) → DEFERRED_BACKLOG follow-up.
 
 ## Known Limitations / Follow-up
 
