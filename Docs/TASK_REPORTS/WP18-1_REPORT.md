@@ -69,8 +69,8 @@ WP18 (Test/CI sertleştirme, MVP'nin son iş paketi) 8 alt-kalem içerir ve 3 fa
 
 - Branch: `task/WP18-1-ci-gates`
 - Commits: `4ac19aa` (prettier 25) · `41ae787` (i18n script) · `7c8bcdd` (routes.ts fix) · `96a6706` (ci.yml gates) · (+docs)
-- PR: #TBD
-- CI: ⏳ bekleniyor
+- PR: [#191](https://github.com/turkerurganci/Skinora/pull/191)
+- CI: ⏳ izleniyor (push sonrası)
 
 ## Notlar
 
