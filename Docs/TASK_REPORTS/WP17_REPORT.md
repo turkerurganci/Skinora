@@ -80,8 +80,9 @@ WP17'nin formal AC listesi yok; "Doküman↔kod hizalı" yeteneği DEFERRED_BACK
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Backend build (Debug) | ✓ 0W/0E | `dotnet build Skinora.sln -c Debug` |
-| Disputes.Tests | ✓ 49/49 | yeni unit test + güncellenen escalate assertion dahil |
+| Disputes.Tests | ✓ 50/50 | yeni tr-locale uçtan-uca + `DisputeAutoCheckMessages` unit + escalate assertion |
 | API.Tests | ✓ 537/537 | Cluster C (reputationScore/cancelledAt/content) + steam-warning kaldırma + dispute endpoint |
+| Notifications.Tests | ✓ 153/153 | resx fallback testleri unsupported-locale'e güncellendi (CI-fix; aşağıya bkz.) |
 | dotnet format --verify | ✓ temiz | `dotnet format Skinora.sln --verify-no-changes` exit 0 |
 | FE `next build` | ✓ | tüm route'lar (privacy/terms/support/admin dahil) derlendi; type-check + lint geçti |
 | FE prettier | ✓ | değişen FE dosyaları `prettier --check` temiz (write sonrası) |
@@ -130,6 +131,9 @@ WP17 diff'i, commit öncesi 5-boyutlu adversarial Workflow ile gözden geçirild
 - **F3 (S3 — doc):** 07 §7.8-§7.10 dispute `message` alanlarına buyer-locale lokalizasyon notu eklendi (§9.10 steam konvansiyonu ile tutarlı).
 - **F2 (S3 — test):** non-en (tr) buyer ile DisputeService uçtan uca integration testi eklendi (stored `SystemCheckResult` + open/escalate response + event `OutcomeText`).
 3 ham bulgu verify aşamasında çürütüldü (refute-default).
+
+## CI-fix (ilk push sonrası)
+İlk push (commit `3b1041b`) CI'ında Unit + Integration job'ları **2 notification fallback testi**nde kırıldı: `ResxNotificationTemplateResolverTests.Resolve_LocaleMissingForKey_FallsBackToEnglish` + `NotificationDispatcherTests.DispatchAsync_FallsBackToEnglishWhenLanguageUnsupportedForKey`. **Root cause:** ikisi de "tr.resx `TRANSACTION_FLAGGED`'i atlıyor → İngilizce fallback" varsayıyordu; WP17 resx parity'yi tamamlayınca (tr/es/zh hepsi 56 entry) tr artık o key'i çeviriyor → fallback tetiklenmiyor. **Fix:** fallback artık **desteklenmeyen locale** (`fr`, resx'i yok → neutral=İngilizce) ile test ediliyor (mekanizma coverage'ı korundu; testler `_UnsupportedLocale_`/`_WhenLanguageUnsupported` olarak yeniden adlandırıldı). **Doğrulama:** Notifications.Tests **153/153** + tüm-solution `Category=Unit` 0 fail. **Ders:** shared/resx/cross-cutting değişikliklerde tüm suite lokalde çalıştırılmalı — ilk push Disputes+API ile sınırlıydı, Notifications.Tests atlanmıştı.
 
 ## Notlar
 - **Working tree:** Adım -1 temiz (session başında clean).

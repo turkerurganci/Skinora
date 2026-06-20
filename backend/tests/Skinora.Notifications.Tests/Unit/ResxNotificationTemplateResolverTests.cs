@@ -60,15 +60,17 @@ public class ResxNotificationTemplateResolverTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void Resolve_LocaleMissingForKey_FallsBackToEnglish()
+    public void Resolve_UnsupportedLocale_FallsBackToEnglish()
     {
-        // Turkish .resx omits TRANSACTION_FLAGGED — resolver should return
-        // the neutral English entry per 05 §7.3 fallback rule.
+        // No French .resx exists, so the resolver returns the neutral English
+        // entry per 05 §7.3 fallback rule. (WP17 brought tr/es/zh to full
+        // template parity, so the per-key fallback can no longer be triggered
+        // by a *supported* locale — an unsupported culture exercises it.)
         var sut = CreateSut();
 
         var rendered = sut.Resolve(
             NotificationType.TRANSACTION_FLAGGED,
-            "tr",
+            "fr",
             new Dictionary<string, string> { ["TransactionId"] = "abc-123" });
 
         Assert.Equal("Transaction flagged", rendered.Title);

@@ -237,10 +237,15 @@ public class NotificationDispatcherTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task DispatchAsync_FallsBackToEnglishWhenLanguageUnsupportedForKey()
+    public async Task DispatchAsync_FallsBackToEnglishWhenLanguageUnsupported()
     {
-        // Turkish resource omits TRANSACTION_FLAGGED → English neutral entry
-        // is used (05 §7.3).
+        // WP17 brought tr/es/zh to full template parity, so fallback is now
+        // exercised via an unsupported locale: no French resource exists →
+        // the neutral English entry is used (05 §7.3).
+        var user = await Context.Set<User>().FirstAsync(u => u.Id == _user.Id);
+        user.PreferredLanguage = "fr";
+        await Context.SaveChangesAsync();
+
         var (dispatcher, _, _) = CreateSut();
 
         await dispatcher.DispatchAsync(
