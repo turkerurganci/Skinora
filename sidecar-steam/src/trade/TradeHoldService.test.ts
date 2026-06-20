@@ -1,9 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  TradeHoldService,
-  SteamApiKeyMissingError,
-  type FetchLike,
-} from './TradeHoldService.js';
+import { TradeHoldService, SteamApiKeyMissingError, type FetchLike } from './TradeHoldService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
 vi.mock('../logger.js', () => ({
@@ -78,9 +74,7 @@ describe('TradeHoldService', () => {
     const fetchFn = vi.fn<FetchLike>(() => okJson(escrowPayload(0)));
     const sut = new TradeHoldService('', undefined, fetchFn);
 
-    await expect(sut.getTradeHold(STEAM_ID, TOKEN)).rejects.toBeInstanceOf(
-      SteamApiKeyMissingError,
-    );
+    await expect(sut.getTradeHold(STEAM_ID, TOKEN)).rejects.toBeInstanceOf(SteamApiKeyMissingError);
     expect(fetchFn).not.toHaveBeenCalled();
   });
 

@@ -42,12 +42,7 @@ export default function PublicProfilePage({ params }: PublicProfilePageProps) {
   }
 
   if (profile.error instanceof ApiError && profile.error.status === 404) {
-    return (
-      <ErrorState
-        title={t("errors.notFound.title")}
-        message={t("errors.notFound.message")}
-      />
-    );
+    return <ErrorState title={t("errors.notFound.title")} message={t("errors.notFound.message")} />;
   }
 
   if (profile.isError || !profile.data) {

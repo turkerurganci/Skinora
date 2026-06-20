@@ -72,9 +72,7 @@ export function Step3BuyerWallet({
           <div className="flex-1">
             <p className="text-sm font-medium text-gray-900">{t("buyer.openLink.title")}</p>
             <p className="text-xs text-gray-600">
-              {openLinkEnabled
-                ? t("buyer.openLink.description")
-                : t("buyer.openLink.disabled")}
+              {openLinkEnabled ? t("buyer.openLink.description") : t("buyer.openLink.disabled")}
             </p>
           </div>
         </label>
@@ -115,9 +113,7 @@ export function Step3BuyerWallet({
         <p className="text-xs text-gray-500">{t("wallet.description")}</p>
         {walletConfirmed ? (
           <div className="flex flex-col gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-            <p className="text-sm font-medium text-green-900">
-              {t("wallet.confirmed")}
-            </p>
+            <p className="text-sm font-medium text-green-900">{t("wallet.confirmed")}</p>
             <code className="break-all rounded-md bg-white px-3 py-2 text-sm">
               {sellerWalletAddress}
             </code>
@@ -130,10 +126,7 @@ export function Step3BuyerWallet({
             </button>
           </div>
         ) : (
-          <WalletAddressInput
-            initialValue={sellerWalletAddress}
-            onConfirm={onConfirmWallet}
-          />
+          <WalletAddressInput initialValue={sellerWalletAddress} onConfirm={onConfirmWallet} />
         )}
       </div>
     </div>

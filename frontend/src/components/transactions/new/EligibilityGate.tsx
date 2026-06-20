@@ -81,11 +81,7 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
       );
     case REASON.FLAGGED:
       return (
-        <Banner
-          tone="orange"
-          title={t("flagged.title")}
-          description={t("flagged.description")}
-        />
+        <Banner tone="orange" title={t("flagged.title")} description={t("flagged.description")} />
       );
     case REASON.CONCURRENT: {
       const { current, max } = eligibility.concurrentLimit;
@@ -115,11 +111,7 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
           <p className="text-sm text-amber-900">{t("cancelCooldown.description")}</p>
           {expiresAt && (
             <div className="mt-2">
-              <CountdownTimer
-                deadline={expiresAt}
-                warningThresholdSeconds={300}
-                format="verbose"
-              />
+              <CountdownTimer deadline={expiresAt} warningThresholdSeconds={300} format="verbose" />
             </div>
           )}
         </Banner>
@@ -134,9 +126,7 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
         />
       );
     default:
-      return (
-        <Banner tone="red" title={t("unknown.title")} description={reason} />
-      );
+      return <Banner tone="red" title={t("unknown.title")} description={reason} />;
   }
 }
 
@@ -157,10 +147,7 @@ interface BannerProps {
 
 function Banner({ tone, title, description, children }: BannerProps) {
   return (
-    <div
-      role="alert"
-      className={`rounded-lg border p-4 ${TONE_STYLES[tone]}`}
-    >
+    <div role="alert" className={`rounded-lg border p-4 ${TONE_STYLES[tone]}`}>
       <h3 className="text-sm font-semibold">{title}</h3>
       {description && <p className="mt-1 text-sm">{description}</p>}
       {children && <div className="mt-3">{children}</div>}

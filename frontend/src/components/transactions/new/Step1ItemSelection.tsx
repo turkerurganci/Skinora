@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  EmptyState,
-  ErrorState,
-  ItemCard,
-  Skeleton,
-  type ItemCardItem,
-} from "@/components/common";
+import { EmptyState, ErrorState, ItemCard, Skeleton, type ItemCardItem } from "@/components/common";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 
 const INITIAL_VISIBLE = 50;
@@ -139,10 +133,7 @@ export function Step1ItemSelection({
       />
 
       {filtered.length === 0 ? (
-        <EmptyState
-          title={t("noMatch.title")}
-          description={t("noMatch.description", { query })}
-        />
+        <EmptyState title={t("noMatch.title")} description={t("noMatch.description", { query })} />
       ) : (
         <>
           <div

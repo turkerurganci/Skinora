@@ -35,11 +35,7 @@ export function ProfileHeader({
       <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full bg-gray-200">
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt={displayName}
-            className="h-full w-full object-cover"
-          />
+          <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-2xl font-semibold text-gray-500">
             {initials}
@@ -59,9 +55,7 @@ export function ProfileHeader({
             <CopyButton value={steamId} label={t("copySteamId")} />
           </div>
         )}
-        <p className="text-sm text-gray-600">
-          {t("accountAge", { age: accountAge })}
-        </p>
+        <p className="text-sm text-gray-600">{t("accountAge", { age: accountAge })}</p>
       </div>
     </section>
   );

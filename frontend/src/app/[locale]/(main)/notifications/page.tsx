@@ -46,10 +46,7 @@ export default function NotificationsPage() {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const currentPage = parsePage(searchParams.get("page"));
-  const list = useNotificationList(
-    { page: currentPage, pageSize: PAGE_SIZE },
-    isAuthenticated,
-  );
+  const list = useNotificationList({ page: currentPage, pageSize: PAGE_SIZE }, isAuthenticated);
 
   function handlePageChange(nextPage: number) {
     const params = new URLSearchParams(searchParams.toString());
@@ -65,10 +62,7 @@ export default function NotificationsPage() {
   if (!isAuthenticated) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        <ErrorState
-          title={t("errors.forbidden.title")}
-          message={t("errors.forbidden.message")}
-        />
+        <ErrorState title={t("errors.forbidden.title")} message={t("errors.forbidden.message")} />
       </div>
     );
   }
@@ -94,10 +88,7 @@ export default function NotificationsPage() {
   if (list.error instanceof ApiError && list.error.status === 401) {
     return (
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
-        <ErrorState
-          title={t("errors.forbidden.title")}
-          message={t("errors.forbidden.message")}
-        />
+        <ErrorState title={t("errors.forbidden.title")} message={t("errors.forbidden.message")} />
       </div>
     );
   }

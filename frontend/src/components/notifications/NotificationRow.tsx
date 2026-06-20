@@ -15,10 +15,7 @@ export interface NotificationRowProps {
  * Maps `targetType` + `targetId` to the in-app route segment for S11 → S07
  * navigation (04 §7.7). `null` targets render as non-clickable info rows.
  */
-function targetHref(
-  locale: string,
-  notification: NotificationListItem,
-): string | null {
+function targetHref(locale: string, notification: NotificationListItem): string | null {
   if (!notification.targetId || !notification.targetType) return null;
   switch (notification.targetType) {
     case "transaction":
@@ -71,7 +68,8 @@ export function NotificationRow({ notification }: NotificationRowProps) {
       className={cn(
         "flex items-start gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0",
         notification.isRead ? "bg-white" : "bg-blue-50/40",
-        interactive && "cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500",
+        interactive &&
+          "cursor-pointer hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500",
       )}
       aria-label={
         notification.isRead
@@ -105,9 +103,7 @@ export function NotificationRow({ notification }: NotificationRowProps) {
         </p>
       </div>
 
-      {!notification.isRead && (
-        <span className="sr-only">{t("row.unreadAriaPrefix")}</span>
-      )}
+      {!notification.isRead && <span className="sr-only">{t("row.unreadAriaPrefix")}</span>}
     </div>
   );
 }

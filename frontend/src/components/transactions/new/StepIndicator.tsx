@@ -15,10 +15,7 @@ export function StepIndicator({ current, className }: StepIndicatorProps) {
 
   return (
     <ol
-      className={cn(
-        "flex w-full items-center justify-between gap-2 text-xs sm:text-sm",
-        className,
-      )}
+      className={cn("flex w-full items-center justify-between gap-2 text-xs sm:text-sm", className)}
       aria-label={t("indicatorLabel")}
     >
       {STEPS.map((step, index) => {
@@ -51,10 +48,7 @@ export function StepIndicator({ current, className }: StepIndicatorProps) {
             {!isLast && (
               <div
                 aria-hidden="true"
-                className={cn(
-                  "h-0.5 flex-1",
-                  isCompleted ? "bg-blue-600" : "bg-gray-300",
-                )}
+                className={cn("h-0.5 flex-1", isCompleted ? "bg-blue-600" : "bg-gray-300")}
               />
             )}
           </li>

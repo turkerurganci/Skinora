@@ -9,10 +9,7 @@ export interface NotificationListProps {
 
 export function NotificationList({ items }: NotificationListProps) {
   return (
-    <ul
-      role="list"
-      className="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
-    >
+    <ul role="list" className="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
       {items.map((notification) => (
         <li key={notification.id}>
           <NotificationRow notification={notification} />

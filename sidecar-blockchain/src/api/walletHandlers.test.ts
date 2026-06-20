@@ -61,10 +61,7 @@ function buildTronClientMock(
 describe('walletBalancesHandler — T76 reconciliation snapshot', () => {
   it('returns 400 INVALID_BALANCES_REQUEST when addresses missing', async () => {
     const { res, captured } = buildResponse();
-    await walletBalancesHandler(buildTronClientMock(), TEST_CONTRACT_MAP)(
-      buildRequest({}),
-      res,
-    );
+    await walletBalancesHandler(buildTronClientMock(), TEST_CONTRACT_MAP)(buildRequest({}), res);
     expect(captured.statusCode).toBe(400);
     expect((captured.body as { error: string }).error).toBe('INVALID_BALANCES_REQUEST');
   });

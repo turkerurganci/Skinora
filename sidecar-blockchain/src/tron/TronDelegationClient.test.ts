@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  TronDelegationClient,
-  DelegationTronWebFactory,
-} from './TronDelegationClient.js';
+import { TronDelegationClient, DelegationTronWebFactory } from './TronDelegationClient.js';
 import { SidecarError } from '../errors/SidecarError.js';
 
 const FULL_NODE = 'https://nile.trongrid.io';

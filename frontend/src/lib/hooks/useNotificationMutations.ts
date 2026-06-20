@@ -1,10 +1,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  markAllNotificationsRead,
-  markNotificationRead,
-} from "@/lib/api/notifications";
+import { markAllNotificationsRead, markNotificationRead } from "@/lib/api/notifications";
 
 /**
  * Shared invalidator for list + unread-count queries. Both mutations affect
