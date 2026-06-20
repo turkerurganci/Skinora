@@ -1,6 +1,6 @@
 # WP16 — Monitoring/health probe + uptime heartbeat
 
-**Faz:** Pre-F6 (P5 — Config/altyapı) | **Durum:** ⏳ Devam ediyor (yapım tamam, bağımsız validator bekliyor) | **Tarih:** 2026-06-20
+**Faz:** Pre-F6 (P5 — Config/altyapı) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-20
 
 ---
 
@@ -76,9 +76,32 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-20, rapor görülmeden kendi verdict'i) |
+| Bulgu sayısı | 0 bloke-edici (4 non-blocking gözlem O1–O4) |
+| Düzeltme gerekli mi | Hayır |
 | Yapım-içi self-check | Build 0W/0E · dokunulan 5 BE suite + FE tsc/eslint yeşil |
 | Yapım-içi adversarial review (6-boyut/refute-default workflow) | 2 ham → **1 onaylı S2 + 1 NOTE**; S2 düzeltildi |
+
+### Bağımsız Doğrulama (validator, ayrı chat — 2026-06-20)
+
+**Verdict: ✓ PASS** — 6/6 kabul kriteri ✓, 0 bloke-edici bulgu. Validator kendi verdict'ini yapım raporunu görmeden oluşturdu; rapor sonradan okunduğunda **tam uyumlu** (uyuşmazlık yok).
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 success (`27848423788`/`27848423798`/`27839380260`) · Adım 0b repo memory WP16 satırı mevcut · Adım 8a task CI HEAD `c2df968` run [`27852551614`](https://github.com/turkerurganci/Skinora/actions/runs/27852551614) **11/11 job success** (Lint/Build/Unit/**Integration**/Contract/Migration dry-run/Docker BE+FE/Gate); PR #189 MERGEABLE.
+
+**Validator-çalıştırıldı (firsthand, current branch HEAD `c2df968`):** `dotnet build Skinora.sln -c Release` **0W/0E** · Shared `~EnumTests` **207/207** · Platform `~AuditLogCategoryMap` **40/40** · API `~PlatformHealthMonitorState` **9/9** · Transactions `~AmountValidationServiceTests` **9/9**. Integration suite (PlatformHealthProbeJob/RestartRecovery/SteamWebhook) CI-authoritative (run `27852551614` Integration job yeşil).
+
+**Bağımsız kod/spec teyidi:**
+- **D1 defekti teyit edildi:** `SchedulePaymentTimeoutAsync` main'de **0 prod çağıran** (`git grep` ile doğrulandı — yalnız interface/doc referansı); branch'te tek yeni çağıran `SteamWebhookHandler.cs:528`. Arm `PaymentDeadline = now + PaymentTimeoutMinutes` + `SchedulePaymentTimeoutAsync` → `PaymentTimeoutJobId` (06 §3.5 invariant `ITEM_ESCROWED → PaymentDeadline + PaymentTimeoutJobId NOT NULL` birebir). Cancel: `CancelTimeoutJobsAsync` ConfirmPayment'ta — `PaymentTimeoutJobId` state-machine OnExit'te **resetlenmiyor** (tüm atamalar yalnız `TimeoutSchedulingService`/`TimeoutFreezeService`'te → grep ile teyit, orphan-job yok).
+- **D2 resume-gate teyidi:** `AddHangfireServer` tek çağıran (`AddHangfireProcessingServer`); `Program.cs` kayıt sırası `TimeoutSchedulerStartupHook` (317) → `AddHangfireProcessingServer` (328); `StartAsync` recovery'i `await` ile tamamlar; `ServicesStartConcurrently` override yok → default sıralı host start → gate geçerli. Audit `TIMEOUT_AUTO_EXTENDED` heartbeat SaveChanges ile atomik (sub-threshold'da yazılmaz).
+- **D3 alert-only + atomiklik teyidi:** `IAuditLogger.LogAsync` + `IOutboxService.PublishAsync` **stage-only** (firsthand okundu — yalnız `Add`, SaveChanges yok) → audit+outbox tek `SaveChangesAsync` ile atomik; S2-fix `Revert` mantığı doğru (Degraded→`InOutage=false`, Recovered→`InOutage=true`; edge re-detect). Otomatik freeze yok.
+- **Migration yok:** `.csproj` diff boş (0 yeni dep), Migrations/ diff boş, CI Migration dry-run yeşil (model drift yok), enum'lar sona eklendi (CHECK'siz, WP8 emsali).
+- **Güvenlik temiz:** yeni HTTP endpoint yok, secret yok, yeni kullanıcı girdisi yok, `X-Internal-Key` mevcut sidecar config'inden.
+
+**Non-blocking gözlemler (validator):**
+- **O1** — Restart-recovery audit, outage eşiği aşıldığında `extendedCount=0` (aktif tx yoksa) olsa bile yazılır; outage-recovery pass'ini kaydetmek savunulabilir, gürültü minimal.
+- **O2** — Health-state singleton tek-instance (Redis scale-out post-MVP, dokümante).
+- **O3** — D1 Hangfire enqueue ↔ outer SaveChanges arası rezidüel atomiklik penceresi (orphan job fire'da no-op; `DeadlineScannerJob` fallback; mevcut konvansiyonla tutarlı).
+- **O4** — FE prettier drift (enums.ts/notification-icons.ts main'de zaten uyumsuz; CI prettier zorlamıyor; WP18). tsc/eslint temiz.
 
 **Adversarial self-review (yapım-içi, validator'dan önce):** 4-boyut refute-default workflow + verify. **S2 (onaylı, düzeltildi):** `PlatformHealthMonitorState.InOutage` durable SaveChanges'ten önce mutate ediliyordu → SaveChanges geçici hata verirse audit+outbox rollback olur ama singleton "alerted" kalır → retry'da `Record` `None` döner → **DEGRADED alert kalıcı kaybolur**. **Fix:** `PlatformHealthMonitorState.Revert(component, transition)` (edge'i geri al → sonraki probe yeniden tespit eder) + `ProbeAsync` SaveChanges try/catch → hata durumunda revert + LogError (recurring job sonraki tick'te yeniden tespit eder). Testler: 3 revert-kontrat unit + 1 job-seviyesi failure integration (`ThrowingOnceDbContext` → run1 fail+revert, run2 fresh-scope re-detect+persist; scoped-per-run prod gerçekliği modellendi). **NOTE (gerçek değil, bırakıldı):** `[DisableConcurrentExecution]` yok — lock atomik edge-detection çift-alert'i imkânsız kılar + recurring job'ların çoğu zaten kullanmıyor.
 
