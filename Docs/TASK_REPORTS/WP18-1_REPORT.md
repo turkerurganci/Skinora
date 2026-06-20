@@ -38,7 +38,7 @@ WP18 (Test/CI sertleştirme, MVP'nin son iş paketi) 8 alt-kalem içerir ve 3 fa
 | 2 | i18n key-parity blocking CI gate'i, bugün yeşil | ✓ | `npm run i18n:check` exit 0; "1291 keys each, identical key sets" |
 | 3 | i18n untranslatable advisory (exit'i etkilemez) | ✓ | 15 advisory uyarı yazılır, exit 0 |
 | 4 | sidecar npm audit advisory CI adımı (steam kalıcı non-blocking) | ✓ | ci.yml 2 step `continue-on-error: true` |
-| 5 | Hiçbir yeni gate mevcut yeşil CI'yı kırmaz / doc-PR'ı red-wall'lamaz | ⏳ | CI run'ı bekleniyor (push sonrası) |
+| 5 | Hiçbir yeni gate mevcut yeşil CI'yı kırmaz / doc-PR'ı red-wall'lamaz | ✓ | CI run [`27879240190`](https://github.com/turkerurganci/Skinora/actions/runs/27879240190) **tüm job success** (Lint dahil blocking format:check+i18n geçti; advisory audit job'ı kırmadı; CI Gate success) |
 
 ## Test Sonuçları (lokal, CI-eşdeğeri)
 
@@ -70,7 +70,7 @@ WP18 (Test/CI sertleştirme, MVP'nin son iş paketi) 8 alt-kalem içerir ve 3 fa
 - Branch: `task/WP18-1-ci-gates`
 - Commits: `4ac19aa` (prettier 25) · `41ae787` (i18n script) · `7c8bcdd` (routes.ts fix) · `96a6706` (ci.yml gates) · (+docs)
 - PR: [#191](https://github.com/turkerurganci/Skinora/pull/191)
-- CI: ⏳ izleniyor (push sonrası)
+- CI: ✓ PASS — run [`27879240190`](https://github.com/turkerurganci/Skinora/actions/runs/27879240190) (`ccab9e2`) tüm job success
 
 ## Notlar
 
