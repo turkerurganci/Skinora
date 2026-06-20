@@ -1,6 +1,6 @@
 # WP17 — Doc/spec/i18n mutabakat
 
-**Faz:** P6 (F6 öncesi borç temizliği — PRE_F6_PLAN) | **Durum:** ⏳ Devam ediyor (yapım; doğrulama bekliyor) | **Tarih:** 2026-06-20
+**Faz:** P6 (F6 öncesi borç temizliği — PRE_F6_PLAN) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-20
 
 ---
 
@@ -95,9 +95,34 @@ WP17'nin formal AC listesi yok; "Doküman↔kod hizalı" yeteneği DEFERRED_BACK
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, ayrı chat, 2026-06-20 — rapor görülmeden kendi verdict'i) |
+| Bulgu sayısı | 0 bloke-edici · 4 non-blocking (raporlu known-limitations ile birebir) |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız Validator Sonucu (2026-06-20)
+
+**VERDICT: ✓ PASS.** Kapılar: Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27859178443`/`27859178445` WP16 #189, `27848423788` WP15) · Adım 0b WP17 memory satırı mevcut · Adım 8a task CI HEAD `0f9ed50` run [`27870505084`](https://github.com/turkerurganci/Skinora/actions/runs/27870505084) **tüm job success** (ara `3b1041b` run fail'di — notification fallback, `0287f20`/`0f9ed50`'de düzeltildi).
+
+**Validator-çalıştırıldı (firsthand, bu doğrulama anında):**
+- Backend `dotnet build Skinora.sln -c Release` → **0W/0E**
+- Disputes.Tests **50/50** · Notifications.Tests **153/153** · API AdminT63EndpointTests **32/32** · API DisputesEndpointTests **8/8** (SQLite in-memory; tam 537-suite + Integration/Contract/Migration CI-authoritative, HEAD yeşil)
+- FE `tsc --noEmit` 0 · `prettier --check` temiz · `next build` exit 0
+- i18n parity: FE leaf-key set **1291×4** (0 missing/0 extra) · notification resx **56×4** (key-set birebir, comm 0/0)
+
+**Bağımsız doc↔kod teyidi (clusters):**
+- **A1** `SanctionedAddressConfiguration.cs` tek `HasIndex(s=>s.Address)` = filtered `UQ_SanctionedAddresses_Address_Active`; `IX_SanctionedAddresses_Address` kodda yok → doc-fix doğru.
+- **A2** FE route'lar `app/[locale]/admin/dashboard` + `admin/audit-logs` mevcut (`/admin` index + `audit-log` singular yok).
+- **A3** `TransactionStatus.cs` `FLAGGED` içerir, `EMERGENCY_HOLD` içermez → 04 §5 notu (FLAGGED kanonik, yalnız EMERGENCY_HOLD overlay) doğru — yapım-içi F4 düzeltmesinin son hali teyit edildi.
+- **A4** `SweepQueueJob.cs:127,157` `ITEM_DELIVERED` gate.
+- **A5** `AuditAction.cs:9` `WALLET_ESCROW_RELEASE` + `AuditLogCategoryMap.cs:27` FundMovement; `SELLER_PAYOUT_SENT` kodda yok (örnek hâlâ illustratif — emisyon WP8 kapsamı, doc-drift fix geçerli).
+- **C2** admin `ComputeReputation` = user-yüzlü `TransactionDetailService.ComputeReputation` ile **birebir** (`Math.Round(rate×5m,1,ToZero)`, null→null); T5 doc'u party `reputationScore`'ı zaten belgeliyor → AD7 "T5'teki tüm alanlar" miras alır, yeni drift yok.
+- **C/D** kontrat: `cancelledAt`(+) `reputationScore`(+) `content`(+) `warningMessage`(−) hepsi pre-launch tüketici-uyumlu; yeni test'ler vacuous değil (reputationScore 0.96→4.8 + null, cancelledAt, content="Test body", warningMessage-absent, locale fallback zinciri).
+
+**Güvenlik mini:** `.csproj`/`package.json`/lock/migration/Designer diff boş (yeni dep/migration yok) · controller diff boş (yeni endpoint yok) · secret yok · locale stored `PreferredLanguage`'den gelir (request input değil).
+
+**4 non-blocking gözlem (hepsi raporlu, bloke etmez):** (1) auto-escalated iki-taraf `{Outcome}` hâlâ TR-sabit (notification-mimari follow-up, deferred); (2) `Dispute.SystemCheckResult` buyer-locale'inde saklanır (admin tanı alanı, bilinçli DRY); (3) stored audit reason'ları TR (saklanan veri, UI değil); (4) ToS/Privacy/Support **taslaktır** — hukuk review şart (AC13 ~ Taslak, owner-onaylı deliverable).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — cluster A–D, AC tablosu, test sonuçları ve 4 known-limitation bağımsız bulgularımla birebir örtüştü; uyuşmazlık yok.
 
 ---
 
@@ -114,9 +139,9 @@ WP17'nin formal AC listesi yok; "Doküman↔kod hizalı" yeteneği DEFERRED_BACK
 
 ## Commit & PR
 - Branch: `task/WP17-doc-spec-i18n`
-- Commit: `ef4719c` (impl) + PR-ref commit
+- Commit: `ef4719c` (impl) + CI-fix `0287f20` + PR-ref/rapor commit'leri (HEAD `0f9ed50`)
 - PR: [#190](https://github.com/turkerurganci/Skinora/pull/190)
-- CI: ✓ run [`27870277748`](https://github.com/turkerurganci/Skinora/actions/runs/27870277748) (`0287f20`) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker BE+FE/Gate) — CI-fix sonrası. İlk run (`3b1041b`) 2 fallback testinde fail'di → düzeltildi (bkz. CI-fix bölümü).
+- CI: ✓ HEAD `0f9ed50` run [`27870505084`](https://github.com/turkerurganci/Skinora/actions/runs/27870505084) **tüm job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker BE+FE/Gate). Ara run `27870277748` (`0287f20`) de success; ilk run (`3b1041b`) 2 fallback testinde fail'di → düzeltildi (bkz. CI-fix bölümü).
 
 ## Known Limitations / Follow-up
 - **Notification `{Outcome}` fragment per-recipient lokalizasyonu (kalan):** `DisputeEscalatedNotificationConsumer`'ın **auto-escalated (iki-taraf)** dalı + `DisputeResolvedNotificationConsumer` hâlâ TR-sabit outcome fragment'ı enjekte ediyor. Dispatcher template'i recipient-locale'inde render eder ama `{Outcome}` param'ını verbatim enjekte eder; iki-recipient'te her tarafın kendi locale'i gerektiği için bu, notification-mimari düzeltmesi gerektirir (ertelendi). **WP17'de lokalize edilenler:** API response'ları (open/submit/escalate `message`) + auto-resolved bildirimi + **manual-escalate bildirimi** (tek-recipient buyer; `DisputeEscalatedEvent.OutcomeText` ile produce-time buyer-locale pre-localize — yapım-içi review F1 düzeltmesi).
