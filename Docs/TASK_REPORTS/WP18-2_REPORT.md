@@ -59,7 +59,7 @@
 - Branch: `task/WP18-2-fe-test-runner`
 - Commits: FE Vitest+seed · BC ethers override · CI frontend-test+BC-critical · form-data override+düzeltme · (+docs)
 - PR: [#192](https://github.com/turkerurganci/Skinora/pull/192)
-- CI: ⏳ izleniyor (push sonrası)
+- CI: ✓ PASS — run [`27886435525`](https://github.com/turkerurganci/Skinora/actions/runs/27886435525) (`5d9e950`) **14/14 job success** (yeni `3b. JS test (vitest)` job'u FE+2 sidecar vitest çalıştı; BC critical-blocking audit Lint'te yeşil). İlk run `27886274863` npm-skew ile fail'di (yukarı bkz.).
 
 ## Notlar
 
