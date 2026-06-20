@@ -17,10 +17,7 @@ import {
   buildInventoryResponse,
   type InventoryFetcher,
 } from './InventoryService.js';
-import {
-  InMemoryInventoryCache,
-  INVENTORY_CACHE_TTL_SECONDS,
-} from '../cache/InventoryCache.js';
+import { InMemoryInventoryCache, INVENTORY_CACHE_TTL_SECONDS } from '../cache/InventoryCache.js';
 
 interface FakeCEconItem {
   id: string;

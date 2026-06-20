@@ -2,12 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
-import {
-  EmptyState,
-  ErrorState,
-  Pagination,
-  Skeleton,
-} from "@/components/common";
+import { EmptyState, ErrorState, Pagination, Skeleton } from "@/components/common";
 import { TransactionRow } from "./TransactionRow";
 import type { TransactionListItem, TransactionListTab } from "@/lib/api/transactions";
 
@@ -52,13 +47,7 @@ export function TransactionList({
   }
 
   if (isError) {
-    return (
-      <ErrorState
-        title={t("error.title")}
-        message={t("error.message")}
-        onRetry={onRetry}
-      />
-    );
+    return <ErrorState title={t("error.title")} message={t("error.message")} onRetry={onRetry} />;
   }
 
   if (!items || items.length === 0) {
@@ -79,10 +68,7 @@ export function TransactionList({
       );
     }
     return (
-      <EmptyState
-        title={t(`empty.${tab}.title`)}
-        description={t(`empty.${tab}.description`)}
-      />
+      <EmptyState title={t(`empty.${tab}.title`)} description={t(`empty.${tab}.description`)} />
     );
   }
 
@@ -98,11 +84,7 @@ export function TransactionList({
       ))}
       {totalPages > 1 && (
         <div className="flex justify-center pt-2">
-          <Pagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={onPageChange}
-          />
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} />
         </div>
       )}
     </div>

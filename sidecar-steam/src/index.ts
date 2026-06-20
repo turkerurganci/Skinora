@@ -8,10 +8,7 @@ import { BotManager } from './bot/BotManager.js';
 import { BotHealthCheck } from './bot/BotHealthCheck.js';
 import { TradeOfferService } from './trade/TradeOfferService.js';
 import { TradeOfferMonitor } from './trade/TradeOfferMonitor.js';
-import {
-  InventoryService,
-  SteamCommunityInventoryFetcher,
-} from './trade/InventoryService.js';
+import { InventoryService, SteamCommunityInventoryFetcher } from './trade/InventoryService.js';
 import { TradeHoldService } from './trade/TradeHoldService.js';
 import { RateLimitedQueue } from './queue/RateLimitedQueue.js';
 import {
@@ -37,10 +34,7 @@ const tradeHoldService = new TradeHoldService(config.steamApiKey, steamWebApiQue
 const inventoryCache: InventoryCache = config.redisUrl
   ? new RedisInventoryCache(new Redis(config.redisUrl))
   : new InMemoryInventoryCache();
-const inventoryService = new InventoryService(
-  new SteamCommunityInventoryFetcher(),
-  inventoryCache,
-);
+const inventoryService = new InventoryService(new SteamCommunityInventoryFetcher(), inventoryCache);
 
 // Middleware
 app.use(express.json());

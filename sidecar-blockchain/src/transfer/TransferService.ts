@@ -6,10 +6,7 @@ import {
   SendTransferResult,
   TransactionStatusResult,
 } from '../tron/TronTransferClient.js';
-import {
-  EnergyDelegationService,
-  DelegationOutcome,
-} from '../wallet/EnergyDelegationService.js';
+import { EnergyDelegationService, DelegationOutcome } from '../wallet/EnergyDelegationService.js';
 
 export type TokenSymbol = 'USDT' | 'USDC';
 

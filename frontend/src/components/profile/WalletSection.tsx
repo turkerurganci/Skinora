@@ -6,11 +6,7 @@ import { useTranslations } from "next-intl";
 import { WalletAddressInput } from "@/components/common";
 import { ApiError } from "@/lib/api/client";
 import { initiateSteamReVerify } from "@/lib/api/auth";
-import {
-  updateRefundWallet,
-  updateSellerWallet,
-  type UpdateWalletResponse,
-} from "@/lib/api/users";
+import { updateRefundWallet, updateSellerWallet, type UpdateWalletResponse } from "@/lib/api/users";
 import { maskWalletAddress } from "./helpers";
 
 export type WalletRole = "seller" | "refund";
@@ -64,10 +60,8 @@ export function WalletSection({
   // Re-auth callback landed and matches this role → drop straight into
   // the input panel without requiring another button click (would
   // otherwise consume the token via state mismatch).
-  const reAuthActiveForThisRole =
-    activeReAuthToken !== null && activeRoleFromCallback === role;
-  const effectiveMode: Mode =
-    mode === "input" || reAuthActiveForThisRole ? "input" : "view";
+  const reAuthActiveForThisRole = activeReAuthToken !== null && activeRoleFromCallback === role;
+  const effectiveMode: Mode = mode === "input" || reAuthActiveForThisRole ? "input" : "view";
 
   async function handleChangeAddress() {
     if (!currentAddress) {
@@ -175,23 +169,16 @@ export function WalletSection({
           )}
 
           {serverError && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
-            </p>
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{serverError}</p>
           )}
         </div>
       )}
 
       {effectiveMode === "input" && (
         <div className="mt-4 flex flex-col gap-3">
-          <WalletAddressInput
-            initialValue=""
-            onConfirm={handleConfirm}
-          />
+          <WalletAddressInput initialValue="" onConfirm={handleConfirm} />
           {serverError && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              {serverError}
-            </p>
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{serverError}</p>
           )}
           <button
             type="button"

@@ -137,8 +137,7 @@ export function coldWalletTransferHandler(service: TransferService) {
     ) {
       res.status(400).json({
         error: 'INVALID_TRANSFER_REQUEST',
-        message:
-          'Fields {coldTransferId, toColdAddress, amount, token=USDT|USDC} are required.',
+        message: 'Fields {coldTransferId, toColdAddress, amount, token=USDT|USDC} are required.',
       });
       return;
     }

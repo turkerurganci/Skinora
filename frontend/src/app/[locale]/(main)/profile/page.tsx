@@ -95,10 +95,7 @@ export default function ProfilePage() {
 
   if (!isAuthenticated) {
     return (
-      <ErrorState
-        title={t("errors.forbidden.title")}
-        message={t("errors.forbidden.message")}
-      />
+      <ErrorState title={t("errors.forbidden.title")} message={t("errors.forbidden.message")} />
     );
   }
 
@@ -115,10 +112,7 @@ export default function ProfilePage() {
 
   if (profile.error instanceof ApiError && profile.error.status === 401) {
     return (
-      <ErrorState
-        title={t("errors.forbidden.title")}
-        message={t("errors.forbidden.message")}
-      />
+      <ErrorState title={t("errors.forbidden.title")} message={t("errors.forbidden.message")} />
     );
   }
 

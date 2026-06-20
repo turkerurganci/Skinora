@@ -36,8 +36,7 @@ export type FetchLike = (
   init?: { method?: string; headers?: Record<string, string> },
 ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 
-const STEAM_TRADE_HOLD_URL =
-  'https://api.steampowered.com/IEconService/GetTradeHoldDurations/v1/';
+const STEAM_TRADE_HOLD_URL = 'https://api.steampowered.com/IEconService/GetTradeHoldDurations/v1/';
 
 /** Thrown when STEAM_API_KEY is not configured — the check cannot run. */
 export class SteamApiKeyMissingError extends SidecarError {
@@ -85,16 +84,11 @@ export class TradeHoldService {
         headers: { 'x-webapi-key': this.apiKey },
       });
     } catch (err) {
-      throw new SteamApiError(
-        `GetTradeHoldDurations transport failure: ${(err as Error).message}`,
-      );
+      throw new SteamApiError(`GetTradeHoldDurations transport failure: ${(err as Error).message}`);
     }
 
     if (!response.ok) {
-      this.log.warn(
-        { steamId, status: response.status },
-        'GetTradeHoldDurations returned non-2xx',
-      );
+      this.log.warn({ steamId, status: response.status }, 'GetTradeHoldDurations returned non-2xx');
       throw new SteamApiError('GetTradeHoldDurations upstream error', response.status);
     }
 

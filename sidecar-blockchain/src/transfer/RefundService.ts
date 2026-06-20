@@ -3,10 +3,7 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import { TronTransferClient, SendTransferResult } from '../tron/TronTransferClient.js';
 import { TokenContractMap, TokenSymbol, TransferService } from './TransferService.js';
-import {
-  EnergyDelegationService,
-  DelegationOutcome,
-} from '../wallet/EnergyDelegationService.js';
+import { EnergyDelegationService, DelegationOutcome } from '../wallet/EnergyDelegationService.js';
 
 export interface RefundRequest {
   blockchainTransactionId: string;

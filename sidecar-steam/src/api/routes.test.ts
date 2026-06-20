@@ -31,10 +31,7 @@ import {
   SteamUnavailableError,
   type InventoryService,
 } from '../trade/InventoryService.js';
-import {
-  SteamApiKeyMissingError,
-  type TradeHoldService,
-} from '../trade/TradeHoldService.js';
+import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
 function buildApp(service: TradeOfferService) {
@@ -373,9 +370,7 @@ async function startTradeHoldApp(
 
 describe('GET /api/trade-hold/:steamId (WP6)', () => {
   it('returns the trade-hold result on success', async () => {
-    const getTradeHold = vi
-      .fn()
-      .mockResolvedValue({ active: true, escrowEndDurationSeconds: 0 });
+    const getTradeHold = vi.fn().mockResolvedValue({ active: true, escrowEndDurationSeconds: 0 });
     const service = { getTradeHold } as unknown as TradeHoldService;
 
     const ctx = await startTradeHoldApp(service);
@@ -435,9 +430,7 @@ describe('GET /api/trade-hold/:steamId (WP6)', () => {
   });
 
   it('returns 503 on a Steam upstream failure', async () => {
-    const getTradeHold = vi
-      .fn()
-      .mockRejectedValue(new SteamApiError('upstream', 429));
+    const getTradeHold = vi.fn().mockRejectedValue(new SteamApiError('upstream', 429));
     const service = { getTradeHold } as unknown as TradeHoldService;
 
     const ctx = await startTradeHoldApp(service);

@@ -97,10 +97,7 @@ declare module 'steam-tradeoffer-manager' {
     shutdown(): void;
 
     /** T66: emitted by built-in polling when a tracked sent offer changes state. */
-    on(
-      event: 'sentOfferChanged',
-      listener: (offer: TradeOffer, oldState: number) => void,
-    ): this;
+    on(event: 'sentOfferChanged', listener: (offer: TradeOffer, oldState: number) => void): this;
     /** T66: emitted when the polling cycle itself fails (network/HTTP/auth). */
     on(event: 'pollFailure', listener: (err: Error) => void): this;
     /** T66: emitted after a successful polling cycle (mostly for diagnostics). */
