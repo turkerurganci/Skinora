@@ -1,6 +1,6 @@
 # WP18-1 — Test/CI sertleştirme: CI altyapısı + ucuz gate'ler (prettier + i18n + sidecar audit advisory)
 
-**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 1/3'ü) | **Durum:** ⏳ Devam ediyor (validator bekliyor) | **Tarih:** 2026-06-20
+**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 1/3'ü) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-20
 
 ---
 
@@ -55,8 +55,24 @@ WP18 (Test/CI sertleştirme, MVP'nin son iş paketi) 8 alt-kalem içerir ve 3 fa
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
+| Doğrulama durumu | ✓ PASS — bağımsız validator (ayrı chat, 2026-06-20) |
+| Bulgu sayısı | 0 bloke-edici (5/5 kabul kriteri ✓) |
+| Düzeltme gerekli mi | Hayır |
 | Yapım-içi adversarial review | 3-boyut workflow (CI/i18n/format), refute-default |
+
+### Bağımsız Validator Notu (2026-06-20)
+
+**Verdict: ✓ PASS** — 5/5 kabul kriteri ✓, 0 bloke-edici bulgu.
+
+Kapılar: Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27871388334`/`27871388331`/`27859178443`) · Adım 0b repo memory WP18 girişi mevcut · Adım 8a task CI HEAD `02bf0be` run [`27879515013`](https://github.com/turkerurganci/Skinora/actions/runs/27879515013) **13/13 job success** (Lint dahil; blocking `format:check`+`i18n:check` step'leri yeşil, advisory audit job'ı kırmadı, CI Gate success).
+
+Validator firsthand kanıt:
+- **format:check (3 alan):** `prettier --check --end-of-line=auto` FE + steam + BC → "All matched files use Prettier code style!" (exit 0). Lokal default-EOL fail'i (71 dosya) Windows CRLF checkout artefaktı (`core.autocrlf=true`, repoda `.gitattributes` yok) — CI (Linux/LF) authoritative ve yeşil.
+- **i18n:check:** `node scripts/check-i18n.mjs` exit 0 — "4 locales, 1291 keys each, identical key sets"; 15 untranslatable advisory uyarı (exit'i etkilemez).
+- **advisory audit meaningful:** steam `npm audit --omit=dev --audit-level=high` lokalde exit 1 (18 açık: 7 high / 3 critical) → `continue-on-error: true` olmasaydı lint job kırılırdı; CI'da step success (advisory mekanizma doğru çalışıyor).
+- **prettier normalizasyon saf-format:** `TransactionList.tsx` (satır-collapse) + `routes.ts` (satır-wrap) diff'leri yalnız formatlama; mantık değişikliği yok. **Yeni bağımlılık yok** (FE yalnız `i18n:check` script; check-i18n.mjs sıfır-dep, Node 20+ built-in). **Secret/auth/input-validation yüzeyi yok.**
+
+6 ci.yml lint step'i bağımsız doğrulandı (FE/steam/BC `format:check` blocking + FE `i18n:check` blocking + 2 sidecar audit advisory). Yapım raporuyla tam uyumlu.
 
 ## Altyapı Değişiklikleri
 
