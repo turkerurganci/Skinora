@@ -167,13 +167,46 @@ jobs:
         working-directory: frontend
         run: npm ci && npm run lint
 
+      - name: Frontend format check
+        working-directory: frontend
+        run: npm run format:check
+
+      - name: Frontend i18n parity check
+        working-directory: frontend
+        run: npm run i18n:check
+
       - name: Sidecar-steam typecheck
         working-directory: sidecar-steam
         run: npm ci && npx tsc --noEmit
 
+      - name: Sidecar-steam format check
+        working-directory: sidecar-steam
+        run: npm run format:check
+
       - name: Sidecar-blockchain typecheck
         working-directory: sidecar-blockchain
         run: npm ci && npx tsc --noEmit
+
+      - name: Sidecar-blockchain format check
+        working-directory: sidecar-blockchain
+        run: npm run format:check
+
+      # npm audit — sidecar dependency advisories (WP18). Advisory-only:
+      # continue-on-error keeps these from ever failing the gate. Steam carries
+      # upstream-unfixable transitive criticals (request@2.88.2 / protobufjs)
+      # whose only npm "fix" is a destructive steam-user downgrade, so it must
+      # stay non-blocking permanently (owner accept-risk, see DEFERRED_BACKLOG).
+      # Blockchain flips to a blocking gate once the ethers 6.17 override lands
+      # (WP18 PR-2). --omit=dev --audit-level=high scopes to prod-runtime high+.
+      - name: Sidecar-steam npm audit (advisory)
+        working-directory: sidecar-steam
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Sidecar-blockchain npm audit (advisory)
+        working-directory: sidecar-blockchain
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
   # ----------------------------------------------------------------------------
   # 2. Build  (09 §21.4 step 2)
