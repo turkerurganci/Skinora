@@ -1310,8 +1310,7 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 
 | İndeks | Tip | Gerekçe |
 |--------|-----|---------|
-| `UQ_SanctionedAddresses_Address_Active` | UNIQUE, filtered (`WHERE IsActive = 1`) | Aktif bir adres iki kez listede olamaz. Deactivate edilen adres yeniden eklenebilir (filtered UQ izin verir, audit izi olarak deaktif satır kalır) |
-| `IX_SanctionedAddresses_Address` | NONCLUSTERED on `Address` | Match lookup hot-path — pipeline her cüzdan adresi girişinde sorgular (07 §5.3, §5.4, §6.4, §6.6) |
+| `UQ_SanctionedAddresses_Address_Active` | UNIQUE, filtered (`WHERE IsActive = 1`) | Aktif bir adres iki kez listede olamaz. Deactivate edilen adres yeniden eklenebilir (filtered UQ izin verir, audit izi olarak deaktif satır kalır). **Match lookup hot-path'ini de karşılar** — pipeline her cüzdan adresi girişinde yalnız aktif satırları (`IsActive = 1`) sorgular (07 §5.3, §5.4, §6.4, §6.6); filtered UQ tam bu predikatı kapsadığı için ayrı bir non-filtered lookup index'ine gerek yoktur |
 
 **Soft deactivation semantiği:**
 

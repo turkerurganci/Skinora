@@ -463,6 +463,9 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
         Assert.Equal("0xpayment123",
             data.GetProperty("paymentDetail").GetProperty("receivedTxHash").GetString());
         Assert.Equal(1, data.GetProperty("notificationHistory").GetArrayLength());
+        // AD7 notification rows surface the rendered body (04 §8.5 "içerik" / WP17 K6).
+        Assert.Equal("Test body",
+            data.GetProperty("notificationHistory")[0].GetProperty("content").GetString());
         Assert.Equal(1, data.GetProperty("disputeHistory").GetArrayLength());
         Assert.Equal(1, data.GetProperty("flagHistory").GetArrayLength());
 
@@ -527,6 +530,58 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
             .GetProperty("canCancel").GetBoolean());
     }
 
+    // WP17 K3 — AD7 party snapshot surfaces the composite reputation score.
+    [Fact]
+    public async Task GetTransactionDetail_PartyReputationScore_DerivedFromSuccessRate()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var seller = await _factory.CreateUserAsync(
+            displayName: "Seller", successfulTransactionRate: 0.96m);
+        var buyer = await _factory.CreateUserAsync(displayName: "Buyer");
+
+        var tx = await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.PAYMENT_RECEIVED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin,
+            ["VIEW_TRANSACTIONS"]);
+        var response = await client.GetAsync($"/api/v1/admin/transactions/{tx.Id}");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+
+        // ROUND(0.96 × 5, 1, ToZero) = 4.8 — mirrors the user-facing T5 detail (06 §3.1).
+        Assert.Equal(4.8m,
+            data.GetProperty("seller").GetProperty("reputationScore").GetDecimal());
+        // Buyer has no denormalized rate → null (T33 contract: rate null ⇒ score null).
+        Assert.Equal(JsonValueKind.Null,
+            data.GetProperty("buyer").GetProperty("reputationScore").ValueKind);
+    }
+
+    // WP17 K4 — AD6 list rows surface cancelledAt for cancelled transactions.
+    [Fact]
+    public async Task ListTransactions_CancelledRow_SurfacesCancelledAt()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+
+        var cancelled = await _factory.CreateTransactionAsync(seller.Id, buyer.Id,
+            TransactionStatus.CANCELLED_ADMIN);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin,
+            ["VIEW_TRANSACTIONS"]);
+        var response = await client.GetAsync(
+            "/api/v1/admin/transactions?status=CANCELLED_ADMIN");
+
+        var items = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("items");
+
+        var row = items.EnumerateArray().First(i =>
+            i.GetProperty("id").GetString() == cancelled.Id.ToString());
+        Assert.NotEqual(JsonValueKind.Null, row.GetProperty("cancelledAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("completedAt").ValueKind);
+    }
+
     // ============================================================
     // AD10 — GET /admin/steam-accounts
     // ============================================================
@@ -567,8 +622,6 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
         var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
             .GetProperty("data");
         Assert.Equal(2, data.GetProperty("accounts").GetArrayLength());
-        Assert.Equal(JsonValueKind.Null,
-            data.GetProperty("warningMessage").ValueKind);
 
         var first = data.GetProperty("accounts")[0];
         Assert.Equal(200, first.GetProperty("dailyTradeOfferLimit").GetInt32());
@@ -576,8 +629,11 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
         Assert.Equal(0, first.GetProperty("recoveryTransactionCount").GetInt32());
     }
 
+    // WP17 (T103-K4) — AD10 no longer ships a server warningMessage; the
+    // degraded-account banner is derived client-side from each account's status,
+    // so the contract just surfaces the non-ACTIVE status per row.
     [Fact]
-    public async Task SteamAccounts_NonActiveBot_WarningMessageNonNull()
+    public async Task SteamAccounts_NonActiveBot_SurfacesStatusPerAccount()
     {
         var admin = await _factory.CreateUserAsync();
         await _factory.CreatePlatformSteamBotAsync("Bot OK",
@@ -592,9 +648,14 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
             .GetProperty("data");
-        var warning = data.GetProperty("warningMessage").GetString();
-        Assert.NotNull(warning);
-        Assert.Contains("RESTRICTED", warning);
+
+        // No server warningMessage field anymore.
+        Assert.False(data.TryGetProperty("warningMessage", out _));
+
+        var statuses = data.GetProperty("accounts").EnumerateArray()
+            .Select(a => a.GetProperty("status").GetString())
+            .ToList();
+        Assert.Contains("RESTRICTED", statuses);
     }
 
     // ============================================================
@@ -807,7 +868,8 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
             _connection.Open();
         }
 
-        public async Task<User> CreateUserAsync(string? displayName = null)
+        public async Task<User> CreateUserAsync(
+            string? displayName = null, decimal? successfulTransactionRate = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -819,6 +881,7 @@ public class AdminT63EndpointTests : IClassFixture<AdminT63EndpointTests.Factory
                 SteamDisplayName = displayName ?? $"T63User{suffix:D3}",
                 PreferredLanguage = "en",
                 CreatedAt = DateTime.UtcNow.AddDays(-30),
+                SuccessfulTransactionRate = successfulTransactionRate,
             };
             db.Set<User>().Add(user);
             await db.SaveChangesAsync();

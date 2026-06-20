@@ -60,7 +60,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S09 | Profil (Başkası — Public) | Kullanıcı | `/users/:steamId` |
 | S10 | Hesap Ayarları | Kullanıcı | `/settings` |
 | S11 | Bildirimler | Kullanıcı | `/notifications` |
-| S12 | Admin Dashboard | Admin | `/admin` |
+| S12 | Admin Dashboard | Admin | `/admin/dashboard` |
 | S13 | Flag Kuyruğu | Admin | `/admin/flags` |
 | S14 | Flag Detay / İnceleme | Admin | `/admin/flags/:id` |
 | S15 | İşlem Listesi & Arama | Admin | `/admin/transactions` |
@@ -69,7 +69,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S18 | Platform Steam Hesapları | Admin | `/admin/steam-accounts` |
 | S19 | Rol & Yetki Yönetimi | Admin | `/admin/roles` |
 | S20 | Kullanıcı Detay (Admin) | Admin | `/admin/users/:steamId` |
-| S21 | Audit Log | Admin | `/admin/audit-log` |
+| S21 | Audit Log | Admin | `/admin/audit-logs` |
 
 > **Not:** S04 numarası atlanmıştır. ToS kabul adımı S02 içinde modal olarak yer alır (ayrı ekran gerektirmez).
 
@@ -334,6 +334,8 @@ Bu bölüm, birden fazla ekranda tekrar eden UI pattern'lerini tanımlar. Her ek
 | CANCELLED_ADMIN | Admin İptal | Turuncu-Kırmızı |
 | FLAGGED | İnceleniyor | Turuncu |
 | EMERGENCY_HOLD | Donduruldu | Kırmızı-Turuncu |
+
+> **Not (EMERGENCY_HOLD overlay):** `EMERGENCY_HOLD` bir `TransactionStatus` enum değeri **değildir** — işlemin gerçek `status`'ünün üzerine binen `IsOnHold` freeze flag'inin overlay/efektif-durum rozetidir. `FLAGGED` ise **kanonik bir `TransactionStatus` değeridir** (06 §2.1; fraud tespitinde oluşturmada atanır — `TransactionStatus.cs`, 07 §9.6 `statusGroup`), yalnızca aktif fraud-flag/inceleme rozeti olarak da görünür. Kanonik statü kümesi için 06 §2 `TransactionStatus` geçerlidir.
 
 **Lokalizasyon notu:** Etiket metinleri 4 dilde farklı uzunluklarda olabilir. Badge genişliği metin uzunluğuna göre esnemelidir.
 

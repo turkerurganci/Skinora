@@ -39,6 +39,13 @@ namespace Skinora.Shared.Events;
 /// <param name="AutoEscalated"><c>true</c> when the WRONG_ITEM auto-checker fired the escalation; <c>false</c> for buyer-initiated.</param>
 /// <param name="Detail">Buyer-supplied detail (≥10 chars trimmed, only when <see cref="AutoEscalated"/> is false).</param>
 /// <param name="OccurredAt">UTC timestamp the escalation was committed.</param>
+/// <param name="OutcomeText">
+/// WP17 — pre-localized outcome fragment for the DISPUTE_RESULT notification
+/// <c>{Outcome}</c> parameter. Set by the manual-escalate path (single buyer
+/// recipient) in the buyer's locale; <c>null</c> for the auto-escalated
+/// two-party path (each recipient needs its own locale — deferred), where the
+/// consumer keeps its hardcoded fallback.
+/// </param>
 public record DisputeEscalatedEvent(
     Guid EventId,
     Guid DisputeId,
@@ -48,4 +55,5 @@ public record DisputeEscalatedEvent(
     Guid BuyerId,
     bool AutoEscalated,
     string? Detail,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    string? OutcomeText = null) : IDomainEvent;

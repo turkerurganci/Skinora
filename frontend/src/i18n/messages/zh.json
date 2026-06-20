@@ -612,6 +612,67 @@
   },
   "adminSettings": {
     "title": "参数管理",
+    "labels": {
+      "accept_timeout_minutes": "买家接受 timeout 时长",
+      "trade_offer_seller_timeout_minutes": "卖家 trade offer timeout 时长",
+      "payment_timeout_min_minutes": "付款 timeout 最小值",
+      "payment_timeout_max_minutes": "付款 timeout 最大值",
+      "payment_timeout_default_minutes": "付款 timeout 默认值",
+      "trade_offer_buyer_timeout_minutes": "买家 trade offer timeout 时长",
+      "timeout_warning_ratio": "Timeout 提醒发送比例",
+      "commission_rate": "佣金费率",
+      "gas_fee_protection_ratio": "Gas fee 保护阈值",
+      "min_transaction_amount": "最小交易金额",
+      "max_transaction_amount": "最大交易金额",
+      "max_concurrent_transactions": "并发活跃交易上限",
+      "new_account_transaction_limit": "新账户交易上限",
+      "new_account_period_days": "新账户认定期限",
+      "cancel_limit_count": "取消上限 — 周期内允许的取消次数",
+      "cancel_limit_period_hours": "取消上限周期",
+      "cancel_cooldown_hours": "取消后冷却时长",
+      "price_deviation_threshold": "市场价格偏离阈值",
+      "high_volume_amount_threshold": "高交易量金额阈值",
+      "high_volume_count_threshold": "高交易量交易次数阈值",
+      "high_volume_period_hours": "高交易量检查周期",
+      "dormant_account_min_age_days": "休眠账户最小年龄阈值",
+      "dormant_account_value_threshold": "休眠账户交易金额阈值",
+      "multi_account_exchange_addresses": "已知 exchange/custodial 地址列表 (CSV; NONE = 无)",
+      "monitoring_post_cancel_24h_polling_seconds": "取消后前 24 小时 polling 间隔",
+      "monitoring_post_cancel_7d_polling_seconds": "取消后 1-7 天 polling 间隔",
+      "monitoring_post_cancel_30d_polling_seconds": "取消后 7-30 天 polling 间隔",
+      "monitoring_stop_after_days": "监控停止时长",
+      "min_refund_threshold_ratio": "最小退款阈值 — 低于 gas fee × 此比例不予退款",
+      "blockchain_refund_gas_fee_estimate_usdt": "退款 gas fee 估算 (T72 MVP, T74 后 runtime)",
+      "blockchain_payout_gas_fee_estimate_usdt": "卖家 payout gas fee 估算 (WP1 MVP, T74 后 runtime)",
+      "blockchain_transfer_retry_intervals_minutes": "出站 transfer 重试间隔 (CSV, 分钟 — T73)",
+      "blockchain_sweep_energy_delegation_sun": "Sweep/refund Energy delegation 金额 (T74)",
+      "blockchain_sweep_trx_fallback_sun": "Energy delegation 回退 TRX 金额 (T74)",
+      "reconciliation_schedule_cron": "Reconciliation job cron 表达式 (T76)",
+      "reconciliation_hot_wallet_address": "Reconciliation hot wallet 地址 (T76)",
+      "reconciliation_cold_wallet_address": "Reconciliation cold wallet 地址 (T76, 可选)",
+      "hot_wallet_monitor_cron": "Hot wallet monitor job cron 表达式 (T77)",
+      "hot_wallet_trx_balance_minimum": "Hot wallet TRX 余额下限阈值 (用于 gas)",
+      "open_link_enabled": "公开链接方式启用",
+      "hot_wallet_limit": "Hot wallet 最大余额上限",
+      "wallet_payout_address_cooldown_hours": "卖家收款地址变更冷却",
+      "wallet_refund_address_cooldown_hours": "买家退款地址变更冷却",
+      "auth_banned_countries": "禁止的国家 (ISO-3166-1 alpha-2 CSV; NONE = 无)",
+      "auth_min_steam_account_age_days": "Steam 账户最小年龄阈值",
+      "reputation_min_account_age_days": "账户年龄阈值 — 低于此值 reputationScore 为 null",
+      "reputation_min_completed_transactions": "已完成交易阈值 — 低于此值 reputationScore 为 null",
+      "platform_maintenance_active": "维护/中断启用",
+      "platform_maintenance_type": "维护/中断类型 (enum, NONE = 无)",
+      "platform_maintenance_message": "向用户显示的消息 (NONE = 无)",
+      "platform_maintenance_planned_end": "预计结束时间 (ISO 8601 UTC, NONE = 无)",
+      "retention_outbox_message_days": "Outbox 消息 retention 时长",
+      "retention_processed_event_days": "ProcessedEvent retention 时长",
+      "retention_external_idempotency_days": "ExternalIdempotencyRecord retention 时长",
+      "retention_orphan_notification_days": "孤立通知 retention 时长",
+      "retention_user_login_log_days": "UserLoginLog retention 时长",
+      "retention_batch_size_outbox": "Outbox 清理批次大小",
+      "retention_batch_size_notification": "通知清理批次大小",
+      "retention_batch_size_user_login_log": "UserLoginLog 清理批次大小"
+    },
     "loadError": "无法加载参数。",
     "empty": "未找到参数。",
     "operationalHeading": "运营参数",
@@ -777,6 +838,8 @@
       "VIEW_AUDIT_LOG": "查看审计日志",
       "CANCEL_TRANSACTIONS": "取消交易",
       "EMERGENCY_HOLD": "应用/解除紧急冻结",
+      "VIEW_DISPUTES": "查看争议",
+      "MANAGE_DISPUTES": "处理争议",
       "MANAGE_SANCTIONS": "管理制裁名单"
     },
     "assignment": {
@@ -802,91 +865,91 @@
     "support": "支持"
   },
   "legal": {
-    "draftNotice": "本页面正在上线前完善。以下摘要概述了完整政策将涵盖的内容。",
+    "draftNotice": "本文为供审阅的草稿，不构成法律意见。上线前将由具备资质的法律顾问审阅并定稿，最终发布的版本将规范您对 Skinora 的使用。",
     "backToHome": "返回首页",
     "privacy": {
       "title": "隐私政策",
-      "intro": "Skinora 仅处理运营 CS2 物品托管服务所需的最少个人数据。本摘要说明我们收集哪些数据、原因以及您拥有的选择。",
+      "intro": "Skinora 是一项 CS2 物品托管服务，连接买家与卖家，并在物品通过 Steam 交付之前托管款项。本政策说明我们为运营该服务而处理的个人数据以及您所拥有的选择。我们力求仅收集必要的数据，并在适用的情况下，依照包括土耳其 KVKK 和欧盟 GDPR 在内的适用数据保护法律处理这些数据。",
       "sections": {
         "dataWeCollect": {
           "heading": "我们收集的数据",
-          "body": "您的 Steam 公开资料（Steam ID、显示名称、头像）、您提供的钱包地址以及您在平台上的交易活动。"
+          "body": "当您使用 Steam 登录（Steam OpenID）时，我们会接收您的 Steam 公开资料，包括 Steam ID、显示名称和头像。我们还会存储您为 TRON 网络上的 TRC-20 稳定币（USDT、USDC）付款而提供的钱包地址，以及您在平台上的交易活动记录，例如报价、托管状态、付款、退款和争议。我们不会获取您的 Steam 密码或 Steam Mobile Authenticator 凭据。"
         },
         "howWeUse": {
           "heading": "我们如何使用您的数据",
-          "body": "用于对您进行身份验证、执行托管交易、防范欺诈，以及履行我们的法律和安全义务。"
+          "body": "我们使用您的数据来对您进行身份验证、创建并结算托管交易、发送和验证 Steam 交易报价，以及处理稳定币付款、佣金、付款和退款。我们还将其用于检测和防范欺诈，执行年龄、地域封锁和制裁筛查等资格规则，解决争议，并履行我们的法律、会计和安全义务。"
         },
         "dataSharing": {
           "heading": "数据共享",
-          "body": "我们仅与提供服务所需的第三方（如 Steam 和区块链基础设施）以及法律要求的情况下共享数据。我们不会出售个人数据。"
+          "body": "我们仅与提供服务所需的各方共享数据，例如用于交易验证的 Steam 和用于链上付款的 TRON 区块链网络，以及代表我们行事的服务提供商。请注意，记录在公共区块链上的交易本质上对他人可见。在法律要求或为执行我们的条款时，我们也可能披露数据；我们不会出售个人数据。"
         },
         "dataRetention": {
           "heading": "数据保留",
-          "body": "交易和审计记录将在会计、争议解决和法律合规所需的期间内保留；在允许的情况下，账户数据将在删除请求后被移除。"
+          "body": "我们会在为提供服务以及履行法律、会计、审计和争议解决义务所需的期间内保留个人数据。为满足这些义务，交易和审计记录的保留期通常长于活跃账户数据。您可以请求删除或匿名化您的账户，在不存在优先适用的法律要求的情况下，我们将予以执行。"
         },
         "yourRights": {
           "heading": "您的权利",
-          "body": "在法律限制范围内，您可以从账户设置中或通过联系支持团队，请求访问、更正或删除您的个人数据。"
+          "body": "根据您所在的地区，您可能依据 KVKK、GDPR 或其他适用法律，享有访问、更正、删除或限制处理您个人数据的权利，对某些处理提出异议的权利，以及数据可携权。您可以从账户设置中或通过联系支持团队行使这些权利，在处理请求前我们可能需要核实您的身份。在法律要求保留数据的情况下，相关权利可能受到限制。"
         },
         "contact": {
           "heading": "联系方式",
-          "body": "如有隐私相关问题，请通过支持页面与我们联系。"
+          "body": "如有隐私相关问题或需行使您的数据保护权利，请通过支持页面与我们联系。数据控制者及任何当地代表将在最终发布的政策中载明。"
         }
       }
     },
     "terms": {
       "title": "服务条款",
-      "intro": "本条款规范您对 Skinora CS2 物品托管平台的使用。使用本服务即表示您同意这些条款。",
+      "intro": "本条款规范您对 Skinora 的使用。Skinora 是一个 CS2 物品托管平台，连接买家与卖家，并在卖家通过 Steam 交易交付物品之前托管买家的款项。登录并使用本服务即表示您同意这些条款。本条款受运营方所在司法管辖区的适用法律管辖，具体将在最终发布的版本中说明。",
       "sections": {
         "acceptance": {
-          "heading": "条款的接受",
-          "body": "通过创建或接受交易，您确认您已年满 18 周岁，并同意本条款和隐私政策。"
+          "heading": "接受与资格",
+          "body": "通过创建或接受交易，您确认您已年满 18 周岁，并同意本条款和隐私政策。您还确认您不位于被封锁或受制裁的司法管辖区，且不在任何适用的制裁名单上。我们会使用地域封锁和筛查，在无法确认资格的情况下可能拒绝提供服务。"
         },
         "serviceDescription": {
           "heading": "服务",
-          "body": "Skinora 将一件 CS2 物品和一笔稳定币付款托管，待双方均在链上和 Steam 中验证后，将各方资产释放给其交易对手。"
+          "body": "Skinora 作为中介，托管买家的 TRC-20 稳定币款项，直至卖家通过 Steam 交易交付约定的 CS2 物品。交付确认后，我们在扣除平台佣金和网络 gas 费用后，将款项释放给卖家。交易通常需要状态良好的 Steam 账户，并可能需要 Steam Mobile Authenticator。Skinora 是独立服务，与 Valve 或 Steam 没有关联，也不受其认可或运营。"
         },
         "userObligations": {
           "heading": "您的义务",
-          "body": "您必须提供准确的钱包地址，仅使用您本人拥有的账户，且不得尝试欺诈、操纵市场或规避平台控制。"
+          "body": "您必须提供准确的钱包地址，仅使用您本人拥有并控制的 Steam 和钱包账户，并诚实、及时地完成交易。您不得尝试欺诈、洗钱、操纵市场，或规避平台控制、资格检查或制裁筛查。您有责任保护您的 Steam 和钱包凭据的安全，并在确认前核实收款方和地址信息。"
         },
         "fees": {
           "heading": "费用",
-          "body": "每笔交易均适用平台佣金和网络 gas 费用，并在您确认前向您显示。"
+          "body": "每笔交易均适用平台佣金和区块链网络（gas）费用。适用金额会在您确认交易前于应用内向您显示，确切费率可配置且可能随时间变化。区块链网络费用由 TRON 网络确定，不在我们的控制范围内。"
         },
         "liability": {
           "heading": "责任",
-          "body": "本服务按现状提供。对于因 Steam、区块链或其控制之外的其他第三方故障而造成的损失，Skinora 概不负责。"
+          "body": "Skinora 按现状和现有可用情况提供托管与中介服务，不保证任何物品的市场价值、真实性或未来的可交易性。在适用法律允许的最大范围内，对于因 Steam 中断、区块链网络问题、第三方故障或用户失误（例如将资金发送至错误地址）而造成的损失，Skinora 概不负责。本条款中的任何内容均不排除依法不可排除的责任。"
         },
         "termination": {
           "heading": "暂停与终止",
-          "body": "对于违反本条款或适用法律（包括我们的制裁和欺诈规则）的账户，我们可以将其暂停或关闭。"
+          "body": "对于违反本条款或适用法律（包括我们的欺诈、资格和制裁规则）的账户，我们可以将其暂停或关闭，并在调查需要时扣留或撤销交易。账户被暂停时，您通常仍保留对活跃交易的只读访问权限，以便您跟进其处理结果。我们将依照本条款和适用法律处理托管中的资金。"
         },
         "contact": {
           "heading": "联系方式",
-          "body": "有关本条款的问题可通过支持页面发送给我们。"
+          "body": "有关本条款的问题，包括定稿后的管辖法律和运营主体，可通过支持页面发送给我们。"
         }
       }
     },
     "support": {
       "title": "支持",
-      "intro": "在交易或账户方面需要帮助吗？以下是联系我们的方式以及您可以期待的内容。",
+      "intro": "在交易或账户方面需要帮助吗？本页面说明如何联系我们的团队、回复通常需要多长时间，以及争议的处理方式。",
       "sections": {
         "contact": {
           "heading": "联系我们",
-          "body": "请发送电子邮件至 support@skinora.app，并附上您的交易编号和问题描述。"
+          "body": "您可以通过应用内的支持流程或发送电子邮件至 support@skinora.app 联系支持团队。请附上您的交易编号和清晰的问题描述，以便我们更快地为您提供帮助。请勿向任何人（包括支持团队）透露您的 Steam 密码或钱包的私钥或助记词。"
         },
         "responseTimes": {
           "heading": "响应时间",
-          "body": "我们力求在一个工作日内回复。时间紧迫的托管问题将被优先处理。"
+          "body": "我们力求在一个工作日内回复，时间紧迫的托管和付款问题将被优先处理。响应时间为目标而非保证，在高需求、Steam 中断或区块链拥堵期间可能会更长。"
         },
         "disputes": {
           "heading": "交易争议",
-          "body": "如果交易未按预期完成，请从交易页面发起争议；我们的团队会审查升级的案件。"
+          "body": "如果交易未按预期完成，买家可以从交易页面针对付款、交付或收到错误物品等问题发起争议。系统会先运行自动检查，未解决的案件将升级至平台管理员进行人工审查。争议可能裁定为有利于买家或卖家，在适当情况下包括将托管资金退回买家的钱包。"
         },
         "faq": {
           "heading": "常见问题",
-          "body": "有关付款、交易报价、退款和账户安全的指南将在此处提供。"
+          "body": "有关 Steam 登录、发送和接受交易报价、稳定币付款与确认、佣金与 gas 费用、退款以及账户安全的指南将在此处提供。在此之前，如需上述任一主题的帮助，请联系支持团队。"
         }
       }
     }

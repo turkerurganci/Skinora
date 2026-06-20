@@ -313,8 +313,8 @@ Tron blockchain (TRC-20) ile tüm etkileşimi yönetir.
 |---|---|
 | Deposit adresleri | Her işlem için HD Wallet'tan benzersiz adres türetilir — bu adresler platformun kontrolündedir |
 | Sweep mekanizması | Ödeme onaylandıktan sonra deposit adresindeki fon hot wallet'a sweep edilir (tek merkezi adres) |
-| Sweep tetikleyicisi | `PaymentReceivedEvent` consumer'ı — ödeme doğrulandığında otomatik sweep job'ı başlar |
-| Payout / iade kaynağı | Satıcıya ödeme ve alıcıya iade hot wallet'tan çıkar |
+| Sweep tetikleyicisi | `ITEM_DELIVERED` state gate'i — sweep, alıcı-iade penceresi (sweep öncesi iade deposit adresinden çıkar) kapandıktan sonra başlar. Eager `PaymentReceivedEvent` tetiği depoziti erken boşaltıp yaygın "ödeme-sonrası-iptal" iadesini bozacağı için ertelendi (WP3 owner kararı 2026-06-15; `SweepQueueJob`) |
+| Payout / iade kaynağı | Satıcıya ödeme **sweep sonrası hot wallet'tan** çıkar. Alıcıya iade ise **sweep öncesi (genelde teslim öncesi iptal/timeout) deposit adresinden** çıkar — aşağıdaki "Sweep öncesi refund" satırına bakınız (WP2/WP3) |
 | Hot wallet limiti | Admin tarafından belirlenen limit aşıldığında admin'e alert — fazla fon cold wallet'a manuel transfer edilir (MVP) |
 | Reconciliation | Günlük otomatik reconciliation job'ı — on-chain bakiye (hot wallet + aktif deposit adresleri) ile platform ledger (DB) karşılaştırılır. Uyuşmazlık tespit edilirse admin'e critical alert |
 | Reconciliation kapsamı | Her deposit adresi: beklenen tutar vs gerçek bakiye. Hot wallet: toplam beklenen bakiye vs gerçek bakiye. Cold wallet: platform ledger'daki cold wallet kayıtları vs on-chain bakiye |

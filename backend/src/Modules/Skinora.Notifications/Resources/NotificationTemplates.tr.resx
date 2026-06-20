@@ -48,6 +48,12 @@
   <data name="TRANSACTION_COMPLETED_Body" xml:space="preserve">
     <value>{ItemName} işlemi başarıyla tamamlandı.</value>
   </data>
+  <data name="SELLER_PAYMENT_SENT_Title" xml:space="preserve">
+    <value>Ödeme gönderildi</value>
+  </data>
+  <data name="SELLER_PAYMENT_SENT_Body" xml:space="preserve">
+    <value>Cüzdanına {Amount} USDT gönderildi.</value>
+  </data>
   <data name="TIMEOUT_WARNING_Title" xml:space="preserve">
     <value>Süre dolmak üzere</value>
   </data>
@@ -59,6 +65,66 @@
   </data>
   <data name="TRANSACTION_CANCELLED_Body" xml:space="preserve">
     <value>{ItemName} işlemi iptal edildi: {Reason}.</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Title" xml:space="preserve">
+    <value>İşlem işaretlendi</value>
+  </data>
+  <data name="TRANSACTION_FLAGGED_Body" xml:space="preserve">
+    <value>{TransactionId} numaralı işlem inceleme altında.</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Title" xml:space="preserve">
+    <value>Hatalı ödeme tutarı</value>
+  </data>
+  <data name="PAYMENT_INCORRECT_Body" xml:space="preserve">
+    <value>{ReceivedAmount} USDT aldık ama beklenen tutar {ExpectedAmount} USDT idi.</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Geç ödeme iade edildi</value>
+  </data>
+  <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>Cüzdanına {Amount} USDT iade edildi.</value>
+  </data>
+  <data name="ITEM_RETURNED_Title" xml:space="preserve">
+    <value>Item iade edildi</value>
+  </data>
+  <data name="ITEM_RETURNED_Body" xml:space="preserve">
+    <value>{ItemName} envanterine iade edildi.</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
+    <value>Ödeme iade edildi</value>
+  </data>
+  <data name="PAYMENT_REFUNDED_Body" xml:space="preserve">
+    <value>{Amount} USDT iade edildi.</value>
+  </data>
+  <data name="DISPUTE_RESULT_Title" xml:space="preserve">
+    <value>Anlaşmazlık çözüldü</value>
+  </data>
+  <data name="DISPUTE_RESULT_Body" xml:space="preserve">
+    <value>Anlaşmazlık çözüldü: {Outcome}.</value>
+  </data>
+  <data name="FLAG_RESOLVED_Title" xml:space="preserve">
+    <value>İşaret kaldırıldı</value>
+  </data>
+  <data name="FLAG_RESOLVED_Body" xml:space="preserve">
+    <value>{TransactionId} numaralı işlemin işareti kaldırıldı.</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Title" xml:space="preserve">
+    <value>Admin: işaret uyarısı</value>
+  </data>
+  <data name="ADMIN_FLAG_ALERT_Body" xml:space="preserve">
+    <value>{TransactionId} numaralı işlem işaretlendi: {Reason}.</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Title" xml:space="preserve">
+    <value>Admin: yükseltme</value>
+  </data>
+  <data name="ADMIN_ESCALATION_Body" xml:space="preserve">
+    <value>{TransactionId} numaralı işlem üst mercie iletildi.</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Title" xml:space="preserve">
+    <value>Admin: ödeme hatası</value>
+  </data>
+  <data name="ADMIN_PAYMENT_FAILURE_Body" xml:space="preserve">
+    <value>{TransactionId} numaralı işlemin ödemesi başarısız oldu ({ErrorCode}).</value>
   </data>
   <data name="EMERGENCY_HOLD_APPLIED_Title" xml:space="preserve">
     <value>İşleminiz inceleme için geçici olarak donduruldu</value>
@@ -72,11 +138,23 @@
   <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
     <value>{ItemName} işlemi {ResumedStatus} aşamasından devam ediyor. Sayaç kaldığı yerden işliyor.</value>
   </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
+    <value>Admin: Steam bot sorunu</value>
+  </data>
+  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
+    <value>{BotId} botu bildirdi: {Issue}.</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
+    <value>Admin: platform sağlık uyarısı</value>
+  </data>
+  <data name="ADMIN_PLATFORM_OUTAGE_Body" xml:space="preserve">
+    <value>{Component} sidecar sağlık durumu: {Status}.</value>
+  </data>
   <data name="INSUFFICIENT_PAYMENT_Title" xml:space="preserve">
     <value>Eksik ödeme — doğru tutarı tekrar gönder</value>
   </data>
   <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
-    <value>{ReceivedAmount} {Stablecoin} aldık ama beklenen {ExpectedAmount} {Stablecoin} idi. Alınan tutar {SourceAddress} adresine iade ediliyor; lütfen timeout dolmadan önce {ExpectedAmount} {Stablecoin} tutarını tek seferde tekrar gönder.</value>
+    <value>{ReceivedAmount} {Stablecoin} aldık ama beklenen {ExpectedAmount} {Stablecoin} idi. Alınan tutar {SourceAddress} adresine iade ediliyor; lütfen süre dolmadan önce {ExpectedAmount} {Stablecoin} tutarının tamamını tekrar gönder.</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Fazla ödeme iade ediliyor</value>

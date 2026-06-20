@@ -122,12 +122,19 @@ export function SettingRow({ setting }: SettingRowProps) {
       : t("saveError")
     : null;
 
+  // WP17 — localize the field label client-side. The backend setting key may
+  // contain dots; next-intl treats dots as path separators, so sanitize them
+  // to underscores for the lookup. Fall back to the backend-provided label
+  // (Turkish) for any key not yet present in the i18n catalog.
+  const labelKey = `labels.${setting.key.replaceAll(".", "_")}`;
+  const localizedLabel = t.has(labelKey) ? t(labelKey) : setting.label;
+
   return (
     <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
       {/* Label + description + impact */}
       <div className="min-w-0 sm:max-w-[55%]">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium text-gray-900">{setting.label}</span>
+          <span className="text-sm font-medium text-gray-900">{localizedLabel}</span>
           <ImpactBadge impact={impact} />
         </div>
         {setting.description && (

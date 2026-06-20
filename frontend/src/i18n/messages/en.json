@@ -612,6 +612,67 @@
   },
   "adminSettings": {
     "title": "Parameter Management",
+    "labels": {
+      "accept_timeout_minutes": "Buyer accept timeout",
+      "trade_offer_seller_timeout_minutes": "Seller trade offer timeout",
+      "payment_timeout_min_minutes": "Payment timeout minimum",
+      "payment_timeout_max_minutes": "Payment timeout maximum",
+      "payment_timeout_default_minutes": "Payment timeout default",
+      "trade_offer_buyer_timeout_minutes": "Buyer trade offer timeout",
+      "timeout_warning_ratio": "Timeout warning send ratio",
+      "commission_rate": "Commission rate",
+      "gas_fee_protection_ratio": "Gas fee protection threshold",
+      "min_transaction_amount": "Minimum transaction amount",
+      "max_transaction_amount": "Maximum transaction amount",
+      "max_concurrent_transactions": "Concurrent active transaction limit",
+      "new_account_transaction_limit": "New account transaction limit",
+      "new_account_period_days": "New account acceptance period",
+      "cancel_limit_count": "Cancel limit — cancellations allowed per period",
+      "cancel_limit_period_hours": "Cancel limit period",
+      "cancel_cooldown_hours": "Post-cancel cooldown period",
+      "price_deviation_threshold": "Market price deviation threshold",
+      "high_volume_amount_threshold": "High volume amount threshold",
+      "high_volume_count_threshold": "High volume transaction count threshold",
+      "high_volume_period_hours": "High volume check period",
+      "dormant_account_min_age_days": "Dormant account minimum age threshold",
+      "dormant_account_value_threshold": "Dormant account transaction amount threshold",
+      "multi_account_exchange_addresses": "Known exchange/custodial address list (CSV; NONE = none)",
+      "monitoring_post_cancel_24h_polling_seconds": "Post-cancel first 24h polling interval",
+      "monitoring_post_cancel_7d_polling_seconds": "Post-cancel 1-7 day polling interval",
+      "monitoring_post_cancel_30d_polling_seconds": "Post-cancel 7-30 day polling interval",
+      "monitoring_stop_after_days": "Monitoring stop period",
+      "min_refund_threshold_ratio": "Minimum refund threshold — no refund below gas fee × this ratio",
+      "blockchain_refund_gas_fee_estimate_usdt": "Refund gas fee estimate (T72 MVP, runtime after T74)",
+      "blockchain_payout_gas_fee_estimate_usdt": "Seller payout gas fee estimate (WP1 MVP, runtime after T74)",
+      "blockchain_transfer_retry_intervals_minutes": "Outbound transfer retry intervals (CSV, minutes — T73)",
+      "blockchain_sweep_energy_delegation_sun": "Sweep/refund Energy delegation amount (T74)",
+      "blockchain_sweep_trx_fallback_sun": "Energy delegation fallback TRX amount (T74)",
+      "reconciliation_schedule_cron": "Reconciliation job cron expression (T76)",
+      "reconciliation_hot_wallet_address": "Reconciliation hot wallet address (T76)",
+      "reconciliation_cold_wallet_address": "Reconciliation cold wallet address (T76, optional)",
+      "hot_wallet_monitor_cron": "Hot wallet monitor job cron expression (T77)",
+      "hot_wallet_trx_balance_minimum": "Hot wallet TRX balance minimum (for gas)",
+      "open_link_enabled": "Open link method enabled",
+      "hot_wallet_limit": "Hot wallet maximum balance limit",
+      "wallet_payout_address_cooldown_hours": "Seller payout address change cooldown",
+      "wallet_refund_address_cooldown_hours": "Buyer refund address change cooldown",
+      "auth_banned_countries": "Banned countries (ISO-3166-1 alpha-2 CSV; NONE = none)",
+      "auth_min_steam_account_age_days": "Steam account minimum age threshold",
+      "reputation_min_account_age_days": "Account age threshold — below it reputationScore is null",
+      "reputation_min_completed_transactions": "Completed transaction threshold — below it reputationScore is null",
+      "platform_maintenance_active": "Maintenance/outage active",
+      "platform_maintenance_type": "Maintenance/outage type (enum, NONE = none)",
+      "platform_maintenance_message": "Message shown to users (NONE = none)",
+      "platform_maintenance_planned_end": "Estimated end time (ISO 8601 UTC, NONE = none)",
+      "retention_outbox_message_days": "Outbox message retention period",
+      "retention_processed_event_days": "ProcessedEvent retention period",
+      "retention_external_idempotency_days": "ExternalIdempotencyRecord retention period",
+      "retention_orphan_notification_days": "Orphan notification retention period",
+      "retention_user_login_log_days": "UserLoginLog retention period",
+      "retention_batch_size_outbox": "Outbox cleanup batch size",
+      "retention_batch_size_notification": "Notification cleanup batch size",
+      "retention_batch_size_user_login_log": "UserLoginLog cleanup batch size"
+    },
     "loadError": "Could not load parameters.",
     "empty": "No parameters found.",
     "operationalHeading": "Operational Parameters",
@@ -777,6 +838,8 @@
       "VIEW_AUDIT_LOG": "View audit log",
       "CANCEL_TRANSACTIONS": "Cancel transactions",
       "EMERGENCY_HOLD": "Apply/release emergency hold",
+      "VIEW_DISPUTES": "View disputes",
+      "MANAGE_DISPUTES": "Resolve disputes",
       "MANAGE_SANCTIONS": "Manage sanctions list"
     },
     "assignment": {
@@ -802,91 +865,91 @@
     "support": "Support"
   },
   "legal": {
-    "draftNotice": "This page is being finalized ahead of launch. The summary below outlines what the full policy will cover.",
+    "draftNotice": "This is a DRAFT prepared for review and is not legal advice. It will be reviewed and finalized by qualified counsel before launch, and the final published version will govern your use of Skinora.",
     "backToHome": "Back to home",
     "privacy": {
       "title": "Privacy Policy",
-      "intro": "Skinora processes the minimum personal data needed to operate the CS2 item escrow service. This summary explains what we collect, why, and the choices you have.",
+      "intro": "Skinora is a CS2 item escrow service that connects buyers and sellers and holds payment until an item is delivered through Steam. This policy describes the personal data we process to operate that service and the choices you have. We aim to collect only what is necessary and to handle it in line with applicable data-protection laws, including the KVKK in Turkey and the GDPR in the EU where they apply.",
       "sections": {
         "dataWeCollect": {
           "heading": "Data we collect",
-          "body": "Your Steam public profile (Steam ID, display name, avatar), the wallet addresses you provide, and your transaction activity on the platform."
+          "body": "When you sign in with Steam (Steam OpenID), we receive your Steam public profile, including your Steam ID, display name, and avatar. We also store the wallet addresses you provide for TRC-20 stablecoin (USDT, USDC) payments on the TRON network, and a record of your transaction activity on the platform, such as offers, escrow status, payouts, refunds, and disputes. We do not receive your Steam password or your Steam Mobile Authenticator credentials."
         },
         "howWeUse": {
           "heading": "How we use your data",
-          "body": "To authenticate you, run escrow transactions, prevent fraud, and meet our legal and security obligations."
+          "body": "We use your data to authenticate you, create and settle escrow transactions, send and verify Steam trade offers, and process stablecoin payments, commissions, payouts, and refunds. We also use it to detect and prevent fraud, enforce eligibility rules such as age, geo-blocking, and sanctions screening, resolve disputes, and meet our legal, accounting, and security obligations."
         },
         "dataSharing": {
           "heading": "Data sharing",
-          "body": "We share data only with the third parties required to deliver the service (such as Steam and blockchain infrastructure) and where the law requires it. We do not sell personal data."
+          "body": "We share data only with the parties needed to deliver the service, such as Steam for trade verification and the TRON blockchain network for on-chain payments, and with service providers acting on our behalf. Note that transactions recorded on a public blockchain are inherently visible to others. We may also disclose data where required by law or to enforce our terms, and we do not sell personal data."
         },
         "dataRetention": {
           "heading": "Data retention",
-          "body": "Transaction and audit records are kept as long as needed for accounting, dispute resolution, and legal compliance; account data is removed on a deletion request where permitted."
+          "body": "We keep personal data for as long as it is needed to provide the service and to satisfy legal, accounting, audit, and dispute-resolution obligations. Transaction and audit records are typically retained longer than active account data to meet these obligations. You may request deletion or anonymization of your account, and we will honor it where no overriding legal requirement applies."
         },
         "yourRights": {
           "heading": "Your rights",
-          "body": "You may request access to, correction of, or deletion of your personal data, subject to legal limits, from your account settings or by contacting support."
+          "body": "Depending on where you live, you may have rights to access, correct, delete, or restrict the processing of your personal data, to object to certain processing, and to data portability, as provided under the KVKK, the GDPR, or other applicable law. You can exercise these rights from your account settings or by contacting support, and we may need to verify your identity before acting on a request. Rights may be limited where retention is legally required."
         },
         "contact": {
           "heading": "Contact",
-          "body": "For privacy questions, reach us through the support page."
+          "body": "For privacy questions or to exercise your data-protection rights, reach us through the support page. The data controller and any local representative will be identified in the final published policy."
         }
       }
     },
     "terms": {
       "title": "Terms of Service",
-      "intro": "These terms govern your use of Skinora's CS2 item escrow platform. By using the service you agree to them.",
+      "intro": "These terms govern your use of Skinora, a CS2 item escrow platform that connects a buyer and a seller and holds the buyer's payment until the seller delivers the item through a Steam trade. By signing in and using the service, you agree to these terms. These terms are governed by the applicable law of the operator's jurisdiction, which will be specified in the final published version.",
       "sections": {
         "acceptance": {
-          "heading": "Acceptance of terms",
-          "body": "By creating or accepting a transaction you confirm that you are at least 18 years old and agree to these terms and the Privacy Policy."
+          "heading": "Acceptance and eligibility",
+          "body": "By creating or accepting a transaction, you confirm that you are at least 18 years old and that you agree to these terms and the Privacy Policy. You also confirm that you are not located in a blocked or sanctioned jurisdiction and are not on any applicable sanctions list. We use geo-blocking and screening, and we may decline service where eligibility cannot be confirmed."
         },
         "serviceDescription": {
           "heading": "The service",
-          "body": "Skinora holds a CS2 item and a stablecoin payment in escrow and releases each side to its counterparty once both have been verified on-chain and in Steam."
+          "body": "Skinora acts as an intermediary that holds the buyer's TRC-20 stablecoin payment in escrow until the seller delivers the agreed CS2 item via a Steam trade. Once delivery is confirmed, we release the payout to the seller after deducting the platform commission and network gas fee. Trading typically requires a Steam account in good standing and may require a Steam Mobile Authenticator. Skinora is an independent service and is not affiliated with, endorsed by, or operated by Valve or Steam."
         },
         "userObligations": {
           "heading": "Your obligations",
-          "body": "You must provide accurate wallet addresses, use only accounts you own, and not attempt fraud, market manipulation, or circumvention of platform controls."
+          "body": "You must provide accurate wallet addresses, use only Steam and wallet accounts that you own and control, and complete trades honestly and promptly. You must not attempt fraud, money laundering, market manipulation, or any circumvention of platform controls, eligibility checks, or sanctions screening. You are responsible for the security of your Steam and wallet credentials and for verifying recipient and address details before confirming."
         },
         "fees": {
           "heading": "Fees",
-          "body": "A platform commission and network gas fees apply to each transaction and are shown to you before you confirm."
+          "body": "Each transaction is subject to a platform commission and a blockchain network (gas) fee. The applicable amounts are shown to you in-app before you confirm a transaction, and exact rates are configurable and may change over time. Blockchain network fees are determined by the TRON network and are outside our control."
         },
         "liability": {
           "heading": "Liability",
-          "body": "The service is provided on an as-is basis. Skinora is not liable for losses arising from Steam, blockchain, or other third-party failures outside its control."
+          "body": "Skinora provides an escrow and intermediary service on an as-is and as-available basis and does not guarantee the market value, authenticity, or future tradability of any item. To the maximum extent permitted by applicable law, Skinora is not liable for losses arising from Steam outages, blockchain network issues, third-party failures, or user error such as sending funds to an incorrect address. Nothing in these terms excludes liability that cannot be excluded by law."
         },
         "termination": {
           "heading": "Suspension and termination",
-          "body": "We may suspend or close accounts that violate these terms or applicable law, including our sanctions and fraud rules."
+          "body": "We may suspend or close accounts that violate these terms or applicable law, including our fraud, eligibility, and sanctions rules, and we may hold or reverse transactions where necessary to investigate. Where an account is suspended, you generally retain read access to your active transactions so you can follow their resolution. We will handle funds held in escrow in accordance with these terms and applicable law."
         },
         "contact": {
           "heading": "Contact",
-          "body": "Questions about these terms can be sent through the support page."
+          "body": "Questions about these terms, including the governing law and operating entity once finalized, can be sent through the support page."
         }
       }
     },
     "support": {
       "title": "Support",
-      "intro": "Need help with a transaction or your account? Here is how to reach us and what to expect.",
+      "intro": "Need help with a transaction or your account? This page explains how to reach our team, how long a response typically takes, and how disputes are handled.",
       "sections": {
         "contact": {
           "heading": "Contact us",
-          "body": "Email support@skinora.app with your transaction ID and a description of the issue."
+          "body": "You can reach support through the in-app support flow or by emailing support@skinora.app. Please include your transaction ID and a clear description of the issue so we can help faster. Never share your Steam password or your wallet's private keys or recovery phrase with anyone, including support."
         },
         "responseTimes": {
           "heading": "Response times",
-          "body": "We aim to respond within one business day. Time-sensitive escrow issues are prioritized."
+          "body": "We aim to respond within one business day, and time-sensitive escrow and payment issues are prioritized. Response times are targets rather than guarantees and may be longer during high demand, Steam outages, or blockchain congestion."
         },
         "disputes": {
           "heading": "Transaction disputes",
-          "body": "If a trade does not complete as expected, open a dispute from the transaction page; our team reviews escalated cases."
+          "body": "If a trade does not complete as expected, the buyer can open a dispute from the transaction page for issues such as payment, delivery, or receiving the wrong item. Automatic checks run first, and unresolved cases are escalated to platform admins for manual review. A dispute may be resolved in the buyer's or the seller's favor, including a refund of escrowed funds to the buyer's wallet where appropriate."
         },
         "faq": {
           "heading": "Common questions",
-          "body": "Guidance on payments, trade offers, refunds, and account safety will be available here."
+          "body": "Guidance on Steam sign-in, sending and accepting trade offers, stablecoin payments and confirmations, commissions and gas fees, refunds, and account safety will be available here. Until then, contact support for help with any of these topics."
         }
       }
     }

@@ -76,11 +76,7 @@ public sealed class AdminSteamBotQueryService : IAdminSteamBotQueryService
             })
             .ToList();
 
-        var warning = BuildWarning(accounts);
-
-        return new AdminSteamAccountsResponse(
-            Accounts: accounts,
-            WarningMessage: warning);
+        return new AdminSteamAccountsResponse(Accounts: accounts);
     }
 
     /// <summary>
@@ -97,21 +93,4 @@ public sealed class AdminSteamBotQueryService : IAdminSteamBotQueryService
         return openRecoveryCount > 0 ? FailoverStatusInRecovery : FailoverStatusDiverted;
     }
 
-    /// <summary>
-    /// Per 07 §9.10: <c>warningMessage</c> is non-null when at least one bot
-    /// is not <c>ACTIVE</c>. The text is a Turkish summary the dashboard can
-    /// render verbatim — admins prefer a single banner over a per-row badge.
-    /// </summary>
-    private static string? BuildWarning(IReadOnlyList<AdminSteamAccountDto> accounts)
-    {
-        var degraded = accounts
-            .Where(a => a.Status != PlatformSteamBotStatus.ACTIVE)
-            .ToList();
-        if (degraded.Count == 0) return null;
-
-        var byStatus = degraded.GroupBy(a => a.Status)
-            .OrderBy(g => g.Key)
-            .Select(g => $"{g.Key}: {g.Count()}");
-        return $"Sorunlu bot hesabı tespit edildi — {string.Join(", ", byStatus)}.";
-    }
 }

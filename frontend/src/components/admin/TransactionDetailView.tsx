@@ -250,6 +250,9 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
         <span className="flex flex-col">
           <span className="text-sm font-medium text-gray-900">{party.displayName}</span>
           <span className="font-mono text-xs text-gray-500">{party.steamId}</span>
+          {typeof party.reputationScore === "number" && (
+            <span className="text-xs text-gray-500">★ {party.reputationScore.toFixed(1)}</span>
+          )}
         </span>
       </Link>
     );
@@ -493,6 +496,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                       {td("recipient")}: {n.recipient}
                       {n.channels.length > 0 && ` · ${n.channels.join(", ")}`}
                     </span>
+                    {n.content && <span className="text-xs text-gray-500">{n.content}</span>}
                   </li>
                 ))}
               </ul>

@@ -62,7 +62,7 @@
 | Önc. | ID | Açıklama | Tip | Hedef | Kaynak |
 |---|---|---|---|---|---|
 | ✅ | T103b | **ÇÖZÜLDÜ → T103b-2 (birleşik impl, 2026-06-13):** emanet item listesi + Recovery Queue satır verisi + `MANAGE_STEAM_RECOVERY` enforcement + otomatik EMERGENCY_HOLD | done | — | T103b-2_REPORT |
-| ⚪ | T103-K4 | AD10 TR-sabit `warningMessage` yerine client-lokalize banner | backend-gap | backend i18n migration | T103 K4 |
+| ✅ | T103-K4 | **ÇÖZÜLDÜ → WP17:** ölü TR-sabit `warningMessage` alanı AD10'dan kaldırıldı (FE banner zaten `status`'ten client-derive) | backend-gap | — | T103 K4 |
 
 ## 3. F6 — Uçtan uca testler (T107–T114)
 
@@ -149,19 +149,19 @@
 
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
-| 🟡 | T33-SuccessRate-FractionVsPercent 🆕 | `successfulTransactionRate` fraction (06 §3.1 `decimal(5,4)`) vs percent (07 §5.x örnekleri); FE öncesi karar | `T33_REPORT.md:142` |
-| ⚪ | AD6-AD7-contract-recon | Party `reputationScore` AD7'de yok, `cancelledAt` AD6 list'te yok, notification `content` AD7'de yok (04 §8.4-8.5 ↔ 07 §9.6/9.7) | T101 K3/K4/K6 |
-| ⚪ | backend-i18n-migration | Backend notification/fraud/dispute/setting mesajları TR-verbatim (es/zh fallback); admin UI client-lokalize | T49/T92/T95/T102/T106 K |
-| ⚪ | audit-doc-drift | 07 §9.19 `SELLER_PAYOUT_SENT` enum'da yok; RefreshToken purge; 06 §3.25 stale index; PermissionCatalog '11'→12; ACTIVE_DISPUTE_EXISTS | T42/T63b/T82 K |
+| ✅ | T33-SuccessRate-FractionVsPercent | **ÇÖZÜLDÜ → WP17 (no-op):** kod (`UserConfiguration.HasPrecision(5,4)`) + 06 §3.1 + 07 §5.x örnekleri zaten **fraction (0..1)** üzerinde hizalı (M1 2026-05-01 kapandı); aksiyon gerekmedi | `T33_REPORT.md:142` |
+| ✅ | AD6-AD7-contract-recon | **ÇÖZÜLDÜ → WP17:** 3 alan koda eklendi — AD7 party `reputationScore` (yeni `AdminTransactionPartyDetailDto`), AD6 list `cancelledAt`, AD7 notification `content` (`Notification.Body`) + FE + 07 §9.6/9.7 doc + 2 test | T101 K3/K4/K6 |
+| ✅ | backend-i18n-migration | **ÇÖZÜLDÜ → WP17 (hibrit):** notification resx tr/es/zh→56 (parity) · dispute auto-check buyer-locale lokalizasyon (`DisputeAutoCheckMessages`) · settings 59 + permission 2 label FE-key-mapping · steam `warningMessage` kaldırıldı. **Kalan:** notification `{Outcome}` per-recipient (auto-escalated iki-taraf + DisputeResolved) → notification-mimari follow-up | T49/T92/T95/T102/T106 K |
+| ~ | audit-doc-drift | **Kısmen → WP17:** 07 §9.19 `SELLER_PAYOUT_SENT`→`WALLET_ESCROW_RELEASE` ✅ · 06 §3.25 stale index ✅ · PermissionCatalog count ✅ (zaten 14). **Kalan (WP17-dışı):** RefreshToken purge (by-design soft-delete) · ACTIVE_DISPUTE_EXISTS (WP5'te 07'den kaldırıldı, erişilemez) | T42/T63b/T82 K |
 | ⚪ | audit-detail-schema | AuditLog `detail` pass-through NewValue; central AuditLog wiring; RestartRecovery audit; OldValue yok | T42/T39/T47/T106 K |
 | ⚪ | mvp-scope-postmvp | Bilinçli MVP-dışı: reviews, KYC, mobil, diğer oyunlar, multi-item/barter, ek blockchain, fiat, premium, Discord guild, Sentry vb. | 10_MVP_SCOPE / 02_PRD |
-| ⚪ | content-authoring | ToS/Privacy metni yazılmadı; notification mesaj gövdeleri; platform Steam-hesap ops detayı | SPEC |
+| ~ | content-authoring | **WP17 (taslak):** ToS/Privacy/Support `legal.*` taslak metin 4 dil yazıldı (owner "taslak yaz" kararı) — **otoriter metin hukuk review gerektirir** (jurisdiction/governing-law/entity belirsiz) | SPEC |
 | ⚪ | suspend-signalr-spec | Suspension'da otomatik EMERGENCY_HOLD/live force-restrict yok (request-time enforce); `/auth/suspended` vs `/account-suspended` | T105a K2 |
 | ⚪ | like-escape-helper | `AdminUserService.ListAsync` + audit/sanctions search raw `EF.Functions.Like` (parametrize, injection değil); paylaşılan escape helper + no-direct-INSERT arch rule | T63 K6 / T106 K8 / T42 K1 |
-| ⚪ | permissioncatalog-xmldoc-drift 🆕 | `IsKnown()` xmldoc "11 catalog entries" der, `All` 12 içerir (runtime doğru) | `PermissionCatalog.cs:52`, `GATE_CHECK_F4.md:340` |
-| ⚪ | datamodel-sanctioned-index-drift 🆕 | 06 §3.25 obsolete `IX_SanctionedAddresses_Address` listeler (filtered UQ'ya merge edildi) | `06_DATA_MODEL.md:1273`, `GATE_CHECK_F4.md:340` |
-| ⚪ | admin-route-table-drift 🆕 | 04 §1 route tablosu `/admin`,`/admin/audit-log` + auth ekran yolları, impl `/admin/dashboard`,`/admin/audit-logs` vb. ile uyuşmuyor (tüm ekranlar mevcut, yalnız doc-yolu farkı; S12/S21 path drift) | `GATE_CHECK_F5.md` |
-| ⚪ | T84-emergencyhold-status-doc-drift 🆕 | 04 §5 status tablosu `EMERGENCY_HOLD`'u status sanıyor (freeze overlay label) — **`audit-doc-drift` ile birlikte tek doc-pass'te ele al** | `MEMORY_ARCHIVE.md` T84 K6 |
+| ✅ | permissioncatalog-xmldoc-drift | **ÇÖZÜLDÜ → WP17 (no-op):** xmldoc zaten "14 catalog entries", `All` 14 içerir (T82 sonrası güncel); aksiyon gerekmedi | `PermissionCatalog.cs:56` |
+| ✅ | datamodel-sanctioned-index-drift | **ÇÖZÜLDÜ → WP17:** 06 §3.25 obsolete `IX_SanctionedAddresses_Address` satırı kaldırıldı; filtered UQ `WHERE IsActive=1` hot-path'i karşılar | `06_DATA_MODEL.md` |
+| ✅ | admin-route-table-drift | **ÇÖZÜLDÜ → WP17:** 04 §1 S12 `/admin`→`/admin/dashboard`, S21 `/admin/audit-log`→`/admin/audit-logs` | `GATE_CHECK_F5.md` |
+| ✅ | T84-emergencyhold-status-doc-drift | **ÇÖZÜLDÜ → WP17:** 04 §5'e overlay-rozet notu eklendi (`EMERGENCY_HOLD` = IsOnHold overlay, enum değeri değil; `FLAGGED` ise kanonik statü — review F4) | `MEMORY_ARCHIVE.md` T84 K6 |
 | ✅ | T58-ActiveDisputeExistsUnreachable 🆕 | **ÇÖZÜLDÜ → WP5** — 07 §7.8 Hatalar'dan kaldırıldı (03 §6 farklı-tip eşzamanlı dispute'a izin verdiği için tasarım-gereği erişilemez) | `T58_REPORT.md:177` |
 
 ## 7. Test / CI borcu

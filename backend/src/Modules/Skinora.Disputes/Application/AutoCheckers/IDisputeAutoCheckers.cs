@@ -24,14 +24,16 @@ namespace Skinora.Disputes.Application.AutoCheckers;
 ///     TX hash (PAYMENT) or escalate manually (any type).
 ///   </item>
 /// </list>
-/// <see cref="CanSubmitTxHash"/> and <see cref="CanEscalate"/> mirror the
-/// <c>autoCheckResult</c> shape in 07 §7.8 — surfaced verbatim on the open
-/// response.
+/// <see cref="MessageKey"/> is a stable key (see <see cref="DisputeAutoCheckMessages"/>),
+/// localized to the buyer's locale by the dispute service before it reaches the
+/// 07 §7.8 <c>autoCheckResult.message</c> field (WP17). <see cref="CanSubmitTxHash"/>
+/// and <see cref="CanEscalate"/> mirror the <c>autoCheckResult</c> shape — surfaced
+/// verbatim on the open response.
 /// </remarks>
 public sealed record AutoCheckResult(
     bool Resolved,
     bool AutoEscalated,
-    string Message,
+    string MessageKey,
     bool CanSubmitTxHash,
     bool CanEscalate);
 

@@ -16,11 +16,11 @@ export interface SteamAccountsViewProps {
  * account-card grid + a recovery-queue panel per restricted/banned bot from a
  * single AD10 response (the per-bot queues fetch AD25 lazily).
  *
- * The banner is DERIVED CLIENT-SIDE from the degraded accounts rather than
- * rendering AD10's `warningMessage`: that server field is Turkish-only
- * (`AdminSteamBotQueryService.BuildWarning`), so showing it verbatim would leak
- * Turkish onto the en/es/zh locales this admin page supports. This mirrors the
- * S12 dashboard, which also derives its banner client-side (T99 K6).
+ * The banner is DERIVED CLIENT-SIDE from the degraded accounts: AD10 no longer
+ * carries a server `warningMessage` (WP17 / T103-K4 removed it — it was
+ * Turkish-only and would have leaked onto the en/es/zh locales this admin page
+ * supports). This mirrors the S12 dashboard, which also derives its banner
+ * client-side (T99 K6).
  *
  * The "yeni işlemler diğer hesaplara yönlendirildi" line is shown only when the
  * failover pipeline reports diversion (RESTRICTED_NEW_TXN_DIVERTED), which is now

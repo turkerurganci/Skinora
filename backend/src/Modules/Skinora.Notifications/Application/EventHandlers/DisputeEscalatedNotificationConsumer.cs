@@ -24,8 +24,12 @@ namespace Skinora.Notifications.Application.EventHandlers;
 ///     T63's responsibility.
 ///   </item>
 /// </list>
-/// Locale coverage for these phrases is forward-deferred to T97 alongside
-/// the T49 timeout reason strings.
+/// WP17: the manual-escalate outcome is localized to the buyer's locale
+/// (pre-rendered on <see cref="DisputeEscalatedEvent.OutcomeText"/> by the
+/// dispute service). The auto-escalated two-party outcome is not yet localized —
+/// each recipient needs its own locale, which the dispatcher applies to the
+/// template but not to injected <c>{Outcome}</c> params (notification-architecture
+/// follow-up, tracked alongside the T49 timeout reason strings).
 /// </remarks>
 public sealed class DisputeEscalatedNotificationConsumer
     : NotificationConsumerBase<DisputeEscalatedEvent>
@@ -48,14 +52,20 @@ public sealed class DisputeEscalatedNotificationConsumer
 
         if (domainEvent.AutoEscalated)
         {
+            // WP17 — two-party fan-out: each recipient needs its own locale, so
+            // per-recipient localization of this {Outcome} fragment stays
+            // deferred (notification-architecture follow-up); keep the TR fallback.
             const string AutoOutcome = "İşleminiz incelemeye alındı";
             requests.Add(BuildRequest(domainEvent, domainEvent.BuyerId, AutoOutcome));
             requests.Add(BuildRequest(domainEvent, domainEvent.SellerId, AutoOutcome));
         }
         else
         {
-            const string ManualOutcome = "İtirazınız admin ekibine iletildi";
-            requests.Add(BuildRequest(domainEvent, domainEvent.BuyerId, ManualOutcome));
+            // WP17 — manual escalate is single-recipient (buyer); DisputeService
+            // pre-localizes the outcome in the buyer's locale and rides it on the
+            // event. Fall back to Turkish for older events without OutcomeText.
+            var manualOutcome = domainEvent.OutcomeText ?? "İtirazınız admin ekibine iletildi";
+            requests.Add(BuildRequest(domainEvent, domainEvent.BuyerId, manualOutcome));
         }
 
         return Task.FromResult<IReadOnlyCollection<NotificationRequest>>(requests);

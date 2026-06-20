@@ -123,14 +123,18 @@ export function TransactionListTable({ transactions, className, sort }: Transact
     {
       key: "completedAt",
       header: t("columns.completedAt"),
-      cell: (row) =>
-        row.completedAt ? (
-          <time dateTime={row.completedAt} className="text-sm tabular-nums text-gray-700">
-            {formatDateTime(row.completedAt, locale)}
+      // 04 §8.4 "Tamamlanma/İptal" — completedAt for COMPLETED, otherwise
+      // cancelledAt for the cancelled/refunded terminal states (WP17 K4).
+      cell: (row) => {
+        const terminalAt = row.completedAt ?? row.cancelledAt;
+        return terminalAt ? (
+          <time dateTime={terminalAt} className="text-sm tabular-nums text-gray-700">
+            {formatDateTime(terminalAt, locale)}
           </time>
         ) : (
           <span className="text-sm text-gray-400">—</span>
-        ),
+        );
+      },
     },
   ];
 

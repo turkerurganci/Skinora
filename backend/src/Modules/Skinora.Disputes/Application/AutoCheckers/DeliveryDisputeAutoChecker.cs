@@ -39,11 +39,9 @@ namespace Skinora.Disputes.Application.AutoCheckers;
 /// </remarks>
 public sealed class DeliveryDisputeAutoChecker : IDeliveryDisputeAutoChecker
 {
-    private const string DeliveredMessage = "Item envanterinize teslim edilmiş durumda";
-    private const string TradeOfferActiveMessage =
-        "Trade offer'ınız aktif, lütfen Steam üzerinden kabul edin";
-    private const string NotDeliveredMessage =
-        "Trade offer henüz oluşturulmadı; teslim aşamasına gelinmedi";
+    private const string DeliveredMessage = DisputeAutoCheckMessages.DeliveryDelivered;
+    private const string TradeOfferActiveMessage = DisputeAutoCheckMessages.DeliveryOfferActive;
+    private const string NotDeliveredMessage = DisputeAutoCheckMessages.DeliveryNotStarted;
 
     private readonly AppDbContext _db;
     private readonly ISteamInventoryReader _inventory;
@@ -105,17 +103,17 @@ public sealed class DeliveryDisputeAutoChecker : IDeliveryDisputeAutoChecker
             : Unresolved(TradeOfferActiveMessage);
     }
 
-    private static AutoCheckResult Resolved(string message) =>
+    private static AutoCheckResult Resolved(string messageKey) =>
         new(Resolved: true,
             AutoEscalated: false,
-            Message: message,
+            MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: false);
 
-    private static AutoCheckResult Unresolved(string message) =>
+    private static AutoCheckResult Unresolved(string messageKey) =>
         new(Resolved: false,
             AutoEscalated: false,
-            Message: message,
+            MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: true);
 }

@@ -1448,6 +1448,8 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 
 Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true` ise dispute anında çözülmüş demektir.
 
+> **Lokalizasyon (WP17):** `autoCheckResult.message` (§7.8), `checkResult.message` (§7.9) ve escalate `message` (§7.10) örneklerde Türkçe gösterilir ama alanlar **itiraz açan alıcının `PreferredLanguage`'ine göre** lokalize edilir (en/tr/es/zh, EN fallback — `DisputeAutoCheckMessages`).
+
 **Hatalar:** 403 `NOT_BUYER`, 409 `INVALID_STATE_TRANSITION`, 409 `DUPLICATE_DISPUTE`
 
 > **Not (WP5):** `ACTIVE_DISPUTE_EXISTS` bu listeden kaldırıldı — 03 §6 farklı türde eşzamanlı aktif dispute'a bilinçli izin verir, dolayısıyla bu kod tasarım gereği erişilemezdir (yalnızca aynı türün tekrarı `DUPLICATE_DISPUTE` ile engellenir).
@@ -1864,9 +1866,12 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
   "seller": { "steamId": "...", "displayName": "...", "avatarUrl": "..." },
   "buyer": { "steamId": "...", "displayName": "...", "avatarUrl": "..." },
   "createdAt": "2026-03-16T10:00:00Z",
-  "completedAt": "2026-03-16T17:00:00Z"
+  "completedAt": "2026-03-16T17:00:00Z",
+  "cancelledAt": null
 }
 ```
+
+`completedAt` / `cancelledAt`: işlemin terminal durumuna göre biri dolu, diğeri null (04 §8.4 "Tamamlanma/İptal" kolonu).
 
 ### 9.7 AD7 — `GET /admin/transactions/:id`
 
@@ -1882,7 +1887,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 | `paymentDetail` | Blockchain detay: `{ paymentAddress, receivedAmount, receivedTxHash, blockConfirmations, confirmedAt }` |
 | `sellerPayoutDetail` | Satıcı ödeme: `{ grossAmount, commission, gasFee, gasFeeFromCommission, gasFeeFromSeller, netAmount, txHash, sentAt }` |
 | `refundDetail` | İade: `{ originalAmount, gasFee, netRefundAmount, refundAddress, txHash, refundedAt }` |
-| `notificationHistory` | Gönderilen bildirimler: `[{ type, recipient, channels, sentAt }]` |
+| `notificationHistory` | Gönderilen bildirimler: `[{ type, recipient, channels, sentAt, content }]` (`content` = gönderilen bildirim gövdesi, 04 §8.5 "içerik") |
 | `disputeHistory` | Dispute'lar: `[{ id, type, status, autoCheckResult, escalatedAt, closedAt }]` |
 | `flagHistory` | Flag'ler: `[{ id, type, reviewStatus, adminNote, reviewedAt }]` |
 | `adminActions` | `{ canApproveFlag, canRejectFlag, canCancel }` |
@@ -1953,12 +1958,11 @@ T5'teki tüm alanlar + admin'e özel bölümler:
       "failoverStatus": "NONE",
       "recoveryTransactionCount": 0
     }
-  ],
-  "warningMessage": null
+  ]
 }
 ```
 
-`status`: `ACTIVE`, `RESTRICTED`, `BANNED`, `OFFLINE` (06 §2.15). `warningMessage`: Sorunlu hesap varsa.
+`status`: `ACTIVE`, `RESTRICTED`, `BANNED`, `OFFLINE` (06 §2.15). Sorunlu hesap uyarı banner'ı **istemci tarafında** hesapların `status`'ünden türetilir (locale'e göre lokalize) — WP17 (T103-K4) sunucu-üretimli TR `warningMessage` alanını kaldırdı (FE kullanmıyordu ve Türkçe sızdırıyordu).
 
 `failoverStatus`: `NONE` (normal), `RESTRICTED_NEW_TXN_DIVERTED` (yeni işlemler diğer botlara yönlendirildi), `ACTIVE_TXN_IN_RECOVERY` (aktif işlemler recovery/manual intervention'da). `recoveryTransactionCount`: Recovery'deki aktif işlem sayısı (02 §15).
 
@@ -2143,7 +2147,7 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 {
   "id": "log-guid",
   "category": "FUND_MOVEMENT",
-  "action": "SELLER_PAYOUT_SENT",
+  "action": "WALLET_ESCROW_RELEASE",
   "actor": { "steamId": "...", "displayName": "System" },
   "subject": { "steamId": "...", "displayName": "SellerPlayer" },
   "transactionId": "tx-guid",
