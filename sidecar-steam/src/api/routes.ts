@@ -49,11 +49,9 @@ export function buildRouter(deps: BotManager | RouterDeps = {}): Router {
   // trade_offer.{accepted,declined,expired,countered,invalid_items}). An ad-hoc
   // pull endpoint is not part of the spec; reserved for future ops tooling.
   apiRouter.get('/trade-offers/:offerId/status', (_req, res) => {
-    res
-      .status(501)
-      .json({
-        error: 'Pull status not implemented — status changes are pushed via webhook (08 §2.4)',
-      });
+    res.status(501).json({
+      error: 'Pull status not implemented — status changes are pushed via webhook (08 §2.4)',
+    });
   });
 
   apiRouter.get('/inventory/:steamId', inventoryGetHandler(inventoryService));
