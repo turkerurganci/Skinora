@@ -97,7 +97,7 @@ PR-1 bu üç kriteri **mümkün kılar** (altyapı); kapanış PR-3'te kanıtlan
 
 - Branch: `task/T107-e2e-fake-sidecar`
 - PR: [#196](https://github.com/turkerurganci/Skinora/pull/196)
-- CI: (watch — sonuç eklenecek)
+- CI: ✓ PASS — run [27911099227](https://github.com/turkerurganci/Skinora/actions/runs/27911099227) (`af33445`). `1. Lint` + `CI Gate` success; Build/Unit/Integration/Contract/Migration/Docker/JS-test **skipped** (sidecar-fake + compose + docs `code` path filtresinde değil — mevcut joblar tetiklenmez). Beklenen davranış; mevcut prod hiçbir şey kırılmadı.
 
 ## Notlar
 
