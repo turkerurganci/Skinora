@@ -57,4 +57,24 @@ public class MarkdownV2EscaperTests
         // is intentional, the escaper is allow-list-free.
         Assert.Equal("\\\\\\.", MarkdownV2Escaper.Escape("\\."));
     }
+
+    [Fact]
+    public void Escape_NonReservedPrintableAscii_PassesThroughUnchanged()
+    {
+        // Negative parity (08 §6.2): ONLY the documented reserved set is escaped —
+        // every other printable ASCII char must survive verbatim, guarding against
+        // over-escaping that would corrupt legitimate copy.
+        const string reserved = "_*[]()~`>#+-=|{}.!\\";
+        var safe = new System.Text.StringBuilder();
+        for (var c = ' '; c <= '~'; c++)
+        {
+            if (!reserved.Contains(c))
+            {
+                safe.Append(c);
+            }
+        }
+
+        var input = safe.ToString();
+        Assert.Equal(input, MarkdownV2Escaper.Escape(input));
+    }
 }

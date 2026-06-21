@@ -260,6 +260,35 @@ public class DiscordNotificationChannelHandlerTests : IntegrationTestBase
         Assert.False(await PreferenceEnabledAsync(discordUserId));
     }
 
+    [Fact]
+    public async Task SendAsync_OverLongBody_TruncatesWithinLimit_KeepsPreferenceEnabled()
+    {
+        var discordUserId = "u10";
+        await SeedPreferenceAsync(discordUserId, isEnabled: true);
+
+        var bot = new FakeBotClient
+        {
+            CreateDmResponse = new DiscordDmChannel("chan-10"),
+            SendResponse = new DiscordSendMessageResult("msg-10"),
+        };
+        var sut = BuildHandler(bot, new InMemoryDiscordDmChannelCache());
+
+        // A 5000-char all-reserved body escapes to ~10000 — well over Discord's
+        // 2000 cap. Without the truncation guard this would 400 → permanent failure
+        // → auto-disable. The guard keeps the payload within the limit and the
+        // preference enabled.
+        await sut.SendAsync(
+            discordUserId,
+            new RenderedNotificationTemplate("Title", new string('*', 5000)),
+            CancellationToken.None);
+
+        Assert.Single(bot.SendCalls);
+        Assert.True(
+            bot.SendCalls[0].Content.Length <= 2000,
+            $"payload length {bot.SendCalls[0].Content.Length} exceeds Discord's 2000 limit");
+        Assert.True(await PreferenceEnabledAsync(discordUserId));
+    }
+
     private DiscordNotificationChannelHandler BuildHandler(
         IDiscordBotClient botClient, IDiscordDmChannelCache cache)
     {

@@ -4,6 +4,7 @@ using Skinora.Notifications.Application.Channels;
 using Skinora.Notifications.Application.Templates;
 using Skinora.Notifications.Domain.Entities;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Telegram;
 
@@ -108,12 +109,19 @@ public sealed class TelegramNotificationChannelHandler : INotificationChannelHan
         }
     }
 
-    private static string FormatMessage(RenderedNotificationTemplate rendered)
-    {
-        var title = MarkdownV2Escaper.Escape(rendered.Title);
-        var body = MarkdownV2Escaper.Escape(rendered.Body);
-        return $"*{title}*\n\n{body}";
-    }
+    // Telegram's sendMessage text limit (08 §6.2). Over-length content is
+    // truncated raw-then-escaped so a dangling trailing backslash (itself reserved
+    // → 400 "can't parse entities") can never reach the API.
+    private const int MaxMessageLength = 4096;
+
+    private static string FormatMessage(RenderedNotificationTemplate rendered) =>
+        BoldHeaderMessageComposer.Compose(
+            rendered.Title,
+            rendered.Body,
+            MaxMessageLength,
+            MarkdownV2Escaper.Escape,
+            boldOpen: "*",
+            boldClose: "*");
 
     private async Task DisablePreferenceAsync(
         string chatId,

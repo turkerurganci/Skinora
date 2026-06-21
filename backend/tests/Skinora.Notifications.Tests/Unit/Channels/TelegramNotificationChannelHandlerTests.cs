@@ -151,6 +151,31 @@ public class TelegramNotificationChannelHandlerTests : IntegrationTestBase
         Assert.True(await PreferenceEnabledAsync(chatId));
     }
 
+    [Fact]
+    public async Task SendAsync_OverLongBody_TruncatesWithinLimit_KeepsPreferenceEnabled()
+    {
+        var chatId = "66666";
+        await SeedPreferenceAsync(chatId, isEnabled: true);
+
+        var botClient = new FakeBotClient { Response = new TelegramSendMessageResult(1) };
+        var sut = BuildHandler(botClient);
+
+        // A 5000-char all-reserved body escapes to ~10000 — well over Telegram's
+        // 4096 cap. Without the truncation guard this would 400 → permanent failure
+        // → auto-disable. The guard keeps the payload within the limit and the
+        // preference enabled.
+        await sut.SendAsync(
+            chatId,
+            new RenderedNotificationTemplate("Title", new string('*', 5000)),
+            CancellationToken.None);
+
+        Assert.Single(botClient.SendCalls);
+        Assert.True(
+            botClient.SendCalls[0].Text.Length <= 4096,
+            $"payload length {botClient.SendCalls[0].Text.Length} exceeds Telegram's 4096 limit");
+        Assert.True(await PreferenceEnabledAsync(chatId));
+    }
+
     private TelegramNotificationChannelHandler BuildHandler(
         ITelegramBotClient botClient,
         ITelegramRateLimiter? rateLimiter = null)

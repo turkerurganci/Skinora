@@ -6,6 +6,7 @@ using Skinora.Notifications.Application.Templates;
 using Skinora.Notifications.Domain.Entities;
 using Skinora.Shared.Discord;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 
 namespace Skinora.Notifications.Infrastructure.Channels;
@@ -179,12 +180,19 @@ public sealed class DiscordNotificationChannelHandler : INotificationChannelHand
         return channel.ChannelId;
     }
 
-    private static string FormatMessage(RenderedNotificationTemplate rendered)
-    {
-        var title = DiscordMarkdownEscaper.Escape(rendered.Title);
-        var body = DiscordMarkdownEscaper.Escape(rendered.Body);
-        return $"**{title}**\n\n{body}";
-    }
+    // Discord's hard cap on message content (08 §6.2). Over-length content is
+    // truncated raw-then-escaped (never the escaped string) so a markdown escape
+    // pair is never split — otherwise the 400 would auto-disable the preference.
+    private const int MaxMessageLength = 2000;
+
+    private static string FormatMessage(RenderedNotificationTemplate rendered) =>
+        BoldHeaderMessageComposer.Compose(
+            rendered.Title,
+            rendered.Body,
+            MaxMessageLength,
+            DiscordMarkdownEscaper.Escape,
+            boldOpen: "**",
+            boldClose: "**");
 
     private async Task DisablePreferenceAsync(
         string discordUserId,
