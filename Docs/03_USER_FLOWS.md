@@ -247,7 +247,7 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 7. Item alıcının envanterine geçer
 8. **Sistem doğrulaması:** Teslim Steam üzerinden doğrulanır
 9. İşlem ITEM_DELIVERED durumuna geçer
-10. Alıcıya "Item'ınız teslim edildi" bildirimi gider (Not: "İşlem tamamlandı" bildirimi ancak payout başarılı olup COMPLETED'a geçtikten sonra gönderilir)
+10. Alıcıya item'ın teslim edildiği **gerçek-zamanlı durum güncellemesi** ile gösterilir — ITEM_DELIVERED için ayrı bir inbox/email bildirim tipi yoktur (02 §18.2 / 06 §2.13 bildirim kataloğunda tanımlı değil; WP19). İnbox "İşlem tamamlandı" bildirimi ancak payout başarılı olup COMPLETED'a geçtikten sonra gönderilir
 11. Satıcıya ödeme gönderilir (bkz. 2.4)
 
 ---
@@ -769,7 +769,7 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 | Item emanete alındı | "Item platforma ulaştı, ödeme yapabilirsin" |
 | Eksik/fazla/yanlış ödeme | İlgili uyarı mesajı |
 | Item gönderildi | "Item'ın gönderildi, trade offer'ı kabul et" |
-| Item teslim edildi | "Item'ınız teslim edildi" (ITEM_DELIVERED — payout henüz işleniyor) |
+| Item teslim edildi | Gerçek-zamanlı durum güncellemesi (ITEM_DELIVERED) ile gösterilir — ayrı inbox/email bildirimi yoktur; inbox "İşlem tamamlandı" bildirimi COMPLETED'da gönderilir (02 §18.2 / 06 §2.13; WP19) |
 | İşlem tamamlandı | "İşlem tamamlandı" (yalnızca COMPLETED state'inde gönderilir) |
 | Gecikmeli ödeme iadesi | "Gecikmeli ödemeniz iade edildi" |
 | Timeout yaklaşıyor (alıcı aksiyonu gereken) | "Ödeme/teslim süreniz dolmak üzere" |

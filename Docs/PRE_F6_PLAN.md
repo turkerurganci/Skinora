@@ -43,6 +43,7 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 | | WP16 | Monitoring/health probe + uptime heartbeat (MVP) | Outage recovery + gözlemlenebilirlik | T114 | M |
 | **P6 — Borç temizliği** | WP17 | Doc/spec/i18n mutabakat | Doküman↔kod hizalı | gate | M |
 | | WP18 | Test/CI sertleştirme (FE runner, prettier CI, npm audit) | Regresyon güvenliği | gate | M–L |
+| **+ T107 keşfi** | WP19 | Happy-path bildirim producer'ları | Kullanıcı happy-path'te bildirim alır | **T107** | M |
 
 **Bağımlılıklar:** WP1 her şeyin temeli (ilk). **WP5 → WP1 + WP2** (satıcı-lehine release WP1'in `Complete`→payout yolunu, alıcı-lehine refund WP2'nin `BUYER_REFUND`'ünü kullanır). WP4a accept-gate ucuz/yüksek-değer (erken). WP12'deki **OPEN_LINK 409 fix bağımsız** — P1'de WP1 ile inebilir. WP18 sürekli/son.
 **Migration taşıyan paketler:** **WP3** (SWEEP için type-bağımlı CHECK constraint), **WP8** (`Notification.FlagId` kolonu), **WP4a** (owner kararı: `price_deviation_threshold` seed default 1.0 → `UpdateData`; seed `HasData` model'in parçası olduğundan migration gerektirir), **WP5** (owner kararı: yapısal statü — `CK_Disputes_Resolved_ResolvedAt` + `CK_Transactions_Cancel` REFUNDED, iki CHECK recreate, seed yok) ve **WP10** (owner Q1=full-per-event: `BlockchainTransaction.EventIndex` kolonu + `(TxHash,EventIndex)` UNIQUE recreate + `CK_..._EventIndex`, şema-only) — gate-check yeni migration dosyası bekler.
@@ -192,6 +193,15 @@ F6 = uçtan uca E2E test fazı. Tarama, **happy-path'in kendisinin bugün tamaml
 **İş:** FE Vitest runner; CI `format:check`; i18n lint CI; dateTo end-of-day repo-geneli; TestContainers Redis/SQL + eksik endpoint testleri; sidecar npm-audit (20 transitive); paylaşılan LIKE-escape helper + no-direct-INSERT arch rule.
 **Efor:** M–L
 
+### WP19 — Happy-path bildirim producer'ları (T107 keşfi)
+> **Durum: ✓ Tamamlandı — bağımsız validator PASS (2026-06-21)** — branch `task/WP19-happy-path-notifications`, PR [#195](https://github.com/turkerurganci/Skinora/pull/195). **Plan dışı, T107 E2E keşfiyle bulundu** (owner onaylı, AskUserQuestion 2026-06-21). AC 1–6 ✓, 0 bloke-edici (alıcı eşlemesi 06 §2.13 ile birebir, 5/5 event gerçek publisher, COMPLETED 2+1, ITEM_DELIVERED bastırma; Release 0W/0E + unit 106/106 + integration 8/8). Rapor: [`TASK_REPORTS/WP19_REPORT.md`](TASK_REPORTS/WP19_REPORT.md).
+
+**Kanıt:** Happy-path NotificationType'ları (TRANSACTION_INVITE/BUYER_ACCEPTED/ITEM_ESCROWED/PAYMENT_RECEIVED/TRADE_OFFER_SENT_TO_BUYER/TRANSACTION_COMPLETED/SELLER_PAYMENT_SENT) yalnız enum + `EmailCategoryMap` + testlerde geçiyor; hiçbir prod kodu bunlar için `NotificationRequest` üretmiyor (grep = 0 producer). 4-dil resx şablonları (`NotificationTemplates.{resx,tr,es,zh}`) zaten mevcut — niyet vardı, yalnız producer wiring eksikti (WP1'in çağıransız payout'u ile birebir desen). Yalnız WP9 realtime `TransactionStatusChanged` badge push çalışıyor; inbox/email happy-path bildirimi hiç oluşmuyor → T107 AC2 + 03 §2–§3 "bildirim gider" karşılanamıyor.
+**İş:** Notifications assembly'sine 5 yeni `NotificationConsumerBase<TEvent>` consumer (mevcut event'leri tüket: `TransactionCreatedEvent`/`BuyerAcceptedEvent`/`PaymentReceivedEvent`/`TransactionStatusChangedEvent`/`PayoutCompletedEvent`; MediatR auto-scan); event'te olmayan alıcı/parametre için consumer-içi salt-okunur AppDbContext re-query (NotificationDispatcher deseni). Event zenginleştirme YOK (WP9 realtime consumer'larını korur), yeni event YOK.
+**Owner kararları (AskUserQuestion 2026-06-21):** (1) önce ayrı backend task → sonra T107; (2) **ITEM_DELIVERED bastır + 03 hizala** — bildirim tipi eklenmez (02 §18.2/06 §2.13 katalog yetkili; teslim realtime badge ile, inbox COMPLETED'da); 03 §3.5/§12.2 hizalandı; (3) **COMPLETED: satıcıya 2** (SELLER_PAYMENT_SENT + TRANSACTION_COMPLETED) **+ alıcıya 1** (TRANSACTION_COMPLETED).
+**Migration:** YOK (enum/şablon/şema değişmedi). **Yeni paket/config:** YOK.
+**Efor:** M · **Açar:** T107 (AC2 — bildirimler)
+
 ---
 
 ## 3. Kapsam Dışı — erteleme DEĞİL (MVP tanımı gereği)
@@ -216,7 +226,7 @@ Aşağıdakiler bu plana **dahil değil** çünkü MVP-dışı (10_MVP_SCOPE / 0
 
 ## 4. Büyüklük ve yaklaşım
 
-- **19 iş paketi** (WP1–WP18, WP4 = WP4a+WP4b), her biri sizin metodolojinizde ayrı **task** (plan→uygula→**ayrı chat** validate). Kabaca **30–45 geliştirme-günü** (validate chat'leri hariç). Bu, ürünün gerçek MVP-tamamlanması — F6 bunun üzerine sağlam test yazabilsin diye.
+- **20 iş paketi** (WP1–WP18 + **WP19** [T107 keşfi, 2026-06-21], WP4 = WP4a+WP4b), her biri sizin metodolojinizde ayrı **task** (plan→uygula→**ayrı chat** validate). Kabaca **30–45 geliştirme-günü** (validate chat'leri hariç). Bu, ürünün gerçek MVP-tamamlanması — F6 bunun üzerine sağlam test yazabilsin diye.
 - **Her task ayrı PR + CI yeşil + bağımsız validator** (mevcut disiplin; gate-check öncesi kalite).
 - **Migration taşıyan paketler:** WP3 (SWEEP CHECK constraint) · WP8 (`Notification.FlagId`) · WP4a (seed `price_deviation_threshold`=1.0 `UpdateData`, owner kararı) · WP5 (dispute/REFUNDED CHECK recreate) · WP10 (`BlockchainTransaction.EventIndex` + `(TxHash,EventIndex)` UNIQUE recreate, owner Q1=full-per-event) · WP12 (seed `timeout_warning_ratio`=0.75 `UpdateData`, owner #5 kararı — plan başta migration-taşımaz sayıyordu, WP4a emsali) — gate-check yeni migration dosyası bekler.
 - **Önerilen ilk hamle:** WP1 (escrow tamamlama) — ürünün tamamlanamadığı tek nokta; geri kalan her şey bunun üstüne oturur. OPEN_LINK 409 fix'i (WP12) ucuz/bağımsız, WP1 ile paralel inebilir.
