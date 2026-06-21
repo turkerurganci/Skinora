@@ -6,6 +6,7 @@
   "scripts": {
     "test": "playwright test",
     "test:smoke": "playwright test happy-path.smoke",
+    "test:ui": "playwright test happy-path.ui",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },

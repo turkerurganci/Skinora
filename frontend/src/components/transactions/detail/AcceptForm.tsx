@@ -75,6 +75,7 @@ export function AcceptForm({
         <p className="text-xs text-gray-600">{t("addressHint")}</p>
         <input
           id="refund-address"
+          data-testid="accept-refund-input"
           type="text"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
@@ -113,6 +114,7 @@ export function AcceptForm({
       )}
       <button
         type="submit"
+        data-testid="accept-submit"
         disabled={submitting || disabled}
         className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
       >
