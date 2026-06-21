@@ -261,7 +261,7 @@
 
 | Task | Ad | Durum | Doğrulama | Commit |
 |---|---|---|---|---|
-| T107 | E2E — Happy path (tam escrow akışı) | ⏳ Devam ediyor (PR-1/3 — altyapı) | — | `task/T107-e2e-fake-sidecar` |
+| T107 | E2E — Happy path (tam escrow akışı) | ⏳ Devam ediyor (PR-1/3 ✓ bağımsız validator PASS + merged; PR-2/3 sırada) | **PR-1/3 ✓ bağımsız validator PASS (ayrı chat 2026-06-21):** `sidecar-fake/` + `docker-compose.e2e.yml` altyapısı. Validator-firsthand: tsc0 / eslint0 / prettier-clean + vitest **7/7** + `docker build ./sidecar-fake` (node:20-alpine) exit0 + `compose config` exit0 + **zero prod source change**; HMAC + inbound-payload + outbound-yüzey/response seam'leri backend kaynağına karşı birebir doğrulandı. Task CI HEAD `1db3f2c` run `27911199769` success (Build/Unit/Integration/Contract/Migration/Docker/JS-test path-filter ile skipped — beklenen). **N1 (non-blocking):** `sidecar-fake` CI path filtresinde değil → lint/unit/docker hiç çalışmaz; PR-3 e2e job'unda CI'ya bağlanmalı. T107 task-bütünü AC'leri (akış/bildirim/UI-state) PR-2/3'te kanıtlanır. Rapor `T107_REPORT.md`. | [#196](https://github.com/turkerurganci/Skinora/pull/196) |
 | T108 | E2E — İptal senaryoları | ⬚ Bekliyor | — | — |
 | T109 | E2E — Timeout senaryoları | ⬚ Bekliyor | — | — |
 | T110 | E2E — Ödeme edge case'ler | ⬚ Bekliyor | — | — |

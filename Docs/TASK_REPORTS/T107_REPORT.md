@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 — altyapı) | **Tarih:** 2026-06-21
+**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 ✓ bağımsız validator PASS + merged; PR-2/3 sırada) | **Tarih:** 2026-06-21
 
 ---
 
@@ -98,6 +98,33 @@ PR-1 bu üç kriteri **mümkün kılar** (altyapı); kapanış PR-3'te kanıtlan
 - Branch: `task/T107-e2e-fake-sidecar`
 - PR: [#196](https://github.com/turkerurganci/Skinora/pull/196)
 - CI: ✓ PASS — run [27911099227](https://github.com/turkerurganci/Skinora/actions/runs/27911099227) (`af33445`). `1. Lint` + `CI Gate` success; Build/Unit/Integration/Contract/Migration/Docker/JS-test **skipped** (sidecar-fake + compose + docs `code` path filtresinde değil — mevcut joblar tetiklenmez). Beklenen davranış; mevcut prod hiçbir şey kırılmadı.
+
+## Doğrulama (Bağımsız Validator — ayrı chat 2026-06-21, kendi verdict'i rapor görülmeden)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** (kapsam: PR-1/3 = E2E altyapısı; T107 task-bütünü AC'leri PR-2/3'e ertelenir) |
+| Bulgu sayısı | 0 bloke-edici |
+| Düzeltme gerekli mi | Hayır |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 run success (`27907999068` / `27907999071` / `27904430722`) · Adım 0b repo memory T107 satırı mevcut · Adım 8a task CI HEAD `1db3f2c` run [`27911199769`](https://github.com/turkerurganci/Skinora/actions/runs/27911199769) success (Lint + CI Gate success; Build/Unit/Integration/Contract/Migration/Docker/JS-test **skipped** — `sidecar-fake/` + `docker-compose.e2e.yml` + docs `code` path filtresinde değil, beklenen).
+
+**Validator-firsthand kanıt (`sidecar-fake/`, Node 24 lokal + node:20-alpine Docker):**
+- `npm run build` (tsc) exit 0 · `npm run lint` (eslint) exit 0 · `npm run format:check` (prettier) clean · `npm test` (vitest) **7/7** (hmac 3 + ids 4).
+- `docker compose -f docker-compose.e2e.yml config` exit 0.
+- **`docker build ./sidecar-fake`** (rapor iddia etmiyordu — validator ekledi) **exit 0** → Dockerfile + committed lockfile node:20-alpine'da `npm ci` (builder + `--omit=dev` runtime) + `tsc` temiz; WP18 npm-skew lockfile riski **bu PR'da yok**.
+- **Zero prod source change:** `git diff --name-only origin/main...HEAD -- backend frontend sidecar-steam sidecar-blockchain infra nginx .github` = boş.
+
+**Seam'ler bağımsız teyit (fake ↔ backend kaynağı, repo notuna güvenmeden):**
+- HMAC: backend `WebhookSignatureMiddleware.ComputeSignature` = `HMACSHA256(secret, timestamp+nonce+body)` hex-lower, header `X-Signature`/`X-Timestamp`/`X-Nonce`, ±`ReplayWindowSeconds`, prefix-bazlı secret seçimi → fake `signWebhook` birebir.
+- Inbound payload: `trade_offer.accepted` (`TradeOfferEventData`), `payment.detected` (`PaymentDetectedData`), `payment.confirmed` (`PaymentConfirmedData`) alan adları + envelope `{event,timestamp,data}` camelCase birebir; detect/confirm aynı `txHash`+`eventIndex=0` → dedup anahtarı tutar.
+- Outbound: inventory `{items,totalCount,tradeableCount}` · trade-hold `{active,escrowEndDurationSeconds}` · trade-offers/send `{status,offerId,attempts}` (status="sent"→Sent) · transfer `{txHash}` · transfer/status `{txHash,blockNumber,contractRet,confirmations}` (25≥20+SUCCESS=finality) — backend HTTP client DTO'larıyla birebir; tüm path'ler eşleşir.
+
+**Mini güvenlik (validator):** secret'lar sabit test fixture (açıkça işaretli, gerçek secret yok) · `/__e2e/*` kontrol yüzeyi kasıtlı auth'suz + yalnız fake image'da (prod'a deploy edilmez) · SQL lookup parametreli (`sql.UniqueIdentifier`, injection yok) · yeni dep yalnız fake'te (express/pino mevcut aile, mssql pure-JS).
+
+**Non-blocking gözlem (N1 — CI coverage):** `sidecar-fake/` CI path filtresinde olmadığı için lint/format/unit/docker job'ları **hiç çalışmaz** (PR'ın "Lint SUCCESS"i fake'i lint etmedi). Owner "advisory E2E CI" kararıyla uyumlu; doğal yer **PR-3'ün e2e job'u** — orada `sidecar-fake` lint+unit (ve ideal olarak image build) CI'ya bağlanmalı ki 7 birim test + lint/format gelecekteki değişiklikleri kapısın. Rapor (Commit & PR §) bu skip davranışını şeffaf belgeliyor.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — rapordaki seam tablosu, test sonuçları (7/7 + compose config), zero-prod-change ve AC ertelemesi (3 kriter ⏳ → PR-3) validator bağımsız bulgularıyla birebir; rapor docker build iddia etmemiş (over-claim yok), validator ek olarak doğruladı.
 
 ## Notlar
 
