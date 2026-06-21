@@ -96,7 +96,7 @@ PR-1 bu üç kriteri **mümkün kılar** (altyapı); kapanış PR-3'te kanıtlan
 ## Commit & PR
 
 - Branch: `task/T107-e2e-fake-sidecar`
-- PR: (push sonrası doldurulacak)
+- PR: [#196](https://github.com/turkerurganci/Skinora/pull/196)
 - CI: (watch — sonuç eklenecek)
 
 ## Notlar
