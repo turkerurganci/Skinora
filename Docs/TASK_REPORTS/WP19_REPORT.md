@@ -102,9 +102,9 @@ Doc hizalama: 03 §3.5 adım 10 + §12.2 satır "Item teslim edildi" → ITEM_DE
 ## Commit & PR
 
 - Branch: `task/WP19-happy-path-notifications`
-- Commit: (eklenecek)
-- PR: (eklenecek)
-- CI: (eklenecek)
+- Commit: `1cbf21e` — WP19: Happy-path bildirim producer'ları (T107 keşfi)
+- PR: [#195](https://github.com/turkerurganci/Skinora/pull/195)
+- CI: izleniyor (sonuç eklenecek)
 
 ## Notlar
 
