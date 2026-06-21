@@ -104,7 +104,7 @@ Doc hizalama: 03 §3.5 adım 10 + §12.2 satır "Item teslim edildi" → ITEM_DE
 - Branch: `task/WP19-happy-path-notifications`
 - Commit: `1cbf21e` — WP19: Happy-path bildirim producer'ları (T107 keşfi)
 - PR: [#195](https://github.com/turkerurganci/Skinora/pull/195)
-- CI: izleniyor (sonuç eklenecek)
+- CI: ✓ PASS — run [27907174750](https://github.com/turkerurganci/Skinora/actions/runs/27907174750) (`bf8e2a5`) tüm job success (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate; `3b. JS test` skipped — FE'ye dokunulmadı)
 
 ## Notlar
 
