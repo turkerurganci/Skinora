@@ -1,0 +1,322 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Skinora.Notifications.Application.EventHandlers;
+using Skinora.Notifications.Infrastructure.Persistence;
+using Skinora.Notifications.Tests.TestSupport;
+using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Persistence;
+using Skinora.Shared.Tests.Integration;
+using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Infrastructure.Persistence;
+using Skinora.Users.Domain.Entities;
+using Skinora.Users.Infrastructure.Persistence;
+
+namespace Skinora.Notifications.Tests.Integration;
+
+/// <summary>
+/// Integration coverage for the WP19 happy-path notification consumers that
+/// re-query the transaction/user for recipient + parameters
+/// (<see cref="BuyerAcceptedNotificationConsumer"/>,
+/// <see cref="PaymentReceivedNotificationConsumer"/>,
+/// <see cref="EscrowedAndTradeOfferNotificationConsumer"/>,
+/// <see cref="PayoutCompletedNotificationConsumer"/>). A
+/// <see cref="RecordingNotificationDispatcher"/> captures the emitted
+/// <see cref="Skinora.Notifications.Application.Notifications.NotificationRequest"/>s
+/// while the consumer reads against a real SQL Server, so recipient/type/params
+/// are asserted directly (template rendering is covered by
+/// <see cref="NotificationDispatcherTests"/>).
+/// </summary>
+public class HappyPathNotificationConsumerTests : IntegrationTestBase
+{
+    static HappyPathNotificationConsumerTests()
+    {
+        UsersModuleDbRegistration.RegisterUsersModule();
+        TransactionsModuleDbRegistration.RegisterTransactionsModule();
+        NotificationsModuleDbRegistration.RegisterNotificationsModule();
+    }
+
+    private const string PaymentAddressValue = "TPaymentAddr0000000000000000000001";
+
+    private User _seller = null!;
+    private User _buyer = null!;
+
+    protected override async Task SeedAsync(AppDbContext context)
+    {
+        _seller = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198000000301",
+            SteamDisplayName = "SellerTester",
+            PreferredLanguage = "en",
+        };
+        _buyer = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198000000302",
+            SteamDisplayName = "BuyerTester",
+            PreferredLanguage = "en",
+        };
+        context.Set<User>().AddRange(_seller, _buyer);
+        await context.SaveChangesAsync();
+    }
+
+    private async Task<Transaction> SeedTransactionAsync(
+        TransactionStatus status,
+        bool withBuyer = true,
+        bool withPaymentAddress = false)
+    {
+        var tx = new Transaction
+        {
+            Id = Guid.NewGuid(),
+            Status = status,
+            SellerId = _seller.Id,
+            BuyerId = withBuyer ? _buyer.Id : null,
+            BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
+            TargetBuyerSteamId = _buyer.SteamId,
+            ItemAssetId = "12345678901",
+            ItemClassId = "98765432101",
+            ItemName = "AK-47 | Redline",
+            StablecoinType = StablecoinType.USDT,
+            Price = 100.000000m,
+            CommissionRate = 0.0200m,
+            CommissionAmount = 2.000000m,
+            TotalAmount = 102.000000m,
+            SellerPayoutAddress = "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL",
+            PaymentTimeoutMinutes = 60,
+        };
+        Context.Set<Transaction>().Add(tx);
+
+        if (withPaymentAddress)
+        {
+            Context.Set<PaymentAddress>().Add(new PaymentAddress
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = tx.Id,
+                Address = PaymentAddressValue,
+                HdWalletIndex = 1,
+                ExpectedAmount = 102.000000m,
+                ExpectedToken = StablecoinType.USDT,
+                MonitoringStatus = MonitoringStatus.ACTIVE,
+            });
+        }
+
+        await Context.SaveChangesAsync();
+        return tx;
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task BuyerAccepted_NotifiesSeller_WithBuyerName()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new BuyerAcceptedNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<BuyerAcceptedNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new BuyerAcceptedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                SellerId: _seller.Id,
+                BuyerId: _buyer.Id,
+                ItemName: tx.ItemName,
+                AcceptedAt: DateTime.UtcNow,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(_seller.Id, request.UserId);
+        Assert.Equal(NotificationType.BUYER_ACCEPTED, request.Type);
+        Assert.Equal(tx.Id, request.TransactionId);
+        Assert.Equal("BuyerTester", request.Parameters["BuyerName"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task PaymentReceived_NotifiesSeller_WithAmount()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new PaymentReceivedNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<PaymentReceivedNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new PaymentReceivedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                Amount: 102m,
+                Stablecoin: StablecoinType.USDT,
+                TxHash: "0xpaymentconfirmed",
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(_seller.Id, request.UserId);
+        Assert.Equal(NotificationType.PAYMENT_RECEIVED, request.Type);
+        Assert.Equal(tx.Id, request.TransactionId);
+        Assert.Equal("102", request.Parameters["Amount"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task StatusChanged_ItemEscrowed_NotifiesBuyer_WithAmountAndAddress()
+    {
+        var tx = await SeedTransactionAsync(
+            TransactionStatus.ITEM_ESCROWED, withPaymentAddress: true);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                FromStatus: TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
+                ToStatus: TransactionStatus.ITEM_ESCROWED,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(_buyer.Id, request.UserId);
+        Assert.Equal(NotificationType.ITEM_ESCROWED, request.Type);
+        Assert.Equal(tx.Id, request.TransactionId);
+        Assert.Equal("102", request.Parameters["Amount"]);
+        Assert.Equal(PaymentAddressValue, request.Parameters["PaymentAddress"]);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task StatusChanged_TradeOfferSentToBuyer_NotifiesBuyer_NoParams()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                FromStatus: TransactionStatus.PAYMENT_RECEIVED,
+                ToStatus: TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        var request = Assert.Single(dispatcher.Requests);
+        Assert.Equal(_buyer.Id, request.UserId);
+        Assert.Equal(NotificationType.TRADE_OFFER_SENT_TO_BUYER, request.Type);
+        Assert.Equal(tx.Id, request.TransactionId);
+        Assert.Empty(request.Parameters);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task StatusChanged_UnrelatedTransition_EmitsNothing()
+    {
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+
+        // SELLER leg (ACCEPTED → TRADE_OFFER_SENT_TO_SELLER) is not a buyer
+        // notification; the consumer returns before any DB read.
+        await sut.Handle(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: Guid.NewGuid(),
+                FromStatus: TransactionStatus.ACCEPTED,
+                ToStatus: TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.Empty(dispatcher.Requests);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task PayoutCompleted_NotifiesSellerTwice_AndBuyerOnce()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.COMPLETED);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new PayoutCompletedNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<PayoutCompletedNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new PayoutCompletedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                PayoutTxHash: "0xpayout",
+                NetAmount: 99.7m,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.Equal(3, dispatcher.Requests.Count);
+
+        var sellerPayout = Assert.Single(
+            dispatcher.Requests,
+            r => r.Type == NotificationType.SELLER_PAYMENT_SENT);
+        Assert.Equal(_seller.Id, sellerPayout.UserId);
+        Assert.Equal("99.7", sellerPayout.Parameters["Amount"]);
+
+        var completed = dispatcher.Requests
+            .Where(r => r.Type == NotificationType.TRANSACTION_COMPLETED)
+            .ToList();
+        Assert.Equal(2, completed.Count);
+        Assert.Contains(completed, r => r.UserId == _seller.Id);
+        Assert.Contains(completed, r => r.UserId == _buyer.Id);
+        Assert.All(completed, r => Assert.Equal("AK-47 | Redline", r.Parameters["ItemName"]));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task PayoutCompleted_OpenLinkNoBuyer_NotifiesSellerOnly()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.COMPLETED, withBuyer: false);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var sut = new PayoutCompletedNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), Context,
+            NullLogger<PayoutCompletedNotificationConsumer>.Instance);
+
+        await sut.Handle(
+            new PayoutCompletedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: tx.Id,
+                PayoutTxHash: "0xpayout",
+                NetAmount: 99.7m,
+                OccurredAt: DateTime.UtcNow),
+            CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.All(dispatcher.Requests, r => Assert.Equal(_seller.Id, r.UserId));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task PayoutCompleted_Idempotent_WhenEventAlreadyProcessed()
+    {
+        var tx = await SeedTransactionAsync(TransactionStatus.COMPLETED);
+        var dispatcher = new RecordingNotificationDispatcher();
+        var processed = new InMemoryProcessedEventStore();
+        var sut = new PayoutCompletedNotificationConsumer(
+            dispatcher, processed, Context,
+            NullLogger<PayoutCompletedNotificationConsumer>.Instance);
+
+        var domainEvent = new PayoutCompletedEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: tx.Id,
+            PayoutTxHash: "0xpayout",
+            NetAmount: 99.7m,
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+        Assert.Equal(3, dispatcher.Requests.Count);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+        Assert.Equal(3, dispatcher.Requests.Count);
+    }
+}
