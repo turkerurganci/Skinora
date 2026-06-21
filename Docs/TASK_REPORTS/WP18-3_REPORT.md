@@ -67,7 +67,7 @@ Tam backend suite + Notifications integration → **CI authoritative**.
 - Branch: `task/WP18-3-backend-tests-correctness`
 - Commits: filterbar · SqlLikeEscaper+arch · truncation guard · AdminWallets/suspend · (+docs)
 - PR: [#193](https://github.com/turkerurganci/Skinora/pull/193)
-- CI: ⏳ izleniyor (push sonrası)
+- CI: ✓ PASS — run [`27901346951`](https://github.com/turkerurganci/Skinora/actions/runs/27901346951) (`8926c86`) **tüm job success** (Lint/Build/Unit/**Integration** [yeni AdminWallets + handler over-length SQL]/Contract/**3b. JS test** [date.test]/Migration dry-run/Docker/CI Gate)
 
 ## Notlar
 
