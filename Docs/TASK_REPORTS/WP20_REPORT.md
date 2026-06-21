@@ -73,7 +73,7 @@ T107 (E2E Happy path) PR-3 bağımsız validator'ı **S1 sapması** keşfetti: `
 - Branch: `task/WP20-canaccept-fix`
 - Commit: `b5ca885` — WP20: canAccept fix + EMERGENCY_HOLD detay projeksiyonu
 - PR: [#199](https://github.com/turkerurganci/Skinora/pull/199)
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — HEAD `d0c9347` run [`27919953501`](https://github.com/turkerurganci/Skinora/actions/runs/27919953501) tüm job success (Lint/Build/Unit/Integration/Contract/Migration dry-run/Docker×2/JS-test/CI Gate). Önceki `b5ca885` run concurrency ile cancelled (supersede — son tamamlanan run authoritative).
 
 ## Known Limitations / Follow-up
 
