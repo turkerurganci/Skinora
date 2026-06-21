@@ -1,0 +1,199 @@
+# =============================================================================
+# Skinora — E2E stack (T107). SELF-CONTAINED — run standalone, NOT layered over
+# docker-compose.yml:
+#   docker compose -f docker-compose.e2e.yml up -d --build --wait
+#
+# Differences from the production stack:
+#   * Both real sidecars are replaced by a single `skinora-fake-sidecar`
+#     container, aliased to BOTH sidecar hostnames so the backend reaches the
+#     Steam surface on :5100 and the blockchain surface on :5200.
+#   * Steam OAuth + on-chain finality are simulated at the backend webhook/client
+#     seam (no real Steam account / Tron node needed).
+#   * Observability (loki/prometheus/grafana/uptime-kuma) is omitted for speed.
+#
+# Schema + happy-path seed (users, bot) are applied by the Playwright harness
+# (T107 PR-2) AFTER the backend reports healthy.
+#
+# All secrets below are FIXED TEST VALUES — they are NOT sensitive and exist so
+# the harness can mint matching JWTs / sign webhooks. NEVER reuse in production.
+# =============================================================================
+services:
+  skinora-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: skinora-e2e-db
+    ports:
+      - "${E2E_DB_PORT:-14333}:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=E2e!Strong!Pass!2345
+      - MSSQL_PID=Developer
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'E2e!Strong!Pass!2345' -Q 'SELECT 1' -C || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - skinora-e2e
+
+  skinora-redis:
+    image: redis:7-alpine
+    container_name: skinora-e2e-redis
+    command: redis-server --requirepass e2e-redis-pass-123 --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "e2e-redis-pass-123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - skinora-e2e
+
+  skinora-fake-sidecar:
+    build:
+      context: ./sidecar-fake
+      dockerfile: Dockerfile
+    container_name: skinora-e2e-fake-sidecar
+    ports:
+      - "${E2E_STEAM_PORT:-5100}:5100"
+      - "${E2E_BLOCKCHAIN_PORT:-5200}:5200"
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - BACKEND_URL=http://skinora-backend:5000
+      # Match the backend's Webhook__*SharedSecret values below.
+      - STEAM_WEBHOOK_SECRET=e2e-steam-webhook-secret-0123456789-abcdef
+      - BLOCKCHAIN_WEBHOOK_SECRET=e2e-blockchain-webhook-secret-0123456789-ab
+      # INTERNAL_KEY intentionally unset → fake accepts backend calls without
+      # X-Internal-Key (avoids a key mismatch failing the surface).
+      - DB_SERVER=skinora-db
+      - DB_PORT_INTERNAL=1433
+      - DB_USER=sa
+      - DB_PASSWORD=E2e!Strong!Pass!2345
+      - DB_NAME=Skinora
+      - FAKE_BOT_STEAM_ID=76561190000000001
+      - FAKE_TRADE_ACCEPT_DELAY_MS=2000
+    depends_on:
+      skinora-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5100/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      skinora-e2e:
+        # The backend's SteamSidecar/BlockchainSidecar BaseUrl host names resolve
+        # to this single container.
+        aliases:
+          - skinora-steam-sidecar
+          - skinora-blockchain-sidecar
+
+  skinora-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: skinora-e2e-backend
+    ports:
+      - "${E2E_BACKEND_PORT:-5000}:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=skinora-db,1433;Database=Skinora;User Id=sa;Password=E2e!Strong!Pass!2345;TrustServerCertificate=True;
+      - Redis__ConnectionString=skinora-redis:6379,password=e2e-redis-pass-123
+      - Jwt__Secret=e2e-jwt-secret-do-not-use-in-prod-0123456789
+      - Jwt__Issuer=skinora
+      - Jwt__Audience=skinora-client
+      - Jwt__AccessTokenExpiryMinutes=60
+      - Webhook__SteamSharedSecret=e2e-steam-webhook-secret-0123456789-abcdef
+      - Webhook__BlockchainSharedSecret=e2e-blockchain-webhook-secret-0123456789-ab
+      - SteamSidecar__BaseUrl=http://skinora-steam-sidecar:5100
+      - SteamSidecar__InternalKey=e2e-internal-key-0123456789
+      - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
+      - BlockchainSidecar__InternalKey=e2e-internal-key-0123456789
+      # 19 mandatory SystemSettings (SettingsBootstrapService fail-fast). Short
+      # timeouts keep the happy path quick; thresholds permissive so the seeded
+      # transaction is not flagged.
+      - SKINORA_SETTING_ACCEPT_TIMEOUT_MINUTES=60
+      - SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES=60
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES=15
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES=60
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES=30
+      - SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES=60
+      - SKINORA_SETTING_MIN_TRANSACTION_AMOUNT=1.0
+      - SKINORA_SETTING_MAX_TRANSACTION_AMOUNT=10000.0
+      - SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS=5
+      - SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT=3
+      - SKINORA_SETTING_NEW_ACCOUNT_PERIOD_DAYS=14
+      - SKINORA_SETTING_CANCEL_LIMIT_COUNT=3
+      - SKINORA_SETTING_CANCEL_LIMIT_PERIOD_HOURS=24
+      - SKINORA_SETTING_CANCEL_COOLDOWN_HOURS=1
+      - SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD=5000.0
+      - SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD=10
+      - SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS=24
+      - SKINORA_SETTING_HOT_WALLET_LIMIT=100000.0
+      - SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD=1000.0
+    depends_on:
+      skinora-db:
+        condition: service_healthy
+      skinora-redis:
+        condition: service_healthy
+      skinora-fake-sidecar:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    networks:
+      - skinora-e2e
+
+  skinora-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: skinora-e2e-frontend
+    # NEXT_PUBLIC_API_URL / _SIGNALR_URL are left at their build-time defaults
+    # (/api/v1, /hubs) so the browser uses same-origin relative paths proxied by
+    # nginx — no rebuild or CORS needed.
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      skinora-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+    networks:
+      - skinora-e2e
+
+  skinora-reverse-proxy:
+    image: nginx:alpine
+    container_name: skinora-e2e-nginx
+    # Playwright targets http://localhost:${E2E_HTTP_PORT}. nginx serves the
+    # frontend and proxies /api + /hubs (WebSocket) + /health to the backend.
+    ports:
+      - "${E2E_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      skinora-backend:
+        condition: service_healthy
+      skinora-frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/nginx-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - skinora-e2e
+
+networks:
+  skinora-e2e:
+    driver: bridge
