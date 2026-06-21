@@ -1,7 +1,21 @@
 import { test, expect } from '@playwright/test';
-import { seedHappyPath, getNotificationTypes, closePool, seed } from '../src/db';
+import { seedHappyPath, pollNotificationTypes, closePool, seed } from '../src/db';
 import { mintAccessToken } from '../src/jwt';
 import * as api from '../src/api';
+
+// WP19 inbox notifications expected across the happy path (one per producer):
+// invite → accept → escrow → payment → delivery-offer → payout. COMPLETED fans
+// out to BOTH parties. ITEM_DELIVERED is realtime-only (WP19 suppression) and
+// must NOT appear as an inbox notification.
+const EXPECTED_NOTIFICATIONS = [
+  'TRANSACTION_INVITE',
+  'BUYER_ACCEPTED',
+  'ITEM_ESCROWED',
+  'PAYMENT_RECEIVED',
+  'TRADE_OFFER_SENT_TO_BUYER',
+  'SELLER_PAYMENT_SENT',
+  'TRANSACTION_COMPLETED',
+];
 
 /**
  * T107 happy-path smoke — drives the full escrow flow at the API level against
@@ -54,9 +68,20 @@ test('happy path: CREATED → COMPLETED with WP19 notifications', async () => {
   // 6. Seller payout pipeline (queue → dispatch → confirm) → COMPLETED.
   await api.pollStatus(buyerToken, txId, 'COMPLETED', { timeoutMs: 240_000 });
 
-  // 7. WP19 notifications produced for the parties.
-  const notifTypes = await getNotificationTypes();
-  expect(notifTypes, `notifications: ${JSON.stringify(notifTypes)}`).toContain(
-    'TRANSACTION_COMPLETED',
-  );
+  // 7. WP19 notifications: every producer fired, COMPLETED fanned out to both
+  //    parties, ITEM_DELIVERED suppressed (AC2 — all notifications correct).
+  const notifTypes = await pollNotificationTypes(EXPECTED_NOTIFICATIONS, { timeoutMs: 30_000 });
+  for (const type of EXPECTED_NOTIFICATIONS) {
+    expect(notifTypes, `missing ${type}: ${JSON.stringify(notifTypes)}`).toContain(type);
+  }
+  // COMPLETED is written for seller + buyer (WP19: 2 rows).
+  expect(
+    notifTypes.filter((t) => t === 'TRANSACTION_COMPLETED').length,
+    `COMPLETED fan-out: ${JSON.stringify(notifTypes)}`,
+  ).toBe(2);
+  // Delivery emits a realtime badge only — no inbox notification.
+  expect(
+    notifTypes,
+    `ITEM_DELIVERED must be suppressed: ${JSON.stringify(notifTypes)}`,
+  ).not.toContain('ITEM_DELIVERED');
 });

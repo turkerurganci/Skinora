@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 ✓ merged + validator PASS; PR-2/3 ✓ **smoke yerel GREEN — tam akış + 7 bildirim**; PR-3 sırada) | **Tarih:** 2026-06-21
+**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 ✓ merged + validator PASS; PR-2/3 ✓ **bağımsız validator: FAIL→fix→PASS — committed-default `:8080` smoke GREEN, tam akış + 7 bildirim guard'lı**; PR-3 sırada) | **Tarih:** 2026-06-21
 
 ---
 
@@ -139,10 +139,10 @@ PR-1 (fake) + PR-2 (harness/smoke) AC1+AC2'yi API düzeyinde **kanıtladı**; AC
 - **Fake düzeltmeleri (`sidecar-fake/src/routes/steam.ts`):**
   1. **`trade_offer.sent` → `trade_offer.accepted` sıralı** — backend `HandleSentAsync` TradeOffer satırını (offerId, bot=DisplayName) yaratır; `HandleAcceptedAsync` satırı offerId ile bulur. Yalnız `accepted` emit etmek ITEM_ESCROWED'a ilerletmiyordu.
   2. **`direction` passthrough** — webhook `direction` = dispatch isteğinin token'ı (`SELLER_TO_BOT`/`BOT_TO_BUYER`), "escrow"/"delivery" **değil** (backend `ParseDirection` `SidecarDirection*` sabitleri = SELLER_TO_BOT/BOT_TO_BUYER).
-- **Compose düzeltmesi (`docker-compose.e2e.yml`):** frontend healthcheck `wget` → node `fetch` (node:20-slim'de wget/curl yok) — full stack + nginx ayağa kalksın (PR-3).
+- **Compose düzeltmesi (`docker-compose.e2e.yml`):** frontend healthcheck `wget` → node `fetch` (node:20-slim'de wget/curl yok) **+ path `/health` → `/api/health`** (Next App Router route'u; düz `/health` 404 → container unhealthy → nginx bloklanırdı). Düzeltme sonrası full stack (frontend + nginx dahil) healthy ayağa kalkar; **validator F1 ile yakalandı ve bu PR'da kapatıldı** (aşağı).
 
 ### Çalıştırma mekanizması (doğrulandı)
-Backend **auto-migrate etmez** → host'tan `dotnet ef database update` (`Server=localhost,14333`) ile şema; sonra `compose up`. Smoke backend'i doğrudan (`:5000`) hedefler (UI/nginx PR-3). Hangfire recurring job'ları (her ~1 dk) job-driven 3 geçişi sürer.
+Backend **auto-migrate etmez** (N3, PR-1'den miras — `compose up --wait` tek-satırı fresh DB'de takılır) → önce `compose up -d skinora-db`, db healthy olunca host'tan `dotnet ef database update --project src/Skinora.Shared --startup-project src/Skinora.API` (`Server=localhost,14333`) ile şema, **sonra** `compose up -d` (kalan servisler). **F1 düzeltmesi sonrası full stack (frontend + nginx dahil) healthy ayağa kalkar** ve smoke **committed default `:8080`** (nginx origin) üzerinden koşar — override gerekmez. Hangfire recurring job'ları (her ~1 dk) job-driven 3 geçişi sürer (tam akış ~5 dk).
 
 ### Smoke sonucu — ✅ GREEN (yerel, gerçek docker stack)
 `npx playwright test` → **1 passed (4.8m)**. Geçiş zinciri (DB'den izlendi): CREATED → ACCEPTED → TRADE_OFFER_SENT_TO_SELLER → ITEM_ESCROWED → PAYMENT_RECEIVED → (TRADE_OFFER_SENT_TO_BUYER) → ITEM_DELIVERED → **COMPLETED**.
@@ -161,6 +161,8 @@ Backend **auto-migrate etmez** → host'tan `dotnet ef database update` (`Server
 
 ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLETED 2+1 (owner kararı) doğrulandı. Bu, T107 AC1 (tam akış) + AC2 (tüm bildirimler) + WP19'u uçtan uca kanıtlar.
 
+**F2 düzeltmesi (validator):** smoke'un bildirim assert'i artık **regresyon guard'ı** — 7 tipin hepsi `toContain` + `TRANSACTION_COMPLETED` adedi `=2` + `ITEM_DELIVERED` `not.toContain` assert edilir (önceki sürüm yalnız `TRANSACTION_COMPLETED` bakıyordu = AC2 over-claim). `pollNotificationTypes` ile kısa poll eklendi (COMPLETED-flip / notification-commit race'ine karşı = N1).
+
 ### Iterasyon (smoke yeşile giderken bulunan + düzeltilen)
 1. Tablo adı `ItemPriceCache` → **`ItemPriceCaches`** (EF çoğul). 2. `paymentTimeoutHours 24` → **1** (e2e max=60 dk). 3. Bot `Status` **nvarchar** ("ACTIVE", `0` değil) → bot seçilmiyordu. 4. Webhook `direction` "escrow" → **SELLER_TO_BOT** (yukarıda).
 
@@ -168,12 +170,32 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 - e2e: `tsc --noEmit` ✓, `eslint .` ✓ 0. Fake (düzeltme sonrası): build ✓, lint ✓ 0, unit **7/7**. Smoke **1/1 PASS**. Stack `compose up --build --wait` (db/redis/fake/backend healthy) + `dotnet ef database update` ✓.
 
 ### Known (PR-3)
-- AC3 UI assert (FE `data-testid` + Playwright browser); CI e2e job (advisory) + `sidecar-fake`/`e2e` CI lint/build/test wiring (validator N1); frontend healthcheck düzeltmesi PR-3 full-stack run'da teyit.
+- AC3 UI assert (FE `data-testid` + Playwright browser); CI e2e job (advisory) + `sidecar-fake`/`e2e` CI lint/build/test wiring (validator N1, N2). Frontend healthcheck + full-stack (frontend+nginx) ayağa kalkış **PR-2'de validator tarafından teyit edildi** (F1 fix). N3 (compose header'ın "schema harness uygular" yanılgısı + `up --wait` migration prereq'i) PR-1'den miras, non-blocking — PR-3 CI e2e job'unda host-migration adımı eklenmeli.
 
 ### Commit & PR (PR-2)
 - Branch: `task/T107-e2e-harness` · Commit: `71e5d69`
 - PR: [#197](https://github.com/turkerurganci/Skinora/pull/197)
 - CI: ✓ PASS — run [27913553177](https://github.com/turkerurganci/Skinora/actions/runs/27913553177). `1. Lint` + `CI Gate` success; Build/Unit/Integration/Contract/Migration/Docker/JS-test **skipped** (`e2e/` + `sidecar-fake/` + compose + docs `code` path filtresinde değil — PR-1 deseni). E2E smoke CI'da çalışmaz (advisory job PR-3'te); bu PR'da smoke **yerel** kanıt.
+
+### Doğrulama (Bağımsız Validator — PR-2, ayrı chat 2026-06-21, kendi verdict'i rapor görülmeden)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **FAIL → fix → ✓ PASS** (validator gerçek docker stack'i kurup smoke'u bizzat koştu) |
+| Bulgu sayısı | 1 bloke-edici (F1) + 1 minor (F2), **ikisi de bu PR'da kapatıldı** |
+| Düzeltme gerekli mi | Yapıldı (owner kararı: F1+F2'yi PR-2'de düzelt + re-validate) |
+
+**Kapılar:** Adım -1 temiz · Adım 0 main son-3 success (`27912352893`/`27912352878`/`27907999068`) · Adım 0b memory mevcut · Adım 8a task CI run `27913553177`/`27913630332` success (ama **vacuous** — `e2e/`+`sidecar-fake/` path-filtre dışı; N2).
+
+**Validator-firsthand reprodüksiyon (gerçek docker stack, Docker 29 + .NET 9 + Node 24):** `compose build` (5 image) exit0 → `compose up -d skinora-db` → host `dotnet ef database update` (`:14333`) → `compose up -d` → smoke. İlk turda DB'den canlı izlendi `…→ITEM_DELIVERED→COMPLETED`; `Notifications` tablosu **tam 7 tip** + COMPLETED×2 + ITEM_DELIVERED yok = rapor matrisi birebir. e2e tsc0/eslint0/prettier-clean; fake tsc0/eslint0/vitest **7/7**.
+
+**Bulgular:**
+- **F1 (S3, bloke-edici → kapatıldı):** committed `config.ts` default `baseUrl :8080` (nginx) ama frontend healthcheck'i yanlış path (`/health` 404; gerçek route `/api/health` 200) prob ediyordu → frontend **unhealthy** → nginx (`depends_on: frontend healthy`) **hiç başlamıyor** (state=`created`) → committed-default smoke **erişilemez** (`:8080` http=000); "GREEN" yalnız belgesiz `:5000` override ile alınmıştı. Validator nginx'i `--no-deps` zorla başlatınca `:8080` tam çalıştı (tek engel healthcheck path'i). **Düzeltme:** `docker-compose.e2e.yml` frontend healthcheck `/health` → `/api/health`. **Re-validation:** `compose up -d` sonrası frontend **healthy** + nginx **healthy**; smoke **committed default `:8080` (override yok) → 1 passed (5.1m)**.
+- **F2 (S1, minor → kapatıldı):** committed smoke yalnız `toContain('TRANSACTION_COMPLETED')` (1/7) assert ediyordu; rapor AC2'yi "tüm bildirimler kanıtlandı" sunuyordu (davranış doğru ama regresyon guard'ı yok). **Düzeltme:** 7 tip `toContain` + COMPLETED `=2` + `ITEM_DELIVERED` `not.toContain` + `pollNotificationTypes` (N1 race). Re-validation run'ında **güçlendirilmiş assert'ler geçti**.
+
+**Çürütülen / non-blocking (validator + 6-ajan refute-default workflow):** JWT claim/iss/aud backend `AccessTokenGenerator`+`AuthModule` ile birebir · fake fix'leri (sent→accepted sıralı, direction passthrough) backend `HandleSentAsync`/`ParseDirection`'a karşı doğru+gerekli · seed NOT-NULL kolonları kapsar · AC1 kısa-devre yok (ayrı exact-match poll'lar) · zero prod source change · güvenlik temiz (test-fixture secret, parametreli seed, `/__e2e/*` yalnız fake). **N2** task CI vacuous (path-filtre), advisory e2e job PR-3'te. **N3** compose header schema-by-harness yanılgısı PR-1'den miras (non-blocking, host-migration prereq).
+
+**Yapım raporu karşılaştırması:** Seam analizi + WP19 matrisi + zero-prod-change birebir doğru. İki uyuşmazlık F1 (healthcheck düzeltmesi amacına ulaşmıyordu) + F2 (AC2 test kapsamı over-claim) bu PR'da kapatıldı; davranışsal iddialar (AC1+AC2) validator tarafından firsthand kanıtlandı.
 
 ## Notlar
 

@@ -119,7 +119,9 @@ export async function seedHappyPath(): Promise<typeof seed> {
   return seed;
 }
 
-/** Notification types produced for the seeded parties (WP19 assertion). */
+/** Notification types produced for the seeded parties (WP19 assertion).
+ *  Includes duplicates (no DISTINCT) so callers can assert per-party fan-out
+ *  (e.g. TRANSACTION_COMPLETED is written for seller + buyer). */
 export async function getNotificationTypes(): Promise<string[]> {
   const p = await getPool();
   const result = await p
@@ -128,6 +130,25 @@ export async function getNotificationTypes(): Promise<string[]> {
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .query('SELECT Type FROM Notifications WHERE UserId IN (@s,@b)');
   return result.recordset.map((row) => String(row.Type));
+}
+
+/** Poll notifications until every `expected` type is present (or timeout). The
+ *  COMPLETED status flip (PayoutCompletedConsumer's own SaveChanges) can commit
+ *  a few ms before the notification rows (deferred to the outbox unit-of-work),
+ *  so a single read right after COMPLETED could race. Returns the last-seen set. */
+export async function pollNotificationTypes(
+  expected: string[],
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<string[]> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 30_000);
+  const interval = opts?.intervalMs ?? 2_000;
+  let types: string[] = [];
+  while (Date.now() < deadline) {
+    types = await getNotificationTypes();
+    if (expected.every((t) => types.includes(t))) return types;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return types;
 }
 
 export async function closePool(): Promise<void> {

@@ -163,13 +163,15 @@ services:
       skinora-backend:
         condition: service_healthy
     # node:20-slim has neither wget nor curl — probe with node's global fetch.
+    # The frontend's health route is /api/health (Next App Router); plain /health
+    # 404s, which would keep this container unhealthy and block nginx from starting.
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 10s
