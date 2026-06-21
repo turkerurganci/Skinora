@@ -1,6 +1,6 @@
 # WP19 — Happy-path bildirim producer'ları
 
-**Faz:** Pre-F6 (F6 öncesi MVP borç kapatma) | **Durum:** ⏳ Devam ediyor (bağımsız validator bekliyor) | **Tarih:** 2026-06-21
+**Faz:** Pre-F6 (F6 öncesi MVP borç kapatma) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-21
 
 ---
 
@@ -66,7 +66,7 @@ Doc hizalama: 03 §3.5 adım 10 + §12.2 satır "Item teslim edildi" → ITEM_DE
 |---|---|---|
 | Unit (Notifications) | ✓ 106/106 | `dotnet test Skinora.Notifications.Tests --filter "Category!=Integration"` (+3 TransactionInvite) |
 | Unit (solution) | ✓ 0 fail | `dotnet test Skinora.sln --filter "Category!=Integration"` — Transactions 782 / API 528 / Platform 133 / Notifications 106 / Auth 83 / Steam 82 / Fraud 79 / Disputes 37 / Users 22 (regresyon yok) |
-| Integration (yeni) | ⏳ CI | `HappyPathNotificationConsumerTests` (8 test) — SQL Server gerekli, CI authoritative |
+| Integration (yeni) | ✓ 8/8 | `HappyPathNotificationConsumerTests` — validator lokal gerçek SQL Server (TestContainers) + CI Integration job (run 27907445321) success |
 | Format gate | ✓ | `dotnet format Skinora.sln --verify-no-changes` exit 0 |
 | Build | ✓ 0E | `dotnet build Skinora.sln -c Debug` exit 0 |
 
@@ -74,9 +74,36 @@ Doc hizalama: 03 §3.5 adım 10 + §12.2 satır "Item teslim edildi" → ITEM_DE
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bağımsız validator bekliyor (ayrı chat) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-21, rapor görülmeden kendi verdict'i) |
 | Yapım-içi self-check | ✓ AC 1–6 |
-| Düzeltme gerekli mi | (validator belirleyecek) |
+| Düzeltme gerekli mi | Hayır — 0 bloke-edici bulgu |
+
+### Bağımsız Validator Sonucu (2026-06-21)
+
+**Verdict: ✓ PASS — AC 1–6 hepsi ✓, 0 bloke-edici bulgu.**
+
+**Kapılar:**
+- Adım -1 working tree temiz · Adım 0 main son-3 run success (`27904430722`/`27904430715`/`27903815964`) · Adım 0b repo memory WP19 satırı mevcut.
+- Adım 8a task CI HEAD `0adef87` run [27907445321](https://github.com/turkerurganci/Skinora/actions/runs/27907445321) **tüm job success** (Lint/Build/Unit/**Integration**/Contract/**Migration dry-run**/Docker/Gate; `0. Guard` + `3b. JS test` skipped).
+
+**Validator lokal yeniden çalıştırma:**
+- `dotnet build Skinora.sln -c Release` → **0 Warning / 0 Error**.
+- Notifications unit (`Category!=Integration&Category!=Contract`) → **106/106**.
+- `HappyPathNotificationConsumerTests` gerçek SQL Server (TestContainers, Docker UP) → **8/8**.
+- `dotnet format Skinora.sln --verify-no-changes` → exit 0.
+
+**Bağımsız spec/kod teyidi:**
+- **Alıcı eşlemesi 06 §2.13 kataloğuyla birebir:** TRANSACTION_INVITE→alıcı, BUYER_ACCEPTED→satıcı, ITEM_ESCROWED→alıcı, PAYMENT_RECEIVED→satıcı, TRADE_OFFER_SENT_TO_BUYER→alıcı, TRANSACTION_COMPLETED→her ikisi, SELLER_PAYMENT_SENT→satıcı.
+- **5 event'in 5'i de gerçek prod publisher'a sahip** (ölü consumer yok): `TransactionCreationService:281` · `TransactionAcceptanceService:191` · `AmountValidationService:511` · `TradeOfferDispatchJob:300`+`SteamWebhookHandler:609` · `OutgoingTransferConfirmationJob:115`.
+- **Şablon placeholder'ları consumer parametreleriyle birebir** (NotificationTemplates.resx: `{ItemName}/{Amount}`, `{BuyerName}`, `{Amount}/{PaymentAddress}`, `{Amount}`, parametre-yok, `{ItemName}`, `{Amount}`).
+- **COMPLETED 2+1** (owner kararı #3): SELLER_PAYMENT_SENT + TRANSACTION_COMPLETED satıcı + TRANSACTION_COMPLETED alıcı — `PayoutCompleted_NotifiesSellerTwice_AndBuyerOnce` testi doğrular.
+- **ITEM_DELIVERED bastırma** (owner kararı #2): notification tipi yok, consumer fire etmez, 03 §3.5/§12.2 hizalandı.
+- **Sıfır mevcut prod kaynak değişikliği** (yalnız 5 yeni consumer + testler; mevcut event/handler/şema dokunulmadı) → regresyon yüzeyi minimal. MediatR auto-scan (`OutboxModule.cs` Notifications assembly) consumer'ları kayıt eder; idempotency `IProcessedEventStore` ile consumer-başına.
+- **Güvenlik:** secret yok · auth değişmedi (internal event tüketimi) · yeni kullanıcı girdisi yok (parametreler iç veriden) · yeni dış bağımlılık yok · re-query'ler salt-okunur.
+
+**Non-blocking gözlemler:** (1) `EscrowedAndTradeOfferNotificationConsumer` ilgisiz `ToStatus` geçişlerinde de event'i processed işaretler (zararsız, EventId benzersiz). (2) ITEM_ESCROWED'da PaymentAddress yoksa Amount→TotalAmount + adres→boş fallback (savunmacı; pratikte ITEM_ESCROWED'a varıldığında adres her zaman tahsisli — WP4b). (3) Uçtan-uca MediatR/DI dispatch wiring'i WP19 testlerinde doğrudan assert edilmiyor (consumer'lar doğrudan örnekleniyor); ~15 canlı consumer ile birebir aynı desen + assembly scan + T107 E2E bunu gerçek bildirimlerle kapatacak. (4) Rapor "Değişen (doc)" listesi yalnız 03'ü anar; diff ayrıca standart status/plan/memory dosyalarını günceller (task bitiş kapısı gereği — içerik dokümanı değil).
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — bağımsız verdict yapım self-check'i (AC 1–6 ✓) ile örtüşür; uyuşmazlık yok.
 
 ## Altyapı Değişiklikleri
 
