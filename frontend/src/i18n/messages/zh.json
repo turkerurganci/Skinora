@@ -1499,7 +1499,7 @@
       "created": {
         "seller": "等待买家接受此交易。",
         "buyer": {
-          "cannotAcceptReason": "您暂时无法接受此交易。请检查 Mobile Authenticator 和冷却期要求。"
+          "cannotAcceptReason": "当前无法接受此交易。"
         }
       },
       "accepted": {

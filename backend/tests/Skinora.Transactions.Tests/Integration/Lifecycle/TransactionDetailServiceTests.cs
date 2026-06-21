@@ -109,8 +109,10 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         // Seller reputation ROUND(0.96 × 5, 1, ToZero) = 4.8.
         Assert.Equal(4.8m, outcome.Body.Seller.ReputationScore);
         Assert.Equal(24, outcome.Body.Seller.CompletedTransactionCount);
-        // canAccept gated on buyer + CREATED + BuyerId is null.
-        Assert.False(outcome.Body.AvailableActions.CanAccept);  // BuyerId already set
+        // WP20 — canAccept = buyer + CREATED (07 §7.5 / 03 §3.2:195). A
+        // registered STEAM_ID buyer has BuyerId set at create time yet must
+        // still be able to accept; role=="buyer" already proves eligibility.
+        Assert.True(outcome.Body.AvailableActions.CanAccept);  // BuyerId set, still acceptable
         Assert.True(outcome.Body.AvailableActions.CanCancel!.Value);
         // requiresLogin field suppressed for authenticated callers.
         Assert.Null(outcome.Body.AvailableActions.RequiresLogin);
@@ -238,6 +240,58 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.False(outcome.Body.AvailableActions.CanCancel!.Value);
         Assert.False(outcome.Body.AvailableActions.CanDispute!.Value);
         Assert.False(outcome.Body.AvailableActions.CanEscalate!.Value);
+        Assert.NotNull(outcome.Body.HoldInfo);
+        // WP20 — status is the EMERGENCY_HOLD overlay (07 §7.1/§7.5), not the
+        // raw underlying ACCEPTED state, so the FE hold banner + frozen panel
+        // (keyed off status=="EMERGENCY_HOLD") fire on the detail surface.
+        Assert.Equal("EMERGENCY_HOLD", outcome.Body.Status);
+    }
+
+    [Fact]
+    public async Task Registered_Steam_Id_Buyer_Can_Accept_Created_Transaction()
+    {
+        // WP20 (canAccept fix) — a registered STEAM_ID target buyer has BuyerId
+        // resolved + set at create time (TransactionCreationService), so the
+        // pre-fix `&& BuyerId is null` clause wrongly disabled their Accept
+        // button even though the accept endpoint admits them. canAccept must be
+        // true: buyer + CREATED (07 §7.5 / 03 §3.2:195).
+        var transaction = await CreateTransactionAsync(TransactionStatus.CREATED, buyerId: _buyer.Id);
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(transaction.Id, _buyer.Id, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        Assert.Equal("buyer", outcome.Body!.UserRole);
+        Assert.True(outcome.Body.AvailableActions.CanAccept);
+        // CREATED is the raw status here (not on hold) — no EMERGENCY_HOLD overlay.
+        Assert.Equal("CREATED", outcome.Body.Status);
+    }
+
+    [Fact]
+    public async Task Held_Created_Transaction_Freezes_Accept_And_Projects_Emergency_Hold()
+    {
+        // WP20 — even with the widened canAccept (buyer + CREATED), the IsOnHold
+        // early-return keeps a held CREATED transaction at all-false, and the
+        // status projects to the EMERGENCY_HOLD overlay (CHANGE B) so the FE
+        // surfaces the frozen panel instead of the (now defensive-only) Accept
+        // form. 06 §3.5 hold invariant set mirrors the ACCEPTED hold test.
+        var transaction = await CreateTransactionAsync(TransactionStatus.CREATED, buyerId: _buyer.Id);
+        transaction.IsOnHold = true;
+        transaction.EmergencyHoldAt = _clock.GetUtcNow().UtcDateTime;
+        transaction.EmergencyHoldReason = "Manual review";
+        transaction.EmergencyHoldByAdminId = _seller.Id;
+        transaction.PreviousStatusBeforeHold = (int)TransactionStatus.CREATED;
+        transaction.TimeoutFrozenAt = transaction.EmergencyHoldAt;
+        transaction.TimeoutFreezeReason = TimeoutFreezeReason.EMERGENCY_HOLD;
+        transaction.TimeoutRemainingSeconds = 0;
+        Context.Set<Transaction>().Update(transaction);
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.GetAsync(transaction.Id, _buyer.Id, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal("EMERGENCY_HOLD", outcome.Body!.Status);
+        Assert.False(outcome.Body.AvailableActions.CanAccept);
         Assert.NotNull(outcome.Body.HoldInfo);
     }
 

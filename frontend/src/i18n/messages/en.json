@@ -1499,7 +1499,7 @@
       "created": {
         "seller": "Waiting for the buyer to accept this transaction.",
         "buyer": {
-          "cannotAcceptReason": "You cannot accept this transaction yet. Check the Mobile Authenticator and cooldown requirements."
+          "cannotAcceptReason": "This transaction can't be accepted right now."
         }
       },
       "accepted": {

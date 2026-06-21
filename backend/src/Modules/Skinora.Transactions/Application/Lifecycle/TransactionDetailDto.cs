@@ -15,7 +15,12 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// </summary>
 public sealed record TransactionDetailDto(
     Guid Id,
-    TransactionStatus Status,
+    // 07 §7.1/§7.5 — projected status string, not the raw TransactionStatus
+    // enum: an EMERGENCY_HOLD (IsOnHold) overlay is surfaced over the real
+    // state so the FE hold banner + frozen action panel fire (04 §7.3,
+    // 06 §2.20). Mirrors TransactionListItemDto.Status, which is already a
+    // projected string for the same reason.
+    string Status,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? UserRole,
     TransactionItemDto Item,
     string Price,
