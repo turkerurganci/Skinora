@@ -219,8 +219,12 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 - UI smoke **1/1 PASS** (chromium, full stack).
 
 ### Known / Follow-up
-- `e2e-smoke` CI job docker-compose-in-CI'yi **yerel doğrulayamadım** (yalnız smoke'un kendisi yerel kanıtlı); advisory olduğu için flaky/kırık olsa bile merge'i bloklamaz — ilk CI run'ında gözlemlenip gerekirse rafine edilir.
 - registered-buyer `canAccept` keşfi (yukarıda) — owner follow-up.
+
+### Commit & PR (PR-3)
+- Branch: `task/T107-e2e-ui` · Commit: `7cabfe4`
+- PR: [#198](https://github.com/turkerurganci/Skinora/pull/198)
+- CI: ✓ PASS — run [27916787128](https://github.com/turkerurganci/Skinora/actions/runs/27916787128). **Tüm bloke-edici joblar success** (Lint [+`sidecar-fake`/`e2e` adımları], Build, Unit, Integration, JS-test [+`sidecar-fake` vitest], Contract, Migration, 4× Docker, CI Gate). **`E2E smoke (advisory)` job da SUCCESS** — yani docker-compose stack CI'da gerçekten ayağa kalktı, migrate oldu ve API smoke COMPLETED'a ulaştı (yerel doğrulanamayan endişe CI'da kendiliğinden kapandı; yine de advisory kalır).
 
 ## Notlar
 
