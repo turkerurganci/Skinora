@@ -8,6 +8,12 @@ namespace Skinora.Shared.Notifications;
 /// truncated (with an ellipsis) BEFORE escaping.
 /// </summary>
 /// <remarks>
+/// Precondition: <c>maxLength</c> must comfortably exceed the fixed envelope
+/// overhead — the bold markers plus the <c>\n\n</c> separator (4 for Telegram, 6
+/// for Discord). Every real channel limit does, so the only callers pass 2000 /
+/// 4096; a degenerate <c>maxLength</c> below the overhead cannot produce a valid
+/// bold envelope and is out of contract.
+///
 /// Truncating the raw text and re-escaping is what makes this safe: truncating an
 /// already-escaped string could split a <c>\X</c> escape pair, leaving a dangling
 /// trailing backslash — itself a reserved char that triggers a Telegram 400
