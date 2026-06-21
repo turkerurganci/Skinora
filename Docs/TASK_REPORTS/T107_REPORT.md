@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 ✓ bağımsız validator PASS + merged; PR-2/3 sırada) | **Tarih:** 2026-06-21
+**Faz:** F6 | **Durum:** ⏳ Devam ediyor (PR-1/3 ✓ merged + validator PASS; PR-2/3 ✓ **smoke yerel GREEN — tam akış + 7 bildirim**; PR-3 sırada) | **Tarih:** 2026-06-21
 
 ---
 
@@ -56,11 +56,11 @@ Mevcut prod kaynak **değişmedi** (yeni dizin + yeni compose dosyası).
 
 | # | Kriter | Durum | Not |
 |---|---|---|---|
-| 1 | Tam escrow akışı (giriş→…→COMPLETED) | ⏳ | Backend wire ✓; uçtan uca sürüş **PR-3** spec'inde assert edilir (fake bu PR'da hazırlanır) |
-| 2 | Tüm bildirimler doğru tetikleniyor | ⏳ | Producer'lar WP19 ✓; E2E assert **PR-3** |
-| 3 | Tüm state geçişleri UI'da doğru gösteriliyor | ⏳ | FE `data-testid` + assert **PR-3** |
+| 1 | Tam escrow akışı (giriş→…→COMPLETED) | ✓ (API düzeyi, PR-2 smoke) | Yerel docker stack'te 8 state'in 7 geçişi sürüldü → COMPLETED (kanıt aşağıda); UI düzeyi assert PR-3 |
+| 2 | Tüm bildirimler doğru tetikleniyor | ✓ (PR-2 smoke) | 7 WP19 tipi gerçek üretildi (matris aşağıda); ITEM_DELIVERED bildirimi yok (WP19 bastırma) doğrulandı |
+| 3 | Tüm state geçişleri UI'da doğru gösteriliyor | ⏳ | FE `data-testid` + Playwright UI assert **PR-3** |
 
-PR-1 bu üç kriteri **mümkün kılar** (altyapı); kapanış PR-3'te kanıtlanır.
+PR-1 (fake) + PR-2 (harness/smoke) AC1+AC2'yi API düzeyinde **kanıtladı**; AC3 (UI) PR-3'te.
 
 ## Test Sonuçları (PR-1)
 
@@ -125,6 +125,50 @@ PR-1 bu üç kriteri **mümkün kılar** (altyapı); kapanış PR-3'te kanıtlan
 **Non-blocking gözlem (N1 — CI coverage):** `sidecar-fake/` CI path filtresinde olmadığı için lint/format/unit/docker job'ları **hiç çalışmaz** (PR'ın "Lint SUCCESS"i fake'i lint etmedi). Owner "advisory E2E CI" kararıyla uyumlu; doğal yer **PR-3'ün e2e job'u** — orada `sidecar-fake` lint+unit (ve ideal olarak image build) CI'ya bağlanmalı ki 7 birim test + lint/format gelecekteki değişiklikleri kapısın. Rapor (Commit & PR §) bu skip davranışını şeffaf belgeliyor.
 
 **Yapım raporu karşılaştırması:** Tam uyumlu — rapordaki seam tablosu, test sonuçları (7/7 + compose config), zero-prod-change ve AC ertelemesi (3 kriter ⏳ → PR-3) validator bağımsız bulgularıyla birebir; rapor docker build iddia etmemiş (over-claim yok), validator ek olarak doğruladı.
+
+## PR-2 — E2E harness + happy-path smoke (2026-06-21, branch `task/T107-e2e-harness`)
+
+**Teslim:** Playwright `e2e/` workspace + JWT-inject login + SQL seed + API-düzeyi happy-path smoke; ayrıca smoke'un ortaya çıkardığı **2 fake düzeltmesi** + **1 compose düzeltmesi**.
+
+### Yapılan
+- **`e2e/`** — Playwright workspace (`playwright.config.ts`, tsconfig, eslint/prettier). API-düzeyi smoke: SQL seed → JWT-inject (Bearer) → create → accept → fake ile escrow/delivery sürüş + ödeme → COMPLETED poll → bildirim assert.
+  - `src/jwt.ts` — HS256 mint (`Jwt__Secret`, iss=skinora, aud=skinora-client, claim sub/steam_id/role).
+  - `src/db.ts` — mssql seed: seller (MA+payout+backdated), buyer (SteamId), 1 ACTIVE bot, **`ItemPriceCaches`** satırı (= listeleme fiyatı → %0 sapma → FLAGGED değil, Steam Market erişiminden bağımsız); idempotent cleanup; `getNotificationTypes` assert.
+  - `src/api.ts` — create/accept/get + `/__e2e/payment/pay` (fake) + ApiResponse unwrap + `pollStatus`.
+  - `tests/happy-path.smoke.spec.ts` — tek serial smoke.
+- **Fake düzeltmeleri (`sidecar-fake/src/routes/steam.ts`):**
+  1. **`trade_offer.sent` → `trade_offer.accepted` sıralı** — backend `HandleSentAsync` TradeOffer satırını (offerId, bot=DisplayName) yaratır; `HandleAcceptedAsync` satırı offerId ile bulur. Yalnız `accepted` emit etmek ITEM_ESCROWED'a ilerletmiyordu.
+  2. **`direction` passthrough** — webhook `direction` = dispatch isteğinin token'ı (`SELLER_TO_BOT`/`BOT_TO_BUYER`), "escrow"/"delivery" **değil** (backend `ParseDirection` `SidecarDirection*` sabitleri = SELLER_TO_BOT/BOT_TO_BUYER).
+- **Compose düzeltmesi (`docker-compose.e2e.yml`):** frontend healthcheck `wget` → node `fetch` (node:20-slim'de wget/curl yok) — full stack + nginx ayağa kalksın (PR-3).
+
+### Çalıştırma mekanizması (doğrulandı)
+Backend **auto-migrate etmez** → host'tan `dotnet ef database update` (`Server=localhost,14333`) ile şema; sonra `compose up`. Smoke backend'i doğrudan (`:5000`) hedefler (UI/nginx PR-3). Hangfire recurring job'ları (her ~1 dk) job-driven 3 geçişi sürer.
+
+### Smoke sonucu — ✅ GREEN (yerel, gerçek docker stack)
+`npx playwright test` → **1 passed (4.8m)**. Geçiş zinciri (DB'den izlendi): CREATED → ACCEPTED → TRADE_OFFER_SENT_TO_SELLER → ITEM_ESCROWED → PAYMENT_RECEIVED → (TRADE_OFFER_SENT_TO_BUYER) → ITEM_DELIVERED → **COMPLETED**.
+
+**WP19 bildirim matrisi (gerçek üretim, `Notifications` tablosu):**
+
+| Tip | Adet | Alıcı |
+|---|---|---|
+| TRANSACTION_INVITE | 1 | alıcı |
+| BUYER_ACCEPTED | 1 | satıcı |
+| ITEM_ESCROWED | 1 | alıcı |
+| PAYMENT_RECEIVED | 1 | satıcı |
+| TRADE_OFFER_SENT_TO_BUYER | 1 | alıcı |
+| SELLER_PAYMENT_SENT | 1 | satıcı |
+| TRANSACTION_COMPLETED | **2** | satıcı + alıcı |
+
+ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLETED 2+1 (owner kararı) doğrulandı. Bu, T107 AC1 (tam akış) + AC2 (tüm bildirimler) + WP19'u uçtan uca kanıtlar.
+
+### Iterasyon (smoke yeşile giderken bulunan + düzeltilen)
+1. Tablo adı `ItemPriceCache` → **`ItemPriceCaches`** (EF çoğul). 2. `paymentTimeoutHours 24` → **1** (e2e max=60 dk). 3. Bot `Status` **nvarchar** ("ACTIVE", `0` değil) → bot seçilmiyordu. 4. Webhook `direction` "escrow" → **SELLER_TO_BOT** (yukarıda).
+
+### Doğrulama (lokal)
+- e2e: `tsc --noEmit` ✓, `eslint .` ✓ 0. Fake (düzeltme sonrası): build ✓, lint ✓ 0, unit **7/7**. Smoke **1/1 PASS**. Stack `compose up --build --wait` (db/redis/fake/backend healthy) + `dotnet ef database update` ✓.
+
+### Known (PR-3)
+- AC3 UI assert (FE `data-testid` + Playwright browser); CI e2e job (advisory) + `sidecar-fake`/`e2e` CI lint/build/test wiring (validator N1); frontend healthcheck düzeltmesi PR-3 full-stack run'da teyit.
 
 ## Notlar
 

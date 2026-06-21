@@ -1,0 +1,28 @@
+{
+  "name": "skinora-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Skinora end-to-end tests (T107). Playwright drives the docker-compose.e2e.yml stack; the happy-path flow is simulated at the backend webhook/client seam via the fake sidecar.",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test happy-path.smoke",
+    "lint": "eslint .",
+    "format:check": "prettier --check \"**/*.ts\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/mssql": "^9.1.5",
+    "@types/node": "^20.17.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^8.57.0",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^11.0.1",
+    "prettier": "^3.4.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

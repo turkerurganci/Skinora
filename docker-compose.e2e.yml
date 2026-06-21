@@ -162,8 +162,15 @@ services:
     depends_on:
       skinora-backend:
         condition: service_healthy
+    # node:20-slim has neither wget nor curl — probe with node's global fetch.
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 10s
       retries: 10

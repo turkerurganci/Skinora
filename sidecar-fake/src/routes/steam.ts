@@ -71,36 +71,59 @@ steamRouter.post('/api/trade-offers/send', (req, res) => {
 
   res.json({ status: 'sent', offerId, attempts: 1 });
 
-  // Self-drive acceptance: after the dispatch job commits TRADE_OFFER_SENT_TO_*,
-  // emit trade_offer.accepted so the backend advances to ITEM_ESCROWED (escrow
-  // leg) or ITEM_DELIVERED (delivery leg). The asset ids populate
-  // EscrowBotAssetId / DeliveredBuyerAssetId required by the accept handlers.
-  const webhookDirection = direction === 'SELLER_TO_BOT' ? 'escrow' : 'delivery';
-  setTimeout(() => {
-    const envelope = {
-      event: 'trade_offer.accepted',
-      timestamp: new Date().toISOString(),
-      data: {
-        transactionId,
-        direction: webhookDirection,
-        partnerSteamId,
-        botSteamId: config.botSteamId,
-        botAccountName,
-        offerId,
-        status: 'accepted',
-        receivedAssetId: fakeAssetId(`${transactionId}:recv`),
-        deliveredAssetId: fakeAssetId(`${transactionId}:deliv`),
-      },
-    };
-    postWebhook(
+  // Self-drive the trade. After the dispatch job commits TRADE_OFFER_SENT_TO_*,
+  // emit two webhooks in order:
+  //   1. trade_offer.sent — HandleSentAsync persists the TradeOffer row (bot
+  //      resolved by DisplayName == botAccountName, keyed by offerId). REQUIRED
+  //      first: HandleAcceptedAsync looks the row up by offerId.
+  //   2. trade_offer.accepted — advances the state machine (escrow leg →
+  //      ITEM_ESCROWED, delivery leg → ITEM_DELIVERED). receivedAssetId /
+  //      deliveredAssetId populate EscrowBotAssetId / DeliveredBuyerAssetId.
+  // The inbound webhook's direction must be the SAME token the dispatch sent
+  // (SELLER_TO_BOT / BOT_TO_BUYER / BOT_TO_SELLER_REFUND) — the backend's
+  // ParseDirection maps those to TO_SELLER / TO_BUYER / RETURN_TO_SELLER.
+  const base = {
+    transactionId,
+    direction,
+    partnerSteamId,
+    botSteamId: config.botSteamId,
+    botAccountName,
+    offerId,
+  };
+
+  const driveTrade = async (): Promise<void> => {
+    await postWebhook(
       '/api/v1/webhooks/steam/trade-events',
       config.steamWebhookSecret,
-      envelope,
+      {
+        event: 'trade_offer.sent',
+        timestamp: new Date().toISOString(),
+        data: { ...base, status: 'sent', attempts: 1 },
+      },
       correlationId,
-    ).catch((err: unknown) =>
+    );
+    await postWebhook(
+      '/api/v1/webhooks/steam/trade-events',
+      config.steamWebhookSecret,
+      {
+        event: 'trade_offer.accepted',
+        timestamp: new Date().toISOString(),
+        data: {
+          ...base,
+          status: 'accepted',
+          receivedAssetId: fakeAssetId(`${transactionId}:recv`),
+          deliveredAssetId: fakeAssetId(`${transactionId}:deliv`),
+        },
+      },
+      correlationId,
+    );
+  };
+
+  setTimeout(() => {
+    driveTrade().catch((err: unknown) =>
       logger.error(
-        { err: String(err), transactionId, direction: webhookDirection },
-        'trade_offer.accepted webhook failed',
+        { err: String(err), transactionId, direction },
+        'trade self-drive (sent→accepted) failed',
       ),
     );
   }, config.tradeAcceptDelayMs);
