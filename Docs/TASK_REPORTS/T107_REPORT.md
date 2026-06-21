@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ✓ Yapım tamam (PR-1/3 ✓ merged + validator PASS; PR-2/3 ✓ merged + validator PASS — API smoke GREEN; **PR-3/3 ✓ UI smoke GREEN — AC1+AC2+AC3 kanıtlı**, doğrulama bekliyor) | **Tarih:** 2026-06-21
+**Faz:** F6 | **Durum:** ⏳ Devam ediyor — **PR-3/3 bağımsız validator ✓ PASS (2026-06-22)** ama **T107 HELD: canAccept fix-task öncesi** (owner kararı "önce düzelt, sonra T107 kapat"; registered STEAM_ID buyer UI'dan kabul edemiyor — 03 §3.2:195 sapması). PR-1 ✓ merged+validator PASS; PR-2 ✓ merged+validator PASS; PR-3 deliverables (FE testid + UI smoke + CI e2e job) ✓ kanıtlı, **merge edilmedi**. | **Tarih:** 2026-06-22
 
 ---
 
@@ -225,6 +225,35 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 - Branch: `task/T107-e2e-ui` · Commit: `7cabfe4`
 - PR: [#198](https://github.com/turkerurganci/Skinora/pull/198)
 - CI: ✓ PASS — run [27916787128](https://github.com/turkerurganci/Skinora/actions/runs/27916787128). **Tüm bloke-edici joblar success** (Lint [+`sidecar-fake`/`e2e` adımları], Build, Unit, Integration, JS-test [+`sidecar-fake` vitest], Contract, Migration, 4× Docker, CI Gate). **`E2E smoke (advisory)` job da SUCCESS** — yani docker-compose stack CI'da gerçekten ayağa kalktı, migrate oldu ve API smoke COMPLETED'a ulaştı (yerel doğrulanamayan endişe CI'da kendiliğinden kapandı; yine de advisory kalır).
+
+## Doğrulama (PR-3/3, bağımsız validator) — 2026-06-22
+
+**Branch:** `task/T107-e2e-ui` · **HEAD:** `9d0d8ea` · **PR:** [#198](https://github.com/turkerurganci/Skinora/pull/198) · **Verdict: ✓ PASS (PR-3 teslimatları + T107 AC'leri)** — ama owner kararıyla **T107 HELD** (aşağıdaki keşif önce düzeltilecek; merge yapılmadı).
+
+> Validator yapım raporunu görmeden bağımsız verdict üretti; her iddia firsthand doğrulandı. Yapım raporuyla **tam uyumlu, over-claim yok** (rapor keşfi kendisi de bildiriyor).
+
+### Kapılar
+- Adım -1 working tree temiz · Adım 0 main son-3 success (`27915545862`/`27915545858`/`27912352893`) · Adım 0b repo memory T107 mevcut.
+- Adım 8a task CI HEAD `9d0d8ea` run [`27917038313`](https://github.com/turkerurganci/Skinora/actions/runs/27917038313) — **15 job hepsi success/skipped, vacuous değil.** `E2E smoke (advisory)` job docker-compose stack'i CI'da gerçekten kurup migrate edip API smoke'u COMPLETED'a sürdü + **PASS** (yapım "yerel doğrulanamadı" demişti → CI'da kapandı). Lint yeni `sidecar-fake`+`e2e` bloke gate'leriyle, JS-test FE 28 + `sidecar-fake` vitest ile, CI Gate success.
+
+### Kabul kriterleri (T107 bütünü)
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | Tam akış → COMPLETED | ✓ | API smoke (PR-2) + UI smoke prospective buyer (PR-3) |
+| 2 | Tüm bildirimler | ✓ | PR-2/WP19 — 7 tip + COMPLETED×2, ITEM_DELIVERED yok |
+| 3 | State geçişleri UI'da | ✓ | `happy-path.ui.spec.ts` gerçek chromium+nginx, badge `data-status` her geçiş |
+
+### Firsthand
+- **Kapsam:** prod değişikliği yalnız 3 FE test-hook (StatusBadge/AcceptForm/DetailHeader), **0 backend**. `data-testid` opsiyonel + `data-status` her zaman → davranış korunur.
+- `extraHTTPHeaders` kaldırma regresyon değil — `api.ts` native fetch kendi `Content-Type`'ını set ediyor (Playwright request fixture kullanılmıyordu).
+- `e2e-smoke` `continue-on-error:true` + `ci-gate.needs`'te DEĞİL → advisory gerçekten bloke etmez. Lockfile'lar tracked → `npm ci` sağlam. N1 kapandı.
+- Yerel kalite: e2e tsc/eslint temiz · prettier `--end-of-line=auto` temiz (çıplak `format:check` 5-dosya = belgeli Windows CRLF false-pos; CI LF'de PASS).
+- Güvenlik: yalnız test-fixture secret · auth yüzeyi değişmedi · PR-3'te yeni runtime dep yok.
+
+### Bulgu — S1 sapma (pre-existing kod, PR-3 sokmadı) → **owner: önce düzelt**
+**registered STEAM_ID buyer `canAccept`:** `TransactionDetailService.cs:468-470` `canAccept = role=="buyer" && CREATED && BuyerId is null`. STEAM_ID **kayıtlı** alıcıda create `BuyerId`'yi set ediyor (`TransactionCreationService.cs:182-186,216`) → `canAccept=false` → UI AcceptForm **disabled** (`StateActionPanel.tsx:264`; `cannotAcceptReason` üstelik gerçek gate'le uyumsuz MA/cooldown metni). **03 §3.2:195 ("Eşleşiyorsa → devam eder") ile çelişir.** Ek inversion: `TRANSACTION_INVITE` bildirimi `BuyerId null→no-op` (WP19) → bildirim alan kayıtlı alıcı UI'dan kabul **edemiyor**, kabul edebilen prospective alıcı bildirim **almıyor** = mainline UI happy-path kırık. UI smoke deferred-buyer (prospective) ile aşıyor (geçerli bir variant ama mainline değil).
+
+**Owner kararı (AskUserQuestion 2026-06-22): "önce düzelt, sonra T107 kapat"** (WP19-style promote-before-close). → canAccept ayrı backend/FE fix-task'ı (ayrı yapım chat'i); sonra mevcut UI harness registered-buyer akışını da doğrular → T107 öyle kapanır. **T107 merge edilmedi; PR #198 açık.**
 
 ## Notlar
 
