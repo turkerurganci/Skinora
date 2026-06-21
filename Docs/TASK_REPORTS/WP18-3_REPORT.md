@@ -1,6 +1,6 @@
 # WP18-3 — Test/CI sertleştirme: backend test + correctness (son PR)
 
-**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 3/3'ü) | **Durum:** ⏳ Devam ediyor (validator bekliyor) | **Tarih:** 2026-06-21
+**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 3/3'ü) | **Durum:** ✓ Tamamlandı — bağımsız validator PASS (2026-06-21) | **Tarih:** 2026-06-21
 
 ---
 
@@ -53,8 +53,17 @@ Tam backend suite + Notifications integration → **CI authoritative**.
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
-| Yapım-içi adversarial review | 4-concern workflow (filterbar/like-escape+arch/truncation/endpoint), refute-default → **filterbar ✓ clean · like-escape+arch ✓ clean · endpoint ✓ clean · truncation 1 minor** (composer "≤ maxLength" invariant'ı `maxLength < overhead` dejenere durumunda — **production'da erişilemez**, call-site'lar 2000/4096 hardcode); **0 onaylı blocking/major**. Minor, composer XML-doc precondition'ıyla kapatıldı. (arch test non-vacuity ajan tarafından throwaway `ExecuteSqlRaw` probe ile kanıtlandı.) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat 2026-06-21, rapor görülmeden kendi verdict'i) |
+| Bulgu sayısı | **0 bloke-edici** (3 non-blocking transparency gözlemi) |
+| Düzeltme gerekli mi | Hayır |
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27899891105`/`27899891106`/`27880232933`) · Adım 0b repo memory mevcut · Adım 8a task CI HEAD `0e7f7f4` run [`27901592751`](https://github.com/turkerurganci/Skinora/actions/runs/27901592751) **12/12 job success** — non-vacuous: CI filter `FullyQualifiedName!~.Integration&!~.Contract` arch + composer + escaper testlerini **Unit** job'da, `~.Integration` endpoint testlerini **Integration** job'da, `3b. JS test` date.test'i çalıştırır.
+
+**Validator-firsthand (`-c Release --no-build`):** Release build **0W/0E** · `dotnet format --verify-no-changes` exit0 · Shared.Tests **405/405** (SqlLikeEscaper + NoRawSqlConventionTests + BoldHeaderMessageComposer + Discord/MarkdownV2 escaper negatif-parity) · API.Tests AdminWallets+suspension **25/25** · Notifications over-length **2/2** · FE `vitest run date.test.ts` **3/3**. Bağımsız tamamlık: backend/src'te **8 `EF.Functions.Like` call-site'ının hepsi** escaped + **0 `ExecuteSqlRaw/FromSqlRaw`** prod'da · `AdminWalletsController` gerçekten `[Authorize(MANAGE_SETTINGS)]`, suspend/unsuspend `MANAGE_FLAGS` (test assert'leriyle birebir) · composer fast-path eski `FormatMessage` ile byte-identik · no-new-dep / no-migration teyit · secret/auth-yüzeyi temiz (LIKE-escape + truncation = net güvenlik artısı).
+
+**5-ajan adversarial workflow (4 refute-default concern skeptiği + completeness critic): 5/5 verdict=clean, 0 bloke-edici.** Composer için bağımsız harness **1.349.614 vaka** (her iki dialekt, all-reserved/backslash-heavy/surrogate fuzz, 2000/4096 boundary) → **0 length-invariant + 0 split-escape-pair ihlali**; permission-isolation testleri non-vacuous (Admin rolü blanket-bypass değil, yalnız SuperAdmin → VIEW_FLAGS-only gerçek 403 alır). Non-blocking gözlemler (transparency): **(a)** composer mid-emoji surrogate-pair slice — kozmetik, safety invariant'larını bozmaz, spec 08 §5.2/§6.2 limitleri UTF-16 unit sayar; **(b)** Redis gerçek container yerine in-memory fake ile davranışsal kapsanır (SQL TestContainers `IntegrationTestBase`'de zaten var) — enhancement, AC değil, DEFERRED_BACKLOG:175'te belgeli; **(c)** `AdminDisputes resolve` HTTP-boundary testi yok — pre-existing, PR-3 kapsamı dışı.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu (6/6 AC ✓). Yapım-içi adversarial "1 minor" (composer degenerate `maxLength<overhead`) validator tarafından da **production'da erişilemez** teyit edildi (call-site'lar 2000/4096 hardcode, XML-doc precondition'la kapalı).
 
 ## Altyapı Değişiklikleri
 
@@ -67,7 +76,7 @@ Tam backend suite + Notifications integration → **CI authoritative**.
 - Branch: `task/WP18-3-backend-tests-correctness`
 - Commits: filterbar · SqlLikeEscaper+arch · truncation guard · AdminWallets/suspend · (+docs)
 - PR: [#193](https://github.com/turkerurganci/Skinora/pull/193)
-- CI: ✓ PASS — run [`27901346951`](https://github.com/turkerurganci/Skinora/actions/runs/27901346951) (`8926c86`) **tüm job success** (Lint/Build/Unit/**Integration** [yeni AdminWallets + handler over-length SQL]/Contract/**3b. JS test** [date.test]/Migration dry-run/Docker/CI Gate)
+- CI: ✓ PASS — HEAD `0e7f7f4` run [`27901592751`](https://github.com/turkerurganci/Skinora/actions/runs/27901592751) **12/12 job success** (Lint/Build/Unit/**Integration** [yeni AdminWallets + handler over-length SQL]/Contract/**3b. JS test** [date.test]/Migration dry-run/Docker/CI Gate); önceki `8926c86` run `27901346951` de success.
 
 ## Notlar
 
