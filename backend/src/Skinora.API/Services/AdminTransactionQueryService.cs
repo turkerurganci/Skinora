@@ -345,7 +345,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             // because the candidate set is already filtered by the other
             // predicates above.
             var raw = q.Search.Trim();
-            var escaped = EscapeLike(raw);
+            var escaped = SqlLikeEscaper.Escape(raw);
             var pattern = $"%{escaped}%";
 
             query = query.Where(t =>
@@ -635,21 +635,6 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             ? DefaultPageSize
             : pageSize > MaxPageSize ? MaxPageSize : pageSize;
         return (safePage, safePageSize);
-    }
-
-    /// <summary>
-    /// SQL Server <c>LIKE</c> escape using bracket-wrapping — works without
-    /// an <c>ESCAPE</c> clause (which the standard <c>EF.Functions.Like</c>
-    /// 2-arg overload does not emit). Order matters: <c>[</c> must be
-    /// rewritten first because the subsequent rewrites introduce literal
-    /// brackets we do not want to re-process.
-    /// </summary>
-    private static string EscapeLike(string value)
-    {
-        return value
-            .Replace("[", "[[]", StringComparison.Ordinal)
-            .Replace("%", "[%]", StringComparison.Ordinal)
-            .Replace("_", "[_]", StringComparison.Ordinal);
     }
 
     private sealed class TxListProjection

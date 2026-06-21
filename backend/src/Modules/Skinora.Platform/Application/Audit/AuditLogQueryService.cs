@@ -83,7 +83,7 @@ public sealed class AuditLogQueryService : IAuditLogQueryService
             // resolve there too — 02 §19 scrubs identity, so a scrubbed user
             // simply stops matching, which is correct).
             var searchTerm = query.Search.Trim();
-            var pattern = $"%{searchTerm}%";
+            var pattern = $"%{SqlLikeEscaper.Escape(searchTerm)}%";
 
             var matchingUserIds = _db.Set<User>()
                 .IgnoreQueryFilters()

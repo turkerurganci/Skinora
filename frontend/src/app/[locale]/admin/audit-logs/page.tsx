@@ -8,6 +8,7 @@ import type { FilterField } from "@/components/common";
 import { AuditLogTable } from "@/components/admin";
 import { useAdminAuditLogList } from "@/lib/hooks/useAdminAuditLogList";
 import type { AdminAuditCategory, AdminAuditLogQuery } from "@/lib/api/admin";
+import { toEndOfDay } from "@/lib/utils/date";
 
 const PAGE_SIZE = 20;
 
@@ -44,13 +45,7 @@ export default function AdminAuditLogsPage() {
       search,
       transactionId,
       dateFrom,
-      // A bare yyyy-mm-dd "Bitiş" binds to 00:00, which the backend's
-      // `CreatedAt <= dateTo` would treat as the start of the day and exclude
-      // every event on the selected end day (04 §8.10 date-range filter). Audit
-      // is a fund/security forensic surface, so widen dateTo to end-of-day.
-      // (The shared S13/S15 filters carry the same un-widened pattern — a repo-
-      // wide FilterBar fix is tracked separately; see T106 report K-notes.)
-      dateTo: dateTo ? `${dateTo}T23:59:59.999` : undefined,
+      dateTo: toEndOfDay(dateTo),
       page,
       pageSize: PAGE_SIZE,
     }),

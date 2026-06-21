@@ -67,7 +67,8 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim();
-            q = q.Where(s => EF.Functions.Like(s.Address, $"%{search}%"));
+            var pattern = $"%{SqlLikeEscaper.Escape(search)}%";
+            q = q.Where(s => EF.Functions.Like(s.Address, pattern));
         }
 
         var sortBy = (query.SortBy ?? "listedAt").Trim().ToLowerInvariant();

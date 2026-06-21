@@ -82,6 +82,38 @@ public class AdminUserSuspensionEndpointTests
     }
 
     [Fact]
+    public async Task SuspendUser_AdminWithoutManageFlagsPermission_Returns403()
+    {
+        // Permission-granularity isolation: an Admin holding a DIFFERENT admin
+        // permission (VIEW_FLAGS) but NOT MANAGE_FLAGS must be denied — proving the
+        // gate enforces the specific permission, not merely the admin role.
+        var actor = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync();
+        var client = BuildClientWithPermissions(
+            actor.Id, actor.SteamId, AuthRoles.Admin, ["VIEW_FLAGS"]);
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/admin/users/{target.Id}/suspend",
+            new { reason = "Multi-account fraud detected" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnsuspendUser_AdminWithoutManageFlagsPermission_Returns403()
+    {
+        // Same isolation on the DELETE un-suspend variant (also gated by MANAGE_FLAGS).
+        var actor = await _factory.CreateUserAsync();
+        var target = await _factory.CreateUserAsync(u => u.IsSuspended = true);
+        var client = BuildClientWithPermissions(
+            actor.Id, actor.SteamId, AuthRoles.Admin, ["VIEW_FLAGS"]);
+
+        var response = await client.DeleteAsync($"/api/v1/admin/users/{target.Id}/suspend");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task SuspendUser_Permanent_Returns200_AndSetsFields()
     {
         var admin = await _factory.CreateUserAsync();
@@ -387,6 +419,45 @@ public class AdminUserSuspensionEndpointTests
                 new Claim(AuthClaimTypes.SteamId, steamId),
                 new Claim(AuthClaimTypes.Role, role),
             }),
+            Expires = DateTime.UtcNow.AddMinutes(15),
+            SigningCredentials = creds,
+        };
+        return handler.WriteToken(handler.CreateToken(descriptor));
+    }
+
+    // WP18 — permission-aware token for the granular-permission isolation tests
+    // only. Kept SEPARATE from the role-only BuildClient/IssueAccessToken above so
+    // the ~13 existing call sites stay untouched (SuperAdmin bypasses, plain User
+    // is denied by role, so none of them need a permission claim).
+    private HttpClient BuildClientWithPermissions(
+        Guid userId, string steamId, string role, IReadOnlyList<string> permissions)
+    {
+        var token = IssueAccessTokenWithPermissions(userId, steamId, role, permissions);
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private static string IssueAccessTokenWithPermissions(
+        Guid userId, string steamId, string role, IReadOnlyList<string> permissions)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var claims = new List<Claim>
+        {
+            new(AuthClaimTypes.UserId, userId.ToString()),
+            new(AuthClaimTypes.SteamId, steamId),
+            new(AuthClaimTypes.Role, role),
+        };
+        foreach (var permission in permissions)
+            claims.Add(new Claim(AuthClaimTypes.Permission, permission));
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = TestIssuer,
+            Audience = TestAudience,
+            Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(15),
             SigningCredentials = creds,
         };

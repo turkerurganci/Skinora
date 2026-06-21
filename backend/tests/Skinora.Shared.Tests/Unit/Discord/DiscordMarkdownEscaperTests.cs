@@ -62,4 +62,24 @@ public class DiscordMarkdownEscaperTests
         // Allow-list-free: caller-supplied pre-escapes get re-escaped.
         Assert.Equal("\\\\\\*", DiscordMarkdownEscaper.Escape("\\*"));
     }
+
+    [Fact]
+    public void Escape_NonReservedPrintableAscii_PassesThroughUnchanged()
+    {
+        // Negative parity (08 §6.2): Discord escapes only its 7-char set, so every
+        // other printable ASCII char — including '.', '!', '[', '(' which Telegram
+        // MarkdownV2 escapes — must pass through unchanged.
+        const string reserved = "*_~`>|\\";
+        var safe = new System.Text.StringBuilder();
+        for (var c = ' '; c <= '~'; c++)
+        {
+            if (!reserved.Contains(c))
+            {
+                safe.Append(c);
+            }
+        }
+
+        var input = safe.ToString();
+        Assert.Equal(input, DiscordMarkdownEscaper.Escape(input));
+    }
 }

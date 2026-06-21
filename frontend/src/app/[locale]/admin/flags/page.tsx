@@ -9,6 +9,7 @@ import { FlagQueueTable } from "@/components/admin";
 import { useAdminFlagList } from "@/lib/hooks/useAdminFlagList";
 import type { AdminFlagListQuery } from "@/lib/api/admin";
 import { parseTableSort, nextTableSort } from "@/lib/admin/tableSort";
+import { toEndOfDay } from "@/lib/utils/date";
 
 const PAGE_SIZE = 20;
 
@@ -58,7 +59,7 @@ export default function AdminFlagsPage() {
       type,
       reviewStatus,
       dateFrom,
-      dateTo,
+      dateTo: toEndOfDay(dateTo),
       sortBy: sort.by ?? undefined,
       sortOrder: sort.by ? sort.order : undefined,
       page,
