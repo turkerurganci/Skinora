@@ -66,8 +66,8 @@ Tam backend suite + Notifications integration → **CI authoritative**.
 
 - Branch: `task/WP18-3-backend-tests-correctness`
 - Commits: filterbar · SqlLikeEscaper+arch · truncation guard · AdminWallets/suspend · (+docs)
-- PR: #TBD
-- CI: ⏳ bekleniyor
+- PR: [#193](https://github.com/turkerurganci/Skinora/pull/193)
+- CI: ⏳ izleniyor (push sonrası)
 
 ## Notlar
 
