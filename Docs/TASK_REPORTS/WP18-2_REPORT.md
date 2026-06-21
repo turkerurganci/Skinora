@@ -1,6 +1,6 @@
 # WP18-2 — Test/CI sertleştirme: FE Vitest runner + blockchain ethers override
 
-**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 2/3'ü) | **Durum:** ⏳ Devam ediyor (validator bekliyor) | **Tarih:** 2026-06-21
+**Faz:** PRE_F6_PLAN (WP18, 3-PR split'in 2/3'ü) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-21
 
 ---
 
@@ -44,7 +44,14 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor |
+| Doğrulama durumu | ✓ **Bağımsız validator PASS** (ayrı chat 2026-06-21, kendi verdict'i rapor görülmeden) |
+| Verdict | ✓ PASS — 6/6 kabul kriteri, 0 bloke-edici bulgu |
+| Kapılar | Adım -1 temiz · Adım 0 main son-3 success (`27880232933`/`27880232927`/`27871388334`) · Adım 0b memory mevcut · Adım 8a task CI HEAD `c54634a` run [`27886664072`](https://github.com/turkerurganci/Skinora/actions/runs/27886664072) **14/14 job success** (`3b. JS test (vitest)` adımları non-vacuous: FE 25 / steam 161 / BC 161) + FE-test commit `5d9e950` run `27886435525` |
+| Validator-firsthand | FE `vitest run` **25/25** (7 dosya) · `tsc --noEmit` exit 0 (jest-dom augmentation çözülür) · BC `vitest run` **161/161** (ethers 6.17.0 HD wallet log'da aktif) · BC `npm audit --omit=dev --audit-level=critical` **exit 0** (0 prod critical) · override resolution lockfile'da: ethers 6.17.0 / form-data 4.0.6 / ws 8.21.0 · steam advisory@high korundu |
+| Bağımsız teyit | ci-gate yalnız `failure`/`cancelled`'da kırılır → skipped frontend-test (doc-only PR) gate'i geçer; `code` filtresi 3 alan-filtresinin strict superset'i → build-skip false-negative yok; hyphenli output'lar bracket-notation; `.github/workflows/**` her 3 filtreyi tetikler (workflow-edit safety net); steam max prod advisory = high (tek full-tree critical = dev-only vitest, `--omit=dev` doğru hariç tutar); residual axios+lodash high tronweb 5.3.5 altında (yalnız breaking tronweb 6.x ile düzelir) = belgeli accept-risk |
+| Adversarial workflow (validator) | 5-ajan (4 refute-default skeptik + completeness critic): **5/5 refuted=false, 0 onaylı bulgu**; bir skeptik vitest'i injected failing test ile exit 1 doğruladı (gate non-vacuous) |
+| Güvenlik | Secret yok · auth/authz etkisi yok · input-validation yüzeyi yok · yeni FE dep'ler salt devDependencies (vitest/jsdom/@testing-library/*/@vitejs/plugin-react), prod bundle'a girmez; BC override mevcut transitive'i pinler |
+| Yapım raporu uyumu | Tam uyumlu — 6/6 AC ✓, in-PR form-data fix + npm-skew CI-fix + accept-risk dürüstçe kaydedilmiş, uyuşmazlık yok |
 | Yapım-içi adversarial review | 3-boyut workflow (FE-test/CI-wiring/BC-override), refute-default → FE-test ✓ clean · CI-wiring ✓ clean · BC-override **1 major** (form-data accuracy) onaylandı + **bu PR'da kapatıldı** (form-data 4.0.6 override + doc düzeltme) |
 
 ## Altyapı Değişiklikleri
