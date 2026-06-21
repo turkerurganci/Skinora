@@ -84,9 +84,10 @@ public sealed class AdminUserService : IAdminUserService
             // (07 §9.15 doesn't pin the search behaviour; this matches the S19
             // "rol atama" workflow which needs to find non-admins).
             var term = search!.Trim();
+            var pattern = $"%{SqlLikeEscaper.Escape(term)}%";
             baseQuery = users.Where(u =>
-                EF.Functions.Like(u.SteamDisplayName, $"%{term}%") ||
-                EF.Functions.Like(u.SteamId, $"%{term}%"));
+                EF.Functions.Like(u.SteamDisplayName, pattern) ||
+                EF.Functions.Like(u.SteamId, pattern));
             if (roleId.HasValue)
                 baseQuery = baseQuery.Where(u => assignments.Any(a => a.UserId == u.Id));
         }
