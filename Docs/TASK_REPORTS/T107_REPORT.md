@@ -170,6 +170,11 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 ### Known (PR-3)
 - AC3 UI assert (FE `data-testid` + Playwright browser); CI e2e job (advisory) + `sidecar-fake`/`e2e` CI lint/build/test wiring (validator N1); frontend healthcheck düzeltmesi PR-3 full-stack run'da teyit.
 
+### Commit & PR (PR-2)
+- Branch: `task/T107-e2e-harness` · Commit: `71e5d69`
+- PR: [#197](https://github.com/turkerurganci/Skinora/pull/197)
+- CI: ✓ PASS — run [27913553177](https://github.com/turkerurganci/Skinora/actions/runs/27913553177). `1. Lint` + `CI Gate` success; Build/Unit/Integration/Contract/Migration/Docker/JS-test **skipped** (`e2e/` + `sidecar-fake/` + compose + docs `code` path filtresinde değil — PR-1 deseni). E2E smoke CI'da çalışmaz (advisory job PR-3'te); bu PR'da smoke **yerel** kanıt.
+
 ## Notlar
 
 - **Working tree (Adım -1):** task öncesi temiz (main'den branch açıldı).
