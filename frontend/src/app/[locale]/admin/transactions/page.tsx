@@ -9,6 +9,7 @@ import { TransactionListTable } from "@/components/admin";
 import { useAdminTransactionList } from "@/lib/hooks/useAdminTransactionList";
 import type { AdminTransactionListQuery, AdminTransactionStatusGroup } from "@/lib/api/admin";
 import { parseTableSort, nextTableSort } from "@/lib/admin/tableSort";
+import { toEndOfDay } from "@/lib/utils/date";
 import { StablecoinType } from "@/types/enums";
 
 const PAGE_SIZE = 20;
@@ -73,7 +74,7 @@ export default function AdminTransactionsPage() {
       statusGroup,
       stablecoin,
       dateFrom,
-      dateTo,
+      dateTo: toEndOfDay(dateTo),
       minAmount,
       maxAmount,
       search,
