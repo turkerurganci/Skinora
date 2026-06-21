@@ -41,6 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      sidecar-steam: ${{ steps.filter.outputs['sidecar-steam'] }}
+      sidecar-blockchain: ${{ steps.filter.outputs['sidecar-blockchain'] }}
       docker-matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - name: Checkout
@@ -191,22 +194,25 @@ jobs:
         working-directory: sidecar-blockchain
         run: npm run format:check
 
-      # npm audit — sidecar dependency advisories (WP18). Advisory-only:
-      # continue-on-error keeps these from ever failing the gate. Steam carries
-      # upstream-unfixable transitive criticals (request@2.88.2 / protobufjs)
-      # whose only npm "fix" is a destructive steam-user downgrade, so it must
-      # stay non-blocking permanently (owner accept-risk, see DEFERRED_BACKLOG).
-      # Blockchain flips to a blocking gate once the ethers 6.17 override lands
-      # (WP18 PR-2). --omit=dev --audit-level=high scopes to prod-runtime high+.
+      # npm audit — sidecar dependency advisories (WP18). Steam is ADVISORY
+      # (continue-on-error) permanently: it carries upstream-unfixable transitive
+      # criticals (request@2.88.2 / protobufjs) whose only npm "fix" is a
+      # destructive steam-user downgrade (owner accept-risk, see DEFERRED_BACKLOG).
+      # Blockchain is BLOCKING at --audit-level=critical (WP18 PR-2). Two
+      # non-breaking npm overrides cleared the fixable highs: ethers 6.17 (→ ws
+      # 8.21, GHSA-58qx) and form-data 4.0.6 (GHSA-hmw2 CRLF injection). The
+      # residual prod highs (axios + lodash, both under tronweb 5.3.5) have no
+      # non-breaking fix — npm offers only the breaking tronweb 6.x bump — so
+      # they are accept-risk + follow-up, and the gate is scoped to prod
+      # criticals (0 today). A new prod critical fails CI.
       - name: Sidecar-steam npm audit (advisory)
         working-directory: sidecar-steam
         continue-on-error: true
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Sidecar-blockchain npm audit (advisory)
+      - name: Sidecar-blockchain npm audit (blocking — prod criticals)
         working-directory: sidecar-blockchain
-        continue-on-error: true
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=critical
 
   # ----------------------------------------------------------------------------
   # 2. Build  (09 §21.4 step 2)
@@ -249,6 +255,41 @@ jobs:
       - name: Frontend build
         working-directory: frontend
         run: npm ci --include=optional && npm run build
+
+  # ----------------------------------------------------------------------------
+  # 3b. JS test (vitest) — frontend + sidecar unit suites (WP18 PR-2)
+  # Each step is gated by its own paths-filter output, so a frontend-only PR
+  # skips the sidecar suites (and vice versa); a workflow edit trips all three.
+  # Blocking via ci-gate.needs. Skipped (not failed) on doc-only PRs.
+  # ----------------------------------------------------------------------------
+  frontend-test:
+    name: 3b. JS test (vitest)
+    needs: [changes, build]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Frontend vitest
+        if: needs.changes.outputs.frontend == 'true'
+        working-directory: frontend
+        run: npm ci && npm run test
+
+      - name: Sidecar-steam vitest
+        if: needs.changes.outputs['sidecar-steam'] == 'true'
+        working-directory: sidecar-steam
+        run: npm ci && npm run test
+
+      - name: Sidecar-blockchain vitest
+        if: needs.changes.outputs['sidecar-blockchain'] == 'true'
+        working-directory: sidecar-blockchain
+        run: npm ci && npm run test
 
   # ----------------------------------------------------------------------------
   # 3. Unit test  (09 §21.4 step 3)
@@ -541,6 +582,7 @@ jobs:
       - guard-direct-push
       - lint
       - build
+      - frontend-test
       - unit-test
       - integration-test
       - contract-test
