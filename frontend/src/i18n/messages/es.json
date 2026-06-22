@@ -1499,7 +1499,7 @@
       "created": {
         "seller": "Esperando a que el comprador acepte la transacción.",
         "buyer": {
-          "cannotAcceptReason": "Aún no puedes aceptar esta transacción. Comprueba el Mobile Authenticator y el periodo de espera."
+          "cannotAcceptReason": "Esta transacción no se puede aceptar en este momento."
         }
       },
       "accepted": {

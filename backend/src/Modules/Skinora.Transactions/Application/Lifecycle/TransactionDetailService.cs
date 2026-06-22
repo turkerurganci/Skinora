@@ -306,7 +306,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
         var dto = new TransactionDetailDto(
             Id: transaction.Id,
-            Status: transaction.Status,
+            Status: ProjectStatus(transaction),
             UserRole: role,
             Item: item,
             Price: FormatMoney(transaction.Price),
@@ -349,7 +349,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
         // with requiresLogin=true.
         var dto = new TransactionDetailDto(
             Id: transaction.Id,
-            Status: transaction.Status,
+            Status: ProjectStatus(transaction),
             UserRole: null,
             Item: new TransactionItemDto(
                 AssetId: null,
@@ -465,9 +465,16 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 RequiresLogin: null);
         }
 
+        // 07 §7.5 / 03 §3.2 — canAccept = eligible buyer + still CREATED. role
+        // is only ever "buyer" for an eligible viewer (the named BuyerId, or the
+        // STEAM_ID-target pre-acceptance match — see role resolution above), so
+        // it already encodes the "Steam ID eşleşiyor" gate. A registered STEAM_ID
+        // buyer has BuyerId set at create time (TransactionCreationService);
+        // gating on BuyerId-is-null wrongly disabled their Accept button even
+        // though the accept endpoint (party guard) admits them. The IsOnHold
+        // early-return above keeps held transactions at all-false.
         var canAccept = role == "buyer"
-            && transaction.Status == TransactionStatus.CREATED
-            && transaction.BuyerId is null;
+            && transaction.Status == TransactionStatus.CREATED;
 
         var canCancel = role is "seller" or "buyer"
             && _activeStatesForCancel.Contains(transaction.Status)
@@ -493,6 +500,17 @@ public sealed class TransactionDetailService : ITransactionDetailService
             CanEscalate: canEscalate,
             RequiresLogin: null);
     }
+
+    /// <summary>
+    /// 07 §7.1/§7.5 status projection. EMERGENCY_HOLD is not a
+    /// <see cref="TransactionStatus"/> value — it is the overlay surfaced when
+    /// <c>IsOnHold=true</c> sits on top of any active state (06 §2.20, 04 §7.3).
+    /// Mirrors <c>TransactionListService.ProjectStatus</c> so the detail surface
+    /// (hold banner + frozen action panel, keyed off status=="EMERGENCY_HOLD")
+    /// fires per 04 §7.3. Applied on both the authenticated and public paths.
+    /// </summary>
+    private static string ProjectStatus(Transaction transaction) =>
+        transaction.IsOnHold ? "EMERGENCY_HOLD" : transaction.Status.ToString();
 
     private static bool IsTerminal(TransactionStatus status) =>
         status == TransactionStatus.COMPLETED

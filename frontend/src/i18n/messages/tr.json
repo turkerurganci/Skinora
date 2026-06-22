@@ -1499,7 +1499,7 @@
       "created": {
         "seller": "Alıcının kabul etmesi bekleniyor.",
         "buyer": {
-          "cannotAcceptReason": "Bu işlemi şu an kabul edemezsiniz. Mobile Authenticator ve cooldown gereksinimlerini kontrol edin."
+          "cannotAcceptReason": "Bu işlem şu anda kabul edilemiyor."
         }
       },
       "accepted": {
