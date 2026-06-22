@@ -66,9 +66,9 @@ Yeni `e2e/tests/cancellation.spec.ts` 4 test:
 ## Commit & PR
 
 - Branch: `task/T108-e2e-cancellation`
-- Commit: _(doldurulacak)_
-- PR: _(doldurulacak)_
-- CI: _(doldurulacak)_
+- Commit: `13049c9` — T108: E2E — İptal senaryoları (cancellation E2E)
+- PR: [#200](https://github.com/turkerurganci/Skinora/pull/200)
+- CI: izleniyor (Claude — evrensel kural)
 
 ## Known Limitations / Follow-up
 
