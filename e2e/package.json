@@ -8,6 +8,7 @@
     "test:smoke": "playwright test happy-path.smoke",
     "test:ui": "playwright test happy-path.ui",
     "test:cancel": "playwright test cancellation",
+    "test:timeout": "playwright test timeout",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
