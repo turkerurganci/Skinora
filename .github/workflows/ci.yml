@@ -44,6 +44,9 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       sidecar-steam: ${{ steps.filter.outputs['sidecar-steam'] }}
       sidecar-blockchain: ${{ steps.filter.outputs['sidecar-blockchain'] }}
+      sidecar-fake: ${{ steps.filter.outputs['sidecar-fake'] }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      e2e-stack: ${{ steps.filter.outputs['e2e-stack'] }}
       docker-matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - name: Checkout
@@ -71,6 +74,21 @@ jobs:
               - '.github/workflows/**'
             sidecar-blockchain:
               - 'sidecar-blockchain/**'
+              - '.github/workflows/**'
+            sidecar-fake:
+              - 'sidecar-fake/**'
+              - '.github/workflows/**'
+            e2e:
+              - 'e2e/**'
+              - '.github/workflows/**'
+            # T107 E2E smoke (advisory) — runs when the harness, the fake, the
+            # compose file, or the services it exercises change.
+            e2e-stack:
+              - 'e2e/**'
+              - 'sidecar-fake/**'
+              - 'docker-compose.e2e.yml'
+              - 'backend/**'
+              - 'frontend/**'
               - '.github/workflows/**'
 
       # Build a matrix JSON for docker-build-check. Empty array when no
@@ -194,6 +212,17 @@ jobs:
         working-directory: sidecar-blockchain
         run: npm run format:check
 
+      # T107 — fake sidecar (E2E test double) + e2e harness quality gates
+      # (validator N1). Blocking like the other sidecars; sidecar-fake also runs
+      # its vitest suite in the JS test job.
+      - name: Sidecar-fake typecheck + format + lint
+        working-directory: sidecar-fake
+        run: npm ci && npx tsc --noEmit && npm run format:check && npm run lint
+
+      - name: E2E typecheck + format + lint
+        working-directory: e2e
+        run: npm ci && npx tsc --noEmit && npm run format:check && npm run lint
+
       # npm audit — sidecar dependency advisories (WP18). Steam is ADVISORY
       # (continue-on-error) permanently: it carries upstream-unfixable transitive
       # criticals (request@2.88.2 / protobufjs) whose only npm "fix" is a
@@ -265,7 +294,7 @@ jobs:
   frontend-test:
     name: 3b. JS test (vitest)
     needs: [changes, build]
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -289,6 +318,11 @@ jobs:
       - name: Sidecar-blockchain vitest
         if: needs.changes.outputs['sidecar-blockchain'] == 'true'
         working-directory: sidecar-blockchain
+        run: npm ci && npm run test
+
+      - name: Sidecar-fake vitest
+        if: needs.changes.outputs['sidecar-fake'] == 'true'
+        working-directory: sidecar-fake
         run: npm ci && npm run test
 
   # ----------------------------------------------------------------------------
@@ -570,6 +604,82 @@ jobs:
           load: false
           cache-from: type=gha,scope=ci-${{ matrix.component.name }}
           cache-to: type=gha,mode=max,scope=ci-${{ matrix.component.name }}
+
+  # ----------------------------------------------------------------------------
+  # E2E smoke (T107) — ADVISORY / non-blocking. Boots the docker-compose.e2e.yml
+  # backend stack (the fake sidecar stands in for the real Steam/blockchain
+  # sidecars), applies migrations, and drives the happy path CREATED -> COMPLETED
+  # via the API-level Playwright smoke. continue-on-error + excluded from
+  # ci-gate.needs, so a flaky run never blocks a merge (owner decision). The
+  # smoke (API + UI) is also proven locally — this is an extra signal.
+  # ----------------------------------------------------------------------------
+  e2e-smoke:
+    name: E2E smoke (advisory)
+    needs: [changes]
+    if: needs.changes.outputs['e2e-stack'] == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dotnet-ef tool
+        run: dotnet tool install --global dotnet-ef --version 9.0.3
+
+      - name: Build e2e images (backend + fake sidecar)
+        run: docker compose -f docker-compose.e2e.yml build skinora-backend skinora-fake-sidecar
+
+      - name: Start database
+        run: docker compose -f docker-compose.e2e.yml up -d skinora-db
+
+      - name: Wait for database health
+        run: |
+          for i in $(seq 1 40); do
+            h=$(docker inspect --format '{{.State.Health.Status}}' skinora-e2e-db 2>/dev/null || echo starting)
+            echo "db health: $h"
+            [ "$h" = "healthy" ] && exit 0
+            sleep 5
+          done
+          echo "::error::database did not become healthy"; exit 1
+
+      - name: Apply migrations
+        working-directory: backend
+        env:
+          ConnectionStrings__DefaultConnection: 'Server=localhost,14333;Database=Skinora;User Id=sa;Password=E2e!Strong!Pass!2345;TrustServerCertificate=True;'
+        run: |
+          dotnet ef database update \
+            --project src/Skinora.Shared/Skinora.Shared.csproj \
+            --startup-project src/Skinora.API/Skinora.API.csproj \
+            --context AppDbContext
+
+      - name: Start backend stack
+        run: docker compose -f docker-compose.e2e.yml up -d --wait skinora-backend skinora-fake-sidecar
+
+      - name: Run API happy-path smoke
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://localhost:5000
+          E2E_FAKE_URL: http://localhost:5200
+        run: npm ci && npm run test:smoke
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.e2e.yml logs --tail=200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
 
   # ----------------------------------------------------------------------------
   # CI Gate — toplu PASS kontrolu icin tek required check

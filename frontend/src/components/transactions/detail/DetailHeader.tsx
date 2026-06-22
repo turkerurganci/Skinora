@@ -19,7 +19,7 @@ export function DetailHeader({ id, status }: DetailHeaderProps) {
       <h1 className="text-2xl font-semibold text-gray-900" title={id}>
         {t("title", { id: shortId })}
       </h1>
-      <StatusBadge status={status} />
+      <StatusBadge status={status} testId="tx-status-badge" />
     </div>
   );
 }

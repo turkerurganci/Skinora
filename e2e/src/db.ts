@@ -37,7 +37,13 @@ export const seed = {
 };
 
 /** Seed seller, buyer, ACTIVE bot, and a matching price-cache row (0% deviation
- *  → CREATED, not FLAGGED). Idempotent: clears prior e2e rows first. */
+ *  → CREATED, not FLAGGED). Idempotent: clears prior e2e rows first.
+ *
+ *  The buyer is a pre-registered STEAM_ID user seeded up-front, so create sets
+ *  the transaction's BuyerId — the mainline shape exercised by both the API and
+ *  UI smokes. Post-WP20 the detail service's canAccept gate
+ *  (`role==buyer && CREATED`) enables the accept form for a registered STEAM_ID
+ *  buyer, not only a BuyerId-null prospect. */
 export async function seedHappyPath(): Promise<typeof seed> {
   const p = await getPool();
   const r = () => p.request();
@@ -78,18 +84,8 @@ export async function seedHappyPath(): Promise<typeof seed> {
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 
-  // Buyer — exists + not suspended; refund address supplied per-transaction at accept.
-  await r()
-    .input('id', sql.UniqueIdentifier, seed.buyerId)
-    .input('steamId', sql.NVarChar(20), seed.buyerSteamId)
-    .input('name', sql.NVarChar(100), 'E2E Buyer')
-    .query(
-      `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
-         MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
-         CreatedAt, UpdatedAt)
-       VALUES (@id, @steamId, @name, 'en', 1, 0, 0, 0, 0,
-         DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
-    );
+  // Buyer — registered STEAM_ID user, seeded up-front so create sets BuyerId.
+  await insertBuyer();
 
   // Bot — ACTIVE (0), zero load → always selected first.
   await r()
@@ -117,6 +113,23 @@ export async function seedHappyPath(): Promise<typeof seed> {
     );
 
   return seed;
+}
+
+/** Insert the buyer User (registered STEAM_ID party). */
+async function insertBuyer(): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('id', sql.UniqueIdentifier, seed.buyerId)
+    .input('steamId', sql.NVarChar(20), seed.buyerSteamId)
+    .input('name', sql.NVarChar(100), 'E2E Buyer')
+    .query(
+      `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
+         MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+         CreatedAt, UpdatedAt)
+       VALUES (@id, @steamId, @name, 'en', 1, 0, 0, 0, 0,
+         DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
+    );
 }
 
 /** Notification types produced for the seeded parties (WP19 assertion).

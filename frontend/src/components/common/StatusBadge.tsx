@@ -26,12 +26,17 @@ const STATUS_COLOR_MAP: Record<ExtendedStatus, string> = {
 export interface StatusBadgeProps {
   status: ExtendedStatus;
   className?: string;
+  /** Optional test hook (T107 E2E). `data-status` carries the raw enum value
+   *  regardless; pass `testId` where a stable selector is needed (detail header). */
+  testId?: string;
 }
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
+export function StatusBadge({ status, className, testId }: StatusBadgeProps) {
   const t = useTranslations("status");
   return (
     <span
+      data-testid={testId}
+      data-status={status}
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset whitespace-nowrap",
         STATUS_COLOR_MAP[status],
