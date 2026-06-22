@@ -45,7 +45,7 @@
 | Backend build (solution) | ✓ | `dotnet build Skinora.sln` exit 0 |
 | sidecar-fake | ✓ tsc + lint + format + vitest 12/12 | `npm run build/lint/format:check/test` |
 | e2e statik | ✓ tsc --noEmit + lint + format | `npx tsc --noEmit` + `npm run lint` + prettier |
-| E2E senaryoları (6) | ⏳ CI'da | docker-compose.e2e yığını gerektirir; CI advisory `e2e-smoke` job'una eklenen "Run API payment edge cases E2E (T110)" adımı (`npm run test:payment`) koşar (lokal docker stack ile çalıştırılmadı — T107–T109 ile aynı kalıp) |
+| E2E senaryoları (6) | ✓ 6/6 CI'da geçti | CI advisory `e2e-smoke` job'unda "Run API payment edge cases E2E (T110)" adımı (`npm run test:payment`) — run `27986154333` (HEAD `d97e27e`) step **conclusion=success**, 6/6 test migrated docker-compose stack'inde geçti (5 passed (16.0m) + §5.2 fix sonrası 6/6). happy-path/T108/T109 step'leri de success (regresyon yok) |
 
 ## Doğrulama
 
@@ -73,9 +73,9 @@
 ## Commit & PR
 
 - Branch: `task/T110-e2e-payment-edge-cases`
-- Commit: `4db9bf7` — T110: E2E — Ödeme edge case'leri (payment edge cases E2E)
+- Commit: `4db9bf7` (kod) → `d97e27e` (final, §5.2 fix dahil)
 - PR: #202
-- CI: ⏳ izleniyor
+- CI: ✓ PASS — run `27986154333` (HEAD `d97e27e`): CI Gate (blocking) success + advisory `e2e-smoke` job success (T110 step 6/6 success)
 
 ## Known Limitations / Follow-up
 
