@@ -41,6 +41,13 @@ export const seed = {
   price: '100.00',
 };
 
+// The buyer's on-chain wallet the fake sidecar pays FROM = fakeTronAddress(999_001)
+// (sidecar-fake/src/routes/control.ts BUYER_WALLET). Every payment-edge-case
+// refund returns to the payment *source* address (02 §4.6), so the refund row's
+// ToAddress equals this — distinct from seed.buyerRefundAddress (the trade-side
+// refund wallet used only by the item-timeout BUYER_REFUND).
+export const fakeBuyerWallet = 'TGDcTRVZVvKBUE7h5fRCVUjRGj6K52AFWg';
+
 /** Seed seller, buyer, ACTIVE bot, and a matching price-cache row (0% deviation
  *  → CREATED, not FLAGGED). Idempotent: clears prior e2e rows first.
  *
@@ -294,6 +301,91 @@ export async function pollBuyerRefundConfirmed(
     await new Promise((res) => setTimeout(res, interval));
   }
   return last;
+}
+
+/** Allow-list of BlockchainTransaction.Type values an e2e test polls for. The
+ *  value is a bound parameter (never interpolated), but the union keeps callers
+ *  honest about which rows the harness expects. */
+export type BlockchainTxType =
+  | 'BUYER_PAYMENT'
+  | 'BUYER_REFUND'
+  | 'EXCESS_REFUND'
+  | 'INCORRECT_AMOUNT_REFUND'
+  | 'WRONG_TOKEN_REFUND'
+  | 'LATE_PAYMENT_REFUND'
+  | 'SPAM_TOKEN_INCOMING';
+
+/** Poll until a BlockchainTransaction of `type` for `transactionId` reaches
+ *  CONFIRMED, then return its row. Generalises pollBuyerRefundConfirmed for the
+ *  T110 payment-edge-case refund rows (INCORRECT_AMOUNT_REFUND / EXCESS_REFUND /
+ *  WRONG_TOKEN_REFUND / LATE_PAYMENT_REFUND) and the §5.3a SPAM_TOKEN_INCOMING
+ *  audit row (which the backend writes directly at terminal CONFIRMED). The fake
+ *  blockchain sidecar auto-confirms outgoing transfers, so refund rows reach
+ *  CONFIRMED on the per-minute dispatch + confirmation cadence with no extra
+ *  control call. Returns the last-seen row (or null if none was ever written). */
+export async function pollBlockchainTxConfirmed(
+  transactionId: string,
+  type: BlockchainTxType,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<BuyerRefundRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 180_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  let last: BuyerRefundRow | null = null;
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('tx', sql.UniqueIdentifier, transactionId)
+      .input('type', sql.NVarChar(40), type)
+      .query(
+        `SELECT TOP 1 Status, Amount, ToAddress FROM BlockchainTransactions
+         WHERE TransactionId = @tx AND Type = @type
+         ORDER BY CreatedAt DESC`,
+      );
+    if (result.recordset.length) {
+      const row = result.recordset[0];
+      last = {
+        status: String(row.Status),
+        amount: String(row.Amount),
+        toAddress: String(row.ToAddress),
+      };
+      if (last.status === 'CONFIRMED') return last;
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return last;
+}
+
+/** Poll until every `expected` recipient has an inbox row of `type`, then
+ *  return the distinct recipient UserIds (lower-cased, within the seeded seller
+ *  + buyer). Generalises pollCancelledNoticeRecipients for the T110
+ *  payment-edge-case notifications (INSUFFICIENT_PAYMENT / OVERPAYMENT_REFUNDED /
+ *  WRONG_TOKEN_REFUND / LATE_PAYMENT_REFUNDED — all buyer-targeted). */
+export async function pollNotificationRecipients(
+  type: string,
+  expected: string[],
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<string[]> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 30_000);
+  const interval = opts?.intervalMs ?? 2_000;
+  const want = expected.map((e) => e.toLowerCase());
+  let recipients: string[] = [];
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('s', sql.UniqueIdentifier, seed.sellerId)
+      .input('b', sql.UniqueIdentifier, seed.buyerId)
+      .input('type', sql.NVarChar(64), type)
+      .query(
+        `SELECT DISTINCT UserId FROM Notifications
+         WHERE Type = @type AND UserId IN (@s, @b)`,
+      );
+    recipients = result.recordset.map((row) => String(row.UserId).toLowerCase());
+    if (want.every((e) => recipients.includes(e))) return recipients;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return recipients;
 }
 
 /** Phase-deadline columns on the Transactions table (06 §3.5). Fixed allow-list
