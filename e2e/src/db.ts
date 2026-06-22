@@ -303,6 +303,24 @@ export async function pollBuyerRefundConfirmed(
   return last;
 }
 
+/** The exact amount the buyer is expected to pay into the deposit address
+ *  (PaymentAddress.ExpectedAmount) — the listing price plus the buyer-side
+ *  commission (≈102 for a 100 listing; 02 §4.6). Used by the §5.2 overpayment
+ *  test so the asserted excess (received − expected) does not hard-code the fee.
+ *  Returns -1 when no PaymentAddress exists yet. */
+export async function getExpectedAmount(transactionId: string): Promise<number> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 ExpectedAmount FROM PaymentAddresses
+       WHERE TransactionId = @tx AND IsDeleted = 0
+       ORDER BY CreatedAt DESC`,
+    );
+  return result.recordset.length ? Number(result.recordset[0].ExpectedAmount) : -1;
+}
+
 /** Allow-list of BlockchainTransaction.Type values an e2e test polls for. The
  *  value is a bound parameter (never interpolated), but the union keeps callers
  *  honest about which rows the harness expects. */

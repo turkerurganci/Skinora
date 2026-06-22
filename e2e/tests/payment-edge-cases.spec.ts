@@ -5,6 +5,7 @@ import {
   pollPostCancelMonitoring,
   pollBlockchainTxConfirmed,
   pollNotificationRecipients,
+  getExpectedAmount,
   getBotEscrowCount,
   closePool,
   seed,
@@ -124,8 +125,15 @@ test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays ITEM_ESCRO
 test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (excess only), buyer notified', async () => {
   const { txId, buyerToken } = await createAcceptEscrow();
 
-  // Buyer overpays (110 of the expected 100). Excess 10 − 2 gas = 8 ≥ 4.
-  const pay = await api.payViaFake(txId, { amount: '110.00' });
+  // The buyer's payable is ExpectedAmount = listing price + buyer commission
+  // (≈102 for a 100 listing, 02 §4.6) — NOT the bare price. Read it so the
+  // asserted excess does not hard-code the fee. Overpay by a comfortable margin
+  // so the excess clears the 2× gas threshold (4.0) and the refund proceeds.
+  const expectedAmount = await getExpectedAmount(txId);
+  expect(expectedAmount).toBeGreaterThan(0);
+  const overpayMargin = 20;
+  const sentAmount = expectedAmount + overpayMargin;
+  const pay = await api.payViaFake(txId, { amount: sentAmount.toFixed(6) });
   expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
 
   // 03 §5.2 step 4 — the platform accepts the correct amount; the transaction
@@ -135,11 +143,13 @@ test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (exces
     statusOf((await api.getTransaction(buyerToken, txId)).body),
   );
 
-  // step 5 — ONLY the excess (received − expected = 10) is refunded.
+  // step 5 — ONLY the excess (received − expected) is refunded to the buyer's
+  // source wallet. The EXCESS_REFUND row carries the gross excess (gas is
+  // deducted at broadcast, not from the stored Amount).
   const refund = await pollBlockchainTxConfirmed(txId, 'EXCESS_REFUND');
   expect(refund, 'EXCESS_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBe(10);
+  expect(Number(refund?.amount)).toBeCloseTo(overpayMargin, 2);
   expect(refund?.toAddress).toBe(fakeBuyerWallet);
 
   // step 7 — buyer notified.
