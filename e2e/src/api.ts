@@ -61,6 +61,22 @@ export function getTransaction(token: string, id: string): Promise<ApiResult> {
   return call('GET', `/api/v1/transactions/${id}`, token);
 }
 
+/** User-facing cancel — POST /transactions/:id/cancel (07 §7.7). The caller
+ *  must be the seller or buyer; reason is required (>=10 chars). */
+export function cancelTransaction(token: string, id: string, reason: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/transactions/${id}/cancel`, token, { reason });
+}
+
+/** Admin cancel — POST /admin/transactions/:id/cancel (07 §9.20). Requires the
+ *  CANCEL_TRANSACTIONS permission, satisfied by a super_admin role claim. */
+export function adminCancelTransaction(
+  token: string,
+  id: string,
+  reason: string,
+): Promise<ApiResult> {
+  return call('POST', `/api/v1/admin/transactions/${id}/cancel`, token, { reason });
+}
+
 /** Simulate the buyer's on-chain payment via the fake sidecar control surface. */
 export async function payViaFake(transactionId: string): Promise<ApiResult> {
   const res = await fetch(`${e2eConfig.fakeUrl}/__e2e/payment/pay`, {
@@ -103,4 +119,38 @@ export async function pollStatus(
     await new Promise((res) => setTimeout(res, interval));
   }
   throw new Error(`timeout awaiting ${target} for ${id} (last status=${last})`);
+}
+
+/** Poll until the transaction reaches a post-payment state in which the buyer's
+ *  payment is in custody AND an admin cancel still triggers a refund —
+ *  PAYMENT_RECEIVED or TRADE_OFFER_SENT_TO_BUYER, i.e. before ITEM_DELIVERED
+ *  (02 §7 / 03 §8.7). In these states a *user* cancel must be rejected with
+ *  PAYMENT_ALREADY_SENT. Accepting either state makes the test race-free against
+ *  the per-minute delivery-dispatch job: catching PAYMENT_RECEIVED early leaves
+ *  a wide window, and a brief slip to TRADE_OFFER_SENT_TO_BUYER is still
+ *  refundable. Throws if the flow advances to ITEM_DELIVERED or a terminal
+ *  state first (the drive overran the cancellable window). */
+export async function pollUntilRefundableCancel(
+  token: string,
+  id: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<string> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 90_000);
+  const interval = opts?.intervalMs ?? 1_000;
+  let last: string | undefined;
+  while (Date.now() < deadline) {
+    const r = await getTransaction(token, id);
+    last = statusOf(r.body);
+    if (last === 'PAYMENT_RECEIVED' || last === 'TRADE_OFFER_SENT_TO_BUYER') return last;
+    if (
+      last === 'ITEM_DELIVERED' ||
+      last === 'COMPLETED' ||
+      last === 'FLAGGED' ||
+      (last !== undefined && last.startsWith('CANCELLED'))
+    ) {
+      throw new Error(`transaction ${id} advanced to ${last} before a refundable-cancel state`);
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  throw new Error(`timeout awaiting a refundable-cancel state for ${id} (last status=${last})`);
 }

@@ -30,6 +30,11 @@ export const seed = {
   botId: '33333333-3333-3333-3333-333333333333',
   botDisplayName: 'E2E-Bot',
   priceCacheId: '44444444-4444-4444-4444-444444444444',
+  // Admin actor for the admin-cancel scenarios (T108). AuditLog.ActorId is an
+  // FK to Users, so the admin must exist as a row; the CANCEL_TRANSACTIONS
+  // permission itself comes from the super_admin role claim on the JWT.
+  adminId: '55555555-5555-5555-5555-555555555555',
+  adminSteamId: '76561198000000099',
   // Must match the fake's inventory item (assetId + marketHashName).
   itemAssetId: '11111111001',
   itemMarketHashName: 'AK-47 | Redline (Field-Tested)',
@@ -115,6 +120,28 @@ export async function seedHappyPath(): Promise<typeof seed> {
   return seed;
 }
 
+/** Idempotently ensure the admin User exists (T108 admin-cancel scenarios).
+ *  Insert-if-absent rather than delete+recreate: admin cancel writes AuditLog
+ *  rows referencing this id under a NO ACTION FK, so the row must persist across
+ *  tests. The super_admin role on the JWT — not a DB role assignment — grants
+ *  the CANCEL_TRANSACTIONS permission. */
+export async function ensureAdmin(): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('id', sql.UniqueIdentifier, seed.adminId)
+    .input('steamId', sql.NVarChar(20), seed.adminSteamId)
+    .input('name', sql.NVarChar(100), 'E2E Admin')
+    .query(
+      `IF NOT EXISTS (SELECT 1 FROM Users WHERE Id = @id)
+         INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
+           MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+           CreatedAt, UpdatedAt)
+         VALUES (@id, @steamId, @name, 'en', 1, 0, 0, 0, 0,
+           DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
+    );
+}
+
 /** Insert the buyer User (registered STEAM_ID party). */
 async function insertBuyer(): Promise<void> {
   const p = await getPool();
@@ -162,6 +189,111 @@ export async function pollNotificationTypes(
     await new Promise((res) => setTimeout(res, interval));
   }
   return types;
+}
+
+/** Poll until every `expected` recipient has a TRANSACTION_CANCELLED inbox row,
+ *  then return the distinct recipient UserIds (lower-cased, within the seeded
+ *  seller + buyer). Lets a test assert the exact fan-out: seller-cancel → buyer
+ *  only (03 §2.5), buyer-cancel → seller only (03 §3.3), admin-cancel → both
+ *  (03 §8.7). */
+export async function pollCancelledNoticeRecipients(
+  expected: string[],
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<string[]> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 30_000);
+  const interval = opts?.intervalMs ?? 2_000;
+  const want = expected.map((e) => e.toLowerCase());
+  let recipients: string[] = [];
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('s', sql.UniqueIdentifier, seed.sellerId)
+      .input('b', sql.UniqueIdentifier, seed.buyerId)
+      .query(
+        `SELECT DISTINCT UserId FROM Notifications
+         WHERE Type = 'TRANSACTION_CANCELLED' AND UserId IN (@s, @b)`,
+      );
+    recipients = result.recordset.map((row) => String(row.UserId).toLowerCase());
+    if (want.every((e) => recipients.includes(e))) return recipients;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return recipients;
+}
+
+/** Poll until the RETURN_TO_SELLER refund offer for `transactionId` is ACCEPTED
+ *  (the fake self-drives the seller's acceptance), proving the escrowed item was
+ *  returned to the seller. */
+export async function pollRefundOfferAccepted(
+  transactionId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<boolean> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 120_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('tx', sql.UniqueIdentifier, transactionId)
+      .query(
+        `SELECT Status FROM TradeOffers
+         WHERE TransactionId = @tx AND Direction = 'RETURN_TO_SELLER'`,
+      );
+    if (result.recordset.some((row) => String(row.Status) === 'ACCEPTED')) return true;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return false;
+}
+
+/** Read the seeded bot's denormalized ActiveEscrowCount (06 §3.10). Returns -1
+ *  when the bot row is missing. */
+export async function getBotEscrowCount(): Promise<number> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('steamId', sql.NVarChar(20), e2eConfig.botSteamId)
+    .query('SELECT ActiveEscrowCount FROM PlatformSteamBots WHERE SteamId = @steamId');
+  return result.recordset.length ? Number(result.recordset[0].ActiveEscrowCount) : -1;
+}
+
+export interface BuyerRefundRow {
+  status: string;
+  amount: string;
+  toAddress: string;
+}
+
+/** Poll until the BUYER_REFUND blockchain transfer for `transactionId` reaches
+ *  CONFIRMED. The dispatch + confirmation Hangfire jobs run on a per-minute
+ *  cadence, so the timeout is generous. Returns the row (last-seen on timeout),
+ *  or null if no BUYER_REFUND row was ever queued. */
+export async function pollBuyerRefundConfirmed(
+  transactionId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<BuyerRefundRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 180_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  let last: BuyerRefundRow | null = null;
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('tx', sql.UniqueIdentifier, transactionId)
+      .query(
+        `SELECT Status, Amount, ToAddress FROM BlockchainTransactions
+         WHERE TransactionId = @tx AND Type = 'BUYER_REFUND'`,
+      );
+    if (result.recordset.length) {
+      const row = result.recordset[0];
+      last = {
+        status: String(row.Status),
+        amount: String(row.Amount),
+        toAddress: String(row.ToAddress),
+      };
+      if (last.status === 'CONFIRMED') return last;
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return last;
 }
 
 export async function closePool(): Promise<void> {
