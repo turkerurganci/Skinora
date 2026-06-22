@@ -619,7 +619,14 @@ jobs:
     if: needs.changes.outputs['e2e-stack'] == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 35
+    # Four E2E suites run sequentially in this single advisory job (happy-path +
+    # T108 cancel + T109 timeout + T110 payment), each gated by the per-minute
+    # transfer/escrow Hangfire crons, so the budget grows per suite. T110 (6
+    # tests, incl. the timeout-reuse §5.4) pushed the total past the previous
+    # 35-min cap. Raised to 70 to fit the 4th suite with margin. NOTE: this
+    # single-job pattern will not scale to T111–T114 — split into parallel jobs
+    # (or a matrix) when they land.
+    timeout-minutes: 70
     steps:
       - name: Checkout
         uses: actions/checkout@v4
