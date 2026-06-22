@@ -39,13 +39,12 @@ export const seed = {
 /** Seed seller, buyer, ACTIVE bot, and a matching price-cache row (0% deviation
  *  → CREATED, not FLAGGED). Idempotent: clears prior e2e rows first.
  *
- *  `includeBuyer` (default true): the API smoke seeds the buyer up-front and
- *  accepts via the endpoint. The UI smoke passes false so the transaction is
- *  created with BuyerId=null — the detail service's canAccept gate
- *  (`role==buyer && CREATED && BuyerId is null`) only enables the UI accept form
- *  for a prospective buyer; a pre-registered (BuyerId-set) buyer gets
- *  canAccept=false. The UI spec calls insertBuyer() AFTER create. */
-export async function seedHappyPath(opts?: { includeBuyer?: boolean }): Promise<typeof seed> {
+ *  The buyer is a pre-registered STEAM_ID user seeded up-front, so create sets
+ *  the transaction's BuyerId — the mainline shape exercised by both the API and
+ *  UI smokes. Post-WP20 the detail service's canAccept gate
+ *  (`role==buyer && CREATED`) enables the accept form for a registered STEAM_ID
+ *  buyer, not only a BuyerId-null prospect. */
+export async function seedHappyPath(): Promise<typeof seed> {
   const p = await getPool();
   const r = () => p.request();
 
@@ -85,11 +84,8 @@ export async function seedHappyPath(opts?: { includeBuyer?: boolean }): Promise<
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 
-  // Buyer — up-front for the API smoke; deferred (insertBuyer after create) for
-  // the UI smoke so BuyerId stays null at creation (prospective buyer).
-  if (opts?.includeBuyer !== false) {
-    await insertBuyer();
-  }
+  // Buyer — registered STEAM_ID user, seeded up-front so create sets BuyerId.
+  await insertBuyer();
 
   // Bot — ACTIVE (0), zero load → always selected first.
   await r()
@@ -119,9 +115,8 @@ export async function seedHappyPath(opts?: { includeBuyer?: boolean }): Promise<
   return seed;
 }
 
-/** Insert the buyer User. Separated so the UI spec can defer it until AFTER the
- *  transaction is created (keeps BuyerId null → prospective buyer → canAccept). */
-export async function insertBuyer(): Promise<void> {
+/** Insert the buyer User (registered STEAM_ID party). */
+async function insertBuyer(): Promise<void> {
   const p = await getPool();
   await p
     .request()

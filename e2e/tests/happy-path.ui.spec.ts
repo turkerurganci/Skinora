@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { seedHappyPath, insertBuyer, closePool, seed } from '../src/db';
+import { seedHappyPath, closePool, seed } from '../src/db';
 import { mintAccessToken } from '../src/jwt';
 import { injectLogin, waitForUiStatus } from '../src/browser';
 import * as api from '../src/api';
@@ -17,10 +17,11 @@ test.afterAll(async () => {
 });
 
 test('UI happy path: badge tracks CREATED → COMPLETED', async ({ page, context }) => {
-  // Defer the buyer so the transaction is created with BuyerId=null — that's the
-  // prospective-buyer shape the detail service's canAccept gate requires to
-  // enable the UI accept form.
-  await seedHappyPath({ includeBuyer: false });
+  // Mainline shape: the buyer is a pre-registered STEAM_ID user, so create sets
+  // the transaction's BuyerId. This exercises the WP20 canAccept fix — a
+  // registered STEAM_ID buyer (BuyerId set) must still see the UI accept form
+  // enabled (the gate no longer requires BuyerId=null).
+  await seedHappyPath();
   const sellerToken = mintAccessToken({ userId: seed.sellerId, steamId: seed.sellerSteamId });
   const buyerToken = mintAccessToken({ userId: seed.buyerId, steamId: seed.buyerSteamId });
 
@@ -37,10 +38,6 @@ test('UI happy path: badge tracks CREATED → COMPLETED', async ({ page, context
   });
   expect(create.ok, `create failed: ${JSON.stringify(create.body)}`).toBeTruthy();
   const txId = String(api.unwrap(create.body).id);
-
-  // Now seed the buyer User (login + accept need it); the transaction's BuyerId
-  // stays null, so the buyer is a prospective buyer with canAccept=true.
-  await insertBuyer();
 
   // Buyer logs in (JWT-inject) and opens the detail page.
   await injectLogin(context, buyerToken);

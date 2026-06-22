@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor — **PR-3/3 bağımsız validator ✓ PASS (2026-06-22)** ama **T107 HELD: canAccept fix-task öncesi** (owner kararı "önce düzelt, sonra T107 kapat"; registered STEAM_ID buyer UI'dan kabul edemiyor — 03 §3.2:195 sapması). PR-1 ✓ merged+validator PASS; PR-2 ✓ merged+validator PASS; PR-3 deliverables (FE testid + UI smoke + CI e2e job) ✓ kanıtlı, **merge edilmedi**. | **Tarih:** 2026-06-22
+**Faz:** F6 | **Durum:** ⏳ PR-3/3 merge-hazır — **canAccept keşfi WP20 ile çözüldü (PR #199 → main `4c5b1a0`)**; PR-3 main üzerine rebase'lendi ve **UI smoke mainline registered-buyer akışına geri alındı** (deferred-buyer workaround kaldırıldı) → WP20 fix'i UI'dan uçtan uca **yerel re-verify** edildi (1 passed 4.5m; DB: `BuyerId=SET` + COMPLETED + 7 bildirim). PR-1/PR-2 ✓ merged+validator PASS; PR-3 deliverables (FE testid + UI smoke + CI e2e job) ✓. **Merge → T107 kapanır.** | **Tarih:** 2026-06-22
 
 ---
 
@@ -209,8 +209,13 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 ### UI smoke sonucu — ✅ GREEN (yerel, chromium + full nginx stack)
 `npx playwright test happy-path.ui` → **1 passed (5.3m)**. Badge `data-status` izleme (DB ile teyitli): CREATED → ACCEPTED → TRADE_OFFER_SENT_TO_SELLER → PAYMENT_RECEIVED → ITEM_DELIVERED → **COMPLETED**. Accept **gerçek UI formuyla** yapıldı (mock değil). Full stack (db/redis/fake/backend/frontend/nginx) tümü healthy; `:8080/en` 200.
 
-### T107 keşfi (non-blocking finding — owner'a) — registered STEAM_ID buyer `canAccept`
-`TransactionDetailService.BuildAuthenticatedActions`: `canAccept = role=="buyer" && CREATED && BuyerId is null`. STEAM_ID **kayıtlı** alıcıda create `BuyerId`'yi **set ediyor** (`TransactionCreationService`) → detay `canAccept=false` → **UI accept formu disabled**, hâlbuki accept endpoint'i (party=SteamId eşleşme) izin veriyor. Yani kayıtlı bir hedef alıcı (TRANSACTION_INVITE alan) UI'dan kabul edemez; yalnız prospective (BuyerId null) alıcı edebilir. UI smoke bu yüzden **deferred-buyer** (prospective) akışını kullanır (gerçek bir akış: kayıtsız STEAM_ID alıcı). **Olası ürün boşluğu — WP19 gibi bir T107 keşfi; ayrı follow-up (owner kararı).** Backend/akış değiştirilmedi.
+### T107 keşfi (registered STEAM_ID buyer `canAccept`) — ✅ ÇÖZÜLDÜ (WP20)
+`TransactionDetailService.BuildAuthenticatedActions`: `canAccept = role=="buyer" && CREATED && BuyerId is null`. STEAM_ID **kayıtlı** alıcıda create `BuyerId`'yi **set ediyor** (`TransactionCreationService`) → detay `canAccept=false` → **UI accept formu disabled**, hâlbuki accept endpoint'i (party=SteamId eşleşme) izin veriyor. Yani kayıtlı bir hedef alıcı (TRANSACTION_INVITE alan) UI'dan kabul edemiyordu; yalnız prospective (BuyerId null) alıcı edebiliyordu. **Çözüm:** WP20 (`&& BuyerId is null` kaldırıldı + EMERGENCY_HOLD detay projeksiyonu), PR #199 → main `4c5b1a0`. Bu keşif sırasında UI smoke geçici olarak **deferred-buyer** (prospective) workaround'unu kullanıyordu; WP20 sonrası **mainline registered-buyer akışına geri alındı** (aşağı bkz.).
+
+### PR-3 güncelleme (post-WP20) — UI smoke mainline registered-buyer'a alındı + re-verify
+WP20 main'e merge edilip PR-3 rebase'lendikten sonra deferred-buyer workaround kaldırıldı: `seedHappyPath()` artık alıcıyı **kayıtlı STEAM_ID** kullanıcı olarak create öncesi seed eder (`includeBuyer` opsiyonu + `insertBuyer` deferred-çağrısı silindi; her iki smoke da mainline shape). Böylece UI smoke artık WP20'nin asıl senaryosunu — create-time `BuyerId` set olan kayıtlı alıcının gerçek UI formundan kabul etmesini — egzersiz ediyor.
+- **Yerel re-verify (full stack, chromium + nginx `:8080`):** `npx playwright test happy-path.ui` → **1 passed (4.5m)**. DB teyidi: `Transactions.BuyerId=SET(registered)` + `TargetBuyerSteamId=76561198000000061` + `Status=COMPLETED`; `Notifications` = 7 tip (TRANSACTION_INVITE / BUYER_ACCEPTED / ITEM_ESCROWED / PAYMENT_RECEIVED / TRADE_OFFER_SENT_TO_BUYER / SELLER_PAYMENT_SENT / TRANSACTION_COMPLETED×2; ITEM_DELIVERED yok = WP19 bastırma).
+- **Net değişiklik:** yalnız `e2e/src/db.ts` + `e2e/tests/happy-path.ui.spec.ts` (workaround scaffolding kaldırıldı, backend/FE dokunulmadı). e2e tsc/eslint ✓, prettier `--end-of-line=auto` temiz.
 
 ### Doğrulama (lokal)
 - FE: lint ✓ · format (düzenlenen 3 dosya) ✓ · vitest **28/28** · frontend image build ✓ (UI smoke kullandı).
@@ -239,7 +244,7 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 ### Kabul kriterleri (T107 bütünü)
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | Tam akış → COMPLETED | ✓ | API smoke (PR-2) + UI smoke prospective buyer (PR-3) |
+| 1 | Tam akış → COMPLETED | ✓ | API smoke (PR-2) + UI smoke registered STEAM_ID buyer (PR-3, post-WP20 mainline) |
 | 2 | Tüm bildirimler | ✓ | PR-2/WP19 — 7 tip + COMPLETED×2, ITEM_DELIVERED yok |
 | 3 | State geçişleri UI'da | ✓ | `happy-path.ui.spec.ts` gerçek chromium+nginx, badge `data-status` her geçiş |
 
@@ -253,7 +258,7 @@ ITEM_DELIVERED için bildirim **yok** (WP19 bastırma) — doğrulandı. COMPLET
 ### Bulgu — S1 sapma (pre-existing kod, PR-3 sokmadı) → **owner: önce düzelt**
 **registered STEAM_ID buyer `canAccept`:** `TransactionDetailService.cs:468-470` `canAccept = role=="buyer" && CREATED && BuyerId is null`. STEAM_ID **kayıtlı** alıcıda create `BuyerId`'yi set ediyor (`TransactionCreationService.cs:182-186,216`) → `canAccept=false` → UI AcceptForm **disabled** (`StateActionPanel.tsx:264`; `cannotAcceptReason` üstelik gerçek gate'le uyumsuz MA/cooldown metni). **03 §3.2:195 ("Eşleşiyorsa → devam eder") ile çelişir.** Ek inversion: `TRANSACTION_INVITE` bildirimi `BuyerId null→no-op` (WP19) → bildirim alan kayıtlı alıcı UI'dan kabul **edemiyor**, kabul edebilen prospective alıcı bildirim **almıyor** = mainline UI happy-path kırık. UI smoke deferred-buyer (prospective) ile aşıyor (geçerli bir variant ama mainline değil).
 
-**Owner kararı (AskUserQuestion 2026-06-22): "önce düzelt, sonra T107 kapat"** (WP19-style promote-before-close). → canAccept ayrı backend/FE fix-task'ı (ayrı yapım chat'i); sonra mevcut UI harness registered-buyer akışını da doğrular → T107 öyle kapanır. **T107 merge edilmedi; PR #198 açık.**
+**Owner kararı (AskUserQuestion 2026-06-22): "önce düzelt, sonra T107 kapat"** (WP19-style promote-before-close). → canAccept ayrı backend/FE fix-task'ı (ayrı yapım chat'i); sonra mevcut UI harness registered-buyer akışını da doğrular → T107 öyle kapanır. **✅ Çözüldü: WP20 (PR #199 → main `4c5b1a0`) canAccept'i düzeltti; PR-3 rebase'lendi + UI smoke mainline registered-buyer'a alındı + yerel re-verify (1 passed 4.5m, `BuyerId=SET`/COMPLETED) — "PR-3 güncelleme (post-WP20)" bölümüne bkz. PR #198 merge-hazır.**
 
 ## Notlar
 
