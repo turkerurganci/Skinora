@@ -1,6 +1,6 @@
 # T109 — E2E: Timeout Senaryoları
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-06-22
+**Faz:** F6 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-22
 
 ---
 
@@ -62,9 +62,40 @@ Yeni `e2e/tests/timeout.spec.ts` 4 test (03 §4.1–§4.4):
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** (bağımsız validator chat, 2026-06-22, rapor görülmeden) |
+| Bulgu sayısı | 0 bloke-edici (4 non-blocking not) |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız Validator Sonucu (ayrı chat, 2026-06-22, branch `task/T109-e2e-timeout`)
+
+**Kapılar:**
+- Adım -1 working tree temiz · Adım 0 main son-3 CI **success** (`27970475909` / `27970475901` / `27954728455`) · Adım 0b repo memory T109 satırı mevcut.
+- Adım 8a task CI HEAD `62af869` run [`27974194159`](https://github.com/turkerurganci/Skinora/actions/runs/27974194159) tüm job **success** — **"Run API timeout E2E (T109)" ADIMI (#13) `conclusion=success`** (job-seviyesi `continue-on-error` step'i maskelemiyor → 4 timeout testi gerçek migrated docker-compose stack'inde koştu+geçti, vacuous değil).
+
+**Validator-firsthand (lokal full docker stack — build + db + `dotnet ef database update` + backend/fake healthy, `Timeouts__DeadlineScannerIntervalSeconds=5`):**
+- `npm run test:timeout` → **4 passed (6.0m), exit 0** — §4.1 accept 29.5s · §4.2 seller-offer 59.7s · §4.3 payment 1.1m · §4.4 delivery 3.4m.
+- Firsthand DB (§4.4 final, re-seed nedeniyle yalnız son senaryo): `Transactions.Status=CANCELLED_TIMEOUT` · `RETURN_TO_SELLER ACCEPTED` + `TO_BUYER SENT` (held = suppression kanıtı) + `TO_SELLER ACCEPTED` · `BUYER_REFUND CONFIRMED` ToAddress=`TJRyWwFs…EkEN` (buyerRefundAddress), Amount **100** = TotalAmount **102** − gas **2** (02 §4.6) · `PlatformSteamBots.ActiveEscrowCount=0` · `PaymentAddresses.MonitoringStatus=POST_CANCEL_24H`, `MonitoringExpiresAt` = cancelledAt **+ tam 24h** · `Notifications.Type='TRANSACTION_CANCELLED'` hem buyer (`2222…`) hem seller (`1111…`).
+
+**Bağımsız backend-seam doğrulaması (7-ajan adversarial workflow, refute-default — hepsi CONFIRMED):** Sıfır production değişiklik olduğundan, testlerin spec-uyumu tümüyle backend timeout yolunun doğru davranmasına bağlı. Firsthand kod referansıyla teyit edildi:
+- **C1 `DeadlineScannerJob`:** self-rescheduling Hangfire (`ScanAndRescheduleAsync` finally-reschedule); `machine.Fire(Timeout)` → state machine `Timeout → CANCELLED_TIMEOUT` (5 state); SQL guard `!IsDeleted && !IsOnHold && TimeoutFrozenAt==null`; `TimeoutSchedulingOptions` section `Timeouts` → `DeadlineScannerIntervalSeconds` (DI binding `TransactionsModule.cs:44`).
+- **C2 faz→kolon:** CREATED→`AcceptDeadline` · TRADE_OFFER_SENT_TO_SELLER→`TradeOfferToSellerDeadline` · ITEM_ESCROWED→`PaymentDeadline` · TRADE_OFFER_SENT_TO_BUYER→`TradeOfferToBuyerDeadline` (4 kolon entity'de mevcut, 06 §3.5).
+- **C3 §4.1/§4.2:** `ActiveEscrowCount` +1 yalnız `AcceptEscrowAsync` (SELLER_TO_BOT *accept*); `TimeoutSideEffectPublisher` Accept/TradeOfferToSeller → no-op (iade yok).
+- **C4 §4.3:** Payment fazı → `ItemRefundToSellerRequestedEvent` (RETURN_TO_SELLER) + `PostCancelMonitorStarter` `POST_CANCEL_24H` + `MonitoringExpiresAt=cancelledAt+24h` (`InitialWindow=24h`); `MonitoringStatus` enum + `PaymentAddress` kolonları mevcut.
+- **C5 §4.4:** Delivery fazı → item iade + `PaymentRefundToBuyerConsumer` `BUYER_REFUND` (Amount=NetRefund=TotalAmount−gas, ToAddress=BuyerRefundAddress).
+- **C6 bildirim:** `TransactionTimedOutNotificationConsumer` → her iki taraf `Type=TRANSACTION_CANCELLED`, buyer yalnız `BuyerId != null` ise (unit test her iki dal).
+- **C7 direction:** `SELLER_TO_BOT`/`BOT_TO_BUYER`/`BOT_TO_SELLER_REFUND` sabitleri + `ParseDirection` → `TO_SELLER`/`TO_BUYER`/`RETURN_TO_SELLER` tutarlı.
+
+**Statik & vacuousness:** e2e tsc0/eslint0 + sidecar-fake tsc0/eslint0/prettier-clean + vitest **12/12** (`tradeControl.test.ts` 5 dahil); e2e prettier committed-içerik LF-clean (lokal CRLF uyarısı `core.autocrlf=true` artefaktı, dokunulmamış T107/T108 dosyaları da işaretli, CI Lint job success). `retries:0`/`workers:1`/`fullyParallel:false`; `pollStatus` yanlış terminal CANCELLED durumunda throw (ayırt edici); `pollCancelledNoticeRecipients` `Type='TRANSACTION_CANCELLED'` filtreli; `getBotEscrowCount` bot satırı yoksa −1.
+
+**Güvenlik:** Secret sızıntısı yok (test-fixture `Jwt__Secret`/DB parolası); kontrol ucu (`/__e2e/*`) unauthenticated ama yalnız e2e harness'tan çağrılan **test double** (prod değil); `backdateDeadline` kolon **allow-list** + bound int offset (SQL injection yok); yeni dış bağımlılık yok; sıfır production kaynak değişikliği.
+
+**Rapor karşılaştırması:** Yapım raporuyla **0 uyuşmazlık**. Bağımsız incelenen tek detay — note #86 (§4.2'de PaymentAddress allocate → scanner `POST_CANCEL_24H` stamp'ler) — `TransactionCreationService` Stage 10c (`:310-313`, CREATED'da inline allocate) ile **doğrulandı** (note doğru).
+
+**Non-blocking notlar:**
+- **N1:** `e2e-smoke` CI advisory (`continue-on-error` + `ci-gate.needs`-dışı) — owner kararı; gelecekteki timeout-E2E regresyonu merge'i bloklamaz.
+- **N2:** §4.1 E2E **kayıtlı** buyer kullanır; "kayıtlıysa" kayıtsız-buyer dalı unit testte (`Handle_Skips_Buyer_When_Not_Registered`), E2E'de değil — AC karşılanıyor, boşluk değil.
+- **N3:** §4.5 `TIMEOUT_WARNING` kapsam dışı (owner kararı, AC'de yok; unit/integration kapsar).
+- **N4:** §4.1/§4.2'de de `POST_CANCEL_24H` stamp'lenir (PaymentAddress create'te allocate, scanner tüm timeout'larda `RequestStartAsync`); spec §4.1/§4.2 monitoring belirtmez ama defansif/zararsız + **pre-existing** backend davranışı (T75) — T109 testleri assert etmez, T109 kapsamı dışı.
 
 ## Altyapı Değişiklikleri
 
@@ -77,7 +108,7 @@ Yeni `e2e/tests/timeout.spec.ts` 4 test (03 §4.1–§4.4):
 - Branch: `task/T109-e2e-timeout`
 - Commit: `21e1ddd` — T109: E2E — Timeout senaryoları (timeout E2E)
 - PR: [#201](https://github.com/turkerurganci/Skinora/pull/201)
-- CI: izleniyor (Claude — evrensel kural)
+- CI: ✓ task CI run `27974194159` tüm job success (E2E timeout adımı dahil)
 
 ## Known Limitations / Follow-up
 
