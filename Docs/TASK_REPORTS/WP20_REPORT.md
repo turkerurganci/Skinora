@@ -1,6 +1,6 @@
 # WP20 — canAccept fix (kayıtlı STEAM_ID alıcı kabul edebilmeli + EMERGENCY_HOLD detay projeksiyonu)
 
-**Faz:** F6 (T107 keşfi — WP19-style promote-before-close) | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız validator bekliyor) | **Tarih:** 2026-06-22
+**Faz:** F6 (T107 keşfi — WP19-style promote-before-close) | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-22
 
 ---
 
@@ -59,8 +59,19 @@ T107 (E2E Happy path) PR-3 bağımsız validator'ı **S1 sapması** keşfetti: `
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Yapım bitti — bağımsız validator (ayrı chat) bekliyor |
-| Bulgu sayısı | — |
+| Doğrulama durumu | ✓ PASS (bağımsız validator, ayrı chat, 2026-06-22 — rapor görülmeden kendi verdict'i oluşturuldu) |
+| Bulgu sayısı | 0 bloke-edici |
+| Düzeltme gerekli mi | Hayır |
+
+### Bağımsız doğrulama kanıtı (validator)
+
+- **Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 CI success (`27915545862` / `27915545858` / `27912352893`) · Adım 0b repo memory WP20 satırı mevcut · Adım 8a task CI HEAD `97be933` run [`27920402672`](https://github.com/turkerurganci/Skinora/actions/runs/27920402672) **12/12 job success** (Lint/Build/Unit/Integration/Contract/Migration dry-run/JS-vitest/Docker×2/Gate; Guard skipped — PR branch).
+- **Validator-firsthand lokal:** `dotnet build -c Release` **0W/0E** · Transactions **803/803** · API `TransactionLifecycleEndpointTests` **25/25** · FE `check-i18n.mjs` **1291×4 identical** · FE `vitest` **28/28**.
+- **CHANGE A bağımsız teyit:** rol çözümü (`:70-96`) `role=="buyer"`'ı yalnız `callerId==BuyerId` / `BuyerId-null+STEAM_ID+SteamId-eşleşme` / OPEN_LINK-prospective'e atar → "Steam ID eşleşiyor" gate'ini zaten kapsar; `IsOnHold` early-return (`:457-466`) hold'da hepsini false bırakır; accept endpoint party guard (`TransactionAcceptanceService.cs:114`) yalnız `SteamId==TargetBuyerSteamId` kontrol eder (BuyerId'ye bakmaz) → yeni `canAccept` endpoint ile **tam tutarlı**, tek davranış-deltası kayıtlı STEAM_ID alıcı (BuyerId set) false→true. Seller/non-party/post-accept/hold yollarında sızma yok (testlerle + kodla doğrulandı).
+- **CHANGE B bağımsız teyit:** `EMERGENCY_HOLD` `TransactionStatus` enum üyesi **değil** (enum 14 üye); `ProjectStatus` helper list servisinin deseniyle birebir; `JsonStringEnumConverter` global (`Program.cs:279`/`:392`) → enum zaten string serileşiyordu, **hold-olmayan wire değeri değişmedi** (`"CREATED"`→`"CREATED"`), yalnız held işlemde `"EMERGENCY_HOLD"` overlay'ı eklenir; FE zaten `ExtendedStatus` string union bekliyor (`StatusBadge.tsx:5`, `helpers.ts:36`, `page.tsx:134`, `StateActionPanel.tsx:67`) → **sıfır FE mantık değişikliği**; `.Body.Status` üreten tek non-test compile sitesi 2 atama, controller `.Body.Id` okur.
+- **Güvenlik:** secret yok · auth zayıflatılmadı (canAccept advisory bit; endpoint guard değişmedi; public-path projeksiyon alt-durumu **gizler**, sızdırmaz) · yeni dış bağımlılık yok · migration/enum-üyesi yok → parity testleri etkilenmez.
+- **Non-blocking gözlemler:** (N1) public-path held projeksiyonu doğrudan unit-test edilmemiş (paylaşılan statik helper ile authenticated held testi `:217-247` kapsamı yeterli); (N2) `cannotAcceptReason` artık defansif/ulaşılamaz, key parity için korundu; (N3) i18n "untranslatable" advisory uyarıları (15) main'de pre-existing, WP20 ile ilgisiz.
+- **Yapım raporu karşılaştırması:** Tam uyumlu — 0 uyuşmazlık; rapor over-claim içermez (public-path projeksiyon kararı reviewer-takdirine dürüstçe işaretlenmiş).
 
 ## Altyapı Değişiklikleri
 
