@@ -77,12 +77,13 @@ export function adminCancelTransaction(
   return call('POST', `/api/v1/admin/transactions/${id}/cancel`, token, { reason });
 }
 
-/** Simulate the buyer's on-chain payment via the fake sidecar control surface. */
-export async function payViaFake(transactionId: string): Promise<ApiResult> {
-  const res = await fetch(`${e2eConfig.fakeUrl}/__e2e/payment/pay`, {
+/** POST to a fake-sidecar control endpoint (/__e2e/*). The control surface is
+ *  unauthenticated (the caller is the test) and shared across both fake ports. */
+async function fakePost(path: string, body: unknown): Promise<ApiResult> {
+  const res = await fetch(`${e2eConfig.fakeUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transactionId }),
+    body: JSON.stringify(body),
   });
   let json: unknown = null;
   try {
@@ -91,6 +92,25 @@ export async function payViaFake(transactionId: string): Promise<ApiResult> {
     json = null;
   }
   return { status: res.status, ok: res.ok, body: json };
+}
+
+/** Simulate the buyer's on-chain payment via the fake sidecar control surface. */
+export function payViaFake(transactionId: string): Promise<ApiResult> {
+  return fakePost('/__e2e/payment/pay', { transactionId });
+}
+
+/** Suppress the fake's auto-accept for a trade-offer dispatch direction
+ *  (SELLER_TO_BOT / BOT_TO_BUYER / BOT_TO_SELLER_REFUND). The offer is still
+ *  "sent" but never self-accepted, so the transaction parks in
+ *  TRADE_OFFER_SENT_TO_* — the setup for the 03 §4.2 / §4.4 timeout scenarios. */
+export function suppressTradeAccept(direction: string): Promise<ApiResult> {
+  return fakePost('/__e2e/trade/suppress-accept', { direction });
+}
+
+/** Clear every trade-accept suppression on the fake — restores the default
+ *  self-drive. Call between timeout scenarios so a held direction never leaks. */
+export function resetTradeControl(): Promise<ApiResult> {
+  return fakePost('/__e2e/trade/reset', {});
 }
 
 function statusOf(body: unknown): string | undefined {

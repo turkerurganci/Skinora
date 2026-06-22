@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { postWebhook } from '../webhookClient.js';
 import { fakeOfferId, fakeAssetId } from '../ids.js';
+import { isAcceptSuppressed } from '../tradeControl.js';
 
 export const steamRouter = Router();
 
@@ -102,6 +103,13 @@ steamRouter.post('/api/trade-offers/send', (req, res) => {
       },
       correlationId,
     );
+    // T109 — when this direction's accept leg is suppressed, stop after `sent`.
+    // The offer row is persisted but never accepted, so the transaction parks
+    // in TRADE_OFFER_SENT_TO_* until the backend deadline scanner times it out.
+    if (isAcceptSuppressed(direction)) {
+      logger.info({ transactionId, direction }, 'trade accept suppressed (T109) — holding at SENT');
+      return;
+    }
     await postWebhook(
       '/api/v1/webhooks/steam/trade-events',
       config.steamWebhookSecret,

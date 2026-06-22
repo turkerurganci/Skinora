@@ -4,6 +4,7 @@ import { logger } from '../logger.js';
 import { lookupPaymentAddress, type DepositPaymentAddress } from '../db.js';
 import { postWebhook } from '../webhookClient.js';
 import { fakeTxHash, fakeTronAddress } from '../ids.js';
+import { suppressAccept, clearSuppressions, listSuppressed } from '../tradeControl.js';
 
 /**
  * E2E control surface (NOT part of the real sidecar contract). The Playwright
@@ -116,6 +117,29 @@ controlRouter.post('/__e2e/payment/confirm', async (req, res) => {
     logger.error({ err: String(err), transactionId }, 'payment/confirm failed');
     res.status(500).json({ error: String(err) });
   }
+});
+
+// Trade auto-accept suppression (T109 — timeout scenarios). The default fake
+// behaviour self-accepts every offer; a test calls this to hold a specific
+// dispatch leg at "sent" so the transaction parks in TRADE_OFFER_SENT_TO_* and
+// the backend deadline scanner can time it out (03 §4.2 / §4.4). Direction is
+// one of SELLER_TO_BOT / BOT_TO_BUYER / BOT_TO_SELLER_REFUND.
+controlRouter.post('/__e2e/trade/suppress-accept', (req, res) => {
+  const { direction } = (req.body ?? {}) as { direction?: string };
+  if (!direction) {
+    res.status(400).json({ error: 'direction is required' });
+    return;
+  }
+  suppressAccept(direction);
+  logger.info({ direction }, 'trade auto-accept suppressed (T109)');
+  res.json({ ok: true, suppressed: listSuppressed() });
+});
+
+// Clear every trade-accept suppression — restores the default self-drive. Tests
+// call this between scenarios so a held direction never leaks across tests.
+controlRouter.post('/__e2e/trade/reset', (_req, res) => {
+  clearSuppressions();
+  res.json({ ok: true, suppressed: [] });
 });
 
 // Pay — detect then confirm (exact expected amount) in one call. The detect

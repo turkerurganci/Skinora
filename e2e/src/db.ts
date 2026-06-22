@@ -296,6 +296,86 @@ export async function pollBuyerRefundConfirmed(
   return last;
 }
 
+/** Phase-deadline columns on the Transactions table (06 §3.5). Fixed allow-list
+ *  — the value is interpolated into SQL, so it must never come from free input. */
+export type DeadlineColumn =
+  | 'AcceptDeadline'
+  | 'TradeOfferToSellerDeadline'
+  | 'PaymentDeadline'
+  | 'TradeOfferToBuyerDeadline';
+
+const DEADLINE_COLUMNS: ReadonlySet<DeadlineColumn> = new Set([
+  'AcceptDeadline',
+  'TradeOfferToSellerDeadline',
+  'PaymentDeadline',
+  'TradeOfferToBuyerDeadline',
+]);
+
+/** Push a phase deadline into the past so the DeadlineScannerJob (05 §4.4) fires
+ *  Timeout on its next sweep. This is the e2e lever for 03 §4 — all e2e timeouts
+ *  are 60 minutes, so a real-clock wait is impossible; backdating the column and
+ *  letting the production scanner do the rest keeps the timeout path itself
+ *  unmocked. `column` is validated against the allow-list before interpolation;
+ *  the offset is a bound int parameter. */
+export async function backdateDeadline(
+  transactionId: string,
+  column: DeadlineColumn,
+  minutesInPast = 5,
+): Promise<void> {
+  if (!DEADLINE_COLUMNS.has(column)) {
+    throw new Error(`backdateDeadline: unknown deadline column ${column}`);
+  }
+  const p = await getPool();
+  await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .input('mins', sql.Int, minutesInPast)
+    .query(
+      `UPDATE Transactions
+       SET ${column} = DATEADD(MINUTE, -@mins, SYSUTCDATETIME())
+       WHERE Id = @tx`,
+    );
+}
+
+export interface MonitoringRow {
+  status: string;
+  expiresAt: Date | null;
+}
+
+/** Poll the deposit PaymentAddress until its MonitoringStatus enters a
+ *  POST_CANCEL_* window — the observable proof that late-payment monitoring was
+ *  (re)started after a payment timeout (03 §4.3 step 4, 08 §3.4). The starter
+ *  stamps POST_CANCEL_24H + MonitoringExpiresAt = cancelledAt + 24h. Returns the
+ *  last-seen row (or null when no PaymentAddress exists). */
+export async function pollPostCancelMonitoring(
+  transactionId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<MonitoringRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 60_000);
+  const interval = opts?.intervalMs ?? 2_000;
+  let last: MonitoringRow | null = null;
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('tx', sql.UniqueIdentifier, transactionId)
+      .query(
+        `SELECT TOP 1 MonitoringStatus, MonitoringExpiresAt FROM PaymentAddresses
+         WHERE TransactionId = @tx AND IsDeleted = 0`,
+      );
+    if (result.recordset.length) {
+      const row = result.recordset[0];
+      last = {
+        status: String(row.MonitoringStatus),
+        expiresAt: row.MonitoringExpiresAt ? new Date(row.MonitoringExpiresAt) : null,
+      };
+      if (last.status.startsWith('POST_CANCEL')) return last;
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return last;
+}
+
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.close();

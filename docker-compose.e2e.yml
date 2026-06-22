@@ -111,6 +111,11 @@ services:
       - SteamSidecar__InternalKey=e2e-internal-key-0123456789
       - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
       - BlockchainSidecar__InternalKey=e2e-internal-key-0123456789
+      # T109 — tighten the deadline-scanner sweep (default 30s) so the timeout
+      # scenarios observe CANCELLED_TIMEOUT quickly after the harness backdates a
+      # phase deadline. Infrastructure knob (TimeoutSchedulingOptions), not a
+      # business parameter.
+      - Timeouts__DeadlineScannerIntervalSeconds=5
       # 19 mandatory SystemSettings (SettingsBootstrapService fail-fast). Short
       # timeouts keep the happy path quick; thresholds permissive so the seeded
       # transaction is not flagged.

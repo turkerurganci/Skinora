@@ -680,6 +680,13 @@ jobs:
           E2E_FAKE_URL: http://localhost:5200
         run: npm run test:cancel
 
+      - name: Run API timeout E2E (T109)
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://localhost:5000
+          E2E_FAKE_URL: http://localhost:5200
+        run: npm run test:timeout
+
       - name: Dump compose logs on failure
         if: failure()
         run: docker compose -f docker-compose.e2e.yml logs --tail=200
