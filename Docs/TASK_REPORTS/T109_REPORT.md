@@ -75,8 +75,8 @@ Yeni `e2e/tests/timeout.spec.ts` 4 test (03 §4.1–§4.4):
 ## Commit & PR
 
 - Branch: `task/T109-e2e-timeout`
-- Commit: _(commit sonrası doldurulacak)_
-- PR: _(PR sonrası doldurulacak)_
+- Commit: `21e1ddd` — T109: E2E — Timeout senaryoları (timeout E2E)
+- PR: [#201](https://github.com/turkerurganci/Skinora/pull/201)
 - CI: izleniyor (Claude — evrensel kural)
 
 ## Known Limitations / Follow-up
