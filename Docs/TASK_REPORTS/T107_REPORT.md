@@ -1,6 +1,6 @@
 # T107 — E2E: Happy path (tam escrow akışı)
 
-**Faz:** F6 | **Durum:** ⏳ PR-3/3 merge-hazır — **canAccept keşfi WP20 ile çözüldü (PR #199 → main `4c5b1a0`)**; PR-3 main üzerine rebase'lendi ve **UI smoke mainline registered-buyer akışına geri alındı** (deferred-buyer workaround kaldırıldı) → WP20 fix'i UI'dan uçtan uca **yerel re-verify** edildi (1 passed 4.5m; DB: `BuyerId=SET` + COMPLETED + 7 bildirim). PR-1/PR-2 ✓ merged+validator PASS; PR-3 deliverables (FE testid + UI smoke + CI e2e job) ✓. **Merge → T107 kapanır.** | **Tarih:** 2026-06-22
+**Faz:** F6 | **Durum:** ✓ **Tamamlandı — PR-3/3 post-WP20 bağımsız re-validator PASS (ayrı chat 2026-06-22, HEAD `795db1d`)**; canAccept keşfi WP20 (PR #199 → main `4c5b1a0`) ile çözüldü, PR-3 rebase'lendi + UI smoke mainline registered-buyer akışına alındı; re-validator full docker stack'i kurup UI smoke'u **firsthand koştu** (1 passed 4.7m; DB `BuyerId=SET(registered)` + COMPLETED + 7 bildirim + ITEM_DELIVERED yok). PR-1/PR-2/PR-3 ✓ validator PASS. **PR #198 squash merge → T107 KAPANDI.** | **Tarih:** 2026-06-22
 
 ---
 
@@ -259,6 +259,39 @@ WP20 main'e merge edilip PR-3 rebase'lendikten sonra deferred-buyer workaround k
 **registered STEAM_ID buyer `canAccept`:** `TransactionDetailService.cs:468-470` `canAccept = role=="buyer" && CREATED && BuyerId is null`. STEAM_ID **kayıtlı** alıcıda create `BuyerId`'yi set ediyor (`TransactionCreationService.cs:182-186,216`) → `canAccept=false` → UI AcceptForm **disabled** (`StateActionPanel.tsx:264`; `cannotAcceptReason` üstelik gerçek gate'le uyumsuz MA/cooldown metni). **03 §3.2:195 ("Eşleşiyorsa → devam eder") ile çelişir.** Ek inversion: `TRANSACTION_INVITE` bildirimi `BuyerId null→no-op` (WP19) → bildirim alan kayıtlı alıcı UI'dan kabul **edemiyor**, kabul edebilen prospective alıcı bildirim **almıyor** = mainline UI happy-path kırık. UI smoke deferred-buyer (prospective) ile aşıyor (geçerli bir variant ama mainline değil).
 
 **Owner kararı (AskUserQuestion 2026-06-22): "önce düzelt, sonra T107 kapat"** (WP19-style promote-before-close). → canAccept ayrı backend/FE fix-task'ı (ayrı yapım chat'i); sonra mevcut UI harness registered-buyer akışını da doğrular → T107 öyle kapanır. **✅ Çözüldü: WP20 (PR #199 → main `4c5b1a0`) canAccept'i düzeltti; PR-3 rebase'lendi + UI smoke mainline registered-buyer'a alındı + yerel re-verify (1 passed 4.5m, `BuyerId=SET`/COMPLETED) — "PR-3 güncelleme (post-WP20)" bölümüne bkz. PR #198 merge-hazır.**
+
+## Re-doğrulama (PR-3/3 post-WP20, bağımsız validator — ayrı chat) — 2026-06-22
+
+**Branch:** `task/T107-e2e-ui` · **HEAD:** `795db1d` · **PR:** [#198](https://github.com/turkerurganci/Skinora/pull/198) · **Verdict: ✓ PASS** — PR-3 teslimatları + T107 AC1+AC2+AC3, **0 bloke-edici bulgu**. Owner kararıyla (merge öncesi ayrı-chat doğrulama) WP20-sonrası mainline registered-buyer akışı yeniden, bağımsız doğrulandı; verdict yapım raporu görülmeden üretildi.
+
+### Kapılar
+- Adım -1 working tree temiz · Adım 0 main son-3 success (`27946431943` / `27946432050` / `27915545862`) · Adım 0b repo memory T107 mevcut.
+- Adım 8a task CI HEAD `795db1d` run [`27951482188`](https://github.com/turkerurganci/Skinora/actions/runs/27951482188) — **tüm job success, `E2E smoke (advisory)` dahil** (Lint [+`sidecar-fake`/`e2e` bloke adımları], Build, Unit, Integration, Contract, Migration dry-run, JS-test [+`sidecar-fake` vitest], 4× Docker, CI Gate). `0. Guard` skipped (PR-context, beklenen).
+
+### Kabul kriterleri (T107 bütünü — firsthand)
+| # | Kriter | Sonuç | Kanıt (re-validator firsthand) |
+|---|---|---|---|
+| 1 | Tam akış → COMPLETED | ✓ | Gerçek docker stack (db/redis/fake/backend/frontend/nginx **hepsi healthy**, `:8080/en`=200) + UI smoke; DB `Transactions.Status=COMPLETED` |
+| 2 | Tüm bildirimler doğru | ✓ | `Notifications` tablosu = **7 distinct tip + TRANSACTION_COMPLETED×2 = 8 satır** (INVITE/BUYER_ACCEPTED/ITEM_ESCROWED/PAYMENT_RECEIVED/TRADE_OFFER_SENT_TO_BUYER/SELLER_PAYMENT_SENT/COMPLETED×2); **ITEM_DELIVERED bildirimi yok** = WP19 bastırma. 03 §12.1/§12.2 + 06 §2.13 birebir |
+| 3 | State geçişleri UI'da | ✓ | `npx playwright test happy-path.ui` (chromium, committed default `:8080`, override yok) → **1 passed (4.7m)**; badge `data-status` CREATED→…→COMPLETED reload-poll; accept **gerçek UI AcceptForm**'undan |
+
+### Firsthand kanıt
+- **WP20 fix mainline'da egzersiz edildi:** DB teyidi `BuyerId=22222222-…-222222222222 (SET)` + `TargetBuyerSteamId=76561198000000061` → kayıtlı STEAM_ID alıcı (create-time BuyerId set). UI smoke gerçek `accept-submit` butonuna tıklar (force/dispatchEvent yok); `canAccept=false` olsaydı buton disabled → Playwright actionability time-out → test FAIL. Geçmesi WP20 fix'ini (`canAccept = role=="buyer" && CREATED`, `&& BuyerId is null` kaldırılmış — `TransactionDetailService.cs:476-477`) kanıtlar.
+- **canAccept CI regresyon guard'ı mevcut:** `TransactionDetailServiceTests.cs:115` (`Assert.True(...CanAccept) // BuyerId set, still acceptable`) — bloke-edici CI integration-test job'unda koşar.
+- **Kalite (firsthand):** FE `vitest` **28/28** · `eslint` (3 dosya) 0 · `tsc --noEmit` 0 · `prettier --end-of-line=auto` clean · `check-i18n.mjs` **1291×4 identical** (15 advisory untranslatable = pre-existing, T107-dışı). e2e `tsc` 0 · `eslint` 0 · `prettier` clean.
+- **Kapsam:** `git diff --stat origin/main...HEAD` → prod kaynağı yalnız **3 FE test-hook** (StatusBadge/AcceptForm/DetailHeader), 0 `.cs`. `data-testid` opsiyonel + `data-status` additive → davranış korunur.
+- **CI semantiği:** `e2e-smoke` `continue-on-error:true` + `ci-gate.needs`'te **değil** (gerçekten advisory) ; yeni `sidecar-fake`/`e2e` tsc+format+lint adımları bloke lint job'unda (job-level `if:` yok → her PR'da koşar; lint ci-gate.needs'te) → **N1 kapandı**.
+- **Güvenlik:** secret'lar sabit test fixture (compose/config doc-işaretli; CI conn-string aynı test parolası) · `/__e2e/*` yalnız fake image'da (backend'de 0 occurrence) · `injectLogin`/`mintAccessToken` HS256 e2e-secret → yalnız e2e stack kabul eder (prod auth-bypass yok) · PR-3'te yeni prod/e2e runtime dep yok (yalnız `test:ui` script).
+
+### Adversarial doğrulama (5-boyut, refute-default workflow)
+doc-conformance · fe-behavior-preservation · ci-wiring · security = **clean** (refute denendi, kırılamadı). e2e-false-positive boyutu UI smoke'un gerçek WP20 egzersizini doğruladı; "UI smoke CI'da koşmuyor" gözlemini **S2** olarak işaretledi — re-validator bunu **non-blocking N1'e indirgedi** (gerekçe: AC3 firsthand-kanıtlı; owner "advisory E2E CI" kararı; canAccept CI integration-test guard'ı mevcut; advisory job API smoke'u tam akışla CI'da koşuyor).
+
+### Non-blocking gözlemler
+- **N1 (CI coverage):** UI smoke (`test:ui`) yalnız **lokal** koşar; CI advisory `e2e-smoke` API smoke'u (`test:smoke`, tam akış + WP19 bildirim assert) koşar. AC3'ün UI-düzeyi E2E kanıtı owner'ın advisory-E2E kararıyla lokal-only; canAccept fix'i `TransactionDetailServiceTests` ile CI'da korunur. Gelecekte `test:ui`'yi advisory job'a bağlamak iyileştirme olur (full FE+nginx+chromium stack gerektirir, daha ağır).
+- **N2 (geniş `data-status`):** `data-status` 8 StatusBadge kullanımının hepsine eklendi (yalnız test-hedefli DetailHeader'a değil); zaten görünür lokalize badge metninden fazla bilgi sızdırmaz (public invite yüzeyi DetailHeader'ı yalnız CREATED'da render eder).
+- **N3 (i18n advisory):** 15 untranslatable uyarı (Gas fee / Mobile Authenticator) pre-existing, T107-ilgisiz.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — rapor AC1/AC2/AC3'ü PASS sunuyor, canAccept keşfini WP20 ile çözülmüş kaydediyor, zero-prod-change (3 FE hook) + WP19 bildirim matrisini birebir belgeliyor; re-validator firsthand bulguları (UI smoke 1 passed, DB COMPLETED + 7 tip + BuyerId set) raporla **0 uyuşmazlık**. ci.yml yorumu "UI is also proven locally" diyerek over-claim yapmıyor.
 
 ## Notlar
 
