@@ -21,6 +21,8 @@
 - `e2e/src/api.ts` (değişti — 3 helper + payViaFake opt)
 - `e2e/src/db.ts` (değişti — pollBlockchainTxConfirmed + pollNotificationRecipients + fakeBuyerWallet)
 - `e2e/tests/payment-edge-cases.spec.ts` (yeni — 6 test)
+- `e2e/package.json` (değişti — `test:payment` script)
+- `.github/workflows/ci.yml` (değişti — advisory `e2e-smoke` job'a "Run API payment edge cases E2E (T110)" adımı; T108/T109 deseniyle birebir)
 
 ## Kabul Kriterleri Kontrolü
 
@@ -43,7 +45,7 @@
 | Backend build (solution) | ✓ | `dotnet build Skinora.sln` exit 0 |
 | sidecar-fake | ✓ tsc + lint + format + vitest 12/12 | `npm run build/lint/format:check/test` |
 | e2e statik | ✓ tsc --noEmit + lint + format | `npx tsc --noEmit` + `npm run lint` + prettier |
-| E2E senaryoları (6) | ⏳ CI'da | docker-compose.e2e yığını gerektirir; CI advisory `e2e-smoke` job'unda koşar (lokal docker stack ile çalıştırılmadı — T107–T109 ile aynı kalıp) |
+| E2E senaryoları (6) | ⏳ CI'da | docker-compose.e2e yığını gerektirir; CI advisory `e2e-smoke` job'una eklenen "Run API payment edge cases E2E (T110)" adımı (`npm run test:payment`) koşar (lokal docker stack ile çalıştırılmadı — T107–T109 ile aynı kalıp) |
 
 ## Doğrulama
 

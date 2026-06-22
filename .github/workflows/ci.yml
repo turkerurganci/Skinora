@@ -687,6 +687,13 @@ jobs:
           E2E_FAKE_URL: http://localhost:5200
         run: npm run test:timeout
 
+      - name: Run API payment edge cases E2E (T110)
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://localhost:5000
+          E2E_FAKE_URL: http://localhost:5200
+        run: npm run test:payment
+
       - name: Dump compose logs on failure
         if: failure()
         run: docker compose -f docker-compose.e2e.yml logs --tail=200

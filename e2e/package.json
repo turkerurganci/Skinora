@@ -9,6 +9,7 @@
     "test:ui": "playwright test happy-path.ui",
     "test:cancel": "playwright test cancellation",
     "test:timeout": "playwright test timeout",
+    "test:payment": "playwright test payment-edge-cases",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
