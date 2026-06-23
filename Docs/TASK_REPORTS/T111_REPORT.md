@@ -1,6 +1,6 @@
 # T111 — E2E: Fraud/flag Senaryoları
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (yapım tamam, bağımsız doğrulama bekliyor) | **Tarih:** 2026-06-23
+**Faz:** F6 | **Durum:** ✓ Tamamlandı (bağımsız validator PASS) | **Tarih:** 2026-06-23
 
 ---
 
@@ -49,9 +49,19 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) · yapımcı firsthand 4/4 + happy-path regresyon ✓ |
-| Bulgu sayısı | — (CI ilk run seed-FK bulgusu yapım içinde kapatıldı) |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-23, rapor görülmeden kendi verdict'i) |
+| Bulgu sayısı | 0 bloke-edici (1 non-blocking doc-note K1) |
+| Düzeltme gerekli mi | Hayır |
+
+**Bağımsız validator (ayrı chat, 2026-06-23 — rapor görülmeden):** Kapılar Adım -1 temiz · Adım 0 main son-3 `success` (`28017118090`/`28017118276`/`28013526658`) · Adım 0b repo memory mevcut · branch origin ile senkron (0/0). **Adım 8a:** task CI HEAD `3b129e8` run `28022439502` — **tüm blocking job'lar success** (Lint/Build/Unit/Integration/Contract/Migration/Docker×4/CI Gate) + advisory `e2e-smoke` job ran (skipped değil) ve **"Run API fraud/flag E2E (T111)" adımı `conclusion=success`** (job `continue-on-error` step-level başarıyı maskelemiyor → 4 test gerçek migrate'li docker-compose stack'inde geçti, önceki 4 suite adımı da success → T108–T110 regresyon yok).
+
+**Validator-firsthand lokal tam docker stack** (build → db healthy → migrate → backend+fake healthy → `npm run test:fraud`): **4/4 passed (5.6s)**. Statik: e2e `tsc --noEmit` 0 + `eslint` 0 + prettier (committed/LF) clean (lokal CRLF uyarıları `core.autocrlf=true` checkout artifaktı; CI blocking "1. Lint" job'u `e2e` `format:check`'i LF'te koşar → success).
+
+**Seam (rapor iddiasından bağımsız teyit — kod kaynağına karşı, 5 boyut + adversarial):** 5/5 CONFIRMED. (1) `TransactionCreationService` Stage 7 `status = fraud.ShouldFlag ? FLAGGED : CREATED` + Stage 9 `StagePreCreateFlagAsync` (scope `TRANSACTION_PRE_CREATE`/status `PENDING`) + Stage 11 DTO `FlagReason = fraud.FlagType?.ToString()`; enum'lar `JsonStringEnumConverter` + camelCase ile `status`/`flagReason` olur. (2) `FraudDetectionCalculator.IsHighVolume` **OR semantiği** (her eşik bağımsız `>`; null/0 o kolu kapatır) → yalnız `amount_threshold` 50'ye düşürmek `~102>50` ile tetikler; `CalculatePriceDeviation` kesir döner (`\|300−100\|/100=2.0 > 1.0`); `IsDormantAnomaly` (completed==0 ∧ age≥min ∧ amount>value) e2e'de `value=1000 > 100` olduğundan tetiklenmez → tx1 `CREATED` korunur, öncelik PRICE_DEVIATION→HIGH_VOLUME→dormant. (3) `FraudFlagService.ApproveAsync` (FLAGGED→CREATED state-machine `AdminApprove`, AcceptDeadline init, `{APPROVED,CREATED}`) / `RejectAsync` (tx flag FLAGGED→CANCELLED_ADMIN `{REJECTED,CANCELLED_ADMIN}`; **ACCOUNT_LEVEL flag → transaction bloğu atlanır, NPE yok, yalnız REJECTED**). (4) `GET /api/v1/admin/flags` `[Authorize(Permission:VIEW_FLAGS)]` + `scope`/`type`/`reviewStatus` server-side filtre + `items[].transactionId/type`; super_admin JWT claim `PermissionAuthorizationHandler` bypass (DB rol yok). (5) `AccountFlagChecker` aktif = `Scope==ACCOUNT_LEVEL ∧ Status!=REJECTED ∧ !IsDeleted` → PENDING bloklar/REJECTED kaldırır; eligibility → `TransactionsController` 422 `error.code='ACCOUNT_FLAGGED'`. **Vacuousness LOW** (`retries:0`/`workers:1`; optional-chain assert'ler undefined'da FAIL eder; `find/some` `.toBeTruthy()`; `unwrap` raw-body fallback → bozuk envelope FAIL; 422 + code çifti asserte edilir). **3 refutation denemesi (priority/interference · env-var-vs-DB config · account-flag reject NPE) hepsi REJECTED.**
+
+**Güvenlik:** Sıfır production kaynak değişikliği (`git diff main...HEAD` yalnız `e2e/` + `ci.yml` + docs + memory) · test-fixture secret (JWT mint, T107–T110 ile aynı seam) · yeni dış bağımlılık yok (`package.json` yalnız `test:fraud` script) · yeni `sidecar-fake` yüzeyi yok · DB helper'ları parametreli (`insertAccountFlag`/`get/setSystemSetting` bound param + `FraudSettingKey` union). Temiz.
+
+**Yapım raporuyla karşılaştırma:** Tam uyumlu — 3 AC, zero-prod-change, lever tasarımı, OR-semantik high-volume, CI fix iterasyonu (AuditLogs cleanup → `PK_Users` re-seed) hepsi birebir. Tek ek validator gözlemi → K1.
 
 ## Altyapı Değişiklikleri
 
@@ -78,6 +88,7 @@
 
 ## Known Limitations / Follow-up
 
+- **K1 (validator non-blocking — doc reconciliation, T111 kusuru değil):** Test 4 hesap flag'ini `POST /admin/flags/:id/reject` ile kaldırır. **03 §8.2** (`03_USER_FLOWS.md:517`) hesap flag'lerinin bu kuyrukta görünmeyip "ayrı bir hesap flag yönetim yüzeyinden" yönetildiğini söyler; ancak **07 §9.2** (`07_API_DESIGN.md:1705`) + **04 §8.2 / T100a** `GET /admin/flags`'in `scope=ACCOUNT_LEVEL`'i kabul edip tüm kategorileri döndürdüğünü tanımlar ve hesap-flag kolonlarını AD2 yüzeyine ekler. Üretim kodu 07/04'ü izler (ayrı hesap-flag yönetim endpoint'i **yok**; her iki scope da `/admin/flags/*` paylaşır). Yani **03 §8.2 ↔ 07 §9.2/04 §8.2 çelişkisi pre-existing** (T100/T100a'da tek-yüzey lehine fiilen çözülmüş; 03 §8.2 ifadesi stale) — **T111 bu mevcut gerçekliği tüketir**, AC3'ü zayıflatmaz (AC3 yalnız "fon akışı engeli" ister; 422 + reject-ile-kaldırma birebir kanıtlı). **Takip:** 03 §8.2 metni 04 §8.2 / 07 §9.2 ile hizalanmalı (owner kararı; T110-K1 cross-doc deseniyle aynı tür).
 - **Admin "flag oluştu" bildirimi (`ADMIN_FLAG_ALERT`, 03 §7.1 step 6) asserte edilmiyor.** `AdminRecipientResolver` admin'leri `AdminUserRole` satırlarından çözer; e2e admin yalnız super_admin JWT claim ile çalışır (DB rol ataması yok) → broadcast 0 alıcıya gider, `Notifications` satırı oluşmaz. Admin-yüzü `GET /admin/flags` kuyruğu (AD2) ile kanıtlanıyor — admin'in flag'i gördüğü ve incelediği uçtan uca akış kapalı. `ADMIN_FLAG_ALERT` üretimi backend unit testleriyle kaplı.
 - **Approve/reject taraf bildirimi (03 §8.2 "taraflara bildirim gider") realtime-only.** `FraudFlag{Approved,Rejected}Event` yalnız `Skinora.Realtime` SignalR consumer'larınca tüketilir (inbox `INotificationHandler` yok) — WP19'un bazı state değişimlerini realtime-only bıraktığı deseniyle tutarlı. API-düzeyi test taraf bildirimini değil, state geçişini (`CREATED`/`CANCELLED_ADMIN`) doğrular. Spec'in pre-create flag-reject'inde inbox `TRANSACTION_CANCELLED` üretip üretmemesi gerektiği **olası takip konusu** (pre-existing tasarım, T111 kusuru değil; owner kararına bırakıldı).
 - E2E senaryoları docker yığını gerektirdiğinden yapım sırasında lokal koşulmadı; CI advisory `e2e-smoke` job'unda gözlenir (T107–T110 ile aynı kalıp). Bağımsız validator lokal tam docker stack'te firsthand koşar.
