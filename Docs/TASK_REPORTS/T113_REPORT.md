@@ -67,7 +67,7 @@
 
 - Branch: `task/T113-e2e-admin-flows`
 - Commit: (bu commit) — T113: E2E — Admin akışları (test coverage)
-- PR: #TBD (push sonrası doldurulacak)
+- PR: [#206](https://github.com/turkerurganci/Skinora/pull/206)
 - CI: ⏳ task CI watch (advisory e2e-smoke "Run API admin-flows E2E (T113)" adımı dahil). Validator çıkış kapısı.
 
 ## Known Limitations / Follow-up
