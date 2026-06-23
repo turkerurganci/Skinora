@@ -12,9 +12,9 @@
   1. **Apply hold → timeout durur → resume → devam.** CREATED işleme hold uygulanır (`status=EMERGENCY_HOLD` projeksiyonu, `previousStatus=CREATED`, IsOnHold + freeze trio DB'de); accept deadline geçmişe çekilir → DeadlineScannerJob held satırı atlar (18 sn / ~3–4 sweep boyunca `EMERGENCY_HOLD`, altta yatan `Status` hâlâ `CREATED` — CANCELLED_TIMEOUT'a düşmedi); **RESUME** → status `CREATED`'a döner, IsOnHold/freeze temizlenir; alıcı kabul eder → akış `ITEM_ESCROWED`'a ilerler (escrow +1).
   2. **Apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN.** ITEM_ESCROWED'a sürülür (escrow=1), hold uygulanır, **CANCEL** → `CANCELLED_ADMIN` + `itemReturned=true` + `paymentRefunded=false` (AD19 refund fan-out); RETURN_TO_SELLER teklifi kabul edilir (escrow=0); her iki taraf `TRANSACTION_CANCELLED` bildirimi alır.
   3. **Apply hold at ITEM_DELIVERED → sadece resume.** Tam happy-path ile ITEM_DELIVERED'a sürülür, hold uygulanır (`previousStatus=ITEM_DELIVERED`); payout pipeline `!IsOnHold` ile kapılı olduğundan 12 sn boyunca ITEM_DELIVERED'da park eder; **CANCEL** denenir → `422 CANNOT_CANCEL_DELIVERED_HOLD` (hold ayakta kalır); **RESUME** → status `ITEM_DELIVERED`'a döner; payout pipeline (queue → dispatch → confirm → complete, her biri dakikalık) işlemi `COMPLETED`'a sürer.
-- Her testte hold sonrası `EMERGENCY_HOLD_APPLIED` ve resume sonrası `EMERGENCY_HOLD_RELEASED` bildirim fan-out'u (seller + kayıtlı buyer) asserte edilir.
+- Her testte hold sonrası `EMERGENCY_HOLD_APPLIED` ve resume sonrası `EMERGENCY_HOLD_RELEASED` bildirim fan-out'u (seller + kayıtlı buyer) asserte edilir (CI kümülatif yükünde dispatcher gecikmesini absorbe etmek için poll timeout 60 sn).
 - **`e2e/src/api.ts`:** `applyEmergencyHold` (AD19b), `releaseEmergencyHold` (AD19c, action RESUME/CANCEL), `assertStatusStable` (held projeksiyonun bir pencere boyunca değişmediğini doğrular — frozen kanıtının API ayağı).
-- **`e2e/src/db.ts`:** `getTransactionHoldState` + `HoldStateRow` (IsOnHold, TimeoutFreezeReason, TimeoutFrozenAt, TimeoutRemainingSeconds, PreviousStatusBeforeHold, Status — DB'de string enum). Seed/cleanup'a dokunulmadı (T111'in FraudFlags/AuditLogs temizliği yeterli; emergency-hold yeni FK satırı eklemez).
+- **`e2e/src/db.ts`:** `getTransactionHoldState` + `HoldStateRow` (IsOnHold, TimeoutFreezeReason, TimeoutFrozenAt, TimeoutRemainingSeconds, PreviousStatusBeforeHold, Status — DB'de string enum). **+ `seedHappyPath` cleanup'ına outbox drenajı** — bkz. CI fix iterasyonu (Test Sonuçları).
 - **`e2e/package.json`:** `test:hold` script.
 - **`.github/workflows/ci.yml`:** advisory `e2e-smoke` job'a "Run API emergency-hold E2E (T112)" adımı (T111 deseniyle birebir) + job yorumu 6 suite'e güncellendi + `timeout-minutes` 70→80 (Test 3'ün dakikalık payout pipeline beklemesi için marj).
 
@@ -22,7 +22,7 @@
 
 - `e2e/tests/emergency-hold.spec.ts` (yeni — 3 test)
 - `e2e/src/api.ts` (değişti — `applyEmergencyHold` + `releaseEmergencyHold` + `assertStatusStable`)
-- `e2e/src/db.ts` (değişti — `getTransactionHoldState` + `HoldStateRow`)
+- `e2e/src/db.ts` (değişti — `getTransactionHoldState` + `HoldStateRow` + `seedHappyPath` outbox drenajı [CI fix])
 - `e2e/package.json` (değişti — `test:hold`)
 - `.github/workflows/ci.yml` (değişti — T112 e2e adımı + yorum + timeout 80)
 
@@ -40,8 +40,13 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| E2E (lokal tam docker stack) | ✓ 3/3 passed (7.9m) | `E2E_BASE_URL=http://localhost:5000 npm run test:hold`: Test 1 1.6m, Test 2 1.5m, Test 3 4.7m. Stack: db + redis + fake-sidecar + backend (migrations `dotnet ef database update` ile uygulandı, backend healthy). |
-| Statik (e2e harness) | ✓ | `tsc --noEmit` temiz; `eslint .` 0/0; `prettier --check` (LF-normalize) değişen 3 dosyada temiz (lokal CRLF uyarısı `core.autocrlf` artifaktı — CI "1. Lint" LF yetkili). |
+| E2E (lokal izole, ilk koşum) | ✓ 3/3 passed (7.9m) | `E2E_BASE_URL=http://localhost:5000 npm run test:hold`: Test 1 1.6m, Test 2 1.5m, Test 3 4.7m. Stack: db + redis + fake-sidecar + backend (migrations `dotnet ef database update` ile uygulandı, backend healthy). |
+| E2E (lokal kümülatif, CI fix sonrası) | ✓ `cancel` 4/4 (5.7m) → `hold` 3/3 (7.2m) | Drenaj düzeltmesi sonrası `test:cancel` → `test:hold` aynı backend'de ardışık; regresyon yok + hold kümülatif bağlamda (bildirim assert'leri dahil) geçti. |
+| Statik (e2e harness) | ✓ | `tsc --noEmit` temiz; `eslint .` 0/0; `prettier --check` (LF-normalize) değişen dosyalarda temiz (lokal CRLF uyarısı `core.autocrlf` artifaktı — CI "1. Lint" LF yetkili). |
+
+### CI fix iterasyonu (advisory e2e-smoke — T112 adımı)
+
+İlk push (`74163dc`) bloke-edici CI Gate'i **success** geçti, ama advisory `e2e-smoke` job'unda "Run API emergency-hold E2E (T112)" adımı **failure** (T108–T111 adımları success — yalnız T112). Üç test de aynı yerde düştü: `pollNotificationRecipients('EMERGENCY_HOLD_APPLIED', …)` boş dizi döndü. **Kök neden (CI backend logu ile doğrulandı):** test mantığı değil, **pre-existing harness bug'ı** — `seedHappyPath` Transaction'ları + Notification'ları siler ama o tx'lere referans veren bekleyen `OutboxMessages` satırlarını bırakır; dispatcher bu mesajdan Notification insert ederken `FK_Notifications_Transactions_TransactionId` ihlal olur, dispatcher satırları tek `SaveChanges`'te batch'lediğinden o tek FK hatası tüm batch'i rollback eder ve **sonsuza dek retry** → sonraki her bildirim (T112'nin `EMERGENCY_HOLD_APPLIED`'i) commit olamaz. (T111 memory'sindeki outbox-poison karakteristiği; T108–T111'de poison'dan önce assert tamamlandığı için yüzeye çıkmadı; lokalde hızlı dispatcher yetiştiği için izole koşumda reprodüke olmadı.) **Düzeltme:** `seedHappyPath` cleanup batch'ine **`DELETE FROM OutboxMessages WHERE Status <> 'PROCESSED'`** (Notification'ları silen cleanup'ı tamamlar; e2e backend'in başka producer'ı yok → global non-PROCESSED purge testler arası güvenli; T113/T114'ü de korur). DELETE'in gerçek `mssql`/Tedious driver'ıyla çalıştığı ayrıca teyit edildi (`before=1 after=0` — `OutboxMessages` filtered-index'i nedeniyle DML `QUOTED_IDENTIFIER ON` ister; driver default ON, ama cleanup `.catch()` ile sarılı olduğundan sessiz başarısızlık riski elendi). Ayrıca T112 bildirim poll'ları 30s→60s (savunma).
 
 ## Doğrulama
 

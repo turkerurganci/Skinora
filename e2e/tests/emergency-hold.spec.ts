@@ -108,10 +108,11 @@ test('apply hold → timeout frozen → resume → transaction continues to ITEM
   expect(held?.timeoutRemainingSeconds ?? 0, 'no frozen remainder captured').toBeGreaterThan(0);
 
   // 03 §8.8 step 6 — both parties are notified the transaction was frozen.
-  const heldNotice = await pollNotificationRecipients('EMERGENCY_HOLD_APPLIED', [
-    seed.sellerId,
-    seed.buyerId,
-  ]);
+  const heldNotice = await pollNotificationRecipients(
+    'EMERGENCY_HOLD_APPLIED',
+    [seed.sellerId, seed.buyerId],
+    { timeoutMs: 60_000 },
+  );
   expect(heldNotice).toContain(seed.sellerId.toLowerCase());
   expect(heldNotice).toContain(seed.buyerId.toLowerCase());
 
@@ -144,10 +145,11 @@ test('apply hold → timeout frozen → resume → transaction continues to ITEM
   expect(resumed?.timeoutFrozenAt, 'freeze stamp not cleared on resume').toBeNull();
 
   // 03 §8.8 step 6 — release notifies both parties.
-  const resumeNotice = await pollNotificationRecipients('EMERGENCY_HOLD_RELEASED', [
-    seed.sellerId,
-    seed.buyerId,
-  ]);
+  const resumeNotice = await pollNotificationRecipients(
+    'EMERGENCY_HOLD_RELEASED',
+    [seed.sellerId, seed.buyerId],
+    { timeoutMs: 60_000 },
+  );
   expect(resumeNotice).toContain(seed.sellerId.toLowerCase());
   expect(resumeNotice).toContain(seed.buyerId.toLowerCase());
 
@@ -183,10 +185,11 @@ test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, 
   expect(held?.isOnHold).toBe(true);
   expect(held?.timeoutFreezeReason).toBe('EMERGENCY_HOLD');
 
-  const heldNotice = await pollNotificationRecipients('EMERGENCY_HOLD_APPLIED', [
-    seed.sellerId,
-    seed.buyerId,
-  ]);
+  const heldNotice = await pollNotificationRecipients(
+    'EMERGENCY_HOLD_APPLIED',
+    [seed.sellerId, seed.buyerId],
+    { timeoutMs: 60_000 },
+  );
   expect(heldNotice).toContain(seed.sellerId.toLowerCase());
   expect(heldNotice).toContain(seed.buyerId.toLowerCase());
 
@@ -212,7 +215,9 @@ test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, 
   expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §8.8 / §8.7 — neither party initiated the cancel, so BOTH are notified.
-  const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
+  const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId], {
+    timeoutMs: 60_000,
+  });
   expect(recipients).toContain(seed.sellerId.toLowerCase());
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
@@ -243,10 +248,11 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   expect(held?.isOnHold).toBe(true);
   expect(held?.timeoutFreezeReason).toBe('EMERGENCY_HOLD');
 
-  const heldNotice = await pollNotificationRecipients('EMERGENCY_HOLD_APPLIED', [
-    seed.sellerId,
-    seed.buyerId,
-  ]);
+  const heldNotice = await pollNotificationRecipients(
+    'EMERGENCY_HOLD_APPLIED',
+    [seed.sellerId, seed.buyerId],
+    { timeoutMs: 60_000 },
+  );
   expect(heldNotice).toContain(seed.sellerId.toLowerCase());
   expect(heldNotice).toContain(seed.buyerId.toLowerCase());
 
@@ -279,10 +285,11 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   expect(resumeBody.action).toBe('RESUME');
   expect((await getTransactionHoldState(txId))?.isOnHold).toBe(false);
 
-  const resumeNotice = await pollNotificationRecipients('EMERGENCY_HOLD_RELEASED', [
-    seed.sellerId,
-    seed.buyerId,
-  ]);
+  const resumeNotice = await pollNotificationRecipients(
+    'EMERGENCY_HOLD_RELEASED',
+    [seed.sellerId, seed.buyerId],
+    { timeoutMs: 60_000 },
+  );
   expect(resumeNotice).toContain(seed.sellerId.toLowerCase());
   expect(resumeNotice).toContain(seed.buyerId.toLowerCase());
 

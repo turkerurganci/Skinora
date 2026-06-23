@@ -64,11 +64,23 @@ export async function seedHappyPath(): Promise<typeof seed> {
   const r = () => p.request();
 
   // Cleanup (best-effort, FK-safe) so a re-run on a non-fresh DB is clean.
+  //
+  // Drain un-PROCESSED OutboxMessages FIRST. The previous test's transactions are
+  // about to be deleted below; any still-PENDING/FAILED outbox row that, on
+  // dispatch, inserts a Notification referencing one of those (now-gone)
+  // transactions trips FK_Notifications_Transactions_TransactionId. Because the
+  // dispatcher batches rows into one SaveChanges, that single FK failure rolls
+  // back the whole batch and the row is retried forever — permanently blocking
+  // every later notification (e.g. a subsequent suite's EMERGENCY_HOLD_APPLIED)
+  // from committing. Deleting Notifications without draining the outbox that
+  // re-creates them left this gap; clearing both closes it (the e2e backend has
+  // no other producer, so a global non-PROCESSED purge is safe between tests).
   await r()
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .batch(
-      `DELETE FROM Notifications WHERE UserId IN (@s,@b);
+      `DELETE FROM OutboxMessages WHERE Status <> 'PROCESSED';
+       DELETE FROM Notifications WHERE UserId IN (@s,@b);
        DELETE FROM FraudFlags WHERE UserId IN (@s,@b);
        DELETE FROM AuditLogs WHERE UserId IN (@s,@b) OR ActorId IN (@s,@b);
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
