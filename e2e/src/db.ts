@@ -595,6 +595,46 @@ export async function setSystemSetting(key: FraudSettingKey, value: string): Pro
     );
 }
 
+export interface HoldStateRow {
+  status: string;
+  isOnHold: boolean;
+  timeoutFreezeReason: string | null;
+  timeoutFrozenAt: Date | null;
+  timeoutRemainingSeconds: number | null;
+  previousStatusBeforeHold: number | null;
+}
+
+/** Read the emergency-hold + timeout-freeze columns of a transaction (06 §3.5).
+ *  Backs the T112 assertions that an apply-hold stamps IsOnHold +
+ *  TimeoutFreezeReason=EMERGENCY_HOLD + the freeze trio (TimeoutFrozenAt +
+ *  TimeoutRemainingSeconds), and that a release clears them (or, for a rejected
+ *  ITEM_DELIVERED cancel, that the hold survives). Status + TimeoutFreezeReason
+ *  are stored as their string names (06 §4; the CK_Transactions_* constraints
+ *  compare against 'EMERGENCY_HOLD'). Returns null when the row is missing. */
+export async function getTransactionHoldState(transactionId: string): Promise<HoldStateRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Status, IsOnHold, TimeoutFreezeReason, TimeoutFrozenAt,
+              TimeoutRemainingSeconds, PreviousStatusBeforeHold
+       FROM Transactions WHERE Id = @tx`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    status: String(row.Status),
+    isOnHold: Boolean(row.IsOnHold),
+    timeoutFreezeReason: row.TimeoutFreezeReason === null ? null : String(row.TimeoutFreezeReason),
+    timeoutFrozenAt: row.TimeoutFrozenAt ? new Date(row.TimeoutFrozenAt) : null,
+    timeoutRemainingSeconds:
+      row.TimeoutRemainingSeconds === null ? null : Number(row.TimeoutRemainingSeconds),
+    previousStatusBeforeHold:
+      row.PreviousStatusBeforeHold === null ? null : Number(row.PreviousStatusBeforeHold),
+  };
+}
+
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.close();
