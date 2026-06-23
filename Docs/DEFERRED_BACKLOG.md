@@ -71,7 +71,7 @@
 | 🟡 | T107 | E2E — Happy path (tam escrow akışı) | task | IMPLEMENTATION_STATUS F6 |
 | ⚪ | T108 | E2E — İptal senaryoları | task | F6 |
 | ⚪ | T109 | E2E — Timeout senaryoları | task | F6 |
-| ⚪ | T110 | E2E — Ödeme edge case'ler | task | F6 |
+| ✅ | T110 | **ÇÖZÜLDÜ** — E2E ödeme edge case'leri (§5.1–§5.5 + §5.3a) firsthand 6/6; bağımsız validator PASS 2026-06-23 (PR #202). Bulgu K1 (refund-adresi doc çelişkisi) → §6 `T110-RefundAddressDocConflict` (post-MVP) | task | F6 |
 | ⚪ | T111 | E2E — Fraud/flag senaryoları (PRICE_DEVIATION dahil) | task | F6 |
 | ⚪ | T112 | E2E — Emergency hold | task | F6 |
 | ⚪ | T113 | E2E — Admin akışları | task | F6 |
@@ -155,6 +155,7 @@
 | ~ | audit-doc-drift | **Kısmen → WP17:** 07 §9.19 `SELLER_PAYOUT_SENT`→`WALLET_ESCROW_RELEASE` ✅ · 06 §3.25 stale index ✅ · PermissionCatalog count ✅ (zaten 14). **Kalan (WP17-dışı):** RefreshToken purge (by-design soft-delete) · ACTIVE_DISPUTE_EXISTS (WP5'te 07'den kaldırıldı, erişilemez) | T42/T63b/T82 K |
 | ⚪ | audit-detail-schema | AuditLog `detail` pass-through NewValue; central AuditLog wiring; RestartRecovery audit; OldValue yok | T42/T39/T47/T106 K |
 | ⚪ | mvp-scope-postmvp | Bilinçli MVP-dışı: reviews, KYC, mobil, diğer oyunlar, multi-item/barter, ek blockchain, fiat, premium, Discord guild, Sentry vb. | 10_MVP_SCOPE / 02_PRD |
+| ⚪ | T110-RefundAddressDocConflict 🆕 | **MVP sonrası (owner kararı 2026-06-23 — yakın zamanda yapılmayacak).** Edge-case iade hedef-adresi doküman çelişkisi: impl + **08 §562** reddedilen-ödeme iadelerini (insufficient/excess/wrong-token/late) **ödeme kaynak adresine** (`FromAddress`) gönderir; ama 02 §4.4 (s.108) · 02 §4.6 (s.127) · 03 §4.3/§5.3/§5.4/§5.5 (s.287/340/360/368) · 06 §3.8 (s.736) "alıcının belirlediği iade adresine" der. `BUYER_REFUND` (kabul edilmiş ödeme iadesi) doğru şekilde belirlenen adrese gider (02 §4.6 s.127 doğru, korunur). Yapılacak: iki-hedef ayrımını dokümanlarda netleştir + `AmountValidationService.QueueRefundIntent` yorumu 02§4.6→08§562. T110 testi spec-yetkili (08 §562) davranışı **doğru** test eder → bu doc-borcu, kod değil. | T110 validate K1 |
 | ~ | content-authoring | **WP17 (taslak):** ToS/Privacy/Support `legal.*` taslak metin 4 dil yazıldı (owner "taslak yaz" kararı) — **otoriter metin hukuk review gerektirir** (jurisdiction/governing-law/entity belirsiz) | SPEC |
 | ⚪ | suspend-signalr-spec | Suspension'da otomatik EMERGENCY_HOLD/live force-restrict yok (request-time enforce); `/auth/suspended` vs `/account-suspended` | T105a K2 |
 | ✅ | like-escape-helper | **ÇÖZÜLDÜ → WP18 (PR-3):** kanonik bracket-wrapping escaper `AdminTransactionQueryService` private'ından `Skinora.Shared.Persistence.SqlLikeEscaper`'a çıkarıldı + 3 escape'siz `EF.Functions.Like` call-site'ı (AdminUserService/AuditLogQueryService/AdminSanctionsService) düzeltildi (LIKE-wildcard injection kapandı). `NoRawSqlConventionTests` source-scan arch testi (`ExecuteSqlRaw`/`FromSqlRaw`/* yasak, backend/src-only, NetArchTest yok). | T63 K6 / T106 K8 / T42 K1 |
