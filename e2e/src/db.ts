@@ -70,6 +70,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
     .batch(
       `DELETE FROM Notifications WHERE UserId IN (@s,@b);
        DELETE FROM FraudFlags WHERE UserId IN (@s,@b);
+       DELETE FROM AuditLogs WHERE UserId IN (@s,@b) OR ActorId IN (@s,@b);
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE pa FROM PaymentAddresses pa JOIN Transactions t ON pa.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE tof FROM TradeOffers tof JOIN Transactions t ON tof.TransactionId=t.Id WHERE t.SellerId=@s;

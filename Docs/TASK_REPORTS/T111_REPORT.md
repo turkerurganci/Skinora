@@ -13,7 +13,7 @@
   2. Fiyat sapması → `FLAGGED` → admin **reject** → `CANCELLED_ADMIN` (07 §9.5).
   3. Yüksek hacim → `FLAGGED` + `HIGH_VOLUME` flag (admin inceleme kuyruğunda görünür, AD2).
   4. Hesap flag'i → yeni işlem `422 ACCOUNT_FLAGGED` (fon akışı engeli); admin **reject** → blok kalkar → `CREATED`.
-- **`e2e/src/db.ts`:** `seedHappyPath` cleanup'ına `DELETE FROM FraudFlags WHERE UserId IN (@s,@b)` eklendi (FraudFlag → User/Transaction NO ACTION FK'leri; fraud testleri flag satırı bıraktığından sonraki re-seed'in Users/Transactions silmesini bu olmadan FK bloklardı — diğer suite'ler için zararsız no-op). Yeni: `seed.accountFlagId`, `getFlagForTransaction`, `insertAccountFlag` (ACCOUNT_LEVEL/PENDING), `getSystemSetting`/`setSystemSetting`.
+- **`e2e/src/db.ts`:** `seedHappyPath` cleanup'ına `DELETE FROM FraudFlags WHERE UserId IN (@s,@b)` + `DELETE FROM AuditLogs WHERE UserId IN (@s,@b) OR ActorId IN (@s,@b)` eklendi. **Neden (CI bulgusu — ilk run düzeltmesi):** FraudFlag (UserId/TransactionId/ReviewedByAdminId) ve AuditLog (UserId/ActorId — 06 §4.2 NO ACTION) User'a FK tutar; fraud akışı `FRAUD_FLAG_CREATED/APPROVED/REJECTED` AuditLog satırlarını `UserId=seller` ile yazar. Bu satırlar temizlenmediğinden bir sonraki test'in `seedHappyPath`'i seller'ı silemiyor → (cleanup batch `.catch` ile yutuluyor) → seller re-insert'i `PK_Users` ihlali. T108–T110 seller-UserId audit yazmadığından etkilenmemişti. **Raw SQL EF append-only guard'ını bypass eder** (immutability AppDbContext seviyesinde, DB trigger değil) → AuditLogs DELETE çalışır. Diğer suite'ler için zararsız (audit'e assert etmezler). Yeni: `seed.accountFlagId`, `getFlagForTransaction`, `insertAccountFlag` (ACCOUNT_LEVEL/PENDING), `getSystemSetting`/`setSystemSetting`.
 - **`e2e/src/api.ts`:** `listFlags` (AD2 — `GET /admin/flags`), `approveFlag` (AD4), `rejectFlag` (AD5).
 - **`e2e/package.json`:** `test:fraud` script.
 - **`.github/workflows/ci.yml`:** advisory `e2e-smoke` job'a "Run API fraud/flag E2E (T111)" adımı (T110 deseniyle birebir) + job yorumu 5 suite'e güncellendi (T111 cron-gated bekleme eklemez — FLAGGED işlem dispatch etmez).
@@ -40,16 +40,17 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| e2e statik | ✓ | `npx tsc --noEmit` exit 0 + `npm run lint` (eslint) 0 + prettier (committed LF) clean — değişen 3 dosya içerik-temiz |
-| E2E senaryoları (4) | ⏳ CI'da gözleniyor | CI advisory `e2e-smoke` job'unda "Run API fraud/flag E2E (T111)" adımı (`npm run test:fraud`) — sonuç bağımsız validator tarafından firsthand koşulur (docker yığını gerektirir; T107–T110 kalıbı) |
+| e2e statik | ✓ | `npx tsc --noEmit` exit 0 + `npm run lint` (eslint) 0 + prettier (committed LF) clean — değişen dosyalar içerik-temiz |
+| E2E senaryoları (4) | ✓ **4/4 firsthand (lokal docker stack)** | Yapımcı lokal tam docker stack'i (db/redis/fake/backend healthy, migrate'li) kurup `npm run test:fraud` koştu → **4/4 passed** (taze DB 4.3s + dirty DB re-run 2.5s; re-seed robustluğu kanıtlı). İlk CI run (`28019011271`) T111 adımı: test 1 geçti, test 2–4 `seedHappyPath`'te `PK_Users` ihlaliyle düştü → AuditLogs cleanup fix → firsthand 4/4. CI advisory `e2e-smoke` "Run API fraud/flag E2E (T111)" adımında da gözlenecek. |
+| Regresyon (paylaşılan seed değişimi) | ✓ | AuditLogs cleanup paylaşılan `seedHappyPath`'i etkilediğinden happy-path smoke **taze DB'de firsthand** koşuldu → `CREATED→COMPLETED` **1 passed (4.9m)** (CI sırası: happy-path önce, sonra fraud 4/4) → mainline seed/akış regresyon yok. |
 | Backend | — | Üretim kodu değişmedi → backend unit/integration etkilenmez |
 
 ## Doğrulama
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
+| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) · yapımcı firsthand 4/4 + happy-path regresyon ✓ |
+| Bulgu sayısı | — (CI ilk run seed-FK bulgusu yapım içinde kapatıldı) |
 | Düzeltme gerekli mi | — |
 
 ## Altyapı Değişiklikleri
@@ -87,3 +88,4 @@
 - **Main CI (Adım 0):** Son 3 run `success` (`28017118090`/`28017118276` docs T110-K1 #203 · `28013526658` T110 #202).
 - **Lever tasarımı:** FLAGGED işlem hiç sidecar çağrısı yapmaz (payment-address allocation yalnız CREATED'da; escrow dispatch yalnız ACCEPTED sonrası) → T111 yeni `sidecar-fake` yüzeyi gerektirmez (T110'dan farklı). Fiyat sapması yalnız listeleme fiyatıyla (300 vs seed market 100) sürülür — cache manipülasyonu gerekmez. Yüksek hacim için `high_volume_amount_threshold` runtime düşürülür (admin parametre yönetimi 03 §8.4'ün gerçek kullanımını yansıtır); `finally` ile geri alınır + her test re-seed prior tx'leri temizlediğinden diğer testler etkilenmez.
 - **CI ölçeklenme:** T111 ucuz (FLAGGED dispatch etmez → cron-gated bekleme yok), tek-job 70dk bütçesine sığar. ci.yml yorumu T112–T114 için paralel job/matrix bölünmesi notunu korur.
+- **CI fix iterasyonu (ilk run → düzeltme → firsthand doğrulama):** İlk push (`8b642b1`, FraudFlags cleanup ile) CI run `28019011271`'de tüm **blocking job'lar success** (CI Gate ✓) ama advisory e2e-smoke T111 adımı **failure** — test 1 geçti, test 2–4 `seedHappyPath`'te `PK_Users` ihlaliyle düştü (yukarıdaki AuditLog FK kök nedeni). **Düzeltme:** `seedHappyPath`'e AuditLogs cleanup eklendi. **Firsthand doğrulama (lokal tam docker stack):** fraud 4/4 (taze + dirty re-run) + happy-path taze DB 4.9m → COMPLETED (regresyon yok). **Lokal gözlem (CI'yı etkilemez):** fraud suite'i happy-path'ten ÖNCE dirty DB'de koşturulunca outbox dispatcher, re-seed'in sildiği transaction'a ait orphan notification event'inde (`FK_Notifications_Transactions_TransactionId`) takılıp poison-message ile durdu → happy-path'in payout→COMPLETED flip'i gecikti. Bu, e2e harness'ın re-seed-while-events-pending karakteristiği (pre-existing, T108–T110'da da var); CI'da happy-path ÖNCE taze DB'de koşar → etkilenmez. T111 testleri senkron state'e assert eder (async outbox'a değil) → poison testleri düşürmez.
