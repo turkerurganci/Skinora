@@ -30,7 +30,7 @@ import * as api from '../src/api';
  *   4. Unsupported (§5.3a)  → SPAM_TOKEN_INCOMING audit row, no refund, no state change.
  *   5. Late payment (§5.4)  → LATE_PAYMENT_REFUND after a payment-timeout cancel.
  *   6. Multi-payment (§5.5) → first exact accepted, second refunded in full.
- * Every refund returns to the payment source wallet (02 §4.6 = fakeBuyerWallet),
+ * Every refund returns to the payment source wallet (08 §562 = fakeBuyerWallet),
  * NOT the trade-side refund wallet. Refund amounts are chosen so net > 2× gas
  * (gas estimate 2.0, threshold 4.0) → the refund proceeds rather than blocking.
  */

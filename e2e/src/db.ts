@@ -43,7 +43,7 @@ export const seed = {
 
 // The buyer's on-chain wallet the fake sidecar pays FROM = fakeTronAddress(999_001)
 // (sidecar-fake/src/routes/control.ts BUYER_WALLET). Every payment-edge-case
-// refund returns to the payment *source* address (02 §4.6), so the refund row's
+// refund returns to the payment *source* address (08 §562), so the refund row's
 // ToAddress equals this — distinct from seed.buyerRefundAddress (the trade-side
 // refund wallet used only by the item-timeout BUYER_REFUND).
 export const fakeBuyerWallet = 'TGDcTRVZVvKBUE7h5fRCVUjRGj6K52AFWg';
