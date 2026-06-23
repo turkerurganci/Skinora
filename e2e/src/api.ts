@@ -94,9 +94,47 @@ async function fakePost(path: string, body: unknown): Promise<ApiResult> {
   return { status: res.status, ok: res.ok, body: json };
 }
 
-/** Simulate the buyer's on-chain payment via the fake sidecar control surface. */
-export function payViaFake(transactionId: string): Promise<ApiResult> {
-  return fakePost('/__e2e/payment/pay', { transactionId });
+/** Simulate the buyer's on-chain payment via the fake sidecar control surface.
+ *  Defaults to the exact expected amount at eventIndex 0 (the happy path). T110
+ *  levers: `amount` drives 03 §5.1 (insufficient) / §5.2 (excess); a non-zero
+ *  `eventIndex` posts a distinct second transfer for the §5.5 multi-payment
+ *  (the backend treats it as a fresh confirmed payment → full refund because the
+ *  transaction already left ITEM_ESCROWED). */
+export function payViaFake(
+  transactionId: string,
+  opts?: { amount?: string; eventIndex?: number },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/payment/pay', { transactionId, ...opts });
+}
+
+/** 03 §5.3 — simulate a supported-but-wrong TRC-20 stablecoin landing at the
+ *  deposit address (USDC when the buyer was billed USDT). Backend queues a
+ *  WRONG_TOKEN_REFUND and the transaction stays ITEM_ESCROWED. */
+export function payWrongTokenViaFake(
+  transactionId: string,
+  opts?: { actualTokenSymbol?: string; amount?: string },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/payment/wrong-token', { transactionId, ...opts });
+}
+
+/** 03 §5.3a — simulate an unsupported token/contract. Backend records a
+ *  terminal SPAM_TOKEN_INCOMING audit row; no refund, transaction state
+ *  untouched (stays ITEM_ESCROWED). */
+export function paySpamTokenViaFake(
+  transactionId: string,
+  opts?: { amount?: string },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/payment/spam-token', { transactionId, ...opts });
+}
+
+/** 03 §5.4 — simulate a late buyer transfer at a cancelled transaction's
+ *  deposit address (inside the post-cancel monitoring window). Backend queues a
+ *  LATE_PAYMENT_REFUND. `monitorState` defaults to POST_CANCEL_24H. */
+export function payLateViaFake(
+  transactionId: string,
+  opts?: { amount?: string; monitorState?: string },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/payment/late-detected', { transactionId, ...opts });
 }
 
 /** Suppress the fake's auto-accept for a trade-offer dispatch direction
