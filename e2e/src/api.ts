@@ -115,6 +115,31 @@ export function rejectFlag(token: string, id: string, note?: string): Promise<Ap
   return call('POST', `/api/v1/admin/flags/${id}/reject`, token, { note: note ?? null });
 }
 
+/** AD19b — POST /admin/transactions/:id/emergency-hold (07 §9.21 / 03 §8.8).
+ *  Freezes an active transaction in its current state: stamps IsOnHold=true +
+ *  TimeoutFreezeReason=EMERGENCY_HOLD and captures the active-phase deadline
+ *  remainder, so no automatic step advances. `reason` is required (>=10 chars).
+ *  Requires the EMERGENCY_HOLD permission, satisfied by a super_admin claim. */
+export function applyEmergencyHold(token: string, id: string, reason: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/admin/transactions/${id}/emergency-hold`, token, { reason });
+}
+
+/** AD19c — POST /admin/transactions/:id/release-hold (07 §9.22 / 03 §8.8).
+ *  RESUME lifts the hold and resumes the frozen timeout at the captured remainder
+ *  (status returns to the pre-hold value); CANCEL releases then admin-cancels
+ *  (→ CANCELLED_ADMIN with the AD19 refund fan-out) — except when the pre-hold
+ *  status was ITEM_DELIVERED, where CANCEL is rejected 422
+ *  CANNOT_CANCEL_DELIVERED_HOLD and only RESUME is permitted. `note` is required
+ *  (>=1 char). Same EMERGENCY_HOLD permission as AD19b. */
+export function releaseEmergencyHold(
+  token: string,
+  id: string,
+  action: 'RESUME' | 'CANCEL',
+  note: string,
+): Promise<ApiResult> {
+  return call('POST', `/api/v1/admin/transactions/${id}/release-hold`, token, { action, note });
+}
+
 /** POST to a fake-sidecar control endpoint (/__e2e/*). The control surface is
  *  unauthenticated (the caller is the test) and shared across both fake ports. */
 async function fakePost(path: string, body: unknown): Promise<ApiResult> {
@@ -249,4 +274,31 @@ export async function pollUntilRefundableCancel(
     await new Promise((res) => setTimeout(res, interval));
   }
   throw new Error(`timeout awaiting a refundable-cancel state for ${id} (last status=${last})`);
+}
+
+/** Poll the transaction for `durationMs`, asserting the detail endpoint's
+ *  projected status never leaves `expected`. Part of the e2e proof of 03 §8.8
+ *  step 6 ("timeout durur — hiçbir otomatik adım ilerlemez"): while on hold the
+ *  detail endpoint projects status=EMERGENCY_HOLD, so a frozen transaction keeps
+ *  reporting EMERGENCY_HOLD across several DeadlineScannerJob sweeps rather than
+ *  flipping to a CANCELLED_* terminal. Callers pair this with a DB read of the
+ *  underlying phase status for the decisive "not cancelled" assertion. Throws on
+ *  the first observation of a different status; returns when the window elapses
+ *  unchanged. */
+export async function assertStatusStable(
+  token: string,
+  id: string,
+  expected: string,
+  opts?: { durationMs?: number; intervalMs?: number },
+): Promise<void> {
+  const deadline = Date.now() + (opts?.durationMs ?? 15_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  do {
+    const r = await getTransaction(token, id);
+    const s = statusOf(r.body);
+    if (s !== expected) {
+      throw new Error(`status left ${expected} → ${s}; expected it to stay frozen`);
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  } while (Date.now() < deadline);
 }

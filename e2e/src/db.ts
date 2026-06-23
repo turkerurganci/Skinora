@@ -64,11 +64,23 @@ export async function seedHappyPath(): Promise<typeof seed> {
   const r = () => p.request();
 
   // Cleanup (best-effort, FK-safe) so a re-run on a non-fresh DB is clean.
+  //
+  // Drain un-PROCESSED OutboxMessages FIRST. The previous test's transactions are
+  // about to be deleted below; any still-PENDING/FAILED outbox row that, on
+  // dispatch, inserts a Notification referencing one of those (now-gone)
+  // transactions trips FK_Notifications_Transactions_TransactionId. Because the
+  // dispatcher batches rows into one SaveChanges, that single FK failure rolls
+  // back the whole batch and the row is retried forever — permanently blocking
+  // every later notification (e.g. a subsequent suite's EMERGENCY_HOLD_APPLIED)
+  // from committing. Deleting Notifications without draining the outbox that
+  // re-creates them left this gap; clearing both closes it (the e2e backend has
+  // no other producer, so a global non-PROCESSED purge is safe between tests).
   await r()
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .batch(
-      `DELETE FROM Notifications WHERE UserId IN (@s,@b);
+      `DELETE FROM OutboxMessages WHERE Status <> 'PROCESSED';
+       DELETE FROM Notifications WHERE UserId IN (@s,@b);
        DELETE FROM FraudFlags WHERE UserId IN (@s,@b);
        DELETE FROM AuditLogs WHERE UserId IN (@s,@b) OR ActorId IN (@s,@b);
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
@@ -593,6 +605,46 @@ export async function setSystemSetting(key: FraudSettingKey, value: string): Pro
        SET Value = @v, IsConfigured = 1, UpdatedAt = SYSUTCDATETIME()
        WHERE [Key] = @k`,
     );
+}
+
+export interface HoldStateRow {
+  status: string;
+  isOnHold: boolean;
+  timeoutFreezeReason: string | null;
+  timeoutFrozenAt: Date | null;
+  timeoutRemainingSeconds: number | null;
+  previousStatusBeforeHold: number | null;
+}
+
+/** Read the emergency-hold + timeout-freeze columns of a transaction (06 §3.5).
+ *  Backs the T112 assertions that an apply-hold stamps IsOnHold +
+ *  TimeoutFreezeReason=EMERGENCY_HOLD + the freeze trio (TimeoutFrozenAt +
+ *  TimeoutRemainingSeconds), and that a release clears them (or, for a rejected
+ *  ITEM_DELIVERED cancel, that the hold survives). Status + TimeoutFreezeReason
+ *  are stored as their string names (06 §4; the CK_Transactions_* constraints
+ *  compare against 'EMERGENCY_HOLD'). Returns null when the row is missing. */
+export async function getTransactionHoldState(transactionId: string): Promise<HoldStateRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Status, IsOnHold, TimeoutFreezeReason, TimeoutFrozenAt,
+              TimeoutRemainingSeconds, PreviousStatusBeforeHold
+       FROM Transactions WHERE Id = @tx`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    status: String(row.Status),
+    isOnHold: Boolean(row.IsOnHold),
+    timeoutFreezeReason: row.TimeoutFreezeReason === null ? null : String(row.TimeoutFreezeReason),
+    timeoutFrozenAt: row.TimeoutFrozenAt ? new Date(row.TimeoutFrozenAt) : null,
+    timeoutRemainingSeconds:
+      row.TimeoutRemainingSeconds === null ? null : Number(row.TimeoutRemainingSeconds),
+    previousStatusBeforeHold:
+      row.PreviousStatusBeforeHold === null ? null : Number(row.PreviousStatusBeforeHold),
+  };
 }
 
 export async function closePool(): Promise<void> {

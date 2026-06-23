@@ -11,6 +11,7 @@
     "test:timeout": "playwright test timeout",
     "test:payment": "playwright test payment-edge-cases",
     "test:fraud": "playwright test fraud-flags",
+    "test:hold": "playwright test emergency-hold",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
