@@ -77,6 +77,44 @@ export function adminCancelTransaction(
   return call('POST', `/api/v1/admin/transactions/${id}/cancel`, token, { reason });
 }
 
+/** AD2 — GET /admin/flags (07 §9.2). Lists fraud flags for the admin review
+ *  queue; the optional filters back the 03 §8.2 scope/status controls. Requires
+ *  the VIEW_FLAGS permission, satisfied by a super_admin role claim. */
+export function listFlags(
+  token: string,
+  query?: {
+    scope?: string;
+    type?: string;
+    reviewStatus?: string;
+    page?: number;
+    pageSize?: number;
+  },
+): Promise<ApiResult> {
+  const params = new URLSearchParams();
+  if (query?.scope) params.set('scope', query.scope);
+  if (query?.type) params.set('type', query.type);
+  if (query?.reviewStatus) params.set('reviewStatus', query.reviewStatus);
+  if (query?.page) params.set('page', String(query.page));
+  if (query?.pageSize) params.set('pageSize', String(query.pageSize));
+  const qs = params.toString();
+  return call('GET', `/api/v1/admin/flags${qs ? `?${qs}` : ''}`, token);
+}
+
+/** AD4 — POST /admin/flags/:id/approve (07 §9.4). For a transaction-scoped flag
+ *  this promotes the linked transaction FLAGGED → CREATED and starts the accept
+ *  timeout. Requires MANAGE_FLAGS (super_admin claim). */
+export function approveFlag(token: string, id: string, note?: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/admin/flags/${id}/approve`, token, { note: note ?? null });
+}
+
+/** AD5 — POST /admin/flags/:id/reject (07 §9.5). For a transaction-scoped flag
+ *  this moves the linked transaction FLAGGED → CANCELLED_ADMIN; for an
+ *  account-level flag it just marks the flag REJECTED (lifting the fund-flow
+ *  block). Requires MANAGE_FLAGS (super_admin claim). */
+export function rejectFlag(token: string, id: string, note?: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/admin/flags/${id}/reject`, token, { note: note ?? null });
+}
+
 /** POST to a fake-sidecar control endpoint (/__e2e/*). The control surface is
  *  unauthenticated (the caller is the test) and shared across both fake ports. */
 async function fakePost(path: string, body: unknown): Promise<ApiResult> {
