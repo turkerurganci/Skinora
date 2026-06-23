@@ -35,6 +35,9 @@ export const seed = {
   // permission itself comes from the super_admin role claim on the JWT.
   adminId: '55555555-5555-5555-5555-555555555555',
   adminSteamId: '76561198000000099',
+  // Fixed id for the account-level FraudFlag the T111 fund-flow-block scenario
+  // inserts for the seller (so the test can reject it by id to unblock).
+  accountFlagId: '66666666-6666-6666-6666-666666666666',
   // Must match the fake's inventory item (assetId + marketHashName).
   itemAssetId: '11111111001',
   itemMarketHashName: 'AK-47 | Redline (Field-Tested)',
@@ -66,6 +69,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .batch(
       `DELETE FROM Notifications WHERE UserId IN (@s,@b);
+       DELETE FROM FraudFlags WHERE UserId IN (@s,@b);
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE pa FROM PaymentAddresses pa JOIN Transactions t ON pa.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE tof FROM TradeOffers tof JOIN Transactions t ON tof.TransactionId=t.Id WHERE t.SellerId=@s;
@@ -484,6 +488,110 @@ export async function pollPostCancelMonitoring(
     await new Promise((res) => setTimeout(res, interval));
   }
   return last;
+}
+
+export interface FraudFlagRow {
+  id: string;
+  scope: string;
+  type: string;
+  status: string;
+}
+
+/** Read the most recent FraudFlag attached to `transactionId` (06 §3.12) — the
+ *  pre-create flag the fraud engine stages when a price-deviation / high-volume
+ *  rule trips during create (03 §7.1–§7.2). Returns null when none exists, so a
+ *  test can assert both "flagged" and "not flagged". */
+export async function getFlagForTransaction(transactionId: string): Promise<FraudFlagRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Id, Scope, Type, Status FROM FraudFlags
+       WHERE TransactionId = @tx
+       ORDER BY CreatedAt DESC`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    id: String(row.Id),
+    scope: String(row.Scope),
+    type: String(row.Type),
+    status: String(row.Status),
+  };
+}
+
+/** Insert an ACCOUNT_LEVEL FraudFlag (TransactionId NULL, PENDING) for `userId`
+ *  — the e2e lever for 03 §7.3/§7.4 "hesap flag'i". An active account flag
+ *  (Status != REJECTED) makes the user fail the transaction-creation eligibility
+ *  gate (AccountFlagChecker → ACCOUNT_FLAGGED), i.e. the fund-flow block. Uses the
+ *  fixed seed.accountFlagId so the test can reject it by id to unblock. Enum
+ *  columns are stored as their string names (06 §4 convention; FraudFlag CHECK
+ *  constraints compare against 'ACCOUNT_LEVEL'/'PENDING'). RowVersion is a
+ *  SQL Server rowversion — omitted so the server generates it. */
+export async function insertAccountFlag(
+  userId: string,
+  opts?: { flagId?: string; type?: string },
+): Promise<string> {
+  const flagId = opts?.flagId ?? seed.accountFlagId;
+  const p = await getPool();
+  await p
+    .request()
+    .input('id', sql.UniqueIdentifier, flagId)
+    .input('uid', sql.UniqueIdentifier, userId)
+    .input('type', sql.NVarChar(40), opts?.type ?? 'ABNORMAL_BEHAVIOR')
+    .input(
+      'details',
+      sql.NVarChar(sql.MAX),
+      '{"pattern":"E2E_ACCOUNT_FLAG","description":"T111 fund-flow block"}',
+    )
+    .query(
+      `INSERT INTO FraudFlags (Id, UserId, TransactionId, ReviewedByAdminId, Scope, Type,
+         Status, Details, AdminNote, ReviewedAt, IsDeleted, DeletedAt, CreatedAt, UpdatedAt)
+       VALUES (@id, @uid, NULL, NULL, 'ACCOUNT_LEVEL', @type,
+         'PENDING', @details, NULL, NULL, 0, NULL, SYSUTCDATETIME(), SYSUTCDATETIME());`,
+    );
+  return flagId;
+}
+
+/** Admin-tunable SystemSetting keys (06 §3.17) an e2e test may rewrite to drive
+ *  a fraud rule deterministically. The value is a bound parameter; the union
+ *  keeps callers honest about which knobs the harness touches. */
+export type FraudSettingKey =
+  | 'high_volume_amount_threshold'
+  | 'high_volume_count_threshold'
+  | 'price_deviation_threshold';
+
+/** Read a SystemSetting value by key ([Key] is a reserved word → bracketed).
+ *  Returns null when the row is unconfigured/absent — lets a test capture the
+ *  e2e default before overriding it, then restore the exact prior value. */
+export async function getSystemSetting(key: FraudSettingKey): Promise<string | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('k', sql.NVarChar(100), key)
+    .query(`SELECT Value FROM SystemSettings WHERE [Key] = @k`);
+  if (!result.recordset.length) return null;
+  const v = result.recordset[0].Value;
+  return v === null || v === undefined ? null : String(v);
+}
+
+/** Set a SystemSetting value by key (IsConfigured=1). The fraud pre-check reads
+ *  SystemSetting rows directly (no cache), so the change is visible to the very
+ *  next create. Used by the high-volume scenario to drop the threshold low
+ *  enough that a single prior transaction trips the rule; the test restores the
+ *  prior value in a finally block. */
+export async function setSystemSetting(key: FraudSettingKey, value: string): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('k', sql.NVarChar(100), key)
+    .input('v', sql.NVarChar(200), value)
+    .query(
+      `UPDATE SystemSettings
+       SET Value = @v, IsConfigured = 1, UpdatedAt = SYSUTCDATETIME()
+       WHERE [Key] = @k`,
+    );
 }
 
 export async function closePool(): Promise<void> {
