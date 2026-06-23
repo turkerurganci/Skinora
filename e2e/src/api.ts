@@ -140,6 +140,120 @@ export function releaseEmergencyHold(
   return call('POST', `/api/v1/admin/transactions/${id}/release-hold`, token, { action, note });
 }
 
+// ---------------------------------------------------------------------------
+// Admin back-office surface (T113 — 03 §8 admin flows). Every endpoint below is
+// gated by an admin authorization policy that a super_admin role claim
+// satisfies (PermissionAuthorizationHandler bypass / AuthPolicies.AdminAccess);
+// a plain `user` token is rejected 403. T113 adds test coverage only — these
+// endpoints shipped wired in T63 (dashboard / tx list+detail), T39+T102
+// (settings), T39+T104 (roles) and T42+T106 (audit log).
+// ---------------------------------------------------------------------------
+
+/** AD1 — GET /admin/dashboard (07 §9.1 / 03 §8.1). Returns the admin landing
+ *  summary: summaryCards (active / pending-flag / daily+weekly-completed
+ *  counters), recentFlags (last 5, newest-first), and steamAccounts. Gated by
+ *  AuthPolicies.AdminAccess — any admin role; a `user` token is forbidden. */
+export function getAdminDashboard(token: string): Promise<ApiResult> {
+  return call('GET', '/api/v1/admin/dashboard', token);
+}
+
+/** AD6 — GET /admin/transactions (07 §9.6 / 03 §8.3). Paged admin transaction
+ *  list with the 03 §8.3 filters (status / date / amount / Steam-id search).
+ *  Requires VIEW_TRANSACTIONS (super_admin claim). */
+export function listAdminTransactions(
+  token: string,
+  query?: { status?: string; search?: string; page?: number; pageSize?: number },
+): Promise<ApiResult> {
+  const params = new URLSearchParams();
+  if (query?.status) params.set('status', query.status);
+  if (query?.search) params.set('search', query.search);
+  if (query?.page) params.set('page', String(query.page));
+  if (query?.pageSize) params.set('pageSize', String(query.pageSize));
+  const qs = params.toString();
+  return call('GET', `/api/v1/admin/transactions${qs ? `?${qs}` : ''}`, token);
+}
+
+/** AD7 — GET /admin/transactions/:id (07 §9.7 / 03 §8.3). Full admin
+ *  transaction detail (parties + reputation, item, price, statusHistory,
+ *  adminActions). 404 TRANSACTION_NOT_FOUND for an unknown id. Same
+ *  VIEW_TRANSACTIONS gate as AD6. */
+export function getAdminTransaction(token: string, id: string): Promise<ApiResult> {
+  return call('GET', `/api/v1/admin/transactions/${id}`, token);
+}
+
+/** AD8 — GET /admin/settings (07 §9.8 / 03 §8.4). Lists the admin-tunable
+ *  platform parameters (key / value / category / label / valueType). Requires
+ *  MANAGE_SETTINGS (super_admin claim). */
+export function listSettings(token: string): Promise<ApiResult> {
+  return call('GET', '/api/v1/admin/settings', token);
+}
+
+/** AD9 — PUT /admin/settings/:key (07 §9.9 / 03 §8.4). Updates one parameter and
+ *  stages a SYSTEM_SETTING_CHANGED audit row in the same DB transaction. A value
+ *  that fails the key's type/range rule is rejected 400 VALIDATION_ERROR. */
+export function updateSetting(
+  token: string,
+  key: string,
+  value: string | null,
+): Promise<ApiResult> {
+  return call('PUT', `/api/v1/admin/settings/${key}`, token, { value });
+}
+
+export interface RoleBody {
+  name: string;
+  description?: string | null;
+  permissions?: string[];
+}
+
+/** AD11 — GET /admin/roles (07 §9.11 / 03 §8.6). Lists roles + the available
+ *  permission catalog. Requires MANAGE_ROLES (super_admin claim). */
+export function listRoles(token: string): Promise<ApiResult> {
+  return call('GET', '/api/v1/admin/roles', token);
+}
+
+/** AD12 — POST /admin/roles (07 §9.12 / 03 §8.6). Creates a role with a
+ *  permission set drawn from the catalog → 201. A duplicate name is rejected
+ *  409 ROLE_NAME_EXISTS; an unknown permission key 400 INVALID_PERMISSION. */
+export function createRole(token: string, body: RoleBody): Promise<ApiResult> {
+  return call('POST', '/api/v1/admin/roles', token, body);
+}
+
+/** AD13 — PUT /admin/roles/:id (07 §9.13 / 03 §8.6). Replaces a role's name /
+ *  description / permission set → 200. */
+export function updateRole(token: string, id: string, body: RoleBody): Promise<ApiResult> {
+  return call('PUT', `/api/v1/admin/roles/${id}`, token, body);
+}
+
+/** AD14 — DELETE /admin/roles/:id (07 §9.14 / 03 §8.6). Deletes an unassigned
+ *  role → 200; a role with assigned users is rejected 422 ROLE_HAS_USERS. */
+export function deleteRole(token: string, id: string): Promise<ApiResult> {
+  return call('DELETE', `/api/v1/admin/roles/${id}`, token);
+}
+
+/** AD18 — GET /admin/audit-logs (07 §9.19 / 03 §8). Paged audit trail with the
+ *  category / date / search / transactionId filters. `search` matches the
+ *  EntityId substring (a settings key, an entity id) plus the actor/subject
+ *  Steam id or display name. Requires VIEW_AUDIT_LOG (super_admin claim). */
+export function listAuditLogs(
+  token: string,
+  query?: {
+    category?: string;
+    search?: string;
+    transactionId?: string;
+    page?: number;
+    pageSize?: number;
+  },
+): Promise<ApiResult> {
+  const params = new URLSearchParams();
+  if (query?.category) params.set('category', query.category);
+  if (query?.search) params.set('search', query.search);
+  if (query?.transactionId) params.set('transactionId', query.transactionId);
+  if (query?.page) params.set('page', String(query.page));
+  if (query?.pageSize) params.set('pageSize', String(query.pageSize));
+  const qs = params.toString();
+  return call('GET', `/api/v1/admin/audit-logs${qs ? `?${qs}` : ''}`, token);
+}
+
 /** POST to a fake-sidecar control endpoint (/__e2e/*). The control surface is
  *  unauthenticated (the caller is the test) and shared across both fake ports. */
 async function fakePost(path: string, body: unknown): Promise<ApiResult> {
