@@ -274,6 +274,20 @@ test('role management lifecycle: create → update → delete (AC5)', async () =
   const updatedPerms = (api.unwrap(updated.body).permissions as string[]) ?? [];
   expect(updatedPerms).toEqual(expect.arrayContaining([perm0, perm1]));
 
+  // Persisted re-read (not the create/update echo): the AD12/AD13 responses
+  // derive `permissions` from the request body (AdminRoleService Create/Update),
+  // so a silently-dropped AdminRolePermission insert would still echo back. AD11
+  // ListAsync is the only DB-backed permission read — re-read the role off the
+  // list and assert the persisted set, proving the assignment round-tripped SQL.
+  const afterUpdate = await api.listRoles(token);
+  const persistedRole = (
+    (api.unwrap(afterUpdate.body).roles as Array<Record<string, unknown>>) ?? []
+  ).find((r) => String(r.id) === roleId);
+  expect(persistedRole, 'updated role missing from the persisted list').toBeTruthy();
+  expect((persistedRole?.permissions as string[]) ?? []).toEqual(
+    expect.arrayContaining([perm0, perm1]),
+  );
+
   // AD14 — delete (unassigned → 200) and confirm it is gone from the list.
   const deleted = await api.deleteRole(token, roleId);
   expect(deleted.ok, `delete failed: ${JSON.stringify(deleted.body)}`).toBeTruthy();
@@ -282,6 +296,49 @@ test('role management lifecycle: create → update → delete (AC5)', async () =
     (api.unwrap(afterList.body).roles as Array<Record<string, unknown>>) ?? []
   ).some((r) => String(r.id) === roleId);
   expect(stillThere, 'role survived delete').toBeFalsy();
+});
+
+test('assign user to role persists + ROLE_HAS_USERS guards delete (AC5 — §8.6 step 4 / AD17)', async () => {
+  await seedHappyPath(); // seeds the buyer User we assign below
+  await ensureAdmin();
+  const token = adminToken();
+
+  // A fresh, empty-permission role to receive the assignment (distinct name so
+  // it never collides with the AC5-lifecycle role under the unfiltered UQ).
+  const created = await api.createRole(token, {
+    name: `${ROLE_TAG} assignable`,
+    description: 'E2E T113 AD17 role',
+    permissions: [],
+  });
+  expect(created.status, `create failed: ${JSON.stringify(created.body)}`).toBe(201);
+  const roleId = String(api.unwrap(created.body).id);
+
+  try {
+    // AD17 — assign the seeded buyer to the role (03 §8.6 step 4 "kullanıcıları
+    // rollere atayabilir").
+    const assign = await api.assignUserRole(token, seed.buyerId, roleId);
+    expect(assign.ok, `assign failed: ${JSON.stringify(assign.body)}`).toBeTruthy();
+    expect(String((api.unwrap(assign.body).role as Record<string, unknown>)?.id)).toBe(roleId);
+
+    // Persisted re-read: AD11 ListAsync counts AdminUserRole rows straight from
+    // SQL → assignedUserCount proves the assignment persisted (not an echo).
+    const list = await api.listRoles(token);
+    const row = ((api.unwrap(list.body).roles as Array<Record<string, unknown>>) ?? []).find(
+      (r) => String(r.id) === roleId,
+    );
+    expect(row, 'assigned role missing from the list').toBeTruthy();
+    expect(Number(row?.assignedUserCount)).toBeGreaterThanOrEqual(1);
+
+    // AD14 — a role with an active assignment is guarded: delete → 422.
+    const blocked = await api.deleteRole(token, roleId);
+    expect(blocked.status, JSON.stringify(blocked.body)).toBe(422);
+    expect(errorCode(blocked.body)).toBe('ROLE_HAS_USERS');
+  } finally {
+    // Clear the assignment (roleId=null tombstones it → count 0) so the role is
+    // deletable; seedHappyPath's AdminUserRoles purge keeps later re-runs clean.
+    await api.assignUserRole(token, seed.buyerId, null);
+    await api.deleteRole(token, roleId);
+  }
 });
 
 test('audit log view surfaces an admin action (AC6)', async () => {

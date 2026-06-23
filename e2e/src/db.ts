@@ -88,6 +88,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
        DELETE tof FROM TradeOffers tof JOIN Transactions t ON tof.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE FROM TransactionHistory WHERE TransactionId IN (SELECT Id FROM Transactions WHERE SellerId=@s);
        DELETE FROM Transactions WHERE SellerId=@s;
+       DELETE FROM AdminUserRoles WHERE UserId IN (@s,@b);
        DELETE FROM Users WHERE Id IN (@s,@b);
        DELETE FROM PlatformSteamBots WHERE Id=@id_unused;`.replace('@id_unused', `'${seed.botId}'`),
     )

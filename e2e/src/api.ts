@@ -230,6 +230,18 @@ export function deleteRole(token: string, id: string): Promise<ApiResult> {
   return call('DELETE', `/api/v1/admin/roles/${id}`, token);
 }
 
+/** AD17 — PUT /admin/users/:id/role (07 §9.18 / 03 §8.6 step 4). Assigns the
+ *  user to `roleId` (or clears the assignment when roleId is null), persisting
+ *  an AdminUserRole row; the prior active assignment is tombstoned first. 404
+ *  USER_NOT_FOUND / ROLE_NOT_FOUND. Requires MANAGE_ROLES (super_admin claim). */
+export function assignUserRole(
+  token: string,
+  userId: string,
+  roleId: string | null,
+): Promise<ApiResult> {
+  return call('PUT', `/api/v1/admin/users/${userId}/role`, token, { roleId });
+}
+
 /** AD18 — GET /admin/audit-logs (07 §9.19 / 03 §8). Paged audit trail with the
  *  category / date / search / transactionId filters. `search` matches the
  *  EntityId substring (a settings key, an entity id) plus the actor/subject
