@@ -68,7 +68,7 @@
 - Branch: `task/T113-e2e-admin-flows`
 - Commit: (bu commit) — T113: E2E — Admin akışları (test coverage)
 - PR: [#206](https://github.com/turkerurganci/Skinora/pull/206)
-- CI: ⏳ task CI watch (advisory e2e-smoke "Run API admin-flows E2E (T113)" adımı dahil). Validator çıkış kapısı.
+- CI: ✓ task CI HEAD `55e3d2f` run [`28051907362`](https://github.com/turkerurganci/Skinora/actions/runs/28051907362) — 15/15 job success (CI Gate dahil) + advisory `e2e-smoke` job success, **"Run API admin-flows E2E (T113)" adımı `conclusion=success`** (continue-on-error maskelemiyor → 6 test gerçek migrated docker-compose stack'inde geçti, vacuous değil); aynı run'da happy-path + T108–T112 adımları da `success` → regresyon yok. Post-merge main CI + Docker Publish watch = validator çıkış kapısı (Adım 18).
 
 ## Known Limitations / Follow-up
 
