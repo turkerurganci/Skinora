@@ -13,6 +13,7 @@
     "test:fraud": "playwright test fraud-flags",
     "test:hold": "playwright test emergency-hold",
     "test:admin": "playwright test admin-flows",
+    "test:downtime": "playwright test downtime",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
