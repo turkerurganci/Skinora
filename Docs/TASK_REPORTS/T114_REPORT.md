@@ -73,9 +73,9 @@
 ## Commit & PR
 
 - Branch: `task/T114-e2e-downtime`
-- Commit: _(bu commit)_ — T114: E2E — Downtime ve bakım senaryoları (test coverage)
-- PR: _(açılacak)_
-- CI: _(izlenecek — advisory `e2e-smoke / E2E T114 downtime` leg + tüm blocking job'lar)_
+- Commit: `8e07539` — T114: E2E — Downtime ve bakım senaryoları (test coverage)
+- PR: [#207](https://github.com/turkerurganci/Skinora/pull/207)
+- CI: _(izleniyor — advisory `e2e-smoke / E2E T114 downtime` leg + tüm blocking job'lar)_
 
 ## Known Limitations / Follow-up
 
