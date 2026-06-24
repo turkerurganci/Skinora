@@ -614,23 +614,40 @@ jobs:
   # smoke (API + UI) is also proven locally — this is an extra signal.
   # ----------------------------------------------------------------------------
   e2e-smoke:
-    name: E2E smoke (advisory)
+    name: E2E ${{ matrix.suite }} (advisory)
     needs: [changes]
     if: needs.changes.outputs['e2e-stack'] == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Seven E2E suites run sequentially in this single advisory job (happy-path +
-    # T108 cancel + T109 timeout + T110 payment + T111 fraud + T112 emergency
-    # hold + T113 admin), most gated by the per-minute transfer/escrow Hangfire
-    # crons, so the budget grows per suite. T110 (6 tests, incl. the
-    # timeout-reuse §5.4) pushed the total past the previous 35-min cap. T111 is
-    # cheap (FLAGGED transactions never dispatch). T112 adds 3 tests, one of
-    # which waits out the per-minute payout pipeline (ITEM_DELIVERED → COMPLETED
-    # after a resume), so the budget grew to 80. T113 is cheap too — the admin
-    # back-office endpoints are synchronous reads/writes with no cron wait. NOTE:
-    # this single-job pattern will not scale to T114 — split into parallel jobs
-    # (or a matrix) when it lands.
-    timeout-minutes: 80
+    # Eight E2E suites, each on its own isolated docker-compose stack so they run
+    # in parallel — the owner's T114 call to split the former single sequential
+    # job (its cumulative budget no longer scaled; the 80-min cap was already at
+    # its limit at seven suites). Every leg is advisory (continue-on-error) and is
+    # outside ci-gate.needs, so a flake never blocks merge. Per-leg budget covers
+    # the image build + db + migrate + backend up + one suite; the heaviest legs
+    # (happy-path, T110 payment, T112 emergency-hold) wait out per-minute Hangfire
+    # crons — comfortably inside 30 min for a single suite.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: happy-path
+            script: test:smoke
+          - suite: T108 cancellation
+            script: test:cancel
+          - suite: T109 timeout
+            script: test:timeout
+          - suite: T110 payment edge cases
+            script: test:payment
+          - suite: T111 fraud-flags
+            script: test:fraud
+          - suite: T112 emergency-hold
+            script: test:hold
+          - suite: T113 admin-flows
+            script: test:admin
+          - suite: T114 downtime
+            script: test:downtime
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -677,54 +694,12 @@ jobs:
       - name: Start backend stack
         run: docker compose -f docker-compose.e2e.yml up -d --wait skinora-backend skinora-fake-sidecar
 
-      - name: Run API happy-path smoke
+      - name: Run ${{ matrix.suite }} E2E
         working-directory: e2e
         env:
           E2E_BASE_URL: http://localhost:5000
           E2E_FAKE_URL: http://localhost:5200
-        run: npm ci && npm run test:smoke
-
-      - name: Run API cancellation E2E (T108)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:cancel
-
-      - name: Run API timeout E2E (T109)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:timeout
-
-      - name: Run API payment edge cases E2E (T110)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:payment
-
-      - name: Run API fraud/flag E2E (T111)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:fraud
-
-      - name: Run API emergency-hold E2E (T112)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:hold
-
-      - name: Run API admin-flows E2E (T113)
-        working-directory: e2e
-        env:
-          E2E_BASE_URL: http://localhost:5000
-          E2E_FAKE_URL: http://localhost:5200
-        run: npm run test:admin
+        run: npm ci && npm run ${{ matrix.script }}
 
       - name: Dump compose logs on failure
         if: failure()

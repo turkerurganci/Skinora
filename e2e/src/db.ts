@@ -465,6 +465,35 @@ export async function backdateDeadline(
     );
 }
 
+/** Set a phase deadline to a fixed point in the future — the forward mirror of
+ *  backdateDeadline. Used to give a parked TRADE_OFFER_SENT_TO_SELLER transaction
+ *  a live seller-trade window before a STEAM_OUTAGE freeze: the e2e fast-path
+ *  leaves TradeOfferToSellerDeadline null (the fake's trade leg never goes through
+ *  the production deadline stamp), whereas a real outage freezes transactions
+ *  whose deadline is live — exactly the state the WP7 integration test seeds at
+ *  +12h. Without it the freeze would capture a zero remainder. `column` is
+ *  validated against the allow-list before interpolation; the offset is a bound
+ *  int parameter. */
+export async function setDeadlineFromNow(
+  transactionId: string,
+  column: DeadlineColumn,
+  minutesFromNow: number,
+): Promise<void> {
+  if (!DEADLINE_COLUMNS.has(column)) {
+    throw new Error(`setDeadlineFromNow: unknown deadline column ${column}`);
+  }
+  const p = await getPool();
+  await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .input('mins', sql.Int, minutesFromNow)
+    .query(
+      `UPDATE Transactions
+       SET ${column} = DATEADD(MINUTE, @mins, SYSUTCDATETIME())
+       WHERE Id = @tx`,
+    );
+}
+
 export interface MonitoringRow {
   status: string;
   expiresAt: Date | null;

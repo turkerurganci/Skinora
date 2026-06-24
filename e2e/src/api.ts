@@ -266,6 +266,60 @@ export function listAuditLogs(
   return call('GET', `/api/v1/admin/audit-logs${qs ? `?${qs}` : ''}`, token);
 }
 
+// ---------------------------------------------------------------------------
+// Platform maintenance / downtime control (T114 — 03 §11 downtime flows). The
+// freeze/resume endpoints are gated by MANAGE_SETTINGS, satisfied by a
+// super_admin role claim (PermissionAuthorizationHandler bypass); a plain
+// `user` token is rejected 403. The public banner read is anonymous. The
+// backend shipped wired in WP7 (07 §9.31 / §10.2); T114 adds test coverage only.
+// ---------------------------------------------------------------------------
+
+export interface MaintenanceFreezeBody {
+  message?: string;
+  plannedEnd?: string;
+}
+
+/** WP7 — POST /admin/maintenance/freeze (07 §9.31 / 03 §11). Enters a
+ *  maintenance/outage window: persists the four platform.maintenance.* banner
+ *  settings, bulk-freezes the timeouts of every active transaction in `type`'s
+ *  scope (PLATFORM_MAINTENANCE = all active states, STEAM_OUTAGE = the two
+ *  trade-offer states, BLOCKCHAIN_DEGRADATION = ITEM_ESCROWED; PLANNED_MAINTENANCE
+ *  is banner-only) and broadcasts the MaintenanceStatusChanged push — all
+ *  atomically. Response data = { active, type, message, plannedEnd,
+ *  affectedTransactions }. A type outside the activatable set (e.g. NONE) is
+ *  rejected 400 VALIDATION_ERROR. */
+export function freezeMaintenance(
+  token: string,
+  type: string,
+  body?: MaintenanceFreezeBody,
+): Promise<ApiResult> {
+  return call('POST', '/api/v1/admin/maintenance/freeze', token, {
+    type,
+    message: body?.message ?? null,
+    plannedEnd: body?.plannedEnd ?? null,
+  });
+}
+
+/** WP7 — POST /admin/maintenance/resume (07 §9.31 / 03 §11). Leaves the active
+ *  maintenance/outage window: resumes the timeouts frozen by the active reason
+ *  (each active phase deadline rewritten as now + the captured remainder, 05
+ *  §4.4), clears the four platform.maintenance.* settings and broadcasts the
+ *  banner-cleared push. Idempotent when nothing is active. Response data =
+ *  { active:false, type:null, ..., affectedTransactions }. */
+export function resumeMaintenance(token: string): Promise<ApiResult> {
+  return call('POST', '/api/v1/admin/maintenance/resume', token);
+}
+
+/** P2 — GET /platform/maintenance (07 §10.2 / 03 §11). Anonymous public
+ *  read-model behind the C08 maintenance banner: { active, type, message,
+ *  plannedEnd }, where type/message/plannedEnd surface as null when inactive.
+ *  This is the API-observable form of the user-facing downtime notice — the
+ *  MaintenanceStatusChanged realtime push that carries the same state is
+ *  SignalR-only (not assertable at the API seam). */
+export function getPlatformMaintenance(): Promise<ApiResult> {
+  return call('GET', '/api/v1/platform/maintenance');
+}
+
 /** POST to a fake-sidecar control endpoint (/__e2e/*). The control surface is
  *  unauthenticated (the caller is the test) and shared across both fake ports. */
 async function fakePost(path: string, body: unknown): Promise<ApiResult> {
@@ -403,14 +457,18 @@ export async function pollUntilRefundableCancel(
 }
 
 /** Poll the transaction for `durationMs`, asserting the detail endpoint's
- *  projected status never leaves `expected`. Part of the e2e proof of 03 §8.8
- *  step 6 ("timeout durur — hiçbir otomatik adım ilerlemez"): while on hold the
- *  detail endpoint projects status=EMERGENCY_HOLD, so a frozen transaction keeps
- *  reporting EMERGENCY_HOLD across several DeadlineScannerJob sweeps rather than
- *  flipping to a CANCELLED_* terminal. Callers pair this with a DB read of the
- *  underlying phase status for the decisive "not cancelled" assertion. Throws on
- *  the first observation of a different status; returns when the window elapses
- *  unchanged. */
+ *  projected status never leaves `expected`. The e2e proof that a freeze "holds"
+ *  a timeout — no automatic step advances while frozen (03 §8.8 step 6 for an
+ *  emergency hold; 03 §11 for a maintenance/outage freeze). What `expected` is
+ *  depends on the freeze kind: an emergency hold sets IsOnHold, so the detail
+ *  endpoint projects status=EMERGENCY_HOLD (callers pass that); a
+ *  maintenance/outage freeze leaves IsOnHold false, so the projection equals the
+ *  underlying phase status (callers pass CREATED / TRADE_OFFER_SENT_TO_SELLER /
+ *  ITEM_ESCROWED). Either way a frozen row keeps reporting `expected` across
+ *  several DeadlineScannerJob sweeps rather than flipping to a CANCELLED_*
+ *  terminal; callers pair this with a DB read of the phase status for the
+ *  decisive "not cancelled" assertion. Throws on the first observation of a
+ *  different status; returns when the window elapses unchanged. */
 export async function assertStatusStable(
   token: string,
   id: string,
