@@ -73,9 +73,9 @@
 ## Commit & PR
 
 - Branch: `task/T114-e2e-downtime`
-- Commit: `8e07539` — T114: E2E — Downtime ve bakım senaryoları (test coverage)
+- Commit: `8e07539` (+ `db8f5b3` PR# backfill)
 - PR: [#207](https://github.com/turkerurganci/Skinora/pull/207)
-- CI: _(izleniyor — advisory `e2e-smoke / E2E T114 downtime` leg + tüm blocking job'lar)_
+- CI: ✓ **PASS** — task CI HEAD `db8f5b3` run [`28083376285`](https://github.com/turkerurganci/Skinora/actions/runs/28083376285) `conclusion=success`. **Tüm blocking job success** (1.Lint, 2.Build, 3.Unit, 3b.JS test, 4.Integration, 5.Contract, 6.Migration dry-run, 4× Docker build, CI Gate). **8-leg advisory `e2e-smoke` matrix: hepsi `conclusion=success`** — **"E2E T114 downtime (advisory)" leg `success`** (continue-on-error maskelemiyor → 3 test gerçek migrated docker-compose stack'inde geçti, vacuous değil) + önceki 7 leg (happy-path/T108–T113) da success → **matrix split regresyon yok**. Post-merge main CI + Docker Publish watch = validator çıkış kapısı (Adım 18).
 
 ## Known Limitations / Follow-up
 
