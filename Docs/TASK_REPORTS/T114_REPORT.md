@@ -1,6 +1,6 @@
 # T114 — E2E: Downtime ve Bakım Senaryoları
 
-**Faz:** F6 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-06-24
+**Faz:** F6 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-06-24
 
 ---
 
@@ -50,10 +50,26 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız validator bekliyor (ayrı chat) |
+| Doğrulama durumu | ✓ **PASS** — bağımsız validator (ayrı chat, 2026-06-24, rapor görülmeden) |
 | Yapım-içi adversarial review | ✓ 6/6 boyut **sound**, **0 bloke-edici** (6-ajan refute-default workflow) |
 | Bulgu sayısı | 0 bloke-edici · 10 non-blocking (hepsi tasarımı **doğruluyor** veya opsiyonel doc-açıklığı) |
 | Düzeltme gerekli mi | Hayır (1 opsiyonel doc-açıklığı uygulandı — aşağı) |
+
+### Bağımsız Doğrulama (Validator — ayrı chat, kendi verdict'i rapor görülmeden)
+
+**Verdict: ✓ PASS** — 3/3 kabul kriteri ✓, doğrulama kontrol listesi ✓, 0 bloke-edici bulgu.
+
+**Kapılar:** Adım -1 working tree temiz · Adım 0 main son-3 run `success` (`28062174449`/`28062174527` T113 #206 + `28047344492` T112 #205) · Adım 0b repo memory T114 satırı mevcut · Adım 8a task CI HEAD `9e4515e` run [`28084414250`](https://github.com/turkerurganci/Skinora/actions/runs/28084414250) **tüm blocking job + 8-leg advisory matrix `success`**.
+
+**Validator firsthand kanıtlar (kod + CI, rapor kör):**
+- **AC1/AC2/AC3 ✓** — `e2e/tests/downtime.spec.ts` 3 testi 3 AC'yi birebir karşılıyor; CI "E2E T114 downtime" leg logu **"Running 3 tests" → 3 ✓ → "3 passed (2.8m)"** gerçek migrated docker-compose stack'inde (leg `conclusion=success` + `Dump compose logs on failure` adımı `skipped` = `continue-on-error` maskelemesi yok, vacuous değil).
+- **Backend yüzeyi gerçekten destekliyor (sıfır prod değişikliği teyidi):** `AdminMaintenanceController` MANAGE_SETTINGS-gated (test `user`→403 asserte ediyor); `AdminMaintenanceService.FreezeReasonFor` PLATFORM_MAINTENANCE→`MAINTENANCE`/STEAM_OUTAGE→`STEAM_OUTAGE`/BLOCKCHAIN_DEGRADATION→`BLOCKCHAIN_DEGRADATION`; `TimeoutFreezeReasonScopes.For` MAINTENANCE=AllActive(CREATED dahil)/STEAM_OUTAGE=trade-offer/BLOCKCHAIN_DEGRADATION=ITEM_ESCROWED → her testin park ettiği state ile eşleşiyor; `TimeoutFreezeService.FreezeAsync` freeze trio'yu set eder ama **`IsOnHold`'a dokunmaz** → testin `isOnHold===false` assertion'ı doğru; `DeadlineScannerJob` filtresi `!IsDeleted && !IsOnHold && TimeoutFrozenAt==null` → frozen satır atlanır (decisive, 5s aralık `docker-compose.e2e.yml`'de doğrulandı).
+- **"bildirim" yorumu doğru:** `NotificationType` enum'unda kullanıcı-yüzlü maintenance/outage tipi **yok** (yalnız admin `ADMIN_PLATFORM_OUTAGE`) → user bildirimi banner + `MaintenanceStatusChanged` broadcast olarak realize ediliyor; test banner'ı asserte eder (under-claim değil).
+- **Statik:** e2e `tsc --noEmit` exit 0 + `eslint .` 0/0 (lokal) + CI "1. Lint" → "E2E typecheck + format + lint" adımı `success` (LF authoritative). Lokal prettier `api.ts`/`db.ts` uyarısı = **saf CRLF artefaktı** (prettier çıktısı EOL hariç byte-aynı; `core.autocrlf=true`) — bulgu değil ([[e2e-prettier-crlf-local-artifact]]).
+- **Güvenlik temiz:** `setDeadlineFromNow`/`backdateDeadline` allow-list (`DEADLINE_COLUMNS`) + bound int param (SQL injection yok); 0 yeni dependency; 0 secret; auth yüzeyi yalnız mevcut MANAGE_SETTINGS (test ediliyor). `git diff origin/main...HEAD` 0 `.cs`/frontend (purely additive helper'lar).
+- **CI matrix split sağlam:** `ci-gate.needs` listesi `e2e-smoke` içermiyor → advisory, merge'i bloklamaz; 8 leg `continue-on-error`/`fail-fast:false`/`timeout 30`, her biri izole stack; önceki 7 leg de `success` → regresyon yok.
+
+**Yapım raporu karşılaştırması:** Tam uyumlu — raporun her maddi iddiası (sıfır prod değişiklik, type→reason scope, freeze-trio-without-IsOnHold, scanner-skip, banner=bildirim, 8-leg advisory matrix, T114 leg non-vacuous) bağımsız kod/CI okumasıyla doğrulandı. Uyuşmazlık yok.
 
 **Adversarial review (6-ajan, refute-default — her ajan ilgili e2e + backend dosyalarını firsthand okudu):** 6 boyut — AC1-platform-maintenance · AC2-steam-outage · AC3-blockchain-degradation · freeze/resume-decisiveness-false-positive · doc-conformance · scope-security-ci — **hepsi sound, 0 bloke-edici bulgu**. Öne çıkan teyitler:
 - **freeze/resume decisive, vacuous değil:** scanner-skip kanıtı gerçek — frozen olmayan backdate'li bir satır 18s/≥3 sweep penceresinde CANCELLED_TIMEOUT'a düşerdi; `assertStatusStable` ilk farklı statüde throw eder. Maintenance freeze `IsOnHold` set etmediğinden `ProjectStatus` underlying fazı döndürür (EMERGENCY_HOLD maskelemesi yok) → assertion anlamlı. Freeze trio okuması taze/uncached SQL; banner 30s cache freeze/resume post-commit `InvalidateCache` ile elenir; `try/finally` resume yalnız kendi hatasını yutar (body `expect` hatasını maskelemez).
