@@ -68,14 +68,14 @@
 
 | Önc. | ID | Açıklama | Tip | Kaynak |
 |---|---|---|---|---|
-| 🟡 | T107 | E2E — Happy path (tam escrow akışı) | task | IMPLEMENTATION_STATUS F6 |
-| ⚪ | T108 | E2E — İptal senaryoları | task | F6 |
-| ⚪ | T109 | E2E — Timeout senaryoları | task | F6 |
+| ✅ | T107 | **ÇÖZÜLDÜ** — E2E happy path (smoke+UI); bağımsız validator PASS (PR #198) | task | IMPLEMENTATION_STATUS F6 |
+| ✅ | T108 | **ÇÖZÜLDÜ** — E2E iptal senaryoları (satıcı/alıcı/admin); bağımsız validator PASS (PR #200) | task | F6 |
+| ✅ | T109 | **ÇÖZÜLDÜ** — E2E timeout senaryoları (4 faz); bağımsız validator PASS (PR #201) | task | F6 |
 | ✅ | T110 | **ÇÖZÜLDÜ** — E2E ödeme edge case'leri (§5.1–§5.5 + §5.3a) firsthand 6/6; bağımsız validator PASS 2026-06-23 (PR #202). Bulgu K1 (refund-adresi doc çelişkisi) → §6 `T110-RefundAddressDocConflict` (post-MVP) | task | F6 |
-| ⚪ | T111 | E2E — Fraud/flag senaryoları (PRICE_DEVIATION dahil) | task | F6 |
-| ⚪ | T112 | E2E — Emergency hold | task | F6 |
-| ⚪ | T113 | E2E — Admin akışları | task | F6 |
-| ⚪ | T114 | E2E — Downtime ve bakım senaryoları | task | F6 |
+| ✅ | T111 | **ÇÖZÜLDÜ** — E2E fraud/flag senaryoları (PRICE_DEVIATION dahil); bağımsız validator PASS (PR #204). Bulgu K1 (admin-flags cross-doc çelişkisi) → §6 `T111-AdminFlagsSurfaceDocConflict` (post-MVP, F6 gate forward) | task | F6 |
+| ✅ | T112 | **ÇÖZÜLDÜ** — E2E emergency hold (hold/resume/cancel + ITEM_DELIVERED guard); bağımsız validator PASS (PR #205) | task | F6 |
+| ✅ | T113 | **ÇÖZÜLDÜ** — E2E admin akışları (6 akış + AD17); bağımsız validator PASS (PR #206). Bulgu B1 (`UQ_AdminRoles_Name` re-create 500) → §4 `T113-AdminRoleNameReuse500` (F6 gate forward) | task | F6 |
+| ✅ | T114 | **ÇÖZÜLDÜ** — E2E downtime/bakım (3 senaryo); bağımsız validator PASS (PR #207) | task | F6 |
 | ✅ | T87-K1 | **ÇÖZÜLDÜ → WP11** — callback refresh→token store + ToS-accept wire-up + 401 refresh interceptor; check-authenticator owner-kararıyla /auth/me recheck'ine bağlandı (A7 trade-URL/U17 akışına ait, login'de değil) | k-note | T87 K1-K3 / T85 K1 |
 
 ## 4. T-future — Backend orkestrasyon (caller/consumer wire-up)
@@ -92,6 +92,7 @@
 | 🟡 | item-refund-consumers | **Yalnız `BUYER_REFUND` kopuk** (delivery-timeout + admin-cancel `PaymentRefundToBuyerRequestedEvent` yayınlar, satır-üreten consumer yok). Wrong-token/late-payment/excess/incorrect inline `QueueRefundIntent` üretir; item-iade T106a bağlı → **WP2** | backend-gap | T49/T51/T71 K |
 | 🟡 | T50-OutageFreezeCallers 🆕 | `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` `FreezeManyAsync`/`ResumeManyAsync` çağıransız (02 §3.3 auto-detect + admin manual) | backend-gap | `T50_REPORT.md:124-125` |
 | ✅ | T56-MultiAccountRetroScan 🆕 | **ÇÖZÜLDÜ → WP4b** — günlük retro-scan Hangfire job (`MultiAccountRetroScanJob`, `AutoUnsuspendJob` deseni) | backend-gap | `T56_REPORT.md:150` |
+| ⚪ | T113-AdminRoleNameReuse500 🆕 | **F6 Gate Check forward (2026-06-24).** `UQ_AdminRoles_Name` **filtresiz** unique index + `AdminRoleService.DeleteAsync` **soft-delete** (`IsDeleted=1`, query filter `!IsDeleted`) → silinen rolün adı kalıcı rezerve kalır; aynı adı yeniden insert/rename **500 INTERNAL_ERROR** verir (temiz **409 CONFLICT** yerine; `Cannot insert duplicate key … UQ_AdminRoles_Name`). Kök tasarım T24'ten (by-design Name-kirlenmesi engeli — `T24_REPORT.md:39,84`), ama 03 §8.6 "sil→aynı adla yeni rol" akışı için latent backend kusuru. Düzeltme: filtered unique index (`WHERE IsDeleted=0`) **veya** servis-katmanı pre-check → 409. T113 E2E per-run benzersiz ad ile robust (CI fresh DB etkilenmez). | backend-gap | `T113_REPORT.md:75` |
 | 🟡 | T61-SteamTransitionRealtimePush 🆕 | Steam pipeline geçişleri için `TransactionStatusChanged` push yok (her biri T67 event'iyle RealtimeConsumer ister) | backend-gap | `T61_REPORT.md:146` (K2) |
 | 🟡 | T38-AdminFlagAlert-FlagId 🆕 | `Notification` entity'de `FlagId` kolonu yok (yalnız `TransactionId`); admin flag-link reinterpret/extend gerek | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
 | ✅ | T30-TosVersionReprompt 🆕 | **ÇÖZÜLDÜ → WP11** — `tosAcceptedVersion` /auth/me'de sunulur + `tos/accept` versiyon-upgrade (409 yalnız aynı versiyon) + FE `TosRepromptGate` | backend-gap | `T30_REPORT.md:155` |
@@ -156,6 +157,7 @@
 | ⚪ | audit-detail-schema | AuditLog `detail` pass-through NewValue; central AuditLog wiring; RestartRecovery audit; OldValue yok | T42/T39/T47/T106 K |
 | ⚪ | mvp-scope-postmvp | Bilinçli MVP-dışı: reviews, KYC, mobil, diğer oyunlar, multi-item/barter, ek blockchain, fiat, premium, Discord guild, Sentry vb. | 10_MVP_SCOPE / 02_PRD |
 | ⚪ | T110-RefundAddressDocConflict 🆕 | **MVP sonrası (owner kararı 2026-06-23 — yakın zamanda yapılmayacak).** Edge-case iade hedef-adresi doküman çelişkisi: impl + **08 §562** reddedilen-ödeme iadelerini (insufficient/excess/wrong-token/late) **ödeme kaynak adresine** (`FromAddress`) gönderir; ama 02 §4.4 (s.108) · 02 §4.6 (s.127) · 03 §4.3/§5.3/§5.4/§5.5 (s.287/340/360/368) · 06 §3.8 (s.736) "alıcının belirlediği iade adresine" der. `BUYER_REFUND` (kabul edilmiş ödeme iadesi) doğru şekilde belirlenen adrese gider (02 §4.6 s.127 doğru, korunur). Yapılacak: iki-hedef ayrımını dokümanlarda netleştir + `AmountValidationService.QueueRefundIntent` yorumu 02§4.6→08§562. T110 testi spec-yetkili (08 §562) davranışı **doğru** test eder → bu doc-borcu, kod değil. | T110 validate K1 |
+| ⚪ | T111-AdminFlagsSurfaceDocConflict 🆕 | **MVP sonrası (F6 Gate Check forward 2026-06-24 — kardeş T110-K1 deseni).** Admin flag yönetim yüzeyi cross-doc çelişkisi: **03 §8.2** (`03_USER_FLOWS.md:517`) hesap flag'lerinin **ayrı bir hesap flag yönetim yüzeyinden** yönetildiğini söyler; ama **07 §9.2 + 04 §8.2 + T100a** tek `/admin/flags` + `scope=ACCOUNT_LEVEL` yüzeyini tanımlar ve üretim kodu (T100a) tek-yüzey lehine fiilen çözmüştür (03 §8.2 stale). Yapılacak: 03 §8.2 metnini 04 §8.2 / 07 §9.2 ile hizala. T111 E2E mevcut gerçekliği (`/admin/flags/:id/reject`) doğru test eder, AC3'ü zayıflatmaz → bu doc-borcu, kod değil. | T111 validate K1 |
 | ~ | content-authoring | **WP17 (taslak):** ToS/Privacy/Support `legal.*` taslak metin 4 dil yazıldı (owner "taslak yaz" kararı) — **otoriter metin hukuk review gerektirir** (jurisdiction/governing-law/entity belirsiz) | SPEC |
 | ⚪ | suspend-signalr-spec | Suspension'da otomatik EMERGENCY_HOLD/live force-restrict yok (request-time enforce); `/auth/suspended` vs `/account-suspended` | T105a K2 |
 | ✅ | like-escape-helper | **ÇÖZÜLDÜ → WP18 (PR-3):** kanonik bracket-wrapping escaper `AdminTransactionQueryService` private'ından `Skinora.Shared.Persistence.SqlLikeEscaper`'a çıkarıldı + 3 escape'siz `EF.Functions.Like` call-site'ı (AdminUserService/AuditLogQueryService/AdminSanctionsService) düzeltildi (LIKE-wildcard injection kapandı). `NoRawSqlConventionTests` source-scan arch testi (`ExecuteSqlRaw`/`FromSqlRaw`/* yasak, backend/src-only, NetArchTest yok). | T63 K6 / T106 K8 / T42 K1 |
