@@ -4,9 +4,11 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum:** ~90 aktif ertelenmiş kalem · **F5 Gate Check'i bloklayan: 0**. Bu dosya bir kalem ele alındıkça güncellenmelidir (satırı **✓ Çözüldü** işaretle veya kaldır).
+> **Durum (2026-07-26):** **28 aktif satır** · 59 satır ✅ çözüldü (Öne Çıkanlar tablosu gövde satırlarını tekrarladığı için satır sayısı kalem sayısından fazladır) · **F6 Gate Check'i bloklayan: 0** (F6 ✓ PASS 2026-06-24 → MVP kapandı; kalan kalemler post-MVP). Bu dosya bir kalem ele alındıkça güncellenmelidir (satırı **✓ Çözüldü** işaretle veya kaldır).
 >
 > **Sıralama/sahiplik:** F6 öncesi MVP-içi kalemler [`PRE_F6_PLAN.md`](PRE_F6_PLAN.md)'de 19 iş paketine (WP1–WP18) bağlandı. Aşağıdaki bazı satırlar 2026-06-14 kod taramasıyla **kısmen stale** bulundu ve düzeltildi (emergency-hold, blockchain-monitor, item-refund, steam-sidecar, T55).
+>
+> **Hijyen taraması (2026-07-26, F6 sonrası):** WP1–WP20 + F6 merge'lerinden sonra kalan 🟡 satırlar üretim wiring'i (DI kaydı + çağıran + migration + test) düzeyinde tek tek doğrulandı. Sonuç: **5 satır tam çözülmüş** (SWEEP-dispatcher → WP3 · item-refund-consumers → WP2 · T38-AdminFlagAlert-FlagId → WP8 · T61-SteamTransitionRealtimePush → WP9 · FE-admin-signalr-subscription → WP9) + Öne Çıkanlar tablosunda gövdeye göre stale kalan 2 satır (T33-SuccessRate → WP17 · T107 → F6) ✅ işaretlendi; **T50-OutageFreezeCallers yalnız manuel yarısı** kapandığı için daraltıldı; **T81-PriceConsumerWireup** "kod ✓ / prod config bağımlı" olarak yeniden yazıldı. `StubPayoutVerifier` doğrulandı — hâlâ açık.
 
 ## Lejant
 
@@ -25,21 +27,21 @@
 | ✅ | T69-DispatchCaller | **ÇÖZÜLDÜ → T106a** (Escrow Trade-Offer Dispatch Engine): `SelectAsync` çağrılıyor + `EscrowBotId` persist + `ActiveEscrowCount` ITEM_ESCROWED'da artar + escrow/delivery/refund dispatch | — |
 | ✅ | T69-BotRecoveryStateMachine | **ÇÖZÜLDÜ → T103b-2** — `BotRecoveryItem` recovery domaini + AD10 canlı `RestrictionReason`/`FailoverStatus`/`RecoveryTransactionCount` | — |
 | ✅ | T103b-2/-3 | **ÇÖZÜLDÜ → T103b-2 (birleşik)** — recovery queue domain + MANAGE_STEAM_RECOVERY enforcement + emanet item listesi + otomatik EMERGENCY_HOLD | — |
-| 🟡 | SWEEP-dispatcher | SWEEP satırı üreten consumer yok → hot-wallet mutabakatı tek-taraflı | Hot-wallet mutabakat doğruluğu |
-| 🟡 | T81-PriceConsumerWireup | `NullMarketPriceProvider` → PRICE_DEVIATION fraud kuralı inert | PRICE_DEVIATION kuralı |
+| ✅ | SWEEP-dispatcher | **ÇÖZÜLDÜ → WP3** — `SweepQueueJob` PENDING `SWEEP` satırı üretir (`OutgoingTransferJobsRegistrar` recurring kaydeder, registrar `IHostedService` olarak `TransactionsModule`'de) + dispatcher `OutboundTypes`'ında SWEEP var | — |
+| 🟡 | T81-PriceConsumerWireup | **Kod tarafı çözüldü → WP4a, prod config'e bağlı:** port `PriceServiceMarketPriceProvider`'a bağlandı, `MarketPriceAtCreation` set ediliyor, PRICE_DEVIATION kuralı canlı. **Açık kalan:** `SteamMarket:Provider` varsayılanı `logging` (`NoPrice()` → fail-open) + seed `price_deviation_threshold=1.0` (%100) → prod'da ikisi ayarlanmadıkça kural sessiz kalır (`DEPLOY_RUNBOOK §C`) | PRICE_DEVIATION'ın prod'da etkin olması (deploy config) |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
 | ✅ | steam-sidecar-stubs | **ÇÖZÜLDÜ → WP6** — sidecar `GET /api/trade-hold/:steamId` (`GetTradeHoldDurations`) + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7); envanter reader zaten gerçekti | — |
-| 🟡 | item-refund-consumers | Yalnız `BUYER_REFUND` kopuk (diğer 4 iade inline/T106a bağlı) → WP2 | Alıcı iadesi (delivery-timeout + admin-cancel) |
-| 🟡 | T50-OutageFreezeCallers | Outage/degradation bulk-freeze motoru var, çağıran yok | Outage dayanıklılığı |
+| ✅ | item-refund-consumers | **ÇÖZÜLDÜ → WP2** — `PaymentRefundToBuyerConsumer` `BUYER_REFUND` satırı üretir; DI'da kayıtlı + iki katmanlı idempotency + `UQ_BlockchainTransactions_BuyerRefund_TransactionId` | — |
+| 🟡 | T50-OutageFreezeCallers | **Yarısı çözüldü → WP7** (admin manuel freeze/resume: `AdminMaintenanceService` `FreezeManyAsync`/`ResumeManyAsync` çağırıyor). **Açık kalan: otomatik tespit** — 02 §3.3 `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` auto-detect'inde bulk-freeze tetiklenmiyor; WP16 `PlatformHealthProbeJob` **alert-only** (admin alert + audit) | Otomatik outage dayanıklılığı (manuel yol açık) |
 | ✅ | T56-MultiAccountRetroScan | **ÇÖZÜLDÜ → WP4b** — günlük `MultiAccountRetroScanJob` cüzdanlı aktif kullanıcıları retroaktif tarar (`IMultiAccountDetector` yeniden çağrılır) | — |
-| 🟡 | T61-SteamTransitionRealtimePush | Steam pipeline geçişlerinde SignalR push yok | — (T96 refetch maskeliyor) |
-| 🟡 | T38-AdminFlagAlert-FlagId | `Notification` entity'de `FlagId` yok → admin flag-link bozuk | Admin flag inbox linki |
+| ✅ | T61-SteamTransitionRealtimePush | **ÇÖZÜLDÜ → WP9** — `SteamWebhookHandler` geçişlerde `TransactionStatusChangedEvent`'i outbox'a yayınlar → `TransactionStatusChangedRealtimeConsumer` SignalR push eder | — |
+| ✅ | T38-AdminFlagAlert-FlagId | **ÇÖZÜLDÜ → WP8** — `Notification.FlagId` kolonu + filtered index (migration `WP8_AddNotificationFlagId`); `FraudFlagCreatedAdminNotificationConsumer` alanı dolduruyor | — |
 | ✅ | T30-TosVersionReprompt | **ÇÖZÜLDÜ → WP11** — CurrentUserDto += `tosAcceptedVersion`, `tos/accept` versiyon-upgrade'e izin verir (409 yalnız aynı versiyonda), FE `TosRepromptGate` versiyon uyuşmazlığında re-prompt | — |
 | ✅ | T87-K1 | **ÇÖZÜLDÜ → WP11** — callback `/auth/refresh`→token store + `acceptTos` wire-up + 401 refresh interceptor; MA recheck /auth/me ile (A7 trade-URL akışına ait) | — |
-| 🟡 | FE-admin-signalr-subscription | `RealtimeProvider.tsx:40-43` üç admin event'ini abone etmiyor | Canlı admin event'leri |
+| ✅ | FE-admin-signalr-subscription | **ÇÖZÜLDÜ → WP9** — `RealtimeProvider.tsx` üç admin event'ine de abone (`onAdminBotStatusChanged` / `onAdminReconciliationMismatch` / `onAdminHotWalletThresholdBreached`) | — |
 | ✅ | TradeOfferMonitor-hotadd-T69 | **ÇÖZÜLDÜ → WP6 (resolved-by-design)** — statik pool (`BotManager` dinamik-add yok); idempotent `attachToSession` hook'u T69 dinamik pool için hazır + test edilmiş | — (statik pool'da sorun yok) |
-| 🟡 | T33-SuccessRate-FractionVsPercent | `successfulTransactionRate` fraction (06) vs percent (07) | FE entegrasyonu öncesi karar |
-| 🟡 | T107 | E2E happy-path testi (başlamadı) | — |
+| ✅ | T33-SuccessRate-FractionVsPercent | **ÇÖZÜLDÜ → WP17 (no-op)** — kod (`HasPrecision(5,4)`) + 06 §3.1 + 07 örnekleri zaten fraction (0..1) üzerinde hizalı; detay §7 satırı | — |
+| ✅ | T107 | **ÇÖZÜLDÜ → F6** — E2E happy path (harness + smoke + UI), bağımsız validator PASS (PR #198); F6 Gate Check ✓ PASS | — |
 
 ---
 
@@ -85,16 +87,16 @@
 | Önc. | ID | Açıklama | Tip | Kaynak |
 |---|---|---|---|---|
 | ✅ | T58-AdminDisputeQueue 🆕 | **ÇÖZÜLDÜ → WP5** — `AdminDisputeService` (AD27/28/29) + `RESOLVED_FOR_*`/`REFUNDED` + audit/notify; FE `/admin/disputes` | backend-gap | `T58_REPORT.md:178` |
-| 🟡 | SWEEP-dispatcher | `PaymentReceivedEvent` consumer'ı SWEEP ledger satırı üretmiyor; `OutgoingTransferDispatchJob` SWEEP picker yok | backend-gap | T73/T76/T77 K |
-| 🟡 | T81-PriceConsumerWireup | `IMarketPriceProvider`=`NullMarketPriceProvider`; `MarketPriceAtCreation` set + PRICE_DEVIATION FraudFlag yok | backend-gap | T81 K1, `NullMarketPriceProvider` |
+| ✅ | SWEEP-dispatcher | **ÇÖZÜLDÜ → WP3** — `SweepQueueJob` (recurring, `OutgoingTransferJobsRegistrar` → `IHostedService` `TransactionsModule.cs`) settle olmuş işlemler için PENDING `SWEEP` `BlockchainTransaction` satırı üretir (`UQ_BlockchainTransactions_Sweep_TransactionId` ile tekil); `OutgoingTransferDispatchJob.OutboundTypes` SWEEP'i kapsıyor; `SweepQueueJobTests` | backend-gap | T73/T76/T77 K |
+| 🟡 | T81-PriceConsumerWireup | **Kod çözüldü → WP4a:** `IMarketPriceProvider`=`PriceServiceMarketPriceProvider` (→ `IPriceService`→`PriceService`→`ISteamMarketPriceClient`), `MarketPriceAtCreation` set ediliyor (`TransactionCreationService`), PRICE_DEVIATION `FraudPreCheckService` Rule 1'de canlı. **Açık kalan (deploy config):** `Program.cs` `SteamMarket:Provider` varsayılanı `logging` → `LoggingSteamMarketPriceClient.NoPrice()` → fail-open; ayrıca seed `price_deviation_threshold=1.0` (%100) pratikte ateşlemez. Prod'da `SteamMarket__Provider=steam-market` + daraltılmış eşik gerekli (`DEPLOY_RUNBOOK §C`) | backend-gap | T81 K1, `Program.cs:154-167` |
 | 🟡 | StubPayoutVerifier | `IPayoutVerifier`=stub (her zaman `UnableToVerify`→manuel admin) | backend-gap | T60 K1, `StubPayoutVerifier` |
 | ✅ | steam-sidecar-stubs | **ÇÖZÜLDÜ → WP6** — sidecar `GET /api/trade-hold/:steamId` (`GetTradeHoldDurations`, 08 §2.2) + paylaşılan `ISteamTradeHoldProbe`/`HttpSteamTradeHoldClient` + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7); fail-closed; envanter reader zaten gerçekti (`SidecarSteamInventoryReader`) | backend-gap | T35/T31/T58 K |
-| 🟡 | item-refund-consumers | **Yalnız `BUYER_REFUND` kopuk** (delivery-timeout + admin-cancel `PaymentRefundToBuyerRequestedEvent` yayınlar, satır-üreten consumer yok). Wrong-token/late-payment/excess/incorrect inline `QueueRefundIntent` üretir; item-iade T106a bağlı → **WP2** | backend-gap | T49/T51/T71 K |
-| 🟡 | T50-OutageFreezeCallers 🆕 | `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` `FreezeManyAsync`/`ResumeManyAsync` çağıransız (02 §3.3 auto-detect + admin manual) | backend-gap | `T50_REPORT.md:124-125` |
+| ✅ | item-refund-consumers | **ÇÖZÜLDÜ → WP2** — `PaymentRefundToBuyerConsumer` `PaymentRefundToBuyerRequestedEvent`'i tüketip `BUYER_REFUND` `BlockchainTransaction` satırı üretir (DI: `TransactionsModule.cs`; iki katmanlı idempotency + `UQ_BlockchainTransactions_BuyerRefund_TransactionId`; `PaymentRefundToBuyerConsumerTests`). Diğer 4 iade yolu zaten inline/T106a bağlıydı | backend-gap | T49/T51/T71 K |
+| 🟡 | T50-OutageFreezeCallers | **Yarısı çözüldü → WP7:** admin manuel bakım toggle'ı `AdminMaintenanceService` üzerinden `FreezeManyAsync`/`ResumeManyAsync` çağırıyor (02 §3.3 "admin manual" yolu kapandı). **Açık kalan:** `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` **otomatik tespitinde** bulk-freeze tetikleyen çağıran yok — WP16 `PlatformHealthProbeJob` bilinçli olarak **alert-only** (`ADMIN_PLATFORM_OUTAGE` + `PLATFORM_OUTAGE_DETECTED` audit, edge-detected), freeze etmiyor | backend-gap | `T50_REPORT.md:124-125`, `PRE_F6_PLAN.md` WP16-D3 |
 | ✅ | T56-MultiAccountRetroScan 🆕 | **ÇÖZÜLDÜ → WP4b** — günlük retro-scan Hangfire job (`MultiAccountRetroScanJob`, `AutoUnsuspendJob` deseni) | backend-gap | `T56_REPORT.md:150` |
 | ⚪ | T113-AdminRoleNameReuse500 🆕 | **F6 Gate Check forward (2026-06-24).** `UQ_AdminRoles_Name` **filtresiz** unique index + `AdminRoleService.DeleteAsync` **soft-delete** (`IsDeleted=1`, query filter `!IsDeleted`) → silinen rolün adı kalıcı rezerve kalır; aynı adı yeniden insert/rename **500 INTERNAL_ERROR** verir (temiz **409 CONFLICT** yerine; `Cannot insert duplicate key … UQ_AdminRoles_Name`). Kök tasarım T24'ten (by-design Name-kirlenmesi engeli — `T24_REPORT.md:39,84`), ama 03 §8.6 "sil→aynı adla yeni rol" akışı için latent backend kusuru. Düzeltme: filtered unique index (`WHERE IsDeleted=0`) **veya** servis-katmanı pre-check → 409. T113 E2E per-run benzersiz ad ile robust (CI fresh DB etkilenmez). | backend-gap | `T113_REPORT.md:75` |
-| 🟡 | T61-SteamTransitionRealtimePush 🆕 | Steam pipeline geçişleri için `TransactionStatusChanged` push yok (her biri T67 event'iyle RealtimeConsumer ister) | backend-gap | `T61_REPORT.md:146` (K2) |
-| 🟡 | T38-AdminFlagAlert-FlagId 🆕 | `Notification` entity'de `FlagId` kolonu yok (yalnız `TransactionId`); admin flag-link reinterpret/extend gerek | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
+| ✅ | T61-SteamTransitionRealtimePush | **ÇÖZÜLDÜ → WP9** — `SteamWebhookHandler.PublishStatusChangedAsync` status flip'iyle aynı unit-of-work'te outbox'a `TransactionStatusChangedEvent` yazar (escrow + delivery geçişleri); `TransactionStatusChangedRealtimeConsumer` bunu SignalR'a push eder | backend-gap | `T61_REPORT.md:146` (K2) |
+| ✅ | T38-AdminFlagAlert-FlagId | **ÇÖZÜLDÜ → WP8** — `Notification.FlagId` (`Guid?`) kolonu + `IX_Notifications_FlagId` filtered index + migration `20260617194020_WP8_AddNotificationFlagId`; `FraudFlagCreatedAdminNotificationConsumer` `FraudFlagId`'yi geçiriyor → admin flag-link hedefi çalışıyor | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
 | ✅ | T30-TosVersionReprompt 🆕 | **ÇÖZÜLDÜ → WP11** — `tosAcceptedVersion` /auth/me'de sunulur + `tos/accept` versiyon-upgrade (409 yalnız aynı versiyon) + FE `TosRepromptGate` | backend-gap | `T30_REPORT.md:155` |
 
 ### Düşük öncelik
@@ -133,7 +135,7 @@
 
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
-| 🟡 | FE-admin-signalr-subscription | `RealtimeProvider.tsx:40-43` üç admin event'ini (`AdminBotStatusChanged`/`AdminReconciliationMismatch`/`AdminHotWalletThresholdBreached`) abone etmiyor | T96 K2 |
+| ✅ | FE-admin-signalr-subscription | **ÇÖZÜLDÜ → WP9** — `RealtimeProvider.tsx` üç admin event'ine de abone (`onAdminBotStatusChanged` / `onAdminReconciliationMismatch` / `onAdminHotWalletThresholdBreached`) ve ilgili query'leri invalidate ediyor | T96 K2 |
 | ⚪ | admin-table-sort | Admin tablolarında tıkla-sırala başlık yok (`sortBy`/`sortOrder` API var, UI göndermiyor) | T101 K10 / T106 K1 |
 | ⚪ | url-state-sync | Tx-list tab/page `?tab=&page=` senkron değil; wizard hard-refresh resetler; dashboard deep-link consume | T88/T89/T99 K |
 | ⚪ | signalr-toast-countdown | C09 toast realtime'da boş; verification countdown; email cooldown Retry-After; LanguageSelector drift | T96/T94/T97 K |
