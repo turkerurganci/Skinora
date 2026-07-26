@@ -136,6 +136,7 @@
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
 | ✅ | FE-admin-signalr-subscription | **ÇÖZÜLDÜ → WP9** — `RealtimeProvider.tsx` üç admin event'ine de abone (`onAdminBotStatusChanged` / `onAdminReconciliationMismatch` / `onAdminHotWalletThresholdBreached`) ve ilgili query'leri invalidate ediyor | T96 K2 |
+| ⚪ | FE-timeline-cancel-step-position 🆕 | **Lokal inceleme bulgusu (2026-07-26).** `TransactionTimeline` iptal/FLAGGED/REFUNDED durumunda kırmızı X'i **her zaman 1. adımda** gösteriyor (`indexForStatus` → `-1`, `effectiveIndex = max(0,-1) = 0`), yani işlemin hangi adımda iptal edildiği kayboluyor; 04 §C05 "aktif adımda kırmızı X" diyor. Frontend-only çözülemez: kullanıcı detay DTO'sunda (`TransactionDetailResponse`) iptal anındaki durum yok (`cancelInfo` yalnız `cancelledBy`/`reason`/`cancelledAt`/`itemReturned`/`paymentRefunded`). Gerekli: AD7'ye iptal-anı durumu (veya kullanıcıya açık `statusHistory`) eklenmesi + timeline'ın bunu tüketmesi. Terminal-render kusurunun diğer yarısı (COMPLETED/REFUNDED) `fix/timeline-terminal-step` PR'ında kapatıldı. | T96 / 04 §C05 |
 | ⚪ | admin-table-sort | Admin tablolarında tıkla-sırala başlık yok (`sortBy`/`sortOrder` API var, UI göndermiyor) | T101 K10 / T106 K1 |
 | ⚪ | url-state-sync | Tx-list tab/page `?tab=&page=` senkron değil; wizard hard-refresh resetler; dashboard deep-link consume | T88/T89/T99 K |
 | ⚪ | signalr-toast-countdown | C09 toast realtime'da boş; verification countdown; email cooldown Retry-After; LanguageSelector drift | T96/T94/T97 K |

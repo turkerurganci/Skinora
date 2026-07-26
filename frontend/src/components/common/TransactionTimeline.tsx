@@ -42,6 +42,10 @@ function indexForStatus(status: TransactionStatus): number {
     case TransactionStatus.CANCELLED_SELLER:
     case TransactionStatus.CANCELLED_BUYER:
     case TransactionStatus.CANCELLED_ADMIN:
+    // REFUNDED (WP5 buyer-favor dispute unwind) is terminal like the CANCELLED_*
+    // family — without this case it fell through to `default: 0` and the finished
+    // transaction rendered as a pulsing blue "step 1 in progress".
+    case TransactionStatus.REFUNDED:
       return -1;
     default:
       return 0;
@@ -60,10 +64,16 @@ export function TransactionTimeline({
     status === TransactionStatus.CANCELLED_TIMEOUT ||
     status === TransactionStatus.CANCELLED_SELLER ||
     status === TransactionStatus.CANCELLED_BUYER ||
-    status === TransactionStatus.CANCELLED_ADMIN;
+    status === TransactionStatus.CANCELLED_ADMIN ||
+    status === TransactionStatus.REFUNDED;
   const isFlagged = flagged || status === TransactionStatus.FLAGGED;
   const activeIndex = indexForStatus(status);
   const effectiveIndex = isCancelled || isFlagged ? Math.max(0, activeIndex) : activeIndex;
+  // 04 §C05 — COMPLETED is the last step AND a finished one. Without this flag
+  // `completed = idx < effectiveIndex` never covers the final step, so the
+  // terminal state rendered as the blue pulsing "active" step instead of a
+  // green check.
+  const isFinished = !isCancelled && !isFlagged && status === TransactionStatus.COMPLETED;
 
   return (
     <ol
@@ -71,9 +81,9 @@ export function TransactionTimeline({
       aria-label={t("ariaLabel")}
     >
       {STEPS.map((step, idx) => {
-        const completed = idx < effectiveIndex;
-        const active = idx === effectiveIndex;
-        const pending = idx > effectiveIndex;
+        const completed = isFinished || idx < effectiveIndex;
+        const active = !isFinished && idx === effectiveIndex;
+        const pending = !isFinished && idx > effectiveIndex;
         return (
           <li
             key={step}
