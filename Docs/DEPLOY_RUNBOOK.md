@@ -12,7 +12,7 @@
 |---|---|---|
 | **A. Zorunlu SystemSetting (19)** | **Prod açılışı için ZORUNLU** | Eksikse `SettingsBootstrapService` startup'ta **fail-fast** eder (06 §8.9). Bilinçli güvenlik — iş-kritik değere yanlış default sessizce prod'a kaçmaz. |
 | **B. Operasyonel secret/altyapı** | **ZORUNLU** | DB / JWT / wallet / webhook / internal key olmadan servis açılmaz veya kör çalışır. |
-| **C. Production'da önerilen** | Önerilir | `NONE` default ile açılır ama ilgili kapsam (reconciliation, geo-block) çalışmaz. |
+| **C. Production'da önerilen** | Önerilir | Seed default ile açılır ama ilgili kapsam (reconciliation, geo-block, PRICE_DEVIATION fiyat kaynağı) çalışmaz. |
 | **D. Sidecar parity (cadence/sweep)** | Sidecar env'i otoriter | Backend DB kopyası admin-görünür; **runtime'a yansımaz** — sidecar env değişimi + sidecar restart gerekir. |
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
 
@@ -81,6 +81,21 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 | `reconciliation.cold_wallet_address` | NONE | Cold wallet reconciliation kapsamı atlanır (info) |
 | `auth.banned_countries` | NONE | Geo-block uygulanmaz (02 §21.1) |
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
+| `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
+
+### C.1 PRICE_DEVIATION için uygulama config'i (SystemSetting değil)
+
+Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider` → `PriceServiceMarketPriceProvider` → `IPriceService` → `ISteamMarketPriceClient`), ancak **fiyat kaynağı varsayılan olarak kapalıdır**: `Program.cs` yalnız `SteamMarket:Provider == "steam-market"` iken gerçek HTTP istemcisini kaydeder; aksi halde `LoggingSteamMarketPriceClient` her çağrıda `NoPrice()` döner ve kural fail-open davranır (08 §7.4). Bu, taze checkout / CI'ın kazara `steamcommunity.com`'a çıkmasını engellemek için bilinçli bir default'tur.
+
+| Env var | Default | Prod'da |
+|---|---|---|
+| `SteamMarket__Provider` | `logging` | PRICE_DEVIATION isteniyorsa **`steam-market`** yapılmalı; aksi halde kural sessiz kalır |
+| `SteamMarket__BaseUrl` | `https://steamcommunity.com` | Değiştirmeye gerek yok |
+| `SteamMarket__RateLimitPerMinute` | 20 | Steam Market rate-limit penceresi (08 §7.2) |
+| `SteamMarket__TimeoutSeconds` | 10 | HTTP timeout |
+| `SteamMarket__FreshTtlHours` / `SteamMarket__StaleTtlHours` | 24 / 48 | Fiyat cache TTL'leri (08 §7.3) |
+
+> **Kontrol:** `Provider=logging` bırakılırsa işlem oluşturmada `MarketPriceAtCreation` null kalır, PRICE_DEVIATION flag'i üretilmez ve admin flag kuyruğunda bu tip hiç görünmez. Bu, deploy'un **bilinçli** bir kararı olmalıdır.
 
 ---
 
