@@ -87,9 +87,12 @@ services:
       - SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS=${SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS}
       - SKINORA_SETTING_HOT_WALLET_LIMIT=${SKINORA_SETTING_HOT_WALLET_LIMIT}
       - SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD=${SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD}
-      # --- Recommended for production (DEPLOY_RUNBOOK §C) — unset = scope skipped
-      - SKINORA_SETTING_RECONCILIATION_HOT_WALLET_ADDRESS=${SKINORA_SETTING_RECONCILIATION_HOT_WALLET_ADDRESS:-}
-      - SKINORA_SETTING_RECONCILIATION_COLD_WALLET_ADDRESS=${SKINORA_SETTING_RECONCILIATION_COLD_WALLET_ADDRESS:-}
+      # NOTE: the DEPLOY_RUNBOOK §C "recommended" settings (reconciliation
+      # wallet addresses, auth.banned_countries, multi_account.exchange_addresses,
+      # price_deviation_threshold) are NOT listed here on purpose. They ship as
+      # seeded Default rows (IsConfigured = true), and the bootstrap only touches
+      # unconfigured rows — env never overrides a configured value (06 §8.9). They
+      # are changed through the admin UI only.
     depends_on:
       skinora-db:
         condition: service_healthy
