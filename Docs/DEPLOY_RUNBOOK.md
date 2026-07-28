@@ -15,6 +15,7 @@
 | **C. Production'da önerilen** | Önerilir | Seed default ile açılır ama ilgili kapsam (reconciliation, geo-block, PRICE_DEVIATION fiyat kaynağı) çalışmaz. |
 | **D. Sidecar parity (cadence/sweep)** | Sidecar env'i otoriter | Backend DB kopyası admin-görünür; **runtime'a yansımaz** — sidecar env değişimi + sidecar restart gerekir. |
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
+| **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
 
 ---
 
@@ -62,8 +63,13 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `JWT_ISSUER` / `JWT_AUDIENCE` | backend | Token issuer/audience |
 | `WEBHOOK_SECRET` (≥32 char) | backend + sidecar'lar | Sidecar→backend HMAC-SHA256 webhook imzası (05 §3.4) |
 | `INTERNAL_KEY` | backend + sidecar'lar | Backend↔sidecar internal API `X-Internal-Key` auth |
-| `STEAM_API_KEY` | steam sidecar | Steam Web API |
+| `STEAM_API_KEY` | steam sidecar + backend | Steam Web API (envanter) + OpenID profil adı/avatar (`SteamOpenId__WebApiKey`; boşsa login çalışır ama profil placeholder'a düşer) |
+| `STEAM_OPENID_REALM` / `_RETURN_TO` / `_REVERIFY_RETURN_TO` / `_FRONTEND_CALLBACK` | backend | Steam OpenID 2.0 (08 §2.1). **`appsettings.json` default'u `https://skinora.com`** — override edilmezse gerçek login ölü bir domaine yönlenir |
+| `PUBLIC_ORIGIN` | backend | Tarayıcıya bakan tek origin → `Cors__AllowedOrigins__0` |
+| `STEAM_BOTS_CONFIG_PATH` (+ `secrets/steam-bots.json` mount) | steam sidecar | Escrow bot kimlik bilgileri (08 §2.5). **Yoksa sidecar skeleton mode'da açılır ve trade offer gönderemez.** Alternatif: `STEAM_BOTS_JSON` inline |
+| `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback |
 | `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme (08 §3.2) |
+| `TRON_USDT_CONTRACT` / `TRON_USDC_CONTRACT` | blockchain sidecar | **Yalnız testnet'te (nile/shasta) zorunlu** — mainnet adresleri koda gömülü. Boşsa desteklenen-token allowlist'i boş kalır ve gelen her transfer wrong/spam token sayılır (08 §3.3) |
 | `HOT_WALLET_ADDRESS` / `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation (Docker secret olarak mount, 05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
 | `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10) |
@@ -136,3 +142,97 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 2. **SystemSetting listesi:** `GET /api/v1/admin/settings` ile tüm katalog + configured/value kontrol.
 3. **Cron re-register:** Admin UI'dan `reconciliation.schedule_cron` değiştir → log `ReconciliationJob re-registered with cron '...'` → Hangfire dashboard'da recurring job cron'u güncel.
 4. **Sidecar parity:** cadence/sweep değişikliği sonrası sidecar env güncellenip restart edildiğini doğrula.
+
+---
+
+## G. Lokal gerçek-konfigürasyon provası
+
+> **Bağlam (2026-07-29).** F6'nın 8 E2E süiti self-contained `docker-compose.e2e.yml` + tek `sidecar-fake` container'ı üzerinde koştu; Steam OAuth ve on-chain finality backend seam'inde simüle edildi. Asıl `docker-compose.yml` **hiç boot edilmemişti** ve ayağa kalkmayı engelleyen eksikleri vardı (backend'e 19 `SKINORA_SETTING_*` geçilmiyordu → fail-fast; iki sidecar'a `INTERNAL_KEY` geçilmiyordu; bot/hot-wallet/testnet-kontrat env'leri ve `SteamOpenId__*` yoktu). Bu bölüm o boşluğu kapatan çalışmanın sonucudur — gerçek Steam hesabı + gerçek bot + Nile testnet ile `http://localhost:8080` üzerinde tam stack.
+
+### G.0 Ön koşullar
+
+| Gereken | Not |
+|---|---|
+| Docker Desktop (çalışır durumda) | 11 container + SQL Server |
+| .NET 9 SDK + `dotnet-ef` | Migration host'tan uygulanır — backend startup'ta **auto-migrate yoktur** |
+| Steam bot hesabı | accountName / password / sharedSecret / identitySecret (Mobile Authenticator `maFile`'dan) |
+| `STEAM_API_KEY` | steamcommunity.com/dev/apikey |
+| Tron testnet cüzdanı | HD mnemonic + ayrı hot wallet (adres + private key), içinde faucet TRX |
+| `TRON_API_KEY` | trongrid.io ücretsiz plan — yoksa monitor 429 yer |
+| Nile USDT/USDC kontrat adresleri | Testnet'te koda gömülü değil, env'den gelir |
+
+### G.1 Sırlar
+
+Değerler **hiçbir zaman** repo'ya girmez. Yerleri:
+
+- `.env` — env olarak taşınan sırlar (gitignored; şablon `.env.example`)
+- `secrets/steam-bots.json` — bot kimlik bilgileri (gitignored; şablon [`secrets/README.md`](../secrets/README.md))
+- `scripts/git-hooks/pre-commit` — staged içerikte sır kalıbı bulursa **commit'i** bloklar (`bash scripts/git-hooks/install.sh` ile kurulur)
+
+`docker-compose.yml` yalnız `${VAR}` referansı taşır. Her servis **yalnız kendi** env'ini alır: `HOT_WALLET_PRIVATE_KEY` ve `HD_WALLET_MNEMONIC` sadece blockchain sidecar'a gider — backend imza materyalini hiç görmez (F4 gate check garantisi).
+
+### G.2 Adımlar
+
+```bash
+# 0) Hook'lar (yeni clone sonrası bir kez)
+bash scripts/git-hooks/install.sh
+
+# 1) .env'i şablondan üret ve doldur (§A'daki 19 + §B'deki secret'lar + §G.0 dış değerler)
+cp .env.example .env
+#    Rastgele secret üretimi:  openssl rand -hex 32
+#    PUBLIC_ORIGIN ve STEAM_OPENID_* → http://localhost:8080
+
+# 2) Bot kimlik bilgileri
+#    secrets/steam-bots.json — şablon secrets/README.md'de
+
+# 3) Veritabanı + Redis
+docker compose -f docker-compose.yml up -d skinora-db skinora-redis
+#    healthy olmasını bekleyin:
+docker inspect --format '{{.State.Health.Status}}' skinora-db
+
+# 4) Şema (host'tan; backend auto-migrate ETMEZ)
+cd backend
+ConnectionStrings__DefaultConnection='Server=localhost,1433;Database=Skinora;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True;' \
+  dotnet ef database update \
+    --project src/Skinora.Shared/Skinora.Shared.csproj \
+    --startup-project src/Skinora.API/Skinora.API.csproj \
+    --context AppDbContext
+cd ..
+
+# 5) Tüm stack — -f ZORUNLU (bkz. G.3)
+docker compose -f docker-compose.yml up -d --build --wait
+
+# 6) Steam ile giriş yapın → http://localhost:8080
+
+# 7) Süper admin + bot kaydı (scripts/bootstrap/README.md)
+#    01 sonrası çıkış+giriş yapın: super_admin claim'i yeni token'da gelir
+```
+
+### G.3 `-f docker-compose.yml` neden zorunlu
+
+Çıplak `docker compose up` komutu `docker-compose.override.yml`'i de katmanlar. Override, frontend ve iki sidecar'a host kaynağını bind-mount eder (`./frontend:/app` vb.) — ama bu imajlar **production build**'dir (Next.js `.next/standalone`, sidecar `dist/`). Bind mount entrypoint'leri gizler ve container'lar açılmaz. Override bir **dev şablonu**dur; gerçek çalıştırmada devre dışı bırakılır.
+
+Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir**: Next.js `NEXT_PUBLIC_*`'ı build-time inline eder ve frontend Dockerfile'ı build-arg almaz. İmaj same-origin default'larıyla (`/api/v1`, `/hubs`) build edilmiştir — nginx tek-origin kurulumunda doğru olan da budur.
+
+### G.4 Doğrulama
+
+| # | Kontrol | Beklenen |
+|---|---|---|
+| 1 | `docker compose -f docker-compose.yml ps` | tüm servisler `healthy` |
+| 2 | `curl http://localhost:8080/health` | 200 |
+| 3 | `docker logs skinora-backend` | fail-fast **yok**; `SettingsBootstrap` 19 anahtarı configured yaptı |
+| 4 | `curl http://localhost:5100/health` | `1/1 bots ready` — skeleton mode değil |
+| 5 | `docker logs skinora-steam-sidecar` | `Bot credentials loaded {source: file, count: 1}` |
+| 6 | `docker logs skinora-blockchain-sidecar` | nile bağlantısı + USDT/USDC allowlist dolu |
+| 7 | Tarayıcı → `http://localhost:8080` | gerçek Steam login, profil adı/avatar gerçek |
+| 8 | `GET /api/v1/admin/settings` | 59 satır; 19'u configured |
+| 9 | Envanter listesi | gerçek CS2 envanteri (`steam-inventory` limiti 5/dk) |
+| 10 | Happy path | işlem → kabul → trade offer → `ITEM_ESCROWED` → deposit adresi → Nile USDT transferi → `payment-detected` → 20 blok → `payment-confirmed` → teslim → `COMPLETED` + payout |
+
+### G.5 Bilinen tuzaklar
+
+- **Steam trade hold (en büyük risk).** Bot hesabında Mobile Authenticator 7 günden yeniyse Steam 15 günlük trade hold uygular; item bot'a girer ama teslim aşaması bekler. Sistem bunu doğru yönetir (U17 `SidecarTradeHoldChecker`, WP6) ama happy path'i canlı görmek gecikir — bot'un MA yaşını baştan kontrol edin.
+- **Nile kontratları.** Testnet USDT/USDC adresleri sabit değildir; faucet'in verdiğini kullanın ve sidecar'ın bakiye çağrısıyla teyit edin. Boş bırakılırsa allowlist boş kalır.
+- **Energy.** Sweep `delegateresource` ile 200 TRX delege eder; hot wallet'ta yeterli testnet TRX yoksa 15 TRX fallback'i de tükenir → `OUT_OF_ENERGY`.
+- **`SteamMarket__Provider`.** Provada `logging` (default) bırakmak önerilir — PRICE_DEVIATION sessiz kalır ve `steamcommunity.com`'a çıkılmaz (§C.1).
+- **Hangfire dashboard.** nginx `/hangfire`'ı proxy'lemez (`/` frontend'e gider); doğrudan `http://localhost:5000/hangfire` kullanın.

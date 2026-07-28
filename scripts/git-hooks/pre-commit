@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Skinora pre-commit hook — secret leak guard
+#
+# Amac (2026-07-28, gercek-konfigurasyon provasi): .gitignore tek basina
+# yeterli degil. `git add -f`, yanlis dizine yazilmis bir dosya veya bir
+# ornek/dokuman icine yapistirilmis gercek deger sirlari repo'ya sokabilir.
+# Bu hook staged icerigi commit ANINDA tarar — push'u degil, commit'i bloklar,
+# boylece sir hic bir zaman lokal gecmise de yazilmaz (reflog temizligi
+# gerekmez).
+#
+# Iki katman:
+#   Layer 1 (yol): secrets/ altindaki README.md disi her sey, .env
+#                  (.env.example haric), *.maFile
+#   Layer 2 (icerik): Tron private key (64-hex), BIP-39 mnemonic (12/24
+#                  kelime), Steam Web API key, gercek deger atanmis
+#                  bilinen sir anahtarlari, PEM private key blogu
+#
+# Davranis:
+#   - Bulgu varsa -> BLOCK + exit 1 (dosya + kural adi + satir no yazilir)
+#   - SKINORA_ALLOW_SECRET=1 -> WARN + BYPASS_LOG'a kayit + izin verir
+#
+# Kurulum: bash scripts/git-hooks/install.sh (core.hooksPath mekanizmasi —
+# bu dosya oraya konuldugu icin ek adim gerekmez).
+#
+# Bypass (gercekten placeholder oldugundan eminsen):
+#   SKINORA_ALLOW_SECRET=1 SKINORA_BYPASS_REASON="..." git commit -m "..."
+#
+# Test:
+#   printf 'HOT_WALLET_PRIVATE_KEY=%s\n' "$(printf 'a%.0s' {1..64})" > /tmp/x.env
+#   cp /tmp/x.env leak.txt && git add leak.txt && git commit -m "test"
+#   # beklenen: BLOCK
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo '')"
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+
+log_bypass() {
+  local LOG_FILE="$REPO_ROOT/Docs/BYPASS_LOG.md"
+  if [ -f "$LOG_FILE" ]; then
+    local TIMESTAMP GIT_USER BRANCH REASON
+    TIMESTAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+    GIT_USER="$(git config user.name || echo 'unknown')"
+    BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || echo 'detached')"
+    REASON="${SKINORA_BYPASS_REASON:-*(sebep belirtilmedi)*}"
+    echo "| $TIMESTAMP | $GIT_USER | $BRANCH | \`pending\` | [secret-guard] $REASON |" >> "$LOG_FILE"
+    echo "BYPASS LOG: Docs/BYPASS_LOG.md'ye kayit eklendi (secret-guard)." >&2
+    echo "  Lutfen bir sonraki normal commit'te bu dosyayi da commit'le." >&2
+  fi
+}
+
+# Staged (added/copied/modified/renamed) dosyalar — silinenler taranmaz.
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+FINDINGS=""
+
+add_finding() {
+  # $1 = dosya, $2 = kural, $3 = detay
+  FINDINGS="${FINDINGS}  - ${1}: ${2}${3:+ (${3})}
+"
+}
+
+# ----------------------------------------------------------------------------
+# Layer 1 — yol bazli
+# ----------------------------------------------------------------------------
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  case "$file" in
+    secrets/README.md)
+      : # tek izinli secrets/ dosyasi
+      ;;
+    secrets/*)
+      add_finding "$file" "secrets/ altindaki dosyalar commit'lenemez" "yalniz secrets/README.md izinli"
+      ;;
+    .env.example)
+      : # sablon — izinli
+      ;;
+    .env|.env.*|*/.env|*/.env.*)
+      add_finding "$file" ".env dosyalari commit'lenemez" "yalniz .env.example izinli"
+      ;;
+    *.maFile|*.mafile)
+      add_finding "$file" "Steam Mobile Authenticator dosyasi" "sharedSecret/identitySecret aciktan"
+      ;;
+  esac
+done <<EOF
+$STAGED
+EOF
+
+# ----------------------------------------------------------------------------
+# Layer 2 — icerik bazli (yalniz eklenen satirlar)
+# ----------------------------------------------------------------------------
+# Placeholder'lari elemek icin ortak beyaz liste: .env.example ve dokumanlardaki
+# ornek degerler "your_...", "REPLACE_IN_ENV", "changeme", "<...>", "xxx..."
+# gibi kaliplar tasir. Bunlar bulgu sayilmaz.
+is_placeholder() {
+  echo "$1" | grep -qiE 'your_|replace_in_env|changeme|change_me|example|placeholder|<[^>]+>|xxxx|\.\.\.|e2e-|test-|fake-|dummy'
+}
+
+for file in $STAGED; do
+  # Binary / buyuk dosyalari atla
+  [ -f "$file" ] || continue
+  if ! git diff --cached --numstat -- "$file" | grep -qv '^-' 2>/dev/null; then
+    continue
+  fi
+
+  ADDED="$(git diff --cached -U0 -- "$file" | grep '^+' | grep -v '^+++' | sed 's/^+//' || true)"
+  [ -z "$ADDED" ] && continue
+
+  # 1) Tron/EVM private key — 64 hex karakter, kelime sinirlari icinde
+  HITS="$(echo "$ADDED" | grep -oiE '\b[0-9a-f]{64}\b' | head -3 || true)"
+  if [ -n "$HITS" ]; then
+    while IFS= read -r hit; do
+      [ -z "$hit" ] && continue
+      # Tek karakterin tekrari (aaaa... / 0000...) test fixture'idir, gercek key degil
+      if echo "$hit" | grep -qE '^(.)\1{63}$'; then continue; fi
+      add_finding "$file" "64-hex private key kalibi" "${hit:0:8}..."
+      break
+    done <<EOF
+$HITS
+EOF
+  fi
+
+  # 2) PEM private key blogu
+  if echo "$ADDED" | grep -qE 'BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY'; then
+    add_finding "$file" "PEM private key blogu" ""
+  fi
+
+  # 3) BIP-39 mnemonic — 12 veya 24 ardisik kucuk-harf kelime
+  MNEMONIC="$(echo "$ADDED" | grep -oE '\b([a-z]{3,8} ){11}[a-z]{3,8}\b' | head -1 || true)"
+  if [ -n "$MNEMONIC" ] && ! is_placeholder "$MNEMONIC"; then
+    add_finding "$file" "BIP-39 mnemonic kalibi (12/24 kelime)" "$(echo "$MNEMONIC" | cut -c1-20)..."
+  fi
+
+  # 4) Bilinen sir anahtarlarina gercek deger atanmasi
+  #    KEY=deger / "KEY": "deger" / KEY: deger formlarini yakalar.
+  SECRET_KEYS='HOT_WALLET_PRIVATE_KEY|HD_WALLET_MNEMONIC|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|JWT_SECRET|WEBHOOK_SECRET|BLOCKCHAIN_WEBHOOK_SECRET|INTERNAL_KEY|STEAM_SIDECAR_INTERNAL_KEY|BLOCKCHAIN_SIDECAR_INTERNAL_KEY|MSSQL_SA_PASSWORD|REDIS_PASSWORD|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|sharedSecret|identitySecret'
+  ASSIGNMENTS="$(echo "$ADDED" | grep -oE "($SECRET_KEYS)[\"']?\s*[:=]\s*[\"']?[^\"',[:space:]]{8,}" || true)"
+  if [ -n "$ASSIGNMENTS" ]; then
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      VALUE="$(echo "$line" | sed -E "s/^($SECRET_KEYS)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?//")"
+      # Env-var indirection bulgu degil — deger degil, referans. compose'un
+      # ${VAR} / ${VAR:-${FALLBACK}} formlarini ve duz $VAR'i kapsar.
+      if echo "$VALUE" | grep -qE '\$\{?[A-Za-z_]'; then continue; fi
+      if is_placeholder "$VALUE"; then continue; fi
+      KEY="$(echo "$line" | grep -oE "^($SECRET_KEYS)")"
+      add_finding "$file" "sir anahtarina gercek deger: $KEY" "${VALUE:0:6}..."
+      break
+    done <<EOF
+$ASSIGNMENTS
+EOF
+  fi
+done
+
+# ----------------------------------------------------------------------------
+# Sonuc
+# ----------------------------------------------------------------------------
+if [ -z "$FINDINGS" ]; then
+  exit 0
+fi
+
+if [ "$SKINORA_ALLOW_SECRET" = "1" ]; then
+  echo "" >&2
+  echo "UYARI: pre-commit secret guard BYPASS edildi (SKINORA_ALLOW_SECRET=1)." >&2
+  echo "Bulgular:" >&2
+  printf '%s' "$FINDINGS" >&2
+  log_bypass
+  exit 0
+fi
+
+echo "" >&2
+echo "=============================================================" >&2
+echo " COMMIT BLOKLANDI — staged icerikte sir kalibi bulundu" >&2
+echo "=============================================================" >&2
+printf '%s' "$FINDINGS" >&2
+echo "" >&2
+echo "Ne yapmali:" >&2
+echo "  1. Deger bir SIR ise: dosyayi unstage et (git restore --staged <dosya>)," >&2
+echo "     degeri .env veya secrets/ altina tasi (ikisi de gitignored)." >&2
+echo "  2. Deger gercekten PLACEHOLDER ise: 'your_...' / 'REPLACE_IN_ENV'" >&2
+echo "     gibi taninan bir kalip kullan, ya da bilincli bypass et:" >&2
+echo "     SKINORA_ALLOW_SECRET=1 SKINORA_BYPASS_REASON=\"...\" git commit ..." >&2
+echo "" >&2
+echo "Detay: secrets/README.md" >&2
+exit 1
