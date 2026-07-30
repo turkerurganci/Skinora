@@ -128,8 +128,19 @@ services:
     depends_on:
       skinora-backend:
         condition: service_healthy
+    # The runner image is node:20-slim — it has neither wget nor curl, so probe
+    # with node's global fetch. The health route is /api/health (Next App
+    # Router); plain /health 404s. A wget-based check on /health therefore never
+    # passed, which also kept nginx from starting (it waits on service_healthy).
+    # Same probe as docker-compose.e2e.yml.
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
