@@ -1,3 +1,22 @@
+# =============================================================================
+# Skinora — full application stack (real configuration).
+#
+# RUN IT EXPLICITLY WITH -f:
+#   docker compose -f docker-compose.yml up -d --build --wait
+#
+# A bare `docker compose up` also layers docker-compose.override.yml, which
+# bind-mounts host source over the frontend and sidecar images. Those images are
+# production builds (Next.js .next/standalone, sidecar dist/) — the bind mount
+# hides their entrypoints and the containers fail to start. The override file is
+# a dev template; keep it out of real runs.
+#
+# Values come from .env (gitignored). This file contains ${VAR} references only —
+# never a secret literal. Services receive only the env they need: hot-wallet and
+# HD-wallet signing material goes to the blockchain sidecar alone.
+#
+# Prerequisite: the schema is NOT auto-migrated at startup. Apply migrations
+# before first boot — see Docs/DEPLOY_RUNBOOK.md §G.
+# =============================================================================
 services:
   # --- Application Services ---
 
@@ -8,6 +27,10 @@ services:
     container_name: skinora-backend
     ports:
       - "${BACKEND_PORT:-5000}:5000"
+    # Every value is a ${VAR} reference resolved from .env (gitignored) — no
+    # secret literal lives in this file. Each service receives ONLY the env it
+    # needs: HOT_WALLET_PRIVATE_KEY and HD_WALLET_MNEMONIC are deliberately
+    # absent here so the backend never sees signing material (F4 gate check).
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
@@ -20,6 +43,56 @@ services:
       - Webhook__SteamSharedSecret=${WEBHOOK_SECRET}
       - Webhook__BlockchainSharedSecret=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
       - Serilog__WriteTo__1__Args__uri=${LOKI_URL:-http://skinora-loki:3100}
+      # Browser-facing origin — CORS. The frontend is same-origin behind nginx,
+      # so this only matters for direct :5000 access and non-browser clients.
+      - Cors__AllowedOrigins__0=${PUBLIC_ORIGIN:-http://localhost:8080}
+      # Steam OpenID 2.0 — appsettings.json defaults point at https://skinora.com;
+      # without these overrides real Steam login redirects to a dead domain.
+      - SteamOpenId__Realm=${STEAM_OPENID_REALM}
+      - SteamOpenId__ReturnToUrl=${STEAM_OPENID_RETURN_TO}
+      - SteamOpenId__ReVerifyReturnToUrl=${STEAM_OPENID_REVERIFY_RETURN_TO}
+      - SteamOpenId__FrontendCallbackUrl=${STEAM_OPENID_FRONTEND_CALLBACK}
+      - SteamOpenId__WebApiKey=${STEAM_API_KEY}
+      # Backend → sidecar internal API auth (X-Internal-Key, 05 §3.4). Must match
+      # the INTERNAL_KEY each sidecar receives below.
+      - SteamSidecar__BaseUrl=http://skinora-steam-sidecar:5100
+      - SteamSidecar__InternalKey=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
+      - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
+      - BlockchainSidecar__InternalKey=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
+      # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
+      # Default "logging" = fail-open, no outbound call to steamcommunity.com.
+      - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}
+      # --- 19 mandatory SystemSettings (DEPLOY_RUNBOOK §A) ---
+      # SettingsBootstrapService hydrates unconfigured rows from these and
+      # FAIL-FASTS (InvalidOperationException → container exit) on any missing or
+      # out-of-range value. Rows already configured via the admin UI are never
+      # overridden (06 §8.9). Enumerated explicitly rather than `env_file: .env`
+      # so the backend receives nothing beyond what it needs.
+      - SKINORA_SETTING_ACCEPT_TIMEOUT_MINUTES=${SKINORA_SETTING_ACCEPT_TIMEOUT_MINUTES}
+      - SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES=${SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES}
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES=${SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES}
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES=${SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES}
+      - SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES=${SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES}
+      - SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES=${SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES}
+      - SKINORA_SETTING_MIN_TRANSACTION_AMOUNT=${SKINORA_SETTING_MIN_TRANSACTION_AMOUNT}
+      - SKINORA_SETTING_MAX_TRANSACTION_AMOUNT=${SKINORA_SETTING_MAX_TRANSACTION_AMOUNT}
+      - SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS=${SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS}
+      - SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT=${SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT}
+      - SKINORA_SETTING_NEW_ACCOUNT_PERIOD_DAYS=${SKINORA_SETTING_NEW_ACCOUNT_PERIOD_DAYS}
+      - SKINORA_SETTING_CANCEL_LIMIT_COUNT=${SKINORA_SETTING_CANCEL_LIMIT_COUNT}
+      - SKINORA_SETTING_CANCEL_LIMIT_PERIOD_HOURS=${SKINORA_SETTING_CANCEL_LIMIT_PERIOD_HOURS}
+      - SKINORA_SETTING_CANCEL_COOLDOWN_HOURS=${SKINORA_SETTING_CANCEL_COOLDOWN_HOURS}
+      - SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD=${SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD}
+      - SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD=${SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD}
+      - SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS=${SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS}
+      - SKINORA_SETTING_HOT_WALLET_LIMIT=${SKINORA_SETTING_HOT_WALLET_LIMIT}
+      - SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD=${SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD}
+      # NOTE: the DEPLOY_RUNBOOK §C "recommended" settings (reconciliation
+      # wallet addresses, auth.banned_countries, multi_account.exchange_addresses,
+      # price_deviation_threshold) are NOT listed here on purpose. They ship as
+      # seeded Default rows (IsConfigured = true), and the bootstrap only touches
+      # unconfigured rows — env never overrides a configured value (06 §8.9). They
+      # are changed through the admin UI only.
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -46,7 +119,12 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://skinora-backend:5000}
+      # NOTE: NEXT_PUBLIC_* are inlined by Next.js at BUILD time and this
+      # Dockerfile takes no build args, so this line does NOT reach the browser
+      # bundle. The image ships with the same-origin defaults ("/api/v1",
+      # "/hubs") which is exactly right behind nginx. Kept for parity with a
+      # future split-origin build; change the image, not this line.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -72,7 +150,17 @@ services:
       - BACKEND_URL=${STEAM_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
       - STEAM_API_KEY=${STEAM_API_KEY}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      # Must match the backend's SteamSidecar__InternalKey above.
+      - INTERNAL_KEY=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
+      # Escrow bot credentials (08 §2.5). Without this the sidecar starts in
+      # skeleton mode: /health serves but selectBot() returns null and no trade
+      # offer can be sent. Mounted read-only from ./secrets (gitignored).
+      - STEAM_BOTS_CONFIG_PATH=${STEAM_BOTS_CONFIG_PATH:-/run/secrets/steam-bots.json}
+      # Inventory cache (08 §2.3). Empty → in-memory fallback.
+      - REDIS_URL=${STEAM_SIDECAR_REDIS_URL:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    volumes:
+      - ./secrets/steam-bots.json:/run/secrets/steam-bots.json:ro
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -100,12 +188,30 @@ services:
       - BACKEND_URL=${BLOCKCHAIN_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
       - TRON_NETWORK=${TRON_NETWORK:-nile}
       - TRON_FULL_NODE_URL=${TRON_FULL_NODE_URL}
+      # TRC-20 contracts (08 §3.3). Mainnet addresses are compiled in; on
+      # nile/shasta these MUST be set or the supported-token allowlist is empty
+      # and every incoming transfer is classified as wrong/spam token.
+      - TRON_USDT_CONTRACT=${TRON_USDT_CONTRACT:-}
+      - TRON_USDC_CONTRACT=${TRON_USDC_CONTRACT:-}
       - HD_WALLET_MNEMONIC=${HD_WALLET_MNEMONIC}
-      - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY}
+      # Hot wallet signing material — ONLY this service receives it (05 §3.3/§3.5).
+      - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
+      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY:-}
+      # Must match the backend's BlockchainSidecar__InternalKey above.
+      - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       - WEBHOOK_SECRET=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
       - TRON_API_KEY=${TRON_API_KEY}
+      - TRON_API_KEY_SECONDARY=${TRON_API_KEY_SECONDARY:-}
       - PAYMENT_POLLING_INTERVAL_MS=${PAYMENT_POLLING_INTERVAL_MS:-3000}
       - MIN_CONFIRMATIONS=${MIN_CONFIRMATIONS:-20}
+      # Sidecar-authoritative cadence/sweep knobs (DEPLOY_RUNBOOK §D). The
+      # backend SystemSetting copies are for admin visibility only and do NOT
+      # propagate to a running sidecar — keep both in parity and restart here.
+      - POST_CANCEL_CADENCE_24H_MS=${POST_CANCEL_CADENCE_24H_MS:-30000}
+      - POST_CANCEL_CADENCE_7D_MS=${POST_CANCEL_CADENCE_7D_MS:-300000}
+      - POST_CANCEL_CADENCE_30D_MS=${POST_CANCEL_CADENCE_30D_MS:-3600000}
+      - SWEEP_ENERGY_DELEGATION_SUN=${SWEEP_ENERGY_DELEGATION_SUN:-200000000}
+      - SWEEP_TRX_FALLBACK_SUN=${SWEEP_TRX_FALLBACK_SUN:-15000000}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-backend:

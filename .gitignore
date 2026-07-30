@@ -49,6 +49,17 @@ Desktop.ini
 .env.*
 !.env.example
 
+# Secrets — value-bearing files NEVER leave the machine.
+# The repo tracks the *shape* (secrets/README.md); the values live only here.
+# Second line of defence: scripts/git-hooks/pre-commit blocks staged secrets.
+# NOTE: "secrets/*" not "secrets/" — git cannot re-include a file inside an
+# excluded DIRECTORY, so the negation below would never take effect.
+secrets/*
+!secrets/README.md
+# Steam Mobile Authenticator exports (shared/identity secrets in the clear)
+*.maFile
+*.mafile
+
 # Logs
 *.log
 logs/
