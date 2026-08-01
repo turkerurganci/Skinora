@@ -149,7 +149,7 @@ describe('TradeOfferMonitor.sentOfferChanged → webhook mapping (08 §2.4)', ()
 
     expect(recordedWebhook).toHaveBeenCalledOnce();
     const [endpoint, payload] = recordedWebhook.mock.calls[0] as [string, WebhookPayload, string];
-    expect(endpoint).toBe('/api/v1/sidecar/steam/trade-offer-events');
+    expect(endpoint).toBe('/api/v1/webhooks/steam/trade-events');
     expect(payload.event).toBe(event);
     expect(payload.data).toMatchObject({
       offerId: 'offer-X',

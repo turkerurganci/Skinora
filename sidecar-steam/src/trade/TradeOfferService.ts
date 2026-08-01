@@ -18,7 +18,12 @@ import {
   type SendTradeOfferResponse,
 } from './types.js';
 
-const DEFAULT_TRADE_OFFER_ENDPOINT = '/api/v1/sidecar/steam/trade-offer-events';
+// Backend route of record: SteamWebhooksController `api/v1/webhooks/steam` +
+// `trade-events`. Previously `/api/v1/sidecar/steam/trade-offer-events` — wrong on
+// BOTH segments, so trade offer state changes never reached the backend and a
+// transaction could never advance to ITEM_ESCROWED. Pinned by
+// SidecarWebhookRouteContractTests.
+const DEFAULT_TRADE_OFFER_ENDPOINT = '/api/v1/webhooks/steam/trade-events';
 
 export interface TradeOfferServiceOptions {
   /** Webhook endpoint backend will receive trade offer events on (T66 consumer). */
