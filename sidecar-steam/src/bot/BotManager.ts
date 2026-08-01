@@ -162,7 +162,9 @@ export class BotManager {
     await this.emitBotEvent('bot.removed_from_pool', {
       accountName,
       reason,
-      status: session.getStatus(),
+      // Backend's BotEventData.Status is a string — send the state, not the
+      // whole BotSessionStatus object (an object here fails model binding → 400).
+      status: session.getStatus().state,
     });
   }
 
@@ -186,7 +188,14 @@ export class BotManager {
     reason: BotFailureReason,
   ): Promise<void> {
     // Emit a session_failed event first (admin visibility), then drop the bot.
-    await this.emitBotEvent('bot.session_failed', { reason, status });
+    // accountName must be top-level: the backend handler looks the bot up by it
+    // and skips the whole status update when it is absent (it does not reach
+    // into a nested status object).
+    await this.emitBotEvent('bot.session_failed', {
+      accountName: status.accountName,
+      reason,
+      status: status.state,
+    });
     await this.removeFromPool(status.accountName, reason);
   }
 

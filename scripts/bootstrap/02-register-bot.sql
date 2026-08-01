@@ -16,10 +16,18 @@
 -- Bot secimi kapasite tabanlidir: Status='ACTIVE' botlar arasinda en dusuk
 -- ActiveEscrowCount kazanir (05 §3.2).
 --
--- Calistirma:
+-- >>> DIKKAT — DisplayName SERBEST METIN DEGILDIR <<<
+-- `SteamWebhookHandler.HandleBotEventAsync` botu SU SORGUYLA bulur:
+--     WHERE b.DisplayName == data.AccountName
+-- yani DisplayName, secrets/steam-bots.json icindeki `accountName` ile
+-- BIREBIR AYNI olmalidir. "Skinora Escrow Bot 1" gibi insan-dostu bir ad
+-- verirseniz bot lifecycle event'leri satiri bulamaz ve sessizce atlanir:
+-- bot ACTIVE kalir, escrow icin secilmeye devam eder, admin uyarilmaz.
+--
+-- Calistirma (BotDisplayName = sidecar accountName):
 --   docker exec -i skinora-db /opt/mssql-tools18/bin/sqlcmd \
 --     -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Skinora \
---     -v BotSteamId="76561198000000000" -v BotDisplayName="Skinora Escrow Bot 1" \
+--     -v BotSteamId="76561198000000000" -v BotDisplayName="skinora_bot_01" \
 --     -i /dev/stdin < scripts/bootstrap/02-register-bot.sql
 --
 -- Idempotent: ayni SteamId ile tekrar calistirmak sayaclari SIFIRLAMAZ, yalniz
@@ -73,4 +81,6 @@ FROM PlatformSteamBots
 WHERE IsDeleted = 0
 ORDER BY CreatedAt;
 
-PRINT 'TAMAM. secrets/steam-bots.json icindeki hesabin SteamID64''u ile ayni oldugunu dogrulayin.';
+PRINT 'TAMAM. Iki seyi dogrulayin:';
+PRINT '  1) SteamId  = secrets/steam-bots.json hesabinin SteamID64''u';
+PRINT '  2) DisplayName = ayni dosyadaki accountName (bot event lookup bu alandan yapilir)';

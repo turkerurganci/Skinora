@@ -23,12 +23,19 @@ docker exec -i skinora-db /opt/mssql-tools18/bin/sqlcmd \
   -v SteamId="76561198000000000" \
   -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
 
-# 2) Escrow bot — secrets/steam-bots.json içindeki hesabın SteamID64'ü
+# 2) Escrow bot — BotDisplayName, steam-bots.json'daki accountName ile AYNI olmalı
 docker exec -i skinora-db /opt/mssql-tools18/bin/sqlcmd \
   -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Skinora \
-  -v BotSteamId="76561198000000000" -v BotDisplayName="Skinora Escrow Bot 1" \
+  -v BotSteamId="76561198000000000" -v BotDisplayName="skinora_bot_01" \
   -i /dev/stdin < scripts/bootstrap/02-register-bot.sql
 ```
+
+> **⚠ `DisplayName` serbest metin değildir.** `SteamWebhookHandler` botu
+> `WHERE DisplayName == data.AccountName` ile arar — yani bu alan
+> `secrets/steam-bots.json` içindeki `accountName` ile **birebir aynı** olmalı.
+> "Skinora Escrow Bot 1" gibi insan-dostu bir ad verirseniz bot lifecycle
+> event'leri satırı bulamaz ve **sessizce atlanır**: bot `ACTIVE` kalır, escrow
+> için seçilmeye devam eder, admin uyarılmaz.
 
 PowerShell'de `$MSSQL_SA_PASSWORD` yerine `.env`'deki değeri doğrudan geçin veya
 `$env:MSSQL_SA_PASSWORD` kullanın.

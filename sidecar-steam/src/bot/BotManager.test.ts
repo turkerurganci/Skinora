@@ -226,6 +226,19 @@ describe('BotManager', () => {
     expect(events).toContain('bot.removed_from_pool');
     expect(manager.snapshot().total).toBe(0);
     expect(manager.snapshot().removed).toBe(1);
+
+    // Payload shape is the backend contract (BotEventData): accountName and
+    // status must both be top-level STRINGS. Sending the BotSessionStatus object
+    // as `status` fails model binding (400) and nesting accountName inside it
+    // makes the handler skip the PlatformSteamBot update entirely — both were
+    // live defects found on the first real-configuration run.
+    for (const [, payload] of webhookSender.mock.calls as Array<
+      [string, { event: string; data: Record<string, unknown> }, string]
+    >) {
+      expect(typeof payload.data.accountName).toBe('string');
+      expect(typeof payload.data.reason).toBe('string');
+      expect(typeof payload.data.status).toBe('string');
+    }
   });
 
   it('webhook send failure does not crash the manager', async () => {
