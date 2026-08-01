@@ -6,7 +6,13 @@ import { sendCallback } from '../webhook/WebhookClient.js';
 import { BotSession, type BotFailureReason, type BotSessionStatus } from './BotSession.js';
 import { loadBotCredentials, type BotCredentials } from './BotConfig.js';
 
-const DEFAULT_BOT_EVENT_ENDPOINT = '/api/v1/sidecar/steam/bot-events';
+// Backend route of record: SteamWebhooksController is mounted at
+// `api/v1/webhooks/steam` with a `bot-events` action, and WebhookSignatureMiddleware
+// only guards `/api/v1/webhooks/steam/*`. This constant previously read
+// `/api/v1/sidecar/steam/bot-events`, which the backend never served — every bot
+// lifecycle event 404'd, so a dead bot stayed ACTIVE in PlatformSteamBots and kept
+// being selected for escrow. Pinned by SidecarWebhookRouteContractTests.
+const DEFAULT_BOT_EVENT_ENDPOINT = '/api/v1/webhooks/steam/bot-events';
 
 export interface BotManagerOptions {
   /** Override credential source (used by tests). */

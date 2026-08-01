@@ -11,7 +11,10 @@ import {
 import type { BotManager } from '../bot/BotManager.js';
 import type { BotSession } from '../bot/BotSession.js';
 
-const DEFAULT_TRADE_OFFER_ENDPOINT = '/api/v1/sidecar/steam/trade-offer-events';
+// Must stay identical to TradeOfferService's endpoint — both publish the same
+// trade_offer.* events to SteamWebhooksController `api/v1/webhooks/steam` +
+// `trade-events`. Pinned by SidecarWebhookRouteContractTests.
+const DEFAULT_TRADE_OFFER_ENDPOINT = '/api/v1/webhooks/steam/trade-events';
 
 export interface TradeOfferMonitorOptions {
   /** Webhook endpoint backend will receive trade offer status events on (T68 consumer). */
