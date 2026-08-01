@@ -98,7 +98,11 @@ EOF
 # ornek degerler "your_...", "REPLACE_IN_ENV", "changeme", "<...>", "xxx..."
 # gibi kaliplar tasir. Bunlar bulgu sayilmaz.
 is_placeholder() {
-  echo "$1" | grep -qiE 'your_|replace_in_env|changeme|change_me|example|placeholder|<[^>]+>|xxxx|\.\.\.|e2e-|test-|fake-|dummy'
+  # "your_x" ve "YourStrong!Password123" gibi tiresiz varyanti da kapsar (^your).
+  # "your" tiresiz/gomulu de gecerli (YourStrong!Password123 — connection string
+  # icinde), "e2e" tiresiz de (E2e!Strong!Pass!2345 — docker-compose.e2e.yml'in
+  # bilincli sabit test degerleri; dosya kendisi "NOT sensitive" diye isaretli).
+  echo "$1" | grep -qiE 'your|replace_in_env|changeme|change_me|example|placeholder|<[^>]+>|xxxx|\.\.\.|e2e|test-|fake-|dummy|todo'
 }
 
 for file in $STAGED; do
@@ -110,6 +114,13 @@ for file in $STAGED; do
 
   ADDED="$(git diff --cached -U0 -- "$file" | grep '^+' | grep -v '^+++' | sed 's/^+//' || true)"
   [ -z "$ADDED" ] && continue
+
+  # Yorum / dokuman satirlari: GENERIC_KEYS bir anahtar ADINI anlatan prose'a da
+  # carpar ("# JWT_SECRET: en az 32 karakter olmali"). Deger atamalarini bunlardan
+  # ayirmak icin yorum onekli satirlari icerik taramasindan dusuruyoruz — yol
+  # katmani (secrets/, .env) zaten bagimsiz calisiyor, yani gercek sir dosyasi
+  # yoruma gizlenerek gecemez.
+  ADDED_CODE="$(echo "$ADDED" | grep -vE '^[[:space:]]*(#|//|\*|>|--|;)' || true)"
 
   # 1) Tron/EVM private key — 64 hex karakter, kelime sinirlari icinde
   HITS="$(echo "$ADDED" | grep -oiE '\b[0-9a-f]{64}\b' | head -3 || true)"
@@ -138,21 +149,37 @@ EOF
 
   # 4) Bilinen sir anahtarlarina gercek deger atanmasi
   #    KEY=deger / "KEY": "deger" / KEY: deger formlarini yakalar.
-  SECRET_KEYS='HOT_WALLET_PRIVATE_KEY|HD_WALLET_MNEMONIC|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|JWT_SECRET|WEBHOOK_SECRET|BLOCKCHAIN_WEBHOOK_SECRET|INTERNAL_KEY|STEAM_SIDECAR_INTERNAL_KEY|BLOCKCHAIN_SIDECAR_INTERNAL_KEY|MSSQL_SA_PASSWORD|REDIS_PASSWORD|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|sharedSecret|identitySecret'
-  ASSIGNMENTS="$(echo "$ADDED" | grep -oE "($SECRET_KEYS)[\"']?\s*[:=]\s*[\"']?[^\"',[:space:]]{8,}" || true)"
-  if [ -n "$ASSIGNMENTS" ]; then
+  # Two tiers. NAMED covers this project's exact keys; GENERIC catches the same
+  # value pasted under any other name — the gap that let a bare
+  #   password: Tr@deB0t!2026
+  # (the Steam bot password) through into a task report or README while
+  # secrets/steam-bots.json itself was protected only by the path rule.
+  NAMED_KEYS='HOT_WALLET_PRIVATE_KEY|HD_WALLET_MNEMONIC|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|JWT_SECRET|WEBHOOK_SECRET|BLOCKCHAIN_WEBHOOK_SECRET|INTERNAL_KEY|STEAM_SIDECAR_INTERNAL_KEY|BLOCKCHAIN_SIDECAR_INTERNAL_KEY|MSSQL_SA_PASSWORD|REDIS_PASSWORD|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|sharedSecret|identitySecret'
+  GENERIC_KEYS='[A-Za-z_]*(PASSWORD|PASSWD|SECRET|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CLIENT_?SECRET|CONNECTION_?STRING)[A-Za-z_]*'
+  SECRET_KEYS="$NAMED_KEYS|$GENERIC_KEYS"
+  # Parca degil TAM SATIR uzerinden calisiyoruz. Bir onceki surum degeri karakter
+  # sinifiyla kesiyordu; connection string'ler hem virgul hem BOSLUK icerdigi icin
+  # ("Server=db,1433;User Id=sa;Password=REPLACE_IN_ENV") placeholder isareti
+  # kesilen kuyrukta kaliyor ve sablon dosyalari yanlis pozitif veriyordu.
+  ASSIGN_LINES="$(echo "$ADDED_CODE" \
+    | grep -inE "($SECRET_KEYS)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?[^[:space:]]{8,}" \
+    | cut -d: -f2- || true)"
+  if [ -n "$ASSIGN_LINES" ]; then
     while IFS= read -r line; do
       [ -z "$line" ] && continue
-      VALUE="$(echo "$line" | sed -E "s/^($SECRET_KEYS)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?//")"
-      # Env-var indirection bulgu degil — deger degil, referans. compose'un
-      # ${VAR} / ${VAR:-${FALLBACK}} formlarini ve duz $VAR'i kapsar.
-      if echo "$VALUE" | grep -qE '\$\{?[A-Za-z_]'; then continue; fi
-      if is_placeholder "$VALUE"; then continue; fi
-      KEY="$(echo "$line" | grep -oE "^($SECRET_KEYS)")"
+      # Placeholder / env-indirection kontrolu TUM satirda: kesilme yok, gomulu
+      # isaretler (REPLACE_IN_ENV, YourStrong!, E2e!) guvenilir sekilde gorulur.
+      if is_placeholder "$line"; then continue; fi
+      # ${VAR} / $VAR referansi deger degil.
+      if echo "$line" | grep -qE '\$\{?[A-Za-z_]'; then continue; fi
+      VALUE="$(echo "$line" | sed -E "s/^.*($SECRET_KEYS)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?//I")"
+      # GENERIC_KEYS kod bildirimlerine de carpar (C# property, TS tip alani).
+      if echo "$VALUE" | grep -qE '^(get;|set;|string\.|null|true|false|\{)'; then continue; fi
+      KEY="$(echo "$line" | grep -oiE "($SECRET_KEYS)" | head -1)"
       add_finding "$file" "sir anahtarina gercek deger: $KEY" "${VALUE:0:6}..."
       break
     done <<EOF
-$ASSIGNMENTS
+$ASSIGN_LINES
 EOF
   fi
 done
