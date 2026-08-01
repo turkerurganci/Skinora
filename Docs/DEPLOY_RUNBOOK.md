@@ -73,7 +73,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `HOT_WALLET_ADDRESS` / `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation (Docker secret olarak mount, 05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
 | `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10) |
-| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | monitoring | Alert kanalı |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `ALERT_EMAIL_TO` | monitoring (Grafana) | Alert kanalı — **ayrıca Grafana'nın açılması için zorunlu.** `contactpoints.yml` bir Telegram kanalı tanımlar; Grafana provisioning'inde koşul yoktur, tanımlı kanal doğrulanamazsa Grafana startup'ta abort eder ve container crash-loop'a girer. Değerler `skinora-grafana-provisioning` render adımıyla yerine konur (§G.6) |
 
 ---
 
@@ -238,3 +238,20 @@ Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir
 - **Energy.** Sweep `delegateresource` ile 200 TRX delege eder; hot wallet'ta yeterli testnet TRX yoksa 15 TRX fallback'i de tükenir → `OUT_OF_ENERGY`.
 - **`SteamMarket__Provider`.** Provada `logging` (default) bırakmak önerilir — PRICE_DEVIATION sessiz kalır ve `steamcommunity.com`'a çıkılmaz (§C.1).
 - **Hangfire dashboard.** nginx `/hangfire`'ı proxy'lemez (`/` frontend'e gider); doğrudan `http://localhost:5000/hangfire` kullanın.
+
+### G.6 Grafana provisioning render adımı
+
+`skinora-grafana` artık `./infra/grafana/provisioning` dizinini **doğrudan mount etmez**; `skinora-grafana-provisioning` adlı tek seferlik bir servis dizini bir volume'e kopyalar, `${TELEGRAM_BOT_TOKEN}` / `${TELEGRAM_CHAT_ID}` / `${ALERT_EMAIL_TO}` yer tutucularını doldurur ve çıkar. Grafana bu **render edilmiş kopyayı** okur (`depends_on: service_completed_successfully`).
+
+**Neden:** Grafana'nın kendi `${VAR}` interpolasyonu, yerine koyduğu değeri yeniden tipler. Telegram chat ID'leri her zaman numeriktir → JSON *number* olarak gelir → entegrasyonun *string* alanına oturmaz:
+
+```
+cannot unmarshal number into Go struct field Config.chatid of type string
+```
+
+Grafana bunun üzerine startup'ı iptal eder. `grafana/grafana:11.3.0` üzerinde ölçüldü: literal tırnaklı chat id ile **açılıyor**, `${VAR}` ve `$__env{VAR}` ile **açılmıyor**. Render'ı Grafana dosyayı ayrıştırmadan önce yapmak değeri YAML tırnakları içinde bırakır, string olarak kalır.
+
+**Sonuçları:**
+- Provisioning dosyalarını değiştirdikten sonra render'ı yeniden koşturun: `docker compose -f docker-compose.yml up -d --force-recreate skinora-grafana` (bağımlılık zinciri render'ı otomatik tetikler).
+- `TELEGRAM_*` boş bırakılamaz — bkz. §B. Gerçek bot yoksa lokal provada boş olmayan herhangi bir değer yeterlidir.
+- Render adımı ayrıca `plugins/` dizinini oluşturur (Grafana yokluğunda hata log'lar; zararsız ama gürültülü).
