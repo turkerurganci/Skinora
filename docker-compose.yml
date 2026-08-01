@@ -323,6 +323,51 @@ services:
     networks:
       - skinora-network
 
+  # Renders infra/grafana/provisioning into a volume with the alerting contact
+  # point placeholders substituted, then exits. Grafana consumes the rendered
+  # copy instead of the host directory.
+  #
+  # Why a render step instead of letting Grafana interpolate ${VAR} itself:
+  # Grafana's provisioning interpolation re-types the substituted value, so a
+  # Telegram chat id — always numeric — arrives as a JSON number and fails
+  # against the integration's string field:
+  #   "cannot unmarshal number into Go struct field Config.chatid of type string"
+  # Grafana then aborts startup and the container crash-loops. Verified on
+  # grafana/grafana:11.3.0: a literal quoted chat id boots healthy, ${VAR} and
+  # $__env{VAR} both fail. Substituting before Grafana parses the file keeps the
+  # value inside its YAML quotes, so it stays a string.
+  #
+  # sed uses | as the delimiter: Telegram tokens/chat ids and e-mail addresses
+  # cannot contain it. $$ escapes compose's own interpolation.
+  skinora-grafana-provisioning:
+    image: alpine:3.20
+    container_name: skinora-grafana-provisioning
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO}
+    volumes:
+      - ./infra/grafana/provisioning:/src:ro
+      - skinora-grafana-provisioning:/out
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -rf /out/* /out/.[!.]* 2>/dev/null || true
+        cp -a /src/. /out/
+        # Grafana logs an error for this directory when it is absent; harmless
+        # but noisy, and it costs nothing to create.
+        mkdir -p /out/plugins
+        sed -i \
+          -e "s|[$$]{TELEGRAM_BOT_TOKEN}|$$TELEGRAM_BOT_TOKEN|g" \
+          -e "s|[$$]{TELEGRAM_CHAT_ID}|$$TELEGRAM_CHAT_ID|g" \
+          -e "s|[$$]{ALERT_EMAIL_TO}|$$ALERT_EMAIL_TO|g" \
+          /out/alerting/contactpoints.yml
+        echo "grafana provisioning rendered"
+    networks:
+      - skinora-network
+
   skinora-grafana:
     image: grafana/grafana:11.3.0
     container_name: skinora-grafana
@@ -335,9 +380,12 @@ services:
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
     volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Rendered copy, not ./infra/grafana/provisioning — see the render service.
+      - skinora-grafana-provisioning:/etc/grafana/provisioning:ro
       - skinora-grafana-data:/var/lib/grafana
     depends_on:
+      skinora-grafana-provisioning:
+        condition: service_completed_successfully
       skinora-loki:
         condition: service_started
       skinora-prometheus:
@@ -395,6 +443,9 @@ volumes:
   skinora-loki-data:
   skinora-prometheus-data:
   skinora-grafana-data:
+  # Rendered provisioning tree — rewritten from ./infra/grafana/provisioning on
+  # every `up` by skinora-grafana-provisioning. Never edit it directly.
+  skinora-grafana-provisioning:
   skinora-uptime-kuma-data:
 
 networks:
