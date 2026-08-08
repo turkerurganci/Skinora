@@ -175,6 +175,19 @@ EOF
       VALUE="$(echo "$line" | sed -E "s/^.*($SECRET_KEYS)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?//I")"
       # GENERIC_KEYS kod bildirimlerine de carpar (C# property, TS tip alani).
       if echo "$VALUE" | grep -qE '^(get;|set;|string\.|null|true|false|\{)'; then continue; fi
+      # Kod dosyasinda TIRNAKSIZ property-access/degisken referansi bir sir DEGERI
+      # degil, kodun kendisidir:
+      #   bot.sharedSecret = response.shared_secret;
+      #   client.logOn({ accountName: bot.accountName, password: bot.password });
+      # Eleme dar tutuldu: deger BASTAN SONA identifier zinciri olmali ve yalniz
+      # kod noktalamasi (; , ) } ]) ile bitebilmeli. Hardcode'lanmis gercek bir sir
+      # tirnak tasir ("abc123") -> kapanis tirnagi bu kalibin disinda kalir ve
+      # bulgu olarak yakalanmaya devam eder.
+      case "$file" in
+        *.ts|*.tsx|*.js|*.jsx|*.cjs|*.mjs|*.cs)
+          if echo "$VALUE" | grep -qE '^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)+[[:space:];,)}]*$'; then continue; fi
+          ;;
+      esac
       KEY="$(echo "$line" | grep -oiE "($SECRET_KEYS)" | head -1)"
       add_finding "$file" "sir anahtarina gercek deger: $KEY" "${VALUE:0:6}..."
       break
