@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v2.3** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-21
+**Versiyon: v3.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -206,32 +206,27 @@ Tüm iş mantığının merkezi. API katmanı, state machine, yetkilendirme, job
 
 Steam ile tüm etkileşimi yönetir. .NET backend ile HTTP üzerinden haberleşir.
 
-| Bileşen | Kütüphane | Görev |
+**v3.0 (P2P) — sidecar salt okunur bir Steam proxy'sidir.** Platform trade offer göndermediği ve item emanete almadığı için (02 §2.1) sidecar'ın Steam hesabı, oturumu veya kimlik bilgisi yoktur. Yaptığı tek iş, Steam'in herkese açık uçlarını okumak ve sonucu backend'e döndürmektir.
+
+| Bileşen | Kaynak | Görev |
 |---|---|---|
-| Trade offer yönetimi | `steam-tradeoffer-manager` | Offer gönder, kabul et, takip et |
-| Steam session | `steamcommunity` | Login, cookie yönetimi, session yenileme |
-| 2FA onayı | `steam-totp` | Mobile authenticator onay kodları |
-| Bot yönetimi | Custom | Birden fazla Steam hesabı, bot seçimi, sağlık kontrolü, failover |
+| Envanter okuma | Steam Community inventory ucu | Satıcının satılabilir item'larını listelemek; teslimat doğrulaması için her iki tarafın envanterini okumak |
+| Trade hold sorgusu | Steam Web API — `IEconService/GetTradeHoldDurations` | Kullanıcının Mobile Authenticator'ının aktif olup olmadığını belirlemek (02 §9.1) |
+| Rate limiting | Custom kuyruk | Steam'in uç bazlı limitlerine uymak — Web API ve Community uçları **ayrı** kuyruklara sahiptir; Community envanter ucu belirgin biçimde daha sıkı limitlidir |
+| Önbellek | Redis | Listeleme amaçlı envanter okumaları önbelleklenir. **Teslimat doğrulaması önbelleği atlar** — bayat veri haksız iadeye yol açar (02 §9.2) |
 
-**Bot yönetim stratejisi:**
+**Kaldırılan sorumluluklar (v3.0):** trade offer gönderimi ve takibi, Steam oturum/cookie yönetimi, 2FA onay kodu üretimi, mobil trade onayı, bot havuzu, bot seçimi, bot sağlık kontrolü, failover ve mid-trade recovery.
 
-| Konu | Karar |
-|---|---|
-| Bot seçimi | Capacity-based — en az aktif emanet item'a sahip bot seçilir |
-| Health check | Her bot için periyodik session kontrolü (60 saniye). Yanıt vermeyen bot havuzdan çıkarılır |
-| Session expire | Otomatik re-login — `steamcommunity` session yenileme. Başarısızsa admin alert |
-| Mid-trade failure | Bot çökerse restart'ta pending trade offer'lar kontrol edilir ve takibe devam edilir |
-| Trade offer gönderim retry | Gönderim başarısız olursa (Steam API hatası, item durumu değişmişse) exponential backoff ile yeniden denenir. Timeout süresi içinde çözülmezse işlem iptal olur (03 §2.3) |
-| Tüm botlar down | Yeni trade offer gönderilmez (state machine guard), admin'e critical alert |
+> **Güvenlik ve operasyon kazancı:** Sidecar artık stateless'tır ve hiçbir Steam kimlik bilgisi (hesap parolası, `sharedSecret`, `identitySecret`, oturum çerezi) taşımaz. Bot ban'i, oturum kaybı, botta mahsur kalan item ve bot havuzu tükenmesi gibi olay sınıflarının tamamı ortadan kalkmıştır.
 
 **İletişim modeli:**
 
 | Yön | Protokol | Örnek |
 |---|---|---|
-| .NET → Sidecar | HTTP REST | "Bu item için satıcıya trade offer gönder" |
-| Sidecar → .NET | Webhook callback | "Trade offer kabul edildi, item platformda" |
+| .NET → Sidecar | HTTP REST | "Bu Steam ID'nin envanterini oku (önbelleksiz)", "Bu kullanıcının trade hold süresi nedir?" |
+| Sidecar → .NET | — | **Yok.** Platform trade'in tarafı olmadığı için Steam'den push edilecek bir olay yoktur; tüm etkileşim istek/yanıt biçimindedir |
 
-> **Asset lineage:** Trade receipt'ten alınan asset ID'ler: seller→bot trade sonrası `EscrowBotAssetId`, bot→buyer trade sonrası `DeliveredBuyerAssetId` Transaction'da kaydedilir. Aynı classId'den çok item olabilir — doğru item seçimi için zorunlu (06 §8.4).
+> **Asset lineage:** Platform iki asset referansı tutar: `ItemAssetId` (satıcının envanterindeki orijinal) ve teslimat doğrulandığında alıcıda tespit edilen asset. Trade sonrası Steam yeni asset ID atadığı için alıcı tarafında **asset ID ile eşleştirme yapılamaz** — eşleştirme item sınıfı üzerinden, referans anlık görüntüye göre sayı farkıyla yapılır (02 §9.2, 06 §8.4). `EscrowBotAssetId` kavramı kaldırılmıştır.
 
 ### 3.3 Node.js Blockchain Servisi
 
@@ -403,18 +398,19 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 | Durum | Açıklama |
 |---|---|
 | `CREATED` | İşlem oluşturuldu, alıcı bekleniyor |
-| `ACCEPTED` | Alıcı kabul etti, satıcıdan item bekleniyor |
-| `TRADE_OFFER_SENT_TO_SELLER` | Satıcıya trade offer gönderildi |
-| `ITEM_ESCROWED` | Item platforma emanet edildi, ödeme bekleniyor |
-| `PAYMENT_RECEIVED` | Ödeme doğrulandı, item teslimi başlıyor |
-| `TRADE_OFFER_SENT_TO_BUYER` | Alıcıya trade offer gönderildi |
-| `ITEM_DELIVERED` | Item alıcıya teslim edildi, satıcıya ödeme gönderiliyor |
+| `ACCEPTED` | Alıcı kabul etti, satıcının hazırlık onayı bekleniyor |
+| `SELLER_CONFIRMED` | Satıcı göndermeye hazır olduğunu onayladı, ödeme bekleniyor. Ödeme adresi bu duruma girildiğinde alıcıya açılır |
+| `PAYMENT_RECEIVED` | Ödeme doğrulandı ve emanete alındı, satıcının item'ı doğrudan alıcıya göndermesi bekleniyor |
+| `ITEM_DELIVERED` | Teslimat doğrulandı, satıcıya ödeme gönderiliyor |
 | `COMPLETED` | İşlem tamamlandı |
 | `CANCELLED_TIMEOUT` | Timeout nedeniyle iptal |
 | `CANCELLED_SELLER` | Satıcı tarafından iptal |
 | `CANCELLED_BUYER` | Alıcı tarafından iptal (ödeme öncesi) |
-| `CANCELLED_ADMIN` | Admin tarafından iptal (flag reddi) |
+| `CANCELLED_ADMIN` | Admin tarafından iptal (flag reddi veya doğrudan iptal) |
+| `REFUNDED` | Dispute alıcı lehine sonuçlandırıldı, ödeme iade edildi (terminal) |
 | `FLAGGED` | Fraud tespiti nedeniyle durduruldu |
+
+> **v3.0 değişikliği (P2P):** `TRADE_OFFER_SENT_TO_SELLER` → `SELLER_CONFIRMED`; `ITEM_ESCROWED` ve `TRADE_OFFER_SENT_TO_BUYER` kaldırıldı. Platform trade offer göndermediği ve item emanete alınmadığı için bu durumların karşılığı yoktur (02 §2.1). Durum adları bilinçli olarak yeniden adlandırıldı, yeniden anlamlandırılmadı: `TransactionHistory`, audit log ve dispute delili kalıcı kayıttır; hiçbir item'ın emanette olmadığı bir duruma `ITEM_ESCROWED` adını bırakmak bu kayıtları yanıltıcı hale getirirdi.
 
 ### 4.2 Durum Geçişleri
 
@@ -432,57 +428,55 @@ FLAGGED                 CREATED ── (flag yoksa, normal akış)
 
 Emergency Hold: State değiştirmez — herhangi bir aktif state'te uygulanabilir (bkz. §4.5)
 
-CREATED ──→ ACCEPTED ──→ TRADE_OFFER_SENT_TO_SELLER ──→ ITEM_ESCROWED ──→ PAYMENT_RECEIVED
-   │            │                    │                        │
-   │ timeout    │ timeout            │ timeout                │ timeout
-   │ seller_cancel seller_cancel     │ seller_decline         │ seller_cancel
-   │ buyer_cancel  buyer_cancel      │ buyer_cancel           │ buyer_cancel
-   ↓            ↓                    ↓                        ↓
-CANCELLED_*  CANCELLED_*        CANCELLED_*              CANCELLED_*
-                                (item iade gerek-        (item iade)
-                                 mez, trade offer
-                                 iptal edilir)
+CREATED ──→ ACCEPTED ──→ SELLER_CONFIRMED ──→ PAYMENT_RECEIVED ──→ ITEM_DELIVERED ──→ COMPLETED
+   │            │                │                     │                   │
+   │ timeout    │ timeout        │ timeout             │ timeout           │ admin_resolve_refund
+   │ (alıcı)    │ (SATICI)       │ (alıcı)             │ (SATICI)          ↓
+   │            │                │                     │                REFUNDED
+   │ seller_cancel               │ seller_cancel       │ seller_cancel
+   │ buyer_cancel                │ buyer_cancel        │ (buyer_cancel YOK)
+   ↓            ↓                ↓                     ↓
+CANCELLED_*  CANCELLED_*     CANCELLED_*          CANCELLED_*
+(iade yok — para henüz gönderilmedi)             (para alıcıya iade)
 
-PAYMENT_RECEIVED ──→ TRADE_OFFER_SENT_TO_BUYER ──→ ITEM_DELIVERED ──→ COMPLETED
-                              │ timeout
-                              │ buyer_decline
-                              ↓
-                        CANCELLED_*
-                        (item iade + para iade)
+Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan etkisi yoktur.
 ```
 
 **İptal ve red geçişleri detayı:**
 
-| Kaynak Durum | Trigger | Hedef Durum | Iade |
+| Kaynak Durum | Trigger | Hedef Durum | İade |
 |---|---|---|---|
-| CREATED | timeout | CANCELLED_TIMEOUT | Yok (varlık transferi olmamış) |
+| CREATED | timeout | CANCELLED_TIMEOUT | Yok — sorumlu: alıcı |
 | CREATED | seller_cancel | CANCELLED_SELLER | Yok |
 | CREATED | buyer_cancel | CANCELLED_BUYER | Yok |
-| ACCEPTED | timeout | CANCELLED_TIMEOUT | Yok |
-| ACCEPTED | seller_cancel | CANCELLED_SELLER | Yok |
+| ACCEPTED | seller_confirm_ready | SELLER_CONFIRMED | — (guard: item hâlâ tradeable, alıcı MA aktif, baseline alındı) |
+| ACCEPTED | timeout | CANCELLED_TIMEOUT | Yok — **sorumlu: satıcı** (hazırlık onayı vermedi) |
+| ACCEPTED | seller_decline | CANCELLED_SELLER | Yok |
 | ACCEPTED | buyer_cancel | CANCELLED_BUYER | Yok |
-| TRADE_OFFER_SENT_TO_SELLER | timeout | CANCELLED_TIMEOUT | Trade offer iptal edilir |
-| TRADE_OFFER_SENT_TO_SELLER | seller_decline | CANCELLED_SELLER | Trade offer reddedildi, iade gerekmez (03 §2.3/5) |
-| TRADE_OFFER_SENT_TO_SELLER | buyer_cancel | CANCELLED_BUYER | Trade offer iptal edilir |
-| ITEM_ESCROWED | timeout | CANCELLED_TIMEOUT | Item satıcıya iade |
-| ITEM_ESCROWED | seller_cancel | CANCELLED_SELLER | Item satıcıya iade |
-| ITEM_ESCROWED | buyer_cancel | CANCELLED_BUYER | Item satıcıya iade |
-| PAYMENT_RECEIVED | timeout | — | Timeout yok (ödeme doğrulandı, teslim aşaması) |
-| TRADE_OFFER_SENT_TO_BUYER | timeout | CANCELLED_TIMEOUT | Item satıcıya iade + para alıcıya iade |
-| TRADE_OFFER_SENT_TO_BUYER | buyer_decline | CANCELLED_BUYER | Item satıcıya iade + para alıcıya iade (03 §3.5/5) |
+| SELLER_CONFIRMED | confirm_payment | PAYMENT_RECEIVED | — (ödeme doğrulandı, teslimat süresi başlar) |
+| SELLER_CONFIRMED | timeout | CANCELLED_TIMEOUT | Yok — sorumlu: alıcı (ödeme yapmadı) |
+| SELLER_CONFIRMED | seller_cancel | CANCELLED_SELLER | Yok (guard: `PaymentReceivedAt is null`) |
+| SELLER_CONFIRMED | buyer_cancel | CANCELLED_BUYER | Yok (guard: `PaymentReceivedAt is null`) |
+| PAYMENT_RECEIVED | deliver_item | ITEM_DELIVERED | — (guard: teslimat kanıtı mevcut — 02 §9.2) |
+| PAYMENT_RECEIVED | timeout | CANCELLED_TIMEOUT | Para alıcıya iade — **sorumlu: satıcı**. İptal uygulanmadan önce son bir teslimat doğrulaması çalışır; kanıt bulunursa geçiş `deliver_item`'a döner |
+| PAYMENT_RECEIVED | seller_cancel | CANCELLED_SELLER | Para alıcıya iade. Satıcı göndermekten vazgeçebilir; itibar cezası uygulanır (02 §7) |
+| PAYMENT_RECEIVED | buyer_cancel | — | **Kullanılamaz.** Ödeme sonrası alıcı tek taraflı iptal edemez (02 §7) |
+| ITEM_DELIVERED | complete | COMPLETED | — (payout on-chain onaylandıktan sonra) |
+| ITEM_DELIVERED | admin_resolve_refund | REFUNDED | Para alıcıya iade. **Item geri alınamaz** — platform item'a erişemez, zarar geri alma imkânı olmadan satıcıya devredilir (02 §10) |
 | FLAGGED | admin_approve | CREATED | Flag kaldırılır, işlem normal akışa girer (03 §7.1) |
-| FLAGGED | admin_reject | CANCELLED_ADMIN | İşlem iptal edilir, taraflara bildirim gider. FLAGGED yalnızca creation-time'da tetiklendiği için varlık transferi henüz olmamıştır (03 §7.1) |
-| CREATED | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — sebep zorunlu (03 §8.7) |
-| ACCEPTED | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — sebep zorunlu |
-| TRADE_OFFER_SENT_TO_SELLER | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — aktif trade offer iptal edilir |
-| ITEM_ESCROWED | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — item satıcıya iade |
-| PAYMENT_RECEIVED | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — item satıcıya, ödeme alıcıya iade |
-| TRADE_OFFER_SENT_TO_BUYER | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — aktif trade offer iptal, item satıcıya, ödeme alıcıya iade |
-| ITEM_DELIVERED | admin_cancel | — | **Kullanılamaz.** Item alıcıya teslim edilmiş, standart iptal/iade uygulanamaz. Bu aşamadan sonra yalnızca exceptional resolution (admin manuel inceleme ve müdahale) başlatılabilir (02 §7) |
-| FLAGGED | admin_cancel | CANCELLED_ADMIN | Admin doğrudan iptal — flag reject ile aynı etki ama farklı tetikleyici |
+| FLAGGED | admin_reject | CANCELLED_ADMIN | İşlem iptal edilir. FLAGGED yalnızca creation-time'da tetiklendiği için varlık transferi henüz olmamıştır (03 §7.1) |
+| CREATED / ACCEPTED / SELLER_CONFIRMED | admin_cancel | CANCELLED_ADMIN | Ödeme alınmışsa alıcıya iade; sebep zorunlu (03 §8.7) |
+| PAYMENT_RECEIVED | admin_cancel | CANCELLED_ADMIN | Para alıcıya iade |
+| SELLER_CONFIRMED / PAYMENT_RECEIVED / ITEM_DELIVERED | admin_resolve_refund | REFUNDED | Dispute alıcı lehine sonuçlandı — para alıcıya iade |
+| ITEM_DELIVERED | admin_cancel | — | **Kullanılamaz.** Teslimat gerçekleşmiş, standart iptal uygulanamaz. Bu aşamada yalnızca `admin_resolve_refund` veya exceptional resolution geçerlidir (02 §7) |
+| FLAGGED | admin_cancel | CANCELLED_ADMIN | Flag reject ile aynı etki, farklı tetikleyici |
 | _(Emergency hold için bkz. §4.5 — state değiştirmez, flag mekanizmasıdır)_ | | | |
 
-> **Not:** Ödeme yapıldıktan sonra (PAYMENT_RECEIVED ve sonrası) kullanıcılar tek taraflı iptal edemez (02 §7). Bu durumlarda sadece timeout, alıcının trade offer reddi veya **admin doğrudan iptali** geçerlidir.
+**Kaldırılan trigger'lar (v3.0):** `send_trade_offer_to_seller`, `escrow_item`, `send_trade_offer_to_buyer` — platform trade offer göndermediği için karşılıkları yoktur. `buyer_decline` de kaldırıldı; tek üreticisi platformun gönderdiği trade offer'ın reddiydi, `buyer_cancel` yeterlidir.
+
+> **Not:** Ödeme yapıldıktan sonra **alıcı** tek taraflı iptal edemez (02 §7). Satıcı ise edebilir — bu bilinçli bir karardır: kapatılsaydı, göndermek istemeyen satıcı hiçbir şey yapmayıp timeout'u beklerdi ve alıcı parasına daha geç kavuşurdu.
+>
+> **Not:** Teslimat fazının timeout sorumlusu **satıcıdır**. Custodial modelde bu faz "alıcının teslim offer'ını kabul etmesi" olduğu için alıcıya aitti; P2P'de trade'i satıcı gönderdiği için sorumluluk da satıcıya geçti (02 §3.1). İtibar hesabı bu haritayı kullanır.
 >
 > **Not:** FLAGGED durumu yalnızca işlem oluşturma anında tetiklenir — fiyat sapması ve yüksek hacim flag'leri (03 §7). Admin onaylarsa işlem CREATED'a geçer, reddederse CANCELLED_ADMIN olur. Anormal davranış tespiti ise hesap düzeyinde çalışır — işlem FLAGGED state'ine geçmez, kullanıcının tüm fon akışı aksiyonları engellenir (03 §7.3).
 >
@@ -510,7 +504,11 @@ PAYMENT_RECEIVED ──→ TRADE_OFFER_SENT_TO_BUYER ──→ ITEM_DELIVERED �
 | Blockchain degradasyonu | Blockchain doğrulama altyapısı sağlıksız olduğunda (node/indexer erişim kaybı) ödeme adımındaki aktif işlemlerin timeout süreleri dondurulur. Health check başarısız → otomatik freeze; admin manuel tetikleme de mümkün. Altyapı normale dönünce gecikmeli ödeme tespiti otomatik yapılır (02 §3.3) |
 | Emergency hold | Admin emergency hold uygulanan işlemlerde timeout durur. Hold kaldırılınca timeout kaldığı yerden devam eder (bkz. §4.5, 02 §7) |
 
-> **Aşama ayrımı:** Ödeme aşaması (ITEM_ESCROWED) per-transaction Hangfire delayed job ile yönetilir. Diğer aşamaların deadline'ları (AcceptDeadline, TradeOfferToSellerDeadline, TradeOfferToBuyerDeadline) periyodik scanner/poller job ile enforce edilir (06 §3.5).
+> **Aşama ayrımı:** Ödeme aşaması (SELLER_CONFIRMED) per-transaction Hangfire delayed job ile yönetilir. Diğer aşamaların deadline'ları (`AcceptDeadline`, `SellerConfirmDeadline`, `DeliveryDeadline`) periyodik scanner/poller job ile enforce edilir (06 §3.5).
+>
+> **v3.0 notu:** Önceki sürümde `TradeOfferToSellerDeadline` ve `TradeOfferToBuyerDeadline` alanları tanımlıydı ancak ileri akışta hiçbir yerde set edilmiyordu — o iki timeout fazı pratikte hiç tetiklenmiyordu. P2P geçişiyle bu alanlar `SellerConfirmDeadline` ve `DeliveryDeadline` olarak yeniden adlandırıldı ve **gerçekten armlanır** hale geldi. Teslimat fazının deadline'ı, satıcı non-delivery riskine karşı tek zaman sınırı olduğu için kritiktir.
+
+> **Teslimat timeout'unda özel davranış:** `DeliveryDeadline` dolduğunda iptal doğrudan uygulanmaz; önce bir teslimat doğrulama turu çalıştırılır (02 §9.2). Kanıt bulunursa işlem `ITEM_DELIVERED`'a ilerletilir. Bunun sebebi, satıcı item'ı göndermiş olmasına rağmen alıcı onay vermediğinde haksız iade yapılmasını önlemektir.
 
 **Timeout job yaşam döngüsü:**
 
@@ -614,16 +612,18 @@ Her state geçişi bir domain event publish eder:
 | Event | Consumer | Aksiyon |
 |---|---|---|
 | `TransactionCreatedEvent` | Notification | Alıcıya davet bildirimi |
-| `TransactionAcceptedEvent` | Steam, Notification | Satıcıya trade offer gönder, bildirim |
-| `ItemEscrowedEvent` | Blockchain, Notification | Ödeme adresi üret, alıcıya bildirim |
-| `PaymentReceivedEvent` | Steam, Blockchain, Notification | Alıcıya trade offer gönder, sweep job başlat (§3.3 custody), bildirim |
-| `ItemDeliveredEvent` | Blockchain, Notification | Satıcıya ödeme gönder, bildirim |
+| `TransactionAcceptedEvent` | Notification | Satıcıya "hazır mısın?" bildirimi |
+| `SellerConfirmedReadyEvent` | Blockchain, Notification | Ödeme adresini alıcıya aç, alıcıya bildirim |
+| `PaymentReceivedEvent` | Blockchain, Notification | Satıcıya "item'ı gönder" bildirimi + trade bağlantısı, teslimat süresini başlat, sweep job (§3.3 custody) |
+| `ItemDeliveredEvent` | Blockchain, Notification | Bekleme penceresinden sonra satıcıya ödeme gönder, bildirim |
 | `TransactionCompletedEvent` | Notification | Her iki tarafa bildirim |
 | `TransactionCancelledEvent` | Steam, Blockchain, Notification | İade işlemleri, bildirimler |
 | `TransactionFlaggedEvent` | Notification | Admin'e alert |
 | `TimeoutWarningEvent` | Notification | Yaklaşan timeout bildirimi |
 
-> **Not:** Notification consumer bu event'leri aldığında, olayın türüne ve mevcut state'e göre uygun bildirimleri üretir. Örneğin `TransactionCancelledEvent` alındığında iptal sebebi, iade durumu ve ilgili taraflara (satıcı/alıcı) göre farklı bildirim mesajları oluşturulur. Aynı event birden fazla bildirim tetikleyebilir (örn: item iade bildirimi + ödeme iade bildirimi). Bildirim tetikleyicilerinin tam listesi için bkz. 03 §12.
+> **Not:** Notification consumer bu event'leri aldığında, olayın türüne ve mevcut state'e göre uygun bildirimleri üretir. Örneğin `TransactionCancelledEvent` alındığında iptal sebebi, iade durumu ve ilgili taraflara (satıcı/alıcı) göre farklı bildirim mesajları oluşturulur. Bildirim tetikleyicilerinin tam listesi için bkz. 03 §12.
+
+> **v3.0 kaldırılan event'ler:** `ItemEscrowedEvent` (item emanete alınmıyor), `ItemRefundToSellerRequestedEvent` ve tüm item-iade zinciri (platformda item bulunmadığı için iade edilecek eşya yok), `TradeOfferDispatchFailedEvent`, `BotRestrictedEvent`, `BotSessionFailedEvent` (bot yok — §3.2). `TransactionCancelledEvent` artık yalnızca para iadesi tetikler; "item iade bildirimi + ödeme iade bildirimi" ikilisi tek bildirime indi.
 
 ### 5.4 Audit Trail
 
