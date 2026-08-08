@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-16
+**Versiyon: v4.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -66,7 +66,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S15 | İşlem Listesi & Arama | Admin | `/admin/transactions` |
 | S16 | İşlem Detay (Admin) | Admin | `/admin/transactions/:id` |
 | S17 | Parametre Yönetimi | Admin | `/admin/settings` |
-| S18 | Platform Steam Hesapları | Admin | `/admin/steam-accounts` |
+| ~~S18~~ | ~~Platform Steam Hesapları~~ | — | **v3.0'da kaldırıldı** — platform Steam hesabı işletmez (02 §15) |
 | S19 | Rol & Yetki Yönetimi | Admin | `/admin/roles` |
 | S20 | Kullanıcı Detay (Admin) | Admin | `/admin/users/:steamId` |
 | S21 | Audit Log | Admin | `/admin/audit-logs` |
@@ -321,19 +321,20 @@ Bu bölüm, birden fazla ekranda tekrar eden UI pattern'lerini tanımlar. Her ek
 | Durum | Etiket Metni | Renk Tonu |
 |-------|-------------|-----------|
 | CREATED | Oluşturuldu | Mavi |
-| ACCEPTED | Kabul Edildi | Mavi |
-| TRADE_OFFER_SENT_TO_SELLER | Item Bekleniyor | Sarı |
-| ITEM_ESCROWED | Ödeme Bekleniyor | Sarı |
-| PAYMENT_RECEIVED | Ödeme Alındı | Yeşil (açık) |
-| TRADE_OFFER_SENT_TO_BUYER | Teslim Bekleniyor | Sarı |
+| ACCEPTED | Satıcı Onayı Bekleniyor | Mavi |
+| SELLER_CONFIRMED | Ödeme Bekleniyor | Sarı |
+| PAYMENT_RECEIVED | Teslimat Bekleniyor | Sarı |
 | ITEM_DELIVERED | Teslim Edildi | Yeşil (açık) |
 | COMPLETED | Tamamlandı | Yeşil |
 | CANCELLED_TIMEOUT | Zaman Aşımı | Kırmızı |
 | CANCELLED_SELLER | Satıcı İptal | Kırmızı |
 | CANCELLED_BUYER | Alıcı İptal | Kırmızı |
 | CANCELLED_ADMIN | Admin İptal | Turuncu-Kırmızı |
+| REFUNDED | İade Edildi | Kırmızı |
 | FLAGGED | İnceleniyor | Turuncu |
 | EMERGENCY_HOLD | Donduruldu | Kırmızı-Turuncu |
+
+> **v3.0 (P2P):** `TRADE_OFFER_SENT_TO_SELLER` → `SELLER_CONFIRMED`; `ITEM_ESCROWED` ve `TRADE_OFFER_SENT_TO_BUYER` kaldırıldı. `PAYMENT_RECEIVED`'ın etiketi "Ödeme Alındı"dan **"Teslimat Bekleniyor"a** değişti — bu durumda beklenen aksiyon artık platformun teslimatı değil, **satıcının item'ı göndermesidir** (02 §2.2). `REFUNDED` daha önce bu tabloda eksikti.
 
 > **Not (EMERGENCY_HOLD overlay):** `EMERGENCY_HOLD` bir `TransactionStatus` enum değeri **değildir** — işlemin gerçek `status`'ünün üzerine binen `IsOnHold` freeze flag'inin overlay/efektif-durum rozetidir. `FLAGGED` ise **kanonik bir `TransactionStatus` değeridir** (06 §2.1; fraud tespitinde oluşturmada atanır — `TransactionStatus.cs`, 07 §9.6 `statusGroup`), yalnızca aktif fraud-flag/inceleme rozeti olarak da görünür. Kanonik statü kümesi için 06 §2 `TransactionStatus` geçerlidir.
 
@@ -948,23 +949,20 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
-| Aksiyon alanı | "Alıcı kabul etti! Item'ınızı gönderin." + "Platform trade offer'ınızı hazırlıyor..." bilgisi | "Satıcının item'ı göndermesi bekleniyor" |
-| Countdown | Satıcı trade offer timeout'u (C02) | Satıcı trade offer timeout'u (C02) |
+| Aksiyon alanı | "Alıcı kabul etti! Göndermeye hazır mısınız?" + **[Göndermeye Hazırım]** birincil butonu | "Satıcının onayı bekleniyor" |
+| Countdown | Hazırlık onayı timeout'u (C02) | Hazırlık onayı timeout'u (C02) |
 | İptal | "İşlemi İptal Et" aktif | "İşlemi İptal Et" aktif |
 
-##### TRADE_OFFER_SENT_TO_SELLER Durumu
+> **[Göndermeye Hazırım] butonu (v3.0):** Tıklandığında platform üç kontrolü yapar (item hâlâ tradeable mı, alıcı MA aktif mi, alıcı envanteri okunabilir mi — 03 §2.3). Kontroller sırasında buton yükleniyor durumuna geçer.
+> - **Item artık yok/tradeable değil →** hata bildirimi: "Item artık gönderilebilir durumda değil." + iptal önerisi
+> - **Alıcı MA aktif değil →** bilgi bildirimi, işlem beklemede kalır
+> - **Alıcı envanteri gizli →** işlem ilerler ama uyarı gösterilir: "Alıcının envanteri gizli olduğu için teslimatı otomatik doğrulayamayacağız — alıcının 'Teslim aldım' onayı gerekecek."
+
+##### SELLER_CONFIRMED Durumu
 
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
-| Aksiyon alanı | "Steam'de trade offer'ı kabul edin" + Steam'e git linki | "Satıcının item'ı göndermesi bekleniyor" |
-| Countdown | Satıcı trade offer timeout'u (C02) | Satıcı trade offer timeout'u (C02) |
-| İptal | "İşlemi İptal Et" aktif | "İşlemi İptal Et" aktif |
-
-##### ITEM_ESCROWED Durumu
-
-| Alan | Satıcı | Alıcı |
-|------|--------|-------|
-| Aksiyon alanı | "Item emanete alındı. Alıcının ödemesi bekleniyor." | Ödeme bilgileri bölümü (aşağıda detaylı) |
+| Aksiyon alanı | "Hazır olduğunuzu onayladınız. Alıcının ödemesi bekleniyor." | Ödeme bilgileri bölümü (aşağıda detaylı) |
 | Countdown | Ödeme timeout'u (C02) | Ödeme timeout'u (C02) |
 | İptal | "İşlemi İptal Et" aktif (ödeme gelmediği sürece) | "İşlemi İptal Et" aktif |
 
@@ -996,19 +994,19 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 ##### PAYMENT_RECEIVED Durumu
 
-| Alan | Satıcı | Alıcı |
-|------|--------|-------|
-| Aksiyon alanı | "Ödeme doğrulandı. Item alıcıya teslim ediliyor." | "Ödemeniz doğrulandı. Item'ınız gönderiliyor." |
-| Countdown | — | — |
-| İptal | Devre dışı | Devre dışı |
-
-##### TRADE_OFFER_SENT_TO_BUYER Durumu
+**Bu ekranın en kritik durumu (v3.0).** Beklenen aksiyon platformda değil, **satıcıdadır**: item'ı Steam üzerinden doğrudan alıcıya göndermelidir.
 
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
-| Aksiyon alanı | "Item alıcıya gönderildi. Kabul etmesi bekleniyor." | "Steam'de trade offer'ı kabul edin" + Steam'e git linki |
-| Countdown | Teslim trade offer timeout'u (C02) | Teslim trade offer timeout'u (C02) |
-| İptal | Devre dışı | Devre dışı |
+| Aksiyon alanı | "Ödeme emanete alındı — item'ı şimdi gönderin." + **[Steam'de Trade Offer Gönder]** birincil butonu (alıcının trade URL'ine açılır) + gönderilecek item'ın adı/görseli hatırlatma olarak | "Ödemeniz emanete alındı. Satıcı item'ı gönderiyor." + **[Teslim Aldım]** butonu |
+| Countdown | Teslimat timeout'u (C02) | Teslimat timeout'u (C02) |
+| İptal | "İşlemi İptal Et" **aktif** — modal'da uyarı: "İptal ederseniz ödeme alıcıya iade edilir ve itibar puanınız etkilenir." | Devre dışı — "Ödeme gönderildiği için iptal edemezsiniz" |
+
+> **[Steam'de Trade Offer Gönder] (v3.0):** `https://steamcommunity.com/tradeoffer/new/?partner=…&token=…` adresine yeni sekmede açılır. **Item önceden seçili gelmez** — Steam arayüzünde item seçimini satıcı yapar. Buton altında hatırlatma: "Yalnızca işlemdeki item'ı gönderin; farklı bir item gönderirseniz teslimat doğrulanmaz."
+>
+> **[Teslim Aldım] (v3.0):** Alıcı item'ın envanterine geçtiğini onaylar → işlem anında `ITEM_DELIVERED`'a geçer. Onay geri alınamaz olduğu için tıklamadan önce doğrulama modal'ı gösterilir: "Item'ı aldığınızı onaylıyor musunuz? Onayladığınızda ödeme satıcıya aktarılacak." Alıcı onaylamazsa arka planda envanter kanıtı da teslimatı doğrulayabilir (02 §9.2) — buton tek yol değildir.
+>
+> **İptal asimetrisi:** Bu durumda satıcı iptal edebilir ama alıcı edemez (02 §7). Sebep: alıcının parası emanettedir ve satıcı göndermekten vazgeçebilmelidir; kapatılsaydı satıcı hiçbir şey yapmayıp timeout'u bekler, alıcı parasına daha geç kavuşurdu.
 
 ##### ITEM_DELIVERED Durumu
 
@@ -1130,7 +1128,9 @@ Dispute aktifken işlem detay sayfasında ek bir bölüm gösterilir:
 |-------|--------------------|--------------------|
 | "Kabul Ediyorum" | Alıcı + CREATED | Steam ID eşleşiyor (veya açık link) + geçerli iade adresi mevcut (profil veya işlem bazlı) + alıcının refund-address cooldown'u aktif değil (cüzdan değişikliği sonrası bekleme süresi — 03 §9.2). Not: iptal cooldown'u yalnızca yeni işlem başlatmayı etkiler, kabul etmeyi etkilemez |
 | "İşlemi İptal Et" | Satıcı veya alıcı + aktif state | Ödeme gönderilmemiş |
-| "İtiraz Et" | Alıcı + ITEM_ESCROWED/PAYMENT_RECEIVED/TRADE_OFFER_SENT_TO_BUYER/ITEM_DELIVERED | Aktif dispute yok VE aynı türde daha önce çözülmüş dispute yok (bkz. 02 §10.2) |
+| "İtiraz Et" | Alıcı + SELLER_CONFIRMED/PAYMENT_RECEIVED/ITEM_DELIVERED | Aktif dispute yok VE aynı türde daha önce çözülmüş dispute yok (bkz. 02 §10.2) |
+| "Göndermeye Hazırım" | Satıcı + ACCEPTED | v3.0 — hazırlık onayı (03 §2.3) |
+| "Teslim Aldım" | Alıcı + PAYMENT_RECEIVED | v3.0 — teslim onayı (03 §3.5) |
 | "Admin'e İlet" | Dispute sonucu gösterildikten sonra | — |
 
 **Cooldown Karar Matrisi (03 §9.2, 02 §12.3):**
@@ -1678,11 +1678,13 @@ Bu ayrım sayfanın üstünde bir bilgi kutusu olarak gösterilir. Her parametre
 
 ### 8.7 S18 — Platform Steam Hesapları
 
-**Amaç:** Platform Steam hesaplarının durumunu izlemek.
+**Bu ekran kaldırılmıştır (v3.0, P2P geçişi).**
 
-**Erişim:** Admin (Steam hesap izleme yetkisi).
+Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sayısı, günlük trade kotası veya recovery kuyruğu yoktur (02 §15, 06 §3.10, 07 §9.10). `VIEW_STEAM_ACCOUNTS` ve `MANAGE_STEAM_RECOVERY` yetkileri, admin navigasyonundaki "Steam hesapları" girişi ve `/admin/steam-accounts` rotası da kaldırılmıştır.
 
-**İçerik:** Her hesap için bir kart.
+Aşağıdaki tasarım tarihsel referans olarak bırakılmıştır.
+
+**~~Eski amaç~~:** Platform Steam hesaplarının durumunu izlemek.
 
 **Hesap Kartı:**
 
