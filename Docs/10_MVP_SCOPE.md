@@ -1,6 +1,6 @@
 # Skinora — MVP Scope
 
-**Versiyon: v1.3** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-03-22
+**Versiyon: v2.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -22,12 +22,14 @@ MVP'nin hedefi:
 
 - Satıcı işlem başlatır (item seçimi, fiyat, stablecoin türü, timeout süresi)
 - Alıcıya bildirim / davet linki gider
-- Alıcı işlemi kabul eder
-- Satıcı item'ı platforma emanet eder (Steam trade offer)
-- Alıcı ödemeyi gönderir (blockchain)
-- Platform otomatik doğrulama yapar (ödeme + item teslim)
-- Item alıcıya teslim edilir (Steam trade offer)
-- Satıcıya ödeme gönderilir (komisyon düşülerek)
+- Alıcı işlemi kabul eder (iade adresi + Steam trade URL verir)
+- Satıcı göndermeye hazır olduğunu onaylar — platform item'ın hâlâ tradeable olduğunu doğrular
+- Alıcı ödemeyi gönderir (blockchain), ödeme emanete alınır
+- **Satıcı item'ı doğrudan alıcıya gönderir** (platform trade'in tarafı değildir)
+- Platform teslimatı doğrular (alıcı onayı veya envanter kanıtı)
+- Bekleme penceresi sonrası satıcıya ödeme gönderilir (komisyon düşülerek)
+
+> **v3.0:** Item custody kaldırıldı — escrow edilen para, item değil (02 §2.1). Sıra tersine döndü: önce ödeme, sonra teslimat.
 
 ### 2.2 Ödeme
 
@@ -94,15 +96,16 @@ MVP'nin hedefi:
 ### 2.9 Item Yönetimi
 
 - Steam envanter okuma
-- Item doğrulama (varlık ve tradeable kontrolü)
+- Item doğrulama (varlık ve tradeable kontrolü) — oluşturmada, hazırlık onayında ve ödeme onayında
 - Tüm CS2 item türleri desteği
-- Sadece tradeable item'lar
+- Sadece tradeable item'lar (trade-protected item'lar dâhil değil)
+- **Item custody yok** — item hiçbir aşamada platformda bulunmaz
+- Teslimat doğrulaması: alıcı onayı veya envanter kanıtı (02 §9.2)
+- Her iki tarafta Steam Mobile Authenticator zorunluluğu
 
 ### 2.10 Platform Steam Hesapları
 
-- Birden fazla Steam hesabı ile çalışma
-- Hesap kısıtlanırsa yeni işlemler diğer uygun bot hesaplarına yönlendirilir; aktif custody işlemleri orijinal bot bağlamında yönetilir (gerekirse emergency hold veya admin müdahalesine alınır)
-- Admin panelinden hesap durumu izleme
+**Kapsam dışı (v3.0).** Platform Steam hesabı işletmez; bot havuzu, failover ve hesap durumu izleme kaldırılmıştır (02 §15). Steam ile tek etkileşim salt okunur envanter ve trade-hold sorgularıdır.
 
 ### 2.11 Admin Paneli
 
@@ -215,6 +218,18 @@ MVP'nin hedefi:
 | Gelir | Sadece komisyon (%2 varsayılan) |
 | KYC | Yok |
 | Kullanıcı değerlendirmesi | Sadece otomatik itibar skoru, yorum yok |
+| Mobile Authenticator | **Her iki tarafta zorunlu** (v3.0). MA'sı olmayan kullanıcılar platformu kullanamaz — trade 15 gün Steam escrow'una düşeceği için. Kullanıcı tabanını daraltan bilinçli bir kısıttır (02 §9.1) |
+| Gizlilik | Taraflar birbirinin Steam profilini ve trade URL'ini görür — P2P modelinin kaçınılmaz sonucu (02 §21) |
+| Teslimat doğrulama hassasiyeti | Item sınıfı (`classid`/`instanceid`) düzeyinde. Aynı sınıftan iki item arasındaki aşınma/desen farkı otomatik tespit edilmez; `WRONG_ITEM` dispute'una tabidir (02 §9.2). Float doğrulaması post-MVP |
+| Eşzamanlı teslimat kapasitesi | Steam Community envanter ucunun rate limiti, aynı anda doğrulanabilen teslimat sayısına pratik bir tavan koyar (08 §2.6). Ölçek arttığında çoklu-IP/proxy havuzu gerekecektir — MVP kapsamı dışında |
+
+### 4.1 Kabul Edilen Riskler
+
+| Risk | Neden kabul ediliyor |
+|---|---|
+| **Steam trade reversal** — Steam, korumalı bir trade'i 7 gün içinde geri alabilir. Item alıcıdan çıkar ama satıcıya yapılan on-chain ödeme geri alınamaz; alıcı hem item'sız hem parasız kalabilir | Riski tamamen kapatmanın tek yolu satıcı ödemesini 7 gün bekletmektir; bu, ürünün varlık sebebi olan hızlı takası ortadan kaldırır. Kısmi önlemler: ödeme öncesi bekleme penceresi (02 §4.5), satıcı tarafı fraud sinyalleri, tekrarlanan ihlallerde askıya alma (02 §14.2). Sorumluluk sınırı 02 §20.2'de açıkça yazılıdır |
+| **Satıcı non-delivery** — ödeme emanete girdikten sonra satıcı item'ı göndermeyebilir | Para emanette güvendedir ve iade edilir; kayıp yalnız zamandır. Teslimat süresi kısa tutulur, gecikme satıcının itibarına yazılır, tekrarı yaptırıma tabidir (02 §14.2). Alternatifi (satıcının önce göndermesi) alıcı ödemediğinde item'ı tamamen kaybettirirdi |
+| **Alıcı envanteri gizliyse otomatik kanıt üretilemez** | Alıcı onayı yolu bağımsız çalışır ve tipik akışta zaten birincil yoldur; kullanıcı hazırlık onayı adımında uyarılır (02 §9.2) |
 
 ---
 
