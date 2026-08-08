@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v2.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-04-21
+**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -1327,10 +1327,16 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 | Aksiyon | Koşul |
 |---------|-------|
 | `canAccept` | buyer + CREATED + Steam ID eşleşme (veya açık link) |
-| `canCancel` | (seller veya buyer) + aktif state + ödeme gönderilmemiş |
-| `canDispute` | buyer + {ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED} + aktif dispute yok + aynı tür daha önce açılmamış |
-| `disputableTypes` | (WP5) buyer + aktif dispute yok iken işlemin mevcut state'inde açılabilen dispute türleri: `DisputeType[]` (PAYMENT→{ITEM_ESCROWED, PAYMENT_RECEIVED}, DELIVERY→{TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED}, WRONG_ITEM→{ITEM_DELIVERED}). `canDispute` = `disputableTypes` boş değil. Public/prospective/hold zarflarında omit. |
+| `canConfirmReady` | **(v3.0)** seller + ACCEPTED — satıcı hazırlık onayı (T6a) |
+| `canConfirmReceipt` | **(v3.0)** buyer + PAYMENT_RECEIVED — alıcı teslim onayı (T6b) |
+| `canCancel` | seller: aktif state (PAYMENT_RECEIVED dâhil — 02 §7) · buyer: aktif state **ve** ödeme gönderilmemiş |
+| `canDispute` | buyer + {SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED} + aktif dispute yok + aynı tür daha önce açılmamış |
+| `disputableTypes` | (WP5) buyer + aktif dispute yok iken işlemin mevcut state'inde açılabilen dispute türleri: `DisputeType[]` (PAYMENT→{SELLER_CONFIRMED, PAYMENT_RECEIVED}, DELIVERY→{PAYMENT_RECEIVED, ITEM_DELIVERED}, WRONG_ITEM→{PAYMENT_RECEIVED, ITEM_DELIVERED}). `canDispute` = `disputableTypes` boş değil. Public/prospective/hold zarflarında omit. |
 | `canEscalate` | dispute var + otomatik kontrol tamamlanmış + henüz eskalasyon yok |
+
+> **v3.0 — `canCancel` artık role göre asimetriktir.** Ödeme gönderildikten sonra alıcı iptal edemez ama satıcı edebilir (item göndermekten vazgeçme hakkı). Önceki tek koşullu kural her iki tarafı da bloklardı.
+>
+> **v3.0 — `WRONG_ITEM` dispute'una `PAYMENT_RECEIVED` eklendi.** Satıcı farklı bir item gönderirse beklenen sınıfın sayısı artmayacağı için işlem `ITEM_DELIVERED`'a hiç ulaşmaz; alıcının bu durumda da yanlış item itirazı açabilmesi gerekir (02 §10.1, 03 §6.3).
 
 > **EMERGENCY_HOLD kısıtlaması:** EMERGENCY_HOLD state'inde tüm `availableActions` `false` döner. Kullanıcı hiçbir aksiyon alamaz — işlem admin tarafından yönetilir.
 
@@ -1376,17 +1382,69 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 
 **Request:**
 ```json
-{ "refundWalletAddress": "TAbcdef1234567890abcdef12345678cd" }
+{
+  "refundWalletAddress": "TAbcdef1234567890abcdef12345678cd",
+  "steamTradeUrl": "https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEfGh"
+}
 ```
+
+`steamTradeUrl`: **Zorunlu (v3.0)**. Satıcı item'ı doğrudan bu adrese göndereceği için gereklidir (02 §2.2 adım 6). Kullanıcının profilinde kayıtlı trade URL'i varsa istemci tarafından ön-doldurulur.
 
 **Response (200) `data`:**
 ```json
 { "status": "ACCEPTED", "acceptedAt": "2026-03-16T14:45:00Z" }
 ```
 
-**Doğrulama:** `refundWalletAddress` merkezi doğrulama pipeline'ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (02 §12.3). Geçersiz veya yaptırımlı adres → ilgili hata.
+**Doğrulama:**
+1. `refundWalletAddress` merkezi doğrulama pipeline'ından geçer: TRC-20 format geçerliliği + sanctions screening (02 §12.3)
+2. `steamTradeUrl` format doğrulaması (partner + token parametreleri ayrıştırılabilmeli)
+3. **Alıcının Mobile Authenticator'ı doğrulanır** (v3.0, 02 §9.1) — Steam `GetTradeHoldDurations` ile hold süresi 0 değilse kabul reddedilir. Gerekçe: MA aktif değilse satıcının göndereceği trade 15 gün Steam escrow'una düşer
 
-**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`, 403 `ACCOUNT_FLAGGED` (hesap-flag accept gate, 02 §14.0 — WP4a), 403 `NOT_A_PARTY` (OPEN_LINK'te satıcı kendi listesini kabul edemez, 02 §6.2)
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 400 `INVALID_TRADE_URL` *(v3.0)*, 403 `MOBILE_AUTHENTICATOR_REQUIRED` *(v3.0)*, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`, 403 `ACCOUNT_FLAGGED` (hesap-flag accept gate, 02 §14.0 — WP4a), 403 `NOT_A_PARTY` (OPEN_LINK'te satıcı kendi listesini kabul edemez, 02 §6.2)
+
+### 7.6a T6a — `POST /transactions/:id/confirm-ready` *(v3.0 — yeni)*
+
+**Amaç:** Satıcı item'ı göndermeye hazır olduğunu onaylar; ödeme adresi alıcıya bu adımdan sonra açılır (S07, 03 §2.3).
+
+| Konu | Değer |
+|------|-------|
+| Auth | Authenticated (yalnız satıcı) |
+
+**Request:** gövde yok.
+
+**Response (200) `data`:**
+```json
+{ "status": "SELLER_CONFIRMED", "sellerReadyConfirmedAt": "2026-03-16T14:50:00Z", "paymentDeadline": "2026-03-16T16:50:00Z" }
+```
+
+**Doğrulama (üçü de geçmeden ilerlenmez, 03 §2.3):**
+1. Item hâlâ satıcının envanterinde ve tradeable mı — envanter **önbelleksiz** okunur
+2. Alıcının Mobile Authenticator'ı hâlâ aktif mi
+3. Alıcının envanteri okunabiliyorsa teslimat doğrulaması için referans anlık görüntü (baseline) alınır. Okunamıyorsa işlem bloklanmaz; envanter kanıtı yolu kapanır ve yanıtta `buyerInventoryVisible: false` döner (02 §9.2)
+
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`, 409 `ITEM_NO_LONGER_AVAILABLE` *(item envanterde yok veya artık tradeable değil)*, 403 `BUYER_MOBILE_AUTHENTICATOR_INACTIVE`, 503 `STEAM_UNAVAILABLE`
+
+### 7.6b T6b — `POST /transactions/:id/confirm-receipt` *(v3.0 — yeni)*
+
+**Amaç:** Alıcı item'ı teslim aldığını onaylar (S07, 03 §3.5).
+
+| Konu | Değer |
+|------|-------|
+| Auth | Authenticated (yalnız alıcı) |
+
+**Request:** gövde yok.
+
+**Response (200) `data`:**
+```json
+{ "status": "ITEM_DELIVERED", "deliveryVerifiedAt": "2026-03-16T15:10:00Z", "evidence": ["BUYER_CONFIRMED"] }
+```
+
+**Notlar:**
+- Onay alıcının kendi aleyhinedir (onaylayınca ödeme satıcıya gider), bu yüzden tek başına yeterli kanıttır (06 §2.24)
+- **İdempotenttir** — zaten `ITEM_DELIVERED` olan bir işlemde tekrar çağrılırsa 200 ve mevcut durum döner
+- Onay sonrası ödeme, bekleme penceresi dolduğunda gönderilir (02 §4.5)
+
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`
 
 ### 7.7 T7 — `POST /transactions/:id/cancel`
 
@@ -1408,12 +1466,20 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 {
   "status": "CANCELLED_SELLER",
   "cancelledAt": "2026-03-16T15:00:00Z",
-  "itemReturned": true,
   "paymentRefunded": false
 }
 ```
 
-**Hatalar:** 422 `PAYMENT_ALREADY_SENT`, 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`, 400 `VALIDATION_ERROR`
+> **v3.0:** `itemReturned` alanı kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yoktur (02 §9).
+
+**İptal yetkisi (v3.0, 02 §7):**
+
+| Durum | Satıcı | Alıcı |
+|---|---|---|
+| CREATED / ACCEPTED / SELLER_CONFIRMED | ✓ | ✓ |
+| PAYMENT_RECEIVED | ✓ — item göndermekten vazgeçer, para alıcıya iade edilir, itibar cezası uygulanır | ✗ `PAYMENT_ALREADY_SENT` |
+
+**Hatalar:** 422 `PAYMENT_ALREADY_SENT` *(yalnız alıcı için)*, 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`, 400 `VALIDATION_ERROR`
 
 ### 7.8 T8 — `POST /transactions/:id/disputes`
 
@@ -1939,34 +2005,13 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 
 ### 9.10 AD10 — `GET /admin/steam-accounts`
 
-**Amaç:** Steam bot hesapları (S18). Permission: `VIEW_STEAM_ACCOUNTS`.
+**Bu endpoint kaldırılmıştır (v3.0, P2P geçişi).**
 
-**Response (200) `data`:**
-```json
-{
-  "accounts": [
-    {
-      "id": "guid",
-      "name": "Platform Hesap 1",
-      "steamId": "76561198000000001",
-      "status": "ACTIVE",
-      "escrowedItemCount": 12,
-      "dailyTradeOfferCount": 45,
-      "dailyTradeOfferLimit": 200,
-      "lastHealthCheck": "2026-03-16T14:25:00Z",
-      "restrictionReason": null,
-      "failoverStatus": "NONE",
-      "recoveryTransactionCount": 0
-    }
-  ]
-}
-```
+Platform Steam hesabı işletmediği için listelenecek bot hesabı, izlenecek emanet item sayısı veya günlük trade offer kotası yoktur (02 §15, 05 §3.2, 06 §3.10). `VIEW_STEAM_ACCOUNTS` yetkisi, S18 admin ekranı ve `PlatformSteamBotStatus` enum'u da kaldırılmıştır.
 
-`status`: `ACTIVE`, `RESTRICTED`, `BANNED`, `OFFLINE` (06 §2.15). Sorunlu hesap uyarı banner'ı **istemci tarafında** hesapların `status`'ünden türetilir (locale'e göre lokalize) — WP17 (T103-K4) sunucu-üretimli TR `warningMessage` alanını kaldırdı (FE kullanmıyordu ve Türkçe sızdırıyordu).
+Steam tarafındaki tek izleme noktası salt okunur API çağrılarının sağlığıdır; bu, genel platform sağlık göstergeleri içinde raporlanır.
 
-`failoverStatus`: `NONE` (normal), `RESTRICTED_NEW_TXN_DIVERTED` (yeni işlemler diğer botlara yönlendirildi), `ACTIVE_TXN_IN_RECOVERY` (aktif işlemler recovery/manual intervention'da). `recoveryTransactionCount`: Recovery'deki aktif işlem sayısı (02 §15).
-
-> **T103b-2:** `restrictionReason`, `failoverStatus`, `recoveryTransactionCount` artık **canlı** doldurulur. `restrictionReason` = sidecar'ın bildirdiği güncel non-ACTIVE sebep (`PlatformSteamBot.RestrictionReason`); `recoveryTransactionCount` = botun açık (non-RESOLVED) `BotRecoveryItem` sayısı; `failoverStatus` türetilir (ACTIVE→`NONE`; non-ACTIVE & 0 recovery→`RESTRICTED_NEW_TXN_DIVERTED`; non-ACTIVE & >0→`ACTIVE_TXN_IN_RECOVERY`). Recovery kuyruğu satırları için AD25 (§9.28), triage için AD26 (§9.29).
+> Alt bölüm numarası bilinçli korundu — §9.11 ve sonrası referanslarının kayması engellendi.
 
 ### 9.11 AD11 — `GET /admin/roles`
 
@@ -2424,7 +2469,9 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 
 ### 9.28 AD25 — `GET /admin/steam-accounts/:botId/recovery-queue`
 
-**Amaç:** Kısıtlı/banned bir botun emanetinde stuck kalan item'ların recovery kuyruğu (S18, 04 §8.7, 02 §15, 03 §11.2a). Permission: `VIEW_STEAM_ACCOUNTS`. Kuyruk, bot RESTRICTED/BANNED'e geçince `BotRestrictionRecoveryConsumer` tarafından eager materyalize edilir (T103b-2).
+**Bu endpoint kaldırılmıştır (v3.0, P2P geçişi).** Platform item tutmadığı için bir bota mahsur kalabilecek item ve dolayısıyla recovery kuyruğu yoktur (02 §15, 06 §3.10a). `MANAGE_STEAM_RECOVERY` yetkisi de kaldırılmıştır. Aşağıdaki sözleşme tarihsel referans olarak bırakılmıştır.
+
+**~~Eski amaç~~:** Kısıtlı/banned bir botun emanetinde stuck kalan item'ların recovery kuyruğu (S18, 04 §8.7, 02 §15, 03 §11.2a). Permission: `VIEW_STEAM_ACCOUNTS`.
 
 **Response (200) `data`:**
 ```json
@@ -2461,7 +2508,9 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 
 ### 9.29 AD26 — `PATCH /admin/steam-accounts/recovery/:id`
 
-**Amaç:** Recovery item triage güncellemesi (04 §8.7 aksiyonları: Not Ekle / Sorumlu Admin Ata / Manual Recovery Başlat → `IN_REVIEW` / Çözüldü → `RESOLVED`). Permission: **`MANAGE_STEAM_RECOVERY`** (salt-okunur `VIEW_STEAM_ACCOUNTS`'tan ayrı; fon/item güvenliği etkili). EMERGENCY_HOLD / İptal AD19b/AD19 ile (S16) yapılır.
+**Bu endpoint kaldırılmıştır (v3.0, P2P geçişi)** — AD25 ile aynı gerekçe: recovery kuyruğu diye bir kavram kalmamıştır.
+
+**~~Eski amaç~~:** Recovery item triage güncellemesi. Permission: `MANAGE_STEAM_RECOVERY`.
 
 **Request (PATCH semantiği — null/eksik alan = değiştirme):**
 ```json
