@@ -1,6 +1,6 @@
 # Skinora — User Flows
 
-**Versiyon: v2.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-03-22
+**Versiyon: v3.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -22,18 +22,19 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
 | Durum | Açıklama |
 |---|---|
 | CREATED | İşlem oluşturuldu, alıcı bekleniyor |
-| ACCEPTED | Alıcı kabul etti, satıcıdan item bekleniyor |
-| TRADE_OFFER_SENT_TO_SELLER | Satıcıya trade offer gönderildi, kabul etmesi bekleniyor |
-| ITEM_ESCROWED | Item platforma emanet edildi, ödeme bekleniyor |
-| PAYMENT_RECEIVED | Ödeme doğrulandı, item teslimi başlıyor |
-| TRADE_OFFER_SENT_TO_BUYER | Alıcıya trade offer gönderildi, kabul etmesi bekleniyor |
-| ITEM_DELIVERED | Item alıcıya teslim edildi, satıcıya ödeme işleniyor. Payout durumu (pending/retry/failed) BlockchainTransaction seviyesinde takip edilir — ayrı state değil (06 §3.8). İşlem payout başarılı olana kadar bu state'te kalır |
+| ACCEPTED | Alıcı kabul etti, satıcının hazırlık onayı bekleniyor |
+| SELLER_CONFIRMED | Satıcı item'ı göndermeye hazır olduğunu onayladı, alıcıdan ödeme bekleniyor |
+| PAYMENT_RECEIVED | Ödeme doğrulandı ve emanete alındı, satıcının item'ı alıcıya göndermesi bekleniyor |
+| ITEM_DELIVERED | Teslimat doğrulandı, satıcıya ödeme işleniyor. Payout durumu (pending/retry/failed) BlockchainTransaction seviyesinde takip edilir — ayrı state değil (06 §3.8). İşlem payout başarılı olana kadar bu state'te kalır |
 | COMPLETED | İşlem tamamlandı |
 | CANCELLED_TIMEOUT | Timeout nedeniyle iptal |
 | CANCELLED_SELLER | Satıcı tarafından iptal |
 | CANCELLED_BUYER | Alıcı tarafından iptal |
 | CANCELLED_ADMIN | Admin tarafından iptal (flag reddi) |
+| REFUNDED | Dispute admin tarafından alıcı lehine sonuçlandırıldı, ödeme iade edildi (terminal) |
 | FLAGGED | Fraud tespiti nedeniyle durduruldu, admin onayı bekleniyor |
+
+> **v3.0 (P2P geçişi) durum değişiklikleri:** `TRADE_OFFER_SENT_TO_SELLER` yerini `SELLER_CONFIRMED`'a bıraktı; `ITEM_ESCROWED` ve `TRADE_OFFER_SENT_TO_BUYER` kaldırıldı. Platform artık trade offer göndermediği ve item emanete alınmadığı için bu durumların karşılığı yoktur (02 §2.1). `REFUNDED` daha önce bu tabloda eksikti, eklendi.
 
 > **Not:** EMERGENCY_HOLD bir state değil, herhangi bir aktif state üzerine uygulanan dondurma mekanizmasıdır — `IsOnHold` flag'i + `TimeoutFreezeReason` ile yönetilir (05 §4.5). Dispute (anlaşmazlık) da ayrı bir işlem durumu değildir. Dispute başlatıldığında işlem mevcut durumunda kalır, dispute ayrı bir bayrak olarak takip edilir.
 
@@ -101,29 +102,31 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
 
 > **Not:** İşlem oluşturulduktan sonra detaylar (item, fiyat, stablecoin türü, timeout süresi) değiştirilemez. Satıcı değişiklik yapmak isterse işlemi iptal edip yeniden başlatmalıdır.
 
-### 2.3 Item Emaneti (Adım 3)
+### 2.3 Satıcı Hazırlık Onayı (Adım 3)
 
-1. Alıcı işlemi kabul ettikten sonra satıcıya "Alıcı hazır, item'ını gönder" bildirimi gider
-2. Platform satıcıya Steam trade offer gönderir
-   - **Trade offer gönderilemezse** (Steam API hatası, item durumu değişmişse) → sistem otomatik yeniden dener. Satıcıya "Trade offer gönderilmeye çalışılıyor" bilgisi gösterilir. Sorun devam ederse timeout süresi içinde çözülmezse işlem iptal olur.
-3. İşlem TRADE_OFFER_SENT_TO_SELLER durumuna geçer
-4. Satıcı Steam üzerinde trade offer'ı görür
-5. **Satıcı trade offer'ı reddederse →** İşlem anında CANCELLED_SELLER durumuna geçer. Item iade gerekmez. Alıcıya "Satıcı işlemi iptal etti" bildirimi gider. İptal kaydı satıcının profiline eklenir.
-5a. **Satıcı counter offer yaparsa (Steam state 4) →** Skinora counter offer desteklemez. Orijinal offer iptal sayılır, satıcıya "Counter offer desteklenmiyor, işlem iptal edildi" bildirimi gönderilir. İşlem CANCELLED_SELLER durumuna geçer (08 §2.4).
-6. Satıcı trade offer'ı kabul eder
-7. Item platformun envanterine geçer
+Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ gerçekleşebilir olduğunu teyit etmektir. Ödeme adresi alıcıya ancak bu adım geçildikten sonra açılır — böylece alıcı bayat bir ilana ödeme yapmaz.
 
-> **Not:** Trade offer kabul sonrası Steam yeni asset ID atar. Bu ID `Transaction.EscrowBotAssetId` olarak kaydedilir. Alıcıya teslim trade offer'ında bu ID kullanılarak doğru item seçilir (06 §8.4).
+1. Alıcı işlemi kabul ettikten sonra satıcıya "Alıcı hazır, item'ı göndermeye hazır mısın?" bildirimi gider
+2. Satıcı işlem detay sayfasında **"Göndermeye hazırım"** butonuna basar
+3. Platform üç kontrolü birden yapar:
+   - **Item hâlâ satıcının envanterinde mi ve tradeable mı?** (envanter taze okunur, önbellek kullanılmaz)
+   - **Alıcının Steam Mobile Authenticator'ı aktif mi?** (02 §9.1 — değilse trade 15 gün Steam escrow'una düşer)
+   - **Alıcının envanteri okunabilir mi?** Okunabiliyorsa teslimat doğrulaması için referans anlık görüntü (baseline) alınır; gizliyse alıcı uyarılır ve teslimat yalnızca alıcı onayı ile doğrulanabilir (02 §9.2)
+4. **Tüm kontroller geçerse →** İşlem SELLER_CONFIRMED durumuna geçer. Alıcıya "Satıcı hazır, ödeme yapabilirsin" bildirimi ve ödeme adresi gösterilir
+5. **Item envanterde yoksa veya tradeable değilse →** Satıcıya "Item artık gönderilebilir durumda değil" hatası gösterilir, işlem ilerlemez. Satıcı işlemi iptal edebilir veya item tekrar tradeable olduğunda yeniden deneyebilir
+6. **Alıcının MA'sı aktif değilse →** Her iki tarafa bilgilendirme gider; alıcı MA'yı aktif edip tekrar denenebilir
+7. **Satıcı hazırlık onayı yerine iptali seçerse →** İşlem CANCELLED_SELLER durumuna geçer. İade gerekmez (para henüz gönderilmedi). Alıcıya "Satıcı işlemi iptal etti" bildirimi gider. İptal kaydı satıcının profiline eklenir
+8. **Satıcı süresi içinde onay vermezse →** §4.2 timeout akışı işler
 
-> **Not:** TradeOffer FAILED durumu iki alt senaryo kapsar: (1) Steam API'ye ulaşılamadan başarısız (SentAt NULL), (2) gönderildi ama sonrasında hata aldı (SentAt dolu). Retry mekanizması her iki senaryoda da geçerlidir (06 §3.9).
+> **Not:** Bu adımda hiçbir Steam trade offer'ı oluşturulmaz. Platform trade'in tarafı değildir; item satıcıda kalmaya devam eder ve yalnızca adım 6'da doğrudan alıcıya gönderilir (02 §2.2).
 
-8. **Sistem doğrulaması:** Emanet alınan item, işlemdeki item ile eşleşiyor mu?
-   - **Evet →** İşlem ITEM_ESCROWED durumuna geçer. Alıcıya "Item emanete alındı, ödeme yapabilirsin" bildirimi gider
-   - **Hayır →** Item satıcıya iade edilir. İşlem CANCELLED_ADMIN durumuna geçer. Satıcıya "Emanet alınan item eşleşmedi, item'ınız iade edildi" bildirimi gider. Alıcıya "İşlem teknik nedenlerle iptal edildi" bildirimi gider. Hata loglanır ve admin'e bildirim gider. Satıcı isterse yeni işlem başlatabilir.
+> **Not:** Alıcı baseline'ı bu adımda alınır, ödeme onayında değil. Satıcı teknik olarak ödemeden önce de item'ı gönderebilir; baseline daha geç alınsaydı erken gelen item referansa dahil olur ve teslimat hiçbir zaman doğrulanamazdı (02 §9.2).
 
 ### 2.4 Satıcıya Ödeme (Adım 8)
 
-1. Item alıcıya teslim edildikten ve doğrulandıktan sonra
+1. Teslimat doğrulandıktan (§3.5) **ve bekleme penceresi dolduktan** sonra
+   - Bekleme penceresi, beklediğinden farklı bir item aldığını fark eden alıcının para çıkmadan dispute açabilmesi içindir. On-chain ödeme geri alınamadığı için bu, otomatik doğrulama ile geri dönülemez ödeme arasındaki tek tampondur (02 §4.5)
+   - Pencere içinde dispute açılırsa ödeme durur ve dispute sonucunu bekler
 2. Platform komisyonu hesaplar ve keser
 3. Gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
    - **Aşmıyorsa →** Gas fee komisyondan karşılanır
@@ -154,14 +157,16 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
 1. Satıcı aktif bir işlemin detay sayfasına gider
 2. "İşlemi İptal Et" butonuna tıklar
 3. **Sistem kontrolü:** Alıcı ödemeyi göndermiş mi?
-   - **Evet →** "Alıcı ödeme gönderdiği için iptal edilemez" uyarısı gösterilir. İptal butonu devre dışı.
+   - **Evet →** Satıcı yine de iptal edebilir — bu, item'ı göndermekten vazgeçmek anlamına gelir. Ekranda "Ödeme alındı. İptal ederseniz para alıcıya iade edilir ve itibar puanınız etkilenir" uyarısı gösterilir (02 §7)
    - **Hayır →** Devam eder
 4. Satıcıdan iptal sebebi istenir (zorunlu)
 5. Satıcı sebebi yazar ve iptal onaylar
-6. Eğer item zaten platformdaysa → item satıcıya iade edilir
+6. Ödeme alınmışsa → alıcıya iade edilir (iade tutarı = fiyat + komisyon − gas fee). Item hiçbir zaman platformda bulunmadığı için item iadesi diye bir adım yoktur
 7. İşlem CANCELLED_SELLER durumuna geçer
-8. İptal kaydı satıcının profiline eklenir (itibar skoru etkilenir)
-9. Alıcıya "İşlem satıcı tarafından iptal edildi" bildirimi gider
+8. İptal kaydı satıcının profiline eklenir (itibar skoru etkilenir). Ödeme alındıktan sonraki iptaller teslim etmeme olarak değerlendirilir ve tekrarı yaptırıma tabidir (02 §14.2)
+9. Alıcıya "İşlem satıcı tarafından iptal edildi, ödemeniz iade ediliyor" bildirimi gider
+
+> **Neden bu yol açık:** Ödeme sonrası satıcı iptali kapatılsaydı, item'ı göndermek istemeyen satıcı hiçbir şey yapmayıp timeout'u beklerdi — alıcı parasına daha geç kavuşurdu. Açık bırakmak, kaçınılmaz sonucu hızlandırır.
 
 ---
 
@@ -199,10 +204,17 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
    - Profilinde varsayılan iade adresi varsa → otomatik gösterilir, isterse değiştirebilir
    - Profilinde yoksa → iade adresi girmesi zorunlu
    - İade adresi olmadan işlem kabul edilemez
-5. Alıcı "Kabul Ediyorum" butonuna tıklar
-6. İşlem ACCEPTED durumuna geçer
-7. Satıcıya "Alıcı işlemi kabul etti, item'ını gönder" bildirimi gider
-8. Alıcı satıcının item'ı göndermesini bekler
+5. Alıcı **Steam trade URL'ini** verir:
+   - Profilinde kayıtlı trade URL'i varsa otomatik gösterilir
+   - Satıcının item'ı doğrudan gönderebilmesi için zorunludur (02 §2.2 adım 6)
+   - Bu URL satıcıya gösterilecektir — taraflar birbirinin Steam profilini görür, bu P2P modelinin kaçınılmaz sonucudur
+6. **Sistem alıcının Steam Mobile Authenticator'ını doğrular** (02 §9.1):
+   - Aktif değilse → "İşlem kabul edebilmek için Steam Mobile Authenticator'ınız aktif olmalı" uyarısı gösterilir, kabul butonu devre dışı kalır ve kurulum rehberine yönlendirilir
+   - Gerekçe: MA aktif değilse satıcının göndereceği trade 15 gün Steam escrow'una düşer
+7. Alıcı "Kabul Ediyorum" butonuna tıklar
+8. İşlem ACCEPTED durumuna geçer
+9. Satıcıya "Alıcı işlemi kabul etti, göndermeye hazır mısın?" bildirimi gider
+10. Alıcı satıcının hazırlık onayını bekler — **ödeme adresi bu aşamada henüz gösterilmez** (§2.3)
 
 ### 3.3 Alıcı İptal Akışı
 
@@ -234,27 +246,32 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 7. Ödeme doğrulanır → İşlem PAYMENT_RECEIVED durumuna geçer
 8. Satıcıya "Ödeme geldi" bildirimi gider
 
-### 3.5 Item Teslim Alma (Adım 6)
+### 3.5 Item Teslimi ve Doğrulanması (Adım 6–7)
 
-1. Ödeme doğrulandıktan sonra platform alıcıya Steam trade offer gönderir
-   - **Trade offer gönderilemezse** (Steam API hatası) → sistem otomatik yeniden dener. Alıcıya "Trade offer gönderilmeye çalışılıyor" bilgisi gösterilir. Sorun devam ederse timeout süresi içinde çözülmezse item satıcıya iade, ödeme alıcıya iade edilir.
-2. İşlem TRADE_OFFER_SENT_TO_BUYER durumuna geçer
-3. Alıcıya "Item'ın gönderildi, Steam'de trade offer'ı kabul et" bildirimi gider
-4. Alıcı Steam üzerinde trade offer'ı görür
-5. **Alıcı trade offer'ı reddederse →** İşlem anında iptal olur. Item satıcıya iade edilir, ödeme alıcıya iade edilir (iade tutarı = fiyat + komisyon - gas fee). İşlem CANCELLED_BUYER durumuna geçer. Her iki tarafa bildirim gider.
-5a. **Alıcı counter offer yaparsa (Steam state 4) →** Skinora counter offer desteklemez. Orijinal offer iptal sayılır, alıcıya "Counter offer desteklenmiyor, işlem iptal edildi" bildirimi gönderilir. Item satıcıya iade edilir, ödeme alıcıya iade edilir. İşlem CANCELLED_BUYER durumuna geçer (08 §2.4).
-6. Alıcı trade offer'ı kabul eder
-7. Item alıcının envanterine geçer
-8. **Sistem doğrulaması:** Teslim Steam üzerinden doğrulanır
-9. İşlem ITEM_DELIVERED durumuna geçer
-10. Alıcıya item'ın teslim edildiği **gerçek-zamanlı durum güncellemesi** ile gösterilir — ITEM_DELIVERED için ayrı bir inbox/email bildirim tipi yoktur (02 §18.2 / 06 §2.13 bildirim kataloğunda tanımlı değil; WP19). İnbox "İşlem tamamlandı" bildirimi ancak payout başarılı olup COMPLETED'a geçtikten sonra gönderilir
-11. Satıcıya ödeme gönderilir (bkz. 2.4)
+Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform trade'in tarafı değildir, offer oluşturmaz ve Steam'den "trade kabul edildi" bildirimi alamaz — teslimatı kendi gözlemiyle doğrulamak zorundadır (02 §9.2).
+
+1. Ödeme doğrulandıktan sonra işlem PAYMENT_RECEIVED durumuna geçer
+2. **Satıcıya** "Ödeme alındı, item'ı şimdi gönder" bildirimi gider. İşlem detay sayfasında alıcının trade URL'ine giden hazır bağlantı gösterilir
+3. **Alıcıya** "Ödemen emanete alındı, satıcı item'ı gönderiyor" bildirimi gider
+4. Satıcı Steam üzerinden alıcıya trade offer gönderir
+5. Alıcı Steam üzerinde offer'ı kabul eder, item alıcının envanterine geçer
+6. **Teslimat doğrulaması — iki bağımsız yoldan biri yeterlidir:**
+   - **Alıcı onayı:** Alıcı işlem sayfasındaki "Teslim aldım" butonuna basar → işlem anında ITEM_DELIVERED durumuna geçer. Onay alıcının kendi aleyhine olduğu için (onaylayınca parası satıcıya gider) tek başına yeterlidir
+   - **Envanter kanıtı:** Item satıcının envanterinden düşmüş **ve** alıcının envanterinde beklenen item sayısı referans anlık görüntüye göre artmışsa → işlem ITEM_DELIVERED durumuna geçer. Bu kontrol alıcı onay verdiğinde, dispute açıldığında ve teslimat süresi dolmadan hemen önce çalışır
+7. **Satıcı yanlış bir item gönderirse veya item'ı üçüncü bir kişiye gönderirse** (item satıcıdan düşmüş ama alıcıya ulaşmamış) → işlem sessizce iptal edilmez, otomatik olarak dispute'a yükseltilir ve admin incelemesine düşer (§6.2, §6.3)
+8. **Alıcı offer'ı reddederse veya hiç kabul etmezse →** kanıt oluşmaz; süre dolduğunda §4.4 işler
+9. Alıcıya item'ın teslim edildiği **gerçek-zamanlı durum güncellemesi** ile gösterilir — ITEM_DELIVERED için ayrı bir inbox/email bildirim tipi yoktur (02 §18.2 / 06 §2.13 bildirim kataloğunda tanımlı değil; WP19). İnbox "İşlem tamamlandı" bildirimi ancak payout başarılı olup COMPLETED'a geçtikten sonra gönderilir
+10. Bekleme penceresi dolduktan sonra satıcıya ödeme gönderilir (bkz. §2.4)
+
+> **Not:** Alıcının Steam envanteri gizliyse envanter kanıtı üretilemez. Bu durumda teslimatın tek doğrulama yolu alıcının onayıdır; alıcı hazırlık onayı adımında (§2.3) bu konuda uyarılır.
+
+> **Not:** Counter offer senaryosu artık platformun sorunu değildir — trade'i platform oluşturmadığı için taraflar Steam üzerinde ne yaparsa yapsın, platform yalnızca sonucu (item el değiştirdi mi) gözlemler.
 
 ---
 
 ## 4. Timeout Akışları
 
-> **Not:** Ödeme aşaması (ITEM_ESCROWED) per-transaction Hangfire delayed job ile yönetilir. Diğer aşamaların deadline'ları periyodik scanner/poller ile enforce edilir (06 §3.5).
+> **Not:** Ödeme aşaması (SELLER_CONFIRMED) per-transaction Hangfire delayed job ile yönetilir. Diğer aşamaların deadline'ları periyodik scanner/poller ile enforce edilir (06 §3.5).
 
 ### 4.1 Alıcı Kabul Timeout'u (Adım 2)
 
@@ -266,15 +283,16 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 4. Satıcıya "Alıcı zamanında kabul etmedi, işlem iptal oldu" bildirimi gider
 5. Alıcıya (kayıtlıysa) "İşlem zaman aşımı nedeniyle iptal oldu" bildirimi gider
 
-### 4.2 Satıcı Trade Offer Timeout'u (Adım 3)
+### 4.2 Satıcı Hazırlık Onayı Timeout'u (Adım 3)
 
-**Tetikleyici:** Satıcı belirlenen süre içinde trade offer'ı kabul edip item'ı göndermedi.
+**Tetikleyici:** Satıcı belirlenen süre içinde hazırlık onayı vermedi.
 
 1. Timeout süresi dolar
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
-3. Item henüz platformda değil → iade gerekmez
-4. Satıcıya "Zamanında item göndermediniz, işlem iptal oldu" bildirimi gider
-5. Alıcıya "Satıcı item'ı göndermedi, işlem iptal oldu" bildirimi gider
+3. Para henüz gönderilmedi, item satıcıda → iade gerekmez
+4. Satıcıya "Zamanında onay vermediniz, işlem iptal oldu" bildirimi gider
+5. Alıcıya "Satıcı işleme devam etmedi, işlem iptal oldu" bildirimi gider
+6. Timeout satıcının sorumluluğuna yazılır (02 §3.1, §13)
 
 ### 4.3 Ödeme Timeout'u (Adım 4)
 
@@ -282,22 +300,28 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 1. Timeout süresi dolar
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
-3. Item platformdaydı → satıcıya iade edilir
+3. Item hiçbir zaman platformda olmadı, satıcıda kaldı → item iadesi diye bir işlem yoktur
 4. **Platform adresi izlemeye devam eder** — gecikmeli ödeme gelirse:
    - Gelen ödeme alıcının iade adresine otomatik iade edilir (iade tutarından gas fee düşülür)
-5. Satıcıya "Alıcı ödeme yapmadı, işlem iptal oldu, item'ınız iade edildi" bildirimi gider
+5. Satıcıya "Alıcı ödeme yapmadı, işlem iptal oldu" bildirimi gider
 6. Alıcıya "Zamanında ödeme yapılmadı, işlem iptal oldu" bildirimi gider
 
-### 4.4 Teslim Trade Offer Timeout'u (Adım 6)
+### 4.4 Satıcı Teslimat Timeout'u (Adım 6–7)
 
-**Tetikleyici:** Alıcı belirlenen süre içinde teslim trade offer'ını kabul etmedi.
+**Tetikleyici:** Ödeme emanete alındıktan sonra belirlenen süre içinde teslimat doğrulanamadı.
 
-1. Timeout süresi dolar
+> **Sorumluluk değişti:** Bu timeout eski modelde alıcıya aitti ("alıcı teslim offer'ını kabul etmedi"). P2P'de trade'i satıcı gönderdiği için gecikme **satıcıya** yazılır (02 §3.1).
+
+1. Timeout süresi dolmadan hemen önce platform **son bir teslimat doğrulaması** yapar (02 §9.2):
+   - **Kanıt bulunursa →** işlem iptal edilmez, ITEM_DELIVERED durumuna geçer. Bu, satıcı item'ı gönderdiği hâlde alıcı onay vermediğinde haksız iadeyi önler
+   - **Item satıcıdan düşmüş ama alıcıya ulaşmamışsa →** işlem iptal edilmez, dispute'a yükseltilir (§6.2)
+   - **Kanıt yoksa →** aşağıdaki iptal akışı işler
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
-3. Item platformda → satıcıya iade edilir
-4. Ödeme platformda → alıcıya iade edilir (iade tutarı = fiyat + komisyon - gas fee)
-5. Satıcıya "Alıcı item'ı teslim almadı, item'ınız iade edildi" bildirimi gider
-6. Alıcıya "Zamanında teslim alınmadı, işlem iptal oldu, ödemeniz iade edildi" bildirimi gider
+3. Item hiçbir zaman platformda olmadı → item iadesi yoktur
+4. Ödeme emanette → alıcıya iade edilir (iade tutarı = fiyat + komisyon − gas fee)
+5. Satıcıya "Item'ı zamanında göndermediniz, işlem iptal oldu ve ödeme alıcıya iade edildi" bildirimi gider
+6. Alıcıya "Satıcı item'ı göndermedi, ödemeniz iade edildi" bildirimi gider
+7. Timeout satıcının sorumluluğuna yazılır; tekrarlanan ihlaller fraud flag'i ve otomatik askıya alma üretir (02 §14.2)
 
 ### 4.5 Timeout Yaklaşıyor Uyarısı
 
@@ -400,13 +424,19 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 1. Alıcı işlem detay sayfasından "İtiraz Et" butonuna tıklar
 2. İtiraz türünü seçer: "Item teslim edilmedi"
-3. Sistem Steam üzerinden trade offer durumunu otomatik kontrol eder
-4. **Sonuç A — Trade offer henüz kabul edilmemiş:**
-   - Alıcıya "Trade offer'ınız aktif, lütfen Steam üzerinden kabul edin" cevabı gösterilir
-5. **Sonuç B — Trade offer kabul edilmiş, item alıcının envanterinde:**
+3. Sistem §9.2 (02) kanıt kurallarını **taze** olarak çalıştırır — her iki tarafın envanteri önbelleksiz okunur
+4. **Sonuç A — Teslimat kanıtı bulundu** (item satıcıdan düştü ve alıcıya ulaştı):
+   - İşlem ITEM_DELIVERED durumuna geçer, dispute anında kapanır
    - Alıcıya "Item envanterinize teslim edilmiş durumda" cevabı gösterilir
-6. **Sonuç C — Gerçekten bir sorun var:**
-   - Sistem çözemezse → admin'e eskalasyon seçeneği sunulur
+5. **Sonuç B — Item hâlâ satıcının envanterinde:**
+   - Satıcı henüz göndermemiştir. Alıcıya "Satıcı item'ı henüz göndermedi, süre dolduğunda ödemeniz iade edilecek" cevabı gösterilir
+   - Alıcı isterse admin'e yükseltebilir
+6. **Sonuç C — Item satıcıdan düşmüş ama alıcıya ulaşmamış:**
+   - Yanlış item gönderimi veya üçüncü kişiye gönderim imzasıdır
+   - **Otomatik olarak admin'e yükseltilir** (kullanıcı aksiyonu beklenmez), her iki tarafa "İşleminiz incelemeye alındı" bildirimi gider
+7. **Sonuç D — Alıcının envanteri gizli veya Steam okunamıyor:**
+   - Alıcıya "Envanterinizi herkese açık yapın veya item'ı aldıysanız 'Teslim aldım' butonunu kullanın" cevabı gösterilir
+   - Alıcı isterse admin'e yükseltebilir
 
 ### 6.3 Yanlış Item İtirazı
 
@@ -414,13 +444,16 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 1. Alıcı işlem detay sayfasından "İtiraz Et" butonuna tıklar
 2. İtiraz türünü seçer: "Yanlış item teslim edildi"
-3. Sistem emanet alınan item ile işlemdeki item'ı otomatik karşılaştırır
-4. **Sonuç A — Item eşleşiyor:**
+3. Sistem, alıcının envanterine referans anlık görüntüden (§2.3) sonra giren item'ları tespit eder ve işlemdeki item ile karşılaştırır
+4. **Sonuç A — Beklenen item gelmiş:**
    - Alıcıya "Teslim edilen item, işlemdeki item ile eşleşiyor" cevabı gösterilir
-5. **Sonuç B — Item eşleşmiyor (sistem hatası):**
-   - İşlem durdurulur
-   - Admin'e otomatik eskalasyon
+5. **Sonuç B — Farklı bir item gelmiş:**
+   - İşlem durdurulur, **gelen item'ın adı kayda geçirilerek** admin'e otomatik eskalasyon yapılır — admin karşılaştırmayı elle yapmak zorunda kalmaz
    - Her iki tarafa "İşleminiz incelemeye alındı" bildirimi gider
+6. **Sonuç C — Hiçbir yeni item gelmemiş:**
+   - Bu bir yanlış item değil, teslim edilmeme vakasıdır → §6.2 akışına yönlendirilir
+
+> **Not:** Otomatik karşılaştırma item sınıfı üzerinden yapılır. Aynı sınıftan iki item arasındaki aşınma/desen farkı ("aynı skin ama daha kötü float") otomatik tespitin kapsamı dışındadır ve admin incelemesine tabidir (02 §9.2).
 
 ### 6.4 Admin Eskalasyonu
 
@@ -432,7 +465,8 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 4. Kullanıcıya "İtirazınız admin ekibine iletildi" bildirimi gider
 5. **Admin çözümü (WP5 — minimal):** Admin eskalasyon kuyruğunu (`GET /admin/disputes`, AD27) görür, itirazı inceler (AD28) ve karar verir (AD29):
    - **Satıcı lehine** → dispute `RESOLVED_FOR_SELLER`; işlem onaylanır, satıcı payout devam eder.
-   - **Alıcı lehine** → dispute `RESOLVED_FOR_BUYER`; işlem `REFUNDED`, alıcıya iade (item platformdaysa satıcıya iade). ITEM_DELIVERED'da fiziksel item geri-alma WP6/manuel.
+   - **Alıcı lehine** → dispute `RESOLVED_FOR_BUYER`; işlem `REFUNDED`, alıcıya iade. **Item iadesi diye bir adım yoktur** — item hiçbir zaman platformda bulunmadığı için platformun geri alabileceği bir eşya yoktur.
+     - Bunun sonucu açıkça kabul edilmelidir: teslimat kanıtlanmış bir işlemde alıcı lehine karar vermek, zararı **geri alma imkânı olmadan** satıcıya devreder. Bu nedenle iki taraflı teslimat kanıtı mevcutken varsayılan karar satıcı lehinedir; alıcı lehine karar istisnadır ve gerekçesi ayrıca kayda geçirilir (02 §10)
    - Her iki tarafa `DISPUTE_RESULT` bildirimi gider; `DISPUTE_RESOLVED` audit kaydı yazılır. Emergency hold altındaki işlem önce AD19c ile release edilir.
    - **Kapsam dışı (MVP-sonrası):** SLA, sorumlu-admin atama, yanıt şablonu, çok-adımlı state machine.
 
@@ -545,12 +579,11 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 ### 8.5 Platform Steam Hesapları İzleme
 
-1. Admin "Steam Hesapları" bölümüne gider
-2. Tüm platform Steam hesaplarının durumunu görür:
-   - Aktif / kısıtlı / banned durumu
-   - Her hesaptaki emanet item sayısı
-   - Günlük trade offer sayısı
-3. Kısıtlı hesap varsa uyarı gösterilir
+**Bu akış kaldırılmıştır (v3.0, P2P geçişi).**
+
+Platform Steam hesabı işletmez (02 §15); izlenecek bot durumu, emanet item sayısı veya günlük trade offer kotası yoktur. Steam tarafında izlenen tek şey salt okunur API çağrılarının sağlığıdır ve bu, platform sağlık göstergeleri içinde yer alır.
+
+> Alt bölüm numarası bilinçli korundu — §8.6 ve sonrası referanslarının kayması engellendi.
 
 ### 8.6 Rol ve Yetki Yönetimi (Sadece Süper Admin)
 
@@ -690,8 +723,8 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 ### 11.2 Global Steam Kesintisi
 
-1. Platform Steam servislerinin global olarak çalışmadığını tespit eder (tüm bot'ların health check'i başarısız veya admin manuel tetikleme)
-2. Aktif işlemlerin Steam bağımlı adımlarındaki timeout süreleri dondurulur
+1. Platform Steam servislerinin global olarak çalışmadığını tespit eder (envanter ve trade-hold sorguları sürekli başarısız veya admin manuel tetikleme)
+2. Aktif işlemlerin Steam bağımlı adımlarındaki timeout süreleri dondurulur — özellikle teslimat fazı: kesinti sırasında trade taraflar arasında gerçekleşebilir ama platform bunu doğrulayamaz, dolayısıyla satıcı haksız yere teslim etmemiş sayılmamalıdır (02 §23)
 3. Kullanıcılara "Steam servisleri geçici olarak kullanılamıyor, işlemleriniz etkilenmeyecek" bildirimi gider
 4. Steam normale döner
 5. Timeout süreleri kaldığı yerden devam eder
@@ -699,11 +732,11 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 ### 11.2a Tekil Bot Hesabı Kısıtlanması
 
-1. Platform belirli bir bot hesabının kısıtlandığını/banlandığını tespit eder (bot health check veya admin manuel tetikleme)
-2. Yeni işlemler aktif diğer bot hesaplarına yönlendirilir
-3. Kısıtlanan hesapta emanette olan item'larla ilgili aktif işlemler için recovery/manual intervention akışı başlatılır (02 §15)
-4. Admin'e "Bot hesabı kısıtlandı — X aktif işlem etkileniyor" bildirimi gider
-5. Admin etkilenen işlemleri değerlendirir ve manuel çözüm uygular (item recovery mümkünse iade, değilse exceptional resolution)
+**Bu akış kaldırılmıştır (v3.0, P2P geçişi).**
+
+Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'ı içinde mahsur kalacak bir bot hesabı yoktur (02 §15). Bu akışla birlikte bot havuzu yönlendirmesi, item recovery ve bota bağlı exceptional resolution senaryolarının tamamı ortadan kalkmıştır.
+
+> Alt bölüm numarası bilinçli korundu — §11.3 referanslarının kayması engellendi.
 
 ### 11.3 Blockchain Altyapısı Degradasyonu
 
