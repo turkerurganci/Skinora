@@ -23,24 +23,23 @@ public sealed class TransactionDetailService : ITransactionDetailService
 {
     private const string TronNetworkLabel = "Tron (TRC-20)";
 
-    private static readonly TransactionStatus[] _activeStatesForCancel =
+    // States where the buyer may still cancel — i.e. before their money moves.
+    // The seller's cancel window is wider (it includes PAYMENT_RECEIVED), so it
+    // is evaluated separately in BuildAvailableActions (02 §7).
+    private static readonly TransactionStatus[] _activeStatesForBuyerCancel =
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
     ];
 
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
-    private readonly ISteamTradeOfferUrlResolver _tradeOfferUrls;
 
-    public TransactionDetailService(
-        AppDbContext db, TimeProvider clock, ISteamTradeOfferUrlResolver tradeOfferUrls)
+    public TransactionDetailService(AppDbContext db, TimeProvider clock)
     {
         _db = db;
         _clock = clock;
-        _tradeOfferUrls = tradeOfferUrls;
     }
 
     public async Task<TransactionDetailOutcome> GetAsync(
@@ -225,18 +224,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
         var warningPercent = await TimeoutWarningThreshold.ReadPercentAsync(_db, cancellationToken);
         var timeout = BuildTimeout(transaction, nowUtc, warningPercent);
 
-        // WP12 (T90 K3) — surface the Steam "go to Steam" trade-offer link only
-        // in the two states 04 §7.3 calls for it. The resolver returns null when
-        // the dispatch row carries no SteamTradeOfferId yet (PENDING) or the
-        // Steam module is not composed.
-        var tradeOfferDirection = transaction.Status switch
-        {
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => (TradeOfferDirection?)TradeOfferDirection.TO_SELLER,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => TradeOfferDirection.TO_BUYER,
-            _ => null,
-        };
-        var tradeOfferUrl = tradeOfferDirection is { } direction
-            ? await _tradeOfferUrls.ResolveUrlAsync(transaction.Id, direction, cancellationToken)
+        // 04 §7 — in PAYMENT_RECEIVED the seller must send the item directly to
+        // the buyer, so the CTA opens the buyer's own trade URL. No lookup is
+        // needed: the platform no longer creates trade offers, it just hands the
+        // seller a ready link (02 §2.2 step 6). Shown to the seller only — the
+        // buyer has no action to take on Steam.
+        var tradeOfferUrl = transaction.Status == TransactionStatus.PAYMENT_RECEIVED && role == "seller"
+            ? transaction.BuyerTradeUrl
             : null;
 
         InviteInfoDto? invite = null;
@@ -270,7 +264,6 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 CancelledBy: transaction.CancelledBy.Value.ToString(),
                 Reason: transaction.CancelReason ?? string.Empty,
                 CancelledAt: transaction.CancelledAt.Value,
-                ItemReturned: transaction.ItemEscrowedAt.HasValue,
                 PaymentRefunded: transaction.PaymentReceivedAt.HasValue);
         }
 
@@ -294,6 +287,8 @@ public sealed class TransactionDetailService : ITransactionDetailService
         var actions = prospectiveBuyer
             ? new AvailableActionsDto(
                 CanAccept: !transaction.IsOnHold,
+                CanConfirmReady: null,
+                CanConfirmReceipt: null,
                 CanCancel: null,
                 CanDispute: null,
                 DisputableTypes: null,
@@ -326,7 +321,6 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Dispute: null,           // T58 dispute
             InviteInfo: invite,
             PaymentEvents: ProducePaymentEventsArray(transaction),
-            EscrowBotAssetId: transaction.EscrowBotAssetId,
             DeliveredBuyerAssetId: transaction.DeliveredBuyerAssetId,
             SteamTradeOfferUrl: tradeOfferUrl,
             AvailableActions: actions,
@@ -379,11 +373,12 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Dispute: null,
             InviteInfo: null,
             PaymentEvents: null,
-            EscrowBotAssetId: null,
             DeliveredBuyerAssetId: null,
             SteamTradeOfferUrl: null,
             AvailableActions: new AvailableActionsDto(
                 CanAccept: false,
+                CanConfirmReady: null,
+                CanConfirmReceipt: null,
                 CanCancel: null,
                 CanDispute: null,
                 DisputableTypes: null,
@@ -401,13 +396,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
     private static IReadOnlyList<PaymentEventDto>? ProducePaymentEventsArray(Transaction transaction)
     {
-        // 07 §7.5: paymentEvents available from ITEM_ESCROWED+. Empty array
-        // before then would imply "we have data, none to show"; we return
-        // null so the field is suppressed entirely until T70+ wires it.
+        // 07 §7.5: paymentEvents available from SELLER_CONFIRMED+ — that is the
+        // first state where a deposit address exists and money can arrive.
+        // Before then an empty array would imply "we have data, none to show";
+        // we return null so the field is suppressed entirely.
         if (transaction.Status == TransactionStatus.CREATED
             || transaction.Status == TransactionStatus.FLAGGED
-            || transaction.Status == TransactionStatus.ACCEPTED
-            || transaction.Status == TransactionStatus.TRADE_OFFER_SENT_TO_SELLER)
+            || transaction.Status == TransactionStatus.ACCEPTED)
             return null;
         return Array.Empty<PaymentEventDto>();
     }
@@ -422,12 +417,19 @@ public sealed class TransactionDetailService : ITransactionDetailService
         {
             TransactionStatus.CREATED when transaction.AcceptDeadline.HasValue
                 => ("accept", transaction.AcceptDeadline.Value),
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER when transaction.TradeOfferToSellerDeadline.HasValue
-                => ("trade_offer_seller", transaction.TradeOfferToSellerDeadline.Value),
-            TransactionStatus.ITEM_ESCROWED when transaction.PaymentDeadline.HasValue
+            TransactionStatus.ACCEPTED when transaction.SellerConfirmDeadline.HasValue
+                => ("seller_confirm", transaction.SellerConfirmDeadline.Value),
+            TransactionStatus.SELLER_CONFIRMED when transaction.PaymentDeadline.HasValue
                 => ("payment", transaction.PaymentDeadline.Value),
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER when transaction.TradeOfferToBuyerDeadline.HasValue
-                => ("trade_offer_buyer", transaction.TradeOfferToBuyerDeadline.Value),
+            TransactionStatus.PAYMENT_RECEIVED when transaction.DeliveryDeadline.HasValue
+                => ("delivery", transaction.DeliveryDeadline.Value),
+
+            // ITEM_DELIVERED carries the settlement countdown instead of a
+            // timeout: nothing gets cancelled when it elapses, the payout
+            // simply becomes eligible for its final check (02 §4.5.1).
+            TransactionStatus.ITEM_DELIVERED when transaction.PayoutEligibleAt.HasValue
+                => ("settlement", transaction.PayoutEligibleAt.Value),
+
             _ => (string.Empty, default(DateTime)),
         };
 
@@ -458,6 +460,8 @@ public sealed class TransactionDetailService : ITransactionDetailService
         {
             return new AvailableActionsDto(
                 CanAccept: false,
+                CanConfirmReady: false,
+                CanConfirmReceipt: false,
                 CanCancel: false,
                 CanDispute: false,
                 DisputableTypes: Array.Empty<DisputeType>(),
@@ -476,9 +480,28 @@ public sealed class TransactionDetailService : ITransactionDetailService
         var canAccept = role == "buyer"
             && transaction.Status == TransactionStatus.CREATED;
 
-        var canCancel = role is "seller" or "buyer"
-            && _activeStatesForCancel.Contains(transaction.Status)
-            && transaction.PaymentReceivedAt is null;
+        // 02 §7 — cancel rights are asymmetric once money is in escrow. The
+        // buyer loses the right the moment they pay; the seller keeps it,
+        // because they may still decide not to send. Closing the seller's route
+        // would not protect the buyer — the seller would simply sit out the
+        // deadline and the buyer would wait longer for the same refund.
+        var canCancel = role switch
+        {
+            "buyer" => _activeStatesForBuyerCancel.Contains(transaction.Status)
+                       && transaction.PaymentReceivedAt is null,
+            "seller" => _activeStatesForBuyerCancel.Contains(transaction.Status)
+                        || transaction.Status == TransactionStatus.PAYMENT_RECEIVED,
+            _ => false,
+        };
+
+        // 03 §2.3 — the seller confirms readiness before the deposit address is
+        // revealed to the buyer.
+        var canConfirmReady = role == "seller"
+            && transaction.Status == TransactionStatus.ACCEPTED;
+
+        // 03 §3.5 — the buyer's own confirmation is sufficient delivery proof.
+        var canConfirmReceipt = role == "buyer"
+            && transaction.Status == TransactionStatus.PAYMENT_RECEIVED;
 
         // WP5 (T58-canDisputeEnvelopeBit) — per-type eligibility from the shared
         // matrix; CanDispute stays as the any-type convenience bit. The duplicate
@@ -494,6 +517,8 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
         return new AvailableActionsDto(
             CanAccept: canAccept,
+            CanConfirmReady: canConfirmReady,
+            CanConfirmReceipt: canConfirmReceipt,
             CanCancel: canCancel,
             CanDispute: canDispute,
             DisputableTypes: disputableTypes,

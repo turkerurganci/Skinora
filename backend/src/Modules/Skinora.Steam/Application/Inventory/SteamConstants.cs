@@ -1,10 +1,9 @@
-namespace Skinora.Steam.Application.Dispatch;
+namespace Skinora.Steam.Application.Inventory;
 
 /// <summary>
-/// CS2 trade-offer constants (06 §3.24 "Sabitler"). MVP is single-app
-/// (Counter-Strike 2) so the app/context ids are pinned rather than
-/// per-transaction. Used to build the <c>items[]</c> descriptor on every
-/// outbound trade-offer dispatch (T106a).
+/// CS2 identifiers used when reading Steam inventories (06 §3.24 "Sabitler").
+/// MVP is single-app (Counter-Strike 2), so the app/context ids are pinned
+/// rather than resolved per transaction.
 /// </summary>
 public static class SteamConstants
 {
