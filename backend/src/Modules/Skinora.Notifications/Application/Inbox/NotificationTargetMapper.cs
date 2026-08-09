@@ -8,7 +8,7 @@ namespace Skinora.Notifications.Application.Inbox;
 /// <c>"transaction"</c>, <c>"flag"</c> or <c>null</c>; user-facing types in
 /// the MVP all carry a Transaction reference, so the storage column
 /// <see cref="Domain.Entities.Notification.TransactionId"/> covers them.
-/// Admin-only types (<c>ADMIN_FLAG_ALERT</c>, <c>ADMIN_STEAM_BOT_ISSUE</c>)
+/// Admin-only types (<c>ADMIN_FLAG_ALERT</c> vb.)
 /// only show up on admin inboxes — <c>ADMIN_FLAG_ALERT</c> resolves to its
 /// dedicated <see cref="Domain.Entities.Notification.FlagId"/> column (WP8).
 /// </summary>
@@ -18,7 +18,6 @@ public static class NotificationTargetMapper
         NotificationType type, Guid? transactionId, Guid? flagId = null) => type switch
         {
             // Admin-only — Steam bot incident is a platform-wide alert.
-            NotificationType.ADMIN_STEAM_BOT_ISSUE => (null, null),
 
             // Admin-only — platform health outage is a platform-wide alert (WP16).
             NotificationType.ADMIN_PLATFORM_OUTAGE => (null, null),

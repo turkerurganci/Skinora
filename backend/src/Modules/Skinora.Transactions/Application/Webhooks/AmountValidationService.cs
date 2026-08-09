@@ -83,8 +83,8 @@ public sealed class AmountValidationService : IAmountValidationService
 
         // 02 §4.4 + 08 §3.4 tutar doğrulama tablosu — strict equality (no tolerance, 06 §8.3).
         // Branch order: multi-payment is detected by Transaction.Status (state already past
-        // ITEM_ESCROWED) regardless of equality, so it must precede the exact/over/under split.
-        if (transaction.Status != TransactionStatus.ITEM_ESCROWED)
+        // SELLER_CONFIRMED) regardless of equality, so it must precede the exact/over/under split.
+        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED)
         {
             return await HandleMultiPaymentAsync(
                 confirmedPayment,
@@ -95,7 +95,7 @@ public sealed class AmountValidationService : IAmountValidationService
                 cancellationToken);
         }
 
-        // ITEM_ESCROWED — the standard payment window. Even here the state machine can
+        // SELLER_CONFIRMED — the standard payment window. Even here the state machine can
         // reject ConfirmPayment if the transaction is on emergency hold; that fan-out
         // is handled by the AdvanceStateMachine helper.
         if (received == expected)
@@ -406,7 +406,7 @@ public sealed class AmountValidationService : IAmountValidationService
     {
         var received = confirmedPayment.Amount;
 
-        // 02 §4.4 — payments arriving after the transaction left ITEM_ESCROWED
+        // 02 §4.4 — payments arriving after the transaction left SELLER_CONFIRMED
         // are refunded in full (the state machine never advances; multi-payment
         // is otherwise identical to underpayment from the refund-decision view).
         var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
@@ -496,11 +496,11 @@ public sealed class AmountValidationService : IAmountValidationService
             ActorType.SYSTEM, SeedConstants.SystemUserId, _clock.GetUtcNow().UtcDateTime);
 
         // WP16 — payment arrived, so cancel the per-tx payment-timeout job armed
-        // on the ITEM_ESCROWED transition (06 §3.5). Mirrors the cancel-after-fire
+        // on the SELLER_CONFIRMED transition (06 §3.5). Mirrors the cancel-after-fire
         // convention in TransactionCancellationService / AdminTransactionService:
-        // the payment job (PaymentTimeoutJobId, untouched by the ITEM_ESCROWED
+        // the payment job (PaymentTimeoutJobId, untouched by the SELLER_CONFIRMED
         // OnExit) is deleted now; the warning job is already a self-guarding no-op
-        // (WarningDispatcher rejects a non-ITEM_ESCROWED state). Without this the
+        // (WarningDispatcher rejects a non-SELLER_CONFIRMED state). Without this the
         // payment-timeout job would sit until its deadline and fire a silent no-op.
         await _timeoutScheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
 

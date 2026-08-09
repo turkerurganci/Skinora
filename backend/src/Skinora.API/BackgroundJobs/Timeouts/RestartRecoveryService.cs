@@ -16,7 +16,7 @@ namespace Skinora.API.BackgroundJobs.Timeouts;
 /// <summary>
 /// Default <see cref="IRestartRecoveryService"/> — extends active phase
 /// deadlines by the detected outage window and re-issues the per-transaction
-/// Hangfire jobs for ITEM_ESCROWED rows (05 §4.4).
+/// Hangfire jobs for SELLER_CONFIRMED rows (05 §4.4).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -82,9 +82,7 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
         var activeStates = new[]
         {
             TransactionStatus.CREATED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-            TransactionStatus.ITEM_ESCROWED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+            TransactionStatus.SELLER_CONFIRMED,
         };
 
         var actives = await _db.Set<Transaction>()
@@ -99,12 +97,12 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
         {
             if (transaction.AcceptDeadline.HasValue)
                 transaction.AcceptDeadline = transaction.AcceptDeadline.Value + outage;
-            if (transaction.TradeOfferToSellerDeadline.HasValue)
-                transaction.TradeOfferToSellerDeadline = transaction.TradeOfferToSellerDeadline.Value + outage;
+            if (transaction.SellerConfirmDeadline.HasValue)
+                transaction.SellerConfirmDeadline = transaction.SellerConfirmDeadline.Value + outage;
             if (transaction.PaymentDeadline.HasValue)
                 transaction.PaymentDeadline = transaction.PaymentDeadline.Value + outage;
-            if (transaction.TradeOfferToBuyerDeadline.HasValue)
-                transaction.TradeOfferToBuyerDeadline = transaction.TradeOfferToBuyerDeadline.Value + outage;
+            if (transaction.DeliveryDeadline.HasValue)
+                transaction.DeliveryDeadline = transaction.DeliveryDeadline.Value + outage;
         }
 
         // Persist deadline extensions before re-issuing the per-tx Hangfire
@@ -112,7 +110,7 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
         // it later calls back into the executor.
         if (actives.Count > 0) await _db.SaveChangesAsync(cancellationToken);
 
-        foreach (var transaction in actives.Where(t => t.Status == TransactionStatus.ITEM_ESCROWED))
+        foreach (var transaction in actives.Where(t => t.Status == TransactionStatus.SELLER_CONFIRMED))
         {
             if (!transaction.PaymentDeadline.HasValue) continue;
             var remaining = transaction.PaymentDeadline.Value - now;

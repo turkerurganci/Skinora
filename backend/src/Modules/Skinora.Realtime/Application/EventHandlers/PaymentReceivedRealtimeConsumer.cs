@@ -8,14 +8,14 @@ namespace Skinora.Realtime.Application.EventHandlers;
 
 /// <summary>
 /// Pushes both <c>PaymentConfirmed</c> and
-/// <c>TransactionStatusChanged(ITEM_ESCROWED → PAYMENT_RECEIVED)</c> on
+/// <c>TransactionStatusChanged(SELLER_CONFIRMED → PAYMENT_RECEIVED)</c> on
 /// <c>/hubs/transactions</c> when blockchain confirmation finalizes the buyer
 /// payment (T48 — 07 §11.1, 03 §3.4).
 /// </summary>
 /// <remarks>
 /// <para>
 /// The state-machine guard (<c>ConfirmPayment</c> trigger only valid from
-/// <c>ITEM_ESCROWED</c>) means the pre-transition state can be hardcoded.
+/// <c>SELLER_CONFIRMED</c>) means the pre-transition state can be hardcoded.
 /// </para>
 /// <para>
 /// 07 §11.1 distinguishes <c>PaymentDetected</c> (mempool / first sighting)
@@ -59,7 +59,7 @@ public sealed class PaymentReceivedRealtimeConsumer
         await _publisher.PublishStatusChangedAsync(
             new TransactionRealtimePayloads.TransactionStatusChanged(
                 TransactionId: domainEvent.TransactionId,
-                FromStatus: TransactionStatus.ITEM_ESCROWED,
+                FromStatus: TransactionStatus.SELLER_CONFIRMED,
                 ToStatus: TransactionStatus.PAYMENT_RECEIVED,
                 Timestamp: domainEvent.OccurredAt),
             cancellationToken);

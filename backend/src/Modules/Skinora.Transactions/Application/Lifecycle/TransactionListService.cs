@@ -30,10 +30,8 @@ public sealed class TransactionListService : ITransactionListService
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
         TransactionStatus.PAYMENT_RECEIVED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
         TransactionStatus.ITEM_DELIVERED,
         TransactionStatus.FLAGGED,
     ];
@@ -92,9 +90,9 @@ public sealed class TransactionListService : ITransactionListService
                 SellerId = t.SellerId,
                 BuyerId = t.BuyerId,
                 AcceptDeadline = t.AcceptDeadline,
-                TradeOfferToSellerDeadline = t.TradeOfferToSellerDeadline,
+                SellerConfirmDeadline = t.SellerConfirmDeadline,
                 PaymentDeadline = t.PaymentDeadline,
-                TradeOfferToBuyerDeadline = t.TradeOfferToBuyerDeadline,
+                DeliveryDeadline = t.DeliveryDeadline,
                 IsOnHold = t.IsOnHold,
                 TimeoutFrozenAt = t.TimeoutFrozenAt,
                 TimeoutRemainingSeconds = t.TimeoutRemainingSeconds,
@@ -198,16 +196,12 @@ public sealed class TransactionListService : ITransactionListService
         {
             TransactionStatus.CREATED when row.AcceptDeadline.HasValue
                 => ("accept", row.AcceptDeadline.Value),
-            TransactionStatus.ACCEPTED when row.TradeOfferToSellerDeadline.HasValue
-                => ("trade_offer_seller", row.TradeOfferToSellerDeadline.Value),
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER when row.TradeOfferToSellerDeadline.HasValue
-                => ("trade_offer_seller", row.TradeOfferToSellerDeadline.Value),
-            TransactionStatus.ITEM_ESCROWED when row.PaymentDeadline.HasValue
+            TransactionStatus.ACCEPTED when row.SellerConfirmDeadline.HasValue
+                => ("seller_confirm", row.SellerConfirmDeadline.Value),
+            TransactionStatus.SELLER_CONFIRMED when row.PaymentDeadline.HasValue
                 => ("payment", row.PaymentDeadline.Value),
-            TransactionStatus.PAYMENT_RECEIVED when row.TradeOfferToBuyerDeadline.HasValue
-                => ("trade_offer_buyer", row.TradeOfferToBuyerDeadline.Value),
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER when row.TradeOfferToBuyerDeadline.HasValue
-                => ("trade_offer_buyer", row.TradeOfferToBuyerDeadline.Value),
+            TransactionStatus.PAYMENT_RECEIVED when row.DeliveryDeadline.HasValue
+                => ("delivery", row.DeliveryDeadline.Value),
             _ => (string.Empty, default(DateTime)),
         };
 
@@ -252,9 +246,9 @@ public sealed class TransactionListService : ITransactionListService
         public Guid SellerId { get; init; }
         public Guid? BuyerId { get; init; }
         public DateTime? AcceptDeadline { get; init; }
-        public DateTime? TradeOfferToSellerDeadline { get; init; }
+        public DateTime? SellerConfirmDeadline { get; init; }
         public DateTime? PaymentDeadline { get; init; }
-        public DateTime? TradeOfferToBuyerDeadline { get; init; }
+        public DateTime? DeliveryDeadline { get; init; }
         public bool IsOnHold { get; init; }
         public DateTime? TimeoutFrozenAt { get; init; }
         public int? TimeoutRemainingSeconds { get; init; }

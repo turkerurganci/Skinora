@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
-using Skinora.Steam.Domain.Entities;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
@@ -58,49 +57,29 @@ public sealed class DeliveryDisputeAutoChecker : IDeliveryDisputeAutoChecker
     {
         ArgumentNullException.ThrowIfNull(transaction);
 
-        var latestOffer = await _db.Set<TradeOffer>()
-            .Where(o => o.TransactionId == transaction.Id
-                     && o.Direction == TradeOfferDirection.TO_BUYER)
-            .OrderByDescending(o => o.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (latestOffer is null)
-        {
-            return Unresolved(NotDeliveredMessage);
-        }
-
-        // Local-only happy path — no Steam round-trip needed.
-        if (latestOffer.Status == TradeOfferStatus.ACCEPTED)
+        // v3.0 — the TradeOffers table is gone: the platform no longer creates
+        // or tracks trade offers (02 §2.1). Delivery is now decided from the
+        // evidence recorded on the transaction itself (02 §9.2, 06 §2.24).
+        //
+        // Full re-implementation — a forced, cache-bypassing verification round
+        // plus the "seller's asset gone but nothing arrived" escalation branch —
+        // lands with the delivery verification service (11 §5, T130). Until
+        // then this reads the already-recorded evidence and fails closed:
+        // anything short of proven delivery stays open so the buyer can
+        // escalate to a human rather than getting a wrong automated answer.
+        if (transaction.DeliveryEvidence.IsSufficientForDelivery())
         {
             return Resolved(DeliveredMessage);
         }
 
-        // Inventory probe (TO_BUYER pending / sent). Stub returns null until
-        // T67 sidecar lands — fails closed (stays OPEN), buyer escalates.
-        var buyer = await _db.Set<User>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == transaction.BuyerId, cancellationToken);
-
-        if (buyer is null || string.IsNullOrWhiteSpace(buyer.SteamId))
+        // Item left the seller but never reached the buyer — a wrong item or a
+        // third-party send. This must never resolve silently.
+        if (transaction.DeliveryEvidence.IsMisdeliverySignature())
         {
             return Unresolved(TradeOfferActiveMessage);
         }
 
-        // Probe by the asset id the buyer is expected to land — prefer the
-        // recorded delivered asset id if the sidecar has populated it; fall
-        // back to the original ItemAssetId snapshot for ITEM_DELIVERED-like
-        // states where the trade was completed but the snapshot column is
-        // unset (defensive — keeps the stub-injected test path stable too).
-        var probeAssetId = transaction.DeliveredBuyerAssetId ?? transaction.ItemAssetId;
-
-        var snapshot = await _inventory.TryGetItemAsync(
-            buyer.SteamId,
-            probeAssetId,
-            cancellationToken);
-
-        return snapshot is not null
-            ? Resolved(DeliveredMessage)
-            : Unresolved(TradeOfferActiveMessage);
+        return Unresolved(NotDeliveredMessage);
     }
 
     private static AutoCheckResult Resolved(string messageKey) =>

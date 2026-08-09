@@ -36,9 +36,7 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+        TransactionStatus.SELLER_CONFIRMED,
     ];
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -118,9 +116,9 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
                 t.Id,
                 t.Status,
                 t.AcceptDeadline,
-                t.TradeOfferToSellerDeadline,
+                t.SellerConfirmDeadline,
                 t.PaymentDeadline,
-                t.TradeOfferToBuyerDeadline,
+                t.DeliveryDeadline,
                 t.IsOnHold,
                 t.TimeoutFreezeReason,
                 t.TimeoutRemainingSeconds))
@@ -185,12 +183,12 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
         {
             TransactionStatus.CREATED =>
                 (TimeoutPhase.Accept, snapshot.AcceptDeadline),
-            TransactionStatus.ACCEPTED or TransactionStatus.TRADE_OFFER_SENT_TO_SELLER =>
-                (TimeoutPhase.TradeOfferToSeller, snapshot.TradeOfferToSellerDeadline),
-            TransactionStatus.ITEM_ESCROWED =>
+            TransactionStatus.ACCEPTED =>
+                (TimeoutPhase.SellerConfirm, snapshot.SellerConfirmDeadline),
+            TransactionStatus.SELLER_CONFIRMED =>
                 (TimeoutPhase.Payment, snapshot.PaymentDeadline),
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER =>
-                (TimeoutPhase.Delivery, snapshot.TradeOfferToBuyerDeadline),
+            TransactionStatus.PAYMENT_RECEIVED =>
+                (TimeoutPhase.Delivery, snapshot.DeliveryDeadline),
             _ => (null, null),
         };
 
@@ -208,9 +206,9 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
         Guid TransactionId,
         TransactionStatus Status,
         DateTime? AcceptDeadline,
-        DateTime? TradeOfferToSellerDeadline,
+        DateTime? SellerConfirmDeadline,
         DateTime? PaymentDeadline,
-        DateTime? TradeOfferToBuyerDeadline,
+        DateTime? DeliveryDeadline,
         bool IsOnHold,
         TimeoutFreezeReason? TimeoutFreezeReason,
         int? TimeoutRemainingSeconds);

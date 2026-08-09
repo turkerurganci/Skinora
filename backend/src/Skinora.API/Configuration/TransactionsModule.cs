@@ -85,8 +85,6 @@ public static class TransactionsModule
 
         // WP12 (T90 K3) — Steam trade-offer URL resolver port. Null default
         // (returns no URL) registered via TryAddScoped; SteamModule.Replace()
-        // swaps in the DB-backed SteamTradeOfferUrlResolver in production.
-        services.TryAddScoped<ISteamTradeOfferUrlResolver, NullSteamTradeOfferUrlResolver>();
 
         // WP4a — wire the fraud pre-check price seam to the T81 Steam Market
         // stack. PriceServiceMarketPriceProvider (Skinora.Fraud) bridges the

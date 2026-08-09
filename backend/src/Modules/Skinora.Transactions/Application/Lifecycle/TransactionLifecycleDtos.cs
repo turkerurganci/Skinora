@@ -128,11 +128,14 @@ public enum AcceptTransactionStatus
 /// <summary>Request body for <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
 public sealed record CancelTransactionRequest(string Reason);
 
-/// <summary>Response body for <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
+/// <summary>
+/// Response body for <c>POST /transactions/:id/cancel</c> (07 §7.7).
+/// <c>ItemReturned</c> was dropped in v3.0 — the platform never holds the item,
+/// so a cancellation can only move money (02 §9).
+/// </summary>
 public sealed record CancelTransactionResponse(
     TransactionStatus Status,
     DateTime CancelledAt,
-    bool ItemReturned,
     bool PaymentRefunded);
 
 /// <summary>

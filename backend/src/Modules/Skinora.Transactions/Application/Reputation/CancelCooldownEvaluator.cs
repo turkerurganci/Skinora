@@ -106,8 +106,10 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
             TransactionStatus.CANCELLED_TIMEOUT when previousStatusByTx.TryGetValue(txId, out var prev) =>
                 prev switch
                 {
-                    TransactionStatus.ACCEPTED or TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => isSeller,
-                    TransactionStatus.CREATED or TransactionStatus.ITEM_ESCROWED or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => isBuyer,
+                    // v3.0 — PAYMENT_RECEIVED moved to the seller side: the
+                    // delivery window is theirs now (02 §3.1).
+                    TransactionStatus.ACCEPTED or TransactionStatus.PAYMENT_RECEIVED => isSeller,
+                    TransactionStatus.CREATED or TransactionStatus.SELLER_CONFIRMED => isBuyer,
                     _ => false
                 },
             _ => false

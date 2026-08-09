@@ -258,7 +258,6 @@ public sealed class AdminDisputeService : IAdminDisputeService
         // ---------- Stage 6: outcome-specific side effects ----------
         if (request.Outcome == DisputeResolutionOutcome.BUYER_FAVOR)
         {
-            var itemWasOnPlatform = ItemWasOnPlatform(transaction.Status);
             var paymentReceived = transaction.PaymentReceivedAt is not null;
 
             var cancelReason = $"Dispute çözümü (alıcı lehine): {note}";
@@ -279,19 +278,12 @@ public sealed class AdminDisputeService : IAdminDisputeService
                 _db, transaction, previousTxStatus, TransactionTrigger.AdminResolveRefund,
                 ActorType.ADMIN, adminUserId, now);
 
-            // Item return to the seller when the item was still on the platform
-            // (false at ITEM_DELIVERED — item is with the buyer).
-            if (itemWasOnPlatform)
-            {
-                await _outbox.PublishAsync(
-                    new ItemRefundToSellerRequestedEvent(
-                        EventId: Guid.NewGuid(),
-                        TransactionId: transaction.Id,
-                        SellerId: transaction.SellerId,
-                        Trigger: ItemRefundTrigger.AdminCancel,
-                        OccurredAt: now),
-                    cancellationToken);
-            }
+            // v3.0 — no item return branch exists. The platform never holds the
+            // item, so a buyer-favour ruling can only move money. The
+            // consequence is deliberate and stated in 02 §10: once delivery is
+            // proven, ruling for the buyer shifts the loss onto the seller with
+            // no way to recover the item, which is why the documented default
+            // at that point is a seller-favour ruling.
 
             // Payment refund to the buyer when they had paid (gates on
             // PaymentReceivedAt — true at ITEM_DELIVERED, unlike the status-based
@@ -427,13 +419,6 @@ public sealed class AdminDisputeService : IAdminDisputeService
     private static AdminDisputePartyDto UnknownParty(Guid userId) =>
         new(userId, SteamId: null, DisplayName: "Deleted User");
 
-    private static bool ItemWasOnPlatform(TransactionStatus status) => status switch
-    {
-        TransactionStatus.ITEM_ESCROWED => true,
-        TransactionStatus.PAYMENT_RECEIVED => true,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
-        _ => false,
-    };
 
     private static (int Page, int PageSize) ClampPaging(int page, int pageSize)
     {

@@ -4,9 +4,19 @@ public enum NotificationType
 {
     TRANSACTION_INVITE,
     BUYER_ACCEPTED,
-    ITEM_ESCROWED,
+
+    // v3.0 — the seller confirmed readiness, so the deposit address is now open
+    // to the buyer (02 §2.2 step 3). Replaces ITEM_ESCROWED: nothing is escrowed
+    // at this point except, shortly, the money.
+    PAYMENT_WINDOW_OPEN,
+
     PAYMENT_RECEIVED,
-    TRADE_OFFER_SENT_TO_BUYER,
+
+    // v3.0 — payment is in escrow and the SELLER must now send the item
+    // directly to the buyer. Replaces TRADE_OFFER_SENT_TO_BUYER, which targeted
+    // the buyer; the recipient of this notification flipped sides.
+    DELIVERY_EXPECTED,
+
     TRANSACTION_COMPLETED,
     SELLER_PAYMENT_SENT,
     TIMEOUT_WARNING,
@@ -14,14 +24,18 @@ public enum NotificationType
     TRANSACTION_FLAGGED,
     PAYMENT_INCORRECT,
     LATE_PAYMENT_REFUNDED,
-    ITEM_RETURNED,
+
+    // ITEM_RETURNED removed in v3.0 — the platform never holds the item, so it
+    // can never return one (02 §9).
     PAYMENT_REFUNDED,
     DISPUTE_RESULT,
     FLAG_RESOLVED,
     ADMIN_FLAG_ALERT,
     ADMIN_ESCALATION,
     ADMIN_PAYMENT_FAILURE,
-    ADMIN_STEAM_BOT_ISSUE,
+
+    // ADMIN_STEAM_BOT_ISSUE removed in v3.0 — the platform runs no Steam bots
+    // (02 §15, 05 §3.2).
     EMERGENCY_HOLD_APPLIED,
     EMERGENCY_HOLD_RELEASED,
 

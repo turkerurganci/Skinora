@@ -6,10 +6,11 @@ namespace Skinora.Transactions.Application.Admin;
 
 public sealed record AdminCancelTransactionRequest(string? Reason);
 
+// ItemReturned dropped in v3.0 — the platform never holds the item, so a
+// cancellation can only ever move money (02 §9).
 public sealed record AdminCancelTransactionResponse(
     TransactionStatus Status,
     DateTime CancelledAt,
-    bool ItemReturned,
     bool PaymentRefunded);
 
 public enum AdminCancelTransactionStatus
@@ -68,7 +69,6 @@ public sealed record ReleaseEmergencyHoldResponse(
     TransactionStatus Status,
     DateTime ReleasedAt,
     EmergencyHoldReleaseAction Action,
-    bool? ItemReturned,
     bool? PaymentRefunded);
 
 public enum ReleaseEmergencyHoldStatus

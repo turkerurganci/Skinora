@@ -62,7 +62,9 @@ public sealed record AdminTransactionDetailDto(
     AdminTransactionPartyDetailDto? Buyer,
     DateTime CreatedAt,
     DateTime? AcceptedAt,
-    DateTime? ItemEscrowedAt,
+    // ItemEscrowedAt removed in v3.0 — nothing is ever escrowed on the platform
+    // side. SellerReadyConfirmedAt is the equivalent milestone (02 §2.2 step 3).
+    DateTime? SellerReadyConfirmedAt,
     DateTime? PaymentReceivedAt,
     DateTime? ItemDeliveredAt,
     DateTime? CompletedAt,

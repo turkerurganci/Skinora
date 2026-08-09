@@ -15,10 +15,10 @@ namespace Skinora.Notifications.Application.EventHandlers;
 /// buyer-facing happy-path notifications for the two Steam orchestration legs
 /// that ride it (WP19):
 /// <list type="bullet">
-///   <item><c>ITEM_ESCROWED</c> → <see cref="NotificationType.ITEM_ESCROWED"/>
+///   <item><c>ITEM_ESCROWED</c> → <see cref="NotificationType.PAYMENT_WINDOW_OPEN"/>
 ///   "item reached the platform, payment due" (03 §3.4 step 1).</item>
 ///   <item><c>TRADE_OFFER_SENT_TO_BUYER</c> →
-///   <see cref="NotificationType.TRADE_OFFER_SENT_TO_BUYER"/> "accept the Steam
+///   <see cref="NotificationType.DELIVERY_EXPECTED"/> "accept the Steam
 ///   trade offer to receive your item" (03 §3.5 step 3).</item>
 /// </list>
 /// </summary>
@@ -52,8 +52,8 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
         TransactionStatusChangedEvent domainEvent,
         CancellationToken cancellationToken)
     {
-        if (domainEvent.ToStatus is not (TransactionStatus.ITEM_ESCROWED
-            or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER))
+        if (domainEvent.ToStatus is not (TransactionStatus.SELLER_CONFIRMED
+            or TransactionStatus.PAYMENT_RECEIVED))
         {
             return [];
         }
@@ -63,6 +63,7 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
             .Select(t => new
             {
                 t.BuyerId,
+                t.SellerId,
                 t.TotalAmount,
                 ExpectedAmount = t.PaymentAddress != null ? (decimal?)t.PaymentAddress.ExpectedAmount : null,
                 PaymentAddress = t.PaymentAddress != null ? t.PaymentAddress.Address : null,
@@ -74,14 +75,17 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
             return [];
         }
 
-        if (domainEvent.ToStatus == TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
+        // v3.0 — this notification changed sides. It used to tell the BUYER to
+        // accept a platform-sent trade offer; now it tells the SELLER to send
+        // the item directly to the buyer (02 §2.2 step 6).
+        if (domainEvent.ToStatus == TransactionStatus.PAYMENT_RECEIVED)
         {
             return
             [
                 new NotificationRequest
                 {
-                    UserId = buyerId,
-                    Type = NotificationType.TRADE_OFFER_SENT_TO_BUYER,
+                    UserId = data.SellerId,
+                    Type = NotificationType.DELIVERY_EXPECTED,
                     TransactionId = domainEvent.TransactionId,
                 },
             ];
@@ -94,7 +98,7 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
             new NotificationRequest
             {
                 UserId = buyerId,
-                Type = NotificationType.ITEM_ESCROWED,
+                Type = NotificationType.PAYMENT_WINDOW_OPEN,
                 TransactionId = domainEvent.TransactionId,
                 Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
                 {

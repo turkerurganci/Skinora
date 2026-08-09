@@ -80,14 +80,16 @@ public sealed class TransactionTimedOutNotificationConsumer
             (TimeoutPhase.Accept, true) => "Alıcı zamanında kabul etmedi, işlem iptal oldu",
             (TimeoutPhase.Accept, false) => "İşlem zaman aşımı nedeniyle iptal oldu",
 
-            (TimeoutPhase.TradeOfferToSeller, true) => "Zamanında item göndermediniz, işlem iptal oldu",
-            (TimeoutPhase.TradeOfferToSeller, false) => "Satıcı item'ı göndermedi, işlem iptal oldu",
+            (TimeoutPhase.SellerConfirm, true) => "Zamanında onay vermediniz, işlem iptal oldu",
+            (TimeoutPhase.SellerConfirm, false) => "Satıcı işleme devam etmedi, işlem iptal oldu",
 
-            (TimeoutPhase.Payment, true) => "Alıcı ödeme yapmadı, işlem iptal oldu, item'ınız iade edildi",
+            (TimeoutPhase.Payment, true) => "Alıcı ödeme yapmadı, işlem iptal oldu",
             (TimeoutPhase.Payment, false) => "Zamanında ödeme yapılmadı, işlem iptal oldu",
 
-            (TimeoutPhase.Delivery, true) => "Alıcı item'ı teslim almadı, item'ınız iade edildi",
-            (TimeoutPhase.Delivery, false) => "Zamanında teslim alınmadı, işlem iptal oldu, ödemeniz iade edildi",
+            // v3.0 — the delivery phase belongs to the seller now (02 §3.1):
+            // they are the one who must send the trade.
+            (TimeoutPhase.Delivery, true) => "Item'ı zamanında göndermediniz, işlem iptal oldu ve ödeme alıcıya iade edildi",
+            (TimeoutPhase.Delivery, false) => "Satıcı item'ı göndermedi, ödemeniz iade edildi",
 
             _ => throw new InvalidOperationException(
                 $"Unhandled timeout phase {phase} (T49 / 03 §4.1–§4.4)."),

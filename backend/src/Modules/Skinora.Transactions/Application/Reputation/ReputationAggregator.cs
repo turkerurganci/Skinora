@@ -21,9 +21,9 @@ namespace Skinora.Transactions.Application.Reputation;
 /// </para>
 /// <list type="bullet">
 ///   <item><c>PreviousStatus = CREATED</c> (alıcı kabul timeout, adım 2) → BUYER (skipped when BuyerId is null — no party to attribute)</item>
-///   <item><c>PreviousStatus = ACCEPTED | TRADE_OFFER_SENT_TO_SELLER</c> (adım 3) → SELLER</item>
-///   <item><c>PreviousStatus = ITEM_ESCROWED</c> (ödeme timeout, adım 4) → BUYER</item>
-///   <item><c>PreviousStatus = TRADE_OFFER_SENT_TO_BUYER</c> (adım 6) → BUYER</item>
+///   <item><c>PreviousStatus = ACCEPTED</c> (hazırlık onayı, adım 3) → SELLER</item>
+///   <item><c>PreviousStatus = SELLER_CONFIRMED</c> (ödeme timeout, adım 4) → BUYER</item>
+///   <item><c>PreviousStatus = PAYMENT_RECEIVED</c> (teslimat, adım 6) → SELLER</item>
 /// </list>
 /// <para>
 /// <see cref="TransactionStatus.CANCELLED_ADMIN"/> rows are excluded from
@@ -174,9 +174,15 @@ public sealed class ReputationAggregator : IReputationAggregator
     {
         TransactionStatus.CREATED => TimeoutResponsibility.Buyer,
         TransactionStatus.ACCEPTED => TimeoutResponsibility.Seller,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => TimeoutResponsibility.Seller,
-        TransactionStatus.ITEM_ESCROWED => TimeoutResponsibility.Buyer,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => TimeoutResponsibility.Buyer,
+        TransactionStatus.SELLER_CONFIRMED => TimeoutResponsibility.Buyer,
+
+        // v3.0 — the delivery phase flipped from BUYER to SELLER. In the
+        // custodial model this window waited on the buyer accepting a
+        // platform-sent offer; in P2P the seller is the one who must send the
+        // trade, so the delay is theirs (02 §3.1). This makes non-delivery the
+        // dominant negative signal in a seller's reputation.
+        TransactionStatus.PAYMENT_RECEIVED => TimeoutResponsibility.Seller,
+
         _ => TimeoutResponsibility.None
     };
 
