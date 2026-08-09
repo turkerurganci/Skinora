@@ -22,7 +22,7 @@ Bunlar aynı anda derlenmek zorunda. Ayrı ayrı merge edilseydi ana dal derlenm
 | `f9a0eb7` | Kalan modüller + API katmanı — kaynak derlemesi temiz |
 | `5f4b005` | Bot testleri silindi, enum parity testleri güncellendi |
 | `2de88ed` | Devam notu (yarım kalan iş kaydı) |
-| _(bu oturum)_ | Test katmanı P2P modeline taşındı, migration üretildi, kaynak katmanında 4 kusur kapatıldı |
+| _(bu oturum)_ | Test katmanı P2P modeline taşındı, migration üretildi, kaynak katmanında 5 kusur kapatıldı |
 
 ## Bu oturumda tamamlanan
 
@@ -63,7 +63,7 @@ Mutabakat ve teslimat-kanıtı kolonlarının hepsi gerçekten yeni; NULL başl�
 
 **Emekli status değerleri remap edilmedi.** `ITEM_ESCROWED` / `TRADE_OFFER_SENT_TO_*` taşıyan bir satır, item'ı fiziksel olarak bir platform botunun envanterinde olan bir işlemi tarif eder; buna karşılık gelen ve aynı zamanda **doğru** olan bir P2P durumu yok. T117 kabul kriteri migration'ı temiz DB'ye tanımlıyor; boş olmayan bir ortam uygulamadan önce uçuştaki custodial işlemlerini operasyonel olarak kapatmalı. Gerekçe migration dosyasının `<remarks>`'ında da duruyor.
 
-### 3. Kaynak katmanında kapatılan dört kusur
+### 3. Kaynak katmanında kapatılan beş kusur
 
 Bunlar test düzeltmesi sırasında ortaya çıktı; hiçbiri test kaynaklı değil.
 
@@ -97,7 +97,7 @@ Platform henüz deploy edilmedi; üretimde 404 atan bir çağrı yok.
 
 ## Etkilenen Modüller / Dosyalar
 
-- **Kaynak (bu oturum):** `TransactionCancellationService` · `TransactionStateMachine` · `CountdownSyncBroadcaster` · `NotificationTargetMapper` · `EscrowedAndTradeOfferNotificationConsumer`
+- **Kaynak (bu oturum):** `TransactionCancellationService` · `TransactionStateMachine` · `CountdownSyncBroadcaster` · `RestartRecoveryService` · `NotificationTargetMapper` · `EscrowedAndTradeOfferNotificationConsumer`
 - **Migration:** `src/Skinora.Shared/Persistence/Migrations/20260809162642_T117_P2P_Pivot.cs` (+ Designer, snapshot)
 - **Test:** 41 dosya — Transactions, API, Notifications, Realtime, Disputes, Fraud
 - **Önceki commit'ler:** 86 kaynak dosyası (38 silme), Steam modülü 35 → 11 dosya
@@ -168,5 +168,5 @@ Bunlar sonraki görevleri bağlar:
 ## Commit & PR
 
 - Branch: `task/T117-enum-transaction-fields`
-- PR: _(açılacak)_
-- CI: _(bekliyor)_
+- PR: [#222](https://github.com/turkerurganci/Skinora/pull/222)
+- CI: izleniyor
