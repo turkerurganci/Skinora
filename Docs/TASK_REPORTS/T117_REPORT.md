@@ -1,6 +1,6 @@
 # T117 — Domain Çekirdeği: Enum, Transaction Alanları, State Machine, Bot Emekliliği
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-08-09
+**Faz:** F7 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-09
 
 ---
 
@@ -111,14 +111,61 @@ Platform henüz deploy edilmedi; üretimde 404 atan bir çağrı yok.
 | 3 | Teslimat doğrulama alanları + deadline rename | ✓ | `Transaction` +11 alan; `SellerConfirmDeadline` / `DeliveryDeadline` rename; EF config + migration |
 | 4 | Tek forward migration temiz DB'ye uygulanıyor, snapshot regenerate | ✓ | `InitialMigrationTests` taze SQL Server DB'ye 32 migration'ı uyguluyor: `PendingMigrations_IsEmpty_AfterInitialApply` ✓ · `Migrate_SecondRun_IsIdempotent` ✓ · `Model_HasNoPendingChanges` (`HasPendingModelChanges()==false` → model ↔ snapshot senkron) ✓ · `Schema_ContainsAllExpectedTables` (model-türetilmiş liste) ✓ |
 
+## Doğrulama
+
+**Doğrulayan:** ayrı doğrulama chat'i (yapım raporunu görmeden, bağımsız verdict) · **Tarih:** 2026-08-09
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Bulgu sayısı | **7** (hepsi S1; S2 Kırılma / S3 Eksik yok) |
+| Düzeltme gerekli mi | Evet — 7'sinin tamamı merge öncesi bu dalda kapatıldı (`9ac760c`) |
+
+**Kapı adımları:** working tree temiz · main son 3 run `success` (`31316632955`, `31316632950`, `31316362102`) · repo memory'de T117 satırı mevcut.
+
+### Validator'ın bağımsız ölçümleri
+
+| Tür | Sonuç | Not |
+|---|---|---|
+| Build | ✓ 0 error / 0 warning | Düzeltme öncesi **1 uyarı** vardı (CS1998) — raporun "0 warning" iddiası yanlıştı, B6 ile kapatıldı |
+| Unit | ✓ **1321/1321** | CI filtresi. Düzeltme öncesi 1290; +31 yeni test (B1/B4/B7) |
+| Integration | ✓ **1074/1074** | CI filtresi, proje bazında. Raporun "630/630" başlığı kendi kırılımıyla (1079) tutarsızdı |
+| Contract | ✓ 9/9 | |
+| Migration rehearsal | ✓ 6/6 | Taze DB, `HasPendingModelChanges()==false` |
+
+Migration'ın faz-eşlemeli rename'i bağımsız denetlendi: `SettlementVerifiedAt`'in `COMPLETED` guard'ının tek kanıtı olduğu ve scaffolder eşlemesinin her satırı ödenebilir göstereceği doğrulandı — elle yazım doğru karar.
+
+### Bulgular ve kapatılışları
+
+| # | Sev | Bulgu | Durum |
+|---|---|---|---|
+| B1 | S1 | Teslimat dispute'u yanlış-teslimat imzasında `DELIVERY_OFFER_ACTIVE` ("trade offer'ınız aktif, Steam'den kabul edin") döndürüyordu — P2P'de platform offer göndermiyor; 02 §10.1'in admin'e yükseltilmesini istediği vakada mesaj "her şey normal" izlenimi veriyordu. 4 dilde | ✓ `9ac760c` — anahtarlar `DELIVERY_ASSET_GONE_NOT_ARRIVED` / `DELIVERY_NOT_SENT`, metinler yeniden yazıldı, 7 test |
+| B2 | S1 | `DeliveryDisputeAutoChecker` sınıf XML doc'u silinen `TradeOffers` algoritmasını anlatıyordu | ✓ `9ac760c` |
+| B3 | S1 | Silinen `ItemRefundToSellerRequestedEvent`/`ItemRefundTrigger`'a 5 dangling `<see cref>` + 2 stale yorum | ✓ `9ac760c` |
+| B4 | S1 | 05 §4.2 `SELLER_CONFIRMED \| seller_cancel` için `PaymentReceivedAt is null` guard'ı şart koşuyor; kod yalnız `BuyerCancel`'a uygulamıştı | ✓ `9ac760c` + 2 test |
+| B5 | S1 | `.claude/CONTEXT.md` dosya haritası bu dalda silinen 4 dosyayı gösteriyordu | ✓ `9ac760c` |
+| B6 | S1 | `CheckDeliveryAsync` await'siz kalmış ama `async` durmuş (CS1998) | ✓ `9ac760c` |
+| B7 | ~ | `DeliveryEvidence` enum parity testi yoktu; bitler DB'ye `int` yazılıyor | ✓ `9ac760c` — bit değerleri pinlendi + 02 §9.2 matrisinin 8 kombinasyonu |
+
+### Validator'ın onayladığı ürün kararı
+
+Raporun 7. kararı (`DeliveryReversed → CancelledBy = SELLER`) gözden geçirildi: **uygun.** 02 §4.5.1 geri almayı satıcı-taraflı yol olarak tanımlıyor, T129 fraud flag'ini satıcıya açıyor, `CK_Transactions_Cancel` boş atıf kabul etmiyor. `ADMIN` yanlış olurdu (admin aksiyon almadı), `TIMEOUT` da öyle.
+
+### Validator'ın açtığı plan konuları (T117 dışı — ayrı PR)
+
+1. **07 §7.6 accept ucunu üstlenen görev yok.** Doküman `steamTradeUrl`'ü zorunlu kılıyor (+`INVALID_TRADE_URL`, `MOBILE_AUTHENTICATOR_REQUIRED`), 06 §3.5 `BuyerTradeUrl`'ü ACCEPTED'dan itibaren zorunlu tutuyor, ama kaynakta alanı yazan kod ve F7'de bunu üstlenen task yok. Kapanmazsa `PAYMENT_RECEIVED`'da satıcıya gösterilen CTA null döner.
+2. **T124 → T127 sıralama riski.** T124 `DeliveryDeadline`'ı armlıyor; 05 §4.2/§4.4'ün zorunlu kıldığı "iptalden önce teslimat doğrulama turu" T127'de. Zincir (T127→T125→T124) sıra değişimine izin vermiyor, çözüm T124'e kapı AC'si eklemek.
+3. **T117 dışı mevcut borç:** `AdminUserActivityProvider._terminalStates`'te `REFUNDED` eksik, oysa XML doc'u diğer iki listeyi birebir yansıttığını iddia ediyor (`git diff` boş → WP5 dönemi).
+
 ## Test Sonuçları
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Build | ✓ 0 error / 0 warning | `dotnet build Skinora.sln -c Debug` |
-| Unit | ✓ 1274/1274 | `--filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` (Docker'a bağlı 16 Discord/Telegram kanal testi lokalde hariç — CI'da koşar) |
-| Integration | ✓ 630/630 | Proje bazında Testcontainers SQL Server: Transactions 305 · API 449 (bkz. not) · Notifications 60 · Fraud 73 · Disputes 41 · Platform 65 · Auth 37 · Admin 22 · Shared 21 · Payments 6 |
-| Contract | ✓ 4/4 | `SidecarWebhookRouteContractTests` |
+| Build | ✓ 0 error / 0 warning | `dotnet build Skinora.sln -c Debug` — validator düzeltmesi sonrası (öncesinde 1 CS1998 uyarısı vardı) |
+| Unit | ✓ **1321/1321** | `--filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — validator ölçümü (raporun ilk yazımındaki 1274, Docker'a bağlı 16 kanal testi lokalde hariç kaldığı için düşüktü) |
+| Integration | ✓ **1074/1074** | Proje bazında: Transactions 305 · API 449 · Fraud 73 · Platform 65 · Notifications 60 · Disputes 41 · Auth 37 · Admin 22 · Shared 16 · Payments 6 |
+| Contract | ✓ 9/9 | `SidecarWebhookRouteContractTests` (API 4) + Shared 5 |
+| Migration rehearsal | ✓ 6/6 | `InitialMigrationTests`, taze SQL Server DB |
 
 > **Ölçüm notu:** Tüm solution'ı tek `dotnet test` ile koşturmak lokalde 42 sahte hata üretti — her test assembly'si kendi SQL Server container'ını açıyor ve 9.6 GB'lık Docker ayrılmış belleği yetmiyor; düşen testler 1 ms'de ve fixture kurulumunda kırılıyordu. Proje bazında seri koşumda hepsi geçti. CI bunları ayrı leg'lerde ve sağlanan connection string ile koşuyor, bu sınıfa yapısal olarak girmiyor. (F6 Gate Check'te de aynı artefakt kayıtlı.)
 
