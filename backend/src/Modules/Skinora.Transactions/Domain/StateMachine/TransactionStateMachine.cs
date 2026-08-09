@@ -90,9 +90,20 @@ public class TransactionStateMachine
         _transaction.TimeoutFreezeReason = TimeoutFreezeReason.EMERGENCY_HOLD;
         _transaction.TimeoutFrozenAt = now;
 
-        if (_transaction.Status == TransactionStatus.ITEM_ESCROWED && _transaction.PaymentDeadline.HasValue)
+        // Kalan süreyi, o state'te hangi deadline aktifse ondan hesapla
+        // (06 §3.5 state → aktif deadline matrisi). Teslimat fazı bu listeye
+        // v3.0'da eklendi: eskiden DeliveryDeadline ileri akışta hiç
+        // armlanmadığı için dondurulacak bir süre de yoktu.
+        var activeDeadline = _transaction.Status switch
         {
-            var remaining = (_transaction.PaymentDeadline.Value - now).TotalSeconds;
+            TransactionStatus.SELLER_CONFIRMED => _transaction.PaymentDeadline,
+            TransactionStatus.PAYMENT_RECEIVED => _transaction.DeliveryDeadline,
+            _ => null,
+        };
+
+        if (activeDeadline.HasValue)
+        {
+            var remaining = (activeDeadline.Value - now).TotalSeconds;
             _transaction.TimeoutRemainingSeconds = remaining > 0 ? (int)Math.Floor(remaining) : 0;
         }
     }
@@ -158,7 +169,7 @@ public class TransactionStateMachine
         {
             TransactionTrigger.Timeout => CancelledByType.TIMEOUT,
             TransactionTrigger.SellerCancel or TransactionTrigger.SellerDecline => CancelledByType.SELLER,
-            TransactionTrigger.BuyerCancel or TransactionTrigger.BuyerDecline => CancelledByType.BUYER,
+            TransactionTrigger.BuyerCancel => CancelledByType.BUYER,
             TransactionTrigger.AdminCancel or TransactionTrigger.AdminReject
                 or TransactionTrigger.AdminResolveRefund => CancelledByType.ADMIN,
             _ => (CancelledByType?)null,
@@ -198,30 +209,21 @@ public class TransactionStateMachine
             .Permit(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER)
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
 
-        // ACCEPTED — satıcıdan trade offer bekleniyor
+        // ACCEPTED — satıcının hazırlık onayı bekleniyor (03 §2.3).
+        // Timeout burada SATICIYA yazılır: onayı vermeyen taraf odur.
         _machine.Configure(TransactionStatus.ACCEPTED)
             .OnEntry(() => _transaction.AcceptedAt = DateTime.UtcNow)
-            .Permit(TransactionTrigger.SendTradeOfferToSeller, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER)
+            .PermitIf(TransactionTrigger.SellerConfirmReady, TransactionStatus.SELLER_CONFIRMED, HasFieldsForSellerConfirmed, "SellerReadyConfirmedAt zorunlu (06 §3.5).")
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
+            .Permit(TransactionTrigger.SellerDecline, TransactionStatus.CANCELLED_SELLER)
             .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
             .Permit(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER)
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
 
-        // TRADE_OFFER_SENT_TO_SELLER
-        _machine.Configure(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER)
-            .PermitIf(TransactionTrigger.EscrowItem, TransactionStatus.ITEM_ESCROWED, HasFieldsForItemEscrowed, "EscrowBotAssetId zorunlu (06 §3.5).")
-            .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
-            .Permit(TransactionTrigger.SellerDecline, TransactionStatus.CANCELLED_SELLER)
-            .Permit(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER)
-            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN);
-
-        // ITEM_ESCROWED — ödeme bekleniyor (timeout warning aktif)
-        _machine.Configure(TransactionStatus.ITEM_ESCROWED)
-            .OnEntry(() =>
-            {
-                _transaction.ItemEscrowedAt = DateTime.UtcNow;
-                _transaction.TimeoutWarningSentAt = null;
-            })
+        // SELLER_CONFIRMED — ödeme bekleniyor (timeout warning aktif).
+        // Item satıcıda durmaya devam ediyor; platform hiçbir şey tutmuyor.
+        _machine.Configure(TransactionStatus.SELLER_CONFIRMED)
+            .OnEntry(() => _transaction.TimeoutWarningSentAt = null)
             .OnExit(() =>
             {
                 _transaction.TimeoutWarningJobId = null;
@@ -230,37 +232,36 @@ public class TransactionStateMachine
             .Permit(TransactionTrigger.ConfirmPayment, TransactionStatus.PAYMENT_RECEIVED)
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
             .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
-            // ITEM_ESCROWED tanımı gereği ödeme henüz yok; guard 09 §9.2 örneğindeki açık kuralla
-            // korunur (PAYMENT_RECEIVED state'ine geçildiğinde alıcı iptali otomatik yasak olur).
             .PermitIf(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER, () => _transaction.PaymentReceivedAt is null, "Ödeme yapıldıktan sonra alıcı iptal edemez (02 §7).")
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
-            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
             .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
-        // PAYMENT_RECEIVED — alıcıya teslim aşaması; tek taraflı iptal kapalı (02 §7)
+        // PAYMENT_RECEIVED — para emanette; satıcı item'ı DOĞRUDAN alıcıya
+        // gönderiyor. Platform trade'in tarafı değil, yalnızca sonucu gözlüyor.
+        //
+        // İptal yetkisi burada asimetrik (02 §7): satıcı vazgeçebilir, alıcı
+        // vazgeçemez. Satıcının yolu kapatılsaydı göndermek istemeyen satıcı
+        // hiçbir şey yapmayıp timeout'u beklerdi — alıcı parasına daha geç
+        // kavuşurdu. Açık bırakmak kaçınılmaz sonucu hızlandırıyor.
         _machine.Configure(TransactionStatus.PAYMENT_RECEIVED)
             .OnEntry(() => _transaction.PaymentReceivedAt = DateTime.UtcNow)
-            .Permit(TransactionTrigger.SendTradeOfferToBuyer, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
-            .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
-            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
-            .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
-
-        // TRADE_OFFER_SENT_TO_BUYER
-        _machine.Configure(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
-            .PermitIf(TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED, HasFieldsForItemDelivered, "DeliveredBuyerAssetId zorunlu (06 §3.5).")
+            .PermitIf(TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED, HasDeliveryEvidence, "Teslimat kanıtı yetersiz (02 §9.2).")
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
-            .Permit(TransactionTrigger.BuyerDecline, TransactionStatus.CANCELLED_BUYER)
+            .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
-            // WP5 — buyer-favor admin dispute resolution unwinds the escrow.
             .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
-        // ITEM_DELIVERED — standart admin-cancel kullanılamaz (05 §4.2 not).
-        // WP5 — admin dispute çözümü "ayrı manuel süreç"tir (07 §9.x exceptional
-        // resolution): buyer-favor kararı AdminResolveRefund ile REFUNDED'a geçer
-        // (item alıcıdadır → fiziksel geri-alma WP6/manuel kapsamı).
+        // ITEM_DELIVERED — mutabakat süresi (02 §4.5.1). Steam korumalı bir
+        // trade'i 7 gün boyunca geri alınabilir tutuyor ve bunu trade'in her
+        // iki tarafı da Steam Support'a başvurmadan yapabiliyor. Bu yüzden
+        // ödeme beklemek zorunda; ama asıl korumayı bekleme değil, sürenin
+        // SONUNDAKİ kontrol sağlıyor — Complete guard'ı buna bakıyor.
+        //
+        // Standart admin-cancel bu state'te kullanılamaz (05 §4.2).
         _machine.Configure(TransactionStatus.ITEM_DELIVERED)
             .OnEntry(() => _transaction.ItemDeliveredAt = DateTime.UtcNow)
-            .Permit(TransactionTrigger.Complete, TransactionStatus.COMPLETED)
+            .PermitIf(TransactionTrigger.Complete, TransactionStatus.COMPLETED, HasSettlementClearance, "Mutabakat doğrulanmadan ödeme yapılamaz (02 §4.5.1).")
+            .Permit(TransactionTrigger.DeliveryReversed, TransactionStatus.REFUNDED)
             .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);
 
         // COMPLETED — terminal
@@ -295,18 +296,38 @@ public class TransactionStateMachine
     private bool HasFieldsForAccepted() =>
         _transaction.BuyerId.HasValue && !string.IsNullOrEmpty(_transaction.BuyerRefundAddress);
 
-    private bool HasFieldsForItemEscrowed() =>
-        HasFieldsForAccepted() && !string.IsNullOrEmpty(_transaction.EscrowBotAssetId);
+    private bool HasFieldsForSellerConfirmed() =>
+        HasFieldsForAccepted() && _transaction.SellerReadyConfirmedAt.HasValue;
 
-    private bool HasFieldsForItemDelivered() =>
-        HasFieldsForItemEscrowed() && !string.IsNullOrEmpty(_transaction.DeliveredBuyerAssetId);
+    /// <summary>
+    /// 02 §9.2 — teslimat kanıtı. Bilinçli olarak <c>DeliveredBuyerAssetId</c>'ye
+    /// BAKMAZ: alıcı onayıyla kapanan bir teslimatta envanter hiç okunmamış
+    /// olabilir ve o alan null kalır. Kanıtın kendisi <c>DeliveryEvidence</c>.
+    /// </summary>
+    private bool HasDeliveryEvidence() =>
+        HasFieldsForSellerConfirmed()
+        && _transaction.DeliveryEvidence.IsSufficientForDelivery()
+        && _transaction.DeliveryVerifiedAt.HasValue;
+
+    /// <summary>
+    /// 02 §4.5.1 — ödeme ancak mutabakat süresi dolduktan <b>ve</b> item'ın hâlâ
+    /// alıcıda olduğu doğrulandıktan sonra yapılabilir.
+    /// <para>
+    /// Sürenin dolmuş olması tek başına yeterli değildir: beklemek, geri alma
+    /// penceresinin kapanmasını sağlar ama geri alınıp alınmadığını söylemez.
+    /// Onu söyleyen <c>SettlementVerifiedAt</c>'tir.
+    /// </para>
+    /// </summary>
+    private bool HasSettlementClearance() =>
+        _transaction.SettlementVerifiedAt.HasValue
+        && _transaction.DeliveryReversedAt is null;
 
     // FLAGGED state invariant — 06 §3.5 not + 03 §7: tüm deadline + Hangfire job ID NULL.
     private bool HasFlaggedStateInvariant() =>
         _transaction.AcceptDeadline is null
-        && _transaction.TradeOfferToSellerDeadline is null
+        && _transaction.SellerConfirmDeadline is null
         && _transaction.PaymentDeadline is null
-        && _transaction.TradeOfferToBuyerDeadline is null
+        && _transaction.DeliveryDeadline is null
         && _transaction.PaymentTimeoutJobId is null
         && _transaction.TimeoutWarningJobId is null;
 }
