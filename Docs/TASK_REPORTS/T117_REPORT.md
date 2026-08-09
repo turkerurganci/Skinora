@@ -153,6 +153,7 @@ Bunlar sonraki görevleri bağlar:
 - **`SellerConfirmDeadline` / `DeliveryDeadline` armlanmıyor.** Alanlar ve state machine hazır; bunları dolduran kod T123/T124'te yazılacak. Bilinçli — T117 domain çekirdeği, akış değil.
 - **`trade_offer_seller_timeout_minutes` / `trade_offer_buyer_timeout_minutes` SystemSetting anahtarları eski adlarıyla duruyor.** Değer semantiği doğru (satıcı onay süresi / teslimat süresi) ama adlar emekli modelden. Yeniden adlandırma migration + seed + admin UI etkisi taşır; T123/T124 kapsamında ele alınmalı.
 - **Emekli status değerleri için veri migration'ı yok** — gerekçe yukarıda (§Migration).
+- **8 advisory E2E leg'i kırmızı — beklenen, planda öngörülmüş.** Kök sebep CI logundan doğrulandı: `RequestError: Invalid object name 'PlatformSteamBots'` — `e2e/src/db.ts` içindeki `seedHappyPath` bu migration'ın düşürdüğü tabloyu temizlemeye çalışıyor, ilk seed çağrısında patlıyor ve leg'in kalan testleri artık-tamamlanmamış seed'in üzerine `PK_Users` çakışmasıyla yığılıyor. Kısmi bir düzeltme (yalnız o `DELETE`'i kaldırmak) hatayı taşır, çözmez: spec'lerin kendisi custodial akışı (`ITEM_ESCROWED`, trade offer, bot) sürüyor ve o model artık yok. Plan bunu zaten ayırmış — **T137** (`sidecar-fake` sürülebilir envanter, notu: *"Tüm E2E'yi bloklar"*) → **T138** (E2E spec'lerinin yeniden yazımı). E2E leg'leri `continue-on-error` olduğu için CI Gate'i bloke etmiyorlar; F7 boyunca T138'e kadar kırmızı kalacaklar.
 - **Sidecar bot/trade yayıncıları hâlâ ölü backend yollarına POST ediyor** — T133'e kadar sürecek bilinen drift; guard'da adı konmuş istisna + kendini iptal eden bekçi testi (§4). T133 bu istisnayı silmek zorunda, aksi hâlde `RetiredPathsAreStillPublished_UntilT133` kırılır.
 - **T118 kapsamı daraldı.** State machine bu dalda yeniden yazıldı ve geçiş tablosunun tamamı test edildi; T118'e kalan iş, 05 §4.2 karşısında bağımsız bir kapsam denetimi.
 
@@ -169,4 +170,13 @@ Bunlar sonraki görevleri bağlar:
 
 - Branch: `task/T117-enum-transaction-fields`
 - PR: [#222](https://github.com/turkerurganci/Skinora/pull/222)
-- CI: izleniyor
+- CI: ✓ PASS — HEAD `07c86fa`, run [`31330229732`](https://github.com/turkerurganci/Skinora/actions/runs/31330229732), `conclusion=success`
+
+| Job | Sonuç |
+|---|---|
+| 1. Lint · 2. Build · 3. Unit · 4. Integration · 5. Contract · 6. Migration dry-run · 7. Docker build (backend) | ✓ success |
+| **CI Gate** | **✓ success** |
+| 3b. JS test (vitest) | skipped (JS yolu değişmedi) |
+| 8× E2E (advisory) | ✗ failure — kök sebep doğrulandı, bkz. Known Limitations |
+
+> Bir önceki run (`31330207219`, HEAD `f360c68`) `cancelled`: rapor düzeltmesi push'u onu iptal etti. Bu bir başarısızlık değil — concurrency davranışı; yetkili olan son tamamlanmış run'dır.
