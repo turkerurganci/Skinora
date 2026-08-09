@@ -4,7 +4,9 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-07-26):** **28 aktif satır** · 59 satır ✅ çözüldü (Öne Çıkanlar tablosu gövde satırlarını tekrarladığı için satır sayısı kalem sayısından fazladır) · **F6 Gate Check'i bloklayan: 0** (F6 ✓ PASS 2026-06-24 → MVP kapandı; kalan kalemler post-MVP). Bu dosya bir kalem ele alındıkça güncellenmelidir (satırı **✓ Çözüldü** işaretle veya kaldır).
+> **Durum (2026-08-09, F7/P2P sonrası):** **34 aktif satır** (28 + §9'da 6 yeni) · 59 satır ✅ çözüldü · P2P geçişiyle **3 satır konusuz kaldı** (bot katmanı — §9 sonundaki nota bakınız). Yeni kalemlerin hiçbiri MVP'yi bloklamıyor.
+>
+> **Önceki durum (2026-07-26):** **28 aktif satır** · 59 satır ✅ çözüldü (Öne Çıkanlar tablosu gövde satırlarını tekrarladığı için satır sayısı kalem sayısından fazladır) · **F6 Gate Check'i bloklayan: 0** (F6 ✓ PASS 2026-06-24 → MVP kapandı; kalan kalemler post-MVP). Bu dosya bir kalem ele alındıkça güncellenmelidir (satırı **✓ Çözüldü** işaretle veya kaldır).
 >
 > **Sıralama/sahiplik:** F6 öncesi MVP-içi kalemler [`PRE_F6_PLAN.md`](PRE_F6_PLAN.md)'de 19 iş paketine (WP1–WP18) bağlandı. Aşağıdaki bazı satırlar 2026-06-14 kod taramasıyla **kısmen stale** bulundu ve düzeltildi (emergency-hold, blockchain-monitor, item-refund, steam-sidecar, T55).
 >
@@ -30,6 +32,9 @@
 | ✅ | SWEEP-dispatcher | **ÇÖZÜLDÜ → WP3** — `SweepQueueJob` PENDING `SWEEP` satırı üretir (`OutgoingTransferJobsRegistrar` recurring kaydeder, registrar `IHostedService` olarak `TransactionsModule`'de) + dispatcher `OutboundTypes`'ında SWEEP var | — |
 | 🟡 | T81-PriceConsumerWireup | **Kod tarafı çözüldü → WP4a, prod config'e bağlı:** port `PriceServiceMarketPriceProvider`'a bağlandı, `MarketPriceAtCreation` set ediliyor, PRICE_DEVIATION kuralı canlı. **Açık kalan:** `SteamMarket:Provider` varsayılanı `logging` (`NoPrice()` → fail-open) + seed `price_deviation_threshold=1.0` (%100) → prod'da ikisi ayarlanmadıkça kural sessiz kalır (`DEPLOY_RUNBOOK §C`) | PRICE_DEVIATION'ın prod'da etkin olması (deploy config) |
 | 🟡 | StubPayoutVerifier | Üretim payout doğrulayıcı yok (fail-closed, manuel admin) | Otomatik on-chain payout doğrulama |
+| 🟡 | P2P-SettlementTiering | **F7/yeni** — herkes 8 gün bekliyor; itibarlı satıcılar için sürenin kısaltılması satıcı deneyimini belirgin iyileştirir (§9) | — |
+| 🟡 | P2P-HotWalletPolicyReview | **F7/yeni** — para artık işlem başına 8 gün platformda; sıcak cüzdan eşiği ve soğuk cüzdan aktarma sıklığı yeni profile göre hesaplanmalı (§9) | — |
+| 🟡 | P2P-DeliveryPollingJob | **F7/yeni** — sürekli teslimat taraması yok; pasif alıcıda satıcı süre sonuna kadar bekliyor (§9) | — |
 | ✅ | steam-sidecar-stubs | **ÇÖZÜLDÜ → WP6** — sidecar `GET /api/trade-hold/:steamId` (`GetTradeHoldDurations`) + `SidecarTradeHoldChecker` (U17) + `SidecarMobileAuthenticatorCheck` (A7); envanter reader zaten gerçekti | — |
 | ✅ | item-refund-consumers | **ÇÖZÜLDÜ → WP2** — `PaymentRefundToBuyerConsumer` `BUYER_REFUND` satırı üretir; DI'da kayıtlı + iki katmanlı idempotency + `UQ_BlockchainTransactions_BuyerRefund_TransactionId` | — |
 | 🟡 | T50-OutageFreezeCallers | **Yarısı çözüldü → WP7** (admin manuel freeze/resume: `AdminMaintenanceService` `FreezeManyAsync`/`ResumeManyAsync` çağırıyor). **Açık kalan: otomatik tespit** — 02 §3.3 `STEAM_OUTAGE`/`BLOCKCHAIN_DEGRADATION` auto-detect'inde bulk-freeze tetiklenmiyor; WP16 `PlatformHealthProbeJob` **alert-only** (admin alert + audit) | Otomatik outage dayanıklılığı (manuel yol açık) |
@@ -190,6 +195,23 @@
 | Önc. | ID | Açıklama | Kaynak |
 |---|---|---|---|
 | ✅ | T55-DormantThresholdMandatoryUnconfigured 🆕 | **ÇÖZÜLDÜ → WP14:** 19 zorunlu ayar (gerçek sayı; "21" stale) `Docs/DEPLOY_RUNBOOK.md §A` + `.env.example`'da belgelendi. Fail-fast (06 §8.9) bilinçli olarak korundu — owner kararı seed-default DEĞİL. | `T55_REPORT.md:37` |
+
+---
+
+## 9. F7 — P2P geçişiyle ertelenen işler
+
+P2P pivotu sırasında bilinçli olarak kapsam dışında bırakılan kalemler (T115, 02 §2.1).
+
+| Önc. | ID | Açıklama | Tip | Kaynak |
+|---|---|---|---|---|
+| 🟡 | P2P-SettlementTiering | **İtibarlı satıcılar için mutabakat süresini kısaltma.** MVP'de herkes 8 gün bekliyor (02 §4.5.1). Geçmişi temiz satıcılar için sürenin kısaltılması (ör. 20+ başarılı işlem → 24 saat) satıcı deneyimini belirgin biçimde iyileştirir. Riski geçmişe göre fiyatlar. **Ön koşul:** itibar verisinin bu karar için yeterince olgun olması | task | 02 §4.5.1, 10 §4.1 |
+| 🟡 | P2P-HotWalletPolicyReview | **Sıcak/soğuk cüzdan politikasının 8 günlük mutabakat süresine göre gözden geçirilmesi.** Para artık işlem başına 8 gün platformda duruyor; aynı anda tutulan toplam tutar custodial modele göre çok daha yüksek. `hot_wallet_limit` eşiği, soğuk cüzdana aktarma sıklığı ve `SweepQueueJob` zamanlaması bu yeni profile göre yeniden hesaplanmalı | task | 02 §4.5.1 |
+| 🟡 | P2P-DeliveryPollingJob | **Sürekli teslimat taraması.** MVP'de doğrulama üç noktada çalışıyor: alıcı onayı, dispute açılışı, teslimat süresi sonu (02 §9.2). Dakikalık arka plan taraması eklenirse pasif alıcıda teslimat 2-3 dakikada kapanır; şu an satıcı süre sonuna kadar bekleyebiliyor. `DeliveryVerificationService` bu iş için hazır tasarlandı (saf, yan etkisiz) — job ince bir sarmalayıcı olacak. **Maliyet:** Steam envanter okuma bütçesi ve eşzamanlı teslimat tavanı (08 §2.6) | task | 02 §9.2, 11 T125 |
+| ⚪ | P2P-FloatVerification | **Aynı sınıf içindeki kalite farkının doğrulanması.** Eşleştirme `(classid, instanceid)` düzeyinde; float/desen farkı otomatik tespit edilmiyor. Satıcı aynı skinin daha kötü kopyasını gönderirse `WRONG_ITEM` dispute'una ve admin incelemesine kalıyor (02 §9.2). Çözüm CS2 Game Coordinator istemcisi gerektirir — yeni Steam hesabı + yeni servis; pivotun Steam hesap bağımlılığından kurtulma amacına ters. Post-MVP'de **fraud sinyali** olarak eklenebilir, durum geçiş kapısı olarak değil | task | 02 §9.2, 10 §4 |
+| ⚪ | P2P-SellerDebtLedger | **Satıcı borç defteri.** Satıcı kusurlu iptallerde/teslim etmemede gas ücretini alıcı yiyor (02 §4.6 — owner kararı: mevcut formül korundu). Adil olan, kusurlu tarafa yazmak; ancak satıcının platformda parası olmadığı için kesinti yapılamıyor. Borç defteri (sonraki payout'tan kesme) çözerdi ama yeni bir muhasebe katmanı gerektirir ve satıcı bir daha hiç dönmeyebilir | task | 02 §4.6, 10 §4.1 |
+| ⚪ | P2P-BotCodeArchive | **Bot custody kodunun arşiv işaretçisi.** T132/T133'te silinecek: bot havuzu, dispatch job, bot recovery, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri, sidecar bot/trade modülleri. Kod git geçmişinde kalacak; silme commit'i merge edildiğinde **sha buraya yazılmalıdır**. Geri dönüş senaryosu yok (eski model Steam kuralı nedeniyle çalışmıyor) ama cooldown'ı olmayan bir oyuna genişlerken referans olabilir | doc-drift | 11 T132/T133 |
+
+> **Bot katmanına ait eski kalemler geçersizleşti.** Yukarıdaki §1 (T69 — bot health/failover/recovery) ve §2 (T103b — Steam hesapları backend) bölümlerindeki **açık** kalemler P2P geçişiyle konusuz kalmıştır: `T69-K4`, `T68-K1`, `T64-BotWebhookHandler`. Platform Steam hesabı işletmediği için bot durumu yayını, bot oturum hatası bildirimi ve bot webhook handler'ı diye bir şey kalmamıştır (02 §15, 05 §3.2). Bu satırlar tarihsel izlenebilirlik için yerinde bırakıldı; **yeni iş üretmezler**.
 
 ---
 
