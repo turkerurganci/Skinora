@@ -106,11 +106,23 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .HasMaxLength(500);
 
         // --- Item Asset Lineage ---
-        builder.Property(t => t.EscrowBotAssetId)
-            .HasMaxLength(20);
-
         builder.Property(t => t.DeliveredBuyerAssetId)
             .HasMaxLength(20);
+
+        // --- Delivery Verification (02 §9.2) ---
+        builder.Property(t => t.BuyerTradeUrl)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.BuyerBaselineAssetIds)
+            .HasMaxLength(400);
+
+        // Stored as int, not string: this is a [Flags] enum and the global
+        // EnumToStringConverter would persist combinations as comma-joined
+        // names, which are awkward to query and brittle to rename.
+        builder.Property(t => t.DeliveryEvidence)
+            .IsRequired()
+            .HasConversion<int>()
+            .HasDefaultValue(DeliveryEvidence.NONE);
 
         // --- Price & Commission (06 §8.3) ---
         builder.Property(t => t.StablecoinType)
@@ -199,15 +211,23 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .WithOne(h => h.Transaction)
             .HasForeignKey(h => h.TransactionId);
 
-        // NOTE: EscrowBotId → PlatformSteamBot FK is configured in
-        // Skinora.Steam module (PlatformSteamBotConfiguration) to avoid
-        // circular project references. See T21.
-
         // --- Unique constraints (06 §5.1) ---
         builder.HasIndex(t => t.InviteToken)
             .IsUnique()
             .HasFilter("[InviteToken] IS NOT NULL")
             .HasDatabaseName("UQ_Transactions_InviteToken");
+
+        // One open transaction per item (02 §2.3). Delivery is verified at the
+        // item-class level, so two live transactions targeting the same asset
+        // would let an arriving item be attributed to the wrong one — and pay
+        // the wrong seller.
+        builder.HasIndex(t => new { t.SellerId, t.ItemAssetId })
+            .IsUnique()
+            .HasFilter(
+                "[Status] <> 'COMPLETED' AND [Status] <> 'CANCELLED_TIMEOUT' AND [Status] <> 'CANCELLED_SELLER' " +
+                "AND [Status] <> 'CANCELLED_BUYER' AND [Status] <> 'CANCELLED_ADMIN' AND [Status] <> 'REFUNDED' " +
+                "AND [IsDeleted] = 0")
+            .HasDatabaseName("UQ_Transactions_SellerId_ItemAssetId_Active");
 
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(t => t.Status)
@@ -223,7 +243,16 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.HasIndex(t => t.CreatedAt)
             .HasDatabaseName("IX_Transactions_CreatedAt");
 
-        builder.HasIndex(t => t.EscrowBotId)
-            .HasDatabaseName("IX_Transactions_EscrowBotId");
+        // Delivery verification / seller non-delivery sweep (02 §9.2).
+        builder.HasIndex(t => new { t.Status, t.DeliveryDeadline })
+            .HasFilter("[Status] = 'PAYMENT_RECEIVED'")
+            .HasDatabaseName("IX_Transactions_Delivery_Pending");
+
+        // Settlement sweep: transactions whose reversal window has closed and
+        // are awaiting the final "is the item still with the buyer?" check
+        // before payout (02 §4.5.1).
+        builder.HasIndex(t => new { t.Status, t.PayoutEligibleAt })
+            .HasFilter("[Status] = 'ITEM_DELIVERED'")
+            .HasDatabaseName("IX_Transactions_Settlement_Pending");
     }
 }
