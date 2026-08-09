@@ -39,10 +39,9 @@ namespace Skinora.API.Services;
 /// RESOLVED_FOR_BUYER and the transaction fires <c>AdminResolveRefund</c> →
 /// REFUNDED (terminal, so the payout job can never pick it up). When the buyer
 /// had paid, a <see cref="PaymentRefundToBuyerRequestedEvent"/> queues the
-/// WP2 refund; when the item was still on the platform, an
-/// <see cref="ItemRefundToSellerRequestedEvent"/> returns it. At ITEM_DELIVERED
-/// the item is already with the buyer — physical claw-back is a separate manual
-/// / WP6 process (07 §9.x exceptional resolution).
+/// WP2 refund. There is no item leg: the platform never holds the item, so
+/// wherever it currently sits is where it stays — physical claw-back is a
+/// separate manual / WP6 process (07 §9.x exceptional resolution).
 /// </para>
 /// <para>
 /// A transaction under emergency hold must have the hold released first (AD19c)

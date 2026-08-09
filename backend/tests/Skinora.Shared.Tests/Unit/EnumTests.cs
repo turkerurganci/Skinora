@@ -4,6 +4,34 @@ namespace Skinora.Shared.Tests.Unit;
 
 public class EnumTests
 {
+    // ── DeliveryEvidence (4, [Flags]) — 06 §2.24 ────────────────────
+
+    [Fact]
+    public void DeliveryEvidence_ShouldHave4Values()
+    {
+        var values = Enum.GetValues<DeliveryEvidence>();
+        Assert.Equal(4, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(DeliveryEvidence.NONE), 0)]
+    [InlineData(nameof(DeliveryEvidence.BUYER_CONFIRMED), 1)]
+    [InlineData(nameof(DeliveryEvidence.INVENTORY_DELTA), 2)]
+    [InlineData(nameof(DeliveryEvidence.SELLER_ASSET_GONE), 4)]
+    public void DeliveryEvidence_ShouldPinBitValue(string valueName, int expectedBit)
+    {
+        // The bits are persisted as an int (TransactionConfiguration uses
+        // HasConversion<int>()), so renumbering them would silently change what
+        // every stored row means. Pin them.
+        Assert.Equal(expectedBit, (int)Enum.Parse<DeliveryEvidence>(valueName));
+    }
+
+    [Fact]
+    public void DeliveryEvidence_ShouldBeFlags()
+    {
+        Assert.NotNull(typeof(DeliveryEvidence).GetCustomAttributes(typeof(FlagsAttribute), false).SingleOrDefault());
+    }
+
     // ── TransactionStatus (12) ──────────────────────────────────────
 
     [Fact]

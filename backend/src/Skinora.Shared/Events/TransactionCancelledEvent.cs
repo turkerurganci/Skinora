@@ -10,9 +10,9 @@ namespace Skinora.Shared.Events;
 /// notification to the counter-party with role-aware Turkish reason text.
 /// </summary>
 /// <remarks>
-/// Item-return and (future) payment-refund side effects are emitted as separate
-/// events (<see cref="ItemRefundToSellerRequestedEvent"/>) so the Steam sidecar
-/// pipeline can reuse a single handler regardless of cancellation origin.
+/// Payment-refund side effects are emitted as a separate event
+/// (<see cref="PaymentRefundToBuyerRequestedEvent"/>) so the transfer pipeline
+/// can reuse a single handler regardless of cancellation origin.
 /// Admin-initiated cancellation (T59) and timeout-initiated cancellation
 /// (T49 — see <see cref="TransactionTimedOutEvent"/>) emit their own dedicated
 /// events because the counter-party reason text differs significantly.

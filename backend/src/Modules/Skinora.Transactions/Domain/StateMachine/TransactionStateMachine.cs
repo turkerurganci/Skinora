@@ -242,7 +242,13 @@ public class TransactionStateMachine
             })
             .Permit(TransactionTrigger.ConfirmPayment, TransactionStatus.PAYMENT_RECEIVED)
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
-            .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
+
+            // 05 §4.2 guards BOTH cancels here on `PaymentReceivedAt is null`.
+            // The state should make that redundant (the field is stamped on
+            // entry to PAYMENT_RECEIVED), which is exactly why it is worth
+            // asserting: if a payment is ever recorded without the state
+            // advancing, neither party may cancel the money away from here.
+            .PermitIf(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER, () => _transaction.PaymentReceivedAt is null, "Ödeme kaydedilmiş bir işlem bu durumdan iptal edilemez (05 §4.2).")
             .PermitIf(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER, () => _transaction.PaymentReceivedAt is null, "Ödeme yapıldıktan sonra alıcı iptal edemez (02 §7).")
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
             .Permit(TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED);

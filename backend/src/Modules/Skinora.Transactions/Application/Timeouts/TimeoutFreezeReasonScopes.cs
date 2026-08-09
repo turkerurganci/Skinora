@@ -12,8 +12,9 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// <para>
 /// <b>MAINTENANCE</b> covers every active state because a planned platform
 /// outage halts the whole pipeline. <b>STEAM_OUTAGE</b> targets only the two
-/// states whose deadlines wait on Steam-side action (the seller and buyer
-/// trade-offer windows). <b>BLOCKCHAIN_DEGRADATION</b> covers <c>SELLER_CONFIRMED</c>
+/// states whose deadlines depend on the platform being able to read Steam (the
+/// seller's readiness re-check and the delivery verification window).
+/// <b>BLOCKCHAIN_DEGRADATION</b> covers <c>SELLER_CONFIRMED</c>
 /// because the only blockchain-bound timeout is <c>PaymentDeadline</c>.
 /// </para>
 /// <para>

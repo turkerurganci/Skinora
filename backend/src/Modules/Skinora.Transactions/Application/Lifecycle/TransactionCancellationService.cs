@@ -26,28 +26,24 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// <b>Role-aware trigger selection (02 §7):</b> the caller is either the
 /// seller or the buyer; the service derives the
 /// <see cref="TransactionTrigger"/> from the (role, current state) pair so the
-/// state machine fires the correct transition. Sellers in
-/// <c>TRADE_OFFER_SENT_TO_SELLER</c> use the dedicated
-/// <see cref="TransactionTrigger.SellerDecline"/> trigger because the state
-/// machine reserves <see cref="TransactionTrigger.SellerCancel"/> for the
-/// pre-trade-offer states only — both end at
+/// state machine fires the correct transition. A seller cancelling from
+/// <c>ACCEPTED</c> may use either <see cref="TransactionTrigger.SellerCancel"/>
+/// or <see cref="TransactionTrigger.SellerDecline"/> — both end at
 /// <see cref="TransactionStatus.CANCELLED_SELLER"/> with identical fields.
 /// </para>
 /// <para>
-/// <b>Post-payment guard (02 §7):</b> states reachable only after
-/// <c>PaymentReceivedAt</c> is set (PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER,
-/// ITEM_DELIVERED) short-circuit to <c>PAYMENT_ALREADY_SENT</c>. The state
-/// machine also permits <see cref="TransactionTrigger.BuyerDecline"/> on
-/// TRADE_OFFER_SENT_TO_BUYER, but that path is reserved for the future
-/// dispute / admin-driven flow — the user-facing cancel endpoint blocks it.
+/// <b>Post-payment guard (02 §7, 07 §7.7):</b> asymmetric in v3.0. The
+/// <b>buyer</b> is refused once their money is in escrow (PAYMENT_RECEIVED,
+/// ITEM_DELIVERED short-circuit to <c>PAYMENT_ALREADY_SENT</c>); the
+/// <b>seller</b> may still back out of PAYMENT_RECEIVED, which refunds the
+/// buyer. Closing the seller's path would not protect anyone — they would
+/// simply let the delivery deadline lapse for the same outcome, later.
 /// </para>
 /// <para>
-/// <b>Item return:</b> when the item was on the platform immediately before
-/// the cancel transition (<c>EscrowBotAssetId</c> is set, i.e. previous state
-/// was <c>ITEM_ESCROWED</c>), the service emits
-/// <see cref="ItemRefundToSellerRequestedEvent"/> with a cancel-flavoured
-/// <see cref="ItemRefundTrigger"/>. The Steam sidecar consumer (T64–T68)
-/// handles the actual return-trade-offer.
+/// <b>Payment refund:</b> when the pre-cancel state was PAYMENT_RECEIVED the
+/// service emits <see cref="PaymentRefundToBuyerRequestedEvent"/>. There is no
+/// item-return counterpart: in the P2P model the item never left the seller's
+/// inventory (02 §9).
 /// </para>
 /// <para>
 /// <b>Reputation + cooldown:</b> after a successful cancel the responsible
@@ -114,10 +110,9 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 "Caller is not a party to this transaction.");
 
         // ---------- Stage 2a: suspension guard (T105a, 02 §14.0) ----------
-        // A suspended user cannot take the cancel action. For ITEM_ESCROWED this
-        // would otherwise publish ItemRefundToSellerRequestedEvent and pull the
-        // escrowed item back out of platform custody (the wallet-address freeze
-        // does not cover the Steam inventory return channel). Under the
+        // A suspended user cannot take the cancel action. From PAYMENT_RECEIVED
+        // this would otherwise publish PaymentRefundToBuyerRequestedEvent and
+        // move funds out on a suspended party's initiative. Under the
         // restricted-session model the caller's pending steps fall to timeout
         // instead; admin can drive the lifecycle via the hold/cancel orchestrator.
         var caller = await _db.Set<User>()

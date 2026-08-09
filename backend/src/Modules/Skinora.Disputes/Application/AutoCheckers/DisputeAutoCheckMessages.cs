@@ -26,8 +26,22 @@ public static class DisputeAutoCheckMessages
     public const string PaymentResolved = "PAYMENT_RESOLVED";
     public const string PaymentNotFound = "PAYMENT_NOT_FOUND";
     public const string DeliveryDelivered = "DELIVERY_DELIVERED";
-    public const string DeliveryOfferActive = "DELIVERY_OFFER_ACTIVE";
-    public const string DeliveryNotStarted = "DELIVERY_NOT_STARTED";
+
+    /// <summary>
+    /// v3.0 — the item left the seller's inventory but never arrived in the
+    /// buyer's (02 §9.2 misdelivery signature). Replaces the retired
+    /// <c>DELIVERY_OFFER_ACTIVE</c>: the platform sends no trade offer, so
+    /// telling the buyer to accept one on Steam was both impossible to act on
+    /// and reassuring in exactly the case that warrants an admin (02 §10.1).
+    /// </summary>
+    public const string DeliveryAssetGoneNotArrived = "DELIVERY_ASSET_GONE_NOT_ARRIVED";
+
+    /// <summary>
+    /// v3.0 — no delivery evidence at all. Replaces <c>DELIVERY_NOT_STARTED</c>,
+    /// whose wording described a platform-created trade offer that no longer
+    /// exists; in P2P the seller sends the trade themselves.
+    /// </summary>
+    public const string DeliveryNotSent = "DELIVERY_NOT_SENT";
     public const string WrongItemMatch = "WRONG_ITEM_MATCH";
     public const string WrongItemMismatch = "WRONG_ITEM_MISMATCH";
     public const string WrongItemNoDelivery = "WRONG_ITEM_NO_DELIVERY";
@@ -46,8 +60,8 @@ public static class DisputeAutoCheckMessages
                 [PaymentResolved] = "Your payment was verified; the transaction continues",
                 [PaymentNotFound] = "No payment was found on the blockchain",
                 [DeliveryDelivered] = "The item has been delivered to your inventory",
-                [DeliveryOfferActive] = "Your trade offer is active — please accept it on Steam",
-                [DeliveryNotStarted] = "The trade offer has not been created yet; the delivery stage has not been reached",
+                [DeliveryAssetGoneNotArrived] = "The item has left the seller's inventory but has not arrived in yours — your transaction has been put under review",
+                [DeliveryNotSent] = "The seller does not appear to have sent the item yet",
                 [WrongItemMatch] = "The delivered item matches the item in the transaction",
                 [WrongItemMismatch] = "The delivered item does not match the expected item — your transaction has been put under review",
                 [WrongItemNoDelivery] = "No delivery data was found; the delivery stage has not been reached",
@@ -58,8 +72,8 @@ public static class DisputeAutoCheckMessages
                 [PaymentResolved] = "Ödemeniz doğrulandı, işlem devam ediyor",
                 [PaymentNotFound] = "Blockchain üzerinde ödeme bulunamadı",
                 [DeliveryDelivered] = "Item envanterinize teslim edilmiş durumda",
-                [DeliveryOfferActive] = "Trade offer'ınız aktif, lütfen Steam üzerinden kabul edin",
-                [DeliveryNotStarted] = "Trade offer henüz oluşturulmadı; teslim aşamasına gelinmedi",
+                [DeliveryAssetGoneNotArrived] = "Item satıcının envanterinden çıkmış ama sizinkine ulaşmamış — işleminiz incelemeye alındı",
+                [DeliveryNotSent] = "Satıcı item'ı henüz göndermemiş görünüyor",
                 [WrongItemMatch] = "Teslim edilen item, işlemdeki item ile eşleşiyor",
                 [WrongItemMismatch] = "Teslim edilen item beklenen item ile eşleşmiyor — işleminiz incelemeye alındı",
                 [WrongItemNoDelivery] = "Teslim verisi bulunamadı; teslim aşamasına gelinmedi",
@@ -70,8 +84,8 @@ public static class DisputeAutoCheckMessages
                 [PaymentResolved] = "Tu pago fue verificado; la transacción continúa",
                 [PaymentNotFound] = "No se encontró ningún pago en la blockchain",
                 [DeliveryDelivered] = "El artículo ha sido entregado en tu inventario",
-                [DeliveryOfferActive] = "Tu oferta de intercambio está activa — acéptala en Steam",
-                [DeliveryNotStarted] = "La oferta de intercambio aún no se ha creado; no se ha llegado a la etapa de entrega",
+                [DeliveryAssetGoneNotArrived] = "El artículo salió del inventario del vendedor pero no llegó al tuyo — tu transacción ha sido puesta en revisión",
+                [DeliveryNotSent] = "El vendedor aún no parece haber enviado el artículo",
                 [WrongItemMatch] = "El artículo entregado coincide con el artículo de la transacción",
                 [WrongItemMismatch] = "El artículo entregado no coincide con el artículo esperado — tu transacción ha sido puesta en revisión",
                 [WrongItemNoDelivery] = "No se encontraron datos de entrega; no se ha llegado a la etapa de entrega",
@@ -82,8 +96,8 @@ public static class DisputeAutoCheckMessages
                 [PaymentResolved] = "您的付款已验证，交易继续进行",
                 [PaymentNotFound] = "区块链上未找到付款",
                 [DeliveryDelivered] = "物品已送达您的库存",
-                [DeliveryOfferActive] = "您的交易报价已激活——请在 Steam 上接受",
-                [DeliveryNotStarted] = "交易报价尚未创建；尚未进入交付阶段",
+                [DeliveryAssetGoneNotArrived] = "物品已离开卖家库存但未到达您的库存——您的交易已进入审核",
+                [DeliveryNotSent] = "卖家似乎尚未发送物品",
                 [WrongItemMatch] = "已交付的物品与交易中的物品一致",
                 [WrongItemMismatch] = "已交付的物品与预期物品不符——您的交易已进入审核",
                 [WrongItemNoDelivery] = "未找到交付数据；尚未进入交付阶段",

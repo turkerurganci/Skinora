@@ -370,6 +370,28 @@ public class TransactionStateMachineTests
         Assert.Null(transaction.TimeoutWarningSentAt);
     }
 
+    // 05 §4.2 guards BOTH cancels out of SELLER_CONFIRMED on
+    // `PaymentReceivedAt is null`. Reaching that combination requires a payment
+    // recorded without the state advancing — precisely the case where cancelling
+    // would strand the buyer's money, so the guard must hold for either party.
+    [Theory]
+    [InlineData(TransactionTrigger.SellerCancel)]
+    [InlineData(TransactionTrigger.BuyerCancel)]
+    public void SellerConfirmed_CancelIsRefused_WhenPaymentAlreadyRecorded(TransactionTrigger trigger)
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.SELLER_CONFIRMED);
+        transaction.PaymentReceivedAt = DateTime.UtcNow.AddMinutes(-1);
+        var sm = new TransactionStateMachine(transaction);
+
+        Assert.False(sm.CanFire(trigger));
+
+        var ex = Assert.Throws<DomainException>(
+            () => sm.Fire(trigger, new CancellationContext("Test iptal gerekçesi")));
+
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, transaction.Status);
+    }
+
     [Fact]
     public void OnEntry_PaymentReceivedSetsPaymentReceivedAt()
     {

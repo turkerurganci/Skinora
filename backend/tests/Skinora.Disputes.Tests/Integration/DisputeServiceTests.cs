@@ -654,7 +654,7 @@ public class DisputeServiceTests : IntegrationTestBase
     private DisputeService BuildSut()
     {
         var paymentChecker = new PaymentDisputeAutoChecker(Context);
-        var deliveryChecker = new DeliveryDisputeAutoChecker(Context, _inventory);
+        var deliveryChecker = new DeliveryDisputeAutoChecker();
         var wrongItemChecker = new WrongItemDisputeAutoChecker(Context, _inventory);
 
         return new DisputeService(
