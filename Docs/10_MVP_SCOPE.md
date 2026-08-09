@@ -27,7 +27,8 @@ MVP'nin hedefi:
 - Alıcı ödemeyi gönderir (blockchain), ödeme emanete alınır
 - **Satıcı item'ı doğrudan alıcıya gönderir** (platform trade'in tarafı değildir)
 - Platform teslimatı doğrular (alıcı onayı veya envanter kanıtı)
-- Bekleme penceresi sonrası satıcıya ödeme gönderilir (komisyon düşülerek)
+- İşlem 8 günlük mutabakat süresine girer (Steam'in trade geri alma penceresi kapanana kadar para platformda tutulur)
+- Süre sonunda item'ın hâlâ alıcıda olduğu doğrulanır → satıcıya ödeme gönderilir (komisyon düşülerek). Trade geri alınmışsa ödeme yapılmaz, para alıcıya iade edilir
 
 > **v3.0:** Item custody kaldırıldı — escrow edilen para, item değil (02 §2.1). Sıra tersine döndü: önce ödeme, sonra teslimat.
 
@@ -227,7 +228,7 @@ MVP'nin hedefi:
 
 | Risk | Neden kabul ediliyor |
 |---|---|
-| **Steam trade reversal** — Steam, korumalı bir trade'i 7 gün içinde geri alabilir. Item alıcıdan çıkar ama satıcıya yapılan on-chain ödeme geri alınamaz; alıcı hem item'sız hem parasız kalabilir | Riski tamamen kapatmanın tek yolu satıcı ödemesini 7 gün bekletmektir; bu, ürünün varlık sebebi olan hızlı takası ortadan kaldırır. Kısmi önlemler: ödeme öncesi bekleme penceresi (02 §4.5), satıcı tarafı fraud sinyalleri, tekrarlanan ihlallerde askıya alma (02 §14.2). Sorumluluk sınırı 02 §20.2'de açıkça yazılıdır |
+| **Satıcı ödemesinin 8 gün gecikmesi** — satıcı item'ı gönderdikten sonra parasını 8 gün bekler | Steam'in 7 günlük trade geri alma penceresi kapanmadan ödeme yapmak, satıcının item'ı gönderip parayı aldıktan sonra trade'i geri almasına açık kapı bırakır. Bekleme, bu dolandırıcılığa karşı tek etkili korumadır (02 §4.5.1). Sektördeki diğer platformlar da benzer gecikme uygular. İtibarlı satıcılar için süreyi kısaltmak post-MVP'ye bırakıldı |
 | **Satıcı non-delivery** — ödeme emanete girdikten sonra satıcı item'ı göndermeyebilir | Para emanette güvendedir ve iade edilir; kayıp yalnız zamandır. Teslimat süresi kısa tutulur, gecikme satıcının itibarına yazılır, tekrarı yaptırıma tabidir (02 §14.2). Alternatifi (satıcının önce göndermesi) alıcı ödemediğinde item'ı tamamen kaybettirirdi |
 | **Alıcı envanteri gizliyse otomatik kanıt üretilemez** | Alıcı onayı yolu bağımsız çalışır ve tipik akışta zaten birincil yoldur; kullanıcı hazırlık onayı adımında uyarılır (02 §9.2) |
 

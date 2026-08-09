@@ -401,7 +401,7 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 | `ACCEPTED` | Alıcı kabul etti, satıcının hazırlık onayı bekleniyor |
 | `SELLER_CONFIRMED` | Satıcı göndermeye hazır olduğunu onayladı, ödeme bekleniyor. Ödeme adresi bu duruma girildiğinde alıcıya açılır |
 | `PAYMENT_RECEIVED` | Ödeme doğrulandı ve emanete alındı, satıcının item'ı doğrudan alıcıya göndermesi bekleniyor |
-| `ITEM_DELIVERED` | Teslimat doğrulandı, satıcıya ödeme gönderiliyor |
+| `ITEM_DELIVERED` | Teslimat doğrulandı. İşlem **mutabakat süresinde** (varsayılan 8 gün) — Steam'in trade geri alma penceresi kapanana kadar ödeme yapılmaz (02 §4.5.1) |
 | `COMPLETED` | İşlem tamamlandı |
 | `CANCELLED_TIMEOUT` | Timeout nedeniyle iptal |
 | `CANCELLED_SELLER` | Satıcı tarafından iptal |
@@ -461,7 +461,8 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 | PAYMENT_RECEIVED | timeout | CANCELLED_TIMEOUT | Para alıcıya iade — **sorumlu: satıcı**. İptal uygulanmadan önce son bir teslimat doğrulaması çalışır; kanıt bulunursa geçiş `deliver_item`'a döner |
 | PAYMENT_RECEIVED | seller_cancel | CANCELLED_SELLER | Para alıcıya iade. Satıcı göndermekten vazgeçebilir; itibar cezası uygulanır (02 §7) |
 | PAYMENT_RECEIVED | buyer_cancel | — | **Kullanılamaz.** Ödeme sonrası alıcı tek taraflı iptal edemez (02 §7) |
-| ITEM_DELIVERED | complete | COMPLETED | — (payout on-chain onaylandıktan sonra) |
+| ITEM_DELIVERED | complete | COMPLETED | Guard: **mutabakat süresi doldu VE son kontrolde item hâlâ alıcıda** (02 §4.5.1). Payout on-chain onaylandıktan sonra |
+| ITEM_DELIVERED | delivery_reversed | REFUNDED | **Trade geri alınmış** — mutabakat sonu kontrolünde item alıcının envanterinde bulunamadı. Satıcıya ödeme yapılmaz, para alıcıya iade edilir, satıcıya fraud işareti konur (02 §4.5.1) |
 | ITEM_DELIVERED | admin_resolve_refund | REFUNDED | Para alıcıya iade. **Item geri alınamaz** — platform item'a erişemez, zarar geri alma imkânı olmadan satıcıya devredilir (02 §10) |
 | FLAGGED | admin_approve | CREATED | Flag kaldırılır, işlem normal akışa girer (03 §7.1) |
 | FLAGGED | admin_reject | CANCELLED_ADMIN | İşlem iptal edilir. FLAGGED yalnızca creation-time'da tetiklendiği için varlık transferi henüz olmamıştır (03 §7.1) |
@@ -471,6 +472,8 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 | ITEM_DELIVERED | admin_cancel | — | **Kullanılamaz.** Teslimat gerçekleşmiş, standart iptal uygulanamaz. Bu aşamada yalnızca `admin_resolve_refund` veya exceptional resolution geçerlidir (02 §7) |
 | FLAGGED | admin_cancel | CANCELLED_ADMIN | Flag reject ile aynı etki, farklı tetikleyici |
 | _(Emergency hold için bkz. §4.5 — state değiştirmez, flag mekanizmasıdır)_ | | | |
+
+**Yeni trigger (v3.0):** `delivery_reversed` — mutabakat süresi sonundaki kontrolde item'ın alıcının envanterinde bulunmaması. Sistem tarafından üretilir, kullanıcı veya admin tetikleyemez.
 
 **Kaldırılan trigger'lar (v3.0):** `send_trade_offer_to_seller`, `escrow_item`, `send_trade_offer_to_buyer` — platform trade offer göndermediği için karşılıkları yoktur. `buyer_decline` de kaldırıldı; tek üreticisi platformun gönderdiği trade offer'ın reddiydi, `buyer_cancel` yeterlidir.
 
@@ -615,7 +618,9 @@ Her state geçişi bir domain event publish eder:
 | `TransactionAcceptedEvent` | Notification | Satıcıya "hazır mısın?" bildirimi |
 | `SellerConfirmedReadyEvent` | Blockchain, Notification | Ödeme adresini alıcıya aç, alıcıya bildirim |
 | `PaymentReceivedEvent` | Blockchain, Notification | Satıcıya "item'ı gönder" bildirimi + trade bağlantısı, teslimat süresini başlat, sweep job (§3.3 custody) |
-| `ItemDeliveredEvent` | Blockchain, Notification | Bekleme penceresinden sonra satıcıya ödeme gönder, bildirim |
+| `ItemDeliveredEvent` | Notification | Mutabakat süresini başlat, taraflara ödeme tarihini bildir |
+| `SettlementCompletedEvent` | Blockchain, Notification | Mutabakat kontrolü geçti → satıcıya ödeme gönder |
+| `DeliveryReversedEvent` | Blockchain, Notification, Fraud | Trade geri alınmış → alıcıya iade, satıcıya fraud işareti, admin bildirimi |
 | `TransactionCompletedEvent` | Notification | Her iki tarafa bildirim |
 | `TransactionCancelledEvent` | Steam, Blockchain, Notification | İade işlemleri, bildirimler |
 | `TransactionFlaggedEvent` | Notification | Admin'e alert |

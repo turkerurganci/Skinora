@@ -324,7 +324,7 @@ Bu bölüm, birden fazla ekranda tekrar eden UI pattern'lerini tanımlar. Her ek
 | ACCEPTED | Satıcı Onayı Bekleniyor | Mavi |
 | SELLER_CONFIRMED | Ödeme Bekleniyor | Sarı |
 | PAYMENT_RECEIVED | Teslimat Bekleniyor | Sarı |
-| ITEM_DELIVERED | Teslim Edildi | Yeşil (açık) |
+| ITEM_DELIVERED | Teslim Edildi — Ödeme Bekleniyor | Yeşil (açık) |
 | COMPLETED | Tamamlandı | Yeşil |
 | CANCELLED_TIMEOUT | Zaman Aşımı | Kırmızı |
 | CANCELLED_SELLER | Satıcı İptal | Kırmızı |
@@ -1012,8 +1012,15 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
-| Aksiyon alanı | "Item teslim edildi. Ödemeniz işleniyor." + loading | "Item'ınız teslim edildi!" |
-| Countdown | — | — |
+| Aksiyon alanı | "Item teslim edildi. Ödemeniz **{tarih}** tarihinde yapılacak." + kısa açıklama | "Item'ınız teslim edildi!" + koruma bilgisi |
+| Countdown | Mutabakat süresi — gün/saat cinsinden geri sayım | — |
+
+> **Mutabakat süresi gösterimi (v3.0):** Bu durumda işlem 8 gün açık kalır (02 §4.5.1). Kullanıcı neden beklediğini anlamalı, aksi hâlde "param neden gelmedi?" destek yükü doğar.
+>
+> - **Satıcıya:** "Steam, trade'leri 7 gün boyunca geri alınabilir tutuyor. Ödemeniz bu süre kapandıktan sonra, item'ın alıcıda kaldığı doğrulanarak yapılacak." + net ödeme tarihi
+> - **Alıcıya:** "Satıcı bu süre içinde trade'i geri alırsa paranız iade edilir." — alıcı için bu bir **güvence** mesajıdır, uyarı değil
+> - Geri sayım gün ve saat cinsinden gösterilir (dakika hassasiyeti gereksiz)
+> - Ödeme öncesi son kontrol başarısız olursa (trade geri alınmışsa) işlem REFUNDED'a geçer; her iki tarafa açıklayıcı bildirim gider
 
 ##### COMPLETED Durumu
 

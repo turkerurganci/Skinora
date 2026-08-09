@@ -127,10 +127,41 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 
 | Gereksinim | Detay |
 |---|---|
-| Zamanlama | Item teslimi doğrulandıktan (§9.2) **ve bekleme penceresi dolduktan** sonra |
-| Bekleme penceresi | Teslimat doğrulandıktan sonra ödeme kısa bir süre bekletilir. Amaç: beklediğinden farklı bir item aldığını fark eden alıcının, para satıcıya çıkmadan önce dispute açabilmesi. On-chain ödeme geri alınamadığı için bu pencere, otomatik doğrulama ile geri dönülemez ödeme arasındaki tek tampondur. Süre admin tarafından ayarlanır (§16.2) |
+| Zamanlama | Item teslimi doğrulandıktan (§9.2) **ve mutabakat süresi dolduktan** sonra — bkz. §4.5.1 |
+| Mutabakat süresi | Varsayılan **8 gün**. Steam'in trade geri alma penceresi (7 gün) kapanana kadar ödeme yapılmaz. Süre admin tarafından ayarlanır (§16.2) |
+| Ödeme öncesi son kontrol | Süre dolduğunda, ödeme yapılmadan **hemen önce** item'ın hâlâ alıcının envanterinde olduğu doğrulanır. Değilse trade geri alınmıştır → ödeme yapılmaz, para alıcıya iade edilir (§4.5.1) |
 | Akış | Platform komisyonu keser, kalan tutarı satıcının cüzdan adresine gönderir |
 | Cüzdan adresi | Satıcı profilinde varsayılan adres tanımlar; işlem başlatırken isterse farklı adres girebilir, girmezse profildeki kullanılır |
+
+### 4.5.1 Mutabakat Süresi ve Trade Geri Alma Koruması
+
+**Sorun.** Steam, trade ile el değiştiren bir item'ı sonraki **7 gün** içinde geri alınabilir tutar (Trade Protection). Geri alma işlemi Steam Support kararı gerektirmez — **trade'in her iki tarafı da** kendi trade geçmişinden tek tıkla başlatabilir. Bu, satıcı için doğrudan bir dolandırıcılık yolu açar:
+
+> Satıcı item'ı gönderir → teslimat doğrulanır → ödemesini alır → trade'i geri alır. Sonuç: item satıcıya döner, para da satıcıda kalır. Alıcı hem item'sız hem parasız kalır.
+
+Steam'in tek caydırıcısı, geri almayı başlatan hesaba uygulanan 30 günlük trade/market yasağıdır. Yüksek değerli tek seferlik bir dolandırıcılık için bu caydırıcı yeterli değildir.
+
+**Çözüm — bekle ve doğrula.**
+
+| Kural | Değer |
+|---|---|
+| Mutabakat süresi | Teslimat doğrulandıktan sonra **8 gün** (7 günlük geri alma penceresi + 1 gün marj) |
+| Süre boyunca | Para platformda tutulur, satıcıya hiçbir ödeme yapılmaz |
+| Süre sonunda | Ödeme yapılmadan hemen önce alıcının envanteri kontrol edilir |
+| Item hâlâ alıcıda | Trade kesinleşmiştir → komisyon kesilir, kalan satıcıya gönderilir → işlem tamamlanır |
+| Item alıcıda değil | Trade geri alınmıştır → **satıcıya ödeme yapılmaz**, para alıcıya iade edilir, işlem `REFUNDED` olur |
+
+Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontroldür**. Bu iki adım birlikte uygulandığında trade geri alma riski tamamen kapanır.
+
+**Geri alma tespit edilirse:**
+- Alıcıya tam iade yapılır (iade kuralları §4.6)
+- Satıcı hesabına dolandırıcılık işareti konur ve tekrarı yaptırıma tabidir (§14.2)
+- Olay audit kaydına yazılır
+
+**Bilinen sonuçları (MVP'de kabul edildi, iyileştirme sonraya bırakıldı):**
+- Satıcı parasını 8 gün sonra alır. Sektördeki diğer platformlar da benzer bir gecikme uygular
+- Aynı anda platformda tutulan toplam para artar — sıcak/soğuk cüzdan politikası buna göre gözden geçirilmelidir
+- İşlem 8 gün boyunca açık kalır; iptal ve anlaşmazlık kuralları bu süreyi de kapsar
 
 ### 4.6 İade Politikası
 
@@ -440,7 +471,7 @@ Bu bölümün kaldırılmasıyla ortadan kalkan gereksinimler: bot havuzu ve ris
 | Dormant hesap anomali eşikleri | Minimum hesap yaşı (gün) ve tek işlem tutar eşiği — birlikte değerlendirilir (§14.3, §14.4) |
 | Alıcı belirleme yöntemi | Yöntem 2'yi aktif/pasif yapabilir |
 | Timeout uyarı eşiği | Süre dolmadan ne zaman uyarı gönderileceği (oran olarak) |
-| Satıcıya ödeme bekleme penceresi | Teslimat doğrulandıktan sonra ödemenin ne kadar bekletileceği (§4.5) |
+| Mutabakat süresi | Teslimat doğrulandıktan sonra satıcı ödemesinin kaç gün bekletileceği (varsayılan 8 gün — §4.5.1). Steam'in geri alma penceresinden kısa ayarlanmamalıdır |
 | Teslimat ihlali eşikleri | Kaçıncı teslim etmeme olayında fraud flag'i, kaçıncısında otomatik askıya alma uygulanacağı (§14.2) |
 | Flag'lenmiş işlem yönetimi | İnceleme, onay ve red aksiyonları |
 | Flag'lenmiş hesap yönetimi | Listeleme, sinyal/evidence görüntüleme, not düşme, flag kaldırma, geçici blok, kalıcı askıya alma. Tüm aksiyonlar audit log'a kaydedilir |
@@ -511,15 +542,12 @@ Bu bölümün kaldırılmasıyla ortadan kalkan gereksinimler: bot havuzu ve ris
 
 - Steam'in item'a el koyması veya hesap banlaması
 - Item'ın çalıntı çıkması
-- **Steam Trade Protection kapsamında bir trade'in Steam tarafından geri alınması (trade reversal)** — aşağıdaki nota bakınız
-- Blockchain ağındaki olağandışı durumlar
 - Steam'in trade sistemini değiştirmesi
+- Blockchain ağındaki olağandışı durumlar
 
-> **Trade reversal riski (v3.0, P2P geçişiyle gelen yeni risk).** Steam, trade ile el değiştiren bir item'ı sonraki 7 gün içinde geri alabilir (tipik olarak gönderen hesabın ele geçirildiği iddiasıyla). Bu durumda item alıcının envanterinden çıkar, ancak satıcıya yapılan on-chain ödeme **geri alınamaz** — alıcı hem item'sız hem parasız kalır.
+> **Trade geri alma (reversal) — kapatılmış risktir, §4.5.1.** Steam'in 7 günlük geri alma penceresi, satıcının item'ı gönderip parayı aldıktan sonra trade'i geri alması yoluyla istismar edilebilir. Platform bu senaryoyu **satıcı ödemesini 8 gün bekleterek ve süre sonunda item'ın hâlâ alıcıda olduğunu doğrulayarak** engeller. Geri alma tespit edilirse satıcıya ödeme yapılmaz, para alıcıya iade edilir.
 >
-> Platform bu senaryoyu engelleyemez: trade'in tarafı değildir, Steam'in kararına müdahale edemez ve gönderilmiş bir blockchain transferini iptal edemez. Riski tamamen kapatmanın tek yolu satıcı ödemesini 7 gün bekletmek olurdu; bu, ürünün varlık sebebi olan hızlı takası ortadan kaldıracağı için **bilinçli olarak kabul edilen bir risktir** (sınır kaydı: 10 §4).
->
-> Alınan kısmi önlemler: satıcıya ödeme öncesi bekleme penceresi (§4.5), satıcı tarafı fraud sinyalleri ve hesap yaşı limitleri (§14), tekrarlanan teslimat ihlallerinde otomatik askıya alma (§14.2). Kullanıcı bu risk hakkında işlem akışı içinde bilgilendirilir.
+> Bu nedenle trade geri alma, platformun sorumsuz olduğu bir durum **değildir** — aksine platformun aktif olarak koruduğu bir senaryodur. Platformun sorumsuz kaldığı hâl, Steam'in item'a doğrudan el koyması veya hesabı banlaması gibi platformun gözlemleyip önleyemeyeceği durumlardır.
 
 ### 20.3 Genel Yaklaşım
 

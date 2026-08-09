@@ -124,10 +124,15 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
 
 ### 2.4 Satıcıya Ödeme (Adım 8)
 
-1. Teslimat doğrulandıktan (§3.5) **ve bekleme penceresi dolduktan** sonra
-   - Bekleme penceresi, beklediğinden farklı bir item aldığını fark eden alıcının para çıkmadan dispute açabilmesi içindir. On-chain ödeme geri alınamadığı için bu, otomatik doğrulama ile geri dönülemez ödeme arasındaki tek tampondur (02 §4.5)
-   - Pencere içinde dispute açılırsa ödeme durur ve dispute sonucunu bekler
-2. Platform komisyonu hesaplar ve keser
+1. Teslimat doğrulandıktan sonra (§3.5) işlem **mutabakat süresine** girer — varsayılan **8 gün** (02 §4.5.1)
+   - Bu süre Steam'in 7 günlük trade geri alma penceresini kapsar. Süre boyunca para platformda tutulur, satıcıya hiçbir ödeme yapılmaz
+   - Satıcıya ve alıcıya ödemenin hangi tarihte yapılacağı gösterilir
+   - Süre içinde dispute açılırsa ödeme durur ve dispute sonucunu bekler
+2. **Süre dolduğunda, ödeme yapılmadan hemen önce son kontrol:** item hâlâ alıcının envanterinde mi?
+   - **Evet →** trade kesinleşmiştir, ödeme akışı devam eder (adım 3)
+   - **Hayır →** trade geri alınmıştır. **Satıcıya ödeme yapılmaz.** Para alıcıya iade edilir, işlem REFUNDED durumuna geçer, satıcı hesabına dolandırıcılık işareti konur (02 §4.5.1, §14.2). Her iki tarafa bildirim gider
+   - **Envanter okunamıyorsa →** karar verilmez, kontrol tekrarlanır. Sürekli okunamıyorsa admin'e düşer
+3. Platform komisyonu hesaplar ve keser
 3. Gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
    - **Aşmıyorsa →** Gas fee komisyondan karşılanır
    - **Aşıyorsa →** Gas fee satıcının payından kesilir

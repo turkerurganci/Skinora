@@ -2451,10 +2451,23 @@ Task T128: (SellerId, ItemAssetId) tekillik kapısı
 
 --- P4: Payout tamponu ---
 
-Task T129: payout_hold_minutes + payout/sweep gecikmesi
+Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
   Bağımlılık: T125
-  Dokümanlar: 02 §4.5
-  Kabul kriterleri: pencere içinde açılan dispute payout'u blokluyor
+  Dokümanlar: 02 §4.5.1, 05 §4.2, 06 §3.5
+  Kabul kriterleri:
+    - payout_settlement_days SystemSetting (varsayılan 8) eklendi
+    - ITEM_DELIVERED girişinde PayoutEligibleAt hesaplanıyor
+    - SellerPayoutQueueJob yalnız PayoutEligibleAt geçmiş işlemleri alıyor
+    - Ödeme ÖNCESİ son kontrol: item hâlâ alıcının envanterinde mi?
+        item var    -> SettlementVerifiedAt damgalanır, ödeme akar
+        item yok    -> delivery_reversed trigger, REFUNDED, alıcıya iade,
+                       satıcıya fraud flag, admin bildirimi
+        okunamıyor  -> karar verilmez, tekrar denenir; ısrar ederse admin
+    - COMPLETED guard'ı: SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL
+    - Süre içinde açılan dispute ödemeyi bloklar
+    - SweepQueueJob aynı kapıya bağlandı
+  Not: Beklemek tek başına korumaz — korumayı süre sonundaki KONTROL sağlar.
+       Bu ikisi ayrılamaz; sadece gecikme uygulayan bir sürüm güvenli değildir.
 
 --- P5: Dispute ---
 

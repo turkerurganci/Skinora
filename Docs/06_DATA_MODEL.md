@@ -120,7 +120,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `ACCEPTED` | Alıcı kabul etti, satıcının hazırlık onayı bekleniyor |
 | `SELLER_CONFIRMED` | Satıcı göndermeye hazır olduğunu onayladı, ödeme bekleniyor |
 | `PAYMENT_RECEIVED` | Ödeme doğrulandı ve emanete alındı, satıcının item'ı alıcıya göndermesi bekleniyor |
-| `ITEM_DELIVERED` | Teslimat doğrulandı, satıcıya ödeme gönderiliyor |
+| `ITEM_DELIVERED` | Teslimat doğrulandı. İşlem **mutabakat süresinde** — `PayoutEligibleAt` gelene kadar ödeme yapılmaz (02 §4.5.1). Süre sonunda item hâlâ alıcıdaysa COMPLETED, değilse REFUNDED |
 | `COMPLETED` | İşlem tamamlandı |
 | `CANCELLED_TIMEOUT` | Timeout nedeniyle iptal |
 | `CANCELLED_SELLER` | Satıcı tarafından iptal |
@@ -609,6 +609,10 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `BuyerConfirmedReceiptAt` | datetime | NULL | Alıcının "teslim aldım" onayını verdiği an |
 | `DeliveryVerifiedAt` | datetime | NULL | Teslimatın doğrulandığı an — ITEM_DELIVERED ve sonrası NOT NULL |
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
+| **Mutabakat (v3.0)** | | | |
+| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
+| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu |
+| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur |
 | **Concurrency** | | | |
 | `RowVersion` | byte[] | NOT NULL, ROWVERSION | Optimistic concurrency token — EF Core `IsRowVersion()` |
 | **Zaman Damgaları** | | | |
@@ -645,7 +649,11 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >   | `ItemDeliveredAt` | ITEM_DELIVERED, COMPLETED |
 >   | `DeliveryVerifiedAt` | ITEM_DELIVERED, COMPLETED |
 >   | `DeliveryEvidence != NONE` | ITEM_DELIVERED, COMPLETED |
+>   | `PayoutEligibleAt` | ITEM_DELIVERED, COMPLETED |
+>   | `SettlementVerifiedAt` | COMPLETED |
 >   | `CompletedAt` | COMPLETED |
+>
+>   **Mutabakat invariantı (v3.0):** `COMPLETED`'a geçiş için `SettlementVerifiedAt NOT NULL` **ve** `DeliveryReversedAt NULL` olmalıdır. Yani ödeme, yalnızca mutabakat süresi dolduktan **ve** item'ın hâlâ alıcıda olduğu doğrulandıktan sonra yapılabilir (02 §4.5.1). Süre dolmuş olması tek başına yeterli değildir.
 >
 >   **`DeliveredBuyerAssetId` bu matriste yer almaz.** Best-effort audit alanıdır: teslimat alıcı onayıyla doğrulandığında envanter okunmamış olabilir ve alan NULL kalır. Guard bu alana değil `DeliveryEvidence`'a bakar (§8.4).
 >
@@ -1401,6 +1409,7 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | Transaction | BuyerId | Standard | Alıcının işlemleri |
 | Transaction | CreatedAt | Standard | Tarih bazlı sorgular, ileride partitioning |
 | Transaction | (Status, DeliveryDeadline) WHERE Status = PAYMENT_RECEIVED | Filtered | **v3.0:** Teslimat doğrulama ve timeout taraması — satıcı non-delivery tespitinin sıcak yolu |
+| Transaction | (Status, PayoutEligibleAt) WHERE Status = ITEM_DELIVERED | Filtered | **v3.0:** Mutabakat süresi dolan işlemlerin taranması — ödeme kuyruğunun giriş sorgusu |
 | TransactionHistory | TransactionId | Standard | İşlem geçmişi sorguları |
 | BlockchainTransaction | TransactionId | Standard | İşleme ait blockchain transferleri |
 | BlockchainTransaction | Status | Filtered (Pending) | Onay bekleyen transferler |
