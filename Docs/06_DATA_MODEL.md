@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v5.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-05-18 (T81 ön-çalışması — `ItemPriceCache` §3.24 olarak envantere ve indeks tablolarına eklendi. Plan 11 §F4/T81 ve 08 §7.3 zaten "SQL Server ItemPriceCache tablosu" referansı veriyordu; data model spec drift'i bu PR ile kapatıldı.)
+**Versiyon: v6.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08 (T115 — P2P geçişi: item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.)
 
 ---
 
@@ -20,9 +20,9 @@ Bu doküman, Skinora platformundaki tüm veri yapılarını tanımlar. Entity'le
 | 6 | | **TransactionHistory** | Her state geçişinin audit kaydı |
 | 7 | Ödeme & Blockchain | **PaymentAddress** | İşlem başına üretilen benzersiz blockchain adresi |
 | 8 | | **BlockchainTransaction** | Gelen/giden tüm blockchain transferleri |
-| 9 | Steam Entegrasyonu | **TradeOffer** | Steam trade offer takibi |
-| 10 | | **PlatformSteamBot** | Platform Steam bot hesapları |
-| 10a | | **BotRecoveryItem** | Kısıtlı bota stuck kalan emanet item'ının recovery kuyruğu (T103b-2) |
+| 9 | Steam Entegrasyonu | ~~TradeOffer~~ | v3.0'da kaldırıldı — platform trade offer göndermez (§3.9) |
+| 10 | | ~~PlatformSteamBot~~ | v3.0'da kaldırıldı — platform Steam hesabı işletmez (§3.10) |
+| 10a | | ~~BotRecoveryItem~~ | v3.0'da kaldırıldı — mahsur kalabilecek item yok (§3.10a) |
 | 11 | Güven & Güvenlik | **Dispute** | İtiraz kaydı, otomatik çözüm, eskalasyon |
 | 12 | | **FraudFlag** | Fraud tespiti, admin inceleme |
 | 13 | Bildirim | **Notification** | Platform içi bildirimler |
@@ -53,13 +53,11 @@ User ─┬── 1:N ──→ Transaction (as Seller)
 
 Transaction ─┬── 1:1 ──→ PaymentAddress
              ├── 1:N ──→ BlockchainTransaction
-             ├── 1:N ──→ TradeOffer
              ├── 1:N ──→ TransactionHistory
              ├── 1:N ──→ Dispute
              ├── 1:N ──→ FraudFlag
              ├── 1:N ──→ Notification
              ├── 1:N ──→ SellerPayoutIssue
-             └── N:1 ──→ PlatformSteamBot (EscrowBot)
 
 Notification ─── 1:N ──→ NotificationDelivery
 
@@ -75,11 +73,11 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 
 | Kategori | Davranış | Entity'ler |
 |----------|----------|-----------|
-| **Soft Delete (Kalıcı)** | `IsDeleted` + `DeletedAt` field'ları. Kayıt silinmez, işaretlenir. Canlı tabloda kalıcı olarak kalır. | User, UserNotificationPreference, UserLoginLog, PlatformSteamBot, AdminRole, AdminRolePermission, AdminUserRole, RefreshToken, FraudFlag (ACCOUNT_LEVEL) |
+| **Soft Delete (Kalıcı)** | `IsDeleted` + `DeletedAt` field'ları. Kayıt silinmez, işaretlenir. Canlı tabloda kalıcı olarak kalır. | User, UserNotificationPreference, UserLoginLog, AdminRole, AdminRolePermission, AdminUserRole, RefreshToken, FraudFlag (ACCOUNT_LEVEL) |
 | **Mutable Catalog (Delete Yasak)** | Seed ile oluşturulur, admin tarafından value güncellenebilir. Silme (soft veya hard) tanımlı değildir — seed contract ile startup fail-fast buna bağımlıdır. Key seti yalnızca migration ile değişir. | SystemSetting |
 | **Soft Delete (Arşivlenebilir)** | Aynı mekanizma, ama transaction archive set ile birlikte archive tabloya taşınabilir (§8.8). Arşivleme öncesi ve sonrası soft delete semantiği geçerlidir. | Transaction, PaymentAddress, Dispute, FraudFlag (TRANSACTION_PRE_CREATE), Notification (TransactionId NOT NULL) |
 | **Append-Only (Arşivlenebilir)** | INSERT sonrası güncellenmez. Gerçek immutable — her satır oluşturulduğu haliyle kalır. DELETE tanımlı değil. Transaction archive set ile birlikte archive tabloya taşınabilir (§8.8). | TransactionHistory |
-| **Workflow Record (Arşivlenebilir)** | DELETE tanımlı değil, ama yaşam döngüsü boyunca state/status güncellemesi alır (ör: Status, RetryCount, ConfirmationCount). Terminal state'e ulaştıktan sonra fiilen frozen olur. Transaction archive set ile birlikte archive tabloya taşınabilir (§8.8). | BlockchainTransaction, TradeOffer, SellerPayoutIssue, NotificationDelivery |
+| **Workflow Record (Arşivlenebilir)** | DELETE tanımlı değil, ama yaşam döngüsü boyunca state/status güncellemesi alır (ör: Status, RetryCount, ConfirmationCount). Terminal state'e ulaştıktan sonra fiilen frozen olur. Transaction archive set ile birlikte archive tabloya taşınabilir (§8.8). | BlockchainTransaction, SellerPayoutIssue, NotificationDelivery |
 | **Append-Only (Kalıcı)** | INSERT sonrası güncellenmez. Gerçek immutable. DELETE tanımlı değil. Arşivleme kapsamı dışında — süresiz olarak canlı tabloda kalır. | AuditLog, ColdWalletTransfer |
 | **Retention-Based** | İşlendikten sonra belirli süre saklanır, sonra toplu temizlenir. Infrastructure verileri. | OutboxMessage, ProcessedEvent, ExternalIdempotencyRecord |
 | **Singleton** | Tek satır, güncellenir, silinmez. | SystemHeartbeat |
@@ -119,12 +117,10 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | Değer | Açıklama |
 |-------|----------|
 | `CREATED` | İşlem oluşturuldu, alıcı bekleniyor |
-| `ACCEPTED` | Alıcı kabul etti, satıcıdan item bekleniyor |
-| `TRADE_OFFER_SENT_TO_SELLER` | Satıcıya trade offer gönderildi |
-| `ITEM_ESCROWED` | Item platforma emanet edildi, ödeme bekleniyor |
-| `PAYMENT_RECEIVED` | Ödeme doğrulandı, item teslimi başlıyor |
-| `TRADE_OFFER_SENT_TO_BUYER` | Alıcıya trade offer gönderildi |
-| `ITEM_DELIVERED` | Item alıcıya teslim edildi, satıcıya ödeme gönderiliyor |
+| `ACCEPTED` | Alıcı kabul etti, satıcının hazırlık onayı bekleniyor |
+| `SELLER_CONFIRMED` | Satıcı göndermeye hazır olduğunu onayladı, ödeme bekleniyor |
+| `PAYMENT_RECEIVED` | Ödeme doğrulandı ve emanete alındı, satıcının item'ı alıcıya göndermesi bekleniyor |
+| `ITEM_DELIVERED` | Teslimat doğrulandı. İşlem **mutabakat süresinde** — `PayoutEligibleAt` gelene kadar ödeme yapılmaz (02 §4.5.1). Süre sonunda item hâlâ alıcıdaysa COMPLETED, değilse REFUNDED |
 | `COMPLETED` | İşlem tamamlandı |
 | `CANCELLED_TIMEOUT` | Timeout nedeniyle iptal |
 | `CANCELLED_SELLER` | Satıcı tarafından iptal |
@@ -134,6 +130,10 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `REFUNDED` | Alıcı-lehine admin dispute çözümü ile işlem geri alındı, alıcıya iade yapıldı (WP5 — 03 §6.4). Terminal. |
 
 > **Kaynak:** 03 §1.2 — birebir aynı durum listesi.
+>
+> **v3.0 (P2P) değişikliği:** `TRADE_OFFER_SENT_TO_SELLER` → `SELLER_CONFIRMED` olarak yeniden adlandırıldı; `ITEM_ESCROWED` ve `TRADE_OFFER_SENT_TO_BUYER` kaldırıldı. Platform trade offer göndermediği ve item emanete almadığı için karşılıkları yoktur (02 §2.1, 05 §4.1).
+>
+> **Migration notu:** `TransactionStatus` veritabanında `EnumToStringConverter` ile string olarak saklanır ve hiçbir CHECK constraint durum değerlerini tek tek listelemez — bu nedenle enum değişikliğinin şema maliyeti yoktur. Değişiklik prod öncesi yapıldığı için taşınacak veri de bulunmamaktadır.
 
 ### 2.2 StablecoinType
 
@@ -186,22 +186,11 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 
 ### 2.7 TradeOfferDirection
 
-| Değer | Açıklama |
-|-------|----------|
-| `TO_SELLER` | Satıcıdan item almak için (escrow) |
-| `TO_BUYER` | Alıcıya item teslimi |
-| `RETURN_TO_SELLER` | İptal/timeout durumunda satıcıya iade |
+**Bu enum kaldırılmıştır (v3.0, P2P geçişi).** Platform trade offer oluşturmadığı için yön kavramı yoktur. Item tek trade ile satıcıdan alıcıya geçer; `RETURN_TO_SELLER` (item iadesi) senaryosu ise tamamen ortadan kalkmıştır — platformda iade edilecek item bulunmaz (§3.9).
 
 ### 2.8 TradeOfferStatus
 
-| Değer | Açıklama |
-|-------|----------|
-| `PENDING` | Oluşturuldu, gönderilmeyi bekliyor |
-| `SENT` | Steam üzerinde gönderildi |
-| `ACCEPTED` | Karşı taraf kabul etti |
-| `DECLINED` | Karşı taraf reddetti |
-| `EXPIRED` | Steam'de süresi doldu |
-| `FAILED` | Gönderilemedi (API hatası) |
+**Bu enum kaldırılmıştır (v3.0, P2P geçişi).** Takip edilecek bir offer yaşam döngüsü yoktur (§3.9). Teslimatın durumu `DeliveryEvidence` (§2.24) ile temsil edilir.
 
 ### 2.9 DisputeType
 
@@ -247,9 +236,9 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 |-------|-------|----------|
 | `TRANSACTION_INVITE` | Alıcı | Yeni işlem daveti |
 | `BUYER_ACCEPTED` | Satıcı | Alıcı işlemi kabul etti |
-| `ITEM_ESCROWED` | Alıcı | Item emanete alındı, ödeme yapabilirsin |
+| `PAYMENT_WINDOW_OPEN` | Alıcı | Satıcı hazır, ödeme yapabilirsin (v3.0: eski `ITEM_ESCROWED`) |
 | `PAYMENT_RECEIVED` | Satıcı | Ödeme doğrulandı |
-| `TRADE_OFFER_SENT_TO_BUYER` | Alıcı | Item gönderildi, trade offer'ı kabul et |
+| `DELIVERY_EXPECTED` | Satıcı | Ödeme alındı, item'ı alıcıya gönder (v3.0: eski `TRADE_OFFER_SENT_TO_BUYER`; hedef taraf alıcıdan satıcıya değişti) |
 | `TRANSACTION_COMPLETED` | Her ikisi | İşlem tamamlandı |
 | `SELLER_PAYMENT_SENT` | Satıcı | Ödeme cüzdana gönderildi |
 | `TIMEOUT_WARNING` | İlgili taraf | Süre dolmak üzere |
@@ -285,12 +274,9 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 
 ### 2.15 PlatformSteamBotStatus
 
-| Değer | Açıklama |
-|-------|----------|
-| `ACTIVE` | Aktif, kullanılabilir |
-| `RESTRICTED` | Steam tarafından kısıtlandı |
-| `BANNED` | Steam tarafından banlandı |
-| `OFFLINE` | Çevrimdışı, bağlantı yok |
+**Bu enum kaldırılmıştır (v3.0, P2P geçişi).** Platform Steam hesabı işletmediği için durumu izlenecek bir bot yoktur (02 §15, 05 §3.2). `PlatformSteamBot` entity'si ile birlikte kaldırılmıştır (§3.10).
+
+> Alt bölüm numarası bilinçli korundu — §2.16 ve sonrası referanslarının kayması engellendi.
 
 ### 2.16 MonitoringStatus
 
@@ -385,6 +371,28 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `FAILED` | Maksimum retry sonrası başarısız |
 
 > **Kaynak:** 02 §18 — dış kanal bildirimleri. NotificationDelivery.Status field'ında kullanılır.
+
+### 2.24 DeliveryEvidence
+
+Bit-flag enum. Teslimatın hangi kanıt(lar)la doğrulandığını kaydeder. `Transaction.DeliveryEvidence` alanında kullanılır ve `ITEM_DELIVERED` geçişinin guard'ıdır.
+
+| Değer | Bit | Açıklama |
+|-------|-----|----------|
+| `NONE` | 0 | Henüz kanıt yok — teslimat doğrulanmamış |
+| `BUYER_CONFIRMED` | 1 | Alıcı "teslim aldım" onayını verdi |
+| `INVENTORY_DELTA` | 2 | Alıcının envanterinde beklenen `(ClassId, InstanceId)` sayısı referans anlık görüntüye göre arttı |
+| `SELLER_ASSET_GONE` | 4 | `ItemAssetId` satıcının envanterinden düştü |
+
+**Geçiş kuralı (02 §9.2):**
+
+```
+ITEM_DELIVERED  ⟸  BUYER_CONFIRMED
+ITEM_DELIVERED  ⟸  SELLER_ASSET_GONE  AND  INVENTORY_DELTA
+```
+
+- `BUYER_CONFIRMED` tek başına yeterlidir: onay alıcının kendi aleyhinedir (onaylayınca parası satıcıya gider), dolayısıyla yanlış pozitif üretmez.
+- Envanter yolunda **iki bitin birlikte** bulunması zorunludur. `INVENTORY_DELTA` tek başına yetmez (alıcı aynı item'ı başka yerden edinmiş olabilir → para yanlış satıcıya gider); `SELLER_ASSET_GONE` tek başına yetmez (satıcı üçüncü bir kişiye göndermiş olabilir).
+- **`SELLER_ASSET_GONE` set ama `INVENTORY_DELTA` değilse** teslimat sayılmaz; bu kombinasyon yanlış item veya üçüncü kişiye gönderim imzasıdır ve otomatik dispute yükseltmesi tetikler (02 §10.1).
 
 ---
 
@@ -556,8 +564,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `ItemType` | string(100) | NULL | Item türü (Rifle, Knife vb.) |
 | `ItemInspectLink` | string(500) | NULL | CS2 inspect linki |
 | **Item Asset Lineage** | | | |
-| `EscrowBotAssetId` | string(20) | NULL | Bot envanterindeki asset ID — trade sonrası Steam yeni ID atar. ITEM_ESCROWED ve sonrası NOT NULL |
-| `DeliveredBuyerAssetId` | string(20) | NULL | Alıcıya teslim sonrası asset ID — ITEM_DELIVERED ve sonrası NOT NULL |
+| `DeliveredBuyerAssetId` | string(20) | NULL | Alıcıda tespit edilen asset ID — **best-effort audit alanı**. Yalnız envanter kanıtı üretilebildiğinde dolar; alıcı onayıyla kapanan işlemlerde NULL kalabilir (§8.4) |
 | **Fiyat & Komisyon** | | | |
 | `StablecoinType` | int | NOT NULL | Enum: StablecoinType |
 | `Price` | decimal(18,6) | NOT NULL | Satıcının belirlediği fiyat |
@@ -571,9 +578,9 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | **Timeout** | | | |
 | `PaymentTimeoutMinutes` | int | NOT NULL | Satıcının seçtiği ödeme timeout süresi |
 | `AcceptDeadline` | datetime | NULL | Alıcı kabul son tarihi |
-| `TradeOfferToSellerDeadline` | datetime | NULL | Satıcı trade offer son tarihi |
+| `SellerConfirmDeadline` | datetime | NULL | Satıcı hazırlık onayı son tarihi (v3.0: eski `TradeOfferToSellerDeadline`) |
 | `PaymentDeadline` | datetime | NULL | Ödeme son tarihi |
-| `TradeOfferToBuyerDeadline` | datetime | NULL | Alıcı trade offer son tarihi |
+| `DeliveryDeadline` | datetime | NULL | Satıcının item'ı teslim etmesi için son tarih (v3.0: eski `TradeOfferToBuyerDeadline`). Satıcı non-delivery riskine karşı tek zaman sınırı — dolduğunda iptal uygulanmadan önce bir teslimat doğrulama turu çalışır (05 §4.4) |
 | `TimeoutFrozenAt` | datetime | NULL | Bakım/kesinti/blockchain degradasyonu — dondurma başlangıcı (null = aktif) |
 | `TimeoutFreezeReason` | int | NULL | Enum: TimeoutFreezeReason (MAINTENANCE, STEAM_OUTAGE, BLOCKCHAIN_DEGRADATION, EMERGENCY_HOLD) |
 | `TimeoutRemainingSeconds` | int | NULL | Freeze anında kalan süre (saniye). Resume'da bu süre ile yeni job schedule edilir (05 §4.4) |
@@ -586,23 +593,33 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 
 > **Emergency hold ve timeout freeze ilişkisi (05 §4.5):** Emergency hold, timeout freeze mekanizmasının özel bir türüdür. Hold uygulandığında `TimeoutFreezeReason = EMERGENCY_HOLD` set edilir ve standart freeze akışı işler (timeout durur, `TimeoutRemainingSeconds` kaydedilir). Ek olarak `IsOnHold = true` flag'i state machine guard'ını ve kullanıcı aksiyonlarını engeller — bu, sıradan freeze'in yapmadığı ek katmandır. Hold kaldırıldığında `IsOnHold = false` yapılır ve standart freeze resume mekanizması devreye girer. Ayrı Emergency Hold field'ları (`EmergencyHoldAt`, `EmergencyHoldReason`, `EmergencyHoldByAdminId`, `PreviousStatusBeforeHold`) admin audit ve operasyonel ihtiyaçlar için tutulur.
 | `PaymentTimeoutJobId` | string(50) | NULL | Hangfire ödeme timeout job ID'si — iptal/freeze'de silinir (09 §13.3) |
-| `TimeoutWarningJobId` | string(50) | NULL | Hangfire timeout uyarı job ID'si — **yalnızca ITEM_ESCROWED (ödeme aşaması)** için geçerlidir. Diğer aşamalar poller ile çalışır, ayrı warning job kullanmaz. İptal/freeze'de silinir (09 §13.3) |
-| `TimeoutWarningSentAt` | datetime | NULL | Timeout uyarısı gönderildi mi — **yalnızca ITEM_ESCROWED (ödeme aşaması)** için geçerlidir. Çift uyarı engeli (09 §13.3). **Reset kuralı:** ITEM_ESCROWED'a her girişte (ilk giriş veya freeze resume sonrası) NULL'a resetlenir — önceki aşamadan kalma stale değer taşınmaz |
+| `TimeoutWarningJobId` | string(50) | NULL | Hangfire timeout uyarı job ID'si — **yalnızca SELLER_CONFIRMED (ödeme aşaması)** için geçerlidir. Diğer aşamalar poller ile çalışır, ayrı warning job kullanmaz. İptal/freeze'de silinir (09 §13.3) |
+| `TimeoutWarningSentAt` | datetime | NULL | Timeout uyarısı gönderildi mi — **yalnızca SELLER_CONFIRMED (ödeme aşaması)** için geçerlidir. Çift uyarı engeli (09 §13.3). **Reset kuralı:** SELLER_CONFIRMED'a her girişte (ilk giriş veya freeze resume sonrası) NULL'a resetlenir — önceki aşamadan kalma stale değer taşınmaz |
 | **İptal** | | | |
 | `CancelledBy` | int | NULL | Enum: CancelledByType |
 | `CancelReason` | string(500) | NULL | İptal sebebi (zorunlu) |
 | **Dispute** | | | |
 | `HasActiveDispute` | bool | NOT NULL, DEFAULT 0 | Aktif dispute var mı |
-| **Steam Bot** | | | |
-| `EscrowBotId` | guid | FK → PlatformSteamBot, NULL | Item'ı tutan bot — escrow sonrası atanır |
+| **Teslimat Doğrulama (v3.0)** | | | |
+| `BuyerTradeUrl` | string(500) | NULL | Alıcının Steam trade URL'i — kabul anında sabitlenir, satıcıya hazır bağlantı olarak gösterilir (02 §2.2) |
+| `SellerReadyConfirmedAt` | datetime | NULL | Satıcının hazırlık onayı verdiği an — SELLER_CONFIRMED ve sonrası NOT NULL |
+| `BuyerBaselineClassCount` | int | NULL | Alıcının envanterinde bu `(ClassId, InstanceId)` çiftinden kaç adet bulunduğu — SELLER_CONFIRMED'a girerken alınan referans anlık görüntü |
+| `BuyerBaselineAssetIds` | string(400) | NULL | Aynı anlık görüntüdeki asset ID listesi (JSON dizi) — yanlış item tespitinde "sonradan gelen asset"i ayırmak için |
+| `BuyerBaselineCapturedAt` | datetime | NULL | Anlık görüntünün alındığı an. NULL ise alıcı envanteri okunamamıştır → envanter kanıtı yolu kapalıdır, yalnız alıcı onayı geçerlidir |
+| `BuyerConfirmedReceiptAt` | datetime | NULL | Alıcının "teslim aldım" onayını verdiği an |
+| `DeliveryVerifiedAt` | datetime | NULL | Teslimatın doğrulandığı an — ITEM_DELIVERED ve sonrası NOT NULL |
+| `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
+| **Mutabakat (v3.0)** | | | |
+| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
+| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu |
+| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur |
 | **Concurrency** | | | |
 | `RowVersion` | byte[] | NOT NULL, ROWVERSION | Optimistic concurrency token — EF Core `IsRowVersion()` |
 | **Zaman Damgaları** | | | |
 | `CreatedAt` | datetime | NOT NULL | İşlem oluşturulma |
 | `AcceptedAt` | datetime | NULL | Alıcı kabul zamanı |
-| `ItemEscrowedAt` | datetime | NULL | Item emanet zamanı |
 | `PaymentReceivedAt` | datetime | NULL | Ödeme doğrulama zamanı |
-| `ItemDeliveredAt` | datetime | NULL | Item teslim zamanı |
+| `ItemDeliveredAt` | datetime | NULL | Teslimatın doğrulandığı zaman. **Satıcıya ödeme bekleme penceresi bu alandan hesaplanır** (02 §4.5) |
 | `CompletedAt` | datetime | NULL | İşlem tamamlanma zamanı |
 | `UpdatedAt` | datetime | NOT NULL | Son güncelleme zamanı |
 | `IsDeleted` | bool | NOT NULL, DEFAULT 0 | Soft delete flag |
@@ -623,38 +640,47 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >
 >   | Field | Zorunlu olduğu status'ler |
 >   |-------|--------------------------|
->   | `BuyerId` | ACCEPTED, TRADE_OFFER_SENT_TO_SELLER, ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
->   | `BuyerRefundAddress` | ACCEPTED, TRADE_OFFER_SENT_TO_SELLER, ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
->   | `AcceptedAt` | ACCEPTED, TRADE_OFFER_SENT_TO_SELLER, ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
->   | `ItemEscrowedAt` | ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
->   | `EscrowBotAssetId` | ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
->   | `PaymentReceivedAt` | PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, COMPLETED |
+>   | `BuyerId` | ACCEPTED, SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
+>   | `BuyerRefundAddress` | ACCEPTED, SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
+>   | `BuyerTradeUrl` | ACCEPTED, SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
+>   | `AcceptedAt` | ACCEPTED, SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
+>   | `SellerReadyConfirmedAt` | SELLER_CONFIRMED, PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
+>   | `PaymentReceivedAt` | PAYMENT_RECEIVED, ITEM_DELIVERED, COMPLETED |
 >   | `ItemDeliveredAt` | ITEM_DELIVERED, COMPLETED |
->   | `DeliveredBuyerAssetId` | ITEM_DELIVERED, COMPLETED |
+>   | `DeliveryVerifiedAt` | ITEM_DELIVERED, COMPLETED |
+>   | `DeliveryEvidence != NONE` | ITEM_DELIVERED, COMPLETED |
+>   | `PayoutEligibleAt` | ITEM_DELIVERED, COMPLETED |
+>   | `SettlementVerifiedAt` | COMPLETED |
 >   | `CompletedAt` | COMPLETED |
 >
->   **CANCELLED_* kuralı:** İptal state'lerinde yukarıdaki field'lar iptalden önceki milestone'a göre kümülatif kalır. Örneğin ITEM_ESCROWED'dan CANCELLED_SELLER'a geçişte AcceptedAt, ItemEscrowedAt, EscrowBotAssetId dolu kalır; PaymentReceivedAt ve sonrası NULL'dır. Bu kural uygulama katmanında state machine guard'ı tarafından korunur — DB CHECK ile enforce edilmez (CANCELLED_* öncesi state bilgisi gerektirir).
+>   **Mutabakat invariantı (v3.0):** `COMPLETED`'a geçiş için `SettlementVerifiedAt NOT NULL` **ve** `DeliveryReversedAt NULL` olmalıdır. Yani ödeme, yalnızca mutabakat süresi dolduktan **ve** item'ın hâlâ alıcıda olduğu doğrulandıktan sonra yapılabilir (02 §4.5.1). Süre dolmuş olması tek başına yeterli değildir.
+>
+>   **`DeliveredBuyerAssetId` bu matriste yer almaz.** Best-effort audit alanıdır: teslimat alıcı onayıyla doğrulandığında envanter okunmamış olabilir ve alan NULL kalır. Guard bu alana değil `DeliveryEvidence`'a bakar (§8.4).
+>
+>   **`BuyerBaselineCapturedAt` de zorunlu değildir.** Alıcının envanteri gizliyse anlık görüntü alınamaz; bu, işlemi bloklamaz ancak envanter kanıtı yolunu kapatır (02 §9.2).
+>
+>   **CANCELLED_* kuralı:** İptal state'lerinde yukarıdaki field'lar iptalden önceki milestone'a göre kümülatif kalır. Örneğin SELLER_CONFIRMED'dan CANCELLED_SELLER'a geçişte AcceptedAt ve SellerReadyConfirmedAt dolu kalır; PaymentReceivedAt ve sonrası NULL'dır. Bu kural uygulama katmanında state machine guard'ı tarafından korunur — DB CHECK ile enforce edilmez (CANCELLED_* öncesi state bilgisi gerektirir).
 >
 >   **FLAGGED:** Tüm milestone field'ları NULL (BuyerId dahil — henüz alıcı kabul etmemiş olabilir).
-> - **FLAGGED state kuralları (03 §7):** FLAGGED state'inde işlem admin onayı bekler, timeout motoru çalışmaz. Tüm deadline field'ları (`AcceptDeadline`, `TradeOfferToSellerDeadline`, `PaymentDeadline`, `TradeOfferToBuyerDeadline`) NULL kalır. Hangfire job'ları oluşturulmaz (`PaymentTimeoutJobId = NULL`, `TimeoutWarningJobId = NULL`). `CreatedAt` kayıt oluşturma anını (FLAGGED'a giriş) temsil eder. Admin onayı geldiğinde CREATED state'ine geçilir ve deadline/job initialization o anda yapılır.
+> - **FLAGGED state kuralları (03 §7):** FLAGGED state'inde işlem admin onayı bekler, timeout motoru çalışmaz. Tüm deadline field'ları (`AcceptDeadline`, `SellerConfirmDeadline`, `PaymentDeadline`, `DeliveryDeadline`) NULL kalır. Hangfire job'ları oluşturulmaz (`PaymentTimeoutJobId = NULL`, `TimeoutWarningJobId = NULL`). `CreatedAt` kayıt oluşturma anını (FLAGGED'a giriş) temsil eder. Admin onayı geldiğinde CREATED state'ine geçilir ve deadline/job initialization o anda yapılır.
 > - **State → aktif deadline/job matrisi** (normatif kural — freeze ve FLAGGED istisna):
 >
 >   | Status | Aktif Deadline | Hangfire Job |
 >   |--------|---------------|-------------|
 >   | FLAGGED | — (tümü NULL) | — (tümü NULL) |
 >   | CREATED | `AcceptDeadline NOT NULL` | — (opsiyonel, alıcı kabul bekleniyor) |
->   | ACCEPTED | `TradeOfferToSellerDeadline NOT NULL` | — |
->   | TRADE_OFFER_SENT_TO_SELLER | `TradeOfferToSellerDeadline NOT NULL` | — |
->   | ITEM_ESCROWED | `PaymentDeadline NOT NULL` | `PaymentTimeoutJobId NOT NULL` |
->   | PAYMENT_RECEIVED | `TradeOfferToBuyerDeadline NOT NULL` | — |
->   | TRADE_OFFER_SENT_TO_BUYER | `TradeOfferToBuyerDeadline NOT NULL` | — |
->   | Terminal state'ler (COMPLETED, CANCELLED_*) | — (tümü consumed) | — (tümü NULL) |
+>   | ACCEPTED | `SellerConfirmDeadline NOT NULL` | — |
+>   | SELLER_CONFIRMED | `PaymentDeadline NOT NULL` | `PaymentTimeoutJobId NOT NULL` |
+>   | PAYMENT_RECEIVED | `DeliveryDeadline NOT NULL` | — |
+>   | Terminal state'ler (COMPLETED, CANCELLED_*, REFUNDED) | — (tümü consumed) | — (tümü NULL) |
 >
 >   Freeze aktifken deadline'lar son değerlerinde kalır, job'lar iptal edilir. Bu matris uygulama katmanında state machine guard'ı tarafından zorunlu kılınır; DB CHECK ile tam enforce edilmesi pratik değildir (state sayısı × deadline kombinasyonu) ancak normatif referans olarak geçerlidir.
 >
->   **Timeout enforcement mekanizması:** Yalnızca **ödeme aşaması** (ITEM_ESCROWED) per-transaction Hangfire delayed job ile yönetilir (`PaymentTimeoutJobId`, `TimeoutWarningJobId`). Diğer aşamaların deadline'ları (AcceptDeadline, TradeOfferToSellerDeadline, TradeOfferToBuyerDeadline) **periyodik scanner/poller job** ile enforce edilir — deadline geçmiş ama state ilerlememiş transaction'lar tespit edilip timeout tetiklenir. Ödeme aşamasının ayrıcalıklı olmasının sebebi: kullanıcının ödeme yapma niyetini ve uyarı zamanlamasını hassas kontrol etme ihtiyacı (09 §13.3). Diğer aşamalarda dakika hassasiyetinde poller yeterlidir.
+>   **Timeout enforcement mekanizması:** Yalnızca **ödeme aşaması** (SELLER_CONFIRMED) per-transaction Hangfire delayed job ile yönetilir (`PaymentTimeoutJobId`, `TimeoutWarningJobId`). Diğer aşamaların deadline'ları (`AcceptDeadline`, `SellerConfirmDeadline`, `DeliveryDeadline`) **periyodik scanner/poller job** ile enforce edilir — deadline geçmiş ama state ilerlememiş transaction'lar tespit edilip timeout tetiklenir. Ödeme aşamasının ayrıcalıklı olmasının sebebi: kullanıcının ödeme yapma niyetini ve uyarı zamanlamasını hassas kontrol etme ihtiyacı (09 §13.3). Diğer aşamalarda dakika hassasiyetinde poller yeterlidir.
 >
->   **Warning field reset kuralı:** `TimeoutWarningJobId` ve `TimeoutWarningSentAt` yalnızca ITEM_ESCROWED aşamasında anlamlıdır. State geçişlerinde bu alanların davranışı: (1) ITEM_ESCROWED'a girişte her ikisi de initialize edilir (job schedule, SentAt = NULL), (2) ITEM_ESCROWED'dan çıkışta (PAYMENT_RECEIVED veya CANCELLED_*) job iptal edilir ve her iki alan NULL'a döner, (3) freeze resume sonrası yeni job schedule edilir ve SentAt NULL'a resetlenir. Diğer state'lerde bu alanlar NULL olmalıdır — state→deadline matrisindeki Hangfire Job sütunu bunu yansıtır.
+>   **Teslimat aşaması istisnası (v3.0):** `DeliveryDeadline` dolduğunda poller doğrudan timeout tetiklemez; önce bir teslimat doğrulama turu çalıştırır (02 §9.2). Kanıt bulunursa geçiş `deliver_item`'a döner ve iptal uygulanmaz. Bu, satıcı item'ı göndermiş olmasına rağmen alıcı onay vermediğinde haksız iadeyi önler (05 §4.4).
+>
+>   **Warning field reset kuralı:** `TimeoutWarningJobId` ve `TimeoutWarningSentAt` yalnızca SELLER_CONFIRMED aşamasında anlamlıdır. State geçişlerinde bu alanların davranışı: (1) SELLER_CONFIRMED'a girişte her ikisi de initialize edilir (job schedule, SentAt = NULL), (2) SELLER_CONFIRMED'dan çıkışta (PAYMENT_RECEIVED veya CANCELLED_*) job iptal edilir ve her iki alan NULL'a döner, (3) freeze resume sonrası yeni job schedule edilir ve SentAt NULL'a resetlenir. Diğer state'lerde bu alanlar NULL olmalıdır — state→deadline matrisindeki Hangfire Job sütunu bunu yansıtır.
 >
 > Bu constraint'ler veri bütünlüğünü DB seviyesinde garanti eder — uygulama katmanı kontrolüne ek güvence sağlar.
 
@@ -778,76 +804,33 @@ Satıcının payout sorununu bildirmesi ve çözüm takibi (02 §10.3).
 
 ### 3.9 TradeOffer
 
-Steam trade offer yaşam döngüsü takibi.
+**Bu entity kaldırılmıştır (v3.0, P2P geçişi).**
 
-| Field | Tip | Kısıt | Açıklama |
-|-------|-----|-------|----------|
-| `Id` | guid | PK | |
-| `TransactionId` | guid | FK → Transaction, NOT NULL | |
-| `Direction` | int | NOT NULL | Enum: TradeOfferDirection |
-| `SteamTradeOfferId` | string(20) | NULL | Steam tarafındaki trade offer ID |
-| `PlatformSteamBotId` | guid | FK → PlatformSteamBot, NOT NULL | Gönderen bot |
-| `Status` | int | NOT NULL | Enum: TradeOfferStatus |
-| `RetryCount` | int | NOT NULL, DEFAULT 0 | Yeniden deneme sayısı |
-| `ErrorMessage` | string(500) | NULL | Hata durumunda mesaj |
-| `CreatedAt` | datetime | NOT NULL | |
-| `SentAt` | datetime | NULL | Steam'de gönderilme zamanı |
-| `RespondedAt` | datetime | NULL | Kabul/ret zamanı |
+Platform trade offer oluşturmaz, göndermez ve takip etmez. Trade doğrudan satıcı ile alıcı arasında geçer ve platform trade'in tarafı olmadığı için Steam'den offer durumu alamaz (02 §2.1, 05 §3.2). Takip edilecek bir offer yaşam döngüsü olmadığından tablo, `TradeOfferDirection` ve `TradeOfferStatus` enum'ları ile birlikte kaldırılmıştır.
 
-> **Silme politikası:** Workflow Record (Arşivlenebilir) — DELETE tanımlı değil; Status, RetryCount, SentAt, RespondedAt güncellenir. Terminal state (ACCEPTED/DECLINED/EXPIRED/FAILED) sonrası frozen. Archive tabloya taşınabilir (§8.8).
->
-> **State-dependent CHECK constraint'ler:**
-> - **SENT, ACCEPTED, DECLINED, EXPIRED**: `SentAt NOT NULL`.
-> - **ACCEPTED, DECLINED, EXPIRED**: `RespondedAt NOT NULL`.
-> - **FAILED**: `SentAt` zorunlu değil — pre-send aşamasında (Steam API'ye ulaşılamadan) başarısız olabilir. `SentAt NOT NULL` ise offer Steam'e iletilmiş ama sonrasında hata almış demektir.
+Teslimatın nasıl doğrulandığı için bkz. §2.24 `DeliveryEvidence` ve `Transaction`'ın teslimat doğrulama alanları (§3.5).
+
+> Alt bölüm numarası bilinçli korundu — §3.11 ve sonrası referanslarının kayması engellendi.
 
 ---
 
 ### 3.10 PlatformSteamBot
 
-Platform Steam bot hesapları ve durumları.
+**Bu entity kaldırılmıştır (v3.0, P2P geçişi).**
 
-| Field | Tip | Kısıt | Açıklama |
-|-------|-----|-------|----------|
-| `Id` | guid | PK | |
-| `SteamId` | string(20) | UNIQUE, NOT NULL | Bot'un Steam ID'si |
-| `DisplayName` | string(100) | NOT NULL | Bot adı |
-| `Status` | int | NOT NULL | Enum: PlatformSteamBotStatus |
-| `RestrictionReason` | string(200) | NULL | Sidecar'ın bildirdiği güncel non-ACTIVE sebep; ACTIVE iken null (T103b-2, 07 §9.10) |
-| `ActiveEscrowCount` | int | NOT NULL, DEFAULT 0 | Aktif emanet item sayısı (denormalized) |
-| `DailyTradeOfferCount` | int | NOT NULL, DEFAULT 0 | Günlük trade offer sayısı (denormalized) |
-| `LastHealthCheckAt` | datetime | NULL | Son sağlık kontrolü zamanı |
-| `IsDeleted` | bool | NOT NULL, DEFAULT 0 | Soft delete flag |
-| `DeletedAt` | datetime | NULL | Silinme zamanı |
-| `CreatedAt` | datetime | NOT NULL | |
-| `UpdatedAt` | datetime | NOT NULL | |
+Platform Steam hesabı işletmez (02 §15, 05 §3.2). Bot havuzu, kapasite bazlı bot seçimi, sağlık kontrolü, günlük offer kotası ve `ActiveEscrowCount` denormalize sayacı — hepsi item custody'sine bağlıydı ve custody kalktığı için karşılıksız kalmıştır. `PlatformSteamBotStatus` enum'u (§2.15) ve `Transaction.EscrowBotId` FK'sı da bu entity ile birlikte kaldırılmıştır.
 
-> **Bot seçimi:** Yeni trade offer gönderirken `ActiveEscrowCount` en düşük olan aktif bot seçilir (capacity-based, 05 §3.2). Eşitlik durumunda en eski `LastHealthCheckAt`, sonra `Id` (deterministik) — `SqlBotSelectionService`.
->
-> **`ActiveEscrowCount` yaşam döngüsü (T106a):** Backend tek-yazardır (sidecar asla yazmaz; negatife düşmez). **+1** item bot'a emanet edildiğinde (`ITEM_ESCROWED` — `trade_offer.accepted` escrow yönü). **−1** item bot'tan ayrıldığında: alıcıya teslim (`ITEM_DELIVERED`) **veya** satıcıya iade (`RETURN_TO_SELLER` accepted). Dispatch anında (`TRADE_OFFER_SENT_TO_SELLER`) sayaç değişmez — yalnızca `EscrowBotId` atanır; sayaç gerçek tutuş anını yansıtır. **Delivery + refund bacakları aynı escrow botunu yeniden kullanır** (yalnız o bot item'ı tutar — `Transaction.EscrowBotId`).
+> Alt bölüm numarası bilinçli korundu.
 
 ---
 
 ### 3.10a BotRecoveryItem
 
-Kısıtlı/banned bir bota stuck kalan emanet item'ının recovery kuyruğu satırı (T103b-2 — 02 §15, 03 §11.2a, 04 §8.7). Bot RESTRICTED/BANNED'e geçince, custody'sinde item duran (escrow kabul edilmiş, teslim/iade edilmemiş) her işlem için `BotRestrictionRecoveryConsumer` tarafından **eager materyalize** edilir.
+**Bu entity kaldırılmıştır (v3.0, P2P geçişi).**
 
-| Field | Tip | Kısıt | Açıklama |
-|-------|-----|-------|----------|
-| `Id` | guid | PK | |
-| `PlatformSteamBotId` | guid | FK → PlatformSteamBot, NOT NULL | Item'ı tutan kısıtlı bot |
-| `TransactionId` | guid | FK → Transaction, UNIQUE, NOT NULL | Stuck işlem (işlem başına tek satır) |
-| `RecoveryStatus` | int | NOT NULL | Enum: BotRecoveryStatus (PENDING / IN_REVIEW / RESOLVED) |
-| `StatusAtRestriction` | int | NOT NULL | Kısıtlama anındaki işlem state snapshot'ı (TransactionStatus) |
-| `ResponsibleAdminId` | guid | FK → User, NULL | Atanan sorumlu admin (opsiyonel) |
-| `AdminNote` | string(2000) | NULL | Admin inceleme notu |
-| `ResolvedAt` | datetime | NULL | RESOLVED'e geçiş zamanı |
-| `CreatedAt` | datetime | NOT NULL | |
-| `UpdatedAt` | datetime | NOT NULL | |
+Recovery kuyruğunun varlık sebebi, kısıtlanan bir botun custody'sinde mahsur kalan item'lardı. Platform item tutmadığı için mahsur kalabilecek bir item yoktur — bu senaryo tamamen ortadan kalkmıştır (02 §15, 03 §11.2a). `BotRecoveryStatus` enum'u da kaldırılmıştır.
 
-> **Idempotent materyalizasyon:** `TransactionId` UNIQUE + consumer'ın var-olan kontrolü → bot tekrar kısıtlansa / outbox yeniden teslim etse satır çiftlenmez. Mutable + `IAuditableEntity` (append-only DEĞİL — admin triage durumunu günceller). `RESOLVED` terminaldir (AD26 değiştirmez). Liste/görünüm verisi (item adı, taraflar, güncel state) okuma anında Transaction'dan join edilir — snapshot edilmez (drift önlenir; yalnız `StatusAtRestriction` snapshot).
->
-> **İndeksler:** `UQ_BotRecoveryItems_TransactionId`, `IX_BotRecoveryItems_PlatformSteamBotId_RecoveryStatus` (açık-recovery sayımı + kuyruk taraması), `IX_BotRecoveryItems_ResponsibleAdminId` (FK).
+> Alt bölüm numarası bilinçli korundu.
 
 ---
 
@@ -1341,18 +1324,12 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | UserNotificationPreference | UserId | User | N:1 |
 | Transaction | SellerId | User | N:1 |
 | Transaction | BuyerId | User | N:1 |
-| Transaction | EscrowBotId | PlatformSteamBot | N:1 |
 | Transaction | EmergencyHoldByAdminId | User | N:1 (opsiyonel) |
 | TransactionHistory | TransactionId | Transaction | N:1 |
 | TransactionHistory | ActorId | User | N:1 |
 | PaymentAddress | TransactionId | Transaction | 1:1 |
 | BlockchainTransaction | TransactionId | Transaction | N:1 |
 | BlockchainTransaction | PaymentAddressId | PaymentAddress | N:1 (opsiyonel) |
-| TradeOffer | TransactionId | Transaction | N:1 |
-| TradeOffer | PlatformSteamBotId | PlatformSteamBot | N:1 |
-| BotRecoveryItem | PlatformSteamBotId | PlatformSteamBot | N:1 |
-| BotRecoveryItem | TransactionId | Transaction | 1:1 (UNIQUE) |
-| BotRecoveryItem | ResponsibleAdminId | User | N:1 (opsiyonel) |
 | Dispute | TransactionId | Transaction | N:1 |
 | Dispute | OpenedByUserId | User | N:1 |
 | Dispute | AdminId | User | N:1 (opsiyonel) |
@@ -1386,14 +1363,13 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | Transaction → TransactionHistory | NO ACTION | Audit kaydı asla silinmez |
 | Transaction → PaymentAddress | NO ACTION | Ödeme adresi kaydı korunmalı |
 | Transaction → BlockchainTransaction | NO ACTION | Blockchain kaydı korunmalı |
-| Transaction → TradeOffer | NO ACTION | Trade offer kaydı korunmalı |
 | Transaction → Dispute | NO ACTION | Dispute kaydı korunmalı |
 | AdminRole → AdminRolePermission | NO ACTION | Soft delete — rol silindiğinde yetkileri de soft delete edilir (uygulama seviyesinde) |
 | AdminRole → AdminUserRole | NO ACTION | Soft delete — rol silindiğinde atamalar da soft delete edilir (uygulama seviyesinde) |
 | Transaction → SellerPayoutIssue | NO ACTION | Payout issue kaydı asla silinmez |
 | User → AuditLog | NO ACTION | Audit kaydı asla silinmez |
 
-> **Genel prensip:** Tüm entity'ler NO ACTION cascade kullanır. Silme işlemleri soft delete ile uygulama seviyesinde yönetilir. Append-only entity'lerde (TransactionHistory, AuditLog, ColdWalletTransfer) INSERT sonrası UPDATE/DELETE tanımlı değildir. Workflow record entity'lerde (BlockchainTransaction, TradeOffer, SellerPayoutIssue) DELETE tanımlı değildir; state/status güncellemesi alırlar ama terminal state sonrası fiilen frozen olurlar. Arşivlenebilir entity'ler transaction archive set ile birlikte archive tabloya taşınabilir (§8.8); kalıcı entity'ler (AuditLog, ColdWalletTransfer) süresiz canlı tabloda kalır.
+> **Genel prensip:** Tüm entity'ler NO ACTION cascade kullanır. Silme işlemleri soft delete ile uygulama seviyesinde yönetilir. Append-only entity'lerde (TransactionHistory, AuditLog, ColdWalletTransfer) INSERT sonrası UPDATE/DELETE tanımlı değildir. Workflow record entity'lerde (BlockchainTransaction, SellerPayoutIssue) DELETE tanımlı değildir; state/status güncellemesi alırlar ama terminal state sonrası fiilen frozen olurlar. Arşivlenebilir entity'ler transaction archive set ile birlikte archive tabloya taşınabilir (§8.8); kalıcı entity'ler (AuditLog, ColdWalletTransfer) süresiz canlı tabloda kalır.
 
 ---
 
@@ -1409,10 +1385,8 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | PaymentAddress | Address | Benzersiz blockchain adresi |
 | PaymentAddress | HdWalletIndex | Derivation index reuse engeli — monoton artan, arşivleme sonrası da global tekillik korunur |
 | BlockchainTransaction | TxHash + EventIndex (WHERE TxHash NOT NULL) | Blockchain transaction tekrar kontrolü — per-event (WP10, 08 §3.4); tek tx'in birden fazla Transfer event'i her event için ayrı kredilenir |
-| TradeOffer | SteamTradeOfferId (WHERE NOT NULL) | Steam trade offer tekrar kontrolü — retry/entegrasyon hatalarında çift kayıt engeli |
+| Transaction | (SellerId, ItemAssetId) WHERE Status NOT IN (terminal) | **v3.0:** Aynı item aynı anda yalnız bir açık işlemde kullanılabilir (02 §2.3). Teslimat doğrulaması item sınıfı üzerinden yapıldığı için, aynı item'ı hedefleyen iki açık işlem yanlış atıf üretir |
 | Transaction | InviteToken (WHERE NOT NULL) | Açık link token benzersizliği |
-| PlatformSteamBot | SteamId | Benzersiz bot hesabı |
-| BotRecoveryItem | TransactionId | İşlem başına tek recovery satırı (idempotent materyalizasyon) |
 | AdminRole | Name | Benzersiz rol adı |
 | SystemSetting | Key | Benzersiz parametre anahtarı |
 | UserNotificationPreference | UserId + Channel (WHERE IsDeleted = 0) | Kullanıcı başına kanal başına tek kayıt |
@@ -1434,13 +1408,12 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | Transaction | SellerId | Standard | Satıcının işlemleri |
 | Transaction | BuyerId | Standard | Alıcının işlemleri |
 | Transaction | CreatedAt | Standard | Tarih bazlı sorgular, ileride partitioning |
-| Transaction | EscrowBotId | Standard | Bot bazlı işlem sorguları |
+| Transaction | (Status, DeliveryDeadline) WHERE Status = PAYMENT_RECEIVED | Filtered | **v3.0:** Teslimat doğrulama ve timeout taraması — satıcı non-delivery tespitinin sıcak yolu |
+| Transaction | (Status, PayoutEligibleAt) WHERE Status = ITEM_DELIVERED | Filtered | **v3.0:** Mutabakat süresi dolan işlemlerin taranması — ödeme kuyruğunun giriş sorgusu |
 | TransactionHistory | TransactionId | Standard | İşlem geçmişi sorguları |
 | BlockchainTransaction | TransactionId | Standard | İşleme ait blockchain transferleri |
 | BlockchainTransaction | Status | Filtered (Pending) | Onay bekleyen transferler |
 | BlockchainTransaction | FromAddress | Standard | Çoklu hesap tespiti — gönderim adresi çapraz kontrol |
-| TradeOffer | TransactionId | Standard | İşleme ait trade offer'lar |
-| TradeOffer | PlatformSteamBotId | Standard | Bot bazlı trade offer sorguları |
 | Notification | UserId + IsRead | Composite | Okunmamış bildirim sorguları |
 | Notification | CreatedAt | Standard | Kronolojik listeleme |
 | Notification | FlagId | Filtered (FlagId IS NOT NULL) | `ADMIN_FLAG_ALERT` flag-link sorguları (WP8) |
@@ -1542,7 +1515,7 @@ Kullanıcı hesabını sildiğinde (02 §19, 05 §6.5):
 | 02 §14.2 | Sahte işlem | User (CooldownExpiresAt), SystemSetting | Cooldown tracking |
 | 02 §14.3 | Hesap güvenliği | FraudFlag, UserLoginLog | IP/cihaz çapraz kontrol |
 | 02 §14.4 | Kara para | FraudFlag, Transaction (MarketPriceAtCreation) | Piyasa fiyatı snapshot |
-| 02 §15 | Platform Steam hesapları | PlatformSteamBot | Durum, kapasite izleme |
+| 02 §9.2 | Teslimat doğrulama | Transaction (`DeliveryEvidence`, baseline alanları) | Alıcı onayı + envanter kanıtı |
 | 02 §16 | Admin paneli | AdminRole, AdminRolePermission, AdminUserRole, SystemSetting | Dinamik rol ve parametre |
 | 02 §17 | Dashboard | — (sorgu bazlı) | Mevcut entity'lerden türetilir |
 | 02 §18 | Bildirimler | Notification, UserNotificationPreference, NotificationDelivery | Platform içi + dış kanal teslimat takibi |
@@ -1550,7 +1523,7 @@ Kullanıcı hesabını sildiğinde (02 §19, 05 §6.5):
 | 02 §23 | Downtime | Transaction (TimeoutFrozenAt) | Timeout dondurma |
 | 03 §1.2 | İşlem durumları | TransactionStatus enum | 13 durum |
 | 03 §2.1 | Kayıt / ToS | User (TosAcceptedVersion, TosAcceptedAt) | Versiyon takibi |
-| 03 §2.3, §3.5 | Trade offer | TradeOffer | Gönderim, kabul, ret takibi |
+| 03 §2.3 | Satıcı hazırlık onayı | Transaction (`SellerReadyConfirmedAt`, baseline) | Ödeme adresini açan kapı |
 | 03 §6 | Dispute akışları | Dispute | Open → Escalated → Closed |
 | 03 §7 | Fraud akışları | FraudFlag | 4 flag türü |
 | 03 §8.6 | Rol/yetki yönetimi | AdminRole, AdminRolePermission, AdminUserRole | Süper admin + dinamik roller |
@@ -1578,12 +1551,12 @@ Bakım veya Steam kesintisinde (02 §3.3, §23). Resume modeli: **TimeoutRemaini
 **Freeze (dondurma):**
 1. `TimeoutFrozenAt = NOW`, `TimeoutFreezeReason` set edilir
 2. Aktif deadline'dan kalan süre hesaplanır ve `TimeoutRemainingSeconds` kaydedilir
-3. **ITEM_ESCROWED aşamasında** (per-transaction Hangfire job): `PaymentTimeoutJobId` ve `TimeoutWarningJobId` job'ları iptal edilir
+3. **SELLER_CONFIRMED aşamasında** (per-transaction Hangfire job): `PaymentTimeoutJobId` ve `TimeoutWarningJobId` job'ları iptal edilir
 4. **Diğer aşamalarda** (scanner/poller): ek aksiyon gerekmez — poller zaten `TimeoutFrozenAt IS NOT NULL` kayıtları atlar
 
 **Resume (devam ettirme):**
 1. Aktif deadline field'ları güncellenir: `yeni deadline = NOW + TimeoutRemainingSeconds`
-2. **ITEM_ESCROWED aşamasında**: yeni Hangfire timeout job schedule edilir (`PaymentTimeoutJobId` güncellenir)
+2. **SELLER_CONFIRMED aşamasında**: yeni Hangfire timeout job schedule edilir (`PaymentTimeoutJobId` güncellenir)
 3. **Diğer aşamalarda**: deadline güncellenir, poller yeni deadline'ı doğal olarak görür
 4. `TimeoutFrozenAt = NULL`, `TimeoutFreezeReason = NULL`, `TimeoutRemainingSeconds = NULL`
 
@@ -1597,8 +1570,6 @@ Bakım veya Steam kesintisinde (02 §3.3, §23). Resume modeli: **TimeoutRemaini
 | User | CompletedTransactionCount | İşlem COMPLETED olduğunda | Eventual (cross-module) |
 | User | SuccessfulTransactionRate | İşlem COMPLETED veya CANCELLED olduğunda — sadece sorumlu tarafın skoru güncellenir (§3.1 formül detayı) | Eventual (cross-module) |
 | User | CooldownExpiresAt | İptal limiti aşıldığında | Eventual (cross-module) |
-| PlatformSteamBot | ActiveEscrowCount | Item escrow/release olduğunda | Atomic (same-module) |
-| PlatformSteamBot | DailyTradeOfferCount | Trade offer gönderildiğinde, gece yarısı sıfırlanır | Atomic (same-module) |
 | Transaction | HasActiveDispute | Dispute açıldığında true, tüm dispute'lar kapandığında false | Atomic (same-module) |
 
 > **Consistency modeli:** Same-module güncellemeler aynı DB transaction'da atomik yapılır. Cross-module güncellemeler Outbox dispatcher üzerinden eventual consistency ile gerçekleşir — idempotent event handler + reconciliation job gerektirir. Detay: 09 §9.6.
@@ -1619,15 +1590,21 @@ Tüm finansal hesaplamalar tek bir normatif kurala tabidir:
 
 ### 8.4 Item Asset Lineage
 
-Steam'de trade yapıldığında asset ID değişir. Item'ın yaşam döngüsü boyunca üç ayrı asset ID'si olur:
+Steam'de trade yapıldığında asset ID değişir. P2P modelinde item tek bir trade ile satıcıdan alıcıya geçtiği için iki asset referansı tutulur:
 
 | Field | Set Edilme Anı | Kaynak |
 |-------|---------------|--------|
 | `ItemAssetId` | İşlem oluşturma | Satıcının envanterinden snapshot |
-| `EscrowBotAssetId` | Trade offer kabul (seller → bot) | Steam trade receipt'ten alınır |
-| `DeliveredBuyerAssetId` | Trade offer kabul (bot → buyer) | Steam trade receipt'ten alınır |
+| `DeliveredBuyerAssetId` | Teslimat doğrulandığında (best-effort) | Alıcının envanterinde referans anlık görüntüden sonra beliren asset |
 
-> **Neden gerekli:** Aynı classId/instanceId'ye sahip birden fazla item bot envanterinde olabilir. Trade offer oluşturulurken doğru item'ı seçmek için `EscrowBotAssetId` zorunludur. İade akışında da aynı alan kullanılır. `DeliveredBuyerAssetId` teslim sonrası audit ve dispute doğrulaması için tutulur.
+> **Kritik ayrım — hangi tarafta hangi eşleştirme kullanılır:**
+>
+> - **Satıcı tarafı `ItemAssetId` ile eşleştirilir.** Item henüz hareket etmediği için asset ID geçerlidir. Teslimat doğrulamasında "bu spesifik asset satıcının envanterinden düştü mü?" sorusu bu alanla cevaplanır.
+> - **Alıcı tarafı asset ID ile eşleştirilemez.** Trade sonrası Steam yeni bir asset ID atar ve platform trade'in tarafı olmadığı için receipt'i göremez. Alıcı tarafında eşleştirme `(ClassId, InstanceId)` üzerinden, `SELLER_CONFIRMED`'a girerken alınan referans anlık görüntüye göre **sayı farkıyla** yapılır (02 §9.2).
+>
+> `DeliveredBuyerAssetId` bu nedenle artık zorunlu bir doğrulama girdisi değil, **best-effort audit alanıdır** — yalnız envanter kanıtı üretilebildiğinde dolar, alıcı onayıyla kapanan işlemlerde `NULL` kalabilir. Durum geçiş guard'ı bu alana değil, `DeliveryEvidence` alanına bakar.
+>
+> `EscrowBotAssetId` kaldırılmıştır — item hiçbir zaman platform envanterinde bulunmaz.
 
 ### 8.5 Admin Aksiyonu Invariantı
 
@@ -1690,7 +1667,6 @@ Transaction ve tüm FK-bağımlı kayıtları **birlikte** arşiv tablolarına t
 | Transaction | `Status IN (COMPLETED, CANCELLED_*)` ve `CreatedAt < 6 ay önce` |
 | TransactionHistory | Arşivlenen Transaction'a bağlı |
 | BlockchainTransaction | Arşivlenen Transaction'a bağlı |
-| TradeOffer | Arşivlenen Transaction'a bağlı |
 | PaymentAddress | Arşivlenen Transaction'a bağlı |
 | Dispute | Arşivlenen Transaction'a bağlı |
 | FraudFlag (TRANSACTION_PRE_CREATE) | Arşivlenen Transaction'a bağlı |
@@ -1714,7 +1690,7 @@ Transaction ve tüm FK-bağımlı kayıtları **birlikte** arşiv tablolarına t
 > **Global benzersizlik ve arşivleme:** Canlı tablodaki unique constraint'ler arşiv tablolarını kapsamaz. Aşağıdaki alanlar için bu risk değerlendirilmiştir:
 > - **PaymentAddress.Address:** HD wallet derivation path'ten üretilir — aynı adres matematiksel olarak tekrar üretilemez. `HdWalletIndex` UNIQUE constraint ile canlı tabloda derivation index reuse engellenir; arşivleme sonrası yeni index her zaman öncekinden büyük olacağı için (monoton artan allocator) arşivlenmiş index'lerle çakışma imkansızdır.
 > - **BlockchainTransaction.TxHash:** Blockchain'de globally unique — aynı hash iki farklı transfer için oluşamaz.
-> - **TradeOffer.SteamTradeOfferId:** Steam tarafından atanır — platform kontrolü dışında, reuse riski yok.
+> - **Transaction.ItemAssetId / DeliveredBuyerAssetId:** Steam tarafından atanır — platform kontrolü dışında, reuse riski yok. Trade sonrası yeni asset ID atandığı için alıcı tarafındaki değer orijinaliyle eşleşmez (§8.4).
 > - **ColdWalletTransfer.TxHash:** Aynı blockchain garantisi geçerli.
 >
 > - **Transaction.InviteToken:** Platform tarafından üretilen kriptografik rastgele token (64 karakter). Collision olasılığı matematiksel olarak ihmal edilebilir düzeydedir (CSPRNG). Ek güvence: arşivlenen transaction'lar terminal state'te olduğundan invite token'ları artık aktif değildir ve yeni işlem akışında kullanılamaz. Arşiv sonrası aynı token'ın yeniden üretilmesi pratik olarak imkansızdır.

@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-28
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08 (F7 — P2P geçişi, T115–T138)
 
 ---
 
@@ -50,6 +50,9 @@ Tüm task'lar 7 faza ayrılmıştır. Her faz bir önceki faz tamamlanmadan baş
 | F4 | Entegrasyonlar | Steam sidecar, blockchain sidecar, email, Telegram, Discord, sanctions, geo-block | T64–T83 |
 | F5 | Kullanıcı Arayüzü | Tüm ekranlar, bileşenler, formlar, state varyantları, responsive, i18n | T84–T106 |
 | F6 | Uçtan Uca Doğrulama | E2E testler, senaryo testleri, regresyon | T107–T114 |
+| F7 | P2P Geçişi | Item custody'nin kaldırılması, teslimat doğrulama, bot katmanının emekliye ayrılması | T115–T138 |
+
+> **F7 neden var:** MVP (F0–F6) custodial bot escrow modeliyle tamamlandı. Steam Trade Protection (16.07.2025) ve trade cooldown reworku (02.2026) sonrası item bir envantere trade ile girdiğinde 7 gün transfer edilemiyor; bot item'ı emanete aldığı anda alıcıya gönderemez. Çift-trade modeli bu kural altında çalışamadığı için item custody kaldırılıp P2P modeline geçilmektedir (02 §2.1). Para escrow'u değişmemektedir.
 
 ### 3.1 Faz Bağımlılık Diyagramı
 
@@ -2322,6 +2325,206 @@ Task T114: E2E — Downtime ve bakım senaryoları
   Test beklentisi: E2E (simüle)
   Doğrulama kontrol listesi:
     - [ ] Downtime senaryolarında freeze/resume doğru mu?
+```
+
+---
+
+### F7 — P2P Geçişi (T115–T138)
+
+Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`sidecar-fake`) P2 ile paralel başlayabilir; tüm E2E'yi bloklar.
+
+```
+--- P0: Doküman ---
+
+Task T115: Docs P2P geçişi (02/03/04/05/06/07/08/10/11)
+  Bağımlılık: —
+  Kabul kriterleri:
+    - Dokümanlar arası tutarlılık (GUARDRAILS §5), belirsiz ifade yok
+    - Traceability matrisleri güncel
+    - Kaldırılan bölümlerin numaraları korunmuş (referans kayması yok)
+
+Task T116: DEFERRED_BACKLOG kayıtları
+  Bağımlılık: T115
+  Kabul kriterleri:
+    - Bot-custody kodu için arşiv işaretçisi (commit sha)
+    - DeliveryPollingJob, float/inspect doğrulaması, satıcı borç defteri satırları
+
+--- P1: Domain çekirdeği ---
+
+Task T117: Enum + Transaction alanları + migration [RİSKLİ]
+  Bağımlılık: T115
+  Dokümanlar: 06 §2.1, §2.24, §3.5
+  Kabul kriterleri:
+    - TransactionStatus/Trigger/TimeoutPhase yeniden tanımlandı
+    - DeliveryEvidence enum'u eklendi
+    - Teslimat doğrulama alanları + deadline rename
+    - Tek forward migration temiz DB'ye uygulanıyor, snapshot regenerate
+  Test beklentisi: Unit (enum parity), migration rehearsal
+
+Task T118: TransactionStateMachine yeniden yazımı [RİSKLİ]
+  Bağımlılık: T117
+  Dokümanlar: 05 §4.2
+  Kabul kriterleri:
+    - 05 §4.2'deki her geçişin geçen bir testi var
+    - Hiçbir test emekli status'e referans vermiyor
+    - ApplyEmergencyHold PAYMENT_RECEIVED + DeliveryDeadline dalını içeriyor
+  Test beklentisi: Unit (geçiş tablosu tam kapsam)
+
+Task T119: Reputation + cooldown sorumluluk eşlemesi
+  Bağımlılık: T118
+  Dokümanlar: 02 §3.1, §13
+  Kabul kriterleri:
+    - PAYMENT_RECEIVED timeout'u SATICI'ya atfediliyor
+    - ACCEPTED timeout'u satıcıya, SELLER_CONFIRMED alıcıya
+
+--- P2: Envanter okuma yolu ---
+
+Task T120: Sidecar envanter — cache bypass + ayrı limiter + visibility
+  Bağımlılık: T115
+  Dokümanlar: 08 §2.3, §2.6
+  Kabul kriterleri:
+    - refresh parametresi cache'i atlıyor
+    - Community ucu için Web API'den ayrı kuyruk
+    - Yanıt görünürlüğü Public/Private/Unavailable olarak ayrıştırıyor
+  Test beklentisi: vitest
+
+Task T121: Backend envanter portu — üç değerli visibility [RİSKLİ]
+  Bağımlılık: T120
+  Dokümanlar: 08 §2.3
+  Kabul kriterleri:
+    - private != unavailable != boş, port seviyesinde gözlenebilir
+    - Mevcut null'a çöktürme davranışı kaldırıldı (money-safety)
+
+--- P2.5: Gerçek Steam probu ---
+
+Task T122: Gerçek trade ölçümü (spike, kod teslimi yok) [RİSKLİ]
+  Bağımlılık: T121
+  Kabul kriterleri:
+    - İki gerçek Steam hesabı arasında trade yapılıp her iki envanterin
+      ham API yanıtı kaydedildi
+    - Ölçülenler: item alıcıda kaç sn/dk sonra görünüyor, classid/instanceid
+      beklendiği gibi mi, assetid gerçekten değişiyor mu, Trade Protection
+      envanter yanıtında nasıl işaretleniyor
+    - Ham yanıtlar Docs/INTEGRATION_RUNBOOKS/'a kaydedildi
+    - 02 §9.2 kanıt kuralı ve delivery timeout varsayılanı teyit/revize edildi
+  Not: sidecar-fake bu davranışı kanıtlayamaz — fake ne yazarsak onu döner.
+       Bu bilinmeyen T125 yazılmadan kapatılmalıdır.
+
+--- P3: Yeni ileri yol ---
+
+Task T123: SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
+  Bağımlılık: T118, T121
+  Dokümanlar: 07 §7.6a, 03 §2.3
+  Kabul kriterleri:
+    - Item envanterden çıkmış satıcı ITEM_NO_LONGER_AVAILABLE alıyor
+    - Alıcı MA kontrolü yapılıyor
+    - Baseline yazılıyor; alıcı envanteri gizliyse işlem bloklanmıyor
+    - Ödeme adresi ancak bu adımdan sonra ifşa ediliyor
+
+Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
+  Bağımlılık: T123
+  Kabul kriterleri:
+    - AmountValidationService SELLER_CONFIRMED -> PAYMENT_RECEIVED
+    - DeliveryDeadline armlanıyor ve zamanında ateşleniyor
+
+Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
+  Bağımlılık: T122, T124
+  Dokümanlar: 02 §9.2, 06 §2.24
+  Kabul kriterleri:
+    - 02 §9.2 tuzak matrisinin HER SATIRI için bir test
+    - Servis saf/yan etkisiz kanıt değerlendirmesi yapıyor (polling'e hazır)
+  Not: Money-safety çekirdeği. Ayrı chat'te bağımsız doğrulama zorunlu.
+
+Task T126: POST /transactions/:id/confirm-receipt
+  Bağımlılık: T125
+  Kabul kriterleri: yalnız alıcı, yalnız PAYMENT_RECEIVED, idempotent
+
+Task T127: TimeoutExecutor'a teslimat doğrulama turu
+  Bağımlılık: T125
+  Kabul kriterleri:
+    - Kanıt tamsa timeout iptal yerine ITEM_DELIVERED üretiyor
+    - SELLER_ASSET_GONE ve delta yoksa dispute'a yükseltiliyor
+
+Task T128: (SellerId, ItemAssetId) tekillik kapısı
+  Bağımlılık: T117
+  Kabul kriterleri: ikinci create ITEM_ALREADY_LISTED dönüyor
+
+--- P4: Payout tamponu ---
+
+Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
+  Bağımlılık: T125
+  Dokümanlar: 02 §4.5.1, 05 §4.2, 06 §3.5
+  Kabul kriterleri:
+    - payout_settlement_days SystemSetting (varsayılan 8) eklendi
+    - ITEM_DELIVERED girişinde PayoutEligibleAt hesaplanıyor
+    - SellerPayoutQueueJob yalnız PayoutEligibleAt geçmiş işlemleri alıyor
+    - Ödeme ÖNCESİ son kontrol: item hâlâ alıcının envanterinde mi?
+        item var    -> SettlementVerifiedAt damgalanır, ödeme akar
+        item yok    -> delivery_reversed trigger, REFUNDED, alıcıya iade,
+                       satıcıya fraud flag, admin bildirimi
+        okunamıyor  -> karar verilmez, tekrar denenir; ısrar ederse admin
+    - COMPLETED guard'ı: SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL
+    - Süre içinde açılan dispute ödemeyi bloklar
+    - SweepQueueJob aynı kapıya bağlandı
+  Not: Beklemek tek başına korumaz — korumayı süre sonundaki KONTROL sağlar.
+       Bu ikisi ayrılamaz; sadece gecikme uygulayan bir sürüm güvenli değildir.
+
+--- P5: Dispute ---
+
+Task T130: DisputeEligibility + AutoChecker yeniden yazımı
+  Bağımlılık: T125
+  Dokümanlar: 02 §10.1, 03 §6.2/§6.3
+  Kabul kriterleri:
+    - "Satıcı başka yere gönderdi" imzası auto-escalate ediyor
+    - WRONG_ITEM PAYMENT_RECEIVED'dan da açılabiliyor
+    - Yanlış item vakasında gelen item'ın adı admin'e kanıt olarak taşınıyor
+
+Task T131: AdminDisputeService — item-refund bacağı + override
+  Bağımlılık: T130
+  Kabul kriterleri:
+    - Item iade bacağı kaldırıldı
+    - INVENTORY_DELTA kanıtlı ITEM_DELIVERED'da BUYER_FAVOR gerekçe istiyor
+
+--- P6: Emeklilik ---
+
+Task T132: Backend bot/dispatch/webhook/recovery yüzeyi silme [RİSKLİ]
+  Bağımlılık: T127, T130
+  Kabul kriterleri:
+    - Bot entity'leri, dispatch job, recovery, admin endpoint'leri kaldırıldı
+    - Webhook HMAC/nonce altyapısı KORUNDU (blockchain sidecar paylaşımlı)
+
+Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
+  Bağımlılık: T132
+  Kabul kriterleri:
+    - Sidecar Steam hesap kimlik bilgisi olmadan boot ediyor
+    - secrets/, compose ve 08 §9'dan bot credential'ları düştü
+
+--- P7: Frontend + test ---
+
+Task T134: FE enum/StatusBadge/Timeline/i18n
+  Bağımlılık: T118
+  Kabul kriterleri: npm run i18n:check yeşil, 4 dil parity
+
+Task T135: StateActionPanel state×rol matrisi
+  Bağımlılık: T123, T126
+  Kabul kriterleri:
+    - ACCEPTED'da satıcıya "hazırım", SELLER_CONFIRMED'da alıcıya ödeme
+    - PAYMENT_RECEIVED'da satıcıya trade deep link + alıcıya "aldım"
+
+Task T136: Admin bot sayfaları silme + create-flow metinleri
+  Bağımlılık: T132
+
+Task T137: sidecar-fake sürülebilir envanter [RİSKLİ]
+  Bağımlılık: T120
+  Kabul kriterleri: steamId başına envanter kontrol edilebiliyor, trade simüle
+  Not: Tüm E2E'yi bloklar; P2 ile paralel başlar.
+
+Task T138: E2E spec'lerinin yeniden yazımı
+  Bağımlılık: T135, T137
+  Kabul kriterleri:
+    - 9 spec yeni sıraya ve data-status değerlerine göre güncellendi
+    - Yeni specler: alıcı-onay hızlı yolu, delivery timeout -> satıcı kusurlu
+      iptal, satıcı-başka-yere-gönderdi -> auto-escalation
 ```
 
 ---

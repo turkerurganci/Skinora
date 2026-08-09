@@ -1,6 +1,6 @@
 # Skinora — Integration Specifications
 
-**Versiyon: v2.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-03-22
+**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-08-08
 
 ---
 
@@ -215,29 +215,45 @@ Item bilgileri, `assets[].classid + instanceid` ile `descriptions[].classid + in
 |------|-------|
 | Cache süresi | 2 dakika — envanter sık değişebilir |
 | Cache yeri | Redis (05 §2.5) |
-| Invalidation | İşlem başlatma ve trade offer sonrası cache temizlenir |
-| Herkese açık envanter | Kullanıcının Steam profili public değilse envanter okunamaz — uyarı gösterilir |
+| Invalidation | İşlem başlatma sonrası cache temizlenir |
+| **Cache bypass (v3.0)** | Teslimat doğrulaması ve satıcı hazırlık onayı okumaları cache'i **atlar** (`refresh` parametresi). Bayat veri iki yönde de zarar verir: teslim edilmiş bir item'ı görmemek haksız iade, satılmış bir item'ı hâlâ görmek ise alıcının bayat ilana ödeme yapması demektir |
+| Herkese açık envanter | Kullanıcının Steam profili public değilse envanter okunamaz |
+
+**Envanter görünürlüğü — üç değerli sonuç (v3.0):**
+
+Teslimat doğrulaması için "envanter okunamadı" ile "envanter okundu ve item yok" arasındaki fark **kritiktir**: ilki bilgi yokluğu, ikincisi kanıttır. Bu nedenle okuma sonucu üç durumdan biri olarak döner:
+
+| Sonuç | Anlamı | Teslimat doğrulamasındaki etkisi |
+|-------|--------|----------------------------------|
+| `Public` | Envanter okundu | Kanıt üretilebilir — sayı farkı hesaplanır |
+| `Private` | Profil/envanter gizli | Kanıt yolu kapalı; yalnız alıcı onayı geçerli, kullanıcı uyarılır |
+| `Unavailable` | Steam erişilemedi / hata | Karar verilmez, tekrar denenir. **Asla "teslim edilmedi" olarak yorumlanmaz** |
+
+> Bu ayrım yapılmazsa, Steam kesintisi sırasında teslim edilmiş bir işlem "item gelmemiş" sayılıp haksız yere iade edilebilir.
+
+**Teslimat doğrulamasında kullanılan alanlar (v3.0):**
+
+| Veri | Kullanım |
+|------|----------|
+| `assetid` | **Yalnız satıcı tarafında** — `ItemAssetId` hâlâ envanterde mi? Trade sonrası Steam yeni ID atadığı için alıcı tarafında kullanılamaz |
+| `classid` + `instanceid` | **Alıcı tarafında** — referans anlık görüntüye göre sayı farkı (02 §9.2) |
+| `tradable` | İşlem oluşturma ve hazırlık onayı kapısı; trade-protected item'lar da burada elenir |
 
 ### 2.4 Trade Offer Yönetimi
 
-Trade offer yaşam döngüsü tamamen Node.js sidecar'da `steam-tradeoffer-manager` kütüphanesi ile yönetilir.
+**Bu entegrasyon kaldırılmıştır (v3.0, P2P geçişi).**
 
-**Trade offer gönderme akışı:**
+Platform trade offer oluşturmaz, göndermez, onaylamaz ve takip etmez. Trade doğrudan satıcı ile alıcı arasında, Steam'in kendi arayüzü üzerinden gerçekleşir (02 §2.1). Platformun rolü, satıcıya alıcının trade URL'ini içeren hazır bir bağlantı sunmakla sınırlıdır:
 
 ```
-1. .NET backend → sidecar'a HTTP isteği (item detayları, hedef Steam ID)
-2. Sidecar bot seçimi yapar (capacity-based — 05 §3.2)
-3. Seçilen bot üzerinden TradeOffer nesnesi oluşturulur
-4. addMyItems() veya addTheirItems() ile item eklenir
-5. send() ile offer gönderilir
-6. steam-totp ile mobile confirmation yapılır
-7. Sidecar → .NET backend'e webhook callback
+https://steamcommunity.com/tradeoffer/new/?partner=<partner>&token=<token>
 ```
 
-> **Dispatch sözleşmesi (T106a):** Backend `POST /api/v1/sidecar/steam/api/trade-offers/send` ile şu gövdeyi yollar: `{ transactionId, direction, partnerSteamId, items[{assetid,appid,contextid}], botAccountName?, message? }`.
-> - **`direction`** sözlüğü: `SELLER_TO_BOT` (escrow — bot item alır, `addTheirItem`), `BOT_TO_BUYER` (teslim — bot item verir, `addMyItem` + MA), `BOT_TO_SELLER_REFUND` (iade — bot item verir, `addMyItem` + MA). Aynı sözlük `trade_offer.sent`/`failed` webhook'larının `direction` alanında da taşınır; backend `TradeOfferDirection` (`TO_SELLER`/`TO_BUYER`/`RETURN_TO_SELLER`) enum'una çözer.
-> - **`botAccountName` (capacity hint):** Bot seçimini **backend** yapar (`IBotSelectionService`, 06 §3.10) ve seçtiği botun `DisplayName`'ini hint olarak geçer; sidecar `selectBot(hint)` READY ise onu kullanır, değilse round-robin'e düşer. Delivery + refund bacakları item'ı tutan **aynı** botu (`Transaction.EscrowBotId`) yeniden kullanmak zorundadır.
-> - **Asset-id yakalama:** `trade_offer.accepted` (state 3) payload'u `receivedAssetId` (bot'un aldığı item'ın yeni id'si — escrow) ve/veya `deliveredAssetId` (karşı tarafın aldığı item'ın yeni id'si — delivery/refund) taşır; sidecar `TradeOffer.getExchangeDetails` ile çözer. Backend bunları `Transaction.EscrowBotAssetId`/`DeliveredBuyerAssetId`'ye yazar (`ITEM_ESCROWED`/`ITEM_DELIVERED` guard'ları zorunlu kılar). Fetch başarısızsa payload asset-id'siz gelir → backend ilerletmez, log + ack (sessiz takılma yok; gerçek-Steam doğrulama T107 E2E).
+Bu bağlantı `Transaction.BuyerTradeUrl` alanından üretilir (06 §3.5); item seçimi Steam arayüzünde satıcı tarafından yapılır — ön-doldurulamaz.
+
+**Kaldırılan bağımlılıklar:** `steam-tradeoffer-manager`, `steamcommunity` (oturum/çerez yönetimi), `steam-totp` (2FA ve mobil trade onayı), bot hesabı kimlik bilgileri, `trade_offer.*` webhook sözleşmesi ve `TradeOfferDirection` sözlüğü.
+
+> **Doğrulama nasıl yapılır:** Platform trade'in tarafı olmadığı için Steam'den "offer kabul edildi" bildirimi alamaz ve `getExchangeDetails` ile yeni asset ID'yi çözemez. Teslimat, her iki tarafın **public envanteri okunarak** doğrulanır: satıcının `ItemAssetId`'si düştü mü ve alıcıda beklenen item sınıfının sayısı arttı mı (02 §9.2, 06 §2.24). Ayrıntılar §2.3.
 
 **Trade offer durumları (Steam tarafı):**
 
@@ -260,14 +276,7 @@ Trade offer yaşam döngüsü tamamen Node.js sidecar'da `steam-tradeoffer-manag
 | Mekanizma | `steam-tradeoffer-manager` built-in polling |
 | Yedek mekanizma | Steam WebSocket event'leri (destekleniyorsa) |
 
-**Mobile confirmation:**
-
-| Konu | Karar |
-|------|-------|
-| Kütüphane | `steam-totp` |
-| Yaklaşım | Offer gönderildikten sonra otomatik confirmation |
-| Gerekli secret'lar | `identity_secret` (bot hesabının) |
-| Zamanlama | Offer gönderiminden hemen sonra, otomatik |
+**Mobile confirmation:** Kaldırıldı (v3.0). Trade'i platform göndermediği için onaylayacağı bir offer da yoktur; mobil onayı kendi trade'i için **satıcı** kendi telefonundan yapar. `steam-totp` bağımlılığı ve `identity_secret` gereksinimi ortadan kalkmıştır.
 
 ### 2.5 Kütüphaneler ve Versiyonlama
 
@@ -294,17 +303,17 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
 |--------|--------------|-------------------|
 | Steam Web API | ~100.000 istek/gün (API key başına) | Yeterli — günlük kullanıcı sayısı bu limiti zorlamaz |
 | Steam Web API (burst) | ~1 istek/saniye önerilen | İstekler arası minimum 1 saniye bekleme |
-| Envanter endpoint | ~10-20 istek/dakika (IP başına) | Cache + rate limiter |
-| Trade offer gönderme | ~5/dakika (hesap başına) | Birden fazla bot ile dağıtım |
-| Login denemesi | ~5/dakika | Session yönetimi ile minimize |
+| Envanter endpoint (Community) | ~10-20 istek/dakika (IP başına) | Cache + **ayrı** rate limiter — bkz. aşağıdaki not |
+
+> **v3.0 — envanter okuma artık kritik yoldadır.** Trade offer gönderimi kalktığı için bot hesabı ve login limitleri anlamsızlaştı; buna karşılık envanter okuma, teslimat doğrulamasının tek aracı hâline geldi (§2.3, 02 §9.2). Community envanter ucu Web API'den belirgin biçimde daha sıkı limitlidir ve **ayrı bir kuyrukta** yönetilmelidir — Web API kuyruğuyla paylaşılırsa doğrulama okumaları trade-hold sorgularının arkasında kuyruklanır.
 
 **Platform tarafı korumalar:**
 
 | Koruma | Uygulama |
 |--------|----------|
-| Request queue | Sidecar'da tüm Steam istekleri kuyruğa alınır, rate limit'e uygun şekilde gönderilir |
-| Bot dağıtımı | Birden fazla bot hesabı ile trade offer limiti dağıtılır (05 §3.2) |
-| Envanter cache | 2 dakikalık cache ile gereksiz envanter çağrısı önlenir |
+| Request queue | Sidecar'da tüm Steam istekleri kuyruğa alınır. **Web API ve Community uçları ayrı kuyruklarda** — limitleri farklıdır |
+| Envanter cache | 2 dakikalık cache ile listeleme çağrıları azaltılır. **Teslimat doğrulaması cache'i atlar** — bayat veri haksız iadeye yol açar (02 §9.2) |
+| Doğrulama okuma bütçesi | Teslimat doğrulaması istek başına iki okuma gerektirir (satıcı + alıcı). Bu, **eşzamanlı aktif teslimat sayısına pratik bir tavan koyar**; sınır 10 §4'te kayıt altındadır |
 | Exponential backoff | 429/rate limit hatalarında artan bekleme |
 
 ### 2.7 Hata Senaryoları ve Retry
@@ -334,20 +343,21 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
 
 | Durum | Aksiyon |
 |-------|---------|
-| Session expire | `steamcommunity` otomatik cookie yenileme |
-| Cookie yenileme başarısız | Tam re-login (username + password + 2FA) |
-| Re-login başarısız | Bot havuzdan çıkarılır, admin alert |
-| Tüm botlar down | Yeni trade offer gönderilmez, admin critical alert (05 §3.2) |
+| Envanter okunamadı (Steam hatası) | `Unavailable` döner — karar verilmez, tekrar denenir. Teslimat "yapılmadı" sayılmaz (§2.3) |
+| Envanter gizli | `Private` döner — kanıt yolu kapanır, alıcı onayı istenir |
+| Trade-hold sorgusu başarısız | Fail-closed: MA doğrulanamadığı için işlem ilerlemez (02 §9.1) |
+
+> **v3.0:** Oturum süresi dolması, cookie yenileme ve re-login senaryoları kaldırıldı — sidecar'ın Steam oturumu yoktur (05 §3.2).
 
 ### 2.8 Bağımlılık Riski — "Steam Çökerse Ne Olur?"
 
 | Senaryo | Etki | Mitigasyon |
 |---------|------|-----------|
-| **Steam servislerinin tamamı down** | Tüm Steam bileşenleri (OpenID, Web API, Community/Trade) etkilenir: yeni giriş yapılamaz, profil/MA kontrolü yapılamaz, envanter okunamaz, trade offer gönderilemez. Bileşen bazlı etkileri §8 risk matrisinde ayrı tanımlanmıştır. | Aktif session'lar çalışmaya devam eder (JWT). Aktif işlemlerin Steam bağımlı adımlarında timeout dondurulur (03 §11.2). Ödeme kabul ve doğrulama etkilenmez (blockchain bağımsız). |
+| **Steam servislerinin tamamı down** | Yeni giriş yapılamaz, MA kontrolü ve envanter okuması yapılamaz. **Trade'in kendisi etkilenmez** — taraflar Steam çalışıyorsa birbirine gönderebilir; etkilenen şey platformun bunu *doğrulayabilmesidir*. Bileşen bazlı etkiler §8 risk matrisinde. | Aktif session'lar çalışmaya devam eder (JWT). Teslimat fazındaki işlemlerin timeout'u dondurulur — aksi hâlde satıcı, platform doğrulayamadığı için haksız yere teslim etmemiş sayılır (03 §11.2). Ödeme kabul ve doğrulama etkilenmez (blockchain bağımsız). |
 | **Steam planlanmış bakım** | Geçici kesinti (genelde 15-30 dakika, Salı günleri) | Health check ile otomatik tespit → timeout dondurma → normale dönünce devam |
-| **Valve trade politikası değişikliği** | Trade offer API davranışı değişebilir | Sidecar izolasyonu sayesinde sadece sidecar güncellenir, ana uygulama etkilenmez |
-| **Bot hesabı ban/kısıtlama** | İlgili bot üzerinden işlem yapılamaz | Birden fazla bot ile risk dağıtımı (05 §3.2). Kısıtlı bot havuzdan çıkar, diğerleri devam eder. |
-| **steam-tradeoffer-manager kütüphanesi güncellenmezse** | Yeni Steam değişikliklerine uyumsuzluk | Community-maintained — fork hazırlığı, alternatif kütüphane değerlendirmesi |
+| **Valve trade politikası değişikliği** | Trade kuralları değişebilir — **bu pivotun sebebi tam olarak budur** (Trade Protection, 02 §2.1) | Platform trade mekaniğine bağımlı değildir: item'ı taşımaz, yalnız envanterde el değiştirdiğini gözlemler. Cooldown/hold kuralları değişse bile doğrulama yöntemi çalışmaya devam eder |
+| **Envanter ucu davranış değişikliği** | Teslimat doğrulaması bozulur — **v3.0'ın en kritik tek nokta bağımlılığı** | Alıcı onayı yolu envanterden bağımsız çalışır ve tipik akışta zaten birincil yoldur; envanter kanıtı yalnız pasif alıcı için gereklidir. Bozulma hâlinde akış onaya düşer, durmaz |
+| **Steam hesap kimlik bilgisi sızıntısı** | — | **Artık mümkün değil:** platform Steam hesabı işletmez, sidecar kimlik bilgisi taşımaz (05 §3.2) |
 
 ---
 
@@ -1140,7 +1150,7 @@ Tüm entegrasyonların çökme senaryosunda platform davranışı:
 |-------------|-------------|---------|------------|
 | **Steam OpenID** | Steam test hesapları | Steam test hesapları | Gerçek Steam hesapları |
 | **Steam Web API** | Gerçek API key (test hesaplarıyla) | Aynı | Aynı (ayrı key önerilir) |
-| **Steam Sidecar** | 1 test bot hesabı | 2 test bot hesabı | N bot hesabı (05 §3.2) |
+| **Steam Sidecar** | Steam Web API key (salt okunur) | Steam Web API key | Steam Web API key. **Bot hesabı gerekmez** (v3.0, 05 §3.2) |
 | **Tron Blockchain** | Nile Testnet (Shasta opsiyonel — izole birim testleri) | Nile Testnet | Tron Mainnet |
 | **TronGrid** | Testnet API key | Testnet API key | Mainnet API key |
 | **USDT/USDC Kontrat** | Test token kontratları | Test token kontratları | Gerçek kontrat adresleri (§3.3) |
