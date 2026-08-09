@@ -37,6 +37,8 @@ public class TransactionAcceptanceUnitTests
     {
         var dto = new AvailableActionsDto(
             CanAccept: false,
+            CanConfirmReady: null,
+            CanConfirmReceipt: null,
             CanCancel: null,
             CanDispute: null,
             DisputableTypes: null,
@@ -50,6 +52,9 @@ public class TransactionAcceptanceUnitTests
         Assert.DoesNotContain("canCancel", json);
         Assert.DoesNotContain("canDispute", json);
         Assert.DoesNotContain("canEscalate", json);
+        // v3.0 — the two P2P action bits are authenticated-only as well.
+        Assert.DoesNotContain("canConfirmReady", json);
+        Assert.DoesNotContain("canConfirmReceipt", json);
     }
 
     [Fact]
@@ -57,6 +62,8 @@ public class TransactionAcceptanceUnitTests
     {
         var dto = new AvailableActionsDto(
             CanAccept: false,
+            CanConfirmReady: true,
+            CanConfirmReceipt: false,
             CanCancel: true,
             CanDispute: false,
             DisputableTypes: null,
@@ -65,6 +72,8 @@ public class TransactionAcceptanceUnitTests
 
         var json = JsonSerializer.Serialize(dto, JsonOptions);
 
+        Assert.Contains("\"canConfirmReady\":true", json);
+        Assert.Contains("\"canConfirmReceipt\":false", json);
         Assert.Contains("\"canCancel\":true", json);
         Assert.Contains("\"canDispute\":false", json);
         Assert.Contains("\"canEscalate\":false", json);

@@ -169,6 +169,15 @@ public class TransactionStateMachine
         {
             TransactionTrigger.Timeout => CancelledByType.TIMEOUT,
             TransactionTrigger.SellerCancel or TransactionTrigger.SellerDecline => CancelledByType.SELLER,
+
+            // 02 §4.5.1 — the settlement re-check found the item gone from the
+            // buyer's inventory, so the trade was reversed. Attributed to the
+            // SELLER: reversal-after-payout is the documented seller-fraud path
+            // and T129 raises the fraud flag on the same side. Without an
+            // attribution the REFUNDED row would violate CK_Transactions_Cancel,
+            // which requires the full (CancelledBy, CancelReason, CancelledAt)
+            // trail on every refund/cancel terminal state.
+            TransactionTrigger.DeliveryReversed => CancelledByType.SELLER,
             TransactionTrigger.BuyerCancel => CancelledByType.BUYER,
             TransactionTrigger.AdminCancel or TransactionTrigger.AdminReject
                 or TransactionTrigger.AdminResolveRefund => CancelledByType.ADMIN,
@@ -184,6 +193,8 @@ public class TransactionStateMachine
         {
             TransactionTrigger.Timeout => "Timeout: işlem süresi içinde tamamlanmadı",
             TransactionTrigger.AdminReject => "Flag reddedildi (admin)",
+            TransactionTrigger.DeliveryReversed =>
+                "Mutabakat kontrolünde item alıcının envanterinde bulunamadı — trade geri alınmış (02 §4.5.1)",
             _ => null,
         };
 

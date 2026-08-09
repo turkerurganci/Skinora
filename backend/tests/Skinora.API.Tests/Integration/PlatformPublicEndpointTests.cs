@@ -234,7 +234,7 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
                 TargetBuyerSteamId = buyerSteamId,
                 BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
                 BuyerRefundAddress = "TXBuyerRefund000000",
-                ItemAssetId = "100200300",
+                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 ItemIconUrl = "https://steamcdn.example/img/test.png",

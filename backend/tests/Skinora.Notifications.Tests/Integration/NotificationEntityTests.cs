@@ -42,7 +42,7 @@ public class NotificationEntityTests : IntegrationTestBase
         _transaction = new Transaction
         {
             Id = Guid.NewGuid(),
-            Status = TransactionStatus.ITEM_ESCROWED,
+            Status = TransactionStatus.SELLER_CONFIRMED,
             SellerId = _user.Id,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198000000002",

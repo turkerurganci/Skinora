@@ -79,10 +79,17 @@ public sealed class RestartRecoveryService : IRestartRecoveryService
             return new RestartRecoveryResult(outage, false, 0, 0);
         }
 
+        // Every state that carries a live deadline in the 06 §3.5 matrix — the
+        // outage skew has to be added back to all of them, not just the two
+        // whose names survived the P2P rename. ACCEPTED holds
+        // SellerConfirmDeadline and PAYMENT_RECEIVED holds DeliveryDeadline;
+        // omitting them would leave those two phases short by the whole outage.
         var activeStates = new[]
         {
             TransactionStatus.CREATED,
+            TransactionStatus.ACCEPTED,
             TransactionStatus.SELLER_CONFIRMED,
+            TransactionStatus.PAYMENT_RECEIVED,
         };
 
         var actives = await _db.Set<Transaction>()

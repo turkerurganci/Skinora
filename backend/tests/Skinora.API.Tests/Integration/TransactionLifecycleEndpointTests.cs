@@ -427,8 +427,10 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
         Assert.Equal("CANCELLED_SELLER", data.GetProperty("status").GetString());
-        Assert.False(data.GetProperty("itemReturned").GetBoolean());
         Assert.False(data.GetProperty("paymentRefunded").GetBoolean());
+        // v3.0 — itemReturned was dropped from the response: the platform never
+        // holds the item, so a cancellation can only move money (07 §7.7, 02 §9).
+        Assert.False(data.TryGetProperty("itemReturned", out _));
 
         // Outbox row written in the same SaveChanges (TransactionCancelledEvent).
         using var scope = _factory.Services.CreateScope();
@@ -472,13 +474,19 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     }
 
     [Fact]
-    public async Task Cancel_Post_Payment_State_Returns_422_PaymentAlreadySent()
+    public async Task Cancel_Post_Payment_By_Buyer_Returns_422_PaymentAlreadySent()
     {
+        // 07 §7.7 (v3.0) — post-payment cancel is asymmetric: 422 is the BUYER's
+        // answer. The seller may still back out (covered below).
         var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(
-            seller.Id, status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED);
+            seller.Id,
+            targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: buyer.Id);
 
-        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var response = await client.PostAsJsonAsync(
             $"/api/v1/transactions/{transactionId:D}/cancel",
             new { reason = "Ödeme sonrası iptal denemesi" });
@@ -487,6 +495,29 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         Assert.Equal("PAYMENT_ALREADY_SENT",
             body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Cancel_Post_Payment_By_Seller_Returns_200_And_Refunds_Buyer()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id,
+            targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: buyer.Id);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/cancel",
+            new { reason = "Item göndermekten vazgeçtim" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var data = body.GetProperty("data");
+        Assert.Equal("CANCELLED_SELLER", data.GetProperty("status").GetString());
+        Assert.True(data.GetProperty("paymentRefunded").GetBoolean());
     }
 
     [Fact]
@@ -651,7 +682,8 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         public async Task<Guid> SeedTransactionAsync(
             Guid sellerId,
             string? targetBuyerSteamId = null,
-            Skinora.Shared.Enums.TransactionStatus status = Skinora.Shared.Enums.TransactionStatus.CREATED)
+            Skinora.Shared.Enums.TransactionStatus status = Skinora.Shared.Enums.TransactionStatus.CREATED,
+            Guid? buyerId = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -671,7 +703,17 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // TargetBuyerSteamId NOT NULL. Tests that don't care about a
                 // specific buyer pass an arbitrary non-matching ID.
                 TargetBuyerSteamId = targetBuyerSteamId ?? "76561198999999999",
-                ItemAssetId = "27348562891",
+                BuyerId = buyerId,
+                // Required from BuyerAccept onwards (06 §3.5) and read by the
+                // refund path when a post-payment cancel unwinds the escrow.
+                BuyerRefundAddress = buyerId is null ? null : ValidWallet,
+                PaymentReceivedAt =
+                    status is Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
+                        or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                        or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                        ? DateTime.UtcNow.AddMinutes(-5)
+                        : null,
+                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 StablecoinType = Skinora.Shared.Enums.StablecoinType.USDT,

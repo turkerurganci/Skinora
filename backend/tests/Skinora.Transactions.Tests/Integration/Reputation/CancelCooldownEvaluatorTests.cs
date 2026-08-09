@@ -153,7 +153,7 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198000000099",
-            ItemAssetId = "1",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "1",
             ItemName = "Test Item",
             StablecoinType = StablecoinType.USDT,

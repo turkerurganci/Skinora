@@ -68,12 +68,12 @@ public class DeadlineScannerJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Scanner_Fires_Timeout_On_Overdue_TRADE_OFFER_SENT_TO_SELLER()
+    public async Task Scanner_Fires_Timeout_On_Overdue_ACCEPTED()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(-1),
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(-1),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         Context.Set<Transaction>().Add(transaction);
@@ -93,12 +93,12 @@ public class DeadlineScannerJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Scanner_Fires_Timeout_On_Overdue_TRADE_OFFER_SENT_TO_BUYER()
+    public async Task Scanner_Fires_Timeout_On_Overdue_PAYMENT_RECEIVED()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, nowUtc,
-            tradeOfferToBuyerDeadline: nowUtc.AddMinutes(-1),
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddMinutes(-1),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         Context.Set<Transaction>().Add(transaction);

@@ -56,11 +56,10 @@ public class TimeoutExecutorTests : IntegrationTestBase
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-1),
             buyerId: buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -76,7 +75,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
 
         var history = await Context.Set<TransactionHistory>().AsNoTracking()
             .SingleAsync(h => h.TransactionId == transaction.Id);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, history.PreviousStatus);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, history.PreviousStatus);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, history.NewStatus);
         Assert.Equal("Timeout", history.Trigger);
         Assert.Equal(ActorType.SYSTEM, history.ActorType);
@@ -96,11 +95,10 @@ public class TimeoutExecutorTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-1),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -122,7 +120,6 @@ public class TimeoutExecutorTests : IntegrationTestBase
             paymentDeadline: nowUtc.AddMinutes(-1),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -138,12 +135,11 @@ public class TimeoutExecutorTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-1),
             timeoutFrozenAt: nowUtc.AddMinutes(-30),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         transaction.TimeoutFreezeReason = TimeoutFreezeReason.MAINTENANCE;
         transaction.TimeoutRemainingSeconds = 1800; // CK_Transactions_FreezeActive
         Context.Set<Transaction>().Add(transaction);
@@ -153,7 +149,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, persisted.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, persisted.Status);
     }
 
     [Fact]
@@ -161,13 +157,12 @@ public class TimeoutExecutorTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-1),
             isOnHold: true,
             timeoutFrozenAt: nowUtc.AddMinutes(-1),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         transaction.TimeoutFreezeReason = TimeoutFreezeReason.EMERGENCY_HOLD;
         transaction.TimeoutRemainingSeconds = 1800; // CK_Transactions_FreezeActive
         // CK_Transactions_Hold — emergency-hold fields must accompany IsOnHold=true.
@@ -181,7 +176,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, persisted.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, persisted.Status);
     }
 
     [Fact]
@@ -189,11 +184,10 @@ public class TimeoutExecutorTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(15),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -201,7 +195,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
         await sut.ExecutePaymentTimeoutAsync(transaction.Id);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, persisted.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, persisted.Status);
     }
 
 }

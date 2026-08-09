@@ -136,13 +136,15 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 $"reason must be at least {MinReasonLength} characters (07 §7.7).");
 
         // ---------- Stage 4: state guard + role → trigger mapping ----------
-        // 02 §7: post-payment cancel by either party is forbidden. The state
-        // machine permits BuyerDecline on TRADE_OFFER_SENT_TO_BUYER, but that
-        // path is reserved for the dispute / admin orchestrator (T58 / T59).
-        if (IsPostPaymentState(transaction.Status))
+        // 02 §7 / 07 §7.7 — post-payment cancel is asymmetric in v3.0: the
+        // BUYER is refused once their money is in escrow, the SELLER is not.
+        // The role check is load-bearing; applying this guard to both parties
+        // would make the seller's PAYMENT_RECEIVED branch in ResolveTrigger
+        // unreachable and silently reinstate the pre-pivot rule.
+        if (role.Value == CancelledByType.BUYER && IsPostPaymentState(transaction.Status))
             return Failure(CancelTransactionStatus.PaymentAlreadySent,
                 TransactionErrorCodes.PaymentAlreadySent,
-                "Payment has already been sent; the transaction can no longer be cancelled by either party (02 §7).");
+                "Payment has already been sent; the buyer can no longer cancel the transaction (02 §7).");
 
         var trigger = ResolveTrigger(role.Value, transaction.Status);
         if (trigger is null)
@@ -267,8 +269,10 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         return null;
     }
 
-    // Post-payment states, used to refuse the BUYER's cancel. The seller is not
-    // blocked here — see ResolveTrigger (02 §7).
+    // Post-payment states, used to refuse the BUYER's cancel (07 §7.7 gives
+    // 422 PAYMENT_ALREADY_SENT for the buyer only). The seller is not blocked
+    // here — see ResolveTrigger (02 §7). The seller's own refusal at
+    // ITEM_DELIVERED comes from ResolveTrigger returning null → 409.
     private static bool IsPostPaymentState(TransactionStatus status) => status switch
     {
         TransactionStatus.PAYMENT_RECEIVED => true,

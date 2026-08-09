@@ -32,7 +32,7 @@ public class TimeoutSideEffectPublisherTests
             BuyerId = buyerId,
             BuyerRefundAddress = buyerRefundAddress,
             BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
-            ItemAssetId = "100200300",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,
@@ -71,35 +71,32 @@ public class TimeoutSideEffectPublisherTests
     }
 
     [Fact]
-    public async Task TradeOfferToSeller_Phase_Emits_Only_Notification_Event()
+    public async Task SellerConfirm_Phase_Emits_Only_Notification_Event()
     {
         var tx = NewTransaction(TransactionStatus.CANCELLED_TIMEOUT,
             Guid.NewGuid(), TimeoutTestFixtures.ValidWallet);
 
-        await CreateSut().PublishAsync(tx, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER);
+        await CreateSut().PublishAsync(tx, TransactionStatus.ACCEPTED);
 
         var evt = Assert.IsType<TransactionTimedOutEvent>(Assert.Single(_outbox.Published));
-        Assert.Equal(TimeoutPhase.TradeOfferToSeller, evt.Phase);
+        Assert.Equal(TimeoutPhase.SellerConfirm, evt.Phase);
     }
 
     [Fact]
-    public async Task Payment_Phase_Emits_Notification_ItemRefund_And_LatePaymentMonitor()
+    public async Task Payment_Phase_Emits_Notification_And_LatePaymentMonitor()
     {
+        // v3.0 — no item refund: the item never left the seller's inventory
+        // (03 §4.3), so only the notification and the late-payment watch remain.
         var buyerId = Guid.NewGuid();
         var refundAddress = TimeoutTestFixtures.ValidWallet;
         var tx = NewTransaction(TransactionStatus.CANCELLED_TIMEOUT, buyerId, refundAddress);
 
-        await CreateSut().PublishAsync(tx, TransactionStatus.ITEM_ESCROWED);
+        await CreateSut().PublishAsync(tx, TransactionStatus.SELLER_CONFIRMED);
 
-        Assert.Equal(3, _outbox.Published.Count);
+        Assert.Equal(2, _outbox.Published.Count);
 
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Payment, notify.Phase);
-
-        var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(tx.Id, itemRefund.TransactionId);
-        Assert.Equal(tx.SellerId, itemRefund.SellerId);
-        Assert.Equal(ItemRefundTrigger.TimeoutPayment, itemRefund.Trigger);
 
         var monitor = Assert.Single(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
         Assert.Equal(tx.Id, monitor.TransactionId);
@@ -110,33 +107,32 @@ public class TimeoutSideEffectPublisherTests
     [Fact]
     public async Task Payment_Phase_Skips_LatePaymentMonitor_When_Buyer_Missing()
     {
-        // Buyer should always be present at ITEM_ESCROWED per 06 §3.5, but the
-        // publisher must not throw if a schema regression leaves the field null.
+        // Buyer should always be present at SELLER_CONFIRMED per 06 §3.5, but
+        // the publisher must not throw if a schema regression leaves it null.
         var tx = NewTransaction(TransactionStatus.CANCELLED_TIMEOUT, buyerId: null, buyerRefundAddress: null);
 
-        await CreateSut().PublishAsync(tx, TransactionStatus.ITEM_ESCROWED);
+        await CreateSut().PublishAsync(tx, TransactionStatus.SELLER_CONFIRMED);
 
         Assert.Empty(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
-        Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
+        Assert.Single(_outbox.Published);
     }
 
     [Fact]
-    public async Task Delivery_Phase_Emits_Notification_ItemRefund_And_PaymentRefund()
+    public async Task Delivery_Phase_Emits_Notification_And_PaymentRefund()
     {
+        // 03 §4.4 — the SELLER failed to deliver, so the buyer's money goes
+        // back. There is no item to return.
         var buyerId = Guid.NewGuid();
         var refundAddress = TimeoutTestFixtures.ValidWallet;
         var tx = NewTransaction(TransactionStatus.CANCELLED_TIMEOUT, buyerId, refundAddress);
 
-        await CreateSut().PublishAsync(tx, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+        await CreateSut().PublishAsync(tx, TransactionStatus.PAYMENT_RECEIVED);
 
-        Assert.Equal(3, _outbox.Published.Count);
+        Assert.Equal(2, _outbox.Published.Count);
 
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Delivery, notify.Phase);
-
-        var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(ItemRefundTrigger.TimeoutDelivery, itemRefund.Trigger);
 
         var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Equal(tx.Id, paymentRefund.TransactionId);
@@ -149,7 +145,9 @@ public class TimeoutSideEffectPublisherTests
     {
         var tx = NewTransaction(TransactionStatus.CANCELLED_TIMEOUT);
 
+        // ITEM_DELIVERED has no timeout phase — from there the transaction is
+        // driven by settlement, not by a deadline (02 §4.5.1).
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CreateSut().PublishAsync(tx, TransactionStatus.PAYMENT_RECEIVED));
+            CreateSut().PublishAsync(tx, TransactionStatus.ITEM_DELIVERED));
     }
 }

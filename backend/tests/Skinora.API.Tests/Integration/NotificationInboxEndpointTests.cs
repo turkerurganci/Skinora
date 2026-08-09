@@ -120,8 +120,8 @@ public class NotificationInboxEndpointTests : IClassFixture<NotificationInboxEnd
         var owner = await _factory.CreateUserAsync();
         await _factory.CreateNotificationAsync(owner.Id, n =>
         {
-            n.Type = NotificationType.ADMIN_STEAM_BOT_ISSUE;
-            n.Title = "Steam bot offline";
+            n.Type = NotificationType.ADMIN_PLATFORM_OUTAGE;
+            n.Title = "Steam sidecar outage";
             n.TransactionId = null;
         });
 

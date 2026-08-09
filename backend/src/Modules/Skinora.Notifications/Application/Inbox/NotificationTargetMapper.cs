@@ -17,8 +17,6 @@ public static class NotificationTargetMapper
     public static (string? TargetType, Guid? TargetId) Resolve(
         NotificationType type, Guid? transactionId, Guid? flagId = null) => type switch
         {
-            // Admin-only — Steam bot incident is a platform-wide alert.
-
             // Admin-only — platform health outage is a platform-wide alert (WP16).
             NotificationType.ADMIN_PLATFORM_OUTAGE => (null, null),
 

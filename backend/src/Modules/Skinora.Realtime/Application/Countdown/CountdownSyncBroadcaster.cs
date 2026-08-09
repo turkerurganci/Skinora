@@ -32,11 +32,16 @@ namespace Skinora.Realtime.Application.Countdown;
 /// </remarks>
 public sealed class CountdownSyncBroadcaster : BackgroundService
 {
+    // Every state that has a live deadline in the 06 §3.5 matrix. PAYMENT_RECEIVED
+    // belongs here: it carries DeliveryDeadline, the seller's window to send the
+    // item, and that countdown is exactly what the buyer watches while waiting
+    // (04 §7). Leaving it out would silently stop the delivery countdown.
     private static readonly TransactionStatus[] ActiveStatuses =
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
         TransactionStatus.SELLER_CONFIRMED,
+        TransactionStatus.PAYMENT_RECEIVED,
     ];
 
     private readonly IServiceScopeFactory _scopeFactory;

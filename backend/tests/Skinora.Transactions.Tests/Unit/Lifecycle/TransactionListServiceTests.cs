@@ -172,22 +172,20 @@ public sealed class TransactionListServiceTests : IDisposable
     public async Task IsOnHold_False_Preserves_Real_Status_Name()
     {
         await SeedUsersAsync();
-        await SeedTxAsync(TransactionStatus.ITEM_ESCROWED, sellerId: _seller.Id, buyerId: _buyer.Id);
+        await SeedTxAsync(TransactionStatus.SELLER_CONFIRMED, sellerId: _seller.Id, buyerId: _buyer.Id);
 
         var result = await _sut.ListAsync(_seller.Id, Query(TransactionListTab.Active), default);
 
-        Assert.Equal("ITEM_ESCROWED", Assert.Single(result.Items).Status);
+        Assert.Equal("SELLER_CONFIRMED", Assert.Single(result.Items).Status);
     }
 
     // ─── activeTimeout resolver (06 §3.5 matrix) ───────────────────────────
 
     [Theory]
     [InlineData(TransactionStatus.CREATED, "accept")]
-    [InlineData(TransactionStatus.ACCEPTED, "trade_offer_seller")]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, "trade_offer_seller")]
-    [InlineData(TransactionStatus.ITEM_ESCROWED, "payment")]
-    [InlineData(TransactionStatus.PAYMENT_RECEIVED, "trade_offer_buyer")]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, "trade_offer_buyer")]
+    [InlineData(TransactionStatus.ACCEPTED, "seller_confirm")]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, "payment")]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, "delivery")]
     public async Task ActiveTimeout_Maps_Phase_Per_Status(TransactionStatus status, string expectedType)
     {
         await SeedUsersAsync();
@@ -195,9 +193,9 @@ public sealed class TransactionListServiceTests : IDisposable
         // Seed all deadline fields — the matrix resolver picks the right one.
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         tx.AcceptDeadline = nowUtc.AddMinutes(10);
-        tx.TradeOfferToSellerDeadline = nowUtc.AddMinutes(20);
+        tx.SellerConfirmDeadline = nowUtc.AddMinutes(20);
         tx.PaymentDeadline = nowUtc.AddMinutes(30);
-        tx.TradeOfferToBuyerDeadline = nowUtc.AddMinutes(40);
+        tx.DeliveryDeadline = nowUtc.AddMinutes(40);
         await _db.SaveChangesAsync();
 
         var result = await _sut.ListAsync(_seller.Id, Query(TransactionListTab.Active), default);
@@ -263,7 +261,7 @@ public sealed class TransactionListServiceTests : IDisposable
     public async Task ActiveTimeout_Frozen_Uses_TimeoutRemainingSeconds()
     {
         await SeedUsersAsync();
-        var tx = await SeedTxAsync(TransactionStatus.ITEM_ESCROWED, sellerId: _seller.Id, buyerId: _buyer.Id);
+        var tx = await SeedTxAsync(TransactionStatus.SELLER_CONFIRMED, sellerId: _seller.Id, buyerId: _buyer.Id);
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         tx.PaymentDeadline = nowUtc.AddHours(1); // would be 3600 live
         tx.TimeoutFrozenAt = nowUtc;
@@ -431,7 +429,7 @@ public sealed class TransactionListServiceTests : IDisposable
             Id: Guid.NewGuid(),
             ItemName: "AK-47 | Redline",
             ItemImageUrl: null,
-            Status: "ITEM_ESCROWED",
+            Status: "ITEM_DELIVERED",
             Price: 100.00m.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
             Stablecoin: StablecoinType.USDT,
             Counterparty: null,
@@ -490,7 +488,9 @@ public sealed class TransactionListServiceTests : IDisposable
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198999999999",
-            ItemAssetId = "27348562891",
+            // Distinct per row: UQ_Transactions_SellerId_ItemAssetId_Active
+            // allows only one open transaction per (seller, item).
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             ItemIconUrl = "https://steamcdn.example/ak.png",

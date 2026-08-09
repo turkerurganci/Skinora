@@ -69,7 +69,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Seller_Cancel_From_Created_Transitions_And_Emits_Cancel_Event_Without_Item_Refund()
+    public async Task Seller_Cancel_From_Created_Transitions_And_Emits_Cancel_Event()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.CREATED, withBuyer: false);
 
@@ -82,7 +82,6 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
         Assert.Equal(CancelTransactionStatus.Cancelled, outcome.Status);
         Assert.NotNull(outcome.Body);
         Assert.Equal(TransactionStatus.CANCELLED_SELLER, outcome.Body.Status);
-        Assert.False(outcome.Body.ItemReturned);
         Assert.False(outcome.Body.PaymentRefunded);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
@@ -91,19 +90,17 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
         Assert.Equal("Fiyatı yükseltmek istiyorum", persisted.CancelReason);
         Assert.NotNull(persisted.CancelledAt);
 
-        // No item on platform → no ItemRefundToSellerRequestedEvent.
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         var cancelEvent = Assert.Single(_outbox.Published.OfType<TransactionCancelledEvent>());
         Assert.Equal(CancelledByType.SELLER, cancelEvent.CancelledBy);
         Assert.Equal(tx.Id, cancelEvent.TransactionId);
     }
 
     [Fact]
-    public async Task Rejects_Cancel_When_Caller_Suspended_And_Does_Not_Release_Escrow()
+    public async Task Rejects_Cancel_When_Caller_Suspended()
     {
-        // T105a — a suspended seller must not be able to cancel an ITEM_ESCROWED
-        // transaction (which would pull the escrowed item back out of custody).
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        // T105a — a suspended user cannot take the cancel action; their pending
+        // steps fall to timeout instead and admin drives the lifecycle.
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
         var seller = await Context.Set<User>().SingleAsync(u => u.Id == _seller.Id);
         seller.IsSuspended = true;
         await Context.SaveChangesAsync();
@@ -116,14 +113,18 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
 
         Assert.Equal(CancelTransactionStatus.AccountSuspended, outcome.Status);
         Assert.Equal(TransactionErrorCodes.AccountSuspended, outcome.ErrorCode);
-        // No item-return event was published — escrow stays frozen.
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
+        // Nothing moved — no state transition, no event.
+        Assert.Empty(_outbox.Published);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, persisted.Status);
     }
 
     [Fact]
-    public async Task Seller_Cancel_From_ItemEscrowed_Emits_Item_Refund_With_Seller_Cancel_Trigger()
+    public async Task Seller_Cancel_From_SellerConfirmed_Cancels_Without_Payment_Refund()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        // v3.0 — the item never left the seller's inventory and the buyer has
+        // not paid yet, so a cancel here moves nothing (02 §9).
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
@@ -132,20 +133,21 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(CancelTransactionStatus.Cancelled, outcome.Status);
-        Assert.True(outcome.Body!.ItemReturned);
+        Assert.False(outcome.Body!.PaymentRefunded);
 
-        var refundEvent = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(ItemRefundTrigger.SellerCancel, refundEvent.Trigger);
-        Assert.Equal(_seller.Id, refundEvent.SellerId);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_SELLER, persisted.Status);
 
         // Hangfire jobs cancelled exactly once.
         Assert.Equal(tx.Id, _timeouts.CancelledTransactions.Single());
     }
 
     [Fact]
-    public async Task Buyer_Cancel_From_ItemEscrowed_Emits_Item_Refund_With_Buyer_Cancel_Trigger()
+    public async Task Buyer_Cancel_From_SellerConfirmed_Cancels_Without_Payment_Refund()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        // The buyer may still walk away right up to the moment their money
+        // lands in escrow (02 §7).
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
@@ -154,24 +156,20 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(CancelTransactionStatus.Cancelled, outcome.Status);
-        Assert.True(outcome.Body!.ItemReturned);
+        Assert.False(outcome.Body!.PaymentRefunded);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
         Assert.Equal(TransactionStatus.CANCELLED_BUYER, persisted.Status);
         Assert.Equal(CancelledByType.BUYER, persisted.CancelledBy);
-
-        var refundEvent = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(ItemRefundTrigger.BuyerCancel, refundEvent.Trigger);
     }
 
     [Fact]
-    public async Task Seller_Cancel_From_TradeOfferSentToSeller_Maps_To_SellerDecline_Trigger()
+    public async Task Seller_Cancel_From_Accepted_Transitions_To_CancelledSeller()
     {
-        // 05 §4.2: SellerCancel is not permitted at TRADE_OFFER_SENT_TO_SELLER —
-        // the equivalent SellerDecline trigger ends at the same CANCELLED_SELLER
-        // state. The service must pick the right trigger.
-        var tx = await CreateTransactionAsync(
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, withBuyer: true);
+        // 05 §4.2 — ACCEPTED permits both SellerCancel and SellerDecline into
+        // CANCELLED_SELLER; the service picks SellerCancel and the outcome is
+        // the same terminal state either way.
+        var tx = await CreateTransactionAsync(TransactionStatus.ACCEPTED, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
@@ -183,8 +181,6 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
         Assert.Equal(TransactionStatus.CANCELLED_SELLER, persisted.Status);
         Assert.Equal(CancelledByType.SELLER, persisted.CancelledBy);
-        // Item was never on platform yet (we're still pre-escrow) → no refund event.
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
     }
 
     [Fact]
@@ -260,15 +256,17 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
 
     [Theory]
     [InlineData(TransactionStatus.PAYMENT_RECEIVED)]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)]
     [InlineData(TransactionStatus.ITEM_DELIVERED)]
-    public async Task Post_Payment_State_Returns_422_PaymentAlreadySent(TransactionStatus status)
+    public async Task Post_Payment_Buyer_Cancel_Returns_422_PaymentAlreadySent(TransactionStatus status)
     {
+        // 02 §7 / 07 §7.7 — once the buyer's money is in escrow the BUYER can no
+        // longer cancel. v3.0 made this asymmetric, so the role matters: the
+        // seller's path from PAYMENT_RECEIVED is covered separately below.
         var tx = await CreateTransactionAsync(status, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
-            _seller.Id, tx.Id,
+            _buyer.Id, tx.Id,
             new CancelTransactionRequest("Geç kalan iptal denemesi"),
             CancellationToken.None);
 
@@ -278,6 +276,46 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
         // State must remain unchanged.
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
         Assert.Equal(status, persisted.Status);
+    }
+
+    [Fact]
+    public async Task Seller_Cancel_From_PaymentReceived_Succeeds_And_Refunds_Buyer()
+    {
+        // 02 §7 (v3.0) — the seller may still back out after the buyer paid.
+        // Closing this path would not protect the buyer. A seller who wants out
+        // just stops responding; the DeliveryDeadline then expires, and the
+        // buyer waits longer for exactly the same refund.
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
+
+        var sut = BuildSut();
+        var outcome = await sut.CancelAsync(
+            _seller.Id, tx.Id,
+            new CancelTransactionRequest("Item'ı göndermekten vazgeçtim"),
+            CancellationToken.None);
+
+        Assert.Equal(CancelTransactionStatus.Cancelled, outcome.Status);
+        Assert.True(outcome.Body!.PaymentRefunded);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_SELLER, persisted.Status);
+        Assert.Equal(CancelledByType.SELLER, persisted.CancelledBy);
+    }
+
+    [Fact]
+    public async Task Seller_Cancel_From_ItemDelivered_Returns_409_InvalidStateTransition()
+    {
+        // ITEM_DELIVERED has no seller-cancel edge (05 §4.2): the item is with
+        // the buyer, so only settlement or an admin refund can move it.
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true);
+
+        var sut = BuildSut();
+        var outcome = await sut.CancelAsync(
+            _seller.Id, tx.Id,
+            new CancelTransactionRequest("Teslimattan sonra iptal denemesi"),
+            CancellationToken.None);
+
+        Assert.Equal(CancelTransactionStatus.InvalidStateTransition, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InvalidStateTransition, outcome.ErrorCode);
     }
 
     [Theory]
@@ -364,7 +402,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     [Fact]
     public async Task Successful_Cancel_Cancels_Hangfire_Timeout_Jobs()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
@@ -413,7 +451,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
                 : BuyerIdentificationMethod.OPEN_LINK,
             TargetBuyerSteamId = withBuyer ? BuyerSteamId : null,
             InviteToken = withBuyer ? null : "T51-test-" + Guid.NewGuid().ToString("N")[..8],
-            ItemAssetId = "100200300",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,
@@ -426,10 +464,8 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
             // Status-dependent caller-set field matrix (06 §3.5).
             AcceptedAt = status >= TransactionStatus.ACCEPTED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-30) : null,
-            ItemEscrowedAt = status >= TransactionStatus.ITEM_ESCROWED && status != TransactionStatus.FLAGGED
+            SellerReadyConfirmedAt = status >= TransactionStatus.SELLER_CONFIRMED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-25) : null,
-            EscrowBotAssetId = status >= TransactionStatus.ITEM_ESCROWED && status != TransactionStatus.FLAGGED
-                ? "200300400" : null,
             PaymentReceivedAt = status >= TransactionStatus.PAYMENT_RECEIVED && status != TransactionStatus.FLAGGED
                                  && status != TransactionStatus.CANCELLED_SELLER
                                  && status != TransactionStatus.CANCELLED_BUYER

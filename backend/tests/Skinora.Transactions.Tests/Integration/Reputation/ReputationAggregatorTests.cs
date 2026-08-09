@@ -108,7 +108,7 @@ public class ReputationAggregatorTests : IntegrationTestBase
         // PreviousStatus = ITEM_ESCROWED → payment timeout (Adım 4) → BUYER.
         // Alice (seller) keeps her clean rate; Bob (buyer) takes the hit.
         var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
-        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.ITEM_ESCROWED);
+        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.SELLER_CONFIRMED);
         await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
 
         var aggregator = new ReputationAggregator(Context);
@@ -214,7 +214,7 @@ public class ReputationAggregatorTests : IntegrationTestBase
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198000000099",
-            ItemAssetId = "1",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "1",
             ItemName = "Test Item",
             StablecoinType = StablecoinType.USDT,

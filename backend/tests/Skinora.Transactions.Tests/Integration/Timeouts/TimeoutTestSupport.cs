@@ -95,7 +95,7 @@ internal static class TimeoutTestFixtures
 
     /// <summary>
     /// Inserts a User with a unique steamId and returns it. The post-CREATED
-    /// states (TRADE_OFFER_SENT_TO_SELLER, ITEM_ESCROWED, ...) require
+    /// states (ACCEPTED, SELLER_CONFIRMED, ...) require
     /// <c>BuyerId</c> NOT NULL (06 §3.5), and the FK enforces the buyer row
     /// exists, so every test that exercises those states must seed one.
     /// </summary>
@@ -140,9 +140,9 @@ internal static class TimeoutTestFixtures
         TransactionStatus status,
         DateTime nowUtc,
         DateTime? acceptDeadline = null,
-        DateTime? tradeOfferToSellerDeadline = null,
+        DateTime? sellerConfirmDeadline = null,
         DateTime? paymentDeadline = null,
-        DateTime? tradeOfferToBuyerDeadline = null,
+        DateTime? deliveryDeadline = null,
         bool isOnHold = false,
         DateTime? timeoutFrozenAt = null,
         string? paymentTimeoutJobId = null,
@@ -159,7 +159,10 @@ internal static class TimeoutTestFixtures
             BuyerRefundAddress = buyerRefundAddress,
             BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
             InviteToken = "tok-" + Guid.NewGuid().ToString("N")[..8],
-            ItemAssetId = "100200300",
+            // Distinct per row: UQ_Transactions_SellerId_ItemAssetId_Active
+            // allows only one open transaction per (seller, item), and these
+            // fixtures routinely seed several active rows for one seller.
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,
@@ -170,9 +173,9 @@ internal static class TimeoutTestFixtures
             SellerPayoutAddress = ValidWallet,
             PaymentTimeoutMinutes = paymentTimeoutMinutes,
             AcceptDeadline = acceptDeadline,
-            TradeOfferToSellerDeadline = tradeOfferToSellerDeadline,
+            SellerConfirmDeadline = sellerConfirmDeadline,
             PaymentDeadline = paymentDeadline,
-            TradeOfferToBuyerDeadline = tradeOfferToBuyerDeadline,
+            DeliveryDeadline = deliveryDeadline,
             IsOnHold = isOnHold,
             TimeoutFrozenAt = timeoutFrozenAt,
             PaymentTimeoutJobId = paymentTimeoutJobId,

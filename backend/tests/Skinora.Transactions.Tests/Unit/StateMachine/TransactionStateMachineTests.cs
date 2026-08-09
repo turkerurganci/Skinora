@@ -25,38 +25,34 @@ public class TransactionStateMachineTests
         (TransactionStatus.CREATED, TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER),
         (TransactionStatus.CREATED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
 
-        (TransactionStatus.ACCEPTED, TransactionTrigger.SendTradeOfferToSeller, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER),
+        (TransactionStatus.ACCEPTED, TransactionTrigger.SellerConfirmReady, TransactionStatus.SELLER_CONFIRMED),
         (TransactionStatus.ACCEPTED, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
+        (TransactionStatus.ACCEPTED, TransactionTrigger.SellerDecline, TransactionStatus.CANCELLED_SELLER),
         (TransactionStatus.ACCEPTED, TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER),
         (TransactionStatus.ACCEPTED, TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER),
         (TransactionStatus.ACCEPTED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
 
-        (TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionTrigger.EscrowItem, TransactionStatus.ITEM_ESCROWED),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionTrigger.SellerDecline, TransactionStatus.CANCELLED_SELLER),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.ConfirmPayment, TransactionStatus.PAYMENT_RECEIVED),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
 
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.ConfirmPayment, TransactionStatus.PAYMENT_RECEIVED),
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER),
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER),
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
-
-        (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.SendTradeOfferToBuyer, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER),
+        // v3.0 — cancel is asymmetric here: the seller may still back out after
+        // the buyer has paid, the buyer may not (02 §7).
+        (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED),
+        (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
+        (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER),
         (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
 
-        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.BuyerDecline, TransactionStatus.CANCELLED_BUYER),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN),
-
+        // Settlement window (02 §4.5.1): payout only after the reversal window
+        // closed AND the item was re-checked; a reversal unwinds to REFUNDED.
         (TransactionStatus.ITEM_DELIVERED, TransactionTrigger.Complete, TransactionStatus.COMPLETED),
+        (TransactionStatus.ITEM_DELIVERED, TransactionTrigger.DeliveryReversed, TransactionStatus.REFUNDED),
 
         // WP5 — buyer-favor admin dispute resolution unwinds the escrow to REFUNDED.
-        (TransactionStatus.ITEM_ESCROWED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
+        (TransactionStatus.SELLER_CONFIRMED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
         (TransactionStatus.PAYMENT_RECEIVED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
-        (TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
         (TransactionStatus.ITEM_DELIVERED, TransactionTrigger.AdminResolveRefund, TransactionStatus.REFUNDED),
 
         (TransactionStatus.FLAGGED, TransactionTrigger.AdminApprove, TransactionStatus.CREATED),
@@ -133,24 +129,78 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
-    public void EscrowItem_WithoutEscrowBotAssetId_ThrowsInvalidTransition()
+    public void SellerConfirmReady_WithoutSellerReadyConfirmedAt_ThrowsInvalidTransition()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER);
-        transaction.EscrowBotAssetId = null;
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);
+        transaction.SellerReadyConfirmedAt = null;
         var sm = new TransactionStateMachine(transaction);
 
-        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.EscrowItem));
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.SellerConfirmReady));
         Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
     }
 
     [Fact]
-    public void DeliverItem_WithoutDeliveredBuyerAssetId_ThrowsInvalidTransition()
+    public void DeliverItem_WithoutSufficientEvidence_ThrowsInvalidTransition()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
-        transaction.DeliveredBuyerAssetId = null;
+        // 02 §9.2 — SELLER_ASSET_GONE alone is the misdelivery signature, not
+        // proof of delivery: the item left the seller but nothing was observed
+        // arriving at the buyer.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.DeliveryEvidence = DeliveryEvidence.SELLER_ASSET_GONE;
         var sm = new TransactionStateMachine(transaction);
 
         var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.DeliverItem));
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+    }
+
+    [Fact]
+    public void DeliverItem_WithoutDeliveryVerifiedAt_ThrowsInvalidTransition()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.DeliveryVerifiedAt = null;
+        var sm = new TransactionStateMachine(transaction);
+
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.DeliverItem));
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+    }
+
+    [Fact]
+    public void DeliverItem_BuyerConfirmedWithoutDeliveredAssetId_Succeeds()
+    {
+        // Deliberate: a delivery closed by the buyer's own confirmation may never
+        // have read an inventory, so DeliveredBuyerAssetId stays null. The guard
+        // must read the evidence flags, not that audit field (02 §9.2).
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.DeliveredBuyerAssetId = null;
+        transaction.DeliveryEvidence = DeliveryEvidence.BUYER_CONFIRMED;
+        var sm = new TransactionStateMachine(transaction);
+
+        sm.Fire(TransactionTrigger.DeliverItem);
+
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, transaction.Status);
+    }
+
+    [Fact]
+    public void Complete_WithoutSettlementVerifiedAt_ThrowsInvalidTransition()
+    {
+        // 02 §4.5.1 — waiting out the reversal window is not clearance; only the
+        // check at the end of it is.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_DELIVERED);
+        transaction.SettlementVerifiedAt = null;
+        var sm = new TransactionStateMachine(transaction);
+
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.Complete));
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+    }
+
+    [Fact]
+    public void Complete_WhenDeliveryReversed_ThrowsInvalidTransition()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_DELIVERED);
+        transaction.DeliveryReversedAt = DateTime.UtcNow;
+        var sm = new TransactionStateMachine(transaction);
+
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.Complete));
         Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
     }
 
@@ -294,23 +344,22 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
-    public void OnEntry_ItemEscrowedResetsTimeoutWarningSentAt()
+    public void OnEntry_SellerConfirmedResetsTimeoutWarningSentAt()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);
         transaction.TimeoutWarningSentAt = DateTime.UtcNow.AddMinutes(-1);
         var sm = new TransactionStateMachine(transaction);
 
-        sm.Fire(TransactionTrigger.EscrowItem);
+        sm.Fire(TransactionTrigger.SellerConfirmReady);
 
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, transaction.Status);
-        Assert.NotNull(transaction.ItemEscrowedAt);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, transaction.Status);
         Assert.Null(transaction.TimeoutWarningSentAt);
     }
 
     [Fact]
-    public void OnExit_FromItemEscrowedClearsTimeoutWarningJobIdAndSentAt()
+    public void OnExit_FromSellerConfirmedClearsTimeoutWarningJobIdAndSentAt()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_ESCROWED);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.SELLER_CONFIRMED);
         transaction.TimeoutWarningJobId = "warning-job-1";
         transaction.TimeoutWarningSentAt = DateTime.UtcNow.AddMinutes(-1);
         var sm = new TransactionStateMachine(transaction);
@@ -324,7 +373,7 @@ public class TransactionStateMachineTests
     [Fact]
     public void OnEntry_PaymentReceivedSetsPaymentReceivedAt()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_ESCROWED);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.SELLER_CONFIRMED);
         var sm = new TransactionStateMachine(transaction);
 
         sm.Fire(TransactionTrigger.ConfirmPayment);
@@ -335,12 +384,30 @@ public class TransactionStateMachineTests
     [Fact]
     public void OnEntry_ItemDeliveredSetsItemDeliveredAt()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
         var sm = new TransactionStateMachine(transaction);
 
         sm.Fire(TransactionTrigger.DeliverItem);
 
         Assert.NotNull(transaction.ItemDeliveredAt);
+    }
+
+    [Fact]
+    public void Fire_DeliveryReversed_FromItemDelivered_MovesToRefunded()
+    {
+        // 02 §4.5.1 — the settlement re-check found the item gone from the
+        // buyer's inventory: the trade was reversed, so the seller is not paid.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_DELIVERED);
+        var sm = new TransactionStateMachine(transaction);
+
+        sm.Fire(TransactionTrigger.DeliveryReversed);
+
+        Assert.Equal(TransactionStatus.REFUNDED, transaction.Status);
+        // CK_Transactions_Cancel requires the full trail on every refund
+        // terminal state; the system-produced trigger supplies its own.
+        Assert.Equal(CancelledByType.SELLER, transaction.CancelledBy);
+        Assert.False(string.IsNullOrEmpty(transaction.CancelReason));
+        Assert.NotNull(transaction.CancelledAt);
     }
 
     [Fact]
@@ -373,7 +440,7 @@ public class TransactionStateMachineTests
     [Fact]
     public void ApplyEmergencyHold_StampsAllFields()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_ESCROWED);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.SELLER_CONFIRMED);
         transaction.PaymentDeadline = DateTime.UtcNow.AddMinutes(30);
         var sm = new TransactionStateMachine(transaction);
         var adminId = Guid.NewGuid();
@@ -384,7 +451,7 @@ public class TransactionStateMachineTests
         Assert.NotNull(transaction.EmergencyHoldAt);
         Assert.Equal("Sanctions match", transaction.EmergencyHoldReason);
         Assert.Equal(adminId, transaction.EmergencyHoldByAdminId);
-        Assert.Equal((int)TransactionStatus.ITEM_ESCROWED, transaction.PreviousStatusBeforeHold);
+        Assert.Equal((int)TransactionStatus.SELLER_CONFIRMED, transaction.PreviousStatusBeforeHold);
         Assert.Equal(TimeoutFreezeReason.EMERGENCY_HOLD, transaction.TimeoutFreezeReason);
         Assert.NotNull(transaction.TimeoutFrozenAt);
         Assert.NotNull(transaction.TimeoutRemainingSeconds);
@@ -392,7 +459,7 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
-    public void ApplyEmergencyHold_OnNonItemEscrowedState_DoesNotSetTimeoutRemainingSeconds()
+    public void ApplyEmergencyHold_OnAcceptedState_DoesNotSetTimeoutRemainingSeconds()
     {
         var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);
         var sm = new TransactionStateMachine(transaction);
@@ -475,7 +542,7 @@ public class TransactionStateMachineTests
         Assert.Contains(TransactionTrigger.BuyerAccept, permitted);
         Assert.Contains(TransactionTrigger.Timeout, permitted);
         Assert.Contains(TransactionTrigger.AdminCancel, permitted);
-        Assert.DoesNotContain(TransactionTrigger.SendTradeOfferToSeller, permitted);
+        Assert.DoesNotContain(TransactionTrigger.SellerConfirmReady, permitted);
         Assert.DoesNotContain(TransactionTrigger.Complete, permitted);
     }
 
@@ -518,13 +585,20 @@ public class TransactionStateMachineTests
         {
             transaction.BuyerId = Guid.NewGuid();
             transaction.BuyerRefundAddress = "TX9876543210";
-            transaction.EscrowBotAssetId = "ESC-999";
+            transaction.BuyerTradeUrl = "https://steamcommunity.com/tradeoffer/new/?partner=1&token=abc";
+            transaction.SellerReadyConfirmedAt = DateTime.UtcNow;
             transaction.DeliveredBuyerAssetId = "DEL-123";
+
+            // Forward-path guards read these, so seed the "everything observed"
+            // shape; the individual negative cases null them out one at a time.
+            transaction.DeliveryEvidence =
+                DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA;
+            transaction.DeliveryVerifiedAt = DateTime.UtcNow;
+            transaction.SettlementVerifiedAt = DateTime.UtcNow;
         }
 
         // Cumulative milestone timestamps per current status (06 §3.5 matrix).
         if (StatusRequiresAccepted(status)) transaction.AcceptedAt = DateTime.UtcNow;
-        if (StatusRequiresItemEscrowed(status)) transaction.ItemEscrowedAt = DateTime.UtcNow;
         if (StatusRequiresPaymentReceivedAt(status)) transaction.PaymentReceivedAt = DateTime.UtcNow;
         if (StatusRequiresItemDelivered(status)) transaction.ItemDeliveredAt = DateTime.UtcNow;
         if (status == TransactionStatus.COMPLETED) transaction.CompletedAt = DateTime.UtcNow;
@@ -540,17 +614,8 @@ public class TransactionStateMachineTests
 
     private static bool StatusRequiresAccepted(TransactionStatus s) => s is
         TransactionStatus.ACCEPTED
-        or TransactionStatus.TRADE_OFFER_SENT_TO_SELLER
-        or TransactionStatus.ITEM_ESCROWED
+        or TransactionStatus.SELLER_CONFIRMED
         or TransactionStatus.PAYMENT_RECEIVED
-        or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER
-        or TransactionStatus.ITEM_DELIVERED
-        or TransactionStatus.COMPLETED;
-
-    private static bool StatusRequiresItemEscrowed(TransactionStatus s) => s is
-        TransactionStatus.ITEM_ESCROWED
-        or TransactionStatus.PAYMENT_RECEIVED
-        or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER
         or TransactionStatus.ITEM_DELIVERED
         or TransactionStatus.COMPLETED;
 
@@ -560,7 +625,6 @@ public class TransactionStateMachineTests
 
     private static bool StatusRequiresPaymentReceivedAt(TransactionStatus s) => s is
         TransactionStatus.PAYMENT_RECEIVED
-        or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER
         or TransactionStatus.ITEM_DELIVERED
         or TransactionStatus.COMPLETED;
 
@@ -568,7 +632,8 @@ public class TransactionStateMachineTests
         TransactionStatus.CANCELLED_TIMEOUT
         or TransactionStatus.CANCELLED_SELLER
         or TransactionStatus.CANCELLED_BUYER
-        or TransactionStatus.CANCELLED_ADMIN;
+        or TransactionStatus.CANCELLED_ADMIN
+        or TransactionStatus.REFUNDED;
 
     private static void FireWithCancelContextIfNeeded(TransactionStateMachine sm, TransactionTrigger trigger)
     {
@@ -587,7 +652,6 @@ public class TransactionStateMachineTests
         or TransactionTrigger.BuyerCancel
         or TransactionTrigger.AdminCancel
         or TransactionTrigger.SellerDecline
-        or TransactionTrigger.BuyerDecline
         // WP5 — reason-required (no default), stamped CancelledBy=ADMIN.
         or TransactionTrigger.AdminResolveRefund;
 }

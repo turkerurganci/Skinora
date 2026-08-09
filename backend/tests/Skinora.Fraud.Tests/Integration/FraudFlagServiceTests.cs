@@ -500,7 +500,7 @@ public class FraudFlagServiceTests : IntegrationTestBase
 
     // ── WP4b #2 — FLAGGED-approve accept-deadline enforced by the scanner ──
     // 05 §4.4: accept-deadlines are poller-driven (no per-tx Hangfire job — only
-    // ITEM_ESCROWED gets one). This proves the AcceptDeadline that ApproveAsync
+    // SELLER_CONFIRMED gets one). This proves the AcceptDeadline that ApproveAsync
     // stamps is enforced by DeadlineScannerJob exactly like a native CREATED tx,
     // so no new per-tx timeout job is needed (T54-FlaggedApproveNoTimeoutJob).
 

@@ -176,8 +176,7 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
             SellerPayoutAddress = Wallet,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddMinutes(-30),
-            ItemEscrowedAt = nowUtc.AddMinutes(-25),
-            EscrowBotAssetId = "200300400",
+            SellerReadyConfirmedAt = nowUtc.AddMinutes(-25),
         };
         Context.Set<Transaction>().Add(transaction);
 

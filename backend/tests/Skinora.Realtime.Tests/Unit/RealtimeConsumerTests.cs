@@ -46,7 +46,7 @@ public class RealtimeConsumerTests
     [InlineData(CancelledByType.SELLER, TransactionStatus.CREATED, TransactionStatus.CANCELLED_SELLER)]
     [InlineData(CancelledByType.BUYER, TransactionStatus.ACCEPTED, TransactionStatus.CANCELLED_BUYER)]
     [InlineData(CancelledByType.ADMIN, TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.CANCELLED_ADMIN)]
-    [InlineData(CancelledByType.TIMEOUT, TransactionStatus.ITEM_ESCROWED, TransactionStatus.CANCELLED_TIMEOUT)]
+    [InlineData(CancelledByType.TIMEOUT, TransactionStatus.SELLER_CONFIRMED, TransactionStatus.CANCELLED_TIMEOUT)]
     public async Task TransactionCancelled_MapsCancelledByToTerminalStatus(
         CancelledByType cancelledBy,
         TransactionStatus fromStatus,
@@ -91,14 +91,14 @@ public class RealtimeConsumerTests
             SellerId: Guid.NewGuid(),
             BuyerId: Guid.NewGuid(),
             ItemName: "M9 Bayonet",
-            FromStatus: TransactionStatus.ITEM_ESCROWED,
+            FromStatus: TransactionStatus.SELLER_CONFIRMED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(ev, CancellationToken.None);
 
         var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(
             publisher.Calls.Single().Payload);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, status.FromStatus);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, status.FromStatus);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, status.ToStatus);
     }
 
@@ -129,7 +129,7 @@ public class RealtimeConsumerTests
 
         Assert.Equal("StatusChanged", publisher.Calls[1].Method);
         var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(publisher.Calls[1].Payload);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, status.FromStatus);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, status.FromStatus);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, status.ToStatus);
     }
 
@@ -310,7 +310,7 @@ public class RealtimeConsumerTests
             BuyerId: Guid.NewGuid(),
             ItemName: "Bayonet",
             Action: EmergencyHoldReleaseAction.RESUME,
-            ResumedStatus: TransactionStatus.ITEM_ESCROWED,
+            ResumedStatus: TransactionStatus.SELLER_CONFIRMED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(ev, CancellationToken.None);
@@ -318,14 +318,14 @@ public class RealtimeConsumerTests
         var payload = Assert.IsType<TransactionRealtimePayloads.EmergencyHoldReleased>(
             publisher.Calls.Single().Payload);
         Assert.Equal(EmergencyHoldReleaseAction.RESUME, payload.Action);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, payload.ResumedStatus);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, payload.ResumedStatus);
     }
 
     [Theory]
-    [InlineData(TransactionStatus.ACCEPTED, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER)]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionStatus.ITEM_ESCROWED)]
-    [InlineData(TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TransactionStatus.ITEM_DELIVERED)]
+    [InlineData(TransactionStatus.ACCEPTED, TransactionStatus.SELLER_CONFIRMED)]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, TransactionStatus.PAYMENT_RECEIVED)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.ITEM_DELIVERED)]
+    [InlineData(TransactionStatus.ITEM_DELIVERED, TransactionStatus.COMPLETED)]
     public async Task TransactionStatusChanged_RelaysFromAndToVerbatim(
         TransactionStatus from, TransactionStatus to)
     {

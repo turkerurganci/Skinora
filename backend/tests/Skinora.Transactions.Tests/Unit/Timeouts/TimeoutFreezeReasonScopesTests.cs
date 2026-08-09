@@ -10,18 +10,17 @@ namespace Skinora.Transactions.Tests.Unit.Timeouts;
 public class TimeoutFreezeReasonScopesTests
 {
     [Fact]
-    public void For_MAINTENANCE_Returns_All_Eight_Active_States()
+    public void For_MAINTENANCE_Returns_All_Six_Active_States()
     {
         var statuses = TimeoutFreezeReasonScopes.For(TimeoutFreezeReason.MAINTENANCE);
 
+        // v3.0 — the two trade-offer states are gone, so the active set is six.
         var expected = new[]
         {
             TransactionStatus.CREATED,
             TransactionStatus.ACCEPTED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             TransactionStatus.PAYMENT_RECEIVED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
             TransactionStatus.ITEM_DELIVERED,
             TransactionStatus.FLAGGED,
         };
@@ -31,19 +30,22 @@ public class TimeoutFreezeReasonScopesTests
     [Fact]
     public void For_STEAM_OUTAGE_Returns_Two_Steam_Bound_States()
     {
+        // The parties can still trade during a Steam outage; what breaks is the
+        // platform's ability to verify it. So the states that freeze are the two
+        // whose deadlines depend on a Steam-side observation (02 §23, 03 §11.2).
         var statuses = TimeoutFreezeReasonScopes.For(TimeoutFreezeReason.STEAM_OUTAGE);
 
         Assert.Equal(
-            new[] { TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER },
+            new[] { TransactionStatus.ACCEPTED, TransactionStatus.PAYMENT_RECEIVED },
             statuses);
     }
 
     [Fact]
-    public void For_BLOCKCHAIN_DEGRADATION_Returns_Only_ITEM_ESCROWED()
+    public void For_BLOCKCHAIN_DEGRADATION_Returns_Only_SELLER_CONFIRMED()
     {
         var statuses = TimeoutFreezeReasonScopes.For(TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION);
 
-        Assert.Equal(new[] { TransactionStatus.ITEM_ESCROWED }, statuses);
+        Assert.Equal(new[] { TransactionStatus.SELLER_CONFIRMED }, statuses);
     }
 
     [Fact]
