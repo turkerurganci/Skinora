@@ -13,25 +13,31 @@ namespace Skinora.Shared.Domain;
 public static class DisputeEligibility
 {
     /// <summary>
-    /// Transaction states in which each dispute type may be opened by the buyer.
-    /// PAYMENT → ITEM_ESCROWED/PAYMENT_RECEIVED; DELIVERY →
-    /// TRADE_OFFER_SENT_TO_BUYER/ITEM_DELIVERED; WRONG_ITEM → ITEM_DELIVERED.
+    /// Transaction states in which each dispute type may be opened by the buyer
+    /// (02 §10.1).
     /// </summary>
     public static readonly IReadOnlyDictionary<DisputeType, TransactionStatus[]> AllowedStatesByType =
         new Dictionary<DisputeType, TransactionStatus[]>
         {
             [DisputeType.PAYMENT] = new[]
             {
-                TransactionStatus.ITEM_ESCROWED,
+                TransactionStatus.SELLER_CONFIRMED,
                 TransactionStatus.PAYMENT_RECEIVED,
             },
             [DisputeType.DELIVERY] = new[]
             {
-                TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+                TransactionStatus.PAYMENT_RECEIVED,
                 TransactionStatus.ITEM_DELIVERED,
             },
+
+            // PAYMENT_RECEIVED is deliberately included (v3.0): if the seller
+            // sends a different item, the expected class count never rises, so
+            // the transaction never reaches ITEM_DELIVERED. The buyer must be
+            // able to raise a wrong-item dispute from that state too, otherwise
+            // the case is only reachable via timeout (02 §10.1, 03 §6.3).
             [DisputeType.WRONG_ITEM] = new[]
             {
+                TransactionStatus.PAYMENT_RECEIVED,
                 TransactionStatus.ITEM_DELIVERED,
             },
         };

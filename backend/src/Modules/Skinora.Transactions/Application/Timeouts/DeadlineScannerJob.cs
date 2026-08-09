@@ -21,8 +21,8 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Scope per 05 §4.4: AcceptDeadline, TradeOfferToSellerDeadline,
-/// TradeOfferToBuyerDeadline are scanner-driven; PaymentDeadline is normally
+/// Scope per 05 §4.4: AcceptDeadline, SellerConfirmDeadline,
+/// DeliveryDeadline are scanner-driven; PaymentDeadline is normally
 /// driven by the per-tx Hangfire delayed job (09 §13.3) but is also included
 /// here as a belt-and-suspenders fallback for orphan-job scenarios (atomicity
 /// gap between Hangfire write and DB commit).
@@ -103,9 +103,9 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                         && t.TimeoutFrozenAt == null
                         && (
                             (t.Status == TransactionStatus.CREATED && t.AcceptDeadline != null && t.AcceptDeadline < now)
-                            || (t.Status == TransactionStatus.TRADE_OFFER_SENT_TO_SELLER && t.TradeOfferToSellerDeadline != null && t.TradeOfferToSellerDeadline < now)
-                            || (t.Status == TransactionStatus.ITEM_ESCROWED && t.PaymentDeadline != null && t.PaymentDeadline < now)
-                            || (t.Status == TransactionStatus.TRADE_OFFER_SENT_TO_BUYER && t.TradeOfferToBuyerDeadline != null && t.TradeOfferToBuyerDeadline < now)
+                            || (t.Status == TransactionStatus.ACCEPTED && t.SellerConfirmDeadline != null && t.SellerConfirmDeadline < now)
+                            || (t.Status == TransactionStatus.SELLER_CONFIRMED && t.PaymentDeadline != null && t.PaymentDeadline < now)
+                            || (t.Status == TransactionStatus.PAYMENT_RECEIVED && t.DeliveryDeadline != null && t.DeliveryDeadline < now)
                         ))
             .Take(_options.DeadlineScannerBatchSize)
             .ToListAsync();
@@ -136,7 +136,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             await _sideEffects.PublishAsync(transaction, previousStatus);
 
             // T75 — post-cancel monitor stamp. The starter is idempotent on
-            // missing PaymentAddress (CREATED / TRADE_OFFER_SENT_TO_SELLER
+            // missing PaymentAddress (CREATED / ACCEPTED
             // timeouts that never allocated a deposit address).
             var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;
             await _postCancelMonitor.RequestStartAsync(

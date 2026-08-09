@@ -575,7 +575,8 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         TransactionStatus status,
         Guid? buyerId = null,
         BuyerIdentificationMethod method = BuyerIdentificationMethod.STEAM_ID,
-        string? inviteToken = null)
+        string? inviteToken = null,
+        string? buyerTradeUrl = null)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
@@ -589,7 +590,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             InviteToken = method == BuyerIdentificationMethod.OPEN_LINK
                 ? (inviteToken ?? "T46-detail-test")
                 : null,
-            ItemAssetId = "27348562891",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             ItemType = "Rifle",
@@ -602,6 +603,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             TotalAmount = 102m,
             SellerPayoutAddress = ValidWallet,
             BuyerRefundAddress = buyerId.HasValue ? ValidWallet : null,
+            BuyerTradeUrl = buyerTradeUrl,
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
@@ -615,62 +617,56 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         return transaction;
     }
 
-    private TransactionDetailService BuildSut(ISteamTradeOfferUrlResolver? tradeOfferUrls = null)
-        => new(Context, _clock, tradeOfferUrls ?? new NullSteamTradeOfferUrlResolver());
+    private TransactionDetailService BuildSut() => new(Context, _clock);
 
-    // WP12 (T90 K3) — records the direction it was asked for so the wiring test
-    // can assert the detail service requests the correct offer per state.
-    private sealed class RecordingTradeOfferUrlResolver(string? url) : ISteamTradeOfferUrlResolver
-    {
-        public TradeOfferDirection? CalledWith { get; private set; }
-
-        public Task<string?> ResolveUrlAsync(
-            Guid transactionId, TradeOfferDirection direction, CancellationToken cancellationToken)
-        {
-            CalledWith = direction;
-            return Task.FromResult(url);
-        }
-    }
+    // v3.0 — the platform creates no trade offers, so there is no offer to look
+    // up. In PAYMENT_RECEIVED the seller's CTA is the buyer's own trade URL,
+    // read straight off the transaction (04 §7, 02 §2.2 step 6).
 
     [Fact]
-    public async Task SteamTradeOfferUrl_Surfaced_For_TradeOfferSentToSeller()
+    public async Task SteamTradeOfferUrl_Surfaces_BuyerTradeUrl_To_Seller_In_PaymentReceived()
     {
         var transaction = await CreateTransactionAsync(
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, buyerId: _buyer.Id);
-        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/9988/");
+            TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: _buyer.Id,
+            buyerTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=9988&token=xyz");
 
-        var outcome = await BuildSut(resolver)
+        var outcome = await BuildSut()
             .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
 
         Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
-        Assert.Equal(TradeOfferDirection.TO_SELLER, resolver.CalledWith);
-        Assert.Equal("https://steamcommunity.com/tradeoffer/9988/", outcome.Body!.SteamTradeOfferUrl);
+        Assert.Equal(
+            "https://steamcommunity.com/tradeoffer/new/?partner=9988&token=xyz",
+            outcome.Body!.SteamTradeOfferUrl);
     }
 
     [Fact]
-    public async Task SteamTradeOfferUrl_Surfaced_For_TradeOfferSentToBuyer()
+    public async Task SteamTradeOfferUrl_Hidden_From_Buyer_In_PaymentReceived()
     {
+        // The buyer has nothing to do on Steam in this state; surfacing their
+        // own trade URL back to them would be noise at best.
         var transaction = await CreateTransactionAsync(
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, buyerId: _buyer.Id);
-        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/7766/");
+            TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: _buyer.Id,
+            buyerTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=7766&token=abc");
 
-        var outcome = await BuildSut(resolver)
+        var outcome = await BuildSut()
             .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
 
-        Assert.Equal(TradeOfferDirection.TO_BUYER, resolver.CalledWith);
-        Assert.Equal("https://steamcommunity.com/tradeoffer/7766/", outcome.Body!.SteamTradeOfferUrl);
+        Assert.Null(outcome.Body!.SteamTradeOfferUrl);
     }
 
     [Fact]
-    public async Task SteamTradeOfferUrl_Null_And_Resolver_Untouched_For_NonTradeOffer_State()
+    public async Task SteamTradeOfferUrl_Null_For_State_Without_A_Pending_Delivery()
     {
-        var transaction = await CreateTransactionAsync(TransactionStatus.ACCEPTED, buyerId: _buyer.Id);
-        var resolver = new RecordingTradeOfferUrlResolver("https://steamcommunity.com/tradeoffer/0/");
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.ACCEPTED,
+            buyerId: _buyer.Id,
+            buyerTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=1&token=t");
 
-        var outcome = await BuildSut(resolver)
+        var outcome = await BuildSut()
             .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
 
-        Assert.Null(resolver.CalledWith);
         Assert.Null(outcome.Body!.SteamTradeOfferUrl);
     }
 }

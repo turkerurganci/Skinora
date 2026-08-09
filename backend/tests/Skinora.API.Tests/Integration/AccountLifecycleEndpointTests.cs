@@ -112,7 +112,7 @@ public class AccountLifecycleEndpointTests
         await _factory.CreateTransactionAsync(t =>
         {
             t.SellerId = user.Id;
-            t.Status = TransactionStatus.ITEM_ESCROWED;
+            t.Status = TransactionStatus.SELLER_CONFIRMED;
         });
 
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);

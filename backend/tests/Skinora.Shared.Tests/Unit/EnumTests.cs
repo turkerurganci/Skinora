@@ -4,23 +4,52 @@ namespace Skinora.Shared.Tests.Unit;
 
 public class EnumTests
 {
-    // ── TransactionStatus (14) ──────────────────────────────────────
+    // ── DeliveryEvidence (4, [Flags]) — 06 §2.24 ────────────────────
 
     [Fact]
-    public void TransactionStatus_ShouldHave14Values()
+    public void DeliveryEvidence_ShouldHave4Values()
     {
-        // 14 after WP5 added REFUNDED (buyer-favor admin dispute resolution).
+        var values = Enum.GetValues<DeliveryEvidence>();
+        Assert.Equal(4, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(DeliveryEvidence.NONE), 0)]
+    [InlineData(nameof(DeliveryEvidence.BUYER_CONFIRMED), 1)]
+    [InlineData(nameof(DeliveryEvidence.INVENTORY_DELTA), 2)]
+    [InlineData(nameof(DeliveryEvidence.SELLER_ASSET_GONE), 4)]
+    public void DeliveryEvidence_ShouldPinBitValue(string valueName, int expectedBit)
+    {
+        // The bits are persisted as an int (TransactionConfiguration uses
+        // HasConversion<int>()), so renumbering them would silently change what
+        // every stored row means. Pin them.
+        Assert.Equal(expectedBit, (int)Enum.Parse<DeliveryEvidence>(valueName));
+    }
+
+    [Fact]
+    public void DeliveryEvidence_ShouldBeFlags()
+    {
+        Assert.NotNull(typeof(DeliveryEvidence).GetCustomAttributes(typeof(FlagsAttribute), false).SingleOrDefault());
+    }
+
+    // ── TransactionStatus (12) ──────────────────────────────────────
+
+    [Fact]
+    public void TransactionStatus_ShouldHave12Values()
+    {
+        // 12 after the v3.0 P2P pivot: TRADE_OFFER_SENT_TO_SELLER became
+        // SELLER_CONFIRMED, and ITEM_ESCROWED / TRADE_OFFER_SENT_TO_BUYER were
+        // removed — the platform neither escrows items nor sends trade offers
+        // (02 §2.1).
         var values = Enum.GetValues<TransactionStatus>();
-        Assert.Equal(14, values.Length);
+        Assert.Equal(12, values.Length);
     }
 
     [Theory]
     [InlineData(nameof(TransactionStatus.CREATED))]
     [InlineData(nameof(TransactionStatus.ACCEPTED))]
-    [InlineData(nameof(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER))]
-    [InlineData(nameof(TransactionStatus.ITEM_ESCROWED))]
+    [InlineData(nameof(TransactionStatus.SELLER_CONFIRMED))]
     [InlineData(nameof(TransactionStatus.PAYMENT_RECEIVED))]
-    [InlineData(nameof(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER))]
     [InlineData(nameof(TransactionStatus.ITEM_DELIVERED))]
     [InlineData(nameof(TransactionStatus.COMPLETED))]
     [InlineData(nameof(TransactionStatus.CANCELLED_TIMEOUT))]
@@ -131,45 +160,6 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(BlockchainTransactionStatus), Enum.Parse<BlockchainTransactionStatus>(valueName)));
     }
 
-    // ── TradeOfferDirection (3) ─────────────────────────────────────
-
-    [Fact]
-    public void TradeOfferDirection_ShouldHave3Values()
-    {
-        var values = Enum.GetValues<TradeOfferDirection>();
-        Assert.Equal(3, values.Length);
-    }
-
-    [Theory]
-    [InlineData(nameof(TradeOfferDirection.TO_SELLER))]
-    [InlineData(nameof(TradeOfferDirection.TO_BUYER))]
-    [InlineData(nameof(TradeOfferDirection.RETURN_TO_SELLER))]
-    public void TradeOfferDirection_ShouldContainExpectedValue(string valueName)
-    {
-        Assert.True(Enum.IsDefined(typeof(TradeOfferDirection), Enum.Parse<TradeOfferDirection>(valueName)));
-    }
-
-    // ── TradeOfferStatus (6) ────────────────────────────────────────
-
-    [Fact]
-    public void TradeOfferStatus_ShouldHave6Values()
-    {
-        var values = Enum.GetValues<TradeOfferStatus>();
-        Assert.Equal(6, values.Length);
-    }
-
-    [Theory]
-    [InlineData(nameof(TradeOfferStatus.PENDING))]
-    [InlineData(nameof(TradeOfferStatus.SENT))]
-    [InlineData(nameof(TradeOfferStatus.ACCEPTED))]
-    [InlineData(nameof(TradeOfferStatus.DECLINED))]
-    [InlineData(nameof(TradeOfferStatus.EXPIRED))]
-    [InlineData(nameof(TradeOfferStatus.FAILED))]
-    public void TradeOfferStatus_ShouldContainExpectedValue(string valueName)
-    {
-        Assert.True(Enum.IsDefined(typeof(TradeOfferStatus), Enum.Parse<TradeOfferStatus>(valueName)));
-    }
-
     // ── DisputeType (3) ─────────────────────────────────────────────
 
     [Fact]
@@ -266,21 +256,25 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (28) ───────────────────────────────────────
+    // ── NotificationType (26) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave28Values()
+    public void NotificationType_ShouldHave26Values()
     {
+        // 26 after the v3.0 P2P pivot: ITEM_ESCROWED became PAYMENT_WINDOW_OPEN
+        // and TRADE_OFFER_SENT_TO_BUYER became DELIVERY_EXPECTED (which also
+        // flipped recipient — it now addresses the seller); ITEM_RETURNED and
+        // ADMIN_STEAM_BOT_ISSUE were removed outright.
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(28, values.Length);
+        Assert.Equal(26, values.Length);
     }
 
     [Theory]
     [InlineData(nameof(NotificationType.TRANSACTION_INVITE))]
     [InlineData(nameof(NotificationType.BUYER_ACCEPTED))]
-    [InlineData(nameof(NotificationType.ITEM_ESCROWED))]
+    [InlineData(nameof(NotificationType.PAYMENT_WINDOW_OPEN))]
     [InlineData(nameof(NotificationType.PAYMENT_RECEIVED))]
-    [InlineData(nameof(NotificationType.TRADE_OFFER_SENT_TO_BUYER))]
+    [InlineData(nameof(NotificationType.DELIVERY_EXPECTED))]
     [InlineData(nameof(NotificationType.TRANSACTION_COMPLETED))]
     [InlineData(nameof(NotificationType.SELLER_PAYMENT_SENT))]
     [InlineData(nameof(NotificationType.TIMEOUT_WARNING))]
@@ -288,14 +282,12 @@ public class EnumTests
     [InlineData(nameof(NotificationType.TRANSACTION_FLAGGED))]
     [InlineData(nameof(NotificationType.PAYMENT_INCORRECT))]
     [InlineData(nameof(NotificationType.LATE_PAYMENT_REFUNDED))]
-    [InlineData(nameof(NotificationType.ITEM_RETURNED))]
     [InlineData(nameof(NotificationType.PAYMENT_REFUNDED))]
     [InlineData(nameof(NotificationType.DISPUTE_RESULT))]
     [InlineData(nameof(NotificationType.FLAG_RESOLVED))]
     [InlineData(nameof(NotificationType.ADMIN_FLAG_ALERT))]
     [InlineData(nameof(NotificationType.ADMIN_ESCALATION))]
     [InlineData(nameof(NotificationType.ADMIN_PAYMENT_FAILURE))]
-    [InlineData(nameof(NotificationType.ADMIN_STEAM_BOT_ISSUE))]
     [InlineData(nameof(NotificationType.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(NotificationType.EMERGENCY_HOLD_RELEASED))]
     [InlineData(nameof(NotificationType.INSUFFICIENT_PAYMENT))]
@@ -325,25 +317,6 @@ public class EnumTests
     public void NotificationChannel_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationChannel), Enum.Parse<NotificationChannel>(valueName)));
-    }
-
-    // ── PlatformSteamBotStatus (4) ──────────────────────────────────
-
-    [Fact]
-    public void PlatformSteamBotStatus_ShouldHave4Values()
-    {
-        var values = Enum.GetValues<PlatformSteamBotStatus>();
-        Assert.Equal(4, values.Length);
-    }
-
-    [Theory]
-    [InlineData(nameof(PlatformSteamBotStatus.ACTIVE))]
-    [InlineData(nameof(PlatformSteamBotStatus.RESTRICTED))]
-    [InlineData(nameof(PlatformSteamBotStatus.BANNED))]
-    [InlineData(nameof(PlatformSteamBotStatus.OFFLINE))]
-    public void PlatformSteamBotStatus_ShouldContainExpectedValue(string valueName)
-    {
-        Assert.True(Enum.IsDefined(typeof(PlatformSteamBotStatus), Enum.Parse<PlatformSteamBotStatus>(valueName)));
     }
 
     // ── MonitoringStatus (5) ────────────────────────────────────────
@@ -529,53 +502,35 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(DeliveryStatus), Enum.Parse<DeliveryStatus>(valueName)));
     }
 
-    // ── TransactionTrigger (16) — 05 §4.2 transition table triggers ───
+    // ── TransactionTrigger (14) — 05 §4.2 transition table triggers ───
 
     [Fact]
-    public void TransactionTrigger_ShouldHave16Values()
+    public void TransactionTrigger_ShouldHave14Values()
     {
-        // 16 after WP5 added AdminResolveRefund (buyer-favor dispute resolution).
+        // 14 after the v3.0 P2P pivot: SellerConfirmReady and DeliveryReversed
+        // added; SendTradeOfferToSeller / EscrowItem / SendTradeOfferToBuyer /
+        // BuyerDecline removed with the bot custody layer.
         var values = Enum.GetValues<TransactionTrigger>();
-        Assert.Equal(16, values.Length);
+        Assert.Equal(14, values.Length);
     }
 
     [Theory]
     [InlineData(nameof(TransactionTrigger.BuyerAccept))]
-    [InlineData(nameof(TransactionTrigger.SendTradeOfferToSeller))]
-    [InlineData(nameof(TransactionTrigger.EscrowItem))]
+    [InlineData(nameof(TransactionTrigger.SellerConfirmReady))]
     [InlineData(nameof(TransactionTrigger.ConfirmPayment))]
-    [InlineData(nameof(TransactionTrigger.SendTradeOfferToBuyer))]
     [InlineData(nameof(TransactionTrigger.DeliverItem))]
     [InlineData(nameof(TransactionTrigger.Complete))]
+    [InlineData(nameof(TransactionTrigger.DeliveryReversed))]
     [InlineData(nameof(TransactionTrigger.Timeout))]
     [InlineData(nameof(TransactionTrigger.SellerCancel))]
     [InlineData(nameof(TransactionTrigger.BuyerCancel))]
     [InlineData(nameof(TransactionTrigger.AdminCancel))]
     [InlineData(nameof(TransactionTrigger.SellerDecline))]
-    [InlineData(nameof(TransactionTrigger.BuyerDecline))]
     [InlineData(nameof(TransactionTrigger.AdminApprove))]
     [InlineData(nameof(TransactionTrigger.AdminReject))]
     public void TransactionTrigger_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(TransactionTrigger), Enum.Parse<TransactionTrigger>(valueName)));
-    }
-
-    [Fact]
-    public void ItemRefundTrigger_ShouldHave5Values()
-    {
-        var values = Enum.GetValues<ItemRefundTrigger>();
-        Assert.Equal(5, values.Length);
-    }
-
-    [Theory]
-    [InlineData(nameof(ItemRefundTrigger.TimeoutPayment))]
-    [InlineData(nameof(ItemRefundTrigger.TimeoutDelivery))]
-    [InlineData(nameof(ItemRefundTrigger.SellerCancel))]
-    [InlineData(nameof(ItemRefundTrigger.BuyerCancel))]
-    [InlineData(nameof(ItemRefundTrigger.AdminCancel))]
-    public void ItemRefundTrigger_ShouldContainExpectedValue(string valueName)
-    {
-        Assert.True(Enum.IsDefined(typeof(ItemRefundTrigger), Enum.Parse<ItemRefundTrigger>(valueName)));
     }
 
     [Fact]
@@ -603,8 +558,9 @@ public class EnumTests
             .Where(t => t.IsEnum && t.Namespace == "Skinora.Shared.Enums")
             .ToList();
 
-        // T59 added EmergencyHoldReleaseAction → 27; T103b-2 added BotRecoveryStatus → 28;
-        // WP5 added DisputeResolutionOutcome → 29.
-        Assert.Equal(29, enumTypes.Count);
+        // 25 after the v3.0 P2P pivot removed 5 bot/trade enums (TradeOfferDirection,
+        // TradeOfferStatus, PlatformSteamBotStatus, BotRecoveryStatus, ItemRefundTrigger)
+        // and added DeliveryEvidence.
+        Assert.Equal(25, enumTypes.Count);
     }
 }

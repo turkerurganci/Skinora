@@ -161,14 +161,14 @@ public class AdminDisputeServiceTests : IntegrationTestBase
         var persistedDispute = await Context.Set<Dispute>().AsNoTracking().FirstAsync(d => d.Id == dispute.Id);
         Assert.Equal(DisputeStatus.RESOLVED_FOR_BUYER, persistedDispute.Status);
 
-        // Buyer payment refund queued; NO item-return (item already with buyer).
+        // Buyer payment refund queued. There is no item-return leg in v3.0 —
+        // the platform never held the item (02 §9).
         Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Single(_outbox.Published.OfType<DisputeResolvedEvent>());
     }
 
     [Fact]
-    public async Task Resolve_BuyerFavor_AtPaymentReceived_RefundsBuyer_AndReturnsItem()
+    public async Task Resolve_BuyerFavor_AtPaymentReceived_RefundsBuyer()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withPayment: true);
         var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.PAYMENT);
@@ -182,9 +182,9 @@ public class AdminDisputeServiceTests : IntegrationTestBase
         var persistedTx = await Context.Set<Transaction>().AsNoTracking().FirstAsync(t => t.Id == tx.Id);
         Assert.Equal(TransactionStatus.REFUNDED, persistedTx.Status);
 
-        // Item still on platform → both refund + return fire.
+        // Only the money moves: the item never left the seller's inventory in
+        // this state, so there is nothing to return (02 §9).
         Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
-        Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
     }
 
     // ---------- Guards ----------

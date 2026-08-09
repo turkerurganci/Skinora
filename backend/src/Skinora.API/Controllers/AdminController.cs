@@ -11,7 +11,6 @@ using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Application.Settings;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
-using Skinora.Steam.Application.Admin;
 using Skinora.Transactions.Application.Admin;
 
 namespace Skinora.API.Controllers;
@@ -40,10 +39,8 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "MANAGE_SETTINGS";
     private const string PolicyViewAuditLog =
         AuthPolicies.PermissionPrefix + "VIEW_AUDIT_LOG";
-    private const string PolicyViewSteamAccounts =
-        AuthPolicies.PermissionPrefix + "VIEW_STEAM_ACCOUNTS";
-    private const string PolicyManageSteamRecovery =
-        AuthPolicies.PermissionPrefix + "MANAGE_STEAM_RECOVERY";
+    // VIEW_STEAM_ACCOUNTS / MANAGE_STEAM_RECOVERY policies removed in v3.0 —
+    // the platform runs no Steam bot accounts (02 §15, 05 §3.2).
     private const string PolicyManageFlags =
         AuthPolicies.PermissionPrefix + "MANAGE_FLAGS";
 
@@ -52,8 +49,6 @@ public sealed class AdminController : ControllerBase
     private readonly ISystemSettingsService _settings;
     private readonly IAuditLogQueryService _auditLogs;
     private readonly IAdminTransactionQueryService _txQueries;
-    private readonly IAdminSteamBotQueryService _steamBots;
-    private readonly IAdminBotRecoveryService _botRecovery;
     private readonly IAdminDashboardService _dashboard;
     private readonly IAdminUserSuspensionService _suspension;
     private readonly IAdminMaintenanceService _maintenance;
@@ -64,8 +59,6 @@ public sealed class AdminController : ControllerBase
         ISystemSettingsService settings,
         IAuditLogQueryService auditLogs,
         IAdminTransactionQueryService txQueries,
-        IAdminSteamBotQueryService steamBots,
-        IAdminBotRecoveryService botRecovery,
         IAdminDashboardService dashboard,
         IAdminUserSuspensionService suspension,
         IAdminMaintenanceService maintenance)
@@ -75,8 +68,6 @@ public sealed class AdminController : ControllerBase
         _settings = settings;
         _auditLogs = auditLogs;
         _txQueries = txQueries;
-        _steamBots = steamBots;
-        _botRecovery = botRecovery;
         _dashboard = dashboard;
         _suspension = suspension;
         _maintenance = maintenance;
@@ -94,87 +85,6 @@ public sealed class AdminController : ControllerBase
         var result = await _dashboard.GetAsync(cancellationToken);
         return Ok(result);
     }
-
-    // ---------- Steam accounts (07 §9.10) ----------
-
-    /// <summary>AD10 — <c>GET /admin/steam-accounts</c> (07 §9.10, T63).</summary>
-    [HttpGet("steam-accounts")]
-    [Authorize(Policy = PolicyViewSteamAccounts)]
-    [RateLimit("admin-read")]
-    public async Task<ActionResult<AdminSteamAccountsResponse>> GetSteamAccounts(
-        CancellationToken cancellationToken)
-    {
-        var result = await _steamBots.ListAsync(cancellationToken);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// AD25 — <c>GET /admin/steam-accounts/:botId/recovery-queue</c> (T103b-2,
-    /// 04 §8.7). Stuck-escrow recovery queue for one bot. Read surface:
-    /// <c>VIEW_STEAM_ACCOUNTS</c>.
-    /// </summary>
-    [HttpGet("steam-accounts/{botId:guid}/recovery-queue")]
-    [Authorize(Policy = PolicyViewSteamAccounts)]
-    [RateLimit("admin-read")]
-    public async Task<IActionResult> GetRecoveryQueue(
-        Guid botId, CancellationToken cancellationToken)
-    {
-        var result = await _botRecovery.GetQueueAsync(botId, cancellationToken);
-        if (result is null)
-        {
-            return NotFound(ApiResponse<object>.Fail(
-                "STEAM_ACCOUNT_NOT_FOUND",
-                $"Steam bot '{botId}' was not found.",
-                traceId: HttpContext.TraceIdentifier));
-        }
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// AD26 — <c>PATCH /admin/steam-accounts/recovery/:id</c> (T103b-2, 04 §8.7).
-    /// Admin triage update (note / responsible admin / status). Mutating surface:
-    /// <c>MANAGE_STEAM_RECOVERY</c> (fund/item-safety impact, separate from the
-    /// read-only <c>VIEW_STEAM_ACCOUNTS</c>).
-    /// </summary>
-    [HttpPatch("steam-accounts/recovery/{id:guid}")]
-    [Authorize(Policy = PolicyManageSteamRecovery)]
-    [RateLimit("admin-write")]
-    public async Task<IActionResult> UpdateRecoveryItem(
-        Guid id,
-        [FromBody] UpdateRecoveryItemRequest? request,
-        CancellationToken cancellationToken)
-    {
-        if (GetCallerUserId() is not { } adminId) return Unauthorized();
-        if (request is null)
-        {
-            return BadRequest(ApiResponse<object>.Fail(
-                BotRecoveryErrorCodes.ValidationError,
-                "Request body is required.",
-                traceId: HttpContext.TraceIdentifier));
-        }
-
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-        var outcome = await _botRecovery.UpdateAsync(adminId, id, request, ipAddress, cancellationToken);
-
-        return outcome.Status switch
-        {
-            UpdateRecoveryItemStatus.Updated => Ok(outcome.Body),
-
-            UpdateRecoveryItemStatus.NotFound => NotFound(RecoveryEnvelope(outcome)),
-
-            UpdateRecoveryItemStatus.ValidationFailed => BadRequest(RecoveryEnvelope(outcome)),
-
-            UpdateRecoveryItemStatus.AlreadyResolved => Conflict(RecoveryEnvelope(outcome)),
-
-            _ => StatusCode(StatusCodes.Status500InternalServerError),
-        };
-    }
-
-    private ApiResponse<object> RecoveryEnvelope(UpdateRecoveryItemOutcome outcome) =>
-        ApiResponse<object>.Fail(
-            outcome.ErrorCode ?? BotRecoveryErrorCodes.ValidationError,
-            outcome.ErrorMessage ?? "Recovery item could not be updated.",
-            traceId: HttpContext.TraceIdentifier);
 
     // ---------- Roles (07 §9.11–§9.14) ----------
 

@@ -55,16 +55,15 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
             NullLogger<TimeoutExecutor>.Instance);
 
     [Fact]
-    public async Task Payment_Timeout_Publishes_Notification_ItemRefund_And_LatePaymentMonitor()
+    public async Task Payment_Timeout_Publishes_Notification_And_LatePaymentMonitor()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-1),
             buyerId: buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -73,12 +72,12 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
 
-        Assert.Equal(3, _outbox.Published.Count);
+        // v3.0 — two events: no item refund exists (03 §4.3).
+        Assert.Equal(2, _outbox.Published.Count);
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Payment, notify.Phase);
         Assert.Equal(buyer.Id, notify.BuyerId);
 
-        Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Single(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
     }
 
@@ -92,7 +91,6 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
             paymentDeadline: nowUtc.AddMinutes(-1),
             buyerId: buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 

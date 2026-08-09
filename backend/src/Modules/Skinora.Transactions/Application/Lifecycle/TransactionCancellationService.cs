@@ -26,28 +26,24 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// <b>Role-aware trigger selection (02 §7):</b> the caller is either the
 /// seller or the buyer; the service derives the
 /// <see cref="TransactionTrigger"/> from the (role, current state) pair so the
-/// state machine fires the correct transition. Sellers in
-/// <c>TRADE_OFFER_SENT_TO_SELLER</c> use the dedicated
-/// <see cref="TransactionTrigger.SellerDecline"/> trigger because the state
-/// machine reserves <see cref="TransactionTrigger.SellerCancel"/> for the
-/// pre-trade-offer states only — both end at
+/// state machine fires the correct transition. A seller cancelling from
+/// <c>ACCEPTED</c> may use either <see cref="TransactionTrigger.SellerCancel"/>
+/// or <see cref="TransactionTrigger.SellerDecline"/> — both end at
 /// <see cref="TransactionStatus.CANCELLED_SELLER"/> with identical fields.
 /// </para>
 /// <para>
-/// <b>Post-payment guard (02 §7):</b> states reachable only after
-/// <c>PaymentReceivedAt</c> is set (PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER,
-/// ITEM_DELIVERED) short-circuit to <c>PAYMENT_ALREADY_SENT</c>. The state
-/// machine also permits <see cref="TransactionTrigger.BuyerDecline"/> on
-/// TRADE_OFFER_SENT_TO_BUYER, but that path is reserved for the future
-/// dispute / admin-driven flow — the user-facing cancel endpoint blocks it.
+/// <b>Post-payment guard (02 §7, 07 §7.7):</b> asymmetric in v3.0. The
+/// <b>buyer</b> is refused once their money is in escrow (PAYMENT_RECEIVED,
+/// ITEM_DELIVERED short-circuit to <c>PAYMENT_ALREADY_SENT</c>); the
+/// <b>seller</b> may still back out of PAYMENT_RECEIVED, which refunds the
+/// buyer. Closing the seller's path would not protect anyone — they would
+/// simply let the delivery deadline lapse for the same outcome, later.
 /// </para>
 /// <para>
-/// <b>Item return:</b> when the item was on the platform immediately before
-/// the cancel transition (<c>EscrowBotAssetId</c> is set, i.e. previous state
-/// was <c>ITEM_ESCROWED</c>), the service emits
-/// <see cref="ItemRefundToSellerRequestedEvent"/> with a cancel-flavoured
-/// <see cref="ItemRefundTrigger"/>. The Steam sidecar consumer (T64–T68)
-/// handles the actual return-trade-offer.
+/// <b>Payment refund:</b> when the pre-cancel state was PAYMENT_RECEIVED the
+/// service emits <see cref="PaymentRefundToBuyerRequestedEvent"/>. There is no
+/// item-return counterpart: in the P2P model the item never left the seller's
+/// inventory (02 §9).
 /// </para>
 /// <para>
 /// <b>Reputation + cooldown:</b> after a successful cancel the responsible
@@ -114,10 +110,9 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 "Caller is not a party to this transaction.");
 
         // ---------- Stage 2a: suspension guard (T105a, 02 §14.0) ----------
-        // A suspended user cannot take the cancel action. For ITEM_ESCROWED this
-        // would otherwise publish ItemRefundToSellerRequestedEvent and pull the
-        // escrowed item back out of platform custody (the wallet-address freeze
-        // does not cover the Steam inventory return channel). Under the
+        // A suspended user cannot take the cancel action. From PAYMENT_RECEIVED
+        // this would otherwise publish PaymentRefundToBuyerRequestedEvent and
+        // move funds out on a suspended party's initiative. Under the
         // restricted-session model the caller's pending steps fall to timeout
         // instead; admin can drive the lifecycle via the hold/cancel orchestrator.
         var caller = await _db.Set<User>()
@@ -136,13 +131,15 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
                 $"reason must be at least {MinReasonLength} characters (07 §7.7).");
 
         // ---------- Stage 4: state guard + role → trigger mapping ----------
-        // 02 §7: post-payment cancel by either party is forbidden. The state
-        // machine permits BuyerDecline on TRADE_OFFER_SENT_TO_BUYER, but that
-        // path is reserved for the dispute / admin orchestrator (T58 / T59).
-        if (IsPostPaymentState(transaction.Status))
+        // 02 §7 / 07 §7.7 — post-payment cancel is asymmetric in v3.0: the
+        // BUYER is refused once their money is in escrow, the SELLER is not.
+        // The role check is load-bearing; applying this guard to both parties
+        // would make the seller's PAYMENT_RECEIVED branch in ResolveTrigger
+        // unreachable and silently reinstate the pre-pivot rule.
+        if (role.Value == CancelledByType.BUYER && IsPostPaymentState(transaction.Status))
             return Failure(CancelTransactionStatus.PaymentAlreadySent,
                 TransactionErrorCodes.PaymentAlreadySent,
-                "Payment has already been sent; the transaction can no longer be cancelled by either party (02 §7).");
+                "Payment has already been sent; the buyer can no longer cancel the transaction (02 §7).");
 
         var trigger = ResolveTrigger(role.Value, transaction.Status);
         if (trigger is null)
@@ -155,7 +152,6 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         // handlers stamp CancelledAt, so we cannot derive item-return logic
         // from the post-trigger entity.
         var previousStatus = transaction.Status;
-        var itemWasOnPlatform = previousStatus == TransactionStatus.ITEM_ESCROWED;
 
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
         try
@@ -183,20 +179,19 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         // 6a. Cancel pending Hangfire timeout / warning jobs (idempotent).
         await _timeouts.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
 
-        // 6b. Item return event when the item was on the platform (i.e. the
-        // pre-cancel state was ITEM_ESCROWED). Trigger flavour mirrors role.
-        if (itemWasOnPlatform)
+        // 6b. No item-return event exists in the P2P model — the item never
+        // left the seller's inventory, so a cancellation only ever moves money
+        // (02 §9). Payment refund, when the buyer had already paid:
+        if (previousStatus == TransactionStatus.PAYMENT_RECEIVED
+            && transaction.BuyerId is { } buyerForRefund
+            && !string.IsNullOrWhiteSpace(transaction.BuyerRefundAddress))
         {
-            var refundTrigger = role.Value == CancelledByType.SELLER
-                ? ItemRefundTrigger.SellerCancel
-                : ItemRefundTrigger.BuyerCancel;
-
             await _outbox.PublishAsync(
-                new ItemRefundToSellerRequestedEvent(
+                new PaymentRefundToBuyerRequestedEvent(
                     EventId: Guid.NewGuid(),
                     TransactionId: transaction.Id,
-                    SellerId: transaction.SellerId,
-                    Trigger: refundTrigger,
+                    BuyerId: buyerForRefund,
+                    BuyerRefundAddress: transaction.BuyerRefundAddress!,
                     OccurredAt: occurredAt),
                 cancellationToken);
         }
@@ -253,11 +248,9 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
             new CancelTransactionResponse(
                 Status: transaction.Status,
                 CancelledAt: transaction.CancelledAt!.Value,
-                ItemReturned: itemWasOnPlatform,
-                // T51 user-cancel can never reach a post-payment state, so
-                // the buyer's payment is never in flight here. Admin-cancel
-                // (T59) and timeout-cancel (T49) own the refund path.
-                PaymentRefunded: false),
+                // v3.0 — a seller cancel from PAYMENT_RECEIVED does refund the
+                // buyer (02 §7), so this is no longer always false.
+                PaymentRefunded: previousStatus == TransactionStatus.PAYMENT_RECEIVED),
             ErrorCode: null,
             ErrorMessage: null);
     }
@@ -271,10 +264,13 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         return null;
     }
 
+    // Post-payment states, used to refuse the BUYER's cancel (07 §7.7 gives
+    // 422 PAYMENT_ALREADY_SENT for the buyer only). The seller is not blocked
+    // here — see ResolveTrigger (02 §7). The seller's own refusal at
+    // ITEM_DELIVERED comes from ResolveTrigger returning null → 409.
     private static bool IsPostPaymentState(TransactionStatus status) => status switch
     {
         TransactionStatus.PAYMENT_RECEIVED => true,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
         TransactionStatus.ITEM_DELIVERED => true,
         _ => false,
     };
@@ -289,17 +285,20 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         {
             (CancelledByType.SELLER, TransactionStatus.CREATED) => TransactionTrigger.SellerCancel,
             (CancelledByType.SELLER, TransactionStatus.ACCEPTED) => TransactionTrigger.SellerCancel,
-            // 05 §4.2: SellerCancel is not permitted at TRADE_OFFER_SENT_TO_SELLER;
-            // SellerDecline carries identical CancelledByType=SELLER + reason
-            // semantics (06 §3.5) and ends at the same CANCELLED_SELLER state.
-            (CancelledByType.SELLER, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER) => TransactionTrigger.SellerDecline,
-            (CancelledByType.SELLER, TransactionStatus.ITEM_ESCROWED) => TransactionTrigger.SellerCancel,
+            (CancelledByType.SELLER, TransactionStatus.SELLER_CONFIRMED) => TransactionTrigger.SellerCancel,
+
+            // v3.0 — the seller may still back out after the buyer has paid
+            // (02 §7). Closing this would not protect the buyer: the seller
+            // would simply let the delivery deadline lapse and the buyer would
+            // wait longer for the same refund.
+            (CancelledByType.SELLER, TransactionStatus.PAYMENT_RECEIVED) => TransactionTrigger.SellerCancel,
 
             (CancelledByType.BUYER, TransactionStatus.CREATED) => TransactionTrigger.BuyerCancel,
             (CancelledByType.BUYER, TransactionStatus.ACCEPTED) => TransactionTrigger.BuyerCancel,
-            (CancelledByType.BUYER, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER) => TransactionTrigger.BuyerCancel,
-            (CancelledByType.BUYER, TransactionStatus.ITEM_ESCROWED) => TransactionTrigger.BuyerCancel,
+            (CancelledByType.BUYER, TransactionStatus.SELLER_CONFIRMED) => TransactionTrigger.BuyerCancel,
 
+            // The buyer has no PAYMENT_RECEIVED entry: once their money is in
+            // escrow they cannot unilaterally cancel (02 §7).
             _ => null,
         };
 

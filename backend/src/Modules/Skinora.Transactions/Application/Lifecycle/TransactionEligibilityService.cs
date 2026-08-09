@@ -21,10 +21,8 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
         TransactionStatus.CREATED,
         TransactionStatus.FLAGGED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
         TransactionStatus.PAYMENT_RECEIVED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
         TransactionStatus.ITEM_DELIVERED,
     ];
 

@@ -354,7 +354,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         var tx = new Transaction
         {
             Id = Guid.NewGuid(),
-            Status = TransactionStatus.ITEM_ESCROWED,
+            Status = TransactionStatus.SELLER_CONFIRMED,
             SellerId = seller.Id,
             BuyerId = buyer.Id,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,

@@ -4,8 +4,8 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// Per-transaction Hangfire timeout job orchestrator (05 §4.4 "Aşama ayrımı",
 /// 09 §13.3). Schedules and cancels the payment timeout (<c>PaymentTimeoutJobId</c>)
 /// and the timeout warning (<c>TimeoutWarningJobId</c>) for transactions in
-/// <c>ITEM_ESCROWED</c>; non-payment timeouts (Accept / TradeOfferToSeller /
-/// TradeOfferToBuyer) are enforced by <see cref="IDeadlineScannerJob"/> instead.
+/// <c>SELLER_CONFIRMED</c>; non-payment timeouts (Accept / SellerConfirm /
+/// Delivery) are enforced by <see cref="IDeadlineScannerJob"/> instead.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -30,7 +30,7 @@ public interface ITimeoutSchedulingService
     /// Schedules <c>PaymentTimeoutJobId</c> (delay = remainder of
     /// <c>PaymentDeadline</c> from now) and <c>TimeoutWarningJobId</c> (delay =
     /// <c>warningRatio × paymentTimeoutMinutes</c>). The transaction MUST be in
-    /// <c>ITEM_ESCROWED</c> with <c>PaymentDeadline</c> set; the caller is
+    /// <c>SELLER_CONFIRMED</c> with <c>PaymentDeadline</c> set; the caller is
     /// responsible for the state transition that produced that field.
     /// </summary>
     /// <returns>The two job ids written onto the entity (also persisted by the caller's <c>SaveChangesAsync</c>).</returns>

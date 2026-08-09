@@ -99,7 +99,6 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         Assert.Equal(AdminCancelTransactionStatus.Cancelled, outcome.Status);
         Assert.NotNull(outcome.Body);
         Assert.Equal(TransactionStatus.CANCELLED_ADMIN, outcome.Body.Status);
-        Assert.False(outcome.Body.ItemReturned);
         Assert.False(outcome.Body.PaymentRefunded);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
@@ -107,16 +106,17 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         Assert.Equal(CancelledByType.ADMIN, persisted.CancelledBy);
         Assert.Equal("Yasal talep — admin iptal", persisted.CancelReason);
 
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         var cancelEvent = Assert.Single(_outbox.Published.OfType<TransactionCancelledEvent>());
         Assert.Equal(CancelledByType.ADMIN, cancelEvent.CancelledBy);
     }
 
     [Fact]
-    public async Task CancelAsync_From_ItemEscrowed_Emits_ItemRefund_With_AdminCancel_Trigger()
+    public async Task CancelAsync_From_SellerConfirmed_Emits_No_Refund_Events()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        // v3.0 — nothing has moved at SELLER_CONFIRMED: the item is still with
+        // the seller and the buyer has not paid (02 §9).
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
 
         var sut = BuildSut();
         var outcome = await sut.CancelAsync(
@@ -126,17 +126,13 @@ public class AdminTransactionServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(AdminCancelTransactionStatus.Cancelled, outcome.Status);
-        Assert.True(outcome.Body!.ItemReturned);
-        Assert.False(outcome.Body.PaymentRefunded); // No payment yet at ITEM_ESCROWED.
+        Assert.False(outcome.Body!.PaymentRefunded);
 
-        var refundEvent = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(ItemRefundTrigger.AdminCancel, refundEvent.Trigger);
-        Assert.Equal(_seller.Id, refundEvent.SellerId);
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
     }
 
     [Fact]
-    public async Task CancelAsync_From_PaymentReceived_Emits_Both_Refund_Events()
+    public async Task CancelAsync_From_PaymentReceived_Emits_Payment_Refund_Only()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
 
@@ -148,10 +144,8 @@ public class AdminTransactionServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(AdminCancelTransactionStatus.Cancelled, outcome.Status);
-        Assert.True(outcome.Body!.ItemReturned);
-        Assert.True(outcome.Body.PaymentRefunded);
+        Assert.True(outcome.Body!.PaymentRefunded);
 
-        Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Equal(_buyer.Id, paymentRefund.BuyerId);
         Assert.Equal(BuyerWallet, paymentRefund.BuyerRefundAddress);
@@ -285,7 +279,7 @@ public class AdminTransactionServiceTests : IntegrationTestBase
     [Fact]
     public async Task ApplyEmergencyHoldAsync_Stamps_Hold_Fields_And_Cancels_Hangfire_Jobs()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED, withBuyer: true);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, withBuyer: true);
         // Pretend the timeout pipeline scheduled jobs at hold-time.
         tx.PaymentTimeoutJobId = "payment-job-001";
         tx.TimeoutWarningJobId = "warning-job-001";
@@ -301,13 +295,13 @@ public class AdminTransactionServiceTests : IntegrationTestBase
 
         Assert.Equal(ApplyEmergencyHoldStatus.Applied, outcome.Status);
         Assert.Equal("EMERGENCY_HOLD", outcome.Body!.Status);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, outcome.Body.PreviousStatus);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, outcome.Body.PreviousStatus);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
         Assert.True(persisted.IsOnHold);
         Assert.Equal(_admin.Id, persisted.EmergencyHoldByAdminId);
         Assert.Equal("Sanctions screening eşleşmesi tespit edildi", persisted.EmergencyHoldReason);
-        Assert.Equal((int)TransactionStatus.ITEM_ESCROWED, persisted.PreviousStatusBeforeHold);
+        Assert.Equal((int)TransactionStatus.SELLER_CONFIRMED, persisted.PreviousStatusBeforeHold);
         Assert.Equal(TimeoutFreezeReason.EMERGENCY_HOLD, persisted.TimeoutFreezeReason);
         Assert.NotNull(persisted.TimeoutFrozenAt);
         Assert.Null(persisted.PaymentTimeoutJobId);
@@ -413,7 +407,6 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         Assert.Equal(ReleaseEmergencyHoldStatus.Released, outcome.Status);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, outcome.Body!.Status);
         Assert.Equal(EmergencyHoldReleaseAction.RESUME, outcome.Body.Action);
-        Assert.Null(outcome.Body.ItemReturned);
         Assert.Null(outcome.Body.PaymentRefunded);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
@@ -429,7 +422,7 @@ public class AdminTransactionServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task ReleaseEmergencyHoldAsync_Cancel_From_PaymentReceived_Hold_Transitions_To_AdminCancel_With_Both_Refunds()
+    public async Task ReleaseEmergencyHoldAsync_Cancel_From_PaymentReceived_Hold_Transitions_To_AdminCancel_With_Payment_Refund()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
         var sut = BuildSut();
@@ -449,7 +442,6 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         Assert.Equal(ReleaseEmergencyHoldStatus.Released, outcome.Status);
         Assert.Equal(TransactionStatus.CANCELLED_ADMIN, outcome.Body!.Status);
         Assert.Equal(EmergencyHoldReleaseAction.CANCEL, outcome.Body.Action);
-        Assert.True(outcome.Body.ItemReturned);
         Assert.True(outcome.Body.PaymentRefunded);
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
@@ -460,7 +452,6 @@ public class AdminTransactionServiceTests : IntegrationTestBase
         Assert.NotNull(persisted.CancelReason);
         Assert.Contains("Soruşturma sonucu iptal", persisted.CancelReason);
 
-        Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
         Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         var cancelEvent = Assert.Single(_outbox.Published.OfType<TransactionCancelledEvent>());
         Assert.Equal(CancelledByType.ADMIN, cancelEvent.CancelledBy);
@@ -668,7 +659,7 @@ public class AdminTransactionServiceTests : IntegrationTestBase
                 : BuyerIdentificationMethod.OPEN_LINK,
             TargetBuyerSteamId = withBuyer ? _buyer.SteamId : null,
             InviteToken = withBuyer ? null : "T59-test-" + Guid.NewGuid().ToString("N")[..8],
-            ItemAssetId = "100200300",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,
@@ -680,10 +671,8 @@ public class AdminTransactionServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = status >= TransactionStatus.ACCEPTED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-30) : null,
-            ItemEscrowedAt = status >= TransactionStatus.ITEM_ESCROWED && status != TransactionStatus.FLAGGED
+            SellerReadyConfirmedAt = status >= TransactionStatus.SELLER_CONFIRMED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-25) : null,
-            EscrowBotAssetId = status >= TransactionStatus.ITEM_ESCROWED && status != TransactionStatus.FLAGGED
-                ? "200300400" : null,
             PaymentReceivedAt = status >= TransactionStatus.PAYMENT_RECEIVED
                                  && status != TransactionStatus.FLAGGED
                                  && status != TransactionStatus.CANCELLED_SELLER
@@ -705,9 +694,8 @@ public class AdminTransactionServiceTests : IntegrationTestBase
                 ? "Pre-existing cancel reason for fixture" : null,
             CancelledAt = status >= TransactionStatus.CANCELLED_TIMEOUT ? nowUtc.AddMinutes(-5) : null,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
-            PaymentDeadline = status == TransactionStatus.ITEM_ESCROWED ? nowUtc.AddMinutes(45) : null,
-            TradeOfferToBuyerDeadline = status == TransactionStatus.PAYMENT_RECEIVED
-                || status == TransactionStatus.TRADE_OFFER_SENT_TO_BUYER
+            PaymentDeadline = status == TransactionStatus.SELLER_CONFIRMED ? nowUtc.AddMinutes(45) : null,
+            DeliveryDeadline = status == TransactionStatus.PAYMENT_RECEIVED
                 ? nowUtc.AddMinutes(60) : null,
         };
         Context.Set<Transaction>().Add(tx);

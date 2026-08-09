@@ -40,7 +40,6 @@ public sealed record TransactionDetailDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DisputeSummaryDto? Dispute,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] InviteInfoDto? InviteInfo,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<PaymentEventDto>? PaymentEvents,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? EscrowBotAssetId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DeliveredBuyerAssetId,
     // WP12 (T90 K3) — Steam trade-offer URL, surfaced only in
     // TRADE_OFFER_SENT_TO_SELLER / TRADE_OFFER_SENT_TO_BUYER (04 §7.3 "Steam'e
@@ -107,11 +106,12 @@ public sealed record RefundDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? RefundedAt);
 
 /// <summary>Cancellation block (07 §7.5 cancelInfo).</summary>
+// ItemReturned removed in v3.0: the platform never holds the item, so there is
+// no item to return on cancellation (02 §9).
 public sealed record CancelInfoDto(
     string CancelledBy,
     string Reason,
     DateTime CancelledAt,
-    bool ItemReturned,
     bool PaymentRefunded);
 
 /// <summary>Flag info block (07 §7.5 flagInfo).</summary>
@@ -152,6 +152,10 @@ public sealed record PaymentEventDto(
 /// </summary>
 public sealed record AvailableActionsDto(
     bool CanAccept,
+    // v3.0 — seller readiness confirmation (03 §2.3) and buyer receipt
+    // confirmation (03 §3.5). Omitted for public / prospective-buyer envelopes.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanConfirmReady,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanConfirmReceipt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanCancel,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CanDispute,
     // WP5 (T58-canDisputeEnvelopeBit) — per-type dispute eligibility so the FE

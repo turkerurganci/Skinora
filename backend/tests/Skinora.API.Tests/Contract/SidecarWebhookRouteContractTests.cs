@@ -50,6 +50,26 @@ public sealed class SidecarWebhookRouteContractTests
         @"['""](?<path>/api/v1/[A-Za-z0-9\-_/]+)['""]",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Backend endpoints retired with the bot custody layer in T117 (02 §2.1):
+    /// the platform runs no Steam bots and creates no trade offers, so
+    /// <c>SteamWebhooksController</c> is gone. The sidecar-side publishers
+    /// (<c>sidecar-steam</c> bot / trade-offer modules and the
+    /// <c>sidecar-fake</c> trade route) are deleted in <b>T133</b>, which is
+    /// also when this list must go empty again.
+    /// </summary>
+    /// <remarks>
+    /// Listed explicitly rather than skipped so the drift is named, bounded and
+    /// visible: every other published path stays strictly guarded, and
+    /// <see cref="RetiredPathsAreStillPublished_UntilT133"/> fails the moment
+    /// the entry becomes stale — so the exclusion cannot outlive its reason.
+    /// </remarks>
+    private static readonly string[] RetiredWithBotCustodyLayer =
+    [
+        "/api/v1/webhooks/steam/bot-events",
+        "/api/v1/webhooks/steam/trade-events",
+    ];
+
     [Fact]
     public void EverySidecarPublishedPath_IsServedByBackend()
     {
@@ -61,6 +81,7 @@ public sealed class SidecarWebhookRouteContractTests
 
         var orphans = published
             .Where(p => !backendRoutes.Contains(p.Path))
+            .Where(p => !RetiredWithBotCustodyLayer.Contains(p.Path, StringComparer.Ordinal))
             .OrderBy(p => p.Path, StringComparer.Ordinal)
             .ToList();
 
@@ -86,13 +107,42 @@ public sealed class SidecarWebhookRouteContractTests
     /// failure message that names them explicitly rather than relying on set diffing.
     /// </summary>
     [Theory]
-    [InlineData("/api/v1/webhooks/steam/bot-events")]
-    [InlineData("/api/v1/webhooks/steam/trade-events")]
     [InlineData("/api/v1/webhooks/blockchain/payment-detected")]
     [InlineData("/api/v1/webhooks/blockchain/payment-confirmed")]
     public void CriticalSidecarRoute_IsServedByBackend(string route)
     {
         Assert.Contains(route, DiscoverBackendRoutes());
+    }
+
+    /// <summary>
+    /// Keeps <see cref="RetiredWithBotCustodyLayer"/> honest from both sides: an
+    /// entry may only stay while a sidecar still publishes it (otherwise the
+    /// exclusion is dead and hides nothing) and while the backend genuinely no
+    /// longer serves it (otherwise the route came back and must be guarded
+    /// again). T133 deletes the publishers — this test then fails and the list
+    /// is removed with them.
+    /// </summary>
+    [Fact]
+    public void RetiredPathsAreStillPublished_UntilT133()
+    {
+        var backendRoutes = DiscoverBackendRoutes();
+        var published = DiscoverSidecarPublishedPaths()
+            .Select(p => p.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var retired in RetiredWithBotCustodyLayer)
+        {
+            Assert.True(
+                published.Contains(retired),
+                $"'{retired}' is no longer published by any sidecar — the bot custody "
+                + "removal (T133) is done, so drop it from RetiredWithBotCustodyLayer "
+                + "and let the strict guard cover it again.");
+
+            Assert.False(
+                backendRoutes.Contains(retired),
+                $"'{retired}' is served by the backend again — remove it from "
+                + "RetiredWithBotCustodyLayer so drift on it is caught.");
+        }
     }
 
     // ------------------------------------------------------------------

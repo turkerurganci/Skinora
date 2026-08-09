@@ -52,7 +52,7 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
 
         // 09 §13.3 — defensive guards. State, freeze, hold and deadline must
         // all hold for the trigger to fire. Any miss is a no-op.
-        if (transaction.Status != TransactionStatus.ITEM_ESCROWED) return;
+        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED) return;
         if (transaction.IsOnHold) return;
         if (transaction.TimeoutFrozenAt is not null) return;
         if (transaction.PaymentDeadline > _clock.GetUtcNow().UtcDateTime) return;
@@ -75,7 +75,7 @@ public sealed class TimeoutExecutor : ITimeoutExecutor
         await _sideEffects.PublishAsync(transaction, previousStatus);
 
         // T75 — post-cancel monitoring start request. The timeout path always
-        // happens from ITEM_ESCROWED, so PaymentAddress is guaranteed to be
+        // happens from SELLER_CONFIRMED, so PaymentAddress is guaranteed to be
         // allocated (T44). Use CancelledAt as the anchor when set; otherwise
         // fall back to wall-clock now (defensive — state machine stamps it).
         var cancelledAt = transaction.CancelledAt ?? _clock.GetUtcNow().UtcDateTime;

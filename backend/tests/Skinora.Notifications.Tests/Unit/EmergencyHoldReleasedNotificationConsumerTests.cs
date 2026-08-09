@@ -121,7 +121,7 @@ public class EmergencyHoldReleasedNotificationConsumerTests
             BuyerId: Guid.NewGuid(),
             ItemName: "Driver Gloves",
             Action: EmergencyHoldReleaseAction.RESUME,
-            ResumedStatus: TransactionStatus.ITEM_ESCROWED,
+            ResumedStatus: TransactionStatus.SELLER_CONFIRMED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);

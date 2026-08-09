@@ -107,14 +107,14 @@ public class TransactionListServiceTests : IntegrationTestBase
     public async Task EMERGENCY_HOLD_Projection_Overrides_Real_Status()
     {
         var tx = await CreateTransactionAsync(
-            TransactionStatus.ITEM_ESCROWED, sellerId: _seller.Id, buyerId: _buyer.Id);
+            TransactionStatus.SELLER_CONFIRMED, sellerId: _seller.Id, buyerId: _buyer.Id);
         // 06 §3.5 invariant trio: IsOnHold=1 ↔ EmergencyHold{At,Reason,ByAdmin}
         // NOT NULL ↔ TimeoutFrozenAt + Reason='EMERGENCY_HOLD' + RemainingSeconds NOT NULL.
         tx.IsOnHold = true;
         tx.EmergencyHoldAt = _clock.GetUtcNow().UtcDateTime;
         tx.EmergencyHoldReason = "Sanctions match";
         tx.EmergencyHoldByAdminId = _seller.Id;
-        tx.PreviousStatusBeforeHold = (int)TransactionStatus.ITEM_ESCROWED;
+        tx.PreviousStatusBeforeHold = (int)TransactionStatus.SELLER_CONFIRMED;
         tx.TimeoutFrozenAt = tx.EmergencyHoldAt;
         tx.TimeoutFreezeReason = TimeoutFreezeReason.EMERGENCY_HOLD;
         tx.TimeoutRemainingSeconds = 0;
@@ -189,7 +189,7 @@ public class TransactionListServiceTests : IntegrationTestBase
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198999999999",
-            ItemAssetId = "27348562891",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             ItemIconUrl = "https://steamcdn.example/ak.png",

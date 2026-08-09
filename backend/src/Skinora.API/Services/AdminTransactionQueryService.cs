@@ -46,10 +46,8 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
         TransactionStatus.PAYMENT_RECEIVED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
         TransactionStatus.FLAGGED,
     ];
 
@@ -281,7 +279,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             Buyer: buyerSnapshot,
             CreatedAt: tx.CreatedAt,
             AcceptedAt: tx.AcceptedAt,
-            ItemEscrowedAt: tx.ItemEscrowedAt,
+            SellerReadyConfirmedAt: tx.SellerReadyConfirmedAt,
             PaymentReceivedAt: tx.PaymentReceivedAt,
             ItemDeliveredAt: tx.ItemDeliveredAt,
             CompletedAt: tx.CompletedAt,

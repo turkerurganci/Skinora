@@ -41,7 +41,7 @@ public interface ITimeoutFreezeService
     /// <summary>
     /// Freezes a single transaction in place. Stamps <c>TimeoutFrozenAt</c> and
     /// <c>TimeoutFreezeReason</c> if not already frozen, captures
-    /// <c>TimeoutRemainingSeconds</c> for <c>ITEM_ESCROWED</c>, and cancels the
+    /// <c>TimeoutRemainingSeconds</c> for <c>SELLER_CONFIRMED</c>, and cancels the
     /// payment + warning Hangfire jobs (if any). Idempotent: re-freezing an
     /// already-frozen transaction preserves the original stamp and only
     /// re-runs the job cancel pass. Caller owns <c>SaveChangesAsync</c>.
@@ -51,7 +51,7 @@ public interface ITimeoutFreezeService
     /// <summary>
     /// Resumes a single frozen transaction. Extends each populated phase
     /// deadline by <c>now − TimeoutFrozenAt</c>, re-issues the
-    /// <c>ITEM_ESCROWED</c> payment + warning Hangfire jobs from
+    /// <c>SELLER_CONFIRMED</c> payment + warning Hangfire jobs from
     /// <c>TimeoutRemainingSeconds</c>, and clears <c>TimeoutFrozenAt</c>,
     /// <c>TimeoutFreezeReason</c> and <c>TimeoutRemainingSeconds</c>.
     /// Idempotent: a transaction that is not frozen is a no-op. Caller owns

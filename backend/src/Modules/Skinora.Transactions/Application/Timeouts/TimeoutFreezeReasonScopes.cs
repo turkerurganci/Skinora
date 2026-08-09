@@ -12,8 +12,9 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// <para>
 /// <b>MAINTENANCE</b> covers every active state because a planned platform
 /// outage halts the whole pipeline. <b>STEAM_OUTAGE</b> targets only the two
-/// states whose deadlines wait on Steam-side action (the seller and buyer
-/// trade-offer windows). <b>BLOCKCHAIN_DEGRADATION</b> covers <c>ITEM_ESCROWED</c>
+/// states whose deadlines depend on the platform being able to read Steam (the
+/// seller's readiness re-check and the delivery verification window).
+/// <b>BLOCKCHAIN_DEGRADATION</b> covers <c>SELLER_CONFIRMED</c>
 /// because the only blockchain-bound timeout is <c>PaymentDeadline</c>.
 /// </para>
 /// <para>
@@ -31,23 +32,26 @@ public static class TimeoutFreezeReasonScopes
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
         TransactionStatus.PAYMENT_RECEIVED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
         TransactionStatus.ITEM_DELIVERED,
         TransactionStatus.FLAGGED,
     ];
 
+    // Steam outage scope. In the P2P model the trade itself is unaffected by a
+    // Steam outage — the two parties can still trade if Steam is up for them.
+    // What breaks is the platform's ability to *verify* it, so the delivery
+    // phase must freeze; otherwise the seller is wrongly recorded as having
+    // failed to deliver (02 §23, 03 §11.2).
     private static readonly TransactionStatus[] SteamBound =
     [
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+        TransactionStatus.ACCEPTED,
+        TransactionStatus.PAYMENT_RECEIVED,
     ];
 
     private static readonly TransactionStatus[] PaymentOnly =
     [
-        TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus.SELLER_CONFIRMED,
     ];
 
     /// <summary>

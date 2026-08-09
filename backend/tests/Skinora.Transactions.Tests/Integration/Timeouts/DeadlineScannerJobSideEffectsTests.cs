@@ -73,19 +73,19 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
 
         var evt = Assert.IsType<TransactionTimedOutEvent>(Assert.Single(_outbox.Published));
         Assert.Equal(TimeoutPhase.Accept, evt.Phase);
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
+
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Empty(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
     }
 
     [Fact]
-    public async Task TradeOfferToSeller_Timeout_Publishes_Only_Notification_Event()
+    public async Task SellerConfirm_Timeout_Publishes_Only_Notification_Event()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(-1),
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(-1),
             buyerId: buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         Context.Set<Transaction>().Add(transaction);
@@ -94,18 +94,18 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
         await CreateSut().ScanAndRescheduleAsync();
 
         var evt = Assert.IsType<TransactionTimedOutEvent>(Assert.Single(_outbox.Published));
-        Assert.Equal(TimeoutPhase.TradeOfferToSeller, evt.Phase);
-        Assert.Empty(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
+        Assert.Equal(TimeoutPhase.SellerConfirm, evt.Phase);
+
     }
 
     [Fact]
-    public async Task Delivery_Timeout_Publishes_Notification_ItemRefund_And_PaymentRefund()
+    public async Task Delivery_Timeout_Publishes_Notification_And_PaymentRefund()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, nowUtc,
-            tradeOfferToBuyerDeadline: nowUtc.AddMinutes(-1),
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddMinutes(-1),
             buyerId: buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         Context.Set<Transaction>().Add(transaction);
@@ -113,13 +113,11 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
 
         await CreateSut().ScanAndRescheduleAsync();
 
-        Assert.Equal(3, _outbox.Published.Count);
+        // v3.0 — two events, not three: there is no item to return (03 §4.4).
+        Assert.Equal(2, _outbox.Published.Count);
 
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Delivery, notify.Phase);
-
-        var itemRefund = Assert.Single(_outbox.Published.OfType<ItemRefundToSellerRequestedEvent>());
-        Assert.Equal(ItemRefundTrigger.TimeoutDelivery, itemRefund.Trigger);
 
         var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Equal(buyer.Id, paymentRefund.BuyerId);

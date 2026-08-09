@@ -758,7 +758,7 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
                     : BuyerIdentificationMethod.OPEN_LINK,
                 BuyerRefundAddress = buyerId.HasValue ? "TXBuyerRefund000000" : null,
                 InviteToken = buyerId.HasValue ? null : Guid.NewGuid().ToString("N")[..8],
-                ItemAssetId = "100200300",
+                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 ItemIconUrl = "https://steamcdn.example/img/test.png",

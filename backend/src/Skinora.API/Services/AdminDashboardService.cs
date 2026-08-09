@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
-using Skinora.Steam.Application.Admin;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.API.Services;
@@ -29,16 +28,13 @@ public sealed class AdminDashboardService : IAdminDashboardService
     ];
 
     private readonly AppDbContext _db;
-    private readonly IAdminSteamBotQueryService _steamBots;
     private readonly TimeProvider _clock;
 
     public AdminDashboardService(
         AppDbContext db,
-        IAdminSteamBotQueryService steamBots,
         TimeProvider clock)
     {
         _db = db;
-        _steamBots = steamBots;
         _clock = clock;
     }
 
@@ -96,13 +92,9 @@ public sealed class AdminDashboardService : IAdminDashboardService
                 f.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        // Delegate to the AD10 service so the dashboard's bot block stays
-        // 1:1 with what /admin/steam-accounts returns — no per-shape drift.
-        var steamAccounts = await _steamBots.ListAsync(cancellationToken);
 
         return new AdminDashboardResponse(
             SummaryCards: summaryCards,
-            SteamAccounts: steamAccounts.Accounts,
             RecentFlags: recentFlags);
     }
 }

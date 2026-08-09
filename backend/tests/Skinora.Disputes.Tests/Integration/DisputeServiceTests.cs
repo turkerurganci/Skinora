@@ -10,7 +10,6 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
-using Skinora.Steam.Domain.Entities;
 using Skinora.Steam.Infrastructure.Persistence;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -46,7 +45,6 @@ public class DisputeServiceTests : IntegrationTestBase
     private User _seller = null!;
     private User _buyer = null!;
     private User _otherUser = null!;
-    private PlatformSteamBot _bot = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -77,15 +75,6 @@ public class DisputeServiceTests : IntegrationTestBase
         };
         context.Set<User>().AddRange(_seller, _buyer, _otherUser);
 
-        _bot = new PlatformSteamBot
-        {
-            Id = Guid.NewGuid(),
-            SteamId = "76561198000000400",
-            DisplayName = "Bot",
-            Status = PlatformSteamBotStatus.ACTIVE,
-        };
-        context.Set<PlatformSteamBot>().Add(_bot);
-
         await context.SaveChangesAsync();
     }
 
@@ -94,7 +83,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Open_Payment_NoConfirmedPayment_StaysOpen_AndFlagsTransaction()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -130,7 +119,7 @@ public class DisputeServiceTests : IntegrationTestBase
         buyer.PreferredLanguage = "tr";
         await Context.SaveChangesAsync();
 
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         // Open PAYMENT (no confirmed payment) → unresolved, Turkish message stored + returned.
@@ -181,23 +170,14 @@ public class DisputeServiceTests : IntegrationTestBase
     // ---------- Open ▸ DELIVERY ----------
 
     [Fact]
-    public async Task Open_Delivery_TradeOfferAccepted_AutoResolves()
+    public async Task Open_Delivery_BuyerConfirmedEvidence_AutoResolves()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
-        Context.Set<TradeOffer>().Add(new TradeOffer
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            PlatformSteamBotId = _bot.Id,
-            Direction = TradeOfferDirection.TO_BUYER,
-            Status = TradeOfferStatus.ACCEPTED,
-            SteamTradeOfferId = "10000",
-            SentAt = _clock.GetUtcNow().UtcDateTime,
-            RespondedAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
-        await Context.SaveChangesAsync();
+        // v3.0 — the platform no longer sends or tracks trade offers, so the
+        // auto-checker reads the recorded delivery evidence instead (02 §9.2).
+        // The buyer's own confirmation is sufficient on its own.
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            deliveryEvidence: DeliveryEvidence.BUYER_CONFIRMED);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -211,24 +191,12 @@ public class DisputeServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Open_Delivery_TradeOfferPendingNoInventory_StaysOpen()
+    public async Task Open_Delivery_NoEvidence_StaysOpen()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
-        Context.Set<TradeOffer>().Add(new TradeOffer
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            PlatformSteamBotId = _bot.Id,
-            Direction = TradeOfferDirection.TO_BUYER,
-            Status = TradeOfferStatus.SENT,
-            SteamTradeOfferId = "10001",
-            SentAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
-        await Context.SaveChangesAsync();
+        // Nothing observed yet — fails closed: the dispute stays OPEN so the
+        // buyer can escalate rather than receive a wrong automated answer.
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
 
-        // Inventory probe returns null (default fake) — fails closed: stays open.
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
             new OpenDisputeRequest(DisputeType.DELIVERY), CancellationToken.None);
@@ -239,34 +207,13 @@ public class DisputeServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Open_Delivery_PendingButInventoryHasItem_AutoResolves()
+    public async Task Open_Delivery_InventoryDeltaWithSellerAssetGone_AutoResolves()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
-        Context.Set<TradeOffer>().Add(new TradeOffer
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            PlatformSteamBotId = _bot.Id,
-            Direction = TradeOfferDirection.TO_BUYER,
-            Status = TradeOfferStatus.SENT,
-            SteamTradeOfferId = "10002",
-            SentAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
-        await Context.SaveChangesAsync();
-
-        _inventory.Snapshot = new InventoryItemSnapshot(
-            AssetId: tx.ItemAssetId,
-            ClassId: tx.ItemClassId,
-            InstanceId: null,
-            Name: tx.ItemName,
-            MarketHashName: tx.ItemName,
-            IconUrl: null,
-            Exterior: null,
-            Type: null,
-            InspectLink: null,
-            IsTradeable: true);
+        // The pair (seller's asset gone) AND (buyer's class count up) is the
+        // second sufficient proof in 02 §9.2 — neither half counts alone.
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            deliveryEvidence: DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -274,6 +221,25 @@ public class DisputeServiceTests : IntegrationTestBase
 
         Assert.Equal(DisputeStatus.CLOSED, outcome.Body!.Status);
         Assert.True(outcome.Body.AutoCheckResult.Resolved);
+    }
+
+    [Fact]
+    public async Task Open_Delivery_MisdeliverySignature_StaysOpen()
+    {
+        // SELLER_ASSET_GONE without INVENTORY_DELTA: the item left the seller
+        // but never reached the buyer. This must never resolve silently — it
+        // stays OPEN for human escalation (02 §10.1).
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            deliveryEvidence: DeliveryEvidence.SELLER_ASSET_GONE);
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.DELIVERY), CancellationToken.None);
+
+        Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
+        Assert.False(outcome.Body.AutoCheckResult.Resolved);
+        Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
     }
 
     // ---------- Open ▸ WRONG_ITEM ----------
@@ -364,7 +330,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Open_NotBuyer_Returns_NotBuyer()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var outcome = await sut.OpenAsync(_otherUser.Id, tx.Id,
@@ -389,9 +355,10 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Open_StateNotAllowedForType_Returns_InvalidStateTransition()
     {
-        // PAYMENT not allowed when state is TRADE_OFFER_SENT_TO_BUYER per
-        // T58 per-type table.
-        var tx = await CreateTransactionAsync(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+        // PAYMENT is only openable in SELLER_CONFIRMED / PAYMENT_RECEIVED per
+        // the canonical DisputeEligibility matrix (02 §10.1); by ITEM_DELIVERED
+        // the payment question is settled.
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
         var sut = BuildSut();
 
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -424,19 +391,6 @@ public class DisputeServiceTests : IntegrationTestBase
     public async Task Open_DifferentTypes_Concurrently_Allowed()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
-        Context.Set<TradeOffer>().Add(new TradeOffer
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            PlatformSteamBotId = _bot.Id,
-            Direction = TradeOfferDirection.TO_BUYER,
-            Status = TradeOfferStatus.SENT,
-            SteamTradeOfferId = "10003",
-            SentAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
-        await Context.SaveChangesAsync();
 
         var sut = BuildSut();
         var delivery = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -489,7 +443,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task SubmitTxHash_NoMatch_StaysOpen()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -511,19 +465,6 @@ public class DisputeServiceTests : IntegrationTestBase
     public async Task SubmitTxHash_NonPaymentDispute_Returns_NotPaymentDispute()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
-        Context.Set<TradeOffer>().Add(new TradeOffer
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = tx.Id,
-            PlatformSteamBotId = _bot.Id,
-            Direction = TradeOfferDirection.TO_BUYER,
-            Status = TradeOfferStatus.SENT,
-            SteamTradeOfferId = "10004",
-            SentAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-            UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
-        await Context.SaveChangesAsync();
 
         var sut = BuildSut();
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -558,7 +499,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task SubmitTxHash_BadHashLength_Returns_ValidationError()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -575,7 +516,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task SubmitTxHash_NonBuyer_Returns_NotBuyer()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -593,7 +534,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Escalate_OpenDispute_PromotesToEscalated_AndEmitsEvent()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -664,7 +605,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Escalate_DetailTooShort_Returns_ValidationFailed()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -681,7 +622,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Escalate_NotBuyer_Returns_NotBuyer()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -697,7 +638,7 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Escalate_DisputeNotFound_Returns_NotFound()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_ESCROWED);
+        var tx = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var outcome = await sut.EscalateAsync(_buyer.Id, tx.Id, Guid.NewGuid(),
@@ -713,7 +654,7 @@ public class DisputeServiceTests : IntegrationTestBase
     private DisputeService BuildSut()
     {
         var paymentChecker = new PaymentDisputeAutoChecker(Context);
-        var deliveryChecker = new DeliveryDisputeAutoChecker(Context, _inventory);
+        var deliveryChecker = new DeliveryDisputeAutoChecker();
         var wrongItemChecker = new WrongItemDisputeAutoChecker(Context, _inventory);
 
         return new DisputeService(
@@ -772,7 +713,8 @@ public class DisputeServiceTests : IntegrationTestBase
 
     private async Task<Transaction> CreateTransactionAsync(
         TransactionStatus status,
-        string? deliveredAssetId = null)
+        string? deliveredAssetId = null,
+        DeliveryEvidence deliveryEvidence = DeliveryEvidence.NONE)
     {
         var tx = new Transaction
         {
@@ -793,6 +735,7 @@ public class DisputeServiceTests : IntegrationTestBase
             SellerPayoutAddress = SellerWallet,
             PaymentTimeoutMinutes = 60,
             DeliveredBuyerAssetId = deliveredAssetId,
+            DeliveryEvidence = deliveryEvidence,
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
             UpdatedAt = _clock.GetUtcNow().UtcDateTime,
             AcceptedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(-10),

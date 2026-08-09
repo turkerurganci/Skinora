@@ -102,7 +102,6 @@ public class WarningDispatcherTests : IntegrationTestBase
             paymentDeadline: nowUtc.AddMinutes(15),
             buyerId: _buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
 
@@ -201,12 +200,11 @@ public class WarningDispatcherTests : IntegrationTestBase
     private Transaction NewEscrowedTransaction(DateTime paymentDeadline)
     {
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED,
             _clock.GetUtcNow().UtcDateTime,
             paymentDeadline: paymentDeadline,
             buyerId: _buyer.Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
-        transaction.EscrowBotAssetId = "100200300-bot";
         return transaction;
     }
 

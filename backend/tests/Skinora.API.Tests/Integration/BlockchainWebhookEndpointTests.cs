@@ -322,7 +322,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var tx = await _factory.GetTransactionAsync(ids.TransactionId);
         // 02 §4.4 — state stays in ITEM_ESCROWED so the timeout countdown continues.
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, tx!.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, tx!.Status);
 
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(50m, refund.Amount);
@@ -613,7 +613,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
                 // ITEM_ESCROWED is when the bot has received the item and the
                 // buyer is expected to pay — matches the PaymentAddress
                 // monitoring window for the blockchain sidecar.
-                Status = TransactionStatus.ITEM_ESCROWED,
+                Status = TransactionStatus.SELLER_CONFIRMED,
                 SellerId = seller.Id,
                 BuyerId = buyer.Id,
                 BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,

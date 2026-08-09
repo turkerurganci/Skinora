@@ -297,10 +297,10 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     {
         // K9 — flagged user's active (non-terminal) transactions; either party;
         // FLAGGED is active; all five terminal states excluded; held rows kept
-        // and marked. Active: CREATED + ITEM_ESCROWED(hold) + PAYMENT_RECEIVED(buyer)
+        // and marked. Active: CREATED + SELLER_CONFIRMED(hold) + PAYMENT_RECEIVED(buyer)
         // + FLAGGED = 4. Terminal (excluded): the 5 below.
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
-        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.SELLER_CONFIRMED, isOnHold: true);
         await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.PAYMENT_RECEIVED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.FLAGGED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
@@ -331,7 +331,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
 
         var held = Assert.Single(detail.ActiveTransactions, t => t.IsOnHold);
         Assert.Equal(FlagTransactionRole.SELLER, held.Role);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, held.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, held.Status);
 
         var asBuyer = Assert.Single(detail.ActiveTransactions, t => t.Role == FlagTransactionRole.BUYER);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, asBuyer.Status);
@@ -365,7 +365,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         // which keeps held rows) — if the count wrongly filtered !IsOnHold it
         // would be 1, so expecting 2 proves held rows are included.
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
-        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.ITEM_ESCROWED, isOnHold: true);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.SELLER_CONFIRMED, isOnHold: true);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.COMPLETED);
 
         var sut = BuildSut();

@@ -64,7 +64,7 @@ public class TransactionEntityTests : IntegrationTestBase
             Status = status,
             SellerId = _seller.Id,
             BuyerIdentificationMethod = method,
-            ItemAssetId = "12345678901",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "98765432101",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,

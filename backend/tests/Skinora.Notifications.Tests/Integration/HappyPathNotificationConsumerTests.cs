@@ -161,10 +161,10 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task StatusChanged_ItemEscrowed_NotifiesBuyer_WithAmountAndAddress()
+    public async Task StatusChanged_SellerConfirmed_NotifiesBuyer_WithAmountAndAddress()
     {
         var tx = await SeedTransactionAsync(
-            TransactionStatus.ITEM_ESCROWED, withPaymentAddress: true);
+            TransactionStatus.SELLER_CONFIRMED, withPaymentAddress: true);
         var dispatcher = new RecordingNotificationDispatcher();
         var sut = new EscrowedAndTradeOfferNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), Context,
@@ -174,14 +174,14 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
             new TransactionStatusChangedEvent(
                 EventId: Guid.NewGuid(),
                 TransactionId: tx.Id,
-                FromStatus: TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-                ToStatus: TransactionStatus.ITEM_ESCROWED,
+                FromStatus: TransactionStatus.ACCEPTED,
+                ToStatus: TransactionStatus.SELLER_CONFIRMED,
                 OccurredAt: DateTime.UtcNow),
             CancellationToken.None);
 
         var request = Assert.Single(dispatcher.Requests);
         Assert.Equal(_buyer.Id, request.UserId);
-        Assert.Equal(NotificationType.ITEM_ESCROWED, request.Type);
+        Assert.Equal(NotificationType.PAYMENT_WINDOW_OPEN, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
         Assert.Equal("102", request.Parameters["Amount"]);
         Assert.Equal(PaymentAddressValue, request.Parameters["PaymentAddress"]);
@@ -189,9 +189,11 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task StatusChanged_TradeOfferSentToBuyer_NotifiesBuyer_NoParams()
+    public async Task StatusChanged_PaymentReceived_NotifiesSeller_NoParams()
     {
-        var tx = await SeedTransactionAsync(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+        // v3.0 — this leg changed sides. The platform no longer sends the buyer
+        // a trade offer; the SELLER is told to deliver the item directly.
+        var tx = await SeedTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
         var dispatcher = new RecordingNotificationDispatcher();
         var sut = new EscrowedAndTradeOfferNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), Context,
@@ -201,14 +203,14 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
             new TransactionStatusChangedEvent(
                 EventId: Guid.NewGuid(),
                 TransactionId: tx.Id,
-                FromStatus: TransactionStatus.PAYMENT_RECEIVED,
-                ToStatus: TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+                FromStatus: TransactionStatus.SELLER_CONFIRMED,
+                ToStatus: TransactionStatus.PAYMENT_RECEIVED,
                 OccurredAt: DateTime.UtcNow),
             CancellationToken.None);
 
         var request = Assert.Single(dispatcher.Requests);
-        Assert.Equal(_buyer.Id, request.UserId);
-        Assert.Equal(NotificationType.TRADE_OFFER_SENT_TO_BUYER, request.Type);
+        Assert.Equal(_seller.Id, request.UserId);
+        Assert.Equal(NotificationType.DELIVERY_EXPECTED, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
         Assert.Empty(request.Parameters);
     }
@@ -222,14 +224,14 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
             dispatcher, new InMemoryProcessedEventStore(), Context,
             NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
 
-        // SELLER leg (ACCEPTED → TRADE_OFFER_SENT_TO_SELLER) is not a buyer
-        // notification; the consumer returns before any DB read.
+        // The acceptance leg (CREATED → ACCEPTED) is not one of the two statuses
+        // this consumer covers; it returns before any DB read.
         await sut.Handle(
             new TransactionStatusChangedEvent(
                 EventId: Guid.NewGuid(),
                 TransactionId: Guid.NewGuid(),
-                FromStatus: TransactionStatus.ACCEPTED,
-                ToStatus: TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
+                FromStatus: TransactionStatus.CREATED,
+                ToStatus: TransactionStatus.ACCEPTED,
                 OccurredAt: DateTime.UtcNow),
             CancellationToken.None);
 

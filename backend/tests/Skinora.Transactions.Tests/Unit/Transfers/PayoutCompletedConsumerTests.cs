@@ -141,6 +141,39 @@ public sealed class PayoutCompletedConsumerTests : IDisposable
     }
 
     [Fact]
+    public async Task WithoutSettlementClearance_IsNotCompleted()
+    {
+        // 02 §4.5.1 — the Complete guard reads SettlementVerifiedAt, not the
+        // elapsed window. Without it the payout event must not close the trade,
+        // because nothing proved the item is still with the buyer.
+        var tx = await SeedAsync(TransactionStatus.ITEM_DELIVERED,
+            t => t.SettlementVerifiedAt = null);
+
+        await _sut.Handle(EventFor(tx.Id), CancellationToken.None);
+
+        var reloaded = await _db.Set<Transaction>().AsNoTracking()
+            .FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, reloaded.Status);
+        Assert.Null(reloaded.CompletedAt);
+    }
+
+    [Fact]
+    public async Task WithDetectedReversal_IsNotCompleted()
+    {
+        // The window closed and the check ran, but the item was gone: the trade
+        // was reversed, so the seller must not be paid out (02 §4.5.1).
+        var tx = await SeedAsync(TransactionStatus.ITEM_DELIVERED,
+            t => t.DeliveryReversedAt = _clock.GetUtcNow().UtcDateTime);
+
+        await _sut.Handle(EventFor(tx.Id), CancellationToken.None);
+
+        var reloaded = await _db.Set<Transaction>().AsNoTracking()
+            .FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, reloaded.Status);
+        Assert.Null(reloaded.CompletedAt);
+    }
+
+    [Fact]
     public async Task WrongState_IsNoOp()
     {
         var tx = await SeedAsync(TransactionStatus.PAYMENT_RECEIVED);
@@ -206,6 +239,10 @@ public sealed class PayoutCompletedConsumerTests : IDisposable
             TotalAmount = 102m,
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
             ItemDeliveredAt = _clock.GetUtcNow().UtcDateTime,
+            // 02 §4.5.1 — a payout can only have completed if settlement was
+            // verified first, so the fixture reflects that. The Complete guard
+            // reads this, not the elapsed settlement window.
+            SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime,
         };
         configure?.Invoke(tx);
 

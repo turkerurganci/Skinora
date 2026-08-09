@@ -219,38 +219,9 @@ public class AdminAlertNotificationConsumerTests
         });
     }
 
-    [Fact]
-    [Trait("Category", "Unit")]
-    public async Task BotSessionFailed_FansOutSteamBotIssue_WithBotAndIssue()
-    {
-        var dispatcher = new RecordingDispatcher();
-        var sut = new BotSessionFailedAdminNotificationConsumer(
-            dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
-            NullLogger<BotSessionFailedAdminNotificationConsumer>.Instance);
-
-        var domainEvent = new BotSessionFailedEvent(
-            EventId: Guid.NewGuid(),
-            PlatformSteamBotId: Guid.NewGuid(),
-            SteamId: "76561198099999102",
-            DisplayName: "EscrowBot-3",
-            PreviousStatus: "ACTIVE",
-            NewStatus: "RESTRICTED",
-            Reason: "restricted",
-            WebhookEvent: "bot.removed_from_pool",
-            OccurredAt: DateTime.UtcNow);
-
-        await sut.Handle(domainEvent, CancellationToken.None);
-
-        Assert.Equal(2, dispatcher.Requests.Count);
-        Assert.All(dispatcher.Requests, r =>
-        {
-            Assert.Equal(NotificationType.ADMIN_STEAM_BOT_ISSUE, r.Type);
-            Assert.Null(r.TransactionId);
-            Assert.Null(r.FlagId);
-            Assert.Equal("EscrowBot-3", r.Parameters["BotId"]);
-            Assert.Equal("RESTRICTED (restricted)", r.Parameters["Issue"]);
-        });
-    }
+    // v3.0 — BotSessionFailed_FansOutSteamBotIssue_WithBotAndIssue removed with
+    // the bot custody layer: the platform runs no Steam bots, so there is no
+    // BotSessionFailedEvent and no ADMIN_STEAM_BOT_ISSUE notification (02 §15).
 
     [Fact]
     [Trait("Category", "Unit")]

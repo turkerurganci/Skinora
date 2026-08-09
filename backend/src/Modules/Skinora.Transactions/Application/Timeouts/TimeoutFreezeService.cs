@@ -85,7 +85,7 @@ public sealed class TimeoutFreezeService : ITimeoutFreezeService
         // now + remainder, NOT as oldDeadline + elapsed (06 §8.1 "Otorite").
         SetActiveDeadline(transaction, newActiveDeadline);
 
-        if (transaction.Status == TransactionStatus.ITEM_ESCROWED)
+        if (transaction.Status == TransactionStatus.SELLER_CONFIRMED)
         {
             // ReschedulePaymentTimeoutAsync also rewrites PaymentDeadline +
             // job ids. The SetActiveDeadline call above is a no-op overlap
@@ -158,11 +158,14 @@ public sealed class TimeoutFreezeService : ITimeoutFreezeService
     private static DateTime? GetActiveDeadline(Transaction t) => t.Status switch
     {
         TransactionStatus.CREATED => t.AcceptDeadline,
-        TransactionStatus.ACCEPTED => t.TradeOfferToSellerDeadline,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => t.TradeOfferToSellerDeadline,
-        TransactionStatus.ITEM_ESCROWED => t.PaymentDeadline,
-        TransactionStatus.PAYMENT_RECEIVED => t.TradeOfferToBuyerDeadline,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => t.TradeOfferToBuyerDeadline,
+        TransactionStatus.ACCEPTED => t.SellerConfirmDeadline,
+        TransactionStatus.SELLER_CONFIRMED => t.PaymentDeadline,
+        TransactionStatus.PAYMENT_RECEIVED => t.DeliveryDeadline,
+
+        // ITEM_DELIVERED is deliberately absent: PayoutEligibleAt is not a
+        // timeout but a settlement clock. Freezing it would only delay a payout
+        // that is already gated on an explicit check, and nothing gets
+        // cancelled when it elapses (02 §4.5.1).
         _ => null,
     };
 
@@ -174,15 +177,13 @@ public sealed class TimeoutFreezeService : ITimeoutFreezeService
                 t.AcceptDeadline = newDeadline;
                 break;
             case TransactionStatus.ACCEPTED:
-            case TransactionStatus.TRADE_OFFER_SENT_TO_SELLER:
-                t.TradeOfferToSellerDeadline = newDeadline;
+                t.SellerConfirmDeadline = newDeadline;
                 break;
-            case TransactionStatus.ITEM_ESCROWED:
+            case TransactionStatus.SELLER_CONFIRMED:
                 t.PaymentDeadline = newDeadline;
                 break;
             case TransactionStatus.PAYMENT_RECEIVED:
-            case TransactionStatus.TRADE_OFFER_SENT_TO_BUYER:
-                t.TradeOfferToBuyerDeadline = newDeadline;
+                t.DeliveryDeadline = newDeadline;
                 break;
         }
     }

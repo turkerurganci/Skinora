@@ -111,7 +111,7 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         var buyer = await _factory.CreateUserAsync();
 
         var created = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.CREATED);
-        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
         var response = await client.PostAsJsonAsync(
@@ -171,9 +171,9 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         var buyer = await _factory.CreateUserAsync();
 
         var steamBound = await _factory.CreateTransactionAsync(
-            seller.Id, buyer.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER);
+            seller.Id, buyer.Id, TransactionStatus.ACCEPTED);
         var paymentStep = await _factory.CreateTransactionAsync(
-            seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+            seller.Id, buyer.Id, TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
         var response = await client.PostAsJsonAsync(
@@ -198,7 +198,7 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         var buyer = await _factory.CreateUserAsync();
 
         var created = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.CREATED);
-        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
         var response = await client.PostAsJsonAsync(
@@ -301,7 +301,7 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
         var admin = await _factory.CreateUserAsync();
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
-        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.ITEM_ESCROWED);
+        var escrowed = await _factory.CreateTransactionAsync(seller.Id, buyer.Id, TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
         await client.PostAsJsonAsync(
@@ -551,7 +551,7 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
                 TargetBuyerSteamId = buyerSteamId,
                 BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
                 BuyerRefundAddress = "TXBuyerRefund000000",
-                ItemAssetId = "100200300",
+                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 ItemIconUrl = "https://steamcdn.example/img/test.png",
@@ -563,11 +563,11 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
                 SellerPayoutAddress = "TXSellerPayout00000",
                 PaymentTimeoutMinutes = 1440,
                 // Give the payment phase a live deadline so the freeze captures a
-                // non-zero remainder for ITEM_ESCROWED.
-                PaymentDeadline = status == TransactionStatus.ITEM_ESCROWED
+                // non-zero remainder for SELLER_CONFIRMED.
+                PaymentDeadline = status == TransactionStatus.SELLER_CONFIRMED
                     ? DateTime.UtcNow.AddHours(12)
                     : null,
-                TradeOfferToSellerDeadline = status == TransactionStatus.TRADE_OFFER_SENT_TO_SELLER
+                SellerConfirmDeadline = status == TransactionStatus.ACCEPTED
                     ? DateTime.UtcNow.AddHours(12)
                     : null,
             };

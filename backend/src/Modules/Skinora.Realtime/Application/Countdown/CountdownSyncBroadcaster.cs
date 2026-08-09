@@ -32,13 +32,16 @@ namespace Skinora.Realtime.Application.Countdown;
 /// </remarks>
 public sealed class CountdownSyncBroadcaster : BackgroundService
 {
+    // Every state that has a live deadline in the 06 §3.5 matrix. PAYMENT_RECEIVED
+    // belongs here: it carries DeliveryDeadline, the seller's window to send the
+    // item, and that countdown is exactly what the buyer watches while waiting
+    // (04 §7). Leaving it out would silently stop the delivery countdown.
     private static readonly TransactionStatus[] ActiveStatuses =
     [
         TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-        TransactionStatus.ITEM_ESCROWED,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
+        TransactionStatus.SELLER_CONFIRMED,
+        TransactionStatus.PAYMENT_RECEIVED,
     ];
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -118,9 +121,9 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
                 t.Id,
                 t.Status,
                 t.AcceptDeadline,
-                t.TradeOfferToSellerDeadline,
+                t.SellerConfirmDeadline,
                 t.PaymentDeadline,
-                t.TradeOfferToBuyerDeadline,
+                t.DeliveryDeadline,
                 t.IsOnHold,
                 t.TimeoutFreezeReason,
                 t.TimeoutRemainingSeconds))
@@ -185,12 +188,12 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
         {
             TransactionStatus.CREATED =>
                 (TimeoutPhase.Accept, snapshot.AcceptDeadline),
-            TransactionStatus.ACCEPTED or TransactionStatus.TRADE_OFFER_SENT_TO_SELLER =>
-                (TimeoutPhase.TradeOfferToSeller, snapshot.TradeOfferToSellerDeadline),
-            TransactionStatus.ITEM_ESCROWED =>
+            TransactionStatus.ACCEPTED =>
+                (TimeoutPhase.SellerConfirm, snapshot.SellerConfirmDeadline),
+            TransactionStatus.SELLER_CONFIRMED =>
                 (TimeoutPhase.Payment, snapshot.PaymentDeadline),
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER =>
-                (TimeoutPhase.Delivery, snapshot.TradeOfferToBuyerDeadline),
+            TransactionStatus.PAYMENT_RECEIVED =>
+                (TimeoutPhase.Delivery, snapshot.DeliveryDeadline),
             _ => (null, null),
         };
 
@@ -208,9 +211,9 @@ public sealed class CountdownSyncBroadcaster : BackgroundService
         Guid TransactionId,
         TransactionStatus Status,
         DateTime? AcceptDeadline,
-        DateTime? TradeOfferToSellerDeadline,
+        DateTime? SellerConfirmDeadline,
         DateTime? PaymentDeadline,
-        DateTime? TradeOfferToBuyerDeadline,
+        DateTime? DeliveryDeadline,
         bool IsOnHold,
         TimeoutFreezeReason? TimeoutFreezeReason,
         int? TimeoutRemainingSeconds);

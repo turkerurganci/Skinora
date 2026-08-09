@@ -433,6 +433,10 @@ public sealed class ReconciliationServiceTests : IDisposable
             StablecoinType = StablecoinType.USDT,
             BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
             InviteToken = $"INV{txId.ToString("N")[..8].ToUpperInvariant()}",
+            // Distinct per row: every fixture shares SeedConstants.SystemUserId
+            // as the seller, and UQ_Transactions_SellerId_ItemAssetId_Active
+            // allows only one open transaction per (seller, item).
+            ItemAssetId = txId.ToString("N")[..12],
             SellerPayoutAddress = "TSellerPayoutFixture",
             PaymentTimeoutMinutes = 60,
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
@@ -535,6 +539,7 @@ public sealed class ReconciliationServiceTests : IDisposable
             StablecoinType = StablecoinType.USDT,
             BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
             InviteToken = "RECON-FLT",
+            ItemAssetId = "RECON-FLT-AST",
             SellerPayoutAddress = "TSellerPayoutFloating",
             PaymentTimeoutMinutes = 60,
             CreatedAt = _clock.GetUtcNow().UtcDateTime,

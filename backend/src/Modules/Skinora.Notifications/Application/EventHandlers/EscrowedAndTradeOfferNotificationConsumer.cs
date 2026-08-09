@@ -15,16 +15,18 @@ namespace Skinora.Notifications.Application.EventHandlers;
 /// buyer-facing happy-path notifications for the two Steam orchestration legs
 /// that ride it (WP19):
 /// <list type="bullet">
-///   <item><c>ITEM_ESCROWED</c> → <see cref="NotificationType.ITEM_ESCROWED"/>
-///   "item reached the platform, payment due" (03 §3.4 step 1).</item>
-///   <item><c>TRADE_OFFER_SENT_TO_BUYER</c> →
-///   <see cref="NotificationType.TRADE_OFFER_SENT_TO_BUYER"/> "accept the Steam
-///   trade offer to receive your item" (03 §3.5 step 3).</item>
+///   <item><c>SELLER_CONFIRMED</c> → <see cref="NotificationType.PAYMENT_WINDOW_OPEN"/>
+///   "the seller is ready, send the payment to this address" (03 §3.4 step 1).
+///   Recipient: buyer.</item>
+///   <item><c>PAYMENT_RECEIVED</c> →
+///   <see cref="NotificationType.DELIVERY_EXPECTED"/> "the money is in escrow,
+///   send the item to the buyer" (03 §3.5 step 3). Recipient: <b>seller</b> —
+///   this leg changed sides in v3.0.</item>
 /// </list>
 /// </summary>
 /// <remarks>
 /// One consumer covers both legs because they share the same generic event;
-/// every other <c>ToStatus</c> (incl. the SELLER leg) yields no notification.
+/// every other <c>ToStatus</c> yields no notification.
 /// The event carries only the status pair, so the recipient (buyer) and the
 /// <c>{Amount}</c>/<c>{PaymentAddress}</c> parameters are read from a single
 /// <see cref="Transaction"/> (+ active <c>PaymentAddress</c>) lookup. The event
@@ -52,8 +54,8 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
         TransactionStatusChangedEvent domainEvent,
         CancellationToken cancellationToken)
     {
-        if (domainEvent.ToStatus is not (TransactionStatus.ITEM_ESCROWED
-            or TransactionStatus.TRADE_OFFER_SENT_TO_BUYER))
+        if (domainEvent.ToStatus is not (TransactionStatus.SELLER_CONFIRMED
+            or TransactionStatus.PAYMENT_RECEIVED))
         {
             return [];
         }
@@ -63,6 +65,7 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
             .Select(t => new
             {
                 t.BuyerId,
+                t.SellerId,
                 t.TotalAmount,
                 ExpectedAmount = t.PaymentAddress != null ? (decimal?)t.PaymentAddress.ExpectedAmount : null,
                 PaymentAddress = t.PaymentAddress != null ? t.PaymentAddress.Address : null,
@@ -74,27 +77,30 @@ public sealed class EscrowedAndTradeOfferNotificationConsumer
             return [];
         }
 
-        if (domainEvent.ToStatus == TransactionStatus.TRADE_OFFER_SENT_TO_BUYER)
+        // v3.0 — this notification changed sides. It used to tell the BUYER to
+        // accept a platform-sent trade offer; now it tells the SELLER to send
+        // the item directly to the buyer (02 §2.2 step 6).
+        if (domainEvent.ToStatus == TransactionStatus.PAYMENT_RECEIVED)
         {
             return
             [
                 new NotificationRequest
                 {
-                    UserId = buyerId,
-                    Type = NotificationType.TRADE_OFFER_SENT_TO_BUYER,
+                    UserId = data.SellerId,
+                    Type = NotificationType.DELIVERY_EXPECTED,
                     TransactionId = domainEvent.TransactionId,
                 },
             ];
         }
 
-        // ITEM_ESCROWED — buyer must send the expected total to the deposit address.
+        // SELLER_CONFIRMED — buyer must send the expected total to the deposit address.
         var amount = data.ExpectedAmount ?? data.TotalAmount;
         return
         [
             new NotificationRequest
             {
                 UserId = buyerId,
-                Type = NotificationType.ITEM_ESCROWED,
+                Type = NotificationType.PAYMENT_WINDOW_OPEN,
                 TransactionId = domainEvent.TransactionId,
                 Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
                 {

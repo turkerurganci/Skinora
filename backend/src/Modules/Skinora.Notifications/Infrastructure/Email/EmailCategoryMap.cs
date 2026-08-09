@@ -19,15 +19,14 @@ public static class EmailCategoryMap
             // --- Transaction lifecycle (08 §4.2 — "İşlem bildirimleri") ---
             [NotificationType.TRANSACTION_INVITE] = EmailCategory.Transaction,
             [NotificationType.BUYER_ACCEPTED] = EmailCategory.Transaction,
-            [NotificationType.ITEM_ESCROWED] = EmailCategory.Transaction,
+            [NotificationType.PAYMENT_WINDOW_OPEN] = EmailCategory.Transaction,
             [NotificationType.PAYMENT_RECEIVED] = EmailCategory.Transaction,
-            [NotificationType.TRADE_OFFER_SENT_TO_BUYER] = EmailCategory.Transaction,
+            [NotificationType.DELIVERY_EXPECTED] = EmailCategory.Transaction,
             [NotificationType.TRANSACTION_COMPLETED] = EmailCategory.Transaction,
             [NotificationType.SELLER_PAYMENT_SENT] = EmailCategory.Transaction,
             [NotificationType.TRANSACTION_CANCELLED] = EmailCategory.Transaction,
             [NotificationType.PAYMENT_INCORRECT] = EmailCategory.Transaction,
             [NotificationType.LATE_PAYMENT_REFUNDED] = EmailCategory.Transaction,
-            [NotificationType.ITEM_RETURNED] = EmailCategory.Transaction,
             [NotificationType.PAYMENT_REFUNDED] = EmailCategory.Transaction,
             [NotificationType.INSUFFICIENT_PAYMENT] = EmailCategory.Transaction,
             [NotificationType.OVERPAYMENT_REFUNDED] = EmailCategory.Transaction,
@@ -57,7 +56,6 @@ public static class EmailCategoryMap
             [NotificationType.ADMIN_FLAG_ALERT] = EmailCategory.Account,
             [NotificationType.ADMIN_ESCALATION] = EmailCategory.Account,
             [NotificationType.ADMIN_PAYMENT_FAILURE] = EmailCategory.Account,
-            [NotificationType.ADMIN_STEAM_BOT_ISSUE] = EmailCategory.Account,
             // WP16 — platform health outage alert is an admin operational tool.
             [NotificationType.ADMIN_PLATFORM_OUTAGE] = EmailCategory.Account,
         };

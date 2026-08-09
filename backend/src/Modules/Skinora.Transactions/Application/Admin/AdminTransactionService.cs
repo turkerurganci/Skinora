@@ -121,7 +121,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
         // ---------- Stage 4: state transition ----------
         var previousStatus = transaction.Status;
-        var itemWasOnPlatform = ItemWasOnPlatform(previousStatus);
         var paymentWasReceived = PaymentWasReceived(previousStatus);
 
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
@@ -148,19 +147,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
         // 5a. Cancel pending Hangfire timeout / warning jobs (idempotent).
         await _scheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
-
-        // 5b. Item return when item was on the platform.
-        if (itemWasOnPlatform)
-        {
-            await _outbox.PublishAsync(
-                new ItemRefundToSellerRequestedEvent(
-                    EventId: Guid.NewGuid(),
-                    TransactionId: transaction.Id,
-                    SellerId: transaction.SellerId,
-                    Trigger: ItemRefundTrigger.AdminCancel,
-                    OccurredAt: occurredAt),
-                cancellationToken);
-        }
 
         // 5c. Payment refund when buyer had paid.
         if (paymentWasReceived && transaction.BuyerId is { } buyerForRefund
@@ -209,7 +195,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 {
                     Status = transaction.Status.ToString(),
                     Reason = trimmedReason,
-                    ItemReturned = itemWasOnPlatform,
                     PaymentRefunded = paymentWasReceived,
                 }, JsonOptions),
                 IpAddress: ipAddress),
@@ -223,7 +208,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
             Body: new AdminCancelTransactionResponse(
                 Status: transaction.Status,
                 CancelledAt: transaction.CancelledAt!.Value,
-                ItemReturned: itemWasOnPlatform,
                 PaymentRefunded: paymentWasReceived),
             ErrorCode: null,
             ErrorMessage: null);
@@ -268,7 +252,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
         // ---------- Stage 4: T50 freeze pre-pass ----------
         // Runs BEFORE the state machine because T44 ApplyEmergencyHold leaves
-        // TimeoutRemainingSeconds NULL for non-ITEM_ESCROWED states (T50 report
+        // TimeoutRemainingSeconds NULL for non-SELLER_CONFIRMED states (T50 report
         // Known Limitations — flagged for T59), which would trip
         // CK_Transactions_FreezeActive at SaveChangesAsync. T50 FreezeAsync
         // resolves the active-phase deadline from the 06 §3.5 matrix and
@@ -422,7 +406,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
         CancellationToken cancellationToken)
     {
         // Resume order matters: T50 ResumeAsync needs TimeoutFrozenAt set to
-        // detect "is frozen?", reschedules Hangfire jobs (ITEM_ESCROWED) and
+        // detect "is frozen?", reschedules Hangfire jobs (SELLER_CONFIRMED) and
         // clears the freeze trio. ReleaseEmergencyHold (state machine) then
         // flips IsOnHold off — the freeze trio fields it would clear are
         // already null after ResumeAsync, so the second clear is a no-op.
@@ -482,7 +466,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 Status: previousStatus,
                 ReleasedAt: occurredAt,
                 Action: EmergencyHoldReleaseAction.RESUME,
-                ItemReturned: null,
                 PaymentRefunded: null),
             ErrorCode: null,
             ErrorMessage: null);
@@ -498,7 +481,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
         string? ipAddress,
         CancellationToken cancellationToken)
     {
-        var itemWasOnPlatform = ItemWasOnPlatform(previousStatus);
         var paymentWasReceived = PaymentWasReceived(previousStatus);
 
         // Step 1 — release the hold so the state machine permits AdminCancel
@@ -548,18 +530,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
             ActorType.ADMIN, adminUserId, occurredAt);
 
         // Step 4 — refund + notification + audit fan-out (same as AD19).
-        if (itemWasOnPlatform)
-        {
-            await _outbox.PublishAsync(
-                new ItemRefundToSellerRequestedEvent(
-                    EventId: Guid.NewGuid(),
-                    TransactionId: transaction.Id,
-                    SellerId: transaction.SellerId,
-                    Trigger: ItemRefundTrigger.AdminCancel,
-                    OccurredAt: occurredAt),
-                cancellationToken);
-        }
-
+        // No item-return branch: the platform never holds the item (02 §9).
         if (paymentWasReceived && transaction.BuyerId is { } buyerForRefund
             && !string.IsNullOrEmpty(transaction.BuyerRefundAddress))
         {
@@ -621,7 +592,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 {
                     Status = transaction.Status.ToString(),
                     Reason = cancelReason,
-                    ItemReturned = itemWasOnPlatform,
                     PaymentRefunded = paymentWasReceived,
                 }, JsonOptions),
                 IpAddress: ipAddress),
@@ -635,7 +605,6 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 Status: transaction.Status,
                 ReleasedAt: transaction.CancelledAt!.Value,
                 Action: EmergencyHoldReleaseAction.CANCEL,
-                ItemReturned: itemWasOnPlatform,
                 PaymentRefunded: paymentWasReceived),
             ErrorCode: null,
             ErrorMessage: null);
@@ -690,7 +659,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
             // Freeze pre-pass before the state machine — resolves the active-phase
             // deadline from the 06 §3.5 matrix and stamps the freeze trio so
-            // CK_Transactions_FreezeActive holds for non-ITEM_ESCROWED states; it
+            // CK_Transactions_FreezeActive holds for non-SELLER_CONFIRMED states; it
             // also cancels the pending Hangfire jobs (T50).
             await _freeze.FreezeAsync(transaction, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
 
@@ -760,18 +729,12 @@ public sealed class AdminTransactionService : IAdminTransactionService
         _ => false,
     };
 
-    private static bool ItemWasOnPlatform(TransactionStatus status) => status switch
-    {
-        TransactionStatus.ITEM_ESCROWED => true,
-        TransactionStatus.PAYMENT_RECEIVED => true,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
-        _ => false,
-    };
-
+    // ItemWasOnPlatform removed in v3.0: the platform never holds the item, so
+    // no admin action can trigger an item return (02 §9).
     private static bool PaymentWasReceived(TransactionStatus status) => status switch
     {
         TransactionStatus.PAYMENT_RECEIVED => true,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => true,
+        TransactionStatus.ITEM_DELIVERED => true,
         _ => false,
     };
 

@@ -78,7 +78,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.ITEM_ESCROWED);
+            TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var response = await client.PostAsJsonAsync(
@@ -110,7 +110,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var buyer = await _factory.CreateUserAsync();
         var stranger = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.ITEM_ESCROWED);
+            TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildAuthenticatedClient(stranger.Id, stranger.SteamId);
         var response = await client.PostAsJsonAsync(
@@ -128,9 +128,10 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
     {
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
-        // PAYMENT not allowed in TRADE_OFFER_SENT_TO_BUYER per per-type table.
+        // PAYMENT is openable only in SELLER_CONFIRMED / PAYMENT_RECEIVED per the
+        // canonical DisputeEligibility matrix (02 §10.1).
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+            TransactionStatus.ITEM_DELIVERED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var response = await client.PostAsJsonAsync(
@@ -149,7 +150,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.ITEM_ESCROWED);
+            TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var first = await client.PostAsJsonAsync(
@@ -175,7 +176,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.ITEM_ESCROWED);
+            TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var openResp = await client.PostAsJsonAsync(
@@ -210,7 +211,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.ITEM_ESCROWED);
+            TransactionStatus.SELLER_CONFIRMED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var openResp = await client.PostAsJsonAsync(
@@ -237,7 +238,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         var seller = await _factory.CreateUserAsync();
         var buyer = await _factory.CreateUserAsync();
         var transactionId = await _factory.SeedTransactionAsync(seller.Id, buyer.Id,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER);
+            TransactionStatus.PAYMENT_RECEIVED);
 
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var openResp = await client.PostAsJsonAsync(
@@ -354,7 +355,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
                 BuyerId = buyerId,
                 BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
                 TargetBuyerSteamId = "76561198000099900",
-                ItemAssetId = "27348562891",
+                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 StablecoinType = StablecoinType.USDT,

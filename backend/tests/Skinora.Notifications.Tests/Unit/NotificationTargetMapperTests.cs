@@ -72,10 +72,13 @@ public class NotificationTargetMapperTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void Resolve_AdminSteamBotIssue_AlwaysReturnsNullPair()
+    public void Resolve_AdminPlatformOutage_AlwaysReturnsNullPair()
     {
+        // Platform-wide admin alert: it has no per-entity target even when a
+        // transaction id happens to be attached. (v3.0 — this case used to be
+        // covered by ADMIN_STEAM_BOT_ISSUE, retired with the bot layer.)
         var (targetType, targetId) = NotificationTargetMapper.Resolve(
-            NotificationType.ADMIN_STEAM_BOT_ISSUE, Guid.NewGuid());
+            NotificationType.ADMIN_PLATFORM_OUTAGE, Guid.NewGuid());
 
         Assert.Null(targetType);
         Assert.Null(targetId);

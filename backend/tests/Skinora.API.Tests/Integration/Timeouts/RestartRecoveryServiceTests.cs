@@ -24,7 +24,7 @@ namespace Skinora.API.Tests.Integration.Timeouts;
 /// Integration coverage for <see cref="RestartRecoveryService"/> (T47, 05 §4.4
 /// "Restart sonrası recovery"). Exercises outage-window detection, deadline
 /// extension across all four phases and the per-tx Hangfire reschedule for
-/// ITEM_ESCROWED rows.
+/// SELLER_CONFIRMED rows.
 /// </summary>
 public class RestartRecoveryServiceTests : IntegrationTestBase
 {
@@ -95,8 +95,8 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
         var b2 = (await AddBuyerAsync()).Id;
         var b3 = (await AddBuyerAsync()).Id;
         var t1 = NewActive(TransactionStatus.CREATED, acceptDeadline: nowUtc.AddMinutes(5));
-        var t2 = NewActive(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, tradeOfferToSellerDeadline: nowUtc.AddMinutes(8), buyerId: b2);
-        var t3 = NewActive(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, tradeOfferToBuyerDeadline: nowUtc.AddMinutes(12), buyerId: b3);
+        var t2 = NewActive(TransactionStatus.ACCEPTED, sellerConfirmDeadline: nowUtc.AddMinutes(8), buyerId: b2);
+        var t3 = NewActive(TransactionStatus.PAYMENT_RECEIVED, deliveryDeadline: nowUtc.AddMinutes(12), buyerId: b3);
         Context.Set<Transaction>().AddRange(t1, t2, t3);
         await Context.SaveChangesAsync();
 
@@ -112,12 +112,12 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
         var p3 = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == t3.Id);
 
         Assert.Equal(nowUtc.AddMinutes(5) + outage, p1.AcceptDeadline);
-        Assert.Equal(nowUtc.AddMinutes(8) + outage, p2.TradeOfferToSellerDeadline);
-        Assert.Equal(nowUtc.AddMinutes(12) + outage, p3.TradeOfferToBuyerDeadline);
+        Assert.Equal(nowUtc.AddMinutes(8) + outage, p2.SellerConfirmDeadline);
+        Assert.Equal(nowUtc.AddMinutes(12) + outage, p3.DeliveryDeadline);
     }
 
     [Fact]
-    public async Task Above_Threshold_Outage_Reschedules_ITEM_ESCROWED_Payment_Jobs()
+    public async Task Above_Threshold_Outage_Reschedules_SELLER_CONFIRMED_Payment_Jobs()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var outage = TimeSpan.FromMinutes(20);
@@ -125,7 +125,7 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
 
         var buyer = await AddBuyerAsync();
         var transaction = NewActive(
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             paymentDeadline: nowUtc.AddMinutes(5),
             paymentTimeoutJobId: "old-payment",
             timeoutWarningJobId: "old-warning",
@@ -175,7 +175,7 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
 
         var heldBuyer = (await AddBuyerAsync()).Id;
         var held = NewActive(
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             paymentDeadline: nowUtc.AddMinutes(5),
             buyerId: heldBuyer);
         held.IsOnHold = true;
@@ -226,9 +226,9 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
     private Transaction NewActive(
         TransactionStatus status,
         DateTime? acceptDeadline = null,
-        DateTime? tradeOfferToSellerDeadline = null,
+        DateTime? sellerConfirmDeadline = null,
         DateTime? paymentDeadline = null,
-        DateTime? tradeOfferToBuyerDeadline = null,
+        DateTime? deliveryDeadline = null,
         string? paymentTimeoutJobId = null,
         string? timeoutWarningJobId = null,
         Guid? buyerId = null)
@@ -241,7 +241,7 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
             BuyerRefundAddress = status == TransactionStatus.CREATED ? null : ValidWallet,
             BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
             InviteToken = "tok-" + Guid.NewGuid().ToString("N")[..8],
-            ItemAssetId = "100200300",
+            ItemAssetId = Guid.NewGuid().ToString("N")[..12],
             ItemClassId = "abc-class",
             ItemName = "AK-47 | Redline",
             StablecoinType = StablecoinType.USDT,
@@ -252,9 +252,9 @@ public class RestartRecoveryServiceTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet,
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = acceptDeadline,
-            TradeOfferToSellerDeadline = tradeOfferToSellerDeadline,
+            SellerConfirmDeadline = sellerConfirmDeadline,
             PaymentDeadline = paymentDeadline,
-            TradeOfferToBuyerDeadline = tradeOfferToBuyerDeadline,
+            DeliveryDeadline = deliveryDeadline,
             PaymentTimeoutJobId = paymentTimeoutJobId,
             TimeoutWarningJobId = timeoutWarningJobId,
         };

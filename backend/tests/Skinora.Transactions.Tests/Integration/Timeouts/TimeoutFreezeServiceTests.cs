@@ -58,7 +58,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(45),
             paymentTimeoutJobId: "payment-existing",
             timeoutWarningJobId: "warning-existing",
@@ -87,8 +87,8 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(120),
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(120),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id);
         Context.Set<Transaction>().Add(transaction);
         await Context.SaveChangesAsync();
@@ -102,12 +102,12 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         Assert.Equal(TimeoutFreezeReason.STEAM_OUTAGE, persisted.TimeoutFreezeReason);
         // CK_Transactions_FreezeActive (06 §3.5): TimeoutRemainingSeconds NOT NULL
         // when frozen — captured from the state's active deadline per 06 §3.5
-        // matrix (TRADE_OFFER_SENT_TO_SELLER → TradeOfferToSellerDeadline).
+        // matrix (ACCEPTED → SellerConfirmDeadline).
         Assert.Equal(120 * 60, persisted.TimeoutRemainingSeconds);
         // Original deadline preserved at freeze time — DeadlineScannerJob filters
         // TimeoutFrozenAt != null so the deadline does not need to move forward
         // until resume rewrites it from the remainder.
-        Assert.Equal(nowUtc.AddMinutes(120), persisted.TradeOfferToSellerDeadline);
+        Assert.Equal(nowUtc.AddMinutes(120), persisted.SellerConfirmDeadline);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var freezeStartUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, freezeStartUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, freezeStartUtc,
             paymentDeadline: freezeStartUtc.AddMinutes(30),
             timeoutFrozenAt: freezeStartUtc,
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
@@ -142,7 +142,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(-5),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -167,7 +167,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
 
         var freezeStartUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, freezeStartUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, freezeStartUtc,
             paymentDeadline: freezeStartUtc.AddMinutes(20),
             timeoutFrozenAt: freezeStartUtc,
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
@@ -205,8 +205,8 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var freezeStartUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, freezeStartUtc,
-            tradeOfferToSellerDeadline: freezeStartUtc.AddMinutes(60),
+            _seller.Id, TransactionStatus.ACCEPTED, freezeStartUtc,
+            sellerConfirmDeadline: freezeStartUtc.AddMinutes(60),
             timeoutFrozenAt: freezeStartUtc,
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id);
         transaction.TimeoutFreezeReason = TimeoutFreezeReason.STEAM_OUTAGE;
@@ -223,7 +223,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Null(persisted.TimeoutFrozenAt);
         Assert.Null(persisted.TimeoutFreezeReason);
-        Assert.Equal(freezeStartUtc.AddMinutes(67), persisted.TradeOfferToSellerDeadline);
+        Assert.Equal(freezeStartUtc.AddMinutes(67), persisted.SellerConfirmDeadline);
         // No Hangfire job for poller-based phases.
         Assert.Empty(_scheduler.ScheduledCalls);
     }
@@ -233,7 +233,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(30),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -253,26 +253,25 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     // -------------------- FreezeManyAsync --------------------
 
     [Fact]
-    public async Task FreezeManyAsync_MAINTENANCE_Freezes_All_Eight_Active_States()
+    public async Task FreezeManyAsync_MAINTENANCE_Freezes_All_Six_Active_States()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
+        // v3.0 — six active states; the two trade-offer states are retired.
         var activeStatuses = new[]
         {
             TransactionStatus.CREATED,
             TransactionStatus.ACCEPTED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             TransactionStatus.PAYMENT_RECEIVED,
-            TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
             TransactionStatus.ITEM_DELIVERED,
             TransactionStatus.FLAGGED,
         };
         var allRows = activeStatuses
             .Select(s => TimeoutTestFixtures.NewTransaction(
                 _seller.Id, s, nowUtc,
-                paymentDeadline: s == TransactionStatus.ITEM_ESCROWED ? nowUtc.AddMinutes(30) : null,
+                paymentDeadline: s == TransactionStatus.SELLER_CONFIRMED ? nowUtc.AddMinutes(30) : null,
                 buyerId: s == TransactionStatus.CREATED ? null : buyer.Id,
                 buyerRefundAddress: s == TransactionStatus.CREATED ? null : TimeoutTestFixtures.ValidWallet))
             .ToList();
@@ -287,11 +286,11 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var sut = CreateSut();
         var affected = await sut.FreezeManyAsync(TimeoutFreezeReason.MAINTENANCE, CancellationToken.None);
 
-        Assert.Equal(8, affected);
+        Assert.Equal(6, affected);
 
         var frozen = await Context.Set<Transaction>().AsNoTracking()
             .Where(t => t.TimeoutFrozenAt != null).ToListAsync();
-        Assert.Equal(8, frozen.Count);
+        Assert.Equal(6, frozen.Count);
         Assert.All(frozen, t => Assert.Equal(TimeoutFreezeReason.MAINTENANCE, t.TimeoutFreezeReason));
 
         var persistedTerminal = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == terminal.Id);
@@ -299,21 +298,21 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task FreezeManyAsync_STEAM_OUTAGE_Targets_Only_Trade_Offer_States()
+    public async Task FreezeManyAsync_STEAM_OUTAGE_Targets_Only_Steam_Observed_States()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
         var steamSeller = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(60),
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(60),
             buyerId: buyer.Id);
         var steamBuyer = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, nowUtc,
-            tradeOfferToBuyerDeadline: nowUtc.AddMinutes(60),
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddMinutes(60),
             buyerId: buyer.Id, buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         var payment = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(30),
             buyerId: buyer.Id, buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         var created = TimeoutTestFixtures.NewTransaction(
@@ -337,20 +336,20 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task FreezeManyAsync_BLOCKCHAIN_DEGRADATION_Targets_Only_ITEM_ESCROWED()
+    public async Task FreezeManyAsync_BLOCKCHAIN_DEGRADATION_Targets_Only_SELLER_CONFIRMED()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
         var payment = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(45),
             paymentTimeoutJobId: "p-old",
             timeoutWarningJobId: "w-old",
             buyerId: buyer.Id, buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
         var steam = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(60), buyerId: buyer.Id);
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(60), buyerId: buyer.Id);
         Context.Set<Transaction>().AddRange(payment, steam);
         await Context.SaveChangesAsync();
 
@@ -373,7 +372,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
         var emergency = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(30),
             isOnHold: true,
             timeoutFrozenAt: nowUtc.AddMinutes(-5),
@@ -384,8 +383,8 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         emergency.EmergencyHoldReason = "Sanctions match";
         emergency.EmergencyHoldByAdminId = _seller.Id;
         var steamFrozen = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, nowUtc,
-            tradeOfferToSellerDeadline: nowUtc.AddMinutes(60),
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(60),
             timeoutFrozenAt: nowUtc.AddMinutes(-2),
             buyerId: buyer.Id);
         steamFrozen.TimeoutFreezeReason = TimeoutFreezeReason.STEAM_OUTAGE;
@@ -431,7 +430,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
         var maintFrozen = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, freezeStartUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, freezeStartUtc,
             paymentDeadline: freezeStartUtc.AddMinutes(40),
             timeoutFrozenAt: freezeStartUtc,
             buyerId: buyer.Id, buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -439,8 +438,8 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         maintFrozen.TimeoutRemainingSeconds = 40 * 60;
 
         var steamFrozen = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, freezeStartUtc,
-            tradeOfferToSellerDeadline: freezeStartUtc.AddMinutes(60),
+            _seller.Id, TransactionStatus.ACCEPTED, freezeStartUtc,
+            sellerConfirmDeadline: freezeStartUtc.AddMinutes(60),
             timeoutFrozenAt: freezeStartUtc, buyerId: buyer.Id);
         steamFrozen.TimeoutFreezeReason = TimeoutFreezeReason.STEAM_OUTAGE;
         steamFrozen.TimeoutRemainingSeconds = 60 * 60;
@@ -480,7 +479,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
 
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(50),
             paymentTimeoutJobId: "p-original",
             timeoutWarningJobId: "w-original",

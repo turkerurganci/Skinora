@@ -83,15 +83,18 @@ public class TransactionTimedOutNotificationConsumerTests
     [InlineData(TimeoutPhase.Accept,
         "Alıcı zamanında kabul etmedi, işlem iptal oldu",
         "İşlem zaman aşımı nedeniyle iptal oldu")]
-    [InlineData(TimeoutPhase.TradeOfferToSeller,
-        "Zamanında item göndermediniz, işlem iptal oldu",
-        "Satıcı item'ı göndermedi, işlem iptal oldu")]
+    [InlineData(TimeoutPhase.SellerConfirm,
+        "Zamanında onay vermediniz, işlem iptal oldu",
+        "Satıcı işleme devam etmedi, işlem iptal oldu")]
+    // v3.0 — no item refund text: the item never left the seller's inventory.
     [InlineData(TimeoutPhase.Payment,
-        "Alıcı ödeme yapmadı, işlem iptal oldu, item'ınız iade edildi",
+        "Alıcı ödeme yapmadı, işlem iptal oldu",
         "Zamanında ödeme yapılmadı, işlem iptal oldu")]
+    // v3.0 — the delivery phase is the SELLER's responsibility now (02 §3.1);
+    // the reason text swapped sides with it.
     [InlineData(TimeoutPhase.Delivery,
-        "Alıcı item'ı teslim almadı, item'ınız iade edildi",
-        "Zamanında teslim alınmadı, işlem iptal oldu, ödemeniz iade edildi")]
+        "Item'ı zamanında göndermediniz, işlem iptal oldu ve ödeme alıcıya iade edildi",
+        "Satıcı item'ı göndermedi, ödemeniz iade edildi")]
     public async Task Handle_Emits_Phase_Specific_Reason_Text(
         TimeoutPhase phase, string sellerReason, string buyerReason)
     {
@@ -135,7 +138,7 @@ public class TransactionTimedOutNotificationConsumerTests
             SellerId: Guid.NewGuid(),
             BuyerId: Guid.NewGuid(),
             ItemName: "Knife",
-            FromStatus: TransactionStatus.ITEM_ESCROWED,
+            FromStatus: TransactionStatus.SELLER_CONFIRMED,
             OccurredAt: DateTime.UtcNow);
 
         await sut.Handle(domainEvent, CancellationToken.None);

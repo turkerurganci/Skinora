@@ -293,8 +293,8 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         // ---------- Stage 10b: best-effort inventory cache invalidation ----------
         // 08 §2.3 — the seller's inventory snapshot is now stale (the listed
-        // item is about to leave their pool via the SELLER_TO_BOT trade offer
-        // T65 dispatches). The invalidator port is a no-op in tests and HTTP
+        // item is committed to this transaction and will leave their inventory
+        // when they send it to the buyer). The invalidator port is a no-op in tests and HTTP
         // in production; failures are swallowed inside the implementation
         // (cache miss costs at most the next 2-minute TTL window — never a
         // hard failure).

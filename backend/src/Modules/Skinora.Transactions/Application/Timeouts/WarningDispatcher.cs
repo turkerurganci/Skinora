@@ -43,7 +43,7 @@ public sealed class WarningDispatcher : IWarningDispatcher
 
         // 09 §13.3 — defensive guards. State, freeze, hold, double-warn must
         // all hold for the dispatch to fire. Any miss is a no-op.
-        if (transaction.Status != TransactionStatus.ITEM_ESCROWED) return;
+        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED) return;
         if (transaction.IsOnHold) return;
         if (transaction.TimeoutFrozenAt is not null) return;
         if (transaction.TimeoutWarningSentAt is not null) return;

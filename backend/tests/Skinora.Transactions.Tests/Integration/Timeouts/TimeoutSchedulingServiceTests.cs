@@ -56,7 +56,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var paymentDeadline = nowUtc.AddMinutes(60);
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: paymentDeadline,
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -99,7 +99,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
         // No SystemSetting configured for timeout_warning_ratio → only payment job.
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(30),
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -136,7 +136,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: null,
             buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
             buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
@@ -153,7 +153,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(30),
             paymentTimeoutJobId: "payment-old",
             timeoutWarningJobId: "warning-old",
@@ -198,7 +198,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(10),
             paymentTimeoutJobId: "payment-old",
             timeoutWarningJobId: "warning-old",
@@ -241,7 +241,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
-            _seller.Id, TransactionStatus.ITEM_ESCROWED, nowUtc,
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
             paymentDeadline: nowUtc.AddMinutes(5),
             paymentTimeoutJobId: "payment-old",
             timeoutWarningJobId: "warning-old",

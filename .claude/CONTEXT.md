@@ -62,14 +62,16 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
 
-### Steam Modülü (T21)
+### Steam Modülü (T21 · T117'de salt-okunur proxy'ye küçüldü)
+
+**v3.0 (P2P):** Bot custody katmanı T117'de silindi — `TradeOffer`, `PlatformSteamBot`, `BotRecoveryItem` entity'leri, bot seçimi, dispatch, recovery ve Steam webhook yüzeyi yok. Modülün kalan görevi **envanter okuma** (teslimat doğrulamasının temeli, 02 §9.2) ve **trade-hold probu** (alıcı MA doğrulaması). Sidecar tarafındaki bot/trade modüllerinin silinmesi T133'e ait.
 
 | Dosya | İçerik |
 |---|---|
-| `backend/src/Modules/Skinora.Steam/Domain/Entities/TradeOffer.cs` | TradeOffer entity — 06 §3.9, 11 field, 7 CHECK constraint |
-| `backend/src/Modules/Skinora.Steam/Domain/Entities/PlatformSteamBot.cs` | PlatformSteamBot entity — 06 §3.10, soft delete, denormalized counters |
-| `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/TradeOfferConfiguration.cs` | EF Core config — 7 CHECK constraint, filtered unique SteamTradeOfferId, 2 perf index, 2 FK |
-| `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/PlatformSteamBotConfiguration.cs` | EF Core config — unique SteamId, soft delete query filter, Transaction.EscrowBotId FK (cross-module) |
+| `backend/src/Modules/Skinora.Steam/Application/Inventory/SteamInventoryQueryService.cs` | Envanter sorgu servisi — sidecar üzerinden |
+| `backend/src/Modules/Skinora.Steam/Application/Inventory/SidecarSteamInventoryReader.cs` | `ISteamInventoryReader` port implementasyonu (cross-module) |
+| `backend/src/Modules/Skinora.Steam/Application/Inventory/HttpSteamSidecarInventoryClient.cs` | Sidecar HTTP client — envanter + cache invalidation |
+| `backend/src/Modules/Skinora.Steam/Application/Inventory/HttpSteamTradeHoldClient.cs` | `GetTradeHoldDurations` — Mobile Authenticator doğrulaması (08 §2.2) |
 | `backend/src/Modules/Skinora.Steam/Infrastructure/Persistence/SteamModuleDbRegistration.cs` | Modül assembly kaydı |
 
 ### Disputes Modülü (T22)

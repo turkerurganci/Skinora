@@ -143,7 +143,7 @@ public sealed class AmountValidationServiceTests : IDisposable
 
         Assert.Equal(AmountValidationOutcome.Underpaid, outcome);
         // State machine MUST NOT advance — timeout continues per 02 §4.4.
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, fixture.Transaction.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, fixture.Transaction.Status);
         // WP16 — the payment-timeout job stays armed (no advance → no cancel).
         Assert.DoesNotContain(fixture.Transaction.Id, _timeoutScheduling.Cancelled);
         var refund = await _db.Set<BlockchainTransaction>()
@@ -173,7 +173,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         await _db.SaveChangesAsync();
 
         Assert.Equal(AmountValidationOutcome.Underpaid, outcome);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, fixture.Transaction.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, fixture.Transaction.Status);
         var refundCount = await _db.Set<BlockchainTransaction>()
             .CountAsync(b => b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(0, refundCount);
@@ -323,7 +323,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         await _db.SaveChangesAsync();
 
         Assert.Equal(AmountValidationOutcome.StateMachineRejected, outcome);
-        Assert.Equal(TransactionStatus.ITEM_ESCROWED, fixture.Transaction.Status);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, fixture.Transaction.Status);
         Assert.Empty(_outbox.Events.OfType<PaymentReceivedEvent>());
         var refundCount = await _db.Set<BlockchainTransaction>()
             .CountAsync(b => b.Type != BlockchainTransactionType.BUYER_PAYMENT);
@@ -335,7 +335,7 @@ public sealed class AmountValidationServiceTests : IDisposable
     private async Task<Fixture> SeedAsync(
         decimal expectedAmount,
         decimal receivedAmount,
-        TransactionStatus initialStatus = TransactionStatus.ITEM_ESCROWED,
+        TransactionStatus initialStatus = TransactionStatus.SELLER_CONFIRMED,
         bool isOnHold = false)
     {
         var seller = new User

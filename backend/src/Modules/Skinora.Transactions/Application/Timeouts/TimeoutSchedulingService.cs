@@ -33,9 +33,9 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
         Guid transactionId, CancellationToken cancellationToken)
     {
         var transaction = await LoadAsync(transactionId, cancellationToken);
-        if (transaction.Status != TransactionStatus.ITEM_ESCROWED)
+        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED)
             throw new InvalidOperationException(
-                $"SchedulePaymentTimeout requires ITEM_ESCROWED, got {transaction.Status}.");
+                $"SchedulePaymentTimeout requires SELLER_CONFIRMED, got {transaction.Status}.");
         if (transaction.PaymentDeadline is null)
             throw new InvalidOperationException(
                 "SchedulePaymentTimeout requires PaymentDeadline to be set (06 §3.5).");
@@ -91,9 +91,9 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
         CancellationToken cancellationToken)
     {
         var transaction = await LoadAsync(transactionId, cancellationToken);
-        if (transaction.Status != TransactionStatus.ITEM_ESCROWED)
+        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED)
             throw new InvalidOperationException(
-                $"ReschedulePaymentTimeout requires ITEM_ESCROWED, got {transaction.Status}.");
+                $"ReschedulePaymentTimeout requires SELLER_CONFIRMED, got {transaction.Status}.");
 
         if (!string.IsNullOrEmpty(transaction.PaymentTimeoutJobId))
             _scheduler.Delete(transaction.PaymentTimeoutJobId);

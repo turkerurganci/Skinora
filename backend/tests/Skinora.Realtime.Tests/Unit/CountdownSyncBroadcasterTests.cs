@@ -85,9 +85,9 @@ public class CountdownSyncBroadcasterTests : IDisposable
     private static Transaction NewTx(
         TransactionStatus status,
         DateTime? acceptDeadline = null,
-        DateTime? tradeOfferToSellerDeadline = null,
+        DateTime? sellerConfirmDeadline = null,
         DateTime? paymentDeadline = null,
-        DateTime? tradeOfferToBuyerDeadline = null,
+        DateTime? deliveryDeadline = null,
         bool isOnHold = false,
         TimeoutFreezeReason? freezeReason = null,
         int? remainingSeconds = null)
@@ -116,9 +116,9 @@ public class CountdownSyncBroadcasterTests : IDisposable
             SellerPayoutAddress = "TRC20XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
             PaymentTimeoutMinutes = 60,
             AcceptDeadline = acceptDeadline,
-            TradeOfferToSellerDeadline = tradeOfferToSellerDeadline,
+            SellerConfirmDeadline = sellerConfirmDeadline,
             PaymentDeadline = paymentDeadline,
-            TradeOfferToBuyerDeadline = tradeOfferToBuyerDeadline,
+            DeliveryDeadline = deliveryDeadline,
             IsOnHold = isOnHold,
             // CK_Transactions_FreezeHold_Reverse — IsOnHold = 1 requires
             // TimeoutFrozenAt set + freezeReason = EMERGENCY_HOLD.
@@ -175,7 +175,7 @@ public class CountdownSyncBroadcasterTests : IDisposable
         var clock = new FakeClock(nowUtc);
 
         var tx = NewTx(
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             paymentDeadline: nowUtc.AddSeconds(127));
 
         var (sp, publisher) = await BuildHostAsync([tx]);
@@ -196,7 +196,7 @@ public class CountdownSyncBroadcasterTests : IDisposable
         var clock = new FakeClock(nowUtc);
 
         var tx = NewTx(
-            TransactionStatus.ITEM_ESCROWED,
+            TransactionStatus.SELLER_CONFIRMED,
             paymentDeadline: nowUtc.AddSeconds(60),
             isOnHold: true,
             freezeReason: TimeoutFreezeReason.EMERGENCY_HOLD,
@@ -232,10 +232,9 @@ public class CountdownSyncBroadcasterTests : IDisposable
 
     [Theory]
     [InlineData(TransactionStatus.CREATED, TimeoutPhase.Accept)]
-    [InlineData(TransactionStatus.ACCEPTED, TimeoutPhase.TradeOfferToSeller)]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_SELLER, TimeoutPhase.TradeOfferToSeller)]
-    [InlineData(TransactionStatus.ITEM_ESCROWED, TimeoutPhase.Payment)]
-    [InlineData(TransactionStatus.TRADE_OFFER_SENT_TO_BUYER, TimeoutPhase.Delivery)]
+    [InlineData(TransactionStatus.ACCEPTED, TimeoutPhase.SellerConfirm)]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, TimeoutPhase.Payment)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, TimeoutPhase.Delivery)]
     public async Task BroadcastOnce_PhaseMatchesStatus(
         TransactionStatus status, TimeoutPhase expectedPhase)
     {
@@ -246,9 +245,9 @@ public class CountdownSyncBroadcasterTests : IDisposable
         var tx = NewTx(
             status,
             acceptDeadline: deadline,
-            tradeOfferToSellerDeadline: deadline,
+            sellerConfirmDeadline: deadline,
             paymentDeadline: deadline,
-            tradeOfferToBuyerDeadline: deadline);
+            deliveryDeadline: deadline);
 
         var (sp, publisher) = await BuildHostAsync([tx]);
         await Build(sp, clock).BroadcastOnceAsync(CancellationToken.None);

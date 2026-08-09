@@ -51,16 +51,8 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
         switch (phase)
         {
             case TimeoutPhase.Payment:
-                // 03 §4.3 — item back to seller + keep watching for late payment.
-                await _outbox.PublishAsync(
-                    new ItemRefundToSellerRequestedEvent(
-                        EventId: Guid.NewGuid(),
-                        TransactionId: transaction.Id,
-                        SellerId: transaction.SellerId,
-                        Trigger: ItemRefundTrigger.TimeoutPayment,
-                        OccurredAt: occurredAt),
-                    cancellationToken);
-
+                // 03 §4.3 — no item refund exists in the P2P model (the item
+                // never left the seller). Only the late-payment watch remains.
                 if (transaction.BuyerId is { } buyerIdForMonitor
                     && !string.IsNullOrWhiteSpace(transaction.BuyerRefundAddress))
                 {
@@ -82,16 +74,9 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
                 break;
 
             case TimeoutPhase.Delivery:
-                // 03 §4.4 — item back to seller + payment back to buyer.
-                await _outbox.PublishAsync(
-                    new ItemRefundToSellerRequestedEvent(
-                        EventId: Guid.NewGuid(),
-                        TransactionId: transaction.Id,
-                        SellerId: transaction.SellerId,
-                        Trigger: ItemRefundTrigger.TimeoutDelivery,
-                        OccurredAt: occurredAt),
-                    cancellationToken);
-
+                // 03 §4.4 — the seller failed to deliver, so the buyer's money
+                // goes back. There is no item to return: it never left the
+                // seller's inventory.
                 if (transaction.BuyerId is { } buyerIdForRefund
                     && !string.IsNullOrWhiteSpace(transaction.BuyerRefundAddress))
                 {
@@ -106,18 +91,19 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
                 }
                 else
                 {
-                    // BuyerId / BuyerRefundAddress should never be null at TRADE_OFFER_SENT_TO_BUYER
-                    // (they are required for BuyerAccept per 06 §3.5), but log defensively so a
-                    // schema regression doesn't silently swallow a refund.
+                    // BuyerId / BuyerRefundAddress should never be null at
+                    // PAYMENT_RECEIVED (they are required for BuyerAccept per
+                    // 06 §3.5), but log defensively so a schema regression
+                    // doesn't silently swallow a refund.
                     _logger.LogError(
-                        "Payment refund event skipped for transaction {TransactionId}: BuyerId or BuyerRefundAddress missing in TRADE_OFFER_SENT_TO_BUYER.",
+                        "Payment refund event skipped for transaction {TransactionId}: BuyerId or BuyerRefundAddress missing in PAYMENT_RECEIVED.",
                         transaction.Id);
                 }
                 break;
 
             case TimeoutPhase.Accept:
-            case TimeoutPhase.TradeOfferToSeller:
-                // 03 §4.1 / §4.2 — item never reached the platform. No refund needed.
+            case TimeoutPhase.SellerConfirm:
+                // 03 §4.1 / §4.2 — no money has moved yet. Nothing to refund.
                 break;
         }
     }
@@ -125,10 +111,10 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
     private static TimeoutPhase MapPhase(TransactionStatus previousStatus) => previousStatus switch
     {
         TransactionStatus.CREATED => TimeoutPhase.Accept,
-        TransactionStatus.TRADE_OFFER_SENT_TO_SELLER => TimeoutPhase.TradeOfferToSeller,
-        TransactionStatus.ITEM_ESCROWED => TimeoutPhase.Payment,
-        TransactionStatus.TRADE_OFFER_SENT_TO_BUYER => TimeoutPhase.Delivery,
+        TransactionStatus.ACCEPTED => TimeoutPhase.SellerConfirm,
+        TransactionStatus.SELLER_CONFIRMED => TimeoutPhase.Payment,
+        TransactionStatus.PAYMENT_RECEIVED => TimeoutPhase.Delivery,
         _ => throw new InvalidOperationException(
-            $"Timeout side effects are only defined for CREATED / TRADE_OFFER_SENT_TO_SELLER / ITEM_ESCROWED / TRADE_OFFER_SENT_TO_BUYER (got {previousStatus})."),
+            $"Timeout side effects are only defined for CREATED / ACCEPTED / SELLER_CONFIRMED / PAYMENT_RECEIVED (got {previousStatus})."),
     };
 }
