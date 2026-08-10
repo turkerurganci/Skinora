@@ -126,9 +126,26 @@ Error: A metric with the name skinora_steam_process_cpu_user_seconds_total has a
 ## Commit & PR
 
 - Branch: `task/T120-inventory-refresh-queue-visibility`
-- Commit: (aşağıda güncellenecek)
-- PR: (aşağıda güncellenecek)
-- CI: (aşağıda güncellenecek)
+- Commit: `73f2bdb` — T120: Sidecar envanter — cache bypass + ayrı limiter + üç değerli görünürlük (kod + testler + rapor + status + repo memory tek commit'te)
+- PR: [#228](https://github.com/turkerurganci/Skinora/pull/228)
+- Branch izolasyon kontrolü: ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` → yalnız `T120`
+- CI: **✓ PASS** — run [`31437273547`](https://github.com/turkerurganci/Skinora/actions/runs/31437273547), **CI Gate `success`**
+
+**Bloke edici job'lar (9/9 yeşil):** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (sidecar-steam) · CI Gate. (`0. Guard (direct push)` skipped — PR yolunda beklenen.)
+
+**8 advisory E2E leg'i kırmızı — bu task kaynaklı değil, kanıtlı.** Kırılma T117'den beri sürüyor (`continue-on-error`, CI Gate'i bloke etmiyor; sahiplik T137 → T138). `gh run view 31437273547 --log-failed` (970 satır) üzerinde ölçüm:
+
+| Arama | İz sayısı | Anlamı |
+|---|---|---|
+| `PlatformSteamBots` | **8** | T117'nin bıraktığı kök sebep — leg başına tam bir tane, imza önceki run'larla birebir |
+| `visibility` | **0** | T120'nin eklediği alan hiçbir kırılmada geçmiyor |
+| `refresh` | **0** | Cache bypass parametresi hiçbir kırılmada geçmiyor |
+| `STEAM_COMMUNITY_REQUESTS_PER_MINUTE` | **0** | Yeni env hiçbir kırılmada geçmiyor |
+| `queue_depth` / `inventory_cache_total` | **0** / **0** | Yeni metrikler hiçbir kırılmada geçmiyor |
+
+Yani dokunulan iki yüzeyden (`sidecar-steam`, `sidecar-fake`) **yeni bir kırılma gelmedi**; `sidecar-fake`'e eklenen `visibility` alanı E2E'de hiçbir şeyi bozmadı (backend alanı sessizce yok sayıyor — `Skinora.Steam.Tests` 21/21 ile de teyitli).
+
+> **Not:** Bu bölümü ekleyen doküman-only commit kendi CI run'ını tetikler; o run'ın kimliği raporlanmaz — aksi hâlde her rapor güncellemesi bir sonrakini gerektirir (sonsuz regresyon). Yetkili ölçüm, kodu taşıyan `31437273547` run'ıdır.
 
 ## Known Limitations / Follow-up
 
