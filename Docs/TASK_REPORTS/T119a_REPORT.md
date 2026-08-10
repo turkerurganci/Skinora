@@ -107,10 +107,11 @@ T119a, T117 doğrulamasının açtığı **plan boşluğunu** kapatır: 07 §7.6
 ## Commit & PR
 
 - Branch: `task/T119a-accept-v3-fields`
-- Commit: `203823e` — accept v3.0 alanları (kod + test + FE + e2e/fake + doküman + rapor/status/memory tek commit)
+- Commit: `203823e` — accept v3.0 alanları (kod + test + FE + e2e/fake + doküman + rapor/status/memory tek commit) · `034458a` — CI sonucunun rapora/status'e/memory'ye işlenmesi (doküman-only)
 - PR: [#227](https://github.com/turkerurganci/Skinora/pull/227)
 - CI: ✓ **PASS** — run [`31425937672`](https://github.com/turkerurganci/Skinora/actions/runs/31425937672), **CI Gate `success`**. Bloke edici job'ların hepsi yeşil: `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (frontend)`.
   **8 advisory E2E leg'i kırmızı — T117'den beri beklenen, T119a kaynaklı değil.** Kanıt: kırılma imzası T119'un run'ıyla (`31402617945`) **birebir aynı** — 8 leg'de de `Invalid object name 'PlatformSteamBots'` (e2e seed temizliği T117 migration'ının düşürdüğü tabloyu siliyor) ve onun artçısı olan `PK_Users` duplicate'leri (T119 run'ında 8 + 21, bu run'da aynı desen). Bu turda değiştirilen `e2e/src/api.ts`, `e2e/src/db.ts` ve `sidecar-fake` yüzeylerinden gelen **yeni bir kırılma yok**: `gh run view 31425937672 --log-failed | grep -c "INVALID_TRADE_URL\|MOBILE_AUTHENTICATOR_REQUIRED\|STEAM_UNAVAILABLE\|steamTradeUrl"` → **0**. Sahiplik T137 → T138.
+  **Doküman-only takip commit'i `034458a` → run [`31426919402`](https://github.com/turkerurganci/Skinora/actions/runs/31426919402), CI Gate `success`, bloke edici hata sayısı `0`** (kod taşıyan run yukarıdaki `31425937672`). Bu satırı ekleyen son doküman commit'inin run'ı da izlendi ve `success` verdi; ID'si burada değil, çünkü her yazım kendi run'ını doğurur — sonsuz regresyonu kırmak için son halka PR check listesinden okunur.
 
 ## Known Limitations / Follow-up
 
