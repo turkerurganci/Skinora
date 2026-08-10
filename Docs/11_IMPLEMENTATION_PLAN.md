@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 denetimi: T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi. Önceki: T118 doğrulaması — T133a eklendi, 03 + 07 custodial kalıntı turu, P6 sonu / P7 öncesi)
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2337,6 +2337,8 @@ Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`side
 
 > **T119 denetimi sonrası düzeltmeler (2026-08-10):** **T123/T124**'e timeout SystemSetting adlandırma kararı, **T129**'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi (ikisi de aşağıda). İki açık DEFERRED_BACKLOG §9'a düştü (`P2P-NonDeliveryAbuseWindow`, `P2P-DeliveryTimeoutWarning`) — teslimat fazı satıcıya devredildi ama fazın **yaptırım** ve **uyarı** bacaklarının F7'de sahibi yok.
 
+> **T119 doğrulaması sonrası düzeltmeler (2026-08-10):** **T133a** kapsamı 03 + 07'den **03 + 04 + 07**'ye genişletildi. 04, v4.0'da P2P'ye çekilmiş olmasına rağmen custodial kalıntı taşıyor ve hiçbir görevin kapsamında değildi — oysa T134/T135/T136 onu ekran spesifikasyonu olarak okuyacak. §16'nın iki timeout satırı (sorumluluğu tersine yazıyordu) doğrulama turunda düzeltildi (**04 v4.1**); geri kalanı T133a'ya bırakıldı.
+
 ```
 --- P0: Doküman ---
 
@@ -2563,14 +2565,26 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
     - Sidecar Steam hesap kimlik bilgisi olmadan boot ediyor
     - secrets/, compose ve 08 §9'dan bot credential'ları düştü
 
-Task T133a: 03 + 07 custodial kalıntı turu (doküman hizalaması)
+Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
-       üçü de 03'ü UI akışı, 07'yi API sözleşmesi olarak okuyor.
-  Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 07 §7.1, §7.5,
-       §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) · referans: 06 §2.13
+       üçü de 03'ü UI akışı, 04'ü ekran spesifikasyonu, 07'yi API
+       sözleşmesi olarak okuyor.
+  Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 04 §2 (akış
+       eşleme tablosu), §11 (S07 iade bilgisi satırları), §16 (admin),
+       §17 (Steam/recovery ekranları) · 07 §7.1, §7.5, §8.1, §9.20, §9.22
+       (+ örnek JSON payload'ları) · referans: 06 §2.13
   Kabul kriterleri:
-    - 03 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
+    - 03, 04 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
       "v3.0'da kaldırıldı" biçiminde, emekliliği BELGELEYEN satırlarda geçiyor
+    - 04'te (v4.0 P2P sürümü olmasına rağmen kalan kalıntı — T119 doğrulaması,
+      2026-08-10): akış eşleme tablosunda emekli ITEM_ESCROWED /
+      TRADE_OFFER_SENT_TO_BUYER adları, "çift iade" ifadesi ve üç adet
+      "Item'ınız iade edildi" satırı — P2P'de item iadesi diye bir işlem
+      yoktur (02 §3.2); admin iptal aralığını "CREATED → TRADE_OFFER_SENT_TO_
+      BUYER" diye tanımlayan üç satır; bot recovery / emanet ekranları
+      (katman T117'de silindi). §16 Timeout Süreleri tablosunun iki satırı
+      T119 doğrulamasında düzeltildi (04 v4.1) — tur o satırları tekrar
+      açmamalı
     - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
       üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
     - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;
@@ -2591,7 +2605,8 @@ Task T133a: 03 + 07 custodial kalıntı turu (doküman hizalaması)
   Test beklentisi: Kod değişikliği yalnız XML doc → build 0 warning + mevcut
        süit yeşil. Doküman doğrulaması:
        `grep -n "ITEM_ESCROWED\|TRADE_OFFER_SENT_TO" Docs/03_USER_FLOWS.md
-        Docs/07_API_DESIGN.md` → yalnız belgeleyici satırlar
+        Docs/04_UI_SPECS.md Docs/07_API_DESIGN.md` → yalnız belgeleyici
+       satırlar; ek olarak 04'te "çift iade" ve "Item'ınız iade edildi" yok
   Neden ayrı task (T118 doğrulaması, 2026-08-10): T115 dokümanları v3.0'a
        taşırken 07'de 16 satır, 03'te 6 bölge custodial dilde kaldı. Kod bu
        bölgelerde zaten P2P'ye taşınmış durumda — bu tur dokümanı KODA
