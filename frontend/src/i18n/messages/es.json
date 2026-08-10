@@ -1471,6 +1471,7 @@
       "tradeUrlLabel": "Tu URL de intercambio de Steam",
       "tradeUrlHint": "El vendedor envía el artículo directamente a esta dirección. Cópiala desde Steam → Inventario → Ofertas de intercambio → Quién puede enviarme ofertas de intercambio.",
       "tradeUrlUsingProfile": "Rellenada desde tu perfil. Actualízala si tu URL de intercambio de Steam ha cambiado.",
+      "maSetupLink": "Cómo configurar Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "La dirección de reembolso es obligatoria.",
         "INVALID_WALLET_ADDRESS": "La dirección de reembolso es inválida. Introduce una dirección TRC-20.",

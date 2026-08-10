@@ -1471,6 +1471,7 @@
       "tradeUrlLabel": "Steam trade URL adresiniz",
       "tradeUrlHint": "Satıcı item’ı doğrudan bu adrese gönderir. Steam → Envanter → Takas Teklifleri → Bana kimler takas teklifi gönderebilir bölümünden kopyalayın.",
       "tradeUrlUsingProfile": "Profilinizden dolduruldu. Steam trade URL’iniz değiştiyse güncelleyin.",
+      "maSetupLink": "Steam Mobile Authenticator nasıl kurulur?",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "İade adresi zorunludur.",
         "INVALID_WALLET_ADDRESS": "İade adresi geçersiz. TRC-20 formatında bir adres girin.",

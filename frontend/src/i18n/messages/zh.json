@@ -1471,6 +1471,7 @@
       "tradeUrlLabel": "你的 Steam 交易链接",
       "tradeUrlHint": "卖家会将物品直接发送到该地址。请从 Steam → 库存 → 交易报价 → 谁可以向我发送交易报价 中复制。",
       "tradeUrlUsingProfile": "已根据你的个人资料自动填入。如果你的 Steam 交易链接已更改，请更新。",
+      "maSetupLink": "如何设置 Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "退款地址为必填项。",
         "INVALID_WALLET_ADDRESS": "退款地址无效。请输入 TRC-20 地址。",

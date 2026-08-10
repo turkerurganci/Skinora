@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
 import { acceptTransaction } from "@/lib/api/transactions";
 
@@ -48,10 +49,16 @@ export function AcceptForm({
   onAccepted,
 }: AcceptFormProps) {
   const t = useTranslations("transactionDetail.accept");
+  const locale = useLocale();
   const [address, setAddress] = useState(defaultRefundAddress ?? "");
   const [tradeUrl, setTradeUrl] = useState(defaultSteamTradeUrl ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // T119a doğrulaması — 03 §3.2 adım 7, MA reddinde kullanıcının kurulum
+  // rehberine yönlendirilmesini şart koşuyor. Kontrol tıklamadan sonra
+  // sunucuda yapıldığı için tek yönlendirme noktası bu hata dalıdır; hangi
+  // kodun geldiğini bilmek gerektiğinden mesajın yanında kodu da tutuyoruz.
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const hasDefault = Boolean(defaultRefundAddress);
   const inputDisabled = hasDefault; // K4: per-tx override disabled
 
@@ -59,15 +66,18 @@ export function AcceptForm({
     e.preventDefault();
     if (disabled) return;
     if (!address.trim()) {
+      setErrorCode(null);
       setError(t("errors.REFUND_ADDRESS_REQUIRED"));
       return;
     }
     if (!tradeUrl.trim()) {
+      setErrorCode(null);
       setError(t("errors.INVALID_TRADE_URL"));
       return;
     }
     setSubmitting(true);
     setError(null);
+    setErrorCode(null);
     try {
       await acceptTransaction(transactionId, {
         refundWalletAddress: address.trim(),
@@ -77,6 +87,7 @@ export function AcceptForm({
     } catch (err) {
       if (err instanceof ApiError) {
         const code = err.code;
+        setErrorCode(code ?? null);
         setError(t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.generic"));
       } else {
         setError(t("errors.generic"));
@@ -144,12 +155,21 @@ export function AcceptForm({
         )}
       </div>
       {error && (
-        <p
-          className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700"
+        <div
+          className="space-y-1 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700"
           role="alert"
         >
-          {error}
-        </p>
+          <p>{error}</p>
+          {errorCode === "MOBILE_AUTHENTICATOR_REQUIRED" && (
+            <Link
+              href={`/${locale}/auth/mobile-authenticator`}
+              data-testid="accept-ma-setup-link"
+              className="inline-block font-medium underline"
+            >
+              {t("maSetupLink")}
+            </Link>
+          )}
+        </div>
       )}
       {disabled && disabledReason && (
         <p className="rounded-md border border-gray-200 bg-gray-50 p-2 text-sm text-gray-700">

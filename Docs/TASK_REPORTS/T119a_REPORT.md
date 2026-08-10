@@ -41,6 +41,8 @@ T119a, T117 doğrulamasının açtığı **plan boşluğunu** kapatır: 07 §7.6
 | `e2e/src/{api,db}.ts` | `seed.buyerTradeUrl`; `acceptTransaction` varsayılan parametre olarak gönderiyor (12 çağrı yeri dokunulmadı) |
 | `Docs/07_API_DESIGN.md` | **v3.1** — §7.6 doğrulama sırası + sahiplik kuralı + 503; §5.1 `steamTradeUrl` |
 | `Docs/06_DATA_MODEL.md` | **v6.3** — §3.5 `BuyerTradeUrl` için DB CHECK istisnası notu |
+| `Docs/08_INTEGRATION_SPEC.md` | **v3.1** *(doğrulama B1)* — §2.2 `GetTradeHoldDurations` iki çağrı yeri tablosu + kalıcı bayrağın neden okunmadığı |
+| `Docs/03_USER_FLOWS.md` | *(doğrulama B2)* — §3.2 adım 6/7 sırası sunucu-taraflı gerçeğe çekildi |
 | Testler | `TransactionAcceptanceUnitTests` (+31 vaka, state machine dahil), `TransactionAcceptanceServiceTests` (+17), `TransactionLifecycleEndpointTests` (+3 + Factory `ITradeHoldChecker` swap) |
 
 ## Kabul Kriterleri Kontrolü
@@ -80,7 +82,7 @@ T119a, T117 doğrulamasının açtığı **plan boşluğunu** kapatır: 07 §7.6
 | Contract | ✓ 9/9 | `--filter "FullyQualifiedName~.Contract"` |
 | FE lint | ✓ 0 bulgu | `npm run lint` |
 | FE typecheck | ✓ temiz | `npx tsc --noEmit` |
-| FE i18n parity | ✓ 4 dil × **1297** anahtar, aynı küme | `npm run i18n:check` — advisory uyarı sayısı 15 (T119 tabanıyla aynı; eklenen anahtarların ikisi "Mobile Authenticator" terimini birebir koruyacak şekilde düzeltildi) |
+| FE i18n parity | ✓ 4 dil × **1297** anahtar, aynı küme *(doğrulama B2 sonrası **1298** — `maSetupLink`)* | `npm run i18n:check` — advisory uyarı sayısı 15, B2 düzeltmesinden sonra da 15 (eklenen anahtarlar "Mobile Authenticator" terimini birebir koruyor) |
 | FE vitest | ✓ 33/33 | `npm run test` (9 dosya) |
 | FE build | ✓ başarılı | `npm run build` |
 | e2e / sidecar-fake | ✓ lint + `tsc --noEmit` temiz | her iki pakette |
@@ -92,9 +94,24 @@ T119a, T117 doğrulamasının açtığı **plan boşluğunu** kapatır: 07 §7.6
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız doğrulama chat'i bekleniyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** (2026-08-10, ayrı chat, yapım raporu görülmeden) |
+| Bulgu sayısı | **2 — ikisi de S1**, ikisi de merge öncesi kapatıldı (S2 Kırılma / S3 Eksik yok) |
+| Düzeltme gerekli mi | Hayır — bulgular aynı dalda kapatıldı |
+
+**Başlangıç kapıları.** Adım −1 working tree temiz · Adım 0 son 3 main run `success` (`31414178181`, `31414178436`, `31380447239`) · Adım 0b repo memory'de T119a satırı mevcut · Adım 8a task branch CI HEAD `0be21e4` → run [`31427843553`](https://github.com/turkerurganci/Skinora/actions/runs/31427843553) `success`.
+
+**Üç kabul kriteri de bağımsız kanıtlandı ve ölçümler yapım raporuyla birebir** (build 0E/0W · `dotnet format` temiz · unit 1361 · integration 1106 — Transactions 333, API 453 · contract 9 · FE lint/tsc/build ✓ · vitest 33/33 · e2e + sidecar-fake temiz). Validator ayrıca üretim zincirini bağımsız izledi: `SidecarTradeHoldChecker` prod'da `SteamModule.Replace` ile kayıtlı ve stub konservatif (`Active=false`) — unutulan bir DI swap kapıyı **açık bırakmıyor**, kapatıyor; gerçek sidecar semantiği `TradeHoldService.ts:109` (`active: seconds === 0`) ile teyit edildi, yani `sidecar-fake` düzeltmesinin yönü doğru. `BuyerTradeUrl`'ün dışa verilmesi yalnız `PAYMENT_RECEIVED + satıcı` koşuluna bağlı (`TransactionDetailService.cs:232`), `GET /users/me` alanı yalnız çağıranın kendi profili.
+
+**Negatif prova (yapım turununkinden farklı mutasyon).** Üretimdeki `SteamId64ToId32Offset` sabiti +1 kaydırıldı → `TransactionAcceptanceServiceTests`'te **10 test kırıldı**, mutasyon geri alındı. Sahiplik kapısı gerçekten üretim kodunu koruyor. Bu prova aynı zamanda `Trade_Url_Partner_Must_Resolve_To_The_Buyers_Own_SteamId` unit theory'sinin (mantığı SUT'tan çağırmak yerine test içinde **kopyalayan** 7 vaka) bir kanıt boşluğu değil, yalnız **fazlalık** olduğunu gösteriyor — kapı happy-path + third-party testleriyle zaten korunuyor.
+
+### Validator bulguları
+
+| # | Seviye | Bulgu | Kapanış |
+|---|---|---|---|
+| B1 | S1 | **08 §2.2 canlı probe'un ikinci çağrı yerini bilmiyordu.** Tablo (satır 134) "Kullanım yeri: **Trade URL kaydı sonrası** MA kontrolü", yaklaşım metni (satır 160) "çağrı … **kaydettiği anda** yapılır … Sonuç `User.MobileAuthenticatorVerified`'a kaydedilir" diyordu. T119a accept'te ikinci bir **canlı** çağrı ekledi ve sonucunu **persist etmiyor**. 08 §2.2 bu görevin dört referans dokümanından biri, üstelik 07 §7.6 md.3 fail-closed kuralı için okuyucuyu tam oraya yolluyor — pointer'ı takip eden okuyucu "bu çağrı başka yerde yapılır" diyen bir bölüme düşüyordu | §2.2 iki çağrı yerini **karşılaştırmalı tabloyla** anlatıyor (çağrı anı / token kaynağı / sonucun nereye yazıldığı / başarısızlık davranışı) + kalıcı bayrağın neden okunmadığının gerekçesi. **08 v3.1**, davranış değişikliği yok |
+| B2 | S1 | **03 §3.2 adım 6, MA kontrolünü kabul tıklamasından ÖNCE konumlandırıyordu:** *"Aktif değilse → kabul butonu devre dışı kalır ve kurulum rehberine yönlendirilir"*, ardından adım 7 *"Alıcı 'Kabul Ediyorum' butonuna tıklar"*. T119a'nın **07 §7.6'ya kendi yazdığı** bağlayıcı sıra bunu imkânsız kılıyor: probe son kapı ve token istek gövdesinden geliyor, dolayısıyla tıklamadan önce MA durumu bilinemez. Ayrıca vaat edilen kurulum rehberi yönlendirmesi FE'de **hiç yoktu** — `AcceptForm` düz hata metni gösteriyordu (`SetupGuideUrl`'ü U17 dışa veriyor, accept yolu vermiyor) | Adım sırası gerçeğe çekildi (tıklama 6, sunucu kontrolü 7) + neden önden devre dışı bırakılamadığı ve Steam kesintisinin **farklı mesajı** yazıldı. FE tarafı da kapatıldı: `AcceptForm` `MOBILE_AUTHENTICATOR_REQUIRED` dalında mevcut `/auth/mobile-authenticator` rehberine link veriyor (`accept-ma-setup-link`), 4 dilde `maSetupLink` anahtarı — i18n parity **4×1298** |
+
+**KALICI DERS (B1 + B2 ortak kökü).** İkisi de MA'nın *"trade URL kaydında"* kontrol edildiği v2.0 dünyasından kalan cümleler. Bir kontrolü **yeni bir ana** taşıyan görev, o kontrolün eski anını anlatan tüm dokümanları taramalıdır — yalnız kendi düzenlediği bölümü değil. Tarama anahtarı kontrolün **adı** değil (*"MA kontrolü"* her iki dünyada da geçiyor), **anı**dır: `GetTradeHoldDurations`'ın nerede çağrıldığını iddia eden her cümle.
 
 ## Altyapı Değişiklikleri
 
@@ -121,7 +138,8 @@ T119a, T117 doğrulamasının açtığı **plan boşluğunu** kapatır: 07 §7.6
 | 2 | **`INVALID_TRADE_URL` iki uçta farklı statü.** Accept 400 (07 §7.6), U17 profil kaydı 422 (07 §5.16a). Bu turda spec'e uyuldu; ortaklaştırma T133a doküman turunun konusu | 07 §7.6'ya not düşüldü |
 | 3 | **Satıcının teslimat CTA'sı hâlâ ekrana gelmiyor.** Backend `steamTradeOfferUrl`'ü `PAYMENT_RECEIVED + satıcı` için dolduruyor (`TransactionDetailService.cs:227-234`) ama FE bu alanı yalnız emekli `TRADE_OFFER_SENT_TO_*` dallarında render ediyor (`StateActionPanel.tsx:300, :327`); `PAYMENT_RECEIVED` dalı linksiz. T119a bu kolonu **doldurdu**, gösterimi **T135**'e ait | T135 kapsamında |
 | 4 | **Profil ekranında trade URL yüzeyi yok.** U17 `PUT /users/me/settings/steam/trade-url` üretimde ama FE'de hiçbir yerde çağrılmıyor (`grep tradeUrl frontend/src` → 0 eşleşme). Alıcı URL'i yalnız kabul formunda girebiliyor; prefill ancak URL başka bir yoldan kaydedilmişse çalışır | T134/T136 yüzeyi — bu turda kapsam dışı bırakıldı |
-| 5 | **`AcceptForm` için FE birim testi yok.** `components/transactions/detail/` altında hiç `.test.tsx` yok; yeni alanın FE davranışı vitest'le değil yalnız tip/lint/build ile korunuyor | Mevcut FE test stratejisinin sınırı |
+| 5 | **`AcceptForm` için FE birim testi yok.** `components/transactions/detail/` altında hiç `.test.tsx` yok; yeni alanın ve (doğrulama B2 ile eklenen) MA rehber linkinin FE davranışı vitest'le değil yalnız tip/lint/build ile korunuyor | Mevcut FE test stratejisinin sınırı |
+| 6 | **MA rehber sayfasının "yeniden kontrol et" butonu kalıcı bayrağı okuyor.** `auth/mobile-authenticator` sayfası `mobileAuthenticatorActive`'i `/auth/me`'den okur (WP11 kararı); accept reddinden oraya gelen alıcı, bayrak bayatsa canlı probe'un dediğinin tersini görebilir. T119a bu sayfayı değiştirmedi, yalnız **linkledi** | T134 yüzeyi — bu turda kapsam dışı |
 
 ## Notlar
 

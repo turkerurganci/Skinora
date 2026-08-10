@@ -1471,6 +1471,7 @@
       "tradeUrlLabel": "Your Steam trade URL",
       "tradeUrlHint": "The seller sends the item straight to this address. Copy it from Steam → Inventory → Trade Offers → Who can send me Trade Offers.",
       "tradeUrlUsingProfile": "Prefilled from your profile. Update it if your Steam trade URL has changed.",
+      "maSetupLink": "How to set up Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "A refund address is required.",
         "INVALID_WALLET_ADDRESS": "The refund address is invalid. Enter a TRC-20 address.",
