@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 — §3.1 `CANCELLED_TIMEOUT` sorumluluk listesi v3.0'a çekildi: teslimat timeout'u alıcı → **satıcı**, adım 3 "trade offer" → "hazırlık onayı", her satıra `PreviousStatus` çapası eklendi. Davranış değişikliği yok; kod zaten P2P haritasını uyguluyordu.)
+**Versiyon: v6.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -663,6 +663,8 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >   **`DeliveredBuyerAssetId` bu matriste yer almaz.** Best-effort audit alanıdır: teslimat alıcı onayıyla doğrulandığında envanter okunmamış olabilir ve alan NULL kalır. Guard bu alana değil `DeliveryEvidence`'a bakar (§8.4).
 >
 >   **`BuyerBaselineCapturedAt` de zorunlu değildir.** Alıcının envanteri gizliyse anlık görüntü alınamaz; bu, işlemi bloklamaz ancak envanter kanıtı yolunu kapatır (02 §9.2).
+>
+>   **`BuyerTradeUrl` DB CHECK ile enforce edilmez (T119a).** Kolon nullable kalır — `CREATED`'da alıcı henüz yoktur, dolayısıyla doldurulamaz — ve invariant `BuyerId`/`BuyerRefundAddress` ile aynı yerde, `BuyerAccept` geçişinin state machine guard'ında (`HasFieldsForAccepted`) korunur. Değer kabul ucunda normalize edilerek yazılır (07 §7.6); satıcıya gösterilen teslimat bağlantısı bu kolondan üretildiği için ham girdi değil kanonik biçim saklanır.
 >
 >   **CANCELLED_* kuralı:** İptal state'lerinde yukarıdaki field'lar iptalden önceki milestone'a göre kümülatif kalır. Örneğin SELLER_CONFIRMED'dan CANCELLED_SELLER'a geçişte AcceptedAt ve SellerReadyConfirmedAt dolu kalır; PaymentReceivedAt ve sonrası NULL'dır. Bu kural uygulama katmanında state machine guard'ı tarafından korunur — DB CHECK ile enforce edilmez (CANCELLED_* öncesi state bilgisi gerektirir).
 >

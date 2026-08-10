@@ -1468,6 +1468,9 @@
       "change": "Cambiar",
       "changeUnavailable": "El cambio por transacción llega en una tarea posterior.",
       "usingDefault": "Usando la dirección de reembolso de tu perfil.",
+      "tradeUrlLabel": "Tu URL de intercambio de Steam",
+      "tradeUrlHint": "El vendedor envía el artículo directamente a esta dirección. Cópiala desde Steam → Inventario → Ofertas de intercambio → Quién puede enviarme ofertas de intercambio.",
+      "tradeUrlUsingProfile": "Rellenada desde tu perfil. Actualízala si tu URL de intercambio de Steam ha cambiado.",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "La dirección de reembolso es obligatoria.",
         "INVALID_WALLET_ADDRESS": "La dirección de reembolso es inválida. Introduce una dirección TRC-20.",
@@ -1479,6 +1482,9 @@
         "BUYER_NOT_FOUND": "Tu cuenta no coincide como comprador. Contacta con soporte.",
         "VALIDATION_ERROR": "Los datos enviados son inválidos. Comprueba la dirección.",
         "ACCOUNT_FLAGGED": "Tu cuenta está en revisión y no puede aceptar transacciones por ahora. Contacta con soporte.",
+        "INVALID_TRADE_URL": "Introduce una URL de intercambio de Steam válida que pertenezca a tu propia cuenta.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Tu Steam Mobile Authenticator debe estar activo para aceptar. Sin él, Steam retiene el intercambio durante 15 días.",
+        "STEAM_UNAVAILABLE": "No se pudo contactar con Steam ahora mismo, así que no se pudo verificar tu Mobile Authenticator. Inténtalo de nuevo en unos minutos.",
         "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo."
       }
     },

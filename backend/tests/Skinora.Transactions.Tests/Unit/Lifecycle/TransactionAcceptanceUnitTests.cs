@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Users.Application.Settings;
 
 namespace Skinora.Transactions.Tests.Unit.Lifecycle;
 
@@ -108,5 +109,113 @@ public class TransactionAcceptanceUnitTests
         Assert.Equal("INVALID_STATE_TRANSITION", TransactionErrorCodes.InvalidStateTransition);
         Assert.Equal("WALLET_CHANGE_COOLDOWN_ACTIVE", TransactionErrorCodes.WalletChangeCooldownActive);
         Assert.Equal("REFUND_ADDRESS_REQUIRED", TransactionErrorCodes.RefundAddressRequired);
+    }
+
+    // ---------------------------------------------------------------------
+    // T119a — 07 §7.6 v3.0 fields.
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public void TransactionErrorCodes_T119a_Codes_Match_07_7_6_Contract()
+    {
+        // 07 §7.6 Hatalar (v3.0): 400 INVALID_TRADE_URL, 403
+        // MOBILE_AUTHENTICATOR_REQUIRED, 503 STEAM_UNAVAILABLE.
+        Assert.Equal("INVALID_TRADE_URL", TransactionErrorCodes.InvalidTradeUrl);
+        Assert.Equal("MOBILE_AUTHENTICATOR_REQUIRED", TransactionErrorCodes.MobileAuthenticatorRequired);
+        Assert.Equal("STEAM_UNAVAILABLE", TransactionErrorCodes.SteamUnavailable);
+    }
+
+    [Fact]
+    public void AcceptTransactionRequest_Serializes_SteamTradeUrl_As_CamelCase()
+    {
+        // 07 §7.6 request body names the field steamTradeUrl; the frontend and
+        // the e2e harness post exactly that key.
+        var dto = new AcceptTransactionRequest(
+            RefundWalletAddress: "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567",
+            SteamTradeUrl: "https://steamcommunity.com/tradeoffer/new/?partner=39734353&token=AbCdEfGh");
+
+        var json = JsonSerializer.Serialize(dto, JsonOptions);
+
+        Assert.Contains("\"refundWalletAddress\":", json);
+        Assert.Contains("\"steamTradeUrl\":", json);
+    }
+
+    [Theory]
+    // Canonical shape (07 §7.6 example).
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEfGh", true)]
+    // Tolerated input shapes — the parser normalizes them.
+    [InlineData("http://steamcommunity.com/tradeoffer/new/?partner=1&token=a", true)]
+    [InlineData("https://STEAMCOMMUNITY.COM/tradeoffer/new/?partner=1&token=a", true)]
+    [InlineData("  https://steamcommunity.com/tradeoffer/new/?partner=1&token=a  ", true)]
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=1&token=a&l=turkish", true)]
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?token=Ab-Cd_Ef&partner=1", true)]
+    // Rejected — every one of these is a 400 INVALID_TRADE_URL at the endpoint.
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("steamcommunity.com/tradeoffer/new/?partner=1&token=a", false)]      // no scheme
+    [InlineData("javascript:alert(1)", false)]                                        // non-http scheme
+    [InlineData("https://www.steamcommunity.com/tradeoffer/new/?partner=1&token=a", false)]     // subdomain
+    [InlineData("https://steamcommunity.com.evil.tr/tradeoffer/new/?partner=1&token=a", false)] // suffix attack
+    [InlineData("https://steamcommunity.com/tradeoffer/new?partner=1&token=a", false)] // no trailing slash
+    [InlineData("https://steamcommunity.com/TradeOffer/New/?partner=1&token=a", false)] // path is case-sensitive
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=1", false)]        // token missing
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?token=a", false)]          // partner missing
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=&token=a", false)] // partner empty
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=abc&token=a", false)] // partner not numeric
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=1&token=ab$cd", false)] // bad token charset
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=123456789012345678901&token=a", false)] // >20 chars
+    public void Trade_Url_Parser_Contract_Is_The_Accept_Endpoint_Contract(string tradeUrl, bool expectParsed)
+    {
+        // 07 §7.6 md.2 — "partner + token ayrıştırılabilmeli". The accept
+        // endpoint deliberately reuses the U17 parser instead of a second
+        // implementation, so this table IS the endpoint's accept/reject list.
+        var parsed = new TradeUrlParser().Parse(tradeUrl);
+
+        Assert.Equal(expectParsed, parsed is not null);
+    }
+
+    [Fact]
+    public void Trade_Url_Parser_Normalizes_To_The_Form_Persisted_On_BuyerTradeUrl()
+    {
+        // The seller's delivery link is generated from Transaction.BuyerTradeUrl
+        // (08 §2.2), so what gets stored must be the canonical form — https,
+        // lower-case host, tracking parameters stripped.
+        var parsed = new TradeUrlParser().Parse(
+            "  http://STEAMCOMMUNITY.COM/tradeoffer/new/?partner=39734353&token=AbCdEfGh&l=turkish  ");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(
+            "https://steamcommunity.com/tradeoffer/new/?partner=39734353&token=AbCdEfGh",
+            parsed.Normalized);
+        Assert.Equal("39734353", parsed.Partner);
+        Assert.Equal("AbCdEfGh", parsed.Token);
+    }
+
+    [Theory]
+    // partner == SteamID64 - 76561197960265728 → belongs to the caller.
+    [InlineData("76561198000000081", "39734353", true)]
+    [InlineData("76561197960265729", "1", true)]
+    // Someone else's account — the case the ownership check exists for.
+    [InlineData("76561198000000081", "39734354", false)]
+    [InlineData("76561198000000081", "39735271", false)]
+    // Degenerate inputs must fail closed, never wrap around ulong.
+    [InlineData("76561198000000081", "0", false)]
+    [InlineData("76561198000000081", "18446744073709551615", false)]
+    [InlineData("not-a-steam-id", "39734353", false)]
+    public void Trade_Url_Partner_Must_Resolve_To_The_Buyers_Own_SteamId(
+        string buyerSteamId64, string partner, bool expectOwned)
+    {
+        // Owner decision (2026-08-10) — not in 07 §7.6. Mirrors
+        // TransactionAcceptanceService.IsOwnedByBuyer; the SUT itself is covered
+        // end-to-end by Integration/Lifecycle/TransactionAcceptanceServiceTests.
+        const ulong offset = 76561197960265728UL;
+
+        var owned =
+            ulong.TryParse(partner, out var partnerId32)
+            && ulong.TryParse(buyerSteamId64, out var buyerId64)
+            && buyerId64 >= offset
+            && buyerId64 - offset == partnerId32;
+
+        Assert.Equal(expectOwned, owned);
     }
 }

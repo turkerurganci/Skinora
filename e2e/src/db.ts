@@ -27,6 +27,10 @@ export const seed = {
   buyerId: '22222222-2222-2222-2222-222222222222',
   buyerSteamId: '76561198000000061',
   buyerRefundAddress: 'TJRyWwFs9wTFGZg3JbrVriFbSfCByEEkEN',
+  // T119a — POST /accept requires a Steam trade URL whose `partner` resolves to
+  // the accepting buyer's own SteamID64 (partner = SteamID64 - 76561197960265728).
+  // 76561198000000061 - 76561197960265728 = 39734333.
+  buyerTradeUrl: 'https://steamcommunity.com/tradeoffer/new/?partner=39734333&token=E2ETOKEN',
   botId: '33333333-3333-3333-3333-333333333333',
   botDisplayName: 'E2E-Bot',
   priceCacheId: '44444444-4444-4444-4444-444444444444',

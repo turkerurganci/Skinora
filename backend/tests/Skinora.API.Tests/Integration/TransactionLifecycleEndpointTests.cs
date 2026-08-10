@@ -25,6 +25,7 @@ using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Users.Application.Settings;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.API.Tests.Integration;
@@ -42,6 +43,17 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     private const string TestAudience = "skinora-client";
     private const string SteamId = "76561198777999001";
     private const string ValidWallet = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567";
+
+    /// <summary>T119a — SteamID64 → SteamID32 offset (07 §7.6 ownership check).</summary>
+    private const ulong SteamId64ToId32Offset = 76561197960265728UL;
+
+    /// <summary>
+    /// T119a — a well-formed trade URL whose <c>partner</c> resolves to
+    /// <paramref name="steamId64"/>. The accept endpoint rejects any URL that
+    /// belongs to somebody else, so every accept test needs the caller's own.
+    /// </summary>
+    private static string TradeUrlFor(string steamId64)
+        => $"https://steamcommunity.com/tradeoffer/new/?partner={ulong.Parse(steamId64) - SteamId64ToId32Offset}&token=AbCdEfGh";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -333,7 +345,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var client = _factory.CreateClient();
         var response = await client.PostAsJsonAsync(
             $"/api/v1/transactions/{Guid.NewGuid():D}/accept",
-            new { refundWalletAddress = ValidWallet });
+            new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(SteamId) });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -349,7 +361,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var response = await client.PostAsJsonAsync(
             $"/api/v1/transactions/{transactionId:D}/accept",
-            new { refundWalletAddress = ValidWallet });
+            new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(buyer.SteamId) });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
@@ -359,6 +371,12 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Single(db.Set<OutboxMessage>().AsNoTracking().ToList());
+
+        // T119a — the mandatory v3.0 field reaches the row through the HTTP
+        // layer, in its normalized form (06 §3.5).
+        var persisted = db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
+            .AsNoTracking().Single(t => t.Id == transactionId);
+        Assert.Equal(TradeUrlFor(buyer.SteamId), persisted.BuyerTradeUrl);
     }
 
     [Fact]
@@ -372,7 +390,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var client = BuildAuthenticatedClient(stranger.Id, stranger.SteamId);
         var response = await client.PostAsJsonAsync(
             $"/api/v1/transactions/{transactionId:D}/accept",
-            new { refundWalletAddress = ValidWallet });
+            new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(stranger.SteamId) });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
@@ -391,12 +409,91 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
         var response = await client.PostAsJsonAsync(
             $"/api/v1/transactions/{transactionId:D}/accept",
-            new { refundWalletAddress = "NOT_A_TRC20_ADDRESS" });
+            new { refundWalletAddress = "NOT_A_TRC20_ADDRESS", steamTradeUrl = TradeUrlFor(buyer.SteamId) });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         Assert.Equal("INVALID_WALLET_ADDRESS",
             body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    // ---------- T119a: accept v3.0 fields (07 §7.6) ----------
+
+    [Fact]
+    public async Task Accept_Invalid_Trade_Url_Returns_400()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new { refundWalletAddress = ValidWallet, steamTradeUrl = "steamcommunity.com/tradeoffer/new/?partner=1" });
+
+        // 400 — 07 §7.6 pins this code at 400 even though the U17 profile-save
+        // path answers 422 for the same code (documented divergence).
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_TRADE_URL",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Accept_Without_Mobile_Authenticator_Returns_403()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        _factory.TradeHold.Active = false;
+        try
+        {
+            var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+            var response = await client.PostAsJsonAsync(
+                $"/api/v1/transactions/{transactionId:D}/accept",
+                new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(buyer.SteamId) });
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("MOBILE_AUTHENTICATOR_REQUIRED",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.TradeHold.Active = true;
+        }
+    }
+
+    [Fact]
+    public async Task Accept_When_Steam_Unreachable_Returns_503()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        _factory.TradeHold.Available = false;
+        try
+        {
+            var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+            var response = await client.PostAsJsonAsync(
+                $"/api/v1/transactions/{transactionId:D}/accept",
+                new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(buyer.SteamId) });
+
+            // Fail-closed (08 §2.2) and retryable — not a 403 telling the buyer
+            // to fix an authenticator that may be perfectly fine.
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("STEAM_UNAVAILABLE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.TradeHold.Available = true;
+        }
     }
 
     // ---------- T51: POST /transactions/:id/cancel (07 §7.7) ----------
@@ -643,6 +740,14 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         private readonly FakeSteamInventoryReader _inventory = new();
         private int _userSuffix;
 
+        /// <summary>
+        /// T119a — buyer Mobile Authenticator probe (07 §7.6 md.3). Defaults to
+        /// "Steam reachable, MA active"; individual tests flip it and reset it in
+        /// a finally block. Reuses the U17 endpoint tests' stub — one shape for
+        /// the whole <see cref="ITradeHoldChecker"/> seam.
+        /// </summary>
+        public AccountSettingsEndpointTests.ConfigurableTradeHoldStub TradeHold { get; } = new();
+
         public Factory()
         {
             _connection = new SqliteConnection("DataSource=:memory:");
@@ -707,6 +812,8 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // Required from BuyerAccept onwards (06 §3.5) and read by the
                 // refund path when a post-payment cancel unwinds the escrow.
                 BuyerRefundAddress = buyerId is null ? null : ValidWallet,
+                // T119a — same 06 §3.5 bracket: NOT NULL once a buyer exists.
+                BuyerTradeUrl = buyerId is null ? null : TradeUrlFor(SteamId),
                 PaymentReceivedAt =
                     status is Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
                         or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
@@ -854,6 +961,13 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // so the seller's items are predictable from test code.
                 services.RemoveAll<ISteamInventoryReader>();
                 services.AddSingleton<ISteamInventoryReader>(_inventory);
+
+                // T119a — the accept endpoint now probes the buyer's Mobile
+                // Authenticator live (07 §7.6). Without this swap the registered
+                // HttpSteamTradeHoldClient would try to reach a sidecar this host
+                // never configures, fail closed, and turn every accept into a 503.
+                services.RemoveAll<ITradeHoldChecker>();
+                services.AddSingleton<ITradeHoldChecker>(TradeHold);
             });
         }
 

@@ -266,6 +266,8 @@ public sealed class TransactionsController : ControllerBase
                 or AcceptTransactionStatus.SanctionsMatch
                 or AcceptTransactionStatus.WalletCooldownActive
                 or AcceptTransactionStatus.AccountFlagged
+                // T119a — 403 MOBILE_AUTHENTICATOR_REQUIRED (07 §7.6).
+                or AcceptTransactionStatus.MobileAuthenticatorRequired
                 => StatusCode(StatusCodes.Status403Forbidden,
                     AcceptErrorEnvelope(outcome)),
 
@@ -275,7 +277,17 @@ public sealed class TransactionsController : ControllerBase
 
             AcceptTransactionStatus.ValidationFailed
                 or AcceptTransactionStatus.InvalidWallet
+                // T119a — 400 INVALID_TRADE_URL (07 §7.6). 400 (not the 422 the
+                // U17 profile-save path returns) because 07 §7.6 pins it there.
+                or AcceptTransactionStatus.InvalidTradeUrl
                 => BadRequest(AcceptErrorEnvelope(outcome)),
+
+            // T119a — 503 STEAM_UNAVAILABLE: Steam could not confirm the buyer's
+            // Mobile Authenticator, so acceptance fails closed (08 §2.2) and the
+            // caller may retry. Same code/status as 07 §7.6a confirm-ready.
+            AcceptTransactionStatus.SteamUnavailable
+                => StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    AcceptErrorEnvelope(outcome)),
 
             AcceptTransactionStatus.BuyerNotFound => Unauthorized(),
 

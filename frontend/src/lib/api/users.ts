@@ -45,6 +45,13 @@ export interface UserProfile {
   sellerWalletAddress: string | null;
   refundWalletAddress: string | null;
   mobileAuthenticatorActive: boolean;
+  /**
+   * T119a — normalized Steam trade URL saved through U17
+   * (PUT /users/me/settings/steam/trade-url). Prefills the mandatory
+   * `steamTradeUrl` field of the accept form (07 §7.6); null when the buyer
+   * has never saved one, in which case they type it during acceptance.
+   */
+  steamTradeUrl: string | null;
 }
 
 export function getMyProfile(): Promise<UserProfile> {

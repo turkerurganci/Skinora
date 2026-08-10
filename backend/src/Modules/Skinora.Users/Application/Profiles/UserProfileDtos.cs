@@ -14,6 +14,12 @@ namespace Skinora.Users.Application.Profiles;
 /// <c>accountAge</c> is a Turkish relative string — i18n (T97) will localise.
 /// <c>mobileAuthenticatorActive</c> mirrors <c>User.MobileAuthenticatorVerified</c>;
 /// the real MA check arrives with T64–T69 via the Steam sidecar.</para>
+/// <para>T119a — <c>steamTradeUrl</c> exposes the normalized trade URL saved by
+/// U17 (<c>PUT /users/me/settings/steam/trade-url</c>). It is the source 07
+/// §7.6 assumes when it says the accept form's mandatory <c>steamTradeUrl</c>
+/// is "pre-filled by the client"; without it the buyer would have to paste the
+/// URL by hand on every acceptance even after saving it to their profile. Read
+/// path only — the value is still written exclusively through U17.</para>
 /// </remarks>
 public sealed record UserProfileDto(
     Guid Id,
@@ -28,7 +34,8 @@ public sealed record UserProfileDto(
     decimal? CancelRate,
     string? SellerWalletAddress,
     string? RefundWalletAddress,
-    bool MobileAuthenticatorActive);
+    bool MobileAuthenticatorActive,
+    string? SteamTradeUrl);
 
 /// <summary>
 /// Matches 07 §5.2 (U2 — <c>GET /users/me/stats</c>) response <c>data</c>

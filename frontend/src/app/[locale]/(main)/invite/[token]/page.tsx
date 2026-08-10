@@ -133,6 +133,7 @@ export default function InviteConsumePage({ params }: InviteConsumePageProps) {
       <StateActionPanel
         detail={data}
         defaultRefundAddress={profile.data?.refundWalletAddress ?? null}
+        defaultSteamTradeUrl={profile.data?.steamTradeUrl ?? null}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}
         onRefetch={() => router.replace(`/${locale}/transactions/${data.id}`)}

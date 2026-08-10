@@ -1468,6 +1468,9 @@
       "change": "Change",
       "changeUnavailable": "Per-transaction override ships in a follow-up task.",
       "usingDefault": "Using the refund address from your profile.",
+      "tradeUrlLabel": "Your Steam trade URL",
+      "tradeUrlHint": "The seller sends the item straight to this address. Copy it from Steam → Inventory → Trade Offers → Who can send me Trade Offers.",
+      "tradeUrlUsingProfile": "Prefilled from your profile. Update it if your Steam trade URL has changed.",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "A refund address is required.",
         "INVALID_WALLET_ADDRESS": "The refund address is invalid. Enter a TRC-20 address.",
@@ -1479,6 +1482,9 @@
         "BUYER_NOT_FOUND": "Your account could not be matched as the buyer. Please contact support.",
         "VALIDATION_ERROR": "The submitted data is invalid. Please check the address.",
         "ACCOUNT_FLAGGED": "Your account is under review and can't accept transactions right now. Please contact support.",
+        "INVALID_TRADE_URL": "Enter a valid Steam trade URL that belongs to your own account.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Your Steam Mobile Authenticator must be active to accept. Without it Steam holds the trade for 15 days.",
+        "STEAM_UNAVAILABLE": "Steam could not be reached right now, so your Mobile Authenticator could not be verified. Please try again shortly.",
         "generic": "Could not accept the transaction. Please try again."
       }
     },

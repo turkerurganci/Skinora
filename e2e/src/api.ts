@@ -1,4 +1,5 @@
 import { e2eConfig } from './config';
+import { seed } from './db';
 
 export interface ApiResult {
   status: number;
@@ -49,12 +50,22 @@ export function createTransaction(token: string, body: CreateTransactionBody): P
   return call('POST', '/api/v1/transactions', token, body);
 }
 
+/**
+ * T119a — `steamTradeUrl` became mandatory in v3.0 (07 §7.6): in the P2P model
+ * the seller ships the item straight to this address. Defaults to the seeded
+ * buyer's URL so the existing scenarios keep reading as "the buyer accepts";
+ * tests that accept as a different identity pass their own.
+ */
 export function acceptTransaction(
   token: string,
   id: string,
   refundWalletAddress: string,
+  steamTradeUrl: string = seed.buyerTradeUrl,
 ): Promise<ApiResult> {
-  return call('POST', `/api/v1/transactions/${id}/accept`, token, { refundWalletAddress });
+  return call('POST', `/api/v1/transactions/${id}/accept`, token, {
+    refundWalletAddress,
+    steamTradeUrl,
+  });
 }
 
 export function getTransaction(token: string, id: string): Promise<ApiResult> {

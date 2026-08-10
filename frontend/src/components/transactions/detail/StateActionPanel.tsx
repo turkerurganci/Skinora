@@ -21,6 +21,7 @@ import { DisputeModal } from "./DisputeModal";
 export interface StateActionPanelProps {
   detail: TransactionDetailResponse;
   defaultRefundAddress: string | null;
+  defaultSteamTradeUrl: string | null;
   isAuthenticated: boolean;
   isSuspended: boolean;
   onRefetch: () => void;
@@ -49,6 +50,7 @@ export interface StateActionPanelProps {
 export function StateActionPanel({
   detail,
   defaultRefundAddress,
+  defaultSteamTradeUrl,
   isAuthenticated,
   isSuspended,
   onRefetch,
@@ -179,6 +181,7 @@ export function StateActionPanel({
       <PrimaryActionPanel
         detail={detail}
         defaultRefundAddress={defaultRefundAddress}
+        defaultSteamTradeUrl={defaultSteamTradeUrl}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}
         onAccepted={onRefetch}
@@ -242,6 +245,7 @@ export function StateActionPanel({
 interface PrimaryActionPanelProps {
   detail: TransactionDetailResponse;
   defaultRefundAddress: string | null;
+  defaultSteamTradeUrl: string | null;
   isAuthenticated: boolean;
   isSuspended: boolean;
   onAccepted: () => void;
@@ -250,6 +254,7 @@ interface PrimaryActionPanelProps {
 function PrimaryActionPanel({
   detail,
   defaultRefundAddress,
+  defaultSteamTradeUrl,
   isAuthenticated,
   isSuspended,
   onAccepted,
@@ -266,6 +271,7 @@ function PrimaryActionPanel({
         <AcceptForm
           transactionId={detail.id}
           defaultRefundAddress={defaultRefundAddress}
+          defaultSteamTradeUrl={defaultSteamTradeUrl}
           disabled={cantAccept || isSuspended || !isAuthenticated}
           disabledReason={
             isSuspended

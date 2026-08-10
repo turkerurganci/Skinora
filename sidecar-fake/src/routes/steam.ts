@@ -50,8 +50,15 @@ steamRouter.delete('/api/inventory/:steamId/cache', (_req, res) => {
 });
 
 steamRouter.get('/api/trade-hold/:steamId', (_req, res) => {
-  // MA-verified seller, no Steam escrow hold → trades settle instantly.
-  res.json({ active: false, escrowEndDurationSeconds: 0 });
+  // MA-verified account, no Steam escrow hold → trades settle instantly.
+  //
+  // `active` is the MOBILE AUTHENTICATOR flag, not the hold flag: the backend
+  // maps active=true → SteamTradeHoldProbeResult.Active ("MA on, hold is 0
+  // seconds"). This used to answer `false`, which contradicted the comment
+  // above it and meant "MA off". Nothing observed it until T119a made the
+  // accept endpoint probe live — with the old value every accept would have
+  // failed 403 MOBILE_AUTHENTICATOR_REQUIRED across all e2e suites.
+  res.json({ active: true, escrowEndDurationSeconds: 0 });
 });
 
 interface SendTradeOfferBody {

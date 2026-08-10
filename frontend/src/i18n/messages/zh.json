@@ -1468,6 +1468,9 @@
       "change": "更改",
       "changeUnavailable": "按交易覆盖功能将在后续任务中提供。",
       "usingDefault": "使用个人资料中的退款地址。",
+      "tradeUrlLabel": "你的 Steam 交易链接",
+      "tradeUrlHint": "卖家会将物品直接发送到该地址。请从 Steam → 库存 → 交易报价 → 谁可以向我发送交易报价 中复制。",
+      "tradeUrlUsingProfile": "已根据你的个人资料自动填入。如果你的 Steam 交易链接已更改，请更新。",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "退款地址为必填项。",
         "INVALID_WALLET_ADDRESS": "退款地址无效。请输入 TRC-20 地址。",
@@ -1479,6 +1482,9 @@
         "BUYER_NOT_FOUND": "您的账户未匹配为买家。请联系支持。",
         "VALIDATION_ERROR": "提交的数据无效。请检查地址。",
         "ACCOUNT_FLAGGED": "您的账户正在审核中，暂时无法接受交易。请联系支持团队。",
+        "INVALID_TRADE_URL": "请输入属于你本人账户的有效 Steam 交易链接。",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "接受交易前必须启用 Steam Mobile Authenticator。否则 Steam 会将该交易冻结 15 天。",
+        "STEAM_UNAVAILABLE": "目前无法连接 Steam，因此无法验证你的 Mobile Authenticator。请稍后重试。",
         "generic": "无法接受此交易。请重试。"
       }
     },

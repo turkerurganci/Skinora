@@ -1468,6 +1468,9 @@
       "change": "Değiştir",
       "changeUnavailable": "İşlem bazlı değiştirme bir sonraki task'ta eklenecek.",
       "usingDefault": "Profil iade adresiniz kullanılıyor.",
+      "tradeUrlLabel": "Steam trade URL adresiniz",
+      "tradeUrlHint": "Satıcı item’ı doğrudan bu adrese gönderir. Steam → Envanter → Takas Teklifleri → Bana kimler takas teklifi gönderebilir bölümünden kopyalayın.",
+      "tradeUrlUsingProfile": "Profilinizden dolduruldu. Steam trade URL’iniz değiştiyse güncelleyin.",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "İade adresi zorunludur.",
         "INVALID_WALLET_ADDRESS": "İade adresi geçersiz. TRC-20 formatında bir adres girin.",
@@ -1479,6 +1482,9 @@
         "BUYER_NOT_FOUND": "Hesabınız alıcı olarak eşleşmedi. Lütfen destek ekibiyle iletişime geçin.",
         "VALIDATION_ERROR": "Gönderilen veri geçersiz. Lütfen adresi kontrol edin.",
         "ACCOUNT_FLAGGED": "Hesabınız incelemede; şu anda işlem kabul edemezsiniz. Lütfen destek ile iletişime geçin.",
+        "INVALID_TRADE_URL": "Kendi hesabınıza ait geçerli bir Steam trade URL girin.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Kabul edebilmek için Steam Mobile Authenticator’ınız aktif olmalı. Aktif değilse Steam takası 15 gün bekletir.",
+        "STEAM_UNAVAILABLE": "Steam’e şu anda ulaşılamadı, Mobile Authenticator doğrulanamadı. Lütfen biraz sonra tekrar deneyin.",
         "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin."
       }
     },
