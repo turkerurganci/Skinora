@@ -392,6 +392,74 @@ public class TransactionStateMachineTests
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, transaction.Status);
     }
 
+    // 05 §4.2 documents two equivalent seller exits from ACCEPTED:
+    // `seller_decline` (refusing the readiness request, 03 §2.3) and
+    // `seller_cancel` (the generic cancel endpoint, 07 §7.7). They are separate
+    // triggers so TransactionHistory keeps the intent distinguishable, but the
+    // outcome must be identical — a divergence would make the same user action
+    // score differently depending on which endpoint produced it.
+    [Fact]
+    public void Accepted_SellerDeclineAndSellerCancel_ProduceIdenticalOutcome()
+    {
+        var declined = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);
+        var cancelled = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);
+
+        new TransactionStateMachine(declined)
+            .Fire(TransactionTrigger.SellerDecline, new CancellationContext("Vazgeçtim"));
+        new TransactionStateMachine(cancelled)
+            .Fire(TransactionTrigger.SellerCancel, new CancellationContext("Vazgeçtim"));
+
+        Assert.Equal(TransactionStatus.CANCELLED_SELLER, declined.Status);
+        Assert.Equal(declined.Status, cancelled.Status);
+        Assert.Equal(declined.CancelledBy, cancelled.CancelledBy);
+        Assert.Equal(CancelledByType.SELLER, cancelled.CancelledBy);
+        Assert.Equal(declined.CancelReason, cancelled.CancelReason);
+        Assert.NotNull(declined.CancelledAt);
+        Assert.NotNull(cancelled.CancelledAt);
+    }
+
+    // 05 §4.2 `PAYMENT_RECEIVED | buyer_cancel | — Kullanılamaz`. The generated
+    // invalid matrix already covers this pair, but the rule is a money-safety
+    // decision (02 §7) rather than an incidental gap, so it gets a test that
+    // says so by name: once the buyer's funds are in escrow they cannot pull
+    // them back unilaterally.
+    [Fact]
+    public void BuyerCancel_FromPaymentReceived_IsRefused()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        var sm = new TransactionStateMachine(transaction);
+
+        Assert.False(sm.CanFire(TransactionTrigger.BuyerCancel));
+
+        var ex = Assert.Throws<DomainException>(
+            () => sm.Fire(TransactionTrigger.BuyerCancel, new CancellationContext("Vazgeçtim")));
+
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, transaction.Status);
+        Assert.Null(transaction.CancelledAt);
+    }
+
+    // 05 §4.2 `ITEM_DELIVERED | admin_cancel | — Kullanılamaz`. Standard cancel
+    // is unavailable once delivery happened: the platform cannot claw the item
+    // back, so unwinding is only ever admin_resolve_refund or an exceptional
+    // resolution (02 §7). Named for the same reason as the case above.
+    [Fact]
+    public void AdminCancel_FromItemDelivered_IsRefused()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ITEM_DELIVERED);
+        var sm = new TransactionStateMachine(transaction);
+
+        Assert.False(sm.CanFire(TransactionTrigger.AdminCancel));
+
+        var ex = Assert.Throws<DomainException>(
+            () => sm.Fire(TransactionTrigger.AdminCancel, new CancellationContext("Admin iptali")));
+
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, transaction.Status);
+        // admin_resolve_refund remains the only admin exit from here (05 §4.2).
+        Assert.True(sm.CanFire(TransactionTrigger.AdminResolveRefund));
+    }
+
     [Fact]
     public void OnEntry_PaymentReceivedSetsPaymentReceivedAt()
     {
@@ -480,6 +548,44 @@ public class TransactionStateMachineTests
         Assert.True(transaction.TimeoutRemainingSeconds > 0);
     }
 
+    // 05 §4.5 + 06 §3.5 state → active-deadline matrix. The delivery phase was
+    // added to this switch in v3.0: before the pivot DeliveryDeadline was never
+    // armed, so there was no remainder to freeze. Now it is the only clock
+    // standing between a paid buyer and a non-delivering seller — holding a
+    // PAYMENT_RECEIVED transaction without capturing it would resume the
+    // delivery window from scratch.
+    [Fact]
+    public void ApplyEmergencyHold_OnPaymentReceived_CapturesDeliveryDeadlineRemainder()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.DeliveryDeadline = DateTime.UtcNow.AddHours(6);
+        // The payment-phase deadline is stale by now; picking it here would
+        // freeze the wrong clock, so it is seeded deliberately.
+        transaction.PaymentDeadline = DateTime.UtcNow.AddMinutes(-30);
+        var sm = new TransactionStateMachine(transaction);
+
+        sm.ApplyEmergencyHold(Guid.NewGuid(), "Sanctions match");
+
+        Assert.True(transaction.IsOnHold);
+        Assert.Equal((int)TransactionStatus.PAYMENT_RECEIVED, transaction.PreviousStatusBeforeHold);
+        Assert.NotNull(transaction.TimeoutRemainingSeconds);
+        // Six hours minus the elapsed wall-clock inside the call.
+        Assert.InRange(transaction.TimeoutRemainingSeconds!.Value, 6 * 3600 - 60, 6 * 3600);
+    }
+
+    [Fact]
+    public void ApplyEmergencyHold_OnPaymentReceived_PastDeliveryDeadline_ClampsToZero()
+    {
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.DeliveryDeadline = DateTime.UtcNow.AddMinutes(-5);
+        var sm = new TransactionStateMachine(transaction);
+
+        sm.ApplyEmergencyHold(Guid.NewGuid(), "Investigation");
+
+        // CK_Transactions_FreezeActive (06 §3.5) rejects a negative remainder.
+        Assert.Equal(0, transaction.TimeoutRemainingSeconds);
+    }
+
     [Fact]
     public void ApplyEmergencyHold_OnAcceptedState_DoesNotSetTimeoutRemainingSeconds()
     {
@@ -528,7 +634,8 @@ public class TransactionStateMachineTests
     [Fact]
     public void ReleaseEmergencyHold_ClearsHoldFlagAndFreezeFields()
     {
-        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.CREATED);
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.SELLER_CONFIRMED);
+        transaction.PaymentDeadline = DateTime.UtcNow.AddMinutes(30);
         var sm = new TransactionStateMachine(transaction);
         sm.ApplyEmergencyHold(Guid.NewGuid(), "Sebep");
 
@@ -541,6 +648,9 @@ public class TransactionStateMachineTests
         Assert.NotNull(transaction.EmergencyHoldAt);
         Assert.NotNull(transaction.EmergencyHoldReason);
         Assert.NotNull(transaction.PreviousStatusBeforeHold);
+        // 05 §4.4 "Otorite": the remainder is what the reschedule reads, so
+        // release must not clear it — T50 ResumeAsync consumes it afterwards.
+        Assert.NotNull(transaction.TimeoutRemainingSeconds);
     }
 
     [Fact]

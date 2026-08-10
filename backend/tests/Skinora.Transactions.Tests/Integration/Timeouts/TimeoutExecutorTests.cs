@@ -49,7 +49,7 @@ public class TimeoutExecutorTests : IntegrationTestBase
     public async Task ExecutePaymentTimeout_Writes_History_And_Attributes_Reputation_To_Buyer()
     {
         // WP15 — the timeout attribution chain. The payment timeout fires from
-        // ITEM_ESCROWED, which 06 §3.1 attributes to the BUYER. The aggregator
+        // SELLER_CONFIRMED, which 06 §3.1 attributes to the BUYER. The aggregator
         // can only resolve that responsibility from the TransactionHistory
         // PreviousStatus this path now writes — without it the timeout would be
         // silently dropped from reputation (the bug WP15 closes).

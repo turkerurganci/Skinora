@@ -7,17 +7,17 @@ namespace Skinora.Realtime.Application.EventHandlers;
 
 /// <summary>
 /// Pushes <c>TransactionStatusChanged</c> on <c>/hubs/transactions</c> for the
-/// Steam orchestration transitions carried by the generic
-/// <see cref="TransactionStatusChangedEvent"/> (WP9 — 07 §11.1, closes T61 K2):
-/// ACCEPTED → TRADE_OFFER_SENT_TO_SELLER, TRADE_OFFER_SENT_TO_SELLER →
-/// ITEM_ESCROWED, PAYMENT_RECEIVED → TRADE_OFFER_SENT_TO_BUYER and
-/// TRADE_OFFER_SENT_TO_BUYER → ITEM_DELIVERED.
+/// forward-path transitions carried by the generic
+/// <see cref="TransactionStatusChangedEvent"/> (WP9 — 07 §11.1, closes T61 K2).
+/// Which legs those are is the producer's decision, not this consumer's: it
+/// relays whatever status pair arrives.
 /// </summary>
 /// <remarks>
-/// The from/to status is carried verbatim by the producer (the dispatch job
-/// and the Steam webhook handler capture it around the <c>Fire()</c>), so this
-/// consumer is a pure relay with no DB lookup. Idempotency + best-effort
-/// delivery are inherited from <see cref="RealtimeConsumerBase{TEvent}"/>.
+/// The from/to status is carried verbatim by the producer (captured around the
+/// <c>Fire()</c>), so this consumer is a pure relay with no DB lookup.
+/// Idempotency + best-effort delivery are inherited from
+/// <see cref="RealtimeConsumerBase{TEvent}"/>. See
+/// <see cref="TransactionStatusChangedEvent"/> for the v3.0 producer state.
 /// </remarks>
 public sealed class TransactionStatusChangedRealtimeConsumer
     : RealtimeConsumerBase<TransactionStatusChangedEvent>

@@ -16,9 +16,9 @@ namespace Skinora.Transactions.Tests.Integration.Timeouts;
 /// <summary>
 /// Integration coverage for the side-effect fan-out wired into
 /// <see cref="TimeoutExecutor"/> (T49 — 02 §3.2, 03 §4.3). The executor only
-/// targets <c>ITEM_ESCROWED</c> (the per-tx Hangfire job covers the payment
-/// stage — 05 §4.4), so the Payment phase side-effect set is the entire
-/// surface here.
+/// targets <c>SELLER_CONFIRMED</c> — the payment stage is the one phase driven
+/// by a per-transaction Hangfire job rather than the periodic scanner
+/// (05 §4.4) — so the Payment phase side-effect set is the entire surface here.
 /// </summary>
 public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
 {

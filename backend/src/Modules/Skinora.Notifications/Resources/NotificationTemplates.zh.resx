@@ -24,10 +24,10 @@
   <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
     <value>{BuyerName} 已接受您的交易。</value>
   </data>
-  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
-    <value>物品已到平台 — 等待付款</value>
+  <data name="PAYMENT_WINDOW_OPEN_Title" xml:space="preserve">
+    <value>卖家已就绪 — 等待付款</value>
   </data>
-  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+  <data name="PAYMENT_WINDOW_OPEN_Body" xml:space="preserve">
     <value>请向 {PaymentAddress} 发送 {Amount} USDT 以完成交易。</value>
   </data>
   <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
@@ -36,11 +36,11 @@
   <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
     <value>已收到您交易的 {Amount} USDT。</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
-    <value>交易报价已发送</value>
+  <data name="DELIVERY_EXPECTED_Title" xml:space="preserve">
+    <value>款项已托管 — 请发送物品</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
-    <value>请接受 Steam 交易报价以领取您的物品。</value>
+  <data name="DELIVERY_EXPECTED_Body" xml:space="preserve">
+    <value>买家已付款。请在交付截止时间前通过 Steam 将物品发送给买家。</value>
   </data>
   <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
     <value>交易已完成</value>
@@ -83,12 +83,6 @@
   </data>
   <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
     <value>{Amount} USDT 已退回您的钱包。</value>
-  </data>
-  <data name="ITEM_RETURNED_Title" xml:space="preserve">
-    <value>物品已退回</value>
-  </data>
-  <data name="ITEM_RETURNED_Body" xml:space="preserve">
-    <value>{ItemName} 已退回您的库存。</value>
   </data>
   <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>付款已退款</value>
@@ -137,12 +131,6 @@
   </data>
   <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
     <value>{ItemName} 已在 {ResumedStatus} 阶段恢复。倒计时从中断处继续。</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
-    <value>管理员：Steam 机器人异常</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
-    <value>机器人 {BotId} 报告：{Issue}。</value>
   </data>
   <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
     <value>管理员：平台健康警报</value>

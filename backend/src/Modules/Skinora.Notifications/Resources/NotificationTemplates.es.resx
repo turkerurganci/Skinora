@@ -24,10 +24,10 @@
   <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
     <value>{BuyerName} aceptó tu transacción.</value>
   </data>
-  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
-    <value>El artículo llegó a la plataforma — pago pendiente</value>
+  <data name="PAYMENT_WINDOW_OPEN_Title" xml:space="preserve">
+    <value>El vendedor está listo — pago pendiente</value>
   </data>
-  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+  <data name="PAYMENT_WINDOW_OPEN_Body" xml:space="preserve">
     <value>Envía {Amount} USDT a {PaymentAddress} para completar la transacción.</value>
   </data>
   <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
@@ -36,11 +36,11 @@
   <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
     <value>Recibimos {Amount} USDT para tu transacción.</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
-    <value>Oferta de intercambio enviada</value>
+  <data name="DELIVERY_EXPECTED_Title" xml:space="preserve">
+    <value>El pago está en depósito — envía el artículo</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
-    <value>Acepta la oferta de intercambio de Steam para recibir tu artículo.</value>
+  <data name="DELIVERY_EXPECTED_Body" xml:space="preserve">
+    <value>El comprador ya pagó. Envía el artículo al comprador por Steam antes de que venza el plazo de entrega.</value>
   </data>
   <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
     <value>Transacción completada</value>
@@ -83,12 +83,6 @@
   </data>
   <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
     <value>Se reembolsaron {Amount} USDT a tu billetera.</value>
-  </data>
-  <data name="ITEM_RETURNED_Title" xml:space="preserve">
-    <value>Artículo devuelto</value>
-  </data>
-  <data name="ITEM_RETURNED_Body" xml:space="preserve">
-    <value>{ItemName} fue devuelto a tu inventario.</value>
   </data>
   <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Pago reembolsado</value>
@@ -137,12 +131,6 @@
   </data>
   <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
     <value>{ItemName} se reanudó en {ResumedStatus}. La cuenta regresiva continúa desde donde se detuvo.</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
-    <value>Admin: problema del bot de Steam</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
-    <value>El bot {BotId} reportó: {Issue}.</value>
   </data>
   <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
     <value>Admin: alerta de salud de la plataforma</value>

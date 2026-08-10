@@ -9,9 +9,10 @@ namespace Skinora.Shared.Events;
 /// Notifications consumer fans out a per-party <c>TRANSACTION_CANCELLED</c>
 /// notification with phase- and role-specific reason text. Refund and
 /// late-payment-monitor side effects are emitted as separate events
-/// (<see cref="ItemRefundToSellerRequestedEvent"/>,
-/// <see cref="PaymentRefundToBuyerRequestedEvent"/>,
-/// <see cref="LatePaymentMonitorRequestedEvent"/>).
+/// (<see cref="PaymentRefundToBuyerRequestedEvent"/>,
+/// <see cref="LatePaymentMonitorRequestedEvent"/>). There is no item-return
+/// counterpart: in the P2P model the item never enters platform custody, so a
+/// timeout only ever moves money (02 §9).
 /// </summary>
 /// <param name="EventId">Outbox-level event identifier.</param>
 /// <param name="TransactionId">Transaction the timeout applies to.</param>

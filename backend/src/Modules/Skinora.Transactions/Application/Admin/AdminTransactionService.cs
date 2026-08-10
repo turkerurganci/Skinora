@@ -251,9 +251,11 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 $"Cannot apply emergency hold to terminal state {transaction.Status}.");
 
         // ---------- Stage 4: T50 freeze pre-pass ----------
-        // Runs BEFORE the state machine because T44 ApplyEmergencyHold leaves
-        // TimeoutRemainingSeconds NULL for non-SELLER_CONFIRMED states (T50 report
-        // Known Limitations — flagged for T59), which would trip
+        // Runs BEFORE the state machine because T44 ApplyEmergencyHold only
+        // resolves a remainder for the two phases it knows about
+        // (SELLER_CONFIRMED → PaymentDeadline, PAYMENT_RECEIVED →
+        // DeliveryDeadline) and leaves TimeoutRemainingSeconds NULL elsewhere
+        // (T50 report Known Limitations — flagged for T59), which would trip
         // CK_Transactions_FreezeActive at SaveChangesAsync. T50 FreezeAsync
         // resolves the active-phase deadline from the 06 §3.5 matrix and
         // stamps the freeze trio (TimeoutFrozenAt + TimeoutFreezeReason +

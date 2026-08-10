@@ -105,7 +105,7 @@ public class ReputationAggregatorTests : IntegrationTestBase
     [Fact]
     public async Task Recompute_Cancelled_Timeout_Maps_To_Responsible_Party()
     {
-        // PreviousStatus = ITEM_ESCROWED → payment timeout (Adım 4) → BUYER.
+        // PreviousStatus = SELLER_CONFIRMED → payment timeout (Adım 4) → BUYER.
         // Alice (seller) keeps her clean rate; Bob (buyer) takes the hit.
         var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
         await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.SELLER_CONFIRMED);

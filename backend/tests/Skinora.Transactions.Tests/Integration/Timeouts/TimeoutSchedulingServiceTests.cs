@@ -117,7 +117,7 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task SchedulePaymentTimeout_Throws_When_Status_Not_ITEM_ESCROWED()
+    public async Task SchedulePaymentTimeout_Throws_When_Status_Not_SELLER_CONFIRMED()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
