@@ -1,6 +1,6 @@
 # T118 — TransactionStateMachine: 05 §4.2 Kapsam Denetimi
 
-**Faz:** F7 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-10
+**Faz:** F7 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-08-10
 
 ---
 
@@ -139,7 +139,7 @@ Sonuç: P2P mutlu yolunun iki merkezi bildirimi ham anahtar olarak render olurdu
 
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | 05 §4.2'deki her geçişin geçen bir testi var | ✓ | 28 doküman satırı = 28 `Permit`/`PermitIf` = 28 `ValidTransitions` satırı; `Fire_ValidTransition_MovesToTargetState` 28 vaka + `Fire_InvalidTransition_…` 140 vaka geçiyor. Doküman tarafındaki tek eksik (`ACCEPTED\|seller_cancel`) 05 §4.2'ye geri eklendi; iki "kullanılamaz" kuralına adlandırılmış test yazıldı. `TransactionStateMachineTests` **212/212** (öncesi 207) |
+| 1 | 05 §4.2'deki her geçişin geçen bir testi var | ✓ | Dokümandan çıkarılan 28 geçiş (bazı tablo satırları çoklu kaynak durumu listeliyor, iki satır ise "kullanılamaz" kuralı) = 28 `Permit`/`PermitIf` = 28 `ValidTransitions` satırı; `Fire_ValidTransition_MovesToTargetState` 28 vaka + `Fire_InvalidTransition_…` 140 vaka geçiyor. Doküman tarafındaki tek eksik (`ACCEPTED\|seller_cancel`) 05 §4.2'ye geri eklendi; iki "kullanılamaz" kuralına adlandırılmış test yazıldı. `TransactionStateMachineTests` **212/212** (öncesi 207) |
 | 2 | Hiçbir test emekli status'e referans vermiyor | ✓ | Backend testlerinde 11 kalıntının 11'i temizlendi; kalan tek grup `EnumTests`'in emekliliği **belgeleyen** yorumları (kasıtlı, yukarıda gerekçeli). Doğrulama: `rg "ITEM_ESCROWED\|TRADE_OFFER_SENT_TO_(SELLER\|BUYER)" backend/tests` → yalnız `EnumTests` |
 | 3 | `ApplyEmergencyHold` PAYMENT_RECEIVED + `DeliveryDeadline` dalını içeriyor | ✓ | `TransactionStateMachine.cs:100`; yeni `ApplyEmergencyHold_OnPaymentReceived_CapturesDeliveryDeadlineRemainder` + `…_PastDeliveryDeadline_ClampsToZero`. Üretim yolunun diğer yarısı için `FreezeAsync_PAYMENT_RECEIVED_…` + `ResumeAsync_PAYMENT_RECEIVED_…` |
 
@@ -152,6 +152,21 @@ Sonuç: P2P mutlu yolunun iki merkezi bildirimi ham anahtar olarak render olurdu
 | Integration | ✓ **1077/1077** | Proje bazında seri koşum (T117'nin ölçüm notu). Baseline 1074 → +1 AdminUsers, +2 TimeoutFreeze. Kırılım: API 450 · Transactions 307 · Fraud 73 · Platform 65 · Notifications 60 · Disputes 41 · Auth 37 · Admin 22 · Shared 16 · Payments 6 |
 | Contract | ✓ **9/9** | `SidecarWebhookRouteContractTests` (API 4) + Shared 5 |
 | Migration | — | Bu görevde migration yok; EF modeli değişmedi |
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ⏳ Bekliyor — ayrı chat (INSTRUCTIONS §3.3 izolasyon kuralı) |
+| Bulgu sayısı | — |
+| Düzeltme gerekli mi | — |
+
+Validator'ın özellikle bakması önerilen noktalar (yapım chat'inin kendi şüpheleri):
+
+1. **05 §4.2'ye eklenen satırın gerçekten eksiklik mi yoksa karar mı olduğu.** Gerekçe `git show ddbdeac~1` + 07 §7.7 + `ResolveTrigger:287` üçlüsüne dayanıyor; üçü de kontrol edilebilir.
+2. **Bildirim şablonu metinlerinin 06 §2.13 ile örtüşmesi** — özellikle `DELIVERY_EXPECTED`'in **satıcıya** gittiği (v3.0'da taraf değişti) ve parametresiz olduğu.
+3. **Aynı geçişte iki satıcı bildirimi.** `PAYMENT_RECEIVED`'a girişte hem `PAYMENT_RECEIVED` ("Ödeme geldi") hem `DELIVERY_EXPECTED` ("item'ı gönder") satıcıya tanımlı (06 §2.13 ikisini de satıcıya veriyor). Tekilleştirilmeli mi, T124 üretici tasarımının konusudur — bu görevde katalog olduğu gibi bırakıldı.
+4. **`AdminUserActivityProvider` değişikliğinin S20 dışındaki etkisi** — aynı liste AD19d hold-by-user yükleminde de kullanılıyor.
 
 ## Altyapı Değişiklikleri
 
