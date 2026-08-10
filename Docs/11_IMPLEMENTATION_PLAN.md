@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T118 doğrulaması: T133a eklendi — 03 + 07 custodial kalıntı turu, P6 sonu / P7 öncesi)
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 denetimi: T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi. Önceki: T118 doğrulaması — T133a eklendi, 03 + 07 custodial kalıntı turu, P6 sonu / P7 öncesi)
 
 ---
 
@@ -2335,6 +2335,8 @@ Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`side
 
 > **T117 doğrulaması sonrası düzeltmeler (2026-08-09):** P1'e **T119a** eklendi — 07 §7.6 accept ucunun v3.0 alanlarını (`steamTradeUrl` → `BuyerTradeUrl`, MA kontrolü) üstlenen görev listede yoktu. **T124**'e teslimat-timeout kapısı kabul kriteri eklendi — 05 §4.4 iptalden önce doğrulama turu şart koşuyor ama o tur T127'de, zincir T124'ü öne zorluyor.
 
+> **T119 denetimi sonrası düzeltmeler (2026-08-10):** **T123/T124**'e timeout SystemSetting adlandırma kararı, **T129**'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi (ikisi de aşağıda). İki açık DEFERRED_BACKLOG §9'a düştü (`P2P-NonDeliveryAbuseWindow`, `P2P-DeliveryTimeoutWarning`) — teslimat fazı satıcıya devredildi ama fazın **yaptırım** ve **uyarı** bacaklarının F7'de sahibi yok.
+
 ```
 --- P0: Doküman ---
 
@@ -2442,12 +2444,30 @@ Task T123: SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
     - Alıcı MA kontrolü yapılıyor
     - Baseline yazılıyor; alıcı envanteri gizliyse işlem bloklanmıyor
     - Ödeme adresi ancak bu adımdan sonra ifşa ediliyor
+    - SellerConfirmDeadline'ı besleyen SystemSetting'e karar verildi (aşağıdaki
+      not) ve seçilen anahtarın açıklaması/etiketi v3.0 fazını anlatıyor
+  Not (T119 denetimi, 2026-08-10): iki timeout ayarı hâlâ custodial adında —
+       `trade_offer_seller_timeout_minutes` (bu görevin fazı) ve
+       `trade_offer_buyer_timeout_minutes` (T124'ün fazı). İkisi de bugün
+       ÜRETİMDE HİÇ OKUNMUYOR: yalnız `SystemSettingSeed` + `SystemSettingsCatalog`
+       + 4 dil FE etiketi olarak var; deadline'ları armlayan kod henüz yok.
+       Yani rename maliyeti şu an en düşük seviyede. Karar iki seçenek arasında:
+       (a) anahtarları `seller_confirm_timeout_minutes` / `delivery_timeout_minutes`
+       olarak yeniden adlandır — migration + `SKINORA_SETTING_*` env adı
+       (DEPLOY_RUNBOOK §A) + 4 dil i18n + 06 §8 tablosu; (b) adları koru,
+       yalnız açıklama/etiketleri düzelt. (a) önerilir: admin panelinde satıcının
+       teslimat penceresini "Alıcı trade offer timeout süresi" adlı bir kutu
+       yönetiyor — yanlış tarafı işaret eden bir kontrol, T119'un düzelttiği
+       sorumluluk çevirmesinin admin yüzündeki kalıntısı.
 
 Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
   Bağımlılık: T123
   Kabul kriterleri:
     - AmountValidationService SELLER_CONFIRMED -> PAYMENT_RECEIVED
-    - DeliveryDeadline armlanıyor ve zamanında ateşleniyor
+    - DeliveryDeadline armlanıyor ve zamanında ateşleniyor; süreyi besleyen
+      SystemSetting T123'te alınan adlandırma kararına göre kullanıldı
+      (bugünkü aday `trade_offer_buyer_timeout_minutes` custodial adında ve
+      artık SATICININ penceresini yönetiyor — T119 denetimi)
     - DeadlineScannerJob'ın PAYMENT_RECEIVED dalı T127 gelene kadar
       TÜKETMİYOR: süre dolduğunda iptal uygulanmaz, işlem taranabilir
       kalır. Kapı T127'de kaldırılır.
@@ -2497,6 +2517,19 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
     - COMPLETED guard'ı: SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL
     - Süre içinde açılan dispute ödemeyi bloklar
     - SweepQueueJob aynı kapıya bağlandı
+    - delivery_reversed ile REFUNDED'a düşen işlemin satıcının itibarına
+      etkisine karar verildi ve 06 §3.1 karara göre yazıldı (aşağıdaki not)
+  Not (T119 denetimi, 2026-08-10): 06 §3.1 oran formülünün paydası
+       COMPLETED + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT.
+       `REFUNDED` paydada YOK — bugün doğru, çünkü v2.0'da REFUNDED yalnız
+       admin dispute iadesiydi (platform kararı, CANCELLED_ADMIN ile aynı
+       gerekçeyle hariç). Bu görev REFUNDED'a ikinci bir giriş açıyor:
+       trade'ini geri alan satıcı. Bu, platform kararı değil kanıtlanmış satıcı
+       kusurudur; formül değişmezse en ağır dolandırıcılık senaryosu itibar
+       skoruna HİÇ yansımaz (yalnız fraud flag'i kalır). Karar ya "payda
+       DeliveryReversedAt NOT NULL olan REFUNDED satırlarını da satıcıya yazar"
+       (06 §3.1 + ReputationAggregator + test) ya da "fraud flag yeterli,
+       gerekçesi belgelendi" olmalı — sessizce geçilemez.
   Not: Beklemek tek başına korumaz — korumayı süre sonundaki KONTROL sağlar.
        Bu ikisi ayrılamaz; sadece gecikme uygulayan bir sürüm güvenli değildir.
 
