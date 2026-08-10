@@ -71,7 +71,8 @@ Odaklı koşum (`FullyQualifiedName~Reputation`): **29/29** — aggregator 12 + 
 ## Commit & PR
 
 - Branch: `task/T119-reputation-cooldown-audit`
-- PR: _(push sonrası doldurulacak)_
+- Commit: `4570e1c` — denetim (doküman + test) · `77724e3` — rapor + status
+- PR: [#226](https://github.com/turkerurganci/Skinora/pull/226)
 - CI: _(run sonrası doldurulacak)_
 
 ## Known Limitations / Follow-up
