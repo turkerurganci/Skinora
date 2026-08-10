@@ -2,7 +2,7 @@
 
 **Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10
 
-> **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı.
+> **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
 ---
 
@@ -488,7 +488,7 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 >
 > **Not:** FLAGGED durumu yalnızca işlem oluşturma anında tetiklenir — fiyat sapması ve yüksek hacim flag'leri (03 §7). Admin onaylarsa işlem CREATED'a geçer, reddederse CANCELLED_ADMIN olur. Anormal davranış tespiti ise hesap düzeyinde çalışır — işlem FLAGGED state'ine geçmez, kullanıcının tüm fon akışı aksiyonları engellenir (03 §7.3).
 >
-> **Not:** Admin doğrudan iptal (admin_cancel) CREATED'dan TRADE_OFFER_SENT_TO_BUYER'a kadar olan aktif state'lerden (+ FLAGGED) tetiklenebilir. ITEM_DELIVERED sonrası admin cancel kullanılamaz — bu aşamada yalnızca exceptional resolution geçerlidir (02 §7). Flag reddi (admin_reject) ise sadece FLAGGED state'ten. İkisi de CANCELLED_ADMIN sonucunu üretir (02 §7, 03 §8.7).
+> **Not:** Admin doğrudan iptal (admin_cancel) CREATED'dan PAYMENT_RECEIVED'a kadar olan aktif state'lerden (+ FLAGGED) tetiklenebilir. ITEM_DELIVERED sonrası admin cancel kullanılamaz — bu aşamada yalnızca exceptional resolution geçerlidir (02 §7). Flag reddi (admin_reject) ise sadece FLAGGED state'ten. İkisi de CANCELLED_ADMIN sonucunu üretir (02 §7, 03 §8.7).
 >
 > **Not:** Emergency hold mekanizması için bkz. §4.5. Hold bir state değişikliği değil, mevcut state üzerine uygulanan dondurma mekanizmasıdır (06 Data Model: `TimeoutFreezeReason` enum'u ile uyumlu).
 

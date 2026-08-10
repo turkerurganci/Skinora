@@ -16,8 +16,12 @@ namespace Skinora.Transactions.Tests.Integration.Timeouts;
 /// <summary>
 /// Integration coverage for the side-effect fan-out wired into
 /// <see cref="DeadlineScannerJob"/> (T49 — 02 §3.2, 03 §4.1–§4.4). Walks every
-/// scanner-driven phase: Accept / TradeOfferToSeller (no refunds) and
-/// TradeOfferToBuyer (item + payment refund).
+/// scanner-driven phase: Accept and SellerConfirm (no refunds) and Delivery
+/// (payment refund only — the platform never holds the item in the P2P model,
+/// so no timeout has an item-return side effect, 02 §9). The Payment phase is
+/// the one leg driven by a per-transaction Hangfire job rather than this
+/// scanner (05 §4.4); it is covered by
+/// <see cref="TimeoutExecutorSideEffectsTests"/>.
 /// </summary>
 public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
 {

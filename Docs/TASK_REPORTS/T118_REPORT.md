@@ -1,6 +1,6 @@
 # T118 — TransactionStateMachine: 05 §4.2 Kapsam Denetimi
 
-**Faz:** F7 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-08-10
+**Faz:** F7 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS | **Tarih:** 2026-08-10
 
 ---
 
@@ -140,7 +140,7 @@ Sonuç: P2P mutlu yolunun iki merkezi bildirimi ham anahtar olarak render olurdu
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | 05 §4.2'deki her geçişin geçen bir testi var | ✓ | Dokümandan çıkarılan 28 geçiş (bazı tablo satırları çoklu kaynak durumu listeliyor, iki satır ise "kullanılamaz" kuralı) = 28 `Permit`/`PermitIf` = 28 `ValidTransitions` satırı; `Fire_ValidTransition_MovesToTargetState` 28 vaka + `Fire_InvalidTransition_…` 140 vaka geçiyor. Doküman tarafındaki tek eksik (`ACCEPTED\|seller_cancel`) 05 §4.2'ye geri eklendi; iki "kullanılamaz" kuralına adlandırılmış test yazıldı. `TransactionStateMachineTests` **212/212** (öncesi 207) |
-| 2 | Hiçbir test emekli status'e referans vermiyor | ✓ | Backend testlerinde 11 kalıntının 11'i temizlendi; kalan tek grup `EnumTests`'in emekliliği **belgeleyen** yorumları (kasıtlı, yukarıda gerekçeli). Doğrulama: `rg "ITEM_ESCROWED\|TRADE_OFFER_SENT_TO_(SELLER\|BUYER)" backend/tests` → yalnız `EnumTests` |
+| 2 | Hiçbir test emekli status'e referans vermiyor | ✓ | Backend testlerinde 11 kalıntının 11'i temizlendi. Validator taraması (`git ls-files 'backend/tests/**/*.cs' \| xargs grep`, emekli status + trigger + `TimeoutPhase` + `NotificationType` adları birlikte): kalan referansların hepsi emekliliği **belgeleyen** yorumlar — `EnumTests`, `NotificationTemplateParityTests`, `NotificationTargetMapperTests`, `AdminAlertNotificationConsumerTests`. **Not:** yapım chat'inin doğrulama regex'i yalnız `ITEM_ESCROWED\|TRADE_OFFER_SENT_TO_(SELLER\|BUYER)` idi; emekli `TimeoutPhase` adlarını kapsamadığı için validator B1'i buldu (aşağıda) |
 | 3 | `ApplyEmergencyHold` PAYMENT_RECEIVED + `DeliveryDeadline` dalını içeriyor | ✓ | `TransactionStateMachine.cs:100`; yeni `ApplyEmergencyHold_OnPaymentReceived_CapturesDeliveryDeadlineRemainder` + `…_PastDeliveryDeadline_ClampsToZero`. Üretim yolunun diğer yarısı için `FreezeAsync_PAYMENT_RECEIVED_…` + `ResumeAsync_PAYMENT_RECEIVED_…` |
 
 ## Test Sonuçları
@@ -157,11 +157,71 @@ Sonuç: P2P mutlu yolunun iki merkezi bildirimi ham anahtar olarak render olurdu
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor — ayrı chat (INSTRUCTIONS §3.3 izolasyon kuralı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✓ PASS** (2026-08-10, ayrı chat — INSTRUCTIONS §3.3 izolasyon kuralı) |
+| Bulgu sayısı | **3 — hepsi S1** (S2 Kırılma / S3 Eksik yok) |
+| Düzeltme gerekli mi | Evet — 3'ü de proje sahibi onayıyla **merge öncesi bu dalda kapatıldı** |
 
-Validator'ın özellikle bakması önerilen noktalar (yapım chat'inin kendi şüpheleri):
+### Validator kapıları
+
+| Kapı | Sonuç |
+|---|---|
+| Adım −1 — Working tree hygiene | ✓ Temiz (`git status --short` boş) |
+| Adım 0 — Main CI startup check | ✓ Son 3 tamamlanmış run `success`: `31363716088`, `31363716080`, `31335569151` |
+| Adım 0b — Repo memory drift | ✓ `.claude/memory/MEMORY.md` satır 25'te T118 kaydı mevcut |
+| Adım 7a/8a — Task branch CI | ✓ HEAD `fa58999`, run [`31371312531`](https://github.com/turkerurganci/Skinora/actions/runs/31371312531) — Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker + **CI Gate** `success`. 8 advisory E2E leg'i kırmızı (T117'den beri bilinen, `continue-on-error`, T137→T138) |
+| Branch izolasyon | ✓ `git log main..HEAD` yalnız `T118` konulu 3 commit |
+| Mini güvenlik kontrolü | ✓ Secret sızıntısı yok · auth etkisi yok · input validation etkisi yok · yeni dış bağımlılık yok |
+
+### Validator ölçümleri (bağımsız koşum)
+
+| Tür | Validator | Yapım raporu | Uyum |
+|---|---|---|---|
+| Build | 0 error / 0 warning (`-c Release`) | 0/0 (`-c Debug`) | ✓ |
+| Unit | **1330/1330** | 1330/1330 | ✓ |
+| Integration | **1077/1077** (proje bazında seri) | 1077/1077 | ✓ |
+| Contract | **9/9** | 9/9 | ✓ |
+| `TransactionStateMachineTests` | **212/212** | 212/212 | ✓ |
+
+### AC1 — bağımsız sayım
+
+Validator doküman tablosunu yapım raporundan bağımsız olarak yeniden çıkardı: 05 §4.2 normatif tablosu + akış şeması **28 ayrık (kaynak, trigger)** çifti veriyor (CREATED 5 · ACCEPTED 6 · SELLER_CONFIRMED 6 · PAYMENT_RECEIVED 5 · ITEM_DELIVERED 3 · FLAGGED 3). Kod 28 `Permit`/`PermitIf`, test tablosu 28 satır. Üretilen invalid matris 12×14−28 = **140**; süit toplamı 39 Fact + 28 + 140 + 5 inline = **212** ile birebir kapanıyor.
+
+`ACCEPTED | seller_cancel` kararı bağımsız doğrulandı: `git show ddbdeac~1:Docs/05_TECHNICAL_ARCHITECTURE.md` satır 462'de satır **mevcut**; 07 §7.7 satıcıya CREATED / ACCEPTED / SELLER_CONFIRMED'da iptal hakkı veriyor. Dokümanı düzeltmek doğru yöndü — kodu kısıtlamak 07'yi de kırardı.
+
+### Parity guard — validator'ın kendi negatif provası
+
+Yapım chat'inin negatif provası tekrarlanmadı, **bağımsız bir mutasyonla** yeniden yapıldı: `tr.resx`'te `DELIVERY_EXPECTED_Body` anahtarı geçici olarak yeniden adlandırıldı → `NotificationTemplateParityTests` `Locale 'tr' has no template for: DELIVERY_EXPECTED_Body` ile kırıldı → geri alındı, working tree temiz doğrulandı. Ayrıca resolver'ın derece kaybettiği (`ResxNotificationTemplateResolver.cs:98` → `return key;`) ve katalog ↔ enum eşitliği (`06 §2.13` 26 satır = enum 26 değer, iki yönlü fark boş; 4 locale × 52 anahtar) doğrudan ölçüldü.
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya | Durum |
+|---|---|---|---|---|
+| B1 | S1 | `DeadlineScannerJobSideEffectsTests` sınıf XML doc'u emekli `TimeoutPhase` adlarını (`TradeOfferToSeller`, `TradeOfferToBuyer`) ve emekli **"item + payment refund"** semantiğini güncel gerçek gibi anlatıyordu. Testler `Accept` / `SellerConfirm` / `Delivery` yürüyor, Delivery yalnız payment refund assert ediyor. Kardeş dosya `TimeoutExecutorSideEffectsTests` aynı T49 doc bloğunda temizlenmiş, bu atlanmıştı — sebep AC2 doğrulama regex'inin `TimeoutPhase` adlarını kapsamaması | `DeadlineScannerJobSideEffectsTests.cs` | ✓ Kapatıldı |
+| B2 | S1 | **Denetlenen bölümün kendisinde emekli durum adı:** 05 §4.2 admin-iptal notu *"CREATED'dan `TRADE_OFFER_SENT_TO_BUYER`'a kadar"* diyordu. Normatif tablo doğru olduğu için davranışsal çelişki yoktu, ama T118 §4.2'yi v3.1'e alırken aynı bölümün notunu atlamıştı | `Docs/05_TECHNICAL_ARCHITECTURE.md` §4.2 | ✓ Kapatıldı (`PAYMENT_RECEIVED`) |
+| B3 | S1 | 03 §3.5 adım 3 alıcıya *"Ödemen emanete alındı"* **bildirimi gittiğini** söylüyordu; böyle bir tip yok — 06 §2.13'te `PAYMENT_RECEIVED` de `DELIVERY_EXPECTED` de satıcıya tanımlı, kodda `PAYMENT_RECEIVED`'a girişte alıcıya hiçbir `NotificationRequest` üretilmiyor (`PaymentReceivedNotificationConsumer` ve `EscrowedAndTradeOfferNotificationConsumer`, ikisi de `sellerId`). Aynı bölümün adım 9'u ITEM_DELIVERED için doğru kalıbı kullanıyordu. T118 §3.4 adım 1'de tam bu sınıfı düzeltmişti; adım 3 hem gözden kaçmış hem de kapsam-dışı listesine girmemişti | `Docs/03_USER_FLOWS.md` §3.5 | ✓ Kapatıldı (adım 9 kalıbı) |
+
+### Validator'ın açtığı kapsam-dışı konular (T118 dışı, ayrı tur öneriliyor)
+
+- **Kaynak katmanında emekli-status XML doc kalıntısı sürüyor (~14 dosya).** İkisi özellikle yanıltıcı: `DisputeService` XML doc'u (satır 29-31) per-type dispute matrisini emekli durumlarla anlatıyor **ve** tek doğru kaynak `DisputeEligibility`'nin `WRONG_ITEM@PAYMENT_RECEIVED` maddesini atlıyor; `EscrowedAndTradeOfferNotificationConsumer` özeti iki bacağı da "buyer-facing" diyor oysa biri satıcıya gidiyor (sınıf adı da emekli sözlükte).
+- **07_API_DESIGN.md'de yaygın custodial kalıntı** — satır 973 (`active` durum listesi), 1193–1209 (detay blokları + `escrowBotAssetId` + `steamTradeOfferUrl`), 1647–1649 (bildirim tabloları), 2229 (iptal edilebilir state'ler), 2301–2303 (iptal etkileri), 2491–2492. Raporun 03 için önerdiği ayrı doküman turu **07'yi de kapsamalı**: T119a doğrudan 07 §7.6'ya dayanıyor.
+
+### Validator'ın yapım raporunda düzelttiği uyuşmazlıklar
+
+| Yer | Rapordaki | Gerçek |
+|---|---|---|
+| Commit & PR | `3428098`, run `31370265288` | Dal HEAD'i **`fa58999`**, son CI run **`31371312531`** (success) |
+| Not satırı | "bu tabloyu taşıyan commit `2e0731b`" | O hash dalda yok; rapor/status commit'leri `cc5b3b3` + `fa58999` |
+| Commit & PR | "Branch:" satırı iki kez | Tekilleştirildi |
+| AC2 kanıtı | "rg → yalnız `EnumTests`" | Regex dar; 3 belgeleyici dosya daha eşleşiyor + B1 |
+| Kapsam-dışı 03 tablosu | "§5.3 adım 3 / adım 5" | Gerçek yer **§5.3a** |
+
+### Yapım raporu karşılaştırması
+
+**Uyum: yüksek.** Dört ölçümün dördü (build, unit, integration, contract) ve `TransactionStateMachineTests` sayısı validator koşumuyla birebir örtüştü; T117'de görülen ölçüm sapması bu görevde yok. Üç kabul kriterinin kanıtı da bağımsız olarak yeniden üretilebildi. Raporun kendi "validator'ın bakması önerilen noktalar" listesi dürüsttü — özellikle `PAYMENT_RECEIVED`'a girişte satıcıya iki bildirim tanımlı olması gerçek bir gözlem (T124 üretici tasarımının konusu) ve B3 tam da o bölgede duruyordu. Uyuşmazlıklar yalnızca yukarıdaki tabloda listelenen künye/kanıt-ifadesi düzeyinde; hiçbiri sonucu değiştirmedi.
+
+---
+
+Yapım chat'inin validator'a işaret ettiği noktalar (hepsi kontrol edildi):
 
 1. **05 §4.2'ye eklenen satırın gerçekten eksiklik mi yoksa karar mı olduğu.** Gerekçe `git show ddbdeac~1` + 07 §7.7 + `ResolveTrigger:287` üçlüsüne dayanıyor; üçü de kontrol edilebilir.
 2. **Bildirim şablonu metinlerinin 06 §2.13 ile örtüşmesi** — özellikle `DELIVERY_EXPECTED`'in **satıcıya** gittiği (v3.0'da taraf değişti) ve parametresiz olduğu.
@@ -197,8 +257,8 @@ Validator'ın özellikle bakması önerilen noktalar (yapım chat'inin kendi ş�
   |---|---|
   | §1.1 aktör tablosu | Satıcı "item'ı **emanet eden**" olarak tanımlı |
   | §3.3 adım 6 | "Eğer item zaten platformdaysa → item satıcıya iade edilir" |
-  | §5.3 adım 3 | İşlemin mevcut durumu **`ITEM_ESCROWED`** olarak yazılı (emekli status adı) |
-  | §5.3 adım 5 | "Item emanette kalır — emanet durumu etkilenmez" |
+  | §5.3a adım 3 | İşlemin mevcut durumu **`ITEM_ESCROWED`** olarak yazılı (emekli status adı) |
+  | §5.3a adım 5 | "Item emanette kalır — emanet durumu etkilenmez" |
   | §5.4 adım 1 | "…işlem iptal edilmiş, **item satıcıya iade edilmiş**" |
   | §8.7 adım 6 | İade kuralları: "Item platformda emanetteyse → satıcıya iade edilir / Her iki varlık da varsa → ikisi de iade edilir" |
 
@@ -217,10 +277,9 @@ Validator'ın özellikle bakması önerilen noktalar (yapım chat'inin kendi ş�
 ## Commit & PR
 
 - Branch: `task/T118-state-machine-audit`
-- Branch: `task/T118-state-machine-audit`
-- Commit: `3428098` — T118: TransactionStateMachine 05 §4.2 kapsam denetimi
+- Commit'ler: `3428098` (denetim) · `cc5b3b3` + `fa58999` (rapor/status/memory) · doğrulama bulguları B1–B3 kapanışı
 - PR: [#224](https://github.com/turkerurganci/Skinora/pull/224)
-- CI: ✓ **PASS** — HEAD `3428098`, run [`31370265288`](https://github.com/turkerurganci/Skinora/actions/runs/31370265288), `conclusion=success`
+- CI: ✓ **PASS** — yapım turu HEAD `fa58999`, run [`31371312531`](https://github.com/turkerurganci/Skinora/actions/runs/31371312531), `conclusion=success`
 
 | Job | Sonuç |
 |---|---|
@@ -229,4 +288,4 @@ Validator'ın özellikle bakması önerilen noktalar (yapım chat'inin kendi ş�
 | 3b. JS test (vitest) | skipped (JS yolu değişmedi) |
 | 8× E2E (advisory) | ✗ failure — T117'den beri bilinen, planda öngörülmüş (T137 → T138); `continue-on-error` |
 
-> Bu tabloyu taşıyan commit (`2e0731b`, yalnız rapor/status/memory referansları) kendisi de bir CI turu tetikler. Yetkili olan **son tamamlanmış run**'dır; doc-only turun sonucu PR #224 üzerinde görünür ve yapım chat'inde raporlanmıştır.
+> Rapor/status/memory referanslarını taşıyan commit'ler (`cc5b3b3`, `fa58999`) kendileri de birer CI turu tetikler. Yetkili olan **son tamamlanmış run**'dır; yapım turunun son hâli `fa58999` / [`31371312531`](https://github.com/turkerurganci/Skinora/actions/runs/31371312531) `success`. Doğrulama bulgularının (B1–B3) kapanış commit'i ayrı bir tur daha tetikler ve sonucu aşağıdaki merge kaydında raporlanır.

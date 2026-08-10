@@ -2,7 +2,7 @@
 
 **Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-10
 
-> **v3.1 (T118):** §3.4 adım 1 ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3/3+5, §5.4/1, §8.7 iade kuralları) — bunlar ayrı bir doküman turu gerektiriyor.
+> **v3.1 (T118):** §3.4 adım 1, **§3.5 adım 3** ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. §3.5 adım 3 alıcıya var olmayan bir inbox bildirimi vaat ediyordu — adım 9'un kalıbına çekildi (gerçek-zamanlı güncelleme; bu geçişin iki bildirimi de satıcıya tanımlı). **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 iade kuralları) — bunlar ayrı bir doküman turu gerektiriyor.
 
 ---
 
@@ -259,7 +259,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 
 1. Ödeme doğrulandıktan sonra işlem PAYMENT_RECEIVED durumuna geçer
 2. **Satıcıya** "Ödeme alındı, item'ı şimdi gönder" bildirimi gider. İşlem detay sayfasında alıcının trade URL'ine giden hazır bağlantı gösterilir
-3. **Alıcıya** "Ödemen emanete alındı, satıcı item'ı gönderiyor" bildirimi gider
+3. Alıcıya ödemenin emanete alındığı **gerçek-zamanlı durum güncellemesi** (PAYMENT_RECEIVED) ile gösterilir — bu geçişte alıcıya giden ayrı bir inbox/email bildirim tipi yoktur. 06 §2.13 kataloğunda bu geçişin iki bildirimi de (`PAYMENT_RECEIVED`, `DELIVERY_EXPECTED`) **satıcıya** tanımlıdır; adım 9 ile aynı kalıp
 4. Satıcı Steam üzerinden alıcıya trade offer gönderir
 5. Alıcı Steam üzerinde offer'ı kabul eder, item alıcının envanterine geçer
 6. **Teslimat doğrulaması — iki bağımsız yoldan biri yeterlidir:**
