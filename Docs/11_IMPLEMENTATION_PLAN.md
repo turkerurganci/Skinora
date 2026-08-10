@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-09 (T117 doğrulaması: T119a eklendi, T124'e teslimat-timeout kapısı AC'si eklendi)
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T118 doğrulaması: T133a eklendi — 03 + 07 custodial kalıntı turu, P6 sonu / P7 öncesi)
 
 ---
 
@@ -2529,6 +2529,42 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
   Kabul kriterleri:
     - Sidecar Steam hesap kimlik bilgisi olmadan boot ediyor
     - secrets/, compose ve 08 §9'dan bot credential'ları düştü
+
+Task T133a: 03 + 07 custodial kalıntı turu (doküman hizalaması)
+  Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
+       üçü de 03'ü UI akışı, 07'yi API sözleşmesi olarak okuyor.
+  Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 07 §7.1, §7.5,
+       §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) · referans: 06 §2.13
+  Kabul kriterleri:
+    - 03 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
+      "v3.0'da kaldırıldı" biçiminde, emekliliği BELGELEYEN satırlarda geçiyor
+    - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
+      üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
+    - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;
+      `steamTradeOfferUrl` satırı kodun FİİLEN ürettiği davranışı anlatıyor
+      (PAYMENT_RECEIVED + satıcı → alıcının BuyerTradeUrl'i,
+      TransactionDetailService:227-234) — emekli TRADE_OFFER_SENT_TO_* değil
+    - 07 §7.1 `active` sekmesi "terminal olmayan" tanımına çekildi;
+      EMERGENCY_HOLD status olarak listelenmiyor (05 §4.5: IsOnHold bayrağı +
+      TimeoutFreezeReason değeri, TransactionStatus üyesi değil)
+    - 07 §9.20/§9.22 iade kuralları tablosundan item-iadesi bacakları kaldırıldı
+    - Kaynak katmanındaki emekli-status XML doc kalıntıları temizlendi
+      (~14 dosya). En yanıltıcı ikisi adı konarak kapatılmalı:
+      DisputeService per-type dispute matrisi (emekli durumlar + tek doğru
+      kaynak DisputeEligibility'nin WRONG_ITEM@PAYMENT_RECEIVED maddesi eksik)
+      ve EscrowedAndTradeOfferNotificationConsumer özetinin iki bacağı da
+      "buyer-facing" demesi (biri satıcıya gidiyor)
+    - 07 v3.1 + 03 v3.2 sürüm notları yazıldı
+  Test beklentisi: Kod değişikliği yalnız XML doc → build 0 warning + mevcut
+       süit yeşil. Doküman doğrulaması:
+       `grep -n "ITEM_ESCROWED\|TRADE_OFFER_SENT_TO" Docs/03_USER_FLOWS.md
+        Docs/07_API_DESIGN.md` → yalnız belgeleyici satırlar
+  Neden ayrı task (T118 doğrulaması, 2026-08-10): T115 dokümanları v3.0'a
+       taşırken 07'de 16 satır, 03'te 6 bölge custodial dilde kaldı. Kod bu
+       bölgelerde zaten P2P'ye taşınmış durumda — bu tur dokümanı KODA
+       hizalar, davranış değiştirmez. Dağınık cümle yaması yerine tek tur
+       tercih edildi (proje sahibi kararı): iki doküman aynı kalıntı sınıfını
+       taşıyor ve tek turda yapılması tutarlı sonuç veriyor.
 
 --- P7: Frontend + test ---
 
