@@ -28,9 +28,12 @@ import type { TradeOfferService } from '../trade/TradeOfferService.js';
 import type { SendTradeOfferResponse } from '../trade/types.js';
 import {
   InventoryPrivateError,
+  InventoryService,
   SteamUnavailableError,
-  type InventoryService,
+  type InventoryFetcher,
+  type InventoryReadResult,
 } from '../trade/InventoryService.js';
+import { InMemoryInventoryCache } from '../cache/InventoryCache.js';
 import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
@@ -219,65 +222,111 @@ async function startInventoryApp(
   };
 }
 
+const INVENTORY_PAYLOAD = {
+  items: [
+    {
+      assetId: '27348562891',
+      classId: '310776959',
+      instanceId: '188530139',
+      name: 'AK-47 | Redline',
+      marketHashName: 'AK-47 | Redline (Field-Tested)',
+      type: 'Rifle',
+      exterior: 'Field-Tested',
+      iconUrl: 'https://cdn.test/ak.png',
+      tradable: true,
+      marketable: true,
+    },
+  ],
+  totalCount: 1,
+  tradeableCount: 1,
+};
+
+/** Build an InventoryService double whose `getInventory` resolves `result`. */
+function inventoryServiceReturning(result: InventoryReadResult): {
+  service: InventoryService;
+  getInventory: ReturnType<typeof vi.fn>;
+} {
+  const getInventory = vi.fn().mockResolvedValue(result);
+  return {
+    service: { getInventory, invalidate: vi.fn() } as unknown as InventoryService,
+    getInventory,
+  };
+}
+
 describe('GET /api/inventory/:steamId (T67)', () => {
   it('returns the inventory envelope on success', async () => {
-    const inventory = {
-      items: [
-        {
-          assetId: '27348562891',
-          classId: '310776959',
-          instanceId: '188530139',
-          name: 'AK-47 | Redline',
-          marketHashName: 'AK-47 | Redline (Field-Tested)',
-          type: 'Rifle',
-          exterior: 'Field-Tested',
-          iconUrl: 'https://cdn.test/ak.png',
-          tradable: true,
-          marketable: true,
-        },
-      ],
-      totalCount: 1,
-      tradeableCount: 1,
-    };
-    const getInventory = vi.fn().mockResolvedValue(inventory);
-    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+    const { service, getInventory } = inventoryServiceReturning({
+      visibility: 'PUBLIC',
+      inventory: INVENTORY_PAYLOAD,
+    });
 
     const ctx = await startInventoryApp(service);
     try {
       const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual(inventory);
-      expect(getInventory).toHaveBeenCalledWith(VALID_STEAM_ID);
+      // The T67 envelope fields are unchanged; `visibility` is additive so an
+      // existing consumer that ignores it keeps working (backend T121 pending).
+      expect(await res.json()).toEqual({ visibility: 'PUBLIC', ...INVENTORY_PAYLOAD });
+      expect(getInventory).toHaveBeenCalledWith(VALID_STEAM_ID, { refresh: false });
     } finally {
       await ctx.close();
     }
   });
 
   it('returns 422 INVENTORY_PRIVATE when the profile is private', async () => {
-    const getInventory = vi.fn().mockRejectedValue(new InventoryPrivateError(VALID_STEAM_ID));
-    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+    const { service } = inventoryServiceReturning({
+      visibility: 'PRIVATE',
+      error: new InventoryPrivateError(VALID_STEAM_ID),
+    });
 
     const ctx = await startInventoryApp(service);
     try {
       const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      // 07 §6.1's public contract: the status code stays the authoritative
+      // signal — a private profile must NOT arrive as a 200 with an empty list.
       expect(res.status).toBe(422);
-      const body = (await res.json()) as { code: string };
+      const body = (await res.json()) as { code: string; visibility: string };
       expect(body.code).toBe('INVENTORY_PRIVATE');
+      expect(body.visibility).toBe('PRIVATE');
     } finally {
       await ctx.close();
     }
   });
 
   it('returns 503 STEAM_UNAVAILABLE on upstream failure', async () => {
-    const getInventory = vi.fn().mockRejectedValue(new SteamUnavailableError('HTTP 503'));
-    const service = { getInventory, invalidate: vi.fn() } as unknown as InventoryService;
+    const { service } = inventoryServiceReturning({
+      visibility: 'UNAVAILABLE',
+      error: new SteamUnavailableError('HTTP 503'),
+    });
 
     const ctx = await startInventoryApp(service);
     try {
       const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
       expect(res.status).toBe(503);
-      const body = (await res.json()) as { code: string };
+      const body = (await res.json()) as { code: string; visibility: string };
       expect(body.code).toBe('STEAM_UNAVAILABLE');
+      expect(body.visibility).toBe('UNAVAILABLE');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('distinguishes UNAVAILABLE from a PUBLIC-but-empty inventory', async () => {
+    const { service } = inventoryServiceReturning({
+      visibility: 'PUBLIC',
+      inventory: { items: [], totalCount: 0, tradeableCount: 0 },
+    });
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      // 08 §2.3 money-safety core: "read, and the item is absent" is evidence
+      // and answers 200/PUBLIC; "could not read" answers 503/UNAVAILABLE. A
+      // consumer must never confuse the two, on either channel.
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { visibility: string; totalCount: number };
+      expect(body.visibility).toBe('PUBLIC');
+      expect(body.totalCount).toBe(0);
     } finally {
       await ctx.close();
     }
@@ -311,6 +360,80 @@ describe('GET /api/inventory/:steamId (T67)', () => {
       expect(res.status).toBe(503);
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('GET /api/inventory/:steamId?refresh (T120 — 08 §2.3)', () => {
+  it.each([
+    ['refresh=true', true],
+    ['refresh=TRUE', true],
+    ['refresh=1', true],
+    ['refresh=false', false],
+    ['refresh=0', false],
+  ])('maps ?%s to refresh=%s', async (query, expected) => {
+    const { service, getInventory } = inventoryServiceReturning({
+      visibility: 'PUBLIC',
+      inventory: INVENTORY_PAYLOAD,
+    });
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}?${query}`);
+      expect(res.status).toBe(200);
+      expect(getInventory).toHaveBeenCalledWith(VALID_STEAM_ID, { refresh: expected });
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it.each([['refresh=yes'], ['refresh='], ['refresh=2'], ['refresh=true&refresh=false']])(
+    'rejects ?%s with 400 without calling the service',
+    async (query) => {
+      const { service, getInventory } = inventoryServiceReturning({
+        visibility: 'PUBLIC',
+        inventory: INVENTORY_PAYLOAD,
+      });
+
+      const ctx = await startInventoryApp(service);
+      try {
+        const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}?${query}`);
+        // An unrecognized value fails loud rather than defaulting to the cached
+        // read: a delivery-verification caller that silently receives
+        // two-minute-old data is the exact failure 08 §2.3 added the flag for.
+        expect(res.status).toBe(400);
+        const body = (await res.json()) as { error: string };
+        expect(body.error).toMatch(/refresh/);
+        expect(getInventory).not.toHaveBeenCalled();
+      } finally {
+        await ctx.close();
+      }
+    },
+  );
+
+  it('bypasses the cache end-to-end against a real InventoryService', async () => {
+    // Route + service wired together (no service double): proves the query
+    // parameter actually reaches the cache decision rather than only the mock.
+    const cache = new InMemoryInventoryCache();
+    let calls = 0;
+    const fetcher: InventoryFetcher = {
+      async fetch() {
+        calls += 1;
+        return [] as never;
+      },
+    };
+    const service = new InventoryService(fetcher, cache);
+
+    const ctx = await startInventoryApp(service);
+    try {
+      await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      expect(calls).toBe(1);
+
+      await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}?refresh=true`);
+      expect(calls).toBe(2);
+    } finally {
+      await ctx.close();
     }
   });
 });

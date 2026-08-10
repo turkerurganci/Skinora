@@ -42,6 +42,35 @@ export const tradeOffersTotal = new client.Counter({
   labelNames: ['direction', 'status'] as const,
 });
 
+/**
+ * Inventory cache lookups by outcome (T120 — 08 §2.3).
+ *
+ * `bypass` is a deliberate cache skip requested via `?refresh=true`, NOT a
+ * miss. The two must stay distinguishable: a rising `bypass` share is the
+ * delivery-verification read load, and it is what consumes the Community
+ * queue budget (08 §2.6) — conflating it with `miss` would hide the cause of
+ * queue saturation behind an apparent cache-tuning problem.
+ */
+export const inventoryCacheTotal = new client.Counter({
+  name: 'skinora_steam_inventory_cache_total',
+  help: 'Steam inventory cache lookups by outcome (hit / miss / bypass)',
+  labelNames: ['result'] as const,
+});
+
+/**
+ * Pending task depth per rate-limited Steam queue (T120 — 08 §2.6).
+ *
+ * The Web API and Community endpoints run in separate queues; a persistently
+ * non-zero `community` depth is the practical ceiling on concurrent delivery
+ * verifications (each verification costs two reads — seller + buyer), which
+ * 10 §4 records as an MVP capacity limit.
+ */
+export const rateLimitedQueueDepth = new client.Gauge({
+  name: 'skinora_steam_queue_depth',
+  help: 'Pending tasks in each rate-limited Steam request queue',
+  labelNames: ['queue'] as const,
+});
+
 export function metricsHandler(_req: Request, res: Response): void {
   client.register
     .metrics()

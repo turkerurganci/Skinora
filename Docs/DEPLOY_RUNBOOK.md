@@ -68,6 +68,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `PUBLIC_ORIGIN` | backend | Tarayıcıya bakan tek origin → `Cors__AllowedOrigins__0` |
 | `STEAM_BOTS_CONFIG_PATH` (+ `secrets/steam-bots.json` mount) | steam sidecar | Escrow bot kimlik bilgileri (08 §2.5). **Yoksa sidecar skeleton mode'da açılır ve trade offer gönderemez.** Alternatif: `STEAM_BOTS_JSON` inline |
 | `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback |
+| `STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE` | steam sidecar | Steam Community envanter ucunun kuyruk tavanı, istek/dakika (08 §2.6, T120). Web API kuyruğundan **ayrı**. Boş/geçersiz → **10/dk** (tahmini 10-20/dk/IP aralığının muhafazakâr ucu; aşım IP bloğuyla cezalandırılır). Her teslimat doğrulaması **iki** okuma harcadığı için (satıcı + alıcı) bu değer aynı zamanda eşzamanlı doğrulama tavanıdır (10 §4). Yalnız proxy havuzu arkasında veya T122 gerçek limiti ölçtükten sonra yükseltilir. Değişiklik sidecar restart gerektirir |
 | `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme (08 §3.2) |
 | `TRON_USDT_CONTRACT` / `TRON_USDC_CONTRACT` | blockchain sidecar | **Yalnız testnet'te (nile/shasta) zorunlu** — mainnet adresleri koda gömülü. Boşsa desteklenen-token allowlist'i boş kalır ve gelen her transfer wrong/spam token sayılır (08 §3.3) |
 | `HOT_WALLET_ADDRESS` / `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation (Docker secret olarak mount, 05 §3.3/§3.5) |
