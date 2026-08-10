@@ -73,7 +73,7 @@ Odaklı koşum (`FullyQualifiedName~Reputation`): **29/29** — aggregator 12 + 
 - Branch: `task/T119-reputation-cooldown-audit`
 - Commit: `4570e1c` — denetim (doküman + test) · `77724e3` — rapor + status
 - PR: [#226](https://github.com/turkerurganci/Skinora/pull/226)
-- CI: _(run sonrası doldurulacak)_
+- CI: ✓ PASS — run [`31401459077`](https://github.com/turkerurganci/Skinora/actions/runs/31401459077), HEAD `c72f260`, CI Gate `success`. Bloke edici job'ların hepsi yeşil (Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker build); `3b. JS test (vitest)` path filtresiyle atlandı (FE değişikliği yok). **8 advisory E2E leg'i kırmızı — T117'den beri beklenen:** tek kök sebep 8 leg'de de `Invalid object name 'PlatformSteamBots'` (e2e seed'i T117 migration'ının düşürdüğü tabloyu temizliyor); `continue-on-error` olduklarından gate'i bloke etmiyorlar, sahiplik T137 → T138
 
 ## Known Limitations / Follow-up
 
