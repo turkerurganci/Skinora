@@ -202,5 +202,16 @@ Sonuç: P2P mutlu yolunun iki merkezi bildirimi ham anahtar olarak render olurdu
 ## Commit & PR
 
 - Branch: `task/T118-state-machine-audit`
-- PR: PR_PLACEHOLDER
-- CI: CI_PLACEHOLDER
+- Branch: `task/T118-state-machine-audit`
+- Commit: `3428098` — T118: TransactionStateMachine 05 §4.2 kapsam denetimi
+- PR: [#224](https://github.com/turkerurganci/Skinora/pull/224)
+- CI: ✓ **PASS** — HEAD `3428098`, run [`31370265288`](https://github.com/turkerurganci/Skinora/actions/runs/31370265288), `conclusion=success`
+
+| Job | Sonuç |
+|---|---|
+| 1. Lint · 2. Build · 3. Unit · 4. Integration · 5. Contract · 6. Migration dry-run · 7. Docker build (backend) | ✓ success |
+| **CI Gate** | **✓ success** |
+| 3b. JS test (vitest) | skipped (JS yolu değişmedi) |
+| 8× E2E (advisory) | ✗ failure — T117'den beri bilinen, planda öngörülmüş (T137 → T138); `continue-on-error` |
+
+> Bu tabloyu taşıyan commit (`2e0731b`, yalnız rapor/status/memory referansları) kendisi de bir CI turu tetikler. Yetkili olan **son tamamlanmış run**'dır; doc-only turun sonucu PR #224 üzerinde görünür ve yapım chat'inde raporlanmıştır.
