@@ -34,6 +34,11 @@ public static class TransactionErrorCodes
     public const string WalletChangeCooldownActive = "WALLET_CHANGE_COOLDOWN_ACTIVE";
     public const string RefundAddressRequired = "REFUND_ADDRESS_REQUIRED";
 
+    // T119a — accept v3.0 fields (07 §7.6). MobileAuthenticatorRequired is
+    // declared above (create path, 07 §7.2) and reused verbatim here.
+    public const string InvalidTradeUrl = "INVALID_TRADE_URL";
+    public const string SteamUnavailable = "STEAM_UNAVAILABLE";
+
     // T51 — cancel (07 §7.7).
     public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
     public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";

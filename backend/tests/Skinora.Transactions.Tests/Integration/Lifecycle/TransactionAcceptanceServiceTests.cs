@@ -9,6 +9,7 @@ using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
+using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
@@ -35,11 +36,27 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     private const string ValidWallet2 = "TabcDEFGHJKLMNPQRSTUVWXYZ234567Xyz";
     private const string SellerSteamId = "76561198000000080";
     private const string BuyerSteamId = "76561198000000081";
+    private const string LateBuyerSteamId = "76561198000000999";
+    private const string RaceWinnerSteamId = "76561198000000777";
+
+    /// <summary>
+    /// T119a — SteamID64 → SteamID32 offset, mirrored from the SUT so a typo in
+    /// either place shows up as a failing ownership check rather than a silent
+    /// pass. A trade URL's <c>partner</c> value is the SteamID32.
+    /// </summary>
+    private const ulong SteamId64ToId32Offset = 76561197960265728UL;
+
+    /// <summary>Canonical trade URL whose <c>partner</c> belongs to <c>_buyer</c>.</summary>
+    private static readonly string BuyerTradeUrl = TradeUrlFor(BuyerSteamId);
+
+    private static string TradeUrlFor(string steamId64, string token = "AbCdEfGh")
+        => $"https://steamcommunity.com/tradeoffer/new/?partner={ulong.Parse(steamId64) - SteamId64ToId32Offset}&token={token}";
 
     private User _seller = null!;
     private User _buyer = null!;
     private FakeTimeProvider _clock = null!;
     private RecordingOutboxService _outbox = null!;
+    private CountingTradeHoldChecker _tradeHold = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -65,6 +82,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
         _clock = new FakeTimeProvider(new DateTimeOffset(2026, 5, 2, 12, 0, 0, TimeSpan.Zero));
         _outbox = new RecordingOutboxService();
+        // T119a — default: Steam reachable, buyer's Mobile Authenticator active.
+        _tradeHold = new CountingTradeHoldChecker(new TradeHoldResult(true, true, null));
     }
 
     [Fact]
@@ -75,7 +94,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
@@ -88,6 +107,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(TransactionStatus.ACCEPTED, persisted.Status);
         Assert.Equal(_buyer.Id, persisted.BuyerId);
         Assert.Equal(ValidWallet2, persisted.BuyerRefundAddress);
+        // T119a — 06 §3.5: NOT NULL from ACCEPTED onwards.
+        Assert.Equal(BuyerTradeUrl, persisted.BuyerTradeUrl);
         Assert.NotNull(persisted.AcceptedAt);
 
         Assert.Single(_outbox.Published);
@@ -117,7 +138,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.BuyerNotFound, outcome.Status);
@@ -134,7 +155,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut(flagChecker: new StubAccountFlagChecker(true));
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.AccountFlagged, outcome.Status);
@@ -155,7 +176,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.SteamIdMismatch, outcome.Status);
@@ -177,7 +198,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var lateBuyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000999",
+            SteamId = LateBuyerSteamId,
             SteamDisplayName = "LateBuyer",
         };
         Context.Set<User>().Add(lateBuyer);
@@ -186,7 +207,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var first = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
         Assert.Equal(AcceptTransactionStatus.Accepted, first.Status);
 
@@ -195,7 +216,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         // ALREADY_ACCEPTED. This is the 07 §7.6 contract for repeat callers.
         var second = await sut.AcceptAsync(
             lateBuyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet1),
+            new AcceptTransactionRequest(ValidWallet1, TradeUrlFor(LateBuyerSteamId)),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.AlreadyAccepted, second.Status);
@@ -217,7 +238,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var winner = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000777",
+            SteamId = RaceWinnerSteamId,
             SteamDisplayName = "RaceWinner",
         };
         Context.Set<User>().Add(winner);
@@ -242,12 +263,14 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             new Trc20AddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             new StubAccountFlagChecker(false),
+            new TradeUrlParser(),
+            _tradeHold,
             _outbox,
             _clock);
 
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.AlreadyAccepted, outcome.Status);
@@ -288,13 +311,15 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             new Trc20AddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             new StubAccountFlagChecker(false),
+            new TradeUrlParser(),
+            _tradeHold,
             _outbox,
             _clock);
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
             sut.AcceptAsync(
                 _buyer.Id, transaction.Id,
-                new AcceptTransactionRequest(ValidWallet2),
+                new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
                 CancellationToken.None));
     }
 
@@ -307,7 +332,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _seller.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, TradeUrlFor(SellerSteamId)),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.NotAParty, outcome.Status);
@@ -323,7 +348,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest("   "),
+            new AcceptTransactionRequest("   ", BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.ValidationFailed, outcome.Status);
@@ -339,7 +364,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest("NOT_A_TRC20_ADDRESS"),
+            new AcceptTransactionRequest("NOT_A_TRC20_ADDRESS", BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.InvalidWallet, outcome.Status);
@@ -355,7 +380,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut(sanctions: new MatchingSanctionsCheck("OFAC"));
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.SanctionsMatch, outcome.Status);
@@ -376,7 +401,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.WalletCooldownActive, outcome.Status);
@@ -397,7 +422,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
@@ -409,7 +434,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, Guid.NewGuid(),
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.NotFound, outcome.Status);
@@ -428,7 +453,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.InvalidStateTransition, outcome.Status);
@@ -444,7 +469,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.AlreadyAccepted, outcome.Status);
@@ -473,7 +498,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest(ValidWallet2),
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
@@ -482,6 +507,184 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var buyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _buyer.Id);
         Assert.Equal(ValidWallet1, buyer.DefaultRefundAddress);   // profile unchanged
         Assert.Null(buyer.RefundAddressChangedAt);                // no cooldown started
+    }
+
+    // ---------------------------------------------------------------------
+    // T119a — 07 §7.6 v3.0 fields: mandatory steamTradeUrl + buyer MA gate.
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task Accept_Persists_Normalized_BuyerTradeUrl_And_Probes_With_Its_Token()
+    {
+        // AC2 — the value 06 §3.5 requires from ACCEPTED onwards is actually
+        // written, and it is the NORMALIZED form (the seller's delivery CTA is
+        // generated from this column, 08 §2.2).
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        // Raw input a real buyer produces: http scheme, upper-case host, Steam's
+        // own language/tracking parameters, surrounding whitespace.
+        var partner = ulong.Parse(BuyerSteamId) - SteamId64ToId32Offset;
+        var raw = $"  http://STEAMCOMMUNITY.COM/tradeoffer/new/?partner={partner}&token=AbCdEfGh&l=turkish  ";
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, raw),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(
+            $"https://steamcommunity.com/tradeoffer/new/?partner={partner}&token=AbCdEfGh",
+            persisted.BuyerTradeUrl);
+
+        // AC3 — the probe is keyed on the buyer's own SteamID and on the token
+        // parsed from THIS request, not on a profile-stored token.
+        Assert.Equal(1, _tradeHold.CallCount);
+        Assert.Equal(BuyerSteamId, _tradeHold.LastSteamId);
+        Assert.Equal("AbCdEfGh", _tradeHold.LastAccessToken);
+    }
+
+    [Theory]
+    // Missing / empty — 07 §7.6 makes the field mandatory and gives every
+    // malformed case the same code.
+    [InlineData("")]
+    [InlineData("   ")]
+    // Scheme missing — the single most common paste error.
+    [InlineData("steamcommunity.com/tradeoffer/new/?partner=39734353&token=AbCdEfGh")]
+    // Wrong host family: subdomain, look-alike suffix, non-http scheme.
+    [InlineData("https://www.steamcommunity.com/tradeoffer/new/?partner=39734353&token=AbCdEfGh")]
+    [InlineData("https://steamcommunity.com.evil.tr/tradeoffer/new/?partner=39734353&token=AbCdEfGh")]
+    [InlineData("javascript:alert(1)")]
+    // Wrong path (trailing slash / casing are part of the contract).
+    [InlineData("https://steamcommunity.com/tradeoffer/new?partner=39734353&token=AbCdEfGh")]
+    [InlineData("https://steamcommunity.com/TradeOffer/New/?partner=39734353&token=AbCdEfGh")]
+    // Missing or non-conforming query values.
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=39734353")]
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?token=AbCdEfGh")]
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=abc&token=AbCdEfGh")]
+    [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=39734353&token=Ab$Cd")]
+    public async Task Malformed_Trade_Url_Rejected_With_InvalidTradeUrl(string tradeUrl)
+    {
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, tradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.InvalidTradeUrl, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InvalidTradeUrl, outcome.ErrorCode);
+
+        // Rejection happens before any mutation and before the Steam round-trip.
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.BuyerId);
+        Assert.Null(persisted.BuyerTradeUrl);
+        Assert.Empty(_outbox.Published);
+        Assert.Equal(0, _tradeHold.CallCount);
+    }
+
+    [Fact]
+    public async Task Trade_Url_Of_A_Third_Party_Is_Rejected()
+    {
+        // T119a ownership cross-check (owner decision 2026-08-10). A well-formed
+        // URL that points at somebody else's account would make the seller ship
+        // the item to a stranger while the escrowed money still settles to the
+        // seller — BuyerTradeUrl is the only field deciding the destination.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, TradeUrlFor(LateBuyerSteamId)),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.InvalidTradeUrl, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InvalidTradeUrl, outcome.ErrorCode);
+        Assert.Equal(0, _tradeHold.CallCount);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Mobile_Authenticator_Inactive_Rejects_And_Writes_Nothing()
+    {
+        // 02 §9.1 — without the buyer's MA the seller's trade would land in
+        // Steam's 15-day escrow, which is exactly what the P2P pivot removes.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(
+            tradeHold: new CountingTradeHoldChecker(
+                new TradeHoldResult(Available: true, Active: false, SetupGuideUrl: "https://guide")));
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.MobileAuthenticatorRequired, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.MobileAuthenticatorRequired, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.BuyerId);
+        Assert.Null(persisted.BuyerRefundAddress);
+        Assert.Null(persisted.BuyerTradeUrl);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Steam_Unreachable_Fails_Closed_With_SteamUnavailable()
+    {
+        // 08 §2.2 fail-closed. Deliberately NOT MOBILE_AUTHENTICATOR_REQUIRED:
+        // the buyer's authenticator may be perfectly fine, and telling them to
+        // enable it would send them after a problem they cannot fix. Same code
+        // the 07 §7.6a confirm-ready step uses for the same condition.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(
+            tradeHold: new CountingTradeHoldChecker(
+                new TradeHoldResult(Available: false, Active: false, SetupGuideUrl: null)));
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SteamUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamUnavailable, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.BuyerTradeUrl);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Cheaper_Rejections_Never_Spend_A_Steam_Round_Trip()
+    {
+        // Pipeline-ordering guard: the MA probe is the last gate precisely
+        // because it is the only network call and the sidecar queues Steam at
+        // 1 req/s. A wrong-buyer request must be rejected without touching it.
+        var transaction = await CreateTransactionAsync(
+            BuyerIdentificationMethod.STEAM_ID, "76561198000099999");
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SteamIdMismatch, outcome.Status);
+        Assert.Equal(0, _tradeHold.CallCount);
     }
 
     private async Task<Transaction> CreateTransactionAsync(
@@ -518,12 +721,17 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
     private TransactionAcceptanceService BuildSut(
         IWalletSanctionsCheck? sanctions = null,
-        IAccountFlagChecker? flagChecker = null) =>
+        IAccountFlagChecker? flagChecker = null,
+        ITradeHoldChecker? tradeHold = null) =>
         new(
             Context,
             new Trc20AddressValidator(),
             sanctions ?? new NoMatchWalletSanctionsCheck(),
             flagChecker ?? new StubAccountFlagChecker(false),
+            // T119a — the real U17 parser, not a stub: the accept endpoint's
+            // trade-URL contract IS that parser's contract (07 §7.6 md.2).
+            new TradeUrlParser(),
+            tradeHold ?? _tradeHold,
             _outbox,
             _clock);
 
@@ -544,6 +752,28 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         public MatchingSanctionsCheck(string list) => _list = list;
         public Task<WalletSanctionsDecision> EvaluateAsync(string address, CancellationToken cancellationToken)
             => Task.FromResult(WalletSanctionsDecision.Match(_list));
+    }
+
+    // T119a — drives the Stage 5b Mobile Authenticator probe. Counts calls so a
+    // test can prove the probe is NOT reached when a cheaper gate already
+    // rejected the request (the sidecar queues Steam at 1 req/s).
+    private sealed class CountingTradeHoldChecker : ITradeHoldChecker
+    {
+        private readonly TradeHoldResult _result;
+        public CountingTradeHoldChecker(TradeHoldResult result) => _result = result;
+
+        public int CallCount { get; private set; }
+        public string? LastSteamId { get; private set; }
+        public string? LastAccessToken { get; private set; }
+
+        public Task<TradeHoldResult> CheckAsync(
+            string steamId64, string tradeOfferAccessToken, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            LastSteamId = steamId64;
+            LastAccessToken = tradeOfferAccessToken;
+            return Task.FromResult(_result);
+        }
     }
 
     // WP4a — drives the account-flag accept gate. The production

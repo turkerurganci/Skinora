@@ -129,6 +129,21 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
+    public void BuyerAccept_WithoutBuyerTradeUrl_ThrowsInvalidTransition()
+    {
+        // T119a — 06 §3.5 puts BuyerTradeUrl in the same NOT-NULL-from-ACCEPTED
+        // bracket as BuyerId/BuyerRefundAddress. The column stays nullable in the
+        // database (it cannot be filled while CREATED), so this guard is the only
+        // place the invariant is enforced.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.CREATED);
+        transaction.BuyerTradeUrl = null;
+        var sm = new TransactionStateMachine(transaction);
+
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.BuyerAccept));
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+    }
+
+    [Fact]
     public void SellerConfirmReady_WithoutSellerReadyConfirmedAt_ThrowsInvalidTransition()
     {
         var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.ACCEPTED);

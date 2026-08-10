@@ -1,6 +1,6 @@
 # Skinora — Integration Specifications
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v3.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-08-10 (T119a doğrulaması — §2.2 `GetTradeHoldDurations` bölümü tek çağrı yeri anlatıyordu; alıcı kabulündeki ikinci **canlı** çağrı (07 §7.6 md.3, sonuç persist edilmez, fail-closed 503) tabloya ve yaklaşım metnine eklendi. Davranış değişikliği yok — kod zaten böyle çalışıyordu.)
 
 ---
 
@@ -131,7 +131,7 @@ Steam entegrasyonu üç ayrı bileşenden oluşur: OpenID (kimlik doğrulama), W
 | Endpoint | Amaç | Kullanım yeri |
 |----------|-------|---------------|
 | `ISteamUser/GetPlayerSummaries/v2` | Kullanıcı profil bilgileri (isim, avatar, profil URL, hesap görünürlüğü) | Login sonrası profil çekme, profil sayfası |
-| `IEconService/GetTradeHoldDurations/v1` | Trade hold süresi — Mobile Authenticator aktifliğini doğrulama | Trade URL kaydı sonrası MA kontrolü |
+| `IEconService/GetTradeHoldDurations/v1` | Trade hold süresi — Mobile Authenticator aktifliğini doğrulama | **İki çağrı yeri:** (1) trade URL kaydı sonrası MA kontrolü, (2) alıcı kabulü — `POST /transactions/:id/accept` (07 §7.6 md.3) |
 
 **GetPlayerSummaries örnek istek:**
 
@@ -157,7 +157,16 @@ Steam Web API'de doğrudan "Mobile Authenticator aktif mi?" endpoint'i yoktur. B
 | MA aktif | 0 gün | Kullanıcı Mobile Authenticator kullanıyor |
 | MA aktif değil | 15 gün | Kullanıcı escrow'a düşer — platform bunu kabul etmez |
 
-**Yaklaşım:** `GetTradeHoldDurations` çağrısı, kullanıcının **trade URL'ini kaydettiği anda** yapılır (login sonrası değil). Sebep: bu endpoint arkadaş olmayan kullanıcılar için `trade_offer_access_token` parametresi gerektirir — bu token trade URL'den parse edilir. Hold süresi > 0 ise kullanıcıya "Mobile Authenticator aktif etmelisiniz" uyarısı gösterilir (03 §2.1). Sonuç `User.MobileAuthenticatorVerified` field'ına kaydedilir (06 §3.1).
+**Yaklaşım:** `GetTradeHoldDurations` çağrısı login sonrası **yapılmaz**. Sebep: bu endpoint arkadaş olmayan kullanıcılar için `trade_offer_access_token` parametresi gerektirir — bu token trade URL'den parse edilir, yani çağrı ancak elde bir trade URL varken mümkündür. Çağrının iki yeri vardır:
+
+| # | Çağrı anı | Token kaynağı | Sonuç nereye yazılır | Başarısızlık davranışı |
+|---|---|---|---|---|
+| 1 | Kullanıcı **trade URL'ini kaydettiği anda** (§5.16a — U17) | Kaydedilen URL | `User.MobileAuthenticatorVerified` (06 §3.1) — kalıcı | Kayıt tamamlanır, `STEAM_API_UNAVAILABLE` yüzeye çıkar; kullanıcı işlem başlatamaz |
+| 2 | **Alıcı kabulünde** (07 §7.6 md.3 — `POST /transactions/:id/accept`) | İsteğin gövdesindeki URL, profilden değil | **Hiçbir yere** — sonuç yalnız o isteğin kapısıdır | Fail-closed: kabul edilmez, 503 `STEAM_UNAVAILABLE` |
+
+Hold süresi > 0 ise 1. çağrıda kullanıcıya "Mobile Authenticator aktif etmelisiniz" uyarısı gösterilir (03 §2.1), 2. çağrıda kabul 403 `MOBILE_AUTHENTICATOR_REQUIRED` ile reddedilir.
+
+> **Neden 2. çağrı kalıcı bayrağı okumuyor (T119a):** `User.MobileAuthenticatorVerified` yalnız U17/A7 yollarında tazelenir. Alıcı bu yolların hiçbirini çalıştırmamış olabilir; ayrıca MA'sını kaydettikten sonra kapatan alıcıyı bayat bir bayrak yakalayamaz. 02 §9.1 kontrolü **kabul adımına** bağladığı için kabul anındaki tek doğru kanıt canlı probe'tur.
 
 **GetTradeHoldDurations parametreleri:**
 

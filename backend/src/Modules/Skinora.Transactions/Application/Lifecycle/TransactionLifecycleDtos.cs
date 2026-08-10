@@ -90,8 +90,19 @@ public enum CreateTransactionStatus
 
 // ---------- POST /transactions/:id/accept (07 §7.6) ----------
 
-/// <summary>Request body for <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
-public sealed record AcceptTransactionRequest(string RefundWalletAddress);
+/// <summary>
+/// Request body for <c>POST /transactions/:id/accept</c> (07 §7.6).
+/// <para>
+/// T119a — <paramref name="SteamTradeUrl"/> is <b>mandatory as of v3.0</b>: in
+/// the P2P model the seller sends the item straight to this address (02 §2.2
+/// step 6), so acceptance without it would leave
+/// <c>Transaction.BuyerTradeUrl</c> permanently NULL and the seller's delivery
+/// CTA empty. Declared as a positional (non-optional) parameter on purpose —
+/// every existing caller becomes a compile error rather than a silent runtime
+/// 400.
+/// </para>
+/// </summary>
+public sealed record AcceptTransactionRequest(string RefundWalletAddress, string SteamTradeUrl);
 
 /// <summary>Response body for <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
 public sealed record AcceptTransactionResponse(TransactionStatus Status, DateTime AcceptedAt);
@@ -121,6 +132,20 @@ public enum AcceptTransactionStatus
     WalletCooldownActive,
     BuyerNotFound,
     AccountFlagged,
+
+    // T119a — 07 §7.6 v3.0 validations.
+    /// <summary>400 <c>INVALID_TRADE_URL</c> — malformed URL, or its
+    /// <c>partner</c> does not resolve to the caller's own SteamID.</summary>
+    InvalidTradeUrl,
+
+    /// <summary>403 <c>MOBILE_AUTHENTICATOR_REQUIRED</c> — the buyer's Steam
+    /// trade hold is non-zero (02 §9.1).</summary>
+    MobileAuthenticatorRequired,
+
+    /// <summary>503 <c>STEAM_UNAVAILABLE</c> — the trade-hold probe could not
+    /// reach Steam, so the Mobile Authenticator state is unknown. Fail-closed
+    /// per 08 §2.2; mirrors the 07 §7.6a confirm-ready contract.</summary>
+    SteamUnavailable,
 }
 
 // ---------- POST /transactions/:id/cancel (07 §7.7) ----------

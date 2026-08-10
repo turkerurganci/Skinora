@@ -8,6 +8,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
+using Skinora.Users.Application.Settings;
 using Skinora.Users.Application.Wallet;
 using Skinora.Users.Domain.Entities;
 
@@ -25,10 +26,20 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     /// <summary>SystemSetting key for the buyer refund-address cooldown (02 §12.3).</summary>
     public const string RefundCooldownKey = "wallet.refund_address_cooldown_hours";
 
+    /// <summary>
+    /// SteamID64 &#8594; SteamID32 offset. A trade URL's <c>partner</c> query
+    /// value is the account's SteamID32, i.e. <c>SteamID64 - 76561197960265728</c>
+    /// (the "individual" universe/type base). Used by the T119a ownership
+    /// cross-check.
+    /// </summary>
+    private const ulong SteamId64ToId32Offset = 76561197960265728UL;
+
     private readonly AppDbContext _db;
     private readonly ITrc20AddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
     private readonly IAccountFlagChecker _flagChecker;
+    private readonly ITradeUrlParser _tradeUrlParser;
+    private readonly ITradeHoldChecker _tradeHoldChecker;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
 
@@ -37,6 +48,8 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         ITrc20AddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
         IAccountFlagChecker flagChecker,
+        ITradeUrlParser tradeUrlParser,
+        ITradeHoldChecker tradeHoldChecker,
         IOutboxService outbox,
         TimeProvider clock)
     {
@@ -44,6 +57,8 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         _addressValidator = addressValidator;
         _sanctions = sanctions;
         _flagChecker = flagChecker;
+        _tradeUrlParser = tradeUrlParser;
+        _tradeHoldChecker = tradeHoldChecker;
         _outbox = outbox;
         _clock = clock;
     }
@@ -140,6 +155,30 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 TransactionErrorCodes.SanctionsMatch,
                 $"refundWalletAddress matched sanctions list '{sanctions.MatchedList}'.");
 
+        // ---------- Stage 4b: trade URL (T119a — 07 §7.6 md.2) ----------
+        // Reuses the U17 parser (Skinora.Users) rather than a second
+        // implementation: one host/path/partner/token contract for the whole
+        // platform. A null result covers missing, empty and malformed input —
+        // 07 §7.6 defines a single code for all of them.
+        var parsedTradeUrl = _tradeUrlParser.Parse(request.SteamTradeUrl);
+        if (parsedTradeUrl is null)
+            return Failure(AcceptTransactionStatus.InvalidTradeUrl,
+                TransactionErrorCodes.InvalidTradeUrl,
+                "steamTradeUrl is missing or not a valid Steam trade URL (07 §7.6).");
+
+        // T119a ownership cross-check (owner decision 2026-08-10 — not in
+        // 07 §7.6). In P2P this field is the ONLY thing that decides where the
+        // item goes: the seller's delivery CTA is built straight from it
+        // (08 §2.2). A buyer submitting a third party's trade URL would send
+        // the seller's item to a stranger while the escrowed money still flows
+        // to the seller, and the Stage 5b hold probe — keyed on the buyer's own
+        // SteamID — would silently answer for the wrong pair. So the URL must
+        // resolve to the caller's own account.
+        if (!IsOwnedByBuyer(parsedTradeUrl.Partner, buyer.SteamId))
+            return Failure(AcceptTransactionStatus.InvalidTradeUrl,
+                TransactionErrorCodes.InvalidTradeUrl,
+                "steamTradeUrl does not belong to the accepting buyer's Steam account.");
+
         // ---------- Stage 5: refund-address cooldown (02 §12.3) ----------
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var cooldownHours = await ReadRefundCooldownHoursAsync(cancellationToken);
@@ -148,11 +187,43 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 TransactionErrorCodes.WalletChangeCooldownActive,
                 "Refund-address cooldown is active (02 §12.3).");
 
+        // ---------- Stage 5b: Mobile Authenticator (T119a — 07 §7.6 md.3) ----
+        // Live probe, not the persisted User.MobileAuthenticatorVerified flag:
+        // 07 §7.6 prescribes GetTradeHoldDurations at accept time, the flag is
+        // only refreshed on the U17/A7 paths (which this buyer may never have
+        // run), and a buyer who switched the authenticator off after their last
+        // refresh would pass a flag check. Deliberately the LAST gate: it is the
+        // only network call in the pipeline and the sidecar queues Steam at
+        // 1 req/s, so a request already doomed by a cheaper rule never spends a
+        // Steam round-trip. The token comes from the body's URL (validated just
+        // above), not the profile — the buyer may have no saved trade URL.
+        var hold = await _tradeHoldChecker.CheckAsync(
+            buyer.SteamId, parsedTradeUrl.Token, cancellationToken);
+        if (!hold.Available)
+            // Fail-closed (08 §2.2): MA state unknown means the trade could
+            // still land in Steam's 15-day escrow, which is exactly what the
+            // P2P pivot removes. Surfaced as its own retryable code instead of
+            // MOBILE_AUTHENTICATOR_REQUIRED — the buyer's authenticator may be
+            // perfectly fine and telling them to "enable MA" would send them
+            // after a problem they cannot fix. Mirrors 07 §7.6a confirm-ready.
+            return Failure(AcceptTransactionStatus.SteamUnavailable,
+                TransactionErrorCodes.SteamUnavailable,
+                "Steam could not be queried to verify the Mobile Authenticator (08 §2.2).");
+        if (!hold.Active)
+            return Failure(AcceptTransactionStatus.MobileAuthenticatorRequired,
+                TransactionErrorCodes.MobileAuthenticatorRequired,
+                "Buyer's Steam Mobile Authenticator is not active (02 §9.1).");
+
         // ---------- Stage 6: state transition + snapshot ----------
-        // 06 §3.5 invariants: BuyerId + BuyerRefundAddress must be set BEFORE
-        // the state-machine guard fires (HasFieldsForAccepted).
+        // 06 §3.5 invariants: BuyerId + BuyerRefundAddress + BuyerTradeUrl must
+        // be set BEFORE the state-machine guard fires (HasFieldsForAccepted).
         transaction.BuyerId = buyerId;
         transaction.BuyerRefundAddress = request.RefundWalletAddress;
+        // Store the normalized form, never the raw input: the seller's delivery
+        // link is generated from this column (08 §2.2), so it must be a single
+        // canonical https/lowercase-host shape with the tracking parameters a
+        // pasted Steam URL often carries stripped off.
+        transaction.BuyerTradeUrl = parsedTradeUrl.Normalized;
 
         var previousStatus = transaction.Status;
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
@@ -250,6 +321,26 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             && parsed > 0)
             return parsed;
         return null;
+    }
+
+    /// <summary>
+    /// T119a — does <paramref name="partner"/> (SteamID32, already digit-only
+    /// per <see cref="ITradeUrlParser"/>) resolve to
+    /// <paramref name="buyerSteamId64"/>? The subtraction runs on the SteamID64
+    /// side (guarded against underflow) rather than adding the offset to the
+    /// attacker-supplied partner — the parser allows up to 20 digits there, and
+    /// an addition could wrap around <see cref="ulong"/> into a false match.
+    /// </summary>
+    private static bool IsOwnedByBuyer(string partner, string buyerSteamId64)
+    {
+        if (!ulong.TryParse(partner, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var partnerId32))
+            return false;
+        if (!ulong.TryParse(buyerSteamId64, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var buyerId64))
+            return false;
+        if (buyerId64 < SteamId64ToId32Offset) return false;
+        return buyerId64 - SteamId64ToId32Offset == partnerId32;
     }
 
     private static bool IsRefundCooldownActive(User buyer, int? cooldownHours, DateTime nowUtc)

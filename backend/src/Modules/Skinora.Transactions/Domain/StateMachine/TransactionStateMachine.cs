@@ -214,7 +214,7 @@ public class TransactionStateMachine
     {
         // CREATED — alıcı bekleniyor
         _machine.Configure(TransactionStatus.CREATED)
-            .PermitIf(TransactionTrigger.BuyerAccept, TransactionStatus.ACCEPTED, HasFieldsForAccepted, "BuyerId ve BuyerRefundAddress zorunlu (06 §3.5).")
+            .PermitIf(TransactionTrigger.BuyerAccept, TransactionStatus.ACCEPTED, HasFieldsForAccepted, "BuyerId, BuyerRefundAddress ve BuyerTradeUrl zorunlu (06 §3.5).")
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
             .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
             .Permit(TransactionTrigger.BuyerCancel, TransactionStatus.CANCELLED_BUYER)
@@ -310,8 +310,14 @@ public class TransactionStateMachine
     }
 
     // 06 §3.5 status → zorunlu field matrisi (caller-set alanlar; OnEntry timestamp'leri ayrı).
+    // T119a: BuyerTradeUrl da bu kümededir — 06 §3.5 alanı ACCEPTED ve
+    // sonrasında NOT NULL sayar. DB tarafında CHECK yok (kolon nullable, çünkü
+    // CREATED'da doldurulamaz), dolayısıyla invariantı uygulama katmanında
+    // zorlayan tek yer burasıdır.
     private bool HasFieldsForAccepted() =>
-        _transaction.BuyerId.HasValue && !string.IsNullOrEmpty(_transaction.BuyerRefundAddress);
+        _transaction.BuyerId.HasValue
+        && !string.IsNullOrEmpty(_transaction.BuyerRefundAddress)
+        && !string.IsNullOrEmpty(_transaction.BuyerTradeUrl);
 
     private bool HasFieldsForSellerConfirmed() =>
         HasFieldsForAccepted() && _transaction.SellerReadyConfirmedAt.HasValue;

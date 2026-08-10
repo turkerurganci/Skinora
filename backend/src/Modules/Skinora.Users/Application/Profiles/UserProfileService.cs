@@ -58,7 +58,11 @@ public sealed class UserProfileService : IUserProfileService
             CancelRate: CancelRateFrom(user.SuccessfulTransactionRate),
             SellerWalletAddress: user.DefaultPayoutAddress,
             RefundWalletAddress: user.DefaultRefundAddress,
-            MobileAuthenticatorActive: user.MobileAuthenticatorVerified);
+            MobileAuthenticatorActive: user.MobileAuthenticatorVerified,
+            // T119a — accept-form prefill source (07 §7.6). Already normalized
+            // by U17 (SteamTradeUrlService), so it round-trips through the
+            // accept endpoint's parser unchanged.
+            SteamTradeUrl: user.SteamTradeUrl);
     }
 
     public async Task<UserStatsDto?> GetOwnStatsAsync(

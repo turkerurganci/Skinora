@@ -368,6 +368,13 @@ export function getTransactionByInvite(token: string): Promise<TransactionDetail
 
 export interface AcceptTransactionRequest {
   refundWalletAddress: string;
+  /**
+   * T119a — mandatory as of v3.0 (07 §7.6). In the P2P model the seller sends
+   * the item straight to this address (02 §2.2 step 6), so it is collected at
+   * acceptance time. Must belong to the accepting buyer's own Steam account,
+   * otherwise the backend answers 400 INVALID_TRADE_URL.
+   */
+  steamTradeUrl: string;
 }
 
 export interface AcceptTransactionResponse {

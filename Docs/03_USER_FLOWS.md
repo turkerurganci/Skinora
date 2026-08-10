@@ -215,10 +215,12 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
    - Profilinde kayıtlı trade URL'i varsa otomatik gösterilir
    - Satıcının item'ı doğrudan gönderebilmesi için zorunludur (02 §2.2 adım 6)
    - Bu URL satıcıya gösterilecektir — taraflar birbirinin Steam profilini görür, bu P2P modelinin kaçınılmaz sonucudur
-6. **Sistem alıcının Steam Mobile Authenticator'ını doğrular** (02 §9.1):
-   - Aktif değilse → "İşlem kabul edebilmek için Steam Mobile Authenticator'ınız aktif olmalı" uyarısı gösterilir, kabul butonu devre dışı kalır ve kurulum rehberine yönlendirilir
+6. Alıcı "Kabul Ediyorum" butonuna tıklar
+7. **Sistem alıcının Steam Mobile Authenticator'ını doğrular** (02 §9.1) — bu kontrol tıklamadan **sonra**, sunucuda yapılır:
+   - Kontrol adım 5'te girilen trade URL'den parse edilen `trade_offer_access_token` ile canlı yapılır (08 §2.2), dolayısıyla URL verilmeden önce sonucu bilinemez — kabul butonu MA gerekçesiyle önden devre dışı bırakılamaz
+   - Aktif değilse → kabul reddedilir, "İşlem kabul edebilmek için Steam Mobile Authenticator'ınız aktif olmalı" uyarısı gösterilir ve kullanıcı kurulum rehberine yönlendirilir
+   - Steam'e ulaşılamazsa → kabul yine reddedilir (fail-closed, 08 §2.2) ama mesaj farklıdır: "Steam'e şu anda ulaşılamadı, birazdan tekrar deneyin". Alıcının MA'sı sağlam olabilir; düzeltemeyeceği bir işe yönlendirilmez
    - Gerekçe: MA aktif değilse satıcının göndereceği trade 15 gün Steam escrow'una düşer
-7. Alıcı "Kabul Ediyorum" butonuna tıklar
 8. İşlem ACCEPTED durumuna geçer
 9. Satıcıya "Alıcı işlemi kabul etti, göndermeye hazır mısın?" bildirimi gider
 10. Alıcı satıcının hazırlık onayını bekler — **ödeme adresi bu aşamada henüz gösterilmez** (§2.3)

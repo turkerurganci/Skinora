@@ -189,6 +189,7 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
       <StateActionPanel
         detail={data}
         defaultRefundAddress={profile.data?.refundWalletAddress ?? null}
+        defaultSteamTradeUrl={profile.data?.steamTradeUrl ?? null}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}
         onRefetch={handleRefetch}

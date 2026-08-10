@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v3.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
 
 ---
 
@@ -561,11 +561,14 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
   "cancelRate": 0.04,
   "sellerWalletAddress": "TXyz1234567890abcdef1234567890ab",
   "refundWalletAddress": "TAbcdef1234567890abcdef12345678cd",
-  "mobileAuthenticatorActive": true
+  "mobileAuthenticatorActive": true,
+  "steamTradeUrl": "https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEfGh"
 }
 ```
 
 `sellerWalletAddress` / `refundWalletAddress`: Tam adres, `null` ise tanımlanmamış.
+
+`steamTradeUrl` *(v3.0 — T119a)*: §5.16a ile kaydedilmiş normalize trade URL; kaydedilmemişse `null`. Salt okunur — yazma yolu yalnız §5.16a'dır. §7.6 kabul formundaki zorunlu `steamTradeUrl` alanının ön-doldurma kaynağıdır.
 
 ### 5.2 U2 — `GET /users/me/stats`
 
@@ -1388,19 +1391,21 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 }
 ```
 
-`steamTradeUrl`: **Zorunlu (v3.0)**. Satıcı item'ı doğrudan bu adrese göndereceği için gereklidir (02 §2.2 adım 6). Kullanıcının profilinde kayıtlı trade URL'i varsa istemci tarafından ön-doldurulur.
+`steamTradeUrl`: **Zorunlu (v3.0)**. Satıcı item'ı doğrudan bu adrese göndereceği için gereklidir (02 §2.2 adım 6). Kullanıcının profilinde kayıtlı trade URL'i varsa istemci tarafından ön-doldurulur — kaynak §5.1 `GET /users/me` yanıtındaki `steamTradeUrl` alanıdır. Sunucuda profil fallback'i **yoktur**: değer yalnız istekten okunur ve normalize edilmiş biçimiyle `Transaction.BuyerTradeUrl`'e yazılır (06 §3.5).
 
 **Response (200) `data`:**
 ```json
 { "status": "ACCEPTED", "acceptedAt": "2026-03-16T14:45:00Z" }
 ```
 
-**Doğrulama:**
+**Doğrulama (sıra bağlayıcıdır — MA kontrolü tek dış çağrı olduğu için en sondadır):**
 1. `refundWalletAddress` merkezi doğrulama pipeline'ından geçer: TRC-20 format geçerliliği + sanctions screening (02 §12.3)
-2. `steamTradeUrl` format doğrulaması (partner + token parametreleri ayrıştırılabilmeli)
-3. **Alıcının Mobile Authenticator'ı doğrulanır** (v3.0, 02 §9.1) — Steam `GetTradeHoldDurations` ile hold süresi 0 değilse kabul reddedilir. Gerekçe: MA aktif değilse satıcının göndereceği trade 15 gün Steam escrow'una düşer
+2. `steamTradeUrl` format doğrulaması (partner + token parametreleri ayrıştırılabilmeli) **ve sahiplik doğrulaması**: `partner` değeri kabul eden alıcının kendi SteamID64'üne çözülmelidir (`partner = SteamID64 − 76561197960265728`). Gerekçe: P2P'de item'ın hedefini belirleyen tek alan budur — başkasının trade URL'i verilirse satıcı item'ı yabancıya gönderir, para yine satıcıya akar. İki durum da 400 `INVALID_TRADE_URL` döner
+3. **Alıcının Mobile Authenticator'ı doğrulanır** (v3.0, 02 §9.1) — Steam `GetTradeHoldDurations` ile hold süresi 0 değilse kabul reddedilir. Gerekçe: MA aktif değilse satıcının göndereceği trade 15 gün Steam escrow'una düşer. Sorgu için gereken `trade_offer_access_token` **isteğin gövdesindeki URL'den** ayrıştırılır (profilden değil). Steam'e ulaşılamazsa **fail-closed** davranılır (08 §2.2): kabul edilmez, 503 `STEAM_UNAVAILABLE` döner — 403 `MOBILE_AUTHENTICATOR_REQUIRED` değil, çünkü alıcının MA'sında bir sorun olmayabilir ve düzeltemeyeceği bir işe yönlendirilmemelidir. §7.6a aynı durumu aynı kodla karşılar
 
-**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 400 `INVALID_TRADE_URL` *(v3.0)*, 403 `MOBILE_AUTHENTICATOR_REQUIRED` *(v3.0)*, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`, 403 `ACCOUNT_FLAGGED` (hesap-flag accept gate, 02 §14.0 — WP4a), 403 `NOT_A_PARTY` (OPEN_LINK'te satıcı kendi listesini kabul edemez, 02 §6.2)
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `STEAM_ID_MISMATCH`, 409 `ALREADY_ACCEPTED`, 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 400 `INVALID_TRADE_URL` *(v3.0 — format veya sahiplik)*, 403 `MOBILE_AUTHENTICATOR_REQUIRED` *(v3.0)*, 503 `STEAM_UNAVAILABLE` *(v3.0 — MA doğrulanamadı, tekrar denenebilir)*, 403 `SANCTIONS_MATCH`, 403 `WALLET_CHANGE_COOLDOWN_ACTIVE`, 403 `ACCOUNT_FLAGGED` (hesap-flag accept gate, 02 §14.0 — WP4a), 403 `NOT_A_PARTY` (OPEN_LINK'te satıcı kendi listesini kabul edemez, 02 §6.2)
+
+> **Not (T119a):** `INVALID_TRADE_URL` bu uçta **400**, §5.16a (U17 profil kaydı) ucunda **422** döner. İki ucun statüsü bilinçli olarak farklı bırakılmıştır (her biri kendi bölümünde tanımlıdır); ortaklaştırma T133a doküman turunun konusudur.
 
 ### 7.6a T6a — `POST /transactions/:id/confirm-ready` *(v3.0 — yeni)*
 
