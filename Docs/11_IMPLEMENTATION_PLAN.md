@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08 (F7 — P2P geçişi, T115–T138)
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-09 (T117 doğrulaması: T119a eklendi, T124'e teslimat-timeout kapısı AC'si eklendi)
 
 ---
 
@@ -2333,6 +2333,8 @@ Task T114: E2E — Downtime ve bakım senaryoları
 
 Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`sidecar-fake`) P2 ile paralel başlayabilir; tüm E2E'yi bloklar.
 
+> **T117 doğrulaması sonrası düzeltmeler (2026-08-09):** P1'e **T119a** eklendi — 07 §7.6 accept ucunun v3.0 alanlarını (`steamTradeUrl` → `BuyerTradeUrl`, MA kontrolü) üstlenen görev listede yoktu. **T124**'e teslimat-timeout kapısı kabul kriteri eklendi — 05 §4.4 iptalden önce doğrulama turu şart koşuyor ama o tur T127'de, zincir T124'ü öne zorluyor.
+
 ```
 --- P0: Doküman ---
 
@@ -2376,6 +2378,26 @@ Task T119: Reputation + cooldown sorumluluk eşlemesi
   Kabul kriterleri:
     - PAYMENT_RECEIVED timeout'u SATICI'ya atfediliyor
     - ACCEPTED timeout'u satıcıya, SELLER_CONFIRMED alıcıya
+  Not: Kod karşılığı T117 dalında yazıldı (ReputationAggregator +
+       CancelCooldownEvaluator). T119'a kalan iş, 02 §3.1 karşısında
+       bağımsız kapsam denetimi.
+
+Task T119a: POST /transactions/:id/accept — v3.0 alanları
+  Bağımlılık: T118
+  Dokümanlar: 07 §7.6, 06 §3.5, 02 §2.2, 08 §2.2
+  Kabul kriterleri:
+    - steamTradeUrl zorunlu alan olarak isteğe eklendi; format doğrulaması
+      (partner + token ayrıştırılabilmeli) başarısızsa 400 INVALID_TRADE_URL
+    - Değer Transaction.BuyerTradeUrl'e yazılıyor (06 §3.5: ACCEPTED ve
+      sonrasında NOT NULL)
+    - Alıcının Mobile Authenticator'ı doğrulanıyor; hold süresi 0 değilse
+      403 MOBILE_AUTHENTICATOR_REQUIRED
+  Test beklentisi: Integration (kabul akışı), Unit (trade URL parse)
+  Neden ayrı task (T117 doğrulaması, 2026-08-09): 07 §7.6 bu üç maddeyi
+       v3.0'da zorunlu kıldı ama F7 listesinde accept ucunu üstlenen görev
+       yoktu. T117 kolonu ekledi, yazan kod yok — kapanmazsa BuyerTradeUrl
+       kalıcı NULL kalır ve PAYMENT_RECEIVED'da satıcıya gösterilen trade
+       CTA'sı boş döner (TransactionDetailService). P2P akışının çekirdeği.
 
 --- P2: Envanter okuma yolu ---
 
@@ -2426,6 +2448,15 @@ Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
   Kabul kriterleri:
     - AmountValidationService SELLER_CONFIRMED -> PAYMENT_RECEIVED
     - DeliveryDeadline armlanıyor ve zamanında ateşleniyor
+    - DeadlineScannerJob'ın PAYMENT_RECEIVED dalı T127 gelene kadar
+      TÜKETMİYOR: süre dolduğunda iptal uygulanmaz, işlem taranabilir
+      kalır. Kapı T127'de kaldırılır.
+  Not (T117 doğrulaması, 2026-08-09): 05 §4.2/§4.4 teslimat timeout'unda
+       iptalden ÖNCE bir doğrulama turu şart koşuyor; o tur T127'de
+       yazılıyor ama zincir (T127 -> T125 -> T124) T124'ü öne zorluyor.
+       Kapı olmadan, aradaki pencerede item'ı gerçekten göndermiş ama
+       alıcısı onay vermemiş satıcının işlemi haksız yere iptal edilir ve
+       para alıcıya iade edilir. Sıra değiştirilemediği için koruma kapı.
 
 Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
   Bağımlılık: T122, T124
