@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T118 doğrulaması: T133a eklendi — 03 + 07 custodial kalıntı turu, P6 sonu / P7 öncesi)
+**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2335,6 +2335,10 @@ Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`side
 
 > **T117 doğrulaması sonrası düzeltmeler (2026-08-09):** P1'e **T119a** eklendi — 07 §7.6 accept ucunun v3.0 alanlarını (`steamTradeUrl` → `BuyerTradeUrl`, MA kontrolü) üstlenen görev listede yoktu. **T124**'e teslimat-timeout kapısı kabul kriteri eklendi — 05 §4.4 iptalden önce doğrulama turu şart koşuyor ama o tur T127'de, zincir T124'ü öne zorluyor.
 
+> **T119 denetimi sonrası düzeltmeler (2026-08-10):** **T123/T124**'e timeout SystemSetting adlandırma kararı, **T129**'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi (ikisi de aşağıda). İki açık DEFERRED_BACKLOG §9'a düştü (`P2P-NonDeliveryAbuseWindow`, `P2P-DeliveryTimeoutWarning`) — teslimat fazı satıcıya devredildi ama fazın **yaptırım** ve **uyarı** bacaklarının F7'de sahibi yok.
+
+> **T119 doğrulaması sonrası düzeltmeler (2026-08-10):** **T133a** kapsamı 03 + 07'den **03 + 04 + 07**'ye genişletildi. 04, v4.0'da P2P'ye çekilmiş olmasına rağmen custodial kalıntı taşıyor ve hiçbir görevin kapsamında değildi — oysa T134/T135/T136 onu ekran spesifikasyonu olarak okuyacak. §16'nın iki timeout satırı (sorumluluğu tersine yazıyordu) doğrulama turunda düzeltildi (**04 v4.1**); geri kalanı T133a'ya bırakıldı.
+
 ```
 --- P0: Doküman ---
 
@@ -2442,12 +2446,30 @@ Task T123: SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
     - Alıcı MA kontrolü yapılıyor
     - Baseline yazılıyor; alıcı envanteri gizliyse işlem bloklanmıyor
     - Ödeme adresi ancak bu adımdan sonra ifşa ediliyor
+    - SellerConfirmDeadline'ı besleyen SystemSetting'e karar verildi (aşağıdaki
+      not) ve seçilen anahtarın açıklaması/etiketi v3.0 fazını anlatıyor
+  Not (T119 denetimi, 2026-08-10): iki timeout ayarı hâlâ custodial adında —
+       `trade_offer_seller_timeout_minutes` (bu görevin fazı) ve
+       `trade_offer_buyer_timeout_minutes` (T124'ün fazı). İkisi de bugün
+       ÜRETİMDE HİÇ OKUNMUYOR: yalnız `SystemSettingSeed` + `SystemSettingsCatalog`
+       + 4 dil FE etiketi olarak var; deadline'ları armlayan kod henüz yok.
+       Yani rename maliyeti şu an en düşük seviyede. Karar iki seçenek arasında:
+       (a) anahtarları `seller_confirm_timeout_minutes` / `delivery_timeout_minutes`
+       olarak yeniden adlandır — migration + `SKINORA_SETTING_*` env adı
+       (DEPLOY_RUNBOOK §A) + 4 dil i18n + 06 §8 tablosu; (b) adları koru,
+       yalnız açıklama/etiketleri düzelt. (a) önerilir: admin panelinde satıcının
+       teslimat penceresini "Alıcı trade offer timeout süresi" adlı bir kutu
+       yönetiyor — yanlış tarafı işaret eden bir kontrol, T119'un düzelttiği
+       sorumluluk çevirmesinin admin yüzündeki kalıntısı.
 
 Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
   Bağımlılık: T123
   Kabul kriterleri:
     - AmountValidationService SELLER_CONFIRMED -> PAYMENT_RECEIVED
-    - DeliveryDeadline armlanıyor ve zamanında ateşleniyor
+    - DeliveryDeadline armlanıyor ve zamanında ateşleniyor; süreyi besleyen
+      SystemSetting T123'te alınan adlandırma kararına göre kullanıldı
+      (bugünkü aday `trade_offer_buyer_timeout_minutes` custodial adında ve
+      artık SATICININ penceresini yönetiyor — T119 denetimi)
     - DeadlineScannerJob'ın PAYMENT_RECEIVED dalı T127 gelene kadar
       TÜKETMİYOR: süre dolduğunda iptal uygulanmaz, işlem taranabilir
       kalır. Kapı T127'de kaldırılır.
@@ -2497,6 +2519,19 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
     - COMPLETED guard'ı: SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL
     - Süre içinde açılan dispute ödemeyi bloklar
     - SweepQueueJob aynı kapıya bağlandı
+    - delivery_reversed ile REFUNDED'a düşen işlemin satıcının itibarına
+      etkisine karar verildi ve 06 §3.1 karara göre yazıldı (aşağıdaki not)
+  Not (T119 denetimi, 2026-08-10): 06 §3.1 oran formülünün paydası
+       COMPLETED + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT.
+       `REFUNDED` paydada YOK — bugün doğru, çünkü v2.0'da REFUNDED yalnız
+       admin dispute iadesiydi (platform kararı, CANCELLED_ADMIN ile aynı
+       gerekçeyle hariç). Bu görev REFUNDED'a ikinci bir giriş açıyor:
+       trade'ini geri alan satıcı. Bu, platform kararı değil kanıtlanmış satıcı
+       kusurudur; formül değişmezse en ağır dolandırıcılık senaryosu itibar
+       skoruna HİÇ yansımaz (yalnız fraud flag'i kalır). Karar ya "payda
+       DeliveryReversedAt NOT NULL olan REFUNDED satırlarını da satıcıya yazar"
+       (06 §3.1 + ReputationAggregator + test) ya da "fraud flag yeterli,
+       gerekçesi belgelendi" olmalı — sessizce geçilemez.
   Not: Beklemek tek başına korumaz — korumayı süre sonundaki KONTROL sağlar.
        Bu ikisi ayrılamaz; sadece gecikme uygulayan bir sürüm güvenli değildir.
 
@@ -2530,14 +2565,26 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
     - Sidecar Steam hesap kimlik bilgisi olmadan boot ediyor
     - secrets/, compose ve 08 §9'dan bot credential'ları düştü
 
-Task T133a: 03 + 07 custodial kalıntı turu (doküman hizalaması)
+Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
-       üçü de 03'ü UI akışı, 07'yi API sözleşmesi olarak okuyor.
-  Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 07 §7.1, §7.5,
-       §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) · referans: 06 §2.13
+       üçü de 03'ü UI akışı, 04'ü ekran spesifikasyonu, 07'yi API
+       sözleşmesi olarak okuyor.
+  Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 04 §2 (akış
+       eşleme tablosu), §11 (S07 iade bilgisi satırları), §16 (admin),
+       §17 (Steam/recovery ekranları) · 07 §7.1, §7.5, §8.1, §9.20, §9.22
+       (+ örnek JSON payload'ları) · referans: 06 §2.13
   Kabul kriterleri:
-    - 03 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
+    - 03, 04 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
       "v3.0'da kaldırıldı" biçiminde, emekliliği BELGELEYEN satırlarda geçiyor
+    - 04'te (v4.0 P2P sürümü olmasına rağmen kalan kalıntı — T119 doğrulaması,
+      2026-08-10): akış eşleme tablosunda emekli ITEM_ESCROWED /
+      TRADE_OFFER_SENT_TO_BUYER adları, "çift iade" ifadesi ve üç adet
+      "Item'ınız iade edildi" satırı — P2P'de item iadesi diye bir işlem
+      yoktur (02 §3.2); admin iptal aralığını "CREATED → TRADE_OFFER_SENT_TO_
+      BUYER" diye tanımlayan üç satır; bot recovery / emanet ekranları
+      (katman T117'de silindi). §16 Timeout Süreleri tablosunun iki satırı
+      T119 doğrulamasında düzeltildi (04 v4.1) — tur o satırları tekrar
+      açmamalı
     - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
       üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
     - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;
@@ -2558,7 +2605,8 @@ Task T133a: 03 + 07 custodial kalıntı turu (doküman hizalaması)
   Test beklentisi: Kod değişikliği yalnız XML doc → build 0 warning + mevcut
        süit yeşil. Doküman doğrulaması:
        `grep -n "ITEM_ESCROWED\|TRADE_OFFER_SENT_TO" Docs/03_USER_FLOWS.md
-        Docs/07_API_DESIGN.md` → yalnız belgeleyici satırlar
+        Docs/04_UI_SPECS.md Docs/07_API_DESIGN.md` → yalnız belgeleyici
+       satırlar; ek olarak 04'te "çift iade" ve "Item'ınız iade edildi" yok
   Neden ayrı task (T118 doğrulaması, 2026-08-10): T115 dokümanları v3.0'a
        taşırken 07'de 16 satır, 03'te 6 bölge custodial dilde kaldı. Kod bu
        bölgelerde zaten P2P'ye taşınmış durumda — bu tur dokümanı KODA

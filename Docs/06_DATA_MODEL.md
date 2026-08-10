@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T118 — §2.13 `NotificationType` kataloğu koda hizalandı: emekli `ITEM_RETURNED` / `ADMIN_STEAM_BOT_ISSUE` satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi, 26 değer.)
+**Versiyon: v6.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 — §3.1 `CANCELLED_TIMEOUT` sorumluluk listesi v3.0'a çekildi: teslimat timeout'u alıcı → **satıcı**, adım 3 "trade offer" → "hazırlık onayı", her satıra `PreviousStatus` çapası eklendi. Davranış değişikliği yok; kod zaten P2P haritasını uyguluyordu.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -448,11 +448,13 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 > - **Sorumluluk prensibi:** İptal sadece sorumlu tarafın skorunu etkiler:
 >   - `CANCELLED_SELLER` → sadece satıcının paydasına eklenir
 >   - `CANCELLED_BUYER` → sadece alıcının paydasına eklenir
->   - `CANCELLED_TIMEOUT` → timeout'un düştüğü adıma göre sorumlu taraf belirlenir:
->     - Alıcı kabul timeout'u (adım 2) → alıcı
->     - Satıcı trade offer timeout'u (adım 3) → satıcı
->     - Ödeme timeout'u (adım 4) → alıcı
->     - Teslim trade offer timeout'u (adım 6) → alıcı
+>   - `CANCELLED_TIMEOUT` → timeout'un düştüğü adıma göre sorumlu taraf belirlenir. Sorumluyu belirleyen tek girdi `TransactionHistory.PreviousStatus`'tur (05 §4.4 — timeout satırını yazan yol bu alanı doldurmazsa iptal hiçbir tarafın paydasına yazılmaz):
+>     - Alıcı kabul timeout'u (adım 2, `PreviousStatus = CREATED`) → alıcı
+>     - Satıcı hazırlık onayı timeout'u (adım 3, `PreviousStatus = ACCEPTED`) → satıcı
+>     - Ödeme timeout'u (adım 4, `PreviousStatus = SELLER_CONFIRMED`) → alıcı
+>     - Teslimat timeout'u (adım 6–7, `PreviousStatus = PAYMENT_RECEIVED`) → **satıcı**
+>
+>   > **v3.0 notu (T119):** Teslimat adımının sorumlusu custodial modelde **alıcıydı** — platformun gönderdiği teslim trade offer'ını kabul etmeyen taraf oydu. P2P'de trade'i satıcı gönderir, dolayısıyla gecikme de satıcıya yazılır (02 §3.1 tablosu, 02 §13 "Teslim etmeme etkisi"). Adım 3'ün adı da değişti: "satıcı trade offer'ı" değil, **hazırlık onayı** (03 §2.3). Sorumlu taraf adım 3'te değişmedi.
 >
 > **Composite reputationScore formülü (02 §13):**
 > ```

@@ -103,9 +103,9 @@ public class ReputationAggregatorTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Recompute_Cancelled_Timeout_Maps_To_Responsible_Party()
+    public async Task Recompute_Cancelled_Timeout_Payment_Phase_Hits_Buyer()
     {
-        // PreviousStatus = SELLER_CONFIRMED → payment timeout (Adım 4) → BUYER.
+        // PreviousStatus = SELLER_CONFIRMED → ödeme timeout'u (Adım 4) → BUYER.
         // Alice (seller) keeps her clean rate; Bob (buyer) takes the hit.
         var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
         await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.SELLER_CONFIRMED);
@@ -126,9 +126,9 @@ public class ReputationAggregatorTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Recompute_Cancelled_Timeout_Step3_Hits_Seller()
+    public async Task Recompute_Cancelled_Timeout_SellerConfirm_Phase_Hits_Seller()
     {
-        // PreviousStatus = ACCEPTED → satıcı trade-offer timeout (Adım 3) → SELLER.
+        // PreviousStatus = ACCEPTED → satıcı hazırlık onayı timeout'u (Adım 3) → SELLER.
         var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
         await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.ACCEPTED);
         await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
@@ -141,6 +141,71 @@ public class ReputationAggregatorTests : IntegrationTestBase
         // Alice (seller): 1 success / 2 attempts = 0.5.
         Assert.Equal(0.5m, aliceSnap.SuccessfulTransactionRate);
         // Bob (buyer): COMPLETED only.
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+    }
+
+    [Fact]
+    public async Task Recompute_Cancelled_Timeout_Accept_Phase_Hits_Buyer()
+    {
+        // PreviousStatus = CREATED → alıcı kabul timeout'u (Adım 2) → BUYER.
+        var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
+        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.CREATED);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // Alice (seller): the buyer never accepted — not her fault.
+        Assert.Equal(1m, aliceSnap.SuccessfulTransactionRate);
+        // Bob (buyer): 1 success / 2 attempts = 0.5.
+        Assert.Equal(0.5m, bobSnap.SuccessfulTransactionRate);
+    }
+
+    [Fact]
+    public async Task Recompute_Cancelled_Timeout_Delivery_Phase_Hits_Seller()
+    {
+        // PreviousStatus = PAYMENT_RECEIVED → teslimat timeout'u (Adım 6–7) → SELLER.
+        //
+        // v3.0 sorumluluk çevirmesi (02 §3.1, 06 §3.1): custodial modelde bu
+        // pencere alıcınındı (platformun gönderdiği teslim offer'ını kabul
+        // edecek taraf oydu). P2P'de trade'i satıcı gönderir — teslim etmeyen
+        // satıcının itibarına yazılır ve 02 §13'e göre bu, satıcı skorunun en
+        // belirleyici negatif girdisidir. Bu test o çevirmenin bekçisidir:
+        // haritada PAYMENT_RECEIVED yeniden alıcıya kayarsa kırılır.
+        var tx = await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
+        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.PAYMENT_RECEIVED);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // Alice (seller): 1 success / 2 attempts = 0.5 — the non-delivery is hers.
+        Assert.Equal(0.5m, aliceSnap.SuccessfulTransactionRate);
+        // Bob (buyer): paid on time and got nothing — his rate stays clean.
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+    }
+
+    [Fact]
+    public async Task Recompute_Cancelled_Timeout_Without_History_Row_Affects_Neither_Party()
+    {
+        // PreviousStatus is the ONLY input the responsibility map reads
+        // (06 §3.1). If a timeout path ever flips the status without recording
+        // the history row, the cancellation is silently dropped from BOTH
+        // denominators — no one is penalised. Pinned so that silent drop shows
+        // up as an intentional, documented behaviour rather than a surprise.
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(1m, aliceSnap.SuccessfulTransactionRate);
         Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
     }
 
