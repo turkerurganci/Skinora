@@ -42,6 +42,11 @@ public sealed class AdminUserActivityProvider : IAdminUserActivityProvider
         TransactionStatus.CANCELLED_SELLER,
         TransactionStatus.CANCELLED_BUYER,
         TransactionStatus.CANCELLED_ADMIN,
+        // REFUNDED is terminal (05 §4.1) and the two mirrored lists have always
+        // carried it; its absence here was a WP5-era omission that let a
+        // refunded transaction keep counting as "active" in S20 and in the
+        // AD19d hold-by-user predicate. Found by the T118 05 §4.2 audit.
+        TransactionStatus.REFUNDED,
     ];
 
     /// <summary>The four CANCELLED_* states behind the S20 "İptal" stat (04 §8.9.2).</summary>

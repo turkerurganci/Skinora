@@ -1,6 +1,8 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10
+
+> **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı.
 
 ---
 
@@ -452,6 +454,7 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 | ACCEPTED | seller_confirm_ready | SELLER_CONFIRMED | — (guard: item hâlâ tradeable, alıcı MA aktif, baseline alındı) |
 | ACCEPTED | timeout | CANCELLED_TIMEOUT | Yok — **sorumlu: satıcı** (hazırlık onayı vermedi) |
 | ACCEPTED | seller_decline | CANCELLED_SELLER | Yok |
+| ACCEPTED | seller_cancel | CANCELLED_SELLER | Yok — `seller_decline` ile aynı sonuç, farklı tetikleyici (07 §7.7) |
 | ACCEPTED | buyer_cancel | CANCELLED_BUYER | Yok |
 | SELLER_CONFIRMED | confirm_payment | PAYMENT_RECEIVED | — (ödeme doğrulandı, teslimat süresi başlar) |
 | SELLER_CONFIRMED | timeout | CANCELLED_TIMEOUT | Yok — sorumlu: alıcı (ödeme yapmadı) |
@@ -478,6 +481,8 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 **Kaldırılan trigger'lar (v3.0):** `send_trade_offer_to_seller`, `escrow_item`, `send_trade_offer_to_buyer` — platform trade offer göndermediği için karşılıkları yoktur. `buyer_decline` de kaldırıldı; tek üreticisi platformun gönderdiği trade offer'ın reddiydi, `buyer_cancel` yeterlidir.
 
 > **Not:** Ödeme yapıldıktan sonra **alıcı** tek taraflı iptal edemez (02 §7). Satıcı ise edebilir — bu bilinçli bir karardır: kapatılsaydı, göndermek istemeyen satıcı hiçbir şey yapmayıp timeout'u beklerdi ve alıcı parasına daha geç kavuşurdu.
+>
+> **Not:** ACCEPTED durumunda satıcının iki eşdeğer çıkışı vardır: `seller_decline` (hazırlık isteğini reddetme, 03 §2.3) ve `seller_cancel` (genel iptal ucu, 07 §7.7). İkisi de `CANCELLED_SELLER` üretir ve aynı iptal alanlarını damgalar; ayrı tetikleyici olarak korunmaları niyeti `TransactionHistory` üzerinde ayırt edilebilir tutar. Yukarıdaki şema genişlik nedeniyle ACCEPTED sütununun iptal etiketlerini taşımaz — normatif liste bu tablodur.
 >
 > **Not:** Teslimat fazının timeout sorumlusu **satıcıdır**. Custodial modelde bu faz "alıcının teslim offer'ını kabul etmesi" olduğu için alıcıya aitti; P2P'de trade'i satıcı gönderdiği için sorumluluk da satıcıya geçti (02 §3.1). İtibar hesabı bu haritayı kullanır.
 >

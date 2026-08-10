@@ -405,12 +405,11 @@ public sealed class FraudFlagService : IFraudFlagService
         {
             // Freeze first so TimeoutRemainingSeconds is captured against the
             // active phase deadline (06 §3.5 matrix) — the state machine's
-            // ApplyEmergencyHold only computes the remainder for ITEM_ESCROWED,
-            // so without this pre-pass the CK_Transactions_FreezeActive
-            // constraint rejects the row whenever the active phase is
-            // CREATED / ACCEPTED / TRADE_OFFER_SENT_TO_SELLER /
-            // PAYMENT_RECEIVED / TRADE_OFFER_SENT_TO_BUYER. Pairs with the
-            // T50 freeze engine that already encodes the matrix correctly.
+            // ApplyEmergencyHold only computes the remainder for the two phases
+            // it knows about (SELLER_CONFIRMED, PAYMENT_RECEIVED), so without
+            // this pre-pass the CK_Transactions_FreezeActive constraint rejects
+            // the row whenever the active phase is CREATED or ACCEPTED. Pairs
+            // with the T50 freeze engine that encodes the full matrix.
             await _freeze.FreezeAsync(tx, TimeoutFreezeReason.EMERGENCY_HOLD, cancellationToken);
 
             var machine = new TransactionStateMachine(tx, tx.RowVersion);

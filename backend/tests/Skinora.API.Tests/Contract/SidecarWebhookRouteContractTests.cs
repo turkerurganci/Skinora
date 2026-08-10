@@ -16,8 +16,9 @@ namespace Skinora.API.Tests.Contract;
 /// <c>/api/v1/sidecar/steam/trade-offer-events</c>, while
 /// <c>SteamWebhooksController</c> serves <c>/api/v1/webhooks/steam/bot-events</c> and
 /// <c>/api/v1/webhooks/steam/trade-events</c>. Every publish 404'd, so trade offer
-/// state changes never reached the backend and a transaction could never advance to
-/// ITEM_ESCROWED. F6's E2E suites could not catch it: they run against
+/// state changes never reached the backend and a transaction could never advance past
+/// the escrow step of the then-current custodial flow (a state set the v3.0 P2P pivot
+/// has since retired — 05 §4.1). F6's E2E suites could not catch it: they run against
 /// <c>sidecar-fake</c>, which used the correct paths — the backend half of the
 /// contract was exercised, the real sidecar's half never was.
 /// </para>

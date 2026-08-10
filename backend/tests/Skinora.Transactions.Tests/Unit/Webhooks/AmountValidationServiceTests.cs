@@ -236,7 +236,7 @@ public sealed class AmountValidationServiceTests : IDisposable
     [Fact]
     public async Task ConfirmedPayment_MultiPayment_PostEscrowState_RefundsEntireAmount()
     {
-        // Seed the transaction past ITEM_ESCROWED (PAYMENT_RECEIVED) — a stray
+        // Seed the transaction past the payment phase (PAYMENT_RECEIVED) — a stray
         // confirmation after the buyer has already paid in full is the
         // multi-payment scenario in 02 §4.4.
         var fixture = await SeedAsync(

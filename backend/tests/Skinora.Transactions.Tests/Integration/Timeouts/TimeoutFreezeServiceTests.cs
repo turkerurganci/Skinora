@@ -54,7 +54,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     // -------------------- FreezeAsync (per-tx) --------------------
 
     [Fact]
-    public async Task FreezeAsync_ITEM_ESCROWED_Stamps_Fields_And_Cancels_Hangfire_Jobs()
+    public async Task FreezeAsync_SELLER_CONFIRMED_Stamps_Fields_And_Cancels_Hangfire_Jobs()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
@@ -110,6 +110,63 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         Assert.Equal(nowUtc.AddMinutes(120), persisted.SellerConfirmDeadline);
     }
 
+    // 06 §3.5 matrix, delivery leg. This branch only became reachable in v3.0:
+    // before the P2P pivot DeliveryDeadline was never armed, so freezing a
+    // post-payment transaction had nothing to capture. It is now the single
+    // clock protecting a buyer who has paid, and the state machine's
+    // ApplyEmergencyHold reads the same field — the two must agree.
+    [Fact]
+    public async Task FreezeAsync_PAYMENT_RECEIVED_Captures_DeliveryDeadline_Remainder()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddHours(6),
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        var sut = CreateSut();
+        await sut.FreezeAsync(transaction, TimeoutFreezeReason.STEAM_OUTAGE, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(6 * 3600, persisted.TimeoutRemainingSeconds);
+        Assert.Equal(nowUtc.AddHours(6), persisted.DeliveryDeadline);
+    }
+
+    [Fact]
+    public async Task ResumeAsync_PAYMENT_RECEIVED_Rewrites_DeliveryDeadline_From_Remainder()
+    {
+        var freezeStartUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, freezeStartUtc,
+            deliveryDeadline: freezeStartUtc.AddHours(6),
+            timeoutFrozenAt: freezeStartUtc,
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        transaction.TimeoutFreezeReason = TimeoutFreezeReason.STEAM_OUTAGE;
+        transaction.TimeoutRemainingSeconds = 6 * 3600;
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        // Outage lasts two hours; 05 §4.4 "Otorite" says the new deadline is
+        // now + remainder, not the original deadline plus elapsed time.
+        _clock.Advance(TimeSpan.FromHours(2));
+        var resumeNowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        var sut = CreateSut();
+        await sut.ResumeAsync(transaction, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(resumeNowUtc.AddHours(6), persisted.DeliveryDeadline);
+        Assert.Null(persisted.TimeoutFrozenAt);
+        Assert.Null(persisted.TimeoutFreezeReason);
+        Assert.Null(persisted.TimeoutRemainingSeconds);
+    }
+
     [Fact]
     public async Task FreezeAsync_Already_Frozen_Preserves_Original_Stamp_And_Reason()
     {
@@ -138,7 +195,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task FreezeAsync_ITEM_ESCROWED_PastDeadline_Captures_Zero_Seconds()
+    public async Task FreezeAsync_SELLER_CONFIRMED_PastDeadline_Captures_Zero_Seconds()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
@@ -160,7 +217,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
     // -------------------- ResumeAsync (per-tx) --------------------
 
     [Fact]
-    public async Task ResumeAsync_ITEM_ESCROWED_Reissues_Job_And_Clears_Freeze_Fields()
+    public async Task ResumeAsync_SELLER_CONFIRMED_Reissues_Job_And_Clears_Freeze_Fields()
     {
         await TimeoutTestFixtures.ConfigureSettingAsync(
             Context, TimeoutSchedulingService.WarningRatioKey, "0.5");

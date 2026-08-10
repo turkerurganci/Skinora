@@ -1,6 +1,8 @@
 # Skinora — User Flows
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-10
+
+> **v3.1 (T118):** §3.4 adım 1 ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3/3+5, §5.4/1, §8.7 iade kuralları) — bunlar ayrı bir doküman turu gerektiriyor.
 
 ---
 
@@ -236,7 +238,7 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 
 ### 3.4 Ödeme Gönderme (Adım 4)
 
-1. Item platforma emanet edildikten sonra alıcıya "Item emanete alındı, ödeme yapabilirsin" bildirimi gider
+1. Satıcı hazırlık onayını verdikten sonra (§2.3, işlem `SELLER_CONFIRMED`) alıcıya "Satıcı hazır, ödeme yapabilirsin" bildirimi gider (`PAYMENT_WINDOW_OPEN`, 06 §2.13). Item satıcının envanterinde kalmaya devam eder — platform hiçbir zaman emanete almaz (02 §2.1)
 2. Alıcı işlem detay sayfasına gider
 3. Ödeme bilgileri gösterilir:
    - Platform tarafından üretilen benzersiz ödeme adresi
@@ -792,11 +794,11 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 | Alıcı işlemi kabul etti | "Alıcı hazır, item'ını gönder" |
 | Ödeme doğrulandı | "Ödeme geldi" |
 | İşlem tamamlandı | "İşlem tamamlandı" |
+| Ödeme emanete alındı | "Ödeme alındı, item'ı şimdi gönder" (`DELIVERY_EXPECTED`) |
 | Satıcıya ödeme gönderildi | "Ödemeniz cüzdan adresinize gönderildi" |
 | Timeout yaklaşıyor (satıcı aksiyonu gereken) | "Item gönderme süreniz dolmak üzere" |
 | Alıcı işlemi iptal etti | "İşlem alıcı tarafından iptal edildi" |
 | İşlem iptal oldu | "İşlem iptal oldu" + sebep |
-| Item iade edildi (timeout/iptal sonrası) | "Item'ınız iade edildi" |
 | İşlem flag'lendi | "İşleminiz incelemeye alındı" |
 
 ### 12.2 Alıcı Bildirimleri
@@ -804,9 +806,8 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 | Tetikleyici | Bildirim |
 |---|---|
 | Yeni işlem daveti | "Sizin için bir işlem oluşturuldu" |
-| Item emanete alındı | "Item platforma ulaştı, ödeme yapabilirsin" |
+| Satıcı hazırlık onayı verdi | "Satıcı hazır, ödeme yapabilirsin" (`PAYMENT_WINDOW_OPEN`) |
 | Eksik/fazla/yanlış ödeme | İlgili uyarı mesajı |
-| Item gönderildi | "Item'ın gönderildi, trade offer'ı kabul et" |
 | Item teslim edildi | Gerçek-zamanlı durum güncellemesi (ITEM_DELIVERED) ile gösterilir — ayrı inbox/email bildirimi yoktur; inbox "İşlem tamamlandı" bildirimi COMPLETED'da gönderilir (02 §18.2 / 06 §2.13; WP19) |
 | İşlem tamamlandı | "İşlem tamamlandı" (yalnızca COMPLETED state'inde gönderilir) |
 | Gecikmeli ödeme iadesi | "Gecikmeli ödemeniz iade edildi" |
@@ -824,7 +825,7 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 | Çoklu hesap tespiti | "Flag: Çoklu hesap tespiti — aynı cüzdan adresi — Kullanıcı Y" |
 | Eskalasyon | "Yeni eskalasyon — İşlem #X" |
 | Satıcıya ödeme başarısız (tekrarlayan) | "Ödeme gönderim hatası — İşlem #X" |
-| Steam hesabı sorunu | "Platform Steam hesabı kısıtlandı — Hesap Z" |
+| Platform kesintisi | "Platform kesintisi tespit edildi" (`ADMIN_PLATFORM_OUTAGE`) |
 
 > **Not:** Dış kanal bildirimleri (email, Telegram, Discord) `NotificationDelivery` entity'sinde kalıcı olarak takip edilir — teslimat başarısı/başarısızlığı, retry sayısı ve hata mesajı kaydedilir (06 §3.13a).
 

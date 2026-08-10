@@ -231,6 +231,33 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         Assert.True(profile.GetProperty("hasTransactionOnHold").GetBoolean());
     }
 
+    // T118 regression — REFUNDED is terminal (05 §4.1) and the mirrored
+    // terminal-state lists in AdminDashboardService / AdminTransactionQueryService
+    // have always carried it, but AdminUserActivityProvider's copy did not. The
+    // result was a refunded transaction still counted as "active" in S20 and
+    // treated as holdable by the AD19d predicate.
+    [Fact]
+    public async Task GetUserDetail_RefundedTransaction_IsNotCountedAsActive()
+    {
+        var admin = await _factory.CreateUserAsync(displayName: "Admin");
+        var target = await _factory.CreateUserAsync(displayName: "Refunded");
+        var cp = await _factory.CreateUserAsync(displayName: "Counterparty");
+
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.REFUNDED);
+        await _factory.CreateTransactionAsync(target.Id, cp.Id, TransactionStatus.ACCEPTED);
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.GetAsync($"/api/v1/admin/users/{target.SteamId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+
+        Assert.Equal(2, data.GetProperty("stats").GetProperty("totalTransactions").GetInt32());
+        // Only the ACCEPTED row is active.
+        Assert.Equal(1, data.GetProperty("profile").GetProperty("activeTransactionCount").GetInt32());
+    }
+
     [Fact]
     public async Task GetUserDetail_FlagHistory_IncludesAccountAndTransactionLevel()
     {
@@ -789,6 +816,9 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
                     TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
                     TransactionStatus.CANCELLED_TIMEOUT => CancelledByType.TIMEOUT,
                     TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+                    // REFUNDED reuses the cancellation trail (05 §4.2) and
+                    // CK_Transactions_Cancel rejects the row without it.
+                    TransactionStatus.REFUNDED => CancelledByType.ADMIN,
                     _ => null,
                 },
                 CancelReason = status >= TransactionStatus.CANCELLED_TIMEOUT

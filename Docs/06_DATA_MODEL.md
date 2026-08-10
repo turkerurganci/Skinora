@@ -1,6 +1,8 @@
 # Skinora — Data Model
 
-**Versiyon: v6.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-08 (T115 — P2P geçişi: item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.)
+**Versiyon: v6.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T118 — §2.13 `NotificationType` kataloğu koda hizalandı: emekli `ITEM_RETURNED` / `ADMIN_STEAM_BOT_ISSUE` satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi, 26 değer.)
+
+> **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
 ---
 
@@ -246,14 +248,13 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `TRANSACTION_FLAGGED` | Satıcı | İşlem incelemeye alındı |
 | `PAYMENT_INCORRECT` | Alıcı | Eksik/fazla/yanlış ödeme |
 | `LATE_PAYMENT_REFUNDED` | Alıcı | Gecikmeli ödeme iade edildi |
-| `ITEM_RETURNED` | Satıcı | İptal/timeout sonrası item iade edildi |
 | `PAYMENT_REFUNDED` | Alıcı | İptal/timeout sonrası ödeme iade edildi |
 | `DISPUTE_RESULT` | Alıcı | Dispute sonucu |
 | `FLAG_RESOLVED` | Satıcı | Flag sonuçlandı (onay veya red) |
 | `ADMIN_FLAG_ALERT` | Admin | Flag'lenmiş işlem |
 | `ADMIN_ESCALATION` | Admin | Yeni dispute eskalasyonu |
 | `ADMIN_PAYMENT_FAILURE` | Admin | Satıcıya ödeme gönderim hatası (tekrarlayan) |
-| `ADMIN_STEAM_BOT_ISSUE` | Admin | Platform Steam hesabı sorunu |
+| `ADMIN_PLATFORM_OUTAGE` | Admin | Platform kesintisi tespit edildi (T63a, 02 §3.3) |
 | `EMERGENCY_HOLD_APPLIED` | Her ikisi | Admin işlemi acil dondurma uyguladı (T59, 07 §9.21) |
 | `EMERGENCY_HOLD_RELEASED` | Her ikisi | Admin acil dondurmayı kaldırdı (T59, 07 §9.22) |
 | `INSUFFICIENT_PAYMENT` | Alıcı | Eksik ödeme tespit edildi (T72, 02 §4.4) |
@@ -261,6 +262,8 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `WRONG_TOKEN_REFUND` | Alıcı | Yanlış token iade edildi (T72, 08 §3.4) |
 | `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (T105a, 02 §14.0) |
 | `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı (T105a) |
+
+> **v3.0 (P2P) değişikliği:** `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti). `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). **Toplam 26 değer.** `ADMIN_PLATFORM_OUTAGE` (T63a) bu tabloda eksikti, eklendi. Katalog ile `NotificationTemplates.*.resx` arasındaki eşleşme `NotificationTemplateParityTests` ile 4 dilde zorlanır (T118).
 
 ### 2.14 NotificationChannel
 

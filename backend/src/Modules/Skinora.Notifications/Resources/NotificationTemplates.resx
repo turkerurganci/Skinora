@@ -24,10 +24,10 @@
   <data name="BUYER_ACCEPTED_Body" xml:space="preserve">
     <value>{BuyerName} accepted your transaction.</value>
   </data>
-  <data name="ITEM_ESCROWED_Title" xml:space="preserve">
-    <value>Item reached the platform — payment due</value>
+  <data name="PAYMENT_WINDOW_OPEN_Title" xml:space="preserve">
+    <value>The seller is ready — payment due</value>
   </data>
-  <data name="ITEM_ESCROWED_Body" xml:space="preserve">
+  <data name="PAYMENT_WINDOW_OPEN_Body" xml:space="preserve">
     <value>Send {Amount} USDT to {PaymentAddress} to complete the transaction.</value>
   </data>
   <data name="PAYMENT_RECEIVED_Title" xml:space="preserve">
@@ -36,11 +36,11 @@
   <data name="PAYMENT_RECEIVED_Body" xml:space="preserve">
     <value>We received {Amount} USDT for your transaction.</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Title" xml:space="preserve">
-    <value>Trade offer sent</value>
+  <data name="DELIVERY_EXPECTED_Title" xml:space="preserve">
+    <value>Payment is in escrow — send the item</value>
   </data>
-  <data name="TRADE_OFFER_SENT_TO_BUYER_Body" xml:space="preserve">
-    <value>Accept the Steam trade offer to receive your item.</value>
+  <data name="DELIVERY_EXPECTED_Body" xml:space="preserve">
+    <value>The buyer has paid. Send the item to the buyer on Steam before the delivery deadline.</value>
   </data>
   <data name="TRANSACTION_COMPLETED_Title" xml:space="preserve">
     <value>Transaction completed</value>
@@ -83,12 +83,6 @@
   </data>
   <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
     <value>{Amount} USDT was refunded to your wallet.</value>
-  </data>
-  <data name="ITEM_RETURNED_Title" xml:space="preserve">
-    <value>Item returned</value>
-  </data>
-  <data name="ITEM_RETURNED_Body" xml:space="preserve">
-    <value>{ItemName} was returned to your inventory.</value>
   </data>
   <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Payment refunded</value>
@@ -137,12 +131,6 @@
   </data>
   <data name="EMERGENCY_HOLD_RELEASED_Body" xml:space="preserve">
     <value>{ItemName} has resumed at {ResumedStatus}. The countdown picks up from where it left off.</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Title" xml:space="preserve">
-    <value>Admin: Steam bot issue</value>
-  </data>
-  <data name="ADMIN_STEAM_BOT_ISSUE_Body" xml:space="preserve">
-    <value>Bot {BotId} reported: {Issue}.</value>
   </data>
   <data name="ADMIN_PLATFORM_OUTAGE_Title" xml:space="preserve">
     <value>Admin: platform health alert</value>
