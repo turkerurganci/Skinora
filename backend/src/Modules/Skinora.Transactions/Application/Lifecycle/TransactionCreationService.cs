@@ -162,8 +162,24 @@ public sealed class TransactionCreationService : ITransactionCreationService
             return Failure(CreateTransactionStatus.SellerNotFound, TransactionErrorCodes.AccountFlagged,
                 "Seller not found.");
 
-        var inventoryItem = await _inventory.TryGetItemAsync(
+        // T121 — 08 §2.3: the read is three-valued and the three answers are
+        // not interchangeable. Only a Public read licenses the "item is not in
+        // the inventory" verdict; a hidden profile or an unreachable Steam is
+        // absence of information and gets its own code, so the seller is not
+        // sent to look for an item that is sitting right where they left it.
+        var lookup = await _inventory.GetItemAsync(
             seller.SteamId, request.ItemAssetId, cancellationToken);
+        switch (lookup.Visibility)
+        {
+            case InventoryVisibility.Private:
+                return Failure(CreateTransactionStatus.InventoryPrivate, TransactionErrorCodes.InventoryPrivate,
+                    "The seller's Steam inventory is private (07 §6.1).");
+            case InventoryVisibility.Unavailable:
+                return Failure(CreateTransactionStatus.SteamUnavailable, TransactionErrorCodes.SteamUnavailable,
+                    "The seller's Steam inventory could not be read (08 §2.3).");
+        }
+
+        var inventoryItem = lookup.Item;
         if (inventoryItem is null)
             return Failure(CreateTransactionStatus.ItemNotInInventory, TransactionErrorCodes.ItemNotInInventory,
                 "Item is not in the seller's Steam inventory.");

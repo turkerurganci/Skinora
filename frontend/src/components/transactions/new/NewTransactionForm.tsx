@@ -320,6 +320,12 @@ const POST_ERROR_CODES = new Set([
   "ACCOUNT_FLAGGED",
   "ITEM_NOT_TRADEABLE",
   "ITEM_NOT_IN_INVENTORY",
+  // T121 — the create path re-reads the seller's inventory, so it can now end
+  // in the same two non-readable outcomes step 1 already reports (07 §6.1).
+  // Each needs its own message: one asks the seller to change a Steam setting,
+  // the other asks them to wait and retry.
+  "INVENTORY_PRIVATE",
+  "STEAM_UNAVAILABLE",
   "PRICE_OUT_OF_RANGE",
   "TIMEOUT_OUT_OF_RANGE",
   "OPEN_LINK_DISABLED",

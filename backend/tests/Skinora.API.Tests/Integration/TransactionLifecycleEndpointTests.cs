@@ -238,6 +238,97 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     }
 
     [Fact]
+    public async Task Create_Returns_422_INVENTORY_PRIVATE_When_Seller_Profile_Hidden()
+    {
+        // T121 — 07 §6.1's inventory vocabulary, reused on the create path. The
+        // item IS seeded: the response must be decided by visibility, not by
+        // the asset lookup.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
+        _factory.InventoryVisibilityOverride = InventoryVisibility.Private;
+
+        try
+        {
+            var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+            var response = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("INVENTORY_PRIVATE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task Create_Returns_503_STEAM_UNAVAILABLE_When_Inventory_Unreadable()
+    {
+        // T121 — a Steam outage is undecided and retryable, so it must not be
+        // reported as 422 ITEM_NOT_IN_INVENTORY (08 §2.3).
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
+        _factory.InventoryVisibilityOverride = InventoryVisibility.Unavailable;
+
+        try
+        {
+            var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+            var response = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("STEAM_UNAVAILABLE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task Create_Returns_422_ITEM_NOT_IN_INVENTORY_When_Inventory_Readable_But_Asset_Absent()
+    {
+        // The third leg of the same fork: the inventory WAS read, so "not
+        // there" is a finding the seller can act on. Kept next to the two
+        // tests above so the three responses stay visibly distinct.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("ITEM_NOT_IN_INVENTORY",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private static object CreateRequestBody() => new
+    {
+        itemAssetId = "27348562891",
+        stablecoin = "USDT",
+        price = "100.00",
+        paymentTimeoutHours = 24,
+        buyerIdentificationMethod = "STEAM_ID",
+        buyerSteamId = "76561198000000999",
+        sellerWalletAddress = ValidWallet,
+    };
+
+    [Fact]
     public async Task Create_Below_Minimum_Price_Returns_422()
     {
         var user = await _factory.CreateUserAsync(u =>
@@ -708,13 +799,17 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
 
     /// <summary>
     /// In-process replacement for <see cref="ISteamInventoryReader"/>. Tests
-    /// register tradeable items via <see cref="Register"/>; everything else
-    /// returns <c>null</c> so the controller correctly maps to
-    /// <c>ITEM_NOT_IN_INVENTORY</c>.
+    /// register tradeable items via <see cref="Register"/>; an unregistered
+    /// asset reads as "inventory readable, asset absent" so the controller
+    /// maps to <c>ITEM_NOT_IN_INVENTORY</c>. T121 — set
+    /// <see cref="ForcedVisibility"/> to exercise the two non-readable
+    /// outcomes (08 §2.3), which map to different responses.
     /// </summary>
     private sealed class FakeSteamInventoryReader : ISteamInventoryReader
     {
         private readonly Dictionary<(string steamId, string assetId), InventoryItemSnapshot> _items = [];
+
+        public InventoryVisibility? ForcedVisibility { get; set; }
 
         public void Register(string steamId, string assetId, string name)
             => _items[(steamId, assetId)] = new InventoryItemSnapshot(
@@ -729,9 +824,18 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 InspectLink: null,
                 IsTradeable: true);
 
-        public Task<InventoryItemSnapshot?> TryGetItemAsync(
+        public Task<InventoryLookupResult> GetItemAsync(
             string steamId64, string itemAssetId, CancellationToken cancellationToken)
-            => Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item) ? item : null);
+        {
+            if (ForcedVisibility is InventoryVisibility.Private)
+                return Task.FromResult(InventoryLookupResult.Private);
+            if (ForcedVisibility is InventoryVisibility.Unavailable)
+                return Task.FromResult(InventoryLookupResult.Unavailable);
+
+            return Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item)
+                ? InventoryLookupResult.Found(item)
+                : InventoryLookupResult.NotFound);
+        }
     }
 
     public sealed class Factory : WebApplicationFactory<Program>
@@ -756,6 +860,18 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
 
         public void SeedInventoryItem(string steamId, string assetId, string name)
             => _inventory.Register(steamId, assetId, name);
+
+        /// <summary>
+        /// T121 — forces the seller's inventory read to a non-readable 08 §2.3
+        /// outcome. Defaults to <c>null</c> (readable); tests that flip it reset
+        /// it in a finally block, matching the <see cref="TradeHold"/> stub's
+        /// convention.
+        /// </summary>
+        public InventoryVisibility? InventoryVisibilityOverride
+        {
+            get => _inventory.ForcedVisibility;
+            set => _inventory.ForcedVisibility = value;
+        }
 
         public async Task ConfigureSettingAsync(string key, string value)
         {

@@ -295,17 +295,28 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.True(refreshedTx.HasActiveDispute);
     }
 
-    [Fact]
-    public async Task Open_WrongItem_DeliveredAssetSet_ButSidecarProbeNull_StaysOpen()
+    [Theory]
+    [InlineData(InventoryVisibility.Public)]      // read, asset absent
+    [InlineData(InventoryVisibility.Private)]     // hidden profile
+    [InlineData(InventoryVisibility.Unavailable)] // Steam / sidecar down
+    public async Task Open_WrongItem_DeliveredAssetSet_ButNoMatchingAsset_StaysOpen(
+        InventoryVisibility visibility)
     {
-        // WP6 harden — when the real SidecarSteamInventoryReader cannot resolve
-        // the delivered asset (sidecar 503 / private inventory both map to null),
-        // a class-id mismatch CANNOT be concluded. The checker must fail closed:
-        // leave the dispute OPEN for manual escalation rather than auto-escalate
-        // (or auto-resolve) off missing data.
+        // WP6 harden — when the delivered asset cannot be resolved in the
+        // buyer's inventory, a class-id mismatch CANNOT be concluded. The
+        // checker must fail closed: leave the dispute OPEN for manual
+        // escalation rather than auto-escalate (or auto-resolve) off missing
+        // data. T121 split the single null into the three 08 §2.3 outcomes;
+        // all three still fail closed, and now each is asserted separately
+        // instead of being represented by one collapsed value.
         var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
             deliveredAssetId: "delivered-asset-9");
-        _inventory.Snapshot = null; // simulates sidecar Unavailable / InventoryPrivate
+        _inventory.Result = visibility switch
+        {
+            InventoryVisibility.Public => InventoryLookupResult.NotFound,
+            InventoryVisibility.Private => InventoryLookupResult.Private,
+            _ => InventoryLookupResult.Unavailable,
+        };
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -771,13 +782,25 @@ public class DisputeServiceTests : IntegrationTestBase
 
     private sealed class FakeInventoryReader : ISteamInventoryReader
     {
-        public InventoryItemSnapshot? Snapshot { get; set; }
+        /// <summary>
+        /// T121 — the double now carries the full 08 §2.3 outcome. It used to
+        /// expose a nullable snapshot, which could not tell "inventory read,
+        /// asset absent" apart from "inventory unreadable".
+        /// </summary>
+        public InventoryLookupResult Result { get; set; } = InventoryLookupResult.NotFound;
 
-        public Task<InventoryItemSnapshot?> TryGetItemAsync(
+        public InventoryItemSnapshot? Snapshot
+        {
+            set => Result = value is null
+                ? InventoryLookupResult.NotFound
+                : InventoryLookupResult.Found(value);
+        }
+
+        public Task<InventoryLookupResult> GetItemAsync(
             string steamId64,
             string itemAssetId,
             CancellationToken cancellationToken)
-            => Task.FromResult(Snapshot);
+            => Task.FromResult(Result);
     }
 }
 

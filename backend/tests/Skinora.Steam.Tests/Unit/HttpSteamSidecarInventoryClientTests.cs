@@ -56,6 +56,96 @@ public sealed class HttpSteamSidecarInventoryClientTests
     }
 
     [Fact]
+    public async Task GetInventoryAsync_Accepts_The_T120_Visibility_Field_On_200()
+    {
+        // T120 added `visibility` to the 200 body alongside the status code.
+        // Pins the sidecar↔backend field tolerance the T120 validator flagged
+        // as untested (observation V3): a PUBLIC body parses normally and the
+        // extra field changes nothing about the payload.
+        const string json = @"{
+            ""visibility"": ""PUBLIC"",
+            ""items"": [
+                {
+                    ""assetId"": ""27348562891"",
+                    ""classId"": ""310776959"",
+                    ""instanceId"": ""188530139"",
+                    ""name"": ""AK-47 | Redline"",
+                    ""marketHashName"": ""AK-47 | Redline (Field-Tested)"",
+                    ""type"": ""Rifle"",
+                    ""exterior"": ""Field-Tested"",
+                    ""iconUrl"": ""https://cdn.test/ak.png"",
+                    ""tradable"": true,
+                    ""marketable"": true
+                }
+            ],
+            ""totalCount"": 1,
+            ""tradeableCount"": 1
+        }";
+        var handler = new StubHandler(_ => OkJson(json));
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+
+        Assert.Equal(SteamSidecarStatus.Success, result.Status);
+        Assert.Equal(1, result.Inventory!.TotalCount);
+        Assert.Equal("27348562891", result.Inventory.Items[0].AssetId);
+    }
+
+    [Theory]
+    [InlineData("PRIVATE", SteamSidecarStatus.InventoryPrivate)]
+    [InlineData("private", SteamSidecarStatus.InventoryPrivate)]
+    [InlineData("UNAVAILABLE", SteamSidecarStatus.Unavailable)]
+    // An unknown value is absence of information, never "readable".
+    [InlineData("SOMETHING_NEW", SteamSidecarStatus.Unavailable)]
+    public async Task GetInventoryAsync_Honours_A_NonPublic_Visibility_On_200(
+        string visibility, SteamSidecarStatus expected)
+    {
+        // T121 — the silent failure this guards against: a 200 whose body says
+        // the inventory was not readable would otherwise be shipped upstream as
+        // an EMPTY inventory, and the seller would be told "item not in your
+        // inventory" (T120 §"Reddedilen tasarım").
+        var json = $@"{{""visibility"":""{visibility}"",""items"":[],""totalCount"":0,""tradeableCount"":0}}";
+        var handler = new StubHandler(_ => OkJson(json));
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+
+        Assert.Equal(expected, result.Status);
+        Assert.Null(result.Inventory);
+    }
+
+    [Fact]
+    public async Task GetInventoryAsync_Treats_A_Missing_Visibility_As_Public()
+    {
+        // Backwards compatibility with a sidecar predating T120: the HTTP
+        // status is the normative contract (07 §6.1), so a 200 without the
+        // field stays a successful read.
+        var handler = new StubHandler(_ =>
+            OkJson("{\"items\":[],\"totalCount\":0,\"tradeableCount\":0}"));
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+
+        Assert.Equal(SteamSidecarStatus.Success, result.Status);
+        Assert.NotNull(result.Inventory);
+        Assert.Empty(result.Inventory!.Items);
+    }
+
+    [Fact]
+    public async Task GetInventoryAsync_Returns_Unavailable_When_200_Body_Has_No_Items_Array()
+    {
+        // A 200 without `items` is a broken envelope, not an empty inventory.
+        // Reading it as empty would manufacture evidence that an asset is gone.
+        var handler = new StubHandler(_ => OkJson("{\"totalCount\":0,\"tradeableCount\":0}"));
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+
+        Assert.Equal(SteamSidecarStatus.Unavailable, result.Status);
+        Assert.Null(result.Inventory);
+    }
+
+    [Fact]
     public async Task GetInventoryAsync_Includes_InternalKey_Header()
     {
         HttpRequestMessage? captured = null;

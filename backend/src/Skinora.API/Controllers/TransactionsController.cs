@@ -154,7 +154,18 @@ public sealed class TransactionsController : ControllerBase
                 or CreateTransactionStatus.BuyerSteamIdNotFound
                 or CreateTransactionStatus.PayoutAddressCooldownActive
                 or CreateTransactionStatus.SellerWalletAddressMissing
+                // T121 — 422 INVENTORY_PRIVATE: same status and code the
+                // inventory listing endpoint uses for the same condition
+                // (07 §6.1), so the seller sees one vocabulary across the
+                // create flow.
+                or CreateTransactionStatus.InventoryPrivate
                 => UnprocessableEntity(CreateErrorEnvelope(outcome)),
+
+            // T121 — 503 STEAM_UNAVAILABLE: the inventory check is undecided,
+            // not negative. Retryable, mirroring the accept endpoint's
+            // fail-closed 503 (07 §7.6).
+            CreateTransactionStatus.SteamUnavailable => StatusCode(
+                StatusCodes.Status503ServiceUnavailable, CreateErrorEnvelope(outcome)),
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };

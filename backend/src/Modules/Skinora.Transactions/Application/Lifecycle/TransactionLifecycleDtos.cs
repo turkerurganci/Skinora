@@ -78,7 +78,25 @@ public enum CreateTransactionStatus
     InvalidWallet,
     SanctionsMatch,
     OpenLinkDisabled,
+
+    /// <summary>422 <c>ITEM_NOT_IN_INVENTORY</c> — the seller's inventory was
+    /// read and the asset is not in it. This is a positive finding, so it must
+    /// never be produced from an unreadable inventory (T121, 08 §2.3).</summary>
     ItemNotInInventory,
+
+    /// <summary>422 <c>INVENTORY_PRIVATE</c> — the seller's Steam inventory is
+    /// hidden, so nothing can be said about the asset. Same code the inventory
+    /// listing endpoint already uses (07 §6.1); the seller's fix is to make the
+    /// profile public, which "item not in inventory" would never have told
+    /// them (T121).</summary>
+    InventoryPrivate,
+
+    /// <summary>503 <c>STEAM_UNAVAILABLE</c> — Steam could not be reached, so
+    /// the inventory check is undecided and retryable. Mirrors the accept
+    /// endpoint's fail-closed 503 (07 §7.6, T119a) rather than reporting an
+    /// outage as a missing item (T121).</summary>
+    SteamUnavailable,
+
     ItemNotTradeable,
     SellerNotFound,
     PriceOutOfRange,
