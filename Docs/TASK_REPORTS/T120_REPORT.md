@@ -1,6 +1,6 @@
 # T120 — Sidecar envanter: cache bypass + ayrı limiter + visibility
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-11
+**Faz:** F7 | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-11
 
 ---
 
@@ -82,6 +82,8 @@ Error: A metric with the name skinora_steam_process_cpu_user_seconds_total has a
 | 2 | Community ucu için Web API'den ayrı kuyruk | ✓ | Üretim: `index.ts` `steamCommunityQueue = new RateLimitedQueue(config.steamCommunityRequestsPerMinute, 60_000, …)` — `steamWebApiQueue`'dan ayrı örnek, `InventoryService`'e enjekte. Testler: `dispatches upstream fetches through the injected queue`, `does not enqueue a cache hit`, `enqueues refresh reads`, `routes failing fetches through the queue too` ve AC'nin asıl iddiasını kanıtlayan `keeps two queues independent — one saturated queue does not stall the other` (doygun kuyruk 1 istek/80 ms iken diğeri <80 ms'de 3 iş bitiriyor) |
 | 3 | Yanıt görünürlüğü Public/Private/Unavailable olarak ayrıştırıyor | ✓ | Üretim: `InventoryReadResult` union (`InventoryService.ts`) + `routes.ts` switch → 200/422/503 + gövdede `visibility`. Testler: `reports PRIVATE (not an exception)…` ve `reports UNAVAILABLE for any other fetch error` (her ikisi `code` **ve** `retryable` kutuplanmasını de assert ediyor), route'ta `returns 422 INVENTORY_PRIVATE…` / `returns 503 STEAM_UNAVAILABLE…` (`visibility` alanı dahil) ve para-güvenliği çekirdeğini kilitleyen iki test: `returns an empty envelope for a public-but-empty inventory` (boş ≠ private/unavailable) + `distinguishes UNAVAILABLE from a PUBLIC-but-empty inventory` |
 
+> **Validator teyidi (2026-08-11):** üç AC de bağımsız olarak ✓ — AC1 ve AC3 mutasyon provalarıyla (M1: 5 test, M2: 1 test kırıldı), AC2 kod okuması + `keeps two queues independent` testiyle. AC2'nin yalnız kompozisyon kökü testsiz (Gözlem V1). Ayrıntı → §Doğrulama.
+
 **Kriter dışı ama aynı kapının parçası:** 08 §2.3 üç değeri PascalCase (`Public`/`Private`/`Unavailable`) yazıyor; kodda UPPER_SNAKE (`PUBLIC`/`PRIVATE`/`UNAVAILABLE`) kullanıldı. 06 §2'de (2.1–2.24 tarandı) envanter görünürlüğü için **enum sözlüğü yok**, dolayısıyla sidecar↔backend iç sözleşmesinde isimlendirme serbest. UPPER_SNAKE seçildi çünkü değer T121'de public API'ye taşınırsa 07 §2.8'in "Enum değerleri UPPER_SNAKE_CASE" kuralı devreye girer ve o noktada yeniden adlandırma gerekmez.
 
 ## Test Sonuçları
@@ -105,11 +107,47 @@ Error: A metric with the name skinora_steam_process_cpu_user_seconds_total has a
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı doğrulama chat'i — INSTRUCTIONS §3.3 izolasyon kuralı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✓ PASS** (2026-08-11, ayrı chat, yapım raporu görülmeden — INSTRUCTIONS §3.3) |
+| Bulgu sayısı | **0 bloke edici** (S1 Sapma 0 · S2 Kırılma 0 · S3 Eksik 0) + 3 bloke etmeyen gözlem |
+| Düzeltme gerekli mi | Hayır |
 
-**Başlangıç kapıları:**
+### Validator kapıları (bağımsız)
+
+| Adım | Sonuç |
+|---|---|
+| -1 Working tree | ✓ temiz (`git status --short` boş; mutasyon probları sonrası da temiz) |
+| 0 Main CI | ✓ son 3 tamamlanmış run `success` — `31432878950` (Docker Publish), `31432878831` (CI), `31414178181` |
+| 0b Repo memory drift | ✓ `.claude/memory/MEMORY.md:31` T120 satırı mevcut |
+| 8a Task branch CI | ✓ `31438041634` (HEAD `67a4cbc`) `success`; önceki `31437273547` de `success` |
+
+### Validator kanıtı — kabul kriterleri
+
+Üç AC de bağımsız doğrulandı; ölçümler yapım raporuyla **birebir** (tsc 0 · vitest **188/188** · lint 0 · prettier temiz · sidecar-fake tsc/lint ✓ + 12/12 · backend `Skinora.Steam.Tests` **21/21**). Baseline `+30` iddiası da doğrulandı: `git show origin/main` ile sayım → routes **19**, InventoryService **13**, RateLimitedQueue **0 (dosya yoktu)**.
+
+**Negatif provalar (yapım turunun denemediği mutasyonlar, hepsi geri alındı):**
+
+| # | Mutasyon | Sonuç |
+|---|---|---|
+| M1 | `InventoryService.getInventory` → `const refresh = false` | **5 test kırıldı** — AC1 gerçekten kilitli, bayrak testlerde tautolojik değil |
+| M2 | `PRIVATE` dalı → `PUBLIC` + boş envanter (08 §2.3'ün en tehlikeli çöktürmesi) | **1 test kırıldı** (`reports PRIVATE (not an exception)…`) — para-güvenliği çekirdeği yakalanıyor |
+| M3 | `index.ts`'te envanter servisine `steamWebApiQueue` bağla (AC2 çapraz kablolama) | **188/188 yeşil kaldı** — bkz. Gözlem V1 |
+| M4 | Backend `HttpSteamSidecarInventoryClientTests` 200 payload'una `"visibility":"PUBLIC"` ekle | **21/21 yeşil** — alan ekleme toleransı **ampirik** olarak kanıtlandı (raporun kendi kanıtı bunu göstermiyordu, bkz. Gözlem V3) |
+
+**Bağımsız E2E ölçümü.** T120 run'ında (`31438041634`) 8 advisory leg kırmızı; `--log-failed` üzerinde `PlatformSteamBots` = **8 iz** (leg başına bir), T120 yüzeyleri (`visibility` / `refresh=` / `STEAM_COMMUNITY_REQUESTS` / `inventory_cache_total` / `queue_depth`) = **0 iz**. Main baseline run'ı `31432878831` **aynı 8 leg**'i aynı adlarla kırıyor → T120 yeni kırılma getirmedi.
+
+**Doküman/tutarlılık teyitleri.** 08 §2.6 "ayrı kuyruk" normatif ✓ · 10 §4 (satır 225) kapasite tavanı atfı gerçek ✓ · 07 §187 enum UPPER_SNAKE kuralı gerçek (isimlendirme gerekçesi geçerli) ✓ · `SidecarWebhookRouteContractTests.RetiredPathsAreStillPublished_UntilT133` gerçekten var (bot kodunu silmeme gerekçesi geçerli) ✓ · env zinciri tutarlı: `.env.example` `STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE` → compose → konteyner `STEAM_COMMUNITY_REQUESTS_PER_MINUTE` → `config` (WP14 `STEAM_SIDECAR_REDIS_URL` → `REDIS_URL` presedanıyla aynı) ✓ · sidecar iç HTTP sözleşmesi normatif dokümanda yok → `visibility` eklemek doküman güncellemesi gerektirmiyor ✓.
+
+**Güvenlik mini kontrolü (bağımsız).** Secret sızıntısı: **temiz** — eklenen env sayısal limit, log'lanmıyor. Auth: **temiz** — uç zaten `internalKeyAuth` arkasında, yeni uç yok. Input validation: **iyileşti** — `refresh` katı allowlist, tanınmayan değer servise ulaşmadan 400. Yeni bağımlılık: **yok** (`package.json`/`package-lock.json` diff'te değil).
+
+### Validator gözlemleri (bloke etmeyen)
+
+| # | Gözlem | Kanıt / öneri |
+|---|---|---|
+| V1 | **AC2'nin kompozisyon kökü testsiz.** `index.ts`'te iki kuyruk çapraz bağlanırsa (envanter → 1/sn Web API kuyruğu) **188 testin hiçbiri** kırılmıyor; M3'ü yalnız eslint `no-unused-vars` yakaladı, o da mutasyon community kuyruğunu tamamen öksüz bıraktığı için. Gerçek çapraz kablolamada (her iki kuyruk da kullanılır) lint de sessiz kalır ve envanter 60/dk'ya çıkar — tahmini IP limitinin ~6 katı | Bugünkü kablolama **doğru** (kod okumasıyla teyitli). `index.ts` bu repoda hiç test edilmiyor (WP6'daki trade-hold kablolaması da testsiz) → mevcut pratikle tutarlı, ama T121 kuyruğu tüketmeye başladığında küçük bir kompozisyon testi ucuz sigorta |
+| V2 | **`positiveIntFromEnv` guard'ının kendi testi yok.** `sidecar-steam/src/config/` altında test dosyası yok; raporun haklı olarak "fail-open kapatıyor" dediği guard hiçbir testle korunmuyor | `vi.resetModules()` + `process.env` ile 3 vakalık (geçerli / `NaN` / `0`) bir test yeterli |
+| V3 | **Rapor §"Test Sonuçları" ve §"Notlar", `Skinora.Steam.Tests` 21/21'i `visibility` alanının yok sayıldığının teyidi olarak gösteriyor — o suite'te `visibility` içeren tek bir payload yok.** İddia **doğru** (M4 ile ampirik kanıtlandı) ama gösterilen kanıt onu desteklemiyordu: 21/21 yalnız eski şeklin regresyona uğramadığını kanıtlar | Repo'da sidecar↔backend alan toleransını sabitleyen test yok. T121 `visibility`'yi zaten okumaya başlayacağı için doğal olarak kapanır; T121'de payload'a alanı ekleyen bir test bunu kalıcılaştırır |
+
+**Başlangıç kapıları (yapım turu):**
 - Working tree (Adım -1): **temiz** — `git status --short` boş.
 - Main CI (Adım 0): son 5 tamamlanmış run `success` — `31432878950`, `31432878831` (T119a #227), `31414178181`, `31414178436` (T119 #226), `31380447239` (chore #225).
 - Bağımlılık: T115 ✓ Tamamlandı (`IMPLEMENTATION_STATUS.md`, 2026-08-08).
@@ -158,6 +196,8 @@ Yani dokunulan iki yüzeyden (`sidecar-steam`, `sidecar-fake`) **yeni bir kırı
 | 5 | Private tespiti `steamcommunity`'nin mesaj string'ine bağlı (`This profile is private.`); kütüphane kod/eresult vermiyor | Mevcut stratejinin sınırı — tanınmayan hata `UNAVAILABLE`'a düşer, yani fail-safe |
 | 6 | Kuyruk süreç-içi ve in-memory; çok replikalı çalışmada limit replika sayısıyla çarpılır | T67 K7'nin devamı — tek replika varsayımı |
 | 7 | 07 §7.6a'nın tek boolean'ı (`buyerInventoryVisible`) ve 06 §3.5'in tek NULL'ı (`BuyerBaselineCapturedAt`) Private ile Unavailable'ı çöktürüyor; 08 §2.3'ün "Unavailable → karar verilmez" kuralıyla gerilimde | **Keşifte bulundu, T120 kapsamı dışı** — kalıcı katman T121/T123'ün; proje sahibine ayrıca raporlandı |
+| 8 | Kuyruk sınırsız ve kuyruktaki işin son kullanma tarihi yok. Backend HTTP istemcisi 30 sn'de vazgeçiyor (`SteamSidecarOptions.TimeoutSeconds`), ama iş kuyrukta kalıp sonradan çalışıyor ve kimsenin beklemediği bir yanıt için **kıt Community bütçesini harcıyor**. T120 öncesi envanter okumaları hiç kuyrukta değildi; 10/dk tavanı bu birikmeyi ilk kez gerçek hâle getiriyor | **Validator gözlemi — T120 kapsamı dışı, bilinçli olarak gözlenebilir bırakılmış** (`skinora_steam_queue_depth` metriği + 10 §4 kapasite notu). Gerçek çağıranlar T121/T125'te bağlanınca deadline/backpressure kararı orada verilmeli |
+| 9 | Kompozisyon kökü (`index.ts`) ve `positiveIntFromEnv` testsiz | **Validator gözlemleri V1 / V2** — bkz. §Doğrulama |
 
 ## Notlar
 
