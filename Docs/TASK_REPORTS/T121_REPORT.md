@@ -115,7 +115,25 @@
 - Commit: `1479453` — T121: Backend envanter portu — üç değerli visibility
 - PR: [#229](https://github.com/turkerurganci/Skinora/pull/229)
 - Branch izolasyon kontrolü: ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` → yalnız `T121`
-- CI: (aşağıda "CI" bölümünde)
+- CI: **✓ PASS** — run [`31517635620`](https://github.com/turkerurganci/Skinora/actions/runs/31517635620) (HEAD `e6f97c4`), **CI Gate `success`**
+
+**Bloke edici job'lar (9/9 yeşil):** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend + frontend) · CI Gate. (`0. Guard (direct push)` skipped — PR yolunda beklenen.)
+
+**Önceki run cancel edildi, FAIL değil.** `31517075770` (HEAD `1479453`, yalnız kod commit'i) ikinci push tarafından concurrency ile iptal edildi: 8 bloke edici job `success`, "4. Integration test" **cancelled**, dolayısıyla CI Gate zincirleme kırmızı. task.md'nin concurrency notu bu durumu `failure` saymaz; yetkili ölçüm son tamamlanmış run olan `31517635620`'dir.
+
+**8 advisory E2E leg'i kırmızı — bu task kaynaklı değil, kanıtlı.** Kırılma T117'den beri sürüyor (`continue-on-error`, CI Gate'i bloke etmiyor; sahiplik T137 → T138). `gh run view 31517635620 --log-failed` (970 satır) üzerinde ölçüm:
+
+| Arama | İz sayısı | Anlamı |
+|---|---|---|
+| `PlatformSteamBots` | **8** | T117'nin bıraktığı kök sebep — leg başına tam bir tane; T120 run'ındaki imzayla birebir aynı |
+| `InventoryLookupResult` / `GetItemAsync` | **0** / **0** | Yeni port tipi ve metodu hiçbir kırılmada geçmiyor |
+| `INVENTORY_PRIVATE` / `STEAM_UNAVAILABLE` | **0** / **0** | İki yeni hata kodu hiçbir kırılmada geçmiyor |
+| `ITEM_NOT_IN_INVENTORY` | **0** | Değişen create dalı hiçbir kırılmada geçmiyor |
+| `visibility` | **0** | Backend'in okumaya başladığı alan hiçbir kırılmada geçmiyor |
+
+Yani E2E yığını `sidecar-fake`'in `visibility: 'PUBLIC'` yanıtını yeni port üzerinden sorunsuz geçiriyor; T120'nin sözleşme paritesi eklemesi amacına ulaştı ve T121 yeni bir kırılma getirmedi.
+
+> **Not:** Bu bölümü ekleyen doküman-only commit kendi CI run'ını tetikler; o run'ın kimliği raporlanmaz — aksi hâlde her rapor güncellemesi bir sonrakini gerektirir (sonsuz regresyon). Yetkili ölçüm, kodu taşıyan `31517635620` run'ıdır.
 
 ## Known Limitations / Follow-up
 
