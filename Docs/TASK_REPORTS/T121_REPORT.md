@@ -1,6 +1,6 @@
 # T121 — Backend envanter portu: üç değerli visibility
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-11
+**Faz:** F7 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-11
 
 ---
 
@@ -90,6 +90,51 @@
 > **Baseline notu.** 2494 ölçülmüş sayıdır; **2476** baseline'ı ondan +18 çıkarılarak **türetilmiştir** (ayrı bir main run'ı ölçülmedi). Tek bağımsız çapa `Skinora.Steam.Tests` 21'dir ve T120 raporunda main üzerinde ölçülmüştür.
 
 > **Lokal Docker notu.** İlk suite koşusunda `IntegrationTestBase` türevi 43 test `DockerUnavailableException` ile düştü — Docker Desktop kapalıydı, değişiklikle ilgisi yok. Docker açıldıktan sonra aynı komut 0 fail verdi. Yetkili ölçüm ikinci koşudur.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Tarih / yöntem | 2026-08-11, ayrı chat, **yapım raporu görülmeden** bağımsız verdict |
+| Doğrulanan commit | `a075e5e` (branch HEAD) |
+| Bulgu sayısı | **0 bloke edici** — S1 Sapma 0 · S2 Kırılma 0 · S3 Eksik 0 |
+| Düzeltme gerekli mi | Hayır |
+
+**Başlangıç kapıları.** Adım -1 working tree **temiz**. Adım 0 main CI son 3 tamamlanmış run `success` — `31508344655`, `31508344617` (T120 #228), `31432878950` (T119a #227). Adım 0b repo memory'de T121 satırı **mevcut**.
+
+**Kabul kriterleri — bağımsız kanıt.**
+
+| # | Kriter | Sonuç | Validator kanıtı |
+|---|---|---|---|
+| 1 | private != unavailable != boş, port seviyesinde gözlenebilir | ✓ | Port sözleşmesi okundu: `GetItemAsync` → `InventoryLookupResult`, `InventoryVisibility` ∈ {`Public`,`Private`,`Unavailable`} = 08 §2.3 tablosunun üç satırı birebir. `Skinora.Steam.Tests` **31/31**; `GetItemAsync_Distinguishes_Private_From_Unavailable_From_Empty` üç visibility'yi çifter çifter `NotEqual` ile pinliyor. Tüketici katmanı: `Inventory_Visibility_Drives_Three_Distinct_Create_Outcomes` (3 farklı status **ve** 3 farklı ErrorCode), HTTP katmanı: 422 `ITEM_NOT_IN_INVENTORY` / 422 `INVENTORY_PRIVATE` / 503 `STEAM_UNAVAILABLE` üç ayrı endpoint testi |
+| 2 | Mevcut null'a çöktürme davranışı kaldırıldı (money-safety) | ✓ | `grep -rn "TryGetItemAsync" --include=*.cs .` → **0 eşleşme** (kalan 9 iz yalnız doküman/rapor/memory). Dönüş tipi non-nullable; ctor private + 4 fabrika → `Private`/`Unavailable` item taşıyamaz (kod okumasıyla teyitli). Üretimdeki **tüm** tüketiciler sayıldı: `grep -rn "GetItemAsync" backend/src/` → 2 çağıran (`TransactionCreationService`, `WrongItemDisputeAutoChecker`), ikisi de Visibility üzerinden dallanıyor; `ISteamInventoryReader` başka üretim tüketicisi yok |
+
+**Wire sözleşmesi bağımsız izlendi.** `sidecar-steam/src/api/routes.ts:121-139` üç dalı 200+`PUBLIC` / 422+`PRIVATE` / 503+`UNAVAILABLE` olarak yayınlıyor; backend `HttpSteamSidecarInventoryClient` 422→`InventoryPrivate`, non-success→`Unavailable`, artı 200 gövdesindeki `visibility` — iki uç tutarlı. `sidecar-fake/src/routes/steam.ts:50` `visibility: 'PUBLIC'` (parite doğrulandı). 07 §6.1 (satır 951) *"503 `STEAM_UNAVAILABLE`, 422 `INVENTORY_PRIVATE`"* → create ucuna eklenen iki kod **icat edilmemiş**, aynı statülerle mevcut sözlükten alınmış.
+
+**Dört negatif prova (hepsi geri alındı, tree temiz).** Testlerin AC'yi gerçekten koruduğunu kanıtlamak için üretim kodu mutasyona uğratıldı:
+
+| Prova | Mutasyon | Kırılan test |
+|---|---|---|
+| A | `SidecarSteamInventoryReader`: `Private` dalı → `NotFound` (08 §2.3'ün en tehlikeli çöktürmesi) | **2** — `..._Returns_Private_When_Profile_Private`, `..._Distinguishes_Private_From_Unavailable_From_Empty` |
+| B | `TransactionCreationService`: visibility switch'i tamamen kaldırıldı (üçü de `ITEM_NOT_IN_INVENTORY`) | **3** — `Rejects_With_InventoryPrivate...`, `Rejects_With_SteamUnavailable...`, `Inventory_Visibility_Drives_Three_Distinct_Create_Outcomes` |
+| C | `ParseVisibility`: tanınmayan değer fail-open → `Success` | **2** theory vakası — `..._Honours_A_NonPublic_Visibility_On_200("UNAVAILABLE")`, `("SOMETHING_NEW")` |
+| D | `TransactionsController`: `SteamUnavailable` → 503 yerine 422 | **1** — `Create_Returns_503_STEAM_UNAVAILABLE_When_Inventory_Unreadable` |
+
+**Ölçümler yapım raporuyla birebir.** Backend build **0 warning / 0 error** · `dotnet test Skinora.sln` **2494/2494** (13 proje, 0 fail, 0 skip — Steam 31 · Transactions 822 · API 521 · Disputes 60 · Shared 399 · Platform 189 · Notifications 171 · Auth 120 · Fraud 91 · Realtime 40 · Users 22 · Admin 22 · Payments 6) · FE eslint 0 · tsc 0 · vitest **33/33** · `npm run i18n:check` *"parity OK — 4 locales, **1300 keys each**, identical key sets"* (15 advisory uyarı **T121 öncesinden**, "Gas fee"/"Mobile Authenticator" verbatim kuralı — bu task'ın anahtarlarıyla ilgisiz) · `npm run build` ✓ · migration yok. Steam.Tests `+10` iddiası `git show origin/main` sayımıyla bağımsız doğrulandı (reader 5→8 `Fact`, client 8→12 attribute = 8→15 vaka).
+
+**Task branch CI (Adım 8a).** Yetkili run **[`31518644528`](https://github.com/turkerurganci/Skinora/actions/runs/31518644528)** — branch HEAD `a075e5e`, **CI Gate `success`**, bloke edici 9 job yeşil. (Rapor `31517635620`'yi yetkili gösteriyor; validator bir sonraki, yani gerçekten merge edilecek HEAD'in run'ını ölçtü — o da yeşil.) `31517075770` concurrency ile **cancelled**, FAIL değil.
+
+**E2E kırmızılığı bağımsız ölçüldü.** `gh run view 31518644528 --log-failed` (970 satır): `PlatformSteamBots` **8 iz** (leg başına tam bir tane, kök sebep `RequestError: Invalid object name 'PlatformSteamBots'`), T121 yüzeyleri (`InventoryLookupResult` / `GetItemAsync` / `INVENTORY_PRIVATE` / `STEAM_UNAVAILABLE` / `ITEM_NOT_IN_INVENTORY` / `visibility`) **0 iz**. **Main baseline karşılaştırması yapıldı:** `31508344617` (T120 squash, main) **aynı 8 leg**'i aynı adlarla kırıyor → T121 yeni kırılma getirmedi (sahiplik T137 → T138).
+
+**Güvenlik kontrolü.** Secret sızıntısı: temiz (diff üzerinde tarama, 0 eşleşme). Auth/authorization: etkisiz — yeni uç yok, `POST /transactions` policy + rate limit değişmedi. Input validation: **iyileşme** — boş `steamId`/`assetId` artık sidecar'a hiç gitmiyor (`GetInventoryCalls == 0` ile pinli) ve sidecar `visibility` değeri allowlist ile ayrıştırılıp tanınmayan değer fail-safe `Unavailable`'a düşüyor. Yeni dış bağımlılık: yok. Bilgi ifşası: 503 gövdesi sabit kod + sabit mesaj; envanter sahibi zaten çağıranın kendisi.
+
+**2 bloke etmeyen gözlem (kayda geçirildi, düzeltme istenmedi):**
+
+- **(V1) Switch'ler enum genişlemesine karşı fail-open.** `TransactionCreationService`'in `switch (lookup.Visibility)` bloğunda `default` arm yok; `WrongItemDisputeAutoChecker` de `is Private or Unavailable` şeklinde **allowlist değil denylist** kuruyor. `InventoryVisibility`'ye ileride dördüncü (okunamaz anlamına gelen) bir değer eklenirse ikisi de sessizce `lookup.Item is null` yoluna düşer, yani yeni durum **`ITEM_NOT_IN_INVENTORY` kanıtına çöker** — T121'in kaldırdığı hatanın aynısı. Bugün gerçek bir açık değil (enum 3 değerli ve genişletmek spec değişikliğidir), ama `default:` → `SteamUnavailable` yazmak korumayı tasarımdan gelir hâle getirirdi. T125/T130 porta yeni tüketici bağladığında ucuz sigorta.
+- **(V2) Ayrımın kullanıcıya ulaştığı tek yüzey create ucu.** `WrongItemDisputeAutoChecker` üç dalı ayrı ele alıyor ama üçü de aynı `Unresolved(NoDeliveryMessage)` sonucunu üretiyor — yani port seviyesindeki ayrım dispute yüzeyinde bugün **gözlenemiyor**. Kod bunu bilerek yapıyor (03 §6.2 Sonuç D metni T130'un) ve doğru kapsamlama; gözlem, T130 o katmanı yazarken ayrımın **hazır** olduğunun ve tüketilmesi gerektiğinin kaydı olarak bırakılıyor.
+
+**Yapım raporu karşılaştırması: tam uyumlu.** İki AC verdict'i, ölçümler, kapsam-dışı gerekçeleri ve E2E imza analizi bağımsız ölçümle örtüşüyor; uyuşmazlık yok. Tek fark yorum değil kapsam: rapor yetkili CI run'ı olarak `31517635620`'yi (kod commit'i) gösteriyor ve doküman-only commit'in run'ını bilinçli olarak raporlamıyor (sonsuz regresyon argümanı); validator merge edilecek HEAD'in run'ını (`31518644528`) ölçüp yukarıya ekledi — sonuç aynı, kanıt bir commit daha güncel.
 
 ## Altyapı Değişiklikleri
 
