@@ -1325,6 +1325,8 @@
         "ACCOUNT_FLAGGED": "Tu cuenta está en revisión. No puedes iniciar nuevas transacciones.",
         "ITEM_NOT_TRADEABLE": "El artículo seleccionado no es intercambiable. Elige otro.",
         "ITEM_NOT_IN_INVENTORY": "El artículo seleccionado no se encontró en tu inventario. Actualiza el inventario e inténtalo de nuevo.",
+        "INVENTORY_PRIVATE": "Tu inventario de Steam es privado, así que no se pudo comprobar. Hazlo público e inténtalo de nuevo.",
+        "STEAM_UNAVAILABLE": "No se pudo contactar con Steam, así que no se pudo comprobar tu inventario. Inténtalo de nuevo en unos minutos.",
         "PRICE_OUT_OF_RANGE": "El precio está fuera de los límites de la plataforma. Vuelve a introducirlo.",
         "TIMEOUT_OUT_OF_RANGE": "El plazo de pago está fuera de los límites de la plataforma.",
         "OPEN_LINK_DISABLED": "El método de enlace abierto está deshabilitado actualmente. Usa el método de Steam ID.",

@@ -301,11 +301,17 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
         { }
     }
 
+    /// <summary>
+    /// These suites never assert on inventory contents, so the double answers
+    /// "inventory readable, asset absent" (T121) — the branch the pre-T121
+    /// <c>null</c> stood for here, kept explicit so a later reader does not
+    /// mistake it for a simulated Steam outage.
+    /// </summary>
     private sealed class StubInventoryReader : ISteamInventoryReader
     {
-        public Task<InventoryItemSnapshot?> TryGetItemAsync(
+        public Task<InventoryLookupResult> GetItemAsync(
             string steamId64, string itemAssetId, CancellationToken cancellationToken)
-            => Task.FromResult<InventoryItemSnapshot?>(null);
+            => Task.FromResult(InventoryLookupResult.NotFound);
     }
 
     public sealed class Factory : WebApplicationFactory<Program>

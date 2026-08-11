@@ -15,7 +15,7 @@ namespace Skinora.Disputes.Application.AutoCheckers;
 /// <list type="bullet">
 ///   <item>Delivered class matches → "Teslim edilen item, işlemdeki item ile eşleşiyor" (Sonuç A — closed).</item>
 ///   <item>Delivered class does NOT match → AUTO-ESCALATED, both parties notified (Sonuç B).</item>
-///   <item>No delivery yet (no DeliveredBuyerAssetId / inventory probe blank) → unresolved, buyer escalates manually.</item>
+///   <item>No delivery yet (no DeliveredBuyerAssetId, asset absent from the buyer's inventory, or that inventory unreadable) → unresolved, buyer escalates manually.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -59,16 +59,29 @@ public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
             return Unresolved(NoDeliveryMessage);
         }
 
-        var snapshot = await _inventory.TryGetItemAsync(
+        var lookup = await _inventory.GetItemAsync(
             buyer.SteamId,
             transaction.DeliveredBuyerAssetId,
             cancellationToken);
 
+        // T121 — 08 §2.3: an unreadable inventory is not a blank inventory.
+        // This branch still leaves the dispute OPEN (nothing can be concluded
+        // either way), but it is now reached deliberately instead of falling
+        // out of a shared `snapshot is null`. The buyer-facing wording for the
+        // hidden-inventory case is 03 §6.2 Sonuç D and belongs to T130, which
+        // rewrites this checker on top of the delivery verification service;
+        // inventing a message key here would pre-empt that decision.
+        if (lookup.Visibility is InventoryVisibility.Private or InventoryVisibility.Unavailable)
+        {
+            return Unresolved(NoDeliveryMessage);
+        }
+
+        var snapshot = lookup.Item;
         if (snapshot is null)
         {
-            // Probe failed (sidecar stub or asset rotated post-delivery). We
-            // cannot conclude auto-mismatch from missing data — leave OPEN so
-            // the buyer can escalate.
+            // Inventory read, asset absent — it rotated post-delivery or never
+            // arrived. Still not an auto-mismatch: leave OPEN so the buyer can
+            // escalate.
             return Unresolved(NoDeliveryMessage);
         }
 

@@ -93,10 +93,30 @@ public sealed class HttpSteamSidecarInventoryClient
                 return new SteamSidecarInventoryResult(SteamSidecarStatus.Unavailable, Inventory: null);
             }
 
-            if (payload is null)
+            if (payload is null || payload.Items is null)
             {
-                _logger.LogWarning("Steam sidecar inventory returned empty body for {SteamId}", steamId);
+                // A 200 without an items array is a contract violation, not an
+                // empty inventory. Failing safe here keeps it from being read
+                // as "the asset is gone" one layer up (08 §2.3).
+                _logger.LogWarning("Steam sidecar inventory returned an unusable body for {SteamId}", steamId);
                 return new SteamSidecarInventoryResult(SteamSidecarStatus.Unavailable, Inventory: null);
+            }
+
+            // T121 — the sidecar carries the 08 §2.3 visibility in the body
+            // ALONGSIDE the status code (T120). The status stays authoritative
+            // (07 §6.1 is the normative public contract, and the field is
+            // absent on older builds), but a 200 whose body says the inventory
+            // was NOT readable is honoured rather than shipped upstream as an
+            // empty inventory — that collapse is exactly what turns "profile
+            // is private" into "item not in inventory".
+            var declared = ParseVisibility(payload.Visibility);
+            if (declared is not null && declared != SteamSidecarStatus.Success)
+            {
+                _logger.LogWarning(
+                    "Steam sidecar returned 200 with visibility '{Visibility}' for {SteamId} — "
+                    + "honouring the body over the status code",
+                    payload.Visibility, steamId);
+                return new SteamSidecarInventoryResult(declared.Value, Inventory: null);
             }
 
             return new SteamSidecarInventoryResult(SteamSidecarStatus.Success, payload.ToDto());
@@ -129,6 +149,30 @@ public sealed class HttpSteamSidecarInventoryClient
     Task ISteamInventoryCacheInvalidator.InvalidateAsync(string steamId, CancellationToken cancellationToken)
         => InvalidateInventoryAsync(steamId, cancellationToken);
 
+    /// <summary>
+    /// Map the sidecar's <c>visibility</c> field (08 §2.3) onto a status.
+    /// Returns <c>null</c> when the field is absent — older sidecar builds do
+    /// not emit it and the HTTP status alone is then authoritative.
+    /// </summary>
+    /// <remarks>
+    /// An unrecognised value resolves to
+    /// <see cref="SteamSidecarStatus.Unavailable"/>, never to
+    /// <see cref="SteamSidecarStatus.Success"/>: a visibility this build does
+    /// not understand is absence of information, and guessing "readable" is
+    /// the one guess that can be mistaken for evidence.
+    /// </remarks>
+    private static SteamSidecarStatus? ParseVisibility(string? visibility)
+    {
+        if (string.IsNullOrWhiteSpace(visibility)) return null;
+
+        return visibility.Trim().ToUpperInvariant() switch
+        {
+            "PUBLIC" => SteamSidecarStatus.Success,
+            "PRIVATE" => SteamSidecarStatus.InventoryPrivate,
+            _ => SteamSidecarStatus.Unavailable,
+        };
+    }
+
     private HttpRequestMessage BuildRequest(HttpMethod method, string relativeUri)
     {
         var request = new HttpRequestMessage(method, relativeUri);
@@ -141,12 +185,15 @@ public sealed class HttpSteamSidecarInventoryClient
     }
 
     private sealed record SidecarInventoryEnvelope(
-        [property: JsonPropertyName("items")] IReadOnlyList<SidecarInventoryItem> Items,
+        [property: JsonPropertyName("items")] IReadOnlyList<SidecarInventoryItem>? Items,
         [property: JsonPropertyName("totalCount")] int TotalCount,
-        [property: JsonPropertyName("tradeableCount")] int TradeableCount)
+        [property: JsonPropertyName("tradeableCount")] int TradeableCount,
+        // T120 added this alongside the status code; nullable because a
+        // sidecar predating it simply omits the field (08 §2.3).
+        [property: JsonPropertyName("visibility")] string? Visibility = null)
     {
         public SteamInventoryDto ToDto() => new(
-            Items: Items.Select(it => it.ToDto()).ToList(),
+            Items: (Items ?? []).Select(it => it.ToDto()).ToList(),
             TotalCount: TotalCount,
             TradeableCount: TradeableCount);
     }

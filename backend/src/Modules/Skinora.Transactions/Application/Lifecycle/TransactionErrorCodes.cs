@@ -15,6 +15,13 @@ public static class TransactionErrorCodes
     public const string MobileAuthenticatorRequired = "MOBILE_AUTHENTICATOR_REQUIRED";
     public const string ItemNotTradeable = "ITEM_NOT_TRADEABLE";
     public const string ItemNotInInventory = "ITEM_NOT_IN_INVENTORY";
+
+    // T121 — the create path re-reads the seller's inventory, so it can hit the
+    // same two non-readable outcomes the listing endpoint already reports
+    // (07 §6.1). Same strings, same meaning; declared here as literals because
+    // Skinora.Transactions does not reference Skinora.Steam (the dependency
+    // runs the other way), exactly as SteamUnavailable below already does.
+    public const string InventoryPrivate = "INVENTORY_PRIVATE";
     public const string PriceOutOfRange = "PRICE_OUT_OF_RANGE";
     public const string TimeoutOutOfRange = "TIMEOUT_OUT_OF_RANGE";
     public const string OpenLinkDisabled = "OPEN_LINK_DISABLED";

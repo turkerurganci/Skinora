@@ -351,6 +351,59 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_With_InventoryPrivate_When_Seller_Inventory_Hidden()
+    {
+        // T121 — 08 §2.3: a hidden profile says nothing about the asset. The
+        // seller's actual fix is to make the profile public, which the old
+        // ITEM_NOT_IN_INVENTORY answer could never have told them. The asset ID
+        // is the registered, present one on purpose: the outcome must be driven
+        // by visibility, not by the item lookup.
+        _inventory.ForcedVisibility = InventoryVisibility.Private;
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.InventoryPrivate, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InventoryPrivate, outcome.ErrorCode);
+        Assert.NotEqual(TransactionErrorCodes.ItemNotInInventory, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Rejects_With_SteamUnavailable_When_Inventory_Cannot_Be_Read()
+    {
+        // T121 — a Steam outage is absence of information, not a missing item
+        // (08 §2.3). Retryable, so it must not be reported with a code that
+        // sends the seller looking for an item sitting in their inventory.
+        _inventory.ForcedVisibility = InventoryVisibility.Unavailable;
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SteamUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamUnavailable, outcome.ErrorCode);
+        Assert.NotEqual(TransactionErrorCodes.ItemNotInInventory, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Inventory_Visibility_Drives_Three_Distinct_Create_Outcomes()
+    {
+        // The AC in one place: the three inventory answers must not collapse
+        // onto a single create-path verdict.
+        _inventory.ForcedVisibility = null;
+        var absent = await BuildSut().CreateAsync(
+            _seller.Id, ValidRequest() with { ItemAssetId = "missing" }, CancellationToken.None);
+
+        _inventory.ForcedVisibility = InventoryVisibility.Private;
+        var hidden = await BuildSut().CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        _inventory.ForcedVisibility = InventoryVisibility.Unavailable;
+        var down = await BuildSut().CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(3, new[] { absent.Status, hidden.Status, down.Status }.Distinct().Count());
+        Assert.Equal(3, new[] { absent.ErrorCode, hidden.ErrorCode, down.ErrorCode }.Distinct().Count());
+    }
+
+    [Fact]
     public async Task Rejects_When_Item_Has_Trade_Lock()
     {
         _inventory.Register(SellerSteamId, new InventoryItemSnapshot(

@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v3.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
+**Versiyon: v3.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
 
 ---
 
@@ -1055,7 +1055,9 @@ Response header: `Location: /api/v1/transactions/guid`
 
 **Doğrulama:** `sellerWalletAddress` merkezi doğrulama pipeline'ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (02 §12.3).
 
-**Hatalar:** 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 422 `CONCURRENT_LIMIT_REACHED`, 422 `CANCEL_COOLDOWN_ACTIVE`, 422 `NEW_ACCOUNT_LIMIT_REACHED`, 422 `MOBILE_AUTHENTICATOR_REQUIRED`, 422 `ITEM_NOT_TRADEABLE`, 422 `PRICE_OUT_OF_RANGE`, 422 `TIMEOUT_OUT_OF_RANGE`, 422 `OPEN_LINK_DISABLED`, 422 `BUYER_STEAM_ID_NOT_FOUND`
+**Hatalar:** 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 422 `CONCURRENT_LIMIT_REACHED`, 422 `CANCEL_COOLDOWN_ACTIVE`, 422 `NEW_ACCOUNT_LIMIT_REACHED`, 422 `MOBILE_AUTHENTICATOR_REQUIRED`, 422 `ITEM_NOT_TRADEABLE`, 422 `ITEM_NOT_IN_INVENTORY`, 422 `INVENTORY_PRIVATE` *(v3.0)*, 503 `STEAM_UNAVAILABLE` *(v3.0 — tekrar denenebilir)*, 422 `PRICE_OUT_OF_RANGE`, 422 `TIMEOUT_OUT_OF_RANGE`, 422 `OPEN_LINK_DISABLED`, 422 `BUYER_STEAM_ID_NOT_FOUND`
+
+> **Envanter okumasının üç sonucu (v3.0, 08 §2.3 — T121):** Bu uç satıcının envanterini yeniden okur ve okumanın üç sonucu **ayrı** raporlanır. Envanter okunduysa ve item yoksa `ITEM_NOT_IN_INVENTORY` döner — bu bir **kanıttır**. Profil gizliyse `INVENTORY_PRIVATE`, Steam'e ulaşılamadıysa `STEAM_UNAVAILABLE` döner; ikisi de **bilgi yokluğudur** ve item hakkında hiçbir şey söylemez. Üçünü tek koda çöktürmek, Steam kesintisindeki satıcıyı envanterinde duran bir item'ı aramaya gönderir. Kodlar §6.1'deki envanter listeleme ucuyla birebir aynıdır — satıcı aynı akışta tek bir sözlük görür.
 
 ### 7.3 T3 — `GET /transactions/eligibility`
 

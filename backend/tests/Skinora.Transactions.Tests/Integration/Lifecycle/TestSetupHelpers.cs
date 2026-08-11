@@ -55,12 +55,29 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
 {
     private readonly Dictionary<(string steamId, string assetId), InventoryItemSnapshot> _items = [];
 
+    /// <summary>
+    /// T121 — forces every read to the given non-readable outcome (08 §2.3),
+    /// so tests can drive "profile private" and "Steam down" separately from
+    /// "inventory read, asset absent". <c>null</c> (default) means the
+    /// inventory is readable and the registered items are the truth.
+    /// </summary>
+    public InventoryVisibility? ForcedVisibility { get; set; }
+
     public void Register(string steamId, InventoryItemSnapshot item)
         => _items[(steamId, item.AssetId)] = item;
 
-    public Task<InventoryItemSnapshot?> TryGetItemAsync(
+    public Task<InventoryLookupResult> GetItemAsync(
         string steamId64, string itemAssetId, CancellationToken cancellationToken)
-        => Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item) ? item : null);
+    {
+        if (ForcedVisibility is InventoryVisibility.Private)
+            return Task.FromResult(InventoryLookupResult.Private);
+        if (ForcedVisibility is InventoryVisibility.Unavailable)
+            return Task.FromResult(InventoryLookupResult.Unavailable);
+
+        return Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item)
+            ? InventoryLookupResult.Found(item)
+            : InventoryLookupResult.NotFound);
+    }
 }
 
 /// <summary>
