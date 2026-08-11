@@ -169,6 +169,10 @@ services:
       - STEAM_BOTS_CONFIG_PATH=${STEAM_BOTS_CONFIG_PATH:-/run/secrets/steam-bots.json}
       # Inventory cache (08 §2.3). Empty → in-memory fallback.
       - REDIS_URL=${STEAM_SIDECAR_REDIS_URL:-}
+      # Steam Community inventory queue ceiling (08 §2.6, T120). Separate from
+      # the Web API queue; unset → 10/min (conservative end of the estimated
+      # 10-20/min per-IP range).
+      - STEAM_COMMUNITY_REQUESTS_PER_MINUTE=${STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     volumes:
       - ./secrets/steam-bots.json:/run/secrets/steam-bots.json:ro

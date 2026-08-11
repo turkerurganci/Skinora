@@ -4,11 +4,7 @@ import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import type { BotManager } from '../bot/BotManager.js';
 import type { TradeOfferService } from '../trade/TradeOfferService.js';
-import {
-  InventoryPrivateError,
-  SteamUnavailableError,
-  type InventoryService,
-} from '../trade/InventoryService.js';
+import type { InventoryService } from '../trade/InventoryService.js';
 import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 import type { SendTradeOfferRequest, TradeDirection } from '../trade/types.js';
@@ -109,23 +105,69 @@ function inventoryGetHandler(service?: InventoryService) {
       res.status(400).json({ error: 'steamId must be a valid SteamID64' });
       return;
     }
+    const refresh = parseRefreshParam(req.query.refresh);
+    if (!refresh.ok) {
+      res.status(400).json({ error: refresh.error });
+      return;
+    }
     try {
-      const inventory = await service.getInventory(steamId);
-      res.status(200).json(inventory);
+      // 08 §2.3 — status codes are the contract the backend consumes today
+      // (07 §6.1 maps them to 200 / 422 INVENTORY_PRIVATE / 503
+      // STEAM_UNAVAILABLE). `visibility` is carried in the body ALONGSIDE
+      // them, never instead of them: collapsing every outcome onto 200 would
+      // make a private profile look like an empty inventory to any consumer
+      // that has not yet been taught to read the new field.
+      const result = await service.getInventory(steamId, { refresh: refresh.value });
+      switch (result.visibility) {
+        case 'PUBLIC':
+          res.status(200).json({ visibility: result.visibility, ...result.inventory });
+          return;
+        case 'PRIVATE':
+          res.status(422).json({
+            visibility: result.visibility,
+            code: result.error.code,
+            error: result.error.message,
+          });
+          return;
+        case 'UNAVAILABLE':
+          req.log.warn({ steamId, err: result.error.message }, 'Steam inventory upstream failure');
+          res.status(503).json({
+            visibility: result.visibility,
+            code: result.error.code,
+            error: result.error.message,
+          });
+          return;
+      }
     } catch (err) {
-      if (err instanceof InventoryPrivateError) {
-        res.status(422).json({ code: err.code, error: err.message });
-        return;
-      }
-      if (err instanceof SteamUnavailableError) {
-        req.log.warn({ steamId, err: err.message }, 'Steam inventory upstream failure');
-        res.status(503).json({ code: err.code, error: err.message });
-        return;
-      }
       req.log.error({ err, steamId }, 'InventoryService.getInventory threw');
       res.status(500).json({ error: (err as Error).message });
     }
   };
+}
+
+/** Accepted spellings of the 08 §2.3 `refresh` cache-bypass flag. */
+const REFRESH_TRUE: ReadonlySet<string> = new Set(['true', '1']);
+const REFRESH_FALSE: ReadonlySet<string> = new Set(['false', '0']);
+
+/**
+ * Parse `?refresh=`. Absent means "use the cache" (the ordinary listing read).
+ *
+ * An unrecognized value is rejected with 400 rather than silently treated as
+ * false: the caller that sets this flag is a delivery-verification read, and
+ * quietly serving it two-minute-old data is precisely the failure 08 §2.3
+ * introduced the flag to prevent. Failing loud keeps the mistake visible.
+ */
+function parseRefreshParam(
+  raw: unknown,
+): { ok: true; value: boolean } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true, value: false };
+  if (typeof raw !== 'string') {
+    return { ok: false, error: 'refresh must be a single value: true, false, 1 or 0' };
+  }
+  const normalized = raw.toLowerCase();
+  if (REFRESH_TRUE.has(normalized)) return { ok: true, value: true };
+  if (REFRESH_FALSE.has(normalized)) return { ok: true, value: false };
+  return { ok: false, error: 'refresh must be one of: true, false, 1, 0' };
 }
 
 function inventoryInvalidateHandler(service?: InventoryService) {

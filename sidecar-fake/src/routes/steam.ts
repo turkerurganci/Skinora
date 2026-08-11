@@ -38,7 +38,16 @@ const INVENTORY_ITEMS = [
 ];
 
 steamRouter.get('/api/inventory/:steamId', (_req, res) => {
+  // `visibility` mirrors the real sidecar's T120 contract (08 §2.3). The fake
+  // is always readable, so it is always PUBLIC; the field exists so a consumer
+  // that reads it (T121 onwards) sees the same shape here as in production
+  // instead of silently falling back to a default. Driving Private/Unavailable
+  // per steamId is T137's job, not this one.
+  //
+  // `?refresh=true` needs no handling: the fake serves no cache, so every read
+  // is already fresh.
   res.json({
+    visibility: 'PUBLIC',
     items: INVENTORY_ITEMS,
     totalCount: INVENTORY_ITEMS.length,
     tradeableCount: INVENTORY_ITEMS.filter((i) => i.tradable).length,
