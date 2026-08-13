@@ -1,6 +1,11 @@
 # Skinora — Product Requirements
 
-**Versiyon: v3.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-13
+
+> **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
+> tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
+> "kanıt eşiği ürün kararı"na düzeltildi (veri `asset_properties` içinde anonim olarak mevcut); anonim okumanın
+> Trade Protection kilit tarihini göremediği normatif not olarak eklendi. Davranış değişikliği yok.
 
 ---
 
@@ -277,9 +282,18 @@ Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API ya
 - Doğrulama şu anlarda çalışır: alıcı onay verdiğinde, dispute açıldığında ve teslimat timeout'u dolmadan hemen önce
 - **Item satıcıdan düşmüş ama alıcıya ulaşmamışsa** — yanlış item gönderimi veya üçüncü kişiye gönderim imzasıdır — işlem sessizce iptal edilmez, otomatik olarak dispute'a yükseltilir (§10)
 - Alıcının Steam envanteri gizliyse envanter kanıtı üretilemez; bu durumda alıcı onayı tek yoldur ve kullanıcı bu konuda uyarılır
-- Item eşleştirmesi item sınıfı üzerinden yapılır (asset ID trade sonrası değiştiği için alıcı tarafında kullanılamaz). Aynı sınıftan iki item arasındaki aşınma/desen farkı otomatik doğrulamanın kapsamı dışındadır — bu ayrım `WRONG_ITEM` dispute'una tabidir
+- Item eşleştirmesi item sınıfı üzerinden yapılır (asset ID trade sonrası değiştiği için alıcı tarafında kullanılamaz). Eşleştirme **sayım** üzerinden kurulur, varlık üzerinden değil: bir item sınıfının aynı envanterde birden çok kopyası bulunabilir (T122 ölçümü: 199 asset → 159 ayrık sınıf, en kalabalık sınıfın **9 kopyası**), dolayısıyla "o skin envanterde var mı" kontrolü alıcının o skinden zaten bir kopyası olduğu durumda teslimatı hiç göremez
+- Aynı sınıftan iki item arasındaki aşınma/desen farkı **otomatik doğrulamanın kapsamı dışındadır** — bu ayrım `WRONG_ITEM` dispute'una tabidir. **Gerekçe (T122, 2026-08-13):** bu kapsam dışılık bir *veri yokluğu* değil, bir **kanıt eşiği** kararıdır. Steam'in envanter yanıtı asset başına `Wear Rating` (float) ve `Pattern Template` alanlarını anonim olarak döndürüyor (`asset_properties`, bkz. [`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §5) — yani veri teslimat doğrulamasının zaten yaptığı okumanın içinde geliyor. Kapsam dışı bırakılmasının sebebi, hangi float farkının "yanlış item" sayılacağının bir **ürün kararı** olması ve bu eşiğin otomatik para hareketine bağlanmasının §9.2'nin konjonksiyon kuralından daha zayıf bir kanıt üretmesidir
 
 > **Veri modeli notu:** Steam trade sonrası asset ID değişir. Platform iki asset referansı takip eder: orijinal (satıcı envanterindeki) ve teslim sonrası alıcıda tespit edilen. Bot/escrow asset ID'si P2P modelinde yoktur. Detay: 06 §8.4.
+
+> **Anonim okuma sınırı (T122 ölçümü, 2026-08-13):** platform envanterleri **anonim** okur (sidecar Steam
+> kimlik bilgisi taşımaz — v3.0 kararı). Steam, `owner_descriptions` ve `cache_expiration` alanlarını yalnız
+> **sahibinin kendi oturumuna** döndürür; bir item'ın 7 günlük Trade Protection kilidinin **bitiş tarihi bu
+> yüzden okunamaz**. Ayrıca `tradable` alanı item **sınıfı** düzeyindedir, asset düzeyinde değil — aynı
+> skinin biri kilitli biri serbest iki kopyası tek kayıtla temsil edilir. Teslimat doğrulaması bu nedenle
+> kilit durumuna **dayandırılamaz**; yukarıdaki iki yol (alıcı onayı / sayım tabanlı envanter kanıtı)
+> tek dayanaktır. Ham ölçüm: [`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §6.
 
 ---
 
@@ -596,4 +610,4 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 
 ---
 
-*Skinora — Product Requirements v3.0*
+*Skinora — Product Requirements v3.1*
