@@ -87,7 +87,7 @@ arasındaki iki fark "Doğrulama" bölümünde açıkça listelenmiştir.
 |---|---|---|---|
 | İki gerçek hesap arasında trade + iki envanterin ham yanıtı | ✗ | **✗ Karşılanmadı** | Trade yapılmadı. Dış varsayım kırık; yeniden yapımla kapanmaz. Kapsam bölünmesi 11 §P2.5'e işlendi (doğrulama bulgusu 1) |
 | `classid`/`instanceid` beklendiği gibi mi · `assetid` değişiyor mu · Trade Protection nasıl işaretleniyor | ~ | **~ Kısmi** | `classid`/`instanceid` **ölçüldü** (B6, bağımsız yeniden üretildi: 219 asset → 174 ayrık, maks. 9 kopya) · Trade Protection'ın anonim görünürlüğü **ölçüldü** (B7) · `assetid` rotasyonu **ölçülemedi** — yalnız ikincil kaynak (`steam-tradeoffer-manager.d.ts:27-31`) |
-| Ham yanıtlar `Docs/INTEGRATION_RUNBOOKS/`'a kaydedildi | ✓ | **~ Kısmi** | Üçüncü şahıs gövdeleri commit edilmedi (kişisel veri — gerekçe geçerli). Doğrulamada eklenen: anonimleştirilmiş şekil artefaktı `data/T122_validation_shape.json` ✓ · sahibin kendi capture'ı ⏳ (runbook §8) |
+| Ham yanıtlar `Docs/INTEGRATION_RUNBOOKS/`'a kaydedildi | ✓ | **~ Kısmi** | Üçüncü şahıs gövdeleri commit edilmedi (kişisel veri — gerekçe geçerli). Doğrulamada eklendi: sahibin ham capture'ı `data/T122_owner_capture.json` ✓ + anonimleştirilmiş şekil artefaktı `data/T122_validation_shape.json` ✓ (runbook §8) |
 | 02 §9.2 kanıt kuralı **ve** delivery timeout varsayılanı teyit/revize edildi | ✓ | **~ Kısmi** | 02 §9.2 gerçekten ✓ (v3.1; kanıtı bağımsız yeniden üretildi). **Delivery timeout varsayılanı ne teyit ne revize edildi** — gecikme ölçülemedi. Doğrulamada `DEPLOY_RUNBOOK` §A#6'ya uyarı eklendi (bulgu 2) |
 
 **Dürüst özet:** dört kriterden biri **karşılanmadı**, üçü **kısmi**. Karşılanmayan kriterin riski
@@ -107,6 +107,7 @@ kapatılmadı — **izole edildi** (runbook §7) ve kapanışı T125 launch kap�
 | `.claude/memory/MEMORY.md` | T122 kaydı |
 | `Docs/11_IMPLEMENTATION_PLAN.md` | T125'e 5 yeni AC + T122 notu · **doğrulama turu:** T122 bloğunun kendi kabul kriterleri revize edildi (bulgu 1) |
 | `Docs/DEPLOY_RUNBOOK.md` | **Doğrulama turu:** §A tablosuna "#6 uyarısı" — `trade_offer_buyer_timeout_minutes` örneği ölçülmemiş (bulgu 2) |
+| `Docs/INTEGRATION_RUNBOOKS/data/T122_owner_capture.json` | **Doğrulama turu:** T122-B ham capture gövdesi (bulgu 3) — B8/B9'un birincil kanıtı |
 | `Docs/INTEGRATION_RUNBOOKS/data/T122_validation_shape.json` | **Doğrulama turu:** anonimleştirilmiş şekil artefaktı (bulgu 3) |
 
 **`backend/src`, `sidecar-steam/src`, `frontend/src` altında sıfır değişiklik** — 11 §P2.5 *"kod teslimi yok"*.
@@ -160,7 +161,7 @@ Kod referanslarının tamamı yerinde doğrulandı: `users.js:599` (`403 && body
 |---|---|---|---|
 | 1 | **S3** | **Plan düzeltilmemişti.** 11 §P2.5'teki T122 bloğu `main` ile bayt bayt aynıydı; onaylanan A/B/C bölünmesi rapora, runbook'a, status'e ve memory'ye yazılmış ama **kabul kriterlerinin kaynağı olan plana** yazılmamıştı. Status ✓ yapılsaydı, plan gerçekleşmeyecek bir trade ölçümü talep ederken görev "tamamlandı" görünecekti — F7 gate check'in traceability taraması ya sessizce rasyonelleştirirdi ya geç keşfederdi | 11 §P2.5 T122 bloğu revize edildi: gerçekleşen kabul kriterleri + `KAPSAM BÖLÜNMESİ` + `ÖLÇÜLEMEYEN` notları (proje sahibi onayı, 2026-08-13) |
 | 2 | S1 | AC4'ün ikinci yarısı açıkken ✓ işaretliydi. Repoda o ayarın tek somut sayısı `DEPLOY_RUNBOOK` §A#6: `trade_offer_buyer_timeout_minutes` örnek **60 dk**, hâlâ custodial dönem etiketiyle — oysa v3.0'da bu **satıcının teslimat penceresi** ve runbook §7.3 "muhafazakâr **yüksek** değer" öneriyor. İki artefakt ters yöne bakıyor, çapraz referans yok | `DEPLOY_RUNBOOK` §A tablosuna "#6 uyarısı" notu eklendi; AC4 ✓ → ~ |
-| 3 | S1 | AC3 ✓ işaretliydi ama ham gövde yok. Üçüncü şahıs gerekçesi haklı — ancak B8/B9'un tek kaynağı olan **sahibin kendi** capture'ında bu engel yok ve ikisi de T125 kabul kriteri oldu | Anonimleştirilmiş şekil artefaktı commit edildi; sahibin capture'ı runbook §8'de commit kuyruğunda (proje sahibi onayı, 2026-08-13). AC3 ✓ → ~ |
+| 3 | S1 | AC3 ✓ işaretliydi ama ham gövde yok. Üçüncü şahıs gerekçesi haklı — ancak B8/B9'un tek kaynağı olan **sahibin kendi** capture'ında bu engel yok ve ikisi de T125 kabul kriteri oldu | İki artefakt commit edildi: `data/T122_owner_capture.json` (ham gövde) + `data/T122_validation_shape.json` (anonimleştirilmiş şekil). Capture programatik olarak anonim ölçümle karşılaştırıldı: **26/26 alan, sıfır fark** — raporun "birebir aynı" iddiası teyitli. AC3 ✓ → ~ (üçüncü şahıs gövdeleri hâlâ yok, gerekçesiyle) |
 | 4 | S1 | Runbook §8 *"§1–§6'daki tüm bulgular **anonimleştirilmiş** özet"* diyordu; §2 altı gerçek SteamID64'ü gizlilik durumlarıyla listeliyor — ikisi aynı anda doğru olamaz | §8 yeniden yazıldı: neyin commit edildiği/edilmediği tablosu + §2'nin anonim **olmadığı** açık uyarısı. Ayrıca §1'e `more_items`/`last_assetid`'in koşullu olduğu dipnotu eklendi |
 
 ### Güvenlik kontrolü
@@ -232,9 +233,10 @@ karşılaştırması bu task için **konusuz**; yeni kırılma ihtimali yapısal
    **B7 "ölçülemedi" olarak kapanır, açık eylem maddesi değildir.** Sonucu tasarıma taşındı: T125'in kanıt
    değerlendirmesi item'ın **kilit durumuna dayanamaz** — 11 §P3'te T125 kabul kriteri olarak yazıldı.
    Bilinmeyen, bir varsayıma dönüşmeden önce tasarımdan **dışlandı**.
-6. **Sahip capture'ının ham JSON'u commit kuyruğunda** (doğrulama bulgusu 3, proje sahibi onayı 2026-08-13):
-   `Docs/INTEGRATION_RUNBOOKS/data/T122_owner_capture.json`. B8 ve B9 T125'in kabul kriteri olduğu için
-   ikisinin de birincil kanıtı repo içinden tekrar üretilebilir olmalı. Merge bu dosyaya bağlıdır.
+6. ~~Sahip capture'ının ham JSON'u commit kuyruğunda~~ → **kapandı** (doğrulama bulgusu 3, proje sahibi
+   onayı 2026-08-13): [`data/T122_owner_capture.json`](../INTEGRATION_RUNBOOKS/data/T122_owner_capture.json)
+   ham gövde olarak commit edildi. B8 ve B9 T125'in kabul kriteri olduğu için ikisinin de birincil kanıtı
+   artık repo içinden tekrar üretilebilir.
 7. **Delivery timeout varsayılanı hâlâ açık** (doğrulama bulgusu 2): `DEPLOY_RUNBOOK` §A#6'daki 60 dk
    ölçülmemiş bir örnektir ve uyarı notu eklendi, ama **gerçek launch değeri kararı verilmedi**. Sahiplik
    T123 (adlandırma) → T124 (tüketim) → T125 (launch kapısı) zincirinde.

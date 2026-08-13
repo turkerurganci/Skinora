@@ -263,6 +263,13 @@ Proje sahibi kendi hesabından tek item'lık envanterinin JSON'unu verdi. Sonuç
 | `cache_expiration` | **YOK** |
 | Alan kümesi | Anonim görünümle **birebir aynı** — fazladan ya da eksik tek alan yok |
 
+> **Doğrulamada teyit edildi (2026-08-13):** capture ([`data/T122_owner_capture.json`](data/T122_owner_capture.json))
+> ile validator'ın anonim ölçümü programatik olarak karşılaştırıldı — aynı sınıftaki (silah) bir
+> `descriptions[]` kaydında **her iki tarafta da 26 alan, sıfır fark**. `owner_descriptions`,
+> `owner_actions`, `cache_expiration` **hiçbirinde** yok. Capture aynı zamanda B9'un ikinci bağımsız
+> kanıtıdır: tek item'lık envanterde de (`total_inventory_count: 1`) `more_items` ve `last_assetid`
+> anahtarları gelmiyor.
+
 **B7 kapanmadı.** Capture'daki tek item `tradable: 1`, yani **kilitli değil**; dolayısıyla iki açıklama
 ayırt edilemiyor: (a) sahip-özel alanlar yalnız bir kilit/hold varken üretiliyor, (b) yanıt zaten anonim
 şekil (oturum çerezleri bu uçta etkili değil). Tek bir kilitsiz capture bu ikisini ayıramaz.
@@ -327,7 +334,7 @@ kendisinden ölçülür. Bu kapı `DEPLOY_RUNBOOK` launch checklist'ine bağlanm
 
 | Kaynak | Repo'da | Gerekçe |
 |---|---|---|
-| Proje sahibinin kendi tek-item capture'ı (T122-B) | ⏳ commit edilecek — `data/T122_owner_capture.json` | Sahibin kendi hesabı, üçüncü şahıs verisi yok. **B8** ve **B9**'un birincil kanıtı ve ikisi de T125 kabul kriteri oldu (11 §P3) → repo içinden tekrar üretilebilir olmalı. Commit kararı T122 doğrulamasında alındı (2026-08-13) |
+| Proje sahibinin kendi tek-item capture'ı (T122-B) | ✓ [`data/T122_owner_capture.json`](data/T122_owner_capture.json) — ham gövde, olduğu gibi | Sahibin kendi hesabı, üçüncü şahıs verisi yok; yanıt SteamID64 taşımıyor. **B8** ve **B9**'un birincil kanıtı ve ikisi de T125 kabul kriteri oldu (11 §P3) → repo içinden tekrar üretilebilir olmalı. Commit kararı T122 doğrulamasında alındı (2026-08-13) |
 | Üçüncü şahıs envanterlerinin ham gövdeleri (~45 istek) | ✗ | Başka kullanıcıların envanter içeriği = kişisel veri. §1–§6'da **türetilmiş bulgu** olarak özetlendi |
 | Bağımsız doğrulama ölçümü (validator) | ✓ [`data/T122_validation_shape.json`](data/T122_validation_shape.json) | Yalnız **şekil** — SteamID / assetid / classid / item adı taşımaz |
 
