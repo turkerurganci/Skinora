@@ -113,6 +113,24 @@ tekrar üretme komutları runbook §8'de.
 - **Commit:** `8d27733` — T122: Gerçek Steam ölçümü — salt-okunur canlı ölçüm + kapsam bölünmesi
 - **PR:** [#230](https://github.com/turkerurganci/Skinora/pull/230)
 - **Branch izolasyon check:** `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` → **`T122`** (tek)
+- **CI ✓ PASS** — HEAD `b38327c`, run [`31726231187`](https://github.com/turkerurganci/Skinora/actions/runs/31726231187), **CI Gate `success`**
+
+### CI'nin kendisi "sıfır üretim diff" iddiasını doğruladı
+
+Job sonuçları:
+
+| Sonuç | Job |
+|---|---|
+| `success` | Detect changed paths · **1. Lint** · **CI Gate** |
+| `skipped` | 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build · **E2E (advisory, 8 leg)** |
+
+`Detect changed paths` hiçbir kod yolunda değişiklik görmediği için tüm derleme/test job'ları atlandı. Bu,
+raporun "üretim kodu değişmedi" iddiasının **bağımsız mekanik teyididir** — `git diff` benim ölçümüm,
+job atlaması pipeline'ın kendi ölçümü.
+
+**E2E notu:** T117'den beri kırmızı olan 8 advisory leg bu run'da **kırmızı değil, `skipped`** — değişiklik
+hiçbir kod yoluna dokunmadığı için hiç koşmadılar. Yani T120/T121'de yapılan "aynı 8 leg, aynı imza"
+karşılaştırması bu task için **konusuz**; yeni kırılma ihtimali yapısal olarak sıfır.
 
 ---
 
