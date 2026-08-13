@@ -13,7 +13,7 @@ varsayımdır** ve scope'u etkileyen bir karardır; BLOCKED yerine şu bölünme
 | Parça | Kapsam | Durum |
 |---|---|---|
 | **T122-A** | Trade **gerektirmeyen** her şey — canlı Steam'e karşı salt-okunur ölçüm | ✓ bu raporda |
-| **T122-B** | Tek hesap, sahibinin kendi oturumundan tek capture (opsiyonel, ~2 dk) | ✗ yapılmadı |
+| **T122-B** | Tek hesap, sahibinin kendi oturumundan tek capture (opsiyonel, ~2 dk) | ✓ yapıldı — **sonuç kısmi**, B7 kapanmadı |
 | **T122-C** | Trade olmadan ölçülemeyen kalanı T125'in tasarımından izole etmek | ✓ bu raporda (runbook §7) |
 
 Kritik gözlem: T122'nin dört kabul kriterinden **üçü trade gerektirmiyordu.** Görev tanımı ölçümü tek bir
@@ -40,6 +40,26 @@ onu döner; buradaki her bulgu gerçek Steam yanıtından çıkarıldı.
 | **B5** | `asset_properties` asset başına **`Wear Rating` (float)** ve **`Pattern Template`** taşıyor — anonim olarak | runbook §5 |
 | **B6** | `(classid, instanceid)` bir item'ı **tanımlamıyor** (199 asset → 159 sınıf, en kalabalığı 9 kopya) → 02 §9.2'nin sayım tabanlı kararı **doğrulandı** | runbook §4.1 |
 | **B7** | `owner_descriptions` / `cache_expiration` anonim görünümde **yok** → Trade Protection kilidinin bitiş tarihi okunamıyor; `tradable` sınıf düzeyinde | runbook §6 |
+| **B8** | **TUZAK:** `market_tradable_restriction: 7` bir **kilit göstergesi değil** — `tradable: 1` olan serbest bir item'da da aynı değeri taşıyor. Sınıf **politikası**, item durumu değil | runbook §6.1 |
+| **B9** | Son sayfada `more_items` / `last_assetid` **hiç gelmiyor** — "devam yok" sinyali `more_items: 0` değil, alanın **yokluğu** | runbook §4.2 |
+
+### T122-B sonucu (proje sahibi capture'ı, 2026-08-13)
+
+Proje sahibi kendi hesabından tek item'lık envanterinin JSON'unu verdi. `owner_descriptions`,
+`owner_actions`, `cache_expiration` — **üçü de yok**; alan kümesi anonim görünümle **birebir aynı**
+(fazladan ya da eksik tek alan yok, programatik olarak karşılaştırıldı).
+
+**B7 kapanmadı** ve kapanmama sebebi dürüstçe kaydedilmelidir: capture'daki tek item `tradable: 1`, yani
+**kilitli değil**. Dolayısıyla iki açıklama ayırt edilemiyor — (a) sahip-özel alanlar yalnız bir kilit
+varken üretiliyor, (b) yanıt zaten anonim şekil. **Kilitsiz tek bir capture bu ikisini ayıramaz.**
+
+Capture yine de B8 ve B9'u üretti — ikisi de tüketici tarafında yanlış okumaya açık alanlar.
+
+> **Deney tasarımı düzeltmesi:** T122-B'nin kurgusu (sahip görünümünü oku) **yanlış görünüme** bakıyordu.
+> Platform envanterleri **anonim** okur; doğru soru *"kilitli bir item ANONİM görünümde nasıl görünür"*dur.
+> Doğru deney: hesapta kilitli bir item oluştur (market alımı veya oyun içi drop) → envanteri Public yap →
+> **anonim** oku ve bu kilitsiz baseline ile karşılaştır. Sahip görünümü öğrenilse bile platformun
+> göremediği bir şeyi anlatır.
 
 ### B3 — kullanıcıya dönen defekt (tam zincir)
 
@@ -147,8 +167,10 @@ karşılaştırması bu task için **konusuz**; yeni kırılma ihtimali yapısal
    ayrımı yapmadan önce sebebi netleştirmeli.
 4. **`P2P-SteamRateLimitWindow`** (B4) — T120'nin 10/dk varsayılanı çürütülmedi ama "rahat" okuması
    çürütüldü; uzun pencereli ikinci bütçe katmanı + 429 backoff gerekiyor.
-5. **T122-B hâlâ ucuz ve açık:** sahibinin kendi oturumundan tek bir capture, B7'yi (cooldown tarihinin
-   sahip görünümünde nasıl geldiği) kesin cevaplar. Trade gerektirmiyor.
+5. **T122-B yapıldı ama B7'yi kapatmadı** (yukarıda) — capture'daki item kilitli değildi. **Doğru deney
+   anonim görünümdedir:** hesapta kilitli bir item oluştur (market alımı / oyun içi drop) → envanteri Public
+   yap → **anonim** oku → bu kilitsiz baseline ile karşılaştır. Tek fark, kilidin **platforma görünen**
+   imzasıdır. Trade gerektirmiyor ve okumayı platform tarafı yapabilir.
 
 ---
 

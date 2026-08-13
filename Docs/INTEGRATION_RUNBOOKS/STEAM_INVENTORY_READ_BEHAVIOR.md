@@ -171,6 +171,12 @@ döngüsü gerçek; `steamcommunity` kütüphanesi bu döngüyü kendi içinde y
 `total_inventory_count` sayfadan bağımsız gerçek toplamı veriyor — **eksik sayfalanmış bir okumanın tespiti
 için kullanılabilir** ve bugün kullanılmıyor.
 
+**Son sayfada `more_items` ve `last_assetid` alanları hiç gelmiyor** (T122-B capture'ı, tek item'lık envanter:
+üst seviye anahtarlar yalnız `assets, descriptions, asset_properties, total_inventory_count, success, rwgrsn`).
+Yani "devam yok" sinyali `more_items: 0` **değil**, alanın **yokluğu**dur. `more_items`'ı her yanıtta var
+sayan bir tüketici `undefined` okur; JS'te bu doğru dallanır (`if (more_items)`), ama alanın varlığını
+şart koşan bir şema doğrulaması son sayfayı geçersiz sayar.
+
 ---
 
 ## §5 `asset_properties` — 02 §9.2'yi Değiştiren Keşif
@@ -226,6 +232,44 @@ Dolayısıyla:
 Bulunan 14 adet `tradable: 0` item'ın hepsi **doğası gereği** trade edilemez (madalya, rozet, müzik kiti) —
 hiçbiri cooldown vakası değil. Cooldown'lu bir silahın anonim görünümde nasıl işaretlendiği, yeterli sayıda
 public envanter örneklenemediği için **ölçülemedi** (§3 rate limit).
+
+### §6.1 TUZAK — `market_tradable_restriction: 7` bir kilit göstergesi **değildir**
+
+Proje sahibinin kendi hesabından alınan capture (T122-B, 2026-08-13) bunu kesinleştirdi: **`tradable: 1`**
+olan, yani **şu anda serbestçe trade edilebilen** bir item'da da `market_tradable_restriction: 7` geliyor.
+
+```jsonc
+{ "name": "Tec-9 | Groundwater", "tradable": 1, "marketable": 1,
+  "market_tradable_restriction": 7, "market_marketable_restriction": 7 }
+```
+
+Alan, item'ın **o anki kilit durumunu** değil, sınıfının **politikasını** taşıyor: *"bu sınıftan bir item
+market/trade yoluyla edinildiğinde 7 gün kısıtlanır."* Kilitli ve serbest item'da **aynı değeri** alır.
+
+> **Neden tuzak:** `market_tradable_restriction`'ı "bu item 7 gün kilitli" diye okuyan bir tüketici, serbest
+> her item'ı kilitli sanır. Kilidin tek göstergesi `tradable` alanıdır — o da §6'da anlatıldığı gibi **sınıf
+> düzeyindedir** ve anonim görünümde bitiş tarihi taşımaz. T125 bu alanı kanıt olarak kullanmamalıdır.
+
+### §6.2 T122-B — sahip oturumu capture'ı (kısmi sonuç)
+
+Proje sahibi kendi hesabından tek item'lık envanterinin JSON'unu verdi. Sonuç:
+
+| Alan | Sahip capture'ında |
+|---|---|
+| `owner_descriptions` | **YOK** |
+| `owner_actions` | **YOK** |
+| `cache_expiration` | **YOK** |
+| Alan kümesi | Anonim görünümle **birebir aynı** — fazladan ya da eksik tek alan yok |
+
+**B7 kapanmadı.** Capture'daki tek item `tradable: 1`, yani **kilitli değil**; dolayısıyla iki açıklama
+ayırt edilemiyor: (a) sahip-özel alanlar yalnız bir kilit/hold varken üretiliyor, (b) yanıt zaten anonim
+şekil (oturum çerezleri bu uçta etkili değil). Tek bir kilitsiz capture bu ikisini ayıramaz.
+
+> **Sonraki adım kilit oluşturmaktır, capture tekrarlamak değil.** Ve doğru deney **sahip görünümü değil,
+> anonim görünümdür**: platform envanterleri anonim okuduğu için asıl sorulacak soru *"kilitli bir item
+> ANONİM görünümde nasıl görünür"*dur. Deney: hesapta kilitli bir item oluştur (market alımı veya oyun
+> içi drop — ikisi de 7 gün trade kısıtı doğurur) → envanteri Public yap → **anonim** olarak oku ve
+> buradaki kilitsiz baseline ile karşılaştır. Tek fark, kilidin platforma görünen imzasıdır.
 
 ---
 
