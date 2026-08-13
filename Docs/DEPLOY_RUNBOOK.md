@@ -49,6 +49,8 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 
 > Örnek değerler `SettingsBootstrapTests.AllRequiredEnvVars()` ile birebir; gerçek prod değerleri risk profiline göre **bilinçli** belirlenir. `payment_timeout_*` cross-key invariant: `min < max` ve `min ≤ default ≤ max` (`SystemSettingsValidator`). Tarihsel olarak 21 sayılıyordu; WP4a (`price_deviation_threshold`) ve WP12 (`timeout_warning_ratio`) seed-default verince **19**'a indi.
 
+> **#6 uyarısı (T122 doğrulaması, 2026-08-13) — `trade_offer_buyer_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır ve v3.0'da adının söylediği şeyi yönetmez.** Anahtar custodial dönemden kalma adını taşıyor; v3.0 P2P modelinde bu ayar **satıcının teslimat penceresini** besliyor (adlandırma kararı 11 §P3 T123'te, tüketen kod T124'te). T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
+
 ---
 
 ## B. Operasyonel secret / altyapı env'leri (ZORUNLU)

@@ -2423,18 +2423,45 @@ Task T121: Backend envanter portu — üç değerli visibility [RİSKLİ]
 
 --- P2.5: Gerçek Steam probu ---
 
-Task T122: Gerçek trade ölçümü (spike, kod teslimi yok) [RİSKLİ]
+Task T122: Gerçek Steam ölçümü (spike, kod teslimi yok) [RİSKLİ]
   Bağımlılık: T121
-  Kabul kriterleri:
-    - İki gerçek Steam hesabı arasında trade yapılıp her iki envanterin
-      ham API yanıtı kaydedildi
-    - Ölçülenler: item alıcıda kaç sn/dk sonra görünüyor, classid/instanceid
-      beklendiği gibi mi, assetid gerçekten değişiyor mu, Trade Protection
-      envanter yanıtında nasıl işaretleniyor
-    - Ham yanıtlar Docs/INTEGRATION_RUNBOOKS/'a kaydedildi
-    - 02 §9.2 kanıt kuralı ve delivery timeout varsayılanı teyit/revize edildi
+  Dokümanlar: 02 §9.2 (v3.1), 08 §2.3, §2.6
+  Çıktı: INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md
+  Kabul kriterleri (2026-08-13'te revize edildi — aşağıdaki KAPSAM BÖLÜNMESİ):
+    - Anonim envanter ucunun statü kümesi ve gövde şekli canlı Steam'e karşı
+      ölçüldü; 08 §2.3'ün üç durumuyla eşleşmeyen taraf kayda geçti
+    - `classid`/`instanceid`'nin bir item'ı TANIMLAMADIĞI ölçümle gösterildi ve
+      02 §9.2'nin sayım tabanlı kanıt kararı buna dayandırıldı
+    - Trade Protection'ın ANONİM görünümdeki okunabilirliği ölçüldü (kilit bitiş
+      tarihi okunamıyor; `tradable` sınıf düzeyinde)
+    - Community rate limit davranışı ölçüldü ve T120'nin 10/dk varsayılanı bu
+      ölçüme göre değerlendirildi
+    - Ölçüm kaydı Docs/INTEGRATION_RUNBOOKS/'a yazıldı; ham yanıtlardan üçüncü
+      şahıs verisi içermeyeni repoya commit edildi
+    - 02 §9.2 kanıt kuralı teyit/revize edildi
+    - Trade olmadan ölçülemeyen kalan T125'in TASARIMINDAN İZOLE edildi ve
+      izolasyon T125 kabul kriterlerine yazıldı
+  KAPSAM BÖLÜNMESİ (proje sahibi kararı, 2026-08-13): bu görevin ilk tanımı
+       ölçümü İKİ GERÇEK STEAM HESABI ARASINDA BİR TRADE'e bağlıyordu. Proje
+       sahibi bu ölçümü yapamayacağını bildirdi — `task.md` Adım 4 anlamında
+       kırık dış varsayım. BLOCKED yerine bölünme onaylandı: T122-A trade
+       GEREKTİRMEYEN her şey (yapıldı) · T122-B sahibin kendi oturumundan tek
+       capture (yapıldı, sonuç kısmi) · T122-C ölçülemeyeni T125'ten izole
+       etmek (yapıldı). Yukarıdaki kriterler bölünme sonrası GERÇEKLEŞEN
+       kapsamdır; ilk tanımın trade'e bağlı kısmı aşağıda.
+       Ders: dört kriterin ÜÇÜ trade gerektirmiyordu — tanım ölçümü tek bir
+       yönteme bağladığı için yöntem düşünce görevin tamamı düşmüş göründü.
+  ÖLÇÜLEMEYEN (kapanışı T125 launch kapısına devredildi): teslimat gecikmesi ·
+       `assetid` rotasyonunun ölçümle teyidi (ikincil kaynak var:
+       `steam-tradeoffer-manager.d.ts:27-31`) · `Item Certificate`'in trade'i
+       hayatta kalması + cooldown'un anonim imzası. T125'i bloklamıyorlar çünkü
+       MANTIĞI değil SABİTLERİ belirliyorlar; izolasyon runbook §7 + T125
+       kabul kriterleri. Bu yüzden delivery timeout VARSAYILANI bu görevde
+       teyit/revize EDİLMEDİ: sayı T124/T125'te config'den gelir ve
+       DEPLOY_RUNBOOK §A#6 örneği (60 dk) ölçüm gelene kadar bağlayıcı değildir.
   Not: sidecar-fake bu davranışı kanıtlayamaz — fake ne yazarsak onu döner.
-       Bu bilinmeyen T125 yazılmadan kapatılmalıdır.
+       Ölçüm bunu doğruladı ve genişletti: dönen dört statüden ikisi (`401`,
+       `429`) sidecar-fake'te hiç modellenmemiş.
 
 --- P3: Yeni ileri yol ---
 
@@ -2482,11 +2509,31 @@ Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
 
 Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
   Bağımlılık: T122, T124
-  Dokümanlar: 02 §9.2, 06 §2.24
+  Dokümanlar: 02 §9.2 (v3.1), 06 §2.24,
+              INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md (T122 ölçümü)
   Kabul kriterleri:
     - 02 §9.2 tuzak matrisinin HER SATIRI için bir test
     - Servis saf/yan etkisiz kanıt değerlendirmesi yapıyor (polling'e hazır)
+    - `market_tradable_restriction` kanıt olarak KULLANILMIYOR (T122 B8: bu alan
+      kilit göstergesi değil, sınıf politikası — `tradable: 1` olan serbest bir
+      item'da da 7 geliyor). Bir test bu alanı okumanın yanlış sonuç verdiğini
+      sabitlemeli
+    - Kanıt değerlendirmesi item'ın KİLİT DURUMUNA dayanmıyor (T122 B7 ölçülemedi:
+      cooldown'un anonim görünümdeki imzası bilinmiyor; `tradable` alanı sınıf
+      düzeyinde ve kilit bitiş tarihi anonim okunamıyor — runbook §6)
+    - Sayfalama tüketicisi "devam yok"u `more_items`'ın YOKLUĞUNDAN anlıyor,
+      `more_items == 0`'dan değil (T122 B9)
+    - LAUNCH KAPISI: ilk N gerçek teslimatta alıcı+satıcı envanterinin ham yanıtı
+      saklanıyor ve insan incelemesinden geçmeden envanter kanıtına dayalı
+      otomatik para bırakma AÇILMIYOR. Kapı DEPLOY_RUNBOOK launch checklist'ine
+      bağlanmalı
   Not: Money-safety çekirdeği. Ayrı chat'te bağımsız doğrulama zorunlu.
+  Not (T122 ölçümü, 2026-08-13): T122 gerçek trade yapılamadığı için üç bilinmeyeni
+       KAPATAMADI — teslimat gecikmesi, `assetid` rotasyonu, `Item Certificate`
+       kalıcılığı + cooldown'un anonim imzası. Bunlar T125'i bloklamıyor çünkü
+       MANTIĞI değil SABİTLERİ belirliyorlar; izolasyon runbook §7'de beş maddede
+       tanımlı ve yukarıdaki AC'ler onun kodlanmış hâlidir. Bu AC'ler kaldırılırsa
+       ölçülmemiş varsayımlar sessizce para hareketine bağlanır.
 
 Task T126: POST /transactions/:id/confirm-receipt
   Bağımlılık: T125

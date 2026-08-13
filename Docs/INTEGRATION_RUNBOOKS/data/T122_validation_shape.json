@@ -1,0 +1,63 @@
+{
+  "_comment": "T122 dogrulama olcumu — ANONIMLESTIRILMIS SEKIL OZETI. Kaynak: canli steamcommunity.com anonim envanter ucu, 2026-08-13. Hicbir SteamID64 / assetid / classid / instanceid / item adi icermez; yalnizca yanit sekli ve sayimlar.",
+  "_produced_by": "T122 dogrulama (validator) — yapim turundan bagimsiz oturum ve istemci",
+  "endpoint": "GET https://steamcommunity.com/inventory/{steamId64}/730/2?l=english&count={n}",
+  "status_semantics": {
+    "http_403_body_null": "envanter gizli — profil public olsa bile (B2)",
+    "http_401_body_null": "private DEGIL; olculen vakalarda Community profili kurulmamis, bir vakada profil public (B3)",
+    "_note_429": "429 bu dogrulamada bilincli olarak yeniden uretilmedi — kesin esigi olcmek Steam uzerinde kasitli asiri yuk gerektirirdi (runbook 3. bolumun kendi gerekcesi)"
+  },
+  "full_page_response": {
+    "_case": "count=500 — envanterin tamami tek sayfada, yani SON sayfa",
+    "top_level_keys": [
+      "assets",
+      "descriptions",
+      "asset_properties",
+      "total_inventory_count",
+      "success",
+      "rwgrsn"
+    ],
+    "has_more_items": false,
+    "has_last_assetid": false,
+    "_B9": "son sayfada more_items ve last_assetid ANAHTARLARI hic gelmiyor — devam-yok sinyali more_items:0 degil, alanin yoklugudur"
+  },
+  "identity": {
+    "asset_count": 219,
+    "total_inventory_count": 220,
+    "distinct_classid_instanceid": 174,
+    "max_assets_sharing_one_class": 9,
+    "classes_with_multiple_assets": 21,
+    "_B6": "(classid,instanceid) bir itemi TANIMLAMIYOR — 02 9.2 sayim tabanli kanit kararinin dayanagi"
+  },
+  "asset_properties": {
+    "entries": 100,
+    "property_names": [
+      "Pattern Template",
+      "Wear Rating",
+      "Item Certificate",
+      "Name Tag",
+      "Charm Template"
+    ],
+    "requires_auth": false,
+    "_B5": "Wear Rating (float) ve Pattern Template anonim yanitta mevcut — 02 9.2 asinma/desen gerekcesi bu yuzden duzeltildi"
+  },
+  "lock_signals": {
+    "market_tradable_restriction_distinct_values": [
+      7
+    ],
+    "market_tradable_restriction_by_tradable": {
+      "tradable_1": [
+        7
+      ],
+      "tradable_0": [
+        7
+      ]
+    },
+    "descriptions_total": 174,
+    "descriptions_tradable_0": 22,
+    "owner_descriptions_present": false,
+    "cache_expiration_present": false,
+    "_B8": "market_tradable_restriction tradable:1 ve tradable:0 icin AYNI degeri tasiyor — kilit gostergesi degil, sinif politikasi",
+    "_B7": "owner_descriptions ve cache_expiration anonim gorunumde yok — Trade Protection kilidinin bitis tarihi okunamiyor"
+  }
+}
