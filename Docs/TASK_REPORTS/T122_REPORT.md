@@ -80,15 +80,18 @@ okunamadı" değil, **kalıcı / geçici**.
 
 Plandaki dört kriter, kapsam bölünmesine göre:
 
-| AC | Durum | Kanıt |
-|---|---|---|
-| İki gerçek hesap arasında trade + iki envanterin ham yanıtı | ✗ **Yapılamadı** — dış varsayım kırık (proje sahibi trade yapamıyor) | runbook §7 B1–B3, izolasyon stratejisiyle karşılandı |
-| `classid`/`instanceid` beklendiği gibi mi · `assetid` değişiyor mu · Trade Protection nasıl işaretleniyor | **Kısmen** — `classid`/`instanceid` semantiği **ölçüldü** (B6) · Trade Protection'ın **anonim görünürlüğü ölçüldü** (B7: kilit tarihi okunamıyor) · `assetid` rotasyonu ölçülemedi (ikincil kaynak: `steam-tradeoffer-manager.d.ts:27-31` `new_assetid` sözleşmesi) | runbook §4.1, §6, §7 |
-| Ham yanıtlar `Docs/INTEGRATION_RUNBOOKS/`'a kaydedildi | ✓ | runbook §1–§6; ham gövdeler §8'deki gerekçeyle özet olarak (üçüncü şahıs envanter içeriği = kişisel veri) |
-| 02 §9.2 kanıt kuralı ve delivery timeout varsayılanı teyit/revize edildi | ✓ **teyit + revizyon** — sayım tabanlı kanıt **doğrulandı** (B6), aşınma/desen gerekçesi düzeltildi (B5), anonim okuma sınırı normatif not oldu (B7). Delivery timeout: T122 bir sayı **dayatmıyor** — gecikme ölçülemedi; gerekçe ve izolasyon runbook §7'de | 02 v3.1 |
+Aşağıdaki tablo **doğrulama sonrası** hâldir; yapım turunun kendi verdict'i ile validator'ın verdict'i
+arasındaki iki fark "Doğrulama" bölümünde açıkça listelenmiştir.
 
-**Dürüst özet:** dört kriterin ikisi tam, biri kısmen, biri yapılamadı karşılandı. Yapılamayan kriterin
-riski kapatılmadı — **izole edildi** (runbook §7) ve kapanışı üretimden gelen ölçüme bağlandı.
+| AC | Yapım | **Validator** | Kanıt |
+|---|---|---|---|
+| İki gerçek hesap arasında trade + iki envanterin ham yanıtı | ✗ | **✗ Karşılanmadı** | Trade yapılmadı. Dış varsayım kırık; yeniden yapımla kapanmaz. Kapsam bölünmesi 11 §P2.5'e işlendi (doğrulama bulgusu 1) |
+| `classid`/`instanceid` beklendiği gibi mi · `assetid` değişiyor mu · Trade Protection nasıl işaretleniyor | ~ | **~ Kısmi** | `classid`/`instanceid` **ölçüldü** (B6, bağımsız yeniden üretildi: 219 asset → 174 ayrık, maks. 9 kopya) · Trade Protection'ın anonim görünürlüğü **ölçüldü** (B7) · `assetid` rotasyonu **ölçülemedi** — yalnız ikincil kaynak (`steam-tradeoffer-manager.d.ts:27-31`) |
+| Ham yanıtlar `Docs/INTEGRATION_RUNBOOKS/`'a kaydedildi | ✓ | **~ Kısmi** | Üçüncü şahıs gövdeleri commit edilmedi (kişisel veri — gerekçe geçerli). Doğrulamada eklenen: anonimleştirilmiş şekil artefaktı `data/T122_validation_shape.json` ✓ · sahibin kendi capture'ı ⏳ (runbook §8) |
+| 02 §9.2 kanıt kuralı **ve** delivery timeout varsayılanı teyit/revize edildi | ✓ | **~ Kısmi** | 02 §9.2 gerçekten ✓ (v3.1; kanıtı bağımsız yeniden üretildi). **Delivery timeout varsayılanı ne teyit ne revize edildi** — gecikme ölçülemedi. Doğrulamada `DEPLOY_RUNBOOK` §A#6'ya uyarı eklendi (bulgu 2) |
+
+**Dürüst özet:** dört kriterden biri **karşılanmadı**, üçü **kısmi**. Karşılanmayan kriterin riski
+kapatılmadı — **izole edildi** (runbook §7) ve kapanışı T125 launch kapısına bağlandı.
 
 ---
 
@@ -100,8 +103,11 @@ riski kapatılmadı — **izole edildi** (runbook §7) ve kapanışı üretimden
 | `Docs/02_PRODUCT_REQUIREMENTS.md` | **v3.0 → v3.1** — §9.2 revizyonu (sayım zorunluluğu gerekçelendirildi, aşınma/desen gerekçesi düzeltildi, anonim okuma sınırı normatif not) |
 | `Docs/DEFERRED_BACKLOG.md` | 2 yeni kalem + `P2P-FloatVerification` önkoşulu çürütüldü (⚪ → 🟡); 36 → **38 aktif satır** |
 | `Docs/TASK_REPORTS/T122_REPORT.md` | Bu rapor |
-| `Docs/IMPLEMENTATION_STATUS.md` | T122 ⏳ |
+| `Docs/IMPLEMENTATION_STATUS.md` | T122 durumu |
 | `.claude/memory/MEMORY.md` | T122 kaydı |
+| `Docs/11_IMPLEMENTATION_PLAN.md` | T125'e 5 yeni AC + T122 notu · **doğrulama turu:** T122 bloğunun kendi kabul kriterleri revize edildi (bulgu 1) |
+| `Docs/DEPLOY_RUNBOOK.md` | **Doğrulama turu:** §A tablosuna "#6 uyarısı" — `trade_offer_buyer_timeout_minutes` örneği ölçülmemiş (bulgu 2) |
+| `Docs/INTEGRATION_RUNBOOKS/data/T122_validation_shape.json` | **Doğrulama turu:** anonimleştirilmiş şekil artefaktı (bulgu 3) |
 
 **`backend/src`, `sidecar-steam/src`, `frontend/src` altında sıfır değişiklik** — 11 §P2.5 *"kod teslimi yok"*.
 
@@ -111,6 +117,58 @@ riski kapatılmadı — **izole edildi** (runbook §7) ve kapanışı üretimden
 
 Üretim kodu değişmediği için test koşusu **gerekmiyor** (yalnız doküman). Ölçümün kendisi kanıttır;
 tekrar üretme komutları runbook §8'de.
+
+---
+
+## Doğrulama
+
+Bağımsız doğrulama chat'i, 2026-08-13 — yapım raporu görülmeden başlatıldı, verdict önce bağımsız oluşturuldu.
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** (bulgu 1 kapatıldıktan sonra; ilk verdict ⛔ BLOCKED — `PLAN_CORRECTION_REQUIRED`) |
+| Bulgu sayısı | 4 (1× S3, 3× S1) — **hepsi doğrulama turunda kapatıldı** |
+| Düzeltme gerekli mi | Yapıldı — düzeltmeler bu dalda |
+| Kapılar | Adım -1 working tree ✓ temiz · Adım 0 main CI son 3 run `success` (`31524132478`, `31524132471`, `31508344655`) · Adım 0b repo memory ✓ T122 satırı var · Adım 8a task branch CI ✓ |
+
+### Bağımsız ölçüm — runbook iddiaları sıfırdan yeniden üretildi
+
+Validator, canlı `steamcommunity.com`'a karşı **ayrı bir oturumdan ve istemciden** 6 salt-okunur istek yaptı
+(16 sn aralıklı, runbook §8'in kendi uyarısına uygun). Makine çıktısı:
+[`data/T122_validation_shape.json`](../INTEGRATION_RUNBOOKS/data/T122_validation_shape.json).
+
+| Bulgu | Yeniden üretildi mi |
+|---|---|
+| B1 / B2 — `403` + gövde literal `null` = envanter gizli | ✓ |
+| B2 ince ayrım — `privacyState=public` olan hesabın envanteri yine `403` | ✓ |
+| B3 — `401` + `null`, `?xml=1` → *"has not yet set up their Steam Community profile"* | ✓ |
+| B3 ince ayrım — profili `public` olan bir hesapta da `401` (tek sebebe indirgenemiyor) | ✓ |
+| B5 — `asset_properties` anonim; 5 property adı birebir | ✓ |
+| B6 — 219 asset → **174 ayrık** `(classid,instanceid)`, en kalabalık sınıf **9 kopya** | ✓ |
+| B7 — `owner_descriptions` / `cache_expiration` yok | ✓ |
+| B8 — `market_tradable_restriction` **tüm** kayıtlarda `7`; `tradable:1` ve `tradable:0` ayrımsız | ✓ (iddiadan güçlü) |
+| B9 — tam sayfada `more_items` / `last_assetid` **anahtarları yok** | ✓ |
+| B4 — rate limit penceresi | **Bilinçli olarak yeniden üretilmedi** — kesin eşik ölçümü Steam'e kasıtlı aşırı yük demek |
+
+Kod referanslarının tamamı yerinde doğrulandı: `users.js:599` (`403 && body===null` özel-kasa) ·
+`InventoryService.ts:165` · `routes.ts:134` (`UNAVAILABLE` → 503) · `HttpSteamSidecarInventoryClient.cs:76-81` ·
+`steam-tradeoffer-manager.d.ts:27-31` · `SystemSettingSeed.cs:37` (`Unconfigured`). **B3 zinciri gerçek.**
+
+### Bulgular ve kapanışları
+
+| # | Sev | Bulgu | Kapanış |
+|---|---|---|---|
+| 1 | **S3** | **Plan düzeltilmemişti.** 11 §P2.5'teki T122 bloğu `main` ile bayt bayt aynıydı; onaylanan A/B/C bölünmesi rapora, runbook'a, status'e ve memory'ye yazılmış ama **kabul kriterlerinin kaynağı olan plana** yazılmamıştı. Status ✓ yapılsaydı, plan gerçekleşmeyecek bir trade ölçümü talep ederken görev "tamamlandı" görünecekti — F7 gate check'in traceability taraması ya sessizce rasyonelleştirirdi ya geç keşfederdi | 11 §P2.5 T122 bloğu revize edildi: gerçekleşen kabul kriterleri + `KAPSAM BÖLÜNMESİ` + `ÖLÇÜLEMEYEN` notları (proje sahibi onayı, 2026-08-13) |
+| 2 | S1 | AC4'ün ikinci yarısı açıkken ✓ işaretliydi. Repoda o ayarın tek somut sayısı `DEPLOY_RUNBOOK` §A#6: `trade_offer_buyer_timeout_minutes` örnek **60 dk**, hâlâ custodial dönem etiketiyle — oysa v3.0'da bu **satıcının teslimat penceresi** ve runbook §7.3 "muhafazakâr **yüksek** değer" öneriyor. İki artefakt ters yöne bakıyor, çapraz referans yok | `DEPLOY_RUNBOOK` §A tablosuna "#6 uyarısı" notu eklendi; AC4 ✓ → ~ |
+| 3 | S1 | AC3 ✓ işaretliydi ama ham gövde yok. Üçüncü şahıs gerekçesi haklı — ancak B8/B9'un tek kaynağı olan **sahibin kendi** capture'ında bu engel yok ve ikisi de T125 kabul kriteri oldu | Anonimleştirilmiş şekil artefaktı commit edildi; sahibin capture'ı runbook §8'de commit kuyruğunda (proje sahibi onayı, 2026-08-13). AC3 ✓ → ~ |
+| 4 | S1 | Runbook §8 *"§1–§6'daki tüm bulgular **anonimleştirilmiş** özet"* diyordu; §2 altı gerçek SteamID64'ü gizlilik durumlarıyla listeliyor — ikisi aynı anda doğru olamaz | §8 yeniden yazıldı: neyin commit edildiği/edilmediği tablosu + §2'nin anonim **olmadığı** açık uyarısı. Ayrıca §1'e `more_items`/`last_assetid`'in koşullu olduğu dipnotu eklendi |
+
+### Güvenlik kontrolü
+
+- Secret sızıntısı: **temiz** — diff'te cookie / token / `steamLoginSecure` / key deseni yok
+- Auth / authorization etkisi: **yok** · Input validation etkisi: **yok** · Yeni bağımlılık: **yok**
+- Üretim kodu: `backend/src`, `sidecar-steam/src`, `frontend/src` altında **sıfır** değişiklik
+- Eklenen veri artefaktı SteamID64 / assetid / classid / item adı taşımıyor (grep ile doğrulandı)
 
 ---
 
@@ -133,7 +191,8 @@ tekrar üretme komutları runbook §8'de.
 - **Commit:** `8d27733` — T122: Gerçek Steam ölçümü — salt-okunur canlı ölçüm + kapsam bölünmesi
 - **PR:** [#230](https://github.com/turkerurganci/Skinora/pull/230)
 - **Branch izolasyon check:** `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` → **`T122`** (tek)
-- **CI ✓ PASS** — HEAD `b38327c`, run [`31726231187`](https://github.com/turkerurganci/Skinora/actions/runs/31726231187), **CI Gate `success`**
+- **CI ✓ PASS** — yapım turu HEAD `b38327c`, run [`31726231187`](https://github.com/turkerurganci/Skinora/actions/runs/31726231187), **CI Gate `success`**
+- **CI ✓ PASS** — doğrulama öncesi son HEAD `4818f49`, run [`31729663319`](https://github.com/turkerurganci/Skinora/actions/runs/31729663319), **CI Gate `success`** (aynı `skipped` profili — doküman-only)
 
 ### CI'nin kendisi "sıfır üretim diff" iddiasını doğruladı
 
@@ -173,6 +232,12 @@ karşılaştırması bu task için **konusuz**; yeni kırılma ihtimali yapısal
    **B7 "ölçülemedi" olarak kapanır, açık eylem maddesi değildir.** Sonucu tasarıma taşındı: T125'in kanıt
    değerlendirmesi item'ın **kilit durumuna dayanamaz** — 11 §P3'te T125 kabul kriteri olarak yazıldı.
    Bilinmeyen, bir varsayıma dönüşmeden önce tasarımdan **dışlandı**.
+6. **Sahip capture'ının ham JSON'u commit kuyruğunda** (doğrulama bulgusu 3, proje sahibi onayı 2026-08-13):
+   `Docs/INTEGRATION_RUNBOOKS/data/T122_owner_capture.json`. B8 ve B9 T125'in kabul kriteri olduğu için
+   ikisinin de birincil kanıtı repo içinden tekrar üretilebilir olmalı. Merge bu dosyaya bağlıdır.
+7. **Delivery timeout varsayılanı hâlâ açık** (doğrulama bulgusu 2): `DEPLOY_RUNBOOK` §A#6'daki 60 dk
+   ölçülmemiş bir örnektir ve uyarı notu eklendi, ama **gerçek launch değeri kararı verilmedi**. Sahiplik
+   T123 (adlandırma) → T124 (tüketim) → T125 (launch kapısı) zincirinde.
 
 ---
 

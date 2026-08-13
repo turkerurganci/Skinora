@@ -27,7 +27,9 @@ Anonim envanter ucu ölçümde **dört** statü döndürdü. Başarısızlık g�
 
 | Statü | Gövde | Anlamı (ölçülen) |
 |---|---|---|
-| `200` | `{assets, descriptions, asset_properties, more_items, last_assetid, total_inventory_count, success, rwgrsn}` | Envanter okundu |
+| `200` | `{assets, descriptions, asset_properties, more_items*, last_assetid*, total_inventory_count, success, rwgrsn}` | Envanter okundu |
+
+<sup>\* `more_items` ve `last_assetid` **koşulludur** — yalnız devam eden bir sayfa varken gelirler; son sayfada anahtar olarak hiç bulunmazlar (§4.2, B9).</sup>
 | `401` | `null` | **Private değil** — ayrı bir başarısızlık modu, §2 |
 | `403` | `null` | Envanter gizli (**private**) |
 | `429` | `null` | Rate limit, §3 |
@@ -321,9 +323,44 @@ kendisinden ölçülür. Bu kapı `DEPLOY_RUNBOOK` launch checklist'ine bağlanm
 
 ## §8 Ham Veri
 
-Ölçümün ham yanıtları oturum scratchpad'inde tutuldu ve **repo'ya commit edilmedi** (üçüncü şahıs Steam
-hesaplarının envanter içeriği — kişisel veri; §1–§6'daki tüm bulgular anonimleştirilmiş özet olarak
-buradadır). Tekrar üretmek için:
+**Neyin commit edildiği, neyin edilmediği:**
+
+| Kaynak | Repo'da | Gerekçe |
+|---|---|---|
+| Proje sahibinin kendi tek-item capture'ı (T122-B) | ⏳ commit edilecek — `data/T122_owner_capture.json` | Sahibin kendi hesabı, üçüncü şahıs verisi yok. **B8** ve **B9**'un birincil kanıtı ve ikisi de T125 kabul kriteri oldu (11 §P3) → repo içinden tekrar üretilebilir olmalı. Commit kararı T122 doğrulamasında alındı (2026-08-13) |
+| Üçüncü şahıs envanterlerinin ham gövdeleri (~45 istek) | ✗ | Başka kullanıcıların envanter içeriği = kişisel veri. §1–§6'da **türetilmiş bulgu** olarak özetlendi |
+| Bağımsız doğrulama ölçümü (validator) | ✓ [`data/T122_validation_shape.json`](data/T122_validation_shape.json) | Yalnız **şekil** — SteamID / assetid / classid / item adı taşımaz |
+
+> **Dikkat — §2 anonim değildir.** Yukarıdaki "kişisel veri" gerekçesi ham *envanter içeriği* içindir.
+> §2'nin tablosu, statü semantiğinin kanıtı olarak **altı gerçek SteamID64'ü** profil ve envanter gizlilik
+> durumlarıyla birlikte listeler. SteamID64 public bir tanımlayıcıdır ve bu repo private'tır, ama bu bölüm
+> "anonimleştirilmiş özet" **değildir** — bulguyu doğrulamak isteyen okuyucunun aynı hesapları sorgulaması
+> gerektiği için bilinçli olarak bırakılmıştır.
+
+### Bağımsız doğrulama (validator, 2026-08-13)
+
+Bu runbook'un ölçüme dayalı iddiaları, yapım turundan **bağımsız** bir oturumda, ayrı bir istemciden,
+6 salt-okunur istekle yeniden üretildi. Sonuç: **B1, B2, B3, B5, B6, B7, B8, B9 birebir tuttu.**
+
+| İddia | Yeniden üretilen kanıt |
+|---|---|
+| B1/B2 (§1, §2) | `403` + gövde literal `null` (4 byte) |
+| B3 (§2) | `401` + `null`; `?xml=1` → *"has not yet set up their Steam Community profile"* |
+| B2 ince ayrım (§2) | `privacyState=public` **olan** bir hesabın envanteri yine `403` |
+| B3 ince ayrım (§2) | profili `public` olan bir hesapta yine `401` — 401 tek sebebe indirgenemiyor |
+| B5 (§5) | `asset_properties` anonim; gözlenen adlar `Pattern Template · Wear Rating · Item Certificate · Name Tag · Charm Template` |
+| B6 (§4.1) | 219 asset → **174 ayrık** `(classid,instanceid)`, en kalabalık sınıf **9 kopya** |
+| B7 (§6) | `owner_descriptions` ve `cache_expiration` **yok** |
+| B8 (§6.1) | Envanterdeki **tüm** `market_tradable_restriction` değerleri `7` — `tradable: 1` ve `tradable: 0` ayrımsız |
+| B9 (§4.2) | Tam sayfa (`count=500`, 219/220 asset) yanıtında `more_items` ve `last_assetid` **anahtarları yok** |
+| B4 (§3) | **Yeniden üretilmedi** — Steam'e kasıtlı aşırı yük gerektirirdi (§3'ün kendi gerekçesi) |
+
+`data/T122_validation_shape.json` bu tablonun makine tarafından üretilmiş hâlidir. B6'nın sayıları
+`total_inventory_count: 220` ile eşleştiği için ölçümün **aynı envanterden** geldiği değerlendirilmiştir —
+yani B6 bağımsız bir örneklem değil, bağımsız bir **yeniden üretimdir**; şekil iddiaları (B5/B7/B8/B9)
+örneklemden bağımsızdır.
+
+### Tekrar üretmek için
 
 ```bash
 # Tek bir public envanterin ham yanıtı
