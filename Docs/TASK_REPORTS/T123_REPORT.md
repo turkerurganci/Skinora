@@ -95,10 +95,17 @@
 
 ## Commit & PR
 
-- Branch: `task/T123-seller-confirm-ready`
-- Commit: (aşağıda güncellenecek)
-- PR: (aşağıda güncellenecek)
-- CI: (aşağıda güncellenecek)
+- Branch: `task/T123-seller-confirm-ready` (main `ec5a05e` üzerinden açıldı)
+- Commit: `e0cae05` — T123: SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
+- PR: [#231](https://github.com/turkerurganci/Skinora/pull/231)
+- CI: run [`31743413400`](https://github.com/turkerurganci/Skinora/actions/runs/31743413400) — **✓ PASS**, CI Gate `success`
+- Branch izolasyon check: `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → yalnız **T123** ✓
+
+**Bloke edici job'ların hepsi `success`:** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · **6. Migration dry-run** · 7. Docker build (backend) · 7. Docker build (frontend) · CI Gate. (`0. Guard (direct push)` beklendiği gibi `skipped`.)
+
+**8 advisory E2E leg'i kırmızı — T117'den beri beklenen, T123 kaynaklı değil.** T120/T121'in yöntemiyle bağımsız ölçüldü: kodun değiştiği son main run'ı (**T121 merge, [`31524132478`](https://github.com/turkerurganci/Skinora/actions/runs/31524132478)**) baseline alındı — orada da **aynı 8 leg** `failure`. İmza karşılaştırması: T123 run'ının failure loglarında `Invalid object name 'PlatformSteamBots'` **tam 8 kez** (leg başına bir) geçiyor ve T123'ün yüzeylerinden (`confirm-ready`, `InventoryReadFreshness`, `refresh=true`, `seller_confirm_timeout_minutes`, `delivery_timeout_minutes`, `ITEM_NO_LONGER_AVAILABLE`, `BUYER_MOBILE_AUTHENTICATOR_INACTIVE`, `CaptureClassBaseline`, `SellerConfirmDeadline`, `buyerInventoryVisible`) **sıfır iz** var → yeni kırılma yok. Sahiplik T137 (`sidecar-fake` sürülebilir envanter) → T138 (E2E spec yeniden yazımı).
+
+> **Baseline seçimi notu:** main'in *en son* run'ı (T122 merge, `31733188607`) karşılaştırma için **kullanılamaz** — T122 doküman-only olduğu için path filtresi 8 E2E leg'ini de `skipped` bırakmıştı, yani orada kıyaslanacak bir sonuç yok. T122 raporunun kendisi bu durumu "doküman-only task'larda o karşılaştırma konusuzdur" diye kaydetmişti; burada kod değiştiği için doğru baseline kodun değiştiği son main run'ıdır.
 
 ## Known Limitations / Follow-up
 
