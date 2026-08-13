@@ -2482,11 +2482,31 @@ Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
 
 Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
   Bağımlılık: T122, T124
-  Dokümanlar: 02 §9.2, 06 §2.24
+  Dokümanlar: 02 §9.2 (v3.1), 06 §2.24,
+              INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md (T122 ölçümü)
   Kabul kriterleri:
     - 02 §9.2 tuzak matrisinin HER SATIRI için bir test
     - Servis saf/yan etkisiz kanıt değerlendirmesi yapıyor (polling'e hazır)
+    - `market_tradable_restriction` kanıt olarak KULLANILMIYOR (T122 B8: bu alan
+      kilit göstergesi değil, sınıf politikası — `tradable: 1` olan serbest bir
+      item'da da 7 geliyor). Bir test bu alanı okumanın yanlış sonuç verdiğini
+      sabitlemeli
+    - Kanıt değerlendirmesi item'ın KİLİT DURUMUNA dayanmıyor (T122 B7 ölçülemedi:
+      cooldown'un anonim görünümdeki imzası bilinmiyor; `tradable` alanı sınıf
+      düzeyinde ve kilit bitiş tarihi anonim okunamıyor — runbook §6)
+    - Sayfalama tüketicisi "devam yok"u `more_items`'ın YOKLUĞUNDAN anlıyor,
+      `more_items == 0`'dan değil (T122 B9)
+    - LAUNCH KAPISI: ilk N gerçek teslimatta alıcı+satıcı envanterinin ham yanıtı
+      saklanıyor ve insan incelemesinden geçmeden envanter kanıtına dayalı
+      otomatik para bırakma AÇILMIYOR. Kapı DEPLOY_RUNBOOK launch checklist'ine
+      bağlanmalı
   Not: Money-safety çekirdeği. Ayrı chat'te bağımsız doğrulama zorunlu.
+  Not (T122 ölçümü, 2026-08-13): T122 gerçek trade yapılamadığı için üç bilinmeyeni
+       KAPATAMADI — teslimat gecikmesi, `assetid` rotasyonu, `Item Certificate`
+       kalıcılığı + cooldown'un anonim imzası. Bunlar T125'i bloklamıyor çünkü
+       MANTIĞI değil SABİTLERİ belirliyorlar; izolasyon runbook §7'de beş maddede
+       tanımlı ve yukarıdaki AC'ler onun kodlanmış hâlidir. Bu AC'ler kaldırılırsa
+       ölçülmemiş varsayımlar sessizce para hareketine bağlanır.
 
 Task T126: POST /transactions/:id/confirm-receipt
   Bağımlılık: T125

@@ -167,10 +167,12 @@ karşılaştırması bu task için **konusuz**; yeni kırılma ihtimali yapısal
    ayrımı yapmadan önce sebebi netleştirmeli.
 4. **`P2P-SteamRateLimitWindow`** (B4) — T120'nin 10/dk varsayılanı çürütülmedi ama "rahat" okuması
    çürütüldü; uzun pencereli ikinci bütçe katmanı + 429 backoff gerekiyor.
-5. **T122-B yapıldı ama B7'yi kapatmadı** (yukarıda) — capture'daki item kilitli değildi. **Doğru deney
-   anonim görünümdedir:** hesapta kilitli bir item oluştur (market alımı / oyun içi drop) → envanteri Public
-   yap → **anonim** oku → bu kilitsiz baseline ile karşılaştır. Tek fark, kilidin **platforma görünen**
-   imzasıdır. Trade gerektirmiyor ve okumayı platform tarafı yapabilir.
+5. **T122-B yapıldı ama B7'yi kapatmadı** (yukarıda) — capture'daki item kilitli değildi. Doğru deney
+   (kilitli item oluştur → envanteri Public yap → **anonim** oku → kilitsiz baseline ile karşılaştır)
+   tasarlandı ve proje sahibine sunuldu; **proje sahibi kararı (2026-08-13): yapılmayacak.**
+   **B7 "ölçülemedi" olarak kapanır, açık eylem maddesi değildir.** Sonucu tasarıma taşındı: T125'in kanıt
+   değerlendirmesi item'ın **kilit durumuna dayanamaz** — 11 §P3'te T125 kabul kriteri olarak yazıldı.
+   Bilinmeyen, bir varsayıma dönüşmeden önce tasarımdan **dışlandı**.
 
 ---
 

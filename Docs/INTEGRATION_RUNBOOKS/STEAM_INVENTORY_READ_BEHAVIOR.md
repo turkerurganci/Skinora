@@ -265,11 +265,16 @@ Proje sahibi kendi hesabından tek item'lık envanterinin JSON'unu verdi. Sonuç
 ayırt edilemiyor: (a) sahip-özel alanlar yalnız bir kilit/hold varken üretiliyor, (b) yanıt zaten anonim
 şekil (oturum çerezleri bu uçta etkili değil). Tek bir kilitsiz capture bu ikisini ayıramaz.
 
-> **Sonraki adım kilit oluşturmaktır, capture tekrarlamak değil.** Ve doğru deney **sahip görünümü değil,
-> anonim görünümdür**: platform envanterleri anonim okuduğu için asıl sorulacak soru *"kilitli bir item
-> ANONİM görünümde nasıl görünür"*dur. Deney: hesapta kilitli bir item oluştur (market alımı veya oyun
-> içi drop — ikisi de 7 gün trade kısıtı doğurur) → envanteri Public yap → **anonim** olarak oku ve
-> buradaki kilitsiz baseline ile karşılaştır. Tek fark, kilidin platforma görünen imzasıdır.
+> **Doğru deney sahip görünümü değil, anonim görünümdür.** Platform envanterleri anonim okuduğu için asıl
+> soru *"kilitli bir item ANONİM görünümde nasıl görünür"*dur — sahip görünümü öğrenilse bile platformun
+> **göremediği** bir şeyi anlatır. Deney tasarımı: hesapta kilitli bir item oluştur (market alımı veya oyun
+> içi drop — ikisi de 7 gün trade kısıtı doğurur) → envanteri Public yap → **anonim** oku → buradaki
+> kilitsiz baseline ile karşılaştır. Tek fark, kilidin platforma görünen imzasıdır.
+
+**KARAR (proje sahibi, 2026-08-13): bu deney yapılmayacak.** B7 bu görevde **ölçülemedi** olarak kapanır ve
+açık bir eylem maddesi değildir. Kilit imzası bilinmediği için T125'in kanıt değerlendirmesi item'ın **kilit
+durumuna dayanamaz** — bu, T125'e kabul kriteri olarak yazıldı (11 §P3). Bilinmeyen, bir varsayıma
+dönüşmeden önce tasarımdan **dışlandı**.
 
 ---
 
