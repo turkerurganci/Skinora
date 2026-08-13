@@ -614,11 +614,11 @@
     "title": "参数管理",
     "labels": {
       "accept_timeout_minutes": "买家接受 timeout 时长",
-      "trade_offer_seller_timeout_minutes": "卖家 trade offer timeout 时长",
+      "seller_confirm_timeout_minutes": "卖家备货确认时限",
       "payment_timeout_min_minutes": "付款 timeout 最小值",
       "payment_timeout_max_minutes": "付款 timeout 最大值",
       "payment_timeout_default_minutes": "付款 timeout 默认值",
-      "trade_offer_buyer_timeout_minutes": "买家 trade offer timeout 时长",
+      "delivery_timeout_minutes": "卖家发货时限",
       "timeout_warning_ratio": "Timeout 提醒发送比例",
       "commission_rate": "佣金费率",
       "gas_fee_protection_ratio": "Gas fee 保护阈值",

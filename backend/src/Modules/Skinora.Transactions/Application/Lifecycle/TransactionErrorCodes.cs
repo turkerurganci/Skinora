@@ -46,6 +46,23 @@ public static class TransactionErrorCodes
     public const string InvalidTradeUrl = "INVALID_TRADE_URL";
     public const string SteamUnavailable = "STEAM_UNAVAILABLE";
 
+    // T123 — confirm-ready (07 §7.6a).
+    /// <summary>
+    /// 409 — the seller's inventory was READ and the listed asset is either
+    /// gone or no longer tradeable. A positive finding, so it may only be
+    /// produced from an <c>InventoryVisibility.Public</c> read (08 §2.3).
+    /// </summary>
+    public const string ItemNoLongerAvailable = "ITEM_NO_LONGER_AVAILABLE";
+
+    /// <summary>
+    /// 403 — the BUYER's Steam Mobile Authenticator is inactive (02 §9.1).
+    /// Distinct from <see cref="MobileAuthenticatorRequired"/> on purpose: here
+    /// the caller is the seller and the fix belongs to the other party, so the
+    /// two cases must not share a code the UI would phrase as "enable your
+    /// authenticator" (07 §7.6a).
+    /// </summary>
+    public const string BuyerMobileAuthenticatorInactive = "BUYER_MOBILE_AUTHENTICATOR_INACTIVE";
+
     // T51 — cancel (07 §7.7).
     public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
     public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";

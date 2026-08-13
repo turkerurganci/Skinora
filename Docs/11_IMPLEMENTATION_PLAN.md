@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
+**Versiyon: v0.7** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2472,31 +2472,53 @@ Task T123: SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
     - Item envanterden çıkmış satıcı ITEM_NO_LONGER_AVAILABLE alıyor
     - Alıcı MA kontrolü yapılıyor
     - Baseline yazılıyor; alıcı envanteri gizliyse işlem bloklanmıyor
-    - Ödeme adresi ancak bu adımdan sonra ifşa ediliyor
+    - Ödeme adresi ancak bu adımdan sonra ifşa ediliyor. Kapı `SellerReadyConfirmedAt`
+      damgasıdır, status kümesi DEĞİL (adres oluşturmada tahsis edilir; CREATED'dan
+      iptal olmuş bir işlemde de vardır ama penceresi hiç açılmamıştır)
+    - Envanter okumaları ÖNBELLEKSİZ (08 §2.3 `refresh`): hem item kontrolü hem
+      baseline. Sidecar bayrağı T120'den beri var ama backend hiç göndermiyordu
+    - Satıcı envanteri GİZLİ ise `ITEM_NO_LONGER_AVAILABLE` DEĞİL, 422
+      `INVENTORY_PRIVATE` döner (T121 üç değerli ayrımı; 07 §7.6a'ya eklendi)
+    - Baseline okunamazsa üç `BuyerBaseline*` kolonu da NULL kalır (sıfır YAZILMAZ)
     - SellerConfirmDeadline'ı besleyen SystemSetting'e karar verildi (aşağıdaki
       not) ve seçilen anahtarın açıklaması/etiketi v3.0 fazını anlatıyor
-  Not (T119 denetimi, 2026-08-10): iki timeout ayarı hâlâ custodial adında —
-       `trade_offer_seller_timeout_minutes` (bu görevin fazı) ve
-       `trade_offer_buyer_timeout_minutes` (T124'ün fazı). İkisi de bugün
-       ÜRETİMDE HİÇ OKUNMUYOR: yalnız `SystemSettingSeed` + `SystemSettingsCatalog`
-       + 4 dil FE etiketi olarak var; deadline'ları armlayan kod henüz yok.
-       Yani rename maliyeti şu an en düşük seviyede. Karar iki seçenek arasında:
-       (a) anahtarları `seller_confirm_timeout_minutes` / `delivery_timeout_minutes`
-       olarak yeniden adlandır — migration + `SKINORA_SETTING_*` env adı
-       (DEPLOY_RUNBOOK §A) + 4 dil i18n + 06 §8 tablosu; (b) adları koru,
-       yalnız açıklama/etiketleri düzelt. (a) önerilir: admin panelinde satıcının
-       teslimat penceresini "Alıcı trade offer timeout süresi" adlı bir kutu
-       yönetiyor — yanlış tarafı işaret eden bir kontrol, T119'un düzelttiği
-       sorumluluk çevirmesinin admin yüzündeki kalıntısı.
+    - SellerConfirmDeadline FİİLEN ARMLANIYOR (kabul geçişinde) — aşağıdaki
+      plan boşluğu notu
+  KARAR (proje sahibi, 2026-08-13) — adlandırma: seçenek (a) UYGULANDI.
+       `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`,
+       `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`.
+       Kapsam: seed + `SystemSettingsCatalog` + migration `T123_RenameTimeoutSettings`
+       (satır Id'leri sabit → `UpdateData`, admin değerleri korunur) +
+       `SKINORA_SETTING_*` env adları (.env.example, docker-compose.yml,
+       docker-compose.e2e.yml, `SettingsBootstrapTests`) + 4 dil i18n +
+       06 §8 + 04 §16 + DEPLOY_RUNBOOK §A.
+  PLAN BOŞLUĞU (T123 yapımında bulundu, proje sahibi onayıyla bu göreve alındı):
+       `SellerConfirmDeadline`'ı YAZAN kod hiç yoktu. Tüm okuyucular vardı
+       (`DeadlineScannerJob` ACCEPTED dalı, `TimeoutFreezeService`,
+       `CountdownSyncBroadcaster`, detay/liste timeout blokları) ama hiçbiri
+       ateşlenemiyordu: `AcceptDeadline` oluşturmada, `DeliveryDeadline` T124'te
+       armlanıyor, aradaki ACCEPTED fazı sahipsizdi. Sonuç, kabul edip susan
+       satıcıya HİÇBİR zaman sınırı olmamasıydı. Kabul geçişinde armlandı
+       (`TransactionAcceptanceService`); rename edilen anahtarın ilk üretim
+       tüketicisi de budur — aksi hâlde T119'un şikâyet ettiği "üretimde hiç
+       okunmayan ayar" durumu adı düzelmiş hâlde sürerdi.
+  Not (T119 denetimi, 2026-08-10 — KAPANDI): iki timeout ayarı custodial
+       adındaydı ve ikisi de üretimde hiç okunmuyordu; rename maliyeti bu yüzden
+       en düşük seviyedeydi. Gerekçe: admin panelinde satıcının teslimat
+       penceresini "Alıcı trade offer timeout süresi" adlı bir kutu yönetiyordu —
+       T119'un düzelttiği sorumluluk çevirmesinin admin yüzündeki kalıntısı.
+  Test beklentisi: Integration (confirm-ready üç kapı + baseline + payment
+       penceresi), Unit (sidecar refresh bayrağı, sınıf bazında baseline sayımı)
 
 Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
   Bağımlılık: T123
   Kabul kriterleri:
     - AmountValidationService SELLER_CONFIRMED -> PAYMENT_RECEIVED
     - DeliveryDeadline armlanıyor ve zamanında ateşleniyor; süreyi besleyen
-      SystemSetting T123'te alınan adlandırma kararına göre kullanıldı
-      (bugünkü aday `trade_offer_buyer_timeout_minutes` custodial adında ve
-      artık SATICININ penceresini yönetiyor — T119 denetimi)
+      SystemSetting **`delivery_timeout_minutes`**'tır (T123 adlandırma kararı
+      uygulandı; eski adı `trade_offer_buyer_timeout_minutes` idi ve SATICININ
+      penceresini yönetiyordu — T119 denetimi). Değer ölçülmemiştir: launch'ta
+      muhafazakâr YÜKSEK tutulur (DEPLOY_RUNBOOK §A #6 uyarısı)
     - DeadlineScannerJob'ın PAYMENT_RECEIVED dalı T127 gelene kadar
       TÜKETMİYOR: süre dolduğunda iptal uygulanmaz, işlem taranabilir
       kalır. Kapı T127'de kaldırılır.

@@ -614,11 +614,11 @@
     "title": "Parametre Yönetimi",
     "labels": {
       "accept_timeout_minutes": "Alıcı kabul timeout süresi",
-      "trade_offer_seller_timeout_minutes": "Satıcı trade offer timeout süresi",
+      "seller_confirm_timeout_minutes": "Satıcı hazırlık onayı penceresi",
       "payment_timeout_min_minutes": "Ödeme timeout minimum",
       "payment_timeout_max_minutes": "Ödeme timeout maksimum",
       "payment_timeout_default_minutes": "Ödeme timeout varsayılan",
-      "trade_offer_buyer_timeout_minutes": "Alıcı trade offer timeout süresi",
+      "delivery_timeout_minutes": "Satıcı teslimat penceresi",
       "timeout_warning_ratio": "Timeout uyarı gönderim oranı",
       "commission_rate": "Komisyon oranı",
       "gas_fee_protection_ratio": "Gas fee koruma eşiği",

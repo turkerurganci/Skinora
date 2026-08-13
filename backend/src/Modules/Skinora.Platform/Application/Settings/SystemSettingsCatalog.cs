@@ -51,11 +51,15 @@ public static class SystemSettingsCatalog
     [
         // --- Timeout (06 §3.17 / 02 §16.2 timeout süreleri) ---
         new("accept_timeout_minutes",                     "timeout",              "Alıcı kabul timeout süresi",                                "dakika"),
-        new("trade_offer_seller_timeout_minutes",         "timeout",              "Satıcı trade offer timeout süresi",                         "dakika"),
+        // T123 — renamed from trade_offer_seller_timeout_minutes /
+        // trade_offer_buyer_timeout_minutes. v3.0 creates no trade offer at all
+        // (03 §2.3 note), and the old names pointed at the wrong party: the
+        // second box manages the SELLER's delivery window (02 §3.1, T119).
+        new("seller_confirm_timeout_minutes",             "timeout",              "Satıcı hazırlık onayı penceresi",                           "dakika"),
         new("payment_timeout_min_minutes",                "timeout",              "Ödeme timeout minimum",                                     "dakika"),
         new("payment_timeout_max_minutes",                "timeout",              "Ödeme timeout maksimum",                                    "dakika"),
         new("payment_timeout_default_minutes",            "timeout",              "Ödeme timeout varsayılan",                                  "dakika"),
-        new("trade_offer_buyer_timeout_minutes",          "timeout",              "Alıcı trade offer timeout süresi",                          "dakika"),
+        new("delivery_timeout_minutes",                   "timeout",              "Satıcı teslimat penceresi",                                 "dakika"),
         new("timeout_warning_ratio",                      "timeout",              "Timeout uyarı gönderim oranı",                              "oran"),
 
         // --- Commission ---

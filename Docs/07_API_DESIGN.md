@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v3.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
+**Versiyon: v3.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §7.6a confirm-ready: hata listesine 422 `INVENTORY_PRIVATE` eklendi (satıcı envanteri gizliyse item "yok" sayılamaz — §7.2/§6.1 ile aynı üç değerli ayrım), yanıta `buyerInventoryVisible` alanı ve `paymentDeadline`'ın kaynağı yazıldı, baseline'ın sayım tabanlı olduğu ve okunamazsa kolonların NULL kaldığı normatif not oldu.) · 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
 
 ---
 
@@ -1421,15 +1421,23 @@ Freeze semantiği: Freeze süresince `remainingSeconds` azalmaz. Freeze kalktı�
 
 **Response (200) `data`:**
 ```json
-{ "status": "SELLER_CONFIRMED", "sellerReadyConfirmedAt": "2026-03-16T14:50:00Z", "paymentDeadline": "2026-03-16T16:50:00Z" }
+{ "status": "SELLER_CONFIRMED", "sellerReadyConfirmedAt": "2026-03-16T14:50:00Z", "paymentDeadline": "2026-03-16T16:50:00Z", "buyerInventoryVisible": true }
 ```
+
+`buyerInventoryVisible` **her yanıtta döner** (T123), yalnız `false` olduğunda değil: satıcıya bu işlemde 02 §9.2'nin hangi kanıt yollarının açık olduğu bildirilmektedir ve yalnız kötü durumda beliren bir alanı istemci okumayı unutabilir. `false` **başarısızlık değildir** — işlem her hâlükârda ilerler; teslimatın yalnızca alıcı onayıyla doğrulanabileceği anlamına gelir.
+
+`paymentDeadline` işlem oluşturulurken satıcının seçtiği `PaymentTimeoutMinutes`'tan hesaplanır (07 §7.2'de min/max SystemSetting'lerine karşı zaten doğrulanmıştır) — alıcıya ilanda gösterilen pencerenin aynısı armlanır.
 
 **Doğrulama (üçü de geçmeden ilerlenmez, 03 §2.3):**
 1. Item hâlâ satıcının envanterinde ve tradeable mı — envanter **önbelleksiz** okunur
 2. Alıcının Mobile Authenticator'ı hâlâ aktif mi
 3. Alıcının envanteri okunabiliyorsa teslimat doğrulaması için referans anlık görüntü (baseline) alınır. Okunamıyorsa işlem bloklanmaz; envanter kanıtı yolu kapanır ve yanıtta `buyerInventoryVisible: false` döner (02 §9.2)
 
-**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`, 409 `ITEM_NO_LONGER_AVAILABLE` *(item envanterde yok veya artık tradeable değil)*, 403 `BUYER_MOBILE_AUTHENTICATOR_INACTIVE`, 503 `STEAM_UNAVAILABLE`
+**Hatalar:** 409 `INVALID_STATE_TRANSITION`, 403 `NOT_A_PARTY`, 409 `ITEM_NO_LONGER_AVAILABLE` *(item envanterde yok veya artık tradeable değil)*, 422 `INVENTORY_PRIVATE` *(v3.0 — satıcının profili gizli, item doğrulanamadı)*, 403 `BUYER_MOBILE_AUTHENTICATOR_INACTIVE`, 503 `STEAM_UNAVAILABLE`
+
+> **Envanter okumasının üç sonucu (T123 — 08 §2.3, §7.2 ile aynı ayrım):** md.1 satıcının envanterini okur ve okumanın üç sonucu **ayrı** raporlanır. Envanter **okunduysa** ve item yok/artık tradeable değilse `ITEM_NO_LONGER_AVAILABLE` döner — bu bir **kanıttır** ve 409 bunu iddia eder. Profil gizliyse `INVENTORY_PRIVATE` (422), Steam'e ulaşılamadıysa `STEAM_UNAVAILABLE` (503) döner; ikisi de **bilgi yokluğudur**. Gizli profili `ITEM_NO_LONGER_AVAILABLE`'a çöktürmek, envanterinde duran bir item'ı arayan satıcıya yanlış talimat verir; `STEAM_UNAVAILABLE`'a çöktürmek ise 08 §2.7 uyarınca **tekrar denemeyle düzelmeyecek** bir duruma retry önerir — doğru talimat "profilini aç"tır. Kodlar §7.2 ve §6.1 ile birebir aynıdır.
+
+> **Not (T123):** md.3'ün baseline'ı `(ClassId, InstanceId)` çifti için **sayım** olarak alınır, varlık olarak değil (06 §3.5, 02 §9.2 — T122 ölçümü). Okuma **başarısızsa** üç `BuyerBaseline*` kolonu da NULL bırakılır: sıfır yazmak, okunamayan bir envanteri gerçekten boş olandan ayırt edilemez kılar ve sonraki delta hesabı alıcının önceden sahip olduğu her kopyayı yeni teslimat sanardı.
 
 ### 7.6b T6b — `POST /transactions/:id/confirm-receipt` *(v3.0 — yeni)*
 

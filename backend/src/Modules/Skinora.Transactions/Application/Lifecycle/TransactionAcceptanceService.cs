@@ -27,6 +27,24 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     public const string RefundCooldownKey = "wallet.refund_address_cooldown_hours";
 
     /// <summary>
+    /// T123 — SystemSetting key for the seller's readiness-confirmation window
+    /// (03 §2.3, §4.2). Renamed from <c>trade_offer_seller_timeout_minutes</c>
+    /// in this task; this is its first production reader.
+    /// </summary>
+    public const string SellerConfirmTimeoutKey = "seller_confirm_timeout_minutes";
+
+    /// <summary>
+    /// Documented default for <see cref="SellerConfirmTimeoutKey"/> when the
+    /// SystemSetting row is unconfigured (02 §16.2). Mirrors
+    /// <c>TransactionCreationService.DefaultAcceptTimeoutMinutes</c>: the
+    /// settings bootstrap fails fast at startup on a missing row, so this is a
+    /// defensive fallback only. It must never be zero — that would arm a
+    /// deadline in the past and time the transaction out the instant it is
+    /// accepted.
+    /// </summary>
+    public const int DefaultSellerConfirmTimeoutMinutes = 60;
+
+    /// <summary>
     /// SteamID64 &#8594; SteamID32 offset. A trade URL's <c>partner</c> query
     /// value is the account's SteamID32, i.e. <c>SteamID64 - 76561197960265728</c>
     /// (the "individual" universe/type base). Used by the T119a ownership
@@ -225,6 +243,20 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // pasted Steam URL often carries stripped off.
         transaction.BuyerTradeUrl = parsedTradeUrl.Normalized;
 
+        // T123 — arm the seller's readiness window (03 §2.3 step 8 → §4.2).
+        // Nothing wrote this column before: AcceptDeadline is armed at create
+        // and DeliveryDeadline is armed in T124, but the ACCEPTED phase in
+        // between had readers (DeadlineScannerJob:106, TimeoutFreezeService,
+        // CountdownSyncBroadcaster, the detail/list timeout blocks) and no
+        // writer at all. A NULL here is not a benign gap — it is the ONLY time
+        // bound on a seller who accepts and then goes quiet, so without it the
+        // buyer waits forever with no cancellation path but their own.
+        // Deliberately stamped from the same `nowUtc` the history row uses, so
+        // the audit trail and the deadline cannot disagree.
+        var sellerConfirmMinutes = await ReadSellerConfirmTimeoutMinutesAsync(cancellationToken)
+            ?? DefaultSellerConfirmTimeoutMinutes;
+        transaction.SellerConfirmDeadline = nowUtc + TimeSpan.FromMinutes(sellerConfirmMinutes);
+
         var previousStatus = transaction.Status;
         var machine = new TransactionStateMachine(transaction, transaction.RowVersion);
         try
@@ -321,6 +353,29 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             && parsed > 0)
             return parsed;
         return null;
+    }
+
+    /// <summary>
+    /// T123 — read <see cref="SellerConfirmTimeoutKey"/>. Returns <c>null</c>
+    /// for an unconfigured, blank, unparsable or non-positive value so the
+    /// caller falls back to the documented default: a zero or negative window
+    /// would arm the deadline in the past and cancel the transaction on the
+    /// next scanner pass, punishing the seller for an admin's typo.
+    /// </summary>
+    private async Task<int?> ReadSellerConfirmTimeoutMinutesAsync(CancellationToken cancellationToken)
+    {
+        var raw = await _db.Set<SystemSetting>()
+            .AsNoTracking()
+            .Where(s => s.Key == SellerConfirmTimeoutKey && s.IsConfigured)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0
+            ? parsed
+            : null;
     }
 
     /// <summary>

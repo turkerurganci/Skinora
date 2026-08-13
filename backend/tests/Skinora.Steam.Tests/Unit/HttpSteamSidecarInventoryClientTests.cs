@@ -43,7 +43,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => OkJson(json));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Success, result.Status);
         Assert.NotNull(result.Inventory);
@@ -84,7 +84,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => OkJson(json));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Success, result.Status);
         Assert.Equal(1, result.Inventory!.TotalCount);
@@ -108,7 +108,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => OkJson(json));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(expected, result.Status);
         Assert.Null(result.Inventory);
@@ -124,7 +124,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
             OkJson("{\"items\":[],\"totalCount\":0,\"tradeableCount\":0}"));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Success, result.Status);
         Assert.NotNull(result.Inventory);
@@ -139,7 +139,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => OkJson("{\"totalCount\":0,\"tradeableCount\":0}"));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Unavailable, result.Status);
         Assert.Null(result.Inventory);
@@ -156,13 +156,51 @@ public sealed class HttpSteamSidecarInventoryClientTests
         });
         var sut = BuildClient(handler);
 
-        await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.NotNull(captured);
         Assert.Equal(HttpMethod.Get, captured!.Method);
         Assert.EndsWith($"/api/inventory/{SteamId}", captured.RequestUri!.AbsoluteUri);
         Assert.True(captured.Headers.TryGetValues("X-Internal-Key", out var keyValues));
         Assert.Equal(InternalKey, keyValues!.Single());
+    }
+
+    [Fact]
+    public async Task GetInventoryAsync_Sends_Refresh_True_When_Cache_Is_Bypassed()
+    {
+        // T123 — the sidecar has accepted ?refresh=true since T120 but nothing
+        // on this side ever set it, so every backend read came out of the
+        // 120-second cache. 07 §7.6a needs an uncached read.
+        HttpRequestMessage? captured = null;
+        var handler = new StubHandler(req =>
+        {
+            captured = req;
+            return OkJson("{\"items\":[],\"totalCount\":0,\"tradeableCount\":0}");
+        });
+        var sut = BuildClient(handler);
+
+        await sut.GetInventoryAsync(SteamId, bypassCache: true, CancellationToken.None);
+
+        Assert.EndsWith($"/api/inventory/{SteamId}?refresh=true", captured!.RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task GetInventoryAsync_Omits_The_Refresh_Flag_On_The_Cached_Path()
+    {
+        // Omitted rather than `refresh=false`: the sidecar's own parser treats
+        // an absent flag as "use the cache" (routes.ts parseRefreshParam), so
+        // the ordinary read keeps its pre-T123 wire shape byte for byte.
+        HttpRequestMessage? captured = null;
+        var handler = new StubHandler(req =>
+        {
+            captured = req;
+            return OkJson("{\"items\":[],\"totalCount\":0,\"tradeableCount\":0}");
+        });
+        var sut = BuildClient(handler);
+
+        await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
+
+        Assert.DoesNotContain("refresh", captured!.RequestUri!.AbsoluteUri, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -174,7 +212,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         });
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.InventoryPrivate, result.Status);
         Assert.Null(result.Inventory);
@@ -186,7 +224,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Unavailable, result.Status);
         Assert.Null(result.Inventory);
@@ -198,7 +236,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
         var handler = new StubHandler(_ => throw new HttpRequestException("connection refused"));
         var sut = BuildClient(handler);
 
-        var result = await sut.GetInventoryAsync(SteamId, CancellationToken.None);
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
 
         Assert.Equal(SteamSidecarStatus.Unavailable, result.Status);
     }

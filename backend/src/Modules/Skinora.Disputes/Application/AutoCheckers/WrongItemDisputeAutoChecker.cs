@@ -59,9 +59,14 @@ public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
             return Unresolved(NoDeliveryMessage);
         }
 
+        // T123 — Cached: this is after-the-fact evidence gathering about an
+        // asset that either arrived or did not, minutes-to-days ago. A
+        // 120-second-old snapshot cannot flip that answer, and the checker
+        // never advances a state on the strength of it.
         var lookup = await _inventory.GetItemAsync(
             buyer.SteamId,
             transaction.DeliveredBuyerAssetId,
+            InventoryReadFreshness.Cached,
             cancellationToken);
 
         // T121 — 08 §2.3: an unreadable inventory is not a blank inventory.

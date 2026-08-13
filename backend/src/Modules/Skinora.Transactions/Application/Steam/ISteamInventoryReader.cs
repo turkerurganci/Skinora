@@ -24,7 +24,63 @@ public interface ISteamInventoryReader
     Task<InventoryLookupResult> GetItemAsync(
         string steamId64,
         string itemAssetId,
+        InventoryReadFreshness freshness,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T123 — capture the 06 §3.5 delivery baseline: how many copies of one
+    /// item class the owner already holds, and which asset IDs those are.
+    /// Called on entry to <c>SELLER_CONFIRMED</c> (03 §2.3 step 3).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Class-scoped, not inventory-wide, and counted rather than tested for
+    /// presence: 02 §9.2 pins delivery evidence to a <em>count</em> delta
+    /// because one class legitimately appears many times in the same inventory
+    /// (T122 measured 199 assets over 159 distinct classes, the busiest class
+    /// holding 9 copies). A presence check would never see a delivery into an
+    /// inventory that already contains that skin.
+    /// </para>
+    /// <para>
+    /// Matching is on <c>(classId, instanceId)</c> — the same pair 06 §3.5
+    /// names — and never on asset ID, which Steam rotates on every trade.
+    /// </para>
+    /// </remarks>
+    Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+        string steamId64,
+        string classId,
+        string? instanceId,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 08 §2.3 — whether a read may be served from the sidecar's 120-second cache.
+/// </summary>
+/// <remarks>
+/// Explicit at the port rather than defaulted, so every call site states which
+/// guarantee it needs. The distinction is not a performance knob:
+/// <see cref="Fresh"/> is a correctness requirement wherever the read decides
+/// whether a transaction may advance (03 §2.3, 07 §7.6a), because a
+/// two-minute-old inventory can still show an item the seller has already
+/// traded away, and a two-minute-old baseline silently absorbs items the buyer
+/// acquired in that window — which would later read as a delivery.
+/// </remarks>
+public enum InventoryReadFreshness
+{
+    /// <summary>
+    /// The sidecar cache may answer (08 §2.3). Correct for browse/listing reads
+    /// and for after-the-fact evidence gathering, where a slightly stale
+    /// snapshot costs nothing.
+    /// </summary>
+    Cached,
+
+    /// <summary>
+    /// Bypass the cache read and go to Steam (<c>?refresh=true</c>). Required
+    /// wherever the answer gates a state transition or is persisted as a
+    /// reference snapshot.
+    /// </summary>
+    Fresh,
 }
 
 /// <summary>
@@ -110,6 +166,66 @@ public sealed record InventoryLookupResult
     /// <summary>Steam unreachable — nothing is known about the asset.</summary>
     public static InventoryLookupResult Unavailable { get; } =
         new(InventoryVisibility.Unavailable, item: null);
+}
+
+/// <summary>
+/// Outcome of one <see cref="ISteamInventoryReader.CaptureClassBaselineAsync"/>
+/// call — the 06 §3.5 <c>BuyerBaseline*</c> snapshot.
+/// </summary>
+/// <remarks>
+/// Same three-valued discipline as <see cref="InventoryLookupResult"/>: a
+/// <see cref="InventoryVisibility.Private"/> or
+/// <see cref="InventoryVisibility.Unavailable"/> read can never be built
+/// carrying a count, so "unreadable" cannot be persisted as a baseline of
+/// zero. A zero baseline is a claim ("the buyer holds none of this skin") and
+/// a delivery would later be measured against it; an unreadable inventory
+/// supports no such claim and must leave the columns NULL (02 §9.2).
+/// </remarks>
+public sealed record InventoryClassBaselineResult
+{
+    private InventoryClassBaselineResult(
+        InventoryVisibility visibility,
+        int classCount,
+        IReadOnlyList<string> assetIds)
+    {
+        Visibility = visibility;
+        ClassCount = classCount;
+        AssetIds = assetIds;
+    }
+
+    /// <summary>Which of the 08 §2.3 states the read ended in.</summary>
+    public InventoryVisibility Visibility { get; }
+
+    /// <summary>
+    /// How many copies of the requested <c>(classId, instanceId)</c> the owner
+    /// holds. Meaningful only for <see cref="Captured"/>; zero otherwise.
+    /// </summary>
+    public int ClassCount { get; }
+
+    /// <summary>
+    /// The asset IDs behind <see cref="ClassCount"/>, in the order the sidecar
+    /// returned them. Empty for the two unreadable outcomes.
+    /// </summary>
+    public IReadOnlyList<string> AssetIds { get; }
+
+    /// <summary>
+    /// Inventory read. A count of zero is a legitimate, useful baseline: the
+    /// buyer owns no copy of this skin yet.
+    /// </summary>
+    public static InventoryClassBaselineResult Captured(IReadOnlyList<string> assetIds)
+    {
+        ArgumentNullException.ThrowIfNull(assetIds);
+        return new InventoryClassBaselineResult(
+            InventoryVisibility.Public, assetIds.Count, assetIds);
+    }
+
+    /// <summary>Inventory hidden — no baseline can be taken (02 §9.2).</summary>
+    public static InventoryClassBaselineResult Private { get; } =
+        new(InventoryVisibility.Private, classCount: 0, assetIds: []);
+
+    /// <summary>Steam unreachable — no baseline can be taken.</summary>
+    public static InventoryClassBaselineResult Unavailable { get; } =
+        new(InventoryVisibility.Unavailable, classCount: 0, assetIds: []);
 }
 
 /// <summary>

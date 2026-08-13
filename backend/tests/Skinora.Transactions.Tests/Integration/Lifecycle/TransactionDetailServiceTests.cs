@@ -571,12 +571,133 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         await Context.SaveChangesAsync();
     }
 
+    // ---------- T123: payment block disclosure (07 §7.5, 03 §2.3) ----------
+
+    [Theory]
+    [InlineData(TransactionStatus.CREATED)]
+    [InlineData(TransactionStatus.ACCEPTED)]
+    public async Task Payment_Block_Is_Hidden_Before_The_Seller_Confirms_Readiness(
+        TransactionStatus status)
+    {
+        // 03 §2.3: the address is allocated at creation but must not be shown
+        // until the seller re-confirms the item is still sendable — otherwise
+        // the buyer pays into a stale listing.
+        var transaction = await CreateTransactionAsync(status, buyerId: _buyer.Id);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Payment);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Is_Disclosed_Once_The_Seller_Has_Confirmed_Readiness()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        var payment = outcome.Body!.Payment;
+        Assert.NotNull(payment);
+        Assert.Equal(PaymentDepositAddress, payment!.Address);
+        Assert.Equal("102.00", payment.ExpectedAmount);
+        Assert.Equal(StablecoinType.USDT, payment.Stablecoin);
+        Assert.Equal("Tron (TRC-20)", payment.Network);
+        // T124+ fill these once payments land; 07 §7.5 scopes txHash to
+        // PAYMENT_RECEIVED onwards.
+        Assert.Null(payment.TxHash);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Survives_A_Cancellation_That_Happened_After_The_Window_Opened()
+    {
+        // 03 §5.4 — a late/lost transfer has to be matched against the address
+        // it was sent to, so hiding it on cancellation would strand the buyer.
+        // 06 §3.5 keeps milestone stamps cumulative across CANCELLED_*.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CANCELLED_TIMEOUT, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.NotNull(outcome.Body!.Payment);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Stays_Hidden_On_A_Cancellation_From_Before_The_Window()
+    {
+        // The address was allocated at creation, so a status-set gate would
+        // leak it here even though the window never opened.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CANCELLED_TIMEOUT, buyerId: _buyer.Id);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Payment);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Is_Never_Shown_To_A_Public_Viewer()
+    {
+        // A deposit address handed to a stranger is an invitation to phish the
+        // buyer with it.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Payment);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Is_Omitted_When_Allocation_Has_Not_Landed_Yet()
+    {
+        // Allocation is retried by EnsurePaymentAddressJob, so a missing row is
+        // a transient gap. Omitting the block beats emitting an empty address
+        // the UI would render as payable.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Payment);
+    }
+
+    private const string PaymentDepositAddress = "TPaymentAddr1234567890abcdef1234";
+
+    private async Task AddPaymentAddressAsync(Guid transactionId)
+    {
+        Context.Set<PaymentAddress>().Add(new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            Address = PaymentDepositAddress,
+            HdWalletIndex = 1,
+            ExpectedAmount = 102m,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+    }
+
     private async Task<Transaction> CreateTransactionAsync(
         TransactionStatus status,
         Guid? buyerId = null,
         BuyerIdentificationMethod method = BuyerIdentificationMethod.STEAM_ID,
         string? inviteToken = null,
-        string? buyerTradeUrl = null)
+        string? buyerTradeUrl = null,
+        bool sellerConfirmed = false)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
@@ -607,6 +728,8 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
+            // T123 — the payment-block gate reads this stamp (03 §2.3 step 4).
+            SellerReadyConfirmedAt = sellerConfirmed ? nowUtc.AddMinutes(-3) : null,
             // CK_Transactions_Cancel — CANCELLED_* requires these three.
             CancelledBy = IsCancelledStatus(status) ? CancelledByType.ADMIN : null,
             CancelReason = IsCancelledStatus(status) ? "admin cancel (test)" : null,

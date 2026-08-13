@@ -50,9 +50,16 @@ public sealed class HttpSteamSidecarInventoryClient
     }
 
     public async Task<SteamSidecarInventoryResult> GetInventoryAsync(
-        string steamId, CancellationToken cancellationToken)
+        string steamId, bool bypassCache, CancellationToken cancellationToken)
     {
-        using var request = BuildRequest(HttpMethod.Get, $"api/inventory/{steamId}");
+        // T123 — 08 §2.3 cache bypass. The flag is omitted rather than sent as
+        // `refresh=false` on the cached path: absent means "use the cache" in
+        // the sidecar's own parser (routes.ts parseRefreshParam), so the
+        // ordinary read keeps its existing wire shape byte for byte.
+        var path = bypassCache
+            ? $"api/inventory/{steamId}?refresh=true"
+            : $"api/inventory/{steamId}";
+        using var request = BuildRequest(HttpMethod.Get, path);
 
         HttpResponseMessage response;
         try

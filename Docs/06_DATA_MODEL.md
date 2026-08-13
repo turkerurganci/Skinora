@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
+**Versiyon: v6.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -1031,11 +1031,11 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | Key | Category | DataType | Varsayılan | Açıklama |
 |-----|----------|----------|------------|----------|
 | `accept_timeout_minutes` | Timeout | int | — | Alıcı kabul timeout süresi |
-| `trade_offer_seller_timeout_minutes` | Timeout | int | — | Satıcı trade offer timeout süresi |
+| `seller_confirm_timeout_minutes` | Timeout | int | — | Satıcı hazırlık onayı penceresi — alıcı kabul ettikten sonra satıcının "göndermeye hazırım" demesi için tanınan süre (03 §2.3, §4.2). `SellerConfirmDeadline`'ı besler |
 | `payment_timeout_min_minutes` | Timeout | int | — | Ödeme timeout minimum |
 | `payment_timeout_max_minutes` | Timeout | int | — | Ödeme timeout maksimum |
 | `payment_timeout_default_minutes` | Timeout | int | — | Ödeme timeout varsayılan |
-| `trade_offer_buyer_timeout_minutes` | Timeout | int | — | Alıcı trade offer timeout süresi |
+| `delivery_timeout_minutes` | Timeout | int | — | Satıcı teslimat penceresi — ödeme emanete girdikten sonra satıcının item'ı doğrudan alıcıya göndermesi için tanınan süre (02 §2.2 adım 6). `DeliveryDeadline`'ı besler (T124) |
 | `timeout_warning_ratio` | Timeout | decimal | 0.75 | Uyarı gönderim oranı (ör: 0.75) — WP12'de seeded default; admin-tunable (0<x<1). Read-path `warningThresholdPercent`=oran×100 (07 §7.1/§7.5) + uyarı bildirimi job zamanlaması bu oranı kullanır |
 | `commission_rate` | Commission | decimal | 0.02 | Komisyon oranı (%2) |
 | `min_transaction_amount` | Limit | decimal | — | Minimum işlem tutarı |
@@ -1088,6 +1088,8 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `reconciliation.cold_wallet_address` | Monitoring | string | NONE | Reconciliation cold wallet Tron adresi (opsiyonel); 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
 | `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
 | `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
+
+> **Anahtar yeniden adlandırma (T123, 2026-08-13):** `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`**. İki ad da custodial dönemden kalmıştı ve v3.0'da **ikisi de yanlıştı**: platform artık trade offer oluşturmuyor (03 §2.3 notu) ve — pahalı olan yarısı — "buyer" anahtarı **satıcının** teslimat penceresini besliyordu, yani admin satıcı teslimatsızlığını "Alıcı trade offer timeout süresi" etiketli bir kutudan yönetiyordu (T119 sorumluluk denetimi). Satır `Id`'leri değişmedi → migration bir `UpdateData`'dır; admin'in girdiği `Value` korunur. Env bootstrap adı anahtardan türetildiği için deploy adları da değişti: `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` / `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` (DEPLOY_RUNBOOK §A #2/#6).
 
 > **API lehçesi:** `GET /admin/settings` (07 §9.8) bu satırları daha ince bir **API kategori** kümesiyle döndürür (ör. `Limit` → `transaction_limits` / `cancel_rules` / `new_account`; `AccessControl` → `geo_blocking` / `age_verification`; `Wallet` → `wallet_security`; `Feature` → `buyer_identification`). DB `Category` kolonu index hedefidir (`IX_SystemSettings_Category`); sunum (label/unit/API kategori) eşlemesi `SystemSettingsCatalog` kodundadır. Sanctions taraması (yaptırımlı adres listesi) ayrı admin yüzeyinden yönetilir (T82) — SystemSetting değildir.
 

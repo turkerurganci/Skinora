@@ -30,11 +30,24 @@ public static class SystemSettingSeed
     public static IReadOnlyList<SystemSetting> All { get; } =
     [
         Unconfigured( 1, "accept_timeout_minutes",                      "int",     "Timeout",     "Alıcı kabul timeout süresi"),
-        Unconfigured( 2, "trade_offer_seller_timeout_minutes",          "int",     "Timeout",     "Satıcı trade offer timeout süresi"),
+        // T123 — renamed from `trade_offer_seller_timeout_minutes` /
+        // `trade_offer_buyer_timeout_minutes` (07 §7.6a, 03 §2.3, 02 §3.1).
+        // Both names were custodial leftovers and BOTH were misleading in v3.0:
+        // no trade offer is created by the platform any more, and — the costly
+        // half — the "buyer" key now feeds the SELLER's delivery window, so an
+        // admin was tuning seller non-delivery through a box labelled "buyer
+        // trade offer timeout" (T119 responsibility audit). The row Ids are
+        // unchanged, so the migration is an UpdateData: any value an admin has
+        // already configured survives the rename.
+        // Env var bootstrap follows the key automatically
+        // (SettingsBootstrapService: SKINORA_SETTING_{KEY_UPPER}) — the deploy
+        // names are now SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES and
+        // SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES (DEPLOY_RUNBOOK §A #2/#6).
+        Unconfigured( 2, "seller_confirm_timeout_minutes",              "int",     "Timeout",     "Satıcı hazırlık onayı penceresi — alıcı kabul ettikten sonra satıcının 'göndermeye hazırım' demesi için tanınan süre (03 §2.3). Dolarsa işlem satıcı kusuruyla iptal olur (02 §3.1)."),
         Unconfigured( 3, "payment_timeout_min_minutes",                 "int",     "Timeout",     "Ödeme timeout minimum"),
         Unconfigured( 4, "payment_timeout_max_minutes",                 "int",     "Timeout",     "Ödeme timeout maksimum"),
         Unconfigured( 5, "payment_timeout_default_minutes",             "int",     "Timeout",     "Ödeme timeout varsayılan"),
-        Unconfigured( 6, "trade_offer_buyer_timeout_minutes",           "int",     "Timeout",     "Alıcı trade offer timeout süresi"),
+        Unconfigured( 6, "delivery_timeout_minutes",                    "int",     "Timeout",     "Satıcı teslimat penceresi — ödeme emanete girdikten sonra satıcının item'ı doğrudan alıcıya göndermesi için tanınan süre (02 §2.2 adım 6). Ölçülmemiş bir değerdir; launch'ta muhafazakâr YÜKSEK tutulur (DEPLOY_RUNBOOK §A #6)."),
         // WP12 (T83a/T45) — seeded with the 06 §3.17 documented default (0.75)
         // so it is no longer deploy-mandatory. Consumed two ways: the warning
         // notification job (TimeoutSchedulingService) schedules at ratio × window,

@@ -28,11 +28,11 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 | # | Env var | SystemSetting key | Tip | Örnek | Anlam |
 |---|---|---|---|---|---|
 | 1 | `SKINORA_SETTING_ACCEPT_TIMEOUT_MINUTES` | accept_timeout_minutes | int | 60 | Alıcı kabul timeout |
-| 2 | `SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES` | trade_offer_seller_timeout_minutes | int | 60 | Satıcı trade offer timeout |
+| 2 | `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` | seller_confirm_timeout_minutes | int | 60 | Satıcı hazırlık onayı penceresi (03 §2.3) — T123'te yeniden adlandırıldı |
 | 3 | `SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES` | payment_timeout_min_minutes | int | 15 | Ödeme timeout min |
 | 4 | `SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES` | payment_timeout_max_minutes | int | 60 | Ödeme timeout max |
 | 5 | `SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES` | payment_timeout_default_minutes | int | 30 | Ödeme timeout varsayılan (min ≤ x ≤ max) |
-| 6 | `SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES` | trade_offer_buyer_timeout_minutes | int | 60 | Alıcı trade offer timeout |
+| 6 | `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` | delivery_timeout_minutes | int | 60 | Satıcı teslimat penceresi (02 §2.2 adım 6) — T123'te yeniden adlandırıldı; **60 bağlayıcı değil**, aşağıdaki uyarıya bak |
 | 7 | `SKINORA_SETTING_MIN_TRANSACTION_AMOUNT` | min_transaction_amount | decimal | 1.0 | Minimum işlem tutarı (USDT) |
 | 8 | `SKINORA_SETTING_MAX_TRANSACTION_AMOUNT` | max_transaction_amount | decimal | 10000.0 | Maksimum işlem tutarı (USDT) |
 | 9 | `SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS` | max_concurrent_transactions | int | 5 | Eşzamanlı aktif işlem limiti |
@@ -49,7 +49,9 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 
 > Örnek değerler `SettingsBootstrapTests.AllRequiredEnvVars()` ile birebir; gerçek prod değerleri risk profiline göre **bilinçli** belirlenir. `payment_timeout_*` cross-key invariant: `min < max` ve `min ≤ default ≤ max` (`SystemSettingsValidator`). Tarihsel olarak 21 sayılıyordu; WP4a (`price_deviation_threshold`) ve WP12 (`timeout_warning_ratio`) seed-default verince **19**'a indi.
 
-> **#6 uyarısı (T122 doğrulaması, 2026-08-13) — `trade_offer_buyer_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır ve v3.0'da adının söylediği şeyi yönetmez.** Anahtar custodial dönemden kalma adını taşıyor; v3.0 P2P modelinde bu ayar **satıcının teslimat penceresini** besliyor (adlandırma kararı 11 §P3 T123'te, tüketen kod T124'te). T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
+> **Anahtar yeniden adlandırma (T123, 2026-08-13):** #2 ve #6'nın hem SystemSetting anahtarı hem env var adı değişti (`trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`). Env adı anahtardan türetildiği için (`SettingsBootstrapService`: `SKINORA_SETTING_{KEY_UPPER}`) **eski env var adları artık hiçbir şeyi doldurmaz** — bu ikisini `.env`'inde eski adla taşıyan bir ortam startup'ta fail-fast eder. `.env.example`, `docker-compose.yml` ve `docker-compose.e2e.yml` güncellendi; kendi `.env` dosyanı elle güncelle. DB tarafında migration `T123_RenameTimeoutSettings` bir `UpdateData`'dır (satır `Id`'leri sabit) → admin UI'dan girilmiş değerler korunur.
+
+> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor (tüketen kod T124'te). T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
 
 ---
 
