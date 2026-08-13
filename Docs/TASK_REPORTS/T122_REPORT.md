@@ -107,6 +107,15 @@ tekrar üretme komutları runbook §8'de.
 
 ---
 
+## Commit & PR
+
+- **Dal:** `task/T122-steam-inventory-measurement`
+- **Commit:** `8d27733` — T122: Gerçek Steam ölçümü — salt-okunur canlı ölçüm + kapsam bölünmesi
+- **PR:** [#230](https://github.com/turkerurganci/Skinora/pull/230)
+- **Branch izolasyon check:** `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` → **`T122`** (tek)
+
+---
+
 ## Known Limitations / Follow-up
 
 1. **Ölçülemeyen üç bilinmeyen (B1–B3, runbook §7):** teslimat gecikmesi · `assetid` rotasyonu ·
