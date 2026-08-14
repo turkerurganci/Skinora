@@ -90,9 +90,26 @@ Doğrudan T124 kapsamı — **5 yeni test metodu = 8 yeni çalıştırma** (biri
 ## Commit & PR
 
 - Branch: `task/T124-confirm-payment-delivery-deadline`
-- Commit: COMMITHASH — T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
-- PR: #PRNO
-- CI: CISTATUS
+- Commit: `44f42b4` — T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
+- PR: [#232](https://github.com/turkerurganci/Skinora/pull/232)
+- CI: ✓ **PASS** — run [`31809828883`](https://github.com/turkerurganci/Skinora/actions/runs/31809828883), **CI Gate `success`**
+
+### CI sonucu
+
+**Bloke edici 8 job yeşil:** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend) · **CI Gate**.
+`0. Guard (direct push)` ve `3b. JS test (vitest)` **skipped** — sırasıyla PR event'i ve frontend'e dokunulmaması nedeniyle beklenen.
+
+**8 advisory E2E leg kırmızı — T124 kaynaklı DEĞİL, kanıtlandı:**
+
+| Kontrol | Sonuç |
+|---|---|
+| Baseline (kodun değiştiği son main run'ı — T123 merge, [`31802083622`](https://github.com/turkerurganci/Skinora/actions/runs/31802083622)) | **Aynı 8 leg orada da `failure`** |
+| Bu run'da kök sebep imzası | `Invalid object name 'PlatformSteamBots'` — **leg başına tam 1 iz, 8/8** |
+| T124 yüzeylerinden iz (`DeliveryDeadline` / `delivery_timeout_minutes` / `ArmDeliveryDeadline` / `ReportGatedDelivery`) | **8 leg'in hepsinde 0** |
+
+Yani yeni kırılma yok; kök sebep T117'nin düşürdüğü `PlatformSteamBots` tablosunu temizlemeye çalışan `e2e/src/db.ts` seed'i ve custodial akışı süren spec'ler — sahiplik **T137 → T138**. Legler `continue-on-error` olduğu için gate'i bloklamıyorlar.
+
+**Düzeltme (bu raporun ilk taslağına göre):** T124 `e2e/**` dosyalarına dokunmadığı için E2E leglerinin tetiklenmeyeceğini yazmıştım — yanlıştı. `ci.yml`'deki `e2e-stack` path filtresi `backend/**`'i de kapsıyor (`.github/workflows/ci.yml:86-92`), dolayısıyla salt-backend değişiklikleri de bu legleri çalıştırır.
 
 ## Known Limitations / Follow-up
 
