@@ -20,6 +20,29 @@ export interface InventoryItem {
   iconUrl: string | null;
   tradable: boolean;
   marketable: boolean;
+  /**
+   * T125 — Steam's per-asset `asset_properties` (T122 runbook §5), forwarded
+   * verbatim when Steam sent any. Omitted rather than emitted as `[]` so the
+   * 07 §6.1 shape is unchanged for the majority of assets (T122 measured
+   * properties on 91 of 199 — weapons carry them, collectibles do not).
+   *
+   * Audit material for the delivery launch gate only. It is NOT an input to
+   * 02 §9.2 delivery verification, which decides on a class count delta.
+   */
+  assetProperties?: AssetProperty[];
+}
+
+/**
+ * One `asset_properties` entry: `Pattern Template` · `Wear Rating` ·
+ * `Item Certificate` · `Name Tag` · `Charm Template` (T122 runbook §5).
+ * Steam types the value three ways and sends exactly one per entry.
+ */
+export interface AssetProperty {
+  propertyId: number;
+  name: string;
+  intValue?: string;
+  floatValue?: string;
+  stringValue?: string;
 }
 
 /** Response payload — totals are derived once during merge to keep callers cheap. */
@@ -88,7 +111,20 @@ export type CacheOutcomeObserver = (outcome: CacheOutcome) => void;
  * implementation is a thin adapter around `SteamCommunity.getUserInventoryContents`.
  */
 export interface InventoryFetcher {
-  fetch(steamId: string, language: string): Promise<CEconItem[]>;
+  fetch(steamId: string, language: string): Promise<InventoryFetchResult>;
+}
+
+/**
+ * What one upstream fetch produced: the merged assets, plus Steam's own
+ * `total_inventory_count` for the whole inventory.
+ *
+ * T125 — the count is carried so {@link InventoryService} can tell a COMPLETE
+ * read from a SHORT one (08 §2.3 pagination). It is `null` when the fetcher
+ * could not report one, which disables the check rather than failing it.
+ */
+export interface InventoryFetchResult {
+  items: CEconItem[];
+  totalInventoryCount: number | null;
 }
 
 /**
@@ -106,18 +142,31 @@ export class SteamCommunityInventoryFetcher implements InventoryFetcher {
 
   constructor(private readonly community: SteamCommunity = new SteamCommunity()) {}
 
-  fetch(steamId: string, language: string): Promise<CEconItem[]> {
+  fetch(steamId: string, language: string): Promise<InventoryFetchResult> {
     return new Promise((resolve, reject) => {
       // @types/steamcommunity narrows Callback to `(err) => any`, but the real
       // library invokes `(err, inventory, currencies, totalCount)` (see
       // node_modules/steamcommunity/components/users.js line 628). Cast through
       // unknown so we can carry the inventory argument out.
-      const callback = (err: Error | null, inventory: CEconItem[] | undefined): void => {
+      //
+      // T125 — the fourth argument is Steam's `total_inventory_count`, which
+      // the library forwards only from the LAST page of the pagination loop
+      // (users.js: `callback(null, inventory, currency, body.total_inventory_count)`).
+      // It is therefore the honest yardstick for "did we get the whole thing".
+      const callback = (
+        err: Error | null,
+        inventory: CEconItem[] | undefined,
+        _currency: unknown,
+        totalInventoryCount: number | undefined,
+      ): void => {
         if (err) {
           reject(err);
           return;
         }
-        resolve(inventory ?? []);
+        resolve({
+          items: inventory ?? [],
+          totalInventoryCount: typeof totalInventoryCount === 'number' ? totalInventoryCount : null,
+        });
       };
       this.community.getUserInventoryContents(
         steamId,
@@ -131,6 +180,23 @@ export class SteamCommunityInventoryFetcher implements InventoryFetcher {
   }
 }
 
+/**
+ * T125 — raised when a read came back with FEWER assets than Steam's own
+ * `total_inventory_count` says the inventory holds, i.e. the pagination loop
+ * stopped early.
+ *
+ * Why this is not a warning: a short read is indistinguishable, downstream,
+ * from a genuinely smaller inventory. Delivery verification (02 §9.2) counts
+ * copies of one item class, so a truncated read produces "the count did not
+ * rise" — a *negative finding* — for a delivery that did happen, and the
+ * buyer gets refunded for an item they received. Reporting UNAVAILABLE turns
+ * a silent wrong answer into a retryable absence of information (08 §2.7).
+ *
+ * Only the `<` direction is checked. An excess is not treated as an error:
+ * `total_inventory_count` counts the whole inventory while the merged list
+ * excludes currency items, so the two are not required to be equal — only for
+ * the list never to fall short.
+ */
 /**
  * 08 §2.3 — Steam Community envanter okuma.
  *
@@ -199,9 +265,9 @@ export class InventoryService {
       this.onCacheOutcome('miss');
     }
 
-    let rawItems: CEconItem[];
+    let fetched: InventoryFetchResult;
     try {
-      rawItems = await this.fetch(steamId);
+      fetched = await this.fetch(steamId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === InventoryService.PRIVATE_INVENTORY_MARKER) {
@@ -212,7 +278,23 @@ export class InventoryService {
       return { visibility: 'UNAVAILABLE', error: new SteamUnavailableError(message) };
     }
 
-    const inventory = buildInventoryResponse(rawItems);
+    // T125 — completeness gate, BEFORE the result is cached or returned. A
+    // truncated inventory must never be written to the cache either: it would
+    // then answer the next 120 seconds of reads as if it were the whole thing.
+    const shortRead = detectShortRead(fetched);
+    if (shortRead) {
+      this.log.warn(
+        {
+          steamId,
+          received: shortRead.received,
+          expected: shortRead.expected,
+        },
+        'Steam inventory read is short of total_inventory_count — reported UNAVAILABLE (08 §2.3)',
+      );
+      return { visibility: 'UNAVAILABLE', error: shortRead };
+    }
+
+    const inventory = buildInventoryResponse(fetched.items);
     await this.cache.set(steamId, inventory);
     this.log.info(
       {
@@ -231,8 +313,8 @@ export class InventoryService {
    * Cache hits deliberately never reach here — a cached read must not wait
    * behind the rate limiter (08 §2.6: the cache exists to reduce queue load).
    */
-  private fetch(steamId: string): Promise<CEconItem[]> {
-    const run = (): Promise<CEconItem[]> =>
+  private fetch(steamId: string): Promise<InventoryFetchResult> {
+    const run = (): Promise<InventoryFetchResult> =>
       this.fetcher.fetch(steamId, InventoryService.DEFAULT_LANGUAGE);
     return this.queue ? this.queue.enqueue(run) : run();
   }
@@ -259,6 +341,38 @@ export class SteamUnavailableError extends SidecarError {
 }
 
 /**
+ * T125 — raised when a read came back with FEWER assets than Steam's own
+ * `total_inventory_count` says the inventory holds, i.e. the pagination loop
+ * stopped early.
+ *
+ * A subclass of {@link SteamUnavailableError} rather than a sibling, because a
+ * short read IS an unreadable inventory as far as every caller is concerned:
+ * retryable, and never evidence of absence (08 §2.7).
+ *
+ * Why it cannot be a warning. A truncated read is indistinguishable, downstream,
+ * from a genuinely smaller inventory. Delivery verification (02 §9.2) counts
+ * copies of one item class, so a short read yields "the count did not rise" — a
+ * *negative finding* — for a delivery that did happen, and the buyer is refunded
+ * for an item they received.
+ *
+ * Only the `<` direction is checked. An excess is not an error:
+ * `total_inventory_count` covers the whole inventory while the merged list
+ * excludes currency items, so the two need not be equal — the list must simply
+ * never fall short.
+ */
+export class InventoryShortReadError extends SteamUnavailableError {
+  constructor(
+    public readonly received: number,
+    public readonly expected: number,
+  ) {
+    super(
+      `Inventory read returned ${received} assets but Steam reports ${expected} — pagination incomplete`,
+    );
+    this.name = 'InventoryShortReadError';
+  }
+}
+
+/**
  * Map `CEconItem[]` to the normalized `InventoryItem[]` shape. Pure / exported
  * for unit testing — `descriptions` join is performed by the library, here we
  * only project the fields the backend exposes (07 §6.1) and 03 §2.2 step 8
@@ -277,6 +391,15 @@ function mapItem(raw: CEconItem): InventoryItem {
   // CEconItem types assetid/classid/instanceid as `number | string` — Steam can
   // emit assetIDs larger than `Number.MAX_SAFE_INTEGER`, so we normalize to
   // string at the wire boundary to avoid precision loss in downstream consumers.
+  //
+  // Deliberately NOT mapped: `market_tradable_restriction`. T122-B measured it
+  // at 7 on an item whose `tradable` was 1 — the field carries the item CLASS's
+  // policy ("items of this class are restricted for 7 days when acquired via
+  // trade/market"), not this asset's current lock state, and reads identically
+  // for a locked and a free copy (runbook §6.1). Forwarding it would invite a
+  // consumer to treat every free item as locked. `tradable` is the only lock
+  // signal Steam gives anonymously, and even that is class-level (runbook §6).
+  const assetProperties = mapAssetProperties(raw);
   return {
     assetId: String(raw.assetid ?? raw.id),
     classId: String(raw.classid),
@@ -288,7 +411,57 @@ function mapItem(raw: CEconItem): InventoryItem {
     iconUrl: typeof raw.getImageURL === 'function' ? raw.getImageURL() : null,
     tradable: Boolean(raw.tradable),
     marketable: Boolean(raw.marketable),
+    ...(assetProperties.length > 0 ? { assetProperties } : {}),
   };
+}
+
+/** Raw `asset_properties` entry as steamcommunity attaches it to a CEconItem. */
+interface RawAssetProperty {
+  propertyid?: number | string;
+  name?: string;
+  int_value?: number | string;
+  float_value?: number | string;
+  string_value?: string;
+}
+
+/**
+ * Project Steam's `asset_properties` into the wire shape (T122 runbook §5).
+ *
+ * Values stay STRINGS: `Wear Rating` arrives as a 19-digit decimal
+ * (`0.0608838982880115509`) that a JS number silently rounds, and
+ * `Item Certificate` is a hex string. The launch-gate reviewer compares these
+ * across two inventories, so a lossy round-trip would corrupt exactly the
+ * comparison the capture exists for.
+ */
+function mapAssetProperties(raw: CEconItem): AssetProperty[] {
+  const entries = (raw as { asset_properties?: unknown }).asset_properties;
+  if (!Array.isArray(entries)) return [];
+
+  const mapped: AssetProperty[] = [];
+  for (const entry of entries as RawAssetProperty[]) {
+    if (entry == null || typeof entry !== 'object') continue;
+    const propertyId = Number(entry.propertyid);
+    mapped.push({
+      propertyId: Number.isFinite(propertyId) ? propertyId : 0,
+      name: entry.name ?? '',
+      ...(entry.int_value != null ? { intValue: String(entry.int_value) } : {}),
+      ...(entry.float_value != null ? { floatValue: String(entry.float_value) } : {}),
+      ...(entry.string_value != null ? { stringValue: String(entry.string_value) } : {}),
+    });
+  }
+  return mapped;
+}
+
+/**
+ * T125 — compare the merged asset list against Steam's `total_inventory_count`.
+ * Returns an error when the list falls short, `null` when the read looks
+ * complete or when no total was reported.
+ */
+function detectShortRead(fetched: InventoryFetchResult): InventoryShortReadError | null {
+  const { items, totalInventoryCount } = fetched;
+  if (totalInventoryCount == null) return null;
+  if (items.length >= totalInventoryCount) return null;
+  return new InventoryShortReadError(items.length, totalInventoryCount);
 }
 
 interface TagEntry {

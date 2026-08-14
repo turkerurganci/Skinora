@@ -159,6 +159,15 @@ public static class SystemSettingSeed
         // SELLER_PAYOUT row. T74 energy delegation replaces this MVP estimate
         // with a runtime Energy/Bandwidth-derived value.
         Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "WP1 MVP satıcı payout gas fee tahmini (USDT). SellerPayoutQueueJob bu değeri gas-fee koruma split'inde (02 §4.7) kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30). T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // --- T125: Delivery evidence launch gate (02 §9.2, DEPLOY_RUNBOOK §H) ---
+        // Seeded FALSE and deliberately not env-bootstrappable (Default(...) ⇒
+        // IsConfigured = true, which SettingsBootstrapService never overrides):
+        // the switch may only be flipped from the admin UI, by a person who has
+        // read the captured evidence. T122 could not measure delivery latency,
+        // assetid rotation or Item Certificate persistence without a real trade
+        // (runbook §7), so until those rows exist the inventory inference is
+        // recorded and surfaced but does not release money on its own.
+        Default     (60, "delivery.inventory_evidence_auto_release_enabled", "bool", "Delivery",     "false",        "Envanter kanıtına dayalı OTOMATİK teslimat onayı açık mı (02 §9.2 launch kapısı). false iken `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` kanıtı kayda geçer ve ekranda görünür ama parayı tek başına serbest bırakmaz — insan incelemesi gerekir. Alıcının kendi 'teslim aldım' onayı bu kapıdan ETKİLENMEZ. İlk N gerçek teslimatın kanıtı (DeliveryEvidenceCaptures) incelendikten sonra true yapılır (DEPLOY_RUNBOOK §H)."),
     ];
 
     private static SystemSetting Unconfigured(

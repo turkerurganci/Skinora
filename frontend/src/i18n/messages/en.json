@@ -712,6 +712,7 @@
       "reputation": "Reputation",
       "platformMaintenance": "Platform Maintenance",
       "retention": "Data Retention",
+      "deliveryVerification": "Delivery Verification",
       "other": "Other"
     }
   },

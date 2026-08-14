@@ -76,7 +76,13 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     // community endpoint — those come from a per-item action
                     // template that the T65 trade pipeline derives on send.
                     InspectLink: null,
-                    IsTradeable: item.Tradeable));
+                    IsTradeable: item.Tradeable)
+                {
+                    // T125 — audit material for the launch-gate capture only
+                    // (DEPLOY_RUNBOOK §H). Nothing in the evidence engine reads
+                    // it; 02 §9.2 decides on a class count delta.
+                    AssetProperties = MapProperties(item),
+                });
 
             case SteamSidecarStatus.InventoryPrivate:
                 _logger.LogInformation(
@@ -111,15 +117,15 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
         switch (result.Status)
         {
             case SteamSidecarStatus.Success when result.Inventory is { } inv:
-                var assetIds = inv.Items
+                var assets = inv.Items
                     .Where(it => MatchesClass(it, classId, instanceId))
-                    .Select(it => it.AssetId)
+                    .Select(it => new InventoryClassAsset(it.AssetId, MapProperties(it)))
                     .ToList();
                 _logger.LogInformation(
                     "Baseline for {SteamId} class {ClassId}/{InstanceId}: {Count} copies "
                     + "of {Total} items scanned",
-                    steamId64, classId, instanceId ?? "-", assetIds.Count, inv.TotalCount);
-                return InventoryClassBaselineResult.Captured(assetIds);
+                    steamId64, classId, instanceId ?? "-", assets.Count, inv.TotalCount);
+                return InventoryClassBaselineResult.Captured(assets);
 
             case SteamSidecarStatus.InventoryPrivate:
                 _logger.LogInformation(
@@ -150,6 +156,22 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
         return instanceId is null
             || string.Equals(item.InstanceId, instanceId, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// T125 — carry Steam's per-asset <c>asset_properties</c> across the module
+    /// boundary (T122 runbook §5). Pure projection; no field here is ever an
+    /// input to the 02 §9.2 delivery decision.
+    /// </summary>
+    private static IReadOnlyList<InventoryAssetProperty> MapProperties(
+        SteamInventoryItemDto item) =>
+        item.AssetProperties.Count == 0
+            ? []
+            : [.. item.AssetProperties.Select(p => new InventoryAssetProperty(
+                PropertyId: p.PropertyId,
+                Name: p.Name,
+                IntValue: p.IntValue,
+                FloatValue: p.FloatValue,
+                StringValue: p.StringValue))];
 
     private static bool BypassCache(InventoryReadFreshness freshness) =>
         freshness == InventoryReadFreshness.Fresh;

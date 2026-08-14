@@ -74,10 +74,11 @@ public class SeedDataTests : IntegrationTestBase
         // 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
         // 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings +
         // 2 T77 hot_wallet.{monitor_cron,trx_balance_minimum} settings +
-        // 1 WP1 blockchain.payout_gas_fee_estimate_usdt setting.
+        // 1 WP1 blockchain.payout_gas_fee_estimate_usdt setting +
+        // 1 T125 delivery.inventory_evidence_auto_release_enabled launch gate.
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(59, rows.Count);
-        Assert.Equal(59, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(60, rows.Count);
+        Assert.Equal(60, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -85,10 +86,15 @@ public class SeedDataTests : IntegrationTestBase
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
         // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses + T77 hot wallet monitor + TRX floor:
-        // 40 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
+        // 41 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
         // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76 + 2 T77 + 1 WP1
         // + 1 WP4a price_deviation_threshold=1.0
-        // + 1 WP12 timeout_warning_ratio=0.75).
+        // + 1 WP12 timeout_warning_ratio=0.75
+        // + 1 T125 delivery.inventory_evidence_auto_release_enabled=false — the
+        //   launch gate ships CONFIGURED on purpose so SettingsBootstrapService
+        //   can never hydrate it from an env var (06 §8.9): opening it is a
+        //   human decision made after reading captured evidence, not a deploy
+        //   variable (DEPLOY_RUNBOOK §H).
         // T76 hot/cold wallet addresses follow the auth.banned_countries
         // NONE-sentinel pattern: shipped configured with "NONE", treated as
         // skipped scope by ReconciliationService until production deploy
@@ -108,6 +114,7 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.sweep_trx_fallback_sun",
             "blockchain.transfer_retry_intervals_minutes",
             "commission_rate",
+            "delivery.inventory_evidence_auto_release_enabled",
             "dormant_account_min_age_days",
             "gas_fee_protection_ratio",
             "hot_wallet.monitor_cron",

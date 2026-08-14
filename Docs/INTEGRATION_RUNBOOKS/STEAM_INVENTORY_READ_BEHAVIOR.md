@@ -328,6 +328,25 @@ Manuel spike yerine: ilk **N** gerçek teslimatta alıcı+satıcı envanterinin 
 incelemesinden geçmeden** envanter kanıtına dayalı otomatik para bırakma açılmaz. Böylece B1–B3 üretimin
 kendisinden ölçülür. Bu kapı `DEPLOY_RUNBOOK` launch checklist'ine bağlanmalıdır — sahiplik T125.
 
+> **UYGULANDI (T125, 2026-08-14) — bir sapmayla.** Kapının kendisi kuruldu:
+> `delivery.inventory_evidence_auto_release_enabled` (06 §8, seed default `false`), kanıt tablosu
+> `DeliveryEvidenceCaptures` (06 §3.5a) ve açma prosedürü **DEPLOY_RUNBOOK §H**.
+>
+> **Sapma — "ham yanıt" saklanmıyor, saklanamıyor.** Yukarıdaki cümle Steam'in ham gövdesinin elde
+> edilebilir olduğunu varsayıyordu; değil. Sidecar envanteri `steamcommunity` kütüphanesi üzerinden okur ve
+> kütüphane sayfalama + `assets[] × descriptions[] × asset_properties` birleştirmesini **kendi içinde**
+> yapıp `CEconItem[]` döndürür (`components/users.js`) — ham JSON hiçbir noktada dışarı verilmez. Erişilebilir
+> en zengin katman `CEconItem`'dır ve `asset_properties` orada mevcuttur (`classes/CEconItem.js:89-91`).
+>
+> **Onun yerine saklanan:** işlemin **kendi item sınıfı** için iki tarafın gözlemi — görünürlükler, baseline ↔
+> gözlenen sayımlar, asset ID listeleri, **asset başına `asset_properties`** ve gecikme türetmek için zaman
+> damgaları. B1 (`ObservedAt` − `PaymentReceivedAt`), B2 (`SellerItemAssetId` ↔ `NewAssetIds`) ve
+> B3 (`Item Certificate` iki tarafta) **üçü de bu kayıttan cevaplanabilir**; kaybedilen tek şey işlemle
+> ilgisiz asset'lerin gövdesidir, ki o zaten üçüncü şahıs verisidir (§8).
+>
+> **Ölçüm nasıl işlenir:** DEPLOY_RUNBOOK §H.3 adım 3 — inceleme sonucu bu bölüme (§7) geri yazılır ve
+> B1–B3'ün "ölçülemez" satırları kapatılır veya revize edilir.
+
 ---
 
 ## §8 Ham Veri

@@ -712,6 +712,7 @@
       "reputation": "信誉",
       "platformMaintenance": "平台维护",
       "retention": "数据保留",
+      "deliveryVerification": "交付验证",
       "other": "其他"
     }
   },

@@ -10,6 +10,7 @@ using Skinora.Shared.BackgroundJobs;
 using Skinora.Fraud.Application.Account;
 using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Admin;
+using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
@@ -62,6 +63,13 @@ public static class TransactionsModule
         // T123 — seller readiness confirmation (07 §7.6a, 03 §2.3). The gate
         // that opens the payment window and takes the 02 §9.2 delivery baseline.
         services.AddScoped<ITransactionReadinessService, TransactionReadinessService>();
+
+        // T125 — the 02 §9.2 delivery evidence engine. Side-effect free by
+        // contract (reads two inventories + the launch-gate setting, returns a
+        // verdict), so it is safe to call repeatedly. Its consumers land later:
+        // T126 confirm-receipt, T127 the scanner's pre-timeout verification
+        // round, T130 the dispute auto-checker.
+        services.AddScoped<IDeliveryVerificationService, DeliveryVerificationService>();
 
         // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
         // doc-ref claimed §7.1–§7.4 but the list endpoint was never

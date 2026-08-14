@@ -135,6 +135,10 @@ public static class SystemSettingsCatalog
         new("retention.batch_size_outbox",                "retention",            "Outbox cleanup batch boyutu",                               "adet"),
         new("retention.batch_size_notification",          "retention",            "Bildirim cleanup batch boyutu",                             "adet"),
         new("retention.batch_size_user_login_log",        "retention",            "UserLoginLog cleanup batch boyutu",                         "adet"),
+
+        // --- Delivery verification launch gate (T125 — 02 §9.2, DEPLOY_RUNBOOK §H) ---
+        new("delivery.inventory_evidence_auto_release_enabled", "delivery_verification",
+            "Envanter kanıtıyla otomatik teslimat onayı",                                     null),
     ];
 }
 

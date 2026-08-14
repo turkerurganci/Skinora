@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
+**Versiyon: v6.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — yeni entity §3.5a `DeliveryEvidenceCapture` (append-only teslimat kanıt kaydı) ve §8'e `delivery.inventory_evidence_auto_release_enabled` launch kapısı satırı eklendi. Şema: 1 yeni tablo, migration `T125_DeliveryEvidenceCapture`.) · 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -691,6 +691,31 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >
 > Bu constraint'ler veri bütünlüğünü DB seviyesinde garanti eder — uygulama katmanı kontrolüne ek güvence sağlar.
 
+### 3.5a DeliveryEvidenceCapture
+
+Bir teslimat doğrulama turunda platformun **ne gördüğünün** kaydı — T125 launch kapısının kanıt tabanı (02 §9.2, DEPLOY_RUNBOOK §H).
+
+| Field | Tip | Kısıt | Açıklama |
+|-------|-----|-------|----------|
+| `Id` | long | PK, IDENTITY | |
+| `TransactionId` | guid | FK → Transaction, NOT NULL | |
+| `ObservedAt` | datetime | NOT NULL | Gözlemin yapıldığı an (satırın yazıldığı an değil) |
+| `Verdict` | string(40) | NOT NULL | Turun sonucu, **ad olarak**: `Delivered` / `InventoryEvidencePendingReview` / `MisdeliverySignature` / `NoMovement` / `Inconclusive` |
+| `Evidence` | int | NOT NULL | Tur sonundaki kümülatif `DeliveryEvidence` (§2.24) — flags enum olduğu için int saklanır |
+| `AutoReleaseGated` | bool | NOT NULL | Gözlem anında launch kapısı kapalı mıydı — yani bu satır inceleme için mi toplandı |
+| `Payload` | text | NOT NULL | Gözlemin tamamı (JSON): iki tarafın görünürlüğü, baseline ↔ gözlenen sayımlar, asset ID listeleri, asset başına property kayıtları, gecikme türetmek için zaman damgaları |
+| `CreatedAt` | datetime | NOT NULL | Satırın yazılma anı |
+
+> **Neden var:** T122 gerçek bir trade yapılamadığı için üç şeyi ölçemedi ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7): teslimatın görünme gecikmesi, `assetid` rotasyonu, `Item Certificate`'in trade'i hayatta kalması. Proje sahibi kararı, ölçümün **üretimden** gelmesi yönünde oldu; bu tablo o ölçümün taşıyıcısıdır.
+>
+> **Kapsam:** yalnız işlemin **kendi item sınıfı**, iki tarafta. Envanter dökümü değildir — üçüncü şahıs envanter içeriği kişisel veridir (T122 runbook §8).
+>
+> **Silme politikası:** Append-Only (`IAppendOnly`, §4.2) — INSERT sonrası UPDATE/DELETE **uygulama katmanında reddedilir**. Satırlar birinin parası hakkındaki bir kararın gerekçesidir; sonradan düzenlenebilen bir kayıt, var olma sebebi olan inceleyici için değersizdir.
+>
+> **Yazan:** `DeliveryEvidenceCaptureRecorder` — çağıranın `SaveChanges`'ine katılır, yani kanıt ve onu gerekçelendiren karar birlikte commit olur. **Üreten:** `DeliveryVerificationService`, yalnız bir inceleyicinin okuyacağı turlar için (envanter kanıtıyla kapanan teslimat ve yanlış-teslimat imzası); hiçbir şey bulmayan bir yoklama kaydedilmez.
+
+---
+
 ### 3.6 TransactionHistory
 
 Her state geçişinin tam kaydı — audit trail.
@@ -1088,6 +1113,7 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `reconciliation.cold_wallet_address` | Monitoring | string | NONE | Reconciliation cold wallet Tron adresi (opsiyonel); 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
 | `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
 | `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
+| `delivery.inventory_evidence_auto_release_enabled` | Delivery | bool | false | Envanter kanıtına dayalı otomatik teslimat onayı açık mı (T125, 02 §9.2). false iken kanıt kaydedilir (§3.5a) ama parayı tek başına serbest bırakmaz; alıcı onayı etkilenmez. Env ile açılamaz — bkz. DEPLOY_RUNBOOK §H |
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`**. İki ad da custodial dönemden kalmıştı ve v3.0'da **ikisi de yanlıştı**: platform artık trade offer oluşturmuyor (03 §2.3 notu) ve — pahalı olan yarısı — "buyer" anahtarı **satıcının** teslimat penceresini besliyordu, yani admin satıcı teslimatsızlığını "Alıcı trade offer timeout süresi" etiketli bir kutudan yönetiyordu (T119 sorumluluk denetimi). Satır `Id`'leri değişmedi → migration bir `UpdateData`'dır; admin'in girdiği `Value` korunur. Env bootstrap adı anahtardan türetildiği için deploy adları da değişti: `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` / `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` (DEPLOY_RUNBOOK §A #2/#6).
 
@@ -1524,7 +1550,7 @@ Kullanıcı hesabını sildiğinde (02 §19, 05 §6.5):
 | 02 §14.2 | Sahte işlem | User (CooldownExpiresAt), SystemSetting | Cooldown tracking |
 | 02 §14.3 | Hesap güvenliği | FraudFlag, UserLoginLog | IP/cihaz çapraz kontrol |
 | 02 §14.4 | Kara para | FraudFlag, Transaction (MarketPriceAtCreation) | Piyasa fiyatı snapshot |
-| 02 §9.2 | Teslimat doğrulama | Transaction (`DeliveryEvidence`, baseline alanları) | Alıcı onayı + envanter kanıtı |
+| 02 §9.2 | Teslimat doğrulama | Transaction (`DeliveryEvidence`, baseline alanları) · DeliveryEvidenceCapture (§3.5a) | Alıcı onayı + envanter kanıtı; envanter yolu launch kapısına bağlı (T125, DEPLOY_RUNBOOK §H) |
 | 02 §16 | Admin paneli | AdminRole, AdminRolePermission, AdminUserRole, SystemSetting | Dinamik rol ve parametre |
 | 02 §17 | Dashboard | — (sorgu bazlı) | Mevcut entity'lerden türetilir |
 | 02 §18 | Bildirimler | Notification, UserNotificationPreference, NotificationDelivery | Platform içi + dış kanal teslimat takibi |

@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -1668,6 +1668,14 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
 | Blockchain health check | Aktif / Pasif | Toggle | — |
 | Health check aralığı | Kontrol sıklığı | Sayı | Saniye |
 | Otomatik timeout freeze | Health check başarısız olunca otomatik freeze | Toggle | — |
+
+#### Teslimat Doğrulama (T125 — 02 §9.2)
+
+| Parametre | Açıklama | Tür | Birim |
+|-----------|----------|-----|-------|
+| Envanter kanıtıyla otomatik teslimat onayı | Kapalıyken envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz; alıcının kendi "teslim aldım" onayı etkilenmez | Toggle | — |
+
+> **Launch kapısı — kapalı doğmuş bir toggle.** Seed default'u `false`'tur ve bu bilinçlidir: T122 gerçek bir trade yapamadığı için teslimat gecikmesi, `assetid` rotasyonu ve `Item Certificate` kalıcılığı ölçülemedi. Toggle, ilk gerçek teslimatların kanıtı (06 §3.5a `DeliveryEvidenceCaptures`) bir insan tarafından okunduktan sonra açılır — açma prosedürü ve inceleme soruları `DEPLOY_RUNBOOK` §H'dedir. **Yalnız admin UI'dan açılabilir**; `SKINORA_SETTING_*` env yolu bu satırda çalışmaz (06 §8.9), çünkü kapı bir deploy değişkeni değil bir insan kararıdır.
 
 **Her Parametre Satırı:**
 - Parametre adı + açıklama
