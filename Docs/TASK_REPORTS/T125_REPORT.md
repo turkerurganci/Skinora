@@ -141,9 +141,9 @@
 ## Commit & PR
 
 - Branch: `task/T125-delivery-verification-evidence`
-- Commit: `afc54f1` — T125: DeliveryVerificationService + DeliveryEvidence
+- Commit: `afc54f1` — T125: DeliveryVerificationService + DeliveryEvidence · `068a9bf` (rapor PR bilgisi) · `c97db85` (`Decide()` yorum düzeltmesi)
 - PR: [#234](https://github.com/turkerurganci/Skinora/pull/234)
-- CI: run [`31831063171`](https://github.com/turkerurganci/Skinora/actions/runs/31831063171) — izleniyor
+- CI: **✓ PASS** — final HEAD `c97db85`, run [`31831916818`](https://github.com/turkerurganci/Skinora/actions/runs/31831916818), **CI Gate `success`**; 12 bloke edici job yeşil (Lint · Build · Unit · JS test · Integration · Contract · Migration dry-run · Docker ×3 · Detect paths · Gate), `Guard` skipped (PR event). Önceki run [`31831063171`](https://github.com/turkerurganci/Skinora/actions/runs/31831063171) (HEAD `afc54f1`) da `success`.
 
 ## Notlar
 
