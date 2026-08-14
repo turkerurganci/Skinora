@@ -419,7 +419,7 @@ describe('GET /api/inventory/:steamId?refresh (T120 — 08 §2.3)', () => {
     const fetcher: InventoryFetcher = {
       async fetch() {
         calls += 1;
-        return [] as never;
+        return { items: [] as never, totalInventoryCount: 0 };
       },
     };
     const service = new InventoryService(fetcher, cache);

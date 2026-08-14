@@ -2,7 +2,7 @@
 
 **Oluşturma:** WP14 (2026-06-19) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
 
-> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (59 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
+> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (60 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
 ---
 
@@ -16,6 +16,7 @@
 | **D. Sidecar parity (cadence/sweep)** | Sidecar env'i otoriter | Backend DB kopyası admin-görünür; **runtime'a yansımaz** — sidecar env değişimi + sidecar restart gerekir. |
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
 | **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
+| **H. Launch checklist — teslimat kanıtı kapısı** | **Launch'ta ZORUNLU adım** | `delivery.inventory_evidence_auto_release_enabled` `false` seed edilir. İlk N gerçek teslimatın kanıtı insan tarafından incelenmeden envanter kanıtına dayalı otomatik para bırakma **açılmaz** (02 §9.2, T125). |
 
 ---
 
@@ -86,7 +87,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 
 Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam **çalışmaz** (warn log ile atlanır, fail-fast DEĞİL).
 
-> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** Aşağıdaki beş satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
+> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** Aşağıdaki altı satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
 
 | Key | Default | Set edilmezse |
 |---|---|---|
@@ -95,6 +96,7 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 | `auth.banned_countries` | NONE | Geo-block uygulanmaz (02 §21.1) |
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
 | `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
+| `delivery.inventory_evidence_auto_release_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz. Açma prosedürü §H'de; alıcının kendi onayı bundan etkilenmez (T125, 02 §9.2) |
 
 ### C.1 PRICE_DEVIATION için uygulama config'i (SystemSetting değil)
 
@@ -260,3 +262,56 @@ Grafana bunun üzerine startup'ı iptal eder. `grafana/grafana:11.3.0` üzerinde
 - Provisioning dosyalarını değiştirdikten sonra render'ı yeniden koşturun: `docker compose -f docker-compose.yml up -d --force-recreate skinora-grafana` (bağımlılık zinciri render'ı otomatik tetikler).
 - `TELEGRAM_*` boş bırakılamaz — bkz. §B. Gerçek bot yoksa lokal provada boş olmayan herhangi bir değer yeterlidir.
 - Render adımı ayrıca `plugins/` dizinini oluşturur (Grafana yokluğunda hata log'lar; zararsız ama gürültülü).
+
+---
+
+## H. Launch checklist — teslimat kanıtı doğrulama kapısı (T125)
+
+> **Sahiplik:** T125 (11 §P3 kabul kriteri) · **Kaynak ölçüm:** [`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7 · **İş kuralı:** 02 §9.2
+
+**Kapı bu:** `delivery.inventory_evidence_auto_release_enabled` (bool, seed default **`false`**). Bu ayar `false` iken envanter kanıtına dayalı **otomatik para bırakma açılmaz**.
+
+### H.1 Neden bir kapı var
+
+T122'nin canlı Steam ölçümü, iki gerçek hesap arasında **trade yapılamadığı** için üç bilinmeyeni kapatamadı (runbook §7):
+
+| # | Bilinmeyen | T125'e etkisi |
+|---|---|---|
+| B1 | Kabul → item'ın alıcı envanterinde görünmesi arasındaki gecikme | Kanıtın ne zaman aranacağını belirler; mantığı değil **sabiti** etkiler |
+| B2 | `assetid`'nin trade'de gerçekten değişmesi | Alıcı tarafında sınıf bazlı eşleşmenin gerekçesi (ikincil kaynak var, ölçüm yok) |
+| B3 | `Item Certificate`'in trade'i hayatta kalması | İleride daha güçlü bir eşleştirme anahtarı olabilir; bugün kullanılmıyor |
+
+Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gelsin**. İlk gerçek teslimatlarda platformun ne gördüğü kaydedilir, bir insan okur, kapı **ondan sonra** açılır.
+
+### H.2 Kapı kapalıyken ne olur / ne olmaz
+
+| Yol | Kapı kapalı (`false`) |
+|---|---|
+| Alıcı "teslim aldım" onayı | **Etkilenmez.** Onay alıcının kendi aleyhinedir (parası satıcıya gider), platformun çıkarımı değildir — normal akar (02 §9.2). |
+| `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` | Kanıt üretilir, `DeliveryEvidenceCaptures`'a yazılır, verdict `InventoryEvidencePendingReview` olur. **Para otomatik hareket etmez.** İşlem iptal de **edilmez** — kanıt item'ın ulaştığını söylüyor. |
+| Yanlış-teslimat imzası (`SELLER_ASSET_GONE`, delta yok) | **Etkilenmez.** Bu bir para hareketi değil, admin'e yükseltmedir (02 §10.1) — kapı bastırmaz. |
+| Okunamayan envanter (private/unavailable) | Kapıdan bağımsız `Inconclusive`. Bilgi yokluğu asla olumsuz bulgu sayılmaz (08 §2.3). |
+
+### H.3 Kapıyı açma adımları
+
+1. **İlk N gerçek teslimatı topla.** N'yi deploy sahibi belirler; öneri **≥ 5** ayrı işlem (farklı satıcı/alıcı çiftleri, en az biri alıcının o skinden zaten kopyası olduğu vaka). Kayıtlar:
+   ```sql
+   SELECT Id, TransactionId, ObservedAt, Verdict, Evidence, Payload
+   FROM   DeliveryEvidenceCaptures
+   WHERE  AutoReleaseGated = 1
+   ORDER  BY ObservedAt;
+   ```
+2. **Her satırı insan incele.** `Payload` JSON'unda cevaplanacaklar:
+   - **B1** — `ObservedAt` − `PaymentReceivedAt` farkı: teslimat gerçekten ne kadar sürüyor? Bu sayı `delivery_timeout_minutes`'in (§A #6) launch değerini daraltmanın tek meşru dayanağıdır.
+   - **B2** — `SellerItemAssetId` ile `NewAssetIds` farklı mı? Farklıysa asset ID rotasyonu ölçümle teyit edilmiş olur.
+   - **B3** — satıcı tarafındaki `SellerAssetProperties` ile alıcı tarafındaki `ObservedAssets[].Properties` içindeki `Item Certificate` aynı mı?
+   - **Yanlış pozitif taraması** — kanıtın gerçekten bu işlemin teslimatını anlattığından emin ol (`BaselineClassCount` → `ObservedClassCount` artışı, `BaselineAssetIdsTruncated = false`).
+3. **Bulguları yaz.** İnceleme sonucu `INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md` §7'ye işlenir (B1–B3 "ölçülemedi" satırları kapatılır veya revize edilir).
+4. **Kapıyı aç.** Admin UI → Ayarlar → *Teslimat Doğrulama* → `Envanter kanıtıyla otomatik teslimat onayı` = `true`.
+   > `SKINORA_SETTING_*` env ile **açılamaz**: satır `IsConfigured = true` olarak seed edilir ve `SettingsBootstrapService` configured bir satırı asla override etmez (06 §8.9). Bu bilinçlidir — kapı bir insan kararıdır, bir deploy değişkeni değil.
+5. **Geri alınabilir.** Şüpheli bir vaka görülürse aynı ayar `false` yapılır; kanıt toplanmaya devam eder, otomatik bırakma durur.
+
+### H.4 Kapı açılmadan yapılmaması gerekenler
+
+- `delivery_timeout_minutes`'i (§A #6) düşürmek. Ölçüm gelmeden daraltmak, T127 sonrası teslim etmiş satıcıyı haksız iptale sokar.
+- `DeliveryEvidenceCaptures` satırlarını silmek/düzenlemek. Tablo append-only'dir (06 §4.2); UPDATE/DELETE uygulama katmanında reddedilir.

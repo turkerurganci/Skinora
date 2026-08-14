@@ -215,7 +215,12 @@ public sealed class HttpSteamSidecarInventoryClient
         [property: JsonPropertyName("exterior")] string? Exterior,
         [property: JsonPropertyName("iconUrl")] string? IconUrl,
         [property: JsonPropertyName("tradable")] bool Tradable,
-        [property: JsonPropertyName("marketable")] bool Marketable)
+        [property: JsonPropertyName("marketable")] bool Marketable,
+        // T125 — nullable because a sidecar predating the field simply omits
+        // it. Absence must read as "not reported", never as "this asset has
+        // none": the launch-gate reviewer distinguishes the two.
+        [property: JsonPropertyName("assetProperties")]
+        IReadOnlyList<SidecarAssetProperty>? AssetProperties = null)
     {
         public SteamInventoryItemDto ToDto() => new(
             AssetId: AssetId,
@@ -227,6 +232,24 @@ public sealed class HttpSteamSidecarInventoryClient
             Wear: Exterior,
             ImageUrl: IconUrl,
             Tradeable: Tradable,
-            Marketable: Marketable);
+            Marketable: Marketable)
+        {
+            AssetProperties = (AssetProperties ?? []).Select(p => p.ToDto()).ToList(),
+        };
+    }
+
+    private sealed record SidecarAssetProperty(
+        [property: JsonPropertyName("propertyId")] int PropertyId,
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("intValue")] string? IntValue,
+        [property: JsonPropertyName("floatValue")] string? FloatValue,
+        [property: JsonPropertyName("stringValue")] string? StringValue)
+    {
+        public SteamInventoryAssetPropertyDto ToDto() => new(
+            PropertyId: PropertyId,
+            Name: Name ?? string.Empty,
+            IntValue: IntValue,
+            FloatValue: FloatValue,
+            StringValue: StringValue);
     }
 }

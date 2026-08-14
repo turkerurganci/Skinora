@@ -7,12 +7,13 @@ import type { AdminSettingItem } from "@/lib/api/admin";
  * lowercase `category`, but it carries neither a UI group title nor an
  * impact-scope field. This module supplies both, derived from the category:
  *
- *  - {@link SETTING_GROUPS} folds the 15 backend categories into the 04 §8.6
+ *  - {@link SETTING_GROUPS} folds the 16 backend categories into the 04 §8.6
  *    admin parameter groups (e.g. `geo_blocking` + `age_verification` →
- *    "Erişim ve Uyumluluk"). Four categories the spec never documented
- *    (`wallet_security`, `reputation`, `platform_maintenance`, `retention`)
- *    are real operational settings, so they render under a separate
- *    "operational" section rather than being hidden (T102 owner decision).
+ *    "Erişim ve Uyumluluk"). Five categories the spec never documented
+ *    (`wallet_security`, `reputation`, `platform_maintenance`, `retention`,
+ *    `delivery_verification`) are real operational settings, so they render
+ *    under a separate "operational" section rather than being hidden
+ *    (T102 owner decision).
  *  - {@link impactForCategory} maps each category to its 04 §8.6 impact class.
  *
  * Group titles / impact labels are localised in the `adminSettings` i18n
@@ -80,6 +81,13 @@ const SETTING_GROUPS: readonly SettingGroupDef[] = [
   { key: "reputation", categories: ["reputation"], section: "operational" },
   { key: "platformMaintenance", categories: ["platform_maintenance"], section: "operational" },
   { key: "retention", categories: ["retention"], section: "operational" },
+  // T125 — the 02 §9.2 delivery launch gate. Operational: 04 §8.6 predates the
+  // v3.0 P2P model and never documented a delivery group.
+  {
+    key: "deliveryVerification",
+    categories: ["delivery_verification"],
+    section: "operational",
+  },
 ];
 
 /** A rendered group: its i18n key, section, and the settings that belong to it. */

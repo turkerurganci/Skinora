@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-13
+**Versiyon: v3.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-14 (T125 — §9.2 envanter kanıtı yoluna launch kapısı notu eklendi: `delivery.inventory_evidence_auto_release_enabled` kapalıyken kanıt üretilir ve saklanır ama tek başına para bırakmaz; alıcı onayı yolu etkilenmez. Kanıt kuralları değişmedi.) · 2026-08-13
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -284,6 +284,15 @@ Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API ya
 - Alıcının Steam envanteri gizliyse envanter kanıtı üretilemez; bu durumda alıcı onayı tek yoldur ve kullanıcı bu konuda uyarılır
 - Item eşleştirmesi item sınıfı üzerinden yapılır (asset ID trade sonrası değiştiği için alıcı tarafında kullanılamaz). Eşleştirme **sayım** üzerinden kurulur, varlık üzerinden değil: bir item sınıfının aynı envanterde birden çok kopyası bulunabilir (T122 ölçümü: 199 asset → 159 ayrık sınıf, en kalabalık sınıfın **9 kopyası**), dolayısıyla "o skin envanterde var mı" kontrolü alıcının o skinden zaten bir kopyası olduğu durumda teslimatı hiç göremez
 - Aynı sınıftan iki item arasındaki aşınma/desen farkı **otomatik doğrulamanın kapsamı dışındadır** — bu ayrım `WRONG_ITEM` dispute'una tabidir. **Gerekçe (T122, 2026-08-13):** bu kapsam dışılık bir *veri yokluğu* değil, bir **kanıt eşiği** kararıdır. Steam'in envanter yanıtı asset başına `Wear Rating` (float) ve `Pattern Template` alanlarını anonim olarak döndürüyor (`asset_properties`, bkz. [`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §5) — yani veri teslimat doğrulamasının zaten yaptığı okumanın içinde geliyor. Kapsam dışı bırakılmasının sebebi, hangi float farkının "yanlış item" sayılacağının bir **ürün kararı** olması ve bu eşiğin otomatik para hareketine bağlanmasının §9.2'nin konjonksiyon kuralından daha zayıf bir kanıt üretmesidir
+
+> **Launch kapısı (T125, 2026-08-14):** Yukarıdaki iki yoldan **envanter kanıtı** yolu, launch anında
+> otomatik para hareketine bağlı DEĞİLDİR. `delivery.inventory_evidence_auto_release_enabled`
+> (06 §8, seed default `false`) kapalıyken `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` kanıtı üretilir,
+> kaydedilir (06 §3.5a) ve gösterilir ama tek başına ödemeyi serbest bırakmaz — işlem iptal de edilmez.
+> **Alıcı onayı yolu bu kapıdan etkilenmez** (onay alıcının kendi aleyhinedir, platformun çıkarımı
+> değildir). Gerekçe: T122 gerçek bir trade yapamadığı için teslimat gecikmesini, `assetid` rotasyonunu
+> ve `Item Certificate` kalıcılığını ölçemedi; kapı bu ölçümün ilk gerçek teslimatlardan gelmesini ve
+> bir insan tarafından okunmasını şart koşar. Açma prosedürü: DEPLOY_RUNBOOK §H.
 
 > **Veri modeli notu:** Steam trade sonrası asset ID değişir. Platform iki asset referansı takip eder: orijinal (satıcı envanterindeki) ve teslim sonrası alıcıda tespit edilen. Bot/escrow asset ID'si P2P modelinde yoktur. Detay: 06 §8.4.
 

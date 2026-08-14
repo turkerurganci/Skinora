@@ -1136,16 +1136,16 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             if (ForcedBaselineVisibility is InventoryVisibility.Unavailable)
                 return Task.FromResult(InventoryClassBaselineResult.Unavailable);
 
-            var assetIds = _items
+            var assets = _items
                 .Where(kv => kv.Key.steamId == steamId64
                     && string.Equals(kv.Value.ClassId, classId, StringComparison.Ordinal)
                     && (instanceId is null
                         || string.Equals(kv.Value.InstanceId, instanceId, StringComparison.Ordinal)))
-                .Select(kv => kv.Value.AssetId)
-                .OrderBy(id => id, StringComparer.Ordinal)
+                .Select(kv => new InventoryClassAsset(kv.Value.AssetId, kv.Value.AssetProperties))
+                .OrderBy(a => a.AssetId, StringComparer.Ordinal)
                 .ToList();
 
-            return Task.FromResult(InventoryClassBaselineResult.Captured(assetIds));
+            return Task.FromResult(InventoryClassBaselineResult.Captured(assets));
         }
     }
 

@@ -13,6 +13,7 @@ vi.mock('../logger.js', () => ({
 import {
   InventoryService,
   InventoryPrivateError,
+  InventoryShortReadError,
   SteamUnavailableError,
   buildInventoryResponse,
   type InventoryFetcher,
@@ -57,6 +58,16 @@ interface FakeCEconItem {
   tradable: boolean;
   marketable: boolean;
   getImageURL?: () => string;
+  /** T122 runbook §5 — steamcommunity attaches these per asset when Steam sends them. */
+  asset_properties?: Array<{
+    propertyid?: number | string;
+    name?: string;
+    int_value?: number | string;
+    float_value?: number | string;
+    string_value?: string;
+  }>;
+  /** T122-B / runbook §6.1 — present on real items; deliberately never mapped. */
+  market_tradable_restriction?: number;
 }
 
 function buildAk47(overrides: Partial<FakeCEconItem> = {}): FakeCEconItem {
@@ -79,12 +90,20 @@ function buildAk47(overrides: Partial<FakeCEconItem> = {}): FakeCEconItem {
   };
 }
 
-function buildFetcher(items: FakeCEconItem[] = []): InventoryFetcher & { calls: number } {
+/**
+ * Fetcher double. `totalInventoryCount` defaults to the number of items, i.e.
+ * a COMPLETE read — the T125 short-read guard is silent unless a test asks for
+ * a mismatch explicitly.
+ */
+function buildFetcher(
+  items: FakeCEconItem[] = [],
+  totalInventoryCount: number | null = items.length,
+): InventoryFetcher & { calls: number } {
   const stub: InventoryFetcher & { calls: number } = {
     calls: 0,
     async fetch() {
       stub.calls += 1;
-      return items as never;
+      return { items: items as never, totalInventoryCount };
     },
   };
   return stub;
@@ -201,7 +220,7 @@ describe('InventoryService (T67 — 08 §2.3)', () => {
         if (attempts === 1) {
           throw new Error('HTTP 503');
         }
-        return [buildAk47()] as never;
+        return { items: [buildAk47()] as never, totalInventoryCount: 1 };
       },
     };
     const svc = new InventoryService(fetcher, cache);
@@ -334,7 +353,7 @@ describe('InventoryService — refresh cache bypass (T120 — 08 §2.3)', () => 
     const fetcher: InventoryFetcher = {
       async fetch() {
         attempts += 1;
-        if (attempts === 1) return [buildAk47()] as never;
+        if (attempts === 1) return { items: [buildAk47()] as never, totalInventoryCount: 1 };
         throw new Error('HTTP 503');
       },
     };
@@ -417,6 +436,149 @@ describe('InventoryService — Community queue (T120 — 08 §2.6)', () => {
     const result = expectPublic(await svc.getInventory('76561198000000044'));
 
     expect(result.totalCount).toBe(1);
+  });
+});
+
+describe('InventoryService — asset_properties passthrough (T125 — T122 runbook §5)', () => {
+  let cache: InMemoryInventoryCache;
+
+  beforeEach(() => {
+    cache = new InMemoryInventoryCache();
+  });
+
+  it('forwards asset_properties verbatim, keeping every value a string', async () => {
+    const fetcher = buildFetcher([
+      buildAk47({
+        asset_properties: [
+          { propertyid: 1, int_value: '744', name: 'Pattern Template' },
+          { propertyid: 2, float_value: '0.0608838982880115509', name: 'Wear Rating' },
+          { propertyid: 6, string_value: 'B0A0654AAF3FF0', name: 'Item Certificate' },
+        ],
+      }),
+    ]);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = expectPublic(await svc.getInventory('76561198000000050'));
+
+    // The wear float is 19 significant digits — a JS number would round it, and
+    // the launch-gate reviewer compares this value across two inventories
+    // (T122 runbook §7 B3). Strings are the only lossless carrier.
+    expect(result.items[0].assetProperties).toEqual([
+      { propertyId: 1, name: 'Pattern Template', intValue: '744' },
+      { propertyId: 2, name: 'Wear Rating', floatValue: '0.0608838982880115509' },
+      { propertyId: 6, name: 'Item Certificate', stringValue: 'B0A0654AAF3FF0' },
+    ]);
+  });
+
+  it('omits the field entirely when Steam sent no properties', async () => {
+    const fetcher = buildFetcher([buildAk47()]);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = expectPublic(await svc.getInventory('76561198000000051'));
+
+    // T122 measured properties on 91 of 199 assets, so absence is ordinary —
+    // emitting `assetProperties: []` on every item would change the 07 §6.1
+    // shape for the majority for no gain.
+    expect('assetProperties' in result.items[0]).toBe(false);
+  });
+
+  it('never surfaces market_tradable_restriction (T122-B8 trap)', async () => {
+    const fetcher = buildFetcher([
+      // The exact shape the owner capture recorded: FREELY TRADABLE, yet the
+      // restriction field reads 7 (runbook §6.1).
+      buildAk47({ tradable: true, market_tradable_restriction: 7 }),
+    ]);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = expectPublic(await svc.getInventory('76561198000000052'));
+
+    expect(result.items[0]).not.toHaveProperty('market_tradable_restriction');
+    expect(result.items[0]).not.toHaveProperty('marketTradableRestriction');
+    // The item IS tradable — which is the whole point: a consumer that read the
+    // restriction field as a lock would have called this locked.
+    expect(result.items[0].tradable).toBe(true);
+  });
+});
+
+describe('InventoryService — short-read guard (T125 — 08 §2.3 pagination)', () => {
+  let cache: InMemoryInventoryCache;
+
+  beforeEach(() => {
+    cache = new InMemoryInventoryCache();
+  });
+
+  it('reports UNAVAILABLE when fewer assets came back than Steam reports', async () => {
+    // Two assets merged, but Steam says the inventory holds five: the
+    // pagination loop stopped early.
+    const fetcher = buildFetcher([buildAk47({ assetid: '1' }), buildAk47({ assetid: '2' })], 5);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = await svc.getInventory('76561198000000060');
+
+    // NOT a PUBLIC read of two items. Downstream, "two items" is a positive
+    // finding — 02 §9.2 counts class copies, so a truncated inventory reads as
+    // "the buyer's count did not rise" and refunds a delivered transaction.
+    expect(result.visibility).toBe('UNAVAILABLE');
+    if (result.visibility !== 'UNAVAILABLE') throw new Error('unreachable');
+    expect(result.error).toBeInstanceOf(InventoryShortReadError);
+    expect(result.error.code).toBe('STEAM_UNAVAILABLE');
+    expect(result.error.retryable).toBe(true);
+    expect((result.error as InventoryShortReadError).received).toBe(2);
+    expect((result.error as InventoryShortReadError).expected).toBe(5);
+  });
+
+  it('does not cache a short read (the next call retries instead of serving it)', async () => {
+    let attempt = 0;
+    const fetcher: InventoryFetcher = {
+      async fetch() {
+        attempt += 1;
+        return attempt === 1
+          ? { items: [buildAk47()] as never, totalInventoryCount: 4 }
+          : { items: [buildAk47()] as never, totalInventoryCount: 1 };
+      },
+    };
+    const svc = new InventoryService(fetcher, cache);
+
+    const short = await svc.getInventory('76561198000000061');
+    const retried = await svc.getInventory('76561198000000061');
+
+    // A cached truncated inventory would answer the next 120 seconds of reads
+    // as though it were complete — the guard would then only delay the wrong
+    // answer rather than prevent it.
+    expect(short.visibility).toBe('UNAVAILABLE');
+    expect(expectPublic(retried).totalCount).toBe(1);
+    expect(attempt).toBe(2);
+  });
+
+  it('accepts a read that matches or exceeds the reported total', async () => {
+    const exact = new InventoryService(buildFetcher([buildAk47()], 1), cache);
+    expect(expectPublic(await exact.getInventory('76561198000000062')).totalCount).toBe(1);
+
+    // total_inventory_count covers the whole inventory while the merged list
+    // excludes currency items, so only the `<` direction is an error.
+    const excess = new InventoryService(buildFetcher([buildAk47(), buildAk47()], 1), cache);
+    expect(expectPublic(await excess.getInventory('76561198000000063')).totalCount).toBe(2);
+  });
+
+  it('stays silent when no total was reported (the check disables, not fails)', async () => {
+    const fetcher = buildFetcher([buildAk47()], null);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = await svc.getInventory('76561198000000064');
+
+    expect(result.visibility).toBe('PUBLIC');
+  });
+
+  it('treats a public-but-empty inventory as complete, not short', async () => {
+    const fetcher = buildFetcher([], 0);
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = await svc.getInventory('76561198000000065');
+
+    // 0 >= 0. An empty PUBLIC inventory stays EVIDENCE of absence (08 §2.3);
+    // the guard must not convert it into "no information".
+    expect(result.visibility).toBe('PUBLIC');
+    expect(expectPublic(result).totalCount).toBe(0);
   });
 });
 

@@ -183,14 +183,16 @@ public sealed record InventoryLookupResult
 /// </remarks>
 public sealed record InventoryClassBaselineResult
 {
+    private IReadOnlyList<string>? _assetIds;
+
     private InventoryClassBaselineResult(
         InventoryVisibility visibility,
         int classCount,
-        IReadOnlyList<string> assetIds)
+        IReadOnlyList<InventoryClassAsset> assets)
     {
         Visibility = visibility;
         ClassCount = classCount;
-        AssetIds = assetIds;
+        Assets = assets;
     }
 
     /// <summary>Which of the 08 §2.3 states the read ended in.</summary>
@@ -203,30 +205,81 @@ public sealed record InventoryClassBaselineResult
     public int ClassCount { get; }
 
     /// <summary>
-    /// The asset IDs behind <see cref="ClassCount"/>, in the order the sidecar
+    /// The assets behind <see cref="ClassCount"/>, in the order the sidecar
     /// returned them. Empty for the two unreadable outcomes.
     /// </summary>
-    public IReadOnlyList<string> AssetIds { get; }
+    public IReadOnlyList<InventoryClassAsset> Assets { get; }
+
+    /// <summary>
+    /// Just the asset IDs of <see cref="Assets"/> — the shape the 06 §3.5
+    /// <c>BuyerBaselineAssetIds</c> column persists.
+    /// </summary>
+    public IReadOnlyList<string> AssetIds =>
+        _assetIds ??= [.. Assets.Select(a => a.AssetId)];
 
     /// <summary>
     /// Inventory read. A count of zero is a legitimate, useful baseline: the
     /// buyer owns no copy of this skin yet.
     /// </summary>
-    public static InventoryClassBaselineResult Captured(IReadOnlyList<string> assetIds)
+    public static InventoryClassBaselineResult Captured(IReadOnlyList<InventoryClassAsset> assets)
     {
-        ArgumentNullException.ThrowIfNull(assetIds);
+        ArgumentNullException.ThrowIfNull(assets);
         return new InventoryClassBaselineResult(
-            InventoryVisibility.Public, assetIds.Count, assetIds);
+            InventoryVisibility.Public, assets.Count, assets);
     }
 
     /// <summary>Inventory hidden — no baseline can be taken (02 §9.2).</summary>
     public static InventoryClassBaselineResult Private { get; } =
-        new(InventoryVisibility.Private, classCount: 0, assetIds: []);
+        new(InventoryVisibility.Private, classCount: 0, assets: []);
 
     /// <summary>Steam unreachable — no baseline can be taken.</summary>
     public static InventoryClassBaselineResult Unavailable { get; } =
-        new(InventoryVisibility.Unavailable, classCount: 0, assetIds: []);
+        new(InventoryVisibility.Unavailable, classCount: 0, assets: []);
 }
+
+/// <summary>
+/// One asset of the requested item class, with the per-asset properties Steam
+/// returns alongside it.
+/// </summary>
+/// <remarks>
+/// T125 — the properties are carried for the launch-gate evidence capture
+/// (DEPLOY_RUNBOOK §H), never for the delivery decision itself. 02 §9.2 pins
+/// that decision to a class <em>count</em> delta; anything per-asset here is
+/// audit material a human reads, not an input the evidence engine branches on.
+/// </remarks>
+public sealed record InventoryClassAsset(
+    string AssetId,
+    IReadOnlyList<InventoryAssetProperty> Properties)
+{
+    /// <summary>An asset whose properties Steam did not return (common — T122 measured them on 91 of 199 assets).</summary>
+    public static InventoryClassAsset Bare(string assetId) => new(assetId, []);
+}
+
+/// <summary>
+/// One entry of Steam's per-asset <c>asset_properties</c> array (T122 runbook
+/// §5): <c>Pattern Template</c>, <c>Wear Rating</c>, <c>Item Certificate</c>,
+/// <c>Name Tag</c>, <c>Charm Template</c>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Steam types the value three ways and sends exactly one of them per entry,
+/// so all three are nullable rather than collapsed into a single string — the
+/// distinction is what a later reviewer needs to tell a wear float from a
+/// certificate hash.
+/// </para>
+/// <para>
+/// Why the platform carries these at all: T122 could not measure whether an
+/// <c>Item Certificate</c> survives a trade (runbook §7, B3), and that question
+/// can only be answered from real deliveries. The launch gate collects the
+/// material; it does <em>not</em> license anyone to branch on it (02 §9.2).
+/// </para>
+/// </remarks>
+public sealed record InventoryAssetProperty(
+    int PropertyId,
+    string Name,
+    string? IntValue,
+    string? FloatValue,
+    string? StringValue);
 
 /// <summary>
 /// Item snapshot pulled from a Steam inventory. Mirrors the
@@ -256,4 +309,19 @@ public sealed record InventoryItemSnapshot(
     string? Exterior,
     string? Type,
     string? InspectLink,
-    bool IsTradeable);
+    bool IsTradeable)
+{
+    /// <summary>
+    /// T125 — Steam's per-asset <c>asset_properties</c> (T122 runbook §5).
+    /// Empty when Steam returned none for this asset, which is ordinary.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately an init-only member rather than an eleventh positional
+    /// parameter: this is audit material for the launch-gate capture
+    /// (DEPLOY_RUNBOOK §H), not a field any decision reads, so forcing every
+    /// existing construction site to state it would misrepresent its weight.
+    /// The money-safety fields above stay positional exactly because a caller
+    /// <em>must</em> be made to think about them.
+    /// </remarks>
+    public IReadOnlyList<InventoryAssetProperty> AssetProperties { get; init; } = [];
+}

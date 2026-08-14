@@ -21,7 +21,33 @@ public sealed record SteamInventoryItemDto(
     string? Wear,
     string? ImageUrl,
     bool Tradeable,
-    bool Marketable);
+    bool Marketable)
+{
+    /// <summary>
+    /// T125 — Steam's per-asset <c>asset_properties</c> (T122 runbook §5), when
+    /// the sidecar returned them. Empty is ordinary: T122 measured them on 91
+    /// of 199 assets (weapons carry them, collectibles do not).
+    /// </summary>
+    /// <remarks>
+    /// Not part of the 07 §6.1 public contract — this is internal audit
+    /// material for the delivery launch gate (DEPLOY_RUNBOOK §H), so it is an
+    /// init-only member rather than a positional field.
+    /// </remarks>
+    public IReadOnlyList<SteamInventoryAssetPropertyDto> AssetProperties { get; init; } = [];
+}
+
+/// <summary>
+/// One <c>asset_properties</c> entry as the sidecar forwards it (T122 runbook
+/// §5): <c>Pattern Template</c>, <c>Wear Rating</c>, <c>Item Certificate</c>,
+/// <c>Name Tag</c>, <c>Charm Template</c>. Steam sends exactly one of the three
+/// value shapes per entry.
+/// </summary>
+public sealed record SteamInventoryAssetPropertyDto(
+    int PropertyId,
+    string Name,
+    string? IntValue,
+    string? FloatValue,
+    string? StringValue);
 
 /// <summary>
 /// 07 §6.1 response envelope — items plus pre-computed totals to spare every

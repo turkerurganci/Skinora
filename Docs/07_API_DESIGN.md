@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v3.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §7.6a confirm-ready: hata listesine 422 `INVENTORY_PRIVATE` eklendi (satıcı envanteri gizliyse item "yok" sayılamaz — §7.2/§6.1 ile aynı üç değerli ayrım), yanıta `buyerInventoryVisible` alanı ve `paymentDeadline`'ın kaynağı yazıldı, baseline'ın sayım tabanlı olduğu ve okunamazsa kolonların NULL kaldığı normatif not oldu.) · 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
+**Versiyon: v3.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — §9.8 kategori listesine `delivery_verification` eklendi ve anahtar sayısı 60'a çekildi (satır T123 döneminde 58'de kalmıştı). Endpoint sözleşmesi değişmedi.) · 2026-08-13 (T123 — §7.6a confirm-ready: hata listesine 422 `INVENTORY_PRIVATE` eklendi (satıcı envanteri gizliyse item "yok" sayılamaz — §7.2/§6.1 ile aynı üç değerli ayrım), yanıta `buyerInventoryVisible` alanı ve `paymentDeadline`'ın kaynağı yazıldı, baseline'ın sayım tabanlı olduğu ve okunamazsa kolonların NULL kaldığı normatif not oldu.) · 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
 
 ---
 
@@ -1994,10 +1994,10 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 }
 ```
 
-**Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`
+**Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`, `delivery_verification`
 
 > **Notlar:**
-> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (58 anahtar). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
+> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (60 anahtar — T125 öncesi 59; buradaki sayı T123 döneminde 58 olarak kalmış, düzeltildi). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
 > - `valueType` ∈ `number` (int/decimal) | `boolean` | `string`. `value`, henüz yapılandırılmamış anahtarlarda `null` döner (06 §3.17 `IsConfigured = false`).
 > - DTO **etki-kapsamı** alanı taşımaz; S17 UI etkiyi (yeni işlem / runtime) kategoriden türetir (04 §8.6).
 > - Sanctions taraması (yaptırımlı adres listesi) ayrı bir admin yüzeyinden yönetilir (T82) — SystemSetting değildir; bu yüzden kategori listesinde `sanctions_screening` yoktur.

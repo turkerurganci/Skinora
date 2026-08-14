@@ -120,16 +120,18 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
         // Counts the registered items of that owner whose class matches — the
         // same (classId, instanceId) rule the sidecar reader applies, so a test
         // registering two copies of one skin gets a baseline of two.
-        var assetIds = _items
+        // T125 — the registered snapshot's asset properties ride along, so tests
+        // can exercise the launch-gate capture without a second fixture.
+        var assets = _items
             .Where(kv => kv.Key.steamId == steamId64
                 && string.Equals(kv.Value.ClassId, classId, StringComparison.Ordinal)
                 && (instanceId is null
                     || string.Equals(kv.Value.InstanceId, instanceId, StringComparison.Ordinal)))
-            .Select(kv => kv.Value.AssetId)
-            .OrderBy(id => id, StringComparer.Ordinal)
+            .Select(kv => new InventoryClassAsset(kv.Value.AssetId, kv.Value.AssetProperties))
+            .OrderBy(a => a.AssetId, StringComparer.Ordinal)
             .ToList();
 
-        return Task.FromResult(InventoryClassBaselineResult.Captured(assetIds));
+        return Task.FromResult(InventoryClassBaselineResult.Captured(assets));
     }
 }
 
