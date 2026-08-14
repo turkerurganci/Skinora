@@ -1,6 +1,6 @@
 # T124 — ConfirmPayment yeniden bağlanması + DeliveryDeadline
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-14
+**Faz:** F7 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-14 (doğrulama 2026-08-14)
 
 ---
 
@@ -77,9 +77,74 @@ Doğrudan T124 kapsamı — **5 yeni test metodu = 8 yeni çalıştırma** (biri
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** — bağımsız doğrulama, ayrı chat, 2026-08-14, **yapım raporu görülmeden** |
+| Bulgu sayısı | **2** — ikisi de **bloke edici değil**, ikisi de **T124 kaynaklı regresyon değil** |
+| Düzeltme gerekli mi | Hayır. Bulgu 1 doküman düzeltmesi olarak proje sahibine soruldu; Bulgu 2 T127 ön koşulu olarak kayda geçti |
+
+### Validator kapıları
+
+| Kapı | Sonuç |
+|---|---|
+| Adım -1 — working tree | ✓ Temiz (`git status --short` boş) |
+| Adım 0 — main son 3 CI run | ✓ `31802083727` · `31802083622` · `31733188607` — üçü de `completed`/`success` |
+| Adım 0b — repo memory drift | ✓ `.claude/memory/MEMORY.md`'de T124 satırı mevcut |
+| Adım 8a — task branch CI | ✓ HEAD `6c1beeb` run [`31813382780`](https://github.com/turkerurganci/Skinora/actions/runs/31813382780) — **CI Gate `success`**, 11 bloke edici job yeşil. (Raporun üstünde yazan `31809828883` bir önceki commit `44f42b4` içindi; rapor commit'i de ayrıca yeşil koştu) |
+
+### Kabul kriterleri — bağımsız kanıt
+
+Validator kanıtları yapım raporundan bağımsız üretildi; testler lokalde yeniden koşuldu.
+
+| # | Kriter | Sonuç | Validator kanıtı |
+|---|---|---|---|
+| 1 | `AmountValidationService` SELLER_CONFIRMED → PAYMENT_RECEIVED | ✓ | Kontrol akışı kodun kendisinden izlendi: `AmountValidationService.cs:87` `Status != SELLER_CONFIRMED` → multi-payment dalına sapıyor, dolayısıyla `:103` (tam tutar) ve `:350` (fazla ödeme) **yalnız** SELLER_CONFIRMED'dan çağrılıyor; `AdvanceStateMachineAsync:482` `machine.Fire(ConfirmPayment)`. Uçtan uca lokal koşum: `PaymentConfirmed_ExactAmount_AdvancesStateAndPublishesPaymentReceivedEvent` + `_Overpayment_*` **Passed** |
+| 2 | `DeliveryDeadline` armlanıyor; süreyi `delivery_timeout_minutes` besliyor | ✓ | `TimeoutSchedulingService.cs:168-190` — anahtar `delivery_timeout_minutes` (`:25`), `SaveChanges` yok, Hangfire çağrısı yok. **06 §3.5 normatif matrisiyle birebir**: `PAYMENT_RECEIVED → DeliveryDeadline NOT NULL, job yok` — bu satır T124 öncesi üretimde **ihlal ediliyordu** (kolonun yazarı yoktu), görev onu kapatıyor. Fallback'in "üretimde ulaşılamaz" iddiası bağımsız doğrulandı: `SettingsBootstrapService.ExecuteAsync:78-90` **tüm** unconfigured satırlarda startup fail-fast ediyor ve `SystemSettingsValidator.ValidateRange:288-292` int'lerde `d <= 0`'ı reddediyor (hem admin hem env yolu). Lokal koşum: `ArmDeliveryDeadline_*` 7 vaka **Passed** |
+| 3 | Scanner'ın PAYMENT_RECEIVED dalı T127'ye kadar tüketmiyor | ✓ | **Kapının eksiksizliği bağımsız tarandı:** backend'de `Fire(TransactionTrigger.Timeout)` yalnız iki yerde — `TimeoutExecutor.cs:64` (ilk guard `:55` `Status != SELLER_CONFIRMED → return`, teslimatı tüketemez) ve `DeadlineScannerJob.cs:151` (delivery dalı `:115-123` sorgusundan çıkarılmış). Teslimat timeout'unu tüketebilecek **üçüncü yol yok**. `ReportGatedDeliveryTimeoutsAsync:219-243` salt-okunur (Count + `Select(Id).Take`), yazma yok, `:130-137` try/catch enforcement turunu maliyetlendirmiyor. Lokal koşum: `Scanner_Does_Not_Consume_..._Until_T127`, `Scanner_Still_Consumes_Other_Phases_When_Gated_...`, `Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127` **Passed** |
+
+**Ters çevrilen testlerin bıraktığı boşluk kapalı:** `TimeoutSideEffectPublisherTests.Delivery_Phase_Emits_Notification_And_PaymentRefund` lokalde **Passed** — publisher'ın teslimat fan-out'u (bildirim + alıcı iadesi) hâlâ kaplı; bu görevin kestiği şey publisher değil, **scanner→publisher kablosu**.
+
+**Açlık testinin gerçekten kısıtladığı doğrulandı:** `TimeoutTestFixtures.Options(batchSize: 1)` fiilen `DeadlineScannerBatchSize = 1` yazıyor (`TimeoutTestSupport.cs:222-232`), yani test kararın (a) gerekçesini gerçekten sabitliyor.
+
+### Test sonuçları — validator lokal koşumu
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Backend tam suite | ✓ **2561/2561** (13 assembly, exit 0) | `dotnet test Skinora.sln` + `Skinora.Shared.Tests` ayrı koşum |
+| T124 kapsamı, isim bazında | ✓ **11/11 vaka** | `--filter` ile `ArmDeliveryDeadline_*` · `Scanner_Does_Not_Consume_*` · `Scanner_Still_Consumes_*` · `Delivery_Timeout_Publishes_Nothing_*` · `Delivery_Phase_Emits_*` |
+| Webhook uçtan uca | ✓ **6/6** | `--filter "…BlockchainWebhookEndpointTests.PaymentConfirmed"` |
+
+Dağılım yapım raporuyla birebir örtüştü: Shared 399 · Steam 39 · Platform 189 · Auth 120 · Admin 22 · Users 22 · Payments 6 · Realtime 40 · Fraud 91 · Disputes 60 · Notifications 171 · Transactions 870 · API 532.
+
+### E2E advisory bacakları — bağımsız baseline karşılaştırması
+
+Validator, raporun iddiasını kendi ölçümüyle yeniden üretti: HEAD run `31813382780` log'unda kök sebep imzası `Invalid object name 'PlatformSteamBots'` **tam 8 kez, leg başına 1**; T124 yüzeylerinden (`ArmDeliveryDeadline` / `DeliveryDeadline` / `delivery_timeout_minutes` / gated delivery) **0 iz**; baseline main run `31802083622` (T123 merge) **aynı 8 bacağı aynı şekilde** kırık bırakmış. → T124 kaynaklı yeni kırılma yok.
+
+### Güvenlik kontrolü (Katman 1)
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | ✓ Temiz — yeni log satırları yalnız transaction Id (GUID) + deadline timestamp içeriyor |
+| Auth/authorization | ✓ Temiz — yeni uç yok; webhook mevcut HMAC + nonce arkasında |
+| Input validation | ✓ Temiz — tek dış girdi `delivery_timeout_minutes`; okuyucuda `int.TryParse` + `> 0`, ayrıca `SystemSettingsValidator`. **Taşma ayağı ayrıca kontrol edildi:** üst sınır yok ama `TimeSpan.FromMinutes(int.MaxValue)` ≈ 4083 yıl → `DateTime` taşmıyor (yıl ~6109 < 9999), yani absürt bir değer istisna üretip ödeme onayını düşüremez |
+| Yeni dış bağımlılık | ✓ Yok |
+
+### Bulgular (ikisi de bloke edici değil)
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| 1 | S1 — doküman | **T127'nin başlığı ile T124'ün altına eklediği kabul kriteri çelişiyor.** Başlık `Task T127: TimeoutExecutor'a teslimat doğrulama turu` diyor, ama teslimat fazı 05 §4.4 gereği scanner-driven ve `TimeoutExecutor.cs:55` ilk satırında `Status != SELLER_CONFIRMED → return` ile teslimatı zaten reddediyor. T124'ün eklediği kriter doğru yeri (`DeadlineScannerJob.ReportGatedDeliveryTimeoutsAsync`) adlandırıyor. Başlık T124'ten eski, ama kapıyı kaldırma sorumluluğunu bu göreve bağlayan kriteri T124 yazdı; yalnız başlığı okuyan bir T127 yapımcısı turu yanlış executor'a bağlar ve **kapı hiç kalkmaz**. Öneri: başlık `DeadlineScannerJob'a teslimat doğrulama turu` olarak düzeltilsin — **doküman değişikliği olduğu için proje sahibine soruldu, tek taraflı değiştirilmedi** (GUARDRAILS §3) | `Docs/11_IMPLEMENTATION_PLAN.md:2588` |
+| 2 | S1 — dayanıklılık (**pre-existing**, T127 ön koşulu) | **Freeze/resume faz kayması `DeliveryDeadline`'ı ödeme fazının artığıyla eziyor.** Zincir üretimde ulaşılabilir ve validator tarafından kod üzerinden doğrulandı: işlem `SELLER_CONFIRMED` iken bulk freeze (`PLATFORM_MAINTENANCE` / `BLOCKCHAIN_DEGRADATION`) `TimeoutRemainingSeconds`'ı **ödeme** deadline'ından yakalıyor → freeze sürerken ödeme onaylanıyor (`Application/Webhooks/` altında `TimeoutFrozenAt` kontrolü **hiç yok**, grep boş; state machine yalnız `IsOnHold`'a bakıyor) → T124 teslimat penceresini armlıyor → resume `ResumeAsync:81,86` `now + TimeoutRemainingSeconds`'ı **güncel** state'e göre dağıtıyor, yani `SetActiveDeadline:185-187` ödeme artığını `DeliveryDeadline`'a yazıyor. **T124 regresyonu değil, aksine:** `TimeoutFreezeService` bu dalda dokunulmadı ve main'de bu ezilmiş değer scanner tarafından **tüketiliyordu** (iptal + alıcıya iade + satıcıya kusur); T124'ün kapısı ara dönemde bunu etkisizleştiriyor. Ancak T127 kapıyı kaldırdığında zarar geri gelir ve tam olarak kapının önlemek için kurulduğu vakayı üretir. Ayrıca yapım raporunun dış-varsayım tablosundaki *"freeze/resume … armlanan kolon bu yollarda doğru davranır"* satırı bu faz-kayması vakasını kapsamıyor. Öneri: T127 ön koşulu veya `DEFERRED_BACKLOG` kalemi olarak kayda geçsin (`ConfirmPayment`'ı `TimeoutFrozenAt`'e karşı korumak **veya** freeze altında faz değişince artığı yeniden yakalamak) | `.../Timeouts/TimeoutFreezeService.cs:81-96,185-187` (T50 kodu, bu dalda değişmedi) |
+
+**Çok mercekli bağımsız tarama:** 5 mercek (AC uyumu · regresyon avı · implementasyon doğruluğu · test+doküman · güvenlik/para) × merceğe düşen bulgu başına 3 farklı açıdan çürütme turu (23 ajan). **Filed 6 bulgu, 0'ı çürütmeden sağ çıktı.** Yukarıdaki iki bulgu, validator'ın çürütme gerekçelerini kendi ölçümüyle yeniden kontrol ettikten sonra "T124 kusuru değil ama kayda değer" olarak bilinçle raporlanmıştır — sağ kalan bloke edici bulgu yoktur.
+
+**Ayrıca bağımsız doğrulanan regresyon riskleri (hiçbiri bulgu değil):**
+- **FLAGGED invariantı kırılmıyor:** `HasFlaggedStateInvariant` (tüm deadline'lar NULL) yalnız FLAGGED'den **çıkış** geçişlerinde (`AdminApprove` / `AdminReject`, `TransactionStateMachine.cs:306-308`) guard'dır ve FLAGGED yalnız oluşturmada set edilir → `PAYMENT_RECEIVED` hiç FLAGGED'a gidemez, armlanan kolon invariantı ihlal edemez.
+- **`RestartRecoveryService:111-112`** kesinti kaymasını `DeliveryDeadline`'a da ekliyor ve teslimat fazı için **Hangfire job yeniden kurmuyor** (`:120` yalnız `SELLER_CONFIRMED`) → ikinci executor doğmuyor.
+- **FE kırılmıyor:** detay/liste timeout bloğunun `"delivery"` tipi T117'den beri üretilebilir durumdaydı ve `signalr/events.ts:30` `TimeoutPhase` birliği `"Delivery"`yi zaten içeriyor; T124 FE değişikliği gerektirmiyor (CI'da `3b. JS test` beklendiği gibi skipped).
+
+### Yapım raporu karşılaştırması
+
+- **Uyum: 3/3 kabul kriterinde tam uyumlu.** Test toplamı (2561), proje dağılımı, E2E baseline analizi ve "kapının tek noktada olması" money-safety iddiası validator tarafından **bağımsız olarak yeniden üretildi** ve birebir tuttu.
+- **2 küçük uyuşmazlık:** (a) rapordaki CI referansı `31809828883` bir önceki commit `44f42b4` içindir; HEAD `6c1beeb` için ayrıca yeşil bir run (`31813382780`) mevcut — validator HEAD run'ını esas aldı. (b) Dış-varsayım tablosundaki freeze/resume satırı olduğundan güçlü — Bulgu 2'ye bakınız.
 
 ## Altyapı Değişiklikleri
 
