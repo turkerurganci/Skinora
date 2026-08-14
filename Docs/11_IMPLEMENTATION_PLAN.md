@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.8** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
+**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (**T124 doğrulaması** — iki bulgu proje sahibi onayıyla plana işlendi: **T127'nin başlığı düzeltildi** (`TimeoutExecutor'a ...` → `DeadlineScannerJob'a ...`; teslimat fazı 05 §4.4 uyarınca scanner-driven ve `TimeoutExecutor` `Status != SELLER_CONFIRMED` ise no-op eder — yanlış başlık T124 kapısının hiç kalkmamasına yol açabilirdi) ve **T127'ye freeze/resume faz kayması ön koşulu** kabul kriteri olarak eklendi (pre-existing T50 yolu `DeliveryDeadline`'a ödeme fazının artığını yazabiliyor; kapı kalkmadan kapatılmalı)) · 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2585,8 +2585,15 @@ Task T126: POST /transactions/:id/confirm-receipt
   Bağımlılık: T125
   Kabul kriterleri: yalnız alıcı, yalnız PAYMENT_RECEIVED, idempotent
 
-Task T127: TimeoutExecutor'a teslimat doğrulama turu
+Task T127: DeadlineScannerJob'a teslimat doğrulama turu
   Bağımlılık: T125
+  BAŞLIK DÜZELTMESİ (T124 doğrulaması, 2026-08-14 — proje sahibi onayı):
+       başlık `TimeoutExecutor'a ...` idi ve v2.0 kalıntısıydı. Teslimat fazı
+       05 §4.4 "Aşama ayrımı" uyarınca scanner-driven'dır; `TimeoutExecutor`
+       ilk satırında `Status != SELLER_CONFIRMED` ise no-op eder, yani teslimat
+       timeout'unu yapısal olarak tüketemez. Yalnız başlığı okuyan bir yapımcı
+       turu yanlış executor'a bağlar ve aşağıdaki kapı hiç kalkmaz — teslimat
+       timeout'u kalıcı olarak ölü kalırdı.
   Kabul kriterleri:
     - Kanıt tamsa timeout iptal yerine ITEM_DELIVERED üretiyor
     - SELLER_ASSET_GONE ve delta yoksa dispute'a yükseltiliyor
@@ -2600,6 +2607,33 @@ Task T127: TimeoutExecutor'a teslimat doğrulama turu
       beklentisine döner: `DeadlineScannerJobTests.Scanner_Does_Not_Consume_
       Overdue_PAYMENT_RECEIVED_Until_T127` ve `DeadlineScannerJobSideEffects
       Tests.Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127`
+    - ÖN KOŞUL — FREEZE/RESUME FAZ KAYMASI KAPATILDI (kapı kalkmadan ÖNCE):
+      `DeliveryDeadline`'a ödeme fazının artığının yazılabildiği yol kapatılmış
+      ve bir testle sabitlenmiş olmalı. Zincir bugün ulaşılabilir: işlem
+      SELLER_CONFIRMED iken bulk freeze (`PLATFORM_MAINTENANCE` /
+      `BLOCKCHAIN_DEGRADATION`) `TimeoutRemainingSeconds`'ı ÖDEME deadline'ından
+      yakalar → freeze sürerken ödeme onaylanabilir (`Application/Webhooks/`
+      altında `TimeoutFrozenAt` kontrolü YOKTUR; state machine yalnız
+      `IsOnHold`'a bakar) → T124 teslimat penceresini armlar → `ResumeAsync`
+      artığı GÜNCEL state'e göre dağıttığı için `SetActiveDeadline`
+      `PAYMENT_RECEIVED` dalı ödeme kalanını `DeliveryDeadline`'a yazar.
+      İki kabul edilebilir çözümden biri seçilir: (a) `ConfirmPayment` yolunu
+      `TimeoutFrozenAt`'e karşı korumak, (b) freeze altında faz değişince
+      artığı yeniden yakalamak.
+      Neden T127'nin ön koşulu: kapı kalkana kadar ezilen değer TÜKETİLMEDİĞİ
+      için zararsızdır; kapı kalktığı anda süresi saniyelere inmiş bir teslimat
+      penceresi iptal + alıcıya iade + satıcıya kusur üretir — yani tam olarak
+      kapının önlemek için kurulduğu vaka. Bu bir T124 regresyonu DEĞİLDİR
+      (`TimeoutFreezeService` T50 kodudur, T124 dokunmadı); T124 öncesinde de
+      main'de aynı ezilme scanner tarafından tüketilip iptal üretiyordu.
+  Not (T124 doğrulaması, 2026-08-14): yukarıdaki ön koşul bağımsız doğrulama
+       turunda bulundu (Bulgu 2, S1 dayanıklılık, pre-existing). Proje sahibi
+       kararı: DEFERRED_BACKLOG kalemi yerine T127 kabul kriteri — zarar tam
+       olarak bu görevde doğduğu için atlanamaz olması gerekiyor.
+       KALICI DERS: bir kapı, yalnız kapattığı yolu değil, koruduğu DEĞERİN
+       diğer yazarlarını da denetlemeli. T124 teslimat penceresinin
+       tüketicisini kapattı ama aynı kolonun ikinci (ve yanlış) yazarını
+       görmedi.
 
 Task T128: (SellerId, ItemAssetId) tekillik kapısı
   Bağımlılık: T117
