@@ -16,11 +16,10 @@ namespace Skinora.Transactions.Tests.Integration.Timeouts;
 /// <summary>
 /// Integration coverage for the side-effect fan-out wired into
 /// <see cref="DeadlineScannerJob"/> (T49 — 02 §3.2, 03 §4.1–§4.4). Walks every
-/// scanner-driven phase: Accept and SellerConfirm (no refunds) and Delivery
-/// (payment refund only — the platform never holds the item in the P2P model,
-/// so no timeout has an item-return side effect, 02 §9). The Payment phase is
-/// the one leg driven by a per-transaction Hangfire job rather than this
-/// scanner (05 §4.4); it is covered by
+/// scanner-driven phase: Accept and SellerConfirm (no refunds) and Delivery,
+/// which since T124 emits nothing at all until the T127 verification round
+/// exists. The Payment phase is the one leg driven by a per-transaction
+/// Hangfire job rather than this scanner (05 §4.4); it is covered by
 /// <see cref="TimeoutExecutorSideEffectsTests"/>.
 /// </summary>
 public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
@@ -102,8 +101,23 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
 
     }
 
+    /// <summary>
+    /// T124 gate — the scanner does not reach the publisher for the delivery
+    /// phase yet, so an overdue delivery emits NOTHING: no cancellation notice
+    /// and, above all, no buyer refund. Publishing the refund event without the
+    /// 05 §4.4 verification round would move money against a seller who may
+    /// have delivered (02 §9.2); T127 adds that round and restores the
+    /// expectations this test asserted before.
+    /// </summary>
+    /// <remarks>
+    /// The publisher's own delivery-phase fan-out is unchanged and still
+    /// covered directly by
+    /// <see cref="TimeoutSideEffectPublisherTests.Delivery_Phase_Emits_Notification_And_PaymentRefund"/>
+    /// — what this task severs is the scanner→publisher wiring, not the
+    /// publisher.
+    /// </remarks>
     [Fact]
-    public async Task Delivery_Timeout_Publishes_Notification_And_PaymentRefund()
+    public async Task Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
@@ -117,17 +131,9 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
 
         await CreateSut().ScanAndRescheduleAsync();
 
-        // v3.0 — two events, not three: there is no item to return (03 §4.4).
-        Assert.Equal(2, _outbox.Published.Count);
+        Assert.Empty(_outbox.Published);
 
-        var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
-        Assert.Equal(TimeoutPhase.Delivery, notify.Phase);
-
-        var paymentRefund = Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
-        Assert.Equal(buyer.Id, paymentRefund.BuyerId);
-        Assert.Equal(TimeoutTestFixtures.ValidWallet, paymentRefund.BuyerRefundAddress);
-
-        // No late-payment monitoring on delivery timeout — payment is already on platform (03 §4.4).
-        Assert.Empty(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, persisted.Status);
     }
 }

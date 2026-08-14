@@ -264,4 +264,104 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
         Assert.Null(persisted.TimeoutWarningJobId);
         Assert.NotNull(persisted.TimeoutWarningSentAt); // preserved
     }
+
+    // ─── T124 — delivery deadline arming ────────────────────────────────
+
+    [Fact]
+    public async Task ArmDeliveryDeadline_Writes_Deadline_From_Configured_Setting()
+    {
+        await TimeoutTestFixtures.ConfigureSettingAsync(
+            Context, TimeoutSchedulingService.DeliveryTimeoutKey, "90", dataType: "int");
+
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = await SeedPaymentReceivedAsync(nowUtc);
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        var deadline = await sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(nowUtc.AddMinutes(90), deadline);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(nowUtc.AddMinutes(90), persisted.DeliveryDeadline);
+    }
+
+    [Fact]
+    public async Task ArmDeliveryDeadline_Schedules_No_Hangfire_Job()
+    {
+        // 05 §4.4 "Aşama ayrımı" — the delivery phase is scanner-driven. A
+        // delayed job here would give the phase a second, independent executor.
+        await TimeoutTestFixtures.ConfigureSettingAsync(
+            Context, TimeoutSchedulingService.DeliveryTimeoutKey, "90", dataType: "int");
+
+        var transaction = await SeedPaymentReceivedAsync(_clock.GetUtcNow().UtcDateTime);
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        await sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Empty(_scheduler.ScheduledCalls);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Null(persisted.PaymentTimeoutJobId);
+        Assert.Null(persisted.TimeoutWarningJobId);
+    }
+
+    [Theory]
+    [InlineData(null)]   // seed row, still unconfigured
+    [InlineData("0")]    // admin/env validator rejects this, but a DB edit could not
+    [InlineData("-15")]
+    [InlineData("not-a-number")]
+    public async Task ArmDeliveryDeadline_Falls_Back_When_Setting_Unusable(string? rawValue)
+    {
+        // A zero or negative window would arm the deadline in the past and put
+        // the seller overdue the instant the payment lands, so anything
+        // unusable falls back to the documented conservative default.
+        if (rawValue is not null)
+        {
+            await TimeoutTestFixtures.ConfigureSettingAsync(
+                Context, TimeoutSchedulingService.DeliveryTimeoutKey, rawValue, dataType: "int");
+        }
+
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = await SeedPaymentReceivedAsync(nowUtc);
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        var deadline = await sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(
+            nowUtc.AddMinutes(TimeoutSchedulingService.DefaultDeliveryTimeoutMinutes),
+            deadline);
+        Assert.True(deadline > nowUtc, "The fallback must never arm a deadline in the past.");
+    }
+
+    [Fact]
+    public async Task ArmDeliveryDeadline_Rejects_Non_PaymentReceived_State()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
+            paymentDeadline: nowUtc.AddMinutes(30),
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None));
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Null(persisted.DeliveryDeadline);
+    }
+
+    private async Task<Transaction> SeedPaymentReceivedAsync(DateTime nowUtc)
+    {
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        transaction.PaymentReceivedAt = nowUtc;
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+        return transaction;
+    }
 }

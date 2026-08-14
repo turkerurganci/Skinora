@@ -504,6 +504,17 @@ public sealed class AmountValidationService : IAmountValidationService
         // payment-timeout job would sit until its deadline and fire a silent no-op.
         await _timeoutScheduling.CancelTimeoutJobsAsync(transaction.Id, cancellationToken);
 
+        // T124 — the seller's delivery window opens here and nowhere else
+        // (02 §3.1 "adım 6–7"): PAYMENT_RECEIVED is the only state that can
+        // precede a delivery, and this is its only entry point. Until now the
+        // column had readers on every side (scanner, freeze/resume, restart
+        // recovery, the detail/list countdown blocks) and no writer at all, so
+        // the phase that carries the whole non-delivery risk had no time bound.
+        // Armed inside the same unit of work as the transition: a rollback that
+        // discards PAYMENT_RECEIVED must not leave a delivery deadline behind.
+        var deliveryDeadline = await _timeoutScheduling.ArmDeliveryDeadlineAsync(
+            transaction.Id, cancellationToken);
+
         // PaymentReceivedEvent — T44 K2 wiring: realtime push (T61) consumes
         // this event; the surrounding SaveChanges commits both the state
         // transition and the outbox row in a single transaction.
@@ -518,8 +529,8 @@ public sealed class AmountValidationService : IAmountValidationService
             cancellationToken);
 
         _logger.LogInformation(
-            "ConfirmPayment fired — transaction {TransactionId} → PAYMENT_RECEIVED, txHash={TxHash} correlationId={CorrelationId}",
-            transaction.Id, confirmedPayment.TxHash, correlationId);
+            "ConfirmPayment fired — transaction {TransactionId} → PAYMENT_RECEIVED, txHash={TxHash} deliveryDeadline={DeliveryDeadline} correlationId={CorrelationId}",
+            transaction.Id, confirmedPayment.TxHash, deliveryDeadline, correlationId);
         return true;
     }
 

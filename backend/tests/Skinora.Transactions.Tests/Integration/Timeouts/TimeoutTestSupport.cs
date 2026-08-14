@@ -112,7 +112,8 @@ internal static class TimeoutTestFixtures
         return buyer;
     }
 
-    public static async Task ConfigureSettingAsync(AppDbContext context, string key, string value)
+    public static async Task ConfigureSettingAsync(
+        AppDbContext context, string key, string value, string dataType = "decimal")
     {
         var existing = await context.Set<SystemSetting>().FirstOrDefaultAsync(s => s.Key == key);
         if (existing is null)
@@ -123,7 +124,7 @@ internal static class TimeoutTestFixtures
                 Key = key,
                 Value = value,
                 IsConfigured = true,
-                DataType = "decimal",
+                DataType = dataType,
                 Category = "Test",
             });
         }

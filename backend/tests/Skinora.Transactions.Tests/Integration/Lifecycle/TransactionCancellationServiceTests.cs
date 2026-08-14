@@ -531,6 +531,13 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
         public Task<TimeoutJobIds> ReschedulePaymentTimeoutAsync(
             Guid transactionId, TimeSpan remaining, DateTime newPaymentDeadlineUtc, CancellationToken cancellationToken)
             => Task.FromResult(new TimeoutJobIds("job-" + transactionId.ToString("N")[..8], null));
+
+        // T124 — cancellation moves a transaction OUT of the flow, so it must
+        // never open a delivery window. Throwing rather than no-opping keeps
+        // that an assertion instead of an assumption.
+        public Task<DateTime> ArmDeliveryDeadlineAsync(Guid transactionId, CancellationToken cancellationToken)
+            => throw new NotSupportedException(
+                "The cancellation path must not arm a delivery deadline (T124).");
     }
 
     private sealed class SettingsBackedThresholdsProvider : ICancelCooldownThresholdsProvider

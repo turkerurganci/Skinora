@@ -87,10 +87,19 @@ public sealed class AmountValidationServiceTests : IDisposable
 
     // WP16 — records CancelTimeoutJobsAsync so tests can assert the payment-timeout
     // job is cancelled when (and only when) the payment confirmation advances the
-    // state machine to PAYMENT_RECEIVED.
+    // state machine to PAYMENT_RECEIVED. T124 adds the mirror-image record for
+    // ArmDeliveryDeadlineAsync.
+    //
+    // The stub deliberately does NOT write a deadline onto the entity: a double
+    // that reproduces production arithmetic would let this class "prove" AC2
+    // against itself. The arithmetic is asserted in TimeoutSchedulingServiceTests
+    // and end-to-end (real service, real SystemSetting) in
+    // BlockchainWebhookEndpointTests; what belongs here is only whether the
+    // ConfirmPayment path calls it.
     private sealed class RecordingTimeoutScheduling : ITimeoutSchedulingService
     {
         public List<Guid> Cancelled { get; } = [];
+        public List<Guid> DeliveryArmed { get; } = [];
 
         public Task<TimeoutJobIds> SchedulePaymentTimeoutAsync(Guid transactionId, CancellationToken cancellationToken)
             => Task.FromResult(new TimeoutJobIds("p", "w"));
@@ -104,6 +113,12 @@ public sealed class AmountValidationServiceTests : IDisposable
         public Task<TimeoutJobIds> ReschedulePaymentTimeoutAsync(
             Guid transactionId, TimeSpan remaining, DateTime newPaymentDeadlineUtc, CancellationToken cancellationToken)
             => Task.FromResult(new TimeoutJobIds("p", "w"));
+
+        public Task<DateTime> ArmDeliveryDeadlineAsync(Guid transactionId, CancellationToken cancellationToken)
+        {
+            DeliveryArmed.Add(transactionId);
+            return Task.FromResult(new DateTime(2026, 5, 17, 12, 0, 0, DateTimeKind.Utc));
+        }
     }
 
     // ─── Correct amount ─────────────────────────────────────────────────
@@ -122,6 +137,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Single(_outbox.Events.OfType<PaymentReceivedEvent>());
         // WP16 — payment arrived → the per-tx payment-timeout job is cancelled.
         Assert.Contains(fixture.Transaction.Id, _timeoutScheduling.Cancelled);
+        // T124 — and the seller's delivery window opens in the same unit of work.
+        Assert.Contains(fixture.Transaction.Id, _timeoutScheduling.DeliveryArmed);
         Assert.Empty(_outbox.Events.OfType<BuyerPaymentInsufficientEvent>());
         Assert.Empty(_outbox.Events.OfType<BuyerPaymentExcessRefundedEvent>());
         // No refund row written when amount is exact.
@@ -146,6 +163,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, fixture.Transaction.Status);
         // WP16 — the payment-timeout job stays armed (no advance → no cancel).
         Assert.DoesNotContain(fixture.Transaction.Id, _timeoutScheduling.Cancelled);
+        // T124 — no advance means no delivery window: the seller has been asked
+        // for nothing yet, so a deadline here would count time against them.
+        Assert.Empty(_timeoutScheduling.DeliveryArmed);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
@@ -195,6 +215,10 @@ public sealed class AmountValidationServiceTests : IDisposable
 
         Assert.Equal(AmountValidationOutcome.AcceptedWithExcessRefund, outcome);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, fixture.Transaction.Status);
+        // T124 — overpayment advances the state, so it must open the delivery
+        // window too: the seller owes the item exactly as in the exact-amount
+        // case, and the excess is refunded on a separate leg.
+        Assert.Contains(fixture.Transaction.Id, _timeoutScheduling.DeliveryArmed);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
         Assert.Equal(10m, refund.Amount);
@@ -249,6 +273,9 @@ public sealed class AmountValidationServiceTests : IDisposable
 
         Assert.Equal(AmountValidationOutcome.MultiPaymentRefunded, outcome);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, fixture.Transaction.Status); // unchanged
+        // T124 — a stray second payment must not re-arm (i.e. extend) the
+        // delivery window the first one opened.
+        Assert.Empty(_timeoutScheduling.DeliveryArmed);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
         Assert.Equal(100m, refund.Amount); // full received amount
@@ -325,6 +352,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(AmountValidationOutcome.StateMachineRejected, outcome);
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, fixture.Transaction.Status);
         Assert.Empty(_outbox.Events.OfType<PaymentReceivedEvent>());
+        // T124 — a held transaction never entered PAYMENT_RECEIVED, so no
+        // delivery clock may start ticking against the seller (05 §4.5).
+        Assert.Empty(_timeoutScheduling.DeliveryArmed);
         var refundCount = await _db.Set<BlockchainTransaction>()
             .CountAsync(b => b.Type != BlockchainTransactionType.BUYER_PAYMENT);
         Assert.Equal(0, refundCount);

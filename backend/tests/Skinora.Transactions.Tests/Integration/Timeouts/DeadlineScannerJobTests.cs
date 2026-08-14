@@ -92,8 +92,20 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
     }
 
+    /// <summary>
+    /// T124 gate — an overdue <c>DeliveryDeadline</c> is NOT consumed until
+    /// T127 adds the verification round that 05 §4.4 / 03 §4.4 require before a
+    /// delivery timeout may cancel. Cancelling here would refund the buyer and
+    /// blame a seller who may have delivered without being confirmed.
+    /// </summary>
+    /// <remarks>
+    /// The transaction must also stay SCANNABLE: nothing is stamped or
+    /// consumed, so a second pass still sees the very same row — which is what
+    /// lets T127 pick up transactions that expired before it shipped. The
+    /// rescan below is the assertion for that, not a repetition.
+    /// </remarks>
     [Fact]
-    public async Task Scanner_Fires_Timeout_On_Overdue_PAYMENT_RECEIVED()
+    public async Task Scanner_Does_Not_Consume_Overdue_PAYMENT_RECEIVED_Until_T127()
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = TimeoutTestFixtures.NewTransaction(
@@ -112,9 +124,60 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
+        await sut.ScanAndRescheduleAsync();
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
-        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, persisted.Status);
+        Assert.Null(persisted.CancelledAt);
+        Assert.Null(persisted.CancelledBy);
+        // Untouched, so the row is still exactly what T127 will inherit.
+        Assert.Equal(nowUtc.AddMinutes(-1), persisted.DeliveryDeadline);
+    }
+
+    /// <summary>
+    /// The gated delivery rows must not eat the batch. They are permanently
+    /// overdue until T127, so sharing <c>DeadlineScannerBatchSize</c> with them
+    /// would let a handful of stuck transactions silently stop every accept /
+    /// seller-confirm / payment timeout in the system.
+    /// </summary>
+    [Fact]
+    public async Task Scanner_Still_Consumes_Other_Phases_When_Gated_Delivery_Rows_Fill_The_Batch()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyerId = (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id;
+
+        for (var i = 0; i < 3; i++)
+        {
+            Context.Set<Transaction>().Add(TimeoutTestFixtures.NewTransaction(
+                _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+                deliveryDeadline: nowUtc.AddMinutes(-10 - i),
+                buyerId: buyerId,
+                buyerRefundAddress: TimeoutTestFixtures.ValidWallet));
+        }
+
+        var accept = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.CREATED, nowUtc,
+            acceptDeadline: nowUtc.AddMinutes(-1));
+        Context.Set<Transaction>().Add(accept);
+        await Context.SaveChangesAsync();
+
+        // Batch of one: if the gated rows shared this query they would win the
+        // single slot on every pass and the CREATED row would never time out.
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            TimeoutTestFixtures.Options(batchSize: 1),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await sut.ScanAndRescheduleAsync();
+
+        var persistedAccept = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == accept.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persistedAccept.Status);
+
+        var stillPending = await Context.Set<Transaction>().AsNoTracking()
+            .CountAsync(t => t.Status == TransactionStatus.PAYMENT_RECEIVED);
+        Assert.Equal(3, stillPending);
     }
 
     [Fact]
