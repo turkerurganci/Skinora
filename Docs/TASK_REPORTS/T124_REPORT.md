@@ -1,0 +1,136 @@
+# T124 — ConfirmPayment yeniden bağlanması + DeliveryDeadline
+
+**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-14
+
+---
+
+## Yapılan İşler
+
+**Satıcının teslimat penceresi ilk kez armlanıyor (AC2).** `DeliveryDeadline` kolonunun her tarafta okuyucusu vardı — `DeadlineScannerJob`, `TimeoutFreezeService` (freeze/resume), `RestartRecoveryService` (kesinti sonrası uzatma), `CountdownSyncBroadcaster`, detay/liste geri sayım blokları, `TransactionStateMachine.ApplyEmergencyHold` — ama **yazan tek satır kod yoktu**. Sonuç, non-delivery riskinin tamamını taşıyan fazın hiçbir zaman sınırının olmamasıydı. T123'ün `SellerConfirmDeadline`'da kapattığı boşluğun teslimat ayağıdır.
+
+- `ITimeoutSchedulingService.ArmDeliveryDeadlineAsync` (yeni) + `TimeoutSchedulingService` implementasyonu: `delivery_timeout_minutes` SystemSetting'ini okur, `DeliveryDeadline = now + dk` yazar, **`SaveChanges` çağırmaz** (09 §13.3 — unit of work çağıranın).
+- **Hangfire job açmaz.** 05 §4.4 "Aşama ayrımı" yalnız ödeme fazına per-transaction delayed job veriyor; teslimat fazı scanner-driven. Job da açmak faza iki bağımsız executor verirdi.
+- Çağıran: `AmountValidationService.AdvanceStateMachineAsync` — `ConfirmPayment` ateşlendikten ve ödeme timeout job'ları iptal edildikten sonra. Geçişle **aynı `SaveChanges`** içinde: rollback olan bir `PAYMENT_RECEIVED` arkasında teslimat deadline'ı bırakamaz.
+- Kapsam doğal olarak doğru: tam tutar ve **fazla ödeme** bacakları bu yardımcıdan geçtiği için ikisi de armlar; eksik ödeme, multi-payment ve emergency-hold bacakları state'i ilerletmediği için armlamaz.
+
+**Teslimat timeout'u T127'ye kadar tüketilmiyor (AC3).** 05 §4.4 ve 03 §4.4 iptalden **önce** bir teslimat doğrulama turu şart koşuyor; o tur T127'de. Kapı olmadan aradaki pencerede item'ı gerçekten göndermiş ama alıcısı onay vermemiş satıcının işlemi haksız yere iptal edilir ve para alıcıya iade edilirdi.
+
+- `DeadlineScannerJob`'ın tüketen sorgusu üç faza indirildi (CREATED / ACCEPTED / SELLER_CONFIRMED).
+- Süresi dolmuş `PAYMENT_RECEIVED` satırları `ReportGatedDeliveryTimeoutsAsync` ile **ayrı, salt-okunur** bir sorguda sayılıp uyarı logu üretir. Hiçbir şey yazılmaz → satır aynen kalır, T127 ilk taramasında devralır.
+- **Ayrı sorgu bilinçli** (proje sahibi kararı, seçenek a): döngü içinde atlamak kalıcı gated satırların `DeadlineScannerBatchSize`'ı doldurmasına ve diğer üç fazın timeout'unun sessizce hiç işlenmemesine yol açabilirdi. Bu, `Scanner_Still_Consumes_Other_Phases_When_Gated_Delivery_Rows_Fill_The_Batch` testiyle sabitlendi.
+
+**AC1 zaten karşılanmıştı — kanıtlandı, yeniden yazılmadı.** `AmountValidationService`'in `SELLER_CONFIRMED → PAYMENT_RECEIVED` bacağı T117'de (`82bff4d`) bağlanmış; o commit yalnız `ITEM_ESCROWED → SELLER_CONFIRMED` rename'ini yaptı. Uçtan uca kanıt HTTP webhook seviyesinde mevcuttu (`PaymentConfirmed_ExactAmount_AdvancesStateAndPublishesPaymentReceivedEvent`) ve bu görevde `DeliveryDeadline` iddiasıyla genişletildi. Task başlığındaki "yeniden bağlanma" T117 öncesi durumu anlatıyor; plana not olarak yazıldı.
+
+## Etkilenen Modüller / Dosyalar
+
+**Değişen — üretim**
+- `Skinora.Transactions/Application/Timeouts/ITimeoutSchedulingService.cs` — `ArmDeliveryDeadlineAsync` sözleşmesi
+- `Skinora.Transactions/Application/Timeouts/TimeoutSchedulingService.cs` — implementasyon + `DeliveryTimeoutKey` + `DefaultDeliveryTimeoutMinutes` + ayar okuyucu
+- `Skinora.Transactions/Application/Timeouts/DeadlineScannerJob.cs` — tüketen sorgu üç faza indi, `ReportGatedDeliveryTimeoutsAsync` eklendi
+- `Skinora.Transactions/Application/Timeouts/IDeadlineScannerJob.cs` — kapı notu (XML doc)
+- `Skinora.Transactions/Application/Webhooks/AmountValidationService.cs` — armlama çağrısı + log alanı
+
+**Değişen — test**
+- `Skinora.Transactions.Tests/Integration/Timeouts/TimeoutSchedulingServiceTests.cs` — 4 yeni test (7 vaka)
+- `Skinora.Transactions.Tests/Integration/Timeouts/DeadlineScannerJobTests.cs` — 1 test ters çevrildi, 1 yeni test
+- `Skinora.Transactions.Tests/Integration/Timeouts/DeadlineScannerJobSideEffectsTests.cs` — 1 test ters çevrildi
+- `Skinora.Transactions.Tests/Integration/Timeouts/TimeoutTestSupport.cs` — `ConfigureSettingAsync`'e opsiyonel `dataType`
+- `Skinora.Transactions.Tests/Unit/Webhooks/AmountValidationServiceTests.cs` — stub + 5 iddia
+- `Skinora.Transactions.Tests/Integration/Lifecycle/TransactionCancellationServiceTests.cs` — stub (iptal yolu armlamamalı → `NotSupportedException`)
+- `Skinora.API.Tests/Integration/BlockchainWebhookEndpointTests.cs` — `ConfigureSettingAsync` yardımcısı + uçtan uca deadline iddiası
+
+**Değişen — doküman**
+- `Docs/11_IMPLEMENTATION_PLAN.md` v0.7→**v0.8** — T124'e üç karar + ara dönem etkisi + test beklentisi; **T127'ye kapı kaldırma kabul kriteri**
+- `Docs/DEPLOY_RUNBOOK.md` — §A #6 tüketici bağlandı, düşük değerin T127 sonrası doğrudan para hareketi ürettiği uyarısı
+- `Docs/DEFERRED_BACKLOG.md` — `P2P-DeliveryTimeoutWarning` ön koşulu karşılandı olarak işaretlendi (kalem açık)
+
+**Migration:** Yok. Yeni kolon veya CHECK yok; `DeliveryDeadline` T117'de eklenmişti.
+
+## Kabul Kriterleri Kontrolü
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `AmountValidationService` SELLER_CONFIRMED → PAYMENT_RECEIVED | ✓ | T117'de (`82bff4d`) bağlanmıştı; bu görevde kanıtlandı ve korundu. HTTP: `PaymentConfirmed_ExactAmount_AdvancesStateAndPublishesPaymentReceivedEvent` (webhook → `PAYMENT_RECEIVED` + `PaymentReceivedEvent`), `PaymentConfirmed_Overpayment_AdvancesStateAndQueuesExcessRefund`. Negatif taraf: `ConfirmedPayment_Underpayment_*` ve `ConfirmedPayment_MultiPayment_*` ilerletmiyor, `ConfirmedPayment_OnEmergencyHold_DoesNotAdvanceOrRefund` |
+| 2 | `DeliveryDeadline` armlanıyor ve zamanında ateşleniyor; süreyi `delivery_timeout_minutes` besliyor | ✓ | Armlama: `ArmDeliveryDeadline_Writes_Deadline_From_Configured_Setting` (90 dk ayar → `now+90`), uçtan uca `PaymentConfirmed_ExactAmount_*` (ayar 45 → gerçek DI grafiğinde `now+45`, sabit değil). Çağrı yeri: `ConfirmedPayment_ExactAmount_*` + `ConfirmedPayment_Overpayment_*` armlıyor; eksik/multi/hold armlamıyor. Hangfire job açılmıyor: `ArmDeliveryDeadline_Schedules_No_Hangfire_Job` (05 §4.4). Yanlış state reddediliyor: `ArmDeliveryDeadline_Rejects_Non_PaymentReceived_State`. "Zamanında ateşleniyor" = scanner deadline geçince satırı **görüyor** (aşağıdaki kapı testleri gated sayımı üzerinden bunu gösteriyor); iptal bacağı AC3 gereği T127'ye kadar kapalı |
+| 3 | `DeadlineScannerJob`'ın PAYMENT_RECEIVED dalı T127'ye kadar tüketmiyor; işlem taranabilir kalır | ✓ | `Scanner_Does_Not_Consume_Overdue_PAYMENT_RECEIVED_Until_T127` — iki ardışık taramadan sonra da `PAYMENT_RECEIVED`, `CancelledAt`/`CancelledBy` NULL, `DeliveryDeadline` değişmemiş (satır aynen T127'ye devrediliyor). Yan etki yok: `Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127` (outbox boş → iade eventi yok). Açlık koruması: `Scanner_Still_Consumes_Other_Phases_When_Gated_Delivery_Rows_Fill_The_Batch` (batch=1, 3 gated satır → CREATED yine iptal oluyor). Kapının kaldırılması T127 kabul kriteri olarak plana yazıldı |
+
+## Test Sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Build | ✓ 0 error / 0 warning | `dotnet build` (backend solution) |
+| Format | ✓ temiz | `dotnet format --verify-no-changes -v diag` → *"Formatted 0 of 1074 files"* |
+| Unit + Integration | ✓ **2561/2561** | 13 test projesi **sırayla** (`dotnet test --no-build`, proje başına). Paralel `Skinora.sln` koşumu tek SQL Server'a 13 assembly'yi aynı anda yüklediği için artefakt üretir (T123 ölçüm notu) |
+
+Proje dağılımı: Shared 399 · Steam 39 · Platform 189 · Auth 120 · Admin 22 · Users 22 · Payments 6 · Realtime 40 · Fraud 91 · Disputes 60 · Notifications 171 · **Transactions 870** · **API 532**.
+
+Doğrudan T124 kapsamı — **5 yeni test metodu = 8 yeni çalıştırma** (biri 4 vakalık `[Theory]`); aritmetik kapanıyor: T123'ün 2553'ü + 8 = **2561**.
+- `TimeoutSchedulingServiceTests` — **4 yeni metod / 7 çalıştırma**: `ArmDeliveryDeadline_Writes_Deadline_From_Configured_Setting`, `_Schedules_No_Hangfire_Job`, `_Falls_Back_When_Setting_Unusable` (`[Theory]` — unconfigured / `0` / `-15` / `not-a-number`), `_Rejects_Non_PaymentReceived_State`
+- `DeadlineScannerJobTests` — **1 yeni metod**: `Scanner_Still_Consumes_Other_Phases_When_Gated_Delivery_Rows_Fill_The_Batch`; ayrıca `Scanner_Fires_Timeout_On_Overdue_PAYMENT_RECEIVED` → `Scanner_Does_Not_Consume_Overdue_PAYMENT_RECEIVED_Until_T127` **ters çevrildi** (sayı değişmedi)
+- `DeadlineScannerJobSideEffectsTests` — `Delivery_Timeout_Publishes_Notification_And_PaymentRefund` → `Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127` **ters çevrildi** (sayı değişmedi)
+- `AmountValidationServiceTests` — mevcut 4 teste **5 yeni iddia** (armlıyor: exact + overpayment · armlamıyor: underpayment, multi-payment, emergency hold)
+- `BlockchainWebhookEndpointTests` — mevcut teste **2 yeni iddia** (deadline NOT NULL + ayardan gelen 45 dk penceresi içinde)
+
+Ölçüm bütünlüğü notu: ilk tam koşum (2561/2561) `DeadlineScannerJob`'a eklenen son savunma `try/catch`'inden **önceki** derleme üzerindeydi; rakam yukarıda **final kod yeniden derlenip suite tekrar koşularak** doğrulandı.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | Bekliyor (ayrı chat) |
+| Bulgu sayısı | — |
+| Düzeltme gerekli mi | — |
+
+## Altyapı Değişiklikleri
+
+- **Migration:** Yok
+- **Config/env değişikliği:** Yok — `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` T123'te tanımlanmıştı, bu görev onu **tüketmeye** başladı. Yeni env yok, ama ayarın değeri artık davranışa bağlı: DEPLOY_RUNBOOK §A #6 uyarısı güncellendi
+- **Docker değişikliği:** Yok
+
+## Commit & PR
+
+- Branch: `task/T124-confirm-payment-delivery-deadline`
+- Commit: COMMITHASH — T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
+- PR: #PRNO
+- CI: CISTATUS
+
+## Known Limitations / Follow-up
+
+- **Teslimat timeout'u T127'ye kadar hiçbir şey tetiklemiyor.** Süresi dolan işlem `PAYMENT_RECEIVED`'da kalır; alıcının parası emanette bekler ve scanner her taramada (varsayılan 30 sn) uyarı logu üretir. Bu plan sırasının kabul edilmiş sonucudur — 05 §4.4 iptalden önce doğrulama turu şart koşuyor ve o tur T127'de. Kapının kaldırılması T127 kabul kriteri olarak yazıldı.
+- **Ara dönemde kullanıcıya görünen etki:** deadline armlandığı andan itibaren detay/liste ekranları ve `CountdownSyncBroadcaster` teslimat geri sayımını gösterir; geri sayım sıfırlanınca hiçbir şey olmaz. FE tarafında ek bir çalışma yapılmadı (T134/T135 kapsamı).
+- **Teslimat fazı için timeout uyarısı yok.** `WarningDispatcher` yalnız ödeme fazını uyarıyor; teslimat penceresinin sahibi satıcı hiçbir uyarı almıyor. `DEFERRED_BACKLOG` `P2P-DeliveryTimeoutWarning` — ön koşulu bu görevle karşılandı, kalem açık.
+- **E2E teslimat-timeout spec'i bayat.** `e2e/tests/timeout.spec.ts` v2.0 akışını (bot dispatch, `TRADE_OFFER_SENT_TO_BUYER`) sürüyor; yeniden yazımı T138'in kapsamında (T137 bağımlı). Bu görevde dokunulmadı.
+- **`delivery_timeout_minutes` değeri hâlâ ölçülmemiş.** T122 gerçek teslimat gecikmesini ölçemedi; launch değeri muhafazakâr yüksek tutulmalı, kapanış T125 launch kapısına bağlı.
+
+## Notlar
+
+**Working tree:** temiz (`git status --short` boş).
+
+**Main CI startup check (task.md Adım 0):** `31802083727` ✓ success · `31802083622` ✓ success · `31733188607` ✓ success — son üç tamamlanmış run yeşil.
+
+**Dış varsayımlar (task.md Adım 4) — kırık yok:**
+
+| Varsayım | Kanıt |
+|---|---|
+| `delivery_timeout_minutes` satırı seed'de mevcut | `SystemSettingSeed.cs:50` (Id=6, `Unconfigured`) |
+| Env hydrate + startup fail-fast var, yani üretimde satır her zaman configured | `SettingsBootstrapService.ExecuteAsync` (`stillMissing` → `InvalidOperationException`), `.env.example:175`, `docker-compose.e2e.yml:127`, `SettingsBootstrapTests.cs:48` |
+| Değer `>0` hem admin hem env yolunda zorlanıyor → kod fallback'i pratikte ulaşılamaz | `SystemSettingsValidator.ValidateRange` generic int kuralı (`dataType is "int" or "decimal"` → `d <= 0` reddedilir) |
+| Scanner'ın PAYMENT_RECEIVED dalı ve `(Status, DeliveryDeadline)` index'i mevcut | `DeadlineScannerJob.cs` (T124 öncesi hâli), `TransactionConfiguration.cs:247` |
+| Freeze/resume + restart recovery `DeliveryDeadline`'ı zaten biliyor → armlanan kolon bu yollarda doğru davranır | `TimeoutFreezeService.cs:163,186` + `FreezeAsync_PAYMENT_RECEIVED_Captures_DeliveryDeadline_Remainder`; `RestartRecoveryService.cs:111` + `RestartRecoveryServiceTests.cs:116` |
+| Teslimat fazı yan etki bacağı (iade eventi) publisher'da mevcut → T127 kapıyı kaldırınca çalışacak | `TimeoutSideEffectPublisher` `TimeoutPhase.Delivery` bacağı + `TimeoutSideEffectPublisherTests.Delivery_Phase_Emits_Notification_And_PaymentRefund` (bu görevde dokunulmadı) |
+
+**Yapım öncesi üç karar proje sahibine soruldu, üçü de onaylandı (2026-08-14):**
+
+| Karar | Seçim | Gerekçe |
+|---|---|---|
+| Kapı şekli | Ayrı salt-okunur sorgu | Döngüde atlamak `DeadlineScannerBatchSize`'ı kalıcı gated satırlarla doldurup diğer üç fazın timeout'unu sessizce durdurabilirdi — testle sabitlendi |
+| `delivery_timeout_minutes` kod fallback'i | 1440 dk (24 sa) | Ulaşılamaz savunma yolu; yön DEPLOY_RUNBOOK §A #6'nın "muhafazakâr YÜKSEK" uyarısından. İki hata yönü simetrik değil: uzun = alıcı bekler, kısa = (T127 sonrası) teslim etmiş satıcıyı haksız iptal eder |
+| Doküman yansıması | Üçü de | T127 kabul kriteri + runbook + backlog ön koşulu |
+
+**Mini güvenlik kontrolü (Katman 1):**
+- Secret sızıntısı: yok — yeni secret/credential yok, log satırları yalnız transaction Id + deadline içeriyor
+- Auth/authorization: değişmedi — yeni uç yok; webhook yolu mevcut HMAC + nonce doğrulamasının arkasında
+- Input validation: yeni kullanıcı girdisi yok. Tek dış girdi `delivery_timeout_minutes` ayarı; parse + `>0` kontrolü hem okuyucuda hem `SystemSettingsValidator`'da
+- Yeni dış bağımlılık: yok
+
+**Kapının tek noktada olması (money-safety notu):** `PAYMENT_RECEIVED`'dan `Timeout` tetikleyebilecek tek üretim yolu scanner'dı — `TimeoutExecutor.ExecutePaymentTimeoutAsync` ilk satırında `Status != SELLER_CONFIRMED` ise no-op ediyor. Dolayısıyla kapı tek yerde ve eksiksiz. `AdminCancel` ayrı bir tetikleyicidir ve bilinçli olarak kapatılmadı — admin müdahalesi bu kapının konusu değil.

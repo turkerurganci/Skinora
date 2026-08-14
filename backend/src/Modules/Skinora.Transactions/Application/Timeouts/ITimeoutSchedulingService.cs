@@ -6,6 +6,13 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// and the timeout warning (<c>TimeoutWarningJobId</c>) for transactions in
 /// <c>SELLER_CONFIRMED</c>; non-payment timeouts (Accept / SellerConfirm /
 /// Delivery) are enforced by <see cref="IDeadlineScannerJob"/> instead.
+/// <para>
+/// T124 added <see cref="ArmDeliveryDeadlineAsync"/> here even though the
+/// delivery phase has no Hangfire job: what this service really owns is
+/// "how long is phase X and when does it end", and keeping the delivery
+/// window's SystemSetting lookup next to the payment window's keeps that
+/// arithmetic in one place instead of a third copy inside a webhook handler.
+/// </para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,6 +65,24 @@ public interface ITimeoutSchedulingService
         TimeSpan remaining,
         DateTime newPaymentDeadlineUtc,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T124 — arms <c>DeliveryDeadline</c> for the seller's delivery window
+    /// (02 §3.1 "adım 6–7", 03 §3.5) from the <c>delivery_timeout_minutes</c>
+    /// SystemSetting. The transaction MUST already be in
+    /// <c>PAYMENT_RECEIVED</c>; the caller owns the <c>ConfirmPayment</c>
+    /// transition that produced that state.
+    /// </summary>
+    /// <remarks>
+    /// No Hangfire job is scheduled: 05 §4.4 "Aşama ayrımı" enforces the
+    /// delivery phase through <see cref="IDeadlineScannerJob"/>, and only the
+    /// payment phase gets a per-transaction delayed job. Like
+    /// <see cref="SchedulePaymentTimeoutAsync"/>, this writes onto the tracked
+    /// entity and does NOT call <c>SaveChangesAsync</c>.
+    /// </remarks>
+    /// <returns>The absolute UTC deadline written onto the entity.</returns>
+    Task<DateTime> ArmDeliveryDeadlineAsync(
+        Guid transactionId, CancellationToken cancellationToken);
 }
 
 /// <summary>The two Hangfire job ids produced by <see cref="ITimeoutSchedulingService"/>.</summary>

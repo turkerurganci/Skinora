@@ -16,6 +16,7 @@ using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -287,16 +288,32 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
         var client = _factory.CreateClient();
 
+        // T124 — a value distinct from every default in the codebase, so the
+        // deadline asserted below can only have come from this row.
+        await _factory.ConfigureSettingAsync("delivery_timeout_minutes", "45");
+
         var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
         await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
 
+        var beforeUtc = DateTime.UtcNow;
         var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
         var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+        var afterUtc = DateTime.UtcNow;
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var tx = await _factory.GetTransactionAsync(ids.TransactionId);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx!.Status);
         Assert.NotNull(tx.PaymentReceivedAt);
+
+        // T124 — the seller's delivery window is armed by the same request that
+        // moved the money into escrow, from the SystemSetting and not a
+        // hard-coded constant. This is the whole wiring in one assertion: the
+        // real service, the real DI graph, the real settings row.
+        Assert.NotNull(tx.DeliveryDeadline);
+        Assert.InRange(
+            tx.DeliveryDeadline!.Value,
+            beforeUtc.AddMinutes(45),
+            afterUtc.AddMinutes(45));
 
         // PaymentReceivedEvent on outbox (T44 K2 wiring).
         var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
@@ -650,6 +667,36 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             await db.SaveChangesAsync();
 
             return (tx.Id, paymentAddress.Id, paymentAddress.Address);
+        }
+
+        /// <summary>
+        /// T124 — configure a seeded (unconfigured) SystemSetting row so a test
+        /// can assert a feature actually reads it. Mirrors what the startup
+        /// bootstrap does from <c>SKINORA_SETTING_*</c> env vars.
+        /// </summary>
+        public async Task ConfigureSettingAsync(string key, string value)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var setting = await db.Set<SystemSetting>().FirstOrDefaultAsync(s => s.Key == key);
+            if (setting is null)
+            {
+                db.Set<SystemSetting>().Add(new SystemSetting
+                {
+                    Id = Guid.NewGuid(),
+                    Key = key,
+                    Value = value,
+                    IsConfigured = true,
+                    DataType = "int",
+                    Category = "Timeout",
+                });
+            }
+            else
+            {
+                setting.Value = value;
+                setting.IsConfigured = true;
+            }
+            await db.SaveChangesAsync();
         }
 
         public async Task<BlockchainTransaction?> GetBlockchainTransactionAsync(string txHash)

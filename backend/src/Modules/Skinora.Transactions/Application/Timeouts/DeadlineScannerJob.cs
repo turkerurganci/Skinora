@@ -28,12 +28,25 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// gap between Hangfire write and DB commit).
 /// </para>
 /// <para>
+/// T124: the delivery phase is scanned but NOT consumed — an expired
+/// <c>DeliveryDeadline</c> is reported and left alone until T127 adds the
+/// verification round 05 §4.4 requires before cancellation. See
+/// <c>ReportGatedDeliveryTimeoutsAsync</c>.
+/// </para>
+/// <para>
 /// The reschedule is wrapped in a <c>try/finally</c> so a batch error never
 /// breaks the chain (mirrors <c>OutboxDispatcher</c>, 09 §13.4).
 /// </para>
 /// </remarks>
 public sealed class DeadlineScannerJob : IDeadlineScannerJob
 {
+    /// <summary>
+    /// How many gated delivery-timeout ids the T124 warning names. The log
+    /// line repeats every scan interval, so it reports an exact count plus a
+    /// bounded, deterministic (oldest-first) sample rather than the whole set.
+    /// </summary>
+    private const int GatedDeliveryLogSampleSize = 10;
+
     private readonly AppDbContext _db;
     private readonly IBackgroundJobScheduler _scheduler;
     private readonly TimeProvider _clock;
@@ -94,9 +107,11 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     {
         var now = _clock.GetUtcNow().UtcDateTime;
 
-        // Single query covers all four phase deadlines. Filtered to honor the
-        // 09 §13.3 guards (IsOnHold + TimeoutFrozenAt) inside SQL so frozen and
-        // emergency-held rows never even reach the in-memory pass.
+        // Single query covers the three CONSUMING phase deadlines. Filtered to
+        // honor the 09 §13.3 guards (IsOnHold + TimeoutFrozenAt) inside SQL so
+        // frozen and emergency-held rows never even reach the in-memory pass.
+        // The delivery phase is deliberately absent — see
+        // ReportGatedDeliveryTimeoutsAsync.
         var candidates = await _db.Set<Transaction>()
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
@@ -105,10 +120,21 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                             (t.Status == TransactionStatus.CREATED && t.AcceptDeadline != null && t.AcceptDeadline < now)
                             || (t.Status == TransactionStatus.ACCEPTED && t.SellerConfirmDeadline != null && t.SellerConfirmDeadline < now)
                             || (t.Status == TransactionStatus.SELLER_CONFIRMED && t.PaymentDeadline != null && t.PaymentDeadline < now)
-                            || (t.Status == TransactionStatus.PAYMENT_RECEIVED && t.DeliveryDeadline != null && t.DeliveryDeadline < now)
                         ))
             .Take(_options.DeadlineScannerBatchSize)
             .ToListAsync();
+
+        // Diagnostics only, so it is not allowed to cost an enforcement pass:
+        // without this catch a failure in the gate report would abort the batch
+        // below and delay real cancellations by a whole scan interval.
+        try
+        {
+            await ReportGatedDeliveryTimeoutsAsync(now);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Gated delivery-timeout report failed (T124).");
+        }
 
         if (candidates.Count == 0) return;
 
@@ -164,6 +190,56 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             await _reputation.RefreshAsync(sellerId, buyerId, evaluateCooldown: true, CancellationToken.None);
         await _db.SaveChangesAsync();
         await dbTx.CommitAsync();
+    }
+
+    /// <summary>
+    /// T124 gate — an expired <c>DeliveryDeadline</c> is observed but NOT
+    /// consumed until T127 ships the delivery verification round.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 05 §4.4 and 03 §4.4 both require a final delivery verification BEFORE a
+    /// delivery timeout cancels anything: evidence found means the transaction
+    /// advances instead of being cancelled. That round is T127's job. Firing
+    /// <c>Timeout</c> here in the meantime would refund the buyer and record
+    /// the cancellation against a seller who may well have sent the item and
+    /// simply never been confirmed (02 §9.2) — the plan orders T127 after this
+    /// task, so the protection has to be a gate.
+    /// </para>
+    /// <para>
+    /// Overdue delivery rows are queried separately rather than skipped inside
+    /// the main loop on purpose: sharing the batched query would let permanently
+    /// gated rows fill <c>DeadlineScannerBatchSize</c> and starve the accept /
+    /// seller-confirm / payment phases, which is a silent availability failure.
+    /// Nothing is written here, so every gated row stays exactly as it is and
+    /// T127 picks it up on its first scan — T127 removes this method and
+    /// restores the <c>PAYMENT_RECEIVED</c> branch to the query above.
+    /// </para>
+    /// </remarks>
+    private async Task ReportGatedDeliveryTimeoutsAsync(DateTime now)
+    {
+        var gated = _db.Set<Transaction>()
+            .Where(t => !t.IsDeleted
+                        && !t.IsOnHold
+                        && t.TimeoutFrozenAt == null
+                        && t.Status == TransactionStatus.PAYMENT_RECEIVED
+                        && t.DeliveryDeadline != null
+                        && t.DeliveryDeadline < now);
+
+        var gatedCount = await gated.CountAsync();
+        if (gatedCount == 0) return;
+
+        var sample = await gated
+            .OrderBy(t => t.DeliveryDeadline)
+            .Select(t => t.Id)
+            .Take(GatedDeliveryLogSampleSize)
+            .ToListAsync();
+
+        _logger.LogWarning(
+            "Delivery deadline passed on {Count} transaction(s) without cancellation — "
+            + "the timeout verification round is not implemented yet (T127), so these stay "
+            + "in PAYMENT_RECEIVED and the buyers' funds stay in escrow. Oldest ids: {TransactionIds}",
+            gatedCount, string.Join(", ", sample));
     }
 }
 

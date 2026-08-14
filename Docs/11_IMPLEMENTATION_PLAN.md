@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.7** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
+**Versiyon: v0.8** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2528,6 +2528,30 @@ Task T124: ConfirmPayment yeniden bağlanması + DeliveryDeadline
        Kapı olmadan, aradaki pencerede item'ı gerçekten göndermiş ama
        alıcısı onay vermemiş satıcının işlemi haksız yere iptal edilir ve
        para alıcıya iade edilir. Sıra değiştirilemediği için koruma kapı.
+  Not (T124 yapımı, 2026-08-14): AC1 kod olarak T117'de KARŞILANMIŞTI
+       (`82bff4d` yalnız `ITEM_ESCROWED` -> `SELLER_CONFIRMED` rename'i yaptı);
+       uçtan uca kanıtı `BlockchainWebhookEndpointTests.PaymentConfirmed_
+       ExactAmount_*`. Bu görevin fiilî işi AC2 + AC3'tü. "Yeniden bağlanma"
+       başlığı T117 öncesi durumu anlatıyor.
+  KARAR (proje sahibi, 2026-08-14) — üç yapım kararı onaylandı:
+       (a) Kapı ŞEKLİ: süresi dolmuş PAYMENT_RECEIVED satırları tüketen
+           sorgudan çıkarıldı ve AYRI bir salt-okunur sorguyla raporlanıyor.
+           Döngü içinde atlamak `DeadlineScannerBatchSize`'ı kalıcı gated
+           satırlarla doldurup diğer üç fazın timeout'unu sessizce durdurabilirdi.
+       (b) `delivery_timeout_minutes` okunamazsa kod fallback'i 1440 dk (24 sa).
+           Startup fail-fast + validator `>0` nedeniyle üretimde ulaşılamaz;
+           yön DEPLOY_RUNBOOK §A #6'nın "muhafazakâr YÜKSEK" uyarısından geliyor
+           (kısa fallback, T127 sonrası teslim etmiş satıcıyı haksız iptal eder).
+       (c) Doküman yansıması: T127'ye kapı kaldırma kriteri + DEPLOY_RUNBOOK
+           §A #6 + DEFERRED_BACKLOG `P2P-DeliveryTimeoutWarning` ön koşulu.
+  Ara dönem etkisi (T127'ye kadar): deadline armlandığı an detay/liste ekranları
+       ve `CountdownSyncBroadcaster` teslimat geri sayımını göstermeye başlar;
+       süre dolunca hiçbir şey olmaz, işlem PAYMENT_RECEIVED'da kalır ve scanner
+       her taramada uyarı logu üretir. Planın sıra kararının kabul edilmiş sonucu.
+  Test beklentisi: Integration (deadline setting'den armlanıyor, Hangfire job
+       açılmıyor, yanlış state reddediliyor, gated satır iki taramada da
+       tüketilmiyor, gated satırlar batch'i doldurunca diğer fazlar hâlâ
+       işleniyor), Unit (ConfirmPayment armlıyor; eksik/multi/hold armlamıyor)
 
 Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
   Bağımlılık: T122, T124
@@ -2566,6 +2590,16 @@ Task T127: TimeoutExecutor'a teslimat doğrulama turu
   Kabul kriterleri:
     - Kanıt tamsa timeout iptal yerine ITEM_DELIVERED üretiyor
     - SELLER_ASSET_GONE ve delta yoksa dispute'a yükseltiliyor
+    - T124 SCANNER KAPISI KALDIRILDI: `DeadlineScannerJob.ReportGatedDelivery
+      TimeoutsAsync` silinir ve `PAYMENT_RECEIVED && DeliveryDeadline < now`
+      dalı tüketen sorguya geri konur. Kapı T124'te kondu çünkü 05 §4.4 iptalden
+      ÖNCE doğrulama turu şart koşuyor ve o tur bu görevdedir; kapı kalkmazsa
+      teslimat timeout'u ateşlenmez, süresi dolan işlemler PAYMENT_RECEIVED'da
+      birikmeye devam eder (T124 uyarı logu bunları sayar)
+    - Kapının kalkışıyla birlikte T124'te ters çevrilen iki test eski
+      beklentisine döner: `DeadlineScannerJobTests.Scanner_Does_Not_Consume_
+      Overdue_PAYMENT_RECEIVED_Until_T127` ve `DeadlineScannerJobSideEffects
+      Tests.Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127`
 
 Task T128: (SellerId, ItemAssetId) tekillik kapısı
   Bağımlılık: T117

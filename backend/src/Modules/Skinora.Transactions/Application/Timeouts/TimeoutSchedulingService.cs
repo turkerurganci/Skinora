@@ -17,6 +17,36 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
     /// <summary>Settings key for the warning ratio (07 §9.8 / 02 §3.4).</summary>
     public const string WarningRatioKey = "timeout_warning_ratio";
 
+    /// <summary>
+    /// T124 — SystemSetting key for the seller's delivery window (02 §3.1
+    /// "adım 6–7"). Renamed from <c>trade_offer_buyer_timeout_minutes</c> in
+    /// T123; this is its first production reader.
+    /// </summary>
+    public const string DeliveryTimeoutKey = "delivery_timeout_minutes";
+
+    /// <summary>
+    /// Defensive fallback for <see cref="DeliveryTimeoutKey"/>, used only when
+    /// the row is unconfigured, blank, unparsable or non-positive.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Practically unreachable: <c>SettingsBootstrapService</c> fail-fasts at
+    /// startup on an unconfigured row and <c>SystemSettingsValidator</c>
+    /// rejects a non-positive int on both the admin and the env-var path.
+    /// </para>
+    /// <para>
+    /// The value is deliberately much higher than the runbook's 60-minute
+    /// example (DEPLOY_RUNBOOK §A #6). That number is an illustration, not a
+    /// measurement — T122 could not measure real delivery latency — and the
+    /// runbook says the launch value must be conservatively HIGH. If this
+    /// fallback is ever reached the two failure directions are not symmetric:
+    /// too long merely makes the buyer wait, while too short (once T127 lets
+    /// the delivery timeout cancel again) refunds the buyer and blames a
+    /// seller who may well have delivered.
+    /// </para>
+    /// </remarks>
+    public const int DefaultDeliveryTimeoutMinutes = 1440;
+
     private readonly AppDbContext _db;
     private readonly IBackgroundJobScheduler _scheduler;
     private readonly TimeProvider _clock;
@@ -135,6 +165,30 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
         return new TimeoutJobIds(paymentJobId, warningJobId);
     }
 
+    public async Task<DateTime> ArmDeliveryDeadlineAsync(
+        Guid transactionId, CancellationToken cancellationToken)
+    {
+        var transaction = await LoadAsync(transactionId, cancellationToken);
+        if (transaction.Status != TransactionStatus.PAYMENT_RECEIVED)
+            throw new InvalidOperationException(
+                $"ArmDeliveryDeadline requires PAYMENT_RECEIVED, got {transaction.Status}.");
+
+        var minutes = await ReadDeliveryTimeoutMinutesAsync(cancellationToken)
+            ?? DefaultDeliveryTimeoutMinutes;
+
+        // Anchored on now rather than on PaymentReceivedAt: the seller's window
+        // starts when the platform learns the money is there (03 §3.5 step 2 —
+        // the "ödeme alındı, item'ı şimdi gönder" notification rides the same
+        // unit of work), and the two are the same instant on the happy path.
+        var deadline = _clock.GetUtcNow().UtcDateTime + TimeSpan.FromMinutes(minutes);
+        transaction.DeliveryDeadline = deadline;
+
+        // No Hangfire job here — 05 §4.4 "Aşama ayrımı" makes the delivery
+        // phase scanner-driven (DeadlineScannerJob). Arming a delayed job as
+        // well would give the phase two independent executors.
+        return deadline;
+    }
+
     private async Task<Transaction> LoadAsync(Guid transactionId, CancellationToken ct)
     {
         var transaction = await _db.Set<Transaction>()
@@ -153,6 +207,27 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
             .FirstOrDefaultAsync(ct);
         if (string.IsNullOrWhiteSpace(raw)) return null;
         return decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    /// <summary>
+    /// T124 — read <see cref="DeliveryTimeoutKey"/>. Returns <c>null</c> for an
+    /// unconfigured, blank, unparsable or non-positive value so the caller
+    /// falls back to <see cref="DefaultDeliveryTimeoutMinutes"/>: a zero or
+    /// negative window would arm the deadline in the past and mark the seller
+    /// overdue the instant the payment lands.
+    /// </summary>
+    private async Task<int?> ReadDeliveryTimeoutMinutesAsync(CancellationToken ct)
+    {
+        var raw = await _db.Set<SystemSetting>()
+            .AsNoTracking()
+            .Where(s => s.Key == DeliveryTimeoutKey && s.IsConfigured)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0
             ? parsed
             : null;
     }
