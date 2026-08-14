@@ -141,9 +141,9 @@
 ## Commit & PR
 
 - Branch: `task/T125-delivery-verification-evidence`
-- Commit: `<hash>` — T125: DeliveryVerificationService + DeliveryEvidence
-- PR: #<no>
-- CI: ⏳
+- Commit: `afc54f1` — T125: DeliveryVerificationService + DeliveryEvidence
+- PR: [#234](https://github.com/turkerurganci/Skinora/pull/234)
+- CI: run [`31831063171`](https://github.com/turkerurganci/Skinora/actions/runs/31831063171) — izleniyor
 
 ## Notlar
 
