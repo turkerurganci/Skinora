@@ -231,11 +231,12 @@ public sealed class DeliveryVerificationService : IDeliveryVerificationService
     {
         if (evidence.IsSufficientForDelivery())
         {
-            // The gate governs the platform's INFERENCE from inventories. A
-            // buyer-confirmed delivery is the buyer's own decision and is never
-            // gated (the short circuit above already returned, so reaching here
-            // with BUYER_CONFIRMED means it was recorded alongside inventory
-            // evidence in the same round — still the buyer's decision).
+            // The gate governs the platform's INFERENCE from inventories, never
+            // the buyer's own decision. VerifyAsync short-circuits on a recorded
+            // BUYER_CONFIRMED before ever reaching here, so this arm is not
+            // reachable through it today — it is kept so the rule survives
+            // inside this function rather than depending on a caller two
+            // hundred lines up remembering to check first.
             if (evidence.HasFlag(DeliveryEvidence.BUYER_CONFIRMED) || gateOpen)
                 return DeliveryVerdict.Delivered;
 
