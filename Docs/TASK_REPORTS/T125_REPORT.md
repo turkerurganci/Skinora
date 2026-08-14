@@ -1,6 +1,6 @@
 # T125 — DeliveryVerificationService + DeliveryEvidence
 
-**Faz:** F7 (P2P geçişi, P3 "Yeni ileri yol") | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-14
+**Faz:** F7 (P2P geçişi, P3 "Yeni ileri yol") | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-14
 
 ---
 
@@ -98,9 +98,67 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** |
+| Doğrulama tarihi | 2026-08-14 (ayrı chat, `/validate T125`) |
+| Doğrulanan commit | `b71760f` (branch HEAD) |
+| Bulgu sayısı | 3 (hiçbiri bloke edici değil — üçü de takip maddesi) |
+| Düzeltme gerekli mi | Hayır (merge öncesi). F1–F3 merge sonrası chore PR'ına |
+
+### Validator kabul kriteri tablosu (bağımsız)
+
+Validator matrisi **yapım raporunu görmeden**, 02 §9.2 + 06 §2.24'ten kendi türetti; sonuç yapım chat'inin 13 satırıyla birebir örtüştü (eksik/fazla satır yok).
+
+| # | Kriter | Validator | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | 02 §9.2 tuzak matrisinin her satırı için bir test | ✓ | `Row01`–`Row13` + `Row06b`; `Row06/06b/07/10/12` Theory ile çift vaka. `--filter DeliveryVerificationServiceTests` → **36/36**. Testler gerçek DB'ye karşı `IntegrationTestBase` + `FakeSteamInventoryReader` ile koşuyor, saf birim mock değil |
+| 2 | Servis saf / yan etkisiz (polling'e hazır) | ✓ | Kod: `VerifyAsync` yalnız `AsNoTracking()` okur (`SystemSetting`, `User`), `transaction`'a yazmaz, `SaveChanges` yok. Yazma ayrı `DeliveryEvidenceCaptureRecorder`'da. Test: `Verification_Writes_Nothing_And_Repeats_Identically` (bellek + DB), `Callers_Choose_The_Read_Freshness` |
+| 3 | `market_tradable_restriction` kanıt değil + tuzağı sabitleyen test | ✓ | `grep -rn "market_tradable_restriction" backend/src` → yalnız `DeliveryVerificationService` XML yorumu. Sidecar `mapItem` alanı bilinçli olarak map'lemiyor. `SteamInventoryReadContract.test.ts` kanonik `T122_owner_capture.json` üzerinden `tradable:1` ↔ `restriction:7` çelişkisini sabitliyor |
+| 4 | Kanıt değerlendirmesi kilit durumuna dayanmıyor | ✓ | Yapısal: `DeliveryVerificationService.cs` içinde `IsTradeable` referansı **yok**. Davranışsal: `Row12` iki vaka → aynı verdict. *(Not: `Row12` kilit bayrağını yalnız satıcı tarafında değiştiriyor; alıcıya ulaşan kilitli item vakası yapısal yoklukla kapanıyor)* |
+| 5 | Sayfalama "devam yok"u `more_items` **yokluğundan** anlıyor | ✓ | Bağımsız teyit: `sidecar-steam/node_modules/steamcommunity/components/users.js:668` → `if (body.more_items)`. Test gerçek kütüphaneyi `httpRequest` seam'iyle sürüyor (mock değil) — son sayfa anahtarsız → 2 istek, 3 asset. Ek: kısa-okuma guard'ı 5 test |
+| 6 | Launch kapısı: ham yanıt saklanıyor + insan incelemesi olmadan otomatik bırakma açılmıyor + runbook'a bağlı | ~ | **Para tarafı tam:** seed `false` (migration `InsertData`, `IsConfigured=true`) · `SettingsBootstrapService` `.Where(s => !s.IsConfigured)` ⇒ env ile açılamaz (bağımsız kodda teyit) · fail-closed (`Gate_Defaults_To_Closed_When_The_Setting_Is_Missing`) · DEPLOY_RUNBOOK §H eksiksiz. **Kısmi:** "ham yanıt" saklanmıyor; yerine sınıf-kapsamlı gözlem. B1/B2/B3'ün üçü de kayıttan cevaplanabildiği için amaç karşılanıyor — kabul edilebilir minor. Gerekçe metni için bkz. F1 |
+
+### Doğrulama kontrol listesi
+
+- [x] Adım -1 — working tree temiz (`git status --short` boş)
+- [x] Adım 0 — main CI son 3 run: `31825580317` ✓ · `31825580363` ✓ · `31824134702` ✓
+- [x] Adım 0b — repo memory `.claude/memory/MEMORY.md` T125 satırı mevcut
+- [x] Adım 8a — task branch CI: HEAD `b71760f` run [`31832714884`](https://github.com/turkerurganci/Skinora/actions/runs/31832714884) `success`, **CI Gate `success`**, 12 bloke edici job yeşil
+- [x] Advisory E2E kırılması T125 kaynaklı **değil** — bağımsız teyit: aynı 8 leg T125 **öncesinde**, main run [`31824134685`](https://github.com/turkerurganci/Skinora/actions/runs/31824134685) (T124 merge) içinde de kırmızıydı; `--log-failed` imzası yalnız `Invalid object name 'PlatformSteamBots'`, T125 yüzeylerinden (`DeliveryVerification*` · `DeliveryEvidenceCapture` · `assetProperties` · `total_inventory_count` · `InventoryShortRead` · yeni ayar anahtarı) **0 iz**
+- [x] Doküman uyumu — 06 §3.5a kolonları ↔ EF config ↔ migration birebir; `DeliveryVerdict` 5 değeri ↔ `nvarchar(40)`; 06 §2.24 geçiş kuralı ↔ `DeliveryEvidenceExtensions`; 02 §9.2 diff'i **tamamen ek** (kanıt kuralları değişmedi — spec koda uydurulmamış)
+- [x] Sidecar wire sözleşmesi — `assetProperties`/`propertyId`/`intValue`/`floatValue`/`stringValue` isimleri sidecar ↔ backend DTO'da birebir; alan nullable ⇒ eski sidecar ile geriye uyumlu
+
+### Mini güvenlik kontrolü
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | Temiz — diff'te credential/anahtar yok |
+| Auth / authorization | Temiz — yeni endpoint yok; ayar mevcut admin `/admin/settings` yüzeyinden yönetiliyor |
+| Input validation | Temiz — `SystemSettingsValidator` `bool` dalı (`bool.TryParse`) yeni anahtarı kapsıyor; motor tarafında parse edilemeyen değer **fail-closed** |
+| Yeni dış bağımlılık | Yok — `*.csproj` / `package.json` / lock dosyalarında değişiklik yok |
+| Kişisel veri | Kanıt kaydı bilinçli olarak işlemin **kendi item sınıfıyla** sınırlı; envanter dökümü değil (runbook §8) |
+
+### Bulgular (hiçbiri bloke edici değil)
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| F1 | S1 Sapma (doküman) | "**ham JSON hiçbir noktada dışarı verilmiyor**" ifadesi fazla kesin. `steamcommunity` ham gövdeyi `SteamCommunity.prototype.httpRequest` seam'inden geçiriyor ve **bu görevin kendi contract testi** (`SteamInventoryReadContract.test.ts:86`) tam olarak o seam'i değiştirerek sayfa gövdeleriyle çalışıyor — yani ham yakalama teknik olarak *mümkündü*, yalnız kütüphanenin **public API'ı** vermiyor. Sapmanın doğru ve zaten yeterli gerekçesi kapsam/kişisel-veri minimizasyonudur (runbook §8). Düzeltme olmazsa T127/T130 yapımcısı "imkânsız" diye okuyup yanlış karar verebilir | `Docs/INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md` §7 · bu rapor "Dış Varsayımlar" #7 |
+| F2 | S1 Sapma (kod hijyeni) | `InventoryShortReadError` JSDoc bloğu `InventoryService` sınıfının kendi JSDoc'unun **hemen üstüne** kopyalanmış (satır 183–199); aynı blok 343–362'de gerçek sınıfa bağlı olarak zaten var. Yetim/çift kayıt — davranışa etkisi yok, sınıfın dokümantasyonunu okuyan için yanıltıcı | `sidecar-steam/src/trade/InventoryService.ts:183-199` |
+| F3 | Takip (ileriye dönük risk) | **Launch kapısı yalnız servis katmanında.** State machine guard'ı `HasDeliveryEvidence()` (`TransactionStateMachine.cs:330`) sadece `IsSufficientForDelivery() && DeliveryVerifiedAt.HasValue` bakar — kapıdan haberi yok. `DeliveryVerificationResult.Evidence` XML'i ise çağırana "bu değeri `Transaction.DeliveryEvidence`'a persist et" diyor. Gated bir turda çağıran hem Evidence'ı yazar hem `DeliveryVerifiedAt`'i damgalarsa kapı **sessizce atlanır**. **Bugün canlı bypass YOK** (bağımsız teyit: `grep -rn "DeliveryEvidence =\|DeliveryVerifiedAt =" backend/src` → üretimde yazan kod yok; tek tüketici `DeliveryDisputeAutoChecker` para hareketi yapmıyor). Kapıyı fiilen tutan alan `DeliveryVerifiedAt`'tir ama bu invariant hiçbir yerde yazılı değil. Öneri: T126/T127 kabul kriterlerine "gated turda `DeliveryVerifiedAt` damgalanmaz" maddesi + `IDeliveryVerificationService` XML'ine not | `Docs/11_IMPLEMENTATION_PLAN.md` (T126/T127) · `IDeliveryVerificationService.cs` |
+
+### Validator test koşumu (bağımsız, commit `b71760f`)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Backend build | ✓ 0 error | `dotnet build Skinora.sln -c Release` |
+| Backend Unit | ✓ **1379/1379** (11 assembly) | `dotnet test --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Backend Integration | ✓ **1209/1209** (10 assembly) | `dotnet test --filter "FullyQualifiedName~.Integration"` |
+| Backend Contract | ✓ **9/9** | `dotnet test --filter "FullyQualifiedName~.Contract"` |
+| Backend toplam | ✓ **2597/2597** | (raporun sayısı bağımsız olarak teyit edildi) |
+| Backend — T125 odaklı | ✓ **36/36** | `--filter "FullyQualifiedName~DeliveryVerificationServiceTests"` |
+| Sidecar steam | ✓ **204/204** (12 dosya) | `npm test` |
+| Frontend | ✓ tsc 0 · eslint 0 · vitest **33/33** · i18n **1301×4** | `npx tsc --noEmit` · `npm run lint` · `npx vitest run` |
+
+> **Koşum notu (şeffaflık):** İlk birleşik koşuda `Skinora.Transactions.Tests` integration 2 FAIL verdi (418/420, süre 7 dk 11 sn) — o sırada frontend vitest suite'i (381 sn environment) aynı makinede koşuyordu. İki bağımsız temiz yeniden koşuda **yeniden üretilmedi**: izole proje 420/420 (3 dk), solution geneli 1209/1209 (5 dk 51 sn). CI aynı commit'te Integration leg `success`. Eşzamanlı yük kaynaklı, yeniden üretilemeyen artefakt olarak sınıflandırıldı; ilk koşuda test **isimleri yakalanmadığı** için hangi iki test olduğu kayıt altına alınamadı.
 
 ## Altyapı Değişiklikleri
 
@@ -141,9 +199,9 @@
 ## Commit & PR
 
 - Branch: `task/T125-delivery-verification-evidence`
-- Commit: `afc54f1` — T125: DeliveryVerificationService + DeliveryEvidence · `068a9bf` (rapor PR bilgisi) · `c97db85` (`Decide()` yorum düzeltmesi)
+- Commit: `afc54f1` — T125: DeliveryVerificationService + DeliveryEvidence · `068a9bf` (rapor PR bilgisi) · `c97db85` (`Decide()` yorum düzeltmesi) · `b71760f` (CI sonucu rapora/memory'ye işlendi)
 - PR: [#234](https://github.com/turkerurganci/Skinora/pull/234)
-- CI: **✓ PASS** — final HEAD `c97db85`, run [`31831916818`](https://github.com/turkerurganci/Skinora/actions/runs/31831916818), **CI Gate `success`**; 12 bloke edici job yeşil (Lint · Build · Unit · JS test · Integration · Contract · Migration dry-run · Docker ×3 · Detect paths · Gate), `Guard` skipped (PR event). Önceki run [`31831063171`](https://github.com/turkerurganci/Skinora/actions/runs/31831063171) (HEAD `afc54f1`) da `success`.
+- CI: **✓ PASS** — final HEAD `b71760f`, run [`31832714884`](https://github.com/turkerurganci/Skinora/actions/runs/31832714884), **CI Gate `success`**; 12 bloke edici job yeşil (Lint · Build · Unit · JS test · Integration · Contract · Migration dry-run · Docker ×3 · Detect paths · Gate), `Guard` skipped (PR event). Önceki run'lar [`31831916818`](https://github.com/turkerurganci/Skinora/actions/runs/31831916818) (`c97db85`) ve [`31831063171`](https://github.com/turkerurganci/Skinora/actions/runs/31831063171) (`afc54f1`) da `success`.
 
 ## Notlar
 
