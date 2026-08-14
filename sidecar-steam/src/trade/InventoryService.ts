@@ -181,23 +181,6 @@ export class SteamCommunityInventoryFetcher implements InventoryFetcher {
 }
 
 /**
- * T125 — raised when a read came back with FEWER assets than Steam's own
- * `total_inventory_count` says the inventory holds, i.e. the pagination loop
- * stopped early.
- *
- * Why this is not a warning: a short read is indistinguishable, downstream,
- * from a genuinely smaller inventory. Delivery verification (02 §9.2) counts
- * copies of one item class, so a truncated read produces "the count did not
- * rise" — a *negative finding* — for a delivery that did happen, and the
- * buyer gets refunded for an item they received. Reporting UNAVAILABLE turns
- * a silent wrong answer into a retryable absence of information (08 §2.7).
- *
- * Only the `<` direction is checked. An excess is not treated as an error:
- * `total_inventory_count` counts the whole inventory while the merged list
- * excludes currency items, so the two are not required to be equal — only for
- * the list never to fall short.
- */
-/**
  * 08 §2.3 — Steam Community envanter okuma.
  *
  * Flow per request:

@@ -2584,6 +2584,21 @@ Task T125: DeliveryVerificationService + DeliveryEvidence [ÇOK RİSKLİ]
 Task T126: POST /transactions/:id/confirm-receipt
   Bağımlılık: T125
   Kabul kriterleri: yalnız alıcı, yalnız PAYMENT_RECEIVED, idempotent
+    - LAUNCH KAPISI İNVARİANTI (T125 doğrulama bulgusu F3, 2026-08-14):
+      `DeliveryVerificationResult.AutoReleaseGated == true` dönen bir turda
+      `Transaction.DeliveryVerifiedAt` DAMGALANMAZ. Gerekçe: kapı yalnız
+      `DeliveryVerificationService` katmanında; state machine guard'ı
+      `HasDeliveryEvidence()` (`IsSufficientForDelivery() &&
+      DeliveryVerifiedAt.HasValue`) kapıdan habersizdir. Çağıran gated bir
+      turda hem `Evidence`'ı persist eder hem `DeliveryVerifiedAt`'i
+      damgalarsa kapı sessizce atlanır ve envanter çıkarımı insan incelemesi
+      olmadan para bırakır (02 §9.2 launch kapısı, DEPLOY_RUNBOOK §H).
+      Kapıyı fiilen tutan alan `DeliveryVerifiedAt`'tir. Bir test bunu
+      sabitlemeli: kapı kapalı + envanter kanıtı tam → `DeliveryVerifiedAt`
+      NULL kalır ve `CanDeliverItem` false döner.
+      (Bu uçta `BUYER_CONFIRMED` yolu kapıdan ETKİLENMEZ — alıcının kendi
+      onayı platformun çıkarımı değildir; `AutoReleaseGated` zaten false
+      döner, yani invariant o yolu kısıtlamaz.)
 
 Task T127: DeadlineScannerJob'a teslimat doğrulama turu
   Bağımlılık: T125
@@ -2607,6 +2622,15 @@ Task T127: DeadlineScannerJob'a teslimat doğrulama turu
       beklentisine döner: `DeadlineScannerJobTests.Scanner_Does_Not_Consume_
       Overdue_PAYMENT_RECEIVED_Until_T127` ve `DeadlineScannerJobSideEffects
       Tests.Delivery_Timeout_Publishes_Nothing_While_Gated_Until_T127`
+    - LAUNCH KAPISI İNVARİANTI (T125 doğrulama bulgusu F3, 2026-08-14):
+      `InventoryEvidencePendingReview` verdict'i alan bir tur ne ITEM_DELIVERED
+      üretir ne de işlemi İPTAL eder — işlem PAYMENT_RECEIVED'da bırakılır ve
+      `DeliveryEvidenceCaptureRecorder` ile kayda geçer (DEPLOY_RUNBOOK §H.2).
+      Bu turda `DeliveryVerifiedAt` DAMGALANMAZ: state machine guard'ı
+      `HasDeliveryEvidence()` kapıdan habersizdir, dolayısıyla kapıyı fiilen
+      tutan tek alan odur (T126'daki aynı madde ile ikiz). İptal edilmemesi
+      ayrıca zorunludur çünkü kanıt item'ın ULAŞTIĞINI söylüyor — iptal,
+      teslim etmiş satıcıyı haksız yere kaybettirirdi
     - ÖN KOŞUL — FREEZE/RESUME FAZ KAYMASI KAPATILDI (kapı kalkmadan ÖNCE):
       `DeliveryDeadline`'a ödeme fazının artığının yazılabildiği yol kapatılmış
       ve bir testle sabitlenmiş olmalı. Zincir bugün ulaşılabilir: işlem
