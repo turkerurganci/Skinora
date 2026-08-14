@@ -332,11 +332,23 @@ kendisinden ölçülür. Bu kapı `DEPLOY_RUNBOOK` launch checklist'ine bağlanm
 > `delivery.inventory_evidence_auto_release_enabled` (06 §8, seed default `false`), kanıt tablosu
 > `DeliveryEvidenceCaptures` (06 §3.5a) ve açma prosedürü **DEPLOY_RUNBOOK §H**.
 >
-> **Sapma — "ham yanıt" saklanmıyor, saklanamıyor.** Yukarıdaki cümle Steam'in ham gövdesinin elde
-> edilebilir olduğunu varsayıyordu; değil. Sidecar envanteri `steamcommunity` kütüphanesi üzerinden okur ve
-> kütüphane sayfalama + `assets[] × descriptions[] × asset_properties` birleştirmesini **kendi içinde**
-> yapıp `CEconItem[]` döndürür (`components/users.js`) — ham JSON hiçbir noktada dışarı verilmez. Erişilebilir
-> en zengin katman `CEconItem`'dır ve `asset_properties` orada mevcuttur (`classes/CEconItem.js:89-91`).
+> **Sapma — "ham yanıt" saklanmıyor; kapsam bilinçli olarak daraltıldı.** Sidecar envanteri
+> `steamcommunity` kütüphanesi üzerinden okur ve kütüphane sayfalama + `assets[] × descriptions[] ×
+> asset_properties` birleştirmesini **kendi içinde** yapıp `CEconItem[]` döndürür (`components/users.js`).
+> Kütüphanenin **public API'ı** ham gövdeyi vermez; erişilebilir en zengin katman `CEconItem`'dır ve
+> `asset_properties` orada mevcuttur (`classes/CEconItem.js:89-91`).
+>
+> *(Düzeltme — T125 doğrulaması, 2026-08-14: bu satır önce "ham JSON hiçbir noktada dışarı verilmez"
+> diyordu. Bu **fazla kesin**: `SteamCommunity.prototype.httpRequest` değiştirilebilir bir seam'dir ve ham
+> sayfa gövdeleri oradan geçer — T125'in kendi contract testi `SteamInventoryReadContract.test.ts` tam o
+> seam'i kullanıyor. Yani ham yakalama teknik olarak **mümkündü**; yapılmama sebebi imkânsızlık değil,
+> aşağıdaki kapsam kararıdır. Bu ayrım önemli: "imkânsız" diye okuyan bir sonraki görev, var olmayan bir
+> sınırı veri sanardı.)*
+>
+> **Kapsam kararı:** ham gövdeyi saklamak, kütüphanenin private bir metodunu sarmalamayı (sürüm
+> yükseltmelerinde sessizce kırılabilir) ve iki tarafın **tüm** envanterini — işlemle ilgisiz üçüncü şahıs
+> varlıkları dahil — DB'ye indirmeyi gerektirirdi (§8 kişisel veri). Kanıt kaydı bu yüzden işlemin **kendi
+> item sınıfıyla** sınırlandı.
 >
 > **Onun yerine saklanan:** işlemin **kendi item sınıfı** için iki tarafın gözlemi — görünürlükler, baseline ↔
 > gözlenen sayımlar, asset ID listeleri, **asset başına `asset_properties`** ve gecikme türetmek için zaman

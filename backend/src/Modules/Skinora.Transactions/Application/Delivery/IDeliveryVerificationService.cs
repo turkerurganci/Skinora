@@ -26,6 +26,23 @@ namespace Skinora.Transactions.Application.Delivery;
 /// auto-check). None exist yet — this task delivers the engine and its
 /// evidence rules only.
 /// </para>
+/// <para>
+/// <b>Caller invariant — do not stamp <c>DeliveryVerifiedAt</c> on a gated
+/// round.</b> The launch gate (DEPLOY_RUNBOOK §H) lives here, in the service.
+/// The state machine does not know about it: <c>HasDeliveryEvidence()</c>
+/// guards <c>DeliverItem</c> on
+/// <c>DeliveryEvidence.IsSufficientForDelivery() &amp;&amp;
+/// DeliveryVerifiedAt.HasValue</c> alone. So a caller that persists
+/// <see cref="DeliveryVerificationResult.Evidence"/> <em>and</em> stamps
+/// <c>DeliveryVerifiedAt</c> while
+/// <see cref="DeliveryVerificationResult.AutoReleaseGated"/> is <c>true</c>
+/// silently opens the gate — the inventory inference would release money
+/// before a human ever read the captured evidence.
+/// <c>DeliveryVerifiedAt</c> is the field that actually holds the gate shut.
+/// Persisting the evidence flags on a gated round is fine and intended; only
+/// the timestamp must wait. (Buyer confirmation is unaffected:
+/// <c>AutoReleaseGated</c> is always <c>false</c> there.)
+/// </para>
 /// </remarks>
 public interface IDeliveryVerificationService
 {
