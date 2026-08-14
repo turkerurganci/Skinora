@@ -32,6 +32,7 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
     public async Task<InventoryLookupResult> GetItemAsync(
         string steamId64,
         string itemAssetId,
+        InventoryReadFreshness freshness,
         CancellationToken cancellationToken)
     {
         // A blank identifier is a caller bug, not a Steam answer. It must not
@@ -44,7 +45,8 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
             return InventoryLookupResult.Unavailable;
         }
 
-        var result = await _sidecar.GetInventoryAsync(steamId64, cancellationToken);
+        var result = await _sidecar.GetInventoryAsync(
+            steamId64, BypassCache(freshness), cancellationToken);
         switch (result.Status)
         {
             case SteamSidecarStatus.Success when result.Inventory is { } inv:
@@ -88,4 +90,67 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                 return InventoryLookupResult.Unavailable;
         }
     }
+
+    /// <inheritdoc />
+    public async Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+        string steamId64,
+        string classId,
+        string? instanceId,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(steamId64) || string.IsNullOrWhiteSpace(classId))
+        {
+            _logger.LogWarning(
+                "Baseline capture called with a blank steamId or classId — treated as unreadable");
+            return InventoryClassBaselineResult.Unavailable;
+        }
+
+        var result = await _sidecar.GetInventoryAsync(
+            steamId64, BypassCache(freshness), cancellationToken);
+        switch (result.Status)
+        {
+            case SteamSidecarStatus.Success when result.Inventory is { } inv:
+                var assetIds = inv.Items
+                    .Where(it => MatchesClass(it, classId, instanceId))
+                    .Select(it => it.AssetId)
+                    .ToList();
+                _logger.LogInformation(
+                    "Baseline for {SteamId} class {ClassId}/{InstanceId}: {Count} copies "
+                    + "of {Total} items scanned",
+                    steamId64, classId, instanceId ?? "-", assetIds.Count, inv.TotalCount);
+                return InventoryClassBaselineResult.Captured(assetIds);
+
+            case SteamSidecarStatus.InventoryPrivate:
+                _logger.LogInformation(
+                    "Inventory for {SteamId} is private — no delivery baseline (02 §9.2)", steamId64);
+                return InventoryClassBaselineResult.Private;
+
+            case SteamSidecarStatus.Unavailable:
+            default:
+                _logger.LogWarning(
+                    "Steam sidecar unavailable for {SteamId} — no delivery baseline", steamId64);
+                return InventoryClassBaselineResult.Unavailable;
+        }
+    }
+
+    /// <summary>
+    /// 06 §3.5 pairs <c>ClassId</c> with <c>InstanceId</c>, so both take part in
+    /// the match. A null <paramref name="instanceId"/> on the transaction means
+    /// the listing was created without one and matches on class alone — the
+    /// alternative (requiring both sides to be null) would silently produce an
+    /// empty baseline for every such listing, and an empty baseline reads as a
+    /// claim rather than a gap.
+    /// </summary>
+    private static bool MatchesClass(
+        SteamInventoryItemDto item, string classId, string? instanceId)
+    {
+        if (!string.Equals(item.ClassId, classId, StringComparison.Ordinal))
+            return false;
+        return instanceId is null
+            || string.Equals(item.InstanceId, instanceId, StringComparison.Ordinal);
+    }
+
+    private static bool BypassCache(InventoryReadFreshness freshness) =>
+        freshness == InventoryReadFreshness.Fresh;
 }

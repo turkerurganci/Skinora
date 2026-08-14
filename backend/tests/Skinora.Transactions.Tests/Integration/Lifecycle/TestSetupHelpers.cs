@@ -63,12 +63,36 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
     /// </summary>
     public InventoryVisibility? ForcedVisibility { get; set; }
 
+    /// <summary>
+    /// T123 — the freshness every call arrived with, newest last. Lets a test
+    /// assert that confirm-ready asked for an uncached read (07 §7.6a) without
+    /// reaching into the HTTP layer.
+    /// </summary>
+    public List<InventoryReadFreshness> ItemReadFreshness { get; } = [];
+
+    /// <summary>T123 — same, for the baseline capture (03 §2.3 step 3).</summary>
+    public List<InventoryReadFreshness> BaselineReadFreshness { get; } = [];
+
+    /// <summary>
+    /// T123 — forces the baseline capture to a non-readable outcome
+    /// independently of <see cref="ForcedVisibility"/>. The two inventories in
+    /// play belong to different people: the seller's may be readable while the
+    /// buyer's is hidden, which is precisely the case 03 §2.3 says must NOT
+    /// block the transaction.
+    /// </summary>
+    public InventoryVisibility? ForcedBaselineVisibility { get; set; }
+
     public void Register(string steamId, InventoryItemSnapshot item)
         => _items[(steamId, item.AssetId)] = item;
 
     public Task<InventoryLookupResult> GetItemAsync(
-        string steamId64, string itemAssetId, CancellationToken cancellationToken)
+        string steamId64,
+        string itemAssetId,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
     {
+        ItemReadFreshness.Add(freshness);
+
         if (ForcedVisibility is InventoryVisibility.Private)
             return Task.FromResult(InventoryLookupResult.Private);
         if (ForcedVisibility is InventoryVisibility.Unavailable)
@@ -77,6 +101,35 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
         return Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item)
             ? InventoryLookupResult.Found(item)
             : InventoryLookupResult.NotFound);
+    }
+
+    public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+        string steamId64,
+        string classId,
+        string? instanceId,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+    {
+        BaselineReadFreshness.Add(freshness);
+
+        if (ForcedBaselineVisibility is InventoryVisibility.Private)
+            return Task.FromResult(InventoryClassBaselineResult.Private);
+        if (ForcedBaselineVisibility is InventoryVisibility.Unavailable)
+            return Task.FromResult(InventoryClassBaselineResult.Unavailable);
+
+        // Counts the registered items of that owner whose class matches — the
+        // same (classId, instanceId) rule the sidecar reader applies, so a test
+        // registering two copies of one skin gets a baseline of two.
+        var assetIds = _items
+            .Where(kv => kv.Key.steamId == steamId64
+                && string.Equals(kv.Value.ClassId, classId, StringComparison.Ordinal)
+                && (instanceId is null
+                    || string.Equals(kv.Value.InstanceId, instanceId, StringComparison.Ordinal)))
+            .Select(kv => kv.Value.AssetId)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToList();
+
+        return Task.FromResult(InventoryClassBaselineResult.Captured(assetIds));
     }
 }
 

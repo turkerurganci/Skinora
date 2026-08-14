@@ -310,8 +310,15 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
     private sealed class StubInventoryReader : ISteamInventoryReader
     {
         public Task<InventoryLookupResult> GetItemAsync(
-            string steamId64, string itemAssetId, CancellationToken cancellationToken)
+            string steamId64, string itemAssetId,
+            InventoryReadFreshness freshness, CancellationToken cancellationToken)
             => Task.FromResult(InventoryLookupResult.NotFound);
+
+        /// <summary>T123 — unused here; "unknown", never a fabricated baseline.</summary>
+        public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+            string steamId64, string classId, string? instanceId,
+            InventoryReadFreshness freshness, CancellationToken cancellationToken)
+            => Task.FromResult(InventoryClassBaselineResult.Unavailable);
     }
 
     public sealed class Factory : WebApplicationFactory<Program>

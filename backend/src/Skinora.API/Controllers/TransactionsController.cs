@@ -24,6 +24,7 @@ public sealed class TransactionsController : ControllerBase
     private readonly ITransactionCreationService _creation;
     private readonly ITransactionDetailService _detail;
     private readonly ITransactionAcceptanceService _acceptance;
+    private readonly ITransactionReadinessService _readiness;
     private readonly ITransactionCancellationService _cancellation;
     private readonly IPayoutIssueService _payoutIssues;
 
@@ -34,6 +35,7 @@ public sealed class TransactionsController : ControllerBase
         ITransactionCreationService creation,
         ITransactionDetailService detail,
         ITransactionAcceptanceService acceptance,
+        ITransactionReadinessService readiness,
         ITransactionCancellationService cancellation,
         IPayoutIssueService payoutIssues)
     {
@@ -43,6 +45,7 @@ public sealed class TransactionsController : ControllerBase
         _creation = creation;
         _detail = detail;
         _acceptance = acceptance;
+        _readiness = readiness;
         _cancellation = cancellation;
         _payoutIssues = payoutIssues;
     }
@@ -305,6 +308,62 @@ public sealed class TransactionsController : ControllerBase
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
+
+    /// <summary>T6a — <c>POST /transactions/:id/confirm-ready</c> (07 §7.6a, T123).</summary>
+    /// <remarks>
+    /// No request body (07 §7.6a) — the seller is asserting a fact about state
+    /// the platform verifies itself, so there is nothing for them to submit.
+    /// </remarks>
+    [HttpPost("{id:guid}/confirm-ready")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-write")]
+    public async Task<IActionResult> ConfirmReady(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        var outcome = await _readiness.ConfirmReadyAsync(userId, id, cancellationToken);
+
+        return outcome.Status switch
+        {
+            ConfirmReadyStatus.Confirmed => Ok(outcome.Body),
+
+            ConfirmReadyStatus.NotFound => NotFound(ConfirmReadyErrorEnvelope(outcome)),
+
+            ConfirmReadyStatus.NotAParty
+                // 403 BUYER_MOBILE_AUTHENTICATOR_INACTIVE — its own code, not
+                // MOBILE_AUTHENTICATOR_REQUIRED: the caller here is the seller
+                // and the fix belongs to the buyer (07 §7.6a).
+                or ConfirmReadyStatus.BuyerMobileAuthenticatorInactive
+                => StatusCode(StatusCodes.Status403Forbidden,
+                    ConfirmReadyErrorEnvelope(outcome)),
+
+            ConfirmReadyStatus.InvalidStateTransition
+                or ConfirmReadyStatus.ItemNoLongerAvailable
+                => Conflict(ConfirmReadyErrorEnvelope(outcome)),
+
+            // 422 INVENTORY_PRIVATE — the seller's profile is hidden, so the
+            // item could not be verified either way. Kept off the 409 above on
+            // purpose: 409 would assert the item is gone. Same code and status
+            // the create path uses for the same read (07 §7.2, T121).
+            ConfirmReadyStatus.InventoryPrivate
+                => UnprocessableEntity(ConfirmReadyErrorEnvelope(outcome)),
+
+            // 503 STEAM_UNAVAILABLE — fail-closed and retryable (08 §2.2).
+            ConfirmReadyStatus.SteamUnavailable
+                => StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    ConfirmReadyErrorEnvelope(outcome)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private ApiResponse<object> ConfirmReadyErrorEnvelope(ConfirmReadyOutcome outcome) =>
+        ApiResponse<object>.Fail(
+            outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
+            outcome.ErrorMessage ?? "Readiness could not be confirmed.",
+            traceId: HttpContext.TraceIdentifier);
 
     /// <summary>T7 — <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
     [HttpPost("{id:guid}/cancel")]

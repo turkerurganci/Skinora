@@ -799,8 +799,22 @@ public class DisputeServiceTests : IntegrationTestBase
         public Task<InventoryLookupResult> GetItemAsync(
             string steamId64,
             string itemAssetId,
+            InventoryReadFreshness freshness,
             CancellationToken cancellationToken)
             => Task.FromResult(Result);
+
+        /// <summary>
+        /// T123 — unused by the dispute suites; answers Unavailable rather than
+        /// an empty baseline so an accidental caller gets "unknown", never a
+        /// fabricated "the buyer owns none of this skin".
+        /// </summary>
+        public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+            string steamId64,
+            string classId,
+            string? instanceId,
+            InventoryReadFreshness freshness,
+            CancellationToken cancellationToken)
+            => Task.FromResult(InventoryClassBaselineResult.Unavailable);
     }
 }
 

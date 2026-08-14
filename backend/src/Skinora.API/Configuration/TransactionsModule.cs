@@ -59,6 +59,10 @@ public static class TransactionsModule
         services.AddScoped<ITransactionDetailService, TransactionDetailService>();
         services.AddScoped<ITransactionAcceptanceService, TransactionAcceptanceService>();
 
+        // T123 — seller readiness confirmation (07 §7.6a, 03 §2.3). The gate
+        // that opens the payment window and takes the 02 §9.2 delivery baseline.
+        services.AddScoped<ITransactionReadinessService, TransactionReadinessService>();
+
         // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
         // doc-ref claimed §7.1–§7.4 but the list endpoint was never
         // implemented; T88 dashboard surfaced the gap.

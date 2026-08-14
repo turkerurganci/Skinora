@@ -166,6 +166,72 @@ public enum AcceptTransactionStatus
     SteamUnavailable,
 }
 
+// ---------- POST /transactions/:id/confirm-ready (07 §7.6a) ----------
+
+/// <summary>
+/// Response body for <c>POST /transactions/:id/confirm-ready</c> (07 §7.6a).
+/// </summary>
+/// <param name="BuyerInventoryVisible">
+/// Whether the delivery baseline could be taken (03 §2.3 step 3). Emitted on
+/// every response, not only when false: the seller is being told which of the
+/// two 02 §9.2 evidence paths will exist for this transaction, and a field that
+/// appears only in the bad case is one the client can forget to read. False
+/// does <em>not</em> mean the confirmation failed — the transaction advances
+/// either way; it means delivery can afterwards only be proven by the buyer's
+/// own confirmation.
+/// </param>
+public sealed record ConfirmReadyResponse(
+    TransactionStatus Status,
+    DateTime SellerReadyConfirmedAt,
+    DateTime PaymentDeadline,
+    bool BuyerInventoryVisible);
+
+/// <summary>
+/// Outcome of <see cref="ITransactionReadinessService.ConfirmReadyAsync"/>. The
+/// controller pattern-matches on <see cref="Status"/> to produce 200 / 4xx / 503
+/// responses without leaking implementation details.
+/// </summary>
+public sealed record ConfirmReadyOutcome(
+    ConfirmReadyStatus Status,
+    ConfirmReadyResponse? Body,
+    string? ErrorCode,
+    string? ErrorMessage);
+
+public enum ConfirmReadyStatus
+{
+    Confirmed,
+    NotFound,
+
+    /// <summary>403 <c>NOT_A_PARTY</c> — only the seller may confirm readiness.</summary>
+    NotAParty,
+
+    /// <summary>409 <c>INVALID_STATE_TRANSITION</c> — not in ACCEPTED.</summary>
+    InvalidStateTransition,
+
+    /// <summary>409 <c>ITEM_NO_LONGER_AVAILABLE</c> — inventory read, asset
+    /// gone or untradeable (07 §7.6a).</summary>
+    ItemNoLongerAvailable,
+
+    /// <summary>422 <c>INVENTORY_PRIVATE</c> — the SELLER's inventory is hidden,
+    /// so the item check is undecided. Not a 409: "hidden" is absence of
+    /// information, and collapsing it onto ITEM_NO_LONGER_AVAILABLE is the
+    /// exact conflation T121 removed. Retrying does not help (08 §2.7) — the
+    /// seller has to open their profile, which only this code tells them.
+    /// </summary>
+    InventoryPrivate,
+
+    /// <summary>403 <c>BUYER_MOBILE_AUTHENTICATOR_INACTIVE</c> — the buyer's MA
+    /// is off, so the seller's trade would land in Steam's 15-day escrow
+    /// (02 §9.1).</summary>
+    BuyerMobileAuthenticatorInactive,
+
+    /// <summary>503 <c>STEAM_UNAVAILABLE</c> — Steam could not be reached for
+    /// the item check or the trade-hold probe. Fail-closed and retryable
+    /// (08 §2.2); the buyer-baseline read is explicitly NOT part of this — an
+    /// unreadable buyer inventory never blocks (03 §2.3 step 3).</summary>
+    SteamUnavailable,
+}
+
 // ---------- POST /transactions/:id/cancel (07 §7.7) ----------
 
 /// <summary>Request body for <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>

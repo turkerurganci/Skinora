@@ -587,6 +587,282 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         }
     }
 
+    // ---------- T123: POST /transactions/:id/confirm-ready (07 §7.6a) ----------
+
+    [Fact]
+    public async Task ConfirmReady_Unauthenticated_Returns_401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Happy_Path_Returns_200_With_The_Payment_Window()
+    {
+        var (seller, transactionId, client) = await SetUpConfirmReadyAsync();
+
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal("SELLER_CONFIRMED", data.GetProperty("status").GetString());
+        Assert.True(data.TryGetProperty("sellerReadyConfirmedAt", out _));
+        Assert.True(data.TryGetProperty("paymentDeadline", out _));
+        // Always emitted, not only when false: the seller is being told which
+        // 02 §9.2 evidence paths this transaction will have.
+        Assert.True(data.GetProperty("buyerInventoryVisible").GetBoolean());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var persisted = db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
+            .AsNoTracking().Single(t => t.Id == transactionId);
+        Assert.Equal(Skinora.Shared.Enums.TransactionStatus.SELLER_CONFIRMED, persisted.Status);
+        Assert.NotNull(persisted.SellerReadyConfirmedAt);
+        Assert.NotNull(persisted.PaymentDeadline);
+        Assert.NotEmpty(db.Set<OutboxMessage>().AsNoTracking().ToList());
+        _ = seller;
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Buyer_Calling_Returns_403_NotAParty()
+    {
+        var buyer = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        const string assetId = "27348562891";
+        _factory.SeedInventoryItem(seller.SteamId, assetId, "AK-47 | Redline");
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.ACCEPTED,
+            buyerId: buyer.Id, itemAssetId: assetId,
+            buyerTradeUrl: TradeUrlFor(buyer.SteamId));
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("NOT_A_PARTY", body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Item_Gone_Returns_409_ItemNoLongerAvailable()
+    {
+        // The seller's inventory is readable and the asset is not in it — the
+        // one branch that licenses a positive "it is gone" verdict (08 §2.3).
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync(registerItem: false);
+
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("ITEM_NO_LONGER_AVAILABLE",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Seller_Inventory_Private_Returns_422_InventoryPrivate()
+    {
+        // 422, not the 409 above: a hidden profile is absence of information.
+        // Same code/status the create path already uses for the same read
+        // (07 §7.2, T121), so the seller sees one dictionary across the flow.
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync();
+        _factory.InventoryVisibilityOverride = InventoryVisibility.Private;
+        try
+        {
+            var response = await client.PostAsync(
+                $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("INVENTORY_PRIVATE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Steam_Unreachable_Returns_503()
+    {
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync();
+        _factory.InventoryVisibilityOverride = InventoryVisibility.Unavailable;
+        try
+        {
+            var response = await client.PostAsync(
+                $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("STEAM_UNAVAILABLE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Buyer_MA_Inactive_Returns_403_With_The_Buyer_Specific_Code()
+    {
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync();
+        _factory.TradeHold.Active = false;
+        try
+        {
+            var response = await client.PostAsync(
+                $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("BUYER_MOBILE_AUTHENTICATOR_INACTIVE",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.TradeHold.Active = true;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Unreadable_Buyer_Inventory_Still_Returns_200()
+    {
+        // 03 §2.3 md.3 — the transaction advances; only the inventory-evidence
+        // path closes. Blocking would punish both parties for the buyer's
+        // privacy setting.
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync();
+        _factory.BaselineVisibilityOverride = InventoryVisibility.Private;
+        try
+        {
+            var response = await client.PostAsync(
+                $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+                .GetProperty("data");
+            Assert.False(data.GetProperty("buyerInventoryVisible").GetBoolean());
+        }
+        finally
+        {
+            _factory.BaselineVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Wrong_State_Returns_409()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(seller.Id);
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_STATE_TRANSITION",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Unknown_Transaction_Returns_404()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/confirm-ready", content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Payment_Address_Is_Only_Disclosed_After_ConfirmReady()
+    {
+        // AC4 end-to-end over HTTP: the deposit address exists from creation
+        // (allocator runs there) but 03 §2.3 says the buyer must not see it
+        // until the seller re-confirms the item is still sendable.
+        var (_, transactionId, sellerClient) = await SetUpConfirmReadyAsync();
+        var buyerId = await BuyerIdOfAsync(transactionId);
+        var buyer = await UserByIdAsync(buyerId);
+        await SeedPaymentAddressAsync(transactionId);
+
+        var buyerClient = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var before = (await (await buyerClient.GetAsync($"/api/v1/transactions/{transactionId:D}"))
+            .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.False(before.TryGetProperty("payment", out _));
+
+        await sellerClient.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+        var after = (await (await buyerClient.GetAsync($"/api/v1/transactions/{transactionId:D}"))
+            .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        var payment = after.GetProperty("payment");
+        Assert.Equal("TPaymentAddr1234567890abcdef1234", payment.GetProperty("address").GetString());
+        Assert.Equal("Tron (TRC-20)", payment.GetProperty("network").GetString());
+    }
+
+    private async Task<(User Seller, Guid TransactionId, HttpClient Client)> SetUpConfirmReadyAsync(
+        bool registerItem = true)
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        const string assetId = "27348562891";
+        if (registerItem)
+            _factory.SeedInventoryItem(seller.SteamId, assetId, "AK-47 | Redline");
+
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id,
+            targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.ACCEPTED,
+            buyerId: buyer.Id,
+            itemAssetId: assetId,
+            buyerTradeUrl: TradeUrlFor(buyer.SteamId));
+
+        return (seller, transactionId, BuildAuthenticatedClient(seller.Id, seller.SteamId));
+    }
+
+    private async Task<Guid> BuyerIdOfAsync(Guid transactionId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return (await db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
+            .AsNoTracking().SingleAsync(t => t.Id == transactionId)).BuyerId!.Value;
+    }
+
+    private async Task<User> UserByIdAsync(Guid userId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Set<User>().AsNoTracking().SingleAsync(u => u.Id == userId);
+    }
+
+    private async Task SeedPaymentAddressAsync(Guid transactionId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Set<Skinora.Transactions.Domain.Entities.PaymentAddress>().Add(
+            new Skinora.Transactions.Domain.Entities.PaymentAddress
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = transactionId,
+                Address = "TPaymentAddr1234567890abcdef1234",
+                HdWalletIndex = 7,
+                ExpectedAmount = 102m,
+                ExpectedToken = Skinora.Shared.Enums.StablecoinType.USDT,
+                MonitoringStatus = Skinora.Shared.Enums.MonitoringStatus.ACTIVE,
+            });
+        await db.SaveChangesAsync();
+    }
+
     // ---------- T51: POST /transactions/:id/cancel (07 §7.7) ----------
 
     [Fact]
@@ -824,9 +1100,23 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 InspectLink: null,
                 IsTradeable: true);
 
+        /// <summary>
+        /// T123 — forces the buyer-baseline capture to a non-readable outcome
+        /// independently of <see cref="ForcedVisibility"/>: the seller's
+        /// inventory and the buyer's are different people's profiles, and
+        /// 03 §2.3 requires an unreadable BUYER inventory to be non-blocking.
+        /// </summary>
+        public InventoryVisibility? ForcedBaselineVisibility { get; set; }
+
+        /// <summary>T123 — freshness of each item read, in order (07 §7.6a).</summary>
+        public List<InventoryReadFreshness> ItemReadFreshness { get; } = [];
+
         public Task<InventoryLookupResult> GetItemAsync(
-            string steamId64, string itemAssetId, CancellationToken cancellationToken)
+            string steamId64, string itemAssetId,
+            InventoryReadFreshness freshness, CancellationToken cancellationToken)
         {
+            ItemReadFreshness.Add(freshness);
+
             if (ForcedVisibility is InventoryVisibility.Private)
                 return Task.FromResult(InventoryLookupResult.Private);
             if (ForcedVisibility is InventoryVisibility.Unavailable)
@@ -835,6 +1125,27 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             return Task.FromResult(_items.TryGetValue((steamId64, itemAssetId), out var item)
                 ? InventoryLookupResult.Found(item)
                 : InventoryLookupResult.NotFound);
+        }
+
+        public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+            string steamId64, string classId, string? instanceId,
+            InventoryReadFreshness freshness, CancellationToken cancellationToken)
+        {
+            if (ForcedBaselineVisibility is InventoryVisibility.Private)
+                return Task.FromResult(InventoryClassBaselineResult.Private);
+            if (ForcedBaselineVisibility is InventoryVisibility.Unavailable)
+                return Task.FromResult(InventoryClassBaselineResult.Unavailable);
+
+            var assetIds = _items
+                .Where(kv => kv.Key.steamId == steamId64
+                    && string.Equals(kv.Value.ClassId, classId, StringComparison.Ordinal)
+                    && (instanceId is null
+                        || string.Equals(kv.Value.InstanceId, instanceId, StringComparison.Ordinal)))
+                .Select(kv => kv.Value.AssetId)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+
+            return Task.FromResult(InventoryClassBaselineResult.Captured(assetIds));
         }
     }
 
@@ -873,6 +1184,18 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             set => _inventory.ForcedVisibility = value;
         }
 
+        /// <summary>
+        /// T123 — forces the BUYER-baseline capture to a non-readable outcome,
+        /// separately from <see cref="InventoryVisibilityOverride"/>: they are
+        /// two different people's profiles, and 03 §2.3 requires an unreadable
+        /// buyer inventory to be non-blocking.
+        /// </summary>
+        public InventoryVisibility? BaselineVisibilityOverride
+        {
+            get => _inventory.ForcedBaselineVisibility;
+            set => _inventory.ForcedBaselineVisibility = value;
+        }
+
         public async Task ConfigureSettingAsync(string key, string value)
         {
             using var scope = Services.CreateScope();
@@ -904,7 +1227,11 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             Guid sellerId,
             string? targetBuyerSteamId = null,
             Skinora.Shared.Enums.TransactionStatus status = Skinora.Shared.Enums.TransactionStatus.CREATED,
-            Guid? buyerId = null)
+            Guid? buyerId = null,
+            // T123 — confirm-ready re-reads the listed asset, so a test that
+            // drives it has to pin the id it registered in the fake inventory.
+            string? itemAssetId = null,
+            string? buyerTradeUrl = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -929,14 +1256,27 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // refund path when a post-payment cancel unwinds the escrow.
                 BuyerRefundAddress = buyerId is null ? null : ValidWallet,
                 // T119a — same 06 §3.5 bracket: NOT NULL once a buyer exists.
-                BuyerTradeUrl = buyerId is null ? null : TradeUrlFor(SteamId),
+                BuyerTradeUrl = buyerId is null ? null : (buyerTradeUrl ?? TradeUrlFor(SteamId)),
+                // 06 §3.5 — NOT NULL from ACCEPTED onwards. Restricted to the
+                // post-accept forward states so the CREATED/FLAGGED fixtures
+                // keep their existing shape.
+                AcceptedAt = status is Skinora.Shared.Enums.TransactionStatus.ACCEPTED
+                    or Skinora.Shared.Enums.TransactionStatus.SELLER_CONFIRMED
+                    or Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
+                    or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                    or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-5)
+                    : null,
+                SellerConfirmDeadline = status == Skinora.Shared.Enums.TransactionStatus.ACCEPTED
+                    ? nowUtc.AddHours(1)
+                    : null,
                 PaymentReceivedAt =
                     status is Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
                         or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
                         or Skinora.Shared.Enums.TransactionStatus.COMPLETED
                         ? DateTime.UtcNow.AddMinutes(-5)
                         : null,
-                ItemAssetId = Guid.NewGuid().ToString("N")[..12],
+                ItemAssetId = itemAssetId ?? Guid.NewGuid().ToString("N")[..12],
                 ItemClassId = "abc-class",
                 ItemName = "AK-47 | Redline",
                 StablecoinType = Skinora.Shared.Enums.StablecoinType.USDT,
@@ -990,6 +1330,14 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             // ACTION, 06 §3.6) must be cleared before its parents. ExecuteDelete
             // bypasses the EnforceAppendOnly guard the ChangeTracker path enforces.
             db.Set<Skinora.Transactions.Domain.Entities.TransactionHistory>().ExecuteDelete();
+            // T123 — same class of dependency, same reason: PaymentAddress FKs
+            // to Transaction with NO ACTION, so a leftover row makes the next
+            // Reset() fail on "FOREIGN KEY constraint failed" and takes the
+            // whole class down with it. IgnoreQueryFilters + ExecuteDelete
+            // because the entity is ISoftDeletable: RemoveRange would only
+            // stamp IsDeleted and the row would still hold the FK.
+            db.Set<Skinora.Transactions.Domain.Entities.PaymentAddress>()
+                .IgnoreQueryFilters().ExecuteDelete();
             db.Set<OutboxMessage>().RemoveRange(db.Set<OutboxMessage>());
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
                 .RemoveRange(db.Set<Skinora.Transactions.Domain.Entities.Transaction>());

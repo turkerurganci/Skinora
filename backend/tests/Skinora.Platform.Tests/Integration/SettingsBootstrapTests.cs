@@ -41,11 +41,11 @@ public class SettingsBootstrapTests : IntegrationTestBase
         new()
         {
             ["SKINORA_SETTING_ACCEPT_TIMEOUT_MINUTES"] = "60",
-            ["SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES"] = "60",
+            ["SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES"] = "60",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES"] = "15",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES"] = "60",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES"] = "30",
-            ["SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES"] = "60",
+            ["SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES"] = "60",
             // WP12 — timeout_warning_ratio now ships with a seeded default (0.75),
             // so it is no longer a deploy-mandatory env var.
             ["SKINORA_SETTING_MIN_TRANSACTION_AMOUNT"] = "1.0",

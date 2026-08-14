@@ -296,6 +296,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 RequiresLogin: null)
             : BuildAuthenticatedActions(transaction, role!, nowUtc);
 
+        var payment = await BuildPaymentAsync(transaction, role, cancellationToken);
         var sellerPayout = await BuildSellerPayoutAsync(transaction, role, cancellationToken);
         var refund = await BuildRefundAsync(transaction, role, cancellationToken);
 
@@ -312,7 +313,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Seller: sellerParty,
             Buyer: buyerParty,
             Timeout: timeout,
-            Payment: null,           // T70+ blockchain monitoring
+            Payment: payment,        // T123 — SELLER_CONFIRMED+ deposit address (07 §7.5)
             SellerPayout: sellerPayout, // WP1 — COMPLETED seller view (07 §7.5)
             Refund: refund,          // WP2 — buyer payment-refund view (07 §7.5)
             CancelInfo: cancel,
@@ -543,6 +544,94 @@ public sealed class TransactionDetailService : ITransactionDetailService
         || status == TransactionStatus.CANCELLED_SELLER
         || status == TransactionStatus.CANCELLED_BUYER
         || status == TransactionStatus.CANCELLED_ADMIN;
+
+    /// <summary>
+    /// T123 — the 07 §7.5 <c>payment</c> block: the deposit address the buyer
+    /// pays into.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The gate is the seller's readiness confirmation (see
+    /// <see cref="HasReachedPaymentWindow"/>), which is the whole point of
+    /// 03 §2.3: the address is allocated at creation (the allocator runs there
+    /// so it can be retried by <c>EnsurePaymentAddressJob</c>), but revealing
+    /// it before the seller re-confirms would let a buyer pay into a stale
+    /// listing whose item has since been sold. Allocation and disclosure are
+    /// separate events, and only the second one is a product promise.
+    /// </para>
+    /// <para>
+    /// 07 §7.5 words the condition as "ITEM_ESCROWED'dan itibaren" — a status
+    /// retired in v3.0. Its v3.0 successor as the first state in which money
+    /// may arrive is <c>SELLER_CONFIRMED</c>, the same mapping
+    /// <see cref="ProducePaymentEventsArray"/> already applies to the sibling
+    /// <c>paymentEvents</c> block; this method reaches the same states through
+    /// the milestone stamp instead of naming them. Rewording the table itself
+    /// belongs to T133a.
+    /// </para>
+    /// <para>
+    /// Party-only: <paramref name="role"/> is null for public/prospective
+    /// viewers, and a deposit address handed to a stranger is an invitation to
+    /// phish the buyer with it. <c>status</c>/<c>txHash</c>/<c>confirmedAt</c>
+    /// stay null until the payment legs land (T124+); 07 §7.5 already scopes
+    /// <c>payment.txHash</c> to PAYMENT_RECEIVED onwards.
+    /// </para>
+    /// </remarks>
+    private async Task<TransactionPaymentDto?> BuildPaymentAsync(
+        Transaction transaction,
+        string? role,
+        CancellationToken cancellationToken)
+    {
+        if (role is null || !HasReachedPaymentWindow(transaction))
+            return null;
+
+        // Soft-deleted rows are already excluded by the global query filter, so
+        // no explicit IsDeleted predicate here (it would only duplicate itself
+        // in the generated SQL).
+        var address = await _db.Set<PaymentAddress>()
+            .AsNoTracking()
+            .Where(p => p.TransactionId == transaction.Id)
+            .Select(p => new { p.Address, p.ExpectedAmount, p.ExpectedToken })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Allocation is asynchronous and retried by EnsurePaymentAddressJob, so
+        // a missing row is a transient gap rather than an error state. Omitting
+        // the block is the honest answer: an empty-string address would be
+        // rendered as something payable.
+        if (address is null) return null;
+
+        return new TransactionPaymentDto(
+            Address: address.Address,
+            ExpectedAmount: FormatMoney(address.ExpectedAmount),
+            Stablecoin: address.ExpectedToken,
+            Network: TronNetworkLabel,
+            Status: null,
+            TxHash: null,
+            ConfirmedAt: null);
+    }
+
+    /// <summary>
+    /// Has the payment window been opened for this transaction (03 §2.3 step 4)?
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Keyed on <c>SellerReadyConfirmedAt</c> rather than on a set of statuses,
+    /// because the milestone stamp is the literal record of the gate 03 §2.3
+    /// describes: the address becomes visible when — and only when — the seller
+    /// has confirmed readiness.
+    /// </para>
+    /// <para>
+    /// A status set would get the cancelled states wrong in both directions. The
+    /// deposit address is allocated at creation, so a transaction that timed out
+    /// while still CREATED already has one; listing CANCELLED_TIMEOUT would
+    /// disclose an address whose window never opened. Dropping the cancelled
+    /// states instead would hide it from a buyer whose late transfer needs
+    /// matching against exactly that address (03 §5.4). The stamp handles both:
+    /// 06 §3.5 keeps milestone fields cumulative across cancellation, so it
+    /// survives a post-window cancel and stays NULL for a pre-window one.
+    /// </para>
+    /// </remarks>
+    private static bool HasReachedPaymentWindow(Transaction transaction) =>
+        transaction.SellerReadyConfirmedAt.HasValue;
 
     private async Task<SellerPayoutDto?> BuildSellerPayoutAsync(
         Transaction transaction,

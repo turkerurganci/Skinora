@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -1599,7 +1599,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
 | Teslimat timeout'u | **Satıcının** item'ı gönderme süresi (adım 6–7) | Sayı | Saat |
 | Timeout uyarı eşiği | Süre dolmadan ne zaman uyarı gönderileceği (oran olarak). Aynı eşik C02 countdown timer renk değişimi için de kullanılır | Sayı | % |
 
-> **v3.0 sorumluluk hizalaması (T119 doğrulaması, 2026-08-10):** Teslimat penceresinin sahibi custodial modelde alıcıydı ("alıcı teslim trade offer'ını kabul eder"); P2P'de trade'i satıcı gönderdiği için pencere de sorumluluk da **satıcınındır** (02 §3.1, 06 §3.1). Bu tablo o çevirmeden önce yazılmıştı ve teslimat kutusunu alıcıya atfediyordu. Ayrıca adım 3 artık "satıcı trade offer'ı" değil **hazırlık onayı**dır (03 §2.3). **Not:** Bu iki kutuyu besleyen SystemSetting anahtarları hâlâ custodial adında (`trade_offer_seller_timeout_minutes`, `trade_offer_buyer_timeout_minutes`); yeniden adlandırma kararı 11 §T123'e bağlıdır — anahtar adı değişirse bu satırların etiketleri zaten uyumludur.
+> **v3.0 sorumluluk hizalaması (T119 doğrulaması, 2026-08-10):** Teslimat penceresinin sahibi custodial modelde alıcıydı ("alıcı teslim trade offer'ını kabul eder"); P2P'de trade'i satıcı gönderdiği için pencere de sorumluluk da **satıcınındır** (02 §3.1, 06 §3.1). Bu tablo o çevirmeden önce yazılmıştı ve teslimat kutusunu alıcıya atfediyordu. Ayrıca adım 3 artık "satıcı trade offer'ı" değil **hazırlık onayı**dır (03 §2.3). **Kapandı (T123, 2026-08-13):** Bu iki kutuyu besleyen SystemSetting anahtarları da yeniden adlandırıldı — `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`** (06 §8, proje sahibi kararı). Yukarıdaki satır etiketleri zaten uyumluydu; artık anahtar adı da aynı şeyi söylüyor, yani admin panelinde satıcının teslimat penceresini "alıcı" adlı bir kutu yönetmiyor.
 
 #### Komisyon
 

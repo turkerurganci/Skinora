@@ -167,8 +167,16 @@ public sealed class TransactionCreationService : ITransactionCreationService
         // the inventory" verdict; a hidden profile or an unreachable Steam is
         // absence of information and gets its own code, so the seller is not
         // sent to look for an item that is sitting right where they left it.
+        // T123 — Cached is correct here and is a deliberate choice, not the old
+        // default carried forward: the seller has just picked this asset from
+        // the listing endpoint, which populated that very cache entry seconds
+        // ago, and the invariant that actually protects the money is re-checked
+        // fresh at confirm-ready (03 §2.3, 07 §7.6a) before any address is
+        // revealed. Spending a second uncached Steam round-trip here would buy
+        // no safety the later gate does not already provide.
         var lookup = await _inventory.GetItemAsync(
-            seller.SteamId, request.ItemAssetId, cancellationToken);
+            seller.SteamId, request.ItemAssetId,
+            InventoryReadFreshness.Cached, cancellationToken);
         switch (lookup.Visibility)
         {
             case InventoryVisibility.Private:

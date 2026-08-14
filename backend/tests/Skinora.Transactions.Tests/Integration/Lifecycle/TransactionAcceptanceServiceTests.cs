@@ -669,6 +669,59 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Accept_Arms_The_SellerConfirmDeadline_From_The_SystemSetting()
+    {
+        // T123 — before this task nothing wrote SellerConfirmDeadline. Every
+        // reader existed (DeadlineScannerJob's ACCEPTED branch, freeze, the
+        // countdown broadcaster, the detail/list timeout blocks) and none of
+        // them could ever fire, so a seller who accepted and went quiet had no
+        // time bound on them at all.
+        await Context.ConfigureSettingAsync(
+            TransactionAcceptanceService.SellerConfirmTimeoutKey, "45");
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(nowUtc.AddMinutes(45), persisted.SellerConfirmDeadline);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("not-a-number")]
+    public async Task Accept_Falls_Back_To_The_Documented_Default_For_An_Unusable_Setting(
+        string? configured)
+    {
+        // A zero/negative/garbage window would arm the deadline in the past and
+        // cancel the transaction on the next scanner pass — punishing the
+        // seller for an admin's typo. Fall back to the 02 §16.2 default.
+        if (configured is not null)
+            await Context.ConfigureSettingAsync(
+                TransactionAcceptanceService.SellerConfirmTimeoutKey, configured);
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(
+            nowUtc.AddMinutes(TransactionAcceptanceService.DefaultSellerConfirmTimeoutMinutes),
+            persisted.SellerConfirmDeadline);
+    }
+
+    [Fact]
     public async Task Cheaper_Rejections_Never_Spend_A_Steam_Round_Trip()
     {
         // Pipeline-ordering guard: the MA probe is the last gate precisely

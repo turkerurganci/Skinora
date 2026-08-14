@@ -18,6 +18,20 @@ public sealed class StubSteamInventoryReader : ISteamInventoryReader
     public Task<InventoryLookupResult> GetItemAsync(
         string steamId64,
         string itemAssetId,
+        InventoryReadFreshness freshness,
         CancellationToken cancellationToken)
         => Task.FromResult(InventoryLookupResult.Unavailable);
+
+    /// <summary>
+    /// T123 — same reasoning as <see cref="GetItemAsync"/>: with no sidecar
+    /// there is no snapshot, and an empty baseline would be a claim about the
+    /// buyer's inventory rather than an admission of ignorance (02 §9.2).
+    /// </summary>
+    public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
+        string steamId64,
+        string classId,
+        string? instanceId,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+        => Task.FromResult(InventoryClassBaselineResult.Unavailable);
 }

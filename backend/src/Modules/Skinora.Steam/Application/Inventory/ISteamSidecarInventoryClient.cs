@@ -13,8 +13,15 @@ public interface ISteamSidecarInventoryClient
     /// pagination, assets+descriptions merge, and the 120-second Redis cache
     /// (08 §2.3) — callers see the already-shaped envelope.
     /// </summary>
+    /// <param name="bypassCache">
+    /// T123 — send the 08 §2.3 <c>?refresh=true</c> cache-bypass flag. The
+    /// sidecar has accepted it since T120 but nothing on this side ever set it,
+    /// so every backend read was served from the 120-second cache. Confirm-ready
+    /// (07 §7.6a) and the delivery baseline cannot use a cached answer: both
+    /// decide whether a transaction advances.
+    /// </param>
     Task<SteamSidecarInventoryResult> GetInventoryAsync(
-        string steamId, CancellationToken cancellationToken);
+        string steamId, bool bypassCache, CancellationToken cancellationToken);
 
     /// <summary>
     /// Drop the sidecar's cached inventory for <paramref name="steamId"/>.
