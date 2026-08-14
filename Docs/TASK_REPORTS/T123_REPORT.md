@@ -1,6 +1,6 @@
 # T123 — SELLER_CONFIRMED + POST /transactions/:id/confirm-ready
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor | **Tarih:** 2026-08-13
+**Faz:** F7 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-13 (doğrulama 2026-08-14)
 
 ---
 
@@ -68,7 +68,7 @@
 |---|---|---|
 | Build | ✓ 0 error / 0 warning | `dotnet build Skinora.sln -c Debug` |
 | Format (CI "1. Lint" paritesi) | ✓ temiz | `dotnet format Skinora.sln --verify-no-changes --severity error` |
-| **Tam backend suite** | **✓ 2525/2525** | 11 proje tek tek: Shared 399 · Steam 39 · Platform 189 · Auth 120 · Admin 22 · Realtime 40 · Fraud 91 · Disputes 60 · Notifications 171 · Transactions 862 · API 532 |
+| **Tam backend suite** | **✓ 2553/2553** *(doğrulama turunda düzeltildi — yapım turu 2525/11 proje yazmıştı, `Users.Tests` 22 + `Payments.Tests` 6 enumerasyona girmemişti; ikisi de 0 fail)* | 13 assembly: Shared 399 · Steam 39 · Platform 189 · Auth 120 · Admin 22 · Users 22 · Payments 6 · Realtime 40 · Fraud 91 · Disputes 60 · Notifications 171 · Transactions 862 · API 532 |
 | FE | ✓ | `npx tsc --noEmit` 0 · `npm run lint` 0 · `npx prettier --check src/i18n/messages/*.json` temiz · `npm run test` **33/33** |
 | FE i18n parity | ✓ | `npm run i18n:check` → 4 locale × 1300 anahtar, aynı anahtar kümesi; 15 advisory uyarı **önceden vardı** (hepsi "Gas fee"/"Mobile Authenticator" untranslatable, dokunulan anahtarlarla ilgisiz) |
 | Migration rehearsal | CI'ye bırakıldı | "6. Migration dry-run" job'ı |
@@ -83,9 +83,50 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✓ PASS** (2026-08-14, ayrı chat, yapım raporu görülmeden) |
+| Bulgu sayısı | **2 — ikisi de minör, bloke edici değil** (biri düzeltildi, biri follow-up) |
+| Düzeltme gerekli mi | Hayır (merge'i bloklamıyor) |
+
+### Validator ön kapıları
+
+| Kapı | Sonuç |
+|---|---|
+| Adım -1 working tree | ✓ temiz (`git status --short` boş) |
+| Adım 0 main CI (son 3 run) | ✓ `31733188607` · `31733188616` · `31524132478` — üçü de `success` |
+| Adım 0b repo memory drift | ✓ `.claude/memory/MEMORY.md:37` T123 satırı mevcut |
+| Adım 8a task branch CI | ✓ HEAD `daef4ab` → run [`31744444820`](https://github.com/turkerurganci/Skinora/actions/runs/31744444820) **CI Gate `success`**; önceki run `31743413400` da success |
+
+### Validator bağımsız kanıtı
+
+| Kriter | Validator sonucu | Bağımsız kanıt (yapım raporuna bakılmadan üretildi) |
+|---|---|---|
+| 1 — `ITEM_NO_LONGER_AVAILABLE` | ✓ | `TransactionReadinessService.cs:134-144` — yalnız `Visibility` switch'i `Private`/`Unavailable`'ı eledikten sonra "item yok"/"tradeable değil" üretiliyor, yani 409 gerçekten bir **okuma kanıtına** dayanıyor. Controller eşlemesi `TransactionsController.cs` → `Conflict` |
+| 2 — Alıcı MA kontrolü | ✓ | `TransactionReadinessService.cs:161-186` — token kabul anında normalize edilip saklanan `BuyerTradeUrl`'den ayrıştırılıyor (07 §7.6a'da gövde yok, kaynak doğru); `hold.Available == false` → 503 fail-closed, `hold.Active == false` → 403 ayrı kod. `ITradeHoldChecker` sözleşmesi accept ucuyla birebir aynı |
+| 3 — Baseline + gizli envanter bloklamıyor | ✓ | `TransactionReadinessService.cs:198-223` — baseline **Stage 6**'da, üç kapının sonuncusu ve `return` yok; `Visibility != Public` yalnız `LogInformation` üretiyor ve akış geçişe devam ediyor |
+| 4 — Ödeme adresi ifşası | ✓ | `TransactionDetailService.cs:590-635` — kapı `HasReachedPaymentWindow` = `SellerReadyConfirmedAt.HasValue`, status kümesi değil; `role is null` → blok yok. Bağımsız leak taraması: `PaymentAddress` okuyan diğer yollar admin (`AdminTransactionQueryService`) ve iç servisler; kullanıcıya dönen başka yüzey yok. `PAYMENT_WINDOW_OPEN` bildirimi `EscrowedAndTradeOfferNotificationConsumer.cs:57` ile yalnız `SELLER_CONFIRMED`/`PAYMENT_RECEIVED`'da tetikleniyor |
+| 5 — Önbelleksiz okuma | ✓ | Her iki çağrı `InventoryReadFreshness.Fresh`; `SidecarSteamInventoryReader.BypassCache` → `HttpSteamSidecarInventoryClient.cs:53-62` `?refresh=true`. Sidecar tarafı bağımsız teyit: `sidecar-steam/src/api/routes.ts:108` `parseRefreshParam` bayrağı kabul ediyor |
+| 6 — Gizli satıcı envanteri → 422 | ✓ | `TransactionReadinessService.cs:124-131` + controller `UnprocessableEntity`; kodlar `TransactionErrorCodes` üzerinden §7.2 ile ortak |
+| 7 — Baseline okunamazsa üç kolon NULL | ✓ | `TransactionReadinessService.cs:205-223` — `else` dalında hiçbir kolona yazılmıyor. Tip düzeyinde de garanti: `InventoryClassBaselineResult.Private/Unavailable` sayı taşıyan bir örnek üretemiyor |
+| 8 — SystemSetting kararı + v3.0 etiketi | ✓ | Seed Id'leri `IdFor(2)`/`IdFor(6)` → migration'daki `0aa51010-…-0002`/`-0006` **GUID'leri birebir eşleşiyor** → `UpdateData` gerçekten admin `Value`'sunu koruyor. Eski anahtar/env adı için repo taraması: canlı kod, compose, `.env.example`, FE i18n (4 dil) ve doküman **temiz**; kalan izler yalnız tarihsel `Migrations/*.Designer.cs` snapshot'ları (beklenen) ve changelog kayıtları |
+| 9 — `SellerConfirmDeadline` fiilen armlanıyor | ✓ | `TransactionAcceptanceService.cs:243-258` yazıyor; tüketici zinciri doğrulandı: `DeadlineScannerJob.cs:106` ACCEPTED dalı → `TransactionTrigger.Timeout`. **Regresyon kontrolü:** FLAGGED invariant (`TransactionStateMachine.cs:349-355`) tüm deadline'ların NULL olmasını şart koşuyor; FLAGGED yalnız oluşturma anında set edildiği ve ACCEPTED'dan FLAGGED'a geçiş **olmadığı** için yeni yazılan kolon bu invariantı kıramıyor |
+
+**Validator test koşusu (lokal, `daef4ab` üzerinde):** tam backend suite `dotnet test Skinora.sln -c Release` → **2553/2553 passed, 0 failed, 0 skipped — 13 assembly.** Shared 399 · Steam 39 · Platform 189 · Auth 120 · Admin 22 · **Users 22** · **Payments 6** · Realtime 40 · Fraud 91 · Disputes 60 · Notifications 171 · Transactions 862 · API 532. Ayrıca filtre bazında ayrı koşuldu: Integration filtresi ✓ (Transactions 376/376, API 467/467 dahil), Unit filtresi ✓, Steam unit 39/39.
+
+> **Yapım raporundaki 2525/11 proje rakamı eksik sayımdır (düzeltildi):** `Skinora.Users.Tests` (22) ve `Skinora.Payments.Tests` (6) enumerasyona girmemiş; 2525 + 28 = **2553**. Test sonucu etkilenmiyor — her iki assembly de **0 fail**. Raporlama kusuru, kod kusuru değil.
+
+### Validator bulguları
+
+| # | Seviye | Açıklama | Etkilenen dosya | Durum |
+|---|---|---|---|---|
+| 1 | S1 (minör, doküman) | Rename sonrası **canlı** bir runbook hâlâ artık var olmayan `trade_offer_buyer_timeout_minutes` anahtarını adlandırıyor ve `SystemSettingSeed.cs:37`'ye atıf yapıyor — o satır artık açıklama yorumu. §7 maddesi T125'in okuyacağı **ileriye dönük** yönlendirmedir, tarihsel kayıt değil; T123'ün `KARAR` kapsam listesinde bu dosya sayılmamıştı | `Docs/INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md:316-318` | **Düzeltildi** (doğrulama turunda, yalnız anahtar adı + satır atfı; ölçüm iddiası değişmedi) |
+| 2 | S1 (minör, dayanıklılık) | **Eşzamanlı çift confirm-ready** korunmamış. Kardeş servis `TransactionAcceptanceService.cs:304-330` bu yarışı açıkça yakalayıp `DbUpdateConcurrencyException`'ı 409'a çeviriyor; `TransactionReadinessService` çevirmiyor → satıcının çift tıkı **500** üretir (409 `INVALID_STATE_TRANSITION` yerine). Ayrıca kaybeden istek `SchedulePaymentTimeoutAsync`'i `SaveChanges`'ten **önce** çağırdığı için Hangfire'da job ID'si hiç kalıcılaşmayan **yetim bir job** bırakır | `Application/Lifecycle/TransactionReadinessService.cs:286` | **Follow-up** — para güvenliği etkisi **yok**: kaybeden `UPDATE` sıfır satır eşlediği için geçiş de baseline de outbox da kalıcılaşmıyor, yetim job ise `TimeoutExecutor.cs:55-58`'deki status + `IsOnHold` + `TimeoutFrozenAt` + deadline guard'larından geçemeyip no-op oluyor. Sıralı ikinci çağrı zaten 409 (`Second_Call_Is_Rejected_Rather_Than_Re_Opening_The_Window`) |
+
+### Yapım raporu karşılaştırması
+
+- **Uyum: yüksek.** Yapım raporunun AC tablosu, bilinen sınırları (400 karakter kırpma · 02 §10.1 ↔ 06 §3.5 gerilimi → T130 · idempotent olmama · Hangfire sözleşmesi) ve E2E baseline analizi validator'ın bağımsız bulgularıyla örtüşüyor. E2E iddiası ayrıca doğrulandı: 8 advisory leg **T121 merge run'ında da** (`31524132478`) aynı şekilde `failure`; sahiplik T137 → T138 planda mevcut.
+- **Uyuşmazlık 1:** test toplamı 2525/11 proje → gerçek **2553/13 assembly** (yukarıda düzeltildi).
+- **Uyuşmazlık 2:** raporun "Known Limitations" bölümü idempotentliği **sıralı** çağrı üzerinden ele alıyor; **eşzamanlı** çağrı yarışı (bulgu 2) kapsanmamış.
+- Bunun dışında rapor kanıt seviyesi ve dürüstlük bakımından validator standardını karşılıyor.
 
 ## Altyapı Değişiklikleri
 

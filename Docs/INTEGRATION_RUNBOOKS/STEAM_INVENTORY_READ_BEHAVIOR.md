@@ -313,9 +313,11 @@ bağımsız yazılabilir:
 2. **Envanter kanıtı tek başına para hareketi tetiklemez.** `SELLER_ASSET_GONE ∧ INVENTORY_DELTA`
    konjonksiyonu korunur; yanlış-teslimat imzası (`IsMisdeliverySignature`) **admin'e** gider, para
    hareketine değil — yani B1/B2 yanlışsa sonuç bir insana düşer, bir ödemeye değil.
-3. **Gecikmeye duyarlı her sayı config'de kalır.** `trade_offer_buyer_timeout_minutes` bugün zaten
-   `Unconfigured` (`SystemSettingSeed.cs:37`) — T122 bir varsayılan **dayatmıyor**, muhafazakâr yüksek bir
-   değerle açılmasını ve ölçüm geldiğinde daraltılmasını öneriyor.
+3. **Gecikmeye duyarlı her sayı config'de kalır.** `delivery_timeout_minutes` bugün zaten
+   `Unconfigured` (`SystemSettingSeed.All`, satır Id 6) — T122 bir varsayılan **dayatmıyor**, muhafazakâr
+   yüksek bir değerle açılmasını ve ölçüm geldiğinde daraltılmasını öneriyor.
+   *(Anahtar T122 sırasında `trade_offer_buyer_timeout_minutes` adındaydı; T123'te
+   `delivery_timeout_minutes` olarak yeniden adlandırıldı — 06 §8. Ölçüm iddiası değişmedi.)*
 4. **T124'ün "tüketmeyen kapı" kararı bu riski zaten karşılıyor:** teslimat timeout'u T127'ye kadar iptal
    uygulamıyor. Yani B1 yanlış tahmin edilse bile kimsenin işlemi haksız iptal edilmiyor.
 5. **Kanıt motoru saf kalır** (T125 AC'si). Ölçüm sonradan geldiğinde **sabitler** değişir, mantık değişmez.
