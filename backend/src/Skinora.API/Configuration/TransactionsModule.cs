@@ -71,6 +71,11 @@ public static class TransactionsModule
         // round, T130 the dispute auto-checker.
         services.AddScoped<IDeliveryVerificationService, DeliveryVerificationService>();
 
+        // T126 — buyer receipt confirmation (07 §7.6b, 03 §3.5). The first
+        // production caller of TransactionTrigger.DeliverItem, and so far the
+        // only way out of PAYMENT_RECEIVED that is not a cancellation.
+        services.AddScoped<IDeliveryConfirmationService, DeliveryConfirmationService>();
+
         // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
         // doc-ref claimed §7.1–§7.4 but the list endpoint was never
         // implemented; T88 dashboard surfaced the gap.
