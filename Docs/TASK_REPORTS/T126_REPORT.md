@@ -81,9 +81,10 @@
 ## Commit & PR
 
 - Branch: `task/T126-confirm-receipt`
-- Commit: `TBD`
-- PR: `TBD`
-- CI: `TBD`
+- Commit: `ca89286` — T126: POST /transactions/:id/confirm-receipt
+- PR: [#236](https://github.com/turkerurganci/Skinora/pull/236)
+- CI: **✓ PASS** — run [`31876488303`](https://github.com/turkerurganci/Skinora/actions/runs/31876488303), **CI Gate `success`**. Bloke edici 12 job yeşil (Detect paths · 1. Lint · 2. Build · 3. Unit · 4. Integration · 5. Contract · 6. Migration dry-run · 7. Docker build backend · CI Gate); `0. Guard` skipped (PR event), `3b. JS test (vitest)` skipped (frontend/sidecar yolu değişmedi).
+- **Advisory E2E (8 leg) kırmızı — T126 kaynaklı DEĞİL.** İmza `RequestError: Invalid object name 'PlatformSteamBots'` (+ ardıl `PK_Users` çakışması): E2E seed'i T117'de silinen bot tablosuna bakıyor. Aynı 8 leg main'in son run'ında da (`31840953171`, chore T125 doğrulama bulguları — genel sonucu `success`) kırmızı, yani **pre-existing**. T126 hiçbir E2E yüzeyine, bot koduna veya migration'a dokunmuyor. Bu, T125 raporunda da aynı gerekçeyle kaydedilen kırmızılığın devamıdır.
 
 ## Known Limitations / Follow-up
 
