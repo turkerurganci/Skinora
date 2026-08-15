@@ -1,6 +1,6 @@
 # T127 — DeadlineScannerJob'a teslimat doğrulama turu
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekleniyor) | **Tarih:** 2026-08-15
+**Faz:** F7 | **Durum:** ✗ **Doğrulama FAIL — düzeltme gerekli** | **Tarih:** 2026-08-15
 
 ---
 
@@ -61,6 +61,11 @@ Yapım öncesi dört karar soruldu, dördü de öneri yönünde onaylandı:
 İptali yetkilendiren **tek** koşul: `SellerVisibility == Public && !Evidence.HasFlag(SELLER_ASSET_GONE)`. `NoMovement` bunu yapısal olarak sağlar; kural tek yerde yaşıyor (`SellerProvenToStillHoldTheItem`).
 
 ## Kabul Kriterleri Kontrolü
+
+> **Doğrulayıcı düzeltmesi (2026-08-15):** aşağıdaki tablo yapım chat'inin kendi verdict'idir ve
+> olduğu gibi korunmuştur. Bağımsız doğrulama **#2'yi ✓ → ~** olarak düşürdü (motor tarafı doğru,
+> re-entry dalı fazla ateşliyor — Bulgu B1). Bağımsız verdict tablosu ve gerekçeleri
+> [Doğrulama](#doğrulama) bölümündedir.
 
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
@@ -126,6 +131,94 @@ Scanner'ın bağımlılık zinciri T127 ile **ilk kez kendi assembly'sinden çı
 - **CI: ✓ PASS** — HEAD `bec894f`, run [`31884389878`](https://github.com/turkerurganci/Skinora/actions/runs/31884389878), `conclusion=success`. Bloke edici job'ların hepsi yeşil: Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker (backend) · **CI Gate**. (`0. Guard` ve `3b. JS test` skipped — sırasıyla direct-push guard'ı ve değişmeyen FE/sidecar yolu.)
 - Önceki run [`31884253788`](https://github.com/turkerurganci/Skinora/actions/runs/31884253788) (`9314fea`) `cancelled` — ikinci push'un concurrency iptali, başarısızlık değil.
 - **8 advisory E2E leg kırmızı — T127 kaynaklı DEĞİL.** İmza CI logundan doğrulandı: `Invalid object name 'PlatformSteamBots'` — `e2e/src/db.ts` seed'i T117'nin düşürdüğü bot tablosunu temizliyor. T117'den beri her F7 task'ında aynı; sahiplik **T137 → T138**. `continue-on-error` olduklarından CI Gate'i bloke etmiyorlar.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✗ **FAIL** (bağımsız chat, 2026-08-15, commit `d81f98e`) |
+| Bulgu sayısı | 5 — **3 bloke edici** (B1 S1 · B2 S2 · B3 S2) + 2 bloke etmeyen (B4 S1 süreç · B5 S1 pre-existing) |
+| Düzeltme gerekli mi | **Evet.** Branch merge edilmedi, `IMPLEMENTATION_STATUS.md` ✓ yapılmadı. Düzeltme yeni yapım chat'inde, ardından yeni doğrulama chat'i |
+
+**Kapılar:** Adım −1 working tree temiz · Adım 0 main CI son 3 run (`31880715941`, `31880715937`, `31880257963`) hepsi `success` · Adım 0b repo memory T127 satırı mevcut · Adım 8a task branch CI run [`31884937003`](https://github.com/turkerurganci/Skinora/actions/runs/31884937003) **CI Gate `success`**, bloke edici 8 job yeşil (Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker backend · CI Gate).
+
+**Bağımsız test koşumu:** unit **1382/1382** (11 assembly, 0 fail) · T127 odaklı integration **88/88** — lokal SQL Server'a karşı **iki bağımsız koşu**, ikisi de 0 fail. Testler yeşil; bulgular testlerin **bakmadığı** yollarda.
+
+**Advisory E2E (8 leg):** main'in T126 merge run'ı (`31880715937`) ile task branch run'ı birebir aynı 8 leg'de kırmızı → **pre-existing, T127 kaynaklı değil**; yapım raporunun tespiti (`Invalid object name 'PlatformSteamBots'`, sahiplik T137→T138) bağımsız olarak teyit edildi.
+
+**Güvenlik:** temiz — `*.csproj` diff boş (yeni bağımlılık yok), secret/connection string sızıntısı yok, yeni endpoint veya authz yüzeyi yok, log satırlarında PII yok. Para hareketi etkisi var ve kasıtlı; itibar ataması `PAYMENT_RECEIVED → Seller` doğru (`ReputationAggregator.cs:184`), iade eventi yayınlanıyor (`Delivery_Timeout_Publishes_Notification_And_PaymentRefund`).
+
+**Bağımsız kabul kriteri verdict'i:** 4 ✓ · 2 ~ — yapım raporuyla **bir uyuşmazlık** (#2).
+
+| # | Kriter | Yapım | Doğrulayıcı | Not |
+|---|---|---|---|---|
+| 1 | Kanıt tamsa ITEM_DELIVERED | ✓ | ✓ | Damga (`DeliveryTimeoutRound.cs:173`) guard'dan önce; `FireInternal` sırası teyit edildi |
+| 2 | SELLER_ASSET_GONE + delta yok → dispute | ✓ | **~** | Motor tarafı doğru; re-entry dalı **fazla** ateşliyor → **B1** |
+| 3 | T124 kapısı kaldırıldı, dal tüketen sorguya döner | ~ | ~ | Öz karşılandı, harf karşılanmadı — ama gerekçe **B2 ile çürüyor** + plan güncellenmedi → **B4** |
+| 4 | Ters çevrilen iki test eski beklentisine döndü | ✓ | ✓ | `git show 44f42b4~1` ile T124 öncesi adlar doğrulandı; `Delivery_Timeout_Publishes_Notification_And_PaymentRefund` adına **birebir** döndü |
+| 5 | Launch kapısı invariantı | ✓ | ✓ | Test invariantın üçünü birden assert ediyor: status · `DeliveryVerifiedAt` NULL · capture `AutoReleaseGated=1` |
+| 6 | Ön koşul — freeze/resume faz kayması | ✓ | ✓ | `Payment_Confirmed_Under_Freeze_Does_Not_Shrink_The_Delivery_Window` izole çağrı değil, **gerçek uçtan uca zincir** kuruyor |
+
+### Bulgu B1 — S1, motorun reddettiği kararı bir tarama sonra uygular
+
+`DeliveryVerificationService.cs:271` yanlış-teslimat imzası için `sellerSideKnown && buyerSideKnown` şart koşuyor; hemen üstündeki yorum açık: *"satıcının item'ı gitti ve alıcının envanteri gizli bir yanlış-teslimat imzası **DEĞİLDİR**; bu platformun bakamamasıdır (08 §2.3)."*
+
+Ama `DeliveryTimeoutRound.cs:125` kanıtı **her kolda** kalıcıya yazıyor, ve `:104`'teki re-entry kapısı `buyerSideKnown` niteleyicisi **olmayan** çıplak `IsMisdeliverySignature()` bayrak testini kullanıyor (`SELLER_ASSET_GONE && !INVENTORY_DELTA`, `DeliveryEvidence.cs:66-68`).
+
+**Zincir:** satıcı item'ı gönderdi + alıcının envanteri gizli → `sellerAssetGone = true`, `buyerSideKnown = false` → verdict `Inconclusive` → `Undelivered()` → `SellerProvenToStillHoldTheItem` false → **Held ✓ (tur 1 doğru)**. Ama `DeliveryEvidence = SELLER_ASSET_GONE` yazılı kaldı. **Tur 2 (30 sn sonra):** `:104` ateşler → Steam okumadan `EscalateAsync` → teslim etmiş satıcı hakkında `DELIVERY`/`ESCALATED` dispute + `HasActiveDispute = true` + iki tarafa `DisputeEscalatedEvent`. Dispute metni `DeliveryAssetGoneNotArrived` — bu vakada **yanlış bir iddia**.
+
+Raporun kendi K4 satırı ("`Inconclusive` → ... aksi hâlde **beklet**") tam olarak burada çiğneniyor. `Asset_Gone_With_An_Unreadable_Buyer_Side_Is_Held_Not_Cancelled` yalnız **tur 1**'i sabitliyor; tur 2 testsiz. Karşı örnek: `Second_Round_On_A_Misdelivery_Re_Asserts_The_Escalation_Without_Reading_Steam` yalnız **gerçek** imza için yazılmış.
+
+**Düzeltme yönü:** re-entry kapısı, kanıt bayrağına ek olarak "önceki turun verdict'i gerçekten `MisdeliverySignature` miydi" bilgisini okumalı (capture satırındaki `Verdict`, veya ayrı bir alan) — bayrak tek başına motorun niteleyicisini taşımıyor.
+
+### Bulgu B2 — S2, teslimat fazı kendi bütçesinde aç kalıyor (timeout sessizce ölüyor)
+
+`DeadlineScannerJob.cs:220-229`: `... Status == PAYMENT_RECEIVED && DeliveryDeadline < now` → `.OrderBy(t => t.DeliveryDeadline).Take(DeliveryVerificationBatchSize)` (varsayılan **20**, tarama aralığı 30 sn).
+
+**Held satırlar bu sorgudan hiç çıkmıyor:** hiçbir kol `DeliveryDeadline`'a dokunmuyor, status `PAYMENT_RECEIVED` kalıyor. En eski oldukları için `OrderBy` onları **pencerenin başına** koyuyor. Kalıcı birikenler:
+- `InventoryEvidencePendingReview` — launch'ta kapı kapalı olduğu için **alıcısı onay vermeyen her teslimatın beklenen sonucu** (raporun §Sapmalar bölümünün kendi ifadesi). §H.3 kapıyı açana kadar drene olmaz.
+- Seller-favor çözülen misdelivery dispute'ları — `AdminDisputeService.cs:307-311` *"no state transition"*, satır `PAYMENT_RECEIVED`'da kalır.
+- Kalıcı okunamayan satıcı envanterleri (Limitation #2).
+
+20'inci kalıcı satırdan sonra **yeni hiçbir teslimat timeout'u tur çalıştıramaz** — AC'nin var olma sebebi olan davranış sessizce durur.
+
+Bu, T124 kararı (a)'nın adını koyduğu açlığın yok edilmesi değil, **teslimat fazının içine taşınması**. Tavanın gerekçesi de bu satırlar için tutmuyor: rapor tavanı "tur = iki rate-limited Steam okuması" ile savunuyor, ama tavanı dolduran satırlar re-entry/short-circuit sayesinde **sıfır Steam okuması** yapıyor. Yani bütçe, ihtiyacı olmayan satırlara harcanıp ihtiyacı olanları aç bırakıyor.
+
+`Scanner_Still_Consumes_Other_Phases_When_Held_Delivery_Rows_Pile_Up` yalnız **diğer üç fazın** korunduğunu kanıtlıyor — teslimat fazının drene olduğunu kanıtlayan test yok.
+
+**Düzeltme yönü:** kalıcı-Held satırların pencereyi işgal etmemesi (ör. son tur damgası + "yeniden değerlendirme aralığı" filtresi, veya sonucu kayıtlı satırların sorgudan düşmesi). Limitation #3'ün (operatör görünürlüğü) bu bulgunun yerine geçmediğine dikkat: görünürlük eksiği ayrı, **işlevsel durma** bu.
+
+### Bulgu B3 — S2, SYSTEM açılan dispute çözülünce alıcı bildirimi alamıyor
+
+`MisdeliveryDisputeEscalator.cs:90` → `OpenedByUserId = SeedConstants.SystemUserId` (K1 kararı). Bu alan T127'den önce **her zaman alıcıydı**: `DisputeService.cs:104-108` sert guard (*"Only the buyer can open a dispute"*) ve `:154` `OpenedByUserId = callerUserId`. T127, invariantı kıran **ilk** yazıcı.
+
+`AdminDisputeService.cs:329` o invariantı okuyor:
+
+```csharp
+new DisputeResolvedEvent(..., BuyerId: dispute.OpenedByUserId, ...)
+```
+
+Admin T127'nin açtığı dispute'u çözdüğünde `DisputeResolvedEvent.BuyerId` **SYSTEM kullanıcısının id'si** olur → gerçek alıcı `DISPUTE_RESULT` bildirimini hiç almaz. Mevcut işlevselliği bozan bir regresyon (S2), K1'in görülmemiş yan etkisi. Escalator'ın **kendi** eventi (`DisputeEscalatedEvent`, `:151-175`) doğru şekilde `transaction.BuyerId` kullanıyor — sapma yalnız **çözüm** yolunda.
+
+**Düzeltme yönü:** `AdminDisputeService`'in alıcıyı `dispute.OpenedByUserId` yerine `transaction.BuyerId`'den çözmesi (tüm dispute'lar için doğru), veya escalator'ın `OpenedByUserId`'yi alıcı bırakması. Birincisi invariantı kaynağında düzeltir.
+
+### Bloke etmeyen bulgular
+
+**B4 — S1, süreç.** AC3 harfen karşılanmadı ve **onaylanan sapma kaynak plana yazılmadı**: `git diff --stat origin/main...HEAD -- Docs/11_IMPLEMENTATION_PLAN.md` **boş**. Rapor sapmayı dürüstçe `~` işaretleyip doğrulayıcıya not düşmüş — bu doğru davranış — ama projenin kendi T122 dersi geçerli: *onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.* B2 düzeltilirken AC3'ün nihai şekli plana işlenmeli.
+
+**B5 — S1, pre-existing (T126'dan tohumlu, T127 genişletiyor).** Kapı kapalıyken biriken yeterli kanıt, alıcı `DELIVERY` dispute'u açtığında `DeliveryDisputeAutoChecker.cs:60-63` üzerinden `Resolved: true` üretiyor → dispute **CLOSED + `CanEscalate = false`** olarak açılıyor. Sonuç: kapı parayı bıraktırmıyor **ve** alıcının eskalasyon yolu kapalı — para kilitli, çıkış yok. T126'da da erişilebilirdi (alıcının kendi confirm-receipt çağrısı üzerinden) ama T127 bunu **alıcı hiçbir şey yapmadan** ve launch'ta **her teslimatta** erişilebilir yapıyor. Sahiplik T130 (auto-checker yeniden yazımı) olabilir — proje sahibi kararı.
+
+### Yapım raporu karşılaştırması
+
+Rapor **dürüst ve yüksek kaliteli**: AC3 sapmasını kendisi `~` işaretlemiş ve doğrulayıcıya açıkça bildirmiş, okunamayan satırların süresiz beklemesini (Limitation #2) kendisi kayda geçmiş, test sayısı farkını (1381 → 1382) not etmiş, advisory E2E'nin pre-existing olduğunu log imzasıyla kanıtlamış.
+
+Uyuşmazlıklar:
+- **B1, B2, B3 raporda yok.**
+- Limitation #1 ("yanlış-teslimat sonrası geç teslimat gözlenmez") bayrağın **yalnız gerçek imzada** set edildiğini varsayıyor — B1 tam olarak bu varsayımın kırıldığı yer.
+- Limitation #3 birikimi bir **görünürlük** eksiği sayıyor; B2 aynı birikimin **işlevsel durma** ürettiğini gösteriyor.
+- §Sapmalar bölümü ayrı sorgu + ayrı tavanı T124 açlığının **çözümü** olarak savunuyor; B2 açlığın yok edilmediğini, teslimat fazına taşındığını gösteriyor.
+
+**KALICI DERS (T124 dersinin üçüncü tekrarı):** bir kapı, koruduğu değerin diğer **yazarlarını** denetlemeli (T124), açtığı değerin **tüketicilerini** denetlemeli (T126) — ve **kendi bıraktığı kalıcı durumun** sonraki turda nasıl okunacağını denetlemeli (T127/B1) ile **o durumun biriktiği kuyruğun drene olup olmadığını** denetlemeli (T127/B2). Üçünde de kabul kriteri listesi hatayı yakalamadı; yakalayan soru "bu satır bir daha buraya geldiğinde ne olur?" oldu.
 
 ## Known Limitations / Follow-up
 
