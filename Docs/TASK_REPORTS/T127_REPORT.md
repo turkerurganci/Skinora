@@ -31,6 +31,7 @@
 **Test (yeni):**
 - `backend/tests/Skinora.Transactions.Tests/Integration/Delivery/DeliveryTimeoutRoundTests.cs` (13 test)
 - `backend/tests/Skinora.Disputes.Tests/Integration/MisdeliveryDisputeEscalatorTests.cs` (7 test)
+- `backend/tests/Skinora.Disputes.Tests/Unit/DisputesModuleRegistrationTests.cs` (1 test — DI kapısı, aşağıda)
 
 **Test (değişen):** `DeadlineScannerJobTests.cs` · `DeadlineScannerJobSideEffectsTests.cs` · `TimeoutTestSupport.cs` · `TimeoutSchedulingServiceTests.cs` · `TimeoutFreezeServiceTests.cs` · `Skinora.Fraud.Tests/Integration/FraudFlagServiceTests.cs`
 
@@ -93,6 +94,13 @@ Korunan iki test bu gerekçeyi mekanik hâle getiriyor: `Scanner_Still_Consumes_
 | Odaklı | ✓ 26/26 | `~DeliveryTimeoutRoundTests\|~DeadlineScannerJob` |
 | Odaklı | ✓ 7/7 | `~MisdeliveryDisputeEscalator` |
 | Odaklı | ✓ 36/36 | `~TimeoutFreezeServiceTests\|~TimeoutSchedulingServiceTests` |
+| Odaklı | ✓ 1/1 | `~DisputesModuleRegistration` |
+
+**Not:** unit/integration/contract sayıları DI kapısı testi eklenmeden önce ölçüldü; o test unit sayısını 1381 → 1382 yapar. Nihai sayılar PR CI'ında.
+
+### DI kapısı (yapım sırasında eklendi)
+
+Scanner'ın bağımlılık zinciri T127 ile **ilk kez kendi assembly'sinden çıkıyor** (`IDeliveryMisdeliveryEscalator` → Disputes). `DeadlineScannerJob` kendini yeniden zamanlayan bir Hangfire job'ı olduğu için **lazy** resolve edilir: eksik bir kayıt build'i, unit testi veya endpoint testini kırmaz — üretimde ilk teslimat deadline'ı dolduğunda kırılır ve **aynı job dört fazın hepsini yürüttüğü için** accept / seller-confirm / payment timeout'larını da beraberinde götürür. `DisputesModuleRegistrationTests` bu kaydı sabitliyor. Zincirin diğer yarısı (`Program.cs` hâlâ `AddDisputesModule()` çağırıyor mu) zaten kapsanmış durumda — API integration süiti gerçek host'u ayağa kaldırıyor ve dispute uçları o çağrı olmadan resolve olmaz.
 
 ## Altyapı Değişiklikleri
 
@@ -113,8 +121,9 @@ Korunan iki test bu gerekçeyi mekanik hâle getiriyor: `Scanner_Still_Consumes_
 ## Commit & PR
 
 - Branch: `task/T127-delivery-timeout-round`
-- PR: (aşağıda güncellenecek)
-- CI: (aşağıda güncellenecek)
+- Commit: `9314fea` — T127: DeadlineScannerJob'a teslimat dogrulama turu
+- PR: [#238](https://github.com/turkerurganci/Skinora/pull/238)
+- CI: (izleniyor — sonuç aşağıya yazılacak)
 
 ## Known Limitations / Follow-up
 
