@@ -317,6 +317,14 @@ birer kabul kriteri** olarak. Doküman başlığındaki "Son güncelleme" zincir
 kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına
 yazılmadıkça gerçekleşmemiştir.
 
+**B1'in komşusu — tarandı, bloke etmiyor.** Kod tabanındaki üçüncü ve son
+`IsMisdeliverySignature()` okuyucusu `DeliveryDisputeAutoChecker.cs:69`'dur ve o da niteleyicisiz.
+Ama sonucu `Unresolved` + `CanEscalate = true`: satıcı hakkında iddia üretmiyor, durum değiştirmiyor,
+alıcının eskalasyon yolunu kapatmıyor — yalnız gösterilen mesaj metni alıcı envanteri okunamayan
+vakada yanlış olabiliyor. T130 bu dosyayı zaten yeniden yazıyor; madde oraya kabul kriteri olarak
+eklendi (B5'in yanına). Kapsamı T127'de genişletmemenin gerekçesi: iki task aynı dosyayı yeniden
+yazmış olurdu.
+
 ### B5 — T130'a devredildi (proje sahibi kararı)
 
 Kapı kapalıyken biriken yeterli kanıtın, alıcının açtığı `DELIVERY` dispute'unu `CanEscalate = false` ile
@@ -349,6 +357,21 @@ ritmi, operatör sonuçları)
 | Contract | ✓ **9/9** | |
 | Odaklı | ✓ 32/32 | `~DeliveryTimeoutRoundTests\|~DeadlineScannerJob` (önce 26) |
 | Odaklı | ✓ 12/12 | `~AdminDisputeServiceTests` (önce 11) |
+
+### Düzeltme turu — PR & CI
+
+- Commit: `c0a1cc7` (düzeltme turu) · `9314fea` + `bec894f` (ilk tur)
+- PR: [#238](https://github.com/turkerurganci/Skinora/pull/238)
+- **CI: ✓ PASS** — HEAD `c0a1cc7`, run [`31907095957`](https://github.com/turkerurganci/Skinora/actions/runs/31907095957),
+  `conclusion=success`. Bloke edici job'ların hepsi yeşil: Lint · Build · Unit · Integration ·
+  Contract · **Migration dry-run** (yeni kolon şemaya temiz uygulanıyor) · Docker (backend) ·
+  **CI Gate**. (`0. Guard` ve `3b. JS test` skipped.)
+- **8 advisory E2E leg kırmızı — T127 kaynaklı DEĞİL, ilk turdakiyle aynı.** İmza bu run'ın
+  logundan yeniden doğrulandı: **8/8 leg `Invalid object name 'PlatformSteamBots'`** — `e2e/src/db.ts`
+  seed'i T117'nin düşürdüğü bot tablosunu temizliyor. Sahiplik T137 → T138; `continue-on-error`
+  oldukları için CI Gate'i bloke etmiyorlar.
+- `dotnet ef migrations has-pending-model-changes` → *"No changes have been made to the model since
+  the last migration"* (model ile migration senkron).
 
 ### Düzeltme turu — altyapı ve güvenlik
 

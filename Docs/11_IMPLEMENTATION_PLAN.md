@@ -2774,6 +2774,13 @@ Task T130: DisputeEligibility + AutoChecker yeniden yazımı
       sonucu üretmemeli (dispute OPEN + eskale edilebilir kalmalı).
       Tohum T126 (alıcının kendi confirm-receipt çağrısı), ama T127 bunu alıcı
       HİÇBİR ŞEY YAPMADAN ve launch'ta HER teslimatta erişilebilir yapıyor
+    - AYNI DOSYADA İKİNCİ MADDE (T127 düzeltme turunda görüldü, bloke etmeyen):
+      `DeliveryDisputeAutoChecker.cs:69` da çıplak `IsMisdeliverySignature()`
+      okuyor — B1 ile aynı niteleyici eksiği, ama **zararsız yönde**: sonuç
+      `Unresolved` + `CanEscalate = true`, yani satıcı hakkında iddia üretmiyor,
+      yalnız alıcıya gösterilen mesaj ("asset gitti, ulaşmadı") alıcı envanteri
+      okunamayan vakada yanlış olabiliyor. Yeniden yazımda mesaj seçimi de
+      motorun verdict'ine bağlanmalı (bayrağa değil)
 
 Task T131: AdminDisputeService — item-refund bacağı + override
   Bağımlılık: T130

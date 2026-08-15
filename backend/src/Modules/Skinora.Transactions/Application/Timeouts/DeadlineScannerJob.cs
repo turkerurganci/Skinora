@@ -247,10 +247,11 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                         && t.DeliveryDeadline < now
                         && (t.DeliveryRoundAt == null || t.DeliveryRoundAt <= recheckBefore))
             // Nulls first, then least-recently-examined, then oldest deadline.
-            // The projection is explicit because SQL Server sorts NULL first on
-            // ASC anyway but SQLite (integration tests) does too only by
-            // accident of storage class — the flag makes the contract the
-            // query's own rather than the provider's.
+            // The null rank is projected explicitly rather than left to
+            // ORDER BY DeliveryRoundAt: SQL Server happens to sort NULL first on
+            // ASC, but "a never-examined delivery outranks every held one" is the
+            // rule this query exists for, and a rule that load-bearing should not
+            // rest on a provider's collation default.
             .OrderBy(t => t.DeliveryRoundAt == null ? 0 : 1)
             .ThenBy(t => t.DeliveryRoundAt)
             .ThenBy(t => t.DeliveryDeadline)
