@@ -863,6 +863,142 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         await db.SaveChangesAsync();
     }
 
+    // ---------- T126: POST /transactions/:id/confirm-receipt (07 §7.6b) ----------
+
+    [Fact]
+    public async Task ConfirmReceipt_Unauthenticated_Returns_401()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConfirmReceipt_Happy_Path_Returns_200_With_ItemDelivered()
+    {
+        var (buyer, transactionId, client) = await SetUpConfirmReceiptAsync();
+
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal("ITEM_DELIVERED", data.GetProperty("status").GetString());
+        Assert.True(data.TryGetProperty("deliveryVerifiedAt", out _));
+        // 07 §7.6b — the buyer's own confirmation is the whole evidence set here.
+        Assert.Equal(
+            new[] { "BUYER_CONFIRMED" },
+            data.GetProperty("evidence").EnumerateArray().Select(e => e.GetString()).ToArray());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var persisted = db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
+            .AsNoTracking().Single(t => t.Id == transactionId);
+        Assert.Equal(Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED, persisted.Status);
+        Assert.NotNull(persisted.DeliveryVerifiedAt);
+        Assert.Equal(Skinora.Shared.Enums.DeliveryEvidence.BUYER_CONFIRMED, persisted.DeliveryEvidence);
+        // The realtime relay's producer (03 §3.5 step 9); ITEM_DELIVERED has no
+        // inbox notification type of its own.
+        Assert.NotEmpty(db.Set<OutboxMessage>().AsNoTracking().ToList());
+        _ = buyer;
+    }
+
+    [Fact]
+    public async Task ConfirmReceipt_Repeat_Is_Idempotent_And_Returns_200()
+    {
+        var (_, transactionId, client) = await SetUpConfirmReceiptAsync();
+
+        var first = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-receipt", content: null);
+        var second = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        var firstData = (await first.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        var secondData = (await second.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        // Same answer, not a fresh one: the repeat must not re-stamp.
+        Assert.Equal(
+            firstData.GetProperty("deliveryVerifiedAt").GetString(),
+            secondData.GetProperty("deliveryVerifiedAt").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReceipt_Seller_Calling_Returns_403_NotAParty()
+    {
+        var buyer = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: buyer.Id,
+            buyerTradeUrl: TradeUrlFor(buyer.SteamId));
+
+        var client = BuildAuthenticatedClient(seller.Id, seller.SteamId);
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("NOT_A_PARTY", body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReceipt_Before_Payment_Returns_409()
+    {
+        var buyer = await _factory.CreateUserAsync();
+        var seller = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.SELLER_CONFIRMED,
+            buyerId: buyer.Id,
+            buyerTradeUrl: TradeUrlFor(buyer.SteamId));
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{transactionId:D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_STATE_TRANSITION",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmReceipt_Unknown_Transaction_Returns_404()
+    {
+        var buyer = await _factory.CreateUserAsync();
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsync(
+            $"/api/v1/transactions/{Guid.NewGuid():D}/confirm-receipt", content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("TRANSACTION_NOT_FOUND",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private async Task<(User Buyer, Guid TransactionId, HttpClient Client)> SetUpConfirmReceiptAsync()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id,
+            targetBuyerSteamId: buyer.SteamId,
+            status: Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: buyer.Id,
+            buyerTradeUrl: TradeUrlFor(buyer.SteamId));
+
+        return (buyer, transactionId, BuildAuthenticatedClient(buyer.Id, buyer.SteamId));
+    }
+
     // ---------- T51: POST /transactions/:id/cancel (07 §7.7) ----------
 
     [Fact]
@@ -1296,6 +1432,27 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 CancelReason = isCancelled ? "Test iptal sebebi (>=10 char)" : null,
                 CompletedAt = status == Skinora.Shared.Enums.TransactionStatus.COMPLETED
                     ? nowUtc.AddMinutes(-1)
+                    : null,
+                // T126 — 06 §3.5 brackets SellerReadyConfirmedAt exactly like
+                // AcceptedAt one state later, and the DeliverItem guard reads it
+                // through HasFieldsForSellerConfirmed(). A PAYMENT_RECEIVED
+                // fixture without it could never deliver.
+                SellerReadyConfirmedAt = status is Skinora.Shared.Enums.TransactionStatus.SELLER_CONFIRMED
+                    or Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
+                    or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                    or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-4)
+                    : null,
+                // The trail a delivered transaction necessarily carries: the
+                // DeliverItem guard requires DeliveryVerifiedAt and its OnEntry
+                // stamps ItemDeliveredAt.
+                DeliveryVerifiedAt = status is Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                    or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-2)
+                    : null,
+                ItemDeliveredAt = status is Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                    or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? nowUtc.AddMinutes(-2)
                     : null,
             };
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>().Add(transaction);

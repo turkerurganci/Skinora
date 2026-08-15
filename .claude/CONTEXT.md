@@ -62,16 +62,19 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
 
-### Teslimat Doğrulama (T125)
+### Teslimat Doğrulama (T125 · T126)
 
 | Dosya | İçerik |
 |---|---|
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryVerificationService.cs` | 02 §9.2 kanıt motoru — **saf/yan etkisiz**, polling'e hazır; kilit durumunu okumaz |
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryVerificationResult.cs` | `DeliveryVerdict` (5 değer) + kanıt capture payload'ı |
-| `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryVerificationService.cs` | Port — çağıranlar T126 / T127 / T130 |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryVerificationService.cs` | Port — çağıranlar T126 (✓) / T127 / T130 |
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryEvidenceCaptureRecorder.cs` | Launch kapısı audit satırını çağıranın `SaveChanges`'ine ekler (statik helper) |
 | `backend/src/Modules/Skinora.Transactions/Domain/Entities/DeliveryEvidenceCapture.cs` | 06 §3.5a — append-only kanıt kaydı (DEPLOY_RUNBOOK §H) |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/DeliveryEvidenceCaptureConfiguration.cs` | EF config — long IDENTITY, FK NO ACTION, 2 index, `Evidence` int (flags) |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryConfirmationService.cs` | **T126** — 07 §7.6b alıcı onayı; `PAYMENT_RECEIVED → ITEM_DELIVERED`'ın tek üreticisi. Kanıtı **önce** işler, sonra motoru çağırır (short-circuit → sıfır Steam okuması) |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryConfirmationService.cs` | Port — çağıran `TransactionsController.ConfirmReceipt` |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryConfirmationDtos.cs` | `ConfirmReceiptResponse` / `ConfirmReceiptOutcome` / `ConfirmReceiptStatus` (5 değer) |
 
 ### Steam Modülü (T21 · T117'de salt-okunur proxy'ye küçüldü)
 

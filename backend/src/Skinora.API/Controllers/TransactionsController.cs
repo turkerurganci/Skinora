@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Models;
+using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PayoutIssues;
 
@@ -11,7 +12,8 @@ namespace Skinora.API.Controllers;
 
 /// <summary>
 /// Transaction lifecycle endpoints — T83a list (07 §7.1), T45
-/// (07 §7.2–§7.4), T46 (07 §7.5–§7.6), T51 cancel (07 §7.7), and T60
+/// (07 §7.2–§7.4), T46 (07 §7.5–§7.6), T123 confirm-ready (07 §7.6a), T126
+/// confirm-receipt (07 §7.6b), T51 cancel (07 §7.7), and T60
 /// report-payout-issue (07 §7.11).
 /// </summary>
 [ApiController]
@@ -25,6 +27,7 @@ public sealed class TransactionsController : ControllerBase
     private readonly ITransactionDetailService _detail;
     private readonly ITransactionAcceptanceService _acceptance;
     private readonly ITransactionReadinessService _readiness;
+    private readonly IDeliveryConfirmationService _deliveryConfirmation;
     private readonly ITransactionCancellationService _cancellation;
     private readonly IPayoutIssueService _payoutIssues;
 
@@ -36,6 +39,7 @@ public sealed class TransactionsController : ControllerBase
         ITransactionDetailService detail,
         ITransactionAcceptanceService acceptance,
         ITransactionReadinessService readiness,
+        IDeliveryConfirmationService deliveryConfirmation,
         ITransactionCancellationService cancellation,
         IPayoutIssueService payoutIssues)
     {
@@ -46,6 +50,7 @@ public sealed class TransactionsController : ControllerBase
         _detail = detail;
         _acceptance = acceptance;
         _readiness = readiness;
+        _deliveryConfirmation = deliveryConfirmation;
         _cancellation = cancellation;
         _payoutIssues = payoutIssues;
     }
@@ -363,6 +368,49 @@ public sealed class TransactionsController : ControllerBase
         ApiResponse<object>.Fail(
             outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
             outcome.ErrorMessage ?? "Readiness could not be confirmed.",
+            traceId: HttpContext.TraceIdentifier);
+
+    /// <summary>T6b — <c>POST /transactions/:id/confirm-receipt</c> (07 §7.6b, T126).</summary>
+    /// <remarks>
+    /// No request body (07 §7.6b) — the buyer is asserting one fact and the id is
+    /// already in the route. Idempotent: a repeat on an already-delivered
+    /// transaction returns 200 with the current state rather than a conflict.
+    /// </remarks>
+    [HttpPost("{id:guid}/confirm-receipt")]
+    [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("user-write")]
+    public async Task<IActionResult> ConfirmReceipt(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        var outcome = await _deliveryConfirmation.ConfirmReceiptAsync(userId, id, cancellationToken);
+
+        return outcome.Status switch
+        {
+            // Both 200 by 07 §7.6b — the idempotent repeat is not an error, it
+            // is the same answer a second time.
+            ConfirmReceiptStatus.Confirmed
+                or ConfirmReceiptStatus.AlreadyDelivered => Ok(outcome.Body),
+
+            ConfirmReceiptStatus.NotFound => NotFound(ConfirmReceiptErrorEnvelope(outcome)),
+
+            ConfirmReceiptStatus.NotAParty
+                => StatusCode(StatusCodes.Status403Forbidden,
+                    ConfirmReceiptErrorEnvelope(outcome)),
+
+            ConfirmReceiptStatus.InvalidStateTransition
+                => Conflict(ConfirmReceiptErrorEnvelope(outcome)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private ApiResponse<object> ConfirmReceiptErrorEnvelope(ConfirmReceiptOutcome outcome) =>
+        ApiResponse<object>.Fail(
+            outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
+            outcome.ErrorMessage ?? "Receipt could not be confirmed.",
             traceId: HttpContext.TraceIdentifier);
 
     /// <summary>T7 — <c>POST /transactions/:id/cancel</c> (07 §7.7).</summary>
