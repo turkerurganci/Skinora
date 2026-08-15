@@ -5,6 +5,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
@@ -134,6 +135,67 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(6 * 3600, persisted.TimeoutRemainingSeconds);
         Assert.Equal(nowUtc.AddHours(6), persisted.DeliveryDeadline);
+    }
+
+    /// <summary>
+    /// <b>T127 precondition — the freeze/resume phase shift.</b> Walks the whole
+    /// reachable chain rather than a single method, because no single method is
+    /// wrong: freeze captures the PAYMENT remainder correctly, the payment is
+    /// correctly allowed to land while frozen (the state machine guards only on
+    /// <c>IsOnHold</c>), and resume correctly distributes the remainder against
+    /// the CURRENT state. Composed, they hand the seller the seconds left of the
+    /// buyer's payment clock as a delivery window.
+    /// </summary>
+    /// <remarks>
+    /// Harmless before this task — the scanner skips frozen rows, so the
+    /// corrupted deadline was never consumed. The moment the delivery timeout
+    /// can cancel again it produces exactly what the verification round exists
+    /// to prevent: a refund to the buyer and a recorded failure against a seller
+    /// who was given three minutes to send.
+    /// </remarks>
+    [Fact]
+    public async Task Payment_Confirmed_Under_Freeze_Does_Not_Shrink_The_Delivery_Window()
+    {
+        await TimeoutTestFixtures.ConfigureSettingAsync(
+            Context, TimeoutSchedulingService.DeliveryTimeoutKey, "120", dataType: "int");
+
+        var freezeStartUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.SELLER_CONFIRMED, freezeStartUtc,
+            // Three minutes left on the buyer's payment window.
+            paymentDeadline: freezeStartUtc.AddMinutes(3),
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        var freeze = CreateSut();
+        await freeze.FreezeAsync(transaction, TimeoutFreezeReason.MAINTENANCE, CancellationToken.None);
+        await Context.SaveChangesAsync();
+        Assert.Equal(3 * 60, transaction.TimeoutRemainingSeconds);
+
+        // The payment lands during the maintenance window. Nothing in the
+        // webhook path checks TimeoutFrozenAt, so the transition and the
+        // delivery arming both happen while the freeze is still on.
+        _clock.Advance(TimeSpan.FromMinutes(10));
+        new TransactionStateMachine(transaction).Fire(TransactionTrigger.ConfirmPayment);
+        var scheduling = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        await scheduling.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // Maintenance ends an hour later.
+        _clock.Advance(TimeSpan.FromHours(1));
+        var resumeUtc = _clock.GetUtcNow().UtcDateTime;
+        await freeze.ResumeAsync(transaction, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(resumeUtc.AddMinutes(120), persisted.DeliveryDeadline);
+        // The failure this guards against, named so the test fails for the right
+        // reason: the leftover payment remainder must not become the window.
+        Assert.NotEqual(resumeUtc.AddMinutes(3), persisted.DeliveryDeadline);
+        Assert.Null(persisted.TimeoutFrozenAt);
+        Assert.Null(persisted.TimeoutRemainingSeconds);
     }
 
     [Fact]

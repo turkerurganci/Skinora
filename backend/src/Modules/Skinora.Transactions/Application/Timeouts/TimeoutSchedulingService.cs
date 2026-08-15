@@ -183,6 +183,33 @@ public sealed class TimeoutSchedulingService : ITimeoutSchedulingService
         var deadline = _clock.GetUtcNow().UtcDateTime + TimeSpan.FromMinutes(minutes);
         transaction.DeliveryDeadline = deadline;
 
+        // T127 — freeze/resume phase shift. TimeoutRemainingSeconds is captured
+        // once, at freeze, against the state the transaction was in THEN
+        // (06 §3.5 matrix), while ResumeAsync distributes it against the state
+        // it is in by resume time. Payment confirmation is not blocked by a
+        // freeze — the state machine only guards on IsOnHold — so a transaction
+        // frozen in SELLER_CONFIRMED can arrive here still frozen, carrying a
+        // remainder that belongs to the PAYMENT window. Resume would then write
+        // that leftover into DeliveryDeadline and hand the seller whatever
+        // seconds were left of somebody else's clock.
+        //
+        // Re-capturing here is the fix the plan calls option (b). The other
+        // option — refusing ConfirmPayment while frozen — would leave an
+        // on-chain payment with no path forward, since nothing re-drives a
+        // refused confirmation on resume.
+        //
+        // Harmless until T127 made it reachable in anger: the scanner skips
+        // frozen rows, so the corrupted deadline was never consumed. Once the
+        // delivery timeout can cancel again, a window collapsed to seconds
+        // produces exactly the outcome the verification round exists to
+        // prevent — refund the buyer and blame a seller who had no time to send.
+        if (transaction.TimeoutFrozenAt is not null)
+        {
+            // CK_Transactions_FreezeActive keeps this NOT NULL while frozen, so
+            // the column is overwritten rather than cleared.
+            transaction.TimeoutRemainingSeconds = (int)TimeSpan.FromMinutes(minutes).TotalSeconds;
+        }
+
         // No Hangfire job here — 05 §4.4 "Aşama ayrımı" makes the delivery
         // phase scanner-driven (DeadlineScannerJob). Arming a delayed job as
         // well would give the phase two independent executors.

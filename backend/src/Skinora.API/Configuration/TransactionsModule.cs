@@ -76,6 +76,12 @@ public static class TransactionsModule
         // only way out of PAYMENT_RECEIVED that is not a cancellation.
         services.AddScoped<IDeliveryConfirmationService, DeliveryConfirmationService>();
 
+        // T127 — the 05 §4.4 verification round the delivery timeout must run
+        // before it is allowed to cancel. Its misdelivery escalation port
+        // (IDeliveryMisdeliveryEscalator) is implemented in the Disputes module,
+        // which is where the Dispute type lives — see DisputesModule.
+        services.AddScoped<IDeliveryTimeoutRound, DeliveryTimeoutRound>();
+
         // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
         // doc-ref claimed §7.1–§7.4 but the list endpoint was never
         // implemented; T88 dashboard surfaced the gap.

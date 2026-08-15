@@ -25,6 +25,14 @@ public static class DisputesModule
         services.AddScoped<IDeliveryDisputeAutoChecker, DeliveryDisputeAutoChecker>();
         services.AddScoped<IWrongItemDisputeAutoChecker, WrongItemDisputeAutoChecker>();
 
+        // T127 — adapter for the Transactions-side misdelivery escalation port.
+        // The dependency direction (Disputes → Transactions) means the delivery
+        // timeout round cannot raise a Dispute itself; it declares the port and
+        // this module supplies the half that knows the table.
+        services.AddScoped<
+            Skinora.Transactions.Application.Delivery.IDeliveryMisdeliveryEscalator,
+            MisdeliveryDisputeEscalator>();
+
         return services;
     }
 }

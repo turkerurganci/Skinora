@@ -52,7 +52,7 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** #2 ve #6'nın hem SystemSetting anahtarı hem env var adı değişti (`trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`). Env adı anahtardan türetildiği için (`SettingsBootstrapService`: `SKINORA_SETTING_{KEY_UPPER}`) **eski env var adları artık hiçbir şeyi doldurmaz** — bu ikisini `.env`'inde eski adla taşıyan bir ortam startup'ta fail-fast eder. `.env.example`, `docker-compose.yml` ve `docker-compose.e2e.yml` güncellendi; kendi `.env` dosyanı elle güncelle. DB tarafında migration `T123_RenameTimeoutSettings` bir `UpdateData`'dır (satır `Id`'leri sabit) → admin UI'dan girilmiş değerler korunur.
 
-> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **Bu değeri düşük vermek, T127 teslimat doğrulama turu geldikten sonra doğrudan para hareketi üretir** (süre dolunca alıcıya iade + satıcıya kusur); T127'ye kadar süre dolması bir şey tetiklemez, yalnız scanner uyarı logu üretir. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
+> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı, **doğrulama turu T127'de canlı**) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **T127 itibarıyla bu değeri düşük vermek doğrudan para hareketi üretir** — süre dolduğunda scanner bir doğrulama turu çalıştırır ve tur "item hâlâ satıcıda" derse iptal + alıcıya iade + satıcıya kusur uygular (03 §4.4). T127 öncesinde süre dolması bir şey tetiklemiyordu; artık tetikliyor. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
 
 ---
 
@@ -292,6 +292,14 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 | Yanlış-teslimat imzası (`SELLER_ASSET_GONE`, delta yok) | **Etkilenmez.** Bu bir para hareketi değil, admin'e yükseltmedir (02 §10.1) — kapı bastırmaz. |
 | Okunamayan envanter (private/unavailable) | Kapıdan bağımsız `Inconclusive`. Bilgi yokluğu asla olumsuz bulgu sayılmaz (08 §2.3). |
 
+> **Teslimat timeout'u da bu tabloya uyar (T127, 2026-08-15).** `DeliveryDeadline` dolduğunda scanner
+> aynı turu çalıştırır ve **yalnız turun sonucuna** göre davranır: `Delivered` → `ITEM_DELIVERED`;
+> `InventoryEvidencePendingReview` → **iptal etmez, teslim de etmez** (satır burada birikir, bu bölümün
+> incelemesi tam olarak o satırları okur); yanlış-teslimat imzası → dispute'a yükseltir; okunamayan
+> envanter → hiçbir şey yapmaz, sonraki taramada tekrar dener. İptal **tek bir** olumlu kanıtla üretilir:
+> satıcının envanteri okunabildi **ve** item hâlâ orada. Kapı kapalıyken teslimatı doğrulanmış bir işlemin
+> parası bu yüzden emanette bekler — bekleme, kapının kabul edilmiş maliyetidir (§H.3 ile kapatılır).
+
 ### H.3 Kapıyı açma adımları
 
 1. **İlk N gerçek teslimatı topla.** N'yi deploy sahibi belirler; öneri **≥ 5** ayrı işlem (farklı satıcı/alıcı çiftleri, en az biri alıcının o skinden zaten kopyası olduğu vaka). Kayıtlar:
@@ -313,5 +321,5 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 
 ### H.4 Kapı açılmadan yapılmaması gerekenler
 
-- `delivery_timeout_minutes`'i (§A #6) düşürmek. Ölçüm gelmeden daraltmak, T127 sonrası teslim etmiş satıcıyı haksız iptale sokar.
+- `delivery_timeout_minutes`'i (§A #6) düşürmek. T127'den beri süre dolması gerçekten iptal üretebiliyor, dolayısıyla ölçüm gelmeden daraltmak teslim etmiş satıcıyı haksız iptale sokar.
 - `DeliveryEvidenceCaptures` satırlarını silmek/düzenlemek. Tablo append-only'dir (06 §4.2); UPDATE/DELETE uygulama katmanında reddedilir.

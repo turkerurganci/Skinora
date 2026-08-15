@@ -7,6 +7,7 @@ using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
@@ -81,6 +82,51 @@ internal sealed class NoOpTimeoutSideEffectPublisher : ITimeoutSideEffectPublish
         Transaction transaction,
         TransactionStatus previousStatus,
         CancellationToken cancellationToken = default) => Task.CompletedTask;
+}
+
+/// <summary>
+/// Default no-op <see cref="IDeliveryTimeoutRound"/> — every overdue delivery
+/// is held, so the scanner behaves exactly as it did before T127 for the three
+/// phases whose deadline decides on its own. Used by the tests that exercise
+/// those phases; the delivery-phase tests inject the real round.
+/// </summary>
+internal sealed class NoOpDeliveryTimeoutRound : IDeliveryTimeoutRound
+{
+    public List<Guid> Rounds { get; } = [];
+
+    public DeliveryTimeoutDecision Decision { get; set; } = DeliveryTimeoutDecision.Held;
+
+    public Task<DeliveryTimeoutDecision> RunAsync(
+        Transaction transaction, CancellationToken cancellationToken)
+    {
+        Rounds.Add(transaction.Id);
+        return Task.FromResult(Decision);
+    }
+}
+
+/// <summary>
+/// Test double for <see cref="IDeliveryMisdeliveryEscalator"/>. The real
+/// adapter lives in <c>Skinora.Disputes</c> (module direction: Disputes →
+/// Transactions), so this assembly asserts that the port is CALLED and leaves
+/// what it writes to <c>MisdeliveryDisputeEscalatorTests</c>.
+/// </summary>
+internal sealed class RecordingMisdeliveryEscalator : IDeliveryMisdeliveryEscalator
+{
+    public List<Guid> Escalations { get; } = [];
+
+    /// <summary>Set to make the port throw, exercising the caller's recovery.</summary>
+    public Exception? Throws { get; set; }
+
+    public Task<MisdeliveryEscalationOutcome> EscalateAsync(
+        Transaction transaction, DateTime occurredAtUtc, CancellationToken cancellationToken)
+    {
+        if (Throws is not null) throw Throws;
+
+        Escalations.Add(transaction.Id);
+        // Mirrors the adapter's own toggle so callers see the flag flip.
+        transaction.HasActiveDispute = true;
+        return Task.FromResult(MisdeliveryEscalationOutcome.Opened);
+    }
 }
 
 /// <summary>
@@ -219,16 +265,25 @@ internal static class TimeoutTestFixtures
     public static Skinora.Transactions.Tests.Helpers.NoOpPostCancelMonitorStarter NoOpPostCancelMonitor()
         => new();
 
+    /// <summary>
+    /// Default <see cref="IDeliveryTimeoutRound"/> (T127) for scanner tests that
+    /// are not about the delivery phase: every overdue delivery is held, which
+    /// is also the production behaviour whenever the platform cannot conclude.
+    /// </summary>
+    public static NoOpDeliveryTimeoutRound NoOpDeliveryRound() => new();
+
     public static IOptions<TimeoutSchedulingOptions> Options(
         int scannerSeconds = 30,
         int batchSize = 200,
-        int recoveryThresholdSeconds = 60)
+        int recoveryThresholdSeconds = 60,
+        int deliveryVerificationBatchSize = 20)
         => Microsoft.Extensions.Options.Options.Create(new TimeoutSchedulingOptions
         {
             DeadlineScannerIntervalSeconds = scannerSeconds,
             DeadlineScannerBatchSize = batchSize,
             HeartbeatIntervalSeconds = 30,
             RecoveryThresholdSeconds = recoveryThresholdSeconds,
+            DeliveryVerificationBatchSize = deliveryVerificationBatchSize,
         });
 }
 

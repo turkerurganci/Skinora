@@ -353,6 +353,65 @@ public class TimeoutSchedulingServiceTests : IntegrationTestBase
         Assert.Null(persisted.DeliveryDeadline);
     }
 
+    // ─── T127 — freeze/resume phase shift ───────────────────────────────
+
+    /// <summary>
+    /// A transaction can reach PAYMENT_RECEIVED while still frozen: the state
+    /// machine guards <c>ConfirmPayment</c> on <c>IsOnHold</c> only, so a
+    /// maintenance freeze does not stop an on-chain payment from landing. The
+    /// remainder captured at freeze belongs to the PAYMENT window, and
+    /// <c>ResumeAsync</c> distributes it against whatever state it finds — so
+    /// arming the delivery window has to re-capture it, or the seller inherits
+    /// the seconds left on somebody else's clock.
+    /// </summary>
+    [Fact]
+    public async Task ArmDeliveryDeadline_Recaptures_The_Remainder_When_Still_Frozen()
+    {
+        await TimeoutTestFixtures.ConfigureSettingAsync(
+            Context, TimeoutSchedulingService.DeliveryTimeoutKey, "120", dataType: "int");
+
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = await SeedPaymentReceivedAsync(nowUtc);
+        // The state a freeze taken in SELLER_CONFIRMED leaves behind: three
+        // minutes were left on the PAYMENT deadline.
+        transaction.TimeoutFrozenAt = nowUtc.AddMinutes(-5);
+        transaction.TimeoutFreezeReason = TimeoutFreezeReason.MAINTENANCE;
+        transaction.TimeoutRemainingSeconds = 180;
+        await Context.SaveChangesAsync();
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        await sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(120 * 60, persisted.TimeoutRemainingSeconds);
+        // CK_Transactions_FreezeActive — overwritten, never cleared, while the
+        // transaction is still frozen.
+        Assert.Equal(nowUtc.AddMinutes(-5), persisted.TimeoutFrozenAt);
+    }
+
+    /// <summary>
+    /// The unfrozen path is untouched: CK_Transactions_FreezePassive requires
+    /// <c>TimeoutRemainingSeconds</c> to stay NULL while
+    /// <c>TimeoutFrozenAt</c> is NULL, so arming must not invent a remainder.
+    /// </summary>
+    [Fact]
+    public async Task ArmDeliveryDeadline_Leaves_The_Remainder_Null_When_Not_Frozen()
+    {
+        await TimeoutTestFixtures.ConfigureSettingAsync(
+            Context, TimeoutSchedulingService.DeliveryTimeoutKey, "120", dataType: "int");
+
+        var transaction = await SeedPaymentReceivedAsync(_clock.GetUtcNow().UtcDateTime);
+
+        var sut = new TimeoutSchedulingService(Context, _scheduler, _clock);
+        await sut.ArmDeliveryDeadlineAsync(transaction.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Null(persisted.TimeoutRemainingSeconds);
+        Assert.Null(persisted.TimeoutFrozenAt);
+    }
+
     private async Task<Transaction> SeedPaymentReceivedAsync(DateTime nowUtc)
     {
         var transaction = TimeoutTestFixtures.NewTransaction(
