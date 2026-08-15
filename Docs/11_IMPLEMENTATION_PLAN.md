@@ -2672,6 +2672,21 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
     - payout_settlement_days SystemSetting (varsayılan 8) eklendi
     - ITEM_DELIVERED girişinde PayoutEligibleAt hesaplanıyor
     - SellerPayoutQueueJob yalnız PayoutEligibleAt geçmiş işlemleri alıyor
+      DURUM: bu madde T126 doğrulamasında (Bulgu F1, 2026-08-15) ERKEN
+      UYGULANDI — `SellerPayoutQueueJob` sorgusu artık `PayoutEligibleAt != null
+      && <= now` filtreliyor ve döngü içi yeniden doğrulama da aynı kapıyı
+      okuyor (2 test: NULL → atlanır, gelecek tarih → atlanır, saat ilerleyince
+      akar). Gerekçe: T126 `DeliverItem`'ın ilk üretim çağıranıdır, yani
+      ITEM_DELIVERED'ı ilk kez erişilebilir yapar; kapı olmadan alıcı onayı
+      ~1 dk içinde zincire payout gönderirdi ve Steam'in 7 günlük geri alma
+      penceresi tamamen açık kalırdı (02 §4.5.1'in kapatmak için var olduğu
+      vaka). T129 bu filtreyi KALDIRMAZ; üstüne `payout_settlement_days` ile
+      hesaplanan `PayoutEligibleAt` yazıcısını ve ödeme öncesi son kontrolü
+      ekler. Kapı bugün fail-closed: kolonu kimse yazmadığı için job hiçbir şey
+      kuyruğa almaz, teslim edilmiş işlemler ITEM_DELIVERED'da bekler.
+      KALICI DERS (T124 dersinin ikizi): bir üreticiyi açan görev, açtığı
+      DEĞERİN tüketicilerinin kapılı olduğunu da doğrulamalı — T126 kabul
+      kriterlerinin hepsini karşıladığı hâlde uyandırdığı tüketici kapısızdı.
     - Ödeme ÖNCESİ son kontrol: item hâlâ alıcının envanterinde mi?
         item var    -> SettlementVerifiedAt damgalanır, ödeme akar
         item yok    -> delivery_reversed trigger, REFUNDED, alıcıya iade,

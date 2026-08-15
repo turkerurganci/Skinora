@@ -19,6 +19,8 @@ namespace Skinora.Transactions.Tests.Unit.Transfers;
 /// 03 §2.4). Confirms the gas-fee-protection net is queued as a PENDING
 /// SELLER_PAYOUT row, the gas estimate is snapshotted, and held / disputed /
 /// non-delivered / already-paid / addressless transactions are skipped.
+/// Extended by the T126 validation (finding F1) with the 02 §4.5.1 settlement
+/// gate: delivery alone never releases the payout.
 /// </summary>
 [Trait("Category", "Unit")]
 public sealed class SellerPayoutQueueJobTests : IDisposable
@@ -152,6 +154,51 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
             b => b.TransactionId == tx.Id));
+    }
+
+    /// <summary>
+    /// T126 validation finding F1 — the settlement gate (02 §4.5.1). A NULL
+    /// <c>PayoutEligibleAt</c> means the settlement window was never armed, and
+    /// that is the state every ITEM_DELIVERED transaction is in until T129
+    /// computes the column. Paying here would hand the seller their money while
+    /// Steam still lets them reverse the trade for 7 days — item back to the
+    /// seller, money with the seller, buyer with neither.
+    /// </summary>
+    [Fact]
+    public async Task NullPayoutEligibleAt_IsSkipped()
+    {
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.PayoutEligibleAt = null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+    }
+
+    /// <summary>
+    /// The window is armed but still open: waiting is the whole point, so the
+    /// tick must pass over it rather than round the remaining time down.
+    /// </summary>
+    [Fact]
+    public async Task PayoutEligibleAt_InTheFuture_IsSkipped()
+    {
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.PayoutEligibleAt = _clock.GetUtcNow().UtcDateTime.AddSeconds(1));
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+
+        // And the causality, so this test fails for the right reason: the clock
+        // reaching the eligibility instant is the single step that releases it.
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        await _sut.ExecuteAsync();
+
+        Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     [Fact]
@@ -337,6 +384,12 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             TotalAmount = price + commission,
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
             ItemDeliveredAt = _clock.GetUtcNow().UtcDateTime,
+            // 02 §4.5.1 — the settlement window has elapsed. Set by default so
+            // every pre-existing case still exercises what it was written for;
+            // the two gate tests below override it. T129 computes this column on
+            // entry to ITEM_DELIVERED; until then nothing writes it in
+            // production, which is exactly why the gate must fail closed.
+            PayoutEligibleAt = _clock.GetUtcNow().UtcDateTime.AddDays(-8),
         };
         configure?.Invoke(tx);
 

@@ -35,6 +35,25 @@ namespace Skinora.Transactions.Application.Transfers;
 /// </para>
 ///
 /// <para>
+/// <b>Settlement gate (02 §4.5.1) — T126 validation finding F1.</b> Reaching
+/// ITEM_DELIVERED is not enough; <see cref="Transaction.PayoutEligibleAt"/>
+/// must exist and be in the past. Steam keeps a protected trade reversible for
+/// 7 days and either side can reverse it without Steam Support, so paying the
+/// seller on delivery alone would leave the buyer without item and without
+/// money — the exact fraud path 02 §4.5.1 exists to close.
+/// </para>
+/// <para>
+/// The check is deliberately fail-closed on NULL. Until T129 computes the
+/// column on entry to ITEM_DELIVERED, nothing writes it, so this job queues
+/// nothing and delivered transactions park in ITEM_DELIVERED — the safe
+/// direction. It was inert before T126 for a different reason: no production
+/// code could fire <c>DeliverItem</c> at all, so ITEM_DELIVERED was
+/// unreachable. T126's confirm-receipt endpoint supplies that missing
+/// reachability, which is what turns the absent gate into a live exposure and
+/// why the gate lands here rather than waiting for T129 to bring its own.
+/// </para>
+///
+/// <para>
 /// Concurrency hardening (WP1 F1 — S2 money-safety). The <c>AnyAsync</c>
 /// idempotency check is not atomic with the subsequent insert, so two
 /// overlapping ticks could both pass it and queue two PENDING payouts →
@@ -90,13 +109,18 @@ public sealed class SellerPayoutQueueJob
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
         // Soft-delete query filter excludes IsDeleted rows. Skip held /
-        // disputed transactions and any that already have a payout row queued.
+        // disputed transactions, transactions whose settlement window has not
+        // elapsed (02 §4.5.1), and any that already have a payout row queued.
         var candidateIds = await _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
                 && !t.IsOnHold
                 && !t.HasActiveDispute
+                && t.PayoutEligibleAt != null
+                && t.PayoutEligibleAt <= nowUtc
                 && !t.BlockchainTransactions.Any(
                     b => b.Type == BlockchainTransactionType.SELLER_PAYOUT))
             .OrderBy(t => t.ItemDeliveredAt)
@@ -122,11 +146,16 @@ public sealed class SellerPayoutQueueJob
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         // Re-validate inside the loop (09 §13.3): a concurrent admin hold,
-        // dispute, or completion must not be overwritten by a stale tick.
+        // dispute, or completion must not be overwritten by a stale tick. The
+        // settlement window is re-read here too — an operator may push
+        // PayoutEligibleAt out while this batch is mid-flight, and the batch was
+        // selected before that write.
         if (transaction is null
             || transaction.Status != TransactionStatus.ITEM_DELIVERED
             || transaction.IsOnHold
-            || transaction.HasActiveDispute)
+            || transaction.HasActiveDispute
+            || transaction.PayoutEligibleAt is not { } eligibleAt
+            || eligibleAt > _clock.GetUtcNow().UtcDateTime)
         {
             return;
         }
