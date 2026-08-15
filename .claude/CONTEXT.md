@@ -62,7 +62,7 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/BlockchainTransactionConfiguration.cs` | EF Core config — 9 CHECK constraint (5 type + 4 status), filtered unique TxHash, 3 perf index |
 | `backend/src/Modules/Skinora.Transactions/Infrastructure/Persistence/TransactionsModuleDbRegistration.cs` | Modül assembly kaydı |
 
-### Teslimat Doğrulama (T125 · T126)
+### Teslimat Doğrulama (T125 · T126 · T127)
 
 | Dosya | İçerik |
 |---|---|
@@ -75,6 +75,10 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryConfirmationService.cs` | **T126** — 07 §7.6b alıcı onayı; `PAYMENT_RECEIVED → ITEM_DELIVERED`'ın tek üreticisi. Kanıtı **önce** işler, sonra motoru çağırır (short-circuit → sıfır Steam okuması) |
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryConfirmationService.cs` | Port — çağıran `TransactionsController.ConfirmReceipt` |
 | `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryConfirmationDtos.cs` | `ConfirmReceiptResponse` / `ConfirmReceiptOutcome` / `ConfirmReceiptStatus` (5 değer) |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/DeliveryTimeoutRound.cs` | **T127** — 05 §4.4 timeout öncesi doğrulama turu; 5 verdict → 3 aksiyon. İptali yetkilendiren tek koşul: satıcı envanteri okundu **ve** item hâlâ orada |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryTimeoutRound.cs` | Port + `DeliveryTimeoutDecision` (`Delivered` / `Cancel` / `Held`). Çağıran `DeadlineScannerJob` |
+| `backend/src/Modules/Skinora.Transactions/Application/Delivery/IDeliveryMisdeliveryEscalator.cs` | **T127** — yanlış-teslimat eskalasyon portu. Adapter Disputes'te (bağımlılık yönü Disputes → Transactions) |
+| `backend/src/Modules/Skinora.Disputes/Application/Disputes/MisdeliveryDisputeEscalator.cs` | Adapter — SYSTEM tarafından açılan `DELIVERY`/`ESCALATED` dispute; filtresiz UQ nedeniyle mevcut satırı yükseltir |
 
 ### Steam Modülü (T21 · T117'de salt-okunur proxy'ye küçüldü)
 

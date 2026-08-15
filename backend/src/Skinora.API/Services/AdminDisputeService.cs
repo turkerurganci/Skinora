@@ -319,6 +319,15 @@ public sealed class AdminDisputeService : IAdminDisputeService
         await UpdateActiveDisputeFlagAsync(transaction, dispute.Id, cancellationToken);
 
         // ---------- Stage 8: notification + audit ----------
+        // The buyer comes from the TRANSACTION, not from who opened the dispute
+        // (T127 validation finding B3). Those were the same party for as long as
+        // the buyer was the only opener 02 §10.2 allows; T127 added the
+        // exception the same document requires — a misdelivery signature the
+        // platform establishes itself, opened by SYSTEM because the buyer may
+        // not even know anything went wrong. Reading the opener as the buyer
+        // there would address the DISPUTE_RESULT notification to the SYSTEM user
+        // and leave the real buyer never told how their dispute ended. The
+        // fallback keeps a buyerless row (schema-level nullable) publishable.
         await _outbox.PublishAsync(
             new DisputeResolvedEvent(
                 EventId: Guid.NewGuid(),
@@ -326,7 +335,7 @@ public sealed class AdminDisputeService : IAdminDisputeService
                 TransactionId: transaction.Id,
                 Type: dispute.Type,
                 SellerId: transaction.SellerId,
-                BuyerId: dispute.OpenedByUserId,
+                BuyerId: transaction.BuyerId ?? dispute.OpenedByUserId,
                 Outcome: request.Outcome,
                 BuyerRefunded: buyerRefunded,
                 OccurredAt: now),

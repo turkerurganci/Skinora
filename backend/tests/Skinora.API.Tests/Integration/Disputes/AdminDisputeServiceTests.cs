@@ -7,6 +7,7 @@ using Skinora.Disputes.Domain.Entities;
 using Skinora.Disputes.Infrastructure.Persistence;
 using Skinora.Platform.Application.Audit;
 using Skinora.Shared.Domain;
+using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
@@ -115,6 +116,38 @@ public class AdminDisputeServiceTests : IntegrationTestBase
         Assert.IsType<DisputeResolvedEvent>(_outbox.Published[0]);
         Assert.Single(_audit.Entries);
         Assert.Equal(AuditAction.DISPUTE_RESOLVED, _audit.Entries[0].Action);
+    }
+
+    /// <summary>
+    /// <b>T127 finding B3.</b> The resolution notice is addressed to the
+    /// transaction's buyer, not to whoever opened the dispute.
+    /// </summary>
+    /// <remarks>
+    /// Those were the same party for as long as 02 §10.2 left the buyer as the
+    /// only opener. T127 added the exception the same document requires: a
+    /// misdelivery signature the platform establishes itself, opened by SYSTEM
+    /// because the buyer may not even know anything went wrong — nothing
+    /// arrived, so from their side the transaction merely looks slow. Reading
+    /// the opener as the buyer sends DISPUTE_RESULT to the SYSTEM account and
+    /// the real buyer is never told how their dispute ended.
+    /// </remarks>
+    [Fact]
+    public async Task Resolve_OfASystemOpenedDispute_NotifiesTheRealBuyer_NotTheOpener()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withPayment: true);
+        var dispute = await CreateDisputeAsync(
+            tx, DisputeType.DELIVERY, DisputeStatus.ESCALATED,
+            openedByUserId: SeedConstants.SystemUserId);
+
+        await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(DisputeResolutionOutcome.SELLER_FAVOR, "Satıcı haklı bulundu."),
+            ipAddress: null, CancellationToken.None);
+
+        var resolved = Assert.Single(_outbox.Published.OfType<DisputeResolvedEvent>());
+        Assert.Equal(_buyer.Id, resolved.BuyerId);
+        Assert.NotEqual(SeedConstants.SystemUserId, resolved.BuyerId);
+        Assert.Equal(_seller.Id, resolved.SellerId);
     }
 
     [Fact]
@@ -346,14 +379,17 @@ public class AdminDisputeServiceTests : IntegrationTestBase
     private Task<Dispute> CreateEscalatedDisputeAsync(Transaction tx, DisputeType type) =>
         CreateDisputeAsync(tx, type, DisputeStatus.ESCALATED);
 
-    private async Task<Dispute> CreateDisputeAsync(Transaction tx, DisputeType type, DisputeStatus status)
+    private async Task<Dispute> CreateDisputeAsync(
+        Transaction tx, DisputeType type, DisputeStatus status, Guid? openedByUserId = null)
     {
         var now = _clock.GetUtcNow().UtcDateTime;
         var dispute = new Dispute
         {
             Id = Guid.NewGuid(),
             TransactionId = tx.Id,
-            OpenedByUserId = _buyer.Id,
+            // Defaults to the buyer — the only opener 02 §10.2 allows until
+            // T127's SYSTEM-opened misdelivery escalation.
+            OpenedByUserId = openedByUserId ?? _buyer.Id,
             Type = type,
             Status = status,
             UserDescription = "Yanlış item teslim edildi",

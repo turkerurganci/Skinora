@@ -77,17 +77,38 @@ public sealed class DeliveryVerificationService : IDeliveryVerificationService
             transaction.BuyerBaselineCapturedAt is not null
             && transaction.BuyerBaselineClassCount is not null;
 
-        // ---------- Short circuit: the buyer already confirmed ----------
+        // ---------- Short circuit: the recorded evidence already settles it ----------
         // 02 §9.2 — buyer confirmation is sufficient ON ITS OWN and cannot be
         // overturned by an inventory read: the confirmation runs against the
         // buyer's own interest (it releases their money), so there is no
         // incentive to claim it falsely. Reading Steam here could only produce
         // a weaker signal that argues with a stronger one, at the cost of two
         // rate-limited round trips per poll.
-        if (recorded.HasFlag(DeliveryEvidence.BUYER_CONFIRMED))
+        //
+        // T127 widened this from BUYER_CONFIRMED to sufficiency in general, and
+        // the widening is an equivalence rather than a new rule: observation can
+        // only ever OR flags IN (see `evidence` below), so once the recorded set
+        // satisfies IsSufficientForDelivery() no read can make it insufficient,
+        // and Decide() reduces to the launch gate. Without this, a transaction
+        // parked by a gated round would re-read both inventories on every
+        // scanner pass forever — the polling cost the engine's purity was meant
+        // to make safe, spent on a question already answered.
+        if (recorded.IsSufficientForDelivery())
         {
+            // The gate is the one remaining variable, and only for the inventory
+            // route: buyer confirmation is the buyer's own decision, never the
+            // platform's inference, so it is not gated and costs no read.
+            var alreadyReleasable = recorded.HasFlag(DeliveryEvidence.BUYER_CONFIRMED)
+                || await IsAutoReleaseEnabledAsync(cancellationToken);
+            var settled = Decide(
+                recorded,
+                sellerSideKnown: false,
+                buyerSideKnown: false,
+                baselineAvailable,
+                gateOpen: alreadyReleasable);
+
             return new DeliveryVerificationResult(
-                verdict: DeliveryVerdict.Delivered,
+                verdict: settled,
                 evidence: recorded,
                 observedEvidence: DeliveryEvidence.NONE,
                 sellerVisibility: null,
@@ -96,7 +117,10 @@ public sealed class DeliveryVerificationService : IDeliveryVerificationService
                 baselineClassCount: transaction.BuyerBaselineClassCount,
                 observedClassCount: null,
                 candidateDeliveredAssetId: null,
-                autoReleaseGated: false,
+                autoReleaseGated: settled == DeliveryVerdict.InventoryEvidencePendingReview,
+                // No capture: the round that first observed this evidence
+                // already wrote one (DEPLOY_RUNBOOK §H.3 reads those rows), and
+                // a re-run observed nothing to add.
                 capture: null);
         }
 
@@ -232,11 +256,12 @@ public sealed class DeliveryVerificationService : IDeliveryVerificationService
         if (evidence.IsSufficientForDelivery())
         {
             // The gate governs the platform's INFERENCE from inventories, never
-            // the buyer's own decision. VerifyAsync short-circuits on a recorded
-            // BUYER_CONFIRMED before ever reaching here, so this arm is not
-            // reachable through it today — it is kept so the rule survives
-            // inside this function rather than depending on a caller two
-            // hundred lines up remembering to check first.
+            // the buyer's own decision. Observation never raises
+            // BUYER_CONFIRMED, so on the full-round path this arm is
+            // unreachable: a transaction carrying the flag short-circuits above.
+            // It is kept because the rule belongs inside this function rather
+            // than in a caller two hundred lines up remembering to check first —
+            // and the short-circuit itself routes through here.
             if (evidence.HasFlag(DeliveryEvidence.BUYER_CONFIRMED) || gateOpen)
                 return DeliveryVerdict.Delivered;
 

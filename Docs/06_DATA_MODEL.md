@@ -614,6 +614,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `BuyerConfirmedReceiptAt` | datetime | NULL | Alıcının "teslim aldım" onayını verdiği an |
 | `DeliveryVerifiedAt` | datetime | NULL | Teslimatın doğrulandığı an — ITEM_DELIVERED ve sonrası NOT NULL |
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
+| `DeliveryRoundAt` | datetime | NULL | Teslimat timeout doğrulama turunun bu satıra **en son ne zaman baktığı** (T127). Her turda yazılır — sonuca varmayan turlar dahil. `DeadlineScannerJob` teslimat penceresini bu kolona göre (NULL'lar önce) sıralar: beş verdict'ten üçü satırı `PAYMENT_RECEIVED` ve süresi kalıcı dolmuş bırakır, dolayısıyla deadline sırası bu satırların pencereyi kalıcı işgal etmesi demektir. Karar girdisi **değildir**, yalnız sıralama/aralık alanıdır |
 | **Mutabakat (v3.0)** | | | |
 | `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
 | `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu |

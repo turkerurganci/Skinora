@@ -6,6 +6,7 @@ using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Reputation;
@@ -28,10 +29,11 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// gap between Hangfire write and DB commit).
 /// </para>
 /// <para>
-/// T124: the delivery phase is scanned but NOT consumed — an expired
-/// <c>DeliveryDeadline</c> is reported and left alone until T127 adds the
-/// verification round 05 §4.4 requires before cancellation. See
-/// <c>ReportGatedDeliveryTimeoutsAsync</c>.
+/// T127: the delivery phase consumes again, but only through
+/// <see cref="IDeliveryTimeoutRound"/> — 05 §4.4 requires a verification round
+/// before a delivery timeout may cancel, and that round can also conclude the
+/// opposite (deliver) or refuse to conclude at all. The T124 gate that reported
+/// these rows without touching them is gone.
 /// </para>
 /// <para>
 /// The reschedule is wrapped in a <c>try/finally</c> so a batch error never
@@ -40,19 +42,13 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// </remarks>
 public sealed class DeadlineScannerJob : IDeadlineScannerJob
 {
-    /// <summary>
-    /// How many gated delivery-timeout ids the T124 warning names. The log
-    /// line repeats every scan interval, so it reports an exact count plus a
-    /// bounded, deterministic (oldest-first) sample rather than the whole set.
-    /// </summary>
-    private const int GatedDeliveryLogSampleSize = 10;
-
     private readonly AppDbContext _db;
     private readonly IBackgroundJobScheduler _scheduler;
     private readonly TimeProvider _clock;
     private readonly ITimeoutSideEffectPublisher _sideEffects;
     private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly ITransactionReputationRefresher _reputation;
+    private readonly IDeliveryTimeoutRound _deliveryRound;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -63,6 +59,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         ITimeoutSideEffectPublisher sideEffects,
         IPostCancelMonitorStarter postCancelMonitor,
         ITransactionReputationRefresher reputation,
+        IDeliveryTimeoutRound deliveryRound,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
@@ -72,6 +69,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         _sideEffects = sideEffects;
         _postCancelMonitor = postCancelMonitor;
         _reputation = reputation;
+        _deliveryRound = deliveryRound;
         _options = options.Value;
         _logger = logger;
     }
@@ -107,11 +105,11 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     {
         var now = _clock.GetUtcNow().UtcDateTime;
 
-        // Single query covers the three CONSUMING phase deadlines. Filtered to
-        // honor the 09 §13.3 guards (IsOnHold + TimeoutFrozenAt) inside SQL so
-        // frozen and emergency-held rows never even reach the in-memory pass.
-        // The delivery phase is deliberately absent — see
-        // ReportGatedDeliveryTimeoutsAsync.
+        // Single query covers the three phases whose deadline decides on its
+        // own. Filtered to honor the 09 §13.3 guards (IsOnHold +
+        // TimeoutFrozenAt) inside SQL so frozen and emergency-held rows never
+        // even reach the in-memory pass. The delivery phase is queried
+        // separately below — its expiry decides nothing by itself.
         var candidates = await _db.Set<Transaction>()
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
@@ -124,19 +122,8 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             .Take(_options.DeadlineScannerBatchSize)
             .ToListAsync();
 
-        // Diagnostics only, so it is not allowed to cost an enforcement pass:
-        // without this catch a failure in the gate report would abort the batch
-        // below and delay real cancellations by a whole scan interval.
-        try
-        {
-            await ReportGatedDeliveryTimeoutsAsync(now);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Gated delivery-timeout report failed (T124).");
-        }
-
-        if (candidates.Count == 0) return;
+        var deliveryCancellations = await RunDeliveryTimeoutRoundsAsync(now);
+        candidates.AddRange(deliveryCancellations);
 
         // WP15 — collect the parties of every transaction that actually timed
         // out so reputation/cooldown can be recomputed after the batch flush.
@@ -177,7 +164,12 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             affected.Add((transaction.SellerId, transaction.BuyerId));
         }
 
-        if (affected.Count == 0) return;
+        // Not `affected.Count == 0`: a delivery round can leave real work
+        // behind — an ITEM_DELIVERED transition, an evidence capture, a raised
+        // dispute — without any party timing out. Asking the change tracker is
+        // both narrower (it sees exactly what this scope mutated) and safer
+        // than a bookkeeping flag that a new arm could forget to set.
+        if (affected.Count == 0 && !_db.ChangeTracker.HasChanges()) return;
 
         // WP15 — flush every timeout transition + history row, then recompute
         // reputation/cooldown for all affected parties. The aggregator/cooldown
@@ -193,53 +185,98 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     }
 
     /// <summary>
-    /// T124 gate — an expired <c>DeliveryDeadline</c> is observed but NOT
-    /// consumed until T127 ships the delivery verification round.
+    /// T127 — run the 05 §4.4 verification round on every overdue delivery and
+    /// return the transactions that earned a cancellation.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// 05 §4.4 and 03 §4.4 both require a final delivery verification BEFORE a
-    /// delivery timeout cancels anything: evidence found means the transaction
-    /// advances instead of being cancelled. That round is T127's job. Firing
-    /// <c>Timeout</c> here in the meantime would refund the buyer and record
-    /// the cancellation against a seller who may well have sent the item and
-    /// simply never been confirmed (02 §9.2) — the plan orders T127 after this
-    /// task, so the protection has to be a gate.
+    /// <b>Why a separate query.</b> The T124 acceptance criterion asks for the
+    /// <c>PAYMENT_RECEIVED</c> branch back in the consuming query, and the
+    /// substance of that — the branch consumes again — is delivered here. The
+    /// query stays separate because the hazard T124 named survives this task:
+    /// an overdue delivery does not always resolve. Three of the five verdicts
+    /// leave the row in <c>PAYMENT_RECEIVED</c> and permanently overdue (held
+    /// for launch-gate review, escalated to an admin, or unreadable), and with
+    /// the launch gate closed at launch the first of those is the EXPECTED
+    /// outcome of a delivery the buyer never confirmed. Sharing
+    /// <c>DeadlineScannerBatchSize</c> with a growing set of permanently overdue
+    /// rows would let them crowd out the accept / seller-confirm / payment
+    /// phases — a silent availability failure, which is exactly the reasoning
+    /// recorded in T124 decision (a).
     /// </para>
     /// <para>
-    /// Overdue delivery rows are queried separately rather than skipped inside
-    /// the main loop on purpose: sharing the batched query would let permanently
-    /// gated rows fill <c>DeadlineScannerBatchSize</c> and starve the accept /
-    /// seller-confirm / payment phases, which is a silent availability failure.
-    /// Nothing is written here, so every gated row stays exactly as it is and
-    /// T127 picks it up on its first scan — T127 removes this method and
-    /// restores the <c>PAYMENT_RECEIVED</c> branch to the query above.
+    /// <b>Why the separate cap.</b> A round costs up to two rate-limited Steam
+    /// reads (08 §2.2), so the delivery phase gets its own, much smaller budget
+    /// per pass.
+    /// </para>
+    /// <para>
+    /// <b>Why the window is fair rather than oldest-first</b> (T127 validation
+    /// finding B2). The same three verdicts that keep the row overdue keep it in
+    /// this query: nothing in the round moves <c>DeliveryDeadline</c> or the
+    /// status. Ordered by deadline, those rows are the OLDEST ones, so they sit
+    /// at the head of the window permanently — and once there are
+    /// <see cref="TimeoutSchedulingOptions.DeliveryVerificationBatchSize"/> of
+    /// them, no delivery that expires afterwards is ever examined again. That is
+    /// the T124 starvation moved into the delivery phase rather than removed.
+    /// So the window is ordered by when each row was last EXAMINED, nulls first:
+    /// a never-examined delivery outranks every held one, and a held row cannot
+    /// come back until <c>DeliveryRoundRecheckSeconds</c> has passed. The
+    /// re-check interval is what keeps the held rows alive — an unreadable
+    /// inventory can become readable, and 08 §2.3 does not let the platform
+    /// treat "cannot see" as settled — while spending the Steam budget on the
+    /// rows that still have a question open.
+    /// </para>
+    /// <para>
+    /// A round that throws costs its own transaction and nothing else: one
+    /// unreachable sidecar must not stop the cancellations the other phases owe.
+    /// Its <c>DeliveryRoundAt</c> stamp is written by the round itself before any
+    /// arm runs, so a row that throws every pass still yields its slot instead of
+    /// consuming the whole budget.
     /// </para>
     /// </remarks>
-    private async Task ReportGatedDeliveryTimeoutsAsync(DateTime now)
+    private async Task<List<Transaction>> RunDeliveryTimeoutRoundsAsync(DateTime now)
     {
-        var gated = _db.Set<Transaction>()
+        var recheckBefore = now.AddSeconds(-_options.DeliveryRoundRecheckSeconds);
+
+        var overdue = await _db.Set<Transaction>()
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
                         && t.TimeoutFrozenAt == null
                         && t.Status == TransactionStatus.PAYMENT_RECEIVED
                         && t.DeliveryDeadline != null
-                        && t.DeliveryDeadline < now);
-
-        var gatedCount = await gated.CountAsync();
-        if (gatedCount == 0) return;
-
-        var sample = await gated
-            .OrderBy(t => t.DeliveryDeadline)
-            .Select(t => t.Id)
-            .Take(GatedDeliveryLogSampleSize)
+                        && t.DeliveryDeadline < now
+                        && (t.DeliveryRoundAt == null || t.DeliveryRoundAt <= recheckBefore))
+            // Nulls first, then least-recently-examined, then oldest deadline.
+            // The null rank is projected explicitly rather than left to
+            // ORDER BY DeliveryRoundAt: SQL Server happens to sort NULL first on
+            // ASC, but "a never-examined delivery outranks every held one" is the
+            // rule this query exists for, and a rule that load-bearing should not
+            // rest on a provider's collation default.
+            .OrderBy(t => t.DeliveryRoundAt == null ? 0 : 1)
+            .ThenBy(t => t.DeliveryRoundAt)
+            .ThenBy(t => t.DeliveryDeadline)
+            .Take(_options.DeliveryVerificationBatchSize)
             .ToListAsync();
 
-        _logger.LogWarning(
-            "Delivery deadline passed on {Count} transaction(s) without cancellation — "
-            + "the timeout verification round is not implemented yet (T127), so these stay "
-            + "in PAYMENT_RECEIVED and the buyers' funds stay in escrow. Oldest ids: {TransactionIds}",
-            gatedCount, string.Join(", ", sample));
+        var cancellations = new List<Transaction>();
+        foreach (var transaction in overdue)
+        {
+            try
+            {
+                var decision = await _deliveryRound.RunAsync(transaction, CancellationToken.None);
+                if (decision == DeliveryTimeoutDecision.Cancel)
+                    cancellations.Add(transaction);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Delivery timeout round failed for transaction {TransactionId} — "
+                    + "left in PAYMENT_RECEIVED and retried on the next scan.",
+                    transaction.Id);
+            }
+        }
+
+        return cancellations;
     }
 }
 
@@ -259,6 +296,38 @@ public sealed class TimeoutSchedulingOptions
 
     /// <summary>Maximum transactions processed per scanner iteration.</summary>
     public int DeadlineScannerBatchSize { get; set; } = 200;
+
+    /// <summary>
+    /// Maximum delivery-verification rounds per scanner iteration (T127).
+    /// </summary>
+    /// <remarks>
+    /// Much smaller than <see cref="DeadlineScannerBatchSize"/> because a round
+    /// is not a state check but up to two rate-limited Steam inventory reads
+    /// (08 §2.2). A backlog drains over successive passes in deadline order
+    /// rather than saturating the sidecar queue in one.
+    /// </remarks>
+    public int DeliveryVerificationBatchSize { get; set; } = 20;
+
+    /// <summary>
+    /// How long a transaction that has already had a delivery-verification
+    /// round waits before it may have another (T127). Default 15 minutes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only re-examinations are throttled: a delivery whose deadline has just
+    /// passed carries a null <c>DeliveryRoundAt</c> and is examined on the very
+    /// next pass, so the timeout stays as prompt as the scan interval.
+    /// </para>
+    /// <para>
+    /// The interval exists because three of the five verdicts leave the row
+    /// overdue and eligible forever. Without it those rows would re-enter the
+    /// window every 30 seconds and, being the oldest, would consume the whole
+    /// per-pass budget. Fifteen minutes is short enough that a Steam inventory
+    /// that becomes readable is picked up within the hour and long enough that a
+    /// backlog of held rows costs a bounded number of reads.
+    /// </para>
+    /// </remarks>
+    public int DeliveryRoundRecheckSeconds { get; set; } = 900;
 
     /// <summary>How often the heartbeat self-reschedules. Default 30 seconds (05 §4.4).</summary>
     public int HeartbeatIntervalSeconds { get; set; } = 30;
