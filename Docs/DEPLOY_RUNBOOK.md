@@ -300,6 +300,16 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 > satıcının envanteri okunabildi **ve** item hâlâ orada. Kapı kapalıyken teslimatı doğrulanmış bir işlemin
 > parası bu yüzden emanette bekler — bekleme, kapının kabul edilmiş maliyetidir (§H.3 ile kapatılır).
 
+> **Biriken satırların tarama maliyeti (T127 düzeltme turu, 2026-08-15).** Kapıda bekleyen satırlar
+> sorgudan çıkmadığı için tarama penceresi **deadline sırasına göre değil**, `Transaction.DeliveryRoundAt`
+> ("bu satıra en son ne zaman bakıldı", NULL'lar önce) sırasına göre doldurulur; bir satır
+> `Timeouts:DeliveryRoundRecheckSeconds` (varsayılan **900 sn**) geçmeden pencereye geri giremez.
+> Operasyonel sonucu: (1) süresi yeni dolan bir teslimat, kaç satır birikmiş olursa olsun **ilk taramada**
+> incelenir; (2) biriken satırların her biri saatte ~4 kez yeniden değerlendirilir — okunamayan bir envanter
+> okunur hâle geldiğinde en geç bir saat içinde yakalanır; (3) `DeliveryEvidenceCaptures`'a yazılan satır
+> sayısı da bu ritme bağlıdır, §H.3'ün sorgusu aynı işleme ait birden çok gözlem satırı görebilir —
+> `ORDER BY ObservedAt` ile en güncel olan okunur.
+
 ### H.3 Kapıyı açma adımları
 
 1. **İlk N gerçek teslimatı topla.** N'yi deploy sahibi belirler; öneri **≥ 5** ayrı işlem (farklı satıcı/alıcı çiftleri, en az biri alıcının o skinden zaten kopyası olduğu vaka). Kayıtlar:

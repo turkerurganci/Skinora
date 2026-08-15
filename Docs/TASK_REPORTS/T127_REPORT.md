@@ -1,6 +1,11 @@
 # T127 — DeadlineScannerJob'a teslimat doğrulama turu
 
-**Faz:** F7 | **Durum:** ✗ **Doğrulama FAIL — düzeltme gerekli** | **Tarih:** 2026-08-15
+**Faz:** F7 | **Durum:** ⏳ **Düzeltme turu tamamlandı — yeniden doğrulama bekliyor** | **Tarih:** 2026-08-15
+
+> Bu rapor iki turu birden taşır. Aşağıdaki **Yapılan İşler → Doğrulama** bölümleri **ilk turun**
+> kaydıdır ve olduğu gibi korunmuştur; bağımsız doğrulamanın ✗ FAIL verdict'i ve beş bulgusu
+> [Doğrulama](#doğrulama) bölümündedir. Bulguların nasıl kapatıldığı en sonda,
+> [Düzeltme Turu](#düzeltme-turu-2026-08-15) bölümündedir.
 
 ---
 
@@ -225,7 +230,138 @@ Uyuşmazlıklar:
 1. **Yanlış-teslimat sonrası geç teslimat gözlenmez.** `IsMisdeliverySignature()` kayıtlıysa tur Steam okumaz (K2). Item gerçekten geç ulaşırsa `INVENTORY_DELTA` hiç görülmez. Kabul edilebilir çünkü satır zaten bir admin'in kuyruğunda; ama B1 (teslimat gecikmesi) ölçülene kadar bu bir varsayımdır — DEPLOY_RUNBOOK §H.3 incelemesinde ölçüldükçe yeniden değerlendirilmeli.
 2. **Okunamayan satırlar süresiz bekler.** Satıcı envanteri kalıcı olarak private/unavailable ise tur hiçbir zaman sonuca varmaz ve alıcının parası emanette kalır. Tek çıkış admin iptali. Otomatik outage freeze (`T50-OutageFreezeCallers`, DEFERRED_BACKLOG) bu vakayı daraltır ama kapatmaz.
 3. **Kapıda biriken satırlar için operatör görünürlüğü yok.** DEPLOY_RUNBOOK §H.3'ün SQL'i tabloyu okuyabiliyor; ayrı bir metrik/alarm yok.
+> **Düzeltme turu sonrası (2026-08-15).** #1 artık **varsayım değil**: kısa devre yalnız motorun
+> `MisdeliverySignature` verdict'i verdiği (yani iki tarafın da okunduğu) satırlarda çalışıyor, geri
+> kalan her satır her turda tam okuma yapıyor — B1 düzeltmesi bu maddenin dayandığı "bayrak yalnız
+> gerçek imzada set edilir" varsayımını kodda doğru hâle getirdi. #2 aynen geçerli (okunamayan satır
+> süresiz bekler) ama artık **saatte ~4 kez** yeniden deneniyor ve diğer teslimatları aç bırakmıyor.
+> #3 kısmen daraldı: `DeliveryRoundAt` operatöre "bu satıra en son ne zaman bakıldı" sorusunun
+> cevabını veriyor (§H.2), ayrı bir metrik/alarm hâlâ yok.
+
 4. **T129 çakışması yok ama komşu:** teslim edilen işlemin `PayoutEligibleAt`'ini yazan kod hâlâ yok, dolayısıyla T127'nin ürettiği `ITEM_DELIVERED` satırları da `SellerPayoutQueueJob` kapısında bekler (T126 doğrulama bulgusu F1 ile fail-closed).
+
+## Düzeltme Turu (2026-08-15)
+
+Bağımsız doğrulamanın **3 bloke edici** bulgusu kapatıldı, **B4** (süreç) kapatıldı, **B5** proje
+sahibi kararıyla **T130'a devredildi**. Dört düzeltme yönü de yapım öncesi proje sahibine seçenekli
+sunuldu ve **önerilen seçenekler onaylandı**.
+
+### B1 — re-entry kapısı artık motorun niteleyicisini taşıyor (S1, kapatıldı)
+
+`DeliveryTimeoutRound.RunAsync` re-entry kapısı çıplak `IsMisdeliverySignature()` bayrak testi yerine
+**önceki turun kayıtlı verdict'ini** okuyor:
+
+```csharp
+if (await MisdeliveryAlreadyConcludedAsync(transaction.Id, cancellationToken))
+```
+→ `DeliveryEvidenceCaptures` üzerinde `TransactionId == id && Verdict == "MisdeliverySignature"`
+(`IX_DeliveryEvidenceCaptures_TransactionId` üzerinde tek seek, `AsNoTracking`).
+
+Neden bu kaynak: capture satırı **motorun sonucudur**, bayraklar ise gözlemdir — ve motor aynı üç biti
+`sellerSideKnown && buyerSideKnown` ile niteliyor (`DeliveryVerificationService.cs:271`). Kanıt olarak
+her `MisdeliverySignature` verdict'i **her zaman** capture yazar (`BuildCapture` → `worthCapturing`),
+yani kapının okuduğu kayıt eksiksizdir.
+
+**Bulgunun zinciri artık kırık:** satıcının asseti gitmiş + alıcı envanteri gizli vakada tur 1 `Inconclusive`
+→ Held (kanıt bayrakları yazılır ama **capture yazılmaz**, çünkü bu verdict `worthCapturing` değildir)
+→ tur 2 kapıyı **açmaz**, tam turu tekrar çalıştırır ve yine bekletir. Teslim etmiş olabilecek satıcı
+hakkında dispute açılmıyor.
+
+| Test | Ne sabitliyor |
+|---|---|
+| `Second_Round_On_An_Unread_Buyer_Side_Still_Does_Not_Escalate` (**yeni**) | İki tur; tur 1'den sonra `DeliveryEvidence.IsMisdeliverySignature()` **true** (fixture gerçek) ve capture tablosu **boş**; tur 2 sonunda escalation **yok**, `HasActiveDispute` false, durum `PAYMENT_RECEIVED` |
+| `Second_Round_On_A_Misdelivery_Re_Asserts_The_Escalation_Without_Reading_Steam` (**fixture düzeltildi**) | Gerçek imza artık **capture satırıyla** kuruluyor; kısa devre + idempotent re-assert korunuyor, sıfır Steam okuması |
+
+### B2 — teslimat penceresi artık drene oluyor (S2, kapatıldı)
+
+Yeni kolon **`Transaction.DeliveryRoundAt`** (migration `20260815163802_T127_AddDeliveryRoundAt`,
+tek kolon `datetime2 NULL`) + yeni knob **`TimeoutSchedulingOptions.DeliveryRoundRecheckSeconds`**
+(varsayılan **900**).
+
+- **Damga:** `RunAsync` içinde, **her koldan önce** yazılıyor — sonuca varmayan tur da yazıyor, çünkü
+  sorulan soru "ne zaman sonuçlandı" değil **"bu satıra en son ne zaman bakıldı"**.
+- **Sorgu:** `(DeliveryRoundAt == null || DeliveryRoundAt <= now - recheck)` filtresi +
+  `OrderBy(nulls-first) → ThenBy(DeliveryRoundAt) → ThenBy(DeliveryDeadline)`.
+
+Bulgunun mekaniği böylece yapısal olarak imkânsız: **hiç turlanmamış** bir teslimat, kaç kalıcı-Held
+satır birikmiş olursa olsun pencerenin başındadır. Kalıcı satırlar emekliye ayrılmıyor (08 §2.3 —
+"okunamadı" sonuçlanmış sayılamaz), yalnız sıraları geliyor: saatte ~4 tur.
+
+Doğrulamanın "tavanın gerekçesi tutmuyor, tavanı dolduran satırlar sıfır okuma yapıyor" tespiti de
+karşılandı: bütçe artık **okuma yapması gereken** satırlara gidiyor.
+
+| Test | Ne sabitliyor |
+|---|---|
+| `Scanner_Examines_A_Never_Rounded_Delivery_Before_Held_Ones` (**yeni**) | 3 kalıcı-Held satır (5+ saatlik deadline, 30 sn önce turlanmış) + 1 yeni süresi dolan satır, tavan **1** → tur **yeni satıra** gidiyor. Deadline sırasında en eski Held satır alırdı — her taramada |
+| `Scanner_Rotates_The_Delivery_Window_Across_Passes` (**yeni**) | Tavan 1, üç tarama → **üç farklı** işlem. Düzeltme öncesi üçü de aynı satırdı |
+| `Scanner_Re_Examines_A_Held_Delivery_Once_The_Recheck_Interval_Passes` (**yeni**) | 901 sn önce turlanmış satır pencereye giriyor, 899 sn önceki girmiyor |
+| `Every_Round_Stamps_When_The_Row_Was_Last_Examined` · `A_Short_Circuited_Round_Stamps_The_Examination_Too` (**yeni**) | Damga hem tam turda hem kısa devrede yazılıyor — kısa devre yazmasaydı admin kuyruğundaki satır pencereyi sonsuza dek tutardı |
+
+### B3 — SYSTEM açılan dispute çözülünce alıcı bildirimi gidiyor (S2, kapatıldı)
+
+`AdminDisputeService` (`Skinora.API/Services/`) `DisputeResolvedEvent.BuyerId`'yi artık
+`transaction.BuyerId ?? dispute.OpenedByUserId` ile çözüyor. Doğrulamanın önerdiği **kaynakta düzeltme**
+yolu seçildi: `OpenedByUserId`'nin alıcı olduğu varsayımı yalnız T127'nin SYSTEM yolunda değil,
+gelecekteki her sistem-açılışında da yanlış olurdu. K1 kararı (dispute kaydında açan taraf SYSTEM
+görünür) korundu — 02 §10.2 kaydı bozulmadı, admin listesindeki "OpenedBy" doğru kalıyor.
+
+| Test | Ne sabitliyor |
+|---|---|
+| `Resolve_OfASystemOpenedDispute_NotifiesTheRealBuyer_NotTheOpener` (**yeni**) | SYSTEM tarafından açılmış `DELIVERY`/`ESCALATED` dispute çözülünce `DisputeResolvedEvent.BuyerId` = **gerçek alıcı**, SYSTEM **değil**; `SellerId` de doğru |
+
+### B4 — onaylanan sapma kaynak plana yazıldı (kapatıldı)
+
+`Docs/11_IMPLEMENTATION_PLAN.md` T127 girdisine eklendi: **AC3'ün NİHAİ ŞEKLİ** (dal tüketiyor, ama
+ayrı sorgu + ayrı tavanla; özü karşılandı, harfi bilinçli olarak karşılanmadı, gerekçesiyle) ve **B1/B2/B3
+birer kabul kriteri** olarak. Doküman başlığındaki "Son güncelleme" zinciri de güncellendi. T122'nin
+kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına
+yazılmadıkça gerçekleşmemiştir.
+
+### B5 — T130'a devredildi (proje sahibi kararı)
+
+Kapı kapalıyken biriken yeterli kanıtın, alıcının açtığı `DELIVERY` dispute'unu `CanEscalate = false` ile
+kapatması (para kilitli + eskalasyon yolu kapalı) **T130'un kabul kriteri** olarak yazıldı ve
+**launch'tan önce kapatılmalı** kaydı düşüldü. Gerekçe: bulgu pre-existing (T126'dan tohumlu) ve
+auto-checker'ın yeniden yazımı zaten T130'un işi; T127 içinde düzeltmek iki task'ın aynı dosyayı
+yeniden yazması demekti.
+
+### Düzeltme turu — etkilenen dosyalar
+
+**Kaynak:** `DeliveryTimeoutRound.cs` (B1 kapısı + B2 damgası) · `DeadlineScannerJob.cs` (B2 sorgu +
+knob) · `Transaction.cs` · `TransactionConfiguration.cs` · `AdminDisputeService.cs` (B3) ·
+`Migrations/20260815163802_T127_AddDeliveryRoundAt.cs`
+
+**Test:** `DeliveryTimeoutRoundTests.cs` (+3 yeni, 1 fixture düzeltmesi) ·
+`DeadlineScannerJobTests.cs` (+3 yeni) · `TimeoutTestSupport.cs` (fake tur damgalıyor, `Options`
+yeni knob) · `AdminDisputeServiceTests.cs` (+1 yeni, fixture `openedByUserId` parametresi)
+
+**Doküman:** `11_IMPLEMENTATION_PLAN.md` (T127 AC3 nihai şekli + B1/B2/B3 kriterleri, T130'a B5) ·
+`06_DATA_MODEL.md` §3.5 (`DeliveryRoundAt`) · `DEPLOY_RUNBOOK.md` §H.2 (biriken satırların tarama
+ritmi, operatör sonuçları)
+
+### Düzeltme turu — test sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Build | ✓ 0 error / 0 warning | `dotnet build Skinora.sln -c Debug` |
+| Unit | ✓ **1382/1382** | 11 assembly, 0 fail (`FullyQualifiedName!~.Integration&!~.Contract`) |
+| Integration | ✓ **1266/1266** | 10 assembly, 0 fail — düzeltme öncesi 1259, +7 yeni test |
+| Contract | ✓ **9/9** | |
+| Odaklı | ✓ 32/32 | `~DeliveryTimeoutRoundTests\|~DeadlineScannerJob` (önce 26) |
+| Odaklı | ✓ 12/12 | `~AdminDisputeServiceTests` (önce 11) |
+
+### Düzeltme turu — altyapı ve güvenlik
+
+- **Migration:** **Var** — `20260815163802_T127_AddDeliveryRoundAt`, `Transactions` tablosuna tek
+  nullable `datetime2` kolon. Geri alınabilir (`Down` → `DropColumn`), veri taşıma yok, mevcut satırlar
+  `NULL` başlar ve **NULL = "hiç bakılmadı" = pencerenin başı**, yani deploy anında birikmiş satırların
+  hepsi önce bir tur alır. Yeni index yok: mevcut filtreli `IX_Transactions_Delivery_Pending` predicate'i
+  karşılıyor, sıralamaya giden küme uçuştaki teslimat sayısıyla sınırlı.
+- **Config:** `Timeouts:DeliveryRoundRecheckSeconds` (kod varsayılanı 900). `appsettings.json`'da
+  `Timeouts` bölümü yok — kardeş knob'lar gibi kod varsayılanıyla çalışır.
+- **Güvenlik:** yeni bağımlılık yok, yeni endpoint/authz yüzeyi yok, secret yok. Para hareketi etkisi
+  **daralıyor**: B1 düzeltmesi hatalı dispute'u, B2 düzeltmesi ise "timeout hiç çalışmıyor" durumunu
+  kaldırıyor; iptali yetkilendiren tek koşul (`SellerProvenToStillHoldTheItem`) değişmedi.
 
 ## Notlar
 

@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (**T124 doğrulaması** — iki bulgu proje sahibi onayıyla plana işlendi: **T127'nin başlığı düzeltildi** (`TimeoutExecutor'a ...` → `DeadlineScannerJob'a ...`; teslimat fazı 05 §4.4 uyarınca scanner-driven ve `TimeoutExecutor` `Status != SELLER_CONFIRMED` ise no-op eder — yanlış başlık T124 kapısının hiç kalkmamasına yol açabilirdi) ve **T127'ye freeze/resume faz kayması ön koşulu** kabul kriteri olarak eklendi (pre-existing T50 yolu `DeliveryDeadline`'a ödeme fazının artığını yazabiliyor; kapı kalkmadan kapatılmalı)) · 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
+**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-15 (**T127 doğrulaması ✗ FAIL → düzeltme turu** — proje sahibi onayıyla dört karar plana işlendi: **T127 AC3'ün NİHAİ ŞEKLİ** yazıldı (dal tüketiyor ama ayrı sorgu + ayrı tavanla; kriterin özü karşılandı, harfi bilinçli olarak karşılanmadı — T122'nin kalıcı dersi gereği onaylanan sapma KAYNAK dokümana geçti), **üç bloke edici bulgu (B1 re-entry niteleyicisi · B2 teslimat penceresi açlığı · B3 SYSTEM dispute'unda alıcı bildirimi) T127'ye kabul kriteri olarak** eklendi, ve **B5 (kapı kapalıyken auto-checker'ın alıcının eskalasyon yolunu kapatması) T130'a** launch öncesi kapatılmak üzere kabul kriteri olarak devredildi. **KALICI DERS:** bir kapı, kendi bıraktığı KALICI DURUMUN sonraki turda nasıl okunacağını ve o durumun biriktiği KUYRUĞUN drene olup olmadığını da denetlemeli — üç bulgunun üçünü de kabul kriteri listesi değil, "bu satır bir daha buraya geldiğinde ne olur?" sorusu yakaladı) · 2026-08-14 (**T124 doğrulaması** — iki bulgu proje sahibi onayıyla plana işlendi: **T127'nin başlığı düzeltildi** (`TimeoutExecutor'a ...` → `DeadlineScannerJob'a ...`; teslimat fazı 05 §4.4 uyarınca scanner-driven ve `TimeoutExecutor` `Status != SELLER_CONFIRMED` ise no-op eder — yanlış başlık T124 kapısının hiç kalkmamasına yol açabilirdi) ve **T127'ye freeze/resume faz kayması ön koşulu** kabul kriteri olarak eklendi (pre-existing T50 yolu `DeliveryDeadline`'a ödeme fazının artığını yazabiliyor; kapı kalkmadan kapatılmalı)) · 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2618,6 +2618,17 @@ Task T127: DeadlineScannerJob'a teslimat doğrulama turu
       ÖNCE doğrulama turu şart koşuyor ve o tur bu görevdedir; kapı kalkmazsa
       teslimat timeout'u ateşlenmez, süresi dolan işlemler PAYMENT_RECEIVED'da
       birikmeye devam eder (T124 uyarı logu bunları sayar)
+      NİHAİ ŞEKİL (yapım + doğrulama sonrası, proje sahibi onayı 2026-08-15):
+       dal TÜKETİYOR ama **ayrı sorgu + ayrı tavan** ile; tek sorguya
+       dönmüyor. Gerekçe T124 kararı (a)'nın kendisidir: beş verdict'ten üçü
+       satırı `PAYMENT_RECEIVED`'da ve süresi KALICI dolmuş bırakır (kapıda
+       inceleme bekleyen, dispute'a yükseltilmiş, okunamayan), launch'ta kapı
+       kapalı olduğu için birincisi alıcısı onay vermeyen her teslimatın
+       BEKLENEN sonucudur, ve bunlar `DeadlineScannerBatchSize`'ı paylaşırsa
+       accept / seller-confirm / payment timeout'larını sessizce durdururlar.
+       Ek olarak bir tur bir state kontrolü değil iki rate-limited Steam
+       okumasıdır (08 §2.2). Kriterin ÖZÜ (kapı kalktı, dal tüketiyor)
+       karşılanmıştır; HARFİ (tek sorgu) bilinçli olarak karşılanmamıştır.
     - Kapının kalkışıyla birlikte T124'te ters çevrilen iki test eski
       beklentisine döner: `DeadlineScannerJobTests.Scanner_Does_Not_Consume_
       Overdue_PAYMENT_RECEIVED_Until_T127` ve `DeadlineScannerJobSideEffects
@@ -2650,6 +2661,39 @@ Task T127: DeadlineScannerJob'a teslimat doğrulama turu
       kapının önlemek için kurulduğu vaka. Bu bir T124 regresyonu DEĞİLDİR
       (`TimeoutFreezeService` T50 kodudur, T124 dokunmadı); T124 öncesinde de
       main'de aynı ezilme scanner tarafından tüketilip iptal üretiyordu.
+    - DOĞRULAMA BULGULARI KAPATILDI (bağımsız doğrulama 2026-08-15 ✗ FAIL →
+      düzeltme turu, proje sahibi onayı aynı gün). Üçü de testlerin BAKMADIĞI
+      yollardaydı — 1382 unit + 88 odaklı integration yeşilken bulundular:
+      (B1, S1) RE-ENTRY KAPISI MOTORUN NİTELEYİCİSİNİ TAŞIR. Tur, kanıt
+       bayrağına (`IsMisdeliverySignature()` = `SELLER_ASSET_GONE &&
+       !INVENTORY_DELTA`) değil, önceki turun KAYITLI VERDICT'ine bakar
+       (`DeliveryEvidenceCaptures.Verdict = 'MisdeliverySignature'`). Motor aynı
+       kararı `sellerSideKnown && buyerSideKnown` ile niteliyor; bayrak bu
+       niteleyiciyi taşımadığı için "satıcının asseti gitti + alıcı envanteri
+       gizli" vakası (verdict `Inconclusive`, tur 1 doğru bekletir) bir sonraki
+       taramada teslim etmiş olabilecek satıcı hakkında dispute açıyordu — K4
+       kararının ve 08 §2.3'ün ihlali. Test: aynı bayrakları taşıyan iki vaka,
+       biri eskale eder biri etmez
+      (B2, S2) TESLİMAT PENCERESİ AÇ KALMAZ. Sorgu `OrderBy(DeliveryDeadline)`
+       değil, `Transaction.DeliveryRoundAt` (§06 3.5, yeni kolon, NULL'lar
+       önce) ile sıralanır ve `DeliveryRoundRecheckSeconds` (varsayılan 900)
+       aralığından yeni geçmiş satırlar pencereye girmez. Gerekçe: hiçbir kol
+       `DeliveryDeadline`'ı veya durumu değiştirmediği için kalıcı bekleyen
+       satırlar sorgudan HİÇ çıkmıyor ve en eski oldukları için deadline
+       sırasında pencerenin başında kalıyorlardı; `DeliveryVerificationBatch
+       Size` kadar biriktiğinde YENİ hiçbir teslimat timeout'u tur çalıştıramaz
+       hâle geliyordu — T124'ün adını koyduğu açlık yok edilmemiş, teslimat
+       fazının içine taşınmış oluyordu. Aralık satırı emekliye ayırmaz (08 §2.3
+       "okunamadı" sonuçlanmış sayılamaz), yalnız sırasını bekletir. Test: üç
+       taramada üç FARKLI satır + hiç turlanmamış satır kalıcı bekleyenleri
+       geçer + aralık dolunca geri gelir
+      (B3, S2) SYSTEM AÇILAN DISPUTE ÇÖZÜLÜNCE GERÇEK ALICI BİLDİRİM ALIR.
+       `AdminDisputeService` `DisputeResolvedEvent.BuyerId`'yi
+       `dispute.OpenedByUserId`'den değil `transaction.BuyerId`'den çözer. K1
+       `OpenedByUserId = SYSTEM` yazan ilk yol olduğu için, alıcı ile açan
+       kişinin aynı olduğu invariant T127'de kırıldı; okuyan taraf düzeltilmesi
+       kaynağı düzeltir (tüm dispute'lar için doğru kalır). Test: SYSTEM açılan
+       dispute çözülür → event alıcıyı taşır
   Not (T124 doğrulaması, 2026-08-14): yukarıdaki ön koşul bağımsız doğrulama
        turunda bulundu (Bulgu 2, S1 dayanıklılık, pre-existing). Proje sahibi
        kararı: DEFERRED_BACKLOG kalemi yerine T127 kabul kriteri — zarar tam
@@ -2720,6 +2764,16 @@ Task T130: DisputeEligibility + AutoChecker yeniden yazımı
     - "Satıcı başka yere gönderdi" imzası auto-escalate ediyor
     - WRONG_ITEM PAYMENT_RECEIVED'dan da açılabiliyor
     - Yanlış item vakasında gelen item'ın adı admin'e kanıt olarak taşınıyor
+    - LAUNCH KAPISI ÇIKMAZI KAPATILDI (T127 doğrulaması Bulgu B5, 2026-08-15 —
+      proje sahibi kararı: sahiplik T130, LAUNCH'TAN ÖNCE kapanmalı):
+      kapı kapalıyken biriken YETERLİ envanter kanıtı, alıcı `DELIVERY`
+      dispute'u açtığında `DeliveryDisputeAutoChecker` üzerinden `Resolved:
+      true` üretiyor → dispute CLOSED + `CanEscalate = false` olarak AÇILIYOR.
+      Sonuç: kapı parayı bıraktırmıyor VE alıcının eskalasyon yolu kapalı —
+      para kilitli, çıkış yok. Auto-checker kapı kapalıyken "teslim edildi"
+      sonucu üretmemeli (dispute OPEN + eskale edilebilir kalmalı).
+      Tohum T126 (alıcının kendi confirm-receipt çağrısı), ama T127 bunu alıcı
+      HİÇBİR ŞEY YAPMADAN ve launch'ta HER teslimatta erişilebilir yapıyor
 
 Task T131: AdminDisputeService — item-refund bacağı + override
   Bağımlılık: T130

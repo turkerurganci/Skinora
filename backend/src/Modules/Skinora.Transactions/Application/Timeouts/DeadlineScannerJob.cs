@@ -207,24 +207,53 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     /// <para>
     /// <b>Why the separate cap.</b> A round costs up to two rate-limited Steam
     /// reads (08 §2.2), so the delivery phase gets its own, much smaller budget
-    /// per pass. Oldest-first ordering makes the pass deterministic and drains
-    /// a backlog in deadline order.
+    /// per pass.
+    /// </para>
+    /// <para>
+    /// <b>Why the window is fair rather than oldest-first</b> (T127 validation
+    /// finding B2). The same three verdicts that keep the row overdue keep it in
+    /// this query: nothing in the round moves <c>DeliveryDeadline</c> or the
+    /// status. Ordered by deadline, those rows are the OLDEST ones, so they sit
+    /// at the head of the window permanently — and once there are
+    /// <see cref="TimeoutSchedulingOptions.DeliveryVerificationBatchSize"/> of
+    /// them, no delivery that expires afterwards is ever examined again. That is
+    /// the T124 starvation moved into the delivery phase rather than removed.
+    /// So the window is ordered by when each row was last EXAMINED, nulls first:
+    /// a never-examined delivery outranks every held one, and a held row cannot
+    /// come back until <c>DeliveryRoundRecheckSeconds</c> has passed. The
+    /// re-check interval is what keeps the held rows alive — an unreadable
+    /// inventory can become readable, and 08 §2.3 does not let the platform
+    /// treat "cannot see" as settled — while spending the Steam budget on the
+    /// rows that still have a question open.
     /// </para>
     /// <para>
     /// A round that throws costs its own transaction and nothing else: one
     /// unreachable sidecar must not stop the cancellations the other phases owe.
+    /// Its <c>DeliveryRoundAt</c> stamp is written by the round itself before any
+    /// arm runs, so a row that throws every pass still yields its slot instead of
+    /// consuming the whole budget.
     /// </para>
     /// </remarks>
     private async Task<List<Transaction>> RunDeliveryTimeoutRoundsAsync(DateTime now)
     {
+        var recheckBefore = now.AddSeconds(-_options.DeliveryRoundRecheckSeconds);
+
         var overdue = await _db.Set<Transaction>()
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
                         && t.TimeoutFrozenAt == null
                         && t.Status == TransactionStatus.PAYMENT_RECEIVED
                         && t.DeliveryDeadline != null
-                        && t.DeliveryDeadline < now)
-            .OrderBy(t => t.DeliveryDeadline)
+                        && t.DeliveryDeadline < now
+                        && (t.DeliveryRoundAt == null || t.DeliveryRoundAt <= recheckBefore))
+            // Nulls first, then least-recently-examined, then oldest deadline.
+            // The projection is explicit because SQL Server sorts NULL first on
+            // ASC anyway but SQLite (integration tests) does too only by
+            // accident of storage class — the flag makes the contract the
+            // query's own rather than the provider's.
+            .OrderBy(t => t.DeliveryRoundAt == null ? 0 : 1)
+            .ThenBy(t => t.DeliveryRoundAt)
+            .ThenBy(t => t.DeliveryDeadline)
             .Take(_options.DeliveryVerificationBatchSize)
             .ToListAsync();
 
@@ -277,6 +306,27 @@ public sealed class TimeoutSchedulingOptions
     /// rather than saturating the sidecar queue in one.
     /// </remarks>
     public int DeliveryVerificationBatchSize { get; set; } = 20;
+
+    /// <summary>
+    /// How long a transaction that has already had a delivery-verification
+    /// round waits before it may have another (T127). Default 15 minutes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only re-examinations are throttled: a delivery whose deadline has just
+    /// passed carries a null <c>DeliveryRoundAt</c> and is examined on the very
+    /// next pass, so the timeout stays as prompt as the scan interval.
+    /// </para>
+    /// <para>
+    /// The interval exists because three of the five verdicts leave the row
+    /// overdue and eligible forever. Without it those rows would re-enter the
+    /// window every 30 seconds and, being the oldest, would consume the whole
+    /// per-pass budget. Fifteen minutes is short enough that a Steam inventory
+    /// that becomes readable is picked up within the hour and long enough that a
+    /// backlog of held rows costs a bounded number of reads.
+    /// </para>
+    /// </remarks>
+    public int DeliveryRoundRecheckSeconds { get; set; } = 900;
 
     /// <summary>How often the heartbeat self-reschedules. Default 30 seconds (05 §4.4).</summary>
     public int HeartbeatIntervalSeconds { get; set; } = 30;

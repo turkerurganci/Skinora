@@ -103,6 +103,15 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public DateTime? DeliveryVerifiedAt { get; set; }
     public DeliveryEvidence DeliveryEvidence { get; set; }
 
+    // When the delivery-timeout verification round last EXAMINED this row —
+    // written on every round, including the ones that conclude nothing. Three
+    // of the five verdicts leave the row PAYMENT_RECEIVED and permanently
+    // overdue, so the scanner cannot order its (rate-limit bounded) window by
+    // deadline alone: the same oldest rows would refill it forever and a
+    // delivery that expired today would never get a round. Ordering by this
+    // column, nulls first, makes the queue fair by construction (T127).
+    public DateTime? DeliveryRoundAt { get; set; }
+
     // --- Settlement (02 §4.5.1) ---
     // Steam lets either side reverse a protected trade for 7 days, with no
     // Steam Support involvement. Paying out before that window closes would let

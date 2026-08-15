@@ -270,6 +270,141 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         Assert.Equal(3, stillPending);
     }
 
+    /// <summary>
+    /// <b>Finding B2 — the other half of the same hazard.</b> Protecting the
+    /// three self-deciding phases from the held rows (the test above) said
+    /// nothing about protecting the DELIVERY phase from them.
+    /// </summary>
+    /// <remarks>
+    /// Held rows never leave this query: no arm moves <c>DeliveryDeadline</c> or
+    /// the status. Ordered by deadline they are the oldest, so they occupy the
+    /// window permanently — and a delivery that expires afterwards is never
+    /// examined at all. Ordering by "when did we last look", nulls first, is
+    /// what makes that impossible.
+    /// </remarks>
+    [Fact]
+    public async Task Scanner_Examines_A_Never_Rounded_Delivery_Before_Held_Ones()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyerId = (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id;
+
+        // Three rows that have been held for hours — the oldest deadlines in the
+        // system, and all examined moments ago.
+        for (var i = 0; i < 3; i++)
+        {
+            var held = TimeoutTestFixtures.NewTransaction(
+                _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+                deliveryDeadline: nowUtc.AddHours(-5 - i), buyerId: buyerId,
+                buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+            held.DeliveryRoundAt = nowUtc.AddSeconds(-30);
+            Context.Set<Transaction>().Add(held);
+        }
+
+        // And one delivery that just expired and has never had a round.
+        var fresh = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddMinutes(-1), buyerId: buyerId,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        Context.Set<Transaction>().Add(fresh);
+        await Context.SaveChangesAsync();
+
+        var round = TimeoutTestFixtures.NoOpDeliveryRound(_clock);
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            round,
+            TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await sut.ScanAndRescheduleAsync();
+
+        // Under deadline ordering the five-hour-old held row would have taken
+        // the only slot, on this pass and on every pass after it.
+        Assert.Equal([fresh.Id], round.Rounds);
+    }
+
+    /// <summary>
+    /// The rotation the fairness ordering buys: a backlog larger than the
+    /// per-pass budget drains across passes instead of the head of the queue
+    /// consuming it forever.
+    /// </summary>
+    [Fact]
+    public async Task Scanner_Rotates_The_Delivery_Window_Across_Passes()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyerId = (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id;
+
+        for (var i = 0; i < 3; i++)
+        {
+            Context.Set<Transaction>().Add(TimeoutTestFixtures.NewTransaction(
+                _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+                deliveryDeadline: nowUtc.AddMinutes(-10 - i), buyerId: buyerId,
+                buyerRefundAddress: TimeoutTestFixtures.ValidWallet));
+        }
+        await Context.SaveChangesAsync();
+
+        var round = TimeoutTestFixtures.NoOpDeliveryRound(_clock);
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            round,
+            TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
+            NullLogger<DeadlineScannerJob>.Instance);
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            await sut.ScanAndRescheduleAsync();
+            _clock.Advance(TimeSpan.FromSeconds(30));
+        }
+
+        // Three passes, three DISTINCT transactions. Before the fix all three
+        // passes went to the same oldest row.
+        Assert.Equal(3, round.Rounds.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The re-check interval throttles a held row without retiring it: 08 §2.3
+    /// does not let the platform treat "cannot see" as settled, and an
+    /// unreadable inventory can become readable.
+    /// </summary>
+    [Fact]
+    public async Task Scanner_Re_Examines_A_Held_Delivery_Once_The_Recheck_Interval_Passes()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyerId = (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id;
+
+        var due = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddHours(-2), buyerId: buyerId,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        due.DeliveryRoundAt = nowUtc.AddSeconds(-901);
+
+        var tooRecent = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc,
+            deliveryDeadline: nowUtc.AddHours(-3), buyerId: buyerId,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        tooRecent.DeliveryRoundAt = nowUtc.AddSeconds(-899);
+
+        Context.Set<Transaction>().AddRange(due, tooRecent);
+        await Context.SaveChangesAsync();
+
+        var round = TimeoutTestFixtures.NoOpDeliveryRound(_clock);
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            round,
+            TimeoutTestFixtures.Options(deliveryRoundRecheckSeconds: 900),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await sut.ScanAndRescheduleAsync();
+
+        Assert.Equal([due.Id], round.Rounds);
+    }
+
     [Fact]
     public async Task Scanner_Skips_Overdue_When_Frozen()
     {

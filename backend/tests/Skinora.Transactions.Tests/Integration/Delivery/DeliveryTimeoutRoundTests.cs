@@ -369,11 +369,18 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     /// dispute raises one here instead of skipping past a finding nobody was
     /// ever told about.
     /// </summary>
+    /// <remarks>
+    /// The fixture is a recorded CAPTURE, not evidence flags — that is the
+    /// distinction finding B1 turned on. Its twin,
+    /// <see cref="Second_Round_On_An_Unread_Buyer_Side_Still_Does_Not_Escalate"/>,
+    /// carries identical flags and must NOT reach this path.
+    /// </remarks>
     [Fact]
     public async Task Second_Round_On_A_Misdelivery_Re_Asserts_The_Escalation_Without_Reading_Steam()
     {
         var transaction = await CreateOverdueAsync(
             evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
 
         var decision = await Run(transaction);
 
@@ -381,6 +388,98 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
         Assert.Equal([transaction.Id], _escalator.Escalations);
         Assert.Empty(_inventory.ItemReadFreshness);
         Assert.Empty(_inventory.BaselineReadFreshness);
+    }
+
+    /// <summary>
+    /// <b>Finding B1 — the round must not apply on pass two the conclusion the
+    /// engine refused on pass one.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The seller's asset is gone and the buyer's inventory is private. The
+    /// engine verdicts <see cref="DeliveryVerdict.Inconclusive"/> — 02 §10.1
+    /// wants both sides READ before the platform accuses a seller — and the
+    /// round holds. But the observation is persisted, and
+    /// <c>SELLER_ASSET_GONE</c> without <c>INVENTORY_DELTA</c> is precisely what
+    /// <c>IsMisdeliverySignature()</c> tests, so a re-entry gate reading the
+    /// flags would fire on the very next pass and open a dispute against a
+    /// seller who may well have delivered — 30 seconds after the round that
+    /// deliberately declined to.
+    /// </para>
+    /// <para>
+    /// Both passes run the full engine here. That is the point: nothing was
+    /// concluded, so nothing may be short-circuited.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Second_Round_On_An_Unread_Buyer_Side_Still_Does_Not_Escalate()
+    {
+        var transaction = await CreateOverdueAsync();
+        _inventory.ForcedBaselineVisibility = InventoryVisibility.Private;
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, await Run(transaction));
+        await Context.SaveChangesAsync();
+
+        // The flags the old gate read are on record — the fixture is real.
+        var afterFirstRound = await ReloadAsync(transaction.Id);
+        Assert.True(afterFirstRound.DeliveryEvidence.IsMisdeliverySignature());
+        Assert.Empty(await Context.Set<DeliveryEvidenceCapture>().AsNoTracking().ToListAsync());
+
+        _clock.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, await Run(transaction));
+        await Context.SaveChangesAsync();
+
+        Assert.Empty(_escalator.Escalations);
+        var persisted = await ReloadAsync(transaction.Id);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, persisted.Status);
+        Assert.False(persisted.HasActiveDispute);
+        Assert.Null(persisted.CancelledAt);
+    }
+
+    /// <summary>
+    /// The scanner's fairness window (finding B2) is ordered by this stamp, so
+    /// every round must write it — including the arms that conclude nothing,
+    /// which are exactly the rows that would otherwise never yield their slot.
+    /// </summary>
+    [Fact]
+    public async Task Every_Round_Stamps_When_The_Row_Was_Last_Examined()
+    {
+        var transaction = await CreateOverdueAsync();
+        _inventory.ForcedVisibility = InventoryVisibility.Unavailable;
+        _inventory.ForcedBaselineVisibility = InventoryVisibility.Unavailable;
+
+        var firstRoundAt = _clock.GetUtcNow().UtcDateTime;
+        Assert.Equal(DeliveryTimeoutDecision.Held, await Run(transaction));
+        await Context.SaveChangesAsync();
+        Assert.Equal(firstRoundAt, (await ReloadAsync(transaction.Id)).DeliveryRoundAt);
+
+        _clock.Advance(TimeSpan.FromMinutes(20));
+        var secondRoundAt = _clock.GetUtcNow().UtcDateTime;
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, await Run(transaction));
+        await Context.SaveChangesAsync();
+        Assert.Equal(secondRoundAt, (await ReloadAsync(transaction.Id)).DeliveryRoundAt);
+    }
+
+    /// <summary>
+    /// And the short-circuits stamp too — a row an admin already owns is the
+    /// most persistent occupant of the window, so it is the one that must
+    /// hand its slot back.
+    /// </summary>
+    [Fact]
+    public async Task A_Short_Circuited_Round_Stamps_The_Examination_Too()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, await Run(transaction));
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime,
+            (await ReloadAsync(transaction.Id)).DeliveryRoundAt);
     }
 
     /// <summary>
@@ -448,6 +547,27 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     {
         Context.ChangeTracker.Clear();
         return await Context.Set<Transaction>().FirstAsync(t => t.Id == transactionId);
+    }
+
+    /// <summary>
+    /// Seed the record of a conclusion an earlier round reached — the row the
+    /// re-entry gate reads (06 §3.5a).
+    /// </summary>
+    private async Task RecordCaptureAsync(Guid transactionId, DeliveryVerdict verdict)
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        Context.Set<DeliveryEvidenceCapture>().Add(new DeliveryEvidenceCapture
+        {
+            TransactionId = transactionId,
+            ObservedAt = nowUtc,
+            Verdict = verdict.ToString(),
+            Evidence = DeliveryEvidence.SELLER_ASSET_GONE,
+            AutoReleaseGated = false,
+            Payload = "{}",
+            CreatedAt = nowUtc,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
     }
 
     /// <summary>

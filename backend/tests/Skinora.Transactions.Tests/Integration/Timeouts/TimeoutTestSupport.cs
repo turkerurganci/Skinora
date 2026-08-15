@@ -90,7 +90,7 @@ internal sealed class NoOpTimeoutSideEffectPublisher : ITimeoutSideEffectPublish
 /// phases whose deadline decides on its own. Used by the tests that exercise
 /// those phases; the delivery-phase tests inject the real round.
 /// </summary>
-internal sealed class NoOpDeliveryTimeoutRound : IDeliveryTimeoutRound
+internal sealed class NoOpDeliveryTimeoutRound(TimeProvider? clock = null) : IDeliveryTimeoutRound
 {
     public List<Guid> Rounds { get; } = [];
 
@@ -100,6 +100,15 @@ internal sealed class NoOpDeliveryTimeoutRound : IDeliveryTimeoutRound
         Transaction transaction, CancellationToken cancellationToken)
     {
         Rounds.Add(transaction.Id);
+
+        // The real round stamps this before any arm runs, and the scanner's
+        // fairness window is ordered by it (T127 finding B2). Supplied with a
+        // clock, the double honours that half of the contract so a multi-pass
+        // test sees the rotation; without one it stays inert for the tests that
+        // only care that the delivery phase was reached.
+        if (clock is not null)
+            transaction.DeliveryRoundAt = clock.GetUtcNow().UtcDateTime;
+
         return Task.FromResult(Decision);
     }
 }
@@ -270,13 +279,15 @@ internal static class TimeoutTestFixtures
     /// are not about the delivery phase: every overdue delivery is held, which
     /// is also the production behaviour whenever the platform cannot conclude.
     /// </summary>
-    public static NoOpDeliveryTimeoutRound NoOpDeliveryRound() => new();
+    public static NoOpDeliveryTimeoutRound NoOpDeliveryRound(TimeProvider? clock = null)
+        => new(clock);
 
     public static IOptions<TimeoutSchedulingOptions> Options(
         int scannerSeconds = 30,
         int batchSize = 200,
         int recoveryThresholdSeconds = 60,
-        int deliveryVerificationBatchSize = 20)
+        int deliveryVerificationBatchSize = 20,
+        int deliveryRoundRecheckSeconds = 900)
         => Microsoft.Extensions.Options.Options.Create(new TimeoutSchedulingOptions
         {
             DeadlineScannerIntervalSeconds = scannerSeconds,
@@ -284,6 +295,7 @@ internal static class TimeoutTestFixtures
             HeartbeatIntervalSeconds = 30,
             RecoveryThresholdSeconds = recoveryThresholdSeconds,
             DeliveryVerificationBatchSize = deliveryVerificationBatchSize,
+            DeliveryRoundRecheckSeconds = deliveryRoundRecheckSeconds,
         });
 }
 

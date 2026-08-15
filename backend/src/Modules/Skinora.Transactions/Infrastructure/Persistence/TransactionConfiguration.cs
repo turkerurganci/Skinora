@@ -244,6 +244,12 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .HasDatabaseName("IX_Transactions_CreatedAt");
 
         // Delivery verification / seller non-delivery sweep (02 §9.2).
+        //
+        // T127 orders the sweep by DeliveryRoundAt (nulls first) rather than by
+        // the deadline. No index change: this filtered index still resolves the
+        // predicate, and what it hands the sort is only the overdue
+        // PAYMENT_RECEIVED rows — a set bounded by how many deliveries are in
+        // flight, not by table size.
         builder.HasIndex(t => new { t.Status, t.DeliveryDeadline })
             .HasFilter("[Status] = 'PAYMENT_RECEIVED'")
             .HasDatabaseName("IX_Transactions_Delivery_Pending");

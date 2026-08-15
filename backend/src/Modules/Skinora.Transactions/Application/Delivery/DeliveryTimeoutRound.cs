@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
@@ -87,6 +88,13 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
 
+        // Stamped before any arm runs, including the short-circuits below: the
+        // scanner's fairness window asks "when did we last LOOK at this row",
+        // not "when did we last conclude something" (T127 validation finding
+        // B2). A round that reaches no conclusion is exactly the one that must
+        // step aside so a never-examined delivery can take its slot.
+        transaction.DeliveryRoundAt = nowUtc;
+
         // ---------- Re-entry: the signature is already on record ----------
         // A held transaction stays overdue forever, so every scanner pass
         // reaches it again. The verification engine already short-circuits when
@@ -95,13 +103,24 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         // re-deriving it would spend two rate-limited inventory reads per pass
         // on a question that already has an owner.
         //
+        // The gate asks the CAPTURE, not the evidence flags (T127 validation
+        // finding B1). Both name the same three bits, but only one of them
+        // carries the qualifier the engine applies: a signature needs
+        // sellerSideKnown && buyerSideKnown (DeliveryVerificationService), so
+        // "seller's asset gone + buyer's inventory private" raises
+        // SELLER_ASSET_GONE and still verdicts Inconclusive — the platform
+        // cannot see, which 08 §2.3 forbids reading as a negative finding.
+        // Gating on the bare flag test made the next pass escalate a seller who
+        // may well have delivered; gating on a recorded MisdeliverySignature
+        // verdict cannot, because that verdict is the engine's own conclusion.
+        //
         // The escalation is re-asserted rather than assumed. It is idempotent
         // and costs one indexed read, and that turns the only partial-commit
         // hazard in this file into a self-healing one: if a previous pass
-        // committed the evidence flag but its escalation was rolled back, this
-        // pass raises the dispute instead of skipping past a signature nobody
-        // was ever told about.
-        if (transaction.DeliveryEvidence.IsMisdeliverySignature())
+        // committed the capture but its escalation was rolled back, this pass
+        // raises the dispute instead of skipping past a signature nobody was
+        // ever told about.
+        if (await MisdeliveryAlreadyConcludedAsync(transaction.Id, cancellationToken))
         {
             var reasserted = await _escalator.EscalateAsync(transaction, nowUtc, cancellationToken);
             _logger.LogDebug(
@@ -338,4 +357,34 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     private static bool SellerProvenToStillHoldTheItem(DeliveryVerificationResult result)
         => result.SellerVisibility == InventoryVisibility.Public
             && !result.Evidence.HasFlag(DeliveryEvidence.SELLER_ASSET_GONE);
+
+    /// <summary>
+    /// Whether a previous round actually reached
+    /// <see cref="DeliveryVerdict.MisdeliverySignature"/> on this transaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The capture is the record of the engine's conclusion, and the conclusion
+    /// is what the re-entry gate needs — <c>Transaction.DeliveryEvidence</c>
+    /// holds observations, and an observation of <c>SELLER_ASSET_GONE</c> is
+    /// raised on paths the engine deliberately refuses to call a signature.
+    /// </para>
+    /// <para>
+    /// The verdict is compared by name because that is how the column stores it
+    /// (06 §3.5a): these rows outlive the enum's ordering. One indexed seek on
+    /// <c>IX_DeliveryEvidenceCaptures_TransactionId</c>, and the answer never
+    /// reverts — the escalation it stands for is a dispute row an admin owns.
+    /// </para>
+    /// </remarks>
+    private Task<bool> MisdeliveryAlreadyConcludedAsync(
+        Guid transactionId, CancellationToken cancellationToken)
+        => _db.Set<DeliveryEvidenceCapture>()
+            .AsNoTracking()
+            .AnyAsync(
+                c => c.TransactionId == transactionId
+                     && c.Verdict == MisdeliverySignatureVerdictName,
+                cancellationToken);
+
+    private static readonly string MisdeliverySignatureVerdictName =
+        nameof(DeliveryVerdict.MisdeliverySignature);
 }
