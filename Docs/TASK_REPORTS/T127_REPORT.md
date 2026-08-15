@@ -1,11 +1,12 @@
 # T127 — DeadlineScannerJob'a teslimat doğrulama turu
 
-**Faz:** F7 | **Durum:** ⏳ **Düzeltme turu tamamlandı — yeniden doğrulama bekliyor** | **Tarih:** 2026-08-15
+**Faz:** F7 | **Durum:** ✓ **Tamamlandı — yeniden doğrulama ✓ PASS** | **Tarih:** 2026-08-16
 
-> Bu rapor iki turu birden taşır. Aşağıdaki **Yapılan İşler → Doğrulama** bölümleri **ilk turun**
-> kaydıdır ve olduğu gibi korunmuştur; bağımsız doğrulamanın ✗ FAIL verdict'i ve beş bulgusu
-> [Doğrulama](#doğrulama) bölümündedir. Bulguların nasıl kapatıldığı en sonda,
-> [Düzeltme Turu](#düzeltme-turu-2026-08-15) bölümündedir.
+> Bu rapor üç turu birden taşır. Aşağıdaki **Yapılan İşler → Doğrulama** bölümleri **ilk turun**
+> kaydıdır ve olduğu gibi korunmuştur; birinci bağımsız doğrulamanın ✗ FAIL verdict'i ve beş bulgusu
+> [Doğrulama](#doğrulama) bölümündedir. Bulguların nasıl kapatıldığı
+> [Düzeltme Turu](#düzeltme-turu-2026-08-15) bölümünde, **ikinci bağımsız doğrulamanın ✓ PASS
+> verdict'i** ise en sonda [Yeniden Doğrulama](#yeniden-doğrulama-2026-08-16--pass) bölümündedir.
 
 ---
 
@@ -141,9 +142,9 @@ Scanner'ın bağımlılık zinciri T127 ile **ilk kez kendi assembly'sinden çı
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✗ **FAIL** (bağımsız chat, 2026-08-15, commit `d81f98e`) |
-| Bulgu sayısı | 5 — **3 bloke edici** (B1 S1 · B2 S2 · B3 S2) + 2 bloke etmeyen (B4 S1 süreç · B5 S1 pre-existing) |
-| Düzeltme gerekli mi | **Evet.** Branch merge edilmedi, `IMPLEMENTATION_STATUS.md` ✓ yapılmadı. Düzeltme yeni yapım chat'inde, ardından yeni doğrulama chat'i |
+| Doğrulama durumu | **TUR 1: ✗ FAIL** (bağımsız chat, 2026-08-15, commit `d81f98e`) → düzeltme turu → **TUR 2: ✓ PASS** (bağımsız chat, 2026-08-16, commit `207e691` — [Yeniden Doğrulama](#yeniden-doğrulama-2026-08-16--pass)) |
+| Bulgu sayısı | Tur 1: 5 — **3 bloke edici** (B1 S1 · B2 S2 · B3 S2) + 2 bloke etmeyen (B4 S1 süreç · B5 S1 pre-existing). Tur 2: **0 bloke edici** + 4 bloke etmeyen gözlem (G1–G4, hepsi pre-existing) |
+| Düzeltme gerekli mi | **Hayır** (tur 2 itibarıyla). Tur 1'in üç bloke edici bulgusu kapatıldı, B4 kapatıldı, B5 T130'a devredildi |
 
 **Kapılar:** Adım −1 working tree temiz · Adım 0 main CI son 3 run (`31880715941`, `31880715937`, `31880257963`) hepsi `success` · Adım 0b repo memory T127 satırı mevcut · Adım 8a task branch CI run [`31884937003`](https://github.com/turkerurganci/Skinora/actions/runs/31884937003) **CI Gate `success`**, bloke edici 8 job yeşil (Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker backend · CI Gate).
 
@@ -385,6 +386,138 @@ ritmi, operatör sonuçları)
 - **Güvenlik:** yeni bağımlılık yok, yeni endpoint/authz yüzeyi yok, secret yok. Para hareketi etkisi
   **daralıyor**: B1 düzeltmesi hatalı dispute'u, B2 düzeltmesi ise "timeout hiç çalışmıyor" durumunu
   kaldırıyor; iptali yetkilendiren tek koşul (`SellerProvenToStillHoldTheItem`) değişmedi.
+
+## Yeniden Doğrulama (2026-08-16) — ✓ PASS
+
+**Bağımsız chat, yapım raporu görülmeden başladı.** Verdict önce koddan üretildi, rapor karşılaştırması
+en sonda yapıldı (INSTRUCTIONS.md §3.3 izolasyon kuralı).
+
+### Verdict: ✓ PASS
+
+**Kapılar:** Adım −1 working tree temiz · Adım 0 main CI son 3 run (`31880715941` · `31880715937` ·
+`31880257981`) hepsi `success` · Adım 0b repo memory T127 satırı mevcut · Adım 8a task branch CI
+HEAD `207e691` run [`31907664975`](https://github.com/turkerurganci/Skinora/actions/runs/31907664975)
+**CI Gate `success`**, bloke edici 8 job yeşil (Lint · Build · Unit · Integration · Contract ·
+Migration dry-run · Docker backend · CI Gate).
+
+### Kabul kriterleri — bağımsız verdict
+
+Plan `11 §P3 T127`'nin **dokuz** maddesi (altı özgün + düzeltme turunda kabul kriteri olarak eklenen
+B1/B2/B3). Hepsi kodda izlendi, kanıtla kapatıldı.
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | Kanıt tamsa ITEM_DELIVERED | ✓ | `DeliveryTimeoutRound.DeliverAsync` — `DeliveryVerifiedAt` guard'dan **önce** damgalanıyor (`HasDeliveryEvidence` onu okur); refuse hâlinde alan alan rollback var. `Complete_Evidence_Delivers_Instead_Of_Cancelling` |
+| 2 | SELLER_ASSET_GONE + delta yok → dispute | ✓ | `EscalateAsync` → `MisdeliveryDisputeEscalator`; `UQ_Disputes_TransactionId_Type` filtresiz olduğu için 4 durumun dördü de enumere edilmiş (`Opened`/`Promoted`/`AlreadyEscalated`/`AlreadyResolved`), `IgnoreQueryFilters` soft-delete'i de görüyor |
+| 3 | T124 kapısı kaldırıldı, dal tüketiyor | ✓ | `grep -rn "ReportGatedDeliveryTimeoutsAsync\|GatedDelivery" backend/` **boş** — metot yok. Dal tüketiyor. Ayrı sorgu + ayrı tavan sapması artık plana **NİHAİ ŞEKİL** olarak yazılı (proje sahibi onaylı) → kriter kaynağıyla uyumlu, tur 1'deki `~` gerekçesi (B4) ortadan kalktı |
+| 4 | Ters çevrilen iki test eski beklentisine döndü | ✓ | `grep -rn "Until_T127"` **boş**. Yerlerine `Scanner_Cancels_An_Overdue_Delivery_When_The_Round_Authorises_It` + `Delivery_Timeout_Publishes_Notification_And_PaymentRefund` (T124 öncesi adına birebir dönüş) |
+| 5 | Launch kapısı invariantı | ✓ | `HoldForReview` `DeliveryVerifiedAt`'e **dokunmuyor**, capture yazıyor. Test üç şeyi birden assert ediyor: status · `DeliveryVerifiedAt` NULL · capture `AutoReleaseGated=1` |
+| 6 | Ön koşul — freeze/resume faz kayması | ✓ | `ArmDeliveryDeadlineAsync` `TimeoutFrozenAt != null` iken `TimeoutRemainingSeconds`'ı yeniden yakalıyor — 05 §4.4 *"Otorite: reschedule'ın kaynağı `TimeoutRemainingSeconds`'tır"* ile hizalı (türetilmiş deadline değil, otorite alanı düzeltiliyor). **Emergency-hold varyantı da kapsanıyor:** `AdminTransactionService:415` release yolu aynı `_freeze.ResumeAsync`'ten geçiyor |
+| 7 | **B1** — re-entry kapısı motorun niteleyicisini taşır | ✓ | Kapı `DeliveryEvidenceCaptures.Verdict == "MisdeliverySignature"` okuyor. **Kaynağın eksiksizliği bağımsız doğrulandı:** `BuildCapture.worthCapturing` = `InventoryEvidencePendingReview \| MisdeliverySignature \| (Delivered && gateOpen)` → (a) her gerçek imza **her zaman** capture yazar, (b) `Inconclusive` **hiç** yazmaz. Zincir testle değil **yapıyla** kırık |
+| 8 | **B2** — teslimat penceresi aç kalmaz | ✓ | `DeliveryRoundAt` (nulls-first CASE projeksiyonu, provider default'una dayanmıyor) + `DeliveryRoundRecheckSeconds`. Damga `RunAsync`'in ilk satırında, kısa devrelerden **önce**; entity tracked olduğu için tur throw etse bile `SaveChanges`'e ulaşıyor (`ChangeTracker.HasChanges()` erken-dönüş guard'ı da bunu koruyor). Sıralama **gerçek SQL Server**'a karşı sınanıyor (`IntegrationTestBase` → Testcontainers MsSql), yani EF çevirisi de kanıtlanmış |
+| 9 | **B3** — SYSTEM dispute'unda gerçek alıcı bildirim alır | ✓ | `transaction.BuyerId ?? dispute.OpenedByUserId`. Kaynakta düzeltme — tüm dispute tipleri için doğru kalıyor; escalator'ın kendi `DisputeEscalatedEvent`'i zaten `transaction.BuyerId` kullanıyordu |
+
+### Doküman uyumu
+
+- **03 §4.4 adım 1** üç yollu eşleme ↔ tur kolları **birebir**.
+- **05 §4.4** scanner-driven teslimat fazı + iptalden önce doğrulama turu + `TimeoutRemainingSeconds` otoritesi ✓.
+- **02 §9.2 / §10.1** yanlış-teslimat *"sessizce iptal edilmez"* ✓; **08 §2.3** bilgi yokluğu olumsuz bulgu sayılmıyor ✓ (`SellerProvenToStillHoldTheItem` tek pozitif koşul).
+- **06 §3.5** `DeliveryRoundAt` satırı eklenmiş ✓ · **DEPLOY_RUNBOOK §H.2** tarama ritmi + operatör sonuçları yazılmış ✓ · **11 §P3 T127** AC3 nihai şekli + B1/B2/B3 kriterleri yazılmış ✓ (B4 kapandı).
+
+### Bağımsız test koşumu
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build (Release) | ✓ **0 error / 0 warning** | `dotnet build Skinora.sln -c Release` |
+| Unit | ✓ **1382/1382** (13 assembly, 0 fail) | `--filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Integration | ✓ **1266/1266** (10 assembly, 0 fail) | `--filter "FullyQualifiedName~.Integration"` |
+| Contract | ✓ **9/9** (API 4 + Shared 5) | `--filter "FullyQualifiedName~.Contract"` |
+| Odaklı — T127 çekirdeği | ✓ **68/68** | `~DeliveryTimeoutRoundTests\|~DeadlineScannerJob\|~TimeoutFreezeServiceTests\|~TimeoutSchedulingServiceTests` |
+| Odaklı — escalator + DI | ✓ **8/8** | `~MisdeliveryDisputeEscalator\|~DisputesModuleRegistration` |
+| Odaklı — admin dispute | ✓ **12/12** | `~AdminDisputeServiceTests` |
+
+Üç sayı da yapım raporunun düzeltme turu ölçümleriyle **birebir**.
+
+> **Ölçüm notu (validator'ın kendi hatası, kayda geçiriliyor).** Integration ilk koşumda **41 fail**
+> verdi (Auth 26 · Notifications 10 · Disputes 5). Sebep T127 değil, **validator'ın kendi kaynak
+> açlığı**: unit + contract + integration suite'leri eşzamanlı koşturuldu ve makinede zaten tam bir
+> `docker compose` yığını (backend · frontend · nginx · redis · mssql · 3 sidecar · grafana · loki ·
+> prometheus) ayaktaydı → Testcontainers MsSql örnekleri timeout'a düştü. Üç assembly de **seri**
+> koşumda temiz: Auth **37/37** (2 dk 5 sn → 21 sn), Notifications **60/60** (2 dk 52 sn → 27 sn),
+> Disputes **50/50** (5 dk 30 sn → 39 sn). Süre farkı tek başına teşhisi kanıtlıyor. Yukarıdaki
+> 1266 rakamı seri koşumların toplamıdır. **Ders:** Testcontainers kullanan suite'ler paralel
+> koşturulmamalı — bir sonraki validator bu tuzağa düşmesin.
+
+### Güvenlik kontrolü
+
+| Kontrol | Sonuç |
+|---|---|
+| Secret sızıntısı | **Temiz** — `git diff origin/main...HEAD` üzerinde secret/anahtar/connection-string taraması boş (tek eşleşme bir test fixture'ının sahte trade URL token'ı) |
+| Auth / authorization | **Temiz** — yeni endpoint yok; `AdminDisputeService` değişikliği mevcut yetkili admin akışında bir bugfix, yetki yüzeyine dokunmuyor |
+| Input validation | **Temiz** — yeni dış girdi yüzeyi yok; tur yalnız arka plan job'ından çağrılıyor |
+| Yeni bağımlılık | **Yok** — `*.csproj` / `*.props` / lock dosyası diff'i boş |
+| Migration | **Güvenli** — tek nullable `datetime2` kolon, veri taşıma yok, `Down` → `DropColumn`. Model snapshot delta **tek property** (`AppDbContextModelSnapshot.cs` +3 satır), yani model ↔ migration senkron; CI `6. Migration dry-run` ✓ |
+| Para hareketi | **Var, kasıtlı ve daralmış** — iptali yetkilendiren tek koşul `SellerProvenToStillHoldTheItem` değişmedi |
+
+### Advisory E2E (8 leg) — T127 kaynaklı DEĞİL, bağımsız teyit
+
+Yapım raporunun tespiti **karşı kanıtla** doğrulandı: T126 dalının run'ı
+[`31880109821`](https://github.com/turkerurganci/Skinora/actions/runs/31880109821) — yani T127 hiç
+yokken — **birebir aynı 8 leg**'de `failure`. İmza iki yönlü: `Invalid object name 'PlatformSteamBots'`
+(T117'nin düşürdüğü bot tablosu) **ve** spec adlarındaki emekli v2.0 statüleri
+(`TRADE_OFFER_SENT_TO_SELLER`, `ITEM_ESCROWED`, `TRADE_OFFER_SENT_TO_BUYER`). Sahiplik planda zaten
+tanımlı: `Task T138: E2E spec'lerinin yeniden yazımı`. `continue-on-error` + CI Gate'ten hariç.
+
+### Bloke etmeyen gözlemler (yeni — proje sahibi kararı gerekiyor)
+
+Dördü de **pre-existing** ve **hiçbiri T127'nin kabul kriterlerinde değil**; hiçbiri merge'i bloke
+etmiyor. Plana yazılmadılar — kapsam değişikliği proje sahibi onayı gerektirir (GUARDRAILS §3).
+
+**G1 (S1, pre-existing — erişilebilirliği T127 genişletiyor). Timeout iptali açık dispute'u kapatmıyor.**
+02 §10.2: *"Dispute açık bir işlem timeout nedeniyle iptal olabilir — **bu durumda dispute otomatik
+kapanır** ve standart iade kuralları uygulanır."* Cümlenin ikinci yarısının kodda karşılığı **yok**:
+`DisputeStatus.CLOSED` yalnız `DisputeService`'in submit-txhash auto-resolve yolunda yazılıyor;
+`TimeoutSideEffectPublisher` ve `DeadlineScannerJob` dispute'a hiç dokunmuyor. **Pre-existing** çünkü
+`PAYMENT` dispute'u `SELLER_CONFIRMED`'da açılabiliyor (`DisputeEligibility`) ve o fazın timeout'u
+T124'ten önce de tüketiyordu. T127 aynı boşluğu teslimat fazına da erişilebilir yapıyor. Zarar sınırlı
+(para zaten alıcıya dönüyor), ama admin `BUYER_FAVOR` ile kapatmayı denerse `AdminResolveRefund`
+`CANCELLED_TIMEOUT`'tan reddedilir — pratik çıkış yalnız `SELLER_FAVOR`. Sahipsiz.
+
+**G2 (S1, pre-existing). Freeze/resume faz kaymasının iki kardeşi açık.** T127 `DeliveryDeadline`
+yazıcısını kapattı (AC6, kriterin kapsamı tam olarak bu). Aynı desenin diğer iki örneği duruyor:
+`TransactionAcceptanceService.cs:258` (CREATED'da donmuşken accept → `SellerConfirmDeadline`'a
+**accept** fazının artığı) ve `TransactionReadinessService.cs:249` (ACCEPTED'da donmuşken confirm-ready
+→ `PaymentDeadline`'a **seller-confirm** artığı). İkisi de T127'den bağımsız olarak **bugün** tüketiliyor,
+yani zarar yeni değil — ama T124'ün *"bir kapı, koruduğu DEĞERİN diğer yazarlarını da denetlemeli"*
+dersi bu iki kolon için hâlâ uygulanmadı.
+
+**G3 (S1, düşük). SELLER_FAVOR ile çözülen SYSTEM misdelivery dispute'u satırı kalıcı bırakıyor.**
+`AdminDisputeService` yalnız `BUYER_FAVOR`'da state geçişi yapıyor; `SELLER_FAVOR`'da işlem
+`PAYMENT_RECEIVED`'da ve süresi dolmuş kalıyor. Re-entry kapısı bu satıra her
+`DeliveryRoundRecheckSeconds`'ta bir dönüp `AlreadyResolved` uyarı logu üretiyor ve rotasyonda bir slot
+tutuyor. Terminal disposition **T131**'in (`AdminDisputeService — item-refund bacağı + override`) işi;
+gürültü sınırlı ve B2 düzeltmesi sayesinde yeni teslimatları aç bırakmıyor.
+
+**G4 (kozmetik, T117 kalıntısı).** `DisputeService` sınıf XML doc'u (`<b>Per-type allowed states:</b>`)
+hâlâ emekli v2.0 statülerini sayıyor (`TRADE_OFFER_SENT_TO_BUYER`, `ITEM_ESCROWED`) oysa kanonik
+`DisputeEligibility` v3.0. T127 bu dosyaya dokunmadı.
+
+### Yapım raporu karşılaştırması
+
+**Tam uyumlu — uyuşmazlık yok.** Bağımsız verdict (9/9 ✓) ile raporun düzeltme turu iddiaları örtüşüyor;
+üç test sayısı da (1382 · 1266 · 9) birebir tuttu. Raporun kendi öz-eleştirisi doğrulandı: tur 1'in
+`~` işaretli AC3'ü, sapmanın kaynak plana yazılmasıyla (B4) artık `✓` — kriterin kaynağı değişti,
+kod değil.
+
+Raporun **doğrulanamayan tek iddiası yok**; B1 fix'inin dayandığı *"her `MisdeliverySignature` verdict'i
+her zaman capture yazar"* önermesi bağımsız olarak `worthCapturing` üzerinden teyit edildi — bu
+önerme yanlış olsaydı fix sessizce etkisiz kalırdı, dolayısıyla kontrol edilmesi zorunluydu.
+
+**KALICI DERS (validator tarafı):** bir düzeltmenin *"X'i okuyoruz artık"* iddiası, **X'in ne zaman
+yazıldığını** denetlemeden onaylanamaz. B1'in tamamı `worthCapturing`'in şekline bağlıydı ve o şart
+başka bir dosyada, başka bir task'ın (T125) kodundaydı.
+
+---
 
 ## Notlar
 
