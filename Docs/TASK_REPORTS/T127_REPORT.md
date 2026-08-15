@@ -121,9 +121,11 @@ Scanner'ın bağımlılık zinciri T127 ile **ilk kez kendi assembly'sinden çı
 ## Commit & PR
 
 - Branch: `task/T127-delivery-timeout-round`
-- Commit: `9314fea` — T127: DeadlineScannerJob'a teslimat dogrulama turu
+- Commit: `9314fea` (yapım) · `bec894f` (DI kapısı + rapor)
 - PR: [#238](https://github.com/turkerurganci/Skinora/pull/238)
-- CI: (izleniyor — sonuç aşağıya yazılacak)
+- **CI: ✓ PASS** — HEAD `bec894f`, run [`31884389878`](https://github.com/turkerurganci/Skinora/actions/runs/31884389878), `conclusion=success`. Bloke edici job'ların hepsi yeşil: Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker (backend) · **CI Gate**. (`0. Guard` ve `3b. JS test` skipped — sırasıyla direct-push guard'ı ve değişmeyen FE/sidecar yolu.)
+- Önceki run [`31884253788`](https://github.com/turkerurganci/Skinora/actions/runs/31884253788) (`9314fea`) `cancelled` — ikinci push'un concurrency iptali, başarısızlık değil.
+- **8 advisory E2E leg kırmızı — T127 kaynaklı DEĞİL.** İmza CI logundan doğrulandı: `Invalid object name 'PlatformSteamBots'` — `e2e/src/db.ts` seed'i T117'nin düşürdüğü bot tablosunu temizliyor. T117'den beri her F7 task'ında aynı; sahiplik **T137 → T138**. `continue-on-error` olduklarından CI Gate'i bloke etmiyorlar.
 
 ## Known Limitations / Follow-up
 
