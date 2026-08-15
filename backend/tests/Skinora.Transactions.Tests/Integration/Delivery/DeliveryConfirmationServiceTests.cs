@@ -110,6 +110,11 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         Assert.Equal(TransactionStatus.ITEM_DELIVERED, persisted.Status);
         Assert.Equal(DeliveryEvidence.BUYER_CONFIRMED, persisted.DeliveryEvidence);
         Assert.NotNull(persisted.DeliveryVerifiedAt);
+        // 06 §3.5 — the column defined for exactly this action. Same instant as
+        // DeliveryVerifiedAt on this route and NULL on every other one, which is
+        // how a later reader tells a buyer-confirmed delivery from one the
+        // platform inferred (T127 / T130).
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.BuyerConfirmedReceiptAt);
         // Stamped by the ITEM_DELIVERED OnEntry, which is what T129's settlement
         // window will later be measured from (02 §4.5.1).
         Assert.NotNull(persisted.ItemDeliveredAt);
@@ -315,6 +320,11 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         Assert.Single(await Context.Set<TransactionHistory>()
             .AsNoTracking().Where(h => h.TransactionId == transaction.Id).ToListAsync());
         Assert.Single(_outbox.Published);
+
+        // The confirmation instant belongs to the first call; the repeat must
+        // not move it forward by the five minutes the clock advanced.
+        var persisted = await ReloadAsync(transaction.Id);
+        Assert.Equal(first.Body.DeliveryVerifiedAt, persisted.BuyerConfirmedReceiptAt);
     }
 
     /// <summary>
@@ -342,6 +352,9 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         Assert.Equal(
             DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA,
             persisted.DeliveryEvidence);
+        // 06 §3.5 — nor is a confirmation timestamp invented for a buyer who
+        // never gave one.
+        Assert.Null(persisted.BuyerConfirmedReceiptAt);
         Assert.Empty(_outbox.Published);
     }
 
@@ -444,6 +457,7 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         var persisted = await ReloadAsync(transaction.Id);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, persisted.Status);
         Assert.Null(persisted.DeliveryVerifiedAt);
+        Assert.Null(persisted.BuyerConfirmedReceiptAt);
         Assert.Equal(DeliveryEvidence.NONE, persisted.DeliveryEvidence);
         Assert.Empty(_outbox.Published);
         Assert.Empty(await Context.Set<TransactionHistory>()
@@ -477,6 +491,7 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         var persisted = await ReloadAsync(transactionId);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, persisted.Status);
         Assert.Null(persisted.DeliveryVerifiedAt);
+        Assert.Null(persisted.BuyerConfirmedReceiptAt);
         Assert.Equal(DeliveryEvidence.NONE, persisted.DeliveryEvidence);
         Assert.Empty(_outbox.Published);
     }

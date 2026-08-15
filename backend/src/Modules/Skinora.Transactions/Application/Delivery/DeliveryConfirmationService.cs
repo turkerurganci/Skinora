@@ -150,10 +150,21 @@ public sealed class DeliveryConfirmationService : IDeliveryConfirmationService
                 "Delivery is held for review and cannot be confirmed (02 §9.2 launch gate).");
         }
 
-        // ---------- Stage 7: stamp the evidence timestamp ----------
+        // ---------- Stage 7: stamp the evidence timestamps ----------
         // 02 §9.2 invariant: DeliveryVerifiedAt must be set BEFORE the
         // state-machine guard fires (HasDeliveryEvidence).
         transaction.DeliveryVerifiedAt = nowUtc;
+
+        // 06 §3.5 — "Alıcının 'teslim aldım' onayını verdiği an". The two
+        // columns carry the same value here and only here: DeliveryVerifiedAt
+        // says when delivery was established by ANY route, this one says the
+        // route was the buyer's own word. T127's timeout round and T130's
+        // dispute round will stamp the former without ever touching this, which
+        // is what makes the pair worth keeping apart — the evidence flags say
+        // WHAT was concluded, these say WHEN each conclusion was reached.
+        // Stamped here rather than beside the Stage 5 flag so the gated branch
+        // above keeps writing nothing at all.
+        transaction.BuyerConfirmedReceiptAt = nowUtc;
 
         // 06 §8.4 — best-effort audit material, never a guard. Null on this path
         // today (the short-circuit reads no inventory), and only ever written

@@ -1,6 +1,6 @@
 # T126 — POST /transactions/:id/confirm-receipt
 
-**Faz:** F7 (P3 — Teslimat) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-15
+**Faz:** F7 (P3 — Teslimat) | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS | **Tarih:** 2026-08-15
 
 ---
 
@@ -85,6 +85,46 @@
 - PR: [#236](https://github.com/turkerurganci/Skinora/pull/236)
 - CI: **✓ PASS** — run [`31876488303`](https://github.com/turkerurganci/Skinora/actions/runs/31876488303), **CI Gate `success`**. Bloke edici 12 job yeşil (Detect paths · 1. Lint · 2. Build · 3. Unit · 4. Integration · 5. Contract · 6. Migration dry-run · 7. Docker build backend · CI Gate); `0. Guard` skipped (PR event), `3b. JS test (vitest)` skipped (frontend/sidecar yolu değişmedi).
 - **Advisory E2E (8 leg) kırmızı — T126 kaynaklı DEĞİL.** İmza `RequestError: Invalid object name 'PlatformSteamBots'` (+ ardıl `PK_Users` çakışması): E2E seed'i T117'de silinen bot tablosuna bakıyor. Aynı 8 leg main'in son run'ında da (`31840953171`, chore T125 doğrulama bulguları — genel sonucu `success`) kırmızı, yani **pre-existing**. T126 hiçbir E2E yüzeyine, bot koduna veya migration'a dokunmuyor. Bu, T125 raporunda da aynı gerekçeyle kaydedilen kırmızılığın devamıdır.
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** (bağımsız chat, 2026-08-15, commit `563dfa0`) |
+| Bulgu sayısı | 2 (ikisi de kabul kriteri ihlali değil; ikisi de düzeltildi) |
+| Düzeltme gerekli mi | Yapıldı — F1 ayrı chore PR [#237](https://github.com/turkerurganci/Skinora/pull/237), F2 bu dalda |
+
+**Kapılar:** Adım −1 working tree temiz · Adım 0 main CI son 3 run (`31840953171`, `31840953115`, `31838962660`) hepsi `success` · Adım 0b repo memory T126 satırı mevcut · Adım 8a task branch CI run [`31877015493`](https://github.com/turkerurganci/Skinora/actions/runs/31877015493) **CI Gate `success`**, 12 bloke edici job yeşil.
+
+**Kabul kriterleri bağımsız verdict'i:** 5/5 ✓ — yapım raporundaki verdict'lerle **tam uyum**, uyuşmazlık yok. Doğrulayıcı AC4'ü (launch kapısı invariantı) `Gated_Round_Leaves_The_Delivery_Guard_Shut`'ın hem invariantı hem **nedenselliği** (damga konunca `CanFire` true olur) sabitlediğini teyit ederek geçirdi.
+
+**Bağımsız test koşumu:** build 0E/0W · backend tam suite **2622/2622** (13 assembly). İlk birleşik koşuda 40 kırılma çıktı; **rasyonalize edilmedi, ölçüldü** — hepsinin imzası `IntegrationTestBase.CreateDatabaseAsync` → `SqlException: Execution Timeout Expired` (11 assembly paralel, DB oluşturma darboğazı). Dört kırmızı assembly **sırayla izole** yeniden koşuldu: Auth 120/120, API 538/538, Notifications 171/171, Transactions 925/925 — hepsi temiz. Bu, T125 doğrulamasında kayda geçen aynı yük artefaktının tekrarıdır.
+
+**Advisory E2E (8 leg):** task branch ve main (`1b4da1c`) failed loglarının imzası **birebir aynı** (`Invalid object name 'PlatformSteamBots'` ×8 + aynı 3 test adı) → pre-existing, doğrulayıcı tarafından bağımsız karşılaştırmayla teyit edildi.
+
+**Güvenlik:** temiz — secret yok, authz alıcı-only + parti kapısı durum kapısından önce, gövde yok (tek girdi route `{id:guid}` + JWT), `[RateLimit("user-write")]` kardeş uçlarla aynı, yeni bağımlılık yok.
+
+### Bulgu F1 — S1, para güvenliği (merge öncesi kapatıldı, PR #237)
+
+**Bulgu:** T126, `TransactionTrigger.DeliverItem`'ın ilk üretim çağıranı olduğu için `ITEM_DELIVERED`'ı **ilk kez erişilebilir** yapıyor (`git grep -n "TransactionTrigger.DeliverItem" origin/main -- backend/src` yalnız state machine tanımını döndürüyor). Ama `SellerPayoutQueueJob` (dakikalık recurring) `ITEM_DELIVERED` işlemleri **`PayoutEligibleAt` / `SettlementVerifiedAt` filtresi olmadan** alıyor ve `NextAttemptAt = null` ile dispatch'e veriyordu. Sonuç: alıcı onayından ~1 dk sonra zincire payout gider; 02 §4.5.1'in 8 günlük mutabakat penceresi ve sonundaki envanter kontrolü tamamen atlanır → Steam'in 7 günlük geri alma vektörü açık kalır. Ardından `Complete` guard'ı `SettlementVerifiedAt` istediği için işlem `ITEM_DELIVERED`'da kilitlenirdi: para gitmiş, durum ilerlemiyor.
+
+**Neden T126'nın AC ihlali değil:** filtreyi plan açıkça T129'a veriyor (11 §P4). Bu bir **sıralama** bulgusu — T126 üreticiyi, tüketici kapatılmadan açıyor.
+
+**Karar (proje sahibi, 2026-08-15):** merge öncesi ara kapı. `SellerPayoutQueueJob` sorgusu + döngü içi yeniden doğrulama `PayoutEligibleAt != null && <= now` okuyor; NULL'da **fail-closed** (T129 kolonu yazana kadar job hiçbir şey kuyruğa almaz, işlemler `ITEM_DELIVERED`'da bekler). 2 yeni test + T129 kabul kriterine "erken uygulandı" notu.
+
+**KALICI DERS (T124 dersinin ikizi):** bir üreticiyi açan görev, açtığı **değerin tüketicilerinin** kapılı olduğunu da doğrulamalı. T126 kendi kabul kriterlerinin hepsini karşıladığı hâlde uyandırdığı tüketici kapısızdı — kabul kriteri listesi bu sınıf hatayı yakalamaz, yalnız "bu geçişi kim tüketiyor?" sorusu yakalar.
+
+### Bulgu F2 — S1, doküman-kod sapması (bu dalda düzeltildi)
+
+`BuyerConfirmedReceiptAt` kolonu `Transaction.cs:102`'de mevcut (T117 migration) ve 06 §3.5'te tanımı aynen *"Alıcının 'teslim aldım' onayını verdiği an"*. T126 tam olarak o eylemi implement ediyor ama kolonu yazan tek yer olmadığı hâlde yazmıyordu — repoda hiçbir yazıcı yoktu. **Düzeltme:** Stage 7'de `DeliveryVerifiedAt` ile birlikte damgalanıyor (Stage 5 yerine Stage 7, ki gated dal hiçbir şey yazmama özelliğini korusun) + 5 assertion. İki kolon yalnız bu yolda aynı değeri taşır: `DeliveryVerifiedAt` teslimatın **herhangi bir yoldan** doğrulandığı anı, bu kolon yolun **alıcının kendi sözü** olduğunu söyler — T127/T130 turları ilkini damgalayıp bunu NULL bırakacak.
+
+> Not: çok-ajanlı bağımsız taramada iki doğrulayıcı F2'yi "kolon zorunlu alan matrisinde değil" gerekçesiyle reddetti; kolonun varlığı ve yazıcısızlığı `grep` ile ayrıca teyit edilerek red düzeltildi.
+
+### Bilgi düzeyinde (bulgu sayılmadı)
+
+- Gated dal `SaveChanges` olmadan dönerken tracked entity üzerinde `BUYER_CONFIRMED` kirli kalıyor. Bu route'un request pipeline'ında `AppDbContext`'i flush eden başka bileşen olmadığı doğrulandı (yalnız webhook signature middleware'leri `SaveChanges` çağırıyor, farklı route'lar) → bugün latent.
+- Endpoint fixture'ı `ITEM_DELIVERED` / `COMPLETED` satırlarını `DeliveryEvidence = NONE` ile tohumluyor; 06 §3.5 matrisi bu durumlar için `!= NONE` istiyor. Yalnız test verisi sadakati.
+- Durum kapısı Theory'sinde `REFUNDED` yok (kod aynı dalla karşılıyor).
 
 ## Known Limitations / Follow-up
 
