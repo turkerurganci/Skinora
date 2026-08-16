@@ -136,10 +136,14 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 
 ### Düzeltme turu için öneri (sahiplik önerisi)
 
-1. **B1** — bu popülasyon için bir çıkış yolu gerekli. Seçenekler: (a) `SettlementVerificationJob`'a "baseline yok" vakası için ayrı bir verdict/gerekçe (`Unreadable` yanıltıcı) + admin'in mutabakatı **satıcı lehine** kapatabileceği bir aksiyon; (b) alıcı-onaylı teslimatta `DeliveredBuyerAssetId`'yi doldurmak için ITEM_DELIVERED anında bir envanter okuması; (c) baseline'sız işlemleri mutabakat kontrolünden muaf tutup alıcı onayını yeterli saymak. **Karar proje sahibinin** — üçü de 02 §4.5.1'in koruma seviyesini farklı yerde dengeliyor.
-2. **B3** — `SettlementVerificationJob`'a `ITransactionReputationRefresher` enjekte et, `ApplyReversalAsync`'te SaveChanges'ten sonra `RefreshAsync(sellerId, buyerId, evaluateCooldown: false, ct)`; 06 §8.2 ve §3.1 giriş cümlesini geri alma dalıyla genişlet.
-3. **B2** — 06 §2.11'e satır, FE `TYPE_VALUES` + üç i18n haritası × 4 dil.
-4. **N1** kapı açılmadan önce; **N2–N7** aynı turda ucuz.
+Üç bloke edici bulgu ve beş bloke etmeyen madde, proje sahibi onayıyla **`Docs/11_IMPLEMENTATION_PLAN.md` §P4 T129 → "DÜZELTME TURU KABUL KRİTERLERİ"** bloğuna yazıldı (T122'nin kalıcı dersi: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir). Özet:
+
+1. **B1 — KARAR (proje sahibi, 2026-08-16): SEÇENEK 1**, ayrı verdict + admin aksiyonu. Dört bacak: (a) "karar girdisi üretilemez" için ayrı verdict/gerekçe kodu (`SETTLEMENT_UNREADABLE` yanıltıcı — okunamayan envanter yok, eksik olan **baseline**'dır), (b) eşiği beklemeden eskale (bu sınıfta retry'ın kazanacağı bir şey yok), (c) admin'in mutabakatı **satıcı lehine** kapatabileceği, dispute gerektirmeyen bir aksiyon, (d) §I.1/§I.4 ve bu raporun "karar `admin_resolve_refund` ile verilir" cümlesinin düzeltilmesi. Alternatifler reddedildi: ITEM_DELIVERED'da envanter okuması gizli-envanter vakasını kapatmıyor; kontrolden muafiyet 02 §4.5.1'in korumasını o popülasyon için kaldırıyor.
+2. **B3** — `SettlementVerificationJob`'a `ITransactionReputationRefresher` enjekte et, `ApplyReversalAsync`'te terminal statü flush edildikten **sonra** `RefreshAsync(sellerId, buyerId, evaluateCooldown: false, ct)`; 06 §8.2 tetikleyici satırını ve §3.1 giriş cümlesini geri alma dalıyla genişlet.
+3. **B2** — 06 §2.11'e satır, 07 §9.3'e `flagDetail` satırı (`SANCTIONS_MATCH` de eksik), FE `TYPE_VALUES` + üç i18n haritası × 4 dil.
+4. **N1** `settlement.reversal_auto_refund_enabled` açılmadan **önce** kapatılması zorunlu (§I.3'e ön koşul); **N2** için önerilen şekil (a) — verdict'i kalıcı kolona yaz, `ClearForPayout`'u ona bağla; **N3–N7** aynı turda ucuz.
+
+**Yeniden doğrulama:** düzeltme sonrası ayrı bir doğrulama chat'i açılır (INSTRUCTIONS §3.3); ilk turda ✓ kanıtlanan AC1/2/3/5/6/7 için kanıt korunur, AC4 + AC8 sıfırdan doğrulanır.
 
 ## Altyapı Değişiklikleri
 
