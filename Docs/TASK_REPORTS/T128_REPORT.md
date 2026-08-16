@@ -1,6 +1,6 @@
 # T128 — (SellerId, ItemAssetId) tekillik kapısı
 
-**Faz:** F7 (P3 — Yeni ileri yol) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-16
+**Faz:** F7 (P3 — Yeni ileri yol) | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-16
 
 ---
 
@@ -103,6 +103,119 @@
 - CI (dal HEAD'i, salt-doküman finalize commit'i): ✓ **PASS** — `16cd40b`, run [`31941624051`](https://github.com/turkerurganci/Skinora/actions/runs/31941624051), bloke edici job'ların tamamı `success`, yine yalnız `Guard` skipped + aynı 8 advisory E2E leg. **Not:** bu satırdan sonraki tek commit bu satırı ekleyen commit'tir (salt-doküman); kod ağacı `b644ee4`'ten beri değişmedi, dolayısıyla iki run da aynı kaynağı doğruluyor.
 
 **8 advisory E2E leg kırmızı — T128 kaynaklı DEĞİL, bu run'ın logundan doğrulandı.** Kök sebep imzası her legde birebir aynı: `Invalid object name 'PlatformSteamBots'` (**8/8**, leg başına tam 1 iz). Aynı loglarda T128 yüzeylerinden (`ITEM_ALREADY_LISTED` / `DbConstraintViolations` / `FindOpenListing`) **0 iz**. T117 tablo düşürmesinden beri pre-existing; sahiplik T137 (sidecar-fake envanter) → T138 (E2E spec yeniden yazımı). `continue-on-error` oldukları için gate'i bloke etmiyorlar.
+
+## Doğrulama (2026-08-16) — ✓ PASS
+
+**Bağımsız chat, yapım raporu görülmeden başladı.** Verdict önce koddan ve dokümanlardan üretildi;
+rapor karşılaştırması en sonda yapıldı (INSTRUCTIONS.md §3.3 izolasyon kuralı).
+
+### Verdict: ✓ PASS — 0 bloke edici bulgu, 1 bloke etmeyen gözlem
+
+**Kapılar:** Adım −1 working tree temiz · Adım 0 main CI son 3 run (`31909528316` · `31909528307` ·
+`31880715941`) üçü de `success` · Adım 0b repo memory T128 satırı mevcut · Adım 8a task branch CI
+**dal HEAD'i** `887b431`, run [`31942121750`](https://github.com/turkerurganci/Skinora/actions/runs/31942121750),
+**CI Gate `success`**, bloke edici 9 job yeşil (Lint · Build · Unit · Integration · Contract ·
+Migration dry-run · JS test · Docker backend · Docker frontend); `Guard` beklendiği gibi skipped.
+
+> **Not (dal doğrulama sırasında ilerledi):** doğrulama `16cd40b` üzerinde başladı, oturum sırasında
+> dal `887b431`'e ilerledi. `git diff 16cd40b 887b431` **yalnız `T128_REPORT.md`** (2 satır);
+> `git diff 16cd40b 887b431 -- backend/ frontend/ Docs/07_API_DESIGN.md` **0 satır** — kod ağacı
+> `b644ee4`'ten beri değişmedi, dolayısıyla inceleme dal HEAD'i için de geçerli.
+
+### Kabul kriteri — bağımsız verdict
+
+Plan `11 §P3 T128` tek madde tanımlıyor.
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | İkinci create `ITEM_ALREADY_LISTED` dönüyor | ✓ | İki katmanda da izlendi. Uçtan uca: `Create_Returns_422_ITEM_ALREADY_LISTED_On_Second_Create_For_Same_Asset` (gerçek HTTP + gerçek DI, 201 → 422 + `error.code`). Kod yolu: `TransactionCreationService.cs:180-189` (Stage 5a ön-kontrol) ve `:346-374` (UNIQUE ihlali dalı) → `TransactionsController.cs:175` `UnprocessableEntity`. Odaklı koşum 12/12 + API testi ✓ |
+
+**Kriterin etrafındaki davranış — bağımsız olarak da doğrulandı:**
+
+- **Ön-kontrol indeksin filtresini gerçekten aynalıyor.** `TransactionStatus` 12 değer; indeks filtresi
+  (`TransactionConfiguration.cs:224-230`, migration `20260809162642_T117_P2P_Pivot.cs:178-183`, model
+  snapshot `:2418-2421`) altı terminal statüyü dışlıyor, `FindOpenListingAsync` (`:437-445`) **aynı
+  altısını**. Bloke eden küme her iki tarafta da `{CREATED, ACCEPTED, SELLER_CONFIRMED,
+  PAYMENT_RECEIVED, ITEM_DELIVERED, FLAGGED}`. `IsDeleted = 0` bacağı gerçekten global filtreden
+  geliyor: `Transaction : ISoftDeletable`, `AppDbContext.cs:134-145` `HasQueryFilter` uyguluyor.
+  Kapı indeksten ne katı ne gevşek → asset kalıcı kilitlenmiyor.
+- **`ChangeTracker.Clear()` yeterli — kaynağa bakılarak doğrulandı.** Yakalama dalının terk ettiği
+  dört yazarın **dördü de** aynı scoped `AppDbContext`'e `Add` ediyor ve hiçbiri `SaveChanges`
+  çağırmıyor: `OutboxService.cs:67`, `AuditLogger.cs:25`, `FraudFlagService.cs:148-178`,
+  `TransactionHistoryRecorder.Record`. Yani "atomik olduğu için hiçbir şey yazılmadı" iddiası
+  test doubles'a değil üretim kodlarına dayanıyor.
+- **Ret yollarında sızıntı yok.** HD cüzdan tahsisi (Stage 10c, `:392`) ve Steam cache invalidation
+  (Stage 10b, `:383`) `SaveChanges`'ten **sonra**; iki ret yolu da onlara ulaşmıyor → yarışı kaybeden
+  istek HD indeksi yakmıyor.
+- **Kapıyı atlayan ikinci yazar yok.** `new Transaction` / `Set<Transaction>().Add` üretim kodunda
+  tek yerde (`TransactionCreationService.cs:261,302`).
+- **Enum ortasına ekleme zararsız.** `CreateTransactionStatus` yalnız 4 kod dosyasında; persist
+  edilmiyor, serialize edilmiyor, TS karşılığı yok — ordinal kayması gözlenebilir değil.
+- **Diğer create hata kodlarını sayan başka yüzey kalmadı.** `ITEM_NOT_IN_INVENTORY`/`INVENTORY_PRIVATE`
+  taraması: create sözlüğünü sayan tek FE noktası `NewTransactionForm.tsx` (güncellendi);
+  `Step1ItemSelection.tsx` / `SteamController.cs` / sidecar envanter **listeleme** ucunun sözlüğü
+  (07 §6.1), T128 kapsamı değil.
+
+### Doküman uyumu
+
+- **02 §2.3** *"Aynı item aynı anda birden fazla açık işlemde kullanılamaz — ikinci işlem oluşturma
+  denemesi reddedilir"* ✓ — ret artık okunabilir bir iş kuralı reddi, 500 değil.
+- **06 §5.1** indeks satırı zaten v3.0'da yazılıydı, düzenleme gerekmiyordu ✓.
+- **07 §7.2** hata listesi + normatif not koda birebir uyuyor (422 · `ITEM_ALREADY_LISTED` · terminal
+  statülerin kapsam dışı olduğu) ✓. Başlık `Son güncelleme` T121 emsalini izliyor.
+- **422 seçimi doğrulandı:** §7.2'de hiç 409 yok; ayrıca `PAYMENT_ALREADY_SENT` zaten 422 olan bir
+  `*_ALREADY_*` kodu (07 §7.7) — yani "duplicate ⇒ 409" diye bir repo konvansiyonu yok.
+
+### Bağımsız test koşumu
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build | ✓ **0 error / 0 warning** | `dotnet build Skinora.sln -c Debug` |
+| Unit | ✓ **1382/1382** (11 assembly) | `--filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Integration | ✓ **1279/1279** (10 assembly, **seri** koşum) | `--filter "FullyQualifiedName~.Integration"` — Transactions 475 · API 475 · Fraud 73 · Platform 65 · Notifications 60 · Disputes 50 · Auth 37 · Admin 22 · Shared 16 · Payments 6 |
+| Contract | ✓ **9/9** (API 4 + Shared 5) | `--filter "FullyQualifiedName~.Contract"` |
+| Odaklı — T128 | ✓ **12/12** + API 1 | 7 metot (biri 6 vakalık `[Theory]`) ⇒ 12 çalıştırma; uçtan uca test ayrıca |
+| FE lint / i18n / vitest | ✓ 0 · **1302×4 identical key sets** · **33/33** | `npm run lint` · `npm run i18n:check` · `npx vitest run` |
+
+Dört sayı da (1382 · 1279 · 9 · 13) yapım raporuyla **birebir**; assembly kırılımı da örtüşüyor.
+
+**Advisory E2E — bağımsız karşı kanıt.** 8 leg kırmızı; `gh run view 31942121750 --log-failed`
+üzerinden **yeniden** sayıldı: `Invalid object name 'PlatformSteamBots'` izi **8/8 legde tam 1 kez**,
+T128 yüzeylerinden (`ITEM_ALREADY_LISTED` / `DbConstraintViolations` / `FindOpenListing`) **0 iz**.
+T117'den beri pre-existing, sahiplik T137 → T138. `continue-on-error` oldukları için gate'i bloke etmiyorlar.
+
+### Mini güvenlik kontrolü (bağımsız)
+
+| Kontrol | Sonuç |
+|---|---|
+| Secret sızıntısı | ✓ Temiz — diff'te yalnız hata kodu dizgesi |
+| Auth/authorization | ✓ Temiz — `sellerId` = `TryGetUserId` (JWT claim), request body'den **değil** (`TransactionsController.cs:129`). Sorgu `SellerId` ile sınırlı → başka kullanıcının satırı hakkında bilgi sızdırmıyor, asset enumerasyonu açmıyor |
+| Input validation | ✓ Temiz — `itemAssetId` Stage 1'de boşluk kontrolünden geçiyor; sorgu parametreli LINQ, string birleştirme yok |
+| Yeni bağımlılık | ✓ Yok — csproj/package.json değişmedi |
+| Migration / config / env | ✓ Yok — kısıt T117 migration'ında; `Migration dry-run` job'ı yeşil, model snapshot drift yok |
+
+### Bloke etmeyen gözlem (proje sahibi kararı — plana YAZILMADI)
+
+**G1 — `ITEM_ALREADY_LISTED` metninin ilk çözüm önerisi `FLAGGED` durumunda uygulanabilir değil.**
+Dört dilde de mesaj *"O işlemi iptal edin veya başka bir item seçin"* diyor. Kapı altı statüyü açık
+sayıyor; bunlardan `FLAGGED`'da satıcının iptal yolu **yok** — `TransactionDetailService` `canCancel`
+FLAGGED'ı içermiyor ve `TransactionCancellationService.ResolveTrigger(SELLER, FLAGGED)` `null` dönüyor
+(409). Fraud pre-check'in yazdığı bayrak `TRANSACTION_PRE_CREATE` scope'unda olduğu için satıcının
+hesabı bayraklanmıyor, yani satıcı aynı asset'i yeniden denemeye devam edebilir ve bu mesajı görür.
+**Neden bloke etmiyor:** (a) ikinci öneri (*"başka bir item seçin"*) her durumda geçerli;
+(b) asset kilitli kalmıyor — admin `FLAGGED → CREATED` (onay) veya `FLAGGED → CANCELLED_ADMIN` (ret)
+ile çözüyor (`FraudFlagService.cs:204,321`); (c) altta yatan durum **pre-existing** — indeks T117'den
+beri aynı satırı reddediyordu, T128 bunu 500'den okunabilir bir 422'ye çeviriyor, yani yolu
+kötüleştirmiyor iyileştiriyor. `ITEM_DELIVERED` bacağı pratikte boş: item satıcının envanterinden
+çıkmış olduğu için zaten yeniden listelenemez.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: tam uyumlu — uyuşmazlık yok.** Dört test sayısı, assembly kırılımı, FE ölçümleri, güvenlik
+sonuçları ve E2E imzası bağımsız ölçümle birebir örtüştü. İki ek:
+1. Rapor CI kanıtı olarak `16cd40b` / `31941624051`'i gösteriyordu; dal HEAD'i `887b431` ve onun run'ı
+   `31942121750` da `CI Gate success` — yukarıya eklendi (kod ağacı aynı).
+2. Raporda G1 gözlemi yoktu; bloke etmediği için yalnız bu bölüme yazıldı.
 
 ## Known Limitations / Follow-up
 
