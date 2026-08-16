@@ -320,6 +320,11 @@ const POST_ERROR_CODES = new Set([
   "ACCOUNT_FLAGGED",
   "ITEM_NOT_TRADEABLE",
   "ITEM_NOT_IN_INVENTORY",
+  // T128 — 02 §2.3: this asset is already committed to one of the seller's
+  // open transactions. Needs its own message because the fix is neither "pick
+  // a tradeable item" nor "refresh your inventory": the item is fine, it is
+  // just spoken for.
+  "ITEM_ALREADY_LISTED",
   // T121 — the create path re-reads the seller's inventory, so it can now end
   // in the same two non-readable outcomes step 1 already reports (07 §6.1).
   // Each needs its own message: one asks the seller to change a Steam setting,

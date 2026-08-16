@@ -1326,6 +1326,7 @@
         "ACCOUNT_FLAGGED": "Hesabınız inceleme altında. Yeni işlem başlatılamaz.",
         "ITEM_NOT_TRADEABLE": "Seçtiğiniz item takas edilemez. Lütfen başka bir item seçin.",
         "ITEM_NOT_IN_INVENTORY": "Seçtiğiniz item envanterinizde bulunamadı. Envanteri yenileyip tekrar deneyin.",
+        "ITEM_ALREADY_LISTED": "Bu item için zaten açık bir işleminiz var. O işlemi iptal edin veya başka bir item seçin.",
         "INVENTORY_PRIVATE": "Steam envanteriniz gizli olduğu için kontrol edilemedi. Envanterinizi herkese açık yapıp tekrar deneyin.",
         "STEAM_UNAVAILABLE": "Steam'e ulaşılamadığı için envanteriniz kontrol edilemedi. Lütfen biraz sonra tekrar deneyin.",
         "PRICE_OUT_OF_RANGE": "Fiyat platform sınırlarının dışında. Lütfen yeniden girin.",

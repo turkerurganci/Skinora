@@ -44,6 +44,13 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     private RecordingOutboxService _outbox = null!;
     private RecordingPaymentAddressAllocator _allocator = null!;
 
+    /// <summary>
+    /// T128 — swappable so one test can force an <c>InviteToken</c> collision
+    /// and prove that a unique violation on the <em>other</em> index is not
+    /// reported as ITEM_ALREADY_LISTED.
+    /// </summary>
+    private IInvitationCodeGenerator _inviteCodes = new InvitationCodeGenerator();
+
     protected override async Task SeedAsync(AppDbContext context)
     {
         _seller = new User
@@ -483,6 +490,231 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Single(_allocator.Allocations);
     }
 
+    // ---- T128 — one open transaction per item (02 §2.3) ---------------------
+
+    [Fact]
+    public async Task Rejects_Second_Create_For_Same_Asset_With_ItemAlreadyListed()
+    {
+        await SeedListingAsync(_seller.Id, ItemAssetId, TransactionStatus.CREATED);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.ItemAlreadyListed, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.ItemAlreadyListed, outcome.ErrorCode);
+
+        // The rejection is the whole outcome: nothing was written and no event
+        // was staged for a transaction that does not exist.
+        Assert.Equal(1, await Context.Set<Transaction>()
+            .CountAsync(t => t.SellerId == _seller.Id && t.ItemAssetId == ItemAssetId));
+        Assert.Empty(_outbox.Published);
+        Assert.Empty(_allocator.Allocations);
+    }
+
+    [Fact]
+    public async Task Already_Listed_Gate_Runs_Before_The_Steam_Read()
+    {
+        // 02 §2.3 needs no inventory evidence, and Steam reads are the scarce,
+        // rate-limited resource (T122). A duplicate listing attempt must not
+        // spend one.
+        await SeedListingAsync(_seller.Id, ItemAssetId, TransactionStatus.CREATED);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.ItemAlreadyListed, outcome.Status);
+        Assert.Empty(_inventory.ItemReadFreshness);
+    }
+
+    [Fact]
+    public async Task Already_Listed_Gate_Does_Not_Preempt_SellerNotFound()
+    {
+        // A suspended seller must hear that their account is the problem, not
+        // that the item is listed — the gate sits after the seller lookup on
+        // purpose.
+        await SeedListingAsync(_seller.Id, ItemAssetId, TransactionStatus.CREATED);
+        _seller.IsSuspended = true;
+        Context.Set<User>().Update(_seller);
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SellerNotFound, outcome.Status);
+    }
+
+    [Theory]
+    [InlineData(TransactionStatus.COMPLETED)]
+    [InlineData(TransactionStatus.CANCELLED_TIMEOUT)]
+    [InlineData(TransactionStatus.CANCELLED_SELLER)]
+    [InlineData(TransactionStatus.CANCELLED_BUYER)]
+    [InlineData(TransactionStatus.CANCELLED_ADMIN)]
+    [InlineData(TransactionStatus.REFUNDED)]
+    public async Task Terminal_Transaction_Over_Same_Asset_Does_Not_Block_A_New_Create(
+        TransactionStatus terminalStatus)
+    {
+        // The rule is "one OPEN transaction per item". Once the previous one
+        // has ended, the seller may list the asset again — and the unique index
+        // agrees, because its filter excludes exactly these six statuses
+        // (06 §5.1). A gate stricter than the index would strand the asset.
+        await SeedListingAsync(_seller.Id, ItemAssetId, terminalStatus);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+    }
+
+    [Fact]
+    public async Task Another_Sellers_Open_Listing_Over_Same_Asset_Does_Not_Block()
+    {
+        // The key is (SellerId, ItemAssetId): asset ids are Steam-account
+        // scoped, so a row belonging to someone else says nothing about this
+        // seller's inventory.
+        var otherSeller = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = "76561198000000099",
+            SteamDisplayName = "Other Seller",
+            DefaultPayoutAddress = ValidWallet,
+            MobileAuthenticatorVerified = true,
+        };
+        Context.Set<User>().Add(otherSeller);
+        await Context.SaveChangesAsync();
+        await SeedListingAsync(otherSeller.Id, ItemAssetId, TransactionStatus.CREATED);
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+    }
+
+    [Fact]
+    public async Task Create_Losing_The_Uniqueness_Race_Reports_ItemAlreadyListed()
+    {
+        // Two creates for the same asset can both clear the read-based gate.
+        // The competing row is inserted from a separate context during the
+        // inventory read — after the gate, before SaveChanges — so the losing
+        // caller reaches the unique index exactly as it would in production.
+        Guid winnerId = Guid.Empty;
+        _inventory.OnItemRead = async () =>
+        {
+            _inventory.OnItemRead = null; // one interleave, not one per read
+            await using var competing = CreateContext();
+            winnerId = await SeedListingAsync(
+                _seller.Id, ItemAssetId, TransactionStatus.CREATED, competing);
+        };
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.ItemAlreadyListed, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.ItemAlreadyListed, outcome.ErrorCode);
+
+        // The winner survives alone — the loser's row was never committed.
+        await using var verify = CreateContext();
+        var rows = await verify.Set<Transaction>().AsNoTracking()
+            .Where(t => t.SellerId == _seller.Id && t.ItemAssetId == ItemAssetId)
+            .Select(t => t.Id)
+            .ToListAsync();
+        Assert.Equal([winnerId], rows);
+    }
+
+    [Fact]
+    public async Task Unique_Violation_On_A_Different_Index_Is_Not_Reported_As_ItemAlreadyListed()
+    {
+        // Transactions carries a second unique index (InviteToken). Reporting
+        // that collision as "item already listed" would send the seller to fix
+        // something that is not wrong, so the catch confirms the conflict by
+        // re-reading and rethrows when there is none.
+        await Context.ConfigureSettingAsync(TransactionLimitsProvider.OpenLinkEnabledKey, "true");
+        const string FixedToken = "t128-fixed-invite-token";
+        _inviteCodes = new FixedInvitationCodeGenerator(FixedToken);
+
+        _inventory.OnItemRead = async () =>
+        {
+            _inventory.OnItemRead = null;
+            await using var competing = CreateContext();
+            // Same token, different asset: the item index stays clean.
+            await SeedListingAsync(
+                _seller.Id, "some-other-asset", TransactionStatus.CREATED, competing,
+                inviteToken: FixedToken);
+        };
+
+        var sut = BuildSut();
+        var request = ValidRequest() with
+        {
+            BuyerIdentificationMethod = BuyerIdentificationMethod.OPEN_LINK,
+            BuyerSteamId = null,
+        };
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => sut.CreateAsync(_seller.Id, request, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Insert one seller-owned transaction over <paramref name="itemAssetId"/>.
+    /// Written through the given context (defaults to the test's own) so a race
+    /// test can commit from a second connection.
+    /// </summary>
+    private async Task<Guid> SeedListingAsync(
+        Guid sellerId,
+        string itemAssetId,
+        TransactionStatus status,
+        AppDbContext? context = null,
+        string? inviteToken = null)
+    {
+        var db = context ?? Context;
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+
+        // CK_Transactions_Cancel — the five unwound statuses carry a forensic
+        // trail; COMPLETED and the live statuses leave these NULL.
+        var isUnwound = status is TransactionStatus.CANCELLED_TIMEOUT
+            or TransactionStatus.CANCELLED_SELLER
+            or TransactionStatus.CANCELLED_BUYER
+            or TransactionStatus.CANCELLED_ADMIN
+            or TransactionStatus.REFUNDED;
+
+        var tx = new Transaction
+        {
+            Id = Guid.NewGuid(),
+            Status = status,
+            SellerId = sellerId,
+            BuyerIdentificationMethod = inviteToken is null
+                ? BuyerIdentificationMethod.STEAM_ID
+                : BuyerIdentificationMethod.OPEN_LINK,
+            TargetBuyerSteamId = inviteToken is null ? BuyerSteamId : null,
+            InviteToken = inviteToken,
+            ItemAssetId = itemAssetId,
+            ItemClassId = "abc-class",
+            ItemName = "AK-47 | Redline",
+            StablecoinType = StablecoinType.USDT,
+            Price = 100m,
+            CommissionRate = 0.02m,
+            CommissionAmount = 2m,
+            TotalAmount = 102m,
+            SellerPayoutAddress = ValidWallet,
+            PaymentTimeoutMinutes = 1440,
+            AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
+            CancelledBy = isUnwound ? CancelledByType.ADMIN : null,
+            CancelReason = isUnwound ? "seeded terminal row" : null,
+            CancelledAt = isUnwound ? nowUtc.AddMinutes(-5) : null,
+        };
+        db.Set<Transaction>().Add(tx);
+        await db.SaveChangesAsync();
+        return tx.Id;
+    }
+
+    private sealed class FixedInvitationCodeGenerator : IInvitationCodeGenerator
+    {
+        private readonly string _token;
+
+        public FixedInvitationCodeGenerator(string token) => _token = token;
+
+        public string Generate() => _token;
+    }
+
     private TransactionCreationService BuildSut()
     {
         var limits = new TransactionLimitsProvider(Context);
@@ -501,7 +733,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             new RecordingFraudFlagWriter(),
             new Trc20AddressValidator(),
             new NoMatchWalletSanctionsCheck(),
-            new InvitationCodeGenerator(),
+            _inviteCodes,
             _outbox,
             new NullSteamInventoryCacheInvalidator(),
             _allocator,

@@ -317,6 +317,33 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             body.GetProperty("error").GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Create_Returns_422_ITEM_ALREADY_LISTED_On_Second_Create_For_Same_Asset()
+    {
+        // T128 — 02 §2.3 over the wire. The first create succeeds and the
+        // second one, identical, must come back as a business rejection the
+        // seller can read rather than the 500 the bare unique index produced.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
+        await _factory.ConfigureSettingAsync("max_concurrent_transactions", "5");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var first = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+
+        var second = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, second.StatusCode);
+        var body = await second.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("ITEM_ALREADY_LISTED",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
     private static object CreateRequestBody() => new
     {
         itemAssetId = "27348562891",

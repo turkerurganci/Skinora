@@ -82,10 +82,19 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
     /// </summary>
     public InventoryVisibility? ForcedBaselineVisibility { get; set; }
 
+    /// <summary>
+    /// T128 — runs at the start of every <see cref="GetItemAsync"/> call. The
+    /// create pipeline reads the inventory immediately after the 02 §2.3
+    /// uniqueness gate and well before <c>SaveChanges</c>, so a test that wants
+    /// to interleave a competing write into exactly that window has a
+    /// deterministic seam here instead of a real thread race.
+    /// </summary>
+    public Func<Task>? OnItemRead { get; set; }
+
     public void Register(string steamId, InventoryItemSnapshot item)
         => _items[(steamId, item.AssetId)] = item;
 
-    public Task<InventoryLookupResult> GetItemAsync(
+    public async Task<InventoryLookupResult> GetItemAsync(
         string steamId64,
         string itemAssetId,
         InventoryReadFreshness freshness,
@@ -93,6 +102,16 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
     {
         ItemReadFreshness.Add(freshness);
 
+        if (OnItemRead is not null)
+        {
+            await OnItemRead();
+        }
+
+        return await GetItemCoreAsync(steamId64, itemAssetId);
+    }
+
+    private Task<InventoryLookupResult> GetItemCoreAsync(string steamId64, string itemAssetId)
+    {
         if (ForcedVisibility is InventoryVisibility.Private)
             return Task.FromResult(InventoryLookupResult.Private);
         if (ForcedVisibility is InventoryVisibility.Unavailable)
