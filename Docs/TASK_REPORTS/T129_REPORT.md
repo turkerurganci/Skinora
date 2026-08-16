@@ -109,7 +109,7 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 - Branch: `task/T129-settlement-window-reversal-guard`
 - Commit: `2813daf` (yapım) + `e24b599` (rapor referansları)
 - PR: [#240](https://github.com/turkerurganci/Skinora/pull/240)
-- CI: **✓ PASS** — dal HEAD `e24b599`, run [`31959216012`](https://github.com/turkerurganci/Skinora/actions/runs/31959216012), **CI Gate `success`**
+- CI: **✓ PASS** — run [`31959216012`](https://github.com/turkerurganci/Skinora/actions/runs/31959216012) (`e24b599`) ve **dal HEAD `36d9549`** için run [`31959858421`](https://github.com/turkerurganci/Skinora/actions/runs/31959858421); ikisinde de **CI Gate `success`**, bloke edici 10 job yeşil
 - Dal izolasyonu: `git log main..HEAD` → yalnız `T129` ✓
 
 **CI kırılımı (bloke edici 10 job yeşil):** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend + frontend) · CI Gate. `0. Guard (direct push)` beklendiği gibi `skipped` (PR event).
