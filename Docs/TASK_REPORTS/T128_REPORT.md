@@ -97,9 +97,11 @@
 ## Commit & PR
 
 - Branch: `task/T128-item-uniqueness-gate`
-- Commit: `e9a9f33` — T128: (SellerId, ItemAssetId) tekillik kapısı
+- Commit: `e9a9f33` — T128: (SellerId, ItemAssetId) tekillik kapısı · `b644ee4` — rapor/status/memory PR referansları
 - PR: [#239](https://github.com/turkerurganci/Skinora/pull/239)
-- CI: CI_RESULT
+- CI: ✓ **PASS** — HEAD `b644ee4`, run [`31941068035`](https://github.com/turkerurganci/Skinora/actions/runs/31941068035), **CI Gate `success`**. Bloke edici 9 job yeşil: Lint · Build · Unit test · Integration test · Contract test · **Migration dry-run** · JS test (vitest) · Docker build (backend) · Docker build (frontend). `0. Guard (direct push)` beklendiği gibi `skipped` (PR event). Önceki commit'in run'ı (`31941043003`, `e9a9f33`) concurrency ile devre dışı kaldı — başarısızlık değil.
+
+**8 advisory E2E leg kırmızı — T128 kaynaklı DEĞİL, bu run'ın logundan doğrulandı.** Kök sebep imzası her legde birebir aynı: `Invalid object name 'PlatformSteamBots'` (**8/8**, leg başına tam 1 iz). Aynı loglarda T128 yüzeylerinden (`ITEM_ALREADY_LISTED` / `DbConstraintViolations` / `FindOpenListing`) **0 iz**. T117 tablo düşürmesinden beri pre-existing; sahiplik T137 (sidecar-fake envanter) → T138 (E2E spec yeniden yazımı). `continue-on-error` oldukları için gate'i bloke etmiyorlar.
 
 ## Known Limitations / Follow-up
 
