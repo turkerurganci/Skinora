@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Infrastructure.Persistence;
 
 namespace Skinora.Transactions.Application.PaymentAddresses;
 
@@ -157,28 +158,10 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
         PaymentAddressAllocationStatus status, Guid transactionId, string message) =>
         new(status, transactionId, Address: null, HdWalletIndex: null, ErrorMessage: message);
 
+    // T128 — the unique-violation predicate moved to
+    // Infrastructure.Persistence.DbConstraintViolations so the 02 §2.3
+    // one-open-transaction-per-item gate reads the same rule from the same
+    // place. Behaviour unchanged.
     private static bool IsUniqueViolation(DbUpdateException ex)
-    {
-        // SQL Server: 2627 (PK violation), 2601 (UNIQUE index violation).
-        // SQLite (used by some integration test scenarios): SqliteErrorCode 19
-        // surfaces as InnerException.Message containing "UNIQUE constraint".
-        var inner = ex.InnerException;
-        if (inner is null) return false;
-
-        var sqlNumber = TryGetSqlNumber(inner);
-        if (sqlNumber is 2627 or 2601) return true;
-
-        return inner.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
-            && inner.Message.Contains("constraint", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int? TryGetSqlNumber(Exception ex)
-    {
-        // Avoid hard-referencing Microsoft.Data.SqlClient from the module
-        // assembly — reflect once and accept the cost. The shared persistence
-        // layer already references SqlClient transitively.
-        var prop = ex.GetType().GetProperty("Number");
-        if (prop is null || prop.PropertyType != typeof(int)) return null;
-        return (int?)prop.GetValue(ex);
-    }
+        => DbConstraintViolations.IsUnique(ex);
 }

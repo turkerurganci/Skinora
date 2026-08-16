@@ -16,6 +16,18 @@ public static class TransactionErrorCodes
     public const string ItemNotTradeable = "ITEM_NOT_TRADEABLE";
     public const string ItemNotInInventory = "ITEM_NOT_IN_INVENTORY";
 
+    /// <summary>
+    /// T128 — 422 <c>ITEM_ALREADY_LISTED</c>: the seller already has a
+    /// non-terminal transaction for this asset (02 §2.3). Not a courtesy
+    /// check — delivery evidence is measured at the item-class level
+    /// (02 §9.2), so two live transactions over one asset would let an
+    /// arriving item be attributed to the wrong one and pay the wrong
+    /// seller. The database says the same thing through
+    /// <c>UQ_Transactions_SellerId_ItemAssetId_Active</c> (06 §5.1); this
+    /// code is how the rule reaches the seller instead of a 500.
+    /// </summary>
+    public const string ItemAlreadyListed = "ITEM_ALREADY_LISTED";
+
     // T121 — the create path re-reads the seller's inventory, so it can hit the
     // same two non-readable outcomes the listing endpoint already reports
     // (07 §6.1). Same strings, same meaning; declared here as literals because

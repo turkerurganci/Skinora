@@ -98,6 +98,13 @@ public enum CreateTransactionStatus
     SteamUnavailable,
 
     ItemNotTradeable,
+
+    /// <summary>422 <c>ITEM_ALREADY_LISTED</c> — the seller already has a
+    /// non-terminal transaction for this asset (02 §2.3, T128). Produced both
+    /// by the pre-insert gate and by the unique-index collision two concurrent
+    /// creates can still reach; the seller sees one answer either way.</summary>
+    ItemAlreadyListed,
+
     SellerNotFound,
     PriceOutOfRange,
     TimeoutOutOfRange,

@@ -10,6 +10,7 @@ using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
+using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Application.Wallet;
 using Skinora.Users.Domain.Entities;
 
@@ -162,6 +163,31 @@ public sealed class TransactionCreationService : ITransactionCreationService
             return Failure(CreateTransactionStatus.SellerNotFound, TransactionErrorCodes.AccountFlagged,
                 "Seller not found.");
 
+        // ---------- Stage 5a: one open transaction per item (02 §2.3) ----------
+        // T128 — the rule is a money-safety rule, not a tidiness one: delivery
+        // evidence is measured as a class-count delta (02 §9.2), so two live
+        // transactions over the same asset let an arriving item be attributed
+        // to the wrong one and pay the wrong seller. 06 §5.1 states the same
+        // invariant as UQ_Transactions_SellerId_ItemAssetId_Active; without
+        // this gate the seller met it as a 500.
+        //
+        // Placed between the seller lookup and the Steam read deliberately.
+        // Before the lookup it would answer "already listed" to a suspended or
+        // deleted seller, who must hear SellerNotFound; after the read it would
+        // spend a rate-limited Steam round-trip on a request that cannot
+        // succeed. The compared value is the requested asset id — the same key
+        // the index is built on.
+        var openListingId = await FindOpenListingAsync(
+            sellerId, request.ItemAssetId, cancellationToken);
+        if (openListingId is not null)
+        {
+            _logger.LogInformation(
+                "Create rejected for seller {SellerId}: asset {ItemAssetId} is already committed to open transaction {TransactionId} (02 §2.3).",
+                sellerId, request.ItemAssetId, openListingId);
+            return Failure(CreateTransactionStatus.ItemAlreadyListed, TransactionErrorCodes.ItemAlreadyListed,
+                "The seller already has an open transaction for this item (02 §2.3).");
+        }
+
         // T121 — 08 §2.3: the read is three-valued and the three answers are
         // not interchangeable. Only a Public read licenses the "item is not in
         // the inventory" verdict; a hidden profile or an unreachable Steam is
@@ -313,7 +339,39 @@ public sealed class TransactionCreationService : ITransactionCreationService
                 OccurredAt: nowUtc),
             cancellationToken);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (DbConstraintViolations.IsUnique(ex))
+        {
+            // T128 — the Stage 5a gate is a read, so two creates racing over
+            // the same asset can both clear it. The unique index is the only
+            // party that sees both inserts, and the loser must hear the same
+            // answer the gate would have given rather than a 500.
+            //
+            // The collision is confirmed by re-reading, not by matching the
+            // index name in the driver's message: Transactions carries a second
+            // unique index (InviteToken), and a token collision reported as
+            // "item already listed" would send the seller to fix something that
+            // is not wrong. No conflicting row ⇒ not our constraint ⇒ rethrow.
+            var conflictId = await FindOpenListingAsync(
+                sellerId, transaction.ItemAssetId, cancellationToken);
+            if (conflictId is null) throw;
+
+            // The unit of work is abandoned. SaveChanges is atomic, so nothing
+            // landed; clearing the tracker stops the staged transaction,
+            // history, fraud-flag and outbox rows from being replayed by any
+            // later save on this scoped context.
+            _db.ChangeTracker.Clear();
+
+            _logger.LogWarning(ex,
+                "Create lost the uniqueness race for seller {SellerId}: asset {ItemAssetId} is committed to open transaction {TransactionId} (02 §2.3).",
+                sellerId, transaction.ItemAssetId, conflictId);
+
+            return Failure(CreateTransactionStatus.ItemAlreadyListed, TransactionErrorCodes.ItemAlreadyListed,
+                "The seller already has an open transaction for this item (02 §2.3).");
+        }
 
         // ---------- Stage 10b: best-effort inventory cache invalidation ----------
         // 08 §2.3 — the seller's inventory snapshot is now stale (the listed
@@ -358,6 +416,35 @@ public sealed class TransactionCreationService : ITransactionCreationService
             ErrorCode: null,
             ErrorMessage: null);
     }
+
+    /// <summary>
+    /// T128 — the seller's open (non-terminal) transaction for this asset, if
+    /// one exists (02 §2.3).
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <c>UQ_Transactions_SellerId_ItemAssetId_Active</c> (06 §5.1) leg
+    /// for leg: same key, same six terminal exclusions. The index's
+    /// <c>IsDeleted = 0</c> leg is not repeated here because the global
+    /// soft-delete query filter already applies it — repeating it would read as
+    /// if the two filters could diverge. Any drift between this predicate and
+    /// the index shows up as a rejected insert rather than a wrong decision:
+    /// the index is the arbiter, this query is how the seller hears about it.
+    /// </remarks>
+    private Task<Guid?> FindOpenListingAsync(
+        Guid sellerId, string itemAssetId, CancellationToken cancellationToken)
+        => _db.Set<Transaction>()
+            .AsNoTracking()
+            .Where(t =>
+                t.SellerId == sellerId &&
+                t.ItemAssetId == itemAssetId &&
+                t.Status != TransactionStatus.COMPLETED &&
+                t.Status != TransactionStatus.CANCELLED_TIMEOUT &&
+                t.Status != TransactionStatus.CANCELLED_SELLER &&
+                t.Status != TransactionStatus.CANCELLED_BUYER &&
+                t.Status != TransactionStatus.CANCELLED_ADMIN &&
+                t.Status != TransactionStatus.REFUNDED)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
     private static string BuildInviteUrl(Transaction transaction)
     {

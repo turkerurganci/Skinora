@@ -167,6 +167,13 @@ public sealed class TransactionsController : ControllerBase
                 // (07 §6.1), so the seller sees one vocabulary across the
                 // create flow.
                 or CreateTransactionStatus.InventoryPrivate
+                // T128 — 422 ITEM_ALREADY_LISTED (02 §2.3). 422 rather than
+                // 409: every business-rule rejection this endpoint can produce
+                // is a 422, and the seller's fix here is the same class of
+                // action as its nearest neighbours (ITEM_NOT_TRADEABLE,
+                // ITEM_NOT_IN_INVENTORY) — pick another item, or cancel the
+                // open transaction.
+                or CreateTransactionStatus.ItemAlreadyListed
                 => UnprocessableEntity(CreateErrorEnvelope(outcome)),
 
             // T121 — 503 STEAM_UNAVAILABLE: the inventory check is undecided,

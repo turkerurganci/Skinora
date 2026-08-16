@@ -1326,6 +1326,7 @@
         "ACCOUNT_FLAGGED": "Your account is under review. You cannot start a new transaction.",
         "ITEM_NOT_TRADEABLE": "The item you selected is not tradeable. Please pick a different item.",
         "ITEM_NOT_IN_INVENTORY": "The item was not found in your inventory. Refresh the inventory and try again.",
+        "ITEM_ALREADY_LISTED": "You already have an open transaction for this item. Cancel it or pick a different item.",
         "INVENTORY_PRIVATE": "Your Steam inventory is set to private, so it could not be checked. Make it public and try again.",
         "STEAM_UNAVAILABLE": "Steam could not be reached, so your inventory could not be checked. Please try again shortly.",
         "PRICE_OUT_OF_RANGE": "The price is outside the platform limits. Please re-enter.",

@@ -1326,6 +1326,7 @@
         "ACCOUNT_FLAGGED": "您的账户正在审核中。无法发起新交易。",
         "ITEM_NOT_TRADEABLE": "您选择的物品不可交易。请选择其他物品。",
         "ITEM_NOT_IN_INVENTORY": "您选择的物品未在库存中找到。请刷新库存后重试。",
+        "ITEM_ALREADY_LISTED": "您已有该物品的进行中交易。请先取消该交易，或选择其他物品。",
         "INVENTORY_PRIVATE": "您的 Steam 库存设为私密，因此无法检查。请将其设为公开后重试。",
         "STEAM_UNAVAILABLE": "无法连接 Steam，因此无法检查您的库存。请稍后重试。",
         "PRICE_OUT_OF_RANGE": "价格超出平台限制范围。请重新输入。",
