@@ -103,6 +103,52 @@ public class ReputationAggregatorTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Recompute_Refunded_By_Delivery_Reversal_Counts_Against_Seller_Only()
+    {
+        // T129 — 06 §3.1. A trade the seller pulled back after being paid is the
+        // heaviest fraud in the model; before this arm existed it left the
+        // reputation score untouched and lived only in a fraud flag an admin had
+        // to go and read.
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -100);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.REFUNDED, dayOffset: -60,
+            deliveryReversedAt: DateTime.UtcNow.AddDays(-60));
+
+        var aggregator = new ReputationAggregator(Context);
+
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // Alice (seller): 1 success out of 2 counted.
+        Assert.Equal(1, aliceSnap.CompletedTransactionCount);
+        Assert.Equal(0.5m, aliceSnap.SuccessfulTransactionRate);
+
+        // Bob (buyer) is the victim here — the reversal must not touch his rate.
+        Assert.Equal(1, bobSnap.CompletedTransactionCount);
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+    }
+
+    [Fact]
+    public async Task Recompute_Refunded_By_Admin_Dispute_Excludes_Both_Parties()
+    {
+        // The other producer of REFUNDED (WP5 buyer-favour ruling) stays out of
+        // the formula for the same reason CANCELLED_ADMIN does: it is a platform
+        // decision, not a proven user fault (02 §13). The discriminator is
+        // DeliveryReversedAt, which only the settlement path sets.
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -100);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.REFUNDED, dayOffset: -60);
+
+        var aggregator = new ReputationAggregator(Context);
+
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(1m, aliceSnap.SuccessfulTransactionRate);
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+    }
+
+    [Fact]
     public async Task Recompute_Cancelled_Timeout_Payment_Phase_Hits_Buyer()
     {
         // PreviousStatus = SELLER_CONFIRMED → ödeme timeout'u (Adım 4) → BUYER.
@@ -268,7 +314,8 @@ public class ReputationAggregatorTests : IntegrationTestBase
         Guid sellerId,
         Guid buyerId,
         TransactionStatus status,
-        int dayOffset)
+        int dayOffset,
+        DateTime? deliveryReversedAt = null)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
@@ -294,24 +341,33 @@ public class ReputationAggregatorTests : IntegrationTestBase
                                   or TransactionStatus.CANCELLED_BUYER
                                   or TransactionStatus.CANCELLED_TIMEOUT
                                   or TransactionStatus.CANCELLED_ADMIN
+                                  or TransactionStatus.REFUNDED
                           ? nowUtc.AddDays(dayOffset)
                           : null,
-            // CK_Transactions_Cancel: any CANCELLED_* status requires
-            // CancelledBy + CancelReason + CancelledAt all NOT NULL.
+            // CK_Transactions_Cancel: any CANCELLED_* status — and REFUNDED,
+            // which reuses the same columns — requires CancelledBy +
+            // CancelReason + CancelledAt all NOT NULL.
             CancelledBy = status switch
             {
                 TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
                 TransactionStatus.CANCELLED_BUYER => CancelledByType.BUYER,
                 TransactionStatus.CANCELLED_TIMEOUT => CancelledByType.TIMEOUT,
                 TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+                // T129 — a settlement reversal is attributed to the seller; an
+                // admin dispute refund to the admin.
+                TransactionStatus.REFUNDED => deliveryReversedAt is null
+                    ? CancelledByType.ADMIN
+                    : CancelledByType.SELLER,
                 _ => null,
             },
             CancelReason = status is TransactionStatus.CANCELLED_SELLER
                                    or TransactionStatus.CANCELLED_BUYER
                                    or TransactionStatus.CANCELLED_TIMEOUT
                                    or TransactionStatus.CANCELLED_ADMIN
+                                   or TransactionStatus.REFUNDED
                            ? "test"
                            : null,
+            DeliveryReversedAt = deliveryReversedAt,
         };
 
         Context.Set<Transaction>().Add(tx);

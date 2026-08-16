@@ -851,5 +851,21 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             Calls.Add((userId, transactionId, type));
             return Task.CompletedTask;
         }
+
+        /// <summary>
+        /// T129 added the account-level leg to the port. Creation never calls it
+        /// (its only caller is the settlement reversal path), so recording with
+        /// an empty transaction id keeps the fake honest: a creation test that
+        /// ever saw a call here would be asserting against a real defect.
+        /// </summary>
+        public Task StageAccountFlagAsync(
+            Guid userId,
+            FraudFlagType type,
+            string details,
+            CancellationToken cancellationToken)
+        {
+            Calls.Add((userId, Guid.Empty, type));
+            return Task.CompletedTask;
+        }
     }
 }

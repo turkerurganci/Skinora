@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — yeni entity §3.5a `DeliveryEvidenceCapture` (append-only teslimat kanıt kaydı) ve §8'e `delivery.inventory_evidence_auto_release_enabled` launch kapısı satırı eklendi. Şema: 1 yeni tablo, migration `T125_DeliveryEvidenceCapture`.) · 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
+**Versiyon: v6.6** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-16 (T129 — §3.5'e iki kolon (`SettlementCheckedAt`, `SettlementEscalatedAt`) ve `PayoutEligibleAt`'ın ITEM_DELIVERED **giriş guard'ı** olduğu notu; §3.1 oran formülünün paydasına `REFUNDED[DeliveryReversedAt NOT NULL]` (mutabakat geri alması satıcıya yazılır, admin dispute iadesi hariç kalır); §3.17'ye üç `Settlement` ayarı. Şema: 2 nullable kolon + 3 seed satırı, migration `T129_SettlementCheckColumns`.) · 2026-08-14 (T125 — yeni entity §3.5a `DeliveryEvidenceCapture` (append-only teslimat kanıt kaydı) ve §8'e `delivery.inventory_evidence_auto_release_enabled` launch kapısı satırı eklendi. Şema: 1 yeni tablo, migration `T125_DeliveryEvidenceCapture`.) · 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -442,12 +442,15 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 >
 > **SuccessfulTransactionRate formülü:**
 > ```
-> completed / (completed + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT)
+> completed / (completed + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT
+>              + REFUNDED[DeliveryReversedAt NOT NULL])
 > ```
 > - CANCELLED_ADMIN paydaya dahil **değildir** — tamamen platform kararı, kullanıcının kontrolünde değil.
+> - `REFUNDED` **bölünerek** dahil edilir (T129, proje sahibi kararı 2026-08-16). İki üreticisi kusur hakkında zıt şey söyler: admin dispute iadesi bir platform kararıdır ve CANCELLED_ADMIN ile aynı gerekçeyle dışarıda kalır; mutabakat sonu geri alması (`DeliveryReversedAt NOT NULL`) ise platformun satıcının item'ı ödeme sonrası geri aldığını **gözlemlemesidir**. Ayırt edici alan `DeliveryReversedAt`'tir; onu yalnız mutabakat yolu yazar. Formül bölünmeseydi modeldeki **en ağır dolandırıcılık** itibar skoruna hiç yansımaz, tek izi admin'in gidip okuması gereken bir fraud flag olurdu.
 > - **Sorumluluk prensibi:** İptal sadece sorumlu tarafın skorunu etkiler:
 >   - `CANCELLED_SELLER` → sadece satıcının paydasına eklenir
 >   - `CANCELLED_BUYER` → sadece alıcının paydasına eklenir
+>   - `REFUNDED` (geri alma) → sadece **satıcının** paydasına eklenir; alıcı bu senaryonun mağdurudur
 >   - `CANCELLED_TIMEOUT` → timeout'un düştüğü adıma göre sorumlu taraf belirlenir. Sorumluyu belirleyen tek girdi `TransactionHistory.PreviousStatus`'tur (05 §4.4 — timeout satırını yazan yol bu alanı doldurmazsa iptal hiçbir tarafın paydasına yazılmaz):
 >     - Alıcı kabul timeout'u (adım 2, `PreviousStatus = CREATED`) → alıcı
 >     - Satıcı hazırlık onayı timeout'u (adım 3, `PreviousStatus = ACCEPTED`) → satıcı
@@ -616,9 +619,11 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
 | `DeliveryRoundAt` | datetime | NULL | Teslimat timeout doğrulama turunun bu satıra **en son ne zaman baktığı** (T127). Her turda yazılır — sonuca varmayan turlar dahil. `DeadlineScannerJob` teslimat penceresini bu kolona göre (NULL'lar önce) sıralar: beş verdict'ten üçü satırı `PAYMENT_RECEIVED` ve süresi kalıcı dolmuş bırakır, dolayısıyla deadline sırası bu satırların pencereyi kalıcı işgal etmesi demektir. Karar girdisi **değildir**, yalnız sıralama/aralık alanıdır |
 | **Mutabakat (v3.0)** | | | |
-| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
-| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu |
-| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur |
+| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (`payout_settlement_days`, varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır ve o geçişin **guard koşuludur** (T129): kolonu yazmayan bir çağıran teslimatı gerçekleştiremez, çünkü kapı yalnız kapattığı yolu değil koruduğu değerin yazarlarını da denetlemelidir. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
+| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu; ayrıca satıcı payout'u ve depozit sweep'i bu damgayı bekler (T129) |
+| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur. Aynı zamanda REFUNDED'ın iki üreticisini ayıran alandır: doluysa kanıtlanmış satıcı kusuru (itibar formülüne girer, §3.1), boşsa admin dispute kararı (girmez) |
+| `SettlementCheckedAt` | datetime | NULL | Mutabakat kontrolünün bu satıra **en son ne zaman baktığı** (T129). `DeliveryRoundAt`'ın ikizi ve aynı gerekçeyle var: envanteri okunamayan satır süresiz uygun kalır, dolayısıyla `PayoutEligibleAt` sırası en eski okunamayan satırların pencereyi kalıcı işgal etmesi demektir. Job bu kolona göre (NULL'lar önce) sıralar. Karar girdisi **değildir** |
+| `SettlementEscalatedAt` | datetime | NULL | Mutabakat kontrolünün işlemi admin'e devrettiği an (T129). Üç sebep: envanter `settlement.unreadable_escalation_hours` boyunca okunamadı, item alıcıdan ayrıldı ama satıcıya döndüğü kanıtlanamadı, ya da geri alma imzası otomatik iade kapısı kapalıyken oluştu. Idempotency işareti — admin bir kez haberdar edilir, her turda değil |
 | **Concurrency** | | | |
 | `RowVersion` | byte[] | NOT NULL, ROWVERSION | Optimistic concurrency token — EF Core `IsRowVersion()` |
 | **Zaman Damgaları** | | | |
@@ -660,6 +665,10 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >   | `CompletedAt` | COMPLETED |
 >
 >   **Mutabakat invariantı (v3.0):** `COMPLETED`'a geçiş için `SettlementVerifiedAt NOT NULL` **ve** `DeliveryReversedAt NULL` olmalıdır. Yani ödeme, yalnızca mutabakat süresi dolduktan **ve** item'ın hâlâ alıcıda olduğu doğrulandıktan sonra yapılabilir (02 §4.5.1). Süre dolmuş olması tek başına yeterli değildir.
+>
+>   **Kapının üç kez okunması (T129):** aynı çift — `SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL` — state machine `Complete` guard'ının yanı sıra `SellerPayoutQueueJob` ve `SweepQueueJob` sorgularında da okunur. Guard tek başına yetmez çünkü ikisi de COMPLETED'dan **önce** çalışır: payout satırı zincire yayınlandıktan sonra guard'ın geçişi reddetmesi parayı geri getirmez, sweep depoziti boşalttıktan sonra iade edilecek kaynak kalmaz. Kapı, korduğu değerin bütün tüketicilerinde tekrarlanır.
+>
+>   **Giriş invariantı (T129):** `ITEM_DELIVERED`'a geçiş `PayoutEligibleAt NOT NULL` ister. Kolon bir kayıt alanı değil ödeme saatidir; duruma kolonsuz girilebilseydi payout kuyruğu fail-closed olduğu için işlem sessizce kilitlenir, ya da ileride başka bir yazar pencereyi `ItemDeliveredAt`'ten bağımsız doldurup kısaltırdı.
 >
 >   **`DeliveredBuyerAssetId` bu matriste yer almaz.** Best-effort audit alanıdır: teslimat alıcı onayıyla doğrulandığında envanter okunmamış olabilir ve alan NULL kalır. Guard bu alana değil `DeliveryEvidence`'a bakar (§8.4).
 >
@@ -1115,6 +1124,9 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
 | `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
 | `delivery.inventory_evidence_auto_release_enabled` | Delivery | bool | false | Envanter kanıtına dayalı otomatik teslimat onayı açık mı (T125, 02 §9.2). false iken kanıt kaydedilir (§3.5a) ama parayı tek başına serbest bırakmaz; alıcı onayı etkilenmez. Env ile açılamaz — bkz. DEPLOY_RUNBOOK §H |
+| `payout_settlement_days` | Settlement | int | 8 | Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletilme süresi (T129, 02 §4.5.1/§16.2). `PayoutEligibleAt = ItemDeliveredAt + bu değer`. Steam'in 7 günlük geri alma penceresini kapsamak zorundadır: **7'nin altına ayarlanamaz** (validator) |
+| `settlement.unreadable_escalation_hours` | Settlement | int | 48 | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında kaç saat sonra admin'e eskale edileceği (T129, 03 §2.4 adım 2). Ödeme her hâlükârda parkta kalır — eşik yalnız "ne zaman insana sorulur"u belirler |
+| `settlement.reversal_auto_refund_enabled` | Settlement | bool | false | Geri alma tespitinde otomatik iade açık mı (T129 launch kapısı, `delivery.inventory_evidence_auto_release_enabled`'ın ikizi). false iken imza admin'e eskale edilir, parayı kendiliğinden hareket ettirmez — bkz. DEPLOY_RUNBOOK §H |
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`**. İki ad da custodial dönemden kalmıştı ve v3.0'da **ikisi de yanlıştı**: platform artık trade offer oluşturmuyor (03 §2.3 notu) ve — pahalı olan yarısı — "buyer" anahtarı **satıcının** teslimat penceresini besliyordu, yani admin satıcı teslimatsızlığını "Alıcı trade offer timeout süresi" etiketli bir kutudan yönetiyordu (T119 sorumluluk denetimi). Satır `Id`'leri değişmedi → migration bir `UpdateData`'dır; admin'in girdiği `Value` korunur. Env bootstrap adı anahtardan türetildiği için deploy adları da değişti: `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` / `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` (DEPLOY_RUNBOOK §A #2/#6).
 

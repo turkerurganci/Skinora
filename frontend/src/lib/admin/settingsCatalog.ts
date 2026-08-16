@@ -88,6 +88,15 @@ const SETTING_GROUPS: readonly SettingGroupDef[] = [
     categories: ["delivery_verification"],
     section: "operational",
   },
+  // T129 — the 02 §4.5.1 settlement window and its reversal guard. Operational
+  // for the same reason as the group above: 04 §8.6 predates v3.0 and lists no
+  // settlement group, but these three are real admin-tunable parameters
+  // (02 §16.2 "Mutabakat süresi") and must not fall into the "other" bucket.
+  {
+    key: "settlement",
+    categories: ["settlement"],
+    section: "operational",
+  },
 ];
 
 /** A rendered group: its i18n key, section, and the settings that belong to it. */

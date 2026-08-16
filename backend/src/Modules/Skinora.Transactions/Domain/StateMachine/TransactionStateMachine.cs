@@ -262,7 +262,7 @@ public class TransactionStateMachine
         // kavuşurdu. Açık bırakmak kaçınılmaz sonucu hızlandırıyor.
         _machine.Configure(TransactionStatus.PAYMENT_RECEIVED)
             .OnEntry(() => _transaction.PaymentReceivedAt = DateTime.UtcNow)
-            .PermitIf(TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED, HasDeliveryEvidence, "Teslimat kanıtı yetersiz (02 §9.2).")
+            .PermitIf(TransactionTrigger.DeliverItem, TransactionStatus.ITEM_DELIVERED, HasDeliveryEntryInvariant, "Teslimat kanıtı yetersiz veya mutabakat penceresi açılmamış (02 §9.2, §4.5.1).")
             .Permit(TransactionTrigger.Timeout, TransactionStatus.CANCELLED_TIMEOUT)
             .Permit(TransactionTrigger.SellerCancel, TransactionStatus.CANCELLED_SELLER)
             .Permit(TransactionTrigger.AdminCancel, TransactionStatus.CANCELLED_ADMIN)
@@ -331,6 +331,29 @@ public class TransactionStateMachine
         HasFieldsForSellerConfirmed()
         && _transaction.DeliveryEvidence.IsSufficientForDelivery()
         && _transaction.DeliveryVerifiedAt.HasValue;
+
+    /// <summary>
+    /// ITEM_DELIVERED giriş invariantı (T129): teslimat kanıtı <b>ve</b>
+    /// mutabakat penceresi.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 06 §3.5 <c>PayoutEligibleAt</c>'ı ITEM_DELIVERED için zorunlu sayar ve
+    /// bunun bir kayıt kuralı değil para kuralı olduğu iki kez pahalıya
+    /// öğrenildi: kolonu kimse yazmadığı sürece <c>SellerPayoutQueueJob</c>
+    /// hiçbir şey kuyruğa almaz (fail-closed, T126 bulgu F1), ama kolon
+    /// olmadan duruma girilebiliyorsa bir gün başka bir yazar onu
+    /// <c>ItemDeliveredAt</c>'ten bağımsız doldurur ve pencere sessizce kısalır.
+    /// </para>
+    /// <para>
+    /// Bu yüzden pencere burada, geçişin kendisinde talep ediliyor:
+    /// <c>DeliverItem</c> çağıranı <c>SettlementWindowStamper</c>'ı atlarsa
+    /// teslimat hiç gerçekleşmez — kapı, koruduğu değerin bütün yazarlarını
+    /// denetler (T124/T126 kalıcı dersi).
+    /// </para>
+    /// </remarks>
+    private bool HasDeliveryEntryInvariant() =>
+        HasDeliveryEvidence() && _transaction.PayoutEligibleAt.HasValue;
 
     /// <summary>
     /// 02 §4.5.1 — ödeme ancak mutabakat süresi dolduktan <b>ve</b> item'ın hâlâ

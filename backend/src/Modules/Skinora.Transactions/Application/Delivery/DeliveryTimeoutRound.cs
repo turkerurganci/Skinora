@@ -7,6 +7,7 @@ using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -60,6 +61,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     private readonly AppDbContext _db;
     private readonly IDeliveryVerificationService _verification;
     private readonly IDeliveryMisdeliveryEscalator _escalator;
+    private readonly ISettlementSettingsProvider _settlementSettings;
     private readonly IOutboxService _outbox;
     private readonly ILogger<DeliveryTimeoutRound> _logger;
     private readonly TimeProvider _clock;
@@ -68,10 +70,12 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         AppDbContext db,
         IDeliveryVerificationService verification,
         IDeliveryMisdeliveryEscalator escalator,
+        ISettlementSettingsProvider settlementSettings,
         IOutboxService outbox,
         ILogger<DeliveryTimeoutRound> logger,
         TimeProvider clock)
     {
+        _settlementSettings = settlementSettings;
         _db = db;
         _verification = verification;
         _escalator = escalator;
@@ -185,11 +189,20 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         // DeliveryVerifiedAt, the field holding the launch gate shut.
         var previousVerifiedAt = transaction.DeliveryVerifiedAt;
         var previousDeliveredAssetId = transaction.DeliveredBuyerAssetId;
+        var previousPayoutEligibleAt = transaction.PayoutEligibleAt;
         var previousStatus = transaction.Status;
 
         // 02 §9.2 invariant: stamped BEFORE the guard runs (HasDeliveryEvidence
         // reads IsSufficientForDelivery() && DeliveryVerifiedAt.HasValue).
         transaction.DeliveryVerifiedAt = nowUtc;
+
+        // T129 — 02 §4.5.1. Same ordering rule and the same rollback discipline
+        // as the stamp above: the ITEM_DELIVERED guard now also demands the
+        // settlement window, and a half-stamped row committed by somebody else's
+        // unit of work would be a transaction whose payout clock was opened
+        // without a delivery.
+        var settlement = await _settlementSettings.GetAsync(cancellationToken);
+        SettlementWindowStamper.Stamp(transaction, nowUtc, settlement.SettlementDays);
 
         // 06 §8.4 — best-effort audit material for WRONG_ITEM handling, never a
         // guard. Only ever written once: a later round's candidate must not
@@ -209,6 +222,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         {
             transaction.DeliveryVerifiedAt = previousVerifiedAt;
             transaction.DeliveredBuyerAssetId = previousDeliveredAssetId;
+            transaction.PayoutEligibleAt = previousPayoutEligibleAt;
 
             _logger.LogError(ex,
                 "Transaction {TransactionId}: delivery timeout round proved delivery but "

@@ -122,6 +122,20 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public DateTime? SettlementVerifiedAt { get; set; }
     public DateTime? DeliveryReversedAt { get; set; }
 
+    // When the settlement re-check last EXAMINED this row (T129) — the twin of
+    // DeliveryRoundAt above, and for the same reason: a row whose inventory
+    // cannot be read stays eligible forever, so ordering the batch by
+    // PayoutEligibleAt alone would let the oldest unreadable rows refill the
+    // window and starve every settlement that came due today.
+    public DateTime? SettlementCheckedAt { get; set; }
+
+    // When the settlement re-check handed this row to an admin — an inventory
+    // that stayed unreadable past settlement.unreadable_escalation_hours, an
+    // item that left the buyer without proof of a reversal, or a reversal
+    // signature raised while the auto-refund gate is closed. Idempotency
+    // marker: the admin is told once, not once per tick.
+    public DateTime? SettlementEscalatedAt { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

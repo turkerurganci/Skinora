@@ -97,6 +97,9 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
 | `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
 | `delivery.inventory_evidence_auto_release_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz. Açma prosedürü §H'de; alıcının kendi onayı bundan etkilenmez (T125, 02 §9.2) |
+| `settlement.reversal_auto_refund_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — mutabakat sonu kontrolü geri alma imzası bulursa admin'e eskale eder, otomatik iade + fraud flag uygulamaz. Açma prosedürü §I'de (T129, 02 §4.5.1) |
+| `payout_settlement_days` | `8` | Seed default'u zaten doğru değerdir (7 günlük Steam penceresi + 1 gün marj). Değiştirilecekse **7'nin altına inilemez** — validator reddeder (02 §16.2) |
+| `settlement.unreadable_escalation_hours` | `48` | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında admin'e ne kadar sonra düşeceği. Kısaltmak admin kuyruğunu şişirir, uzatmak satıcının ödemesini geciktirir — ödeme her iki hâlde de parkta kalır (03 §2.4) |
 
 ### C.1 PRICE_DEVIATION için uygulama config'i (SystemSetting değil)
 
@@ -333,3 +336,43 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 
 - `delivery_timeout_minutes`'i (§A #6) düşürmek. T127'den beri süre dolması gerçekten iptal üretebiliyor, dolayısıyla ölçüm gelmeden daraltmak teslim etmiş satıcıyı haksız iptale sokar.
 - `DeliveryEvidenceCaptures` satırlarını silmek/düzenlemek. Tablo append-only'dir (06 §4.2); UPDATE/DELETE uygulama katmanında reddedilir.
+
+---
+
+## I. Launch checklist — mutabakat geri alma kapısı (T129)
+
+### I.1 Neden ikinci bir kapı var
+
+Teslimat kapısı (§H) "item geldi mi?" sorusunun otomatik cevabını tutar; bu kapı "**trade geri mi alındı?**" sorusununkini tutar. İkisi ayrı sorulardır ve ikinci sorunun yanlış cevabı daha pahalıdır: yanlış "geri alındı" kararı alıcıya tam iade yapar, satıcıya `DELIVERY_REVERSED` fraud flag'i koyar ve item'ı kimsede bırakmaz. T122 gerçek bir geri almayı **ölçemedi** (runbook §7), dolayısıyla imza — "item alıcıdan gitti, satıcının orijinal asset'i geri döndü" — doğrulanmamış bir çıkarımdır.
+
+Kapı kapalıyken imza **kaybolmaz**: işlem `ITEM_DELIVERED`'da parkta kalır, `SettlementEscalatedAt` damgalanır ve admin'lere `ADMIN_ESCALATION` bildirimi gider. Admin isterse `admin_resolve_refund` ile aynı sonucu insan kararı olarak üretir.
+
+### I.2 Kapı kapalıyken ne olur / ne olmaz
+
+| Durum | Kapı kapalı (`false`) | Kapı açık (`true`) |
+|---|---|---|
+| Item hâlâ alıcıda | `SettlementVerifiedAt` damgalanır → payout + sweep akar | Aynı |
+| Item gitti, satıcıda geri belirdi | Admin'e eskale, para parkta | `delivery_reversed` → REFUNDED + alıcıya iade + satıcıya fraud flag |
+| Item gitti, satıcıda görünmüyor | Admin'e eskale | Admin'e eskale (kapıdan bağımsız — ayrım kanıtlanamıyor) |
+| Envanter okunamıyor | Eşik dolunca admin'e eskale | Aynı |
+
+Üçüncü satır kapının **dışındadır**: alıcının item'ı başkasına devretmesi ile geri alma tek taraflı okumada aynı görünür ve Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde biter, yani devir meşru bir ihtimaldir. O vaka hiçbir zaman otomatik karara bağlanmaz.
+
+### I.3 Kapıyı açma adımları
+
+1. **En az bir gerçek geri alma vakası gözlenmiş olmalı.** Eskale edilmiş işlemler:
+   ```sql
+   SELECT Id, SellerId, BuyerId, ItemDeliveredAt, PayoutEligibleAt,
+          SettlementCheckedAt, SettlementEscalatedAt
+   FROM   Transactions
+   WHERE  SettlementEscalatedAt IS NOT NULL
+   ORDER  BY SettlementEscalatedAt;
+   ```
+2. **Her vakayı insan incele:** Steam trade geçmişi gerçekten bir rollback gösteriyor mu, yoksa alıcı item'ı mı devretti? Sonuç `INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md` §7'ye işlenir — geri alma sonrası asset ID'nin korunup korunmadığı bu incelemede öğrenilir ve servisin imzası ona göre daraltılabilir.
+3. **Kapıyı aç.** Admin UI → Ayarlar → *Mutabakat* → `Geri alma tespitinde otomatik iade` = `true`. Env ile açılamaz (§C'deki aynı gerekçe).
+4. **Geri alınabilir.** Şüpheli bir vaka görülürse `false` yapılır; tespit ve eskalasyon sürer, otomatik iade durur.
+
+### I.4 Kapı açılmadan yapılmaması gerekenler
+
+- `payout_settlement_days`'i 7'ye indirmek. Validator 7'nin altını reddeder ama tam 7 de marjsızdır: kontrol penceresi Steam'in geri alma penceresiyle tam örtüşür ve saat farkı kadar bir açık bırakır.
+- Eskale edilmiş işlemi `SettlementVerifiedAt` elle damgalayarak "çözmek". O damga payout'u serbest bırakır ve `COMPLETED` guard'ını açar — kararın doğru yolu `admin_resolve_refund` veya kontrolün kendi kendine sonuçlanmasıdır.

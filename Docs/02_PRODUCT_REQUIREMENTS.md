@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v3.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-14 (T125 — §9.2 envanter kanıtı yoluna launch kapısı notu eklendi: `delivery.inventory_evidence_auto_release_enabled` kapalıyken kanıt üretilir ve saklanır ama tek başına para bırakmaz; alıcı onayı yolu etkilenmez. Kanıt kuralları değişmedi.) · 2026-08-13
+**Versiyon: v3.3** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-08-16 (T129 — §4.5.1 mutabakat sonu kontrolü **iki taraflı** hâle getirildi: "item alıcıda değil" tek başına geri alma sayılmaz, item'ın satıcıda yeniden belirmesi aranır; ayırt edilemeyen ayrılma admin'e düşer. Gerekçe: Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde bittiği için alıcının meşru devri tek taraflı okumada geri almayla aynı görünüyordu. Ayrıca geri alma sonuçlarına hesap düzeyi `DELIVERY_REVERSED` flag tipi ve itibar paydası (06 §3.1) eklendi, otomatik iade launch kapısına bağlandı.) · 2026-08-14 (T125 — §9.2 envanter kanıtı yoluna launch kapısı notu eklendi: `delivery.inventory_evidence_auto_release_enabled` kapalıyken kanıt üretilir ve saklanır ama tek başına para bırakmaz; alıcı onayı yolu etkilenmez. Kanıt kuralları değişmedi.) · 2026-08-13
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -154,13 +154,19 @@ Steam'in tek caydırıcısı, geri almayı başlatan hesaba uygulanan 30 günlü
 | Süre boyunca | Para platformda tutulur, satıcıya hiçbir ödeme yapılmaz |
 | Süre sonunda | Ödeme yapılmadan hemen önce alıcının envanteri kontrol edilir |
 | Item hâlâ alıcıda | Trade kesinleşmiştir → komisyon kesilir, kalan satıcıya gönderilir → işlem tamamlanır |
-| Item alıcıda değil | Trade geri alınmıştır → **satıcıya ödeme yapılmaz**, para alıcıya iade edilir, işlem `REFUNDED` olur |
+| Item alıcıda değil **ve satıcıya dönmüşse** | Trade geri alınmıştır → **satıcıya ödeme yapılmaz**, para alıcıya iade edilir, işlem `REFUNDED` olur |
+| Item alıcıda değil, satıcıya döndüğü de görünmüyor | **Karar verilmez** — admin incelemesine düşer (aşağıdaki not) |
 
 Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontroldür**. Bu iki adım birlikte uygulandığında trade geri alma riski tamamen kapanır.
 
+> **Kontrol neden iki taraflıdır (T129, proje sahibi kararı 2026-08-16):** "item alıcıda değil = geri alınmıştır" eşitliği pencerenin tamamı için geçerli değildir. Steam trade ile edinilen item'ı **7 gün** kısıtlar (T122 runbook §6.1), mutabakat süresi ise **8 gündür** — yani son bir gün boyunca alıcı skini meşru şekilde devredebilir. Tek taraflı okuma bu alıcıya tam iade verir, item'ı da bırakır ve teslim etmiş satıcıyı fraud flag'iyle cezalandırır; yani bu kuralın satıcıya karşı kapattığı dolandırıcılığın **simetriğini alıcıya açar**. Ayırt edici sinyal ucuzdur: geri alma item'ı **satıcıya döndürür**, alıcının devri döndürmez. Bu yüzden alıcı tarafı "item gitti" dediğinde satıcı envanteri de okunur ve yalnızca item'ın satıcıda yeniden belirmesi geri alma sayılır. Ayırt edilemeyen vaka otomatik karara bağlanmaz — ne ödeme akar ne iade yapılır, insan bakar.
+
+> **Launch kapısı (T129):** Geri alma imzası ölçülmemiş bir çıkarımdır (T122 gerçek bir rollback gözleyemedi). Bu yüzden otomatik iade `settlement.reversal_auto_refund_enabled` ayarının arkasındadır ve launch'ta **kapalıdır**: imza kaydedilir, admin'e eskale edilir, para parkta bekler. Teslimat kanıtı kapısının (§9.2) ikizidir; prosedür DEPLOY_RUNBOOK §I.
+
 **Geri alma tespit edilirse:**
 - Alıcıya tam iade yapılır (iade kuralları §4.6)
-- Satıcı hesabına dolandırıcılık işareti konur ve tekrarı yaptırıma tabidir (§14.2)
+- Satıcı hesabına dolandırıcılık işareti konur ve tekrarı yaptırıma tabidir (§14.2). İşaret **hesap düzeyindedir** ve kendi tipini taşır (`DELIVERY_REVERSED`) — §14.2'nin saydığı şey tekrar olduğu için vakanın admin kuyruğunda ayırt edilebilir olması gerekir
+- İşlem satıcının itibar oranının paydasına yazılır (06 §3.1). Bu, `REFUNDED`'ın paydaya giren tek türüdür: admin dispute iadesi platform kararıdır ve dışarıda kalır
 - Olay audit kaydına yazılır
 
 **Bilinen sonuçları (MVP'de kabul edildi, iyileştirme sonraya bırakıldı):**

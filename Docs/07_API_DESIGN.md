@@ -1996,10 +1996,10 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 }
 ```
 
-**Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`, `delivery_verification`
+**Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`, `delivery_verification`, `settlement`
 
 > **Notlar:**
-> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (60 anahtar — T125 öncesi 59; buradaki sayı T123 döneminde 58 olarak kalmış, düzeltildi). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
+> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (63 anahtar — T129 mutabakat penceresi için üç `settlement` anahtarı ekledi; T125 öncesi 59). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
 > - `valueType` ∈ `number` (int/decimal) | `boolean` | `string`. `value`, henüz yapılandırılmamış anahtarlarda `null` döner (06 §3.17 `IsConfigured = false`).
 > - DTO **etki-kapsamı** alanı taşımaz; S17 UI etkiyi (yeni işlem / runtime) kategoriden türetir (04 §8.6).
 > - Sanctions taraması (yaptırımlı adres listesi) ayrı bir admin yüzeyinden yönetilir (T82) — SystemSetting değildir; bu yüzden kategori listesinde `sanctions_screening` yoktur.

@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-10
+**Versiyon: v3.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-16 (T129 — §4.2'de `complete` ve `delivery_reversed` satırları mutabakat kontrolünün **iki taraflı** olduğunu ve kapının payout/sweep üreticilerinde de okunduğunu yazar hâle getirildi. Geçiş kümesi değişmedi.) · 2026-08-10
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -464,8 +464,8 @@ Item hiçbir durumda platformda bulunmaz — "item iadesi" diye bir geçiş yan 
 | PAYMENT_RECEIVED | timeout | CANCELLED_TIMEOUT | Para alıcıya iade — **sorumlu: satıcı**. İptal uygulanmadan önce son bir teslimat doğrulaması çalışır; kanıt bulunursa geçiş `deliver_item`'a döner |
 | PAYMENT_RECEIVED | seller_cancel | CANCELLED_SELLER | Para alıcıya iade. Satıcı göndermekten vazgeçebilir; itibar cezası uygulanır (02 §7) |
 | PAYMENT_RECEIVED | buyer_cancel | — | **Kullanılamaz.** Ödeme sonrası alıcı tek taraflı iptal edemez (02 §7) |
-| ITEM_DELIVERED | complete | COMPLETED | Guard: **mutabakat süresi doldu VE son kontrolde item hâlâ alıcıda** (02 §4.5.1). Payout on-chain onaylandıktan sonra |
-| ITEM_DELIVERED | delivery_reversed | REFUNDED | **Trade geri alınmış** — mutabakat sonu kontrolünde item alıcının envanterinde bulunamadı. Satıcıya ödeme yapılmaz, para alıcıya iade edilir, satıcıya fraud işareti konur (02 §4.5.1) |
+| ITEM_DELIVERED | complete | COMPLETED | Guard: **mutabakat süresi doldu VE son kontrolde item hâlâ alıcıda** (02 §4.5.1) — kod karşılığı `SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL`. Payout on-chain onaylandıktan sonra. Aynı çift payout ve sweep üreticilerinde de okunur; guard tek başına yetmez çünkü ikisi de COMPLETED'dan önce para hareket ettirir (06 §3.5) |
+| ITEM_DELIVERED | delivery_reversed | REFUNDED | **Trade geri alınmış** — mutabakat sonu kontrolünde item alıcının envanterinde bulunamadı **ve satıcının envanterinde yeniden belirdi** (iki taraflı kontrol, 02 §4.5.1). Satıcıya ödeme yapılmaz, para alıcıya iade edilir, satıcıya fraud işareti konur ve işlem itibar paydasına yazılır (06 §3.1). Tetikleyen tek yol `SettlementVerificationJob`; launch'ta `settlement.reversal_auto_refund_enabled` kapalı olduğu için dal otomatik işlemez, imza admin'e eskale edilir |
 | ITEM_DELIVERED | admin_resolve_refund | REFUNDED | Para alıcıya iade. **Item geri alınamaz** — platform item'a erişemez, zarar geri alma imkânı olmadan satıcıya devredilir (02 §10) |
 | FLAGGED | admin_approve | CREATED | Flag kaldırılır, işlem normal akışa girer (03 §7.1) |
 | FLAGGED | admin_reject | CANCELLED_ADMIN | İşlem iptal edilir. FLAGGED yalnızca creation-time'da tetiklendiği için varlık transferi henüz olmamıştır (03 §7.1) |

@@ -2736,6 +2736,26 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
         item yok    -> delivery_reversed trigger, REFUNDED, alıcıya iade,
                        satıcıya fraud flag, admin bildirimi
         okunamıyor  -> karar verilmez, tekrar denenir; ısrar ederse admin
+      YAPIM KARARLARI (proje sahibi, 2026-08-16 — dördü de öneri yönünde
+      onaylandı; ayrıntı Docs/TASK_REPORTS/T129_REPORT.md):
+        (K1) Kontrol İKİ TARAFLI. "Item alıcıda yok" tek başına geri alma
+             sayılmaz: Steam trade ile edinilen item'ı 7 gün kısıtlar
+             (T122 runbook §6.1) ama pencere 8 gün, yani son bir gün alıcı
+             skini meşru devredebilir. Tek taraflı okuma o alıcıya tam iade
+             verir, item'ı da bırakır ve teslim etmiş satıcıyı fraud'la
+             cezalandırır — kuralın satıcıya karşı kapattığı dolandırıcılığın
+             SİMETRİĞİ. Geri alma item'ı satıcıya döndürür, devir döndürmez;
+             ayırt edici sinyal budur. Ayırt edilemeyen vaka (alıcıdan gitti,
+             satıcıda görünmüyor) otomatik karara BAĞLANMAZ → admin.
+        (K2) Negatif dal LAUNCH KAPISI arkasında
+             (settlement.reversal_auto_refund_enabled, varsayılan false) —
+             T125'in kapısının ikizi. Kapalıyken imza kaydedilir + admin'e
+             eskale edilir, para parkta; açıkken plandaki otomatik dal işler.
+             Gerekçe: T122 gerçek bir rollback ölçemedi (runbook §7).
+        (K3) Okunamaz dal settlement.unreadable_escalation_hours (varsayılan
+             48) sonrası admin'e eskale; ödeme her hâlükârda parkta kalır.
+        (K4) Fraud işareti yeni FraudFlagType.DELIVERY_REVERSED, HESAP
+             düzeyinde (02 §4.5.1 "satıcı hesabına"; §14.2 tekrarı sayar).
     - COMPLETED guard'ı: SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL
     - Süre içinde açılan dispute ödemeyi bloklar
     - SweepQueueJob aynı kapıya bağlandı
@@ -2752,6 +2772,10 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
        DeliveryReversedAt NOT NULL olan REFUNDED satırlarını da satıcıya yazar"
        (06 §3.1 + ReputationAggregator + test) ya da "fraud flag yeterli,
        gerekçesi belgelendi" olmalı — sessizce geçilemez.
+       KARAR (proje sahibi, 2026-08-16): BİRİNCİSİ. `DeliveryReversedAt NOT
+       NULL` olan REFUNDED satırları satıcının paydasına yazılır; admin dispute
+       iadesi (kolon NULL) CANCELLED_ADMIN ile aynı gerekçeyle dışarıda kalır.
+       06 §3.1 formülü + ReputationAggregator + 2 test bu ayrımı uygular.
   Not: Beklemek tek başına korumaz — korumayı süre sonundaki KONTROL sağlar.
        Bu ikisi ayrılamaz; sadece gecikme uygulayan bir sürüm güvenli değildir.
 

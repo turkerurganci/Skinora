@@ -58,6 +58,15 @@ public sealed class OutgoingTransferJobsRegistrar : IHostedService
                 SweepQueueJob.RecurringJobId,
                 job => job.Execute(),
                 SweepQueueJob.Cron);
+
+            // T129 — the end-of-window settlement check (02 §4.5.1). Both
+            // producers above now gate on the clearance this job stamps, so
+            // without it registered nothing after ITEM_DELIVERED ever moves:
+            // the failure mode is a stuck payout, never a wrong one.
+            scheduler.AddOrUpdateRecurring<Settlement.SettlementVerificationJob>(
+                Settlement.SettlementVerificationJob.RecurringJobId,
+                job => job.Execute(),
+                Settlement.SettlementVerificationJob.Cron);
         }
         catch (Exception ex)
         {

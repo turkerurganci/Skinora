@@ -7,6 +7,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -24,6 +25,7 @@ public sealed class DeliveryConfirmationService : IDeliveryConfirmationService
 {
     private readonly AppDbContext _db;
     private readonly IDeliveryVerificationService _verification;
+    private readonly ISettlementSettingsProvider _settlementSettings;
     private readonly IOutboxService _outbox;
     private readonly ILogger<DeliveryConfirmationService> _logger;
     private readonly TimeProvider _clock;
@@ -31,12 +33,14 @@ public sealed class DeliveryConfirmationService : IDeliveryConfirmationService
     public DeliveryConfirmationService(
         AppDbContext db,
         IDeliveryVerificationService verification,
+        ISettlementSettingsProvider settlementSettings,
         IOutboxService outbox,
         ILogger<DeliveryConfirmationService> logger,
         TimeProvider clock)
     {
         _db = db;
         _verification = verification;
+        _settlementSettings = settlementSettings;
         _outbox = outbox;
         _logger = logger;
         _clock = clock;
@@ -175,6 +179,15 @@ public sealed class DeliveryConfirmationService : IDeliveryConfirmationService
         {
             transaction.DeliveredBuyerAssetId = candidate;
         }
+
+        // ---------- Stage 7b: open the settlement window (T129 — 02 §4.5.1) ----------
+        // The buyer's confirmation proves the item arrived; it does not prove the
+        // trade will stand. Steam keeps it reversible for 7 days and the seller
+        // can start that reversal without Steam Support, so this is exactly the
+        // path that must not pay on delivery alone. Stamped before the trigger:
+        // the ITEM_DELIVERED guard refuses the transition without the column.
+        var settlement = await _settlementSettings.GetAsync(cancellationToken);
+        SettlementWindowStamper.Stamp(transaction, nowUtc, settlement.SettlementDays);
 
         // ---------- Stage 8: transition ----------
         var previousStatus = transaction.Status;

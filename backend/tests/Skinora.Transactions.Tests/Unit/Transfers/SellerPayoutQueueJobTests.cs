@@ -201,6 +201,51 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
+    /// <summary>
+    /// T129 — the second half of the settlement gate. An elapsed window says the
+    /// reversal period has closed, not that nobody used it; only
+    /// <c>SettlementVerifiedAt</c> says that. Without this check a reversed
+    /// transaction would still have its payout broadcast, and the money would be
+    /// gone before the COMPLETED guard ever got to refuse the transition.
+    /// </summary>
+    [Fact]
+    public async Task ElapsedWindow_WithoutSettlementVerification_IsSkipped()
+    {
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.SettlementVerifiedAt = null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+
+        // Causality: the stamp is the single step that releases it.
+        tx.SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+        await _sut.ExecuteAsync();
+
+        Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
+    /// <summary>
+    /// T129 — a reversal detected during the window. The transaction is on its
+    /// way to REFUNDED; paying the seller now would pay the person who took the
+    /// item back.
+    /// </summary>
+    [Fact]
+    public async Task ReversedDelivery_IsSkipped_EvenWithSettlementStamp()
+    {
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.DeliveryReversedAt = _clock.GetUtcNow().UtcDateTime);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+    }
+
     [Fact]
     public async Task ExistingPayoutRow_IsNotDuplicated()
     {
@@ -390,6 +435,11 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             // entry to ITEM_DELIVERED; until then nothing writes it in
             // production, which is exactly why the gate must fail closed.
             PayoutEligibleAt = _clock.GetUtcNow().UtcDateTime.AddDays(-8),
+            // T129 — and the window having elapsed is only half of it: the
+            // end-of-window re-read is what says the trade was not reversed.
+            // Set by default for the same reason as the column above; the two
+            // T129 gate tests below override it.
+            SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime,
         };
         configure?.Invoke(tx);
 

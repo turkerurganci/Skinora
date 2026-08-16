@@ -51,6 +51,15 @@ public sealed class SystemSettingsValidator
     };
 
     /// <summary>
+    /// Floor for <c>payout_settlement_days</c> (T129 — 02 §4.5.1, §16.2). Steam
+    /// keeps a traded item reversible for 7 days and either side can start the
+    /// reversal, so a settlement window shorter than that pays the seller while
+    /// they can still take the item back. The seeded default is 8 (7 + one day
+    /// of margin); this is the hard floor an admin cannot go under.
+    /// </summary>
+    public const int MinimumSettlementDays = 7;
+
+    /// <summary>
     /// Validate a single key/value tuple in isolation (type + range only).
     /// Caller is responsible for invoking <see cref="ValidateCrossKey"/>
     /// against the post-write SystemSettings snapshot.
@@ -223,6 +232,23 @@ public sealed class SystemSettingsValidator
             var d = decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
             if (d <= 0m)
                 return $"{key} must be greater than 0 (got {value}).";
+            return null;
+        }
+
+        // T129 — the settlement window must cover Steam's reversal window
+        // (02 §16.2: "Steam'in geri alma penceresinden kısa ayarlanmamalıdır").
+        // The floor is the whole point of the setting: a window shorter than 7
+        // days pays the seller while they can still reverse the trade, which is
+        // the exact fraud 02 §4.5.1 exists to close. The generic positive-number
+        // rule would happily accept 1.
+        if (key == "payout_settlement_days")
+        {
+            var d = int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture);
+            if (d < MinimumSettlementDays)
+            {
+                return $"{key} must be at least {MinimumSettlementDays} days — it has to cover "
+                    + $"Steam's 7-day trade reversal window (02 §4.5.1, §16.2) (got {value}).";
+            }
             return null;
         }
 

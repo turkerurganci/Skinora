@@ -220,11 +220,15 @@ public class EnumTests
     // ── FraudFlagType (4) ───────────────────────────────────────────
 
     [Fact]
-    public void FraudFlagType_ShouldHave5Values()
+    public void FraudFlagType_ShouldHave6Values()
     {
-        // 5 after T82 added SANCTIONS_MATCH (02 §21.1, 06 §2.11).
+        // 5 after T82 added SANCTIONS_MATCH (02 §21.1, 06 §2.11);
+        // 6 after T129 added DELIVERY_REVERSED — the settlement re-check
+        // catching a reversed trade (02 §4.5.1, §14.2). It is a type of its own
+        // rather than an ABNORMAL_BEHAVIOR row precisely because §14.2 counts
+        // the repeat, and a count needs something to count.
         var values = Enum.GetValues<FraudFlagType>();
-        Assert.Equal(5, values.Length);
+        Assert.Equal(6, values.Length);
     }
 
     [Theory]
@@ -233,6 +237,7 @@ public class EnumTests
     [InlineData(nameof(FraudFlagType.ABNORMAL_BEHAVIOR))]
     [InlineData(nameof(FraudFlagType.MULTI_ACCOUNT))]
     [InlineData(nameof(FraudFlagType.SANCTIONS_MATCH))]
+    [InlineData(nameof(FraudFlagType.DELIVERY_REVERSED))]
     public void FraudFlagType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(FraudFlagType), Enum.Parse<FraudFlagType>(valueName)));

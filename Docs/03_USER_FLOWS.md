@@ -1,6 +1,6 @@
 # Skinora — User Flows
 
-**Versiyon: v3.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-10
+**Versiyon: v3.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-16 (T129 — §2.4 adım 2 mutabakat son kontrolü dört dala ayrıldı: item duruyor / geri alınmış (iki taraflı kanıt) / ayırt edilemeyen ayrılma → admin / okunamıyor → eşikten sonra admin.) · 2026-08-10
 
 > **v3.1 (T118):** §3.4 adım 1, **§3.5 adım 3** ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. §3.5 adım 3 alıcıya var olmayan bir inbox bildirimi vaat ediyordu — adım 9'un kalıbına çekildi (gerçek-zamanlı güncelleme; bu geçişin iki bildirimi de satıcıya tanımlı). **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 iade kuralları) — bunlar ayrı bir doküman turu gerektiriyor.
 
@@ -132,8 +132,9 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
    - Süre içinde dispute açılırsa ödeme durur ve dispute sonucunu bekler
 2. **Süre dolduğunda, ödeme yapılmadan hemen önce son kontrol:** item hâlâ alıcının envanterinde mi?
    - **Evet →** trade kesinleşmiştir, ödeme akışı devam eder (adım 3)
-   - **Hayır →** trade geri alınmıştır. **Satıcıya ödeme yapılmaz.** Para alıcıya iade edilir, işlem REFUNDED durumuna geçer, satıcı hesabına dolandırıcılık işareti konur (02 §4.5.1, §14.2). Her iki tarafa bildirim gider
-   - **Envanter okunamıyorsa →** karar verilmez, kontrol tekrarlanır. Sürekli okunamıyorsa admin'e düşer
+   - **Hayır, ve item satıcının envanterinde yeniden belirdiyse →** trade geri alınmıştır. **Satıcıya ödeme yapılmaz.** Para alıcıya iade edilir, işlem REFUNDED durumuna geçer, satıcı hesabına dolandırıcılık işareti konur (02 §4.5.1, §14.2). Her iki tarafa bildirim gider. *Launch'ta bu dal `settlement.reversal_auto_refund_enabled` kapalı olduğu için otomatik işlemez; imza admin'e eskale edilir (DEPLOY_RUNBOOK §I)*
+   - **Hayır, ama satıcıya döndüğü de görünmüyorsa →** karar verilmez, admin'e düşer. Alıcının item'ı başkasına devretmesi ile geri alma tek taraflı okumada aynı görünür ve Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde biter (02 §4.5.1 iki taraflı kontrol notu)
+   - **Envanter okunamıyorsa →** karar verilmez, kontrol tekrarlanır. `settlement.unreadable_escalation_hours` (varsayılan 48 saat) boyunca sonuca varılamazsa admin'e düşer. Ödeme her hâlükârda parkta kalır
 3. Platform komisyonu hesaplar ve keser
 3. Gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
    - **Aşmıyorsa →** Gas fee komisyondan karşılanır

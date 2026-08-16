@@ -139,6 +139,11 @@ public static class SystemSettingsCatalog
         // --- Delivery verification launch gate (T125 — 02 §9.2, DEPLOY_RUNBOOK §H) ---
         new("delivery.inventory_evidence_auto_release_enabled", "delivery_verification",
             "Envanter kanıtıyla otomatik teslimat onayı",                                     null),
+
+        // --- Settlement window + trade-reversal guard (T129 — 02 §4.5.1) ---
+        new("payout_settlement_days",                     "settlement",           "Mutabakat süresi — satıcı ödemesinin bekletilme süresi",    "gün"),
+        new("settlement.unreadable_escalation_hours",     "settlement",           "Okunamayan envanterde admin eskalasyon eşiği",              "saat"),
+        new("settlement.reversal_auto_refund_enabled",    "settlement",           "Geri alma tespitinde otomatik iade",                        null),
     ];
 }
 

@@ -33,4 +33,33 @@ public interface ITransactionFraudFlagWriter
         FraudFlagType type,
         string details,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Stage an ACCOUNT-level <c>FraudFlag</c> row (T129 — 02 §4.5.1: "satıcı
+    /// hesabına dolandırıcılık işareti konur", §14.2 counts the repeat).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Account-level rather than transaction-scoped, and that is the document's
+    /// word rather than a convenience: the finding is about the person, the
+    /// sanction in §14.2 is about their history, and a transaction-scoped flag
+    /// would be reviewed through the pre-create approve/reject path whose
+    /// outcomes (FLAGGED → CREATED / CANCELLED_ADMIN) are meaningless on a
+    /// transaction that has already refunded. 06 §3.12 enforces the shape from
+    /// the other side: <c>ACCOUNT_LEVEL</c> requires <c>TransactionId IS NULL</c>,
+    /// so the originating transaction travels in the details payload.
+    /// </para>
+    /// <para>
+    /// No emergency-hold cascade. That escalation belongs to sanctions matching
+    /// (02 §14.0, T82), where the platform is legally obliged to stop every
+    /// movement at once; a single reversal is a finding for a human to weigh,
+    /// and freezing the seller's unrelated in-flight transactions on it would
+    /// punish counter-parties who have nothing to do with this one.
+    /// </para>
+    /// </remarks>
+    Task StageAccountFlagAsync(
+        Guid userId,
+        FraudFlagType type,
+        string details,
+        CancellationToken cancellationToken);
 }
