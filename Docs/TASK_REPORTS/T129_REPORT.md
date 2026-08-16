@@ -107,7 +107,11 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 ## Commit & PR
 
 - Branch: `task/T129-settlement-window-reversal-guard`
-- Commit: `2813daf` — T129: mutabakat süresi + trade geri alma koruması
+- Commit: `2813daf` (yapım) + `e24b599` (rapor referansları)
 - PR: [#240](https://github.com/turkerurganci/Skinora/pull/240)
-- CI: run `31959182411` (izleniyor — sonuç bu satıra işlenecek)
+- CI: **✓ PASS** — dal HEAD `e24b599`, run [`31959216012`](https://github.com/turkerurganci/Skinora/actions/runs/31959216012), **CI Gate `success`**
 - Dal izolasyonu: `git log main..HEAD` → yalnız `T129` ✓
+
+**CI kırılımı (bloke edici 10 job yeşil):** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend + frontend) · CI Gate. `0. Guard (direct push)` beklendiği gibi `skipped` (PR event).
+
+**8 advisory E2E leg kırmızı — T129 kaynaklı değil, bu run'ın logundan doğrulandı.** İmza 8/8 leg'de `Invalid object name 'PlatformSteamBots'` (leg başına tam 1 iz); T129 yüzeylerinden (`settlement` / `PayoutEligibleAt` / `DELIVERY_REVERSED`) log genelinde **0 iz**. T117'den beri pre-existing, sahiplik T137 → T138 (aynı bulgu T128 raporunda da kayıtlı).
