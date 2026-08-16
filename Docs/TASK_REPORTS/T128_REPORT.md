@@ -97,8 +97,8 @@
 ## Commit & PR
 
 - Branch: `task/T128-item-uniqueness-gate`
-- Commit: COMMIT_HASH
-- PR: PR_NUMBER
+- Commit: `e9a9f33` — T128: (SellerId, ItemAssetId) tekillik kapısı
+- PR: [#239](https://github.com/turkerurganci/Skinora/pull/239)
 - CI: CI_RESULT
 
 ## Known Limitations / Follow-up
