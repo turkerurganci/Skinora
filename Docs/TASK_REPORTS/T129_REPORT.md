@@ -107,6 +107,7 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 ## Commit & PR
 
 - Branch: `task/T129-settlement-window-reversal-guard`
-- Commit: (aşağıya işlenecek)
-- PR: (aşağıya işlenecek)
-- CI: (aşağıya işlenecek)
+- Commit: `2813daf` — T129: mutabakat süresi + trade geri alma koruması
+- PR: [#240](https://github.com/turkerurganci/Skinora/pull/240)
+- CI: run `31959182411` (izleniyor — sonuç bu satıra işlenecek)
+- Dal izolasyonu: `git log main..HEAD` → yalnız `T129` ✓
