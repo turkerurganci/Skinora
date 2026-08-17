@@ -88,7 +88,9 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 
 **Paralel koşum artefaktı (kanıtlı, T129 kaynaklı değil).** İlk tam suite koşumu 13 assembly'yi **paralel** çalıştırdı ve 26 başarısızlık verdi. Bunların 9'u gerçekti (seed satır sayısı 60→63, `payout_settlement_days`/`settlement.*` anahtar listeleri, `FraudFlagType` 5→6 parity) ve düzeltildi; kalan 17'si tek paylaşımlı SQL Server üzerindeki çekişmeden geliyordu — assembly başına **seri** yeniden koşumda Fraud 91/91, Notifications 171/171, Platform 189/189, Shared 400/400 hepsi temiz geçti (F6 gate'inde de kaydedilmiş olan "integration timeout artefaktı" ile aynı sınıf). FE vitest'in ilk koşumu da aynı yükün altında worker başlatamadı; backend suite bitince 33/33 geçti.
 
-## Doğrulama
+## Doğrulama — Tur 1 (✗ FAIL, tarihsel kayıt)
+
+> Bu bölüm ilk turun bağımsız doğrulamasının **değiştirilmemiş** kaydıdır. Bulguların nasıl kapatıldığı bir alttaki §Düzeltme Turu bölümündedir; yeniden doğrulama henüz yapılmadı.
 
 **Tarih:** 2026-08-16 · **Dal:** `task/T129-settlement-window-reversal-guard` · **Commit:** `0a21df8` · **Yöntem:** bağımsız spec-conformance review (yapım raporu Faz 3'e kadar okunmadı; dokuz boyutlu paralel tarama + her ham bulgu için ayrı düşman doğrulayıcı — 48 ham bulgudan 34'ü çürütüldü, 14'ü ayakta kaldı)
 
@@ -243,8 +245,10 @@ Bağımsız doğrulamanın üç bloke edici bulgusu ve yedi bloke etmeyen maddes
 ## Commit & PR
 
 - Branch: `task/T129-settlement-window-reversal-guard`
-- Commit: `2813daf` (yapım) + `e24b599` (rapor referansları)
+- Commit: `2813daf` (yapım) + `e24b599` (rapor referansları) + **`206efcc` (düzeltme turu)**
 - PR: [#240](https://github.com/turkerurganci/Skinora/pull/240)
+- **Düzeltme turu CI ✓ PASS** — dal HEAD `206efcc`, run [`32013176074`](https://github.com/turkerurganci/Skinora/actions/runs/32013176074), **CI Gate `success`**, bloke edici 10 job yeşil (Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build ×2 · CI Gate). `0. Guard (direct push)` beklendiği gibi `skipped`.
+- **8 advisory E2E leg kırmızı — düzeltme turu kaynaklı değil, bu run'ın logundan doğrulandı.** `gh run view 32013176074 --log-failed`: 8/8 leg'de **tam 1** `Invalid object name 'PlatformSteamBots'` izi (leg dağılımı birebir 1'er), turun eklediği yüzeylerden (`clear-settlement` · `SettlementEscalationReason` · `SettlementClearedByAdminId` · `NoDeliveryReference` · `SETTLEMENT_CLEARED_ADMIN` · `DELIVERY_REVERSED`) ve genel olarak `settlement` kelimesinden log genelinde **0 iz**. İlk turdaki (`31959216012`) ve main'in kendi run'larındaki imzayla aynı; T117'den beri pre-existing, sahiplik T137 → T138.
 - CI: **✓ PASS** — run [`31959216012`](https://github.com/turkerurganci/Skinora/actions/runs/31959216012) (`e24b599`) ve **dal HEAD `36d9549`** için run [`31959858421`](https://github.com/turkerurganci/Skinora/actions/runs/31959858421); ikisinde de **CI Gate `success`**, bloke edici 10 job yeşil
 - Dal izolasyonu: `git log main..HEAD` → yalnız `T129` ✓
 
