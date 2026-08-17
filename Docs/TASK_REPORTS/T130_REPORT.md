@@ -159,14 +159,11 @@ DELIVERY bloğu (5 senaryo) + WRONG_ITEM bloğu (7 senaryo).
 
 **Bloke edici 9 job yeşil:** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend) · CI Gate. İki job `skipped`: *0. Guard* (direct push guard — PR yolunda çalışmaz) ve *3b. JS test (vitest)* (path filtresi — bu task'ta frontend değişikliği yok).
 
-**8 advisory E2E leg kırmızı, tamamı T130 dışı** — log genelinde T130 yüzeylerinden (`BuyerBaselineClassIds`, `DeliveredItemName`, `DeliveryDisputeRound`, `CaptureInventoryFingerprint`, iki yeni mesaj anahtarı) **0 iz**:
+**8 advisory E2E leg kırmızı, tamamı T130 dışı.** Nihai (yeşil) run'da 8/8 legin tamamı aynı imzayla düşüyor: `Invalid object name 'PlatformSteamBots'`, **leg başına tam 1 iz** — yani legler spec'lere hiç ulaşmadan setup'ta ölüyor. T117'den beri pre-existing; sahiplik **T137a** (E2E harness custodial seed triyajı). Log genelinde T130 yüzeylerinden (`BuyerBaselineClassIds`, `DeliveredItemName`, `DeliveryDisputeRound`, `CaptureInventoryFingerprint`, iki yeni mesaj anahtarı) **0 iz**; setup-download kırılması **0**.
 
-| Leg | Neden |
-|---|---|
-| T109 · T110 · T111 · T112 · T113 · T114 | `Invalid object name 'PlatformSteamBots'` — leg başına **tam 1 iz**, yani "spec'lere hiç ulaşmadı" imzası. T117'den beri pre-existing; sahiplik T137a |
-| T108 · happy-path | GitHub kesintisi — `actions/setup-dotnet` indirilemedi (429), "Set up job"da öldü |
+**CI notu (altyapı, kod dışı — 2026-08-17 GitHub kesintisi).** Run üç kez GitHub kaynaklı düştü: `dorny/paths-filter@v3` ve `actions/setup-dotnet` `codeload.github.com`'dan indirilemedi (429/503, her seferinde 3 denemede de). Tur 1'de `Detect changed paths`, tur 2'de `3. Unit test` + `4. Integration test` + `6. Migration dry-run`, tur 3'te iki advisory leg **"Set up job"** aşamasında öldü — bu turlarda hiçbir test kodu çalışmadı. Dördüncü rerun'da kesinti geçti ve run `success` oldu.
 
-**CI notu (altyapı, kod dışı):** run iki kez GitHub kaynaklı düştü — `dorny/paths-filter@v3` ve `actions/setup-dotnet` `codeload.github.com`'dan indirilemedi (429/503, 3 denemede de). İlk turda `Detect changed paths`, ikinci turda `3. Unit test` + `4. Integration test` + `6. Migration dry-run` **"Set up job"** aşamasında öldü — hiçbir test kodu çalışmadı. Üçüncü turda (rerun) kesinti geçti ve bloke edici jobların hepsi yeşillendi. Run'ın üst düzey `conclusion` değeri `failure` görünür; bu, advisory E2E leglerinin run sonucuna dahil olmasındandır (T129'da da aynı şekildeydi) — yetkili sinyal bloke edici jobların durumudur.
+> **Öğrenim (bu task'ta ölçüldü):** advisory E2E legleri `continue-on-error: true` olduğu için normalde run sonucunu düşürmez — T129'un **yeşil** run'ında da 8'i job düzeyinde kırmızıydı. Ancak `continue-on-error` yalnız **adım** hatalarını tolere eder; bir leg *"Set up job"* aşamasında (runner düzeyinde, action indirilemediği için) ölürse tolerans işlemez ve run `failure` olur. Dolayısıyla "advisory legler run'ı düşürdü" açıklaması yanlıştır — bu ayrımı yapmadan bir kırmızıyı advisory'ye yıkmak, gerçek bir bloke edici kırılmayı da aynı gerekçeyle geçiştirmeye açık kapı bırakır. Pre-push Layer 2 hook'u bu turlarda **doğru** davrandı; bypass kullanılmadı, temiz bir run üretilerek geçildi.
 
 ## Known Limitations / Follow-up
 
