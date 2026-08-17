@@ -1,6 +1,6 @@
 # T130 — DisputeEligibility + AutoChecker yeniden yazımı
 
-**Faz:** F7 (P5 — Dispute) | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-17
+**Faz:** F7 (P5 — Dispute) | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-17
 
 ---
 
@@ -144,18 +144,80 @@ DELIVERY bloğu (5 senaryo) + WRONG_ITEM bloğu (7 senaryo).
 
 ## Doğrulama
 
+**Bağımsız doğrulama (2026-08-17, ayrı chat, yapım raporu görülmeden, dal HEAD `7aafaf0`).**
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** |
+| Kabul kriteri | 5/5 ✓ (bağımsız olarak yeniden üretildi) |
+| Bulgu sayısı | 2 — **ikisi de bloke etmeyen** (N1 doküman başlığı, N2 sahipsiz FE yüzeyi) |
+| Düzeltme gerekli mi | Merge için hayır; N1/N2 için proje sahibi kararı |
+
+### Kapı kontrolleri
+
+| Adım | Sonuç |
+|---|---|
+| −1 Working tree | ✓ Temiz (`git status --short` boş) |
+| 0 Main CI (son 3 run) | ✓ 3/3 `success` — `32039187802`, `32039187921`, `32033733318` |
+| 0b Repo memory drift | ✓ `.claude/memory/MEMORY.md` satır 51'de T130 kaydı mevcut |
+| 8a Task dalı CI | ✓ Dal HEAD `7aafaf0` run [`32046789416`](https://github.com/turkerurganci/Skinora/actions/runs/32046789416) — bloke edici 9 job yeşil, CI Gate `success` |
+
+### Kabul kriterleri — validator kanıtı
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | Yanlış-teslimat imzası auto-escalate ediyor | ✓ | `DeliveryDisputeAutoChecker.cs:72-73` → `AutoEscalated`; `DisputeService.cs:161-165` `AutoEscalated → DisputeStatus.ESCALATED`, `:208-221` `DisputeEscalatedEvent{AutoEscalated=true}` iki tarafa. Motorun `MisdeliverySignature` kolu `sellerSideKnown && buyerSideKnown` ile nitelenmiş (`DeliveryVerificationService.cs:271`) |
+| 2 | WRONG_ITEM PAYMENT_RECEIVED'dan açılabiliyor | ✓ | `DisputeEligibility.cs:38-42` — `origin/main`'de de mevcut (T117, `82bff4d`), yani kapı T130 öncesinde açıktı; T130 arkasındaki motoru işler kıldı (`Open_WrongItem_DifferentClassArrived_...` PAYMENT_RECEIVED'da eskale ediyor) |
+| 3 | Gelen item'ın adı admin'e kanıt olarak taşınıyor | ✓ | Zincir uçtan uca doğrulandı: `WrongItemDisputeAutoChecker.cs:133,151` → `AutoCheckResult.DeliveredItemName` → `DisputeService.cs:180` → `Dispute.DeliveredItemName` (nvarchar(200), migration + snapshot senkron) → `AdminDisputeService.cs:181` → AD28 `deliveredItemName`. Belirsizlikte NULL (`distinctClasses == 1` koşulu). **Not:** API sözleşmesinde tam; admin **arayüzünde** yüzeye çıkmıyor → N2 |
+| 4 | Launch kapısı çıkmazı kapandı | ✓ | `DeliveryDisputeRound.cs:210-224` (`HoldForReview`) `DeliveryVerifiedAt` **damgalamıyor**; `DeliveryDisputeAutoChecker.cs:85-86` `PendingReview → Unresolved` ⇒ `Resolved:false`, `CanEscalate:true` ⇒ `DisputeStatus.OPEN`. `DeliverItem` reddedilirse de (05 §4.5 hold) alan-alan rollback + aynı `PendingReview` (`:146-169`). Yerel koşum: `Open_Delivery_InventoryEvidence_LaunchGateClosed_StaysOpenAndEscalatable` ✓ |
+| 5 | Mesaj seçimi verdict'e bağlandı (bayrağa değil) | ✓ | `grep "IsMisdeliverySignature()\|IsSufficientForDelivery()" backend/src` → Disputes modülünde **yalnız XML yorumu**; tek çalışan okuma motorda (`DeliveryVerificationService.cs:256,271`) ve state machine guard'ında. Checker'ın tek girdisi `DeliveryDisputeOutcome` |
+
+### Validator'ın bağımsız koştuğu testler
+
+| Tür | Sonuç | Komut / kanıt |
+|---|---|---|
+| Unit (tüm solution) | ✓ **1433/1433**, exit 0 | `dotnet test Skinora.sln -c Release --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Integration (tüm solution) | ✓ **1312/1312**, exit 0 | Aynı filtre `~.Integration`, lokal SQL Server 2022 container (`INTEGRATION_TEST_SQL_SERVER`) |
+| Contract | ✓ | CI job `5. Contract test` — run `32046789416` |
+| Migration dry-run | ✓ | CI job `6. Migration dry-run`; ayrıca `AppDbContextModelSnapshot` diff'i migration ile birebir |
+
+Toplam bağımsız yeşil: **2745** (unit + integration); raporun 2754 rakamı contract testlerini de sayıyor — tutarlı.
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | Temiz — yeni secret/credential yok |
+| Auth / authorization | Temiz — dispute açma hâlâ yalnız alıcı (`DisputeService` Stage 2); `deliveredItemName` yalnız `VIEW_DISPUTES` gerektiren AD28'de, alıcı yüzeyinde yok |
+| Input validation | Temiz — üçüncü taraf kaynaklı item adı 200 karaktere kırpılıyor (`Truncate`), kolon `nvarchar(200)` ile sınırlı |
+| Yeni dış bağımlılık | Yok — `CaptureInventoryFingerprintAsync` mevcut sidecar cevabının farklı projeksiyonu (ek Steam round-trip yok, kod üzerinden doğrulandı) |
+| Fail-closed davranışı | ✓ Okunamayan envanter hiçbir kolda olumsuz bulguya çevrilmiyor (08 §2.3); baseline yoksa karşılaştırma yapılmıyor |
+
+### Bulgular (ikisi de bloke etmiyor)
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| N1 | S1 Sapma | T130 dört kaynak dokümanı (02 §10.1, 03 §6.2/§6.3, 06 §3.5/§3.11, 07 AD28 — ikisi **şema/sözleşme** değişikliği) değiştirdi ama hiçbirinin **sürüm/`Son güncelleme` başlığını** güncellemedi. T129 aynı dokümanlarda satır 3'ü güncellemişti (`2dbd0c1`), yani konvansiyon yerleşik. Sonuç: 06 hâlâ "v6.7 · T129" diyorken iki T130 kolonu taşıyor; audit ve GPT cross-review turları bu başlıkları okuyor | `Docs/02_…`, `Docs/03_…`, `Docs/06_…`, `Docs/07_…` (satır 3) |
+| N2 | S3 Eksik | `deliveredItemName` AD28 cevabına kadar geliyor ama admin **arayüzünde** hiçbir yerde gösterilmiyor: `AdminDisputeDetail` TS tipinde alan yok, `DisputeResolveModal.tsx` yalnız `systemCheckResult` + `dispute.itemName` render ediyor. 03 §6.3 Sonuç B "admin karşılaştırmayı elle yapmak zorunda kalmaz" ve 07 AD28 notu "yan yana görür" diyor — bugün admin'in bunu görmesi için ham API'ye bakması gerekiyor. **Sahibi yok:** raporun §Notlar'da işaret ettiği T134 (enum/StatusBadge/Timeline/i18n) ve T135 (StateActionPanel state×rol matrisi) kabul kriterleri admin dispute ekranını kapsamıyor; T136 admin **bot** sayfalarıyla ilgili | `frontend/src/lib/api/admin.ts`, `frontend/src/components/admin/DisputeResolveModal.tsx` |
+
+Hiçbiri merge'i bloklamıyor: AC3'ün zinciri API sözleşmesine kadar eksiksiz, para güvenliği davranışı (AC4) uçtan uca kanıtlandı. N1 doküman hijyeni, N2 sahiplik ataması gerektiriyor — ikisi de proje sahibi kararı.
+
+### Yapım raporu karşılaştırması
+
+- **Uyum:** Kabul kriterleri, mimari anlatımı, migration tanımı ve test rakamları bağımsız bulgularla **tam uyumlu**. Rapordaki hiçbir iddia yanlış çıkmadı.
+- **Bir fazla iyimserlik (N2):** §Notlar "Admin AD28 alanı FE tarafında T134/T135 kapsamında yüzeye çıkabilir" diyor; bu iki task'ın kabul kriterleri admin dispute ekranını içermiyor, dolayısıyla alan bugün **sahipsiz**.
+- **Kayıt tazeliği:** §Commit & PR bölümü dal HEAD'ini `af2c9a6` / run `32042922572` diye anıyordu; doğrulama anında dal `7aafaf0`'a ilerlemişti. Aşağıda nihai HEAD run'ı ile güncellendi.
+
+### E2E advisory legleri
+
+8/8 leg kırmızı, **T130 dışı**: `Invalid object name 'PlatformSteamBots'` — run `32045939393` log'unda **tam 8 iz** (leg başına 1), yani legler spec'lere hiç ulaşmadan setup'ta ölüyor. T117'den beri pre-existing, sahiplik **T137a**. Raporun teşhisi bağımsız olarak doğrulandı.
 
 ## Commit & PR
 
 - Branch: `task/T130-dispute-eligibility-autochecker`
 - Commit: `4429f31` — T130: DisputeEligibility + AutoChecker yeniden yazımı
 - PR: [#242](https://github.com/turkerurganci/Skinora/pull/242)
-- CI: ✓ **PASS** — dal HEAD `af2c9a6`, run [`32042922572`](https://github.com/turkerurganci/Skinora/actions/runs/32042922572)
+- CI: ✓ **PASS** — dal HEAD `7aafaf0`, run [`32046789416`](https://github.com/turkerurganci/Skinora/actions/runs/32046789416) (doğrulama anındaki nihai HEAD). Önceki kod-kapsamlı yeşil run'lar: `32042922572` (`af2c9a6`), `32045939393` (`741f58d`)
 
 **Bloke edici 9 job yeşil:** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend) · CI Gate. İki job `skipped`: *0. Guard* (direct push guard — PR yolunda çalışmaz) ve *3b. JS test (vitest)* (path filtresi — bu task'ta frontend değişikliği yok).
 
