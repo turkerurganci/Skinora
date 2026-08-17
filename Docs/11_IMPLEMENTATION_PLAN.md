@@ -2909,6 +2909,62 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
       çekilir · 05'in sweep tetikleyicisi satırı (05:313) hâlâ yalnız
       "ITEM_DELIVERED state gate'i" diyor, T129'un genişlettiği çifti yazmalı.
 
+    DÜZELTME TURU — NİHAİ ŞEKİL (2026-08-17, proje sahibi onaylı; T122'nin
+    kalıcı dersi gereği sapmalar ve genişlemeler KAYNAK dokümana yazıldı):
+
+      - (B1c NİHAİ ŞEKİL) Aksiyon bir state machine geçişi DEĞİLDİR.
+        Kriter "ITEM_DELIVERED'dan Complete'i açan yol" diyordu; reentrant
+        bir ITEM_DELIVERED geçişi kullanılamaz, çünkü o state'in OnEntry'si
+        `ItemDeliveredAt`'i admin'in tıkladığı ana yeniden damgalar. Uç
+        bunun yerine `SettlementVerifiedAt`'i damgalar — yani üç para
+        kapısının (payout, sweep, COMPLETED guard) okuduğu tek kolonu — ve
+        statüye dokunmaz; COMPLETED yine payout'un arkasından
+        `PayoutCompletedConsumer` ile gelir. History satırı, geçiş olmadığı
+        için enum trigger yerine string etiketle yazılır
+        (`"AdminClearSettlement"`, genesis satırı emsali).
+        Uç: AD32 `POST /admin/transactions/:id/clear-settlement`,
+        yetki `MANAGE_DISPUTES`, doküman 07 §9.22b (§9.23 doluydu; numara
+        işlem ailesinin yanında tutuldu). Ön koşul olarak `SettlementEscalatedAt
+        NOT NULL` arar: admin, platformun SORDUĞU vakayı kapatır — pencere
+        dolmadan satıcıyı ödeme yoluna sokmanın yolu değildir. Karşı yön
+        (alıcı lehine) EKLENMEDİ; o karar dispute üzerinden AD29'dur.
+        Yeni `AuditAction.SETTLEMENT_CLEARED_ADMIN` (ADMIN_ACTION).
+
+      - (N2 NİHAİ ŞEKİL) Kalıcı kolon `SettlementEscalationReason`
+        (nvarchar(64), SettlementReviewReasons kodu). Yapışkanlık gerekçeye
+        göre bölündü: AYRILMAYI GÖZLEMLEMİŞ eskalasyonlar
+        (`SETTLEMENT_AMBIGUOUS_DEPARTURE`, `SETTLEMENT_REVERSAL_GATED`)
+        `ClearForPayout`'u bloklar; HİÇBİR ŞEY GÖZLEMEMİŞ olanlar
+        (`SETTLEMENT_UNREADABLE`, `SETTLEMENT_NO_DELIVERY_REFERENCE`)
+        bloklamaz — orada sonraki turun okuması gerçekten yeni bilgidir ve
+        güvenli yöndedir. Kolon aynı zamanda B1(a)'nın "gerekçe admin
+        kuyruğunda ayırt edilebilir olmalı" şartını karşılar (gerekçe daha
+        önce yalnız outbox event'indeydi, tabloda yoktu).
+        İkinci kolon `SettlementClearedByAdminId` (uniqueidentifier): hiçbir
+        para kapısı okumaz, yalnız "kararı insan mı verdi" sorusunu triyaj
+        sorgusunda yanıtlar. Migration `T129_SettlementEscalationColumns`.
+
+      - (N1 KAPSAM KARARI, proje sahibi 2026-08-17) Kodda kapatıldı, yalnız
+        runbook ön koşulu olarak bırakılmadı: `ReversalSignature` artık
+        teslimatta gözlenmiş `DeliveryEvidence.SELLER_ASSET_GONE` biti ile
+        şimdi satıcıda görünmeyi BİRLİKTE ister; yalnız ikincisi varsa vaka
+        `AmbiguousDeparture`'dır ve ayrım Detail metninde korunur. Kapı
+        kapalıyken gözlenebilir davranış değişmez (ikisi de eskalasyon), kapı
+        açıldığında dürüst satıcıya yanlış-pozitif iade riski kapanır.
+
+      - (B2 KAPSAM GENİŞLEMESİ, proje sahibi 2026-08-17) 07 §9.3'e satır
+        yazmak tek başına yanlış olurdu: `FraudFlagAdminQueryService` bu tipi
+        `_ => null` dalına düşürdüğü için AD3 `flagDetail` boş dönüyordu ve
+        admin ekranı "sinyal detayı yok" gösteriyordu. Tura backend
+        projeksiyonu (`DeliveryReversedFlagDetail`, 12 alan — N7'deki "on
+        alan" sayımı YANLIŞTI), AD2 liste özeti (`ItemName`) ve FE
+        `FlagDetailView` dalı da dahil edildi. 07 §9.3 tablosuna
+        `SANCTIONS_MATCH` satırı da eklendi ("projeksiyon yok" olarak).
+
+      - (N5 EK BULGU) 06 §3.17 metni "58" derken tablosu da eksikti: 62 satır
+        listeliyor, `blockchain.payout_gas_fee_estimate_usdt` yok. Sayı 63'e
+        çekilirken eksik satır da eklendi.
+
     Yeniden doğrulama: düzeltme sonrası AYRI bir doğrulama chat'i açılır
     (INSTRUCTIONS §3.3 izolasyon kuralı); ilk turda ✓ kanıtlanan
     AC1/2/3/5/6/7 için kanıt korunur, AC4 + AC8 sıfırdan doğrulanır.

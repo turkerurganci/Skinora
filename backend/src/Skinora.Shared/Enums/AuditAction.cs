@@ -32,6 +32,16 @@ public enum AuditAction
     EMERGENCY_HOLD_APPLIED,
     EMERGENCY_HOLD_RELEASED,
 
+    // Settlement clearance (T129 fix round — 02 §4.5.1, 07 §9.22b). Written when
+    // an admin closes an ESCALATED settlement in the seller's favour via AD32.
+    // EntityType = "Transaction"; EntityId = Transaction.Id; OldValue captures
+    // the escalation (reason + escalatedAt) the decision answers, NewValue the
+    // stamped SettlementVerifiedAt, the acting admin and their reason.
+    // ActorType = ADMIN. ADMIN_ACTION category — the human counterpart of a
+    // clearance the automated check refused to make, so it sits with the other
+    // money-releasing admin decisions rather than in the fund-movement stream.
+    SETTLEMENT_CLEARED_ADMIN,
+
     // Steam bot lifecycle (T69 — 02 §15, 05 §3.2). Sidecar reports bot
     // restriction / ban / pool removal via signed webhook; backend mirrors
     // it onto PlatformSteamBot.Status and records the transition here so

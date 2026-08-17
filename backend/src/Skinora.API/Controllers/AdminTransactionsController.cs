@@ -11,12 +11,13 @@ namespace Skinora.API.Controllers;
 
 /// <summary>
 /// Admin-facing transaction endpoints — read surfaces from T63 (AD6 / AD7,
-/// 07 §9.6 / §9.7) plus the lifecycle actions from T59 (AD19 / AD19b /
-/// AD19c, 07 §9.20–§9.22, 02 §7, 03 §8.8). Each action is protected by
+/// 07 §9.6 / §9.7), the lifecycle actions from T59 (AD19 / AD19b /
+/// AD19c, 07 §9.20–§9.22, 02 §7, 03 §8.8) and the settlement clearance from
+/// T129 (AD32, 07 §9.22b). Each action is protected by
 /// the dynamic <c>Permission:&lt;KEY&gt;</c> policy (T06 / T40):
 /// reads require <c>VIEW_TRANSACTIONS</c>; AD19 requires
-/// <c>CANCEL_TRANSACTIONS</c>; AD19b/c require <c>EMERGENCY_HOLD</c>.
-/// AD19/AD19b/AD19c are independent (02 §7 not).
+/// <c>CANCEL_TRANSACTIONS</c>; AD19b/c require <c>EMERGENCY_HOLD</c>;
+/// AD32 requires <c>MANAGE_DISPUTES</c>. They are independent (02 §7 not).
 /// </summary>
 [ApiController]
 [Route("api/v1/admin/transactions")]
@@ -30,6 +31,12 @@ public sealed class AdminTransactionsController : ControllerBase
 
     private const string PolicyEmergencyHold =
         AuthPolicies.PermissionPrefix + "EMERGENCY_HOLD";
+
+    // AD32 rides MANAGE_DISPUTES rather than CANCEL_TRANSACTIONS: it is an
+    // adjudication between the two parties of a settlement the platform could
+    // not decide, which is what that permission already gates for AD29.
+    private const string PolicyManageDisputes =
+        AuthPolicies.PermissionPrefix + "MANAGE_DISPUTES";
 
     private readonly IAdminTransactionService _service;
     private readonly IAdminTransactionQueryService _queries;
@@ -241,6 +248,59 @@ public sealed class AdminTransactionsController : ControllerBase
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
+
+    /// <summary>
+    /// AD32 — <c>POST /admin/transactions/:id/clear-settlement</c> (07 §9.22b).
+    /// Closes an escalated settlement in the seller's favour. This is the only
+    /// terminating path for a settlement the automated check cannot finish;
+    /// stamping <c>SettlementVerifiedAt</c> by hand in the database is forbidden
+    /// (DEPLOY_RUNBOOK §I.4).
+    /// </summary>
+    [HttpPost("{id:guid}/clear-settlement")]
+    [Authorize(Policy = PolicyManageDisputes)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> ClearSettlement(
+        Guid id,
+        [FromBody] ClearSettlementRequest? request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryGetAdminId(out var adminId)) return Unauthorized();
+        if (request is null)
+            return BadRequest(ApiResponse<object>.Fail(
+                AdminTransactionErrorCodes.ValidationError,
+                "Request body is required.",
+                traceId: HttpContext.TraceIdentifier));
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var outcome = await _service.ClearSettlementAsync(adminId, id, request, ipAddress, cancellationToken);
+
+        return outcome.Status switch
+        {
+            ClearSettlementStatus.Cleared => Ok(outcome.Body),
+
+            ClearSettlementStatus.NotFound => NotFound(ClearSettlementEnvelope(outcome)),
+
+            ClearSettlementStatus.ValidationFailed => BadRequest(ClearSettlementEnvelope(outcome)),
+
+            // 422 for the two "the transaction is not in a state this action
+            // applies to" cases, matching §7.2's business-rule dialect; 409 for
+            // a genuine state-transition conflict (hold / dispute / wrong
+            // status), matching AD19.
+            ClearSettlementStatus.NotEscalated => UnprocessableEntity(ClearSettlementEnvelope(outcome)),
+
+            ClearSettlementStatus.AlreadyResolved => UnprocessableEntity(ClearSettlementEnvelope(outcome)),
+
+            ClearSettlementStatus.InvalidStateTransition => Conflict(ClearSettlementEnvelope(outcome)),
+
+            _ => StatusCode(StatusCodes.Status500InternalServerError),
+        };
+    }
+
+    private ApiResponse<object> ClearSettlementEnvelope(ClearSettlementOutcome outcome) =>
+        ApiResponse<object>.Fail(
+            outcome.ErrorCode ?? AdminTransactionErrorCodes.ValidationError,
+            outcome.ErrorMessage ?? "Settlement could not be cleared.",
+            traceId: HttpContext.TraceIdentifier);
 
     private ApiResponse<object> CancelEnvelope(AdminCancelTransactionOutcome outcome) =>
         ApiResponse<object>.Fail(

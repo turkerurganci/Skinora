@@ -8,6 +8,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -24,9 +25,10 @@ namespace Skinora.Transactions.Tests.Unit.Settlement;
 /// action can be asserted in isolation.
 /// </summary>
 /// <remarks>
-/// The recurring theme in these assertions is that only two of the four verdicts
-/// may move money, and neither of the other two may be allowed to drift into
-/// doing so by accident.
+/// The recurring theme in these assertions is that only two of the five verdicts
+/// may move money, and none of the other three may be allowed to drift into
+/// doing so by accident — nor, since the fix round, may a parked transaction be
+/// allowed to sit with no way out at all.
 /// </remarks>
 [Trait("Category", "Unit")]
 public sealed class SettlementVerificationJobTests : IDisposable
@@ -42,6 +44,7 @@ public sealed class SettlementVerificationJobTests : IDisposable
     private readonly StubVerificationService _verification;
     private readonly StubSettlementSettings _settings;
     private readonly RecordingFlagWriter _flags;
+    private readonly RecordingReputationRefresher _reputation;
     private readonly RecordingOutbox _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly SettlementVerificationJob _sut;
@@ -62,12 +65,13 @@ public sealed class SettlementVerificationJobTests : IDisposable
         _verification = new StubVerificationService();
         _settings = new StubSettlementSettings();
         _flags = new RecordingFlagWriter();
+        _reputation = new RecordingReputationRefresher(_db);
         _outbox = new RecordingOutbox();
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 8, 24, 12, 0, 0, TimeSpan.Zero));
 
         _sut = new SettlementVerificationJob(
-            _db, _verification, _settings, _flags, _outbox, _clock,
+            _db, _verification, _settings, _flags, _reputation, _outbox, _clock,
             NullLogger<SettlementVerificationJob>.Instance);
     }
 
@@ -88,6 +92,9 @@ public sealed class SettlementVerificationJobTests : IDisposable
         Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementCheckedAt);
         Assert.Empty(_outbox.Published);
         Assert.Empty(_flags.Calls);
+
+        // Nothing terminal happened, so the reputation formula has no new input.
+        Assert.Empty(_reputation.Calls);
     }
 
     // ================= Reversal, gate open =================
@@ -131,6 +138,36 @@ public sealed class SettlementVerificationJobTests : IDisposable
                 && h.NewStatus == TransactionStatus.REFUNDED));
     }
 
+    /// <summary>
+    /// 06 §3.1 counts this REFUNDED against the seller, but the rate it feeds is
+    /// a denormalised column: writing the formula changed nothing until somebody
+    /// asked for the recompute (validator finding B3).
+    /// </summary>
+    [Fact]
+    public async Task ReversalSignature_WithGateOpen_RefreshesTheSellersReputation_AfterTheFlush()
+    {
+        await SeedAsync();
+        _settings.ReversalAutoRefundEnabled = true;
+        _verification.Result = Verdict(SettlementVerdict.ReversalSignature,
+            buyerHoldsItem: false, sellerAssetReturned: true);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_reputation.Calls);
+        Assert.Equal(_sellerId, call.SellerId);
+        Assert.Equal(_buyerId, call.BuyerId);
+
+        // The cooldown query counts only the CANCELLED_* statuses; asking it to
+        // run over a REFUNDED row would be two guaranteed no-op queries.
+        Assert.False(call.EvaluateCooldown);
+
+        // Ordering is the whole finding: the aggregator reads AsNoTracking, so a
+        // refresh requested before the save would still see ITEM_DELIVERED and a
+        // null DeliveryReversedAt, and the row would miss the denominator.
+        Assert.Equal(TransactionStatus.REFUNDED, Assert.Single(_reputation.StatusInDbAtCallTime));
+    }
+
+
     // ================= Reversal, gate closed =================
 
     [Fact]
@@ -151,9 +188,15 @@ public sealed class SettlementVerificationJobTests : IDisposable
         var review = Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
         Assert.Equal(SettlementReviewReasons.ReversalGated, review.Reason);
 
+        // The reason also lands on the row: the triage query has to be able to
+        // separate the classes, and ClearForPayout has to know a departure was
+        // observed here.
+        Assert.Equal(SettlementReviewReasons.ReversalGated, persisted.SettlementEscalationReason);
+
         // Nothing that moves money or blames anybody happened.
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Empty(_flags.Calls);
+        Assert.Empty(_reputation.Calls);
     }
 
     // ================= Ambiguous =================
@@ -239,6 +282,126 @@ public sealed class SettlementVerificationJobTests : IDisposable
         Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementCheckedAt);
 
         // And through all of it, the admin was told exactly once.
+        Assert.Equal(firstEscalation, persisted.SettlementEscalatedAt);
+        Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+    }
+
+    // ================= No decision input (B1) =================
+
+    /// <summary>
+    /// The buyer's inventory was private at SELLER_CONFIRMED and the delivery
+    /// closed on their own confirmation, so neither the asset id nor the
+    /// baseline exists — and neither is writable any more. Retrying cannot win
+    /// anything, so the threshold is skipped: before the fix round this class
+    /// waited out 48 hours and then sat escalated with no way to end
+    /// (validator finding B1).
+    /// </summary>
+    [Fact]
+    public async Task NoDeliveryReference_EscalatesOnTheFirstRound_WithoutWaitingTheThreshold()
+    {
+        // Five minutes past the window — nowhere near the 48h unreadable floor.
+        var tx = await SeedAsync(payoutEligibleAt: _clock.GetUtcNow().UtcDateTime.AddMinutes(-5));
+        _verification.Result = Verdict(SettlementVerdict.NoDeliveryReference);
+
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementEscalatedAt);
+        Assert.Equal(SettlementReviewReasons.NoDeliveryReference, persisted.SettlementEscalationReason);
+
+        // Still no money moved in either direction — escalation is not a verdict.
+        Assert.Null(persisted.SettlementVerifiedAt);
+        Assert.Null(persisted.DeliveryReversedAt);
+        Assert.Empty(_flags.Calls);
+
+        var review = Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+        Assert.Equal(SettlementReviewReasons.NoDeliveryReference, review.Reason);
+    }
+
+    // ================= Escalation stickiness (N2) =================
+
+    /// <summary>
+    /// A round that watched the item LEAVE may not be undone by a later round
+    /// that reads it back. The class-count route says "item duruyor" as soon as
+    /// the buyer acquires any other copy of the same skin, and before the fix
+    /// round that reading stamped the clearance and released the money while an
+    /// ADMIN_ESCALATION was still open, with nobody told (validator finding N2).
+    /// </summary>
+    [Fact]
+    public async Task Escalation_ThatObservedADeparture_IsNotClearedByALaterVerifiedRound()
+    {
+        var tx = await SeedAsync();
+        _verification.Result = Verdict(SettlementVerdict.AmbiguousDeparture,
+            buyerHoldsItem: false, sellerAssetReturned: false);
+
+        await _sut.ExecuteAsync();
+        Assert.Equal(
+            SettlementReviewReasons.AmbiguousDeparture,
+            (await ReloadAsync(tx.Id)).SettlementEscalationReason);
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        _verification.Result = Verdict(SettlementVerdict.Verified, buyerHoldsItem: true);
+
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Null(persisted.SettlementVerifiedAt);
+        Assert.NotNull(persisted.SettlementEscalatedAt);
+        Assert.Equal(SettlementReviewReasons.AmbiguousDeparture, persisted.SettlementEscalationReason);
+
+        // The round still happened (queue fairness) and the admin was still told
+        // exactly once.
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementCheckedAt);
+        Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+    }
+
+    /// <summary>
+    /// The mirror case, and the reason stickiness is keyed on the REASON rather
+    /// than on "was escalated": an escalation that observed nothing carries no
+    /// finding to preserve, so an inventory that finally opens and shows the
+    /// item is new information in the safe direction.
+    /// </summary>
+    [Fact]
+    public async Task Escalation_ThatObservedNothing_IsClearedByALaterVerifiedRound()
+    {
+        var tx = await SeedAsync(payoutEligibleAt: _clock.GetUtcNow().UtcDateTime.AddHours(-49));
+        _verification.Result = Verdict(SettlementVerdict.Inconclusive);
+
+        await _sut.ExecuteAsync();
+        Assert.Equal(
+            SettlementReviewReasons.Unreadable,
+            (await ReloadAsync(tx.Id)).SettlementEscalationReason);
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        _verification.Result = Verdict(SettlementVerdict.Verified, buyerHoldsItem: true);
+
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementVerifiedAt);
+    }
+
+    /// <summary>
+    /// An inventory that opens and shows the item gone is a strictly stronger
+    /// finding than "could not read", so the recorded reason is upgraded — but
+    /// the admin is not told twice, because one is already looking.
+    /// </summary>
+    [Fact]
+    public async Task Escalation_Reason_IsUpgraded_WhenALaterRoundLearnsMore()
+    {
+        var tx = await SeedAsync(payoutEligibleAt: _clock.GetUtcNow().UtcDateTime.AddHours(-49));
+        _verification.Result = Verdict(SettlementVerdict.Inconclusive);
+        await _sut.ExecuteAsync();
+
+        var firstEscalation = (await ReloadAsync(tx.Id)).SettlementEscalatedAt;
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        _verification.Result = Verdict(SettlementVerdict.AmbiguousDeparture,
+            buyerHoldsItem: false, sellerAssetReturned: false);
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Equal(SettlementReviewReasons.AmbiguousDeparture, persisted.SettlementEscalationReason);
         Assert.Equal(firstEscalation, persisted.SettlementEscalatedAt);
         Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
     }
@@ -416,6 +579,34 @@ public sealed class SettlementVerificationJobTests : IDisposable
         {
             Calls.Add((userId, type, details));
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingReputationRefresher : ITransactionReputationRefresher
+    {
+        private readonly AppDbContext _db;
+
+        public RecordingReputationRefresher(AppDbContext db) => _db = db;
+
+        public List<(Guid SellerId, Guid? BuyerId, bool EvaluateCooldown)> Calls { get; } = [];
+
+        /// <summary>
+        /// The status the DATABASE held at the moment the refresh was asked for.
+        /// The real aggregator reads AsNoTracking, so this is what it would have
+        /// seen — the only way to prove the call sits after the flush and not
+        /// before it.
+        /// </summary>
+        public List<TransactionStatus> StatusInDbAtCallTime { get; } = [];
+
+        public async Task RefreshAsync(
+            Guid sellerId, Guid? buyerId, bool evaluateCooldown, CancellationToken cancellationToken)
+        {
+            Calls.Add((sellerId, buyerId, evaluateCooldown));
+            StatusInDbAtCallTime.AddRange(await _db.Set<Transaction>()
+                .AsNoTracking()
+                .Where(t => t.SellerId == sellerId)
+                .Select(t => t.Status)
+                .ToListAsync(cancellationToken));
         }
     }
 

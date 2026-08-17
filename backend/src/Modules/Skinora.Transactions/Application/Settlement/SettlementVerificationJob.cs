@@ -10,6 +10,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 
@@ -28,8 +29,8 @@ namespace Skinora.Transactions.Application.Settlement;
 /// entire settlement mechanism is inert without it, in the safe direction.
 /// </para>
 /// <para>
-/// <b>What it may and may not decide.</b> Two of the four verdicts move money's
-/// direction (verified → payout, reversal → refund) and the other two park the
+/// <b>What it may and may not decide.</b> Two of the five verdicts move money's
+/// direction (verified → payout, reversal → refund) and the other three park the
 /// transaction for an admin. That asymmetry is the point: a wrong "verified"
 /// pays a seller who took the item back, and a wrong "reversed" refunds a buyer
 /// who simply sold the skin on — while a wrong "escalate" only costs a human
@@ -82,6 +83,7 @@ public sealed class SettlementVerificationJob
     private readonly ISettlementVerificationService _verification;
     private readonly ISettlementSettingsProvider _settings;
     private readonly ITransactionFraudFlagWriter _flagWriter;
+    private readonly ITransactionReputationRefresher _reputation;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<SettlementVerificationJob> _logger;
@@ -91,6 +93,7 @@ public sealed class SettlementVerificationJob
         ISettlementVerificationService verification,
         ISettlementSettingsProvider settings,
         ITransactionFraudFlagWriter flagWriter,
+        ITransactionReputationRefresher reputation,
         IOutboxService outbox,
         TimeProvider clock,
         ILogger<SettlementVerificationJob> logger)
@@ -99,6 +102,7 @@ public sealed class SettlementVerificationJob
         _verification = verification;
         _settings = settings;
         _flagWriter = flagWriter;
+        _reputation = reputation;
         _outbox = outbox;
         _clock = clock;
         _logger = logger;
@@ -215,6 +219,16 @@ public sealed class SettlementVerificationJob
                     transaction, SettlementReviewReasons.AmbiguousDeparture, result, nowUtc, cancellationToken);
                 break;
 
+            // No threshold on this arm. The unreadable threshold exists to give
+            // a closed inventory time to open; here there is nothing to wait
+            // for, and waiting only holds an honest seller's money for another
+            // two days before asking the same human the same question
+            // (validator finding B1, owner decision 2026-08-16).
+            case SettlementVerdict.NoDeliveryReference:
+                await EscalateAsync(
+                    transaction, SettlementReviewReasons.NoDeliveryReference, result, nowUtc, cancellationToken);
+                break;
+
             case SettlementVerdict.Inconclusive:
             default:
                 await HandleInconclusiveAsync(transaction, result, settings, nowUtc, cancellationToken);
@@ -224,14 +238,36 @@ public sealed class SettlementVerificationJob
 
     /// <summary>
     /// The item is still with the buyer: stamp the clearance the COMPLETED
-    /// guard reads, and let <c>SellerPayoutQueueJob</c> queue the payout.
+    /// guard reads, and let <c>SellerPayoutQueueJob</c> queue the payout —
+    /// unless an earlier round already watched the item LEAVE.
     /// </summary>
+    /// <remarks>
+    /// The refusal is the whole point of persisting the escalation reason. A
+    /// departure that was escalated once must not be erased by a later reading:
+    /// the class-count route in particular says "item duruyor" the moment the
+    /// buyer acquires any other copy of the same skin, and without this guard
+    /// that reading released the money while an <c>ADMIN_ESCALATION</c> was
+    /// still open on the same transaction and nobody was told (validator
+    /// finding N2). Only the human path (07 §9.22b) may end such a case.
+    /// </remarks>
     private async Task ClearForPayoutAsync(
         Transaction transaction,
         SettlementVerificationResult result,
         DateTime nowUtc,
         CancellationToken cancellationToken)
     {
+        if (SettlementReviewReasons.ObservedDeparture(transaction.SettlementEscalationReason))
+        {
+            _logger.LogWarning(
+                "Transaction {TransactionId}: settlement now reads as verified ({Detail}) but an "
+                + "escalation raised on an OBSERVED departure ({Reason}) is still open — clearance "
+                + "withheld, the payout stays parked for the admin decision (02 §4.5.1)",
+                transaction.Id, result.Detail, transaction.SettlementEscalationReason);
+
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         transaction.SettlementVerifiedAt = nowUtc;
 
         _logger.LogInformation(
@@ -359,6 +395,26 @@ public sealed class SettlementVerificationJob
             transaction.Id, transaction.SellerId, result.Detail);
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // 06 §3.1 put REFUNDED[DeliveryReversedAt NOT NULL] in the denominator of
+        // SuccessfulTransactionRate, but that column is denormalised: it only
+        // changes when somebody asks for a recompute. Every other terminal
+        // transition already does (PayoutCompletedConsumer, TimeoutExecutor,
+        // DeadlineScannerJob, TransactionCancellationService); without this call
+        // the heaviest fraud in the model left the seller's score untouched
+        // until some OTHER transaction of theirs went terminal — which may never
+        // happen (validator finding B3).
+        //
+        // Strictly AFTER the flush: the aggregator reads the transaction with
+        // AsNoTracking, so before the save it would still see ITEM_DELIVERED and
+        // a null DeliveryReversedAt, and the row would miss the denominator
+        // filter entirely (ITransactionReputationRefresher's documented
+        // precondition). evaluateCooldown is false because the cooldown query
+        // counts only the CANCELLED_* statuses — REFUNDED never enters it.
+        await _reputation.RefreshAsync(
+            transaction.SellerId, transaction.BuyerId, evaluateCooldown: false, cancellationToken);
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -397,6 +453,17 @@ public sealed class SettlementVerificationJob
     /// not once per tick, and the transaction keeps being re-checked in case the
     /// inventory becomes readable before anyone acts.
     /// </summary>
+    /// <remarks>
+    /// The reason is also written to the transaction, not just to the event.
+    /// Two things need it there: the triage query has to tell an unreadable
+    /// inventory from a delivery that left no reference at all (different
+    /// procedures — DEPLOY_RUNBOOK §I.3 vs §I.5), and
+    /// <see cref="ClearForPayoutAsync"/> has to know whether a departure was
+    /// ever observed. A later round may upgrade the recorded reason — an
+    /// inventory that opens and shows the item gone is a strictly stronger
+    /// finding than "could not read" — but it never re-notifies: a human is
+    /// already looking.
+    /// </remarks>
     private async Task EscalateAsync(
         Transaction transaction,
         string reason,
@@ -406,15 +473,29 @@ public sealed class SettlementVerificationJob
     {
         if (transaction.SettlementEscalatedAt is not null)
         {
-            _logger.LogDebug(
-                "Transaction {TransactionId}: settlement already escalated at {EscalatedAt} — "
-                + "re-checked ({Reason}), no second notification",
-                transaction.Id, transaction.SettlementEscalatedAt, reason);
+            if (!string.Equals(transaction.SettlementEscalationReason, reason, StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "Transaction {TransactionId}: settlement escalation reason changed "
+                    + "{PreviousReason} → {Reason} on re-check — {Detail}",
+                    transaction.Id, transaction.SettlementEscalationReason, reason, result.Detail);
+
+                transaction.SettlementEscalationReason = reason;
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Transaction {TransactionId}: settlement already escalated at {EscalatedAt} — "
+                    + "re-checked ({Reason}), no second notification",
+                    transaction.Id, transaction.SettlementEscalatedAt, reason);
+            }
+
             await _db.SaveChangesAsync(cancellationToken);
             return;
         }
 
         transaction.SettlementEscalatedAt = nowUtc;
+        transaction.SettlementEscalationReason = reason;
 
         await _outbox.PublishAsync(
             new SettlementReviewRequiredEvent(

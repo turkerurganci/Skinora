@@ -116,3 +116,34 @@ public sealed record HoldUserTransactionsOutcome(
     HoldUserTransactionsResponse? Body,
     string? ErrorCode,
     string? ErrorMessage);
+
+// ---------- AD32 — POST /admin/transactions/:id/clear-settlement ----------
+
+/// <summary>
+/// Closes an escalated settlement in the SELLER's favour (07 §9.22b, T129 fix
+/// round). The one lever that exists for a settlement the check cannot finish
+/// on its own — before this, an escalated transaction had no terminating path
+/// at all unless the buyer happened to open a dispute (validator finding B1).
+/// </summary>
+public sealed record ClearSettlementRequest(string? Reason);
+
+public sealed record ClearSettlementResponse(
+    TransactionStatus Status,
+    DateTime SettlementVerifiedAt,
+    string EscalationReason);
+
+public enum ClearSettlementStatus
+{
+    Cleared,
+    NotFound,
+    ValidationFailed,
+    NotEscalated,
+    AlreadyResolved,
+    InvalidStateTransition,
+}
+
+public sealed record ClearSettlementOutcome(
+    ClearSettlementStatus Status,
+    ClearSettlementResponse? Body,
+    string? ErrorCode,
+    string? ErrorMessage);

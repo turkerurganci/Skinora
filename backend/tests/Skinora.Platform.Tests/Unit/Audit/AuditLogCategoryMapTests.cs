@@ -75,15 +75,16 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Seventeen_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Eighteen_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
         // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59)
         // + 1 bot recovery triage (T103b-2) + 1 maintenance toggle (WP7)
-        // + 1 restart-recovery auto-extension (WP16) = 17.
-        Assert.Equal(17, actions.Count);
+        // + 1 restart-recovery auto-extension (WP16)
+        // + 1 settlement clearance (T129 fix round, AD32) = 18.
+        Assert.Equal(18, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
         Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
@@ -96,6 +97,7 @@ public class AuditLogCategoryMapTests
         Assert.Contains(AuditAction.BOT_RECOVERY_UPDATED, actions);
         Assert.Contains(AuditAction.MAINTENANCE_MODE_CHANGED, actions);
         Assert.Contains(AuditAction.TIMEOUT_AUTO_EXTENDED, actions);
+        Assert.Contains(AuditAction.SETTLEMENT_CLEARED_ADMIN, actions);
     }
 
     [Fact]

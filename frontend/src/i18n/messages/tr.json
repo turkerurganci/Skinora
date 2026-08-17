@@ -300,7 +300,8 @@
       "HIGH_VOLUME": "Yüksek Hacim",
       "ABNORMAL_BEHAVIOR": "Anormal Davranış",
       "MULTI_ACCOUNT": "Çoklu Hesap",
-      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi"
+      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi",
+      "DELIVERY_REVERSED": "Teslimat Geri Alındı"
     },
     "flagStatus": {
       "PENDING": "Bekliyor",
@@ -346,7 +347,8 @@
       "HIGH_VOLUME": "Yüksek Hacim",
       "ABNORMAL_BEHAVIOR": "Anormal Davranış",
       "MULTI_ACCOUNT": "Çoklu Hesap",
-      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi"
+      "SANCTIONS_MATCH": "Yaptırım Eşleşmesi",
+      "DELIVERY_REVERSED": "Teslimat Geri Alındı"
     },
     "reviewStatus": {
       "PENDING": "Bekliyor",
@@ -387,6 +389,13 @@
       "matchValue": "Eşleşen Değer",
       "linkedAccounts": "İlişkili Hesaplar",
       "supportingSignals": "Destekleyici Sinyaller",
+      "reversedTransaction": "Geri Alınan İşlem",
+      "item": "Item",
+      "deliveredAt": "Teslim Tarihi",
+      "detectedAt": "Tespit Tarihi",
+      "buyerVisibility": "Alıcı Envanteri",
+      "sellerVisibility": "Satıcı Envanteri",
+      "classCount": "Alıcıdaki Kopya (Görülen / Beklenen)",
       "activeTransactions": "Aktif İşlemler ({count})",
       "noActiveTransactions": "Aktif işlem yok.",
       "onHold": "Hold'da"
@@ -1870,7 +1879,8 @@
         "HIGH_VOLUME": "Yüksek hacim",
         "ABNORMAL_BEHAVIOR": "Anormal davranış",
         "MULTI_ACCOUNT": "Çoklu hesap",
-        "SANCTIONS_MATCH": "Yaptırım eşleşmesi"
+        "SANCTIONS_MATCH": "Yaptırım eşleşmesi",
+        "DELIVERY_REVERSED": "Teslimat geri alındı"
       },
       "status": {
         "PENDING": "Bekliyor",

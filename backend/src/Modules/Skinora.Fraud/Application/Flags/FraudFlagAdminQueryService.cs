@@ -443,6 +443,11 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 FraudFlagType.MULTI_ACCOUNT =>
                     NormalizeMultiAccount(
                         JsonSerializer.Deserialize<MultiAccountFlagDetail>(flag.Details, DetailJsonOptions)),
+                // T129 — the settlement job writes a typed payload for this one,
+                // so it gets projected rather than falling through to the
+                // untyped branch below (07 §9.3).
+                FraudFlagType.DELIVERY_REVERSED =>
+                    JsonSerializer.Deserialize<DeliveryReversedFlagDetail>(flag.Details, DetailJsonOptions),
                 _ => null,
             };
         }
@@ -482,6 +487,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
     /// behaviour pattern — non-translatable, so the frontend just labels the
     /// column) and the linked-account count. SANCTIONS_MATCH and any future
     /// account type without a typed payload return <c>(null, null)</c>.
+    /// DELIVERY_REVERSED returns the reversed item's name (T129).
     /// </summary>
     private static (string? Summary, int? LinkedCount) ParseAccountSignal(
         FraudFlagType type, string? details)
@@ -499,6 +505,12 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
                 case FraudFlagType.ABNORMAL_BEHAVIOR:
                     var ab = JsonSerializer.Deserialize<AbnormalBehaviorFlagDetail>(details, DetailJsonOptions);
                     return (ab?.Pattern, null);
+                // T129 — the reversed item is the identifying signal here, and
+                // §14.2 counts repeats per ACCOUNT, so the queue row has to say
+                // which trade was taken back without opening the detail.
+                case FraudFlagType.DELIVERY_REVERSED:
+                    var dr = JsonSerializer.Deserialize<DeliveryReversedFlagDetail>(details, DetailJsonOptions);
+                    return (dr?.ItemName, null);
                 default:
                     return (null, null);
             }

@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v3.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-16 (T128 — §7.2 hata listesine 422 `ITEM_ALREADY_LISTED` eklendi ve 02 §2.3'ün "aynı item ikinci kez listelenemez" kuralı uç sözleşmesinde normatif not oldu: kapı 06 §5.1 filtered unique index'inin filtresini birebir aynalar, terminal statüler kapsam dışıdır, eşzamanlı iki isteğin ürettiği indeks çakışması da aynı koda çevrilir. Başka endpoint sözleşmesi değişmedi.) · 2026-08-14 (T125 — §9.8 kategori listesine `delivery_verification` eklendi ve anahtar sayısı 60'a çekildi (satır T123 döneminde 58'de kalmıştı). Endpoint sözleşmesi değişmedi.) · 2026-08-13 (T123 — §7.6a confirm-ready: hata listesine 422 `INVENTORY_PRIVATE` eklendi (satıcı envanteri gizliyse item "yok" sayılamaz — §7.2/§6.1 ile aynı üç değerli ayrım), yanıta `buyerInventoryVisible` alanı ve `paymentDeadline`'ın kaynağı yazıldı, baseline'ın sayım tabanlı olduğu ve okunamazsa kolonların NULL kaldığı normatif not oldu.) · 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
+**Versiyon: v3.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-17 (T129 düzeltme turu — yeni **§9.22b AD32** `POST /admin/transactions/:id/clear-settlement` (yetki `MANAGE_DISPUTES`): eskale edilmiş mutabakatı satıcı lehine kapatır, statü değiştirmez; §9.3 `flagDetail` tablosuna `DELIVERY_REVERSED` (12 alan) ve `SANCTIONS_MATCH` satırları eklendi.) · 2026-08-16 (T128 — §7.2 hata listesine 422 `ITEM_ALREADY_LISTED` eklendi ve 02 §2.3'ün "aynı item ikinci kez listelenemez" kuralı uç sözleşmesinde normatif not oldu: kapı 06 §5.1 filtered unique index'inin filtresini birebir aynalar, terminal statüler kapsam dışıdır, eşzamanlı iki isteğin ürettiği indeks çakışması da aynı koda çevrilir. Başka endpoint sözleşmesi değişmedi.) · 2026-08-14 (T125 — §9.8 kategori listesine `delivery_verification` eklendi ve anahtar sayısı 60'a çekildi (satır T123 döneminde 58'de kalmıştı). Endpoint sözleşmesi değişmedi.) · 2026-08-13 (T123 — §7.6a confirm-ready: hata listesine 422 `INVENTORY_PRIVATE` eklendi (satıcı envanteri gizliyse item "yok" sayılamaz — §7.2/§6.1 ile aynı üç değerli ayrım), yanıta `buyerInventoryVisible` alanı ve `paymentDeadline`'ın kaynağı yazıldı, baseline'ın sayım tabanlı olduğu ve okunamazsa kolonların NULL kaldığı normatif not oldu.) · 2026-08-11 (T121 — §7.2 hata listesi envanter okumasının 08 §2.3'teki üç sonucunu ayrı raporlayacak şekilde tamamlandı: `ITEM_NOT_IN_INVENTORY` (kod üretiyordu, listede yoktu) korundu, 422 `INVENTORY_PRIVATE` ve 503 `STEAM_UNAVAILABLE` eklendi — ikisi de §6.1'in envanter sözlüğünden, yeni kod icat edilmedi.) · 2026-08-10 (T119a — §7.6 accept ucu v3.0 alanları: `steamTradeUrl` sahiplik doğrulaması (partner ↔ alıcının kendi SteamID64'ü) ve Steam erişilemediğinde fail-closed 503 `STEAM_UNAVAILABLE` hata listesine eklendi; §5.1 `GET /users/me` yanıtına salt-okunur `steamTradeUrl` eklendi — §7.6 ön-doldurma kaynağı.)
 
 ---
 
@@ -1876,6 +1876,10 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 | HIGH_VOLUME | `{ periodHours, transactionCount, totalVolume }` |
 | ABNORMAL_BEHAVIOR | `{ pattern, description }` |
 | MULTI_ACCOUNT | `{ matchType, matchValue, linkedAccounts: [{steamId, displayName}], supportingSignals: [{type, value, linkedAccounts: [{steamId, displayName}]}] }` |
+| SANCTIONS_MATCH | Tipli projeksiyon **yok** — `flagDetail: null`. Eşleşen adres ve kaynak audit kaydındadır (§9.19, `SANCTIONS_LIST_ADDRESS_ADDED`); admin ekranı bu tip için jenerik bir not gösterir (T82) |
+| DELIVERY_REVERSED | `{ transactionId, itemName, itemAssetId, deliveredBuyerAssetId, itemDeliveredAt, payoutEligibleAt, detectedAt, buyerVisibility, sellerVisibility, observedClassCount, expectedClassCount, detail }` |
+
+`DELIVERY_REVERSED` (T129 — 02 §4.5.1): **hesap düzeyi** flag olduğu için satırın kendisi `transactionId` taşımaz (06 §3.12); işlem kimliği payload'dadır ve §14.2'nin saydığı tekrarın hangi işlemlerden geldiğini gösteren tek yerdir. `buyerVisibility` / `sellerVisibility` ∈ `Public` | `Private` | `Unavailable` (08 §2.3 üç değerli okuma); `observedClassCount` / `expectedClassCount` yalnız sayım rotası kullanıldığında dolar (teslimatta asset ID kaydedilmemişse), `detail` kontrolün ne gördüğünün insan-okur özetidir.
 
 `MULTI_ACCOUNT.matchType` değerleri (güçlü sinyal — flag tetikleyici, 02 §14.3, 03 §7.4): `WALLET_PAYOUT`, `WALLET_REFUND`.
 `MULTI_ACCOUNT.supportingSignals[].type` değerleri (destekleyici sinyal — tek başına flag tetiklemez, güçlü sinyal eşliğinde admin kanıtı olarak listelenir): `IP_ADDRESS`, `DEVICE_FINGERPRINT`, `SOURCE_ADDRESS`. Bilinen exchange/custodial adresleri admin tarafından `multi_account.exchange_addresses` SystemSetting'inde tutulur ve `SOURCE_ADDRESS` karşılaştırmasından hariç bırakılır (`NONE` = hariç adres yok).
@@ -2350,6 +2354,36 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 **Hatalar:** 400 `VALIDATION_ERROR` (reason < 10 karakter)
 
 > **Not:** Hesap-flag varyantının diğer iki aksiyonu — "Flag Kaldır" (AD4 approve) ve "Askıya Al" (hesap askıya alma) — bu endpoint kapsamı dışındadır. "Askıya Al" için kullanıcı durum modeli + auth pipeline enforcement gerektiğinden ayrı bir görevde (S20 / kullanıcı yönetimi, AD20) ele alınır.
+
+### 9.22b AD32 — `POST /admin/transactions/:id/clear-settlement`
+
+**Amaç:** Eskale edilmiş bir **mutabakat kontrolünü satıcı lehine kapatma** (02 §4.5.1, T129 düzeltme turu). Permission: `MANAGE_DISPUTES` — bu bir iptal değil, platformun karara bağlayamadığı bir mutabakatta iki taraf arasında hakemliktir; AD29 ile aynı yetki sınıfı.
+
+> **Neden ayrı bir uç gerekti:** payout kuyruğu, sweep kuyruğu ve `COMPLETED` guard'ının üçü de `SettlementVerifiedAt`'i okur ve o kolonun tek yazarı, sonuca varamayan kontrolün kendisiydi. Karar girdisi hiç üretilememiş işlemlerde (bkz. `SETTLEMENT_NO_DELIVERY_REFERENCE`, DEPLOY_RUNBOOK §I.5) kontrol sonsuza kadar sonuçsuz kalıyor, `admin_resolve_refund` ise yalnız **alıcının** açabileceği bir dispute üzerinden ateşlendiği için erişilemiyordu: dürüst satıcı hiç ödenemiyor, alıcının parası süresiz donuyordu. Bu uç o boşluğu kapatır. Kolonu veritabanında elle damgalamak **yasaktır** (DEPLOY_RUNBOOK §I.4) — bu uç aynı damgayı audit + history + gerekçe ile atar.
+
+**Request:**
+```json
+{ "reason": "Alıcı teslimatı onaylamış, Steam trade geçmişinde geri alma yok" }
+```
+
+`reason`: Zorunlu, min 10 karakter (AD19 ile tutarlı).
+
+**Response (200) `data`:**
+```json
+{
+  "status": "ITEM_DELIVERED",
+  "settlementVerifiedAt": "2026-03-20T12:00:00Z",
+  "escalationReason": "SETTLEMENT_NO_DELIVERY_REFERENCE"
+}
+```
+
+**Davranış:** `SettlementVerifiedAt` (karar anı) ve `SettlementClearedByAdminId` (kararı veren) damgalanır; **statü değişmez** ve hiçbir state machine trigger'ı ateşlenmez — `COMPLETED` yine payout'un arkasından, `PayoutCompletedConsumer` üzerinden gelir. Yan etkiler: `AdminClearSettlement` etiketli `TransactionHistory` satırı (aktör ADMIN; geçiş olmadığı için enum trigger değil etiket — genesis satırı emsali) ve `SETTLEMENT_CLEARED_ADMIN` audit satırı (`OldValue` eskalasyonu, `NewValue` damgayı ve gerekçeyi taşır). Hepsi tek `SaveChanges` ile atomik. Payout bir sonraki `SellerPayoutQueueJob` turunda kuyruğa girer.
+
+**Ön koşullar:** İşlem `ITEM_DELIVERED` olmalı, hold'da ve aktif dispute'lu olmamalı, mutabakat henüz sonuçlanmamış olmalı (`SettlementVerifiedAt` ve `DeliveryReversedAt` NULL) ve **eskale edilmiş** olmalı (`SettlementEscalatedAt` NOT NULL). Sonuncusu bilinçli bir sınırdır: admin, platformun sorduğu vakayı kapatır — kontrolün penceresi dolmadan satıcıyı ödeme yoluna sokmanın bir yolu değildir.
+
+**Karşı yön yoktur.** Alıcı lehine karar (iade) dispute üzerinden AD29'dur; iki kol **aynı sonucu üretmez** — yalnız otomatik geri alma dalı `DeliveryReversedAt` yazar, dolayısıyla itibar paydası (06 §3.1) ve `DELIVERY_REVERSED` fraud flag'i yalnız orada oluşur.
+
+**Hatalar:** 422 `SETTLEMENT_NOT_ESCALATED`, 422 `SETTLEMENT_ALREADY_RESOLVED`, 409 `INVALID_STATE_TRANSITION` (statü ITEM_DELIVERED değil / hold / aktif dispute), 404 `TRANSACTION_NOT_FOUND`, 400 `VALIDATION_ERROR`
 
 ### 9.23 AD22 — `GET /admin/sanctions/addresses`
 

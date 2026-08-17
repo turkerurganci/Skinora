@@ -10,6 +10,7 @@ import type {
   AbnormalBehaviorFlagDetail,
   AdminFlagDetail,
   AdminFlagPartyDetail,
+  DeliveryReversedFlagDetail,
   HighVolumeFlagDetail,
   MultiAccountFlagDetail,
   PriceDeviationFlagDetail,
@@ -227,6 +228,49 @@ export function FlagDetailView({ flag }: FlagDetailViewProps) {
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (flag.type === "DELIVERY_REVERSED") {
+      const p = d as DeliveryReversedFlagDetail;
+      // Account-level flag, so the reversed transaction lives in the payload
+      // (06 §3.12) — link it so a repeat offender can be traced (02 §14.2).
+      const counts =
+        typeof p.observedClassCount === "number" && typeof p.expectedClassCount === "number"
+          ? `${p.observedClassCount} / ${p.expectedClassCount}`
+          : null;
+      return (
+        <div className="flex flex-col gap-3">
+          <dl>
+            <DescRow
+              label={t("detail.reversedTransaction")}
+              value={
+                <Link
+                  href={`/${locale}/admin/transactions/${p.transactionId}`}
+                  className="break-all font-mono text-xs text-blue-600 hover:text-blue-700"
+                >
+                  {p.transactionId}
+                </Link>
+              }
+            />
+            <DescRow label={t("detail.item")} value={p.itemName ?? "—"} />
+            <DescRow
+              label={t("detail.deliveredAt")}
+              value={p.itemDeliveredAt ? formatDateTime(p.itemDeliveredAt, locale) : "—"}
+            />
+            <DescRow label={t("detail.detectedAt")} value={formatDateTime(p.detectedAt, locale)} />
+            <DescRow label={t("detail.buyerVisibility")} value={p.buyerVisibility ?? "—"} />
+            <DescRow label={t("detail.sellerVisibility")} value={p.sellerVisibility ?? "—"} />
+            {counts && <DescRow label={t("detail.classCount")} value={counts} />}
+          </dl>
+          {p.detail && (
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+                {t("detail.description")}
+              </p>
+              <p className="text-sm text-gray-900">{p.detail}</p>
             </div>
           )}
         </div>

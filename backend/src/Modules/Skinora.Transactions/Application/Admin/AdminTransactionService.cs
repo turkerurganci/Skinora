@@ -718,7 +718,134 @@ public sealed class AdminTransactionService : IAdminTransactionService
             ErrorMessage: null);
     }
 
+    // ---------- AD32 — POST /admin/transactions/:id/clear-settlement ----------
+
+    public async Task<ClearSettlementOutcome> ClearSettlementAsync(
+        Guid adminUserId,
+        Guid transactionId,
+        ClearSettlementRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ---------- Stage 1: load transaction ----------
+        var transaction = await _db.Set<Transaction>()
+            .FirstOrDefaultAsync(t => t.Id == transactionId && !t.IsDeleted, cancellationToken);
+        if (transaction is null)
+            return ClearSettlementFailure(ClearSettlementStatus.NotFound,
+                AdminTransactionErrorCodes.TransactionNotFound,
+                "Transaction not found.");
+
+        // ---------- Stage 2: reason validation ----------
+        // Same floor as AD19: this decision releases money the automated check
+        // refused to release, so the audit row has to say why in a sentence.
+        var trimmedReason = (request.Reason ?? string.Empty).Trim();
+        if (trimmedReason.Length < MinReasonLength)
+            return ClearSettlementFailure(ClearSettlementStatus.ValidationFailed,
+                AdminTransactionErrorCodes.ValidationError,
+                $"reason must be at least {MinReasonLength} characters (07 §9.22b).");
+
+        // ---------- Stage 3: state guards (07 §9.22b) ----------
+        if (transaction.Status != TransactionStatus.ITEM_DELIVERED)
+            return ClearSettlementFailure(ClearSettlementStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                $"Settlement can only be cleared while the transaction is ITEM_DELIVERED (was {transaction.Status}).");
+
+        if (transaction.IsOnHold)
+            return ClearSettlementFailure(ClearSettlementStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                "Transaction is under emergency hold; release the hold first (use AD19c).");
+
+        if (transaction.HasActiveDispute)
+            return ClearSettlementFailure(ClearSettlementStatus.InvalidStateTransition,
+                AdminTransactionErrorCodes.InvalidStateTransition,
+                "An active dispute owns this transaction; resolve it through AD29 instead.");
+
+        // Already decided, in either direction — nothing left to close.
+        if (transaction.SettlementVerifiedAt is not null || transaction.DeliveryReversedAt is not null)
+            return ClearSettlementFailure(ClearSettlementStatus.AlreadyResolved,
+                AdminTransactionErrorCodes.SettlementAlreadyResolved,
+                "Settlement has already been resolved for this transaction.");
+
+        // The admin closes what the platform asked about. Without this guard the
+        // endpoint would be a way to pay a seller before the reversal window it
+        // exists to enforce has even elapsed (02 §4.5.1).
+        if (transaction.SettlementEscalatedAt is null)
+            return ClearSettlementFailure(ClearSettlementStatus.NotEscalated,
+                AdminTransactionErrorCodes.SettlementNotEscalated,
+                "Settlement has not been escalated for review; only an escalated settlement can be cleared.");
+
+        // ---------- Stage 4: clearance ----------
+        // No state machine trigger and no status change. COMPLETED must still
+        // arrive the ordinary way — payout first, PayoutCompletedConsumer after
+        // — so what an admin decision does here is exactly what a successful
+        // check does: open the gate the three money paths read.
+        var occurredAt = _clock.GetUtcNow().UtcDateTime;
+        var escalationReason = transaction.SettlementEscalationReason ?? "UNKNOWN";
+
+        transaction.SettlementVerifiedAt = occurredAt;
+        transaction.SettlementClearedByAdminId = adminUserId;
+
+        // ---------- Stage 5: side effects ----------
+        // WP15 — audit-trail row (06 §3.6). The string overload is used on
+        // purpose: this is not a state transition, so there is no
+        // TransactionTrigger to name, exactly as with the genesis row.
+        TransactionHistoryRecorder.Record(
+            _db, transaction, transaction.Status, ClearSettlementTrigger,
+            ActorType.ADMIN, adminUserId, occurredAt,
+            additionalData: JsonSerializer.Serialize(new
+            {
+                EscalationReason = escalationReason,
+                Reason = trimmedReason,
+            }, JsonOptions));
+
+        await _audit.LogAsync(
+            new AuditLogEntry(
+                UserId: null,
+                ActorId: adminUserId,
+                ActorType: ActorType.ADMIN,
+                Action: AuditAction.SETTLEMENT_CLEARED_ADMIN,
+                EntityType: nameof(Transaction),
+                EntityId: transaction.Id.ToString(),
+                OldValue: JsonSerializer.Serialize(new
+                {
+                    SettlementVerifiedAt = (DateTime?)null,
+                    EscalationReason = escalationReason,
+                    EscalatedAt = transaction.SettlementEscalatedAt,
+                }, JsonOptions),
+                NewValue: JsonSerializer.Serialize(new
+                {
+                    transaction.SettlementVerifiedAt,
+                    ClearedBy = adminUserId,
+                    Reason = trimmedReason,
+                }, JsonOptions),
+                IpAddress: ipAddress),
+            cancellationToken);
+
+        // ---------- Stage 6: atomic commit ----------
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new ClearSettlementOutcome(
+            Status: ClearSettlementStatus.Cleared,
+            Body: new ClearSettlementResponse(
+                Status: transaction.Status,
+                SettlementVerifiedAt: occurredAt,
+                EscalationReason: escalationReason),
+            ErrorCode: null,
+            ErrorMessage: null);
+    }
+
     // ---------- helpers ----------
+
+    /// <summary>
+    /// Trigger label for the AD32 history row. A string rather than a
+    /// <c>TransactionTrigger</c> because no transition happens: modelling it as
+    /// a reentrant ITEM_DELIVERED transition would re-run that state's
+    /// <c>OnEntry</c> and overwrite <c>ItemDeliveredAt</c> with the time of the
+    /// admin's click.
+    /// </summary>
+    public const string ClearSettlementTrigger = "AdminClearSettlement";
 
     private static bool IsTerminalState(TransactionStatus status) => status switch
     {
@@ -750,5 +877,9 @@ public sealed class AdminTransactionService : IAdminTransactionService
 
     private static ReleaseEmergencyHoldOutcome ReleaseFailure(
         ReleaseEmergencyHoldStatus status, string errorCode, string message)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+
+    private static ClearSettlementOutcome ClearSettlementFailure(
+        ClearSettlementStatus status, string errorCode, string message)
         => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
 }

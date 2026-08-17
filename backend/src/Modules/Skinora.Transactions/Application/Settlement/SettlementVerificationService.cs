@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -86,6 +87,22 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
         // ---------- Buyer side ----------
         var buyerSide = await ReadBuyerSideAsync(transaction, buyerSteamId, Freshness, cancellationToken);
 
+        if (buyerSide.ReferenceMissing)
+        {
+            // Not "could not read" — there is no question to ask. Kept apart
+            // from Inconclusive so the job escalates it at once instead of
+            // retrying a check that can never conclude (validator finding B1).
+            return new SettlementVerificationResult(
+                Verdict: SettlementVerdict.NoDeliveryReference,
+                BuyerHoldsItem: null,
+                SellerAssetReturned: null,
+                BuyerVisibility: null,
+                SellerVisibility: null,
+                ObservedClassCount: null,
+                ExpectedClassCount: null,
+                Detail: buyerSide.Detail);
+        }
+
         if (buyerSide.HoldsItem is null)
         {
             return Inconclusive(buyerSide.Visibility, buyerSide.Detail);
@@ -114,15 +131,27 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
             : await _inventory.GetItemAsync(
                 sellerSteamId, transaction.ItemAssetId, Freshness, cancellationToken);
 
-        // Only a PUBLIC read carries information. "Asset present again" is the
-        // reversal signature; "asset absent" is NOT proof of an onward sale,
+        // Only a PUBLIC read carries information. "Asset present again" is half
+        // the reversal signature; "asset absent" is NOT proof of an onward sale,
         // because a reversal may well hand the item back under a rotated id
         // (T122 could not measure a real reversal — runbook §7). So the absent
         // case falls through to AmbiguousDeparture, where a human decides.
         var sellerSideKnown = sellerRead.Visibility == InventoryVisibility.Public;
         var sellerAssetReturned = sellerSideKnown ? sellerRead.Item is not null : (bool?)null;
 
-        if (sellerAssetReturned is true)
+        // The other half. 02 §4.5.1 says the item must have RETURNED to the
+        // seller ("yeniden belirmesi"), and presence alone does not say that: on
+        // a delivery closed by the buyer's confirmation the platform never reads
+        // the seller's inventory, so an honest seller who sent a DIFFERENT copy
+        // of the same skin (a valid delivery under the §9.2 counting rule) still
+        // has the original asset sitting there. Calling that a reversal would
+        // refund the buyer, keep the skin with them and flag the seller — the
+        // very mirror-image harm the two-sided check was written to prevent
+        // (validator finding N1). The departure is only ever established by the
+        // delivery round, and it is recorded on the transaction itself.
+        var sellerAssetHadLeft = transaction.DeliveryEvidence.HasFlag(DeliveryEvidence.SELLER_ASSET_GONE);
+
+        if (sellerAssetReturned is true && sellerAssetHadLeft)
         {
             _logger.LogWarning(
                 "Transaction {TransactionId}: settlement check found the item gone from the buyer "
@@ -141,6 +170,12 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
                     + "envanterine geri dönmüş — trade geri alma imzası.");
         }
 
+        var sellerDetail = sellerAssetReturned is true
+            ? $"Satıcının orijinal asset'i ({transaction.ItemAssetId}) envanterinde görünüyor, "
+                + "ancak teslimatta satıcıdan AYRILDIĞI hiç gözlenmedi (teslimat alıcı onayıyla "
+                + "kapandı, satıcı envanteri okunmadı) — 'yeniden belirme' kanıtlanamıyor"
+            : $"Satıcı tarafı geri dönüşü doğrulamıyor (görünürlük: {sellerRead.Visibility})";
+
         return new SettlementVerificationResult(
             Verdict: SettlementVerdict.AmbiguousDeparture,
             BuyerHoldsItem: false,
@@ -149,8 +184,7 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
             SellerVisibility: sellerRead.Visibility,
             ObservedClassCount: buyerSide.ObservedClassCount,
             ExpectedClassCount: buyerSide.ExpectedClassCount,
-            Detail: $"{buyerSide.Detail} Satıcı tarafı geri dönüşü doğrulamıyor "
-                + $"(görünürlük: {sellerRead.Visibility}) — geri alma mı, alıcının devri mi "
+            Detail: $"{buyerSide.Detail} {sellerDetail} — geri alma mı, alıcının devri mi "
                 + "ayırt edilemedi; insan incelemesi gerekiyor.");
     }
 
@@ -196,13 +230,20 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
         // measure against and the buyer side is simply unknowable.
         if (transaction.BuyerBaselineCapturedAt is null || transaction.BuyerBaselineClassCount is not { } baseline)
         {
+            // Neither route has an input, and neither ever will: the baseline is
+            // only ever written on entry to SELLER_CONFIRMED and the asset id
+            // only by a delivery round that read an inventory. Both are closed
+            // for good by the time this runs, so this is flagged as its own
+            // condition rather than as a read that failed.
             return new BuyerSideRead(
                 HoldsItem: null,
                 Visibility: null,
                 ObservedClassCount: null,
                 ExpectedClassCount: null,
-                Detail: "Teslim edilen asset ID'si kaydedilmemiş ve alıcı baseline'ı yok — "
-                    + "envanter üzerinden mutabakat kontrolü yapılamıyor (06 §3.5).");
+                ReferenceMissing: true,
+                Detail: "Teslim edilen asset ID'si kaydedilmemiş ve alıcı baseline'ı yok "
+                    + "(alıcı envanteri SELLER_CONFIRMED anında gizliydi) — mutabakat kontrolünün "
+                    + "karar girdisi hiç üretilemedi ve sonradan da üretilemez (06 §3.5).");
         }
 
         var expected = baseline + 1;
@@ -270,10 +311,16 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
         return null;
     }
 
+    /// <param name="ReferenceMissing">
+    /// The delivery recorded nothing to measure against, so the buyer side is
+    /// unanswerable rather than unread. Separate from a null
+    /// <paramref name="HoldsItem"/>, which merely means "not this round".
+    /// </param>
     private sealed record BuyerSideRead(
         bool? HoldsItem,
         InventoryVisibility? Visibility,
         int? ObservedClassCount,
         int? ExpectedClassCount,
-        string Detail);
+        string Detail,
+        bool ReferenceMissing = false);
 }

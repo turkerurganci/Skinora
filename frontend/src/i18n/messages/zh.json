@@ -300,7 +300,8 @@
       "HIGH_VOLUME": "高额交易量",
       "ABNORMAL_BEHAVIOR": "异常行为",
       "MULTI_ACCOUNT": "多账户",
-      "SANCTIONS_MATCH": "制裁匹配"
+      "SANCTIONS_MATCH": "制裁匹配",
+      "DELIVERY_REVERSED": "交付被撤销"
     },
     "flagStatus": {
       "PENDING": "待处理",
@@ -346,7 +347,8 @@
       "HIGH_VOLUME": "高交易量",
       "ABNORMAL_BEHAVIOR": "异常行为",
       "MULTI_ACCOUNT": "多账户",
-      "SANCTIONS_MATCH": "制裁匹配"
+      "SANCTIONS_MATCH": "制裁匹配",
+      "DELIVERY_REVERSED": "交付被撤销"
     },
     "reviewStatus": {
       "PENDING": "待处理",
@@ -387,6 +389,13 @@
       "matchValue": "匹配值",
       "linkedAccounts": "关联账户",
       "supportingSignals": "辅助信号",
+      "reversedTransaction": "被撤销的交易",
+      "item": "物品",
+      "deliveredAt": "交付时间",
+      "detectedAt": "检测时间",
+      "buyerVisibility": "买方库存",
+      "sellerVisibility": "卖方库存",
+      "classCount": "买方持有数量（实测 / 预期）",
       "activeTransactions": "活跃交易（{count}）",
       "noActiveTransactions": "无活跃交易。",
       "onHold": "已冻结"
@@ -1870,7 +1879,8 @@
         "HIGH_VOLUME": "高交易量",
         "ABNORMAL_BEHAVIOR": "异常行为",
         "MULTI_ACCOUNT": "多账户",
-        "SANCTIONS_MATCH": "制裁匹配"
+        "SANCTIONS_MATCH": "制裁匹配",
+        "DELIVERY_REVERSED": "交付被撤销"
       },
       "status": {
         "PENDING": "待处理",

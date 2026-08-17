@@ -110,7 +110,10 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
     [Fact]
     public async Task ItemGoneFromBuyer_AndBackWithSeller_IsReversalSignature()
     {
-        var transaction = await CreateDeliveredAsync();
+        // Full verification round at delivery: the platform watched the asset
+        // leave the seller, so its reappearance now is a RETURN (02 §4.5.1).
+        var transaction = await CreateDeliveredAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA);
         // Nothing registered for the buyer: the delivered asset is gone.
         RegisterSellerAsset(ItemAssetId);
 
@@ -124,7 +127,13 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
     [Fact]
     public async Task CountRoute_DropsBackToBaseline_AndSellerHasItBack_IsReversalSignature()
     {
-        var transaction = await CreateDeliveredAsync(deliveredBuyerAssetId: null, baselineClassCount: 2);
+        // Inventory-evidence delivery that recorded no single candidate asset id
+        // (more than one new asset appeared), so the buyer side falls to the
+        // count route while the departure is still on file.
+        var transaction = await CreateDeliveredAsync(
+            deliveredBuyerAssetId: null,
+            baselineClassCount: 2,
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA);
         // Buyer is back down to their two original copies.
         RegisterBuyerAsset("11112222");
         RegisterBuyerAsset("33334444");
@@ -138,6 +147,32 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
     }
 
     // ================= Ambiguous departure =================
+
+    /// <summary>
+    /// The mirror-image harm the two-sided check exists to prevent, closed at
+    /// the other end (validator finding N1). 02 §4.5.1 asks whether the item
+    /// RETURNED to the seller; presence alone does not say that. On a delivery
+    /// closed by the buyer's confirmation the platform never reads the seller's
+    /// inventory, so an honest seller who sent a different copy of the same skin
+    /// — a valid delivery under the §9.2 counting rule — still has the original
+    /// asset sitting there. Calling that a reversal would refund the buyer, let
+    /// them keep the skin and flag the seller.
+    /// </summary>
+    [Fact]
+    public async Task SellerHasTheAsset_ButItsDepartureWasNeverObserved_IsAmbiguous_NotAReversal()
+    {
+        var transaction = await CreateDeliveredAsync(); // buyer-confirmed route
+        RegisterSellerAsset(ItemAssetId);
+
+        var result = await Verify(transaction);
+
+        Assert.Equal(SettlementVerdict.AmbiguousDeparture, result.Verdict);
+        Assert.False(result.BuyerHoldsItem);
+        // The read itself is preserved — the admin is told the asset IS there,
+        // just that its departure was never on file.
+        Assert.True(result.SellerAssetReturned);
+        Assert.Contains("AYRILDIĞI hiç gözlenmedi", result.Detail);
+    }
 
     [Fact]
     public async Task ItemGoneFromBuyer_ButNotBackWithSeller_IsAmbiguous()
@@ -185,18 +220,25 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
         Assert.Equal(InventoryVisibility.Unavailable, result.BuyerVisibility);
     }
 
+    // ================= No decision input =================
+
+    /// <summary>
+    /// Buyer-confirmed delivery with a private buyer inventory at
+    /// SELLER_CONFIRMED: no asset id was recorded and no count exists to measure
+    /// against (06 §3.5 — a NULL baseline is not a zero baseline). Its own
+    /// verdict rather than <c>Inconclusive</c>, because neither column is
+    /// writable after ITEM_DELIVERED: retrying this one is not "wait and see",
+    /// it is waiting for something that cannot happen (validator finding B1).
+    /// </summary>
     [Fact]
-    public async Task NoDeliveredAssetId_AndNoBaseline_IsInconclusive()
+    public async Task NoDeliveredAssetId_AndNoBaseline_IsNoDeliveryReference_NotInconclusive()
     {
-        // Buyer-confirmed delivery with a private buyer inventory at
-        // SELLER_CONFIRMED: no asset id was recorded and no count exists to
-        // measure against. 06 §3.5 — a NULL baseline is not a zero baseline.
         var transaction = await CreateDeliveredAsync(
             deliveredBuyerAssetId: null, baselineClassCount: null);
 
         var result = await Verify(transaction);
 
-        Assert.Equal(SettlementVerdict.Inconclusive, result.Verdict);
+        Assert.Equal(SettlementVerdict.NoDeliveryReference, result.Verdict);
         Assert.Null(result.BuyerHoldsItem);
         // No inventory read is spent on a question with no reference.
         Assert.Empty(_inventory.BaselineReadFreshness);
@@ -228,9 +270,17 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
             InspectLink: null,
             IsTradeable: true);
 
+    /// <param name="evidence">
+    /// How the delivery was proven. The default is the buyer-confirmation route,
+    /// which reads no inventory at all — so it never records that the seller's
+    /// asset LEFT, and a settlement round cannot call its reappearance a
+    /// reversal. Tests that want the reversal signature have to say the full
+    /// verification round ran.
+    /// </param>
     private async Task<Transaction> CreateDeliveredAsync(
         string? deliveredBuyerAssetId = DeliveredAssetId,
-        int? baselineClassCount = 0)
+        int? baselineClassCount = 0,
+        DeliveryEvidence evidence = DeliveryEvidence.BUYER_CONFIRMED)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var deliveredAt = nowUtc.AddDays(-8);
@@ -260,7 +310,7 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
             PaymentReceivedAt = deliveredAt.AddHours(-1),
             ItemDeliveredAt = deliveredAt,
             DeliveryVerifiedAt = deliveredAt,
-            DeliveryEvidence = DeliveryEvidence.BUYER_CONFIRMED,
+            DeliveryEvidence = evidence,
             DeliveredBuyerAssetId = deliveredBuyerAssetId,
             PayoutEligibleAt = deliveredAt.AddDays(8),
             BuyerBaselineClassCount = baselineClassCount,

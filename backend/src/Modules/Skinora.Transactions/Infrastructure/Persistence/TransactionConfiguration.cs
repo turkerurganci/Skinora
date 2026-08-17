@@ -116,6 +116,13 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(t => t.BuyerBaselineAssetIds)
             .HasMaxLength(400);
 
+        // --- Settlement (02 §4.5.1) ---
+        // A SettlementReviewReasons constant, not free text — sized for the
+        // longest code with room for another, and deliberately not an enum
+        // column: the codes travel over the outbox event as strings already.
+        builder.Property(t => t.SettlementEscalationReason)
+            .HasMaxLength(64);
+
         // Stored as int, not string: this is a [Flags] enum and the global
         // EnumToStringConverter would persist combinations as comma-joined
         // names, which are awkward to query and brittle to rename.

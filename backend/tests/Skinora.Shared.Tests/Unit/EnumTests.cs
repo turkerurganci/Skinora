@@ -381,17 +381,18 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (32) ────────────────────────────────────────────
+    // ── AuditAction (33) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave32Values()
+    public void AuditAction_ShouldHave33Values()
     {
         // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
         // 29 after WP7 added MAINTENANCE_MODE_CHANGED;
         // 30 after WP8 added BOT_SESSION_FAILED;
-        // 32 after WP16 added TIMEOUT_AUTO_EXTENDED / PLATFORM_OUTAGE_DETECTED.
+        // 32 after WP16 added TIMEOUT_AUTO_EXTENDED / PLATFORM_OUTAGE_DETECTED;
+        // 33 after T129's fix round added SETTLEMENT_CLEARED_ADMIN (AD32).
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(32, values.Length);
+        Assert.Equal(33, values.Length);
     }
 
     [Theory]
@@ -427,6 +428,7 @@ public class EnumTests
     [InlineData(nameof(AuditAction.MAINTENANCE_MODE_CHANGED))]
     [InlineData(nameof(AuditAction.TIMEOUT_AUTO_EXTENDED))]
     [InlineData(nameof(AuditAction.PLATFORM_OUTAGE_DETECTED))]
+    [InlineData(nameof(AuditAction.SETTLEMENT_CLEARED_ADMIN))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));

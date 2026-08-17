@@ -136,6 +136,26 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // marker: the admin is told once, not once per tick.
     public DateTime? SettlementEscalatedAt { get; set; }
 
+    // WHY it was handed over, as the machine-readable SettlementReviewReasons
+    // code. Two jobs, both added by the T129 fix round:
+    //  * the reason lived only in the outbox event, so a triage query could not
+    //    tell an unreadable inventory from a delivery that left NO reference to
+    //    measure against — two classes whose procedures differ (DEPLOY_RUNBOOK
+    //    §I.3 vs §I.5);
+    //  * it makes the escalation STICKY. A round that watched the item LEAVE the
+    //    buyer must not be undone by a later round that happens to read it back:
+    //    without this column ClearForPayout stamped the clearance regardless and
+    //    the money left while an ADMIN_ESCALATION sat open, unannounced.
+    public string? SettlementEscalationReason { get; set; }
+
+    // Set when an admin closed the settlement in the seller's favour instead of
+    // the check concluding on its own (07 §9.22b). Evidentiary only — no money
+    // gate reads it; SettlementVerifiedAt is still the single column that opens
+    // payout, sweep and COMPLETED. It exists so a row cleared by a human is
+    // distinguishable from one cleared by the job, in the triage query and in
+    // the audit trail alike.
+    public Guid? SettlementClearedByAdminId { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
