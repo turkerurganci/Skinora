@@ -2335,6 +2335,8 @@ Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`side
 
 > **E2E ağı karanlıkta — T137 paralel başlatılıyor, T137a eklendi (T129 doğrulaması tur 3, 2026-08-17; proje sahibi onaylı).** Sekiz advisory E2E leg'in **hepsi**, T117'nin custody emekliliğinden beri kırmızı: `e2e/src/db.ts` harness setup'ı emekli `PlatformSteamBots` tablosuna dört atıf yapıyor (satır 97 · 102 · 131 · 284) ve legler spec'lere **hiç ulaşmadan** ölüyor — imza 8/8 leg'de leg başına **tam 1** `Invalid object name` izi. Legler bilinçli olarak `continue-on-error` + `ci-gate.needs` dışında (proje sahibi kararı, `ci.yml:612-625`), dolayısıyla hiçbir CI Gate'i kırmadılar ve dört görev boyunca (T126 · T127 · T128 · T129) "T129 kaynaklı değil" diye doğru şekilde kayda geçirilip **hiç kapatılmadılar**. Sonuç: F7'nin **para hareket ettiren** görevleri uçtan uca ağ hiç çalışmazken iniyor ve sırada gelen T130/T131 dispute/iade bacaklarıdır. Karar: (a) **T138 öne ALINMAZ** — bağımlılığı T135 gerçek, hareketli FE'ye karşı yazılan spec iki kez yazılır; (b) **T137 P5 ile paralel başlatılır** — planın kendi notunun gereği, tek bağımlılığı T120 zaten kapandı; (c) yeni **T137a** ölçüm görevi harness'i onarıp ağın ne kadarının ayakta olduğunu ölçer ve T138'in "9 spec" tahminini gerçek sayıyla değiştirir. **KALICI DERS:** advisory bir sinyal, "bloke etmediği" için değil "kimsenin sahibi olmadığı" için ölür; her turda doğru şekilde "benim kaynaklı değil" demek onu kapatmaz — bir sahibi ve bir kapatma tarihi olmalıdır.
 
+> **T137a ölçümü — yukarıdaki tanının iki düzeltmesi (2026-08-17, rapor [`T137a_REPORT.md`](TASK_REPORTS/T137a_REPORT.md), CI run [`32050987594`](https://github.com/turkerurganci/Skinora/actions/runs/32050987594)).** (1) **Atıf sayısı dört değil sekiz:** `TradeOffers` de aynı T117 migration'ında düşmüş ve harness iki yerde ona bakıyordu (cleanup satırı + `pollRefundOfferAccepted`); ayrıca T117 deadline kolonlarını faz-koruyarak yeniden adlandırmış (`TradeOfferToSellerDeadline → SellerConfirmDeadline`, `TradeOfferToBuyerDeadline → DeliveryDeadline`) ama harness'ın allow-list'i eski adları taşıyordu — tabloların arkasındaki ikinci duvar. (2) **"Spec'lere hiç ulaşmadan ölüyor" yanlıştı:** spec'ler koşuyor. SQL Server ad-hoc batch'in adlarını **compile anında** çözümlediği için tek bilinmeyen tablo cleanup'ın **tamamını** no-op'a çeviriyordu; ilk test bot INSERT'ünde `Invalid object name`, sonraki testler cleanup çalışmadığından `PK_Users` duplicate'iyle düşüyordu — "leg başına tam 1 iz" bunun sonucu, "hiç başlamadı" imzası değil (T113 leg'i o hâlde bile 3 test geçiriyordu). **Ölçüm sonucu:** harness onarıldıktan sonra 32 testin **10'u geçiyor** (öncesi 3), kalan 22'si custody durumlarında (`ITEM_ESCROWED` / `TRADE_OFFER_SENT_TO_*`) takılıyor — yani ağ artık "karanlık" değil, **P2P akışına göre yeniden yazılmayı bekliyor**. **KALICI DERS (yukarıdakinin üstüne):** ölü bir sinyal teşhis edilirken de sahipsizdir — dört tur boyunca "benim kaynaklı değil" diyen notlar aynı zamanda **yanlış** bir mekanizma tespitini de dört tur taşıdı; sinyali kapatan tur, tanıyı da sıfırdan doğrulamak zorundadır.
+
 > **T117 doğrulaması sonrası düzeltmeler (2026-08-09):** P1'e **T119a** eklendi — 07 §7.6 accept ucunun v3.0 alanlarını (`steamTradeUrl` → `BuyerTradeUrl`, MA kontrolü) üstlenen görev listede yoktu. **T124**'e teslimat-timeout kapısı kabul kriteri eklendi — 05 §4.4 iptalden önce doğrulama turu şart koşuyor ama o tur T127'de, zincir T124'ü öne zorluyor.
 
 > **T119 denetimi sonrası düzeltmeler (2026-08-10):** **T123/T124**'e timeout SystemSetting adlandırma kararı, **T129**'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi (ikisi de aşağıda). İki açık DEFERRED_BACKLOG §9'a düştü (`P2P-NonDeliveryAbuseWindow`, `P2P-DeliveryTimeoutWarning`) — teslimat fazı satıcıya devredildi ama fazın **yaptırım** ve **uyarı** bacaklarının F7'de sahibi yok.
@@ -3364,10 +3366,34 @@ Task T138: E2E spec'lerinin yeniden yazımı
        yazılır ve iki kez yazılır. Ağın bugün karanlık olmasının cevabı
        T138'i öne almak değil, T137a'nın ölçümü + T137'nin paralel
        başlatılmasıdır.
-  Kabul kriterleri:
-    - 9 spec yeni sıraya ve data-status değerlerine göre güncellendi
+  Kabul kriterleri (T137a ÖLÇÜMÜYLE GÜNCELLENDİ, 2026-08-17 — "9 spec" tahmini
+  yerine ölçülen gerçek dağılım; kanıt CI run 32050987594, rapor T137a_REPORT):
+    - **7 spec yeniden yazıldı** (21 test — 20'si CI'da ÖLÇÜLDÜ, +1 ölçülmedi
+      çünkü happy-path.ui CI matrisinde yok; alttaki üçüncü maddeye bak) —
+      akışları emekli custody durumlarına dayanıyor, hepsi bugün
+      `ACCEPTED`'da takılıyor:
+      happy-path.smoke (1) · happy-path.ui (1) · cancellation (4) ·
+      timeout (3/4 — accept-timeout testi P2P'de zaten geçiyor) ·
+      payment-edge-cases (6) · emergency-hold (3) · downtime (3)
+    - **2 spec noktasal düzeltmeyle kapandı** (yeniden yazım DEĞİL):
+      · admin-flows AC1 — `steamAccounts` assertion'ı AD1 DTO'sunda artık
+        olmayan bir alana bakıyor (07 §9.1'de yok); assertion kalkar veya
+        03 §8.1'in bot bloğu doküman turunda emekliye ayrılır (T133a/T136)
+      · fraud-flags high-volume testi — ikinci create'i T128'in
+        (SellerId, ItemAssetId) tekillik kapısı `ITEM_ALREADY_LISTED` ile
+        reddediyor; ikinci assetId (fake'te `11111111002` mevcut) ile
+        kurtulur, ama o item'ın ItemPriceCache satırı yok → fiyat sapması
+        flag'i tetiklenmesin diye harness'a ikinci cache satırı gerekir
+    - `happy-path.ui.spec.ts` için CI'da leg YOK (matris 8 suite, `test:ui`
+      dışarıda) — yeniden yazımı doğrulayacak bir sinyal de yok; T138 ya
+      9. leg'i ekler ya da spec'in yalnız lokal koşulduğunu açıkça yazar
     - Yeni specler: alıcı-onay hızlı yolu, delivery timeout -> satıcı kusurlu
       iptal, satıcı-başka-yere-gönderdi -> auto-escalation
+  T137 bağımlılığının ölçülen gerekçesi: fake'in `/api/inventory/:steamId`
+       ucu `steamId`'yi YOK SAYIYOR (tek sabit liste, satıcı = alıcı envanteri),
+       dolayısıyla teslimatın kanıtı (item satıcıdan çıkıp alıcıda görünmeli,
+       T125 baseline diff'i) simüle edilemiyor. 8 spec'in 7'si bu yüzden
+       T137'siz yeşile dönemez; yalnız admin-flows T137'den bağımsız.
 ```
 
 ---

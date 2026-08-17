@@ -174,7 +174,7 @@ test('steam outage: freeze halts the trade-offer timeout + shows the outage noti
     // 30-min window — the realistic state a Steam outage freezes (the WP7
     // integration test likewise seeds the seller-bound deadline, at +12h). The
     // freeze then captures a real remainder rather than a zero one.
-    await setDeadlineFromNow(txId, 'TradeOfferToSellerDeadline', 30);
+    await setDeadlineFromNow(txId, 'SellerConfirmDeadline', 30);
 
     // 03 §11.2 step 1-3 — global Steam outage: the Steam-bound timeouts freeze and
     // users see the "Steam temporarily unavailable, your transactions are safe"
@@ -200,7 +200,7 @@ test('steam outage: freeze halts the trade-offer timeout + shows the outage noti
     expect(held?.timeoutRemainingSeconds ?? 0).toBeGreaterThan(0);
 
     // Decisive "timeout dondurma": back-date the seller-trade deadline; frozen → skipped.
-    await backdateDeadline(txId, 'TradeOfferToSellerDeadline');
+    await backdateDeadline(txId, 'SellerConfirmDeadline');
     await api.assertStatusStable(buyerToken, txId, 'TRADE_OFFER_SENT_TO_SELLER', {
       durationMs: SCANNER_SKIP_WINDOW_MS,
     });

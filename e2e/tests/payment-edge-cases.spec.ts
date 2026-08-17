@@ -6,7 +6,6 @@ import {
   pollBlockchainTxConfirmed,
   pollNotificationRecipients,
   getExpectedAmount,
-  getBotEscrowCount,
   closePool,
   seed,
   fakeBuyerWallet,
@@ -33,6 +32,10 @@ import * as api from '../src/api';
  * Every refund returns to the payment source wallet (08 §562 = fakeBuyerWallet),
  * NOT the trade-side refund wallet. Refund amounts are chosen so net > 2× gas
  * (gas estimate 2.0, threshold 4.0) → the refund proceeds rather than blocking.
+ *
+ * T137a: the bot escrow-slot assertions were removed — T117 dropped
+ * PlatformSteamBots and P2P has no platform inventory. The flows still drive
+ * through ITEM_ESCROWED, which no longer exists; the rewrite is T138's scope.
  */
 
 // States a transaction can occupy once the buyer's payment has been accepted —
@@ -195,9 +198,8 @@ test('§5.3a unsupported token → SPAM_TOKEN_INCOMING audit row, no refund, tx 
   expect(audit, 'SPAM_TOKEN_INCOMING row not recorded').not.toBeNull();
   expect(audit?.status).toBe('CONFIRMED');
 
-  // steps 3 & 5 — transaction stays ITEM_ESCROWED, item stays escrowed.
+  // steps 3 & 5 — transaction stays ITEM_ESCROWED.
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('ITEM_ESCROWED');
-  expect(await getBotEscrowCount()).toBe(1);
 
   // step 6 — automatic refund is NOT guaranteed for an unsupported asset; the
   // backend queues no refund row (admin review path — known limitation: the
@@ -212,7 +214,6 @@ test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELL
   // Setup mirrors the T109 payment-timeout scenario so the deposit address
   // enters POST_CANCEL_24H monitoring.
   const { txId, buyerToken } = await createAcceptEscrow();
-  expect(await getBotEscrowCount()).toBe(1);
 
   await backdateDeadline(txId, 'PaymentDeadline');
   const cancelled = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', {

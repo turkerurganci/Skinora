@@ -23,7 +23,8 @@ export const e2eConfig = {
     database: process.env.E2E_DB_NAME || 'Skinora',
   },
 
-  // Must equal the fake's FAKE_BOT_STEAM_ID so the accepted-trade webhook's
-  // botSteamId lines up with the seeded ACTIVE bot.
-  botSteamId: process.env.E2E_BOT_STEAM_ID || '76561190000000001',
+  // T137a — `botSteamId` was removed: the harness no longer seeds a platform
+  // bot (T117 dropped PlatformSteamBots). The fake sidecar still carries a
+  // FAKE_BOT_STEAM_ID identity for its custody-era trade routes; retiring that
+  // is T137's scope, not the harness's.
 };
