@@ -153,7 +153,9 @@ DELIVERY bloğu (5 senaryo) + WRONG_ITEM bloğu (7 senaryo).
 ## Commit & PR
 
 - Branch: `task/T130-dispute-eligibility-autochecker`
-- PR: (aşağıda güncellenecek)
+- Commit: `4429f31` — T130: DisputeEligibility + AutoChecker yeniden yazımı
+- PR: [#242](https://github.com/turkerurganci/Skinora/pull/242)
+- CI: (izleniyor — sonuç aşağıda)
 
 ## Known Limitations / Follow-up
 
