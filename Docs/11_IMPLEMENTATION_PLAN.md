@@ -1,6 +1,6 @@
 # Skinora — Implementation Plan
 
-**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-16 (**T129 doğrulaması ✗ FAIL → düzeltme turu** — proje sahibi onayıyla üç bloke edici bulgu ve beş bloke etmeyen madde §P4 T129'a **düzeltme turu kabul kriteri** olarak yazıldı. **B1 için karar SEÇENEK 1** (ayrı verdict + admin aksiyonu): alıcı envanteri `SELLER_CONFIRMED` anında gizli olan işlemlerde mutabakatın karar girdisi (`baseline` / `DeliveredBuyerAssetId`) hiç üretilemiyor, kontrol sonsuza kadar `Inconclusive` kalıyor ve payout + sweep + COMPLETED üçü birden kalıcı kilitleniyor — admin'in kolu yok çünkü `admin_resolve_refund` yalnız alıcının açabileceği bir dispute üzerinden ateşleniyor. Alternatifler (ITEM_DELIVERED'da envanter okuması / kontrolden muafiyet) reddedildi: ilki gizli-envanter vakasını kapatmıyor, ikincisi 02 §4.5.1'in korumasını o popülasyon için kaldırıyor. **B2** `DELIVERY_REVERSED` ne 06 §2.11'de ne bir admin yüzeyinde, **B3** itibar formülünü çalıştıran refresher geri alma yolunda çağrılmıyor (06 §3.1 ↔ §8.2 çelişkisi). **İKİ KALICI DERS:** (1) bir kapı, koruduğu değerin yazarlarını denetlemekle bitmez — kendi KARAR GİRDİSİNİN hiç üretilemediği popülasyonu da denetlemelidir; girdisi asla gelemeyecek bir fail-closed kapı fail-closed değil **fail-frozen**'dır (T124/T126 dersinin bir sonraki halkası). (2) Denormalize bir alanda "kural yazıldı" ile "kural işliyor" farklı şeylerdir ve birim testi ikincisini göstermez — formülü genişleten görev, o formülü ÇALIŞTIRAN tetikleyiciyi de genişletmelidir.) · 2026-08-15 (**T127 doğrulaması ✗ FAIL → düzeltme turu** — proje sahibi onayıyla dört karar plana işlendi: **T127 AC3'ün NİHAİ ŞEKLİ** yazıldı (dal tüketiyor ama ayrı sorgu + ayrı tavanla; kriterin özü karşılandı, harfi bilinçli olarak karşılanmadı — T122'nin kalıcı dersi gereği onaylanan sapma KAYNAK dokümana geçti), **üç bloke edici bulgu (B1 re-entry niteleyicisi · B2 teslimat penceresi açlığı · B3 SYSTEM dispute'unda alıcı bildirimi) T127'ye kabul kriteri olarak** eklendi, ve **B5 (kapı kapalıyken auto-checker'ın alıcının eskalasyon yolunu kapatması) T130'a** launch öncesi kapatılmak üzere kabul kriteri olarak devredildi. **KALICI DERS:** bir kapı, kendi bıraktığı KALICI DURUMUN sonraki turda nasıl okunacağını ve o durumun biriktiği KUYRUĞUN drene olup olmadığını da denetlemeli — üç bulgunun üçünü de kabul kriteri listesi değil, "bu satır bir daha buraya geldiğinde ne olur?" sorusu yakaladı) · 2026-08-14 (**T124 doğrulaması** — iki bulgu proje sahibi onayıyla plana işlendi: **T127'nin başlığı düzeltildi** (`TimeoutExecutor'a ...` → `DeadlineScannerJob'a ...`; teslimat fazı 05 §4.4 uyarınca scanner-driven ve `TimeoutExecutor` `Status != SELLER_CONFIRMED` ise no-op eder — yanlış başlık T124 kapısının hiç kalkmamasına yol açabilirdi) ve **T127'ye freeze/resume faz kayması ön koşulu** kabul kriteri olarak eklendi (pre-existing T50 yolu `DeliveryDeadline`'a ödeme fazının artığını yazabiliyor; kapı kalkmadan kapatılmalı)) · 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
+**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-17 (**T129 yeniden doğrulaması ✗ FAIL → ikinci düzeltme turu** — proje sahibi onayıyla bir bloke edici bulgu (**B4**) ve üç bloke etmeyen madde (N8–N10) §P4 T129'a **ikinci düzeltme turu kabul kriteri** olarak yazıldı. Düzeltme turunun on dört maddesinden **on üçü** (B1a–d · B2 · B3 · N1 · N3–N7) bağımsız olarak yeniden üretildi ve doğru bulundu; açık kalan **N2**'dir. **B4:** yapışkanlık `SettlementEscalationReason` alanının DEĞERİNE bağlandı ama alanı yazan kol düşürmeye karşı korunmadı — `EscalateAsync` gerekçeyi koşulsuz üzerine yazıyor ve eşik geçmişken gelen tek bir `Inconclusive` tur `SETTLEMENT_REVERSAL_GATED`'i `SETTLEMENT_UNREADABLE`'a çeviriyor; sonraki `Verified` turunda `ClearForPayout` artık bloklamıyor ve para, açık bir `ADMIN_ESCALATION`'ın üstünden, ikinci bir bildirim gitmeden çıkıyor. **KALICI DERS:** yapışkanlığı bir alanın değerine bağlayan tasarım, o alanı yazan HER kolun düşürme yönünü de denetlemelidir — "kural yazıldı" ile "kural korunuyor" yine farklı çıktı ve iki karşıt yapışkanlık testi yalnız yükseltme yönünü sabitliyordu (B3 dersinin ikizi: orada formülün TETİKLEYİCİSİ eksikti, burada kuralın KORUYUCUSU).) · 2026-08-16 (**T129 doğrulaması ✗ FAIL → düzeltme turu** — proje sahibi onayıyla üç bloke edici bulgu ve beş bloke etmeyen madde §P4 T129'a **düzeltme turu kabul kriteri** olarak yazıldı. **B1 için karar SEÇENEK 1** (ayrı verdict + admin aksiyonu): alıcı envanteri `SELLER_CONFIRMED` anında gizli olan işlemlerde mutabakatın karar girdisi (`baseline` / `DeliveredBuyerAssetId`) hiç üretilemiyor, kontrol sonsuza kadar `Inconclusive` kalıyor ve payout + sweep + COMPLETED üçü birden kalıcı kilitleniyor — admin'in kolu yok çünkü `admin_resolve_refund` yalnız alıcının açabileceği bir dispute üzerinden ateşleniyor. Alternatifler (ITEM_DELIVERED'da envanter okuması / kontrolden muafiyet) reddedildi: ilki gizli-envanter vakasını kapatmıyor, ikincisi 02 §4.5.1'in korumasını o popülasyon için kaldırıyor. **B2** `DELIVERY_REVERSED` ne 06 §2.11'de ne bir admin yüzeyinde, **B3** itibar formülünü çalıştıran refresher geri alma yolunda çağrılmıyor (06 §3.1 ↔ §8.2 çelişkisi). **İKİ KALICI DERS:** (1) bir kapı, koruduğu değerin yazarlarını denetlemekle bitmez — kendi KARAR GİRDİSİNİN hiç üretilemediği popülasyonu da denetlemelidir; girdisi asla gelemeyecek bir fail-closed kapı fail-closed değil **fail-frozen**'dır (T124/T126 dersinin bir sonraki halkası). (2) Denormalize bir alanda "kural yazıldı" ile "kural işliyor" farklı şeylerdir ve birim testi ikincisini göstermez — formülü genişleten görev, o formülü ÇALIŞTIRAN tetikleyiciyi de genişletmelidir.) · 2026-08-15 (**T127 doğrulaması ✗ FAIL → düzeltme turu** — proje sahibi onayıyla dört karar plana işlendi: **T127 AC3'ün NİHAİ ŞEKLİ** yazıldı (dal tüketiyor ama ayrı sorgu + ayrı tavanla; kriterin özü karşılandı, harfi bilinçli olarak karşılanmadı — T122'nin kalıcı dersi gereği onaylanan sapma KAYNAK dokümana geçti), **üç bloke edici bulgu (B1 re-entry niteleyicisi · B2 teslimat penceresi açlığı · B3 SYSTEM dispute'unda alıcı bildirimi) T127'ye kabul kriteri olarak** eklendi, ve **B5 (kapı kapalıyken auto-checker'ın alıcının eskalasyon yolunu kapatması) T130'a** launch öncesi kapatılmak üzere kabul kriteri olarak devredildi. **KALICI DERS:** bir kapı, kendi bıraktığı KALICI DURUMUN sonraki turda nasıl okunacağını ve o durumun biriktiği KUYRUĞUN drene olup olmadığını da denetlemeli — üç bulgunun üçünü de kabul kriteri listesi değil, "bu satır bir daha buraya geldiğinde ne olur?" sorusu yakaladı) · 2026-08-14 (**T124 doğrulaması** — iki bulgu proje sahibi onayıyla plana işlendi: **T127'nin başlığı düzeltildi** (`TimeoutExecutor'a ...` → `DeadlineScannerJob'a ...`; teslimat fazı 05 §4.4 uyarınca scanner-driven ve `TimeoutExecutor` `Status != SELLER_CONFIRMED` ise no-op eder — yanlış başlık T124 kapısının hiç kalkmamasına yol açabilirdi) ve **T127'ye freeze/resume faz kayması ön koşulu** kabul kriteri olarak eklendi (pre-existing T50 yolu `DeliveryDeadline`'a ödeme fazının artığını yazabiliyor; kapı kalkmadan kapatılmalı)) · 2026-08-14 (T124 — üç yapım kararı (kapı şekli, fallback sabiti, doküman yansıması) §P3 T124'e yazıldı; **T127'ye kapı kaldırma kabul kriteri eklendi** — T124'ün scanner kapısı kalkmazsa teslimat timeout'u hiç ateşlenmez. AC1'in T117'de zaten karşılandığı kanıtıyla kayda geçti.) · 2026-08-13 (T123 — adlandırma kararı (seçenek **a**) ve T123 yapımında bulunan **plan boşluğu** (`SellerConfirmDeadline`'ı yazan kod yoktu) §P3'e kabul kriteri olarak yazıldı; T124'ün SystemSetting'i adıyla sabitlendi. T122'nin kalıcı dersi uygulandı: onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir.) · 2026-08-10 (T119 doğrulaması: T133a kapsamı 03 + 07 → **03 + 04 + 07** genişletildi. Önceki: T119 denetimi — T123/T124'e timeout SystemSetting adlandırma kararı, T129'a `REFUNDED` itibar kararı kabul kriteri olarak eklendi)
 
 ---
 
@@ -2968,6 +2968,79 @@ Task T129: Mutabakat süresi + trade geri alma koruması [RİSKLİ]
     Yeniden doğrulama: düzeltme sonrası AYRI bir doğrulama chat'i açılır
     (INSTRUCTIONS §3.3 izolasyon kuralı); ilk turda ✓ kanıtlanan
     AC1/2/3/5/6/7 için kanıt korunur, AC4 + AC8 sıfırdan doğrulanır.
+
+  İKİNCİ DÜZELTME TURU KABUL KRİTERLERİ (T129 yeniden doğrulaması ✗ FAIL,
+  2026-08-17 — bağımsız validator, tur 2; bir bloke edici bulgu proje sahibi
+  onayıyla plana işlendi. Düzeltme turunun on dört maddesinden on üçü
+  (B1a–d · B2 · B3 · N1 · N3–N7) bağımsız olarak yeniden üretildi ve DOĞRU
+  bulundu; AC1/2/3/5/6/7/8 ✓, AC4 ~ Kısmi kaldı):
+
+    - (B4) ESKALASYON GEREKÇESİNİN YAPIŞKANLIĞI DÜŞÜRÜLEMEZ OLMALI.
+      Bulgu: N2'nin NİHAİ ŞEKLİ yapışkanlığı `SettlementEscalationReason`
+      alanının DEĞERİNE bağladı, ama o alanı yazan kolu düşürmeye karşı
+      korumadı. `EscalateAsync` zaten eskale edilmiş bir satırda gerekçe
+      farklıysa KOŞULSUZ üzerine yazıyor (kod yorumu yalnız "upgrade"
+      diyor; uygulama düşürmeyi de yapıyor), ve `HandleInconclusiveAsync`
+      eşiği `PayoutEligibleAt`'ten ölçtüğü için eskalasyondan sonra
+      `settlement.unreadable_escalation_hours` geçmişken gelen TEK BİR
+      `Inconclusive` tur — alıcının envanterini gizlemesi yeter —
+      `SETTLEMENT_REVERSAL_GATED` / `SETTLEMENT_AMBIGUOUS_DEPARTURE`
+      gerekçesini `SETTLEMENT_UNREADABLE`'a çeviriyor. Sonraki `Verified`
+      turunda `ClearForPayoutAsync`'in `ObservedDeparture(...)` kontrolü
+      artık `false` dönüyor → `SettlementVerifiedAt` damgalanıyor → payout
+      ve sweep açılıyor; `SettlementEscalatedAt` hâlâ dolu, admin kutusunda
+      `ADMIN_ESCALATION` açık ve İKİNCİ BİR BİLDİRİM GİTMİYOR. Yani N2'nin
+      kapatmak için yazıldığı zararın ta kendisi geri geliyor ve bu sefer
+      yalnız ayırt edilemeyen ayrılmayı değil GERİ ALMA İMZASINI da siliyor.
+      Dönüş rotası gerçek: `DeliveredBuyerAssetId` NULL olan alıcı-onaylı
+      teslimatlarda kontrol sayım rotasına düşer ve alıcı aynı sınıftan
+      başka kopya edindiği anda "item duruyor" der (raporun kendi §Known
+      Limitations'ında yazılı zayıflık).
+      Çelişilen kaynak cümleler: 02 §4.5.1 launch kapısı notu ("Kaydedilen
+      imza YAPIŞKANDIR — ayrılmayı gözlemlemiş bir eskalasyon açıkken
+      sonraki turun 'item duruyor' okuması ödemeyi serbest bırakmaz"),
+      06 §3.5 `SettlementEscalationReason` satırının (2) numaralı işi,
+      DEPLOY_RUNBOOK §I.1.
+      Kanıt: validator reprosu (geçici test, koşumdan sonra geri alındı) —
+      `r1 reason=SETTLEMENT_REVERSAL_GATED → r2 reason=SETTLEMENT_UNREADABLE
+      → SettlementVerifiedAt damgalandı, SettlementEscalatedAt dolu`.
+      Uygulama:
+        a) `EscalateAsync`'te gerekçe yalnız GÜÇLENDİRİLEBİLİR:
+           `ObservedDeparture(mevcut) && !ObservedDeparture(yeni)` ise
+           mevcut gerekçe korunur (yalnız log). Ters yön (hiçbir şey
+           gözlememiş → gözlemlemiş) serbest kalır; bugünkü davranış budur.
+        b) Düşürme yönü için regresyon testi. Mevcut iki karşıt yapışkanlık
+           testi yalnız yükseltme yönünü sabitliyor — kriterin yarısı test
+           edilmemiş durumda.
+      KALICI DERS: yapışkanlığı bir alanın DEĞERİNE bağlayan tasarım, o
+      alanı yazan HER kolun düşürme yönünü de denetlemek zorundadır.
+      "Kural yazıldı" ile "kural korunuyor" yine farklı şeyler çıktı ve
+      birim testleri ikincisini göstermedi (B3 dersinin ikizi: orada
+      formülün TETİKLEYİCİSİ eksikti, burada kuralın KORUYUCUSU).
+
+    - (N8, bloke etmeyen) Rapor §Güvenlik Kontrolü düzeltme turu için
+      güncellenmemiş: "Auth/authorization: yeni endpoint yok" diyor, oysa
+      aynı rapor AD32'yi belgeliyor. Kod temiz doğrulandı (policy
+      `MANAGE_DISPUTES`, `RateLimit("admin-write")`, gerekçe ≥10 karakter,
+      yeni permission tanımlanmamış) — yanlış olan Katman-1 kaydı.
+
+    - (N9, bloke etmeyen) Sweep artık payout ile AYNI ANDA açılıyor: T129
+      öncesi sweep `ITEM_DELIVERED`'da (T+0), payout `PayoutEligibleAt`'te
+      (T+8g) çalışıyordu; artık ikisinin de kapısı `SettlementVerifiedAt`.
+      Kapı doğru ve AC7'nin talebi (05 §3.3 gerekçesi yazılı), eksik olan
+      SONUCUN KAYDI: hot wallet artık ilgili depozit girişini payout
+      çıkışından önce görmüyor, yani 8 günlük bir float ihtiyacı doğuyor.
+      02 §4.5.1 "Bilinen sonuçları" yalnız toplam tutulan paranın artışını
+      yazıyor. Bir satır DEPLOY_RUNBOOK §I'ye veya DEFERRED_BACKLOG'a.
+
+    - (N10, bloke etmeyen) Rapor §Yeni kalıcı yüzeyler migration adını
+      `20260817081454_...` yazıyor; dosya `20260817084800_...`. Yalnız kayıt
+      hatası — migration'ın kendisi doğru (snapshot senkron, CI migration
+      dry-run yeşil).
+
+    Üçüncü doğrulama: düzeltme sonrası yine AYRI bir doğrulama chat'i
+    açılır. Tur 2'de ✓ kanıtlanan AC1/2/3/5/6/7/8 ve B1(a–d) · B2 · B3 · N1 ·
+    N3–N7 için kanıt korunur; AC4 + N2 (B4 ekseninde) sıfırdan doğrulanır.
 
 --- P5: Dispute ---
 
