@@ -1,6 +1,6 @@
 # T129 — Mutabakat süresi + trade geri alma koruması
 
-**Faz:** F7 (P4 — Payout tamponu) | **Durum:** ✗ FAIL (yeniden doğrulama 2026-08-17 — **bir bloke edici bulgu: B4**, ikinci düzeltme turu bekleniyor) | **Tarih:** 2026-08-16 · düzeltme turu 2026-08-17 · yeniden doğrulama 2026-08-17
+**Faz:** F7 (P4 — Payout tamponu) | **Durum:** ✓ Tamamlandı (üçüncü doğrulama 2026-08-17 — **✓ PASS, 0 bloke edici bulgu**) | **Tarih:** 2026-08-16 · düzeltme turu 2026-08-17 · yeniden doğrulama 2026-08-17 · ikinci düzeltme turu 2026-08-17 · üçüncü doğrulama 2026-08-17
 
 ---
 
@@ -329,6 +329,86 @@ Yeniden doğrulamanın bir bloke edici bulgusu (**B4**) ve üç bloke etmeyen ma
 - **Şema değişikliği yok.** Değişiklik job içi karar mantığı + rank tablosu + testler + doküman; yeni kolon, migration, enum veya endpoint eklenmedi.
 - **Mevcut satırlar için geri dönük düzeltme yok.** Kural bundan sonraki turlarda uygulanır; bugün üretimde düşürülmüş bir gerekçe yoktur (T129 henüz merge edilmedi).
 
+---
+
+## Doğrulama — Tur 3 (üçüncü doğrulama, ✓ PASS)
+
+**Tarih:** 2026-08-17 · **Dal:** `task/T129-settlement-window-reversal-guard` · **Commit:** `e219d48` (dal HEAD) · **Yöntem:** bağımsız spec-conformance review (yapım raporu Faz 3'e kadar okunmadı; kaynak dokümanlar 02 §4.5.1 / 06 §3.5 / 11 §P4 "İKİNCİ DÜZELTME TURU KABUL KRİTERLERİ" + D3/D4/D5 NİHAİ ŞEKİL üzerinden). **Kapsam:** plan §P4'ün "Üçüncü doğrulama" satırı gereği **AC4 + N2 (B4 ekseni) sıfırdan**; tur 2'de ✓ kanıtlanan AC1/2/3/5/6/7/8 ve B1(a–d) · B2 · B3 · N1 · N3–N7 için kanıt korundu.
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Bloke edici bulgu | **0** |
+| Bloke etmeyen bulgu | 2 (N11 repo memory etiketi · N12 test sayımı 1 fark) |
+| Düzeltme gerekli mi | Hayır |
+
+### Kapı kontrolleri
+
+| Adım | Sonuç |
+|---|---|
+| -1 Working tree | ✓ temiz (`git status --short` boş; validator reprosundan sonra da temiz) |
+| 0 Main CI son 3 run | ✓ `31944080720` · `31944080697` · `31909528316` — üçü de `success` |
+| 0b Repo memory drift | ✓ T129 satırı mevcut (satır 49); gövde güncel, **başlık etiketi bayat** → N11 |
+| 3 Remote tazeleme | ✓ `git fetch origin --prune` — `HEAD` = `origin/task/T129-…` = `e219d48` |
+| 8a Dal CI | ✓ dal HEAD `e219d48` → run [`32029632903`](https://github.com/turkerurganci/Skinora/actions/runs/32029632903), **CI Gate `success`**; bloke edici 10 job yeşil (Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build ×2 · CI Gate), `0. Guard` beklendiği gibi `skipped` |
+| Lokal unit suite (validator) | ✓ **1426/1426, 0 hata, exit 0** — CI'nin **birebir** filtresiyle (`FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract`): Transactions 518 · Shared 392 · Platform 124 · Notifications 111 · Auth 83 · API 61 · Realtime 40 · Steam 39 · Users 22 · Disputes 18 · Fraud 18 |
+| Çapraz ölçüm (raporun filtresi) | ✓ **2478/2478, 0 hata, exit 0** — `Category!=Integration&Category!=Contract` (Docker/Testcontainers ayakta): Transactions **992** · API 521 · Shared 403 · Platform 133 · Notifications 111 · Auth 83 · Fraud 79 · Disputes 55 · Realtime 40 · Steam 39 · Users 22. **Raporun aynı satırı 2477 / Transactions 991 diyor — 1 testlik fark** (N12, bloke etmiyor: her iki ölçümde de sıfır hata, kod commit'i aynı `5c29277`). İki filtre farklı küme seçer (FQN filtresi `.Integration` namespace'ini de eler, trait filtresi elemez); CI'nin kapısı olan filtre birincisidir |
+
+### AC4 + N2/B4 — sıfırdan doğrulama
+
+| Ne | Bağımsız kanıt |
+|---|---|
+| **B4(a)** — gerekçe yalnız güçlendirilebilir | `SettlementVerificationJob.EscalateAsync` (satır 487-520) üç kollu: aynı → debug · `Strength(yeni) > Strength(kayıtlı)` → yaz · aksi hâlde **koru** + warning. Koşulsuz atama kalmadı; `SettlementEscalationReason`'ın **tek** yazarı bu koldur (`grep` ile repo genelinde doğrulandı — diğer tek dokunan AD32 ve o yalnız okur) |
+| **B4(b)** — düşürme yönü regresyon testi | Üç test (`Escalation_ThatObservedADeparture_IsNotLoweredByALaterRoundThatObservesNothing` · `…IsNotLowered_WithinTheObservingClass` · `…IsNotRewritten_ByAnEqualStrengthReason`). **Validator mutasyon prova'sı:** `EscalateAsync`'in `Strength` koşulu geçici olarak `true`'ya çevrildi → **tam olarak bu üç test kırıldı**, başka hiçbir test etkilenmedi; mutasyon `git checkout` ile geri alındı, working tree temiz. Yani testler kuralı gerçekten sabitliyor, yeşilliğini başka bir yerden almıyor |
+| **D3** — tam sıralama + rank tablosunun kendisi | `SettlementReviewReasons.Strength`: `REVERSAL_GATED` 2 > `AMBIGUOUS_DEPARTURE` 1 > `UNREADABLE` = `NO_DELIVERY_REFERENCE` 0 > bilinmeyen/NULL −1. `SettlementReviewReasonsTests` 12 test; **`ObservedDeparture` ↔ `Strength ≥ 1` aynı çizgi** invariant'ı ve reflection guard'ı bağımsız okundu — rank'lanmamış bir kodun −1 alıp sessizce yazılamaz olması riski gerçekten kapatılmış |
+| **D5** — referans-yok kontrolü `VerifyAsync`'in başında | `SettlementVerificationService.cs:84` `HasNoDeliveryReference` ilk; Steam ID çözümü ve envanter okuması sonra. Test `NoDeliveryReference_IsDecided_BeforeTheBuyerAccountIsResolved`. **Dayandığı iddia bağımsız doğrulandı:** `DeliveredBuyerAssetId`'nin yazarları yalnız `DeliveryConfirmationService` + `DeliveryTimeoutRound` (teslimat turu), `BuyerBaselineCapturedAt`/`ClassCount`'unki yalnız `TransactionReadinessService` (SELLER_CONFIRMED girişi) — ITEM_DELIVERED'dan sonra ikisini de dolduran yol **yok**, yani vaka gerçekten kalıcı olarak cevapsız |
+| **Kaçış yolu taraması (validator)** | `SettlementVerifiedAt`'i yazan iki yer var ve ikisi de kapılı: `ClearForPayoutAsync` (`ObservedDeparture` reddi) ve AD32 (`SettlementEscalatedAt NOT NULL` + `MANAGE_DISPUTES` + audit). `SettlementEscalatedAt`/`…Reason`'ı **hiçbir yol NULL'a döndürmüyor**. `ApplyReversalAsync`'in `DomainException` dalı gerekçe yazmadan çıkıyor ama ITEM_DELIVERED → `DeliveryReversed` koşulsuz `Permit` (`TransactionStateMachine.cs:281`) olduğu için yapısal olarak erişilemez — **bulgu değil**, kayda geçirildi |
+| **D4 / N9 doküman yansıması** | 02 §4.5.1 "Bilinen sonuçları" **4. madde** mevcut (`02_PRODUCT_REQUIREMENTS.md:180`) + DEPLOY_RUNBOOK §I.2 launch öncesi nakit akışı kontrolü. Mekanizma doğru ifade edilmiş (kaybolan şey **ön fonlama**, "8 günlük float" değil) |
+| **B4 doküman yansıması (üç kaynak cümle)** | 06 §3.5 `SettlementEscalationReason` satırı (güç sırası + eşit güç kuralı) ✓ · DEPLOY_RUNBOOK §I.1 (operasyonel sonuç: §I.3 sorgusunda görülen gerekçe **en güçlü** bulgudur) ✓ · 02 §4.5.1 launch kapısı notu ("yapışkanlık gerekçeyi de kapsar") ✓ |
+| **N8** | §Güvenlik Kontrolü yeniden yazılmış ve AD32'yi doğru anlatıyor. Tur 1'in tarihsel kaydındaki (satır 159) "yeni endpoint yok" cümlesi **doğru bırakılmış** — AD32 o turda henüz yoktu |
+| **N10** | Rapor `20260817084800_T129_SettlementEscalationColumns` yazıyor; dosya adı birebir aynı (`ls` ile doğrulandı) |
+
+### Kabul kriterleri — tur 3 sonucu
+
+| # | Kriter | Tur 3 | Not |
+|---|---|---|---|
+| 1 | `payout_settlement_days` (varsayılan 8) | ✓ | Tur 2 kanıtı korundu; seed satır 61 = `"8"`, validator floor 7 |
+| 2 | ITEM_DELIVERED girişinde `PayoutEligibleAt` | ✓ | Tur 2 kanıtı korundu; `HasDeliveryEntryInvariant` geçişin ön koşulu |
+| 3 | `SellerPayoutQueueJob` penceresi | ✓ | Tur 2 kanıtı korundu |
+| 4 | **Ödeme öncesi son kontrol (item / yok / okunamıyor)** | **✓** | Üç dal da yerinde ve **hiçbiri artık açık bir ayrılma eskalasyonunun üstünden geçemiyor**: "item var" dalı `ObservedDeparture` reddiyle, o reddin dayandığı gerekçe alanı `Strength` monotonluğuyla korunuyor (B4 kapandı, mutasyon prova'sıyla). K1 iki taraflılık + `SELLER_ASSET_GONE` niteleyicisi, K2 launch kapısı (`false`), K3 eşik (48 saat), K4 hesap düzeyi `DELIVERY_REVERSED` bağımsız okundu |
+| 5 | COMPLETED guard'ı | ✓ | Tur 2 kanıtı korundu; `HasSettlementClearance` yalnız `Complete`'te ve ITEM_DELIVERED'ın COMPLETED'a giden **tek** yolu o |
+| 6 | Süre içinde dispute ödemeyi bloklar | ✓ | Tur 2 kanıtı korundu |
+| 7 | `SweepQueueJob` aynı kapıya bağlandı | ✓ | Tur 2 kanıtı korundu; nakit akışı sonucu N9 ile kayda geçti |
+| 8 | Geri alma → itibar (06 §3.1) | ✓ | Tur 2 kanıtı korundu |
+
+**İkinci düzeltme turu kriterleri:** B4(a) ✓ · B4(b) ✓ · D3 ✓ · D4 ✓ · D5 ✓ · N8 ✓ · N9 ✓ · N10 ✓ — **8/8**.
+
+### Bloke etmeyen bulgu
+
+| # | Seviye | Açıklama | Dosya |
+|---|---|---|---|
+| N11 | S1 | **Repo memory'nin T129 başlık etiketi bayat:** gövde ikinci düzeltme turunu doğru ve tam anlatıyor ("dördü de kapatıldı, üçüncü doğrulama bekliyor") ama satırın başındaki durum etiketi hâlâ `✗ FAIL — … ikinci düzeltme turu bekleniyor` diyor. `IMPLEMENTATION_STATUS.md` aynı anda "ikinci düzeltme turu uygulandı" diyor, yani iki kayıt birbiriyle çelişiyordu. Bu doğrulamanın finalize adımında düzeltildi. **Ders:** memory satırında **başlık ile gövde ayrı ayrı bayatlayabilir**; gövdeyi güncelleyen tur etiketi de güncellemelidir | `.claude/memory/MEMORY.md:49` |
+| N12 | S1 | **Rapor §Test Sonuçları'ndaki unit-filter sayısı 1 test eksik:** rapor `Category!=Integration&Category!=Contract` için **2477** (Transactions 991) diyor; validator aynı filtreyi aynı kod commit'inde (`5c29277`; sonraki iki commit doküman-only) koştu ve **2478** (Transactions **992**) ölçtü. Her iki ölçümde de **sıfır hata**, dolayısıyla kalite değil **sayım** farkı. Bloke etmiyor; rapor satırı validator ölçümüyle birlikte kayda geçirildi | `Docs/TASK_REPORTS/T129_REPORT.md` §Test Sonuçları |
+
+### Güvenlik kontrolü (validator)
+
+- Secret sızıntısı: **temiz** — dal diff'inde yeni secret/credential/bağlantı dizesi yok (`git diff main...HEAD` üzerinde desen taraması).
+- Auth/authorization: **temiz** — bu tur yeni yüzey eklemedi. AD32 (düzeltme turu) `[Authorize(Policy = "Permission:MANAGE_DISPUTES")]` + `[RateLimit("admin-write")]`, yeni permission yok.
+- Input validation: **temiz** — bu tur yeni girdi yüzeyi eklemedi (değişiklik job içi karar mantığı + rank tablosu + testler + doküman).
+- Yeni dış bağımlılık: **yok** — `*.csproj` / `package.json` / `Directory.Packages.props` dal boyunca değişmemiş.
+
+### 8 advisory E2E leg (bağımsız teyit)
+
+Validator dal HEAD run'ının log'unu kendi çağrısıyla okudu: `E2E happy-path (advisory)` başarısızlığının kökü `RequestError: Invalid object name 'PlatformSteamBots'` — F7'nin custody emekliliğinden kalan **bayat E2E harness'i**, T129 yüzeyleriyle ilgisi yok. Aynı 8 leg main'in T128 (`31944080720`) ve T127 (`31909528316`) run'larında da birebir kırmızı, yani T129 öncesinden geliyor. Legler `continue-on-error` + `ci-gate.needs` dışında (proje sahibi kararı, `ci.yml:612-625`) ve sahiplik plandaki **T138** ("E2E spec'lerinin yeniden yazımı", T137 bağımlı) görevindedir. **T129 bulgusu değildir**; ancak F7 boyunca para hareket ettiren değişiklikler bu ağ tamamen karanlıkken inmektedir — proje sahibine hatırlatılır.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: tam uyumlu (0 uyuşmazlık).** Raporun ikinci düzeltme turu için ileri sürdüğü sekiz maddenin sekizi de bağımsız olarak yeniden üretildi ve doğru bulundu; raporun kendi "negatif prova" iddiası (koşul eski hâline çevrilince tam olarak yeni üç test kırılıyor) validator tarafından **ayrıca ve bağımsız olarak** koşuldu ve birebir aynı sonucu verdi. §Known Limitations, bu turun kendi getirdiği yeni riski ("yanlış ilk etiket de kalıcı olur") kendiliğinden ve doğru şekilde kayda geçirmiş — kapanış turlarında sık kaçan sınıf.
+
+### Merge kararı
+
+**Merge edildi.** Üç turluk döngü kapandı: sekiz kabul kriterinin sekizi ✓, iki düzeltme turunun yirmi iki maddesinin yirmi ikisi ✓, bloke edici bulgu 0.
+
 ## Altyapı Değişiklikleri
 
 - **Migration (1/2):** `20260816140704_T129_SettlementCheckColumns` — `Transactions`'a 2 nullable `datetime2` kolon + 3 `SystemSettings` seed satırı. Down temiz (DeleteData + DropColumn).
@@ -373,6 +453,7 @@ Katman-1 mini güvenlik kontrolü, **düzeltme turlarının eklediği yüzeyler 
 - Branch: `task/T129-settlement-window-reversal-guard`
 - Commit: `2813daf` (yapım) + `e24b599` (rapor referansları) + `206efcc` (düzeltme turu) + **`5c29277` (ikinci düzeltme turu)**
 - PR: [#240](https://github.com/turkerurganci/Skinora/pull/240)
+- **Dal HEAD CI (validator, Adım 8a) ✓ PASS** — commit `e219d48`, run [`32029632903`](https://github.com/turkerurganci/Skinora/actions/runs/32029632903), **CI Gate `success`**, bloke edici 10 job yeşil. Bu run doğrulamanın dayandığı kanıttır (`feedback_refetch_branch_before_verdict`: verdict öncesi `git fetch` tekrarlandı, `HEAD` = `origin/…` = `e219d48`).
 - **İkinci düzeltme turu CI ✓ PASS** — commit `5c29277`, run [`32027179164`](https://github.com/turkerurganci/Skinora/actions/runs/32027179164), **CI Gate `success`**, bloke edici 10 job yeşil (Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build ×2 · CI Gate). `0. Guard (direct push)` beklendiği gibi `skipped`.
 - **Doküman commit'i `e4fbcca`** (ikinci düzeltme turu CI sonucunun rapora/status'e/memory'ye işlenmesi) → run [`32028346758`](https://github.com/turkerurganci/Skinora/actions/runs/32028346758), `conclusion=success`. **Not (aynı yapısal sınır, üçüncü kez):** bu satırı ekleyen commit'in kendi run'ı doğal olarak burada kayıtlı olamaz; validator dal HEAD'inin run'ını Faz 1 Adım 7a'da kendi `gh` çağrısıyla teyit eder (INSTRUCTIONS §3.3).
 - **8 advisory E2E leg kırmızı — bu tur kaynaklı değil, bu run'ın logundan doğrulandı.** `gh run view 32027179164 --log-failed` (970 satır): `Invalid object name 'PlatformSteamBots'` izi **8 kez**, leg başına **tam 1** (8/8 leg birebir); bu turun yüzeylerinden (`SettlementReviewReasons` · `HasNoDeliveryReference` · `NoDeliveryReferenceDetail`) **0 iz** ve `settlement` kelimesinden log genelinde **0 iz**. Önceki iki turdaki imzayla aynı; T117'den beri pre-existing, sahiplik T137 → T138.
