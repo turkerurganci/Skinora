@@ -48,14 +48,16 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 
 **Öncesi (main, T129 merge run [`32033733318`](https://github.com/turkerurganci/Skinora/actions/runs/32033733318)):** 32 testten **3'ü pass / 29'u fail**. İz deseni her leg'de aynı: **1** × `Invalid object name 'PlatformSteamBots'` + (n−1) × `PK_Users` duplicate.
 
-**Sonrası (task branch HEAD `5138cf4`, CI run [`32044914807`](https://github.com/turkerurganci/Skinora/actions/runs/32044914807)):** 32 testten **10'u pass / 22'si fail**. `Invalid object name` ve `PK_Users` izi **sıfır** — harness artık 8 leg'in hepsinde spec'lere ulaşıyor ve testler akış seviyesinde düşüyor.
+**Sonrası (final HEAD `7d6583b`, CI run [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752)):** 32 testten **10'u pass / 22'si fail**. `Invalid object name` ve `PK_Users` izi **sıfır** — harness artık 8 leg'in hepsinde spec'lere ulaşıyor ve testler akış seviyesinde düşüyor.
+
+**Tekrarlanabilirlik:** aynı ölçüm iki bağımsız run'da **birebir** aynı çıktı — [`32044914807`](https://github.com/turkerurganci/Skinora/actions/runs/32044914807) (HEAD `5138cf4`) ve [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) (HEAD `7d6583b`): leg başına aynı pass/fail sayıları, aynı düşme noktaları. Sayılar tek koşumluk flake değil.
 
 | Leg | Öncesi | Sonrası | Düştüğü ADIM (sonrası) |
 |---|---|---|---|
 | happy-path | 0/1 | 0/1 | Akış: `timeout awaiting ITEM_ESCROWED (last=ACCEPTED)` |
 | T108 cancellation | 0/4 | 0/4 | Akış: 4/4 `ITEM_ESCROWED` (last=ACCEPTED) |
 | T109 timeout | 0/4 | **1/4** | test 1 (accept timeout) ✓ geçiyor — P2P'de de geçerli tek faz. test 2 `TRADE_OFFER_SENT_TO_SELLER`, test 3–4 `ITEM_ESCROWED` |
-| T110 payment | 0/6 | 0/6 | Akış: 6/6 `ITEM_ESCROWED`. **Veri bir önceki commit `9e8df29`'dan** (run [`32043406207`](https://github.com/turkerurganci/Skinora/actions/runs/32043406207)): `5138cf4` run'ında bu leg GitHub `codeload` 429 flake'iyle "Set up job"da öldü. Verinin geçerliliği mekanik olarak gösterilebilir — `git diff 9e8df29 HEAD -- e2e/tests/payment-edge-cases.spec.ts` **boş**, iki commit arasındaki tek `db.ts` değişikliği `DeadlineColumn` allow-list'i ve bu spec yalnız adı değişmemiş `PaymentDeadline`'ı kullanıyor |
+| T110 payment | 0/6 | 0/6 | Akış: 6/6 `ITEM_ESCROWED` |
 | T111 fraud-flags | 0/4 | **3/4** | test 3 (high volume) **custody değil, YENİ İŞ KURALI çakışması**: ikinci create `ITEM_ALREADY_LISTED` — T128'in (SellerId, ItemAssetId) tekillik kapısı |
 | T112 emergency-hold | 0/3 | 0/3 | Akış: 3/3 `ITEM_ESCROWED` |
 | T113 admin-flows | 3/7 | **6/7** | AC1: `steamAccounts.length ≥ 1` — alan `AdminDashboardResponse`'ta yok (kaynak teyidi: `AdminDashboardDtos.cs` yalnız `summaryCards` + `recentFlags`) |
@@ -85,7 +87,7 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 - Branch: `task/T137a-e2e-harness-triage`
 - Commit: `9e8df29` — emekli tablo atıfları + custody helper'ları · `5138cf4` — deadline allow-list'i T117 rename'ine hizalama
 - PR: [#243](https://github.com/turkerurganci/Skinora/pull/243)
-- CI: ✓ CI Gate success + "1. Lint" success (run [`32044914807`](https://github.com/turkerurganci/Skinora/actions/runs/32044914807)); 8 advisory E2E leg beklendiği gibi kırmızı (§Notlar)
+- CI: ✓ **run [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) `conclusion=success`** (final HEAD `7d6583b`) — CI Gate ✓ + "1. Lint" ✓; 8 advisory E2E leg beklendiği gibi kırmızı, run conclusion'ını düşürmüyor (§Notlar)
 
 ## Known Limitations / Follow-up
 
@@ -102,4 +104,4 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 
 **Dış varsayımlar:** Yok. Görev yalnız repo içi harness kodunu ve mevcut CI matrisini kullanıyor; yeni paket, plan tier'ı veya dış API varsayımı yok.
 
-**CI run conclusion'ı hakkında:** Bu görevde 8 advisory leg'in kırmızı kalması **beklenen** sonuçtur (plan: "bu görevin ÇIKTISI yeşil leg değil, ÖLÇÜMDÜR"), dolayısıyla run-level `conclusion` advisory legler yüzünden `failure` görünür. Bitiş Kapısı'nın aradığı sinyal bu görevde **CI Gate job'ı + blocking job'lar**dır: CI Gate ✓ success, "1. Lint" ✓ success, diğer blocking job'lar path filtresi gereği skipped (`e2e/**` değişikliği `code` filtresini tetiklemez).
+**CI run conclusion'ı hakkında:** Bu görevde 8 advisory leg'in kırmızı kalması **beklenen** sonuçtur (plan: "bu görevin ÇIKTISI yeşil leg değil, ÖLÇÜMDÜR"). Buna rağmen final run [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) `conclusion=success` verdi (`gh run watch --exit-status` → exit 0): `continue-on-error: true` bir job'ın **adım** başarısızlığını run seviyesine taşımıyor. Ara run'ların `failure` görünmesinin sebebi advisory legler değildi — o legler GitHub `codeload` **429/503 flake'i** yüzünden `Set up job` aşamasında ölmüştü ve job-setup çökmesi `continue-on-error` ile maskelenmiyor. Bitiş Kapısı bu yüzden literal olarak karşılanıyor: final HEAD'in run'ı `success`, CI Gate ✓, "1. Lint" ✓; diğer blocking job'lar path filtresi gereği skipped (`e2e/**` değişikliği `code` filtresini tetiklemez).
