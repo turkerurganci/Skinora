@@ -31,8 +31,6 @@ export const seed = {
   // the accepting buyer's own SteamID64 (partner = SteamID64 - 76561197960265728).
   // 76561198000000061 - 76561197960265728 = 39734333.
   buyerTradeUrl: 'https://steamcommunity.com/tradeoffer/new/?partner=39734333&token=E2ETOKEN',
-  botId: '33333333-3333-3333-3333-333333333333',
-  botDisplayName: 'E2E-Bot',
   priceCacheId: '44444444-4444-4444-4444-444444444444',
   // Admin actor for the admin-cancel scenarios (T108). AuditLog.ActorId is an
   // FK to Users, so the admin must exist as a row; the CANCEL_TRANSACTIONS
@@ -55,8 +53,14 @@ export const seed = {
 // refund wallet used only by the item-timeout BUYER_REFUND).
 export const fakeBuyerWallet = 'TGDcTRVZVvKBUE7h5fRCVUjRGj6K52AFWg';
 
-/** Seed seller, buyer, ACTIVE bot, and a matching price-cache row (0% deviation
- *  → CREATED, not FLAGGED). Idempotent: clears prior e2e rows first.
+/** Seed seller, buyer, and a matching price-cache row (0% deviation → CREATED,
+ *  not FLAGGED). Idempotent: clears prior e2e rows first.
+ *
+ *  T137a — no bot row is seeded any more. T117's P2P pivot dropped
+ *  PlatformSteamBots, TradeOffers and BotRecoveryItems (migration
+ *  20260809162642_T117_P2P_Pivot), so the platform never holds the item and
+ *  there is no escrow slot to reserve: the seller sends the item directly to
+ *  the buyer (02 §2.1).
  *
  *  The buyer is a pre-registered STEAM_ID user seeded up-front, so create sets
  *  the transaction's BuyerId — the mainline shape exercised by both the API and
@@ -79,30 +83,43 @@ export async function seedHappyPath(): Promise<typeof seed> {
   // from committing. Deleting Notifications without draining the outbox that
   // re-creates them left this gap; clearing both closes it (the e2e backend has
   // no other producer, so a global non-PROCESSED purge is safe between tests).
+  //
+  // T137a — two corrections to this batch:
+  //
+  // 1. Table set. Every child with a NO-ACTION TransactionId FK must be purged
+  //    before Transactions. TradeOffers and PlatformSteamBots left the model
+  //    (T117 dropped them); DeliveryEvidenceCaptures (T125), Disputes and
+  //    SellerPayoutIssues joined it after this batch was written.
+  // 2. Silence. SQL Server resolves object names for an ad-hoc batch at COMPILE
+  //    time, so ONE unknown table turns the whole purge into a no-op — no
+  //    statement runs at all. That is how the retired-table references survived
+  //    four tasks: the cleanup silently stopped deleting anything while
+  //    `.catch(() => undefined)` kept the harness quiet, and the only visible
+  //    symptom was a duplicate-key error two tests later. The failure is logged
+  //    now; it stays non-fatal (a fresh DB has nothing to clean).
   await r()
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
+    .input('item', sql.NVarChar(200), seed.itemMarketHashName)
     .batch(
       `DELETE FROM OutboxMessages WHERE Status <> 'PROCESSED';
        DELETE FROM Notifications WHERE UserId IN (@s,@b);
        DELETE FROM FraudFlags WHERE UserId IN (@s,@b);
        DELETE FROM AuditLogs WHERE UserId IN (@s,@b) OR ActorId IN (@s,@b);
+       DELETE evc FROM DeliveryEvidenceCaptures evc JOIN Transactions t ON evc.TransactionId=t.Id WHERE t.SellerId=@s;
+       DELETE d FROM Disputes d JOIN Transactions t ON d.TransactionId=t.Id WHERE t.SellerId=@s;
+       DELETE spi FROM SellerPayoutIssues spi JOIN Transactions t ON spi.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE pa FROM PaymentAddresses pa JOIN Transactions t ON pa.TransactionId=t.Id WHERE t.SellerId=@s;
-       DELETE tof FROM TradeOffers tof JOIN Transactions t ON tof.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE FROM TransactionHistory WHERE TransactionId IN (SELECT Id FROM Transactions WHERE SellerId=@s);
        DELETE FROM Transactions WHERE SellerId=@s;
        DELETE FROM AdminUserRoles WHERE UserId IN (@s,@b);
        DELETE FROM Users WHERE Id IN (@s,@b);
-       DELETE FROM PlatformSteamBots WHERE Id=@id_unused;`.replace('@id_unused', `'${seed.botId}'`),
+       DELETE FROM ItemPriceCaches WHERE MarketHashName=@item;`,
     )
-    .catch(() => undefined);
-  await r()
-    .batch(
-      `DELETE FROM PlatformSteamBots WHERE SteamId='${e2eConfig.botSteamId}';
-       DELETE FROM ItemPriceCaches WHERE MarketHashName='${seed.itemMarketHashName.replace(/'/g, "''")}';`,
-    )
-    .catch(() => undefined);
+    .catch((err: unknown) => {
+      console.warn(`[e2e:db] seed cleanup batch failed — stale rows may remain: ${String(err)}`);
+    });
 
   // Seller — MA verified + payout address + backdated account (dodges new-account limit).
   await r()
@@ -120,18 +137,6 @@ export async function seedHappyPath(): Promise<typeof seed> {
 
   // Buyer — registered STEAM_ID user, seeded up-front so create sets BuyerId.
   await insertBuyer();
-
-  // Bot — ACTIVE (0), zero load → always selected first.
-  await r()
-    .input('id', sql.UniqueIdentifier, seed.botId)
-    .input('steamId', sql.NVarChar(20), e2eConfig.botSteamId)
-    .input('name', sql.NVarChar(100), seed.botDisplayName)
-    .query(
-      // Status is an nvarchar enum column → store the name 'ACTIVE', not 0.
-      `INSERT INTO PlatformSteamBots (Id, SteamId, DisplayName, Status, ActiveEscrowCount,
-         DailyTradeOfferCount, LastHealthCheckAt, IsDeleted, CreatedAt, UpdatedAt)
-       VALUES (@id, @steamId, @name, 'ACTIVE', 0, 0, SYSUTCDATETIME(), 0, SYSUTCDATETIME(), SYSUTCDATETIME());`,
-    );
 
   // Price cache — fresh row equal to the listing price ⇒ 0% deviation ⇒ no flag,
   // independent of Steam Market reachability.
@@ -250,40 +255,20 @@ export async function pollCancelledNoticeRecipients(
   return recipients;
 }
 
-/** Poll until the RETURN_TO_SELLER refund offer for `transactionId` is ACCEPTED
- *  (the fake self-drives the seller's acceptance), proving the escrowed item was
- *  returned to the seller. */
-export async function pollRefundOfferAccepted(
-  transactionId: string,
-  opts?: { timeoutMs?: number; intervalMs?: number },
-): Promise<boolean> {
-  const deadline = Date.now() + (opts?.timeoutMs ?? 120_000);
-  const interval = opts?.intervalMs ?? 3_000;
-  while (Date.now() < deadline) {
-    const p = await getPool();
-    const result = await p
-      .request()
-      .input('tx', sql.UniqueIdentifier, transactionId)
-      .query(
-        `SELECT Status FROM TradeOffers
-         WHERE TransactionId = @tx AND Direction = 'RETURN_TO_SELLER'`,
-      );
-    if (result.recordset.some((row) => String(row.Status) === 'ACCEPTED')) return true;
-    await new Promise((res) => setTimeout(res, interval));
-  }
-  return false;
-}
-
-/** Read the seeded bot's denormalized ActiveEscrowCount (06 §3.10). Returns -1
- *  when the bot row is missing. */
-export async function getBotEscrowCount(): Promise<number> {
-  const p = await getPool();
-  const result = await p
-    .request()
-    .input('steamId', sql.NVarChar(20), e2eConfig.botSteamId)
-    .query('SELECT ActiveEscrowCount FROM PlatformSteamBots WHERE SteamId = @steamId');
-  return result.recordset.length ? Number(result.recordset[0].ActiveEscrowCount) : -1;
-}
+// T137a — two custody-era helpers were removed here, and they have NO P2P
+// successor (T138 must not look for one):
+//
+//   pollRefundOfferAccepted(txId)  read TradeOffers WHERE Direction =
+//     'RETURN_TO_SELLER'. It proved the escrowed item went back to the seller
+//     after a cancel. In P2P the item never leaves the seller before
+//     PAYMENT_RECEIVED, so a cancel has no return leg to observe — the
+//     `itemReturned` field of the cancel response is the whole story.
+//
+//   getBotEscrowCount()           read PlatformSteamBots.ActiveEscrowCount
+//     (06 §3.10) to prove the platform's escrow slot was taken/released. There
+//     is no platform inventory in P2P; the equivalent question ("is the item
+//     still with the seller?") is answered by the Steam inventory read the
+//     delivery-verification round already performs.
 
 export interface BuyerRefundRow {
   status: string;
@@ -429,18 +414,27 @@ export async function pollNotificationRecipients(
 }
 
 /** Phase-deadline columns on the Transactions table (06 §3.5). Fixed allow-list
- *  — the value is interpolated into SQL, so it must never come from free input. */
+ *  — the value is interpolated into SQL, so it must never come from free input.
+ *
+ *  T137a: the two custody-era names were renamed by T117's phase-preserving
+ *  rename (migration 20260809162642_T117_P2P_Pivot):
+ *    TradeOfferToSellerDeadline → SellerConfirmDeadline
+ *    TradeOfferToBuyerDeadline  → DeliveryDeadline
+ *  The allow-list carried the dead names, so any backdate/set call using them
+ *  would have hit "Invalid column name" — the next wall behind the dropped
+ *  tables. Call sites were swapped along the migration's own mapping; whether a
+ *  P2P flow should still lean on that phase at all is T138's question. */
 export type DeadlineColumn =
   | 'AcceptDeadline'
-  | 'TradeOfferToSellerDeadline'
+  | 'SellerConfirmDeadline'
   | 'PaymentDeadline'
-  | 'TradeOfferToBuyerDeadline';
+  | 'DeliveryDeadline';
 
 const DEADLINE_COLUMNS: ReadonlySet<DeadlineColumn> = new Set([
   'AcceptDeadline',
-  'TradeOfferToSellerDeadline',
+  'SellerConfirmDeadline',
   'PaymentDeadline',
-  'TradeOfferToBuyerDeadline',
+  'DeliveryDeadline',
 ]);
 
 /** Push a phase deadline into the past so the DeadlineScannerJob (05 §4.4) fires
@@ -472,7 +466,7 @@ export async function backdateDeadline(
 /** Set a phase deadline to a fixed point in the future — the forward mirror of
  *  backdateDeadline. Used to give a parked TRADE_OFFER_SENT_TO_SELLER transaction
  *  a live seller-trade window before a STEAM_OUTAGE freeze: the e2e fast-path
- *  leaves TradeOfferToSellerDeadline null (the fake's trade leg never goes through
+ *  leaves SellerConfirmDeadline null (the fake's trade leg never goes through
  *  the production deadline stamp), whereas a real outage freezes transactions
  *  whose deadline is live — exactly the state the WP7 integration test seeds at
  *  +12h. Without it the freeze would capture a zero remainder. `column` is

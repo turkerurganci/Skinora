@@ -3,9 +3,7 @@ import {
   seedHappyPath,
   ensureAdmin,
   pollCancelledNoticeRecipients,
-  pollRefundOfferAccepted,
   pollBuyerRefundConfirmed,
-  getBotEscrowCount,
   closePool,
   seed,
 } from '../src/db';
@@ -24,6 +22,11 @@ import * as api from '../src/api';
  *   3. Admin cancel before payment    → CANCELLED_ADMIN,  item returned, both notified.
  *   4. Post-payment                   → user cancel rejected (PAYMENT_ALREADY_SENT, 422),
  *                                        admin cancel refunds the buyer + notifies both.
+ *
+ * T137a: the custody-era item-return assertions (RETURN_TO_SELLER trade offer +
+ * bot escrow slot) were removed — T117 dropped both tables and P2P has no return
+ * leg to observe. The flows themselves still drive through ITEM_ESCROWED, which
+ * no longer exists; rewriting them is T138's scope.
  */
 
 const CANCEL_REASON = 'E2E cancellation scenario — automated reason text.';
@@ -77,11 +80,6 @@ test('seller cancel before payment → CANCELLED_SELLER, item returned, buyer no
   expect(body.itemReturned).toBe(true);
   expect(body.paymentRefunded).toBe(false);
 
-  // Item return: the seller accepts the RETURN_TO_SELLER offer (fake self-drive),
-  // which releases the bot's escrow slot (06 §3.10).
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
-
   // 03 §2.5 step 9 — only the counter-party (buyer) is notified.
   const recipients = await pollCancelledNoticeRecipients([seed.buyerId]);
   expect(recipients).toContain(seed.buyerId.toLowerCase());
@@ -97,10 +95,6 @@ test('buyer cancel before payment → CANCELLED_BUYER, item returned, seller not
   expect(body.status).toBe('CANCELLED_BUYER');
   expect(body.itemReturned).toBe(true);
   expect(body.paymentRefunded).toBe(false);
-
-  // Item return to the seller — same return leg, buyer-flavoured trigger.
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §3.3 step 8 — only the counter-party (seller) is notified.
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId]);
@@ -123,9 +117,6 @@ test('admin cancel before payment → CANCELLED_ADMIN, item returned, both parti
   expect(body.status).toBe('CANCELLED_ADMIN');
   expect(body.itemReturned).toBe(true);
   expect(body.paymentRefunded).toBe(false);
-
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §8.7 — neither party initiated the cancel, so BOTH are notified.
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
