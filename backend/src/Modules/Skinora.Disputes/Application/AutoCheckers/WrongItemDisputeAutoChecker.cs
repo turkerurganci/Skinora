@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -7,36 +9,53 @@ using Skinora.Users.Domain.Entities;
 namespace Skinora.Disputes.Application.AutoCheckers;
 
 /// <summary>
-/// Default <see cref="IWrongItemDisputeAutoChecker"/>. Compares the
-/// transaction's <c>ItemClassId</c> snapshot (set at creation time, 06 §3.5)
-/// against the actually delivered asset's class id resolved through
-/// <see cref="ISteamInventoryReader"/>. Implements 02 §10.1 third row +
-/// 03 §6.3:
-/// <list type="bullet">
-///   <item>Delivered class matches → "Teslim edilen item, işlemdeki item ile eşleşiyor" (Sonuç A — closed).</item>
-///   <item>Delivered class does NOT match → AUTO-ESCALATED, both parties notified (Sonuç B).</item>
-///   <item>No delivery yet (no DeliveredBuyerAssetId, asset absent from the buyer's inventory, or that inventory unreadable) → unresolved, buyer escalates manually.</item>
-/// </list>
+/// T130 — default <see cref="IWrongItemDisputeAutoChecker"/>. Implements 03 §6.3
+/// by diffing the buyer's inventory against the 06 §3.5
+/// <c>BuyerBaselineClassIds</c> fingerprint taken on entry to
+/// <c>SELLER_CONFIRMED</c>, and comparing whatever arrived against the
+/// transaction's own item class.
 /// </summary>
 /// <remarks>
-/// The auto-escalate branch is the only place in T58 that promotes a dispute
-/// directly to ESCALATED on open — by design, because a class-id mismatch is
-/// a strong system-side anomaly signal (admin must inspect). All other paths
-/// either close the dispute on the spot or leave it OPEN.
+/// <para>
+/// <b>Why the previous implementation could never fire.</b> It resolved
+/// <c>Transaction.DeliveredBuyerAssetId</c> and compared that asset's class
+/// against <c>Transaction.ItemClassId</c>. But the only writers of that column
+/// take their value from <c>DeliveryVerificationResult.CandidateDeliveredAssetId</c>,
+/// which is the diff of a <em>class-scoped</em> baseline read of the
+/// transaction's own class — so the id it holds is always of that class and the
+/// comparison always matched. And a genuinely wrong item never raises the class
+/// count at all, so the column stays NULL and the check fell out at the first
+/// guard. The mismatch branch was unreachable in both directions; 02 §10.1's
+/// "gelen item'ın adı kayda geçirilerek admin'e yükseltilir" had nothing to
+/// name. An inventory-wide reference point is what closes that.
+/// </para>
+/// <para>
+/// <b>Why this makes PAYMENT_RECEIVED meaningful.</b> 02 §10.1 admits the
+/// wrong-item dispute from <c>PAYMENT_RECEIVED</c> precisely because a wrong
+/// item never lifts the expected class count and so never reaches
+/// <c>ITEM_DELIVERED</c>. That state is where the case actually lives, and it is
+/// the state in which the old checker had least to say.
+/// </para>
+/// <para>
+/// <b>Read-only.</b> Unlike the delivery checker this one advances nothing: a
+/// class mismatch is a question for an admin, never a state transition
+/// (03 §6.3 Sonuç B).
+/// </para>
 /// </remarks>
 public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
 {
-    private const string MatchMessage = DisputeAutoCheckMessages.WrongItemMatch;
-    private const string AutoEscalatedMessage = DisputeAutoCheckMessages.WrongItemMismatch;
-    private const string NoDeliveryMessage = DisputeAutoCheckMessages.WrongItemNoDelivery;
-
     private readonly AppDbContext _db;
     private readonly ISteamInventoryReader _inventory;
+    private readonly ILogger<WrongItemDisputeAutoChecker> _logger;
 
-    public WrongItemDisputeAutoChecker(AppDbContext db, ISteamInventoryReader inventory)
+    public WrongItemDisputeAutoChecker(
+        AppDbContext db,
+        ISteamInventoryReader inventory,
+        ILogger<WrongItemDisputeAutoChecker> logger)
     {
         _db = db;
         _inventory = inventory;
+        _logger = logger;
     }
 
     public async Task<AutoCheckResult> CheckAsync(
@@ -45,58 +64,151 @@ public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
     {
         ArgumentNullException.ThrowIfNull(transaction);
 
-        if (string.IsNullOrWhiteSpace(transaction.DeliveredBuyerAssetId))
+        // ---------- The reference point ----------
+        // No fingerprint means the buyer's inventory was unreadable when the
+        // baseline was due (06 §3.5 leaves all four columns NULL together). The
+        // comparison has nothing to be measured against, and comparing against
+        // an empty set would read every item the buyer owns as a fresh arrival.
+        var baselineClassIds = DeserializeBaselineClassIds(transaction);
+        if (baselineClassIds is null)
         {
-            return Unresolved(NoDeliveryMessage);
+            return Unresolved(DisputeAutoCheckMessages.WrongItemInventoryUnreadable);
         }
 
-        var buyer = await _db.Set<User>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == transaction.BuyerId, cancellationToken);
-
-        if (buyer is null || string.IsNullOrWhiteSpace(buyer.SteamId))
+        var buyerSteamId = await ResolveBuyerSteamIdAsync(transaction, cancellationToken);
+        if (buyerSteamId is null)
         {
-            return Unresolved(NoDeliveryMessage);
+            return Unresolved(DisputeAutoCheckMessages.WrongItemInventoryUnreadable);
         }
 
-        // T123 — Cached: this is after-the-fact evidence gathering about an
-        // asset that either arrived or did not, minutes-to-days ago. A
-        // 120-second-old snapshot cannot flip that answer, and the checker
-        // never advances a state on the strength of it.
-        var lookup = await _inventory.GetItemAsync(
-            buyer.SteamId,
-            transaction.DeliveredBuyerAssetId,
-            InventoryReadFreshness.Cached,
-            cancellationToken);
+        // Fresh: 02 §10.1 runs the dispute checks against live state, and a
+        // cached read can still be missing an item that arrived a minute ago.
+        var fingerprint = await _inventory.CaptureInventoryFingerprintAsync(
+            buyerSteamId, InventoryReadFreshness.Fresh, cancellationToken);
 
-        // T121 — 08 §2.3: an unreadable inventory is not a blank inventory.
-        // This branch still leaves the dispute OPEN (nothing can be concluded
-        // either way), but it is now reached deliberately instead of falling
-        // out of a shared `snapshot is null`. The buyer-facing wording for the
-        // hidden-inventory case is 03 §6.2 Sonuç D and belongs to T130, which
-        // rewrites this checker on top of the delivery verification service;
-        // inventing a message key here would pre-empt that decision.
-        if (lookup.Visibility is InventoryVisibility.Private or InventoryVisibility.Unavailable)
+        // 08 §2.3 — an unreadable inventory is not an empty one. Diffing it would
+        // manufacture the opposite finding: every baseline class would look gone
+        // and nothing would look arrived.
+        if (fingerprint.Visibility != InventoryVisibility.Public)
         {
-            return Unresolved(NoDeliveryMessage);
+            _logger.LogInformation(
+                "Transaction {TransactionId}: wrong-item check could not read the buyer's "
+                + "inventory ({Visibility}) — no comparison made (08 §2.3)",
+                transaction.Id, fingerprint.Visibility);
+            return Unresolved(DisputeAutoCheckMessages.WrongItemInventoryUnreadable);
         }
 
-        var snapshot = lookup.Item;
-        if (snapshot is null)
+        // ---------- Sonuç A — the expected item is there ----------
+        // Counted, not tested for presence, and against the same
+        // (classId, instanceId) pair the baseline counted: one class legitimately
+        // appears many times in an inventory, so "the buyer owns this skin" would
+        // answer A for a buyer who already owned one before the trade (02 §9.2).
+        var expectedNow = fingerprint.Assets
+            .Count(a => a.Matches(transaction.ItemClassId, transaction.ItemInstanceId));
+
+        if (transaction.BuyerBaselineClassCount is { } baselineCount && expectedNow > baselineCount)
         {
-            // Inventory read, asset absent — it rotated post-delivery or never
-            // arrived. Still not an auto-mismatch: leave OPEN so the buyer can
-            // escalate.
-            return Unresolved(NoDeliveryMessage);
+            return Resolved(DisputeAutoCheckMessages.WrongItemMatch);
         }
 
-        if (string.Equals(snapshot.ClassId, transaction.ItemClassId, StringComparison.Ordinal))
+        // ---------- Sonuç B — something else arrived ----------
+        var known = new HashSet<string>(baselineClassIds, StringComparer.Ordinal);
+        var arrived = fingerprint.Assets
+            .Where(a => !known.Contains(a.ClassId))
+            .ToList();
+
+        if (arrived.Count > 0)
         {
-            return Resolved(MatchMessage);
+            // 06 §8.4's rule, applied to a name instead of an id: ambiguity
+            // resolves to null rather than to a guess. Several classes can arrive
+            // in the window between the baseline and the dispute — the buyer
+            // trades on their own account too — and naming the wrong one in the
+            // admin's evidence field is worse than naming none. The escalation
+            // itself is unconditional either way.
+            var distinctClasses = arrived
+                .Select(a => a.ClassId)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+
+            var deliveredItemName = distinctClasses == 1 ? Truncate(arrived[0].Name) : null;
+
+            if (deliveredItemName is null)
+            {
+                _logger.LogWarning(
+                    "Transaction {TransactionId}: {Count} distinct classes arrived since the "
+                    + "baseline — escalated without naming one, since naming the wrong item is "
+                    + "worse than naming none (02 §10.1)",
+                    transaction.Id, distinctClasses);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Transaction {TransactionId}: expected class {Expected} did not arrive but "
+                    + "'{DeliveredItemName}' did — auto-escalated to admin (03 §6.3 Sonuç B)",
+                    transaction.Id, transaction.ItemClassId, deliveredItemName);
+            }
+
+            return AutoEscalated(DisputeAutoCheckMessages.WrongItemMismatch, deliveredItemName);
         }
 
-        return AutoEscalated(AutoEscalatedMessage);
+        // ---------- Sonuç C — nothing new arrived ----------
+        // "Bu bir yanlış item değil, teslim edilmeme vakasıdır" (03 §6.3): the
+        // buyer is pointed at the delivery flow, and the dispute stays open so
+        // they can escalate.
+        return Unresolved(DisputeAutoCheckMessages.WrongItemNoDelivery);
     }
+
+    /// <summary>
+    /// The 06 §3.5 fingerprint, or <c>null</c> when there is none to diff
+    /// against.
+    /// </summary>
+    /// <remarks>
+    /// An unparsable column degrades to "no reference" rather than to an empty
+    /// set — the two are opposite findings, and the empty one accuses a seller.
+    /// </remarks>
+    private IReadOnlyList<string>? DeserializeBaselineClassIds(Transaction transaction)
+    {
+        if (transaction.BuyerBaselineCapturedAt is null) return null;
+        if (string.IsNullOrWhiteSpace(transaction.BuyerBaselineClassIds)) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(transaction.BuyerBaselineClassIds);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex,
+                "Transaction {TransactionId} has an unparsable BuyerBaselineClassIds column — "
+                + "the wrong-item comparison has no reference point (06 §3.5)", transaction.Id);
+            return null;
+        }
+    }
+
+    private async Task<string?> ResolveBuyerSteamIdAsync(
+        Transaction transaction, CancellationToken cancellationToken)
+    {
+        if (transaction.BuyerId is not { } buyerId) return null;
+
+        var steamId = await _db.Set<User>()
+            .AsNoTracking()
+            .Where(u => u.Id == buyerId)
+            .Select(u => u.SteamId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return string.IsNullOrWhiteSpace(steamId) ? null : steamId;
+    }
+
+    /// <summary>
+    /// Keep the name inside the 200-character column (06 §3.11). A name long
+    /// enough to hit this is already anomalous; truncating preserves the
+    /// evidence an admin needs while the column stays bounded.
+    /// </summary>
+    private static string Truncate(string name) =>
+        name.Length <= DeliveredItemNameMaxLength
+            ? name
+            : name[..DeliveredItemNameMaxLength];
+
+    private const int DeliveredItemNameMaxLength = 200;
 
     private static AutoCheckResult Resolved(string messageKey) =>
         new(Resolved: true,
@@ -112,10 +224,13 @@ public sealed class WrongItemDisputeAutoChecker : IWrongItemDisputeAutoChecker
             CanSubmitTxHash: false,
             CanEscalate: true);
 
-    private static AutoCheckResult AutoEscalated(string messageKey) =>
+    private static AutoCheckResult AutoEscalated(string messageKey, string? deliveredItemName) =>
         new(Resolved: false,
             AutoEscalated: true,
             MessageKey: messageKey,
             CanSubmitTxHash: false,
-            CanEscalate: false);
+            CanEscalate: false)
+        {
+            DeliveredItemName = deliveredItemName,
+        };
 }

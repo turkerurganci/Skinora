@@ -26,10 +26,18 @@ namespace Skinora.Disputes.Application.Disputes;
 /// own semantically meaningful subset enforced here:
 /// </para>
 /// <list type="bullet">
-///   <item>PAYMENT — ITEM_ESCROWED, PAYMENT_RECEIVED.</item>
-///   <item>DELIVERY — TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED.</item>
-///   <item>WRONG_ITEM — ITEM_DELIVERED.</item>
+///   <item>PAYMENT — SELLER_CONFIRMED, PAYMENT_RECEIVED.</item>
+///   <item>DELIVERY — PAYMENT_RECEIVED, ITEM_DELIVERED.</item>
+///   <item>WRONG_ITEM — PAYMENT_RECEIVED, ITEM_DELIVERED.</item>
 /// </list>
+/// <para>
+/// The v3.0 states, restated here because the pre-P2P list named three retired
+/// ones (<c>ITEM_ESCROWED</c>, <c>TRADE_OFFER_SENT_TO_BUYER</c>). WRONG_ITEM's
+/// <c>PAYMENT_RECEIVED</c> row is the load-bearing one: a wrong item never lifts
+/// the expected class count, so the transaction never reaches
+/// <c>ITEM_DELIVERED</c> and that state is where the case actually lives
+/// (<see cref="DisputeEligibility"/>).
+/// </para>
 /// <para>
 /// <b>Duplicate type rule (02 §10.2):</b> a dispute of the same type cannot be
 /// reopened for a transaction even after closure. The
@@ -45,10 +53,19 @@ namespace Skinora.Disputes.Application.Disputes;
 /// (ESCALATED is still active per 06 §3.11).
 /// </para>
 /// <para>
-/// <b>Auto-escalation:</b> only the WRONG_ITEM checker can short-circuit a
-/// just-opened dispute to ESCALATED (03 §6.3, Sonuç B). The dispute row is
+/// <b>Auto-escalation:</b> the WRONG_ITEM checker (03 §6.3 Sonuç B) and, since
+/// T130, the DELIVERY checker on the misdelivery signature (03 §6.2 Sonuç C)
+/// can short-circuit a just-opened dispute to ESCALATED. The dispute row is
 /// persisted with status=ESCALATED on insert; both parties are notified via
 /// <see cref="DisputeEscalatedEvent"/> with <c>AutoEscalated=true</c>.
+/// </para>
+/// <para>
+/// <b>T130 — the DELIVERY auto-check is no longer side-effect free.</b> It runs
+/// a fresh 02 §9.2 round that may move the transaction to <c>ITEM_DELIVERED</c>
+/// (03 §6.2 Sonuç A) on this service's tracked context. That is why Stage 5 runs
+/// after the state and duplicate guards and before the single
+/// <c>SaveChangesAsync</c> below: the dispute row, the transition it concluded
+/// and the events for both commit together or not at all.
 /// </para>
 /// <para>
 /// <b>ACTIVE_DISPUTE_EXISTS:</b> 03 §6 explicitly allows concurrent disputes
@@ -155,6 +172,13 @@ public sealed class DisputeService : IDisputeService
             Type = request.Type,
             Status = status,
             SystemCheckResult = autoCheckText,
+
+            // T130 — 02 §10.1 third row. Carried as a column rather than folded
+            // into SystemCheckResult above: that text is localized to the buyer's
+            // language at produce time, and the admin who acts on this evidence
+            // may not read it. NULL on every path but the WRONG_ITEM mismatch.
+            DeliveredItemName = autoCheck.DeliveredItemName,
+
             ResolvedAt = autoCheck.Resolved ? now : null,
             CreatedAt = now,
             UpdatedAt = now,

@@ -294,6 +294,7 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 | `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` | Kanıt üretilir, `DeliveryEvidenceCaptures`'a yazılır, verdict `InventoryEvidencePendingReview` olur. **Para otomatik hareket etmez.** İşlem iptal de **edilmez** — kanıt item'ın ulaştığını söylüyor. |
 | Yanlış-teslimat imzası (`SELLER_ASSET_GONE`, delta yok) | **Etkilenmez.** Bu bir para hareketi değil, admin'e yükseltmedir (02 §10.1) — kapı bastırmaz. |
 | Okunamayan envanter (private/unavailable) | Kapıdan bağımsız `Inconclusive`. Bilgi yokluğu asla olumsuz bulgu sayılmaz (08 §2.3). |
+| Alıcının açtığı **teslim itirazı** (T130) | Aynı tur taze koşar. `InventoryEvidencePendingReview` → dispute **OPEN kalır ve eskale edilebilir**, alıcıya "teslimat kanıtı bulundu, inceleniyor" denir (03 §6.2 Sonuç E). "Teslim edildi" diye **kapatılmaz** — kapatılırsa otomatik yol kapalı, elle yol da kapalı olur ve alıcının parasının çıkışı kalmaz. |
 
 > **Teslimat timeout'u da bu tabloya uyar (T127, 2026-08-15).** `DeliveryDeadline` dolduğunda scanner
 > aynı turu çalıştırır ve **yalnız turun sonucuna** göre davranır: `Delivered` → `ITEM_DELIVERED`;

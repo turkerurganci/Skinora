@@ -52,6 +52,32 @@ public interface ISteamInventoryReader
         string? instanceId,
         InventoryReadFreshness freshness,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T130 — read the owner's whole inventory as (asset, class, name) triples,
+    /// the shape the 03 §6.3 wrong-item comparison needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why the class baseline cannot answer this.</b>
+    /// <see cref="CaptureClassBaselineAsync"/> is scoped to the transaction's own
+    /// item class, so an arrival of a <em>different</em> class is invisible to
+    /// it — and a wrong item is, by definition, a different class. Every asset id
+    /// the platform records today (<c>Transaction.DeliveredBuyerAssetId</c>) came
+    /// out of that class-scoped diff, which is why comparing its class against
+    /// <c>Transaction.ItemClassId</c> could only ever match (T130 finding).
+    /// Naming what actually arrived needs an inventory-wide reference point.
+    /// </para>
+    /// <para>
+    /// <b>Cost.</b> None beyond the call that is already made: the sidecar
+    /// returns the full inventory on every request and both methods above filter
+    /// it client-side. This one keeps more of the same response.
+    /// </para>
+    /// </remarks>
+    Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+        string steamId64,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -188,11 +214,13 @@ public sealed record InventoryClassBaselineResult
     private InventoryClassBaselineResult(
         InventoryVisibility visibility,
         int classCount,
-        IReadOnlyList<InventoryClassAsset> assets)
+        IReadOnlyList<InventoryClassAsset> assets,
+        IReadOnlyList<string> inventoryClassIds)
     {
         Visibility = visibility;
         ClassCount = classCount;
         Assets = assets;
+        InventoryClassIds = inventoryClassIds;
     }
 
     /// <summary>Which of the 08 §2.3 states the read ended in.</summary>
@@ -218,23 +246,40 @@ public sealed record InventoryClassBaselineResult
         _assetIds ??= [.. Assets.Select(a => a.AssetId)];
 
     /// <summary>
+    /// T130 — every DISTINCT class id in the owner's inventory at capture time,
+    /// not just the requested one: the 06 §3.5 <c>BuyerBaselineClassIds</c>
+    /// column. Empty for the two unreadable outcomes.
+    /// </summary>
+    /// <remarks>
+    /// Carried on this result rather than fetched separately because the sidecar
+    /// hands back the whole inventory anyway — a second call would cost a real
+    /// Steam round trip (the baseline is read <see cref="InventoryReadFreshness.Fresh"/>,
+    /// so the 120-second cache would not absorb it) to re-read bytes this one
+    /// already had.
+    /// </remarks>
+    public IReadOnlyList<string> InventoryClassIds { get; }
+
+    /// <summary>
     /// Inventory read. A count of zero is a legitimate, useful baseline: the
     /// buyer owns no copy of this skin yet.
     /// </summary>
-    public static InventoryClassBaselineResult Captured(IReadOnlyList<InventoryClassAsset> assets)
+    public static InventoryClassBaselineResult Captured(
+        IReadOnlyList<InventoryClassAsset> assets,
+        IReadOnlyList<string> inventoryClassIds)
     {
         ArgumentNullException.ThrowIfNull(assets);
+        ArgumentNullException.ThrowIfNull(inventoryClassIds);
         return new InventoryClassBaselineResult(
-            InventoryVisibility.Public, assets.Count, assets);
+            InventoryVisibility.Public, assets.Count, assets, inventoryClassIds);
     }
 
     /// <summary>Inventory hidden — no baseline can be taken (02 §9.2).</summary>
     public static InventoryClassBaselineResult Private { get; } =
-        new(InventoryVisibility.Private, classCount: 0, assets: []);
+        new(InventoryVisibility.Private, classCount: 0, assets: [], inventoryClassIds: []);
 
     /// <summary>Steam unreachable — no baseline can be taken.</summary>
     public static InventoryClassBaselineResult Unavailable { get; } =
-        new(InventoryVisibility.Unavailable, classCount: 0, assets: []);
+        new(InventoryVisibility.Unavailable, classCount: 0, assets: [], inventoryClassIds: []);
 }
 
 /// <summary>
@@ -253,6 +298,91 @@ public sealed record InventoryClassAsset(
 {
     /// <summary>An asset whose properties Steam did not return (common — T122 measured them on 91 of 199 assets).</summary>
     public static InventoryClassAsset Bare(string assetId) => new(assetId, []);
+}
+
+/// <summary>
+/// Outcome of one <see cref="ISteamInventoryReader.CaptureInventoryFingerprintAsync"/>
+/// call — the inventory-wide reference the 03 §6.3 wrong-item comparison runs
+/// against (T130).
+/// </summary>
+/// <remarks>
+/// Same three-valued discipline as the two results above: an unreadable
+/// inventory can never be built carrying assets, so "hidden" cannot be diffed
+/// as "everything left" (08 §2.3).
+/// </remarks>
+public sealed record InventoryFingerprintResult
+{
+    private IReadOnlyList<string>? _classIds;
+
+    private InventoryFingerprintResult(
+        InventoryVisibility visibility,
+        IReadOnlyList<InventoryFingerprintEntry> assets)
+    {
+        Visibility = visibility;
+        Assets = assets;
+    }
+
+    /// <summary>Which of the 08 §2.3 states the read ended in.</summary>
+    public InventoryVisibility Visibility { get; }
+
+    /// <summary>
+    /// Every asset in the inventory, in the order the sidecar returned them.
+    /// Empty for the two unreadable outcomes.
+    /// </summary>
+    public IReadOnlyList<InventoryFingerprintEntry> Assets { get; }
+
+    /// <summary>
+    /// The distinct class ids behind <see cref="Assets"/> — the shape the
+    /// 06 §3.5 <c>BuyerBaselineClassIds</c> column persists, and the shape the
+    /// wrong-item diff compares against.
+    /// </summary>
+    public IReadOnlyList<string> ClassIds =>
+        _classIds ??= [.. Assets.Select(a => a.ClassId).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>Inventory read. An empty inventory is a legitimate fingerprint.</summary>
+    public static InventoryFingerprintResult Captured(IReadOnlyList<InventoryFingerprintEntry> assets)
+    {
+        ArgumentNullException.ThrowIfNull(assets);
+        return new InventoryFingerprintResult(InventoryVisibility.Public, assets);
+    }
+
+    /// <summary>Inventory hidden — nothing is known about what it holds.</summary>
+    public static InventoryFingerprintResult Private { get; } =
+        new(InventoryVisibility.Private, assets: []);
+
+    /// <summary>Steam unreachable — nothing is known about what it holds.</summary>
+    public static InventoryFingerprintResult Unavailable { get; } =
+        new(InventoryVisibility.Unavailable, assets: []);
+}
+
+/// <summary>
+/// One asset of an inventory fingerprint: enough to tell WHICH item it is and
+/// to name it for an admin (02 §10.1 third row), and nothing more.
+/// </summary>
+/// <remarks>
+/// Deliberately narrower than <see cref="InventoryItemSnapshot"/>. A fingerprint
+/// spans a third party's whole inventory, and its only job is the class diff
+/// plus a human-readable name for the one item that diff singles out — so it
+/// carries no icons, no inspect links and no per-asset properties (runbook §8:
+/// third-party inventory contents are personal data).
+/// </remarks>
+public sealed record InventoryFingerprintEntry(
+    string AssetId,
+    string ClassId,
+    string? InstanceId,
+    string Name)
+{
+    /// <summary>
+    /// Whether this asset is the <c>(classId, instanceId)</c> pair 06 §3.5 names
+    /// — the same match rule the class baseline uses, so a count taken from a
+    /// fingerprint is comparable with <c>BuyerBaselineClassCount</c>.
+    /// </summary>
+    public bool Matches(string classId, string? instanceId)
+    {
+        if (!string.Equals(ClassId, classId, StringComparison.Ordinal)) return false;
+        return instanceId is null
+            || string.Equals(InstanceId, instanceId, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>

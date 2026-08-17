@@ -150,8 +150,47 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
             .OrderBy(a => a.AssetId, StringComparer.Ordinal)
             .ToList();
 
-        return Task.FromResult(InventoryClassBaselineResult.Captured(assets));
+        return Task.FromResult(
+            InventoryClassBaselineResult.Captured(assets, ClassIdsOf(steamId64)));
     }
+
+    /// <summary>T130 — same registry, projected inventory-wide (06 §3.5 BuyerBaselineClassIds).</summary>
+    public Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+        string steamId64,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+    {
+        FingerprintReadFreshness.Add(freshness);
+
+        if (ForcedFingerprintVisibility is InventoryVisibility.Private)
+            return Task.FromResult(InventoryFingerprintResult.Private);
+        if (ForcedFingerprintVisibility is InventoryVisibility.Unavailable)
+            return Task.FromResult(InventoryFingerprintResult.Unavailable);
+
+        var assets = _items
+            .Where(kv => kv.Key.steamId == steamId64)
+            .Select(kv => new InventoryFingerprintEntry(
+                kv.Value.AssetId, kv.Value.ClassId, kv.Value.InstanceId, kv.Value.Name))
+            .OrderBy(a => a.AssetId, StringComparer.Ordinal)
+            .ToList();
+
+        return Task.FromResult(InventoryFingerprintResult.Captured(assets));
+    }
+
+    /// <summary>T130 — the freshness every fingerprint call arrived with.</summary>
+    public List<InventoryReadFreshness> FingerprintReadFreshness { get; } = [];
+
+    /// <summary>T130 — forces the fingerprint read to a non-readable outcome.</summary>
+    public InventoryVisibility? ForcedFingerprintVisibility { get; set; }
+
+    private IReadOnlyList<string> ClassIdsOf(string steamId64) =>
+    [
+        .. _items
+            .Where(kv => kv.Key.steamId == steamId64)
+            .Select(kv => kv.Value.ClassId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+    ];
 }
 
 /// <summary>

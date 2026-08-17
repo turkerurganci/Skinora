@@ -2467,7 +2467,9 @@ Response: AD6 ile aynı yapı, bu kullanıcıya filtrelenmiş.
 Permission: `VIEW_DISPUTES`. Query: `status` (DisputeStatus, **default ESCALATED**), `type` (DisputeType), `page`, `pageSize`. Response: `PagedResult` — `items[]`: `{ id, transactionId, type, status, itemName, transactionStatus, openedBy { userId, steamId, displayName }, createdAt }`.
 
 #### AD28 — `GET /admin/disputes/:id`
-Permission: `VIEW_DISPUTES`. Response: `{ id, type, status, systemCheckResult?, userDescription?, adminId?, adminNote?, resolvedAt?, createdAt, updatedAt, transaction { id, status, itemName, price, stablecoin, isOnHold, hasActiveDispute, seller, buyer? } }`. **Hatalar:** 404 `DISPUTE_NOT_FOUND`.
+Permission: `VIEW_DISPUTES`. Response: `{ id, type, status, systemCheckResult?, deliveredItemName?, userDescription?, adminId?, adminNote?, resolvedAt?, createdAt, updatedAt, transaction { id, status, itemName, price, stablecoin, isOnHold, hasActiveDispute, seller, buyer? } }`. **Hatalar:** 404 `DISPUTE_NOT_FOUND`.
+
+> **`deliveredItemName` (T130):** yanlış item vakasında gerçekten gelen item'ın adı (06 §3.11). Yalnız WRONG_ITEM otomatik eskalasyonunda ve tek bir yeni sınıf geldiğinde döner — admin `transaction.itemName` ile bunu yan yana görür ve karşılaştırmayı elle yapmak zorunda kalmaz (02 §10.1). Diğer tüm dispute'larda alan yoktur.
 
 #### AD29 — `POST /admin/disputes/:id/resolve`
 Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR", adminNote (1..2000) }`.

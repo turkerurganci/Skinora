@@ -325,7 +325,7 @@ Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API ya
 | İtiraz Türü | Çözüm |
 |---|---|
 | Ödeme itirazı ("ödedim ama sistem görmüyor") | Blockchain üzerinden otomatik doğrulama |
-| Teslim itirazı ("item teslim edilmedi") | §9.2 kanıt kuralları taze olarak çalıştırılır. Kanıt bulunursa işlem teslim edilmiş sayılır ve dispute kapanır; item satıcıdan düşmüş ama alıcıya ulaşmamışsa admin'e yükseltilir; hiçbir hareket yoksa satıcı henüz göndermemiştir |
+| Teslim itirazı ("item teslim edilmedi") | §9.2 kanıt kuralları taze olarak çalıştırılır. Kanıt bulunursa işlem teslim edilmiş sayılır ve dispute kapanır; item satıcıdan düşmüş ama alıcıya ulaşmamışsa admin'e yükseltilir; hiçbir hareket yoksa satıcı henüz göndermemiştir. **İstisna (T130):** envanter kanıtı yeterli ama otomatik onay kapısı kapalıysa dispute kapanmaz — OPEN kalır ve eskale edilebilir (03 §6.2 Sonuç E), çünkü kapı zaten parayı bırakmıyorken dispute'u da kapatmak alıcıya hiçbir çıkış bırakmaz |
 | Yanlış item itirazı | Sistem, alıcının envanterine referans anlık görüntüden (adım 3) sonra giren item'ları tespit eder ve işlemdeki item ile karşılaştırır. Farklı bir item geldiyse gelen item'ın adı kayda geçirilerek admin'e yükseltilir |
 
 > **Teslim itirazı P2P modelinde birincil risktir.** Custodial modelde teslimat platformun kendi botu tarafından yapıldığı için itiraz nadirdi; artık trade'i satıcı gönderdiğinden teslim edilmeme, eksik gönderim ve yanlış item senaryolarının tamamı bu başlık altında toplanır.

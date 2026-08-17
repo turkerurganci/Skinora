@@ -1,77 +1,93 @@
-using Skinora.Shared.Enums;
+using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Disputes.Application.AutoCheckers;
 
 /// <summary>
-/// Default <see cref="IDeliveryDisputeAutoChecker"/>. Decides the 02 §10.1
-/// second row + 03 §6.2 flow from the delivery evidence recorded on the
-/// transaction (02 §9.2, 06 §2.24):
-/// <list type="bullet">
-///   <item>
-///     Evidence sufficient for delivery → "Item envanterinize teslim edilmiş
-///     durumda" (Sonuç B). The dispute closes immediately.
-///   </item>
-///   <item>
-///     Misdelivery signature — the seller's asset is gone but nothing arrived
-///     for the buyer → the dispute stays OPEN with a message that names that
-///     situation, so the buyer escalates instead of waiting.
-///   </item>
-///   <item>
-///     No evidence at all → the seller has not sent yet (Sonuç A). Stays OPEN.
-///   </item>
-/// </list>
+/// T130 — default <see cref="IDeliveryDisputeAutoChecker"/>. Runs the 02 §9.2
+/// evidence rules <b>fresh</b> through
+/// <see cref="IDeliveryDisputeRound"/> and maps its verdict onto the five
+/// outcomes 03 §6.2 defines.
 /// </summary>
 /// <remarks>
 /// <para>
-/// v3.0 — the platform is not a party to the seller→buyer trade, so there is
-/// no offer status to read and no <c>TradeOffers</c> table behind this any
-/// more. The check is a pure read of already-recorded evidence.
+/// <b>What changed and why.</b> The T58/v3.0 checker read
+/// <c>Transaction.DeliveryEvidence</c> off the row and tested
+/// <c>IsSufficientForDelivery()</c> directly. Three defects followed from that
+/// one shortcut, and all three are fixed by asking the engine instead of the
+/// flags:
 /// </para>
-/// <para>
-/// It deliberately fails closed: anything short of proven delivery leaves the
-/// dispute OPEN so a human decides, rather than an automated answer moving
-/// money on a guess. The fuller behaviour — a forced, cache-bypassing
-/// verification round and automatic admin escalation on the misdelivery
-/// signature — belongs to <b>T130</b>, which rewrites this checker on top of
-/// the delivery verification service (T125).
-/// </para>
+/// <list type="number">
+///   <item>
+///     <b>The launch-gate deadlock (T127 validation finding B5).</b> With the
+///     gate closed, inventory evidence accumulates on the transaction without
+///     releasing money. The old checker read that as "delivered" and closed the
+///     dispute with <c>CanEscalate = false</c> — so the automatic route was
+///     gated, the manual route was shut, and the buyer's funds had no exit at
+///     all. The gated verdict now keeps the dispute OPEN and escalatable.
+///   </item>
+///   <item>
+///     <b>The misdelivery signature never escalated.</b> 03 §6.2 Sonuç C says
+///     the platform escalates without waiting for the buyer; the old checker
+///     left the dispute OPEN and told the buyer to press a button.
+///   </item>
+///   <item>
+///     <b>A bare flag test cannot express "I could not look".</b>
+///     <c>IsMisdeliverySignature()</c> is true whenever <c>SELLER_ASSET_GONE</c>
+///     is set and <c>INVENTORY_DELTA</c> is not — including when the buyer's
+///     inventory was simply unreadable. The engine qualifies that with
+///     <c>sellerSideKnown &amp;&amp; buyerSideKnown</c>, which is what separates
+///     an accusation about a seller from an admission of ignorance (08 §2.3).
+///     Every message below is now chosen from the verdict, never from a flag.
+///   </item>
+/// </list>
 /// </remarks>
 public sealed class DeliveryDisputeAutoChecker : IDeliveryDisputeAutoChecker
 {
-    private const string DeliveredMessage = DisputeAutoCheckMessages.DeliveryDelivered;
-    private const string AssetGoneNotArrivedMessage = DisputeAutoCheckMessages.DeliveryAssetGoneNotArrived;
-    private const string NotSentMessage = DisputeAutoCheckMessages.DeliveryNotSent;
+    private readonly IDeliveryDisputeRound _round;
 
-    // No dependencies: the decision is a pure function of the evidence already
-    // on the transaction. T130 reintroduces the inventory port when it adds the
-    // forced verification round.
-    public Task<AutoCheckResult> CheckAsync(
+    public DeliveryDisputeAutoChecker(IDeliveryDisputeRound round)
+    {
+        _round = round;
+    }
+
+    public async Task<AutoCheckResult> CheckAsync(
         Transaction transaction,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(transaction);
 
-        return Task.FromResult(Check(transaction));
-    }
+        var outcome = await _round.RunAsync(transaction, cancellationToken);
 
-    private static AutoCheckResult Check(Transaction transaction)
-    {
-        if (transaction.DeliveryEvidence.IsSufficientForDelivery())
+        return outcome switch
         {
-            return Resolved(DeliveredMessage);
-        }
+            // Sonuç A — the round moved the transaction to ITEM_DELIVERED (or it
+            // was there already). The dispute closes on the spot.
+            DeliveryDisputeOutcome.Delivered =>
+                Resolved(DisputeAutoCheckMessages.DeliveryDelivered),
 
-        // Item left the seller but never reached the buyer — a wrong item or a
-        // third-party send. This must never resolve silently, and the message
-        // must not imply the buyer has something to do on Steam: there is no
-        // offer for them to accept (02 §10.1).
-        if (transaction.DeliveryEvidence.IsMisdeliverySignature())
-        {
-            return Unresolved(AssetGoneNotArrivedMessage);
-        }
+            // Sonuç C — a positive finding about a seller. The platform does not
+            // wait for the buyer to press "escalate": they may not even know
+            // anything went wrong, since from their side nothing arrived.
+            DeliveryDisputeOutcome.MisdeliverySignature =>
+                AutoEscalated(DisputeAutoCheckMessages.DeliveryAssetGoneNotArrived),
 
-        return Unresolved(NotSentMessage);
+            // Sonuç B — both sides read, neither moved.
+            DeliveryDisputeOutcome.NotSent =>
+                Unresolved(DisputeAutoCheckMessages.DeliveryNotSent),
+
+            // Sonuç E — evidence found, launch gate closed. Deliberately NOT
+            // auto-escalated: the gate is a launch-period review the platform
+            // owner performs in bulk (DEPLOY_RUNBOOK §H.3), and routing every
+            // such transaction into the admin dispute queue would confuse a
+            // scheduled review with an incident. The buyer keeps the escalation
+            // button, which is the exit that was missing.
+            DeliveryDisputeOutcome.PendingReview =>
+                Unresolved(DisputeAutoCheckMessages.DeliveryEvidenceUnderReview),
+
+            // Sonuç D — the platform could not look.
+            _ => Unresolved(DisputeAutoCheckMessages.DeliveryInventoryUnreadable),
+        };
     }
 
     private static AutoCheckResult Resolved(string messageKey) =>
@@ -87,4 +103,11 @@ public sealed class DeliveryDisputeAutoChecker : IDeliveryDisputeAutoChecker
             MessageKey: messageKey,
             CanSubmitTxHash: false,
             CanEscalate: true);
+
+    private static AutoCheckResult AutoEscalated(string messageKey) =>
+        new(Resolved: false,
+            AutoEscalated: true,
+            MessageKey: messageKey,
+            CanSubmitTxHash: false,
+            CanEscalate: false);
 }
