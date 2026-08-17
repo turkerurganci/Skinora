@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Enums;
@@ -241,6 +242,34 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
         Assert.Equal(SettlementVerdict.NoDeliveryReference, result.Verdict);
         Assert.Null(result.BuyerHoldsItem);
         // No inventory read is spent on a question with no reference.
+        Assert.Empty(_inventory.BaselineReadFreshness);
+    }
+
+    /// <summary>
+    /// The missing reference is decided BEFORE the buyer's Steam account is
+    /// resolved, so a buyer the platform cannot resolve does not turn a
+    /// permanently unanswerable case into "could not read". Ordering mattered
+    /// once the escalation reasons became sticky: the row would have been
+    /// escalated as <c>SETTLEMENT_UNREADABLE</c> after 48 hours of pointless
+    /// retries, and that label — pinned by the anti-downgrade rule — sends the
+    /// admin to DEPLOY_RUNBOOK §I.3, whose triage explicitly does not apply to
+    /// this class (§I.5 does). Owner decision, 2026-08-17.
+    /// </summary>
+    [Fact]
+    public async Task NoDeliveryReference_IsDecided_BeforeTheBuyerAccountIsResolved()
+    {
+        var transaction = await CreateDeliveredAsync(
+            deliveredBuyerAssetId: null, baselineClassCount: null);
+
+        // The buyer can no longer be resolved (soft-deleted → query filter).
+        var buyer = await Context.Set<User>().FirstAsync(u => u.Id == _buyer.Id);
+        buyer.IsDeleted = true;
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var result = await Verify(transaction);
+
+        Assert.Equal(SettlementVerdict.NoDeliveryReference, result.Verdict);
         Assert.Empty(_inventory.BaselineReadFreshness);
     }
 

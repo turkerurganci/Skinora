@@ -47,12 +47,18 @@ public record SettlementReviewRequiredEvent(
 /// persisted on <c>Transaction.SettlementEscalationReason</c>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The codes split into two classes and the split is load-bearing:
 /// <see cref="AmbiguousDeparture"/> and <see cref="ReversalGated"/> were raised
 /// by a round that OBSERVED the item leave the buyer, so they are sticky — a
 /// later round may not silently clear them for payout. <see cref="Unreadable"/>
 /// and <see cref="NoDeliveryReference"/> observed nothing, so a later round that
 /// does see the item is genuinely new information in the safe direction.
+/// </para>
+/// <para>
+/// Because the stickiness is keyed on the recorded VALUE, the recorded value
+/// itself has to be protected: see <see cref="Strength(string?)"/>.
+/// </para>
 /// </remarks>
 public static class SettlementReviewReasons
 {
@@ -79,4 +85,48 @@ public static class SettlementReviewReasons
     /// </summary>
     public static bool ObservedDeparture(string? reason) =>
         reason is AmbiguousDeparture or ReversalGated;
+
+    /// <summary>
+    /// How strong a finding the code represents. The persisted reason may only
+    /// ever be RAISED, never lowered: a later round writes its own code only
+    /// when this rank is strictly greater than the recorded one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Keying the payout stickiness on the recorded VALUE (see
+    /// <see cref="ObservedDeparture(string?)"/>) is only half a rule — the arm
+    /// that WRITES the value has to police the direction too, or the rule
+    /// unwrites itself. A single later <c>Inconclusive</c> round past the
+    /// unreadable threshold used to overwrite
+    /// <see cref="ReversalGated"/> with <see cref="Unreadable"/>, after which
+    /// the next "item is there" reading cleared the clearance and released the
+    /// money over an open <c>ADMIN_ESCALATION</c>, with no second notification
+    /// (validator finding B4).
+    /// </para>
+    /// <para>
+    /// The two observing codes are also ranked against EACH OTHER, not just
+    /// against the non-observing ones. Money is parked either way, but
+    /// DEPLOY_RUNBOOK §I.3 decides whether to open the auto-refund gate by
+    /// counting <see cref="ReversalGated"/> rows: if a seller trades the
+    /// returned item onward, the next round reads
+    /// <see cref="AmbiguousDeparture"/>, and a downgrade there would erase the
+    /// very evidence the gate decision is made from — as well as the reason
+    /// AD32's audit row records at the moment an admin closes the case.
+    /// </para>
+    /// <para>
+    /// Unknown or absent codes rank below every known one (-1), so a row that
+    /// somehow carries no reason still accepts the first real one.
+    /// <c>SettlementReviewReasonsTests</c> asserts every constant declared here
+    /// is ranked, so adding a code without ranking it fails the build's tests
+    /// rather than silently becoming unwritable.
+    /// </para>
+    /// </remarks>
+    public static int Strength(string? reason) => reason switch
+    {
+        ReversalGated => 2,
+        AmbiguousDeparture => 1,
+        Unreadable => 0,
+        NoDeliveryReference => 0,
+        _ => -1,
+    };
 }

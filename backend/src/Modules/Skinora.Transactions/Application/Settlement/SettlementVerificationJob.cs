@@ -454,15 +454,28 @@ public sealed class SettlementVerificationJob
     /// inventory becomes readable before anyone acts.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The reason is also written to the transaction, not just to the event.
     /// Two things need it there: the triage query has to tell an unreadable
     /// inventory from a delivery that left no reference at all (different
     /// procedures — DEPLOY_RUNBOOK §I.3 vs §I.5), and
     /// <see cref="ClearForPayoutAsync"/> has to know whether a departure was
-    /// ever observed. A later round may upgrade the recorded reason — an
-    /// inventory that opens and shows the item gone is a strictly stronger
-    /// finding than "could not read" — but it never re-notifies: a human is
-    /// already looking.
+    /// ever observed.
+    /// </para>
+    /// <para>
+    /// A later round may only ever RAISE the recorded reason — an inventory that
+    /// opens and shows the item gone is a strictly stronger finding than "could
+    /// not read" — and it never re-notifies, because a human is already looking.
+    /// Lowering it is refused: this arm is the only writer of the field
+    /// <see cref="ClearForPayoutAsync"/> keys its refusal on, so an unpoliced
+    /// overwrite let the rule unwrite itself. One <c>Inconclusive</c> round past
+    /// the unreadable threshold — a buyer hiding their inventory is enough —
+    /// turned <c>SETTLEMENT_REVERSAL_GATED</c> into <c>SETTLEMENT_UNREADABLE</c>,
+    /// and the next "item is there" reading then stamped the clearance and
+    /// released the money over an open <c>ADMIN_ESCALATION</c> with no second
+    /// notification (validator finding B4; ranks in
+    /// <see cref="SettlementReviewReasons.Strength(string?)"/>).
+    /// </para>
     /// </remarks>
     private async Task EscalateAsync(
         Transaction transaction,
@@ -473,21 +486,33 @@ public sealed class SettlementVerificationJob
     {
         if (transaction.SettlementEscalatedAt is not null)
         {
-            if (!string.Equals(transaction.SettlementEscalationReason, reason, StringComparison.Ordinal))
-            {
-                _logger.LogWarning(
-                    "Transaction {TransactionId}: settlement escalation reason changed "
-                    + "{PreviousReason} → {Reason} on re-check — {Detail}",
-                    transaction.Id, transaction.SettlementEscalationReason, reason, result.Detail);
+            var recordedReason = transaction.SettlementEscalationReason;
 
-                transaction.SettlementEscalationReason = reason;
-            }
-            else
+            if (string.Equals(recordedReason, reason, StringComparison.Ordinal))
             {
                 _logger.LogDebug(
                     "Transaction {TransactionId}: settlement already escalated at {EscalatedAt} — "
                     + "re-checked ({Reason}), no second notification",
                     transaction.Id, transaction.SettlementEscalatedAt, reason);
+            }
+            else if (SettlementReviewReasons.Strength(reason)
+                > SettlementReviewReasons.Strength(recordedReason))
+            {
+                _logger.LogWarning(
+                    "Transaction {TransactionId}: settlement escalation reason raised "
+                    + "{PreviousReason} → {Reason} on re-check — {Detail}",
+                    transaction.Id, recordedReason, reason, result.Detail);
+
+                transaction.SettlementEscalationReason = reason;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Transaction {TransactionId}: a later settlement round read {Reason} but the "
+                    + "recorded reason {PreviousReason} is at least as strong — the recorded reason "
+                    + "is KEPT, because lowering it would let a subsequent 'item is there' round "
+                    + "release the payout over this open escalation (02 §4.5.1). {Detail}",
+                    transaction.Id, reason, recordedReason, result.Detail);
             }
 
             await _db.SaveChangesAsync(cancellationToken);

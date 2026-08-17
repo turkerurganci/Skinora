@@ -73,6 +73,30 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
         // can still show an item that moved two minutes ago (08 §2.3).
         const InventoryReadFreshness Freshness = InventoryReadFreshness.Fresh;
 
+        // Asked FIRST, before the account is even resolved: this is a test of two
+        // columns, not of an inventory, and it can never change its answer
+        // (validator finding B1). Ordering it after the Steam-id resolution made
+        // an unresolvable buyer report "could not read" instead — which cost the
+        // case 48 hours of retries and, once the reasons became sticky, could
+        // pin the wrong triage label on it for good (DEPLOY_RUNBOOK §I.3 vs
+        // §I.5; owner decision, 2026-08-17). It also saves a rate-limited read
+        // on a question that has no answer.
+        if (HasNoDeliveryReference(transaction))
+        {
+            // Not "could not read" — there is no question to ask. Kept apart
+            // from Inconclusive so the job escalates it at once instead of
+            // retrying a check that can never conclude.
+            return new SettlementVerificationResult(
+                Verdict: SettlementVerdict.NoDeliveryReference,
+                BuyerHoldsItem: null,
+                SellerAssetReturned: null,
+                BuyerVisibility: null,
+                SellerVisibility: null,
+                ObservedClassCount: null,
+                ExpectedClassCount: null,
+                Detail: NoDeliveryReferenceDetail);
+        }
+
         var buyerSteamId = transaction.BuyerId is { } buyerId
             ? await ResolveSteamIdAsync(buyerId, cancellationToken)
             : null;
@@ -89,9 +113,8 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
 
         if (buyerSide.ReferenceMissing)
         {
-            // Not "could not read" — there is no question to ask. Kept apart
-            // from Inconclusive so the job escalates it at once instead of
-            // retrying a check that can never conclude (validator finding B1).
+            // Unreachable via the short-circuit above; kept as the structural
+            // guard for the count route, which has to bind the baseline anyway.
             return new SettlementVerificationResult(
                 Verdict: SettlementVerdict.NoDeliveryReference,
                 BuyerHoldsItem: null,
@@ -241,9 +264,7 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
                 ObservedClassCount: null,
                 ExpectedClassCount: null,
                 ReferenceMissing: true,
-                Detail: "Teslim edilen asset ID'si kaydedilmemiş ve alıcı baseline'ı yok "
-                    + "(alıcı envanteri SELLER_CONFIRMED anında gizliydi) — mutabakat kontrolünün "
-                    + "karar girdisi hiç üretilemedi ve sonradan da üretilemez (06 §3.5).");
+                Detail: NoDeliveryReferenceDetail);
         }
 
         var expected = baseline + 1;
@@ -279,6 +300,23 @@ public sealed class SettlementVerificationService : ISettlementVerificationServi
                 ? $"Alıcının {transaction.ItemClassId} sınıfı sayımı {countRead.ClassCount} ≥ beklenen {expected} — item duruyor."
                 : $"Alıcının {transaction.ItemClassId} sınıfı sayımı {countRead.ClassCount} < beklenen {expected} — item ayrılmış.");
     }
+
+    /// <summary>
+    /// The delivery recorded neither an asset id nor a buyer baseline, so
+    /// neither buyer-side route has an input — and neither ever will: the
+    /// baseline is only written on entry to SELLER_CONFIRMED and the asset id
+    /// only by a delivery round that read an inventory, and both are closed for
+    /// good by the time settlement runs (06 §3.5, validator finding B1).
+    /// </summary>
+    private static bool HasNoDeliveryReference(Transaction transaction) =>
+        string.IsNullOrEmpty(transaction.DeliveredBuyerAssetId)
+        && (transaction.BuyerBaselineCapturedAt is null
+            || transaction.BuyerBaselineClassCount is null);
+
+    private const string NoDeliveryReferenceDetail =
+        "Teslim edilen asset ID'si kaydedilmemiş ve alıcı baseline'ı yok "
+        + "(alıcı envanteri SELLER_CONFIRMED anında gizliydi) — mutabakat kontrolünün "
+        + "karar girdisi hiç üretilemedi ve sonradan da üretilemez (06 §3.5).";
 
     private static SettlementVerificationResult Inconclusive(
         InventoryVisibility? buyerVisibility, string detail) =>

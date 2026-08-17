@@ -51,6 +51,15 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 **Değişen (test):** `SettlementVerificationServiceTests` · `SettlementVerificationJobTests` · `AdminTransactionServiceTests` · `EnumTests` · `AuditLogCategoryMapTests`
 **Değişen (doküman):** 02 §4.5.1 · 03 §2.4 · 05:313 · 06 §2.11/§2.19/§3.1/§3.5/§3.17/§8.2 · 07 §9.3 + yeni §9.22b · 11 §P4 (NİHAİ ŞEKİL bloğu) · DEPLOY_RUNBOOK §0/§C/§I.1/§I.2/§I.3/§I.4 + §I.5
 
+### İkinci düzeltme turunda değişenler (2026-08-17)
+
+Şema, endpoint, enum veya FE değişikliği **yok** — değişiklik karar mantığı, rank tablosu, testler ve doküman.
+
+**Yeni:** `backend/tests/Skinora.Shared.Tests/Unit/SettlementReviewReasonsTests.cs` (rank tablosunun kendisi + reflection guard'ı)
+**Değişen (backend):** `SettlementReviewRequiredEvent.cs` (`SettlementReviewReasons.Strength` + gerekçe) · `SettlementVerificationJob.cs` (`EscalateAsync` üç kollu: aynı / kesin daha güçlü / eşit-veya-daha-zayıf → koru) · `SettlementVerificationService.cs` (D5 — referans-yok kontrolü `VerifyAsync`'in başına, `HasNoDeliveryReference` + `NoDeliveryReferenceDetail`)
+**Değişen (test):** `SettlementVerificationJobTests` (+3 düşürme regresyonu) · `SettlementVerificationServiceTests` (+1 sıra testi)
+**Değişen (doküman):** 02 §4.5.1 (launch kapısı notu + "Bilinen sonuçları" 4. madde) · 06 §3.5 (güç sırası) · 11 §P4 (D3/D4 NİHAİ ŞEKİL) · DEPLOY_RUNBOOK §I.1 (operasyonel sonuç) + §I.2 (nakit akışı kontrolü) · bu rapor (§Güvenlik Kontrolü N8, migration adı N10)
+
 ## Kabul Kriterleri Kontrolü
 
 | # | Kriter | Sonuç | Kanıt |
@@ -58,7 +67,7 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 | 1 | `payout_settlement_days` SystemSetting (varsayılan 8) eklendi | ✓ | `SystemSettingSeed.cs` satır 61 (`Default(61, ..., "8")`), `SystemSettingsCatalog.cs` (`settlement` API kategorisi), migration `InsertData`. Validator 7 altını reddeder — `SystemSettingsValidator.MinimumSettlementDays` |
 | 2 | ITEM_DELIVERED girişinde `PayoutEligibleAt` hesaplanıyor | ✓ | `SettlementWindowStamper.Stamp` iki çağıranda; **guard koşulu** olduğu için atlanamaz (`HasDeliveryEntryInvariant`). Testler: `DeliverItem_WithoutPayoutEligibleAt_ThrowsInvalidTransition`, confirm-receipt ve timeout-round happy path'lerinde `PayoutEligibleAt = now + 8g` assertion'ı |
 | 3 | `SellerPayoutQueueJob` yalnız `PayoutEligibleAt` geçmiş işlemleri alıyor | ✓ | T126-F1'de erken uygulanmıştı; T129 kapıyı tamamladı (`SettlementVerifiedAt != null && DeliveryReversedAt == null`). Testler: `ElapsedWindow_WithoutSettlementVerification_IsSkipped`, `ReversedDelivery_IsSkipped_EvenWithSettlementStamp` |
-| 4 | Ödeme öncesi son kontrol (item / yok / okunamıyor) | ✓ (düzeltme turu sonrası) | İlk turda ~ Kısmi'ydi: birinci dal ("item var → ödeme akar") gizli-envanterli popülasyon için erişilemezdi (**B1**) ve K1'in ayırt edici sinyali "satıcıya döndü" yerine "satıcıda var" idi (**N1**). İkisi de kapatıldı — beşinci verdict `NoDeliveryReference` + eşiksiz eskalasyon + AD32 admin kolu; imza artık `SELLER_ASSET_GONE` ∧ "şimdi satıcıda". Dallar: 5 verdict × job aksiyonu, 9 + 21 test |
+| 4 | Ödeme öncesi son kontrol (item / yok / okunamıyor) | ✓ (ikinci düzeltme turu sonrası) | Bu kriter iki tur boyunca ~ Kısmi kaldı. **İlk turda:** birinci dal ("item var → ödeme akar") gizli-envanterli popülasyon için erişilemezdi (**B1**) ve K1'in ayırt edici sinyali "satıcıya döndü" yerine "satıcıda var" idi (**N1**) — ikisi de kapatıldı: beşinci verdict `NoDeliveryReference` + eşiksiz eskalasyon + AD32 admin kolu; imza artık `SELLER_ASSET_GONE` ∧ "şimdi satıcıda". **Tur 2'de kalan açık (B4):** aynı dal, açık ve gözlenmiş bir ayrılma eskalasyonunun **üstünde** de alınabiliyordu, çünkü yapışkanlığı taşıyan gerekçe alanı düşürülebiliyordu. İkinci düzeltme turunda gerekçe **güç sırasına** bağlandı (`SettlementReviewReasons.Strength`) ve düşürme yönü üç regresyon testiyle sabitlendi (negatif prova: eski koşulsuz atama geri konduğunda tam o üç test kırıldı). Dallar: 5 verdict × job aksiyonu, 9 + 24 test + 12 rank testi |
 | 5 | COMPLETED guard'ı: `SettlementVerifiedAt NOT NULL && DeliveryReversedAt NULL` | ✓ | T117/T118'de yazılmıştı (`HasSettlementClearance`), T129'da kanıtlandı ve aynı çift payout+sweep sorgularına yansıtıldı (guard tek başına yetmez: ikisi de COMPLETED'dan önce para hareket ettirir) |
 | 6 | Süre içinde açılan dispute ödemeyi bloklar | ✓ | Üç sorguda da `!HasActiveDispute` (settlement job + payout + sweep). Test: `IneligibleTransactions_AreNotEvenRead(kind: "dispute")` |
 | 7 | `SweepQueueJob` aynı kapıya bağlandı | ✓ | Sorgu + döngü içi yeniden doğrulama. Testler: `UnverifiedSettlement_IsSkipped`, `ReversedDelivery_IsSkipped` |
@@ -66,17 +75,22 @@ Bu görev, teslim edilmiş bir işlemin parasının **ne zaman** ve **hangi koş
 
 ## Test Sonuçları
 
-**Aşağıdaki ölçümler düzeltme turu sonrasıdır (2026-08-17).** İlk turun ölçümü karşılaştırma için parantez içinde verilmiştir.
+**Aşağıdaki tablo ikinci düzeltme turu sonrasıdır (2026-08-17).** Önceki turların ölçümleri karşılaştırma için parantez içinde verilmiştir.
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Backend tam suite | ✓ **2716/2716** (ilk tur 2703) | Assembly başına **seri** koşum: Transactions **1007** (+12) · API **540** · Shared **401** (+1) · Platform **189** · Notifications **171** · Auth 120 · Fraud 91 · Disputes 68 · Realtime 40 · Steam 39 · Users 22 · Admin 22 · Payments 6 |
+| Backend tam suite | ✓ **2732/2732** (düzeltme turu 2716 · ilk tur 2703) | `dotnet test Skinora.sln -m:1`, **seri** koşum, exit 0: Transactions **1011** (+4) · API 540 · Shared **413** (+12) · Platform 189 · Notifications 171 · Auth 120 · Fraud 91 · Disputes 68 · Realtime 40 · Steam 39 · Users 22 · Admin 22 · Payments 6. **+16 = 3 (job düşürme regresyonu) + 12 (rank tablosu) + 1 (motor sırası)** |
+| Backend unit-filter suite | ✓ **2477/2477**, exit 0 | `--filter "Category!=Integration&Category!=Contract"` — ayrı koşum; Transactions 991, Shared 403 |
+| Build (bu tur) | ✓ 0 warning / 0 error | `dotnet build Skinora.sln` |
+| FE (bu tur) | değişiklik yok | İkinci düzeltme turu frontend'e dokunmadı; aşağıdaki FE satırları düzeltme turunun ölçümüdür |
 | Build | ✓ 0 warning / 0 error | `dotnet build Skinora.sln -c Debug` |
 | Migration | ✓ 6/6 | `InitialMigrationTests` — `Model_HasNoPendingChanges` dahil (aşağıdaki nota bakınız) |
 | FE lint | ✓ exit 0 | `npm run lint` |
 | FE i18n parity | ✓ **1313 × 4** (ilk tur 1303) | `npm run i18n:check` — "identical key sets"; +10 anahtar (3 tip haritası + 7 `adminFlags.detail` etiketi) |
 | FE vitest | ✓ 33/33 | 9 dosya |
 | FE tsc | ✓ exit 0 | `npx tsc --noEmit` |
+
+**Yeni testler (ikinci düzeltme turu, +16):** `SettlementReviewReasonsTests` **+12** (Shared, yeni dosya — rank matrisi 4 · bilinmeyen/NULL 3 · reflection "her sabit rank'lanmış" 1 · `ObservedDeparture` ↔ `Strength ≥ 1` 4) · `SettlementVerificationJobTests` **+3** (gerekçe düşürme: B4 repro dizisi, sınıf içi düşürme, eşit güç) · `SettlementVerificationServiceTests` **+1** (`NoDeliveryReference_IsDecided_BeforeTheBuyerAccountIsResolved`). **İki negatif prova koşuldu ve ikisi de hedefi tam vurdu:** (1) `EscalateAsync`'in koşulu geçici olarak eski koşulsuz hâline çevrildi → tam olarak yeni üç test kırıldı, mevcut 19 test etkilenmedi; (2) `HasNoDeliveryReference` erken çıkışı devre dışı bırakıldı → yalnız yeni motor testi kırıldı (`Expected NoDeliveryReference / Actual Inconclusive`), mevcut 9 test etkilenmedi. İki scratch de koşumdan sonra geri alındı.
 
 **Yeni testler (düzeltme turu, +12):** `SettlementVerificationServiceTests` +1 (`SellerHasTheAsset_ButItsDepartureWasNeverObserved_IsAmbiguous_NotAReversal`; ayrıca `NoDeliveredAssetId_AndNoBaseline_*` yeni verdict'e taşındı ve iki reversal testi ayrılma kanıtı alacak şekilde güncellendi) · `SettlementVerificationJobTests` +5 (eşiksiz eskalasyon, iki karşıt yapışkanlık testi, gerekçe yükseltme, itibar tetikleyicisi + sıralama kanıtı) · `AdminTransactionServiceTests` +6 (AD32 happy path + beş guard).
 
@@ -196,7 +210,7 @@ Bağımsız doğrulamanın üç bloke edici bulgusu ve yedi bloke etmeyen maddes
 
 ### Yeni kalıcı yüzeyler
 
-- **Kolonlar:** `Transaction.SettlementEscalationReason` (nvarchar(64)), `Transaction.SettlementClearedByAdminId` (uniqueidentifier) — migration `20260817081454_T129_SettlementEscalationColumns`.
+- **Kolonlar:** `Transaction.SettlementEscalationReason` (nvarchar(64)), `Transaction.SettlementClearedByAdminId` (uniqueidentifier) — migration `20260817084800_T129_SettlementEscalationColumns` (dosya adı; raporun ilk kaydı `…081454_` yazıyordu — yeniden doğrulama bulgusu N10, yalnız kayıt hatasıydı).
 - **Enum:** `AuditAction.SETTLEMENT_CLEARED_ADMIN` (ADMIN_ACTION kategorisi).
 - **Uç:** AD32 (07 §9.22b).
 - **Runbook:** DEPLOY_RUNBOOK **§I.5** — karar girdisi üretilememiş vakalar için ayrı triyaj prosedürü (B1(a)'nın "§I.3 bu vakaya uymaz" tespitinin karşılığı).
@@ -283,20 +297,54 @@ Yani geri alma imzası kaydedilmiş bir işlemde mutabakat, açık eskalasyonun 
 
 Merge edilmedi. Düzeltme `SettlementVerificationJob.EscalateAsync` içinde tek koşul + bir regresyon testi; ardından üçüncü bir doğrulama turu açılır (INSTRUCTIONS §3.3 izolasyon kuralı). Tur 2'de ✓ kanıtlanan AC1/2/3/5/6/7/8 ve B1/B2/B3/N1/N3–N7 için kanıt korunur; AC4 + N2 yeniden doğrulanır.
 
+---
+
+## İkinci Düzeltme Turu (2026-08-17)
+
+Yeniden doğrulamanın bir bloke edici bulgusu (**B4**) ve üç bloke etmeyen maddesi (**N8–N10**), proje sahibi onayıyla `11_IMPLEMENTATION_PLAN.md` §P4 T129 → "İKİNCİ DÜZELTME TURU KABUL KRİTERLERİ" bloğuna yazılmıştı. Bu tur o bloğu uygular.
+
+### Bu turda sorulan üç karar (proje sahibi, 2026-08-17 — üçü de öneri yönünde onaylandı)
+
+| # | Karar | Gerekçe |
+|---|---|---|
+| D3 | **B4(a) güç sırası (monotonik) olarak uygulansın** — kriterin harfi olan sınıf bazlı koşul (`ObservedDeparture(mevcut) && !ObservedDeparture(yeni)`) yerine tam sıralama | Kriterin (a) maddesini tam karşılar, üstüne sınıf **içi** düşürmeyi (`REVERSAL_GATED → AMBIGUOUS_DEPARTURE`) de kapatır. Gerekçe operasyoneldir: DEPLOY_RUNBOOK §I.3 kapı açma kararını `SETTLEMENT_REVERSAL_GATED` satırlarını **sayarak** verir; satıcı geri dönen item'ı devrederse bir sonraki tur `AmbiguousDeparture` okur ve sınıf içi düşürme o kanıtı siler — kuyruk "hiç gerçek geri alma gözlenmedi" gibi görünür. Aynı gerekçe AD32'nin audit satırı için de geçerli (`AdminTransactionService.cs:785` gerekçeyi kapanış anında okur). Para her iki hâlde parkta kalır, kaybedilen şey triyaj doğruluğudur. Maliyet: bir rank fonksiyonu + testler |
+| D4 | **N9 hem 02 §4.5.1 "Bilinen sonuçları" listesine hem DEPLOY_RUNBOOK §I'ye yazılsın** (yalnız runbook veya yalnız `DEFERRED_BACKLOG` değil) | Validator'ın eksik bulduğu liste tam olarak 02 §4.5.1'dir; sonuç bir **iş maddesi değil**, ürün kararının bilinen bedeli — `DEFERRED_BACKLOG` yanlış tür. Kaynak dokümana yazılmazsa runbook satırı türev kalır ve aynı boşluk bir sonraki turda geri gelir |
+| D5 | **Motorda referans-yok kontrolü alıcının Steam ID çözümünden ÖNCE çalışsın** (tur 2'de ✓ doğrulanmış `SettlementVerificationService`'te sıra değişikliği) | Turun kendisi sırasında bulundu: D3'ün eşit-güç koruması, gerekçeyi ilk kaydedildiği hâlde sabitliyor. `ReferenceMissing` saf bir **kolon** kontrolüyken Steam ID çözümünün arkasındaydı, yani çözülemeyen bir alıcı (soft-delete) kalıcı olarak cevapsız bir vakayı önce `Inconclusive` yapıyor, 48 saat sonra `SETTLEMENT_UNREADABLE` etiketiyle eskale ediyordu — ve o etiket artık **düşürülemez** olduğu için admin'i §I.3'e gönderiyordu, oysa bu sınıfın prosedürü §I.5'tir ve §I.3 triyajı ona **açıkça uymuyor**. Öne alınınca yol yapısal olarak erişilemez olur, B1'in kendi gerekçesine ("beklemenin kazanacağı bir şey yok") daha uygun davranılır ve bir rate-limited Steam okuması tasarruf edilir. Para davranışı değişmez |
+
+### Bulgu bulgu kapatma
+
+| # | Ne yapıldı | Kanıt |
+|---|---|---|
+| **B4(a)** | `SettlementReviewReasons.Strength(string?)` eklendi: `UNREADABLE` = `NO_DELIVERY_REFERENCE` (0) < `AMBIGUOUS_DEPARTURE` (1) < `REVERSAL_GATED` (2), bilinmeyen/NULL (−1). `EscalateAsync` artık üç kollu: **aynı** gerekçe → debug log; **kesin olarak daha güçlü** → yazılır (eski "upgrade" davranışı korundu); **eşit veya daha zayıf** → kayıtlı gerekçe **korunur**, warning log. Koşulsuz `= reason` ataması kaldırıldı | `SettlementReviewRequiredEvent.cs` (rank + gerekçe), `SettlementVerificationJob.cs` `EscalateAsync` |
+| **B4(b)** | Düşürme yönü için üç regresyon testi: (1) **B4'ün tam repro dizisi** — `ReversalSignature` (kapı kapalı) → +49s `Inconclusive` → +2s `Verified`; gerekçe `REVERSAL_GATED` kalıyor, `SettlementVerifiedAt` NULL, tek bildirim, sıfır fraud flag, sıfır iade event'i. (2) sınıf içi düşürme (`REVERSAL_GATED` → `AmbiguousDeparture`). (3) eşit güç (`NO_DELIVERY_REFERENCE` → `UNREADABLE`) | `SettlementVerificationJobTests` — **negatif prova:** koşul geçici olarak eski koşulsuz hâline çevrildiğinde tam olarak bu üç test kırıldı (`Expected REVERSAL_GATED / Actual UNREADABLE`, `Actual AMBIGUOUS_DEPARTURE`, `Expected NO_DELIVERY_REFERENCE / Actual UNREADABLE`) ve mevcut 19 test etkilenmedi; scratch geri alındıktan sonra 22/22 yeşil |
+| **B4 (rank tablosunun kendisi)** | Yeni `SettlementReviewReasonsTests` (Shared): rank matrisi · bilinmeyen/NULL her bilinen kodun altında · **reflection ile "her sabit rank'lanmış"** guard'ı · `ObservedDeparture` ile `Strength ≥ 1` aynı çizgiyi çiziyor. Gerekçe: rank'lanmamış bir kod −1 alır ve mevcut gerekçenin üstüne **hiç yazılamaz** — yani yeni bir bulgu, parayı serbest bırakan yönde sessizce kaybolur. Bulgunun kalıcı dersinin ("kural yazıldı ≠ kural korunuyor") rank tablosuna uygulanması | 12 test, `Passed! 12/12` |
+| **B4 (doküman)** | Kural üç kaynak cümlede tamamlandı: 06 §3.5 `SettlementEscalationReason` satırına güç sırası + "eşit güçteki iki kod birbirinin üstüne yazmaz" (prosedürde ayrışırlar, gözlemde ayrışmazlar); DEPLOY_RUNBOOK §I.1'e operasyonel sonuç ("§I.3 sorgusunda gördüğünüz gerekçe, o işlem için gözlenmiş **en güçlü** bulgudur"); 02 §4.5.1 launch kapısı notuna "yapışkanlık gerekçeyi de kapsar" | `06_DATA_MODEL.md:629` · `DEPLOY_RUNBOOK.md` §I.1 · `02_PRODUCT_REQUIREMENTS.md:169` |
+| **N8** | §Güvenlik Kontrolü yeniden yazıldı: AD32'nin ucu, policy'si (`MANAGE_DISPUTES` — mevcut anahtar, yeni permission **yok**), rate limit'i, ön koşulu ve ≥10 karakter gerekçe validasyonu kayda geçti. Kod zaten temizdi; yanlış olan Katman-1 kaydıydı | Bu raporun §Güvenlik Kontrolü bölümü |
+| **N9** | 02 §4.5.1 "Bilinen sonuçları"na dördüncü madde + DEPLOY_RUNBOOK §I.2'ye launch öncesi nakit akışı kontrolü. Mekanizma doğru yazıldı: eskiden süpürme T+0, ödeme T+8g olduğu için sıcak cüzdan depoziti ödemeden **günler önce** görüyordu ve bu gecikme onu kendiliğinden fonluyordu; artık iki kapı da `SettlementVerifiedAt` ve iki job birbirini beklemiyor, dolayısıyla ön fonlama yok. Aksiyon: işletme bakiyesi + `hot_wallet_limit` (§A satır 18) boyutlandırması. Kapının kendisi değiştirilmedi (WP3 gerekçesi korunur) | `02_PRODUCT_REQUIREMENTS.md:180` · `DEPLOY_RUNBOOK.md` §I.2 |
+| **N10** | Migration adı iki yerde `20260817084800_…` olarak düzeltildi (§Yeni kalıcı yüzeyler + §Altyapı Değişiklikleri'ndeki `20260817…` placeholder'ı) | `find` çıktısı: `20260817084800_T129_SettlementEscalationColumns.cs` |
+| **D5 (turun bulduğu kenar durum)** | `VerifyAsync` artık `HasNoDeliveryReference(transaction)` kontrolünü **ilk** yapıyor: okuma yok, Steam ID çözümü yok, doğrudan `NoDeliveryReference`. Gerekçe metni `NoDeliveryReferenceDetail` sabitine çıkarıldı; sayım rotasındaki eski dal, `baseline`'ı bağlamak için zaten gerekli olduğundan yapısal guard olarak kaldı (artık erişilemez, yorumda yazılı) | Test `NoDeliveryReference_IsDecided_BeforeTheBuyerAccountIsResolved` (alıcı soft-delete edilir → çözülemez). **Negatif prova:** kontrol geçici olarak devre dışı bırakıldığında yalnız bu test kırıldı, `Expected NoDeliveryReference / Actual Inconclusive`; mevcut 9 test etkilenmedi |
+
+### Bu turun kapsam dışı bıraktığı (bilinçli)
+
+- **Şema değişikliği yok.** Değişiklik job içi karar mantığı + rank tablosu + testler + doküman; yeni kolon, migration, enum veya endpoint eklenmedi.
+- **Mevcut satırlar için geri dönük düzeltme yok.** Kural bundan sonraki turlarda uygulanır; bugün üretimde düşürülmüş bir gerekçe yoktur (T129 henüz merge edilmedi).
+
 ## Altyapı Değişiklikleri
 
 - **Migration (1/2):** `20260816140704_T129_SettlementCheckColumns` — `Transactions`'a 2 nullable `datetime2` kolon + 3 `SystemSettings` seed satırı. Down temiz (DeleteData + DropColumn).
-- **Migration (2/2, düzeltme turu):** `20260817…_T129_SettlementEscalationColumns` — `SettlementEscalationReason` (nvarchar(64), null) + `SettlementClearedByAdminId` (uniqueidentifier, null) + `settlement.reversal_auto_refund_enabled` açıklamasının `UpdateData`'sı. Down tam tersi (iki `DropColumn` + eski açıklamaya geri dönüş).
+- **Migration (2/2, düzeltme turu):** `20260817084800_T129_SettlementEscalationColumns` — `SettlementEscalationReason` (nvarchar(64), null) + `SettlementClearedByAdminId` (uniqueidentifier, null) + `settlement.reversal_auto_refund_enabled` açıklamasının `UpdateData`'sı. Down tam tersi (iki `DropColumn` + eski açıklamaya geri dönüş).
 - **Config:** 3 yeni SystemSetting (hepsi `Default(...)` → `IsConfigured = true`, env ile override edilemez).
 - **Hangfire:** yeni recurring job `settlement-verification` (`*/5 * * * *`), `OutgoingTransferJobsRegistrar`'da kayıtlı.
 - **Docker:** değişiklik yok.
 
 ## Güvenlik Kontrolü
 
-- Secret sızıntısı: yok (yeni secret/credential yok).
-- Auth/authorization: yeni endpoint yok; job SYSTEM aktörü ile çalışır, admin yüzeyi mevcut `ADMIN_ESCALATION` bildirimidir.
-- Input validation: yeni kullanıcı girdisi yok; SystemSetting değerleri validator'dan geçer (`payout_settlement_days ≥ 7`).
-- Yeni dış bağımlılık: yok.
+Katman-1 mini güvenlik kontrolü, **düzeltme turlarının eklediği yüzeyler dahil** (ilk tur kaydı AD32'yi görmediği için "yeni endpoint yok" diyordu — yeniden doğrulama bulgusu N8):
+
+- **Secret sızıntısı:** yok — hiçbir turda yeni secret/credential/bağlantı dizesi eklenmedi.
+- **Auth/authorization:** düzeltme turu **bir yeni endpoint ekledi** — AD32 `POST /admin/transactions/:id/clear-settlement` (07 §9.22b). Koruması: `[Authorize(Policy = "Permission:MANAGE_DISPUTES")]` + `[RateLimit("admin-write")]`. `MANAGE_DISPUTES` **mevcut** bir katalog anahtarıdır (AD29 `admin_resolve_refund` ile aynı sınıf), yeni permission tanımlanmadı — yani yetki yüzeyi genişlemedi, mevcut yetkiye ikinci bir aksiyon bağlandı. Ön koşul `SettlementEscalatedAt NOT NULL` ve aktif dispute varsa uç reddeder (karar o durumda AD29'a aittir). Uç `SettlementVerifiedAt` + `SettlementClearedByAdminId` damgalar, statüyü değiştirmez; iz `SETTLEMENT_CLEARED_ADMIN` audit satırı + `AdminClearSettlement` history satırıdır. Job'ın kendisi SYSTEM aktörüyle çalışır.
+- **Input validation:** AD32 `reason` alanı **≥ 10 karakter** (AD19 ile aynı taban), route `{id:guid}`. SystemSetting değerleri validator'dan geçer (`payout_settlement_days ≥ 7` — generic pozitif-sayı dalından önce yakalanan ayrı floor). İkinci düzeltme turu yeni girdi yüzeyi eklemedi (değişiklik yalnız job içi karar mantığı + testler + doküman).
+- **Yeni dış bağımlılık:** yok (üç turda da).
 
 ## Known Limitations / Follow-up
 
@@ -306,6 +354,7 @@ Merge edilmedi. Düzeltme `SettlementVerificationJob.EscalateAsync` içinde tek 
 - **Bildirim tipi yeniden kullanıldı.** Geri alma bildirimi `TRANSACTION_CANCELLED` şablonuyla (taraf-özel `Reason` metniyle) gider; yeni `NotificationType` + 4 dil resx maliyeti yerine mevcut zarf tercih edildi. Admin tarafı `ADMIN_ESCALATION` + fraud flag'in kendi `ADMIN_FLAG_ALERT`'i ile iki kanaldan haberdar olur.
 - **Eskale satırlar için ayrı bir "mutabakat incelemesi" ekranı yoktur.** İşlem admin işlem listesinde/detayında görünür; karar AD32 (satıcı lehine) veya AD29 (alıcı lehine, dispute üzerinden) ile verilir. Eskalasyon bildirim + `SettlementEscalatedAt` + `SettlementEscalationReason` kolonları üzerinden izlenir (DEPLOY_RUNBOOK §I.3 / §I.5 sorguları). **Açık kalan:** AD7 işlem detay DTO'su settlement kolonlarını taşımıyor, yani admin gerekçeyi ekranda değil ancak sorguyla görüyor — bu turun kapsamına alınmadı, `Docs/DEFERRED_BACKLOG.md`'ye önerilir.
 - **`SETTLEMENT_NO_DELIVERY_REFERENCE` sınıfı ürün tarafında kapanmadı.** Vakanın kökü, alıcı envanterinin `SELLER_CONFIRMED` anında gizli olabilmesidir; T129 bunun için bir çıkış yolu (AD32) verir ama kaynağını ortadan kaldırmaz. Hacim beklenenden yüksek çıkarsa çare admin kapasitesi değil, envanteri okunabilir hâle getiren ürün düzeltmesidir (DEPLOY_RUNBOOK §I.5 son not).
+- **Eskalasyon gerekçesi ilk kaydedildiği hâlde sabittir (ikinci düzeltme turunun bilinçli sonucu).** Kural "yalnız güçlendirilebilir" olduğu için eşit güçteki bir gerekçe kayıtlıyı değiştirmez — yani **yanlış bir ilk etiket de kalıcı olur**. Bunun bilinen tek erişilebilir yolu D5 ile yapısal olarak kapatıldı (referans-yok kontrolü artık Steam ID çözümünden önce). Kural gereği bir gerekçe yanlış kaydedilirse düzeltmesi kodda değil, admin kolundadır (AD32 + `SETTLEMENT_CLEARED_ADMIN` audit satırı); alternatif — eşit güçte üzerine yazmaya izin vermek — kolon ile gönderilmiş `SettlementReviewRequiredEvent`'in gerekçesini ikinci bir bildirim olmadan çelişkiye düşürürdü.
 - **06 §2.19 AuditAction tablosu backend'in gerisinde** (17 satır ↔ 33 enum değeri). T129 öncesinden gelen bir borçtur; bu turda yalnız `SETTLEMENT_CLEARED_ADMIN` satırı eklendi, tablonun tamamının senkronu kapsam dışı bırakıldı — proje sahibi kararına sunulur.
 
 ## Notlar

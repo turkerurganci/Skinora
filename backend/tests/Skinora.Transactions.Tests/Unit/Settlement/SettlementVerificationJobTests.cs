@@ -406,6 +406,114 @@ public sealed class SettlementVerificationJobTests : IDisposable
         Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
     }
 
+    /// <summary>
+    /// The other half of the stickiness rule, and the one the first fix round
+    /// left open: the reason may not be LOWERED. Stickiness is keyed on the
+    /// recorded value, and <c>EscalateAsync</c> is the only arm that writes it,
+    /// so an unpoliced overwrite let the rule unwrite itself — a single
+    /// <c>Inconclusive</c> round past the unreadable threshold (a buyer hiding
+    /// their inventory is enough) turned <c>SETTLEMENT_REVERSAL_GATED</c> into
+    /// <c>SETTLEMENT_UNREADABLE</c>, and the next "item is there" reading then
+    /// released the money over an open escalation with nobody told (validator
+    /// finding B4). This is that exact sequence.
+    /// </summary>
+    [Fact]
+    public async Task Escalation_ThatObservedADeparture_IsNotLoweredByALaterRoundThatObservesNothing()
+    {
+        var tx = await SeedAsync();
+
+        // Round 1 — reversal signature with the launch gate closed.
+        _verification.Result = Verdict(SettlementVerdict.ReversalSignature,
+            buyerHoldsItem: false, sellerAssetReturned: true);
+        await _sut.ExecuteAsync();
+
+        var firstEscalation = (await ReloadAsync(tx.Id)).SettlementEscalatedAt;
+        Assert.Equal(
+            SettlementReviewReasons.ReversalGated,
+            (await ReloadAsync(tx.Id)).SettlementEscalationReason);
+
+        // Round 2 — the buyer's inventory goes private, and the unreadable
+        // threshold (measured from PayoutEligibleAt, so already past) would
+        // otherwise re-stamp the reason as SETTLEMENT_UNREADABLE.
+        _clock.Advance(TimeSpan.FromHours(49));
+        _verification.Result = Verdict(SettlementVerdict.Inconclusive);
+        await _sut.ExecuteAsync();
+
+        var afterInconclusive = await ReloadAsync(tx.Id);
+        Assert.Equal(SettlementReviewReasons.ReversalGated, afterInconclusive.SettlementEscalationReason);
+
+        // Round 3 — the count route reads "item is there" (the buyer acquired
+        // another copy of the same skin). The preserved reason must still refuse.
+        _clock.Advance(TimeSpan.FromHours(2));
+        _verification.Result = Verdict(SettlementVerdict.Verified, buyerHoldsItem: true);
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Null(persisted.SettlementVerifiedAt);
+        Assert.Null(persisted.DeliveryReversedAt);
+        Assert.Equal(SettlementReviewReasons.ReversalGated, persisted.SettlementEscalationReason);
+
+        // The admin was told once and is still the only way out; no money moved
+        // in either direction across the three rounds.
+        Assert.Equal(firstEscalation, persisted.SettlementEscalatedAt);
+        var review = Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+        Assert.Equal(SettlementReviewReasons.ReversalGated, review.Reason);
+        Assert.Empty(_flags.Calls);
+        Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
+    }
+
+    /// <summary>
+    /// The two observing codes are ranked against each other too. Money is
+    /// parked either way, but DEPLOY_RUNBOOK §I.3 decides whether to open the
+    /// auto-refund gate by counting <c>SETTLEMENT_REVERSAL_GATED</c> rows. Say
+    /// the seller trades the returned asset onward: the next round then reads
+    /// <c>AmbiguousDeparture</c>, and a downgrade would erase the very evidence
+    /// that decision is made from — as well as the reason AD32 writes into its
+    /// audit row (owner decision, 2026-08-17).
+    /// </summary>
+    [Fact]
+    public async Task Escalation_Reason_IsNotLowered_WithinTheObservingClass()
+    {
+        var tx = await SeedAsync();
+        _verification.Result = Verdict(SettlementVerdict.ReversalSignature,
+            buyerHoldsItem: false, sellerAssetReturned: true);
+        await _sut.ExecuteAsync();
+
+        // The returned asset is no longer with the seller: the item left the
+        // buyer and is now nowhere the platform can see it.
+        _clock.Advance(TimeSpan.FromHours(2));
+        _verification.Result = Verdict(SettlementVerdict.AmbiguousDeparture,
+            buyerHoldsItem: false, sellerAssetReturned: false);
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Equal(SettlementReviewReasons.ReversalGated, persisted.SettlementEscalationReason);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.SettlementCheckedAt);
+        Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+    }
+
+    /// <summary>
+    /// Equal-strength codes do not overwrite each other either. The two
+    /// non-observing reasons differ in admin PROCEDURE, not in what was seen
+    /// (DEPLOY_RUNBOOK §I.3 vs §I.5), and the first-recorded one is the one the
+    /// notified admin is looking at.
+    /// </summary>
+    [Fact]
+    public async Task Escalation_Reason_IsNotRewritten_ByAnEqualStrengthReason()
+    {
+        var tx = await SeedAsync();
+        _verification.Result = Verdict(SettlementVerdict.NoDeliveryReference);
+        await _sut.ExecuteAsync();
+
+        _clock.Advance(TimeSpan.FromHours(49));
+        _verification.Result = Verdict(SettlementVerdict.Inconclusive);
+        await _sut.ExecuteAsync();
+
+        var persisted = await ReloadAsync(tx.Id);
+        Assert.Equal(SettlementReviewReasons.NoDeliveryReference, persisted.SettlementEscalationReason);
+        Assert.Single(_outbox.Published.OfType<SettlementReviewRequiredEvent>());
+    }
+
     // ================= Candidate selection =================
 
     [Theory]
