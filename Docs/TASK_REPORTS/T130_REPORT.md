@@ -155,7 +155,18 @@ DELIVERY bloğu (5 senaryo) + WRONG_ITEM bloğu (7 senaryo).
 - Branch: `task/T130-dispute-eligibility-autochecker`
 - Commit: `4429f31` — T130: DisputeEligibility + AutoChecker yeniden yazımı
 - PR: [#242](https://github.com/turkerurganci/Skinora/pull/242)
-- CI: (izleniyor — sonuç aşağıda)
+- CI: ✓ **PASS** — dal HEAD `af2c9a6`, run [`32042922572`](https://github.com/turkerurganci/Skinora/actions/runs/32042922572)
+
+**Bloke edici 9 job yeşil:** Detect changed paths · 1. Lint · 2. Build · 3. Unit test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build (backend) · CI Gate. İki job `skipped`: *0. Guard* (direct push guard — PR yolunda çalışmaz) ve *3b. JS test (vitest)* (path filtresi — bu task'ta frontend değişikliği yok).
+
+**8 advisory E2E leg kırmızı, tamamı T130 dışı** — log genelinde T130 yüzeylerinden (`BuyerBaselineClassIds`, `DeliveredItemName`, `DeliveryDisputeRound`, `CaptureInventoryFingerprint`, iki yeni mesaj anahtarı) **0 iz**:
+
+| Leg | Neden |
+|---|---|
+| T109 · T110 · T111 · T112 · T113 · T114 | `Invalid object name 'PlatformSteamBots'` — leg başına **tam 1 iz**, yani "spec'lere hiç ulaşmadı" imzası. T117'den beri pre-existing; sahiplik T137a |
+| T108 · happy-path | GitHub kesintisi — `actions/setup-dotnet` indirilemedi (429), "Set up job"da öldü |
+
+**CI notu (altyapı, kod dışı):** run iki kez GitHub kaynaklı düştü — `dorny/paths-filter@v3` ve `actions/setup-dotnet` `codeload.github.com`'dan indirilemedi (429/503, 3 denemede de). İlk turda `Detect changed paths`, ikinci turda `3. Unit test` + `4. Integration test` + `6. Migration dry-run` **"Set up job"** aşamasında öldü — hiçbir test kodu çalışmadı. Üçüncü turda (rerun) kesinti geçti ve bloke edici jobların hepsi yeşillendi. Run'ın üst düzey `conclusion` değeri `failure` görünür; bu, advisory E2E leglerinin run sonucuna dahil olmasındandır (T129'da da aynı şekildeydi) — yetkili sinyal bloke edici jobların durumudur.
 
 ## Known Limitations / Follow-up
 
