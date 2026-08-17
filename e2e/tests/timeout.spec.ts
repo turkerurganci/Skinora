@@ -103,7 +103,7 @@ test('seller trade-offer timeout: TRADE_OFFER_SENT_TO_SELLER → CANCELLED_TIMEO
   await api.pollStatus(buyerToken, txId, 'TRADE_OFFER_SENT_TO_SELLER', { timeoutMs: 120_000 });
 
   // 03 §4.2 — backdate the seller-offer deadline; scanner cancels.
-  await backdateDeadline(txId, 'TradeOfferToSellerDeadline');
+  await backdateDeadline(txId, 'SellerConfirmDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
 
@@ -161,7 +161,7 @@ test('delivery timeout: TRADE_OFFER_SENT_TO_BUYER → CANCELLED_TIMEOUT, item to
   await api.pollStatus(buyerToken, txId, 'TRADE_OFFER_SENT_TO_BUYER', { timeoutMs: 120_000 });
 
   // 03 §4.4 — backdate the buyer-delivery deadline; scanner cancels.
-  await backdateDeadline(txId, 'TradeOfferToBuyerDeadline');
+  await backdateDeadline(txId, 'DeliveryDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
 

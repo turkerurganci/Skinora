@@ -414,18 +414,27 @@ export async function pollNotificationRecipients(
 }
 
 /** Phase-deadline columns on the Transactions table (06 §3.5). Fixed allow-list
- *  — the value is interpolated into SQL, so it must never come from free input. */
+ *  — the value is interpolated into SQL, so it must never come from free input.
+ *
+ *  T137a: the two custody-era names were renamed by T117's phase-preserving
+ *  rename (migration 20260809162642_T117_P2P_Pivot):
+ *    TradeOfferToSellerDeadline → SellerConfirmDeadline
+ *    TradeOfferToBuyerDeadline  → DeliveryDeadline
+ *  The allow-list carried the dead names, so any backdate/set call using them
+ *  would have hit "Invalid column name" — the next wall behind the dropped
+ *  tables. Call sites were swapped along the migration's own mapping; whether a
+ *  P2P flow should still lean on that phase at all is T138's question. */
 export type DeadlineColumn =
   | 'AcceptDeadline'
-  | 'TradeOfferToSellerDeadline'
+  | 'SellerConfirmDeadline'
   | 'PaymentDeadline'
-  | 'TradeOfferToBuyerDeadline';
+  | 'DeliveryDeadline';
 
 const DEADLINE_COLUMNS: ReadonlySet<DeadlineColumn> = new Set([
   'AcceptDeadline',
-  'TradeOfferToSellerDeadline',
+  'SellerConfirmDeadline',
   'PaymentDeadline',
-  'TradeOfferToBuyerDeadline',
+  'DeliveryDeadline',
 ]);
 
 /** Push a phase deadline into the past so the DeadlineScannerJob (05 §4.4) fires
