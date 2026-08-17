@@ -449,6 +449,11 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 7. **Sonuç D — Alıcının envanteri gizli veya Steam okunamıyor:**
    - Alıcıya "Envanterinizi herkese açık yapın veya item'ı aldıysanız 'Teslim aldım' butonunu kullanın" cevabı gösterilir
    - Alıcı isterse admin'e yükseltebilir
+8. **Sonuç E — Teslimat kanıtı bulundu ama otomatik onay kapısı kapalı** (T130):
+   - Envanter kanıtı (`SELLER_ASSET_GONE ∧ INVENTORY_DELTA`) tamam, ancak `delivery.inventory_evidence_auto_release_enabled` kapalı olduğu için platform kendi çıkarımıyla para bırakmaz ([`DEPLOY_RUNBOOK.md` §H](DEPLOY_RUNBOOK.md#h-launch-checklist--teslimat-kanıtı-doğrulama-kapısı-t125))
+   - Alıcıya "Teslimat kanıtı bulundu, işleminiz inceleniyor" cevabı gösterilir
+   - Dispute **OPEN kalır ve alıcı admin'e yükseltebilir.** Bu şart kapının kendisi kadar önemlidir: kapı kapalıyken dispute "teslim edildi" diye kapatılırsa otomatik yol kapalı, elle yol da kapalı olur ve alıcının parasının hiçbir çıkışı kalmaz
+   - Otomatik eskalasyon **yapılmaz** — kapı, launch döneminde toplu olarak incelenen bir kayıt kuyruğudur (§H.3), tekil bir olay değil
 
 ### 6.3 Yanlış Item İtirazı
 
@@ -457,11 +462,13 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 1. Alıcı işlem detay sayfasından "İtiraz Et" butonuna tıklar
 2. İtiraz türünü seçer: "Yanlış item teslim edildi"
 3. Sistem, alıcının envanterine referans anlık görüntüden (§2.3) sonra giren item'ları tespit eder ve işlemdeki item ile karşılaştırır
+   > **Referans nedir (T130):** §2.3'te alınan anlık görüntü iki parçalıdır — işlemin kendi item sınıfının **sayısı** (teslimat kanıtı için, 02 §9.2) ve alıcı envanterinin **tüm sınıf kimlikleri** (`BuyerBaselineClassIds`, 06 §3.5). Yanlış item sınıf-kapsamlı sayıyı hiç yükseltmediği için karşılaştırma ikinciye dayanır: dispute anında envanter taze okunur, baseline'da olmayan sınıflar "sonradan gelen" olur. Baseline alınamamışsa (alıcı envanteri o an gizliydi) karşılaştırmanın dayanağı yoktur ve sistem bunu söyler — boş bir kümeyle karşılaştırmak alıcının sahip olduğu her item'ı "yeni geldi" diye okurdu.
 4. **Sonuç A — Beklenen item gelmiş:**
    - Alıcıya "Teslim edilen item, işlemdeki item ile eşleşiyor" cevabı gösterilir
 5. **Sonuç B — Farklı bir item gelmiş:**
-   - İşlem durdurulur, **gelen item'ın adı kayda geçirilerek** admin'e otomatik eskalasyon yapılır — admin karşılaştırmayı elle yapmak zorunda kalmaz
+   - İşlem durdurulur, **gelen item'ın adı kayda geçirilerek** (`Disputes.DeliveredItemName`, 06 §3.11) admin'e otomatik eskalasyon yapılır — admin karşılaştırmayı elle yapmak zorunda kalmaz
    - Her iki tarafa "İşleminiz incelemeye alındı" bildirimi gider
+   > **Ad tek bir sınıf geldiyse yazılır (T130).** Baseline ile dispute arasındaki pencerede alıcı kendi hesabından da trade yapmış olabilir; birden fazla yeni sınıf varsa hangisinin satıcıdan geldiği belirsizdir. Eskalasyon her hâlükârda yapılır, ama ad **boş bırakılır** — admin'in kanıt alanına yanlış item'ı yazmak hiç yazmamaktan kötüdür (06 §8.4'ün aynı kuralı).
 6. **Sonuç C — Hiçbir yeni item gelmemiş:**
    - Bu bir yanlış item değil, teslim edilmeme vakasıdır → §6.2 akışına yönlendirilir
 

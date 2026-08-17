@@ -121,11 +121,17 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     .Where(it => MatchesClass(it, classId, instanceId))
                     .Select(it => new InventoryClassAsset(it.AssetId, MapProperties(it)))
                     .ToList();
+                // T130 — the inventory-wide class fingerprint rides along on the
+                // same response. The envelope is already in hand; projecting it
+                // here is what keeps the 06 §3.5 BuyerBaselineClassIds column
+                // free of a second Fresh (cache-bypassing) Steam round trip.
+                var inventoryClassIds = ProjectClassIds(inv);
                 _logger.LogInformation(
                     "Baseline for {SteamId} class {ClassId}/{InstanceId}: {Count} copies "
-                    + "of {Total} items scanned",
-                    steamId64, classId, instanceId ?? "-", assets.Count, inv.TotalCount);
-                return InventoryClassBaselineResult.Captured(assets);
+                    + "of {Total} items scanned, {Classes} distinct classes fingerprinted",
+                    steamId64, classId, instanceId ?? "-", assets.Count, inv.TotalCount,
+                    inventoryClassIds.Count);
+                return InventoryClassBaselineResult.Captured(assets, inventoryClassIds);
 
             case SteamSidecarStatus.InventoryPrivate:
                 _logger.LogInformation(
@@ -139,6 +145,59 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                 return InventoryClassBaselineResult.Unavailable;
         }
     }
+
+    /// <inheritdoc />
+    public async Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+        string steamId64,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(steamId64))
+        {
+            _logger.LogWarning(
+                "Inventory fingerprint called with a blank steamId — treated as unreadable");
+            return InventoryFingerprintResult.Unavailable;
+        }
+
+        var result = await _sidecar.GetInventoryAsync(
+            steamId64, BypassCache(freshness), cancellationToken);
+        switch (result.Status)
+        {
+            case SteamSidecarStatus.Success when result.Inventory is { } inv:
+                var assets = inv.Items
+                    .Select(it => new InventoryFingerprintEntry(
+                        it.AssetId, it.ClassId, it.InstanceId, it.Name))
+                    .ToList();
+                _logger.LogInformation(
+                    "Fingerprint for {SteamId}: {Count} assets over {Classes} distinct classes",
+                    steamId64, assets.Count,
+                    assets.Select(a => a.ClassId).Distinct(StringComparer.Ordinal).Count());
+                return InventoryFingerprintResult.Captured(assets);
+
+            case SteamSidecarStatus.InventoryPrivate:
+                _logger.LogInformation(
+                    "Inventory for {SteamId} is private — no fingerprint (03 §6.3)", steamId64);
+                return InventoryFingerprintResult.Private;
+
+            case SteamSidecarStatus.Unavailable:
+            default:
+                _logger.LogWarning(
+                    "Steam sidecar unavailable for {SteamId} — no fingerprint", steamId64);
+                return InventoryFingerprintResult.Unavailable;
+        }
+    }
+
+    /// <summary>
+    /// The distinct class ids of a whole inventory envelope — the 06 §3.5
+    /// <c>BuyerBaselineClassIds</c> shape.
+    /// </summary>
+    private static IReadOnlyList<string> ProjectClassIds(SteamInventoryDto inventory) =>
+    [
+        .. inventory.Items
+            .Select(it => it.ClassId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.Ordinal)
+    ];
 
     /// <summary>
     /// 06 §3.5 pairs <c>ClassId</c> with <c>InstanceId</c>, so both take part in

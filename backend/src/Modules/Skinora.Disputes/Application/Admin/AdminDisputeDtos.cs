@@ -52,6 +52,10 @@ public sealed record AdminDisputeDetailDto(
     DisputeType Type,
     DisputeStatus Status,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SystemCheckResult,
+    // T130 — 02 §10.1 third row: the name of the item that actually arrived on a
+    // WRONG_ITEM auto-escalation, so the admin does not have to make the
+    // comparison by hand. Absent on every other dispute.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DeliveredItemName,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? UserDescription,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? AdminId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AdminNote,

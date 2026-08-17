@@ -1308,7 +1308,35 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 .OrderBy(a => a.AssetId, StringComparer.Ordinal)
                 .ToList();
 
-            return Task.FromResult(InventoryClassBaselineResult.Captured(assets));
+            var inventoryClassIds = _items
+                .Where(kv => kv.Key.steamId == steamId64)
+                .Select(kv => kv.Value.ClassId)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            return Task.FromResult(
+                InventoryClassBaselineResult.Captured(assets, inventoryClassIds));
+        }
+
+        /// <summary>T130 — inventory-wide projection of the same registry.</summary>
+        public Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+            string steamId64,
+            InventoryReadFreshness freshness,
+            CancellationToken cancellationToken)
+        {
+            if (ForcedBaselineVisibility is InventoryVisibility.Private)
+                return Task.FromResult(InventoryFingerprintResult.Private);
+            if (ForcedBaselineVisibility is InventoryVisibility.Unavailable)
+                return Task.FromResult(InventoryFingerprintResult.Unavailable);
+
+            var assets = _items
+                .Where(kv => kv.Key.steamId == steamId64)
+                .Select(kv => new InventoryFingerprintEntry(
+                    kv.Value.AssetId, kv.Value.ClassId, kv.Value.InstanceId, kv.Value.Name))
+                .OrderBy(a => a.AssetId, StringComparer.Ordinal)
+                .ToList();
+
+            return Task.FromResult(InventoryFingerprintResult.Captured(assets));
         }
     }
 

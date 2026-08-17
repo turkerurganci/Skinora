@@ -306,6 +306,12 @@ public class PayoutIssueEndpointTests : IClassFixture<PayoutIssueEndpointTests.F
             string steamId64, string classId, string? instanceId,
             InventoryReadFreshness freshness, CancellationToken cancellationToken)
             => Task.FromResult(InventoryClassBaselineResult.Unavailable);
+
+        /// <summary>T130 — same reasoning; an empty fingerprint would be a claim.</summary>
+        public Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+            string steamId64, InventoryReadFreshness freshness,
+            CancellationToken cancellationToken)
+            => Task.FromResult(InventoryFingerprintResult.Unavailable);
     }
 
     private sealed class TestAdminResolver : IPayoutEscalationAdminResolver

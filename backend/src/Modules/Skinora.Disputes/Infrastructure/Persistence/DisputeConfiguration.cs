@@ -35,6 +35,13 @@ public class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
         builder.Property(d => d.AdminNote)
             .HasMaxLength(2000);
 
+        // T130 — a Steam market name. The longest CS2 names (skin + wear +
+        // StatTrak™/Souvenir prefix + name tag) sit well under this; the cap is
+        // there so a hostile name tag cannot turn an admin evidence field into
+        // unbounded storage.
+        builder.Property(d => d.DeliveredItemName)
+            .HasMaxLength(200);
+
         // --- Soft delete query filter ---
         builder.HasQueryFilter(d => !d.IsDeleted);
 

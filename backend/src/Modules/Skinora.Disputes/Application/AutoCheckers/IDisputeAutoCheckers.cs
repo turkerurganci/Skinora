@@ -35,7 +35,22 @@ public sealed record AutoCheckResult(
     bool AutoEscalated,
     string MessageKey,
     bool CanSubmitTxHash,
-    bool CanEscalate);
+    bool CanEscalate)
+{
+    /// <summary>
+    /// T130 — the Steam name of the item that actually arrived, on the WRONG_ITEM
+    /// mismatch branch only (02 §10.1: "gelen item'ın adı kayda geçirilerek
+    /// admin'e yükseltilir"). Copied verbatim onto
+    /// <c>Dispute.DeliveredItemName</c> by the dispute service.
+    /// </summary>
+    /// <remarks>
+    /// An init-only member rather than a sixth positional parameter: it is
+    /// evidence one branch of one checker produces, and forcing every other
+    /// construction site to state <c>null</c> would misrepresent it as part of
+    /// the shape every auto-check answers in.
+    /// </remarks>
+    public string? DeliveredItemName { get; init; }
+}
 
 /// <summary>
 /// Read port over the buyer's blockchain payment trail (02 §10.1 first row,
@@ -62,19 +77,27 @@ public interface IPaymentDisputeAutoChecker
 }
 
 /// <summary>
-/// Read port over the Steam trade-offer + buyer inventory state (02 §10.1
-/// second row, 03 §6.2). Combines the on-platform <c>TradeOffers</c> table
-/// with an inventory probe through <see cref="Skinora.Transactions.Application.Steam.ISteamInventoryReader"/>.
+/// The 02 §10.1 second row / 03 §6.2 delivery check. v3.0 — there is no
+/// <c>TradeOffers</c> table behind this any more: the platform is not a party to
+/// the seller→buyer trade, so delivery is established by re-running the 02 §9.2
+/// evidence rules against both inventories.
 /// </summary>
+/// <remarks>
+/// T130 — no longer a pure read. The rules are run <em>fresh</em> through
+/// <see cref="Skinora.Transactions.Application.Delivery.IDeliveryDisputeRound"/>,
+/// which may advance the transaction to <c>ITEM_DELIVERED</c> (03 §6.2 Sonuç A)
+/// on the caller's unit of work.
+/// </remarks>
 public interface IDeliveryDisputeAutoChecker
 {
     Task<AutoCheckResult> CheckAsync(Transaction transaction, CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Read port over the on-platform vs. delivered item snapshot
-/// (02 §10.1 third row, 03 §6.3). Compares <see cref="Transaction.ItemClassId"/>
-/// against the delivered asset's class id (resolved via the inventory reader).
+/// Read port over what actually arrived in the buyer's inventory
+/// (02 §10.1 third row, 03 §6.3). Diffs the buyer's current inventory against
+/// the 06 §3.5 <c>BuyerBaselineClassIds</c> fingerprint and compares whatever
+/// arrived against <see cref="Transaction.ItemClassId"/>.
 /// </summary>
 public interface IWrongItemDisputeAutoChecker
 {

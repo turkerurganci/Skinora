@@ -3133,6 +3133,30 @@ Task T130: DisputeEligibility + AutoChecker yeniden yazımı
       okunamayan vakada yanlış olabiliyor. Yeniden yazımda mesaj seçimi de
       motorun verdict'ine bağlanmalı (bayrağa değil)
 
+  YAPIM ÖNCESİ BULGU + PROJE SAHİBİ KARARLARI (2026-08-17, T130 ön-uçuş):
+       BULGU (SPEC_GAP): "gelen item'ın adı admin'e taşınır" kriteri mevcut
+       veriyle KARŞILANAMAZ. Zincir: baseline sınıf-kapsamlı alınıyor
+       (`CaptureClassBaselineAsync(steamId, ItemClassId, ItemInstanceId)`) →
+       `CandidateDeliveredAssetId` o sınıfın yeni asset'i →
+       `DeliveredBuyerAssetId`'nin tek iki yazarı bu adayı yazıyor →
+       `WrongItemDisputeAutoChecker` adayın sınıfını `ItemClassId` ile
+       karşılaştırıyor ve **her zaman eşleşiyor**. Yanlış sınıf geldiğinde ise
+       sayaç hiç artmadığı için kolon NULL kalıyor. Uyuşmazlık dalı iki yönde
+       de erişilemez; 06 §3.5 satır 617'nin `BuyerBaselineAssetIds`'e yüklediği
+       "yanlış item tespiti" görevi sınıf-kapsamlı bir baseline'la yapılamaz.
+       D1 — 03 §6.2'ye **Sonuç E** eklendi (kapı kapalı + kanıt var): dispute
+            OPEN kalır ve eskale edilebilir; yeni mesaj anahtarı
+            `DELIVERY_EVIDENCE_UNDER_REVIEW`. DEPLOY_RUNBOOK §H.2'ye dispute
+            satırı eklendi.
+       D2 — Gelen item'ın adı `Disputes.DeliveredItemName` **kolonuna** yazılır
+            (`SystemCheckResult` içine gömülmez: o metin alıcının dilinde
+            üretiliyor, admin o dili okumayabilir).
+       D3 — `Transactions.BuyerBaselineClassIds` eklendi: SELLER_CONFIRMED'da
+            alıcı envanterinin TÜM sınıf kimlikleri kaydedilir; dispute anında
+            envanter taze okunup diff alınır. Ek Steam çağrısı maliyeti YOK —
+            sidecar zaten her istekte tüm envanteri döndürüyor, iki mevcut
+            okuma da onu istemci tarafında filtreliyor.
+
 Task T131: AdminDisputeService — item-refund bacağı + override
   Bağımlılık: T130
   Kabul kriterleri:
