@@ -50,7 +50,7 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 
 **Sonrası (final HEAD `7d6583b`, CI run [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752)):** 32 testten **10'u pass / 22'si fail**. `Invalid object name` ve `PK_Users` izi **sıfır** — harness artık 8 leg'in hepsinde spec'lere ulaşıyor ve testler akış seviyesinde düşüyor.
 
-**Tekrarlanabilirlik:** aynı ölçüm iki bağımsız run'da **birebir** aynı çıktı — [`32044914807`](https://github.com/turkerurganci/Skinora/actions/runs/32044914807) (HEAD `5138cf4`) ve [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) (HEAD `7d6583b`): leg başına aynı pass/fail sayıları, aynı düşme noktaları. Sayılar tek koşumluk flake değil.
+**Tekrarlanabilirlik:** aynı ölçüm **üç** bağımsız run'da birebir aynı çıktı — [`32044914807`](https://github.com/turkerurganci/Skinora/actions/runs/32044914807) (`5138cf4`), [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) (`7d6583b`) ve [`32050987594`](https://github.com/turkerurganci/Skinora/actions/runs/32050987594) (`efd7401`, **T130 merge'ünden sonra**): leg başına aynı pass/fail sayıları, aynı düşme noktaları. Sayılar tek koşumluk flake değil; T130'un main'e inmesi de tabloyu değiştirmiyor.
 
 | Leg | Öncesi | Sonrası | Düştüğü ADIM (sonrası) |
 |---|---|---|---|
@@ -87,7 +87,8 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 - Branch: `task/T137a-e2e-harness-triage`
 - Commit: `9e8df29` — emekli tablo atıfları + custody helper'ları · `5138cf4` — deadline allow-list'i T117 rename'ine hizalama
 - PR: [#243](https://github.com/turkerurganci/Skinora/pull/243)
-- CI: ✓ **run [`32048912041`](https://github.com/turkerurganci/Skinora/actions/runs/32048912041) `conclusion=success`** (HEAD `9835824`) — CI Gate ✓ + "1. Lint" ✓; 8 advisory E2E leg beklendiği gibi kırmızı, run conclusion'ını düşürmüyor (§Notlar). **E2E yüzeyi `5138cf4`'ten beri donmuş** (sonraki commit'ler yalnız `Docs/` + `.claude/`), dolayısıyla o commit'ten sonraki üç run — `32044914807`, `32046880752`, `32048912041` — aynı e2e kodunu ölçüyor ve aynı sonucu veriyor. Bu raporu sonlandıran commit'in kendi run'ı, doğası gereği rapora yazılamaz (doküman-only, e2e'ye dokunmaz); doğrulama chat'i dal HEAD'inin run'ına bakmalıdır.
+- CI: ✓ **run [`32050987594`](https://github.com/turkerurganci/Skinora/actions/runs/32050987594) `conclusion=success`** (HEAD `efd7401`, T130 merge'ü sonrası) — CI Gate ✓ + "1. Lint" ✓; 8 advisory E2E leg beklendiği gibi kırmızı, run conclusion'ını düşürmüyor (§Notlar). **E2E yüzeyi `5138cf4`'ten beri donmuş** (sonraki commit'ler yalnız `Docs/` + `.claude/` + main merge'ü), dolayısıyla o commit'ten sonraki dört run aynı e2e kodunu ölçüyor ve aynı sonucu veriyor. Bu raporu sonlandıran commit'in kendi run'ı doğası gereği rapora yazılamaz (doküman-only, e2e'ye dokunmaz); doğrulama chat'i dal HEAD'inin run'ına bakmalıdır.
+- Main entegrasyonu: `efd7401` — T130 (`523dc97`, PR #242) main'e indiğinde dal doküman çakışmasına girdi ve **GitHub çakışmalı PR'a run yaratmadı** (`mergeStateStatus=DIRTY`; `66df8bb` için 0 check run). `origin/main` dala merge edildi, `IMPLEMENTATION_STATUS.md` + repo `MEMORY.md` çakışmaları **her iki kaydı da koruyacak** şekilde çözüldü (STATUS: T137a "Son", T130 "Önceki güncelleme"; MEMORY: kronolojik T130 → T137a).
 
 ## Known Limitations / Follow-up
 
