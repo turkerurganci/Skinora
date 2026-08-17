@@ -8,6 +8,8 @@ interface ResolveArgs {
   id: string;
   outcome: DisputeResolutionOutcome;
   adminNote: string;
+  /** T131 — required by AD29 when the ruling overrides a proven delivery (03 §6.4). */
+  overrideReason?: string;
 }
 
 /**
@@ -17,8 +19,8 @@ interface ResolveArgs {
 export function useAdminDisputeResolve() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, outcome, adminNote }: ResolveArgs) =>
-      resolveAdminDispute(id, outcome, adminNote),
+    mutationFn: ({ id, outcome, adminNote, overrideReason }: ResolveArgs) =>
+      resolveAdminDispute(id, outcome, adminNote, overrideReason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "disputes"] });
     },

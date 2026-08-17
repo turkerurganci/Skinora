@@ -182,22 +182,30 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// A human already answered this question. The unique index forbids a second
-    /// row and re-opening a settled decision is not a timeout's call, so the
-    /// contradiction is logged and left alone rather than acted on.
+    /// Already answered. The unique index forbids a second row and re-opening a
+    /// settled decision is not a timeout's call, so the dispute is left alone in
+    /// every resolved terminal — but the ANSWER differs by who settled it
+    /// (T131 / T127 finding G3).
     /// </summary>
+    /// <remarks>
+    /// CLOSED is the system's own auto-resolution (06 §2.10): nobody looked, so
+    /// the caller must keep holding — cancelling there would still be the silent
+    /// cancellation 02 §9.2 forbids. RESOLVED_FOR_* means a human read the case,
+    /// which is the one thing that lifts the hold.
+    /// </remarks>
     [Theory]
-    [InlineData(DisputeStatus.CLOSED)]
-    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER)]
-    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER)]
-    public async Task Resolved_Dispute_Is_Left_Alone(DisputeStatus status)
+    [InlineData(DisputeStatus.CLOSED, MisdeliveryEscalationOutcome.AlreadyResolved)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER, MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER, MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)]
+    public async Task Resolved_Dispute_Is_Left_Alone(
+        DisputeStatus status, MisdeliveryEscalationOutcome expected)
     {
         var tx = await CreateTransactionAsync();
         await AddDisputeAsync(tx, status);
 
         var outcome = await EscalateAsync(tx);
 
-        Assert.Equal(MisdeliveryEscalationOutcome.AlreadyResolved, outcome);
+        Assert.Equal(expected, outcome);
         Assert.Empty(_outbox.Published);
         await Context.SaveChangesAsync();
 

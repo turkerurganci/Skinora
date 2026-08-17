@@ -40,6 +40,23 @@ public class Dispute : BaseEntity, ISoftDeletable, IAuditableEntity
     // --- Resolution ---
     public DateTime? ResolvedAt { get; set; }
 
+    /// <summary>
+    /// T131 — why an admin ruled for the buyer on a transaction whose delivery
+    /// the platform had already established (02 §10.4, 03 §6.4). NULL on every
+    /// other resolution, including a buyer-favour ruling on an undelivered
+    /// transaction, where the ruling is the ordinary outcome rather than an
+    /// exception.
+    /// </summary>
+    /// <remarks>
+    /// A column of its own rather than a longer <see cref="AdminNote"/>: 03
+    /// §6.4 requires the justification to be recorded <em>separately</em>, and
+    /// the two answer different questions. The note explains the case to
+    /// whoever reads the dispute; this field answers "why was the platform's
+    /// own proof of delivery overruled" — the question an audit asks after the
+    /// money is gone and the seller has no way to recover the item.
+    /// </remarks>
+    public string? ResolutionOverrideReason { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

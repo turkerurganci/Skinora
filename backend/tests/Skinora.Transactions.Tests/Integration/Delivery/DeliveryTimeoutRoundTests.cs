@@ -399,6 +399,79 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// <b>T131 (T127 finding G3) — an admin ruling is the exit from the hold.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Before this, the arm above was the only answer a misdelivery ever got:
+    /// the row stayed PAYMENT_RECEIVED and overdue forever, so the buyer's money
+    /// sat in escrow with no automatic exit while every scan re-derived the same
+    /// held verdict. The hold exists because 02 §9.2 forbids cancelling a
+    /// misdelivery <em>silently</em> — and once an admin has read the case and
+    /// ruled, the cancellation is no longer silent.
+    /// </para>
+    /// <para>
+    /// Still no Steam read: the release is a consequence of the ruling, not of a
+    /// fresh look at the inventories.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+        _escalator.Outcome = MisdeliveryEscalationOutcome.AlreadyRuledByAdmin;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        Assert.Empty(_inventory.ItemReadFreshness);
+        Assert.Empty(_inventory.BaselineReadFreshness);
+    }
+
+    /// <summary>
+    /// The twin of the test above, and the reason the release keys on
+    /// <see cref="MisdeliveryEscalationOutcome.AlreadyRuledByAdmin"/> rather than
+    /// on "the dispute is no longer active": CLOSED is the system's own
+    /// auto-resolution (06 §2.10), so nobody looked and a cancellation here
+    /// would still be the silent one 02 §9.2 forbids.
+    /// </summary>
+    [Fact]
+    public async Task A_System_Closed_Dispute_Does_Not_Release_The_Hold()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+        _escalator.Outcome = MisdeliveryEscalationOutcome.AlreadyResolved;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, decision);
+    }
+
+    /// <summary>
+    /// The same release applies on the FIRST round that establishes the
+    /// signature, not only on a re-entry: a dispute can already be settled when
+    /// the signature is first derived (the buyer opened one, an admin ruled, and
+    /// only then did the seller's asset leave). Both arms answer the escalator,
+    /// so both must read its answer the same way.
+    /// </summary>
+    [Fact]
+    public async Task A_First_Round_Signature_Also_Releases_When_An_Admin_Has_Ruled()
+    {
+        // Same fixture as Misdelivery_Signature_Escalates_Instead_Of_Cancelling:
+        // the seller's asset is gone and the buyer holds nothing new.
+        var transaction = await CreateOverdueAsync();
+        _escalator.Outcome = MisdeliveryEscalationOutcome.AlreadyRuledByAdmin;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        Assert.Equal([transaction.Id], _escalator.Escalations);
+    }
+
+    /// <summary>
     /// <b>Finding B1 — the round must not apply on pass two the conclusion the
     /// engine refused on pass one.</b>
     /// </summary>
@@ -648,12 +721,21 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     {
         public List<Guid> Escalations { get; } = [];
 
+        /// <summary>
+        /// What the adapter answers. T131 made this decisive rather than
+        /// diagnostic: <c>AlreadyRuledByAdmin</c> is what releases the round's
+        /// hold, so the round's behaviour has to be exercised against each
+        /// answer the real adapter can give.
+        /// </summary>
+        public MisdeliveryEscalationOutcome Outcome { get; set; } =
+            MisdeliveryEscalationOutcome.Opened;
+
         public Task<MisdeliveryEscalationOutcome> EscalateAsync(
             Transaction transaction, DateTime occurredAtUtc, CancellationToken cancellationToken)
         {
             Escalations.Add(transaction.Id);
             transaction.HasActiveDispute = true;
-            return Task.FromResult(MisdeliveryEscalationOutcome.Opened);
+            return Task.FromResult(Outcome);
         }
     }
 

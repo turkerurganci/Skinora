@@ -131,7 +131,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
                 "Transaction {TransactionId}: misdelivery signature already recorded — no Steam "
                 + "read spent, escalation re-asserted ({Outcome})",
                 transaction.Id, reasserted);
-            return DeliveryTimeoutDecision.Held;
+            return ReleasedByAdminRuling(transaction, reasserted);
         }
 
         // Fresh, never cached: this round decides whether money moves, and the
@@ -313,7 +313,47 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
             + "Escalated to admin ({Outcome}) instead of cancelling (02 §9.2, §10.1)",
             transaction.Id, transaction.ItemAssetId, transaction.ItemClassId, outcome);
 
-        return DeliveryTimeoutDecision.Held;
+        return ReleasedByAdminRuling(transaction, outcome);
+    }
+
+    /// <summary>
+    /// T131 (T127 finding G3) — the one exit from the misdelivery hold.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A misdelivery signature is held rather than cancelled because 02 §9.2
+    /// forbids cancelling it <em>silently</em>: something left the seller, and
+    /// deciding against them without a human reading the case would punish a
+    /// seller who may well have delivered. That reasoning expires the moment an
+    /// admin rules on the dispute. Before this, it never expired — the row
+    /// stayed PAYMENT_RECEIVED and overdue forever, so the buyer's money sat in
+    /// escrow with no automatic exit and every scan re-derived the same answer.
+    /// </para>
+    /// <para>
+    /// The ruling itself does not decide where the money goes; it only ends the
+    /// silence. A buyer-favour ruling has already moved the row to REFUNDED and
+    /// never reaches this scanner. A seller-favour ruling leaves the transaction
+    /// exactly where it was, and 07 §9.30 already conditions the seller payout
+    /// on ITEM_DELIVERED — so "uphold" cannot mean "pay out" here. What is left
+    /// is the ordinary course of an expired delivery window (03 §4.4): the
+    /// transaction cancels and the buyer is refunded.
+    /// </para>
+    /// </remarks>
+    private DeliveryTimeoutDecision ReleasedByAdminRuling(
+        Transaction transaction, MisdeliveryEscalationOutcome outcome)
+    {
+        if (outcome != MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)
+        {
+            return DeliveryTimeoutDecision.Held;
+        }
+
+        _logger.LogWarning(
+            "Transaction {TransactionId}: an admin has ruled on the misdelivery dispute, so the "
+            + "delivery timeout is no longer a silent cancellation — the expired window proceeds "
+            + "to cancellation and the buyer is refunded (02 §9.2, 03 §4.4, §6.4)",
+            transaction.Id);
+
+        return DeliveryTimeoutDecision.Cancel;
     }
 
     /// <summary>

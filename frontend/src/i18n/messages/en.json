@@ -239,9 +239,11 @@
       "fields": {
         "type": "Type",
         "item": "Item",
+        "deliveredItemName": "Item received",
         "openedBy": "Opened by",
         "userDescription": "User description",
-        "systemCheckResult": "System check"
+        "systemCheckResult": "System check",
+        "overrideReason": "Override reason"
       },
       "outcomeLabel": "Resolution",
       "outcome": {
@@ -256,6 +258,10 @@
       "noteLabel": "Admin note",
       "notePlaceholder": "Reason for the decision",
       "noteRequired": "An admin note is required.",
+      "overrideLabel": "Override justification",
+      "overrideHint": "Delivery is established on this transaction. Ruling for the buyer reverses that finding, and the seller has no way to recover the item — state why.",
+      "overridePlaceholder": "Why the proof of delivery is being overruled",
+      "overrideRequired": "A justification of at least {min} characters is required.",
       "error": "Failed to resolve the dispute.",
       "cancel": "Cancel",
       "confirm": "Resolve"

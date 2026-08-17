@@ -42,6 +42,13 @@ public class DisputeConfiguration : IEntityTypeConfiguration<Dispute>
         builder.Property(d => d.DeliveredItemName)
             .HasMaxLength(200);
 
+        // T131 — same width as AdminNote (06 §3.11): both are admin prose, and
+        // an override reason that had to be shorter than the note beside it
+        // would push the justification into the note, which is exactly the
+        // conflation 03 §6.4's "ayrıca kayda geçirilir" forbids.
+        builder.Property(d => d.ResolutionOverrideReason)
+            .HasMaxLength(2000);
+
         // --- Soft delete query filter ---
         builder.HasQueryFilter(d => !d.IsDeleted);
 

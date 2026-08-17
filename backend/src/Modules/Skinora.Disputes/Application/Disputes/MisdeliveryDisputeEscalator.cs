@@ -121,12 +121,28 @@ public sealed class MisdeliveryDisputeEscalator : IDeliveryMisdeliveryEscalator
                 transaction.HasActiveDispute = true;
                 return MisdeliveryEscalationOutcome.AlreadyEscalated;
 
+            case DisputeStatus.RESOLVED_FOR_SELLER:
+            case DisputeStatus.RESOLVED_FOR_BUYER:
+                // T131 (T127 finding G3) — an ADMIN has ruled on this row. The
+                // dispute is left untouched exactly as below, but the caller is
+                // told so, because this is the one case where its hold must
+                // lift: 02 §9.2 forbids a SILENT cancellation, and a human has
+                // now read the case. Holding on past a ruling is what left the
+                // buyer's money in escrow with no automatic exit.
+                _logger.LogInformation(
+                    "Transaction {TransactionId}: misdelivery signature stands, but its DELIVERY "
+                    + "dispute {DisputeId} was already ruled on by an admin ({Status}) — the "
+                    + "delivery timeout is released to its normal course (03 §6.4)",
+                    transaction.Id, existing.Id, existing.Status);
+                return MisdeliveryEscalationOutcome.AlreadyRuledByAdmin;
+
             default:
-                // CLOSED or an admin resolution (RESOLVED_FOR_*). A human or an
-                // auto-check has already answered this question; a second row is
-                // forbidden by the unique index and re-opening a settled
-                // decision is not a timeout's call. Logged so the contradiction
-                // is visible rather than silent.
+                // CLOSED — the system's own auto-check answered this question
+                // (06 §2.10). A second row is forbidden by the unique index and
+                // re-opening a settled decision is not a timeout's call. Unlike
+                // the admin arm above this does NOT release the hold: nobody
+                // looked, so a cancellation here would still be silent. Logged
+                // so the contradiction is visible rather than silent.
                 _logger.LogWarning(
                     "Transaction {TransactionId}: misdelivery signature found at the delivery "
                     + "timeout, but its DELIVERY dispute {DisputeId} is already in {Status} — "

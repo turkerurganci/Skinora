@@ -3158,8 +3158,43 @@ Task T130: DisputeEligibility + AutoChecker yeniden yazımı
 Task T131: AdminDisputeService — item-refund bacağı + override
   Bağımlılık: T130
   Kabul kriterleri:
-    - Item iade bacağı kaldırıldı
-    - INVENTORY_DELTA kanıtlı ITEM_DELIVERED'da BUYER_FAVOR gerekçe istiyor
+    - Item iade bacağı kaldırıldı. NİHAİ KAPSAM (2026-08-17, proje sahibi
+      onaylı): bacak KODDA zaten yoktu (T117 `ItemRefundToSellerRequestedEvent`
+      tipini sildi, `AdminDisputeService` açık negatif yorum taşıyor). Kapatılan
+      şey, bacağın hâlâ VAR olduğunu söyleyen dört kalıntı: 07 §9.30 AD29
+      ("item platformdaysa ItemRefundToSellerRequestedEvent yayınlanır"),
+      06 §3.11 WP5 notu ("item platformdaysa satıcıya iade"), ve iki XML doc
+      (`DisputeResolutionOutcome`, `DisputeResolvedEvent` + `IAdminDisputeService`).
+      07 §9.20/§9.22 iade tabloları bu göreve DEĞİL T133a'ya aittir (aşağıdaki
+      T133a kriteri) — T131 yalnız kendi ucunun (AD29) sözleşmesini kapatır,
+      çünkü kodu "kaldırıldı" işaretleyip sözleşmeyi vaat eder hâlde bırakmak
+      "kod kaldırdı, sözleşme hâlâ söz veriyor" penceresini açar
+    - Kanıtlanmış teslimatta BUYER_FAVOR gerekçe istiyor.
+      NİHAİ ŞEKİL (2026-08-17, proje sahibi onaylı — kriterin ilk metni
+      "INVENTORY_DELTA kanıtlı ITEM_DELIVERED" idi; kapsam o metnin ÜST
+      KÜMESİNE genişletildi, dolayısıyla harfi de karşılanır):
+      D1 — KAPI KOŞULU `Status == ITEM_DELIVERED`, kanıt bayrakları DEĞİL.
+           Gerekçe: bu duruma tek bir giriş kenarı vardır (`DeliverItem`) ve
+           guard'ı zaten 02 §9.2 kanıtını + `DeliveryVerifiedAt` damgasını
+           şart koşar — yani ITEM_DELIVERED olmak teslimatın kanıtlanmış
+           OLMASIDIR. Bayrağa bağlamak, admin'in gerekçe yazma yükümlülüğünü
+           vakanın gücüne değil Steam'in o an okunabilir olmasına bağlardı
+           (`INVENTORY_DELTA` yalnız alıcı envanteri Public iken yazılır), ve
+           launch'ta kapı kapalı olduğu için en kalabalık popülasyonu
+           (alıcı onayıyla gelen teslimatlar) korumasız bırakırdı
+      D2 — GEREKÇE AYRI BİR ALANDIR: AD29 body'sine `overrideReason`
+           (zorunlu, ≥20 karakter) ve kalıcı kolon
+           `Disputes.ResolutionOverrideReason` (06 §3.11). 03 §6.4 "gerekçesi
+           AYRICA kayda geçirilir" diyor; `adminNote`'un içine gömmek o
+           ayrımı yok ederdi. Eşik 1 değil 20: "ok" kabul eden bir kapı hiçbir
+           şey kaydetmez. Override'ı olmayan bir kararda alan gönderilse bile
+           SAKLANMAZ — böylece dolu kolon her zaman tek bir şey demektir
+           (platformun kendi kanıtına rağmen verilmiş karar) ve istisna
+           kaydı aranabilir kalır. Audit satırına da yazılır: kolon okunduğu
+           yer, audit (06 §3.20, değiştirilemez) silinemediği yer
+      D3 — AD28 `buyerFavorRequiresOverride` (sunucuda hesaplanmış bool)
+           döndürür. Kural tek yerde (servis) yaşar; istemci yalnız cevabı
+           çizer. Aksi hâlde predicate iki dilde iki kez yazılırdı
     - AD28 `deliveredItemName` admin EKRANINDA gösteriliyor (T130 doğrulaması
       bulgu N2, 2026-08-17 — proje sahibi kararı: sahiplik T131):
       alan AD28 cevabına kadar geliyor ama `DisputeResolveModal.tsx` yalnız
@@ -3173,6 +3208,35 @@ Task T131: AdminDisputeService — item-refund bacağı + override
       KALICI DERS (T137 dersinin ikizi): bir alanın API sözleşmesine ulaşması
       onu KULLANILIR yapmaz — zinciri bitiren yüzeyin de bir sahibi olmalıdır,
       yoksa "taşındı" denip hiç görülmeyen bir kanıt olarak kalır
+    - SELLER_FAVOR sonrası terminal disposition (T127 doğrulaması gözlem G3,
+      2026-08-17 — proje sahibi kararıyla T131'e ALINDI; T127 raporunda
+      "sahiplik T131" deniyordu ama kabul kriteri olarak yazılmamıştı):
+      Teslimat penceresi dolmuş ve misdelivery imzası kayıtlı bir satırda admin
+      dispute'u SELLER_FAVOR ile kapattığında işlem PAYMENT_RECEIVED'da ve
+      süresi dolmuş kalıyordu. Re-entry kapısı (`DeliveryTimeoutRound`) her
+      turda `AlreadyResolved` görüp Held dönüyor; timeout hiç ateşlenmiyor,
+      teslimat olmuyor, iptal olmuyor. Sonuç yalnız log gürültüsü değil:
+      alıcının parası emanette KALICI olarak asılı, tek çıkış belgesiz bir elle
+      AD19 admin-cancel.
+      D4 — KARAR (seçilen: normal timeout akışına dön): admin KARAR VERDİYSE
+           satır Held'den serbest bırakılır ve süresi dolmuş pencere olağan
+           seyrini izler (03 §4.4) → CANCELLED_TIMEOUT + alıcıya iade.
+           Dayanak: 02 §9.2'nin koruması "SESSİZCE iptal edilmez"dir; bir
+           admin o satırı okuyup karar verdiği an iptal sessiz olmaktan çıkar.
+           Ayrıca 07 §9.30 SELLER_FAVOR'un payout etkisini zaten
+           ITEM_DELIVERED'a koşullamıştır — yani "işlem onaylanır" bu durumda
+           "satıcıya öde" anlamına GELEMEZ. Dispute RESOLVED_FOR_SELLER kalır
+           (satıcının kaydına kusur yazılmaz), para kanıt kuralına göre akar.
+      D5 — KAPI YALNIZ ADMİN KARARIYLA AÇILIR, "dispute artık aktif değil" ile
+           değil: `CLOSED` sistemin kendi otomatik çözümüdür (06 §2.10), yani
+           kimse bakmamıştır ve orada iptal HÂLÂ sessiz olurdu. Bu ayrım için
+           port enum'una `MisdeliveryEscalationOutcome.AlreadyRuledByAdmin`
+           eklendi (adapter dispute statüsünü görür, tur göremez — modül yönü
+           Disputes → Transactions)
+      Reddedilen alternatifler: (a) ITEM_DELIVERED'a taşı + payout — 02 §9.2'nin
+      kanıt kuralını admin eliyle deler, alıcı hem parasını hem item'ı kaybeder;
+      (c) yalnız rotasyondan düşür — para asılı kalmaya devam eder, T130'un
+      kapattığı "otomatik yol kapalı, elle yol belgesiz" sınıfına geri düşer
 
 --- P6: Emeklilik ---
 

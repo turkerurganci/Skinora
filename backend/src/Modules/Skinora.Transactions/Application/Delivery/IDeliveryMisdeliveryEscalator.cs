@@ -53,10 +53,26 @@ public enum MisdeliveryEscalationOutcome
     AlreadyEscalated,
 
     /// <summary>
-    /// A DELIVERY dispute exists in a resolved terminal (CLOSED or an admin
-    /// resolution). Left alone: the unfiltered unique index forbids a second
-    /// row, and re-opening a decision a human already made is not this job's
-    /// call.
+    /// A DELIVERY dispute exists in CLOSED — the system's own auto-check
+    /// answered it, no human looked. Left alone: the unfiltered unique index
+    /// forbids a second row, and re-opening a settled decision is not this
+    /// job's call.
     /// </summary>
     AlreadyResolved,
+
+    /// <summary>
+    /// T131 — a DELIVERY dispute exists in an ADMIN resolution
+    /// (RESOLVED_FOR_SELLER / RESOLVED_FOR_BUYER): a human has read this
+    /// transaction and ruled on it.
+    /// </summary>
+    /// <remarks>
+    /// Distinguished from <see cref="AlreadyResolved"/> because it is the one
+    /// signal that releases the caller's hold. 02 §9.2 forbids cancelling a
+    /// misdelivery signature <em>silently</em>; once an admin has ruled, a
+    /// cancellation is no longer silent, and continuing to hold would leave the
+    /// buyer's money in escrow forever with no automatic exit (T127 finding
+    /// G3). CLOSED does not qualify — that terminal is reserved for the
+    /// system's own auto-resolution (06 §2.10), so nobody has looked.
+    /// </remarks>
+    AlreadyRuledByAdmin,
 }
