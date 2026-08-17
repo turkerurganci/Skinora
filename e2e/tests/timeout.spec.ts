@@ -4,9 +4,7 @@ import {
   backdateDeadline,
   pollPostCancelMonitoring,
   pollCancelledNoticeRecipients,
-  pollRefundOfferAccepted,
   pollBuyerRefundConfirmed,
-  getBotEscrowCount,
   closePool,
   seed,
 } from '../src/db';
@@ -31,6 +29,11 @@ import * as api from '../src/api';
  *   4. Delivery timeout (TO_BUYER)             → item returned + buyer refund.
  * Every phase notifies both parties (TRANSACTION_CANCELLED). The §4.5 "deadline
  * approaching" warning is out of scope (covered by unit/integration tests).
+ *
+ * T137a: the custody-era assertions (bot escrow slot, RETURN_TO_SELLER offer)
+ * were removed — T117 dropped both tables and P2P has no platform inventory.
+ * Phases 2–4 above are custody phases that no longer exist; rewriting them for
+ * the P2P timeline is T138's scope.
  */
 
 test.beforeEach(async () => {
@@ -79,9 +82,6 @@ test('accept timeout: CREATED → CANCELLED_TIMEOUT, no refund, both parties not
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
 
-  // Item never reached the platform → no escrow slot consumed, no item return.
-  expect(await getBotEscrowCount()).toBe(0);
-
   // 03 §4.1 steps 4–5 — seller notified; buyer notified because registered.
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
   expect(recipients).toContain(seed.sellerId.toLowerCase());
@@ -107,10 +107,6 @@ test('seller trade-offer timeout: TRADE_OFFER_SENT_TO_SELLER → CANCELLED_TIMEO
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
 
-  // 03 §4.2 step 3 — the item never reached the platform (escrow +1 only fires
-  // on the SELLER_TO_BOT *accept*), so no escrow slot was consumed.
-  expect(await getBotEscrowCount()).toBe(0);
-
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
   expect(recipients).toContain(seed.sellerId.toLowerCase());
   expect(recipients).toContain(seed.buyerId.toLowerCase());
@@ -126,17 +122,12 @@ test('payment timeout: ITEM_ESCROWED → CANCELLED_TIMEOUT, item returned to sel
 
   // Escrow leg auto-drives (not suppressed) → ITEM_ESCROWED. The buyer never pays.
   await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
-  expect(await getBotEscrowCount()).toBe(1);
 
   // 03 §4.3 — backdate the payment deadline; the scanner (belt-and-suspenders for
   // the per-tx Hangfire job) cancels the ITEM_ESCROWED transaction.
   await backdateDeadline(txId, 'PaymentDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
-
-  // 03 §4.3 step 3 — item returned to the seller; the bot's escrow slot releases.
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §4.3 step 4 / 08 §3.4 — the platform keeps watching the deposit address
   // for a late payment: the PaymentAddress flips to a POST_CANCEL_* window.
@@ -173,11 +164,6 @@ test('delivery timeout: TRADE_OFFER_SENT_TO_BUYER → CANCELLED_TIMEOUT, item to
   await backdateDeadline(txId, 'TradeOfferToBuyerDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
-
-  // 03 §4.4 step 3 — item returned to the seller (the RETURN_TO_SELLER refund leg
-  // is a different direction, so it self-drives even with BOT_TO_BUYER held).
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §4.4 step 4 — payment returned to the buyer (02 §4.6 net = TotalAmount −
   // gas fee), addressed to the buyer's refund wallet.

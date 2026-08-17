@@ -5,9 +5,7 @@ import {
   seed,
   closePool,
   getTransactionHoldState,
-  getBotEscrowCount,
   backdateDeadline,
-  pollRefundOfferAccepted,
   pollCancelledNoticeRecipients,
   pollNotificationRecipients,
 } from '../src/db';
@@ -31,6 +29,11 @@ import * as api from '../src/api';
  *   3. Apply hold at ITEM_DELIVERED → CANCEL rejected (422
  *      CANNOT_CANCEL_DELIVERED_HOLD; only RESUME is permitted) → RESUME → the
  *      payout pipeline (released from the hold gate) drives it to COMPLETED.
+ *
+ * T137a: the custody-era assertions (bot escrow slot, RETURN_TO_SELLER offer)
+ * were removed — T117 dropped both tables and P2P has no platform inventory.
+ * The flows still drive through ITEM_ESCROWED, which no longer exists; the
+ * rewrite is T138's scope.
  *
  * Levers: the harness backdates the active phase deadline to prove the held row
  * is skipped by the DeadlineScannerJob (05 §4.4); the ITEM_DELIVERED park needs
@@ -162,7 +165,6 @@ test('apply hold → timeout frozen → resume → transaction continues to ITEM
 
   const advanced = await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
   expect(advanced).toBe('ITEM_ESCROWED');
-  expect(await getBotEscrowCount()).toBe(1);
 });
 
 test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, both notified', async () => {
@@ -175,7 +177,6 @@ test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, 
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
   await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
-  expect(await getBotEscrowCount()).toBe(1);
 
   // Apply the hold mid-escrow.
   const hold = await api.applyEmergencyHold(adminToken, txId, HOLD_REASON);
@@ -208,11 +209,6 @@ test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, 
   const after = await getTransactionHoldState(txId);
   expect(after?.status).toBe('CANCELLED_ADMIN');
   expect(after?.isOnHold).toBe(false);
-
-  // Item return — the seller accepts the RETURN_TO_SELLER offer (fake self-drive),
-  // releasing the bot's escrow slot (06 §3.10).
-  expect(await pollRefundOfferAccepted(txId), 'RETURN_TO_SELLER offer not ACCEPTED').toBeTruthy();
-  expect(await getBotEscrowCount()).toBe(0);
 
   // 03 §8.8 / §8.7 — neither party initiated the cancel, so BOTH are notified.
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId], {
