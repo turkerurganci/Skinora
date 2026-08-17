@@ -87,7 +87,7 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 - Branch: `task/T137a-e2e-harness-triage`
 - Commit: `9e8df29` — emekli tablo atıfları + custody helper'ları · `5138cf4` — deadline allow-list'i T117 rename'ine hizalama
 - PR: [#243](https://github.com/turkerurganci/Skinora/pull/243)
-- CI: ✓ **run [`32046880752`](https://github.com/turkerurganci/Skinora/actions/runs/32046880752) `conclusion=success`** (final HEAD `7d6583b`) — CI Gate ✓ + "1. Lint" ✓; 8 advisory E2E leg beklendiği gibi kırmızı, run conclusion'ını düşürmüyor (§Notlar)
+- CI: ✓ **run [`32048912041`](https://github.com/turkerurganci/Skinora/actions/runs/32048912041) `conclusion=success`** (HEAD `9835824`) — CI Gate ✓ + "1. Lint" ✓; 8 advisory E2E leg beklendiği gibi kırmızı, run conclusion'ını düşürmüyor (§Notlar). **E2E yüzeyi `5138cf4`'ten beri donmuş** (sonraki commit'ler yalnız `Docs/` + `.claude/`), dolayısıyla o commit'ten sonraki üç run — `32044914807`, `32046880752`, `32048912041` — aynı e2e kodunu ölçüyor ve aynı sonucu veriyor. Bu raporu sonlandıran commit'in kendi run'ı, doğası gereği rapora yazılamaz (doküman-only, e2e'ye dokunmaz); doğrulama chat'i dal HEAD'inin run'ına bakmalıdır.
 
 ## Known Limitations / Follow-up
 
