@@ -108,6 +108,7 @@ otomatik çözümüdür (06 §2.10) — kimse bakmamıştır.
 | FE i18n | ✓ 4×1319 | `npm run i18n:check` — parity OK, advisory 15 (değişmedi) |
 | FE vitest | ✓ 33/33 | `npm test` |
 | FE build | ✓ | `npm run build` — `/[locale]/admin/disputes` ƒ |
+| **CI** | **✓ PASS** | HEAD `bdbe46e`, run [`32062899657`](https://github.com/turkerurganci/Skinora/actions/runs/32062899657) — CI Gate `success`, bloke edici 11/11 job yeşil |
 
 ## Doğrulama
 
@@ -197,6 +198,46 @@ artık gerekçenin **alfabesine** değil, kaydedilip kaydedilmediğine bakıyor.
 
 ## Commit & PR
 - Branch: `task/T131-admin-dispute-override`
-- Commit: (aşağıda)
-- PR: (aşağıda)
-- CI: (aşağıda)
+- Commit: `abb8daf` — T131: AdminDisputeService item-refund bacağı + override
+- Commit: `bdbe46e` — Merge `origin/main` (T137a #243) — aşağıdaki nota bakınız
+- PR: [#245](https://github.com/turkerurganci/Skinora/pull/245)
+- CI: **✓ PASS** — HEAD `bdbe46e`, run [`32062899657`](https://github.com/turkerurganci/Skinora/actions/runs/32062899657),
+  **CI Gate `success`**. Bloke edici **11 job'un 11'i yeşil**: 1. Lint · 2. Build ·
+  3. Unit test · 3b. JS test (vitest) · 4. Integration test · 5. Contract test ·
+  **6. Migration dry-run** (yeni kolon şemaya temiz uygulanıyor) · 7. Docker build
+  (backend + frontend) · Detect changed paths · CI Gate.
+
+### Session ortasında main ilerledi (kayda geçti)
+Yapım sürerken **başka bir session T137a'yı (#243) main'e merge etti ve bu worktree'nin
+HEAD'ini `main`'e aldı.** Task dalı push edilmiş olduğu için iş kaybolmadı. İki sonucu oldu:
+
+1. PR #245 `CONFLICTING` doğdu — T137a bu görevin de dokunduğu **üç ortak dokümana**
+   dokunmuştu (`IMPLEMENTATION_STATUS.md`, `11_IMPLEMENTATION_PLAN.md`,
+   `.claude/memory/MEMORY.md`). **GitHub çakışmalı PR'da CI run'ı hiç yaratmadı** —
+   `feedback_branch_from_main_after_squash` ile aynı imza, farklı sebep; "Actions bozuk"
+   teşhisine gidilmedi.
+2. Çözüm `bdbe46e` merge commit'i: iki doküman çakışması **her iki taraf da korunarak**
+   çözüldü (T131 girişi "Son güncelleme", T137a "Önceki güncelleme"ye indi; memory'de ikisi
+   de görev numarası sırasında). `11_IMPLEMENTATION_PLAN.md` otomatik birleşti ve T137a'nın
+   T138 kriterine yazdığı ölçüm ("7 spec yeniden yazım, 21 test") bozulmadan geldi — kontrol
+   edildi.
+
+Merge'ün getirdiği tek kod değişikliği `e2e/` altındadır; **backend ve frontend kaynağına
+sıfır dokunuş** (`git diff abb8daf..bdbe46e --stat` → 11 dosya: 3 doküman + T137a raporu +
+7 `e2e/` dosyası), dolayısıyla yukarıdaki lokal test sonuçları bu HEAD için geçerlidir ve
+CI bunu bağımsız olarak teyit etti. Dal izolasyon kontrolü temiz: `git log main..HEAD` yalnız
+`T131` içeriyor.
+
+### Advisory E2E legleri (T131 kaynaklı DEĞİL — kanıtlı)
+8 advisory leg kırmızı (`continue-on-error`, `ci-gate.needs` dışında — `ci.yml:612-625`).
+Üç bağımsız kanıt T131'in bunlara katkısının sıfır olduğunu gösteriyor:
+
+- **`Invalid object name 'PlatformSteamBots'` izi: 0** — T137a'nın onardığı harness katmanı
+  gerçekten geçiliyor (T117'den T137a'ya kadar bu imza 8/8 leg'de tam 1 kez görülüyordu).
+- **T131 yüzeylerinden 0 iz** — `grep -ciE "overrideReason|OVERRIDE_REASON_REQUIRED|
+  deliveredItemName|ResolutionOverrideReason|AlreadyRuledByAdmin|buyerFavorRequiresOverride"`
+  → **0** (1012 satırlık `--log-failed` çıktısı üzerinde).
+- **Sayım T137a'nın ölçtüğü tabanı birebir yeniden üretiyor:** 10 passed / 22 failed = 32,
+  yani T137a'nın main run'ında (`32050987594`) ölçtüğü 10/32 ile aynı. Kalan 22 test custody
+  durumlarında takılıyor; sahiplik **T137** (sidecar-fake envanter ucu steamId'yi yok sayıyor,
+  teslimat kanıtı simüle edilemiyor) → **T138** (spec yeniden yazımı).
