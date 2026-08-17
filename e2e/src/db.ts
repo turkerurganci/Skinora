@@ -466,7 +466,7 @@ export async function backdateDeadline(
 /** Set a phase deadline to a fixed point in the future — the forward mirror of
  *  backdateDeadline. Used to give a parked TRADE_OFFER_SENT_TO_SELLER transaction
  *  a live seller-trade window before a STEAM_OUTAGE freeze: the e2e fast-path
- *  leaves TradeOfferToSellerDeadline null (the fake's trade leg never goes through
+ *  leaves SellerConfirmDeadline null (the fake's trade leg never goes through
  *  the production deadline stamp), whereas a real outage freezes transactions
  *  whose deadline is live — exactly the state the WP7 integration test seeds at
  *  +12h. Without it the freeze would capture a zero remainder. `column` is
