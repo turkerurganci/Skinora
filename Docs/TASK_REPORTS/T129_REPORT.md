@@ -1,6 +1,6 @@
 # T129 — Mutabakat süresi + trade geri alma koruması
 
-**Faz:** F7 (P4 — Payout tamponu) | **Durum:** ⏳ Devam ediyor (düzeltme turu 2026-08-17 tamamlandı — **yeniden doğrulama bekliyor**) | **Tarih:** 2026-08-16 · düzeltme turu 2026-08-17
+**Faz:** F7 (P4 — Payout tamponu) | **Durum:** ✗ FAIL (yeniden doğrulama 2026-08-17 — **bir bloke edici bulgu: B4**, ikinci düzeltme turu bekleniyor) | **Tarih:** 2026-08-16 · düzeltme turu 2026-08-17 · yeniden doğrulama 2026-08-17
 
 ---
 
@@ -205,6 +205,83 @@ Bağımsız doğrulamanın üç bloke edici bulgusu ve yedi bloke etmeyen maddes
 
 - **AD7 detay DTO'suna settlement kolonları eklenmedi.** Plan bunu saymıyor; admin gerekçeyi §I.3/§I.5 sorgularıyla görüyor. Backlog önerisi olarak Known Limitations'a yazıldı.
 - **06 §2.19 AuditAction tablosunun tamamı senkronlanmadı** (17 satır ↔ 33 enum değeri). T129 öncesi borç; yalnız bu turun eklediği satır yazıldı.
+
+---
+
+## Doğrulama — Tur 2 (yeniden doğrulama, ✗ FAIL)
+
+**Tarih:** 2026-08-17 · **Dal:** `task/T129-settlement-window-reversal-guard` · **Commit:** `7c02acd` (dal HEAD) · **Yöntem:** bağımsız spec-conformance review (yapım raporu Faz 3'e kadar okunmadı; kaynak dokümanlar 02 §4.5.1 / 03 §2.4 / 05 §3.3+§4.2 / 06 §2.11+§3.1+§3.5+§3.17+§8.2 / 07 §9.3+§9.8+§9.22b / 11 §P4 üzerinden)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✗ FAIL** |
+| Bloke edici bulgu | 1 (**B4**) |
+| Bloke etmeyen bulgu | 3 (N8–N10) |
+| Düzeltme gerekli mi | **Evet** |
+
+### Kapı kontrolleri
+
+| Adım | Sonuç |
+|---|---|
+| -1 Working tree | ✓ temiz (`git status --short` boş) |
+| 0 Main CI son 3 run | ✓ `31944080720` · `31944080697` · `31909528316` — üçü de `success` |
+| 0b Repo memory drift | ✓ `.claude/memory/MEMORY.md`'de T129 satırı mevcut (satır 49) |
+| 3 Remote tazeleme | ✓ `git fetch origin --prune` — dal `origin` ile eşit, main'in 9 commit önünde / 0 geride |
+| 8a Dal CI | ✓ dal HEAD `7c02acd` → run [`32015141944`](https://github.com/turkerurganci/Skinora/actions/runs/32015141944), `conclusion=success` |
+| Lokal unit suite (validator) | ✓ **0 hata / exit 0** — `dotnet test --filter "Category!=Integration&Category!=Contract"`; assembly başına: Transactions 988 · API 521 · Platform 133 · Notifications 111 · Auth 83 · Fraud 79 · Disputes 55 · Realtime 40 · Steam 39 · Users 22 (+ Shared/Admin/Payments, hepsi `Passed!`) |
+
+### Bloke edici bulgu
+
+| # | Seviye | Açıklama | Dosya |
+|---|---|---|---|
+| **B4** | S1 Sapma | **N2'nin yapışkanlığı geri alınabiliyor: "ayrılmayı gözlemlemiş" gerekçe sonraki bir turda sessizce düşürülüyor ve para admin'e haber verilmeden çıkıyor.** `EscalateAsync`, zaten eskale edilmiş bir satırda gerekçe farklıysa **koşulsuz** üzerine yazıyor (`SettlementVerificationJob.cs:476-484`) — kod yorumu yalnız *yükseltmeyi* ("upgrade") anlatıyor ama uygulama **düşürmeyi de** yapıyor. `HandleInconclusiveAsync` eşiği `PayoutEligibleAt`'ten ölçtüğü için (satır 432-439), eskalasyondan sonra `settlement.unreadable_escalation_hours` geçmişken gelen **tek bir** `Inconclusive` tur (alıcı envanterini gizlerse) `SETTLEMENT_REVERSAL_GATED` / `SETTLEMENT_AMBIGUOUS_DEPARTURE` gerekçesini `SETTLEMENT_UNREADABLE`'a çeviriyor. Sonraki `Verified` turunda `ClearForPayoutAsync`'in `ObservedDeparture(...)` kontrolü artık `false` dönüyor → `SettlementVerifiedAt` damgalanıyor → payout + sweep açılıyor; `SettlementEscalatedAt` hâlâ dolu, admin kutusunda `ADMIN_ESCALATION` açık ve **ikinci bir bildirim gitmiyor**. Bu, N2'nin kapatmak için yazıldığı zararın ta kendisidir ve üstelik yalnız `AmbiguousDeparture`'ı değil **geri alma imzasını** da siliyor. Üç kaynak doküman cümlesiyle çelişir: 02 §4.5.1 launch kapısı notu ("Kaydedilen imza **yapışkandır** — ayrılmayı gözlemlemiş bir eskalasyon açıkken sonraki turun 'item duruyor' okuması ödemeyi serbest bırakmaz"), 06 §3.5 `SettlementEscalationReason` satırı, DEPLOY_RUNBOOK §I.1. Erişilebilirlik gerçek: dönüş rotası sayım rotasıdır (`DeliveredBuyerAssetId` NULL olan alıcı-onaylı teslimatlar) ve alıcı aynı sınıftan başka kopya edindiğinde "item duruyor" der — raporun kendi §Known Limitations'ında yazılı zayıflık. Mevcut iki yapışkanlık testi yalnız *yükseltme* yönünü sabitliyor, düşürme yönü test edilmemiş. **Önerilen düzeltme:** `EscalateAsync`'te `ObservedDeparture(mevcut) && !ObservedDeparture(yeni)` ise gerekçeyi koru (yalnız log), + bir regresyon testi | `backend/src/Modules/Skinora.Transactions/Application/Settlement/SettlementVerificationJob.cs:467-495` |
+
+**Kanıt (validator reprosu — geçici test, koşumdan sonra `git checkout` ile geri alındı; working tree temiz):** `SettlementVerificationJobTests` harness'ine tek `[Fact]` eklendi — tur 1 `ReversalSignature` (kapı kapalı) → +49 saat `Inconclusive` → +2 saat `Verified`. Çıktı:
+
+```
+r1 reason=SETTLEMENT_REVERSAL_GATED | r2 reason=SETTLEMENT_UNREADABLE |
+SettlementVerifiedAt=2026-08-26T15:00:00.0000000Z | SettlementEscalatedAt=2026-08-24T12:00:00.0000000Z
+```
+
+Yani geri alma imzası kaydedilmiş bir işlemde mutabakat, açık eskalasyonun üstüne **satıcı lehine kapanıyor**.
+
+### Bloke etmeyen bulgular
+
+| # | Seviye | Açıklama | Dosya |
+|---|---|---|---|
+| N8 | S1 | **Rapor §Güvenlik Kontrolü düzeltme turu için güncellenmemiş:** "Auth/authorization: **yeni endpoint yok**" diyor, oysa aynı rapor AD32 `POST /admin/transactions/:id/clear-settlement` ucunu (`MANAGE_DISPUTES`, `RateLimit("admin-write")`, ≥10 karakter gerekçe) belgeliyor. Katman-1 mini güvenlik kontrolü kaydı bu hâliyle yanlış. *(Kodun kendisi temiz doğrulandı: policy doğru, `PermissionCatalog.ManageDisputes` mevcut, gerekçe alanı doğrulanıyor, secret/yeni bağımlılık yok.)* | `Docs/TASK_REPORTS/T129_REPORT.md:220` |
+| N9 | S1 | **Sweep artık payout ile aynı anda açılıyor** ve bunun hot wallet nakit akışı sonucu hiçbir yerde kayıtlı değil. T129 öncesi sweep `ITEM_DELIVERED`'da (T+0), payout `PayoutEligibleAt`'te (T+8g) çalışıyordu; artık ikisinin de kapısı `SettlementVerifiedAt` olduğu için sweep girişi payout çıkışının önüne geçmiyor. Kapının kendisi doğru ve AC7'nin talebi (05 §3.3 gerekçesi yazılı) — eksik olan sonucun kaydı: 02 §4.5.1 "Bilinen sonuçları" yalnız *toplam tutulan para* artışını yazıyor, hot wallet'ın 8 günlük float ihtiyacını değil. Öneri: DEPLOY_RUNBOOK §I'ye veya `DEFERRED_BACKLOG`'a bir satır | `SweepQueueJob.cs:139-176` · `Docs/02_PRODUCT_REQUIREMENTS.md:177-180` |
+| N10 | S1 | Rapor §Yeni kalıcı yüzeyler migration adını `20260817081454_T129_SettlementEscalationColumns` yazıyor; dosya adı **`20260817084800_T129_SettlementEscalationColumns`**. Yalnız kayıt hatası — migration'ın kendisi doğru (2 `AddColumn` + `UpdateData`, `Down()` tam tersi, snapshot senkron, CI "6. Migration dry-run" yeşil) | `Docs/TASK_REPORTS/T129_REPORT.md:200` |
+
+### Kabul kriterleri — tur 2 sonucu
+
+| # | Kriter | Tur 2 | Not |
+|---|---|---|---|
+| 1 | `payout_settlement_days` (varsayılan 8) | ✓ | Seed satır 61 = katalog = 06 §3.17 tablosu; **63 = 63 = 63** bağımsız sayıldı. Validator floor'u `MinimumSettlementDays = 7`, generic pozitif-sayı dalından önce yakalıyor |
+| 2 | ITEM_DELIVERED girişinde `PayoutEligibleAt` | ✓ | `DeliverItem`'ı fire eden üretim yolu tam olarak iki; ikisi de `SettlementWindowStamper.Stamp` çağırıyor, `HasDeliveryEntryInvariant` kolonu geçişin ön koşulu yapıyor; `DeliveryTimeoutRound` rollback'i üç alanı da geri alıyor |
+| 3 | `SellerPayoutQueueJob` penceresi | ✓ | Sorgu + döngü içi yeniden doğrulama; `PayoutEligibleAt` filtresi korunmuş, üstüne mutabakat çifti eklenmiş |
+| 4 | Ödeme öncesi son kontrol (item / yok / okunamıyor) | **~ Kısmi** | Beş verdict, iki taraflı imza (N1 kapalı: `SELLER_ASSET_GONE ∧ şimdi satıcıda`), `NoDeliveryReference` eşiksiz eskalasyon ve AD32 admin kolu **doğrulandı ve çalışıyor**. Kalan açık **B4**: "item var → ödeme akar" dalı, açık ve gözlenmiş bir ayrılma eskalasyonunun üstünde de alınabiliyor |
+| 5 | COMPLETED guard'ı | ✓ | `HasSettlementClearance` yalnız `Complete`'te; aynı çift payout + sweep sorgularında tekrarlanıyor |
+| 6 | Süre içinde dispute ödemeyi bloklar | ✓ | Üç sorguda da `!HasActiveDispute`; AD32 de aktif dispute'ta reddediyor |
+| 7 | `SweepQueueJob` aynı kapıya bağlandı | ✓ | Sorgu + döngü içi yeniden doğrulama, iki test. Nakit akışı sonucu N9'da |
+| 8 | Geri alma → itibar (06 §3.1) | ✓ | Payda `REFUNDED[DeliveryReversedAt NOT NULL]`, yalnız satıcıya; tetikleyici `ApplyReversalAsync`'te flush **sonrası**; §3.1 ↔ §8.2 çelişkisi kapanmış |
+
+**Düzeltme turu kriterleri:** B1(a) ✓ · B1(b) ✓ · B1(c) ✓ (AD32 + 6 test + 07 §9.22b) · B1(d) ✓ · B2 ✓ (06 §2.11 · 07 §9.3 iki satır · backend projeksiyon + AD2 özeti · FE `TYPE_VALUES` + `FlagDetailView` + üç i18n haritası × 4 dil) · B3 ✓ · N1 ✓ · **N2 ✗** (B4) · N3 ✓ · N4 ✓ · N5 ✓ (eksik `blockchain.payout_gas_fee_estimate_usdt` satırı da eklenmiş) · N6 ✓ · N7 ✓
+
+### Güvenlik kontrolü (validator)
+
+- Secret sızıntısı: **temiz** — yeni secret/credential/bağlantı dizesi yok.
+- Auth/authorization: **temiz ama raporda yanlış kayıtlı (N8)** — AD32 `[Authorize(Policy = "Permission:MANAGE_DISPUTES")]` + `[RateLimit("admin-write")]`; `MANAGE_DISPUTES` mevcut bir katalog anahtarı (AD29 ile aynı sınıf), yeni permission tanımlanmamış.
+- Input validation: **temiz** — `reason` ≥ 10 karakter (AD19 ile aynı taban), route `{id:guid}`, `payout_settlement_days` validator floor'u.
+- Yeni dış bağımlılık: **yok**.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: 1 uyuşmazlık.** Rapor N2'yi ✓ kapandı sayıyor ve iki karşıt yapışkanlık testini kanıt gösteriyor; testlerin ikisi de gerekçenin **düşürülmesi** yönünü kapsamıyor, dolayısıyla kanıt kriterin yalnız yarısını sabitliyor (B4). Diğer on üç düzeltme maddesinin (B1a–d, B2, B3, N1, N3–N7) kanıtları bağımsız olarak yeniden üretildi ve **doğru** bulundu; N5'in "ek bulgu" olarak eklediği eksik seed satırı da tabloda mevcut. Rapor §Known Limitations, B4'ün zeminini (sayım rotasının zayıflığı) doğru öngörüyor ama bu zeminin **yapışkanlığı da delebildiğini** görmüyor.
+
+### Merge kararı
+
+Merge edilmedi. Düzeltme `SettlementVerificationJob.EscalateAsync` içinde tek koşul + bir regresyon testi; ardından üçüncü bir doğrulama turu açılır (INSTRUCTIONS §3.3 izolasyon kuralı). Tur 2'de ✓ kanıtlanan AC1/2/3/5/6/7/8 ve B1/B2/B3/N1/N3–N7 için kanıt korunur; AC4 + N2 yeniden doğrulanır.
 
 ## Altyapı Değişiklikleri
 
