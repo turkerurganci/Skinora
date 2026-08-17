@@ -30,6 +30,15 @@ namespace Skinora.Transactions.Application.Reputation;
 /// both numerator and denominator (02 §13 — platform decision, not user
 /// fault).
 /// </para>
+/// <para>
+/// <see cref="TransactionStatus.REFUNDED"/> is split rather than excluded
+/// wholesale (T129 — 06 §3.1). Its two producers say opposite things about
+/// fault: an admin dispute refund is a platform ruling and stays out for the
+/// same reason CANCELLED_ADMIN does, while a settlement reversal
+/// (<c>DeliveryReversedAt</c> set) is the platform having WATCHED the seller
+/// take the item back after being paid. Only the second counts, and only
+/// against the seller.
+/// </para>
 /// </remarks>
 public sealed class ReputationAggregator : IReputationAggregator
 {
@@ -54,7 +63,14 @@ public sealed class ReputationAggregator : IReputationAggregator
                         && (t.Status == TransactionStatus.COMPLETED
                             || t.Status == TransactionStatus.CANCELLED_SELLER
                             || t.Status == TransactionStatus.CANCELLED_BUYER
-                            || t.Status == TransactionStatus.CANCELLED_TIMEOUT))
+                            || t.Status == TransactionStatus.CANCELLED_TIMEOUT
+                            // T129 — only the reversal kind of REFUNDED. The
+                            // filter is what keeps 02 §13 intact: an admin
+                            // dispute refund is a platform decision and stays
+                            // out of the formula entirely, exactly like
+                            // CANCELLED_ADMIN.
+                            || (t.Status == TransactionStatus.REFUNDED
+                                && t.DeliveryReversedAt != null)))
             .Select(t => new TxRow(
                 t.Id,
                 t.Status,
@@ -62,7 +78,8 @@ public sealed class ReputationAggregator : IReputationAggregator
                 t.BuyerId,
                 t.CreatedAt,
                 t.CancelledAt,
-                t.CompletedAt))
+                t.CompletedAt,
+                t.DeliveryReversedAt))
             .ToListAsync(cancellationToken);
 
         // Raw COMPLETED count — wash filter intentionally NOT applied
@@ -126,7 +143,8 @@ public sealed class ReputationAggregator : IReputationAggregator
         Guid? BuyerId,
         DateTime CreatedAt,
         DateTime? CancelledAt,
-        DateTime? CompletedAt);
+        DateTime? CompletedAt,
+        DateTime? DeliveryReversedAt);
 
     private readonly record struct ClassifiedRow(TxRow Tx, ResponsibilityEffect Effect);
 
@@ -152,6 +170,22 @@ public sealed class ReputationAggregator : IReputationAggregator
 
             case TransactionStatus.CANCELLED_BUYER:
                 return isBuyer ? new(true, false) : new(false, false);
+
+            // T129 — trade reversed at settlement (02 §4.5.1). Charged to the
+            // SELLER alone, and the asymmetry is the finding itself: the item
+            // came back to them after the buyer had paid, which is proven seller
+            // fault rather than a platform ruling. Without this arm the heaviest
+            // fraud in the model would leave a reputation score untouched, since
+            // the only other trace is a fraud flag an admin has to go read.
+            //
+            // The row reaches here only when DeliveryReversedAt is set (the
+            // query filters on it), so no second test is needed — but the guard
+            // is written out anyway because REFUNDED has a second, excluded
+            // producer (admin dispute) and a future widening of the query must
+            // not silently start charging sellers for admin decisions.
+            case TransactionStatus.REFUNDED:
+                if (row.DeliveryReversedAt is null) return new(false, false);
+                return isSeller ? new(true, false) : new(false, false);
 
             case TransactionStatus.CANCELLED_TIMEOUT:
                 if (!previousStatusByTx.TryGetValue(row.Id, out var previous))

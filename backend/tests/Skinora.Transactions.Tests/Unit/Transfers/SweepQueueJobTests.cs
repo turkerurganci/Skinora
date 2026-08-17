@@ -148,6 +148,46 @@ public sealed class SweepQueueJobTests : IDisposable
             b => b.TransactionId == tx.Id));
     }
 
+    /// <summary>
+    /// T129 — the deposit is the source a buyer refund draws from (WP2), and the
+    /// most likely refund left at this point is a reversal detected at the end
+    /// of the settlement window. Sweeping before that check would empty the
+    /// deposit shortly before the one refund it exists to fund.
+    /// </summary>
+    [Fact]
+    public async Task UnverifiedSettlement_IsSkipped()
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, _) = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.SettlementVerifiedAt = null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+
+        // Causality: the clearance stamp is the single step that releases it.
+        tx.SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+        await _sut.ExecuteAsync();
+
+        Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id && b.Type == BlockchainTransactionType.SWEEP));
+    }
+
+    [Fact]
+    public async Task ReversedDelivery_IsSkipped()
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, _) = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+            t.DeliveryReversedAt = _clock.GetUtcNow().UtcDateTime);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id));
+    }
+
     [Fact]
     public async Task MissingDepositAddress_IsSkipped()
     {
@@ -359,6 +399,11 @@ public sealed class SweepQueueJobTests : IDisposable
             TotalAmount = price + commission,
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
             ItemDeliveredAt = _clock.GetUtcNow().UtcDateTime,
+            // T129 — the sweep waits for the same settlement clearance the
+            // payout does: until the end-of-window re-read passes, the deposit
+            // is still the source a reversal refund would draw from.
+            PayoutEligibleAt = _clock.GetUtcNow().UtcDateTime.AddDays(-8),
+            SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime,
         };
         configure?.Invoke(tx);
         _db.Set<Transaction>().Add(tx);

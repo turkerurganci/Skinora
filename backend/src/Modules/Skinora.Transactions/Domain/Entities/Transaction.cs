@@ -122,6 +122,40 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public DateTime? SettlementVerifiedAt { get; set; }
     public DateTime? DeliveryReversedAt { get; set; }
 
+    // When the settlement re-check last EXAMINED this row (T129) — the twin of
+    // DeliveryRoundAt above, and for the same reason: a row whose inventory
+    // cannot be read stays eligible forever, so ordering the batch by
+    // PayoutEligibleAt alone would let the oldest unreadable rows refill the
+    // window and starve every settlement that came due today.
+    public DateTime? SettlementCheckedAt { get; set; }
+
+    // When the settlement re-check handed this row to an admin — an inventory
+    // that stayed unreadable past settlement.unreadable_escalation_hours, an
+    // item that left the buyer without proof of a reversal, or a reversal
+    // signature raised while the auto-refund gate is closed. Idempotency
+    // marker: the admin is told once, not once per tick.
+    public DateTime? SettlementEscalatedAt { get; set; }
+
+    // WHY it was handed over, as the machine-readable SettlementReviewReasons
+    // code. Two jobs, both added by the T129 fix round:
+    //  * the reason lived only in the outbox event, so a triage query could not
+    //    tell an unreadable inventory from a delivery that left NO reference to
+    //    measure against — two classes whose procedures differ (DEPLOY_RUNBOOK
+    //    §I.3 vs §I.5);
+    //  * it makes the escalation STICKY. A round that watched the item LEAVE the
+    //    buyer must not be undone by a later round that happens to read it back:
+    //    without this column ClearForPayout stamped the clearance regardless and
+    //    the money left while an ADMIN_ESCALATION sat open, unannounced.
+    public string? SettlementEscalationReason { get; set; }
+
+    // Set when an admin closed the settlement in the seller's favour instead of
+    // the check concluding on its own (07 §9.22b). Evidentiary only — no money
+    // gate reads it; SettlementVerifiedAt is still the single column that opens
+    // payout, sweep and COMPLETED. It exists so a row cleared by a human is
+    // distinguishable from one cleared by the job, in the triage query and in
+    // the audit trail alike.
+    public Guid? SettlementClearedByAdminId { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

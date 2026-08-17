@@ -43,14 +43,23 @@ namespace Skinora.Transactions.Application.Transfers;
 /// money — the exact fraud path 02 §4.5.1 exists to close.
 /// </para>
 /// <para>
-/// The check is deliberately fail-closed on NULL. Until T129 computes the
-/// column on entry to ITEM_DELIVERED, nothing writes it, so this job queues
-/// nothing and delivered transactions park in ITEM_DELIVERED — the safe
-/// direction. It was inert before T126 for a different reason: no production
-/// code could fire <c>DeliverItem</c> at all, so ITEM_DELIVERED was
-/// unreachable. T126's confirm-receipt endpoint supplies that missing
-/// reachability, which is what turns the absent gate into a live exposure and
-/// why the gate lands here rather than waiting for T129 to bring its own.
+/// The check is deliberately fail-closed on NULL. It was inert before T126 for
+/// a different reason: no production code could fire <c>DeliverItem</c> at all,
+/// so ITEM_DELIVERED was unreachable. T126's confirm-receipt endpoint supplied
+/// that missing reachability, which is what turned the absent gate into a live
+/// exposure and why the gate landed here rather than waiting for T129.
+/// </para>
+/// <para>
+/// <b>T129 completed the gate.</b> An elapsed window is a necessary condition,
+/// never a sufficient one: waiting says the reversal period has closed, not
+/// that nobody used it. <see cref="Settlement.SettlementVerificationJob"/>
+/// answers that second question by re-reading the buyer's inventory and stamps
+/// <c>SettlementVerifiedAt</c>; this job now requires that stamp and the absence
+/// of <c>DeliveryReversedAt</c>, which is the same pair the COMPLETED guard
+/// reads (<c>TransactionStateMachine.HasSettlementClearance</c>). Without the
+/// pair here, a reversed transaction would still have its payout queued and
+/// broadcast — the money would leave before the state machine ever got the
+/// chance to refuse the COMPLETED transition.
 /// </para>
 ///
 /// <para>
@@ -121,6 +130,8 @@ public sealed class SellerPayoutQueueJob
                 && !t.HasActiveDispute
                 && t.PayoutEligibleAt != null
                 && t.PayoutEligibleAt <= nowUtc
+                && t.SettlementVerifiedAt != null
+                && t.DeliveryReversedAt == null
                 && !t.BlockchainTransactions.Any(
                     b => b.Type == BlockchainTransactionType.SELLER_PAYOUT))
             .OrderBy(t => t.ItemDeliveredAt)
@@ -154,6 +165,8 @@ public sealed class SellerPayoutQueueJob
             || transaction.Status != TransactionStatus.ITEM_DELIVERED
             || transaction.IsOnHold
             || transaction.HasActiveDispute
+            || transaction.SettlementVerifiedAt is null
+            || transaction.DeliveryReversedAt is not null
             || transaction.PayoutEligibleAt is not { } eligibleAt
             || eligibleAt > _clock.GetUtcNow().UtcDateTime)
         {

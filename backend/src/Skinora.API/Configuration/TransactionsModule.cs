@@ -82,6 +82,17 @@ public static class TransactionsModule
         // which is where the Dispute type lives — see DisputesModule.
         services.AddScoped<IDeliveryTimeoutRound, DeliveryTimeoutRound>();
 
+        // T129 — settlement window (02 §4.5.1). The provider reads the three
+        // settlement settings; the verification service answers the end-of-
+        // window question ("is the item still with the buyer, and if not, did it
+        // go back to the seller?") and is side-effect free like its T125
+        // sibling. The job that acts on the verdict is registered with the other
+        // recurring jobs below.
+        services.AddScoped<Skinora.Transactions.Application.Settlement.ISettlementSettingsProvider,
+            Skinora.Transactions.Application.Settlement.SettlementSettingsProvider>();
+        services.AddScoped<Skinora.Transactions.Application.Settlement.ISettlementVerificationService,
+            Skinora.Transactions.Application.Settlement.SettlementVerificationService>();
+
         // T83a — user transaction list (07 §7.1). F4 retro recovery: T45
         // doc-ref claimed §7.1–§7.4 but the list endpoint was never
         // implemented; T88 dashboard surfaced the gap.
@@ -246,6 +257,10 @@ public static class TransactionsModule
         // buyer-refund window, owner decision); the dispatch + confirmation
         // jobs above settle it and reconciliation credits the hot wallet inflow.
         services.AddScoped<SweepQueueJob>();
+        // T129 — the end-of-window settlement check. Produces neither transfer
+        // row itself: it stamps the clearance both producers above now require,
+        // or refunds the buyer when the trade turns out to have been reversed.
+        services.AddScoped<Skinora.Transactions.Application.Settlement.SettlementVerificationJob>();
         services.AddHostedService<OutgoingTransferJobsRegistrar>();
 
         // WP1 — seller payout completion. The confirmation job emits

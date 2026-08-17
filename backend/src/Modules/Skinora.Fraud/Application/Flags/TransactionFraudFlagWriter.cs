@@ -35,4 +35,19 @@ public sealed class TransactionFraudFlagWriter : ITransactionFraudFlagWriter
             actorId: SeedConstants.SystemUserId,
             actorType: ActorType.SYSTEM,
             cancellationToken);
+
+    public Task StageAccountFlagAsync(
+        Guid userId,
+        FraudFlagType type,
+        string details,
+        CancellationToken cancellationToken)
+        => _flagService.StageAccountFlagAsync(
+            userId,
+            type,
+            details,
+            actorId: SeedConstants.SystemUserId,
+            actorType: ActorType.SYSTEM,
+            cascadeEmergencyHold: false,
+            emergencyHoldReason: null,
+            cancellationToken);
 }

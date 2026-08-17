@@ -1669,6 +1669,45 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "false"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000003d"),
+                            Category = "Settlement",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "int",
+                            Description = "Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletileceği süre (02 §4.5.1). `PayoutEligibleAt = ItemDeliveredAt + bu değer` olarak ITEM_DELIVERED girişinde hesaplanır; süre dolmadan ne satıcı payout'u ne de depozit sweep'i kuyruğa girer. Steam'in 7 günlük trade geri alma penceresini kapsamalıdır — 7'nin altına ayarlanamaz (02 §16.2).",
+                            IsConfigured = true,
+                            Key = "payout_settlement_days",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "8"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000003e"),
+                            Category = "Settlement",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "int",
+                            Description = "Mutabakat sonu kontrolü envanter okunamadığı için sonuca varamadığında, kaç saat sonra admin'e eskale edileceği (03 §2.4 adım 2 üçüncü dal). Eşiğe kadar kontrol her turda tekrarlanır; eşik aşılınca admin bildirimi gider ve işlem insan incelemesine düşer. Ödeme her iki durumda da parkta kalır — eşik yalnızca 'ne zaman insana sorulur' sorusunu yanıtlar, ödemeyi serbest bırakmaz.",
+                            IsConfigured = true,
+                            Key = "settlement.unreadable_escalation_hours",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "48"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000003f"),
+                            Category = "Settlement",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "bool",
+                            Description = "Geri alma tespitinde OTOMATİK iade açık mı (T129 launch kapısı, T125 kapısının ikizi). false iken imza kayda geçer ve admin'e eskale edilir, para hareket etmez; kararı admin verir — satıcı lehine AD32 clear-settlement, alıcı lehine dispute üzerinden AD29. İki kol AYNI sonucu üretmez: DeliveryReversedAt'i yalnız otomatik dal yazar, itibar paydası ve fraud flag yalnız orada oluşur. true iken imza delivery_reversed tetikler. Gerçek geri alma ölçülene kadar (T122 §7) kapalı kalır.",
+                            IsConfigured = true,
+                            Key = "settlement.reversal_auto_refund_enabled",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "false"
                         });
                 });
 
@@ -2354,6 +2393,19 @@ namespace Skinora.Shared.Persistence.Migrations
 
                     b.Property<DateTime?>("SellerReadyConfirmedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("SettlementCheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SettlementClearedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SettlementEscalatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SettlementEscalationReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime?>("SettlementVerifiedAt")
                         .HasColumnType("datetime2");

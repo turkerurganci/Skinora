@@ -99,6 +99,12 @@ public static class AuditLogCategoryMap
             // same admin dashboard.
             [AuditAction.HOT_WALLET_THRESHOLD_BREACHED] = Categories.SecurityEvent,
 
+            // T129 fix round — AD32 settlement clearance (07 §9.22b). An admin
+            // releasing a payout the automated check would not release is the
+            // same class of decision as DISPUTE_RESOLVED / MANUAL_REFUND, and
+            // belongs on the same review queue.
+            [AuditAction.SETTLEMENT_CLEARED_ADMIN] = Categories.AdminAction,
+
             // T82 — sanctions list mutation events (02 §21.1, 07 §9.24–§9.25).
             // Admin AD23 / AD24 adres ekleme / deaktive aksiyonları
             // wallet-address-changed / reconciliation-mismatch ile aynı

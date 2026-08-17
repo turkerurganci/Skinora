@@ -300,7 +300,8 @@
       "HIGH_VOLUME": "High Volume",
       "ABNORMAL_BEHAVIOR": "Abnormal Behavior",
       "MULTI_ACCOUNT": "Multi-Account",
-      "SANCTIONS_MATCH": "Sanctions Match"
+      "SANCTIONS_MATCH": "Sanctions Match",
+      "DELIVERY_REVERSED": "Delivery Reversed"
     },
     "flagStatus": {
       "PENDING": "Pending",
@@ -346,7 +347,8 @@
       "HIGH_VOLUME": "High Volume",
       "ABNORMAL_BEHAVIOR": "Abnormal Behavior",
       "MULTI_ACCOUNT": "Multi-Account",
-      "SANCTIONS_MATCH": "Sanctions Match"
+      "SANCTIONS_MATCH": "Sanctions Match",
+      "DELIVERY_REVERSED": "Delivery Reversed"
     },
     "reviewStatus": {
       "PENDING": "Pending",
@@ -387,6 +389,13 @@
       "matchValue": "Matched Value",
       "linkedAccounts": "Linked Accounts",
       "supportingSignals": "Supporting Signals",
+      "reversedTransaction": "Reversed Transaction",
+      "item": "Item",
+      "deliveredAt": "Delivered At",
+      "detectedAt": "Detected At",
+      "buyerVisibility": "Buyer Inventory",
+      "sellerVisibility": "Seller Inventory",
+      "classCount": "Buyer Copies (Seen / Expected)",
       "activeTransactions": "Active Transactions ({count})",
       "noActiveTransactions": "No active transactions.",
       "onHold": "On Hold"
@@ -713,6 +722,7 @@
       "platformMaintenance": "Platform Maintenance",
       "retention": "Data Retention",
       "deliveryVerification": "Delivery Verification",
+      "settlement": "Settlement",
       "other": "Other"
     }
   },
@@ -1869,7 +1879,8 @@
         "HIGH_VOLUME": "High volume",
         "ABNORMAL_BEHAVIOR": "Abnormal behavior",
         "MULTI_ACCOUNT": "Multi-account",
-        "SANCTIONS_MATCH": "Sanctions match"
+        "SANCTIONS_MATCH": "Sanctions match",
+        "DELIVERY_REVERSED": "Delivery reversed"
       },
       "status": {
         "PENDING": "Pending",

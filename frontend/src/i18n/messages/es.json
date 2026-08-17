@@ -300,7 +300,8 @@
       "HIGH_VOLUME": "Alto volumen",
       "ABNORMAL_BEHAVIOR": "Comportamiento anormal",
       "MULTI_ACCOUNT": "Multi-cuenta",
-      "SANCTIONS_MATCH": "Coincidencia de sanciones"
+      "SANCTIONS_MATCH": "Coincidencia de sanciones",
+      "DELIVERY_REVERSED": "Entrega revertida"
     },
     "flagStatus": {
       "PENDING": "Pendiente",
@@ -346,7 +347,8 @@
       "HIGH_VOLUME": "Alto Volumen",
       "ABNORMAL_BEHAVIOR": "Comportamiento Anormal",
       "MULTI_ACCOUNT": "Multicuenta",
-      "SANCTIONS_MATCH": "Coincidencia de Sanciones"
+      "SANCTIONS_MATCH": "Coincidencia de Sanciones",
+      "DELIVERY_REVERSED": "Entrega Revertida"
     },
     "reviewStatus": {
       "PENDING": "Pendiente",
@@ -387,6 +389,13 @@
       "matchValue": "Valor Coincidente",
       "linkedAccounts": "Cuentas Vinculadas",
       "supportingSignals": "Señales de Apoyo",
+      "reversedTransaction": "Transacción Revertida",
+      "item": "Ítem",
+      "deliveredAt": "Entregado el",
+      "detectedAt": "Detectado el",
+      "buyerVisibility": "Inventario del Comprador",
+      "sellerVisibility": "Inventario del Vendedor",
+      "classCount": "Copias del Comprador (Vistas / Esperadas)",
       "activeTransactions": "Transacciones Activas ({count})",
       "noActiveTransactions": "Sin transacciones activas.",
       "onHold": "En Espera"
@@ -713,6 +722,7 @@
       "platformMaintenance": "Mantenimiento de la Plataforma",
       "retention": "Retención de Datos",
       "deliveryVerification": "Verificación de Entrega",
+      "settlement": "Liquidación",
       "other": "Otros"
     }
   },
@@ -1869,7 +1879,8 @@
         "HIGH_VOLUME": "Volumen alto",
         "ABNORMAL_BEHAVIOR": "Comportamiento anómalo",
         "MULTI_ACCOUNT": "Multicuenta",
-        "SANCTIONS_MATCH": "Coincidencia de sanciones"
+        "SANCTIONS_MATCH": "Coincidencia de sanciones",
+        "DELIVERY_REVERSED": "Entrega revertida"
       },
       "status": {
         "PENDING": "Pendiente",

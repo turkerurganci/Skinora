@@ -105,7 +105,7 @@ export enum DisputeResolutionOutcome {
   BUYER_FAVOR = "BUYER_FAVOR",
 }
 
-// §2.11 — 5 values
+// §2.11 — 6 values
 export enum FraudFlagType {
   PRICE_DEVIATION = "PRICE_DEVIATION",
   HIGH_VOLUME = "HIGH_VOLUME",
@@ -113,6 +113,8 @@ export enum FraudFlagType {
   MULTI_ACCOUNT = "MULTI_ACCOUNT",
   // T82 — sanctioned wallet address match (02 §21.1).
   SANCTIONS_MATCH = "SANCTIONS_MATCH",
+  // T129 — seller pulled the delivered item back inside the settlement window (02 §4.5.1).
+  DELIVERY_REVERSED = "DELIVERY_REVERSED",
 }
 
 // §2.12 — 3 values

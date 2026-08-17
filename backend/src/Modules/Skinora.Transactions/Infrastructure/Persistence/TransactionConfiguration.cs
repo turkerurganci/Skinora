@@ -116,6 +116,13 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(t => t.BuyerBaselineAssetIds)
             .HasMaxLength(400);
 
+        // --- Settlement (02 §4.5.1) ---
+        // A SettlementReviewReasons constant, not free text — sized for the
+        // longest code with room for another, and deliberately not an enum
+        // column: the codes travel over the outbox event as strings already.
+        builder.Property(t => t.SettlementEscalationReason)
+            .HasMaxLength(64);
+
         // Stored as int, not string: this is a [Flags] enum and the global
         // EnumToStringConverter would persist combinations as comma-joined
         // names, which are awkward to query and brittle to rename.
@@ -257,6 +264,13 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         // Settlement sweep: transactions whose reversal window has closed and
         // are awaiting the final "is the item still with the buyer?" check
         // before payout (02 §4.5.1).
+        //
+        // T129 orders that sweep by SettlementCheckedAt (nulls first) for the
+        // same reason T127 orders its own by DeliveryRoundAt: a row whose
+        // inventory cannot be read stays eligible indefinitely, so ordering by
+        // PayoutEligibleAt would let the oldest unreadable rows hold the window.
+        // The filtered index still resolves the predicate and the set it hands
+        // the sort is bounded by settlements in flight, not by table size.
         builder.HasIndex(t => new { t.Status, t.PayoutEligibleAt })
             .HasFilter("[Status] = 'ITEM_DELIVERED'")
             .HasDatabaseName("IX_Transactions_Settlement_Pending");

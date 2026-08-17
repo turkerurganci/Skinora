@@ -20,7 +20,9 @@ export type AdminFlagType =
   | "HIGH_VOLUME"
   | "ABNORMAL_BEHAVIOR"
   | "MULTI_ACCOUNT"
-  | "SANCTIONS_MATCH";
+  | "SANCTIONS_MATCH"
+  // T129 — settlement-window delivery reversal (02 §4.5.1).
+  | "DELIVERY_REVERSED";
 
 export type AdminFlagReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -250,6 +252,32 @@ export interface MultiAccountFlagDetail {
   matchValue: string;
   linkedAccounts: MultiAccountLinkedAccount[];
   supportingSignals: MultiAccountSupportingSignal[];
+}
+
+/** Inventory read outcome reported by the settlement check (T129). */
+export type FlagInventoryVisibility = "Public" | "Private" | "Unavailable";
+
+/**
+ * `flagDetail` for DELIVERY_REVERSED (T129 — 02 §4.5.1). The flag is
+ * ACCOUNT_LEVEL, so the row carries no `transactionId` (06 §3.12) and the
+ * reversed transaction is named here instead. Mirrors the backend
+ * `DeliveryReversedFlagDetail` record.
+ */
+export interface DeliveryReversedFlagDetail {
+  transactionId: string;
+  itemName: string | null;
+  itemAssetId: string | null;
+  deliveredBuyerAssetId: string | null;
+  itemDeliveredAt: string | null;
+  payoutEligibleAt: string | null;
+  detectedAt: string;
+  buyerVisibility: FlagInventoryVisibility | null;
+  sellerVisibility: FlagInventoryVisibility | null;
+  /** Buyer's observed count of the traded item class (count route only). */
+  observedClassCount: number | null;
+  /** The count the delivery established — baseline + 1. */
+  expectedClassCount: number | null;
+  detail: string | null;
 }
 
 /** Role of the flagged user in a {@link FlagActiveTransaction} (07 §9.3). */

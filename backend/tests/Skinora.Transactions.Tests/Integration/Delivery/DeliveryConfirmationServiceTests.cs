@@ -10,6 +10,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -115,9 +116,18 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         // how a later reader tells a buyer-confirmed delivery from one the
         // platform inferred (T127 / T130).
         Assert.Equal(_clock.GetUtcNow().UtcDateTime, persisted.BuyerConfirmedReceiptAt);
-        // Stamped by the ITEM_DELIVERED OnEntry, which is what T129's settlement
-        // window will later be measured from (02 §4.5.1).
+        // Stamped by the ITEM_DELIVERED OnEntry, which is what the settlement
+        // window is measured from (02 §4.5.1).
         Assert.NotNull(persisted.ItemDeliveredAt);
+
+        // T129 — the buyer's confirmation proves arrival, not that the trade
+        // will stand: Steam keeps it reversible for 7 days. The window opened
+        // here is what stops the payout job from paying on delivery alone, and
+        // the seeded default (8 days) is what it must be measured with.
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime.AddDays(SettlementSettingsProvider.DefaultSettlementDays),
+            persisted.PayoutEligibleAt);
+        Assert.Null(persisted.SettlementVerifiedAt);
     }
 
     /// <summary>
@@ -393,9 +403,15 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
         Assert.Null(persisted.DeliveryVerifiedAt);
         Assert.False(new TransactionStateMachine(persisted).CanFire(TransactionTrigger.DeliverItem));
 
-        // And the causality, so this test fails for the right reason: stamping
-        // the timestamp is the single step that would have opened the guard.
+        // And the causality, so this test fails for the right reason. Since T129
+        // the entry invariant has two halves, and each is asserted separately:
+        // the timestamp alone leaves the guard shut...
         persisted.DeliveryVerifiedAt = _clock.GetUtcNow().UtcDateTime;
+        Assert.False(new TransactionStateMachine(persisted).CanFire(TransactionTrigger.DeliverItem));
+
+        // ...and the settlement window is what completes it (02 §4.5.1).
+        SettlementWindowStamper.Stamp(
+            persisted, _clock.GetUtcNow().UtcDateTime, settlementDays: 8);
         Assert.True(new TransactionStateMachine(persisted).CanFire(TransactionTrigger.DeliverItem));
     }
 
@@ -473,6 +489,10 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
             // rests on how the engine answers a buyer-confirmed round, so a stub
             // would test the wrong thing.
             verification ?? BuildVerificationService(),
+            // T129 — the real provider, which falls back to the documented
+            // defaults when the settings rows are absent. Stubbing it would hide
+            // the case this endpoint actually runs in.
+            new SettlementSettingsProvider(Context),
             _outbox,
             NullLogger<DeliveryConfirmationService>.Instance,
             _clock);

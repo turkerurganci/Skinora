@@ -16,4 +16,8 @@ public static class AdminTransactionErrorCodes
     public const string CannotCancelDeliveredHold = "CANNOT_CANCEL_DELIVERED_HOLD";
     public const string AlreadyOnHold = "ALREADY_ON_HOLD";
     public const string NotOnHold = "NOT_ON_HOLD";
+
+    // AD32 — settlement clearance (T129 fix round, 07 §9.22b).
+    public const string SettlementNotEscalated = "SETTLEMENT_NOT_ESCALATED";
+    public const string SettlementAlreadyResolved = "SETTLEMENT_ALREADY_RESOLVED";
 }

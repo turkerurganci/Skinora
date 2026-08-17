@@ -2,7 +2,7 @@
 
 **Oluşturma:** WP14 (2026-06-19) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
 
-> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (60 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
+> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (63 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
 ---
 
@@ -87,7 +87,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 
 Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam **çalışmaz** (warn log ile atlanır, fail-fast DEĞİL).
 
-> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** Aşağıdaki altı satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
+> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** Aşağıdaki dokuz satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
 
 | Key | Default | Set edilmezse |
 |---|---|---|
@@ -97,6 +97,9 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
 | `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
 | `delivery.inventory_evidence_auto_release_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz. Açma prosedürü §H'de; alıcının kendi onayı bundan etkilenmez (T125, 02 §9.2) |
+| `settlement.reversal_auto_refund_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — mutabakat sonu kontrolü geri alma imzası bulursa admin'e eskale eder, otomatik iade + fraud flag uygulamaz. Açma prosedürü §I'de (T129, 02 §4.5.1) |
+| `payout_settlement_days` | `8` | Seed default'u zaten doğru değerdir (7 günlük Steam penceresi + 1 gün marj). Değiştirilecekse **7'nin altına inilemez** — validator reddeder (02 §16.2) |
+| `settlement.unreadable_escalation_hours` | `48` | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında admin'e ne kadar sonra düşeceği. Kısaltmak admin kuyruğunu şişirir, uzatmak satıcının ödemesini geciktirir — ödeme her iki hâlde de parkta kalır (03 §2.4) |
 
 ### C.1 PRICE_DEVIATION için uygulama config'i (SystemSetting değil)
 
@@ -333,3 +336,78 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 
 - `delivery_timeout_minutes`'i (§A #6) düşürmek. T127'den beri süre dolması gerçekten iptal üretebiliyor, dolayısıyla ölçüm gelmeden daraltmak teslim etmiş satıcıyı haksız iptale sokar.
 - `DeliveryEvidenceCaptures` satırlarını silmek/düzenlemek. Tablo append-only'dir (06 §4.2); UPDATE/DELETE uygulama katmanında reddedilir.
+
+---
+
+## I. Launch checklist — mutabakat geri alma kapısı (T129)
+
+### I.1 Neden ikinci bir kapı var
+
+Teslimat kapısı (§H) "item geldi mi?" sorusunun otomatik cevabını tutar; bu kapı "**trade geri mi alındı?**" sorusununkini tutar. İkisi ayrı sorulardır ve ikinci sorunun yanlış cevabı daha pahalıdır: yanlış "geri alındı" kararı alıcıya tam iade yapar, satıcıya `DELIVERY_REVERSED` fraud flag'i koyar ve item'ı kimsede bırakmaz. T122 gerçek bir geri almayı **ölçemedi** (runbook §7), dolayısıyla imza — "item alıcıdan gitti, satıcının orijinal asset'i geri döndü" — doğrulanmamış bir çıkarımdır.
+
+Kapı kapalıyken imza **kaybolmaz**: işlem `ITEM_DELIVERED`'da parkta kalır, `SettlementEscalatedAt` + `SettlementEscalationReason` damgalanır ve admin'lere `ADMIN_ESCALATION` bildirimi gider. İmza **yapışkandır**: ayrılmayı gözlemlemiş bir eskalasyon (`SETTLEMENT_AMBIGUOUS_DEPARTURE` / `SETTLEMENT_REVERSAL_GATED`) açıkken sonraki tur "item duruyor" dese bile kontrol `SettlementVerifiedAt` damgalamaz — sayım rotası, alıcı aynı skinden başka kopya edindiği anda "duruyor" der ve o okuma parayı admin haberdar edilmeden serbest bırakırdı.
+
+Yapışkanlık gerekçe kolonunun **değerine** bağlı olduğu için gerekçe de korunur: kayıtlı kod **yalnız güçlendirilebilir** (`UNREADABLE` = `NO_DELIVERY_REFERENCE` < `AMBIGUOUS_DEPARTURE` < `REVERSAL_GATED`), düşürülemez. Operasyonel sonucu: **§I.3'ün ilk sorgusunda gördüğünüz gerekçe, o işlem için gözlenmiş en güçlü bulgudur** — sonraki turların zayıf okumaları onu değiştirmez. Bu, kapı açma kararının kanıt sayımını korur: sıra olmadan, satıcı geri dönen item'ı devrettiğinde bir sonraki tur `AMBIGUOUS_DEPARTURE` okuyup `REVERSAL_GATED` kaydını siliyordu ve kuyruk "hiç gerçek geri alma gözlenmedi" gibi görünüyordu; alıcı envanterini gizlediğinde ise gerekçe `UNREADABLE`'a düşüyor, ardından ilk "item duruyor" okuması parayı açık eskalasyonun üstünden serbest bırakıyordu (T129 ikinci düzeltme turu, bulgu B4).
+
+> **Admin'in iki kolu ayrı sonuçlar üretir — karıştırmayın (T129 düzeltme turu).** `admin_resolve_refund` (AD29) **alıcı lehine** karardır: yalnız ESCALATED bir dispute üzerinden ateşlenir, dispute'u yalnız alıcı açabilir, `DeliveryReversedAt` **yazmaz** — dolayısıyla ne satıcının itibar paydasına girer (06 §3.1) ne de `DELIVERY_REVERSED` fraud flag'i yazılır. **Satıcı lehine** karar için ayrı bir kol vardır: AD32 `POST /admin/transactions/:id/clear-settlement` (yetki `MANAGE_DISPUTES`), dispute gerektirmez ve `SettlementVerifiedAt` + `SettlementClearedByAdminId` damgalayarak payout'u açar. Bir vaka her iki kolla da "aynı sonuca" varmaz; hangi tarafın lehine karar verildiği kolun kendisidir.
+
+### I.2 Kapı kapalıyken ne olur / ne olmaz
+
+| Durum | Kapı kapalı (`false`) | Kapı açık (`true`) |
+|---|---|---|
+| Item hâlâ alıcıda | `SettlementVerifiedAt` damgalanır → payout + sweep akar | Aynı |
+| Item gitti, satıcıda geri belirdi **ve teslimatta satıcıdan ayrıldığı gözlenmişti** | Admin'e eskale (`SETTLEMENT_REVERSAL_GATED`), para parkta | `delivery_reversed` → REFUNDED + alıcıya iade + satıcıya fraud flag |
+| Item gitti, satıcıda görünüyor ama **ayrıldığı hiç gözlenmedi** | Admin'e eskale (`SETTLEMENT_AMBIGUOUS_DEPARTURE`) | Admin'e eskale (kapıdan bağımsız) |
+| Item gitti, satıcıda görünmüyor | Admin'e eskale (`SETTLEMENT_AMBIGUOUS_DEPARTURE`) | Admin'e eskale (kapıdan bağımsız — ayrım kanıtlanamıyor) |
+| Envanter okunamıyor | Eşik dolunca admin'e eskale (`SETTLEMENT_UNREADABLE`) | Aynı |
+| Kontrolün karar girdisi hiç üretilememiş | **İlk turda** admin'e eskale (`SETTLEMENT_NO_DELIVERY_REFERENCE`) — §I.5 | Aynı (kapıdan bağımsız) |
+
+> **Launch öncesi nakit akışı kontrolü — sıcak cüzdan işletme bakiyesi (T129 ikinci düzeltme turu, bulgu N9).** Bu kapının kendisinden bağımsız olarak, mutabakat kontrolü hem ödemenin hem **süpürmenin** kapısıdır (05 §3.3 "Sweep tetikleyicisi"; `SweepQueueJob` de `SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL` çiftini okur). T129 öncesi süpürme `ITEM_DELIVERED`'da (T+0), ödeme `PayoutEligibleAt`'te (T+8g) çalışıyordu; yani sıcak cüzdan ilgili depoziti ödeme çıkışından günler önce görüyor ve bu gecikme onu kendiliğinden fonluyordu. Artık iki kapı aynı ana açılıyor: iki job birbirini beklemez, dolayısıyla ödeme karşılık gelen depozitle aynı pencerede ısmarlanır ve ön fonlama ortadan kalkar. **Yapılacak:** launch öncesi sıcak cüzdanın işletme bakiyesi beklenen günlük ödeme hacmine göre boyutlandırılır ve `hot_wallet_limit` (§A satır 18) buna göre ayarlanır — limit, ödeme kuyruğunun aynı pencerede ihtiyaç duyduğu bakiyenin altında kalırsa alert deploy'un ilk gününden itibaren gürültü üretir. Kapının kendisi doğrudur ve değiştirilmemelidir — depozit, geri alma tespit edilirse iadenin çekilebileceği yerde kalmalıdır (02 §4.5.1 "Bilinen sonuçları"). Süpürme başarısız olursa fallback zaten depozit adresinden doğrudan gönderim yapar (05 §3.3 "Sweep hatası").
+
+Son dört satır kapının **dışındadır**. Alıcının item'ı başkasına devretmesi ile geri alma tek taraflı okumada aynı görünür ve Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde biter, yani devir meşru bir ihtimaldir. Üçüncü satır aynı kuralın satıcı tarafındaki karşılığıdır: 02 §4.5.1 item'ın satıcıya **dönmesini** arar, oysa alıcı onayıyla kapanan bir teslimatta platform satıcı envanterini hiç okumaz — satıcı aynı sınıftan başka bir kopya göndermiş olabilir (§9.2 sayım kuralı bunu geçerli teslimat sayar) ve orijinal asset'i yerinde durur. Bunu geri alma saymak dürüst satıcıyı cezalandırırdı, o yüzden imza artık **ayrılmanın gözlenmiş olmasını** da şart koşar (`DeliveryEvidence.SELLER_ASSET_GONE`).
+
+### I.3 Kapıyı açma adımları
+
+1. **En az bir gerçek geri alma vakası gözlenmiş olmalı.** Eskale edilmiş işlemler:
+   ```sql
+   SELECT Id, SellerId, BuyerId, ItemDeliveredAt, PayoutEligibleAt,
+          SettlementCheckedAt, SettlementEscalatedAt, SettlementEscalationReason,
+          SettlementVerifiedAt, SettlementClearedByAdminId, DeliveryReversedAt
+   FROM   Transactions
+   WHERE  SettlementEscalatedAt IS NOT NULL
+   ORDER  BY SettlementEscalationReason, SettlementEscalatedAt;
+   ```
+   Son üç kolon **kapalı** vakaları ayırt etmek içindir: `SettlementVerifiedAt` doluysa mutabakat kapanmıştır (`SettlementClearedByAdminId` doluysa kararı bir admin verdi, boşsa kontrol kendi sonuçlandı), `DeliveryReversedAt` doluysa geri alma uygulanmıştır. `SettlementEscalationReason` ile gruplayın — `SETTLEMENT_NO_DELIVERY_REFERENCE` satırları bu kapıyla ilgili **değildir**, prosedürleri §I.5'tedir.
+2. **Her vakayı insan incele:** Steam trade geçmişi gerçekten bir rollback gösteriyor mu, yoksa alıcı item'ı mı devretti? Sonuç `INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md` §7'ye işlenir — geri alma sonrası asset ID'nin korunup korunmadığı bu incelemede öğrenilir ve servisin imzası ona göre daraltılabilir.
+3. **Karar veren kolu doğru seç.** Satıcı lehine kapatma AD32 (`clear-settlement`); alıcı lehine iade AD29 (`admin_resolve_refund`, dispute gerektirir). §I.1'deki uyarıya bakın — ikisi aynı sonucu üretmez.
+4. **Kapıyı aç.** Admin UI → Ayarlar → *Mutabakat* → `Geri alma tespitinde otomatik iade` = `true`. Env ile açılamaz (§C'deki aynı gerekçe).
+5. **Geri alınabilir.** Şüpheli bir vaka görülürse `false` yapılır; tespit ve eskalasyon sürer, otomatik iade durur.
+
+### I.4 Kapı açılmadan yapılmaması gerekenler
+
+- `payout_settlement_days`'i 7'ye indirmek. Validator 7'nin altını reddeder ama tam 7 de marjsızdır: kontrol penceresi Steam'in geri alma penceresiyle tam örtüşür ve saat farkı kadar bir açık bırakır.
+- Eskale edilmiş işlemi **veritabanında** `SettlementVerifiedAt` elle damgalayarak "çözmek". O damga payout'u serbest bırakır ve `COMPLETED` guard'ını açar, ama ne audit satırı ne history satırı ne de kararı verenin kaydı kalır. Satıcı lehine karar için **AD32** (`POST /admin/transactions/:id/clear-settlement`) kullanılır: aynı damgayı atar, üstüne `SettlementClearedByAdminId` + `SETTLEMENT_CLEARED_ADMIN` audit satırı + `AdminClearSettlement` history satırı yazar ve en az 10 karakterlik gerekçe ister. Alıcı lehine karar dispute üzerinden AD29'dur.
+
+### I.5 Karar girdisi üretilememiş vakalar (`SETTLEMENT_NO_DELIVERY_REFERENCE`)
+
+Bu sınıf kapıyla ilgili **değildir** ve §I.3'ün "Steam trade geçmişi rollback gösteriyor mu" triyajı buna **uymaz** — ortada bir imza yoktur, ölçülecek referans hiç doğmamıştır.
+
+**Nasıl oluşur:** alıcının envanteri `SELLER_CONFIRMED` anında gizliyse baseline bilinçli olarak NULL bırakılır (03 §2.3 — gizli envanter işlemi durdurmaz, yalnız kanıt yolunu kapatır) ve teslimat alıcı onayıyla kapanırsa envanter hiç okunmadığı için `DeliveredBuyerAssetId` de yazılmaz. Mutabakat kontrolünün iki rotası da girdisiz kalır ve **iki kolon da ITEM_DELIVERED'dan sonra hiçbir yolla dolmaz**. Bu yüzden bu sınıf eşiği beklemez: ilk turda eskale edilir, çünkü tekrar denemenin kazanacağı bir şey yoktur.
+
+**Triyaj:**
+
+```sql
+SELECT Id, SellerId, BuyerId, ItemName, ItemDeliveredAt, PayoutEligibleAt, SettlementEscalatedAt
+FROM   Transactions
+WHERE  SettlementEscalationReason = 'SETTLEMENT_NO_DELIVERY_REFERENCE'
+  AND  SettlementVerifiedAt IS NULL
+  AND  DeliveryReversedAt IS NULL
+ORDER  BY SettlementEscalatedAt;
+```
+
+1. **Alıcının teslimatı onayladığını doğrula.** `BuyerConfirmedReceiptAt` dolu ve `DeliveryEvidence` `BUYER_CONFIRMED` içeriyorsa alıcı item'ı aldığını kendisi beyan etmiştir; bu, platformun elindeki tek kanıttır ve 02 §9.2 onu yeterli sayar.
+2. **Alıcı tarafında açık bir şikâyet olmadığını doğrula.** Dispute varsa AD29 yolu işler; AD32 zaten aktif dispute'ta reddeder.
+3. **Satıcı lehine kapat.** AD32 → `POST /admin/transactions/:id/clear-settlement`, gerekçe alanına neye bakıldığı yazılır. Payout bir sonraki `SellerPayoutQueueJob` turunda kuyruğa girer.
+4. **Alıcı sonradan geri alma bildirirse** olağan yol dispute'tur (03 §8.8); AD32 kararı `SETTLEMENT_CLEARED_ADMIN` audit satırıyla izlenebilir durumdadır.
+
+**Hacim beklentisi:** bu sınıf gizli envanterli alıcılarla sınırlıdır. Kuyruk şişerse çare admin sayısı değil, alıcı envanterini `SELLER_CONFIRMED` anında okunabilir hâle getiren ürün tarafı düzeltmesidir — kayıt: `Docs/DEFERRED_BACKLOG.md`.

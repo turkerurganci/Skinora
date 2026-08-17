@@ -60,4 +60,25 @@ public interface IAdminTransactionService
         HoldUserTransactionsRequest request,
         string? ipAddress,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// AD32 — close an escalated settlement in the seller's favour (07 §9.22b).
+    /// Stamps the clearance the payout, sweep and COMPLETED gates all read; the
+    /// status is untouched, because COMPLETED must still follow the payout, not
+    /// precede it.
+    /// </summary>
+    /// <remarks>
+    /// Only an ESCALATED settlement can be closed this way: the admin ends what
+    /// the platform asked about, and cannot pay a seller out before the window
+    /// the check exists to enforce has even elapsed. The opposite direction
+    /// (decide against the seller) is deliberately absent — that is a refund,
+    /// and refunds keep going through the dispute path so the buyer's evidence
+    /// is on file (02 §4.5.1, 03 §8.8).
+    /// </remarks>
+    Task<ClearSettlementOutcome> ClearSettlementAsync(
+        Guid adminUserId,
+        Guid transactionId,
+        ClearSettlementRequest request,
+        string? ipAddress,
+        CancellationToken cancellationToken);
 }

@@ -33,6 +33,18 @@ namespace Skinora.Transactions.Application.Transfers;
 /// </para>
 ///
 /// <para>
+/// <b>T129 — the settlement gate applies here for the same reason the deferral
+/// does.</b> This job's whole rationale is that the deposit must stay where a
+/// refund can draw from it until the transaction has settled toward the seller
+/// — and until the end-of-window re-check runs, it has not. A trade reversed on
+/// day seven produces exactly the refund this deferral exists to protect, so
+/// sweeping at ITEM_DELIVERED alone would empty the deposit shortly before the
+/// one refund path most likely to need it. The gate is therefore the same pair
+/// the payout job and the COMPLETED guard read: <c>SettlementVerifiedAt</c> set
+/// and <c>DeliveryReversedAt</c> null.
+/// </para>
+///
+/// <para>
 /// Money-safety gate (mirrors <see cref="SellerPayoutQueueJob"/>): a
 /// transaction on emergency hold or with an active dispute is skipped so its
 /// deposit stays available for a hold-release / buyer-favour refund. The sweep
@@ -127,6 +139,8 @@ public sealed class SweepQueueJob
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
                 && !t.IsOnHold
                 && !t.HasActiveDispute
+                && t.SettlementVerifiedAt != null
+                && t.DeliveryReversedAt == null
                 && !t.BlockchainTransactions.Any(
                     b => b.Type == BlockchainTransactionType.SWEEP))
             .OrderBy(t => t.ItemDeliveredAt)
@@ -156,7 +170,9 @@ public sealed class SweepQueueJob
         if (transaction is null
             || transaction.Status != TransactionStatus.ITEM_DELIVERED
             || transaction.IsOnHold
-            || transaction.HasActiveDispute)
+            || transaction.HasActiveDispute
+            || transaction.SettlementVerifiedAt is null
+            || transaction.DeliveryReversedAt is not null)
         {
             return;
         }

@@ -180,6 +180,23 @@ public class TransactionStateMachineTests
     }
 
     [Fact]
+    public void DeliverItem_WithoutPayoutEligibleAt_ThrowsInvalidTransition()
+    {
+        // T129 — 02 §4.5.1 / 06 §3.5. The settlement window is required to ENTER
+        // ITEM_DELIVERED, not merely to leave it: without the column the payout
+        // queue is fail-closed and the transaction would sit in a state whose
+        // only exit nobody can compute. Making it an entry condition is what
+        // forces every DeliverItem caller through SettlementWindowStamper.
+        var transaction = NewTransactionWithAllRequiredFields(TransactionStatus.PAYMENT_RECEIVED);
+        transaction.PayoutEligibleAt = null;
+        var sm = new TransactionStateMachine(transaction);
+
+        var ex = Assert.Throws<DomainException>(() => sm.Fire(TransactionTrigger.DeliverItem));
+        Assert.Equal(TransactionStateMachine.InvalidTransitionErrorCode, ex.ErrorCode);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, transaction.Status);
+    }
+
+    [Fact]
     public void DeliverItem_BuyerConfirmedWithoutDeliveredAssetId_Succeeds()
     {
         // Deliberate: a delivery closed by the buyer's own confirmation may never
@@ -742,6 +759,10 @@ public class TransactionStateMachineTests
                 DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA;
             transaction.DeliveryVerifiedAt = DateTime.UtcNow;
             transaction.SettlementVerifiedAt = DateTime.UtcNow;
+
+            // T129 — the ITEM_DELIVERED entry guard also demands the settlement
+            // window, so DeliverItem callers must have stamped it (02 §4.5.1).
+            transaction.PayoutEligibleAt = DateTime.UtcNow.AddDays(8);
         }
 
         // Cumulative milestone timestamps per current status (06 §3.5 matrix).

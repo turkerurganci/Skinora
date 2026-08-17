@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Platform.Application.Audit;
@@ -641,10 +642,199 @@ public class AdminTransactionServiceTests : IntegrationTestBase
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    //  AD32 — POST /admin/transactions/:id/clear-settlement (T129 fix round)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The lever that did not exist before the fix round. An escalated
+    /// settlement had no terminating path at all: the payout, the sweep and the
+    /// COMPLETED guard all wait on <c>SettlementVerifiedAt</c>, whose only
+    /// writer was a check that could not conclude, and the one admin route named
+    /// in the runbook (<c>admin_resolve_refund</c>) is reachable only through a
+    /// dispute the buyer alone can open (validator finding B1).
+    /// </summary>
+    [Fact]
+    public async Task ClearSettlementAsync_On_Escalated_Delivery_Stamps_Clearance_With_History_And_Audit()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true,
+            configure: t =>
+            {
+                t.PayoutEligibleAt = nowUtc.AddDays(-1);
+                t.SettlementCheckedAt = nowUtc.AddMinutes(-5);
+                t.SettlementEscalatedAt = nowUtc.AddHours(-2);
+                t.SettlementEscalationReason = SettlementReviewReasons.NoDeliveryReference;
+            });
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("Steam trade geçmişi temiz, teslimat doğrulandı"),
+            ipAddress: "127.0.0.1",
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.Cleared, outcome.Status);
+        Assert.Equal(SettlementReviewReasons.NoDeliveryReference, outcome.Body!.EscalationReason);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Equal(nowUtc, persisted.SettlementVerifiedAt);
+        Assert.Equal(_admin.Id, persisted.SettlementClearedByAdminId);
+        Assert.Null(persisted.DeliveryReversedAt);
+
+        // The status is deliberately untouched: COMPLETED still has to arrive
+        // behind the payout, not in front of it.
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, persisted.Status);
+
+        // WP15 history row — no transition, so a label rather than a trigger.
+        var history = await Context.Set<TransactionHistory>().AsNoTracking()
+            .SingleAsync(h => h.TransactionId == tx.Id
+                && h.Trigger == AdminTransactionService.ClearSettlementTrigger);
+        Assert.Equal(ActorType.ADMIN, history.ActorType);
+        Assert.Equal(_admin.Id, history.ActorId);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, history.PreviousStatus);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, history.NewStatus);
+        Assert.Contains(SettlementReviewReasons.NoDeliveryReference, history.AdditionalData);
+
+        var audit = await Context.Set<AuditLog>().AsNoTracking()
+            .SingleAsync(a => a.EntityId == tx.Id.ToString()
+                && a.Action == AuditAction.SETTLEMENT_CLEARED_ADMIN);
+        Assert.Equal(ActorType.ADMIN, audit.ActorType);
+        Assert.Equal(_admin.Id, audit.ActorId);
+        Assert.Contains(SettlementReviewReasons.NoDeliveryReference, audit.OldValue);
+
+        // Read the payload back rather than substring-matching it: the
+        // serializer escapes non-ASCII, so a Turkish reason never appears
+        // literally in the stored JSON.
+        var newValue = JsonSerializer.Deserialize<JsonElement>(audit.NewValue!);
+        Assert.Equal(
+            "Steam trade geçmişi temiz, teslimat doğrulandı",
+            newValue.GetProperty("Reason").GetString());
+        Assert.Equal(_admin.Id, newValue.GetProperty("ClearedBy").GetGuid());
+    }
+
+    [Fact]
+    public async Task ClearSettlementAsync_Without_An_Escalation_Is_Refused()
+    {
+        // The admin ends what the platform asked about. Without this guard the
+        // endpoint would be a way to pay a seller before the reversal window the
+        // check exists to enforce has even elapsed.
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true,
+            configure: t => t.PayoutEligibleAt = nowUtc.AddDays(7));
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("Erkenden ödemeyi açmayı dene"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.NotEscalated, outcome.Status);
+        Assert.Equal(AdminTransactionErrorCodes.SettlementNotEscalated, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Null(persisted.SettlementVerifiedAt);
+    }
+
+    [Fact]
+    public async Task ClearSettlementAsync_On_An_Already_Resolved_Settlement_Is_Refused()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true,
+            configure: t =>
+            {
+                t.PayoutEligibleAt = nowUtc.AddDays(-1);
+                t.SettlementEscalatedAt = nowUtc.AddHours(-2);
+                t.SettlementEscalationReason = SettlementReviewReasons.Unreadable;
+                t.SettlementVerifiedAt = nowUtc.AddMinutes(-1);
+            });
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("İkinci kez kapatmayı dene"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.AlreadyResolved, outcome.Status);
+        Assert.Equal(AdminTransactionErrorCodes.SettlementAlreadyResolved, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ClearSettlementAsync_With_An_Active_Dispute_Is_Refused()
+    {
+        // A dispute owns the outcome; two admin surfaces deciding the same
+        // transaction is exactly the race AD29's hold guard exists to stop.
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true,
+            configure: t =>
+            {
+                t.PayoutEligibleAt = nowUtc.AddDays(-1);
+                t.SettlementEscalatedAt = nowUtc.AddHours(-2);
+                t.SettlementEscalationReason = SettlementReviewReasons.AmbiguousDeparture;
+                t.HasActiveDispute = true;
+            });
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("Dispute açıkken kapatmayı dene"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.InvalidStateTransition, outcome.Status);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Null(persisted.SettlementVerifiedAt);
+    }
+
+    [Fact]
+    public async Task ClearSettlementAsync_Outside_ItemDelivered_Is_Refused()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("Teslimat olmadan mutabakat kapatmayı dene"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.InvalidStateTransition, outcome.Status);
+    }
+
+    [Fact]
+    public async Task ClearSettlementAsync_With_A_Too_Short_Reason_Is_Refused()
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true,
+            configure: t =>
+            {
+                t.PayoutEligibleAt = nowUtc.AddDays(-1);
+                t.SettlementEscalatedAt = nowUtc.AddHours(-2);
+                t.SettlementEscalationReason = SettlementReviewReasons.Unreadable;
+            });
+
+        var sut = BuildSut();
+        var outcome = await sut.ClearSettlementAsync(
+            _admin.Id, tx.Id,
+            new ClearSettlementRequest("ok"),
+            ipAddress: null,
+            CancellationToken.None);
+
+        Assert.Equal(ClearSettlementStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(AdminTransactionErrorCodes.ValidationError, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.Null(persisted.SettlementVerifiedAt);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     //  fixtures
     // ─────────────────────────────────────────────────────────────────────
 
-    private async Task<Transaction> CreateTransactionAsync(TransactionStatus status, bool withBuyer)
+    private async Task<Transaction> CreateTransactionAsync(
+        TransactionStatus status, bool withBuyer, Action<Transaction>? configure = null)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var tx = new Transaction
@@ -698,6 +888,7 @@ public class AdminTransactionServiceTests : IntegrationTestBase
             DeliveryDeadline = status == TransactionStatus.PAYMENT_RECEIVED
                 ? nowUtc.AddMinutes(60) : null,
         };
+        configure?.Invoke(tx);
         Context.Set<Transaction>().Add(tx);
         await Context.SaveChangesAsync();
         return tx;

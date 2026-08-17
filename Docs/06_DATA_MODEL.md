@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — yeni entity §3.5a `DeliveryEvidenceCapture` (append-only teslimat kanıt kaydı) ve §8'e `delivery.inventory_evidence_auto_release_enabled` launch kapısı satırı eklendi. Şema: 1 yeni tablo, migration `T125_DeliveryEvidenceCapture`.) · 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
+**Versiyon: v6.7** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-17 (T129 ikinci düzeltme turu — §3.5 `SettlementEscalationReason` satırına **güç sırası** yazıldı: yapışkanlık kolonun değerine bağlı olduğu için değerin kendisi de korunur, kod yalnız güçlendirilebilir (`SETTLEMENT_UNREADABLE` = `SETTLEMENT_NO_DELIVERY_REFERENCE` < `SETTLEMENT_AMBIGUOUS_DEPARTURE` < `SETTLEMENT_REVERSAL_GATED`) ve eşit güçteki iki kod birbirinin üstüne de yazmaz — prosedürde ayrışırlar (DEPLOY_RUNBOOK §I.3 ↔ §I.5), gözlemde ayrışmazlar. Şema değişikliği **yok**. Gerekçe: sıra olmadan tek bir `Inconclusive` tur yapışkanlığı kendi kendine iptal ediyordu (bulgu B4).) · 2026-08-17 (T129 düzeltme turu — §3.5'e `SettlementEscalationReason` + `SettlementClearedByAdminId`, §2.11'e `DELIVERY_REVERSED`, §2.19'a `SETTLEMENT_CLEARED_ADMIN`; §3.1 girişi ile §8.2 tetikleyicisi geri alma dalıyla genişletilip **çelişkileri giderildi**; §3.17 anahtar sayısı 58 → **63** ve eksik `blockchain.payout_gas_fee_estimate_usdt` satırı eklendi; launch kapısı atfı §H → **§I**.) · 2026-08-16 (T129 — §3.5'e iki kolon (`SettlementCheckedAt`, `SettlementEscalatedAt`) ve `PayoutEligibleAt`'ın ITEM_DELIVERED **giriş guard'ı** olduğu notu; §3.1 oran formülünün paydasına `REFUNDED[DeliveryReversedAt NOT NULL]` (mutabakat geri alması satıcıya yazılır, admin dispute iadesi hariç kalır); §3.17'ye üç `Settlement` ayarı. Şema: 2 nullable kolon + 3 seed satırı, migration `T129_SettlementCheckColumns`.) · 2026-08-14 (T125 — yeni entity §3.5a `DeliveryEvidenceCapture` (append-only teslimat kanıt kaydı) ve §8'e `delivery.inventory_evidence_auto_release_enabled` launch kapısı satırı eklendi. Şema: 1 yeni tablo, migration `T125_DeliveryEvidenceCapture`.) · 2026-08-13 (T123 — §8 SystemSetting tablosunda iki custodial anahtar yeniden adlandırıldı: `trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`. Şema değişikliği yok; migration satır `Id`'leri sabit tutan bir `UpdateData`'dır.) · 2026-08-10 (T119a — §3.5 zorunlu-field matrisine `BuyerTradeUrl` için DB CHECK istisnası notu eklendi: kolon nullable kalır, invariant `HasFieldsForAccepted` guard'ında korunur. Şema değişikliği yok.)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -223,6 +223,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `ABNORMAL_BEHAVIOR` | Anormal davranış örüntüsü |
 | `MULTI_ACCOUNT` | Çoklu hesap tespiti (cüzdan/IP/cihaz) |
 | `SANCTIONS_MATCH` | Yaptırımlı cüzdan adresi eşleşmesi (02 §21.1, 03 §11a.3) — `cascadeEmergencyHold = true` ile tetiklenen yüksek risk tipi |
+| `DELIVERY_REVERSED` | Mutabakat sonu kontrolünde satıcının trade'i geri aldığının tespiti (02 §4.5.1, T129) — **hesap düzeyi** (`ACCOUNT_LEVEL`) işaret, çünkü bulgu işlemin değil kişinin hakkındadır ve 02 §14.2 yaptırımı tekrarı sayar. Ayrı tip olmasının sebebi bu sayımdır: `ABNORMAL_BEHAVIOR` torbasına atılsaydı "kaçıncı geri alma" sorusu admin kuyruğunda cevaplanamazdı |
 
 ### 2.12 ReviewStatus
 
@@ -330,6 +331,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `TRANSACTION_CANCELLED_ADMIN` | Admin | Admin doğrudan işlem iptali (07 §9.20 AD19, 02 §7) |
 | `EMERGENCY_HOLD_APPLIED` | Admin | Admin acil durdurma uyguladı (07 §9.21 AD19b, 02 §7) |
 | `EMERGENCY_HOLD_RELEASED` | Admin | Admin emergency hold kaldırdı (RESUME veya CANCEL — 07 §9.22 AD19c) |
+| `SETTLEMENT_CLEARED_ADMIN` | Admin | Admin eskale edilmiş mutabakatı satıcı lehine kapattı (07 §9.22b AD32, 02 §4.5.1, T129) — `SettlementVerifiedAt` + `SettlementClearedByAdminId` damgalanır, statü değişmez |
 
 ### 2.20 TimeoutFreezeReason
 
@@ -438,16 +440,19 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 
 > **Cüzdan adresi geçmişi (`WalletAddressHistory` — T105b):** `DefaultPayoutAddress` / `DefaultRefundAddress` yalnızca **mevcut** adresleri taşır. Bir adres değiştirildiğinde, değiştirilen (önceki) adres ayrı bir **append-only** `WalletAddressHistory` tablosuna yazılır: `Id` (bigint, IDENTITY PK), `UserId` (guid, FK → User), `Type` (string(10), `"seller"` = payout / `"buyer"` = refund), `Address` (string(50)), `SetAt` (datetime, NULL — önceki adresin atanma zamanı), `CreatedAt` (datetime — değişim anı). Index: `(UserId)`, `(UserId, Type)`. 06 §4.2 append-only — UPDATE/DELETE reddedilir. İlk adres tanımlaması (önceki yok) veya aynı adresin yeniden kaydı geçmiş satırı **üretmez**. Admin kullanıcı detayında (07 §9.16 `walletHistory[]`) mevcut adresler User kaydından (`current: true`), önceki adresler bu tablodan (`current: false`, en yeni önce) sunulur — `current` saklanan bir bayrak değil, okuma anında türetilir.
 
-> **İtibar skoru:** `CompletedTransactionCount`, `SuccessfulTransactionRate` ve `CreatedAt` (hesap yaşı) alanlarından oluşur. Denormalized field'lar işlem tamamlandığında veya iptal olduğunda güncellenir.
+> **İtibar skoru:** `CompletedTransactionCount`, `SuccessfulTransactionRate` ve `CreatedAt` (hesap yaşı) alanlarından oluşur. Denormalized field'lar işlem tamamlandığında, iptal olduğunda veya mutabakat sonu kontrolü geri alma tespit ettiğinde (REFUNDED, `DeliveryReversedAt NOT NULL` — T129) güncellenir.
 >
 > **SuccessfulTransactionRate formülü:**
 > ```
-> completed / (completed + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT)
+> completed / (completed + CANCELLED_SELLER + CANCELLED_BUYER + CANCELLED_TIMEOUT
+>              + REFUNDED[DeliveryReversedAt NOT NULL])
 > ```
 > - CANCELLED_ADMIN paydaya dahil **değildir** — tamamen platform kararı, kullanıcının kontrolünde değil.
+> - `REFUNDED` **bölünerek** dahil edilir (T129, proje sahibi kararı 2026-08-16). İki üreticisi kusur hakkında zıt şey söyler: admin dispute iadesi bir platform kararıdır ve CANCELLED_ADMIN ile aynı gerekçeyle dışarıda kalır; mutabakat sonu geri alması (`DeliveryReversedAt NOT NULL`) ise platformun satıcının item'ı ödeme sonrası geri aldığını **gözlemlemesidir**. Ayırt edici alan `DeliveryReversedAt`'tir; onu yalnız mutabakat yolu yazar. Formül bölünmeseydi modeldeki **en ağır dolandırıcılık** itibar skoruna hiç yansımaz, tek izi admin'in gidip okuması gereken bir fraud flag olurdu.
 > - **Sorumluluk prensibi:** İptal sadece sorumlu tarafın skorunu etkiler:
 >   - `CANCELLED_SELLER` → sadece satıcının paydasına eklenir
 >   - `CANCELLED_BUYER` → sadece alıcının paydasına eklenir
+>   - `REFUNDED` (geri alma) → sadece **satıcının** paydasına eklenir; alıcı bu senaryonun mağdurudur
 >   - `CANCELLED_TIMEOUT` → timeout'un düştüğü adıma göre sorumlu taraf belirlenir. Sorumluyu belirleyen tek girdi `TransactionHistory.PreviousStatus`'tur (05 §4.4 — timeout satırını yazan yol bu alanı doldurmazsa iptal hiçbir tarafın paydasına yazılmaz):
 >     - Alıcı kabul timeout'u (adım 2, `PreviousStatus = CREATED`) → alıcı
 >     - Satıcı hazırlık onayı timeout'u (adım 3, `PreviousStatus = ACCEPTED`) → satıcı
@@ -616,9 +621,13 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
 | `DeliveryRoundAt` | datetime | NULL | Teslimat timeout doğrulama turunun bu satıra **en son ne zaman baktığı** (T127). Her turda yazılır — sonuca varmayan turlar dahil. `DeadlineScannerJob` teslimat penceresini bu kolona göre (NULL'lar önce) sıralar: beş verdict'ten üçü satırı `PAYMENT_RECEIVED` ve süresi kalıcı dolmuş bırakır, dolayısıyla deadline sırası bu satırların pencereyi kalıcı işgal etmesi demektir. Karar girdisi **değildir**, yalnız sıralama/aralık alanıdır |
 | **Mutabakat (v3.0)** | | | |
-| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
-| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu |
-| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur |
+| `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (`payout_settlement_days`, varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır ve o geçişin **guard koşuludur** (T129): kolonu yazmayan bir çağıran teslimatı gerçekleştiremez, çünkü kapı yalnız kapattığı yolu değil koruduğu değerin yazarlarını da denetlemelidir. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
+| `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu; ayrıca satıcı payout'u ve depozit sweep'i bu damgayı bekler (T129) |
+| `DeliveryReversedAt` | datetime | NULL | Trade geri alma tespit edildiği an. Doluysa satıcıya ödeme yapılmaz; işlem REFUNDED olur. Aynı zamanda REFUNDED'ın iki üreticisini ayıran alandır: doluysa kanıtlanmış satıcı kusuru (itibar formülüne girer, §3.1), boşsa admin dispute kararı (girmez) |
+| `SettlementCheckedAt` | datetime | NULL | Mutabakat kontrolünün bu satıra **en son ne zaman baktığı** (T129). `DeliveryRoundAt`'ın ikizi ve aynı gerekçeyle var: envanteri okunamayan satır süresiz uygun kalır, dolayısıyla `PayoutEligibleAt` sırası en eski okunamayan satırların pencereyi kalıcı işgal etmesi demektir. Job bu kolona göre (NULL'lar önce) sıralar. Karar girdisi **değildir** |
+| `SettlementEscalatedAt` | datetime | NULL | Mutabakat kontrolünün işlemi admin'e devrettiği an (T129). Dört sebep: envanter `settlement.unreadable_escalation_hours` boyunca okunamadı; teslimat ölçülebilir bir referans bırakmadı (ne `DeliveredBuyerAssetId` ne alıcı baseline'ı üretildi — bu sebep eşik **beklemeden ilk turda** eskale eder, çünkü karar girdisi sonradan da doğmaz, T129 düzeltme turu); item alıcıdan ayrıldı ama satıcıya döndüğü kanıtlanamadı; ya da geri alma imzası otomatik iade kapısı kapalıyken oluştu. Hangi sebeple devredildiği `SettlementEscalationReason`'da tutulur. Idempotency işareti — admin bir kez haberdar edilir, her turda değil |
+| `SettlementEscalationReason` | string(64) | NULL | Eskalasyonun gerekçe kodu (T129): `SETTLEMENT_UNREADABLE`, `SETTLEMENT_NO_DELIVERY_REFERENCE`, `SETTLEMENT_AMBIGUOUS_DEPARTURE`, `SETTLEMENT_REVERSAL_GATED` — `SettlementReviewReasons` sabitleri. Enum kolonu **değildir**: kodlar outbox event'inde zaten string olarak taşınır. İki işi vardır. (1) Triyaj: admin kuyruğu eskalasyon sınıflarını ayırt edebilir. (2) **Yapışkanlık:** ayrılmayı *gözlemlemiş* bir gerekçe yazılıysa (`SETTLEMENT_AMBIGUOUS_DEPARTURE` veya `SETTLEMENT_REVERSAL_GATED`) sonraki tur "item alıcıda duruyor" dese bile `SettlementVerifiedAt` damgalanmaz — para insan kararına kadar parkta kalır. Aksi hâlde item'ın alıcıya geri dönmesi (ya da envanterin yeniden görünür olması) gözlemlenmiş ayrılmayı sessizce silerdi. Yapışkanlık kolonun **değerine** bağlı olduğu için değerin kendisi de korunur: kod **yalnız güçlendirilebilir**, düşürülemez. Güç sırası `SETTLEMENT_UNREADABLE` = `SETTLEMENT_NO_DELIVERY_REFERENCE` (0) < `SETTLEMENT_AMBIGUOUS_DEPARTURE` (1) < `SETTLEMENT_REVERSAL_GATED` (2); yeni bir tur yalnız kendi kodu **kesin olarak daha güçlüyse** yazar, eşit veya daha zayıfsa kayıtlı gerekçe korunur (yalnız log). Eşit güçteki iki kod prosedürde ayrışır (DEPLOY_RUNBOOK §I.3 ↔ §I.5), gözlemde ayrışmaz — bu yüzden biri diğerinin üstüne de yazmaz. Sıra olmadan tek bir `Inconclusive` tur `SETTLEMENT_REVERSAL_GATED`'i `SETTLEMENT_UNREADABLE`'a çevirip yapışkanlığı kendi kendine iptal ediyordu (T129 ikinci düzeltme turu, bulgu B4) |
+| `SettlementClearedByAdminId` | guid | NULL | Mutabakatı admin kapattıysa hangi admin (T129, AuditAction `SETTLEMENT_CLEARED_ADMIN`). **Hiçbir para kapısı bu kolonu okumaz** — kapılar `SettlementVerifiedAt`/`DeliveryReversedAt` çiftine bakar; bu alan yalnız kanıt ve triyaj içindir. FK tanımlı değildir |
 | **Concurrency** | | | |
 | `RowVersion` | byte[] | NOT NULL, ROWVERSION | Optimistic concurrency token — EF Core `IsRowVersion()` |
 | **Zaman Damgaları** | | | |
@@ -660,6 +669,10 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 >   | `CompletedAt` | COMPLETED |
 >
 >   **Mutabakat invariantı (v3.0):** `COMPLETED`'a geçiş için `SettlementVerifiedAt NOT NULL` **ve** `DeliveryReversedAt NULL` olmalıdır. Yani ödeme, yalnızca mutabakat süresi dolduktan **ve** item'ın hâlâ alıcıda olduğu doğrulandıktan sonra yapılabilir (02 §4.5.1). Süre dolmuş olması tek başına yeterli değildir.
+>
+>   **Kapının üç kez okunması (T129):** aynı çift — `SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL` — state machine `Complete` guard'ının yanı sıra `SellerPayoutQueueJob` ve `SweepQueueJob` sorgularında da okunur. Guard tek başına yetmez çünkü ikisi de COMPLETED'dan **önce** çalışır: payout satırı zincire yayınlandıktan sonra guard'ın geçişi reddetmesi parayı geri getirmez, sweep depoziti boşalttıktan sonra iade edilecek kaynak kalmaz. Kapı, korduğu değerin bütün tüketicilerinde tekrarlanır.
+>
+>   **Giriş invariantı (T129):** `ITEM_DELIVERED`'a geçiş `PayoutEligibleAt NOT NULL` ister. Kolon bir kayıt alanı değil ödeme saatidir; duruma kolonsuz girilebilseydi payout kuyruğu fail-closed olduğu için işlem sessizce kilitlenir, ya da ileride başka bir yazar pencereyi `ItemDeliveredAt`'ten bağımsız doldurup kısaltırdı.
 >
 >   **`DeliveredBuyerAssetId` bu matriste yer almaz.** Best-effort audit alanıdır: teslimat alıcı onayıyla doğrulandığında envanter okunmamış olabilir ve alan NULL kalır. Guard bu alana değil `DeliveryEvidence`'a bakar (§8.4).
 >
@@ -1052,7 +1065,7 @@ Admin tarafından yönetilen platform parametreleri.
 
 **Başlangıç parametreleri (02 §16.2):** Varsayılan sütununda "—" olan parametreler seed'de `Value = NULL, IsConfigured = false` olarak oluşturulur; lansman öncesi admin tarafından yapılandırılması zorunludur.
 
-Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. `Category`, DB kolonudur (07 §9.8'in API lehçesinden daha kaba — eşleme `SystemSettingsCatalog` kodundadır).
+Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **63 anahtar**. `Category`, DB kolonudur (07 §9.8'in API lehçesinden daha kaba — eşleme `SystemSettingsCatalog` kodundadır).
 
 | Key | Category | DataType | Varsayılan | Açıklama |
 |-----|----------|----------|------------|----------|
@@ -1114,7 +1127,11 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **58 anahtar**. 
 | `reconciliation.cold_wallet_address` | Monitoring | string | NONE | Reconciliation cold wallet Tron adresi (opsiyonel); 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
 | `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
 | `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
+| `blockchain.payout_gas_fee_estimate_usdt` | Commission | decimal | 0.50 | Satıcı payout gas fee tahmini (USDT) — `SellerPayoutQueueJob` gas-fee koruma split'inde kullanır: gas fee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (WP1, 02 §4.7, 04 §7.3); T74 energy delegation sonrası runtime değerle değiştirilir |
 | `delivery.inventory_evidence_auto_release_enabled` | Delivery | bool | false | Envanter kanıtına dayalı otomatik teslimat onayı açık mı (T125, 02 §9.2). false iken kanıt kaydedilir (§3.5a) ama parayı tek başına serbest bırakmaz; alıcı onayı etkilenmez. Env ile açılamaz — bkz. DEPLOY_RUNBOOK §H |
+| `payout_settlement_days` | Settlement | int | 8 | Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletilme süresi (T129, 02 §4.5.1/§16.2). `PayoutEligibleAt = ItemDeliveredAt + bu değer`. Steam'in 7 günlük geri alma penceresini kapsamak zorundadır: **7'nin altına ayarlanamaz** (validator) |
+| `settlement.unreadable_escalation_hours` | Settlement | int | 48 | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında kaç saat sonra admin'e eskale edileceği (T129, 03 §2.4 adım 2). Ödeme her hâlükârda parkta kalır — eşik yalnız "ne zaman insana sorulur"u belirler |
+| `settlement.reversal_auto_refund_enabled` | Settlement | bool | false | Geri alma tespitinde otomatik iade açık mı (T129 launch kapısı, `delivery.inventory_evidence_auto_release_enabled`'ın ikizi). false iken imza admin'e eskale edilir, parayı kendiliğinden hareket ettirmez — bkz. DEPLOY_RUNBOOK §I |
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`**. İki ad da custodial dönemden kalmıştı ve v3.0'da **ikisi de yanlıştı**: platform artık trade offer oluşturmuyor (03 §2.3 notu) ve — pahalı olan yarısı — "buyer" anahtarı **satıcının** teslimat penceresini besliyordu, yani admin satıcı teslimatsızlığını "Alıcı trade offer timeout süresi" etiketli bir kutudan yönetiyordu (T119 sorumluluk denetimi). Satır `Id`'leri değişmedi → migration bir `UpdateData`'dır; admin'in girdiği `Value` korunur. Env bootstrap adı anahtardan türetildiği için deploy adları da değişti: `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` / `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` (DEPLOY_RUNBOOK §A #2/#6).
 
@@ -1604,7 +1621,7 @@ Bakım veya Steam kesintisinde (02 §3.3, §23). Resume modeli: **TimeoutRemaini
 | Entity | Field | Güncelleme Zamanı | Consistency |
 |--------|-------|-------------------|-------------|
 | User | CompletedTransactionCount | İşlem COMPLETED olduğunda | Eventual (cross-module) |
-| User | SuccessfulTransactionRate | İşlem COMPLETED veya CANCELLED olduğunda — sadece sorumlu tarafın skoru güncellenir (§3.1 formül detayı) | Eventual (cross-module) |
+| User | SuccessfulTransactionRate | İşlem COMPLETED, CANCELLED veya mutabakat sonu geri almasıyla REFUNDED (`DeliveryReversedAt NOT NULL`, T129) olduğunda — sadece sorumlu tarafın skoru güncellenir (§3.1 formül detayı). Geri alma dalında refresh terminal statü flush edildikten **sonra** çağrılır, aksi hâlde payda geri alınan işlemi saymadan hesaplanır | Eventual (cross-module) |
 | User | CooldownExpiresAt | İptal limiti aşıldığında | Eventual (cross-module) |
 | Transaction | HasActiveDispute | Dispute açıldığında true, tüm dispute'lar kapandığında false | Atomic (same-module) |
 

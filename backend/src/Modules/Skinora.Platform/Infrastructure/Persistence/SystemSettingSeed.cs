@@ -168,6 +168,15 @@ public static class SystemSettingSeed
         // (runbook §7), so until those rows exist the inventory inference is
         // recorded and surfaced but does not release money on its own.
         Default     (60, "delivery.inventory_evidence_auto_release_enabled", "bool", "Delivery",     "false",        "Envanter kanıtına dayalı OTOMATİK teslimat onayı açık mı (02 §9.2 launch kapısı). false iken `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` kanıtı kayda geçer ve ekranda görünür ama parayı tek başına serbest bırakmaz — insan incelemesi gerekir. Alıcının kendi 'teslim aldım' onayı bu kapıdan ETKİLENMEZ. İlk N gerçek teslimatın kanıtı (DeliveryEvidenceCaptures) incelendikten sonra true yapılır (DEPLOY_RUNBOOK §H)."),
+        // --- T129: Settlement window + trade-reversal guard (02 §4.5.1, 03 §2.4) ---
+        // The wait and the check are one mechanism: waiting alone protects
+        // nothing, the END-OF-WINDOW re-read is what closes the reversal path.
+        // The window default is 8 days = Steam's 7-day reversal window + 1 day
+        // margin; the validator floors it at 7 because a shorter window would
+        // let the seller reverse the trade AFTER being paid (02 §16.2).
+        Default     (61, "payout_settlement_days",                        "int",  "Settlement",   "8",            "Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletileceği süre (02 §4.5.1). `PayoutEligibleAt = ItemDeliveredAt + bu değer` olarak ITEM_DELIVERED girişinde hesaplanır; süre dolmadan ne satıcı payout'u ne de depozit sweep'i kuyruğa girer. Steam'in 7 günlük trade geri alma penceresini kapsamalıdır — 7'nin altına ayarlanamaz (02 §16.2)."),
+        Default     (62, "settlement.unreadable_escalation_hours",        "int",  "Settlement",   "48",           "Mutabakat sonu kontrolü envanter okunamadığı için sonuca varamadığında, kaç saat sonra admin'e eskale edileceği (03 §2.4 adım 2 üçüncü dal). Eşiğe kadar kontrol her turda tekrarlanır; eşik aşılınca admin bildirimi gider ve işlem insan incelemesine düşer. Ödeme her iki durumda da parkta kalır — eşik yalnızca 'ne zaman insana sorulur' sorusunu yanıtlar, ödemeyi serbest bırakmaz."),
+        Default     (63, "settlement.reversal_auto_refund_enabled",       "bool", "Settlement",   "false",        "Geri alma tespitinde OTOMATİK iade açık mı (T129 launch kapısı, T125 kapısının ikizi). false iken imza kayda geçer ve admin'e eskale edilir, para hareket etmez; kararı admin verir — satıcı lehine AD32 clear-settlement, alıcı lehine dispute üzerinden AD29. İki kol AYNI sonucu üretmez: DeliveryReversedAt'i yalnız otomatik dal yazar, itibar paydası ve fraud flag yalnız orada oluşur. true iken imza delivery_reversed tetikler. Gerçek geri alma ölçülene kadar (T122 §7) kapalı kalır."),
     ];
 
     private static SystemSetting Unconfigured(

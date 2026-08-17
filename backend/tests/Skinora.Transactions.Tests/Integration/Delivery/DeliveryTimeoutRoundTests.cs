@@ -10,6 +10,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
+using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -119,6 +120,13 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
         // 06 §8.4 — exactly one asset appeared since the baseline, so it can be
         // named without guessing.
         Assert.Equal("99887766", persisted.DeliveredBuyerAssetId);
+
+        // T129 — the settlement window opens on this route too (02 §4.5.1). A
+        // delivery the platform inferred is no more final than one the buyer
+        // confirmed: either way Steam lets the seller reverse it for 7 days.
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime.AddDays(SettlementSettingsProvider.DefaultSettlementDays),
+            persisted.PayoutEligibleAt);
 
         // The audit trail the reputation map reads: SYSTEM actor, because this
         // conclusion is the platform's inference and not a user action.
@@ -515,6 +523,10 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
             new DeliveryVerificationService(
                 Context, _inventory, NullLogger<DeliveryVerificationService>.Instance, _clock),
             _escalator,
+            // T129 — the real provider (documented defaults when the settings
+            // rows are absent), so the round opens a settlement window exactly
+            // as production does.
+            new SettlementSettingsProvider(Context),
             _outbox,
             NullLogger<DeliveryTimeoutRound>.Instance,
             _clock);

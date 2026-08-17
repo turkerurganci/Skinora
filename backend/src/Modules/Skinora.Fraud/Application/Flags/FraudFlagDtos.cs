@@ -157,6 +157,33 @@ public sealed record MultiAccountFlagDetail(
     // IP/device evidence alongside the strong wallet-address signal.
     IReadOnlyList<MultiAccountSupportingSignal> SupportingSignals);
 
+/// <summary>
+/// <c>flagDetail</c> shape for <see cref="FraudFlagType.DELIVERY_REVERSED"/>
+/// (T129 — 02 §4.5.1). Account-level flag, so the row itself carries no
+/// <c>TransactionId</c> (06 §3.12) and the transaction is named in the payload.
+/// </summary>
+/// <remarks>
+/// The projection exists because §14.2 counts repeats: an admin looking at a
+/// second <c>DELIVERY_REVERSED</c> on the same account has to be able to see
+/// which transactions produced them and what the check actually observed —
+/// which inventory was readable, and how the counts compared. Without it the
+/// twelve-field payload the settlement job writes reaches the admin screen as
+/// "no signal detail".
+/// </remarks>
+public sealed record DeliveryReversedFlagDetail(
+    Guid TransactionId,
+    string? ItemName,
+    string? ItemAssetId,
+    string? DeliveredBuyerAssetId,
+    DateTime? ItemDeliveredAt,
+    DateTime? PayoutEligibleAt,
+    DateTime DetectedAt,
+    string? BuyerVisibility,
+    string? SellerVisibility,
+    int? ObservedClassCount,
+    int? ExpectedClassCount,
+    string? Detail);
+
 /// <summary>Linked account entry inside <see cref="MultiAccountFlagDetail"/>.</summary>
 public sealed record MultiAccountLinkedAccount(
     string SteamId,
