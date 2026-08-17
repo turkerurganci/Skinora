@@ -116,6 +116,15 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
         builder.Property(t => t.BuyerBaselineAssetIds)
             .HasMaxLength(400);
 
+        // T130 — deliberately NOT capped like the column above. That one is an
+        // audit aid whose loss only degrades asset discrimination, so truncating
+        // it is survivable; this one is the reference the wrong-item comparison
+        // diffs against, and a truncated set makes every dropped class look like
+        // a fresh arrival — an invented accusation against a seller. T122
+        // measured 159 distinct classes on a real account (~1.8 KB serialized),
+        // so nvarchar(max) is the honest size rather than a generous one.
+        builder.Property(t => t.BuyerBaselineClassIds);
+
         // --- Settlement (02 §4.5.1) ---
         // A SettlementReviewReasons constant, not free text — sized for the
         // longest code with room for another, and deliberately not an enum

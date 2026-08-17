@@ -94,6 +94,14 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public int? BuyerBaselineClassCount { get; set; }
     public string? BuyerBaselineAssetIds { get; set; }
 
+    // T130 — the buyer's WHOLE inventory as a distinct class-id set, captured in
+    // the same read as the two columns above. The class-scoped baseline cannot
+    // see an arrival of a different class, and a wrong item is by definition a
+    // different class: without an inventory-wide reference point 02 §10.1's
+    // "gelen item'ın adı kayda geçirilerek admin'e yükseltilir" has nothing to
+    // name. NULL alongside a NULL BuyerBaselineCapturedAt — same read, same gap.
+    public string? BuyerBaselineClassIds { get; set; }
+
     // Null when the buyer's inventory was unreadable. This does not block the
     // transaction — it only closes the evidence path, leaving buyer
     // confirmation as the sole route (02 §9.2).

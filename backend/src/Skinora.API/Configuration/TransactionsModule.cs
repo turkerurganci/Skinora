@@ -82,6 +82,12 @@ public static class TransactionsModule
         // which is where the Dispute type lives — see DisputesModule.
         services.AddScoped<IDeliveryTimeoutRound, DeliveryTimeoutRound>();
 
+        // T130 — the dispute-open sibling of the timeout round. Registered here
+        // rather than in the Disputes module for the same reason: the arm that
+        // fires DeliverItem is Transactions-side work, and the Disputes checker
+        // only maps its verdict onto what the buyer is told.
+        services.AddScoped<IDeliveryDisputeRound, DeliveryDisputeRound>();
+
         // T129 — settlement window (02 §4.5.1). The provider reads the three
         // settlement settings; the verification service answers the end-of-
         // window question ("is the item still with the buyer, and if not, did it

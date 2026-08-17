@@ -614,8 +614,9 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `BuyerTradeUrl` | string(500) | NULL | Alıcının Steam trade URL'i — kabul anında sabitlenir, satıcıya hazır bağlantı olarak gösterilir (02 §2.2) |
 | `SellerReadyConfirmedAt` | datetime | NULL | Satıcının hazırlık onayı verdiği an — SELLER_CONFIRMED ve sonrası NOT NULL |
 | `BuyerBaselineClassCount` | int | NULL | Alıcının envanterinde bu `(ClassId, InstanceId)` çiftinden kaç adet bulunduğu — SELLER_CONFIRMED'a girerken alınan referans anlık görüntü |
-| `BuyerBaselineAssetIds` | string(400) | NULL | Aynı anlık görüntüdeki asset ID listesi (JSON dizi) — yanlış item tespitinde "sonradan gelen asset"i ayırmak için |
-| `BuyerBaselineCapturedAt` | datetime | NULL | Anlık görüntünün alındığı an. NULL ise alıcı envanteri okunamamıştır → envanter kanıtı yolu kapalıdır, yalnız alıcı onayı geçerlidir |
+| `BuyerBaselineAssetIds` | string(400) | NULL | Aynı anlık görüntüdeki **bu sınıfa ait** asset ID listesi (JSON dizi) — teslim edilen asset'i (`DeliveredBuyerAssetId`) adlandırmak için. Sığmazsa kırpılır; kırpılma teslimat kararını etkilemez, çünkü kararı `BuyerBaselineClassCount` verir |
+| `BuyerBaselineClassIds` | string(max) | NULL | Aynı anlık görüntüdeki alıcı envanterinin **tüm** benzersiz `ClassId` kümesi (JSON dizi) — yanlış item tespitinin referans noktası (T130, 03 §6.3). Sınıf-kapsamlı olan yukarıdaki iki kolon farklı bir sınıfın gelişini göremez; yanlış item ise tanımı gereği farklı bir sınıftır. **Kırpılmaz:** düşen her sınıf sonradan "yeni geldi" diye okunur ve bu, satıcı hakkında uydurulmuş bir iddiadır |
+| `BuyerBaselineCapturedAt` | datetime | NULL | Anlık görüntünün alındığı an. NULL ise alıcı envanteri okunamamıştır → envanter kanıtı yolu kapalıdır, yalnız alıcı onayı geçerlidir. Yukarıdaki dört baseline kolonu **birlikte yazılır**: bu kolon NULL iken diğerleri de anlamsızdır |
 | `BuyerConfirmedReceiptAt` | datetime | NULL | Alıcının "teslim aldım" onayını verdiği an |
 | `DeliveryVerifiedAt` | datetime | NULL | Teslimatın doğrulandığı an — ITEM_DELIVERED ve sonrası NOT NULL |
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
@@ -891,7 +892,8 @@ Alıcı tarafından açılan itiraz kaydı.
 | `OpenedByUserId` | guid | FK → User, NOT NULL | Sadece alıcı açabilir |
 | `Type` | int | NOT NULL | Enum: DisputeType |
 | `Status` | int | NOT NULL | Enum: DisputeStatus |
-| `SystemCheckResult` | text | NULL | Otomatik kontrol sonucu (JSON) |
+| `SystemCheckResult` | text | NULL | Otomatik kontrol sonucu — alıcının diline **üretim anında** çevrilmiş metin (WP17) |
+| `DeliveredItemName` | string(200) | NULL | Yanlış item vakasında gerçekten gelen item'ın Steam adı (T130 — 02 §10.1, 03 §6.3 Sonuç B). Yalnız WRONG_ITEM otomatik eskalasyonunda ve **tek** bir yeni sınıf geldiğinde dolar; diğer tüm dispute'larda NULL. `SystemCheckResult` içine gömülmez: o metin alıcının dilindedir, üzerinde işlem yapacak admin ise o dili okumayabilir — admin'in kanıtı bir çeviriye gömülemez |
 | `UserDescription` | string(2000) | NULL | Kullanıcının eskalasyon açıklaması |
 | `AdminId` | guid | FK → User, NULL | İnceleyen admin |
 | `AdminNote` | string(2000) | NULL | Admin notu |

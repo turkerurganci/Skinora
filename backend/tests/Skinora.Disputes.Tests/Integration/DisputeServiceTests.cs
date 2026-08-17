@@ -1,5 +1,9 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Disputes.Application.AutoCheckers;
 using Skinora.Disputes.Application.Disputes;
 using Skinora.Disputes.Domain.Entities;
@@ -11,6 +15,8 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Steam.Infrastructure.Persistence;
+using Skinora.Transactions.Application.Delivery;
+using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -33,6 +39,10 @@ public class DisputeServiceTests : IntegrationTestBase
         TransactionsModuleDbRegistration.RegisterTransactionsModule();
         SteamModuleDbRegistration.RegisterSteamModule();
         DisputesModuleDbRegistration.RegisterDisputesModule();
+
+        // T130 — the delivery auto-check now runs the real 02 §9.2 round, which
+        // reads the launch gate out of SystemSettings (DEPLOY_RUNBOOK §H).
+        PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
     private const string SellerSteam = "76561198000000301";
@@ -190,12 +200,21 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Single(_outbox.Published.OfType<DisputeAutoResolvedEvent>());
     }
 
+    /// <summary>
+    /// 03 §6.2 Sonuç B — both inventories read, neither moved.
+    /// </summary>
     [Fact]
-    public async Task Open_Delivery_NoEvidence_StaysOpen()
+    public async Task Open_Delivery_NoMovement_StaysOpen_AsNotSentYet()
     {
-        // Nothing observed yet — fails closed: the dispute stays OPEN so the
-        // buyer can escalate rather than receive a wrong automated answer.
-        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            baselineClassCount: 0,
+            baselineClassIds: []);
+
+        // Seller still holds the asset, buyer's count still zero.
+        _inventory.Result = InventoryLookupResult.Found(
+            BuildSnapshot(tx.ItemAssetId, tx.ItemClassId));
+        _inventory.ClassBaseline = InventoryClassBaselineResult.Captured([], []);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -204,15 +223,59 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
         Assert.False(outcome.Body.AutoCheckResult.Resolved);
         Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(DisputeAutoCheckMessages.DeliveryNotSent, "en"),
+            outcome.Body.AutoCheckResult.Message);
     }
 
+    /// <summary>
+    /// <b>The launch-gate deadlock regression</b> (T127 validation finding B5).
+    /// The gate is closed by default (DEPLOY_RUNBOOK §H), so inventory evidence
+    /// accumulates without releasing money. Before T130 the checker read those
+    /// flags and closed the dispute as delivered with
+    /// <c>CanEscalate = false</c> — leaving the buyer's funds with no exit: the
+    /// automatic route gated, the manual route shut.
+    /// </summary>
     [Fact]
-    public async Task Open_Delivery_InventoryDeltaWithSellerAssetGone_AutoResolves()
+    public async Task Open_Delivery_InventoryEvidence_LaunchGateClosed_StaysOpenAndEscalatable()
     {
-        // The pair (seller's asset gone) AND (buyer's class count up) is the
-        // second sufficient proof in 02 §9.2 — neither half counts alone.
         var tx = await CreateTransactionAsync(
-            TransactionStatus.ITEM_DELIVERED,
+            TransactionStatus.PAYMENT_RECEIVED,
+            deliveryEvidence: DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA);
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.DELIVERY), CancellationToken.None);
+
+        Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
+        Assert.False(outcome.Body.AutoCheckResult.Resolved);
+        Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(
+                DisputeAutoCheckMessages.DeliveryEvidenceUnderReview, "en"),
+            outcome.Body.AutoCheckResult.Message);
+
+        // And the money stayed exactly where it was: no transition, and above
+        // all no DeliveryVerifiedAt — the field that actually holds the gate shut.
+        var refreshed = await Context.Set<Transaction>().AsNoTracking()
+            .FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, refreshed.Status);
+        Assert.Null(refreshed.DeliveryVerifiedAt);
+        Assert.Null(refreshed.PayoutEligibleAt);
+    }
+
+    /// <summary>
+    /// 03 §6.2 Sonuç A with the gate open — "İşlem ITEM_DELIVERED durumuna
+    /// geçer, dispute anında kapanır". The transition is the round's, not the
+    /// dispute service's, and both commit in one SaveChanges.
+    /// </summary>
+    [Fact]
+    public async Task Open_Delivery_InventoryEvidence_LaunchGateOpen_DeliversAndCloses()
+    {
+        await OpenLaunchGateAsync();
+
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
             deliveryEvidence: DeliveryEvidence.SELLER_ASSET_GONE | DeliveryEvidence.INVENTORY_DELTA);
 
         var sut = BuildSut();
@@ -221,31 +284,85 @@ public class DisputeServiceTests : IntegrationTestBase
 
         Assert.Equal(DisputeStatus.CLOSED, outcome.Body!.Status);
         Assert.True(outcome.Body.AutoCheckResult.Resolved);
+        Assert.Single(_outbox.Published.OfType<DisputeAutoResolvedEvent>());
+
+        var refreshed = await Context.Set<Transaction>().AsNoTracking()
+            .FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, refreshed.Status);
+        Assert.NotNull(refreshed.DeliveryVerifiedAt);
+        // T129 — the settlement window opened with the delivery, not after it.
+        Assert.NotNull(refreshed.PayoutEligibleAt);
     }
 
+    /// <summary>
+    /// 03 §6.2 Sonuç C — "Otomatik olarak admin'e yükseltilir (kullanıcı
+    /// aksiyonu beklenmez)", both parties notified. Before T130 this left the
+    /// dispute OPEN and asked the buyer to escalate it themselves.
+    /// </summary>
     [Fact]
-    public async Task Open_Delivery_MisdeliverySignature_StaysOpen()
+    public async Task Open_Delivery_MisdeliverySignature_AutoEscalates_AndNotifiesBothParties()
     {
-        // SELLER_ASSET_GONE without INVENTORY_DELTA: the item left the seller
-        // but never reached the buyer. This must never resolve silently — it
-        // stays OPEN for human escalation (02 §10.1).
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            baselineClassCount: 0,
+            baselineClassIds: []);
+
+        // Seller's asset is gone AND the buyer's side was genuinely read — the
+        // qualifier that separates a finding from an unreadable inventory.
+        _inventory.Result = InventoryLookupResult.NotFound;
+        _inventory.ClassBaseline = InventoryClassBaselineResult.Captured([], []);
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.DELIVERY), CancellationToken.None);
+
+        Assert.Equal(DisputeStatus.ESCALATED, outcome.Body!.Status);
+        Assert.False(outcome.Body.AutoCheckResult.Resolved);
+
+        var evt = Assert.Single(_outbox.Published.OfType<DisputeEscalatedEvent>());
+        Assert.True(evt.AutoEscalated);
+        Assert.Equal(_seller.Id, evt.SellerId);
+        Assert.Equal(_buyer.Id, evt.BuyerId);
+    }
+
+    /// <summary>
+    /// 03 §6.2 Sonuç D. A bare <c>SELLER_ASSET_GONE</c> flag with an unreadable
+    /// buyer side is NOT the misdelivery signature — the engine qualifies it
+    /// with <c>buyerSideKnown</c>, and 08 §2.3 forbids reading "I could not
+    /// look" as a finding against a seller.
+    /// </summary>
+    [Fact]
+    public async Task Open_Delivery_UnreadableBuyerInventory_StaysOpen_WithoutBlamingTheSeller()
+    {
         var tx = await CreateTransactionAsync(
             TransactionStatus.PAYMENT_RECEIVED,
             deliveryEvidence: DeliveryEvidence.SELLER_ASSET_GONE);
+
+        _inventory.Result = InventoryLookupResult.NotFound;
+        _inventory.ClassBaseline = InventoryClassBaselineResult.Private;
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
             new OpenDisputeRequest(DisputeType.DELIVERY), CancellationToken.None);
 
         Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
-        Assert.False(outcome.Body.AutoCheckResult.Resolved);
         Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(
+                DisputeAutoCheckMessages.DeliveryInventoryUnreadable, "en"),
+            outcome.Body.AutoCheckResult.Message);
+        Assert.Empty(_outbox.Published.OfType<DisputeEscalatedEvent>());
     }
 
     // ---------- Open ▸ WRONG_ITEM ----------
 
+    /// <summary>
+    /// No 06 §3.5 fingerprint means the buyer's inventory was unreadable when
+    /// the baseline was due. The comparison has no reference point, and diffing
+    /// against an empty set would read every item the buyer owns as an arrival.
+    /// </summary>
     [Fact]
-    public async Task Open_WrongItem_NoDeliveredAsset_StaysOpen()
+    public async Task Open_WrongItem_NoBaselineFingerprint_StaysOpen()
     {
         var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
         var sut = BuildSut();
@@ -255,14 +372,26 @@ public class DisputeServiceTests : IntegrationTestBase
 
         Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
         Assert.False(outcome.Body.AutoCheckResult.Resolved);
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(
+                DisputeAutoCheckMessages.WrongItemInventoryUnreadable, "en"),
+            outcome.Body.AutoCheckResult.Message);
     }
 
+    /// <summary>03 §6.3 Sonuç A — the expected class count rose.</summary>
     [Fact]
-    public async Task Open_WrongItem_ClassMatch_AutoResolves()
+    public async Task Open_WrongItem_ExpectedItemArrived_AutoResolves()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
-            deliveredAssetId: "delivered-asset-1");
-        _inventory.Snapshot = BuildSnapshot("delivered-asset-1", classId: tx.ItemClassId);
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            baselineClassCount: 0,
+            baselineClassIds: ["CLASS-OTHER"]);
+
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured(
+        [
+            new InventoryFingerprintEntry("other-1", "CLASS-OTHER", null, "Glock-18 | Sand Dune"),
+            new InventoryFingerprintEntry("arrived-1", tx.ItemClassId, null, tx.ItemName),
+        ]);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -272,12 +401,27 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Single(_outbox.Published.OfType<DisputeAutoResolvedEvent>());
     }
 
+    /// <summary>
+    /// <b>The acceptance criterion this task exists for.</b> 03 §6.3 Sonuç B —
+    /// a different class arrived, so the name is recorded and the dispute
+    /// auto-escalates. Before T130 this branch was unreachable: the only asset
+    /// id the platform ever recorded came out of a class-scoped diff of the
+    /// transaction's own class, so the comparison could only ever match.
+    /// </summary>
     [Fact]
-    public async Task Open_WrongItem_ClassMismatch_AutoEscalates_AndNotifiesBothParties()
+    public async Task Open_WrongItem_DifferentClassArrived_AutoEscalates_AndRecordsItsName()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
-            deliveredAssetId: "delivered-asset-2");
-        _inventory.Snapshot = BuildSnapshot("delivered-asset-2", classId: "DIFFERENT-CLASS");
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            baselineClassCount: 0,
+            baselineClassIds: ["CLASS-OTHER"]);
+
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured(
+        [
+            new InventoryFingerprintEntry("other-1", "CLASS-OTHER", null, "Glock-18 | Sand Dune"),
+            new InventoryFingerprintEntry(
+                "wrong-1", "CLASS-AWP-ASIIMOV", null, "AWP | Asiimov (Field-Tested)"),
+        ]);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -290,41 +434,101 @@ public class DisputeServiceTests : IntegrationTestBase
         Assert.Equal(_seller.Id, evt.SellerId);
         Assert.Equal(_buyer.Id, evt.BuyerId);
 
+        // 02 §10.1 — the admin must not have to make the comparison by hand.
+        var dispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == outcome.Body.Id);
+        Assert.Equal("AWP | Asiimov (Field-Tested)", dispute.DeliveredItemName);
+
         var refreshedTx = await Context.Set<Transaction>().AsNoTracking()
             .FirstAsync(t => t.Id == tx.Id);
         Assert.True(refreshedTx.HasActiveDispute);
+        // A class mismatch is an admin question, never a state transition.
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, refreshedTx.Status);
     }
 
-    [Theory]
-    [InlineData(InventoryVisibility.Public)]      // read, asset absent
-    [InlineData(InventoryVisibility.Private)]     // hidden profile
-    [InlineData(InventoryVisibility.Unavailable)] // Steam / sidecar down
-    public async Task Open_WrongItem_DeliveredAssetSet_ButNoMatchingAsset_StaysOpen(
-        InventoryVisibility visibility)
+    /// <summary>
+    /// Several classes can arrive between the baseline and the dispute — the
+    /// buyer trades on their own account too. The escalation is unconditional,
+    /// but the name is not: 06 §8.4's rule is that ambiguity resolves to null
+    /// rather than to a guess, and naming the wrong item in an admin's evidence
+    /// field is worse than naming none.
+    /// </summary>
+    [Fact]
+    public async Task Open_WrongItem_SeveralClassesArrived_Escalates_WithoutNamingOne()
     {
-        // WP6 harden — when the delivered asset cannot be resolved in the
-        // buyer's inventory, a class-id mismatch CANNOT be concluded. The
-        // checker must fail closed: leave the dispute OPEN for manual
-        // escalation rather than auto-escalate (or auto-resolve) off missing
-        // data. T121 split the single null into the three 08 §2.3 outcomes;
-        // all three still fail closed, and now each is asserted separately
-        // instead of being represented by one collapsed value.
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
-            deliveredAssetId: "delivered-asset-9");
-        _inventory.Result = visibility switch
-        {
-            InventoryVisibility.Public => InventoryLookupResult.NotFound,
-            InventoryVisibility.Private => InventoryLookupResult.Private,
-            _ => InventoryLookupResult.Unavailable,
-        };
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            baselineClassCount: 0,
+            baselineClassIds: []);
+
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured(
+        [
+            new InventoryFingerprintEntry("a", "CLASS-A", null, "AWP | Asiimov"),
+            new InventoryFingerprintEntry("b", "CLASS-B", null, "M4A4 | Howl"),
+        ]);
 
         var sut = BuildSut();
         var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
             new OpenDisputeRequest(DisputeType.WRONG_ITEM), CancellationToken.None);
 
-        // OPEN status + no escalation event proves the checker did NOT auto-
-        // escalate off missing data (AutoEscalated is internal-only; the DTO
-        // surfaces it as "stays OPEN, can escalate manually").
+        Assert.Equal(DisputeStatus.ESCALATED, outcome.Body!.Status);
+
+        var dispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == outcome.Body.Id);
+        Assert.Null(dispute.DeliveredItemName);
+    }
+
+    /// <summary>
+    /// 03 §6.3 Sonuç C — nothing new arrived at all. "Bu bir yanlış item değil,
+    /// teslim edilmeme vakasıdır": the buyer is pointed at the delivery flow and
+    /// keeps the escalation route.
+    /// </summary>
+    [Fact]
+    public async Task Open_WrongItem_NothingArrived_StaysOpen_AsADeliveryCase()
+    {
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            baselineClassCount: 0,
+            baselineClassIds: ["CLASS-OTHER"]);
+
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured(
+            [new InventoryFingerprintEntry("other-1", "CLASS-OTHER", null, "Glock-18 | Sand Dune")]);
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.WRONG_ITEM), CancellationToken.None);
+
+        Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
+        Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(DisputeAutoCheckMessages.WrongItemNoDelivery, "en"),
+            outcome.Body.AutoCheckResult.Message);
+        Assert.Empty(_outbox.Published.OfType<DisputeEscalatedEvent>());
+    }
+
+    [Theory]
+    [InlineData(InventoryVisibility.Private)]     // hidden profile
+    [InlineData(InventoryVisibility.Unavailable)] // Steam / sidecar down
+    public async Task Open_WrongItem_UnreadableInventory_StaysOpen(InventoryVisibility visibility)
+    {
+        // WP6 harden, restated on the T130 mechanism — an unreadable inventory
+        // is not an empty one. Diffing it would manufacture the opposite
+        // finding: every baseline class would look gone and nothing arrived.
+        // The checker must fail closed rather than auto-escalate off missing
+        // data (08 §2.3).
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            baselineClassCount: 0,
+            baselineClassIds: ["CLASS-OTHER"]);
+
+        _inventory.Fingerprint = visibility == InventoryVisibility.Private
+            ? InventoryFingerprintResult.Private
+            : InventoryFingerprintResult.Unavailable;
+
+        var sut = BuildSut();
+        var outcome = await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.WRONG_ITEM), CancellationToken.None);
+
         Assert.Equal(DisputeStatus.OPEN, outcome.Body!.Status);
         Assert.False(outcome.Body.AutoCheckResult.Resolved);
         Assert.True(outcome.Body.AutoCheckResult.CanEscalate);
@@ -334,6 +538,28 @@ public class DisputeServiceTests : IntegrationTestBase
         var refreshedTx = await Context.Set<Transaction>().AsNoTracking()
             .FirstAsync(t => t.Id == tx.Id);
         Assert.True(refreshedTx.HasActiveDispute);
+    }
+
+    /// <summary>
+    /// 02 §10.1 requires the dispute path to re-run the rules "taze olarak": a
+    /// cached read can still be missing an item that arrived a minute ago.
+    /// </summary>
+    [Fact]
+    public async Task Open_WrongItem_ReadsTheInventoryFresh()
+    {
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            baselineClassCount: 0,
+            baselineClassIds: []);
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured([]);
+
+        var sut = BuildSut();
+        await sut.OpenAsync(_buyer.Id, tx.Id,
+            new OpenDisputeRequest(DisputeType.WRONG_ITEM), CancellationToken.None);
+
+        Assert.Equal(
+            InventoryReadFreshness.Fresh,
+            Assert.Single(_inventory.FingerprintReadFreshness));
     }
 
     // ---------- Open ▸ guards ----------
@@ -578,9 +804,15 @@ public class DisputeServiceTests : IntegrationTestBase
     [Fact]
     public async Task Escalate_AlreadyEscalated_Returns_AlreadyEscalated()
     {
-        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED,
-            deliveredAssetId: "delivered-asset-3");
-        _inventory.Snapshot = BuildSnapshot("delivered-asset-3", classId: "OTHER-CLASS");
+        // T130 — the auto-escalation now comes from the inventory diff rather
+        // than from a DeliveredBuyerAssetId lookup: a foreign class arrived that
+        // was not in the 06 §3.5 baseline fingerprint.
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED,
+            baselineClassCount: 0,
+            baselineClassIds: []);
+        _inventory.Fingerprint = InventoryFingerprintResult.Captured(
+            [new InventoryFingerprintEntry("wrong-3", "OTHER-CLASS", null, "AWP | Asiimov")]);
 
         var sut = BuildSut();
         var open = await sut.OpenAsync(_buyer.Id, tx.Id,
@@ -665,8 +897,25 @@ public class DisputeServiceTests : IntegrationTestBase
     private DisputeService BuildSut()
     {
         var paymentChecker = new PaymentDisputeAutoChecker(Context);
-        var deliveryChecker = new DeliveryDisputeAutoChecker();
-        var wrongItemChecker = new WrongItemDisputeAutoChecker(Context, _inventory);
+
+        // T130 — the REAL round, not a stub. The dispute path is where the
+        // 02 §9.2 rules are re-run "taze olarak", and the launch-gate deadlock
+        // this task closes only exists as a composition of the engine, the gate
+        // and the checker's mapping. Stubbing the round here would test the
+        // mapping twice and the composition never.
+        var deliveryChecker = new DeliveryDisputeAutoChecker(
+            new DeliveryDisputeRound(
+                db: Context,
+                verification: new DeliveryVerificationService(
+                    Context, _inventory,
+                    NullLogger<DeliveryVerificationService>.Instance, _clock),
+                settlementSettings: new SettlementSettingsProvider(Context),
+                outbox: _outbox,
+                logger: NullLogger<DeliveryDisputeRound>.Instance,
+                clock: _clock));
+
+        var wrongItemChecker = new WrongItemDisputeAutoChecker(
+            Context, _inventory, NullLogger<WrongItemDisputeAutoChecker>.Instance);
 
         return new DisputeService(
             db: Context,
@@ -722,10 +971,47 @@ public class DisputeServiceTests : IntegrationTestBase
         await Context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// T130 — open the launch gate (DEPLOY_RUNBOOK §H). Closed by default, and
+    /// deliberately so: the gate is the reason a delivery dispute must not close
+    /// itself as "delivered" on inventory evidence alone.
+    /// </summary>
+    private async Task OpenLaunchGateAsync()
+    {
+        // The row is seeded (unconfigured) by the schema seed, and
+        // UQ_SystemSettings_Key is unfiltered — so this updates rather than
+        // inserts, exactly as the admin UI does (DEPLOY_RUNBOOK §H.3 step 4).
+        var existing = await Context.Set<SystemSetting>()
+            .FirstOrDefaultAsync(s => s.Key == DeliveryVerificationService.AutoReleaseSettingKey);
+
+        if (existing is null)
+        {
+            Context.Set<SystemSetting>().Add(new SystemSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = DeliveryVerificationService.AutoReleaseSettingKey,
+                Value = "true",
+                IsConfigured = true,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+                UpdatedAt = _clock.GetUtcNow().UtcDateTime,
+            });
+        }
+        else
+        {
+            existing.Value = "true";
+            existing.IsConfigured = true;
+            existing.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+        }
+
+        await Context.SaveChangesAsync();
+    }
+
     private async Task<Transaction> CreateTransactionAsync(
         TransactionStatus status,
         string? deliveredAssetId = null,
-        DeliveryEvidence deliveryEvidence = DeliveryEvidence.NONE)
+        DeliveryEvidence deliveryEvidence = DeliveryEvidence.NONE,
+        int? baselineClassCount = null,
+        IReadOnlyList<string>? baselineClassIds = null)
     {
         var tx = new Transaction
         {
@@ -745,8 +1031,29 @@ public class DisputeServiceTests : IntegrationTestBase
             TotalAmount = 51.50m,
             SellerPayoutAddress = SellerWallet,
             PaymentTimeoutMinutes = 60,
+
+            // 06 §3.5 — the fields ACCEPTED and later states require. Set on
+            // every fixture because T130's delivery arm fires DeliverItem, whose
+            // guard walks the whole matrix back to ACCEPTED; without them the
+            // transition is refused and the round holds instead of delivering.
+            BuyerRefundAddress = "TBuyerRefundAddress00000000000000",
+            BuyerTradeUrl = "https://steamcommunity.com/tradeoffer/new/?partner=1&token=abc",
+            SellerReadyConfirmedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(-5),
             DeliveredBuyerAssetId = deliveredAssetId,
             DeliveryEvidence = deliveryEvidence,
+
+            // 06 §3.5 — the four baseline columns live and die together: a
+            // fingerprint without a CapturedAt is not a baseline, it is a
+            // half-written row (T130 reads CapturedAt as the "is there one at
+            // all" signal, exactly as the evidence engine does).
+            BuyerBaselineClassCount = baselineClassCount,
+            BuyerBaselineClassIds = baselineClassIds is null
+                ? null
+                : JsonSerializer.Serialize(baselineClassIds),
+            BuyerBaselineCapturedAt = baselineClassIds is null && baselineClassCount is null
+                ? null
+                : _clock.GetUtcNow().UtcDateTime.AddMinutes(-20),
+
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
             UpdatedAt = _clock.GetUtcNow().UtcDateTime,
             AcceptedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(-10),
@@ -808,13 +1115,41 @@ public class DisputeServiceTests : IntegrationTestBase
         /// an empty baseline so an accidental caller gets "unknown", never a
         /// fabricated "the buyer owns none of this skin".
         /// </summary>
+        /// <summary>
+        /// T130 — the buyer's side of a delivery round. Defaults to Unavailable
+        /// so a suite that does not set it gets "unknown" rather than a
+        /// fabricated "the buyer owns none of this skin".
+        /// </summary>
+        public InventoryClassBaselineResult ClassBaseline { get; set; } =
+            InventoryClassBaselineResult.Unavailable;
+
         public Task<InventoryClassBaselineResult> CaptureClassBaselineAsync(
             string steamId64,
             string classId,
             string? instanceId,
             InventoryReadFreshness freshness,
             CancellationToken cancellationToken)
-            => Task.FromResult(InventoryClassBaselineResult.Unavailable);
+            => Task.FromResult(ClassBaseline);
+
+        /// <summary>
+        /// T130 — the buyer's inventory as the wrong-item comparison sees it.
+        /// Defaults to Unavailable so a suite that does not set it gets
+        /// "unknown" rather than "the buyer's inventory is empty".
+        /// </summary>
+        public InventoryFingerprintResult Fingerprint { get; set; } =
+            InventoryFingerprintResult.Unavailable;
+
+        /// <summary>T130 — freshness of each fingerprint read (02 §10.1 "taze").</summary>
+        public List<InventoryReadFreshness> FingerprintReadFreshness { get; } = [];
+
+        public Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+            string steamId64,
+            InventoryReadFreshness freshness,
+            CancellationToken cancellationToken)
+        {
+            FingerprintReadFreshness.Add(freshness);
+            return Task.FromResult(Fingerprint);
+        }
     }
 }
 

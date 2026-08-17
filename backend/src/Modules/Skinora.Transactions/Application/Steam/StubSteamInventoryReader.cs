@@ -34,4 +34,15 @@ public sealed class StubSteamInventoryReader : ISteamInventoryReader
         InventoryReadFreshness freshness,
         CancellationToken cancellationToken)
         => Task.FromResult(InventoryClassBaselineResult.Unavailable);
+
+    /// <summary>
+    /// T130 — same reasoning again. An empty fingerprint would diff as "the
+    /// buyer's inventory holds nothing", which with a recorded baseline reads as
+    /// every item having left it (08 §2.3).
+    /// </summary>
+    public Task<InventoryFingerprintResult> CaptureInventoryFingerprintAsync(
+        string steamId64,
+        InventoryReadFreshness freshness,
+        CancellationToken cancellationToken)
+        => Task.FromResult(InventoryFingerprintResult.Unavailable);
 }

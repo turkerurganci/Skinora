@@ -207,6 +207,14 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
             transaction.BuyerBaselineClassCount = baseline.ClassCount;
             transaction.BuyerBaselineAssetIds = SerializeBaselineAssetIds(
                 baseline.AssetIds, transaction.Id);
+
+            // T130 — 06 §3.5 BuyerBaselineClassIds. Uncapped on purpose (see the
+            // column config): this set is the reference the 03 §6.3 wrong-item
+            // diff runs against, and a class dropped from it would later read as
+            // an item that arrived after the snapshot.
+            transaction.BuyerBaselineClassIds =
+                JsonSerializer.Serialize(baseline.InventoryClassIds);
+
             transaction.BuyerBaselineCapturedAt = nowUtc;
         }
         else

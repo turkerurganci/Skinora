@@ -42,9 +42,35 @@ public static class DisputeAutoCheckMessages
     /// exists; in P2P the seller sends the trade themselves.
     /// </summary>
     public const string DeliveryNotSent = "DELIVERY_NOT_SENT";
+
+    /// <summary>
+    /// T130 — 03 §6.2 Sonuç D. The buyer's inventory is hidden or Steam could
+    /// not be read, so nothing may be concluded either way (08 §2.3). Before
+    /// T130 this case fell through to <see cref="DeliveryNotSent"/>, which told
+    /// the buyer the seller had not sent — a negative finding about a seller the
+    /// platform had made no observation about.
+    /// </summary>
+    public const string DeliveryInventoryUnreadable = "DELIVERY_INVENTORY_UNREADABLE";
+
+    /// <summary>
+    /// T130 — 03 §6.2 Sonuç E. The inventory conjunction held but the launch
+    /// gate is closed (DEPLOY_RUNBOOK §H), so the evidence is real and under
+    /// review while no money moves on it. The dispute stays OPEN and
+    /// escalatable.
+    /// </summary>
+    public const string DeliveryEvidenceUnderReview = "DELIVERY_EVIDENCE_UNDER_REVIEW";
+
     public const string WrongItemMatch = "WRONG_ITEM_MATCH";
     public const string WrongItemMismatch = "WRONG_ITEM_MISMATCH";
     public const string WrongItemNoDelivery = "WRONG_ITEM_NO_DELIVERY";
+
+    /// <summary>
+    /// T130 — the wrong-item twin of <see cref="DeliveryInventoryUnreadable"/>.
+    /// 03 §6.3 compares what arrived against the transaction's item; an
+    /// unreadable inventory closes that comparison without saying anything about
+    /// what the seller did.
+    /// </summary>
+    public const string WrongItemInventoryUnreadable = "WRONG_ITEM_INVENTORY_UNREADABLE";
 
     /// <summary>Response shown to the buyer after a manual escalation (07 §7.10).</summary>
     public const string ManualEscalated = "MANUAL_ESCALATED";
@@ -62,9 +88,12 @@ public static class DisputeAutoCheckMessages
                 [DeliveryDelivered] = "The item has been delivered to your inventory",
                 [DeliveryAssetGoneNotArrived] = "The item has left the seller's inventory but has not arrived in yours — your transaction has been put under review",
                 [DeliveryNotSent] = "The seller does not appear to have sent the item yet",
+                [DeliveryInventoryUnreadable] = "Your inventory could not be read — make it public, or use the \"I received it\" button if the item has arrived",
+                [DeliveryEvidenceUnderReview] = "Delivery evidence was found and your transaction is being reviewed",
                 [WrongItemMatch] = "The delivered item matches the item in the transaction",
                 [WrongItemMismatch] = "The delivered item does not match the expected item — your transaction has been put under review",
                 [WrongItemNoDelivery] = "No delivery data was found; the delivery stage has not been reached",
+                [WrongItemInventoryUnreadable] = "Your inventory could not be read, so the delivered item could not be compared — make it public and try again",
                 [ManualEscalated] = "Your dispute has been forwarded to the admin team",
             },
             ["tr"] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -74,9 +103,12 @@ public static class DisputeAutoCheckMessages
                 [DeliveryDelivered] = "Item envanterinize teslim edilmiş durumda",
                 [DeliveryAssetGoneNotArrived] = "Item satıcının envanterinden çıkmış ama sizinkine ulaşmamış — işleminiz incelemeye alındı",
                 [DeliveryNotSent] = "Satıcı item'ı henüz göndermemiş görünüyor",
+                [DeliveryInventoryUnreadable] = "Envanteriniz okunamadı — envanterinizi herkese açık yapın veya item'ı aldıysanız \"Teslim aldım\" butonunu kullanın",
+                [DeliveryEvidenceUnderReview] = "Teslimat kanıtı bulundu, işleminiz inceleniyor",
                 [WrongItemMatch] = "Teslim edilen item, işlemdeki item ile eşleşiyor",
                 [WrongItemMismatch] = "Teslim edilen item beklenen item ile eşleşmiyor — işleminiz incelemeye alındı",
                 [WrongItemNoDelivery] = "Teslim verisi bulunamadı; teslim aşamasına gelinmedi",
+                [WrongItemInventoryUnreadable] = "Envanteriniz okunamadığı için teslim edilen item karşılaştırılamadı — envanterinizi herkese açık yapıp tekrar deneyin",
                 [ManualEscalated] = "İtirazınız admin ekibine iletildi",
             },
             ["es"] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -86,9 +118,12 @@ public static class DisputeAutoCheckMessages
                 [DeliveryDelivered] = "El artículo ha sido entregado en tu inventario",
                 [DeliveryAssetGoneNotArrived] = "El artículo salió del inventario del vendedor pero no llegó al tuyo — tu transacción ha sido puesta en revisión",
                 [DeliveryNotSent] = "El vendedor aún no parece haber enviado el artículo",
+                [DeliveryInventoryUnreadable] = "No se pudo leer tu inventario — hazlo público, o usa el botón \"Lo he recibido\" si el artículo ya llegó",
+                [DeliveryEvidenceUnderReview] = "Se encontraron pruebas de entrega y tu transacción está siendo revisada",
                 [WrongItemMatch] = "El artículo entregado coincide con el artículo de la transacción",
                 [WrongItemMismatch] = "El artículo entregado no coincide con el artículo esperado — tu transacción ha sido puesta en revisión",
                 [WrongItemNoDelivery] = "No se encontraron datos de entrega; no se ha llegado a la etapa de entrega",
+                [WrongItemInventoryUnreadable] = "No se pudo leer tu inventario, así que no se pudo comparar el artículo entregado — hazlo público e inténtalo de nuevo",
                 [ManualEscalated] = "Tu disputa ha sido enviada al equipo de administración",
             },
             ["zh"] = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -98,9 +133,12 @@ public static class DisputeAutoCheckMessages
                 [DeliveryDelivered] = "物品已送达您的库存",
                 [DeliveryAssetGoneNotArrived] = "物品已离开卖家库存但未到达您的库存——您的交易已进入审核",
                 [DeliveryNotSent] = "卖家似乎尚未发送物品",
+                [DeliveryInventoryUnreadable] = "无法读取您的库存——请将其设为公开，或在物品已送达时点击\"我已收到\"按钮",
+                [DeliveryEvidenceUnderReview] = "已找到交付证据，您的交易正在审核中",
                 [WrongItemMatch] = "已交付的物品与交易中的物品一致",
                 [WrongItemMismatch] = "已交付的物品与预期物品不符——您的交易已进入审核",
                 [WrongItemNoDelivery] = "未找到交付数据；尚未进入交付阶段",
+                [WrongItemInventoryUnreadable] = "无法读取您的库存，因此无法比对已交付的物品——请将其设为公开后重试",
                 [ManualEscalated] = "您的争议已转交给管理团队",
             },
         };

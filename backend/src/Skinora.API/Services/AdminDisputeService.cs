@@ -178,6 +178,7 @@ public sealed class AdminDisputeService : IAdminDisputeService
             Type: dispute.Type,
             Status: dispute.Status,
             SystemCheckResult: dispute.SystemCheckResult,
+            DeliveredItemName: dispute.DeliveredItemName,
             UserDescription: dispute.UserDescription,
             AdminId: dispute.AdminId,
             AdminNote: dispute.AdminNote,
