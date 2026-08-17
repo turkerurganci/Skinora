@@ -55,7 +55,7 @@ Her iki sapma da `11_IMPLEMENTATION_PLAN.md` §F7 notuna işlendi.
 | happy-path | 0/1 | 0/1 | Akış: `timeout awaiting ITEM_ESCROWED (last=ACCEPTED)` |
 | T108 cancellation | 0/4 | 0/4 | Akış: 4/4 `ITEM_ESCROWED` (last=ACCEPTED) |
 | T109 timeout | 0/4 | **1/4** | test 1 (accept timeout) ✓ geçiyor — P2P'de de geçerli tek faz. test 2 `TRADE_OFFER_SENT_TO_SELLER`, test 3–4 `ITEM_ESCROWED` |
-| T110 payment | 0/6 | 0/6 | Akış: 6/6 `ITEM_ESCROWED`. (Bu commit'te leg GitHub `codeload` 429 flake'i yüzünden "Set up job"da öldü; veri bir önceki commit `9e8df29` run [`32043406207`](https://github.com/turkerurganci/Skinora/actions/runs/32043406207) attempt 1'den — ikinci commit bu spec'in kullandığı hiçbir şeye dokunmuyor, rerun teyidi §Notlar) |
+| T110 payment | 0/6 | 0/6 | Akış: 6/6 `ITEM_ESCROWED`. **Veri bir önceki commit `9e8df29`'dan** (run [`32043406207`](https://github.com/turkerurganci/Skinora/actions/runs/32043406207)): `5138cf4` run'ında bu leg GitHub `codeload` 429 flake'iyle "Set up job"da öldü. Verinin geçerliliği mekanik olarak gösterilebilir — `git diff 9e8df29 HEAD -- e2e/tests/payment-edge-cases.spec.ts` **boş**, iki commit arasındaki tek `db.ts` değişikliği `DeadlineColumn` allow-list'i ve bu spec yalnız adı değişmemiş `PaymentDeadline`'ı kullanıyor |
 | T111 fraud-flags | 0/4 | **3/4** | test 3 (high volume) **custody değil, YENİ İŞ KURALI çakışması**: ikinci create `ITEM_ALREADY_LISTED` — T128'in (SellerId, ItemAssetId) tekillik kapısı |
 | T112 emergency-hold | 0/3 | 0/3 | Akış: 3/3 `ITEM_ESCROWED` |
 | T113 admin-flows | 3/7 | **6/7** | AC1: `steamAccounts.length ≥ 1` — alan `AdminDashboardResponse`'ta yok (kaynak teyidi: `AdminDashboardDtos.cs` yalnız `summaryCards` + `recentFlags`) |
