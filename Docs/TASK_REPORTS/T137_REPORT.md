@@ -1,6 +1,6 @@
 # T137 — sidecar-fake sürülebilir envanter
 
-**Faz:** F7 (P7, plan gereği P5 ile paralel) | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-18
+**Faz:** F7 (P7, plan gereği P5 ile paralel) | **Durum:** ✗ FAIL (bağımsız doğrulama tur 1 — 1 bloke edici bulgu, düzeltme turu bekliyor) | **Tarih:** 2026-08-18
 
 ---
 
@@ -59,9 +59,9 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✗ **FAIL** (bağımsız doğrulama, 2026-08-18 — ayrıntı: §Doğrulama — Tur 1) |
+| Bulgu sayısı | 1 bloke edici (**B1**) + 2 bloke etmeyen (**N1**, **N2**) |
+| Düzeltme gerekli mi | Evet — B1 doküman turu; kapsam kararı proje sahibinde |
 
 ## Altyapı Değişiklikleri
 
@@ -146,3 +146,84 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 - **Auth/authorization:** kontrol yüzeyi mevcut `/__e2e/*` deseniyle aynı — **kimliksiz**, çünkü çağıran testin kendisi ve servis üretime **hiç** deploy edilmiyor (`docker-compose.e2e.yml`'e özel). Backend'e bakan `/api/*` route'ları `internalKeyAuth` arkasında kalmaya devam ediyor (`app.ts` sırası değişmedi).
 - **Input validation:** yeni uçların hepsi doğruluyor — bilinmeyen `visibility`, bilinmeyen katalog adı, bilinmeyen/yazım hatalı item alanı, `assetId`/`classId` eksikliği, aynı envanterde tekrarlı `assetId`, dizi olmayan `items`, boş `steamId`, sahip olunmayan asset'in trade'i, kendine trade, negatif `escrowEndDurationSeconds` → hepsi **400**. Alan kopyalama sabit allow-list üzerinden yapıldığı için `__proto__` bir alan yerine prototipe atanamıyor (hem unit hem canlı HTTP ile doğrulandı).
 - **Yeni dış bağımlılık:** yok.
+
+---
+
+## Doğrulama — Tur 1 (2026-08-18, ✗ FAIL)
+
+**Validator:** bağımsız chat, yapım raporu görülmeden. **Dal HEAD:** `f8cdf4e` (lokal = `origin/task/T137-fake-drivable-inventory`). **Merge-base:** `787b1b3` (= `origin/main` HEAD).
+
+### Kapı adımları
+
+| Adım | Sonuç |
+|---|---|
+| −1 Working tree hygiene | ✓ `git status --short` 0 satır |
+| 0 Main CI startup check | ✓ son 3 run `success` — [`32133727296`](https://github.com/turkerurganci/Skinora/actions/runs/32133727296) (Docker Publish, `787b1b3`) · [`32133727298`](https://github.com/turkerurganci/Skinora/actions/runs/32133727298) (CI, `787b1b3`) · [`32057012508`](https://github.com/turkerurganci/Skinora/actions/runs/32057012508) |
+| 0b Repo memory drift | ✓ `.claude/memory/MEMORY.md:56` T137 satırı mevcut |
+| 7a Dal CI | ✓ **dal HEAD'in kendi run'ı** [`32146723383`](https://github.com/turkerurganci/Skinora/actions/runs/32146723383) (`f8cdf4e`) `conclusion=success`, bloke edici 14/14 yeşil (`3b. JS test (vitest)` dahil) |
+
+### Kabul kriterleri — bağımsız yeniden üretim
+
+Validator fake'i lokalde `dist/`'ten koşturdu (5199 steam / 5198 blockchain, tek process) ve her kriteri **kendi** HTTP çağrılarıyla üretti.
+
+| # | Kriter | Sonuç | Validator kanıtı |
+|---|---|---|---|
+| 1 | `steamId` başına envanter kontrol edilebiliyor | ✓ Karşılandı | Sürülmemiş `…060` → `200 {"visibility":"PUBLIC","items":[],"totalCount":0}` · seed sonrası `…060` → 1 item / `totalCount:1`, aynı anda `…061` → `items:[]`. İki steamId **farklı** cevap veriyor |
+| 2 | Trade simüle | ✓ Karşılandı | `POST /__e2e/steam/trade` `…060→…061` `11111111001` → `{"ok":true,"newAssetId":"388965514727569895"}`; sonrasında satıcı `items:[]`, alıcıda **aynı** `classId 310776767` + **rotasyonlu** assetId. Ters bacak (T129 geri alma) da çalıştı → `913066708457036972`. Bu, `DeliveryVerificationService`'in okuduğu kanıtın **tam** şeklidir (satıcı tarafı: `ItemAssetId` gitti · alıcı tarafı: `ItemClassId` sayısı arttı + baseline'da olmayan yeni assetId → `candidateDeliveredAssetId`) |
+| 3 | (D3) visibility'de gerçek sidecar paritesi | ✓ Karşılandı | `PRIVATE` → `422 {"visibility":"PRIVATE","code":"INVENTORY_PRIVATE",…}` · `UNAVAILABLE` → `503 {"code":"STEAM_UNAVAILABLE",…}`, ikisinde de `items` yok. Gerçek sidecar ile karşılaştırıldı: `sidecar-steam/src/api/routes.ts:121-140` (200/422/503 + `visibility` gövdede) ve kod sabitleri `InventoryService.ts:314,321` — kodlar **birebir** aynı; 200 gövdesi `items/totalCount/tradeableCount` ile `HttpSteamSidecarInventoryClient.SidecarInventoryEnvelope` alan adlarını karşılıyor |
+| 4 | (D4) trade-hold per-steamId sürülebilir | ✓ Karşılandı | Sürülen `…060` → `{"active":false,…}` · sürülmemiş steamId → `{"active":true,"escrowEndDurationSeconds":0}` |
+| 5 | (D2) custody trade yüzeyi emekli | ✓ Karşılandı | Canlı: `POST /api/trade-offers/send` → **404**, `POST /__e2e/trade/suppress-accept` → **404**. Bağımsız kontrol: `grep -rn "trade-offers\|TradeOfferDispatch\|trade-events" backend/src --include=*.cs` → **0 satır**; repo genelinde kalan atıflar yalnız tarihsel task raporları |
+
+**Girdi doğrulama (Katman 1 mini güvenlik):** validator kendi 400 probe'larını koştu — bilinmeyen alan (`assetid`) → `400 unknown item field 'assetid'`, sahip olunmayan asset trade'i → `400 A does not hold asset nope`. `resolveItem` sabit allow-list üzerinde döndüğü için `__proto__` alan yerine prototipe atanamıyor (unit testi de bunu kapsıyor). Secret sızıntısı yok, yeni dış bağımlılık yok, backend'e bakan `/api/*` route'ları `internalKeyAuth` arkasında; `/__e2e/*` kimliksiz kalması pre-existing tasarım ve servis yalnız `docker-compose.e2e.yml`'de.
+
+**Testler (validator'ın kendi koşumu):** `sidecar-fake` `npm test` → **38/38 passed** (3 dosya: ids 4 · hmac 3 · inventoryStore 31) · `npm run build` exit 0 · `npm run lint` 0 · `e2e` `npx tsc --noEmit` exit 0.
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| B1 | S3 Eksik (bloke edici) | Onaylanan D1–D5 kararları ve ölçülen advisory e2e gerilemesi **kaynak dokümana yazılmadı**; seed yükümlülüğünün **sahibi yok** | `Docs/11_IMPLEMENTATION_PLAN.md` §T137 · §T138 |
+| N1 | S1 Sapma (bloke etmeyen) | Plan §T138 "yalnız admin-flows T137'den bağımsız" diyor; ölçüm bunu yalanlıyor (6/7 → **4/7**) | `Docs/11_IMPLEMENTATION_PLAN.md` §T138 |
+| N2 | S1 Sapma (bloke etmeyen) | `seed.itemAssetId` yorumu bayat: "Must match the fake's inventory item" — fake'in artık varsayılan envanter item'ı **yok**, sabit yalnız `ITEM_CATALOG` şablonuyla eşleşiyor | `e2e/src/db.ts:43-44` |
+
+#### B1 — ayrıntı
+
+Validator, yapım raporunu görmeden önce advisory e2e sinyalini **merge-base'e karşı** ölçtü ve gerilemeyi bağımsız olarak buldu:
+
+| Leg | main `787b1b3` ([`32133727298`](https://github.com/turkerurganci/Skinora/actions/runs/32133727298)) | dal HEAD `f8cdf4e` ([`32146723383`](https://github.com/turkerurganci/Skinora/actions/runs/32146723383)) |
+|---|---|---|
+| happy-path | 0/1 | 0/1 |
+| T108 cancellation | 0/4 | 0/4 |
+| T109 timeout | **1/4** | 0/4 |
+| T110 payment edge cases | 0/6 | 0/6 |
+| T111 fraud-flags | **3/4** | 0/4 |
+| T112 emergency-hold | 0/3 | 0/3 |
+| T113 admin-flows | **6/7** | 4/7 |
+| T114 downtime | 0/3 | 0/3 |
+| **Toplam** | **10/32** | **4/32** |
+
+Mekanizma tek ve deterministik — dal CI logunda 8 leg'de aynı imza: `create failed: {"code":"ITEM_NOT_IN_INVENTORY","message":"Item is not in the seller's Steam inventory."}`. Kök: `TransactionCreationService` Stage 5 satıcı envanterini okuyor; sürülmemiş steamId artık **boş** dönüyor ve **hiçbir spec/harness `setFakeInventory` çağırmıyor** (repo genelinde helper'ın çağıranı `0`).
+
+Bu sonucun **kendisi** bulgu değildir — D1'de proje sahibi "bilinmeyen steamId → boş envanter"i bedeli yazılı olarak seçmiştir ve validator bu kararı sorgulamaz. Bulgu, kararın **nereye yazıldığıdır**:
+
+1. `11_IMPLEMENTATION_PLAN.md` §T137'nin kabul kriteri hâlâ yalnız "steamId başına envanter kontrol edilebiliyor, trade simüle"dir; D1–D5'in hiçbiri, ölçülen 10/32 → 4/32 bedeli de dahil, planda **yok**. Projenin kendi kalıcı dersi (T122, T123 girişinde kayıtlı): *"onaylanmış kapsam değişikliği, kabul kriterlerinin KAYNAK dokümanına yazılmadıkça gerçekleşmemiştir."* Bugün planı okuyan biri, altı testin bilinçli ve fiyatlandırılmış bir kararla düştüğünü göremez.
+2. Seed yükümlülüğü yalnız T137 raporunun "Known Limitations #1" maddesinde duruyor. §T138'in kabul kriterleri — ki T137a ölçümüyle bir kez zaten güncellendi — seed'den **hiç** söz etmiyor. Bu, T129 tur 3'ün kalıcı dersinin birebir tekrarıdır: *"advisory bir sinyal 'bloke etmediği' için değil sahibi olmadığı için ölür; bir sahibi ve bir kapatma tarihi olmalıdır."* Legler `continue-on-error` olduğu için T138 seed'i hiç eklemeden kapanabilir ve kimse fark etmez.
+
+**Kapsam sorusu (proje sahibi kararı — validator karar vermez):** seed T137'de mi kapatılsın, T138'e mi kalsın? Validator'ın ölçtüğü olgu: 9 spec'in **tamamı** `seedHappyPath()` (`e2e/src/db.ts`) çağırıyor ve bu fonksiyon spec'lerin `beforeEach` reset'inden **sonra** koşuyor; dolayısıyla satıcı envanterini oraya seed etmek tek noktalı bir harness değişikliğidir, hiçbir spec senaryosuna dokunmaz ve D1'in kazancını (alıcı **sıfır** baseline'la başlar) korur — seed yalnız satıcıya yapılır.
+
+#### N1 — ayrıntı
+
+Plan §T138 "T137 bağımlılığının ölçülen gerekçesi" bloğu: *"8 spec'in 7'si bu yüzden T137'siz yeşile dönemez; yalnız admin-flows T137'den bağımsız."* Ölçüm bunu yalanlıyor: admin-flows **6/7 → 4/7**, düşen üç testin üçü de `ITEM_NOT_IN_INVENTORY` (AC1 satır 100 · AC2 satır 137 · AC3 satır 174). B1'in doküman turunda birlikte düzeltilmeli.
+
+### Yapım raporu karşılaştırması
+
+Validator kendi verdict'ini oluşturduktan **sonra** raporu okudu.
+
+- **Uyum:** Kabul kriterleri 1–5'te tam uyum — validator beşini de bağımsız olarak yeniden üretti, rapordaki her kanıt doğrulandı, abartı veya boşluk yok.
+- **Ölçüm uyumu:** Rapor Known Limitations #1 aynı gerilemeyi (10/32 → 4/32), aynı mekanizmayı ve aynı leg dağılımını **kendisi** kaydetmiş; validator'ın merge-base ölçümü rapordaki T137a tabanıyla birebir örtüştü. Rapor bu noktada dürüst ve eksiksizdir — B1 raporun bir şeyi gizlemesi değil, **raporda kalmış olmasıdır**.
+- **Tek uyuşmazlık:** Rapor seed'i "T138'in yeniden yazım listesine eklenmesi gereken mekanik bir ön adım" diye niteliyor; plan §T138'de böyle bir madde yok ve rapor onu eklemiyor. B1 tam olarak budur.
+- **D5 (CI açığı) bağımsız doğrulandı:** `code` filtresi gerçekten `sidecar-fake/**` içermiyor (`ci.yml:60-65`); ilk dal run'ı [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605)'te `3b. JS test` **skipped**, düzeltmeden sonra dal HEAD run'ında **success** + `Tests 38 passed (38)`. `ci-gate.needs` listesi değişmedi (`ci.yml:723-736`), yani bloke edicilik korunmuş. Düzeltme doğru ve gerekçesi doğru.
+
+### Verdict
+
+**✗ FAIL** — kod tarafı temiz ve beş kabul kriterinin beşi de bağımsız olarak karşılandı; bloke eden şey **doküman/sahiplik** boşluğudur (B1). Düzeltme turu `11_IMPLEMENTATION_PLAN.md` §T137 + §T138 üzerinde, proje sahibinin kapsam kararının ardından yapılır. Dal merge **edilmez**.
