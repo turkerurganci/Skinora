@@ -47,7 +47,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit (sidecar-fake) | ✓ **38/38 passed** | `npm test` → `ids 4 · hmac 3 · inventoryStore 31`, 3 dosya. Taban 12'ydi (`tradeControl` 5 testi emeklilikle düştü, 31 yeni test geldi) |
+| Unit (sidecar-fake) | ✓ **38/38 passed** | Lokal `npm test` → `ids 4 · hmac 3 · inventoryStore 31`, 3 dosya. Taban 12'ydi (`tradeControl` 5 testi emeklilikle düştü, 31 yeni test geldi). **CI'da da koştu** (D5 düzeltmesinden sonra): run `32143961035` → `Sidecar-fake vitest` adımı `Tests 38 passed (38)` |
 | Build (sidecar-fake) | ✓ | `npx tsc --noEmit` exit 0 · `npm run build` exit 0 |
 | Lint/format (sidecar-fake) | ✓ | `npm run lint` 0 · `npm run format:check` "All matched files use Prettier code style!" |
 | Typecheck/lint (e2e) | ✓ | `npx tsc --noEmit` exit 0 · `npm run lint` 0 |
@@ -74,7 +74,9 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 - Branch: `task/T137-fake-drivable-inventory`
 - Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5)
 - PR: [#246](https://github.com/turkerurganci/Skinora/pull/246)
-- CI: `050620c` run [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605) `success` (ama `3b. JS test` **skipped** — D5 bulgusu) · `c0412f6` run [`32142550427`](https://github.com/turkerurganci/Skinora/actions/runs/32142550427) `success` (docs-only) · D5 sonrası dal HEAD run'ı: aşağıya işlenecek
+- CI: ✓ **dal HEAD `fd969ef` run [`32143961035`](https://github.com/turkerurganci/Skinora/actions/runs/32143961035) `conclusion=success`** — bloke edici **14/14** yeşil (`1. Lint` · `2. Build` · `3. Unit test` · **`3b. JS test (vitest)`** · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build` ×4 · `CI Gate`; `0. Guard` skipped). Bu push `.github/workflows`'a dokunduğu için tüm path filtreleri açıldı → run tam kapsamlı koştu.
+  - **D5 düzeltmesinin kanıtı run içinde:** `3b. JS test (vitest)` job'ının `Sidecar-fake vitest` adımı **çalıştı** ve `Tests 38 passed (38)` / `Test Files 3 passed (3)` bastı — düzeltme öncesi aynı job `skipped`'dı.
+  - Önceki run'lar: `050620c` [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605) `success` (ama `3b. JS test` **skipped** — D5 bulgusunun kanıtı) · `c0412f6` [`32142550427`](https://github.com/turkerurganci/Skinora/actions/runs/32142550427) `success` (docs-only) · `1af5404` [`32143864749`](https://github.com/turkerurganci/Skinora/actions/runs/32143864749) **`cancelled`** (sonraki push iptal etti — task.md concurrency notu; o run'da `3b. JS test` artık `skipped` değil, koşarken iptal oldu).
 
 ## Yapım İçinde Bulunan CI Açığı (D5 — proje sahibi onaylı düzeltme)
 
@@ -101,6 +103,8 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
    | T113 admin-flows | 6/7 | **4/7** |
    | T114 downtime | 0/3 | 0/3 |
    | **Toplam** | **10/32** | **4/32** |
+
+   **Tekrarlanabilirlik:** ölçüm **iki tam run'da birebir aynı** çıktı — [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605) (`050620c`) ve dal HEAD [`32143961035`](https://github.com/turkerurganci/Skinora/actions/runs/32143961035) (`fd969ef`); her ikisinde de 8/8 leg sonuç üretti ve leg başına sayılar aynı.
 
    Kaybedilen 6 testin tamamı bir transaction **yaratıyor**; düşme imzası tek ve aynı: `create failed: {"code":"ITEM_NOT_IN_INVENTORY","message":"Item is not in the seller's Steam inventory."}` (happy-path leg logu). Yani kayıp yeni bir kırılma değil, **seed sorumluluğunun görünür hâle gelmesi**. Ayakta kalan 4 test admin-flows'un envantere dokunmayan bölümü. Zincir T138'e kadar zaten kırmızıydı (T137a: "bu görev hiçbir leg'i yeşile çevirmiyor... yeşil beklentisi T137 + T135 + T138 zincirinin sonunda doğar"), legler `continue-on-error` + `ci-gate.needs` dışında olduğu için **CI Gate etkilenmez**. **T138 için somut sonuç:** her spec artık satıcı envanterini `api.setFakeInventory(...)` ile seed etmek zorunda — bu, T138'in yeniden yazım listesine eklenmesi gereken mekanik bir ön adımdır.
 2. **Emekli lever'ların senaryoları T138'e kaldı.** `timeout.spec.ts`'in iki testi (satıcı trade-offer timeout / delivery timeout) ve `downtime.spec.ts`'in Steam-outage testi custody durumlarına dayanıyordu; lever'ları kaldırıldı ve yerlerine P2P karşılıklarını **adıyla** söyleyen notlar bırakıldı (confirm-ready deadline'ı, "satıcı hiç trade etmez", ACCEPTED'da bekleyen Steam-bound durum). Yeniden yazım T138'in kabul kriterinde.
