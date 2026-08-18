@@ -1,6 +1,6 @@
 # T131 — AdminDisputeService: item-refund bacağı + override
 
-**Faz:** P5 | **Durum:** ⏳ Devam ediyor (düzeltme turu uygulandı 2026-08-18 — B1 · N1 · N2 kapatıldı, yeniden doğrulama bekliyor) | **Tarih:** 2026-08-17 (yapım) · 2026-08-18 (doğrulama) · 2026-08-18 (düzeltme turu)
+**Faz:** P5 | **Durum:** ✓ Tamamlandı (tur 1 ✗ FAIL → düzeltme turu → tur 2 ✓ PASS) | **Tarih:** 2026-08-17 (yapım) · 2026-08-18 (doğrulama tur 1) · 2026-08-18 (düzeltme turu) · 2026-08-18 (doğrulama tur 2)
 
 ---
 
@@ -120,7 +120,9 @@ otomatik çözümüdür (06 §2.10) — kimse bakmamıştır.
 | FE build | ✓ | `npm run build` — `/[locale]/admin/disputes` ƒ |
 | **CI** | **✓ PASS** | HEAD `bdbe46e`, run [`32062899657`](https://github.com/turkerurganci/Skinora/actions/runs/32062899657) — CI Gate `success`, bloke edici 11/11 job yeşil |
 
-## Doğrulama
+## Doğrulama — Tur 1 (2026-08-18, ✗ FAIL)
+
+> Tur 2 (✓ PASS) bu dosyanın sonundaki [§Yeniden Doğrulama — Tur 2](#yeniden-doğrulama--tur-2-2026-08-18--pass) bölümündedir. Aşağısı tarihsel kayıttır.
 
 | Alan | Sonuç |
 |---|---|
@@ -464,3 +466,108 @@ CI bunu bağımsız olarak teyit etti. Dal izolasyon kontrolü temiz: `git log m
   yani T137a'nın main run'ında (`32050987594`) ölçtüğü 10/32 ile aynı. Kalan 22 test custody
   durumlarında takılıyor; sahiplik **T137** (sidecar-fake envanter ucu steamId'yi yok sayıyor,
   teslimat kanıtı simüle edilemiyor) → **T138** (spec yeniden yazımı).
+
+---
+
+## Yeniden Doğrulama — Tur 2 (2026-08-18) ✓ PASS
+
+Bağımsız validator chat'i, **yapım raporu görülmeden**, kendi verdict'ini oluşturduktan sonra
+raporla karşılaştırdı. Dal HEAD **`3df4d91`** (= `origin/task/T131-admin-dispute-override`,
+merge-base = `origin/main`).
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Bulgu sayısı | **2** — bloke edici **0**, bloke etmeyen 2 (N1, N2 — ikisi de bu turda kapatıldı) |
+| Düzeltme gerekli mi | Hayır |
+
+### Validator kapıları
+
+| Adım | Sonuç |
+|---|---|
+| -1 Working tree | ✓ temiz |
+| 0 Main CI son 3 | ✓ [`32057012508`](https://github.com/turkerurganci/Skinora/actions/runs/32057012508) · [`32057012471`](https://github.com/turkerurganci/Skinora/actions/runs/32057012471) · [`32053321109`](https://github.com/turkerurganci/Skinora/actions/runs/32053321109) — üçü de `success` |
+| 0b Repo memory | ✓ T131 satırları mevcut |
+| 8a Task branch CI | ✓ [`32124494037`](https://github.com/turkerurganci/Skinora/actions/runs/32124494037), headSha `3df4d91` = dal HEAD, CI Gate `success`, bloke edici **11/11** yeşil (0. Guard skipped) |
+
+### Validator'ın kendi ürettiği kanıt (dal HEAD `3df4d91`)
+
+| Tür | Sonuç | Komut / detay |
+|---|---|---|
+| Build | ✓ 0 Error / 0 Warning | `dotnet build Skinora.sln -c Debug` |
+| **Backend toplam** | ✓ **2779/2779**, 0 fail | 13 proje **seri** koşuldu (Testcontainers kuralı), 13/13 exit 0: API 551 · Admin 22 · Auth 120 · Disputes 83 · Fraud 91 · Notifications 171 · Payments 6 · Platform 189 · Realtime 40 · Shared 413 · Steam 39 · Transactions 1032 · Users 22 |
+| FE tsc / eslint | ✓ 0 / 0 | `npx tsc --noEmit` · `npm run lint` |
+| FE i18n | ✓ **4 locale × 1319 anahtar, identical key sets** | `npm run i18n:check` — 15 advisory `untranslatable` uyarısı pre-existing, hiçbiri T131 anahtarı değil |
+| FE vitest | ✓ 33/33 | `npm test` |
+
+**Advisory E2E (8 leg kırmızı) T131 kaynaklı DEĞİL — bu turda en güçlü kanıtla:** dal run'ı
+[`32124494037`](https://github.com/turkerurganci/Skinora/actions/runs/32124494037) ile main
+tabanı [`32057012471`](https://github.com/turkerurganci/Skinora/actions/runs/32057012471)
+**leg sayımları birebir aynı** (3× "1 failed" · 1× "1 passed" · 3× "3 failed" · 1× "3 passed" ·
+1× "4 failed" · 1× "6 failed" · 1× "6 passed" = **10 passed / 22 failed = 32**) ve **hata
+imzaları da birebir**: 18× `timeout awaiting ITEM_ESCROWED` · 2× `timeout awaiting
+TRADE_OFFER_SENT_TO_SELLER` · 1× `second create failed` · 1× `toBeGreaterThanOrEqual`. Yani
+kalan 22 test **T117'de emekli edilen custody statülerini bekleyen spec'lerdir** — sahiplik
+**T138**. T131 yüzeylerinden `--log-failed` üzerinde **0 iz**; `PlatformSteamBots` izi **0**
+(T137a'nın onardığı harness katmanı geçiliyor).
+
+### Kabul kriterleri — validator verdict'i (hepsi bağımsız olarak yeniden üretildi)
+
+| # | Kriter | Yapım | Validator | Kanıt |
+|---|---|---|---|---|
+| 1 | Item iade bacağı — dört kalıntı (AC1) | ✓ | ✓ | Dördü kapalı; `ItemRefundToSeller` **kaynakta 0 isabet** (kalan tek atıf 05 §4.2'nin "v3.0 kaldırılan event'ler" listesi — belgeleyici). 07 §9.20/§9.22 doğru şekilde dokunulmadı: `git diff -U0` hunk'ları yalnız satır 3 + 2470–2489, iki tablo da her hunk'ın dışında (T133a sınırı korundu) |
+| 2 | Kanıtlanmış teslimatta BUYER_FAVOR gerekçe (D1·D2·D3) | ✓ | ✓ | **D1:** kapı `AdminDisputeService.cs:461-463` tek helper'da `Status == ITEM_DELIVERED`, hiçbir kanıt bayrağı okumuyor. D1'in gerekçesi bağımsız doğrulandı: `ITEM_DELIVERED`'a giden **tek** state-machine kenarı `TransactionStateMachine.cs:265` ve guard zinciri (`HasDeliveryEntryInvariant` → `HasDeliveryEvidence` → `IsSufficientForDelivery` + `DeliveryVerifiedAt`) 02 §9.2 kanıtını şart koşuyor → durum gerçekten kanıtın kendisi. **D2:** `overrideReason` trim'li ≥20 / ≤2000; kolon `nvarchar(2000)` — DTO sınırıyla **eşit**, taşma SaveChanges'te patlamaz; override yoksa `ResolutionOverrideReason = null`; audit `NewValue`'ya da yazılıyor; kapı state guard'larından **sonra** (hold testi bunu sabitliyor). **D3:** AD28 bool'u **aynı** helper'dan geliyor ve `JsonIgnore` taşımıyor (her zaman dönüyor) |
+| 3 | AD28 `deliveredItemName` admin ekranında (AC3) | ✓ | ✓ | Modal alanı beklenen adın **hemen altında** çiziyor; koşul `detail?.deliveredItemName &&` → `undefined` **ve** boş string ikisini de eliyor; karşılaştırmanın iki tarafı da aynı `detail` fetch'inden (`expectedItemName = detail?.transaction.itemName ?? dispute.itemName`); i18n 4×1319 identical |
+| 4 | SELLER_FAVOR sonrası terminal disposition (D4·D5) | ✓ | ✓ | `Cancel` → `DeadlineScannerJob.cs:267` → `Fire(Timeout)` → `CANCELLED_TIMEOUT` + alıcıya iade zinciri uçtan uca izlendi. `CLOSED` kapıyı açmıyor (`AlreadyResolved`). `RESOLVED_FOR_BUYER` kolu savunma amaçlı: alıcı lehine karar işlemi `REFUNDED`'a taşıyor, tarayıcı ise yalnız `PAYMENT_RECEIVED` sorguluyor → pratikte erişilemez. Modül yönü doğru (Transactions → Disputes referansı yok), adapter `DisputesModule.cs:33-34`'te kayıtlı |
+| 4a | **B1** — serbest bırakılan satır satıcının kaydına yazılmıyor (D6·D6a) | ✓ | ✓ | Damgayı **tek yazan** `DeliveryTimeoutRound.cs:377` (repo genelinde tek atama). İki tüketici de **hem sorguda hem switch'te** dışlıyor (`ReputationAggregator.cs:82-84` + `:215`; `CancelCooldownEvaluator.cs:63-64` + `:128`). Statü `CANCELLED_TIMEOUT` kaldı. Migration = 1 additive `datetime2` nullable, seed/CHECK/index yok. **D6a bağımsız olarak yeniden tarandı:** `CANCELLED_TIMEOUT`'un repo'daki diğer tüm okuyucuları (`FraudFlagService` · `FraudFlagAdminQueryService` · `UserActiveTransactionChecker` · `ActiveTransactionCounter` · `TransactionCreationService` · `AdminTransactionService.IsTerminalState` · liste/detay servisleri) yalnız **terminal-dışlama filtresi**; satıcının kaydına yazan başka yol **yok** → D6a'nın "iki tüketici akışın tamamıdır" iddiası doğru |
+| 4b | **N2** — kapıyı yalnız imzayı görmüş karar açıyor (N2a·N2b·N2c) | ✓ | ✓ | Karşılaştırma `dispute.ResolvedAt is not { } ruledAt \|\| ruledAt <= signatureFirstObservedAtUtc` → eşit an **ve** NULL `ResolvedAt` ikisi de "görmemiş" (N2a). **En eski** capture okunuyor (`OrderBy(ObservedAt).First`). Tur imza anını parametre veriyor, adapter karşılaştırıyor, `ReEscalatedAfterRuling` → `Held` ve damga **yazılmıyor** (N2b). Yeniden eskalasyon `ESCALATED` + `ResolvedAt = null` → `CK_Disputes_Resolved_ResolvedAt` sağlanıyor; iki tarafa bildirim `DisputeEscalatedEvent(AutoEscalated: true)` ile gidiyor (N2c). **Para kilitlenmiyor:** `AdminDisputeService` Stage 3 guard'ı `ESCALATED` istiyor ve yeniden eskale edilen satır tam olarak orada → ikinci kez çözülebiliyor |
+| 4c | **N1** — port doc'u iki üreticiyi de anlatıyor | ✓ | ✓ | "timeout recorded against the seller" cümlesi çıkarılmış, iki üretici adıyla yazılmış ve **doc'un her iddiası kodda doğrulandı** (yorum metnine güvenilmedi) |
+
+### Doküman uyumu
+
+Beş kaynak dokümanın hepsi sürüm + `Son güncelleme` bump'ı almış (T130 N1 konvansiyonu):
+02 v3.5→v3.7 · 03 v3.4→v3.6 · 05 v3.3→v3.4 · 06 v6.8→v6.10 · 07 v3.5→v3.6. 06 §3.5 / §3.11
+kolon satırları migration'larla **tip ve nullability olarak birebir**; 06 §3.1 formül bölmesi
+ve sorumluluk haritası satırı aggregator predicate'iyle birebir; 07 §9.30 AD28/AD29 sözleşmesi
+DTO'larla **alan alan** eşleşiyor (opsiyonellik `JsonIgnore` ile, `buyerFavorRequiresOverride`
+bilinçli olarak zorunlu).
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | Temiz |
+| Auth etkisi | Temiz — `AdminDisputesController` diff'te yok; `VIEW_DISPUTES` (AD27/AD28) + `MANAGE_DISPUTES` (AD29) policy'leri değişmedi |
+| Input validation | Temiz — `overrideReason` trim + min/max, kolon genişliği DTO sınırıyla eşit, JSX'te React escape'i, log'lanmıyor |
+| Yeni bağımlılık | Yok — diff'te `.csproj` / `package.json` değişikliği yok |
+
+### Bulgular — bloke edici 0
+
+| # | Seviye | Açıklama | Etkilenen dosya | Durum |
+|---|---|---|---|---|
+| N1 | S1 Sapma (bloke etmeyen) | 06 §2.10 `DisputeStatus` tablosu `RESOLVED_FOR_*`'a hâlâ koşulsuz **"Terminal."** diyordu; aynı turda yazılan N2c yeniden eskalasyonu o statüyü geri döndürüyor ve bu **varsayılan yol** — ilk-tur imzasında karşılaştırma anı `now` olduğu için mevcut **her** karar imzadan önce sayılır. "Terminal." aynı dosyada normatif anlamda kullanılıyor (satır 132 `REFUNDED`). 06 bu görevde v6.10'a çekilmişti ama §2.10 açılmamıştı — AC1'in kapatmak için var olduğu "kod değişti, sözleşme eski sözü veriyor" sınıfının aynısı | `Docs/06_DATA_MODEL.md:212-213` | **Bu turda kapatıldı** (proje sahibi onayı): tabloya istisna işaretlendi + §2.10'a yeniden eskalasyon notu yazıldı, 06 v6.10→**v6.11**. Şema değişikliği yok |
+| N2 | S3 Eksik (bloke etmeyen) | N2c'nin "`AdminNote` + `AdminId` **KORUNUR**" maddesi hiçbir testte iddia edilmiyordu; üstelik fixture `AddDisputeAsync` ikisini de hiç set etmediği için assertion eklense **bile** regresyonu yakalayamazdı. Kod doğruydu (`ReEscalateAsync` alanlara dokunmuyor), korumasızdı | `backend/tests/.../MisdeliveryDisputeEscalatorTests.cs` | **Bu turda kapatıldı** (proje sahibi onayı): fixture'a `_admin` kullanıcısı + `AdminId`/`AdminNote` (yalnız `RESOLVED_FOR_*`'ta — `CLOSED` sistemin kendi çözümü, admin'i yok), `A_Ruling_That_Predates_The_Signature_Re_Escalates`'e iki assertion. **Mutasyon testiyle kanıtlandı:** `ReEscalateAsync`'e `AdminNote = null; AdminId = null` enjekte edildiğinde test **2/2 FAIL** veriyor → assertion boş değil. Mutasyon geri alındı, üretim kodu değişmedi |
+
+**Elenen aday bulgular:** validator 23 aday bulgunun her birini üç bağımsız çürütücüden
+geçirdi; 22'si elendi. En yakın ikisi 05 §4.2 ve 03 §4.4 adım 7'nin niteliksiz "sorumlu:
+satıcı" ifadeleriydi, ikisi de geçerli çıkmadı: (a) 02 §13 (satır 416/419/420) **aynı şekilde**
+niteliksiz özet tutup sorumluluğu 06 §3.1'e açıkça delege ediyor ve T129'un `DeliveryReversedAt`
+ikizinde de aynı konvansiyon uygulanmış; (b) 03 §4.4 **adım 1** yanlış-teslimat imzası vakasını
+zaten §4.4'ün iptal dalının **dışına** çıkarıyor ("işlem iptal edilmez, dispute'a yükseltilir"),
+dolayısıyla adım 7 o vakayı hiç kapsamıyor.
+
+### Yapım raporu karşılaştırması
+
+**Tam uyumlu — uyuşmazlık yok.** Raporun kabul kriterleri tablosundaki sekiz satırın hepsi
+(1 · 2 · 3 · 3b · 4 · 4a · 4b · 4c) bağımsız olarak yeniden üretildi. Raporun bildirdiği
+**2779/2779** backend sayısı validator'ın kendi koşumuyla **birebir** örtüştü (proje bazında
+dağılım dahil). Raporun *Known Limitations* kalemleri doğru sınıflandırılmış.
+
+### Kalıcı ders (tur 2)
+
+**Bir kuralın KORUNDUĞUNU söyleyen madde, o korumayı bozan bir değişikliğin testi kırıp
+kırmayacağıyla ölçülür.** N2c'nin `AdminNote`/`AdminId` koruması koddaydı ve doğruydu, ama
+fixture ikisini de NULL bıraktığı için testin o maddeye dair söyleyebileceği hiçbir şey yoktu
+— "assertion yok" ile "assertion var ama boş" aynı korumasızlıktır. T129 B4'ün ("kural yazıldı"
+≠ "kural korunuyor") test tarafındaki karşılığı; ayırt etmenin yolu **mutasyon**: korumayı
+kaldır, süit hâlâ yeşilse koruma test edilmiyordur.

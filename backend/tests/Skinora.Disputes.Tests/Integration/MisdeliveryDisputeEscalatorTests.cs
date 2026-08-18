@@ -44,12 +44,20 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
 
     private const string SellerSteam = "76561198000000401";
     private const string BuyerSteam = "76561198000000402";
+    private const string AdminSteam = "76561198000000403";
     private const string SellerWallet = "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL";
+
+    // T131 finding N2c — the ruling a re-escalation must PRESERVE. Written into
+    // every resolved fixture dispute so an assertion on AdminNote/AdminId can
+    // actually fail: with both left NULL the preservation rule is untestable,
+    // and a future "reset the row for the next admin" edit would go unnoticed.
+    private const string PriorAdminNote = "Satıcı kanıt sundu, işlem satıcı lehine kapatıldı.";
 
     private FakeTimeProvider _clock = null!;
     private RecordingOutboxService _outbox = null!;
     private User _seller = null!;
     private User _buyer = null!;
+    private User _admin = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -70,7 +78,13 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
             SteamDisplayName = "Buyer",
             PreferredLanguage = "tr",
         };
-        context.Set<User>().AddRange(_seller, _buyer);
+        _admin = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = AdminSteam,
+            SteamDisplayName = "Admin",
+        };
+        context.Set<User>().AddRange(_seller, _buyer, _admin);
         await context.SaveChangesAsync();
     }
 
@@ -260,6 +274,13 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
         // CK_Disputes_Resolved_ResolvedAt pairs the two. The previous ruling
         // survives in the append-only audit trail (06 §3.20).
         Assert.Null(dispute.ResolvedAt);
+        // ...but the ruling's AUTHOR and REASONING stay on the row (N2c). Only
+        // ResolvedAt is cleared, and only because the CHECK constraint pairs it
+        // with the status. Whoever rules next has to be able to read what the
+        // previous admin decided and why before they overturn it — the audit
+        // row that also holds it is not on the screen they are looking at.
+        Assert.Equal(_admin.Id, dispute.AdminId);
+        Assert.Equal(PriorAdminNote, dispute.AdminNote);
         // WP17 — the new finding replaces the old text, in the buyer's locale.
         Assert.Equal(
             DisputeAutoCheckMessages.Localize(
@@ -373,6 +394,11 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
         var isResolved = status is DisputeStatus.CLOSED
             or DisputeStatus.RESOLVED_FOR_BUYER
             or DisputeStatus.RESOLVED_FOR_SELLER;
+        // Only an ADMIN resolution carries an author: CLOSED is the system
+        // answering its own question (06 §2.10), so it has no AdminId/AdminNote
+        // — the same split the escalator keys on.
+        var isAdminRuling = status is DisputeStatus.RESOLVED_FOR_BUYER
+            or DisputeStatus.RESOLVED_FOR_SELLER;
 
         var dispute = new Dispute
         {
@@ -384,6 +410,8 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
             UserDescription = "Item hiç gelmedi",
             // CK_Disputes_Closed — a closed dispute carries its resolution time.
             ResolvedAt = isResolved ? now : null,
+            AdminId = isAdminRuling ? _admin.Id : null,
+            AdminNote = isAdminRuling ? PriorAdminNote : null,
             CreatedAt = now,
             UpdatedAt = now,
         };
