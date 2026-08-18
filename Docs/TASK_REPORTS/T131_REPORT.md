@@ -307,7 +307,35 @@ Unit-filter suite ayrıca koşuldu — kardeş projelerdeki parity testleri dahi
 (Shared 391 · Platform 124 · Transactions 518).
 
 **Frontend:** bu turda **hiçbir FE dosyası değişmedi** (düzeltme tamamen backend); FE kapıları
-CI'nin 1. Lint / 3b. JS test legleriyle doğrulanır.
+CI'nin 1. Lint / 3b. JS test legleriyle doğrulandı (ikisi de ✓).
+
+### Düzeltme turu — CI
+
+**✓ PASS** — HEAD `ea56b78`, run [`32122430201`](https://github.com/turkerurganci/Skinora/actions/runs/32122430201),
+`headSha` = dal HEAD, **CI Gate `success`**. Bloke edici **11 job'un 11'i yeşil**: Detect
+changed paths · 1. Lint · 2. Build · 3. Unit test · 3b. JS test (vitest) · 4. Integration
+test · 5. Contract test · **6. Migration dry-run** (yeni kolon şemaya temiz uygulanıyor) ·
+7. Docker build (backend) · 7. Docker build (frontend) · CI Gate. `0. Guard` skipped.
+
+Dal izolasyon kontrolü temiz: `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+…'` →
+yalnız `T131`. Working tree session başında temizdi.
+
+**8 advisory E2E leg kırmızı — T131 kaynaklı DEĞİL, dört kanıtla:**
+
+1. **Düzeltme turunun yüzeylerinden 0 iz** — `grep -ciE
+   "TimeoutReleasedByAdminRulingAt|ReEscalatedAfterRuling|signatureFirstObserved|
+   RuledWithoutTheSignature"` → **0** (948 satırlık `--log-failed` çıktısı üzerinde).
+2. **`PlatformSteamBots` izi 0** — T137a'nın onardığı harness katmanı geçiliyor.
+3. **Spec çalıştıran yedi leg tabanı leg-leg birebir üretiyor:** happy-path 0/1 ·
+   cancellation 0/4 · timeout 1/4 · payment 0/6 · fraud-flags 3/4 · emergency-hold 0/3 ·
+   downtime 0/3 — T137a'nın main run'ında (`32050987594`) ölçtüğü değerlerin aynısı.
+4. **Sekizinci leg (T113 admin-flows) tek bir test bile koşmadı:** "Start database" adımı
+   `mcr.microsoft.com/v2/mssql/server/manifests/2022-latest` imajını çekerken ağ hatası
+   aldı (`read tcp …` → `Error response from daemon`) ve job orada düştü. **Geçici altyapı
+   arızası**, test başarısızlığı değil. Tabandaki 6/7'si eklenince toplam **10 passed /
+   22 failed = 32** — yani T137a tabanıyla birebir.
+
+Kalan 22 test custody durumlarında takılıyor; sahiplik **T137** → **T138**.
 
 ## Altyapı Değişiklikleri
 - **Migration (yapım):** `T131_DisputeResolutionOverrideReason` — 1 additive nullable kolon
