@@ -246,6 +246,7 @@ Run `32190325806`'nın leg loglarından sayıldı:
 Sayı **ve** leg dağılımı birebir aynı → `Webhook__SteamSharedSecret` env satırının
 kaldırılması e2e yığınında hiçbir şeyi değiştirmedi; D'nin "davranış değişmez"
 iddiası tahmin değil, ölçüm.
+**Tekrarlanabilirlik:** ölçüm bu dalda **iki** bağımsız run'da yapıldı — kod run'ı [`32190325806`](https://github.com/turkerurganci/Skinora/actions/runs/32190325806) (`ad853e5`) ve docs-only run [`32192290639`](https://github.com/turkerurganci/Skinora/actions/runs/32192290639) (`9f2c011`, docs push'u da e2e filtresini açar çünkü filtre dal ↔ main farkına bakar) — **ikisi de 10/32 ve leg dağılımı birebir aynı**; ikinci run da `conclusion=success`, bloke edici jobların hepsi yeşil. Bu dalda koşacak her sonraki run bir tekrar daha ekler (sayı burada sabitlenmedi ki atıf bayatlamasın — T137 tur 2'nin N3 dersi).
 
 ---
 
