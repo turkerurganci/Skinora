@@ -14,6 +14,14 @@ namespace Skinora.Transactions.Application.Reputation;
 /// CANCELLED_SELLER for seller, CANCELLED_BUYER for buyer, and
 /// CANCELLED_TIMEOUT only for the party at fault per 06 §3.1.
 /// </summary>
+/// <remarks>
+/// T131 (validation finding B1) — a CANCELLED_TIMEOUT released by an admin's
+/// dispute ruling (<c>TimeoutReleasedByAdminRulingAt</c> set) is not anyone's
+/// fault and never counts, mirroring the same exclusion in
+/// <see cref="ReputationAggregator"/>. Both consumers must agree: this one
+/// stamps <c>User.CooldownExpiresAt</c>, which blocks the seller from trading
+/// at all, so a divergence here would be the heavier half of the same mistake.
+/// </remarks>
 public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
 {
     private readonly AppDbContext _db;
@@ -49,8 +57,20 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
                         && t.CancelledAt >= windowStart
                         && (t.Status == TransactionStatus.CANCELLED_SELLER
                             || t.Status == TransactionStatus.CANCELLED_BUYER
-                            || t.Status == TransactionStatus.CANCELLED_TIMEOUT))
-            .Select(t => new { t.Id, t.Status, t.SellerId, t.BuyerId, t.CancelledAt })
+                            // T131 (finding B1) — the admin-released kind of
+                            // CANCELLED_TIMEOUT is not a responsible
+                            // cancellation for either party.
+                            || (t.Status == TransactionStatus.CANCELLED_TIMEOUT
+                                && t.TimeoutReleasedByAdminRulingAt == null)))
+            .Select(t => new
+            {
+                t.Id,
+                t.Status,
+                t.SellerId,
+                t.BuyerId,
+                t.CancelledAt,
+                t.TimeoutReleasedByAdminRulingAt
+            })
             .ToListAsync(cancellationToken);
 
         var timeoutIds = cancellations
@@ -73,7 +93,8 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
                 })
                 .ToDictionaryAsync(x => x.TxId, x => x.PreviousStatus, cancellationToken);
 
-        var responsibleCount = cancellations.Count(c => IsResponsibleFor(c.Status, c.SellerId, c.BuyerId, c.Id, userId, previousStatusByTx));
+        var responsibleCount = cancellations.Count(c => IsResponsibleFor(
+            c.Status, c.SellerId, c.BuyerId, c.Id, c.TimeoutReleasedByAdminRulingAt, userId, previousStatusByTx));
 
         if (responsibleCount <= thresholds.LimitCount)
             return new CooldownEvaluationResult(responsibleCount, thresholds.LimitCount, thresholds.WindowHours, null);
@@ -93,6 +114,7 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
         Guid sellerId,
         Guid? buyerId,
         Guid txId,
+        DateTime? timeoutReleasedByAdminRulingAt,
         Guid userId,
         IReadOnlyDictionary<Guid, TransactionStatus> previousStatusByTx)
     {
@@ -103,6 +125,10 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
         {
             TransactionStatus.CANCELLED_SELLER => isSeller,
             TransactionStatus.CANCELLED_BUYER => isBuyer,
+            // T131 (finding B1) — restated here as well as in the query, so a
+            // later widening of the query cannot silently push a seller the
+            // admin cleared over the cooldown limit.
+            TransactionStatus.CANCELLED_TIMEOUT when timeoutReleasedByAdminRulingAt is not null => false,
             TransactionStatus.CANCELLED_TIMEOUT when previousStatusByTx.TryGetValue(txId, out var prev) =>
                 prev switch
                 {

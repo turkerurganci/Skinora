@@ -1,6 +1,6 @@
 # T131 — AdminDisputeService: item-refund bacağı + override
 
-**Faz:** P5 | **Durum:** ✗ FAIL (doğrulama 2026-08-18 — 1 bloke edici bulgu, düzeltme turu bekliyor) | **Tarih:** 2026-08-17 (yapım) · 2026-08-18 (doğrulama)
+**Faz:** P5 | **Durum:** ⏳ Devam ediyor (düzeltme turu uygulandı 2026-08-18 — B1 · N1 · N2 kapatıldı, yeniden doğrulama bekliyor) | **Tarih:** 2026-08-17 (yapım) · 2026-08-18 (doğrulama) · 2026-08-18 (düzeltme turu)
 
 ---
 
@@ -91,12 +91,17 @@ otomatik çözümüdür (06 §2.10) — kimse bakmamıştır.
 | 2 | Kanıtlanmış teslimatta BUYER_FAVOR gerekçe istiyor | ✓ | `Resolve_BuyerFavor_AtItemDelivered_WithoutOverrideReason_IsRejected` · `…WithATokenOverrideReason_IsRejected` · `…PersistsTheOverrideReason_AndAuditsIt` · `Resolve_SellerFavor_AtItemDelivered_NeedsNoOverrideReason` · `Resolve_OverrideReason_OnARulingThatOverrodeNothing_IsNotStored` · `Resolve_OnAHeldTransaction_ReportsTheHold_NotTheMissingOverride` |
 | 3 | AD28 `deliveredItemName` admin ekranında | ✓ | Backend: `Get_ReturnsTheDeliveredItemName_ForTheAdminToCompare` (DTO'da ilk assertion — T130'da hiç yoktu). FE: `DisputeResolveModal.tsx` koşullu satır + `fields.deliveredItemName` ×4 dil; `npm run i18n:check` → parity OK 4×1319 |
 | 3b | i18n 4 dil parity | ✓ | `i18n parity OK — 4 locales, 1319 keys each, identical key sets.` |
-| 4 | SELLER_FAVOR sonrası terminal disposition (G3) | ✓ | `An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation` · `A_System_Closed_Dispute_Does_Not_Release_The_Hold` · `A_First_Round_Signature_Also_Releases_When_An_Admin_Has_Ruled` · `Resolved_Dispute_Is_Left_Alone` (Theory: CLOSED→`AlreadyResolved`, RESOLVED_FOR_*→`AlreadyRuledByAdmin`) |
+| 4 | SELLER_FAVOR sonrası terminal disposition (G3) | ✓ | `An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation` · `A_System_Closed_Dispute_Does_Not_Release_The_Hold` · `Resolved_Dispute_Is_Left_Alone` (Theory: CLOSED→`AlreadyResolved`, RESOLVED_FOR_*→`AlreadyRuledByAdmin`) |
+| 4a | B1 — serbest bırakılan satır satıcının kaydına yazılmıyor (düzeltme turu) | ✓ | `An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation` (damga yazılıyor) · `An_Ordinary_Delivery_Timeout_Is_Not_Marked_As_Admin_Released` · `Recompute_Cancelled_Timeout_Released_By_Admin_Ruling_Counts_For_Neither_Party` · `Recompute_Admin_Release_Does_Not_Clear_An_Unrelated_Timeout` · `Admin_Released_Delivery_Timeouts_Never_Reach_The_Cooldown` · `Admin_Release_Removes_Only_Its_Own_Row_From_The_Count` |
+| 4b | N2 — kapıyı yalnız imzayı görmüş karar açıyor (düzeltme turu) | ✓ | `A_Ruling_That_Predates_The_Signature_Re_Escalates` (Theory ×2) · `A_Ruling_In_The_Same_Instant_As_The_Signature_Re_Escalates` · `A_Closed_Dispute_Is_Not_Re_Escalated_By_A_Later_Signature` · `A_First_Round_Signature_Does_Not_Release_On_A_Ruling_That_Predates_It` · `A_Ruling_Made_Without_The_Signature_Does_Not_Release_The_Hold` · `The_Escalator_Is_Told_When_The_Signature_Was_First_Observed` |
+| 4c | N1 — port doc'u iki üreticiyi de anlatıyor (düzeltme turu) | ✓ | `IDeliveryTimeoutRound.cs` `Cancel` doc'u: "timeout recorded against the seller" cümlesi kaldırıldı, iki üretici adıyla yazıldı |
 
-> **Bu tablo yapım chat'inin kendi değerlendirmesidir.** Bağımsız validator (2026-08-18)
+> **1–4 satırları yapım chat'inin kendi değerlendirmesidir.** Bağımsız validator (2026-08-18)
 > 1–3'ü onayladı, **4'ü `~ Kısmi`'ye indirdi**: D4'ün "satıcının kaydına kusur yazılmaz"
 > koşulu karşılanmıyor (bulgu **B1**). Validator'ın kendi tablosu ve kanıtları
-> [§Doğrulama](#doğrulama) bölümünde.
+> [§Doğrulama](#doğrulama) bölümünde. **4a–4c düzeltme turunun (2026-08-18) kriterleridir**
+> — detay [§Düzeltme Turu](#düzeltme-turu-2026-08-18) bölümünde; bunlar da yapım chat'inin
+> kendi değerlendirmesidir ve bağımsız doğrulama bekliyor.
 
 ## Test Sonuçları
 
@@ -178,9 +183,139 @@ Lokal `prettier --check` yedi dosyada uyarı verdi; `tr -d '\r'` sonrası çıkt
 
 **Merge edilmedi.** FAIL kuralı: branch merge edilmez, düzeltme ayrı yapım chat'inde yapılır, sonrasında yeni doğrulama chat'i açılır.
 
+---
+
+## Düzeltme Turu (2026-08-18)
+
+Doğrulamanın üç maddesi (**B1 bloke edici** · **N1** · **N2**) kapatıldı. Turun iki kapsam
+kararı proje sahibine **seçenekli** sunuldu ve **önerilen seçenekler onaylandı**; ikisi de
+`11_IMPLEMENTATION_PLAN.md` §P5 T131 bloğuna **NİHAİ ŞEKİL** olarak yazıldı.
+
+### B1 (bloke edici) — admin kararıyla serbest bırakılan satır artık kimseye yazılmıyor
+
+**Ayırt edici alan:** yeni nullable kolon `Transactions.TimeoutReleasedByAdminRulingAt`.
+Damgayı **yalnız** teslimat turunun admin-serbest-bırakma kolu yazar
+(`DeliveryTimeoutRound.ReleasedByAdminRuling`) — kararın **yanında**, çünkü scanner yalnız
+`Cancel` görür ve o değerin iki üreticisi oradan birbirinin aynısıdır.
+
+`ReputationAggregator` ve `CancelCooldownEvaluator` damgalı satırı **hem sorgu katmanında
+filtreler hem switch içinde açık guard'la reddeder**. Çift yazım bilinçlidir ve T129'un
+`REFUNDED` bölmesindeki desenin aynısıdır: `CANCELLED_TIMEOUT`'un artık iki üreticisi var,
+sorgunun ileride genişletilmesi sessizce yeniden ceza yazmaya başlamamalı.
+
+**Statü `CANCELLED_TIMEOUT` kaldı** — B1'in metni bunu şart koşuyor; ayrıca iade akışı,
+bildirim metni ve state machine geçişi o statüye bağlı.
+
+**Reddedilen iki alternatif** (proje sahibine sunuldu): (i) kolonsuz çıkarım
+(`MisdeliverySignature` capture'ı olan bir `CANCELLED_TIMEOUT` ancak admin serbest
+bırakmasıyla oluşabilir, çünkü re-entry kapısı diğer tüm yolları kısa devre ediyor) — doğru,
+ama doğruluğu **başka bir dosyadaki** kapının değişmemesine bağlı; (ii) statüyü
+`CANCELLED_ADMIN`'e çevirmek — B1'in metnine aykırı ve dalga boyu geniş.
+
+**D7'nin gereği — yan kayıtların tamamı tarandı.** Serbest bırakılan iptalin ürettiği yan
+kayıtlar tek tek çıkarıldı: `TransactionTimedOutEvent` (tüketicileri yalnız Notifications +
+Realtime), `PaymentRefundToBuyerRequestedEvent` (alıcıya iade — doğru), `TransactionHistory`
+(audit — doğru) ve itibar + cooldown. **Satıcının kaydına yazan başka yol yok** (fraud flag
+yolu dahil), yani B1'in adlandırdığı iki tüketici bu akışın tamamıdır.
+
+### N2 — kapıyı yalnız imzayı GÖRMÜŞ bir karar açar
+
+**Karşılaştırma:** `Disputes.ResolvedAt` ↔ imzanın **ilk** kayda geçtiği an
+(`DeliveryEvidenceCaptures` içindeki **en eski** `MisdeliverySignature` satırının
+`ObservedAt`'i). Serbest bırakma yalnız ruling imzadan **kesin olarak sonra** ise uygulanır.
+İki belirsiz girdi — eşit an ve (şema regresyonu olan) NULL `ResolvedAt` — "görmemiş" sayılır:
+iki hata simetrik değildir, gereksiz inceleme admin'in zamanına, yanlış serbest bırakma
+satıcının malına mal olur. **En eski** capture okunur, en yeni değil — sonraki bir turun aynı
+bulguyu yeniden kaydetmesi, kanıtı görmüş bir kararı görmemişe çeviremez.
+
+**Karar port'un iki ucu arasında bölündü.** Tur imzanın ilk gözlem anını `EscalateAsync`'e
+**parametre** olarak verir (ilk turda kendi saati — imza o an oluşuyorsa mevcut her karar
+zorunlu olarak ondan öncedir); dispute'u görebilen taraf adapter olduğu için karşılaştırmayı
+o yapar ve yeni `MisdeliveryEscalationOutcome.ReEscalatedAfterRuling` döner. Tur bu değeri
+diğer serbest-bırakmayan cevaplar gibi `Held`'e çevirir ve damgayı **yazmaz**.
+
+**Yeniden eskalasyon:** aynı satır `ESCALATED`'a döner, `SystemCheckResult` yeni bulguyla
+(alıcının dilinde) yazılır, `ResolvedAt` **temizlenir**
+(`CK_Disputes_Resolved_ResolvedAt` ikisini eşler), `AdminNote` + `AdminId` **korunur**
+(sonraki admin kimin ne gerekçeyle karar verdiğini görmeli) ve iki tarafa inceleme bildirimi
+gider. Önceki karar kaybolmaz: değiştirilemez `DISPUTE_RESOLVED` audit kaydındadır
+(06 §3.20). Kural `02 §10.2`'ye yazıldı — oradaki yasak ikinci bir dispute **satırıdır**
+(`UQ_Disputes_TransactionId_Type`), aynı satırın **yeni bir olguyla** yeniden ele alınması
+değil. Kapıyı yalnız platformun yeni gözlemi açar; kullanıcı itirazı veya eski kararın
+yeniden tartışılması açmaz. **`CLOSED` bu kolun dışındadır** (06 §2.10 — insan kararı yok,
+korunacak bir hüküm de yok) ve orada mevcut davranış zaten parayı serbest bırakmıyor.
+
+**Reddedilen iki alternatif:** (i) sessizce `Held` kalmak — D4'ün kapatmak için var olduğu
+fail-frozen sınıfını bu popülasyon için geri getirir (para emanette asılı, tek çıkış
+belgesiz AD19); (ii) dispute'a dokunmadan `Transaction`'a triyaj damgası — 02 §10.2 sorusunu
+doğurmaz ama kimsenin okumadığı bir yüzey yaratır (T130 N2 / T137'nin "sahipsiz sinyal ölür"
+dersi).
+
+### N1 — port doc'u iki üreticiyi de anlatıyor
+
+`DeliveryTimeoutDecision.Cancel` doc'undan tek üreticiye ait "timeout recorded against the
+seller" cümlesi **çıkarıldı**; yerine iki üretici de adıyla yazıldı: (a) kanıtlı
+teslimatsızlık — kusur satıcınındır ve 06 §3.1 ona yazar; (b) admin kararıyla serbest bırakma
+— imza item'ın satıcıdan **ayrıldığını** söyler, karar satıcıyı aklamıştır ve satır
+damgalanıp iki haritadan da düşer. Çağıranın işi iki kolda da aynıdır; farklı olan satırın
+satıcının kaydına ne ifade ettiğidir, ve o bilgi enum'da değil işlem satırında taşınır.
+
+### Düzeltme turu — etkilenen dosyalar
+
+**Kaynak (7):**
+- `Skinora.Transactions/Domain/Entities/Transaction.cs` — `TimeoutReleasedByAdminRulingAt`
+- `Skinora.Transactions/Application/Delivery/DeliveryTimeoutRound.cs` — damga + imza anının
+  kaynağı (`MisdeliveryFirstObservedAtAsync`, en eski capture)
+- `Skinora.Transactions/Application/Delivery/IDeliveryTimeoutRound.cs` — **N1** doc
+- `Skinora.Transactions/Application/Delivery/IDeliveryMisdeliveryEscalator.cs` — yeni
+  parametre + `ReEscalatedAfterRuling`
+- `Skinora.Transactions/Application/Reputation/ReputationAggregator.cs` — **B1** dışlama
+- `Skinora.Transactions/Application/Reputation/CancelCooldownEvaluator.cs` — **B1** dışlama
+- `Skinora.Disputes/Application/Disputes/MisdeliveryDisputeEscalator.cs` — **N2** karşılaştırma
+  + yeniden eskalasyon
+
+**Migration (1):** `20260818085958_T131_TimeoutReleasedByAdminRulingAt` — 1 additive nullable
+`datetime2` kolon, seed/CHECK/index yok.
+
+**Test (5 dosya, +11 test):**
+- `DeliveryTimeoutRoundTests` — damga yazılıyor / olağan timeout'ta yazılmıyor /
+  `ReEscalatedAfterRuling` → `Held` + damgasız / escalator'a **ilk** gözlem anı veriliyor;
+  ilk-tur testi N2'nin gerektirdiği şekilde **yeniden yazıldı**
+  (`A_First_Round_Signature_Does_Not_Release_On_A_Ruling_That_Predates_It`)
+- `MisdeliveryDisputeEscalatorTests` — karardan sonraki imza iki terminalde de yeniden eskale
+  ediyor / eşit an da yeniden eskale ediyor / `CLOSED` sonraki imzayla yeniden eskale
+  **edilmiyor**; mevcut "left alone" theory'si imzayı karardan **önceye** alacak şekilde
+  güncellendi
+- `ReputationAggregatorTests` — damgalı satır iki tarafta da sayılmıyor / damga **başka** bir
+  timeout'u temizlemiyor
+- `CancelCooldownEvaluatorTests` — damgalı satırlar cooldown'a hiç ulaşmıyor / dışlama yalnız
+  kendi satırını düşürüyor
+- `TimeoutTestSupport` — port test double'ı yeni imzaya uyarlandı
+
+### Düzeltme turu — test sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Build | ✓ **0 error / 0 warning** | `dotnet build Skinora.sln -c Debug` |
+| Backend toplam | ✓ **2779/2779** | 13 test projesi, **proje bazında seri** koşum (Testcontainers kuralı, T127 dersi). Taban 2768 → **+11** |
+
+Proje kırılımı: API 551 · Admin 22 · Auth 120 · Disputes 83 · Fraud 91 · Notifications 171 ·
+Payments 6 · Platform 189 · Realtime 40 · Shared 413 · Steam 39 · Transactions 1032 · Users 22.
+
+Enum değeri eklendiği için (`MisdeliveryEscalationOutcome.ReEscalatedAfterRuling`) tüm
+Unit-filter suite ayrıca koşuldu — kardeş projelerdeki parity testleri dahil temiz
+(Shared 391 · Platform 124 · Transactions 518).
+
+**Frontend:** bu turda **hiçbir FE dosyası değişmedi** (düzeltme tamamen backend); FE kapıları
+CI'nin 1. Lint / 3b. JS test legleriyle doğrulanır.
+
 ## Altyapı Değişiklikleri
-- **Migration:** `T131_DisputeResolutionOverrideReason` — 1 additive nullable kolon
+- **Migration (yapım):** `T131_DisputeResolutionOverrideReason` — 1 additive nullable kolon
   (`Disputes.ResolutionOverrideReason` nvarchar(2000)). Seed yok, CHECK yok, index yok.
+- **Migration (düzeltme turu):** `T131_TimeoutReleasedByAdminRulingAt` — 1 additive nullable
+  kolon (`Transactions.TimeoutReleasedByAdminRulingAt` datetime2). Seed yok, CHECK yok,
+  index yok. Mevcut satırlarda NULL = "admin serbest bırakması değil", yani geriye dönük
+  veri hiçbir sayımdan düşmez; dışlama yalnız bu turdan sonra oluşacak satırlara uygulanır.
 - **Config/env değişikliği:** Yok.
 - **Docker değişikliği:** Yok.
 - **Yeni paket:** Yok.

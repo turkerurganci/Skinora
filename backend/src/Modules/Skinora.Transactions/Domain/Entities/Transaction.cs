@@ -120,6 +120,27 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // column, nulls first, makes the queue fair by construction (T127).
     public DateTime? DeliveryRoundAt { get; set; }
 
+    // T131 (validation finding B1) — set when an ADMIN's dispute ruling is what
+    // let this delivery timeout proceed to cancellation, rather than the
+    // platform proving the seller still held the item. Written only on the
+    // misdelivery release path (DeliveryTimeoutRound); NULL on every ordinary
+    // timeout, and on every other phase.
+    //
+    // It exists because the row that path produces is a CANCELLED_TIMEOUT out of
+    // PAYMENT_RECEIVED, and 06 §3.1 charges that transition to the SELLER — so
+    // with no way to tell the two producers apart, the reputation aggregator and
+    // the cancel-cooldown evaluator both penalise the very seller the admin just
+    // cleared (03 §6.4: "kayda kusur yazılmaz"), permanently and with no
+    // correction surface. Both consumers exclude a stamped row outright, for the
+    // reason 02 §13 excludes CANCELLED_ADMIN: it records a platform decision,
+    // not a user's fault.
+    //
+    // The twin of DeliveryReversedAt below, and deliberately so: there too one
+    // status has two producers that say opposite things about fault, and the
+    // split is carried by a nullable timestamp on the row rather than by an
+    // inference re-derived in whichever file happens to ask.
+    public DateTime? TimeoutReleasedByAdminRulingAt { get; set; }
+
     // --- Settlement (02 §4.5.1) ---
     // Steam lets either side reverse a protected trade for 7 days, with no
     // Steam Support involvement. Paying out before that window closes would let

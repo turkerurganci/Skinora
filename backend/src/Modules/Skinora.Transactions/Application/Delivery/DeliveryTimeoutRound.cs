@@ -124,14 +124,15 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         // committed the capture but its escalation was rolled back, this pass
         // raises the dispute instead of skipping past a signature nobody was
         // ever told about.
-        if (await MisdeliveryAlreadyConcludedAsync(transaction.Id, cancellationToken))
+        if (await MisdeliveryFirstObservedAtAsync(transaction.Id, cancellationToken) is { } recordedAt)
         {
-            var reasserted = await _escalator.EscalateAsync(transaction, nowUtc, cancellationToken);
+            var reasserted = await _escalator.EscalateAsync(
+                transaction, nowUtc, recordedAt, cancellationToken);
             _logger.LogDebug(
                 "Transaction {TransactionId}: misdelivery signature already recorded — no Steam "
                 + "read spent, escalation re-asserted ({Outcome})",
                 transaction.Id, reasserted);
-            return ReleasedByAdminRuling(transaction, reasserted);
+            return ReleasedByAdminRuling(transaction, reasserted, nowUtc);
         }
 
         // Fresh, never cached: this round decides whether money moves, and the
@@ -305,7 +306,12 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     {
         DeliveryEvidenceCaptureRecorder.Record(_db, transaction, result, nowUtc);
 
-        var outcome = await _escalator.EscalateAsync(transaction, nowUtc, cancellationToken);
+        // The signature is being established right now, so `nowUtc` IS its first
+        // observation — which means any admin ruling already on the dispute
+        // necessarily predates it (T131 finding N2). The escalator is what acts
+        // on that, and it re-escalates rather than releasing.
+        var outcome = await _escalator.EscalateAsync(
+            transaction, nowUtc, nowUtc, cancellationToken);
 
         _logger.LogWarning(
             "Transaction {TransactionId}: delivery deadline passed on a misdelivery signature — "
@@ -313,7 +319,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
             + "Escalated to admin ({Outcome}) instead of cancelling (02 §9.2, §10.1)",
             transaction.Id, transaction.ItemAssetId, transaction.ItemClassId, outcome);
 
-        return ReleasedByAdminRuling(transaction, outcome);
+        return ReleasedByAdminRuling(transaction, outcome, nowUtc);
     }
 
     /// <summary>
@@ -338,19 +344,43 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     /// is the ordinary course of an expired delivery window (03 §4.4): the
     /// transaction cancels and the buyer is refunded.
     /// </para>
+    /// <para>
+    /// <b>What the stamp is for</b> (T131 validation finding B1). The row this
+    /// produces is a <c>CANCELLED_TIMEOUT</c> out of <c>PAYMENT_RECEIVED</c>,
+    /// and 06 §3.1 charges that transition to the SELLER — the same seller the
+    /// ruling just cleared. Left unmarked it lowers their
+    /// <c>SuccessfulTransactionRate</c> and counts toward a cancel cooldown,
+    /// permanently and with no correction surface, which is the opposite of what
+    /// 03 §6.4 says a seller-favour ruling means. So the release marks itself on
+    /// the transaction, and both consumers read the mark. It is written HERE,
+    /// beside the decision it describes, rather than by the scanner: the scanner
+    /// sees only <c>Cancel</c>, and both of that value's producers look
+    /// identical from there.
+    /// </para>
+    /// <para>
+    /// <b>Which rulings qualify</b> (T131 validation finding N2). Only the ones
+    /// made with the signature on record. The escalator answers that question —
+    /// it is the side that can see the dispute — and reports a ruling that
+    /// predates the signature as
+    /// <see cref="MisdeliveryEscalationOutcome.ReEscalatedAfterRuling"/>, which
+    /// falls through to <c>Held</c> below like every other non-release outcome.
+    /// </para>
     /// </remarks>
     private DeliveryTimeoutDecision ReleasedByAdminRuling(
-        Transaction transaction, MisdeliveryEscalationOutcome outcome)
+        Transaction transaction, MisdeliveryEscalationOutcome outcome, DateTime nowUtc)
     {
         if (outcome != MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)
         {
             return DeliveryTimeoutDecision.Held;
         }
 
+        transaction.TimeoutReleasedByAdminRulingAt = nowUtc;
+
         _logger.LogWarning(
             "Transaction {TransactionId}: an admin has ruled on the misdelivery dispute, so the "
             + "delivery timeout is no longer a silent cancellation — the expired window proceeds "
-            + "to cancellation and the buyer is refunded (02 §9.2, 03 §4.4, §6.4)",
+            + "to cancellation and the buyer is refunded. The cancellation is NOT recorded against "
+            + "the seller: the ruling cleared them (02 §9.2, 03 §4.4, §6.4, 06 §3.1)",
             transaction.Id);
 
         return DeliveryTimeoutDecision.Cancel;
@@ -413,8 +443,9 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
             && !result.Evidence.HasFlag(DeliveryEvidence.SELLER_ASSET_GONE);
 
     /// <summary>
-    /// Whether a previous round actually reached
-    /// <see cref="DeliveryVerdict.MisdeliverySignature"/> on this transaction.
+    /// When a previous round first reached
+    /// <see cref="DeliveryVerdict.MisdeliverySignature"/> on this transaction,
+    /// or <c>null</c> if none ever did.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -429,15 +460,24 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     /// <c>IX_DeliveryEvidenceCaptures_TransactionId</c>, and the answer never
     /// reverts — the escalation it stands for is a dispute row an admin owns.
     /// </para>
+    /// <para>
+    /// The EARLIEST observation is the one returned, not the latest (T131
+    /// finding N2). The question downstream is whether an admin who has already
+    /// ruled had the signature in front of them, and the first capture is when
+    /// it reached their queue; a later round re-recording the same finding must
+    /// not push that moment forward and turn a ruling made WITH the evidence
+    /// into one made without it.
+    /// </para>
     /// </remarks>
-    private Task<bool> MisdeliveryAlreadyConcludedAsync(
+    private async Task<DateTime?> MisdeliveryFirstObservedAtAsync(
         Guid transactionId, CancellationToken cancellationToken)
-        => _db.Set<DeliveryEvidenceCapture>()
+        => await _db.Set<DeliveryEvidenceCapture>()
             .AsNoTracking()
-            .AnyAsync(
-                c => c.TransactionId == transactionId
-                     && c.Verdict == MisdeliverySignatureVerdictName,
-                cancellationToken);
+            .Where(c => c.TransactionId == transactionId
+                        && c.Verdict == MisdeliverySignatureVerdictName)
+            .OrderBy(c => c.ObservedAt)
+            .Select(c => (DateTime?)c.ObservedAt)
+            .FirstOrDefaultAsync(cancellationToken);
 
     private static readonly string MisdeliverySignatureVerdictName =
         nameof(DeliveryVerdict.MisdeliverySignature);

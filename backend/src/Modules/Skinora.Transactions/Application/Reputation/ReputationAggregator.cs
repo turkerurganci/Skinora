@@ -39,6 +39,17 @@ namespace Skinora.Transactions.Application.Reputation;
 /// take the item back after being paid. Only the second counts, and only
 /// against the seller.
 /// </para>
+/// <para>
+/// <see cref="TransactionStatus.CANCELLED_TIMEOUT"/> is split the same way
+/// (T131 — validation finding B1). A delivery timeout that ran because an
+/// ADMIN ruled on a misdelivery dispute (<c>TimeoutReleasedByAdminRulingAt</c>
+/// set) is excluded outright, on the reasoning that excludes CANCELLED_ADMIN:
+/// the row records a platform decision, and the decision it records is the
+/// admin CLEARING this seller (03 §6.4). Counting it would take the one case
+/// where a human explicitly found no fault and turn it into the heaviest
+/// negative signal a seller can carry — with no correction surface, since
+/// reputation is recomputed from the rows themselves.
+/// </para>
 /// </remarks>
 public sealed class ReputationAggregator : IReputationAggregator
 {
@@ -63,7 +74,13 @@ public sealed class ReputationAggregator : IReputationAggregator
                         && (t.Status == TransactionStatus.COMPLETED
                             || t.Status == TransactionStatus.CANCELLED_SELLER
                             || t.Status == TransactionStatus.CANCELLED_BUYER
-                            || t.Status == TransactionStatus.CANCELLED_TIMEOUT
+                            // T131 — not the admin-released kind of
+                            // CANCELLED_TIMEOUT (finding B1). Same shape as the
+                            // REFUNDED filter below and the same reason: the
+                            // status has two producers, and this one is a
+                            // platform decision that CLEARED the seller.
+                            || (t.Status == TransactionStatus.CANCELLED_TIMEOUT
+                                && t.TimeoutReleasedByAdminRulingAt == null)
                             // T129 — only the reversal kind of REFUNDED. The
                             // filter is what keeps 02 §13 intact: an admin
                             // dispute refund is a platform decision and stays
@@ -79,7 +96,8 @@ public sealed class ReputationAggregator : IReputationAggregator
                 t.CreatedAt,
                 t.CancelledAt,
                 t.CompletedAt,
-                t.DeliveryReversedAt))
+                t.DeliveryReversedAt,
+                t.TimeoutReleasedByAdminRulingAt))
             .ToListAsync(cancellationToken);
 
         // Raw COMPLETED count — wash filter intentionally NOT applied
@@ -144,7 +162,8 @@ public sealed class ReputationAggregator : IReputationAggregator
         DateTime CreatedAt,
         DateTime? CancelledAt,
         DateTime? CompletedAt,
-        DateTime? DeliveryReversedAt);
+        DateTime? DeliveryReversedAt,
+        DateTime? TimeoutReleasedByAdminRulingAt);
 
     private readonly record struct ClassifiedRow(TxRow Tx, ResponsibilityEffect Effect);
 
@@ -188,6 +207,13 @@ public sealed class ReputationAggregator : IReputationAggregator
                 return isSeller ? new(true, false) : new(false, false);
 
             case TransactionStatus.CANCELLED_TIMEOUT:
+                // T131 (finding B1) — the query already filters these out, and
+                // the guard is written out anyway for the reason the REFUNDED
+                // one above is: CANCELLED_TIMEOUT has two producers now, and a
+                // future widening of the query must not silently start charging
+                // a seller for the cancellation an admin's ruling authorised.
+                if (row.TimeoutReleasedByAdminRulingAt is not null) return new(false, false);
+
                 if (!previousStatusByTx.TryGetValue(row.Id, out var previous))
                     return new(false, false);
 
