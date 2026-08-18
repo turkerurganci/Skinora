@@ -31,6 +31,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 | `docker-compose.e2e.yml` | iki custody env değişkeni düştü |
 | `e2e/src/api.ts` · `e2e/src/config.ts` | yeni helper'lar; emekli helper'lar çıktı |
 | `e2e/tests/{timeout,downtime,emergency-hold,payment-edge-cases}.spec.ts` | emekli lever çağrıları kaldırıldı / reset'e çevrildi |
+| `.github/workflows/ci.yml` | `frontend-test` job'ının `needs`'inden `build` çıkarıldı (D5 — aşağıda) |
 
 ## Kabul Kriterleri Kontrolü
 
@@ -71,13 +72,37 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 ## Commit & PR
 
 - Branch: `task/T137-fake-drivable-inventory`
-- Commit: `050620c` — T137: sidecar-fake surulebilir envanter + P2P trade simulasyonu
+- Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5)
 - PR: [#246](https://github.com/turkerurganci/Skinora/pull/246)
-- CI: (aşağıya işlenecek)
+- CI: `050620c` run [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605) `success` (ama `3b. JS test` **skipped** — D5 bulgusu) · `c0412f6` run [`32142550427`](https://github.com/turkerurganci/Skinora/actions/runs/32142550427) `success` (docs-only) · D5 sonrası dal HEAD run'ı: aşağıya işlenecek
+
+## Yapım İçinde Bulunan CI Açığı (D5 — proje sahibi onaylı düzeltme)
+
+**Bulgu:** `3b. JS test (vitest)` job'ı `needs: [changes, build]` diyordu; `2. Build` ise `if: needs.changes.outputs.code == 'true'` ile koşuyor ve `code` filtresi `backend / frontend / sidecar-steam / sidecar-blockchain / .github/workflows` — **`sidecar-fake` yok**. GitHub, atlanan bir `needs` bağımlılığının ardındaki job'ı da atladığı için, yalnız `sidecar-fake/**` değişen bir PR'da `build` atlanıyor ve JS test job'ı da atlanıyordu — **job'ın kendi `if`'i `sidecar-fake == 'true'`u açıkça saydığı hâlde.** Yani fake'in unit testleri CI'da **hiç** koşamıyordu.
+
+**Kanıt:** ilk dal run'ı [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605) (`050620c`) — `2. Build` **skipped**, `3b. JS test (vitest)` **skipped**, CI Gate yine `success`. Bu turda yazılan 38 test o run'da hiç çalışmadı; yeşil CI onları kanıtlamıyordu.
+
+**Düzeltme (proje sahibi seçimi):** `frontend-test` job'ının `needs`'i `[changes, build]` → `[changes]`. Job build çıktısı tüketmiyor (her adım kendi `npm ci`'sini yapıyor), yani kenar bir bağımlılık değil sıralamaydı. Bloke edicilik değişmedi — `ci-gate.needs` listesi ve `if: always()` + `contains(needs.*.result, 'failure')` mantığı aynı. Alternatif (`code` filtresine `sidecar-fake/**` eklemek) reddedildi: fake-only bir PR'da backend+frontend build'ini de tetiklerdi.
+
+**Kalıcı ders:** bir job'ın kendi `if`'inde bir filtreyi saymış olması, o filtre gerçekleştiğinde job'ın koşacağı anlamına gelmez — `needs` zincirindeki **atlanan** bir halka koşulu sessizce geçersiz kılar. "Test suite'i CI'a bağlandı" ile "CI o suite'i koşuyor" farklı şeylerdir ve ilki ikincisini göstermez (T129 B3'ün CI düzlemindeki ikizi: orada formülün tetikleyicisi eksikti, burada testin tetikleyicisi).
 
 ## Known Limitations / Follow-up
 
-1. **Advisory e2e ölçümü geçici olarak düşecek — beklenen ve proje sahibi onaylı.** Sürülmemiş steamId artık **boş** okunduğu için (D1) ve hiçbir spec henüz envanter seed etmediği için, T137a'nın ölçtüğü 10 geçen testin create ayağı da düşecek. Zincir T138'e kadar zaten kırmızı (T137a: "bu görev hiçbir leg'i yeşile çevirmiyor... yeşil beklentisi T137 + T135 + T138 zincirinin sonunda doğar"), legler `continue-on-error` + `ci-gate.needs` dışında olduğu için **CI Gate etkilenmez**. Gerçek sayı bu PR'ın advisory matrisinden okunup buraya yazıldı (aşağıdaki CI bölümü).
+1. **Advisory e2e ölçümü düştü — beklenen ve proje sahibi onaylı (D1).** Sürülmemiş steamId artık **boş** okunduğu için ve hiçbir spec henüz envanter seed etmediği için, create çağrısı `ITEM_NOT_IN_INVENTORY` ile reddediliyor. **Ölçülen (run [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605), 8/8 leg koştu):** 32 testin **4'ü pass / 28'i fail** — T137a tabanı 10/32'ydi.
+
+   | Leg | T137a tabanı | T137 sonrası |
+   |---|---|---|
+   | happy-path | 0/1 | 0/1 |
+   | T108 cancellation | 0/4 | 0/4 |
+   | T109 timeout | 1/4 | **0/4** |
+   | T110 payment edge cases | 0/6 | 0/6 |
+   | T111 fraud-flags | 3/4 | **0/4** |
+   | T112 emergency-hold | 0/3 | 0/3 |
+   | T113 admin-flows | 6/7 | **4/7** |
+   | T114 downtime | 0/3 | 0/3 |
+   | **Toplam** | **10/32** | **4/32** |
+
+   Kaybedilen 6 testin tamamı bir transaction **yaratıyor**; düşme imzası tek ve aynı: `create failed: {"code":"ITEM_NOT_IN_INVENTORY","message":"Item is not in the seller's Steam inventory."}` (happy-path leg logu). Yani kayıp yeni bir kırılma değil, **seed sorumluluğunun görünür hâle gelmesi**. Ayakta kalan 4 test admin-flows'un envantere dokunmayan bölümü. Zincir T138'e kadar zaten kırmızıydı (T137a: "bu görev hiçbir leg'i yeşile çevirmiyor... yeşil beklentisi T137 + T135 + T138 zincirinin sonunda doğar"), legler `continue-on-error` + `ci-gate.needs` dışında olduğu için **CI Gate etkilenmez**. **T138 için somut sonuç:** her spec artık satıcı envanterini `api.setFakeInventory(...)` ile seed etmek zorunda — bu, T138'in yeniden yazım listesine eklenmesi gereken mekanik bir ön adımdır.
 2. **Emekli lever'ların senaryoları T138'e kaldı.** `timeout.spec.ts`'in iki testi (satıcı trade-offer timeout / delivery timeout) ve `downtime.spec.ts`'in Steam-outage testi custody durumlarına dayanıyordu; lever'ları kaldırıldı ve yerlerine P2P karşılıklarını **adıyla** söyleyen notlar bırakıldı (confirm-ready deadline'ı, "satıcı hiç trade etmez", ACCEPTED'da bekleyen Steam-bound durum). Yeniden yazım T138'in kabul kriterinde.
 3. **Trade lock / cooldown modellenmedi** — bilinçli. Hiçbir tüketici lock durumunu okumuyor (`DeliveryVerificationService` neden okumaması gerektiğini uzun uzun belgeliyor: anonim okumada süre bilgisi yok), ölçülmemiş bir sinyali simüle etmek testi ona assert etmeye davet ederdi.
 4. **`.claude/CONTEXT.md` dosya haritasında `sidecar-fake/` ve `e2e/` hiç yok** — T107'den beri var olan bir boşluk, T137 kusuru değil. Yapısal doküman değişikliği proje sahibi onayı gerektirdiği için (GUARDRAILS §3) bu turda açılmadı; ayrı bir `chore:` turu adayı.
@@ -108,6 +133,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 - **D2 — custody trade yüzeyi:** **T137'de emekli edilsin** (önerilen). Gerekçe kanıtla: backend'de çağıran da yok, webhook ucu da yok.
 - **D3 — visibility raporlaması:** **gerçek sidecar paritesi** (önerilen) — 200/422/503.
 - **D4 — trade-hold:** **sürülebilir olsun** (önerilen); varsayılan bugünkü değer korundu, hiçbir mevcut akış etkilenmedi.
+- **D5 — yapım sırasında bulunan CI açığı** (ilk dal run'ında `3b. JS test` skipped çıkınca soruldu): **T137'de düzeltilsin, `frontend-test.needs`'ten `build` çıkarılsın** (önerilen). Ayrıntı ve kalıcı ders yukarıdaki §Yapım İçinde Bulunan CI Açığı bölümünde.
 
 **Mini güvenlik kontrolü (Katman 1):**
 

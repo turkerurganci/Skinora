@@ -291,9 +291,16 @@ jobs:
   # skips the sidecar suites (and vice versa); a workflow edit trips all three.
   # Blocking via ci-gate.needs. Skipped (not failed) on doc-only PRs.
   # ----------------------------------------------------------------------------
+  # T137 — `build` was REMOVED from `needs`. This job consumes nothing the build
+  # job produces (each step runs its own `npm ci`), so the edge was ordering,
+  # not a dependency — and it silently disabled the sidecar-fake suite: `build`
+  # is gated on the `code` filter, which does not list `sidecar-fake/**`, and
+  # GitHub skips the dependents of a skipped job. A fake-only PR therefore
+  # skipped this job despite its own `if` naming the filter, so the fake's unit
+  # tests could never run in CI. Blocking status is unchanged (ci-gate.needs).
   frontend-test:
     name: 3b. JS test (vitest)
-    needs: [changes, build]
+    needs: [changes]
     if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true'
     runs-on: ubuntu-latest
     steps:
