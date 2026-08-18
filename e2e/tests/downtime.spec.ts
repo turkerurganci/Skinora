@@ -159,10 +159,12 @@ test('steam outage: freeze halts the trade-offer timeout + shows the outage noti
   const buyerToken = mintAccessToken({ userId: seed.buyerId, steamId: seed.buyerSteamId });
 
   try {
-    // Park the transaction in TRADE_OFFER_SENT_TO_SELLER — a Steam-bound state
-    // (03 §11.2 scope) — by suppressing the fake's escrow-offer self-accept.
-    await api.resetTradeControl();
-    await api.suppressTradeAccept('SELLER_TO_BOT');
+    // T137 — this scenario parked the transaction in TRADE_OFFER_SENT_TO_SELLER
+    // by suppressing the fake's escrow-offer self-accept. Both the state and the
+    // lever are retired (02 §2.1); the P2P Steam-bound state a §11.2 outage
+    // freezes is ACCEPTED awaiting the seller's confirm-ready, and re-pointing
+    // the scenario at it is T138's scope.
+    await api.resetFakeSteamState();
 
     const txId = await createCreated(sellerToken);
     const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
@@ -221,7 +223,7 @@ test('steam outage: freeze halts the trade-offer timeout + shows the outage noti
     expect(resumed?.status).toBe('TRADE_OFFER_SENT_TO_SELLER');
   } finally {
     await api.resumeMaintenance(admin).catch(() => undefined);
-    await api.resetTradeControl().catch(() => undefined);
+    await api.resetFakeSteamState().catch(() => undefined);
   }
 });
 
@@ -233,7 +235,7 @@ test('blockchain degradation: freeze halts the payment timeout; resume restores 
   const buyerToken = mintAccessToken({ userId: seed.buyerId, steamId: seed.buyerSteamId });
 
   try {
-    await api.resetTradeControl();
+    await api.resetFakeSteamState();
     const txId = await createCreated(sellerToken);
     const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
     expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();

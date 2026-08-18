@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { setFakeInventory } from './api';
 import { e2eConfig } from './config';
 
 let pool: sql.ConnectionPool | null = null;
@@ -40,7 +41,13 @@ export const seed = {
   // Fixed id for the account-level FraudFlag the T111 fund-flow-block scenario
   // inserts for the seller (so the test can reject it by id to unblock).
   accountFlagId: '66666666-6666-6666-6666-666666666666',
-  // Must match the fake's inventory item (assetId + marketHashName).
+  // The listed item. These two constants DRIVE the seed rather than mirror a
+  // fixture: seedHappyPath() writes them into the seller's fake inventory and
+  // the ItemPriceCaches row below is keyed by the same market hash name. T137
+  // retired the fake's constant inventory — an undriven steamId now reads
+  // EMPTY, so there is no default item left to 'match'; the fake's
+  // AK47_REDLINE catalog template supplies the remaining fields (class,
+  // instance, type, exterior, tradable/marketable).
   itemAssetId: '11111111001',
   itemMarketHashName: 'AK-47 | Redline (Field-Tested)',
   price: '100.00',
@@ -150,6 +157,37 @@ export async function seedHappyPath(): Promise<typeof seed> {
        VALUES (@id, @name, @price, @price, SYSUTCDATETIME(), 'STEAM_MARKET',
          SYSUTCDATETIME(), SYSUTCDATETIME());`,
     );
+
+  // Fake Steam side — the SELLER holds the listed item (T137 fix round, B1).
+  // T137 made an undriven steamId read PUBLIC + EMPTY, so create's Stage 5
+  // seller-inventory check rejected every scenario with ITEM_NOT_IN_INVENTORY:
+  // no spec or harness ever drove the fake. Seeding it here — the one function
+  // all nine specs call, and which runs AFTER their beforeEach
+  // resetFakeSteamState() — restores create suite-wide without touching a
+  // single scenario (the P2P rewrite stays T138's scope).
+  //
+  // ONLY the seller is seeded. The buyer's ZERO baseline is what the delivery
+  // check counts its class delta against (06 §3.5) and is the whole point of
+  // the empty default — handing the buyer a copy would destroy it.
+  //
+  // Loud on failure: a silent no-op here is exactly the T137a failure mode (a
+  // setup step that quietly stopped working and surfaced two tests later).
+  const inventory = await setFakeInventory(seed.sellerSteamId, {
+    items: [
+      {
+        catalog: 'AK47_REDLINE',
+        assetId: seed.itemAssetId,
+        name: seed.itemMarketHashName,
+        marketHashName: seed.itemMarketHashName,
+      },
+    ],
+  });
+  if (!inventory.ok) {
+    throw new Error(
+      `[e2e:db] seeding the seller's fake inventory failed (${inventory.status}): ` +
+        JSON.stringify(inventory.body),
+    );
+  }
 
   return seed;
 }

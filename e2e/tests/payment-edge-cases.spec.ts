@@ -48,13 +48,13 @@ const POST_PAYMENT_STATES = [
 ];
 
 test.beforeEach(async () => {
-  // No edge case suppresses a trade leg, but a prior suite might have — clear it
-  // so the escrow/delivery legs auto-drive normally.
-  await api.resetTradeControl();
+  // No edge case drives an inventory, but a prior suite might have — clear it so
+  // this suite starts from an empty, readable world.
+  await api.resetFakeSteamState();
 });
 
 test.afterAll(async () => {
-  await api.resetTradeControl();
+  await api.resetFakeSteamState();
   await closePool();
 });
 

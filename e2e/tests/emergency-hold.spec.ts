@@ -47,13 +47,13 @@ const HOLD_REASON = 'E2E emergency-hold scenario — sanctions review (automated
 const RELEASE_NOTE = 'E2E hold release — automated note.';
 
 test.beforeEach(async () => {
-  // Clear any direction suppression a prior suite left on the shared (in-process)
-  // fake state so the escrow + delivery legs auto-drive normally here.
-  await api.resetTradeControl();
+  // Clear any inventory / trade-hold a prior suite drove into the shared
+  // (in-process) fake state so this suite starts from an empty, readable world.
+  await api.resetFakeSteamState();
 });
 
 test.afterAll(async () => {
-  await api.resetTradeControl();
+  await api.resetFakeSteamState();
   await closePool();
 });
 
