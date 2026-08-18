@@ -1,6 +1,6 @@
 # T132 — Backend bot/dispatch/webhook/recovery yüzeyi silme [RİSKLİ]
 
-**Faz:** F7 (P6 — Emeklilik) | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-19
+**Faz:** F7 (P6 — Emeklilik) | **Durum:** ⏳ Devam ediyor (yapım bitti + CI ✓ PASS, doğrulama bekliyor) | **Tarih:** 2026-08-19
 
 ---
 
@@ -211,7 +211,41 @@ sonra yeşil oldu" adımının sessizce atlanmaması için burada duruyor.
 - Commit: `9e64906` — T132: backend bot/webhook/recovery kalintisinin silinmesi
 - PR: **[#247](https://github.com/turkerurganci/Skinora/pull/247)**
 - Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE ^T[0-9]+... | sort -u` → **yalnız `T132`**
-- CI: `TBD`
+- CI: ✓ **PASS** — dal HEAD `ad853e5` run [`32190325806`](https://github.com/turkerurganci/Skinora/actions/runs/32190325806)
+  `conclusion=success`. Bloke edici jobların **hepsi** yeşil: `1. Lint` · `2. Build` ·
+  `3. Unit test` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` ·
+  `7. Docker build (backend)` · **`CI Gate`**. `0. Guard (direct push)` tasarım gereği
+  `skipped`; `3b. JS test (vitest)` `skipped` (tur hiçbir JS paketine dokunmadı).
+  İlk run [`32190127423`](https://github.com/turkerurganci/Skinora/actions/runs/32190127423)
+  (`9e64906`) öz-denetim commit'i push'lanınca concurrency group tarafından
+  **cancelled** edildi — task.md concurrency notu gereği `failure` sayılmaz, yetkili
+  olan son tamamlanmış run'dır.
+
+### Advisory E2E ölçümü — compose değişikliğinin inert olduğu KANITLANDI
+
+8 advisory E2E leg'i kırmızı; bu T117'den beri bilinen ve **T138'e ait** olan durum
+(spec'ler hâlâ emekli custody akışını sürüyor). Ama bu tur `docker-compose.e2e.yml`'a
+dokunduğu için (`Webhook__SteamSharedSecret` env satırı) ölçümün **kaymadığını**
+göstermek gerekiyordu — T137'nin dersi tam olarak budur: advisory sinyal bloke
+etmediği için değil, **kimse bakmadığı için** ölür.
+
+Run `32190325806`'nın leg loglarından sayıldı:
+
+| Leg | T137 tabanı | T132 HEAD |
+|---|---|---|
+| happy-path | 0/1 | **0/1** |
+| T108 cancellation | 0/4 | **0/4** |
+| T109 timeout | 1/4 | **1/4** |
+| T110 payment edge cases | 0/6 | **0/6** |
+| T111 fraud-flags | 3/4 | **3/4** |
+| T112 emergency-hold | 0/3 | **0/3** |
+| T113 admin-flows | 6/7 | **6/7** |
+| T114 downtime | 0/3 | **0/3** |
+| **TOPLAM** | **10/32** | **10/32** |
+
+Sayı **ve** leg dağılımı birebir aynı → `Webhook__SteamSharedSecret` env satırının
+kaldırılması e2e yığınında hiçbir şeyi değiştirmedi; D'nin "davranış değişmez"
+iddiası tahmin değil, ölçüm.
 
 ---
 
