@@ -39,10 +39,8 @@ export function fakeTxHash(seed: string): string {
   return sha256(`tx:${seed}`).toString('hex');
 }
 
-/** Deterministic numeric Steam trade-offer id. */
-export function fakeOfferId(seed: string): string {
-  return BigInt('0x' + sha256(`offer:${seed}`).toString('hex').slice(0, 15)).toString();
-}
+// T137 — `fakeOfferId` was removed with the custody trade surface: the platform
+// sends no trade offers (02 §2.1), so there is no offer id left to mint.
 
 /** Deterministic numeric Steam asset id. */
 export function fakeAssetId(seed: string): string {

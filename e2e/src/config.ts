@@ -24,7 +24,7 @@ export const e2eConfig = {
   },
 
   // T137a — `botSteamId` was removed: the harness no longer seeds a platform
-  // bot (T117 dropped PlatformSteamBots). The fake sidecar still carries a
-  // FAKE_BOT_STEAM_ID identity for its custody-era trade routes; retiring that
-  // is T137's scope, not the harness's.
+  // bot (T117 dropped PlatformSteamBots). T137 closed the other half: the fake
+  // sidecar's custody-era trade routes and its FAKE_BOT_STEAM_ID identity are
+  // gone, so no bot identity survives anywhere in the e2e stack.
 };

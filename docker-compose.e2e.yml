@@ -71,8 +71,9 @@ services:
       - DB_USER=sa
       - DB_PASSWORD=E2e!Strong!Pass!2345
       - DB_NAME=Skinora
-      - FAKE_BOT_STEAM_ID=76561190000000001
-      - FAKE_TRADE_ACCEPT_DELAY_MS=2000
+      # T137 — FAKE_BOT_STEAM_ID + FAKE_TRADE_ACCEPT_DELAY_MS were dropped with
+      # the fake's custody trade surface: the platform sends no trade offers
+      # (02 §2.1), so there is no bot identity and no self-accept delay left.
     depends_on:
       skinora-db:
         condition: service_healthy

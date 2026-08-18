@@ -37,13 +37,13 @@ import * as api from '../src/api';
  */
 
 test.beforeEach(async () => {
-  // Clear any direction suppression a previous timeout test left on the shared
-  // (in-process) fake state, so this test's untouched legs auto-drive normally.
-  await api.resetTradeControl();
+  // Clear any inventory / trade-hold a previous test drove into the shared
+  // (in-process) fake state, so this test starts from an empty, readable world.
+  await api.resetFakeSteamState();
 });
 
 test.afterAll(async () => {
-  await api.resetTradeControl();
+  await api.resetFakeSteamState();
   await closePool();
 });
 
@@ -90,8 +90,11 @@ test('accept timeout: CREATED → CANCELLED_TIMEOUT, no refund, both parties not
 
 test('seller trade-offer timeout: TRADE_OFFER_SENT_TO_SELLER → CANCELLED_TIMEOUT, no escrow, both notified', async () => {
   await seedHappyPath();
-  // Hold the escrow leg at "sent" — the seller never accepts the bot's offer.
-  await api.suppressTradeAccept('SELLER_TO_BOT');
+  // T137 — the lever this scenario used (hold the escrow leg at "sent" so the
+  // seller never accepts the bot's offer) went with the custody trade surface:
+  // the platform sends no trade offers any more (02 §2.1), so TRADE_OFFER_SENT_
+  // TO_SELLER is not a state the flow can reach. The P2P replacement is the
+  // seller confirm-ready deadline (03 §2.3), and writing it is T138's scope.
   const { sellerToken, buyerToken } = tokens();
   const txId = await createTransaction(sellerToken);
 
@@ -143,9 +146,10 @@ test('payment timeout: ITEM_ESCROWED → CANCELLED_TIMEOUT, item returned to sel
 
 test('delivery timeout: TRADE_OFFER_SENT_TO_BUYER → CANCELLED_TIMEOUT, item to seller + payment to buyer, both notified', async () => {
   await seedHappyPath();
-  // Hold the delivery leg — the buyer never accepts. The escrow + refund legs
-  // (different directions) still auto-drive.
-  await api.suppressTradeAccept('BOT_TO_BUYER');
+  // T137 — same retirement as above: there is no bot delivery leg to hold. The
+  // P2P replacement is "the seller never trades the item to the buyer", driven
+  // by simply NOT calling api.simulateFakeTrade before the delivery deadline
+  // (03 §6.4); wiring that into this scenario is T138's scope.
   const { sellerToken, buyerToken } = tokens();
   const txId = await createTransaction(sellerToken);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fakeTronAddress, fakeTxHash, fakeOfferId, fakeAssetId } from './ids.js';
+import { fakeTronAddress, fakeTxHash, fakeAssetId } from './ids.js';
 
 describe('fakeTronAddress', () => {
   it('is a deterministic 34-char base58 string starting with T', () => {
@@ -24,11 +24,10 @@ describe('fakeTxHash', () => {
   });
 });
 
-describe('fakeOfferId / fakeAssetId', () => {
-  it('are deterministic numeric strings', () => {
-    expect(fakeOfferId('a')).toMatch(/^[0-9]+$/);
-    expect(fakeOfferId('a')).toBe(fakeOfferId('a'));
+describe('fakeAssetId', () => {
+  it('is a deterministic numeric string', () => {
     expect(fakeAssetId('a')).toMatch(/^[0-9]+$/);
-    expect(fakeAssetId('a')).not.toBe(fakeOfferId('a'));
+    expect(fakeAssetId('a')).toBe(fakeAssetId('a'));
+    expect(fakeAssetId('b')).not.toBe(fakeAssetId('a'));
   });
 });

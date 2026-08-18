@@ -28,14 +28,10 @@ export const config = {
   blockchainWebhookSecret:
     process.env.BLOCKCHAIN_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '',
 
-  // Delay before the fake self-emits `trade_offer.accepted` after answering a
-  // `POST /api/trade-offers/send`. Gives the dispatch job time to commit the
-  // TRADE_OFFER_SENT_TO_* state before the acceptance webhook arrives.
-  tradeAcceptDelayMs: parseInt(process.env.FAKE_TRADE_ACCEPT_DELAY_MS || '2000', 10),
-
-  // SteamId reported as the escrow bot in trade webhooks. Match the seeded
-  // ACTIVE PlatformSteamBot so any bot-identity assertion lines up.
-  botSteamId: process.env.FAKE_BOT_STEAM_ID || '76561190000000001',
+  // T137 — `FAKE_TRADE_ACCEPT_DELAY_MS` and `FAKE_BOT_STEAM_ID` were removed
+  // with the custody trade surface: the platform sends no trade offers (02
+  // §2.1) and there is no escrow bot identity left to report. The seller→buyer
+  // trade is simulated by moving inventory (`POST /__e2e/steam/trade`).
 
   // Finality the fake reports for outgoing transfers (>= 20 = confirmed).
   transferConfirmations: parseInt(process.env.FAKE_TRANSFER_CONFIRMATIONS || '25', 10),

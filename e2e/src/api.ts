@@ -348,6 +348,19 @@ async function fakePost(path: string, body: unknown): Promise<ApiResult> {
   return { status: res.status, ok: res.ok, body: json };
 }
 
+/** GET from a fake-sidecar control endpoint (/__e2e/*). Same unauthenticated
+ *  surface as {@link fakePost}; used to read state back rather than drive it. */
+async function fakeGet(path: string): Promise<ApiResult> {
+  const res = await fetch(`${e2eConfig.fakeUrl}${path}`);
+  let json: unknown = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+  return { status: res.status, ok: res.ok, body: json };
+}
+
 /** Simulate the buyer's on-chain payment via the fake sidecar control surface.
  *  Defaults to the exact expected amount at eventIndex 0 (the happy path). T110
  *  levers: `amount` drives 03 §5.1 (insufficient) / §5.2 (excess); a non-zero
@@ -391,18 +404,71 @@ export function payLateViaFake(
   return fakePost('/__e2e/payment/late-detected', { transactionId, ...opts });
 }
 
-/** Suppress the fake's auto-accept for a trade-offer dispatch direction
- *  (SELLER_TO_BOT / BOT_TO_BUYER / BOT_TO_SELLER_REFUND). The offer is still
- *  "sent" but never self-accepted, so the transaction parks in
- *  TRADE_OFFER_SENT_TO_* — the setup for the 03 §4.2 / §4.4 timeout scenarios. */
-export function suppressTradeAccept(direction: string): Promise<ApiResult> {
-  return fakePost('/__e2e/trade/suppress-accept', { direction });
+/** One item a test seeds into a fake inventory: a `catalog` template name
+ *  (`AK47_REDLINE` / `AWP_ASIIMOV`), explicit fields, or a template with
+ *  overrides — `{ catalog: 'AK47_REDLINE', assetId: '777' }` is a SECOND copy
+ *  of the same class, which is what a 06 §3.5 count delta is made of. */
+export interface FakeInventoryItemSpec {
+  catalog?: string;
+  assetId?: string;
+  classId?: string;
+  instanceId?: string;
+  name?: string;
+  marketHashName?: string;
+  type?: string;
+  exterior?: string;
+  iconUrl?: string;
+  tradable?: boolean;
+  marketable?: boolean;
 }
 
-/** Clear every trade-accept suppression on the fake — restores the default
- *  self-drive. Call between timeout scenarios so a held direction never leaks. */
-export function resetTradeControl(): Promise<ApiResult> {
-  return fakePost('/__e2e/trade/reset', {});
+/** T137 — seed one steamId's Steam inventory on the fake. `items` REPLACES the
+ *  whole inventory; `visibility` drives the 08 §2.3 three-valued read (PUBLIC →
+ *  200, PRIVATE → 422, UNAVAILABLE → 503, exactly as the real sidecar answers).
+ *  Either field may be omitted to leave that half untouched.
+ *
+ *  A steamId nobody seeds reads as PUBLIC and EMPTY — so a buyer starts with a
+ *  zero baseline unless the test says otherwise. */
+export function setFakeInventory(
+  steamId: string,
+  opts: { items?: FakeInventoryItemSpec[]; visibility?: string },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/steam/inventory', { steamId, ...opts });
+}
+
+/** Read the fake's STORED holdings for a steamId (always 200 — this reports the
+ *  store, it does not simulate a Steam read). */
+export function getFakeInventory(steamId: string): Promise<ApiResult> {
+  return fakeGet(`/__e2e/steam/inventory/${steamId}`);
+}
+
+/** T137 — simulate the seller→buyer Steam trade the platform never sees (02
+ *  §2.1). The asset leaves `fromSteamId` and lands at `toSteamId` under a NEW
+ *  asset id (06 §8.4 rotation), which is returned as `newAssetId`; class and
+ *  instance are preserved. Call it in the other direction to simulate the
+ *  seller pulling the trade back (T129 reversal). */
+export function simulateFakeTrade(
+  fromSteamId: string,
+  toSteamId: string,
+  assetId: string,
+): Promise<ApiResult> {
+  return fakePost('/__e2e/steam/trade', { fromSteamId, toSteamId, assetId });
+}
+
+/** T137 — drive the 08 §2.2 MA / trade-hold probe for one steamId.
+ *  `active: false` = no mobile authenticator → the accept endpoint answers 403
+ *  MOBILE_AUTHENTICATOR_REQUIRED (T119a). Default (undriven) is MA-verified. */
+export function setFakeTradeHold(
+  steamId: string,
+  opts: { active?: boolean; escrowEndDurationSeconds?: number },
+): Promise<ApiResult> {
+  return fakePost('/__e2e/steam/trade-hold', { steamId, ...opts });
+}
+
+/** Drop every driven inventory + trade hold on the fake. Call between scenarios
+ *  so one scenario's seeded inventory never leaks into the next. */
+export function resetFakeSteamState(): Promise<ApiResult> {
+  return fakePost('/__e2e/steam/reset', {});
 }
 
 function statusOf(body: unknown): string | undefined {
