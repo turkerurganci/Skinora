@@ -11,10 +11,17 @@ namespace Skinora.API.Middleware;
 
 /// <summary>
 /// HMAC-SHA256 signature verification for inbound sidecar webhooks
-/// (05 §3.4, 09 §11.3). Applied to the Steam (<c>/api/v1/webhooks/steam/*</c>,
-/// T68) and blockchain (<c>/api/v1/webhooks/blockchain/*</c>, T71) sidecar
-/// paths; the legacy Telegram bot webhook keeps its own header-secret check
-/// on <c>/api/v1/webhooks/telegram</c>.
+/// (05 §3.4, 09 §11.3). Applied to the blockchain sidecar paths
+/// (<c>/api/v1/webhooks/blockchain/*</c>, T71); the Telegram bot webhook
+/// keeps its own header-secret check on <c>/api/v1/webhooks/telegram</c>.
+///
+/// <para>
+/// The Steam sidecar half (<c>/api/v1/webhooks/steam/*</c>, T68) was removed
+/// with the bot custody layer in v3.0 (T132 — 02 §15, 05 §3.2): the platform
+/// runs no Steam bots, sends no trade offers and therefore serves no inbound
+/// Steam webhook. The pipeline stays multi-sidecar by construction — a new
+/// sidecar is one entry in <c>WebhookRoutes</c> plus one secret.
+/// </para>
 ///
 /// <para>
 /// Steps per 09 §11.3:
@@ -33,7 +40,6 @@ namespace Skinora.API.Middleware;
 /// </summary>
 public sealed class WebhookSignatureMiddleware
 {
-    private const string SteamWebhookPathPrefix = "/api/v1/webhooks/steam";
     private const string BlockchainWebhookPathPrefix = "/api/v1/webhooks/blockchain";
     private const string SignatureHeader = "X-Signature";
     private const string TimestampHeader = "X-Timestamp";
@@ -42,7 +48,6 @@ public sealed class WebhookSignatureMiddleware
     // Source discriminator persisted with each accepted nonce. Distinct value
     // per sidecar prevents nonce collisions if blockchain/notification sidecars
     // share the table (see ProcessedNonce.Source).
-    public const string SteamNonceSource = "steam-sidecar";
     public const string BlockchainNonceSource = "blockchain-sidecar";
 
     /// <summary>
@@ -53,7 +58,6 @@ public sealed class WebhookSignatureMiddleware
     /// </summary>
     private static readonly (string PathPrefix, string SecretSelector, string NonceSource)[] WebhookRoutes =
     {
-        (SteamWebhookPathPrefix, "steam", SteamNonceSource),
         (BlockchainWebhookPathPrefix, "blockchain", BlockchainNonceSource),
     };
 
@@ -191,7 +195,6 @@ public sealed class WebhookSignatureMiddleware
 
     private static string SelectSecret(string selector, WebhookSettings settings) => selector switch
     {
-        "steam" => settings.SteamSharedSecret,
         "blockchain" => settings.BlockchainSharedSecret,
         _ => string.Empty,
     };

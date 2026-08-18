@@ -59,32 +59,10 @@ public static class AuditLogCategoryMap
             [AuditAction.EMERGENCY_HOLD_APPLIED] = Categories.AdminAction,
             [AuditAction.EMERGENCY_HOLD_RELEASED] = Categories.AdminAction,
 
-            // T69 — Steam bot lifecycle. Sidecar-driven RESTRICTED/BANNED
-            // transitions are platform infrastructure changes, but they
-            // signal an operational security event (a bot just lost trade
-            // privileges) so they live next to WALLET_ADDRESS_CHANGED in
-            // the security queue.
-            [AuditAction.BOT_STATUS_CHANGED] = Categories.SecurityEvent,
-
-            // WP8 — Steam bot session failure / pool removal. The sidecar
-            // bot.session_failed / bot.removed_from_pool incident sits beside
-            // BOT_STATUS_CHANGED in the operational security queue (a bot just
-            // dropped out of the active pool) and pairs 1:1 with the
-            // ADMIN_STEAM_BOT_ISSUE admin notification.
-            [AuditAction.BOT_SESSION_FAILED] = Categories.SecurityEvent,
-
-            // T103b-2 — bot recovery queue. Materialisation is SYSTEM-driven and
-            // signals the same operational-security situation as BOT_STATUS_CHANGED
-            // (a restricted bot is now holding stuck items), so it sits in the
-            // security queue. The admin triage update (note / responsible admin /
-            // status) is a deliberate operator action → ADMIN_ACTION.
-            [AuditAction.BOT_RECOVERY_ITEM_CREATED] = Categories.SecurityEvent,
-            [AuditAction.BOT_RECOVERY_UPDATED] = Categories.AdminAction,
-
             // T76 — daily reconciliation discrepancy (05 §3.3). An on-chain
             // vs ledger gap is a custody-integrity alarm: it sits in the
             // security queue so the same operators who watch wallet-address
-            // and bot-status events see it on the same dashboard.
+            // events see it on the same dashboard.
             [AuditAction.RECONCILIATION_MISMATCH] = Categories.SecurityEvent,
 
             // T77 — admin-initiated hot→cold operational consolidation
@@ -125,8 +103,7 @@ public static class AuditLogCategoryMap
 
             // WP16 — platform health probe outage/recovery (05 §4.4, 02 §3.3).
             // A sidecar going down is an operational integrity alarm, so it sits
-            // in the security queue beside BOT_STATUS_CHANGED and the
-            // reconciliation/hot-wallet alarms.
+            // in the security queue beside the reconciliation/hot-wallet alarms.
             [AuditAction.PLATFORM_OUTAGE_DETECTED] = Categories.SecurityEvent,
         };
 

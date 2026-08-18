@@ -84,13 +84,16 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
         var data = body.GetProperty("data");
 
         var available = data.GetProperty("availablePermissions");
-        // 14 permissions after WP5 added VIEW_DISPUTES / MANAGE_DISPUTES
-        // (07 §9.11, 04 §8.8).
-        Assert.Equal(14, available.GetArrayLength());
+        // 14 permissions after WP5 added VIEW_DISPUTES / MANAGE_DISPUTES;
+        // 12 after T132 removed VIEW_STEAM_ACCOUNTS / MANAGE_STEAM_RECOVERY —
+        // the platform runs no Steam bots, so there is no S18 surface for them
+        // to guard (02 §15, 07 §9.11, 04 §8.8).
+        Assert.Equal(12, available.GetArrayLength());
         var keys = new List<string>();
         foreach (var entry in available.EnumerateArray())
             keys.Add(entry.GetProperty("key").GetString()!);
-        Assert.Contains("MANAGE_STEAM_RECOVERY", keys);
+        Assert.DoesNotContain("VIEW_STEAM_ACCOUNTS", keys);
+        Assert.DoesNotContain("MANAGE_STEAM_RECOVERY", keys);
         Assert.Contains("MANAGE_ROLES", keys);
         Assert.Contains("EMERGENCY_HOLD", keys);
         Assert.Contains("MANAGE_SANCTIONS", keys);

@@ -24,7 +24,6 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
     private const string TelegramConnectedEvent = "TelegramConnected";
     private const string DiscordConnectedEvent = "DiscordConnected";
     private const string MaintenanceStatusChangedEvent = "MaintenanceStatusChanged";
-    private const string AdminBotStatusChangedEvent = "AdminBotStatusChanged";
     private const string AdminReconciliationMismatchEvent = "AdminReconciliationMismatch";
     private const string AdminHotWalletThresholdBreachedEvent = "AdminHotWalletThresholdBreached";
 
@@ -68,11 +67,6 @@ public sealed class SignalRNotificationRealtimePublisher : INotificationRealtime
         CancellationToken cancellationToken) =>
         // Platform-wide banner — genuinely everyone (07 §11.2 C08).
         SendToAllAsync(MaintenanceStatusChangedEvent, payload, cancellationToken);
-
-    public Task PublishAdminBotStatusChangedAsync(
-        NotificationRealtimePayloads.AdminBotStatusChanged payload,
-        CancellationToken cancellationToken) =>
-        SendToGroupAsync(NotificationsHub.AdminGroup, AdminBotStatusChangedEvent, payload, cancellationToken);
 
     public Task PublishAdminReconciliationMismatchAsync(
         NotificationRealtimePayloads.AdminReconciliationMismatch payload,

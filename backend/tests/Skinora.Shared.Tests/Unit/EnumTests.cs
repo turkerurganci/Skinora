@@ -381,18 +381,22 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (33) ────────────────────────────────────────────
+    // ── AuditAction (29) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave33Values()
+    public void AuditAction_ShouldHave29Values()
     {
         // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
         // 29 after WP7 added MAINTENANCE_MODE_CHANGED;
         // 30 after WP8 added BOT_SESSION_FAILED;
         // 32 after WP16 added TIMEOUT_AUTO_EXTENDED / PLATFORM_OUTAGE_DETECTED;
-        // 33 after T129's fix round added SETTLEMENT_CLEARED_ADMIN (AD32).
+        // 33 after T129's fix round added SETTLEMENT_CLEARED_ADMIN (AD32);
+        // 29 after T132 removed the four bot-custody actions
+        // (BOT_STATUS_CHANGED / BOT_SESSION_FAILED / BOT_RECOVERY_ITEM_CREATED /
+        // BOT_RECOVERY_UPDATED) — the platform runs no Steam bots, so nothing
+        // writes them (02 §15). The set now matches 06 §2.19 exactly.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(33, values.Length);
+        Assert.Equal(29, values.Length);
     }
 
     [Theory]
@@ -416,15 +420,11 @@ public class EnumTests
     [InlineData(nameof(AuditAction.TRANSACTION_CANCELLED_ADMIN))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_APPLIED))]
     [InlineData(nameof(AuditAction.EMERGENCY_HOLD_RELEASED))]
-    [InlineData(nameof(AuditAction.BOT_STATUS_CHANGED))]
-    [InlineData(nameof(AuditAction.BOT_SESSION_FAILED))]
     [InlineData(nameof(AuditAction.RECONCILIATION_MISMATCH))]
     [InlineData(nameof(AuditAction.COLD_WALLET_TRANSFER_INITIATED))]
     [InlineData(nameof(AuditAction.HOT_WALLET_THRESHOLD_BREACHED))]
     [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_ADDED))]
     [InlineData(nameof(AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED))]
-    [InlineData(nameof(AuditAction.BOT_RECOVERY_ITEM_CREATED))]
-    [InlineData(nameof(AuditAction.BOT_RECOVERY_UPDATED))]
     [InlineData(nameof(AuditAction.MAINTENANCE_MODE_CHANGED))]
     [InlineData(nameof(AuditAction.TIMEOUT_AUTO_EXTENDED))]
     [InlineData(nameof(AuditAction.PLATFORM_OUTAGE_DETECTED))]

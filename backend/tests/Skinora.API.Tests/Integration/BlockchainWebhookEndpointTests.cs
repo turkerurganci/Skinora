@@ -37,7 +37,7 @@ namespace Skinora.API.Tests.Integration;
 public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWebhookEndpointTests.Factory>
 {
     private const string BlockchainSecret = "skinora-test-blockchain-webhook-32!!!";
-    private const string SteamSecret = "skinora-test-steam-webhook-shared-32!";
+    private const string ForeignSidecarSecret = "skinora-test-foreign-sidecar-32!!!!";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -81,17 +81,19 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
     }
 
     [Fact]
-    public async Task PaymentDetected_SteamSecret_DoesNotAuthenticateBlockchain()
+    public async Task PaymentDetected_ForeignSidecarSecret_DoesNotAuthenticateBlockchain()
     {
-        // Each sidecar has its own secret — a Steam-signed payload must not
-        // be accepted on the blockchain path.
+        // Each sidecar has its own secret: a well-formed HMAC computed with
+        // any other secret must not be accepted on the blockchain path. Stronger
+        // than the garbage-signature case above — it proves the SELECTOR picks
+        // the blockchain secret, not merely that a signature is verified.
         var client = _factory.CreateClient();
         var body = JsonSerializer.Serialize(MakeDetectedEnvelope(Guid.NewGuid(), Guid.NewGuid()), JsonOptions);
         var timestamp = DateTime.UtcNow.ToString("O");
         var nonce = Guid.NewGuid().ToString("N");
-        var steamSignature = Sign(SteamSecret, timestamp, nonce, body);
+        var foreignSignature = Sign(ForeignSidecarSecret, timestamp, nonce, body);
 
-        using var request = BuildRequest("/api/v1/webhooks/blockchain/payment-detected", body, timestamp, nonce, steamSignature);
+        using var request = BuildRequest("/api/v1/webhooks/blockchain/payment-detected", body, timestamp, nonce, foreignSignature);
         var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -836,9 +838,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             builder.UseSetting("BlockchainSidecar:BaseUrl", "http://localhost:65501");
             builder.UseSetting("BlockchainSidecar:InternalKey", "test-internal-key");
 
-            // T71 — both sidecar webhook secrets registered so the path-scope
-            // expand is exercised end-to-end.
-            builder.UseSetting("Webhook:SteamSharedSecret", SteamSecret);
+            // T71 — the blockchain sidecar secret. The Steam half went with the
+            // bot custody layer in T132; ForeignSidecarSecret is never registered,
+            // which is exactly what makes the isolation assertion meaningful.
             builder.UseSetting("Webhook:BlockchainSharedSecret", BlockchainSecret);
             builder.UseSetting("Webhook:ReplayWindowSeconds", "300");
             builder.UseSetting("Webhook:NonceRetentionSeconds", "3600");

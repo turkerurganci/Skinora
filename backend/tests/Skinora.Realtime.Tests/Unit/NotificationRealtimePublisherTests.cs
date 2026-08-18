@@ -24,22 +24,6 @@ public class NotificationRealtimePublisherTests
     }
 
     [Fact]
-    public async Task AdminBotStatusChanged_TargetsAdminGroup()
-    {
-        var (sut, clients) = CreateSut();
-
-        await sut.PublishAdminBotStatusChangedAsync(
-            new NotificationRealtimePayloads.AdminBotStatusChanged(
-                Guid.NewGuid(), "76561198000011111", "Bot-1",
-                "ACTIVE", "RESTRICTED", "trade hold", DateTime.UtcNow),
-            CancellationToken.None);
-
-        var send = Assert.Single(clients.Sends);
-        Assert.Equal(NotificationsHub.AdminGroup, send.Target);
-        Assert.Equal("AdminBotStatusChanged", send.Method);
-    }
-
-    [Fact]
     public async Task AdminReconciliationMismatch_TargetsAdminGroup()
     {
         var (sut, clients) = CreateSut();

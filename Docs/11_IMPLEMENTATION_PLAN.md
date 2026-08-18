@@ -3369,6 +3369,50 @@ Task T132: Backend bot/dispatch/webhook/recovery yüzeyi silme [RİSKLİ]
     - Bot entity'leri, dispatch job, recovery, admin endpoint'leri kaldırıldı
     - Webhook HMAC/nonce altyapısı KORUNDU (blockchain sidecar paylaşımlı)
 
+  KAPSAM NETLEŞTİRMESİ (proje sahibi onaylı, 2026-08-19 — göreve başlarken
+  yapılan ölçüm). Yukarıdaki iki kriterin BİRİNCİSİ T117'de fiilen
+  karşılanmıştı: entity, job, `SteamWebhooksController` ve admin uçları o
+  dalda silindi (enum'dan değer silmek 136 dosyayı birden kırdığı için
+  T117+T118+T132 tek dalda birleşmişti). Ölçüm, geriye ÇALIŞMAYAN AMA DURAN
+  bir yüzeyin kaldığını gösterdi — yazıcısı olmayan sabitler ve hâlâ
+  yayınlanan sözleşme girdileri. T132 bu turda ONLARI kapatır:
+    A — `AuditAction`'ın dört bot değeri (`BOT_STATUS_CHANGED`,
+        `BOT_SESSION_FAILED`, `BOT_RECOVERY_ITEM_CREATED`,
+        `BOT_RECOVERY_UPDATED`) + `AuditLogCategoryMap` girdileri. Üretimde
+        tek yazıcıları yoktu. Silmek kodu KAYNAĞA hizalar: 06 §2.19 tablosu
+        bu dördünü zaten içermiyordu (T115 doküman turunda düşmüşlerdi),
+        yani kod-doküman driftinin kapanan tarafı koddur.
+    B — `VIEW_STEAM_ACCOUNTS` + `MANAGE_STEAM_RECOVERY` permission'ları
+        (katalog 14 → 12). Hiçbir endpoint enforce etmiyordu ama AD11
+        cevabında yayınlanıyordu — var olmayan bir ekran (S18) için rol
+        tanımlanabiliyordu. Sözleşme değişikliği olduğu için doküman yarısı
+        AYNI PR'da: 07 §9 tablosu + §9.11 kataloğu + 04 §8.8 matrisi.
+        T133a'ya bırakılmadı; kod ile spec bir task boyunca bile çelişik
+        bırakılmaz (INSTRUCTIONS §4).
+    C — `AdminBotStatusChanged` realtime kanalı (payload + port + SignalR
+        event). Üretimde tek çağıranı yoktu; yalnız beş test double'ı
+        taşıyordu.
+    D — Steam webhook yüzeyinin BACKEND yarısı: `/api/v1/webhooks/steam`
+        prefix'i, `steam-sidecar` nonce source'u, `SteamSharedSecret` +
+        appsettings/compose env'i. Ardında serve edilen uç yoktu; bu yollar
+        T117'den beri zaten 404'tü, dolayısıyla kaldırma davranışı
+        değiştirmez ve T133'ü BEKLEMEZ. HMAC/nonce hattının kendisi
+        (middleware, `ProcessedNonces`, cleanup job, blockchain dalı)
+        ikinci kriter gereği KORUNDU — `BlockchainWebhookEndpointTests`'in
+        yabancı-secret izolasyon testi bunu kanıtlamaya devam eder.
+    E — emekli katmanı anlatan bayat XML doc / yorumlar.
+  KAPSAM DIŞI (sahibi belli, bu turda dokunulmadı): FE `enums.ts` bot
+  değerleri / `PlatformSteamBotStatus` / `updateBotRecoveryItem` /
+  `useAdminSteamAccounts` → T134 ve T136 · `sidecar-steam` bot+trade
+  modülleri ve `SidecarWebhookRouteContractTests`'in adı konmuş istisnası →
+  T133 · 03/04/07 custodial DİL kalıntısı → T133a.
+  ÖLÇÜLEN YAN BULGU (T132 öncesinden var, T133a'ya yazıldı): 04 §8.8 yetki
+  matrisi `VIEW_DISPUTES`/`MANAGE_DISPUTES` satırlarını WP5'ten beri
+  taşımıyor — T132 sonrası tablo 10 satır, kod kataloğu 12. Bu turda
+  kapatılmadı çünkü kaldırma değil EKLEME işidir ve 04'ün hizalama turu
+  T133a'dır; oraya kabul kriteri olarak işlendi (T137'nin kalıcı dersi:
+  ölçülen açık, sahibi olan bir kriterde yazılı değilse ölür).
+
 Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
   Bağımlılık: T132
   Kabul kriterleri:
@@ -3380,9 +3424,10 @@ Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
        üçü de 03'ü UI akışı, 04'ü ekran spesifikasyonu, 07'yi API
        sözleşmesi olarak okuyor.
   Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 04 §2 (akış
-       eşleme tablosu), §11 (S07 iade bilgisi satırları), §16 (admin),
-       §17 (Steam/recovery ekranları) · 07 §7.1, §7.5, §8.1, §9.20, §9.22
-       (+ örnek JSON payload'ları) · referans: 06 §2.13
+       eşleme tablosu), §8.8 (yetki matrisi), §11 (S07 iade bilgisi
+       satırları), §16 (admin), §17 (Steam/recovery ekranları) · 07 §7.1,
+       §7.5, §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) ·
+       referans: 06 §2.13, 07 §9.11
   Kabul kriterleri:
     - 03, 04 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
       "v3.0'da kaldırıldı" biçiminde, emekliliği BELGELEYEN satırlarda geçiyor
@@ -3395,6 +3440,13 @@ Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
       (katman T117'de silindi). §16 Timeout Süreleri tablosunun iki satırı
       T119 doğrulamasında düzeltildi (04 v4.1) — tur o satırları tekrar
       açmamalı
+    - 04 §8.8 yetki matrisi 07 §9.11 kataloğuyla BİREBİR (12 satır). Tablo
+      bugün 10 satır: `VIEW_DISPUTES` ("İtirazları görüntüle") ve
+      `MANAGE_DISPUTES` ("İtirazları çöz") WP5'ten beri eksik. Bu, T132'nin
+      ölçtüğü ve KENDİ turunda kapatmadığı bir açıktır (T132 kaldırma
+      turuydu; bu ekleme işi ve 04'ün hizalama turu burası). §8.8'in altına
+      T132'nin bıraktığı "Bilinen açık" notu bu kriter kapandığında
+      SİLİNMELİ — kapanmış bir açığın notu yeni bir drift kaynağıdır
     - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
       üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
     - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;

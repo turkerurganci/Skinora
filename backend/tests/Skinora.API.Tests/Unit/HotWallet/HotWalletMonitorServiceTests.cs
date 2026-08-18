@@ -353,10 +353,6 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             NotificationRealtimePayloads.MaintenanceStatusChanged payload,
             CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task PublishAdminBotStatusChangedAsync(
-            NotificationRealtimePayloads.AdminBotStatusChanged payload,
-            CancellationToken cancellationToken) => Task.CompletedTask;
-
         public Task PublishAdminReconciliationMismatchAsync(
             NotificationRealtimePayloads.AdminReconciliationMismatch payload,
             CancellationToken cancellationToken) => Task.CompletedTask;

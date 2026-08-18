@@ -3,8 +3,7 @@ namespace Skinora.Shared.Interfaces;
 /// <summary>
 /// Resolves the set of admin user ids that should receive an admin-targeted
 /// in-app notification (06 §2.13 "Admin" target types — <c>ADMIN_FLAG_ALERT</c>,
-/// <c>ADMIN_ESCALATION</c>, <c>ADMIN_PAYMENT_FAILURE</c>,
-/// <c>ADMIN_STEAM_BOT_ISSUE</c>).
+/// <c>ADMIN_ESCALATION</c>, <c>ADMIN_PAYMENT_FAILURE</c>).
 /// </summary>
 /// <remarks>
 /// WP8 fans admin alerts out to every user holding an admin role (owner

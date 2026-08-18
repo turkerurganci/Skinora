@@ -343,7 +343,6 @@ public sealed class ResendWebhookEndpointTests : IClassFixture<ResendWebhookEndp
             builder.UseSetting("BlockchainSidecar:BaseUrl", "http://localhost:65501");
             builder.UseSetting("BlockchainSidecar:InternalKey", "test-internal-key");
 
-            builder.UseSetting("Webhook:SteamSharedSecret", "skinora-test-steam-32!!!!!!!!!!!!!!!");
             builder.UseSetting("Webhook:BlockchainSharedSecret", "skinora-test-blockchain-32!!!!!!!!");
             builder.UseSetting("Webhook:ReplayWindowSeconds", "300");
             builder.UseSetting("Webhook:NonceRetentionSeconds", "3600");

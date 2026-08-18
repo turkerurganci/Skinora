@@ -490,8 +490,6 @@ public class AdminMaintenanceEndpointTests : IClassFixture<AdminMaintenanceEndpo
             => Task.CompletedTask;
         public Task PublishDiscordConnectedAsync(Guid userId, NotificationRealtimePayloads.DiscordConnected payload, CancellationToken cancellationToken)
             => Task.CompletedTask;
-        public Task PublishAdminBotStatusChangedAsync(NotificationRealtimePayloads.AdminBotStatusChanged payload, CancellationToken cancellationToken)
-            => Task.CompletedTask;
         public Task PublishAdminReconciliationMismatchAsync(NotificationRealtimePayloads.AdminReconciliationMismatch payload, CancellationToken cancellationToken)
             => Task.CompletedTask;
         public Task PublishAdminHotWalletThresholdBreachedAsync(NotificationRealtimePayloads.AdminHotWalletThresholdBreached payload, CancellationToken cancellationToken)

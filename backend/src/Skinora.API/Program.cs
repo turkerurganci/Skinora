@@ -241,12 +241,12 @@ builder.Services.AddTransactionsModule(builder.Configuration);
 // IDisputeService + per-type auto-checkers (PAYMENT/DELIVERY/WRONG_ITEM).
 builder.Services.AddDisputesModule();
 
-// Steam bot read service (T63 — 07 §9.10 AD10). Sidecar wiring + bot
-// failover land with T64–T69 and will register here too.
+// Steam read-only proxy (v3.0 — 02 §15): inventory reads (02 §9.2) and the
+// trade-hold probe. No bot accounts, no trade offers, no inbound webhook.
 builder.Services.AddSteamModule(builder.Configuration);
 
-// T63 — admin dashboard composer (07 §9.1 AD1). Composes summary counters,
-// the AD10 Steam-bot snapshot and the latest fraud flags in one round-trip.
+// T63 — admin dashboard composer (07 §9.1 AD1). Composes summary counters
+// and the latest fraud flags in one round-trip.
 builder.Services.AddScoped<IAdminDashboardService, AdminDashboardService>();
 
 // WP5 / T58 — admin dispute resolution (AD27–AD29, 07 §9.x). Closes the
@@ -424,8 +424,8 @@ app.UseSerilogRequestLogging();
 // 5. Global exception handler (wraps everything downstream)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// 5a. Webhook signature verification (T68 — 05 §3.4, 09 §11.3). Path-scoped
-// to /api/v1/webhooks/steam so the legacy Telegram webhook keeps its own
+// 5a. Webhook signature verification (T71 — 05 §3.4, 09 §11.3). Path-scoped
+// to /api/v1/webhooks/blockchain so the Telegram webhook keeps its own
 // secret-header check. Runs after CorrelationId/Logging/Exception so a 401
 // here is still correlated and gracefully reported.
 app.UseMiddleware<WebhookSignatureMiddleware>();

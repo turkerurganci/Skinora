@@ -40,7 +40,6 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE:-skinora-client}
       - Jwt__AccessTokenExpiryMinutes=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - Jwt__RefreshTokenExpiryDays=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
-      - Webhook__SteamSharedSecret=${WEBHOOK_SECRET}
       - Webhook__BlockchainSharedSecret=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
       - Serilog__WriteTo__1__Args__uri=${LOKI_URL:-http://skinora-loki:3100}
       # Browser-facing origin — CORS. The frontend is same-origin behind nginx,

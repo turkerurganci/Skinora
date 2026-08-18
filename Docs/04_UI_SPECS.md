@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -1783,14 +1783,16 @@ Aşağıdaki tasarım tarihsel referans olarak bırakılmıştır.
 | Flag'leri yönet | İşlem flag: Devam Et / İptal Et aksiyonları. Hesap flag: Flag Kaldır / Askıya Al / Hold aksiyonları |
 | İşlemleri görüntüle | S15, S16'ya erişim |
 | Parametreleri yönet | S17'ye erişim |
-| Steam hesaplarını görüntüle | S18'e erişim (salt okunur) |
-| Steam recovery yönet | S18'de Manual Recovery Başlat, not düşme, sorumlu admin atama (fon/item güvenliği etkili — görüntüleme yetkisinden ayrı) |
 | Kullanıcı detay görüntüle | S20'ye erişim |
 | Rolleri yönet | S19'a erişim (sadece süper admin) |
 | Audit log görüntüle | S21'e erişim |
 | İşlemleri iptal et | S16'da aktif işlemleri doğrudan iptal etme — CREATED → TRADE_OFFER_SENT_TO_BUYER arası (03 §8.7) |
 | Emergency hold uygula/kaldır | S16'da aktif işlemlere emergency hold uygulama ve kaldırma (03 §8.8) |
 | Sanctions listesi yönet | Yaptırımlı cüzdan adresleri listesinin yönetimi — ekleme/listeleme/deaktive (02 §21.1, 03 §11a.3, 07 §9.23–§9.25 AD22/AD23/AD24). `MANAGE_SETTINGS`'ten ayrıdır: sanctions admin'i sistem ayarlarına dokunmaz (least-privilege) |
+
+> **Not (v3.0, P2P geçişi):** "Steam hesaplarını görüntüle" (`VIEW_STEAM_ACCOUNTS`) ve "Steam recovery yönet" (`MANAGE_STEAM_RECOVERY`) satırları kaldırılmıştır (T132) — koruyacakları S18 ekranı ve recovery kuyruğu yoktur (02 §15, §8.7).
+>
+> **Bilinen açık (T133a):** Bu tablo, kod tarafındaki 12 yetkilik katalogla (07 §9.11) **henüz birebir değildir** — "İtirazları görüntüle" (`VIEW_DISPUTES`) ve "İtirazları çöz" (`MANAGE_DISPUTES`) satırları WP5'ten beri eksiktir. Bu, T132 öncesinden var olan bir boşluktur ve 03/04/07 hizalama turunda (T133a) kapatılır.
 
 #### Kullanıcı-Rol Atama
 

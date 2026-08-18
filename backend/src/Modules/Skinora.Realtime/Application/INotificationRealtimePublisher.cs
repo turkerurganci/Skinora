@@ -47,18 +47,6 @@ public interface INotificationRealtimePublisher
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Broadcast variant: bot status changes are visible to every admin client
-    /// (T69 — 02 §15). The frontend filters on the admin route guard; we do
-    /// not yet have a per-role group abstraction, so the fanout is platform-
-    /// wide and admin UI consumes the event while other roles ignore it.
-    /// Best-effort like all realtime pushes — audit log row written next to
-    /// the publish is the durable record.
-    /// </summary>
-    Task PublishAdminBotStatusChangedAsync(
-        NotificationRealtimePayloads.AdminBotStatusChanged payload,
-        CancellationToken cancellationToken);
-
-    /// <summary>
     /// Broadcast variant: reconciliation mismatches are visible to every admin
     /// client (T76 — 05 §3.3). Fired once per (scope, token) finding by
     /// <see cref="Skinora.Transactions.Application.Reconciliation.IReconciliationService"/>.

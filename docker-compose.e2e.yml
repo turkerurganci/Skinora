@@ -106,7 +106,6 @@ services:
       - Jwt__Issuer=skinora
       - Jwt__Audience=skinora-client
       - Jwt__AccessTokenExpiryMinutes=60
-      - Webhook__SteamSharedSecret=e2e-steam-webhook-secret-0123456789-abcdef
       - Webhook__BlockchainSharedSecret=e2e-blockchain-webhook-secret-0123456789-ab
       - SteamSidecar__BaseUrl=http://skinora-steam-sidecar:5100
       - SteamSidecar__InternalKey=e2e-internal-key-0123456789

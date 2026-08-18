@@ -52,21 +52,6 @@ public static class NotificationRealtimePayloads
         DateTime? PlannedEnd);
 
     /// <summary>
-    /// Pushed when a platform Steam bot transitions to RESTRICTED / BANNED /
-    /// OFFLINE or is removed from the pool (T69 — 02 §15, 05 §3.2). Delivered to
-    /// the <see cref="Skinora.Realtime.Hubs.NotificationsHub.AdminGroup"/> only
-    /// (WP9 T69 K4); the frontend admin dashboard (S18) renders the alert.
-    /// </summary>
-    public sealed record AdminBotStatusChanged(
-        Guid BotId,
-        string SteamId,
-        string DisplayName,
-        string PreviousStatus,
-        string NewStatus,
-        string Reason,
-        DateTime ChangedAt);
-
-    /// <summary>
     /// Pushed when the daily reconciliation job (T76 — 05 §3.3) detects an
     /// on-chain vs ledger mismatch. One push per (scope, token) finding.
     /// <c>Scope</c> ∈ {<c>DepositAddress</c>, <c>HotWallet</c>, <c>ColdWallet</c>};
