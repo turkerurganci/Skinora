@@ -115,6 +115,8 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 
 ## Notlar
 
+**Hangi run kod kanıtıdır (tur 1'in ayrımı sürüyor).** Bu turun kod commit'i **`d4149b1`**'dir; ondan sonraki her commit **doküman-only**'dir. Path filtresi dal ↔ main farkına baktığı için doküman commit'leri de e2e leglerini yeniden koşturuyor, dolayısıyla aynı kod dört kez bağımsız ölçüldü ve **dördü de 10/32** verdi: [`32156212760`](https://github.com/turkerurganci/Skinora/actions/runs/32156212760) (`d4149b1`, **kod run'ı**) · [`32163260494`](https://github.com/turkerurganci/Skinora/actions/runs/32163260494) (`423ec21`) · [`32165358912`](https://github.com/turkerurganci/Skinora/actions/runs/32165358912) (`bc7410b`) · [`32167491343`](https://github.com/turkerurganci/Skinora/actions/runs/32167491343) (`900a958`) — dördünde de leg dağılımı ve `ITEM_NOT_IN_INVENTORY` tablosu (yalnız downtime, 2) birebir aynı, dördünün de `conclusion=success` ve bloke edici jobları yeşil.
+
 ### Öz-denetim (yapım turu içi — bağımsız doğrulamanın yerini TUTMAZ)
 
 Bulguları bağımsız validator'a bırakmadan önce dört mercek yapım chat'inde koşuldu (INSTRUCTIONS §3.3 gereği bu bir ön-kontroldür, doğrulama ayrı chat'te yapılır). Hayatta kalan bulgu **yok**; üretilen kanıt:
