@@ -1,6 +1,6 @@
 # T131 — AdminDisputeService: item-refund bacağı + override
 
-**Faz:** P5 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-17
+**Faz:** P5 | **Durum:** ✗ FAIL (doğrulama 2026-08-18 — 1 bloke edici bulgu, düzeltme turu bekliyor) | **Tarih:** 2026-08-17 (yapım) · 2026-08-18 (doğrulama)
 
 ---
 
@@ -93,6 +93,11 @@ otomatik çözümüdür (06 §2.10) — kimse bakmamıştır.
 | 3b | i18n 4 dil parity | ✓ | `i18n parity OK — 4 locales, 1319 keys each, identical key sets.` |
 | 4 | SELLER_FAVOR sonrası terminal disposition (G3) | ✓ | `An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation` · `A_System_Closed_Dispute_Does_Not_Release_The_Hold` · `A_First_Round_Signature_Also_Releases_When_An_Admin_Has_Ruled` · `Resolved_Dispute_Is_Left_Alone` (Theory: CLOSED→`AlreadyResolved`, RESOLVED_FOR_*→`AlreadyRuledByAdmin`) |
 
+> **Bu tablo yapım chat'inin kendi değerlendirmesidir.** Bağımsız validator (2026-08-18)
+> 1–3'ü onayladı, **4'ü `~ Kısmi`'ye indirdi**: D4'ün "satıcının kaydına kusur yazılmaz"
+> koşulu karşılanmıyor (bulgu **B1**). Validator'ın kendi tablosu ve kanıtları
+> [§Doğrulama](#doğrulama) bölümünde.
+
 ## Test Sonuçları
 
 | Tür | Sonuç | Detay |
@@ -114,9 +119,64 @@ otomatik çözümüdür (06 §2.10) — kimse bakmamıştır.
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✗ FAIL** (bağımsız validator chat'i, 2026-08-18) |
+| Bulgu sayısı | **3** — 1 bloke edici (B1) + 2 bloke etmeyen (N1, N2) |
+| Düzeltme gerekli mi | **Evet** — düzeltme turu kriterleri `11_IMPLEMENTATION_PLAN.md` §P5 T131'e yazıldı (D6, D7 + N1, N2) |
+
+### Validator kapıları
+
+| Adım | Sonuç |
+|---|---|
+| -1 Working tree | ✓ temiz |
+| 0 Main CI son 3 | ✓ [`32057012508`](https://github.com/turkerurganci/Skinora/actions/runs/32057012508) · [`32057012471`](https://github.com/turkerurganci/Skinora/actions/runs/32057012471) · [`32053321109`](https://github.com/turkerurganci/Skinora/actions/runs/32053321109) — üçü de `success` |
+| 0b Repo memory | ✓ T131 satırları mevcut |
+| 8a Task branch CI | ✓ [`32067472674`](https://github.com/turkerurganci/Skinora/actions/runs/32067472674), headSha `fed6689` = dal HEAD, CI Gate `success`, bloke edici **11/11** yeşil |
+
+### Validator'ın kendi ürettiği kanıt (dal HEAD `fed6689`)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build | ✓ 0 Error / 0 Warning | `dotnet build Skinora.sln -c Release` |
+| Unit | ✓ **1433/1433** | `dotnet test Skinora.sln -c Release --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Integration | ✓ **1326/1326** | proje bazında seri, `--filter "FullyQualifiedName~.Integration"` |
+| Contract | ✓ **9/9** | `--filter "FullyQualifiedName~.Contract"` |
+| **Backend toplam** | ✓ **2768/2768** | — |
+| FE tsc / eslint / i18n / vitest | ✓ 0 / 0 / **1319×4 identical key sets** / 33/33 | `npx tsc --noEmit` · `npm run lint` · `npm run i18n:check` · `npm test` |
+
+Lokal `prettier --check` yedi dosyada uyarı verdi; `tr -d '\r'` sonrası çıktı **birebir aynı** → `core.autocrlf=true` artifaktı, CI `1. Lint` (LF checkout) yeşil. Bulgu sayılmadı.
+
+**E2E advisory (8 leg kırmızı) T131 kaynaklı DEĞİL — bağımsız olarak yeniden üretildi:** dal run'ı ile main tabanı [`32057012471`](https://github.com/turkerurganci/Skinora/actions/runs/32057012471) **birebir aynı** (10 passed / 22 failed), `PlatformSteamBots` izi **0**, T131 yüzeylerinden (`overrideReason` · `OVERRIDE_REASON_REQUIRED` · `buyerFavorRequiresOverride` · `ResolutionOverrideReason` · `deliveredItemName`) `--log-failed` üzerinde **0 iz**.
+
+### Kabul kriterleri — validator verdict'i
+
+| # | Kriter | Yapım | Validator | Not |
+|---|---|---|---|---|
+| 1 | Item iade bacağı — dört kalıntı | ✓ | ✓ | Dördü de kapalı; kalan tüm `ItemRefundToSeller` isabetleri olumsuz/tarihsel. 07 §9.20/§9.22 doğru şekilde dokunulmadı (T133a) |
+| 2 | Kanıtlanmış teslimatta BUYER_FAVOR gerekçe istiyor (D1·D2·D3) | ✓ | ✓ | Kapı `Status == ITEM_DELIVERED` tek helper'da; ≥20 trim'li; override yoksa saklanmıyor; audit `NewValue`'da; AD28 bool'u her zaman dönüyor |
+| 3 | AD28 `deliveredItemName` admin ekranında | ✓ | ✓ | Beklenen item adının hemen altında, alan yoksa satır çizilmiyor; 4 dil parity |
+| 4 | SELLER_FAVOR sonrası terminal disposition | ✓ | **~ Kısmi** | D5 ✓ (`AlreadyRuledByAdmin`, `CLOSED` kapıyı açmıyor). **D4'ün "satıcının kaydına kusur yazılmaz" koşulu ✗ — B1** |
+
+### Bulgular
+
+| # | Seviye | Açıklama | Etkilenen dosya |
+|---|---|---|---|
+| B1 | S1 Sapma (**bloke edici**) | Admin kararıyla serbest bırakılan satır, admin'in akladığı satıcıya kusur yazıyor | `ReputationAggregator.cs:218` · `CancelCooldownEvaluator.cs:111` |
+| N1 | S1 Sapma | `DeliveryTimeoutDecision.Cancel` XML doc'u ikinci üreticisi için yanlış | `IDeliveryTimeoutRound.cs:47-51` |
+| N2 | Gözlem | İlk-tur serbest bırakma, admin'in hiç görmediği bir imzayı iptale çevirebiliyor | `DeliveryTimeoutRound.cs:316` |
+
+**B1 — doğrulanmış üretim zinciri:** `DeliveryTimeoutRound.cs:316` `Cancel` → `DeadlineScannerJob.cs:267→126→138` `Fire(Timeout)` → `TransactionStateMachine.cs:266` `PAYMENT_RECEIVED → CANCELLED_TIMEOUT` → `DeadlineScannerJob.cs:161-164` history satırı (`PreviousStatus = PAYMENT_RECEIVED`) + `affected.Add(sellerId, …)` → `:182` `RefreshAsync(evaluateCooldown: true)` → `ReputationAggregator.cs:218` (`PAYMENT_RECEIVED → Seller`; paydaya girer, başarı sayılmaz) **ve** `CancelCooldownEvaluator.cs:111` (aynı satır cooldown penceresine girer → `User.CooldownExpiresAt` damgalanabilir). Buna karşılık `11_IMPLEMENTATION_PLAN.md` D4 ve — bu görevde yazılan — `03_USER_FLOWS.md:490` "(kayda kusur yazılmaz)" diyor. İtibarın admin düzeltme yüzeyi yok; satır kalıcı olduğu için ceza da kalıcı. T131 öncesi bu popülasyon erişilemezdi (satır sonsuza kadar `Held` dönüyordu) → yeni davranış. `IDeliveryTimeoutRound.cs:50` zaten "timeout recorded against the seller" diyor — 03 §6.4'ün inkâr ettiği sonucu.
+
+**Proje sahibi kararı (2026-08-18): D6 — kod düzeltilir (seçenek (a)).** N1 ve N2 aynı düzeltme turuna alındı. Kriterlerin nihai metni `11_IMPLEMENTATION_PLAN.md` §P5 T131 "DÜZELTME TURU KABUL KRİTERLERİ" bloğunda.
+
+### Yapım raporu karşılaştırması
+
+- **AC1–AC3: tam uyum.** Validator kanıtları yapım raporunun kanıtlarını bağımsız olarak yeniden üretti.
+- **AC4: uyuşmazlık.** Rapor ✓ işaretlemiş; itibar/cooldown sonucu raporda hiç geçmiyor. Validator `~ Kısmi` verdi (mekanizma doğru, D4'ün karar metninin ikinci yarısı karşılanmıyor).
+- Raporun kendi *Known Limitations* üç kalemi (çözülmüş dispute'ların ekrandan açılamaması · modal component testi yokluğu · `SELLER_PAYOUT` yarış penceresi) doğru sınıflandırılmış; validator ilk ikisini bağımsız olarak da gördü, üçüncüsü T131 kapsamı dışında ve doğrulanmadı.
+
+### Merge durumu
+
+**Merge edilmedi.** FAIL kuralı: branch merge edilmez, düzeltme ayrı yapım chat'inde yapılır, sonrasında yeni doğrulama chat'i açılır.
 
 ## Altyapı Değişiklikleri
 - **Migration:** `T131_DisputeResolutionOverrideReason` — 1 additive nullable kolon
