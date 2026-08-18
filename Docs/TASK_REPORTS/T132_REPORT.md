@@ -207,9 +207,10 @@ sonra yeşil oldu" adımının sessizce atlanmaması için burada duruyor.
 
 ## Commit & PR
 
-- Branch: `task/T132-backend-bot-surface-removal`
-- Commit: `TBD`
-- PR: `TBD`
+- Branch: `task/T132-backend-bot-surface-removal` (güncel `main` `f9d9896` üzerinden kesildi)
+- Commit: `9e64906` — T132: backend bot/webhook/recovery kalintisinin silinmesi
+- PR: **[#247](https://github.com/turkerurganci/Skinora/pull/247)**
+- Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE ^T[0-9]+... | sort -u` → **yalnız `T132`**
 - CI: `TBD`
 
 ---
@@ -230,11 +231,17 @@ sonra yeşil oldu" adımının sessizce atlanmaması için burada duruyor.
    `/trade-events`). Bu, T117'den beri bilinen ve `SidecarWebhookRouteContractTests`'te
    adı konmuş bir istisnayla sınırlanan drift; sahibi **T133**. T132 bunu ne büyüttü ne
    küçülttü — yollar önce de 404'tü, şimdi de 404.
-4. **04 §8.8 ↔ 07 §9.11 hizası tamamlanmadı:** Tablo T132 sonrası 10 satır, kod kataloğu
-   12 — `VIEW_DISPUTES` / `MANAGE_DISPUTES` satırları WP5'ten beri eksik. **T132 öncesinden
-   var olan** bir açıktır ve kaldırma değil **ekleme** işidir; 04'ün hizalama turu T133a
-   olduğu için oraya **kabul kriteri olarak yazıldı** (plan §P7 T133a) ve 04 §8.8'e
-   "Bilinen açık" notu düşüldü. Not, kriter kapandığında silinmek üzere işaretlidir.
+4. **Yetki kataloğunun üç nüshası henüz birebir değil — ikisi T132 ÖNCESİNDEN eksik.**
+   Normatif nüsha kod (`PermissionCatalog`, 12) ve 07 §9.11 onunla hizalı (12). Ama
+   **07 §9 permission tablosu 11 satır** (`MANAGE_SANCTIONS` eksik, T82'den beri) ve
+   **04 §8.8 matrisi 10 satır** (`VIEW_DISPUTES` / `MANAGE_DISPUTES` eksik, WP5'ten
+   beri). İkisi de bu turda kapatılmadı çünkü **kaldırma değil ekleme** işidir ve
+   03/04/07 hizalama turu T133a'dır — oraya **kabul kriteri olarak** yazıldı (plan
+   §P7 T133a, doğrulama yöntemiyle birlikte); her iki tablonun altına "Bilinen açık"
+   notu düşüldü ve notlar kriter kapandığında **silinmek üzere** işaretlendi.
+   **Öz-denetimde yakalandı:** kapsam sunumunda iki drift de ölçülmüştü ama ilk
+   yazımda yalnız 04 §8.8'e sahip atanmıştı — ölçülüp sahipsiz bırakılan açık,
+   T137'nin B1 bulgusunun ta kendisidir.
 
 ---
 

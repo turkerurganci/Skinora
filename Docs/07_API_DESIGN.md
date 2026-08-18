@@ -1742,6 +1742,10 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 | `VIEW_DISPUTES` | İtiraz kuyruğunu görüntüle (AD27, AD28) |
 | `MANAGE_DISPUTES` | İtirazları çöz (AD29) |
 
+> **Tek doğru kaynak §9.11'dir.** Yukarıdaki tablo okuma kolaylığı içindir; yetki kataloğunun normatif nüshası §9.11 `availablePermissions` (kodda `PermissionCatalog`, **12 giriş**).
+>
+> **Bilinen açık (T133a):** Bu tablo bugün **11 satır** — `MANAGE_SANCTIONS` (T82) eksiktir. T132 öncesinden gelen bir boşluktur (o turda `VIEW_STEAM_ACCOUNTS` **kaldırıldı**, hiçbir satır eklenmedi) ve 03/04/07 hizalama turunda kapatılır.
+
 ### 9.1 AD1 — `GET /admin/dashboard`
 
 **Amaç:** Admin dashboard özet (S12). Permission: herhangi bir admin.

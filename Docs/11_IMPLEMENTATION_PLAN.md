@@ -3440,13 +3440,20 @@ Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
       (katman T117'de silindi). §16 Timeout Süreleri tablosunun iki satırı
       T119 doğrulamasında düzeltildi (04 v4.1) — tur o satırları tekrar
       açmamalı
-    - 04 §8.8 yetki matrisi 07 §9.11 kataloğuyla BİREBİR (12 satır). Tablo
-      bugün 10 satır: `VIEW_DISPUTES` ("İtirazları görüntüle") ve
-      `MANAGE_DISPUTES` ("İtirazları çöz") WP5'ten beri eksik. Bu, T132'nin
-      ölçtüğü ve KENDİ turunda kapatmadığı bir açıktır (T132 kaldırma
-      turuydu; bu ekleme işi ve 04'ün hizalama turu burası). §8.8'in altına
-      T132'nin bıraktığı "Bilinen açık" notu bu kriter kapandığında
-      SİLİNMELİ — kapanmış bir açığın notu yeni bir drift kaynağıdır
+    - Yetki kataloğunun ÜÇ nüshası birebir aynı (12 giriş): kod
+      `PermissionCatalog` (T132'de 12'ye indi, NORMATİF) · 07 §9.11
+      `availablePermissions` (T132'de hizalandı) · 07 §9 permission tablosu ·
+      04 §8.8 yetki matrisi. **İki nüsha bugün eksik** ve ikisi de T132
+      ÖNCESİNDEN gelir (T132 kaldırma turuydu, hiçbir satır eklemedi;
+      ölçüm o turda yapıldı ve sahibi buraya verildi):
+        · 07 §9 tablosu **11 satır** — `MANAGE_SANCTIONS` (T82) eksik
+        · 04 §8.8 matrisi **10 satır** — `VIEW_DISPUTES` ("İtirazları
+          görüntüle") ve `MANAGE_DISPUTES` ("İtirazları çöz") WP5'ten beri
+          eksik
+      T132'nin her iki tablonun altına bıraktığı "Bilinen açık" notları bu
+      kriter kapandığında SİLİNMELİ — kapanmış bir açığın notu yeni bir
+      drift kaynağıdır. Doğrulama: üç tablodaki key kümesini
+      `PermissionCatalog.All` ile karşılaştır, fark boş olmalı
     - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
       üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
     - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;
