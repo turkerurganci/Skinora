@@ -72,7 +72,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 ## Commit & PR
 
 - Branch: `task/T137-fake-drivable-inventory`
-- Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5) · `33cd1e4` (düzeltme turu — plan/doküman yarısı) · **`d4149b1` (düzeltme turu — harness seed + N2)**
+- Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5) · `33cd1e4` (düzeltme turu — plan/doküman yarısı) · **`d4149b1` (düzeltme turu — harness seed + N2)** · `423ec21` (düzeltme turu ölçümü — rapor/status/memory)
 - PR: [#246](https://github.com/turkerurganci/Skinora/pull/246)
 - CI: ✓ **kodun tamamını kapsayan run — `fd969ef` → [`32143961035`](https://github.com/turkerurganci/Skinora/actions/runs/32143961035) `conclusion=success`** — bloke edici **14/14** yeşil (`1. Lint` · `2. Build` · `3. Unit test` · **`3b. JS test (vitest)`** · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build` ×4 · `CI Gate`; `0. Guard` skipped). Bu push `.github/workflows`'a dokunduğu için tüm path filtreleri açıldı → run tam kapsamlı koştu.
   - **D5 düzeltmesinin kanıtı run içinde:** `3b. JS test (vitest)` job'ının `Sidecar-fake vitest` adımı **çalıştı** ve `Tests 38 passed (38)` / `Test Files 3 passed (3)` bastı — düzeltme öncesi aynı job `skipped`'dı.
@@ -114,6 +114,16 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 5. **`C:/projects/Escrow-T137a` worktree'si duruyor** — T137a merge edildiği için gereksiz; proje sahibi bu turda yalnız `Escrow-T137`'nin kaldırılmasını onayladı.
 
 ## Notlar
+
+### Öz-denetim (yapım turu içi — bağımsız doğrulamanın yerini TUTMAZ)
+
+Bulguları bağımsız validator'a bırakmadan önce dört mercek yapım chat'inde koşuldu (INSTRUCTIONS §3.3 gereği bu bir ön-kontroldür, doğrulama ayrı chat'te yapılır). Hayatta kalan bulgu **yok**; üretilen kanıt:
+
+- **Backend kapıları.** `SidecarSteamInventoryReader.GetItemAsync` asset id'yi ordinal eşliyor, `IsTradeable`'ı sidecar'ın `tradable`'ından alıyor ve `MarketHashName`'i fraud ön-kontrolüne taşıyor (`TransactionCreationService` Stage 5 → `ItemNotInInventory` / `ItemNotTradeable` / `InventoryPrivate` / `SteamUnavailable`). Seed üçünü birden karşılıyor; **ampirik teyit:** sekiz leg logunda `ITEM_NOT_TRADEABLE` · `INVENTORY_PRIVATE` · `STEAM_UNAVAILABLE` **sıfır** eşleşme (fraud-flags'teki iki `PRICE_DEVIATION` senaryonun kendisidir ve `marketHashName` ↔ `ItemPriceCaches` eşleşmesinin çalıştığını gösterir).
+- **Alıcı gerçekten dokunulmamış.** Repo genelinde `setFakeInventory`'nin tek çağıranı `seedHappyPath` (satıcı); hiçbir spec envanter sürmüyor.
+- **Import döngüsü.** `db.ts` ve `api.ts` karşı modüle yalnız fonksiyon gövdesinde dokunuyor (`api.ts`'te tek kullanım satır 63'teki varsayılan parametre); `npx playwright test --list` dokuz spec dosyasını da yükleyip 33 testi listeliyor. `db.ts`'i Playwright dışında koşturan script veya CI adımı yok, dolayısıyla yeni `throw` yalnız fake ayakta olması gereken bağlamda ateşlenebilir.
+- **Seed'e karşı saldırı merceği.** Hiçbir spec satıcının item'ı **taşımamasına** dayanmıyor (envanter kaynaklı bir reddi assert eden test yok), yani koşulsuz seed hiçbir senaryonun anlamını sessizce değiştirmiyor. `setInventory` item listesini **replace** ediyor ve aynı envanterde tekrarlı `assetId`'yi reddediyor; `playwright.config.ts` `workers: 1` + `fullyParallel: false` → biriken kopya ya da yarış yok.
+- **Kapsam.** Düzeltme turu commit'leri (`33cd1e4..HEAD`) yalnız `e2e/src/db.ts` + üç dokümana dokundu; **hiçbir spec dosyası yok** — "hiçbir spec senaryosuna dokunulmaz" kriteri harfiyle karşılandı.
 
 **Working tree hygiene (Adım -1):** temiz — `git status --short` 0 satır.
 
@@ -271,6 +281,8 @@ Doğrulama tur 1'in üç maddesinin **kod/harness yarısı** bu turda kapatıld�
 | T114 downtime | 0/3 | 0/3 | 0/3 |
 | **Toplam** | **10/32** | **4/32** | **10/32** |
 
+**Tekrarlanabilirlik — ölçüm iki tam run'da birebir aynı.** Rapor/status commit'i `423ec21` push edildiğinde path filtresi (dal ↔ main farkı `e2e/**` içerdiği için) legleri yeniden açtı ve aynı kod ikinci kez ölçüldü: [`32163260494`](https://github.com/turkerurganci/Skinora/actions/runs/32163260494) → yine **10/32**, leg başına aynı dağılım (timeout 1/4 · fraud-flags 3/4 · admin-flows 6/7 · kalan beş leg 0/N) ve `ITEM_NOT_IN_INVENTORY` yine yalnız `downtime` leg'inde (2 eşleşme). Tur 1'in tabanı da iki run'da aynı çıkmıştı; ölçüm bu görevde dört run boyunca deterministik.
+
 **Sayı değil, küme aynı.** Karışık üç leg'in (timeout · fraud-flags · admin-flows) başarısız test **başlıkları** tabanla birebir karşılaştırıldı ve aynı çıktı — timeout: satıcı trade-offer / payment / delivery timeout · fraud-flags: high volume · admin-flows: AC1 (tabanda da kırmızı, T137 ile ilgisiz). Tek fark `timeout.spec.ts`'te T137'nin kaydırdığı satır numaraları. Kalan beş leg tabanda da 0/N. Yani 10/32 "tesadüfen aynı sayı" değil, **aynı on test**.
 
 **Mekanizma doğrulaması.** `ITEM_NOT_IN_INVENTORY` imzası sekiz leg'in **yedisinde tamamen kayboldu** (job loglarında 0 eşleşme; tur 1'de sekizinde de vardı). Kalan başarısızlıkların imzası artık `Error: timeout awaiting ITEM_ESCROWED ... (last status=ACCEPTED)` — yani create **ve** accept geçiyor, işlem T117'de emekli edilen **custody durumunda** takılıyor. Bu, T137a'nın ölçtüğü tablonun aynısıdır (22 test custody durumlarında takılı) ve T138'in yeniden yazım kapsamıdır.
@@ -285,6 +297,7 @@ Doğrulama tur 1'in üç maddesinin **kod/harness yarısı** bu turda kapatıld�
 | `npm run lint` (e2e / eslint) | ✓ 0 bulgu |
 | prettier (`--config .prettierrc.json`, LF kopya) | ✓ temiz — lokal CRLF uyarıları bilinen artefakt, yetkili kapı CI "1. Lint" |
 | `npx playwright test --list` | ✓ 9 spec / 33 test yükleniyor (import döngüsü probu) |
+| CI (rapor/status commit'i `423ec21`) [`32163260494`](https://github.com/turkerurganci/Skinora/actions/runs/32163260494) | ✓ `conclusion=success` — bloke edici jobların hepsi yeşil; ikinci ölçüm de 10/32 |
 | CI [`32156212760`](https://github.com/turkerurganci/Skinora/actions/runs/32156212760) | ✓ `conclusion=success` — bloke edici jobların hepsi yeşil (`Detect changed paths` · `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build` ×4 · `CI Gate`; `0. Guard` tasarım gereği skipped) |
 
 **Working tree hygiene (Adım -1):** temiz — `git status --short` 0 satır. **Main CI startup check (Adım 0):** son 3 tamamlanmış main run `success` — [`32133727296`](https://github.com/turkerurganci/Skinora/actions/runs/32133727296) · [`32133727298`](https://github.com/turkerurganci/Skinora/actions/runs/32133727298) · [`32057012508`](https://github.com/turkerurganci/Skinora/actions/runs/32057012508). **Dış varsayım:** yeni yok — kullanılan kontrol ucu (`POST /__e2e/steam/inventory`) ve `AK47_REDLINE` şablonu bu görevin yapım turunda canlı HTTP ile doğrulanmıştı; katalog `assetId`'si (`11111111001`) `seed.itemAssetId` ile birebir.
