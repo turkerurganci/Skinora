@@ -1,6 +1,6 @@
 # T137 — sidecar-fake sürülebilir envanter
 
-**Faz:** F7 (P7, plan gereği P5 ile paralel) | **Durum:** ✗ FAIL (bağımsız doğrulama tur 1 — 1 bloke edici bulgu, düzeltme turu bekliyor) | **Tarih:** 2026-08-18
+**Faz:** F7 (P7, plan gereği P5 ile paralel) | **Durum:** ⏳ Düzeltme turu uygulandı — yeniden doğrulama bekliyor (tur 1 ✗ FAIL) | **Tarih:** 2026-08-18 (yapım) · 2026-08-18 (doğrulama tur 1) · 2026-08-18 (düzeltme turu)
 
 ---
 
@@ -59,9 +59,9 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ✗ **FAIL** (bağımsız doğrulama, 2026-08-18 — ayrıntı: §Doğrulama — Tur 1) |
-| Bulgu sayısı | 1 bloke edici (**B1**) + 2 bloke etmeyen (**N1**, **N2**) |
-| Düzeltme gerekli mi | Evet — B1 doküman turu; kapsam kararı proje sahibinde |
+| Doğrulama durumu | ✗ **FAIL** (tur 1, 2026-08-18 — ayrıntı: §Doğrulama — Tur 1) → **düzeltme turu uygulandı** (§Düzeltme Turu — Uygulandı); yeniden doğrulama bekliyor |
+| Bulgu sayısı | 1 bloke edici (**B1**) + 2 bloke etmeyen (**N1**, **N2**) — **üçü de kapatıldı** |
+| Düzeltme gerekli mi | Uygulandı — B1 doküman yarısı `33cd1e4` + harness yarısı `d4149b1` · N1 `33cd1e4` · N2 `d4149b1` |
 
 ## Altyapı Değişiklikleri
 
@@ -72,7 +72,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 ## Commit & PR
 
 - Branch: `task/T137-fake-drivable-inventory`
-- Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5)
+- Commit: `050620c` (kod) · `c0412f6` (rapor/status/memory) · CI açığı düzeltmesi (D5) · `33cd1e4` (düzeltme turu — plan/doküman yarısı) · **`d4149b1` (düzeltme turu — harness seed + N2)**
 - PR: [#246](https://github.com/turkerurganci/Skinora/pull/246)
 - CI: ✓ **kodun tamamını kapsayan run — `fd969ef` → [`32143961035`](https://github.com/turkerurganci/Skinora/actions/runs/32143961035) `conclusion=success`** — bloke edici **14/14** yeşil (`1. Lint` · `2. Build` · `3. Unit test` · **`3b. JS test (vitest)`** · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build` ×4 · `CI Gate`; `0. Guard` skipped). Bu push `.github/workflows`'a dokunduğu için tüm path filtreleri açıldı → run tam kapsamlı koştu.
   - **D5 düzeltmesinin kanıtı run içinde:** `3b. JS test (vitest)` job'ının `Sidecar-fake vitest` adımı **çalıştı** ve `Tests 38 passed (38)` / `Test Files 3 passed (3)` bastı — düzeltme öncesi aynı job `skipped`'dı.
@@ -91,7 +91,7 @@ Fake sidecar'ın `GET /api/inventory/:steamId` ucu `steamId` parametresini **yok
 
 ## Known Limitations / Follow-up
 
-1. **Advisory e2e ölçümü düştü — beklenen ve proje sahibi onaylı (D1).** Sürülmemiş steamId artık **boş** okunduğu için ve hiçbir spec henüz envanter seed etmediği için, create çağrısı `ITEM_NOT_IN_INVENTORY` ile reddediliyor. **Ölçülen (run [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605), 8/8 leg koştu):** 32 testin **4'ü pass / 28'i fail** — T137a tabanı 10/32'ydi.
+1. **(DÜZELTME TURUNDA KAPATILDI — bkz. §Düzeltme Turu — Uygulandı; ölçüm `d4149b1`'de 10/32'ye döndü.)** **Advisory e2e ölçümü düştü — beklenen ve proje sahibi onaylı (D1).** Sürülmemiş steamId artık **boş** okunduğu için ve hiçbir spec henüz envanter seed etmediği için, create çağrısı `ITEM_NOT_IN_INVENTORY` ile reddediliyor. **Ölçülen (run [`32142151605`](https://github.com/turkerurganci/Skinora/actions/runs/32142151605), 8/8 leg koştu):** 32 testin **4'ü pass / 28'i fail** — T137a tabanı 10/32'ydi.
 
    | Leg | T137a tabanı | T137 sonrası |
    |---|---|---|
@@ -233,3 +233,58 @@ Validator kendi verdict'ini oluşturduktan **sonra** raporu okudu.
 Proje sahibi kararı: **"T137'de kapat + plana yaz"**. `Docs/11_IMPLEMENTATION_PLAN.md` §P7 T137'ye **DÜZELTME TURU** bloğu yazıldı — D1–D5 kararları **NİHAİ ŞEKİL** olarak, D1'in ölçülen bedeli (10/32 → 4/32 leg tablosuyla) ve B1/N1/N2'nin düzeltme turu kabul kriterleri. §T138'e **envanter seed sorumluluğu** kabul kriteri eklendi ve N1 (admin-flows bağımsızlık iddiası) aynı blokta düzeltildi.
 
 **Kalan iş (ayrı yapım chat'i — INSTRUCTIONS §3.3 izolasyon):** `e2e/src/db.ts` `seedHappyPath()` satıcı envanterini seed eder (yalnız satıcı; alıcının SIFIR baseline'ı korunur), N2 yorumu güncellenir, ölçüm yeniden alınır (hedef: taban 10/32'nin geri gelmesi). Ardından yeniden doğrulama turu açılır.
+
+---
+
+## Düzeltme Turu — Uygulandı (2026-08-18)
+
+Doğrulama tur 1'in üç maddesinin **kod/harness yarısı** bu turda kapatıldı; doküman yarısı (B1'in plana yazılması + N1) `33cd1e4`'te inmişti (§Düzeltme turu — kaynak dokümana işlendi). Proje sahibi kararı: **"T137'de kapat + plana yaz"**. Kabul kriterleri `11_IMPLEMENTATION_PLAN.md` §P7 T137 "DÜZELTME TURU KABUL KRİTERLERİ" bloğundan geliyor.
+
+### B1 — `seedHappyPath()` satıcının fake envanterini seed ediyor
+
+**Değişen tek dosya:** `e2e/src/db.ts` (+39/−1). Hiçbir spec senaryosuna dokunulmadı, backend'e dokunulmadı, yeni bağımlılık yok.
+
+- `seedHappyPath()` sonunda tek çağrı: `setFakeInventory(seed.sellerSteamId, { items: [{ catalog: 'AK47_REDLINE', assetId: seed.itemAssetId, name/marketHashName: seed.itemMarketHashName }] })`.
+- **Yalnız satıcı.** Alıcı hiç seed edilmiyor — SIFIR baseline D1'in kazancıdır ve teslimat deltasının (06 §3.5) ölçüldüğü zemindir.
+- **Neden burası:** dokuz spec'in **tamamı** bu fonksiyonu çağırıyor ve fonksiyon spec'lerin `beforeEach` `resetFakeSteamState()` çağrısından **sonra** koşuyor — tek noktalı bir harness değişikliği create'i suite genelinde geri getiriyor.
+- **Sabitler seed'i sürüyor:** `assetId` + `marketHashName` `seed` objesinden geliyor, yani `ItemPriceCaches` satırıyla tek kaynaktan tutarlı; katalog şablonu yalnız kalan alanları (class, instance, type, exterior, tradable/marketable) veriyor.
+- **Sessiz başarısızlık yok:** seed 2xx dönmezse harness `Error` fırlatıyor — T137a'nın dersi (sessizce no-op'a düşen bir setup adımı dört tur boyunca fark edilmedi) bu adımda tekrarlanamaz.
+- **Import döngüsü:** `db.ts → api.ts → db.ts` oluştu; iki taraf da karşı modüle **yalnız fonksiyon gövdesinde** dokunduğu için çalışma anında sorun yok. Kanıt: `npx playwright test --list` dokuz spec dosyasını da yükleyip 33 testi listeliyor.
+
+### N2 — bayat yorum düzeltildi
+
+`db.ts`'teki item sabitlerinin yorumu "Must match the fake's inventory item" diyordu; fake'in artık varsayılan envanteri yok (T137 D1). Yeni yorum sabitlerin **seed'i sürdüğünü**, `ItemPriceCaches` satırının aynı ada bağlı olduğunu ve kalan alanların `AK47_REDLINE` katalog şablonundan geldiğini söylüyor.
+
+### Ölçüm — hedef karşılandı: taban geri geldi (10/32)
+
+**Run:** [`32156212760`](https://github.com/turkerurganci/Skinora/actions/runs/32156212760) (`d4149b1`) — 8/8 leg sonuç üretti.
+
+| Leg | T137a tabanı (`787b1b3`) | T137 tur 1 (`f8cdf4e`) | **Düzeltme sonrası (`d4149b1`)** |
+|---|---|---|---|
+| happy-path | 0/1 | 0/1 | 0/1 |
+| T108 cancellation | 0/4 | 0/4 | 0/4 |
+| T109 timeout | 1/4 | 0/4 | **1/4** |
+| T110 payment edge cases | 0/6 | 0/6 | 0/6 |
+| T111 fraud-flags | 3/4 | 0/4 | **3/4** |
+| T112 emergency-hold | 0/3 | 0/3 | 0/3 |
+| T113 admin-flows | 6/7 | 4/7 | **6/7** |
+| T114 downtime | 0/3 | 0/3 | 0/3 |
+| **Toplam** | **10/32** | **4/32** | **10/32** |
+
+**Sayı değil, küme aynı.** Karışık üç leg'in (timeout · fraud-flags · admin-flows) başarısız test **başlıkları** tabanla birebir karşılaştırıldı ve aynı çıktı — timeout: satıcı trade-offer / payment / delivery timeout · fraud-flags: high volume · admin-flows: AC1 (tabanda da kırmızı, T137 ile ilgisiz). Tek fark `timeout.spec.ts`'te T137'nin kaydırdığı satır numaraları. Kalan beş leg tabanda da 0/N. Yani 10/32 "tesadüfen aynı sayı" değil, **aynı on test**.
+
+**Mekanizma doğrulaması.** `ITEM_NOT_IN_INVENTORY` imzası sekiz leg'in **yedisinde tamamen kayboldu** (job loglarında 0 eşleşme; tur 1'de sekizinde de vardı). Kalan başarısızlıkların imzası artık `Error: timeout awaiting ITEM_ESCROWED ... (last status=ACCEPTED)` — yani create **ve** accept geçiyor, işlem T117'de emekli edilen **custody durumunda** takılıyor. Bu, T137a'nın ölçtüğü tablonun aynısıdır (22 test custody durumlarında takılı) ve T138'in yeniden yazım kapsamıdır.
+
+**Tek istisna — `downtime` leg'i (2 eşleşme).** `downtime.spec.ts`'in iki testi `resetFakeSteamState()`'i **test gövdesinin içinde**, `seedHappyPath()`'ten **sonra** çağırıyor (satır 167 · 238) ve seed'i siliyor; create yine `ITEM_NOT_IN_INVENTORY` alıyor. Leg tabanda da **0/3** olduğu için 10/32 hedefi etkilenmiyor. Düzeltmesi spec senaryosuna dokunmayı gerektirir, bu turun kabul kriteri ise "hiçbir spec senaryosuna dokunulmaz" diyor — dolayısıyla **T138'in envanter-seed kabul kriterine dahildir** (plan §T138).
+
+### Kanıt
+
+| Kapı | Sonuç |
+|---|---|
+| `npx tsc --noEmit` (e2e) | ✓ temiz |
+| `npm run lint` (e2e / eslint) | ✓ 0 bulgu |
+| prettier (`--config .prettierrc.json`, LF kopya) | ✓ temiz — lokal CRLF uyarıları bilinen artefakt, yetkili kapı CI "1. Lint" |
+| `npx playwright test --list` | ✓ 9 spec / 33 test yükleniyor (import döngüsü probu) |
+| CI [`32156212760`](https://github.com/turkerurganci/Skinora/actions/runs/32156212760) | ✓ `conclusion=success` — bloke edici jobların hepsi yeşil (`Detect changed paths` · `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build` ×4 · `CI Gate`; `0. Guard` tasarım gereği skipped) |
+
+**Working tree hygiene (Adım -1):** temiz — `git status --short` 0 satır. **Main CI startup check (Adım 0):** son 3 tamamlanmış main run `success` — [`32133727296`](https://github.com/turkerurganci/Skinora/actions/runs/32133727296) · [`32133727298`](https://github.com/turkerurganci/Skinora/actions/runs/32133727298) · [`32057012508`](https://github.com/turkerurganci/Skinora/actions/runs/32057012508). **Dış varsayım:** yeni yok — kullanılan kontrol ucu (`POST /__e2e/steam/inventory`) ve `AK47_REDLINE` şablonu bu görevin yapım turunda canlı HTTP ile doğrulanmıştı; katalog `assetId`'si (`11111111001`) `seed.itemAssetId` ile birebir.
