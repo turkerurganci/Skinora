@@ -227,3 +227,9 @@ Validator kendi verdict'ini oluşturduktan **sonra** raporu okudu.
 ### Verdict
 
 **✗ FAIL** — kod tarafı temiz ve beş kabul kriterinin beşi de bağımsız olarak karşılandı; bloke eden şey **doküman/sahiplik** boşluğudur (B1). Düzeltme turu `11_IMPLEMENTATION_PLAN.md` §T137 + §T138 üzerinde, proje sahibinin kapsam kararının ardından yapılır. Dal merge **edilmez**.
+
+### Düzeltme turu — kaynak dokümana işlendi (2026-08-18)
+
+Proje sahibi kararı: **"T137'de kapat + plana yaz"**. `Docs/11_IMPLEMENTATION_PLAN.md` §P7 T137'ye **DÜZELTME TURU** bloğu yazıldı — D1–D5 kararları **NİHAİ ŞEKİL** olarak, D1'in ölçülen bedeli (10/32 → 4/32 leg tablosuyla) ve B1/N1/N2'nin düzeltme turu kabul kriterleri. §T138'e **envanter seed sorumluluğu** kabul kriteri eklendi ve N1 (admin-flows bağımsızlık iddiası) aynı blokta düzeltildi.
+
+**Kalan iş (ayrı yapım chat'i — INSTRUCTIONS §3.3 izolasyon):** `e2e/src/db.ts` `seedHappyPath()` satıcı envanterini seed eder (yalnız satıcı; alıcının SIFIR baseline'ı korunur), N2 yorumu güncellenir, ölçüm yeniden alınır (hedef: taban 10/32'nin geri gelmesi). Ardından yeniden doğrulama turu açılır.
