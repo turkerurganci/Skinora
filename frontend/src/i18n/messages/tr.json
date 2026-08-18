@@ -239,9 +239,11 @@
       "fields": {
         "type": "Tür",
         "item": "Ürün",
+        "deliveredItemName": "Gelen ürün",
         "openedBy": "Açan",
         "userDescription": "Kullanıcı açıklaması",
-        "systemCheckResult": "Sistem kontrolü"
+        "systemCheckResult": "Sistem kontrolü",
+        "overrideReason": "Aykırı karar gerekçesi"
       },
       "outcomeLabel": "Karar",
       "outcome": {
@@ -256,6 +258,10 @@
       "noteLabel": "Admin notu",
       "notePlaceholder": "Karar gerekçesi",
       "noteRequired": "Admin notu zorunludur.",
+      "overrideLabel": "Aykırı karar gerekçesi",
+      "overrideHint": "Bu işlemde teslimat kanıtlanmış durumda. Alıcı lehine karar bu bulguyu geri çevirir ve satıcı item'ı geri alamaz — gerekçesini yazın.",
+      "overridePlaceholder": "Teslimat kanıtının neden geçersiz sayıldığı",
+      "overrideRequired": "En az {min} karakterlik bir gerekçe zorunludur.",
       "error": "İtiraz çözülemedi.",
       "cancel": "İptal",
       "confirm": "Çöz"

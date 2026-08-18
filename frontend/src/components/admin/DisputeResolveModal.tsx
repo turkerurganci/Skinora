@@ -11,6 +11,12 @@ import { useAdminDisputeResolve } from "@/lib/hooks/useAdminDisputeResolve";
 const MIN_NOTE = 1;
 const MAX_NOTE = 2000;
 
+// T131 — mirrors AdminDisputeService.MinOverrideReasonLength / Max… (03 §6.4).
+// The server is the authority; these only keep the admin from submitting into a
+// rejection they could have been told about while typing.
+const MIN_OVERRIDE_REASON = 20;
+const MAX_OVERRIDE_REASON = 2000;
+
 export interface DisputeResolveModalProps {
   /** The dispute being resolved; `null` keeps the modal closed. */
   dispute: AdminDisputeListItem | null;
@@ -74,17 +80,42 @@ function DisputeResolveForm({
 
   const [outcome, setOutcome] = useState<DisputeResolutionOutcome | null>(null);
   const [note, setNote] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [touched, setTouched] = useState(false);
 
   const trimmed = note.trim();
   const noteTooShort = trimmed.length < MIN_NOTE;
   const noteTooLong = trimmed.length > MAX_NOTE;
 
+  // T131 — the transaction's delivery is already established, so ruling for the
+  // buyer reverses the platform's own finding and hands the loss to a seller
+  // who cannot get the item back (03 §6.4). Whether that applies is decided by
+  // the server (`buyerFavorRequiresOverride`), never re-derived here.
+  const overrideRequired =
+    outcome === DisputeResolutionOutcome.BUYER_FAVOR && detail?.buyerFavorRequiresOverride === true;
+  const trimmedOverride = overrideReason.trim();
+  const overrideTooShort = trimmedOverride.length < MIN_OVERRIDE_REASON;
+  const overrideTooLong = trimmedOverride.length > MAX_OVERRIDE_REASON;
+  const overrideInvalid = overrideRequired && (overrideTooShort || overrideTooLong);
+
+  // The expected side of the comparison is read from the DETAIL, so both halves
+  // come from one fetch and cannot disagree; the list row is only the
+  // placeholder until it lands.
+  const expectedItemName = detail?.transaction.itemName ?? dispute.itemName;
+
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setTouched(true);
-    if (outcome === null || noteTooShort || noteTooLong) return;
-    resolve.mutate({ id: dispute.id, outcome, adminNote: trimmed }, { onSuccess: () => onClose() });
+    if (outcome === null || noteTooShort || noteTooLong || overrideInvalid) return;
+    resolve.mutate(
+      {
+        id: dispute.id,
+        outcome,
+        adminNote: trimmed,
+        overrideReason: overrideRequired ? trimmedOverride : undefined,
+      },
+      { onSuccess: () => onClose() },
+    );
   }
 
   const outcomes: DisputeResolutionOutcome[] = [
@@ -101,7 +132,19 @@ function DisputeResolveForm({
         <dt className="text-gray-500">{t("resolve.fields.type")}</dt>
         <dd className="col-span-2 text-gray-900">{tType(dispute.type)}</dd>
         <dt className="text-gray-500">{t("resolve.fields.item")}</dt>
-        <dd className="col-span-2 text-gray-900">{dispute.itemName}</dd>
+        <dd className="col-span-2 text-gray-900">{expectedItemName}</dd>
+        {/*
+          T130 evidence, surfaced by T131. Rendered directly beneath the
+          expected item so the admin reads the comparison instead of making it
+          (03 §6.3 Sonuç B). Absent means "not a wrong-item case" — not
+          "unknown" — so the row is omitted rather than shown empty.
+        */}
+        {detail?.deliveredItemName && (
+          <>
+            <dt className="text-gray-500">{t("resolve.fields.deliveredItemName")}</dt>
+            <dd className="col-span-2 font-medium text-amber-700">{detail.deliveredItemName}</dd>
+          </>
+        )}
         <dt className="text-gray-500">{t("resolve.fields.openedBy")}</dt>
         <dd className="col-span-2 text-gray-900">{dispute.openedBy.displayName}</dd>
         {detail?.userDescription && (
@@ -116,6 +159,14 @@ function DisputeResolveForm({
           <>
             <dt className="text-gray-500">{t("resolve.fields.systemCheckResult")}</dt>
             <dd className="col-span-2 text-gray-700">{detail.systemCheckResult}</dd>
+          </>
+        )}
+        {detail?.resolutionOverrideReason && (
+          <>
+            <dt className="text-gray-500">{t("resolve.fields.overrideReason")}</dt>
+            <dd className="col-span-2 whitespace-pre-wrap text-gray-700">
+              {detail.resolutionOverrideReason}
+            </dd>
           </>
         )}
       </dl>
@@ -176,6 +227,39 @@ function DisputeResolveForm({
           <span className="text-xs text-red-600">{t("resolve.noteRequired")}</span>
         )}
       </label>
+
+      {/*
+        T131 — the override gate (03 §6.4, 02 §10.4). Only drawn once the admin
+        has actually chosen the buyer, so the ordinary ruling is not cluttered
+        by a field it never needs.
+      */}
+      {overrideRequired && (
+        <label className="flex flex-col gap-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+          <span className="font-medium text-amber-900">{t("resolve.overrideLabel")}</span>
+          <span className="text-xs text-amber-800">{t("resolve.overrideHint")}</span>
+          <textarea
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
+            onBlur={() => setTouched(true)}
+            placeholder={t("resolve.overridePlaceholder")}
+            rows={3}
+            minLength={MIN_OVERRIDE_REASON}
+            maxLength={MAX_OVERRIDE_REASON}
+            required
+            className={cn(
+              "rounded-md border bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2",
+              touched && (overrideTooShort || overrideTooLong)
+                ? "border-red-300 focus:ring-red-200"
+                : "border-amber-300 focus:ring-amber-200",
+            )}
+          />
+          {touched && overrideTooShort && (
+            <span className="text-xs text-red-600">
+              {t("resolve.overrideRequired", { min: MIN_OVERRIDE_REASON })}
+            </span>
+          )}
+        </label>
+      )}
 
       {resolve.isError && <p className="text-sm text-red-600">{t("resolve.error")}</p>}
 

@@ -24,4 +24,8 @@ public static class DisputeErrorCodes
     // WP5 — admin dispute resolution (07 §9.x).
     public const string NotEscalated = "DISPUTE_NOT_ESCALATED";
     public const string TransactionOnHold = "TRANSACTION_ON_HOLD";
+
+    // T131 — ruling for the buyer on a delivery the platform already proved
+    // (03 §6.4, 02 §10.4). The exception needs its own reason on the record.
+    public const string OverrideReasonRequired = "OVERRIDE_REASON_REQUIRED";
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.API.Services;
@@ -177,7 +178,12 @@ public class AdminDisputeServiceTests : IntegrationTestBase
 
         var outcome = await BuildSut().ResolveAsync(
             _adminId, dispute.Id,
-            new AdminResolveDisputeRequest(DisputeResolutionOutcome.BUYER_FAVOR, "Alıcı haklı; iade edilecek."),
+            new AdminResolveDisputeRequest(
+                DisputeResolutionOutcome.BUYER_FAVOR,
+                "Alıcı haklı; iade edilecek.",
+                // T131 — delivery is established here, so the ruling is an
+                // override and cannot be made without its own justification.
+                OverrideReason: "Steam Support kaydı trade'in geri alındığını gösteriyor."),
             ipAddress: "10.0.0.1", CancellationToken.None);
 
         Assert.Equal(AdminResolveDisputeStatus.Resolved, outcome.Status);
@@ -218,6 +224,165 @@ public class AdminDisputeServiceTests : IntegrationTestBase
         // Only the money moves: the item never left the seller's inventory in
         // this state, so there is nothing to return (02 §9).
         Assert.Single(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
+
+        // T131 — no delivery was established here, so the ruling overrode
+        // nothing and the exception register stays empty.
+        var persistedDispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == dispute.Id);
+        Assert.Null(persistedDispute.ResolutionOverrideReason);
+    }
+
+    // ---------- T131: the override gate (02 §10.4, 03 §6.4) ----------
+
+    /// <summary>
+    /// At ITEM_DELIVERED the platform has already established delivery — the
+    /// state has one entry edge and its guard demands 02 §9.2 evidence. Ruling
+    /// for the buyer there reverses the platform's own finding and, since there
+    /// is no item leg, hands the whole loss to a seller who cannot recover the
+    /// item. 03 §6.4 makes that an exception whose reason is recorded
+    /// separately; without one the ruling is refused.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_BuyerFavor_AtItemDelivered_WithoutOverrideReason_IsRejected()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.WRONG_ITEM);
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(DisputeResolutionOutcome.BUYER_FAVOR, "note"),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(DisputeErrorCodes.OverrideReasonRequired, outcome.ErrorCode);
+
+        // Nothing moved: the refusal is a guard, not a partial resolution.
+        var persistedTx = await Context.Set<Transaction>().AsNoTracking().FirstAsync(t => t.Id == tx.Id);
+        Assert.Equal(TransactionStatus.ITEM_DELIVERED, persistedTx.Status);
+        var persistedDispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == dispute.Id);
+        Assert.Equal(DisputeStatus.ESCALATED, persistedDispute.Status);
+        Assert.Empty(_outbox.Published);
+    }
+
+    /// <summary>
+    /// The floor exists so the field cannot be satisfied by typing past it: a
+    /// gate that accepts "ok" records nothing, and the gate is there precisely
+    /// because this ruling has to be explainable after the money is gone.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_BuyerFavor_AtItemDelivered_WithATokenOverrideReason_IsRejected()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(
+                DisputeResolutionOutcome.BUYER_FAVOR, "note", OverrideReason: "  ok  "),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(DisputeErrorCodes.OverrideReasonRequired, outcome.ErrorCode);
+    }
+
+    /// <summary>
+    /// The accepted ruling records its reason in two places on purpose: the
+    /// column is where the next admin reads it, the audit row is where it cannot
+    /// be edited afterwards (06 §3.20).
+    /// </summary>
+    [Fact]
+    public async Task Resolve_BuyerFavor_AtItemDelivered_PersistsTheOverrideReason_AndAuditsIt()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+        const string reason = "Alıcı Steam Support kaydı sundu; trade geri alınmış (bilet #4412).";
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(
+                DisputeResolutionOutcome.BUYER_FAVOR, "note", OverrideReason: $"  {reason}  "),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.Resolved, outcome.Status);
+
+        var persistedDispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == dispute.Id);
+        Assert.Equal(reason, persistedDispute.ResolutionOverrideReason);
+
+        // Parsed rather than substring-matched: the serializer escapes non-ASCII
+        // (ı for "ı" and so on), so a raw Contains would pass or fail on the
+        // reason's alphabet rather than on whether it was recorded.
+        var audit = Assert.Single(_audit.Entries, e => e.Action == AuditAction.DISPUTE_RESOLVED);
+        using var auditJson = JsonDocument.Parse(audit.NewValue!);
+        Assert.Equal(reason, auditJson.RootElement.GetProperty("OverrideReason").GetString());
+    }
+
+    /// <summary>
+    /// A seller-favour ruling upholds the platform's own finding, so there is
+    /// nothing to override and nothing to justify.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_SellerFavor_AtItemDelivered_NeedsNoOverrideReason()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(DisputeResolutionOutcome.SELLER_FAVOR, "note"),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.Resolved, outcome.Status);
+        var persistedDispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == dispute.Id);
+        Assert.Equal(DisputeStatus.RESOLVED_FOR_SELLER, persistedDispute.Status);
+        Assert.Null(persistedDispute.ResolutionOverrideReason);
+    }
+
+    /// <summary>
+    /// A reason sent where nothing was overridden is dropped rather than stored.
+    /// That is what keeps a non-NULL column meaning exactly one thing — a ruling
+    /// made against the platform's own proof of delivery — so the register of
+    /// exceptions stays searchable.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_OverrideReason_OnARulingThatOverrodeNothing_IsNotStored()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.PAYMENT);
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(
+                DisputeResolutionOutcome.BUYER_FAVOR, "note",
+                OverrideReason: "Bu gerekçenin geçersiz kılacağı bir kanıt yok."),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.Resolved, outcome.Status);
+        var persistedDispute = await Context.Set<Dispute>().AsNoTracking()
+            .FirstAsync(d => d.Id == dispute.Id);
+        Assert.Null(persistedDispute.ResolutionOverrideReason);
+    }
+
+    /// <summary>
+    /// The gate is ordered after the state guards, so an admin is never asked to
+    /// justify a ruling that would have been refused anyway.
+    /// </summary>
+    [Fact]
+    public async Task Resolve_OnAHeldTransaction_ReportsTheHold_NotTheMissingOverride()
+    {
+        var tx = await CreateTransactionAsync(
+            TransactionStatus.ITEM_DELIVERED, withPayment: true, withHold: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+
+        var outcome = await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(DisputeResolutionOutcome.BUYER_FAVOR, "note"),
+            ipAddress: null, CancellationToken.None);
+
+        Assert.Equal(AdminResolveDisputeStatus.TransactionOnHold, outcome.Status);
+        Assert.Equal(DisputeErrorCodes.TransactionOnHold, outcome.ErrorCode);
     }
 
     // ---------- Guards ----------
@@ -327,6 +492,72 @@ public class AdminDisputeServiceTests : IntegrationTestBase
     {
         var detail = await BuildSut().GetAsync(Guid.NewGuid(), CancellationToken.None);
         Assert.Null(detail);
+    }
+
+    /// <summary>
+    /// T130 wrote the arrived item's name onto the dispute; T131's job is that
+    /// AD28 carries it to the screen. Asserted here because until now nothing
+    /// checked the DTO — the column had a writer and a reader and no test
+    /// between them (T130 validation finding N2).
+    /// </summary>
+    [Fact]
+    public async Task Get_ReturnsTheDeliveredItemName_ForTheAdminToCompare()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.WRONG_ITEM);
+        dispute.DeliveredItemName = "AWP | Asiimov (Field-Tested)";
+        await Context.SaveChangesAsync();
+
+        var detail = await BuildSut().GetAsync(dispute.Id, CancellationToken.None);
+
+        Assert.Equal("AWP | Asiimov (Field-Tested)", detail!.DeliveredItemName);
+        // The other half of the comparison travels in the same response, so the
+        // screen never has to stitch two fetches together (03 §6.3 Sonuç B).
+        Assert.Equal("AK-47 | Redline", detail.Transaction.ItemName);
+    }
+
+    /// <summary>
+    /// T131 — AD28 answers the override question itself so the screen can ask
+    /// for the justification while the admin is deciding, instead of letting
+    /// them discover the rule from a rejected submission. One implementation of
+    /// the rule (the service); the client only renders the answer.
+    /// </summary>
+    [Theory]
+    [InlineData(TransactionStatus.ITEM_DELIVERED, true)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, false)]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, false)]
+    public async Task Get_AnswersWhetherABuyerFavorRulingWouldNeedAnOverride(
+        TransactionStatus status, bool expected)
+    {
+        var tx = await CreateTransactionAsync(status, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+
+        var detail = await BuildSut().GetAsync(dispute.Id, CancellationToken.None);
+
+        Assert.Equal(expected, detail!.BuyerFavorRequiresOverride);
+    }
+
+    /// <summary>
+    /// A recorded override travels back out on the detail, so the exception is
+    /// readable where the decision is read rather than only in the audit table.
+    /// </summary>
+    [Fact]
+    public async Task Get_ReturnsARecordedOverrideReason()
+    {
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withPayment: true);
+        var dispute = await CreateEscalatedDisputeAsync(tx, DisputeType.DELIVERY);
+        const string reason = "Steam Support kaydı trade'in geri alındığını gösteriyor.";
+
+        await BuildSut().ResolveAsync(
+            _adminId, dispute.Id,
+            new AdminResolveDisputeRequest(
+                DisputeResolutionOutcome.BUYER_FAVOR, "note", OverrideReason: reason),
+            ipAddress: null, CancellationToken.None);
+        Context.ChangeTracker.Clear();
+
+        var detail = await BuildSut().GetAsync(dispute.Id, CancellationToken.None);
+
+        Assert.Equal(reason, detail!.ResolutionOverrideReason);
     }
 
     // ---------- helpers ----------

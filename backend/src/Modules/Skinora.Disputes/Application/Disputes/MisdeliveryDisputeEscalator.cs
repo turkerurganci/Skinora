@@ -61,6 +61,7 @@ public sealed class MisdeliveryDisputeEscalator : IDeliveryMisdeliveryEscalator
     public async Task<MisdeliveryEscalationOutcome> EscalateAsync(
         Transaction transaction,
         DateTime occurredAtUtc,
+        DateTime signatureFirstObservedAtUtc,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(transaction);
@@ -121,12 +122,41 @@ public sealed class MisdeliveryDisputeEscalator : IDeliveryMisdeliveryEscalator
                 transaction.HasActiveDispute = true;
                 return MisdeliveryEscalationOutcome.AlreadyEscalated;
 
+            case DisputeStatus.RESOLVED_FOR_SELLER:
+            case DisputeStatus.RESOLVED_FOR_BUYER:
+                // T131 (T127 finding G3) — an ADMIN has ruled on this row. The
+                // dispute is left untouched exactly as below, but the caller is
+                // told so, because this is the one case where its hold must
+                // lift: 02 §9.2 forbids a SILENT cancellation, and a human has
+                // now read the case. Holding on past a ruling is what left the
+                // buyer's money in escrow with no automatic exit.
+                //
+                // T131 fix round (validation finding N2) — but only if the
+                // ruling was made WITH this signature in front of it. The
+                // release is granted for one reason and one reason only: a human
+                // read the case. An admin who ruled BEFORE the signature existed
+                // read a different case, so treating their ruling as consent to
+                // cancel would reverse it on evidence they never saw.
+                if (RuledWithoutTheSignature(existing, signatureFirstObservedAtUtc))
+                {
+                    return await ReEscalateAsync(
+                        transaction, existing, message, occurredAtUtc, signatureFirstObservedAtUtc, cancellationToken);
+                }
+
+                _logger.LogInformation(
+                    "Transaction {TransactionId}: misdelivery signature stands, but its DELIVERY "
+                    + "dispute {DisputeId} was already ruled on by an admin ({Status}) — the "
+                    + "delivery timeout is released to its normal course (03 §6.4)",
+                    transaction.Id, existing.Id, existing.Status);
+                return MisdeliveryEscalationOutcome.AlreadyRuledByAdmin;
+
             default:
-                // CLOSED or an admin resolution (RESOLVED_FOR_*). A human or an
-                // auto-check has already answered this question; a second row is
-                // forbidden by the unique index and re-opening a settled
-                // decision is not a timeout's call. Logged so the contradiction
-                // is visible rather than silent.
+                // CLOSED — the system's own auto-check answered this question
+                // (06 §2.10). A second row is forbidden by the unique index and
+                // re-opening a settled decision is not a timeout's call. Unlike
+                // the admin arm above this does NOT release the hold: nobody
+                // looked, so a cancellation here would still be silent. Logged
+                // so the contradiction is visible rather than silent.
                 _logger.LogWarning(
                     "Transaction {TransactionId}: misdelivery signature found at the delivery "
                     + "timeout, but its DELIVERY dispute {DisputeId} is already in {Status} — "
@@ -134,6 +164,83 @@ public sealed class MisdeliveryDisputeEscalator : IDeliveryMisdeliveryEscalator
                     transaction.Id, existing.Id, existing.Status);
                 return MisdeliveryEscalationOutcome.AlreadyResolved;
         }
+    }
+
+    /// <summary>
+    /// Whether the admin resolution on <paramref name="dispute"/> was reached
+    /// without the misdelivery signature on record (T131 finding N2).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The comparison is <c>ResolvedAt</c> against when the signature was first
+    /// observed. A signature recorded STRICTLY BEFORE the ruling is one the
+    /// admin had: establishing it sets the dispute to ESCALATED and writes the
+    /// finding into <c>SystemCheckResult</c>, so it is on the very screen AD28
+    /// renders. One recorded at or after the ruling is not.
+    /// </para>
+    /// <para>
+    /// The two ambiguous inputs — equal timestamps, and a NULL
+    /// <c>ResolvedAt</c> (impossible while the status is RESOLVED_FOR_* per
+    /// <c>CK_Disputes_Resolved_ResolvedAt</c>, so a schema regression) — both
+    /// read as "cannot establish that they saw it", because the two errors are
+    /// not symmetric: sending a case back to the admin queue costs a review,
+    /// while a wrong release cancels the transaction and refunds the buyer
+    /// against a ruling nobody re-read.
+    /// </para>
+    /// </remarks>
+    private static bool RuledWithoutTheSignature(
+        Dispute dispute, DateTime signatureFirstObservedAtUtc)
+        => dispute.ResolvedAt is not { } ruledAt || ruledAt <= signatureFirstObservedAtUtc;
+
+    /// <summary>
+    /// Put a resolved dispute back into the admin queue because the platform
+    /// established the misdelivery signature after the ruling (T131 finding N2).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the same row, not a second one: 02 §10.2's "aynı türde dispute
+    /// tekrar açılamaz" and <c>UQ_Disputes_TransactionId_Type</c> both forbid an
+    /// insert, and neither is being worked around. What justifies re-opening it
+    /// is that the platform is bringing a NEW fact — it watched the item leave
+    /// the seller after the ruling — rather than asking for the old one to be
+    /// weighed again. The CLOSED arm below is deliberately not treated this way:
+    /// there the system answered its own question, and nothing new has arrived.
+    /// </para>
+    /// <para>
+    /// <c>ResolvedAt</c> is cleared because the row is no longer resolved and
+    /// <c>CK_Disputes_Resolved_ResolvedAt</c> pairs the two; the previous ruling
+    /// survives where it cannot be edited — the <c>DISPUTE_RESOLVED</c> audit
+    /// entry (06 §3.20, append-only). <c>AdminNote</c> and <c>AdminId</c> are
+    /// kept, so that whoever rules next can read the earlier ruling first.
+    /// </para>
+    /// </remarks>
+    private async Task<MisdeliveryEscalationOutcome> ReEscalateAsync(
+        Transaction transaction,
+        Dispute dispute,
+        string message,
+        DateTime occurredAtUtc,
+        DateTime signatureFirstObservedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var previousStatus = dispute.Status;
+        var previousResolvedAt = dispute.ResolvedAt;
+
+        dispute.Status = DisputeStatus.ESCALATED;
+        dispute.SystemCheckResult = message;
+        dispute.ResolvedAt = null;
+        dispute.UpdatedAt = occurredAtUtc;
+        transaction.HasActiveDispute = true;
+
+        await PublishAsync(transaction, dispute.Id, occurredAtUtc, cancellationToken);
+
+        _logger.LogWarning(
+            "Transaction {TransactionId}: DELIVERY dispute {DisputeId} was ruled {PreviousStatus} "
+            + "at {ResolvedAt}, but the misdelivery signature was first observed at "
+            + "{SignatureObservedAt} — the ruling was made without it, so the dispute goes back "
+            + "to the admin queue and the delivery timeout keeps holding (02 §9.2, 03 §6.4)",
+            transaction.Id, dispute.Id, previousStatus, previousResolvedAt, signatureFirstObservedAtUtc);
+
+        return MisdeliveryEscalationOutcome.ReEscalatedAfterRuling;
     }
 
     /// <summary>

@@ -198,6 +198,81 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
         Assert.Null(buyer!.CooldownExpiresAt);
     }
 
+    /// <summary>
+    /// <b>T131 finding B1 — an admin-released delivery timeout never counts
+    /// toward the cooldown.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fixture is <c>Delivery_Timeouts_Push_The_Seller_Into_Cooldown</c>
+    /// with one field changed on each row, so the assertion is the exact
+    /// inverse: three delivery timeouts, all released by an admin ruling, and
+    /// the seller stays out of cooldown entirely.
+    /// </para>
+    /// <para>
+    /// This is the heavier half of B1. Reputation is a number on a profile;
+    /// <c>CooldownExpiresAt</c> stops the seller from opening a transaction at
+    /// all (02 §14.2) — so a seller an admin explicitly cleared would be locked
+    /// out of the platform by the cleanup of the very case they were cleared in.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Admin_Released_Delivery_Timeouts_Never_Reach_The_Cooldown()
+    {
+        var thresholds = new StubThresholds(new CancelCooldownThresholds(LimitCount: 2, WindowHours: 24, CooldownHours: 12));
+        var evaluator = new CancelCooldownEvaluator(Context, thresholds, _clock);
+
+        foreach (var hoursAgo in new[] { 1, 5, 10 })
+        {
+            var tx = await InsertCancellationAsync(
+                _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo,
+                releasedByAdminRuling: true);
+            await InsertTimeoutHistoryAsync(tx.Id, TransactionStatus.PAYMENT_RECEIVED);
+        }
+
+        var sellerResult = await evaluator.EvaluateAsync(_seller.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(0, sellerResult.ResponsibleCancelCount);
+        Assert.Null(sellerResult.NewCooldownExpiresAt);
+
+        var seller = await Context.Set<User>().FindAsync(_seller.Id);
+        Assert.Null(seller!.CooldownExpiresAt);
+    }
+
+    /// <summary>
+    /// The B1 exclusion removes only the released row, not the seller's other
+    /// delivery timeouts inside the same window.
+    /// </summary>
+    /// <remarks>
+    /// The guard against over-correcting: the column lives on the transaction,
+    /// so a filter written one level too wide would quietly exempt a repeat
+    /// non-deliverer from 02 §14.2's primary abuse control.
+    /// </remarks>
+    [Fact]
+    public async Task Admin_Release_Removes_Only_Its_Own_Row_From_The_Count()
+    {
+        var thresholds = new StubThresholds(new CancelCooldownThresholds(LimitCount: 5, WindowHours: 24, CooldownHours: 12));
+        var evaluator = new CancelCooldownEvaluator(Context, thresholds, _clock);
+
+        var released = await InsertCancellationAsync(
+            _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo: 1,
+            releasedByAdminRuling: true);
+        await InsertTimeoutHistoryAsync(released.Id, TransactionStatus.PAYMENT_RECEIVED);
+
+        foreach (var hoursAgo in new[] { 5, 10 })
+        {
+            var tx = await InsertCancellationAsync(
+                _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo);
+            await InsertTimeoutHistoryAsync(tx.Id, TransactionStatus.PAYMENT_RECEIVED);
+        }
+
+        var sellerResult = await evaluator.EvaluateAsync(_seller.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(2, sellerResult.ResponsibleCancelCount);
+    }
+
     [Fact]
     public async Task Timeout_Without_History_Row_Counts_For_Neither_Party()
     {
@@ -225,7 +300,8 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
         Guid sellerId,
         Guid buyerId,
         TransactionStatus status,
-        int hoursAgo)
+        int hoursAgo,
+        bool releasedByAdminRuling = false)
     {
         var cancelledAt = _clock.GetUtcNow().UtcDateTime.AddHours(-hoursAgo);
         var tx = new Transaction
@@ -262,6 +338,9 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
                                    or TransactionStatus.CANCELLED_ADMIN
                            ? "test"
                            : null,
+            // T131 — the delivery timeout ran only because an admin had ruled
+            // on the misdelivery dispute (finding B1).
+            TimeoutReleasedByAdminRulingAt = releasedByAdminRuling ? cancelledAt : null,
         };
 
         Context.Set<Transaction>().Add(tx);

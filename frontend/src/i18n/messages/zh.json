@@ -239,9 +239,11 @@
       "fields": {
         "type": "类型",
         "item": "物品",
+        "deliveredItemName": "收到的物品",
         "openedBy": "发起人",
         "userDescription": "用户描述",
-        "systemCheckResult": "系统检查"
+        "systemCheckResult": "系统检查",
+        "overrideReason": "推翻裁决的理由"
       },
       "outcomeLabel": "裁决",
       "outcome": {
@@ -256,6 +258,10 @@
       "noteLabel": "管理员备注",
       "notePlaceholder": "决定原因",
       "noteRequired": "管理员备注为必填项。",
+      "overrideLabel": "推翻裁决的理由",
+      "overrideHint": "本交易的交付已被证实。支持买家将推翻该结论，且卖家无法追回物品——请说明理由。",
+      "overridePlaceholder": "为何推翻交付证据",
+      "overrideRequired": "理由至少需要 {min} 个字符。",
       "error": "解决争议失败。",
       "cancel": "取消",
       "confirm": "解决"

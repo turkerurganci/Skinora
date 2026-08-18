@@ -235,6 +235,83 @@ public class ReputationAggregatorTests : IntegrationTestBase
         Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
     }
 
+    /// <summary>
+    /// <b>T131 finding B1 — a delivery timeout an ADMIN's ruling released is not
+    /// the seller's fault and counts for nobody.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The fixture is the one the test above pins, with a single field changed:
+    /// <c>TimeoutReleasedByAdminRulingAt</c>. It is the same
+    /// <c>PAYMENT_RECEIVED → CANCELLED_TIMEOUT</c> row, carrying the same
+    /// history row, so without the split the map would charge it to Alice — the
+    /// seller an admin had just cleared by ruling RESOLVED_FOR_SELLER on the
+    /// misdelivery dispute (03 §6.4: "satıcının kaydına kusur yazılmaz").
+    /// </para>
+    /// <para>
+    /// Excluded rather than counted-as-success: it belongs to the same class as
+    /// CANCELLED_ADMIN (02 §13) — a platform decision, not a party's
+    /// performance. Neither side earns credit for it either, which is why Bob's
+    /// denominator is untouched too.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Recompute_Cancelled_Timeout_Released_By_Admin_Ruling_Counts_For_Neither_Party()
+    {
+        var tx = await InsertTransactionAsync(
+            _alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50,
+            timeoutReleasedByAdminRulingAt: DateTime.UtcNow.AddDays(-50));
+        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.PAYMENT_RECEIVED);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // 1 success / 1 attempt — the released timeout left the denominator
+        // entirely. The unmarked twin above gives 0.5 on the same fixture.
+        Assert.Equal(1m, aliceSnap.SuccessfulTransactionRate);
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+
+        // And it is not a hidden COMPLETED either: the raw count still sees one.
+        Assert.Equal(1, aliceSnap.CompletedTransactionCount);
+    }
+
+    /// <summary>
+    /// The B1 exclusion is scoped to the delivery phase's admin release — an
+    /// ordinary timeout in any other phase is untouched by it.
+    /// </summary>
+    /// <remarks>
+    /// Written because the column is on the transaction rather than on the
+    /// history row, so a mistake in the other direction — clearing every timeout
+    /// for a seller who once had one released — would be just as silent, and
+    /// would empty the single strongest negative signal 02 §13 defines.
+    /// </remarks>
+    [Fact]
+    public async Task Recompute_Admin_Release_Does_Not_Clear_An_Unrelated_Timeout()
+    {
+        // Spaced more than the 02 §14.1 wash-trading window (30 days) apart, so
+        // the assertion is about the B1 exclusion and not about that filter.
+        var released = await InsertTransactionAsync(
+            _alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -80,
+            timeoutReleasedByAdminRulingAt: DateTime.UtcNow.AddDays(-80));
+        await InsertTimeoutHistoryAsync(released.Id, previousStatus: TransactionStatus.PAYMENT_RECEIVED);
+
+        var ordinary = await InsertTransactionAsync(
+            _alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -45);
+        await InsertTimeoutHistoryAsync(ordinary.Id, previousStatus: TransactionStatus.PAYMENT_RECEIVED);
+
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // 1 success / 2 attempts — the ordinary non-delivery still counts.
+        Assert.Equal(0.5m, aliceSnap.SuccessfulTransactionRate);
+    }
+
     [Fact]
     public async Task Recompute_Cancelled_Timeout_Without_History_Row_Affects_Neither_Party()
     {
@@ -315,7 +392,8 @@ public class ReputationAggregatorTests : IntegrationTestBase
         Guid buyerId,
         TransactionStatus status,
         int dayOffset,
-        DateTime? deliveryReversedAt = null)
+        DateTime? deliveryReversedAt = null,
+        DateTime? timeoutReleasedByAdminRulingAt = null)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
@@ -368,6 +446,7 @@ public class ReputationAggregatorTests : IntegrationTestBase
                            ? "test"
                            : null,
             DeliveryReversedAt = deliveryReversedAt,
+            TimeoutReleasedByAdminRulingAt = timeoutReleasedByAdminRulingAt,
         };
 
         Context.Set<Transaction>().Add(tx);

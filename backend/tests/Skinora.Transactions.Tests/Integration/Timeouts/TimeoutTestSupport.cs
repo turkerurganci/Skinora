@@ -127,7 +127,10 @@ internal sealed class RecordingMisdeliveryEscalator : IDeliveryMisdeliveryEscala
     public Exception? Throws { get; set; }
 
     public Task<MisdeliveryEscalationOutcome> EscalateAsync(
-        Transaction transaction, DateTime occurredAtUtc, CancellationToken cancellationToken)
+        Transaction transaction,
+        DateTime occurredAtUtc,
+        DateTime signatureFirstObservedAtUtc,
+        CancellationToken cancellationToken)
     {
         if (Throws is not null) throw Throws;
 

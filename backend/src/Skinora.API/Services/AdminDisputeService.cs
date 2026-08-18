@@ -22,7 +22,7 @@ namespace Skinora.API.Services;
 /// ESCALATED dead-end (02 §10.4, 03 §6.4): the admin queue (AD27), detail
 /// (AD28) and resolve command (AD29). Lives at the API composition root because
 /// resolution orchestrates <c>Skinora.Disputes</c> (Dispute row),
-/// <c>Skinora.Transactions</c> (state machine + refund/return events) and
+/// <c>Skinora.Transactions</c> (state machine + payment refund event) and
 /// <c>Skinora.Platform</c> (audit) — modules that cannot reference each other
 /// without a cycle. All resolution side effects land inside a single
 /// <see cref="DbContext.SaveChangesAsync"/> so the action is atomic (09 §13.3).
@@ -44,6 +44,24 @@ namespace Skinora.API.Services;
 /// separate manual / WP6 process (07 §9.x exceptional resolution).
 /// </para>
 /// <para>
+/// <b>The override gate (T131 — 02 §10.4, 03 §6.4).</b> At ITEM_DELIVERED the
+/// platform has already established delivery: that state has exactly one entry
+/// edge and its guard demands 02 §9.2 evidence. Ruling for the buyer there is
+/// therefore not the ordinary outcome but a reversal of the platform's own
+/// finding, and — because there is no item leg — it moves the whole loss onto a
+/// seller with no way to recover the item. Such a ruling must carry its own
+/// <c>OverrideReason</c>, recorded in a column of its own so the exception is
+/// findable later without reading every admin note.
+/// </para>
+/// <para>
+/// The gate deliberately keys on the STATE, not on which evidence flags
+/// happen to be set. Both routes into ITEM_DELIVERED are proof under 02 §9.2 —
+/// the buyer's own confirmation and the two-sided inventory conjunction — and
+/// keying on the flags would make the admin's duty to justify depend on whether
+/// Steam happened to be readable at the time, so two equally strong cases would
+/// be treated differently.
+/// </para>
+/// <para>
 /// A transaction under emergency hold must have the hold released first (AD19c)
 /// — mirrors the AD19 guard; dispute and hold are independent admin axes.
 /// </para>
@@ -53,6 +71,15 @@ public sealed class AdminDisputeService : IAdminDisputeService
     /// <summary>AdminNote bounds — column width is 2000 (06 §3.11).</summary>
     public const int MinNoteLength = 1;
     public const int MaxNoteLength = 2000;
+
+    /// <summary>
+    /// T131 — override-reason bounds. The floor is higher than
+    /// <see cref="MinNoteLength"/> on purpose: a field that accepts "ok" would
+    /// satisfy the gate without recording anything, and the gate exists exactly
+    /// because this ruling has to be explainable after the money is gone.
+    /// </summary>
+    public const int MinOverrideReasonLength = 20;
+    public const int MaxOverrideReasonLength = 2000;
 
     private const int MinPage = 1;
     private const int MinPageSize = 1;
@@ -182,6 +209,8 @@ public sealed class AdminDisputeService : IAdminDisputeService
             UserDescription: dispute.UserDescription,
             AdminId: dispute.AdminId,
             AdminNote: dispute.AdminNote,
+            ResolutionOverrideReason: dispute.ResolutionOverrideReason,
+            BuyerFavorRequiresOverride: RequiresOverrideReason(tx.Status),
             ResolvedAt: dispute.ResolvedAt,
             CreatedAt: dispute.CreatedAt,
             UpdatedAt: dispute.UpdatedAt,
@@ -251,6 +280,27 @@ public sealed class AdminDisputeService : IAdminDisputeService
                 DisputeErrorCodes.TransactionOnHold,
                 "Transaction is under emergency hold; release the hold first (AD19c).");
 
+        // ---------- Stage 5b: override gate (T131 — 02 §10.4, 03 §6.4) ----------
+        // Ordered after the state guards so the admin is never asked to justify
+        // a ruling that would have been refused anyway.
+        var overrideRequired = request.Outcome == DisputeResolutionOutcome.BUYER_FAVOR
+            && RequiresOverrideReason(transaction.Status);
+        var overrideReason = (request.OverrideReason ?? string.Empty).Trim();
+
+        if (overrideRequired)
+        {
+            if (overrideReason.Length < MinOverrideReasonLength)
+                return Fail(AdminResolveDisputeStatus.ValidationFailed,
+                    DisputeErrorCodes.OverrideReasonRequired,
+                    $"Delivery is established on this transaction; a buyer-favour ruling "
+                    + $"requires overrideReason of at least {MinOverrideReasonLength} "
+                    + "characters (03 §6.4).");
+            if (overrideReason.Length > MaxOverrideReasonLength)
+                return Fail(AdminResolveDisputeStatus.ValidationFailed,
+                    DisputeErrorCodes.ValidationError,
+                    $"overrideReason must be at most {MaxOverrideReasonLength} characters.");
+        }
+
         var now = _clock.GetUtcNow().UtcDateTime;
         var previousTxStatus = transaction.Status;
         var buyerRefunded = false;
@@ -314,6 +364,11 @@ public sealed class AdminDisputeService : IAdminDisputeService
         // ---------- Stage 7: dispute resolution fields + active-flag ----------
         dispute.AdminId = adminUserId;
         dispute.AdminNote = note;
+        // Stored only where it means something. A reason sent on a ruling that
+        // overrode nothing is dropped, so a non-NULL column always identifies a
+        // ruling made against the platform's own proof of delivery — which is
+        // what makes the column searchable as the register of exceptions.
+        dispute.ResolutionOverrideReason = overrideRequired ? overrideReason : null;
         dispute.ResolvedAt = now;
         dispute.UpdatedAt = now;
 
@@ -362,6 +417,11 @@ public sealed class AdminDisputeService : IAdminDisputeService
                     TransactionStatus = transaction.Status.ToString(),
                     BuyerRefunded = buyerRefunded,
                     Note = note,
+                    // T131 — the audit row is immutable (06 §3.20) while the
+                    // dispute row is not, so the exception is recorded in both
+                    // places: the column is where it is read, this is where it
+                    // cannot be edited afterwards.
+                    OverrideReason = dispute.ResolutionOverrideReason,
                 }, JsonOptions),
                 IpAddress: ipAddress),
             cancellationToken);
@@ -382,6 +442,25 @@ public sealed class AdminDisputeService : IAdminDisputeService
     }
 
     // ---------- helpers ----------
+
+    /// <summary>
+    /// T131 — the single definition of the override gate (02 §10.4, 03 §6.4),
+    /// read by AD28 (so the screen can ask up front) and by AD29 (so the rule
+    /// is enforced). One implementation on purpose: a client-side copy of this
+    /// predicate would be a second place for it to drift.
+    /// </summary>
+    /// <remarks>
+    /// ITEM_DELIVERED is the whole test. The state has exactly one entry edge
+    /// (<c>DeliverItem</c>) and its guard already demands 02 §9.2 evidence plus
+    /// a <c>DeliveryVerifiedAt</c> stamp, so being in it IS the proof — there is
+    /// no such thing as an ITEM_DELIVERED transaction whose delivery was not
+    /// established. Every earlier state is excluded because a buyer-favour
+    /// ruling there is the ordinary outcome, not an exception, and demanding a
+    /// justification for the ordinary outcome would train admins to type past
+    /// the field.
+    /// </remarks>
+    private static bool RequiresOverrideReason(TransactionStatus status)
+        => status == TransactionStatus.ITEM_DELIVERED;
 
     private async Task UpdateActiveDisputeFlagAsync(
         Transaction transaction, Guid currentDisputeId, CancellationToken cancellationToken)

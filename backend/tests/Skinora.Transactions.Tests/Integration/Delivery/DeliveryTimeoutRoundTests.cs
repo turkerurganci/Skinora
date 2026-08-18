@@ -399,6 +399,201 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// <b>T131 (T127 finding G3) — an admin ruling is the exit from the hold.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Before this, the arm above was the only answer a misdelivery ever got:
+    /// the row stayed PAYMENT_RECEIVED and overdue forever, so the buyer's money
+    /// sat in escrow with no automatic exit while every scan re-derived the same
+    /// held verdict. The hold exists because 02 §9.2 forbids cancelling a
+    /// misdelivery <em>silently</em> — and once an admin has read the case and
+    /// ruled, the cancellation is no longer silent.
+    /// </para>
+    /// <para>
+    /// Still no Steam read: the release is a consequence of the ruling, not of a
+    /// fresh look at the inventories.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_Admin_Ruling_Releases_The_Misdelivery_Hold_To_Cancellation()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+        _escalator.Outcome = MisdeliveryEscalationOutcome.AlreadyRuledByAdmin;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        Assert.Empty(_inventory.ItemReadFreshness);
+        Assert.Empty(_inventory.BaselineReadFreshness);
+
+        // T131 validation finding B1 — the release marks itself, because the
+        // row it produces (PAYMENT_RECEIVED → CANCELLED_TIMEOUT) is the one
+        // 06 §3.1 charges to the seller. Without the mark the reputation
+        // aggregator and the cancel-cooldown evaluator both penalise the seller
+        // whose ruling opened this very gate (03 §6.4).
+        await Context.SaveChangesAsync();
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime,
+            (await ReloadAsync(transaction.Id)).TimeoutReleasedByAdminRulingAt);
+    }
+
+    /// <summary>
+    /// Only the release marks the row (T131 finding B1) — an ordinary,
+    /// evidence-proven delivery timeout stays the seller's.
+    /// </summary>
+    /// <remarks>
+    /// The negative half of the test above. The stamp is what removes a row from
+    /// both responsibility maps, so a producer that set it on the wrong arm
+    /// would silently erase the strongest negative signal 02 §13 defines —
+    /// non-delivery — and nothing downstream would notice.
+    /// </remarks>
+    [Fact]
+    public async Task An_Ordinary_Delivery_Timeout_Is_Not_Marked_As_Admin_Released()
+    {
+        // Same fixture as Item_Still_With_The_Seller_Authorises_The_Cancellation:
+        // the platform read the seller's inventory and the item is still in it.
+        var transaction = await CreateOverdueAsync();
+        RegisterSellerStillHoldsItem();
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        await Context.SaveChangesAsync();
+        Assert.Null((await ReloadAsync(transaction.Id)).TimeoutReleasedByAdminRulingAt);
+    }
+
+    /// <summary>
+    /// <b>T131 finding N2 — a ruling the escalator reports as made WITHOUT the
+    /// signature keeps the hold.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The round's own share of N2 is small and exact: it must treat
+    /// <see cref="MisdeliveryEscalationOutcome.ReEscalatedAfterRuling"/> like
+    /// every other non-release answer. Which rulings qualify is the escalator's
+    /// call — it is the side that can see the dispute — and is pinned in
+    /// <c>MisdeliveryDisputeEscalatorTests</c>.
+    /// </para>
+    /// <para>
+    /// The row must also stay unmarked: it was not released, so nothing may
+    /// later read it as a cancellation an admin authorised.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_Ruling_Made_Without_The_Signature_Does_Not_Release_The_Hold()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+        _escalator.Outcome = MisdeliveryEscalationOutcome.ReEscalatedAfterRuling;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, decision);
+        await Context.SaveChangesAsync();
+        Assert.Null((await ReloadAsync(transaction.Id)).TimeoutReleasedByAdminRulingAt);
+    }
+
+    /// <summary>
+    /// The round sources the escalator's N2 input correctly: the EARLIEST
+    /// recorded signature on a re-entry, and its own clock on the round that
+    /// establishes one (T131 finding N2).
+    /// </summary>
+    /// <remarks>
+    /// The escalator compares this value against the dispute's
+    /// <c>ResolvedAt</c>, so a round that passed "now" on a re-entry would turn
+    /// every ruling into one made "before the signature" and re-escalate cases
+    /// an admin had already decided with the evidence in hand — while a round
+    /// that passed the LATEST capture would do the same the moment a second
+    /// round re-recorded the finding.
+    /// </remarks>
+    [Fact]
+    public async Task The_Escalator_Is_Told_When_The_Signature_Was_First_Observed()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        var firstObservedAt = _clock.GetUtcNow().UtcDateTime.AddHours(-3);
+        await RecordCaptureAsync(
+            transaction.Id, DeliveryVerdict.MisdeliverySignature, observedAt: firstObservedAt);
+        // A later round re-recorded the same finding. The first one is still the
+        // moment the case reached the admin queue.
+        await RecordCaptureAsync(
+            transaction.Id, DeliveryVerdict.MisdeliverySignature,
+            observedAt: _clock.GetUtcNow().UtcDateTime.AddHours(-1));
+
+        await Run(transaction);
+
+        Assert.Equal(firstObservedAt, Assert.Single(_escalator.SignatureTimes));
+    }
+
+    /// <summary>
+    /// The twin of the test above, and the reason the release keys on
+    /// <see cref="MisdeliveryEscalationOutcome.AlreadyRuledByAdmin"/> rather than
+    /// on "the dispute is no longer active": CLOSED is the system's own
+    /// auto-resolution (06 §2.10), so nobody looked and a cancellation here
+    /// would still be the silent one 02 §9.2 forbids.
+    /// </summary>
+    [Fact]
+    public async Task A_System_Closed_Dispute_Does_Not_Release_The_Hold()
+    {
+        var transaction = await CreateOverdueAsync(
+            evidence: DeliveryEvidence.SELLER_ASSET_GONE);
+        await RecordCaptureAsync(transaction.Id, DeliveryVerdict.MisdeliverySignature);
+        _escalator.Outcome = MisdeliveryEscalationOutcome.AlreadyResolved;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, decision);
+    }
+
+    /// <summary>
+    /// <b>T131 finding N2 — the FIRST round that establishes a signature never
+    /// releases on an existing ruling.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A dispute can already be settled when the signature is first derived: the
+    /// buyer opened one, an admin ruled, and only afterwards did the seller's
+    /// asset leave. Both arms of the round answer the escalator, and an earlier
+    /// version read its answer the same way on both — which made this case
+    /// cancel the transaction and refund the buyer on a ruling whose author had
+    /// never seen the signature, quietly reversing a seller-favour decision and
+    /// leaving a seller whose item was already gone with neither the item nor
+    /// the money.
+    /// </para>
+    /// <para>
+    /// The fix is in what the round TELLS the escalator, not in how it reads the
+    /// answer: on this arm the signature is being established right now, so
+    /// "now" is passed as its first observation and every existing ruling
+    /// necessarily predates it. The escalator answers
+    /// <see cref="MisdeliveryEscalationOutcome.ReEscalatedAfterRuling"/> — it
+    /// puts the case back in the admin queue — and the round keeps holding.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_First_Round_Signature_Does_Not_Release_On_A_Ruling_That_Predates_It()
+    {
+        // Same fixture as Misdelivery_Signature_Escalates_Instead_Of_Cancelling:
+        // the seller's asset is gone and the buyer holds nothing new.
+        var transaction = await CreateOverdueAsync();
+        _escalator.Outcome = MisdeliveryEscalationOutcome.ReEscalatedAfterRuling;
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Held, decision);
+        Assert.Equal([transaction.Id], _escalator.Escalations);
+        await Context.SaveChangesAsync();
+        Assert.Null((await ReloadAsync(transaction.Id)).TimeoutReleasedByAdminRulingAt);
+
+        // The signature is established by THIS round, so the escalator is told
+        // "now" — which is what makes any existing ruling predate it.
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, Assert.Single(_escalator.SignatureTimes));
+    }
+
+    /// <summary>
     /// <b>Finding B1 — the round must not apply on pass two the conclusion the
     /// engine refused on pass one.</b>
     /// </summary>
@@ -516,6 +711,7 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
         return await BuildSut().RunAsync(tracked, CancellationToken.None);
     }
 
+
     private DeliveryTimeoutRound BuildSut() =>
         new(Context,
             // The real engine: this round's entire safety argument is about how
@@ -565,13 +761,14 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     /// Seed the record of a conclusion an earlier round reached — the row the
     /// re-entry gate reads (06 §3.5a).
     /// </summary>
-    private async Task RecordCaptureAsync(Guid transactionId, DeliveryVerdict verdict)
+    private async Task RecordCaptureAsync(
+        Guid transactionId, DeliveryVerdict verdict, DateTime? observedAt = null)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         Context.Set<DeliveryEvidenceCapture>().Add(new DeliveryEvidenceCapture
         {
             TransactionId = transactionId,
-            ObservedAt = nowUtc,
+            ObservedAt = observedAt ?? nowUtc,
             Verdict = verdict.ToString(),
             Evidence = DeliveryEvidence.SELLER_ASSET_GONE,
             AutoReleaseGated = false,
@@ -648,12 +845,33 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     {
         public List<Guid> Escalations { get; } = [];
 
+        /// <summary>
+        /// What the adapter answers. T131 made this decisive rather than
+        /// diagnostic: <c>AlreadyRuledByAdmin</c> is what releases the round's
+        /// hold, so the round's behaviour has to be exercised against each
+        /// answer the real adapter can give.
+        /// </summary>
+        public MisdeliveryEscalationOutcome Outcome { get; set; } =
+            MisdeliveryEscalationOutcome.Opened;
+
+        /// <summary>
+        /// The signature times the round passed in, in call order. T131 finding
+        /// N2 turned this argument into the adapter's whole decision input, so
+        /// the round's duty is to source it correctly: the recorded capture's
+        /// observation on a re-entry, "now" on the round that establishes it.
+        /// </summary>
+        public List<DateTime> SignatureTimes { get; } = [];
+
         public Task<MisdeliveryEscalationOutcome> EscalateAsync(
-            Transaction transaction, DateTime occurredAtUtc, CancellationToken cancellationToken)
+            Transaction transaction,
+            DateTime occurredAtUtc,
+            DateTime signatureFirstObservedAtUtc,
+            CancellationToken cancellationToken)
         {
             Escalations.Add(transaction.Id);
+            SignatureTimes.Add(signatureFirstObservedAtUtc);
             transaction.HasActiveDispute = true;
-            return Task.FromResult(MisdeliveryEscalationOutcome.Opened);
+            return Task.FromResult(Outcome);
         }
     }
 

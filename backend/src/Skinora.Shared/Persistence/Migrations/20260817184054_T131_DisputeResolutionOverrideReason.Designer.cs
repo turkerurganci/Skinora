@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Persistence;
 
@@ -11,9 +12,11 @@ using Skinora.Shared.Persistence;
 namespace Skinora.Shared.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817184054_T131_DisputeResolutionOverrideReason")]
+    partial class T131_DisputeResolutionOverrideReason
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2437,9 +2440,6 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("TimeoutFrozenAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("TimeoutReleasedByAdminRulingAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("TimeoutRemainingSeconds")

@@ -59,6 +59,14 @@ public sealed record AdminDisputeDetailDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? UserDescription,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Guid? AdminId,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AdminNote,
+    // T131 — the recorded justification when a past ruling overrode a proven
+    // delivery (06 §3.11). Absent on every other resolution.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ResolutionOverrideReason,
+    // T131 — server-computed: would a BUYER_FAVOR ruling on THIS dispute have
+    // to carry an override reason? Sent so the admin screen can ask for it up
+    // front instead of discovering the rule from a rejected submission. The
+    // rule has one home (the service); the client renders the answer.
+    bool BuyerFavorRequiresOverride,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? ResolvedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt,
@@ -67,9 +75,18 @@ public sealed record AdminDisputeDetailDto(
 // ---------- AD29 — POST /admin/disputes/:id/resolve (07 §9.x) ----------
 
 /// <summary>Request body for <c>POST /admin/disputes/:id/resolve</c>.</summary>
+/// <param name="Outcome">Which party the admin rules for.</param>
+/// <param name="AdminNote">Required, 1..2000 — the case note (06 §3.11).</param>
+/// <param name="OverrideReason">
+/// T131 — required only when the ruling overrides a delivery the platform
+/// already proved (03 §6.4). Ignored otherwise: it is not a second note, and
+/// storing one where there was nothing to override would make the column
+/// useless as the marker of an exception.
+/// </param>
 public sealed record AdminResolveDisputeRequest(
     DisputeResolutionOutcome Outcome,
-    string? AdminNote);
+    string? AdminNote,
+    string? OverrideReason = null);
 
 /// <summary>Response body for a successful resolution.</summary>
 public sealed record AdminResolveDisputeResponse(

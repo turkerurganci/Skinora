@@ -6,9 +6,10 @@ namespace Skinora.Disputes.Application.Admin;
 /// WP5 / T58 — admin dispute resolution surface. Closes the ESCALATED dead-end
 /// (02 §10.4, 03 §6.4): admins list escalated disputes, inspect one, and resolve
 /// it in favor of the seller (uphold → payout proceeds) or the buyer (unwind →
-/// REFUNDED + refund). All resolution side effects (Dispute terminal status,
-/// AdminId/AdminNote/ResolvedAt, transaction transition, refund/return events,
-/// audit, notification) land inside a single
+/// REFUNDED + payment refund; there is no item leg — 02 §3.2). All resolution
+/// side effects (Dispute terminal status, AdminId/AdminNote/ResolvedAt, the
+/// T131 override reason, transaction transition, payment refund event, audit,
+/// notification) land inside a single
 /// <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync"/>.
 /// </summary>
 /// <remarks>

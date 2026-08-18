@@ -44,12 +44,20 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
 
     private const string SellerSteam = "76561198000000401";
     private const string BuyerSteam = "76561198000000402";
+    private const string AdminSteam = "76561198000000403";
     private const string SellerWallet = "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL";
+
+    // T131 finding N2c — the ruling a re-escalation must PRESERVE. Written into
+    // every resolved fixture dispute so an assertion on AdminNote/AdminId can
+    // actually fail: with both left NULL the preservation rule is untestable,
+    // and a future "reset the row for the next admin" edit would go unnoticed.
+    private const string PriorAdminNote = "Satıcı kanıt sundu, işlem satıcı lehine kapatıldı.";
 
     private FakeTimeProvider _clock = null!;
     private RecordingOutboxService _outbox = null!;
     private User _seller = null!;
     private User _buyer = null!;
+    private User _admin = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -70,7 +78,13 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
             SteamDisplayName = "Buyer",
             PreferredLanguage = "tr",
         };
-        context.Set<User>().AddRange(_seller, _buyer);
+        _admin = new User
+        {
+            Id = Guid.NewGuid(),
+            SteamId = AdminSteam,
+            SteamDisplayName = "Admin",
+        };
+        context.Set<User>().AddRange(_seller, _buyer, _admin);
         await context.SaveChangesAsync();
     }
 
@@ -182,20 +196,150 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
     }
 
     /// <summary>
-    /// A human already answered this question. The unique index forbids a second
-    /// row and re-opening a settled decision is not a timeout's call, so the
-    /// contradiction is logged and left alone rather than acted on.
+    /// Already answered. The unique index forbids a second row and re-opening a
+    /// settled decision is not a timeout's call, so the dispute is left alone in
+    /// every resolved terminal — but the ANSWER differs by who settled it
+    /// (T131 / T127 finding G3).
     /// </summary>
+    /// <remarks>
+    /// CLOSED is the system's own auto-resolution (06 §2.10): nobody looked, so
+    /// the caller must keep holding — cancelling there would still be the silent
+    /// cancellation 02 §9.2 forbids. RESOLVED_FOR_* means a human read the case,
+    /// which is the one thing that lifts the hold — provided the case they read
+    /// INCLUDED the signature, which is why the RESOLVED_FOR_* rows below place
+    /// the signature half an hour before the ruling (T131 finding N2).
+    /// </remarks>
     [Theory]
-    [InlineData(DisputeStatus.CLOSED)]
-    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER)]
-    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER)]
-    public async Task Resolved_Dispute_Is_Left_Alone(DisputeStatus status)
+    [InlineData(DisputeStatus.CLOSED, MisdeliveryEscalationOutcome.AlreadyResolved)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER, MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER, MisdeliveryEscalationOutcome.AlreadyRuledByAdmin)]
+    public async Task Resolved_Dispute_Is_Left_Alone(
+        DisputeStatus status, MisdeliveryEscalationOutcome expected)
     {
         var tx = await CreateTransactionAsync();
         await AddDisputeAsync(tx, status);
 
+        var outcome = await EscalateAsync(
+            tx, signatureFirstObservedAtUtc: _clock.GetUtcNow().UtcDateTime.AddMinutes(-30));
+
+        Assert.Equal(expected, outcome);
+        Assert.Empty(_outbox.Published);
+        await Context.SaveChangesAsync();
+
+        var dispute = await Context.Set<Dispute>().AsNoTracking()
+            .SingleAsync(d => d.TransactionId == tx.Id);
+        Assert.Equal(status, dispute.Status);
+    }
+
+    /// <summary>
+    /// <b>Finding N2 — a ruling made without the signature does not release the
+    /// hold; it sends the case back.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The release exists for exactly one reason: a human read the case, so the
+    /// cancellation 02 §9.2 forbids being SILENT no longer is. An admin who
+    /// ruled before the signature existed read a different case. Releasing on
+    /// their ruling cancels the transaction and refunds the buyer — quietly
+    /// reversing a seller-favour decision on evidence its author never saw, and
+    /// leaving a seller whose item has already left their inventory with neither
+    /// the item nor the money.
+    /// </para>
+    /// <para>
+    /// Both terminals are covered because the rule is about the ORDER, not about
+    /// which way the ruling went.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(DisputeStatus.RESOLVED_FOR_SELLER)]
+    [InlineData(DisputeStatus.RESOLVED_FOR_BUYER)]
+    public async Task A_Ruling_That_Predates_The_Signature_Re_Escalates(DisputeStatus ruling)
+    {
+        var tx = await CreateTransactionAsync();
+        var ruledAt = _clock.GetUtcNow().UtcDateTime;
+        await AddDisputeAsync(tx, ruling);
+
+        // The signature is established a minute AFTER the ruling — the shape the
+        // first-round arm produces, where the round passes its own clock.
+        var outcome = await EscalateAsync(
+            tx, signatureFirstObservedAtUtc: ruledAt.AddMinutes(1));
+
+        Assert.Equal(MisdeliveryEscalationOutcome.ReEscalatedAfterRuling, outcome);
+        await Context.SaveChangesAsync();
+
+        var dispute = await Context.Set<Dispute>().AsNoTracking()
+            .SingleAsync(d => d.TransactionId == tx.Id);
+        Assert.Equal(DisputeStatus.ESCALATED, dispute.Status);
+        // Cleared: the row is not resolved any more, and
+        // CK_Disputes_Resolved_ResolvedAt pairs the two. The previous ruling
+        // survives in the append-only audit trail (06 §3.20).
+        Assert.Null(dispute.ResolvedAt);
+        // ...but the ruling's AUTHOR and REASONING stay on the row (N2c). Only
+        // ResolvedAt is cleared, and only because the CHECK constraint pairs it
+        // with the status. Whoever rules next has to be able to read what the
+        // previous admin decided and why before they overturn it — the audit
+        // row that also holds it is not on the screen they are looking at.
+        Assert.Equal(_admin.Id, dispute.AdminId);
+        Assert.Equal(PriorAdminNote, dispute.AdminNote);
+        // WP17 — the new finding replaces the old text, in the buyer's locale.
+        Assert.Equal(
+            DisputeAutoCheckMessages.Localize(
+                DisputeAutoCheckMessages.DeliveryAssetGoneNotArrived, "tr"),
+            dispute.SystemCheckResult);
+
+        // The admin queue is not enough on its own — both parties are told, the
+        // same way the first escalation tells them (03 §6.3 step 5).
+        var escalated = Assert.IsType<DisputeEscalatedEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(dispute.Id, escalated.DisputeId);
+        Assert.True(escalated.AutoEscalated);
+
+        var tracked = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == tx.Id);
+        Assert.True(tracked.HasActiveDispute);
+    }
+
+    /// <summary>
+    /// A ruling made in the SAME instant the signature was recorded is treated
+    /// as one made without it (T131 finding N2).
+    /// </summary>
+    /// <remarks>
+    /// Establishing the signature is what writes it onto the dispute, so an
+    /// admin who ruled at that instant cannot have read it. The two errors are
+    /// not symmetric — a needless review costs an admin's time, a wrong release
+    /// costs a seller their item and their money — so the ambiguous input takes
+    /// the conservative arm.
+    /// </remarks>
+    [Fact]
+    public async Task A_Ruling_In_The_Same_Instant_As_The_Signature_Re_Escalates()
+    {
+        var tx = await CreateTransactionAsync();
+        await AddDisputeAsync(tx, DisputeStatus.RESOLVED_FOR_SELLER);
+
+        // AddDisputeAsync stamps ResolvedAt with the same clock the default
+        // signature time comes from.
         var outcome = await EscalateAsync(tx);
+
+        Assert.Equal(MisdeliveryEscalationOutcome.ReEscalatedAfterRuling, outcome);
+    }
+
+    /// <summary>
+    /// CLOSED is never re-escalated, whatever the order of the timestamps
+    /// (T131 finding N2).
+    /// </summary>
+    /// <remarks>
+    /// The N2 rule is about a HUMAN having ruled without seeing the evidence.
+    /// CLOSED is the system answering its own question (06 §2.10) — there is no
+    /// ruling to preserve or to revisit, and the existing arm already refuses to
+    /// release the caller's hold, so the money is not stuck on this path.
+    /// </remarks>
+    [Fact]
+    public async Task A_Closed_Dispute_Is_Not_Re_Escalated_By_A_Later_Signature()
+    {
+        var tx = await CreateTransactionAsync();
+        var closedAt = _clock.GetUtcNow().UtcDateTime;
+        await AddDisputeAsync(tx, DisputeStatus.CLOSED);
+
+        var outcome = await EscalateAsync(
+            tx, signatureFirstObservedAtUtc: closedAt.AddMinutes(1));
 
         Assert.Equal(MisdeliveryEscalationOutcome.AlreadyResolved, outcome);
         Assert.Empty(_outbox.Published);
@@ -203,7 +347,8 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
 
         var dispute = await Context.Set<Dispute>().AsNoTracking()
             .SingleAsync(d => d.TransactionId == tx.Id);
-        Assert.Equal(status, dispute.Status);
+        Assert.Equal(DisputeStatus.CLOSED, dispute.Status);
+        Assert.NotNull(dispute.ResolvedAt);
     }
 
     /// <summary>
@@ -225,13 +370,22 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
 
     // ================= Helpers =================
 
-    private async Task<MisdeliveryEscalationOutcome> EscalateAsync(Transaction tx)
+    /// <summary>
+    /// Run the adapter. <paramref name="signatureFirstObservedAtUtc"/> defaults
+    /// to "now", which is the round that ESTABLISHES the signature — the case
+    /// where every existing ruling necessarily predates it (T131 finding N2).
+    /// Tests about a ruling made with the signature on record pass an earlier
+    /// time explicitly.
+    /// </summary>
+    private async Task<MisdeliveryEscalationOutcome> EscalateAsync(
+        Transaction tx, DateTime? signatureFirstObservedAtUtc = null)
     {
         var tracked = await Context.Set<Transaction>().FirstAsync(t => t.Id == tx.Id);
+        var now = _clock.GetUtcNow().UtcDateTime;
         var sut = new MisdeliveryDisputeEscalator(
             Context, _outbox, NullLogger<MisdeliveryDisputeEscalator>.Instance);
         return await sut.EscalateAsync(
-            tracked, _clock.GetUtcNow().UtcDateTime, CancellationToken.None);
+            tracked, now, signatureFirstObservedAtUtc ?? now, CancellationToken.None);
     }
 
     private async Task<Dispute> AddDisputeAsync(Transaction tx, DisputeStatus status)
@@ -239,6 +393,11 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
         var now = _clock.GetUtcNow().UtcDateTime;
         var isResolved = status is DisputeStatus.CLOSED
             or DisputeStatus.RESOLVED_FOR_BUYER
+            or DisputeStatus.RESOLVED_FOR_SELLER;
+        // Only an ADMIN resolution carries an author: CLOSED is the system
+        // answering its own question (06 §2.10), so it has no AdminId/AdminNote
+        // — the same split the escalator keys on.
+        var isAdminRuling = status is DisputeStatus.RESOLVED_FOR_BUYER
             or DisputeStatus.RESOLVED_FOR_SELLER;
 
         var dispute = new Dispute
@@ -251,6 +410,8 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
             UserDescription = "Item hiç gelmedi",
             // CK_Disputes_Closed — a closed dispute carries its resolution time.
             ResolvedAt = isResolved ? now : null,
+            AdminId = isAdminRuling ? _admin.Id : null,
+            AdminNote = isAdminRuling ? PriorAdminNote : null,
             CreatedAt = now,
             UpdatedAt = now,
         };

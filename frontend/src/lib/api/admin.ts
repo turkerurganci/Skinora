@@ -441,9 +441,24 @@ export interface AdminDisputeDetail {
   type: DisputeType;
   status: DisputeStatus;
   systemCheckResult: string | null;
+  /**
+   * T130 — the Steam name of the item that actually arrived on a WRONG_ITEM
+   * auto-escalation (07 §9.30). The server omits the field entirely on every
+   * other dispute, so `undefined` means "not this kind of case" rather than
+   * "unknown" — the row is not rendered at all.
+   */
+  deliveredItemName?: string;
   userDescription: string | null;
   adminId: string | null;
   adminNote: string | null;
+  /** T131 — recorded justification of a past ruling that overrode a proven delivery. */
+  resolutionOverrideReason?: string;
+  /**
+   * T131 — server-computed: does a BUYER_FAVOR ruling on this dispute need an
+   * override reason (03 §6.4)? The rule lives in the service; the client only
+   * renders the answer, so the two cannot drift apart.
+   */
+  buyerFavorRequiresOverride: boolean;
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -484,10 +499,11 @@ export function resolveAdminDispute(
   id: string,
   outcome: DisputeResolutionOutcome,
   adminNote: string,
+  overrideReason?: string,
 ): Promise<AdminResolveDisputeResult> {
   return apiClient<AdminResolveDisputeResult>(`/admin/disputes/${encodeURIComponent(id)}/resolve`, {
     method: "POST",
-    body: JSON.stringify({ outcome, adminNote }),
+    body: JSON.stringify({ outcome, adminNote, overrideReason }),
   });
 }
 

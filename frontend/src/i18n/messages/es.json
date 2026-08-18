@@ -239,9 +239,11 @@
       "fields": {
         "type": "Tipo",
         "item": "Artículo",
+        "deliveredItemName": "Artículo recibido",
         "openedBy": "Abierta por",
         "userDescription": "Descripción del usuario",
-        "systemCheckResult": "Comprobación del sistema"
+        "systemCheckResult": "Comprobación del sistema",
+        "overrideReason": "Motivo de la anulación"
       },
       "outcomeLabel": "Resolución",
       "outcome": {
@@ -256,6 +258,10 @@
       "noteLabel": "Nota del administrador",
       "notePlaceholder": "Motivo de la decisión",
       "noteRequired": "La nota del administrador es obligatoria.",
+      "overrideLabel": "Justificación de la anulación",
+      "overrideHint": "La entrega está acreditada en esta transacción. Resolver a favor del comprador revierte esa conclusión y el vendedor no puede recuperar el artículo: indica el motivo.",
+      "overridePlaceholder": "Por qué se anula la prueba de entrega",
+      "overrideRequired": "Se requiere una justificación de al menos {min} caracteres.",
       "error": "No se pudo resolver la disputa.",
       "cancel": "Cancelar",
       "confirm": "Resolver"
