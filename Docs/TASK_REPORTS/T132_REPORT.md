@@ -1,6 +1,6 @@
 # T132 — Backend bot/dispatch/webhook/recovery yüzeyi silme [RİSKLİ]
 
-**Faz:** F7 (P6 — Emeklilik) | **Durum:** ⏳ Devam ediyor (yapım bitti + CI ✓ PASS, doğrulama bekliyor) | **Tarih:** 2026-08-19
+**Faz:** F7 (P6 — Emeklilik) | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-19
 
 ---
 
@@ -63,6 +63,12 @@ netleştirildi (plan §P6 T132 "KAPSAM NETLEŞTİRMESİ" bloğuna yazıldı):
 - 5 test double'ından (`AdminMaintenanceEndpointTests`, `HotWalletMonitorServiceTests`,
   `ReconciliationServiceTests`, Notifications + Steam `RecordingNotificationRealtimePublisher`)
   ve `NotificationRealtimePublisherTests`'in kanal testinden temizlendi.
+- **Sözleşme yarısı (doğrulama turunda eklendi — bulgu B1):** `07 §11.2` RT2 admin
+  grubu kataloğundan `AdminBotStatusChanged` satırı kaldırıldı, "üç olay" → **"iki
+  olay"**, kalıcı kayıt satırından emekli `PlatformSteamBot.Status` atfı düştü ve
+  yerine emekliliği belgeleyen not yazıldı. B maddesinin gerekçesi (sözleşme
+  değişikliğinin doküman yarısı aynı PR'da) burada da geçerliydi; §11.2 sonraki
+  hiçbir görevin kapsamında olmadığı için sahipsiz kalacaktı.
 
 ### D — Steam webhook yüzeyinin backend yarısı
 - `WebhookSignatureMiddleware`'den `SteamWebhookPathPrefix`, `SteamNonceSource`,
@@ -136,7 +142,7 @@ secret — izolasyon iddiasını anlamlı kılan şey tam olarak budur).
 
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | Bot entity'leri, dispatch job, recovery, admin endpoint'leri kaldırıldı | ✓ | **Entity/job/uç katmanı T117'de** (`82bff4d`). Bu turda kalan ölü yüzey kapatıldı: `grep -rniE "PlatformSteamBot\|BotRecoveryItem\|TradeOfferDispatch\|BotPool\|SteamWebhooksController" backend/src --include=*.cs` (Migrations hariç) → **0 satır**; `grep -rn "AdminBotStatusChanged\|BOT_STATUS_CHANGED\|BOT_SESSION_FAILED\|BOT_RECOVERY" backend/src backend/tests --include=*.cs` → **0 satır**; `PermissionCatalog.All.Count` = 12 (`AdminRolesEndpointTests` AD11 cevabında assert eder) |
+| 1 | Bot entity'leri, dispatch job, recovery, admin endpoint'leri kaldırıldı | ✓ | **Entity/job/uç katmanı T117'de** (`82bff4d`). Bu turda kalan ölü yüzey kapatıldı: `grep -rniE "PlatformSteamBot\|BotRecoveryItem\|TradeOfferDispatch\|BotPool\|SteamWebhooksController" backend/src --include=*.cs` (Migrations hariç) → **0 satır**; `grep -rn "AdminBotStatusChanged\|BOT_STATUS_CHANGED\|BOT_SESSION_FAILED\|BOT_RECOVERY" backend/src backend/tests --include=*.cs` → **kodda 0 satır** (dönen 4 satırın hepsi `EnumTests.cs`'in sayım-yorumunda, emekliliği BELGELEYEN metin — doğrulama turunda düzeltildi, gözlem N3); `PermissionCatalog.All.Count` = 12 (`AdminRolesEndpointTests` AD11 cevabında assert eder) |
 | 2 | Webhook HMAC/nonce altyapısı KORUNDU (blockchain sidecar paylaşımlı) | ✓ | `WebhookSignatureMiddleware` + `ProcessedNonces` + `ProcessedNonceCleanupJob` + `ReplayWindowSeconds`/`NonceRetentionSeconds` yerinde; blockchain dalı ve `BlockchainSharedSecret` dokunulmadı. `BlockchainWebhookEndpointTests` (imza doğrulama, replay/nonce, yabancı-secret izolasyonu, iki kritik yol) **yeşil**; `SidecarWebhookRouteContractTests` `CriticalSidecarRoute_IsServedByBackend` iki blockchain yolunu doğrulamaya devam ediyor |
 
 ---
@@ -182,9 +188,59 @@ sonra yeşil oldu" adımının sessizce atlanmaması için burada duruyor.
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat — INSTRUCTIONS §3.3 izolasyon kuralı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** (2026-08-19, bağımsız chat — INSTRUCTIONS §3.3 izolasyon kuralı; tur 1 ✗ FAIL → düzeltme → PASS) |
+| Bulgu sayısı | **2 bloke edici (S1) + 3 bloke etmeyen** — beşi de merge öncesi kapatıldı |
+| Düzeltme gerekli mi | Hayır (uygulandı) |
+
+**Kapılar.** Working tree temiz · main son 3 run `32180658381` / `32180658440` /
+`32133727296` üçü de `success` · repo memory T132 satırı mevcut.
+
+**Bağımsız üretilen ölçümler (yapım raporundan bağımsız, dal HEAD üzerinde).**
+Build **0E/0W** · Unit lokal **1408/1408** (+16 test Docker Desktop kapalı olduğu için
+koşamadı — hepsi `Failed to connect to Docker endpoint`, ortam; CI `3. Unit test`
+`success` = 1424/1424) · `Shared.EnumTests` **388/388**, `Platform.AuditLogCategoryMapTests`
+**120/120** (enum parity kardeşleri) · Integration + Contract lokalde üretilemedi
+(aynı Docker sebebi), yetkili kanıt CI · `AuditAction` programatik sayım **29** ·
+`PermissionCatalog.All` **12** · 07 §9.11 JSON **12** · 07 §9 tablosu **11** ·
+04 §8.8 matrisi **10** — iki "Bilinen açık" notu ölçümle birebir doğru.
+
+**Kriter 1** dal DURUMU üzerinden doğrulandı (diff üzerinden değil): entity sınıfları,
+`SteamWebhooksController`, dispatch/recovery katmanı ve `steam-accounts`/`recovery`
+rotaları **yok**; yalnız tarihsel migration'lar duruyor. **Kriter 2** envanterle
+doğrulandı: middleware · `ProcessedNonce` + configuration · `ProcessedNonceCleanupJob` ·
+`ReplayWindowSeconds=300` / `NonceRetentionSeconds=3600` · blockchain dalı +
+`BlockchainSharedSecret` yerinde.
+
+**Advisory E2E — üçüncü bağımsız ölçüm.** Dal HEAD `9afa320` run
+[`32194023638`](https://github.com/turkerurganci/Skinora/actions/runs/32194023638)
+leg logları validator tarafından sıfırdan sayıldı → **10/32**, leg dağılımı
+(timeout 1/4 · fraud-flags 3/4 · admin-flows 6/7 · kalan beş 0/N) yapım turunun iki
+ölçümüyle **birebir**. D'nin "davranış değişmez" iddiası üç bağımsız run'da tutuyor.
+
+**Enum silme ↔ veri riski bağımsız teyit edildi.** Raporun 1. varsayımı gerçek
+(`EnumToStringConverter` okurken parse eder, emekli string'i taşıyan satır okuma
+kırardı); 2. varsayımı — "canlı satır yok" — migration taramasıyla doğrulandı:
+`AuditLogs`'a **hiçbir `InsertData` yok** ve deploy yapılmadı, dolayısıyla emekli
+değeri taşıyan satır üretilemez.
+
+### Bulgular (hepsi merge öncesi kapatıldı)
+
+| # | Seviye | Bulgu | Düzeltme |
+|---|---|---|---|
+| **B1** | **S1 Sapma** (bloke edici) | **C maddesinin sözleşme yarısı yapılmamış ve sahipsizdi.** Kod artık `AdminBotStatusChanged` yayınlayamıyor ama 07 §11.2 RT2 kataloğu onu tam payload'uyla yayınlanan olay olarak listeliyor, aynı paragraf *"Aşağıdaki **üç** olay"* diyor ve kalıcı kayıt olarak T117'de düşürülen `PlatformSteamBot.Status`'ü gösteriyordu. Turun **B maddesi için** yazdığı gerekçe (*"Sözleşme değişikliği olduğu için doküman yarısı AYNI PR'da… kod ile spec bir task boyunca bile çelişik bırakılmaz"*) burada birebir geçerliydi: §11.2 de §9.11 kadar normatif sözleşmedir. Sahibi de yoktu — T133a'nın doküman listesi 07'nin §7.1/§7.5/§8.1/§9.20/§9.22'sini kapsıyor, **§11'i kapsamıyor**; T136'nın ise hiç kabul kriteri yok. Turun kendi andığı T137-B1 deseni bu maddede tekrar ediyordu | 07 §11.2'den satır kaldırıldı, "üç→**iki**" düzeltildi, `PlatformSteamBot.Status` atfı düştü, yerine emekliliği belgeleyen not yazıldı; 07 v3.7 changelog'u genişletildi |
+| **B2** | **S1 Sapma** (bloke edici) | **Koda yanlış bir eşitlik iddiası yazılmıştı:** `EnumTests.AuditAction_ShouldHave29Values` yorumu *"The set now matches 06 §2.19 exactly."* diyordu. Programatik karşılaştırma: 06 §2.19 = **17 satır**, kod = **29 değer**, **12 değerin** tabloda satırı yok (dört `FRAUD_FLAG_*`, `RECONCILIATION_MISMATCH`, `COLD_WALLET_TRANSFER_INITIATED`, `HOT_WALLET_THRESHOLD_BREACHED`, `SANCTIONS_LIST_ADDRESS_ADDED/REMOVED`, `MAINTENANCE_MODE_CHANGED`, `TIMEOUT_AUTO_EXTENDED`, `PLATFORM_OUTAGE_DETECTED`); tabloda kodda olmayan satır yok. Turun **dar** iddiası (*"06 bu dördünü zaten içermiyordu"*) doğru, **eşitlik** iddiası değildi. Yorum bekçi testinin üstünde durduğu için sonraki okuyucu ya doğrulanmış sayıp gereken hizalamayı atlar, ya da "hizalamak" için geçerli değerleri siler. Boşluk T132 öncesinden gelir; **yanlış iddia** T132'nindir | Yorum gerçek durumla değiştirildi ("NOT full parity", 12 değer adıyla, **yön normatif: eksik olan dokümandır, enum silmek yasak**) ve boşluğa **sahip atandı**: plan §T133a'ya doğrulama yöntemiyle birlikte kabul kriteri + `Dokümanlar` satırına 06 §2.19 eklendi |
+| **N1** | Bloke etmeyen | `docker-compose.e2e.yml:64` yorumu *"Match the backend's `Webhook__*SharedSecret` values below"* diyordu ama tur 44 satır aşağıdaki karşılığını sildi; `STEAM_WEBHOOK_SECRET` artık backend'de eşi olmayan bir değişken. `sidecar-fake`'te de **tüketicisi yok** (`config.ts:27` bağlıyor, kimse okumuyor) → davranışsal etki sıfır, ama turun kendi dokunduğu dosyada yanlış bir ifade | Yorum gerçeğe çekildi; **sidecar yarısı sahiplendirildi** — plan §T133'e üç kalıntıyı (fake `config.ts` bağlaması, README atfı, compose satırı) adıyla anan kriter eklendi |
+| **N2** | Bloke etmeyen | Plan §T132 "KAPSAM DIŞI" listesi FE kalıntısının bir kısmını atlıyor: `lib/admin/permissionCatalog.ts` (iki ölü key), `i18n/messages/{tr,en,es,zh}.json` sekiz `adminRoles.permissions.*` girdisi, `lib/signalr/{events.ts,NotificationsHubClient.ts,RealtimeProvider.tsx}`'teki artık `AdminBotStatusChanged` aboneliği. **Kırılma yok** — raporun 3. varsayımı bağımsız doğrulandı: `RoleFormModal` AD11'in listesi üzerinde map'liyor, `KNOWN_PERMISSION_KEYS` yalnız tip/etiket fallback'i; dinlenmeyen event `conn.on` için no-op | Kayda geçirildi; sahibi T134/T136 (T136'nın kriter yazımı o turun işi) |
+| **N3** | Bloke etmeyen | Rapordaki AC1 kanıtı *"grep … → 0 satır"* birebir çalıştırıldığında 4 satır dönüyordu (hepsi `EnumTests.cs` yorumu, kod değil) | Kanıt metni düzeltildi (yukarıdaki kriter tablosu) |
+
+### Yapım raporu karşılaştırması
+
+Ölçülebilir iddiaların **tamamı** bağımsız üretimde tuttu: 33→29, 14→12, 0E/0W, unit
+1424, e2e 10/32 + leg dağılımı, HMAC/nonce envanteri, 07/04 tablo sayıları, iki
+"Bilinen açık" notunun doğruluğu, `AuthReVerify` testinin ortam kaynaklı olduğu,
+migration gereksizliği. Rapor kendi yan bulgularını dürüstçe kaydetmiş.
+**Uyuşmazlıklar:** B1 (raporun "Known Limitations" listesinde de yoktu — ertelenmedi,
+gözden kaçtı), B2, N3 ve CI atfının dal HEAD'i yerine `ad853e5`'te kalması.
 
 ---
 
@@ -209,10 +265,14 @@ sonra yeşil oldu" adımının sessizce atlanmaması için burada duruyor.
 
 - Branch: `task/T132-backend-bot-surface-removal` (güncel `main` `f9d9896` üzerinden kesildi)
 - Commit: `9e64906` — T132: backend bot/webhook/recovery kalintisinin silinmesi
+  (+ doğrulama düzeltme commit'i — B1/B2/N1/N3)
 - PR: **[#247](https://github.com/turkerurganci/Skinora/pull/247)**
 - Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE ^T[0-9]+... | sort -u` → **yalnız `T132`**
-- CI: ✓ **PASS** — dal HEAD `ad853e5` run [`32190325806`](https://github.com/turkerurganci/Skinora/actions/runs/32190325806)
-  `conclusion=success`. Bloke edici jobların **hepsi** yeşil: `1. Lint` · `2. Build` ·
+- CI: ✓ **PASS** — yapım turunun son run'ı `ad853e5` [`32190325806`](https://github.com/turkerurganci/Skinora/actions/runs/32190325806)
+  `conclusion=success`; doğrulama turu başlarken dal HEAD `9afa320`'nin run'ı
+  [`32194023638`](https://github.com/turkerurganci/Skinora/actions/runs/32194023638) da
+  `success` (validator bağımsız teyit etti — aradaki iki commit docs-only).
+  Bloke edici jobların **hepsi** yeşil: `1. Lint` · `2. Build` ·
   `3. Unit test` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` ·
   `7. Docker build (backend)` · **`CI Gate`**. `0. Guard (direct push)` tasarım gereği
   `skipped`; `3b. JS test (vitest)` `skipped` (tur hiçbir JS paketine dokunmadı).
@@ -262,6 +322,10 @@ iddiası tahmin değil, ölçüm.
    (FE enum turu) ve **T136** (admin bot sayfaları). FE, S19 yetki matrisini AD11'den
    render ettiği için B'nin kaldırılması FE'yi kırmaz — `RoleFormModal` zaten
    veri-güdümlüdür.
+1a. **Steam webhook secret'ının sidecar yarısı** (`sidecar-fake/src/config.ts:27`
+   `steamWebhookSecret` — bugün tüketicisi yok, `sidecar-fake/README.md` atfı,
+   `docker-compose.e2e.yml` `STEAM_WEBHOOK_SECRET` satırı) duruyor. Doğrulama
+   gözlemi N1; sahibi **T133**, oraya kabul kriteri olarak yazıldı.
 3. **`sidecar-steam` hâlâ emekli yollara POST ediyor** (`/api/v1/webhooks/steam/bot-events`,
    `/trade-events`). Bu, T117'den beri bilinen ve `SidecarWebhookRouteContractTests`'te
    adı konmuş bir istisnayla sınırlanan drift; sahibi **T133**. T132 bunu ne büyüttü ne
@@ -277,6 +341,11 @@ iddiası tahmin değil, ölçüm.
    **Öz-denetimde yakalandı:** kapsam sunumunda iki drift de ölçülmüştü ama ilk
    yazımda yalnız 04 §8.8'e sahip atanmıştı — ölçülüp sahipsiz bırakılan açık,
    T137'nin B1 bulgusunun ta kendisidir.
+5. **06 §2.19 `AuditAction` tablosu kod enum'unun 17 satırlık ALT KÜMESİ** — 12
+   değerin satırı yok. T132 öncesinden birikir (T54/T76/T77/T82/WP7/WP16); T132
+   yalnız sildi, eklemedi. Doğrulama bulgusu **B2**; sahibi **T133a**, doğrulama
+   yöntemiyle birlikte kabul kriteri olarak yazıldı. Yön normatiftir: eksik olan
+   **dokümandır**, enum değeri silerek hizalamak yasaktır.
 
 ---
 

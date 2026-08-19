@@ -394,7 +394,18 @@ public class EnumTests
         // 29 after T132 removed the four bot-custody actions
         // (BOT_STATUS_CHANGED / BOT_SESSION_FAILED / BOT_RECOVERY_ITEM_CREATED /
         // BOT_RECOVERY_UPDATED) — the platform runs no Steam bots, so nothing
-        // writes them (02 §15). The set now matches 06 §2.19 exactly.
+        // writes them (02 §15). 06 §2.19 never listed those four, so the removal
+        // closed the stale half of that drift.
+        //
+        // NOT full parity with 06 §2.19: that table is a 17-row STRICT SUBSET of
+        // this enum. Twelve values carry no row there — the four FRAUD_FLAG_*,
+        // RECONCILIATION_MISMATCH, COLD_WALLET_TRANSFER_INITIATED,
+        // HOT_WALLET_THRESHOLD_BREACHED, SANCTIONS_LIST_ADDRESS_ADDED/REMOVED,
+        // MAINTENANCE_MODE_CHANGED, TIMEOUT_AUTO_EXTENDED and
+        // PLATFORM_OUTAGE_DETECTED. That gap predates T132 (it accrued across
+        // T54/T76/T77/T82/WP7/WP16) and is owned by T133a, which reconciles the
+        // two catalogs. Do NOT delete enum values to "align" — the doc is the
+        // side that is behind.
         var values = Enum.GetValues<AuditAction>();
         Assert.Equal(29, values.Length);
     }

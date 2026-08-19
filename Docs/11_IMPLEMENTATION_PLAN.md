@@ -3418,6 +3418,16 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
   Kabul kriterleri:
     - Sidecar Steam hesap kimlik bilgisi olmadan boot ediyor
     - secrets/, compose ve 08 §9'dan bot credential'ları düştü
+    - Steam webhook secret'ının SIDECAR yarısı da düştü (backend yarısı
+      T132'de gitti — T132 doğrulaması, gözlem N1): `sidecar-fake/src/
+      config.ts` `steamWebhookSecret` bağlaması (bugün tüketicisi YOK),
+      `sidecar-fake/README.md`'nin `Webhook__SteamSharedSecret` atfı ve
+      `docker-compose.e2e.yml`'daki `STEAM_WEBHOOK_SECRET` satırı
+    - `SidecarWebhookRouteContractTests.RetiredWithBotCustodyLayer` listesi
+      BOŞALDI: `sidecar-steam`'in bot/trade yayıncıları silindiğinde emekli
+      iki yol artık hiç publish edilmiyor, dolayısıyla adı konmuş istisna
+      gerekçesiyle birlikte kalkar (bekçi `RetiredPathsAreStillPublished_
+      UntilT133` bu turda kaldırılır — kendini iptal etmesi tasarımdır)
 
 Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
@@ -3426,7 +3436,8 @@ Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Dokümanlar: 03 §1.1, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 · 04 §2 (akış
        eşleme tablosu), §8.8 (yetki matrisi), §11 (S07 iade bilgisi
        satırları), §16 (admin), §17 (Steam/recovery ekranları) · 07 §7.1,
-       §7.5, §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) ·
+       §7.5, §8.1, §9.20, §9.22 (+ örnek JSON payload'ları) · 06 §2.19
+       (AuditAction kataloğu — aşağıdaki parity kriteri) ·
        referans: 06 §2.13, 07 §9.11
   Kabul kriterleri:
     - 03, 04 ve 07'de item-custody dili kalmadı; emekli status adları yalnız
@@ -3454,6 +3465,21 @@ Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
       kriter kapandığında SİLİNMELİ — kapanmış bir açığın notu yeni bir
       drift kaynağıdır. Doğrulama: üç tablodaki key kümesini
       `PermissionCatalog.All` ile karşılaştır, fark boş olmalı
+    - 06 §2.19 `AuditAction` tablosu kod enum'uyla birebir (bugün **29**
+      değer). Tablo BUGÜN 17 satır — kod enum'unun bir ALT KÜMESİ; on iki
+      değerin satırı yok: `FRAUD_FLAG_CREATED` / `_APPROVED` / `_REJECTED` /
+      `_AUTO_HOLD` (T54), `RECONCILIATION_MISMATCH` (T76),
+      `COLD_WALLET_TRANSFER_INITIATED` + `HOT_WALLET_THRESHOLD_BREACHED`
+      (T77), `SANCTIONS_LIST_ADDRESS_ADDED` / `_REMOVED` (T82),
+      `MAINTENANCE_MODE_CHANGED` (WP7), `TIMEOUT_AUTO_EXTENDED` +
+      `PLATFORM_OUTAGE_DETECTED` (WP16). Boşluk T132 ÖNCESİNDEN gelir ve
+      birikmelidir — T132 yalnız dört bot değerini SİLDİ, hiçbir satır
+      eklemedi; ölçüm T132 doğrulamasında yapıldı (bulgu B2) ve sahibi
+      buraya verildi. **Yön normatiftir: eksik olan DOKÜMANDIR** — enum
+      değeri silerek hizalama YASAK, her değerin bir yazıcısı vardır.
+      Doğrulama: `Enum.GetValues<AuditAction>()` ile 06 §2.19 key kümesini
+      karşılaştır, fark boş olmalı. `EnumTests.AuditAction_ShouldHave29Values`
+      yorumundaki "NOT full parity" bloğu bu kriter kapandığında SİLİNMELİ
     - 07 §8.1 bildirim tipi kataloğu 06 §2.13 ile birebir (26 tip). Bu katalog
       üç yerde tutuluyor; T118'de 06 ve 03 hizalandı, 07 nüshası bayat kaldı
     - 07 §7.5 detay blok koşulları güncel durumlara göre yazıldı;
