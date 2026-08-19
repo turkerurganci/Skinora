@@ -6,11 +6,12 @@ namespace Skinora.Users.Application.Account;
 /// — accounts with active transactions cannot be deactivated or deleted.
 /// </summary>
 /// <remarks>
-/// "Active" means <c>Status &#8712; { CREATED, ACCEPTED,
-/// TRADE_OFFER_SENT_TO_SELLER, ITEM_ESCROWED, PAYMENT_RECEIVED,
-/// TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED, FLAGGED }</c> — i.e. any
-/// non-terminal state on either the buyer or seller side. Terminals are
-/// <c>COMPLETED</c> and all <c>CANCELLED_*</c> variants.
+/// "Active" means non-terminal on either the buyer or the seller side. The
+/// query expresses this as an exclusion, so it matches <c>CREATED</c>,
+/// <c>ACCEPTED</c>, <c>SELLER_CONFIRMED</c>, <c>PAYMENT_RECEIVED</c>,
+/// <c>ITEM_DELIVERED</c> and <c>FLAGGED</c> — and, as the exclusion list stands
+/// today, also the terminal <c>REFUNDED</c>, which is not named there.
+/// Excluded: <c>COMPLETED</c> and all <c>CANCELLED_*</c> variants.
 /// <para>
 /// The abstraction lives here (and the implementation in
 /// <c>Skinora.Transactions</c>) so <c>Skinora.Users</c> does not depend on

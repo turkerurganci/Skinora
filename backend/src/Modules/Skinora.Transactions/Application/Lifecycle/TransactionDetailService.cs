@@ -560,13 +560,11 @@ public sealed class TransactionDetailService : ITransactionDetailService
     /// separate events, and only the second one is a product promise.
     /// </para>
     /// <para>
-    /// 07 §7.5 words the condition as "ITEM_ESCROWED'dan itibaren" — a status
-    /// retired in v3.0. Its v3.0 successor as the first state in which money
-    /// may arrive is <c>SELLER_CONFIRMED</c>, the same mapping
-    /// <see cref="ProducePaymentEventsArray"/> already applies to the sibling
-    /// <c>paymentEvents</c> block; this method reaches the same states through
-    /// the milestone stamp instead of naming them. Rewording the table itself
-    /// belongs to T133a.
+    /// The gate is keyed on the milestone stamp rather than on a status name.
+    /// 07 §7.5 states the condition as "SELLER_CONFIRMED'dan itibaren" — the
+    /// first state in which money may arrive — which is the same mapping
+    /// <see cref="ProducePaymentEventsArray"/> applies to the sibling
+    /// <c>paymentEvents</c> block.
     /// </para>
     /// <para>
     /// Party-only: <paramref name="role"/> is null for public/prospective

@@ -10,7 +10,7 @@ namespace Skinora.Shared.Events;
 /// 08 §3.4 tutar doğrulama tablosu).
 /// </summary>
 /// <remarks>
-/// The state machine stays in <c>ITEM_ESCROWED</c> (timeout countdown
+/// The state machine stays in <c>SELLER_CONFIRMED</c> (timeout countdown
 /// continues) and a <c>BlockchainTransaction</c> row of type
 /// <c>INCORRECT_AMOUNT_REFUND</c> is queued at <c>Status=PENDING</c>; T73
 /// blockchain sidecar consumer dispatches the actual TRC-20 transfer.

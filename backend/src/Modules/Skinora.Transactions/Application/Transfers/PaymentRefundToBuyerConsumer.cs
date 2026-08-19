@@ -11,15 +11,17 @@ namespace Skinora.Transactions.Application.Transfers;
 
 /// <summary>
 /// WP2 refund leg — MediatR notification handler that consumes
-/// <see cref="PaymentRefundToBuyerRequestedEvent"/> (published by the three
-/// terminal-cancel paths: delivery timeout, admin-cancel AD19, and
-/// emergency-hold-release-cancel AD19c) and queues a PENDING
+/// <see cref="PaymentRefundToBuyerRequestedEvent"/> (published by the terminal
+/// unwind paths: delivery timeout, admin-cancel AD19,
+/// emergency-hold-release-cancel AD19c, buyer-favour dispute resolution AD29,
+/// and settlement reversal per 02 §4.5.1) and queues a PENDING
 /// <c>BUYER_REFUND</c> <see cref="BlockchainTransaction"/> row. The existing
 /// <see cref="OutgoingTransferDispatchJob"/> broadcasts the row and
 /// <see cref="OutgoingTransferConfirmationJob"/> drives it to CONFIRMED; no
-/// transaction-state transition is needed because the transaction is already
-/// in a terminal CANCELLED_* state at publish time (there is no REFUNDED
-/// status, and the confirmation job announces only SELLER_PAYOUT).
+/// transaction-state transition is needed because the transaction is already in
+/// a terminal state at publish time — <c>CANCELLED_*</c> on the cancel paths,
+/// <c>REFUNDED</c> on the dispute-resolution and settlement-reversal paths — and
+/// the confirmation job announces only SELLER_PAYOUT.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -43,8 +45,8 @@ namespace Skinora.Transactions.Application.Transfers;
 /// <c>catch(DbUpdateException)</c> detaches the rejected row and re-queries —
 /// swallowing as an idempotent no-op when the row now exists, re-throwing any
 /// unrelated failure unchanged. At most one BUYER_REFUND row per transaction is
-/// legitimate: all three publish sites are terminal transitions and a
-/// transaction is cancelled exactly once.
+/// legitimate: every publish site is a terminal transition and a transaction is
+/// unwound exactly once.
 /// </para>
 /// </remarks>
 public sealed class PaymentRefundToBuyerConsumer

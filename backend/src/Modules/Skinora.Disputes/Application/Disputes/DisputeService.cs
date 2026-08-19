@@ -20,10 +20,14 @@ namespace Skinora.Disputes.Application.Disputes;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Per-type allowed states:</b> the canDispute envelope on
+/// <b>Per-type allowed states.</b> The matrix itself lives in
+/// <see cref="DisputeEligibility.AllowedStatesByType"/> and that is the single
+/// source of truth: the Stage 3 guard below reads it, and so does the
+/// <c>canDispute</c> / <c>disputableTypes</c> envelope on
 /// <see cref="Skinora.Transactions.Application.Lifecycle.TransactionDetailService"/>
-/// computes a union of states across types, but each dispute type has its
-/// own semantically meaningful subset enforced here:
+/// — the envelope publishes the union across types, this service enforces the
+/// per-type subset. Reproduced below for orientation only; on any discrepancy
+/// <see cref="DisputeEligibility"/> wins:
 /// </para>
 /// <list type="bullet">
 ///   <item>PAYMENT — SELLER_CONFIRMED, PAYMENT_RECEIVED.</item>
@@ -31,12 +35,10 @@ namespace Skinora.Disputes.Application.Disputes;
 ///   <item>WRONG_ITEM — PAYMENT_RECEIVED, ITEM_DELIVERED.</item>
 /// </list>
 /// <para>
-/// The v3.0 states, restated here because the pre-P2P list named three retired
-/// ones (<c>ITEM_ESCROWED</c>, <c>TRADE_OFFER_SENT_TO_BUYER</c>). WRONG_ITEM's
-/// <c>PAYMENT_RECEIVED</c> row is the load-bearing one: a wrong item never lifts
-/// the expected class count, so the transaction never reaches
-/// <c>ITEM_DELIVERED</c> and that state is where the case actually lives
-/// (<see cref="DisputeEligibility"/>).
+/// WRONG_ITEM's <c>PAYMENT_RECEIVED</c> row is the load-bearing one: a wrong
+/// item never lifts the expected class count, so the transaction never reaches
+/// <c>ITEM_DELIVERED</c> and <c>PAYMENT_RECEIVED</c> is the state the case
+/// actually lives in (02 §10.1, 03 §6.3).
 /// </para>
 /// <para>
 /// <b>Duplicate type rule (02 §10.2):</b> a dispute of the same type cannot be

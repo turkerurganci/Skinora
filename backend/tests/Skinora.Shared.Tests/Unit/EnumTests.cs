@@ -397,15 +397,15 @@ public class EnumTests
         // writes them (02 §15). 06 §2.19 never listed those four, so the removal
         // closed the stale half of that drift.
         //
-        // NOT full parity with 06 §2.19: that table is a 17-row STRICT SUBSET of
-        // this enum. Twelve values carry no row there — the four FRAUD_FLAG_*,
-        // RECONCILIATION_MISMATCH, COLD_WALLET_TRANSFER_INITIATED,
+        // Full parity with 06 §2.19 since T133a: that table lists all 29 values
+        // and is no longer a subset. The twelve rows it was missing (the four
+        // FRAUD_FLAG_*, RECONCILIATION_MISMATCH, COLD_WALLET_TRANSFER_INITIATED,
         // HOT_WALLET_THRESHOLD_BREACHED, SANCTIONS_LIST_ADDRESS_ADDED/REMOVED,
         // MAINTENANCE_MODE_CHANGED, TIMEOUT_AUTO_EXTENDED and
-        // PLATFORM_OUTAGE_DETECTED. That gap predates T132 (it accrued across
-        // T54/T76/T77/T82/WP7/WP16) and is owned by T133a, which reconciles the
-        // two catalogs. Do NOT delete enum values to "align" — the doc is the
-        // side that is behind.
+        // PLATFORM_OUTAGE_DETECTED) accrued across T54/T76/T77/T82/WP7/WP16 and
+        // were written there in that round. Adding a value here means adding its
+        // row there — and never the reverse: do NOT delete enum values to
+        // "align", every one of them has a writer.
         var values = Enum.GetValues<AuditAction>();
         Assert.Equal(29, values.Length);
     }

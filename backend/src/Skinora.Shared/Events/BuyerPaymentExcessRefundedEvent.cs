@@ -9,11 +9,11 @@ namespace Skinora.Shared.Events;
 /// than the snapshot in <c>PaymentAddress.ExpectedAmount</c> (02 §4.4 "Fazla
 /// tutar", 08 §3.4 tutar doğrulama tablosu) — or when an extra payment
 /// arrives for a transaction that has already advanced past
-/// <c>ITEM_ESCROWED</c> (multi-payment case in 02 §4.4).
+/// <c>SELLER_CONFIRMED</c> (multi-payment case in 02 §4.4).
 /// </summary>
 /// <remarks>
 /// Overpayment: state machine fires <c>ConfirmPayment</c>
-/// (<c>ITEM_ESCROWED → PAYMENT_RECEIVED</c>) and the excess
+/// (<c>SELLER_CONFIRMED → PAYMENT_RECEIVED</c>) and the excess
 /// <c>received − expected</c> is queued as <c>EXCESS_REFUND</c> at
 /// <c>Status=PENDING</c>. Multi-payment: state machine does not advance
 /// (already past); the full <c>received</c> amount is queued as
@@ -36,7 +36,7 @@ namespace Skinora.Shared.Events;
 /// <param name="TxHash">Inbound transaction hash for cross-reference.</param>
 /// <param name="IsMultiPayment">
 /// <c>true</c> when this event represents a stray transfer after
-/// <c>ITEM_ESCROWED</c> exited (multi-payment), <c>false</c> for the regular
+/// <c>SELLER_CONFIRMED</c> exited (multi-payment), <c>false</c> for the regular
 /// single-shot overpayment.
 /// </param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>

@@ -18,7 +18,7 @@ namespace Skinora.Notifications.Tests.Integration;
 /// re-query the transaction/user for recipient + parameters
 /// (<see cref="BuyerAcceptedNotificationConsumer"/>,
 /// <see cref="PaymentReceivedNotificationConsumer"/>,
-/// <see cref="EscrowedAndTradeOfferNotificationConsumer"/>,
+/// <see cref="HappyPathMilestoneNotificationConsumer"/>,
 /// <see cref="PayoutCompletedNotificationConsumer"/>). A
 /// <see cref="RecordingNotificationDispatcher"/> captures the emitted
 /// <see cref="Skinora.Notifications.Application.Notifications.NotificationRequest"/>s
@@ -166,9 +166,9 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
         var tx = await SeedTransactionAsync(
             TransactionStatus.SELLER_CONFIRMED, withPaymentAddress: true);
         var dispatcher = new RecordingNotificationDispatcher();
-        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+        var sut = new HappyPathMilestoneNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), Context,
-            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+            NullLogger<HappyPathMilestoneNotificationConsumer>.Instance);
 
         await sut.Handle(
             new TransactionStatusChangedEvent(
@@ -195,9 +195,9 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
         // a trade offer; the SELLER is told to deliver the item directly.
         var tx = await SeedTransactionAsync(TransactionStatus.PAYMENT_RECEIVED);
         var dispatcher = new RecordingNotificationDispatcher();
-        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+        var sut = new HappyPathMilestoneNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), Context,
-            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+            NullLogger<HappyPathMilestoneNotificationConsumer>.Instance);
 
         await sut.Handle(
             new TransactionStatusChangedEvent(
@@ -220,9 +220,9 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
     public async Task StatusChanged_UnrelatedTransition_EmitsNothing()
     {
         var dispatcher = new RecordingNotificationDispatcher();
-        var sut = new EscrowedAndTradeOfferNotificationConsumer(
+        var sut = new HappyPathMilestoneNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), Context,
-            NullLogger<EscrowedAndTradeOfferNotificationConsumer>.Instance);
+            NullLogger<HappyPathMilestoneNotificationConsumer>.Instance);
 
         // The acceptance leg (CREATED → ACCEPTED) is not one of the two statuses
         // this consumer covers; it returns before any DB read.

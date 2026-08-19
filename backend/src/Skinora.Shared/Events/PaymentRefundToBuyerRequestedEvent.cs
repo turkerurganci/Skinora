@@ -4,9 +4,11 @@ namespace Skinora.Shared.Events;
 
 /// <summary>
 /// Emitted by the timeout pipeline (T49 — 02 §3.2, 03 §4.4) when the payment
-/// is already on the platform and must be refunded to the buyer — i.e. when
-/// the transaction was in <c>TRADE_OFFER_SENT_TO_BUYER</c> immediately before
-/// the state machine flipped to <c>CANCELLED_TIMEOUT</c> (delivery timeout).
+/// is already held by the platform and must be refunded to the buyer — i.e. when
+/// the transaction leaves <c>PAYMENT_RECEIVED</c> without a completed delivery
+/// (delivery timeout per 02 §3.2 / 03 §4.4, admin cancel, buyer-favour dispute
+/// resolution, or a detected trade reversal at settlement). There is no item
+/// leg: the platform never held the item, so a refund moves money only.
 /// </summary>
 /// <remarks>
 /// The Blockchain sidecar consumer (T73) acts on this event to send the

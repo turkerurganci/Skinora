@@ -12,37 +12,39 @@ namespace Skinora.Notifications.Application.EventHandlers;
 
 /// <summary>
 /// Translates the generic <see cref="TransactionStatusChangedEvent"/> into the
-/// buyer-facing happy-path notifications for the two Steam orchestration legs
-/// that ride it (WP19):
+/// happy-path notification for the two P2P milestones that ride it (WP19). The
+/// two legs address <b>different parties</b>:
 /// <list type="bullet">
 ///   <item><c>SELLER_CONFIRMED</c> → <see cref="NotificationType.PAYMENT_WINDOW_OPEN"/>
 ///   "the seller is ready, send the payment to this address" (03 §3.4 step 1).
 ///   Recipient: buyer.</item>
 ///   <item><c>PAYMENT_RECEIVED</c> →
 ///   <see cref="NotificationType.DELIVERY_EXPECTED"/> "the money is in escrow,
-///   send the item to the buyer" (03 §3.5 step 3). Recipient: <b>seller</b> —
-///   this leg changed sides in v3.0.</item>
+///   send the item directly to the buyer" (03 §3.5 step 3). Recipient:
+///   <b>seller</b> — this leg changed sides in v3.0: the platform sends no
+///   trade offer, the seller sends the item.</item>
 /// </list>
 /// </summary>
 /// <remarks>
 /// One consumer covers both legs because they share the same generic event;
 /// every other <c>ToStatus</c> yields no notification.
-/// The event carries only the status pair, so the recipient (buyer) and the
+/// The event carries only the status pair, so the recipient (the buyer on the
+/// SELLER_CONFIRMED leg, the seller on the PAYMENT_RECEIVED leg) and the
 /// <c>{Amount}</c>/<c>{PaymentAddress}</c> parameters are read from a single
 /// <see cref="Transaction"/> (+ active <c>PaymentAddress</c>) lookup. The event
 /// is deliberately not enriched so the WP9 realtime relay it also feeds stays a
 /// no-DB pass-through.
 /// </remarks>
-public sealed class EscrowedAndTradeOfferNotificationConsumer
+public sealed class HappyPathMilestoneNotificationConsumer
     : NotificationConsumerBase<TransactionStatusChangedEvent>
 {
     private readonly AppDbContext _dbContext;
 
-    public EscrowedAndTradeOfferNotificationConsumer(
+    public HappyPathMilestoneNotificationConsumer(
         INotificationDispatcher dispatcher,
         IProcessedEventStore processedEventStore,
         AppDbContext dbContext,
-        ILogger<EscrowedAndTradeOfferNotificationConsumer> logger)
+        ILogger<HappyPathMilestoneNotificationConsumer> logger)
         : base(dispatcher, processedEventStore, logger)
     {
         _dbContext = dbContext;

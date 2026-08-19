@@ -10,7 +10,8 @@ namespace Skinora.Notifications.Application.EventHandlers;
 /// <summary>
 /// Translates a <see cref="TimeoutWarningEvent"/> (T48 — 02 §3.4, 05 §4.4)
 /// into a single <see cref="NotificationRequest"/> targeting the recipient
-/// carried on the event (the buyer for the ITEM_ESCROWED payment stage). The
+/// carried on the event (the buyer, for the <c>SELLER_CONFIRMED</c> payment
+/// window). The
 /// dispatcher then writes the platform-in-app row plus one
 /// <c>NotificationDelivery</c> per enabled external channel.
 /// </summary>

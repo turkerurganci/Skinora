@@ -7,10 +7,12 @@ namespace Skinora.Users.Application.Wallet;
 /// registered by the API composition root.
 /// </summary>
 /// <remarks>
-/// "Active" means <c>Status &#8712; { CREATED, ACCEPTED, TRADE_OFFER_SENT_TO_SELLER,
-/// ITEM_ESCROWED, PAYMENT_RECEIVED, TRADE_OFFER_SENT_TO_BUYER, ITEM_DELIVERED,
-/// FLAGGED }</c> — i.e. every non-terminal state. Terminal states are
-/// <c>COMPLETED</c> and all <c>CANCELLED_*</c> variants. 02 §12.3 snapshot
+/// "Active" means non-terminal. The query expresses this as an exclusion, so it
+/// counts <c>CREATED</c>, <c>ACCEPTED</c>, <c>SELLER_CONFIRMED</c>,
+/// <c>PAYMENT_RECEIVED</c>, <c>ITEM_DELIVERED</c> and <c>FLAGGED</c> — and, as
+/// the exclusion list stands today, also <c>REFUNDED</c>, which is terminal but
+/// is not named there. Excluded: <c>COMPLETED</c> and all <c>CANCELLED_*</c>
+/// variants. 02 §12.3 snapshot
 /// principle: the count reflects pre-change addresses still in flight.
 /// </remarks>
 public interface IActiveTransactionCounter

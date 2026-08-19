@@ -100,12 +100,12 @@ public enum AmountValidationOutcome
     AcceptedWithExcessRefund,
 
     /// <summary>Received amount &lt; expected → state stays at
-    /// <c>ITEM_ESCROWED</c>, <c>INCORRECT_AMOUNT_REFUND</c> row queued
+    /// <c>SELLER_CONFIRMED</c>, <c>INCORRECT_AMOUNT_REFUND</c> row queued
     /// (or admin alert raised for sub-threshold).</summary>
     Underpaid,
 
     /// <summary>Payment arrived after the transaction left
-    /// <c>ITEM_ESCROWED</c>; entire <c>received</c> amount queued as
+    /// <c>SELLER_CONFIRMED</c>; entire <c>received</c> amount queued as
     /// <c>EXCESS_REFUND</c> (or admin alert).</summary>
     MultiPaymentRefunded,
 

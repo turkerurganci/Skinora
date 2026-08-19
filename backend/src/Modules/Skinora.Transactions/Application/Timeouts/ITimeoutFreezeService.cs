@@ -31,9 +31,10 @@ namespace Skinora.Transactions.Application.Timeouts;
 /// <b>Authority (05 §4.4 + 06 §8.1).</b> Resume reads
 /// <c>Transaction.TimeoutRemainingSeconds</c> as the source of truth for the
 /// remaining payment window. <c>PaymentDeadline</c> is recomputed from
-/// <c>now + remaining</c> on resume. Other phase deadlines (Accept,
-/// TradeOfferToSeller, TradeOfferToBuyer) are bumped by the elapsed freeze
-/// time directly because they are poller-driven and have no per-tx job.
+/// <c>now + remaining</c> on resume. The other phase deadlines
+/// (<c>AcceptDeadline</c>, <c>SellerConfirmDeadline</c>,
+/// <c>DeliveryDeadline</c>) are bumped by the elapsed freeze time directly
+/// because they are poller-driven and have no per-tx job.
 /// </para>
 /// </remarks>
 public interface ITimeoutFreezeService

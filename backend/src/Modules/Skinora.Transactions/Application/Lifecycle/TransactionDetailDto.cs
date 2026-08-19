@@ -41,9 +41,12 @@ public sealed record TransactionDetailDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] InviteInfoDto? InviteInfo,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<PaymentEventDto>? PaymentEvents,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DeliveredBuyerAssetId,
-    // WP12 (T90 K3) — Steam trade-offer URL, surfaced only in
-    // TRADE_OFFER_SENT_TO_SELLER / TRADE_OFFER_SENT_TO_BUYER (04 §7.3 "Steam'e
-    // git linki"); null in every other state and the public/trimmed shape.
+    // WP12 (T90 K3) — the buyer's own Steam trade URL, surfaced only to the
+    // seller in PAYMENT_RECEIVED (04 §7.3 "Steam'e git linki"): the CTA that
+    // opens the trade the seller must send. The platform creates no trade offer
+    // of its own (02 §2.2 step 6). Null in every other state, for the buyer's
+    // view, and in the public/trimmed shape. The property name predates the
+    // v3.0 pivot and is kept because it is part of the 07 §7.5 JSON contract.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SteamTradeOfferUrl,
     AvailableActionsDto AvailableActions,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CreatedAt,
@@ -75,7 +78,7 @@ public sealed record TransactionTimeoutDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FrozenReason,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? FrozenAt);
 
-/// <summary>Payment block; populated from <c>ITEM_ESCROWED</c> onwards.</summary>
+/// <summary>Payment block; populated from <c>SELLER_CONFIRMED</c> onwards (07 §7.5).</summary>
 public sealed record TransactionPaymentDto(
     string Address,
     string ExpectedAmount,

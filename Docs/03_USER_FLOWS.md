@@ -1,8 +1,8 @@
 # Skinora — User Flows
 
-**Versiyon: v3.6** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-18 (**T131 düzeltme turu** — §6.4'teki "satıcı lehine karar imzayı serbest bırakır" kuralına iki alt madde eklendi. (1) **B1:** "kayda kusur yazılmaz" bir **kayıt kuralıdır**, yalnız bir cümle değil — serbest bırakma `PAYMENT_RECEIVED → CANCELLED_TIMEOUT` üretir ve 06 §3.1 haritası o geçişi satıcıya yazardı; satır artık `Transactions.TimeoutReleasedByAdminRulingAt` ile damgalanır ve **itibar + cooldown'ın ikisinde de** sayım dışı kalır (sınıf gerekçesi `CANCELLED_ADMIN` ile aynı, 02 §13). Kanıtla ispatlanmış olağan teslimat timeout'u bu damgayı almaz. (2) **N2:** kapıyı yalnız imzayı **görmüş** bir karar açar — karar imzadan önce verilmişse o admin başka bir vakayı okumuştur; serbest bırakma uygulanmaz, dispute yeni bulguyla `ESCALATED`'a döner (02 §10.2) ve timeout beklemeye devam eder. Karşılaştırma `Disputes.ResolvedAt` ile imzanın **ilk** kayda geçtiği an arasındadır; eşit an ve boş `ResolvedAt` "görmemiş" sayılır.) · 2026-08-17 (**T131** — §6.4'e iki kural eklendi: **gerekçe kapısı** (`ITEM_DELIVERED`'da alıcı lehine karar, admin notundan ayrı bir `overrideReason` olmadan reddedilir; daha erken durumlarda alıcı lehine karar olağan sonuçtur ve gerekçe istenmez — olağan sonuç için gerekçe istemek admin'i alanı geçiştirmeye alıştırır) ve **satıcı lehine kararın bekletilen teslimat imzasını serbest bırakması** (dispute "satıcı kusurlu mu" sorusunu kapatır, para 02 §9.2 kanıt kuralına göre akar; satıcı payout'u yalnız `ITEM_DELIVERED`'da işlediği için "işlem onaylanır" bu durumda "satıcıya öde" anlamına gelmez). "(02 §10)" atfı **§10.4**'e sabitlendi.) · 2026-08-17 (**T130** — §6.2'ye **Sonuç E** eklendi (kanıt var + kapı kapalı → dispute OPEN kalır, alıcı admin'e yükseltebilir, otomatik eskalasyon yapılmaz; mesaj `DELIVERY_EVIDENCE_UNDER_REVIEW`). §6.3'e iki kural: (a) yanlış item karşılaştırmasının **referans noktası** `BuyerBaselineClassIds`'dir — sınıf-kapsamlı sayı farklı bir sınıfın gelişini göremez, baseline yoksa karşılaştırma yapılmaz; (b) **ad yalnız tek bir yeni sınıf geldiyse** yazılır (`Disputes.DeliveredItemName`), birden fazlaysa eskalasyon yine yapılır ama ad boş bırakılır — yanlış item'ı yazmak hiç yazmamaktan kötüdür.) · 2026-08-17 (T129 düzeltme turu — §2.4 adım 2'ye beşinci dal (karar girdisi hiç üretilememiş → eşik beklemeden admin, 07 §9.22b ile satıcı lehine kapatılır) ve "bir kez ayrılma gözlenmişse karar geri alınmaz" kuralı eklendi; geri alma dalı artık ayrılmanın gözlenmiş olmasını da şart koşuyor ve itibar güncellemesini de sayıyor.) · 2026-08-16 (T129 — §2.4 adım 2 mutabakat son kontrolü dört dala ayrıldı: item duruyor / geri alınmış (iki taraflı kanıt) / ayırt edilemeyen ayrılma → admin / okunamıyor → eşikten sonra admin.) · 2026-08-10
+**Versiyon: v3.7** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-19 (**T133a** — custodial kalıntı turu: §1.1 aktör tanımından "item'ı emanet eden" ifadesi kaldırıldı; §3.3/6, §5.3a/5 ve §8.7/6'daki item-iade adımları silindi, §5.4/1 "iade edilecek eşya yoktur" kuralına (02 §3.2) çekildi; §4.1/3'ün "item henüz platformda değil" kalıbı §4.3/§4.4 ile aynı dile getirildi; §5.3a/3'teki canlı `ITEM_ESCROWED` → `SELLER_CONFIRMED`; §8.1 admin dashboard'ından Steam hesapları maddesi kaldırıldı (kodda `AdminDashboardResponse` `steamAccounts` taşımaz); §8.7/2 ve §8.8/8'deki emekli `TRADE_OFFER_SENT_TO_BUYER` aralık ucu state machine'in izin verdiği kümeye (`CREATED → PAYMENT_RECEIVED` + FLAGGED) çekildi; §12.1'in "item'ını gönder" satırı `BUYER_ACCEPTED` şablonuna, §12.2'nin "teslim süreniz" uyarısı ödeme süresine hizalandı. Hijyen: §2.1 ve §2.4'teki yinelenen adım numaraları ve onlara bağlı iki çapraz atıf düzeltildi, satır 5'teki T118 borç notu kapanışa çevrildi, altbilgi başlıkla hizalandı. Davranış değişikliği yok — doküman koda hizalandı.) · 2026-08-18 (**T131 düzeltme turu** — §6.4'teki "satıcı lehine karar imzayı serbest bırakır" kuralına iki alt madde eklendi. (1) **B1:** "kayda kusur yazılmaz" bir **kayıt kuralıdır**, yalnız bir cümle değil — serbest bırakma `PAYMENT_RECEIVED → CANCELLED_TIMEOUT` üretir ve 06 §3.1 haritası o geçişi satıcıya yazardı; satır artık `Transactions.TimeoutReleasedByAdminRulingAt` ile damgalanır ve **itibar + cooldown'ın ikisinde de** sayım dışı kalır (sınıf gerekçesi `CANCELLED_ADMIN` ile aynı, 02 §13). Kanıtla ispatlanmış olağan teslimat timeout'u bu damgayı almaz. (2) **N2:** kapıyı yalnız imzayı **görmüş** bir karar açar — karar imzadan önce verilmişse o admin başka bir vakayı okumuştur; serbest bırakma uygulanmaz, dispute yeni bulguyla `ESCALATED`'a döner (02 §10.2) ve timeout beklemeye devam eder. Karşılaştırma `Disputes.ResolvedAt` ile imzanın **ilk** kayda geçtiği an arasındadır; eşit an ve boş `ResolvedAt` "görmemiş" sayılır.) · 2026-08-17 (**T131** — §6.4'e iki kural eklendi: **gerekçe kapısı** (`ITEM_DELIVERED`'da alıcı lehine karar, admin notundan ayrı bir `overrideReason` olmadan reddedilir; daha erken durumlarda alıcı lehine karar olağan sonuçtur ve gerekçe istenmez — olağan sonuç için gerekçe istemek admin'i alanı geçiştirmeye alıştırır) ve **satıcı lehine kararın bekletilen teslimat imzasını serbest bırakması** (dispute "satıcı kusurlu mu" sorusunu kapatır, para 02 §9.2 kanıt kuralına göre akar; satıcı payout'u yalnız `ITEM_DELIVERED`'da işlediği için "işlem onaylanır" bu durumda "satıcıya öde" anlamına gelmez). "(02 §10)" atfı **§10.4**'e sabitlendi.) · 2026-08-17 (**T130** — §6.2'ye **Sonuç E** eklendi (kanıt var + kapı kapalı → dispute OPEN kalır, alıcı admin'e yükseltebilir, otomatik eskalasyon yapılmaz; mesaj `DELIVERY_EVIDENCE_UNDER_REVIEW`). §6.3'e iki kural: (a) yanlış item karşılaştırmasının **referans noktası** `BuyerBaselineClassIds`'dir — sınıf-kapsamlı sayı farklı bir sınıfın gelişini göremez, baseline yoksa karşılaştırma yapılmaz; (b) **ad yalnız tek bir yeni sınıf geldiyse** yazılır (`Disputes.DeliveredItemName`), birden fazlaysa eskalasyon yine yapılır ama ad boş bırakılır — yanlış item'ı yazmak hiç yazmamaktan kötüdür.) · 2026-08-17 (T129 düzeltme turu — §2.4 adım 2'ye beşinci dal (karar girdisi hiç üretilememiş → eşik beklemeden admin, 07 §9.22b ile satıcı lehine kapatılır) ve "bir kez ayrılma gözlenmişse karar geri alınmaz" kuralı eklendi; geri alma dalı artık ayrılmanın gözlenmiş olmasını da şart koşuyor ve itibar güncellemesini de sayıyor.) · 2026-08-16 (T129 — §2.4 adım 2 mutabakat son kontrolü dört dala ayrıldı: item duruyor / geri alınmış (iki taraflı kanıt) / ayırt edilemeyen ayrılma → admin / okunamıyor → eşikten sonra admin.) · 2026-08-10
 
-> **v3.1 (T118):** §3.4 adım 1, **§3.5 adım 3** ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. §3.5 adım 3 alıcıya var olmayan bir inbox bildirimi vaat ediyordu — adım 9'un kalıbına çekildi (gerçek-zamanlı güncelleme; bu geçişin iki bildirimi de satıcıya tanımlı). **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 iade kuralları) — bunlar ayrı bir doküman turu gerektiriyor.
+> **v3.1 (T118):** §3.4 adım 1, **§3.5 adım 3** ve §12 bildirim kataloğu koda hizalandı — ödeme penceresi item emanetiyle değil satıcı hazırlık onayıyla açılıyor (`PAYMENT_WINDOW_OPEN`), satıcıya `DELIVERY_EXPECTED` satırı eklendi, emekli `ITEM_RETURNED` / trade-offer / Steam-bot satırları kaldırıldı, eksik `ADMIN_PLATFORM_OUTAGE` eklendi. §3.5 adım 3 alıcıya var olmayan bir inbox bildirimi vaat ediyordu — adım 9'un kalıbına çekildi (gerçek-zamanlı güncelleme; bu geçişin iki bildirimi de satıcıya tanımlı). **Kapsam dışı kalan custodial kalıntılar** T118 raporunda listelendi (§1.1 aktör tanımı, §3.3/6, §5.3a/3+5, §5.4/1, §8.7 iade kuralları) ve **T133a turunda kapatıldı.**
 
 ---
 
@@ -14,7 +14,7 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
 
 | Aktör | Tanım |
 |---|---|
-| Satıcı | İşlemi başlatan, item'ı emanet eden, ödemeyi alan taraf |
+| Satıcı | İşlemi başlatan, item'ı doğrudan alıcıya gönderen, ödemeyi alan taraf |
 | Alıcı | İşlemi kabul eden, ödemeyi gönderen, item'ı teslim alan taraf |
 | Admin | Platformu yöneten, flag'lenmiş işlemleri inceleyen taraf |
 | Platform (Sistem) | Otomatik doğrulama, transfer ve bildirim işlemlerini gerçekleştiren sistem |
@@ -59,7 +59,7 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
    - ~~Steam Mobile Authenticator kontrolü login'de yapılmaz~~ — MA kontrolü **trade URL kaydı sırasında** yapılır (08 §2.2). Login'de yalnızca yukarıdaki kontroller geçerlidir.
 7. İlk kez geliyorsa hesabı otomatik oluşturulur (Steam ID, profil bilgileri çekilir)
 8. Kullanıcı profil ayarlarından **trade URL'ini kaydeder** → bu adımda MA kontrolü yapılır (08 §2.2: `GetTradeHoldDurations` çağrısı trade URL'den parse edilen `trade_offer_access_token` ile). MA aktif değilse → uyarı gösterilir, işlem başlatamaz ama platformu gezebilir. MA aktifse → işlem başlatma yetkisi verilir.
-8. Kullanıcı dashboard'a yönlendirilir (davet linkinden geldiyse → işlem detay sayfasına)
+9. Kullanıcı dashboard'a yönlendirilir (davet linkinden geldiyse → işlem detay sayfasına)
 
 ### 2.2 İşlem Başlatma (Normal Akış)
 
@@ -138,13 +138,13 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
    - **Kontrolün karar girdisi hiç üretilememişse →** (alıcı envanteri `SELLER_CONFIRMED` anında gizliydi ve teslimat alıcı onayıyla kapandı; ne asset kimliği ne baseline var, ikisi de sonradan doldurulamaz) karar verilmez ve **eşik beklenmez** — ilk turda admin'e düşer. Admin mutabakatı satıcı lehine kapatabilir (07 §9.22b); prosedür DEPLOY_RUNBOOK §I.5
    - **Bir kez ayrılma gözlenmişse karar geri alınmaz:** sonraki turun "item duruyor" okuması ödemeyi serbest bırakmaz, vaka admin'de kalır (02 §4.5.1 launch kapısı notu)
 3. Platform komisyonu hesaplar ve keser
-3. Gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
+4. Gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
    - **Aşmıyorsa →** Gas fee komisyondan karşılanır
    - **Aşıyorsa →** Gas fee satıcının payından kesilir
-4. Platform kalan tutarı satıcının cüzdan adresine gönderir
+5. Platform kalan tutarı satıcının cüzdan adresine gönderir
    - **Ödeme gönderimi başarısız olursa →** Sistem otomatik yeniden dener. Tekrarlayan başarısızlıkta admin'e bildirim gider. İşlem COMPLETED'a geçmez, ödeme başarılı olana kadar bekler.
-5. Satıcıya "Ödemeniz gönderildi" bildirimi gider
-6. İşlem COMPLETED durumuna geçer
+6. Satıcıya "Ödemeniz gönderildi" bildirimi gider
+7. İşlem COMPLETED durumuna geçer
 
 ### 2.4a Satıcı Payout Sorunu Bildirimi (02 §10.3)
 
@@ -160,7 +160,7 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
 
 **Senaryo B — İşlem ITEM_DELIVERED, payout stuck/başarısız (pre-COMPLETED):**
 
-> **Not:** Bu senaryo §2.4 adım 4'te tanımlı retry mekanizması kapsamındadır. Payout başarısız olduğunda işlem COMPLETED'a geçmez, ITEM_DELIVERED'da kalır. Retry otomatik çalışır (exponential backoff, 3 deneme — 06 §3.8). 3 deneme sonrası admin'e eskale edilir. Satıcının ayrıca bildirim yapmasına gerek yoktur — sistem otomatik yönetir.
+> **Not:** Bu senaryo §2.4 adım 5'te tanımlı retry mekanizması kapsamındadır. Payout başarısız olduğunda işlem COMPLETED'a geçmez, ITEM_DELIVERED'da kalır. Retry otomatik çalışır (exponential backoff, 3 deneme — 06 §3.8). 3 deneme sonrası admin'e eskale edilir. Satıcının ayrıca bildirim yapmasına gerek yoktur — sistem otomatik yönetir.
 
 ### 2.5 Satıcı İptal Akışı
 
@@ -192,7 +192,7 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
 2. Platforma yönlendirilir
 3. Kayıtlı değilse → "Steam ile Giriş" ekranı gösterilir
 4. Steam ile giriş yapar (bkz. §2.1 adım 1-7). MA kontrolü ayrıca trade URL kaydında yapılır (§2.1 adım 8).
-5. İlk kez geliyorsa hesabı otomatik oluşturulur, Kullanıcı Sözleşmesi gösterilir (bkz. §2.1 adım 7-8)
+5. İlk kez geliyorsa hesabı otomatik oluşturulur, Kullanıcı Sözleşmesi gösterilir (bkz. §2.1 adım 6-7)
 6. İşlem detay sayfasına yönlendirilir
 
 ### 3.2 İşlemi Kabul Etme (Adım 2)
@@ -237,9 +237,8 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
    - **Hayır →** Devam eder
 4. Alıcıdan iptal sebebi istenir (zorunlu)
 5. Alıcı sebebi yazar ve iptal onaylar
-6. Eğer item zaten platformdaysa → item satıcıya iade edilir
-7. İşlem CANCELLED_BUYER durumuna geçer
-8. Satıcıya "İşlem alıcı tarafından iptal edildi" bildirimi gider
+6. İşlem CANCELLED_BUYER durumuna geçer
+7. Satıcıya "İşlem alıcı tarafından iptal edildi" bildirimi gider
 
 ### 3.4 Ödeme Gönderme (Adım 4)
 
@@ -291,7 +290,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 
 1. Timeout süresi dolar
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
-3. Item henüz platformda değil (adım 3'e geçilmemişti) → iade gerekmez
+3. Ne ödeme alınmıştır ne de item satıcının envanterinden çıkmıştır → iade gerekmez
 4. Satıcıya "Alıcı zamanında kabul etmedi, işlem iptal oldu" bildirimi gider
 5. Alıcıya (kayıtlıysa) "İşlem zaman aşımı nedeniyle iptal oldu" bildirimi gider
 
@@ -381,16 +380,15 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 
 1. Alıcı ödeme adresine platform tarafından desteklenmeyen bir token/kontrat gönderir
 2. Platform bu varlığı tespit eder ancak işleyemez
-3. **İşlem state'i değişmez** — desteklenmeyen token ödeme olarak kabul edilmediği için işlem mevcut durumunda (ITEM_ESCROWED) kalır
+3. **İşlem state'i değişmez** — desteklenmeyen token ödeme olarak kabul edilmediği için işlem mevcut durumunda (`SELLER_CONFIRMED`) kalır
 4. **Timeout devam eder** — alıcı süre dolmadan doğru token ile ödeme gönderebilir
-5. **Item emanette kalır** — normal akıştan bağımsız, emanet durumu etkilenmez
-6. Desteklenmeyen varlık için ayrı bir admin review süreci başlatılır (otomatik iade garanti edilemez)
-7. Alıcıya "Desteklenmeyen varlık tespit edildi. Lütfen doğru token ile ödeme gönderin. Desteklenmeyen varlık için admin incelemesi başlatıldı" bildirimi gider
-8. Admin durumu değerlendirir ve mümkünse desteklenmeyen varlığı manuel iade eder (02 §4.4)
+5. Desteklenmeyen varlık için ayrı bir admin review süreci başlatılır (otomatik iade garanti edilemez)
+6. Alıcıya "Desteklenmeyen varlık tespit edildi. Lütfen doğru token ile ödeme gönderin. Desteklenmeyen varlık için admin incelemesi başlatıldı" bildirimi gider
+7. Admin durumu değerlendirir ve mümkünse desteklenmeyen varlığı manuel iade eder (02 §4.4)
 
 ### 5.4 Gecikmeli Ödeme (Timeout Sonrası)
 
-1. Ödeme timeout'u dolmuş, işlem iptal edilmiş, item satıcıya iade edilmiş
+1. Ödeme timeout'u dolmuş ve işlem iptal edilmiştir; item baştan beri satıcının envanterinde olduğu için iade edilecek bir eşya yoktur
 2. Platform ödeme adresini izlemeye devam eder
 3. Gecikmeli ödeme platforma ulaşır
 4. Platform ödemeyi otomatik olarak alıcının iade adresine iade eder (iade tutarından gas fee düşülür)
@@ -556,7 +554,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
    - Aktif işlem sayısı
    - Flag'lenmiş işlem sayısı (bekleyen)
    - Günlük/haftalık tamamlanan işlem sayısı
-   - Platform Steam hesaplarının durumu
+   - Son 5 flag kaydı (`recentFlags`)
 
 ### 8.2 Flag'lenmiş İşlem İnceleme
 
@@ -620,14 +618,13 @@ Platform Steam hesabı işletmez (02 §15); izlenecek bot durumu, emanet item sa
 **Senaryo:** Admin, flag mekanizması dışında operasyonel bir sebepten (yasal talep, kullanıcı şikayeti, teknik sorun) bir işlemi doğrudan iptal etmek istiyor.
 
 1. Admin işlem detay sayfasına gider (S16)
-2. İşlem CREATED'dan TRADE_OFFER_SENT_TO_BUYER'a kadar olan aktif bir state'teyse (+ FLAGGED) "İşlemi İptal Et" butonu görünür
+2. İşlem CREATED, ACCEPTED, SELLER_CONFIRMED veya PAYMENT_RECEIVED durumundaysa (+ FLAGGED) "İşlemi İptal Et" butonu görünür
 3. Admin butona tıklar
 4. İptal sebebi girmesi istenir (zorunlu)
 5. Admin sebebi yazar ve iptal onaylar
 6. **İade kuralları (standart iptal kurallarıyla aynı):**
-   - Item platformda emanetteyse → satıcıya iade edilir
-   - Ödeme alınmışsa → alıcıya iade edilir (fiyat + komisyon - gas fee)
-   - Her iki varlık da varsa → ikisi de iade edilir
+   - Ödeme alınmışsa → alıcıya iade edilir (fiyat + komisyon − gas fee)
+   - **Item iadesi diye bir adım yoktur** — item hiçbir zaman platformda bulunmadığı için platformun geri verebileceği tek varlık paradır (02 §3.2)
 7. İşlem CANCELLED_ADMIN durumuna geçer
 8. Her iki tarafa "İşleminiz admin tarafından iptal edildi" bildirimi gider (admin notu dahil)
 9. İptal kaydı AuditLog'a yazılır
@@ -654,7 +651,7 @@ Platform Steam hesabı işletmez (02 §15); izlenecek bot durumu, emanet item sa
 7. İşlem mevcut state'inde kalır, `IsOnHold` flag'i aktif edilir, `TimeoutFreezeReason = EMERGENCY_HOLD` kaydedilir (05 §4.5)
 8. Admin incelemesini tamamlar:
    - **Devam ettir →** Hold kaldırılır (`IsOnHold = false`), timeout kaldığı yerden devam eder
-   - **İptal et (CREATED → TRADE_OFFER_SENT_TO_BUYER arası) →** Standart admin iptal kuralları uygulanır (§8.7)
+   - **İptal et (CREATED → PAYMENT_RECEIVED arası) →** Standart admin iptal kuralları uygulanır (§8.7)
    - **İptal et (ITEM_DELIVERED) →** Standart iptal uygulanamaz (item alıcıda). Admin exceptional resolution başlatır — manuel inceleme ve müdahale (§8.7 notu)
 9. Tüm hold aksiyonları AuditLog'a yazılır
 
@@ -807,7 +804,7 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 
 | Tetikleyici | Bildirim |
 |---|---|
-| Alıcı işlemi kabul etti | "Alıcı hazır, item'ını gönder" |
+| Alıcı işlemi kabul etti | "Alıcı işlemi kabul etti — hazırlık onayı ver" (`BUYER_ACCEPTED`) |
 | Ödeme doğrulandı | "Ödeme geldi" |
 | İşlem tamamlandı | "İşlem tamamlandı" |
 | Ödeme emanete alındı | "Ödeme alındı, item'ı şimdi gönder" (`DELIVERY_EXPECTED`) |
@@ -827,7 +824,7 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 | Item teslim edildi | Gerçek-zamanlı durum güncellemesi (ITEM_DELIVERED) ile gösterilir — ayrı inbox/email bildirimi yoktur; inbox "İşlem tamamlandı" bildirimi COMPLETED'da gönderilir (02 §18.2 / 06 §2.13; WP19) |
 | İşlem tamamlandı | "İşlem tamamlandı" (yalnızca COMPLETED state'inde gönderilir) |
 | Gecikmeli ödeme iadesi | "Gecikmeli ödemeniz iade edildi" |
-| Timeout yaklaşıyor (alıcı aksiyonu gereken) | "Ödeme/teslim süreniz dolmak üzere" |
+| Timeout yaklaşıyor (alıcı aksiyonu gereken) | "Ödeme süreniz dolmak üzere" (`TIMEOUT_WARNING`) |
 | Satıcı işlemi iptal etti | "İşlem satıcı tarafından iptal edildi" |
 | İşlem iptal oldu (timeout) | "İşlem iptal oldu" + sebep |
 
@@ -847,4 +844,4 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 
 ---
 
-*Skinora — User Flows v2.2*
+*Skinora — User Flows v3.7*
