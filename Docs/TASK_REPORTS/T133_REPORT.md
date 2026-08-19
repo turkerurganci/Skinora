@@ -92,7 +92,13 @@ kapsamıyordu**.
 - **Lokal sır:** `secrets/steam-bots.json` proje sahibi kararıyla **silindi**.
   Gitignored'dı, repo'ya hiç girmedi. Taşıdığı Steam hesabı parolası için
   **rotasyon önerildi** ve `secrets/README.md`'ye yazıldı.
-- **Arşiv kaydı:** `DEFERRED_BACKLOG` `P2P-BotCodeArchive` satırı kapatıldı.
+- **Arşiv kaydı:** `DEFERRED_BACKLOG` `P2P-BotCodeArchive` satırı **kapatıldı**
+  (aktif 38 → 37). Üç halkanın üçünün de işaretçisi satıra yazıldı: T117 `82bff4d` ·
+  T132 PR #247 · T133 PR #248. **İşaretçi olarak PR numarası seçildi, squash sha'sı
+  değil** — sha merge anında doğar, yani satır kendi kapanışını hiçbir zaman
+  yazamıyordu (T132 turunda da tam bu yüzden boş kaldı ve iş T133'e devretti).
+  `git log --grep "(#248)"` squash commit'i sha'dan bağımsız bulur, yani satırın
+  amacı (git geçmişinde yeri işaretlemek) sha olmadan da karşılanıyor.
 - **Kapsam dışı, sahibi işaretlendi:** DEPLOY_RUNBOOK §G.4 kontrol 10'un happy
   path anlatısı hâlâ custodial. Bu bir **yeniden yazımdır**, bu turun sildiği bir
   şeyin sonucu değil → yeni **T133b** görevi olarak plana yazıldı.
@@ -132,6 +138,8 @@ kapsamıyordu**.
 | `Docs/DEPLOY_RUNBOOK.md` | §B env tablosu, §G.0/§G.1/§G.2/§G.4/§G.5 |
 | `infra/grafana/.../{integration,business}-metrics.json` | 2 ölü panel + satır yeniden akıtıldı |
 | `.claude/CONTEXT.md` | Steam sidecar dosya haritası |
+| `Docs/IMPLEMENTATION_STATUS.md` | Başlık + **Post-MVP §G kontrol listesi**: adım 5/6/8 ve #214 operasyonel tuzağı silinen script'e/dosyaya yönlendiriyordu |
+| `Docs/DEFERRED_BACKLOG.md` | `P2P-BotCodeArchive` kapatıldı (aktif 38 → 37) |
 
 ---
 
@@ -253,8 +261,10 @@ Yetkili kanıt CI'dır — izole container'da Docker vardır.
 ## Commit & PR
 
 - Branch: `task/T133-sidecar-steam-readonly-proxy`
-- PR: #248
-- CI: (aşağıda güncellenecek)
+- Commit: `c4a66bd` — T133: sidecar-steam salt-okunur proxy'ye küçültme
+- PR: [#248](https://github.com/turkerurganci/Skinora/pull/248)
+- Branch izolasyon check: ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → yalnız `T133`
+- CI: run [`32257305901`](https://github.com/turkerurganci/Skinora/actions/runs/32257305901) — sonuç aşağıya yazılacak
 
 ---
 
