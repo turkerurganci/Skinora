@@ -1,7 +1,7 @@
 namespace Skinora.Admin.Application.Permissions;
 
 /// <summary>
-/// Static catalog of the 14 admin permissions defined by 07 §9.11
+/// Static catalog of the 12 admin permissions defined by 07 §9.11
 /// <c>availablePermissions</c> (kept 1:1 with the 04 §8.8 yetki matrix).
 /// Single source of truth in code — the AD11 response, role validation
 /// (INVALID_PERMISSION) and the Permission constants used by
@@ -16,8 +16,6 @@ public static class PermissionCatalog
         public const string ManageFlags = "MANAGE_FLAGS";
         public const string ViewTransactions = "VIEW_TRANSACTIONS";
         public const string ManageSettings = "MANAGE_SETTINGS";
-        public const string ViewSteamAccounts = "VIEW_STEAM_ACCOUNTS";
-        public const string ManageSteamRecovery = "MANAGE_STEAM_RECOVERY";
         public const string ViewUsers = "VIEW_USERS";
         public const string ManageRoles = "MANAGE_ROLES";
         public const string ViewAuditLog = "VIEW_AUDIT_LOG";
@@ -38,8 +36,6 @@ public static class PermissionCatalog
         new(Keys.ManageFlags, "Flag'leri yönet"),
         new(Keys.ViewTransactions, "İşlemleri görüntüle"),
         new(Keys.ManageSettings, "Parametreleri yönet"),
-        new(Keys.ViewSteamAccounts, "Steam hesaplarını görüntüle"),
-        new(Keys.ManageSteamRecovery, "Steam recovery yönet"),
         new(Keys.ViewUsers, "Kullanıcı detay görüntüle"),
         new(Keys.ManageRoles, "Rolleri yönet"),
         new(Keys.ViewAuditLog, "Audit log görüntüle"),
@@ -53,7 +49,7 @@ public static class PermissionCatalog
     private static readonly HashSet<string> KeySet =
         new(All.Select(p => p.Key), StringComparer.Ordinal);
 
-    /// <summary>Returns true if <paramref name="key"/> is one of the 14 catalog entries.</summary>
+    /// <summary>Returns true if <paramref name="key"/> is one of the 12 catalog entries.</summary>
     public static bool IsKnown(string key) => KeySet.Contains(key);
 }
 

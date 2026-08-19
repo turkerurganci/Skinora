@@ -57,14 +57,6 @@ public sealed class RecordingNotificationRealtimePublisher : INotificationRealti
         return Task.CompletedTask;
     }
 
-    public Task PublishAdminBotStatusChangedAsync(
-        NotificationRealtimePayloads.AdminBotStatusChanged payload,
-        CancellationToken cancellationToken)
-    {
-        Calls.Add(("AdminBotStatusChanged", payload));
-        return Task.CompletedTask;
-    }
-
     public Task PublishAdminReconciliationMismatchAsync(
         NotificationRealtimePayloads.AdminReconciliationMismatch payload,
         CancellationToken cancellationToken)

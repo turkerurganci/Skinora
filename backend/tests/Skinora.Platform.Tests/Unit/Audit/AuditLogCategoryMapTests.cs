@@ -31,12 +31,8 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.TRANSACTION_CANCELLED_ADMIN, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.EMERGENCY_HOLD_APPLIED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.EMERGENCY_HOLD_RELEASED, AuditLogCategoryMap.Categories.AdminAction)]
-    [InlineData(AuditAction.BOT_STATUS_CHANGED, AuditLogCategoryMap.Categories.SecurityEvent)]
-    [InlineData(AuditAction.BOT_SESSION_FAILED, AuditLogCategoryMap.Categories.SecurityEvent)]
     [InlineData(AuditAction.COLD_WALLET_TRANSFER_INITIATED, AuditLogCategoryMap.Categories.FundMovement)]
     [InlineData(AuditAction.HOT_WALLET_THRESHOLD_BREACHED, AuditLogCategoryMap.Categories.SecurityEvent)]
-    [InlineData(AuditAction.BOT_RECOVERY_ITEM_CREATED, AuditLogCategoryMap.Categories.SecurityEvent)]
-    [InlineData(AuditAction.BOT_RECOVERY_UPDATED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.MAINTENANCE_MODE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.TIMEOUT_AUTO_EXTENDED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.PLATFORM_OUTAGE_DETECTED, AuditLogCategoryMap.Categories.SecurityEvent)]
@@ -75,16 +71,17 @@ public class AuditLogCategoryMapTests
     }
 
     [Fact]
-    public void ActionsInCategory_ADMIN_ACTION_Returns_Eighteen_Admin_Actions()
+    public void ActionsInCategory_ADMIN_ACTION_Returns_Seventeen_Admin_Actions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.AdminAction);
 
         // 7 pre-T54 + 4 fraud-flag (T54) + 3 admin tx lifecycle (T59)
-        // + 1 bot recovery triage (T103b-2) + 1 maintenance toggle (WP7)
-        // + 1 restart-recovery auto-extension (WP16)
-        // + 1 settlement clearance (T129 fix round, AD32) = 18.
-        Assert.Equal(18, actions.Count);
+        // + 1 maintenance toggle (WP7) + 1 restart-recovery auto-extension (WP16)
+        // + 1 settlement clearance (T129 fix round, AD32) = 17.
+        // The bot recovery triage action (T103b-2) left with T132 — the
+        // platform runs no Steam bots, so no admin triages a recovery item.
+        Assert.Equal(17, actions.Count);
         Assert.Contains(AuditAction.SYSTEM_SETTING_CHANGED, actions);
         Assert.Contains(AuditAction.REFUND_BLOCKED, actions);
         Assert.Contains(AuditAction.FRAUD_FLAG_CREATED, actions);
@@ -94,22 +91,20 @@ public class AuditLogCategoryMapTests
         Assert.Contains(AuditAction.TRANSACTION_CANCELLED_ADMIN, actions);
         Assert.Contains(AuditAction.EMERGENCY_HOLD_APPLIED, actions);
         Assert.Contains(AuditAction.EMERGENCY_HOLD_RELEASED, actions);
-        Assert.Contains(AuditAction.BOT_RECOVERY_UPDATED, actions);
         Assert.Contains(AuditAction.MAINTENANCE_MODE_CHANGED, actions);
         Assert.Contains(AuditAction.TIMEOUT_AUTO_EXTENDED, actions);
         Assert.Contains(AuditAction.SETTLEMENT_CLEARED_ADMIN, actions);
     }
 
     [Fact]
-    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Bot_Status_Reconciliation_HotWalletBreach_And_Sanctions()
+    public void ActionsInCategory_SECURITY_EVENT_Returns_Wallet_Address_Changed_Reconciliation_HotWalletBreach_And_Sanctions()
     {
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.SecurityEvent);
 
         // Ordering mirrors the dictionary insertion order in
         // AuditLogCategoryMap: WALLET_ADDRESS_CHANGED (initial) →
-        // BOT_STATUS_CHANGED (T69) → BOT_SESSION_FAILED (WP8) →
-        // BOT_RECOVERY_ITEM_CREATED (T103b-2) → RECONCILIATION_MISMATCH (T76) →
+        // RECONCILIATION_MISMATCH (T76) →
         // HOT_WALLET_THRESHOLD_BREACHED (T77) →
         // SANCTIONS_LIST_ADDRESS_ADDED / SANCTIONS_LIST_ADDRESS_REMOVED (T82) →
         // PLATFORM_OUTAGE_DETECTED (WP16, inserted last).
@@ -117,9 +112,6 @@ public class AuditLogCategoryMapTests
             new[]
             {
                 AuditAction.WALLET_ADDRESS_CHANGED,
-                AuditAction.BOT_STATUS_CHANGED,
-                AuditAction.BOT_SESSION_FAILED,
-                AuditAction.BOT_RECOVERY_ITEM_CREATED,
                 AuditAction.RECONCILIATION_MISMATCH,
                 AuditAction.HOT_WALLET_THRESHOLD_BREACHED,
                 AuditAction.SANCTIONS_LIST_ADDRESS_ADDED,
