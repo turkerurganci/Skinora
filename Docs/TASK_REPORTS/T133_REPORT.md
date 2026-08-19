@@ -264,7 +264,30 @@ Yetkili kanıt CI'dır — izole container'da Docker vardır.
 - Commit: `c4a66bd` — T133: sidecar-steam salt-okunur proxy'ye küçültme
 - PR: [#248](https://github.com/turkerurganci/Skinora/pull/248)
 - Branch izolasyon check: ✓ temiz — `git log main..HEAD --format='%s' | grep -oE '^T[0-9]+...'` → yalnız `T133`
-- CI: run [`32257305901`](https://github.com/turkerurganci/Skinora/actions/runs/32257305901) — sonuç aşağıya yazılacak
+- CI: ✓ **PASS** — dal HEAD `437c895` run [`32257465991`](https://github.com/turkerurganci/Skinora/actions/runs/32257465991) `conclusion=success`; bloke edici jobların **hepsi** yeşil (`1. Lint`, `2. Build`, `3. Unit test`, `3b. JS test (vitest)`, `4. Integration test`, `5. Contract test`, `6. Migration dry-run`, `7. Docker build` ×2, **`CI Gate`**). Önceki run [`32257305901`](https://github.com/turkerurganci/Skinora/actions/runs/32257305901) (`c4a66bd`) rapor/status commit'i push edilince concurrency'den **cancelled** — task.md gereği failure sayılmaz.
+
+### Advisory E2E ölçümü — compose değişikliğinin inert olduğu KANITLANDI
+
+Tur `docker-compose.e2e.yml`'a dokunduğu için (`STEAM_WEBHOOK_SECRET` satırı)
+sekiz advisory leg'in logları sayıldı. T137'nin kalıcı dersi gereği bakıldı:
+advisory sinyal bloke etmediği için değil, **kimse bakmadığı için** ölür.
+
+| Leg | Sonuç | Taban (T132, run `32194023638`) |
+|---|---|---|
+| happy-path | 0/1 | 0/1 |
+| T108 cancellation | 0/4 | 0/4 |
+| T109 timeout | **1/4** | 1/4 |
+| T110 payment edge cases | 0/6 | 0/6 |
+| T111 fraud-flags | **3/4** | 3/4 |
+| T112 emergency-hold | 0/3 | 0/3 |
+| T114 downtime | 0/3 | 0/3 |
+| T113 admin-flows | **6/7** | 6/7 |
+| **Toplam** | **10/32** | **10/32** |
+
+Sayı **ve** leg dağılımı birebir → `STEAM_WEBHOOK_SECRET` satırının kaldırılması
+davranışı değiştirmiyor. Bu bir tahmin değil ölçümdür. Bu dalda koşacak her
+sonraki run bir tekrar daha ekler (sayı burada sabitlenmedi ki atıf
+bayatlamasın — T137 tur 2'nin N3 dersi).
 
 ---
 
