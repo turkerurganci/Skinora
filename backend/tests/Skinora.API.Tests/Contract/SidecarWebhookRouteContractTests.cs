@@ -13,8 +13,8 @@ namespace Skinora.API.Tests.Contract;
 /// <para>
 /// Why this exists: the real Steam sidecar published to
 /// <c>/api/v1/sidecar/steam/bot-events</c> and
-/// <c>/api/v1/sidecar/steam/trade-offer-events</c>, while
-/// <c>SteamWebhooksController</c> serves <c>/api/v1/webhooks/steam/bot-events</c> and
+/// <c>/api/v1/sidecar/steam/trade-offer-events</c>, while the then-existing
+/// <c>SteamWebhooksController</c> served <c>/api/v1/webhooks/steam/bot-events</c> and
 /// <c>/api/v1/webhooks/steam/trade-events</c>. Every publish 404'd, so trade offer
 /// state changes never reached the backend and a transaction could never advance past
 /// the escrow step of the then-current custodial flow (a state set the v3.0 P2P pivot
@@ -26,6 +26,13 @@ namespace Skinora.API.Tests.Contract;
 /// Both halves are read from source rather than hardcoded here, so the test fails on
 /// drift from EITHER side: rename the controller route and this breaks; change a
 /// sidecar constant and this breaks.
+/// </para>
+/// <para>
+/// The guard is strict again as of T133. Between T117 and T132 it carried a named
+/// exception for those two <c>/webhooks/steam/*</c> paths: the controller was gone
+/// but <c>sidecar-steam</c>'s bot / trade-offer modules still published to them.
+/// T133 deleted the publishers, so the exception had nothing left to cover and went
+/// with them — every published path is checked again without exemption.
 /// </para>
 /// </remarks>
 public sealed class SidecarWebhookRouteContractTests
@@ -51,26 +58,6 @@ public sealed class SidecarWebhookRouteContractTests
         @"['""](?<path>/api/v1/[A-Za-z0-9\-_/]+)['""]",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// Backend endpoints retired with the bot custody layer in T117 (02 §2.1):
-    /// the platform runs no Steam bots and creates no trade offers, so
-    /// <c>SteamWebhooksController</c> is gone. The sidecar-side publishers
-    /// (<c>sidecar-steam</c> bot / trade-offer modules and the
-    /// <c>sidecar-fake</c> trade route) are deleted in <b>T133</b>, which is
-    /// also when this list must go empty again.
-    /// </summary>
-    /// <remarks>
-    /// Listed explicitly rather than skipped so the drift is named, bounded and
-    /// visible: every other published path stays strictly guarded, and
-    /// <see cref="RetiredPathsAreStillPublished_UntilT133"/> fails the moment
-    /// the entry becomes stale — so the exclusion cannot outlive its reason.
-    /// </remarks>
-    private static readonly string[] RetiredWithBotCustodyLayer =
-    [
-        "/api/v1/webhooks/steam/bot-events",
-        "/api/v1/webhooks/steam/trade-events",
-    ];
-
     [Fact]
     public void EverySidecarPublishedPath_IsServedByBackend()
     {
@@ -82,7 +69,6 @@ public sealed class SidecarWebhookRouteContractTests
 
         var orphans = published
             .Where(p => !backendRoutes.Contains(p.Path))
-            .Where(p => !RetiredWithBotCustodyLayer.Contains(p.Path, StringComparer.Ordinal))
             .OrderBy(p => p.Path, StringComparer.Ordinal)
             .ToList();
 
@@ -116,34 +102,33 @@ public sealed class SidecarWebhookRouteContractTests
     }
 
     /// <summary>
-    /// Keeps <see cref="RetiredWithBotCustodyLayer"/> honest from both sides: an
-    /// entry may only stay while a sidecar still publishes it (otherwise the
-    /// exclusion is dead and hides nothing) and while the backend genuinely no
-    /// longer serves it (otherwise the route came back and must be guarded
-    /// again). T133 deletes the publishers — this test then fails and the list
-    /// is removed with them.
+    /// The custody layer left no published path behind: nothing under
+    /// <c>/api/v1/webhooks/steam/</c> is emitted by any sidecar any more (T133
+    /// deleted the last three constants, in <c>sidecar-steam</c>'s
+    /// <c>BotManager</c>, <c>TradeOfferService</c> and <c>TradeOfferMonitor</c>).
     /// </summary>
+    /// <remarks>
+    /// Asserted rather than assumed: <see cref="EverySidecarPublishedPath_IsServedByBackend"/>
+    /// would stay green if such a path came back AND a matching backend route came
+    /// back with it — which is exactly how the custody surface would be resurrected
+    /// by accident. This test fails on the publisher alone.
+    /// </remarks>
     [Fact]
-    public void RetiredPathsAreStillPublished_UntilT133()
+    public void NoSidecarPublishesToTheRetiredSteamWebhookSurface()
     {
-        var backendRoutes = DiscoverBackendRoutes();
-        var published = DiscoverSidecarPublishedPaths()
-            .Select(p => p.Path)
-            .ToHashSet(StringComparer.Ordinal);
+        var resurrected = DiscoverSidecarPublishedPaths()
+            .Where(p => p.Path.StartsWith("/api/v1/webhooks/steam", StringComparison.Ordinal))
+            .OrderBy(p => p.Path, StringComparer.Ordinal)
+            .ToList();
 
-        foreach (var retired in RetiredWithBotCustodyLayer)
-        {
-            Assert.True(
-                published.Contains(retired),
-                $"'{retired}' is no longer published by any sidecar — the bot custody "
-                + "removal (T133) is done, so drop it from RetiredWithBotCustodyLayer "
-                + "and let the strict guard cover it again.");
-
-            Assert.False(
-                backendRoutes.Contains(retired),
-                $"'{retired}' is served by the backend again — remove it from "
-                + "RetiredWithBotCustodyLayer so drift on it is caught.");
-        }
+        Assert.True(
+            resurrected.Count == 0,
+            "The Steam webhook surface was retired with the bot custody layer (02 §2.1) "
+            + "and the backend serves none of it, but a sidecar publishes:"
+            + Environment.NewLine
+            + string.Join(
+                Environment.NewLine,
+                resurrected.Select(o => $"  - {o.Path}   (declared in {o.SourceFile})")));
     }
 
     // ------------------------------------------------------------------

@@ -21,38 +21,19 @@ bash scripts/git-hooks/install.sh
 
 ## Beklenen dosyalar
 
-### `secrets/steam-bots.json` — Steam escrow bot kimlik bilgileri
+**Bu dizinde beklenen bir dosya yoktur (T133).** Tek beklenen dosya
+`secrets/steam-bots.json` idi: Steam escrow bot'unun hesap adı, parolası ve iki
+Mobile Authenticator sırrı. Platform artık hiçbir Steam hesabı çalıştırmıyor ve
+trade offer göndermiyor (05 §3.2, 02 §2.1) — Steam sidecar'ın tek kimlik bilgisi
+`.env`'deki `STEAM_API_KEY`'dir ve o env olarak taşınır, dosya olarak değil.
 
-Steam sidecar'a `:ro` mount edilir; `STEAM_BOTS_CONFIG_PATH=/run/secrets/steam-bots.json`
-ile okunur ([`BotConfig.ts`](../sidecar-steam/src/bot/BotConfig.ts) önce dosya
-yoluna bakar, sonra `STEAM_BOTS_JSON`'a düşer). Dosya yoksa sidecar **skeleton
-mode**'da açılır: `/health` çalışır ama `selectBot()` null döner ve trade offer
-gönderilemez.
+Dizin ve savunma katmanları **kaldırılmadı**: `.gitignore` + `pre-commit` kuralı
+buraya yanlışlıkla yapıştırılan herhangi bir sırrı bloklamaya devam eder, ve
+ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 
-Şablon (gerçek değerleri siz doldurun):
-
-```json
-{
-  "bots": [
-    {
-      "accountName": "<bot Steam hesap adi>",
-      "password": "<bot Steam sifresi>",
-      "sharedSecret": "<maFile icindeki shared_secret>",
-      "identitySecret": "<maFile icindeki identity_secret>"
-    }
-  ]
-}
-```
-
-- `sharedSecret` → `steam-totp` ile 2FA kodu üretir (giriş).
-- `identitySecret` → `steamcommunity` mobil onay anahtarı (trade confirmation).
-- İkisi de bot hesabının **Mobile Authenticator `maFile`**'ından gelir. `maFile`'ın
-  kendisini repo dizinine kopyalamayın — `*.maFile` de gitignored ve hook tarafından
-  bloklanır, ama en güvenlisi repo dışında tutmaktır.
-- Birden fazla bot desteklenir (`bots` dizisine ekleyin); `BotManager` round-robin seçer.
-
-Her bot için ayrıca veritabanına bir `PlatformSteamBots` satırı gerekir —
-bkz. [`scripts/bootstrap/02-register-bot.sql`](../scripts/bootstrap/02-register-bot.sql).
+> **Bu dosyayı daha önce doldurduysanız:** lokal `secrets/steam-bots.json` T133'te
+> silindi. Repo'ya hiç girmedi (gitignored) — ama içindeki Steam hesabı parolası
+> diskte açık metin durduğu için o hesabın parolasını **döndürün**.
 
 ---
 
@@ -65,9 +46,10 @@ bkz. [`scripts/bootstrap/02-register-bot.sql`](../scripts/bootstrap/02-register-
 |---|---|---|
 | `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme (`m/44'/195'/0'/0/{index}`) |
 | `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + Energy delegation. **Backend'e geçilmez.** |
-| `STEAM_API_KEY` | steam sidecar + backend | Envanter + OpenID profil |
+| `STEAM_API_KEY` | steam sidecar + backend | Envanter okuma + trade-hold probu + OpenID profil |
 | `TRON_API_KEY` / `_SECONDARY` | blockchain sidecar | TronGrid rate limit + failover |
-| `JWT_SECRET`, `WEBHOOK_SECRET`, `*_INTERNAL_KEY` | backend + sidecar'lar | ≥32 karakter rastgele |
+| `JWT_SECRET`, `*_INTERNAL_KEY` | backend + sidecar'lar | ≥32 karakter rastgele |
+| `WEBHOOK_SECRET` | backend + **blockchain** sidecar | ≥32 karakter rastgele. Steam sidecar webhook göndermez (T133) |
 
 ---
 
@@ -86,8 +68,8 @@ Nile testnet üzerinde yapılır.
 
 ## Sır sızdıysa ne yapmalı
 
-1. Anahtarı **hemen döndürün** (Steam API key'i iptal edip yenileyin, bot şifresini
-   değiştirin, Tron cüzdanını boşaltıp yenisini üretin). Git geçmişini temizlemek
-   ikinci adımdır — sızan anahtar artık yakılmış sayılır.
+1. Anahtarı **hemen döndürün** (Steam API key'i iptal edip yenileyin, Tron
+   cüzdanını boşaltıp yenisini üretin). Git geçmişini temizlemek ikinci adımdır —
+   sızan anahtar artık yakılmış sayılır.
 2. Sonra geçmişten temizleyin (`git filter-repo` veya BFG) ve force-push edin.
 3. `Docs/BYPASS_LOG.md`'de ilgili `[secret-guard]` kaydı varsa nedenini not edin.

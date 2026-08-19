@@ -82,7 +82,7 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 
 ### Steam Modülü (T21 · T117'de salt-okunur proxy'ye küçüldü)
 
-**v3.0 (P2P):** Bot custody katmanı T117'de silindi — `TradeOffer`, `PlatformSteamBot`, `BotRecoveryItem` entity'leri, bot seçimi, dispatch, recovery ve Steam webhook yüzeyi yok. Modülün kalan görevi **envanter okuma** (teslimat doğrulamasının temeli, 02 §9.2) ve **trade-hold probu** (alıcı MA doğrulaması). Sidecar tarafındaki bot/trade modüllerinin silinmesi T133'e ait.
+**v3.0 (P2P):** Bot custody katmanı T117'de silindi — `TradeOffer`, `PlatformSteamBot`, `BotRecoveryItem` entity'leri, bot seçimi, dispatch, recovery ve Steam webhook yüzeyi yok. Modülün kalan görevi **envanter okuma** (teslimat doğrulamasının temeli, 02 §9.2) ve **trade-hold probu** (alıcı MA doğrulaması). **T133'te sidecar yarısı da kapandı:** `sidecar-steam` salt-okunur bir proxy'dir — bot havuzu, trade offer gönderimi/takibi ve webhook yayıncısı silindi, hiçbir Steam hesabı kimlik bilgisi taşımaz (tek credential `STEAM_API_KEY`).
 
 | Dosya | İçerik |
 |---|---|
@@ -186,18 +186,14 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `sidecar-steam/src/index.ts` | Entry point — Express server + graceful shutdown |
 | `sidecar-steam/src/config/index.ts` | Environment config (port, URLs, keys, rate limits) |
 | `sidecar-steam/src/logger.ts` | Pino logger (Loki push, correlationId, secret redaction) |
-| `sidecar-steam/src/errors/SidecarError.ts` | Error hiyerarşisi: SidecarError → SteamApiError, BotSessionExpiredError |
-| `sidecar-steam/src/queue/RateLimitedQueue.ts` | Rate-limited istek kuyruğu (Steam API) |
-| `sidecar-steam/src/webhook/WebhookClient.ts` | HMAC-SHA256 imzalı webhook callback (05 §3.4) |
-| `sidecar-steam/src/webhook/WebhookPayloads.ts` | Webhook payload type |
-| `sidecar-steam/src/health/HealthController.ts` | /health endpoint |
-| `sidecar-steam/src/api/routes.ts` | Express router (health + stub API routes) |
+| `sidecar-steam/src/errors/SidecarError.ts` | Error hiyerarşisi: SidecarError → SteamApiError |
+| `sidecar-steam/src/health/HealthController.ts` | /health endpoint (tek check: `steam-api`) |
+| `sidecar-steam/src/api/routes.ts` | Express router — `/health`, `/metrics` + iki salt-okunur uç (envanter, trade-hold) |
 | `sidecar-steam/src/api/middleware.ts` | correlationId + X-Internal-Key auth middleware |
-| `sidecar-steam/src/bot/BotManager.ts` | Bot yönetimi stub (T64) |
-| `sidecar-steam/src/bot/BotSession.ts` | Bot session stub (T64) |
-| `sidecar-steam/src/bot/BotHealthCheck.ts` | Bot health check stub (T64) |
-| `sidecar-steam/src/trade/TradeOfferService.ts` | Trade offer stub (T65) |
-| `sidecar-steam/src/trade/InventoryService.ts` | Envanter stub (T67) |
+| `sidecar-steam/src/trade/InventoryService.ts` | Anonim Steam Community envanter okuma (T67 · 08 §2.3) |
+| `sidecar-steam/src/trade/TradeHoldService.ts` | Trade-hold / Mobile Authenticator probu (WP6 · 08 §2.2) |
+| `sidecar-steam/src/cache/InventoryCache.ts` | Redis + in-memory envanter cache (T120) |
+| `sidecar-steam/src/queue/RateLimitedQueue.ts` | Web API ve Community için AYRI rate limit kuyrukları (T120 · 08 §2.6) |
 | `sidecar-steam/Dockerfile` | Multi-stage Node.js 20-alpine build |
 
 ### Blockchain Sidecar — Node.js (T15)

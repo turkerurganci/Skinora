@@ -24,8 +24,6 @@ vi.mock('../logger.js', () => ({
 
 import { buildRouter } from './routes.js';
 import { correlationMiddleware } from './middleware.js';
-import type { TradeOfferService } from '../trade/TradeOfferService.js';
-import type { SendTradeOfferResponse } from '../trade/types.js';
 import {
   InventoryPrivateError,
   InventoryService,
@@ -37,166 +35,8 @@ import { InMemoryInventoryCache } from '../cache/InventoryCache.js';
 import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
-function buildApp(service: TradeOfferService) {
-  const app = express();
-  app.use(express.json());
-  app.use(correlationMiddleware);
-  app.use(buildRouter({ tradeOfferService: service }));
-  return app;
-}
-
-async function startApp(
-  service: TradeOfferService,
-): Promise<{ url: string; close: () => Promise<void> }> {
-  const app = buildApp(service);
-  const server = await new Promise<import('http').Server>((resolve) => {
-    const s = app.listen(0, () => resolve(s));
-  });
-  const port = (server.address() as AddressInfo).port;
-  return {
-    url: `http://127.0.0.1:${port}`,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
-  };
-}
-
-const validBody = {
-  transactionId: 'tx-1',
-  direction: 'BOT_TO_BUYER',
-  partnerSteamId: '76561198000000999',
-  items: [{ assetid: 'a1', appid: 730, contextid: '2' }],
-};
-
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe('POST /api/trade-offers/send', () => {
-  it('routes a valid request to TradeOfferService.sendOffer', async () => {
-    const sendOffer = vi.fn().mockResolvedValue({
-      status: 'sent',
-      offerId: 'offer-1',
-      attempts: 1,
-    } satisfies SendTradeOfferResponse);
-    const service = { sendOffer } as unknown as TradeOfferService;
-
-    const ctx = await startApp(service);
-    try {
-      const res = await fetch(`${ctx.url}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(validBody),
-      });
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body).toMatchObject({ status: 'sent', offerId: 'offer-1' });
-      expect(sendOffer).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 'tx-1' }));
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  it('returns 502 when TradeOfferService reports failure', async () => {
-    const sendOffer = vi.fn().mockResolvedValue({
-      status: 'failed',
-      reason: 'no bots',
-      retryable: true,
-      attempts: 0,
-    } satisfies SendTradeOfferResponse);
-    const service = { sendOffer } as unknown as TradeOfferService;
-
-    const ctx = await startApp(service);
-    try {
-      const res = await fetch(`${ctx.url}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(validBody),
-      });
-      expect(res.status).toBe(502);
-      const body = await res.json();
-      expect(body).toMatchObject({ status: 'failed', reason: 'no bots' });
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  it('rejects missing transactionId with 400', async () => {
-    const sendOffer = vi.fn();
-    const service = { sendOffer } as unknown as TradeOfferService;
-
-    const ctx = await startApp(service);
-    try {
-      const res = await fetch(`${ctx.url}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...validBody, transactionId: undefined }),
-      });
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toMatch(/transactionId/);
-      expect(sendOffer).not.toHaveBeenCalled();
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  it('rejects invalid direction with 400', async () => {
-    const sendOffer = vi.fn();
-    const service = { sendOffer } as unknown as TradeOfferService;
-
-    const ctx = await startApp(service);
-    try {
-      const res = await fetch(`${ctx.url}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...validBody, direction: 'BUYER_TO_BOT' }),
-      });
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toMatch(/direction/);
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  it('rejects empty items with 400', async () => {
-    const sendOffer = vi.fn();
-    const service = { sendOffer } as unknown as TradeOfferService;
-
-    const ctx = await startApp(service);
-    try {
-      const res = await fetch(`${ctx.url}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...validBody, items: [] }),
-      });
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toMatch(/items/);
-    } finally {
-      await ctx.close();
-    }
-  });
-
-  it('returns 503 when TradeOfferService is not initialized', async () => {
-    const app = express();
-    app.use(express.json());
-    app.use(correlationMiddleware);
-    app.use(buildRouter({}));
-    const server = await new Promise<import('http').Server>((resolve) => {
-      const s = app.listen(0, () => resolve(s));
-    });
-    try {
-      const port = (server.address() as AddressInfo).port;
-      const res = await fetch(`http://127.0.0.1:${port}/api/trade-offers/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(validBody),
-      });
-      expect(res.status).toBe(503);
-    } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -581,6 +421,82 @@ describe('GET /api/trade-hold/:steamId (WP6)', () => {
         `http://127.0.0.1:${port}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok123`,
       );
       expect(res.status).toBe(503);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T133 — the surface is READ-ONLY
+// ---------------------------------------------------------------------------
+
+/**
+ * Pins what this sidecar does NOT serve any more. Asserted as live 404s rather
+ * than by reading routes.ts, because a 404 is what a stale caller actually
+ * receives — a source grep would still pass if the route came back under a
+ * different spelling.
+ *
+ * The two webhook publishers behind `/trade-offers/send` were also the last
+ * things emitting `/api/v1/webhooks/steam/*`, which is why
+ * `SidecarWebhookRouteContractTests.RetiredWithBotCustodyLayer` could go empty
+ * in the same task.
+ */
+describe('retired custody surface (T133)', () => {
+  const RETIRED: ReadonlyArray<{ method: string; path: string }> = [
+    { method: 'POST', path: '/api/trade-offers/send' },
+    { method: 'GET', path: '/api/trade-offers/123/status' },
+    { method: 'GET', path: '/api/bots/status' },
+  ];
+
+  it.each(RETIRED)('$method $path is not served', async ({ method, path }) => {
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    app.use(buildRouter({}));
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+        method,
+        headers: method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+        body: method === 'POST' ? '{}' : undefined,
+      });
+      expect(res.status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('still serves the two read-only routes and /health', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    app.use(buildRouter({}));
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const base = `http://127.0.0.1:${port}`;
+
+      // 503 (dependency absent), NOT 404 — the routes exist.
+      expect((await fetch(`${base}/api/inventory/${VALID_STEAM_ID}`)).status).toBe(503);
+      expect((await fetch(`${base}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok`)).status).toBe(
+        503,
+      );
+
+      // /health is healthy WITHOUT any Steam credential — the point of T133.
+      const health = await fetch(`${base}/health`);
+      expect(health.status).toBe(200);
+      const body = (await health.json()) as {
+        status: string;
+        checks: Array<{ name: string }>;
+      };
+      expect(body.status).toBe('healthy');
+      expect(body.checks.map((c) => c.name)).not.toContain('bot-session');
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
