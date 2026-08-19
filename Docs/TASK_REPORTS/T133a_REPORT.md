@@ -1,6 +1,6 @@
 # T133a — 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-19
+**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, CI ✓ PASS — doğrulama bekliyor) | **Tarih:** 2026-08-19
 
 ---
 
@@ -67,7 +67,7 @@ Beş dosyanın **altbilgisi** de başlıkla hizalandı (donmuş değerler: 02 "v
 |---|---|---|
 | Build | ✓ 0 Warning / 0 Error | `dotnet build -warnaserror`, exit 0 — taban ölçümüyle (tur öncesi) birebir aynı |
 | Unit + non-integration | ✓ 1417/1417 | `dotnet test --no-build --filter "FullyQualifiedName!~Integration"` — 11 assembly. Ayrıca **16 test Docker'sız koşamadı** (`DockerUnavailableException`, `Unit.Channels` Testcontainers kullanıyor); Docker dışı **hiçbir** hata yok (`grep` ile doğrulandı: 16 Failed / 32 DockerUnavailableException satırı, başka hata mesajı türü yok). Lokalde Docker daemon kapalı — bu legler CI'da koşar |
-| Integration | ⏳ CI | Lokalde Testcontainers kullanılamadığı için CI'ya bırakıldı. Yeniden adlandırılan sınıfın testleri (`HappyPathNotificationConsumerTests`, 7 satır) Integration namespace'inde — CI kanıtı zorunlu |
+| Integration | ✓ CI | `4. Integration test` job'ı **success** (run `32295024930`). Yeniden adlandırılan sınıfın testleri (`HappyPathNotificationConsumerTests`, 7 satır) bu leg'de koştu |
 | Doküman parity (programatik) | ✓ 6/6 | `scratchpad/parity.js`: yetki 12/12/12 (sıra birebir), bildirim 26/26 (07 ≡ 06 sıra dahil), AuditAction 29/29 (sıra birebir) |
 
 ## Doğrulama
@@ -88,9 +88,19 @@ Beş dosyanın **altbilgisi** de başlıkla hizalandı (donmuş değerler: 02 "v
 ## Commit & PR
 
 - Branch: `task/T133a-doc-custodial-alignment`
-- Commit: (aşağıda)
-- PR: (aşağıda)
-- CI: (aşağıda)
+- Commit: `c937d00` — T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
+- PR: [#249](https://github.com/turkerurganci/Skinora/pull/249)
+- CI: ✓ **PASS** — run [`32295024930`](https://github.com/turkerurganci/Skinora/actions/runs/32295024930), **CI Gate `success`**, bloke edici **9/9 job yeşil** (1. Lint · 2. Build · 3. Unit test · 4. Integration test · 5. Contract test · 6. Migration dry-run · 7. Docker build · Detect changed paths · CI Gate). `0. Guard (direct push)` ve `3b. JS test (vitest)` **skipped** (bu turda FE değişikliği yok).
+
+### Advisory E2E — T133a kaynaklı DEĞİL (üç kanıt)
+
+8 advisory leg T117'den beri kırmızı. Ölçüm **T133'ün ve T137a'nın tabanıyla birebir**:
+
+1. **Sayım aynı:** **10 passed / 22 failed = 32** — T137a'nın main run'ı `32050987594` ve T133'ün ölçümüyle **birebir**.
+2. **T133a yüzeylerinden sıfır iz** (1016 satırlık `--log-failed` üzerinde): `HappyPathMilestone` 0 · `EscrowedAndTradeOffer` 0 · `PermissionCatalog` 0 · `AuditAction` 0 · `VIEW_DISPUTES` 0 · `MANAGE_SANCTIONS` 0. Yeniden adlandırılan sınıf da, eklenen katalog satırları da log'da hiç geçmiyor.
+3. **Mekanizma değişmedi:** `PlatformSteamBots` **0** (T137a'nın onardığı katman geçiliyor) · `Invalid object name` / `Invalid column name` **0** · 18 poll timeout'unun **18'i de** `(last status=ACCEPTED)` — yani create ve accept geçiyor, işlem T117'de emekli edilen custody durumunda takılıyor · `ITEM_NOT_IN_INVENTORY` **2** (yalnız downtime leg'inde, T137 düzeltme turunun ölçtüğü dağılımın aynısı).
+
+Kalan 22 testin sahibi **T138** (E2E spec'lerinin yeniden yazımı).
 
 ## Known Limitations / Follow-up
 
