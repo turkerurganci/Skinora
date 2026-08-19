@@ -12,11 +12,11 @@ import { logger as defaultLogger, type Logger } from '../logger.js';
  *   their_escrow.escrow_end_duration_seconds === 0  → MA active (no hold)
  *   their_escrow.escrow_end_duration_seconds  > 0   → MA inactive (15-day escrow)
  *
- * This is a **Web API key** call (no bot session required): it is keyed on the
- * platform `STEAM_API_KEY` plus the target SteamID64 and the
- * `trade_offer_access_token` parsed from the user's trade URL (mandatory for
- * non-friend targets — 08 §2.2). It therefore works even when the bot pool is
- * empty, which is why it lives outside the BotSession/TradeOfferManager stack.
+ * This is a **Web API key** call: it is keyed on the platform `STEAM_API_KEY`
+ * plus the target SteamID64 and the `trade_offer_access_token` parsed from the
+ * user's trade URL (mandatory for non-friend targets — 08 §2.2). No Steam
+ * account or session is involved, which is why the probe survived the custody
+ * layer's removal (T133) while everything that needed a logged-in bot did not.
  *
  * The backend calls this through `ITradeHoldChecker` (U17 trade-URL save) and
  * `IMobileAuthenticatorCheck` (A7 re-verify) — both map a successful result to

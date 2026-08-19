@@ -8,8 +8,10 @@ export interface SignedWebhook {
 }
 
 /**
- * Sign a webhook body exactly as the real sidecars do
- * (sidecar-steam / sidecar-blockchain WebhookClient.ts, 05 §3.4): HMAC-SHA256 over
+ * Sign a webhook body exactly as the real sidecar does
+ * (sidecar-blockchain `webhook/WebhookClient.ts`, 05 §3.4 — the steam sidecar's
+ * publisher went with the custody layer in T133, so blockchain is the only
+ * signed surface left): HMAC-SHA256 over
  * `timestamp + nonce + body` with the per-sidecar shared secret. The backend's
  * `WebhookSignatureMiddleware` recomputes the same string and constant-time
  * compares the lowercase hex digest.

@@ -34,6 +34,14 @@ ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 > **Bu dosyayı daha önce doldurduysanız:** lokal `secrets/steam-bots.json` T133'te
 > silindi. Repo'ya hiç girmedi (gitignored) — ama içindeki Steam hesabı parolası
 > diskte açık metin durduğu için o hesabın parolasını **döndürün**.
+>
+> **Rotasyon isteğe bağlı değildir (T133 doğrulama turu bulgusu).** Aynı parola
+> `scripts/git-hooks/pre-commit`'in bir yorumunda **açık metin** duruyordu ve o
+> dosya **takip ediliyor** — yani parola yalnız lokal diskte değil, **git
+> geçmişinde** de var. Literal bu turda maskelendi, fakat maskeleme geçmişi
+> temizlemez: sızan anahtar yakılmış sayılır (aşağıdaki "Sır sızdıysa ne
+> yapmalı" md.1). Hesap emekli olsa bile parola başka yerde tekrar
+> kullanılmışsa risk sürer.
 
 ---
 

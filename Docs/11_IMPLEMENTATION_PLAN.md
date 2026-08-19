@@ -3482,6 +3482,16 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
   squash sha'sı yazılarak KAPATILIR — satırın kendi tanımladığı zincir
   ("sidecar tarafı T133'te silinecek, sha'sı o zaman eklenecek") burada
   bitiyor.
+  İŞARETÇİ SAPMASI — NİHAİ ŞEKİL (doğrulama turu, proje sahibi onaylı,
+  2026-08-19): işaretçi **squash sha'sı değil PR numarasıdır** (#248).
+  Kriterin harfi bu turda karşılanamaz çünkü sha merge ANINDA doğar —
+  satır kendi kapanışını hiçbir zaman yazamıyordu ve T132 turunda tam bu
+  yüzden boş kalıp işi T133'e devretmişti. `git log --grep "(#248)"`
+  squash commit'i sha'dan bağımsız bulur, yani kriterin ÖZÜ (silme
+  commit'inin git geçmişinde işaretlenmesi) karşılanır. Geçmiş halkalar
+  sha ile yazılır (T117 `82bff4d`, T132 `eb0e49d`) — sha yalnız KENDİ
+  turunda yazılamaz, sonraki turda yazılabilir. T122'nin kalıcı dersi
+  gereği sapma KAYNAK dokümana burada kayda geçti.
   KAPSAM DIŞI (sahibi işaretlendi, bu turda dokunulmadı): DEPLOY_RUNBOOK
   §G.4 kontrol 10'un happy path anlatısı hâlâ custodial ("trade offer →
   ITEM_ESCROWED"). Bu bir YENİDEN YAZIMDIR, bu turun sildiği bir şeyin

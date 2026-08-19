@@ -1,6 +1,6 @@
 # Skinora — Integration Specifications
 
-**Versiyon: v3.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-08-19 (**T133** — sidecar-steam salt-okunur proxy'ye küçüldü, doküman koda hizalandı: §9.2'den Steam bot credential dörtlüsü düştü (kabul kriteri); §2 girişi iki bileşene indi; §2.5 kütüphane tablosu dörtten **bire** indi (`steamcommunity`, rolü "yalnız anonim envanter okuma"ya daraldı — `steam-tradeoffer-manager`/`steam-totp`/`steam-user` `package.json`'dan silindi); §2.4 polling stratejisi ve §2.7 hata tablosunun dört bot/trade satırı kaldırıldı. Davranış değişikliği yok — kaldırılan satırların hepsi T117'de emekliye ayrılmış bir katmanı anlatıyordu.) · 2026-08-10 (T119a doğrulaması — §2.2 `GetTradeHoldDurations` bölümü tek çağrı yeri anlatıyordu; alıcı kabulündeki ikinci **canlı** çağrı (07 §7.6 md.3, sonuç persist edilmez, fail-closed 503) tabloya ve yaklaşım metnine eklendi. Davranış değişikliği yok — kod zaten böyle çalışıyordu.)
+**Versiyon: v3.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-08-19 (**T133** — sidecar-steam salt-okunur proxy'ye küçüldü, doküman koda hizalandı: §9.2'den Steam bot credential dörtlüsü düştü (kabul kriteri); §2 girişi iki bileşene indi; §2.5 kütüphane tablosu dörtten **bire** indi (`steamcommunity`, rolü "yalnız anonim envanter okuma"ya daraldı — `steam-tradeoffer-manager`/`steam-totp`/`steam-user` `package.json`'dan silindi); §2.4 polling stratejisi ve §2.7 hata tablosunun dört bot/trade satırı kaldırıldı. Davranış değişikliği yok — kaldırılan satırların hepsi T117'de emekliye ayrılmış bir katmanı anlatıyordu. **T133 doğrulama turu — aynı sınıfın üç kalıntısı daha kapatıldı:** §2.4'ün "Trade offer durumları" tablosu ("Accepted → state geçişi tetiklenir", "Canceled → Platform tarafından iptal edildi", "CreatedNeedsConfirmation → Mobile confirmation bekleniyor") emekli platform davranışı vaat ediyordu ve sonuncusu iki satır altındaki "Mobile confirmation: Kaldırıldı" paragrafıyla doğrudan çelişiyordu — bölümün kendi v3.0 kalıbına (`Kaldırıldı (v3.0). …`) çevrildi; §2.7'nin `Envanter private` satırı 503 karar ağacı kod bloğunun ardında **yetim** duruyordu (başlıksız → markdown'da tablo değil düz metin) ve ait olduğu hata tablosuna taşındı; §2.7'nin "Session yönetimi retry" başlığı altındaki tablo v3.0'dan beri oturumu değil **okuma sonucunu** anlatıyordu, başlık içeriğine çekildi.) · 2026-08-10 (T119a doğrulaması — §2.2 `GetTradeHoldDurations` bölümü tek çağrı yeri anlatıyordu; alıcı kabulündeki ikinci **canlı** çağrı (07 §7.6 md.3, sonuç persist edilmez, fail-closed 503) tabloya ve yaklaşım metnine eklendi. Davranış değişikliği yok — kod zaten böyle çalışıyordu.)
 
 ---
 
@@ -264,18 +264,7 @@ Bu bağlantı `Transaction.BuyerTradeUrl` alanından üretilir (06 §3.5); item 
 
 > **Doğrulama nasıl yapılır:** Platform trade'in tarafı olmadığı için Steam'den "offer kabul edildi" bildirimi alamaz ve `getExchangeDetails` ile yeni asset ID'yi çözemez. Teslimat, her iki tarafın **public envanteri okunarak** doğrulanır: satıcının `ItemAssetId`'si düştü mü ve alıcıda beklenen item sınıfının sayısı arttı mı (02 §9.2, 06 §2.24). Ayrıntılar §2.3.
 
-**Trade offer durumları (Steam tarafı):**
-
-| Durum | Kod | Skinora karşılığı |
-|-------|-----|-------------------|
-| Active | 2 | Offer gönderildi, yanıt bekleniyor |
-| Accepted | 3 | Kabul edildi → state geçişi tetiklenir |
-| Countered | 4 | Karşı taraf counter offer yaptı — Skinora counter offer desteklemez. Orijinal offer iptal sayılır, kullanıcıya "Counter offer desteklenmiyor, işlem iptal edildi" bildirimi gönderilir, işlem iptal akışına yönlendirilir (03 §2.3/5, §3.5/5). |
-| Declined | 7 | Reddedildi → iptal akışı (03 §2.3/5, §3.5/5) |
-| Expired | 5 | Süresi doldu → timeout akışı |
-| Canceled | 6 | Platform tarafından iptal edildi |
-| InvalidItems | 8 | Item artık mevcut değil → hata akışı |
-| CreatedNeedsConfirmation | 9 | Mobile confirmation bekleniyor |
+**Trade offer durumları:** Kaldırıldı (v3.0). Steam'in offer durum kodlarının (`Active`, `Accepted`, `Countered`, `Declined`, `Expired`, `Canceled`, `InvalidItems`, `CreatedNeedsConfirmation`) platformda bir karşılığı yoktur — offer'ı platform göndermediği için durum kodunu görebileceği bir kanal da yoktur; kod yalnız trade'in taraflarına görünür. Counter offer, red ve süre dolması artık taraflar arasında geçer, platform yalnız **sonucu** gözlemler: item el değiştirdi mi (§2.3, 02 §9.2). Aynı ifade 03 §2.3/5'te de yazılıdır.
 
 **Polling stratejisi:** Kaldırıldı (v3.0). Takip edilecek bir offer olmadığı için poll döngüsü de yoktur; `steam-tradeoffer-manager` bağımlılığı T133'te kaldırıldı (§2.5). Teslimatın ilerlemesi envanter okumasıyla anlaşılır (§2.3).
 
@@ -326,6 +315,7 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
 | Steam API geçici hatası | 500, 502 | Log + retry | Evet — 3 deneme (5s, 15s, 45s) |
 | Steam 503 | 503 | Aşağıdaki 503 karar ağacına göre işlenir | Karar ağacına bağlı |
 | API key geçersiz | 403 | Admin alert | Hayır — manuel müdahale |
+| Envanter private | — | Kullanıcıya "Envanterinizi public yapın" uyarısı | Hayır — kullanıcı aksiyonu gerekli |
 
 **503 karar ağacı:**
 
@@ -335,9 +325,8 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
    2a. Health check da başarısız → Steam bakımda kabul et → aktif işlemlerde timeout dondurma tetikle (03 §11.2), 60 saniye aralıkla health check tekrarla
    2b. Health check başarılı → izole geçici hata, log + admin alert
 ```
-| Envanter private | — | Kullanıcıya "Envanterinizi public yapın" uyarısı | Hayır — kullanıcı aksiyonu gerekli |
 
-**Session yönetimi retry:**
+**Okuma sonucunun karar karşılığı:**
 
 | Durum | Aksiyon |
 |-------|---------|

@@ -158,7 +158,7 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 
 ## G. Lokal gerçek-konfigürasyon provası
 
-> **Bağlam (2026-07-29).** F6'nın 8 E2E süiti self-contained `docker-compose.e2e.yml` + tek `sidecar-fake` container'ı üzerinde koştu; Steam OAuth ve on-chain finality backend seam'inde simüle edildi. Asıl `docker-compose.yml` **hiç boot edilmemişti** ve ayağa kalkmayı engelleyen eksikleri vardı (backend'e 19 `SKINORA_SETTING_*` geçilmiyordu → fail-fast; iki sidecar'a `INTERNAL_KEY` geçilmiyordu; bot/hot-wallet/testnet-kontrat env'leri ve `SteamOpenId__*` yoktu). Bu bölüm o boşluğu kapatan çalışmanın sonucudur — gerçek Steam hesabı + gerçek bot + Nile testnet ile `http://localhost:8080` üzerinde tam stack.
+> **Bağlam (2026-07-29).** F6'nın 8 E2E süiti self-contained `docker-compose.e2e.yml` + tek `sidecar-fake` container'ı üzerinde koştu; Steam OAuth ve on-chain finality backend seam'inde simüle edildi. Asıl `docker-compose.yml` **hiç boot edilmemişti** ve ayağa kalkmayı engelleyen eksikleri vardı (backend'e 19 `SKINORA_SETTING_*` geçilmiyordu → fail-fast; iki sidecar'a `INTERNAL_KEY` geçilmiyordu; bot/hot-wallet/testnet-kontrat env'leri ve `SteamOpenId__*` yoktu). Bu bölüm o boşluğu kapatan çalışmanın sonucudur — gerçek Steam hesabı + Nile testnet ile `http://localhost:8080` üzerinde tam stack. **T133 notu:** o turdaki "gerçek bot" ön koşulu kalktı; sidecar hiçbir Steam hesabı taşımaz (§G.0, 05 §3.2), prova için gereken tek Steam credential'ı `STEAM_API_KEY`'dir.
 
 ### G.0 Ön koşullar
 

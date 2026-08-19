@@ -151,9 +151,14 @@ EOF
   #    KEY=deger / "KEY": "deger" / KEY: deger formlarini yakalar.
   # Two tiers. NAMED covers this project's exact keys; GENERIC catches the same
   # value pasted under any other name — the gap that let a bare
-  #   password: Tr@deB0t!2026
-  # (the Steam bot password) through into a task report or README while
-  # secrets/steam-bots.json itself was protected only by the path rule.
+  #   password: <redacted>
+  # (the Steam bot account's real password) through into a task report or README
+  # while secrets/steam-bots.json itself was protected only by the path rule.
+  # T133 dogrulama turu: the literal was REDACTED here. Quoting a live secret to
+  # document the rule that forbids quoting live secrets defeats the rule — and it
+  # sat in a TRACKED file, so the value is in git history regardless of this edit.
+  # The account is retired (no bot layer since T133) but the password must still
+  # be rotated — see secrets/README.md.
   NAMED_KEYS='HOT_WALLET_PRIVATE_KEY|HD_WALLET_MNEMONIC|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|JWT_SECRET|WEBHOOK_SECRET|BLOCKCHAIN_WEBHOOK_SECRET|INTERNAL_KEY|STEAM_SIDECAR_INTERNAL_KEY|BLOCKCHAIN_SIDECAR_INTERNAL_KEY|MSSQL_SA_PASSWORD|REDIS_PASSWORD|TELEGRAM_BOT_TOKEN|GRAFANA_ADMIN_PASSWORD|sharedSecret|identitySecret'
   GENERIC_KEYS='[A-Za-z_]*(PASSWORD|PASSWD|SECRET|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|CLIENT_?SECRET|CONNECTION_?STRING)[A-Za-z_]*'
   SECRET_KEYS="$NAMED_KEYS|$GENERIC_KEYS"
