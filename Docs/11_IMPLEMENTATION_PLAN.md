@@ -3429,6 +3429,88 @@ Task T133: sidecar-steam salt-okunur proxy'ye küçültme [RİSKLİ]
       gerekçesiyle birlikte kalkar (bekçi `RetiredPathsAreStillPublished_
       UntilT133` bu turda kaldırılır — kendini iptal etmesi tasarımdır)
 
+  KAPSAM NETLEŞTİRMESİ (proje sahibi onaylı, 2026-08-19 — göreve başlarken
+  yapılan ölçüm). Yukarıdaki dört kriter KORUNUR; aşağıdakiler onlara EK
+  olarak bu turda kapatılır. Gerekçe T132 doğrulamasının B1 dersidir: bir
+  sözleşme girdisi koddan kaldırılırken "hangi doküman bu girdiyi VAAT
+  ediyor" sorusu HER MADDE İÇİN AYRI sorulmalıdır. Aşağıdaki altı kalemin
+  hiçbirinin başka sahibi YOKTUR — T133a yalnız 03 + 04 + 07'yi kapsar, 08'i
+  ve deploy/ops yüzeyini hiçbir görev kapsamıyor:
+    F — 08 §2.5 kütüphane tablosu: dört satırın ÜÇÜ (`steam-tradeoffer-
+        manager`, `steam-totp`, `steam-user`) bu turda `package.json`'dan
+        siliniyor. `steamcommunity` KALIR ve tablodaki amacı daralır —
+        oturum/login/confirmation değil, yalnız ANONİM envanter okuma
+        (`InventoryService`, 02 §9.2'nin tek aracı). §2.4 zaten "kaldırılan
+        bağımlılıklar" derken `steamcommunity`'yi yalnız oturum/çerez
+        rolüyle sayıyor; §2.5 o daralmayı yansıtmıyor.
+    G — 08 §2.4 polling tablosu (`steam-tradeoffer-manager` built-in
+        polling) ve §2.7 hata tablosunun bot/trade satırları ("Bot session
+        expired → sidecar otomatik yönetir" + üç trade-offer satırı).
+        Başlıklar v3.0'da emekliye ayrıldı, ALT TABLOLAR kaldı — kaldırılan
+        koda ait davranış vaat etmeye devam ediyorlar.
+    H — `scripts/bootstrap/02-register-bot.sql` + `scripts/bootstrap/
+        README.md` adım 2. Script `PlatformSteamBots`'a INSERT ediyor; o
+        tablo T117'de DÜŞTÜ (model snapshot'ta sıfır eşleşme), yani script
+        bugün ZATEN çalışmıyor. `secrets/README.md` ve DEPLOY_RUNBOOK §G.2
+        ona link veriyor → AC2'nin `secrets/` bacağı bu bağı çözmeden
+        kapanamaz.
+    I — DEPLOY_RUNBOOK: §B `STEAM_BOTS_CONFIG_PATH` satırı · §B
+        `WEBHOOK_SECRET` satırının "sidecar'lar" ifadesi (steam sidecar'ın
+        imzalayacağı webhook kalmıyor) · §G.0 "Steam bot hesabı" ön koşulu ·
+        §G.1 `secrets/steam-bots.json` · §G.2 adım 2 ve adım 7'nin bot
+        yarısı · §G.4 kontrol 4-5 ("1/1 bots ready", "Bot credentials
+        loaded") · §G.5 bot-MA trade-hold tuzağı.
+    J — Grafana `integration-metrics.json` (`skinora_steam_active_bot_
+        sessions`) ve `business-metrics.json` (`skinora_steam_trade_offers_
+        total`) panelleri: bu turun sildiği iki metriğin TEK tüketicileri;
+        yazıcısı olmayan bir panel kalıcı "No data" gösterir.
+    K — `sidecar-steam` içinde kriterlerin adını anmadığı ama bot/trade
+        katmanına AİT olan kalıntı: `src/webhook/` dizininin tamamı
+        (`sendCallback`'in bot/trade dışında sıfır çağıranı var ve emekli
+        iki yolu yayınlayan yer burasıdır — AC4 bu dizin gitmeden
+        kapanamaz), `src/trade/types.ts` (tamamı trade sözleşmesi;
+        `InventoryService`/`TradeHoldService` kullanmıyor), `routes.ts`'in
+        üç bot/trade ucu + `normalizeDeps` backward-compat shim'i,
+        `HealthController.botStatusFactory` + `buildBotSessionCheck`,
+        `metrics.ts`'in iki bot/trade metriği ve `BotSessionExpiredError`
+        (bugün zaten sıfır kullanım).
+  LOKAL SIR (proje sahibi kararı): `secrets/steam-bots.json` bu turda
+  SİLİNİR. Dosya gitignored'dır ve repo'ya hiç girmemiştir; taşıdığı Steam
+  hesabı parolası için ROTASYON önerilir — platform artık bot hesabı
+  kullanmıyor, ama parola diskte açık metin durdu.
+  ARŞİV KAYDI: `DEFERRED_BACKLOG` `P2P-BotCodeArchive` satırı bu turun
+  squash sha'sı yazılarak KAPATILIR — satırın kendi tanımladığı zincir
+  ("sidecar tarafı T133'te silinecek, sha'sı o zaman eklenecek") burada
+  bitiyor.
+  İŞARETÇİ SAPMASI — NİHAİ ŞEKİL (doğrulama turu, proje sahibi onaylı,
+  2026-08-19): işaretçi **squash sha'sı değil PR numarasıdır** (#248).
+  Kriterin harfi bu turda karşılanamaz çünkü sha merge ANINDA doğar —
+  satır kendi kapanışını hiçbir zaman yazamıyordu ve T132 turunda tam bu
+  yüzden boş kalıp işi T133'e devretmişti. `git log --grep "(#248)"`
+  squash commit'i sha'dan bağımsız bulur, yani kriterin ÖZÜ (silme
+  commit'inin git geçmişinde işaretlenmesi) karşılanır. Geçmiş halkalar
+  sha ile yazılır (T117 `82bff4d`, T132 `eb0e49d`) — sha yalnız KENDİ
+  turunda yazılamaz, sonraki turda yazılabilir. T122'nin kalıcı dersi
+  gereği sapma KAYNAK dokümana burada kayda geçti.
+  KAPSAM DIŞI (sahibi işaretlendi, bu turda dokunulmadı): DEPLOY_RUNBOOK
+  §G.4 kontrol 10'un happy path anlatısı hâlâ custodial ("trade offer →
+  ITEM_ESCROWED"). Bu bir YENİDEN YAZIMDIR, bu turun sildiği bir şeyin
+  sonucu değil; T133b'ye kabul kriteri olarak yazıldı.
+
+Task T133b: DEPLOY_RUNBOOK §G happy path anlatısının P2P'ye çekilmesi
+  Bağımlılık: T133
+  Dokümanlar: `Docs/DEPLOY_RUNBOOK.md` §G.4 · referans 02 §2.1, 05 §4.1
+  Kabul kriterleri:
+    - §G.4 kontrol 10'un uçtan uca prova adımı v3.0 P2P akışını anlatıyor:
+      emekli `ITEM_ESCROWED` ve "trade offer" adımları yerine satıcı
+      onayı → alıcı ödemesi → P2P trade → teslimat doğrulaması (02 §9.2)
+      → `COMPLETED` + payout zinciri
+    - §G tablolarında kalan custodial adım adı yok
+  Neden ayrı task (T133 kapsam netleştirmesi, 2026-08-19): T133 kendi
+       sildiği koda ait vaatleri kapatır; §G.4/10 ise T117'de emekliye
+       ayrılan bir AKIŞIN anlatısıdır — kaldırma değil yeniden yazım işidir
+       ve prova adımlarının canlı stack üzerinde doğrulanması gerekir.
+
 Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
        üçü de 03'ü UI akışı, 04'ü ekran spesifikasyonu, 07'yi API

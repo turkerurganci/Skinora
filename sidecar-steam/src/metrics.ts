@@ -31,17 +31,6 @@ export const steamApiErrorsTotal = new client.Counter({
   labelNames: ['endpoint', 'error_type'] as const,
 });
 
-export const activeBotSessions = new client.Gauge({
-  name: 'skinora_steam_active_bot_sessions',
-  help: 'Number of active bot sessions',
-});
-
-export const tradeOffersTotal = new client.Counter({
-  name: 'skinora_steam_trade_offers_total',
-  help: 'Total trade offers processed',
-  labelNames: ['direction', 'status'] as const,
-});
-
 /**
  * Inventory cache lookups by outcome (T120 — 08 §2.3).
  *

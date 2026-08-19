@@ -1,6 +1,6 @@
 # Skinora — Coding Guidelines
 
-**Versiyon: v0.9** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-03-19
+**Versiyon: v1.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
 
 > **Amaç:** Bu doküman, projede kod üretirken ve mevcut kodu değiştirirken uyulması gereken teknik geliştirme kurallarını tanımlar.
 >
@@ -398,19 +398,16 @@ frontend/
 ```
 sidecar-steam/
 ├── src/
-│   ├── bot/                                  ← Bot yönetimi
-│   │   ├── BotManager.ts
-│   │   ├── BotSession.ts
-│   │   └── BotHealthCheck.ts
-│   ├── trade/                                ← Trade offer iş mantığı
-│   │   ├── TradeOfferService.ts
-│   │   └── InventoryService.ts
+│   ├── trade/                                ← Steam okuma servisleri
+│   │   ├── InventoryService.ts               ← Anonim envanter okuma (08 §2.3)
+│   │   └── TradeHoldService.ts               ← Trade-hold / MA probu (08 §2.2)
+│   ├── cache/
+│   │   └── InventoryCache.ts                 ← Redis + in-memory fallback
+│   ├── queue/
+│   │   └── RateLimitedQueue.ts               ← Web API + Community ayrı kuyruk
 │   ├── api/                                  ← .NET'ten gelen HTTP endpoint'ler
 │   │   ├── routes.ts
-│   │   └── handlers/
-│   ├── webhook/                              ← .NET'e callback gönderim
-│   │   ├── WebhookClient.ts                  ← HMAC imzalama dahil
-│   │   └── WebhookPayloads.ts
+│   │   └── middleware.ts
 │   ├── health/
 │   │   └── HealthController.ts
 │   ├── config/

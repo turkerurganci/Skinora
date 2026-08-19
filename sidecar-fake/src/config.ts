@@ -21,10 +21,11 @@ export const config = {
   // set (empty = skip, mirrors sidecar-steam internalKeyAuth).
   internalKey: process.env.INTERNAL_KEY || '',
 
-  // Separate HMAC secrets per sidecar — the backend's WebhookSignatureMiddleware
-  // selects the secret by route prefix, so steam webhooks MUST be signed with
-  // the steam secret and blockchain webhooks with the blockchain secret.
-  steamWebhookSecret: process.env.STEAM_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '',
+  // The backend's WebhookSignatureMiddleware selects the shared secret by route
+  // prefix. Only the blockchain prefix is left: T132 removed the inbound Steam
+  // webhook route and its `Webhook__SteamSharedSecret`, and T133 removed the
+  // publishing half, so a `steamWebhookSecret` binding here would name a
+  // secret with no signer and no verifier.
   blockchainWebhookSecret:
     process.env.BLOCKCHAIN_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '',
 

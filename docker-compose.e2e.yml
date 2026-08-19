@@ -62,11 +62,10 @@ services:
       - LOG_LEVEL=info
       - BACKEND_URL=http://skinora-backend:5000
       # BLOCKCHAIN_WEBHOOK_SECRET must match the backend's
-      # Webhook__BlockchainSharedSecret below. STEAM_WEBHOOK_SECRET has no
-      # backend counterpart any more (T132 removed Webhook__SteamSharedSecret
-      # with the inbound Steam webhook) and no consumer inside sidecar-fake —
-      # config.ts still binds it, and both go with the sidecar half in T133.
-      - STEAM_WEBHOOK_SECRET=e2e-steam-webhook-secret-0123456789-abcdef
+      # Webhook__BlockchainSharedSecret below. It is the only webhook secret
+      # left: T132 removed Webhook__SteamSharedSecret with the inbound Steam
+      # webhook route, and T133 removed the sidecar half (STEAM_WEBHOOK_SECRET
+      # and the config.ts binding that had no reader).
       - BLOCKCHAIN_WEBHOOK_SECRET=e2e-blockchain-webhook-secret-0123456789-ab
       # INTERNAL_KEY intentionally unset → fake accepts backend calls without
       # X-Internal-Key (avoids a key mismatch failing the surface).

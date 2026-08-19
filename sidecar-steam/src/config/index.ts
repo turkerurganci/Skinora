@@ -16,7 +16,6 @@ export const config = {
   // Backend communication
   backendUrl: process.env.BACKEND_URL || 'http://skinora-backend:5000',
   internalKey: process.env.INTERNAL_KEY || '',
-  webhookSecret: process.env.WEBHOOK_SECRET || '',
 
   // Steam API
   steamApiKey: process.env.STEAM_API_KEY || '',
@@ -31,7 +30,6 @@ export const config = {
 
   // Rate limiting — 08 §2.6. The Web API and the Steam Community endpoint are
   // limited independently and therefore run in SEPARATE queues (T120).
-  steamTradeOfferLimitPerMinute: 5,
   steamWebApiRequestsPerSecond: 1,
   // Community inventory endpoint (08 §2.6: "~10-20 istek/dakika (IP başına)",
   // undocumented by Valve and explicitly an estimate). The conservative end of

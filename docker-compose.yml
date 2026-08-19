@@ -158,14 +158,13 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - BACKEND_URL=${STEAM_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
+      # The sidecar's ONLY Steam credential (T133): a Web API key for anonymous
+      # inventory reads and trade-hold probes. No bot account, no password, no
+      # maFile secret — the custody layer that needed them is gone (05 §3.2).
+      # No WEBHOOK_SECRET either: this sidecar signs nothing any more.
       - STEAM_API_KEY=${STEAM_API_KEY}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       # Must match the backend's SteamSidecar__InternalKey above.
       - INTERNAL_KEY=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
-      # Escrow bot credentials (08 §2.5). Without this the sidecar starts in
-      # skeleton mode: /health serves but selectBot() returns null and no trade
-      # offer can be sent. Mounted read-only from ./secrets (gitignored).
-      - STEAM_BOTS_CONFIG_PATH=${STEAM_BOTS_CONFIG_PATH:-/run/secrets/steam-bots.json}
       # Inventory cache (08 §2.3). Empty → in-memory fallback.
       - REDIS_URL=${STEAM_SIDECAR_REDIS_URL:-}
       # Steam Community inventory queue ceiling (08 §2.6, T120). Separate from
@@ -173,8 +172,6 @@ services:
       # 10-20/min per-IP range).
       - STEAM_COMMUNITY_REQUESTS_PER_MINUTE=${STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
-    volumes:
-      - ./secrets/steam-bots.json:/run/secrets/steam-bots.json:ro
     depends_on:
       skinora-backend:
         condition: service_healthy

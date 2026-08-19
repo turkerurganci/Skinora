@@ -18,10 +18,3 @@ export class SteamApiError extends SidecarError {
     this.name = 'SteamApiError';
   }
 }
-
-export class BotSessionExpiredError extends SidecarError {
-  constructor(message = 'Bot session has expired') {
-    super(message, 'BOT_SESSION_EXPIRED', true);
-    this.name = 'BotSessionExpiredError';
-  }
-}

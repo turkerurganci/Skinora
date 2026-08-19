@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import type { BotManager, BotPoolSnapshot } from '../bot/BotManager.js';
 
 interface HealthCheck {
   name: string;
@@ -16,14 +15,18 @@ interface HealthResponse {
 
 /**
  * Factory for the `/health` handler.
- * `botManager` is optional so tests can exercise the no-bots path easily.
+ *
+ * T133 — the `bot-session` check went with the bot pool. It reported
+ * `degraded` whenever no credentials were configured, which is now the ONLY
+ * possible state: the sidecar holds no Steam account (05 §3.2) and a
+ * credential-less boot is the supported configuration, not a deficiency. A
+ * check that is permanently degraded is not a signal, and it would keep the
+ * container's compose healthcheck reading `degraded` forever.
  */
-export function healthCheckFactory(botManager?: BotManager) {
+export function healthCheckFactory() {
   return function healthCheck(_req: Request, res: Response): void {
-    const snapshot = botManager?.snapshot();
     const checks: HealthCheck[] = [
       { name: 'steam-api', status: 'healthy', message: 'Connectivity probe deferred to T67' },
-      buildBotSessionCheck(snapshot),
     ];
 
     const overallStatus = checks.every((c) => c.status === 'healthy')
@@ -41,48 +44,5 @@ export function healthCheckFactory(botManager?: BotManager) {
 
     const statusCode = overallStatus === 'unhealthy' ? 503 : 200;
     res.status(statusCode).json(response);
-  };
-}
-
-/**
- * Factory for `/api/bots/status` — detailed pool state.
- * Mounted behind internalKeyAuth in routes.ts.
- */
-export function botStatusFactory(botManager?: BotManager) {
-  return function botStatus(_req: Request, res: Response): void {
-    if (!botManager) {
-      res.json({ healthy: 0, total: 0, removed: 0, bots: [] });
-      return;
-    }
-    res.json(botManager.snapshot());
-  };
-}
-
-function buildBotSessionCheck(snapshot?: BotPoolSnapshot): HealthCheck {
-  if (!snapshot || snapshot.total === 0) {
-    return {
-      name: 'bot-session',
-      status: 'degraded',
-      message: 'No bots configured (sidecar idle)',
-    };
-  }
-  if (snapshot.healthy === 0) {
-    return {
-      name: 'bot-session',
-      status: 'unhealthy',
-      message: `0/${snapshot.total} bots ready`,
-    };
-  }
-  if (snapshot.healthy < snapshot.total) {
-    return {
-      name: 'bot-session',
-      status: 'degraded',
-      message: `${snapshot.healthy}/${snapshot.total} bots ready`,
-    };
-  }
-  return {
-    name: 'bot-session',
-    status: 'healthy',
-    message: `${snapshot.healthy}/${snapshot.total} bots ready`,
   };
 }

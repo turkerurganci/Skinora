@@ -101,20 +101,22 @@ only invite a test to assert on a field production ignores.
 HMAC-SHA256 over `timestamp + nonce + body` with the per-sidecar shared secret,
 sent as `X-Signature` / `X-Timestamp` / `X-Nonce` — identical to the real
 sidecars and verified by the backend's `WebhookSignatureMiddleware` (05 §3.4).
-Steam webhooks use `STEAM_WEBHOOK_SECRET`, blockchain webhooks
-`BLOCKCHAIN_WEBHOOK_SECRET`; they must match the backend's
-`Webhook__SteamSharedSecret` / `Webhook__BlockchainSharedSecret`.
+Only blockchain webhooks are signed: `BLOCKCHAIN_WEBHOOK_SECRET` must match the
+backend's `Webhook__BlockchainSharedSecret`. There is no Steam counterpart —
+T132 removed the inbound Steam webhook route together with
+`Webhook__SteamSharedSecret`, and T133 removed the publishing half.
 
 ## Configuration
 
 See [`src/config.ts`](src/config.ts). Key env vars: `STEAM_PORT` (5100),
-`BLOCKCHAIN_PORT` (5200), `BACKEND_URL`, `STEAM_WEBHOOK_SECRET`,
-`BLOCKCHAIN_WEBHOOK_SECRET`, `INTERNAL_KEY` (optional), `DB_*` (control-endpoint
-lookups), `FAKE_TRANSFER_CONFIRMATIONS`.
+`BLOCKCHAIN_PORT` (5200), `BACKEND_URL`, `BLOCKCHAIN_WEBHOOK_SECRET`,
+`INTERNAL_KEY` (optional), `DB_*` (control-endpoint lookups),
+`FAKE_TRANSFER_CONFIRMATIONS`.
 
 `FAKE_BOT_STEAM_ID` and `FAKE_TRADE_ACCEPT_DELAY_MS` were removed in T137 with
 the custody trade surface — there is no bot identity and no self-accept delay
-left anywhere in the e2e stack.
+left anywhere in the e2e stack. `STEAM_WEBHOOK_SECRET` went in T133 for the
+same reason: nothing signs a Steam webhook and nothing verifies one.
 
 ## Develop
 

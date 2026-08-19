@@ -206,54 +206,6 @@
     },
     {
       "datasource": "Prometheus",
-      "description": "Number of currently active Steam bot sessions.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "blue",
-            "mode": "fixed"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 2 }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 },
-      "id": 3,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "skinora_steam_active_bot_sessions",
-          "legendFormat": "Active Bot Sessions",
-          "refId": "A"
-        }
-      ],
-      "title": "Active Bot Sessions",
-      "type": "stat"
-    },
-    {
-      "datasource": "Prometheus",
       "description": "P50, P95, P99 latency for outbound TronGrid API requests.",
       "fieldConfig": {
         "defaults": {
@@ -301,7 +253,7 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 8 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
       "id": 4,
       "options": {
         "legend": {

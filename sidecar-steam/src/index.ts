@@ -4,10 +4,6 @@ import { config } from './config/index.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
-import { BotManager } from './bot/BotManager.js';
-import { BotHealthCheck } from './bot/BotHealthCheck.js';
-import { TradeOfferService } from './trade/TradeOfferService.js';
-import { TradeOfferMonitor } from './trade/TradeOfferMonitor.js';
 import { InventoryService, SteamCommunityInventoryFetcher } from './trade/InventoryService.js';
 import { TradeHoldService } from './trade/TradeHoldService.js';
 import { RateLimitedQueue } from './queue/RateLimitedQueue.js';
@@ -18,11 +14,13 @@ import {
   type InventoryCache,
 } from './cache/InventoryCache.js';
 
+// T133 — the sidecar is a READ-ONLY Steam proxy. It boots with no Steam
+// account of any kind: the bot pool, its credentials and the trade offer
+// send/monitor stack went with the custody layer (05 §3.2). Everything wired
+// below is keyed on the platform's Steam Web API key or on anonymous
+// Community reads, so a missing/empty STEAM_API_KEY degrades a single route
+// (trade-hold → 503) instead of blocking startup.
 const app = express();
-const botManager = new BotManager();
-const botHealthCheck = new BotHealthCheck(botManager);
-const tradeOfferService = new TradeOfferService(botManager);
-const tradeOfferMonitor = new TradeOfferMonitor(botManager);
 
 // T120 — queue depth is published from the wiring layer so the queue itself
 // stays free of the Prometheus import (the prom-client registry is
@@ -71,33 +69,24 @@ app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(buildRouter({ botManager, tradeOfferService, inventoryService, tradeHoldService }));
+app.use(buildRouter({ inventoryService, tradeHoldService }));
 
 // Start server
-const server = app.listen(config.port, '0.0.0.0', async () => {
+const server = app.listen(config.port, '0.0.0.0', () => {
   logger.info({ port: config.port }, 'Steam sidecar listening');
-  await botManager.initialize();
-  // Attach AFTER initialize so the bot pool is populated; the underlying
-  // TradeOfferManager instances exist from BotSession construction and queue
-  // events until the polling cycle kicks in post-webSession.
-  tradeOfferMonitor.start();
-  botHealthCheck.start();
 });
 
 // Graceful shutdown (09 §17.9)
-async function shutdown(signal: string): Promise<void> {
+function shutdown(signal: string): void {
   logger.info({ signal }, 'Graceful shutdown started');
 
-  // 1. Stop accepting new connections
+  // Stop accepting new connections. Nothing else holds a long-lived resource:
+  // the sidecar keeps no Steam session and the rate-limited queues are
+  // in-process timers that die with it.
   server.close(() => {
     logger.info('HTTP server closed');
   });
 
-  // 2. Stop health check loop and shutdown bot sessions
-  botHealthCheck.stop();
-  await botManager.shutdown();
-
-  // 3. Force exit after timeout
   const forceTimer = setTimeout(() => {
     logger.error('Forced shutdown — timeout exceeded');
     process.exit(1);
