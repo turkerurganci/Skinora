@@ -194,6 +194,12 @@ AC5 "kurma/durdurma port metotları (**statü eşlemesi dahil**)" diyor, ama `Ht
 - `sidecar-blockchain/src/monitor/MonitorRegistry.ts` · `PostCancelMonitor.ts` · `src/metrics.ts` — gauge yazımı toplayıcıya alındı, `help` metni düzeltildi
 - `Docs/11_IMPLEMENTATION_PLAN.md` §F7 T139 **DÜZELTME TURU 2** bloğu · `Docs/08_INTEGRATION_SPEC.md` v3.4 → **v3.5** · `Docs/DEFERRED_BACKLOG.md` (satır sayısı **değişmedi**, 45)
 
+### Düzeltme turu 2 CI kanıtı
+
+Dal HEAD `111976c` · run [`32399382402`](https://github.com/turkerurganci/Skinora/actions/runs/32399382402) **`success`**, **`CI Gate` yeşil** — on bloke edici job'ın onu da başarılı (`1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`); `0. Guard (direct push)` skipped (beklenen).
+
+Advisory E2E **10/32** — geçen 1+3+6, düşen 22; tur 1'in run'ı (`32379774377`) ve iki bağımsız T139-öncesi tabanla (`32264946887` T133 · `32246467184` T132) **birebir**. Tur 2 hem reconciler'ın sorgu şekline hem sidecar'ın iki registry'sine dokunduğu hâlde ağda ne kazanç ne kayıp var.
+
 ### KALICI DERS (tur 2)
 
 **Bir tavan, üzerinde durduğu kümenin DRENE OLUP OLMADIĞI sorulmadan kopyalanamaz.** `EnsurePaymentAddressJob`'un `Take(50)`'si doğru, `EnsurePaymentMonitorJob`'un `Take(200)`'ü yanlıştı ve iki satır birbirinin aynısıydı — fark koddan değil, kümenin davranışından geliyor. İkinci ders aynı turun içinden: **bir kararın bedelini bir metriğe havale etmek, o metriğin doğru olduğunu ayrıca doğrulamayı gerektirir** — N1 telafisi yazılırken gösterge zaten iki registry tarafından eziliyordu.
