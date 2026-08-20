@@ -1,6 +1,6 @@
 # T133b — DEPLOY_RUNBOOK §G happy path anlatısının P2P'ye çekilmesi
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama bekliyor) | **Tarih:** 2026-08-20
+**Faz:** F7 | **Durum:** ✓ Tamamlandı — doğrulama **✓ PASS** | **Tarih:** 2026-08-20
 
 ---
 
@@ -16,6 +16,7 @@
 - **§G bağlam bloğuna "T133b notu"** eklendi (§G'nin kendi konvansiyonu — T133 notunun yanına).
 - **Plan §P6 T133b'ye KAPSAM NETLEŞTİRMESİ bloğu** yazıldı (E1/E2/E3 + canlı stack notu).
 - **`DEFERRED_BACKLOG` satırı açıldı:** `T133b-LiveRehearsalUnrun` (43 → **44** aktif satır).
+- **(Doğrulama turu, 2026-08-20 — proje sahibi onaylı)** sekiz bulgu aynı dalda kapatıldı: kontrol 8'in gözlemi var olmayan `isConfigured` alanından `value != null`'a çevrildi · §G.5'in "üçü de fail-closed" cümlesi "ikisi canlı, satıcı kapısı kalıcı bayrak (bayat `true` geçirebilir)" olarak düzeltildi · kısayolun öncül/ardıl sıralaması düzeltildi ve ön koşulu (`NoDeliveryReference` riski) yazıldı · kontrol 10'a **elle ödeme izleyicisi kurma** adımı eklendi (bağlanmamış caller — ayrı backlog satırı) · üç `02 §4.5.1` atfının ikisi `§16.2`'ye çevrildi · cron literalleri kayıtlı stringlere çekildi · 10a zincirine `PayoutCompletedConsumer` eklendi. İkinci `DEFERRED_BACKLOG` satırı: `T133b-PaymentMonitorUnarmed` (44 → **45**).
 
 ## Etkilenen Modüller / Dosyalar
 
@@ -23,7 +24,8 @@
 |---|---|
 | `Docs/DEPLOY_RUNBOOK.md` | §G bağlam notu · §G.4 kontrol 8 · §G.4 kontrol 10 → 10 + 10a · §G.4 altına prova notu bloğu · §G.5 trade-hold tuzağı |
 | `Docs/11_IMPLEMENTATION_PLAN.md` | §P6 T133b — KAPSAM NETLEŞTİRMESİ (E1/E2/E3) + CANLI STACK NOTU |
-| `Docs/DEFERRED_BACKLOG.md` | `T133b-LiveRehearsalUnrun` satırı + durum başlığı 43 → 44 |
+| `Docs/DEFERRED_BACKLOG.md` | `T133b-LiveRehearsalUnrun` satırı + durum başlığı 43 → 44 · **(doğrulama)** `T133b-PaymentMonitorUnarmed` satırı (§4) + başlık 44 → 45 |
+| `Docs/DEPLOY_RUNBOOK.md` **(doğrulama turu)** | §G.4 kontrol 8 gözlemi · kontrol 10 ödeme-izleyici adımı + yeni not bloğu · kontrol 10a cron/`PayoutCompletedConsumer`/§16.2 · kısayol paragrafı sıralama + ön koşul · §G.5 platform kapıları maddesi |
 
 **Kod değişikliği yok** — tur tümüyle dokümandır.
 
@@ -65,9 +67,54 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bağımsız doğrulama bekliyor |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✓ PASS** (2026-08-20, bağımsız chat) |
+| Bulgu sayısı | **8 — bloke edici 0.** Altısı (B1–B6) proje sahibi onayıyla **aynı dalda kapatıldı**, B7/B8 de birlikte alındı |
+| Düzeltme gerekli mi | Hayır — düzeltmeler merge öncesi bu dalda uygulandı |
+
+### Kapılar
+
+- **Adım -1 (working tree):** ✓ `git status --short` boş.
+- **Adım 0 (main CI):** ✓ son üç tamamlanmış main run'ı `success` — `32352581013`, `32352580901` (T133a #249), `32267172619` (T133 #248).
+- **Adım 0b (repo memory):** ✓ `.claude/memory/MEMORY.md:58` T133b satırını taşıyor.
+- **Adım 8a (dal CI):** ✓ dal HEAD `8341b02` run [`32356870769`](https://github.com/turkerurganci/Skinora/actions/runs/32356870769) `success`, **`CI Gate` yeşil**. Koşan iki job `Detect changed paths` + `1. Lint`; kalanlar `paths-filter` gereği skipped (docs-only tur). Raporun ilk yazımı bir önceki commit'in run'ını (`838483b` / `32356485612`) gösteriyordu — yetkili kanıt dal HEAD'ine ait olan yukarıdaki run'dır.
+
+### Kabul kriterleri — bağımsız yeniden üretim
+
+| # | Kriter | Sonuç | Validator kanıtı |
+|---|---|---|---|
+| 1 | Kontrol 10 v3.0 P2P akışını anlatıyor | ✓ | Kontrol 10 + 10a'daki **her** uç, status, kolon, job id, ayar anahtarı ve sınıf adı kodda **birebir** doğrulandı; sıralama `TransactionStateMachine`'in izin verdiği geçişlerle uyumlu. E1'in bölme gerekçesi bağımsız ölçüldü: `SystemSettingsValidator.cs:60` `MinimumSettlementDays = 7` + `:244-252` reddetme + seed varsayılanı `"8"` (`SystemSettingSeed.cs:177`) → kuyruk tek oturumda ayardan gözlenemez, bölme **zorunlu** |
+| 2 | §G tablolarında custodial adım adı yok | ✓ | Emekli enum listesi `git show 82bff4d^:…/TransactionStatus.cs`'ten türetildi (`ITEM_ESCROWED`, `TRADE_OFFER_SENT_TO_BUYER`, `TRADE_OFFER_SENT_TO_SELLER`) + ~30 custody terimi; **tüm dosyada** grep → emekli adlarda **0 isabet**. Kalan isabetler: `trade offer` ×1 ve `custodial` ×1 emekliliğin **kendi ifadesi**, `escrow` ×2 Steam'in **kendi** escrow'u, `emanet` ×1 v3.0'da **duran** ödeme emaneti, `bot` ×8 (5 emekliliği belgeliyor, 3 `TELEGRAM_BOT_TOKEN`) |
+
+**Yöntem:** altı iddia kümesi paralel doğrulandı, her küme ayrı bir **çürütme** turundan geçirildi (aynı iddialar ikinci kez, "yanlışla" talimatıyla), üstüne iki bağımsız eleştirmen — biri kümelerin kapsamadığı iddiaları ve **her çapraz referansı** (02 §2.2/§4.5.1/§9.1/§9.2/§16.2, 03 §4.4, 05 §3.2, §C.1, §H/§H.2/§H.3, §A) kaynak bölümü açarak, diğeri kriterlerin kendisini + plan değişikliğinin bütünlüğünü denetledi. En yüksek riskli iki iddia ayrıca elle teyit edildi.
+
+### Bulgular
+
+| # | Sev | Bulgu | Durum |
+|---|---|---|---|
+| B1 | S1 | **Kontrol 8 çalıştırılamazdı:** `GET /admin/settings` yanıtı `isConfigured` **taşımıyor** — `SettingItemDto` (`SystemSettingDtos.cs:7-14`) yedi alan taşır, `IsConfigured` 07 §9.8 gereği bilinçli olarak projekte edilmez (kodda tek `isConfigured` bir audit-log payload'u, `SystemSettingsService.cs:139-140`). Sayılar (63/44/19) doğruydu, **adı verilen gözlem** yoktu | ✅ kapatıldı — gözlem `value != null`'a çevrildi; 19'un kanıtı boot log satırı, 44'ünki `IsConfigured = 1` sorgusu olarak yazıldı |
+| B2 | S1 | **"Üçü de fail-closed: Steam sorgulanamazsa `STEAM_UNAVAILABLE`"** yanlıştı — satıcı kapısı Steam'e **hiç çıkmaz**; `TransactionEligibilityService.cs:9-16` kendi yorumunda *"no live sidecar call"* diyor ve `MOBILE_AUTHENTICATOR_REQUIRED` döner. Madde iki cümle önce bunu **doğru** anlatıp sonra kendisiyle çelişiyordu | ✅ kapatıldı — "ikisi canlı + fail-closed, satıcı kapısı kalıcı bayrak" olarak ayrıldı; **bayat `true` riski** ve provada satıcı MA'sının elle teyidi yazıldı |
+| B3 | S1 | **Kısayol paragrafında sıralama tersti:** "satır kuyruğa düştükten sonra `SettlementVerificationJob` … damgalar". Kuyruk `SettlementVerifiedAt != null`'ı **önkoşul** olarak arıyor (`SellerPayoutQueueJob.cs:124-136`), yani doğrulama kuyruğun **öncülü**. Paragraf hemen üstündeki 10a satırıyla çelişiyordu; gerçek garanti yazılandan **daha güçlü** | ✅ kapatıldı — öncül/ardıl ilişkisi düzeltildi, kuyruğun **iki iş turunda** (≤5 dk + ≤1 dk) göründüğü yazıldı |
+| B4 | S1 | **Kontrol 10 gerçek stack'te ilerlemezdi:** sidecar'ın T71 ucu `POST /api/monitor/start`'ı çağıran **hiçbir backend kodu yok** (`IBlockchainSidecarClient` yalnız derive · post-cancel-start/stop · balances · cold-wallet taşıyor) ve `MonitorRegistry.start` yalnız o route'tan erişilebilir. Allocator DB'ye `MonitoringStatus.ACTIVE` yazıyor ama sidecar'ı **kurmuyor** → Nile transferi `payment-detected` üretmez, prova `SELLER_CONFIRMED`'da sessizce durur. **Devralınmış** (emekli satır da aynı adımı vaat ediyordu) ama turun "her adım kod üzerinden doğrulandı" iddiasının **ad** düzeyinde kaldığını gösteriyor | ✅ kapatıldı — elle kurma `curl`'ü §G.4'e yazıldı **ve** kalıcı açık `DEFERRED_BACKLOG` §4'e `T133b-PaymentMonitorUnarmed` olarak kaydedildi (sınıfı `T81-PriceConsumerWireup` ile aynı) |
+| B5 | S2 | Kısayol **koşullu** yeterliydi: alıcı envanteri readiness'ta veya turda okunamıyorsa verdict `NoDeliveryReference` olur, satır kuyruğa girmek yerine eskale edilir (§I.5) — ve bunu söyleyen bir hata mesajı yok | ✅ kapatıldı — "Kısayolun ön koşulu" paragrafı eklendi |
+| B6 | S1– | "02 §4.5.1" üç kez tabanın **dayanağı** olarak gösteriliyordu; §4.5.1 yalnız gerekçeyi (8 = 7 + 1 gün pay) verir, uygulanabilir kural 02 **§16.2** — runbook'un kendi §C satırı ve validator'ın kendi yorumu da §16.2'yi anıyor | ✅ kapatıldı — iki yerde §16.2'ye çevrildi, kısayol paragrafında kural (§16.2) ile gerekçe (§4.5.1) ayrıldı |
+| B7 | trivial | Cron literalleri `*/5` / `*/1` yazılmıştı; kayıtlı stringler `*/5 * * * *` / `* * * * *` — bare hâli Hangfire/Cronos'ta parse edilmez ve kodda grep'lenmez | ✅ kapatıldı |
+| B8 | trivial | 10a zinciri `PayoutCompletedConsumer`'ı atlıyordu — `Complete` geçişini yazan o (raporun kendi dayanak tablosu bunu **doğru** biliyordu) | ✅ kapatıldı |
+
+**Devralınmış, T133b'nin sorumluluğu değil (iş üretmez):** §G.5'in "MA 7 günden yeniyse → 15 günlük escrow" tetikleyicisinin repo'da kaynağı yok (kapı `escrow_end_duration_seconds != 0`'a bakar, MA yaşına değil) — cümle emekli §G.5'ten **aynen** taşındı, bu tur onu üretmedi. `DEFERRED_BACKLOG`'un mutlak "aktif satır" sayacı bir birim sapmalı; **delta doğru** ve sapma T133a'dan devralınmış.
+
+### Güvenlik kontrolü
+
+- Secret sızıntısı: **Temiz** — eklenen tek SQL bir `UPDATE` şablonu; doğrulama turunun eklediği `curl` `$INTERNAL_KEY`'i **env değişkeni olarak** referanslar, literal taşımaz.
+- Auth/authorization etkisi: **Temiz** — kod dokunulmadı. Doğrulama `steamTradeOfferUrl`'in yalnız satıcıya döndüğünü bağımsız teyit etti (`TransactionDetailService.cs:227-234`).
+- Input validation: **Temiz.**
+- Yeni bağımlılık: **Yok.**
+- **B4'ün güvenlik okuması:** kayıt bir açığı **açmaz**, kapalı kalmış bir bacağı görünür kılar — izleyici kurulmadığı için ödeme hiç algılanmaz, yani hata yönü **fail-closed**'dır (para eksik hareket eder, fazla değil).
+
+### Yapım raporu karşılaştırması
+
+**Tam uyumlu.** Raporun 13 satırlık dayanak tablosundaki her atıf bağımsız olarak yeniden üretildi. İki not: (1) CI atfı bir commit eskiydi (yukarıda düzeltildi); (2) raporun *"kod kanıtı **ad** doğruluğu için güçlü, **davranış** doğruluğu için zayıf"* itirafı B4'ü **önceden doğru teşhis etmiş** — doğrulama o zayıflığın somut bir örneğini buldu ve sahibini yazdı.
+
+**Turun kalıcı dersi doğrulandı ve bir adım ilerletildi.** Yapım turu "bu satır UYGULANABİLİR mi?" sorusunu sordu ve kriterin kendisindeki gerçekleştirilemez vaadi (E1) yakaladı. Doğrulama aynı soruyu **kendi yeniden yazımına** sordu ve iki yerde daha kaldı: kontrol 8 var olmayan bir alanı okutuyordu (B1), kontrol 10 bağlanmamış bir caller'a dayanıyordu (B4). **Bir prova dokümanında "doğru" ile "koşulabilir" ayrı iki denetimdir ve ikincisi ancak her adımın gerçekten bir çağıranı olup olmadığı sorulunca geçilir** — ad aramak yetmez, çağıran aramak gerekir.
 
 ## Altyapı Değişiklikleri
 
