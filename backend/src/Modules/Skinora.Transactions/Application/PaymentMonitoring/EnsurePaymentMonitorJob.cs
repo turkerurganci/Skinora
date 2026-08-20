@@ -87,12 +87,52 @@ public sealed class EnsurePaymentMonitorJob
     public const string Cron = "* * * * *";
 
     /// <summary>
-    /// Maximum addresses processed per run. Only <em>actionable</em> rows are
-    /// fetched (see <see cref="ActionableStates"/>), so idle allocations from
-    /// CREATED/ACCEPTED transactions can never crowd armed windows out of the
-    /// batch.
+    /// Rows fetched per database round-trip. This is a <em>page</em> size, not
+    /// a cap on the run: <see cref="ExecuteAsync"/> pages until the actionable
+    /// set is exhausted.
     /// </summary>
-    public const int BatchSize = 200;
+    /// <remarks>
+    /// It used to be a single <c>Take(200)</c>, copied from
+    /// <c>EnsurePaymentAddressJob</c>. That cap is safe there and unsafe here,
+    /// and the difference is whether the candidate set <em>drains</em>:
+    /// allocating an address removes the transaction from
+    /// <c>EnsurePaymentAddressJob</c>'s set, but arming a monitor leaves the row
+    /// <c>ACTIVE</c>, so it stays a candidate for the whole window. Combined
+    /// with <c>CreatedAt</c>-ascending ordering that starved the newest windows
+    /// once the set passed 200 — and by <see cref="ArmedStates"/> the set tracks
+    /// a week of volume (see the class remarks), so ~29 transactions a day is
+    /// enough to get there. The starved population was exactly the
+    /// money-critical one: a buyer paying right now, into an address the
+    /// reconciler would not revisit for days. Found in the T139 validation
+    /// round (finding B1, round 2).
+    /// </remarks>
+    public const int PageSize = 200;
+
+    /// <summary>
+    /// Hard ceiling on the addresses one run may touch — a wedge guard so a
+    /// runaway set cannot hold the Hangfire worker past its own cron, not a
+    /// throughput knob. Reaching it is logged as a warning naming exactly what
+    /// was left unreconciled, because a silently truncated sweep reads like a
+    /// complete one.
+    /// </summary>
+    /// <remarks>
+    /// The ceiling is deliberately far above any set the platform could serve:
+    /// at 5 000 concurrent monitors the sidecar is already issuing ~3 300
+    /// TronGrid queries per second at its own 3-second cadence, an order of
+    /// magnitude past any plausible plan budget, so
+    /// <c>T139-ActiveMonitorQuotaAlarm</c> fires long before this does. One
+    /// <c>start</c> per monitor per <em>minute</em> is ~0.5% of the load the
+    /// sidecar already carries for the same address, which is why paging the
+    /// whole set is cheap enough to be the default.
+    /// </remarks>
+    public const int MaxAddressesPerRun = 5_000;
+
+    /// <summary>
+    /// Ids per handover-probe query. The probe used to see at most one page of
+    /// armed addresses; now that a run can arm the whole set it has to chunk
+    /// rather than hand an arbitrary-length IN list to the provider.
+    /// </summary>
+    private const int HandoverProbeChunkSize = 1_000;
 
     /// <summary>
     /// The payment window is open: the deposit address has been revealed to
@@ -144,7 +184,7 @@ public sealed class EnsurePaymentMonitorJob
 
     /// <summary>
     /// Statuses worth fetching — the union of armed and closed. Applied in SQL
-    /// so the batch is never filled with <see cref="WindowNotOpenStates"/> rows.
+    /// so the pages are never filled with <see cref="WindowNotOpenStates"/> rows.
     /// </summary>
     public static readonly TransactionStatus[] ActionableStates =
         [.. ArmedStates, .. WindowClosedStates];
@@ -186,86 +226,139 @@ public sealed class EnsurePaymentMonitorJob
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
-        var candidates = await _db.Set<PaymentAddress>()
-            .Where(p => !p.IsDeleted
-                && p.MonitoringStatus == MonitoringStatus.ACTIVE
-                && ActionableStates.Contains(p.Transaction.Status))
-            .OrderBy(p => p.CreatedAt)
-            .Take(BatchSize)
-            .Select(p => new CandidateRow
-            {
-                Address = p,
-                Status = p.Transaction.Status,
-                DepositSwept = p.BlockchainTransactions.Any(b =>
-                    b.Type == BlockchainTransactionType.SWEEP
-                    && b.Status == BlockchainTransactionStatus.CONFIRMED),
-            })
-            .ToListAsync(cancellationToken);
-
-        if (candidates.Count == 0) return;
-
-        int armed = 0, disarmed = 0, failed = 0;
+        int armed = 0, disarmed = 0, failed = 0, examined = 0;
+        var ceilingHit = false;
         // Addresses this run actually armed, kept so the handover check below
         // can undo an arm that raced a cancel (T139 düzeltme turu — N2).
         var armedAddresses = new List<(Guid Id, string Address)>();
 
-        foreach (var candidate in candidates)
+        // Offset paging: the ordering is stable within a run because the disarm
+        // stamps are not saved until the loop ends. A row a concurrent writer
+        // moves out of ACTIVE mid-run shifts the offset and can cost one skipped
+        // row — benign, the next run sees it, and it is the same snapshot
+        // staleness the handover guard below already compensates for on the arm
+        // side.
+        IQueryable<PaymentAddress> Actionable() => _db.Set<PaymentAddress>()
+            .Where(p => !p.IsDeleted
+                && p.MonitoringStatus == MonitoringStatus.ACTIVE
+                && ActionableStates.Contains(p.Transaction.Status))
+            .OrderBy(p => p.CreatedAt)
+            .ThenBy(p => p.Id);
+
+        var stoppedAtLimit = false;
+
+        // Page over the WHOLE actionable set. A single Take() would be a silent
+        // cap on a set that does not drain (see PageSize) — every run would
+        // reconcile the same oldest slice and never reach the newest windows.
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var action = Classify(candidate.Status, candidate.DepositSwept);
-            if (action == PaymentMonitorAction.Idle) continue;
-
-            if (action == PaymentMonitorAction.Arm)
+            var remaining = MaxAddressesPerRun - examined;
+            if (remaining <= 0)
             {
-                var contract = KnownStablecoinContracts.ResolveContractAddress(
-                    candidate.Address.ExpectedToken);
-                var startStatus = await _sidecar.StartMonitoringAsync(
-                    new PaymentMonitorStartRequest(
-                        Address: candidate.Address.Address,
-                        PaymentAddressId: candidate.Address.Id,
-                        TransactionId: candidate.Address.TransactionId,
-                        ExpectedContract: contract,
-                        ExpectedSymbol: candidate.Address.ExpectedToken.ToString()),
-                    cancellationToken);
+                stoppedAtLimit = true;
+                break;
+            }
 
-                if (startStatus == BlockchainSidecarStatus.Success)
+            var pageSize = Math.Min(PageSize, remaining);
+
+            var page = await Actionable()
+                .Skip(examined)
+                .Take(pageSize)
+                .Select(p => new CandidateRow
                 {
-                    armed++;
-                    armedAddresses.Add((candidate.Address.Id, candidate.Address.Address));
+                    Address = p,
+                    Status = p.Transaction.Status,
+                    DepositSwept = p.BlockchainTransactions.Any(b =>
+                        b.Type == BlockchainTransactionType.SWEEP
+                        && b.Status == BlockchainTransactionStatus.CONFIRMED),
+                })
+                .ToListAsync(cancellationToken);
+
+            if (page.Count == 0) break;
+            examined += page.Count;
+
+            foreach (var candidate in page)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var action = Classify(candidate.Status, candidate.DepositSwept);
+                if (action == PaymentMonitorAction.Idle) continue;
+
+                if (action == PaymentMonitorAction.Arm)
+                {
+                    var contract = KnownStablecoinContracts.ResolveContractAddress(
+                        candidate.Address.ExpectedToken);
+                    var startStatus = await _sidecar.StartMonitoringAsync(
+                        new PaymentMonitorStartRequest(
+                            Address: candidate.Address.Address,
+                            PaymentAddressId: candidate.Address.Id,
+                            TransactionId: candidate.Address.TransactionId,
+                            ExpectedContract: contract,
+                            ExpectedSymbol: candidate.Address.ExpectedToken.ToString()),
+                        cancellationToken);
+
+                    if (startStatus == BlockchainSidecarStatus.Success)
+                    {
+                        armed++;
+                        armedAddresses.Add((candidate.Address.Id, candidate.Address.Address));
+                    }
+                    else
+                    {
+                        failed++;
+                        _logger.LogWarning(
+                            "EnsurePaymentMonitorJob: could not arm PaymentAddress {Id} (status={Status}) — retrying next run.",
+                            candidate.Address.Id, startStatus);
+                    }
+
+                    continue;
+                }
+
+                var stopStatus = await _sidecar.StopMonitoringAsync(
+                    candidate.Address.Address, cancellationToken);
+
+                if (stopStatus == BlockchainSidecarStatus.Success)
+                {
+                    // Stamp only on an acknowledged stop. Writing STOPPED while
+                    // the sidecar is unreachable would leave a monitor running
+                    // that no query can find again — the row would drop out of
+                    // this job's candidate set and out of ReconciliationService's
+                    // scope at the same time.
+                    candidate.Address.MonitoringStatus = MonitoringStatus.STOPPED;
+                    candidate.Address.MonitoringExpiresAt = null;
+                    disarmed++;
                 }
                 else
                 {
                     failed++;
                     _logger.LogWarning(
-                        "EnsurePaymentMonitorJob: could not arm PaymentAddress {Id} (status={Status}) — retrying next run.",
-                        candidate.Address.Id, startStatus);
+                        "EnsurePaymentMonitorJob: could not disarm PaymentAddress {Id} (status={Status}) — row stays ACTIVE, retrying next run.",
+                        candidate.Address.Id, stopStatus);
                 }
-
-                continue;
             }
 
-            var stopStatus = await _sidecar.StopMonitoringAsync(
-                candidate.Address.Address, cancellationToken);
+            if (page.Count < pageSize) break;
+        }
 
-            if (stopStatus == BlockchainSidecarStatus.Success)
-            {
-                // Stamp only on an acknowledged stop. Writing STOPPED while the
-                // sidecar is unreachable would leave a monitor running that no
-                // query can find again — the row would drop out of this job's
-                // candidate set and out of ReconciliationService's scope at the
-                // same time.
-                candidate.Address.MonitoringStatus = MonitoringStatus.STOPPED;
-                candidate.Address.MonitoringExpiresAt = null;
-                disarmed++;
-            }
-            else
-            {
-                failed++;
-                _logger.LogWarning(
-                    "EnsurePaymentMonitorJob: could not disarm PaymentAddress {Id} (status={Status}) — row stays ACTIVE, retrying next run.",
-                    candidate.Address.Id, stopStatus);
-            }
+        if (examined == 0) return;
+
+        // Only warn if the ceiling actually truncated something — a set of
+        // exactly MaxAddressesPerRun is fully reconciled and must not report a
+        // gap it does not have.
+        if (stoppedAtLimit)
+        {
+            ceilingHit = await Actionable().Skip(examined).AnyAsync(cancellationToken);
+        }
+
+        if (ceilingHit)
+        {
+            _logger.LogWarning(
+                "EnsurePaymentMonitorJob stopped at the {Ceiling}-address ceiling — the actionable "
+                + "ACTIVE set is larger than one run may touch, so an unknown number of deposit "
+                + "addresses went unreconciled this pass. At this scale the sidecar is already past "
+                + "any plausible TronGrid budget (see T139-ActiveMonitorQuotaAlarm).",
+                MaxAddressesPerRun);
         }
 
         if (disarmed > 0)
@@ -305,17 +398,26 @@ public sealed class EnsurePaymentMonitorJob
         // One extra query per run undoes it.
         if (armedAddresses.Count > 0)
         {
-            var armedIds = armedAddresses.Select(a => a.Id).ToList();
-            var handedOver = await _db.Set<PaymentAddress>()
-                .AsNoTracking()
-                .Where(p => armedIds.Contains(p.Id)
-                    && p.MonitoringStatus != MonitoringStatus.ACTIVE)
-                .Select(p => p.Id)
-                .ToListAsync(cancellationToken);
+            var armedById = armedAddresses.ToDictionary(a => a.Id, a => a.Address);
+
+            // Chunked because a run may now arm the whole set rather than one
+            // page of it, and an IN list is not something to hand an arbitrary
+            // count to.
+            var handedOver = new List<Guid>();
+            foreach (var chunk in armedById.Keys.Chunk(HandoverProbeChunkSize))
+            {
+                var chunkIds = chunk.ToList();
+                handedOver.AddRange(await _db.Set<PaymentAddress>()
+                    .AsNoTracking()
+                    .Where(p => chunkIds.Contains(p.Id)
+                        && p.MonitoringStatus != MonitoringStatus.ACTIVE)
+                    .Select(p => p.Id)
+                    .ToListAsync(cancellationToken));
+            }
 
             foreach (var id in handedOver)
             {
-                var address = armedAddresses.First(a => a.Id == id).Address;
+                var address = armedById[id];
                 var undoStatus = await _sidecar.StopMonitoringAsync(address, cancellationToken);
 
                 armed--;
@@ -332,8 +434,8 @@ public sealed class EnsurePaymentMonitorJob
         if (armed > 0 || disarmed > 0 || failed > 0)
         {
             _logger.LogInformation(
-                "EnsurePaymentMonitorJob complete: candidates={Total} armed={Armed} disarmed={Disarmed} failed={Failed}",
-                candidates.Count, armed, disarmed, failed);
+                "EnsurePaymentMonitorJob complete: candidates={Total} armed={Armed} disarmed={Disarmed} failed={Failed} ceilingHit={CeilingHit}",
+                examined, armed, disarmed, failed, ceilingHit);
         }
     }
 

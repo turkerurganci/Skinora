@@ -275,6 +275,66 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
         Assert.Equal(MonitoringStatus.POST_CANCEL_24H, await ReadStatusAsync(address.Id));
     }
 
+    // ─── Whole-set coverage (T139 düzeltme turu 2 — B1) ─────────────────
+
+    [Fact]
+    public async Task Every_Open_Window_Is_Armed_Even_Past_One_Page()
+    {
+        // The candidate set does not drain on the arm side: arming leaves the
+        // row ACTIVE, so it stays a candidate for the whole window. A single
+        // Take(PageSize) over a CreatedAt-ascending order therefore kept
+        // reconciling one slice — always the oldest — while the newest windows
+        // were never reached. And the newest window is precisely the one with a
+        // buyer paying into it right now. Whatever the page size, the run must
+        // cover the set.
+        var baseTime = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var i = 0; i < EnsurePaymentMonitorJob.PageSize; i++)
+        {
+            await SeedAddressAsync(
+                TransactionStatus.ITEM_DELIVERED,
+                MonitoringStatus.ACTIVE,
+                createdAt: baseTime.AddMinutes(i));
+        }
+
+        var (_, newest) = await SeedAddressAsync(
+            TransactionStatus.SELLER_CONFIRMED,
+            MonitoringStatus.ACTIVE,
+            createdAt: baseTime.AddDays(10));
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(
+            EnsurePaymentMonitorJob.PageSize + 1, _sidecar.MonitorStartCalls.Count);
+        Assert.Contains(_sidecar.MonitorStartCalls, c => c.Address == newest.Address);
+    }
+
+    [Fact]
+    public async Task A_Closed_Window_Past_The_First_Page_Is_Still_Disarmed()
+    {
+        // The disarm half is what keeps MonitoringStatus honest and bounds
+        // ReconciliationService's scan scope. Age ordering usually puts
+        // terminal rows near the head, but "usually" is not a guarantee — a
+        // row that lands on page two must still be stamped.
+        var baseTime = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var i = 0; i < EnsurePaymentMonitorJob.PageSize; i++)
+        {
+            await SeedAddressAsync(
+                TransactionStatus.SELLER_CONFIRMED,
+                MonitoringStatus.ACTIVE,
+                createdAt: baseTime.AddMinutes(i));
+        }
+
+        var (_, terminal) = await SeedAddressAsync(
+            TransactionStatus.COMPLETED,
+            MonitoringStatus.ACTIVE,
+            createdAt: baseTime.AddDays(10));
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(terminal.Address, Assert.Single(_sidecar.MonitorStopCalls));
+        Assert.Equal(MonitoringStatus.STOPPED, await ReadStatusAsync(terminal.Id));
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private EnsurePaymentMonitorJob BuildSut()
@@ -316,9 +376,10 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
     private async Task<(Transaction Transaction, PaymentAddress Address)> SeedAddressAsync(
         TransactionStatus status,
         MonitoringStatus monitoringStatus,
-        bool softDeleted = false)
+        bool softDeleted = false,
+        DateTime? createdAt = null)
     {
-        var nowUtc = new DateTime(2026, 8, 20, 11, 0, 0, DateTimeKind.Utc);
+        var nowUtc = createdAt ?? new DateTime(2026, 8, 20, 11, 0, 0, DateTimeKind.Utc);
         // CK_Transactions_Cancel — REFUNDED reuses the cancellation fields
         // (WP5 buyer-favor resolution), so it needs the same attribution as the
         // CANCELLED_* rows.

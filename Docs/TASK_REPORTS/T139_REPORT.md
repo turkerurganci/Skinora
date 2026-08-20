@@ -1,6 +1,6 @@
 # T139 — Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama tur 1 ✗ FAIL → düzeltme turu uygulandı, yeniden doğrulama bekliyor) | **Tarih:** 2026-08-20
+**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama tur 2 ✗ FAIL → düzeltme turu 2 uygulandı, yeniden doğrulama bekliyor) | **Tarih:** 2026-08-20
 
 ---
 
@@ -47,6 +47,8 @@ Yalnız `start` çağrısını bağlamak iki yeni kusur üretirdi: (1) hiç durm
 - `backend/tests/Skinora.Transactions.Tests/Unit/PaymentMonitoring/PaymentMonitorStartDispatcherTests.cs`
 - `backend/tests/Skinora.Transactions.Tests/Unit/PostCancel/PostCancelMonitorStartDispatcherTests.cs`
 - `backend/tests/Skinora.Transactions.Tests/Integration/PaymentMonitoring/EnsurePaymentMonitorJobTests.cs`
+- `backend/tests/Skinora.API.Tests/Unit/Configuration/TransactionsModuleNotificationHandlerTests.cs` *(düzeltme turu 1 — B1 DI bekçisi)*
+- `sidecar-blockchain/src/monitor/activeMonitorGauge.ts` + `activeMonitorGauge.test.ts` *(düzeltme turu 2 — N2-2 gauge toplayıcısı)*
 
 **Değişen (kod):**
 - `.../PaymentAddresses/IBlockchainSidecarClient.cs` — iki metot + `PaymentMonitorStartRequest`
@@ -54,13 +56,16 @@ Yalnız `start` çağrısını bağlamak iki yeni kusur üretirdi: (1) hiç durm
 - `.../Lifecycle/TransactionReadinessService.cs` — Stage 10b
 - `.../PostCancel/PostCancelMonitorStartDispatcher.cs` — devir öncesi `stop`
 - `backend/src/Skinora.API/Configuration/TransactionsModule.cs` — job + registrar kaydı; **düzeltme turu:** `PaymentMonitorStartDispatcher`'ın MediatR handler kaydı (B1)
-- `sidecar-blockchain/src/monitor/MonitorRegistry.ts` — sınıf yorumu (emekli `PENDING_PAYMENT (T44 state)` çağıranını tarif ediyordu)
+- `sidecar-blockchain/src/monitor/MonitorRegistry.ts` — sınıf yorumu (emekli `PENDING_PAYMENT (T44 state)` çağıranını tarif ediyordu); **düzeltme turu 2:** gauge yazımı toplayıcıya alındı (N2-2)
+- `sidecar-blockchain/src/monitor/PostCancelMonitor.ts` · `src/metrics.ts` — **düzeltme turu 2:** gauge yazımı toplayıcıya alındı + `help` metni düzeltildi (N2-2)
+- `.../PaymentMonitoring/EnsurePaymentMonitorJob.cs` — **düzeltme turu:** pencere bedeli doc'u (N1) + devir telafisi ve concurrency ele alımı (N2); **düzeltme turu 2:** `BatchSize` → `PageSize` + `MaxAddressesPerRun`, tüm kümenin sayfalanması, tavan WARN'ı (B1-2)
+- `.../Unit/PaymentAddresses/HttpBlockchainSidecarClientTests.cs` — **düzeltme turu 2:** 7 port testi (N1-2)
 - Dört test stub'ı (`StubBlockchainSidecarClient` + üç `Skinora.API.Tests` stub'ı) yeni arayüz üyeleriyle
 
 **Değişen (doküman):**
 - `Docs/11_IMPLEMENTATION_PLAN.md` — §F7 P7'ye T139 bloğu; F7 aralığı T115–T138 → T115–T139
 - `Docs/06_DATA_MODEL.md` v6.12 → **v6.13** — §2.16 + §3.7
-- `Docs/08_INTEGRATION_SPEC.md` v3.2 → **v3.4** — §3.4 yaşam döngüsü tablosu (altbilgi sürümü de düzeltildi: v2.6 → v3.3), düzeltme turunda **v3.4**: pencere süresinin ölçülmüş bedeli (N1)
+- `Docs/08_INTEGRATION_SPEC.md` v3.2 → **v3.5** — §3.4 yaşam döngüsü tablosu (altbilgi sürümü de düzeltildi: v2.6 → v3.3); düzeltme turunda **v3.4** pencere süresinin ölçülmüş bedeli (N1); düzeltme turu 2'de **v3.5** gauge'un iki registry'yi birden saydığı (N2-2)
 - `Docs/DEPLOY_RUNBOOK.md` — §G.4 kontrol 10 + elle kurma notu → doğrulama notu
 - `Docs/DEFERRED_BACKLOG.md` — `T133b-PaymentMonitorUnarmed` ✅ (45 → 44), düzeltme turunda `T139-ActiveMonitorQuotaAlarm` açıldı (44 → **45**)
 - `Docs/IMPLEMENTATION_STATUS.md`, `.claude/memory/MEMORY.md`
@@ -71,9 +76,9 @@ Yalnız `start` çağrısını bağlamak iki yeni kusur üretirdi: (1) hiç durm
 |---|---|---|---|
 | AC1 | Port `StartMonitoringAsync` + `StopMonitoringAsync` taşır, gövde sidecar'ın beş zorunlu alanıyla birebir | ✓ | `IBlockchainSidecarClient.cs` + `HttpBlockchainSidecarClient.cs`; `MonitorStartRequestBody` alanları `startMonitorHandler`'ın (`monitorHandlers.ts:33-38`) zorunlu beşlisiyle birebir; `PaymentMonitorStartDispatcherTests.Success_Arms_The_Sidecar_With_The_Mapped_Payload` alan alan doğruluyor |
 | AC2 | Arm, geçişle aynı `SaveChanges` içinde; **dispatcher olayı tüketip sidecar'ı kurar**; adres yoksa geçiş bloklanmaz | ✓ *(düzeltme turundan sonra)* | Yayın kolu: `TransactionReadinessService` Stage 10b; `Arming_Rides_The_Same_Unit_Of_Work_As_The_Transition` (2 olay, tek batch) + `A_Missing_Deposit_Address_Does_Not_Block_The_Confirmation`. **Tüketim kolu yapım turunda BAĞLI DEĞİLDİ** (doğrulama bulgusu B1) — `TransactionsModule.cs`'e DI kaydı eklendi, `TransactionsModuleNotificationHandlerTests` bekçisi kaydın varlığını zorunlu kılıyor |
-| AC3 | Self-heal: dakikalık idempotent yeniden kurma | ✓ | `EnsurePaymentMonitorJob` (`Cron = "* * * * *"`) + `EnsurePaymentMonitorJobRegistrar`; `Arming_Is_Repeated_Every_Run_So_A_Sidecar_Restart_Self_Heals` |
+| AC3 | Self-heal: **kurulu olması gereken kümeyi her turda** idempotent olarak yeniden kurar | ✓ *(düzeltme turu 2'den sonra)* | `EnsurePaymentMonitorJob` (`Cron = "* * * * *"`) + `EnsurePaymentMonitorJobRegistrar`; `Arming_Is_Repeated_Every_Run_So_A_Sidecar_Restart_Self_Heals`. **Kriterin "kümeyi" kısmı tur 2'ye kadar KARŞILANMIYORDU** (doğrulama bulgusu B1-2): tek `Take(200)` + `CreatedAt` artan sıra, kümeyi 200'ün üstünde en yeni pencerelere hiç ulaşamaz hâle getiriyordu. Sayfalamaya çevrildi; `Every_Open_Window_Is_Armed_Even_Past_One_Page` + `A_Closed_Window_Past_The_First_Page_Is_Still_Disarmed` sayfa sınırının üstünü kapsıyor |
 | AC4 | Disarm: (a) iptal devrinde stop→start sırası, (b) pencere kapanışında stop + `STOPPED` | ✓ | (a) `Handover_Stops_The_Active_Monitor_Before_Starting_PostCancel` çağrı **sırasını** assert eder; (b) `Terminal_Status_Stops_The_Monitor_And_Stamps_Stopped` + `A_Swept_Deposit_Is_Disarmed_While_The_Transaction_Is_Still_Live` |
-| AC5 | Birim + entegrasyon kapsaması | ✓ | 4 yeni test dosyası; aşağıdaki test tablosu |
+| AC5 | Birim + entegrasyon kapsaması — **port metotları (statü eşlemesi dahil)** + dispatcher 3 kol + atomik yayın + karar tablosu | ✓ *(düzeltme turu 2'den sonra)* | 5 yeni test dosyası; aşağıdaki test tablosu. **Port yarısı tur 2'ye kadar EKSİKTİ** (doğrulama bulgusu N1-2): `HttpBlockchainSidecarClientTests` yalnız `DeriveAddressAsync`'i kapsıyordu, `api/monitor/start|stop` yolu / alan adları / `SendCommandAsync` statü eşlemesi hiç koşmuyordu. 7 test eklendi, post-cancel ikizlerinin yollarını da kapsıyor |
 | AC6 | Doküman: 08 §3.4 yaşam döngüsü, 06 §3.7/§2.16 `ACTIVE` anlamı, runbook `curl` notu kalkar, backlog ✅ | ✓ | Yukarıdaki doküman listesi |
 
 ## Test Sonuçları
@@ -85,6 +90,7 @@ Yalnız `start` çağrısını bağlamak iki yeni kusur üretirdi: (1) hiç durm
 | **Tüm backend suite** | ✓ **2817/2817** | 13 assembly, **0 fail** — Shared 409 · Platform 185 · Users 22 · Auth 120 · Steam 39 · Payments 6 · Realtime 39 · Admin 22 · Fraud 91 · Notifications 171 · Disputes 83 · Transactions 1079 · API 551 |
 | Yeni testler | ✓ 44/44 | Üç yeni dosya (`Unit.PaymentMonitoring` + `Unit.PostCancel` + `Integration.PaymentMonitoring`); ayrıca `TransactionReadinessServiceTests`'e **3** test eklendi → toplam **47** yeni test |
 | **Düzeltme turu (validator koşumu)** | ✓ | Build Release **0W/0E** · `dotnet format --verify-no-changes` exit 0 · **Unit 1437/1437** (API 46 → **47**, yeni DI bekçisi) · `Integration.PaymentMonitoring` + `Integration.Lifecycle.TransactionReadinessServiceTests` **50/50** · üç yeni testin **üçü de ayırt edici** olduğu, düzeltmeler geçici olarak devre dışı bırakılarak kanıtlandı |
+| **Düzeltme turu 2 (validator koşumu)** | ✓ | Build Release **0W/0E** · `dotnet format --verify-no-changes --severity error` exit 0 · **Transactions entegrasyon 538/538** (536 → +2 sayfa-aşımı testi) · **Transactions unit 559** (545 → +14 port testi: 6 fact + 8 `Theory` vakası) · **sidecar-blockchain 166/166** (161 → +5 gauge testi) · `npx tsc --noEmit` exit 0 · prettier LF-normalize edilmiş kopyada temiz (lokal `--check` 38 dosyanın **34**'ünü uyarıyor, dokunulmamışlar dahil → `core.autocrlf` artefaktı) · **üç düzeltmenin üçü de ayırt edici**, geçici olarak devre dışı bırakılarak kanıtlandı |
 | Yeni + komşu testler | ✓ 75/75 | Yukarıdaki filtre + `TransactionReadinessServiceTests` sınıfının tamamı |
 | sidecar-blockchain tsc | ✓ exit 0 | `npx tsc --noEmit` |
 | sidecar-blockchain prettier | ✓ (LF) | Lokal `--check` **tüm** pakette uyarıyor (`core.autocrlf=true` artefaktı — dokunulmamış `routes.ts`/`monitorHandlers.ts` de uyarıyor); LF'e normalize edilmiş kopya **temiz** |
@@ -145,6 +151,53 @@ Advisory E2E **10/32** — yapım turunun run'ıyla (`32369306467`) ve iki bağ�
 
 **Bir handler'ın VAR olması ile ULAŞILABİLİR olması aynı şey değildir, ve birim testi ikincisini göstermez.** T139 bağlanmamış bir *caller*'ı kapatmak için açıldı ve kapatırken bağlanmamış bir *consumer* üretti — kusurun sınıfı aynı, yalnız yönü ters. İkisini de aynı şey mümkün kıldı: bir uç noktanın kendi testi yeşilken kompozisyonda ölü olabilmesi. Bu yüzden düzeltme tek örneği değil **sınıfı** kapatıyor; aksi hâlde bu assembly'ye eklenen bir sonraki handler aynı sessiz düşüşü tekrar ederdi.
 
+## Doğrulama — Tur 2 (2026-08-20, bağımsız doğrulama chat'i)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✗ **FAIL** → düzeltme turu 2 **aynı dalda uygulandı** (proje sahibi kararı) |
+| Bulgu sayısı | **3** — 1 bloke edici (B1-2) + 2 bloke etmeyen (N1-2, N2-2) |
+| Düzeltme gerekli mi | Evet — üçü de kapatıldı, kayıtları plan §F7 T139 "DÜZELTME TURU 2" bloğunda |
+
+**Giriş kapıları:** working tree temiz ✓ · main son 3 run `success` (`32352581013`, `32352580901`, `32248307699`) ✓ · repo memory T139 satırı mevcut ✓ · dal HEAD `51b1552` ↔ origin senkron ✓
+
+**Bağımsız olarak yeniden üretilenler:** AC1 (beş zorunlu alan ↔ gövde birebir, `expectedSymbol` = enum adı ↔ sidecar allowlist, `expectedContract` iki token için de dolu) · AC2 (`OutboxService.PublishAsync` yalnız change tracker'a ekliyor → atomiklik yapısal; Stage 10b tek `SaveChangesAsync` öncesinde) · AC4 (a+b) · AC6 (runbook'un üç komutu da koşulabilir) · tur 1'in üç düzeltmesinin **üçünün de ayırt ediciliği** (DI bekçisi kaldırıldığında `Unregistered: PaymentMonitorStartRequestedEvent`; devir telafisi kapalıyken `Assert.Single() Failure`; concurrency ele alımı kapalıyken ham `DbUpdateConcurrencyException`) · Transactions entegrasyon **536/536** lokal · sidecar **161/161** lokal · advisory E2E **10/32**, dal HEAD run `32379774377` ↔ `32264946887` (T133) ↔ `32246467184` (T132) **leg-leg birebir**.
+
+### B1-2 — BLOKE EDİCİ (AC3'ün özü): reconciler tek sayfayla sınırlıydı, en yeni pencereler aç kalıyordu
+
+`ExecuteAsync` adayları tek bir `Take(BatchSize = 200)` ile `CreatedAt` **artan** sırada alıyordu. Tavan `EnsurePaymentAddressJob`'dan kopyalanmıştı ve orada güvenlidir çünkü o kümenin satırları işlendikçe **düşer** (`t.PaymentAddress == null` artık doğru değil). Burada arm satırı `ACTIVE` bıraktığı için satır pencerenin tamamı boyunca aday kalır — küme 200'ü aştığı anda her tur aynı en eski dilimi mutabık kılıyor.
+
+Kümenin büyüklüğünü bu görevin **kendi N1 bulgusu** ölçmüştü: `ArmedStates` `ITEM_DELIVERED`'ı içeriyor ve sweep 7 günlük tabandan önce kuyruklanamıyor → küme ≈ **bir haftalık hacim**, eşik ~29 işlem/gün. Aç kalan popülasyon tam olarak para-kritik olan: en yeni `SELLER_CONFIRMED` satırı sıranın **sonunda** doğuyor ve önündeki (küme−200) satır drene olana kadar (100 tx/gün'de ≈ 5 gün) işlenmiyor — 30-120 dakikalık ödeme penceresi için pratikte **hiçbir zaman**. AC3'ün kapattığı üç vakadan ikisi (sidecar restart · düşen outbox teslimi) tam da hızlı yolun çalışmadığı anda ölüyordu. `BatchSize` XML doc'u ise tersini iddia ediyordu ("idle allocations ... can never crowd armed windows out of the batch") — başka bir kalabalıklaşma kaynağını adlandırıp geçerli olanı atlıyordu.
+
+Validator geçici bir sondaj testiyle **yeniden üretti**: 201 aktif satır → 200 arm, en yeni `SELLER_CONFIRMED` penceresi armed değil.
+
+**Kapatma:** tek `Take` yerine **tüm aday kümesi sayfalanıyor** (`PageSize` = DB gidiş-dönüş boyu, `MaxAddressesPerRun = 5000` wedge guard). Tavan bir throughput ayarı değil kama korumasıdır ve çarpıldığında **WARN loglanıyor** — sessizce kırpılmış bir sweep tam kapsama gibi okunur. Bedeli düşük: izleyici başına **dakikada** bir `start`, sidecar'ın aynı adres için zaten 3 saniyede bir yaptığı işin ~%0.5'i. İki kalıcı bekçi testi (`Every_Open_Window_Is_Armed_Even_Past_One_Page`, `A_Closed_Window_Past_The_First_Page_Is_Still_Disarmed`) sayfa sınırının üstünü kapsıyor ve **ikisi de ayırt edici** (tek sayfaya kilitlendiğinde `Assert.Equal() Failure: Values differ` ve `Assert.Single() Failure: The collection was empty`).
+
+### N1-2 — bloke etmez: AC5'in port yarısı ölçülmemişti
+
+AC5 "kurma/durdurma port metotları (**statü eşlemesi dahil**)" diyor, ama `HttpBlockchainSidecarClientTests` yalnız `DeriveAddressAsync`'i kapsıyordu: `api/monitor/start|stop` **yolu**, JSON **alan adları** ve `SendCommandAsync`'in dört yönlü **statü eşlemesi** hiçbir testte koşmuyordu. AC5'in "post-cancel ikizlerinin test dosyaları şablondur" cümlesi yanıltıcıydı — o ikizlerin de port testi yoktu, yani şablon boştu. Eksik olan tam olarak AC1'in konusu: bir alan adı veya yol sapması sidecar'da 400 `INVALID_MONITOR_REQUEST` üretir, `PaymentMonitorStartDispatcher` 400'ü **terminal** sayar ve ödeme bacağı sessizce ölür.
+
+**Kapatma:** yol + beş alan + `api/monitor/stop` gövdesi + post-cancel ikizlerinin yolları + sekiz HTTP statüsünün eşlemesi + transport/timeout/internal-key testleri. Ayırt edicilik kanıtlandı: yol `api/monitor/starts` yapıldığında ve `expectedContract` → `expected_contract` yeniden adlandırıldığında test her iki sapmayı da yakalıyor.
+
+### N2-2 — bloke etmez: N1'in telafisinin dayandığı gösterge yanlıştı
+
+`skinora_blockchain_active_monitors` etiketsiz **tek** bir gauge ve iki registry (`MonitorRegistry` + `PostCancelMonitor`) ikisi de ona `.set(this.monitors.size)` yazıyordu — yayınlanan değer toplam değil **en son yazan** registry'nin sayısıydı; üstelik birinin `shutdown()`'ı diğeri hâlâ yoklarken düz 0 yayınlıyordu. Kusur T71/T75'ten geliyor, T139 üretmedi — ama **taşıyıcı hâle getiren T139'dur**: N1'in telafisi (08 §3.4 "throughput artırılmadan önce bu gauge izlenmeli"), `DEPLOY_RUNBOOK` §G.4'ün kurulum kanıtı, `infra/grafana/.../integration-metrics.json:404` paneli ve `T139-ActiveMonitorQuotaAlarm` hepsi bu sayıya bağlandı.
+
+**Kapatma:** metrik **adı ve (boş) etiket kümesi korundu** — mevcut Grafana paneli dokunulmadan doğru sayıyı çizmeye başlıyor — ve iki registry tek bir toplayıcıdan (`sidecar-blockchain/src/monitor/activeMonitorGauge.ts`) yazıyor. Post-cancel izleyiciler de aynı TronGrid bütçesini tükettiği için toplam zaten kapasite planlamasının istediği sayı. Beş test; registry seviyesindeki ikisi **ayırt edici** (eski yazım geri alındığında `expected 1 to be 2` ve `expected +0 to be 1`).
+
+### Düzeltme turu 2'nin değişiklikleri
+
+- `.../PaymentMonitoring/EnsurePaymentMonitorJob.cs` — `BatchSize` → `PageSize` + `MaxAddressesPerRun`, sayfalama döngüsü, tavan WARN'ı (B1-2)
+- `.../Integration/PaymentMonitoring/EnsurePaymentMonitorJobTests.cs` — **2 yeni** sayfa-aşımı testi + `SeedAddressAsync`'e `createdAt` parametresi
+- `.../Unit/PaymentAddresses/HttpBlockchainSidecarClientTests.cs` — **7 yeni** port testi (N1-2)
+- `sidecar-blockchain/src/monitor/activeMonitorGauge.ts` + `.test.ts` — **yeni** toplayıcı + 5 test (N2-2)
+- `sidecar-blockchain/src/monitor/MonitorRegistry.ts` · `PostCancelMonitor.ts` · `src/metrics.ts` — gauge yazımı toplayıcıya alındı, `help` metni düzeltildi
+- `Docs/11_IMPLEMENTATION_PLAN.md` §F7 T139 **DÜZELTME TURU 2** bloğu · `Docs/08_INTEGRATION_SPEC.md` v3.4 → **v3.5** · `Docs/DEFERRED_BACKLOG.md` (satır sayısı **değişmedi**, 45)
+
+### KALICI DERS (tur 2)
+
+**Bir tavan, üzerinde durduğu kümenin DRENE OLUP OLMADIĞI sorulmadan kopyalanamaz.** `EnsurePaymentAddressJob`'un `Take(50)`'si doğru, `EnsurePaymentMonitorJob`'un `Take(200)`'ü yanlıştı ve iki satır birbirinin aynısıydı — fark koddan değil, kümenin davranışından geliyor. İkinci ders aynı turun içinden: **bir kararın bedelini bir metriğe havale etmek, o metriğin doğru olduğunu ayrıca doğrulamayı gerektirir** — N1 telafisi yazılırken gösterge zaten iki registry tarafından eziliyordu.
+
 ## Altyapı Değişiklikleri
 
 - **Migration: Yok** — D4 gereği enum ve şema değişmedi.
@@ -164,6 +217,7 @@ Advisory E2E **10/32** — yapım turunun run'ıyla (`32369306467`) ve iki bağ�
 
 - **Kurma gecikmesinin üst sınırı 1 dakikadır.** Outbox teslimi düşerse izleyici reconciler turuna kadar kurulmaz. Ödeme penceresi en az 30 dakika olduğu için bu pratikte görünmez, ama sıfır değildir.
 - **`skinora_blockchain_active_monitors` üzerinde alarm yok.** Kurulmamış bir pencere bugün yalnız log'dan görülür; bir "armed pencere sayısı ≠ açık pencere sayısı" alarmı bunu gözlenebilir yapardı — T139 kapsamına alınmadı. *(Doğrulama turu N1: madde bir rapor satırı olmaktan çıkarılıp `DEFERRED_BACKLOG` → `T139-ActiveMonitorQuotaAlarm` olarak **sahiplendirildi**; eşiğin kendisi TronGrid plan bütçesi bilinmeden sayı olarak yazılamıyor.)*
+- **Reconciler'ın tur başına 5000 adres tavanı var** (`MaxAddressesPerRun`, düzeltme turu 2). Tavan bir kama korumasıdır, throughput ayarı değil, ve çarpıldığında **WARN loglanır** — sessizce kırpılmaz. Pratikte ulaşılamaz olması beklenir: 5000 eşzamanlı izleyicide sidecar zaten saniyede ~3300 TronGrid sorgusu üretiyor olur, yani `T139-ActiveMonitorQuotaAlarm` çok önce ateşlenmelidir. Tavanın kendisi test edilmedi (5001 satır seed etmek süiti gereksiz yavaşlatırdı); test edilen şey **sayfa sınırının aşılması**dır.
 - **Canlı prova hâlâ koşulmadı.** `T133b-LiveRehearsalUnrun` açık kalır: bu turun kanıtı testlerdir, gerçek Nile transferi + gerçek sidecar ile uçtan uca ölçüm değil.
 
 ## Notlar

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { logger } from '../logger.js';
-import { activeMonitors, transfersTotal } from '../metrics.js';
+import { transfersTotal } from '../metrics.js';
+import { reportActiveMonitorCount } from './activeMonitorGauge.js';
 import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
@@ -145,7 +146,7 @@ export class MonitorRegistry {
       seenEvents: new Set(),
       pendingFinality: new Map(),
     });
-    activeMonitors.set(this.monitors.size);
+    reportActiveMonitorCount('active', this.monitors.size);
     logger.info(
       {
         address: options.address,
@@ -165,7 +166,7 @@ export class MonitorRegistry {
    */
   stop(address: string): { stopped: boolean } {
     const had = this.monitors.delete(address);
-    activeMonitors.set(this.monitors.size);
+    reportActiveMonitorCount('active', this.monitors.size);
     if (had) {
       logger.info({ address }, 'Monitor stopped');
     }
@@ -183,7 +184,7 @@ export class MonitorRegistry {
     this.stopped = true;
     this.clearTimer();
     this.monitors.clear();
-    activeMonitors.set(0);
+    reportActiveMonitorCount('active', 0);
   }
 
   /** Public for tests — runs a single polling iteration deterministically. */

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { logger } from '../logger.js';
-import { activeMonitors, transfersTotal } from '../metrics.js';
+import { transfersTotal } from '../metrics.js';
+import { reportActiveMonitorCount } from './activeMonitorGauge.js';
 import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
@@ -224,7 +225,7 @@ export class PostCancelMonitorRegistry {
       seenEvents: new Set(),
     };
     this.monitors.set(options.address, entry);
-    activeMonitors.set(this.monitors.size);
+    reportActiveMonitorCount('post_cancel', this.monitors.size);
     logger.info(
       {
         address: options.address,
@@ -245,7 +246,7 @@ export class PostCancelMonitorRegistry {
    */
   stop(address: string): { stopped: boolean } {
     const had = this.monitors.delete(address);
-    activeMonitors.set(this.monitors.size);
+    reportActiveMonitorCount('post_cancel', this.monitors.size);
     if (had) {
       logger.info({ address }, 'Post-cancel monitor stopped');
     }
@@ -259,7 +260,7 @@ export class PostCancelMonitorRegistry {
     this.stopped = true;
     this.clearTimer();
     this.monitors.clear();
-    activeMonitors.set(0);
+    reportActiveMonitorCount('post_cancel', 0);
   }
 
   /** Public for tests — runs a single tick deterministically. */
@@ -344,7 +345,7 @@ export class PostCancelMonitorRegistry {
       if (nextState === PostCancelMonitorStates.Stopped) {
         // Drop the entry — no further polling after 30-day terminal.
         this.monitors.delete(entry.options.address);
-        activeMonitors.set(this.monitors.size);
+        reportActiveMonitorCount('post_cancel', this.monitors.size);
         if (this.monitors.size === 0) {
           this.clearTimer();
         }
