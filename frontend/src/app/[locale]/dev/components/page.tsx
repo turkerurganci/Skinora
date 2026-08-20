@@ -25,21 +25,9 @@ import {
 } from "@/components/common";
 import { DisputeType, TimeoutFreezeReason, TransactionStatus } from "@/types/enums";
 
-const ALL_STATUSES = [
-  TransactionStatus.CREATED,
-  TransactionStatus.ACCEPTED,
-  TransactionStatus.TRADE_OFFER_SENT_TO_SELLER,
-  TransactionStatus.ITEM_ESCROWED,
-  TransactionStatus.PAYMENT_RECEIVED,
-  TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
-  TransactionStatus.ITEM_DELIVERED,
-  TransactionStatus.COMPLETED,
-  TransactionStatus.CANCELLED_TIMEOUT,
-  TransactionStatus.CANCELLED_SELLER,
-  TransactionStatus.CANCELLED_BUYER,
-  TransactionStatus.CANCELLED_ADMIN,
-  TransactionStatus.FLAGGED,
-] as const;
+// Every canonical status (06 §2.1), so the gallery shows the full C01 palette.
+// REFUNDED was missing before T134 — it is a badge tone of its own (04 §C01).
+const ALL_STATUSES = Object.values(TransactionStatus);
 
 function Section({
   id,

@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "Transacción cancelada por administrador",
       "EMERGENCY_HOLD_APPLIED": "Retención de emergencia aplicada",
       "EMERGENCY_HOLD_RELEASED": "Retención de emergencia liberada",
-      "BOT_STATUS_CHANGED": "Estado del bot cambiado",
+      "SETTLEMENT_CLEARED_ADMIN": "Liquidación liberada por administrador",
       "RECONCILIATION_MISMATCH": "Discrepancia de conciliación",
       "COLD_WALLET_TRANSFER_INITIATED": "Transferencia a cartera fría iniciada",
       "HOT_WALLET_THRESHOLD_BREACHED": "Umbral de cartera caliente superado",
       "SANCTIONS_LIST_ADDRESS_ADDED": "Dirección añadida a la lista de sanciones",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones",
+      "MAINTENANCE_MODE_CHANGED": "Modo de mantenimiento cambiado",
+      "TIMEOUT_AUTO_EXTENDED": "Tiempo límite ampliado automáticamente",
+      "PLATFORM_OUTAGE_DETECTED": "Interrupción de la plataforma detectada"
     }
   },
   "adminTransactions": {
@@ -614,9 +617,8 @@
     },
     "cancelRefund": {
       "title": "Resumen de reembolso",
-      "itemToSeller": "El artículo en depósito se devolverá al vendedor.",
       "paymentToBuyer": "El pago recibido se reembolsará al comprador (precio + comisión − tarifa de gas).",
-      "none": "No hay nada que reembolsar: el artículo no está en depósito y no se recibió ningún pago."
+      "none": "No hay nada que reembolsar: no se recibió ningún pago."
     },
     "success": {
       "cancelled": "Transacción cancelada.",
@@ -854,7 +856,7 @@
       "MANAGE_ROLES": "Gestionar roles",
       "VIEW_AUDIT_LOG": "Ver registro de auditoría",
       "CANCEL_TRANSACTIONS": "Cancelar transacciones",
-      "EMERGENCY_HOLD": "Aplicar/retirar retención de emergencia",
+      "EMERGENCY_HOLD": "Aplicar/retirar retención de emergencia en transacciones",
       "VIEW_DISPUTES": "Ver disputas",
       "MANAGE_DISPUTES": "Resolver disputas",
       "MANAGE_SANCTIONS": "Gestionar lista de sanciones"
@@ -973,19 +975,17 @@
   },
   "status": {
     "CREATED": "Creado",
-    "ACCEPTED": "Aceptado",
-    "TRADE_OFFER_SENT_TO_SELLER": "Esperando ítem",
-    "ITEM_ESCROWED": "Esperando pago",
-    "PAYMENT_RECEIVED": "Pago recibido",
-    "TRADE_OFFER_SENT_TO_BUYER": "Esperando entrega",
-    "ITEM_DELIVERED": "Ítem entregado",
+    "ACCEPTED": "Esperando confirmación del vendedor",
+    "SELLER_CONFIRMED": "Esperando pago",
+    "PAYMENT_RECEIVED": "Esperando entrega",
+    "ITEM_DELIVERED": "Entregado — pago pendiente",
     "COMPLETED": "Completado",
     "CANCELLED_TIMEOUT": "Tiempo agotado",
     "CANCELLED_SELLER": "Cancelado por vendedor",
     "CANCELLED_BUYER": "Cancelado por comprador",
     "CANCELLED_ADMIN": "Cancelado por admin",
-    "FLAGGED": "En revisión",
     "REFUNDED": "Reembolsada",
+    "FLAGGED": "En revisión",
     "EMERGENCY_HOLD": "Congelado"
   },
   "countdown": {
@@ -1018,11 +1018,9 @@
     "step": {
       "CREATED": "Creado",
       "ACCEPTED": "Aceptado",
-      "ITEM_ESCROWED": "Ítem en custodia",
-      "PAYMENT_RECEIVED": "Pago",
-      "PAYMENT_VERIFIED": "Pago verificado",
-      "ITEM_DELIVERED": "Entrega",
-      "DELIVERY_VERIFIED": "Entrega verificada",
+      "SELLER_CONFIRMED": "Vendedor listo",
+      "PAYMENT_RECEIVED": "Pago recibido",
+      "ITEM_DELIVERED": "Entregado",
       "COMPLETED": "Completado"
     }
   },
@@ -1533,22 +1531,9 @@
         "seller": "El comprador aceptó. La plataforma está preparando tu oferta de intercambio.",
         "buyer": "Esperando a que el vendedor envíe el ítem."
       },
-      "viewTradeOffer": "Ir a la oferta de intercambio de Steam",
-      "tradeOfferToSeller": {
-        "seller": "Acepta la oferta en Steam para depositar el ítem en garantía.",
-        "buyer": "Esperando a que el vendedor envíe el ítem."
-      },
-      "itemEscrowed": {
-        "seller": "Ítem en garantía. Esperando el pago del comprador.",
-        "buyer": "Envía el pago usando los detalles a continuación."
-      },
       "paymentReceived": {
         "seller": "Pago verificado. El ítem se está entregando al comprador.",
         "buyer": "Tu pago fue verificado. El ítem está en camino."
-      },
-      "tradeOfferToBuyer": {
-        "seller": "El ítem fue enviado al comprador. Esperando su aceptación.",
-        "buyer": "Acepta la oferta en Steam para recibir el ítem."
       },
       "itemDelivered": {
         "seller": "Ítem entregado. Tu pago se está procesando.",

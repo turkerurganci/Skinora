@@ -9,47 +9,42 @@ export interface TransactionTimelineProps {
   className?: string;
 }
 
-const STEPS = [
-  "CREATED",
-  "ACCEPTED",
-  "ITEM_ESCROWED",
-  "PAYMENT_RECEIVED",
-  "PAYMENT_VERIFIED",
-  "ITEM_DELIVERED",
-  "DELIVERY_VERIFIED",
-  "COMPLETED",
+/**
+ * 04 §C05 (v3.0) — six steps, one per non-terminal status. "Item Emanet" is
+ * gone (the platform never holds the item) and the two verification steps were
+ * dropped: verification is the *condition* of the next transition, not a step
+ * of its own.
+ *
+ * The list is also the index source — a status maps to its own position — so
+ * there is no second lookup table that can drift away from it.
+ */
+export const TIMELINE_STEPS = [
+  TransactionStatus.CREATED,
+  TransactionStatus.ACCEPTED,
+  TransactionStatus.SELLER_CONFIRMED,
+  TransactionStatus.PAYMENT_RECEIVED,
+  TransactionStatus.ITEM_DELIVERED,
+  TransactionStatus.COMPLETED,
 ] as const;
 
+/**
+ * Statuses that end the flow off-timeline. REFUNDED (WP5 buyer-favor dispute
+ * unwind, T129 settlement reversal) belongs here like the CANCELLED_* family —
+ * without it the finished transaction rendered as a pulsing "step 1 in progress".
+ */
+const OFF_TIMELINE: ReadonlySet<TransactionStatus> = new Set([
+  TransactionStatus.FLAGGED,
+  TransactionStatus.CANCELLED_TIMEOUT,
+  TransactionStatus.CANCELLED_SELLER,
+  TransactionStatus.CANCELLED_BUYER,
+  TransactionStatus.CANCELLED_ADMIN,
+  TransactionStatus.REFUNDED,
+]);
+
 function indexForStatus(status: TransactionStatus): number {
-  switch (status) {
-    case TransactionStatus.CREATED:
-      return 0;
-    case TransactionStatus.ACCEPTED:
-      return 1;
-    case TransactionStatus.TRADE_OFFER_SENT_TO_SELLER:
-    case TransactionStatus.ITEM_ESCROWED:
-      return 2;
-    case TransactionStatus.PAYMENT_RECEIVED:
-      return 4;
-    case TransactionStatus.TRADE_OFFER_SENT_TO_BUYER:
-      return 5;
-    case TransactionStatus.ITEM_DELIVERED:
-      return 6;
-    case TransactionStatus.COMPLETED:
-      return 7;
-    case TransactionStatus.FLAGGED:
-    case TransactionStatus.CANCELLED_TIMEOUT:
-    case TransactionStatus.CANCELLED_SELLER:
-    case TransactionStatus.CANCELLED_BUYER:
-    case TransactionStatus.CANCELLED_ADMIN:
-    // REFUNDED (WP5 buyer-favor dispute unwind) is terminal like the CANCELLED_*
-    // family — without this case it fell through to `default: 0` and the finished
-    // transaction rendered as a pulsing blue "step 1 in progress".
-    case TransactionStatus.REFUNDED:
-      return -1;
-    default:
-      return 0;
-  }
+  if (OFF_TIMELINE.has(status)) return -1;
+  const index = (TIMELINE_STEPS as readonly TransactionStatus[]).indexOf(status);
+  return index === -1 ? 0 : index;
 }
 
 export function TransactionTimeline({
@@ -80,7 +75,7 @@ export function TransactionTimeline({
       className={cn("flex flex-col gap-2 md:flex-row md:items-center md:gap-0", className)}
       aria-label={t("ariaLabel")}
     >
-      {STEPS.map((step, idx) => {
+      {TIMELINE_STEPS.map((step, idx) => {
         const completed = isFinished || idx < effectiveIndex;
         const active = !isFinished && idx === effectiveIndex;
         const pending = !isFinished && idx > effectiveIndex;
@@ -146,7 +141,7 @@ export function TransactionTimeline({
                 {active && !isCancelled && !isFlagged && <span>{idx + 1}</span>}
                 {pending && <span>{idx + 1}</span>}
               </span>
-              {idx < STEPS.length - 1 && (
+              {idx < TIMELINE_STEPS.length - 1 && (
                 <span
                   className={cn(
                     "ml-2 h-px flex-1 md:ml-0 md:mt-0 md:hidden",
@@ -157,7 +152,7 @@ export function TransactionTimeline({
               )}
             </div>
             <span className="text-xs text-gray-600 md:text-center">{t(`step.${step}`)}</span>
-            {idx < STEPS.length - 1 && (
+            {idx < TIMELINE_STEPS.length - 1 && (
               <span
                 className={cn(
                   "hidden h-px flex-1 md:block",

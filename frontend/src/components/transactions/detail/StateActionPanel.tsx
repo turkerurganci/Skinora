@@ -299,40 +299,16 @@ function PrimaryActionPanel({
     );
   }
 
-  if (status === TransactionStatus.TRADE_OFFER_SENT_TO_SELLER) {
-    return (
-      <div className="space-y-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-        <p>{role === "seller" ? t("tradeOfferToSeller.seller") : t("tradeOfferToSeller.buyer")}</p>
-        {detail.steamTradeOfferUrl && (
-          <SteamTradeOfferLink url={detail.steamTradeOfferUrl} label={t("viewTradeOffer")} />
-        )}
-      </div>
-    );
-  }
-
-  if (status === TransactionStatus.ITEM_ESCROWED) {
-    return (
-      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-        {role === "seller" ? t("itemEscrowed.seller") : t("itemEscrowed.buyer")}
-      </div>
-    );
-  }
+  // SELLER_CONFIRMED (04 §7.3) — T134 removed the two retired custodial branches
+  // (TRADE_OFFER_SENT_TO_SELLER / ITEM_ESCROWED) that used to live here. The v3.0
+  // row — seller "waiting for payment", buyer payment instructions — plus the
+  // PAYMENT_RECEIVED × seller Steam trade deep link and the buyer "Teslim Aldım"
+  // button are the subject of T135 (state×role matrix), which owns the panel.
 
   if (status === TransactionStatus.PAYMENT_RECEIVED) {
     return (
       <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
         {role === "seller" ? t("paymentReceived.seller") : t("paymentReceived.buyer")}
-      </div>
-    );
-  }
-
-  if (status === TransactionStatus.TRADE_OFFER_SENT_TO_BUYER) {
-    return (
-      <div className="space-y-2 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-900">
-        <p>{role === "seller" ? t("tradeOfferToBuyer.seller") : t("tradeOfferToBuyer.buyer")}</p>
-        {detail.steamTradeOfferUrl && (
-          <SteamTradeOfferLink url={detail.steamTradeOfferUrl} label={t("viewTradeOffer")} />
-        )}
       </div>
     );
   }
@@ -348,21 +324,8 @@ function PrimaryActionPanel({
   return null;
 }
 
-/**
- * WP12 backend / WP13 FE — "Go to Steam trade offer" deep link, shown in the
- * TRADE_OFFER_SENT_TO_* states when the backend populated `steamTradeOfferUrl`
- * (07 §7.5). Opens the offer in a new tab so the recipient can accept it.
- */
-function SteamTradeOfferLink({ url, label }: { url: string; label: string }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 rounded-md bg-yellow-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-yellow-700"
-    >
-      {label}
-      <span aria-hidden="true">↗</span>
-    </a>
-  );
-}
+// SteamTradeOfferLink (WP12/WP13) was rendered only inside the two retired
+// TRADE_OFFER_SENT_TO_* branches, so T134 removed it with them rather than
+// leaving unreachable markup behind. `detail.steamTradeOfferUrl` still ships in
+// the DTO (07 §7.5); its v3.0 home is the PAYMENT_RECEIVED × seller row —
+// "Steam'de Trade Offer Gönder" (04 §7.3) — and wiring it there belongs to T135.

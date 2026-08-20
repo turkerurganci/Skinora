@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "Transaction cancelled by admin",
       "EMERGENCY_HOLD_APPLIED": "Emergency hold applied",
       "EMERGENCY_HOLD_RELEASED": "Emergency hold released",
-      "BOT_STATUS_CHANGED": "Bot status changed",
+      "SETTLEMENT_CLEARED_ADMIN": "Settlement cleared by admin",
       "RECONCILIATION_MISMATCH": "Reconciliation mismatch",
       "COLD_WALLET_TRANSFER_INITIATED": "Cold wallet transfer initiated",
       "HOT_WALLET_THRESHOLD_BREACHED": "Hot wallet threshold breached",
       "SANCTIONS_LIST_ADDRESS_ADDED": "Sanctions list address added",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed",
+      "MAINTENANCE_MODE_CHANGED": "Maintenance mode changed",
+      "TIMEOUT_AUTO_EXTENDED": "Timeout automatically extended",
+      "PLATFORM_OUTAGE_DETECTED": "Platform outage detected"
     }
   },
   "adminTransactions": {
@@ -614,9 +617,8 @@
     },
     "cancelRefund": {
       "title": "Refund summary",
-      "itemToSeller": "The escrowed item will be returned to the seller.",
       "paymentToBuyer": "The received payment will be refunded to the buyer (price + commission − gas fee).",
-      "none": "Nothing to refund — the item is not in escrow and no payment was received."
+      "none": "Nothing to refund — no payment was received."
     },
     "success": {
       "cancelled": "Transaction cancelled.",
@@ -854,7 +856,7 @@
       "MANAGE_ROLES": "Manage roles",
       "VIEW_AUDIT_LOG": "View audit log",
       "CANCEL_TRANSACTIONS": "Cancel transactions",
-      "EMERGENCY_HOLD": "Apply/release emergency hold",
+      "EMERGENCY_HOLD": "Apply/lift emergency hold on transactions",
       "VIEW_DISPUTES": "View disputes",
       "MANAGE_DISPUTES": "Resolve disputes",
       "MANAGE_SANCTIONS": "Manage sanctions list"
@@ -973,19 +975,17 @@
   },
   "status": {
     "CREATED": "Created",
-    "ACCEPTED": "Accepted",
-    "TRADE_OFFER_SENT_TO_SELLER": "Awaiting Item",
-    "ITEM_ESCROWED": "Awaiting Payment",
-    "PAYMENT_RECEIVED": "Payment Received",
-    "TRADE_OFFER_SENT_TO_BUYER": "Awaiting Delivery",
-    "ITEM_DELIVERED": "Item Delivered",
+    "ACCEPTED": "Awaiting Seller Confirmation",
+    "SELLER_CONFIRMED": "Awaiting Payment",
+    "PAYMENT_RECEIVED": "Awaiting Delivery",
+    "ITEM_DELIVERED": "Delivered — Payout Pending",
     "COMPLETED": "Completed",
     "CANCELLED_TIMEOUT": "Timed Out",
     "CANCELLED_SELLER": "Seller Cancelled",
     "CANCELLED_BUYER": "Buyer Cancelled",
     "CANCELLED_ADMIN": "Admin Cancelled",
-    "FLAGGED": "Under Review",
     "REFUNDED": "Refunded",
+    "FLAGGED": "Under Review",
     "EMERGENCY_HOLD": "On Hold"
   },
   "countdown": {
@@ -1018,11 +1018,9 @@
     "step": {
       "CREATED": "Created",
       "ACCEPTED": "Accepted",
-      "ITEM_ESCROWED": "Item Escrowed",
-      "PAYMENT_RECEIVED": "Payment",
-      "PAYMENT_VERIFIED": "Payment Verified",
-      "ITEM_DELIVERED": "Delivery",
-      "DELIVERY_VERIFIED": "Delivery Verified",
+      "SELLER_CONFIRMED": "Seller Ready",
+      "PAYMENT_RECEIVED": "Payment Received",
+      "ITEM_DELIVERED": "Delivered",
       "COMPLETED": "Completed"
     }
   },
@@ -1533,22 +1531,9 @@
         "seller": "The buyer accepted. The platform is preparing your trade offer.",
         "buyer": "Waiting for the seller to send the item."
       },
-      "viewTradeOffer": "Go to Steam trade offer",
-      "tradeOfferToSeller": {
-        "seller": "Accept the trade offer in Steam to escrow the item.",
-        "buyer": "Waiting for the seller to send the item."
-      },
-      "itemEscrowed": {
-        "seller": "Item is in escrow. Waiting for the buyer's payment.",
-        "buyer": "Send the payment using the details below."
-      },
       "paymentReceived": {
         "seller": "Payment verified. The item is being delivered to the buyer.",
         "buyer": "Your payment was verified. The item is on its way."
-      },
-      "tradeOfferToBuyer": {
-        "seller": "The item has been sent to the buyer. Waiting for them to accept.",
-        "buyer": "Accept the trade offer in Steam to receive the item."
       },
       "itemDelivered": {
         "seller": "Item delivered. Your payout is being processed.",

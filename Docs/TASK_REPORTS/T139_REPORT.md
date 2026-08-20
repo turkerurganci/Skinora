@@ -308,6 +308,7 @@ Secret sızıntısı **temiz** (yeni sır yok; mevcut `X-Internal-Key` mekanizma
 - Commit: `3ad44f7` — T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 - PR: [#251](https://github.com/turkerurganci/Skinora/pull/251)
 - CI: ✓ **PASS** — dal HEAD `3ad44f7` run [`32367284135`](https://github.com/turkerurganci/Skinora/actions/runs/32367284135) `success`, **`CI Gate` yeşil**
+- **Merge + post-merge teyit (2026-08-20, `task/T134-fe-enum-status-timeline-i18n` dalında eklendi):** PR [#251](https://github.com/turkerurganci/Skinora/pull/251) **squash merge** → main `28a910c` (20:03Z). Post-merge **CI** [`32411998138`](https://github.com/turkerurganci/Skinora/actions/runs/32411998138) `success` + **Docker Publish** [`32411997251`](https://github.com/turkerurganci/Skinora/actions/runs/32411997251) `success`. Bu satır merge sonrası üretildiği için T139 squash'ına giremezdi ve doğrudan main'e push edilemez (pre-push hook Layer 1) — established desen gereği bir sonraki task dalında kayda geçti.
 
 **Dört tur, dört yeşil CI** (her turun kendi dal HEAD'i üzerinde):
 
