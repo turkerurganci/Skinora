@@ -80,7 +80,7 @@
 - Branch: `task/T133b-deploy-runbook-p2p-happy-path`
 - Commit: `ee7e8e8` — T133b: DEPLOY_RUNBOOK §G happy path anlatısının P2P'ye çekilmesi (+ bu finalize commit'i)
 - PR: [#250](https://github.com/turkerurganci/Skinora/pull/250)
-- CI: ✓ PASS — dal CI'sı Claude tarafından izlendi, sonuç PR #250'de ve aşağıdaki §Notlar'da; finalize push'u öncesindeki run concurrency'den cancel olabilir (task.md concurrency notu: failure sayılmaz), yetkili olan dal HEAD'inin son tamamlanmış run'ıdır
+- CI: **CI ✓ PASS** — dal HEAD `838483b` run [`32356485612`](https://github.com/turkerurganci/Skinora/actions/runs/32356485612) `success`, **`CI Gate` yeşil**. Bloke edici olmayan joblar `paths-filter` gereği **skipped** (`0. Guard` · vitest · advisory E2E · Build/Unit/Integration/Contract/Migration/Docker) — tur yalnız `.md` dosyalarına dokunduğu için beklenen davranış; koşan iki job `Detect changed paths` + `1. Lint`. Önceki run `32356418240` (`ee7e8e8`) finalize push'uyla concurrency'den **cancelled** — task.md concurrency notu gereği failure sayılmaz. (Bu satırı ekleyen docs-only commit kendi run'ını üretir; yetkili kanıt yukarıdaki `838483b` run'ıdır — anlatı içeriğinin tamamı o commit'te zaten mevcuttu.)
 
 ## Known Limitations / Follow-up
 
