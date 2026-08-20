@@ -10,9 +10,9 @@ namespace Skinora.Realtime.Infrastructure;
 /// SignalR-backed implementation of <see cref="INotificationRealtimePublisher"/>.
 /// Resolves <see cref="IHubContext{T}"/> for <see cref="NotificationsHub"/> and
 /// pushes payloads to the per-user group named by
-/// <see cref="NotificationsHub.GroupName(Guid)"/>. The three admin-scoped events
-/// target <see cref="NotificationsHub.AdminGroup"/> (T69 K4 — only admins join
-/// it). The <c>Maintenance</c> variant fans out to <see cref="IHubClients.All"/>
+/// <see cref="NotificationsHub.GroupName(Guid)"/>. The two admin-scoped events
+/// (reconciliation mismatch, hot-wallet threshold breach) target
+/// <see cref="NotificationsHub.AdminGroup"/> (T69 K4 — only admins join it). The <c>Maintenance</c> variant fans out to <see cref="IHubClients.All"/>
 /// because the C08 banner is platform-wide. Every send is best-effort: failures
 /// are logged uniformly (WP9 group-failure observability) and swallowed so a
 /// dropped push never propagates to the outbox dispatcher as a redelivery signal.

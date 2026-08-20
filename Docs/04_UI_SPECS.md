@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-19 (**T133a** — custodial kalıntı turu: §2.1 ekran sayımı S18 çıkarılarak 23'e indi; §3.1/§3.2/§3.3 izlenebilirlik satırlarındaki `ITEM_ESCROWED`, "trade offer timeout'u", "çift iade" ve S18/AD10 referansları v3.0 karşılıklarıyla değiştirildi ya da silindi; §4.3 admin navigasyonundan S18 girişi kaldırıldı; C05 zaman çizelgesi 8 → **6 adım** ("Item Emanet" kaldırıldı, doğrulama adımları geçişin koşulu olarak yazıldı) ve §9.3 responsive notu hizalandı; C06 iptal modal'ı, S01 "Nasıl Çalışır" akışı, §7.3'ün üç "Item'ınız iade edildi" satırı ve §8.5'in "item ve/veya para" kalemi P2P para-iadesi diline çekildi; §8.1 S12 layout'undan Steam hesapları menüsü + sağlık paneli, §8.7'den S18 tarihsel tasarımı (50 satır) silindi — §9.10 AD10 / 03 §8.5 deseniyle yalnız kaldırma notu kaldı; admin iptal aralığı iki yerde `CREATED → PAYMENT_RECEIVED`'a çekildi. **§8.8 yetki matrisi 10 → 12 satır** (`VIEW_DISPUTES` + `MANAGE_DISPUTES` WP5'ten beri eksikti) ve tabloya `Anahtar` kolonu eklendi — parity artık makinece doğrulanabilir; `EMERGENCY_HOLD` etiketi kod kataloğuna hizalandı. §8.6 Timeout Süreleri tablosu T119/T123'te kapandığı hâliyle korundu. Davranış değişikliği yok.) · 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -37,10 +37,10 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 
 | Kategori | Ekran Sayısı | Oran |
 |----------|-------------|------|
-| Genel (public + auth + erişim kontrolü) | 7 | %29 |
-| Kullanıcı | 7 | %29 |
-| Admin | 10 | %42 |
-| **Toplam** | **24** | **%100** |
+| Genel (public + auth + erişim kontrolü) | 7 | %30 |
+| Kullanıcı | 7 | %30 |
+| Admin | 9 | %40 |
+| **Toplam** | **23** | **%100** |
 
 ### 2.2 Ekran Listesi
 
@@ -95,8 +95,8 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | 2.2 | 13-14 | Alıcı ve cüzdan adresi belirleme | S06 (alıcı & cüzdan) |
 | 2.2 | 15-16 | Özet ve onay | S06 (review step) |
 | 2.2 | 17-20 | Oluşturma, bildirim, bekleme | S07 (seller, CREATED) |
-| 2.3 | 1-8 | Item emaneti süreci | S07 (seller, ACCEPTED → ITEM_ESCROWED) |
-| 2.4 | 1-6 | Satıcıya ödeme | S07 (seller, ITEM_DELIVERED → COMPLETED) |
+| 2.3 | 1-8 | Satıcı hazırlık onayı (adım 3) | S07 (seller, ACCEPTED → SELLER_CONFIRMED) |
+| 2.4 | 1-7 | Satıcıya ödeme (mutabakat penceresi dahil) | S07 (seller, ITEM_DELIVERED → COMPLETED) |
 | 2.5 | 1-9 | Satıcı iptal akışı | S07 (cancel modal) |
 
 #### Alıcı Akışları (03 §3)
@@ -107,18 +107,18 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | 3.1 | 2-5 | Login + hesap oluşturma | S02 → S07 |
 | 3.1 | 6 | İşlem detay sayfasına yönlendirilir | S07 (buyer, CREATED) |
 | 3.2 | 1-8 | İşlemi kabul etme (iade adresi dahil) | S07 (buyer, CREATED → ACCEPTED) |
-| 3.3 | 1-8 | Alıcı iptal akışı | S07 (cancel modal) |
-| 3.4 | 1-8 | Ödeme gönderme | S07 (buyer, ITEM_ESCROWED) |
-| 3.5 | 1-11 | Item teslim alma | S07 (buyer, PAYMENT_RECEIVED → COMPLETED) |
+| 3.3 | 1-7 | Alıcı iptal akışı | S07 (cancel modal) |
+| 3.4 | 1-8 | Ödeme gönderme | S07 (buyer, SELLER_CONFIRMED) |
+| 3.5 | 1-10 | Item teslimi ve doğrulanması | S07 (buyer, PAYMENT_RECEIVED → ITEM_DELIVERED → COMPLETED) |
 
 #### Timeout Akışları (03 §4)
 
 | Akış | Açıklama | Ekran |
 |------|----------|-------|
 | 4.1 | Alıcı kabul timeout'u | S07 (countdown + CANCELLED_TIMEOUT) |
-| 4.2 | Satıcı trade offer timeout'u | S07 (countdown + CANCELLED_TIMEOUT) |
+| 4.2 | Satıcı hazırlık onayı timeout'u | S07 (countdown + CANCELLED_TIMEOUT) |
 | 4.3 | Ödeme timeout'u | S07 (countdown + CANCELLED_TIMEOUT + iade) |
-| 4.4 | Teslim trade offer timeout'u | S07 (countdown + CANCELLED_TIMEOUT + çift iade) |
+| 4.4 | Satıcı teslimat timeout'u | S07 (countdown + CANCELLED_TIMEOUT + alıcıya ödeme iadesi) |
 | 4.5 | Timeout yaklaşıyor uyarısı | S07 (uyarı banner) + S11 (bildirim) |
 
 #### Ödeme Edge Case Akışları (03 §5)
@@ -152,7 +152,6 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | 8.2 | 1-4 | Flag inceleme | S13, S14 |
 | 8.3 | 1-3 | İşlem listesi ve detay | S15, S16 |
 | 8.4 | 1-4 | Parametre yönetimi | S17 |
-| 8.5 | 1-3 | Steam hesapları izleme | S18 |
 | 8.6 | 1-4 | Rol ve yetki yönetimi | S19 |
 
 #### Profil, Hesap ve Diğer Akışlar (03 §9-12)
@@ -176,14 +175,13 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | Alıcı belirleme | §6 | S06 (input), S17 (yöntem 2 toggle) |
 | İptal kuralları | §7 | S07 (iptal modal) |
 | İşlem limitleri | §8 | S06 (validation), S17 (config) |
-| Item yönetimi | §9 | S06 (envanter + seçim) |
+| Item yönetimi | §9 | S06 (envanter + seçim), S07 (teslimat doğrulama — §9.2), S17 (envanter kanıtı toggle'ı) |
 | Dispute | §10 | S07 (dispute flow) |
 | Kullanıcı kimlik / giriş | §11 | S01, S02, S03 |
 | Cüzdan güvenliği | §12 | S07 (alıcı iade adresi), S08, S06 |
 | İtibar skoru | §13 | S08, S09, S07 |
 | Fraud / abuse | §14 | S07 (FLAGGED), S13, S14, S17 |
-| Platform Steam hesapları | §15 | S18 |
-| Admin paneli | §16 | S12-S21 |
+| Admin paneli | §16 | S12–S17, S19–S21 |
 | Kullanıcı dashboard | §17 | S05 |
 | Bildirimler | §18 | S11, S10 (tercihler) |
 | Hesap yönetimi | §19 | S10 |
@@ -216,7 +214,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S15 | 8.3/1-2 | §16 |
 | S16 | 8.3/3 | §16 |
 | S17 | 8.4 | §3, §4.6, §5, §6.2, §8, §14, §16.2 |
-| S18 | 8.5 | §15, §16 |
+| ~~S18~~ | — | **v3.0'da kaldırıldı** — kaynak akış (03 §8.5) ve gereksinim (02 §15) da kaldırıldı (§2.2, §8.7) |
 | S19 | 8.6 | §16.1 |
 | S20 | — (GAP-6'dan türetildi) | §16 (implied) |
 | S21 | — | §16.2 (audit log görüntüleme) |
@@ -286,7 +284,6 @@ S11 Bildirimler
 S12 Admin Dashboard
  ├── Flag sayısı kartı ────→ S13 Flag Kuyruğu
  ├── İşlem sayısı kartı ──→ S15 İşlem Listesi
- ├── Steam hesapları ──────→ S18 Steam Hesapları
  ├── Ayarlar ──────────────→ S17 Parametre Yönetimi
  ├── Roller ───────────────→ S19 Rol & Yetki
  └── Audit Log ────────────→ S21 Audit Log
@@ -394,8 +391,10 @@ Kullanıcı bilgilerini gösteren kart bileşeni.
 
 İşlemin hangi adımda olduğunu gösteren ilerleme göstergesi.
 
-**Yapı:** 8 adımlık yatay progress bar:
-1. Oluşturuldu → 2. Kabul Edildi → 3. Item Emanet → 4. Ödeme → 5. Ödeme Doğrulama → 6. Teslim → 7. Teslim Doğrulama → 8. Tamamlandı
+**Yapı:** 6 adımlık yatay progress bar (v3.0 — terminal olmayan durum kümesiyle birebir):
+1. Oluşturuldu → 2. Kabul Edildi → 3. Satıcı Hazır → 4. Ödeme Alındı → 5. Teslim Edildi → 6. Tamamlandı
+
+> **v3.0 (P2P):** "Item Emanet" adımı kaldırıldı — platform item'ı hiçbir aşamada emanete almaz (02 §2.1). "Ödeme Doğrulama" ve "Teslim Doğrulama" ayrı adım değildir; doğrulama, kendisinden sonraki duruma geçişin koşuludur. 5. adımda (ITEM_DELIVERED) mutabakat penceresi geri sayımı gösterilir (§7.3, 02 §4.5.1).
 
 - Tamamlanan adımlar: dolu (yeşil)
 - Aktif adım: vurgulu (mavi, animasyonlu)
@@ -412,7 +411,7 @@ Kullanıcı bilgilerini gösteren kart bileşeni.
 **İçerik:**
 1. Uyarı başlığı: "İşlemi iptal etmek istediğinize emin misiniz?"
 2. İptal sebebi (zorunlu textarea, min 10 karakter)
-3. İade bilgisi: "Item satıcıya iade edilecektir" (duruma göre değişir)
+3. İade bilgisi: ödeme alınmışsa "Ödeme alıcıya iade edilecektir (fiyat + komisyon − gas fee)", alınmamışsa "İade edilecek bir ödeme yok". Item iadesi diye bir işlem yoktur — item hiçbir aşamada platformda bulunmaz (02 §3.2)
 4. "İptal Et" butonu (kırmızı) + "Vazgeç" butonu (gri)
 
 ### C07 — Dispute Form
@@ -547,10 +546,10 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 2. **Nasıl Çalışır**
    - 4 adımlık görsel akış:
-     1. Satıcı işlemi başlatır
-     2. Item platforma emanet edilir
-     3. Alıcı ödemeyi gönderir
-     4. Otomatik teslim ve ödeme
+     1. Satıcı işlemi başlatır ve alıcıyı davet eder
+     2. Satıcı göndermeye hazır olduğunu onaylar, alıcı ödemeyi emanete gönderir
+     3. Satıcı item'ı Steam üzerinden doğrudan alıcıya gönderir
+     4. Platform teslimatı doğrular ve ödemeyi satıcıya aktarır
    - Her adım: ikon + kısa açıklama
 
 3. **Güven Göstergeleri**
@@ -1074,10 +1073,10 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
 | Aksiyon alanı | İptal bilgisi (sebep, tür) | İptal bilgisi (sebep, tür) |
-| İade bilgisi (CANCELLED_TIMEOUT, ödeme sonrası) | "Item'ınız iade edildi" | İade özeti: orijinal tutar (fiyat + komisyon), gas fee kesintisi, net iade tutarı, tx hash |
-| İade bilgisi (CANCELLED_TIMEOUT, ödeme öncesi) | "Item'ınız iade edildi" (emanetteyse) | — |
-| İade bilgisi (CANCELLED_SELLER/BUYER, emanet sonrası) | "Item'ınız iade edildi" | — |
-| İade bilgisi (CANCELLED_ADMIN) | Varlık transferi olduysa iade bilgisi gösterilir | Aynı |
+| İade bilgisi (CANCELLED_TIMEOUT, ödeme sonrası) | "Item'ı zamanında göndermediniz; ödeme alıcıya iade edildi" — item sizde kaldı, iade edilecek bir eşya yoktur | İade özeti: orijinal tutar (fiyat + komisyon), gas fee kesintisi, net iade tutarı, tx hash |
+| İade bilgisi (CANCELLED_TIMEOUT, ödeme öncesi) | İade yok — para gönderilmedi, item sizde kaldı | — |
+| İade bilgisi (CANCELLED_SELLER/BUYER, ödeme sonrası) | "Ödeme alıcıya iade edildi" bilgisi | İade özeti: orijinal tutar (fiyat + komisyon), gas fee kesintisi, net iade tutarı, tx hash |
+| İade bilgisi (CANCELLED_ADMIN) | Ödeme alınmışsa iade bilgisi gösterilir (fiyat + komisyon − gas fee, tx hash) | Aynı |
 | Ek bilgi (CANCELLED_ADMIN) | "İşleminiz admin tarafından reddedildi" + admin notu (varsa) | Aynı |
 
 ##### FLAGGED Durumu
@@ -1339,13 +1338,8 @@ Dispute aktifken işlem detay sayfasında ek bir bölüm gösterilir:
 │  │ Flag'ler     │  │  │Aktif│ │Flag │ │Günlük││
 │  │ İşlemler     │  │  │ 42  │ │ 5   │ │ 128 ││
 │  │ Ayarlar      │  │  └─────┘ └─────┘ └─────┘│
-│  │ Steam Hsb    │  │                           │
-│  │ Roller       │  │  Steam Hesapları Durumu   │
+│  │ Roller       │  │                           │
 │  │ Audit Log    │  │                           │
-│  │              │  │  ┌──────────────────────┐ │
-│  │              │  │  │ Hsb1: ✅ | Hsb2: ✅  │ │
-│  │              │  │  │ Hsb3: ⚠️ kısıtlı     │ │
-│  │              │  │  └──────────────────────┘ │
 │  │              │  │                           │
 │  │              │  │  Son Flag'lenmiş İşlemler │
 │  │              │  │  (son 5, tablo)           │
@@ -1361,11 +1355,6 @@ Dispute aktifken işlem detay sayfasında ek bir bölüm gösterilir:
 | Bekleyen Flag'ler | Sayı (kırmızı badge — acil) | → S13 |
 | Günlük Tamamlanan | Sayı | → S15 (bugün filtre) |
 | Haftalık Tamamlanan | Sayı | → S15 (bu hafta filtre) |
-
-**Steam Hesapları Durumu:**
-- Her hesap: ad + durum ikonu (✅ aktif, ⚠ kısıtlı, ❌ banned)
-- Kısıtlı/banned hesap varsa kart vurgulu (kırmızı border)
-- Tıklanabilir → S18
 
 **Son Flag'lenmiş İşlemler:**
 - Son 5 flag (tablo: ID, tür, tarih, durum)
@@ -1557,7 +1546,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
    - Gönderim zamanı
 
 6. **İade Detayları** (iptal olduysa)
-   - İade edilen varlıklar (item ve/veya para)
+   - İade edilen tutar (fiyat + komisyon − gas fee) — item iadesi diye bir kalem yoktur (02 §3.2)
    - İade tx hash'leri
 
 7. **Bildirim Geçmişi**
@@ -1571,7 +1560,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
 
 **Aksiyonlar:**
 - FLAGGED durumundaysa: yalnızca "İşleme Devam Et" / "İptal Et" butonları gösterilir (S14 terminolojisi). Genel "İşlemi İptal Et" butonu FLAGGED state'te gizlenir — flag resolution aksiyonları ile operasyonel cancel karışmasını önlemek için
-- CREATED → TRADE_OFFER_SENT_TO_BUYER arası aktif state'lerde (FLAGGED hariç — FLAGGED için yukarıdaki flag resolution aksiyonları geçerlidir): "İşlemi İptal Et" butonu (kırmızı) — `CANCEL_TRANSACTIONS` yetkisi gerektirir. Tıklandığında iptal modal'ı açılır: sebep (zorunlu textarea) + iade bilgisi + onay/vazgeç butonları (03 §8.7)
+- CREATED → PAYMENT_RECEIVED arası aktif state'lerde (FLAGGED hariç — FLAGGED için yukarıdaki flag resolution aksiyonları geçerlidir): "İşlemi İptal Et" butonu (kırmızı) — `CANCEL_TRANSACTIONS` yetkisi gerektirir. Tıklandığında iptal modal'ı açılır: sebep (zorunlu textarea) + iade bilgisi + onay/vazgeç butonları (03 §8.7)
 - ITEM_DELIVERED state'inde: "İşlemi İptal Et" butonu görünmez. Bunun yerine "Exceptional Resolution Başlat" butonu (turuncu) — item alıcıya teslim edilmiş, standart iptal uygulanamaz (02 §7)
 - Tüm aktif state'lerde: "Emergency Hold Uygula" butonu (sarı) — `EMERGENCY_HOLD` yetkisi gerektirir. Tıklandığında hold modal'ı açılır: sebep (zorunlu textarea) + onay/vazgeç butonları (03 §8.8)
 - EMERGENCY_HOLD state'inde: "Hold Kaldır (Devam)" ve "Hold Kaldır (İptal Et)" butonları + hold sebebi ve süresi gösterilir. Otomatik tetiklenen hold'larda (sanctions match) "Auto-Hold — Sanctions Match" etiketi gösterilir. ITEM_DELIVERED'da "İptal Et" → exceptional resolution akışına yönlendirir (03 §8.8)
@@ -1699,57 +1688,7 @@ Bu ayrım sayfanın üstünde bir bilgi kutusu olarak gösterilir. Her parametre
 
 Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sayısı, günlük trade kotası veya recovery kuyruğu yoktur (02 §15, 06 §3.10, 07 §9.10). `VIEW_STEAM_ACCOUNTS` ve `MANAGE_STEAM_RECOVERY` yetkileri, admin navigasyonundaki "Steam hesapları" girişi ve `/admin/steam-accounts` rotası da kaldırılmıştır.
 
-Aşağıdaki tasarım tarihsel referans olarak bırakılmıştır.
-
-**~~Eski amaç~~:** Platform Steam hesaplarının durumunu izlemek.
-
-**Hesap Kartı:**
-
-```
-┌──────────────────────────────────┐
-│  🎮 Platform Hesap 1             │
-│  Steam ID: 7656...               │
-├──────────────────────────────────┤
-│  Durum:    ✅ Aktif               │
-│  Emanet:   12 item               │
-│  Günlük Trade: 45 / 200          │
-│  Son Kontrol: 5 dk önce          │
-└──────────────────────────────────┘
-```
-
-**Durum Göstergeleri:**
-
-| Durum | Görünüm |
-|-------|---------|
-| Aktif | Yeşil ✅ — normal |
-| Kısıtlı | Turuncu ⚠ — kart vurgulu, uyarı mesajı |
-| Banned | Kırmızı ❌ — kart vurgulu, acil uyarı |
-
-**Kısıtlı/Banned Hesap Uyarısı:**
-- Uyarı banner: "X hesap kısıtlı. Yeni işlemler diğer hesaplara yönlendirildi."
-- Kısıtlı hesabın emanetindeki item'lar listelenir
-- Emanette item varsa ek uyarı: "Bu hesapta Y aktif işlem için emanette item bulunuyor. Bu işlemler otomatik devam ettirilemez — recovery/manual intervention gerektirir." (02 §15, 03 §11.2a)
-
-**Recovery Queue (emanetteki item'larla ilgili aktif işlemler):**
-
-| Kolon | Açıklama |
-|-------|----------|
-| İşlem ID | Tıklanabilir → S16 |
-| Item | Emanetteki item adı |
-| Satıcı / Alıcı | Taraflar |
-| İşlem State | Mevcut state (kısıtlama öncesi) |
-| Recovery Durumu | Bekliyor / İnceleniyor / Çözüldü |
-| Sorumlu Admin | Atanan admin (opsiyonel) |
-| Admin Notu | İnceleme notları |
-
-**Aksiyonlar:**
-- "İncele" → S16'da işlem detayına git
-- "Not Ekle" → admin inceleme notu
-- "Sorumlu Admin Ata/Değiştir" → dropdown'dan admin seçimi, atama AuditLog'a kaydedilir
-- "EMERGENCY_HOLD Uygula" → işlem henüz hold'da değilse, timeout dondurulur (herhangi bir aktif state'te uygulanabilir)
-- "İptal Et" → standart admin iptal kuralları (yalnızca CREATED → TRADE_OFFER_SENT_TO_BUYER arası)
-- "Manual Recovery Başlat" → bot recovery'ye özel akış: Steam support talebi oluşturma notu, alternatif bot'tan teslim deneme, kullanıcı iletişim. Bu, S16'daki exceptional resolution'dan ayrıdır — exceptional resolution ITEM_DELIVERED sonrası iptal imkansızlığı için, manual recovery ise bot kısıtlaması nedeniyle emanet item'a erişim kaybı için kullanılır.
-- Tüm aksiyonlar AuditLog'a kaydedilir.
+> Alt bölüm numarası bilinçli korundu — §8.8 ve sonrası referanslarının kayması engellendi.
 
 ---
 
@@ -1777,22 +1716,24 @@ Aşağıdaki tasarım tarihsel referans olarak bırakılmıştır.
 
 #### Yetki Matrisi
 
-| Yetki | Açıklama |
-|-------|----------|
-| Flag'leri görüntüle | S13, S14'e erişim |
-| Flag'leri yönet | İşlem flag: Devam Et / İptal Et aksiyonları. Hesap flag: Flag Kaldır / Askıya Al / Hold aksiyonları |
-| İşlemleri görüntüle | S15, S16'ya erişim |
-| Parametreleri yönet | S17'ye erişim |
-| Kullanıcı detay görüntüle | S20'ye erişim |
-| Rolleri yönet | S19'a erişim (sadece süper admin) |
-| Audit log görüntüle | S21'e erişim |
-| İşlemleri iptal et | S16'da aktif işlemleri doğrudan iptal etme — CREATED → TRADE_OFFER_SENT_TO_BUYER arası (03 §8.7) |
-| Emergency hold uygula/kaldır | S16'da aktif işlemlere emergency hold uygulama ve kaldırma (03 §8.8) |
-| Sanctions listesi yönet | Yaptırımlı cüzdan adresleri listesinin yönetimi — ekleme/listeleme/deaktive (02 §21.1, 03 §11a.3, 07 §9.23–§9.25 AD22/AD23/AD24). `MANAGE_SETTINGS`'ten ayrıdır: sanctions admin'i sistem ayarlarına dokunmaz (least-privilege) |
+> Bu tablo kod kataloğunun (`PermissionCatalog.All`) ve 07 §9.11 `availablePermissions` nüshasının aynasıdır — **anahtar, etiket ve sıra dahil, 12 giriş**. Katalog değişirse bu tablo aynı commit'te güncellenir; doğrulama anahtar kümesinin `PermissionCatalog.All` ile farkının boş olmasıdır (T133a).
+
+| Anahtar | Yetki | Açıklama |
+|---------|-------|----------|
+| `VIEW_FLAGS` | Flag'leri görüntüle | S13, S14'e erişim |
+| `MANAGE_FLAGS` | Flag'leri yönet | İşlem flag: Devam Et / İptal Et aksiyonları. Hesap flag: Flag Kaldır / Askıya Al / Hold aksiyonları |
+| `VIEW_TRANSACTIONS` | İşlemleri görüntüle | S15, S16'ya erişim |
+| `MANAGE_SETTINGS` | Parametreleri yönet | S17'ye erişim |
+| `VIEW_USERS` | Kullanıcı detay görüntüle | S20'ye erişim |
+| `MANAGE_ROLES` | Rolleri yönet | S19'a erişim (sadece süper admin) |
+| `VIEW_AUDIT_LOG` | Audit log görüntüle | S21'e erişim |
+| `CANCEL_TRANSACTIONS` | İşlemleri iptal et | S16'da aktif işlemleri doğrudan iptal etme — CREATED, ACCEPTED, SELLER_CONFIRMED, PAYMENT_RECEIVED ve FLAGGED durumları (02 §7, 03 §8.7). ITEM_DELIVERED'da standart iptal uygulanamaz |
+| `EMERGENCY_HOLD` | İşlemleri acil dondurma/kaldırma | S16'da aktif işlemlere emergency hold uygulama ve kaldırma (03 §8.8) |
+| `VIEW_DISPUTES` | İtirazları görüntüle | Eskale edilmiş itiraz kuyruğuna ve itiraz detayına erişim — `/admin/disputes` (02 §10.4, 07 §9.30 AD27/AD28) |
+| `MANAGE_DISPUTES` | İtirazları çöz | Eskale edilmiş itirazı satıcı veya alıcı lehine karara bağlama ve eskale edilmiş mutabakat kontrolünü satıcı lehine kapatma (07 §9.30 AD29, §9.22b AD32). `VIEW_DISPUTES`'ten ayrıdır: kuyruğu okuyan admin karar veremez (least-privilege) |
+| `MANAGE_SANCTIONS` | Sanctions listesi yönet | Yaptırımlı cüzdan adresleri listesinin yönetimi — ekleme/listeleme/deaktive (02 §21.1, 03 §11a.3, 07 §9.23–§9.25 AD22/AD23/AD24). `MANAGE_SETTINGS`'ten ayrıdır: sanctions admin'i sistem ayarlarına dokunmaz (least-privilege) |
 
 > **Not (v3.0, P2P geçişi):** "Steam hesaplarını görüntüle" (`VIEW_STEAM_ACCOUNTS`) ve "Steam recovery yönet" (`MANAGE_STEAM_RECOVERY`) satırları kaldırılmıştır (T132) — koruyacakları S18 ekranı ve recovery kuyruğu yoktur (02 §15, §8.7).
->
-> **Bilinen açık (T133a):** Bu tablo, kod tarafındaki 12 yetkilik katalogla (07 §9.11) **henüz birebir değildir** — "İtirazları görüntüle" (`VIEW_DISPUTES`) ve "İtirazları çöz" (`MANAGE_DISPUTES`) satırları WP5'ten beri eksiktir. Bu, T132 öncesinden var olan bir boşluktur ve 03/04/07 hizalama turunda (T133a) kapatılır.
 
 #### Kullanıcı-Rol Atama
 
@@ -1905,7 +1846,7 @@ Aşağıdaki tasarım tarihsel referans olarak bırakılmıştır.
 
 ### 9.3 C05 Transaction Timeline
 
-- Desktop/Tablet: Yatay 8 adım
+- Desktop/Tablet: Yatay 6 adım
 - Mobil: Dikey timeline (adımlar alt alta)
 
 ### 9.4 Tablo → Kart Dönüşümü
@@ -1970,4 +1911,4 @@ Aşağıdaki terimler tüm dillerde İngilizce kalır:
 
 ---
 
-*Skinora — UI Specifications v3.0*
+*Skinora — UI Specifications v4.5*

@@ -22,7 +22,7 @@ public interface IRestartRecoveryService
 /// <param name="OutageWindow">Detected outage window (LastHeartbeat → UtcNow).</param>
 /// <param name="ExtensionApplied">True when the threshold was exceeded and deadlines were bumped.</param>
 /// <param name="ExtendedTransactionCount">Number of transactions whose deadlines were rewritten.</param>
-/// <param name="RescheduledPaymentJobCount">Number of ITEM_ESCROWED transactions whose Hangfire jobs were re-issued.</param>
+/// <param name="RescheduledPaymentJobCount">Number of SELLER_CONFIRMED transactions whose Hangfire payment-timeout + warning jobs were re-issued.</param>
 public sealed record RestartRecoveryResult(
     TimeSpan OutageWindow,
     bool ExtensionApplied,

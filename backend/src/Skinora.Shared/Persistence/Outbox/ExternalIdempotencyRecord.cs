@@ -11,7 +11,7 @@ namespace Skinora.Shared.Persistence.Outbox;
 /// <c>EventId</c> or <c>TransactionId + action</c>). The receiver writes a
 /// row keyed by <c>(ServiceName, IdempotencyKey)</c>. A replay of the same
 /// key returns the previously stored result instead of re-running the side
-/// effect (e.g. issuing the same trade offer twice).
+/// effect (e.g. broadcasting the same on-chain refund transfer twice).
 /// </para>
 /// <para>
 /// <b>Lease semantics (06 §3.21):</b> while a request is being processed

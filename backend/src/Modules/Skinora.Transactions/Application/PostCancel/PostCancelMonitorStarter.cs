@@ -38,10 +38,13 @@ public sealed class PostCancelMonitorStarter : IPostCancelMonitorStarter
         DateTime cancelledAt,
         CancellationToken cancellationToken)
     {
-        // PaymentAddress allocation (T44) is a side effect of `ACCEPTED →
-        // TRADE_OFFER_SENT_TO_SELLER`. A cancel before allocation — most
-        // commonly seller-cancel from CREATED — leaves nothing to monitor;
-        // bail silently. The cancel handler does not need to know.
+        // PaymentAddress allocation is a side effect of transaction creation
+        // (T70/T123: inline at CREATED, swept by EnsurePaymentAddressJob, and
+        // deferred to admin approval for FLAGGED rows). A missing row therefore
+        // means the inline allocation failed and the sweep had not caught up,
+        // or the transaction was flagged at creation and never approved —
+        // either way there is nothing to monitor, so bail silently. The cancel
+        // handler does not need to know.
         var paymentAddress = await _db.Set<PaymentAddress>()
             .FirstOrDefaultAsync(p => p.TransactionId == transactionId && !p.IsDeleted, cancellationToken);
         if (paymentAddress is null)

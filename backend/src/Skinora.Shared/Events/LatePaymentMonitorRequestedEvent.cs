@@ -4,8 +4,8 @@ namespace Skinora.Shared.Events;
 
 /// <summary>
 /// Emitted by the timeout pipeline (T49 — 02 §3.2, 03 §4.3) after a payment
-/// timeout — i.e. when the transaction was in <c>ITEM_ESCROWED</c> immediately
-/// before the state machine flipped to <c>CANCELLED_TIMEOUT</c>. Asks the
+/// timeout — i.e. when the transaction was in <c>SELLER_CONFIRMED</c>
+/// immediately before the state machine flipped to <c>CANCELLED_TIMEOUT</c>. Asks the
 /// Blockchain sidecar (T75) to keep watching the platform payment address so
 /// any late incoming transfer is auto-refunded to the buyer's refund address.
 /// </summary>

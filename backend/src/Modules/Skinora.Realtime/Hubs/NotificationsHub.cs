@@ -40,11 +40,12 @@ public class NotificationsHub : Hub
     public const string GroupPrefix = "user:";
 
     /// <summary>
-    /// Group that receives the admin-scoped pushes (T69 K4 — bot status,
-    /// reconciliation mismatch, hot-wallet threshold). Admins are auto-joined on
-    /// <see cref="OnConnectedAsync"/>; non-admin connections never join, so these
-    /// payloads (bot SteamIds, wallet balances, reconciliation deltas) no longer
-    /// fan out to every client via <c>Clients.All</c>.
+    /// Group that receives the admin-scoped pushes (T69 K4 — reconciliation
+    /// mismatch and hot-wallet threshold breach; the platform Steam-bot status
+    /// push went with the bot custody layer in v3.0, T132). Admins are
+    /// auto-joined on <see cref="OnConnectedAsync"/>; non-admin connections
+    /// never join, so these payloads (wallet balances, reconciliation deltas)
+    /// no longer fan out to every client via <c>Clients.All</c>.
     /// </summary>
     public const string AdminGroup = "admins";
 

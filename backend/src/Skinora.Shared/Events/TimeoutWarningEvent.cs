@@ -6,7 +6,7 @@ namespace Skinora.Shared.Events;
 /// Emitted when the per-transaction Hangfire warning job fires for a payment
 /// timeout (T48 — 02 §3.4, 05 §4.4). The Notifications consumer translates it
 /// into a <c>TIMEOUT_WARNING</c> fan-out targeting the buyer (the only party
-/// awaiting an action during ITEM_ESCROWED).
+/// awaiting an action during the <c>SELLER_CONFIRMED</c> payment window).
 /// </summary>
 /// <param name="EventId">Outbox-level event identifier.</param>
 /// <param name="TransactionId">Transaction the warning applies to.</param>
