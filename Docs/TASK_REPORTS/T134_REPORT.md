@@ -95,7 +95,7 @@ Sondaj 2 aynı zamanda **T134'ün var oluş sebebini** ölçüyor: dört dil bir
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
+| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) — yapım CI'sı ✓ PASS, Bitiş Kapısı'nın sekiz maddesi de açık |
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 
@@ -108,10 +108,29 @@ Sondaj 2 aynı zamanda **T134'ün var oluş sebebini** ölçüyor: dört dil bir
 
 ## Commit & PR
 
-- Branch: `task/T134-fe-enum-status-timeline-i18n`
-- Commit: bkz. aşağıdaki CI bölümü
-- PR: (aşağıda güncellenecek)
-- CI: (aşağıda güncellenecek)
+- Branch: `task/T134-fe-enum-status-timeline-i18n` (origin/main `28a910c` üzerinden kesildi)
+- Commit: `cbad04d` — T134: FE enum/StatusBadge/Timeline/i18n v3.0 hizalaması + iki parity bekçisi
+- Ek commit: `20e7bb2` — T139 merge teyidi raporlara işlendi (bkz. Notlar)
+- PR: [#252](https://github.com/turkerurganci/Skinora/pull/252)
+- CI: ✓ **PASS** — dal HEAD `cbad04d`, run [`32418535947`](https://github.com/turkerurganci/Skinora/actions/runs/32418535947) `success`, **`CI Gate` yeşil**
+
+**Bloke edici jobların tamamı yeşil:** `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (frontend)` · `CI Gate` (+ `Detect changed paths`). `0. Guard (direct push)` skipped (beklenen). Docker build'in yalnız **frontend** kolunun koşması `paths-filter`ın doğru davranışıdır — tur `backend/` ve `sidecar-*/` altında tek satır değiştirmedi.
+
+**Sekiz advisory E2E leg'i kırmızı — T134 kaynaklı DEĞİL, ve sayı ölçülerek doğrulandı.** Legler T117'nin custody emekliliğinden beri kırmızıdır (`e2e/src/db.ts` harness'ı emekli tablolara bakıyor), `continue-on-error` + `ci-gate.needs` dışındadır ve yeniden yazımlarının sahibi **T138**'dir. T137'nin kalıcı dersi gereği leg statüsü değil **geçen test kümesi** sayıldı:
+
+| Leg | Geçen | Düşen |
+|---|---|---|
+| E2E happy-path | 0 | 1 |
+| T108 cancellation | 0 | 4 |
+| T109 timeout | 1 | 3 |
+| T110 payment edge cases | 0 | 6 |
+| T111 fraud-flags | 3 | 1 |
+| T112 emergency-hold | 0 | 3 |
+| T113 admin-flows | 6 | 1 |
+| T114 downtime | 0 | 3 |
+| **Toplam** | **10** | **22** |
+
+**10/32** — T139 tur 3'ün ölçümüyle (run `32407918580`: geçen 1+3+6 = 10, düşen 22) **birebir aynı**. T134 advisory ağına dokunmadı, regresyon yok.
 
 ## Known Limitations / Follow-up
 
