@@ -12,11 +12,9 @@ const messages = {
     step: {
       CREATED: "Created",
       ACCEPTED: "Accepted",
-      ITEM_ESCROWED: "Item escrowed",
-      PAYMENT_RECEIVED: "Payment",
-      PAYMENT_VERIFIED: "Payment verified",
+      SELLER_CONFIRMED: "Seller ready",
+      PAYMENT_RECEIVED: "Payment received",
       ITEM_DELIVERED: "Delivered",
-      DELIVERY_VERIFIED: "Delivery verified",
       COMPLETED: "Completed",
     },
   },
@@ -30,7 +28,9 @@ function renderTimeline(props: React.ComponentProps<typeof TransactionTimeline>)
   );
 }
 
-const STEP_COUNT = 8;
+// 04 §C05 (v3.0) — six steps: "Item Emanet" and the two verification steps are
+// gone. The count is asserted so a step silently reappearing fails here.
+const STEP_COUNT = 6;
 
 /** Step markers only — the connector lines share the green/gray colours, so a
  *  bare `.bg-green-500` query would also match them. */
@@ -43,6 +43,15 @@ function countWithClass(container: HTMLElement, className: string): number {
 }
 
 describe("TransactionTimeline", () => {
+  it("renders exactly the six v3.0 steps (04 §C05)", () => {
+    const { container } = renderTimeline({ status: TransactionStatus.CREATED });
+
+    expect(markers(container)).toHaveLength(STEP_COUNT);
+    for (const label of Object.values(messages.timeline.step)) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+  });
+
   it("marks every step done — including the last — when the transaction is COMPLETED", () => {
     const { container } = renderTimeline({ status: TransactionStatus.COMPLETED });
 
@@ -62,10 +71,19 @@ describe("TransactionTimeline", () => {
     const active = container.querySelectorAll('[aria-current="step"]');
     expect(active).toHaveLength(1);
     expect(active[0]).toHaveClass("bg-blue-500");
-    // PAYMENT_RECEIVED maps to index 4 → four earlier markers green, three later pending.
-    expect(countWithClass(container, "bg-green-500")).toBe(4);
-    expect(countWithClass(container, "bg-gray-200")).toBe(3);
+    // PAYMENT_RECEIVED is step 4 of 6 → three earlier markers green, two later pending.
+    expect(countWithClass(container, "bg-green-500")).toBe(3);
+    expect(countWithClass(container, "bg-gray-200")).toBe(2);
     expect(screen.getByText("Completed")).toBeInTheDocument();
+  });
+
+  it("puts SELLER_CONFIRMED on the timeline as step 3 (v3.0 — replaces ITEM_ESCROWED)", () => {
+    const { container } = renderTimeline({ status: TransactionStatus.SELLER_CONFIRMED });
+
+    const active = container.querySelectorAll('[aria-current="step"]');
+    expect(active).toHaveLength(1);
+    expect(countWithClass(container, "bg-green-500")).toBe(2);
+    expect(countWithClass(container, "bg-gray-200")).toBe(3);
   });
 
   it("renders a cancelled transaction with the red terminal marker, not a pulsing step", () => {

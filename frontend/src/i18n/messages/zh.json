@@ -614,9 +614,8 @@
     },
     "cancelRefund": {
       "title": "退款摘要",
-      "itemToSeller": "托管中的物品将退还给卖家。",
       "paymentToBuyer": "已收款项将退还给买家（价格 + 佣金 − Gas 费）。",
-      "none": "无需退款——物品未托管，且未收到付款。"
+      "none": "无需退款——未收到付款。"
     },
     "success": {
       "cancelled": "交易已取消。",
@@ -854,7 +853,7 @@
       "MANAGE_ROLES": "管理角色",
       "VIEW_AUDIT_LOG": "查看审计日志",
       "CANCEL_TRANSACTIONS": "取消交易",
-      "EMERGENCY_HOLD": "应用/解除紧急冻结",
+      "EMERGENCY_HOLD": "对交易应用/解除紧急冻结",
       "VIEW_DISPUTES": "查看争议",
       "MANAGE_DISPUTES": "处理争议",
       "MANAGE_SANCTIONS": "管理制裁名单"
@@ -973,19 +972,17 @@
   },
   "status": {
     "CREATED": "已创建",
-    "ACCEPTED": "已接受",
-    "TRADE_OFFER_SENT_TO_SELLER": "等待物品",
-    "ITEM_ESCROWED": "等待付款",
-    "PAYMENT_RECEIVED": "已收款",
-    "TRADE_OFFER_SENT_TO_BUYER": "等待交付",
-    "ITEM_DELIVERED": "已交付",
+    "ACCEPTED": "等待卖家确认",
+    "SELLER_CONFIRMED": "等待付款",
+    "PAYMENT_RECEIVED": "等待交付",
+    "ITEM_DELIVERED": "已交付 — 等待放款",
     "COMPLETED": "已完成",
     "CANCELLED_TIMEOUT": "超时取消",
     "CANCELLED_SELLER": "卖家取消",
     "CANCELLED_BUYER": "买家取消",
     "CANCELLED_ADMIN": "管理员取消",
-    "FLAGGED": "审核中",
     "REFUNDED": "已退款",
+    "FLAGGED": "审核中",
     "EMERGENCY_HOLD": "已冻结"
   },
   "countdown": {
@@ -1018,11 +1015,9 @@
     "step": {
       "CREATED": "已创建",
       "ACCEPTED": "已接受",
-      "ITEM_ESCROWED": "物品托管",
-      "PAYMENT_RECEIVED": "付款",
-      "PAYMENT_VERIFIED": "付款确认",
-      "ITEM_DELIVERED": "交付",
-      "DELIVERY_VERIFIED": "交付确认",
+      "SELLER_CONFIRMED": "卖家已就绪",
+      "PAYMENT_RECEIVED": "已收款",
+      "ITEM_DELIVERED": "已交付",
       "COMPLETED": "已完成"
     }
   },
@@ -1533,22 +1528,9 @@
         "seller": "买家已接受。平台正在准备您的交易报价。",
         "buyer": "等待卖家发送物品。"
       },
-      "viewTradeOffer": "前往 Steam 交易报价",
-      "tradeOfferToSeller": {
-        "seller": "请在 Steam 中接受交易报价以将物品存入托管。",
-        "buyer": "等待卖家发送物品。"
-      },
-      "itemEscrowed": {
-        "seller": "物品已托管。等待买家付款。",
-        "buyer": "请使用下方信息发送付款。"
-      },
       "paymentReceived": {
         "seller": "付款已确认。物品正在送达买家。",
         "buyer": "您的付款已确认。物品正在送达。"
-      },
-      "tradeOfferToBuyer": {
-        "seller": "物品已发送给买家。等待其接受。",
-        "buyer": "请在 Steam 中接受交易报价以收取物品。"
       },
       "itemDelivered": {
         "seller": "物品已送达。您的款项正在处理。",

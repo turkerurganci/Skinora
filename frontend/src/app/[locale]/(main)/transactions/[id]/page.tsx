@@ -35,7 +35,7 @@ interface TransactionDetailPageProps {
  *
  *   • Sabit layout: header + timeline + (item + info + parties).
  *   • State × role action panel — 12 state × seller/buyer + public surface.
- *   • Conditional panels: paymentInfo (buyer ITEM_ESCROWED), payout
+ *   • Conditional panels: paymentInfo (buyer SELLER_CONFIRMED — 04 §7.3), payout
  *     (seller COMPLETED), cancelInfo (CANCELLED_*), flag/hold banners,
  *     dispute, invite link, payment edge case banners.
  *   • Suspended session override: banner + tüm aksiyonlar disabled.
@@ -50,9 +50,10 @@ interface TransactionDetailPageProps {
  *   K1 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
  *        modal; DisputeBlock "TX Hash Gir" / "Admin'e İlet" → C07 modal
  *        in existing-dispute resume mode.
- *   K2 — Steam trade offer URL (TRADE_OFFER_SENT_TO_* state'leri) WP13'te
- *        bağlandı: `steamTradeOfferUrl` DTO alanı (WP12 backend) →
- *        StateActionPanel "Steam takas teklifine git" CTA.
+ *   K2 — Steam trade deep link: `steamTradeOfferUrl` DTO alanı WP13'te
+ *        StateActionPanel'e bağlanmıştı. v3.0'da bağlandığı iki state
+ *        (TRADE_OFFER_SENT_TO_*) emekli oldu; deep link'in yeni yeri
+ *        PAYMENT_RECEIVED × satıcı (04 §7.3) ve bağlanması T135'e ait.
  *   K3 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
  *        adres alanı + cooldown check yapıyor; per-transaction override
  *        field T-future.
@@ -113,8 +114,10 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
   const role = data.userRole;
   const cancelled = isCancelledStatus(status);
   const emergencyHold = isEmergencyHold(status);
+  // 04 §7.3 SELLER_CONFIRMED — the deposit address is revealed to the buyer only
+  // once the seller has confirmed readiness (02 §2.2 step 3).
   const showPaymentInfo =
-    role === "buyer" && data.payment && status === TransactionStatus.ITEM_ESCROWED;
+    role === "buyer" && data.payment && status === TransactionStatus.SELLER_CONFIRMED;
   const showSellerPayout =
     role === "seller" && data.sellerPayout && status === TransactionStatus.COMPLETED;
   const showInviteInfo =
@@ -132,7 +135,7 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
       <TransactionTimeline
         status={
           status === "EMERGENCY_HOLD"
-            ? TransactionStatus.ITEM_ESCROWED
+            ? TransactionStatus.SELLER_CONFIRMED
             : (status as TransactionStatus)
         }
         cancelled={cancelled}

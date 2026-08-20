@@ -37,17 +37,13 @@ const TERMINAL_STATES: ReadonlySet<TransactionStatus> = new Set([
   TransactionStatus.CANCELLED_ADMIN,
 ]);
 
-// Admin-cancel refund preview (04 §8.5 "iade bilgisi" / 03 §8.7 / AD19): the
-// item sits in escrow from ITEM_ESCROWED onward → returned to the seller; the
-// buyer's payment is held from PAYMENT_RECEIVED onward → refunded to the buyer.
-const ITEM_ESCROWED_STATES: ReadonlySet<TransactionStatus> = new Set([
-  TransactionStatus.ITEM_ESCROWED,
-  TransactionStatus.PAYMENT_RECEIVED,
-  TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
-]);
+// Admin-cancel refund preview (04 §8.5 "iade bilgisi" / 03 §8.7 / AD19). v3.0:
+// there is no "item returned to the seller" line any more — the platform never
+// holds the item, so the only thing a cancel can return is money (04 §8.5 item 6,
+// 04 §C06, 02 §3.2). The buyer's payment is held from PAYMENT_RECEIVED onward;
+// that is also the last state a standard admin cancel can reach (04 §8.5).
 const PAYMENT_HELD_STATES: ReadonlySet<TransactionStatus> = new Set([
   TransactionStatus.PAYMENT_RECEIVED,
-  TransactionStatus.TRADE_OFFER_SENT_TO_BUYER,
 ]);
 
 type Action =
@@ -187,15 +183,16 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
       tooShort: t("reason.minChars", { count: CANCEL_REASON_MIN }),
     };
     // 04 §8.5 / 03 §8.7 — show what will be returned to whom before confirming.
-    const itemEscrowed = ITEM_ESCROWED_STATES.has(tx.status);
     const paymentHeld = PAYMENT_HELD_STATES.has(tx.status);
     modalInfo = (
       <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
         <p className="mb-1 font-medium text-amber-800">{t("cancelRefund.title")}</p>
         <ul className="list-disc space-y-0.5 pl-4 text-amber-900">
-          {itemEscrowed && <li>{t("cancelRefund.itemToSeller")}</li>}
-          {paymentHeld && <li>{t("cancelRefund.paymentToBuyer")}</li>}
-          {!itemEscrowed && <li>{t("cancelRefund.none")}</li>}
+          {paymentHeld ? (
+            <li>{t("cancelRefund.paymentToBuyer")}</li>
+          ) : (
+            <li>{t("cancelRefund.none")}</li>
+          )}
         </ul>
       </div>
     );
@@ -614,7 +611,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                   </>
                 )}
 
-                {/* General admin cancel — CREATED…TRADE_OFFER_SENT_TO_BUYER, not flagged/held */}
+                {/* General admin cancel — CREATED…PAYMENT_RECEIVED, not flagged/held (04 §8.5) */}
                 {!isFlagged && !isDelivered && !tx.isOnHold && tx.adminActions.canCancel && (
                   <button
                     type="button"

@@ -9,7 +9,7 @@ export interface PaymentInfoBlockProps {
 }
 
 /**
- * 04 §7.3 — Alıcı görünümünde ITEM_ESCROWED state'inde ödeme bilgileri
+ * 04 §7.3 — Alıcı görünümünde SELLER_CONFIRMED state'inde ödeme bilgileri
  * paneli: adres + tutar + ağ + uyarılar + countdown. Address shown in
  * full (alıcı kopyalayacak), warning list is verbatim per spec.
  */

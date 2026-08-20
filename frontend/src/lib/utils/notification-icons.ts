@@ -1,12 +1,16 @@
 import { NotificationType } from "@/types/enums";
 
 /**
- * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 28 backend
+ * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 26 backend
  * `NotificationType` values (07 §8.1 / 06 §2.13) are projected onto these
  * categories so the row UI renders the canonical icon set.
  *
  * Frontend-only mapping by design (T95 scope decision): keeps the API
  * contract untouched and centralises icon edits when the type list grows.
+ *
+ * `Record<NotificationType, …>` is the guard: adding a type to the enum without
+ * classifying it here is a compile error, so the mapping cannot silently lag
+ * behind the catalogue.
  */
 export type NotificationIconCategory =
   | "transactionUpdate"
@@ -19,10 +23,13 @@ export type NotificationIconCategory =
 const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.TRANSACTION_INVITE]: "transactionUpdate",
   [NotificationType.BUYER_ACCEPTED]: "transactionUpdate",
-  [NotificationType.ITEM_ESCROWED]: "transactionUpdate",
-  [NotificationType.TRADE_OFFER_SENT_TO_BUYER]: "transactionUpdate",
-  [NotificationType.ITEM_RETURNED]: "transactionUpdate",
+  // v3.0 — the seller is now expected to send the item directly to the buyer.
+  // Replaces TRADE_OFFER_SENT_TO_BUYER and keeps its 🔄 flow-update icon.
+  [NotificationType.DELIVERY_EXPECTED]: "transactionUpdate",
 
+  // v3.0 — replaces ITEM_ESCROWED, but not its icon: what opens here is the
+  // payment window (the deposit address is revealed), so this is a 💰 row.
+  [NotificationType.PAYMENT_WINDOW_OPEN]: "payment",
   [NotificationType.PAYMENT_RECEIVED]: "payment",
   [NotificationType.SELLER_PAYMENT_SENT]: "payment",
   [NotificationType.PAYMENT_INCORRECT]: "payment",
@@ -51,7 +58,6 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.ADMIN_FLAG_ALERT]: "flag",
   [NotificationType.ADMIN_ESCALATION]: "flag",
   [NotificationType.ADMIN_PAYMENT_FAILURE]: "flag",
-  [NotificationType.ADMIN_STEAM_BOT_ISSUE]: "flag",
 };
 
 const ICON_BY_CATEGORY: Record<NotificationIconCategory, string> = {

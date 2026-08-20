@@ -3,14 +3,18 @@
  * Values are string literals to match EF Core string storage (HasConversion).
  */
 
-// §2.1 — 14 values
+// §2.1 — 12 values
 export enum TransactionStatus {
   CREATED = "CREATED",
   ACCEPTED = "ACCEPTED",
-  TRADE_OFFER_SENT_TO_SELLER = "TRADE_OFFER_SENT_TO_SELLER",
-  ITEM_ESCROWED = "ITEM_ESCROWED",
+  // v3.0 — the seller confirmed readiness; the deposit address is revealed to
+  // the buyer from this state onwards (02 §2.2 step 3). Renamed from
+  // TRADE_OFFER_SENT_TO_SELLER — the platform sends no trade offer.
+  SELLER_CONFIRMED = "SELLER_CONFIRMED",
+  // v3.0 — payment is escrowed and the SELLER must now send the item directly
+  // to the buyer. ITEM_ESCROWED / TRADE_OFFER_SENT_TO_BUYER were removed: the
+  // platform never holds the item (02 §2.1, 05 §4.1).
   PAYMENT_RECEIVED = "PAYMENT_RECEIVED",
-  TRADE_OFFER_SENT_TO_BUYER = "TRADE_OFFER_SENT_TO_BUYER",
   ITEM_DELIVERED = "ITEM_DELIVERED",
   COMPLETED = "COMPLETED",
   CANCELLED_TIMEOUT = "CANCELLED_TIMEOUT",
@@ -65,22 +69,11 @@ export enum BlockchainTransactionStatus {
   FAILED = "FAILED",
 }
 
-// §2.7 — 3 values
-export enum TradeOfferDirection {
-  TO_SELLER = "TO_SELLER",
-  TO_BUYER = "TO_BUYER",
-  RETURN_TO_SELLER = "RETURN_TO_SELLER",
-}
-
-// §2.8 — 6 values
-export enum TradeOfferStatus {
-  PENDING = "PENDING",
-  SENT = "SENT",
-  ACCEPTED = "ACCEPTED",
-  DECLINED = "DECLINED",
-  EXPIRED = "EXPIRED",
-  FAILED = "FAILED",
-}
+// §2.7 TradeOfferDirection / §2.8 TradeOfferStatus — removed in v3.0 (P2P).
+// The platform creates no trade offer, so there is neither a direction nor an
+// offer lifecycle to track; delivery state is carried by DeliveryEvidence
+// (06 §2.24). Section numbers are deliberately skipped, mirroring 06 §2, so
+// the §2.9+ references do not shift.
 
 // §2.9 — 3 values
 export enum DisputeType {
@@ -124,13 +117,19 @@ export enum ReviewStatus {
   REJECTED = "REJECTED",
 }
 
-// §2.13 — 28 values
+// §2.13 — 26 values
 export enum NotificationType {
   TRANSACTION_INVITE = "TRANSACTION_INVITE",
   BUYER_ACCEPTED = "BUYER_ACCEPTED",
-  ITEM_ESCROWED = "ITEM_ESCROWED",
+  // v3.0 — the seller confirmed readiness, so the deposit address is now open
+  // to the buyer (02 §2.2 step 3). Replaces ITEM_ESCROWED: nothing is escrowed
+  // at this point except, shortly, the money.
+  PAYMENT_WINDOW_OPEN = "PAYMENT_WINDOW_OPEN",
   PAYMENT_RECEIVED = "PAYMENT_RECEIVED",
-  TRADE_OFFER_SENT_TO_BUYER = "TRADE_OFFER_SENT_TO_BUYER",
+  // v3.0 — payment is in escrow and the SELLER must now send the item directly
+  // to the buyer. Replaces TRADE_OFFER_SENT_TO_BUYER, which targeted the buyer;
+  // the recipient of this notification flipped sides.
+  DELIVERY_EXPECTED = "DELIVERY_EXPECTED",
   TRANSACTION_COMPLETED = "TRANSACTION_COMPLETED",
   SELLER_PAYMENT_SENT = "SELLER_PAYMENT_SENT",
   TIMEOUT_WARNING = "TIMEOUT_WARNING",
@@ -138,14 +137,16 @@ export enum NotificationType {
   TRANSACTION_FLAGGED = "TRANSACTION_FLAGGED",
   PAYMENT_INCORRECT = "PAYMENT_INCORRECT",
   LATE_PAYMENT_REFUNDED = "LATE_PAYMENT_REFUNDED",
-  ITEM_RETURNED = "ITEM_RETURNED",
+  // ITEM_RETURNED removed in v3.0 — the platform never holds the item, so it
+  // can never return one (02 §9).
   PAYMENT_REFUNDED = "PAYMENT_REFUNDED",
   DISPUTE_RESULT = "DISPUTE_RESULT",
   FLAG_RESOLVED = "FLAG_RESOLVED",
   ADMIN_FLAG_ALERT = "ADMIN_FLAG_ALERT",
   ADMIN_ESCALATION = "ADMIN_ESCALATION",
   ADMIN_PAYMENT_FAILURE = "ADMIN_PAYMENT_FAILURE",
-  ADMIN_STEAM_BOT_ISSUE = "ADMIN_STEAM_BOT_ISSUE",
+  // ADMIN_STEAM_BOT_ISSUE removed in v3.0 — the platform runs no Steam bots
+  // (02 §15, 05 §3.2).
   // T59 — emergency hold lifecycle.
   EMERGENCY_HOLD_APPLIED = "EMERGENCY_HOLD_APPLIED",
   EMERGENCY_HOLD_RELEASED = "EMERGENCY_HOLD_RELEASED",
@@ -167,13 +168,9 @@ export enum NotificationChannel {
   DISCORD = "DISCORD",
 }
 
-// §2.15 — 4 values
-export enum PlatformSteamBotStatus {
-  ACTIVE = "ACTIVE",
-  RESTRICTED = "RESTRICTED",
-  BANNED = "BANNED",
-  OFFLINE = "OFFLINE",
-}
+// §2.15 PlatformSteamBotStatus — removed in v3.0 (P2P). The platform operates
+// no Steam account, so there is no bot whose status could be tracked
+// (02 §15, 05 §3.2). Section number deliberately skipped, mirroring 06 §2.
 
 // §2.16 — 5 values
 export enum MonitoringStatus {
@@ -199,7 +196,7 @@ export enum ActorType {
   ADMIN = "ADMIN",
 }
 
-// §2.19 — 32 values
+// §2.19 — 29 values
 export enum AuditAction {
   // Fund operations
   WALLET_DEPOSIT = "WALLET_DEPOSIT",
@@ -226,11 +223,11 @@ export enum AuditAction {
   TRANSACTION_CANCELLED_ADMIN = "TRANSACTION_CANCELLED_ADMIN",
   EMERGENCY_HOLD_APPLIED = "EMERGENCY_HOLD_APPLIED",
   EMERGENCY_HOLD_RELEASED = "EMERGENCY_HOLD_RELEASED",
-  // T69 / T103b-2 — Steam bot lifecycle & recovery queue
-  BOT_STATUS_CHANGED = "BOT_STATUS_CHANGED",
-  BOT_SESSION_FAILED = "BOT_SESSION_FAILED",
-  BOT_RECOVERY_ITEM_CREATED = "BOT_RECOVERY_ITEM_CREATED",
-  BOT_RECOVERY_UPDATED = "BOT_RECOVERY_UPDATED",
+  // T129 — admin clears an ESCALATED settlement in the seller's favour (AD32).
+  SETTLEMENT_CLEARED_ADMIN = "SETTLEMENT_CLEARED_ADMIN",
+  // BOT_STATUS_CHANGED / BOT_SESSION_FAILED / BOT_RECOVERY_ITEM_CREATED /
+  // BOT_RECOVERY_UPDATED removed in v3.0 — the bot lifecycle and its recovery
+  // queue were retired with the custody layer (T117 / T132).
   // T76 / T77 — reconciliation & hot wallet management
   RECONCILIATION_MISMATCH = "RECONCILIATION_MISMATCH",
   COLD_WALLET_TRANSFER_INITIATED = "COLD_WALLET_TRANSFER_INITIATED",
@@ -268,9 +265,13 @@ export enum PayoutIssueStatus {
   RESOLVED = "RESOLVED",
 }
 
-// §2.23 — 3 values
+// §2.23 — 4 values
 export enum DeliveryStatus {
   PENDING = "PENDING",
   SENT = "SENT",
+  // Quiet-hours / maintenance deferral (DeferredNotificationDeliveryJob). Present
+  // in the C# enum since the notification delivery work; 06 §2.23 still lists
+  // three values — doc-side gap tracked in DEFERRED_BACKLOG (T134-Doc06DeliveryDeferred).
+  DEFERRED = "DEFERRED",
   FAILED = "FAILED",
 }

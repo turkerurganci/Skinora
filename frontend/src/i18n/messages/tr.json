@@ -614,9 +614,8 @@
     },
     "cancelRefund": {
       "title": "İade bilgisi",
-      "itemToSeller": "Emanetteki item satıcıya iade edilecek.",
       "paymentToBuyer": "Alınan ödeme alıcıya iade edilecek (fiyat + komisyon − Gas fee).",
-      "none": "İade edilecek varlık yok — item emanette değil, ödeme alınmadı."
+      "none": "İade edilecek bir ödeme yok."
     },
     "success": {
       "cancelled": "İşlem iptal edildi.",
@@ -854,7 +853,7 @@
       "MANAGE_ROLES": "Rolleri yönet",
       "VIEW_AUDIT_LOG": "Audit log görüntüle",
       "CANCEL_TRANSACTIONS": "İşlemleri iptal et",
-      "EMERGENCY_HOLD": "Emergency hold uygula/kaldır",
+      "EMERGENCY_HOLD": "İşlemleri acil dondurma/kaldırma",
       "VIEW_DISPUTES": "İtirazları görüntüle",
       "MANAGE_DISPUTES": "İtirazları çöz",
       "MANAGE_SANCTIONS": "Sanctions listesi yönet"
@@ -973,19 +972,17 @@
   },
   "status": {
     "CREATED": "Oluşturuldu",
-    "ACCEPTED": "Kabul Edildi",
-    "TRADE_OFFER_SENT_TO_SELLER": "Item Bekleniyor",
-    "ITEM_ESCROWED": "Ödeme Bekleniyor",
-    "PAYMENT_RECEIVED": "Ödeme Alındı",
-    "TRADE_OFFER_SENT_TO_BUYER": "Teslim Bekleniyor",
-    "ITEM_DELIVERED": "Teslim Edildi",
+    "ACCEPTED": "Satıcı Onayı Bekleniyor",
+    "SELLER_CONFIRMED": "Ödeme Bekleniyor",
+    "PAYMENT_RECEIVED": "Teslimat Bekleniyor",
+    "ITEM_DELIVERED": "Teslim Edildi — Ödeme Bekleniyor",
     "COMPLETED": "Tamamlandı",
     "CANCELLED_TIMEOUT": "Zaman Aşımı",
     "CANCELLED_SELLER": "Satıcı İptal",
     "CANCELLED_BUYER": "Alıcı İptal",
     "CANCELLED_ADMIN": "Admin İptal",
+    "REFUNDED": "İade Edildi",
     "FLAGGED": "İnceleniyor",
-    "REFUNDED": "İade edildi",
     "EMERGENCY_HOLD": "Donduruldu"
   },
   "countdown": {
@@ -1018,11 +1015,9 @@
     "step": {
       "CREATED": "Oluşturuldu",
       "ACCEPTED": "Kabul Edildi",
-      "ITEM_ESCROWED": "Item Emanet",
-      "PAYMENT_RECEIVED": "Ödeme",
-      "PAYMENT_VERIFIED": "Ödeme Doğrulama",
-      "ITEM_DELIVERED": "Teslim",
-      "DELIVERY_VERIFIED": "Teslim Doğrulama",
+      "SELLER_CONFIRMED": "Satıcı Hazır",
+      "PAYMENT_RECEIVED": "Ödeme Alındı",
+      "ITEM_DELIVERED": "Teslim Edildi",
       "COMPLETED": "Tamamlandı"
     }
   },
@@ -1533,22 +1528,9 @@
         "seller": "Alıcı kabul etti. Platform trade offer'ınızı hazırlıyor.",
         "buyer": "Satıcının item'ı göndermesi bekleniyor."
       },
-      "viewTradeOffer": "Steam takas teklifine git",
-      "tradeOfferToSeller": {
-        "seller": "Item'ı emanete almak için Steam'de trade offer'ı kabul edin.",
-        "buyer": "Satıcının item'ı göndermesi bekleniyor."
-      },
-      "itemEscrowed": {
-        "seller": "Item emanete alındı. Alıcının ödemesi bekleniyor.",
-        "buyer": "Aşağıdaki bilgileri kullanarak ödemeyi gönderin."
-      },
       "paymentReceived": {
         "seller": "Ödeme doğrulandı. Item alıcıya teslim ediliyor.",
         "buyer": "Ödemeniz doğrulandı. Item'ınız gönderiliyor."
-      },
-      "tradeOfferToBuyer": {
-        "seller": "Item alıcıya gönderildi. Kabul etmesi bekleniyor.",
-        "buyer": "Item'ı almak için Steam'de trade offer'ı kabul edin."
       },
       "itemDelivered": {
         "seller": "Item teslim edildi. Ödemeniz işleniyor.",
