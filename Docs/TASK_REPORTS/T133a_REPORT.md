@@ -1,6 +1,6 @@
 # T133a — 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, CI ✓ PASS — doğrulama bekliyor) | **Tarih:** 2026-08-19
+**Faz:** F7 | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS, 2026-08-20) | **Tarih:** 2026-08-19
 
 ---
 
@@ -58,7 +58,7 @@ Beş dosyanın **altbilgisi** de başlıkla hizalandı (donmuş değerler: 02 "v
 | 6 | 07 §7.5 detay blok koşulları güncel durumlara göre; `steamTradeOfferUrl` satırı kodun FİİLEN ürettiği davranışı anlatıyor | ✓ | `TransactionDetailService.cs:227-234` okundu: alan yalnız `Status == PAYMENT_RECEIVED && role == "seller"` iken doluyor ve değer **alıcının kendi** `BuyerTradeUrl`'i. §7.5 satırı bu hâle yazıldı; ayrıca `payment`/`paymentEvents` eşiği `SELLER_CONFIRMED`, `deliveredBuyerAssetId` `ITEM_DELIVERED`, `refund`/`cancelInfo` damga tabanlı (+`REFUNDED`), `holdInfo` `IsOnHold` bayrağı, `timeout.type` beş değeri (`settlement` dahil) yazıldı. `escrowBotAssetId` (DTO'da yok) tablo satırı + örnek + not atfı silindi. DTO yorumu (`TransactionDetailDto.cs:44-47`) da düzeltildi |
 | 7 | 07 §7.1 `active` sekmesi "terminal olmayan" tanımına çekildi; EMERGENCY_HOLD status olarak listelenmiyor | ✓ | `TransactionListService.cs:29-37` (`_activeStatuses` = 6 değer) ve `:39-47` (`_cancelledStatuses` = 5, `REFUNDED` dahil) okundu. §7.1 `active` = terminal olmayan 6 statü, `cancelled`'a `REFUNDED` eklendi; EMERGENCY_HOLD listeden çıkarıldı ve projeksiyon notuna "**sekme filtresinde yer almaz**" cümlesi + terminal statü listesi eklendi (`ProjectStatus`, `:178-184`). Üç sekmenin birleşimi 12 statünün tamamı |
 | 8 | 07 §9.20/§9.22 iade kuralları tablosundan item-iadesi bacakları kaldırıldı | ✓ | §9.20: "İade kuralları" yalnız para; iptal edilebilir state listesi `TransactionStateMachine.cs:221/232/253/268/309`'a hizalandı (`SELLER_CONFIRMED` eklendi, üç emekli ad düştü); "İptal edilemez"e `REFUNDED` eklendi ve hold'un statü olmadığı yazıldı. §9.22 CANCEL tablosu 6 → 4 satır, çift-iade satırı ve iki emekli-statü satırı silindi. `itemReturned` **üç** örnek yanıttan (§7.5, §9.20, §9.22) kaldırıldı — `AdminTransactionDtos.cs:9-14` "dropped in v3.0" diyor |
-| 9 | Kaynak katmanındaki emekli-status XML doc kalıntıları temizlendi (~14 dosya); adı konan iki bulgu kapatıldı | ✓ | **20 dosya** (tahminden fazla). `grep -rn "ITEM_ESCROWED\|TRADE_OFFER_SENT" backend/src` → **0 isabet**. Adı konan iki bulgu yukarıda ayrıntılı; `DisputeEligibility.cs:19-43` okunarak matrisin doğru olduğu teyit edildi (kriterin "WRONG_ITEM maddesi eksik" tarifi T130'da zaten kapanmıştı) |
+| 9 | Kaynak katmanındaki emekli-status XML doc kalıntıları temizlendi (~14 dosya); adı konan iki bulgu kapatıldı | ✓ | **20 dosya** (tahminden fazla). `grep -rn "ITEM_ESCROWED\|TRADE_OFFER_SENT" backend/src` → **3 isabet, üçü de belgeleyici** (`NotificationType.cs:9` ve `:16` emekli tipin yerini alan v3.0 tipini anlatıyor — "Replaces ITEM_ESCROWED / TRADE_OFFER_SENT_TO_BUYER"; `20260809162642_T117_P2P_Pivot.cs:31` emekli değerlerin **neden remap edilmediğini** anlatan migration doc'u). Kalıntı yok; üçü de emekliliği BELGELEYEN satır — kriterin 03/04/07 için kullandığı ölçütün kaynak katmanındaki karşılığı. **(Doğrulama düzeltmesi: yapım turu bu satırı "0 isabet" diye yazmıştı; gerçek 3'tür ve kriter yine karşılanır — T132'nin B2 dersi, "silmenin gerekçesi olarak yazılan iddia da ölçülmelidir".)** Adı konan iki bulgu yukarıda ayrıntılı; `DisputeEligibility.cs:19-43` okunarak matrisin doğru olduğu teyit edildi (kriterin "WRONG_ITEM maddesi eksik" tarifi T130'da zaten kapanmıştı) |
 | 10 | 07 + 03 sürüm notları yazıldı | ✓ (sapma kayıtlı) | Kriterin "v3.1 / v3.2" numaraları T118 dönemine ait ve **bayat** — harfiyen uygulansa sürüm geri giderdi. Beş doküman bump'landı ve sapma plan §P6 T133a → **D3**'e yazıldı (T122'nin kalıcı dersi) |
 
 ## Test Sonuçları
@@ -66,7 +66,7 @@ Beş dosyanın **altbilgisi** de başlıkla hizalandı (donmuş değerler: 02 "v
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Build | ✓ 0 Warning / 0 Error | `dotnet build -warnaserror`, exit 0 — taban ölçümüyle (tur öncesi) birebir aynı |
-| Unit + non-integration | ✓ 1417/1417 | `dotnet test --no-build --filter "FullyQualifiedName!~Integration"` — 11 assembly. Ayrıca **16 test Docker'sız koşamadı** (`DockerUnavailableException`, `Unit.Channels` Testcontainers kullanıyor); Docker dışı **hiçbir** hata yok (`grep` ile doğrulandı: 16 Failed / 32 DockerUnavailableException satırı, başka hata mesajı türü yok). Lokalde Docker daemon kapalı — bu legler CI'da koşar |
+| Unit + non-integration | ✓ 1417 passed / 16 Docker-bağımlı | `dotnet test --no-build --filter "FullyQualifiedName!~Integration"` — 11 assembly. **16 test Docker'sız koşamadı** (`DockerUnavailableException`, `Unit.Channels` Testcontainers kullanıyor); Docker dışı **hiçbir** hata yok. Lokalde Docker daemon kapalı — bu legler CI'da koşar. *(Doğrulama notu: "1417/1417" gösterimi düzeltildi — 16 düşen dahil toplam **1433**'tür.)* |
 | Integration | ✓ CI | `4. Integration test` job'ı **success** (run `32295024930`). Yeniden adlandırılan sınıfın testleri (`HappyPathNotificationConsumerTests`, 7 satır) bu leg'de koştu |
 | Doküman parity (programatik) | ✓ 6/6 | `scratchpad/parity.js`: yetki 12/12/12 (sıra birebir), bildirim 26/26 (07 ≡ 06 sıra dahil), AuditAction 29/29 (sıra birebir) |
 
@@ -74,9 +74,69 @@ Beş dosyanın **altbilgisi** de başlıkla hizalandı (donmuş değerler: 02 "v
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** |
+| Bulgu sayısı | **0 bloke edici** + 3 bloke etmeyen (ikisi bu turda düzeltildi, biri gözlem) |
+| Düzeltme gerekli mi | Hayır |
+
+**Tarih:** 2026-08-20 · **Dal HEAD:** `90d5637` · **Bağımsız chat** (yapım raporu yalnız Faz 3'te okundu)
+
+### Kapı kontrolleri
+
+| Kapı | Sonuç |
+|---|---|
+| Adım -1 Working tree | ✓ `git status --short` boş |
+| Adım 0 Main CI | ✓ son 3 run `success` — `32267172619`, `32267172521` (T133 #248), `32248307699` (T132 #247) |
+| Adım 0b Repo memory | ✓ `.claude/memory/MEMORY.md:58` T133a satırı mevcut |
+| Adım 8a Task branch CI | ✓ run [`32297236830`](https://github.com/turkerurganci/Skinora/actions/runs/32297236830), dal HEAD `90d5637`, `conclusion=success`; bloke edici **9/9 yeşil** (`CI Gate` dahil), `0. Guard` + `3b. vitest` skipped |
+
+### Bağımsız olarak yeniden üretilen kanıtlar
+
+**On kabul kriterinin onu da bağımsız kanıtla karşılandı.** Validator kendi ölçüm script'lerini yazdı (yapım turunun `scratchpad/parity.js`'i kullanılmadı):
+
+- **Kriter 1–2 (custodial dil):** `ITEM_ESCROWED|TRADE_OFFER_SENT_TO` → 03/04/07'de **5 isabet, beşi de belgeleyici**; `çift iade` + `Item'ınız iade` gövdede **0**. Ek olarak kriterin adlandırmadığı iki geniş tarama yapıldı: **`emanet`** → kalan isabetlerin hepsi ya **para** emaneti (02 §20.1 ile hizalı) ya kaldırma notu; **`bot`** → hepsi Telegram bot'u veya kaldırma notu. §8.6 Timeout Süreleri tablosu main ile **birebir aynı** (`diff` boş) — kriterin "tur o satırları tekrar açmamalı" şartı karşılandı.
+- **Kriter 3 (yetki parity):** dört nüsha da **12/12, sıra birebir**, ve **etiket metinleri de** kod kataloğuyla birebir (kod `PermissionCatalog.All` ↔ 07 §9 tablosu ↔ 07 §9.11 JSON ↔ 04 §8.8 `Anahtar` kolonu). İki "Bilinen açık" notu → grep **0**.
+- **Kriter 4 (AuditAction):** kod enum **29** ↔ 06 §2.19 **29**, küme + **sıra birebir**. Ayrıca kriterin istemediği bir kontrol daha koşuldu: **`Grup` kolonu ↔ `AuditLogCategoryMap` 29/29 birebir**, ve haritada olup tabloda olmayan değer **yok**. `EnumTests` "NOT full parity" bloğu → grep **0**.
+- **Kriter 5 (bildirim kataloğu):** 06 §2.13 ↔ 07 §8.1 **26/26, ad + hedef + sıra birebir** (satır satır karşılaştırıldı, 0 fark). 07 §8.1'in `targetType` kolonu `NotificationTargetMapper` ile teyit edildi (`ADMIN_PLATFORM_OUTAGE`→null, `ADMIN_FLAG_ALERT`→flag, `ACCOUNT_SUSPENDED`→null çünkü `AccountSuspendedNotificationConsumer:31-41` `TransactionId` yazmıyor).
+- **Kriter 6–7 (§7.5 / §7.1):** kod okunarak doğrulandı — `TransactionDetailService:229-231` (`PAYMENT_RECEIVED && role=="seller"` → `BuyerTradeUrl`), `BuildRefundAsync:666-696` (alıcı + `BUYER_REFUND` kaydı), `cancelInfo` (`:261` `CancelledAt`+`CancelledBy`), `TransactionListService:29-46` (`_activeStatuses` 6 · `_cancelledStatuses` 5 + `REFUNDED`). `TransactionStatus` enum'u **12** değer → üç sekmenin birleşimi tam, kesişim boş. `escrowBotAssetId` → grep **0**.
+- **Kriter 8 (§9.20/§9.22):** item-iadesi bacakları kaldırılmış; `CANNOT_CANCEL_AT_DELIVERY_STAGE` kodda mevcut (`AdminTransactionErrorCodes.cs`) — doküman var olmayan bir hata kodu vaat etmiyor.
+- **Kriter 9 (kaynak katmanı):** `DisputeService` XML doc matrisi `DisputeEligibility.AllowedStatesByType` ile **birebir** ve tek doğru kaynağı adıyla gösteriyor. Yeniden adlandırma **saf**: eski dosya ile yeni dosya yorumlar çıkarılıp sınıf adı normalize edilerek `diff`'lendi → **gövde birebir aynı**; `ConsumerName` sabiti main'deki değerle **aynı** (`"notifications.transaction-status-changed"`), DI kaydı sınıf adına bağlı değil (`INotificationHandler<TEvent>` üzerinden). Kriterin AC9 kanıt satırındaki "0 isabet" iddiası **düzeltildi** (bkz. yukarıdaki tablo).
+- **Kriter 10 (sürüm):** beş dokümanın **başlığı ile altbilgisi** programatik olarak karşılaştırıldı → 5/5 hizalı.
+- **Davranış nötrlüğü (turun ana iddiası):** `git diff origin/main...HEAD -- backend/src/**/*.cs` üzerinden yorum/XML-doc satırları elendiğinde **geriye sıfır satır kalıyor** — yeniden adlandırma dışında hiçbir çalıştırılabilir satır değişmemiş. Migration/config/bağımlılık dosyası diff'te **yok**.
+- **Plan bütünlüğü:** `11_IMPLEMENTATION_PLAN.md` diff'i **saf ekleme** (95+ / 1−, tek silinen satır sürüm başlığı) → orijinal on kabul kriteri **korunmuş**, KAPSAM NETLEŞTİRMESİ üstüne eklenmiş; sessiz kriter yeniden yazımı yok.
+- **T134/T136'ya devredilen ölçümler denetlendi (yanlış ölçüm sonraki görevin kriterini zehirler):** FE `enums.ts` `NotificationType` gerçekten **28 değer** (4 emekli duruyor, 2 v3.0 tipi eksik) · FE `permissionCatalog.ts` gerçekten **14 anahtar** (`VIEW_STEAM_ACCOUNTS` + `MANAGE_STEAM_RECOVERY` duruyor) · dört i18n dosyasının `EMERGENCY_HOLD` etiketinin dördü de kod kataloğundan sapıyor. Üçü de doğru.
+- **`T133a-ActiveCounterRefunded` gerçek:** `ActiveTransactionCounter:48-54` ve `UserActiveTransactionChecker:30-36` dışlama listelerinde `REFUNDED` **yok** → terminal bir işlem "aktif" sayılıyor. İki XML doc bu açığı **adıyla** yazıyor; tur davranışa dokunmadı — doğru karar.
+
+### Test sonuçları (validator'ın kendi koşumu)
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Build | ✓ **0 Warning / 0 Error** | `dotnet build Skinora.sln -c Release` |
+| Unit (CI filtresiyle) | ✓ **1408/1424** | `--filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Integration | ✓ CI | `4. Integration test` job `success` (yeniden adlandırılan sınıfın testleri `tests/Skinora.Notifications.Tests/Integration/`'da, bu leg'de koştu) |
+| Advisory E2E | 10 passed / 32 — **tabanla birebir** | Run `32297236830` leg log'ları bağımsız sayıldı: 1 + 3 + 6 = **10** (timeout · fraud-flags · admin-flows), T133/T137a tabanının aynısı |
+
+**16 düşen test T133a regresyonu DEĞİL:** hepsi `Notifications.Tests.Unit.Channels` (Discord 10 + Telegram 6) ve hepsinin hatası `Failed to connect to Docker endpoint at 'npipe://./pipe/docker_engine'` — `docker info` ile bu makinede daemon'ın **kapalı** olduğu teyit edildi. Toplam **1424**, T132/T133 raporlarının kaydettiği taban ile birebir; CI'da aynı leg **success**.
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | ✓ Temiz — diff'te sır deseni yok (tek grep isabeti `IMPLEMENTATION_STATUS.md` changelog metni) |
+| Auth/authorization | ✓ Temiz — `PermissionCatalog` **kodu değişmedi**; tur dokümanı koda hizaladı, ters yöne değil |
+| Input validation | ✓ Temiz — çalıştırılabilir satır değişikliği yok |
+| Yeni bağımlılık | ✓ Yok — `.csproj` / `package.json` diff'te yok |
+
+### Bloke etmeyen bulgular
+
+| # | Seviye | Açıklama | Durum |
+|---|---|---|---|
+| N1 | Kanıt doğruluğu | AC9'un kanıt satırı `grep … backend/src` → "**0 isabet**" diyordu; gerçek **3** (üçü de belgeleyici, kriter yine karşılanıyor). Aynı iddia `IMPLEMENTATION_STATUS.md` satır 3'e de yansımıştı | **Bu turda düzeltildi** (rapor + status) |
+| N2 | Gösterim | Test satırı "1417/1417" diyordu ama aynı satır 16 düşen testi de sayıyordu — toplam **1433** | **Bu turda düzeltildi** |
+| N3 | Gözlem (değişiklik yok) | Plan §P7 T134 kriterindeki "`EMERGENCY_HOLD` etiketi **dört dilde de** 'Emergency hold uygula/kaldır' diyor" ifadesi harfiyen yalnız `tr.json` için doğru; `en/es/zh` aynı **eski** ifadenin çevirisini taşıyor. Kriterin **özü** doğru ve ölçülebilir ("dört dilin etiketi kod kataloğuyla hizalı") — dördü de sapıyor, T134 aksiyonu değişmiyor | Kayda geçti, düzeltme önerilmedi |
+
+### Yapım raporu karşılaştırması
+
+**Uyum: yüksek — 10/10 kriterde verdict aynı, iki kanıt uyuşmazlığı (N1, N2).** Rapor, kriterin tarifiyle gerçeğin ayrıştığı yerleri (AC9'da `DisputeService` matrisinin T130'da zaten düzelmiş olması; AC10'da bayat sürüm numaraları) kendi kendine bildirmiş ve `NotificationType` sıra gözlemini de bulgu saymadan kaydetmiş — validator bağımsız olarak aynı sonuçlara ulaştı. Raporun **abartmadığı** ve kendi aleyhine kaydettiği kalemler (20 dosya > tahmini 14; D4'ün "yalnız XML doc" beklentisini aştığının açıkça yazılması) doğrulandı. Tek gerçek uyuşmazlık N1'dir: turun kendisi T132'nin "yazılan iddia ölçülmelidir" dersini kaynak dokümana taşırken, kendi kanıt satırında aynı sınıftan bir ölçülmemiş iddia bırakmış.
 
 ## Altyapı Değişiklikleri
 
