@@ -131,6 +131,24 @@ Yalnız `start` çağrısını bağlamak iki yeni kusur üretirdi: (1) hiç durm
 ## Commit & PR
 
 - Branch: `task/T139-payment-monitor-lifecycle`
-- Commit: (aşağıda)
-- PR: (aşağıda)
-- CI: (aşağıda)
+- Commit: `3ad44f7` — T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
+- PR: [#251](https://github.com/turkerurganci/Skinora/pull/251)
+- CI: ✓ **PASS** — dal HEAD `3ad44f7` run [`32367284135`](https://github.com/turkerurganci/Skinora/actions/runs/32367284135) `success`, **`CI Gate` yeşil**
+
+**Bloke edici jobların tamamı yeşil:** `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`. `0. Guard (direct push)` skipped (beklenen).
+
+**Sekiz advisory E2E leg'i kırmızı — T139 kaynaklı DEĞİL, ve sayı ölçülerek doğrulandı.** Legler T117'nin custody emekliliğinden beri kırmızıdır, `continue-on-error` + `ci-gate.needs` dışındadır (proje sahibi kararı, `ci.yml:612-625`) ve yeniden yazımlarının sahibi T138'dir. T137'nin kalıcı dersi gereği leg statüsü değil **geçen test kümesi** sayıldı:
+
+| Leg | Geçen | Düşen |
+|---|---|---|
+| T110 payment edge cases | 0 | 6 |
+| T108 cancellation | 0 | 4 |
+| T114 downtime | 0 | 3 |
+| T112 emergency-hold | 0 | 3 |
+| T111 fraud-flags | **3** | 1 |
+| T109 timeout | **1** | 3 |
+| T113 admin-flows | **6** | 1 |
+| happy-path | 0 | 1 |
+| **Toplam** | **10** | **22** |
+
+**10/32** — T137a'nın ölçtüğü ve T137'nin düzeltme turundan sonra sabitlenen tabanla **birebir aynı**. T139 bu ağa ne ekledi ne çıkardı, ki bu beklenen sonuçtur: arm çağrısı outbox üzerinden **commit sonrası** gider, dolayısıyla sidecar erişilemez olsa bile geçişin kendisi etkilenmez.
