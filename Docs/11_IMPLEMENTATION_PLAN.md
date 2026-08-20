@@ -3511,6 +3511,58 @@ Task T133b: DEPLOY_RUNBOOK §G happy path anlatısının P2P'ye çekilmesi
        ayrılan bir AKIŞIN anlatısıdır — kaldırma değil yeniden yazım işidir
        ve prova adımlarının canlı stack üzerinde doğrulanması gerekir.
 
+  KAPSAM NETLEŞTİRMESİ (proje sahibi onaylı, 2026-08-20 — göreve başlarken
+  kod üzerinden yapılan ölçüm). Yukarıdaki iki kabul kriteri KORUNUR;
+  aşağıdaki üç karar onlara EK olarak bu turda uygulandı:
+    E1 — KONTROL 10 İKİYE BÖLÜNDÜ (10 + 10a). Kriterin harfi kuyruğu
+        ("→ `COMPLETED` + payout zinciri") tek prova adımı olarak istiyor,
+        ama o adım TEK OTURUMDA GÖZLENEMEZ: `payout_settlement_days`'in
+        tabanı 7 gündür ve admin altına inemez — `SystemSettingsValidator.
+        MinimumSettlementDays` sert kural olarak reddeder (02 §4.5.1, T129).
+        Yani eski tek satır yalnız custodial DEĞİL, aynı zamanda
+        GERÇEKLEŞTİRİLEMEZ bir vaatti ve yeniden yazım onu olduğu gibi
+        P2P'ye çevirseydi hata sınıf değiştirerek hayatta kalırdı. KARAR:
+        kontrol 10 = tek oturumda gözlenebilen zincir (… → `ITEM_DELIVERED`,
+        `PayoutEligibleAt` damgalandı); kontrol 10a = pencere sonrası
+        mutabakat + payout kuyruğu. Kriterin ÖZÜ (uçtan uca zincirin P2P
+        anlatısı) iki satırın toplamında karşılanır.
+    E2 — PROVA KISAYOLU YAZILDI (kontrol 10a'nın altı). Kuyruğu aynı
+        oturumda görmek için `UPDATE Transactions SET PayoutEligibleAt =
+        SYSUTCDATETIME()`. Kısayol GUARD ZAYIFLATMAZ: satır kuyruğa
+        düştükten sonra `SettlementVerificationJob` alıcının envanterini
+        gerçekten yeniden okur ve `SettlementVerifiedAt`'i ancak item
+        alıcıda durduğu için damgalar — sahte olan tek şey saattir, verdict
+        değil. Alternatif ("ayarı düşür") MÜMKÜN DEĞİL (E1'deki taban),
+        alternatif ("8 gün bekle") prova reçetesini kullanılamaz kılıyordu.
+        Üretimde yasak olduğu satırda açıkça yazılı.
+    E3 — İKİ SAHİPSİZ KOMŞU KALEM KAPATILDI (proje sahibi onaylı). İkisi
+        de custodial DEĞİL — bayat — ama aynı §G'de duruyor, başka görevin
+        kapsamında değil ve provayı yanlış yola sokuyorlardı. Gerekçe T133
+        doğrulamasının kalıcı dersi: bir turun kapattığı kalıntı SINIFI, o
+        sınıfın kriterde adı geçmeyen komşularını da kapsar.
+        · N1 — §G.4 kontrol 8 "59 satır; 19'u configured" diyordu. Gerçek
+          **63** (`SystemSettingsCatalog` 63 giriş, `SeedDataTests` 63'ü
+          assert eder) ve boot SONRASI 63'ün 63'ü configured'dır (44'ü
+          seed'den, 19'u §A env'lerinden). Sapma tek yönlü değildi: aynı
+          runbook'un GİRİŞ paragrafı zaten "63 satır" diyordu, yani
+          doküman kendi içinde çelişiyordu.
+        · N2 — §G.5 trade-hold tuzağı yalnız ALICI kapısını anlatıyordu.
+          Ölçüm: kapı üç yerde (satıcı için `TransactionEligibilityService`
+          kalıcı bayrakla; alıcı için `TransactionAcceptanceService` ve
+          `TransactionReadinessService` canlı probeyle). Daha önemlisi
+          P2P'de trade'i SATICI gönderir — hold'un ağır tarafı taraf
+          değiştirdi ve tuzak bunu söylemiyordu. Prova sonucu §H.2'nin
+          verdict tablosuna bağlandı (iptal mi, dispute mu) çünkü hangisinin
+          olacağı item'ın satıcı envanterinden düşüp düşmediğine bağlıdır.
+  CANLI STACK NOTU: "Neden ayrı task" gerekçesi prova adımlarının canlı
+  stack üzerinde doğrulanmasını istiyor. Bu tur onu YAPMADI — gerçek Steam
+  hesabı çifti, `STEAM_API_KEY` ve fonlu Nile testnet cüzdanı gerektiriyor
+  ve hiçbiri bu ortamda yok. Anlatının her adımı bunun yerine KOD üzerinden
+  doğrulandı (uç adları, state machine geçişleri, cron ifadeleri, ayar
+  tabanı); ad doğruluğu için bu daha güçlü, davranış doğruluğu için daha
+  zayıf bir kanıttır. Canlı prova ilk gerçek deploy hazırlığına devredildi —
+  `DEFERRED_BACKLOG` satırı açıldı.
+
 Task T133a: 03 + 04 + 07 custodial kalıntı turu (doküman hizalaması)
   Bağımlılık: Yok (doküman). T134/T135/T136'dan ÖNCE tamamlanmalı —
        üçü de 03'ü UI akışı, 04'ü ekran spesifikasyonu, 07'yi API
