@@ -255,7 +255,7 @@ B1'in kararı "tek örneği değil **sınıfı** kapat" diyordu, ama bekçi sın
 
 ### Tur 3 test kanıtı (validator'ın kendi koşumu, dal HEAD `2ec7762`)
 
-Build Release **0W / 0E** · `dotnet format --verify-no-changes --severity error` exit **0** · **Unit 1466/1466** · **Transactions entegrasyon 538/538** (4 dk 56 sn) · **sidecar-blockchain 166/166** · dal HEAD CI run [`32402092945`](https://github.com/turkerurganci/Skinora/actions/runs/32402092945) **`success`**, `CI Gate` yeşil.
+Build Release **0W / 0E** · `dotnet format --verify-no-changes --severity error` exit **0** · **Unit 1466/1466** · **Transactions entegrasyon 538/538** (4 dk 56 sn) · **sidecar-blockchain 166/166** · doğrulanan dal HEAD `2ec7762` CI run [`32402092945`](https://github.com/turkerurganci/Skinora/actions/runs/32402092945) **`success`** · N1-3 düzeltmesinden sonra dal HEAD `4d1b515` CI run [`32407918580`](https://github.com/turkerurganci/Skinora/actions/runs/32407918580) **`success`**, `CI Gate` yeşil.
 
 Advisory E2E **10/32** — validator HEAD run'ından bağımsız saydı (geçen 1+3+6, düşen 22), T139-öncesi tabanla aynı → **regresyon yok**. (Sekiz advisory leg'in T117'den beri düşmesi T138'in sahipliğinde, bu görevin kapsamı dışında.)
 
@@ -316,7 +316,9 @@ Secret sızıntısı **temiz** (yeni sır yok; mevcut `X-Internal-Key` mekanizma
 | Yapım | `3ad44f7` | [`32367284135`](https://github.com/turkerurganci/Skinora/actions/runs/32367284135) | ✓ `success` |
 | Düzeltme 1 | `ad613c8` | [`32377529035`](https://github.com/turkerurganci/Skinora/actions/runs/32377529035) | ✓ `success` |
 | Düzeltme 2 | `111976c` | [`32399382402`](https://github.com/turkerurganci/Skinora/actions/runs/32399382402) | ✓ `success` |
-| Düzeltme 3 (N1-3) | _aşağıda_ | _aşağıda_ | ✓ `success` |
+| Düzeltme 3 (N1-3) | `4d1b515` | [`32407918580`](https://github.com/turkerurganci/Skinora/actions/runs/32407918580) | ✓ `success` |
+
+**Tur 3 (N1-3) CI kanıtı:** dal HEAD `4d1b515` · run [`32407918580`](https://github.com/turkerurganci/Skinora/actions/runs/32407918580) **`success`**, **`CI Gate` yeşil** — on bloke edici job'ın onu da başarılı (`1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`); `0. Guard (direct push)` skipped (beklenen). Advisory E2E **10/32** (geçen 1+3+6, düşen 22) — bir önceki dal HEAD run'ı `32402092945` ile **birebir**, yani bekçinin yeniden yazımı ağa dokunmadı.
 
 **Bloke edici jobların tamamı yeşil:** `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`. `0. Guard (direct push)` skipped (beklenen).
 
