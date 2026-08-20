@@ -35,13 +35,31 @@ public enum PaymentMonitorAction
 /// <remarks>
 /// <para>
 /// This job is the reason T139 does not need a startup-only recovery hook
-/// like <c>PostCancelMonitorRecoveryHook</c>. Post-cancel windows are 24h to
-/// 30 days, so replaying them once per backend start is enough. An active
-/// payment window is 30-120 minutes: a monitor lost to a <em>sidecar</em>
-/// restart (which no backend hook observes) would let the buyer's transfer
-/// land unseen and the transaction time out with the money already on-chain.
-/// A per-minute sweep closes backend restart, sidecar restart and a dropped
-/// outbox delivery with one mechanism.
+/// like <c>PostCancelMonitorRecoveryHook</c>. Post-cancel windows are replayed
+/// once per backend start, which is enough because nothing time-critical
+/// depends on them resuming within the minute. The active window is different:
+/// a monitor lost to a <em>sidecar</em> restart (which no backend hook
+/// observes) would let the buyer's transfer land unseen and the transaction
+/// time out with the money already on-chain. A per-minute sweep closes backend
+/// restart, sidecar restart and a dropped outbox delivery with one mechanism.
+/// </para>
+/// <para>
+/// <b>How long a window stays armed (T139 decision D3, cost measured in the
+/// validation round — finding N1).</b> The money-critical part of the window is
+/// the buyer's payment leg, 30-120 minutes. The window this job keeps open is
+/// much longer: <see cref="ArmedStates"/> includes <c>ITEM_DELIVERED</c>, and
+/// the sweep that closes it cannot be queued before <c>SettlementVerifiedAt</c>
+/// is stamped, which <c>payout_settlement_days</c> floors at <b>7 days</b>
+/// (<c>SystemSettingsValidator.MinimumSettlementDays</c>, 02 §16.2). So each
+/// deposit address is polled at the 3-second active cadence for a week or more
+/// after delivery, not for the length of the payment leg. That is deliberate —
+/// D3 keeps the window open so the 02 §4.4 overpayment branch and the 03 §5.5
+/// second-transfer branch stay observable — but it means concurrent-monitor
+/// count tracks <em>a week</em> of transaction volume rather than two hours of
+/// it, and TronGrid request volume scales with that count (two query phases per
+/// monitor per tick). The consequence is recorded in 08 §3.4; watch
+/// <c>skinora_blockchain_active_monitors</c> against the provider's rate limit
+/// before raising throughput.
 /// </para>
 /// <para>
 /// Re-arming is safe to do unconditionally: <c>MonitorRegistry.start</c> is
@@ -187,6 +205,10 @@ public sealed class EnsurePaymentMonitorJob
         if (candidates.Count == 0) return;
 
         int armed = 0, disarmed = 0, failed = 0;
+        // Addresses this run actually armed, kept so the handover check below
+        // can undo an arm that raced a cancel (T139 düzeltme turu — N2).
+        var armedAddresses = new List<(Guid Id, string Address)>();
+
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -210,6 +232,7 @@ public sealed class EnsurePaymentMonitorJob
                 if (startStatus == BlockchainSidecarStatus.Success)
                 {
                     armed++;
+                    armedAddresses.Add((candidate.Address.Id, candidate.Address.Address));
                 }
                 else
                 {
@@ -247,7 +270,63 @@ public sealed class EnsurePaymentMonitorJob
 
         if (disarmed > 0)
         {
-            await _db.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                // Another writer moved one of these rows out of ACTIVE between
+                // the candidate query and this save — in practice the cancel
+                // pipeline stamping POST_CANCEL_24H. RowVersion (09 §10.4) turns
+                // that into this exception instead of a blind overwrite, which
+                // matters: overwriting a post-cancel window with STOPPED would
+                // silently retire the late-payment recovery guarantee (08 §3.4).
+                // The whole batch's stamping is lost, not just the contended
+                // row; that is acceptable because stamping is idempotent and the
+                // next run (one minute later) redoes it against fresh state.
+                disarmed = 0;
+                _db.ChangeTracker.Clear();
+                _logger.LogWarning(
+                    ex,
+                    "EnsurePaymentMonitorJob: a deposit address left ACTIVE while this run was "
+                    + "disarming; no STOPPED stamp was written this pass. Retrying next run.");
+            }
+        }
+
+        // Handover guard (T139 düzeltme turu — N2). The candidate list is a
+        // snapshot: a cancel committing after it was taken moves the row to
+        // POST_CANCEL_24H and PostCancelMonitorStartDispatcher stops the active
+        // monitor before registering the gradual one. An arm issued from the
+        // stale snapshot after that stop resurrects the active monitor on an
+        // address this job will never look at again (its filter is ACTIVE), so
+        // two registries would poll it until the next sidecar restart — exactly
+        // the double-registration AC4(a) exists to prevent, surviving as a race.
+        // One extra query per run undoes it.
+        if (armedAddresses.Count > 0)
+        {
+            var armedIds = armedAddresses.Select(a => a.Id).ToList();
+            var handedOver = await _db.Set<PaymentAddress>()
+                .AsNoTracking()
+                .Where(p => armedIds.Contains(p.Id)
+                    && p.MonitoringStatus != MonitoringStatus.ACTIVE)
+                .Select(p => p.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var id in handedOver)
+            {
+                var address = armedAddresses.First(a => a.Id == id).Address;
+                var undoStatus = await _sidecar.StopMonitoringAsync(address, cancellationToken);
+
+                armed--;
+                _logger.LogWarning(
+                    "EnsurePaymentMonitorJob: PaymentAddress {Id} left ACTIVE while this run was "
+                    + "arming it — the active monitor was stopped again (status={Status}) so the "
+                    + "post-cancel registry owns the address alone.",
+                    id, undoStatus);
+
+                if (undoStatus != BlockchainSidecarStatus.Success) failed++;
+            }
         }
 
         if (armed > 0 || disarmed > 0 || failed > 0)

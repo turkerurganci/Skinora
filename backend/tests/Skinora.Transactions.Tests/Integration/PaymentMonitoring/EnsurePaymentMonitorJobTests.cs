@@ -220,6 +220,61 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
         Assert.Empty(_sidecar.MonitorStopCalls);
     }
 
+    // ─── Handover race (T139 düzeltme turu — N2) ────────────────────────
+
+    [Fact]
+    public async Task An_Arm_That_Raced_A_Cancel_Handover_Is_Undone()
+    {
+        // The candidate list is a snapshot. A cancel that commits after it was
+        // taken drives PostCancelMonitorStartDispatcher, which stops the active
+        // monitor and registers the gradual one. An arm replayed from the stale
+        // snapshot then re-adds the address to MonitorRegistry — where this job
+        // can no longer see it, since its filter is MonitoringStatus.ACTIVE.
+        // Result: two registries polling one address until the sidecar restarts.
+        var (_, address) = await SeedAddressAsync(
+            TransactionStatus.SELLER_CONFIRMED, MonitoringStatus.ACTIVE);
+
+        _sidecar.OnMonitorStart = async _ =>
+        {
+            await Context.Database.ExecuteSqlRawAsync(
+                "UPDATE PaymentAddresses SET MonitoringStatus = {0} WHERE Id = {1}",
+                (int)MonitoringStatus.POST_CANCEL_24H, address.Id);
+        };
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Single(_sidecar.MonitorStartCalls);
+        Assert.Equal(address.Address, Assert.Single(_sidecar.MonitorStopCalls));
+        // The handover owns the row; the reconciler must not have re-stamped it.
+        Assert.Equal(MonitoringStatus.POST_CANCEL_24H, await ReadStatusAsync(address.Id));
+    }
+
+    [Fact]
+    public async Task A_Disarm_Never_Overwrites_A_Concurrent_Cancel_Handover()
+    {
+        // Same race on the other branch, and here it is money-relevant: stamping
+        // STOPPED over POST_CANCEL_24H would retire the late-payment recovery
+        // window (08 §3.4) for an address the buyer may still pay into. The
+        // RowVersion concurrency token (09 §10.4) turns the blind overwrite into
+        // a failed save; the job must absorb it and leave the row alone.
+        var (_, address) = await SeedAddressAsync(
+            TransactionStatus.CANCELLED_TIMEOUT, MonitoringStatus.ACTIVE);
+
+        // The handover lands after the candidate snapshot was taken. Raw SQL
+        // bypasses the change tracker, so the tracked entity's RowVersion goes
+        // stale exactly as a concurrent writer would make it.
+        _sidecar.OnMonitorStop = async _ =>
+        {
+            await Context.Database.ExecuteSqlRawAsync(
+                "UPDATE PaymentAddresses SET MonitoringStatus = {0} WHERE Id = {1}",
+                (int)MonitoringStatus.POST_CANCEL_24H, address.Id);
+        };
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(MonitoringStatus.POST_CANCEL_24H, await ReadStatusAsync(address.Id));
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private EnsurePaymentMonitorJob BuildSut()
