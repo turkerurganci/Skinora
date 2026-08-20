@@ -263,6 +263,14 @@ public sealed class HotWalletServiceTests : IDisposable
             int index, Guid transactionId, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
+        public Task<BlockchainSidecarStatus> StartMonitoringAsync(
+            PaymentMonitorStartRequest request, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
+        public Task<BlockchainSidecarStatus> StopMonitoringAsync(
+            string address, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
         public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
             PostCancelMonitorStartRequest request, CancellationToken cancellationToken) =>
             throw new NotImplementedException();

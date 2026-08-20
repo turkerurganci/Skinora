@@ -32,6 +32,41 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
         return Task.FromResult(response);
     }
 
+    public Queue<BlockchainSidecarStatus> MonitorStartResponses { get; } = new();
+    public List<PaymentMonitorStartRequest> MonitorStartCalls { get; } = new();
+    public Queue<BlockchainSidecarStatus> MonitorStopResponses { get; } = new();
+    public List<string> MonitorStopCalls { get; } = new();
+
+    /// <summary>
+    /// Runs inside <see cref="StartMonitoringAsync"/>, before it returns. Lets a
+    /// test commit a state change (a cancel handover) at the one instant the
+    /// reconciler is mid-loop and its candidate snapshot has gone stale.
+    /// </summary>
+    public Func<PaymentMonitorStartRequest, Task>? OnMonitorStart { get; set; }
+
+    public async Task<BlockchainSidecarStatus> StartMonitoringAsync(
+        PaymentMonitorStartRequest request, CancellationToken cancellationToken)
+    {
+        MonitorStartCalls.Add(request);
+        if (OnMonitorStart is not null) await OnMonitorStart(request);
+        return MonitorStartResponses.Count > 0
+            ? MonitorStartResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
+    }
+
+    /// <summary>Twin of <see cref="OnMonitorStart"/> for the disarm branch.</summary>
+    public Func<string, Task>? OnMonitorStop { get; set; }
+
+    public async Task<BlockchainSidecarStatus> StopMonitoringAsync(
+        string address, CancellationToken cancellationToken)
+    {
+        MonitorStopCalls.Add(address);
+        if (OnMonitorStop is not null) await OnMonitorStop(address);
+        return MonitorStopResponses.Count > 0
+            ? MonitorStopResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
+    }
+
     public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
         PostCancelMonitorStartRequest request, CancellationToken cancellationToken)
     {

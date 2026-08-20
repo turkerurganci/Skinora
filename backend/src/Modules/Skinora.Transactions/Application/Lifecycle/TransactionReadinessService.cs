@@ -9,6 +9,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Settings;
@@ -289,8 +290,58 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
                 OccurredAt: nowUtc),
             cancellationToken);
 
+        // ---------- Stage 10b: arm the payment monitor (T139) ---------------
+        // The deposit address has existed since creation, but nothing was ever
+        // watching it: the sidecar's active monitor (T71) had no backend caller
+        // at all until T139 (DEFERRED_BACKLOG T133b-PaymentMonitorUnarmed), so
+        // a real buyer's transfer produced no payment-detected webhook and the
+        // transaction sat here until it timed out. SELLER_CONFIRMED is the
+        // right moment to arm: it is the first state in which the buyer is
+        // shown the address (02 §2.2 step 3), hence the first state in which
+        // money can arrive.
+        //
+        // Published in the same SaveChanges as the transition for the same
+        // reason the status event is: a rolled-back confirmation must not leave
+        // a monitor armed on an address the buyer was never told about.
+        //
+        // A missing PaymentAddress row does NOT block the confirmation.
+        // Allocation is best-effort at creation and swept by
+        // EnsurePaymentAddressJob (T70/T123); EnsurePaymentMonitorJob arms
+        // whatever exists a minute later. Blocking here would punish the seller
+        // for a sidecar outage whose only real effect is on the buyer's ability
+        // to pay — and the payment deadline armed in Stage 8 is what protects
+        // them if the address never appears.
+        var paymentAddress = await _db.Set<PaymentAddress>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                p => p.TransactionId == transaction.Id && !p.IsDeleted,
+                cancellationToken);
+
+        if (paymentAddress is not null)
+        {
+            await _outbox.PublishAsync(
+                new PaymentMonitorStartRequestedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    PaymentAddressId: paymentAddress.Id,
+                    Address: paymentAddress.Address,
+                    ExpectedToken: paymentAddress.ExpectedToken,
+                    ExpectedContractAddress: KnownStablecoinContracts
+                        .ResolveContractAddress(paymentAddress.ExpectedToken),
+                    OccurredAt: nowUtc),
+                cancellationToken);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Transaction {TransactionId} reached SELLER_CONFIRMED without a PaymentAddress "
+                + "row — the payment monitor was not armed inline. EnsurePaymentMonitorJob will "
+                + "arm it once EnsurePaymentAddressJob allocates the address (T139).",
+                transaction.Id);
+        }
+
         // Single unit of work: transition + baseline + deadline + Hangfire job
-        // ids + history row + outbox message.
+        // ids + history row + both outbox messages.
         await _db.SaveChangesAsync(cancellationToken);
 
         return new ConfirmReadyOutcome(

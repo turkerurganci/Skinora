@@ -14,6 +14,7 @@ using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.PaymentMonitoring;
 using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Transactions.Application.PostCancel;
@@ -219,6 +220,26 @@ public static class TransactionsModule
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
+
+        // T139 — active payment monitor lifecycle (08 §3.4). The per-minute
+        // reconciler arms every open payment window, re-arms after a backend or
+        // sidecar restart, and disarms (stamping MonitoringStatus = STOPPED)
+        // once the deposit has been swept or the transaction went terminal.
+        services.AddScoped<EnsurePaymentMonitorJob>();
+        services.AddHostedService<EnsurePaymentMonitorJobRegistrar>();
+
+        // The inline fast path, wired through the outbox by the
+        // SELLER_CONFIRMED transition. Explicit registration for the same
+        // reason as its three siblings below: the Transactions assembly is NOT
+        // in the OutboxModule MediatR scan list, so a missing line here would
+        // silently drop the event — IPublisher.Publish with zero handlers
+        // returns normally and the outbox row is stamped PROCESSED. The T139
+        // validation round found exactly that defect here (finding B1); the
+        // reconciler above masked it by re-arming within a minute.
+        services.AddScoped<PaymentMonitorStartDispatcher>();
+        services.AddScoped<MediatR.INotificationHandler<
+            Skinora.Shared.Events.PaymentMonitorStartRequestedEvent>>(sp =>
+            sp.GetRequiredService<PaymentMonitorStartDispatcher>());
 
         // T71 — inbound blockchain webhook handler (08 §3.4). The signature
         // envelope is verified by WebhookSignatureMiddleware (extended to

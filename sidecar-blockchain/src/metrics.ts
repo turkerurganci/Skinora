@@ -64,9 +64,12 @@ export const tronApiErrorsTotal = getOrCreateCounter({
   labelNames: ['endpoint', 'error_type'] as const,
 });
 
+// Write through `reportActiveMonitorCount` (monitor/activeMonitorGauge.ts), not
+// directly: two registries feed this one label-free gauge and a bare `.set()`
+// from either publishes a partial total.
 export const activeMonitors = getOrCreateGauge({
   name: 'skinora_blockchain_active_monitors',
-  help: 'Number of active payment monitors',
+  help: 'Deposit addresses under monitoring — active payment (T71) plus post-cancel (T75)',
 });
 
 export const transfersTotal = getOrCreateCounter({

@@ -127,6 +127,36 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         }
     }
 
+    public async Task<BlockchainSidecarStatus> StartMonitoringAsync(
+        PaymentMonitorStartRequest request,
+        CancellationToken cancellationToken)
+    {
+        var body = new MonitorStartRequestBody(
+            Address: request.Address,
+            PaymentAddressId: request.PaymentAddressId.ToString("D"),
+            TransactionId: request.TransactionId.ToString("D"),
+            ExpectedContract: request.ExpectedContract,
+            ExpectedSymbol: request.ExpectedSymbol);
+
+        return await SendCommandAsync(
+            "api/monitor/start",
+            body,
+            logContext: $"address={request.Address} transactionId={request.TransactionId}",
+            cancellationToken);
+    }
+
+    public async Task<BlockchainSidecarStatus> StopMonitoringAsync(
+        string address,
+        CancellationToken cancellationToken)
+    {
+        var body = new MonitorStopRequestBody(Address: address);
+        return await SendCommandAsync(
+            "api/monitor/stop",
+            body,
+            logContext: $"address={address}",
+            cancellationToken);
+    }
+
     public async Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
         PostCancelMonitorStartRequest request,
         CancellationToken cancellationToken)
@@ -407,6 +437,16 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("address")] string? Address,
         [property: JsonPropertyName("derivationPath")] string? DerivationPath,
         [property: JsonPropertyName("index")] int Index);
+
+    private sealed record MonitorStartRequestBody(
+        [property: JsonPropertyName("address")] string Address,
+        [property: JsonPropertyName("paymentAddressId")] string PaymentAddressId,
+        [property: JsonPropertyName("transactionId")] string TransactionId,
+        [property: JsonPropertyName("expectedContract")] string ExpectedContract,
+        [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol);
+
+    private sealed record MonitorStopRequestBody(
+        [property: JsonPropertyName("address")] string Address);
 
     private sealed record PostCancelStartRequestBody(
         [property: JsonPropertyName("address")] string Address,
