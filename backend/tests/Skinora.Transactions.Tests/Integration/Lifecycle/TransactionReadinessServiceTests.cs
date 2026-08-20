@@ -129,6 +129,80 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Happy_Path_Arms_The_Payment_Monitor_When_A_Deposit_Address_Exists()
+    {
+        // T139 — the deposit address had existed since creation but nothing was
+        // watching it: the sidecar's active monitor had no backend caller at
+        // all, so a real buyer's transfer never produced payment-detected and
+        // the transaction sat in SELLER_CONFIRMED until it timed out. This
+        // event is that caller.
+        var transaction = await CreateAcceptedTransactionAsync();
+        var address = await SeedPaymentAddressAsync(transaction);
+
+        await BuildSut().ConfirmReadyAsync(_seller.Id, transaction.Id, CancellationToken.None);
+
+        var evt = Assert.IsType<PaymentMonitorStartRequestedEvent>(
+            Assert.Single(_outbox.Published, e => e is PaymentMonitorStartRequestedEvent));
+        Assert.Equal(transaction.Id, evt.TransactionId);
+        Assert.Equal(address.Id, evt.PaymentAddressId);
+        Assert.Equal(address.Address, evt.Address);
+        Assert.Equal(StablecoinType.USDT, evt.ExpectedToken);
+        Assert.Equal("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", evt.ExpectedContractAddress);
+    }
+
+    [Fact]
+    public async Task Arming_Rides_The_Same_Unit_Of_Work_As_The_Transition()
+    {
+        // Both events must be in the same outbox batch as the state change: a
+        // rolled-back confirmation must not leave a monitor armed on an address
+        // the buyer was never told about (09 §13.3).
+        var transaction = await CreateAcceptedTransactionAsync();
+        await SeedPaymentAddressAsync(transaction);
+
+        await BuildSut().ConfirmReadyAsync(_seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(2, _outbox.Published.Count);
+        Assert.Contains(_outbox.Published, e => e is TransactionStatusChangedEvent);
+        Assert.Contains(_outbox.Published, e => e is PaymentMonitorStartRequestedEvent);
+    }
+
+    [Fact]
+    public async Task A_Missing_Deposit_Address_Does_Not_Block_The_Confirmation()
+    {
+        // Allocation is best-effort at creation and swept by
+        // EnsurePaymentAddressJob; EnsurePaymentMonitorJob arms whatever exists
+        // a minute later. Blocking the seller here would punish them for a
+        // sidecar outage whose only effect is on the buyer's ability to pay.
+        var transaction = await CreateAcceptedTransactionAsync();
+
+        var outcome = await BuildSut().ConfirmReadyAsync(
+            _seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(ConfirmReadyStatus.Confirmed, outcome.Status);
+        Assert.DoesNotContain(_outbox.Published, e => e is PaymentMonitorStartRequestedEvent);
+    }
+
+    private async Task<PaymentAddress> SeedPaymentAddressAsync(Transaction transaction)
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var address = new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transaction.Id,
+            Address = "TReadinessDepositAddrFakeFakeFake1",
+            HdWalletIndex = 7100,
+            ExpectedAmount = transaction.TotalAmount,
+            ExpectedToken = transaction.StablecoinType,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+            CreatedAt = nowUtc,
+            UpdatedAt = nowUtc,
+        };
+        Context.Set<PaymentAddress>().Add(address);
+        await Context.SaveChangesAsync();
+        return address;
+    }
+
+    [Fact]
     public async Task Happy_Path_Writes_A_History_Row_Attributed_To_The_Seller()
     {
         var transaction = await CreateAcceptedTransactionAsync();

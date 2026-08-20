@@ -19,6 +19,33 @@ public interface IBlockchainSidecarClient
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Register a deposit address for active payment monitoring (T71 —
+    /// 08 §3.4). Called when the buyer's payment window opens, i.e. on the
+    /// <c>ACCEPTED → SELLER_CONFIRMED</c> transition (T139), which is also
+    /// the first moment the buyer is shown the address (02 §2.2 step 3).
+    /// Idempotent on <c>request.Address</c>: a duplicate call returns
+    /// <c>BlockchainSidecarStatus.Success</c> and leaves the sidecar's
+    /// pagination cursors and dedup set untouched, so the per-minute
+    /// re-arm sweep can call it unconditionally.
+    /// </summary>
+    Task<BlockchainSidecarStatus> StartMonitoringAsync(
+        PaymentMonitorStartRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Drop a deposit address from active payment monitoring (T139). Two
+    /// callers: the post-cancel handover (the address moves to the gradual
+    /// cadence, and leaving the active monitor running would have two
+    /// registries polling the same address), and the window-closed sweep
+    /// once the deposit has been emptied (05 §3.3 sweep) or the transaction
+    /// reached a terminal state. Idempotent: returns Success whether or not
+    /// the address was being monitored.
+    /// </summary>
+    Task<BlockchainSidecarStatus> StopMonitoringAsync(
+        string address,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Register a deposit address for post-cancel monitoring (T75 — 08 §3.4).
     /// Idempotent on <c>request.Address</c>: a duplicate call returns
     /// <c>BlockchainSidecarStatus.Success</c> without disturbing the
@@ -90,6 +117,18 @@ public sealed record HotToColdTransferRequest(
 public sealed record BlockchainSidecarTransferResult(
     BlockchainSidecarStatus Status,
     string? TxHash);
+
+/// <summary>
+/// Input payload for the sidecar <c>POST /api/monitor/start</c> endpoint
+/// (T71). Mirrors the five fields <c>startMonitorHandler</c> requires —
+/// omitting any of them yields 400 <c>INVALID_MONITOR_REQUEST</c>.
+/// </summary>
+public sealed record PaymentMonitorStartRequest(
+    string Address,
+    Guid PaymentAddressId,
+    Guid TransactionId,
+    string ExpectedContract,
+    string ExpectedSymbol);
 
 /// <summary>
 /// Input payload for the sidecar <c>POST /api/monitor/post-cancel-start</c>

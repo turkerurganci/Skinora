@@ -80,9 +80,18 @@ function eventKey(txHash: string, eventIndex: number): string {
 
 /**
  * Manages active payment monitors per deposit address (T71). One registry
- * instance per sidecar; backend calls `start` when a transaction enters
- * PENDING_PAYMENT (T44 state) and `stop` once finality has been observed
- * or the transaction is cancelled (T75 takes over the post-cancel cadence).
+ * instance per sidecar. The backend calls `start` when the buyer's payment
+ * window opens — the `ACCEPTED -> SELLER_CONFIRMED` transition, which is also
+ * the first moment the deposit address is revealed to the buyer — and `stop`
+ * when that window closes: on the post-cancel handover (T75 then takes the
+ * same address onto the gradual cadence) or once the deposit has been swept
+ * into the hot wallet.
+ *
+ * Both calls arrive from the T139 pair (`PaymentMonitorStartDispatcher` on the
+ * outbox fast path, `EnsurePaymentMonitorJob` as the per-minute reconciler).
+ * Before T139 neither endpoint had a backend caller at all — this registry
+ * only ever held what a manual request put in it, so a real buyer's transfer
+ * produced no `payment-detected` event.
  *
  * <para>
  * Polling cadence is driven by a single shared `setInterval` regardless of

@@ -32,6 +32,31 @@ internal sealed class StubBlockchainSidecarClient : IBlockchainSidecarClient
         return Task.FromResult(response);
     }
 
+    public Queue<BlockchainSidecarStatus> MonitorStartResponses { get; } = new();
+    public List<PaymentMonitorStartRequest> MonitorStartCalls { get; } = new();
+    public Queue<BlockchainSidecarStatus> MonitorStopResponses { get; } = new();
+    public List<string> MonitorStopCalls { get; } = new();
+
+    public Task<BlockchainSidecarStatus> StartMonitoringAsync(
+        PaymentMonitorStartRequest request, CancellationToken cancellationToken)
+    {
+        MonitorStartCalls.Add(request);
+        var response = MonitorStartResponses.Count > 0
+            ? MonitorStartResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
+        return Task.FromResult(response);
+    }
+
+    public Task<BlockchainSidecarStatus> StopMonitoringAsync(
+        string address, CancellationToken cancellationToken)
+    {
+        MonitorStopCalls.Add(address);
+        var response = MonitorStopResponses.Count > 0
+            ? MonitorStopResponses.Dequeue()
+            : BlockchainSidecarStatus.Success;
+        return Task.FromResult(response);
+    }
+
     public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
         PostCancelMonitorStartRequest request, CancellationToken cancellationToken)
     {

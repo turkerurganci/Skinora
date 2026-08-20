@@ -14,6 +14,7 @@ using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.PaymentMonitoring;
 using Skinora.Transactions.Application.PayoutIssues;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Transactions.Application.PostCancel;
@@ -219,6 +220,16 @@ public static class TransactionsModule
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
+
+        // T139 — active payment monitor lifecycle (08 §3.4). The per-minute
+        // reconciler arms every open payment window, re-arms after a backend or
+        // sidecar restart, and disarms (stamping MonitoringStatus = STOPPED)
+        // once the deposit has been swept or the transaction went terminal. The
+        // inline fast path is PaymentMonitorStartDispatcher, wired through the
+        // outbox by the SELLER_CONFIRMED transition; MediatR discovers it by
+        // assembly scan, so only the job needs explicit registration here.
+        services.AddScoped<EnsurePaymentMonitorJob>();
+        services.AddHostedService<EnsurePaymentMonitorJobRegistrar>();
 
         // T71 — inbound blockchain webhook handler (08 §3.4). The signature
         // envelope is verified by WebhookSignatureMiddleware (extended to

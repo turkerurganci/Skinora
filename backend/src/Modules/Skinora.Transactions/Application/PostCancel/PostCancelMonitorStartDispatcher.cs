@@ -40,6 +40,32 @@ public sealed class PostCancelMonitorStartDispatcher
         PostCancelMonitorStartRequestedEvent notification,
         CancellationToken cancellationToken)
     {
+        // T139 — hand the address over, do not double-register it. Until T139
+        // nothing ever armed the active monitor, so there was nothing to stop.
+        // Now the cancel path must drop the 3-second monitor before the
+        // gradual-cadence one takes the same address, otherwise two registries
+        // poll it and each emits its own webhook. (The backend's
+        // (TxHash, EventIndex) UNIQUE index absorbs the duplicate credit, so
+        // this is a quota-and-noise defect rather than a money defect — but the
+        // row has already left MonitoringStatus.ACTIVE by the time this event
+        // is published, so EnsurePaymentMonitorJob will never see the stale
+        // monitor and no other mechanism would clean it up.)
+        //
+        // A failed stop is logged, not thrown: the post-cancel registration
+        // below carries the money-recovery guarantee (08 §3.4) and must not be
+        // skipped for it. Transport failures are covered anyway — the same
+        // sidecar is about to be asked to start post-cancel monitoring, and
+        // that call throws, so the outbox retries the pair together.
+        var stopStatus = await _sidecar.StopMonitoringAsync(
+            notification.Address, cancellationToken);
+        if (stopStatus != BlockchainSidecarStatus.Success)
+        {
+            _logger.LogWarning(
+                "Could not stop the active payment monitor before post-cancel handover "
+                + "(status={Status}): address={Address} transactionId={TransactionId}",
+                stopStatus, notification.Address, notification.TransactionId);
+        }
+
         var request = new PostCancelMonitorStartRequest(
             Address: notification.Address,
             PaymentAddressId: notification.PaymentAddressId,
