@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "İşlem admin tarafından iptal edildi",
       "EMERGENCY_HOLD_APPLIED": "Acil hold uygulandı",
       "EMERGENCY_HOLD_RELEASED": "Acil hold kaldırıldı",
-      "BOT_STATUS_CHANGED": "Bot durumu değişti",
+      "SETTLEMENT_CLEARED_ADMIN": "Mutabakat admin tarafından serbest bırakıldı",
       "RECONCILIATION_MISMATCH": "Mutabakat uyuşmazlığı",
       "COLD_WALLET_TRANSFER_INITIATED": "Soğuk cüzdan transferi başlatıldı",
       "HOT_WALLET_THRESHOLD_BREACHED": "Sıcak cüzdan eşiği aşıldı",
       "SANCTIONS_LIST_ADDRESS_ADDED": "Yaptırım listesine adres eklendi",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "Yaptırım listesinden adres çıkarıldı"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Yaptırım listesinden adres çıkarıldı",
+      "MAINTENANCE_MODE_CHANGED": "Bakım modu değiştirildi",
+      "TIMEOUT_AUTO_EXTENDED": "Timeout otomatik uzatıldı",
+      "PLATFORM_OUTAGE_DETECTED": "Platform kesintisi tespit edildi"
     }
   },
   "adminTransactions": {

@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "Transacción cancelada por administrador",
       "EMERGENCY_HOLD_APPLIED": "Retención de emergencia aplicada",
       "EMERGENCY_HOLD_RELEASED": "Retención de emergencia liberada",
-      "BOT_STATUS_CHANGED": "Estado del bot cambiado",
+      "SETTLEMENT_CLEARED_ADMIN": "Liquidación liberada por administrador",
       "RECONCILIATION_MISMATCH": "Discrepancia de conciliación",
       "COLD_WALLET_TRANSFER_INITIATED": "Transferencia a cartera fría iniciada",
       "HOT_WALLET_THRESHOLD_BREACHED": "Umbral de cartera caliente superado",
       "SANCTIONS_LIST_ADDRESS_ADDED": "Dirección añadida a la lista de sanciones",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones",
+      "MAINTENANCE_MODE_CHANGED": "Modo de mantenimiento cambiado",
+      "TIMEOUT_AUTO_EXTENDED": "Tiempo límite ampliado automáticamente",
+      "PLATFORM_OUTAGE_DETECTED": "Interrupción de la plataforma detectada"
     }
   },
   "adminTransactions": {

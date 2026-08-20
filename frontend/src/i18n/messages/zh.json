@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "管理员取消交易",
       "EMERGENCY_HOLD_APPLIED": "紧急暂停已应用",
       "EMERGENCY_HOLD_RELEASED": "紧急暂停已解除",
-      "BOT_STATUS_CHANGED": "机器人状态已更改",
+      "SETTLEMENT_CLEARED_ADMIN": "管理员已放行结算",
       "RECONCILIATION_MISMATCH": "对账不一致",
       "COLD_WALLET_TRANSFER_INITIATED": "冷钱包转账已发起",
       "HOT_WALLET_THRESHOLD_BREACHED": "热钱包阈值被突破",
       "SANCTIONS_LIST_ADDRESS_ADDED": "已添加制裁名单地址",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "已移除制裁名单地址"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "已移除制裁名单地址",
+      "MAINTENANCE_MODE_CHANGED": "维护模式已更改",
+      "TIMEOUT_AUTO_EXTENDED": "超时已自动延长",
+      "PLATFORM_OUTAGE_DETECTED": "检测到平台中断"
     }
   },
   "adminTransactions": {

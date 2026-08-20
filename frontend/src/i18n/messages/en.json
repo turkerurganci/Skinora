@@ -493,12 +493,15 @@
       "TRANSACTION_CANCELLED_ADMIN": "Transaction cancelled by admin",
       "EMERGENCY_HOLD_APPLIED": "Emergency hold applied",
       "EMERGENCY_HOLD_RELEASED": "Emergency hold released",
-      "BOT_STATUS_CHANGED": "Bot status changed",
+      "SETTLEMENT_CLEARED_ADMIN": "Settlement cleared by admin",
       "RECONCILIATION_MISMATCH": "Reconciliation mismatch",
       "COLD_WALLET_TRANSFER_INITIATED": "Cold wallet transfer initiated",
       "HOT_WALLET_THRESHOLD_BREACHED": "Hot wallet threshold breached",
       "SANCTIONS_LIST_ADDRESS_ADDED": "Sanctions list address added",
-      "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed"
+      "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed",
+      "MAINTENANCE_MODE_CHANGED": "Maintenance mode changed",
+      "TIMEOUT_AUTO_EXTENDED": "Timeout automatically extended",
+      "PLATFORM_OUTAGE_DETECTED": "Platform outage detected"
     }
   },
   "adminTransactions": {

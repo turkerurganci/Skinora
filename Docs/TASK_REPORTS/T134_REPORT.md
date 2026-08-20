@@ -1,6 +1,6 @@
 # T134 — FE enum / StatusBadge / Timeline / i18n
 
-**Faz:** F7 (P2P Geçişi) | **Durum:** ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor | **Tarih:** 2026-08-21
+**Faz:** F7 (P2P Geçişi) | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-08-21
 
 ---
 
@@ -28,14 +28,14 @@ Frontend'in **katalog nüshaları** v3.0 (P2P) kod gerçeğine çekildi ve nüsh
 | `frontend/src/components/common/StatusBadge.tsx` | 04 §C01 renk/kapsam |
 | `frontend/src/components/common/TransactionTimeline.tsx` | 6 adım; `STEPS` → export `TIMELINE_STEPS`; `switch` tablosu → `indexOf` |
 | `frontend/src/lib/utils/notification-icons.ts` | 26 tip; iki yeni tipin kategorisi |
-| `frontend/src/i18n/messages/{en,tr,es,zh}.json` | `status`, `timeline.step`, `adminRoles.permissions.EMERGENCY_HOLD`, `adminTransactions.cancelRefund` |
+| `frontend/src/i18n/messages/{en,tr,es,zh}.json` | `status`, `timeline.step`, `adminRoles.permissions.EMERGENCY_HOLD`, `adminTransactions.cancelRefund` · **doğrulama turu (N1):** `adminAuditLog.action` 26 → **29** (4 etiket eklendi, öksüz `BOT_STATUS_CHANGED` silindi) |
 
 **Bekçiler (yeni)**
 
 | Dosya | Ne ölçer |
 |---|---|
 | `frontend/src/types/enums.parity.test.ts` | FE nüshası ↔ `backend/src/Skinora.Shared/Enums/*.cs` — değer **ve sıra** |
-| `frontend/src/i18n/catalog-parity.test.ts` | i18n `status` / `timeline.step` ↔ `TransactionStatus` / `TIMELINE_STEPS` |
+| `frontend/src/i18n/catalog-parity.test.ts` | i18n `status` / `timeline.step` / **`adminAuditLog.action`** ↔ `TransactionStatus` / `TIMELINE_STEPS` / **`AuditAction`** (üçüncü eksen doğrulama turunda eklendi — N1) |
 
 **Zorunlu yan etki (davranış T135/T136'ya ait)**
 
@@ -73,8 +73,8 @@ Frontend'in **katalog nüshaları** v3.0 (P2P) kod gerçeğine çekildi ve nüsh
 |---|---|---|
 | TypeScript | ✓ exit 0 | `npx tsc --noEmit` |
 | Lint | ✓ exit 0 | `npm run lint` (eslint) |
-| i18n parity | ✓ | `npm run i18n:check` — 1307 × 4, identical key sets |
-| Vitest | ✓ **71/71** (11 dosya) | T134 öncesi taban **35/35** (9 dosya) ölçüldü (`--exclude` ile iki yeni bekçi dosyası dışlanarak); +36 test iki bekçiden, +1 timeline'ın yeni SELLER_CONFIRMED vakasından |
+| i18n parity | ✓ | `npm run i18n:check` — **1310 × 4**, identical key sets (yapım turu 1307; doğrulama turunun N1 düzeltmesi +4 anahtar ekledi, 1 öksüz anahtarı sildi) |
+| Vitest | ✓ **75/75** (11 dosya) — yapım turu 71/71, doğrulama turunun N1 bekçi ekseni +4 | T134 öncesi taban **35/35** (9 dosya) ölçüldü (`--exclude` ile iki yeni bekçi dosyası dışlanarak); +36 test iki bekçiden, +1 timeline'ın yeni SELLER_CONFIRMED vakasından |
 | Build | ✓ | `npm run build` — `Compiled successfully`, TypeScript ✓, 3/3 static page. Tek uyarı `middleware → proxy` deprecation'ı, T134 öncesinden gelir |
 | Prettier | ✓ (içerik) | `npx prettier <dosya> \| diff` → CRLF normalize edildiğinde **birebir aynı**. Lokal `--check` uyarısı yalnız satır sonu artifaktıdır (repo `core.autocrlf=true`); yetkili ölçüm CI'ın LF checkout'udur |
 
@@ -95,9 +95,42 @@ Sondaj 2 aynı zamanda **T134'ün var oluş sebebini** ölçüyor: dört dil bir
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) — yapım CI'sı ✓ PASS, Bitiş Kapısı'nın sekiz maddesi de açık |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** (2026-08-21, ayrı chat, yapım raporu görülmeden) |
+| Bulgu sayısı | **1 bloke etmeyen (N1)** + 2 gözlem · bloke edici **0** |
+| Düzeltme gerekli mi | N1 proje sahibi kararıyla **aynı dalda kapatıldı** |
+
+**Giriş kapıları:** working tree boş · main son 3 run `success` (`32411998138` CI · `32411997251` + `32361465502` Docker Publish) · repo memory T134 satırı mevcut.
+
+**Altı kabul kriterinin altısı da bağımsız olarak yeniden üretildi.** Validator, yapım turunun ölçümlerine güvenmek yerine kendi araçlarını yazdı: `enums.parity.test.ts`'i hiç kullanmadan **bağımsız bir parser** ile 21 aynalı enum'un tamamını C# kaynağına karşı değer+sıra olarak karşılaştırdı → **fark yok**; taban `origin/main`'de `TransactionStatus` 14 / `NotificationType` 28 / `AuditAction` 32 / `DeliveryStatus` 3 + üç emekli enum ölçülerek sapmanın gerçekliği ayrıca doğrulandı. `EMERGENCY_HOLD` etiketi `PermissionCatalog.cs:43` ↔ `tr.json` **birebir**. StatusBadge'in 13 satırı 04 §C01 tonlarıyla, Timeline'ın 6 adımı 04 §C05 sırasıyla tek tek karşılaştırıldı.
+
+**Validator'ın kendi ölçümleri:** `tsc --noEmit` 0 · `eslint` 0 · `i18n:check` 1310×4 identical · `vitest` **75/75** · `next build` exit 0 · prettier (CRLF normalize edilince) birebir. Dal HEAD `6506463` CI run [`32420549055`](https://github.com/turkerurganci/Skinora/actions/runs/32420549055) **`success`**, `CI Gate` yeşil — rapor yalnız `cbad04d` run'ını gösteriyordu, HEAD'in kendi run'ı doğrulama sırasında tamamlandı. Sekiz advisory E2E leg'i **main tabanıyla birebir** 8/8 kırmızı; ayrıca `e2e/` FE enum kataloğunu hiç import etmiyor, yani T134 bu sinyale yapısal olarak dokunamaz.
+
+**Bekçi ayırt ediciliği — validator'ın KENDİ sondajları.** Yapım turunun dört sondajı tekrarlanmadı; beş bağımsız mutasyon koşuldu (guard'ın kanıtı başkasının provası değil kendi provandır):
+
+| # | Sondaj | Ölçülen |
+|---|---|---|
+| A | **C# kaynağına** değer eklendi (FE'ye değil) | ✓ düştü — bekçi üretilmiş bir artefaktı değil gerçek kaynağı okuyor |
+| B | Yalnız **sıra** değişimi (küme aynı): `FLAGGED`↔`REFUNDED` | ✓ düştü; catalog-parity doğru şekilde yeşil kaldı (sıralı karşılaştırma yapmaz) |
+| C | **Dört dile birden ÖKSÜZ anahtar** (`status.ITEM_ESCROWED`) | ✓ `check-i18n.mjs` **yeşil** (1308×4 identical), catalog-parity **dört dilde de** düştü. Yapım turu sondaj 2 *silme* yönünü ölçmüştü; bu *ekleme* yönü — bekçi **çift yönlü** |
+| D | C# parser'ı bozuldu (girinti 4→6) | ✓ vakumda sessizce geçmedi: `TransactionStatus parsed to no members` |
+| E | Backend'de olmayan FE enum'u geri kondu | ✓ düştü (`declares no enum the backend does not have`) |
+
+### N1 (bloke etmez, proje sahibi kararıyla aynı dalda kapatıldı) — `adminAuditLog.action` kataloğu T134'ün kendi ayak izinde saptı
+
+Tur `AuditAction`'ı 32 → 29 çekti ama **aynı enum'la anahtarlanan i18n etiket kataloğuna hiç dokunmadı** — turun i18n diff'i `status`, `timeline.step`, `adminRoles.permissions` ve `cancelRefund` içeriyor, `adminAuditLog.action` yok. Ölçüm dört dilde de aynı çıktı: **enum 29 / katalog 26**; eksik `SETTLEMENT_CLEARED_ADMIN` · `MAINTENANCE_MODE_CHANGED` · `TIMEOUT_AUTO_EXTENDED` · `PLATFORM_OUTAGE_DETECTED`, öksüz `BOT_STATUS_CHANGED`.
+
+**İkisi doğrudan T134'ün ürünü:** `SETTLEMENT_CLEARED_ADMIN`'i enum'a bu tur ekledi (etiketsiz), `BOT_STATUS_CHANGED`'i bu tur sildi (etiketini bırakarak). Diğer üçü WP7/WP16 borcu. **Dördünün de canlı üretim yazıcısı var** — `AdminTransactionService.cs:808` (AD32), `RestartRecoveryService.cs:155`, `PlatformHealthProbeJob`, `AdminMaintenanceService.cs:235` — yani S21 audit log'unda admin bugün ham `SETTLEMENT_CLEARED_ADMIN` görüyor.
+
+**Neden hiçbir kapı görmedi:** katman kırılmıyor, **derece kaybediyor** — `AuditLogTable.tsx:107` `tAction.has(row.action) ? tAction(row.action) : row.action` ile ham enum adına düşüyor. Ve `check-i18n.mjs` yeşil kalıyor çünkü dört dil **aynı şekilde** yanlış. Bu, T134'ün var oluş sebebi olan mekanizmanın bir katalog ötedeki tekrarıdır ve T118'in `ResxNotificationTemplateResolver` dersinin ikizidir. D4'ün "kapsam sınırı bekçinin kendi başlığında yazılıdır" iddiası bu eksen için geçerli değildi: `catalog-parity.test.ts` başlığı yalnız string-union istisnasını adlandırıyor, bu kataloğu hiç anmıyordu.
+
+**Kapanış (aynı dal):** dört etiket dört dile de yazıldı ve öksüz silindi — katalog artık dört dilde de **29/29 ve enum SIRASINDA**. `catalog-parity.test.ts`'e **üçüncü eksen** eklendi (`adminAuditLog.action` ↔ `AuditAction`, self-check `toHaveLength(29)`, boş-etiket kontrolü dahil) ve **kapsam sınırı başlığa yazıldı**: enum-anahtarlı olmayan bloklar (`adminAuditLog.category`, `adminFlags.signalType`, `adminTransactions.statusGroup`, `adminSteamAccounts.*` — API projeksiyonları/sözlükleri) ve **T136'ya ait** `adminRoles.permissions` adıyla kapsam dışı sayıldı. Yeni eksenin ayırt ediciliği **iki yönde de** kanıtlandı: `SETTLEMENT_CLEARED_ADMIN` dört dilden birden silinince `check-i18n.mjs` yeşil (1309×4) / bekçi dört dilde düştü; öksüz `BOT_STATUS_CHANGED` dört dile geri konunca yine yeşil (1311×4) / bekçi yine dört dilde düştü.
+
+**KALICI DERS:** bir turun enum'a **eklediği ve enum'dan sildiği** değerler, o enum'la anahtarlanan **her nüshada** aynı turda kapatılmalıdır — ve bir bekçinin kapsam beyanı, kapsadıklarını değil **kapsamadıklarını** saymalıdır. T134 bir kopya ekseninin drift ettiğini kanıtlarken ikinci bir kopya eksenini kendi eliyle drift ettirdi.
+
+### Bloke etmeyen gözlemler (kapsam dışı, bilgi olarak kayda geçti)
+
+- **G1 — timeline sınıflandırması geleceğe karşı zorlanmıyor.** Sondajla ölçüldü: C# + FE + dört dile yeni bir `TransactionStatus` eklendiğinde yalnız `toHaveLength(13)` self-check'i düşer ve teşhis timeline'ı **işaret etmez**; `TIMELINE_STEPS`/`OFF_TIMELINE` bölümlemesine girmeyen statü `indexOf → -1 → 0` ile sessizce "1. adım, sürüyor" olarak çizilir — `REFUNDED`'ın kod yorumunda anlatılan hatanın aynısı. **Bugün kırık değil:** bölümleme tam (6 + 6 = 12) ve validator bunu doğruladı. Kapanışı bir bölümleme-tamlığı assertion'ıdır.
+- **G2 — EMERGENCY_HOLD timeline'ı sabit statü basıyor.** `page.tsx:137` hold'da `holdInfo.previousStatus`u (FE tipinde **mevcut**: `lib/api/transactions.ts:260`) okumak yerine sabit `SELLER_CONFIRMED` veriyor, yani `PAYMENT_RECEIVED`'da dondurulmuş bir işlem timeline'da bir adım geride görünüyor. **T134 kaynaklı değil** — main'deki sabit `ITEM_ESCROWED`'in birebir taşınmışı, göreli konum değişmedi.
 
 ## Altyapı Değişiklikleri
 
@@ -138,6 +171,7 @@ Sondaj 2 aynı zamanda **T134'ün var oluş sebebini** ölçüyor: dört dil bir
 - **`steamTradeOfferUrl` şu an hiçbir yerde çizilmiyor.** DTO alanı duruyor (07 §7.5, v3.0'da PAYMENT_RECEIVED + satıcı görünümünde alıcının kendi trade URL'i); onu çizen `SteamTradeOfferLink` yalnız emekli iki dalın içinde yaşadığı için T134 onunla birlikte kaldırdı. Yeni yeri 04 §7.3'ün "Steam'de Trade Offer Gönder" birincil butonudur → **T135**.
 - **`T134-Doc06DeliveryDeferred`** (backlog 🟡): 06 §2.23 üç değer sayıyor, kod dört taşıyor. FE koda hizalandı; doküman düzeltmesi doküman turu işidir.
 - **`T134-FeEnumUnionDup`** (backlog ⚪): `EmergencyHoldReleaseAction` FE'de iki ayrı string-union nüshası (`lib/api/admin.ts:527`, `lib/signalr/events.ts:37`) ve `enums.ts`'te hiç yok — bugün **sapma yok**, ama yeni bekçi bu iki nüshayı görmüyor. Kapsam sınırı bekçinin başlığında açıkça yazılı.
+- **`adminAuditLog.action` ekseni doğrulama turunda kapatıldı (N1).** Yapım turu `AuditAction`ı 32 → 29 çekerken bu kataloğu 26'da bıraktı; dört etiket dört dile yazıldı, öksüz silindi ve bekçiye üçüncü eksen olarak eklendi. Ayrıntı: §Doğrulama.
 - **Permission kataloğu ekseni bekçisiz kaldı:** `permissionCatalog.ts` 14 anahtar taşıyor, backend `PermissionCatalog` 12 — bu sapmanın sahibi **T136**'dır (`T133a-FePermissionCatalogKeys`), T134 yalnız `EMERGENCY_HOLD` **etiketini** düzeltti.
 
 ## Notlar
