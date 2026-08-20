@@ -135,6 +135,12 @@ Reconciler candidate'ları tek sorguda çekip sırayla sidecar çağırıyor ve 
 - `.../Integration/PaymentMonitoring/EnsurePaymentMonitorJobTests.cs` — **2 yeni** yarış testi
 - `Docs/08_INTEGRATION_SPEC.md` v3.3 → **v3.4** · `Docs/DEFERRED_BACKLOG.md` 44 → **45** · `Docs/11_IMPLEMENTATION_PLAN.md` §F7 T139 DÜZELTME TURU bloğu
 
+### Düzeltme turu CI kanıtı
+
+Dal HEAD `ad613c8` · run [`32377529035`](https://github.com/turkerurganci/Skinora/actions/runs/32377529035) **`success`**, **`CI Gate` yeşil** — on bloke edici job'ın onu da başarılı (`1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`); `0. Guard (direct push)` skipped (beklenen).
+
+Advisory E2E **10/32** — yapım turunun run'ıyla (`32369306467`) ve iki bağımsız T139-öncesi tabanla (`32264946887` T133 · `32246467184` T132) **leg-leg birebir** (T111 3 · T109 1 · T113 6). Düzeltme turu DI kablolamasına ve reconciler'a dokunduğu hâlde ağda ne kazanç ne kayıp var.
+
 ### KALICI DERS
 
 **Bir handler'ın VAR olması ile ULAŞILABİLİR olması aynı şey değildir, ve birim testi ikincisini göstermez.** T139 bağlanmamış bir *caller*'ı kapatmak için açıldı ve kapatırken bağlanmamış bir *consumer* üretti — kusurun sınıfı aynı, yalnız yönü ters. İkisini de aynı şey mümkün kıldı: bir uç noktanın kendi testi yeşilken kompozisyonda ölü olabilmesi. Bu yüzden düzeltme tek örneği değil **sınıfı** kapatıyor; aksi hâlde bu assembly'ye eklenen bir sonraki handler aynı sessiz düşüşü tekrar ederdi.
