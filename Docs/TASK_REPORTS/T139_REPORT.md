@@ -1,6 +1,6 @@
 # T139 — Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (doğrulama tur 2 ✗ FAIL → düzeltme turu 2 uygulandı, yeniden doğrulama bekliyor) | **Tarih:** 2026-08-20
+**Faz:** F7 | **Durum:** ✓ Tamamlandı (doğrulama tur 3 ✓ PASS) | **Tarih:** 2026-08-20
 
 ---
 
@@ -204,6 +204,73 @@ Advisory E2E **10/32** — geçen 1+3+6, düşen 22; tur 1'in run'ı (`323797743
 
 **Bir tavan, üzerinde durduğu kümenin DRENE OLUP OLMADIĞI sorulmadan kopyalanamaz.** `EnsurePaymentAddressJob`'un `Take(50)`'si doğru, `EnsurePaymentMonitorJob`'un `Take(200)`'ü yanlıştı ve iki satır birbirinin aynısıydı — fark koddan değil, kümenin davranışından geliyor. İkinci ders aynı turun içinden: **bir kararın bedelini bir metriğe havale etmek, o metriğin doğru olduğunu ayrıca doğrulamayı gerektirir** — N1 telafisi yazılırken gösterge zaten iki registry tarafından eziliyordu.
 
+## Doğrulama — Tur 3 (2026-08-20, bağımsız doğrulama chat'i)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ **PASS** — görev kapandı |
+| Bulgu sayısı | **1** — 0 bloke edici + 1 bloke etmeyen (N1-3), proje sahibi kararıyla aynı dalda kapatıldı |
+| Düzeltme gerekli mi | Hayır (N1-3 bloke etmez; yine de kapatıldı) |
+
+**Giriş kapıları:** working tree temiz ✓ · main son 3 run `success` (`32361465502`, `32361465451`, `32352581013`) ✓ · repo memory T139 satırı mevcut ✓ · dal HEAD `2ec7762` ↔ origin senkron ✓
+
+### Bağımsız olarak yeniden üretilenler (6/6 kabul kriteri ✓)
+
+- **AC1** — `MonitorStartRequestBody`'nin beş alanı ↔ `startMonitorHandler`'ın zorunlu beşlisi birebir; `expectedSymbol` enum **adı** olarak gidiyor ve `StablecoinType` (USDT/USDC) sidecar'ın `ALLOWED_SYMBOLS` allowlist'iyle örtüşüyor; yol `api/monitor/start|stop` ↔ `router.use('/api', apiRouter)` mount'u.
+- **AC2** — `OutboxService.PublishAsync` yalnız change tracker'a `Add`liyor, `SaveChanges` **çağırmıyor** → Stage 10b'nin atomikliği yapısal olarak doğru. Ayrıca `SellerConfirmReady` trigger'ının repo'da **tek** çağıranı var (`TransactionReadinessService:243`), yani arm noktası eksiksiz — `SELLER_CONFIRMED`'a giren ikinci bir yol yok.
+- **AC3 / AC4 / AC5 / AC6** — hepsi kanıtla doğrulandı; runbook §G.4'ün üç gözlem komutunun üçü de koşulabilir (`'Monitor started'` log metni gerçek, `/metrics` auth'suz `routes.ts:40`, `EnsurePaymentMonitorJob complete: ... armed=` formatı doğru).
+
+### Planın hiçbir yerinde yazılı olmayan bir sıralama invariant'ı ölçüldü — ve DOĞRU çıktı
+
+`EnsurePaymentMonitorJob`'ın `WindowClosedStates` yorumu "CANCELLED_* satırları normalde `PostCancelMonitorStarter` üzerinden ACTIVE'den çıkar ve bu job'a hiç gelmez" diyor. Bu bir **varsayım**dır ve yanlış olsaydı para ilgili olurdu: iptal geçişi önce commit edilip post-cancel damgası ayrı bir transaction'a kalsaydı, arada koşan reconciler `Disarm` sınıflandırıp satırı `STOPPED` damgalardı — ve `PostCancelMonitorStarter`'ın `STOPPED` guard'ı (satır 61-68) yüzünden gecikmeli izleme **hiç kurulmazdı**. Dört çağıranın (`TransactionCancellationService:216`, `AdminTransactionService:182` + `:564`, `TimeoutExecutor:82`, `DeadlineScannerJob:155`) **dördünde de** `RequestStartAsync` iptal geçişini commit eden `SaveChanges`'ten **önce** duruyor (timeout kolları ayrıca açık `BeginTransactionAsync` içinde), yani `CANCELLED_* + ACTIVE` bileşimi hiç commit edilmiyor. Varsayım korunuyor.
+
+Aynı sınıftan ikinci bir kontrol: `FLAGGED` yalnız oluşturma anında set ediliyor (`TransactionStateMachine:304`, `SELLER_CONFIRMED → FLAGGED` yolu yok), yani `WindowNotOpenStates` gruplaması doğru — armed bir pencere `FLAGGED`e düşüp yeniden kurulamaz hâle gelemiyor.
+
+### Tur 1 + tur 2 düzeltmelerinin ayırt ediciliği — beşi de validator tarafından yeniden kanıtlandı
+
+| Düzeltme | Geçici olarak bozulduğunda |
+|---|---|
+| B1 DI kaydı | `Unregistered: PaymentMonitorStartRequestedEvent` |
+| B1-2 sayfalama | **Yalnız** o 2 sayfa-aşımı testi düştü (diğer 19 geçti) → hedefli |
+| N2 devir telafisi | `An_Arm_That_Raced_A_Cancel_Handover_Is_Undone` → `Assert.Single() Failure` |
+| N1-2 port yolu | `Assert.Equal() Failure: Strings differ` |
+| N2-2 gauge toplamı | `expected 1 to be 2` + `expected +0 to be 1` |
+
+### N1-3 — bloke etmez: B1'in kapattığı SINIFIN kalan yarısı
+
+B1'in kararı "tek örneği değil **sınıfı** kapat" diyordu, ama bekçi sınıfın yalnız bir yarısını ölçüyordu. `TransactionsModuleNotificationHandlerTests` `declared` kümesini handler **tipleri** değil `INotificationHandler<T>` **arayüz tipleri** üzerinden kurup `.Distinct()` uyguluyordu; zaten kayıtlı bir olay tipi için eklenen **ikinci** bir handler aynı arayüz girdisine çöktüğü için bekçi yeşil kalıyor, oysa o handler MediatR'da hiç çözülmez — B1'in kusurunun aynısı.
+
+**Sondajla üretildi:** assembly'ye `PaymentMonitorStartRequestedEvent` için ikinci bir kayıtsız handler eklendi → test **geçti** (`Passed: 1, Failed: 0`).
+
+**Kapatma:** karşılaştırma **sayıma** çevrildi — (a) bir olay tipi için bildirilen handler sayısı, o tipin `INotificationHandler<T>` kayıt sayısını aşamaz; (b) her handler'ın **kendi somut tipi** de kayıtlı olmalı (modülün kalıbı arayüzü somut tipe yönlendiriyor; eksik somut satır fabrikayı resolve anında patlatır). Yeni test **yok**, mevcut bekçi yeniden yazıldı → Unit sayısı 1466'da sabit.
+
+**Ayırt edicilik iki yönde de kanıtlandı:**
+- İkinci kayıtsız handler → `PaymentMonitorStartRequestedEvent: 2 handler(s) declared (PaymentMonitorStartDispatcher + ValidatorProbeHandler) but only 1 INotificationHandler<> registration(s) | ValidatorProbeHandler: the concrete type itself is not registered`
+- B1'in orijinal kusuru (kayıt tamamen kaldırıldı) → `1 handler(s) declared (PaymentMonitorStartDispatcher) but only 0 INotificationHandler<> registration(s)` — **regresyon yok**, eski vaka hâlâ yakalanıyor.
+
+### Tur 3'ün değişiklikleri
+
+- `backend/tests/Skinora.API.Tests/Unit/Configuration/TransactionsModuleNotificationHandlerTests.cs` — bekçi sayım tabanlı yeniden yazıldı (N1-3)
+- `Docs/11_IMPLEMENTATION_PLAN.md` §F7 T139 **DÜZELTME TURU 3** bloğu + başlık girişi
+
+### Tur 3 test kanıtı (validator'ın kendi koşumu, dal HEAD `2ec7762`)
+
+Build Release **0W / 0E** · `dotnet format --verify-no-changes --severity error` exit **0** · **Unit 1466/1466** · **Transactions entegrasyon 538/538** (4 dk 56 sn) · **sidecar-blockchain 166/166** · dal HEAD CI run [`32402092945`](https://github.com/turkerurganci/Skinora/actions/runs/32402092945) **`success`**, `CI Gate` yeşil.
+
+Advisory E2E **10/32** — validator HEAD run'ından bağımsız saydı (geçen 1+3+6, düşen 22), T139-öncesi tabanla aynı → **regresyon yok**. (Sekiz advisory leg'in T117'den beri düşmesi T138'in sahipliğinde, bu görevin kapsamı dışında.)
+
+### Güvenlik
+
+Secret sızıntısı **temiz** (yeni sır yok; mevcut `X-Internal-Key` mekanizması) · Auth etkisi **yok** (yeni endpoint yok; sidecar uçları zaten `internalKeyAuth` arkasında) · Input validation **etkisiz** (kullanıcı girdisi taşımıyor) · Yeni dış bağımlılık **yok** · Migration **yok**.
+
+### Yapım raporu karşılaştırması
+
+**Tam uyumlu** — uyuşmazlık yok. Raporun bildirdiği her sayı (Unit 1466 · Transactions entegrasyon 538 · sidecar 166 · build 0W/0E) validator'ın kendi koşumuyla birebir eşleşti.
+
+### KALICI DERS (tur 3)
+
+**Bir bekçinin KAPSAMI da kendisi kadar denetlenmelidir.** "Sınıfı kapattım" diyen bir test, sınıfın hangi yarısını ölçtüğü ayrıca sorulmadıkça kapattığını sanılan şeyi kapatmamış olabilir — B1 tam olarak "tek örneği düzeltmek yetmez" diyerek bir bekçi yazdırmıştı ve bekçinin kendisi tek örneği kapatıyordu. Tur 2'nin dersinin ikizi: orada kopyalanan **sabit** yanlış kümeye oturmuştu, burada kopyalanan **ölçüm ekseni**.
+
 ## Altyapı Değişiklikleri
 
 - **Migration: Yok** — D4 gereği enum ve şema değişmedi.
@@ -241,6 +308,15 @@ Advisory E2E **10/32** — geçen 1+3+6, düşen 22; tur 1'in run'ı (`323797743
 - Commit: `3ad44f7` — T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 - PR: [#251](https://github.com/turkerurganci/Skinora/pull/251)
 - CI: ✓ **PASS** — dal HEAD `3ad44f7` run [`32367284135`](https://github.com/turkerurganci/Skinora/actions/runs/32367284135) `success`, **`CI Gate` yeşil**
+
+**Dört tur, dört yeşil CI** (her turun kendi dal HEAD'i üzerinde):
+
+| Tur | Dal HEAD | Run | Sonuç |
+|---|---|---|---|
+| Yapım | `3ad44f7` | [`32367284135`](https://github.com/turkerurganci/Skinora/actions/runs/32367284135) | ✓ `success` |
+| Düzeltme 1 | `ad613c8` | [`32377529035`](https://github.com/turkerurganci/Skinora/actions/runs/32377529035) | ✓ `success` |
+| Düzeltme 2 | `111976c` | [`32399382402`](https://github.com/turkerurganci/Skinora/actions/runs/32399382402) | ✓ `success` |
+| Düzeltme 3 (N1-3) | _aşağıda_ | _aşağıda_ | ✓ `success` |
 
 **Bloke edici jobların tamamı yeşil:** `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (backend)` · `7. Docker build (sidecar-blockchain)` · `CI Gate`. `0. Guard (direct push)` skipped (beklenen).
 
