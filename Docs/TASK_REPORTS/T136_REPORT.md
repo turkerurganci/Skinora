@@ -1,6 +1,6 @@
 # T136 — Admin bot sayfaları silme + create-flow metinleri
 
-**Faz:** F7 (P6 — Emeklilik / P7 — FE) | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-21
+**Faz:** F7 (P6 — Emeklilik / P7 — FE) | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS | **Tarih:** 2026-08-21
 
 ---
 
@@ -150,9 +150,83 @@ M4'ün ilk denemesi CRLF nedeniyle **hiç inmedi** (`replace` tutmadı) ve test 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat — INSTRUCTIONS.md §3.3 izolasyon kuralı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | **✓ PASS** (2026-08-21, bağımsız chat — INSTRUCTIONS.md §3.3 izolasyon kuralı) |
+| Bloke edici bulgu sayısı | **0** |
+| Bloke etmeyen bulgu | **1** (N1 — aşağıda, backlog satırı açıldı) |
+| Düzeltme gerekli mi | Hayır |
+| Dal / commit | `task/T136-admin-bot-surface-removal` · `e4e9ee1` (`HEAD == origin/task/...`, doğrulama sırasında ilerlemedi) |
+
+**Giriş kapıları temiz.** Adım -1 working tree boş; Adım 0 main son 3 run'ın üçü de `success` (`32478492189`, `32478492044` — T135 #253; `32425168281` — T134 #252); Adım 0b repo memory T136 satırı mevcut (`.claude/memory/MEMORY.md:58`).
+
+### Kabul kriterleri — ikisi de bağımsız olarak yeniden üretildi
+
+| # | Kriter | Sonuç | Validator kanıtı (yapım turunun sondajları tekrarlanmadı, kendi ölçümü koşuldu) |
+|---|---|---|---|
+| 1 | FE nüshası `PermissionCatalog` ile birebir 12 anahtar, ölü i18n etiketleri düştü | ✓ | İki kaynak **yan yana** okundu: `PermissionCatalog.cs` `All` listesi 12 giriş, `permissionCatalog.ts` 12 anahtar, **sıra dahil birebir**. Dört dilin `adminRoles.permissions` bloğu programatik sayıldı → **12 / 12 / 12 / 12**, dördü de aynı küme. `VIEW_STEAM_ACCOUNTS` / `MANAGE_STEAM_RECOVERY` için dört dilde ve repo genelinde grep → **0** |
+| 2 | `/admin/steam-accounts` rotası ve `RecoveryQueuePanel` / `useAdminSteamAccounts` yüzeyi silindi | ✓ | Rota dizini yok (`app/[locale]/admin/` altında `steam-accounts` **yok**); `next build` rota listesi 11 admin rotası basıyor, silinen rota **yok**; yedi ada karşı repo-genişliğinde grep (`steam-accounts`, `RecoveryQueuePanel`, `useAdminSteamAccounts`, `SteamAccountCard`, `SteamAccountsStatus`, `SteamAccountsView`, `BotRecoveryQueue`) `frontend/src` + `frontend/e2e`'de **0 isabet**; tek kalan atıf `catalog-parity.test.ts`'in kapsam docstring'i ve o **bilerek** tazelenmiş |
+
+### Kapsam eklentileri — ölü olduğu backend'den teyit edildi
+
+Yazılı kriterlerin dışındaki her silme, **backend tarafında karşılığının gerçekten olmadığı** doğrulanarak kabul edildi (S2 Kırılma taraması):
+
+| Silinen FE yüzeyi | Backend teyidi |
+|---|---|
+| `AdminDashboardResponse.steamAccounts` | `AdminDashboardDtos.cs:5-7` → `(SummaryCards, RecentFlags)`, alan yok |
+| AD10 / AD25 / AD26 istemcisi (`admin.ts`, 105 satır) | `grep -rn "steam-accounts" backend/src --include=*.cs` → **0** uç |
+| `AdminBotStatusChanged` SignalR zinciri | `grep -rn "AdminBotStatusChanged" backend/src backend/tests` → **0** |
+| `CancelInfo.itemReturned` + `CancelTransactionResponse.itemReturned` | `TransactionDetailDto.cs:128` / `TransactionLifecycleDtos.cs:249` → alan v3.0'da düşürülmüş, yalnız kaldırma yorumu duruyor |
+| `escrowBotAssetId` | Canlı modelde yok; yalnız dondurulmuş migration dosyalarında (beklenen) |
+| `TimeoutPhase` `TradeOfferToSeller` → `SellerConfirm` | `Skinora.Shared/Enums/TimeoutPhase.cs` → `Accept / SellerConfirm / Payment / Delivery`; FE mirror'ı **yalan söylüyordu**, düzeltildi |
+
+Metin turunun doküman dayanağı da ayrıca okundu: **04 §6.1 S01** dört adımı (satıcı başlatır+davet → hazır onayı + ödeme emanete → satıcı doğrudan gönderir → platform doğrular + ödeme aktarılır) yeni i18n metinleriyle **birebir**; **04 §8.1** S12 layout'unda sol menüde Steam Hesapları girişi ve dashboard'da bot sağlık paneli **yok**; **04 §4.3** admin navigasyonunda S18 **yok**; **03 §8.1** dashboard maddesi yalnız `recentFlags` sayıyor. Kod dokümanı takip ediyor, tersi değil.
+
+### Validator kendi mutasyonlarını koştu — altısı da yakalandı, hayatta kalan mutant yok
+
+Yapım turunun beş mutasyonu **tekrarlanmadı**; bekçinin iddia ettiği üç ekseni (FE dizisi / C# kaynağı / dört dil) ve öz-kontrolünü ayrı ayrı zorlayan altı mutasyon bağımsız olarak uygulandı:
+
+| # | Mutasyon | Düşen test | Yorum |
+|---|---|---|---|
+| V1 | FE kataloğuna 13. anahtar (`VIEW_STEAM_ACCOUNTS`) eklendi | 2 | sıra testi + etiket halkası testi |
+| V2 | FE'de `VIEW_FLAGS` ↔ `MANAGE_FLAGS` sırası takas edildi | **tam 1** | yalnız sıra testi — küme değişmediği için üyelik testleri doğru şekilde sessiz kaldı (07 §9.11 sıra-normatifliği gerçekten ölçülüyor) |
+| V3 | `en.json`'dan `MANAGE_SANCTIONS` etiketi silindi | 2 | o dilin üyelik testi + etiket halkası |
+| V4 | `zh.json`'a ölü etiket eklendi | **tam 1** | yalnız o dilin üyelik testi |
+| V5 | **Backend** C# kataloğuna 13. giriş eklendi | 5 | **en değerlisi:** bekçi gerçekten canlı C# kaynağını okuyor, dondurulmuş bir nüshayı değil — sıra testi + dört dilin hepsi düştü |
+| V6 | C# parser'ı körleştirildi (`All` → `AllEntries`) | 6 | öz-kontrol (`expected 0 to be greater than or equal to 10`) sessiz boş-liste karşılaştırması yerine gürültüyle düşüyor |
+
+Her mutasyondan sonra dosya geri alındı; doğrulama sonunda `git status --short` **boş**.
+
+### Test ve CI kanıtı
+
+| Tür | Sonuç | Komut / run |
+|---|---|---|
+| Lint (eslint) | ✓ 0 bulgu | `npx eslint` → çıktı yok, exit 0 |
+| i18n parity | ✓ | `npm run i18n:check` → *"parity OK — 4 locales, **1285** keys each, identical key sets"*; 15 advisory untranslatable uyarısı **T136 öncesiyle aynı** (Gas fee / Mobile Authenticator, kayıtlı backlog kalemi) |
+| Anahtar parity (bağımsız) | ✓ | Dört dil düzleştirilip karşılaştırıldı: **1285 / 1285 / 1285 / 1285**, `missing: 0 extra: 0` |
+| Unit (vitest) | ✓ **152/152** | `npx vitest run`, 14 dosya |
+| Build / tip | ✓ | `npm run build` (`next build`) exit 0; rota listesinde silinen rota yok |
+| Dal HEAD CI | ✓ `success` | run [`32491360190`](https://github.com/turkerurganci/Skinora/actions/runs/32491360190) (`e4e9ee1`) — bloke edici **10/10 yeşil**, `CI Gate` success. (Rapor gövdesi bir önceki commit'in run'ını — `32489325975` / `fd3010f` — anıyor; HEAD'in kendi run'ı da yeşil.) |
+| Advisory E2E | 8/8 kırmızı — **T136 kaynaklı DEĞİL** | Taban ölçüldü: T136 **öncesi** T135 dal HEAD run'ı [`32478473148`](https://github.com/turkerurganci/Skinora/actions/runs/32478473148) **aynı sekiz leg'i aynı şekilde** kırmızı bırakıyor. Sahibi T138 |
+
+### Güvenlik kontrolü
+
+- **Secret sızıntısı:** Temiz — eklenen satırlarda sır kalıbı yok; `package.json` / lockfile değişmedi.
+- **Auth/authorization:** Temiz ve **bağımsız olarak teyit edildi**. Yetkilendirme sunucu tarafında (`[Authorize(Policy = "Permission:...")]` + `PermissionCatalog.IsKnown`); FE kataloğu yalnız S19 etiketlemesi için okunuyor (`RoleFormModal.tsx:40`, `t.has(key) ? t(key) : p.label`). İki ölü anahtarın düşmesi hiçbir kapıyı gevşetmiyor. Backend'in kendi bekçisi de yerinde: `AdminRolesEndpointTests.cs:88-96` AD11 cevabında `Assert.Equal(12, …)` + iki `DoesNotContain`.
+- **Input validation:** Etkilenmedi — yeni kullanıcı girdisi yok.
+- **Yeni bağımlılık:** Yok. Eklenen test yalnız `node:fs` / `node:url` / `node:path` kullanıyor.
+
+### N1 — bloke etmeyen bulgu (backlog satırı açıldı)
+
+**FE↔C# parity bekçileri, drift'in YARATILDIĞI PR'da koşmuyor.** T136'nın eklediği `permissionCatalog.parity.test.ts` ve kardeşi `enums.parity.test.ts` (T134) backend C# kaynağını okur ama `frontend/` altında yaşar; ikisini de yalnız `3b. JS test (vitest)` job'ı koşturur, o job `frontend` / `sidecar-*` filtrelerine bağlıdır (`ci.yml:304`) ve `frontend` filtresi yalnız `frontend/**` + `.github/workflows/**`'dir (`ci.yml:69-71`). Backend-only bir PR job'ı `skipped` yapar; `ci-gate` yalnız `failure`/`cancelled` arar (`ci.yml:740-745`), yani **`skipped` geçer** ve bekçi hiç koşmadan CI Gate yeşil kalır.
+
+**Bu bir varsayım değil, tarihin kendisi:** T136'nın kapattığı drift'i yaratan T132'nin squash commit'i (`eb0e49d`) `.claude/`, `Docs/`, `backend/` ve `docker-compose*.yml` dosyalarına dokunuyor — `frontend/**`'e **hiç** dokunmuyor. Yani yeni bekçi o gün var olsaydı da **koşmayacaktı**. Backend'deki ikame sinyal kısmî: `AdminRolesEndpointTests.cs` sayıyı tutar ve backend-only PR'da koşar, ama FE nüshasının **varlığından söz etmez** — nitekim T132 o assertion'ı güncelledi (satır 88-91'deki yorum bunu yazıyor) ve FE nüshası yine de bayatladı.
+
+**Neden bloke edici değil:** T136'nın iki yazılı kabul kriteri de bir bekçi **talep etmiyor**; ikisi de bugünkü kod durumu üzerinden kanıtla karşılandı. Bekçi turun gönüllü eklentisi ve bugün doğru çalışıyor (altı mutasyonun altısını yakaladı). Açık **yapısaldır ve T136'dan eskidir** (aynı kablolama T134'te merge edildi), bu yüzden düzeltme T136'ya yüklenmedi — sahipli bir backlog satırına yazıldı: `T136-ParityGuardsSkippedOnBackendPRs` (🟡). Önerilen ucuz kapatma `frontend` paths-filter'ına bekçilerin okuduğu C# yollarını eklemektir; job'ın `if`'i değişmez, yalnız tetikleyici genişler.
+
+**Kalıcı ders:** bir kopya bekçisi, **izlediği kaynağın değiştiği PR'da koşmuyorsa** yalnız kendi tarafındaki bozulmayı yakalar. T134/T136'nın ortak dersi "kopya nüsha drift eder" idi; N1 bunun bir katman altını gösteriyor — **bekçinin tetikleyicisi de kapsamın bir parçasıdır**, ve tetikleyici sessizce dar kaldığında bekçi "yeşil" değil **görüşsüz**dür.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: tam.** Raporun ölçtüğü her iddia bağımsız olarak yeniden üretildi ve doğru bulundu — 12 anahtarlık katalog, dört dilin 1285 anahtarı, silinen yedi dosya, 04 §S01 dört adımı, `AdminDashboardResponse` alan yokluğu, `TimeoutPhase` hizalaması, advisory leglerin T136 kaynaklı olmayışı ve mutasyonların yakalandığı. Rapor kendi öz-hatalarını da (mutasyon sondajı sırasında çalışmanın geri alınması, prettier CRLF yanlış-pozitifi, pre-commit BIP-39 yanlış-pozitifi ve **bypass edilmemiş** oluşu) kayda geçirmiş; validator bunlarda uyuşmazlık bulmadı. Uyuşmazlık **yok**; rapora eklenen tek yeni şey N1'dir — raporun kapsamadığı, bekçinin *tetiklenme koşuluna* dair yapısal bir ölçüm.
 
 ---
 
