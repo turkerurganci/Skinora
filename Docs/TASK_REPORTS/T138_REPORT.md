@@ -84,6 +84,8 @@ Kural P2P'de anlamlı: `PAYMENT_RECEIVED`'da item hâlâ satıcıdadır, yani ge
 
 ### B2 — `DELIVERY_EXPECTED` hiç üretilemiyor: **ürün açığı** (T140'a devredildi)
 
+**Önce bir yanlış okumayı kapatalım:** tur 1'in kaydında `E2E happy-path (advisory): failure` yazıyor, ama zincir **`COMPLETED`'a ulaşmıştı**. Düşen tek şey bildirim kümesi iddiasıydı ve düşerken bastığı liste bunu kanıtlıyor: `SELLER_PAYMENT_SENT` + **iki** `TRANSACTION_COMPLETED` satırı orada. Yani mutabakat kısayolu → `settlement-verification` → `seller-payout-queue` → dispatch → confirm → `COMPLETED` zinciri gerçek job'larla uçtan uca koştu; D2 kararı ölçümle doğrulandı. Leg'in kırmızısı akışın değil, tek bir eksik bildirimin kırmızısıdır.
+
 happy-path leg'i `DELIVERY_EXPECTED` eksik diye düştü. Kanıt zinciri:
 
 - `HappyPathMilestoneNotificationConsumer`'ın `PAYMENT_RECEIVED` kolu bu bildirimi **satıcıya** üretir (03 §3.5 adım 3) ve `TransactionStatusChangedEvent` tüketir.
@@ -139,9 +141,11 @@ Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yal
 | prettier | ✓ temiz | `npx prettier --end-of-line auto --check "src/**/*.ts" "tests/**/*.ts" "*.ts" "package.json"` — lokal CRLF artefaktı ayıklandı, CI "1. Lint" LF üzerinde yetkili |
 | ci.yml YAML | ✓ ayrıştırılıyor | `js-yaml` ile yüklendi; matris 10 leg, `timeout-minutes: ${{ matrix.timeoutMinutes \|\| 30 }}` |
 | E2E — tur 1 | **8/10 leg yeşil** | CI run [`32509486246`](https://github.com/turkerurganci/Skinora/actions/runs/32509486246), `conclusion=success`, CI Gate ✓. Yeşil: happy-path **UI** · T109 timeout · T110 payment · T111 fraud-flags · T112 emergency-hold · T113 admin-flows · T114 downtime · **T138 delivery**. Kırmızı: happy-path (API) · T108 cancellation — ikisi de §CI turu 1'de çözümlendi |
-| E2E — tur 2 | _koşuyor_ | Tur 1'in iki bulgusu uygulandıktan sonra |
+| E2E — tur 2 | **✓ 10/10 leg, 36/36 test** | CI run [`32515611903`](https://github.com/turkerurganci/Skinora/actions/runs/32515611903) `conclusion=success`, CI Gate ✓, HEAD `27adb7d`. Leg bazında: happy-path 1 (7.2 dk) · happy-path UI 1 (6.1 dk) · T108 cancellation 5 (4.9 dk) · T109 timeout 4 (3.2 dk) · T110 payment 6 (9.2 dk) · T111 fraud-flags 4 (3.6 sn) · T112 emergency-hold 3 (7.7 dk) · T113 admin-flows 7 (4.3 sn) · T114 downtime 3 (58 sn) · **T138 delivery 2 (31 sn)** |
 
-**Taban karşılaştırması:** T137a'nın ölçtüğü main tabanı **10/32 test** geçiyordu ve **8/8 leg kırmızıydı**. Tur 1'de leg bazında **8/10 yeşil** — ve kalan ikisinin sebebi custody kalıntısı değil, biri spec hatası biri gerçek ürün açığı.
+**Taban karşılaştırması.** T137a'nın ölçtüğü main tabanı **10/32 test** geçiyordu ve **8/8 leg kırmızıydı**. Tur 2'de **36/36 test, 10/10 leg yeşil**. Test sayısının 32 → 36 çıkışı dört yeni ölçümdür: `delivery.spec.ts`'in iki senaryosu, `cancellation`'ın v3.0 asimetrisi için yazılan beşinci testi ve **CI'da ilk kez koşan** `happy-path.ui`.
+
+**Süre bütçeleri ölçüldü, tahmin değil.** `COMPLETED`'a varan üç leg mutabakat penceresini gerçekten bekliyor: happy-path 7.2 dk, happy-path UI 6.1 dk, emergency-hold 7.7 dk — hepsi kendilerine verilen 40/45/45 dk bütçenin çok içinde. En uzun leg aslında T110 payment (9.2 dk), sebebi mutabakat değil altı senaryonun her birindeki dakika kadanslı iade zinciri; o da 30 dk varsayılanın içinde. Playwright'ın 12 → 20 dk'ya çıkarılan test timeout'u gerekliydi: tek başına happy-path testi 7.2 dk sürüyor ve en kötü durumda mutabakat cron'u beş dakikaya kadar bekletebiliyor.
 
 ## Altyapı Değişiklikleri
 
@@ -156,7 +160,11 @@ Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yal
 - Commit: `580d6ae` — E2E spec'lerinin P2P'ye yeniden yazımı
 - PR: [#255](https://github.com/turkerurganci/Skinora/pull/255)
 - CI tur 1: [`32509486246`](https://github.com/turkerurganci/Skinora/actions/runs/32509486246) `success` (CI Gate ✓; 8/10 advisory E2E leg yeşil)
-- CI tur 2: _koşuyor_
+- CI tur 2: [`32515611903`](https://github.com/turkerurganci/Skinora/actions/runs/32515611903) `success` (CI Gate ✓; **10/10 advisory E2E leg yeşil, 36/36 test**)
+
+## Sonuç
+
+T117'nin P2P pivotundan beri kırmızı olan sekiz advisory E2E leg'i yeşile döndü ve ağ iki leg büyüdü (**10/10, 36/36**). Yeniden yazımın ilk somut getirisi bir ÜRÜN AÇIĞI oldu — `DELIVERY_EXPECTED` hiç üretilemiyor (§CI turu 1 B2) — ve o açık artık sahipli: `DEFERRED_BACKLOG` 🔴 satırı + önerilen T140 + kapandığı gün kırılacak bir E2E işareti.
 
 ## Known Limitations / Follow-up
 
