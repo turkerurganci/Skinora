@@ -906,4 +906,41 @@ public class TransactionDetailServiceTests : IntegrationTestBase
 
         Assert.Null(outcome.Body!.BuyerInventoryVisible);
     }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Is_Hidden_From_A_Stranger_Holding_A_Spent_Invite()
+    {
+        // The reachable stranger case, and the one with real stakes: the invite
+        // path hands a non-party authenticated caller `role = null` once the
+        // invite is spent (GetByInviteTokenAsync's final else). Unlike a
+        // prospective buyer — only possible while the transaction is still
+        // CREATED, so its baseline has never been read — a spent invite can point
+        // at a transaction that passed the readiness milestone long ago. This is
+        // therefore the one path where a stranger holding a stale link could
+        // otherwise learn whether the buyer's Steam inventory is readable.
+        //
+        // What protects it is BuildResponseAsync's `if (role is null) return
+        // BuildPublicResponse(...)`, not the `role is null` clause inside
+        // BuildBuyerInventoryVisible — a mutation probe showed that clause is
+        // unreachable defence-in-depth, kept only to mirror its two siblings
+        // (BuildPaymentAsync, BuildSellerPayoutAsync). The assertion below is
+        // about the OUTCOME, which is what the caller actually gets.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED,
+            buyerId: _buyer.Id,
+            method: BuyerIdentificationMethod.OPEN_LINK,
+            inviteToken: "inv-spent-token",
+            sellerConfirmed: true,
+            baselineCaptured: true);
+
+        var stranger = Guid.NewGuid();
+        var outcome = await BuildSut().GetByInviteTokenAsync(
+            "inv-spent-token", stranger, callerSteamId: null, CancellationToken.None);
+
+        Assert.Equal(TransactionDetailStatus.Found, outcome.Status);
+        // Guard rails for the setup itself: if either of these drifts the test
+        // would stop exercising the intended path while still passing.
+        Assert.Null(outcome.Body!.UserRole);
+        Assert.Null(outcome.Body.BuyerInventoryVisible);
+    }
 }

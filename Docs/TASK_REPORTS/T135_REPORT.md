@@ -74,7 +74,7 @@ raporluyor.
 **Backend (D2 — sözleşme genişlemesi, yeni kolon yok):**
 - `backend/src/Modules/Skinora.Transactions/Application/Lifecycle/TransactionDetailDto.cs` — `bool? BuyerInventoryVisible`
 - `backend/src/Modules/Skinora.Transactions/Application/Lifecycle/TransactionDetailService.cs` — `BuildBuyerInventoryVisible` + iki kurulum noktası
-- `backend/tests/Skinora.Transactions.Tests/Integration/Lifecycle/TransactionDetailServiceTests.cs` — +7 test (`baselineCaptured` helper parametresi)
+- `backend/tests/Skinora.Transactions.Tests/Integration/Lifecycle/TransactionDetailServiceTests.cs` — **+8 test** (`baselineCaptured` helper parametresi); sekizincisi mutasyon sondajının ürünü (aşağıda)
 
 **Frontend:**
 - `frontend/src/lib/api/transactions.ts` — `confirmReady()` / `confirmReceipt()` + tipleri, `canConfirmReady` / `canConfirmReceipt` / `buyerInventoryVisible` alanları, bayat `steamTradeOfferUrl` yorumu düzeltildi
@@ -133,7 +133,7 @@ test tarafını etkiler, ürün derlemesi değişmedi:
 | FE `prettier --check` | ✓ | Lokal çalışma ağacı CRLF olduğu için repo geneli `format:check` 107 dosya uyarıyor — bilinen lokal artefakt. **Turun dokunduğu 18 dosya** LF'e normalize edilip ayrıca kontrol edildi: "All matched files use Prettier code style!" |
 | Backend `dotnet build` (Release) | ✓ 0 Error / 0 Warning | tüm çözüm |
 | Backend unit (CI filtresi) | **1450 / 1466**, 16 düşen | Düşen 16'nın **hepsi** `Skinora.Notifications.Tests.Unit.Channels` altında ve hepsinin hatası `DockerUnavailableException` — Testcontainers lokal Docker daemon'ına bağlanamıyor. T135 Notifications modülüne **hiç dokunmuyor**. |
-| Backend integration | ✓ **CI'da PASS** (lokalde koşulamadı) | Lokal engel: Testcontainers + Docker Desktop daemon kapalı, makinede SQL Server servisi de yok (`Get-Service MSSQL*` → yalnız `SQLWriter`). D2'nin 7 yeni testi bu ayaktadır ve kanıtı dal CI'sının **"4. Integration test"** job'ıdır — run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539) `success`. Aynı job lokalde düşen 16 Notifications testini de yeşil koşturdu, yani o 16'nın gerçekten ortam kaynaklı olduğu **bağımsız olarak** doğrulandı |
+| Backend integration | ✓ **CI'da PASS + lokalde tekrarlandı** | (a) Dal CI'sı: **"4. Integration test"** `success` — run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539) ve [`32462859570`](https://github.com/turkerurganci/Skinora/actions/runs/32462859570), ikisi de yeşil. (b) **Docker açılarak lokalde de koşuldu** (proje sahibi talebi): `TransactionDetailServiceTests` **40/40**, `Skinora.Notifications.Tests` unit **111/111** (lokalde Docker yüzünden düşen 16'nın hepsi yeşil → "ortam kaynaklı" teşhisi **ölçüldü**), tam çözüm Integration filtresi **1369 testte 2 düşen** ve ikisi de **izole olarak geçiyor** (bkz. §Notlar — paralel koşum kararsızlığı) |
 
 **Dürüstlük notu (kapandı):** yukarıdaki iki satır turun bilinen kanıt boşluğuydu — backend
 değişikliğinin tüm testleri (mevcut 39 + yeni 7) Integration ayağındadır ve lokal makinede
@@ -142,6 +142,61 @@ lokalde düşen 16 Notifications testini de yeşil koşturdu — yani "ortam kay
 varsayım değil, **ölçüm**. Kanıt hâlâ lokal bir "yeşil" değil, CI çıktısıdır.
 
 ---
+
+## Mutasyon Sondajı — D2 testlerinin ayırt ediciliği
+
+Docker açıldıktan sonra (proje sahibi talebi) yeni testlerin gerçekten ayırt edip etmediği
+ölçüldü. Her mutasyon uygulandı, derlendi, koşuldu ve **geri alındı**; çalışma ağacı her turdan
+sonra temiz doğrulandı.
+
+| # | Mutasyon | Sonuç |
+|---|---|---|
+| M1 | Projeksiyon ters çevrildi (`!...HasValue`) | **Tam 4 değer testi düştü** (`Is_True`, `Is_False`, `Reaches_The_Buyer_Too`, `Survives_A_Cancellation`), diğer 35 geçti ✓ |
+| M2 | Kilometre taşı kapısı kaldırıldı (`!HasReachedPaymentWindow`) | **Tam 2 theory vakası düştü** (`Is_Unknown_Before_The_Seller_Confirms_Readiness` × CREATED/ACCEPTED), diğer 37 geçti ✓ |
+| M3 | `role is null` kaldırıldı | **Hiçbir test düşmedi** — hayatta kalan mutant |
+| M4 | `BuildResponseAsync`'in public routing'i kapatıldı | 2 **mevcut** test düştü; envanter alanı yine sızmadı |
+| M3+M4 | İkisi birden | **4 düştü**, ikisi envanter erişim kontrolü ✓ |
+
+### M3'ün açıkladığı şey — ve turun kendi düzelttiği bir iddia
+
+M3 hayatta kalınca ilk okuma "kapı yük taşıyor, testin kapsam boşluğu var" oldu. **Bu yanlıştı.**
+[`TransactionDetailService.cs:189`](../../backend/src/Modules/Skinora.Transactions/Application/Lifecycle/TransactionDetailService.cs)
+`if (role is null) return BuildPublicResponse(...)` diyor — yani **authenticated DTO yolu hiçbir
+zaman `role == null` ile çalışmıyor** ve `BuildBuyerInventoryVisible` içindeki kapı **erişilemez
+derinlemesine savunmadır**. Kapı yine de yerinde bırakıldı: iki kardeşi (`BuildPaymentAsync`,
+`BuildSellerPayoutAsync`) birebir aynı kalıbı taşıyor, yani kaldırmak dosyanın konvansiyonunu
+bozardı. M3+M4 bunu kesinleştirdi: **iki katman birbirini yedekliyor**, sızıntı için ikisinin
+birden gitmesi gerekir — dolayısıyla M3'ü tek başına öldüren bir test **yazılamaz**, yazılsaydı
+gerçek bir şeyi değil kendi kurgusunu ölçerdi.
+
+### Sondajın bıraktığı kazanç — yeni test
+
+`BuyerInventoryVisible_Is_Hidden_From_A_Stranger_Holding_A_Spent_Invite`. Harcanmış davet
+token'ı olan yabancı, `GetByInviteTokenAsync`'in son `else`'inde `role = null` alıyor ve
+prospective buyer'ın aksine — o yalnız işlem **hâlâ CREATED** iken mümkün, yani baseline'ı hiç
+okunmamış olur — **hazırlık kilometre taşını çoktan geçmiş** bir işleme bakabiliyor. Sızıntının
+gerçek stakes'i olan tek yol budur ve önceden **hiçbir test onu sabitlemiyordu**. Test M3+M4
+altında düşüyor, yani sonucu gerçekten koruyor.
+
+## Lokal Ölçüm (Docker açıldıktan sonra)
+
+| Ölçüm | Sonuç |
+|---|---|
+| `Skinora.Notifications.Tests` unit filtresi | **111/111** — lokalde Docker kapalıyken düşen 16'nın hepsi yeşil |
+| `TransactionDetailServiceTests` | **40/40** (32 taban + 8 yeni) |
+| `BuyerInventoryVisible*` filtresi | **8/8**, hepsi isimleriyle doğrulandı |
+| Tam çözüm Integration filtresi | **1369 testte 2 düşen**; ikisi de izole olarak geçiyor |
+
+**Paralel koşum kararsızlığı (kayda geçti, backlog satırı açıldı).** Üç koşum yapıldı ve üçü de
+**farklı** düşen küme verdi: (A) `INTEGRATION_TEST_SQL_SERVER` set edilmeden — her test sınıfı
+kendi container'ını açtı — 28 düşen; **bu koşum CI'nın eşdeğeri değildir ve sayılmaz**.
+(B) Paylaşılan sunucuyla 6 düşen, hepsi `Skinora.Fraud.Tests` (assembly tek başına **73/73**).
+(C) Aynı kod, aynı kurulum: 2 düşen ve Fraud bu kez temiz — `NotificationDispatcherTests` +
+`SettlementVerificationServiceTests`, ikisi de izole **8/8** ve **10/10**.
+**Güçlü çeliştirici, over-claim edilmemeli:** ölçüm makinesinde aynı anda projenin tüm compose
+stack'i (8 konteyner) çalışıyordu ve CI iki koşumda da yeşildi. Satır
+`T135-IntegrationSuiteParallelFlake` (⚪) olarak açıldı; kapanışı **temiz bir makinede tekrarlı
+ölçüm**.
 
 ## Doğrulama
 
