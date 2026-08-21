@@ -20,7 +20,7 @@
   "landing": {
     "hero": {
       "title": "CS2 Eşya Ticaretinde Güvenli Emanet",
-      "subtitle": "Eşyanız ve ödemeniz, otomatik doğrulanan tarafsız bir emanet üzerinden el değiştirir.",
+      "subtitle": "Satıcı eşyayı doğrudan size gönderirken, ödemeniz otomatik doğrulanan tarafsız bir emanette tutulur.",
       "cta": "Steam ile Giriş Yap",
       "ctaDisabledHint": "Platform şu an bakımda. Daha sonra tekrar deneyin."
     },
@@ -29,19 +29,19 @@
       "steps": {
         "sellerStarts": {
           "title": "Satıcı işlemi başlatır",
-          "description": "Eşya, fiyat ve alıcı bilgileri ile yeni bir işlem oluşturulur."
+          "description": "Eşya ve fiyat ile yeni bir işlem oluşturulur, ardından alıcı davet edilir."
         },
-        "itemEscrowed": {
-          "title": "Eşya emanete alınır",
-          "description": "Steam üzerinden eşya platform botuna gönderilir ve güvenle bekletilir."
+        "paymentEscrowed": {
+          "title": "Ödeme emanete alınır",
+          "description": "Satıcı göndermeye hazır olduğunu onaylar; ödeme adresi ancak o zaman açılır ve alıcı ödemeyi emanete gönderir."
         },
-        "buyerPays": {
-          "title": "Alıcı ödemeyi gönderir",
-          "description": "Belirtilen adrese USDT/USDC gönderilir, blok zinciri otomatik doğrular."
+        "sellerDelivers": {
+          "title": "Satıcı eşyayı gönderir",
+          "description": "Satıcı eşyayı Steam üzerinden doğrudan alıcıya gönderir — platform eşyayı hiçbir zaman tutmaz."
         },
         "autoSettle": {
-          "title": "Otomatik teslim ve ödeme",
-          "description": "Eşya alıcıya iletilir, satıcının ödemesi aynı adımda otomatik aktarılır."
+          "title": "Otomatik doğrulama ve ödeme",
+          "description": "Platform teslimatı doğrular ve satıcının ödemesini serbest bırakır."
         }
       }
     },
@@ -113,7 +113,7 @@
       "description": "Devam etmeden önce lütfen aşağıdakileri inceleyin ve onaylayın.",
       "summaryHeading": "Önemli noktalar",
       "summary": {
-        "escrow": "Eşyanız ve ödemeniz, her iki taraf da yükümlülüğünü yerine getirene kadar emanette tutulur.",
+        "escrow": "Ödemeniz, satıcı eşyayı teslim edene kadar emanette tutulur; platform eşyanın kendisini hiçbir zaman tutmaz.",
         "commission": "İşlem tamamlandığında satıcıdan komisyon kesilir.",
         "crypto": "Ödemeler yalnızca TRON ağı üzerinden USDT veya USDC ile yapılır.",
         "disputes": "İtirazlar Skinora yöneticileri tarafından incelenir.",
@@ -193,7 +193,6 @@
     "disputes": "İtirazlar",
     "transactions": "İşlemler",
     "settings": "Ayarlar",
-    "steamAccounts": "Steam Hesapları",
     "roles": "Roller",
     "users": "Kullanıcılar",
     "auditLog": "Audit Log"
@@ -274,20 +273,6 @@
       "pendingFlags": "Bekleyen Flag'ler",
       "dailyCompleted": "Günlük Tamamlanan",
       "weeklyCompleted": "Haftalık Tamamlanan"
-    },
-    "steamAccounts": {
-      "title": "Steam Hesapları",
-      "manage": "Yönet",
-      "warning": "{count} bot hesabı dikkat gerektiriyor.",
-      "cardAriaLabel": "{name} hesabı — {status}",
-      "empty": "Tanımlı Steam botu yok.",
-      "loadError": "Steam hesapları yüklenemedi.",
-      "status": {
-        "ACTIVE": "Aktif",
-        "RESTRICTED": "Kısıtlı",
-        "BANNED": "Yasaklı",
-        "OFFLINE": "Çevrimdışı"
-      }
     },
     "recentFlags": {
       "title": "Son Flag'lenmiş İşlemler",
@@ -734,71 +719,6 @@
       "other": "Diğer"
     }
   },
-  "adminSteamAccounts": {
-    "title": "Steam Hesapları",
-    "loadError": "Steam hesapları yüklenemedi.",
-    "empty": "Tanımlı Steam botu yok.",
-    "banner": {
-      "warning": "{count} bot hesabı dikkat gerektiriyor.",
-      "diverted": "Yeni işlemler diğer hesaplara yönlendirildi."
-    },
-    "status": {
-      "ACTIVE": "Aktif",
-      "RESTRICTED": "Kısıtlı",
-      "BANNED": "Yasaklı",
-      "OFFLINE": "Çevrimdışı"
-    },
-    "card": {
-      "steamId": "Steam ID",
-      "escrow": "Emanet",
-      "escrowValue": "{count} item",
-      "dailyTrade": "Günlük Trade",
-      "dailyTradeValue": "{count} / {limit}",
-      "lastCheck": "Son Kontrol",
-      "neverChecked": "Hiç kontrol edilmedi"
-    },
-    "restricted": {
-      "warning": "Bu hesap kısıtlı. Yeni işlemler diğer hesaplara yönlendirilir.",
-      "escrowWarning": "Bu hesapta {count} item emanette — bu işlemler otomatik devam ettirilemez, recovery/manuel müdahale gerektirir.",
-      "escrowItemsInQueue": "Bu item'lar aşağıdaki recovery kuyruğunda listelenir."
-    },
-    "banned": {
-      "warning": "Bu hesap yasaklı. Acil müdahale gerekiyor."
-    },
-    "recovery": {
-      "titleFor": "Recovery Kuyruğu — {bot}",
-      "description": "Bu kısıtlı/yasaklı botun emanetinde duran item'lar — her satır otomatik devam ettirilemeyen bir işlem.",
-      "ariaLabel": "Recovery kuyruğu",
-      "empty": "Bu bot için recovery'de item yok.",
-      "loading": "Recovery kuyruğu yükleniyor…",
-      "loadError": "Recovery kuyruğu yüklenemedi.",
-      "onHold": "Hold'da",
-      "statusValue": {
-        "PENDING": "Bekliyor",
-        "IN_REVIEW": "İnceleniyor",
-        "RESOLVED": "Çözüldü"
-      },
-      "columns": {
-        "transactionId": "İşlem ID",
-        "item": "Item",
-        "parties": "Satıcı / Alıcı",
-        "state": "İşlem State",
-        "recoveryStatus": "Recovery Durumu",
-        "responsibleAdmin": "Sorumlu Admin",
-        "note": "Admin Notu",
-        "actions": "Aksiyonlar"
-      },
-      "actions": {
-        "manualRecovery": "Manual Recovery Başlat",
-        "resolve": "Çözüldü İşaretle",
-        "done": "Çözüldü",
-        "editNote": "Düzenle",
-        "save": "Kaydet",
-        "cancel": "İptal",
-        "assignAdmin": "Ata…"
-      }
-    }
-  },
   "adminRoles": {
     "title": "Rol & Yetki Yönetimi",
     "loadError": "Roller yüklenemedi.",
@@ -850,8 +770,6 @@
       "MANAGE_FLAGS": "Flag'leri yönet",
       "VIEW_TRANSACTIONS": "İşlemleri görüntüle",
       "MANAGE_SETTINGS": "Parametreleri yönet",
-      "VIEW_STEAM_ACCOUNTS": "Steam hesaplarını görüntüle",
-      "MANAGE_STEAM_RECOVERY": "Steam recovery yönet",
       "VIEW_USERS": "Kullanıcı detay görüntüle",
       "MANAGE_ROLES": "Rolleri yönet",
       "VIEW_AUDIT_LOG": "Audit log görüntüle",
@@ -896,7 +814,7 @@
         },
         "howWeUse": {
           "heading": "Verilerinizi nasıl kullanırız",
-          "body": "Verilerinizi sizi doğrulamak, emanet işlemleri oluşturup tamamlamak, Steam takas tekliflerini göndermek ve doğrulamak ve stablecoin ödemelerini, komisyonları, ödemeleri ve iadeleri işlemek için kullanırız. Ayrıca dolandırıcılığı tespit edip önlemek; yaş, coğrafi engelleme ve yaptırım taraması gibi uygunluk kurallarını uygulamak; uyuşmazlıkları çözmek ve yasal, muhasebe ve güvenlik yükümlülüklerimizi yerine getirmek için kullanırız."
+          "body": "Verilerinizi sizi doğrulamak, emanet işlemleri oluşturup tamamlamak, envanterleri okuyarak Steam teslimatlarını doğrulamak ve stablecoin ödemelerini, komisyonları, ödemeleri ve iadeleri işlemek için kullanırız. Ayrıca dolandırıcılığı tespit edip önlemek; yaş, coğrafi engelleme ve yaptırım taraması gibi uygunluk kurallarını uygulamak; uyuşmazlıkları çözmek ve yasal, muhasebe ve güvenlik yükümlülüklerimizi yerine getirmek için kullanırız."
         },
         "dataSharing": {
           "heading": "Veri paylaşımı",
@@ -1430,7 +1348,6 @@
       },
       "cancelledAt": "İptal tarihi",
       "reason": "Sebep",
-      "itemReturned": "Item iade edildi",
       "paymentRefunded": "Ödeme iade edildi",
       "yes": "Evet",
       "no": "Hayır",

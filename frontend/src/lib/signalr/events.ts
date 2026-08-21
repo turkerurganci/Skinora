@@ -23,11 +23,13 @@ import type {
 
 /**
  * Timeout phase emitted in `CountdownSync.timeoutType`. Mirrors backend
- * `Skinora.Shared.Enums.TimeoutPhase` (Accept / TradeOfferToSeller / Payment
- * / Delivery — PascalCase on the wire because the enum members are PascalCase
- * and `JsonStringEnumConverter` preserves member casing).
+ * `Skinora.Shared.Enums.TimeoutPhase` (Accept / SellerConfirm / Payment /
+ * Delivery — PascalCase on the wire because the enum members are PascalCase
+ * and `JsonStringEnumConverter` preserves member casing). T117 replaced the
+ * custodial `TradeOfferToSeller` phase with `SellerConfirm` (03 §4.2); the
+ * frontend mirror kept the retired member until T136.
  */
-export type TimeoutPhase = "Accept" | "TradeOfferToSeller" | "Payment" | "Delivery";
+export type TimeoutPhase = "Accept" | "SellerConfirm" | "Payment" | "Delivery";
 
 /**
  * Emergency hold release action. Mirrors backend
@@ -130,15 +132,6 @@ export interface MaintenanceStatusChangedPayload {
  * Admin-scoped events (07 §11.2 — WP9). Delivered only to connections in the
  * NotificationsHub admin group, so non-admin clients never receive them.
  */
-export interface AdminBotStatusChangedPayload {
-  botId: string;
-  steamId: string;
-  displayName: string;
-  previousStatus: string;
-  newStatus: string;
-  reason: string;
-  changedAt: string;
-}
 
 export interface AdminReconciliationMismatchPayload {
   scope: string;
@@ -183,7 +176,6 @@ export const NotificationHubEvents = {
   TelegramConnected: "TelegramConnected",
   DiscordConnected: "DiscordConnected",
   MaintenanceStatusChanged: "MaintenanceStatusChanged",
-  AdminBotStatusChanged: "AdminBotStatusChanged",
   AdminReconciliationMismatch: "AdminReconciliationMismatch",
   AdminHotWalletThresholdBreached: "AdminHotWalletThresholdBreached",
 } as const;

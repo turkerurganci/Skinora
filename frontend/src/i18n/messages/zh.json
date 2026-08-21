@@ -20,7 +20,7 @@
   "landing": {
     "hero": {
       "title": "安全的 CS2 物品交易托管",
-      "subtitle": "您的物品与款项通过一个自动且中立的托管完成交换。",
+      "subtitle": "卖家将物品直接发送给您，您的款项则由中立且自动验证的托管保管。",
       "cta": "使用 Steam 登录",
       "ctaDisabledHint": "平台正在维护中,请稍后再试。"
     },
@@ -29,19 +29,19 @@
       "steps": {
         "sellerStarts": {
           "title": "卖家发起交易",
-          "description": "填写物品、价格和买家信息,创建一笔新交易。"
+          "description": "填写物品和价格创建一笔新交易，然后邀请买家。"
         },
-        "itemEscrowed": {
-          "title": "物品进入托管",
-          "description": "物品通过 Steam 发送至平台机器人并安全保管。"
+        "paymentEscrowed": {
+          "title": "款项进入托管",
+          "description": "卖家确认已准备好发货；此后付款地址才会开放，买家将款项支付至托管。"
         },
-        "buyerPays": {
-          "title": "买家完成付款",
-          "description": "将 USDT/USDC 发送到指定地址,系统在链上自动验证。"
+        "sellerDelivers": {
+          "title": "卖家发送物品",
+          "description": "卖家通过 Steam 将物品直接发送给买家——平台从不持有物品。"
         },
         "autoSettle": {
-          "title": "自动交付与放款",
-          "description": "物品交付给买家,卖家的款项在同一步骤中自动释放。"
+          "title": "自动核验与放款",
+          "description": "平台核验交付情况，并向卖家释放款项。"
         }
       }
     },
@@ -113,7 +113,7 @@
       "description": "继续前请阅读并接受以下条款。",
       "summaryHeading": "要点",
       "summary": {
-        "escrow": "在双方完成交易之前,您的物品和付款将由托管保管。",
+        "escrow": "在卖家交付物品之前，您的款项将由托管保管；平台从不持有物品本身。",
         "commission": "交易完成时将从卖家收取佣金。",
         "crypto": "付款仅通过 TRON 网络使用 USDT 或 USDC。",
         "disputes": "争议由 Skinora 管理员审核。",
@@ -193,7 +193,6 @@
     "disputes": "争议",
     "transactions": "交易",
     "settings": "设置",
-    "steamAccounts": "Steam 账户",
     "roles": "角色",
     "users": "用户",
     "auditLog": "审计日志"
@@ -274,20 +273,6 @@
       "pendingFlags": "待处理标记",
       "dailyCompleted": "今日完成",
       "weeklyCompleted": "本周完成"
-    },
-    "steamAccounts": {
-      "title": "Steam 账户",
-      "manage": "管理",
-      "warning": "{count} 个机器人账户需要关注。",
-      "cardAriaLabel": "{name} 账户 — {status}",
-      "empty": "尚未配置 Steam 机器人。",
-      "loadError": "无法加载 Steam 账户。",
-      "status": {
-        "ACTIVE": "活跃",
-        "RESTRICTED": "受限",
-        "BANNED": "已封禁",
-        "OFFLINE": "离线"
-      }
     },
     "recentFlags": {
       "title": "最近标记",
@@ -734,71 +719,6 @@
       "other": "其他"
     }
   },
-  "adminSteamAccounts": {
-    "title": "Steam 账户",
-    "loadError": "无法加载 Steam 账户。",
-    "empty": "未配置 Steam 机器人。",
-    "banner": {
-      "warning": "{count} 个机器人账户需要关注。",
-      "diverted": "新交易已转移至其他账户。"
-    },
-    "status": {
-      "ACTIVE": "正常",
-      "RESTRICTED": "受限",
-      "BANNED": "已封禁",
-      "OFFLINE": "离线"
-    },
-    "card": {
-      "steamId": "Steam ID",
-      "escrow": "托管",
-      "escrowValue": "{count} 件物品",
-      "dailyTrade": "每日交易",
-      "dailyTradeValue": "{count} / {limit}",
-      "lastCheck": "上次检查",
-      "neverChecked": "从未检查"
-    },
-    "restricted": {
-      "warning": "此账户受限。新交易将转移至其他账户。",
-      "escrowWarning": "此账户托管了 {count} 件物品——这些交易无法自动继续，需要恢复/人工介入。",
-      "escrowItemsInQueue": "这些物品列在下方的恢复队列中。"
-    },
-    "banned": {
-      "warning": "此账户已封禁。需要紧急介入。"
-    },
-    "recovery": {
-      "titleFor": "恢复队列 — {bot}",
-      "description": "仍托管在此受限/已封禁机器人上的物品——每行是一笔无法自动继续的交易。",
-      "ariaLabel": "恢复队列",
-      "empty": "此机器人没有待恢复的物品。",
-      "loading": "正在加载恢复队列…",
-      "loadError": "加载恢复队列失败。",
-      "onHold": "已冻结",
-      "statusValue": {
-        "PENDING": "待处理",
-        "IN_REVIEW": "审查中",
-        "RESOLVED": "已解决"
-      },
-      "columns": {
-        "transactionId": "交易 ID",
-        "item": "物品",
-        "parties": "卖家 / 买家",
-        "state": "交易状态",
-        "recoveryStatus": "恢复状态",
-        "responsibleAdmin": "负责管理员",
-        "note": "管理员备注",
-        "actions": "操作"
-      },
-      "actions": {
-        "manualRecovery": "开始人工恢复",
-        "resolve": "标记为已解决",
-        "done": "已解决",
-        "editNote": "编辑",
-        "save": "保存",
-        "cancel": "取消",
-        "assignAdmin": "分配…"
-      }
-    }
-  },
   "adminRoles": {
     "title": "角色与权限管理",
     "loadError": "无法加载角色。",
@@ -850,8 +770,6 @@
       "MANAGE_FLAGS": "管理标记",
       "VIEW_TRANSACTIONS": "查看交易",
       "MANAGE_SETTINGS": "管理参数",
-      "VIEW_STEAM_ACCOUNTS": "查看 Steam 账户",
-      "MANAGE_STEAM_RECOVERY": "管理 Steam 恢复",
       "VIEW_USERS": "查看用户详情",
       "MANAGE_ROLES": "管理角色",
       "VIEW_AUDIT_LOG": "查看审计日志",
@@ -896,7 +814,7 @@
         },
         "howWeUse": {
           "heading": "我们如何使用您的数据",
-          "body": "我们使用您的数据来对您进行身份验证、创建并结算托管交易、发送和验证 Steam 交易报价，以及处理稳定币付款、佣金、付款和退款。我们还将其用于检测和防范欺诈，执行年龄、地域封锁和制裁筛查等资格规则，解决争议，并履行我们的法律、会计和安全义务。"
+          "body": "我们使用您的数据来对您进行身份验证、创建并结算托管交易、通过读取库存核验 Steam 交付，以及处理稳定币付款、佣金、付款和退款。我们还将其用于检测和防范欺诈，执行年龄、地域封锁和制裁筛查等资格规则，解决争议，并履行我们的法律、会计和安全义务。"
         },
         "dataSharing": {
           "heading": "数据共享",
@@ -1430,7 +1348,6 @@
       },
       "cancelledAt": "取消时间",
       "reason": "原因",
-      "itemReturned": "物品已退回",
       "paymentRefunded": "款项已退还",
       "yes": "是",
       "no": "否",

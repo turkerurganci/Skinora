@@ -36,10 +36,6 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
           </div>
         )}
         <div className="flex justify-between gap-3">
-          <dt className="text-gray-600">{t("itemReturned")}</dt>
-          <dd className="text-gray-900">{cancelInfo.itemReturned ? t("yes") : t("no")}</dd>
-        </div>
-        <div className="flex justify-between gap-3">
           <dt className="text-gray-600">{t("paymentRefunded")}</dt>
           <dd className="text-gray-900">{cancelInfo.paymentRefunded ? t("yes") : t("no")}</dd>
         </div>

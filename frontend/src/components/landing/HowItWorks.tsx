@@ -7,11 +7,14 @@ export interface HowItWorksProps {
   className?: string;
 }
 
-const STEP_KEYS = ["sellerStarts", "itemEscrowed", "buyerPays", "autoSettle"] as const;
+// 04 §S01 — the four-step P2P narrative. `paymentEscrowed` replaced the
+// custodial `itemEscrowed` slot in T136: what the platform holds is the
+// money, never the item (02 §2.1).
+const STEP_KEYS = ["sellerStarts", "paymentEscrowed", "sellerDelivers", "autoSettle"] as const;
 const STEP_ICONS: Record<(typeof STEP_KEYS)[number], string> = {
   sellerStarts: "📝",
-  itemEscrowed: "🛡️",
-  buyerPays: "💸",
+  paymentEscrowed: "🛡️",
+  sellerDelivers: "📦",
   autoSettle: "✅",
 };
 

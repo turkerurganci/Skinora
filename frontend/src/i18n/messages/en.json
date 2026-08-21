@@ -20,7 +20,7 @@
   "landing": {
     "hero": {
       "title": "Secure escrow for CS2 item trades",
-      "subtitle": "Your item and your payment change hands through an automatic, neutral escrow.",
+      "subtitle": "Your payment is held in a neutral, automatically verified escrow while the seller sends the item straight to you.",
       "cta": "Sign in with Steam",
       "ctaDisabledHint": "Platform is under maintenance. Please try again later."
     },
@@ -29,19 +29,19 @@
       "steps": {
         "sellerStarts": {
           "title": "Seller starts the trade",
-          "description": "Create a new transaction with the item, price, and buyer details."
+          "description": "Create a new transaction with the item and price, then invite the buyer."
         },
-        "itemEscrowed": {
-          "title": "Item goes into escrow",
-          "description": "The item is sent to the platform bot on Steam and held safely."
+        "paymentEscrowed": {
+          "title": "Payment goes into escrow",
+          "description": "The seller confirms they are ready to send. Only then does the payment address open, and the buyer pays into escrow."
         },
-        "buyerPays": {
-          "title": "Buyer sends payment",
-          "description": "USDT/USDC is sent to the provided address and verified on-chain automatically."
+        "sellerDelivers": {
+          "title": "Seller sends the item",
+          "description": "The seller sends the item straight to the buyer on Steam — the platform never holds it."
         },
         "autoSettle": {
-          "title": "Automatic delivery & payout",
-          "description": "The item is delivered to the buyer and the seller's payout is released in the same step."
+          "title": "Automatic verification & payout",
+          "description": "The platform verifies the delivery and releases the seller's payout."
         }
       }
     },
@@ -113,7 +113,7 @@
       "description": "Please review and accept before continuing.",
       "summaryHeading": "Key points",
       "summary": {
-        "escrow": "Your item and payment are held in escrow until both sides settle.",
+        "escrow": "Your payment is held in escrow until the seller delivers the item; the platform never holds the item itself.",
         "commission": "A commission is taken from the seller upon completion.",
         "crypto": "Payments use USDT or USDC on the TRON network only.",
         "disputes": "Disputes are reviewed by Skinora administrators.",
@@ -193,7 +193,6 @@
     "disputes": "Disputes",
     "transactions": "Transactions",
     "settings": "Settings",
-    "steamAccounts": "Steam Accounts",
     "roles": "Roles",
     "users": "Users",
     "auditLog": "Audit Log"
@@ -274,20 +273,6 @@
       "pendingFlags": "Pending Flags",
       "dailyCompleted": "Daily Completed",
       "weeklyCompleted": "Weekly Completed"
-    },
-    "steamAccounts": {
-      "title": "Steam Accounts",
-      "manage": "Manage",
-      "warning": "{count} bot account(s) need attention.",
-      "cardAriaLabel": "{name} account — {status}",
-      "empty": "No Steam bots configured.",
-      "loadError": "Could not load Steam accounts.",
-      "status": {
-        "ACTIVE": "Active",
-        "RESTRICTED": "Restricted",
-        "BANNED": "Banned",
-        "OFFLINE": "Offline"
-      }
     },
     "recentFlags": {
       "title": "Recent Flags",
@@ -734,71 +719,6 @@
       "other": "Other"
     }
   },
-  "adminSteamAccounts": {
-    "title": "Steam Accounts",
-    "loadError": "Failed to load Steam accounts.",
-    "empty": "No Steam bots configured.",
-    "banner": {
-      "warning": "{count} bot account(s) need attention.",
-      "diverted": "New transactions have been routed to other accounts."
-    },
-    "status": {
-      "ACTIVE": "Active",
-      "RESTRICTED": "Restricted",
-      "BANNED": "Banned",
-      "OFFLINE": "Offline"
-    },
-    "card": {
-      "steamId": "Steam ID",
-      "escrow": "Escrow",
-      "escrowValue": "{count} items",
-      "dailyTrade": "Daily Trade",
-      "dailyTradeValue": "{count} / {limit}",
-      "lastCheck": "Last Check",
-      "neverChecked": "Never checked"
-    },
-    "restricted": {
-      "warning": "This account is restricted. New transactions are routed to other accounts.",
-      "escrowWarning": "This account holds {count} escrowed items — those transactions cannot continue automatically and require recovery/manual intervention.",
-      "escrowItemsInQueue": "Those items are listed in the recovery queue below."
-    },
-    "banned": {
-      "warning": "This account is banned. Urgent intervention required."
-    },
-    "recovery": {
-      "titleFor": "Recovery Queue — {bot}",
-      "description": "Items still escrowed on this restricted/banned bot — each row is a transaction that cannot continue automatically.",
-      "ariaLabel": "Recovery queue",
-      "empty": "No items in recovery for this bot.",
-      "loading": "Loading recovery queue…",
-      "loadError": "Failed to load the recovery queue.",
-      "onHold": "On hold",
-      "statusValue": {
-        "PENDING": "Pending",
-        "IN_REVIEW": "In review",
-        "RESOLVED": "Resolved"
-      },
-      "columns": {
-        "transactionId": "Transaction ID",
-        "item": "Item",
-        "parties": "Seller / Buyer",
-        "state": "Transaction State",
-        "recoveryStatus": "Recovery Status",
-        "responsibleAdmin": "Responsible Admin",
-        "note": "Admin Note",
-        "actions": "Actions"
-      },
-      "actions": {
-        "manualRecovery": "Start manual recovery",
-        "resolve": "Resolve",
-        "done": "Resolved",
-        "editNote": "Edit",
-        "save": "Save",
-        "cancel": "Cancel",
-        "assignAdmin": "Assign…"
-      }
-    }
-  },
   "adminRoles": {
     "title": "Role & Permission Management",
     "loadError": "Failed to load roles.",
@@ -850,8 +770,6 @@
       "MANAGE_FLAGS": "Manage flags",
       "VIEW_TRANSACTIONS": "View transactions",
       "MANAGE_SETTINGS": "Manage parameters",
-      "VIEW_STEAM_ACCOUNTS": "View Steam accounts",
-      "MANAGE_STEAM_RECOVERY": "Manage Steam recovery",
       "VIEW_USERS": "View user details",
       "MANAGE_ROLES": "Manage roles",
       "VIEW_AUDIT_LOG": "View audit log",
@@ -896,7 +814,7 @@
         },
         "howWeUse": {
           "heading": "How we use your data",
-          "body": "We use your data to authenticate you, create and settle escrow transactions, send and verify Steam trade offers, and process stablecoin payments, commissions, payouts, and refunds. We also use it to detect and prevent fraud, enforce eligibility rules such as age, geo-blocking, and sanctions screening, resolve disputes, and meet our legal, accounting, and security obligations."
+          "body": "We use your data to authenticate you, create and settle escrow transactions, verify Steam deliveries by reading inventories, and process stablecoin payments, commissions, payouts, and refunds. We also use it to detect and prevent fraud, enforce eligibility rules such as age, geo-blocking, and sanctions screening, resolve disputes, and meet our legal, accounting, and security obligations."
         },
         "dataSharing": {
           "heading": "Data sharing",
@@ -1430,7 +1348,6 @@
       },
       "cancelledAt": "Cancelled at",
       "reason": "Reason",
-      "itemReturned": "Item returned",
       "paymentRefunded": "Payment refunded",
       "yes": "Yes",
       "no": "No",

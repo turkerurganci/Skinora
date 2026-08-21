@@ -34,7 +34,6 @@ import type { UnreadCountResponse } from "@/lib/api/notifications";
  *   • `TelegramConnected/DiscordConnected` → invalidate account settings.
  *   • `MaintenanceStatusChanged` → invalidate platform maintenance cache.
  *   • Admin-scoped (WP9, only delivered to admin connections):
- *     `AdminBotStatusChanged` → invalidate Steam-account + dashboard caches;
  *     `AdminReconciliationMismatch` / `AdminHotWalletThresholdBreached` →
  *     invalidate the audit-log + dashboard caches (where they surface durably).
  */
@@ -133,10 +132,6 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       },
       // WP9 — admin-scoped events. The backend only delivers these to admin
       // connections (admin group), so the handlers are inert for regular users.
-      onAdminBotStatusChanged: () => {
-        queryClient.invalidateQueries({ queryKey: ["admin", "steam-accounts"] });
-        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-      },
       onAdminReconciliationMismatch: () => {
         queryClient.invalidateQueries({ queryKey: ["admin", "audit-logs"] });
         queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });

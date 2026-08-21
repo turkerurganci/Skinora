@@ -247,7 +247,6 @@ export interface TransactionDetailCancelInfo {
   cancelledBy: string;
   reason: string;
   cancelledAt: string;
-  itemReturned: boolean;
   paymentRefunded: boolean;
 }
 
@@ -348,7 +347,6 @@ export interface TransactionDetailResponse {
   dispute?: TransactionDetailDispute | null;
   inviteInfo?: TransactionDetailInviteInfo | null;
   paymentEvents?: TransactionDetailPaymentEvent[] | null;
-  escrowBotAssetId?: string | null;
   deliveredBuyerAssetId?: string | null;
   /**
    * Steam trade deep link (07 §7.5). v3.0: populated only in PAYMENT_RECEIVED
@@ -499,7 +497,6 @@ export interface CancelTransactionRequest {
 export interface CancelTransactionResponse {
   status: TransactionStatus;
   cancelledAt: string;
-  itemReturned: boolean;
   paymentRefunded: boolean;
 }
 
