@@ -1,6 +1,6 @@
 # T135 — StateActionPanel state×rol matrisi
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, **CI ✓ PASS**, doğrulama bekliyor) | **Tarih:** 2026-08-21
+**Faz:** F7 | **Durum:** ✓ **Tamamlandı — doğrulama ✓ PASS** | **Tarih:** 2026-08-21
 
 ---
 
@@ -89,7 +89,7 @@ raporluyor.
 
 **Doküman:**
 - `Docs/07_API_DESIGN.md` — v3.8 → **v3.9** (§7.5 `buyerInventoryVisible` satırı + örnek + normatif not; başlık ve altbilgi hizalı)
-- `Docs/DEFERRED_BACKLOG.md` — 3 yeni satır (50 → **53 aktif**)
+- `Docs/DEFERRED_BACKLOG.md` — **4** yeni satır (50 → **54 aktif**; dördüncüsü `T135-IntegrationSuiteParallelFlake`, Docker açıldıktan sonraki lokal ölçümden — bkz. §Lokal Ölçüm)
 
 ### Test altyapısı — iki engel kaldırıldı (yan ürün)
 
@@ -200,11 +200,117 @@ stack'i (8 konteyner) çalışıyordu ve CI iki koşumda da yeşildi. Satır
 
 ## Doğrulama
 
+**Tarih:** 2026-08-21 · **Validator:** bağımsız doğrulama chat'i (yapım raporu Faz 3'e kadar okunmadı)
+**Dal:** `task/T135-state-action-panel-matrix` · **Commit:** `f8881a9` (HEAD == `origin/task/T135-…` aynı SHA)
+
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Bekliyor (ayrı chat) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ **PASS** |
+| Bloke edici bulgu | **0** |
+| Bloke etmeyen not | 2 (N1 sayım driftı — bu turda düzeltildi · N2 `isTerminalStatus` artık tüketicisiz) |
+| Düzeltme gerekli mi | Hayır |
+
+### Giriş kapıları
+
+| Adım | Sonuç |
+|---|---|
+| −1 Working tree | ✓ `git status --short` boş |
+| 0 Main CI startup | ✓ son 3 run `success` — [`32425168281`](https://github.com/turkerurganci/Skinora/actions/runs/32425168281) · [`32425168333`](https://github.com/turkerurganci/Skinora/actions/runs/32425168333) · [`32411997251`](https://github.com/turkerurganci/Skinora/actions/runs/32411997251) |
+| 0b Repo memory drift | ✓ `.claude/memory/MEMORY.md` T135 satırı mevcut |
+| 3 Remote tazeleme | ✓ `git fetch origin` sonrası `HEAD == origin/task/T135-…` = `f8881a9` |
+
+### Kabul kriterleri — bağımsız kanıt
+
+Plan §F7 T135 iki satır sayıyor; ikisi de dört hücre içerir. Her hücre **koddan okunarak** ve
+ayrıca **mutasyonla** doğrulandı (aşağıda).
+
+| # | Kriter | Sonuç | Bağımsız kanıt |
+|---|---|---|---|
+| 1 | ACCEPTED'da satıcıya "hazırım" | ✓ | `panelRowFor(ACCEPTED,"seller") → acceptedSeller` → `StateActionPanel.tsx` `<ConfirmReadyButton>`; uç `POST /transactions/:id/confirm-ready` **var** (`TransactionsController.cs:329`) ve yanıt tipi FE `ConfirmReadyResponse` ile alan alan uyumlu (`Status`/`SellerReadyConfirmedAt`/`PaymentDeadline`/`BuyerInventoryVisible`). Sunucu bayrağı `canConfirmReady = role=="seller" && Status==ACCEPTED` (`TransactionDetailService.cs:504`) |
+| 2 | SELLER_CONFIRMED'da alıcıya ödeme | ✓ | Ödeme bloğu sayfa düzeyinde: `showPaymentInfo = role==="buyer" && data.payment && status===SELLER_CONFIRMED` (`page.tsx:116`) → `PaymentInfoBlock` (`page.tsx:169`); panel `sellerConfirmedBuyer` satırıyla yönlendirme metnini ekliyor. Satıcı tarafının **main'de dalı yoktu**, eklendi (`sellerConfirmedSeller`) |
+| 3 | PAYMENT_RECEIVED'da satıcıya trade deep link | ✓ | `paymentReceivedSeller` → `SellerTradeCta`: `href={tradeUrl}` + `target="_blank"` + `rel="noopener noreferrer"`, item hatırlatması, yanlış-item uyarısı, link yoksa `role="alert"` açıklaması. Backend alanı **yalnız** bu hücrede dolduruyor: `Status == PAYMENT_RECEIVED && role == "seller"` (`TransactionDetailService.cs:232`) |
+| 4 | PAYMENT_RECEIVED'da alıcıya "aldım" | ✓ | `paymentReceivedBuyer` → `ConfirmReceiptButton`: buton → `<dialog>` onayı → `POST /transactions/:id/confirm-receipt` (`TransactionsController.cs:386`, idempotent 200). Sunucu bayrağı `canConfirmReceipt = role=="buyer" && Status==PAYMENT_RECEIVED` |
+
+**04 §7.3 karşısında matris tamlığı bağımsız sayıldı:** `TransactionStatus` 12 değer +
+`EMERGENCY_HOLD` overlay = 13; `panelRowFor` bunları 6 guard (FLAGGED + 4×`CANCELLED_*` +
+REFUNDED) ve 6 enumerated `case` ile tüketiyor → **kalan yok**, `unclassified` bugün üretilemiyor.
+13 × 3 görüntüleyici = **39 hücre**, hepsi karara bağlı.
+
+### Doğrulama kontrol listesi
+
+- [x] Kabul kriterleri (4 hücre) koddan ve testten doğrulandı
+- [x] Referans doküman uyumu — 04 §7.3 satır satır karşılaştırıldı (ACCEPTED / SELLER_CONFIRMED / PAYMENT_RECEIVED / ITEM_DELIVERED / COMPLETED / `CANCELLED_*` / FLAGGED / EMERGENCY_HOLD / public varyant / suspended override)
+- [x] İptal asimetrisi (04 §7.3, 02 §7) — satıcı modal uyarısı + alıcı gerekçeli devre dışı
+- [x] ITEM_DELIVERED'da alıcıya geri sayım **gösterilmiyor**, satıcıya gün/saat gösteriliyor
+- [x] 07 §7.5 sözleşme genişlemesi (D2) — kod ↔ doküman ↔ FE tipi üçü de uyumlu
+- [x] Sunucu bayraklarının FE'de yeniden türetilmediği doğrulandı (`canConfirmReady` / `canConfirmReceipt` doğrudan tüketiliyor)
+- [x] Yeni migration / config / env / bağımlılık yok — doğrulandı
+- [x] Dal CI kanıtı **dal HEAD'ine** ait (Adım 8a)
+
+### Test sonuçları — validator tarafından yeniden koşuldu
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| FE tip kontrolü | ✓ exit 0, çıktı yok | `npx tsc --noEmit` |
+| FE lint | ✓ exit 0, bulgu yok | `npm run lint` |
+| FE i18n parity | ✓ **4 locale, 1344 anahtar, identical key sets** | `npm run i18n:check` |
+| FE vitest | ✓ **145/145** (13 dosya) | `npm test` |
+| Backend integration (ilgili) | ✓ **40/40** | `dotnet test Skinora.Transactions.Tests --filter TransactionDetailServiceTests` (Docker açık) |
+| Dal CI (HEAD `f8881a9`) | ✓ run [`32470305165`](https://github.com/turkerurganci/Skinora/actions/runs/32470305165) `success` | Bloke edici **10/10** yeşil: Lint · Build · Unit · JS test · Integration · Contract · Migration dry-run · Docker build ×2 · **CI Gate** |
+
+> **Advisory E2E 8/8 kırmızı — bloke edici değil, T135 kaynaklı değil.** Sekiz leg'in `continue-on-error`
+> olduğu ve custody dönemine göre yazıldığı T137/T137a'dan beri kayıtlı; yeniden yazımın sahibi **T138**
+> ve bağımlılığı T135'ti — bu turla açıldı. `CI Gate` job'ı `success`.
+
+### Mutasyon sondajı — validator'ın kendi beş mutasyonu
+
+Yapım turunun sondajları **tekrarlanmadı**; testlerin ayırt ediciliği bağımsız mutasyonlarla ölçüldü.
+Her mutasyon uygulandı, koşuldu, geri alındı; çalışma ağacı sonda `git status --short` ile temiz doğrulandı.
+
+| # | Mutasyon | Beklenen | Sonuç |
+|---|---|---|---|
+| V1 | `panelRowFor` ACCEPTED rolleri **takas edildi** | AC1 düşmeli | ✓ **7 test düştü** (63 geçti) — hem matris hem render |
+| V2 | `UNWOUND` kümesinden **REFUNDED silindi** | Tamlık bekçisi yakalamalı | ✓ **5 test düştü**; yalnız `matrix.test.ts` — render testi yakalayamıyor, çünkü `unclassified` ile `unwound` **aynı** çıktıyı (null) veriyor. **Bekçinin var oluş sebebi tam olarak bu** |
+| V3 | `buyerInventoryVisible === false` → `!buyerInventoryVisible` | "alan yok ≠ false" düşmeli | ✓ **tam 1 test düştü**: `stays silent while the answer is still unknown (field absent ≠ false)` |
+| V4 | `ConfirmReceiptButton` onay modalı **atlandı** (`onClick={handleConfirm}`) | Geri alınamaz onay koruması düşmeli | ✓ **2 test düştü** (`asks the buyer to confirm…`, `sends nothing when the buyer backs out…`) |
+| V5 | Backend `BuildBuyerInventoryVisible`'dan **kilometre taşı kapısı** kaldırıldı | "onaydan önce bilinmiyor" düşmeli | ✓ **tam 2 theory vakası düştü** (CREATED + ACCEPTED), diğer 38 geçti |
+
+**Sonuç:** beş mutasyonun beşi de **hedeflenen** testler tarafından yakalandı; hiçbiri hayatta kalmadı,
+hiçbirinde alakasız test gürültüsü olmadı. V2 ayrıca yapım turunun D3 gerekçesini **ölçümle** doğruladı.
+
+### Güvenlik kontrolü
+
+| Kontrol | Sonuç |
+|---|---|
+| Secret sızıntısı | ✓ Temiz — yeni secret/anahtar/bağlantı dizesi yok |
+| Auth / authorization | ✓ Temiz — `buyerInventoryVisible` taraf-özel; public + prospective + **harcanmış davetli yabancı** üç yolun üçü de test edilmiş. Yeni uç yok; iki uç da T123/T126'dan beri `AuthPolicies.Authenticated` + `RateLimit("user-write")` |
+| Input validation | ✓ Temiz — iki uç da **gövdesiz**; yeni kullanıcı girdisi yok |
+| Kullanıcı-kaynaklı `href` (XSS) | ✓ Temiz — **bağımsız doğrulandı:** `TradeUrlParser` şema (`http`/`https`), host (`steamcommunity.com`) ve yolu (`/tradeoffer/new/`) doğruluyor, `partner` (yalnız rakam ≤20) + `token` (alnum/`-`/`_` ≤20) alanlarını süzüp URL'i **yeniden kuruyor**; kolona yazılan `Normalized`'dir. `javascript:` şeması `Uri.UriScheme*` kontrolünde düşer |
+| Yeni dış bağımlılık | ✓ Yok — `package.json` / `.csproj` değişmedi |
+
+### Bloke etmeyen notlar
+
+**N1 — Sayım driftı (bu turda düzeltildi).** Rapor §Etkilenen Modüller ve plan §F7 YAPIM TURU bloğu
+`DEFERRED_BACKLOG` için "**3** yeni satır (50 → 53 aktif)" diyordu; dosyanın kendisi **4** yeni satır
+ve **54 aktif** taşıyor. Dördüncü satır (`T135-IntegrationSuiteParallelFlake`) sonraki commit'te
+(`c67937b`) eklenmiş; backlog'un kendi başlık bloğu ve raporun §Lokal Ölçüm bölümü doğru sayıyor —
+yalnız iki özet satırı bayat kalmıştı. **İkisi de bu doğrulama turunda düzeltildi.** Kaynak dosya
+(`DEFERRED_BACKLOG.md`) baştan doğruydu.
+
+**N2 — `isTerminalStatus` artık tüketicisiz.** Panelin yeniden yazımı `!isTerminalStatus(status)`
+kapısını (`main` `StateActionPanel.tsx:190`) `isActivePartyRow` ile değiştirdi; fonksiyon export
+edilmeye devam ediyor ama FE'de **hiçbir çağıranı kalmadı** (`grep` ile doğrulandı). Bugün zararsız
+ve `UNWOUND`'dan türediği için bayatlayamaz da; yine de ya bir tüketiciye bağlanmalı ya silinmelidir.
+İş üretmediği için backlog satırı açılmadı — kayda geçirmek yeterli.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: tam.** Yapım raporu Faz 3'e kadar okunmadı; okunduğunda bağımsız verdict ile **uyuşmazlık
+çıkmadı**. Raporun altı kabul kriteri iddiasının altısı da yeniden üretildi. Raporun kendi kendini
+düzelttiği M3 analizi (`role is null` kapısının erişilemez derinlemesine savunma olduğu) bağımsız
+olarak da doğru bulundu: `BuildResponseAsync`'in `if (role is null) return BuildPublicResponse(...)`
+yönlendirmesi authenticated DTO yolunu rolsüz çağrıya kapatıyor. Raporun tek yanlış satırı N1'deki
+sayımdı ve düzeltildi.
 
 ---
 
