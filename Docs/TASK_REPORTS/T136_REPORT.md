@@ -41,9 +41,11 @@ Kapsam kod yazılmadan **9 paralel ajanla ölçüldü** (8 envanter şeridi — 
 
 ## Etkilenen Modüller / Dosyalar
 
-24 dosya: 7 silme, 1 ekleme, 16 düzeltme. **188 ekleme / 1360 silme.**
+**Kod (commit `59a0bd7`):** 24 dosya — 7 silme, 1 ekleme, 16 düzeltme. **188 ekleme / 1360 silme.** Tamamı `frontend/src` altında.
 
-Backend'e, sidecar'lara, e2e'ye ve `Docs/`'a **dokunulmadı**.
+**Doküman (commit `fd3010f`):** `Docs/TASK_REPORTS/T136_REPORT.md` (yeni), `Docs/IMPLEMENTATION_STATUS.md`, `.claude/memory/MEMORY.md`, `Docs/DEFERRED_BACKLOG.md` — artı `permissionCatalog.parity.test.ts`’te CI turu 1’in prettier düzeltmesi.
+
+**Dokunulmayanlar:** `backend/`, `sidecar-steam/`, `sidecar-blockchain/`, `sidecar-fake/`, `e2e/`, `.github/`, docker-compose dosyaları ve 02–10 numaralı spec dokümanları. Doküman dayanağı T133a’da zaten hizalanmıştı; bu tur **kodu dokümana** getirdi, tersini değil.
 
 ---
 
@@ -167,9 +169,11 @@ M4'ün ilk denemesi CRLF nedeniyle **hiç inmedi** (`replace` tutmadı) ve test 
 ## Commit & PR
 
 - Branch: `task/T136-admin-bot-surface-removal`
-- Commit: `59a0bd7` — T136: Admin bot sayfaları silme + create-flow metinleri
+- Commit: `59a0bd7` (kod) · `fd3010f` (rapor + status + memory + backlog, prettier düzeltmesi)
 - PR: [#254](https://github.com/turkerurganci/Skinora/pull/254)
-- CI: run [`32488164707`](https://github.com/turkerurganci/Skinora/actions/runs/32488164707) → **`1. Lint` ✗** (aşağıda) · düzeltme commit'i `%FIXSHA%` sonrası yeni run
+- CI turu 1: run [`32488164707`](https://github.com/turkerurganci/Skinora/actions/runs/32488164707) → **`1. Lint` ✗** (kök neden aşağıda). Düzeltme `fd3010f` push edilince bu run **cancelled** oldu — concurrency, başarısızlık değil (task.md Bitiş Kapısı concurrency notu).
+- CI turu 2: run [`32489325975`](https://github.com/turkerurganci/Skinora/actions/runs/32489325975) (`fd3010f`) → **✓ `success`**. Bloke edici **10/10 yeşil**: `1. Lint` · `2. Build` · `3. Unit test` · `3b. JS test (vitest)` · `4. Integration test` · `5. Contract test` · `6. Migration dry-run` · `7. Docker build (frontend)` · `Detect changed paths` · **`CI Gate` success**.
+- Advisory E2E: 8/8 leg kırmızı — **T136 kaynaklı değil**. Legler custody dönemine göre yazılı ve T117'den beri kırmızı; sahibi **T138**, bağımlılığı T135'ti ve o tur açıldı. T136'nın bu leglere katkısı `admin-flows.spec.ts:124-128`'in `steamAccounts` iddiasının artık **kesin** ölü olması; envanter turu ayrıca beş ölü assertion daha buldu (Known Limitations §2, backlog `T136-E2EDeadItemReturnedAssertions`).
 
 ### CI turu 1 — `1. Lint` kırıldı, kök neden bulundu ve kapatıldı
 
