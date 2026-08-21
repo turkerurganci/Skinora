@@ -161,6 +161,7 @@ Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yal
 - PR: [#255](https://github.com/turkerurganci/Skinora/pull/255)
 - CI tur 1: [`32509486246`](https://github.com/turkerurganci/Skinora/actions/runs/32509486246) `success` (CI Gate ✓; 8/10 advisory E2E leg yeşil)
 - CI tur 2: [`32515611903`](https://github.com/turkerurganci/Skinora/actions/runs/32515611903) `success` (CI Gate ✓; **10/10 advisory E2E leg yeşil, 36/36 test**)
+- **E2E yüzeyi `27adb7d`'ten beri DONMUŞ** — sonraki commit'ler yalnız `Docs/` + `.claude/`. Dolayısıyla o commit'ten sonraki run'lar aynı e2e kodunu ölçer. Bu raporu sonlandıran commit'in kendi run'ı doğası gereği rapora yazılamaz (doküman-only); doğrulama chat'i dal HEAD'inin run'ına bakmalıdır (T137a ile aynı durum).
 
 ## Sonuç
 
