@@ -56,6 +56,7 @@ Yeniden yazımın şekli üç sert kısıttan çıktı; üçü de kod okunarak d
 | 4 | Yeni specler: alıcı-onay hızlı yolu · delivery timeout → satıcı kusurlu iptal · satıcı-başka-yere-gönderdi → auto-escalation | ✓ | `delivery.spec.ts` test 1 (hızlı yol + idempotency) · `timeout.spec.ts` test 4 (satıcı kusurlu iptal — 03 §4.4'ün kendi fazı, bkz. §Senaryo haritası) · `delivery.spec.ts` test 2 (auto-escalation) |
 | 5 | Envanter seed sorumluluğu: her spec (a) ortak seed yetmiyorsa kendi `setFakeInventory`'sini yazar, (b) teslimat kanıtını `simulateFakeTrade` ile üretir; alıcının SIFIR baseline'ı korunur | ✓ | Ortak seed iki item'ı da satıcıya yazıyor (ikincisi T128 kapısı için); alıcı hiçbir yerde seed edilmiyor → PUBLIC + BOŞ, baseline 0. `simulateFakeTrade` üç yerde: happy-path.smoke, happy-path.ui, emergency-hold #3 (satıcı→alıcı) ve delivery #2 (satıcı→üçüncü taraf) |
 | 6 | Bilinen vaka: `downtime.spec.ts`'in iki testi `resetFakeSteamState()`'i `seedHappyPath()`'ten **sonra** çağırıp ortak seed'i siliyor (T137 G1) | ✓ | Gövde içi iki çağrı silindi, `test.beforeEach` hook'una taşındı; hook'a bunun neden orada olması gerektiğini yazan not kondu |
+| 7 | `DEFERRED_BACKLOG` `T136-E2EDeadItemReturnedAssertions` (satır T138'i sahibi olarak adlandırıyor) | ✓ | Altı maddenin altısı kapandı + satırın kendisinin kaçırdığı yedinci ölü referans; ayrıntı §Kapatılan backlog satırı. Satır ✅ işaretlendi, backlog 58 → **57 aktif / 64 çözülmüş** |
 
 ## Senaryo haritası — üç yeni senaryo nereye düştü
 
@@ -73,6 +74,23 @@ Bunlar P2P yeniden adlandırması değil; yazarken kodu okuyunca çıktı:
 
 - **`emergency-hold` #3 yalancı geçiş üretiyordu.** "Hold hattı tutar" iddiası, custody döneminde `ITEM_DELIVERED → COMPLETED`'ın per-minute bir payout hattı olmasına dayanıyordu. P2P araya 02 §4.5.1 mutabakat penceresini koydu: hold çalışsa da çalışmasa da satır sekiz gün `ITEM_DELIVERED`'da beklerdi ve test **yanlış sebeple** geçerdi. Düzeltme: önce hold uygulanıyor, **sonra** `setPayoutEligibleNow` — bu sıra hem saati bahane olmaktan çıkarıyor hem de "uygun ama henüz hold'lu değil" penceresini (mutabakat cron'unun içine düşebileceği bir yarış) tamamen kapatıyor.
 - **`fraud-flags` high-volume testi ilgisiz bir iş kuralında düşüyordu.** İkinci `create`'i T128'in `(SellerId, ItemAssetId)` tekillik kapısı `ITEM_ALREADY_LISTED` ile reddediyordu, yani test "rolling window'u ölçüyorum" derken aslında hiç fraud motoruna varmıyordu. İkinci asset + kendi fiyat cache satırı (aynı fiyattan, `PRICE_DEVIATION` — daha yüksek öncelikli kural — temiz kalsın diye).
+
+## Kapatılan backlog satırı — `T136-E2EDeadItemReturnedAssertions`
+
+`DEFERRED_BACKLOG` §Öne Çıkanlar'daki bu 🟡 satır **T138'i açıkça sahibi olarak adlandırıyordu** ("T136 branch'inde uygulanmadı, kabul kriterine taşınmalı"). Altı maddesinin altısı da kapatıldı ve tek tek doğrulandı:
+
+| Madde | Durum |
+|---|---|
+| `cancellation.spec.ts` üç `itemReturned` hard-fail'i | ✓ spec yeniden yazıldı |
+| Aynı dosyanın iki custody başlığı ("item returned") | ✓ başlıklar "nothing refunded" |
+| `emergency-hold.spec.ts` `cancelBody.itemReturned` hard-fail'i | ✓ silindi |
+| `emergency-hold.spec.ts` **boşuna geçen** `expect(resumeBody.itemReturned ?? null).toBeNull()` | ✓ yerine `paymentRefunded` iddiası — RESUME'de gerçekten `null` döner, yani iddia artık bir şey ölçüyor |
+| `admin-flows.spec.ts` `steamAccounts` bloğu | ✓ silindi + notu yazıldı |
+| `e2e/src/api.ts` docstring'i | ✓ (bu turda `itemReturned` referansı kalmadı) |
+
+**Satırın kendi envanteri eksikti.** Kapatırken yedinci bir ölü referans çıktı: `e2e/src/db.ts`'in T137a notu, `pollRefundOfferAccepted`'in neden silindiğini anlatırken *"P2P'de bir cancel'ın gözlenecek dönüş bacağı yok — cancel yanıtının `itemReturned` alanı hikâyenin tamamı"* diyordu. O alan da yok. Yani ölü-referans avının kendisi bir ölü referans bırakmıştı; not düzeltildi. Ayrıca `docker-compose.e2e.yml` başlığı hâlâ "users, bot" seed'ini anlatıyordu (T137a bot satırını kaldırmıştı) — o da düzeltildi.
+
+Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yalnız **silmeyi açıklayan** üç yorum kalıyor.
 
 ## Kaldırılan iki harness kaldıracı
 
@@ -107,7 +125,7 @@ Bunlar P2P yeniden adlandırması değil; yazarken kodu okuyunca çıktı:
 
 ## Known Limitations / Follow-up
 
-- **Bloke etmeyen gözlem (backend doküman driftı, bu turun kapsamı dışında):** `AdminTransactionDtos.cs:63-65`'teki `ReleaseEmergencyHoldResponse` XML doc'u hâlâ `itemReturned` alanından söz ediyor; alan v3.0'da record'dan düşmüş. Yalnız yorum satırı, davranış etkisi yok. E2E görevinde production kaynağına dokunmamak için düzeltilmedi — `DEFERRED_BACKLOG` satırı önerilir.
+- **Bloke etmeyen gözlem (backend doküman driftı, bu turun kapsamı dışında):** `AdminTransactionDtos.cs:63-65`'teki `ReleaseEmergencyHoldResponse` XML doc'u hâlâ `itemReturned` alanından söz ediyor; alan v3.0'da record'dan düşmüş. Yalnız yorum satırı, davranış etkisi yok. E2E görevinde production kaynağına dokunmamak için düzeltilmedi. **Bilerek backlog satırı açılmadı** ve karar doğrulama turuna bırakıldı (backlog durum notunda yazılı): satır açmaya değer mi, yoksa T135 N2 gibi "iş üretmediği için" mi geçilmeli. Bir sonraki backend turunun yolu üstünde olduğu için ikinci seçenek savunulabilir.
 - **`happy-path.ui` leg'i pahalı:** frontend imajı build ediliyor ve chromium indiriliyor (~+8 dk). Bütçesi 45 dk'ya çekildi; ilk birkaç koşumda gerçek süresi izlenmeli.
 - Mutabakat turunun cron'u (`SettlementVerificationJob.Cron`, beş dakika) bir `const` — konfigüre edilemiyor. `COMPLETED`'a varan üç testin her biri en kötü ihtimalle beş dakika bekliyor; leg süresi bütçelerinin asıl sebebi budur.
 - 02 §9.2'nin **envanter kanıtı** yolu (launch kapısı açıkken `SELLER_ASSET_GONE ∧ INVENTORY_DELTA` → `Delivered`) e2e'de hâlâ kapsanmıyor: kapı seed'de `false` ve onu açmak bir platform ayarını değiştirmek demek. `InventoryEvidencePendingReview` kolu da aynı sebeple kapsanmıyor.

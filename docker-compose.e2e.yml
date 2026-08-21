@@ -11,8 +11,10 @@
 #     seam (no real Steam account / Tron node needed).
 #   * Observability (loki/prometheus/grafana/uptime-kuma) is omitted for speed.
 #
-# Schema + happy-path seed (users, bot) are applied by the Playwright harness
-# (T107 PR-2) AFTER the backend reports healthy.
+# Schema + happy-path seed are applied by the Playwright harness AFTER the
+# backend reports healthy. The seed is users + price cache + the SELLER's fake
+# Steam inventory; there is no bot row any more (T117 dropped PlatformSteamBots,
+# T137a removed the seed, T137 removed the fake's bot identity).
 #
 # All secrets below are FIXED TEST VALUES — they are NOT sensitive and exist so
 # the harness can mint matching JWTs / sign webhooks. NEVER reuse in production.

@@ -339,8 +339,13 @@ export async function pollCancelledNoticeRecipients(
 //   pollRefundOfferAccepted(txId)  read TradeOffers WHERE Direction =
 //     'RETURN_TO_SELLER'. It proved the escrowed item went back to the seller
 //     after a cancel. In P2P the item never leaves the seller before
-//     PAYMENT_RECEIVED, so a cancel has no return leg to observe — the
-//     `itemReturned` field of the cancel response is the whole story.
+//     PAYMENT_RECEIVED, so a cancel has no return leg to observe. T138
+//     correction: this note used to say the cancel response's `itemReturned`
+//     field "is the whole story" — that field does not exist either. v3.0
+//     dropped it from CancelTransactionResponse and from the admin cancel /
+//     release-hold responses, because a platform that never holds the item can
+//     never report returning one. What a pre-payment cancel has to say is that
+//     no money moved: `paymentRefunded: false`, and no BUYER_REFUND row.
 //
 //   getBotEscrowCount()           read PlatformSteamBots.ActiveEscrowCount
 //     (06 §3.10) to prove the platform's escrow slot was taken/released. There
