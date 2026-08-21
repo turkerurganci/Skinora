@@ -324,6 +324,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             PaymentEvents: ProducePaymentEventsArray(transaction),
             DeliveredBuyerAssetId: transaction.DeliveredBuyerAssetId,
             SteamTradeOfferUrl: tradeOfferUrl,
+            BuyerInventoryVisible: BuildBuyerInventoryVisible(transaction, role),
             AvailableActions: actions,
             CreatedAt: transaction.CreatedAt,
             UpdatedAt: transaction.UpdatedAt);
@@ -376,6 +377,10 @@ public sealed class TransactionDetailService : ITransactionDetailService
             PaymentEvents: null,
             DeliveredBuyerAssetId: null,
             SteamTradeOfferUrl: null,
+            // Party-only (T135): a visitor who is not yet a party has no
+            // delivery obligation to be told about, and the readability of a
+            // stranger's Steam inventory is not theirs to learn.
+            BuyerInventoryVisible: null,
             AvailableActions: new AvailableActionsDto(
                 CanAccept: false,
                 CanConfirmReady: null,
@@ -630,6 +635,39 @@ public sealed class TransactionDetailService : ITransactionDetailService
     /// </remarks>
     private static bool HasReachedPaymentWindow(Transaction transaction) =>
         transaction.SellerReadyConfirmedAt.HasValue;
+
+    /// <summary>
+    /// T135 — the 07 §7.5 <c>buyerInventoryVisible</c> flag: whether the
+    /// 02 §9.2 inventory-evidence path is open for this transaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The stored signal is <c>BuyerBaselineCapturedAt</c>. 06 §3.5 makes its
+    /// NULL-ness the carrier of the fact — <see cref="TransactionReadinessService"/>
+    /// leaves all four baseline columns NULL when the read failed rather than
+    /// writing zeros — so the projection is a null-check, not a second copy of
+    /// the decision. Nothing else in the system writes that column, so the flag
+    /// cannot drift away from the reality the evidence engine sees.
+    /// </para>
+    /// <para>
+    /// Gated on <see cref="HasReachedPaymentWindow"/>, deliberately the SAME
+    /// milestone stamp the sibling <c>payment</c> block uses and not a status
+    /// name. Two consequences, both wanted: before the seller confirms the
+    /// field is suppressed (the buyer's inventory has never been read — "not
+    /// known yet" must not be reported as "visible"), and after a cancellation
+    /// the answer stays put, because the read really did happen and a dispute
+    /// or an admin may still need to know which evidence path existed.
+    /// </para>
+    /// <para>
+    /// Party-only: <paramref name="role"/> is null for the public and
+    /// prospective-buyer envelopes, which get no flag at all.
+    /// </para>
+    /// </remarks>
+    private static bool? BuildBuyerInventoryVisible(Transaction transaction, string? role)
+    {
+        if (role is null || !HasReachedPaymentWindow(transaction)) return null;
+        return transaction.BuyerBaselineCapturedAt.HasValue;
+    }
 
     private async Task<SellerPayoutDto?> BuildSellerPayoutAsync(
         Transaction transaction,

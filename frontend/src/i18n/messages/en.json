@@ -1528,16 +1528,70 @@
         }
       },
       "accepted": {
-        "seller": "The buyer accepted. The platform is preparing your trade offer.",
-        "buyer": "Waiting for the seller to send the item."
+        "seller": {
+          "title": "The buyer accepted. Are you ready to send the item?",
+          "cta": "I'm ready to send",
+          "submitting": "Checking…",
+          "itemGoneHint": "You can cancel the transaction, or try again once the item is tradeable.",
+          "suspendedHint": "Your account is suspended, so you can't confirm right now.",
+          "errors": {
+            "ITEM_NO_LONGER_AVAILABLE": "This item can no longer be sent — it is not in your inventory, or it is not tradeable.",
+            "INVENTORY_PRIVATE": "We could not read your Steam inventory because your profile is private. Make your inventory public and try again.",
+            "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "The buyer's Steam Mobile Authenticator is not active yet. They have been notified — you can try again once they enable it.",
+            "STEAM_UNAVAILABLE": "Steam could not be reached. Please try again in a moment.",
+            "INVALID_STATE_TRANSITION": "This transaction is no longer waiting for your confirmation.",
+            "NOT_A_PARTY": "You are not a party to this transaction.",
+            "generic": "Could not confirm. Please try again."
+          }
+        },
+        "buyer": "Waiting for the seller to confirm they are ready to send."
+      },
+      "sellerConfirmed": {
+        "seller": "You confirmed you are ready. Waiting for the buyer's payment.",
+        "buyer": "The seller is ready. Send your payment using the details above."
       },
       "paymentReceived": {
-        "seller": "Payment verified. The item is being delivered to the buyer.",
-        "buyer": "Your payment was verified. The item is on its way."
+        "seller": {
+          "title": "Payment is in escrow — send the item now.",
+          "cta": "Send the trade offer on Steam",
+          "itemReminderLabel": "Item to send",
+          "warning": "Send only the item in this transaction. If you send a different item, the delivery cannot be verified.",
+          "missingLink": "The buyer's Steam trade URL is missing, so we cannot open the trade for you. Please contact support.",
+          "cancelWarning": "Payment has been received. If you cancel, the money is refunded to the buyer and your reputation is affected."
+        },
+        "buyer": {
+          "title": "Your payment is in escrow. The seller is sending the item.",
+          "cta": "I received it",
+          "submitting": "Confirming…",
+          "cannotCancel": "You cannot cancel — the payment has already been sent.",
+          "confirmModal": {
+            "title": "Confirm delivery",
+            "body": "Do you confirm you received the item? Once you confirm, the payment is released to the seller. This cannot be undone.",
+            "confirm": "Yes, I received it",
+            "dismiss": "Not yet"
+          },
+          "errors": {
+            "INVALID_STATE_TRANSITION": "This transaction is no longer waiting for your confirmation.",
+            "NOT_A_PARTY": "You are not a party to this transaction.",
+            "generic": "Could not confirm. Please try again."
+          }
+        }
       },
       "itemDelivered": {
-        "seller": "Item delivered. Your payout is being processed.",
-        "buyer": "Your item has been delivered."
+        "seller": {
+          "title": "Item delivered. Your payout is scheduled.",
+          "titleWithDate": "Item delivered. Your payout will be sent on {date}.",
+          "explanation": "Steam keeps trades reversible for 7 days. Your payout is sent once that window closes and the item is confirmed to still be with the buyer.",
+          "countdownLabel": "Payout in"
+        },
+        "buyer": {
+          "title": "Your item has been delivered!",
+          "guarantee": "If the seller reverses the trade within the protection window, your payment is refunded."
+        }
+      },
+      "inventoryHidden": {
+        "seller": "The buyer's inventory is private, so we will not be able to verify the delivery automatically — the buyer will have to confirm they received it.",
+        "buyer": "Your Steam inventory is private, so we cannot verify the delivery automatically. When the item arrives, press “I received it” — otherwise the transaction will expire."
       },
       "cancelErrors": {
         "generic": "Could not cancel the transaction. Please try again.",

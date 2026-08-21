@@ -303,6 +303,18 @@ export interface TransactionDetailPaymentEvent {
  */
 export interface TransactionDetailAvailableActions {
   canAccept: boolean;
+  /**
+   * T135 — seller readiness confirmation (03 §2.3). True only for the seller in
+   * ACCEPTED. Server-derived: it already encodes the party check, so the panel
+   * never re-derives "am I the seller and is this the right state".
+   */
+  canConfirmReady?: boolean | null;
+  /**
+   * T135 — buyer receipt confirmation (03 §3.5). True only for the buyer in
+   * PAYMENT_RECEIVED. Absent (undefined) on the public / prospective-buyer
+   * envelope, exactly like the other party-only flags.
+   */
+  canConfirmReceipt?: boolean | null;
   canCancel?: boolean | null;
   canDispute?: boolean | null;
   canEscalate?: boolean | null;
@@ -338,9 +350,25 @@ export interface TransactionDetailResponse {
   paymentEvents?: TransactionDetailPaymentEvent[] | null;
   escrowBotAssetId?: string | null;
   deliveredBuyerAssetId?: string | null;
-  // WP12 backend / WP13 FE — Steam trade-offer deep link. Populated only in the
-  // two TRADE_OFFER_SENT_TO_* states (null on the public surface and elsewhere).
+  /**
+   * Steam trade deep link (07 §7.5). v3.0: populated only in PAYMENT_RECEIVED
+   * for the SELLER, where it is the buyer's own trade URL — the platform builds
+   * no offer of its own (02 §2.2 step 6). Null in every other state, in the
+   * buyer's view, and on the public surface. The field name predates the pivot
+   * and is part of the JSON contract, so it stays.
+   */
   steamTradeOfferUrl?: string | null;
+  /**
+   * T135 — whether the delivery baseline could be taken when the seller
+   * confirmed readiness (07 §7.5, 03 §2.3 step 3). `false` means the 02 §9.2
+   * inventory-evidence path is closed for this transaction and delivery can
+   * only be proven by the buyer's own "Teslim Aldım".
+   *
+   * `undefined` is NOT `false`: before the seller confirms, the buyer's
+   * inventory has never been read, so the server suppresses the field. The
+   * panel must branch on `=== false`, never on falsiness.
+   */
+  buyerInventoryVisible?: boolean | null;
   availableActions: TransactionDetailAvailableActions;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -390,6 +418,76 @@ export function acceptTransaction(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// ---------- POST /transactions/:id/confirm-ready (07 §7.6a) ----------
+
+/**
+ * Response body for `POST /transactions/:id/confirm-ready` (07 §7.6a, T123).
+ *
+ * `buyerInventoryVisible` is returned on EVERY response, not only when false:
+ * the seller is being told which of the two 02 §9.2 evidence paths exists for
+ * this transaction, and a field that appears only in the bad case is one the
+ * client can forget to read. `false` is NOT a failure — the transaction
+ * advances either way; it means delivery can afterwards only be proven by the
+ * buyer's own confirmation. The same fact is mirrored onto the detail envelope
+ * (`buyerInventoryVisible`, 07 §7.5) so it survives a reload and reaches the
+ * buyer, who is the party that carries the resulting obligation.
+ */
+export interface ConfirmReadyResponse {
+  status: TransactionStatus;
+  sellerReadyConfirmedAt: string;
+  paymentDeadline: string;
+  buyerInventoryVisible: boolean;
+}
+
+/**
+ * 03 §2.3 — the seller asserts the item is still sendable. No request body: the
+ * seller is asserting a fact the platform verifies itself (item still in the
+ * inventory and tradeable, buyer's Mobile Authenticator active, buyer's
+ * inventory baseline), so there is nothing for them to submit.
+ *
+ * Error codes (07 §7.6a): `ITEM_NO_LONGER_AVAILABLE` (409),
+ * `INVENTORY_PRIVATE` (422), `BUYER_MOBILE_AUTHENTICATOR_INACTIVE` (403),
+ * `STEAM_UNAVAILABLE` (503), `INVALID_STATE_TRANSITION` (409),
+ * `NOT_A_PARTY` (403).
+ */
+export function confirmReady(id: string): Promise<ConfirmReadyResponse> {
+  return apiClient<ConfirmReadyResponse>(`/transactions/${encodeURIComponent(id)}/confirm-ready`, {
+    method: "POST",
+  });
+}
+
+// ---------- POST /transactions/:id/confirm-receipt (07 §7.6b) ----------
+
+/**
+ * Response body for `POST /transactions/:id/confirm-receipt` (07 §7.6b, T126).
+ * `evidence` carries the 02 §9.2 flags recorded on the transaction as names —
+ * a buyer-driven confirmation always contains `BUYER_CONFIRMED`.
+ */
+export interface ConfirmReceiptResponse {
+  status: TransactionStatus;
+  deliveryVerifiedAt: string;
+  evidence: string[];
+}
+
+/**
+ * 03 §3.5 — the buyer confirms the item arrived. No request body. The
+ * confirmation is against the buyer's own interest (once given, the payout goes
+ * to the seller), which is why it is sufficient proof on its own (06 §2.24) and
+ * why the UI asks for an explicit confirmation before sending it.
+ *
+ * Idempotent (07 §7.6b): repeating it on an already-delivered transaction
+ * returns 200 with the current state rather than a conflict, so a double click
+ * or a retry after a dropped response is not an error path.
+ *
+ * Error codes: `INVALID_STATE_TRANSITION` (409), `NOT_A_PARTY` (403).
+ */
+export function confirmReceipt(id: string): Promise<ConfirmReceiptResponse> {
+  return apiClient<ConfirmReceiptResponse>(
+    `/transactions/${encodeURIComponent(id)}/confirm-receipt`,
+    { method: "POST" },
+  );
 }
 
 // ---------- POST /transactions/:id/cancel (07 §7.7) ----------

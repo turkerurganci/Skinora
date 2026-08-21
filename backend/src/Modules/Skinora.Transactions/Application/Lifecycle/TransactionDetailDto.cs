@@ -48,6 +48,22 @@ public sealed record TransactionDetailDto(
     // view, and in the public/trimmed shape. The property name predates the
     // v3.0 pivot and is kept because it is part of the 07 §7.5 JSON contract.
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SteamTradeOfferUrl,
+    // T135 — whether the delivery baseline could be taken when the seller
+    // confirmed readiness (03 §2.3 step 3). The same fact 07 §7.6a returns once,
+    // in the confirm-ready response; persisted here because it stays true for
+    // the rest of the transaction and BOTH parties act on it: false means the
+    // 02 §9.2 inventory-evidence path is closed and delivery can only be proven
+    // by the buyer pressing "Teslim Aldım" (04 §7.3 ACCEPTED note, 03 §3.5
+    // note). Surfacing it only in the one-shot confirm-ready reply would put a
+    // standing obligation behind a message that disappears on the next reload —
+    // and the buyer, who carries that obligation, never sees that reply at all.
+    //
+    // Null (field suppressed) means "not known yet", not "visible": before the
+    // seller confirms, the buyer's inventory has never been read. The gate is
+    // the milestone stamp, not a status name — same rule the sibling `payment`
+    // block uses (07 §7.5), so the answer survives a later cancellation.
+    // Party-only: null on the public / prospective-buyer surface.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? BuyerInventoryVisible,
     AvailableActionsDto AvailableActions,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CreatedAt,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? UpdatedAt);

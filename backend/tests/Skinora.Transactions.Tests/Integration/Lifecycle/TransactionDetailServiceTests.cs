@@ -697,7 +697,8 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         BuyerIdentificationMethod method = BuyerIdentificationMethod.STEAM_ID,
         string? inviteToken = null,
         string? buyerTradeUrl = null,
-        bool sellerConfirmed = false)
+        bool sellerConfirmed = false,
+        bool baselineCaptured = false)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
@@ -730,6 +731,10 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
             // T123 — the payment-block gate reads this stamp (03 §2.3 step 4).
             SellerReadyConfirmedAt = sellerConfirmed ? nowUtc.AddMinutes(-3) : null,
+            // T135 — the buyerInventoryVisible projection reads this column's
+            // NULL-ness (06 §3.5). Left NULL when the readiness read failed.
+            BuyerBaselineCapturedAt = baselineCaptured ? nowUtc.AddMinutes(-3) : null,
+            BuyerBaselineClassCount = baselineCaptured ? 0 : null,
             // CK_Transactions_Cancel — CANCELLED_* requires these three.
             CancelledBy = IsCancelledStatus(status) ? CancelledByType.ADMIN : null,
             CancelReason = IsCancelledStatus(status) ? "admin cancel (test)" : null,
@@ -791,5 +796,114 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
 
         Assert.Null(outcome.Body!.SteamTradeOfferUrl);
+    }
+
+    // ---------- T135: buyerInventoryVisible (07 §7.5, 03 §2.3 step 3) ----------
+    //
+    // The flag tells both parties whether the 02 §9.2 inventory-evidence path
+    // is open. It is a projection of BuyerBaselineCapturedAt's NULL-ness, gated
+    // on the SAME milestone stamp as the sibling `payment` block, so the four
+    // cases below mirror the T123 payment-block cases deliberately.
+
+    [Theory]
+    [InlineData(TransactionStatus.CREATED)]
+    [InlineData(TransactionStatus.ACCEPTED)]
+    public async Task BuyerInventoryVisible_Is_Unknown_Before_The_Seller_Confirms_Readiness(
+        TransactionStatus status)
+    {
+        // "Not read yet" must not be reported as "visible": the baseline read
+        // happens inside confirm-ready, so before that stamp there is no answer
+        // and the field is suppressed entirely (07 §7.5).
+        var transaction = await CreateTransactionAsync(status, buyerId: _buyer.Id);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.BuyerInventoryVisible);
+    }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Is_True_When_The_Baseline_Was_Captured()
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED,
+            buyerId: _buyer.Id,
+            sellerConfirmed: true,
+            baselineCaptured: true);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.True(outcome.Body!.BuyerInventoryVisible);
+    }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Is_False_When_The_Baseline_Read_Failed()
+    {
+        // 06 §3.5: a NULL BuyerBaselineCapturedAt IS the signal that the
+        // evidence path is closed — the seller confirmed, the read did not land.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED,
+            buyerId: _buyer.Id,
+            sellerConfirmed: true,
+            baselineCaptured: false);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.False(outcome.Body!.BuyerInventoryVisible);
+    }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Reaches_The_Buyer_Too()
+    {
+        // 03 §3.5 — the obligation created by a false flag ("only your own
+        // 'Teslim Aldım' can prove delivery") is the BUYER's, and the buyer
+        // never sees the §7.6a confirm-ready reply the seller got it from.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.PAYMENT_RECEIVED,
+            buyerId: _buyer.Id,
+            sellerConfirmed: true,
+            baselineCaptured: false);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.False(outcome.Body!.BuyerInventoryVisible);
+    }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Survives_A_Cancellation_That_Happened_After_The_Read()
+    {
+        // Same rule as the payment block: the read really did happen, and a
+        // dispute or an admin may still need to know which evidence path
+        // existed. A status-set gate would erase that.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.CANCELLED_TIMEOUT,
+            buyerId: _buyer.Id,
+            sellerConfirmed: true,
+            baselineCaptured: true);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.True(outcome.Body!.BuyerInventoryVisible);
+    }
+
+    [Fact]
+    public async Task BuyerInventoryVisible_Is_Never_Shown_To_A_Public_Viewer()
+    {
+        // A visitor who is not a party carries no delivery obligation, and the
+        // readability of a stranger's Steam inventory is not theirs to learn.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED,
+            buyerId: _buyer.Id,
+            sellerConfirmed: true,
+            baselineCaptured: true);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.BuyerInventoryVisible);
     }
 }
