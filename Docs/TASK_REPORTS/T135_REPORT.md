@@ -223,7 +223,7 @@ stack'i (8 konteyner) çalışıyordu ve CI iki koşumda da yeşildi. Satır
 - Branch: `task/T135-state-action-panel-matrix`
 - Commit: `ed0fdaa` — T135: StateActionPanel state×rol matrisi
 - PR: [#253](https://github.com/turkerurganci/Skinora/pull/253)
-- CI: **✓ PASS** — dal HEAD `ed0fdaa`, run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539), `CI Gate` **success**.
+- CI: **✓ PASS** — dalın **üç** commit'inin üçü de yeşil: `ed0fdaa` run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539) · `f0fbd8f` run [`32462859570`](https://github.com/turkerurganci/Skinora/actions/runs/32462859570) · **dal HEAD `c67937b` run [`32468527905`](https://github.com/turkerurganci/Skinora/actions/runs/32468527905)** — üçünde de `CI Gate` **success**. Mutasyon sondajının eklediği **sekizinci testi** kapsayan koşum sonuncusudur.
   Bloke edici **10 job'un 10'u** yeşil: Lint · Build · Unit test · JS test (vitest) · **Integration test** ·
   Contract test · Migration dry-run · Docker build (backend) · Docker build (frontend) · CI Gate.
   Docker build **iki kolda birden** koştu (backend + frontend) — tur her iki tarafa da dokunduğu için
