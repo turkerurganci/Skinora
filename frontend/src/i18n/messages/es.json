@@ -20,7 +20,7 @@
   "landing": {
     "hero": {
       "title": "Custodia segura para el comercio de ítems de CS2",
-      "subtitle": "Tu ítem y tu pago cambian de manos mediante una custodia automática y neutral.",
+      "subtitle": "Tu pago se mantiene en una custodia neutral y verificada automáticamente mientras el vendedor te envía el ítem directamente.",
       "cta": "Iniciar sesión con Steam",
       "ctaDisabledHint": "La plataforma está en mantenimiento. Inténtalo de nuevo más tarde."
     },
@@ -29,19 +29,19 @@
       "steps": {
         "sellerStarts": {
           "title": "El vendedor inicia la operación",
-          "description": "Crea una nueva transacción con el ítem, el precio y los datos del comprador."
+          "description": "Crea una nueva transacción con el ítem y el precio, y luego invita al comprador."
         },
-        "itemEscrowed": {
-          "title": "El ítem entra en custodia",
-          "description": "El ítem se envía al bot de la plataforma en Steam y se conserva de forma segura."
+        "paymentEscrowed": {
+          "title": "El pago entra en custodia",
+          "description": "El vendedor confirma que está listo para enviar; solo entonces se abre la dirección de pago y el comprador paga a la custodia."
         },
-        "buyerPays": {
-          "title": "El comprador envía el pago",
-          "description": "Se envían USDT/USDC a la dirección indicada y la cadena verifica automáticamente."
+        "sellerDelivers": {
+          "title": "El vendedor envía el ítem",
+          "description": "El vendedor envía el ítem directamente al comprador en Steam; la plataforma nunca lo retiene."
         },
         "autoSettle": {
-          "title": "Entrega y pago automáticos",
-          "description": "El ítem se entrega al comprador y el pago del vendedor se libera en el mismo paso."
+          "title": "Verificación y pago automáticos",
+          "description": "La plataforma verifica la entrega y libera el pago del vendedor."
         }
       }
     },
@@ -113,7 +113,7 @@
       "description": "Revisa y acepta antes de continuar.",
       "summaryHeading": "Puntos clave",
       "summary": {
-        "escrow": "Tu artículo y tu pago se mantienen en depósito hasta que ambas partes cumplan.",
+        "escrow": "Tu pago se mantiene en custodia hasta que el vendedor entrega el ítem; la plataforma nunca retiene el ítem.",
         "commission": "Se cobra una comisión al vendedor al completarse la operación.",
         "crypto": "Los pagos se hacen en USDT o USDC únicamente en la red TRON.",
         "disputes": "Las disputas son revisadas por administradores de Skinora.",
@@ -193,7 +193,6 @@
     "disputes": "Disputas",
     "transactions": "Transacciones",
     "settings": "Configuración",
-    "steamAccounts": "Cuentas de Steam",
     "roles": "Roles",
     "users": "Usuarios",
     "auditLog": "Registro de auditoría"
@@ -274,20 +273,6 @@
       "pendingFlags": "Marcadas pendientes",
       "dailyCompleted": "Completadas hoy",
       "weeklyCompleted": "Completadas en la semana"
-    },
-    "steamAccounts": {
-      "title": "Cuentas de Steam",
-      "manage": "Gestionar",
-      "warning": "{count} cuenta(s) de bot requieren atención.",
-      "cardAriaLabel": "Cuenta {name} — {status}",
-      "empty": "No hay bots de Steam configurados.",
-      "loadError": "No se pudieron cargar las cuentas de Steam.",
-      "status": {
-        "ACTIVE": "Activa",
-        "RESTRICTED": "Restringida",
-        "BANNED": "Bloqueada",
-        "OFFLINE": "Sin conexión"
-      }
     },
     "recentFlags": {
       "title": "Últimas marcadas",
@@ -734,71 +719,6 @@
       "other": "Otros"
     }
   },
-  "adminSteamAccounts": {
-    "title": "Cuentas de Steam",
-    "loadError": "No se pudieron cargar las cuentas de Steam.",
-    "empty": "No hay bots de Steam configurados.",
-    "banner": {
-      "warning": "{count} cuenta(s) de bot requieren atención.",
-      "diverted": "Las nuevas transacciones se han redirigido a otras cuentas."
-    },
-    "status": {
-      "ACTIVE": "Activa",
-      "RESTRICTED": "Restringida",
-      "BANNED": "Baneada",
-      "OFFLINE": "Sin conexión"
-    },
-    "card": {
-      "steamId": "Steam ID",
-      "escrow": "Custodia",
-      "escrowValue": "{count} ítems",
-      "dailyTrade": "Intercambio diario",
-      "dailyTradeValue": "{count} / {limit}",
-      "lastCheck": "Última comprobación",
-      "neverChecked": "Nunca comprobada"
-    },
-    "restricted": {
-      "warning": "Esta cuenta está restringida. Las nuevas transacciones se redirigen a otras cuentas.",
-      "escrowWarning": "Esta cuenta tiene {count} ítems en custodia — esas transacciones no pueden continuar automáticamente y requieren recuperación/intervención manual.",
-      "escrowItemsInQueue": "Esos ítems se listan en la cola de recuperación de abajo."
-    },
-    "banned": {
-      "warning": "Esta cuenta está baneada. Se requiere intervención urgente."
-    },
-    "recovery": {
-      "titleFor": "Cola de recuperación — {bot}",
-      "description": "Ítems aún en custodia en este bot restringido/baneado — cada fila es una transacción que no puede continuar automáticamente.",
-      "ariaLabel": "Cola de recuperación",
-      "empty": "No hay ítems en recuperación para este bot.",
-      "loading": "Cargando la cola de recuperación…",
-      "loadError": "No se pudo cargar la cola de recuperación.",
-      "onHold": "En espera",
-      "statusValue": {
-        "PENDING": "Pendiente",
-        "IN_REVIEW": "En revisión",
-        "RESOLVED": "Resuelto"
-      },
-      "columns": {
-        "transactionId": "ID de transacción",
-        "item": "Ítem",
-        "parties": "Vendedor / Comprador",
-        "state": "Estado de la transacción",
-        "recoveryStatus": "Estado de recuperación",
-        "responsibleAdmin": "Administrador responsable",
-        "note": "Nota del administrador",
-        "actions": "Acciones"
-      },
-      "actions": {
-        "manualRecovery": "Iniciar recuperación manual",
-        "resolve": "Marcar como resuelto",
-        "done": "Resuelto",
-        "editNote": "Editar",
-        "save": "Guardar",
-        "cancel": "Cancelar",
-        "assignAdmin": "Asignar…"
-      }
-    }
-  },
   "adminRoles": {
     "title": "Gestión de Roles y Permisos",
     "loadError": "No se pudieron cargar los roles.",
@@ -850,8 +770,6 @@
       "MANAGE_FLAGS": "Gestionar flags",
       "VIEW_TRANSACTIONS": "Ver transacciones",
       "MANAGE_SETTINGS": "Gestionar parámetros",
-      "VIEW_STEAM_ACCOUNTS": "Ver cuentas de Steam",
-      "MANAGE_STEAM_RECOVERY": "Gestionar recuperación de Steam",
       "VIEW_USERS": "Ver detalles de usuario",
       "MANAGE_ROLES": "Gestionar roles",
       "VIEW_AUDIT_LOG": "Ver registro de auditoría",
@@ -896,7 +814,7 @@
         },
         "howWeUse": {
           "heading": "Cómo usamos tus datos",
-          "body": "Usamos tus datos para autenticarte, crear y liquidar transacciones de custodia, enviar y verificar ofertas de intercambio de Steam, y procesar pagos en stablecoin, comisiones, pagos y reembolsos. También los usamos para detectar y prevenir el fraude, aplicar reglas de elegibilidad como la edad, el geobloqueo y el cribado de sanciones, resolver disputas y cumplir nuestras obligaciones legales, contables y de seguridad."
+          "body": "Usamos tus datos para autenticarte, crear y liquidar transacciones de custodia, verificar las entregas de Steam leyendo los inventarios, y procesar pagos en stablecoin, comisiones, pagos y reembolsos. También los usamos para detectar y prevenir el fraude, aplicar reglas de elegibilidad como la edad, el geobloqueo y el cribado de sanciones, resolver disputas y cumplir nuestras obligaciones legales, contables y de seguridad."
         },
         "dataSharing": {
           "heading": "Intercambio de datos",
@@ -1430,7 +1348,6 @@
       },
       "cancelledAt": "Cancelada el",
       "reason": "Motivo",
-      "itemReturned": "Ítem devuelto",
       "paymentRefunded": "Pago reembolsado",
       "yes": "Sí",
       "no": "No",

@@ -32,11 +32,12 @@ import { TIMELINE_STEPS } from "@/components/common/TransactionTimeline";
  *
  * SCOPE — state it, do not assume it. Other SCREAMING_SNAKE i18n blocks are not
  * keyed by an enum in `types/enums.ts` and are deliberately out of scope:
- * `adminRoles.permissions` mirrors the backend `PermissionCatalog` and is owned
- * by T136 (`T133a-FePermissionCatalogKeys`); `adminAuditLog.category`,
- * `adminFlags.signalType`, `adminTransactions.statusGroup` and the
- * `adminSteamAccounts.*` blocks are API projections/vocabularies, not enum
- * copies.
+ * `adminAuditLog.category`, `adminFlags.signalType` and
+ * `adminTransactions.statusGroup` are API projections/vocabularies, not enum
+ * copies. `adminRoles.permissions` mirrors the backend `PermissionCatalog`,
+ * which is a static class rather than a C# enum — T136 gave it its own guard in
+ * `lib/admin/permissionCatalog.parity.test.ts`. The `adminSteamAccounts.*`
+ * blocks that used to sit in this list were deleted outright in T136.
  */
 
 const LOCALES = ["en", "tr", "es", "zh"] as const;

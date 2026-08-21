@@ -12,7 +12,6 @@ interface AdminMenuItem {
     | "disputes"
     | "transactions"
     | "settings"
-    | "steamAccounts"
     | "roles"
     | "users"
     | "auditLog";
@@ -25,7 +24,6 @@ const MENU: readonly AdminMenuItem[] = [
   { key: "disputes", path: "/admin/disputes" },
   { key: "transactions", path: "/admin/transactions" },
   { key: "settings", path: "/admin/settings" },
-  { key: "steamAccounts", path: "/admin/steam-accounts" },
   { key: "roles", path: "/admin/roles" },
   { key: "users", path: "/admin/users" },
   { key: "auditLog", path: "/admin/audit-logs" },

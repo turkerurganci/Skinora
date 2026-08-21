@@ -4,7 +4,6 @@ import { HubConnection, HubConnectionState } from "@microsoft/signalr";
 import { createHubConnection } from "./connection";
 import {
   NotificationHubEvents,
-  type AdminBotStatusChangedPayload,
   type AdminHotWalletThresholdBreachedPayload,
   type AdminReconciliationMismatchPayload,
   type DiscordConnectedPayload,
@@ -22,7 +21,6 @@ export interface NotificationHubHandlers {
   onMaintenanceStatusChanged?: (p: MaintenanceStatusChangedPayload) => void;
   // Admin-scoped (WP9) — only fire for connections the backend joined to the
   // admin group, so a non-admin session never receives these.
-  onAdminBotStatusChanged?: (p: AdminBotStatusChangedPayload) => void;
   onAdminReconciliationMismatch?: (p: AdminReconciliationMismatchPayload) => void;
   onAdminHotWalletThresholdBreached?: (p: AdminHotWalletThresholdBreachedPayload) => void;
 }
@@ -98,9 +96,6 @@ class NotificationsHubClient {
     );
     conn.on(NotificationHubEvents.MaintenanceStatusChanged, (p: MaintenanceStatusChangedPayload) =>
       this.dispatch((h) => h.onMaintenanceStatusChanged?.(p)),
-    );
-    conn.on(NotificationHubEvents.AdminBotStatusChanged, (p: AdminBotStatusChangedPayload) =>
-      this.dispatch((h) => h.onAdminBotStatusChanged?.(p)),
     );
     conn.on(
       NotificationHubEvents.AdminReconciliationMismatch,

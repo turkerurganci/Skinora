@@ -1,13 +1,17 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { RecentFlagsTable, SteamAccountsStatus, SummaryCards } from "@/components/admin";
+import { RecentFlagsTable, SummaryCards } from "@/components/admin";
 import { useAdminDashboard } from "@/lib/hooks/useAdminDashboard";
 
 /**
- * S12 — Admin Dashboard (04 §8.1). One AD1 fetch fans out into three
- * children; each child manages its own loading / error sub-state so a partial
- * failure on the bot block doesn't blank out the summary counters.
+ * S12 — Admin Dashboard (04 §8.1). One AD1 fetch fans out into two children;
+ * each child manages its own loading / error sub-state so a partial failure on
+ * the flag table doesn't blank out the summary counters.
+ *
+ * The Steam bot health block was removed in T136: AD1 stopped emitting
+ * `steamAccounts` in T132 and the platform runs no bot accounts at all under
+ * P2P (04 §8.7).
  */
 export default function AdminDashboardPage() {
   const t = useTranslations("adminDashboard");
@@ -28,14 +32,7 @@ export default function AdminDashboardPage() {
         className="mb-6"
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SteamAccountsStatus
-          accounts={data?.steamAccounts}
-          isLoading={isLoading}
-          isError={isError}
-        />
-        <RecentFlagsTable flags={data?.recentFlags} isLoading={isLoading} isError={isError} />
-      </div>
+      <RecentFlagsTable flags={data?.recentFlags} isLoading={isLoading} isError={isError} />
     </div>
   );
 }
