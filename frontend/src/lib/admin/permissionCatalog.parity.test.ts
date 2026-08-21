@@ -65,7 +65,10 @@ function parseBackendPermissionKeys(): string[] {
 
   return [...all[1].matchAll(/new\(Keys\.(\w+),/g)].map((m) => {
     const value = constants.get(m[1]);
-    expect(value, `PermissionCatalog.Keys.${m[1]} is referenced by All but not declared`).toBeDefined();
+    expect(
+      value,
+      `PermissionCatalog.Keys.${m[1]} is referenced by All but not declared`,
+    ).toBeDefined();
     return value as string;
   });
 }
