@@ -4208,6 +4208,43 @@ Task T138: E2E spec'lerinin yeniden yazımı
     record'dan düşmüş `itemReturned` alanından hâlâ söz ediyor. Yalnız yorum;
     e2e görevinde production kaynağına dokunmamak için düzeltilmedi.
 
+Task T140 (ÖNERİ — proje sahibi onayı bekliyor): `DELIVERY_EXPECTED`
+       bildiriminin yayıncısının bağlanması
+  Bağımlılık: —  (kaynak T138'in E2E turu, 2026-08-21)
+  Kaynak: `DEFERRED_BACKLOG` §Öne Çıkanlar
+       `T138-DeliveryExpectedNeverPublished` (🔴).
+  ÖLÇÜLEN AÇIK: `HappyPathMilestoneNotificationConsumer`'ın `PAYMENT_RECEIVED`
+       kolu — 03 §3.5 adım 3'ün satıcıya "para emanette, item'ı doğrudan alıcıya
+       gönder" çağrısı — `TransactionStatusChangedEvent`'i tüketiyor. O olayın
+       repodaki BEŞ yayıncısının hiçbiri ödeme onayı yolu değil:
+       `AmountValidationService.AdvanceStateMachineAsync`, tek
+       `→ PAYMENT_RECEIVED` üreticisi, yalnız `PaymentReceivedEvent` yayınlıyor.
+       Kolun tamamı erişilemez ölü kod; aynı olayın ikinci tüketicisi
+       `TransactionStatusChangedRealtimeConsumer` de bu geçiş için sessiz.
+  NEDEN ÖNEMLİ: P2P'de satıcının item'ı göndermesi akışın beklediği TEK eylem ve
+       platform o trade'e taraf değil — başka hiçbir mekanizma satıcıyı
+       dürtmüyor. Uyarılmayan satıcının `DeliveryDeadline`'ı işliyor, pencere
+       dolunca 03 §4.4 iptal ediyor ve 06 §3.1 kusuru SATICIYA yazıyor. Yani
+       hiç iletilmemiş bir talebin yerine getirilmemesi cezalandırılıyor.
+  ÖNERİLEN KABUL KRİTERLERİ:
+    AC1 — `AdvanceStateMachineAsync` geçişle AYNI `SaveChangesAsync` içinde
+       `TransactionStatusChangedEvent(SELLER_CONFIRMED → PAYMENT_RECEIVED)`
+       yayınlar (09 §13.3): geri alınan bir ödeme onayı bildirim doğurmamalı.
+    AC2 — Satıcı `DELIVERY_EXPECTED` inbox satırını alır; alıcı ALMAZ (bu kol
+       v3.0'da taraf değiştirdi).
+    AC3 — İkinci tüketici gözden geçirilir: `TransactionStatusChangedRealtimeConsumer`
+       ile `PaymentReceivedEvent`'in kendi realtime tüketicisi aynı geçiş için
+       ÇİFT push üretmemeli; `ProcessedEventStore` idempotency'si iki olay için
+       de korunmalı.
+    AC4 — E2E kendini kapatan işaret ÇEVRİLİR: `happy-path.smoke.spec.ts`'teki
+       "gap marker" bloğu silinir ve `DELIVERY_EXPECTED` yeniden
+       `EXPECTED_NOTIFICATIONS` listesine alınır. (T138 o işareti, açık
+       kapandığında testin KIRILACAĞI şekilde bıraktı — bu AC o kırılmanın
+       cevabıdır, sürpriz değil.)
+  NOT: T133b'nin B4'üyle (`POST /api/monitor/start`'ın çağıranı yoktu → T139)
+       aynı sınıf: v3.0 için yazılmış tüketici + hiç bağlanmamış yayıncı, ve
+       ikisini de yalnız uçtan uca ağ görebilirdi.
+
 Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
   Bağımlılık: T71 (sidecar `POST /api/monitor/start` ucu) · T75 (post-cancel
        izleyicinin kurma/kurtarma deseni) · T123 (`SELLER_CONFIRMED` geçişi) —

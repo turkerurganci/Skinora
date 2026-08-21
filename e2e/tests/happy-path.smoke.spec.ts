@@ -53,12 +53,15 @@ import * as api from '../src/api';
 // flipped RECIPIENT — it used to tell the buyer to accept the platform's offer
 // and now tells the seller to send the item. COMPLETED still fans out to BOTH
 // parties; ITEM_DELIVERED is realtime-only and must NOT appear in an inbox.
+//
+// DELIVERY_EXPECTED is deliberately ABSENT from this list — see the gap marker
+// at the bottom of the test. It is not "not expected"; it is currently
+// unproducible, and the marker is what will force this list to be corrected.
 const EXPECTED_NOTIFICATIONS = [
   'TRANSACTION_INVITE',
   'BUYER_ACCEPTED',
   'PAYMENT_WINDOW_OPEN',
   'PAYMENT_RECEIVED',
-  'DELIVERY_EXPECTED',
   'SELLER_PAYMENT_SENT',
   'TRANSACTION_COMPLETED',
 ];
@@ -191,4 +194,36 @@ test('happy path: CREATED → COMPLETED through the P2P chain, with WP19 notific
     notifTypes,
     `ITEM_DELIVERED must be suppressed: ${JSON.stringify(notifTypes)}`,
   ).not.toContain('ITEM_DELIVERED');
+
+  // ---------------------------------------------------------------------------
+  // GAP MARKER — NOT an expectation. Read this before "fixing" the assertion.
+  //
+  // 03 §3.5 step 3 says the seller is told DELIVERY_EXPECTED ("the money is in
+  // escrow, send the item directly to the buyer") on entry to PAYMENT_RECEIVED.
+  // In P2P that notification is the ONLY prompt for the one action the whole
+  // flow now waits on — the platform is not a party to the trade, so nothing
+  // else will nudge the seller.
+  //
+  // It is currently UNPRODUCIBLE. HappyPathMilestoneNotificationConsumer's
+  // PAYMENT_RECEIVED leg consumes TransactionStatusChangedEvent, and the payment
+  // confirmation path (AmountValidationService.AdvanceStateMachineAsync — the
+  // only producer of "-> PAYMENT_RECEIVED") publishes PaymentReceivedEvent and
+  // nothing else. Five publishers of TransactionStatusChangedEvent exist in the
+  // repo; none of them is that path. So the consumer's whole PAYMENT_RECEIVED
+  // leg is dead code, and a seller who never opens the site is cancelled at the
+  // delivery deadline with the fault recorded against them (03 §4.4, 06 §3.1).
+  //
+  // T138 found this and did NOT paper over it: the type was removed from
+  // EXPECTED_NOTIFICATIONS above and replaced by the assertion below, which is
+  // the inverse. It FAILS on the day the gap is closed — and that is its whole
+  // purpose. When it does: move DELIVERY_EXPECTED back into
+  // EXPECTED_NOTIFICATIONS and delete this block. Owner:
+  // DEFERRED_BACKLOG "T138-DeliveryExpectedNeverPublished" (proposed task T140).
+  // ---------------------------------------------------------------------------
+  expect(
+    notifTypes,
+    'DELIVERY_EXPECTED is being produced now — the gap is CLOSED. Move it back ' +
+      'into EXPECTED_NOTIFICATIONS and delete the gap marker block above ' +
+      '(DEFERRED_BACKLOG: T138-DeliveryExpectedNeverPublished).',
+  ).not.toContain('DELIVERY_EXPECTED');
 });

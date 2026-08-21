@@ -19,10 +19,11 @@ import * as api from '../src/api';
  *   1. Seller cancel before payment   → CANCELLED_SELLER, buyer notified.
  *   2. Buyer cancel before payment    → CANCELLED_BUYER,  seller notified.
  *   3. Admin cancel before payment    → CANCELLED_ADMIN,  both notified.
- *   4. Post-payment                   → user cancel rejected (PAYMENT_ALREADY_SENT, 422),
+ *   4. Post-payment, BUYER            → rejected (PAYMENT_ALREADY_SENT, 422);
  *                                        admin cancel refunds the buyer + notifies both.
+ *   5. Post-payment, SELLER           → ALLOWED (CANCELLED_SELLER + full refund).
  *
- * Two things changed with the P2P pivot, and both are visible here:
+ * Three things changed with the P2P pivot, and all three are visible here:
  *
  *   The "before payment" state is now SELLER_CONFIRMED, not ITEM_ESCROWED. It is
  *   the same moment in the story — everything is arranged and the buyer's money
@@ -37,6 +38,18 @@ import * as api from '../src/api';
  *   asserting the field's absence would be asserting a DTO shape, so what these
  *   tests assert instead is the substantive half: no refund is queued, because
  *   no money moved either.
+ *
+ *   The post-payment cancel became ASYMMETRIC. The custody rule was symmetric —
+ *   "once payment is in, NEITHER party may cancel" — and it was symmetric
+ *   because a cancel then had to unwind an item the platform was holding. In P2P
+ *   the item is still the seller's at PAYMENT_RECEIVED, so backing out costs
+ *   nothing to undo: the BUYER is refused (their money is in escrow and the
+ *   seller is mid-obligation) while the SELLER may still withdraw, and doing so
+ *   refunds the buyer in full. `TransactionCancellationService` says this in as
+ *   many words, and warns that guarding both parties "would silently reinstate
+ *   the pre-pivot rule" — which is exactly what the first draft of test 4 did,
+ *   and what CI caught: the seller's cancel answered 200 CANCELLED_SELLER where
+ *   the test demanded 422.
  */
 
 const CANCEL_REASON = 'E2E cancellation scenario — automated reason text.';
@@ -154,28 +167,32 @@ test('admin cancel before payment → CANCELLED_ADMIN, nothing refunded, both pa
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('post-payment: user cancel blocked (422); admin cancel refunds buyer + notifies both', async () => {
-  const { txId, sellerToken, buyerToken } = await createAndConfirmReady();
-
-  // Buyer pays (fake control endpoint: detect → confirm exact amount).
-  const pay = await api.payViaFake(txId);
-  expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
-
-  // PAYMENT_RECEIVED is a resting state in P2P: nothing advances it but the
-  // buyer's confirmation, an admin, or the delivery deadline. The custody-era
-  // helper that hedged against a per-minute delivery-dispatch job racing this
-  // poll (pollUntilRefundableCancel) went with the job it was hedging against.
+/** Drive an already-ready transaction to PAYMENT_RECEIVED. Resting state in P2P:
+ *  nothing advances it but the buyer's confirmation, an admin, or the delivery
+ *  deadline — which is why the custody-era helper that hedged against a
+ *  per-minute delivery-dispatch job (pollUntilRefundableCancel) went with the
+ *  job it was hedging against. */
+async function payAndSettleIntoEscrow(txId: string, buyerToken: string): Promise<void> {
+  const result = await api.payViaFake(txId);
+  expect(result.ok, `pay failed: ${JSON.stringify(result.body)}`).toBeTruthy();
   await api.pollStatus(buyerToken, txId, 'PAYMENT_RECEIVED', { timeoutMs: 90_000 });
+}
 
-  // 03 §2.5 / §3.3 — once payment is in, NEITHER party may cancel. The cancel
-  // service short-circuits every post-payment state to PAYMENT_ALREADY_SENT,
-  // which the controller maps uniquely to 422 (other failures use 400/403/404/409).
-  const sellerBlocked = await api.cancelTransaction(sellerToken, txId, CANCEL_REASON);
-  expect(sellerBlocked.status, `seller cancel body: ${JSON.stringify(sellerBlocked.body)}`).toBe(
-    422,
-  );
+function errorCode(body: unknown): unknown {
+  return ((body as Record<string, unknown>)?.error as Record<string, unknown>)?.code;
+}
+
+test('post-payment: buyer cancel blocked (422); admin cancel refunds buyer + notifies both', async () => {
+  const { txId, buyerToken } = await createAndConfirmReady();
+  await payAndSettleIntoEscrow(txId, buyerToken);
+
+  // 02 §7 — the BUYER is refused once their money is in escrow. The cancel
+  // service short-circuits to PAYMENT_ALREADY_SENT, which the controller maps
+  // uniquely to 422 (other failures use 400/403/404/409). The seller is NOT
+  // refused here — that is test 5.
   const buyerBlocked = await api.cancelTransaction(buyerToken, txId, CANCEL_REASON);
   expect(buyerBlocked.status, `buyer cancel body: ${JSON.stringify(buyerBlocked.body)}`).toBe(422);
+  expect(errorCode(buyerBlocked.body)).toBe('PAYMENT_ALREADY_SENT');
 
   // 03 §8.7 — admin CAN cancel after payment (until ITEM_DELIVERED). This is the
   // unique admin capability: the buyer's payment is refunded.
@@ -202,4 +219,35 @@ test('post-payment: user cancel blocked (422); admin cancel refunds buyer + noti
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
   expect(recipients).toContain(seed.sellerId.toLowerCase());
   expect(recipients).toContain(seed.buyerId.toLowerCase());
+});
+
+test('post-payment: the SELLER may still back out — CANCELLED_SELLER refunds the buyer in full', async () => {
+  const { txId, sellerToken, buyerToken } = await createAndConfirmReady();
+  await payAndSettleIntoEscrow(txId, buyerToken);
+
+  // 02 §7 / 07 §7.7 — the v3.0 asymmetry. At PAYMENT_RECEIVED the item is still
+  // the seller's, so their withdrawal has nothing to unwind: the transaction
+  // cancels and the buyer's escrowed money goes straight back. Letting the
+  // delivery window expire instead would reach the same place by the slower
+  // route AND record a fault against them (03 §4.4), so this branch is the
+  // honest exit rather than a loophole.
+  const cancel = await api.cancelTransaction(sellerToken, txId, CANCEL_REASON);
+  expect(cancel.ok, `seller cancel failed: ${JSON.stringify(cancel.body)}`).toBeTruthy();
+  const body = api.unwrap(cancel.body);
+  expect(body.status).toBe('CANCELLED_SELLER');
+  // The one place a NON-admin cancel reports a refund.
+  expect(body.paymentRefunded).toBe(true);
+
+  // The refund is real, not merely reported: a BUYER_REFUND transfer is queued
+  // and confirmed to the buyer's trade-side refund wallet (02 §4.6 net of gas).
+  const refund = await pollBuyerRefundConfirmed(txId);
+  expect(refund, 'BUYER_REFUND row never queued for a post-payment seller cancel').not.toBeNull();
+  expect(refund?.status).toBe('CONFIRMED');
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+
+  // 03 §2.5 step 9 — a seller-initiated cancel notifies the counter-party only,
+  // exactly as it does before payment. The refund does not widen the fan-out.
+  const recipients = await pollCancelledNoticeRecipients([seed.buyerId]);
+  expect(recipients).toContain(seed.buyerId.toLowerCase());
+  expect(recipients).not.toContain(seed.sellerId.toLowerCase());
 });

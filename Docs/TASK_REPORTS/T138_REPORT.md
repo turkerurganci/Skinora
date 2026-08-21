@@ -68,6 +68,37 @@ Kabul kriteri üç "yeni spec" sayıyor; ikisi yeni dosyaya, biri mevcut suite'i
 | Delivery timeout → satıcı kusurlu iptal | `timeout.spec.ts` #4 | 03 §4'ün **dördüncü fazı**. Dört fazı bir arada tutmak dokümanın kendi yapısı; ayrıca üç doğrulama kolundan **iptal eden tek kol** budur |
 | Satıcı başka yere gönderdi → auto-escalation | `delivery.spec.ts` #2 | İptal **etmeyen** kol. Timeout suite'ine koymak "timeout iptal eder" iddiasını yanlışlardı |
 
+## CI turu 1 — ağın ilk kez P2P'ye göre koşması ve iki bulgu
+
+Tur 1'de 10 leg'in 8'i yeşil geldi (taban: 8/8 kırmızı). Kalan ikisi **birbirinden çok farklı** iki şeydi ve ayırt edilmeleri turun asıl değeriydi.
+
+### B1 — `cancellation.spec.ts` #4: benim spec hatam (düzeltildi)
+
+Test, satıcının `PAYMENT_RECEIVED`'da iptalinin 422 `PAYMENT_ALREADY_SENT` almasını bekliyordu; backend **200 `CANCELLED_SELLER` + `paymentRefunded: true`** döndü.
+
+Backend haklıydı. `TransactionCancellationService` v3.0'da post-payment iptali **asimetrik** yapmış ve bunu açıkça yazmış: *"the BUYER is refused once their money is in escrow…; the SELLER may still back out of PAYMENT_RECEIVED, which refunds the buyer"* — üstelik kodun kendi yorumu, guard'ı iki tarafa birden uygulamanın *"would silently reinstate the pre-pivot rule"* olacağı uyarısını taşıyor. İlk taslağım tam olarak o pre-pivot kuralı iddia ediyordu.
+
+Kural P2P'de anlamlı: `PAYMENT_RECEIVED`'da item hâlâ satıcıdadır, yani geri çekilmenin geri alınacak bir tarafı yoktur — alıcının parası tam olarak geri döner. Alıcı reddedilir çünkü parası emanettedir ve satıcı yükümlülüğünün ortasındadır.
+
+**Düzeltme:** test 4 yalnız **alıcının** reddini (+ hata kodunu) ve admin iptalini iddia ediyor; asimetrinin diğer yarısı için **yeni test 5** yazıldı — satıcı geri çekilir, `CANCELLED_SELLER` + `paymentRefunded: true`, `BUYER_REFUND` alıcının iade cüzdanına **gerçekten** onaylanır ve fan-out yine yalnız karşı tarafa gider. Leg 4 → 5 teste çıktı.
+
+### B2 — `DELIVERY_EXPECTED` hiç üretilemiyor: **ürün açığı** (T140'a devredildi)
+
+happy-path leg'i `DELIVERY_EXPECTED` eksik diye düştü. Kanıt zinciri:
+
+- `HappyPathMilestoneNotificationConsumer`'ın `PAYMENT_RECEIVED` kolu bu bildirimi **satıcıya** üretir (03 §3.5 adım 3) ve `TransactionStatusChangedEvent` tüketir.
+- Repoda o olayın **beş** yayıncısı var — `TransactionReadinessService`, `DeliveryConfirmationService`, `DeliveryTimeoutRound`, `DeliveryDisputeRound`, `SettlementVerificationJob` — ve **hiçbiri ödeme onayı yolu değil**.
+- Tek `→ PAYMENT_RECEIVED` üreticisi olan `AmountValidationService.AdvanceStateMachineAsync` yalnız `PaymentReceivedEvent` yayınlıyor.
+- ⇒ kolun tamamı **erişilemez ölü kod**. Aynı olayın ikinci tüketicisi (`TransactionStatusChangedRealtimeConsumer`) de bu geçiş için sessiz.
+
+Neden önemli: P2P'de satıcının item'ı göndermesi akışın beklediği **tek** eylem ve platform o trade'e taraf değil — başka hiçbir şey satıcıyı dürtmüyor. Uyarılmayan satıcının `DeliveryDeadline`'ı işliyor, pencere dolunca 03 §4.4 iptal ediyor ve 06 §3.1 kusuru **satıcıya** yazıyor. Yani hiç iletilmemiş bir talebin yerine getirilmemesi cezalandırılıyor.
+
+**T133b'nin B4'üyle (`POST /api/monitor/start`'ın çağıranı yoktu) birebir aynı sınıf:** v3.0 için yazılmış tüketici + hiç bağlanmamış yayıncı, ve ikisini de yalnız uçtan uca ağ görebilirdi. Bu, T138'in yeniden yazımının ilk somut getirisidir — ağ karanlıkken bu açık dört görev boyunca görünmezdi.
+
+**Proje sahibi kararı (2026-08-21):** T138 sıfır production değişikliğiyle kapanır; açık `DEFERRED_BACKLOG` `T138-DeliveryExpectedNeverPublished` (🔴) satırına ve **önerilen T140** görevine devredilir (11 §F7). Düzeltmenin outbox atomikliğine ve iki tüketicinin idempotency'sine dokunması, onu T139'un B4 için aldığı muameleyi hak eden ayrı bir backend turu yapıyor.
+
+**Açık "beklenen davranış" olarak kodlanmadı.** `happy-path.smoke.spec.ts` tipi listeden çıkardı ama yerine **kendini kapatan bir işaret** koydu: bildirimin **yokluğunu** assert ediyor ve gerekçesini blok yorumda taşıyor. Açık kapandığı gün bu test **kırılır** ve listeyi düzeltmeye zorlar — T140'ın AC4'ü tam olarak o kırılmanın cevabıdır.
+
 ## Ölçüm sırasında düzeltilen iki gerçek hata
 
 Bunlar P2P yeniden adlandırması değil; yazarken kodu okuyunca çıktı:
@@ -107,7 +138,10 @@ Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yal
 | eslint | ✓ 0/0 | `npx eslint .` (e2e) |
 | prettier | ✓ temiz | `npx prettier --end-of-line auto --check "src/**/*.ts" "tests/**/*.ts" "*.ts" "package.json"` — lokal CRLF artefaktı ayıklandı, CI "1. Lint" LF üzerinde yetkili |
 | ci.yml YAML | ✓ ayrıştırılıyor | `js-yaml` ile yüklendi; matris 10 leg, `timeout-minutes: ${{ matrix.timeoutMinutes \|\| 30 }}` |
-| E2E (10 leg) | _PR CI'sinde koşuyor_ | Sonuç aşağıya işlenecek |
+| E2E — tur 1 | **8/10 leg yeşil** | CI run [`32509486246`](https://github.com/turkerurganci/Skinora/actions/runs/32509486246), `conclusion=success`, CI Gate ✓. Yeşil: happy-path **UI** · T109 timeout · T110 payment · T111 fraud-flags · T112 emergency-hold · T113 admin-flows · T114 downtime · **T138 delivery**. Kırmızı: happy-path (API) · T108 cancellation — ikisi de §CI turu 1'de çözümlendi |
+| E2E — tur 2 | _koşuyor_ | Tur 1'in iki bulgusu uygulandıktan sonra |
+
+**Taban karşılaştırması:** T137a'nın ölçtüğü main tabanı **10/32 test** geçiyordu ve **8/8 leg kırmızıydı**. Tur 1'de leg bazında **8/10 yeşil** — ve kalan ikisinin sebebi custody kalıntısı değil, biri spec hatası biri gerçek ürün açığı.
 
 ## Altyapı Değişiklikleri
 
@@ -121,7 +155,8 @@ Doğrulama: `grep -rn "itemReturned" e2e/ docker-compose.e2e.yml` → geriye yal
 - Branch: `task/T138-e2e-p2p-rewrite`
 - Commit: `580d6ae` — E2E spec'lerinin P2P'ye yeniden yazımı
 - PR: [#255](https://github.com/turkerurganci/Skinora/pull/255)
-- CI: _izleniyor_
+- CI tur 1: [`32509486246`](https://github.com/turkerurganci/Skinora/actions/runs/32509486246) `success` (CI Gate ✓; 8/10 advisory E2E leg yeşil)
+- CI tur 2: _koşuyor_
 
 ## Known Limitations / Follow-up
 
