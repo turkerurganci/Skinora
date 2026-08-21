@@ -44,7 +44,14 @@ const SETTING_FALLBACK = '5000';
 // fresh DB, where any name would do).
 const ROLE_TAG = `E2E T113 Role ${Date.now()}`;
 
+test.beforeEach(async () => {
+  // See the fraud-flags note: seedHappyPath re-drives the seller's inventory per
+  // test, so the reset only has to clear whatever a prior suite left behind.
+  await api.resetFakeSteamState();
+});
+
 test.afterAll(async () => {
+  await api.resetFakeSteamState();
   await closePool();
 });
 
@@ -121,11 +128,13 @@ test('admin access control + dashboard summary (AC1)', async () => {
     `flagged ${flaggedTxId} not in recentFlags`,
   ).toBeTruthy();
 
-  // steamAccounts block present (seeded ACTIVE bot → ≥ 1) — 03 §8.1 "Platform
-  // Steam hesaplarının durumu".
-  const accounts = (body.steamAccounts as Array<unknown>) ?? [];
-  expect(Array.isArray(accounts)).toBeTruthy();
-  expect(accounts.length).toBeGreaterThanOrEqual(1);
+  // T138 — the third assertion here read `body.steamAccounts` ("Platform Steam
+  // hesaplarının durumu", 03 §8.1) and expected the seeded ACTIVE bot. Both ends
+  // of it are gone: v3.0 dropped the field from AdminDashboardResponse, which now
+  // carries only summaryCards + recentFlags, and T117 dropped the bot table it
+  // counted. The platform runs no Steam accounts to report on (02 §15), so this
+  // is a deletion rather than a re-point — there is no P2P successor block, and
+  // T136 removed the admin page that rendered it.
 });
 
 test('flag review queue → approve → CREATED (AC2 — summary; full matrix in T111)', async () => {

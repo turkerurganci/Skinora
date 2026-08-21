@@ -51,6 +51,22 @@ export const seed = {
   itemAssetId: '11111111001',
   itemMarketHashName: 'AK-47 | Redline (Field-Tested)',
   price: '100.00',
+  // T138 — a SECOND listable item, seeded into the same seller inventory with
+  // its own ItemPriceCaches row at the same price (so it is as deviation-free as
+  // the first). It exists because T128 added a (SellerId, ItemAssetId)
+  // uniqueness gate over active transactions: any scenario that needs a seller
+  // to hold TWO transactions open at once — the 03 §7.2 high-volume rule is the
+  // one in tree — is rejected ITEM_ALREADY_LISTED on the second create unless it
+  // lists a different asset. Matches the fake's AWP_ASIIMOV catalog template.
+  secondItemAssetId: '11111111002',
+  secondItemMarketHashName: 'AWP | Asiimov (Field-Tested)',
+  secondPriceCacheId: '44444444-4444-4444-4444-444444444445',
+  // T138 — a Steam identity that is NEITHER party. Used by the misdelivery
+  // scenario (02 §9.2 / §10.1): the seller trades the item to this id, so the
+  // asset leaves the seller's inventory while the buyer's class count never
+  // rises — the exact pair of readings that raises MisdeliverySignature. Nothing
+  // seeds it in the DB; it only ever has to exist on the fake.
+  outsiderSteamId: '76561198000000077',
 };
 
 // The buyer's on-chain wallet the fake sidecar pays FROM = fakeTronAddress(999_001)
@@ -108,6 +124,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .input('item', sql.NVarChar(200), seed.itemMarketHashName)
+    .input('item2', sql.NVarChar(200), seed.secondItemMarketHashName)
     .batch(
       `DELETE FROM OutboxMessages WHERE Status <> 'PROCESSED';
        DELETE FROM Notifications WHERE UserId IN (@s,@b);
@@ -122,7 +139,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
        DELETE FROM Transactions WHERE SellerId=@s;
        DELETE FROM AdminUserRoles WHERE UserId IN (@s,@b);
        DELETE FROM Users WHERE Id IN (@s,@b);
-       DELETE FROM ItemPriceCaches WHERE MarketHashName=@item;`,
+       DELETE FROM ItemPriceCaches WHERE MarketHashName IN (@item,@item2);`,
     )
     .catch((err: unknown) => {
       console.warn(`[e2e:db] seed cleanup batch failed — stale rows may remain: ${String(err)}`);
@@ -146,23 +163,18 @@ export async function seedHappyPath(): Promise<typeof seed> {
   await insertBuyer();
 
   // Price cache — fresh row equal to the listing price ⇒ 0% deviation ⇒ no flag,
-  // independent of Steam Market reachability.
-  await r()
-    .input('id', sql.UniqueIdentifier, seed.priceCacheId)
-    .input('name', sql.NVarChar(200), seed.itemMarketHashName)
-    .input('price', sql.Decimal(18, 2), Number(seed.price))
-    .query(
-      `INSERT INTO ItemPriceCaches (Id, MarketHashName, MedianPrice, LowestPrice, FetchedAt, Source,
-         CreatedAt, UpdatedAt)
-       VALUES (@id, @name, @price, @price, SYSUTCDATETIME(), 'STEAM_MARKET',
-         SYSUTCDATETIME(), SYSUTCDATETIME());`,
-    );
+  // independent of Steam Market reachability. Written for BOTH seeded items
+  // (T138): a create against the second asset with no cache row would deviate
+  // against whatever the live provider answers, which in the e2e stack is
+  // nothing — the point of the row is that the outcome does not depend on that.
+  await insertPriceCache(seed.priceCacheId, seed.itemMarketHashName);
+  await insertPriceCache(seed.secondPriceCacheId, seed.secondItemMarketHashName);
 
   // Fake Steam side — the SELLER holds the listed item (T137 fix round, B1).
   // T137 made an undriven steamId read PUBLIC + EMPTY, so create's Stage 5
   // seller-inventory check rejected every scenario with ITEM_NOT_IN_INVENTORY:
   // no spec or harness ever drove the fake. Seeding it here — the one function
-  // all nine specs call, and which runs AFTER their beforeEach
+  // all ten specs call, and which runs AFTER their beforeEach
   // resetFakeSteamState() — restores create suite-wide without touching a
   // single scenario (the P2P rewrite stays T138's scope).
   //
@@ -180,6 +192,17 @@ export async function seedHappyPath(): Promise<typeof seed> {
         name: seed.itemMarketHashName,
         marketHashName: seed.itemMarketHashName,
       },
+      // T138 — the second listable item (see seed.secondItemAssetId). Seeded
+      // unconditionally rather than by the one suite that needs it: the seller
+      // simply owns two skins, which is the ordinary case, and a scenario that
+      // ignores it is unaffected (create names one assetId, and the delivery
+      // baseline counts ONE class).
+      {
+        catalog: 'AWP_ASIIMOV',
+        assetId: seed.secondItemAssetId,
+        name: seed.secondItemMarketHashName,
+        marketHashName: seed.secondItemMarketHashName,
+      },
     ],
   });
   if (!inventory.ok) {
@@ -190,6 +213,23 @@ export async function seedHappyPath(): Promise<typeof seed> {
   }
 
   return seed;
+}
+
+/** One ItemPriceCaches row pinned at the listing price (0% deviation). Both
+ *  seeded items get one — see the call site in seedHappyPath. */
+async function insertPriceCache(id: string, marketHashName: string): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('id', sql.UniqueIdentifier, id)
+    .input('name', sql.NVarChar(200), marketHashName)
+    .input('price', sql.Decimal(18, 2), Number(seed.price))
+    .query(
+      `INSERT INTO ItemPriceCaches (Id, MarketHashName, MedianPrice, LowestPrice, FetchedAt, Source,
+         CreatedAt, UpdatedAt)
+       VALUES (@id, @name, @price, @price, SYSUTCDATETIME(), 'STEAM_MARKET',
+         SYSUTCDATETIME(), SYSUTCDATETIME());`,
+    );
 }
 
 /** Idempotently ensure the admin User exists (T108 admin-cancel scenarios).
@@ -299,8 +339,13 @@ export async function pollCancelledNoticeRecipients(
 //   pollRefundOfferAccepted(txId)  read TradeOffers WHERE Direction =
 //     'RETURN_TO_SELLER'. It proved the escrowed item went back to the seller
 //     after a cancel. In P2P the item never leaves the seller before
-//     PAYMENT_RECEIVED, so a cancel has no return leg to observe — the
-//     `itemReturned` field of the cancel response is the whole story.
+//     PAYMENT_RECEIVED, so a cancel has no return leg to observe. T138
+//     correction: this note used to say the cancel response's `itemReturned`
+//     field "is the whole story" — that field does not exist either. v3.0
+//     dropped it from CancelTransactionResponse and from the admin cancel /
+//     release-hold responses, because a platform that never holds the item can
+//     never report returning one. What a pre-payment cancel has to say is that
+//     no money moved: `paymentRefunded: false`, and no BUYER_REFUND row.
 //
 //   getBotEscrowCount()           read PlatformSteamBots.ActiveEscrowCount
 //     (06 §3.10) to prove the platform's escrow slot was taken/released. There
@@ -501,34 +546,19 @@ export async function backdateDeadline(
     );
 }
 
-/** Set a phase deadline to a fixed point in the future — the forward mirror of
- *  backdateDeadline. Used to give a parked TRADE_OFFER_SENT_TO_SELLER transaction
- *  a live seller-trade window before a STEAM_OUTAGE freeze: the e2e fast-path
- *  leaves SellerConfirmDeadline null (the fake's trade leg never goes through
- *  the production deadline stamp), whereas a real outage freezes transactions
- *  whose deadline is live — exactly the state the WP7 integration test seeds at
- *  +12h. Without it the freeze would capture a zero remainder. `column` is
- *  validated against the allow-list before interpolation; the offset is a bound
- *  int parameter. */
-export async function setDeadlineFromNow(
-  transactionId: string,
-  column: DeadlineColumn,
-  minutesFromNow: number,
-): Promise<void> {
-  if (!DEADLINE_COLUMNS.has(column)) {
-    throw new Error(`setDeadlineFromNow: unknown deadline column ${column}`);
-  }
-  const p = await getPool();
-  await p
-    .request()
-    .input('tx', sql.UniqueIdentifier, transactionId)
-    .input('mins', sql.Int, minutesFromNow)
-    .query(
-      `UPDATE Transactions
-       SET ${column} = DATEADD(MINUTE, @mins, SYSUTCDATETIME())
-       WHERE Id = @tx`,
-    );
-}
+// T138 — `setDeadlineFromNow` was removed here. It was the forward mirror of
+// backdateDeadline, and it existed for exactly one caller: the STEAM_OUTAGE
+// scenario parked a transaction in TRADE_OFFER_SENT_TO_SELLER, a state the fake's
+// trade webhook produced WITHOUT going through the production deadline stamp, so
+// the column was null and a freeze there would have captured a zero remainder.
+// The scenario had to fabricate a live window before it could freeze one.
+//
+// P2P has no such state left. Every freezable phase is now entered through a
+// production endpoint that arms its own deadline — accept arms
+// SellerConfirmDeadline, confirm-ready arms PaymentDeadline, ConfirmPayment arms
+// DeliveryDeadline — so a test that reaches a state honestly finds a real
+// remainder waiting for it, and one that needs a fabricated deadline is testing
+// a state the flow cannot actually produce.
 
 export interface MonitoringRow {
   status: string;
@@ -710,6 +740,169 @@ export async function getTransactionHoldState(transactionId: string): Promise<Ho
       row.TimeoutRemainingSeconds === null ? null : Number(row.TimeoutRemainingSeconds),
     previousStatusBeforeHold:
       row.PreviousStatusBeforeHold === null ? null : Number(row.PreviousStatusBeforeHold),
+  };
+}
+
+export interface SettlementStateRow {
+  status: string;
+  deliveryRoundAt: Date | null;
+  deliveryVerifiedAt: Date | null;
+  payoutEligibleAt: Date | null;
+  settlementVerifiedAt: Date | null;
+  deliveredBuyerAssetId: string | null;
+  buyerBaselineClassCount: number | null;
+  buyerBaselineCapturedAt: Date | null;
+  hasActiveDispute: boolean;
+}
+
+/** Read the delivery + settlement columns of a transaction (06 §3.5, T125/T129).
+ *  These are the fields the 02 §9.2 evidence engine and the 02 §4.5.1 settlement
+ *  window write, and none of them is projected by the detail endpoint in a form
+ *  a test can assert precisely — the API surfaces a phase label, not a stamp. */
+export async function getSettlementState(
+  transactionId: string,
+): Promise<SettlementStateRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Status, DeliveryRoundAt, DeliveryVerifiedAt, PayoutEligibleAt, SettlementVerifiedAt,
+              DeliveredBuyerAssetId, BuyerBaselineClassCount, BuyerBaselineCapturedAt,
+              HasActiveDispute
+       FROM Transactions WHERE Id = @tx`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    status: String(row.Status),
+    deliveryRoundAt: row.DeliveryRoundAt ? new Date(row.DeliveryRoundAt) : null,
+    deliveryVerifiedAt: row.DeliveryVerifiedAt ? new Date(row.DeliveryVerifiedAt) : null,
+    payoutEligibleAt: row.PayoutEligibleAt ? new Date(row.PayoutEligibleAt) : null,
+    settlementVerifiedAt: row.SettlementVerifiedAt ? new Date(row.SettlementVerifiedAt) : null,
+    deliveredBuyerAssetId:
+      row.DeliveredBuyerAssetId === null ? null : String(row.DeliveredBuyerAssetId),
+    buyerBaselineClassCount:
+      row.BuyerBaselineClassCount === null ? null : Number(row.BuyerBaselineClassCount),
+    buyerBaselineCapturedAt: row.BuyerBaselineCapturedAt
+      ? new Date(row.BuyerBaselineCapturedAt)
+      : null,
+    hasActiveDispute: Boolean(row.HasActiveDispute),
+  };
+}
+
+/** Bring a delivered transaction's settlement window forward to NOW — the e2e
+ *  form of the DEPLOY_RUNBOOK §G.4 control-10a rehearsal shortcut.
+ *
+ *  `payout_settlement_days` has a HARD floor of 7 (SystemSettingsValidator, 02
+ *  §16.2) because it must cover Steam's 7-day trade-reversal window, so no
+ *  setting change can make the queue observable inside one CI leg. Back-dating
+ *  the eligibility clock is the documented alternative, and it fakes ONLY the
+ *  clock: the row merely becomes a CANDIDATE for `settlement-verification`,
+ *  which still re-reads the buyer's inventory for real and only stamps
+ *  `SettlementVerifiedAt` because the item is genuinely still there;
+ *  `seller-payout-queue` then requires that stamp as a precondition. The
+ *  verdict is never faked — which is exactly why this shortcut is safe here and
+ *  forbidden in production, where the waiting IS the protection. */
+export async function setPayoutEligibleNow(transactionId: string): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(`UPDATE Transactions SET PayoutEligibleAt = SYSUTCDATETIME() WHERE Id = @tx`);
+}
+
+/** Poll until `SettlementVerifiedAt` is stamped — the 02 §4.5.1 re-read that
+ *  `seller-payout-queue` requires before it queues anything. The verification
+ *  job runs every FIVE minutes (SettlementVerificationJob.Cron — a const, not a
+ *  knob: the window it closes is measured in days and each candidate costs
+ *  rate-limited Steam reads), so the timeout has to clear a full five-minute
+ *  cadence plus the round itself.
+ *  Returns the last-seen row so a timeout reports WHY it never came. */
+export async function pollSettlementVerified(
+  transactionId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<SettlementStateRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 420_000);
+  const interval = opts?.intervalMs ?? 5_000;
+  let last: SettlementStateRow | null = null;
+  while (Date.now() < deadline) {
+    last = await getSettlementState(transactionId);
+    if (last?.settlementVerifiedAt) return last;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return last;
+}
+
+export interface DisputeRow {
+  id: string;
+  type: string;
+  status: string;
+  openedByUserId: string;
+  systemCheckResult: string | null;
+}
+
+/** Poll for the Dispute attached to `transactionId` (06 §3.11). The misdelivery
+ *  escalation opens one from the SYSTEM actor rather than from the buyer (02
+ *  §9.2: "işlem sessizce iptal edilmez, otomatik olarak dispute'a yükseltilir"),
+ *  and it lands on the DeadlineScannerJob's own cadence — hence a poll rather
+ *  than a read. Returns null when none was ever opened, which is what the
+ *  seller-fault cancel scenario asserts. */
+export async function pollDisputeForTransaction(
+  transactionId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<DisputeRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 90_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  while (Date.now() < deadline) {
+    const p = await getPool();
+    const result = await p
+      .request()
+      .input('tx', sql.UniqueIdentifier, transactionId)
+      .query(
+        `SELECT TOP 1 Id, Type, Status, OpenedByUserId, SystemCheckResult FROM Disputes
+         WHERE TransactionId = @tx AND IsDeleted = 0
+         ORDER BY CreatedAt DESC`,
+      );
+    if (result.recordset.length) {
+      const row = result.recordset[0];
+      return {
+        id: String(row.Id),
+        type: String(row.Type),
+        status: String(row.Status),
+        openedByUserId: String(row.OpenedByUserId).toLowerCase(),
+        systemCheckResult: row.SystemCheckResult === null ? null : String(row.SystemCheckResult),
+      };
+    }
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return null;
+}
+
+/** Read the newest DeliveryEvidenceCaptures row for `transactionId` (06 §3.5a).
+ *  Append-only, written by every delivery-verification round that OBSERVED
+ *  something; `verdict` is the DeliveryVerdict name and `evidence` the
+ *  DeliveryEvidence flags as an int. DEPLOY_RUNBOOK §H.3 reads these rows to
+ *  decide when the launch gate may be opened, so the e2e assertion doubles as a
+ *  check that the launch-gate evidence trail is actually being written. */
+export async function getLatestDeliveryCapture(
+  transactionId: string,
+): Promise<{ verdict: string; evidence: number; autoReleaseGated: boolean } | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Verdict, Evidence, AutoReleaseGated FROM DeliveryEvidenceCaptures
+       WHERE TransactionId = @tx
+       ORDER BY Id DESC`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    verdict: String(row.Verdict),
+    evidence: Number(row.Evidence),
+    autoReleaseGated: Boolean(row.AutoReleaseGated),
   };
 }
 

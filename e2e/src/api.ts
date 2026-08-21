@@ -72,6 +72,38 @@ export function getTransaction(token: string, id: string): Promise<ApiResult> {
   return call('GET', `/api/v1/transactions/${id}`, token);
 }
 
+/** T123 — POST /transactions/:id/confirm-ready (07 §7.6a). The SELLER asserts
+ *  they are ready to send; the platform verifies the claim itself, so there is
+ *  no request body. On success ACCEPTED → SELLER_CONFIRMED: the payment window
+ *  is armed, the deposit address is revealed to the buyer, the buyer's inventory
+ *  baseline is captured (02 §9.2) and — since T139 — the payment monitor is
+ *  armed inside the same SaveChanges.
+ *
+ *  This is the P2P step with no custody-era counterpart. The platform used to
+ *  pull the item into escrow here; now it only checks that the seller can still
+ *  send it. Three gates run against the fake — the item is still in the seller's
+ *  inventory and tradeable (409 ITEM_NO_LONGER_AVAILABLE / 422 INVENTORY_PRIVATE
+ *  / 503 STEAM_UNAVAILABLE), and the buyer's Mobile Authenticator is live (403
+ *  BUYER_MOBILE_AUTHENTICATOR_INACTIVE). */
+export function confirmReady(token: string, id: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/transactions/${id}/confirm-ready`, token);
+}
+
+/** T126 — POST /transactions/:id/confirm-receipt (07 §7.6b). The BUYER states
+ *  the item arrived; no request body. PAYMENT_RECEIVED → ITEM_DELIVERED, and in
+ *  the e2e stack it is the only producer of that transition that advances on its
+ *  own: 02 §9.2's other route (inventory evidence) is held shut by the
+ *  `delivery.inventory_evidence_auto_release_enabled` launch gate, whose seed
+ *  default is false (DEPLOY_RUNBOOK §H). Buyer confirmation is explicitly NOT
+ *  subject to that gate — it runs against the buyer's own interest, so there is
+ *  no incentive to claim it falsely.
+ *
+ *  Idempotent by 07 §7.6b: a repeat on an already-delivered transaction answers
+ *  200 with the same state rather than 409. */
+export function confirmReceipt(token: string, id: string): Promise<ApiResult> {
+  return call('POST', `/api/v1/transactions/${id}/confirm-receipt`, token);
+}
+
 /** User-facing cancel — POST /transactions/:id/cancel (07 §7.7). The caller
  *  must be the seller or buyer; reason is required (>=10 chars). */
 export function cancelTransaction(token: string, id: string, reason: string): Promise<ApiResult> {
@@ -162,7 +194,9 @@ export function releaseEmergencyHold(
 
 /** AD1 — GET /admin/dashboard (07 §9.1 / 03 §8.1). Returns the admin landing
  *  summary: summaryCards (active / pending-flag / daily+weekly-completed
- *  counters), recentFlags (last 5, newest-first), and steamAccounts. Gated by
+ *  counters) and recentFlags (last 5, newest-first) — that is the whole AD1
+ *  body since v3.0 dropped the steamAccounts block (the platform runs no Steam
+ *  accounts, 02 §15). Gated by
  *  AuthPolicies.AdminAccess — any admin role; a `user` token is forbidden. */
 export function getAdminDashboard(token: string): Promise<ApiResult> {
   return call('GET', '/api/v1/admin/dashboard', token);
@@ -293,9 +327,16 @@ export interface MaintenanceFreezeBody {
 /** WP7 — POST /admin/maintenance/freeze (07 §9.31 / 03 §11). Enters a
  *  maintenance/outage window: persists the four platform.maintenance.* banner
  *  settings, bulk-freezes the timeouts of every active transaction in `type`'s
- *  scope (PLATFORM_MAINTENANCE = all active states, STEAM_OUTAGE = the two
- *  trade-offer states, BLOCKCHAIN_DEGRADATION = ITEM_ESCROWED; PLANNED_MAINTENANCE
- *  is banner-only) and broadcasts the MaintenanceStatusChanged push — all
+ *  scope and broadcasts the MaintenanceStatusChanged push — all
+ *
+ *  T138 — the scopes are the P2P ones (TimeoutFreezeReasonScopes):
+ *  PLATFORM_MAINTENANCE = every active state; STEAM_OUTAGE = { ACCEPTED,
+ *  PAYMENT_RECEIVED } — the two phases whose deadline depends on the platform
+ *  being able to READ Steam (the seller's readiness re-check and the delivery
+ *  verification window), not on the parties being able to trade;
+ *  BLOCKCHAIN_DEGRADATION = { SELLER_CONFIRMED }, the only phase with a
+ *  blockchain-bound deadline (PaymentDeadline); PLANNED_MAINTENANCE is
+ *  banner-only. All
  *  atomically. Response data = { active, type, message, plannedEnd,
  *  affectedTransactions }. A type outside the activatable set (e.g. NONE) is
  *  rejected 400 VALIDATION_ERROR. */
@@ -366,7 +407,8 @@ async function fakeGet(path: string): Promise<ApiResult> {
  *  levers: `amount` drives 03 §5.1 (insufficient) / §5.2 (excess); a non-zero
  *  `eventIndex` posts a distinct second transfer for the §5.5 multi-payment
  *  (the backend treats it as a fresh confirmed payment → full refund because the
- *  transaction already left ITEM_ESCROWED). */
+ *  transaction already left SELLER_CONFIRMED — AmountValidationService.cs:87
+ *  picks the multi-payment branch on STATE, not on amount). */
 export function payViaFake(
   transactionId: string,
   opts?: { amount?: string; eventIndex?: number },
@@ -376,7 +418,7 @@ export function payViaFake(
 
 /** 03 §5.3 — simulate a supported-but-wrong TRC-20 stablecoin landing at the
  *  deposit address (USDC when the buyer was billed USDT). Backend queues a
- *  WRONG_TOKEN_REFUND and the transaction stays ITEM_ESCROWED. */
+ *  WRONG_TOKEN_REFUND and the transaction stays SELLER_CONFIRMED. */
 export function payWrongTokenViaFake(
   transactionId: string,
   opts?: { actualTokenSymbol?: string; amount?: string },
@@ -386,7 +428,7 @@ export function payWrongTokenViaFake(
 
 /** 03 §5.3a — simulate an unsupported token/contract. Backend records a
  *  terminal SPAM_TOKEN_INCOMING audit row; no refund, transaction state
- *  untouched (stays ITEM_ESCROWED). */
+ *  untouched (stays SELLER_CONFIRMED). */
 export function paySpamTokenViaFake(
   transactionId: string,
   opts?: { amount?: string },
@@ -499,39 +541,15 @@ export async function pollStatus(
   throw new Error(`timeout awaiting ${target} for ${id} (last status=${last})`);
 }
 
-/** Poll until the transaction reaches a post-payment state in which the buyer's
- *  payment is in custody AND an admin cancel still triggers a refund —
- *  PAYMENT_RECEIVED or TRADE_OFFER_SENT_TO_BUYER, i.e. before ITEM_DELIVERED
- *  (02 §7 / 03 §8.7). In these states a *user* cancel must be rejected with
- *  PAYMENT_ALREADY_SENT. Accepting either state makes the test race-free against
- *  the per-minute delivery-dispatch job: catching PAYMENT_RECEIVED early leaves
- *  a wide window, and a brief slip to TRADE_OFFER_SENT_TO_BUYER is still
- *  refundable. Throws if the flow advances to ITEM_DELIVERED or a terminal
- *  state first (the drive overran the cancellable window). */
-export async function pollUntilRefundableCancel(
-  token: string,
-  id: string,
-  opts?: { timeoutMs?: number; intervalMs?: number },
-): Promise<string> {
-  const deadline = Date.now() + (opts?.timeoutMs ?? 90_000);
-  const interval = opts?.intervalMs ?? 1_000;
-  let last: string | undefined;
-  while (Date.now() < deadline) {
-    const r = await getTransaction(token, id);
-    last = statusOf(r.body);
-    if (last === 'PAYMENT_RECEIVED' || last === 'TRADE_OFFER_SENT_TO_BUYER') return last;
-    if (
-      last === 'ITEM_DELIVERED' ||
-      last === 'COMPLETED' ||
-      last === 'FLAGGED' ||
-      (last !== undefined && last.startsWith('CANCELLED'))
-    ) {
-      throw new Error(`transaction ${id} advanced to ${last} before a refundable-cancel state`);
-    }
-    await new Promise((res) => setTimeout(res, interval));
-  }
-  throw new Error(`timeout awaiting a refundable-cancel state for ${id} (last status=${last})`);
-}
+// T138 — `pollUntilRefundableCancel` was removed here, and it has no P2P
+// successor. It accepted PAYMENT_RECEIVED *or* TRADE_OFFER_SENT_TO_BUYER because
+// a per-minute delivery-dispatch job could slip the transaction from the first
+// to the second while the test was looking. In P2P nothing advances
+// PAYMENT_RECEIVED on its own: the platform is not a party to the seller→buyer
+// trade (02 §2.1), so the state only leaves when the buyer confirms receipt, an
+// admin acts, or the delivery deadline expires. The refundable-cancel window is
+// therefore exactly PAYMENT_RECEIVED and `pollStatus(..., 'PAYMENT_RECEIVED')`
+// says so without a second state to hedge against.
 
 /** Poll the transaction for `durationMs`, asserting the detail endpoint's
  *  projected status never leaves `expected`. The e2e proof that a freeze "holds"
@@ -540,8 +558,8 @@ export async function pollUntilRefundableCancel(
  *  depends on the freeze kind: an emergency hold sets IsOnHold, so the detail
  *  endpoint projects status=EMERGENCY_HOLD (callers pass that); a
  *  maintenance/outage freeze leaves IsOnHold false, so the projection equals the
- *  underlying phase status (callers pass CREATED / TRADE_OFFER_SENT_TO_SELLER /
- *  ITEM_ESCROWED). Either way a frozen row keeps reporting `expected` across
+ *  underlying phase status (callers pass CREATED / ACCEPTED / SELLER_CONFIRMED /
+ *  PAYMENT_RECEIVED). Either way a frozen row keeps reporting `expected` across
  *  several DeadlineScannerJob sweeps rather than flipping to a CANCELLED_*
  *  terminal; callers pair this with a DB read of the phase status for the
  *  decisive "not cancelled" assertion. Throws on the first observation of a

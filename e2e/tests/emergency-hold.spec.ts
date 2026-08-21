@@ -5,6 +5,9 @@ import {
   seed,
   closePool,
   getTransactionHoldState,
+  getSettlementState,
+  setPayoutEligibleNow,
+  pollSettlementVerified,
   backdateDeadline,
   pollCancelledNoticeRecipients,
   pollNotificationRecipients,
@@ -13,34 +16,45 @@ import { mintAccessToken } from '../src/jwt';
 import * as api from '../src/api';
 
 /**
- * T112 emergency-hold scenarios — drives the AD19b/AD19c admin emergency-hold
- * surface at the API level against the docker-compose.e2e.yml stack (same seam as
- * T107–T111). Apply-hold / release-hold (RESUME / CANCEL) and the ITEM_DELIVERED
- * cancel guard are fully wired backend-side (AdminTransactionService +
- * TimeoutFreezeService + the SellerPayout pipeline's !IsOnHold gate), so this task
- * adds test coverage only — no production source changes.
+ * T112 emergency-hold scenarios, rewritten for P2P (T138) — drives the AD19b /
+ * AD19c admin emergency-hold surface at the API level against the
+ * docker-compose.e2e.yml stack. Apply-hold / release-hold (RESUME / CANCEL) and
+ * the ITEM_DELIVERED cancel guard are fully wired backend-side.
  *
  * Covers 03 §8.8 (admin emergency hold):
- *   1. Apply hold → timeout frozen (a backdated deadline does NOT cancel) →
- *      RESUME → the transaction is live again and continues to ITEM_ESCROWED.
- *   2. Apply hold (ITEM_ESCROWED) → CANCEL → CANCELLED_ADMIN, item returned to
- *      the seller, both parties notified (cancel is allowed for any non-delivered
- *      pre-hold state).
+ *   1. Apply hold (CREATED) → timeout frozen (a backdated deadline does NOT
+ *      cancel) → RESUME → the transaction is live again and walks on to
+ *      SELLER_CONFIRMED.
+ *   2. Apply hold (SELLER_CONFIRMED) → CANCEL → CANCELLED_ADMIN, both parties
+ *      notified (cancel is allowed for any non-delivered pre-hold state).
  *   3. Apply hold at ITEM_DELIVERED → CANCEL rejected (422
  *      CANNOT_CANCEL_DELIVERED_HOLD; only RESUME is permitted) → RESUME → the
- *      payout pipeline (released from the hold gate) drives it to COMPLETED.
+ *      settlement + payout pipeline drives it to COMPLETED.
  *
- * T137a: the custody-era assertions (bot escrow slot, RETURN_TO_SELLER offer)
- * were removed — T117 dropped both tables and P2P has no platform inventory.
- * The flows still drive through ITEM_ESCROWED, which no longer exists; the
- * rewrite is T138's scope.
+ * Two rewrites worth naming.
+ *
+ * Scenario 2's pre-hold state moved from ITEM_ESCROWED to SELLER_CONFIRMED — the
+ * same point in the story (arranged, unpaid) minus the custody. Its old
+ * `itemReturned === true` assertion is gone with the field (v3.0): the platform
+ * never held the skin, so an admin cancel here can only ever be about money, and
+ * there is no money yet.
+ *
+ * Scenario 3 needed a real repair, not a rename. Under custody, ITEM_DELIVERED →
+ * COMPLETED was a per-minute payout pipeline and "the hold holds the line" was
+ * proven by simply watching it not fire. P2P put the 02 §4.5.1 settlement window
+ * in front of that pipeline, so a held transaction would now sit at
+ * ITEM_DELIVERED for eight days whether or not the hold worked — the assertion
+ * would have passed for the wrong reason. The repair is to clear the clock as an
+ * excuse: apply the hold, THEN bring the eligibility date forward, so the row is
+ * due for payout and the hold is the only thing that can be stopping it. That
+ * order also leaves no window in which the row is eligible but not yet held —
+ * see the comment at the call site.
  *
  * Levers: the harness backdates the active phase deadline to prove the held row
- * is skipped by the DeadlineScannerJob (05 §4.4); the ITEM_DELIVERED park needs
- * no fake lever because the ITEM_DELIVERED→COMPLETED payout pipeline is itself
- * gated by !IsOnHold (SellerPayoutQueueJob + PayoutCompletedConsumer), so the
- * hold holds the line. The EMERGENCY_HOLD permission is satisfied by the admin's
- * super_admin claim. All emergency holds reason/note text is fixed test data.
+ * is skipped by the DeadlineScannerJob (05 §4.4), and brings the settlement
+ * clock forward (DEPLOY_RUNBOOK §G.4 control 10a) for scenario 3. The
+ * EMERGENCY_HOLD permission is satisfied by the admin's super_admin claim. All
+ * hold reason/note text is fixed test data.
  */
 
 const HOLD_REASON = 'E2E emergency-hold scenario — sanctions review (automated).';
@@ -48,7 +62,8 @@ const RELEASE_NOTE = 'E2E hold release — automated note.';
 
 test.beforeEach(async () => {
   // Clear any inventory / trade-hold a prior suite drove into the shared
-  // (in-process) fake state so this suite starts from an empty, readable world.
+  // (in-process) fake state; seedHappyPath re-drives the seller's inventory
+  // right after, and the buyer's zero baseline depends on this reset.
   await api.resetFakeSteamState();
 });
 
@@ -86,7 +101,7 @@ async function createTransaction(sellerToken: string): Promise<string> {
   return String(created.id);
 }
 
-test('apply hold → timeout frozen → resume → transaction continues to ITEM_ESCROWED', async () => {
+test('apply hold → timeout frozen → resume → transaction continues to SELLER_CONFIRMED', async () => {
   await seedHappyPath();
   await ensureAdmin();
   const { sellerToken, buyerToken, adminToken } = tokens();
@@ -138,8 +153,7 @@ test('apply hold → timeout frozen → resume → transaction continues to ITEM
   const resumeBody = api.unwrap(resume.body);
   expect(resumeBody.status).toBe('CREATED');
   expect(resumeBody.action).toBe('RESUME');
-  // RESUME does not touch item/payment — those fields stay null on the wire.
-  expect(resumeBody.itemReturned ?? null).toBeNull();
+  // RESUME moves no money — the field stays null on the wire (07 §9.22).
   expect(resumeBody.paymentRefunded ?? null).toBeNull();
 
   const resumed = await getTransactionHoldState(txId);
@@ -157,31 +171,35 @@ test('apply hold → timeout frozen → resume → transaction continues to ITEM
   expect(resumeNotice).toContain(seed.buyerId.toLowerCase());
 
   // "Devam" — the resumed transaction is live (RESUME rewrote AcceptDeadline to
-  // now + remainder, so it is no longer past-due). The buyer accepts and the flow
-  // proceeds normally through escrow dispatch to ITEM_ESCROWED.
+  // now + remainder, so it is no longer past-due). Both party steps still work:
+  // the buyer accepts and the seller confirms readiness, which is the P2P proof
+  // that the freeze left no residue on either side's gate.
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept after resume failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
   expect(api.unwrap(accept.body).status).toBe('ACCEPTED');
 
-  const advanced = await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
-  expect(advanced).toBe('ITEM_ESCROWED');
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready after resume failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
+  expect(api.unwrap(ready.body).status).toBe('SELLER_CONFIRMED');
 });
 
-test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, both notified', async () => {
+test('apply hold (SELLER_CONFIRMED) → cancel → CANCELLED_ADMIN, nothing refunded, both notified', async () => {
   await seedHappyPath();
   await ensureAdmin();
   const { sellerToken, buyerToken, adminToken } = tokens();
   const txId = await createTransaction(sellerToken);
 
-  // Drive to ITEM_ESCROWED (item on the platform, payment not yet in).
+  // Drive to SELLER_CONFIRMED (payment window open, buyer has not paid).
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
-  await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
+  expect(api.unwrap(ready.body).status).toBe('SELLER_CONFIRMED');
 
-  // Apply the hold mid-escrow.
+  // Apply the hold mid-flow.
   const hold = await api.applyEmergencyHold(adminToken, txId, HOLD_REASON);
   expect(hold.ok, `apply hold failed: ${JSON.stringify(hold.body)}`).toBeTruthy();
-  expect(api.unwrap(hold.body).previousStatus).toBe('ITEM_ESCROWED');
+  expect(api.unwrap(hold.body).previousStatus).toBe('SELLER_CONFIRMED');
   const held = await getTransactionHoldState(txId);
   expect(held?.isOnHold).toBe(true);
   expect(held?.timeoutFreezeReason).toBe('EMERGENCY_HOLD');
@@ -195,15 +213,14 @@ test('apply hold (ITEM_ESCROWED) → cancel → CANCELLED_ADMIN, item returned, 
   expect(heldNotice).toContain(seed.buyerId.toLowerCase());
 
   // 03 §8.8 step 8 "İptal et" — CANCEL is allowed for a non-delivered pre-hold
-  // state. The hold is released then the transaction is admin-cancelled, applying
-  // the standard AD19 refund fan-out: item back to the seller, no payment to
-  // refund (the buyer never paid).
+  // state. The hold is released, then the transaction is admin-cancelled with
+  // the standard AD19 fan-out. In P2P that fan-out has one leg, not two: there
+  // is no item to hand back, and the buyer never paid, so nothing moves at all.
   const cancel = await api.releaseEmergencyHold(adminToken, txId, 'CANCEL', RELEASE_NOTE);
   expect(cancel.ok, `cancel-after-hold failed: ${JSON.stringify(cancel.body)}`).toBeTruthy();
   const cancelBody = api.unwrap(cancel.body);
   expect(cancelBody.status).toBe('CANCELLED_ADMIN');
   expect(cancelBody.action).toBe('CANCEL');
-  expect(cancelBody.itemReturned).toBe(true);
   expect(cancelBody.paymentRefunded).toBe(false);
 
   const after = await getTransactionHoldState(txId);
@@ -224,18 +241,26 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   const { sellerToken, buyerToken, adminToken } = tokens();
   const txId = await createTransaction(sellerToken);
 
-  // Drive the full happy path to ITEM_DELIVERED (item handed to the buyer). The
-  // ITEM_DELIVERED→COMPLETED seller-payout pipeline runs on a per-minute cadence
-  // and is itself gated by !IsOnHold, so a hold applied right after delivery
-  // parks the transaction at ITEM_DELIVERED with no race.
+  // Drive the full P2P happy path to ITEM_DELIVERED.
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
-  await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
   const pay = await api.payViaFake(txId);
   expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
-  await api.pollStatus(buyerToken, txId, 'ITEM_DELIVERED', { timeoutMs: 180_000 });
+  await api.pollStatus(buyerToken, txId, 'PAYMENT_RECEIVED', { timeoutMs: 90_000 });
+  // The seller's trade has to actually happen: the settlement re-read at the end
+  // of this test asks whether the buyer still holds the item, and it asks Steam.
+  const trade = await api.simulateFakeTrade(
+    seed.sellerSteamId,
+    seed.buyerSteamId,
+    seed.itemAssetId,
+  );
+  expect(trade.ok, `trade simulation failed: ${JSON.stringify(trade.body)}`).toBeTruthy();
+  const receipt = await api.confirmReceipt(buyerToken, txId);
+  expect(receipt.ok, `confirm-receipt failed: ${JSON.stringify(receipt.body)}`).toBeTruthy();
+  expect(api.unwrap(receipt.body).status).toBe('ITEM_DELIVERED');
 
-  // Apply the hold at ITEM_DELIVERED.
   const hold = await api.applyEmergencyHold(adminToken, txId, HOLD_REASON);
   expect(hold.ok, `apply hold failed: ${JSON.stringify(hold.body)}`).toBeTruthy();
   expect(api.unwrap(hold.body).previousStatus).toBe('ITEM_DELIVERED');
@@ -243,6 +268,17 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   expect(held?.status).toBe('ITEM_DELIVERED');
   expect(held?.isOnHold).toBe(true);
   expect(held?.timeoutFreezeReason).toBe('EMERGENCY_HOLD');
+
+  // Only NOW make the row payout-ELIGIBLE. Ordering matters and the other order
+  // is subtly wrong twice over. Setting the clock first would leave a window —
+  // small, but the settlement cron is a real background job — in which the row
+  // is eligible and NOT yet held, so a sweep could stamp SettlementVerifiedAt
+  // and turn the assertion below into a flake. And leaving the clock alone
+  // entirely would be worse than a flake: the row would sit at ITEM_DELIVERED
+  // for the eight-day window whether or not the hold worked, so "the hold holds
+  // the line" would pass while testing nothing. Held first, then eligible: the
+  // hold is the only thing left that can be stopping it.
+  await setPayoutEligibleNow(txId);
 
   const heldNotice = await pollNotificationRecipients(
     'EMERGENCY_HOLD_APPLIED',
@@ -252,13 +288,25 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   expect(heldNotice).toContain(seed.sellerId.toLowerCase());
   expect(heldNotice).toContain(seed.buyerId.toLowerCase());
 
-  // The hold holds the line: the payout pipeline is gated by !IsOnHold, so while
-  // held the detail endpoint reports EMERGENCY_HOLD and the underlying phase
-  // status stays ITEM_DELIVERED (it does not advance to COMPLETED).
-  await api.assertStatusStable(buyerToken, txId, 'EMERGENCY_HOLD', { durationMs: 12_000 });
-  const parked = await getTransactionHoldState(txId);
+  // The hold holds the line at BOTH gates: SettlementVerificationJob and
+  // SellerPayoutQueueJob each filter on !IsOnHold. The window is due, so a
+  // working hold is the only reason nothing advances.
+  //
+  // Calibration, so the next reader does not overclaim it: SettlementVerification
+  // runs on a FIVE-MINUTE cron (SettlementVerificationJob.Cron — a const, not a
+  // knob, and unlike Timeouts__DeadlineScannerIntervalSeconds it is not lowered
+  // for e2e). A ~20s park window therefore rarely contains a sweep, so the null
+  // SettlementVerifiedAt below is CORROBORATION, not the decisive proof — the
+  // decisive assertions are that the projection stays EMERGENCY_HOLD and that
+  // IsOnHold survives. The job-level !IsOnHold filter itself is pinned where it
+  // can be pinned deterministically: SettlementVerificationJobTests
+  // .IneligibleTransactions_AreNotEvenRead("hold"). Widening this window to
+  // clear the cron would add five idle minutes to the leg for a duplicate.
+  await api.assertStatusStable(buyerToken, txId, 'EMERGENCY_HOLD', { durationMs: 18_000 });
+  const parked = await getSettlementState(txId);
   expect(parked?.status).toBe('ITEM_DELIVERED');
-  expect(parked?.isOnHold).toBe(true);
+  expect(parked?.settlementVerifiedAt, 'settlement ran on a held transaction').toBeNull();
+  expect((await getTransactionHoldState(txId))?.isOnHold).toBe(true);
 
   // 03 §8.8 note — CANCEL is forbidden once the item has been delivered: the item
   // is already with the buyer, so standard cancel/refund cannot apply. The guard
@@ -273,7 +321,7 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   );
 
   // 03 §8.8 note — only RESUME is permitted. Releasing the hold returns the
-  // transaction to ITEM_DELIVERED and re-arms the payout pipeline.
+  // transaction to ITEM_DELIVERED and re-arms the settlement + payout pipeline.
   const resume = await api.releaseEmergencyHold(adminToken, txId, 'RESUME', RELEASE_NOTE);
   expect(resume.ok, `resume failed: ${JSON.stringify(resume.body)}`).toBeTruthy();
   const resumeBody = api.unwrap(resume.body);
@@ -289,8 +337,14 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
   expect(resumeNotice).toContain(seed.sellerId.toLowerCase());
   expect(resumeNotice).toContain(seed.buyerId.toLowerCase());
 
-  // "Devam" — with the hold gone, the seller-payout pipeline (queue → dispatch →
-  // confirm → complete, each per-minute) drives the transaction to COMPLETED.
+  // "Devam" — with the hold gone, settlement-verification re-reads the buyer's
+  // inventory (the item is there, because the trade really happened above) and
+  // the payout pipeline follows it to COMPLETED.
+  const verified = await pollSettlementVerified(txId);
+  expect(
+    verified?.settlementVerifiedAt,
+    `settlement never verified after resume: ${JSON.stringify(verified)}`,
+  ).toBeTruthy();
   const completed = await api.pollStatus(sellerToken, txId, 'COMPLETED', { timeoutMs: 300_000 });
   expect(completed).toBe('COMPLETED');
 });

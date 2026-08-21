@@ -2,7 +2,7 @@
   "name": "skinora-e2e",
   "version": "0.1.0",
   "private": true,
-  "description": "Skinora end-to-end tests (T107). Playwright drives the docker-compose.e2e.yml stack; the happy-path flow is simulated at the backend webhook/client seam via the fake sidecar.",
+  "description": "Skinora end-to-end tests (T107, rewritten for P2P in T138). Playwright drives the docker-compose.e2e.yml stack; the two steps the platform is not party to — the buyer's on-chain payment and the seller-to-buyer Steam trade — are simulated on the fake sidecar's control surface.",
   "scripts": {
     "test": "playwright test",
     "test:smoke": "playwright test happy-path.smoke",
@@ -14,6 +14,7 @@
     "test:hold": "playwright test emergency-hold",
     "test:admin": "playwright test admin-flows",
     "test:downtime": "playwright test downtime",
+    "test:delivery": "playwright test delivery",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
