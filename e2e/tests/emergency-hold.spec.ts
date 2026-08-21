@@ -290,9 +290,18 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
 
   // The hold holds the line at BOTH gates: SettlementVerificationJob and
   // SellerPayoutQueueJob each filter on !IsOnHold. The window is due, so a
-  // working hold is the only reason nothing advances — and the sharper proof is
-  // that SettlementVerifiedAt is still null after several five-minute-cron
-  // opportunities' worth of sweeps have started.
+  // working hold is the only reason nothing advances.
+  //
+  // Calibration, so the next reader does not overclaim it: SettlementVerification
+  // runs on a FIVE-MINUTE cron (SettlementVerificationJob.Cron — a const, not a
+  // knob, and unlike Timeouts__DeadlineScannerIntervalSeconds it is not lowered
+  // for e2e). A ~20s park window therefore rarely contains a sweep, so the null
+  // SettlementVerifiedAt below is CORROBORATION, not the decisive proof — the
+  // decisive assertions are that the projection stays EMERGENCY_HOLD and that
+  // IsOnHold survives. The job-level !IsOnHold filter itself is pinned where it
+  // can be pinned deterministically: SettlementVerificationJobTests
+  // .IneligibleTransactions_AreNotEvenRead("hold"). Widening this window to
+  // clear the cron would add five idle minutes to the leg for a duplicate.
   await api.assertStatusStable(buyerToken, txId, 'EMERGENCY_HOLD', { durationMs: 18_000 });
   const parked = await getSettlementState(txId);
   expect(parked?.status).toBe('ITEM_DELIVERED');

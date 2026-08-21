@@ -194,7 +194,9 @@ export function releaseEmergencyHold(
 
 /** AD1 — GET /admin/dashboard (07 §9.1 / 03 §8.1). Returns the admin landing
  *  summary: summaryCards (active / pending-flag / daily+weekly-completed
- *  counters), recentFlags (last 5, newest-first), and steamAccounts. Gated by
+ *  counters) and recentFlags (last 5, newest-first) — that is the whole AD1
+ *  body since v3.0 dropped the steamAccounts block (the platform runs no Steam
+ *  accounts, 02 §15). Gated by
  *  AuthPolicies.AdminAccess — any admin role; a `user` token is forbidden. */
 export function getAdminDashboard(token: string): Promise<ApiResult> {
   return call('GET', '/api/v1/admin/dashboard', token);
@@ -405,7 +407,8 @@ async function fakeGet(path: string): Promise<ApiResult> {
  *  levers: `amount` drives 03 §5.1 (insufficient) / §5.2 (excess); a non-zero
  *  `eventIndex` posts a distinct second transfer for the §5.5 multi-payment
  *  (the backend treats it as a fresh confirmed payment → full refund because the
- *  transaction already left ITEM_ESCROWED). */
+ *  transaction already left SELLER_CONFIRMED — AmountValidationService.cs:87
+ *  picks the multi-payment branch on STATE, not on amount). */
 export function payViaFake(
   transactionId: string,
   opts?: { amount?: string; eventIndex?: number },
@@ -415,7 +418,7 @@ export function payViaFake(
 
 /** 03 §5.3 — simulate a supported-but-wrong TRC-20 stablecoin landing at the
  *  deposit address (USDC when the buyer was billed USDT). Backend queues a
- *  WRONG_TOKEN_REFUND and the transaction stays ITEM_ESCROWED. */
+ *  WRONG_TOKEN_REFUND and the transaction stays SELLER_CONFIRMED. */
 export function payWrongTokenViaFake(
   transactionId: string,
   opts?: { actualTokenSymbol?: string; amount?: string },
@@ -425,7 +428,7 @@ export function payWrongTokenViaFake(
 
 /** 03 §5.3a — simulate an unsupported token/contract. Backend records a
  *  terminal SPAM_TOKEN_INCOMING audit row; no refund, transaction state
- *  untouched (stays ITEM_ESCROWED). */
+ *  untouched (stays SELLER_CONFIRMED). */
 export function paySpamTokenViaFake(
   transactionId: string,
   opts?: { amount?: string },
@@ -555,8 +558,8 @@ export async function pollStatus(
  *  depends on the freeze kind: an emergency hold sets IsOnHold, so the detail
  *  endpoint projects status=EMERGENCY_HOLD (callers pass that); a
  *  maintenance/outage freeze leaves IsOnHold false, so the projection equals the
- *  underlying phase status (callers pass CREATED / TRADE_OFFER_SENT_TO_SELLER /
- *  ITEM_ESCROWED). Either way a frozen row keeps reporting `expected` across
+ *  underlying phase status (callers pass CREATED / ACCEPTED / SELLER_CONFIRMED /
+ *  PAYMENT_RECEIVED). Either way a frozen row keeps reporting `expected` across
  *  several DeadlineScannerJob sweeps rather than flipping to a CANCELLED_*
  *  terminal; callers pair this with a DB read of the phase status for the
  *  decisive "not cancelled" assertion. Throws on the first observation of a

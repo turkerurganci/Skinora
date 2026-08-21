@@ -1,6 +1,6 @@
 # T138 — E2E spec'lerinin yeniden yazımı
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-21
+**Faz:** F7 | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-21 (doğrulama 2026-08-22)
 
 ---
 
@@ -56,7 +56,7 @@ Yeniden yazımın şekli üç sert kısıttan çıktı; üçü de kod okunarak d
 | 4 | Yeni specler: alıcı-onay hızlı yolu · delivery timeout → satıcı kusurlu iptal · satıcı-başka-yere-gönderdi → auto-escalation | ✓ | `delivery.spec.ts` test 1 (hızlı yol + idempotency) · `timeout.spec.ts` test 4 (satıcı kusurlu iptal — 03 §4.4'ün kendi fazı, bkz. §Senaryo haritası) · `delivery.spec.ts` test 2 (auto-escalation) |
 | 5 | Envanter seed sorumluluğu: her spec (a) ortak seed yetmiyorsa kendi `setFakeInventory`'sini yazar, (b) teslimat kanıtını `simulateFakeTrade` ile üretir; alıcının SIFIR baseline'ı korunur | ✓ | Ortak seed iki item'ı da satıcıya yazıyor (ikincisi T128 kapısı için); alıcı hiçbir yerde seed edilmiyor → PUBLIC + BOŞ, baseline 0. `simulateFakeTrade` üç yerde: happy-path.smoke, happy-path.ui, emergency-hold #3 (satıcı→alıcı) ve delivery #2 (satıcı→üçüncü taraf) |
 | 6 | Bilinen vaka: `downtime.spec.ts`'in iki testi `resetFakeSteamState()`'i `seedHappyPath()`'ten **sonra** çağırıp ortak seed'i siliyor (T137 G1) | ✓ | Gövde içi iki çağrı silindi, `test.beforeEach` hook'una taşındı; hook'a bunun neden orada olması gerektiğini yazan not kondu |
-| 7 | `DEFERRED_BACKLOG` `T136-E2EDeadItemReturnedAssertions` (satır T138'i sahibi olarak adlandırıyor) | ✓ | Altı maddenin altısı kapandı + satırın kendisinin kaçırdığı yedinci ölü referans; ayrıntı §Kapatılan backlog satırı. Satır ✅ işaretlendi, backlog 58 → **57 aktif / 64 çözülmüş** |
+| 7 | `DEFERRED_BACKLOG` `T136-E2EDeadItemReturnedAssertions` (satır T138'i sahibi olarak adlandırıyor) | ~ → ✓ | **Yapım turunda 6/6 iddia edildi; doğrulama 5/6 ölçtü** (B1, aşağıda). Dördüncü madde (`e2e/src/api.ts:165`) `itemReturned`'ı değil AD1'in `steamAccounts` bloğunu kastediyordu ve satır dalda dokunulmadan duruyordu; kapatmanın kayıtlı kanıtı (`grep -rn "itemReturned"`) o maddeyi yapısal olarak göremiyordu. Doğrulama turunda kapatıldı (+ aynı dosyada dört ölü custody docstring'i daha). Satır ✅, backlog **61 aktif / 64 çözülmüş** |
 
 ## Senaryo haritası — üç yeni senaryo nereye düştü
 
@@ -189,3 +189,100 @@ T117'nin P2P pivotundan beri kırmızı olan sekiz advisory E2E leg'i yeşile d�
 - GitHub Actions ifadelerinde tireli matris anahtarı — `matrix.timeout-minutes` çıkarma olarak ayrıştığı için anahtarlar tiresiz seçildi (`timeoutMinutes` vb.); aynı dosya zaten `needs.changes.outputs['e2e-stack']` indeks formunu bu sebeple kullanıyor.
 - Playwright tarayıcı kurulumu — `npm ci` chromium indirmiyor; sekiz API leg'i `page` fixture'ını hiç kullanmadığı için tarayıcısız çalışıyordu, UI leg'ine koşullu `npx playwright install --with-deps chromium` adımı eklendi.
 - **Lokal Docker çalışmıyor** (daemon kapalı), dolayısıyla stack lokalde ayağa kaldırılmadı; E2E kanıtı PR CI'sinin 10 advisory leg'inden gelir — T137/T137a'nın izlediği yolun aynısı.
+
+---
+
+## Doğrulama
+
+**Tarih:** 2026-08-22 · **Dal:** `task/T138-e2e-p2p-rewrite` · **Doğrulanan HEAD:** `9c19fa7` (bulgu düzeltmeleri sonrası final HEAD aşağıda) · **Yöntem:** ayrı chat, yapım raporu ve 11 §F7'nin YAPIM TURU bloğu görülmeden; on bir bağımsız lens + her bulgu için ayrı şüpheci teyitçi + tamlık eleştirmeni (45 ajan).
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Bloke edici bulgu | **0** |
+| Bloke etmeyen bulgu | 6 (2'si dalda düzeltildi, 3'ü backlog satırı oldu, 1'i T138 kaynaklı değil) |
+| Düzeltme gerekli mi | Hayır (yapılan iki düzeltme bloke edici değildi) |
+
+### Giriş kapıları
+
+| Kapı | Sonuç |
+|---|---|
+| Adım -1 working tree | ✓ Boş |
+| Adım 0 main CI (son 3 run) | ✓ `32497982838` · `32497983077` · `32478492189` — üçü de `success` |
+| Adım 0b repo memory | ✓ `.claude/memory/MEMORY.md` T138 satırı mevcut |
+| Dal tazeliği | ✓ `git fetch` sonrası merge-base = `origin/main` HEAD (`15a3715`) — dal geride değil |
+
+### Kabul kriterleri — bağımsız yeniden üretim
+
+| # | Kriter | Sonuç | Validator kanıtı |
+|---|---|---|---|
+| 1 | 7 spec / 21 test P2P'ye yeniden yazıldı | ✓ | `git show origin/main:<spec>` ile taban test adları çıkarıldı: main'de `ITEM_ESCROWED` / `TRADE_OFFER_SENT_TO_*` **test başlıklarında** geçiyordu, dalda hiçbirinde geçmiyor. 02 §2.2'nin sekiz adımlık tablosu spec adımlarıyla satır satır eşleştirildi. `grep -rn "ITEM_ESCROWED\|TRADE_OFFER_SENT" e2e/` → yalnız **geçmiş zamanda** yazılmış tarihsel yorumlar (dördü doğrulama turunda düzeltildi, B1) |
+| 2 | 2 spec noktasal düzeltme | ✓ | `AdminDashboardDtos.cs:4-6` bağımsız okundu — `AdminDashboardResponse` gerçekten yalnız `(SummaryCards, RecentFlags)`; 03 §8.5 v3.0'da emekliye ayrılmış ("Bu akış kaldırılmıştır"). admin-flows diff'i +12/−5, tek dosya → noktasal. fraud-flags: `TransactionCreationService.cs:180-187` T128 tekillik kapısının `_fraudPreCheck.EvaluateAsync`'ten (satır 250) **önce** koştuğu doğrulandı; ikinci asset kapıyı aşıyor, flag tipi kontrolü kesin (`type === 'HIGH_VOLUME'`), PRICE_DEVIATION'ı HIGH_VOLUME sanma riski yok |
+| 3 | `happy-path.ui` için 9. leg ya eklenir ya lokal-only yazılır | ✓ | Leg **eklendi ve gerçekten koştu**: run `32519935414` job `96889858971` "E2E happy-path UI (advisory)" → `1 passed (5.1m)`. `docker-compose.e2e.yml:193-213` reverse-proxy `nginx:alpine` (build gerekmiyor), her iki servis healthcheck'li → `--wait` geçerli, `E2E_HTTP_PORT:-8080` ile `baseUrl` örtüşüyor |
+| 4 | Üç yeni senaryo | ✓ | 02 §9.2 tam okundu. Alıcı-onay hızlı yolu → `delivery.spec.ts:112`; auto-escalation → `delivery.spec.ts:159`; satıcı kusurlu iptal → `timeout.spec.ts:163`. Üçünün assertion'ları backend davranışına karşı ayrı ayrı doğrulandı (`evidence == ['BUYER_CONFIRMED']`, `MisdeliverySignature` verdict'i, `ESCALATED` + SYSTEM dispute, `deliveryRoundAt` damgası). 03 §4.4'ün üç kolundan ikisi kapsanıyor; üçüncüsü (envanter kanıtı bulundu) launch kapısı seed'de `false` olduğu için üretilemiyor — `SystemSettingSeed.cs:170` okunarak teyit edildi, kabul kriterlerinde de kapsam dışı |
+| 5 | Envanter seed sorumluluğu + alıcının SIFIR baseline'ı | ✓ | `seedHappyPath()` yalnız satıcıyı sürüyor, başarısızlıkta throw ediyor; on spec'in hepsinde `resetFakeSteamState()` **dosya seviyesi** `beforeEach`'te ve `seedHappyPath()`'ten önce. Cleanup batch'indeki 14 tablonun 14'ü de migration'larda var; `TransactionId` FK'sı taşıyan **sekiz** entity'nin sekizi de batch'te (Dispute · FraudFlag · Notification · BlockchainTransaction · DeliveryEvidenceCapture · PaymentAddress · SellerPayoutIssue · TransactionHistory) → "tek bilinmeyen tablo tüm purge'ü no-op yapar" riski bu batch'te yok. Yeni yedi yardımcının hepsi kullanılıyor, kaldırılan ikisinin canlı çağıranı yok |
+| 6 | T137 G1 vakası (`downtime.spec.ts` gövde içi reset) | ✓ | `grep -n "resetFakeSteamState\|seedHappyPath" e2e/tests/downtime.spec.ts` → reset satır 61 (`beforeEach`) ve 65 (`afterAll`); `seedHappyPath()` 99 · 176 · 257 (test gövdeleri). Sıra doğru |
+| 7 | `T136-E2EDeadItemReturnedAssertions` kapatması | ~ → ✓ | B1 — aşağıda |
+
+### CI kanıtı — bağımsız ölçüm
+
+Dal HEAD'i `9c19fa7` için run [`32519935414`](https://github.com/turkerurganci/Skinora/actions/runs/32519935414) `success`, CI Gate ✓.
+
+**Advisory maskeleme kontrolü (ilk yapılan şey):** `continue-on-error` job conclusion'ını maskeliyor olabilirdi. Yalanlandı — T135 dalının run'ı [`32478473148`](https://github.com/turkerurganci/Skinora/actions/runs/32478473148) aynı legleri `conclusion: failure` diye bildiriyor. Yani "10/10 success" gerçek bir sinyaldir.
+
+Playwright özetleri log'dan leg leg çıkarıldı (ön veriye güvenilmedi):
+
+| Leg | Sonuç | Leg | Sonuç |
+|---|---|---|---|
+| happy-path | 1 passed (6.7m) | T111 fraud-flags | 4 passed (3.7s) |
+| happy-path UI | 1 passed (5.1m) | T112 emergency-hold | 3 passed (6.4m) |
+| T108 cancellation | 5 passed (4.4m) | T113 admin-flows | 7 passed (4.1s) |
+| T109 timeout | 4 passed (3.4m) | T114 downtime | 3 passed (58.2s) |
+| T110 payment | 6 passed (9.8m) | **T138 delivery** | **2 passed (30.0s)** |
+
+**Toplam 36 passed · 0 failed · 0 flaky · 0 skipped.** `retries: 0` (`playwright.config.ts:23`) olduğu için "flaky" maskesi mimari olarak imkânsız; `Dump compose logs on failure` adımı 10 leg'in 10'unda da `skipped` — hiçbir leg içeriden kırılmadı. Dosyalardaki `test(` sayımı da 36 veriyor ve `test.skip/only/fixme` yok. Lokal: `tsc --noEmit` 0 · `eslint` 0 · `prettier --check` temiz.
+
+**"Sıfır production kaynak değişikliği" doğrulandı:** daldaki **altı commit'in altısında da** diff yalnız `e2e/**`, `.github/workflows/ci.yml`, `docker-compose.e2e.yml`, `Docs/**`, `.claude/memory/**`. `backend/`, `frontend/`, `sidecar-*` hiç görünmüyor. Altı commit de `T138:` başlıklı — bundled-PR yok.
+
+**`DELIVERY_EXPECTED` açığı bağımsız olarak yeniden üretildi:** `grep -rn "new TransactionStatusChangedEvent" backend/src` → tam **beş** yayıncı (TransactionReadinessService · DeliveryConfirmationService · DeliveryTimeoutRound · DeliveryDisputeRound · SettlementVerificationJob); `AmountValidationService.cs:521` (tek `→ PAYMENT_RECEIVED` üreticisi) yalnız `PaymentReceivedEvent` yayınlıyor; consumer'ın `PAYMENT_RECEIVED` kolu (`HappyPathMilestoneNotificationConsumer.cs:85-96`) erişilemez. **Açık gerçek, T140'a devri meşru** (production dokunuşu gerektiriyor, T138'in kabul kriterlerinde yok) ve kendini kapatan işaret doğru kurgulanmış.
+
+### Güvenlik kontrolü
+
+| Alan | Sonuç |
+|---|---|
+| Secret sızıntısı | Temiz — eklenen satırlarda yeni credential yok; `docker-compose.e2e.yml` sabit test değerleri taşıyor ve üretim compose'undan ayrı |
+| Auth/authorization | Temiz — harness JWT'si test-only imza anahtarıyla üretiliyor, üretim yolunu etkilemiyor |
+| Input validation | Etkilenmiyor — production kaynağı değişmedi |
+| Yeni bağımlılık | Yok — `package.json` ↔ `package-lock.json` senkron, yeni paket eklenmemiş |
+| Kapsam sızması | Yok — 21 dosyanın hepsi bildirilen kapsam içinde |
+
+### Bulgular — hiçbiri bloke edici değil
+
+**B1 (S1, dalda DÜZELTİLDİ) — `T136-E2EDeadItemReturnedAssertions` kapatması 6/6 değil 5/6'ydı.** Satırın dördüncü maddesi (`e2e/src/api.ts:165` docstring'i) `itemReturned`'ı değil, bir önceki maddenin alanını — AD1'in `steamAccounts` bloğunu — kastediyordu. `git show origin/main:e2e/src/api.ts | sed -n '165p'` o satırın AD1 docstring'i olduğunu gösteriyor ve satır dalda **kelimesi kelimesine** duruyordu. Kapatmanın kayıtlı kanıtı olan `grep -rn "itemReturned"` bu maddeyi **yapısal olarak göremez**. Aynı taramada dört ölü custody docstring'i daha çıktı: `payViaFake` (:408) "already left ITEM_ESCROWED" — gerçek dal koşulu `Status != SELLER_CONFIRMED`; `payWrongTokenViaFake` (:418) ve `paySpamTokenViaFake` (:428) "stays ITEM_ESCROWED" — kardeş assertion'lar (`payment-edge-cases.spec.ts:173` · `:201`) `SELLER_CONFIRMED` assert ediyor; `assertStatusStable` (:558) "callers pass CREATED / TRADE_OFFER_SENT_TO_SELLER / ITEM_ESCROWED" — altı çağıranın hiçbiri onları geçmiyor. **Kapsam içi olduğunun kanıtı:** T138 aynı dosyada `freezeMaintenance` docstring'ini custody'den P2P'ye bizzat yeniden yazmıştı. Beşi de düzeltildi; backlog satırı ve durum bloğu gerçeğe göre yeniden yazıldı; kapatma kanıtı artık **iki** komut.
+
+**B2 (gözlem, dalda DÜZELTİLDİ) — `emergency-hold.spec.ts` senaryo 3'ün gerekçe yorumu kaynakla çelişiyordu.** Yorum, ~18 sn'lik park penceresinde "several five-minute-cron opportunities' worth of sweeps" başladığını söylüyordu. `SettlementVerificationJob.Cron = "*/5 * * * *"` ve e2e'de override edilmiyor (`docker-compose.e2e.yml` yalnız `Timeouts__DeadlineScannerIntervalSeconds=5`'i düşürüyor) — üstelik aynı repodaki `db.ts:817` bunu "a const, not a knob" diye yazıyor, ve raporun kendi §Known Limitations bölümü de öyle. Assertion **yanlış değil**, ama iddia edilen ayırt edicilik yanlıştı: bu negatif korroborasyondur, kesin kanıt değil. Kesin kanıtlar zaten yerinde (projeksiyon `EMERGENCY_HOLD` kalıyor, `IsOnHold` sağ kalıyor) ve iş kuralı deterministik olarak `SettlementVerificationJobTests.IneligibleTransactions_AreNotEvenRead("hold")`'da kapalı — yani kapsam boşluğu yok, yalnız yanlış bir gerekçe vardı. Pencereyi cron'u aşacak kadar açmak leg'e beş boş dakika eklerdi; doğru düzeltme yorumun kalibre edilmesiydi.
+
+**B3 (🟡 backlog: `T138-E2ENginxPathFilterGap`)** — yeni UI leg'i `nginx/nginx.conf`'a bağımlı ama `e2e-stack` paths-filter'ında `nginx/**` yok; proxy kuralını bozan bir PR advisory ağı hiç tetiklemez. `T136-ParityGuardsSkippedOnBackendPRs` ile aynı sınıf. Dalda uygulanmadı: davranışsal bir CI değişikliği ve kabul kriterlerinde yok.
+
+**B4 (⚪ backlog: `T138-E2ENoArtifactUpload`)** — on leg'in hiçbiri playwright trace/HTML raporunu yüklemiyor; kırmızı tur tanısı `logs --tail=200`'e kalıyor. T138 öncesinden var, maruziyet 8→10 leg'e çıktı.
+
+**B5 (⚪ backlog: `T133b-AdminDtoItemReturnedXmlDoc`)** — yapım turunun **bilerek doğrulamaya bıraktığı karar**: `AdminTransactionDtos.cs:61-65` XML doc'u düşmüş `itemReturned` alanından söz ediyor; satır açılsın mı, yoksa T135 N2 gibi geçilsin mi? **Karar: satır açılsın.** Gerekçe bu turun kendi B1'idir — sahipsiz bir yorum sonunda yanlış bir kapatma iddiası üretti.
+
+**B6 (gözlem, T138 kaynaklı DEĞİL)** — 07 §9.22 iç tutarsızlığı: AD19c CANCEL tablosunun ITEM_DELIVERED satırı `CANNOT_CANCEL_AT_DELIVERY_STAGE` kodunu anıyor, aynı bölümün hata satırı ve kod `CANNOT_CANCEL_DELIVERED_HOLD` üretiyor. Doküman borcu, T138 diff'inde yok, satır açılmadı (bir sonraki doküman turunun yolu üstünde).
+
+### Çürütülen bulgular (örnek)
+
+Teyit turu 16 bulguyu çürüttü. En öğreticisi: bir lens `happy-path.smoke.spec.ts:192`'deki `expect(notifTypes).not.toContain('ITEM_DELIVERED')` assertion'ını "yanlışlanamaz, dolayısıyla vakum" diye raporladı ve tamlık eleştirmeni de bağımsız olarak aynı yere geldi. **İkisi de yanılıyordu.** 03 §3.5 adım 9 harfiyen şunu yazıyor: *"ITEM_DELIVERED için ayrı bir inbox/email bildirim tipi **yoktur** (02 §18.2 / 06 §2.13 bildirim kataloğunda tanımlı değil; WP19)"*. Yani assertion, yazılı bir **yasağın** kodlanmasıdır ve yasak ihlal edildiği gün (biri `NotificationType.ITEM_DELIVERED` ekleyip ürettiğinde) kırılır. Bugün yeşil olması boşluk değil, nöbet tutmanın tanımıdır. **Ders:** "bu assertion hiç kırılamaz" bir vakum işareti gibi görünür; kural bir **yasak** olduğunda tam tersidir.
+
+### Kanıt yönteminin sınırı (dürüstçe kayda geçiyor)
+
+Bu projede validator'ın alışkanlığı kendi mutasyonlarını koşmaktır (T135'te 5, T136'da 6). **E2E'de koşulamadı: lokal Docker daemon kapalı** — yapım turunun da yaşadığı kısıt. Ayırt edicilik bunun yerine **statik** ölçüldü: her assertion backend kaynağına karşı okundu, poll yardımcılarının timeout davranışı tek tek incelendi, "yok" iddialarının zamanlaması arka plan job'larının gerçek kadanslarıyla karşılaştırıldı. Bu yöntem B2'yi (18 sn vs 5 dk) zaten yakaladı, yani kör değil — ama bir mutasyon turunun yerini tutmaz ve bu rapor onu tuttuğunu iddia etmiyor.
+
+### Yapım raporu karşılaştırması
+
+**Uyum: yüksek, bir uyuşmazlık.** Rapor kendi ölçümlerini fazla saymıyor, kendi hatalarını (B1 spec hatası, emergency-hold yalancı geçişi, fraud-flags kapısı) açıkça yazıyor ve bir kararı bilerek doğrulamaya bırakıyor — validator'ın bağımsız bulduğu her şey raporda ya aynen ya da daha ayrıntılı duruyordu. **Tek uyuşmazlık AC7:** rapor "altı maddenin altısı kapandı ve tek tek doğrulandı" diyordu, ölçüm 5/6 verdi (B1). Uyuşmazlığın sebebi kötü niyet değil, kapatma **kanıt komutunun** kapsamıydı — ki bu, satırın kendi dersinin bir kez daha tekrarıdır ve rapora o şekilde işlendi.
+
+### Merge
+
+- Squash commit: `T138: E2E spec'lerinin P2P'ye yeniden yazımı (#255)`
+- Post-merge main CI + Docker Publish: aşağıda

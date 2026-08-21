@@ -174,7 +174,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
   // T137 made an undriven steamId read PUBLIC + EMPTY, so create's Stage 5
   // seller-inventory check rejected every scenario with ITEM_NOT_IN_INVENTORY:
   // no spec or harness ever drove the fake. Seeding it here — the one function
-  // all nine specs call, and which runs AFTER their beforeEach
+  // all ten specs call, and which runs AFTER their beforeEach
   // resetFakeSteamState() — restores create suite-wide without touching a
   // single scenario (the P2P rewrite stays T138's scope).
   //
