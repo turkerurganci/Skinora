@@ -1528,16 +1528,70 @@
         }
       },
       "accepted": {
-        "seller": "El comprador aceptó. La plataforma está preparando tu oferta de intercambio.",
-        "buyer": "Esperando a que el vendedor envíe el ítem."
+        "seller": {
+          "title": "¡El comprador aceptó! ¿Estás listo para enviar el artículo?",
+          "cta": "Estoy listo para enviar",
+          "submitting": "Comprobando…",
+          "itemGoneHint": "Puedes cancelar la transacción o volver a intentarlo cuando el artículo sea intercambiable.",
+          "suspendedHint": "Tu cuenta está suspendida, así que no puedes confirmar ahora.",
+          "errors": {
+            "ITEM_NO_LONGER_AVAILABLE": "Este artículo ya no se puede enviar: no está en tu inventario o no es intercambiable.",
+            "INVENTORY_PRIVATE": "No pudimos leer tu inventario de Steam porque tu perfil es privado. Hazlo público e inténtalo de nuevo.",
+            "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "El Mobile Authenticator de Steam del comprador aún no está activo. Ya se le notificó: podrás intentarlo de nuevo cuando lo active.",
+            "STEAM_UNAVAILABLE": "No se pudo contactar con Steam. Inténtalo de nuevo en un momento.",
+            "INVALID_STATE_TRANSITION": "Esta transacción ya no espera tu confirmación.",
+            "NOT_A_PARTY": "No eres parte de esta transacción.",
+            "generic": "No se pudo confirmar. Inténtalo de nuevo."
+          }
+        },
+        "buyer": "Esperando a que el vendedor confirme que está listo para enviar."
+      },
+      "sellerConfirmed": {
+        "seller": "Confirmaste que estás listo. Esperando el pago del comprador.",
+        "buyer": "El vendedor está listo. Envía tu pago con los datos indicados arriba."
       },
       "paymentReceived": {
-        "seller": "Pago verificado. El ítem se está entregando al comprador.",
-        "buyer": "Tu pago fue verificado. El ítem está en camino."
+        "seller": {
+          "title": "El pago está en custodia: envía el artículo ahora.",
+          "cta": "Enviar la oferta de intercambio en Steam",
+          "itemReminderLabel": "Artículo a enviar",
+          "warning": "Envía solo el artículo de esta transacción. Si envías otro artículo, la entrega no se podrá verificar.",
+          "missingLink": "Falta la URL de intercambio de Steam del comprador, así que no podemos abrir el intercambio por ti. Contacta con soporte.",
+          "cancelWarning": "El pago fue recibido. Si cancelas, el dinero se reembolsa al comprador y tu reputación se ve afectada."
+        },
+        "buyer": {
+          "title": "Tu pago está en custodia. El vendedor está enviando el artículo.",
+          "cta": "Lo he recibido",
+          "submitting": "Confirmando…",
+          "cannotCancel": "No puedes cancelar: el pago ya fue enviado.",
+          "confirmModal": {
+            "title": "Confirmar la entrega",
+            "body": "¿Confirmas que recibiste el artículo? Al confirmar, el pago se libera al vendedor. Esto no se puede deshacer.",
+            "confirm": "Sí, lo he recibido",
+            "dismiss": "Todavía no"
+          },
+          "errors": {
+            "INVALID_STATE_TRANSITION": "Esta transacción ya no espera tu confirmación.",
+            "NOT_A_PARTY": "No eres parte de esta transacción.",
+            "generic": "No se pudo confirmar. Inténtalo de nuevo."
+          }
+        }
       },
       "itemDelivered": {
-        "seller": "Ítem entregado. Tu pago se está procesando.",
-        "buyer": "Tu ítem ha sido entregado."
+        "seller": {
+          "title": "Artículo entregado. Tu pago está programado.",
+          "titleWithDate": "Artículo entregado. Tu pago se enviará el {date}.",
+          "explanation": "Steam mantiene los intercambios reversibles durante 7 días. Tu pago se envía cuando esa ventana se cierra y se confirma que el artículo sigue con el comprador.",
+          "countdownLabel": "Pago en"
+        },
+        "buyer": {
+          "title": "¡Tu artículo ha sido entregado!",
+          "guarantee": "Si el vendedor revierte el intercambio dentro de la ventana de protección, se te reembolsa el pago."
+        }
+      },
+      "inventoryHidden": {
+        "seller": "El inventario del comprador es privado, así que no podremos verificar la entrega automáticamente: el comprador tendrá que confirmar que lo recibió.",
+        "buyer": "Tu inventario de Steam es privado, así que no podemos verificar la entrega automáticamente. Cuando llegue el artículo, pulsa “Lo he recibido”: de lo contrario, la transacción caducará."
       },
       "cancelErrors": {
         "generic": "No se pudo cancelar la transacción. Inténtalo de nuevo.",

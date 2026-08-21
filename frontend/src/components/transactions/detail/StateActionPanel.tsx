@@ -1,22 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { ApiError } from "@/lib/api/client";
 import { cancelTransaction, type TransactionDetailResponse } from "@/lib/api/transactions";
 import { CancelModal, CountdownTimer } from "@/components/common";
-import { TransactionStatus } from "@/types/enums";
 import {
   asFreezeReason,
   computeWarningSeconds,
-  isCancelledStatus,
-  isEmergencyHold,
-  isFlagged,
-  isTerminalStatus,
+  isActivePartyRow,
+  panelRowFor,
+  type PanelRole,
+  type PanelRow,
 } from "./helpers";
 import { AcceptForm } from "./AcceptForm";
+import { ConfirmReadyButton } from "./ConfirmReadyButton";
+import { ConfirmReceiptButton } from "./ConfirmReceiptButton";
 import { DisputeModal } from "./DisputeModal";
+import { InventoryHiddenNotice } from "./InventoryHiddenNotice";
+import { SellerTradeCta } from "./SellerTradeCta";
+import { SettlementNotice } from "./SettlementNotice";
 
 export interface StateActionPanelProps {
   detail: TransactionDetailResponse;
@@ -36,16 +40,29 @@ export interface StateActionPanelProps {
 }
 
 /**
- * 04 §7.3 — State × Role aksiyon paneli. Switch tree explicit on purpose;
- * each branch matches one row of the state×role matrix in the spec.
+ * 04 §7.3 — S07 State × Role aksiyon paneli (v3.0).
  *
- * Tek bir component'te tutmamızın sebebi: countdown + role mesajları + iptal
- * butonu sürekli aynı 3-bölümlü iskelet kullanır. Branch'lerin ne yaptığı
- * tek bir dosyada görünmesi, spec ile diff almayı kolaylaştırır.
+ * The matrix itself lives in `helpers.panelRowFor`: every (status × role) pair
+ * resolves to exactly one {@link PanelRow}, and this file renders exactly one
+ * branch per row. Splitting the classification from the rendering is what makes
+ * the matrix checkable — `StateActionPanel.matrix.test.ts` walks every cell and
+ * fails on an unclassified one, instead of a new status quietly falling through
+ * to an empty action area (the failure mode REFUNDED had actually been in, and
+ * the one T134's validation recorded for the timeline as observation G1).
  *
- * Suspended override (04 §7.3): tüm butonlar disabled, salt-okunur banner
- * SuspendedBanner ile üst seviyede gösterilir; burada `isSuspended` flag'i
- * yalnız buton aktivasyonunu kontrol eder.
+ * Three shapes of row:
+ *   • Self-contained — frozen, unwound, public, completed. Return their own
+ *     block (or null) and no secondary actions.
+ *   • Active party rows — share the countdown + primary action + secondary
+ *     (cancel / dispute) frame.
+ *   • Rows whose mechanics need state of their own (a mutation, a modal) live
+ *     in sibling components, the way CREATED × buyer already did with
+ *     `AcceptForm`: `ConfirmReadyButton`, `ConfirmReceiptButton`,
+ *     `SellerTradeCta`, `SettlementNotice`.
+ *
+ * Suspended override (04 §7.3): every button is disabled and the read-only
+ * banner is rendered above by `SuspendedBanner`; here `isSuspended` only
+ * controls activation.
  */
 export function StateActionPanel({
   detail,
@@ -64,12 +81,12 @@ export function StateActionPanel({
   const [disputeOpen, setDisputeOpen] = useState(false);
 
   const { status, timeout, userRole, availableActions } = detail;
-  const role = userRole;
+  const role: PanelRole | null = userRole ?? null;
+  const row = panelRowFor(status, role);
 
-  // 04 §7.3 — FLAGGED/EMERGENCY_HOLD aksiyonları tamamen devre dışı;
-  // banner FlagHoldBanner tarafından zaten gösterilmiştir, burada sadece
-  // countdown frozen state'ini gösteren placeholder bırakıyoruz.
-  if (isEmergencyHold(status) || isFlagged(status)) {
+  // 04 §7.3 FLAGGED / EMERGENCY_HOLD — every action off; the banner is already
+  // rendered by FlagHoldBanner, so all that belongs here is the frozen clock.
+  if (row === "frozen") {
     return (
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
         {t("frozenInfo")}
@@ -87,28 +104,19 @@ export function StateActionPanel({
     );
   }
 
-  // Terminal cancelled states — CancelInfoBlock üst seviyede bilgileri
-  // gösterir; burada sadece ek mesaj veya gecikmeli ödeme banner
-  // PaymentEventBanners (LATE_PAYMENT) tarafından yönetilir.
-  if (isCancelledStatus(status)) {
-    return null;
-  }
+  // 04 §7.3 CANCELLED_* (and REFUNDED, 07 §7.5) — the record, not an action
+  // area. CancelInfoBlock owns that surface at page level; a LATE_PAYMENT note
+  // comes from PaymentEventBanners.
+  if (row === "unwound") return null;
 
-  // COMPLETED — SellerPayoutSummary (satıcı view) veya simple confirmation
-  if (status === TransactionStatus.COMPLETED) {
-    return (
-      <div
-        className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900"
-        role="status"
-      >
-        {role === "seller" ? t("completed.seller") : t("completed.buyer")}
-      </div>
-    );
-  }
+  // A status the matrix has never been taught. Rendering nothing is the safe
+  // half of the answer; the loud half is the matrix guard.
+  if (row === "unclassified") return null;
 
-  // Public (unauthenticated, CREATED only — 07 §7.5)
-  if (!role) {
-    if (status !== TransactionStatus.CREATED) return null;
+  if (row === "publicNoAction") return null;
+
+  // 04 §7.3 public varyant — scoped to CREATED (07 §7.5).
+  if (row === "publicCreated") {
     // The auth flow reads `returnUrl` (login + callback both) and prepends the
     // locale on success; pass a locale-less relative path.
     const returnTarget = loginReturnTo ?? `/transactions/${detail.id}`;
@@ -121,6 +129,19 @@ export function StateActionPanel({
         >
           {t("public.loginCta")}
         </Link>
+      </div>
+    );
+  }
+
+  // 04 §7.3 COMPLETED — SellerPayoutSummary carries the seller's breakdown at
+  // page level; this is the one-line confirmation next to it.
+  if (row === "completedSeller" || row === "completedBuyer") {
+    return (
+      <div
+        className="rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-900"
+        role="status"
+      >
+        {row === "completedSeller" ? t("completed.seller") : t("completed.buyer")}
       </div>
     );
   }
@@ -156,9 +177,26 @@ export function StateActionPanel({
   const disputeButtonShown = availableActions.canDispute != null;
   const disputeButtonEnabled = Boolean(availableActions.canDispute) && !isSuspended;
 
+  // 04 §7.3 PAYMENT_RECEIVED — the cancel asymmetry, both halves. The seller may
+  // still walk away (02 §7), so their modal carries the consequence; the buyer
+  // may not, and 04 §7.3 asks for the reason to be stated rather than left as a
+  // greyed-out button with no explanation.
+  const cancelRefundWarning =
+    row === "paymentReceivedSeller" ? t("paymentReceived.seller.cancelWarning") : undefined;
+  const cancelDisabledReason =
+    row === "paymentReceivedBuyer" && cancelButtonShown && !isSuspended
+      ? t("paymentReceived.buyer.cannotCancel")
+      : null;
+
+  // 04 §7.3 ITEM_DELIVERED — the settlement window owns its own countdown
+  // (labelled, day/hour) for the seller and the buyer gets none at all, so the
+  // generic timer at the top of the frame is suppressed for both.
+  const showFrameCountdown =
+    Boolean(timeout) && row !== "itemDeliveredSeller" && row !== "itemDeliveredBuyer";
+
   return (
     <div className="space-y-4">
-      {timeout && (
+      {showFrameCountdown && timeout && (
         <div className="flex items-center gap-3 rounded-md border border-gray-200 bg-white p-3">
           <span className="text-xs font-medium uppercase text-gray-500">{t("countdownLabel")}</span>
           {timeout.frozen ? (
@@ -179,6 +217,7 @@ export function StateActionPanel({
       )}
 
       <PrimaryActionPanel
+        row={row}
         detail={detail}
         defaultRefundAddress={defaultRefundAddress}
         defaultSteamTradeUrl={defaultSteamTradeUrl}
@@ -187,33 +226,41 @@ export function StateActionPanel({
         onAccepted={onRefetch}
       />
 
-      {!isTerminalStatus(status) && (cancelButtonShown || disputeButtonShown) && (
-        <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-          {cancelButtonShown && (
-            <button
-              type="button"
-              disabled={!cancelButtonEnabled}
-              onClick={() => setCancelOpen(true)}
-              className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t("cancel")}
-            </button>
-          )}
-          {disputeButtonShown && (
-            <button
-              type="button"
-              disabled={!disputeButtonEnabled}
-              onClick={() => setDisputeOpen(true)}
-              className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t("dispute")}
-            </button>
+      {isActivePartyRow(row) && (cancelButtonShown || disputeButtonShown) && (
+        <div className="space-y-2 border-t border-gray-100 pt-3">
+          <div className="flex flex-wrap gap-2">
+            {cancelButtonShown && (
+              <button
+                type="button"
+                disabled={!cancelButtonEnabled}
+                onClick={() => setCancelOpen(true)}
+                className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t("cancel")}
+              </button>
+            )}
+            {disputeButtonShown && (
+              <button
+                type="button"
+                disabled={!disputeButtonEnabled}
+                onClick={() => setDisputeOpen(true)}
+                className="rounded-md border border-orange-300 bg-white px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t("dispute")}
+              </button>
+            )}
+          </div>
+          {cancelDisabledReason && (
+            <p className="text-xs text-gray-600" data-testid="cancel-disabled-reason">
+              {cancelDisabledReason}
+            </p>
           )}
         </div>
       )}
 
       <CancelModal
         open={cancelOpen}
+        refundDescription={cancelRefundWarning}
         onConfirm={handleCancelConfirm}
         onClose={() => {
           if (!cancelling) {
@@ -243,6 +290,7 @@ export function StateActionPanel({
 }
 
 interface PrimaryActionPanelProps {
+  row: PanelRow;
   detail: TransactionDetailResponse;
   defaultRefundAddress: string | null;
   defaultSteamTradeUrl: string | null;
@@ -251,7 +299,13 @@ interface PrimaryActionPanelProps {
   onAccepted: () => void;
 }
 
+/**
+ * One branch per active party row of the 04 §7.3 matrix. The switch is
+ * exhaustive over the rows `isActivePartyRow` admits; anything else is handled
+ * by the caller before this component is reached.
+ */
 function PrimaryActionPanel({
+  row,
   detail,
   defaultRefundAddress,
   defaultSteamTradeUrl,
@@ -260,12 +314,15 @@ function PrimaryActionPanel({
   onAccepted,
 }: PrimaryActionPanelProps) {
   const t = useTranslations("transactionDetail.actions");
-  const { status, userRole, availableActions } = detail;
-  const role = userRole!;
+  const { availableActions } = detail;
+  // 07 §7.5 — `buyerInventoryVisible` is tri-state. `undefined` means the read
+  // has not happened yet (before the seller confirms readiness) and must not be
+  // reported as "hidden", so the check is strict.
+  const inventoryHidden = detail.buyerInventoryVisible === false;
 
-  // CREATED — buyer'a Accept form, seller'a "alıcı bekleniyor" mesajı
-  if (status === TransactionStatus.CREATED) {
-    if (role === "buyer") {
+  switch (row) {
+    // CREATED — buyer gets the Accept form, seller waits.
+    case "createdBuyer": {
       const cantAccept = !availableActions.canAccept;
       return (
         <AcceptForm
@@ -284,48 +341,79 @@ function PrimaryActionPanel({
         />
       );
     }
-    return (
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-        {t("created.seller")}
-      </div>
-    );
+    case "createdSeller":
+      return <InfoBox>{t("created.seller")}</InfoBox>;
+
+    // ACCEPTED — the seller's readiness confirmation is the awaited action.
+    case "acceptedSeller":
+      return (
+        <ConfirmReadyButton
+          transactionId={detail.id}
+          canConfirmReady={Boolean(availableActions.canConfirmReady)}
+          isSuspended={isSuspended}
+          onConfirmed={onAccepted}
+        />
+      );
+    case "acceptedBuyer":
+      return <InfoBox>{t("accepted.buyer")}</InfoBox>;
+
+    // SELLER_CONFIRMED — the deposit address is open to the buyer, who sees it
+    // in PaymentInfoBlock at page level (04 §7.3 "Ödeme Bilgileri Bölümü").
+    // The panel carries the waiting message and, for both parties, the standing
+    // "no inventory evidence" condition if it applies.
+    case "sellerConfirmedSeller":
+      return (
+        <div className="space-y-3">
+          <InfoBox>{t("sellerConfirmed.seller")}</InfoBox>
+          {inventoryHidden && <InventoryHiddenNotice role="seller" />}
+        </div>
+      );
+    case "sellerConfirmedBuyer":
+      return (
+        <div className="space-y-3">
+          <InfoBox>{t("sellerConfirmed.buyer")}</InfoBox>
+          {inventoryHidden && <InventoryHiddenNotice role="buyer" />}
+        </div>
+      );
+
+    // PAYMENT_RECEIVED — 04 §7.3's most critical state: the money is escrowed
+    // and the awaited action is the seller's Steam trade.
+    case "paymentReceivedSeller":
+      return (
+        <div className="space-y-3">
+          <SellerTradeCta tradeUrl={detail.steamTradeOfferUrl} item={detail.item} />
+          {inventoryHidden && <InventoryHiddenNotice role="seller" />}
+        </div>
+      );
+    case "paymentReceivedBuyer":
+      return (
+        <div className="space-y-3">
+          <ConfirmReceiptButton
+            transactionId={detail.id}
+            canConfirmReceipt={Boolean(availableActions.canConfirmReceipt)}
+            isSuspended={isSuspended}
+            onConfirmed={onAccepted}
+          />
+          {inventoryHidden && <InventoryHiddenNotice role="buyer" />}
+        </div>
+      );
+
+    // ITEM_DELIVERED — the settlement window (02 §4.5.1).
+    case "itemDeliveredSeller":
+      return <SettlementNotice role="seller" timeout={detail.timeout} />;
+    case "itemDeliveredBuyer":
+      return <SettlementNotice role="buyer" timeout={detail.timeout} />;
+
+    default:
+      return null;
   }
-
-  if (status === TransactionStatus.ACCEPTED) {
-    return (
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-        {role === "seller" ? t("accepted.seller") : t("accepted.buyer")}
-      </div>
-    );
-  }
-
-  // SELLER_CONFIRMED (04 §7.3) — T134 removed the two retired custodial branches
-  // (TRADE_OFFER_SENT_TO_SELLER / ITEM_ESCROWED) that used to live here. The v3.0
-  // row — seller "waiting for payment", buyer payment instructions — plus the
-  // PAYMENT_RECEIVED × seller Steam trade deep link and the buyer "Teslim Aldım"
-  // button are the subject of T135 (state×role matrix), which owns the panel.
-
-  if (status === TransactionStatus.PAYMENT_RECEIVED) {
-    return (
-      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-        {role === "seller" ? t("paymentReceived.seller") : t("paymentReceived.buyer")}
-      </div>
-    );
-  }
-
-  if (status === TransactionStatus.ITEM_DELIVERED) {
-    return (
-      <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
-        {role === "seller" ? t("itemDelivered.seller") : t("itemDelivered.buyer")}
-      </div>
-    );
-  }
-
-  return null;
 }
 
-// SteamTradeOfferLink (WP12/WP13) was rendered only inside the two retired
-// TRADE_OFFER_SENT_TO_* branches, so T134 removed it with them rather than
-// leaving unreachable markup behind. `detail.steamTradeOfferUrl` still ships in
-// the DTO (07 §7.5); its v3.0 home is the PAYMENT_RECEIVED × seller row —
-// "Steam'de Trade Offer Gönder" (04 §7.3) — and wiring it there belongs to T135.
+/** The "nothing to do, here is why" box the four waiting cells share. */
+function InfoBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+      {children}
+    </div>
+  );
+}

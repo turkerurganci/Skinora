@@ -11,6 +11,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // T135 — next-intl's `createNavigation` imports the extensionless
+      // `next/navigation`, which Next 16 exposes through its bundler plugin
+      // rather than through package `exports`. Vite cannot resolve it, so any
+      // test that reaches `@/i18n/navigation` (everything importing the
+      // `@/components/common` barrel, since LanguageSelector lives there)
+      // failed to load before the first assertion ran. Pointing at the real
+      // file next to it is the whole fix; Next's own build is unaffected.
+      "next/navigation": fileURLToPath(
+        new URL("./node_modules/next/navigation.js", import.meta.url),
+      ),
     },
   },
   test: {
@@ -18,5 +28,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    server: {
+      // Process next-intl through Vite instead of leaving it externalised, so
+      // the `next/navigation` alias above actually applies to ITS imports —
+      // which is where the extensionless specifier lives.
+      deps: { inline: ["next-intl"] },
+    },
   },
 });

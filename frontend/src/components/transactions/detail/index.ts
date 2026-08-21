@@ -11,3 +11,9 @@ export { DisputeBlock } from "./DisputeBlock";
 export { DisputeModal } from "./DisputeModal";
 export { InviteLinkBlock } from "./InviteLinkBlock";
 export { AcceptForm } from "./AcceptForm";
+// T135 — the 04 §7.3 state × role matrix rows that carry their own mechanics.
+export { ConfirmReadyButton } from "./ConfirmReadyButton";
+export { ConfirmReceiptButton } from "./ConfirmReceiptButton";
+export { SellerTradeCta } from "./SellerTradeCta";
+export { SettlementNotice } from "./SettlementNotice";
+export { InventoryHiddenNotice } from "./InventoryHiddenNotice";

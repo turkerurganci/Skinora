@@ -50,11 +50,7 @@ interface TransactionDetailPageProps {
  *   K1 — Dispute UI (T92) wired: StateActionPanel "İtiraz Et" → C07
  *        modal; DisputeBlock "TX Hash Gir" / "Admin'e İlet" → C07 modal
  *        in existing-dispute resume mode.
- *   K2 — Steam trade deep link: `steamTradeOfferUrl` DTO alanı WP13'te
- *        StateActionPanel'e bağlanmıştı. v3.0'da bağlandığı iki state
- *        (TRADE_OFFER_SENT_TO_*) emekli oldu; deep link'in yeni yeri
- *        PAYMENT_RECEIVED × satıcı (04 §7.3) ve bağlanması T135'e ait.
- *   K3 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
+ *   K2 — İade adresi "Değiştir" linki disabled. Backend AcceptRequest tek
  *        adres alanı + cooldown check yapıyor; per-transaction override
  *        field T-future.
  */

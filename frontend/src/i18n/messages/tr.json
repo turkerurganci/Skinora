@@ -1528,16 +1528,70 @@
         }
       },
       "accepted": {
-        "seller": "Alıcı kabul etti. Platform trade offer'ınızı hazırlıyor.",
-        "buyer": "Satıcının item'ı göndermesi bekleniyor."
+        "seller": {
+          "title": "Alıcı kabul etti! Göndermeye hazır mısınız?",
+          "cta": "Göndermeye Hazırım",
+          "submitting": "Kontrol ediliyor…",
+          "itemGoneHint": "İşlemi iptal edebilir veya item tekrar gönderilebilir olduğunda yeniden deneyebilirsiniz.",
+          "suspendedHint": "Hesabınız askıya alındığı için şu anda onay veremezsiniz.",
+          "errors": {
+            "ITEM_NO_LONGER_AVAILABLE": "Item artık gönderilebilir durumda değil — envanterinizde yok ya da takas edilebilir değil.",
+            "INVENTORY_PRIVATE": "Profiliniz gizli olduğu için Steam envanteriniz okunamadı. Envanterinizi herkese açık yapıp tekrar deneyin.",
+            "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "Alıcının Steam Mobile Authenticator'ı henüz aktif değil. Alıcı bilgilendirildi — aktif ettiğinde tekrar deneyebilirsiniz.",
+            "STEAM_UNAVAILABLE": "Steam'e şu anda ulaşılamadı. Birazdan tekrar deneyin.",
+            "INVALID_STATE_TRANSITION": "Bu işlem artık onayınızı beklemiyor.",
+            "NOT_A_PARTY": "Bu işlemin tarafı değilsiniz.",
+            "generic": "Onay verilemedi. Lütfen tekrar deneyin."
+          }
+        },
+        "buyer": "Satıcının hazırlık onayı bekleniyor."
+      },
+      "sellerConfirmed": {
+        "seller": "Hazır olduğunuzu onayladınız. Alıcının ödemesi bekleniyor.",
+        "buyer": "Satıcı hazır. Yukarıdaki bilgilerle ödemenizi gönderin."
       },
       "paymentReceived": {
-        "seller": "Ödeme doğrulandı. Item alıcıya teslim ediliyor.",
-        "buyer": "Ödemeniz doğrulandı. Item'ınız gönderiliyor."
+        "seller": {
+          "title": "Ödeme emanete alındı — item'ı şimdi gönderin.",
+          "cta": "Steam'de Trade Offer Gönder",
+          "itemReminderLabel": "Gönderilecek item",
+          "warning": "Yalnızca işlemdeki item'ı gönderin; farklı bir item gönderirseniz teslimat doğrulanmaz.",
+          "missingLink": "Alıcının Steam trade URL'i bulunamadı, bu yüzden takası sizin için açamıyoruz. Lütfen destek ile iletişime geçin.",
+          "cancelWarning": "Ödeme alındı. İptal ederseniz ödeme alıcıya iade edilir ve itibar puanınız etkilenir."
+        },
+        "buyer": {
+          "title": "Ödemeniz emanete alındı. Satıcı item'ı gönderiyor.",
+          "cta": "Teslim Aldım",
+          "submitting": "Onaylanıyor…",
+          "cannotCancel": "Ödeme gönderildiği için iptal edemezsiniz.",
+          "confirmModal": {
+            "title": "Teslimatı onaylayın",
+            "body": "Item'ı aldığınızı onaylıyor musunuz? Onayladığınızda ödeme satıcıya aktarılacak. Bu işlem geri alınamaz.",
+            "confirm": "Evet, teslim aldım",
+            "dismiss": "Henüz almadım"
+          },
+          "errors": {
+            "INVALID_STATE_TRANSITION": "Bu işlem artık onayınızı beklemiyor.",
+            "NOT_A_PARTY": "Bu işlemin tarafı değilsiniz.",
+            "generic": "Onay verilemedi. Lütfen tekrar deneyin."
+          }
+        }
       },
       "itemDelivered": {
-        "seller": "Item teslim edildi. Ödemeniz işleniyor.",
-        "buyer": "Item'ınız teslim edildi."
+        "seller": {
+          "title": "Item teslim edildi. Ödemeniz planlandı.",
+          "titleWithDate": "Item teslim edildi. Ödemeniz {date} tarihinde yapılacak.",
+          "explanation": "Steam, trade'leri 7 gün boyunca geri alınabilir tutuyor. Ödemeniz bu süre kapandıktan sonra, item'ın alıcıda kaldığı doğrulanarak yapılacak.",
+          "countdownLabel": "Ödemeye kalan"
+        },
+        "buyer": {
+          "title": "Item'ınız teslim edildi!",
+          "guarantee": "Satıcı koruma süresi içinde trade'i geri alırsa paranız iade edilir."
+        }
+      },
+      "inventoryHidden": {
+        "seller": "Alıcının envanteri gizli olduğu için teslimatı otomatik doğrulayamayacağız — alıcının “Teslim Aldım” onayı gerekecek.",
+        "buyer": "Steam envanteriniz gizli olduğu için teslimatı otomatik doğrulayamıyoruz. Item elinize geçtiğinde “Teslim Aldım” butonuna basmanız gerekiyor — aksi hâlde işlemin süresi dolar."
       },
       "cancelErrors": {
         "generic": "İşlem iptal edilemedi. Lütfen tekrar deneyin.",

@@ -1528,16 +1528,70 @@
         }
       },
       "accepted": {
-        "seller": "买家已接受。平台正在准备您的交易报价。",
-        "buyer": "等待卖家发送物品。"
+        "seller": {
+          "title": "买家已接受！您准备好发送物品了吗？",
+          "cta": "我准备好发送了",
+          "submitting": "检查中…",
+          "itemGoneHint": "您可以取消交易，或在该物品可交易后重试。",
+          "suspendedHint": "您的账户已被暂停，目前无法确认。",
+          "errors": {
+            "ITEM_NO_LONGER_AVAILABLE": "该物品已无法发送——它不在您的库存中，或不可交易。",
+            "INVENTORY_PRIVATE": "由于您的资料为私密，我们无法读取您的 Steam 库存。请将库存设为公开后重试。",
+            "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "买家的 Steam Mobile Authenticator 尚未启用。已通知买家——启用后您可以重试。",
+            "STEAM_UNAVAILABLE": "无法连接 Steam。请稍后重试。",
+            "INVALID_STATE_TRANSITION": "该交易不再等待您的确认。",
+            "NOT_A_PARTY": "您不是该交易的当事方。",
+            "generic": "无法确认。请重试。"
+          }
+        },
+        "buyer": "等待卖家确认已准备好发送。"
+      },
+      "sellerConfirmed": {
+        "seller": "您已确认准备就绪。等待买家付款。",
+        "buyer": "卖家已准备就绪。请按上方信息付款。"
       },
       "paymentReceived": {
-        "seller": "付款已确认。物品正在送达买家。",
-        "buyer": "您的付款已确认。物品正在送达。"
+        "seller": {
+          "title": "款项已托管——请立即发送物品。",
+          "cta": "在 Steam 上发送交易报价",
+          "itemReminderLabel": "待发送物品",
+          "warning": "只能发送本次交易中的物品；如果发送其他物品，交付将无法验证。",
+          "missingLink": "缺少买家的 Steam 交易链接，我们无法为您打开交易。请联系客服。",
+          "cancelWarning": "款项已收到。如果您取消，款项将退还给买家，并且会影响您的信誉分。"
+        },
+        "buyer": {
+          "title": "您的款项已托管。卖家正在发送物品。",
+          "cta": "我已收到",
+          "submitting": "确认中…",
+          "cannotCancel": "款项已发送，无法取消。",
+          "confirmModal": {
+            "title": "确认收货",
+            "body": "您确认已收到物品吗？确认后款项将支付给卖家。此操作无法撤销。",
+            "confirm": "是的，我已收到",
+            "dismiss": "还没有"
+          },
+          "errors": {
+            "INVALID_STATE_TRANSITION": "该交易不再等待您的确认。",
+            "NOT_A_PARTY": "您不是该交易的当事方。",
+            "generic": "无法确认。请重试。"
+          }
+        }
       },
       "itemDelivered": {
-        "seller": "物品已送达。您的款项正在处理。",
-        "buyer": "您的物品已送达。"
+        "seller": {
+          "title": "物品已交付。您的付款已安排。",
+          "titleWithDate": "物品已交付。您的款项将于 {date} 支付。",
+          "explanation": "Steam 会在 7 天内保持交易可撤销。该期限结束并确认物品仍在买家处后，我们才会向您付款。",
+          "countdownLabel": "距付款"
+        },
+        "buyer": {
+          "title": "您的物品已送达！",
+          "guarantee": "如果卖家在保护期内撤销交易，您的款项将被退还。"
+        }
+      },
+      "inventoryHidden": {
+        "seller": "买家的库存为私密，我们无法自动验证交付——需要买家确认已收到物品。",
+        "buyer": "您的 Steam 库存为私密，我们无法自动验证交付。物品到账后请点击“我已收到”——否则该交易将过期。"
       },
       "cancelErrors": {
         "generic": "无法取消交易。请重试。",
