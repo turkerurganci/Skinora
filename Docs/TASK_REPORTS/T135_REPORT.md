@@ -1,6 +1,6 @@
 # T135 — StateActionPanel state×rol matrisi
 
-**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-08-21
+**Faz:** F7 | **Durum:** ⏳ Devam ediyor (yapım bitti, **CI ✓ PASS**, doğrulama bekliyor) | **Tarih:** 2026-08-21
 
 ---
 
@@ -133,11 +133,13 @@ test tarafını etkiler, ürün derlemesi değişmedi:
 | FE `prettier --check` | ✓ | Lokal çalışma ağacı CRLF olduğu için repo geneli `format:check` 107 dosya uyarıyor — bilinen lokal artefakt. **Turun dokunduğu 18 dosya** LF'e normalize edilip ayrıca kontrol edildi: "All matched files use Prettier code style!" |
 | Backend `dotnet build` (Release) | ✓ 0 Error / 0 Warning | tüm çözüm |
 | Backend unit (CI filtresi) | **1450 / 1466**, 16 düşen | Düşen 16'nın **hepsi** `Skinora.Notifications.Tests.Unit.Channels` altında ve hepsinin hatası `DockerUnavailableException` — Testcontainers lokal Docker daemon'ına bağlanamıyor. T135 Notifications modülüne **hiç dokunmuyor**. |
-| Backend integration | **lokalde koşulamadı** | Aynı sebep: Testcontainers + Docker Desktop daemon kapalı, makinede SQL Server servisi de yok (`Get-Service MSSQL*` → yalnız `SQLWriter`). D2'nin 7 yeni testi bu ayaktadır → **kanıt dal CI'sının "4. Integration test" job'ından gelecek** |
+| Backend integration | ✓ **CI'da PASS** (lokalde koşulamadı) | Lokal engel: Testcontainers + Docker Desktop daemon kapalı, makinede SQL Server servisi de yok (`Get-Service MSSQL*` → yalnız `SQLWriter`). D2'nin 7 yeni testi bu ayaktadır ve kanıtı dal CI'sının **"4. Integration test"** job'ıdır — run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539) `success`. Aynı job lokalde düşen 16 Notifications testini de yeşil koşturdu, yani o 16'nın gerçekten ortam kaynaklı olduğu **bağımsız olarak** doğrulandı |
 
-**Dürüstlük notu:** yukarıdaki iki satır bu turun bilinen kanıt boşluğudur. Backend
-değişikliğinin tüm testleri (mevcut 39 + yeni 7) Integration ayağındadır; lokal makinede
-koşturulamadıkları için **doğrulanmış hâlleri CI çıktısıdır**, lokal bir "yeşil" değil.
+**Dürüstlük notu (kapandı):** yukarıdaki iki satır turun bilinen kanıt boşluğuydu — backend
+değişikliğinin tüm testleri (mevcut 39 + yeni 7) Integration ayağındadır ve lokal makinede
+koşturulamadı. Boşluk **dal CI'sında kapandı**: `Integration test` job'ı `success` ve aynı job
+lokalde düşen 16 Notifications testini de yeşil koşturdu — yani "ortam kaynaklı" teşhisi
+varsayım değil, **ölçüm**. Kanıt hâlâ lokal bir "yeşil" değil, CI çıktısıdır.
 
 ---
 
@@ -164,9 +166,20 @@ koşturulamadıkları için **doğrulanmış hâlleri CI çıktısıdır**, loka
 ## Commit & PR
 
 - Branch: `task/T135-state-action-panel-matrix`
-- Commit: `<hash>` — T135: StateActionPanel state×rol matrisi
-- PR: #<no>
-- CI: ⏳
+- Commit: `ed0fdaa` — T135: StateActionPanel state×rol matrisi
+- PR: [#253](https://github.com/turkerurganci/Skinora/pull/253)
+- CI: **✓ PASS** — dal HEAD `ed0fdaa`, run [`32461001539`](https://github.com/turkerurganci/Skinora/actions/runs/32461001539), `CI Gate` **success**.
+  Bloke edici **10 job'un 10'u** yeşil: Lint · Build · Unit test · JS test (vitest) · **Integration test** ·
+  Contract test · Migration dry-run · Docker build (backend) · Docker build (frontend) · CI Gate.
+  Docker build **iki kolda birden** koştu (backend + frontend) — tur her iki tarafa da dokunduğu için
+  `paths-filter` doğru davrandı.
+- **Lokal kanıt boşluğu CI'da kapandı:** "4. Integration test" job'ı `success` — D2'nin 7 yeni testi
+  ve lokalde Docker yüzünden düşen 16 Notifications testi bu ayakta gerçek SQL Server'a karşı koştu.
+- Advisory E2E **8/8 leg kırmızı, T135 kaynaklı DEĞİL**: leg bazında taban `main` (T134 run
+  [`32425168333`](https://github.com/turkerurganci/Skinora/actions/runs/32425168333)) ile **birebir**
+  aynı — happy-path 0/1 · cancellation 0/4 · timeout **1**/4 · payment-edge 0/6 · fraud-flags **3**/4 ·
+  emergency-hold 0/3 · admin-flows **6**/7 · downtime 0/3, **toplam 10/32 → 10/32**. Spec'ler hâlâ
+  custody durumlarına göre yazılı; yeniden yazımın sahibi **T138** (bağımlılığı T135'ti, artık açık).
 
 ---
 
