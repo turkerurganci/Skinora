@@ -14,18 +14,16 @@ import { mintAccessToken } from '../src/jwt';
 import * as api from '../src/api';
 
 /**
- * T110 payment edge cases — drives 03 §5 at the API level against the
- * docker-compose.e2e.yml stack (same seam as the T107/T108/T109 smokes). Every
- * branch is wired backend-side (AmountValidationService — 02 §4.4 / 08 §3.4),
- * so this task adds test coverage plus four e2e-only fake levers (wrong-token,
- * spam-token, late-detected webhooks + a distinct second buyer payment). The one
- * production change is the previously-missing LatePaymentRefundRequested
- * notification consumer (§5.4 step 5), wired in this task.
+ * T110 payment edge cases, rewritten for P2P (T138) — drives 03 §5 at the API
+ * level against the docker-compose.e2e.yml stack. Every branch is wired backend-
+ * side (AmountValidationService — 02 §4.4 / 08 §3.4); the harness supplies four
+ * fake levers (wrong-token, spam-token, late-detected webhooks + a distinct
+ * second buyer payment).
  *
  * Covers 03 §5.1–§5.5 (+ §5.3a):
- *   1. Insufficient (§5.1)  → INCORRECT_AMOUNT_REFUND, tx stays ITEM_ESCROWED.
+ *   1. Insufficient (§5.1)  → INCORRECT_AMOUNT_REFUND, tx stays SELLER_CONFIRMED.
  *   2. Excess (§5.2)        → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (excess only).
- *   3. Wrong token (§5.3)   → WRONG_TOKEN_REFUND, tx stays ITEM_ESCROWED.
+ *   3. Wrong token (§5.3)   → WRONG_TOKEN_REFUND, tx stays SELLER_CONFIRMED.
  *   4. Unsupported (§5.3a)  → SPAM_TOKEN_INCOMING audit row, no refund, no state change.
  *   5. Late payment (§5.4)  → LATE_PAYMENT_REFUND after a payment-timeout cancel.
  *   6. Multi-payment (§5.5) → first exact accepted, second refunded in full.
@@ -33,23 +31,21 @@ import * as api from '../src/api';
  * NOT the trade-side refund wallet. Refund amounts are chosen so net > 2× gas
  * (gas estimate 2.0, threshold 4.0) → the refund proceeds rather than blocking.
  *
- * T137a: the bot escrow-slot assertions were removed — T117 dropped
- * PlatformSteamBots and P2P has no platform inventory. The flows still drive
- * through ITEM_ESCROWED, which no longer exists; the rewrite is T138's scope.
+ * The P2P rewrite moved ONE thing, and it moved everything with it: the state a
+ * payment is legal in. `AmountValidationService` accepts a transfer only in
+ * SELLER_CONFIRMED — which used to be ITEM_ESCROWED, the state the platform
+ * entered by taking custody of the item. It is now the state the platform enters
+ * by VERIFYING the seller can still send, and reaching it takes the seller's own
+ * confirm-ready call. That is not cosmetic for this suite: the branch order in
+ * AmountValidationService keys the §5.5 multi-payment arm off "status is not
+ * SELLER_CONFIRMED", so a setup that stopped one step short would silently route
+ * every scenario down the multi-payment path instead of the one under test.
  */
 
-// States a transaction can occupy once the buyer's payment has been accepted —
-// the proof a §5.2/§5.5 payment advanced past ITEM_ESCROWED.
-const POST_PAYMENT_STATES = [
-  'PAYMENT_RECEIVED',
-  'TRADE_OFFER_SENT_TO_BUYER',
-  'ITEM_DELIVERED',
-  'COMPLETED',
-];
-
 test.beforeEach(async () => {
-  // No edge case drives an inventory, but a prior suite might have — clear it so
-  // this suite starts from an empty, readable world.
+  // No edge case drives an inventory itself, but seedHappyPath does — reset
+  // first so this suite starts from an empty, readable world and the seed's
+  // seller inventory is the only thing on the fake.
   await api.resetFakeSteamState();
 });
 
@@ -65,10 +61,11 @@ function tokens(): { sellerToken: string; buyerToken: string } {
   };
 }
 
-/** Fresh seed → seller creates → buyer accepts → escrow dispatch (Hangfire) +
- *  fake trade self-drive → ITEM_ESCROWED. Each test re-seeds, so notification
- *  rows and prior blockchain rows never carry over. */
-async function createAcceptEscrow(): Promise<{
+/** Fresh seed → seller creates → buyer accepts → seller confirms readiness →
+ *  SELLER_CONFIRMED, the only state in which a payment is accepted at all. Each
+ *  test re-seeds, so notification rows and prior blockchain rows never carry
+ *  over. */
+async function createAcceptConfirmReady(): Promise<{
   txId: string;
   sellerToken: string;
   buyerToken: string;
@@ -94,7 +91,10 @@ async function createAcceptEscrow(): Promise<{
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
   expect(api.unwrap(accept.body).status).toBe('ACCEPTED');
 
-  await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
+  expect(api.unwrap(ready.body).status).toBe('SELLER_CONFIRMED');
+
   return { txId, sellerToken, buyerToken };
 }
 
@@ -102,16 +102,16 @@ function statusOf(body: unknown): string {
   return String(api.unwrap(body).status);
 }
 
-test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays ITEM_ESCROWED, buyer notified', async () => {
-  const { txId, buyerToken } = await createAcceptEscrow();
+test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays SELLER_CONFIRMED, buyer notified', async () => {
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
-  // Buyer underpays (10 of the expected 100). Net 10 − 2 gas = 8 ≥ 4 threshold.
+  // Buyer underpays (10 of the expected ~102). Net 10 − 2 gas = 8 ≥ 4 threshold.
   const pay = await api.payViaFake(txId, { amount: '10.00' });
   expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
 
   // 03 §5.1 step 4 — the platform does NOT accept the payment; the transaction
-  // stays ITEM_ESCROWED and the timeout keeps running (no state advance).
-  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('ITEM_ESCROWED');
+  // stays SELLER_CONFIRMED and the payment timeout keeps running (no advance).
+  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('SELLER_CONFIRMED');
 
   // step 5 — the received amount is refunded to the buyer's source wallet.
   const refund = await pollBlockchainTxConfirmed(txId, 'INCORRECT_AMOUNT_REFUND');
@@ -126,7 +126,7 @@ test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays ITEM_ESCRO
 });
 
 test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (excess only), buyer notified', async () => {
-  const { txId, buyerToken } = await createAcceptEscrow();
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
   // The buyer's payable is ExpectedAmount = listing price + buyer commission
   // (≈102 for a 100 listing, 02 §4.6) — NOT the bare price. Read it so the
@@ -139,12 +139,11 @@ test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (exces
   const pay = await api.payViaFake(txId, { amount: sentAmount.toFixed(6) });
   expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
 
-  // 03 §5.2 step 4 — the platform accepts the correct amount; the transaction
-  // advances past ITEM_ESCROWED (confirm is synchronous, so it is at least
-  // PAYMENT_RECEIVED; the per-minute delivery job may already have moved it on).
-  expect(POST_PAYMENT_STATES).toContain(
-    statusOf((await api.getTransaction(buyerToken, txId)).body),
-  );
+  // 03 §5.2 step 4 — the platform accepts the correct amount and the transaction
+  // advances to PAYMENT_RECEIVED. Confirm is synchronous, and PAYMENT_RECEIVED
+  // is a RESTING state in P2P — nothing (no bot, no job) moves it on — so this
+  // is a plain equality rather than the custody-era "one of these four states".
+  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('PAYMENT_RECEIVED');
 
   // step 5 — ONLY the excess (received − expected) is refunded to the buyer's
   // source wallet. The EXCESS_REFUND row carries the gross excess (gas is
@@ -160,8 +159,8 @@ test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (exces
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays ITEM_ESCROWED, buyer notified', async () => {
-  const { txId, buyerToken } = await createAcceptEscrow();
+test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays SELLER_CONFIRMED, buyer notified', async () => {
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
   // A supported-but-wrong stablecoin (USDC) lands at the deposit address.
   const wrong = await api.payWrongTokenViaFake(txId, {
@@ -170,8 +169,8 @@ test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays ITEM_ESCROWED, b
   });
   expect(wrong.ok, `wrong-token failed: ${JSON.stringify(wrong.body)}`).toBeTruthy();
 
-  // 03 §5.3 step 4 — payment not accepted; the transaction stays ITEM_ESCROWED.
-  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('ITEM_ESCROWED');
+  // 03 §5.3 step 4 — payment not accepted; the transaction stays SELLER_CONFIRMED.
+  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('SELLER_CONFIRMED');
 
   // step 5 — the received token is refunded to the buyer's source wallet.
   const refund = await pollBlockchainTxConfirmed(txId, 'WRONG_TOKEN_REFUND');
@@ -186,7 +185,7 @@ test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays ITEM_ESCROWED, b
 });
 
 test('§5.3a unsupported token → SPAM_TOKEN_INCOMING audit row, no refund, tx unchanged', async () => {
-  const { txId, buyerToken } = await createAcceptEscrow();
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
   // An unsupported token/contract lands at the deposit address.
   const spam = await api.paySpamTokenViaFake(txId, { amount: '10.00' });
@@ -198,8 +197,8 @@ test('§5.3a unsupported token → SPAM_TOKEN_INCOMING audit row, no refund, tx 
   expect(audit, 'SPAM_TOKEN_INCOMING row not recorded').not.toBeNull();
   expect(audit?.status).toBe('CONFIRMED');
 
-  // steps 3 & 5 — transaction stays ITEM_ESCROWED.
-  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('ITEM_ESCROWED');
+  // steps 3 & 5 — transaction stays SELLER_CONFIRMED.
+  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('SELLER_CONFIRMED');
 
   // step 6 — automatic refund is NOT guaranteed for an unsupported asset; the
   // backend queues no refund row (admin review path — known limitation: the
@@ -213,7 +212,7 @@ test('§5.3a unsupported token → SPAM_TOKEN_INCOMING audit row, no refund, tx 
 test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELLED_TIMEOUT, buyer notified', async () => {
   // Setup mirrors the T109 payment-timeout scenario so the deposit address
   // enters POST_CANCEL_24H monitoring.
-  const { txId, buyerToken } = await createAcceptEscrow();
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
   await backdateDeadline(txId, 'PaymentDeadline');
   const cancelled = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', {
@@ -244,18 +243,18 @@ test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELL
 });
 
 test('§5.5 multi-payment → first exact accepted (proceeds), second refunded in full, buyer notified', async () => {
-  const { txId, buyerToken } = await createAcceptEscrow();
+  const { txId, buyerToken } = await createAcceptConfirmReady();
 
   // 03 §5.5 scenario A — the first transfer is the exact expected amount: it is
-  // accepted and the transaction proceeds past ITEM_ESCROWED.
+  // accepted and the transaction advances to PAYMENT_RECEIVED.
   const first = await api.payViaFake(txId);
   expect(first.ok, `first pay failed: ${JSON.stringify(first.body)}`).toBeTruthy();
-  expect(POST_PAYMENT_STATES).toContain(
-    statusOf((await api.getTransaction(buyerToken, txId)).body),
-  );
+  expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('PAYMENT_RECEIVED');
 
   // A second distinct on-chain transfer (eventIndex 1) arrives after the tx left
-  // ITEM_ESCROWED → treated as excess and refunded IN FULL (50, not just a delta).
+  // SELLER_CONFIRMED → treated as excess and refunded IN FULL (50, not a delta).
+  // This is the branch AmountValidationService selects on state rather than on
+  // amount, which is why the setup above must land exactly on SELLER_CONFIRMED.
   const second = await api.payViaFake(txId, { amount: '50.00', eventIndex: 1 });
   expect(second.ok, `second pay failed: ${JSON.stringify(second.body)}`).toBeTruthy();
 

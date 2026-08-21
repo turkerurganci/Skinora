@@ -615,10 +615,24 @@ jobs:
   # ----------------------------------------------------------------------------
   # E2E smoke (T107) — ADVISORY / non-blocking. Boots the docker-compose.e2e.yml
   # backend stack (the fake sidecar stands in for the real Steam/blockchain
-  # sidecars), applies migrations, and drives the happy path CREATED -> COMPLETED
-  # via the API-level Playwright smoke. continue-on-error + excluded from
-  # ci-gate.needs, so a flaky run never blocks a merge (owner decision). The
-  # smoke (API + UI) is also proven locally — this is an extra signal.
+  # sidecars), applies migrations, and drives the P2P chain
+  # CREATED -> SELLER_CONFIRMED -> PAYMENT_RECEIVED -> ITEM_DELIVERED -> COMPLETED
+  # via Playwright. continue-on-error + excluded from ci-gate.needs, so a flaky
+  # run never blocks a merge (owner decision).
+  #
+  # T138 took the matrix from eight legs to ten:
+  #   • "T138 delivery" — the 02 §9.2 delivery-verification suite, which has no
+  #     custody-era ancestor. Given its own leg rather than folded into an
+  #     existing one so the signal has an owner (the T137 lesson: an advisory
+  #     signal dies because nobody owns it, not because it does not block).
+  #   • "happy-path UI" — previously the ONLY spec with no CI leg at all, because
+  #     it needs the frontend + nginx and this job only started the backend. T134
+  #     and T135 rewrote the whole FE status surface (data-status badges, the
+  #     04 §7.3 state x role panel) and nothing measured it. Two matrix keys
+  #     carry the difference: extraServices (started alongside the backend) and
+  #     baseUrl (the nginx origin instead of the bare backend port). The keys are
+  #     hyphen-free on purpose — a GitHub expression cannot reach `matrix.a-b`
+  #     with dot notation, since it parses as a subtraction.
   # ----------------------------------------------------------------------------
   e2e-smoke:
     name: E2E ${{ matrix.suite }} (advisory)
@@ -626,20 +640,30 @@ jobs:
     if: needs.changes.outputs['e2e-stack'] == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Eight E2E suites, each on its own isolated docker-compose stack so they run
-    # in parallel — the owner's T114 call to split the former single sequential
-    # job (its cumulative budget no longer scaled; the 80-min cap was already at
-    # its limit at seven suites). Every leg is advisory (continue-on-error) and is
-    # outside ci-gate.needs, so a flake never blocks merge. Per-leg budget covers
-    # the image build + db + migrate + backend up + one suite; the heaviest legs
-    # (happy-path, T110 payment, T112 emergency-hold) wait out per-minute Hangfire
-    # crons — comfortably inside 30 min for a single suite.
+    # Ten E2E suites (eight until T138), each on its own isolated docker-compose
+    # stack so they run in parallel — the owner's T114 call to split the former
+    # single sequential job (its cumulative budget no longer scaled; the 80-min
+    # cap was already at its limit at seven suites). Every leg is advisory
+    # (continue-on-error) and is outside ci-gate.needs, so a flake never blocks
+    # merge. Per-leg budget covers the image build + db + migrate + stack up +
+    # one suite.
     strategy:
       fail-fast: false
       matrix:
         include:
+          # timeoutMinutes is per-leg (default 30). The three legs that raise it
+          # all wait out the 02 §4.5.1 settlement window: settlement-verification
+          # runs on a five-minute cron and the payout pipeline behind it on
+          # per-minute ones, so ITEM_DELIVERED -> COMPLETED alone costs up to
+          # eight minutes of real waiting per test that reaches the end.
           - suite: happy-path
             script: test:smoke
+            timeoutMinutes: 40
+          - suite: happy-path UI
+            script: test:ui
+            extraServices: skinora-frontend skinora-reverse-proxy
+            baseUrl: http://localhost:8080
+            timeoutMinutes: 45
           - suite: T108 cancellation
             script: test:cancel
           - suite: T109 timeout
@@ -650,11 +674,14 @@ jobs:
             script: test:fraud
           - suite: T112 emergency-hold
             script: test:hold
+            timeoutMinutes: 45
           - suite: T113 admin-flows
             script: test:admin
           - suite: T114 downtime
             script: test:downtime
-    timeout-minutes: 30
+          - suite: T138 delivery
+            script: test:delivery
+    timeout-minutes: ${{ matrix.timeoutMinutes || 30 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -672,8 +699,9 @@ jobs:
       - name: Install dotnet-ef tool
         run: dotnet tool install --global dotnet-ef --version 9.0.3
 
-      - name: Build e2e images (backend + fake sidecar)
-        run: docker compose -f docker-compose.e2e.yml build skinora-backend skinora-fake-sidecar
+      # The frontend image is only built for the leg that serves a browser.
+      - name: Build e2e images
+        run: docker compose -f docker-compose.e2e.yml build skinora-backend skinora-fake-sidecar ${{ matrix.extraServices && 'skinora-frontend' || '' }}
 
       - name: Start database
         run: docker compose -f docker-compose.e2e.yml up -d skinora-db
@@ -698,15 +726,28 @@ jobs:
             --startup-project src/Skinora.API/Skinora.API.csproj \
             --context AppDbContext
 
+      # extraServices is empty for every API leg; the UI leg adds the frontend and
+      # the nginx origin in front of it. --wait covers them all — both have a
+      # healthcheck in docker-compose.e2e.yml.
       - name: Start backend stack
-        run: docker compose -f docker-compose.e2e.yml up -d --wait skinora-backend skinora-fake-sidecar
+        run: docker compose -f docker-compose.e2e.yml up -d --wait skinora-backend skinora-fake-sidecar ${{ matrix.extraServices }}
 
+      # The browser download is skipped for the nine API suites: they drive the
+      # backend with plain fetch and never open a page, so pulling chromium (and
+      # its apt dependencies) would add minutes to every leg for nothing. Only
+      # the UI leg — the one with extraServices — pays for it.
       - name: Run ${{ matrix.suite }} E2E
         working-directory: e2e
         env:
-          E2E_BASE_URL: http://localhost:5000
+          # The API suites talk to the backend port directly; the UI suite needs
+          # the nginx origin, which is what serves the frontend and proxies
+          # /api/v1 + /hubs the way production does.
+          E2E_BASE_URL: ${{ matrix.baseUrl || 'http://localhost:5000' }}
           E2E_FAKE_URL: http://localhost:5200
-        run: npm ci && npm run ${{ matrix.script }}
+        run: |
+          npm ci
+          ${{ matrix.extraServices && 'npx playwright install --with-deps chromium' || '' }}
+          npm run ${{ matrix.script }}
 
       - name: Dump compose logs on failure
         if: failure()

@@ -5,6 +5,8 @@ import {
   pollPostCancelMonitoring,
   pollCancelledNoticeRecipients,
   pollBuyerRefundConfirmed,
+  pollDisputeForTransaction,
+  getSettlementState,
   closePool,
   seed,
 } from '../src/db';
@@ -12,33 +14,38 @@ import { mintAccessToken } from '../src/jwt';
 import * as api from '../src/api';
 
 /**
- * T109 timeout scenarios — drives the four phase timeouts of 03 §4 at the API
- * level against the docker-compose.e2e.yml stack (same seam as the T107/T108
- * smokes). The whole timeout path is wired backend-side (DeadlineScannerJob —
- * 05 §4.4), so this task adds test coverage plus two e2e-only levers:
- *   • the harness backdates the real phase deadline (all e2e timeouts are 60 min,
- *     so a wall-clock wait is impossible) and lets the production scanner fire;
- *   • the fake's trade auto-accept is suppressed per direction so a transaction
- *     parks in TRADE_OFFER_SENT_TO_SELLER / _BUYER long enough to time out.
- * No production source changes.
+ * T109 timeout scenarios, rewritten for P2P (T138) — drives the four phase
+ * timeouts of 03 §4 at the API level against the docker-compose.e2e.yml stack.
+ * The timeout path itself stays unmocked: the harness back-dates the real phase
+ * deadline (all e2e timeouts are 60 minutes, so a wall-clock wait is impossible)
+ * and lets the production DeadlineScannerJob sweep — 5 s in the e2e stack.
  *
- * Covers 03 §4.1–§4.4:
- *   1. Accept timeout (CREATED)                → CANCELLED_TIMEOUT, no refund.
- *   2. Seller trade-offer timeout (TO_SELLER)  → CANCELLED_TIMEOUT, no escrow.
- *   3. Payment timeout (ITEM_ESCROWED)         → item returned + late-payment monitor.
- *   4. Delivery timeout (TO_BUYER)             → item returned + buyer refund.
+ * Covers 03 §4.1–§4.4, whose four phases the P2P pivot renamed and re-pointed
+ * without changing their count:
+ *   1. Accept timeout      (CREATED)          → CANCELLED_TIMEOUT, no refund.
+ *   2. Seller-confirm      (ACCEPTED)         → CANCELLED_TIMEOUT, no money moved.
+ *   3. Payment timeout     (SELLER_CONFIRMED) → CANCELLED_TIMEOUT + late-payment monitor.
+ *   4. Delivery timeout    (PAYMENT_RECEIVED) → seller-fault cancel + buyer refund.
  * Every phase notifies both parties (TRANSACTION_CANCELLED). The §4.5 "deadline
  * approaching" warning is out of scope (covered by unit/integration tests).
  *
- * T137a: the custody-era assertions (bot escrow slot, RETURN_TO_SELLER offer)
- * were removed — T117 dropped both tables and P2P has no platform inventory.
- * Phases 2–4 above are custody phases that no longer exist; rewriting them for
- * the P2P timeline is T138's scope.
+ * Phase 4 is where P2P changed the MECHANISM, not just the state name. In the
+ * custody model the delivery deadline expiring WAS the decision: the bot still
+ * held the item, so the platform cancelled and handed both sides back what they
+ * had put in. In P2P the platform is not a party to the trade (02 §2.1), so an
+ * expired deadline decides nothing on its own — 05 §4.4 requires a verification
+ * round first, and its verdict picks one of three actions. This test drives the
+ * one arm that is authorised to cancel: the seller's inventory was READ and the
+ * item is still in it, which is the single positive proof that nothing was sent
+ * (03 §4.4). The other two arms — evidence says it arrived, and evidence says it
+ * went somewhere else — live in delivery.spec.ts, because neither of them
+ * cancels and a timeout suite that owned them would be lying about its subject.
  */
 
 test.beforeEach(async () => {
   // Clear any inventory / trade-hold a previous test drove into the shared
   // (in-process) fake state, so this test starts from an empty, readable world.
+  // seedHappyPath() runs AFTER this and re-drives the seller's inventory.
   await api.resetFakeSteamState();
 });
 
@@ -88,13 +95,8 @@ test('accept timeout: CREATED → CANCELLED_TIMEOUT, no refund, both parties not
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('seller trade-offer timeout: TRADE_OFFER_SENT_TO_SELLER → CANCELLED_TIMEOUT, no escrow, both notified', async () => {
+test('seller-confirm timeout: ACCEPTED → CANCELLED_TIMEOUT, no money moved, both notified', async () => {
   await seedHappyPath();
-  // T137 — the lever this scenario used (hold the escrow leg at "sent" so the
-  // seller never accepts the bot's offer) went with the custody trade surface:
-  // the platform sends no trade offers any more (02 §2.1), so TRADE_OFFER_SENT_
-  // TO_SELLER is not a state the flow can reach. The P2P replacement is the
-  // seller confirm-ready deadline (03 §2.3), and writing it is T138's scope.
   const { sellerToken, buyerToken } = tokens();
   const txId = await createTransaction(sellerToken);
 
@@ -102,20 +104,31 @@ test('seller trade-offer timeout: TRADE_OFFER_SENT_TO_SELLER → CANCELLED_TIMEO
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
   expect(api.unwrap(accept.body).status).toBe('ACCEPTED');
 
-  // Escrow dispatch sends SELLER_TO_BOT; suppression parks it here (no accept).
-  await api.pollStatus(buyerToken, txId, 'TRADE_OFFER_SENT_TO_SELLER', { timeoutMs: 120_000 });
-
-  // 03 §4.2 — backdate the seller-offer deadline; scanner cancels.
+  // 03 §4.2 — the P2P replacement for the retired seller trade-offer phase. The
+  // transaction parks in ACCEPTED simply because the seller never presses
+  // confirm-ready: there is no offer to hold open and no fake lever needed, so
+  // "the seller did not act" is modelled by NOT acting. SellerConfirmDeadline is
+  // armed by the accept itself (TransactionAcceptanceService), which is what
+  // makes the plain wait observable at all.
   await backdateDeadline(txId, 'SellerConfirmDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
+
+  // Nothing to give back on either side: the buyer's payment window never opened
+  // (the deposit address is revealed at SELLER_CONFIRMED) and the item never left
+  // the seller.
+  const refund = await pollBuyerRefundConfirmed(txId, { timeoutMs: 8_000 });
+  expect(
+    refund,
+    `unexpected refund for an unpaid transaction: ${JSON.stringify(refund)}`,
+  ).toBeNull();
 
   const recipients = await pollCancelledNoticeRecipients([seed.sellerId, seed.buyerId]);
   expect(recipients).toContain(seed.sellerId.toLowerCase());
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('payment timeout: ITEM_ESCROWED → CANCELLED_TIMEOUT, item returned to seller, late-payment monitor started, both notified', async () => {
+test('payment timeout: SELLER_CONFIRMED → CANCELLED_TIMEOUT, late-payment monitor started, both notified', async () => {
   await seedHappyPath();
   const { sellerToken, buyerToken } = tokens();
   const txId = await createTransaction(sellerToken);
@@ -123,11 +136,14 @@ test('payment timeout: ITEM_ESCROWED → CANCELLED_TIMEOUT, item returned to sel
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
 
-  // Escrow leg auto-drives (not suppressed) → ITEM_ESCROWED. The buyer never pays.
-  await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
+  // The payment window opens here, and only here — the buyer cannot pay before
+  // the seller has confirmed the item is still sendable (02 §2.2 step 3).
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
+  expect(api.unwrap(ready.body).status).toBe('SELLER_CONFIRMED');
 
-  // 03 §4.3 — backdate the payment deadline; the scanner (belt-and-suspenders for
-  // the per-tx Hangfire job) cancels the ITEM_ESCROWED transaction.
+  // 03 §4.3 — the buyer never pays. Backdate the payment deadline; the scanner
+  // (belt-and-suspenders for the per-tx Hangfire job) cancels.
   await backdateDeadline(txId, 'PaymentDeadline');
   const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
   expect(status).toBe('CANCELLED_TIMEOUT');
@@ -144,33 +160,54 @@ test('payment timeout: ITEM_ESCROWED → CANCELLED_TIMEOUT, item returned to sel
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('delivery timeout: TRADE_OFFER_SENT_TO_BUYER → CANCELLED_TIMEOUT, item to seller + payment to buyer, both notified', async () => {
+test('delivery timeout with the item still at the seller: seller-fault cancel + buyer refund, both notified', async () => {
   await seedHappyPath();
-  // T137 — same retirement as above: there is no bot delivery leg to hold. The
-  // P2P replacement is "the seller never trades the item to the buyer", driven
-  // by simply NOT calling api.simulateFakeTrade before the delivery deadline
-  // (03 §6.4); wiring that into this scenario is T138's scope.
   const { sellerToken, buyerToken } = tokens();
   const txId = await createTransaction(sellerToken);
 
   const accept = await api.acceptTransaction(buyerToken, txId, seed.buyerRefundAddress);
   expect(accept.ok, `accept failed: ${JSON.stringify(accept.body)}`).toBeTruthy();
+  const ready = await api.confirmReady(sellerToken, txId);
+  expect(ready.ok, `confirm-ready failed: ${JSON.stringify(ready.body)}`).toBeTruthy();
 
-  await api.pollStatus(buyerToken, txId, 'ITEM_ESCROWED', { timeoutMs: 180_000 });
-
-  // Buyer pays → PAYMENT_RECEIVED; delivery dispatch sends BOT_TO_BUYER, which
-  // suppression parks at TRADE_OFFER_SENT_TO_BUYER (buyer never accepts).
   const pay = await api.payViaFake(txId);
   expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
-  await api.pollStatus(buyerToken, txId, 'TRADE_OFFER_SENT_TO_BUYER', { timeoutMs: 120_000 });
+  await api.pollStatus(buyerToken, txId, 'PAYMENT_RECEIVED', { timeoutMs: 90_000 });
 
-  // 03 §4.4 — backdate the buyer-delivery deadline; scanner cancels.
+  // 03 §4.4 — the seller never sends. Modelled by NOT calling
+  // api.simulateFakeTrade: the item stays in the seller's inventory exactly as
+  // seedHappyPath left it, which is both the scenario AND the evidence. The
+  // buyer's baseline is zero and stays zero.
   await backdateDeadline(txId, 'DeliveryDeadline');
-  const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', { timeoutMs: 90_000 });
+  const status = await api.pollStatus(buyerToken, txId, 'CANCELLED_TIMEOUT', {
+    timeoutMs: 120_000,
+  });
   expect(status).toBe('CANCELLED_TIMEOUT');
 
+  const rounded = await getSettlementState(txId);
+  expect(rounded?.deliveryRoundAt, 'no delivery verification round ever ran').not.toBeNull();
+  expect(rounded?.deliveryVerifiedAt, 'delivery must not be recorded on a cancel').toBeNull();
+
+  // 05 §4.4 — the cancel came from a verification ROUND, not from the clock.
+  // DeliveryRoundAt is stamped by the round before any arm runs (T127 finding
+  // B2: the scanner's fairness window asks when a row was last LOOKED at, not
+  // when it was last concluded about), so its presence is the proof that an
+  // inventory read happened at all. There is deliberately NO
+  // DeliveryEvidenceCaptures row to check here: captures are written only where
+  // a reviewer has something to weigh — a gated delivery or a misdelivery
+  // signature — and "nothing moved, the seller still has it" is neither.
+
+  // 02 §9.2 — a cancel and an escalation are mutually exclusive answers. This
+  // arm cancels precisely BECAUSE the item was proven to be still with the
+  // seller, so no dispute may have been opened.
+  const dispute = await pollDisputeForTransaction(txId, { timeoutMs: 8_000 });
+  expect(
+    dispute,
+    `a dispute was opened for a proven non-delivery: ${JSON.stringify(dispute)}`,
+  ).toBeNull();
+
   // 03 §4.4 step 4 — payment returned to the buyer (02 §4.6 net = TotalAmount −
-  // gas fee), addressed to the buyer's refund wallet.
+  // gas fee), addressed to the buyer's trade-side refund wallet.
   const refund = await pollBuyerRefundConfirmed(txId);
   expect(refund, 'BUYER_REFUND row never queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');

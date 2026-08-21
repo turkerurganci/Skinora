@@ -26,11 +26,20 @@ import * as api from '../src/api';
  *   4. Account flag → new transaction blocked (ACCOUNT_FLAGGED); admin reject of
  *      the account flag lifts the fund-flow block.
  *
- * Levers (no new fake-sidecar surface needed — a FLAGGED transaction makes no
- * sidecar calls): the seeded ItemPriceCache pins the market price at the listing
- * price (100), so a 300 listing deviates 200% > the 100% price_deviation_threshold;
+ * Levers: the seeded ItemPriceCache pins the market price at the listing price
+ * (100), so a 300 listing deviates 200% > the 100% price_deviation_threshold;
  * high_volume_amount_threshold is dropped via SystemSetting so one prior
  * transaction trips the rolling-window rule; the account flag is inserted directly.
+ *
+ * T138 — the high-volume scenario needed a real fix, not a P2P re-point. It opens
+ * TWO transactions for the same seller, and T128 added a (SellerId, ItemAssetId)
+ * uniqueness gate over active transactions, so the second create was being
+ * rejected ITEM_ALREADY_LISTED before the fraud engine ever ran — the test was
+ * failing on an unrelated business rule while claiming to measure the rolling
+ * window. It now lists a SECOND item (seed.secondItemAssetId, seeded into the
+ * seller's fake inventory with its own price-cache row at the same price), which
+ * satisfies the uniqueness gate and keeps PRICE_DEVIATION — the higher-priority
+ * rule — clear, so HIGH_VOLUME is what actually trips.
  */
 
 const REVIEW_NOTE = 'E2E fraud-flag review — automated reason text.';
@@ -39,13 +48,24 @@ const REVIEW_NOTE = 'E2E fraud-flag review — automated reason text.';
 // seeded market price (100): |300-100|/100 = 2.0. Within [min,max] = [1,10000].
 const DEVIATING_PRICE = '300.00';
 
+test.beforeEach(async () => {
+  // seedHappyPath() runs inside each test and re-drives the seller's inventory;
+  // clearing first keeps a prior suite's fake state (run locally via `npm test`,
+  // where all suites share one stack) out of this one.
+  await api.resetFakeSteamState();
+});
+
 test.afterAll(async () => {
+  await api.resetFakeSteamState();
   await closePool();
 });
 
-function createBody(price: string): api.CreateTransactionBody {
+function createBody(
+  price: string,
+  itemAssetId: string = seed.itemAssetId,
+): api.CreateTransactionBody {
   return {
-    itemAssetId: seed.itemAssetId,
+    itemAssetId,
     stablecoin: 'USDT',
     price,
     // 1h = 60 min, within the e2e PAYMENT_TIMEOUT_MIN/MAX (15/60).
@@ -155,8 +175,13 @@ test('high volume → FLAGGED + HIGH_VOLUME flag on the admin queue', async () =
     expect(api.unwrap(first.body).status).toBe('CREATED');
 
     // tx2 — the window now holds tx1 (~102 > 50) → HIGH_VOLUME pre-create flag.
-    // Listed at the market price so PRICE_DEVIATION (higher priority) stays clear.
-    const second = await api.createTransaction(sellerToken, createBody(seed.price));
+    // Listed at the market price so PRICE_DEVIATION (higher priority) stays clear,
+    // and against the SECOND asset so T128's (SellerId, ItemAssetId) uniqueness
+    // gate does not reject it first (ITEM_ALREADY_LISTED — tx1 is still active).
+    const second = await api.createTransaction(
+      sellerToken,
+      createBody(seed.price, seed.secondItemAssetId),
+    );
     expect(second.ok, `second create failed: ${JSON.stringify(second.body)}`).toBeTruthy();
     const flagged = api.unwrap(second.body);
     expect(flagged.status, JSON.stringify(flagged)).toBe('FLAGGED');
