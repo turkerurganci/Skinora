@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Disputes.Domain.Entities;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Notifications.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
@@ -52,20 +53,13 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
     ];
 
     /// <summary>
-    /// Terminal states — mirrors <c>AdminDashboardService._terminalStates</c>
-    /// so the <see cref="AdminTransactionStatusGroup.ACTIVE"/> bucket
+    /// Terminal states — the shared <see cref="TransactionStatusSets.Terminal"/>
+    /// set, so the <see cref="AdminTransactionStatusGroup.ACTIVE"/> bucket
     /// (= "not terminal") matches the AD1 dashboard active-transaction counter
     /// exactly (07 §9.6 / §9.1).
     /// </summary>
     private static readonly TransactionStatus[] _terminalStates =
-    [
-        TransactionStatus.COMPLETED,
-        TransactionStatus.CANCELLED_TIMEOUT,
-        TransactionStatus.CANCELLED_SELLER,
-        TransactionStatus.CANCELLED_BUYER,
-        TransactionStatus.CANCELLED_ADMIN,
-        TransactionStatus.REFUNDED,
-    ];
+        TransactionStatusSets.Terminal;
 
     /// <summary>
     /// Terminal cancelled/unwound states behind the S15 "İptal" group (04 §8.4).
@@ -74,13 +68,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
     /// distinct status value/badge in the row.
     /// </summary>
     private static readonly TransactionStatus[] _cancelledStates =
-    [
-        TransactionStatus.CANCELLED_TIMEOUT,
-        TransactionStatus.CANCELLED_SELLER,
-        TransactionStatus.CANCELLED_BUYER,
-        TransactionStatus.CANCELLED_ADMIN,
-        TransactionStatus.REFUNDED,
-    ];
+        TransactionStatusSets.Cancelled;
 
     private readonly AppDbContext _db;
 

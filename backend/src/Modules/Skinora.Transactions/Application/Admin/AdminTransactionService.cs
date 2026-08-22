@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Application.Audit;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
@@ -643,12 +644,7 @@ public sealed class AdminTransactionService : IAdminTransactionService
                 (t.SellerId == targetUserId || t.BuyerId == targetUserId)
                 && !t.IsDeleted
                 && !t.IsOnHold
-                && t.Status != TransactionStatus.COMPLETED
-                && t.Status != TransactionStatus.CANCELLED_TIMEOUT
-                && t.Status != TransactionStatus.CANCELLED_SELLER
-                && t.Status != TransactionStatus.CANCELLED_BUYER
-                && t.Status != TransactionStatus.CANCELLED_ADMIN
-                && t.Status != TransactionStatus.REFUNDED)
+                && !TransactionStatusSets.Terminal.Contains(t.Status))
             .ToListAsync(cancellationToken);
 
         var occurredAt = _clock.GetUtcNow().UtcDateTime;

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Admin.Application.Users;
 using Skinora.Disputes.Domain.Entities;
 using Skinora.Fraud.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -30,24 +31,15 @@ public sealed class AdminUserActivityProvider : IAdminUserActivityProvider
     private const int MaxCounterparties = 10;
 
     /// <summary>
-    /// Terminal states — mirrors <c>AdminTransactionQueryService._terminalStates</c>
-    /// / <c>AdminDashboardService._terminalStates</c> so the "active" count here
-    /// matches the AD1 dashboard active-transaction counter and the AD19d
-    /// hold-by-user predicate exactly (07 §9.16 / §9.1 / §9.22a).
+    /// Terminal states — the shared <see cref="TransactionStatusSets.Terminal"/>
+    /// set, so the "active" count here matches the AD1 dashboard counter and the
+    /// AD19d hold-by-user predicate exactly (07 §9.16 / §9.1 / §9.22a). This
+    /// used to be a hand-copied array whose doc claimed to "mirror" two others;
+    /// the copy went stale when REFUNDED became terminal and this surface
+    /// counted refunded transactions as active until T118.
     /// </summary>
     private static readonly TransactionStatus[] _terminalStates =
-    [
-        TransactionStatus.COMPLETED,
-        TransactionStatus.CANCELLED_TIMEOUT,
-        TransactionStatus.CANCELLED_SELLER,
-        TransactionStatus.CANCELLED_BUYER,
-        TransactionStatus.CANCELLED_ADMIN,
-        // REFUNDED is terminal (05 §4.1) and the two mirrored lists have always
-        // carried it; its absence here was a WP5-era omission that let a
-        // refunded transaction keep counting as "active" in S20 and in the
-        // AD19d hold-by-user predicate. Found by the T118 05 §4.2 audit.
-        TransactionStatus.REFUNDED,
-    ];
+        TransactionStatusSets.Terminal;
 
     /// <summary>The four CANCELLED_* states behind the S20 "İptal" stat (04 §8.9.2).</summary>
     private static readonly TransactionStatus[] _cancelledStates =

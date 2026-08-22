@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Skinora.Shared.Enums;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Application.Account;
@@ -27,11 +27,9 @@ public sealed class UserActiveTransactionChecker : IUserActiveTransactionChecker
         => _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.BuyerId == userId || t.SellerId == userId)
-            .Where(t =>
-                t.Status != TransactionStatus.COMPLETED &&
-                t.Status != TransactionStatus.CANCELLED_TIMEOUT &&
-                t.Status != TransactionStatus.CANCELLED_SELLER &&
-                t.Status != TransactionStatus.CANCELLED_BUYER &&
-                t.Status != TransactionStatus.CANCELLED_ADMIN)
+            // REFUNDED counts as terminal as of the T133a-ActiveCounterRefunded
+            // fix: before it, a user whose only open row was a buyer-favour
+            // refund could not close their account at all (02 §19).
+            .Where(t => !TransactionStatusSets.Terminal.Contains(t.Status))
             .AnyAsync(cancellationToken);
 }

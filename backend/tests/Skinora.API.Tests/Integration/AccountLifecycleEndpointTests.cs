@@ -167,6 +167,20 @@ public class AccountLifecycleEndpointTests
             t.CancelReason = "buyer cancelled";
             t.CancelledAt = DateTime.UtcNow;
         });
+        // Regression (T133a-ActiveCounterRefunded): REFUNDED is terminal
+        // (05 §4.1), so a settled buyer-favour refund must not keep the account
+        // open (02 §19). UserActiveTransactionChecker's exclusion list carried
+        // only the five pre-v3.0 terminals, and this test never seeded REFUNDED
+        // — so the block stayed invisible.
+        await _factory.CreateTransactionAsync(t =>
+        {
+            t.SellerId = user.Id;
+            t.Status = TransactionStatus.REFUNDED;
+            // REFUNDED reuses the cancellation trail (05 §4.2).
+            t.CancelledBy = CancelledByType.ADMIN;
+            t.CancelReason = "buyer-favour dispute resolution";
+            t.CancelledAt = DateTime.UtcNow;
+        });
 
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
 
