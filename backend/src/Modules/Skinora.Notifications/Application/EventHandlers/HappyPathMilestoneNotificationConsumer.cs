@@ -20,9 +20,11 @@ namespace Skinora.Notifications.Application.EventHandlers;
 ///   Recipient: buyer.</item>
 ///   <item><c>PAYMENT_RECEIVED</c> →
 ///   <see cref="NotificationType.DELIVERY_EXPECTED"/> "the money is in escrow,
-///   send the item directly to the buyer" (03 §3.5 step 3). Recipient:
-///   <b>seller</b> — this leg changed sides in v3.0: the platform sends no
-///   trade offer, the seller sends the item.</item>
+///   send the item directly to the buyer" (03 §3.5 step 2 — step 3 is the
+///   companion negative: the buyer gets a realtime update and no inbox row,
+///   both of the transition's notifications being the seller's per the 06
+///   §2.13 catalogue). Recipient: <b>seller</b> — this leg changed sides in
+///   v3.0: the platform sends no trade offer, the seller sends the item.</item>
 /// </list>
 /// </summary>
 /// <remarks>

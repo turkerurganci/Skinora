@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   seedHappyPath,
   pollNotificationTypes,
+  getNotificationRecipients,
   getSettlementState,
   setPayoutEligibleNow,
   pollSettlementVerified,
@@ -54,14 +55,17 @@ import * as api from '../src/api';
 // and now tells the seller to send the item. COMPLETED still fans out to BOTH
 // parties; ITEM_DELIVERED is realtime-only and must NOT appear in an inbox.
 //
-// DELIVERY_EXPECTED is deliberately ABSENT from this list — see the gap marker
-// at the bottom of the test. It is not "not expected"; it is currently
-// unproducible, and the marker is what will force this list to be corrected.
+// DELIVERY_EXPECTED is back in this list as of T140. T138 removed it and left a
+// gap marker asserting its ABSENCE, because the notification was unproducible:
+// its consumer leg rode TransactionStatusChangedEvent and the payment
+// confirmation published no such event. T140 wired that producer, the marker
+// failed exactly as designed, and this list is the answer.
 const EXPECTED_NOTIFICATIONS = [
   'TRANSACTION_INVITE',
   'BUYER_ACCEPTED',
   'PAYMENT_WINDOW_OPEN',
   'PAYMENT_RECEIVED',
+  'DELIVERY_EXPECTED',
   'SELLER_PAYMENT_SENT',
   'TRANSACTION_COMPLETED',
 ];
@@ -195,35 +199,16 @@ test('happy path: CREATED → COMPLETED through the P2P chain, with WP19 notific
     `ITEM_DELIVERED must be suppressed: ${JSON.stringify(notifTypes)}`,
   ).not.toContain('ITEM_DELIVERED');
 
-  // ---------------------------------------------------------------------------
-  // GAP MARKER — NOT an expectation. Read this before "fixing" the assertion.
-  //
-  // 03 §3.5 step 3 says the seller is told DELIVERY_EXPECTED ("the money is in
-  // escrow, send the item directly to the buyer") on entry to PAYMENT_RECEIVED.
-  // In P2P that notification is the ONLY prompt for the one action the whole
-  // flow now waits on — the platform is not a party to the trade, so nothing
-  // else will nudge the seller.
-  //
-  // It is currently UNPRODUCIBLE. HappyPathMilestoneNotificationConsumer's
-  // PAYMENT_RECEIVED leg consumes TransactionStatusChangedEvent, and the payment
-  // confirmation path (AmountValidationService.AdvanceStateMachineAsync — the
-  // only producer of "-> PAYMENT_RECEIVED") publishes PaymentReceivedEvent and
-  // nothing else. Five publishers of TransactionStatusChangedEvent exist in the
-  // repo; none of them is that path. So the consumer's whole PAYMENT_RECEIVED
-  // leg is dead code, and a seller who never opens the site is cancelled at the
-  // delivery deadline with the fault recorded against them (03 §4.4, 06 §3.1).
-  //
-  // T138 found this and did NOT paper over it: the type was removed from
-  // EXPECTED_NOTIFICATIONS above and replaced by the assertion below, which is
-  // the inverse. It FAILS on the day the gap is closed — and that is its whole
-  // purpose. When it does: move DELIVERY_EXPECTED back into
-  // EXPECTED_NOTIFICATIONS and delete this block. Owner:
-  // DEFERRED_BACKLOG "T138-DeliveryExpectedNeverPublished" (proposed task T140).
-  // ---------------------------------------------------------------------------
+  // DELIVERY_EXPECTED must reach the SELLER and no one else (T140). The type
+  // appearing in the set above only proves a producer fired; this proves it
+  // addressed the right party. 03 §3.5 step 3 gives the buyer a realtime status
+  // update and no inbox row for this transition, and the leg flipped sides in
+  // v3.0 — it used to tell the buyer to accept the platform's trade offer.
+  // Addressed to the wrong party it would leave the seller exactly as
+  // unprompted as the gap this task closed, with the type assertion still green.
+  const deliveryPromptedUsers = await getNotificationRecipients('DELIVERY_EXPECTED');
   expect(
-    notifTypes,
-    'DELIVERY_EXPECTED is being produced now — the gap is CLOSED. Move it back ' +
-      'into EXPECTED_NOTIFICATIONS and delete the gap marker block above ' +
-      '(DEFERRED_BACKLOG: T138-DeliveryExpectedNeverPublished).',
-  ).not.toContain('DELIVERY_EXPECTED');
+    deliveryPromptedUsers,
+    `DELIVERY_EXPECTED recipients: ${JSON.stringify(deliveryPromptedUsers)}`,
+  ).toEqual([seed.sellerId.toLowerCase()]);
 });

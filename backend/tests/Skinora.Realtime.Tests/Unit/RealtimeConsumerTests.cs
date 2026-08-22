@@ -103,8 +103,16 @@ public class RealtimeConsumerTests
     }
 
     [Fact]
-    public async Task PaymentReceived_PushesPaymentConfirmed_Then_StatusChanged()
+    public async Task PaymentReceived_PushesPaymentConfirmed_And_NoStatusChanged()
     {
+        // T140 — this consumer used to push StatusChanged too, with FromStatus
+        // hardcoded to SELLER_CONFIRMED, because no producer published
+        // TransactionStatusChangedEvent for this transition. One does now (it
+        // has to: it is the only producer of the seller's DELIVERY_EXPECTED
+        // notification), and its relay owns the push. Two pushes would deliver
+        // the identical payload twice, so the stand-in is gone from here rather
+        // than the relay being taught to skip a status — which keeps the relay
+        // a verbatim pass-through and matches the SELLER_CONFIRMED leg (T123).
         var publisher = new RecordingRealtimePublisher();
         var sut = new PaymentReceivedRealtimeConsumer(
             publisher, new InMemoryProcessedEventStore(),
@@ -120,17 +128,59 @@ public class RealtimeConsumerTests
 
         await sut.Handle(ev, CancellationToken.None);
 
-        Assert.Equal(2, publisher.Calls.Count);
-        Assert.Equal("PaymentConfirmed", publisher.Calls[0].Method);
-        var confirmed = Assert.IsType<TransactionRealtimePayloads.PaymentConfirmed>(publisher.Calls[0].Payload);
+        var call = Assert.Single(publisher.Calls);
+        Assert.Equal("PaymentConfirmed", call.Method);
+        var confirmed = Assert.IsType<TransactionRealtimePayloads.PaymentConfirmed>(call.Payload);
         Assert.Equal(12.5m, confirmed.Amount);
         Assert.Equal("0xabc", confirmed.TxHash);
         Assert.Equal(20, confirmed.Confirmations);
+        Assert.DoesNotContain(publisher.Calls, c => c.Method == "StatusChanged");
+    }
 
-        Assert.Equal("StatusChanged", publisher.Calls[1].Method);
-        var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(publisher.Calls[1].Payload);
+    [Fact]
+    public async Task PaymentConfirmationTransition_PushesStatusChanged_ExactlyOnce_AcrossBothConsumers()
+    {
+        // The double-push guard, asserted where it can actually be observed:
+        // the payment confirmation publishes BOTH events into one unit of work
+        // (T140), so the two consumers run against the same transition. Whoever
+        // later re-adds a StatusChanged push to the PaymentReceived leg — or
+        // wires a second producer — breaks this, and the FE badge flickering
+        // twice is not something a per-consumer test would catch.
+        var publisher = new RecordingRealtimePublisher();
+        var transactionId = Guid.NewGuid();
+        var occurredAt = DateTime.UtcNow;
+
+        await new PaymentReceivedRealtimeConsumer(
+            publisher, new InMemoryProcessedEventStore(),
+            NullLogger<PaymentReceivedRealtimeConsumer>.Instance)
+            .Handle(
+                new PaymentReceivedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transactionId,
+                    Amount: 12.5m,
+                    Stablecoin: StablecoinType.USDT,
+                    TxHash: "0xabc",
+                    OccurredAt: occurredAt),
+                CancellationToken.None);
+
+        await new TransactionStatusChangedRealtimeConsumer(
+            publisher, new InMemoryProcessedEventStore(),
+            NullLogger<TransactionStatusChangedRealtimeConsumer>.Instance)
+            .Handle(
+                new TransactionStatusChangedEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transactionId,
+                    FromStatus: TransactionStatus.SELLER_CONFIRMED,
+                    ToStatus: TransactionStatus.PAYMENT_RECEIVED,
+                    OccurredAt: occurredAt),
+                CancellationToken.None);
+
+        var statusPushes = publisher.Calls.Where(c => c.Method == "StatusChanged").ToList();
+        var status = Assert.IsType<TransactionRealtimePayloads.TransactionStatusChanged>(
+            Assert.Single(statusPushes).Payload);
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, status.FromStatus);
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, status.ToStatus);
+        Assert.Single(publisher.Calls, c => c.Method == "PaymentConfirmed");
     }
 
     [Fact]

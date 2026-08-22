@@ -303,6 +303,24 @@ export async function pollNotificationTypes(
   return types;
 }
 
+/** Recipient UserIds (lower-cased, within the seeded seller + buyer) of every
+ *  inbox row of `type`. Lets a test assert WHICH party a notification reached,
+ *  which `getNotificationTypes` cannot: presence proves a producer fired, not
+ *  that it addressed the right side. Used for DELIVERY_EXPECTED (T140), whose
+ *  recipient flipped from buyer to seller in v3.0 — the type being present
+ *  while addressed to the buyer would leave the seller just as unprompted as
+ *  the gap T140 closed, and the type-only assertion would stay green. */
+export async function getNotificationRecipients(type: string): Promise<string[]> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('s', sql.UniqueIdentifier, seed.sellerId)
+    .input('b', sql.UniqueIdentifier, seed.buyerId)
+    .input('t', sql.NVarChar, type)
+    .query('SELECT UserId FROM Notifications WHERE Type = @t AND UserId IN (@s,@b)');
+  return result.recordset.map((row) => String(row.UserId).toLowerCase());
+}
+
 /** Poll until every `expected` recipient has a TRANSACTION_CANCELLED inbox row,
  *  then return the distinct recipient UserIds (lower-cased, within the seeded
  *  seller + buyer). Lets a test assert the exact fan-out: seller-cancel → buyer

@@ -1,21 +1,28 @@
 using Microsoft.Extensions.Logging;
 using Skinora.Realtime.Application.Contracts;
-using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
 
 namespace Skinora.Realtime.Application.EventHandlers;
 
 /// <summary>
-/// Pushes both <c>PaymentConfirmed</c> and
-/// <c>TransactionStatusChanged(SELLER_CONFIRMED → PAYMENT_RECEIVED)</c> on
-/// <c>/hubs/transactions</c> when blockchain confirmation finalizes the buyer
-/// payment (T48 — 07 §11.1, 03 §3.4).
+/// Pushes <c>PaymentConfirmed</c> on <c>/hubs/transactions</c> when blockchain
+/// confirmation finalizes the buyer payment (T48 — 07 §11.1, 03 §3.4).
 /// </summary>
 /// <remarks>
 /// <para>
-/// The state-machine guard (<c>ConfirmPayment</c> trigger only valid from
-/// <c>SELLER_CONFIRMED</c>) means the pre-transition state can be hardcoded.
+/// <b>It does NOT push <c>TransactionStatusChanged</c> (T140).</b> It used to,
+/// with the pre-transition state hardcoded to <c>SELLER_CONFIRMED</c> — the
+/// state-machine guard on the <c>ConfirmPayment</c> trigger made that safe, but
+/// it was a stand-in for a producer that did not exist. Since T140 the payment
+/// confirmation publishes <see cref="TransactionStatusChangedEvent"/> itself
+/// (it has to: that event is the only producer of the seller's
+/// <c>DELIVERY_EXPECTED</c> notification), so
+/// <c>TransactionStatusChangedRealtimeConsumer</c> now relays the status pair
+/// verbatim from the producer. Keeping the push here as well would deliver the
+/// identical payload twice; the hardcode is removed rather than the relay
+/// filtered, so this leg matches the SELLER_CONFIRMED one (T123) and the relay
+/// stays free of per-status special cases.
 /// </para>
 /// <para>
 /// 07 §11.1 distinguishes <c>PaymentDetected</c> (mempool / first sighting)
@@ -44,24 +51,14 @@ public sealed class PaymentReceivedRealtimeConsumer
 
     protected override string ConsumerName => "realtime.payment-received";
 
-    protected override async Task PublishAsync(
+    protected override Task PublishAsync(
         PaymentReceivedEvent domainEvent,
-        CancellationToken cancellationToken)
-    {
-        await _publisher.PublishPaymentConfirmedAsync(
+        CancellationToken cancellationToken) =>
+        _publisher.PublishPaymentConfirmedAsync(
             new TransactionRealtimePayloads.PaymentConfirmed(
                 TransactionId: domainEvent.TransactionId,
                 Amount: domainEvent.Amount,
                 TxHash: domainEvent.TxHash,
                 Confirmations: FinalConfirmationCount),
             cancellationToken);
-
-        await _publisher.PublishStatusChangedAsync(
-            new TransactionRealtimePayloads.TransactionStatusChanged(
-                TransactionId: domainEvent.TransactionId,
-                FromStatus: TransactionStatus.SELLER_CONFIRMED,
-                ToStatus: TransactionStatus.PAYMENT_RECEIVED,
-                Timestamp: domainEvent.OccurredAt),
-            cancellationToken);
-    }
 }
