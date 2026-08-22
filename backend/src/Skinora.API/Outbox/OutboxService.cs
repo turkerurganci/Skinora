@@ -41,6 +41,14 @@ public class OutboxService : IOutboxService
 
     private readonly AppDbContext _dbContext;
 
+    /// <summary>
+    /// Publish ordinal handed to <see cref="OutboxMessage.Sequence"/>, starting
+    /// at 1. The service is scoped to the request's <see cref="AppDbContext"/>,
+    /// so the counter is per unit of work — exactly the scope in which
+    /// <see cref="OutboxMessage.CreatedAt"/> stops discriminating.
+    /// </summary>
+    private int _sequence;
+
     public OutboxService(AppDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -62,6 +70,7 @@ public class OutboxService : IOutboxService
             ErrorMessage = null,
             CreatedAt = DateTime.UtcNow,
             ProcessedAt = null,
+            Sequence = ++_sequence,
         };
 
         _dbContext.OutboxMessages.Add(message);
