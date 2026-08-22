@@ -207,6 +207,6 @@ Backend `*.csproj`, `frontend/package.json`, `sidecar-blockchain/package.json` �
 
 - Ölçüm commit'i: `10833fd`
 - main CI: [`32572552827`](https://github.com/turkerurganci/Skinora/actions/runs/32572552827) · Docker Publish: [`32572552828`](https://github.com/turkerurganci/Skinora/actions/runs/32572552828)
-- Önceki gate: [`GATE_CHECK_F6.md`](GATE_CHECK_F6.md) (tag `phase/F6-pass`, `dd35fc1`)
+- Önceki gate: [`GATE_CHECK_F6.md`](GATE_CHECK_F6.md) — tag `phase/F6-pass` = `8dcfcdf` (gate chore PR [#208](https://github.com/turkerurganci/Skinora/pull/208) merge commit'i); F6'nın **ölçüm** commit'i `dd35fc1` idi, tag onun üzerinde değildir
 - Faz planı: [`11_IMPLEMENTATION_PLAN.md` §5 F7](../11_IMPLEMENTATION_PLAN.md)
 - Task raporları: `Docs/TASK_REPORTS/T115_REPORT.md` … `T140_REPORT.md`
