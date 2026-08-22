@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.4** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-17 (**T131** — §4.4 geçiş tablosunun iki satırı netleşti: `PAYMENT_RECEIVED | timeout` satırına yanlış-teslimat imzasında **bekletme** ve **admin kararından sonra bekletmenin kalkması** yazıldı (`CLOSED` kaldırmaz — orada kimse bakmamıştır); `ITEM_DELIVERED | admin_resolve_refund` satırı ayrı gerekçe (`overrideReason`, 07 §9.30) şartını ve düzeltilmiş 02 §10.4 atfını taşıyor. **Yeni trigger yok** — bekletmenin kalkması mevcut `timeout` geçişini serbest bırakır.) · 2026-08-17 (T129 düzeltme turu — sweep tetikleyicisi satırı mutabakat kapısını (`SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL`) da yazıyor; `ITEM_DELIVERED` state gate'i tek başına depoziti geri alma tespitinden günler önce boşaltırdı.) · 2026-08-16 (T129 — §4.2'de `complete` ve `delivery_reversed` satırları mutabakat kontrolünün **iki taraflı** olduğunu ve kapının payout/sweep üreticilerinde de okunduğunu yazar hâle getirildi. Geçiş kümesi değişmedi.) · 2026-08-10
+**Versiyon: v3.5** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-22 (**T140** — §5.3 domain event tablosu **koda hizalandı**: on bir satırın **yedisi** kodda karşılığı olmayan kavramsal adlar taşıyordu (`TransactionAcceptedEvent`, `SellerConfirmedReadyEvent`, `ItemDeliveredEvent`, `SettlementCompletedEvent`, `DeliveryReversedEvent`, `TransactionCompletedEvent`, `TransactionFlaggedEvent`) ve `PaymentReceivedEvent` satırı `DELIVERY_EXPECTED`’ı **yanlış olaya** bağlıyordu; satırda ayrıca iki custody kalıntısı vardı (*trade bağlantısı*, *§3.3 custody*). Tablo artık gerçek tip adlarını, yayıncılarını ve `TransactionStatusChangedEvent`’in üç ayrı bacağını taşıyor; ödeme onayının **neden** iki olay birden yayınladığı ve realtime çift-push’un bastırmayla değil **sahiplikle** önlendiği not olarak eklendi. Gerekçe ölçüldü: bu sapma, `DELIVERY_EXPECTED`’in dört görev boyunca hiç üretilememesinin bilgi ayağıydı. **Önceki (v3.4, 2026-08-17, T131)** — §4.4 geçiş tablosunun iki satırı netleşti: `PAYMENT_RECEIVED | timeout` — §4.4 geçiş tablosunun iki satırı netleşti: `PAYMENT_RECEIVED | timeout` satırına yanlış-teslimat imzasında **bekletme** ve **admin kararından sonra bekletmenin kalkması** yazıldı (`CLOSED` kaldırmaz — orada kimse bakmamıştır); `ITEM_DELIVERED | admin_resolve_refund` satırı ayrı gerekçe (`overrideReason`, 07 §9.30) şartını ve düzeltilmiş 02 §10.4 atfını taşıyor. **Yeni trigger yok** — bekletmenin kalkması mevcut `timeout` geçişini serbest bırakır.) · 2026-08-17 (T129 düzeltme turu — sweep tetikleyicisi satırı mutabakat kapısını (`SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL`) da yazıyor; `ITEM_DELIVERED` state gate'i tek başına depoziti geri alma tespitinden günler önce boşaltırdı.) · 2026-08-16 (T129 — §4.2'de `complete` ve `delivery_reversed` satırları mutabakat kontrolünün **iki taraflı** olduğunu ve kapının payout/sweep üreticilerinde de okunduğunu yazar hâle getirildi. Geçiş kümesi değişmedi.) · 2026-08-10
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -615,21 +615,28 @@ State geçişlerinde event kaybı kabul edilemez. Outbox Pattern bu garantiyi sa
 
 ### 5.3 Domain Event'ler
 
-Her state geçişi bir domain event publish eder:
+Her state geçişi bir domain event publish eder. Aşağıdaki tablo **kodda var olan olay adlarını** taşır — kavramsal ad değil, `Skinora.Shared/Events/` altındaki tipin kendisi. Bunun neden önemli olduğu tablonun altındaki nota yazılı.
 
-| Event | Consumer | Aksiyon |
-|---|---|---|
-| `TransactionCreatedEvent` | Notification | Alıcıya davet bildirimi |
-| `TransactionAcceptedEvent` | Notification | Satıcıya "hazır mısın?" bildirimi |
-| `SellerConfirmedReadyEvent` | Blockchain, Notification | Ödeme adresini alıcıya aç, alıcıya bildirim |
-| `PaymentReceivedEvent` | Blockchain, Notification | Satıcıya "item'ı gönder" bildirimi + trade bağlantısı, teslimat süresini başlat, sweep job (§3.3 custody) |
-| `ItemDeliveredEvent` | Notification | Mutabakat süresini başlat, taraflara ödeme tarihini bildir |
-| `SettlementCompletedEvent` | Blockchain, Notification | Mutabakat kontrolü geçti → satıcıya ödeme gönder |
-| `DeliveryReversedEvent` | Blockchain, Notification, Fraud | Trade geri alınmış → alıcıya iade, satıcıya fraud işareti, admin bildirimi |
-| `TransactionCompletedEvent` | Notification | Her iki tarafa bildirim |
-| `TransactionCancelledEvent` | Steam, Blockchain, Notification | İade işlemleri, bildirimler |
-| `TransactionFlaggedEvent` | Notification | Admin'e alert |
-| `TimeoutWarningEvent` | Notification | Yaklaşan timeout bildirimi |
+| Event | Yayıncı | Consumer | Aksiyon |
+|---|---|---|---|
+| `TransactionCreatedEvent` | `TransactionCreationService` | Notification | Alıcıya davet bildirimi (`TRANSACTION_INVITE`) |
+| `BuyerAcceptedEvent` | `TransactionAcceptanceService` | Notification, Realtime | Satıcıya "alıcı kabul etti, hazır mısın?" (`BUYER_ACCEPTED`) |
+| `TransactionStatusChangedEvent`<br>(→ `SELLER_CONFIRMED`) | `TransactionReadinessService` | Notification, Realtime | Alıcıya ödeme adresi + tutar (`PAYMENT_WINDOW_OPEN`, 03 §3.4 adım 1) |
+| `PaymentMonitorStartRequestedEvent` | `TransactionReadinessService` | Blockchain | Depozit adresinin aktif izleyicisini kur (T139) |
+| `PaymentReceivedEvent` | `AmountValidationService`<br>`.AdvanceStateMachineAsync` | Notification, Realtime | Satıcıya "ödeme alındı" (`PAYMENT_RECEIVED`) + alıcıya `PaymentConfirmed` push. **Para bilgisini taşır** (tutar / token / txHash) |
+| `TransactionStatusChangedEvent`<br>(→ `PAYMENT_RECEIVED`) | `AmountValidationService`<br>`.AdvanceStateMachineAsync` | Notification, Realtime | **Satıcıya "para emanette, item'ı doğrudan alıcıya gönder"** (`DELIVERY_EXPECTED`, 03 §3.5 adım 2) + `StatusChanged` push. Aynı unit-of-work'te teslimat penceresi damgalanır (T124). P2P'de satıcıyı dürten **tek** çağrı budur (T140) |
+| `TransactionStatusChangedEvent`<br>(→ `ITEM_DELIVERED`) | `DeliveryConfirmationService`<br>`DeliveryTimeoutRound`<br>`DeliveryDisputeRound` | Realtime | **Yalnız gerçek-zamanlı rozet — inbox bildirimi YOKTUR** (03 §3.5 adım 9; 06 §2.13 kataloğunda tanımlı değil) |
+| `SettlementReviewRequiredEvent` | `SettlementVerificationJob` | Notification | Mutabakat turu sonuçsuz → admin incelemesine düşer (T129) |
+| `SettlementReversalDetectedEvent` | `SettlementVerificationJob` | Notification, Fraud | Trade geri alınmış → satıcıya fraud işareti, admin bildirimi; iade `PaymentRefundToBuyerRequestedEvent` ile ayrı yürür |
+| `PayoutCompletedEvent` | `OutgoingTransferConfirmationJob` | Notification, Realtime | Payout onaylandı → `COMPLETED`; **her iki tarafa** bildirim (`TRANSACTION_COMPLETED`) |
+| `TransactionCancelledEvent` | `TransactionCancellationService`<br>`AdminTransactionService` | Blockchain, Notification | Para iadesi + bildirimler. **Item iadesi yoktur** (aşağıdaki v3.0 notu) |
+| `TransactionTimedOutEvent` | `TimeoutSideEffectPublisher` | Notification, Realtime | Süre doldu → iptal bildirimi |
+| `FraudFlagCreatedEvent` | `FraudFlagService` | Notification | Admin'e alert |
+| `TimeoutWarningEvent` | `WarningDispatcher` | Notification | Yaklaşan timeout bildirimi |
+
+> **Neden bu tablo kodda var olan adları taşımak zorunda (T140):** önceki sürümü kavramsal adlar kullanıyordu (`TransactionAcceptedEvent`, `SellerConfirmedReadyEvent`, `ItemDeliveredEvent`, `SettlementCompletedEvent`, `DeliveryReversedEvent`, `TransactionCompletedEvent`, `TransactionFlaggedEvent`) ve on bir satırın **yedisinin** kodda karşılığı yoktu; `PaymentReceivedEvent` satırı da `DELIVERY_EXPECTED`'ı **yanlış olaya** bağlıyordu. Bunun bedeli ölçüldü: `DELIVERY_EXPECTED` bildirimi — P2P'de satıcıyı dürten tek çağrı — dört görev boyunca **hiç üretilemedi**, çünkü yayıncısının hangi olay olduğu hiçbir yerde doğru yazılı değildi ve `TransactionStatusChangedEvent`'in kendi XML doc'u ödeme onayını yayıncı olmaktan **açıkça meneden** bayat bir custody-dönemi kuralı taşıyordu. Kavramsal ad kullanmanın maliyeti kozmetik değildir: bir sonraki uygulayıcı tabloyu wiring talimatı olarak okur.
+
+> **`TransactionStatusChangedEvent` neden üç ayrı satırda:** jenerik olaydır, kendi domain olayı olmayan ileri-yön geçişleri taşır ve tüketicileri `ToStatus`'a göre dallanır. Kendi domain olayı olan geçişler (kabul, payout, iptal, timeout, dispute, flag, emergency-hold) bu olayı yayınlamaz — çift push olmasın diye. **Tek kasıtlı istisna ödeme onayıdır:** hem `PaymentReceivedEvent` hem bu olay yayınlanır, çünkü ikisi ayrık tüketicilere farklı olgular taşır (para ↔ durum çifti). Realtime çift-push'u bastırmayla değil **sahiplikle** önlenir: `PaymentReceivedRealtimeConsumer` yalnız `PaymentConfirmed`, jenerik relay yalnız `StatusChanged` push eder (T140).
 
 > **Not:** Notification consumer bu event'leri aldığında, olayın türüne ve mevcut state'e göre uygun bildirimleri üretir. Örneğin `TransactionCancelledEvent` alındığında iptal sebebi, iade durumu ve ilgili taraflara (satıcı/alıcı) göre farklı bildirim mesajları oluşturulur. Bildirim tetikleyicilerinin tam listesi için bkz. 03 §12.
 

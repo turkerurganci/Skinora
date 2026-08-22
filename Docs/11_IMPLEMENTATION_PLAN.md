@@ -4305,6 +4305,25 @@ Task T140: `DELIVERY_EXPECTED` bildiriminin yayıncısının bağlanması
     hataya dönüşmesi — düzeltildi, adım 3 "eşlik eden negatif" olarak anıldı.
     (T138'in gap marker'ı ve yukarıdaki T140 tanımı da "adım 3" diyor; ikisi de
     tarihsel kayıt, kod sözleşmesi değil — dokunulmadı.)
+    KAPSAM GENİŞLETMESİ (proje sahibi "çöz", 2026-08-22) — 05 §5.3 DOMAIN EVENT
+    TABLOSU KODA HİZALANDI, doküman v3.4 → v3.5. Ölçüm kapsamı bildirilenden
+    geniş çıktı: tablonun on bir olay adının YEDİSİNİN kodda karşılığı yoktu
+    (`TransactionAcceptedEvent` → gerçekte `BuyerAcceptedEvent`,
+    `SellerConfirmedReadyEvent` → `TransactionStatusChangedEvent`,
+    `ItemDeliveredEvent` / `SettlementCompletedEvent` / `TransactionFlaggedEvent`
+    hiç yok, `DeliveryReversedEvent` → `SettlementReversalDetectedEvent`,
+    `TransactionCompletedEvent` → `PayoutCompletedEvent`) ve
+    `PaymentReceivedEvent` satırı `DELIVERY_EXPECTED`'ı YANLIŞ OLAYA bağlıyordu,
+    üstelik iki custody kalıntısı taşıyordu (trade bağlantısı, §3.3 custody).
+    Yalnız bildirilen satırı düzeltip yedi yanlış adı bırakmak INSTRUCTIONS §5'in
+    yasakladığı yarım çözüm olurdu; tablo gerçek tip adı + yayıncı + tüketici ile
+    yeniden yazıldı, `TransactionStatusChangedEvent` üç bacağıyla ayrı satırlara
+    ayrıldı ve iki gerekçe notu eklendi (tablo neden kavramsal ad taşıyamaz;
+    ödeme onayı neden iki olay yayınlar ve çift-push neden sahiplikle önlenir).
+    TURUN KALICI DERSİ BURADA TAMAMLANIYOR: `DELIVERY_EXPECTED`'ın yayıncısının
+    hangi olay olduğu ÜÇ BİLGİ KAYNAĞININ ÜÇÜNDE DE yanlıştı — C# XML doc'u
+    (çelişkili), tüketicinin 03 §3.5 alıntısı (adım 3 ≠ adım 2), 05 §5.3 (yanlış
+    olay). Bildirim dört görev boyunca hiç üretilmedi. Üçü de bu turda düzeltildi.
     KANIT — CI run 32564788118 `success`, CI Gate ✓: Unit 1470/1470 ·
     Integration 1369/1369 · Contract 9/9 · Migration dry-run ✓ · Docker build ✓ ·
     10/10 advisory E2E leg YEŞİL, 36/36 test. AC4 UÇTAN UCA KANITLANDI:

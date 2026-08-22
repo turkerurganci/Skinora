@@ -216,11 +216,27 @@ Yani testler **kendi kodlarına hiç ulaşmadan**, per-test veritabanı oluştur
 
 **Bloke etmeyen gözlem, dalda düzeltildi — alıntı sapması.** `HappyPathMilestoneNotificationConsumer`'ın XML doc'u `DELIVERY_EXPECTED`'ı `03 §3.5 step 3`'e bağlıyordu. Adım 3 **alıcının inbox satırı almadığını** söyleyen maddedir; satıcıya *"Ödeme alındı, item'ı şimdi gönder"* diyen madde **adım 2**'dir. Sapma davranışı etkilemiyordu ama tam olarak bu turun canlandırdığı kolun üstündeydi ve turun kendi konusu bayat yorumların gerçek hataya dönüşmesi — düzeltildi, adım 3 de "eşlik eden negatif" olarak açıkça anıldı. (T138'in gap marker'ı ve planın T140 tanımı da "adım 3" diyordu; ikisi de tarihsel kayıt, kod sözleşmesi değil, dokunulmadı.)
 
-**Bloke etmeyen gözlem, DÜZELTİLMEDİ — proje sahibi kararı bekliyor.** `05_TECHNICAL_ARCHITECTURE.md` §5.3 domain event tablosunun `PaymentReceivedEvent` satırı *"Satıcıya «item'ı gönder» bildirimi + **trade bağlantısı**, teslimat süresini başlat, sweep job (**§3.3 custody**)"* diyor. Kodda o bildirimi (`DELIVERY_EXPECTED`) süren `TransactionStatusChangedEvent`; `PaymentReceivedEvent` satıcının `PAYMENT_RECEIVED` ("ödeme alındı") bildirimini sürer. Satırda ayrıca iki custody kalıntısı var (*trade bağlantısı*, *§3.3 custody*).
+**Bloke etmeyen gözlem → proje sahibi "çöz" dedi (2026-08-22), ÇÖZÜLDÜ.** `05_TECHNICAL_ARCHITECTURE.md` §5.3 domain event tablosunun `PaymentReceivedEvent` satırı *"Satıcıya «item'ı gönder» bildirimi + **trade bağlantısı**, teslimat süresini başlat, sweep job (**§3.3 custody**)"* diyordu — yani `DELIVERY_EXPECTED`'ı **yanlış olaya** bağlıyor ve iki custody kalıntısı taşıyordu.
 
-**Neden bu turda düzeltilmedi:** GUARDRAILS §3 + INSTRUCTIONS §4 — 02–10 dokümanlarında yapısal değişiklik proje sahibi onayı ister ve kod-doküman çelişkisi fark edildiğinde sessizce ilerlenmez. **Neden yine de kaydedildi:** bu, T140'ın kök nedeniyle **aynı sapma ailesinin üçüncü örneği** (C# XML doc'u, tüketicinin alıntısı, ve şimdi 05 §5.3) — bir sonraki uygulayıcı bu tabloyu okuyup `DELIVERY_EXPECTED`'ı yanlış olaya bağlayabilir.
+**Ölçüm kapsamı bir satırdan geniş çıkardı — ve yarım düzeltme yapılmadı.** Tablonun on bir olay adı tek tek kodla karşılaştırıldı (`ls backend/src/Skinora.Shared/Events/`): **yedisinin kodda karşılığı yok.**
 
-**Hafifletici bağlam (satırı tek başına finding saymamak için):** §5.3 bir **kavramsal** mimari taslağıdır, uygulanan olay kataloğu değil — tablodaki on bir olay adının çoğunun kodda karşılığı yok (`TransactionAcceptedEvent`, `SellerConfirmedReadyEvent`, `ItemDeliveredEvent`, `SettlementCompletedEvent`, `TransactionCompletedEvent`, `TransactionFlaggedEvent`, `TimeoutWarningEvent`). Yani okuyucu onu birebir wiring talimatı olarak alamaz; C# XML doc'unun aksine. **Öneri:** `DEFERRED_BACKLOG`'a ⚪ bir satır (05 §5.3'ün v3.0'a hizalanması, custody kalıntıları dahil) — açılıp açılmayacağı proje sahibinin kararı. Backlog'da bu tabloyu kapsayan mevcut satır yok.
+| Tablodaki ad | Kodda | Gerçek karşılığı |
+|---|---|---|
+| `TransactionCreatedEvent` | ✓ var | — |
+| `TransactionAcceptedEvent` | ✗ yok | `BuyerAcceptedEvent` |
+| `SellerConfirmedReadyEvent` | ✗ yok | `TransactionStatusChangedEvent` (→ `SELLER_CONFIRMED`) + `PaymentMonitorStartRequestedEvent` |
+| `PaymentReceivedEvent` | ✓ var | aksiyonu yanlıştı — `DELIVERY_EXPECTED` bu olayda değil, `TransactionStatusChangedEvent` (→ `PAYMENT_RECEIVED`) üzerinde |
+| `ItemDeliveredEvent` | ✗ yok | `TransactionStatusChangedEvent` (→ `ITEM_DELIVERED`) — üç yayıncı |
+| `SettlementCompletedEvent` | ✗ yok | `SettlementReviewRequiredEvent` / `TransactionStatusChangedEvent` (`SettlementVerificationJob`) |
+| `DeliveryReversedEvent` | ✗ yok | `SettlementReversalDetectedEvent` |
+| `TransactionCompletedEvent` | ✗ yok | `PayoutCompletedEvent` |
+| `TransactionCancelledEvent` | ✓ var | — |
+| `TransactionFlaggedEvent` | ✗ yok | `FraudFlagCreatedEvent` |
+| `TimeoutWarningEvent` | ✓ var | — |
+
+Yalnız `PaymentReceivedEvent` satırını düzeltip yedi yanlış adı bırakmak, INSTRUCTIONS §5'in açıkça yasakladığı yarım çözüm olurdu. Tablo **kodda var olan tip adlarına, yayıncılarına ve tüketicilerine** göre yeniden yazıldı; `TransactionStatusChangedEvent` üç ayrı bacağıyla (→ `SELLER_CONFIRMED`, → `PAYMENT_RECEIVED`, → `ITEM_DELIVERED`) ayrı satırlarda gösterildi. İki not eklendi: (1) tablonun **neden** kavramsal ad değil gerçek tip adı taşımak zorunda olduğu — gerekçesi bu turun kendisi; (2) ödeme onayının **neden** iki olay birden yayınladığı ve realtime çift-push'un bastırmayla değil **sahiplikle** önlendiği. Doküman **v3.4 → v3.5**; sürüm notu sessizce üzerine yazmadı, önceki sürümü koruyarak yazıldı (GUARDRAILS §5).
+
+**Bu sapmanın maliyeti kozmetik değildi:** `DELIVERY_EXPECTED`'ın yayıncısının hangi olay olduğu **hiçbir yerde doğru yazılı değildi** — ne C# XML doc'unda (çelişkiliydi), ne tüketicinin alıntısında (adım 3 ≠ adım 2), ne de 05 §5.3'te (yanlış olay). Üç bilgi kaynağının üçü de yanlıştı ve bildirim dört görev boyunca hiç üretilmedi. Üçü de bu turda düzeltildi.
 
 **Yapım turunun bilerek doğrulamaya bıraktığı başka bir şey yok** — AC3'ün gerektirdiği tek karar (push sahipliği) yapım öncesinde proje sahibine sunuldu ve karara bağlandı (D1), plana yazıldı.
 
