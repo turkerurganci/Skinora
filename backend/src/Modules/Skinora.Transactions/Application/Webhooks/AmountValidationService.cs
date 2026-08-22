@@ -516,9 +516,12 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id, cancellationToken);
 
         // PaymentReceivedEvent — T44 K2 wiring: the seller's PAYMENT_RECEIVED
-        // inbox notification and the buyer's PaymentConfirmed realtime push
-        // consume this event; the surrounding SaveChanges commits both the
-        // state transition and the outbox row in a single transaction.
+        // inbox notification and the PaymentConfirmed realtime push consume
+        // this event; the surrounding SaveChanges commits both the state
+        // transition and the outbox row in a single transaction. The push goes
+        // to the transaction group, not to one party — SignalRTransaction-
+        // RealtimePublisher sends by TransactionId, so whoever joined the room
+        // receives it.
         await _outbox.PublishAsync(
             new PaymentReceivedEvent(
                 EventId: Guid.NewGuid(),

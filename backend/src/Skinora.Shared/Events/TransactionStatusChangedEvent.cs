@@ -20,18 +20,28 @@ namespace Skinora.Shared.Events;
 /// timeout / dispute / flag / emergency-hold transitions.
 /// </para>
 /// <para>
-/// <b>The payment confirmation is the one deliberate exception (T140).</b> It
-/// publishes BOTH this event and <see cref="PaymentReceivedEvent"/>, because
-/// the two carry different facts to disjoint consumers: PaymentReceived
-/// carries the money (amount / token / txHash) and drives the
-/// <c>PaymentConfirmed</c> push plus the seller's <c>PAYMENT_RECEIVED</c>
-/// notification, while this event carries the status pair and is the ONLY
-/// producer of the seller's <c>DELIVERY_EXPECTED</c> notification — the single
-/// prompt for the one action P2P waits on (03 §3.5 step 2). Double-push is
-/// avoided on the realtime side by ownership, not by suppression:
-/// <c>PaymentReceivedRealtimeConsumer</c> pushes <c>PaymentConfirmed</c> only
-/// and this event's relay owns <c>StatusChanged</c> for the transition, so the
-/// relay stays a verbatim pass-through with no per-status special cases.
+/// <b>Two transitions deliberately publish this event ALONGSIDE their own
+/// domain event</b>, and in both the second event exists because no consumer
+/// of the first one does the job:
+/// <list type="bullet">
+///   <item><b>The payment confirmation (T140).</b> It publishes BOTH this
+///   event and <see cref="PaymentReceivedEvent"/>, because the two carry
+///   different facts to disjoint consumers: PaymentReceived carries the money
+///   (amount / token / txHash) and drives the <c>PaymentConfirmed</c> push
+///   plus the seller's <c>PAYMENT_RECEIVED</c> notification, while this event
+///   carries the status pair and is the ONLY producer of the seller's
+///   <c>DELIVERY_EXPECTED</c> notification — the single prompt for the one
+///   action P2P waits on (03 §3.5 step 2).</item>
+///   <item><b>The settlement reversal</b> (<c>ITEM_DELIVERED → REFUNDED</c>,
+///   <see cref="SettlementReversalDetectedEvent"/>, T129). Its own event has
+///   only a notification/fraud consumer, so this event is what stops the
+///   parties' screens showing a settlement countdown for a transaction that
+///   has refunded.</item>
+/// </list>
+/// Double-push is avoided in both by ownership, not by suppression: each
+/// sibling event's consumers push their own payload and this event's relay
+/// owns <c>StatusChanged</c>, so the relay stays a verbatim pass-through with
+/// no per-status special cases.
 /// </para>
 /// <para>
 /// This paragraph is a correction, and the correction is the point: until T140
