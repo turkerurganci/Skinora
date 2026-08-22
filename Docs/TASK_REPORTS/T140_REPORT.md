@@ -188,7 +188,12 @@ Yani testler **kendi kodlarına hiç ulaşmadan**, per-test veritabanı oluştur
 - Branch: `task/T140-delivery-expected-publisher`
 - Commit: `d77f57f` — T140: DELIVERY_EXPECTED bildiriminin yayıncısının bağlanması
 - PR: [#256](https://github.com/turkerurganci/Skinora/pull/256)
-- CI: **✓ PASS** — run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) `conclusion: success`, **CI Gate ✓**. Bloke edici jobların hepsi `success` (Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker build) ve **10/10 advisory E2E leg YEŞİL**
+- Commit zinciri: `d77f57f` (kod + test + e2e + doküman) → `00d56fe` (CI sonucu kaydı, docs-only) → `5581b9b` (05 §5.3 hizalaması, docs-only)
+- CI: **✓ PASS**, iki bağımsız yeşil tur:
+  - Run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) — HEAD `d77f57f`, **dört AC'yi kanıtlayan tur**: Unit 1470/1470 · Integration 1369/1369 · Contract 9/9 · Migration dry-run ✓ · Docker build ✓ · **10/10 advisory E2E leg, 36/36 test**. CI Gate ✓
+  - Run [`32565772674`](https://github.com/turkerurganci/Skinora/actions/runs/32565772674) — HEAD `5581b9b`, **doküman turlarının regresyon kontrolü**: bloke edici jobların hepsi + 10/10 advisory E2E leg yine `success`. CI Gate ✓
+  - Aradaki run [`32565560754`](https://github.com/turkerurganci/Skinora/actions/runs/32565560754) (`00d56fe`) `cancelled` — ardışık push tarafından devre dışı bırakıldı. task.md concurrency notu gereği **failure sayılmaz**; son tamamlanmış tur yetkilidir
+  - Bu satırı ekleyen commit'in kendi run'ı doğrulama anında `gh run list --branch task/T140-delivery-expected-publisher` ile okunur — rapor kendi commit'inin run id'sini içeremez (sonsuz gerileme)
 - Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE "^T[0-9]+..."` → **yalnız `T140`** ✓
 
 ---
