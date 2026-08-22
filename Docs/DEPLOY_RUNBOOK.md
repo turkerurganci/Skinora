@@ -171,6 +171,25 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 | `TRON_API_KEY` | trongrid.io ücretsiz plan — yoksa monitor 429 yer |
 | Nile USDT/USDC kontrat adresleri | Testnet'te koda gömülü değil, env'den gelir |
 
+### G.0a F6 → F7 yükseltmesi (mevcut bir ortam için)
+
+> **Kimin için:** bu bölümü **F7 öncesi** (2026-08-08'den önce) kurmuş ve `.env` + veritabanını o günden beri taşımış bir ortam için. **Sıfırdan kuranlar bu adımı atlar** — `.env.example` ve migration zinciri zaten v3.0'dır.
+>
+> **Neden gerekli (F7 Gate Check, 2026-08-22 — bulgu F7-N4):** F7 üç yerde geriye dönük uyumsuz değişiklik yaptı ve hiçbiri kendiliğinden uygulanmaz. Backend startup'ta **auto-migrate yoktur** (§G.0), env anahtar adları koda gömülü değildir ve `SettingsBootstrapService` yalnız **yapılandırılmamış** satırlara dokunur (06 §8.9) — yani eski adlı satırlar sessizce yerinde kalır. Gate ölçümünde bu makinedeki ortam tam olarak bu durumdaydı: image'ler 2026-07-26 tarihli, veritabanında 31/40 migration, `SystemSettings`'te hâlâ custody adları.
+
+| # | Adım | Komut / kontrol | Neden |
+|---|---|---|---|
+| 1 | **Şemayı 40 migration'a çıkar** | `dotnet ef database update --project src/Skinora.Shared/Skinora.Shared.csproj --startup-project src/Skinora.API/Skinora.API.csproj --context AppDbContext` (host'tan, §G.2 deseni) | F7 dokuz migration ekledi: `T117_P2P_Pivot` · `T123_RenameTimeoutSettings` · `T125_DeliveryEvidenceCapture` · `T127_AddDeliveryRoundAt` · `T129_SettlementCheckColumns` · `T129_SettlementEscalationColumns` · `T130_WrongItemEvidenceColumns` · `T131_DisputeResolutionOverrideReason` · `T131_TimeoutReleasedByAdminRulingAt`. `T117_P2P_Pivot` emekli tabloları (`TradeOffers`, `PlatformSteamBots`, `BotRecoveryItems`) düşürür |
+| 2 | **Doğrula: 40 migration** | `SELECT COUNT(*) FROM __EFMigrationsHistory;` → **40** | Adım 1'in kanıtı |
+| 3 | **`.env`'de iki anahtarı yeniden adlandır** | `SKINORA_SETTING_TRADE_OFFER_SELLER_TIMEOUT_MINUTES` → **`SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES`**; `SKINORA_SETTING_TRADE_OFFER_BUYER_TIMEOUT_MINUTES` → **`SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES`** | T123 adlandırma kararı. Eski adlar custodial dönemden kalma ve **sorumluluğu ters** anlatıyordu (teslimat penceresi satıcınındır, alıcının değil — T119 denetimi). Yapmazsan `docker compose config` iki `variable is not set` uyarısı verir ve `SettingsBootstrapService` bu iki satırı hidrate edemez |
+| 4 | **`.env`'den `STEAM_BOTS_CONFIG_PATH` satırını sil** | — | T133'te konusuz kaldı: `secrets/steam-bots.json` ve onu okuyan katman silindi; sidecar hiçbir Steam hesabı kimlik bilgisi taşımaz |
+| 5 | **Doğrula: uyarısız config** | `docker compose config --quiet` → `variable is not set` uyarısı **yok** | Adım 3–4'ün kanıtı |
+| 6 | **Doğrula: v3.0 ayar adları DB'de** | `SELECT [Key] FROM SystemSettings WHERE [Key] LIKE '%timeout_minutes%';` → `accept_timeout_minutes`, **`delivery_timeout_minutes`**, **`seller_confirm_timeout_minutes`** (custody adları **yok**) | Migration `UpdateData` ile satır Id'leri sabit tutup adı değiştirir; **admin tarafından girilmiş değerler korunur** |
+| 7 | **Image'leri F7 kodundan yeniden kur** | `docker compose build` → `docker compose up -d` | Eski image F7 şemasını okuyamaz. Image tarihini `docker inspect --format '{{.Created}}' escrow-skinora-backend` ile teyit et |
+| 8 | **Doğrula: 63 SystemSetting** | `SELECT COUNT(*) FROM SystemSettings;` → **63** (F6: 59; T125 `delivery_verification` + T129 üç `settlement` anahtarı) | 07 §9.8 ile hizalı |
+
+> **Sıra bağlayıcıdır:** adım 7'yi adım 1'den önce koşarsan F7 backend'i F6 şemasına bakar. Adım 3'ü atlarsan stack ayağa kalkar ama iki timeout ayarı env'den hidrate edilemez.
+
 ### G.1 Sırlar
 
 Değerler **hiçbir zaman** repo'ya girmez. Yerleri:

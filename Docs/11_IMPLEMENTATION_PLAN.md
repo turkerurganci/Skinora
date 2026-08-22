@@ -50,7 +50,7 @@ Tüm task'lar 7 faza ayrılmıştır. Her faz bir önceki faz tamamlanmadan baş
 | F4 | Entegrasyonlar | Steam sidecar, blockchain sidecar, email, Telegram, Discord, sanctions, geo-block | T64–T83 |
 | F5 | Kullanıcı Arayüzü | Tüm ekranlar, bileşenler, formlar, state varyantları, responsive, i18n | T84–T106 |
 | F6 | Uçtan Uca Doğrulama | E2E testler, senaryo testleri, regresyon | T107–T114 |
-| F7 | P2P Geçişi | Item custody'nin kaldırılması, teslimat doğrulama, bot katmanının emekliye ayrılması | T115–T139 |
+| F7 | P2P Geçişi | Item custody'nin kaldırılması, teslimat doğrulama, bot katmanının emekliye ayrılması | T115–T140 |
 
 > **F7 neden var:** MVP (F0–F6) custodial bot escrow modeliyle tamamlandı. Steam Trade Protection (16.07.2025) ve trade cooldown reworku (02.2026) sonrası item bir envantere trade ile girdiğinde 7 gün transfer edilemiyor; bot item'ı emanete aldığı anda alıcıya gönderemez. Çift-trade modeli bu kural altında çalışamadığı için item custody kaldırılıp P2P modeline geçilmektedir (02 §2.1). Para escrow'u değişmemektedir.
 
@@ -2329,7 +2329,7 @@ Task T114: E2E — Downtime ve bakım senaryoları
 
 ---
 
-### F7 — P2P Geçişi (T115–T139)
+### F7 — P2P Geçişi (T115–T140)
 
 Sıra: P0 → P1 → P2 → P2.5 → P3 → P4 → P5 → P6 → P7. T137 (`sidecar-fake`) P2 ile paralel başlayabilir; tüm E2E'yi bloklar. **T139** P7'ye eklendi ama FE görevlerine bağlı değildir (backend borcu, kaynağı T133b doğrulaması) — T134–T136 ile paralel koşabilir; sırayı bekletmesi gereken tek şey kendi doğrulamasıdır.
 
@@ -4630,6 +4630,9 @@ Her faz tamamlandığında aşağıdaki kontroller yapılır. Tümü geçmedikç
 | F4 | Sidecar'lar health check'te yeşil mi? Webhook iletişimi çift yönlü çalışıyor mu? |
 | F5 | Tüm ekranlar 3 breakpoint'te doğru mu? 4 dil çalışıyor mu? SignalR real-time çalışıyor mu? |
 | F6 | Tüm E2E senaryoları geçiyor mu? Staging ortamında test edildi mi? |
+| F7 | **FK1** — P2P ileri yolun her geçişinin bir üretim üreticisi var mı? (`BuyerAccept` · `SellerConfirmReady` · `ConfirmPayment` · `DeliverItem` · `Complete` · `DeliveryReversed` · `AdminResolveRefund`) · **FK2** — custody yüzeyi gerçekten kalktı mı? (prod kaynakta `PlatformSteamBot`/`BotRecoveryItem`/`TradeOffer` ve emekli enum değerleri sıfır; `Webhook.SteamSharedSecret` prod konfigde yok; `PermissionCatalog` 12; FE'de `/admin/steam` rotası yok; migration provasında emekli tablolar oluşmuyor) · **FK3** — 06 §2.13 bildirim kataloğundaki her tipin bir üretim üreticisi var mı? · **FK4** — her domain event'in ≥1 yayıncısı **ve** ≥1 tüketicisi var mı? |
+
+> **F7 satırı neden bu içerikle yazıldı (F7 Gate Check, 2026-08-22 — bulgu F7-N3):** §6.2'de F7 satırı yoktu ve gate ek kontrollerini kendisi tanımlamak zorunda kaldı. FK1/FK3/FK4 fazın kendi acı derslerinin kurumsallaşmış hâlidir: `T133b-PaymentMonitorUnarmed` (yayıncı bağlı, tüketici yok) ve `T138-DeliveryExpectedNeverPublished` → **T140** (tüketici yazılmış, yayıncı hiç bağlanmamış) aynı kusur ailesindendi ve ikisini de yalnız **uçtan uca eşleme taraması** görebilirdi — tek tek görev doğrulamaları dört tur boyunca göremedi. FK2 emekliliğin **gerçekten** bittiğini ölçer: bir fazın "sildik" demesi, silinmişliği ölçen taramanın kapsamı kadar doğrudur.
 
 ---
 
@@ -4648,7 +4651,7 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | UserNotificationPreference | DM-004, DM-060–061, DM-108, DM-201, DM-204 | T23 | |
 | Transaction, TransactionHistory | DM-005–006, DM-056, DM-070–075, DM-109–114, DM-141–146, DM-184–186, DM-188, DM-199, DM-206–207 | T19 | |
 | PaymentAddress, BlockchainTransaction | DM-007–008, DM-051–054, DM-076–084, DM-115–117, DM-147–149, DM-165, DM-208 | T20 | |
-| TradeOffer, PlatformSteamBot | DM-010–011, DM-055, DM-057, DM-088–089, DM-118–119, DM-150–151, DM-182–183, DM-204, DM-208 | T21 | |
+| ~~TradeOffer, PlatformSteamBot~~ | DM-010–011, DM-055, DM-057, DM-088–089, DM-118–119, DM-150–151, DM-182–183, DM-204, DM-208 | T21 → **emekli: T117** | ⊘ **v3.0'da kaldırıldı** (06 §3.9/§3.10, §2.7/§2.8/§2.15). Entity'ler, enum'lar ve tablolar T117 migration'ında düştü; `BotRecoveryItem` de aynı turda. Kalan DM ID'leri emekli, yeni task beklemiyor |
 | Dispute, FraudFlag | DM-012–013, DM-064, DM-090–093, DM-120–125, DM-154–158, DM-206 | T22 | |
 | Notification, NotificationDelivery | DM-014–015, DM-068, DM-094–095, DM-126–128, DM-152–153, DM-198, DM-203, DM-206, DM-208 | T23 | |
 | AdminRole, AdminRolePermission, AdminUserRole | DM-016–018, DM-058, DM-062–063, DM-129–132, DM-204 | T24 | |
@@ -4689,7 +4692,7 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | Steam OpenID | INT-001 – INT-007 | T29 | |
 | Steam Web API | INT-008 – INT-011 | T29, T31, T67 | |
 | Steam Community (envanter) | INT-012 – INT-015 | T67 | |
-| Steam Trade Offer | INT-016 – INT-019, INT-157 | T65, T66 | |
+| ~~Steam Trade Offer~~ | INT-016 – INT-019, INT-157 | T65, T66 → **emekli: T132, T133** | ⊘ **v3.0'da kaldırıldı** (02 §15, 08). Platform trade offer göndermez; backend dispatch/webhook yüzeyi T132'de, sidecar yarısı T133'te silindi. `sidecar-steam` salt-okunur proxy'dir |
 | Steam Sidecar setup | INT-020 – INT-022 | T14 | |
 | Steam hata yönetimi | INT-023 – INT-032 | T64, T65, T66 | |
 | TRON setup | INT-033 – INT-043 | T15, T73, T74 | |
@@ -4721,13 +4724,40 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | Admin Flag (S13, S14) | UI-016–018, UI-050, UI-063–065 | T100 | |
 | Admin İşlemler (S15, S16) | UI-019–020, UI-048–049, UI-066, UI-187 | T101 | |
 | Admin Parametreler (S17) | UI-021, UI-067, UI-071–080, UI-198–199 | T102 | |
-| Admin Steam (S18) | UI-022, UI-070, UI-137–139, UI-188–189 | T103 | |
+| ~~Admin Steam (S18)~~ | UI-022, UI-070, UI-137–139, UI-188–189 | T103 → **emekli: T136** | ⊘ **v3.0'da kaldırıldı** (04 §2.2/§8.7, 07 §9.11). Ekran ve rotaları T136'da silindi; koruyan iki yetki (`VIEW_STEAM_ACCOUNTS`, `MANAGE_STEAM_RECOVERY`) T132'de katalogdan düştü |
 | Admin Roller (S19) | UI-023, UI-047, UI-068, UI-159, UI-190–191 | T104 | |
 | Admin Kullanıcı (S20) | UI-024, UI-192–195 | T105 | |
 | Admin Audit Log (S21) | UI-025, UI-069, UI-140–142 | T106 | |
 | Responsive | UI-162 – UI-168 | T98 | |
 | Lokalizasyon | UI-169 – UI-173 | T97 | |
 | Suspended session | UI-143 | T87, T90 | |
+
+### 7.5 F7 — P2P Geçişi kaynak öğeleri (v3.0)
+
+> **Bu alt bölüm neden var (F7 Gate Check, 2026-08-22 — bulgu F7-N1):** §7.1–§7.4 envanteri MVP (F0–F6) taramasından gelir ve `DM-`/`API-`/`INT-`/`UI-` ID'leri **kaynak dokümanlarda geçmez**, yalnız §2 envanter özetinde yaşar. F7 bu envantere iki yönde birden dokundu: eşlenmiş öğeleri **emekli etti** (yukarıda ⊘ ile işaretlendi) ve **yeni kaynak öğeler** getirdi. F6 gate'i §7'yi *"F6 bir doğrulama fazıdır, yeni kaynak öğe implement etmez"* gerekçesiyle boşluksuz saymıştı; **bu gerekçe F7 için geçerli değildir**, bu yüzden F7'nin yeni öğeleri aşağıda ID'siz ama doküman-referanslı olarak eşlenir.
+
+| Kaynak öğe | Doküman | Task | Implemented |
+|---|---|---|---|
+| `TransactionStatus` / `TransactionTrigger` / `TimeoutPhase` yeniden tanımı | 06 §2.1, §2.24 | T117 | ✓ |
+| `DeliveryEvidence` bit-flag enum'u (`ITEM_DELIVERED` geçişinin guard'ı) | 06 §2.24 | T117, T125 | ✓ |
+| Transaction teslimat alanları + deadline rename (`SellerConfirmDeadline`, `DeliveryDeadline`, `BuyerBaseline*`, `SellerReadyConfirmedAt`) | 06 §3.5 | T117, T123 | ✓ |
+| `DeliveryEvidenceCapture` entity (append-only kanıt kaydı) | 06 §3.5a | T125 | ✓ |
+| Dispute yanlış-item kanıt kolonları + çözüm override gerekçesi | 06 §3.11 | T130, T131 | ✓ |
+| Mutabakat (settlement) kolonları + eskalasyon | 06 §3.5 | T129 | ✓ |
+| `NotificationType` kataloğu v3.0 (26 tip; `PAYMENT_WINDOW_OPEN`, `DELIVERY_EXPECTED`) | 06 §2.13, 07 §8.1 | T117, T133a, T140 | ✓ |
+| `POST /transactions/:id/confirm-ready` | 07 §7.6a | T123 | ✓ |
+| `POST /transactions/:id/confirm-receipt` | 07 §7.6b | T126 | ✓ |
+| `POST /transactions/:id/accept` v3.0 alanları (`steamTradeUrl`, MA kontrolü) | 07 §7.6 | T119a | ✓ |
+| `POST /admin/transactions/:id/clear-settlement` (AD32) | 07 §9.22b | T129 | ✓ |
+| Envanter üç değerli görünürlük (`Public`/`Private`/`Unavailable`) + `refresh` cache bypass + ayrı limiter | 08 §2.3, §2.6 | T120, T121 | ✓ |
+| Trade-hold / Mobile Authenticator probu | 08 §2.2 | T119a, T123 | ✓ |
+| Teslimat doğrulama admin parametreleri | 04 §8.6 | T125 | ✓ |
+| StateActionPanel state×rol matrisi + v3.0 zaman çizelgesi (C05, 6 adım) | 04 §7.3, §9.3 | T134, T135 | ✓ |
+| `seller_confirm_timeout_minutes` / `delivery_timeout_minutes` SystemSetting'leri | 06 §8, 04 §16 | T123, T124 | ✓ |
+| Ödeme izleyicisi arm / re-arm / disarm | 08 §3.4 | T139 | ✓ |
+| `(SellerId, ItemAssetId)` tekillik kapısı | 06 §5.1, 07 §7.2 | T128 | ✓ |
+
+**F7 boşluk (S3): 0** — eşlenip implement edilmeyen öğe yok.
 
 ---
 
