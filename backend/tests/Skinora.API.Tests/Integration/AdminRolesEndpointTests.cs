@@ -256,6 +256,58 @@ public class AdminRolesEndpointTests : IClassFixture<AdminRolesEndpointTests.Fac
     }
 
     [Fact]
+    public async Task CreateRole_NameOfSoftDeletedRole_Returns409NotServerError()
+    {
+        // T113-AdminRoleNameReuse500: UQ_AdminRoles_Name is unfiltered by design
+        // (T24) so a deleted role's name stays reserved, but DeleteAsync only
+        // soft-deletes and the pre-check rode the !IsDeleted query filter — it
+        // could not see the reserving row, so SaveChanges hit the index and the
+        // caller got 500 instead of 409.
+        var admin = await _factory.CreateUserAsync();
+        var role = await _factory.CreateRoleAsync("Silinecek Rol", null, ["VIEW_FLAGS"]);
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.DeleteAsync($"/api/v1/admin/roles/{role.Id}")).StatusCode);
+
+        var response = await client.PostAsJsonAsync("/api/v1/admin/roles", new
+        {
+            name = "Silinecek Rol",
+            description = (string?)null,
+            permissions = Array.Empty<string>(),
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("ROLE_NAME_EXISTS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateRole_RenameToSoftDeletedRoleName_Returns409NotServerError()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var doomed = await _factory.CreateRoleAsync("Emekli Ad", null, ["VIEW_FLAGS"]);
+        var survivor = await _factory.CreateRoleAsync("Yaşayan Rol", null, ["VIEW_FLAGS"]);
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.DeleteAsync($"/api/v1/admin/roles/{doomed.Id}")).StatusCode);
+
+        var response = await client.PutAsJsonAsync($"/api/v1/admin/roles/{survivor.Id}", new
+        {
+            name = "Emekli Ad",
+            description = (string?)null,
+            permissions = new[] { "VIEW_FLAGS" },
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("ROLE_NAME_EXISTS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task DeleteRole_AssignedToUser_Returns422RoleHasUsers()
     {
         var admin = await _factory.CreateUserAsync();

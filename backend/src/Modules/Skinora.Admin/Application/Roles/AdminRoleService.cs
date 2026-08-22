@@ -72,7 +72,13 @@ public sealed class AdminRoleService : IAdminRoleService
             return validationOutcome!;
 
         var name = request.Name.Trim();
+        // IgnoreQueryFilters: UQ_AdminRoles_Name is unfiltered (T24, by design —
+        // a deleted role's name stays reserved so audit rows keep pointing at
+        // one meaning), while DeleteAsync only soft-deletes. Without this the
+        // pre-check cannot see the reserving row, SaveChanges hits the index and
+        // the caller gets 500 instead of 409 (T113-AdminRoleNameReuse500).
         var nameTaken = await _db.Set<AdminRole>()
+            .IgnoreQueryFilters()
             .AnyAsync(r => r.Name == name, cancellationToken);
         if (nameTaken) return new RoleOperationOutcome.NameConflict();
 
@@ -119,7 +125,9 @@ public sealed class AdminRoleService : IAdminRoleService
         var name = request.Name.Trim();
         if (!string.Equals(role.Name, name, StringComparison.Ordinal))
         {
+            // Same reason as CreateAsync — the reserving row may be soft-deleted.
             var nameTaken = await _db.Set<AdminRole>()
+                .IgnoreQueryFilters()
                 .AnyAsync(r => r.Id != roleId && r.Name == name, cancellationToken);
             if (nameTaken) return new RoleOperationOutcome.NameConflict();
             role.Name = name;
