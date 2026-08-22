@@ -124,9 +124,9 @@ Böylece **fazla ödeme** kolu da kapsanır. Gerekçe ölçülebilir: fazla öde
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | `AdvanceStateMachineAsync` geçişle AYNI `SaveChangesAsync` içinde `TransactionStatusChangedEvent(SELLER_CONFIRMED → PAYMENT_RECEIVED)` yayınlar (09 §13.3): geri alınan bir ödeme onayı bildirim doğurmamalı | ✓ | `AmountValidationService.cs` — yayın, `machine.Fire()` ile caller'ın `SaveChanges`'i arasında. `IOutboxService.PublishAsync` yalnız change tracker'a satır ekler (`OutboxService.cs` remarks), yani atomiklik yapısaldır. Testler: `ConfirmedPayment_PublishesStatusChangedEvent_SoTheSellerIsToldToDeliver` (çift doğru), `ConfirmedPayment_PublishesBothEvents_InTheCallersUnitOfWork` (yakalama `SaveChanges` beklerken olur), **negatif:** `ConfirmedPayment_OnEmergencyHold_DoesNotAdvanceOrRefund` + `ConfirmedPayment_Underpayment_AboveThreshold_QueuesIncorrectAmountRefund` (ikisinde de `Assert.Empty(...OfType<TransactionStatusChangedEvent>())`) |
-| 2 | Satıcı `DELIVERY_EXPECTED` inbox satırını alır; alıcı ALMAZ | ✓ | Backend: `HappyPathNotificationConsumerTests.StatusChanged_PaymentReceived_NotifiesSeller_NoParams` — `Assert.Equal(_seller.Id, request.UserId)` + yeni `Assert.DoesNotContain(dispatcher.Requests, r => r.UserId == _buyer.Id)`. E2E: `happy-path.smoke.spec.ts` — `getNotificationRecipients('DELIVERY_EXPECTED')` `[sellerId]`'e eşit (CI kanıtı, aşağıdaki sınır notuna bakınız) |
+| 2 | Satıcı `DELIVERY_EXPECTED` inbox satırını alır; alıcı ALMAZ | ✓ | Backend: `HappyPathNotificationConsumerTests.StatusChanged_PaymentReceived_NotifiesSeller_NoParams` — `Assert.Equal(_seller.Id, request.UserId)` + yeni `Assert.DoesNotContain(dispatcher.Requests, r => r.UserId == _buyer.Id)`. E2E: `happy-path.smoke.spec.ts` — `getNotificationRecipients('DELIVERY_EXPECTED')` `[sellerId]`'e eşit; CI'da **geçti** (run `32564788118`, happy-path leg 1 passed) |
 | 3 | İkinci tüketici gözden geçirilir: çift push üretilmemeli; `ProcessedEventStore` idempotency'si iki olay için de korunmalı | ✓ | Gözden geçirme çift-push'u **ölçtü** (yukarıdaki §AC3). Düzeltme: `PaymentReceivedRealtimeConsumer`'dan status push'u kaldırıldı. Testler: `PaymentReceived_PushesPaymentConfirmed_And_NoStatusChanged` + `PaymentConfirmationTransition_PushesStatusChanged_ExactlyOnce_AcrossBothConsumers` (iki tüketici aynı geçiş üzerinde koşturulur, `StatusChanged` tam **bir** kez). İdempotency: anahtar `(EventId, ConsumerName)` (`NotificationConsumerBase:75`), iki olayın `EventId`'leri ayrı → maskeleme yok |
-| 4 | E2E kendini kapatan işaret ÇEVRİLİR: gap marker bloğu silinir, `DELIVERY_EXPECTED` `EXPECTED_NOTIFICATIONS`'a alınır | ✓ | `happy-path.smoke.spec.ts` — blok silindi, tip listeye döndü, yerine alıcı iddiası kondu. `tsc --noEmit` 0, `eslint` 0. **Çalıştırma kanıtı PR CI'sinin `happy-path.smoke` leg'inden gelir** (aşağıdaki sınır notu) |
+| 4 | E2E kendini kapatan işaret ÇEVRİLİR: gap marker bloğu silinir, `DELIVERY_EXPECTED` `EXPECTED_NOTIFICATIONS`'a alınır | ✓ | `happy-path.smoke.spec.ts` — blok silindi, tip listeye döndü, yerine alıcı iddiası kondu. **UÇTAN UCA KANITLANDI:** CI run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118), `E2E happy-path (advisory)` leg'i `✓ 1 passed (7.7m)` — yani gerçek stack'te `DELIVERY_EXPECTED` **üretildi**, `EXPECTED_NOTIFICATIONS`'ın yedi tipinin yedisi de geldi ve alıcı kümesi `[sellerId]`'e eşit çıktı. T138'in kırılmak üzere bıraktığı işaretin cevabı bu leg'in yeşile dönmesidir |
 
 ---
 
@@ -135,11 +135,32 @@ Böylece **fazla ödeme** kolu da kapsanır. Gerekçe ölçülebilir: fazla öde
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Build | ✓ 0 uyarı / 0 hata | `dotnet build -v q --nologo` |
-| Unit (tam suite) | ✓ 1470/1470 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — CI'nin kendi filtresi. Modül dağılımı: Shared 388 · Transactions 562 · Notifications 111 · Platform 120 · Auth 83 · API 62 · Realtime 40 · Steam 39 · Disputes 25 · Users 22 · Fraud 18 |
-| Integration | (aşağıya bkz.) | `--filter "FullyQualifiedName~.Integration"` |
+| Unit (tam suite) | ✓ **1470/1470** (lokal **ve** CI, birebir aynı) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — CI'nin kendi filtresi. Modül dağılımı: Shared 388 · Transactions 562 · Notifications 111 · Platform 120 · Auth 83 · API 62 · Realtime 40 · Steam 39 · Disputes 25 · Users 22 · Fraud 18 |
+| Integration | ✓ **1369/1369** (CI) | CI run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) job "4. Integration test" — 0 failed. Lokal koşu kısmi düştü, **kök nedeni ölçüldü ve CI yalanladı** → §Lokal integration koşusu |
+| E2E (advisory) | ✓ **36/36**, 10/10 leg | T110 6 · T113 7 · T108 5 · T109 4 · T111 4 · T114 3 · T112 3 · T138 delivery 2 · happy-path 1 · happy-path UI 1 |
+| Contract | ✓ 9/9 | CI job "5. Contract test" |
+| Migration dry-run | ✓ | CI job "6. Migration dry-run" |
 | e2e typecheck | ✓ 0 | `npx tsc --noEmit` |
 | e2e lint | ✓ 0 | `npx eslint .` |
 | e2e prettier | (bulgu değil) | Lokal uyarılar 15 dosyada, dokunulmayanlar dahil — `core.autocrlf` CRLF artifaktı; yetkili ölçüm CI "1. Lint" leg'i (LF) |
+
+---
+
+## Lokal integration koşusu — düştü, kök nedeni ölçüldü, CI yalanladı
+
+Kayda geçiyor çünkü **doğrulayıcı bunu görecek** ve "yapım turu kırık integration ile ilerledi" diye okunabilir.
+
+**Ölçüm:** lokal integration koşusunda `Skinora.Transactions.Tests` **64 fail** verdi (546 test, 27 dk). Diğer dokuz assembly'nin dokuzu da temiz geçti — ki bunların içinde **benim dokunduğum tüketicinin assembly'si de var**: `Skinora.Notifications.Tests` **60/60**.
+
+**Ayırt edici deney:** aynı assembly **tek başına** yeniden koşturuldu → fail sayısı **64 → 4**'e düştü. Paralelliğe göre ölçeklenen bir sayı, test mantığına göre ölçeklenmez.
+
+**Hata sınıflandırması — belirleyici olan bu:** gözlenen fail'lerin **%100'ü** `Microsoft.Data.SqlClient.SqlException`, ve hepsi **aynı yerde**: `IntegrationTestBase.CreateDatabaseAsync` (`IntegrationTestBase.cs:176`), `InitializeAsync` içinden. Mesajlar: *"Could not obtain exclusive lock on database 'model'. Retry the operation later."* (×3) ve *"Execution Timeout Expired"* (×1). **Assertion fail sayısı: 0** (`grep -c "Assert."` → 0).
+
+Yani testler **kendi kodlarına hiç ulaşmadan**, per-test veritabanı oluşturma aşamasında düştü. SQL Server eşzamanlı `CREATE DATABASE` çağrılarını `model` veritabanı üzerinde serileştirir; on assembly aynı anda kendi container'ını ve veritabanlarını kurunca tek bir Windows makinesinde çakışırlar.
+
+**Yapısal teyit:** `AmountValidationService` için **hiç integration testi yoktur** — `Skinora.Transactions.Tests/Integration/` altında böyle bir dosya bulunmuyor. Yani bu turun tek Transactions-modülü production değişikliğinin, bu assembly'de kırabileceği bir yüzey yok.
+
+**Yalanlama:** CI'nin "4. Integration test" job'ı aynı filtreyle **1369/1369, 0 failed** verdi. Kaynak lokal ortam çekişmesiydi; **turun kodu değil.**
 
 ---
 
@@ -165,15 +186,17 @@ Böylece **fazla ödeme** kolu da kapsanır. Gerekçe ölçülebilir: fazla öde
 ## Commit & PR
 
 - Branch: `task/T140-delivery-expected-publisher`
-- Commit: (aşağıda güncellenecek)
-- PR: (aşağıda güncellenecek)
-- CI: (aşağıda güncellenecek)
+- Commit: `d77f57f` — T140: DELIVERY_EXPECTED bildiriminin yayıncısının bağlanması
+- PR: [#256](https://github.com/turkerurganci/Skinora/pull/256)
+- CI: **✓ PASS** — run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) `conclusion: success`, **CI Gate ✓**. Bloke edici jobların hepsi `success` (Lint · Build · Unit · Integration · Contract · Migration dry-run · Docker build) ve **10/10 advisory E2E leg YEŞİL**
+- Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE "^T[0-9]+..."` → **yalnız `T140`** ✓
 
 ---
 
 ## Known Limitations / Follow-up
 
-- **E2E süiti lokalde koşturulmadı.** T137 / T137a / T138'in izlediği yolun aynısı: e2e ağı `docker-compose.e2e.yml` üzerinde koşar ve AC4'ün gerçek çalıştırma kanıtı PR CI'sinin `happy-path.smoke` leg'idir. Lokalde `tsc` + `eslint` ile statik doğrulandı. **Bu leg'in yeşile dönmesi turun ana kanıtıdır** — T138 onu bilerek kırmızıya hazırlamıştı.
+- **E2E süiti lokalde koşturulmadı** (T137 / T137a / T138'in izlediği yolun aynısı) — lokalde `tsc` + `eslint` ile statik doğrulandı, çalıştırma kanıtı CI'dan geldi ve **yeşil**: `E2E happy-path (advisory)` `1 passed (7.7m)`. T138 bu leg'i bilerek kırmızıya hazırlamıştı; yeşile dönmesi turun ana kanıtıdır. Bu bir kısıt değil, **kapanmış bir kanıt yolu** olarak kayda geçti.
+- **Lokal integration koşusu kısmi düştü** — kök nedeni ölçüldü (container çekişmesi, 0 assertion fail) ve CI 1369/1369 ile yalanladı; §Lokal integration koşusu.
 - `T133b-AdminDtoItemReturnedXmlDoc` (⚪) satırına dokunulmadı — kapsam dışı, kendi sahibi var.
 - `DEFERRED_BACKLOG` bu turdan sonra **60 aktif / 65 çözülmüş**; kapanan satır listenin **tek 🔴'sıydı, listede artık 🔴 yok.**
 

@@ -4305,11 +4305,21 @@ Task T140: `DELIVERY_EXPECTED` bildiriminin yayıncısının bağlanması
     hataya dönüşmesi — düzeltildi, adım 3 "eşlik eden negatif" olarak anıldı.
     (T138'in gap marker'ı ve yukarıdaki T140 tanımı da "adım 3" diyor; ikisi de
     tarihsel kayıt, kod sözleşmesi değil — dokunulmadı.)
-    KANIT: backend build 0 uyarı/0 hata · Unit 1470/1470 · Integration
-    (Testcontainers MsSql, lokal Docker) · e2e `tsc` 0 · `eslint` 0.
-    LOKAL ÖLÇÜM SINIRI: e2e süiti lokalde koşturulmadı (T137/T137a/T138'in
-    izlediği yolun aynısı) — `happy-path.smoke` legi PR CI'sinden doğrulanır ve
-    AC4'ün gerçek kanıtı odur.
+    KANIT — CI run 32564788118 `success`, CI Gate ✓: Unit 1470/1470 ·
+    Integration 1369/1369 · Contract 9/9 · Migration dry-run ✓ · Docker build ✓ ·
+    10/10 advisory E2E leg YEŞİL, 36/36 test. AC4 UÇTAN UCA KANITLANDI:
+    `E2E happy-path` legi `1 passed (7.7m)` — gerçek stack'te
+    `DELIVERY_EXPECTED` ÜRETİLDİ ve alıcı kümesi `[sellerId]`'e eşit çıktı;
+    T138'in kırılmak üzere bıraktığı işaret yeşile döndü.
+    LOKAL INTEGRATION KOŞUSU DÜŞTÜ, KÖK NEDENİ ÖLÇÜLDÜ, CI YALANLADI:
+    `Skinora.Transactions.Tests` lokalde 64 fail verdi. Gözlenen fail'lerin
+    %100'ü `IntegrationTestBase.CreateDatabaseAsync`'te `SqlException`
+    ("Could not obtain exclusive lock on database 'model'" / execution
+    timeout) — 0 assertion fail, yani testler kendi kodlarına HİÇ ULAŞMADI.
+    Ayırt edici deney: aynı assembly tek başına koşunca 64 → 4'e düştü;
+    paralelliğe göre ölçeklenen bir sayı test mantığına göre ölçeklenmez.
+    Yapısal teyit: `AmountValidationService` için hiç integration testi yok.
+    CI aynı filtreyle 1369/1369 verdi — kaynak lokal container çekişmesiydi.
 
 Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
   Bağımlılık: T71 (sidecar `POST /api/monitor/start` ucu) · T75 (post-cancel
