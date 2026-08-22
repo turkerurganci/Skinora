@@ -956,4 +956,4 @@ Tüm monitoring stack'i self-hosted ve ücretsizdir:
 
 ---
 
-*Skinora — Technical Architecture v2.3*
+*Skinora — Technical Architecture v3.5*
