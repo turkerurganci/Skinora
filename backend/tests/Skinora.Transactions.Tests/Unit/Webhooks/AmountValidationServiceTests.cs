@@ -148,6 +148,70 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(0, refundRows);
     }
 
+    // ─── DELIVERY_EXPECTED producer (T140) ──────────────────────────────
+
+    [Fact]
+    public async Task ConfirmedPayment_PublishesStatusChangedEvent_SoTheSellerIsToldToDeliver()
+    {
+        // T140 — HappyPathMilestoneNotificationConsumer raises the seller's
+        // DELIVERY_EXPECTED notification ("the money is in escrow, send the
+        // item directly to the buyer", 03 §3.5 step 2) off
+        // TransactionStatusChangedEvent, and this is its only producer. In P2P
+        // that notification is the ONLY prompt for the one action the flow
+        // waits on — the platform is not a party to the trade. Without it the
+        // delivery clock armed two lines earlier runs out against a seller who
+        // was never asked, and 06 §3.1 records the fault as theirs.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 100m);
+
+        await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-t140-1", default);
+        await _db.SaveChangesAsync();
+
+        var evt = Assert.Single(_outbox.Events.OfType<TransactionStatusChangedEvent>());
+        Assert.Equal(fixture.Transaction.Id, evt.TransactionId);
+        // Carried verbatim from around the Fire(), so the realtime relay that
+        // now owns this transition's StatusChanged push needs no DB lookup.
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, evt.FromStatus);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, evt.ToStatus);
+    }
+
+    [Fact]
+    public async Task ConfirmedPayment_PublishesBothEvents_InTheCallersUnitOfWork()
+    {
+        // 09 §13.3 — IOutboxService only adds the row to the change tracker,
+        // so publishing BEFORE the caller's SaveChanges is what makes the
+        // transition and both outbox rows atomic. Asserting the capture
+        // happens while SaveChanges is still pending is the observable half of
+        // that contract: a confirmation that rolls back cannot leave a
+        // "send the item" notification behind for a payment that never landed.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 100m);
+
+        await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-t140-2", default);
+
+        Assert.Equal(2, _outbox.Events.Count);
+        Assert.Contains(_outbox.Events, e => e is PaymentReceivedEvent);
+        Assert.Contains(_outbox.Events, e => e is TransactionStatusChangedEvent);
+
+        await _db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task ConfirmedPayment_Overpayment_AlsoPublishesStatusChanged()
+    {
+        // Overpayment advances the state machine, so the seller owes the item
+        // exactly as in the exact-amount case — the excess refund rides a
+        // separate leg. Pinned because a producer wired only into the "clean"
+        // branch would punish this seller the same silent way: delivery clock
+        // armed, no prompt sent.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 110m);
+
+        await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-t140-3", default);
+        await _db.SaveChangesAsync();
+
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, fixture.Transaction.Status);
+        var evt = Assert.Single(_outbox.Events.OfType<TransactionStatusChangedEvent>());
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, evt.ToStatus);
+    }
+
     // ─── Underpayment ───────────────────────────────────────────────────
 
     [Fact]
@@ -166,6 +230,10 @@ public sealed class AmountValidationServiceTests : IDisposable
         // T124 — no advance means no delivery window: the seller has been asked
         // for nothing yet, so a deadline here would count time against them.
         Assert.Empty(_timeoutScheduling.DeliveryArmed);
+        // T140 — and no delivery prompt either. The two must move together: a
+        // seller told to send the item on an underpayment would be handing over
+        // an asset against money that is on its way back to the buyer.
+        Assert.Empty(_outbox.Events.OfType<TransactionStatusChangedEvent>());
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
@@ -355,6 +423,12 @@ public sealed class AmountValidationServiceTests : IDisposable
         // T124 — a held transaction never entered PAYMENT_RECEIVED, so no
         // delivery clock may start ticking against the seller (05 §4.5).
         Assert.Empty(_timeoutScheduling.DeliveryArmed);
+        // T140 — the guard-rejected path returns before either publish, so a
+        // fire that never happened raises no DELIVERY_EXPECTED. The hold exists
+        // precisely to stop the flow; prompting the seller to send the item
+        // would defeat it, and this is the branch that AC1's "a reverted
+        // payment confirmation must not produce a notification" names.
+        Assert.Empty(_outbox.Events.OfType<TransactionStatusChangedEvent>());
         var refundCount = await _db.Set<BlockchainTransaction>()
             .CountAsync(b => b.Type != BlockchainTransactionType.BUYER_PAYMENT);
         Assert.Equal(0, refundCount);

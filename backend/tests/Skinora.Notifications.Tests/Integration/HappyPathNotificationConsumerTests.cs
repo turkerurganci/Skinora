@@ -213,6 +213,13 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
         Assert.Equal(NotificationType.DELIVERY_EXPECTED, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
         Assert.Empty(request.Parameters);
+        // T140 — the buyer must NOT receive it. 03 §3.5 step 3 gives the buyer
+        // a realtime status update and no inbox row for this transition; both
+        // of the transition's notifications are defined to the seller in the
+        // 06 §2.13 catalogue. Asserted explicitly rather than left to the
+        // Single() above, because the leg that flipped sides in v3.0 is exactly
+        // the one a future edit is likeliest to flip back.
+        Assert.DoesNotContain(dispatcher.Requests, r => r.UserId == _buyer.Id);
     }
 
     [Fact]

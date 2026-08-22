@@ -4208,9 +4208,9 @@ Task T138: E2E spec'lerinin yeniden yazımı
     record'dan düşmüş `itemReturned` alanından hâlâ söz ediyor. Yalnız yorum;
     e2e görevinde production kaynağına dokunmamak için düzeltilmedi.
 
-Task T140 (ÖNERİ — proje sahibi onayı bekliyor): `DELIVERY_EXPECTED`
-       bildiriminin yayıncısının bağlanması
+Task T140: `DELIVERY_EXPECTED` bildiriminin yayıncısının bağlanması
   Bağımlılık: —  (kaynak T138'in E2E turu, 2026-08-21)
+  Onay: proje sahibi, 2026-08-22 — öneri kabul edildi, dört AC de korundu.
   Kaynak: `DEFERRED_BACKLOG` §Öne Çıkanlar
        `T138-DeliveryExpectedNeverPublished` (🔴).
   ÖLÇÜLEN AÇIK: `HappyPathMilestoneNotificationConsumer`'ın `PAYMENT_RECEIVED`
@@ -4244,6 +4244,101 @@ Task T140 (ÖNERİ — proje sahibi onayı bekliyor): `DELIVERY_EXPECTED`
   NOT: T133b'nin B4'üyle (`POST /api/monitor/start`'ın çağıranı yoktu → T139)
        aynı sınıf: v3.0 için yazılmış tüketici + hiç bağlanmamış yayıncı, ve
        ikisini de yalnız uçtan uca ağ görebilirdi.
+  YAPIM TURU (2026-08-22, dal `task/T140-delivery-expected-publisher`):
+    ÖLÇÜM BAĞIMSIZ YENİDEN ÜRETİLDİ (rapora güvenilmeden): beş yayıncının
+    hiçbiri ödeme yolu değil; `AdvanceStateMachineAsync` yalnız
+    `PaymentReceivedEvent` yayınlıyordu. Açık gerçek.
+    KÖK NEDEN BULUNDU — VE AÇIĞIN KENDİSİNDEN DAHA ÖNEMLİ. Bu unutkanlık
+    değildi: `TransactionStatusChangedEvent`'in XML doc'unun **paragraf 1'i**
+    ödeme onayını, "bu olayı yayınlaMAmalı, yoksa çift-push olur" listesinde
+    **adıyla sayıyordu**; aynı doc'un paragraf 2'si ise üreticiyi "T124 yazar"
+    diyordu. İki paragraf birbiriyle çelişiyordu ve T124 **yazılı talimata
+    uydu** — T123 kendi bacağını bağladı, T124 bağlamadı. Kural custody
+    döneminde doğruydu (o çağda bu bacağın bildirimi `TRADE_OFFER_SENT_TO_BUYER`
+    bot dispatch job'ından geliyordu ve olay yalnız realtime badge taşıyordu);
+    v3.0 bildirimi olayın üstüne taşıyıp alıcısını satıcıya çevirdi, kural
+    bayat kaldı. **Yalnız yayıncıyı bağlayıp bu paragrafı bırakmak açığı
+    yeniden üretilebilir hâlde bırakırdı** — düzeltildi ve neden değiştiği
+    dosyada kayıtlı.
+    AC3 VARSAYIMSAL DEĞİLDİ, ÖLÇÜLDÜ: `PaymentReceivedRealtimeConsumer` **zaten**
+    `TransactionStatusChanged(SELLER_CONFIRMED → PAYMENT_RECEIVED)` push
+    ediyordu, `FromStatus` hardcoded (gerekçesi yorumda: state-machine guard'ı
+    ön-durumu tek seçenek bırakıyor). AC1 uygulanınca generic relay birebir
+    aynı payload'ı ikinci kez push edecekti.
+    KAPSAM KARARI D1 (proje sahibi onaylı, 2026-08-22): **status push'un
+    sahibi generic relay olur.** `PaymentReceivedRealtimeConsumer`'dan
+    `PublishStatusChangedAsync` bloğu kaldırıldı; sınıf saf `PaymentConfirmed`
+    push'una indi ve hardcoded `FromStatus` kaldıracı onunla birlikte silindi.
+    Alternatif — relay'e `ToStatus == PAYMENT_RECEIVED` skip filtresi koymak —
+    **reddedildi**: relay'in tek sözleşmesi "producer'ın kararını sorgulamadan
+    verbatim ilet" ve ilk per-status istisna o sözleşmeyi kalıcı olarak deler;
+    ayrıca kaldıracı yaşatır. Seçilen yol T123'ün SELLER_CONFIRMED bacağıyla
+    simetriktir ve net etkisi bir kaldıraç EKSİLTMEKTİR.
+    İKİ OLAYIN BİRLİKTE YAŞAMASI KASITLIDIR: `PaymentReceivedEvent` parayı
+    (tutar/token/txHash) taşır ve `PaymentConfirmed` push'u + satıcının
+    `PAYMENT_RECEIVED` bildirimini sürer; `TransactionStatusChangedEvent`
+    durum çiftini taşır ve satıcının `DELIVERY_EXPECTED`'ının **tek**
+    üreticisidir. Tüketicileri ayrıktır; `ProcessedEventStore` anahtarı
+    (EventId, ConsumerName) olduğu için iki ayrı EventId birbirini maskelemez.
+    KAPSAMA KARARI: AC1'in yayını `AdvanceStateMachineAsync`'in **içine**
+    kondu, "tam tutar" kolunun içine değil — böylece **fazla ödeme** kolu da
+    kapsanır. Gerekçe ölçülebilir: fazla ödeme durumu ilerletir, yani satıcı
+    item'ı aynen borçludur ve teslimat saati ona karşı işlemeye başlar; yalnız
+    temiz kola bağlanmış bir yayıncı o satıcıyı tam olarak aynı sessiz yolla
+    cezalandırırdı. Test `ConfirmedPayment_Overpayment_AlsoPublishesStatusChanged`
+    ile pinlendi.
+    AC2'NİN E2E YARISI TİPTEN ALICIYA YÜKSELTİLDİ: `EXPECTED_NOTIFICATIONS`'a
+    tipi geri koymak yalnız "bir üretici ateşledi"yi kanıtlar, **doğru tarafa
+    gittiğini kanıtlamaz** — ve v3.0'da taraf değiştiren tam da bu bacak.
+    Yeni `getNotificationRecipients(type)` yardımcısıyla alıcı kümesinin
+    `[sellerId]`'e eşit olduğu iddia edildi: yanlış tarafa adreslenmiş bir
+    bildirim satıcıyı T140'ın kapattığı açık kadar uyarısız bırakırdı ve
+    tip-bazlı iddia yeşil kalırdı.
+    AC4 İŞARET ÇEVRİLDİ: `happy-path.smoke.spec.ts`'in gap marker bloğu silindi,
+    `DELIVERY_EXPECTED` listeye döndü. T138'in bıraktığı `not.toContain`
+    tasarlandığı gibi kırıldı — sürpriz değil, cevabı bu task.
+    BLOKE ETMEYEN GÖZLEM, DALDA DÜZELTİLDİ: `HappyPathMilestoneNotificationConsumer`'ın
+    XML doc'u `DELIVERY_EXPECTED`'ı `03 §3.5 step 3`'e bağlıyordu; adım 3
+    ALICININ inbox satırı almadığını söyleyen maddedir, satıcıya "item'ı gönder"
+    diyen madde adım 2'dir. Davranış etkisi yok ama sapma tam da bu turun
+    canlandırdığı kolun üstündeydi ve turun konusu bayat yorumların gerçek
+    hataya dönüşmesi — düzeltildi, adım 3 "eşlik eden negatif" olarak anıldı.
+    (T138'in gap marker'ı ve yukarıdaki T140 tanımı da "adım 3" diyor; ikisi de
+    tarihsel kayıt, kod sözleşmesi değil — dokunulmadı.)
+    KAPSAM GENİŞLETMESİ (proje sahibi "çöz", 2026-08-22) — 05 §5.3 DOMAIN EVENT
+    TABLOSU KODA HİZALANDI, doküman v3.4 → v3.5. Ölçüm kapsamı bildirilenden
+    geniş çıktı: tablonun on bir olay adının YEDİSİNİN kodda karşılığı yoktu
+    (`TransactionAcceptedEvent` → gerçekte `BuyerAcceptedEvent`,
+    `SellerConfirmedReadyEvent` → `TransactionStatusChangedEvent`,
+    `ItemDeliveredEvent` / `SettlementCompletedEvent` / `TransactionFlaggedEvent`
+    hiç yok, `DeliveryReversedEvent` → `SettlementReversalDetectedEvent`,
+    `TransactionCompletedEvent` → `PayoutCompletedEvent`) ve
+    `PaymentReceivedEvent` satırı `DELIVERY_EXPECTED`'ı YANLIŞ OLAYA bağlıyordu,
+    üstelik iki custody kalıntısı taşıyordu (trade bağlantısı, §3.3 custody).
+    Yalnız bildirilen satırı düzeltip yedi yanlış adı bırakmak INSTRUCTIONS §5'in
+    yasakladığı yarım çözüm olurdu; tablo gerçek tip adı + yayıncı + tüketici ile
+    yeniden yazıldı, `TransactionStatusChangedEvent` üç bacağıyla ayrı satırlara
+    ayrıldı ve iki gerekçe notu eklendi (tablo neden kavramsal ad taşıyamaz;
+    ödeme onayı neden iki olay yayınlar ve çift-push neden sahiplikle önlenir).
+    TURUN KALICI DERSİ BURADA TAMAMLANIYOR: `DELIVERY_EXPECTED`'ın yayıncısının
+    hangi olay olduğu ÜÇ BİLGİ KAYNAĞININ ÜÇÜNDE DE yanlıştı — C# XML doc'u
+    (çelişkili), tüketicinin 03 §3.5 alıntısı (adım 3 ≠ adım 2), 05 §5.3 (yanlış
+    olay). Bildirim dört görev boyunca hiç üretilmedi. Üçü de bu turda düzeltildi.
+    KANIT — CI run 32564788118 `success`, CI Gate ✓: Unit 1470/1470 ·
+    Integration 1369/1369 · Contract 9/9 · Migration dry-run ✓ · Docker build ✓ ·
+    10/10 advisory E2E leg YEŞİL, 36/36 test. AC4 UÇTAN UCA KANITLANDI:
+    `E2E happy-path` legi `1 passed (7.7m)` — gerçek stack'te
+    `DELIVERY_EXPECTED` ÜRETİLDİ ve alıcı kümesi `[sellerId]`'e eşit çıktı;
+    T138'in kırılmak üzere bıraktığı işaret yeşile döndü.
+    LOKAL INTEGRATION KOŞUSU DÜŞTÜ, KÖK NEDENİ ÖLÇÜLDÜ, CI YALANLADI:
+    `Skinora.Transactions.Tests` lokalde 64 fail verdi. Gözlenen fail'lerin
+    %100'ü `IntegrationTestBase.CreateDatabaseAsync`'te `SqlException`
+    ("Could not obtain exclusive lock on database 'model'" / execution
+    timeout) — 0 assertion fail, yani testler kendi kodlarına HİÇ ULAŞMADI.
+    Ayırt edici deney: aynı assembly tek başına koşunca 64 → 4'e düştü;
+    paralelliğe göre ölçeklenen bir sayı test mantığına göre ölçeklenmez.
+    Yapısal teyit: `AmountValidationService` için hiç integration testi yok.
+    CI aynı filtreyle 1369/1369 verdi — kaynak lokal container çekişmesiydi.
 
 Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
   Bağımlılık: T71 (sidecar `POST /api/monitor/start` ucu) · T75 (post-cancel

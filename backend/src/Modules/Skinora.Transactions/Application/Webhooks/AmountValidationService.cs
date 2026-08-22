@@ -515,9 +515,13 @@ public sealed class AmountValidationService : IAmountValidationService
         var deliveryDeadline = await _timeoutScheduling.ArmDeliveryDeadlineAsync(
             transaction.Id, cancellationToken);
 
-        // PaymentReceivedEvent — T44 K2 wiring: realtime push (T61) consumes
+        // PaymentReceivedEvent — T44 K2 wiring: the seller's PAYMENT_RECEIVED
+        // inbox notification and the PaymentConfirmed realtime push consume
         // this event; the surrounding SaveChanges commits both the state
-        // transition and the outbox row in a single transaction.
+        // transition and the outbox row in a single transaction. The push goes
+        // to the transaction group, not to one party — SignalRTransaction-
+        // RealtimePublisher sends by TransactionId, so whoever joined the room
+        // receives it.
         await _outbox.PublishAsync(
             new PaymentReceivedEvent(
                 EventId: Guid.NewGuid(),
@@ -525,6 +529,41 @@ public sealed class AmountValidationService : IAmountValidationService
                 Amount: confirmedPayment.Amount,
                 Stablecoin: confirmedPayment.Token,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
+                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+            cancellationToken);
+
+        // T140 — the generic status-changed event. This is the producer
+        // HappyPathMilestoneNotificationConsumer's PAYMENT_RECEIVED leg has
+        // been waiting for since v3.0: it raises the seller's
+        // DELIVERY_EXPECTED notification (03 §3.5 step 2, "the money is in
+        // escrow, send the item directly to the buyer"), and it feeds the WP9
+        // realtime relay for this transition.
+        //
+        // Until T140 no such producer existed, so the consumer leg was
+        // unreachable dead code and the seller was never told to deliver —
+        // while ArmDeliveryDeadlineAsync above started counting down against
+        // them, ending in a 03 §4.4 cancellation with the fault recorded
+        // against the seller (06 §3.1). In P2P this notification is the ONLY
+        // prompt for the one action the flow waits on; the platform is not a
+        // party to the trade and nothing else nudges the seller.
+        //
+        // The two events are complementary, not duplicates: PaymentReceived
+        // carries the money facts (amount/token/txHash) and this one carries
+        // the status pair verbatim. Their consumers are disjoint — see the
+        // remarks on TransactionStatusChangedEvent for the push ownership.
+        //
+        // Published here rather than after the caller's SaveChanges so a
+        // confirmation that rolls back cannot leave a notification behind
+        // (09 §13.3); IOutboxService only adds the row to the change tracker,
+        // so the transition and both outbox rows land in one transaction.
+        // Both early returns above (guard-rejected and DomainException) exit
+        // before this point, so a fire that never happened publishes nothing.
+        await _outbox.PublishAsync(
+            new TransactionStatusChangedEvent(
+                EventId: Guid.NewGuid(),
+                TransactionId: transaction.Id,
+                FromStatus: previousStatus,
+                ToStatus: transaction.Status,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime),
             cancellationToken);
 

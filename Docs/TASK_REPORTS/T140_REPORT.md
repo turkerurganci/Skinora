@@ -1,0 +1,318 @@
+# T140 — `DELIVERY_EXPECTED` bildiriminin yayıncısının bağlanması
+
+**Faz:** F7 (P2P Geçişi) | **Durum:** ✓ Tamamlandı (doğrulama ✓ PASS) | **Tarih:** 2026-08-22
+
+---
+
+## Yapılan İşler
+
+- **AC1 — Yayıncı bağlandı.** `AmountValidationService.AdvanceStateMachineAsync` artık `ConfirmPayment` geçişiyle **aynı** `SaveChangesAsync` içinde `TransactionStatusChangedEvent(SELLER_CONFIRMED → PAYMENT_RECEIVED)` yayınlıyor. Bu, `HappyPathMilestoneNotificationConsumer`'ın `PAYMENT_RECEIVED` kolunun eksik olan tek parçasıydı; kol T118'den beri v3.0'a göre yazılıydı ama erişilemezdi.
+- **Kök neden düzeltildi (planda AC değil — yapım turunda ölçüldü).** `TransactionStatusChangedEvent`'in XML doc'unun çelişkili iki paragrafı hizalandı; ödeme onayı artık "bu olayı yayınlamaz" listesinden çıkarıldı ve **neden** kasıtlı istisna olduğu, **neden** eski kuralın custody dönemine ait olduğu dosyada kayıtlı.
+- **AC3 — Realtime çift-push'u sahiplikle çözüldü.** `PaymentReceivedRealtimeConsumer`'dan `PublishStatusChangedAsync` bloğu kaldırıldı; sınıf saf `PaymentConfirmed` push'una indi ve hardcoded `FromStatus: SELLER_CONFIRMED` kaldıracı onunla birlikte silindi. Status push'un sahibi artık `TransactionStatusChangedRealtimeConsumer`'ın verbatim relay'i.
+- **AC2 — İki tarafta da kanıtlandı.** Backend tarafında alıcının bu bildirimi almadığı açıkça assert edildi; E2E tarafında iddia **tipten alıcıya yükseltildi** (yeni `getNotificationRecipients` yardımcısı).
+- **AC4 — Kendini kapatan işaret çevrildi.** `happy-path.smoke.spec.ts`'in gap marker bloğu silindi, `DELIVERY_EXPECTED` `EXPECTED_NOTIFICATIONS`'a döndü ve yerine satıcı-alıcı iddiası kondu.
+- **Negatif kollar kilitlendi.** Durum ilerlemeyen her yolda (eksik ödeme, emergency-hold) olayın yayınlanmadığı ayrı ayrı assert edildi.
+
+## Etkilenen Modüller / Dosyalar
+
+**Production kaynağı (3 dosya):**
+| Dosya | Değişiklik |
+|---|---|
+| `backend/src/Modules/Skinora.Transactions/Application/Webhooks/AmountValidationService.cs` | `AdvanceStateMachineAsync` ikinci outbox yayını (AC1) |
+| `backend/src/Skinora.Shared/Events/TransactionStatusChangedEvent.cs` | XML doc — çelişkili kuralın düzeltilmesi (kök neden) |
+| `backend/src/Modules/Skinora.Realtime/Application/EventHandlers/PaymentReceivedRealtimeConsumer.cs` | `PublishStatusChangedAsync` bloğu + hardcoded `FromStatus` kaldırıldı (AC3) |
+
+**Test (3 dosya):**
+| Dosya | Değişiklik |
+|---|---|
+| `backend/tests/Skinora.Transactions.Tests/Unit/Webhooks/AmountValidationServiceTests.cs` | 3 yeni test + 2 mevcut testte negatif kol assertion'ı |
+| `backend/tests/Skinora.Realtime.Tests/Unit/RealtimeConsumerTests.cs` | 1 test yeniden yazıldı + 1 yeni çapraz-tüketici testi |
+| `backend/tests/Skinora.Notifications.Tests/Integration/HappyPathNotificationConsumerTests.cs` | AC2 alıcı-negatif assertion'ı |
+
+**E2E (2 dosya):**
+| Dosya | Değişiklik |
+|---|---|
+| `e2e/src/db.ts` | Yeni `getNotificationRecipients(type)` yardımcısı |
+| `e2e/tests/happy-path.smoke.spec.ts` | Gap marker → alıcı iddiası; `DELIVERY_EXPECTED` listeye döndü (AC4) |
+
+**Doküman (4 dosya):** `Docs/11_IMPLEMENTATION_PLAN.md` (§F7 T140 bloğu: ÖNERİ → onaylı + yapım turu), `Docs/DEFERRED_BACKLOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `.claude/memory/MEMORY.md`.
+
+**Migration / config / docker değişikliği: YOK.**
+
+---
+
+## Ölçüm — açık bağımsız yeniden üretildi
+
+Yapım turu T138 raporuna güvenmeden ölçtü:
+
+```
+$ grep -rn "new TransactionStatusChangedEvent(" --include=*.cs backend/src/
+DeliveryConfirmationService.cs:233 · DeliveryDisputeRound.cs:184 · DeliveryTimeoutRound.cs:254
+TransactionReadinessService.cs:285 · SettlementVerificationJob.cs:384
+```
+
+Beş yayıncı, **hiçbiri ödeme onayı yolu değil**. Tek `→ PAYMENT_RECEIVED` üreticisi `AmountValidationService.AdvanceStateMachineAsync` yalnız `PaymentReceivedEvent` yayınlıyordu (`AmountValidationService.cs:521`). Açık gerçek. ✓
+
+---
+
+## Kök neden — turun asıl getirisi
+
+Açık **unutkanlık değildi**. `TransactionStatusChangedEvent`'in XML doc'u kendisiyle çelişiyordu:
+
+| | Ne diyordu | Sonucu |
+|---|---|---|
+| **Paragraf 1** | *"Transitions that already raise a specific domain event ... do NOT publish this event, so no double-push occurs: ... **the payment confirmation (`PaymentReceivedEvent`)** ..."* | Ödeme onayı yolunu **adıyla** yasaklıyordu |
+| **Paragraf 2** | *"the P2P producers for those two legs are written in T123 (`seller_confirm_ready`) and **T124 (`confirm_payment`)**"* | Aynı yolu üretici olarak **görevlendiriyordu** |
+
+T123 kendi bacağını bağladı; T124 bağlamadı — **yazılı talimata uydu**.
+
+Kural custody döneminde **doğruydu**: o çağda bu bacağın bildirimi `TRADE_OFFER_SENT_TO_BUYER` idi, bot dispatch job'ından geliyordu ve bu olay yalnız realtime badge taşıyordu. v3.0 bildirimi olayın üstüne taşıdı ve alıcısını satıcıya çevirdi; kural bayat kaldı, çelişkisi dört görev boyunca okunmadan yaşadı.
+
+**Neden bu düzeltme kapsamın parçası:** yalnız yayıncıyı bağlayıp paragrafı bırakmak açığı **yeniden üretilebilir** hâlde bırakırdı — bir sonraki okuyucu aynı talimatı görüp aynı kararı verirdi. Paragraf düzeltildi, ödeme onayının **kasıtlı istisna** olduğu ve neden kuralın değiştiği dosyada kayıtlı.
+
+Bu, T138 doğrulamasının B1 dersinin kardeşidir: T138 bir *kapatma iddiasının* kanıt komutunun kapsamı kadar doğru olduğunu ölçtü; T140 bir *bağlanmama kararının* onu emreden yorumun güncelliği kadar doğru olduğunu ölçtü. İkisi de aynı yere çıkıyor — **sahipsiz yorum ucuz değildir**.
+
+---
+
+## AC3 — çift-push varsayımsal değildi
+
+`PaymentReceivedRealtimeConsumer` **zaten** `TransactionStatusChanged(SELLER_CONFIRMED → PAYMENT_RECEIVED)` push ediyordu, `FromStatus` hardcoded; gerekçesi kendi yorumunda yazılıydı: *"the state-machine guard ... means the pre-transition state can be hardcoded."* Bu bir kaldıraçtı — generic olay yayınlanmadığı için vardı. `RealtimeConsumerTests`'in `PaymentReceived_PushesPaymentConfirmed_Then_StatusChanged` testi davranışı pinliyordu.
+
+AC1 tek başına uygulansaydı generic relay **birebir aynı payload'ı** ikinci kez push edecekti → FE aynı badge'i iki kez alırdı.
+
+**Proje sahibi kararı D1 (2026-08-22): push'un sahibi generic relay olur.**
+
+| Seçenek | Karar | Gerekçe |
+|---|---|---|
+| `PaymentReceivedRealtimeConsumer`'dan status push'unu kaldır | ✓ **Seçildi** | Hardcoded `FromStatus` kaldıracı da silinir; T123'ün `SELLER_CONFIRMED` bacağıyla simetrik; net etki bir kaldıraç **eksiltmek** |
+| Relay'e `ToStatus == PAYMENT_RECEIVED` skip filtresi | ✗ Reddedildi | Relay'in tek sözleşmesi *"producer'ın kararını sorgulamadan verbatim ilet"*; ilk per-status istisna onu kalıcı olarak deler **ve** kaldıracı yaşatır |
+
+**İki olayın birlikte yaşaması kasıtlıdır ve tüketicileri ayrıktır:**
+
+| Olay | Taşıdığı | Sürdüğü |
+|---|---|---|
+| `PaymentReceivedEvent` | para (tutar / token / txHash) | `PaymentConfirmed` push'u + satıcının `PAYMENT_RECEIVED` bildirimi |
+| `TransactionStatusChangedEvent` | durum çifti | `StatusChanged` push'u + satıcının `DELIVERY_EXPECTED` bildirimi (**tek üretici**) |
+
+`ProcessedEventStore` anahtarı `(EventId, ConsumerName)` olduğu için iki ayrı `EventId` birbirini maskelemez; idempotency her iki olay için korunur.
+
+**Push payload'ı birebir aynı kaldı** — sahip değişti, içerik değişmedi:
+
+| Alan | Eski (`PaymentReceivedRealtimeConsumer`) | Yeni (`TransactionStatusChangedRealtimeConsumer`) |
+|---|---|---|
+| `TransactionId` | `domainEvent.TransactionId` | `domainEvent.TransactionId` |
+| `FromStatus` | `SELLER_CONFIRMED` (hardcoded) | `domainEvent.FromStatus` = `previousStatus` = `SELLER_CONFIRMED` |
+| `ToStatus` | `PAYMENT_RECEIVED` (hardcoded) | `domainEvent.ToStatus` = `PAYMENT_RECEIVED` |
+| `Timestamp` | `domainEvent.OccurredAt` | `domainEvent.OccurredAt` (aynı `_clock`, aynı çağrı yeri) |
+
+**Sıralama riski değerlendirildi ve yok.** Eskiden `PaymentConfirmed` → `StatusChanged` tek tüketiciden sırayla gidiyordu; artık iki ayrı outbox satırından geliyorlar ve göreli sıra kesin garanti değil. FE bundan etkilenmiyor: `RealtimeProvider.tsx:69` ve `:95` handler'larının ikisi de **saf cache invalidation** (`queryClient.invalidateQueries`) — durum makinesi yok, biri diğerinin gelmiş olmasına dayanmıyor, sıra değişse sonuç aynı. Admin sayfası da (`admin/transactions/[id]/page.tsx:21,23`) ikisini de `refetch()`'e bağlıyor.
+
+---
+
+## Kapsam yapımda iki yerde genişletildi
+
+**1 — Yayın "tam tutar" koluna değil `AdvanceStateMachineAsync`'in İÇİNE kondu.**
+Böylece **fazla ödeme** kolu da kapsanır. Gerekçe ölçülebilir: fazla ödeme durum makinesini ilerletir (`ConfirmedPayment_Overpayment_AdvancesStateAndQueuesExcessRefund`), yani satıcı item'ı **aynen** borçludur ve `ArmDeliveryDeadlineAsync` saati ona karşı başlatır. Yalnız temiz kola bağlanmış bir yayıncı o satıcıyı **tam olarak aynı sessiz yolla** cezalandırırdı — T140'ın kapattığı açığın kendisi. `ConfirmedPayment_Overpayment_AlsoPublishesStatusChanged` ile pinlendi.
+
+**2 — AC2'nin E2E yarısı tipten alıcıya yükseltildi.**
+`EXPECTED_NOTIFICATIONS`'a tipi geri koymak yalnız *"bir üretici ateşledi"*yi kanıtlar; **doğru tarafa gittiğini kanıtlamaz.** v3.0'da taraf değiştiren tam da bu bacak (alıcı → satıcı). Yanlış tarafa adreslenmiş bir `DELIVERY_EXPECTED` satıcıyı T140'ın kapattığı açık kadar uyarısız bırakır ve tip-bazlı iddia yeşil kalırdı. Yeni `getNotificationRecipients(type)` yardımcısıyla alıcı kümesinin `[sellerId]`'e eşitliği assert ediliyor.
+
+---
+
+## Kabul Kriterleri Kontrolü
+
+| # | Kriter | Sonuç | Kanıt |
+|---|---|---|---|
+| 1 | `AdvanceStateMachineAsync` geçişle AYNI `SaveChangesAsync` içinde `TransactionStatusChangedEvent(SELLER_CONFIRMED → PAYMENT_RECEIVED)` yayınlar (09 §13.3): geri alınan bir ödeme onayı bildirim doğurmamalı | ✓ | `AmountValidationService.cs` — yayın, `machine.Fire()` ile caller'ın `SaveChanges`'i arasında. `IOutboxService.PublishAsync` yalnız change tracker'a satır ekler (`OutboxService.cs` remarks), yani atomiklik yapısaldır. Testler: `ConfirmedPayment_PublishesStatusChangedEvent_SoTheSellerIsToldToDeliver` (çift doğru), `ConfirmedPayment_PublishesBothEvents_InTheCallersUnitOfWork` (yakalama `SaveChanges` beklerken olur), **negatif:** `ConfirmedPayment_OnEmergencyHold_DoesNotAdvanceOrRefund` + `ConfirmedPayment_Underpayment_AboveThreshold_QueuesIncorrectAmountRefund` (ikisinde de `Assert.Empty(...OfType<TransactionStatusChangedEvent>())`) |
+| 2 | Satıcı `DELIVERY_EXPECTED` inbox satırını alır; alıcı ALMAZ | ✓ | Backend: `HappyPathNotificationConsumerTests.StatusChanged_PaymentReceived_NotifiesSeller_NoParams` — `Assert.Equal(_seller.Id, request.UserId)` + yeni `Assert.DoesNotContain(dispatcher.Requests, r => r.UserId == _buyer.Id)`. E2E: `happy-path.smoke.spec.ts` — `getNotificationRecipients('DELIVERY_EXPECTED')` `[sellerId]`'e eşit; CI'da **geçti** (run `32564788118`, happy-path leg 1 passed) |
+| 3 | İkinci tüketici gözden geçirilir: çift push üretilmemeli; `ProcessedEventStore` idempotency'si iki olay için de korunmalı | ✓ | Gözden geçirme çift-push'u **ölçtü** (yukarıdaki §AC3). Düzeltme: `PaymentReceivedRealtimeConsumer`'dan status push'u kaldırıldı. Testler: `PaymentReceived_PushesPaymentConfirmed_And_NoStatusChanged` + `PaymentConfirmationTransition_PushesStatusChanged_ExactlyOnce_AcrossBothConsumers` (iki tüketici aynı geçiş üzerinde koşturulur, `StatusChanged` tam **bir** kez). İdempotency: anahtar `(EventId, ConsumerName)` (`NotificationConsumerBase:75`), iki olayın `EventId`'leri ayrı → maskeleme yok |
+| 4 | E2E kendini kapatan işaret ÇEVRİLİR: gap marker bloğu silinir, `DELIVERY_EXPECTED` `EXPECTED_NOTIFICATIONS`'a alınır | ✓ | `happy-path.smoke.spec.ts` — blok silindi, tip listeye döndü, yerine alıcı iddiası kondu. **UÇTAN UCA KANITLANDI:** CI run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118), `E2E happy-path (advisory)` leg'i `✓ 1 passed (7.7m)` — yani gerçek stack'te `DELIVERY_EXPECTED` **üretildi**, `EXPECTED_NOTIFICATIONS`'ın yedi tipinin yedisi de geldi ve alıcı kümesi `[sellerId]`'e eşit çıktı. T138'in kırılmak üzere bıraktığı işaretin cevabı bu leg'in yeşile dönmesidir |
+
+---
+
+## Test Sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Build | ✓ 0 uyarı / 0 hata | `dotnet build -v q --nologo` |
+| Unit (tam suite) | ✓ **1470/1470** (lokal **ve** CI, birebir aynı) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — CI'nin kendi filtresi. Modül dağılımı: Shared 388 · Transactions 562 · Notifications 111 · Platform 120 · Auth 83 · API 62 · Realtime 40 · Steam 39 · Disputes 25 · Users 22 · Fraud 18 |
+| Integration | ✓ **1369/1369** (CI) | CI run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) job "4. Integration test" — 0 failed. Lokal koşu kısmi düştü, **kök nedeni ölçüldü ve CI yalanladı** → §Lokal integration koşusu |
+| E2E (advisory) | ✓ **36/36**, 10/10 leg | T110 6 · T113 7 · T108 5 · T109 4 · T111 4 · T114 3 · T112 3 · T138 delivery 2 · happy-path 1 · happy-path UI 1 |
+| Contract | ✓ 9/9 | CI job "5. Contract test" |
+| Migration dry-run | ✓ | CI job "6. Migration dry-run" |
+| e2e typecheck | ✓ 0 | `npx tsc --noEmit` |
+| e2e lint | ✓ 0 | `npx eslint .` |
+| e2e prettier | (bulgu değil) | Lokal uyarılar 15 dosyada, dokunulmayanlar dahil — `core.autocrlf` CRLF artifaktı; yetkili ölçüm CI "1. Lint" leg'i (LF) |
+
+---
+
+## Lokal integration koşusu — düştü, kök nedeni ölçüldü, CI yalanladı
+
+Kayda geçiyor çünkü **doğrulayıcı bunu görecek** ve "yapım turu kırık integration ile ilerledi" diye okunabilir.
+
+**Ölçüm:** lokal integration koşusunda `Skinora.Transactions.Tests` **64 fail** verdi (546 test, 27 dk). Diğer dokuz assembly'nin dokuzu da temiz geçti — ki bunların içinde **benim dokunduğum tüketicinin assembly'si de var**: `Skinora.Notifications.Tests` **60/60**.
+
+**Ayırt edici deney:** aynı assembly **tek başına** yeniden koşturuldu → fail sayısı **64 → 4**'e düştü. Paralelliğe göre ölçeklenen bir sayı, test mantığına göre ölçeklenmez.
+
+**Hata sınıflandırması — belirleyici olan bu:** gözlenen fail'lerin **%100'ü** `Microsoft.Data.SqlClient.SqlException`, ve hepsi **aynı yerde**: `IntegrationTestBase.CreateDatabaseAsync` (`IntegrationTestBase.cs:176`), `InitializeAsync` içinden. Mesajlar: *"Could not obtain exclusive lock on database 'model'. Retry the operation later."* (×3) ve *"Execution Timeout Expired"* (×1). **Assertion fail sayısı: 0** (`grep -c "Assert."` → 0).
+
+Yani testler **kendi kodlarına hiç ulaşmadan**, per-test veritabanı oluşturma aşamasında düştü. SQL Server eşzamanlı `CREATE DATABASE` çağrılarını `model` veritabanı üzerinde serileştirir; on assembly aynı anda kendi container'ını ve veritabanlarını kurunca tek bir Windows makinesinde çakışırlar.
+
+**Yapısal teyit:** `AmountValidationService` için **hiç integration testi yoktur** — `Skinora.Transactions.Tests/Integration/` altında böyle bir dosya bulunmuyor. Yani bu turun tek Transactions-modülü production değişikliğinin, bu assembly'de kırabileceği bir yüzey yok.
+
+**Yalanlama:** CI'nin "4. Integration test" job'ı aynı filtreyle **1369/1369, 0 failed** verdi. Kaynak lokal ortam çekişmesiydi; **turun kodu değil.**
+
+---
+
+## Doğrulama (bağımsız — 2026-08-22)
+
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | **✓ PASS** |
+| Bloke edici bulgu | **0** |
+| Bloke etmeyen bulgu | **13** (2 S1 → dalda düzeltildi · 11 OBS → 5'i backlog satırı, kalanı kayıt) |
+| Düzeltme gerekli mi | Hayır (dalda yapılanlar dışında) |
+
+**Giriş kapıları:** working tree temiz · main son 3 run `32531800402`/`32531800419`/`32497982838` hepsi `success` · repo memory'de T140 satırı mevcut · dal HEAD = `origin/task/T140-…` HEAD · merge-base = `origin/main` HEAD (`d2d5500`) · dal yalnız `T140` commit'i taşıyor.
+
+**Dört AC de bağımsız yeniden üretildi** (rapor okunmadan, kod ve komut çıktısı üzerinden):
+
+| AC | Sonuç | Doğrulayıcının kendi kanıtı |
+|---|---|---|
+| AC1 | ✓ | Yayın, `CanFire` guard'ı (`AmountValidationService.cs:471`) ve `DomainException` catch'i (:484) **sonrasında**; `OutboxService.PublishAsync` gövdesinin tamamı `OutboxMessages.Add(...)` + `Task.CompletedTask` — `SaveChanges` çağırmıyor, yani atomiklik yapısal. Çağıran tarafta tek `SaveChangesAsync` (`BlockchainWebhookHandler.cs:200`), araya giren başka `SaveChanges` yok. Tekrar-webhook `:180-186` `Idempotent` ile daha önce dönüyor → çift yayın yok. `ConfirmPayment` state machine'de **tek** `.Permit` ile yalnız `SELLER_CONFIRMED`'dan izinli (`TransactionStateMachine.cs:243`, `Configure(SELLER_CONFIRMED)` bloğunda) → `FromStatus` sözleşmesi yapısal garanti. `PAYMENT_RECEIVED`'a ulaşan ikinci bir yol yok |
+| AC2 | ✓ | `HappyPathMilestoneNotificationConsumer.cs:93` `UserId = data.SellerId`. 06 §2.13 satır 245–246 **iki bildirimi de** satıcıya tanımlıyor; 03 §3.5 **adım 2** satıcıya "item'ı şimdi gönder", **adım 3** alıcıya yalnız realtime — yani XML doc'un "step 3 → step 2" düzeltmesi doğru. `DELIVERY_EXPECTED` şablonları 4 dilde mevcut, `EmailCategoryMap:24` + FE ikon eşlemesi bağlı → canlanan bildirim gerçekten render oluyor |
+| AC3 | ✓ | `TransactionStatusChangedEvent`'in tüketicisi tam olarak **2**; diğer beş yayıncının hiçbiri `→ PAYMENT_RECEIVED` üretemiyor (hepsi bu durumdan **çıkan** geçişler). `ProcessedEvents` UQ = `(EventId, ConsumerName)` (`ProcessedEventConfiguration.cs:33-35`) → iki ayrı `EventId` birbirini maskelemiyor. FE handler'ları saf `invalidateQueries` (`RealtimeProvider.tsx:69,95`) → sahiplik değişimi FE'de davranış kaybı üretmiyor |
+| AC4 | ✓ | Gap marker bloğu silinmiş; kalan tek "gap marker" ifadesi tarihsel açıklama yorumu (`happy-path.smoke.spec.ts:59`). `pollNotificationTypes` `EXPECTED_NOTIFICATIONS`'ın tamamı gelene kadar beklediği ve `DELIVERY_EXPECTED` listeye döndüğü için yeni alıcı iddiası **flaky değil**. `Notification.Type` global `EnumToStringConverter` ile nvarchar → `sql.NVarChar` karşılaştırması doğru |
+
+**Mutasyon turu koşuldu** (T138 doğrulamasında Docker kapalı olduğu için yapılamamıştı — bu turda açıktı). Ayırt edicilik varsayılmadı, ölçüldü:
+
+| # | Mutasyon | Ölçülen sonuç |
+|---|---|---|
+| M1 | `AdvanceStateMachineAsync`'ten yayın satırını sil | **3 fail** — tam olarak T140'ın üç yeni testi (`…SoTheSellerIsToldToDeliver`, `…InTheCallersUnitOfWork`, `…Overpayment_AlsoPublishesStatusChanged`), başka hiçbir test kırılmadı |
+| M2 | `HappyPathMilestoneNotificationConsumer` alıcısını `SellerId → buyerId` çevir | **1 fail** — `StatusChanged_PaymentReceived_NotifiesSeller_NoParams`. **Ama :212'deki mevcut `Assert.Equal` üzerinde düştü**, T140'ın eklediği :222 `DoesNotContain`'e hiç ulaşılmadı → `T140-TestClaimsExceedMeasurement` satırının kaynağı |
+| M3 | `PaymentReceivedRealtimeConsumer`'a çift push'u geri ekle | **2 fail** — `PaymentReceived_PushesPaymentConfirmed_And_NoStatusChanged` + çapraz-tüketici `…ExactlyOnce_AcrossBothConsumers`. AC3'ün guard'ı gerçek |
+
+Üç mutasyon da uygulandıktan sonra geri alındı; ağaç temiz bırakıldı ve tüm nihai ölçümler temiz ağaçta yeniden koşuldu.
+
+**Doğrulayıcının kendi ölçümleri (dal HEAD'i üzerinde):**
+
+| Ölçüm | Sonuç |
+|---|---|
+| Build | ✓ 0 uyarı / 0 hata |
+| Unit (CI filtresi) | ✓ **1470/1470** — yapım turunun ve CI'ın sayısıyla birebir |
+| Integration (lokal, çekişmesiz) | ✓ `Skinora.API.Tests` **486/486** · `Skinora.Transactions.Tests` **546/546** |
+| Integration (CI, ham log'dan) | ✓ **1369/1369** (16+22+546+37+73+60+58+6+65+486) |
+| e2e | ✓ `tsc` 0 · `eslint` 0 |
+| HEAD CI | ✓ run [`32567263035`](https://github.com/turkerurganci/Skinora/actions/runs/32567263035) `success`, **CI Gate ✓**, 10/10 advisory E2E leg yeşil |
+| Backlog sayımı | ✓ iddia edildiği gibi: 60 aktif / 65 çözülmüş / tablo satırında 0 🔴 (doğrulama sonrası 65/65) |
+| 05 §5.3 tablosu | 14 olay adının **14'ü** kodda mevcut ✓ · 10 yayıncının **10'u** eşleşiyor ✓ · **tüketici kolonu 2 satırda yanlış**, 1 bacak eksik → B1'e bak |
+
+**Lokal integration bulgusu — yapım turunun teşhisi doğrulandı ve genişletildi.** Yapım turu `Skinora.Transactions.Tests`'in lokalde 64 fail verdiğini, tek başına koşunca 64 → 4'e düştüğünü ölçmüştü. Doğrulayıcı aynı deneyi tekrarladı ve **daha keskin sonuç aldı:** tam solution integration koşusu (10 assembly paralel) 1369 testin yalnız **827'sini** çalıştırdı ve `Skinora.API.Tests` 12 fail verdi; **aynı iki assembly tek başına koşturulunca `Skinora.API.Tests` 486/486 ve `Skinora.Transactions.Tests` 546/546, sıfır fail.** Test mantığı paralelliğe göre ölçeklenmez, altyapı çekişmesi ölçeklenir — teşhis (SQL Server `model` veritabanı üzerinde serileşen eşzamanlı `CREATE DATABASE`) kesinleşti ve kalan "4" de ortadan kalktı.
+
+### Bulgular
+
+**B1 — S1 Sapma, dalda düzeltildi. Turun kendi dersinin, düzeltmenin üstünde tekrarlanması.**
+T140 hem üretim XML doc'una (`TransactionStatusChangedEvent.cs`) hem 05 §5.3'e *"ödeme onayı **tek** kasıtlı istisnadır"* diye yazdı. Ölçüm bunu yanlışladı: `SettlementVerificationJob` mutabakat turunda geri alma tespit edince `SettlementReversalDetectedEvent` **ile aynı** unit-of-work'te `TransactionStatusChangedEvent(ITEM_DELIVERED → REFUNDED)` yayınlıyor (`SettlementVerificationJob.cs:371-390`, `previousStatus` :290, tek `SaveChangesAsync` :397). Yani olayın **dördüncü bacağı** var; 05 §5.3 tablosu onu hiç taşımıyordu ve altındaki notun başlığı *"neden **üç** ayrı satırda"* diyordu. Aynı taramada tablonun **tüketici kolonu** iki satırda kodla uyuşmadı — `TransactionCancelledEvent` "Blockchain" gösteriyor (repoda öyle bir modül yok; gerçek tüketiciler `TransactionCancelledNotificationConsumer` + `TransactionCancelledRealtimeConsumer`, ve para iadesini bu olay sürmüyor, ayrı `PaymentRefundToBuyerRequestedEvent` sürüyor) ve `SettlementReversalDetectedEvent` "Fraud" gösteriyor (tek tüketicisi `SettlementReversalNotificationConsumer`; fraud işaretini **yayıncının kendisi** yazıyor) — ayrıca `PaymentConfirmed` push'u "alıcıya" deniyor, oysa `SignalRTransactionRealtimePublisher.cs:52` işlem odasına gönderiyor. **Neden bloke edici değil:** hiçbir davranış yanlış değil, çift push riski gerçekte yok (`SettlementReversalDetectedEvent`'in realtime tüketicisi yok) ve dört AC'nin hiçbiri ihlal edilmiyor. **Neden yine de dalda düzeltildi:** T140'ın var oluş nedeni, bir üretim XML doc'undaki bayat kuralın dört görev boyunca gerçek bir ürün açığı üretmesiydi; aynı dosyaya yanlış bir kural bırakıp merge etmek açığın mekanizmasını yeniden kurardı. Düzeltildi: XML doc iki istisnayı da adıyla sayıyor, 05 §5.3'e `(→ REFUNDED)` satırı eklendi, not "dört ayrı satır / iki kasıtlı istisna" olarak yeniden yazıldı, iki tüketici kolonu ve push hedefi koda hizalandı, `AmountValidationService.cs`'in "alıcıya" diyen yeni yorumu düzeltildi. Doküman **v3.5 → v3.6**.
+
+**B2 — OBS, dalda düzeltildi.** `05_TECHNICAL_ARCHITECTURE.md:3` başlık günlüğünde v3.4 girdisinin ilk cümle parçası iki kez yazılmıştı (T140'ın v3.4 girdisini "Önceki" olarak yeniden konumlandırırken oluşan kopyala-yapıştır artefaktı). Temizlendi. Aynı sınıf bir artefakt `IMPLEMENTATION_STATUS.md`'nin T140 girdisinde de vardı (*"Ölçüm sınırı dürüstçe: … koşturulmadı …, Ölçüm sınırı yoktu: …"* — yarım kalmış, kendisiyle çelişen cümle); status güncellemesiyle birlikte düzeltildi.
+
+**B3–B7 — OBS, backlog satırı açıldı** (ayrıntı `DEFERRED_BACKLOG.md`): `T140-TestClaimsExceedMeasurement` · `T140-MultiPaymentLeakPin` · `T140-E2ENotificationsSoftDeleteFilter` · `T140-DocFooterVersionDrift` · `T140-OutboxDispatchOrderNonDeterministic`. Beşi de davranışı etkilemiyor; ikisi (`DocFooterVersionDrift`, `E2ENotificationsSoftDeleteFilter`) T140 kaynaklı bile değil, yerleşik kalıbın sürdürülmesi.
+
+**Çürütülen bulgular (14).** Doğrulama fan-out'u 27 ham bulgu üretti, 14'ü bağımsız çürütücüler tarafından kodla yalanlandı. En öğreticileri: (a) *"e2e `getNotificationRecipients` `sql.NVarChar`'ı uzunluksuz kullanıyor, sessiz boş küme döndürebilir"* — `Notification.Type` global `EnumToStringConverter` ile nvarchar saklanıyor ve CI legi yeşil, iddia düştü; (b) *"yayın `Fire()` ile arasında yakalanmayan throw noktaları var, AC1 delinir"* — o noktalar `AdvanceStateMachineAsync`'in dışında ve hepsi caller'ın `SaveChanges`'inden önce, rollback bildirimi zaten bırakmıyor; (c) *"05 §5.3 'her state geçişi' diyor ama tabloda yedi olay eksik"* — tablo bir özet, 34 olay tipinin tamamını saymak iddiası hiç kurulmuyor.
+
+### Yapım Raporu Karşılaştırması
+
+**Uyum: yüksek — iki uyuşmazlık.**
+1. **B1 (yukarıda).** Rapor 05 §5.3'ün "kodda var olan tip adlarına, yayıncılarına **ve tüketicilerine** göre" yeniden yazıldığını söylüyor. Ad ve yayıncı kolonları için doğrulandı (14/14, 10/10); **tüketici kolonu** için doğru değildi ve dördüncü bacak eksikti. Bu, raporun kendi "üç bilgi kaynağının üçü de yanlıştı" tezinin dördüncü katmanı.
+2. **Lokal integration sayısı.** Rapor tek-başına koşuda "64 → 4" diyor; doğrulayıcının aynı deneyi **546/546, 0 fail** verdi. Çelişki değil, aynı yönde daha keskin sonuç — teşhis (çekişme) her iki ölçümde de aynı.
+
+Bunun dışında raporun ölçülebilir her iddiası bağımsız olarak yeniden üretildi: yayıncı sayımı, `ProcessedEventStore` anahtarı, payload birebirliği, FE sıra bağımsızlığı, şablon/enum/ikon hazırlığı, backlog sayıları, CI run zinciri ve `cancelled` run'ın ardışık push kaynaklı olduğu.
+
+---
+
+## Altyapı Değişiklikleri
+
+- Migration: **Yok**
+- Config/env değişikliği: **Yok**
+- Docker değişikliği: **Yok**
+- Yeni dış bağımlılık: **Yok**
+
+## Mini Güvenlik Kontrolü
+
+| Kontrol | Sonuç |
+|---|---|
+| Secret sızıntısı | Yok — eklenen kod yalnız var olan bir domain olayını outbox'a yazıyor |
+| Auth / authorization etkisi | Yok — yeni endpoint veya yetki yolu yok |
+| Input validation etkisi | Yok — yeni kullanıcı girdisi yok; olayın alanları iç durum makinesinden geliyor |
+| Yeni dış bağımlılık | Yok |
+| Bilgi ifşası | Bildirim satıcıya gidiyor ve parametre taşımıyor (`Assert.Empty(request.Parameters)`); alıcı-negatif assertion'ı yanlış tarafa sızmayı kapatıyor |
+
+---
+
+## Commit & PR
+
+- Branch: `task/T140-delivery-expected-publisher`
+- Commit: `d77f57f` — T140: DELIVERY_EXPECTED bildiriminin yayıncısının bağlanması
+- PR: [#256](https://github.com/turkerurganci/Skinora/pull/256)
+- Commit zinciri: `d77f57f` (kod + test + e2e + doküman) → `00d56fe` (CI sonucu kaydı, docs-only) → `5581b9b` (05 §5.3 hizalaması, docs-only)
+- CI: **✓ PASS**, iki bağımsız yeşil tur:
+  - Run [`32564788118`](https://github.com/turkerurganci/Skinora/actions/runs/32564788118) — HEAD `d77f57f`, **dört AC'yi kanıtlayan tur**: Unit 1470/1470 · Integration 1369/1369 · Contract 9/9 · Migration dry-run ✓ · Docker build ✓ · **10/10 advisory E2E leg, 36/36 test**. CI Gate ✓
+  - Run [`32565772674`](https://github.com/turkerurganci/Skinora/actions/runs/32565772674) — HEAD `5581b9b`, **doküman turlarının regresyon kontrolü**: bloke edici jobların hepsi + 10/10 advisory E2E leg yine `success`. CI Gate ✓
+  - Aradaki run [`32565560754`](https://github.com/turkerurganci/Skinora/actions/runs/32565560754) (`00d56fe`) `cancelled` — ardışık push tarafından devre dışı bırakıldı. task.md concurrency notu gereği **failure sayılmaz**; son tamamlanmış tur yetkilidir
+  - Bu satırı ekleyen commit'in kendi run'ı doğrulama anında `gh run list --branch task/T140-delivery-expected-publisher` ile okunur — rapor kendi commit'inin run id'sini içeremez (sonsuz gerileme)
+- Branch izolasyon check: `git log main..HEAD --format=%s | grep -oE "^T[0-9]+..."` → **yalnız `T140`** ✓
+
+---
+
+## Known Limitations / Follow-up
+
+- **E2E süiti lokalde koşturulmadı** (T137 / T137a / T138'in izlediği yolun aynısı) — lokalde `tsc` + `eslint` ile statik doğrulandı, çalıştırma kanıtı CI'dan geldi ve **yeşil**: `E2E happy-path (advisory)` `1 passed (7.7m)`. T138 bu leg'i bilerek kırmızıya hazırlamıştı; yeşile dönmesi turun ana kanıtıdır. Bu bir kısıt değil, **kapanmış bir kanıt yolu** olarak kayda geçti.
+- **Lokal integration koşusu kısmi düştü** — kök nedeni ölçüldü (container çekişmesi, 0 assertion fail) ve CI 1369/1369 ile yalanladı; §Lokal integration koşusu.
+- `T133b-AdminDtoItemReturnedXmlDoc` (⚪) satırına dokunulmadı — kapsam dışı, kendi sahibi var.
+- `DEFERRED_BACKLOG` bu turdan sonra **60 aktif / 65 çözülmüş**; kapanan satır listenin **tek 🔴'sıydı, listede artık 🔴 yok.**
+
+---
+
+## Notlar
+
+**Giriş kapıları (task.md Adım -1 / Adım 0):**
+- Working tree: **temiz** (`git status --short` boş).
+- Main CI son 3 tamamlanmış run: `32531800402` `success` · `32531800419` `success` · `32497982838` `success` → **hepsi `success`**, HARD STOP yok.
+- Bağımlılık: **yok** (plan: `Bağımlılık: —`).
+- Dal `origin/main` HEAD'inden (`d2d5500`) kesildi.
+
+**Dış varsayımlar (task.md Adım 4): YOK.** Task tamamen repo-içi; yeni paket, dış API, plan tier veya ortam değişkeni bağımlılığı yok. Yine de scope'u etkileyebilecek iki varsayım kod üzerinden doğrulandı:
+- `DELIVERY_EXPECTED` bildirim şablonları dört dilde mevcut → `NotificationTemplates{,.tr,.es,.zh}.resx` dördünde de `DELIVERY_EXPECTED_Title` + `_Body` var. Yani yayıncı bağlandığında dispatch şablon eksikliğinden düşmez.
+- Frontend tarafı hazır → `frontend/src/types/enums.ts:132` (enum değeri) + `lib/utils/notification-icons.ts:28` (ikon eşlemesi). **FE işi yok**; başlık/gövde backend resx'inden render edildiği için per-tip FE i18n anahtarı gerekmiyor.
+
+**Bloke etmeyen gözlem, dalda düzeltildi — alıntı sapması.** `HappyPathMilestoneNotificationConsumer`'ın XML doc'u `DELIVERY_EXPECTED`'ı `03 §3.5 step 3`'e bağlıyordu. Adım 3 **alıcının inbox satırı almadığını** söyleyen maddedir; satıcıya *"Ödeme alındı, item'ı şimdi gönder"* diyen madde **adım 2**'dir. Sapma davranışı etkilemiyordu ama tam olarak bu turun canlandırdığı kolun üstündeydi ve turun kendi konusu bayat yorumların gerçek hataya dönüşmesi — düzeltildi, adım 3 de "eşlik eden negatif" olarak açıkça anıldı. (T138'in gap marker'ı ve planın T140 tanımı da "adım 3" diyordu; ikisi de tarihsel kayıt, kod sözleşmesi değil, dokunulmadı.)
+
+**Bloke etmeyen gözlem → proje sahibi "çöz" dedi (2026-08-22), ÇÖZÜLDÜ.** `05_TECHNICAL_ARCHITECTURE.md` §5.3 domain event tablosunun `PaymentReceivedEvent` satırı *"Satıcıya «item'ı gönder» bildirimi + **trade bağlantısı**, teslimat süresini başlat, sweep job (**§3.3 custody**)"* diyordu — yani `DELIVERY_EXPECTED`'ı **yanlış olaya** bağlıyor ve iki custody kalıntısı taşıyordu.
+
+**Ölçüm kapsamı bir satırdan geniş çıkardı — ve yarım düzeltme yapılmadı.** Tablonun on bir olay adı tek tek kodla karşılaştırıldı (`ls backend/src/Skinora.Shared/Events/`): **yedisinin kodda karşılığı yok.**
+
+| Tablodaki ad | Kodda | Gerçek karşılığı |
+|---|---|---|
+| `TransactionCreatedEvent` | ✓ var | — |
+| `TransactionAcceptedEvent` | ✗ yok | `BuyerAcceptedEvent` |
+| `SellerConfirmedReadyEvent` | ✗ yok | `TransactionStatusChangedEvent` (→ `SELLER_CONFIRMED`) + `PaymentMonitorStartRequestedEvent` |
+| `PaymentReceivedEvent` | ✓ var | aksiyonu yanlıştı — `DELIVERY_EXPECTED` bu olayda değil, `TransactionStatusChangedEvent` (→ `PAYMENT_RECEIVED`) üzerinde |
+| `ItemDeliveredEvent` | ✗ yok | `TransactionStatusChangedEvent` (→ `ITEM_DELIVERED`) — üç yayıncı |
+| `SettlementCompletedEvent` | ✗ yok | `SettlementReviewRequiredEvent` / `TransactionStatusChangedEvent` (`SettlementVerificationJob`) |
+| `DeliveryReversedEvent` | ✗ yok | `SettlementReversalDetectedEvent` |
+| `TransactionCompletedEvent` | ✗ yok | `PayoutCompletedEvent` |
+| `TransactionCancelledEvent` | ✓ var | — |
+| `TransactionFlaggedEvent` | ✗ yok | `FraudFlagCreatedEvent` |
+| `TimeoutWarningEvent` | ✓ var | — |
+
+Yalnız `PaymentReceivedEvent` satırını düzeltip yedi yanlış adı bırakmak, INSTRUCTIONS §5'in açıkça yasakladığı yarım çözüm olurdu. Tablo **kodda var olan tip adlarına, yayıncılarına ve tüketicilerine** göre yeniden yazıldı; `TransactionStatusChangedEvent` üç ayrı bacağıyla (→ `SELLER_CONFIRMED`, → `PAYMENT_RECEIVED`, → `ITEM_DELIVERED`) ayrı satırlarda gösterildi. İki not eklendi: (1) tablonun **neden** kavramsal ad değil gerçek tip adı taşımak zorunda olduğu — gerekçesi bu turun kendisi; (2) ödeme onayının **neden** iki olay birden yayınladığı ve realtime çift-push'un bastırmayla değil **sahiplikle** önlendiği. Doküman **v3.4 → v3.5**; sürüm notu sessizce üzerine yazmadı, önceki sürümü koruyarak yazıldı (GUARDRAILS §5).
+
+**Bu sapmanın maliyeti kozmetik değildi:** `DELIVERY_EXPECTED`'ın yayıncısının hangi olay olduğu **hiçbir yerde doğru yazılı değildi** — ne C# XML doc'unda (çelişkiliydi), ne tüketicinin alıntısında (adım 3 ≠ adım 2), ne de 05 §5.3'te (yanlış olay). Üç bilgi kaynağının üçü de yanlıştı ve bildirim dört görev boyunca hiç üretilmedi. Üçü de bu turda düzeltildi.
+
+**Handoff tarama bulgusu — 05 düzeltildi, 09 ve 10 DOKUNULMADI.** Doküman başlığı/altbilgi sürüm eşleşmesi ölçüldü (12 doküman): **9'u eşleşiyor, 3'ü uyuşmuyor** — `05` (başlık v3.5 / altbilgi v2.3), `09_CODING_GUIDELINES` (v1.0 / v0.9), `10_MVP_SCOPE` (v2.0 / v1.3); `12_VALIDATION_PROTOCOL`'ün altbilgisi yok. **05 bu turda sürümü yükseltilen dosya olduğu için burada hizalandı** (v2.3 → v3.5) — T133a'nın 03 için yaptığı hijyenin aynısı. **09, 10 ve 12 bu dalın kapsamı değildir ve bilerek elle sürülmedi:** bu turda o dosyalara dokunulmadı, ilgisiz dokümanları bir task dalına almak bundled-PR yasağının ruhuna aykırıdır. Sahiplenilmesi proje sahibinin kararı — ⚪ bir backlog satırı ("doküman başlık/altbilgi sürüm hizalaması, 3 dosya") ya da bir sonraki doküman turunun kapsamı olabilir.
+
+**Ölü olay adı taraması temiz.** §5.3'ten çıkarılan yedi kavramsal ad (`TransactionAcceptedEvent`, `SellerConfirmedReadyEvent`, `ItemDeliveredEvent`, `SettlementCompletedEvent`, `DeliveryReversedEvent`, `TransactionCompletedEvent`, `TransactionFlaggedEvent`) `Docs/` altında **yalnız bu turun kendi açıklama metinlerinde** geçiyor (05 sürüm notu, 11 §F7 T140 bloğu, IMPLEMENTATION_STATUS satırı) — yani "neyin yanlış olduğunu" anlatan yerlerde. **Canlı bir talimat olarak kalan atıf yok**, bir task tanımı bu adlardan birini implement etmeyi istemiyor.
+
+**Yapım turunun bilerek doğrulamaya bıraktığı başka bir şey yok** — AC3'ün gerektirdiği tek karar (push sahipliği) yapım öncesinde proje sahibine sunuldu ve karara bağlandı (D1), plana yazıldı.
+
+**Proje sahibi onayı:** T140 planda `ÖNERİ — proje sahibi onayı bekliyor` durumundaydı; 2026-08-22'de onaylandı, dört AC de korunarak. Plan başlığı ÖNERİ etiketinden arındırıldı ve onay tarihi kaydedildi.
