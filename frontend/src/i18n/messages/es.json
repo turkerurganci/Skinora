@@ -1667,6 +1667,23 @@
         }
       }
     },
+    "steamTradeUrl": {
+      "title": "Enlace de intercambio de Steam",
+      "description": "Guarda tu enlace de intercambio de Steam para poder iniciar transacciones. Al guardarlo también se verifica el estado de tu Steam Mobile Authenticator.",
+      "statusActive": "Mobile Authenticator activo",
+      "statusInactive": "Mobile Authenticator sin verificar",
+      "label": "Enlace de intercambio",
+      "whereToFind": "Puedes encontrarlo en \"Sitios de terceros\" dentro de tu configuración de privacidad de Steam:",
+      "whereToFindLink": "Abrir la configuración de intercambio de Steam",
+      "save": "Guardar y verificar",
+      "saving": "Verificando…",
+      "resultActive": "Tu enlace de intercambio se guardó y el Mobile Authenticator se verificó como activo. Ya puedes iniciar transacciones.",
+      "resultInactive": "Tu enlace se guardó, pero el Mobile Authenticator no parece estar activo en tu cuenta de Steam. Actívalo y vuelve a guardar.",
+      "setupGuide": "Guía de configuración de Steam",
+      "resultPending": "Tu enlace se guardó, pero Steam no respondió y no se pudo verificar el Mobile Authenticator. Vuelve a guardar en unos minutos.",
+      "resultInvalid": "Enlace de intercambio no válido. Formato esperado: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",
+      "resultError": "No se pudo guardar el enlace de intercambio. Inténtalo de nuevo."
+    },
     "linkedAccounts": {
       "title": "Cuentas Vinculadas",
       "connect": "Conectar",

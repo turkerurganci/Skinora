@@ -59,6 +59,46 @@ export function getMyProfile(): Promise<UserProfile> {
 }
 
 /**
+ * Response body for U17 — PUT /users/me/settings/steam/trade-url (07 §5.16a).
+ *
+ * The backend answers in three shapes and they are **discriminable from the
+ * body alone**, which matters because `apiClient` unwraps on `success` and
+ * does not surface the HTTP status:
+ *
+ *   | Durum                    | HTTP | active | setupGuideUrl |
+ *   |--------------------------|------|--------|---------------|
+ *   | MA açık                  | 200  | true   | null          |
+ *   | MA kapalı                | 200  | false  | **non-null**  |
+ *   | Steam erişilemez (pending)| 503 | false  | null          |
+ *
+ * The 503 branch is an `ApiResponse.Ok` envelope (UsersController U17), so it
+ * does NOT throw — `active === false && setupGuideUrl === null` is the pending
+ * signal. `SidecarTradeHoldChecker` guarantees the guide URL is present on the
+ * MA-off branch and absent when Steam could not be reached, which is what makes
+ * this derivable rather than a guess.
+ */
+export interface TradeUrlUpdateResponse {
+  tradeUrl: string;
+  mobileAuthenticatorActive: boolean;
+  setupGuideUrl: string | null;
+}
+
+/**
+ * U17 — persist the Steam trade URL and refresh the Mobile Authenticator flag.
+ *
+ * This is the **only** writer of `User.MobileAuthenticatorVerified`, and until
+ * F1 nothing in the UI called it — a new user could never become eligible to
+ * create a transaction (`UITour-NoUiPathToVerifyMobileAuthenticator`).
+ * Throws `ApiError` with code `INVALID_TRADE_URL` (422) on a malformed URL.
+ */
+export function updateSteamTradeUrl(tradeUrl: string): Promise<TradeUrlUpdateResponse> {
+  return apiClient<TradeUrlUpdateResponse>("/users/me/settings/steam/trade-url", {
+    method: "PUT",
+    body: JSON.stringify({ tradeUrl }),
+  });
+}
+
+/**
  * Response body for U5 — GET /users/{steamId} (07 §5.5).
  *
  * S09 (public profile, 04 §7.5) surface. Sensitive fields (wallet

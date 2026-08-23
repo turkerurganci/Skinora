@@ -13,6 +13,7 @@ import {
   LanguagePreferenceSection,
   LinkedAccountsSection,
   NotificationPreferencesSection,
+  SteamTradeUrlSection,
 } from "@/components/settings";
 
 type DiscordCallbackStatus =
@@ -146,6 +147,7 @@ export default function SettingsPage() {
       )}
 
       <NotificationPreferencesSection settings={data} />
+      <SteamTradeUrlSection />
       <LinkedAccountsSection settings={data} />
       <LanguagePreferenceSection settings={data} />
       <AccountManagementSection />
