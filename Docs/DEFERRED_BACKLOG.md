@@ -4,7 +4,15 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-22, F7-sonrası parite turu):** **56 aktif / 56 çözülmüş** (ölçüm komutu aşağıda). 🔴 yok.
+> **Durum (2026-08-23, üç chore PR'ının merge'i):** **54 aktif / 58 çözülmüş** (ölçüm komutu aşağıda). 🔴 yok.
+>
+> **Dört kalem kapandı, başlık sayacı merge sonrası düzeltildi (56/56 → 54/58).** 2026-08-22'de açılan üç chore dalı 2026-08-23'te sırayla merge edildi: [#260](https://github.com/turkerurganci/Skinora/pull/260) iki kalem (`AdminUserActivity-RefundedTerminal` + `T133a-ActiveCounterRefunded`) · [#261](https://github.com/turkerurganci/Skinora/pull/261) `T113-AdminRoleNameReuse500` · [#262](https://github.com/turkerurganci/Skinora/pull/262) `T140-OutboxDispatchOrderNonDeterministic`. Yeni kalem açılmadı.
+>
+> **Sapma merge'in ürünü DEĞİLDİ — iki dalın kendi içinde zaten vardı ve bu varsayılmadı, ölçüldü.** Merge'den önce dört dalda aynı komut koşuldu: `main` 58/54 (başlık 58/54 ✓) · #260 56/56 (başlık 56/56 ✓ — başlığı **güncelleyen tek dal**) · #261 57/55 (başlık **58/54** ✗) · #262 57/55 (başlık **58/54** ✗). #261 ve #262 birer kalemi ✅'ye çevirip başlığa dokunmadı; ikisi de **kendi dalında bayat bir sayaçla** yeşil CI aldı. Merge iki sapmayı üst üste koydu (toplam 2 kalem), yaratmadı.
+>
+> **Kalıcı ders — dosya kendi ölçüm komutunu yazdı ama onu koşan bir kapı yok.** Hijyen turu (2026-08-22) sayım tanımını düzeltti ve komutu bu başlığa yazdı; komut yazılı olduğu hâlde ertesi gün iki PR onu koşmadan geçti ve hiçbir kontrol sormadı. Başlıktaki toplam gövdeden **türetilebilir** bir sayıdır; elle tutulduğu sürece her PR'da yeniden bozulabilir. Bu tur için bekçi satırı **açılmadı** — sapma 2 kalemdi ve saatler içinde yakalandı — ama kusurun adı burada kayıtlı: bir sonraki tur aynı sapmayı görürse bedeli artık ölçülmüş olacak.
+>
+> **Önceki durum (2026-08-22, F7-sonrası parite turu):** **56 aktif / 56 çözülmüş** (ölçüm komutu aşağıda). 🔴 yok.
 >
 > **§4'ün ilk kalemi iki satır birden kapattı (58 → 56).** `AdminUserActivity-RefundedTerminal` **T118'de düzeltilmişti, satırı hiç çevrilmemişti** — çözülmüş bir iş dört tur boyunca açık göründü. Satır kapatılırken kardeş listeler tarandı ve **kayıtsız üç sapma** çıktı: `FraudFlagAdminQueryService`'in iki yüklemi (AD2, AD3) ve `FraudFlagService.ApplyEmergencyHoldCascadeAsync` hâlâ yalnız beş terminali dışlıyordu. Bunlar `T133a-ActiveCounterRefunded`'ın iki yüklemiyle birlikte tek turda kapatıldı; ikinci satır da ✅ oldu.
 >
