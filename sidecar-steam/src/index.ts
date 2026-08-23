@@ -4,7 +4,8 @@ import { config } from './config/index.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
-import { InventoryService, SteamCommunityInventoryFetcher } from './trade/InventoryService.js';
+import { InventoryService } from './trade/InventoryService.js';
+import { HttpInventoryFetcher } from './trade/HttpInventoryFetcher.js';
 import { TradeHoldService } from './trade/TradeHoldService.js';
 import { RateLimitedQueue } from './queue/RateLimitedQueue.js';
 import { inventoryCacheTotal, rateLimitedQueueDepth } from './metrics.js';
@@ -58,7 +59,10 @@ const inventoryCache: InventoryCache = config.redisUrl
   ? new RedisInventoryCache(new Redis(config.redisUrl))
   : new InMemoryInventoryCache();
 const inventoryService = new InventoryService(
-  new SteamCommunityInventoryFetcher(),
+  // F2 — `steamcommunity` paketi yerine doğrudan HTTP: paketin taşıdığı
+  // eski `request` yığını Steam tarafından 429 ile reddediliyordu, aynı
+  // konteynerden düz fetch 200 dönüyordu (`UITour-InventoryClientRefusedBySteam`).
+  new HttpInventoryFetcher(),
   inventoryCache,
   steamCommunityQueue,
   (result) => inventoryCacheTotal.inc({ result }),
