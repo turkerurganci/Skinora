@@ -197,6 +197,12 @@
     "users": "用户",
     "auditLog": "审计日志"
   },
+  "adminGuard": {
+    "rateLimitedTitle": "请求过于频繁",
+    "rateLimitedMessage": "由于达到请求限制，无法读取你的会话。这不是权限问题——请一分钟后重试。",
+    "unavailableTitle": "无法加载会话",
+    "unavailableMessage": "由于无法连接服务器，无法验证你的权限。你的权限没有变化；连接恢复后请重试。"
+  },
   "adminDisputes": {
     "title": "争议队列",
     "loadError": "加载争议失败。",

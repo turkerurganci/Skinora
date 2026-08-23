@@ -197,6 +197,12 @@
     "users": "Kullanıcılar",
     "auditLog": "Audit Log"
   },
+  "adminGuard": {
+    "rateLimitedTitle": "Çok fazla istek",
+    "rateLimitedMessage": "Oturum bilgin şu anda okunamadı çünkü istek sınırına ulaşıldı. Bu bir yetki sorunu değil — bir dakika sonra tekrar dene.",
+    "unavailableTitle": "Oturum bilgisi alınamadı",
+    "unavailableMessage": "Yetkin doğrulanamadı çünkü sunucuya ulaşılamadı. Yetkin değişmedi; bağlantı düzelince tekrar dene."
+  },
   "adminDisputes": {
     "title": "İtiraz Kuyruğu",
     "loadError": "İtirazlar yüklenemedi.",

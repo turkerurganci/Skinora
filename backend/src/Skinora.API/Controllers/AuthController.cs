@@ -19,6 +19,12 @@ namespace Skinora.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
+// F3b — sınıf düzeyi "auth" kovası (10/60sn, IP bazlı) BRUTE-FORCE yüzeyini
+// korur: Steam giriş başlatma ve callback'i. Oturum OKUMA/YENİLEME uçları
+// (me, refresh, logout) bu kovadan ÇIKARILDI — her sayfa yüklemesinin yaptığı
+// bir okumayı giriş denemeleriyle aynı bütçeye koymak, kimliksiz on istekle
+// tüm platformun oturum katmanını düşürülebilir kılıyordu
+// (UITour-AuthBucketIncludesSessionReads, kırmızı bulgu).
 [RateLimit("auth")]
 public sealed class AuthController : ControllerBase
 {
@@ -231,6 +237,9 @@ public sealed class AuthController : ControllerBase
     /// <summary>A4 — <c>GET /auth/me</c>. Current session profile (07 §4.5).</summary>
     [HttpGet("me")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
+    // Kullanıcı bazlı: middleware UseAuthentication'dan SONRA koştuğu için
+    // 'sub' claim'i çözülür ve kova kullanıcıya aittir, IP'ye değil.
+    [RateLimit("user-read")]
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken cancellationToken)
     {
         var userIdClaim = User.FindFirstValue(AuthClaimTypes.UserId);
@@ -247,6 +256,7 @@ public sealed class AuthController : ControllerBase
     /// <summary>A8 — <c>POST /auth/logout</c>. Revokes refresh and clears cookie (07 §4.9).</summary>
     [HttpPost("logout")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
+    [RateLimit("session")]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         if (Request.Cookies.TryGetValue(RefreshCookieName, out var cookie)
@@ -262,6 +272,9 @@ public sealed class AuthController : ControllerBase
     /// <summary>A9 — <c>POST /auth/refresh</c>. Rotates refresh + returns new access (07 §4.10).</summary>
     [HttpPost("refresh")]
     [AllowAnonymous]
+    // Anonim (bearer süresi dolmuş olabilir) → IP bazlı kalır. F3a ile bu IP
+    // artık GERÇEK istemcinin IP'si, dolayısıyla kova istemci başına ayrışıyor.
+    [RateLimit("session")]
     public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
     {
         if (!Request.Cookies.TryGetValue(RefreshCookieName, out var cookie)

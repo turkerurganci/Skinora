@@ -197,6 +197,12 @@
     "users": "Usuarios",
     "auditLog": "Registro de auditoría"
   },
+  "adminGuard": {
+    "rateLimitedTitle": "Demasiadas solicitudes",
+    "rateLimitedMessage": "No se pudo leer tu sesión porque se alcanzó el límite de solicitudes. No es un problema de permisos: inténtalo de nuevo en un minuto.",
+    "unavailableTitle": "No se pudo cargar la sesión",
+    "unavailableMessage": "No se pudo verificar tu acceso porque no se pudo contactar con el servidor. Tus permisos no han cambiado; inténtalo cuando se restablezca la conexión."
+  },
   "adminDisputes": {
     "title": "Cola de disputas",
     "loadError": "No se pudieron cargar las disputas.",

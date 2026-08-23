@@ -197,6 +197,12 @@
     "users": "Users",
     "auditLog": "Audit Log"
   },
+  "adminGuard": {
+    "rateLimitedTitle": "Too many requests",
+    "rateLimitedMessage": "Your session could not be read because the request limit was reached. This is not a permission problem — try again in a minute.",
+    "unavailableTitle": "Session could not be loaded",
+    "unavailableMessage": "Your access could not be verified because the server could not be reached. Your permissions have not changed; try again once the connection recovers."
+  },
   "adminDisputes": {
     "title": "Dispute Queue",
     "loadError": "Failed to load disputes.",
