@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Fraud.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -18,14 +19,7 @@ public sealed class AdminDashboardService : IAdminDashboardService
     /// into the API composition root.
     /// </summary>
     private static readonly TransactionStatus[] _terminalStates =
-    [
-        TransactionStatus.COMPLETED,
-        TransactionStatus.CANCELLED_TIMEOUT,
-        TransactionStatus.CANCELLED_SELLER,
-        TransactionStatus.CANCELLED_BUYER,
-        TransactionStatus.CANCELLED_ADMIN,
-        TransactionStatus.REFUNDED,
-    ];
+        TransactionStatusSets.Terminal;
 
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;

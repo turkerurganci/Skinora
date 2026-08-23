@@ -4,6 +4,7 @@ using Microsoft.Extensions.Time.Testing;
 using Skinora.Fraud.Application.Flags;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Fraud.Infrastructure.Persistence;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
@@ -296,9 +297,17 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
     public async Task GetDetailAsync_Returns_ActiveTransactions_With_Role_And_Hold()
     {
         // K9 — flagged user's active (non-terminal) transactions; either party;
-        // FLAGGED is active; all five terminal states excluded; held rows kept
-        // and marked. Active: CREATED + SELLER_CONFIRMED(hold) + PAYMENT_RECEIVED(buyer)
-        // + FLAGGED = 4. Terminal (excluded): the 5 below.
+        // FLAGGED is active; every terminal state excluded; held rows kept and
+        // marked. Active: CREATED + SELLER_CONFIRMED(hold) + PAYMENT_RECEIVED(buyer)
+        // + FLAGGED = 4. Terminal (excluded): the 6 below.
+        //
+        // REFUNDED is the regression case: this test used to seed only "the
+        // five terminal states" and assert their absence — which is exactly the
+        // stale belief the production predicate carried. The predicate excluded
+        // five while AD19d already excluded six, and its own comment claimed
+        // parity with AD19d. A refunded transaction was listed to the admin as
+        // an active transaction of the flagged user, and the test stayed green
+        // because it never seeded one.
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CREATED);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.SELLER_CONFIRMED, isOnHold: true);
         await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.PAYMENT_RECEIVED);
@@ -308,6 +317,7 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT);
         await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.CANCELLED_SELLER);
         await SeedTransactionAsync(_buyer.Id, _seller.Id, TransactionStatus.CANCELLED_BUYER);
+        await SeedTransactionAsync(_seller.Id, _buyer.Id, TransactionStatus.REFUNDED);
 
         var flag = await SeedFlagAsync(
             scope: FraudFlagScope.ACCOUNT_LEVEL,
@@ -319,13 +329,14 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
 
         Assert.NotNull(detail);
         Assert.Equal(4, detail!.ActiveTransactions.Count);
-        // All five terminal states excluded.
+        // Every terminal state excluded — enumerated from the shared set rather
+        // than re-listed here, so a new terminal status cannot be added to the
+        // system while this assertion keeps passing against a stale copy.
         Assert.DoesNotContain(detail.ActiveTransactions,
-            t => t.Status is TransactionStatus.COMPLETED
-                or TransactionStatus.CANCELLED_TIMEOUT
-                or TransactionStatus.CANCELLED_SELLER
-                or TransactionStatus.CANCELLED_BUYER
-                or TransactionStatus.CANCELLED_ADMIN);
+            t => TransactionStatusSets.Terminal.Contains(t.Status));
+        // Pinned separately: REFUNDED is the value the predicate used to miss.
+        Assert.DoesNotContain(detail.ActiveTransactions,
+            t => t.Status == TransactionStatus.REFUNDED);
         // FLAGGED is active (not terminal).
         Assert.Contains(detail.ActiveTransactions, t => t.Status == TransactionStatus.FLAGGED);
 
@@ -464,6 +475,9 @@ public class FraudFlagAdminQueryServiceTests : IntegrationTestBase
             TransactionStatus.CANCELLED_SELLER => CancelledByType.SELLER,
             TransactionStatus.CANCELLED_BUYER => CancelledByType.BUYER,
             TransactionStatus.CANCELLED_ADMIN => CancelledByType.ADMIN,
+            // REFUNDED reuses the cancellation trail (05 §4.2) and is bound by
+            // the same CHECK constraint.
+            TransactionStatus.REFUNDED => CancelledByType.ADMIN,
             _ => null,
         };
 

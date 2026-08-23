@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Platform.Application.Audit;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
@@ -379,7 +380,14 @@ public sealed class FraudFlagService : IFraudFlagService
         Guid flagId,
         CancellationToken cancellationToken)
     {
-        // Active state set: anything that is not COMPLETED or CANCELLED_*.
+        // Active state set: anything not in TransactionStatusSets.Terminal.
+        // REFUNDED is part of that set as of the F7-gate follow-up: this
+        // predicate used to exclude only the five pre-v3.0 terminals, so the
+        // cascade would freeze an already-refunded transaction — writing an
+        // audit row and firing EMERGENCY_HOLD_APPLIED at both parties for a
+        // transaction that had already been settled and closed. The method's
+        // own summary said it skips rows that are "already terminal"; the code
+        // did not know REFUNDED was one.
         // FLAGGED transactions are intentionally included — 07 §9.21
         // "Hold uygulanabilir state'ler: Tüm aktif state'ler (CREATED →
         // ITEM_DELIVERED + FLAGGED)".
@@ -391,11 +399,7 @@ public sealed class FraudFlagService : IFraudFlagService
                 (t.SellerId == userId || t.BuyerId == userId)
                 && !t.IsDeleted
                 && !t.IsOnHold
-                && t.Status != TransactionStatus.COMPLETED
-                && t.Status != TransactionStatus.CANCELLED_TIMEOUT
-                && t.Status != TransactionStatus.CANCELLED_SELLER
-                && t.Status != TransactionStatus.CANCELLED_BUYER
-                && t.Status != TransactionStatus.CANCELLED_ADMIN)
+                && !TransactionStatusSets.Terminal.Contains(t.Status))
             .ToListAsync(cancellationToken);
 
         if (activeTxs.Count == 0)

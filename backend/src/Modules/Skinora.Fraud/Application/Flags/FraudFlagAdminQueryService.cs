@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Fraud.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -155,11 +156,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             var activeRows = await _db.Set<Transaction>()
                 .AsNoTracking()
                 .Where(t => !t.IsDeleted
-                            && t.Status != TransactionStatus.COMPLETED
-                            && t.Status != TransactionStatus.CANCELLED_TIMEOUT
-                            && t.Status != TransactionStatus.CANCELLED_SELLER
-                            && t.Status != TransactionStatus.CANCELLED_BUYER
-                            && t.Status != TransactionStatus.CANCELLED_ADMIN
+                            && !TransactionStatusSets.Terminal.Contains(t.Status)
                             && (accountUserIds.Contains(t.SellerId)
                                 || (t.BuyerId.HasValue && accountUserIds.Contains(t.BuyerId.Value))))
                 .Select(t => new { t.SellerId, t.BuyerId })
@@ -324,7 +321,10 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
 
         // K9 — active (non-terminal) transactions of the flagged user (04 §8.3
         // hesap-flag madde 4). Same *active definition* as AD19d (07 §9.22a):
-        // either party, FLAGGED still active, the five terminal states excluded.
+        // either party, FLAGGED still active, TransactionStatusSets.Terminal
+        // excluded. The set is shared rather than spelled out here because this
+        // comment used to say "the five terminal states" while AD19d already
+        // excluded six — the claim of parity outlived the parity.
         // NOTE: unlike AD19d's bulk-hold selection, this does NOT apply the
         // `!IsOnHold` idempotency filter — held rows are intentionally kept (still
         // active) and marked via IsOnHold so the admin sees what a subsequent
@@ -333,11 +333,7 @@ public sealed class FraudFlagAdminQueryService : IFraudFlagAdminQueryService
             .AsNoTracking()
             .Where(t => (t.SellerId == flag.UserId || t.BuyerId == flag.UserId)
                         && !t.IsDeleted
-                        && t.Status != TransactionStatus.COMPLETED
-                        && t.Status != TransactionStatus.CANCELLED_TIMEOUT
-                        && t.Status != TransactionStatus.CANCELLED_SELLER
-                        && t.Status != TransactionStatus.CANCELLED_BUYER
-                        && t.Status != TransactionStatus.CANCELLED_ADMIN)
+                        && !TransactionStatusSets.Terminal.Contains(t.Status))
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new
             {

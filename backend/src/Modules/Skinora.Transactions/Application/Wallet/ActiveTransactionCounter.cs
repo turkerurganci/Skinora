@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Skinora.Shared.Enums;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Application.Wallet;
@@ -43,15 +43,13 @@ public sealed class ActiveTransactionCounter : IActiveTransactionCounter
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, null),
         };
 
-        // Non-terminal statuses per 02 §12.3 snapshot principle. Terminals
-        // (COMPLETED, CANCELLED_*) no longer "use" the address operationally.
+        // Non-terminal statuses per 02 §12.3 snapshot principle. Terminals no
+        // longer "use" the address operationally. REFUNDED counts as terminal
+        // here as of the T133a-ActiveCounterRefunded fix: before it, a user
+        // whose only open row was a buyer-favour refund could not change their
+        // wallet address at all (02 §12.3).
         return await query
-            .Where(t =>
-                t.Status != TransactionStatus.COMPLETED &&
-                t.Status != TransactionStatus.CANCELLED_TIMEOUT &&
-                t.Status != TransactionStatus.CANCELLED_SELLER &&
-                t.Status != TransactionStatus.CANCELLED_BUYER &&
-                t.Status != TransactionStatus.CANCELLED_ADMIN)
+            .Where(t => !TransactionStatusSets.Terminal.Contains(t.Status))
             .CountAsync(cancellationToken);
     }
 }

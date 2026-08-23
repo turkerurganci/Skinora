@@ -226,9 +226,17 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
             u.DefaultPayoutAddress = ValidSellerAddress;
         });
 
-        // Two non-terminal (CREATED, PAYMENT_RECEIVED) + one terminal (COMPLETED)
-        // using ValidSellerAddress as seller payout snapshot. One more
-        // transaction uses a different address and must not be counted.
+        // Two non-terminal (CREATED, PAYMENT_RECEIVED) + two terminal
+        // (COMPLETED, REFUNDED) using ValidSellerAddress as seller payout
+        // snapshot. One more transaction uses a different address and must not
+        // be counted.
+        //
+        // REFUNDED is the regression case (T133a-ActiveCounterRefunded): it is
+        // terminal (05 §4.1) but ActiveTransactionCounter's exclusion list only
+        // carried the five pre-v3.0 terminals, so a user whose buyer-favour
+        // refund had already settled kept being told they had an active
+        // transaction on the old address (02 §12.3). This test would have
+        // stayed green throughout, because it never exercised REFUNDED.
         await _factory.CreateTransactionAsync(t =>
         {
             t.SellerId = user.Id;
@@ -246,6 +254,17 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
             t.SellerId = user.Id;
             t.SellerPayoutAddress = ValidSellerAddress;
             t.Status = TransactionStatus.COMPLETED;
+        });
+        await _factory.CreateTransactionAsync(t =>
+        {
+            t.SellerId = user.Id;
+            t.SellerPayoutAddress = ValidSellerAddress;
+            t.Status = TransactionStatus.REFUNDED;
+            // REFUNDED reuses the cancellation trail (05 §4.2);
+            // CK_Transactions_Cancel rejects the row without it.
+            t.CancelledBy = CancelledByType.ADMIN;
+            t.CancelledAt = DateTime.UtcNow.AddMinutes(-5);
+            t.CancelReason = "Buyer-favour dispute resolution";
         });
         await _factory.CreateTransactionAsync(t =>
         {
