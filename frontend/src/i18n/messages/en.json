@@ -1667,6 +1667,23 @@
         }
       }
     },
+    "steamTradeUrl": {
+      "title": "Steam Trade URL",
+      "description": "Save your Steam trade URL to start transactions. Saving it also verifies your Steam Mobile Authenticator status.",
+      "statusActive": "Mobile Authenticator active",
+      "statusInactive": "Mobile Authenticator not verified",
+      "label": "Trade URL",
+      "whereToFind": "You can find it under \"Third-Party Sites\" in your Steam privacy settings:",
+      "whereToFindLink": "Open Steam trade settings",
+      "save": "Save and verify",
+      "saving": "Verifying…",
+      "resultActive": "Your trade URL was saved and the Mobile Authenticator was verified as active. You can now start transactions.",
+      "resultInactive": "Your trade URL was saved, but the Mobile Authenticator does not appear to be active on your Steam account. Enable it and save again.",
+      "setupGuide": "Steam setup guide",
+      "resultPending": "Your trade URL was saved, but Steam did not respond so the Mobile Authenticator could not be verified. Please save again in a few minutes.",
+      "resultInvalid": "Invalid trade URL. Expected format: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",
+      "resultError": "Could not save the trade URL. Please try again."
+    },
     "linkedAccounts": {
       "title": "Linked Accounts",
       "connect": "Connect",

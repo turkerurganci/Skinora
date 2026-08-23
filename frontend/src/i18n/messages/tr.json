@@ -1667,6 +1667,23 @@
         }
       }
     },
+    "steamTradeUrl": {
+      "title": "Steam Takas Bağlantısı",
+      "description": "İşlem başlatabilmek için Steam takas bağlantınızı kaydedin. Kaydettiğinizde Steam Mobile Authenticator durumunuz da doğrulanır.",
+      "statusActive": "Mobile Authenticator aktif",
+      "statusInactive": "Mobile Authenticator doğrulanmadı",
+      "label": "Takas bağlantısı",
+      "whereToFind": "Bağlantıyı Steam gizlilik ayarlarınızın altındaki \"Üçüncü Taraf Siteler\" bölümünde bulabilirsiniz:",
+      "whereToFindLink": "Steam takas ayarlarını aç",
+      "save": "Kaydet ve doğrula",
+      "saving": "Doğrulanıyor…",
+      "resultActive": "Takas bağlantınız kaydedildi ve Mobile Authenticator aktif olarak doğrulandı. Artık işlem başlatabilirsiniz.",
+      "resultInactive": "Takas bağlantınız kaydedildi ama Steam hesabınızda Mobile Authenticator aktif görünmüyor. Etkinleştirdikten sonra tekrar kaydedin.",
+      "setupGuide": "Steam kurulum rehberi",
+      "resultPending": "Takas bağlantınız kaydedildi ancak Steam şu anda yanıt vermediği için Mobile Authenticator doğrulanamadı. Birkaç dakika sonra tekrar kaydedin.",
+      "resultInvalid": "Takas bağlantısı geçersiz. Beklenen biçim: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",
+      "resultError": "Takas bağlantısı kaydedilemedi. Lütfen tekrar deneyin."
+    },
     "linkedAccounts": {
       "title": "Bağlı Hesaplar",
       "connect": "Bağla",

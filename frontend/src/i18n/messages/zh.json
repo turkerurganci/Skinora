@@ -1667,6 +1667,23 @@
         }
       }
     },
+    "steamTradeUrl": {
+      "title": "Steam 交易链接",
+      "description": "保存你的 Steam 交易链接后才能发起交易。保存时也会验证你的 Steam 手机令牌状态。",
+      "statusActive": "手机令牌已启用",
+      "statusInactive": "手机令牌未验证",
+      "label": "交易链接",
+      "whereToFind": "你可以在 Steam 隐私设置中的“第三方网站”部分找到它：",
+      "whereToFindLink": "打开 Steam 交易设置",
+      "save": "保存并验证",
+      "saving": "正在验证…",
+      "resultActive": "交易链接已保存，手机令牌验证为已启用。你现在可以发起交易了。",
+      "resultInactive": "交易链接已保存，但你的 Steam 账户似乎未启用手机令牌。启用后请重新保存。",
+      "setupGuide": "Steam 设置指南",
+      "resultPending": "交易链接已保存，但 Steam 未响应，无法验证手机令牌。请几分钟后重新保存。",
+      "resultInvalid": "交易链接无效。期望格式：https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",
+      "resultError": "无法保存交易链接，请重试。"
+    },
     "linkedAccounts": {
       "title": "已关联账户",
       "connect": "连接",
