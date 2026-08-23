@@ -45,6 +45,14 @@ services:
       # Browser-facing origin — CORS. The frontend is same-origin behind nginx,
       # so this only matters for direct :5000 access and non-browser clients.
       - Cors__AllowedOrigins__0=${PUBLIC_ORIGIN:-http://localhost:8080}
+      # F3a — Reverse proxy güveni (ForwardedHeadersNotRegistered).
+      # Bu DEĞER YOKSA UseForwardedHeaders hiç kaydedilmez ve backend istemci
+      # IP'sini göremez (bugünkü davranış). Değer verilince güven SADECE burada
+      # yazan ağla sınırlıdır — X-Forwarded-For'a körü körüne güvenmek istemcinin
+      # rate limit ve geo-block'u birlikte atlamasına izin verirdi.
+      # 172.20.0.0/16 = bu compose dosyasının skinora-network alt ağı.
+      - ReverseProxy__KnownNetworks__0=${REVERSE_PROXY_KNOWN_NETWORK:-172.20.0.0/16}
+      - ReverseProxy__ForwardLimit=${REVERSE_PROXY_FORWARD_LIMIT:-1}
       # Steam OpenID 2.0 — appsettings.json defaults point at https://skinora.com;
       # without these overrides real Steam login redirects to a dead domain.
       - SteamOpenId__Realm=${STEAM_OPENID_REALM}

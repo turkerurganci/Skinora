@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using Serilog;
@@ -405,9 +406,75 @@ AdminModuleDbRegistration.RegisterAdminModule();
 PaymentsModuleDbRegistration.RegisterPaymentsModule();
 PlatformModuleDbRegistration.RegisterPlatformModule();
 
+// F3a — Reverse proxy güveni (ForwardedHeadersNotRegistered 🔴).
+// Bağlama build'den ÖNCE yapılır; kaydın kendisi aşağıda, pipeline'ın en
+// başında ve YALNIZ yapılandırılmışsa.
+var reverseProxySettings =
+    builder.Configuration.GetSection(ReverseProxySettings.SectionName).Get<ReverseProxySettings>()
+    ?? new ReverseProxySettings();
+
+if (reverseProxySettings.IsConfigured)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = reverseProxySettings.ForwardLimit;
+
+        // Varsayılan listeler loopback içerir; güveni SADECE yapılandırılana
+        // indirmek için ikisi de temizlenir. Aksi halde "yapılandırdım" sanan
+        // bir operatör farkında olmadan fazladan bir kaynağa güvenir.
+        options.KnownProxies.Clear();
+        options.KnownNetworks.Clear();
+
+        foreach (var proxy in reverseProxySettings.KnownProxies)
+        {
+            if (System.Net.IPAddress.TryParse(proxy, out var ip))
+                options.KnownProxies.Add(ip);
+        }
+
+        foreach (var network in reverseProxySettings.KnownNetworks)
+        {
+            var parts = network.Split('/', 2);
+            if (parts.Length == 2 &&
+                System.Net.IPAddress.TryParse(parts[0], out var prefix) &&
+                int.TryParse(parts[1], out var length))
+            {
+                options.KnownNetworks.Add(new IPNetwork(prefix, length));
+            }
+        }
+    });
+}
+
 var app = builder.Build();
 
 // --- Middleware Pipeline (order matters) ---
+
+// 0. Forwarded headers (F3a) — HER ŞEYDEN ÖNCE. Sonraki her katman
+//    (HTTPS redirect'in şema kararı, rate limit'in IP anahtarı, geo-block,
+//    VPN sinyali ve 17 denetim çağrı yeri) RemoteIpAddress/Scheme okuyor;
+//    bu yeniden yazma daha sonra yapılırsa aradaki katmanlar proxy'nin
+//    kimliğini görmeye devam eder.
+//    YALNIZ yapılandırılmışsa kaydedilir — gerekçe ReverseProxySettings'te.
+if (reverseProxySettings.IsConfigured)
+{
+    app.UseForwardedHeaders();
+    app.Logger.LogInformation(
+        "Forwarded headers ENABLED — trusting networks [{Networks}] proxies [{Proxies}] forwardLimit {Limit}.",
+        string.Join(", ", reverseProxySettings.KnownNetworks),
+        string.Join(", ", reverseProxySettings.KnownProxies),
+        reverseProxySettings.ForwardLimit);
+}
+else
+{
+    // Sessiz kalmamalı: bu durumda rate limit izolasyonu, geo-block ve VPN
+    // sinyali proxy arkasında ETKİSİZDİR ve hiçbiri hata vermez. Operatörün
+    // bunu ancak bir denetim kaydını okuyup şaşırarak fark etmesi
+    // ForwardedHeadersNotRegistered bulgusunun ta kendisiydi.
+    app.Logger.LogWarning(
+        "Forwarded headers DISABLED — no ReverseProxy:KnownNetworks/KnownProxies configured. " +
+        "Behind a reverse proxy every request is attributed to the proxy IP: " +
+        "auth rate-limit isolation, geo-block and the VPN signal are INEFFECTIVE.");
+}
 
 // 1. HTTPS redirection
 app.UseHttpsRedirection();

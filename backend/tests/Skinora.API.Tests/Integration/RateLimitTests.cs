@@ -268,19 +268,29 @@ public class RateLimitTests
     [Fact]
     public async Task AuthRefresh_WhenRateLimited_Returns429Json_NotRedirect()
     {
-        // POST /auth/refresh shares the "auth" policy but is NOT flagged for the
+        // POST /auth/refresh is rate limited but is NOT flagged for the
         // brute-force redirect — it must still surface the 429 JSON the FE
         // interceptor reads. The flagged GET /auth/steam redirect path is covered
         // by the focused RateLimitMiddlewareTests unit test (the full Steam OpenID
         // controller is not serviceable in this generic factory).
+        //
+        // F3b — refresh ARTIK "auth" kovasında değil, kendi "session" kovasında.
+        // Gerekçe: /auth/me, /refresh ve /logout giriş denemeleriyle aynı 10/60sn
+        // IP kovasını paylaşınca kimliksiz on istek tüm platformun oturum
+        // katmanını düşürebiliyordu (UITour-AuthBucketIncludesSessionReads).
+        // Bu testin İDDİASI değişmedi (429 JSON, redirect değil); yalnız kovayı
+        // tüketme biçimi politikadan bağımsız hale getirildi — sabit bir sayı
+        // yazmak, testi bir sonraki limit ayarında yine kıracaktı.
         var client = CreateClient();
 
-        for (var i = 0; i < 10; i++)
+        HttpResponseMessage blocked;
+        var attempts = 0;
+        do
         {
-            await client.PostAsync("/api/v1/auth/refresh", content: null);
+            blocked = await client.PostAsync("/api/v1/auth/refresh", content: null);
+            attempts++;
         }
-
-        var blocked = await client.PostAsync("/api/v1/auth/refresh", content: null);
+        while (blocked.StatusCode != HttpStatusCode.TooManyRequests && attempts < 200);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
         var body = await DeserializeResponse(blocked);

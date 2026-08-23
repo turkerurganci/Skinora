@@ -64,6 +64,8 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 |---|---|---|
 | `DB_CONNECTION_STRING` / `ConnectionStrings__DefaultConnection` | backend | SQL Server connection string (Hangfire de aynı bağlantıyı kullanır) |
 | `REDIS_CONNECTION_STRING` | backend | Redis (distributed lock, cache) |
+| `REVERSE_PROXY_KNOWN_NETWORK` | backend | **Reverse proxy arkasında ZORUNLU (F3a).** Backend istemci IP'sini yalnız bu ağdan gelen `X-Forwarded-For` başlığına güvenerek çözer. Boş bırakılırsa forwarded header **hiç işlenmez** ve `RemoteIpAddress` proxy'nin IP'si olarak kalır → `auth` rate limit izolasyonu, geo-block ve VPN sinyali **sessizce etkisiz** olur. Compose varsayılanı `172.20.0.0/16` (skinora-network). **Üretimde yalnız reverse proxy'nin bulunduğu ağ/adres yazılmalıdır** — geniş aralık güveni sulandırır |
+| `REVERSE_PROXY_FORWARD_LIMIT` | backend | Zincirdeki proxy sayısı, varsayılan `1` (tek nginx). Önünde CDN varsa artırın. **Olduğundan büyük vermek istemcinin zincire sahte girdi eklemesine izin verir** — ölçüldü: `ForwardLimit=1` ile nginx üzerinden sahte `X-Forwarded-For` gönderen istemci kendi kovasından kaçamıyor |
 | `JWT_SECRET` (≥32 char) | backend | Access/refresh token imzası |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | backend | Token issuer/audience |
 | `WEBHOOK_SECRET` (≥32 char) | backend + **blockchain** sidecar | Sidecar→backend HMAC-SHA256 webhook imzası (05 §3.4). Steam sidecar webhook göndermez (T133) — kalan tek imzalı yüzey blockchain'dir |
@@ -148,6 +150,12 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 ---
 
 ## F. Doğrulama (deploy sonrası)
+
+> **F3a — proxy güveni açık mı?** Backend başlangıç logunda tam olarak bir satır olmalı:
+> `Forwarded headers ENABLED — trusting networks [...]`. Bunun yerine
+> `Forwarded headers DISABLED` görüyorsanız istemci IP'si çözülmüyor demektir ve
+> üç güvenlik kontrolü hata vermeden etkisizdir. **Uç doğrulama:** bir giriş sonrası
+> `UserLoginLogs.IpAddress` proxy'nin IP'si DEĞİL, gerçek istemcinin IP'si olmalı.
 
 1. **Startup fail-fast kontrolü:** 19 zorunlu env eksikse backend açılırken `InvalidOperationException` log'u + container çıkışı → eksik anahtar mesajda görünür.
 2. **SystemSetting listesi:** `GET /api/v1/admin/settings` ile tüm katalog + configured/value kontrol.
