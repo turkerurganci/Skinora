@@ -8,7 +8,14 @@ namespace Skinora.Admin.Application.Roles;
 /// </summary>
 public static class AdminRoleErrorCodes
 {
-    /// <summary>409 — name collision against an active <c>AdminRole</c>.</summary>
+    /// <summary>
+    /// 409 — name collision against <b>any</b> <c>AdminRole</c> row, including a
+    /// soft-deleted one. <c>UQ_AdminRoles_Name</c> is unfiltered by design (T24)
+    /// so a deleted role's name stays reserved; the check therefore ignores the
+    /// soft-delete query filter (T113-AdminRoleNameReuse500). It used to read
+    /// "against an active AdminRole", which is what the code did — and why
+    /// reusing a deleted role's name returned 500 instead of this code.
+    /// </summary>
     public const string RoleNameExists = "ROLE_NAME_EXISTS";
 
     /// <summary>404 — role id resolves to no active row.</summary>
