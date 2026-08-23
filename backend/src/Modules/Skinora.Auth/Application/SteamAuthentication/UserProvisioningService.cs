@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Domain;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Auth.Application.SteamAuthentication;
@@ -16,6 +17,7 @@ public sealed class UserProvisioningService : IUserProvisioningService
     public async Task<UserProvisioningResult> UpsertFromSteamLoginAsync(
         string steamId64,
         SteamPlayerSummary? profile,
+        string? preferredLanguage,
         CancellationToken cancellationToken)
     {
         var existing = await _db.Set<User>()
@@ -29,7 +31,15 @@ public sealed class UserProvisioningService : IUserProvisioningService
                 SteamId = steamId64,
                 SteamDisplayName = profile?.PersonaName ?? BuildPlaceholderDisplayName(steamId64),
                 SteamAvatarUrl = profile?.AvatarFull,
-                PreferredLanguage = "en",
+                // F4 — kullanıcının giriş yaptığı ARAYÜZ dili saklanır.
+                // Önceki hâl burada sabit "en" yazıyordu ve bu alan yalnız bir
+                // tercih kutusu değil, GİDEN HER MESAJIN dili: bildirimler
+                // (platform içi + e-posta + Telegram + Discord), itiraz
+                // yazışmaları, yanlış teslimat tırmandırması. Türkçe arayüzde
+                // kayıt olan satıcı teslimat süresi uyarısını İngilizce alıyordu
+                // ve P2P'de kusur kaçırılan süreye göre atanıyor
+                // (UITour-SignupLanguageHardcodedEn).
+                PreferredLanguage = SupportedLanguages.NormalizeOrDefault(preferredLanguage),
             };
 
             _db.Set<User>().Add(created);

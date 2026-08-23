@@ -10,9 +10,16 @@ namespace Skinora.Auth.Application.SteamAuthentication;
 /// </summary>
 public interface IUserProvisioningService
 {
+    /// <param name="preferredLanguage">
+    /// F4 — kullanıcının giriş yaptığı ARAYÜZ dili. Yalnız kayıt anında
+    /// kullanılır; mevcut kullanıcının tercihi bu yoldan DEĞİŞTİRİLMEZ
+    /// (kullanıcı Ayarlar'dan bilinçli olarak seçmiş olabilir).
+    /// Desteklenmeyen/boş değer <c>SupportedLanguages.Default</c>'a düşer.
+    /// </param>
     Task<UserProvisioningResult> UpsertFromSteamLoginAsync(
         string steamId64,
         SteamPlayerSummary? profile,
+        string? preferredLanguage,
         CancellationToken cancellationToken);
 }
 

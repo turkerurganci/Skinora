@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -8,8 +9,10 @@ public sealed class LanguageService : ILanguageService
 {
     // 07 §5.10 — MVP languages only. The enum-like check keeps the column
     // content stable for i18n resource keys without introducing a DB enum.
-    private static readonly HashSet<string> Allowed =
-        new(StringComparer.OrdinalIgnoreCase) { "en", "zh", "es", "tr" };
+    //
+    // F4 — liste SupportedLanguages'e taşındı: kayıt anında dil saklayan
+    // UserProvisioningService de aynı listeye ihtiyaç duyuyor ve kopyalamak
+    // iki doğruluk kaynağı yaratırdı.
 
     private readonly AppDbContext _db;
 
@@ -21,7 +24,7 @@ public sealed class LanguageService : ILanguageService
     public async Task<LanguageUpdateResult> UpdateAsync(
         Guid userId, string? language, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(language) || !Allowed.Contains(language))
+        if (!SupportedLanguages.IsSupported(language))
             return LanguageUpdateResult.Failure(LanguageUpdateStatus.InvalidLanguage);
 
         var user = await _db.Set<User>()

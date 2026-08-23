@@ -12,5 +12,6 @@ public interface ISteamAuthenticationPipeline
         IReadOnlyDictionary<string, string> callbackParameters,
         string? ipAddress,
         string? userAgent,
+        string? preferredLanguage,
         CancellationToken cancellationToken);
 }

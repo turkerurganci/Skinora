@@ -50,6 +50,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
         IReadOnlyDictionary<string, string> callbackParameters,
         string? ipAddress,
         string? userAgent,
+        string? preferredLanguage,
         CancellationToken cancellationToken)
     {
         var validation = await _validator.ValidateAsync(callbackParameters, cancellationToken);
@@ -86,7 +87,7 @@ public sealed class SteamAuthenticationPipeline : ISteamAuthenticationPipeline
             return new AuthenticationOutcome.AgeBlocked(age.AccountAgeDays!.Value, age.RequiredDays!.Value);
 
         var provisioning = await _provisioning.UpsertFromSteamLoginAsync(
-            steamId64, profile, cancellationToken);
+            steamId64, profile, preferredLanguage, cancellationToken);
 
         if (provisioning.User.IsDeactivated)
             return new AuthenticationOutcome.AccountBanned(provisioning.User.Id);
