@@ -75,6 +75,36 @@ public class OutboxMessage
     public DateTime CreatedAt { get; set; }
 
     /// <summary>
+    /// Publish ordinal within the producing unit of work, assigned by
+    /// <c>OutboxService</c> from a per-<c>DbContext</c> counter starting at 1.
+    /// The dispatcher orders by <see cref="CreatedAt"/> then by this
+    /// (T140-OutboxDispatchOrderNonDeterministic).
+    ///
+    /// <para>
+    /// <b>Why it exists.</b> Two rows published in the same unit of work get
+    /// the same <see cref="CreatedAt"/> — <c>DateTime.UtcNow</c> resolves far
+    /// coarser than the gap between two <c>Add</c> calls — and the dispatcher
+    /// sorted on that column alone, so SQL Server was free to return them in
+    /// either order. Nothing observable depended on it yet, but the day an
+    /// order-dependent consumer arrives the bug is already in production and
+    /// intermittent.
+    /// </para>
+    /// <para>
+    /// <b>Why a producer counter rather than an IDENTITY column.</b> IDENTITY
+    /// would give a global insertion order, but it is SQL Server-only: SQLite
+    /// auto-generates values solely for an INTEGER PRIMARY KEY, and this table
+    /// already has a caller-supplied <see cref="Id"/> as its key, so every row
+    /// written by a SQLite-backed test would silently share the value 0 and the
+    /// ambiguity would come straight back where the tests run. A producer
+    /// ordinal behaves identically on every provider. It disambiguates exactly
+    /// the case that is ambiguous — rows sharing a <see cref="CreatedAt"/>,
+    /// which in practice means rows from one unit of work; ordering between
+    /// unrelated units of work is what <see cref="CreatedAt"/> already decides.
+    /// </para>
+    /// </summary>
+    public int Sequence { get; set; }
+
+    /// <summary>
     /// UTC timestamp when the row reached <see cref="OutboxMessageStatus.PROCESSED"/>.
     /// Required to be NULL in any other status.
     /// </summary>

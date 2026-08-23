@@ -57,10 +57,20 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         builder.Property(x => x.ProcessedAt);
 
-        // Filtered index on (Status, CreatedAt) WHERE Status IN (PENDING, FAILED)
-        // — feeds the dispatcher's "fetch unprocessed and retryable" query
-        // (06 §5.2). T17: Status stored as string.
-        builder.HasIndex(x => new { x.Status, x.CreatedAt })
+        // Publish ordinal within the producing unit of work. Defaults to 0 so
+        // rows written before this column existed keep sorting purely by
+        // CreatedAt — their relative order was never recorded and cannot be
+        // reconstructed, and by the time this ships they are long processed.
+        builder.Property(x => x.Sequence)
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        // Filtered index on (Status, CreatedAt, Sequence) WHERE Status IN
+        // (PENDING, FAILED) — feeds the dispatcher's "fetch unprocessed and
+        // retryable" query (06 §5.2). Sequence is part of the key rather than
+        // an include so the dispatcher's ORDER BY is served by the index and
+        // does not add a sort. T17: Status stored as string.
+        builder.HasIndex(x => new { x.Status, x.CreatedAt, x.Sequence })
             .HasFilter("[Status] IN ('PENDING', 'FAILED')")
             .HasDatabaseName("IX_OutboxMessages_Status_CreatedAt_Pending");
     }

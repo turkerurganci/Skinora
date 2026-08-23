@@ -268,6 +268,61 @@ public class OutboxTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_StampsSequenceInPublishOrder_SoTiedCreatedAtStaysOrderable()
+    {
+        // T140-OutboxDispatchOrderNonDeterministic. Two rows published in one
+        // unit of work share CreatedAt — DateTime.UtcNow resolves far coarser
+        // than the gap between two Add calls — and the dispatcher sorted on that
+        // column alone, leaving the order up to the database.
+        //
+        // WHAT THIS TEST PROVES, AND WHAT IT DOES NOT. The load-bearing
+        // assertion is the Sequence stamp: OutboxService must number the two
+        // rows 1 and 2 in publish order, and removing `Sequence = ++_sequence`
+        // makes this test fail. The dispatch-order assertion at the end is
+        // corroborating only — it was MEASURED to be non-discriminating here:
+        // with `.ThenBy(m => m.Sequence)` deleted from the dispatcher the whole
+        // test still passed, because these tests run on SQLite and SQLite
+        // happens to return tied rows in insertion order. The nondeterminism
+        // being fixed is SQL Server's freedom to do otherwise, which no test
+        // on this fixture can force. Saying so here rather than letting the
+        // green tick imply a proof it never gave.
+        var first = new TestOutboxEvent(Guid.NewGuid(), "first", DateTime.UtcNow);
+        var second = new TestOutboxEvent(Guid.NewGuid(), "second", DateTime.UtcNow);
+
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var outbox = scope.ServiceProvider.GetRequiredService<IOutboxService>();
+            var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await outbox.PublishAsync(first);
+            await outbox.PublishAsync(second);
+            await ctx.SaveChangesAsync();
+        }
+
+        var sharedStamp = new DateTime(2026, 8, 22, 12, 0, 0, DateTimeKind.Utc);
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            foreach (var row in await ctx.OutboxMessages.ToListAsync())
+                row.CreatedAt = sharedStamp;
+            await ctx.SaveChangesAsync();
+        }
+
+        var stored = await AllOutboxAsync();
+        Assert.Equal(2, stored.Count);
+        Assert.All(stored, r => Assert.Equal(sharedStamp, r.CreatedAt));
+        Assert.Equal(
+            [1, 2],
+            stored.OrderBy(r => r.Sequence).Select(r => r.Sequence).ToArray());
+
+        await RunDispatcherAsync();
+
+        // Corroborating only — see the note at the top of this test.
+        Assert.Equal(
+            [first.EventId, second.EventId],
+            TestOutboxEventHandler.Received.Select(e => e.EventId).ToArray());
+    }
+
+    [Fact]
     public async Task Dispatcher_DispatchesByConcreteType_RoutingToCorrectHandler()
     {
         await PublishAsync(new TestOutboxEvent(Guid.NewGuid(), "first", DateTime.UtcNow));

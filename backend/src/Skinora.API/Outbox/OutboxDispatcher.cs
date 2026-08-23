@@ -123,7 +123,12 @@ public class OutboxDispatcher : IOutboxDispatcher
         var batch = await _dbContext.OutboxMessages
             .Where(m => m.Status == OutboxMessageStatus.PENDING
                         || m.Status == OutboxMessageStatus.FAILED)
+            // CreatedAt alone left ties undefined: rows published in one unit of
+            // work share it, because DateTime.UtcNow resolves far coarser than
+            // the gap between two Add calls. Sequence breaks those ties in
+            // publish order (T140-OutboxDispatchOrderNonDeterministic).
             .OrderBy(m => m.CreatedAt)
+            .ThenBy(m => m.Sequence)
             .Take(_options.BatchSize)
             .ToListAsync();
 
