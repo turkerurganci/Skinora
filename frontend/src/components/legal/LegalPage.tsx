@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Footer } from "@/components/layout/Footer";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 export interface LegalPageProps {
   /** Translation namespace for this page, e.g. "legal.privacy". */
@@ -54,10 +55,10 @@ export function LegalPage({ namespace, sectionKeys }: LegalPageProps) {
           {sectionKeys.map((key) => (
             <section key={key}>
               <h2 className="text-xl font-semibold text-gray-900">
-                {t(`sections.${key}.heading`)}
+                {tDynamicOrKey(t, `sections.${key}.heading`)}
               </h2>
               <p className="mt-2 text-base leading-relaxed text-gray-700">
-                {t(`sections.${key}.body`)}
+                {tDynamicOrKey(t, `sections.${key}.body`)}
               </p>
             </section>
           ))}

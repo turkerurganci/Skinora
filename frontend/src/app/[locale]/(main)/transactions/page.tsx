@@ -1,4 +1,5 @@
 import { redirect } from "@/i18n/navigation";
+import type { Locale } from "next-intl";
 
 /**
  * F6 / `UITour-TransactionsListPageIsStub` — this route shipped in `c01e790`
@@ -17,7 +18,9 @@ import { redirect } from "@/i18n/navigation";
 export default async function TransactionsPage({
   params,
 }: {
-  params: Promise<{ locale: string }>;
+  // WP4 — Locale, not string: the AppConfig augmentation types the locale
+  // union, and next-intl`s redirect() now checks it.
+  params: Promise<{ locale: Locale }>;
 }) {
   const { locale } = await params;
   redirect({ href: "/dashboard", locale });

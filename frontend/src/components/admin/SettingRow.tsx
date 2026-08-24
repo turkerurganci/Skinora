@@ -8,6 +8,7 @@ import { useUpdateSetting } from "@/lib/hooks/useUpdateSetting";
 import { impactForCategory } from "@/lib/admin/settingsCatalog";
 import type { AdminSettingItem, AdminSettingValueType } from "@/lib/api/admin";
 import { ImpactBadge } from "./ImpactScopeInfoBox";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 interface SettingInputProps {
   valueType: AdminSettingValueType;
@@ -127,7 +128,7 @@ export function SettingRow({ setting }: SettingRowProps) {
   // to underscores for the lookup. Fall back to the backend-provided label
   // (Turkish) for any key not yet present in the i18n catalog.
   const labelKey = `labels.${setting.key.replaceAll(".", "_")}`;
-  const localizedLabel = t.has(labelKey) ? t(labelKey) : setting.label;
+  const localizedLabel = tDynamic(t, labelKey, setting.label);
 
   return (
     <div className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">

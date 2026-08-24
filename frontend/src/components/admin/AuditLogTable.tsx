@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils/cn";
 import { formatDateTime } from "@/lib/utils/format";
 import type { AdminAuditLogItem, AuditLogParticipant } from "@/lib/api/admin";
 import { AuditCategoryBadge } from "./AuditCategoryBadge";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 function shortId(id: string): string {
   return id.slice(0, 8);
@@ -103,9 +104,7 @@ export function AuditLogTable({ entries, className }: AuditLogTableProps) {
       key: "action",
       header: t("columns.action"),
       cell: (row) => (
-        <span className="text-sm text-gray-900">
-          {tAction.has(row.action) ? tAction(row.action) : row.action}
-        </span>
+        <span className="text-sm text-gray-900">{tDynamic(tAction, row.action, row.action)}</span>
       ),
     },
     {

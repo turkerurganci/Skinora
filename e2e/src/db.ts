@@ -280,7 +280,7 @@ export async function getNotificationTypes(): Promise<string[]> {
     .request()
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
-    .query('SELECT Type FROM Notifications WHERE UserId IN (@s,@b)');
+    .query('SELECT Type FROM Notifications WHERE IsDeleted = 0 AND UserId IN (@s,@b)');
   return result.recordset.map((row) => String(row.Type));
 }
 
@@ -317,7 +317,7 @@ export async function getNotificationRecipients(type: string): Promise<string[]>
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .input('t', sql.NVarChar, type)
-    .query('SELECT UserId FROM Notifications WHERE Type = @t AND UserId IN (@s,@b)');
+    .query('SELECT UserId FROM Notifications WHERE IsDeleted = 0 AND Type = @t AND UserId IN (@s,@b)');
   return result.recordset.map((row) => String(row.UserId).toLowerCase());
 }
 
@@ -342,7 +342,7 @@ export async function pollCancelledNoticeRecipients(
       .input('b', sql.UniqueIdentifier, seed.buyerId)
       .query(
         `SELECT DISTINCT UserId FROM Notifications
-         WHERE Type = 'TRANSACTION_CANCELLED' AND UserId IN (@s, @b)`,
+         WHERE IsDeleted = 0 AND Type = 'TRANSACTION_CANCELLED' AND UserId IN (@s, @b)`,
       );
     recipients = result.recordset.map((row) => String(row.UserId).toLowerCase());
     if (want.every((e) => recipients.includes(e))) return recipients;
@@ -505,7 +505,7 @@ export async function pollNotificationRecipients(
       .input('type', sql.NVarChar(64), type)
       .query(
         `SELECT DISTINCT UserId FROM Notifications
-         WHERE Type = @type AND UserId IN (@s, @b)`,
+         WHERE IsDeleted = 0 AND Type = @type AND UserId IN (@s, @b)`,
       );
     recipients = result.recordset.map((row) => String(row.UserId).toLowerCase());
     if (want.every((e) => recipients.includes(e))) return recipients;

@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "@/i18n/messages/tr.json";
 import SteamCallbackPage from "./page";
+import type { Locale } from "next-intl";
 
 /**
  * F4b regresyon testi — `/tr/tr/dashboard`.
@@ -36,7 +37,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => ({
   refreshAccessToken,
 }));
 
-function renderCallback(locale = "tr") {
+function renderCallback(locale: Locale = "tr") {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages}>
       <SteamCallbackPage />

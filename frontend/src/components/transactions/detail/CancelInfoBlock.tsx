@@ -4,6 +4,7 @@ import { CopyButton } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 import { TxHashLink } from "./TxHashLink";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 export interface CancelInfoBlockProps {
   cancelInfo: TransactionDetailCancelInfo;
@@ -22,7 +23,7 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
   return (
     <section className="space-y-3 rounded-lg border border-red-300 bg-red-50 p-4">
       <h2 className="text-base font-semibold text-red-900">
-        {t(`cancelledBy.${cancelInfo.cancelledBy}`)}
+        {tDynamicOrKey(t, `cancelledBy.${cancelInfo.cancelledBy}`)}
       </h2>
       <dl className="space-y-1 text-sm">
         <div className="flex justify-between gap-3">

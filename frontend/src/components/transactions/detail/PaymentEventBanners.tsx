@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import type { TransactionDetailPaymentEvent } from "@/lib/api/transactions";
 import { cn } from "@/lib/utils/cn";
 import { TxHashLink } from "./TxHashLink";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 export interface PaymentEventBannersProps {
   events: TransactionDetailPaymentEvent[];
@@ -41,7 +42,7 @@ export function PaymentEventBanners({ events, stablecoin, cancelled }: PaymentEv
             )}
             role={variant === "warning" ? "alert" : "status"}
           >
-            <p className="font-medium">{t(`${event.type}.title`)}</p>
+            <p className="font-medium">{tDynamicOrKey(t, `${event.type}.title`)}</p>
             <p>{messageFor(event, stablecoin, t)}</p>
             {event.refundTxHash && (
               <p className="mt-1 flex items-center gap-1 font-mono text-xs">
@@ -65,7 +66,7 @@ function bannerVariant(type: string): Variant {
 function messageFor(
   event: TransactionDetailPaymentEvent,
   stablecoin: string,
-  t: (key: string, values?: Record<string, string | number>) => string,
+  t: ReturnType<typeof useTranslations<"transactionDetail.paymentEvents">>,
 ): string {
   switch (event.type) {
     case "INCORRECT_AMOUNT":

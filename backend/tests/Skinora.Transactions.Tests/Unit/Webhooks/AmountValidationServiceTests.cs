@@ -175,13 +175,20 @@ public sealed class AmountValidationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfirmedPayment_PublishesBothEvents_InTheCallersUnitOfWork()
+    public async Task ConfirmedPayment_PublishesBothEvents_BeforeTheCallerSaves()
     {
-        // 09 §13.3 — IOutboxService only adds the row to the change tracker,
-        // so publishing BEFORE the caller's SaveChanges is what makes the
-        // transition and both outbox rows atomic. Asserting the capture
-        // happens while SaveChanges is still pending is the observable half of
-        // that contract: a confirmation that rolls back cannot leave a
+        // WP4 (T140-TestClaimsExceedMeasurement) — renamed from
+        // ...InTheCallersUnitOfWork, which claimed more than this test can see.
+        // The injected CapturingOutboxService only appends to a list; it models
+        // no change tracker and no rollback, so atomicity itself is not what is
+        // being measured here.
+        //
+        // What IS measured is the observable half, and it is the half that can
+        // regress: both events are published BEFORE the caller's SaveChanges.
+        // Atomicity then follows structurally from 09 §13.3 —
+        // IOutboxService.PublishAsync only adds the row to the change tracker,
+        // so a publish that happens before the save shares the save's
+        // transaction. A confirmation that rolls back therefore cannot leave a
         // "send the item" notification behind for a payment that never landed.
         var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 100m);
 
@@ -351,6 +358,12 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.True(domainEvent.IsMultiPayment);
         Assert.Equal(100m, domainEvent.ExcessAmount);
         Assert.Empty(_outbox.Events.OfType<PaymentReceivedEvent>());
+        // WP4 (T140-MultiPaymentLeakPin) — the same pin the underpayment and
+        // guard-rejected arms already carry. The multi-payment arm never calls
+        // AdvanceStateMachineAsync, so no status event is published today; this
+        // asserts it stays that way. A delivery prompt here would tell the
+        // seller to hand over the item for money already on its way back.
+        Assert.Empty(_outbox.Events.OfType<TransactionStatusChangedEvent>());
     }
 
     // ─── Wrong-token ────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { DisputeType } from "@/types/enums";
 import { Spinner } from "./LoadingState";
 import { cn } from "@/lib/utils/cn";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 /**
  * Outcome of the initial auto-check. Includes the human-readable message
@@ -197,7 +198,7 @@ export function DisputeForm({
           className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700"
           role="alert"
         >
-          {tErr.has(errorKey) ? tErr(errorKey) : tErr("generic")}
+          {tDynamic(tErr, errorKey, tErr("generic"))}
         </p>
       )}
 

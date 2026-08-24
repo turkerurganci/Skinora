@@ -8,7 +8,18 @@ on:
 
 env:
   DOTNET_VERSION: '9.0.x'
-  NODE_VERSION: '20'
+  # WP4 (npm-version-ci-parity) — 20 → 24, matching .nvmrc.
+  #
+  # Node 20 ships npm 10 and Node 24 ships npm 11, and npm 10 REJECTS a
+  # lockfile npm 11 wrote. Every lockfile edit therefore had to be made on a
+  # machine pinned to the older npm or `npm ci` failed here — which is exactly
+  # how WP18 PR-2's first run went red. Aligning the runner with the version
+  # developers actually have removes the skew instead of documenting it.
+  #
+  # Verified before the bump rather than after: frontend (tsc + eslint + 222
+  # vitest + build), sidecar-steam (96), sidecar-blockchain (166) and
+  # sidecar-fake all pass on Node 24 locally.
+  NODE_VERSION: '24'
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
@@ -42,6 +53,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      fe-parity-sources: ${{ steps.filter.outputs['fe-parity-sources'] }}
       sidecar-steam: ${{ steps.filter.outputs['sidecar-steam'] }}
       sidecar-blockchain: ${{ steps.filter.outputs['sidecar-blockchain'] }}
       sidecar-fake: ${{ steps.filter.outputs['sidecar-fake'] }}
@@ -69,6 +81,16 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/**'
+            # WP4 (T136-ParityGuardsSkippedOnBackendPRs) — the two FE↔C# parity
+            # guards live under frontend/ but read these backend sources, so the
+            # drift they exist to catch is created by a BACKEND-only PR. Before
+            # this filter such a PR skipped the vitest job entirely and ci-gate
+            # passed a skipped guard, so the guard never ran on the change it
+            # was written for. Kept narrow on purpose: only the files the tests
+            # actually read, not all of backend/**.
+            fe-parity-sources:
+              - 'backend/src/Skinora.Shared/Enums/**'
+              - 'backend/src/Modules/Skinora.Admin/Application/Permissions/PermissionCatalog.cs'
             sidecar-steam:
               - 'sidecar-steam/**'
               - '.github/workflows/**'
@@ -89,6 +111,14 @@ jobs:
               - 'docker-compose.e2e.yml'
               - 'backend/**'
               - 'frontend/**'
+              # WP4 (T138-E2ENginxPathFilterGap) — the happy-path UI leg drives
+              # Playwright through the reverse proxy (compose mounts
+              # ./nginx/nginx.conf and baseUrl is that origin), so a PR that
+              # breaks the /api/v1 or /hubs proxy rule is a PR that breaks E2E.
+              # Without this entry such a PR triggered no leg at all and the
+              # network stayed silent about a change it was the only thing
+              # covering.
+              - 'nginx/**'
               - '.github/workflows/**'
 
       # Build a matrix JSON for docker-build-check. Empty array when no
@@ -301,7 +331,7 @@ jobs:
   frontend-test:
     name: 3b. JS test (vitest)
     needs: [changes]
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['fe-parity-sources'] == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -316,6 +346,16 @@ jobs:
         if: needs.changes.outputs.frontend == 'true'
         working-directory: frontend
         run: npm ci && npm run test
+
+      # WP4 (T136-ParityGuardsSkippedOnBackendPRs) — a backend-only PR does not
+      # match the `frontend` filter, so the step above stays skipped; run just
+      # the two FE↔C# parity guards instead. They read the C# sources directly,
+      # so they are exactly the tests that can fail on such a PR, and running
+      # only them keeps a backend PR off the full jsdom suite.
+      - name: Frontend↔backend parity guards (backend-only PR)
+        if: needs.changes.outputs.frontend != 'true' && needs.changes.outputs['fe-parity-sources'] == 'true'
+        working-directory: frontend
+        run: npm ci && npx vitest run src/types/enums.parity.test.ts src/lib/admin/permissionCatalog.parity.test.ts
 
       - name: Sidecar-steam vitest
         if: needs.changes.outputs['sidecar-steam'] == 'true'
@@ -752,6 +792,22 @@ jobs:
       - name: Dump compose logs on failure
         if: failure()
         run: docker compose -f docker-compose.e2e.yml logs --tail=200
+
+      # WP4 (T138-E2ENoArtifactUpload) — playwright.config.ts already produces
+      # an HTML report and traces on CI; without this step they were discarded
+      # when the leg ended and the only diagnosis left was 200 lines of compose
+      # log. These legs are advisory, so a red one falls quietly — keeping the
+      # report is what makes it worth looking at afterwards.
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.suite }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Teardown
         if: always()

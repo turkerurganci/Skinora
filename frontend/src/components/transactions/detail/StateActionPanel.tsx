@@ -21,6 +21,7 @@ import { DisputeModal } from "./DisputeModal";
 import { InventoryHiddenNotice } from "./InventoryHiddenNotice";
 import { SellerTradeCta } from "./SellerTradeCta";
 import { SettlementNotice } from "./SettlementNotice";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export interface StateActionPanelProps {
   detail: TransactionDetailResponse;
@@ -155,11 +156,7 @@ export function StateActionPanel({
       onRefetch();
     } catch (err) {
       if (err instanceof ApiError) {
-        setCancelError(
-          t.has(`cancelErrors.${err.code}`)
-            ? t(`cancelErrors.${err.code}`)
-            : t("cancelErrors.generic"),
-        );
+        setCancelError(tDynamic(t, `cancelErrors.${err.code}`, t("cancelErrors.generic")));
       } else {
         setCancelError(t("cancelErrors.generic"));
       }

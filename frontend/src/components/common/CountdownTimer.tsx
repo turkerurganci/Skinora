@@ -129,7 +129,7 @@ function formatClock(r: RemainingTime): string {
 
 function formatVerbose(
   r: RemainingTime,
-  t: (key: string, values?: Record<string, number>) => string,
+  t: ReturnType<typeof useTranslations<"countdown">>,
 ): string {
   if (r.days > 0) {
     return t("verboseDays", { days: r.days, hours: r.hours });
