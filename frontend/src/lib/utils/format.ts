@@ -60,28 +60,6 @@ export function formatDateLong(value: string | Date, locale?: string): string {
 }
 
 /**
- * Relative recency label ("5 dakika önce", "2 saat önce") — backs the S18 bot
- * "Son Kontrol" field (04 §8.7). Computed against the current clock at render
- * time, so it is **non-deterministic across renders**: callers must be client
- * components (the S18 page loads via React Query, so the value only renders
- * client-side — no SSR hydration mismatch). For spans ≥ 24h the absolute
- * date+time is clearer than "3 gün önce", so it falls back to {@link formatDateTime}.
- * `now` is injectable for deterministic tests.
- */
-export function formatRelativeTime(value: string | Date, locale?: string, now?: Date): string {
-  const date = toDate(value);
-  const ref = now ?? new Date();
-  const diffSec = Math.round((date.getTime() - ref.getTime()) / 1000);
-  const rtf = new Intl.RelativeTimeFormat(normalizeLocale(locale), { numeric: "auto" });
-  if (Math.abs(diffSec) < 60) return rtf.format(diffSec, "second");
-  const diffMin = Math.round(diffSec / 60);
-  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, "minute");
-  const diffHour = Math.round(diffMin / 60);
-  if (Math.abs(diffHour) < 24) return rtf.format(diffHour, "hour");
-  return formatDateTime(date, locale);
-}
-
-/**
  * Locale-aware number formatting for **non-stablecoin** values — counters,
  * statistics, ranking. 04 §10.3 thousand/decimal separator table:
  *   en/zh → 1,234.56   tr/es → 1.234,56
