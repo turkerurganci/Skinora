@@ -22,9 +22,9 @@ import { dirname, join } from "node:path";
  *
  * SCOPE — state it, do not assume it. This covers exactly what `enums.ts`
  * declares as a TS `enum`. Catalogue copies written as string unions elsewhere
- * in the frontend (`EmergencyHoldReleaseAction` in `lib/api/admin.ts` and again
- * in `lib/signalr/events.ts`) are NOT compared against C# by anything — see
- * DEFERRED_BACKLOG `T134-FeEnumUnionDup`.
+ * in the frontend are NOT compared against C# by anything. WP6a closed the one
+ * known case: `EmergencyHoldReleaseAction` was a bare string union in
+ * `lib/api/admin.ts` and now lives in `enums.ts`, so this guard covers it.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

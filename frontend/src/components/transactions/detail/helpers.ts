@@ -187,18 +187,6 @@ export function maskAddress(value: string, head = 6, tail = 4): string {
   return `${value.slice(0, head)}…${value.slice(-tail)}`;
 }
 
-/**
- * Map the backend `timeout.type` string onto a payload-agnostic key for
- * i18n lookup. The backend currently emits server-side strings ("payment",
- * "buyer_acceptance", "seller_trade_offer", "buyer_trade_offer") — we
- * preserve them verbatim. Unknown types fall back to "generic".
- */
-export function timeoutLabelKey(type: string): string {
-  const lower = type.toLowerCase();
-  const known = new Set(["payment", "buyer_acceptance", "seller_trade_offer", "buyer_trade_offer"]);
-  return known.has(lower) ? lower : "generic";
-}
-
 export type CallerView = "public" | "seller" | "buyer";
 
 export function deriveCallerView(detail: TransactionDetailResponse): CallerView {
