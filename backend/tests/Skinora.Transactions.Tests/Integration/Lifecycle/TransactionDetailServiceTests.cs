@@ -943,4 +943,97 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Null(outcome.Body!.UserRole);
         Assert.Null(outcome.Body.BuyerInventoryVisible);
     }
+
+    // ---------- WP2c: cancelInfo.statusAtCancellation ----------
+
+    [Fact]
+    public async Task CancelInfo_StatusAtCancellation_Comes_From_The_Recorded_Transition()
+    {
+        // No new column: the status the flow stopped at is recovered from the
+        // TransactionHistory row that moved it into the terminal state.
+        var transaction = await CreateTransactionAsync(TransactionStatus.CANCELLED_ADMIN);
+        await SeedHistoryAsync(
+            transaction.Id, TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.CANCELLED_ADMIN, -2);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(
+            nameof(TransactionStatus.PAYMENT_RECEIVED),
+            outcome.Body!.CancelInfo!.StatusAtCancellation);
+    }
+
+    [Fact]
+    public async Task CancelInfo_StatusAtCancellation_Is_Null_Without_A_History_Row()
+    {
+        // Pre-history records must not break — the client falls back to its old
+        // rendering when the field is absent.
+        var transaction = await CreateTransactionAsync(TransactionStatus.CANCELLED_ADMIN);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.NotNull(outcome.Body!.CancelInfo);
+        Assert.Null(outcome.Body.CancelInfo!.StatusAtCancellation);
+    }
+
+    [Fact]
+    public async Task CancelInfo_StatusAtCancellation_Ignores_Transitions_Into_Other_States()
+    {
+        // Only the transition INTO the current status counts. A flow that went
+        // CREATED -> ACCEPTED -> PAYMENT_RECEIVED -> CANCELLED_ADMIN must report
+        // PAYMENT_RECEIVED, not the first hop it ever made.
+        var transaction = await CreateTransactionAsync(TransactionStatus.CANCELLED_ADMIN);
+        await SeedHistoryAsync(transaction.Id, TransactionStatus.CREATED, TransactionStatus.ACCEPTED, -10);
+        await SeedHistoryAsync(
+            transaction.Id, TransactionStatus.ACCEPTED, TransactionStatus.PAYMENT_RECEIVED, -6);
+        await SeedHistoryAsync(
+            transaction.Id, TransactionStatus.PAYMENT_RECEIVED, TransactionStatus.CANCELLED_ADMIN, -2);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(
+            nameof(TransactionStatus.PAYMENT_RECEIVED),
+            outcome.Body!.CancelInfo!.StatusAtCancellation);
+    }
+
+    [Fact]
+    public async Task CancelInfo_StatusAtCancellation_Takes_The_Newest_Entry_Into_The_Status()
+    {
+        // A transaction can re-enter the same terminal status (re-cancel after an
+        // admin unwind). The newest transition is the one being displayed.
+        var transaction = await CreateTransactionAsync(TransactionStatus.CANCELLED_ADMIN);
+        await SeedHistoryAsync(
+            transaction.Id, TransactionStatus.CREATED, TransactionStatus.CANCELLED_ADMIN, -20);
+        await SeedHistoryAsync(
+            transaction.Id, TransactionStatus.ITEM_DELIVERED, TransactionStatus.CANCELLED_ADMIN, -1);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _seller.Id, SellerSteamId, CancellationToken.None);
+
+        Assert.Equal(
+            nameof(TransactionStatus.ITEM_DELIVERED),
+            outcome.Body!.CancelInfo!.StatusAtCancellation);
+    }
+
+    private async Task SeedHistoryAsync(
+        Guid transactionId,
+        TransactionStatus? previous,
+        TransactionStatus next,
+        int minutesAgo)
+    {
+        Context.Set<TransactionHistory>().Add(new TransactionHistory
+        {
+            TransactionId = transactionId,
+            PreviousStatus = previous,
+            NewStatus = next,
+            Trigger = "test",
+            // FK_TransactionHistory_Users_ActorId — the row must point at a real user.
+            ActorType = ActorType.SYSTEM,
+            ActorId = _seller.Id,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(minutesAgo),
+        });
+        await Context.SaveChangesAsync();
+    }
 }

@@ -1274,9 +1274,12 @@ Olay yoksa boş array `[]` döner.
   "cancelledBy": "SELLER",
   "reason": "Fiyat konusunda anlaşamadık",
   "cancelledAt": "2026-03-16T15:00:00Z",
-  "paymentRefunded": false
+  "paymentRefunded": false,
+  "statusAtCancellation": "PAYMENT_RECEIVED"
 }
 ```
+
+`statusAtCancellation` akışın **durduğu andaki** statüdür — timeline kırmızı X'i bu adıma koyar (04 §C05); alan olmadan iptal edilen her işlem 1. adımda durmuş gibi görünüyordu. Sunucu bunu `TransactionHistory`'nin **mevcut terminal statüye giren** geçişinin `previousStatus`'undan türetir (yeni kolon/migration yok); birden fazla giriş varsa **en yenisi** alınır. Geçiş kaydı bulunmayan (history öncesi) kayıtlarda alan **yoktur** ve istemci eski davranışına döner (WP2c).
 
 **`flagInfo` (FLAGGED):**
 ```json

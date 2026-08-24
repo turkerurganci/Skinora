@@ -248,6 +248,12 @@ export interface TransactionDetailCancelInfo {
   reason: string;
   cancelledAt: string;
   paymentRefunded: boolean;
+  /**
+   * WP2c — status the flow held when it was cancelled (07 §7.5), derived
+   * backend-side from the recorded transition. Drives the timeline red X
+   * position (04 §C05). Absent for a record with no history row.
+   */
+  statusAtCancellation?: string;
 }
 
 export interface TransactionDetailFlagInfo {

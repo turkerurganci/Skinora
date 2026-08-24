@@ -131,7 +131,17 @@ public sealed record CancelInfoDto(
     string CancelledBy,
     string Reason,
     DateTime CancelledAt,
-    bool PaymentRefunded);
+    bool PaymentRefunded,
+    // WP2c — the status the transaction held when it was cancelled, so the
+    // timeline can put its red X on the step the flow actually stopped at
+    // (04 §C05) instead of always on step 1. Same concept as
+    // HoldInfoDto.PreviousStatus.
+    //
+    // Derived from TransactionHistory.PreviousStatus rather than stored on the
+    // Transaction row — the transition is already recorded, so no column and no
+    // migration are needed. Null when no history row is found (a pre-history
+    // record); the client keeps its old behaviour in that case.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? StatusAtCancellation);
 
 /// <summary>Flag info block (07 §7.5 flagInfo).</summary>
 public sealed record FlagInfoDto(string FlagType, string Message);
