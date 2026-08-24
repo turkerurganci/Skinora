@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { healthCheckFactory } from '../health/HealthController.js';
+import { healthCheckFactory, type HealthDeps } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import type { InventoryService } from '../trade/InventoryService.js';
@@ -19,14 +19,20 @@ const STEAM_ID64_REGEX = /^7656119[0-9]{10}$/;
 export interface RouterDeps {
   inventoryService?: InventoryService;
   tradeHoldService?: TradeHoldService;
+  /**
+   * WP5 — overrides the `/health` outbound probe. Threaded through so tests can
+   * exercise the route without reaching the real Steam API; production passes
+   * nothing and gets the real probe.
+   */
+  health?: HealthDeps;
 }
 
 export function buildRouter(deps: RouterDeps = {}): Router {
-  const { inventoryService, tradeHoldService } = deps;
+  const { inventoryService, tradeHoldService, health } = deps;
   const router = Router();
 
   // Health check — no auth required
-  router.get('/health', healthCheckFactory());
+  router.get('/health', healthCheckFactory(health));
 
   // Prometheus metrics — no auth required (T16)
   router.get('/metrics', metricsHandler);

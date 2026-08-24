@@ -1122,7 +1122,7 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **63 anahtar**. 
 | `open_link_enabled` | Feature | bool | false | Açık link yöntemi aktif mi |
 | `hot_wallet_limit` | Wallet | decimal | — | Hot wallet maksimum bakiye limiti — aşıldığında admin alert, cold wallet transfer gerekir (05 §3.3) |
 | `auth.banned_countries` | AccessControl | string | NONE | Geo-block ülke kodları CSV (ISO-3166-1 alpha-2); 'NONE' = engelsiz (T30, 02 §21.1, 03 §11a.1) |
-| `auth.min_steam_account_age_days` | AccessControl | int | 30 | Steam hesap minimum yaş eşiği (gün) — altındaysa giriş engellenir (T30, 02 §21.1, 03 §11a.2) |
+| `auth.min_steam_account_age_days` | AccessControl | int | 30 | Steam hesap minimum yaş eşiği (gün) — altındaysa giriş engellenir (T30, 02 §21.1, 03 §11a.2). **`0` = kapı tamamen kapalı** (`SettingsBasedAgeGateCheck` eşiği okuduktan sonra `thresholdDays <= 0` için `Allowed()` döner) ve bu değer AD9 üzerinden yazılabilir — negatif değerler reddedilir (WP5) |
 | `wallet.payout_address_cooldown_hours` | Wallet | int | 24 | Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3) |
 | `wallet.refund_address_cooldown_hours` | Wallet | int | 24 | Alıcı iade adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma ve işlem kabul etme engellenir (02 §12.3) |
 | `reputation.min_account_age_days` | Reputation | int | 30 | Hesap yaşı bu eşiğin altındaysa composite reputationScore null döner (T43, 02 §13) |

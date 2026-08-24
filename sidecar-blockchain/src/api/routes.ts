@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { healthCheck } from '../health/HealthController.js';
+import { healthCheckFactory } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import { deriveAddressHandler, walletBalancesHandler } from './walletHandlers.js';
@@ -34,7 +34,7 @@ export function createRouter(deps: RouterDeps): Router {
   const router = Router();
 
   // Health check — no auth required
-  router.get('/health', healthCheck);
+  router.get('/health', healthCheckFactory());
 
   // Prometheus metrics — no auth required (T16)
   router.get('/metrics', metricsHandler);
