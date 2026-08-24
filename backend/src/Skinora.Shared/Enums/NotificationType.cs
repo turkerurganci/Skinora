@@ -50,8 +50,9 @@ public enum NotificationType
 
     // --- WP16: platform health probe alert (05 §4.4, 02 §3.3) ---
     // Admin-only operational alert raised when the periodic health probe detects
-    // a Steam/blockchain sidecar outage (or its recovery). Alert-only — the admin
-    // decides whether to apply a maintenance freeze (WP7). Fanned out to every
+    // a Steam/blockchain sidecar outage (or its recovery). The probe freezes the
+    // affected timeouts itself (backlog WP1/T50, 02 §3.3); this alert reports
+    // that it happened and the admin can still freeze manually (WP7). Fanned out to every
     // admin via the WP8 AdminBroadcast pattern; pairs with the
     // PLATFORM_OUTAGE_DETECTED audit row.
     ADMIN_PLATFORM_OUTAGE

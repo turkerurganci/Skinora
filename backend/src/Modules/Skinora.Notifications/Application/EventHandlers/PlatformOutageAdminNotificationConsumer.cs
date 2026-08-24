@@ -13,8 +13,9 @@ namespace Skinora.Notifications.Application.EventHandlers;
 /// <see cref="NotificationType.ADMIN_PLATFORM_OUTAGE"/> in-app notification for
 /// every admin. A Steam / blockchain sidecar crossed the outage threshold (or
 /// recovered), so a durable admin-inbox record sits beside the transient
-/// realtime banner and the <c>PLATFORM_OUTAGE_DETECTED</c> audit row. Alert-only
-/// — the admin decides whether to apply a maintenance freeze (WP7).
+/// realtime banner and the <c>PLATFORM_OUTAGE_DETECTED</c> audit row. The probe
+/// has already frozen the affected timeouts by the time this arrives (backlog
+/// WP1/T50, 02 §3.3); the admin can still apply a manual maintenance freeze (WP7).
 /// </summary>
 public sealed class PlatformOutageAdminNotificationConsumer
     : AdminBroadcastNotificationConsumerBase<PlatformOutageAlertEvent>

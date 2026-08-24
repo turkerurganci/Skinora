@@ -306,6 +306,13 @@ builder.Services.AddHangfireModule(builder.Configuration);
 builder.Services.AddScoped<SettingsBootstrapService>();
 builder.Services.AddHostedService<SettingsBootstrapHook>();
 
+// WP1 (T81) — report whether the PRICE_DEVIATION fraud rule can actually fire.
+// Registered immediately after the bootstrap hook so it reads the hydrated
+// price_deviation_threshold, and before anything that could serve traffic.
+// Diagnostic only: both inert defaults (Provider=logging, threshold=1.0) are
+// valid deployments, so it warns instead of failing the host.
+builder.Services.AddHostedService<PriceDeviationConfigDiagnosticHook>();
+
 // Outbox (T10) — IOutboxService producer, dispatcher (self-rescheduling
 // Hangfire job + Medallion distributed lock), consumer idempotency store,
 // receiver-side external idempotency service, MediatR fan-out and the
@@ -341,8 +348,9 @@ builder.Services.AddHostedService<RetentionJobsRegistrar>();
 
 // WP16 — platform health probe (05 §4.4, 02 §3.3). Periodic Hangfire job sweeps
 // the Steam + blockchain sidecar /health endpoints and raises an admin alert
-// (in-app + audit) on each outage / recovery transition. Alert-only — the admin
-// applies the maintenance freeze (WP7) if warranted. Single-instance MVP state
+// (in-app + audit) on each outage / recovery transition. Backlog WP1 (T50) added
+// the automatic bulk timeout freeze/resume on those same edges per 02 §3.3; the
+// admin's manual maintenance freeze (WP7) still works. Single-instance MVP state
 // (Redis scale-out is post-MVP, PRE_F6_PLAN §3).
 builder.Services.Configure<HealthProbeOptions>(
     builder.Configuration.GetSection(HealthProbeOptions.SectionName));

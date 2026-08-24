@@ -116,6 +116,22 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
 
 > **Kontrol:** `Provider=logging` bırakılırsa işlem oluşturmada `MarketPriceAtCreation` null kalır, PRICE_DEVIATION flag'i üretilmez ve admin flag kuyruğunda bu tip hiç görünmez. Bu, deploy'un **bilinçli** bir kararı olmalıdır.
 
+> **Doğrulama — backend açılış log'u (WP1/T81).** Bu iki ayarın birlikte doğru olup olmadığı artık tahmin edilmiyor: backend her açılışta verdict'i basar. Kesin olarak birini göreceksiniz:
+>
+> ```
+> PRICE_DEVIATION rule ACTIVE — SteamMarket:Provider=steam-market, price_deviation_threshold=0.3 (30% deviation flags a transaction).
+> ```
+>
+> ```
+> PRICE_DEVIATION rule INEFFECTIVE — it will never flag a transaction. Price source: NO PRICE (logging stub, fail-open) ...
+> ```
+>
+> `INEFFECTIVE` bir hata değildir — fail-open bir deploy geçerli bir tercihtir (yukarıdaki kontrol) — ama **sessiz** olmamalıdır. Bu satır `ForwardedHeadersNotRegistered` dersinin fraud config'e uygulanmış hâlidir: varsayılan duruşta etkisiz kalan bir kontrolün bunu açılışta söylemesi gerekir, yoksa fark etmenin tek yolu "hiçbir şey flaglenmemiş" olduğunu bir gün fark etmektir. Kontrol komutu:
+>
+> ```bash
+> docker logs skinora-backend 2>&1 | grep "PRICE_DEVIATION rule"
+> ```
+
 ---
 
 ## D. Sidecar config parity (cadence / sweep) — env otoriter, restart-bound
