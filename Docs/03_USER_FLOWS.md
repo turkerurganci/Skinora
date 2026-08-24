@@ -313,7 +313,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
 3. Item hiçbir zaman platformda olmadı, satıcıda kaldı → item iadesi diye bir işlem yoktur
 4. **Platform adresi izlemeye devam eder** — gecikmeli ödeme gelirse:
-   - Gelen ödeme alıcının iade adresine otomatik iade edilir (iade tutarından gas fee düşülür)
+   - Gelen ödeme **geldiği adrese** otomatik iade edilir (iade tutarından gas fee düşülür). Ödeme kabul edilmediği için hedef, alıcının beyan ettiği iade adresi değil paranın kaynağıdır — 02 §4.4 notu, normatif kaynak 08 §562
 5. Satıcıya "Alıcı ödeme yapmadı, işlem iptal oldu" bildirimi gider
 6. Alıcıya "Zamanında ödeme yapılmadı, işlem iptal oldu" bildirimi gider
 
@@ -372,7 +372,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 2. Platform token türünü kontrol eder
 3. Beklenen token ile eşleşmiyor ama platform bu token'ı işleyebiliyor
 4. Platform ödemeyi kabul etmez
-5. Gelen token alıcının iade adresine otomatik iade edilir (gas fee düşülür)
+5. Gelen token **geldiği adrese** otomatik iade edilir (gas fee düşülür) — reddedilen ödeme iadesi, hedef paranın kaynağıdır (02 §4.4 notu, 08 §562)
 6. Alıcıya "Yanlış token gönderildi, lütfen X token ile gönderin" bildirimi gider
 7. Timeout süresi devam eder
 
@@ -391,7 +391,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 1. Ödeme timeout'u dolmuş ve işlem iptal edilmiştir; item baştan beri satıcının envanterinde olduğu için iade edilecek bir eşya yoktur
 2. Platform ödeme adresini izlemeye devam eder
 3. Gecikmeli ödeme platforma ulaşır
-4. Platform ödemeyi otomatik olarak alıcının iade adresine iade eder (iade tutarından gas fee düşülür)
+4. Platform ödemeyi otomatik olarak **geldiği adrese** iade eder (iade tutarından gas fee düşülür) — işlem zaten iptal olduğu ve ödeme kabul edilmediği için hedef paranın kaynağıdır (02 §4.4 notu, 08 §562)
 5. Alıcıya "Gecikmeli ödemeniz tespit edildi ve iade edildi" bildirimi gider
 
 ### 5.5 Çoklu/Parçalı Ödeme
@@ -399,7 +399,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 1. Alıcı aynı ödeme adresine birden fazla transfer gönderir
 2. **Senaryo A — İlk transfer doğru tutarda:** İlk transfer kabul edilir, işlem ilerler. Sonraki transferler fazla tutar olarak değerlendirilir → otomatik iade (§5.2)
 3. **Senaryo B — Parçalı gönderim (her biri eksik):** Her parçalı transfer ayrı ayrı değerlendirilir. Hiçbiri tek başına beklenen tutara ulaşmadığından her biri §5.1 kuralıyla iade edilir. Platform parçalı ödemeleri birleştirmez — alıcının tek seferde doğru tutarı göndermesi gerekir
-4. **Senaryo C — İşlem COMPLETED sonrası ek transfer:** İşlem tamamlanmış, ödeme adresi hâlâ izleniyor. Gelen ek transfer alıcının iade adresine otomatik iade edilir (gecikmeli ödeme kuralı — §5.4)
+4. **Senaryo C — İşlem COMPLETED sonrası ek transfer:** İşlem tamamlanmış, ödeme adresi hâlâ izleniyor. Gelen ek transfer **geldiği adrese** otomatik iade edilir (02 §4.4 notu, 08 §562) (gecikmeli ödeme kuralı — §5.4)
 5. Alıcıya her durumda ilgili bildirim gider
 
 ---
@@ -558,7 +558,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
 
 ### 8.2 Flag'lenmiş İşlem İnceleme
 
-1. Admin işlem flag kuyruğunu görür (yalnızca işlem flag'leri — pre-create: fiyat sapması, yüksek hacim)
+1. Admin flag kuyruğunu açar ve **flag kategorisi** filtresinden işlem flag'lerini seçer (`TRANSACTION_PRE_CREATE` — fiyat sapması, yüksek hacim)
 2. Flag'lenmiş işlemi seçer
 3. İşlem detaylarını görür:
    - İşlem bilgileri (item, fiyat, taraflar)
@@ -569,7 +569,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
    - **İşleme Devam Et →** Flag false positive — işlem normal akışa döner, taraflara bildirim gider
    - **İptal Et →** Fraud doğrulanmış — işlem iptal edilir, taraflara bildirim gider
 
-> **Not:** Hesap flag'leri (anormal davranış, çoklu hesap) bu kuyrukta görünmez — bunlar ayrı bir hesap flag yönetim yüzeyinden incelenir (02 §14.0, §16.2).
+> **Not:** Hesap flag'leri (anormal davranış, çoklu hesap) **aynı kuyrukta**, `ACCOUNT_LEVEL` kategorisi altında incelenir — ayrı bir yönetim yüzeyi yoktur. Flag kategorisi bir filtredir, farklı bir ekran değil (04 §8.2 "Flag kategorisi", 07 §9.2 `scope` parametresi, 02 §14.0/§16.2). Hesap flag'lerinin kararları işlem flag'lerinden farklıdır (işlemi sürdürme/iptal yerine hesap düzeyi yaptırım), ama inceleme yüzeyi ortaktır.
 
 ### 8.3 İşlem Listesi ve Arama
 

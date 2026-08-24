@@ -604,7 +604,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `MarketPriceAtCreation` | decimal(18,6) | NULL | Oluşturma anındaki piyasa fiyatı (fraud kontrolü için) |
 | **Cüzdan Adresleri (Snapshot)** | | | |
 | `SellerPayoutAddress` | string(50) | NOT NULL | Satıcının cüzdan adresi — oluşturma anında sabitlenir |
-| `BuyerRefundAddress` | string(50) | NULL | Alıcının iade adresi — kabul anında sabitlenir |
+| `BuyerRefundAddress` | string(50) | NULL | Alıcının iade adresi — kabul anında sabitlenir. **Yalnız `BUYER_REFUND` hedefidir** (kabul edilmiş ödemenin iadesi); reddedilen ödeme iadeleri paranın geldiği adrese döner — 02 §4.4 notu, normatif kaynak 08 §562 |
 | **Timeout** | | | |
 | `PaymentTimeoutMinutes` | int | NOT NULL | Satıcının seçtiği ödeme timeout süresi |
 | `AcceptDeadline` | datetime | NULL | Alıcı kabul son tarihi |
@@ -805,7 +805,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 | `TxHash` | string(100) | NULL, UNIQUE (`TxHash`+`EventIndex`) | Blockchain transaction hash (broadcast sonrası) |
 | `EventIndex` | int | NULL, CHECK (`>= 0`) | Gelen TRC-20 Transfer event'inin tx içindeki **on-chain log index**'i (08 §3.4 — WP10). Gelen izlenen kayıtlarda (`BUYER_PAYMENT`/`WRONG_TOKEN_INCOMING`/`SPAM_TOKEN_INCOMING`) `TxHash` ile birlikte per-event tekilliği sağlar — tek bir tx'in depozit adresine birden fazla transfer'i her event için ayrı kredilenir. Tek-transfer'li yaygın ödeme `0`. Giden kayıtlarda (iade/payout/sweep) NULL — gelen event'leri yoktur ve her biri ayrı broadcast `TxHash`'i taşır |
 | `FromAddress` | string(50) | NOT NULL | Gönderen adres |
-| `ToAddress` | string(50) | NOT NULL | Alıcı adres |
+| `ToAddress` | string(50) | NOT NULL | Alıcı adres. Giden iadelerde hedef **iade türüne göre** değişir: `BUYER_REFUND` → `Transaction.BuyerRefundAddress`; `INCORRECT_AMOUNT_REFUND` / `EXCESS_REFUND` / `WRONG_TOKEN_REFUND` / `LATE_PAYMENT_REFUND` → kaynak transferin `FromAddress`'i (02 §4.4 notu, 08 §562) |
 | `Amount` | decimal(18,6) | NOT NULL | Transfer tutarı |
 | `Token` | int | NOT NULL | Enum: StablecoinType |
 | `ActualTokenAddress` | string(50) | NULL | Yanlış token senaryosunda gelen/refund edilen token'ın contract adresi. `WRONG_TOKEN_INCOMING` ve `WRONG_TOKEN_REFUND` türlerinde dolu |
