@@ -4,7 +4,21 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-25, backlog kapatma turu — WP6a + WP6b §9):** **20 aktif / 107 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-25, backlog kapatma turu — WP7 §9, TUR KAPANDI):** **17 aktif / 110 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+>
+> **Tur özeti: 57 aktif → 17.** Dokuz çalışma paketi (WP1 §4 · WP2a/b/c §5+§10 · WP3 §6 · WP4 §7 · WP5 §8 · WP6a/b + WP7 §9). Kalan 17'nin çoğu **kayıtlı karar**: yedi büyük P2P/altyapı kalemi owner kararıyla ertelendi, üçü bu turda ölçülüp daraltıldı, geri kalanı yeni faz işi.
+>
+> **Turun baskın bulgusu koddan değil ölçümden çıktı: kapatılan satırların büyük kısmı iş gerektirmedi, doğrulama gerektirdi.** On satır zaten çözülmüştü ve yalnız çevrilmemişti; **üçü iddiasının TERSİ** çıktı (`admin-table-sort` "API var UI göndermiyor" diyordu — UI gönderiyordu · `suspend-signalr-spec` "otomatik hold yok" diyordu — vardı · `T134-FeEnumUnionDup` "iki nüsha" diyordu — bir taneydi); biri (`dev-route-visibility`) kendi metnini yalanladı. **Ölçmeden fix yazılsaydı var olmayan iş "yapılmış" olacaktı.**
+>
+> **Üç kez kendi işini ölçüm yakaladı — ve üçü de sessiz kalabilecek kusurlardı.** (1) WP4'te yazılan i18n bekçisinin ilk hâli (next-intl v3 mekanizması) **temiz derliyor ve hiçbir şeyi korumuyordu**; kasıtlı bir typo `tsc`'den geçti. (2) WP5'te health uçlarına eklenen config kontrolleri, WP1'in freeze'iyle birleşince timeout'ları **sonsuza dek dondururdu** — mevcut bir T133 testi yakaladı. (3) WP7'de iki bildirim şablonu, üretici bağlanmadan önce **yanlış metin** taşıyordu: biri yalnız red durumunu anlatıyordu (onayda tersini söylerdi), diğeri elde olmayan `{Amount}`'ı isteyip kullanıcıya ham `{Amount}` gösterecekti.
+>
+> **WP1 bir satırı acil hâle getirdi ve bunu WP5 kapattı.** WP1 otomatik outage freeze'i health sinyaline bağladı; WP5 o sinyalin **sabit `healthy`** döndürdüğünü ölçtü — yani kontrol yapısı gereği hiç ateşleyemezdi. Zincirin ikinci halkası olmasa birincisi kâğıt üstünde kalırdı.
+>
+> **Kapatmak kadar DARALTMAK da yapıldı, ve gerekçeleri kayıtlı.** `url-state-sync` · `profile-prefill-image` · `T136-NoRouteOrMessageCompileGuard` · `P2P-InventoryUnauthorizedMapping` · `F7Gate-EventsWithoutConsumer` — her birinin kapanan yarısı kapandı, açık kalan yarısı **kendi gerekçesiyle** görünür bırakıldı. İkisinde satırın kendi ölçümü işi yasakladı: 401 statü ayrımı (bir `public` profil de 401 döndürmüştü) ve `typedRoutes` (68 `href`'in 67'si template/değişken, yani bekçi hiçbir şey göremezdi).
+>
+> **Sayaç hatası da bu turda oldu ve düzeltildi:** WP4 satırı bir tur boyunca `30/97` dedi, gerçek `27/100`'dü — WP5'in başlık güncellemesi merge öncesi yazılmamıştı. Dosyanın kendi uyarısı, bu kez uyaranın üstünde.
+>
+> **Önceki durum (2026-08-25, WP6a + WP6b §9):** **20 aktif / 107 çözülmüş**. **🔴 YOK.**
 >
 > **Başlıktaki sayı bir tur boyunca yanlış kaldı ve düzeltmesi buraya yazılıyor.** WP4 satırı `30 aktif / 97` diyordu; WP5 üç satır daha kapatınca gerçek sayım `27 / 100` oldu ve başlık merge öncesi güncellenmedi. **Dosyanın kendi başlığında iki kez uyardığı kusurun aynısı**, bu kez sayacın üstünde: elle tutulan bir sayı her pakette yeniden bozulabilir. Bu satırdaki 20/107 dosyanın kendi `awk` komutuyla ölçüldü.
 >
