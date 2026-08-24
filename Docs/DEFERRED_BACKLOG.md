@@ -4,7 +4,17 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-25, backlog kapatma turu — WP4 §7):** **30 aktif / 97 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-25, backlog kapatma turu — WP6a + WP6b §9):** **20 aktif / 107 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+>
+> **Başlıktaki sayı bir tur boyunca yanlış kaldı ve düzeltmesi buraya yazılıyor.** WP4 satırı `30 aktif / 97` diyordu; WP5 üç satır daha kapatınca gerçek sayım `27 / 100` oldu ve başlık merge öncesi güncellenmedi. **Dosyanın kendi başlığında iki kez uyardığı kusurun aynısı**, bu kez sayacın üstünde: elle tutulan bir sayı her pakette yeniden bozulabilir. Bu satırdaki 20/107 dosyanın kendi `awk` komutuyla ölçüldü.
+>
+> **WP6a §9'un dört frontend kalemini kapattı ve ikisinde satırın kendi iddiası ölçümle düzeltildi.** `T134-FeEnumUnionDup` "iki nüsha var" diyordu — tek nüsha vardı; **gerçek eksik** enum'un `enums.ts` dışında yaşayıp FE↔C# parity guard'ının kapsamına hiç girmemesiydi, ve kapatılan o oldu. `T135-FeTimeoutLabelKeyStale` yalnız "ölü" diye kayıtlıydı; silme gerekçesi **bayatlık** çıktı — bildiği anahtarlar v3.0'da kalkan trade-offer kavramlarıydı.
+>
+> **WP6b sözleşmede vaat edilip sabit `null` dönen iki bloğu doldurdu ve ikisinin de kullanıcı etkisi gerçekti:** ödemesini yapmış alıcı "hiçbir şey ulaşmadı" gibi görünen bir ödeme bloğu görüyordu; açık itirazı olan taraf ise itirazın **var olmadığını** söyleyen bir yanıt alıyordu.
+>
+> **`dispute` bloğu bir modül sınırı problemiydi ve porta çevrildi:** `Dispute` entity'si `Skinora.Disputes`'a ait ve o modül zaten `Skinora.Transactions`'ı referans veriyor — ters yön proje döngüsü olurdu. `IAccountFlagChecker` ile birebir aynı ev deseni kullanıldı. `canSubmitTxHash`/`canEscalate` uçların **fiilen uyguladığı** guard'lardan türetiliyor; auto-checker yeniden koşturulmuyor, çünkü checker bir POST'un yaptığı iştir ve cevabı o ana aittir.
+>
+> **Önceki durum (2026-08-25, WP5 §8):** **27 aktif / 100 çözülmüş** (WP4 satırındaki `30/97` bu düzeltmeden önceki hatalı değerdir). **🔴 YOK.**
 >
 > **§7 kapandı** (`tronweb 6` major bump bilinçli ertelendi). Turun en değerli parçası yeni bekçi yazmak değil, **var olan ama hiç koşmayan** bekçileri koşturmaktı.
 >
