@@ -4,45 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { routing } from "@/i18n/routing";
+import { sanitizeReturnUrl } from "@/lib/auth/returnUrl";
 import { cn } from "@/lib/utils/cn";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
-
-const RELATIVE_PATH_RE = /^\/(?!\/)[^?#]*(\?[^#]*)?(#.*)?$/;
-
-/** First path segment of an app-relative URL ("/tr/dashboard?x=1" → "tr"). */
-function firstSegment(path: string): string {
-  const withoutLeadingSlash = path.startsWith("/") ? path.slice(1) : path;
-  return withoutLeadingSlash.split(/[/?#]/)[0];
-}
-
-/**
- * F4a — the return URL must carry a locale segment, and this is not cosmetic.
- * It is the ONLY thing the backend has to tell what language a brand-new user
- * is registering in: A1 stores this value in the `skinora_oid_rt` cookie and
- * the Steam callback derives `PreferredLanguage` from its first segment
- * (`SupportedLanguages.FromPathPrefix`), which decides the language of every
- * notification, dispute message and misdelivery escalation that user will ever
- * receive.
- *
- * Before this function knew about locales it defaulted to a bare
- * "/dashboard": the landing page's primary sign-up CTA passes no returnUrl at
- * all, so the most common path through the product handed the backend a
- * locale-less hint and every new user fell back to English — the exact defect
- * F4 was written to close (`UITour-SignupLanguageHardcodedEn`). A locale-less
- * value also sent the user to whatever locale the middleware resolved after
- * login, so a Turkish visitor could land on /en/dashboard.
- *
- * A returnUrl that already names a locale is left alone (an explicit
- * destination wins); anything that is not an app-relative path is discarded.
- */
-function sanitizeReturnUrl(raw: string | null, locale: string): string {
-  const fallback = `/${locale}/dashboard`;
-  if (!raw || !RELATIVE_PATH_RE.test(raw)) return fallback;
-  if ((routing.locales as readonly string[]).includes(firstSegment(raw))) return raw;
-  return `/${locale}${raw}`;
-}
 
 export default function SteamLoginPage() {
   const t = useTranslations("auth.login");
