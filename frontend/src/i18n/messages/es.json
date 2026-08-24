@@ -1904,5 +1904,38 @@
       },
       "empty": "Aún no hay contrapartes."
     }
+  },
+  "adminUsers": {
+    "title": "Usuarios",
+    "description": "Busca un usuario y abre su página de detalle.",
+    "manageRolesLink": "Asignación de roles →",
+    "tableAriaLabel": "Lista de usuarios",
+    "loadError": "No se pudo cargar la lista de usuarios.",
+    "noRole": "Sin rol",
+    "resultCount": "Total: {count}",
+    "columns": {
+      "user": "Usuario",
+      "steamId": "Steam ID",
+      "role": "Rol",
+      "actions": "Acción"
+    },
+    "actions": {
+      "detail": "Detalle"
+    },
+    "filters": {
+      "search": "Buscar",
+      "searchPlaceholder": "Steam ID o nombre de usuario",
+      "role": "Rol",
+      "allRoles": "Todos"
+    },
+    "scope": {
+      "browse": "Sin término de búsqueda solo se listan los usuarios con un rol de administrador asignado. Busca por Steam ID o nombre de usuario para llegar a cualquier usuario.",
+      "search": "La búsqueda abarca a todos los usuarios excepto las cuentas desactivadas."
+    },
+    "empty": {
+      "title": "No se encontraron usuarios",
+      "browseDescription": "Todavía no hay ningún usuario con un rol de administrador asignado. Busca por Steam ID o nombre de usuario para encontrar a cualquier usuario.",
+      "searchDescription": "Ningún usuario coincide con estos filtros."
+    }
   }
 }
