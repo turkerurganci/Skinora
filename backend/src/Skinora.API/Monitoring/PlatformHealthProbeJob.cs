@@ -7,6 +7,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Timeouts;
 
 namespace Skinora.API.Monitoring;
 
@@ -19,11 +20,19 @@ namespace Skinora.API.Monitoring;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Alert-only by design (owner decision, WP16): the probe never freezes
-/// transactions automatically — it raises the alert and the admin applies the
-/// maintenance freeze (WP7) if warranted. Edge-detection lives in
-/// <see cref="PlatformHealthMonitorState"/> so a sustained outage alerts once,
-/// not every poll.
+/// Alerts <b>and</b> freezes (backlog WP1, owner decision 2026-08-24 —
+/// supersedes the WP16 alert-only decision). 02 §3.3 promises that active
+/// timeouts stop during a Steam outage or a blockchain degradation and that
+/// detection is automatic; leaving the freeze to a human meant users were
+/// charged a timeout for the platform's own outage whenever no admin was
+/// awake. On the degraded edge the probe now calls
+/// <see cref="ITimeoutFreezeService.FreezeManyAsync"/> for the component's
+/// reason and on the recovery edge <see cref="ITimeoutFreezeService.ResumeManyAsync"/>.
+/// Edge-detection lives in <see cref="PlatformHealthMonitorState"/> so a
+/// sustained outage alerts (and freezes) once, not every poll, and the
+/// <c>HealthProbe:FailureThreshold</c> consecutive-failure debounce already
+/// keeps a single flaky probe from tripping it. The admin's manual
+/// maintenance freeze (WP7) is unaffected and still available.
 /// </para>
 /// <para>
 /// The job owns its own unit of work (a standalone recurring job, not part of a
@@ -38,6 +47,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
     private readonly PlatformHealthMonitorState _state;
     private readonly IOutboxService _outbox;
     private readonly IAuditLogger _auditLogger;
+    private readonly ITimeoutFreezeService _freeze;
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
     private readonly HealthProbeOptions _options;
@@ -48,6 +58,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
         PlatformHealthMonitorState state,
         IOutboxService outbox,
         IAuditLogger auditLogger,
+        ITimeoutFreezeService freeze,
         AppDbContext db,
         TimeProvider clock,
         IOptions<HealthProbeOptions> options,
@@ -57,6 +68,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
         _state = state;
         _outbox = outbox;
         _auditLogger = auditLogger;
+        _freeze = freeze;
         _db = db;
         _clock = clock;
         _options = options.Value;
@@ -79,6 +91,17 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
             var consecutiveFailures = _state.ConsecutiveFailures(component);
             var now = _clock.GetUtcNow().UtcDateTime;
 
+            // WP1 (T50) — apply the bulk timeout freeze/resume BEFORE staging the
+            // alert rows. FreezeManyAsync/ResumeManyAsync own their own
+            // SaveChanges on this same scoped AppDbContext; running them first
+            // keeps that commit out of the alert unit of work, so the revert
+            // path below still governs exactly the rows it staged. Both calls
+            // are idempotent — freeze skips rows already frozen
+            // (TimeoutFrozenAt == null filter) and resume matches on the same
+            // reason — so a revert + re-detect on the next tick cannot
+            // double-apply.
+            var frozenOrResumed = await ApplyTimeoutFreezeAsync(component, transition);
+
             // Audit row (SECURITY_EVENT) — durable record of the transition,
             // pairs 1:1 with the admin notification raised by the event below.
             await _auditLogger.LogAsync(
@@ -95,6 +118,11 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
                         component,
                         status,
                         consecutiveFailures,
+                        // WP1 (T50) — how many transactions the automatic
+                        // freeze/resume touched. null = the bulk call failed;
+                        // the alert still stands and the admin can apply the
+                        // manual maintenance freeze (WP7).
+                        timeoutsAffected = frozenOrResumed,
                     }),
                     IpAddress: null),
                 CancellationToken.None);
@@ -111,8 +139,9 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
 
             applied.Add((component, transition));
             _logger.LogWarning(
-                "Platform health transition — component={Component} status={Status} consecutiveFailures={Failures}.",
-                component, status, consecutiveFailures);
+                "Platform health transition — component={Component} status={Status} "
+                + "consecutiveFailures={Failures} timeoutsAffected={Affected}.",
+                component, status, consecutiveFailures, frozenOrResumed);
         }
 
         if (applied.Count == 0) return;
@@ -137,6 +166,48 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
                 "Platform health probe could not persist {Count} outage transition(s) — "
                 + "reverted in-memory state for re-detection on the next run.",
                 applied.Count);
+        }
+    }
+
+    /// <summary>
+    /// WP1 (T50) — maps a component health edge onto the bulk timeout
+    /// freeze/resume required by 02 §3.3 and applies it. Returns the number of
+    /// transactions touched, or <c>null</c> when the component has no
+    /// platform-level freeze reason or the bulk call failed.
+    /// </summary>
+    /// <remarks>
+    /// A failure is logged and swallowed on purpose: the alert is the safety
+    /// net and it must still reach the admins, who retain the manual WP7
+    /// maintenance freeze. Failing the whole probe here would trade a partial
+    /// outcome (alert without freeze) for no outcome at all.
+    /// </remarks>
+    private async Task<int?> ApplyTimeoutFreezeAsync(string component, HealthTransition transition)
+    {
+        var reason = component switch
+        {
+            PlatformComponents.Steam => (TimeoutFreezeReason?)TimeoutFreezeReason.STEAM_OUTAGE,
+            PlatformComponents.Blockchain => TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION,
+            _ => null,
+        };
+
+        if (reason is null) return null;
+
+        try
+        {
+            return transition == HealthTransition.Degraded
+                ? await _freeze.FreezeManyAsync(reason.Value, CancellationToken.None)
+                : await _freeze.ResumeManyAsync(reason.Value, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Automatic timeout {Action} failed for component={Component} reason={Reason} — "
+                + "the outage alert still fires; apply the manual maintenance freeze if needed.",
+                transition == HealthTransition.Degraded ? "freeze" : "resume",
+                component,
+                reason.Value);
+            return null;
         }
     }
 }

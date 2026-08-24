@@ -12,9 +12,11 @@ namespace Skinora.Shared.Events;
 /// inbox alongside the <c>PLATFORM_OUTAGE_DETECTED</c> audit row.
 /// </summary>
 /// <remarks>
-/// Alert-only by design (owner decision, WP16): the probe never freezes
-/// transactions automatically — it raises the alert and the admin applies the
-/// maintenance freeze (WP7) if warranted. <see cref="Component"/> is a stable
+/// The probe also freezes the component's active timeouts automatically on the
+/// same edge (backlog WP1/T50, 02 §3.3) — this event is the notification half,
+/// so a recipient learns about an outage the platform has already reacted to.
+/// The admin's manual maintenance freeze (WP7) remains available.
+/// <see cref="Component"/> is a stable
 /// string identifier (<c>"STEAM"</c> / <c>"BLOCKCHAIN"</c>) rather than a shared
 /// enum so the event carries no enum-parity surface.
 /// </remarks>
