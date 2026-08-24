@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { useAuthStore } from "@/lib/stores/auth-store";
+import { signOut } from "@/lib/auth/signOut";
 import { LanguageSelector } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
 
@@ -19,7 +19,8 @@ export function SuspendedHeader({
 }: SuspendedHeaderProps) {
   const t = useTranslations("nav");
   const locale = useLocale();
-  const logout = useAuthStore((s) => s.logout);
+  // F7a — mağazadaki logout yalnız yerel token'ı siler; signOut A8'i de
+  // çağırıp refresh token'ı sunucuda iptal eder.
 
   const href = (path: string) => `/${locale}${path}`;
   const isExternalSupport = supportUrl.startsWith("http") || supportUrl.startsWith("mailto:");
@@ -53,7 +54,7 @@ export function SuspendedHeader({
 
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={() => void signOut()}
           className="inline-flex items-center rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 hover:bg-gray-50"
           aria-label={t("signOut")}
         >

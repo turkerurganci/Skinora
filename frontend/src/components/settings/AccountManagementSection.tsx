@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
 import { DELETE_ACCOUNT_CONFIRMATION, deactivateAccount, deleteAccount } from "@/lib/api/settings";
-import { useAuthStore } from "@/lib/stores/auth-store";
+import { signOut } from "@/lib/auth/signOut";
 import { cn } from "@/lib/utils/cn";
 
 type Mode = "none" | "deactivate" | "delete";
@@ -152,7 +152,7 @@ export function AccountManagementSection() {
   const t = useTranslations("settings.accountManagement");
   const router = useRouter();
   const locale = useLocale();
-  const logout = useAuthStore((s) => s.logout);
+  // F7a — hesabı kapatan/silen kullanıcının refresh token'ı da iptal edilmeli.
 
   const [mode, setMode] = useState<Mode>("none");
   const [submitting, setSubmitting] = useState(false);
@@ -173,10 +173,10 @@ export function AccountManagementSection() {
       } else if (mode === "delete") {
         await deleteAccount(DELETE_ACCOUNT_CONFIRMATION);
       }
-      // logout() already clears the persisted access_token via the auth store
-      // (the single token writer — WP11); the manual removeItem here was
-      // redundant (WP13 cleanup).
-      logout();
+      // F7a — signOut A8'i çağırıp refresh token'ı sunucuda iptal eder, sonra
+      // yerel token'ı temizler. Önceden yalnız yerel temizlik vardı: hesabını
+      // silen kullanıcının oturumu sunucuda 7 gün daha uyandırılabilirdi.
+      await signOut();
       router.replace(`/${locale}`);
     } catch (err) {
       if (err instanceof ApiError) {
