@@ -4,7 +4,19 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-24, backlog kapatma turu — WP2b §5):** **46 aktif / 81 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-24, backlog kapatma turu — WP2c §5):** **45 aktif / 83 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+>
+> **WP2c iki satır kapattı ve ölçüm sırasında bir tane açtı.** Kapananların ikisi de owner kararıyla kapsama alınmıştı ve ikisi de **sanıldığından küçük** çıktı.
+>
+> **`FE-timeline-cancel-step-position`: satırın teşhisi doğruydu, çözümü fazla büyük varsayıyordu.** "Frontend-only çözülemez, AD7'ye iptal-anı durumu eklenmeli" diyordu — doğru; ama yeni bir kolon ya da migration gerekmedi: geçiş zaten `TransactionHistory`'de `PreviousStatus`/`NewStatus` olarak kayıtlıydı. Terminal statüye **giren** geçişten türetiliyor, birden çok giriş varsa en yenisi alınıyor.
+>
+> **`FE-permission-guard`'ın kritik kuralı koda bakılarak bulundu, tahminle değil:** `AccessTokenGenerator` **süper admin'e hiç Permission claim'i üretmiyor** — yetkilendirme rol üzerinden kısa devre yapıyor. `/auth/me`'nin listesini harfi harfine okuyan bir istemci, **her şeyi yapabilen tek hesaptan tüm admin yüzeyini gizlerdi**. Bu tuzak teste sabitlendi; mutasyonla ölçüldü.
+>
+> **Açılan satır bir ölçüm yan ürünü:** rota→yetki haritası controller'lardan okunurken AD15 `GET /admin/users`'ın `VIEW_USERS` değil **`MANAGE_ROLES`** istediği görüldü (07 §9.15 onu S19 rol-atama listesi olarak tanımlıyor — kod spec'e uygun). Ama F5 bu ucu S20 detayının **ilk giriş kapısına** dönüştürmüştü; sonuçta yalnız `VIEW_USERS` taşıyan admin detayı görebiliyor ama ona giden dizine ulaşamıyor → `AdminUsersDirectoryPermissionMismatch`.
+>
+> **Turun ikinci süreç dersi CI'dan geldi.** WP2b'nin ilk koşusu **yalnız** prettier'da kırıldı: WP2a'da dosya bazında doğruladığım formatı WP2b'de atlamıştım ve lokaldeki 136-dosyalık CRLF gürültüsü gerçek uyuşmazlığı gizlemişti. WP2c'de tarama **önden** yapıldı — dokuz dosya uyumsuz çıktı ve CI'ya hiç gitmeden düzeltildi. Düzeltmenin kendisi de bir şey öğretti: pre-push guard kırmızı dalda **kendi çözümünü** engelliyor, bu yüzden kayıtlı bypass kullanıldı (BYPASS_LOG'daki 30 emsalin aynısı).
+>
+> **Önceki durum (2026-08-24, WP2b §5):** **46 aktif / 81 çözülmüş**. **🔴 YOK.**
 >
 > **WP2b üç satır kapattı, ikisini böldü.** Kapananlar: `wizard-hard-refresh-resets` (sihirbaz taslağı `sessionStorage`'a) · `profile-prefill-image`'ın prefill yarısı · `dev-route-visibility`. Bölünenler: `fe-next-image-migration` (16 `<img>` → `next/image`, deploy bağımlılıklı) ve önceki turdan `url-state-sync`. **Bölmek kapatmaktan daha dürüst olduğu için tercih edildi:** bir satırın tek açık parçası, o parçanın kendi gerekçesiyle görünür kalmalı.
 >
