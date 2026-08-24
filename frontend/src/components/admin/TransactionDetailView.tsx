@@ -6,12 +6,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { StatusBadge } from "@/components/common";
 import type { ExtendedStatus } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
-import { TransactionStatus } from "@/types/enums";
-import type {
-  AdminTransactionDetail,
-  AdminTransactionParty,
-  EmergencyHoldReleaseAction,
-} from "@/lib/api/admin";
+import { EmergencyHoldReleaseAction, TransactionStatus } from "@/types/enums";
+import type { AdminTransactionDetail, AdminTransactionParty } from "@/lib/api/admin";
 import { useApproveFlag, useRejectFlag } from "@/lib/hooks/useAdminFlagMutations";
 import {
   useApplyEmergencyHold,
@@ -655,7 +651,12 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                   <>
                     <button
                       type="button"
-                      onClick={() => setAction({ kind: "release", releaseAction: "RESUME" })}
+                      onClick={() =>
+                        setAction({
+                          kind: "release",
+                          releaseAction: EmergencyHoldReleaseAction.RESUME,
+                        })
+                      }
                       disabled={actionPending}
                       className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
@@ -676,7 +677,12 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setAction({ kind: "release", releaseAction: "CANCEL" })}
+                        onClick={() =>
+                          setAction({
+                            kind: "release",
+                            releaseAction: EmergencyHoldReleaseAction.CANCEL,
+                          })
+                        }
                         disabled={actionPending}
                         className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                       >

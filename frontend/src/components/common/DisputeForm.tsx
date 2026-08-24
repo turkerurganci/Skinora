@@ -67,6 +67,18 @@ export interface DisputeFormProps {
   onSubmitTxHash?: (disputeId: string, txHash: string) => Promise<DisputeTxHashPayload>;
   /** Escalate the dispute to admin review. */
   onEscalate: (disputeId: string, type: DisputeType, detail: string) => Promise<void>;
+  /**
+   * WP6a (T135-FeDisputeTypeChoices) — the types the server will accept for
+   * this transaction right now (`availableActions.disputableTypes`, 07 §7.5).
+   * The form used to offer all three unconditionally, so a buyer could pick
+   * one the API would reject and only learn on submit.
+   *
+   * Undefined means "the caller did not supply it" (an older response, or a
+   * context with no transaction) and all three are offered, exactly as
+   * before. An EMPTY array is different and is respected: the server said
+   * none are open.
+   */
+  disputableTypes?: readonly DisputeType[];
   /** Optional close handler — renders the cancel/close buttons when set. */
   onClose?: () => void;
   /**
@@ -101,12 +113,22 @@ export function DisputeForm({
   onClose,
   existingDispute,
   className,
+  disputableTypes,
 }: DisputeFormProps) {
   const t = useTranslations("disputeForm");
   const tErr = useTranslations("disputeForm.errors");
 
   const [step, setStep] = useState<Step>(existingDispute ? "result" : "type");
   const [type, setType] = useState<DisputeType | null>(existingDispute?.type ?? null);
+
+  // WP6a — the server's list when it supplied one, otherwise all three. The
+  // ?? (not ||) matters: an empty array is a real answer ("none disputable")
+  // and must not fall through to the full set.
+  const offeredTypes: readonly DisputeType[] = disputableTypes ?? [
+    DisputeType.PAYMENT,
+    DisputeType.DELIVERY,
+    DisputeType.WRONG_ITEM,
+  ];
   const [disputeId, setDisputeId] = useState<string | null>(existingDispute?.disputeId ?? null);
   const [resolved, setResolved] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(existingDispute?.autoCheckMessage ?? null);
@@ -206,35 +228,33 @@ export function DisputeForm({
         <form onSubmit={handleTypeSubmit} className="space-y-3">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-gray-700">{t("typeLegend")}</legend>
-            {([DisputeType.PAYMENT, DisputeType.DELIVERY, DisputeType.WRONG_ITEM] as const).map(
-              (option) => (
-                <label
-                  key={option}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm",
-                    type === option
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-300 hover:border-gray-400",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="dispute-type"
-                    value={option}
-                    checked={type === option}
-                    onChange={() => setType(option)}
-                    className="mt-1"
-                    required
-                  />
-                  <span>
-                    <span className="block font-medium">{t(`type.${option}.title`)}</span>
-                    <span className="block text-xs text-gray-600">
-                      {t(`type.${option}.description`)}
-                    </span>
+            {offeredTypes.map((option) => (
+              <label
+                key={option}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm",
+                  type === option
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-gray-400",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="dispute-type"
+                  value={option}
+                  checked={type === option}
+                  onChange={() => setType(option)}
+                  className="mt-1"
+                  required
+                />
+                <span>
+                  <span className="block font-medium">{t(`type.${option}.title`)}</span>
+                  <span className="block text-xs text-gray-600">
+                    {t(`type.${option}.description`)}
                   </span>
-                </label>
-              ),
-            )}
+                </span>
+              </label>
+            ))}
           </fieldset>
           <div className="flex justify-end gap-2">
             {onClose && (

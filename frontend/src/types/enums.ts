@@ -275,3 +275,17 @@ export enum DeliveryStatus {
   DEFERRED = "DEFERRED",
   FAILED = "FAILED",
 }
+
+/**
+ * Action chosen by the admin when releasing an emergency hold (07 §9.22 AD19c).
+ *
+ * WP6a (T134-FeEnumUnionDup) — moved here from a bare string union in
+ * `lib/api/admin.ts`. It mirrors a real C# enum
+ * (`Skinora.Shared.Enums.EmergencyHoldReleaseAction`), and living outside this
+ * file meant `enums.parity.test.ts` — which only reads this file — never
+ * compared it against the backend. Declaring it here puts it under that guard.
+ */
+export enum EmergencyHoldReleaseAction {
+  RESUME = "RESUME",
+  CANCEL = "CANCEL",
+}

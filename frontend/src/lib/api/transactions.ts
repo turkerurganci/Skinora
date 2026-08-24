@@ -1,6 +1,11 @@
 import { apiClient } from "./client";
 import type { PagedResult } from "@/types/api";
-import type { BuyerIdentificationMethod, StablecoinType, TransactionStatus } from "@/types/enums";
+import type {
+  BuyerIdentificationMethod,
+  DisputeType,
+  StablecoinType,
+  TransactionStatus,
+} from "@/types/enums";
 import type { ExtendedStatus } from "@/components/common";
 
 /**
@@ -322,6 +327,12 @@ export interface TransactionDetailAvailableActions {
   canConfirmReceipt?: boolean | null;
   canCancel?: boolean | null;
   canDispute?: boolean | null;
+  /**
+   * WP6a — the dispute types the server will actually accept right now
+   * (07 §7.5, added in WP5). Absent on responses that predate it; the form
+   * falls back to offering all three in that case.
+   */
+  disputableTypes?: DisputeType[] | null;
   canEscalate?: boolean | null;
   requiresLogin?: boolean | null;
 }

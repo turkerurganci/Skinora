@@ -277,6 +277,7 @@ export function StateActionPanel({
       <DisputeModal
         open={disputeOpen}
         transactionId={detail.id}
+        disputableTypes={availableActions.disputableTypes ?? undefined}
         onClose={() => {
           setDisputeOpen(false);
           onRefetch();

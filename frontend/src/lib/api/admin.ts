@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import {
+  EmergencyHoldReleaseAction,
   DisputeResolutionOutcome,
   DisputeStatus,
   DisputeType,
@@ -421,8 +422,14 @@ export function resolveAdminDispute(
  */
 export type AdminTransactionStatusGroup = "ACTIVE" | "COMPLETED" | "CANCELLED" | "FLAGGED";
 
-/** RESUME or CANCEL — the AD19c release-hold action (07 §9.22). */
-export type EmergencyHoldReleaseAction = "RESUME" | "CANCEL";
+/**
+ * RESUME or CANCEL — the AD19c release-hold action (07 §9.22).
+ *
+ * WP6a — re-exported from `@/types/enums` rather than redeclared here, so the
+ * FE↔C# parity guard (which only reads `enums.ts`) covers it. Existing
+ * importers keep working unchanged.
+ */
+export { EmergencyHoldReleaseAction };
 
 /** Buyer/seller view shared by AD6 + AD7 (07 §9.6 / §9.7). */
 export interface AdminTransactionParty {

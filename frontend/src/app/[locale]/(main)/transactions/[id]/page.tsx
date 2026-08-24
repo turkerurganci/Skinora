@@ -130,8 +130,17 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
 
       <TransactionTimeline
         status={
+          // WP6a (T135-TimelineHoldPreviousStatus) — EMERGENCY_HOLD is an
+          // overlay, not a step, so the timeline has to draw the status the
+          // transaction is held AT. That value is already on the wire as
+          // `holdInfo.previousStatus` (07 §7.5); this used to hardcode
+          // SELLER_CONFIRMED, so a hold applied at PAYMENT_RECEIVED or
+          // ITEM_DELIVERED drew the flow further back than it really was.
+          // The constant stays as the fallback for a hold with no recorded
+          // previous status.
           status === "EMERGENCY_HOLD"
-            ? TransactionStatus.SELLER_CONFIRMED
+            ? ((data.holdInfo?.previousStatus as TransactionStatus | undefined) ??
+              TransactionStatus.SELLER_CONFIRMED)
             : (status as TransactionStatus)
         }
         cancelled={cancelled}

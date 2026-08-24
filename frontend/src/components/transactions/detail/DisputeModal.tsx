@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { DisputeForm, type ExistingDisputeContext } from "@/components/common";
 import { openDispute, submitDisputeTxHash, escalateDispute } from "@/lib/api/disputes";
 import { cn } from "@/lib/utils/cn";
+import type { DisputeType } from "@/types/enums";
 
 export interface DisputeModalProps {
   open: boolean;
@@ -17,6 +18,12 @@ export interface DisputeModalProps {
    * the new-dispute creation flow (StateActionPanel "İtiraz Et" button).
    */
   existingDispute?: ExistingDisputeContext;
+  /**
+   * WP6a — `availableActions.disputableTypes` from the transaction detail,
+   * passed straight through so the form only offers types the server will
+   * accept. Omitted for callers that have no detail to hand.
+   */
+  disputableTypes?: readonly DisputeType[];
   onClose: () => void;
   className?: string;
 }
@@ -35,6 +42,7 @@ export function DisputeModal({
   open,
   transactionId,
   existingDispute,
+  disputableTypes,
   onClose,
   className,
 }: DisputeModalProps) {
@@ -80,6 +88,7 @@ export function DisputeModal({
           </h2>
           <DisputeForm
             existingDispute={existingDispute}
+            disputableTypes={disputableTypes}
             onOpen={async (type) => {
               const response = await openDispute(transactionId, { type });
               invalidateDetail();
