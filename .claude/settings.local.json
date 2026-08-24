@@ -121,5 +121,6 @@
         ]
       }
     ]
-  }
+  },
+  "outputStyle": "Concise"
 }

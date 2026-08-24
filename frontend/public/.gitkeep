@@ -1,0 +1,14 @@
+Bu dizin BİLEREK boş tutuluyor ama SİLİNMEMELİ.
+
+F6 / `UITour-NextStarterAssetsShipped`: burada duran beş dosyanın tamamı
+(next.svg · vercel.svg · file.svg · globe.svg · window.svg) Next.js starter
+şablonundan geliyordu ve hiçbiri koddan referans edilmiyordu; production
+image'ına giriyorlardı. Beşi de silindi.
+
+Dizinin kendisi kalıyor çünkü `frontend/Dockerfile:24` runner katmanına
+`COPY --from=builder /app/public ./public` yapıyor; dizin yoksa image build'i
+kırılır. Git de boş dizin takip edemez, dolayısıyla bu dosya gerekli.
+
+Uygulamanın ikonları burada DEĞİL: Next.js App Router kuralı gereği
+`src/app/favicon.ico`, `src/app/icon.png` ve `src/app/apple-icon.png`
+dosyalarında ve `<head>`'e otomatik enjekte ediliyorlar.
