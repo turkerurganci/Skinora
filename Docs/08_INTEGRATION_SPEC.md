@@ -298,6 +298,12 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
 
 > **v3.0 — envanter okuma artık kritik yoldadır.** Trade offer gönderimi kalktığı için bot hesabı ve login limitleri anlamsızlaştı; buna karşılık envanter okuma, teslimat doğrulamasının tek aracı hâline geldi (§2.3, 02 §9.2). Community envanter ucu Web API'den belirgin biçimde daha sıkı limitlidir ve **ayrı bir kuyrukta** yönetilmelidir — Web API kuyruğuyla paylaşılırsa doğrulama okumaları trade-hold sorgularının arkasında kuyruklanır.
 
+> **T122 ölçümü (2026-08-13) — pencere bir dakikadan UZUN, ve bu tabloyu okuma biçimini değiştirir (WP7).** `STEAM_COMMUNITY_REQUESTS_PER_MINUTE=10` yukarıdaki 10-20/dk aralığının muhafazakâr ucu olarak seçilmişti; ölçüm bu okumayı yetersiz buldu. 6 sn aralıkla (= tam 10/dk) sürdürülen bir koşuda **~90 saniyede / ~18 istekte 429 başladı**; ~40 sn sonra kısmen toparlandı, ama **aralık 15 sn'ye (4/dk) düşürüldüğü hâlde 429 sürdü**. Yani limitleyici yalnız dakikalık hızı değil, **daha uzun bir pencereyi** ölçüyor ve sadece dakikalık hıza bakan bir kuyruk o bütçeyi farkında olmadan tüketebilir.
+>
+> **`Retry-After` başlığı gözlenmedi** (gövde `null`), dolayısıyla backoff **tahmin** olmak zorunda — yukarıdaki "exponential backoff" satırı sunucudan gelen bir süreye dayanmıyor.
+>
+> **Ölçümün kendi sınırı:** koşu **residential bir TR IP'sinden** yapıldı. Üretim trafiği datacenter IP'sinden çıkacak ve Steam'in datacenter aralıklarına daha sıkı davrandığı biliniyor — yani gerçek üretim tavanı bu ölçümden **daha düşük** olabilir. Bu yüzden ölçüm yeni bir varsayılan sayı üretmedi: `10/dk` değeri değiştirilmedi, çünkü onu değiştirmek için gereken şey üretim IP'sinden alınmış ikinci bir ölçümdür. Kapasite planlaması yaparken bu belirsizlik girdi olarak alınmalıdır (10 §4).
+
 **Platform tarafı korumalar:**
 
 | Koruma | Uygulama |

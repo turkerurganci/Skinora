@@ -285,6 +285,23 @@ internal static class TimeoutTestFixtures
     public static NoOpDeliveryTimeoutRound NoOpDeliveryRound(TimeProvider? clock = null)
         => new(clock);
 
+    /// <summary>
+    /// WP7 — records the ids the scanner asked to warn, so a test can assert
+    /// WHICH transactions were selected without exercising the dispatcher.
+    /// </summary>
+    public sealed class RecordingWarningDispatcher : IWarningDispatcher
+    {
+        public List<Guid> Warned { get; } = [];
+
+        public Task DispatchWarningAsync(Guid transactionId)
+        {
+            Warned.Add(transactionId);
+            return Task.CompletedTask;
+        }
+    }
+
+    public static RecordingWarningDispatcher NoOpWarnings() => new();
+
     public static IOptions<TimeoutSchedulingOptions> Options(
         int scannerSeconds = 30,
         int batchSize = 200,

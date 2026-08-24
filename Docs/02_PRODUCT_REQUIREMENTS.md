@@ -88,6 +88,8 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 - Timeout süresi dolmadan önce ilgili tarafa (alıcı veya satıcı) "timeout yaklaşıyor" uyarısı gönderilir
 - Uyarı eşiği (süre dolmadan ne zaman gönderileceği) admin tarafından oran olarak ayarlanır (§16.2)
 - Uyarı tüm bildirim kanalları üzerinden iletilir (§18)
+- **Uyarılan taraf, o fazda eylemi borçlu olan taraftır** (WP7): ödeme fazında **alıcı** (`PaymentDeadline`), teslimat fazında **satıcı** (`DeliveryDeadline`). P2P'de teslim etmeyen satıcı kusurlu taraf olarak kaydedilir (06 §3.1), dolayısıyla teslimat saatinin uyarısız dolması hiç haberdar edilmemiş birini cezalandırır.
+- **Uygulama farkı bilinçlidir:** ödeme fazı uyarısı zamanlanmış bir Hangfire job'ıdır, teslimat fazı uyarısı ise `DeadlineScannerJob` süpürmesinden gelir — 05 §4.4 teslimat fazının tamamını scanner-driven yapar ve oraya gecikmeli bir job eklemek faza ikinci bir bağımsız yürütücü verirdi. Tekrar gönderimi `TimeoutWarningSentAt` engeller; iki faz aynı damgayı paylaşır, bu yüzden migration gerekmedi.
 
 ---
 

@@ -1176,7 +1176,7 @@
       },
       "error": {
         "title": "Inventory could not be loaded",
-        "message": "Could not read your Steam inventory right now. Please try again.",
+        "message": "We couldn't read your Steam inventory right now. Please try again shortly. If it keeps failing, check that your Steam Community profile is set up and your inventory is public — retrying alone will not fix that.",
         "privateTitle": "Your inventory is private",
         "privateMessage": "Your Steam inventory is set to private. Make it public to start a transaction."
       }

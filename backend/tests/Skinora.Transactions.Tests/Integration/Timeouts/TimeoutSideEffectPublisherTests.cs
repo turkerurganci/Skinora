@@ -93,15 +93,15 @@ public class TimeoutSideEffectPublisherTests
 
         await CreateSut().PublishAsync(tx, TransactionStatus.SELLER_CONFIRMED);
 
-        Assert.Equal(2, _outbox.Published.Count);
+        // WP7 (F7Gate-EventsWithoutConsumer) — the payment phase publishes
+        // ONE event. LatePaymentMonitorRequestedEvent used to ride along and
+        // was removed: nothing consumed it, and the late-payment watch is
+        // armed by PostCancelMonitorStarter instead. Asserting the exact
+        // count is the point — a re-added orphan publish fails here.
+        Assert.Single(_outbox.Published);
 
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Payment, notify.Phase);
-
-        var monitor = Assert.Single(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
-        Assert.Equal(tx.Id, monitor.TransactionId);
-        Assert.Equal(buyerId, monitor.BuyerId);
-        Assert.Equal(refundAddress, monitor.BuyerRefundAddress);
     }
 
     [Fact]
@@ -113,7 +113,6 @@ public class TimeoutSideEffectPublisherTests
 
         await CreateSut().PublishAsync(tx, TransactionStatus.SELLER_CONFIRMED);
 
-        Assert.Empty(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
         Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Single(_outbox.Published);
     }

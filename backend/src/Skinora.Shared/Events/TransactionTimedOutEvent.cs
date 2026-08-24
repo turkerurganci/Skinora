@@ -10,7 +10,7 @@ namespace Skinora.Shared.Events;
 /// notification with phase- and role-specific reason text. Refund and
 /// late-payment-monitor side effects are emitted as separate events
 /// (<see cref="PaymentRefundToBuyerRequestedEvent"/>,
-/// <see cref="LatePaymentMonitorRequestedEvent"/>). There is no item-return
+/// the PostCancelMonitor path). There is no item-return
 /// counterpart: in the P2P model the item never enters platform custody, so a
 /// timeout only ever moves money (02 §9).
 /// </summary>

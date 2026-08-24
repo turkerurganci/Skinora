@@ -72,13 +72,14 @@ public class TimeoutExecutorSideEffectsTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
 
-        // v3.0 — two events: no item refund exists (03 §4.3).
-        Assert.Equal(2, _outbox.Published.Count);
+        // v3.0 — no item refund exists (03 §4.3). WP7 removed the second
+        // event too: LatePaymentMonitorRequestedEvent had no consumer and
+        // the watch is armed by the PostCancelMonitor path instead.
+        Assert.Single(_outbox.Published);
         var notify = Assert.Single(_outbox.Published.OfType<TransactionTimedOutEvent>());
         Assert.Equal(TimeoutPhase.Payment, notify.Phase);
         Assert.Equal(buyer.Id, notify.BuyerId);
 
-        Assert.Single(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
     }
 
     [Fact]

@@ -52,25 +52,27 @@ public sealed class TimeoutSideEffectPublisher : ITimeoutSideEffectPublisher
         {
             case TimeoutPhase.Payment:
                 // 03 §4.3 — no item refund exists in the P2P model (the item
-                // never left the seller). Only the late-payment watch remains.
-                if (transaction.BuyerId is { } buyerIdForMonitor
-                    && !string.IsNullOrWhiteSpace(transaction.BuyerRefundAddress))
-                {
-                    await _outbox.PublishAsync(
-                        new LatePaymentMonitorRequestedEvent(
-                            EventId: Guid.NewGuid(),
-                            TransactionId: transaction.Id,
-                            BuyerId: buyerIdForMonitor,
-                            BuyerRefundAddress: transaction.BuyerRefundAddress!,
-                            OccurredAt: occurredAt),
-                        cancellationToken);
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Late payment monitor skipped for transaction {TransactionId}: BuyerId or BuyerRefundAddress missing.",
-                        transaction.Id);
-                }
+                // never left the seller). Only the late-payment watch remains,
+                // and this publisher is NOT what arms it.
+                //
+                // WP7 (F7Gate-EventsWithoutConsumer) — the
+                // LatePaymentMonitorRequestedEvent publish that used to live
+                // here was removed. It had no consumer and never did: the watch
+                // is armed by PostCancelMonitorStarter →
+                // PostCancelMonitorStartRequestedEvent →
+                // PostCancelMonitorStartDispatcher → the sidecar's
+                // PostCancelMonitor, which is what actually emits the
+                // latePaymentDetected webhook, and DeadlineScannerJob /
+                // TimeoutExecutor already call that path.
+                //
+                // Keeping the publish was worse than merely wasteful. Every
+                // payment-phase timeout wrote an outbox row nothing would ever
+                // read, and — the part that actually cost something — it left a
+                // signal in the outbox saying "the late-payment watch has been
+                // requested", which is exactly the sentence someone reading this
+                // code would trust while looking for why a late payment was
+                // missed. Silence here is more truthful than a message no one
+                // receives.
                 break;
 
             case TimeoutPhase.Delivery:
