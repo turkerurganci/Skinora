@@ -51,6 +51,16 @@ export interface MeResponse {
   hasRefundWallet: boolean;
   createdAt: string;
   isSuspended: boolean;
+  /**
+   * WP2c — admin permission keys carried by the current token, so the client
+   * can hide a surface the caller could not use instead of walking them into a
+   * 403. Always present; `[]` for a non-admin.
+   *
+   * **Empty for a super admin too** — the backend mints no Permission claims
+   * for one because authorization short-circuits on the role. Never read this
+   * list directly; go through {@link hasPermission}, which encodes that rule.
+   */
+  permissions: string[];
 }
 
 export function getMe(): Promise<MeResponse> {
