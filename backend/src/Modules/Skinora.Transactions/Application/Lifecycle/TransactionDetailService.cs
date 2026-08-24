@@ -35,11 +35,16 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly ITransactionDisputeSummaryProvider _disputeSummaries;
 
-    public TransactionDetailService(AppDbContext db, TimeProvider clock)
+    public TransactionDetailService(
+        AppDbContext db,
+        TimeProvider clock,
+        ITransactionDisputeSummaryProvider disputeSummaries)
     {
         _db = db;
         _clock = clock;
+        _disputeSummaries = disputeSummaries;
     }
 
     public async Task<TransactionDetailOutcome> GetAsync(
@@ -315,6 +320,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
         var payment = await BuildPaymentAsync(transaction, role, cancellationToken);
         var sellerPayout = await BuildSellerPayoutAsync(transaction, role, cancellationToken);
         var refund = await BuildRefundAsync(transaction, role, cancellationToken);
+        var dispute = await BuildDisputeAsync(transaction, role, cancellationToken);
 
         var dto = new TransactionDetailDto(
             Id: transaction.Id,
@@ -335,7 +341,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             CancelInfo: cancel,
             FlagInfo: flag,
             HoldInfo: hold,
-            Dispute: null,           // T58 dispute
+            Dispute: dispute,        // WP6b (T133a-DisputeBlockNulls) — 07 §7.5
             InviteInfo: invite,
             PaymentEvents: ProducePaymentEventsArray(transaction),
             DeliveredBuyerAssetId: transaction.DeliveredBuyerAssetId,
@@ -591,10 +597,58 @@ public sealed class TransactionDetailService : ITransactionDetailService
     /// Party-only: <paramref name="role"/> is null for public/prospective
     /// viewers, and a deposit address handed to a stranger is an invitation to
     /// phish the buyer with it. <c>status</c>/<c>txHash</c>/<c>confirmedAt</c>
-    /// stay null until the payment legs land (T124+); 07 §7.5 already scopes
-    /// <c>payment.txHash</c> to PAYMENT_RECEIVED onwards.
+    /// are read off the BUYER_PAYMENT row (WP6b) and stay null until a
+    /// transfer is actually seen — the three together mean "nothing has
+    /// arrived", which is not the same as "0 received".
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// WP6b (T133a-DisputeBlockNulls) — the 07 §7.5 <c>dispute</c> summary.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Contract-defined since T58 and hardcoded null until now, so a party
+    /// with an open dispute got a detail response that denied it existed.
+    /// </para>
+    /// <para>
+    /// Party-only, like the payment block: a dispute is a private matter
+    /// between the two sides and an admin.
+    /// </para>
+    /// <para>
+    /// <c>canSubmitTxHash</c> and <c>canEscalate</c> are DERIVED from the
+    /// dispute's own state rather than re-run through the auto-checkers. They
+    /// mirror the guards the endpoints actually enforce — <c>submit-txhash</c>
+    /// requires a PAYMENT dispute still in <c>OPEN</c> (DisputeService stage
+    /// 2+3), and <c>escalate</c> refuses <c>ESCALATED</c> and <c>CLOSED</c>.
+    /// Re-running an auto-check from a read path would be both expensive and
+    /// misleading: the checker is what a POST runs, and its answer belongs to
+    /// that moment, not to every page load.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// WP6b (T133a-DisputeBlockNulls) — the 07 §7.5 <c>dispute</c> summary.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Contract-defined since T58 and hardcoded null until now, so a party
+    /// with an open dispute got a detail response that denied it existed.
+    /// </para>
+    /// <para>
+    /// Party-only, like the payment block: a dispute is a private matter
+    /// between the two sides and an admin. The lookup goes through
+    /// <see cref="ITransactionDisputeSummaryProvider"/> because the entity
+    /// belongs to <c>Skinora.Disputes</c>, which already references this
+    /// module — reaching the other way would close a project cycle.
+    /// </para>
+    /// </remarks>
+    private async Task<DisputeSummaryDto?> BuildDisputeAsync(
+        Transaction transaction,
+        string? role,
+        CancellationToken cancellationToken)
+    {
+        if (role is null) return null;
+        return await _disputeSummaries.GetLatestAsync(transaction.Id, cancellationToken);
+    }
     private async Task<TransactionPaymentDto?> BuildPaymentAsync(
         Transaction transaction,
         string? role,
@@ -618,14 +672,33 @@ public sealed class TransactionDetailService : ITransactionDetailService
         // rendered as something payable.
         if (address is null) return null;
 
+        // WP6b (T133a-PaymentDetailNulls) — 07 §7.5 promises status / txHash /
+        // confirmedAt and all three were hardcoded null, so a buyer who had
+        // already paid saw a payment block that looked like nothing had
+        // arrived. They come from the BUYER_PAYMENT row.
+        //
+        // Newest first: a transaction can accumulate more than one incoming row
+        // (the multi-payment and late-payment paths both write one), and the
+        // block describes the payment the flow is currently standing on.
+        var payment = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .Where(b => b.TransactionId == transaction.Id
+                        && b.Type == BlockchainTransactionType.BUYER_PAYMENT)
+            .OrderByDescending(b => b.CreatedAt)
+            .ThenByDescending(b => b.Id)
+            .Select(b => new { b.Status, b.TxHash, b.ConfirmedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new TransactionPaymentDto(
             Address: address.Address,
             ExpectedAmount: FormatMoney(address.ExpectedAmount),
             Stablecoin: address.ExpectedToken,
             Network: TronNetworkLabel,
-            Status: null,
-            TxHash: null,
-            ConfirmedAt: null);
+            // Still null before anything arrives — the three fields together
+            // mean "no transfer seen yet", which is different from "0 received".
+            Status: payment?.Status.ToString(),
+            TxHash: payment?.TxHash,
+            ConfirmedAt: payment?.ConfirmedAt);
     }
 
     /// <summary>

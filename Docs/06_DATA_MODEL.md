@@ -391,6 +391,7 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 |-------|----------|
 | `PENDING` | Gönderim kuyruğunda, henüz denenmedi |
 | `SENT` | Başarıyla gönderildi |
+| `DEFERRED` | Sessiz saat ya da bakım penceresi nedeniyle **ertelendi** — `DeferredNotificationDeliveryJob` pencere kapanınca yeniden dener. Başarısızlık değildir (T134) |
 | `FAILED` | Maksimum retry sonrası başarısız |
 
 > **Kaynak:** 02 §18 — dış kanal bildirimleri. NotificationDelivery.Status field'ında kullanılır.
@@ -995,7 +996,7 @@ Dış kanal bildirim teslimat kaydı — her Notification için her dış kanala
 | `NotificationId` | guid | FK → Notification, NOT NULL | İlgili platform içi bildirim |
 | `Channel` | int | NOT NULL | Enum: NotificationChannel (EMAIL, TELEGRAM, DISCORD) |
 | `TargetExternalId` | string(256) | NOT NULL | Gönderim anındaki hedef (email adresi, chat ID vb.) — snapshot |
-| `Status` | int | NOT NULL | Enum: DeliveryStatus — PENDING, SENT, FAILED |
+| `Status` | int | NOT NULL | Enum: DeliveryStatus — PENDING, SENT, DEFERRED, FAILED (§2.23) |
 | `AttemptCount` | int | NOT NULL, DEFAULT 0 | Deneme sayısı |
 | `LastError` | string(2000) | NULL | Son hata mesajı |
 | `CreatedAt` | datetime | NOT NULL | İlk gönderim girişimi |
