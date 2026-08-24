@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { InfoScreen, TosModal } from "@/components/auth";
 import { ApiError, refreshAccessToken } from "@/lib/api/client";
 import { acceptTos } from "@/lib/api/auth";
+import { sanitizeReturnUrl } from "@/lib/auth/returnUrl";
 import { useAuthStore } from "@/lib/stores/auth-store";
 
 type CallbackStatus = "loading" | "success" | "new_user" | "error";
@@ -31,14 +32,6 @@ function asErrorCode(raw: string | null): CallbackErrorCode {
   return "unknown";
 }
 
-const RELATIVE_PATH_RE = /^\/(?!\/)[^?#]*(\?[^#]*)?(#.*)?$/;
-
-function sanitizeReturnUrl(raw: string | null): string {
-  if (!raw) return "/dashboard";
-  if (!RELATIVE_PATH_RE.test(raw)) return "/dashboard";
-  return raw;
-}
-
 const DEFAULT_TOS_VERSION = process.env.NEXT_PUBLIC_TOS_VERSION ?? "1.0";
 
 export default function SteamCallbackPage() {
@@ -53,7 +46,9 @@ export default function SteamCallbackPage() {
   const rawStatus = searchParams.get("status");
   const rawError = searchParams.get("error");
   const retryAfterRaw = searchParams.get("retryAfter");
-  const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"));
+  // F4b — dönen değer ZATEN locale önekli; localePath ile tekrar öneklenmemeli.
+  // Öyleydi ve Türkçe giriş /tr/tr/dashboard'a (404) düşüyordu.
+  const returnUrl = sanitizeReturnUrl(searchParams.get("returnUrl"), locale);
 
   const localePath = (path: string) => `/${locale}${path.startsWith("/") ? path : `/${path}`}`;
 
@@ -94,19 +89,19 @@ export default function SteamCallbackPage() {
   // success → once the token is stored, redirect into the app's return URL.
   useEffect(() => {
     if (status !== "success" || !tokenReady) return;
-    router.replace(localePath(returnUrl));
-  }, [status, tokenReady, returnUrl, router, locale]); // eslint-disable-line react-hooks/exhaustive-deps
+    router.replace(returnUrl);
+  }, [status, tokenReady, returnUrl, router]);
 
   const handleAcceptTos = async (tosVersion: string) => {
     setTosSubmitting(true);
     setTosError(null);
     try {
       await acceptTos(tosVersion);
-      router.replace(localePath(returnUrl));
+      router.replace(returnUrl);
     } catch (err) {
       // Already accepted this version (e.g. double-submit) → treat as done.
       if (err instanceof ApiError && err.code === "TOS_ALREADY_ACCEPTED") {
-        router.replace(localePath(returnUrl));
+        router.replace(returnUrl);
         return;
       }
       setTosError(tTos("acceptError"));
