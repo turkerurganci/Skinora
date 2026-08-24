@@ -4,7 +4,19 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-24, backlog kapatma turu — WP1 §4):** **55 aktif / 71 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-24, backlog kapatma turu — WP2a §5+§10):** **48 aktif / 78 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+>
+> **WP2a'nın bulgusu satırların içeriğinde değil, listenin kendisinde: §5'in yarısı zaten kapalıymış.** Fix yazmadan önce her satır ölçüldü ve **altısı bayat** çıktı — hepsi WP13'te ([#186](https://github.com/turkerurganci/Skinora/pull/186)) veya sonraki turlarda kapanmış, satırları hiç çevrilmemişti (`T97-formatAmount-deprecated-alias` · `T97-NEXT_LOCALE-cookie` · `FE-enums-ts-lag` · `static-routes-pages` · `admin-table-sort` · `url-state-sync`). Bir tanesinde ölçüm iddianın **tersini** gösterdi: `admin-table-sort` "API var, UI göndermiyor" diyordu; oysa `SortBy` taşıyan üç backend yüzeyinden ikisinin UI'ı zaten gönderiyor, üçüncüsünün admin sayfası hiç yok.
+>
+> **Bu, dosyanın kendi başlığında iki kez uyardığı kusur ailesinin en büyük örneği** (`AdminUserActivity-RefundedTerminal` dört tur açık görünmüştü; bu kez **altı satır** aynı anda). Ölçülmeden fix yazılsaydı var olmayan iş "yapılmış" olacaktı.
+>
+> **Kapatma değil daraltma da yapıldı:** `url-state-sync`'in tek açık parçası (`NewTransactionForm` adım durumunu `useState`'te tutuyor, yenilemede sıfırlanıyor) `wizard-hard-refresh-resets` olarak ayrı satıra bölündü — çözüm yeri (URL mi `sessionStorage` mı) bir tasarım kararı olduğu için kapatılmadı.
+>
+> **İki gerçek düzeltmenin ikisi de "kayıtta olmayan sonuç" barındırıyordu.** `UITour-StateScreensReachableAnonymously`'nin ürün kararı (anonim erişim) korundu, ama ölçüm kayıtta olmayan bir şey gösterdi: `noindex`/`robots` frontend'de **hiç geçmiyordu**, yani üç durum ekranı arama motorlarına tamamen açıktı. `T136-FormatRelativeTimeUnused` ise "tüketicisiz util" değil, **next-intl'in üretimde kullandığımız `relativeTime`'ının elle yazılmış ikinci nüshası** çıktı — silme gerekçesi bu yüzden "kullanılmıyor" değil "tekrarlıyor" oldu (GUARDRAILS §4).
+>
+> **Ölçümün kendisi de doğrulandı:** noindex'in *derlenmesi* değil *ulaştığı* ölçüldü — build alınıp sunucu kaldırıldı, üç ekran `noindex, nofollow` döndürdü ve **negatif kontrol** (`/en/privacy`) robots meta'sı döndürmedi.
+>
+> **Önceki durum (2026-08-24, WP1 §4):** **55 aktif / 71 çözülmüş**. **🔴 YOK.**
 >
 > **Bu, "backlog'un tamamını sırayla kapat" turunun ilk paketi.** Tur başında altı **karar-kilitli** satır (metni "owner kararı: yapılmayacak" ya da "bilinçli ürün kararı" diyenler) proje sahibine yeniden açıldı ve altısı da karara bağlandı; ayrıca yeni faz işi gerektiren yedi büyük kalem (`P2P-DeliveryPollingJob` · `NonDeliveryAbuseWindow` · `FloatVerification` · `SettlementTiering` · `HotWalletPolicyReview` · `StubPayoutVerifier` · `tronweb 6 major bump`) bilinçli olarak **ertelendi** — kapsam daraltması değil, kayıtlı bir karar.
 >
