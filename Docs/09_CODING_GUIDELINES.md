@@ -2287,4 +2287,4 @@ Her kod tesliminde sorulacak sorular:
 
 ---
 
-*Skinora — Coding Guidelines v0.9*
+*Skinora — Coding Guidelines v1.0*

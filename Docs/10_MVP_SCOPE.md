@@ -264,4 +264,4 @@ Hedef rakamlar MVP lansmanı sonrası belirlenecektir.
 
 ---
 
-*Skinora — MVP Scope v1.3*
+*Skinora — MVP Scope v2.0*

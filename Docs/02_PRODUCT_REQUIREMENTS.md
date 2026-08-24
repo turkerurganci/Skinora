@@ -123,10 +123,15 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 |---|---|
 | Eksik tutar | Platform kabul etmez, gelen tutar iade edilir, alıcı doğru tutarı baştan gönderir |
 | Fazla tutar | Platform doğru tutarı kabul eder, fazlayı alıcıya iade eder, işlem devam eder |
-| Yanlış token (desteklenen TRC-20) | Platform kabul etmez, alıcının iade adresine otomatik iade edilir. *Veri modeli notu: Yanlış token ile gelen transfer `WRONG_TOKEN_INCOMING` tipiyle blockchain audit kaydı oluşturulur; `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır (06 §3.8).* |
+| Yanlış token (desteklenen TRC-20) | Platform kabul etmez, **geldiği adrese** otomatik iade edilir. *Veri modeli notu: Yanlış token ile gelen transfer `WRONG_TOKEN_INCOMING` tipiyle blockchain audit kaydı oluşturulur; `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır (06 §3.8).* |
 | Desteklenmeyen token/kontrat | Platform bu varlığı işleyemez — otomatik iade garanti edilemez, manuel incelemeye (admin review) düşer |
 | Timeout sonrası gecikmeli ödeme | İşlem zaten iptal, platform adresi izlemeye devam eder, gelen ödeme alıcıya otomatik iade edilir |
 | Çoklu/parçalı ödeme | Platform parçalı ödemeleri birleştirmez — tek seferde doğru tutarın gönderilmesi gerekir. İlk doğru transfer kabul edilir, sonraki transferler fazla tutar kuralıyla iade edilir. İşlem tamamlandıktan sonra gelen ek transferler gecikmeli ödeme kuralıyla iade edilir |
+
+> **İki farklı iade hedefi vardır ve karıştırılmamalıdır (T110-K1):**
+>
+> - **Bu tablodaki reddedilen ödeme iadeleri** (eksik tutar · fazla tutar · yanlış token · timeout sonrası gecikmeli ödeme · çoklu transferin fazlası) **paranın geldiği adrese** geri gönderilir. Ödeme hiç kabul edilmediği için platformun o para ile ilgili tek bildiği şey nereden geldiğidir; alıcının beyan ettiği iade adresine göndermek, kabul edilmemiş bir transferi doğrulanmamış bir adrese yönlendirmek olurdu. Normatif kaynak: **08 §562**.
+> - **§4.6'daki `BUYER_REFUND`** (kabul edilmiş ödemenin iadesi — iptal, dispute, mutabakat geri alma) **alıcının kabul anında belirlediği iade adresine** gider. Orada ödeme kabul edilmiş ve adres işlemle birlikte sabitlenmiştir (`BuyerRefundAddress`, 06 §3.5).
 
 ### 4.5 Satıcıya Ödeme
 

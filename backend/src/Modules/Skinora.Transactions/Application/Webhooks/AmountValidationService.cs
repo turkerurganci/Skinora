@@ -585,7 +585,17 @@ public sealed class AmountValidationService : IAmountValidationService
         // (BUYER_REFUND / EXCESS_REFUND / WRONG_TOKEN_REFUND / INCORRECT_AMOUNT_REFUND /
         // LATE_PAYMENT_REFUND) MUST carry PaymentAddressId NULL. The
         // destination is the source address (FromAddress on the source row =
-        // ToAddress on the refund row, 02 §4.6).
+        // ToAddress on the refund row).
+        //
+        // Normative source is 08 §562, NOT 02 §4.6 — the citation used to point
+        // at the latter and that is the wrong rule for this path (T110-K1).
+        // §4.6 governs BUYER_REFUND, the unwind of an ACCEPTED payment, which
+        // goes to the buyer's designated BuyerRefundAddress. Everything queued
+        // here is a REJECTED payment (insufficient / excess / wrong-token /
+        // late), and a payment the platform never accepted returns to where it
+        // came from: sending it to a self-declared address instead would route
+        // an unaccepted transfer to an unverified destination. 02 §4.4 now
+        // spells the two destinations out side by side.
         var refund = new BlockchainTransaction
         {
             Id = Guid.NewGuid(),

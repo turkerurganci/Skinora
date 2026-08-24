@@ -60,11 +60,17 @@ public sealed record ReleaseEmergencyHoldRequest(
 
 /// <summary>
 /// Released response — covers both <c>RESUME</c> (status, releasedAt, action)
-/// and <c>CANCEL</c> (status=CANCELLED_ADMIN, releasedAt, action, itemReturned,
-/// paymentRefunded). The CANCEL-only fields are nullable in the DTO so the
-/// controller can serialise the RESUME shape without "ItemReturned": false
-/// noise on the wire (07 §9.22).
+/// and <c>CANCEL</c> (status=CANCELLED_ADMIN, releasedAt, action,
+/// paymentRefunded). <see cref="PaymentRefunded"/> is the one CANCEL-only field
+/// and is nullable so the controller can serialise the RESUME shape without it
+/// on the wire (07 §9.22).
 /// </summary>
+/// <remarks>
+/// The doc used to describe an <c>itemReturned</c> field as well. That field
+/// left the record in v3.0: the platform never takes custody of the item, so a
+/// cancellation has no item to return (02 §9). The record was updated then and
+/// this summary was not (T133b).
+/// </remarks>
 public sealed record ReleaseEmergencyHoldResponse(
     TransactionStatus Status,
     DateTime ReleasedAt,
