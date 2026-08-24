@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Spinner } from "./LoadingState";
 import { cn } from "@/lib/utils/cn";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export type WalletValidationOutcome =
   | { status: "ok" }
@@ -50,7 +51,7 @@ export function WalletAddressInput({
         }
         if (result.status === "error") {
           setPhase("input");
-          setError(t(result.messageKey ?? "validationError"));
+          setError(tDynamic(t, result.messageKey ?? "validationError", t("validationError")));
           return;
         }
       } catch {

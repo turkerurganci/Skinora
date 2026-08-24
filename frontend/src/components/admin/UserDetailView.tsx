@@ -18,6 +18,7 @@ import type {
   AdminUserFlagEntry,
   AdminUserWalletEntry,
 } from "@/lib/api/admin";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 function SectionCard({
   title,
@@ -193,7 +194,7 @@ export function UserDetailView({ steamId, detail }: UserDetailViewProps) {
       header: t("disputes.columns.status"),
       cell: (r) => (
         <PillBadge tone={DISPUTE_STATUS_TONE[r.status]}>
-          {t(`disputes.status.${r.status}`)}
+          {tDynamicOrKey(t, `disputes.status.${r.status}`)}
         </PillBadge>
       ),
     },

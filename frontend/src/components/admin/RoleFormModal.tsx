@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
 import { permissionLabelKey } from "@/lib/admin/permissionCatalog";
 import type { AdminRoleSummary, AvailablePermission, RoleWriteRequest } from "@/lib/api/admin";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 interface RoleFormProps {
   mode: "create" | "edit";
@@ -38,7 +39,7 @@ function RoleForm({
   /** Localize a permission by `key`; fall back to the server label if absent. */
   function permissionLabel(p: AvailablePermission): string {
     const key = permissionLabelKey(p.key);
-    return t.has(key) ? t(key) : p.label;
+    return tDynamic(t, key, p.label);
   }
 
   function togglePermission(key: string) {

@@ -26,6 +26,7 @@ import {
   type FlagActionTone,
 } from "./FlagActionModal";
 import { FlagReviewStatusBadge } from "./FlagReviewStatusBadge";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 const HOLD_REASON_MIN_LENGTH = 10;
 
@@ -211,7 +212,7 @@ export function FlagDetailView({ flag }: FlagDetailViewProps) {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-gray-700">
-                        {t(`signalType.${s.type}`)}
+                        {tDynamicOrKey(t, `signalType.${s.type}`)}
                       </span>
                       <span className="break-all font-mono text-xs text-gray-500">{s.value}</span>
                     </div>

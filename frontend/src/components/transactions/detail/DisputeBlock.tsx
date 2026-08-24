@@ -6,6 +6,7 @@ import type { TransactionDetailDispute } from "@/lib/api/transactions";
 import { formatDateTime } from "@/lib/utils/format";
 import { DisputeType } from "@/types/enums";
 import { DisputeModal } from "./DisputeModal";
+import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
 
 export interface DisputeBlockProps {
   transactionId: string;
@@ -35,11 +36,11 @@ export function DisputeBlock({ transactionId, dispute, isSuspended }: DisputeBlo
       <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-gray-600">{t("type")}</dt>
-          <dd className="text-gray-900">{t(`types.${dispute.type}`)}</dd>
+          <dd className="text-gray-900">{tDynamicOrKey(t, `types.${dispute.type}`)}</dd>
         </div>
         <div>
           <dt className="text-gray-600">{t("status")}</dt>
-          <dd className="text-gray-900">{t(`statuses.${dispute.status}`)}</dd>
+          <dd className="text-gray-900">{tDynamicOrKey(t, `statuses.${dispute.status}`)}</dd>
         </div>
         <div>
           <dt className="text-gray-600">{t("createdAt")}</dt>

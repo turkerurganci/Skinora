@@ -140,12 +140,22 @@ public class RealtimeConsumerTests
     [Fact]
     public async Task PaymentConfirmationTransition_PushesStatusChanged_ExactlyOnce_AcrossBothConsumers()
     {
-        // The double-push guard, asserted where it can actually be observed:
-        // the payment confirmation publishes BOTH events into one unit of work
-        // (T140), so the two consumers run against the same transition. Whoever
-        // later re-adds a StatusChanged push to the PaymentReceived leg — or
-        // wires a second producer — breaks this, and the FE badge flickering
-        // twice is not something a per-consumer test would catch.
+        // COMPOSITION PIN — kept deliberately, and deliberately labelled.
+        //
+        // WP4 (T140-TestClaimsExceedMeasurement): the T140 validator measured
+        // that this test kills no mutation the two per-consumer tests above do
+        // not already kill — all three died together in its M3 round. So it
+        // adds no independent mutation coverage and should not be counted as
+        // if it did.
+        //
+        // What it does carry is the COMPOSED claim, which no per-consumer test
+        // states: the payment confirmation publishes both events into one unit
+        // of work (T140), so the two consumers run against the same transition
+        // and exactly one StatusChanged push may reach the client. Whoever
+        // later re-adds a StatusChanged push to the PaymentReceived leg, or
+        // wires a second producer, makes the FE badge flicker twice — a defect
+        // that lives in the seam between the consumers, not inside either one.
+        // Retained on that basis (documenting the seam), not as a guard.
         var publisher = new RecordingRealtimePublisher();
         var transactionId = Guid.NewGuid();
         var occurredAt = DateTime.UtcNow;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
 import { confirmReceipt } from "@/lib/api/transactions";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export interface ConfirmReceiptButtonProps {
   transactionId: string;
@@ -73,7 +74,7 @@ export function ConfirmReceiptButton({
     } catch (err) {
       if (err instanceof ApiError) {
         const code = err.code;
-        setError(t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.generic"));
+        setError(tDynamic(t, `errors.${code}`, t("errors.generic")));
       } else {
         setError(t("errors.generic"));
       }

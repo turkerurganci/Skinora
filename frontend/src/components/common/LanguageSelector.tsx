@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { usePathname, useRouter, setLocaleCookie } from "@/i18n/navigation";
 import { cn } from "@/lib/utils/cn";
+import type { Locale } from "next-intl";
 
 const LOCALE_LABELS: Record<string, { code: string; label: string }> = {
   en: { code: "EN", label: "English" },
@@ -16,7 +17,7 @@ const LOCALE_LABELS: Record<string, { code: string; label: string }> = {
 
 export interface LanguageSelectorProps {
   className?: string;
-  onSelect?: (locale: string) => void;
+  onSelect?: (locale: Locale) => void;
 }
 
 export function LanguageSelector({ className, onSelect }: LanguageSelectorProps) {
@@ -39,7 +40,7 @@ export function LanguageSelector({ className, onSelect }: LanguageSelectorProps)
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  function handleSelect(locale: string) {
+  function handleSelect(locale: Locale) {
     setOpen(false);
     if (locale === currentLocale) return;
     if (onSelect) {

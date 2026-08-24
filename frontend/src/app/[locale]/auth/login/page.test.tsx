@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "@/i18n/messages/tr.json";
 import SteamLoginPage from "./page";
+import type { Locale } from "next-intl";
 
 /**
  * F4a — `UITour-SignupLanguageHardcodedEn`'in ana yolu.
@@ -33,7 +34,7 @@ vi.mock("next/navigation", () => ({
 
 const assign = vi.fn();
 
-function renderLogin(locale = "tr") {
+function renderLogin(locale: Locale = "tr") {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages}>
       <SteamLoginPage />

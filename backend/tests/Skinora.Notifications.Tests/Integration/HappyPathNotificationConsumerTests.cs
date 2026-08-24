@@ -208,18 +208,27 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
                 OccurredAt: DateTime.UtcNow),
             CancellationToken.None);
 
+        // WP4 (T140-TestClaimsExceedMeasurement) — the recipient SET is the
+        // claim, so it is asserted as a set.
+        //
+        // This used to read Single() + Equal(seller) + DoesNotContain(buyer).
+        // The last assertion could never fail on its own: Single() had already
+        // made a second recipient impossible, so the "buyer is excluded" claim
+        // was dead weight and a mutation flipping the sides died two lines
+        // earlier. Comparing the whole set keeps both halves load-bearing —
+        // a recipient added, or the side swapped, fails right here.
+        //
+        // 03 §3.5 step 3 gives the buyer a realtime status update and no inbox
+        // row for this transition; both of the transition's notifications are
+        // defined to the seller in the 06 §2.13 catalogue. This is the leg that
+        // flipped sides in v3.0, i.e. the one a future edit is likeliest to
+        // flip back.
+        Assert.Equal(new[] { _seller.Id }, dispatcher.Requests.Select(r => r.UserId));
+
         var request = Assert.Single(dispatcher.Requests);
-        Assert.Equal(_seller.Id, request.UserId);
         Assert.Equal(NotificationType.DELIVERY_EXPECTED, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
         Assert.Empty(request.Parameters);
-        // T140 — the buyer must NOT receive it. 03 §3.5 step 3 gives the buyer
-        // a realtime status update and no inbox row for this transition; both
-        // of the transition's notifications are defined to the seller in the
-        // 06 §2.13 catalogue. Asserted explicitly rather than left to the
-        // Single() above, because the leg that flipped sides in v3.0 is exactly
-        // the one a future edit is likeliest to flip back.
-        Assert.DoesNotContain(dispatcher.Requests, r => r.UserId == _buyer.Id);
     }
 
     [Fact]

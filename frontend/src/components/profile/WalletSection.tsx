@@ -8,6 +8,7 @@ import { ApiError } from "@/lib/api/client";
 import { initiateSteamReVerify } from "@/lib/api/auth";
 import { updateRefundWallet, updateSellerWallet, type UpdateWalletResponse } from "@/lib/api/users";
 import { maskWalletAddress } from "./helpers";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export type WalletRole = "seller" | "refund";
 
@@ -79,7 +80,7 @@ export function WalletSection({
     } catch (err) {
       setSubmitting(false);
       if (err instanceof ApiError) {
-        setServerError(tErr(mapErrorCode(err.code) ?? "generic"));
+        setServerError(tDynamic(tErr, mapErrorCode(err.code) ?? "generic", tErr("generic")));
       } else {
         setServerError(tErr("generic"));
       }
@@ -102,7 +103,7 @@ export function WalletSection({
       onSavedSuccessfully();
     } catch (err) {
       if (err instanceof ApiError) {
-        setServerError(tErr(mapErrorCode(err.code) ?? "generic"));
+        setServerError(tDynamic(tErr, mapErrorCode(err.code) ?? "generic", tErr("generic")));
       } else {
         setServerError(tErr("generic"));
       }

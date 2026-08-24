@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
 import { confirmReady } from "@/lib/api/transactions";
+import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export interface ConfirmReadyButtonProps {
   transactionId: string;
@@ -63,7 +64,7 @@ export function ConfirmReadyButton({
       if (err instanceof ApiError) {
         const code = err.code;
         setErrorCode(code ?? null);
-        setError(t.has(`errors.${code}`) ? t(`errors.${code}`) : t("errors.generic"));
+        setError(tDynamic(t, `errors.${code}`, t("errors.generic")));
       } else {
         setError(t("errors.generic"));
       }
