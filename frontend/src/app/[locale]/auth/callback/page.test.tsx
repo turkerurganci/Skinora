@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "@/i18n/messages/tr.json";
 import SteamCallbackPage from "./page";
@@ -85,6 +85,37 @@ describe("SteamCallbackPage — giriş sonrası hedef", () => {
     params = new URLSearchParams("status=success&returnUrl=%2Ftr%2Fdashboard");
     renderCallback("tr");
     await waitFor(() => expect(refreshAccessToken).toHaveBeenCalled());
+    expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("SteamCallbackPage — politika reddi kendi ekranına gider (F4c)", () => {
+  it.each([
+    ["age_blocked", "/tr/auth/age-gate"],
+    ["geo_blocked", "/tr/auth/geo-block"],
+    ["sanctions_match", "/tr/auth/sanctions"],
+  ])("%s → %s", async (code, target) => {
+    params = new URLSearchParams(`error=${code}`);
+    renderCallback("tr");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(target));
+  });
+
+  it("politika reddinde jenerik hata kartı ÇİZİLMEZ — Tekrar Dene düğmesi yok", () => {
+    params = new URLSearchParams("error=age_blocked");
+    const { container } = renderCallback("tr");
+    expect(container.textContent).not.toContain(messages.auth.callback.error.unknown.title);
+    expect(screen.queryByText(messages.common.retry)).toBeNull();
+  });
+
+  it("tanınan bir hata kodu YÖNLENDİRİLMEZ, kartını gösterir", () => {
+    params = new URLSearchParams("error=account_banned");
+    renderCallback("tr");
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("bilinmeyen bir kod da yönlendirilmez — sessiz yutulmaz", () => {
+    params = new URLSearchParams("error=some_future_code");
+    renderCallback("tr");
     expect(replace).not.toHaveBeenCalled();
   });
 });

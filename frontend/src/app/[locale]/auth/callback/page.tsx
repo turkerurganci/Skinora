@@ -32,6 +32,29 @@ function asErrorCode(raw: string | null): CallbackErrorCode {
   return "unknown";
 }
 
+/**
+ * F4c — kalıcı, politika gereği retlerin kendi ekranı var; giriş akışından
+ * oraya yönlendiren kod yoktu.
+ *
+ * Backend bu uçtan beş kod gönderiyor (`AuthController.cs:118-127`) ve
+ * `ERROR_CODES` bunlardan yalnız ikisini tanıyordu; kalan üçü `unknown`'a
+ * düşüp *"Giriş sırasında bir hata oluştu, lütfen tekrar deneyin"* kartını
+ * ve altında hiçbir zaman işe yaramayacak bir **Tekrar Dene** düğmesini
+ * çiziyordu. Üçü de geçici değil: 30 günden yeni hesap, engelli ülke,
+ * yaptırım eşleşmesi. Üçünün de hazır InfoScreen sayfası vardı
+ * (`/auth/age-gate`, `/auth/geo-block`, `/auth/sanctions`) ve hiçbirine
+ * giriş akışından gelinmiyordu.
+ *
+ * Gerçek bir girişte ölçüldü: 0 günlük Steam hesabı → backend
+ * `Age gate blocked login: 0d below threshold 30d` → `?error=age_blocked`
+ * → jenerik hata kartı.
+ */
+const POLICY_BLOCK_ROUTES: Record<string, string> = {
+  age_blocked: "/auth/age-gate",
+  geo_blocked: "/auth/geo-block",
+  sanctions_match: "/auth/sanctions",
+};
+
 const DEFAULT_TOS_VERSION = process.env.NEXT_PUBLIC_TOS_VERSION ?? "1.0";
 
 export default function SteamCallbackPage() {
@@ -86,6 +109,15 @@ export default function SteamCallbackPage() {
     };
   }, [status, setAccessToken]);
 
+  // F4c — politika reddi kendi ekranına gider. Jenerik hata kartı bu üç kod
+  // için hiç çizilmez: `policyBlockRoute` render dalını da kapatıyor.
+  const policyBlockRoute = rawError ? (POLICY_BLOCK_ROUTES[rawError] ?? null) : null;
+
+  useEffect(() => {
+    if (!policyBlockRoute) return;
+    router.replace(`/${locale}${policyBlockRoute}`);
+  }, [policyBlockRoute, router, locale]);
+
   // success → once the token is stored, redirect into the app's return URL.
   useEffect(() => {
     if (status !== "success" || !tokenReady) return;
@@ -113,7 +145,7 @@ export default function SteamCallbackPage() {
   const exchangingToken =
     (status === "success" || status === "new_user") && !tokenReady && !refreshFailed;
 
-  if (status === "loading" || (status === "success" && exchangingToken)) {
+  if (policyBlockRoute || status === "loading" || (status === "success" && exchangingToken)) {
     return (
       <div
         role="status"
