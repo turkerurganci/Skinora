@@ -45,34 +45,13 @@ describe("wizardDraft", () => {
       ["a JSON scalar", '"just a string"'],
       ["null", "null"],
       ["an object missing every field", "{}"],
-      [
-        "an unknown stablecoin",
-        JSON.stringify({ ...DRAFT, stablecoin: "DOGE" }),
-      ],
-      [
-        "an unknown identification method",
-        JSON.stringify({ ...DRAFT, method: "TELEPATHY" }),
-      ],
-      [
-        "a non-numeric timeout",
-        JSON.stringify({ ...DRAFT, paymentTimeoutHours: "24" }),
-      ],
-      [
-        "a NaN timeout",
-        JSON.stringify({ ...DRAFT, paymentTimeoutHours: null }),
-      ],
-      [
-        "an item without assetId",
-        JSON.stringify({ ...DRAFT, item: { tradeable: true } }),
-      ],
-      [
-        "an item without tradeable",
-        JSON.stringify({ ...DRAFT, item: { assetId: "1" } }),
-      ],
-      [
-        "a boolean field carrying a string",
-        JSON.stringify({ ...DRAFT, walletConfirmed: "true" }),
-      ],
+      ["an unknown stablecoin", JSON.stringify({ ...DRAFT, stablecoin: "DOGE" })],
+      ["an unknown identification method", JSON.stringify({ ...DRAFT, method: "TELEPATHY" })],
+      ["a non-numeric timeout", JSON.stringify({ ...DRAFT, paymentTimeoutHours: "24" })],
+      ["a NaN timeout", JSON.stringify({ ...DRAFT, paymentTimeoutHours: null })],
+      ["an item without assetId", JSON.stringify({ ...DRAFT, item: { tradeable: true } })],
+      ["an item without tradeable", JSON.stringify({ ...DRAFT, item: { assetId: "1" } })],
+      ["a boolean field carrying a string", JSON.stringify({ ...DRAFT, walletConfirmed: "true" })],
     ])("rejects %s", (_label, raw) => {
       window.sessionStorage.setItem(STORAGE_KEY, raw);
       expect(readWizardDraft()).toBeNull();

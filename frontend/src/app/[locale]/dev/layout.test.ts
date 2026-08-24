@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const notFound = vi.hoisted(() => vi.fn(() => {
-  throw new Error("NEXT_NOT_FOUND");
-}));
+const notFound = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
+);
 
 vi.mock("next/navigation", () => ({ notFound }));
 

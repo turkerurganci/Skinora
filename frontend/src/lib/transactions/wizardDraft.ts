@@ -78,17 +78,17 @@ function isWizardDraft(value: unknown): value is WizardDraft {
   const d = value as Record<string, unknown>;
 
   return (
-    (d.item === null || isInventoryItem(d.item))
-    && typeof d.stablecoin === "string"
-    && Object.values(StablecoinType).includes(d.stablecoin as StablecoinType)
-    && typeof d.price === "string"
-    && typeof d.paymentTimeoutHours === "number"
-    && Number.isFinite(d.paymentTimeoutHours)
-    && typeof d.method === "string"
-    && Object.values(BuyerIdentificationMethod).includes(d.method as BuyerIdentificationMethod)
-    && typeof d.buyerSteamId === "string"
-    && typeof d.sellerWalletAddress === "string"
-    && typeof d.walletConfirmed === "boolean"
+    (d.item === null || isInventoryItem(d.item)) &&
+    typeof d.stablecoin === "string" &&
+    Object.values(StablecoinType).includes(d.stablecoin as StablecoinType) &&
+    typeof d.price === "string" &&
+    typeof d.paymentTimeoutHours === "number" &&
+    Number.isFinite(d.paymentTimeoutHours) &&
+    typeof d.method === "string" &&
+    Object.values(BuyerIdentificationMethod).includes(d.method as BuyerIdentificationMethod) &&
+    typeof d.buyerSteamId === "string" &&
+    typeof d.sellerWalletAddress === "string" &&
+    typeof d.walletConfirmed === "boolean"
   );
 }
 

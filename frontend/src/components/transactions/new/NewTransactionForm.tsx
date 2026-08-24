@@ -81,9 +81,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
   // the field holds a string it wins for good — including the empty string, so
   // a seller who deliberately clears the address is not fought by a late query
   // resolution or a refetch.
-  const [walletInput, setWalletInput] = useState<string | null>(
-    draft?.sellerWalletAddress ?? null,
-  );
+  const [walletInput, setWalletInput] = useState<string | null>(draft?.sellerWalletAddress ?? null);
   const sellerWalletAddress = walletInput ?? profile.data?.sellerWalletAddress ?? "";
   const setSellerWalletAddress = useCallback((next: string) => setWalletInput(next), []);
 
