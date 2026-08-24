@@ -77,3 +77,17 @@ export function acceptTos(tosVersion: string): Promise<AcceptTosResponse> {
     body: JSON.stringify({ tosVersion, ageOver18: true }),
   });
 }
+
+/**
+ * A8 — `POST /auth/logout` (07 §4.9). Revokes the refresh token server-side and
+ * clears the HttpOnly cookie.
+ *
+ * F7a added the first production caller. Until then the endpoint existed,
+ * revoked correctly and was never called: the UI's "Sign out" only cleared the
+ * access token from localStorage, so the refresh cookie stayed valid for its
+ * full 7-day lifetime and `POST /auth/refresh` from the same browser could mint
+ * a new session (`Session-LogoutDoesNotRevokeRefreshToken`).
+ */
+export function logout(): Promise<void> {
+  return apiClient<void>("/auth/logout", { method: "POST" });
+}

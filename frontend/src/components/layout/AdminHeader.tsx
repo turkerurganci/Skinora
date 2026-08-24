@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { signOut } from "@/lib/auth/signOut";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { cn } from "@/lib/utils/cn";
 
@@ -15,7 +16,8 @@ export function AdminHeader({ className, onMenuClick }: AdminHeaderProps) {
   const tAdmin = useTranslations("adminNav");
   const locale = useLocale();
   const displayName = useAuthStore((s) => s.displayName);
-  const logout = useAuthStore((s) => s.logout);
+  // F7a — mağazadaki logout yalnız yerel token'ı siler; signOut A8'i de
+  // çağırıp refresh token'ı sunucuda iptal eder.
 
   const href = (path: string) => `/${locale}${path}`;
   const adminName = displayName ?? t("adminFallback");
@@ -65,7 +67,7 @@ export function AdminHeader({ className, onMenuClick }: AdminHeaderProps) {
         </span>
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={() => void signOut()}
           className="inline-flex items-center rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-100 hover:bg-gray-700"
           aria-label={t("signOut")}
         >
