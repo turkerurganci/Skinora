@@ -420,7 +420,8 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
   "hasSellerWallet": true,
   "hasRefundWallet": false,
   "createdAt": "2026-03-10T08:00:00Z",
-  "isSuspended": false
+  "isSuspended": false,
+  "permissions": []
 }
 ```
 
@@ -431,6 +432,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 | `tosAccepted` | `false` → ToS modal |
 | `tosAcceptedVersion` | Kabul edilen ToS versiyonu (`null` = hiç kabul edilmemiş). İstemci mevcut sürümle karşılaştırır; uyuşmazsa re-prompt (WP11/T30, §4.4) |
 | `isSuspended` | `true` → kısıtlı oturum (SuspendedHeader + S03d), fon-akışı mutation'ları reddedilir (T105a, 02 §14.0, 03 §2.1) |
+| `permissions` | Token'ın taşıdığı admin yetki anahtarları (§9.11 kataloğu). İstemci **yalnız görünürlük** için kullanır — hangi admin yüzeyinin gösterileceğine karar verir; yetkilendirmenin yetkili kaynağı her uçtaki `Permission:<KEY>` policy'sidir ve 403 döndürmeye devam eder. Non-admin için `[]`. **Süper admin için de `[]`** — `PermissionAuthorizationHandler` role üzerinden kısa devre yaptığı için süper admine hiç Permission claim'i üretilmez; istemci bu listeyi harfi harfine okumaz, `super_admin` rolünü "hepsine sahip" sayar (WP2c) |
 
 ### 4.6 A5 — `POST /auth/steam/re-verify`
 
@@ -1272,9 +1274,12 @@ Olay yoksa boş array `[]` döner.
   "cancelledBy": "SELLER",
   "reason": "Fiyat konusunda anlaşamadık",
   "cancelledAt": "2026-03-16T15:00:00Z",
-  "paymentRefunded": false
+  "paymentRefunded": false,
+  "statusAtCancellation": "PAYMENT_RECEIVED"
 }
 ```
+
+`statusAtCancellation` akışın **durduğu andaki** statüdür — timeline kırmızı X'i bu adıma koyar (04 §C05); alan olmadan iptal edilen her işlem 1. adımda durmuş gibi görünüyordu. Sunucu bunu `TransactionHistory`'nin **mevcut terminal statüye giren** geçişinin `previousStatus`'undan türetir (yeni kolon/migration yok); birden fazla giriş varsa **en yenisi** alınır. Geçiş kaydı bulunmayan (history öncesi) kayıtlarda alan **yoktur** ve istemci eski davranışına döner (WP2c).
 
 **`flagInfo` (FLAGGED):**
 ```json

@@ -92,6 +92,68 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
         Assert.Equal("tr", data.GetProperty("language").GetString());
         Assert.True(data.GetProperty("hasSellerWallet").GetBoolean());
         Assert.False(data.GetProperty("hasRefundWallet").GetBoolean());
+
+        // WP2c — a plain user carries no admin authority, and the field is an
+        // empty array rather than absent so the client never has to branch on
+        // "missing" vs "none".
+        Assert.Empty(data.GetProperty("permissions").EnumerateArray());
+    }
+
+    // ---------- /auth/me permissions (WP2c — FE-permission-guard) ----------
+
+    [Fact]
+    public async Task GetMe_Admin_ReturnsThePermissionClaimsOnTheToken()
+    {
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(
+            user.Id, user.SteamId, AuthRoles.Admin, "VIEW_FLAGS", "MANAGE_FLAGS");
+
+        var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+
+        Assert.Equal(AuthRoles.Admin, data.GetProperty("role").GetString());
+        var permissions = data.GetProperty("permissions")
+            .EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal(["VIEW_FLAGS", "MANAGE_FLAGS"], permissions);
+    }
+
+    [Fact]
+    public async Task GetMe_Admin_DoesNotInventPermissionsBeyondTheToken()
+    {
+        // The response must describe the authority the presented token actually
+        // carries — an admin whose role grants nothing yet still gets an empty
+        // list, not the full catalogue.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId, AuthRoles.Admin);
+
+        var response = await client.GetAsync("/api/v1/auth/me");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Empty(data.GetProperty("permissions").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GetMe_SuperAdmin_ReturnsEmptyPermissions_BecauseAuthorizationShortCircuitsOnRole()
+    {
+        // Pins a rule the client depends on: AccessTokenGenerator mints NO
+        // Permission claims for a super admin, because
+        // PermissionAuthorizationHandler short-circuits on the role. A client
+        // that read this list literally would hide the whole admin surface from
+        // the one account that can use all of it — hence the frontend
+        // `hasPermission` helper treats super_admin as holding everything.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.GetAsync("/api/v1/auth/me");
+
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data");
+        Assert.Equal(AuthRoles.SuperAdmin, data.GetProperty("role").GetString());
+        Assert.Empty(data.GetProperty("permissions").EnumerateArray());
     }
 
     // ---------- /auth/refresh ----------
@@ -248,29 +310,41 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
 
     // ---------- helpers ----------
 
-    private HttpClient BuildAuthenticatedClient(Guid userId, string steamId)
+    private HttpClient BuildAuthenticatedClient(
+        Guid userId,
+        string steamId,
+        string role = AuthRoles.User,
+        params string[] permissions)
     {
-        var token = IssueAccessToken(userId, steamId);
+        var token = IssueAccessToken(userId, steamId, role, permissions);
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
 
-    private static string IssueAccessToken(Guid userId, string steamId)
+    private static string IssueAccessToken(
+        Guid userId,
+        string steamId,
+        string role = AuthRoles.User,
+        params string[] permissions)
     {
         var handler = new JwtSecurityTokenHandler();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var claims = new List<Claim>
+        {
+            new(AuthClaimTypes.UserId, userId.ToString()),
+            new(AuthClaimTypes.SteamId, steamId),
+            new(AuthClaimTypes.Role, role),
+        };
+        // Mirrors AccessTokenGenerator: one Permission claim per key.
+        claims.AddRange(permissions.Select(p => new Claim(AuthClaimTypes.Permission, p)));
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = TestIssuer,
             Audience = TestAudience,
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(AuthClaimTypes.UserId, userId.ToString()),
-                new Claim(AuthClaimTypes.SteamId, steamId),
-                new Claim(AuthClaimTypes.Role, AuthRoles.User),
-            }),
+            Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.AddMinutes(15),
             SigningCredentials = creds,
         };

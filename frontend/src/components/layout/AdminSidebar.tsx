@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useQuery } from "@tanstack/react-query";
+import { getMe } from "@/lib/api/auth";
+import { hasPermission } from "@/lib/auth/roles";
+import { permissionForAdminRoute } from "@/lib/admin/routePermissions";
 import { cn } from "@/lib/utils/cn";
 
 interface AdminMenuItem {
@@ -44,6 +48,23 @@ export function AdminSidebar({
   const locale = useLocale();
   const pathname = usePathname();
 
+  // WP2c (FE-permission-guard) — hide the entries this admin's own token cannot
+  // open. Reuses the shared ["auth","me"] query that AuthInitializer and
+  // AdminGuard already prime, so this costs no extra request.
+  //
+  // While `me` is still loading the menu renders unfiltered. That is the
+  // deliberate direction to fail in: a link that turns out to 403 is a smaller
+  // problem than an admin watching their own menu items disappear and reappear
+  // on every navigation. Nothing here is a security boundary — the backend
+  // policy answers 403 regardless of what the menu shows.
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: getMe });
+
+  const visibleMenu = MENU.filter((item) => {
+    if (!me) return true;
+    const required = permissionForAdminRoute(item.path);
+    return required === null || hasPermission(me.role, me.permissions, required);
+  });
+
   const href = (path: string) => `/${locale}${path}`;
 
   function isActive(path: string) {
@@ -53,7 +74,7 @@ export function AdminSidebar({
 
   const nav = (
     <nav className="flex flex-col py-2">
-      {MENU.map((item) => {
+      {visibleMenu.map((item) => {
         const active = isActive(item.path);
         return (
           <Link

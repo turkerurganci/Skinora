@@ -255,7 +255,16 @@ public sealed class AuthController : ControllerBase
         if (!Guid.TryParse(userIdClaim, out var userId))
             return Unauthorized();
 
-        var dto = await _currentUserService.GetAsync(userId, role, cancellationToken);
+        // WP2c — read the permission claims off the presented token rather than
+        // re-resolving them from the DB. Two reasons: this stays a single-query
+        // endpoint, and the response then describes the authority the bearer
+        // token actually carries, which is exactly what the endpoints will
+        // enforce until the token is refreshed.
+        var permissions = User.FindAll(AuthClaimTypes.Permission)
+            .Select(c => c.Value)
+            .ToArray();
+
+        var dto = await _currentUserService.GetAsync(userId, role, permissions, cancellationToken);
         if (dto is null) return Unauthorized();
 
         return Ok(dto);

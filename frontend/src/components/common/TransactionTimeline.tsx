@@ -6,6 +6,17 @@ export interface TransactionTimelineProps {
   status: TransactionStatus;
   cancelled?: boolean;
   flagged?: boolean;
+  /**
+   * WP2c — the status the flow held when it stopped, for the off-timeline
+   * terminal states. Comes from `cancelInfo.statusAtCancellation` (07 §7.5),
+   * which the backend derives from the recorded transition.
+   *
+   * Without it a cancelled transaction has no on-timeline position at all and
+   * the red X falls back to step 1, so every cancellation looked like it died
+   * at creation — 04 §C05 asks for the X on the step the flow actually reached.
+   * Optional: a record with no history row keeps the old fallback.
+   */
+  stoppedAtStatus?: TransactionStatus | null;
   className?: string;
 }
 
@@ -51,6 +62,7 @@ export function TransactionTimeline({
   status,
   cancelled,
   flagged,
+  stoppedAtStatus,
   className,
 }: TransactionTimelineProps) {
   const t = useTranslations("timeline");
@@ -63,7 +75,16 @@ export function TransactionTimeline({
     status === TransactionStatus.REFUNDED;
   const isFlagged = flagged || status === TransactionStatus.FLAGGED;
   const activeIndex = indexForStatus(status);
-  const effectiveIndex = isCancelled || isFlagged ? Math.max(0, activeIndex) : activeIndex;
+  // For an off-timeline terminal state `activeIndex` is -1 by definition, so the
+  // marker needs a position from somewhere else: the step the flow stopped at.
+  // `stoppedAtStatus` can itself be off-timeline (FLAGGED → CANCELLED_ADMIN
+  // reports FLAGGED as the previous status), which lands back on -1 and the
+  // clamp restores the old step-1 fallback.
+  const stoppedIndex = stoppedAtStatus ? indexForStatus(stoppedAtStatus) : -1;
+  const effectiveIndex =
+    isCancelled || isFlagged
+      ? Math.max(0, stoppedIndex >= 0 ? stoppedIndex : activeIndex)
+      : activeIndex;
   // 04 §C05 — COMPLETED is the last step AND a finished one. Without this flag
   // `completed = idx < effectiveIndex` never covers the final step, so the
   // terminal state rendered as the blue pulsing "active" step instead of a

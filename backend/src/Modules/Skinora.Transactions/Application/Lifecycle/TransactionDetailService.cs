@@ -260,11 +260,27 @@ public sealed class TransactionDetailService : ITransactionDetailService
         CancelInfoDto? cancel = null;
         if (transaction.CancelledAt.HasValue && transaction.CancelledBy.HasValue)
         {
+            // WP2c — recover the status the flow stopped at from the recorded
+            // transition INTO the current terminal state. Ordered newest-first
+            // and matched on NewStatus so a transaction that passed through more
+            // than one terminal state (cancelled, then refunded) reports the
+            // step it is actually showing, not the first one it ever reached.
+            var statusAtCancellation = await _db.Set<TransactionHistory>()
+                .AsNoTracking()
+                .Where(h => h.TransactionId == transaction.Id
+                            && h.NewStatus == transaction.Status
+                            && h.PreviousStatus != null)
+                .OrderByDescending(h => h.CreatedAt)
+                .ThenByDescending(h => h.Id)
+                .Select(h => h.PreviousStatus)
+                .FirstOrDefaultAsync(cancellationToken);
+
             cancel = new CancelInfoDto(
                 CancelledBy: transaction.CancelledBy.Value.ToString(),
                 Reason: transaction.CancelReason ?? string.Empty,
                 CancelledAt: transaction.CancelledAt.Value,
-                PaymentRefunded: transaction.PaymentReceivedAt.HasValue);
+                PaymentRefunded: transaction.PaymentReceivedAt.HasValue,
+                StatusAtCancellation: statusAtCancellation?.ToString());
         }
 
         HoldInfoDto? hold = null;

@@ -136,6 +136,9 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
         }
         cancelled={cancelled}
         flagged={status === TransactionStatus.FLAGGED}
+        stoppedAtStatus={
+          (data.cancelInfo?.statusAtCancellation as TransactionStatus | undefined) ?? null
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">

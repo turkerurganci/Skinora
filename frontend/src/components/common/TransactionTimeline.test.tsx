@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { TransactionTimeline } from "@/components/common/TransactionTimeline";
+import { TransactionTimeline, TIMELINE_STEPS } from "@/components/common/TransactionTimeline";
 import { TransactionStatus } from "@/types/enums";
 
 // Mirrors the shape of the real `timeline` namespace (labels shortened to the
@@ -105,5 +105,64 @@ describe("TransactionTimeline", () => {
 
     expect(countWithClass(container, "bg-orange-500")).toBe(1);
     expect(countWithClass(container, "bg-blue-500")).toBe(0);
+  });
+
+  // ---------- WP2c: red X lands on the step the flow stopped at ----------
+
+  it("puts the red marker on the step the flow stopped at, not on step 1", () => {
+    // The defect this closes: indexForStatus returns -1 for every off-timeline
+    // status, so the clamp put the X on step 1 and every cancellation looked
+    // like it died at creation.
+    const { container } = renderTimeline({
+      status: TransactionStatus.CANCELLED_SELLER,
+      stoppedAtStatus: TransactionStatus.PAYMENT_RECEIVED,
+    });
+
+    const red = markers(container).findIndex((m) => m.classList.contains("bg-red-500"));
+    expect(red).toBe(TIMELINE_STEPS.indexOf(TransactionStatus.PAYMENT_RECEIVED));
+    // Everything before it stays green — the flow really did get that far.
+    expect(countWithClass(container, "bg-green-500")).toBe(red);
+  });
+
+  it("falls back to step 1 when no stop status is known", () => {
+    // A record with no history row (pre-WP2c data) keeps the old rendering.
+    const { container } = renderTimeline({ status: TransactionStatus.CANCELLED_BUYER });
+
+    const red = markers(container).findIndex((m) => m.classList.contains("bg-red-500"));
+    expect(red).toBe(0);
+  });
+
+  it("falls back to step 1 when the stop status is itself off-timeline", () => {
+    // FLAGGED -> CANCELLED_ADMIN reports FLAGGED as the previous status, and
+    // FLAGGED has no timeline position of its own.
+    const { container } = renderTimeline({
+      status: TransactionStatus.CANCELLED_ADMIN,
+      stoppedAtStatus: TransactionStatus.FLAGGED,
+    });
+
+    const red = markers(container).findIndex((m) => m.classList.contains("bg-red-500"));
+    expect(red).toBe(0);
+  });
+
+  it("positions a REFUNDED transaction the same way", () => {
+    const { container } = renderTimeline({
+      status: TransactionStatus.REFUNDED,
+      stoppedAtStatus: TransactionStatus.ITEM_DELIVERED,
+    });
+
+    const red = markers(container).findIndex((m) => m.classList.contains("bg-red-500"));
+    expect(red).toBe(TIMELINE_STEPS.indexOf(TransactionStatus.ITEM_DELIVERED));
+  });
+
+  it("ignores the stop status for a live transaction", () => {
+    // Only the off-timeline terminal states consult it; a running flow keeps
+    // marking its own status.
+    const { container } = renderTimeline({
+      status: TransactionStatus.ACCEPTED,
+      stoppedAtStatus: TransactionStatus.ITEM_DELIVERED,
+    });
+
+    const blue = markers(container).findIndex((m) => m.classList.contains("bg-blue-500"));
+    expect(blue).toBe(TIMELINE_STEPS.indexOf(TransactionStatus.ACCEPTED));
   });
 });
