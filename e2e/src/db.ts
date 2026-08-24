@@ -317,7 +317,9 @@ export async function getNotificationRecipients(type: string): Promise<string[]>
     .input('s', sql.UniqueIdentifier, seed.sellerId)
     .input('b', sql.UniqueIdentifier, seed.buyerId)
     .input('t', sql.NVarChar, type)
-    .query('SELECT UserId FROM Notifications WHERE IsDeleted = 0 AND Type = @t AND UserId IN (@s,@b)');
+    .query(
+      'SELECT UserId FROM Notifications WHERE IsDeleted = 0 AND Type = @t AND UserId IN (@s,@b)',
+    );
   return result.recordset.map((row) => String(row.UserId).toLowerCase());
 }
 
