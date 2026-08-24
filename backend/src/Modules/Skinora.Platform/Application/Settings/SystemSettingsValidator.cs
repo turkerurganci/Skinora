@@ -310,6 +310,21 @@ public sealed class SystemSettingsValidator
             return null;
         }
 
+        // WP5 (AgeGateDisableValueUnreachable) — a few settings define 0 as a
+        // real, documented value meaning "off", so the generic rule below would
+        // make a supported capability unreachable through the only supported
+        // write path. Checked before it, in the same shape as IsCronKey above.
+        if (IsZeroMeansDisabledKey(key))
+        {
+            if (dataType is "int" or "decimal")
+            {
+                var value0 = decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
+                if (value0 < 0m)
+                    return $"{key} cannot be negative (got {value}); use 0 to disable.";
+            }
+            return null;
+        }
+
         // Generic positive-number rule for everything else numeric.
         if (dataType is "int" or "decimal")
         {
@@ -351,6 +366,29 @@ public sealed class SystemSettingsValidator
 
         return false;
     }
+
+    /// <summary>
+    /// WP5 — settings whose consumer treats <c>0</c> as "disabled", so the
+    /// generic <c>&gt; 0</c> rule must not apply to them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>auth.min_steam_account_age_days</c>: <c>SettingsBasedAgeGateCheck</c>
+    /// reads the threshold and then says, explicitly,
+    /// <c>if (thresholdDays &lt;= 0) return AgeGateDecision.Allowed()</c> — the
+    /// gate is skipped. Before this, the only supported write path (AD9) refused
+    /// that value, so an operator could reach the documented "off" state only by
+    /// writing to the production database by hand. That is exactly what had to
+    /// be done on 2026-08-24 to run the F4 probe, which is how the gap surfaced.
+    /// </para>
+    /// <para>
+    /// Negative values are still rejected: <c>0</c> is the documented switch,
+    /// and <c>-1</c> reaching the same branch would be a typo silently disabling
+    /// an access control rather than an intent.
+    /// </para>
+    /// </remarks>
+    private static bool IsZeroMeansDisabledKey(string key) => key
+        is "auth.min_steam_account_age_days";
 
     // NOTE: price_deviation_threshold is intentionally NOT here — it is a
     // deviation ratio that legitimately exceeds 1 (see the explicit >0 branch

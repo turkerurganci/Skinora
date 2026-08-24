@@ -23,6 +23,7 @@ vi.mock('../logger.js', () => ({
 }));
 
 import { buildRouter } from './routes.js';
+import { resetHealthCacheForTests } from '../health/HealthController.js';
 import { correlationMiddleware } from './middleware.js';
 import {
   InventoryPrivateError,
@@ -471,10 +472,18 @@ describe('retired custody surface (T133)', () => {
   });
 
   it('still serves the two read-only routes and /health', async () => {
+    resetHealthCacheForTests();
     const app = express();
     app.use(express.json());
     app.use(correlationMiddleware);
-    app.use(buildRouter({}));
+    app.use(
+      buildRouter({
+        // WP5 — stub the outbound probe. /health now really reaches Steam, and a
+        // unit test must not: it would be slow, flaky, and would report the
+        // network rather than the route.
+        health: { fetchImpl: () => Promise.resolve({ ok: true, status: 200 }) },
+      }),
+    );
     const server = await new Promise<import('http').Server>((resolve) => {
       const s = app.listen(0, () => resolve(s));
     });

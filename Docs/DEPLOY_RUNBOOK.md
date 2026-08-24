@@ -180,6 +180,18 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 
 ---
 
+### F.1 T132 öncesi bir veritabanında ölü yetki satırları (WP5)
+
+`VIEW_STEAM_ACCOUNTS` ve `MANAGE_STEAM_RECOVERY` v3.0'da (T132) kaldırıldı. **Taze bir kurulum etkilenmez** — ölçüldü: bu iki anahtar hiçbir migration'da seed edilmiyor ve `PermissionCatalog`'da yok, dolayısıyla yeni bir DB onları hiç görmez.
+
+Yalnızca T132 **öncesinde** bir admin tarafından bir role elle atanmışlarsa `AdminRolePermissions` satırları olarak kalmış olabilirler (tipik olarak uzun ömürlü bir dev/staging DB'si). Bu bir tuzak değildir ve kendiliğinden temizlenir:
+
+- `PermissionAuthorizationHandler` bu anahtarları isteyen bir policy bulamaz → fazladan yetki vermezler;
+- rolün ilk düzenlemesinde `UpdateAsync` gönderilen küme dışındaki satırları soft-delete eder;
+- frontend gönderilecek kümeyi katalogdan türettiği için ölü anahtar geri yollanamaz → `INVALID_PERMISSION` 400 doğmaz.
+
+Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migration yazılmadı — seed edilmemiş ve kendiliğinden düzelen satırlar için migration maliyeti karşılığını vermez. Erken temizlemek isteyen operatör için ilgili rolü bir kez kaydetmek yeterlidir.
+
 ## G. Lokal gerçek-konfigürasyon provası
 
 > **Bağlam (2026-07-29).** F6'nın 8 E2E süiti self-contained `docker-compose.e2e.yml` + tek `sidecar-fake` container'ı üzerinde koştu; Steam OAuth ve on-chain finality backend seam'inde simüle edildi. Asıl `docker-compose.yml` **hiç boot edilmemişti** ve ayağa kalkmayı engelleyen eksikleri vardı (backend'e 19 `SKINORA_SETTING_*` geçilmiyordu → fail-fast; iki sidecar'a `INTERNAL_KEY` geçilmiyordu; bot/hot-wallet/testnet-kontrat env'leri ve `SteamOpenId__*` yoktu). Bu bölüm o boşluğu kapatan çalışmanın sonucudur — gerçek Steam hesabı + Nile testnet ile `http://localhost:8080` üzerinde tam stack. **T133 notu:** o turdaki "gerçek bot" ön koşulu kalktı; sidecar hiçbir Steam hesabı taşımaz (§G.0, 05 §3.2), prova için gereken tek Steam credential'ı `STEAM_API_KEY`'dir. **T133b notu:** §G.4'ün happy path anlatısı v3.0 P2P akışına çekildi ve **ikiye ayrıldı** — tek oturumda gözlenebilen kısım (kontrol 10) ile mutabakat penceresinin ardındaki payout kuyruğu (kontrol 10a). Bölünmenin sebebi bir doküman tercihi değil, ölçülen bir kısıt: `payout_settlement_days`'in tabanı **7 gün**dür ve admin altına inemez (`SystemSettingsValidator.MinimumSettlementDays`, 02 §16.2), dolayısıyla eski tek satırın vaat ettiği "→ `COMPLETED` + payout" bir oturumda **hiçbir zaman** gözlenemezdi.

@@ -307,4 +307,43 @@ public class SystemSettingsValidatorTests
         var result = _v.ValidateCrossKey(snapshot);
         Assert.True(result.IsValid);
     }
+
+    // ---------- WP5: 0 = "disabled" keys (AgeGateDisableValueUnreachable) ----------
+
+    [Fact]
+    public void ValidateSingle_AgeGateThreshold_Accepts_Zero_Meaning_Disabled()
+    {
+        // SettingsBasedAgeGateCheck says, explicitly, `if (thresholdDays <= 0)
+        // return Allowed()` — 0 is the documented "skip the gate" value. The
+        // generic > 0 rule used to reject it, so the only way to reach a state
+        // the code supports was to write to the database by hand. That is what
+        // had to be done on 2026-08-24 to run the F4 probe.
+        var result = _v.ValidateSingle("auth.min_steam_account_age_days", "0", "int");
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void ValidateSingle_AgeGateThreshold_Still_Rejects_Negative()
+    {
+        // 0 is the switch; -1 reaching the same branch would be a typo silently
+        // disabling an access control rather than an intent.
+        var result = _v.ValidateSingle("auth.min_steam_account_age_days", "-1", "int");
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public void ValidateSingle_AgeGateThreshold_Accepts_A_Normal_Threshold()
+    {
+        var result = _v.ValidateSingle("auth.min_steam_account_age_days", "30", "int");
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void ValidateSingle_OtherNumericKeys_Still_Reject_Zero()
+    {
+        // The exception is per-key on purpose: every other numeric setting keeps
+        // the generic > 0 rule, so this does not become a blanket relaxation.
+        Assert.False(_v.ValidateSingle("high_volume_count_threshold", "0", "int").IsValid);
+        Assert.False(_v.ValidateSingle("payout_settlement_days", "0", "int").IsValid);
+    }
 }
