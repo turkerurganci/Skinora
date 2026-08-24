@@ -1,3 +1,4 @@
+using Skinora.Platform.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -49,6 +50,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly ITransactionReputationRefresher _reputation;
     private readonly IDeliveryTimeoutRound _deliveryRound;
+    private readonly IWarningDispatcher _warnings;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -60,6 +62,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         IPostCancelMonitorStarter postCancelMonitor,
         ITransactionReputationRefresher reputation,
         IDeliveryTimeoutRound deliveryRound,
+        IWarningDispatcher warnings,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
@@ -70,6 +73,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         _postCancelMonitor = postCancelMonitor;
         _reputation = reputation;
         _deliveryRound = deliveryRound;
+        _warnings = warnings;
         _options = options.Value;
         _logger = logger;
     }
@@ -101,6 +105,78 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         }
     }
 
+    /// <summary>
+    /// WP7 — fires the delivery-phase timeout warning for rows that have
+    /// crossed the warning ratio and not been warned yet.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The ratio is the same <c>timeout_warning_ratio</c> the payment phase
+    /// uses (02 §16.2), applied to the delivery window. Ratio unset or out of
+    /// the open (0,1) range disables the warning, matching
+    /// <c>TimeoutSchedulingService</c> — an operator who turns it off turns it
+    /// off everywhere.
+    /// </para>
+    /// <para>
+    /// Idempotency comes from <c>TimeoutWarningSentAt</c>, which the dispatcher
+    /// stamps; without it every sweep would re-warn the same seller. The
+    /// column already existed for the payment phase, so no migration.
+    /// </para>
+    /// <para>
+    /// A throw here must not take the cancellation sweep down with it: a
+    /// missed warning is a smaller failure than a missed timeout.
+    /// </para>
+    /// </remarks>
+    private async Task DispatchDeliveryWarningsAsync(DateTime now)
+    {
+        var ratio = await ReadWarningRatioAsync();
+        if (ratio is not { } r || r <= 0m || r >= 1m) return;
+
+        var due = await _db.Set<Transaction>()
+            .Where(t => !t.IsDeleted
+                        && !t.IsOnHold
+                        && t.TimeoutFrozenAt == null
+                        && t.Status == TransactionStatus.PAYMENT_RECEIVED
+                        && t.DeliveryDeadline != null
+                        && t.DeliveryDeadline > now
+                        && t.TimeoutWarningSentAt == null)
+            .Select(t => t.Id)
+            .Take(_options.DeadlineScannerBatchSize)
+            .ToListAsync();
+
+        foreach (var id in due)
+        {
+            try
+            {
+                await _warnings.DispatchWarningAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Delivery timeout warning failed for transaction {TransactionId} — "
+                    + "the cancellation sweep continues.",
+                    id);
+            }
+        }
+    }
+
+    private async Task<decimal?> ReadWarningRatioAsync()
+    {
+        var raw = await _db.Set<SystemSetting>()
+            .AsNoTracking()
+            .Where(x => x.Key == "timeout_warning_ratio" && x.IsConfigured)
+            .Select(x => x.Value)
+            .FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        return decimal.TryParse(
+            raw,
+            System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var parsed)
+            ? parsed
+            : null;
+    }
     private async Task ScanBatchAsync()
     {
         var now = _clock.GetUtcNow().UtcDateTime;
@@ -121,6 +197,13 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                         ))
             .Take(_options.DeadlineScannerBatchSize)
             .ToListAsync();
+
+        // WP7 (P2P-DeliveryTimeoutWarning) — warn before cancelling.
+        // Scanner-driven rather than a delayed job, because 05 §4.4 makes the
+        // whole delivery phase scanner-driven; arming a Hangfire job here
+        // would give the phase a second, independent executor — exactly what
+        // ArmDeliveryDeadlineAsync deliberately avoids.
+        await DispatchDeliveryWarningsAsync(now);
 
         var deliveryCancellations = await RunDeliveryTimeoutRoundsAsync(now);
         candidates.AddRange(deliveryCancellations);

@@ -1176,7 +1176,7 @@
       },
       "error": {
         "title": "无法加载库存",
-        "message": "当前无法读取您的 Steam 库存。请重试。",
+        "message": "目前无法读取你的 Steam 库存。请稍后重试。如果持续失败，请检查你的 Steam 社区个人资料是否已设置、库存是否公开——仅靠重试无法解决该情况。",
         "privateTitle": "您的库存为私密",
         "privateMessage": "您的 Steam 库存已设为私密。要发起交易,请将库存设为 'public'。"
       }

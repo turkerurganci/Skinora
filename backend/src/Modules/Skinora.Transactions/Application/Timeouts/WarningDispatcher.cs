@@ -43,15 +43,39 @@ public sealed class WarningDispatcher : IWarningDispatcher
 
         // 09 §13.3 — defensive guards. State, freeze, hold, double-warn must
         // all hold for the dispatch to fire. Any miss is a no-op.
-        if (transaction.Status != TransactionStatus.SELLER_CONFIRMED) return;
         if (transaction.IsOnHold) return;
         if (transaction.TimeoutFrozenAt is not null) return;
         if (transaction.TimeoutWarningSentAt is not null) return;
-        if (transaction.PaymentDeadline is null) return;
-        if (transaction.BuyerId is null) return;
+
+        // WP7 (P2P-DeliveryTimeoutWarning) — the warning now covers the
+        // delivery phase too. 02 §3.4 and 03 §4.5 define it for ALL timeouts,
+        // and the delivery phase was the one that had none: in P2P a seller who
+        // does not deliver is recorded as the party at fault (06 §3.1), so
+        // letting that clock run out unannounced penalises someone who was
+        // never told. Which party is warned follows who owes the action —
+        // the buyer owes the payment, the seller owes the item.
+        Guid recipientId;
+        DateTime deadline;
+        switch (transaction.Status)
+        {
+            case TransactionStatus.SELLER_CONFIRMED:
+                if (transaction.PaymentDeadline is null || transaction.BuyerId is null) return;
+                recipientId = transaction.BuyerId.Value;
+                deadline = transaction.PaymentDeadline.Value;
+                break;
+
+            case TransactionStatus.PAYMENT_RECEIVED:
+                if (transaction.DeliveryDeadline is null) return;
+                recipientId = transaction.SellerId;
+                deadline = transaction.DeliveryDeadline.Value;
+                break;
+
+            default:
+                return;
+        }
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
-        var remaining = transaction.PaymentDeadline.Value - nowUtc;
+        var remaining = deadline - nowUtc;
         if (remaining <= TimeSpan.Zero)
         {
             // Deadline already passed — the timeout executor will drive the
@@ -68,7 +92,7 @@ public sealed class WarningDispatcher : IWarningDispatcher
             new TimeoutWarningEvent(
                 EventId: Guid.NewGuid(),
                 TransactionId: transaction.Id,
-                RecipientUserId: transaction.BuyerId.Value,
+                RecipientUserId: recipientId,
                 ItemName: transaction.ItemName,
                 RemainingMinutes: remainingMinutes,
                 OccurredAt: nowUtc));

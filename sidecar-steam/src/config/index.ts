@@ -35,8 +35,17 @@ export const config = {
   // undocumented by Valve and explicitly an estimate). The conservative end of
   // that range is the default because overshooting is punished with an IP-level
   // block, while undershooting only slows delivery verification. Tunable
-  // without a rebuild: the real ceiling is measured in T122, and an operator
-  // running behind a proxy pool may raise it.
+  // without a rebuild.
+  //
+  // WP7 — T122 MEASURED this (2026-08-13) and the result is worse than the
+  // default suggests: at exactly 10/min (6s spacing) 429s began after ~90
+  // seconds / ~18 requests, and they KEPT COMING even after slowing to 4/min.
+  // The limiter therefore counts a window LONGER than a minute, so a queue that
+  // only paces per-minute can still exhaust it. No Retry-After header was
+  // returned, so backoff is a guess. The run came from a residential IP;
+  // production egresses from a datacenter range, where Steam is stricter — the
+  // real ceiling may be lower still. The value was NOT changed on that basis:
+  // lowering it needs a second measurement from the production IP (08 §2.6).
   steamCommunityRequestsPerMinute: positiveIntFromEnv(
     process.env.STEAM_COMMUNITY_REQUESTS_PER_MINUTE,
     10,

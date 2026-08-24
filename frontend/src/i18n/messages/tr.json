@@ -1176,7 +1176,7 @@
       },
       "error": {
         "title": "Envanter okunamadı",
-        "message": "Steam envanteriniz şu an okunamadı. Lütfen tekrar deneyin.",
+        "message": "Steam envanteriniz şu an okunamadı. Lütfen biraz sonra tekrar deneyin. Sorun sürüyorsa Steam Community profilinizin kurulu ve envanterinizin herkese açık olduğundan emin olun — bu durumda tekrar denemek tek başına çözmez.",
         "privateTitle": "Envanteriniz gizli",
         "privateMessage": "Steam envanteriniz gizli olarak ayarlanmış. İşlem başlatmak için envanterinizi 'public' yapmalısınız."
       }

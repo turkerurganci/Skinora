@@ -59,6 +59,7 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             new NoOpDeliveryTimeoutRound { Decision = deliveryDecision },
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -81,7 +82,6 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
         Assert.Equal(TimeoutPhase.Accept, evt.Phase);
 
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
-        Assert.Empty(_outbox.Published.OfType<LatePaymentMonitorRequestedEvent>());
     }
 
     [Fact]

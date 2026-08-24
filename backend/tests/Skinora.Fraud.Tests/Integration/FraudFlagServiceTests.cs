@@ -528,6 +528,8 @@ public class FraudFlagServiceTests : IntegrationTestBase
             // never sees a candidate here, so a hold-everything double keeps the
             // scanner's other phase untouched.
             new NoOpDeliveryTimeoutRound(),
+            // WP7 — delivery-phase warning sweep; this test never reaches it.
+            new NoOpWarningDispatcher(),
             Options.Create(new TimeoutSchedulingOptions()),
             NullLogger<DeadlineScannerJob>.Instance);
         await scanner.ScanAndRescheduleAsync();
@@ -564,6 +566,11 @@ public class FraudFlagServiceTests : IntegrationTestBase
         public Task<DeliveryTimeoutDecision> RunAsync(
             Transaction transaction, CancellationToken cancellationToken)
             => Task.FromResult(DeliveryTimeoutDecision.Held);
+    }
+
+    private sealed class NoOpWarningDispatcher : IWarningDispatcher
+    {
+        public Task DispatchWarningAsync(Guid transactionId) => Task.CompletedTask;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

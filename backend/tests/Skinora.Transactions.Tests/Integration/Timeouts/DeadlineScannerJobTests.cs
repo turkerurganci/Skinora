@@ -55,6 +55,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -74,6 +75,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -101,6 +103,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -213,6 +216,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -258,6 +262,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(batchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -315,6 +320,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -351,6 +357,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -398,6 +405,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(deliveryRoundRecheckSeconds: 900),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -424,6 +432,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -456,6 +465,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -475,6 +485,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(scannerSeconds: 45),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -501,11 +512,109 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpPostCancelMonitor(),
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
 
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+    }
+
+    // ---------- WP7: delivery-phase timeout warning ----------
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Delivery_Warning_Is_Dispatched_For_A_Live_Delivery_Window()
+    {
+        // 02 §3.4 / 03 §4.5 define the warning for ALL timeouts and the
+        // delivery phase had none. In P2P the seller who does not deliver is
+        // recorded as at fault (06 §3.1), so an unannounced clock penalises
+        // someone who was never told.
+        await SetWarningRatioAsync("0.5");
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+        var tx = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc, buyerId: buyer.Id);
+        tx.DeliveryDeadline = nowUtc.AddHours(1);
+        Context.Set<Transaction>().Add(tx);
+        await Context.SaveChangesAsync();
+
+        var warnings = TimeoutTestFixtures.NoOpWarnings();
+        await CreateSutWithWarnings(warnings).ScanAndRescheduleAsync();
+
+        Assert.Contains(tx.Id, warnings.Warned);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Delivery_Warning_Skips_A_Transaction_Already_Warned()
+    {
+        // Idempotency rides on TimeoutWarningSentAt — the same column the
+        // payment phase uses, which is why this needed no migration. Without
+        // it every sweep would re-warn the same seller.
+        await SetWarningRatioAsync("0.5");
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+        var tx = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc, buyerId: buyer.Id);
+        tx.DeliveryDeadline = nowUtc.AddHours(1);
+        tx.TimeoutWarningSentAt = nowUtc.AddMinutes(-5);
+        Context.Set<Transaction>().Add(tx);
+        await Context.SaveChangesAsync();
+
+        var warnings = TimeoutTestFixtures.NoOpWarnings();
+        await CreateSutWithWarnings(warnings).ScanAndRescheduleAsync();
+
+        Assert.DoesNotContain(tx.Id, warnings.Warned);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task Delivery_Warning_Is_Disabled_When_The_Ratio_Is_Unset()
+    {
+        // An operator who turns the warning off turns it off everywhere —
+        // the delivery sweep reads the same timeout_warning_ratio the payment
+        // phase does (02 §16.2). Turned off EXPLICITLY: the base fixture seeds
+        // the setting, so "unset" is a state a test has to create.
+        await SetWarningRatioAsync(null);
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+        var tx = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc, buyerId: buyer.Id);
+        tx.DeliveryDeadline = nowUtc.AddHours(1);
+        Context.Set<Transaction>().Add(tx);
+        await Context.SaveChangesAsync();
+
+        var warnings = TimeoutTestFixtures.NoOpWarnings();
+        await CreateSutWithWarnings(warnings).ScanAndRescheduleAsync();
+
+        Assert.Empty(warnings.Warned);
+    }
+
+    private DeadlineScannerJob CreateSutWithWarnings(
+        TimeoutTestFixtures.RecordingWarningDispatcher warnings) =>
+        new(Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            TimeoutTestFixtures.NoOpDeliveryRound(),
+            warnings,
+            TimeoutTestFixtures.Options(),
+            NullLogger<DeadlineScannerJob>.Instance);
+
+    /// <summary>
+    /// WP7 — the base fixture already seeds `timeout_warning_ratio` (it is one
+    /// of the 19 mandatory settings), so this UPDATES rather than inserts.
+    /// Passing null models the "operator turned the warning off" case.
+    /// </summary>
+    private async Task SetWarningRatioAsync(string? value)
+    {
+        var setting = await Context.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+            .SingleAsync(x => x.Key == "timeout_warning_ratio");
+        setting.Value = value;
+        setting.IsConfigured = value is not null;
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
     }
 }

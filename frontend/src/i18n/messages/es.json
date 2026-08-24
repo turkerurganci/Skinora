@@ -1176,7 +1176,7 @@
       },
       "error": {
         "title": "No se pudo cargar el inventario",
-        "message": "No se pudo leer tu inventario de Steam en este momento. Inténtalo de nuevo.",
+        "message": "No pudimos leer tu inventario de Steam en este momento. Vuelve a intentarlo en unos minutos. Si sigue fallando, comprueba que tu perfil de Steam Community esté configurado y que tu inventario sea público: reintentar por sí solo no lo resolverá.",
         "privateTitle": "Tu inventario es privado",
         "privateMessage": "Tu inventario de Steam está configurado como privado. Para iniciar una transacción debes hacerlo 'público'."
       }
