@@ -1163,9 +1163,9 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
     "expectedAmount": "102.00",
     "stablecoin": "USDT",
     "network": "Tron (TRC-20)",
-    "status": null,
-    "txHash": null,
-    "confirmedAt": null
+    "status": "CONFIRMED",
+    "txHash": "0x9f2c…",
+    "confirmedAt": "2026-03-16T11:04:00Z"
   },
 
   "sellerPayout": null,
@@ -1203,12 +1203,12 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
 | `buyer` | ACCEPTED'dan itibaren. CREATED ve FLAGGED statülerinde `null` — STEAM_ID yönteminde alıcı kaydı işlem oluşturulurken bağlansa bile blok açılmaz |
 | `timeout` | Aktif bir sayaç varsa dolar. `type` değerleri: `accept` (CREATED), `seller_confirm` (ACCEPTED), `payment` (SELLER_CONFIRMED), `delivery` (PAYMENT_RECEIVED), `settlement` (ITEM_DELIVERED — mutabakat penceresi; dolduğunda iptal değil, payout uygunluğu doğar, 02 §4.5.1). Terminal statülerde ve FLAGGED'de `null`. Freeze durumunda `frozen: true` + `frozenReason` + `frozenAt` dolar |
 | `payment` | SELLER_CONFIRMED'dan itibaren — ödeme adresi alıcıya satıcının hazırlık onayıyla açılır (§7.6a). Kapı onay damgasıdır, bu yüzden pencere açıldıktan sonra iptal edilen işlemlerde de görünür kalır (geç gelen transferin eşlenebilmesi için, 03 §5.4). Yalnız işlem taraflarına döner; public/prospective görünümde `null`. Adres henüz tahsis edilmemişse blok komple `null` |
-| `payment.txHash` | PAYMENT_RECEIVED'dan itibaren |
+| `payment.status` / `payment.txHash` / `payment.confirmedAt` | **(WP6b)** İlgili `BUYER_PAYMENT` `BlockchainTransaction` satırından okunur — `status` `BlockchainTransactionStatus` adıdır (`DETECTED` / `PENDING` / `CONFIRMED` / `FAILED`). Henüz transfer görülmemişse **üçü de** yoktur; bu "hiçbir şey gelmedi" demektir ve "0 alındı"dan farklıdır. Birden fazla gelen satır varsa (çoklu ödeme, gecikmeli ödeme) **en yenisi** anlatılır |
 | `sellerPayout` | COMPLETED'da (satıcı view) |
 | `refund` | Alıcı görünümünde, işlem için bir `BUYER_REFUND` kaydı oluşturulmuşsa — `CANCELLED_*` ve `REFUNDED` statüleri bu kapsamdadır. Satıcı görünümünde her zaman `null`; `txHash`/`refundedAt` zincir onayına kadar `null` |
 | `cancelInfo` | İşlem iptal damgası taşıyorsa (`cancelledAt` + `cancelledBy` dolu) — dört `CANCELLED_*` statüsü ve `REFUNDED` bu kapsamdadır |
 | `flagInfo` | FLAGGED state'te |
-| `dispute` | Aktif dispute varsa |
+| `dispute` | **(WP6b)** İşlemin **en yeni** dispute'u; hiç yoksa `null`. Yalnız işlem taraflarına döner — dispute iki taraf ve admin arasında özeldir, public görünümde sorgulanmaz bile. 02 §10.2 tür başına tek dispute'a izin verdiği için bir işlem birden çok taşıyabilir; blok tarafın **üzerinde işlem yaptığı** olanı anlatır. `canSubmitTxHash` / `canEscalate` uçların fiilen uyguladığı guard'lardan **türetilir** (submit-txhash: PAYMENT türü + `OPEN`; escalate: `ESCALATED`/`CLOSED`/iki admin çözüm statüsü dışında), auto-checker yeniden koşturulmaz — checker bir POST'un yaptığı iştir ve cevabı o ana aittir, her sayfa yüklemesine değil |
 | `holdInfo` | `IsOnHold = true` iken (yanıtta `status: "EMERGENCY_HOLD"` projeksiyonu ile birlikte) — hold bir statü değil, aktif statünün üzerine binen overlay'dir (05 §4.5). `previousStatus` alanı alttaki gerçek statüyü taşır |
 | `inviteInfo` | CREATED, satıcı, alıcı kayıtlı değilse |
 | `paymentEvents` | SELLER_CONFIRMED'dan itibaren — ödeme edge case olayları (eksik/fazla/yanlış tutar, gecikmeli ödeme). CREATED, ACCEPTED ve FLAGGED statülerinde alan hiç dönmez |

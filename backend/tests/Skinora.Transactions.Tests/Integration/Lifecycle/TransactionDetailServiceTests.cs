@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -542,6 +543,44 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         await Context.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// WP6b — seeds an incoming BUYER_PAYMENT row so the payment block has
+    /// something to report. `minutesAgo` orders the rows: the block describes
+    /// the newest one.
+    /// </summary>
+    private async Task SeedBuyerPaymentAsync(
+        Guid transactionId,
+        BlockchainTransactionStatus status,
+        string txHash,
+        int minutesAgo)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime.AddMinutes(minutesAgo);
+        var address = await Context.Set<PaymentAddress>()
+            .AsNoTracking()
+            .FirstAsync(a => a.TransactionId == transactionId);
+
+        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            // 06 §3.8 — incoming rows carry the deposit address.
+            PaymentAddressId = address.Id,
+            Type = BlockchainTransactionType.BUYER_PAYMENT,
+            TxHash = txHash,
+            FromAddress = ValidWallet,
+            ToAddress = PaymentDepositAddress,
+            Amount = 102m,
+            Token = StablecoinType.USDT,
+            Status = status,
+            BlockNumber = 1_400_000L,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            RetryCount = 0,
+            CreatedAt = now,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? now : null,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+    }
     private static bool IsCancelledStatus(TransactionStatus status) =>
         status is TransactionStatus.CANCELLED_TIMEOUT
             or TransactionStatus.CANCELLED_SELLER
@@ -745,7 +784,27 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         return transaction;
     }
 
-    private TransactionDetailService BuildSut() => new(Context, _clock);
+    private readonly StubDisputeSummaries _disputeSummaries = new();
+
+    private TransactionDetailService BuildSut() => new(Context, _clock, _disputeSummaries);
+
+    /// <summary>
+    /// WP6b — the dispute block reaches the detail service through a port
+    /// implemented in Skinora.Disputes, so this suite (which cannot reference
+    /// that module either) supplies it directly. The provider's own
+    /// derivation of canSubmitTxHash / canEscalate is covered where it lives.
+    /// </summary>
+    private sealed class StubDisputeSummaries : ITransactionDisputeSummaryProvider
+    {
+        public DisputeSummaryDto? Summary { get; set; }
+        public List<Guid> Queried { get; } = [];
+
+        public Task<DisputeSummaryDto?> GetLatestAsync(Guid transactionId, CancellationToken ct)
+        {
+            Queried.Add(transactionId);
+            return Task.FromResult(Summary);
+        }
+    }
 
     // v3.0 — the platform creates no trade offers, so there is no offer to look
     // up. In PAYMENT_RECEIVED the seller's CTA is the buyer's own trade URL,
@@ -1035,5 +1094,119 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             CreatedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(minutesAgo),
         });
         await Context.SaveChangesAsync();
+    }
+
+    // ---------- WP6b: dispute block (T133a-DisputeBlockNulls) ----------
+
+    [Fact]
+    public async Task Dispute_Block_Is_Surfaced_To_A_Party()
+    {
+        // Contract-defined since T58 and hardcoded null until WP6b, so a party
+        // with an open dispute got a response that denied it existed.
+        var transaction = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, buyerId: _buyer.Id);
+        _disputeSummaries.Summary = new DisputeSummaryDto(
+            Id: Guid.NewGuid(),
+            Type: "PAYMENT",
+            Status: "OPEN",
+            AutoCheckResult: "no matching transfer",
+            CanSubmitTxHash: true,
+            CanEscalate: true,
+            CreatedAt: _clock.GetUtcNow().UtcDateTime);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Equal("PAYMENT", outcome.Body!.Dispute!.Type);
+        Assert.Equal("OPEN", outcome.Body.Dispute!.Status);
+        Assert.True(outcome.Body.Dispute.CanSubmitTxHash);
+        Assert.Contains(transaction.Id, _disputeSummaries.Queried);
+    }
+
+    [Fact]
+    public async Task Dispute_Block_Is_Null_When_There_Is_No_Dispute()
+    {
+        var transaction = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, buyerId: _buyer.Id);
+        _disputeSummaries.Summary = null;
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Dispute);
+    }
+
+    [Fact]
+    public async Task Dispute_Block_Is_Not_Queried_For_A_Public_Viewer()
+    {
+        // A dispute is private to the two parties and an admin — the public
+        // shape must not even ask for it.
+        var transaction = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, buyerId: _buyer.Id);
+        _disputeSummaries.Summary = new DisputeSummaryDto(
+            Guid.NewGuid(), "PAYMENT", "OPEN", null, false, false,
+            _clock.GetUtcNow().UtcDateTime);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, callerId: null, callerSteamId: null, CancellationToken.None);
+
+        Assert.Null(outcome.Body!.Dispute);
+        Assert.Empty(_disputeSummaries.Queried);
+    }
+
+    // ---------- WP6b: payment status / txHash / confirmedAt ----------
+
+    [Fact]
+    public async Task Payment_Block_Reports_The_Buyer_Payment_Row()
+    {
+        // 07 §7.5 promised these three and all were hardcoded null, so a buyer
+        // who had already paid saw a block that looked like nothing arrived.
+        var transaction = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+        await SeedBuyerPaymentAsync(
+            transaction.Id, BlockchainTransactionStatus.CONFIRMED, "0xabc", minutesAgo: -5);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        var payment = outcome.Body!.Payment!;
+        Assert.Equal("CONFIRMED", payment.Status);
+        Assert.Equal("0xabc", payment.TxHash);
+        Assert.NotNull(payment.ConfirmedAt);
+    }
+
+    [Fact]
+    public async Task Payment_Block_Leaves_The_Three_Null_Before_Any_Transfer()
+    {
+        // "Nothing has arrived" is not the same as "0 received" — the absence
+        // of all three is what says the former.
+        var transaction = await CreateTransactionAsync(TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        var payment = outcome.Body!.Payment!;
+        Assert.Null(payment.Status);
+        Assert.Null(payment.TxHash);
+        Assert.Null(payment.ConfirmedAt);
+        // The address half still renders — that is what the buyer pays to.
+        Assert.False(string.IsNullOrEmpty(payment.Address));
+    }
+
+    [Fact]
+    public async Task Payment_Block_Describes_The_Newest_Incoming_Row()
+    {
+        // Multi-payment and late-payment both write another BUYER_PAYMENT row;
+        // the block describes the one the flow is standing on.
+        var transaction = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(transaction.Id);
+        await SeedBuyerPaymentAsync(
+            transaction.Id, BlockchainTransactionStatus.CONFIRMED, "0xold", minutesAgo: -30);
+        await SeedBuyerPaymentAsync(
+            transaction.Id, BlockchainTransactionStatus.DETECTED, "0xnew", minutesAgo: -1);
+
+        var outcome = await BuildSut()
+            .GetAsync(transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        Assert.Equal("0xnew", outcome.Body!.Payment!.TxHash);
+        Assert.Equal("DETECTED", outcome.Body.Payment!.Status);
     }
 }

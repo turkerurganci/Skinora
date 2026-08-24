@@ -1,3 +1,4 @@
+using Skinora.Disputes.Application.Disputes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -142,6 +143,13 @@ public static class TransactionsModule
         // but implemented in Skinora.Fraud (Fraud already references
         // Transactions; the reverse direction would be a project cycle).
         services.AddScoped<IAccountFlagChecker, AccountFlagChecker>();
+
+        // WP6b (T133a-DisputeBlockNulls) — same cross-module shape: the port
+        // is declared in Skinora.Transactions and implemented in
+        // Skinora.Disputes, which owns the Dispute entity. Without this the
+        // 07 §7.5 dispute block stayed hardcoded null and a party with an open
+        // dispute saw a detail response that denied it existed.
+        services.AddScoped<ITransactionDisputeSummaryProvider, TransactionDisputeSummaryProvider>();
 
         // T47 — timeout scheduling primitives + Hangfire job targets.
         services.AddScoped<ITimeoutSchedulingService, TimeoutSchedulingService>();
