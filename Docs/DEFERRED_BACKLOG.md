@@ -4,7 +4,21 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-25, backlog kapatma turu — WP3 §6):** **38 aktif / 89 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-25, backlog kapatma turu — WP4 §7):** **30 aktif / 97 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+>
+> **§7 kapandı** (`tronweb 6` major bump bilinçli ertelendi). Turun en değerli parçası yeni bekçi yazmak değil, **var olan ama hiç koşmayan** bekçileri koşturmaktı.
+>
+> **Üç bekçi sessizce devre dışıydı.** `T136-ParityGuardsSkippedOnBackendPRs`: FE↔C# parity testleri drift'in **yaratıldığı** backend PR'ında koşmuyordu — job `skipped` oluyor, `ci-gate` `skipped`'ı geçiyor, bekçi hiç çalışmadan CI yeşile dönüyordu. `T138-E2ENginxPathFilterGap`: proxy kuralını bozan bir PR **hiçbir E2E leg'i** tetiklemiyordu. `T138-E2ENoArtifactUpload`: kırmızı bir leg'in Playwright raporu üretiliyor ve **atılıyordu**.
+>
+> **Turun kendi dersi: yazdığım ilk bekçi de sessizce işe yaramadı — ve bunu ölçüm yakaladı.** `T136-NoRouteOrMessageCompileGuard` için önce next-intl v3'ün `IntlMessages` global arayüzü yazıldı; **temiz derledi ve hiçbir şeyi korumadı** — kasıtlı bir typo `tsc`'den geçti. v4'ün mekanizması `AppConfig` ve onunla aynı typo kırılıyor. Bekçi kurulunca 21 dosyada 33 **meşru dinamik anahtar** açığa çıktı; 33 ayrı cast (yani 33 görünmez delik) yerine tek, greplenebilir kaçış kapısından geçirildi.
+>
+> **Bir yarı ölçülüp GEREKSİZ bulundu ve yapılmadı.** Aynı satırın "ölü rota" yarısı için `typedRoutes: true` denendi: 68 `href`'in **67'si** template/değişken, yani `typedRoutes` onları göremiyor. Kazanç 1 literal, maliyet 8 dosyada kaçış kapısı olurdu → geri alındı. Karar tercihle değil **ölçümle** verildi.
+>
+> **`npm-version-ci-parity` kalıcı çözümle kapandı:** CI Node 20 → 24 + `.nvmrc`. Kök sebep npm 10'un npm 11 lockfile'ını reddetmesiydi. Bump'tan **önce** doğrulandı: sidecar-steam 96/96, sidecar-blockchain 166/166, frontend 239/239 + build — hepsi Node 24'te yeşil.
+>
+> **Süreç dersi tuttu:** WP2b'nin prettier CI kırığından sonra tarama **önden** yapılıyor; WP4'te 16 dosya CI'ya hiç gitmeden düzeltildi.
+>
+> **Önceki durum (2026-08-25, WP3 §6):** **38 aktif / 89 çözülmüş**. **🔴 YOK.**
 >
 > **§6 kapandı: altı satır çözüldü, iki satır non-actionable'a taşındı, bir satır açıldı.** Kapananların **üçü ölçümle** kapandı (kod hiç değişmedi çünkü değişmesi gerekmiyordu), üçü gerçek doküman işiydi.
 >
