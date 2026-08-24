@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -13,8 +13,14 @@ import {
   type TransactionParamsResponse,
 } from "@/lib/api/transactions";
 import { Skeleton } from "@/components/common";
+import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useSteamInventory } from "@/lib/hooks/useSteamInventory";
 import type { SteamInventoryItem } from "@/lib/api/steam";
+import {
+  clearWizardDraft,
+  readWizardDraft,
+  writeWizardDraft,
+} from "@/lib/transactions/wizardDraft";
 import { EligibilityGate, getBlockingReasons } from "./EligibilityGate";
 import { StepIndicator } from "./StepIndicator";
 import { Step1ItemSelection } from "./Step1ItemSelection";
@@ -41,20 +47,68 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
   const gateReasons = useMemo(() => getBlockingReasons(eligibility), [eligibility]);
   const isGated = gateReasons.length > 0;
 
-  const [item, setItem] = useState<SteamInventoryItem | null>(null);
+  // WP2b (wizard-hard-refresh-resets) — seed every field from the sessionStorage
+  // draft so a hard refresh resumes instead of restarting.
+  //
+  // Read in the lazy initializer, not an effect. This component is mounted only
+  // after the eligibility + params queries resolve client-side, so the server
+  // never renders it — there is no server markup for a storage-seeded value to
+  // disagree with, and no cascading re-render to pay for.
+  const [draft] = useState(readWizardDraft);
+
+  const [item, setItem] = useState<SteamInventoryItem | null>(draft?.item ?? null);
   const [stablecoin, setStablecoin] = useState<StablecoinType>(
-    params.supportedStablecoins[0] ?? StablecoinType.USDT,
+    draft?.stablecoin ?? params.supportedStablecoins[0] ?? StablecoinType.USDT,
   );
-  const [price, setPrice] = useState("");
+  const [price, setPrice] = useState(draft?.price ?? "");
   const [paymentTimeoutHours, setPaymentTimeoutHours] = useState(
-    params.paymentTimeout.defaultHours,
+    draft?.paymentTimeoutHours ?? params.paymentTimeout.defaultHours,
   );
   const [method, setMethod] = useState<BuyerIdentificationMethod>(
-    BuyerIdentificationMethod.STEAM_ID,
+    draft?.method ?? BuyerIdentificationMethod.STEAM_ID,
   );
-  const [buyerSteamId, setBuyerSteamId] = useState("");
-  const [sellerWalletAddress, setSellerWalletAddress] = useState("");
-  const [walletConfirmed, setWalletConfirmed] = useState(false);
+  const [buyerSteamId, setBuyerSteamId] = useState(draft?.buyerSteamId ?? "");
+  const [walletConfirmed, setWalletConfirmed] = useState(draft?.walletConfirmed ?? false);
+
+  // WP2b (profile-prefill-image) — prefill the seller payout address from the
+  // saved profile. U1 already backs the buyer-side refund-wallet prefill in S07
+  // and returns `sellerWalletAddress`, so this is the missing symmetric half:
+  // a seller with an address on file should not retype it for every listing.
+  const profile = useMyProfile(!isGated);
+
+  // `null` means "neither the draft nor the seller has supplied a value yet",
+  // which is what makes the profile a *fallback* rather than an override. Once
+  // the field holds a string it wins for good — including the empty string, so
+  // a seller who deliberately clears the address is not fought by a late query
+  // resolution or a refetch.
+  const [walletInput, setWalletInput] = useState<string | null>(draft?.sellerWalletAddress ?? null);
+  const sellerWalletAddress = walletInput ?? profile.data?.sellerWalletAddress ?? "";
+  const setSellerWalletAddress = useCallback((next: string) => setWalletInput(next), []);
+
+  // Persisting to sessionStorage is exactly the external-system synchronisation
+  // an effect is for. `sellerWalletAddress` (not `walletInput`) is stored so a
+  // profile-prefilled address survives the refresh the same way a typed one does.
+  useEffect(() => {
+    writeWizardDraft({
+      item,
+      stablecoin,
+      price,
+      paymentTimeoutHours,
+      method,
+      buyerSteamId,
+      sellerWalletAddress,
+      walletConfirmed,
+    });
+  }, [
+    item,
+    stablecoin,
+    price,
+    paymentTimeoutHours,
+    method,
+    buyerSteamId,
+    sellerWalletAddress,
+    walletConfirmed,
+  ]);
 
   const inventory = useSteamInventory(!isGated);
 
@@ -94,10 +148,14 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
 
   // Wizard step is mirrored in the URL (WP13 url-state-sync) so the browser
   // back button moves between steps instead of leaving the wizard. The form
-  // data itself stays in memory (it includes a live-inventory item + wallet
-  // address — not URL-safe), so on a hard refresh the data is gone; clamping
-  // the shown step to the furthest one the current data supports makes the
-  // wizard restart cleanly at step 1 instead of resuming on an empty later step.
+  // data is not URL-safe (a live-inventory item object + a wallet address), so
+  // it lives in the WP2b sessionStorage draft instead — a hard refresh now
+  // restores it and the URL step it lands on is genuinely reachable.
+  //
+  // The clamp stays, and still earns its place: it guards the first paint
+  // (before the restore effect runs), a tab with no draft, a draft this build
+  // rejected, and a hand-edited `?step=4`. In all of those the wizard opens at
+  // the furthest step the data actually supports rather than on an empty one.
   const stepParam = Number(searchParams.get("step"));
   const urlStep: StepNumber =
     Number.isInteger(stepParam) && stepParam >= 1 && stepParam <= 4 ? (stepParam as StepNumber) : 1;
@@ -136,6 +194,9 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
       });
     },
     onSuccess: (data) => {
+      // WP2b — the draft has served its purpose; leaving it behind would offer
+      // to "resume" a listing that already exists as a transaction.
+      clearWizardDraft();
       router.push(`/${locale}/transactions/${data.id}`);
     },
   });
