@@ -312,6 +312,18 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         return client.GetAsync(BuildCallbackUrl());
     }
 
+    /// <summary>
+    /// F4 — A1'de bırakılan return-URL cookie'siyle callback çağırır. Kayıt
+    /// anındaki arayüz dili bu yoldan türetiliyor ("/tr/dashboard" → "tr").
+    /// </summary>
+    private static Task<HttpResponseMessage> SendCallbackWithReturnUrlAsync(
+        HttpClient client, string returnUrl)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, BuildCallbackUrl());
+        request.Headers.Add("Cookie", $"skinora_oid_rt={Uri.EscapeDataString(returnUrl)}");
+        return client.SendAsync(request);
+    }
+
     private static string BuildCallbackUrl()
     {
         var qs = "openid.mode=id_res" +
@@ -413,6 +425,16 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             // Hangfire services registered (see scrub below), the mount
             // would otherwise throw at UseHangfireModule().
             builder.UseSetting("Hangfire:DashboardEnabled", "false");
+
+            // Bu sınıf Steam OpenID akışını test ediyor, rate limit'i değil —
+            // limitler RateLimitTests'te kendi başına kapsanıyor. Kapatılmasının
+            // sebebi keyfi değil, ÖLÇÜLDÜ: /auth/steam/callback sınıf düzeyinde
+            // "auth" kovasında (10/60sn, IP bazlı) ve testler tek bir istemci
+            // IP'si paylaşıyor. Sınıf on isteğin dibindeydi; F4 üç test ekleyince
+            // sonraki testler 429 aldı ve "Expected: Found, Actual: TooManyRequests"
+            // diye kırıldı. Yani sınıf, yeni test eklenemez hâldeydi ve bu gizli
+            // bir tuzaktı — kapatmak semptomu değil tuzağı kaldırıyor.
+            builder.UseSetting("RateLimit:Enabled", "false");
 
             builder.UseSetting("Jwt:Secret", "integration-jwt-secret-key-minimum-32-characters!!");
             builder.UseSetting("Jwt:Issuer", "skinora");
@@ -520,5 +542,76 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             }
         }
     }
+    #region F4 — kayıt anında arayüz dili (UITour-SignupLanguageHardcodedEn)
+
+    [Fact]
+    public async Task Callback_NewUser_StoresTheLocaleTheySignedUpIn()
+    {
+        const string steamId = "76561100000000041";
+        // Bu alan yalnız bir tercih kutusu değil, GİDEN HER MESAJIN dili:
+        // bildirimler, itiraz yazışmaları, teslimat süresi uyarıları. Önceki
+        // hâl burada sabit "en" yazıyordu ve Türkçe arayüzde kayıt olan satıcı
+        // teslimat uyarısını İngilizce alıyordu.
+        _factory.ValidatorFake.SteamIdToReturn = steamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        await SendCallbackWithReturnUrlAsync(client, "/tr/dashboard");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Set<User>().SingleAsync(u => u.SteamId == steamId);
+        Assert.Equal("tr", user.PreferredLanguage);
+    }
+
+    [Fact]
+    public async Task Callback_NewUser_UnsupportedLocale_FallsBackToDefault()
+    {
+        const string steamId = "76561100000000042";
+        _factory.ValidatorFake.SteamIdToReturn = steamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        await SendCallbackWithReturnUrlAsync(client, "/de/dashboard");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Set<User>().SingleAsync(u => u.SteamId == steamId);
+        Assert.Equal("en", user.PreferredLanguage);
+    }
+
+    [Fact]
+    public async Task Callback_ExistingUser_DoesNotOverwriteTheirLanguageChoice()
+    {
+        const string steamId = "76561100000000043";
+        // ASIL İDDİA BU: kullanıcı Ayarlar'dan bilinçli olarak bir dil seçmiş
+        // olabilir. Girişte arayüz dilini yazmak, o seçimi her oturum açışta
+        // sessizce ezerdi — dil yalnız KAYIT anında saklanır.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<User>().Add(new User
+            {
+                Id = Guid.NewGuid(),
+                SteamId = steamId,
+                SteamDisplayName = "Existing",
+                PreferredLanguage = "es",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        _factory.ValidatorFake.SteamIdToReturn = steamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        await SendCallbackWithReturnUrlAsync(client, "/tr/dashboard");
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await verifyDb.Set<User>().SingleAsync(u => u.SteamId == steamId);
+        Assert.Equal("es", user.PreferredLanguage);
+    }
+
+    #endregion
 }
 

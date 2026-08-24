@@ -49,7 +49,7 @@ public class SteamAuthenticationPipelineTests
         _validator.Setup(v => v.ValidateAsync(It.IsAny<IReadOnlyDictionary<string, string>>(), default))
             .ReturnsAsync(SteamOpenIdValidationResult.Failure("is_valid:false"));
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", "agent", default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", "agent", null, default);
 
         Assert.IsType<AuthenticationOutcome.AuthFailed>(result);
         _provisioning.VerifyNoOtherCalls();
@@ -63,12 +63,12 @@ public class SteamAuthenticationPipelineTests
         _geo.Setup(g => g.EvaluateAsync(It.IsAny<string?>(), default))
             .ReturnsAsync(GeoBlockDecision.Blocked("XX"));
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", null, default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", null, null, default);
 
         var blocked = Assert.IsType<AuthenticationOutcome.GeoBlocked>(result);
         Assert.Equal("XX", blocked.CountryCode);
         _provisioning.Verify(p => p.UpsertFromSteamLoginAsync(
-            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<CancellationToken>()),
+            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -81,12 +81,12 @@ public class SteamAuthenticationPipelineTests
         _sanctions.Setup(s => s.EvaluateAsync(SteamId, default))
             .ReturnsAsync(SanctionsDecision.Match("OFAC"));
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), null, null, default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), null, null, null, default);
 
         var match = Assert.IsType<AuthenticationOutcome.SanctionsMatch>(result);
         Assert.Equal("OFAC", match.List);
         _provisioning.Verify(p => p.UpsertFromSteamLoginAsync(
-            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<CancellationToken>()),
+            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -111,13 +111,13 @@ public class SteamAuthenticationPipelineTests
             _access.Object, _refresh.Object, _audit.Object,
             _geo.Object, _sanctions.Object, _sanctionsViolation.Object,
             _ageGate.Object, _vpnDetector.Object, _logger)
-            .ExecuteAsync(ValidCallback(), null, null, default);
+            .ExecuteAsync(ValidCallback(), null, null, null, default);
 
         var blocked = Assert.IsType<AuthenticationOutcome.AgeBlocked>(result);
         Assert.Equal(5, blocked.AccountAgeDays);
         Assert.Equal(30, blocked.RequiredDays);
         _provisioning.Verify(p => p.UpsertFromSteamLoginAsync(
-            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<CancellationToken>()),
+            It.IsAny<string>(), It.IsAny<SteamPlayerSummary?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -131,10 +131,10 @@ public class SteamAuthenticationPipelineTests
             .ReturnsAsync(SanctionsDecision.NoMatch());
 
         var bannedUser = new User { Id = Guid.NewGuid(), SteamId = SteamId, IsDeactivated = true };
-        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, It.IsAny<SteamPlayerSummary?>(), default))
+        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, It.IsAny<SteamPlayerSummary?>(), It.IsAny<string?>(), default))
             .ReturnsAsync(new UserProvisioningResult(bannedUser, IsNewUser: false));
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), null, null, default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), null, null, null, default);
 
         Assert.IsType<AuthenticationOutcome.AccountBanned>(result);
         _access.Verify(a => a.GenerateAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()),
@@ -173,7 +173,7 @@ public class SteamAuthenticationPipelineTests
             .ReturnsAsync(profile);
 
         var user = new User { Id = Guid.NewGuid(), SteamId = SteamId };
-        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, profile, default))
+        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, profile, It.IsAny<string?>(), default))
             .ReturnsAsync(new UserProvisioningResult(user, IsNewUser: true));
 
         _access.Setup(a => a.GenerateAsync(user, It.IsAny<CancellationToken>()))
@@ -188,7 +188,7 @@ public class SteamAuthenticationPipelineTests
         _vpnDetector.Setup(v => v.IsVpnOrProxyAsync("9.9.9.9", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "9.9.9.9", "agent", default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "9.9.9.9", "agent", null, default);
 
         Assert.IsType<AuthenticationOutcome.Success>(result);
         _audit.Verify(a => a.RecordLoginAsync(user.Id, "9.9.9.9", "agent", true, default), Times.Once);
@@ -207,7 +207,7 @@ public class SteamAuthenticationPipelineTests
             .ReturnsAsync(profile);
 
         var user = new User { Id = Guid.NewGuid(), SteamId = SteamId, SteamDisplayName = "Persona" };
-        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, profile, default))
+        _provisioning.Setup(p => p.UpsertFromSteamLoginAsync(SteamId, profile, It.IsAny<string?>(), default))
             .ReturnsAsync(new UserProvisioningResult(user, isNewUser));
 
         var accessToken = new GeneratedAccessToken("access.jwt", DateTime.UtcNow.AddMinutes(15));
@@ -220,7 +220,7 @@ public class SteamAuthenticationPipelineTests
         _refresh.Setup(r => r.IssueAsync(user.Id, "1.2.3.4", "agent", default))
             .ReturnsAsync(refreshToken);
 
-        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", "agent", default);
+        var result = await BuildPipeline().ExecuteAsync(ValidCallback(), "1.2.3.4", "agent", null, default);
 
         var success = Assert.IsType<AuthenticationOutcome.Success>(result);
         Assert.Equal(user, success.User);

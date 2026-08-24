@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Skinora.Shared.Domain;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
@@ -95,8 +96,15 @@ public sealed class AuthController : ControllerBase
         var userAgent = Request.Headers.UserAgent.ToString();
         if (string.IsNullOrWhiteSpace(userAgent)) userAgent = null;
 
+        // F4 — kullanıcının giriş yaptığı arayüz dili, A1'de saklanan return
+        // URL'inden türetilir (örn. "/tr/dashboard" → "tr"). Ayrı bir cookie
+        // veya OpenID state alanı eklemeye gerek yok: bu bilgi zaten
+        // taşınıyordu ve state/CSRF doğrulaması hiç değişmiyor.
+        var preferredLanguage = SupportedLanguages.FromPathPrefix(
+            Request.Cookies.TryGetValue(ReturnUrlStateCookie, out var rt) ? rt : null);
+
         var outcome = await _pipeline.ExecuteAsync(
-            callbackParameters, ipAddress, userAgent, cancellationToken);
+            callbackParameters, ipAddress, userAgent, preferredLanguage, cancellationToken);
 
         var storedReturnUrl = Request.Cookies.TryGetValue(ReturnUrlStateCookie, out var stored)
             ? _returnUrlValidator.Sanitize(stored)
