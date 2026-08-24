@@ -1904,5 +1904,38 @@
       },
       "empty": "Henüz karşı taraf yok."
     }
+  },
+  "adminUsers": {
+    "title": "Kullanıcılar",
+    "description": "Kullanıcı bul ve detay sayfasını aç.",
+    "manageRolesLink": "Rol atama →",
+    "tableAriaLabel": "Kullanıcı listesi",
+    "loadError": "Kullanıcı listesi yüklenemedi.",
+    "noRole": "Rol yok",
+    "resultCount": "Toplam: {count}",
+    "columns": {
+      "user": "Kullanıcı",
+      "steamId": "Steam ID",
+      "role": "Rol",
+      "actions": "İşlem"
+    },
+    "actions": {
+      "detail": "Detay"
+    },
+    "filters": {
+      "search": "Ara",
+      "searchPlaceholder": "Steam ID veya kullanıcı adı",
+      "role": "Rol",
+      "allRoles": "Tümü"
+    },
+    "scope": {
+      "browse": "Arama yapılmadığında yalnızca admin rolü atanmış kullanıcılar listelenir. Herhangi bir kullanıcıya ulaşmak için Steam ID veya kullanıcı adıyla arayın.",
+      "search": "Arama, devre dışı bırakılmış hesaplar dışında tüm kullanıcıları kapsar."
+    },
+    "empty": {
+      "title": "Kullanıcı bulunamadı",
+      "browseDescription": "Henüz hiçbir kullanıcıya admin rolü atanmamış. Herhangi bir kullanıcıyı bulmak için Steam ID veya kullanıcı adıyla arayın.",
+      "searchDescription": "Bu filtrelerle eşleşen kullanıcı yok."
+    }
   }
 }

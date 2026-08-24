@@ -1904,5 +1904,38 @@
       },
       "empty": "暂无交易对手。"
     }
+  },
+  "adminUsers": {
+    "title": "用户",
+    "description": "查找用户并打开其详情页。",
+    "manageRolesLink": "角色分配 →",
+    "tableAriaLabel": "用户列表",
+    "loadError": "无法加载用户列表。",
+    "noRole": "无角色",
+    "resultCount": "共计：{count}",
+    "columns": {
+      "user": "用户",
+      "steamId": "Steam ID",
+      "role": "角色",
+      "actions": "操作"
+    },
+    "actions": {
+      "detail": "详情"
+    },
+    "filters": {
+      "search": "搜索",
+      "searchPlaceholder": "Steam ID 或用户名",
+      "role": "角色",
+      "allRoles": "全部"
+    },
+    "scope": {
+      "browse": "未输入搜索词时，仅列出已分配管理员角色的用户。按 Steam ID 或用户名搜索可找到任意用户。",
+      "search": "搜索涵盖除已停用账户外的所有用户。"
+    },
+    "empty": {
+      "title": "未找到用户",
+      "browseDescription": "尚无用户被分配管理员角色。按 Steam ID 或用户名搜索以查找任意用户。",
+      "searchDescription": "没有用户符合这些筛选条件。"
+    }
   }
 }

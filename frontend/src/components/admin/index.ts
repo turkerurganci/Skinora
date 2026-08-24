@@ -72,3 +72,6 @@ export type { AuditLogTableProps } from "./AuditLogTable";
 
 export { AuditCategoryBadge } from "./AuditCategoryBadge";
 export type { AuditCategoryBadgeProps } from "./AuditCategoryBadge";
+
+export { AdminUserTable } from "./AdminUserTable";
+export type { AdminUserTableProps } from "./AdminUserTable";

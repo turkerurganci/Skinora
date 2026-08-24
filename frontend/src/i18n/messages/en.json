@@ -1904,5 +1904,38 @@
       },
       "empty": "No counterparties yet."
     }
+  },
+  "adminUsers": {
+    "title": "Users",
+    "description": "Find a user and open their detail page.",
+    "manageRolesLink": "Role assignment →",
+    "tableAriaLabel": "User list",
+    "loadError": "Failed to load the user list.",
+    "noRole": "No role",
+    "resultCount": "Total: {count}",
+    "columns": {
+      "user": "User",
+      "steamId": "Steam ID",
+      "role": "Role",
+      "actions": "Action"
+    },
+    "actions": {
+      "detail": "Detail"
+    },
+    "filters": {
+      "search": "Search",
+      "searchPlaceholder": "Steam ID or username",
+      "role": "Role",
+      "allRoles": "All"
+    },
+    "scope": {
+      "browse": "Without a search term only users with an assigned admin role are listed. Search by Steam ID or username to reach any user.",
+      "search": "Search covers every user except deactivated accounts."
+    },
+    "empty": {
+      "title": "No users found",
+      "browseDescription": "No user has an admin role assigned yet. Search by Steam ID or username to find any user.",
+      "searchDescription": "No user matches these filters."
+    }
   }
 }
