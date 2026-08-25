@@ -8,6 +8,8 @@ Kabul kriterleri ya da plan dış bir servise/feature'a bağlıysa (GitHub plan 
 
 **Why:** T11 close-out (2026-04-08) sırasında branch protection'ı `gh api PUT branches/main/protection` ile aktifleştirmeye çalıştım, **HTTP 403 "Upgrade to GitHub Pro"** aldım. GitHub Free + private repo'da branch protection ve rulesets paid feature olduğunu plan aşamasında kontrol etmemiştim. Sonuç: 3 düzeltme commit'i (0327315 → e44e3d2 → 8d7c3b1), yalan iddialar içeren bir close-out commit'i, validator'a re-validation talebi, INSTRUCTIONS.md ve CI_CD_SETUP.md'de discipline-only rejim oluşturma, T11_REPORT'ta BLOCKED bölümünün ekleme + sonradan "Çözüldü" formuna çevirme. ~1 saat ekstra iş + 4 ek commit + bir housekeeping PR.
 
+Daha önemlisi: validator ilk verdict'inde "PASS için owner kanıtı gerekli" diye uyarmıştı, ben yine de close-out'a kadar farkedemedim. **Erken sinyalleri ciddiye al**.
+
 **How to apply:**
 
 Plan aşamasında (task scope sunmadan önce) şu kontrolleri yap:
