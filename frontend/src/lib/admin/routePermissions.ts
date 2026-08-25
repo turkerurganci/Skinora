@@ -14,10 +14,7 @@ import type { KnownPermissionKey } from "./permissionCatalog";
  * boundary: the backend policy is the authoritative check and still answers 403
  * for anyone who reaches an endpoint directly.
  */
-export type AdminRoutePermission =
-  | KnownPermissionKey
-  | readonly KnownPermissionKey[]
-  | null;
+export type AdminRoutePermission = KnownPermissionKey | readonly KnownPermissionKey[] | null;
 
 export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, AdminRoutePermission>> = {
   // AdminController.Dashboard — AuthPolicies.AdminAccess, no permission key.

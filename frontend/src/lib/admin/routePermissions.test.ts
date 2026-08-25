@@ -54,11 +54,7 @@ describe("menu visibility", () => {
   const visible = (role: string, permissions: string[], path: string) => {
     const required = permissionForAdminRoute(path);
     if (required === null) return true;
-    return hasAnyPermission(
-      role,
-      permissions,
-      Array.isArray(required) ? required : [required],
-    );
+    return hasAnyPermission(role, permissions, Array.isArray(required) ? required : [required]);
   };
 
   it("shows a super admin everything even though their permission list is empty", () => {
