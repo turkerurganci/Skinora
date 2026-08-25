@@ -40,3 +40,18 @@ export function hasPermission(
   if (!isAdminRole(role)) return false;
   return permissions?.includes(permission) ?? false;
 }
+
+/**
+ * True when the caller holds ANY of `required` — the client-side mirror of a
+ * comma-separated `Permission:` policy on the backend (see
+ * `PermissionRequirement`). An empty list means "no permission needed", which
+ * matches how an unmapped admin route behaves.
+ */
+export function hasAnyPermission(
+  role: string | null | undefined,
+  permissions: readonly string[] | null | undefined,
+  required: readonly string[],
+): boolean {
+  if (required.length === 0) return true;
+  return required.some((p) => hasPermission(role, permissions, p));
+}

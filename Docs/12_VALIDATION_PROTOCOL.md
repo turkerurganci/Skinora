@@ -1,6 +1,6 @@
 # Skinora — Validation Protocol
 
-**Versiyon: v0.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md`, `11_IMPLEMENTATION_PLAN.md` | **Son güncelleme:** 2026-03-29
+**Versiyon: v3.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md`, `11_IMPLEMENTATION_PLAN.md` | **Son güncelleme:** 2026-08-25 (**`Doc12PreP2PStale`** — doküman v3.0 P2P akışına hizalandı. Bu dosya F7 boyunca hiç güncellenmemiş ve **kaldırılmış** kavramları normatif metin olarak taşımaya devam etmişti: `ITEM_ESCROWED` ×11, `TRADE_OFFER_SENT_TO_SELLER` ×9, `TRADE_OFFER_SENT_TO_BUYER` ×6, platform bot'ları ×13 — buna karşılık `SELLER_CONFIRMED`, `DELIVERY_EXPECTED`, `PAYMENT_WINDOW_OPEN` ve "mutabakat" **sıfır** kez. Diğer dokümanlarda aynı statüler yalnız *"v3.0'da kaldırıldı"* tarihsel notu olarak geçerken burada hâlâ **doğrulama kuralıydı**. Güncellenen bölümler: §1.2 kapsam · §3.5 entegrasyon kapsamı · §4.2–§4.6 VAL matrisleri · §7.1 kanıt örneği · §12.1 state geçiş matrisi · §12.2 özel durumlar · §13.1/§13.3/§13.4/§13.5 ek kontroller. Davranış değişikliği yok — protokol koda ve 02/03/06/07'ye hizalandı; state geçişleri `TransactionStateMachine`'den birebir okundu.)
 
 ---
 
@@ -22,7 +22,7 @@ Doğrulama kapsamı `10_MVP_SCOPE.md` ile birebir hizalıdır. MVP'de olan her �
 
 | Alan | Kapsam |
 |---|---|
-| Temel escrow akışı | İşlem oluşturma → item emanet → ödeme → teslim → payout (uçtan uca) |
+| Temel P2P akışı | İşlem oluşturma → alıcı kabulü → satıcı hazırlık onayı → ödeme emanete alınır → satıcı item'ı **doğrudan alıcıya** gönderir → teslimat doğrulaması → mutabakat süresi → payout (uçtan uca) |
 | Ödeme | USDT/USDC (TRC-20), otomatik doğrulama, edge case yönetimi (eksik/fazla/yanlış/parçalı/gecikmeli tutar) |
 | Timeout sistemi | 4 adım timeout, state bazlı sonuçlar, timeout dondurma (downtime) |
 | Kullanıcı yönetimi | Steam giriş, MA zorunluluğu, profil, cüzdan, itibar skoru, hesap silme |
@@ -30,7 +30,7 @@ Doğrulama kapsamı `10_MVP_SCOPE.md` ile birebir hizalıdır. MVP'de olan her �
 | Dispute | Otomatik doğrulama (ödeme/teslim/yanlış item), admin eskalasyonu |
 | Fraud/abuse | Wash trading, iptal limiti, yeni hesap limiti, çoklu hesap, AML flag |
 | Item yönetimi | Envanter okuma, item doğrulama, tradeable kontrolü |
-| Bot yönetimi | Çoklu bot, kısıtlama durumunda yönlendirme, admin izleme |
+| Teslimat doğrulama | Alıcı envanter referansı, teslimat kanıtı, mutabakat penceresi, trade geri alma tespiti |
 | Admin paneli | Rol/yetki, parametre yönetimi, flag inceleme, emergency hold, audit log |
 | Bildirimler | Platform içi, email, Telegram, Discord |
 | Downtime yönetimi | Platform/Steam/blockchain kesintilerinde timeout dondurma |
@@ -163,7 +163,7 @@ State transition tablosunun detayı Ek A'dadır (§12).
 | Kontrol | Açıklama |
 |---|---|
 | Monetary tutarlılık | `ItemPrice + BuyerFeeAmount = TotalBuyerAmount`. `ItemPrice - SellerFeeAmount = SellerPayoutAmount`. Rounding kuralı uygulanıyor (06 §8.1). |
-| Entity ilişkileri | Seller/Buyer/Bot mapping tutarlı. Foreign key bütünlüğü korunuyor. |
+| Entity ilişkileri | Seller/Buyer mapping tutarlı (`SellerId ≠ BuyerId`). Foreign key bütünlüğü korunuyor. |
 | Timestamp'ler | Her state geçişinde ilgili timestamp set ediliyor. Null olmaması gereken alanlar dolu. |
 | Audit trail | Her state geçişi `TransactionHistory`'de kayıtlı. Her fon hareketi ve admin aksiyonu `AuditLog`'da kayıtlı. |
 | Correlation | İlişkili kayıtlar arasında correlation ID/trace zinciri izlenebilir. |
@@ -182,7 +182,7 @@ State transition tablosunun detayı Ek A'dadır (§12).
 |---|---|
 | Steam (OpenID) | Giriş akışı, session yönetimi |
 | Steam (WebAPI) | Envanter okuma, item doğrulama, MA kontrolü (`GetTradeHoldDurations`) |
-| Steam (Trade Offer) | Offer gönderme/kabul/iptal/timeout takibi, bot atama, bot kısıtlama durumunda yönlendirme |
+| Steam (envanter farkı) | Alıcı envanter referansının alınması, teslimat sonrası farkın okunması, mutabakat süresi sonunda item'ın hâlâ alıcıda olduğunun doğrulanması (02 §9.2, §4.5.1). Platform trade offer göndermez — v3.0'da hiçbir Steam hesabı çalıştırılmaz (02 §15, 05 §3.2) |
 | Tron (TRC-20) | Adres üretme (HD wallet), ödeme izleme (solidified endpoint + finality), payout gönderme, iade |
 | Tron edge case'ler | Yanlış token tespiti (iki aşamalı izleme + spam koruması), gas fee yönetimi, rate-limit/outage ayrımı |
 | Email (Resend) | 5 event gönderimi, webhook teslim takibi |
@@ -259,22 +259,22 @@ Bu matris, doğrulanacak her maddeyi izlenebilir şekilde tanımlar. Her madde b
 | VAL-A020 | Dispute açılması timeout'u durdurmaz | 02 §10.2 | Dispute açılmış, timeout çalışıyor | Timeout normal devam eder, dispute açık işlem timeout ile iptal olabilir | DB record | ORTA |
 | VAL-A021 | Aynı türde dispute tekrar açılamaz | 02 §10.2 | Bir dispute türü zaten açılmış | Aynı tür dispute tekrar açma reddedilir | API response | ORTA |
 | VAL-A022 | Internal/admin endpoint'ler public'e sızmaz | 07, 09 | API deploy edilmiş | Public erişim denemesi 401/404 döner. Admin endpoint'ler ayrı route prefix ve middleware arkasında | API response + structured log | KRİTİK |
-| VAL-A023a | Webhook signature/token doğrulama: Steam, Tron, Resend, Telegram | 08 §2, §3, §4, §5 | Webhook endpoint'leri aktif | Geçersiz imza/secret_token ile gelen callback'ler 401 döner. Her provider kendi doğrulama mekanizmasıyla test edilir (Steam: trade offer callback, Tron: blockchain callback, Resend: Svix signature, Telegram: X-Telegram-Bot-Api-Secret-Token) | API response + structured log | KRİTİK |
+| VAL-A023a | Webhook signature/token doğrulama: Tron, Resend, Telegram | 08 §3, §4, §5 | Webhook endpoint'leri aktif | Geçersiz imza/secret_token ile gelen callback'ler 401 döner. Her provider kendi doğrulama mekanizmasıyla test edilir (Tron: blockchain callback, Resend: Svix signature, Telegram: X-Telegram-Bot-Api-Secret-Token). **Steam webhook'u yoktur** — v3.0'da platform trade offer göndermez, teslimat envanter okumasıyla doğrulanır (02 §9.2) | API response + structured log | KRİTİK |
 | VAL-A023b | OAuth/OpenID callback doğrulama: Steam OpenID, Discord OAuth2 | 08 §1, §6 | OAuth/OpenID redirect endpoint'leri aktif | Geçersiz/manipüle edilmiş assertion (Steam) veya authorization code (Discord) ile gelen callback reddedilir. Replay koruması (nonce) çalışır. State parametresi doğrulanır | API response + structured log | KRİTİK |
 | VAL-A024 | Cross-user order isolation: kullanıcı başka kullanıcının order'ına erişemez | 02, 07 | Birden fazla kullanıcı ve işlem mevcut | Seller başka seller'ın, buyer başka buyer'ın order'ına erişim/aksiyon denemesi 403 döner | API response + DB record | KRİTİK |
-| VAL-A025 | Bot authorization boundary: bot sadece atandığı order için aksiyon alır | 08 §2 | Birden fazla bot ve işlem mevcut | Atanmamış order için trade offer gönderme engellenir | API response + structured log | KRİTİK |
+| VAL-A025 | Ödeme adresi izolasyonu: bir işlemin adresine gelen transfer başka işleme sayılmaz | 08 §3, 06 §3.7 | Birden fazla aktif işlem ve ödeme adresi mevcut | Her transfer yalnız kendi `PaymentAddress`'inin işlemine kredi edilir; adres yeniden kullanılmaz | DB (PaymentAddress + BlockchainTransaction) + structured log | KRİTİK |
 
 ### 4.3 Seviye B — Fonksiyonel Doğrulama
 
 | ID | Kural / Gereksinim | Kaynak | Ön Koşul | Beklenen Sonuç | Kanıt Türü | Severity |
 |---|---|---|---|---|---|---|
-| VAL-B001 | Happy path: uçtan uca işlem tamamlanır | 03 §2, §3 | Tüm aktörler ve servisler hazır | CREATED → … → COMPLETED, tüm state'ler sırayla geçilir, item alıcıda, ödeme satıcıda | DB + API + log | KRİTİK |
+| VAL-B001 | Happy path: uçtan uca işlem tamamlanır | 03 §2, §3 | Tüm aktörler ve servisler hazır | CREATED → ACCEPTED → SELLER_CONFIRMED → PAYMENT_RECEIVED → ITEM_DELIVERED → COMPLETED, tüm state'ler sırayla geçilir; item alıcıda (mutabakat süresi sonunda hâlâ alıcıda), ödeme satıcıda | DB + API + log | KRİTİK |
 | VAL-B002 | Alıcı kabul timeout: işlem iptal olur | 03 §4.1 | İşlem CREATED, timeout süresi dolmuş | State → CANCELLED_TIMEOUT, henüz varlık transferi yok | DB record + structured log | KRİTİK |
-| VAL-B003 | Satıcı trade offer timeout: işlem iptal olur | 03 §4.2 | İşlem ACCEPTED/TRADE_OFFER_SENT_TO_SELLER, timeout dolmuş | State → CANCELLED_TIMEOUT, henüz varlık transferi yok | DB record + structured log | KRİTİK |
-| VAL-B004 | Ödeme timeout: item satıcıya iade, adres izlemeye devam | 03 §4.3 | İşlem ITEM_ESCROWED, timeout dolmuş | State → CANCELLED_TIMEOUT, item iade trade offer'ı gönderilir, adres monitoring devam eder | DB + TradeOffer + PaymentAddress | KRİTİK |
-| VAL-B005 | Teslim timeout: item satıcıya iade, ödeme alıcıya iade | 03 §4.4 | İşlem TRADE_OFFER_SENT_TO_BUYER, timeout dolmuş | State → CANCELLED_TIMEOUT, item satıcıya iade, ödeme alıcıya iade | DB + TradeOffer + BlockchainTransaction | KRİTİK |
+| VAL-B003 | Satıcı hazırlık onayı timeout: işlem iptal olur | 03 §4.2 | İşlem ACCEPTED, timeout dolmuş | State → CANCELLED_TIMEOUT, henüz varlık transferi yok — ne item ne para hareket etmiştir | DB record + structured log | KRİTİK |
+| VAL-B004 | Ödeme timeout: iade edilecek eşya yoktur, adres izlemeye devam | 03 §4.3, 02 §3.2 | İşlem SELLER_CONFIRMED, timeout dolmuş | State → CANCELLED_TIMEOUT. **Item iadesi YOKTUR** — item hiçbir zaman platforma geçmedi, satıcının envanterinde kaldı. Adres monitoring devam eder (gecikmeli ödeme yakalanır) | DB + PaymentAddress | KRİTİK |
+| VAL-B005 | Teslimat timeout: ödeme alıcıya iade | 03 §4.4 | İşlem PAYMENT_RECEIVED, teslimat süresi dolmuş | State → CANCELLED_TIMEOUT, ödeme alıcıya iade. **Item iadesi YOKTUR** — satıcı göndermediği için item zaten onda | DB + BlockchainTransaction | KRİTİK |
 | VAL-B006 | Gecikmeli ödeme (timeout sonrası): otomatik iade | 03 §4.3 | İşlem CANCELLED_TIMEOUT (ödeme adımı), ödeme sonra geldi | Gelen ödeme alıcıya otomatik iade edilir | BlockchainTransaction + DB | KRİTİK |
-| VAL-B007 | Eksik tutar gönderimi: reddedilir ve iade edilir | 02 §4.4, 08 | Alıcı beklenen tutardan az gönderdi (tek transfer) | Eksik tutar payment olarak kabul edilmez (state değişmez, ITEM_ESCROWED kalır). Gelen tutar alıcıya iade kuyruğuna alınır (gas fee düşülerek). İşlem doğru tutarda ödeme beklemeye devam eder | DB + BlockchainTransaction | KRİTİK |
+| VAL-B007 | Eksik tutar gönderimi: reddedilir ve iade edilir | 02 §4.4, 08 | Alıcı beklenen tutardan az gönderdi (tek transfer) | Eksik tutar payment olarak kabul edilmez (state değişmez, SELLER_CONFIRMED kalır). Gelen tutar alıcıya iade kuyruğuna alınır (gas fee düşülerek). İşlem doğru tutarda ödeme beklemeye devam eder | DB + BlockchainTransaction | KRİTİK |
 | VAL-B008 | Fazla tutar gönderimi: fark iade edilir | 02 §4.4, 08 | Alıcı fazla tutar gönderdi | İşlem ilerler, fark alıcıya iade edilir | DB + BlockchainTransaction | KRİTİK |
 | VAL-B009 | Yanlış token gönderimi: iki aşamalı izleme + spam koruması | 08 §3 | Alıcı yanlış token gönderdi | Yanlış token tespit edilir, kullanıcı bilgilendirilir, spam koruması çalışır | DB + log | KRİTİK |
 | VAL-B010 | Hesap silme: aktif işlem varken engellenir | 02 §9, 10 §2.4 | Kullanıcının aktif işlemi var | Hesap silme isteği reddedilir | API response | ORTA |
@@ -284,10 +284,12 @@ Bu matris, doğrulanacak her maddeyi izlenebilir şekilde tanımlar. Her madde b
 | VAL-B014 | Timeout uyarısı zamanında gönderilir | 02 §3.4 | Timeout süresi dolmaya yaklaşıyor | Admin tarafından ayarlanan eşikte ilgili tarafa uyarı bildirimi gider | Notification kaydı + log | ORTA |
 | VAL-B015 | Parçalı ödeme birleştirilmez | 02 §4.4 | Alıcı birden fazla ayrı transfer göndermiş | Yalnızca ilk tam tutarlı (ExpectedAmount ile eşleşen) tek transfer kabul edilir. Parçalı transferler birleştirilmez. Tam tutara ulaşmayan tüm transferler ayrı ayrı iade kuyruğuna alınır (gas fee düşülerek) | DB + BlockchainTransaction | KRİTİK |
 | VAL-B016 | Her kritik state geçişinde ilgili tarafa bildirim gider | 02 §18.2 | İşlem state geçişi gerçekleşmiş | 02 §18.2 tablosundaki her tetikleyici için doğru tarafa bildirim oluşur | Notification kaydı + NotificationDelivery | ORTA |
-| VAL-B017 | Satıcı gönüllü iptali: ödeme öncesi state'lerde işlem iptal olur | 02 §5.1, 03 §2 | İşlem CREATED, ACCEPTED, TRADE_OFFER_SENT_TO_SELLER veya ITEM_ESCROWED state'te (ödeme öncesi) | Satıcı iptal ister → State → CANCELLED_SELLER. İptal sebebi kaydedilir. State'e göre doğru iade davranışı tetiklenir (§13.5). Cooldown uygulanır | DB record + API response | KRİTİK |
-| VAL-B018 | Alıcı gönüllü iptali: ödeme öncesi state'lerde işlem iptal olur | 02 §5.1, 03 §2 | İşlem ACCEPTED, TRADE_OFFER_SENT_TO_SELLER veya ITEM_ESCROWED state'te (ödeme öncesi) | Alıcı iptal ister → State → CANCELLED_BUYER. İptal sebebi kaydedilir. State'e göre doğru iade davranışı tetiklenir (§13.5). Cooldown uygulanır | DB record + API response | KRİTİK |
-| VAL-B019 | Satıcı trade offer reddi/counter: işlem iptal olur | 03 §2, Ek A §12.1 | İşlem TRADE_OFFER_SENT_TO_SELLER, satıcı trade offer'ı reddetti veya counter gönderdi | State → CANCELLED_SELLER. Henüz item bot'a geçmemiş, iade gerekmez | DB record + TradeOffer record | KRİTİK |
-| VAL-B020 | Alıcı delivery trade offer reddi/counter: item ve ödeme iade | 03 §3, Ek A §12.1 | İşlem TRADE_OFFER_SENT_TO_BUYER, alıcı trade offer'ı reddetti veya counter gönderdi | State → CANCELLED_BUYER. Item satıcıya iade edilir, ödeme alıcıya iade edilir | DB + TradeOffer + BlockchainTransaction | KRİTİK |
+| VAL-B017 | Satıcı gönüllü iptali: ödeme öncesi state'lerde işlem iptal olur | 02 §5.1, 03 §2 | İşlem CREATED, ACCEPTED veya SELLER_CONFIRMED state'te (ödeme öncesi) | Satıcı iptal ister → State → CANCELLED_SELLER. İptal sebebi kaydedilir. State'e göre doğru iade davranışı tetiklenir (§13.5). Cooldown uygulanır | DB record + API response | KRİTİK |
+| VAL-B018 | Alıcı gönüllü iptali: ödeme öncesi state'lerde işlem iptal olur | 02 §5.1, 03 §2 | İşlem CREATED, ACCEPTED veya SELLER_CONFIRMED state'te (ödeme öncesi) | Alıcı iptal ister → State → CANCELLED_BUYER. İptal sebebi kaydedilir. State'e göre doğru iade davranışı tetiklenir (§13.5). Cooldown uygulanır | DB record + API response | KRİTİK |
+| VAL-B019 | Satıcı hazırlık onayını reddeder: işlem iptal olur | 03 §2, Ek A §12.1 | İşlem ACCEPTED, satıcı işlemi reddetti | State → CANCELLED_SELLER. Ne item ne para hareket etmiş, iade gerekmez | DB record + API response | KRİTİK |
+| VAL-B020 | Ödeme sonrası iptal yetkisi asimetriktir | 02 §7, 05 §4.2 | İşlem PAYMENT_RECEIVED | **Satıcı** iptal edebilir (CANCELLED_SELLER, ödeme alıcıya iade) — göndermek istemeyen satıcıyı timeout beklemeye zorlamak alıcıyı parasına daha geç kavuşturur. **Alıcı** edemez; denemesi reddedilir. Admin CANCELLED_ADMIN veya REFUNDED yapabilir | API response + DB + BlockchainTransaction | KRİTİK |
+| VAL-B021 | Mutabakat: trade geri alınırsa payout yapılmaz, alıcı iade alır | 02 §4.5.1 | İşlem ITEM_DELIVERED, mutabakat süresi içinde item alıcıdan ayrılmış | Payout **tetiklenmez**; State → REFUNDED, ödeme alıcıya iade, satıcıya hesap düzeyinde flag yazılır | DB + BlockchainTransaction + FraudFlag | KRİTİK |
+| VAL-B022 | Mutabakat doğrulanmadan payout yapılamaz | 02 §4.5.1 | İşlem ITEM_DELIVERED, mutabakat penceresi hâlâ açık | COMPLETED geçişi reddedilir (`HasSettlementClearance` guard). Süre dolmadan ve item'ın alıcıda olduğu doğrulanmadan hiçbir yol payout üretemez | API response (409) + DB record | KRİTİK |
 
 ### 4.4 Seviye C — State Machine Doğrulama
 
@@ -318,10 +320,11 @@ Bu matris, doğrulanacak her maddeyi izlenebilir şekilde tanımlar. Her madde b
 | VAL-D006 | Outbox tutarlılığı: iş operasyonu + outbox aynı TX'te | 05 §5.1, 06 §3.18 | State geçişi veya fon hareketi | OutboxMessage kaydı aynı DB transaction'da yazılmış | DB record + structured log | KRİTİK |
 | VAL-D007 | Consumer idempotency: ProcessedEvent kaydı oluşuyor | 06 §3.19 | Event consume edilmiş | ProcessedEvent kaydı mevcut, aynı event tekrar işlenmiyor | DB record + structured log | KRİTİK |
 | VAL-D008 | Soft delete: filtered unique index doğru çalışıyor | 06 | Kayıt silinmiş (IsDeleted = true) | Aynı unique kombinasyonla yeni kayıt oluşturulabiliyor | DB record | ORTA |
-| VAL-D009 | Seller-Buyer-Bot mapping tutarlı | 06 §3.5 | İşlem oluşturulmuş ve bot atanmış | Foreign key'ler doğru, ilişkili entity'ler mevcut | DB record | ORTA |
+| VAL-D009 | Seller-Buyer mapping tutarlı | 06 §3.5 | İşlem oluşturulmuş ve alıcı kabul etmiş | Foreign key'ler doğru, ilişkili entity'ler mevcut, `SellerId ≠ BuyerId` | DB record | ORTA |
 | VAL-D010 | Cüzdan adresi snapshot prensibi: işlem anında sabitlenir | 02 §12.3 | İşlem başlatılmış/kabul edilmiş, sonra profil adresi değişmiş | İşlemdeki adres orijinal snapshot'ı korur, profil değişikliği aktif işlemi etkilemez | DB record + API response | KRİTİK |
 | VAL-D011 | İtibar skoru bileşenleri doğru hesaplanır | 02 §13 | Kullanıcının tamamlanmış/iptal olmuş işlemleri var | Tamamlanan işlem sayısı, başarılı işlem oranı, hesap yaşı doğru hesaplanır | DB record (User itibar alanları) | ORTA |
-| VAL-D012 | Asset lineage zinciri doğru takip ediliyor | 06 §3.5 | İşlem uçtan uca tamamlanmış (COMPLETED) | `ItemAssetId` (seller orijinal) işlem oluşturmada set edilmiş. `EscrowBotAssetId` (bot'a geçtikten sonra Steam'in atadığı yeni ID) ITEM_ESCROWED'da set edilmiş. `DeliveredBuyerAssetId` (alıcıya teslim sonrası Steam'in atadığı yeni ID) ITEM_DELIVERED'da set edilmiş. Üç ID birbirinden farklı ve her biri ilgili Steam trade'in sonucuyla tutarlı | DB record + TradeOffer record | KRİTİK |
+| VAL-D012 | Asset lineage zinciri doğru takip ediliyor | 06 §3.5 | İşlem uçtan uca tamamlanmış (COMPLETED) | `ItemAssetId` (satıcının orijinal asset'i) işlem oluşturmada set edilmiş. `DeliveredBuyerAssetId` (alıcıya geçtikten sonra Steam'in atadığı yeni ID) ITEM_DELIVERED'da set edilmiş ve `ItemAssetId`'den farklı. **Ara halka yoktur** — item hiçbir zaman platforma uğramaz, tek transfer satıcıdan alıcıyadır (02 §2.1) | DB record | KRİTİK |
+| VAL-D013 | Alıcı envanter referansı doğru anda alınır ve saklanır | 06 §3.5, 02 §9.2 | İşlem SELLER_CONFIRMED'a geçmiş | `BuyerBaselineAssetIds` / `BuyerBaselineClassIds` / `BuyerBaselineClassCount` / `BuyerBaselineCapturedAt` dolu ve **ödeme penceresi açılmadan önceki** ana ait. Referans yoksa teslimat karşılaştırması yapılmaz — eksik referansla "teslim edilmedi" sonucuna varılmaz | DB record + structured log | KRİTİK |
 
 ### 4.6 Seviye E — Entegrasyon Doğrulama
 
@@ -329,11 +332,11 @@ Bu matris, doğrulanacak her maddeyi izlenebilir şekilde tanımlar. Her madde b
 |---|---|---|---|---|---|---|
 | VAL-E001 | Steam giriş akışı çalışır | 08 §1 | Steam OpenID yapılandırılmış | Kullanıcı Steam ile giriş yapabilir, User kaydı oluşur | API response + DB | KRİTİK |
 | VAL-E002 | MA kontrolü trade URL kaydında yapılır | 08 §2.2 | Kullanıcı trade URL kaydetmeye çalışıyor | MA aktif değilse uyarı, işlem başlatma engeli | API response + DB record | KRİTİK |
-| VAL-E003 | Bot trade offer gönderme/takip çalışır | 08 §2 | Bot atanmış, item bilgisi doğru | Trade offer gönderilir, durum takip edilir | TradeOffer record + log | KRİTİK |
-| VAL-E004 | Bot kısıtlama durumunda yeni işlem diğer bot'a yönlendirilir | 08 §2, 10 §2.10 | Bir bot kısıtlanmış | Yeni işlem uygun bot'a atanır | DB (PlatformSteamBot) + log | KRİTİK |
-| VAL-E005 | HD wallet'tan benzersiz ödeme adresi üretilir | 08 §3 | İşlem ITEM_ESCROWED | Benzersiz adres üretilir, PaymentAddress kaydı oluşur | DB record + structured log | KRİTİK |
+| VAL-E003 | Teslimat doğrulaması envanter farkından okunur | 08 §2, 02 §9.2 | Alıcı referansı alınmış, satıcı item'ı göndermiş | Alıcının envanteri okunur, referansla farkı alınır, beklenen `(classid, instanceid)` geldiyse teslimat kanıtı üretilir | DB (DeliveryEvidence) + log | KRİTİK |
+| VAL-E004 | Envanter okunamadığında teslimat "yapılmadı" sayılmaz | 08 §2, 02 §9.2 | Alıcının profili gizli veya Steam erişilemez | Okuma başarısızlığı olumsuz kanıt olarak kullanılmaz; işlem bekler veya admin'e taşınır, satıcı otomatik cezalandırılmaz | API response + structured log | KRİTİK |
+| VAL-E005 | HD wallet'tan benzersiz ödeme adresi üretilir | 08 §3 | İşlem SELLER_CONFIRMED | Benzersiz adres üretilir, PaymentAddress kaydı oluşur, adres yeniden kullanılmaz | DB record + structured log | KRİTİK |
 | VAL-E006 | Blockchain ödeme izleme (solidified + finality) çalışır | 08 §3 | Ödeme adresi üretilmiş, alıcı ödeme göndermiş | Ödeme doğru tespit edilir, finality beklenir | DB (BlockchainTransaction) + log | KRİTİK |
-| VAL-E007 | Payout gönderimi çalışır | 08 §3 | İşlem ITEM_DELIVERED | Satıcıya doğru tutar gönderilir | BlockchainTransaction + log | KRİTİK |
+| VAL-E007 | Payout gönderimi çalışır | 08 §3, 02 §4.5.1 | İşlem ITEM_DELIVERED **ve mutabakat süresi dolmuş, item hâlâ alıcıda** | Satıcıya doğru tutar gönderilir. Mutabakat doğrulanmadan payout tetiklenmez (VAL-B022) | BlockchainTransaction + log | KRİTİK |
 | VAL-E008 | Email bildirimi (Resend) 5 event için gönderilir | 08 §4 | İlgili event tetiklenmiş | Email gönderilir, NotificationDelivery kaydı oluşur | DB + log | ORTA |
 | VAL-E009 | Telegram webhook güvenlik + idempotency | 08 §5 | Telegram entegrasyonu aktif | Webhook doğrulanır, duplicate callback işlenmez | log | ORTA |
 | VAL-E010 | Steam Market fiyat çekimi + fallback zinciri | 08 §7 | Piyasa fiyat kontrolü tetiklenmiş | Fiyat alınır veya fallback zinciri çalışır | log | ORTA |
@@ -444,7 +447,7 @@ Her PASS sonucu en az bir kanıt türüyle desteklenmelidir. Kanıtsız PASS ge�
 | **API response** | Endpoint'e yapılan isteğin tam response'u (status code + body) | `POST /api/transactions` → 201 + response body |
 | **DB record** | İlgili tablodaki kayıt(lar)ın snapshot'ı | Transaction kaydı: Status = COMPLETED, SellerPayoutAmount = 95.00 |
 | **Blockchain TX** | Blockchain transaction hash ve detayları | TxHash, tutar, gönderen/alıcı adres, onay sayısı |
-| **Structured log** | İlgili akışa ait log çıktısı (correlation ID ile filtrelenmiş) | `[TraceId: abc-123] PaymentConfirmed → StateTransition: ITEM_ESCROWED → PAYMENT_RECEIVED` |
+| **Structured log** | İlgili akışa ait log çıktısı (correlation ID ile filtrelenmiş) | `[TraceId: abc-123] PaymentConfirmed → StateTransition: SELLER_CONFIRMED → PAYMENT_RECEIVED` |
 | **TradeOffer record** | Steam trade offer durumu (DB kaydı + Steam API response) | TradeOffer kaydı: Status = Accepted, SteamTradeOfferId = 123456 |
 | **Event/outbox kaydı** | OutboxMessage ve/veya ProcessedEvent kayıtları | OutboxMessage: EventType = PaymentConfirmed, ProcessedAt = ... |
 | **Test report** | Otomatik test çıktısı (birim veya entegrasyon) | `Tests passed: 12/12, Coverage: TransactionService` |
@@ -672,17 +675,18 @@ Bu tablo, state machine doğrulama maddeleri (VAL-C001 – VAL-C012) için detay
 
 ### 12.1 State Transition Matrisi
 
-| Mevcut State | İzin Verilen Sonraki State'ler | Tetikleyici |
+> **Kaynak:** bu tablo `TransactionStateMachine` yapılandırmasından birebir okunmuştur. Geçiş koşulu olan satırlarda koşul da yazılıdır — koşulsuz gösterilen bir geçiş doğrulamada koşulsuz denenir.
+
+| Mevcut State | İzin Verilen Sonraki State'ler | Tetikleyici ve koşul |
 |---|---|---|
-| **FLAGGED** | CREATED, CANCELLED_ADMIN | Admin onay → CREATED. Admin red → CANCELLED_ADMIN. |
-| **CREATED** | ACCEPTED, CANCELLED_TIMEOUT, CANCELLED_SELLER | Alıcı kabul → ACCEPTED. Timeout → CANCELLED_TIMEOUT. Satıcı iptal → CANCELLED_SELLER. |
-| **ACCEPTED** | TRADE_OFFER_SENT_TO_SELLER, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN | Trade offer gönderildi → TRADE_OFFER_SENT_TO_SELLER. Timeout / iptal seçenekleri. |
-| **TRADE_OFFER_SENT_TO_SELLER** | ITEM_ESCROWED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN | Satıcı kabul → ITEM_ESCROWED. Satıcı red/counter → CANCELLED_SELLER. Timeout / iptal seçenekleri. |
-| **ITEM_ESCROWED** | PAYMENT_RECEIVED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN | Ödeme doğrulandı → PAYMENT_RECEIVED. Timeout → CANCELLED_TIMEOUT (item iade). Satıcı iptal → CANCELLED_SELLER (item iade — ödeme öncesi, 02 §7). Alıcı iptal → CANCELLED_BUYER (item iade). |
-| **PAYMENT_RECEIVED** | TRADE_OFFER_SENT_TO_BUYER, CANCELLED_ADMIN | Alıcıya trade offer gönderildi → TRADE_OFFER_SENT_TO_BUYER. Admin iptal → CANCELLED_ADMIN (item + ödeme iade). Not: Ödeme sonrası kullanıcı tek taraflı iptal edemez (02 §7), sadece admin yetkisiyle. |
-| **TRADE_OFFER_SENT_TO_BUYER** | ITEM_DELIVERED, CANCELLED_TIMEOUT, CANCELLED_BUYER, CANCELLED_ADMIN | Alıcı kabul → ITEM_DELIVERED. Alıcı red/counter → CANCELLED_BUYER (item + ödeme iade). Timeout → CANCELLED_TIMEOUT (item + ödeme iade). |
-| **ITEM_DELIVERED** | COMPLETED | Payout başarılı → COMPLETED. |
+| **FLAGGED** | CREATED, CANCELLED_ADMIN | Admin onay → CREATED (FLAGGED state invariant'ı sağlanmalı, 06 §3.5). Admin red → CANCELLED_ADMIN. Admin iptal → CANCELLED_ADMIN. |
+| **CREATED** | ACCEPTED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN | Alıcı kabul → ACCEPTED (`BuyerId`, `BuyerRefundAddress`, `BuyerTradeUrl` zorunlu, 06 §3.5). Timeout → CANCELLED_TIMEOUT. Satıcı/alıcı/admin iptali. |
+| **ACCEPTED** | SELLER_CONFIRMED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN | Satıcı hazırlık onayı → SELLER_CONFIRMED (`SellerReadyConfirmedAt` zorunlu). Satıcı red → CANCELLED_SELLER. Timeout / iptal seçenekleri. |
+| **SELLER_CONFIRMED** | PAYMENT_RECEIVED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_BUYER, CANCELLED_ADMIN, REFUNDED | Ödeme doğrulandı → PAYMENT_RECEIVED. Timeout → CANCELLED_TIMEOUT. **Satıcı ve alıcı iptali yalnız `PaymentReceivedAt` NULL iken** (05 §4.2, 02 §7) — para kaydedilmişse bu durumdan iptal edilemez. Admin iptal → CANCELLED_ADMIN. Admin iade kararı → REFUNDED. |
+| **PAYMENT_RECEIVED** | ITEM_DELIVERED, CANCELLED_TIMEOUT, CANCELLED_SELLER, CANCELLED_ADMIN, REFUNDED | Teslimat doğrulandı → ITEM_DELIVERED (teslimat kanıtı + mutabakat penceresi açılmış olmalı, 02 §9.2/§4.5.1). Timeout → CANCELLED_TIMEOUT (ödeme iade). **Satıcı iptal edebilir, alıcı EDEMEZ** (02 §7 asimetrisi — bkz. VAL-B020). Admin iptal → CANCELLED_ADMIN. Admin iade kararı → REFUNDED. |
+| **ITEM_DELIVERED** | COMPLETED, REFUNDED | Mutabakat doğrulandı → COMPLETED (`HasSettlementClearance` — süre dolmadan ve item'ın alıcıda olduğu doğrulanmadan payout yapılamaz, 02 §4.5.1). Teslimat geri alındığı tespit edildi → REFUNDED. Admin iade kararı → REFUNDED. **Buradan hiçbir CANCELLED_* geçişi yoktur.** |
 | **COMPLETED** | *(terminal — çıkış yok)* | — |
+| **REFUNDED** | *(terminal — çıkış yok)* | — |
 | **CANCELLED_TIMEOUT** | *(terminal — çıkış yok)* | — |
 | **CANCELLED_SELLER** | *(terminal — çıkış yok)* | — |
 | **CANCELLED_BUYER** | *(terminal — çıkış yok)* | — |
@@ -695,8 +699,10 @@ Bu tablo, state machine doğrulama maddeleri (VAL-C001 – VAL-C012) için detay
 | **EMERGENCY_HOLD** | State değil, overlay mekanizma. Herhangi bir aktif state üzerine uygulanır (`IsOnHold = true`). Hold aktifken: state geçişi engellenir, timeout durur. Hold kaldırılınca: RESUME (kaldığı yerden devam) veya CANCEL (iptal + iade). ITEM_DELIVERED state'inde hold'dan yalnızca RESUME ile çıkılır — CANCEL uygulanamaz (item alıcıda). |
 | **FLAGGED** | Pre-create flag. İşlem CREATED öncesi durdurulur. Timeout başlamaz. Milestone field'ları (BuyerId, deadline'lar) NULL kalır. Admin onayı ile CREATED'a geçişte initialization yapılır. |
 | **Dispute** | Ayrı state değil, bayrak. İşlem mevcut state'inde kalır, dispute ayrı entity olarak takip edilir. State geçişini etkilemez. |
-| **ITEM_DELIVERED → CANCELLED_*** | Bu geçiş yoktur. Item alıcıya teslim edilmiş olduğundan standart iptal/iade uygulanamaz. Exceptional durumlar admin tarafından manuel süreçle çözülür. |
-| **Ödeme sonrası tek taraflı iptal** | PAYMENT_RECEIVED ve sonrası state'lerde satıcı/alıcı tek taraflı iptal edemez. Sadece admin CANCELLED_ADMIN yapabilir (item + ödeme iade ile). |
+| **ITEM_DELIVERED → CANCELLED_*** | Bu geçiş yoktur. Item alıcıda olduğundan standart iptal uygulanamaz. Buradan çıkış COMPLETED (mutabakat temiz) veya **REFUNDED** (trade geri alınmış ya da admin alıcı lehine karar vermiş) yönündedir. |
+| **Ödeme sonrası iptal — asimetrik** | PAYMENT_RECEIVED'da **satıcı** iptal edebilir (ödeme alıcıya iade), **alıcı edemez** (02 §7). Gerekçe kayıtlıdır: satıcının yolu kapatılsaydı göndermek istemeyen satıcı hiçbir şey yapmayıp timeout'u beklerdi ve alıcı parasına daha geç kavuşurdu. SELLER_CONFIRMED'da ikisi de yalnız `PaymentReceivedAt` NULL iken iptal edebilir. |
+| **Mutabakat süresi** | ITEM_DELIVERED bir bitiş değil, bir bekleme durumudur. Steam'in trade geri alma penceresi kapanana ve item'ın hâlâ alıcıda olduğu doğrulanana kadar payout yapılmaz (02 §4.5.1). Bu süre içinde geri alma tespit edilirse işlem REFUNDED'a gider ve satıcıya hesap düzeyinde flag yazılır. |
+| **Platform item'ı hiç tutmaz** | v3.0'da item satıcıdan **doğrudan** alıcıya gider; platform trade'in tarafı değildir ve hiçbir Steam hesabı çalıştırmaz (02 §2.1, §15, 05 §3.2). Bu yüzden hiçbir iptal/timeout dalında "item iadesi" adımı yoktur — iade edilecek eşya platformda hiç bulunmaz (02 §3.2). |
 
 ### 12.3 Doğrulama Kontrol Listesi
 
@@ -717,7 +723,7 @@ Her state için reviewer agent şunları doğrular:
 
 ## 13. Ek B — Proje-Spesifik Kontroller
 
-Bu ek, Skinora'nın escrow/kripto/Steam yapısından kaynaklanan ve standart doğrulama seviyelerine sığmayan çapraz kontrolleri tanımlar. Bu kontroller §4 matrisindeki VAL maddelerini tamamlar.
+Bu ek, Skinora'nın P2P/kripto/Steam yapısından kaynaklanan ve standart doğrulama seviyelerine sığmayan çapraz kontrolleri tanımlar. Bu kontroller §4 matrisindeki VAL maddelerini tamamlar. **Emanet edilen tek şey paradır** — item hiçbir zaman platforma geçmez (02 §2.1).
 
 ### 13.1 Idempotency Doğrulama
 
@@ -725,10 +731,10 @@ Aynı aksiyon iki kez tetiklendiğinde sistemin güvenli davranması doğrulanı
 
 | Senaryo | Beklenen Davranış | İlişkili VAL |
 |---|---|---|
-| Aynı Steam trade offer callback'i iki kez gelir | İlk işlenir, ikinci yok sayılır. Duplicate TradeOffer/state geçişi oluşmaz | VAL-C004, VAL-F001 |
+| Aynı teslimat doğrulaması iki kez koşar | İlk sonuç yazılır, ikinci yeni bir state geçişi üretmez | VAL-C004, VAL-F001 |
 | Aynı blockchain payment confirmation iki kez gelir | İlk işlenir, ikinci yok sayılır. Duplicate BlockchainTransaction oluşmaz | VAL-C004, VAL-F001 |
-| Aynı payout komutu iki kez tetiklenir | İlk gönderilir, ikinci engellenir. Çift ödeme yapılmaz | VAL-D006, VAL-D007, VAL-F001 |
-| Aynı bot assignment iki kez çalışır | İlk atanır, ikinci yok sayılır. Duplicate atama oluşmaz | VAL-D007 |
+| Aynı payout komutu iki kez tetiklenir | İlk gönderilir, ikinci engellenir. Çift ödeme yapılmaz — DB düzeyinde işlem başına tek `SELLER_PAYOUT` satırı kuralı da bunu arkadan destekler (06 §3.8) | VAL-D006, VAL-D007, VAL-F001 |
+| Aynı iade komutu iki kez tetiklenir | İlk gönderilir, ikinci engellenir. Çift iade yapılmaz — işlem başına tek `BUYER_REFUND` satırı kuralı (06 §3.8) | VAL-D006, VAL-D007 |
 | Worker restart sonrası aynı job tekrar çalışır | Idempotent — aynı sonuç, side effect yok | VAL-F001, VAL-F002 |
 
 ### 13.2 Monetary Doğrulama
@@ -759,7 +765,7 @@ Para alanlarında "yaklaşık doğru" kabul edilmez. Aritmetik eşitlik kanıtla
 |---|---|---|
 | Seller sadece kendi order'ında işlem yapar | Başka seller'ın order'ına erişim/aksiyon denemesi 403 döner | VAL-A024 |
 | Buyer sadece kendi order'ını görür | Başka buyer'ın order'ına erişim denemesi 403 döner | VAL-A024 |
-| Bot sadece atanmış order için aksiyon alır | Atanmamış order için trade offer gönderme engellenir | VAL-A025 |
+| Bir işlemin ödeme adresi başka işleme sayılmaz | Her transfer yalnız kendi işlemine kredi edilir; adres yeniden kullanılmaz | VAL-A025 |
 | Admin yetkileri rol bazlı | Yetkisiz admin aksiyonu (ör: emergency hold yetkisi olmadan hold) 403 döner | VAL-A013, VAL-A014 |
 | Internal/admin endpoint'ler public'e sızmaz | Public erişim denemesi 401/404 döner | VAL-A022 |
 | Spoofed callback/forged request reddedilir | Geçersiz imza/token ile gelen webhook 401 döner | VAL-A023a, VAL-A023b |
@@ -771,8 +777,9 @@ Bir order için sonradan aşağıdaki soruların cevaplanabilmesi doğrulanır.
 | Soru | Kanıt Kaynağı | İlişkili VAL |
 |---|---|---|
 | Kim başlattı? | Transaction.SellerId + AuditLog | VAL-D004, VAL-D005 |
-| Hangi bot işledi? | Transaction.AssignedBotId + TradeOffer kayıtları | VAL-D009 |
-| Hangi offer seçildi? | TradeOffer.SteamTradeOfferId | VAL-E003 |
+| Taraflar kimdi? | Transaction.SellerId + Transaction.BuyerId | VAL-D009 |
+| Teslimat neye dayanarak doğrulandı? | Transaction.DeliveryEvidence + BuyerBaseline* alanları + DeliveredBuyerAssetId | VAL-E003, VAL-D012, VAL-D013 |
+| Mutabakat neden temiz sayıldı? | Transaction.SettlementVerifiedAt (veya DeliveryReversedAt) + TransactionHistory | VAL-B021, VAL-B022 |
 | Hangi tarihte payment alındı? | BlockchainTransaction.ConfirmedAt + TransactionHistory | VAL-D003, VAL-D004 |
 | Hangi event completion'a götürdü? | TransactionHistory (son geçiş kaydı) + OutboxMessage | VAL-C008, VAL-D006 |
 | Admin neden iptal etti? | AuditLog (aksiyon + sebep) | VAL-D005, VAL-A013 |
@@ -783,18 +790,24 @@ Bir order için sonradan aşağıdaki soruların cevaplanabilmesi doğrulanır.
 
 İptal/timeout durumunda state'e göre doğru iade davranışının tetiklenmesi doğrulanır.
 
-| İptal Anındaki State | Item İadesi | Ödeme İadesi | İlişkili VAL |
-|---|---|---|---|
-| CREATED (timeout) | Gerekmez (henüz transfer yok) | Gerekmez | VAL-B002 |
-| CREATED (satıcı iptal) | Gerekmez (henüz transfer yok) | Gerekmez | VAL-B017 |
-| ACCEPTED (timeout) | Gerekmez (henüz transfer yok) | Gerekmez | VAL-B003 |
-| ACCEPTED (satıcı/alıcı iptal) | Gerekmez (henüz transfer yok) | Gerekmez | VAL-B017, VAL-B018 |
-| TRADE_OFFER_SENT_TO_SELLER (timeout) | Gerekmez (offer iptal edilir) | Gerekmez | VAL-B003 |
-| TRADE_OFFER_SENT_TO_SELLER (satıcı red/counter) | Gerekmez (offer iptal edilir) | Gerekmez | VAL-B019 |
-| TRADE_OFFER_SENT_TO_SELLER (satıcı/alıcı iptal) | Gerekmez (offer iptal edilir) | Gerekmez | VAL-B017, VAL-B018 |
-| ITEM_ESCROWED (timeout) | Satıcıya iade | Gerekmez (henüz ödeme yok) | VAL-B004 |
-| ITEM_ESCROWED (satıcı/alıcı iptal) | Satıcıya iade | Gerekmez (henüz ödeme yok) | VAL-B017, VAL-B018 |
-| PAYMENT_RECEIVED (admin iptal) | Satıcıya iade | Alıcıya iade | VAL-A013 |
-| TRADE_OFFER_SENT_TO_BUYER (timeout) | Satıcıya iade (offer iptal) | Alıcıya iade | VAL-B005 |
-| TRADE_OFFER_SENT_TO_BUYER (alıcı red/counter) | Satıcıya iade (offer iptal) | Alıcıya iade | VAL-B020 |
-| ITEM_DELIVERED | İade uygulanamaz (item alıcıda) | İade uygulanamaz | §12.2 |
+> **Item iadesi sütunu bilerek yoktur.** v3.0'da platform item'ı hiç tutmaz, dolayısıyla hiçbir dalda iade edilecek bir eşya bulunmaz (02 §2.1, §3.2). Bu tablonun önceki sürümü sekiz satırında "satıcıya iade" diyordu ve hiçbirinin kodda karşılığı yoktu.
+
+| İptal Anındaki State | Ödeme İadesi | İlişkili VAL |
+|---|---|---|
+| CREATED (timeout) | Gerekmez (henüz ödeme yok) | VAL-B002 |
+| CREATED (satıcı/alıcı iptal) | Gerekmez (henüz ödeme yok) | VAL-B017, VAL-B018 |
+| ACCEPTED (timeout) | Gerekmez (henüz ödeme yok) | VAL-B003 |
+| ACCEPTED (satıcı red) | Gerekmez (henüz ödeme yok) | VAL-B019 |
+| ACCEPTED (satıcı/alıcı iptal) | Gerekmez (henüz ödeme yok) | VAL-B017, VAL-B018 |
+| SELLER_CONFIRMED (timeout) | Gerekmez (ödeme gelmedi). Adres izlemede kalır; gecikmeli gelen ödeme ayrıca iade edilir | VAL-B004, VAL-B006 |
+| SELLER_CONFIRMED (satıcı/alıcı iptal) | Gerekmez — iptal zaten yalnız `PaymentReceivedAt` NULL iken mümkün | VAL-B017, VAL-B018 |
+| PAYMENT_RECEIVED (teslimat timeout) | Alıcıya iade | VAL-B005 |
+| PAYMENT_RECEIVED (satıcı iptal) | Alıcıya iade | VAL-B020 |
+| PAYMENT_RECEIVED (admin iptal / admin iade kararı) | Alıcıya iade | VAL-A013 |
+| ITEM_DELIVERED (mutabakatta geri alma tespit edildi) | Alıcıya iade → REFUNDED, satıcıya flag | VAL-B021 |
+| ITEM_DELIVERED (admin alıcı lehine karar) | Alıcıya iade → REFUNDED | VAL-A013 |
+| ITEM_DELIVERED (standart iptal) | Uygulanamaz — bu geçiş yoktur (§12.2) | §12.2 |
+
+---
+
+*Skinora — Validation Protocol v3.0*

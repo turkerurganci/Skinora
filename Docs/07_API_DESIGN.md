@@ -1634,6 +1634,10 @@ Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true`
 
 **Otomatik akış:** Bildirim sonrası sistem payout tx hash'ini blockchain üzerinden doğrular. Blockchain'de onaylıysa satıcıya tx hash gösterilir. Sorun tespit edilirse admin'e eskale edilir (03 §2.4a Senaryo A).
 
+> **Doğrulama yalnız zincir onayıyla kapanır** (backlog `StubPayoutVerifier`, owner kararı 2026-08-25). Doğrulayıcı önce işlemin `SELLER_PAYOUT` kaydını okur, gerekiyorsa blockchain sidecar'ına sorar. **Yalnız onaylanmış bir transfer** `RESOLVED` üretir; zincirde başarısız transfer, hiç payout kaydı bulunmaması, kayıtla beklenen hash'in uyuşmaması ve sidecar'a ulaşılamaması hallerinde satır `ESCALATED` olur ve admin'e düşer. **Tamamlanmış bir işlemde payout kaydının hiç olmaması** özellikle admin'e taşınır: bu durumda satıcının şikâyeti doğrudur.
+>
+> **Çözüldüğünde satıcı haberdar edilir:** `RESOLVED` geçişi `PAYOUT_ISSUE_RESOLVED` bildirimi üretir (§8.1). Bu tip her iki çözüm yolunu da (zincir onayı ve admin kararı) aynı metinle anlatır; `SELLER_PAYMENT_SENT` kullanılamaz çünkü şablonu tutar ister ve admin yolunda gözlenmiş bir transfer yoktur.
+
 > **Not:** Bu endpoint yalnızca COMPLETED işlemler içindir. ITEM_DELIVERED state'inde stuck payout durumunda sistem otomatik retry yapar (exponential backoff, 3 deneme — 06 §3.8). Satıcının ayrıca bildirim yapmasına gerek yoktur (03 §2.4a Senaryo B).
 
 **Hatalar:** 409 `TRANSACTION_NOT_COMPLETED`, 409 `ISSUE_ALREADY_REPORTED`, 403 `NOT_SELLER`, 400 `VALIDATION_ERROR`
@@ -1694,10 +1698,11 @@ Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true`
 | `WRONG_TOKEN_REFUND` | Alıcı | Yanlış token iade edildi (08 §3.4) | transaction |
 | `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (02 §14.0) | null |
 | `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı | null |
+| `PAYOUT_ISSUE_RESOLVED` | Satıcı | Bildirdiği ödeme sorunu çözüldü (§7.11, 02 §10.3) | transaction |
 
 `targetType`: Frontend route mapping için. `null` → tıklama yönlendirmez. Eşleme `NotificationTargetMapper`'da tutulur: `ADMIN_FLAG_ALERT` kendi `FlagId` kolonuna, `ADMIN_PLATFORM_OUTAGE` platform geneli olduğu için hiçbir hedefe bağlanmaz; hesap seviyesi iki tip bir işleme bağlı olmadığı için `null` döner, kalan tipler işlem referansını taşır.
 
-> **Parity çapası (T133a):** Katalog **26 tip**tir ve 06 §2.13 ile birebir aynıdır — ad, hedef ve sıra dahil; normatif kaynak kod enum'u `NotificationType`'dır. v3.0'da `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti); `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). Enum'a tip eklendiğinde bu tablo ve 06 §2.13 aynı commit'te güncellenir.
+> **Parity çapası (T133a):** Katalog **27 tip**tir ve 06 §2.13 ile birebir aynıdır — ad, hedef ve sıra dahil; normatif kaynak kod enum'u `NotificationType`'dır. v3.0'da `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti); `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). Enum'a tip eklendiğinde bu tablo ve 06 §2.13 aynı commit'te güncellenir.
 
 ### 8.2 N2 — `GET /notifications/unread-count`
 
@@ -2120,7 +2125,9 @@ Steam tarafındaki tek izleme noktası salt okunur API çağrılarının sağlı
 
 ### 9.15 AD15 — `GET /admin/users`
 
-**Amaç:** Admin kullanıcı listesi (S19 rol atama). Permission: `MANAGE_ROLES`. Paginated.
+**Amaç:** Kullanıcı dizini — hem S19 rol atamasının listesi, hem S20 kullanıcı detayının giriş kapısı. Permission: **`VIEW_USERS` VEYA `MANAGE_ROLES`** (herhangi biri yeterli). Paginated.
+
+> **Neden iki yetki:** uç salt-okunur bir listelemedir; rol *atama* AD12–AD14/AD17'de kalır ve `MANAGE_ROLES` ister. Yalnız `MANAGE_ROLES` istendiği sürece, `VIEW_USERS` taşıyan bir admin AD16 detay sayfasını açabiliyor ama ona giden dizini göremiyordu — SteamID'yi ezbere bilmediği sürece sayfaya hiç ulaşamıyordu (backlog `AdminUsersDirectoryPermissionMismatch`).
 
 **Query Params:** `search`, `roleId`
 

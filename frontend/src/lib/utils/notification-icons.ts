@@ -1,7 +1,7 @@
 import { NotificationType } from "@/types/enums";
 
 /**
- * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 26 backend
+ * Six S11 ikon kategorisi tanımlandığı 04 §7.7. The 27 backend
  * `NotificationType` values (07 §8.1 / 06 §2.13) are projected onto these
  * categories so the row UI renders the canonical icon set.
  *
@@ -35,6 +35,10 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.PAYMENT_INCORRECT]: "payment",
   [NotificationType.LATE_PAYMENT_REFUNDED]: "payment",
   [NotificationType.PAYMENT_REFUNDED]: "payment",
+
+  // Backlog F7Gate-EventsWithoutConsumer — a payout outcome on the seller's own
+  // sale, so it reads as a 💰 row next to SELLER_PAYMENT_SENT.
+  [NotificationType.PAYOUT_ISSUE_RESOLVED]: "payment",
 
   [NotificationType.INSUFFICIENT_PAYMENT]: "payment",
   [NotificationType.OVERPAYMENT_REFUNDED]: "payment",

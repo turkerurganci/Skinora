@@ -7,6 +7,10 @@ namespace Skinora.Auth.Authorization;
 /// Handles <see cref="PermissionRequirement"/> by checking the user's permission claims.
 /// Super admins automatically satisfy all permission requirements.
 /// </summary>
+/// <remarks>
+/// A requirement that names several permissions is satisfied by holding
+/// <b>any</b> one of them (<see cref="PermissionRequirement.Permissions"/>).
+/// </remarks>
 public sealed class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
     protected override Task HandleRequirementAsync(
@@ -20,10 +24,14 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
             return Task.CompletedTask;
         }
 
-        // Check for the specific permission claim
-        if (context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission))
+        // Any one of the named permission claims satisfies the requirement.
+        foreach (var permission in requirement.Permissions)
         {
-            context.Succeed(requirement);
+            if (context.User.HasClaim(AuthClaimTypes.Permission, permission))
+            {
+                context.Succeed(requirement);
+                break;
+            }
         }
 
         return Task.CompletedTask;

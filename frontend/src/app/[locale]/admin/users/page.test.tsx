@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import messages from "@/i18n/messages/en.json";
 import type { AdminUserListItem, AdminUserListResponse } from "@/lib/api/admin";
 import AdminUsersPage from "./page";
@@ -42,6 +43,16 @@ const { useAdminUsers, useAdminRoles } = vi.hoisted(() => ({
 vi.mock("@/lib/hooks/useAdminUsers", () => ({ useAdminUsers }));
 vi.mock("@/lib/hooks/useAdminRoles", () => ({ useAdminRoles }));
 
+// `AdminUsersDirectoryPermissionMismatch` — the page now reads the caller's own
+// permissions, because AD15 (this list) accepts VIEW_USERS or MANAGE_ROLES while
+// AD11 (the role list feeding the role filter) still demands MANAGE_ROLES.
+const { getMe } = vi.hoisted(() => ({ getMe: vi.fn() }));
+vi.mock("@/lib/api/auth", () => ({ getMe }));
+
+function setMe(permissions: string[]) {
+  getMe.mockResolvedValue({ role: "admin", permissions });
+}
+
 const USER: AdminUserListItem = {
   id: "11111111-1111-1111-1111-111111111111",
   steamId: "76561199053273410",
@@ -65,15 +76,23 @@ function setList(data: AdminUserListResponse | undefined, extra: Record<string, 
 }
 
 function renderPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <AdminUsersPage />
-    </NextIntlClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <AdminUsersPage />
+      </NextIntlClientProvider>
+    </QueryClientProvider>,
   );
 }
 
 beforeEach(() => {
   replace.mockClear();
+  getMe.mockReset();
+  useAdminRoles.mockClear();
+  setMe(["MANAGE_ROLES"]);
   currentParams = new URLSearchParams();
   setList(page([USER]));
   useAdminRoles.mockReturnValue({
@@ -146,9 +165,42 @@ describe("AdminUsersPage — sorgu ve URL", () => {
     expect(replace).toHaveBeenCalledWith("/en/admin/users?search=moder");
   });
 
-  it("rol filtresinin seçeneklerini AD11'den doldurur", () => {
+  it("rol filtresinin seçeneklerini AD11'den doldurur", async () => {
     renderPage();
-    expect(screen.getByRole("option", { name: "Moderator" })).toBeInTheDocument();
+    // `findBy` because the filter waits for the caller's own permissions — it
+    // is rendered only once we know AD11 is readable for them.
+    expect(await screen.findByRole("option", { name: "Moderator" })).toBeInTheDocument();
+  });
+});
+
+describe("AdminUsersPage — iki uç, iki yetki", () => {
+  /** Waits for the `me` query to resolve and re-render the page. */
+  async function settle() {
+    await waitFor(() => expect(useAdminRoles.mock.calls.length).toBeGreaterThan(1));
+  }
+
+  it("MANAGE_ROLES taşıyan admin için AD11 sorgusunu açar ve filtreyi gösterir", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("option", { name: "Moderator" })).toBeInTheDocument();
+    expect(useAdminRoles).toHaveBeenLastCalledWith({ enabled: true });
+  });
+
+  it("yalnız VIEW_USERS taşıyan admin'e rol filtresini göstermez, AD11'i hiç açmaz", async () => {
+    // `AdminUsersDirectoryPermissionMismatch`: this admin legitimately reaches
+    // the directory now, but AD11 still demands MANAGE_ROLES. A select with
+    // permanently empty options would read as "there are no roles" — a wrong
+    // conclusion drawn from a correct screen — and firing the request anyway
+    // would put a red herring in the network log and the server's audit trail.
+    setMe(["VIEW_USERS"]);
+    renderPage();
+    await settle();
+
+    expect(useAdminRoles).toHaveBeenLastCalledWith({ enabled: false });
+    expect(screen.queryByRole("option", { name: "Moderator" })).not.toBeInTheDocument();
+    // The list itself still renders for them — that is the whole point of the
+    // widened policy.
+    expect(screen.getAllByText(USER.displayName).length).toBeGreaterThan(0);
   });
 });
 

@@ -79,7 +79,7 @@ public class PayoutIssueEndpointTests : IClassFixture<PayoutIssueEndpointTests.F
     }
 
     [Fact]
-    public async Task Report_HappyPath_StubVerifier_Returns_201_And_Escalated()
+    public async Task Report_HappyPath_NoPayoutRecord_Returns_201_And_Escalated()
     {
         var admin = await _factory.CreateUserAsync();
         _factory.AdminId = admin.Id;
@@ -97,7 +97,11 @@ public class PayoutIssueEndpointTests : IClassFixture<PayoutIssueEndpointTests.F
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         var data = body.GetProperty("data");
         Assert.NotEqual(Guid.Empty, data.GetProperty("issueId").GetGuid());
-        // StubPayoutVerifier always returns UnableToVerify → service escalates.
+        // The seeded transaction carries no SELLER_PAYOUT BlockchainTransaction
+        // row, so BlockchainPayoutVerifier reports AnomalyDetected — a COMPLETED
+        // sale with no payout record is a real inconsistency — and the service
+        // escalates. This assertion held under the old always-escalate stub too;
+        // it now exercises the real verifier's missing-record path instead.
         Assert.Equal("ESCALATED", data.GetProperty("status").GetString());
     }
 

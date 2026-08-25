@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { KNOWN_PERMISSION_KEYS } from "./permissionCatalog";
 import { ADMIN_ROUTE_PERMISSIONS, permissionForAdminRoute } from "./routePermissions";
-import { hasPermission } from "@/lib/auth/roles";
+import { hasAnyPermission } from "@/lib/auth/roles";
 
 /**
  * WP2c (FE-permission-guard) — the map decides what the admin menu shows, so
@@ -12,7 +12,9 @@ describe("admin route → permission map", () => {
   it("only uses keys the backend catalogue defines", () => {
     for (const [path, key] of Object.entries(ADMIN_ROUTE_PERMISSIONS)) {
       if (key === null) continue;
-      expect(KNOWN_PERMISSION_KEYS, `${path} maps to an unknown key`).toContain(key);
+      for (const one of Array.isArray(key) ? key : [key]) {
+        expect(KNOWN_PERMISSION_KEYS, `${path} maps to an unknown key`).toContain(one);
+      }
     }
   });
 
@@ -26,17 +28,18 @@ describe("admin route → permission map", () => {
       "/admin/transactions": "VIEW_TRANSACTIONS",
       "/admin/settings": "MANAGE_SETTINGS",
       "/admin/roles": "MANAGE_ROLES",
-      "/admin/users": "MANAGE_ROLES",
+      "/admin/users": ["VIEW_USERS", "MANAGE_ROLES"],
       "/admin/audit-logs": "VIEW_AUDIT_LOG",
     });
   });
 
-  it("keeps /admin/users on MANAGE_ROLES, matching AD15 rather than its name", () => {
-    // The route reads like a VIEW_USERS surface but AD15 (07 §9.15) is the S19
-    // role-assignment list and the controller enforces MANAGE_ROLES. Mirroring
-    // the weaker-looking key would show a link that answers 403.
-    expect(permissionForAdminRoute("/admin/users")).toBe("MANAGE_ROLES");
-    expect(permissionForAdminRoute("/admin/users")).not.toBe("VIEW_USERS");
+  it("opens /admin/users to either key, matching the widened AD15 policy", () => {
+    // AD15 (07 §9.15) is a read-only directory and now accepts VIEW_USERS or
+    // MANAGE_ROLES. It used to be MANAGE_ROLES alone, which hid the directory
+    // from the very permission group whose detail page it links to —
+    // `AdminUsersDirectoryPermissionMismatch`. The map mirrors the controller;
+    // it must not widen further on its own, or it would show a 403 link.
+    expect(permissionForAdminRoute("/admin/users")).toEqual(["VIEW_USERS", "MANAGE_ROLES"]);
   });
 
   it("leaves an unmapped route visible", () => {
@@ -50,7 +53,12 @@ describe("admin route → permission map", () => {
 describe("menu visibility", () => {
   const visible = (role: string, permissions: string[], path: string) => {
     const required = permissionForAdminRoute(path);
-    return required === null || hasPermission(role, permissions, required);
+    if (required === null) return true;
+    return hasAnyPermission(
+      role,
+      permissions,
+      Array.isArray(required) ? required : [required],
+    );
   };
 
   it("shows a super admin everything even though their permission list is empty", () => {
@@ -76,6 +84,18 @@ describe("menu visibility", () => {
     expect(visible(role, permissions, "/admin/roles")).toBe(false);
     expect(visible(role, permissions, "/admin/users")).toBe(false);
     expect(visible(role, permissions, "/admin/audit-logs")).toBe(false);
+  });
+
+  it("shows the user directory to a VIEW_USERS-only admin", () => {
+    // The case the backlog line was opened for: this admin can open a user's
+    // detail page (AD16), so hiding the directory that links to it left them
+    // needing to know a Steam ID by heart.
+    const role = "admin";
+    expect(visible(role, ["VIEW_USERS"], "/admin/users")).toBe(true);
+    // Widening the directory must not widen role management with it.
+    expect(visible(role, ["VIEW_USERS"], "/admin/roles")).toBe(false);
+    // The other holder of the key still sees it.
+    expect(visible(role, ["MANAGE_ROLES"], "/admin/users")).toBe(true);
   });
 
   it("hides everything but the dashboard from an admin holding no permissions", () => {

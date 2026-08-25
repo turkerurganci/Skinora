@@ -198,12 +198,19 @@ public static class TransactionsModule
         services.AddScoped<IAdminUserActivityProvider, AdminUserActivityProvider>();
 
         // T60 — seller payout issue (07 §7.11, 02 §10.3, 06 §3.8a, 03 §2.4a
-        // Senaryo A). Stub IPayoutVerifier is forward-deferred until the Tron
-        // sidecar lands (T64–T69 devir); the admin resolver lives in
-        // Skinora.API/Services because Skinora.Transactions cannot reference
-        // Skinora.Admin (where AdminUserRole is declared).
+        // Senaryo A). The admin resolver lives in Skinora.API/Services because
+        // Skinora.Transactions cannot reference Skinora.Admin (where
+        // AdminUserRole is declared).
+        //
+        // Backlog StubPayoutVerifier — the T60 K1 forward-deferral is closed:
+        // the Tron sidecar it was waiting on (T64–T69) has landed, so the real
+        // BlockchainPayoutVerifier replaces the always-escalate stub. Only a
+        // chain-confirmed payout resolves automatically; every other outcome
+        // still reaches an admin (owner decision 2026-08-25). StubPayoutVerifier
+        // is KEPT — tests register it deliberately to drive the escalation path
+        // without a sidecar.
         services.AddScoped<IPayoutIssueService, PayoutIssueService>();
-        services.TryAddScoped<IPayoutVerifier, StubPayoutVerifier>();
+        services.TryAddScoped<IPayoutVerifier, BlockchainPayoutVerifier>();
         services.AddScoped<IPayoutEscalationAdminResolver, PayoutEscalationAdminResolver>();
 
         // T70 — blockchain sidecar HD wallet wiring (08 §3.2, 05 §3.3).

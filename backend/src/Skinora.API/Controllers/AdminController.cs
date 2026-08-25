@@ -35,6 +35,15 @@ public sealed class AdminController : ControllerBase
         AuthPolicies.PermissionPrefix + "MANAGE_ROLES";
     private const string PolicyViewUsers =
         AuthPolicies.PermissionPrefix + "VIEW_USERS";
+    // AD15 only — the user directory is the entry point BOTH surfaces need:
+    // role assignment (MANAGE_ROLES) and user detail (VIEW_USERS). Holding
+    // either is enough to read it; every mutating role endpoint keeps
+    // MANAGE_ROLES alone. Closes backlog AdminUsersDirectoryPermissionMismatch,
+    // opened when F5 (#274) turned this list into the S20 detail page's only
+    // navigable entry point — a VIEW_USERS admin could open a user's detail
+    // page but had no way to reach the directory that links to it.
+    private const string PolicyViewUsersOrManageRoles =
+        AuthPolicies.PermissionPrefix + "VIEW_USERS,MANAGE_ROLES";
     private const string PolicyManageSettings =
         AuthPolicies.PermissionPrefix + "MANAGE_SETTINGS";
     private const string PolicyViewAuditLog =
@@ -154,9 +163,12 @@ public sealed class AdminController : ControllerBase
 
     // ---------- Users (07 §9.15–§9.18) ----------
 
-    /// <summary>AD15 — <c>GET /admin/users</c>.</summary>
+    /// <summary>
+    /// AD15 — <c>GET /admin/users</c>. Read-only directory; reachable with
+    /// <c>VIEW_USERS</c> or <c>MANAGE_ROLES</c> (07 §9.15).
+    /// </summary>
     [HttpGet("users")]
-    [Authorize(Policy = PolicyManageRoles)]
+    [Authorize(Policy = PolicyViewUsersOrManageRoles)]
     [RateLimit("admin-read")]
     public async Task<ActionResult<PagedResult<AdminUserListItemDto>>> ListUsers(
         [FromQuery] string? search,

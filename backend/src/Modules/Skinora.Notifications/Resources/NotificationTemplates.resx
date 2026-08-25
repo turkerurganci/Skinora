@@ -168,4 +168,10 @@
   <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
     <value>Your Skinora account is active again. You can now start and accept transactions normally.</value>
   </data>
+  <data name="PAYOUT_ISSUE_RESOLVED_Title" xml:space="preserve">
+    <value>Payout issue resolved</value>
+  </data>
+  <data name="PAYOUT_ISSUE_RESOLVED_Body" xml:space="preserve">
+    <value>The payout problem you reported has been resolved. You can review the details on the transaction page.</value>
+  </data>
 </root>

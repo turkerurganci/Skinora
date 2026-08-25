@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { getMe } from "@/lib/api/auth";
-import { hasPermission } from "@/lib/auth/roles";
+import { hasAnyPermission } from "@/lib/auth/roles";
 import { permissionForAdminRoute } from "@/lib/admin/routePermissions";
 import { cn } from "@/lib/utils/cn";
 
@@ -62,7 +62,13 @@ export function AdminSidebar({
   const visibleMenu = MENU.filter((item) => {
     if (!me) return true;
     const required = permissionForAdminRoute(item.path);
-    return required === null || hasPermission(me.role, me.permissions, required);
+    if (required === null) return true;
+    // An array means the endpoint accepts any one of the keys (AD15).
+    return hasAnyPermission(
+      me.role,
+      me.permissions,
+      Array.isArray(required) ? required : [required],
+    );
   });
 
   const href = (path: string) => `/${locale}${path}`;
