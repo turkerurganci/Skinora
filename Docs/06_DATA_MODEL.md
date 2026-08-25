@@ -265,8 +265,9 @@ Tüm entity'ler silme davranışına göre üç kategoriye ayrılır:
 | `WRONG_TOKEN_REFUND` | Alıcı | Yanlış token iade edildi (T72, 08 §3.4) |
 | `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (T105a, 02 §14.0) |
 | `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı (T105a) |
+| `PAYOUT_ISSUE_RESOLVED` | Satıcı | Bildirdiği ödeme sorunu çözüldü (backlog `F7Gate-EventsWithoutConsumer`, 07 §7.11, 02 §10.3) |
 
-> **v3.0 (P2P) değişikliği:** `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti). `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). **Toplam 26 değer.** `ADMIN_PLATFORM_OUTAGE` (T63a) bu tabloda eksikti, eklendi. Katalog ile `NotificationTemplates.*.resx` arasındaki eşleşme `NotificationTemplateParityTests` ile 4 dilde zorlanır (T118).
+> **v3.0 (P2P) değişikliği:** `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti). `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). **Toplam 27 değer** — `PAYOUT_ISSUE_RESOLVED` backlog `F7Gate-EventsWithoutConsumer` ile eklendi: `SellerPayoutIssueResolvedEvent` yayınlanıyor ama tüketicisi yoktu, dolayısıyla sorununu bildiren satıcı çözüldüğünde hiçbir şey duymuyordu. En yakın tip (`SELLER_PAYMENT_SENT`) yeniden kullanılamadı çünkü şablonu `{Amount}` istiyor ve bu olay tutar taşımıyor; admin yolunda ise gözlenmiş bir transfer değil bir karar vardır. `ADMIN_PLATFORM_OUTAGE` (T63a) bu tabloda eksikti, eklendi. Katalog ile `NotificationTemplates.*.resx` arasındaki eşleşme `NotificationTemplateParityTests` ile 4 dilde zorlanır (T118).
 
 ### 2.14 NotificationChannel
 

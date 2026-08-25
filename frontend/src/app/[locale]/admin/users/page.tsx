@@ -4,6 +4,9 @@ import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useQuery } from "@tanstack/react-query";
+import { getMe } from "@/lib/api/auth";
+import { hasPermission } from "@/lib/auth/roles";
 import { EmptyState, ErrorState, FilterBar, Pagination, Skeleton } from "@/components/common";
 import type { FilterField } from "@/components/common";
 import { AdminUserTable } from "@/components/admin";
@@ -28,10 +31,16 @@ const PAGE_SIZE = 20;
  * which mode is active.
  *
  * Filters (search / role / page) are synced to the URL — same WP13 contract as
- * S21, so a filtered view is shareable and survives a refresh. Backend enforces
- * MANAGE_ROLES on both AD15 and AD11; there is no client-side permission guard
- * (a 403 surfaces as the error state — the T103 K5 precedent every other admin
- * page follows).
+ * S21, so a filtered view is shareable and survives a refresh. There is no
+ * client-side permission guard on the list itself (a 403 surfaces as the error
+ * state — the T103 K5 precedent every other admin page follows).
+ *
+ * THE TWO ENDPOINTS NO LONGER SHARE A POLICY. AD15 accepts VIEW_USERS *or*
+ * MANAGE_ROLES since `AdminUsersDirectoryPermissionMismatch` was closed, while
+ * the role list AD11 that feeds the role filter still requires MANAGE_ROLES.
+ * So the filter is rendered only for admins who can actually read it, and its
+ * query is not fired otherwise: a select with permanently empty options would
+ * read as "there are no roles" rather than "this is not yours to filter by".
  */
 export default function AdminUsersPage() {
   const t = useTranslations("adminUsers");
@@ -51,9 +60,13 @@ export default function AdminUsersPage() {
   );
 
   const { data, isLoading, isError, refetch } = useAdminUsers(query);
-  // AD11 shares the MANAGE_ROLES policy with AD15, so whoever can read this
-  // list can also read the role names the filter needs.
-  const rolesQuery = useAdminRoles();
+  // AD11 (role list) still requires MANAGE_ROLES; AD15 (this list) does not.
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: getMe });
+  // Until `me` resolves the filter stays hidden rather than flashing in and
+  // out — the same direction AdminSidebar fails in, inverted because here the
+  // cost of guessing wrong is a request that 403s.
+  const canFilterByRole = hasPermission(me?.role, me?.permissions, "MANAGE_ROLES");
+  const rolesQuery = useAdminRoles({ enabled: canFilterByRole });
 
   const pushParams = useCallback(
     (next: Record<string, string | undefined>) => {
@@ -75,13 +88,17 @@ export default function AdminUsersPage() {
       kind: "text",
       placeholder: t("filters.searchPlaceholder"),
     },
-    {
-      key: "roleId",
-      label: t("filters.role"),
-      kind: "select",
-      placeholder: t("filters.allRoles"),
-      options: (rolesQuery.data?.roles ?? []).map((r) => ({ value: r.id, label: r.name })),
-    },
+    ...(canFilterByRole
+      ? [
+          {
+            key: "roleId",
+            label: t("filters.role"),
+            kind: "select" as const,
+            placeholder: t("filters.allRoles"),
+            options: (rolesQuery.data?.roles ?? []).map((r) => ({ value: r.id, label: r.name })),
+          },
+        ]
+      : []),
   ];
 
   const initialValues: Record<string, string> = {};

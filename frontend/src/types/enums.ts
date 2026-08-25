@@ -159,6 +159,11 @@ export enum NotificationType {
   ACCOUNT_UNSUSPENDED = "ACCOUNT_UNSUSPENDED",
   // WP16 — platform health probe outage alert (admin-only).
   ADMIN_PLATFORM_OUTAGE = "ADMIN_PLATFORM_OUTAGE",
+  // Backlog F7Gate-EventsWithoutConsumer — the seller's reported payout issue
+  // was closed. Distinct from SELLER_PAYMENT_SENT, which promises an amount
+  // this resolution does not carry (and, on the admin path, an observed
+  // transfer that did not necessarily happen).
+  PAYOUT_ISSUE_RESOLVED = "PAYOUT_ISSUE_RESOLVED",
 }
 
 // §2.14 — 3 values

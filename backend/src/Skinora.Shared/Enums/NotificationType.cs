@@ -55,5 +55,17 @@ public enum NotificationType
     // that it happened and the admin can still freeze manually (WP7). Fanned out to every
     // admin via the WP8 AdminBroadcast pattern; pairs with the
     // PLATFORM_OUTAGE_DETECTED audit row.
-    ADMIN_PLATFORM_OUTAGE
+    ADMIN_PLATFORM_OUTAGE,
+
+    // --- Backlog F7Gate-EventsWithoutConsumer: seller payout issue resolved
+    // (07 §7.11, 02 §10.3, 03 §2.4a Senaryo A) ---
+    // A seller who reported "my payout never arrived" was never told when the
+    // report was closed. SELLER_PAYMENT_SENT could not carry this: it promises
+    // "{Amount} was sent to your wallet", and the resolution has no amount on
+    // its event and — on the admin path — no observed transfer either, only a
+    // decision. Saying "sent" there would be a claim the platform cannot back.
+    // This type states what actually happened: the reported problem is closed.
+    // Both resolution paths (chain-confirmed and admin) share it; the renderer
+    // does not distinguish them, because to the seller the fact is the same.
+    PAYOUT_ISSUE_RESOLVED
 }

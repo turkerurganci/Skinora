@@ -261,17 +261,20 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (26) ───────────────────────────────────────
+    // ── NotificationType (27) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave26Values()
+    public void NotificationType_ShouldHave27Values()
     {
         // 26 after the v3.0 P2P pivot: ITEM_ESCROWED became PAYMENT_WINDOW_OPEN
         // and TRADE_OFFER_SENT_TO_BUYER became DELIVERY_EXPECTED (which also
         // flipped recipient — it now addresses the seller); ITEM_RETURNED and
         // ADMIN_STEAM_BOT_ISSUE were removed outright.
+        // 27 with PAYOUT_ISSUE_RESOLVED (backlog F7Gate-EventsWithoutConsumer):
+        // the seller's reported payout problem being closed is its own fact and
+        // could not reuse SELLER_PAYMENT_SENT, which promises an amount.
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(26, values.Length);
+        Assert.Equal(27, values.Length);
     }
 
     [Theory]
@@ -301,6 +304,7 @@ public class EnumTests
     [InlineData(nameof(NotificationType.ACCOUNT_SUSPENDED))]
     [InlineData(nameof(NotificationType.ACCOUNT_UNSUSPENDED))]
     [InlineData(nameof(NotificationType.ADMIN_PLATFORM_OUTAGE))]
+    [InlineData(nameof(NotificationType.PAYOUT_ISSUE_RESOLVED))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(NotificationType), Enum.Parse<NotificationType>(valueName)));

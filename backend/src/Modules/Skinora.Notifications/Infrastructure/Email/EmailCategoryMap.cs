@@ -31,6 +31,11 @@ public static class EmailCategoryMap
             [NotificationType.INSUFFICIENT_PAYMENT] = EmailCategory.Transaction,
             [NotificationType.OVERPAYMENT_REFUNDED] = EmailCategory.Transaction,
             [NotificationType.WRONG_TOKEN_REFUND] = EmailCategory.Transaction,
+            // Backlog F7Gate-EventsWithoutConsumer — the seller's reported
+            // payout problem was closed. A money-movement outcome on their own
+            // sale, so it rides the transaction wrapper next to
+            // SELLER_PAYMENT_SENT rather than the security one.
+            [NotificationType.PAYOUT_ISSUE_RESOLVED] = EmailCategory.Transaction,
 
             // --- Timeout warnings (08 §4.2 — "Timeout uyarıları") ---
             [NotificationType.TIMEOUT_WARNING] = EmailCategory.Timeout,

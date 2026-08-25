@@ -8,6 +8,14 @@ namespace Skinora.Auth.Authorization;
 /// Dynamically creates authorization policies for permission-based access control.
 /// Any policy name starting with "Permission:" is resolved to a <see cref="PermissionRequirement"/>.
 /// </summary>
+/// <remarks>
+/// The suffix may list SEVERAL permission keys separated by commas
+/// (<c>"Permission:VIEW_USERS,MANAGE_ROLES"</c>), which builds an any-of
+/// requirement. Blank entries are dropped so a stray comma cannot silently
+/// widen a policy to "no permission required" — a suffix that yields no key at
+/// all falls through to the default provider and therefore fails closed rather
+/// than authorizing everyone.
+/// </remarks>
 public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
 {
     private readonly DefaultAuthorizationPolicyProvider _fallback;
@@ -27,14 +35,18 @@ public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
     {
         if (policyName.StartsWith(AuthPolicies.PermissionPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            var permission = policyName[AuthPolicies.PermissionPrefix.Length..];
+            var permissions = policyName[AuthPolicies.PermissionPrefix.Length..]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            var policy = new AuthorizationPolicyBuilder()
-                .RequireAuthenticatedUser()
-                .AddRequirements(new PermissionRequirement(permission))
-                .Build();
+            if (permissions.Length > 0)
+            {
+                var policy = new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement(permissions))
+                    .Build();
 
-            return policy;
+                return policy;
+            }
         }
 
         return await _fallback.GetPolicyAsync(policyName);

@@ -168,4 +168,10 @@
   <data name="ACCOUNT_UNSUSPENDED_Body" xml:space="preserve">
     <value>您的 Skinora 账户已重新激活。现在您可以正常发起和接受交易。</value>
   </data>
+  <data name="PAYOUT_ISSUE_RESOLVED_Title" xml:space="preserve">
+    <value>付款问题已解决</value>
+  </data>
+  <data name="PAYOUT_ISSUE_RESOLVED_Body" xml:space="preserve">
+    <value>您报告的付款问题已解决。您可以在交易页面查看详情。</value>
+  </data>
 </root>
