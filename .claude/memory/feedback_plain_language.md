@@ -17,4 +17,8 @@ Bu kullanıcıya yazarken **sade dil** kullanılır. Uzun, yoğun teknik anlatı
 - **Sonucu önce söyle.** "Şu oldu" → sonra gerekçe. Gerekçeyi baştan kurup sonuca varma.
 - **Kısa tut.** Uzun mesaj yerine kısa mesaj + "detay ister misin?" tercih edilir.
 
+**Tekrar — 2026-08-28.** Aynı geri bildirim yeniden geldi: *"daha anlaşılabilir ve çok kısa anlat"*. Tetikleyen yanıt, **"TronGrid API key ne işe yarıyor"** gibi tek cümlelik bir soruya beş paragraf + dört `dosya:satır` bağlantısı + kalın terimlerle cevap vermekti. Kod dayanağı doğruydu ama **soru onu istemiyordu**.
+
+**Ek kural — soru tipine göre uzunluk.** *"X ne işe yarıyor / neden gerekli"* türü bir soru **2-3 kısa cümle** ile cevaplanır: dosya/satır bağlantısı yok, tablo yok, kod adı ancak zorunluysa. Kod dayanağı yalnız **istenirse** ya da bir iddia tartışmalıysa eklenir. Ölçüt basit: kullanıcı bir **kavramı** sorduysa kavramı anlat, **kanıtı** değil.
+
 **Neyi bozmaz:** Doküman içeriği (`Docs/*.md`), task raporları ve commit mesajları teknik ve ayrıntılı kalmaya devam eder — bu kural **sohbet yanıtları** içindir. [[feedback_respond_in_turkish]] ile birlikte geçerlidir.
