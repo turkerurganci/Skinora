@@ -293,4 +293,5 @@
 ## Reference
 - [reference_remote_control.md](reference_remote_control.md) — VS Code Claude Code /remote-control (/rc) komutu — mobil session izleme/kontrol
 - [reference_local_stack_runbook_g.md](reference_local_stack_runbook_g.md) — Yerel Docker stack: ciplak `docker compose up` override tuzagi + nginx bayat upstream IP; olcum icin e2e JWT-enjeksiyon yolu
+- [reference_local_payment_leg_nile.md](reference_local_payment_leg_nile.md) — Lokal ödeme bacağı Nile kurulumu: üretilen HD/hot cüzdan adresleri, ölçülerek seçilen USDT kontratı, kalan dış-değer borcu
 - [reference_workflow_subagents_blocked.md](reference_workflow_subagents_blocked.md) — Workflow/Agent subagent durumu session'a gore degisir; guvenmeden once tek ucuz probe ile dogrula
