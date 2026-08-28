@@ -15,3 +15,24 @@ type: reference
 **Kalan dış-değer borcu (yalnız insan yapabilir):** TronGrid API key (`TRON_API_KEY`; 3 sn'lik izleme turu anahtarsız 429 yer) · hot wallet'a faucet TRX (sweep 200 TRX energy delege eder) · alıcı rolündeki cüzdana Nile test USDT. Ayrıca happy path'in Steam yarısı için ikinci hesabın (`76561198652999063`) MA + trade URL'i gerekiyor — alıcı kapıları fail-closed.
 
 İlgili: [[reference_local_stack_runbook_g]]
+
+
+## Prova durumu — 2026-08-29 (nerede kaldık)
+
+**Tron tarafı BİTTİ, Steam tarafı 31 Ağustos'a kadar bloke.**
+
+Hazır olanlar (ölçüldü):
+
+- Hot wallet `TP6e9Yqa1wFFDbJzKaSgTwBq2LHax9YSFD` → **798,9 TRX**. Faucet 1000 TRX verdi; 200'ü alıcı cüzdanına gönderildi, 1,1 TRX ücret (1 TRX yeni hesap açma + 0,1 bant genişliği — `08 §3.3` ile uyumlu).
+- Alıcı cüzdanı (TronLink, Nile) `TWrbG7F38xPMty4jRhgnBxrfAPtS84KmHK` → **200 TRX + 1000 USDT**.
+- USDT'nin durduğu kontrat **`TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf`** — yani `.env`'e yazılan kontrat **faucet tarafından doğrulandı** (rakip aday `TXLAQ63…`'te bakiye **0**). Runbook §G.5'in "faucet'in verdiğini kullan" kuralı karşılandı.
+- `TRON_API_KEY` dolu. **Geçerliliği kanıtlanamadı:** Nile uydurma bir anahtara da 200 dönüyor, yani "çalıştı" cevabı anahtarı doğrulamıyor. Gerçek kanıt trongrid.io panelindeki istek sayacı ya da provada 429 görmemek.
+- `auth.min_steam_account_age_days` **30 → 1** yapıldı (admin API, audit kaydıyla). İkinci hesabın Steam hesabı 4 günlüktü ve giriş kapıda duruyordu. **Prova sonrası 30'a geri alınmalı.**
+
+Bloke eden tek şey (Steam):
+
+- `turkerurganci_2` (`76561198652999063`) Steam hesabı **2026-08-24**'te açıldı ve MA **aynı gün** etkinleştirildi. Steam 7 günden genç MA'ya 15 günlük bekletme uyguluyor, alıcı kapıları da bekletme = 0 şartını arıyor. **7 gün 2026-08-31'de doluyor**; o gün trade URL kaydı hiçbir kısayol olmadan geçer.
+- **Denenip geri alınan kısayol:** `MobileAuthenticatorVerified = 1`'i veritabanına elle yazmak **kapıyı açmıyor**. Alıcı kabul ve hazırlık adımları bayrağı hiç okumuyor, canlı probe kullanıyor (`TransactionAcceptanceService.cs:209` yorumunda yazılı). Bayrak yalnız satıcı kapısını besliyor. Tekrar denenmesin.
+- Alıcının CS2 envanteri yok ve **gerek de yok** — teslimat referansı bilerek non-blocking. CS2 indirmeye gerek yok, ayrıntı `DEPLOY_RUNBOOK §G.5`'te.
+
+31 Ağustos'ta koşulacak: trade URL kaydı → satıcı ilan açar (`turkerurganci`, envanterinde Tec-9 | Groundwater var) → alıcı kabul → `confirm-ready` → deposit adresi → TronLink'ten USDT → `payment-detected` → 20 blok → `PAYMENT_RECEIVED`.
