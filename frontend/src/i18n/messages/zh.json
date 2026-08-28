@@ -155,6 +155,8 @@
     "ageGate": {
       "title": "未达到年龄要求",
       "description": "使用 Skinora 需年满 18 岁。",
+      "accountAgeTitle": "您的 Steam 账户过新",
+      "accountAgeDescription": "Skinora 要求 Steam 账户至少注册 {required} 天。您的账户目前为 {days} 天，请在 {remaining} 天后重试。",
       "backToHome": "返回首页"
     },
     "sanctions": {
@@ -1176,7 +1178,7 @@
       },
       "error": {
         "title": "无法加载库存",
-        "message": "目前无法读取你的 Steam 库存。请稍后重试。如果持续失败，请检查你的 Steam 社区个人资料是否已设置、库存是否公开——仅靠重试无法解决该情况。",
+        "message": "目前无法读取你的 Steam 库存。请稍后重试。如果持续失败，请检查你的 Steam 社区个人资料是否已设置、库存是否公开——仅靠重试无法解决该情况。 如果你从未在此账户上启动过 CS2，其库存可能尚未创建——打开一次游戏即可创建。",
         "privateTitle": "您的库存为私密",
         "privateMessage": "您的 Steam 库存已设为私密。要发起交易,请将库存设为 'public'。"
       }
@@ -1684,7 +1686,7 @@
       "save": "保存并验证",
       "saving": "正在验证…",
       "resultActive": "交易链接已保存，手机令牌验证为已启用。你现在可以发起交易了。",
-      "resultInactive": "交易链接已保存，但你的 Steam 账户似乎未启用手机令牌。启用后请重新保存。",
+      "resultInactive": "您的交易链接已保存。但 Steam 报告该账户存在交易保留，这有两种可能的原因：未启用 Mobile Authenticator，或启用不足 7 天。Steam 对这两种情况的报告完全相同，我们无法区分。如果已经启用，请在满 7 天后重新保存此表单。",
       "setupGuide": "Steam 设置指南",
       "resultPending": "交易链接已保存，但 Steam 未响应，无法验证手机令牌。请几分钟后重新保存。",
       "resultInvalid": "交易链接无效。期望格式：https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",

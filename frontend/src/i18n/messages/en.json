@@ -155,6 +155,8 @@
     "ageGate": {
       "title": "Age requirement not met",
       "description": "You must be at least 18 years old to use Skinora.",
+      "accountAgeTitle": "Your Steam Account Is Too New",
+      "accountAgeDescription": "Skinora requires your Steam account to be at least {required} days old. Yours is {days} days old — try again in {remaining} days.",
       "backToHome": "Back to home"
     },
     "sanctions": {
@@ -1176,7 +1178,7 @@
       },
       "error": {
         "title": "Inventory could not be loaded",
-        "message": "We couldn't read your Steam inventory right now. Please try again shortly. If it keeps failing, check that your Steam Community profile is set up and your inventory is public — retrying alone will not fix that.",
+        "message": "We couldn't read your Steam inventory right now. Please try again shortly. If it keeps failing, check that your Steam Community profile is set up and your inventory is public — retrying alone will not fix that. If you have never launched CS2 on this account, its inventory may not exist yet — opening the game once creates it.",
         "privateTitle": "Your inventory is private",
         "privateMessage": "Your Steam inventory is set to private. Make it public to start a transaction."
       }
@@ -1684,7 +1686,7 @@
       "save": "Save and verify",
       "saving": "Verifying…",
       "resultActive": "Your trade URL was saved and the Mobile Authenticator was verified as active. You can now start transactions.",
-      "resultInactive": "Your trade URL was saved, but the Mobile Authenticator does not appear to be active on your Steam account. Enable it and save again.",
+      "resultInactive": "Your trade link was saved. Steam reports a trade hold on this account, and that has two possible causes: the Mobile Authenticator is not enabled, or it has been enabled for less than 7 days. Steam reports both cases identically, so we cannot tell them apart. If it is already enabled, save this form again once those 7 days have passed.",
       "setupGuide": "Steam setup guide",
       "resultPending": "Your trade URL was saved, but Steam did not respond so the Mobile Authenticator could not be verified. Please save again in a few minutes.",
       "resultInvalid": "Invalid trade URL. Expected format: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",

@@ -155,6 +155,8 @@
     "ageGate": {
       "title": "No se cumple el requisito de edad",
       "description": "Debes tener al menos 18 años para usar Skinora.",
+      "accountAgeTitle": "Tu cuenta de Steam es demasiado nueva",
+      "accountAgeDescription": "Skinora requiere que tu cuenta de Steam tenga al menos {required} días. La tuya tiene {days} días: vuelve a intentarlo en {remaining} días.",
       "backToHome": "Volver al inicio"
     },
     "sanctions": {
@@ -1176,7 +1178,7 @@
       },
       "error": {
         "title": "No se pudo cargar el inventario",
-        "message": "No pudimos leer tu inventario de Steam en este momento. Vuelve a intentarlo en unos minutos. Si sigue fallando, comprueba que tu perfil de Steam Community esté configurado y que tu inventario sea público: reintentar por sí solo no lo resolverá.",
+        "message": "No pudimos leer tu inventario de Steam en este momento. Vuelve a intentarlo en unos minutos. Si sigue fallando, comprueba que tu perfil de Steam Community esté configurado y que tu inventario sea público: reintentar por sí solo no lo resolverá. Si nunca has iniciado CS2 en esta cuenta, puede que su inventario aún no exista: basta con abrir el juego una vez para crearlo.",
         "privateTitle": "Tu inventario es privado",
         "privateMessage": "Tu inventario de Steam está configurado como privado. Para iniciar una transacción debes hacerlo 'público'."
       }
@@ -1684,7 +1686,7 @@
       "save": "Guardar y verificar",
       "saving": "Verificando…",
       "resultActive": "Tu enlace de intercambio se guardó y el Mobile Authenticator se verificó como activo. Ya puedes iniciar transacciones.",
-      "resultInactive": "Tu enlace se guardó, pero el Mobile Authenticator no parece estar activo en tu cuenta de Steam. Actívalo y vuelve a guardar.",
+      "resultInactive": "Tu enlace de intercambio se guardó. Steam informa una retención de intercambio en esta cuenta, y eso tiene dos causas posibles: el Mobile Authenticator no está activado, o lleva activado menos de 7 días. Steam informa ambos casos de forma idéntica, así que no podemos distinguirlos. Si ya está activado, vuelve a guardar este formulario cuando hayan pasado esos 7 días.",
       "setupGuide": "Guía de configuración de Steam",
       "resultPending": "Tu enlace se guardó, pero Steam no respondió y no se pudo verificar el Mobile Authenticator. Vuelve a guardar en unos minutos.",
       "resultInvalid": "Enlace de intercambio no válido. Formato esperado: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",

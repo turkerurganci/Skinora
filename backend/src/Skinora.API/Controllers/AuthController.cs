@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -122,7 +123,18 @@ public sealed class AuthController : ControllerBase
             AuthenticationOutcome.AccountBanned => Redirect(BuildFrontendUrl("error", "account_banned", null)),
             AuthenticationOutcome.GeoBlocked => Redirect(BuildFrontendUrl("error", "geo_blocked", null)),
             AuthenticationOutcome.SanctionsMatch => Redirect(BuildFrontendUrl("error", "sanctions_match", null)),
-            AuthenticationOutcome.AgeBlocked => Redirect(BuildFrontendUrl("error", "age_blocked", null)),
+            // The two numbers are the whole point of this redirect: /auth/age-gate
+            // is also reached when a user declines the 18+ checkbox, and without
+            // them the page cannot tell the two callers apart — it showed the
+            // "you must be 18" copy to users blocked purely for Steam account
+            // age (backlog AgeGateMessageDescribesWrongRule).
+            AuthenticationOutcome.AgeBlocked age => Redirect(BuildFrontendUrl(
+                "error", "age_blocked", null,
+                new (string, string)[]
+                {
+                    ("accountAgeDays", age.AccountAgeDays.ToString(CultureInfo.InvariantCulture)),
+                    ("requiredDays", age.RequiredDays.ToString(CultureInfo.InvariantCulture)),
+                })),
             _ => Redirect(BuildFrontendUrl("error", "auth_failed", null)),
         };
     }
@@ -364,7 +376,8 @@ public sealed class AuthController : ControllerBase
         return $"{target}{separator}reAuthToken={Uri.EscapeDataString(success.ReAuthToken)}";
     }
 
-    private string BuildFrontendUrl(string key, string value, string? returnUrl)
+    private string BuildFrontendUrl(
+        string key, string value, string? returnUrl, IReadOnlyList<(string Key, string Value)>? extra = null)
     {
         var builder = new UriBuilder(_settings.FrontendCallbackUrl);
         var query = string.IsNullOrEmpty(builder.Query) ? "" : builder.Query.TrimStart('?');
@@ -372,6 +385,9 @@ public sealed class AuthController : ControllerBase
         qs += $"{key}={Uri.EscapeDataString(value)}";
         if (!string.IsNullOrWhiteSpace(returnUrl))
             qs += $"&returnUrl={Uri.EscapeDataString(returnUrl)}";
+        if (extra is not null)
+            foreach (var (extraKey, extraValue) in extra)
+                qs += $"&{Uri.EscapeDataString(extraKey)}={Uri.EscapeDataString(extraValue)}";
         builder.Query = qs;
         return builder.Uri.ToString();
     }
