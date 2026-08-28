@@ -107,8 +107,16 @@ describe("SteamTradeUrlSection (F1)", () => {
     await submit();
 
     await waitFor(() =>
-      expect(screen.getByText(/Mobile Authenticator does not appear to be active/)).toBeTruthy(),
+      expect(screen.getByText(messages.settings.steamTradeUrl.resultInactive)).toBeTruthy(),
     );
+    // MaMessageConflatesAbsentWithYoungAuthenticator — Steam, "MA yok" ile
+    // "MA 7 günden genç" durumlarını AYNI bekletme sayısıyla bildiriyor, yani kod
+    // ikisini ayıramıyor. Metin bu yüzden ikisini de adlandırmak zorunda: yalnız
+    // "etkinleştir" diyen bir uyarı, MA'si zaten aktif olan kullanıcıya
+    // yapamayacağı bir şeyi söyler (2026-08-28'de gerçek bir hesapta ölçüldü).
+    const inactiveCopy = messages.settings.steamTradeUrl.resultInactive;
+    expect(inactiveCopy).toMatch(/not enabled/i);
+    expect(inactiveCopy).toMatch(/less than 7 days/i);
     const guide = screen.getByText(messages.settings.steamTradeUrl.setupGuide);
     expect(guide.closest("a")?.getAttribute("href")).toBe("https://help.steampowered.com/guide");
   });

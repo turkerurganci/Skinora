@@ -225,6 +225,15 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Contains("error=age_blocked", response.Headers.Location!.ToString());
 
+        // The two numbers are the point of this redirect, not decoration:
+        // /auth/age-gate is ALSO where a user lands after declining the 18+
+        // checkbox, so without them the page cannot tell the callers apart and
+        // showed "you must be 18" to an adult whose Steam account was merely
+        // new (backlog AgeGateMessageDescribesWrongRule). Account is 5 days old,
+        // threshold seeded above is 30.
+        Assert.Contains("accountAgeDays=5", response.Headers.Location!.ToString());
+        Assert.Contains("requiredDays=30", response.Headers.Location!.ToString());
+
         using var verifyScope = _factory.Services.CreateScope();
         var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.False(await verifyDb.Set<User>().AnyAsync(u => u.SteamId == SteamId));

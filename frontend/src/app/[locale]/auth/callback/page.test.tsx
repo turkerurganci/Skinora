@@ -101,6 +101,23 @@ describe("SteamCallbackPage — politika reddi kendi ekranına gider (F4c)", () 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(target));
   });
 
+  // AgeGateMessageDescribesWrongRule — /auth/age-gate'e iki alakasız sebepten
+  // gelinir (Steam hesabı çok yeni / kullanıcı 18+ kutusunu reddetti) ve sayfa
+  // ikisini ancak bu iki sayı kendisine ulaşırsa ayırt edebilir.
+  it("age_blocked → hesap yaşı sayıları age-gate'e taşınır", async () => {
+    params = new URLSearchParams("error=age_blocked&accountAgeDays=4&requiredDays=30");
+    renderCallback("tr");
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/tr/auth/age-gate?accountAgeDays=4&requiredDays=30"),
+    );
+  });
+
+  it("sayılar yoksa sorgu dizesi EKLENMEZ — 18+ metni varsayılan kalır", async () => {
+    params = new URLSearchParams("error=age_blocked");
+    renderCallback("tr");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/tr/auth/age-gate"));
+  });
+
   it("politika reddinde jenerik hata kartı ÇİZİLMEZ — Tekrar Dene düğmesi yok", () => {
     params = new URLSearchParams("error=age_blocked");
     const { container } = renderCallback("tr");

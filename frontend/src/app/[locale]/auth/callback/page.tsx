@@ -113,10 +113,21 @@ export default function SteamCallbackPage() {
   // için hiç çizilmez: `policyBlockRoute` render dalını da kapatıyor.
   const policyBlockRoute = rawError ? (POLICY_BLOCK_ROUTES[rawError] ?? null) : null;
 
+  // AgeGateMessageDescribesWrongRule — /auth/age-gate'e iki alakasiz sebepten
+  // gelinir: Steam HESABININ 30 gunden genc olmasi, ve kullanicinin 18+ kutusunu
+  // reddetmesi. Sayfa ikisini ancak bu iki sayi kendisine ulasirsa ayirt edebilir;
+  // ulasmadigi surece herkese "en az 18 yasinda olmalisiniz" diyordu.
+  const accountAgeDays = searchParams.get("accountAgeDays");
+  const requiredDays = searchParams.get("requiredDays");
+  const policyBlockQuery =
+    accountAgeDays && requiredDays
+      ? `?accountAgeDays=${encodeURIComponent(accountAgeDays)}&requiredDays=${encodeURIComponent(requiredDays)}`
+      : "";
+
   useEffect(() => {
     if (!policyBlockRoute) return;
-    router.replace(`/${locale}${policyBlockRoute}`);
-  }, [policyBlockRoute, router, locale]);
+    router.replace(`/${locale}${policyBlockRoute}${policyBlockQuery}`);
+  }, [policyBlockRoute, policyBlockQuery, router, locale]);
 
   // success → once the token is stored, redirect into the app's return URL.
   useEffect(() => {

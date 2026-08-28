@@ -155,6 +155,8 @@
     "ageGate": {
       "title": "Yaş Gereksinimi Karşılanmıyor",
       "description": "Skinora'yı kullanmak için en az 18 yaşında olmanız gerekmektedir.",
+      "accountAgeTitle": "Steam Hesabınız Çok Yeni",
+      "accountAgeDescription": "Skinora'yı kullanmak için Steam hesabınızın en az {required} günlük olması gerekiyor. Hesabınız şu an {days} günlük — {remaining} gün sonra tekrar deneyin.",
       "backToHome": "Ana sayfaya dön"
     },
     "sanctions": {
@@ -1176,7 +1178,7 @@
       },
       "error": {
         "title": "Envanter okunamadı",
-        "message": "Steam envanteriniz şu an okunamadı. Lütfen biraz sonra tekrar deneyin. Sorun sürüyorsa Steam Community profilinizin kurulu ve envanterinizin herkese açık olduğundan emin olun — bu durumda tekrar denemek tek başına çözmez.",
+        "message": "Steam envanteriniz şu an okunamadı. Lütfen biraz sonra tekrar deneyin. Sorun sürüyorsa Steam Community profilinizin kurulu ve envanterinizin herkese açık olduğundan emin olun — bu durumda tekrar denemek tek başına çözmez. CS2'yi bu hesapta hiç çalıştırmadıysanız envanteriniz henüz oluşmamış olabilir; oyunu bir kez açmak onu oluşturur.",
         "privateTitle": "Envanteriniz gizli",
         "privateMessage": "Steam envanteriniz gizli olarak ayarlanmış. İşlem başlatmak için envanterinizi 'public' yapmalısınız."
       }
@@ -1684,7 +1686,7 @@
       "save": "Kaydet ve doğrula",
       "saving": "Doğrulanıyor…",
       "resultActive": "Takas bağlantınız kaydedildi ve Mobile Authenticator aktif olarak doğrulandı. Artık işlem başlatabilirsiniz.",
-      "resultInactive": "Takas bağlantınız kaydedildi ama Steam hesabınızda Mobile Authenticator aktif görünmüyor. Etkinleştirdikten sonra tekrar kaydedin.",
+      "resultInactive": "Takas bağlantınız kaydedildi. Ancak Steam bu hesap için takas bekletmesi bildiriyor ve bunun iki sebebi olabilir: Mobile Authenticator kurulu değil, ya da kurulalı 7 gün olmamış. Steam ikisini de aynı şekilde raporladığı için hangisi olduğunu ayırt edemiyoruz. Kuruluysa, 7 günü dolduktan sonra bu formu tekrar kaydedin.",
       "setupGuide": "Steam kurulum rehberi",
       "resultPending": "Takas bağlantınız kaydedildi ancak Steam şu anda yanıt vermediği için Mobile Authenticator doğrulanamadı. Birkaç dakika sonra tekrar kaydedin.",
       "resultInvalid": "Takas bağlantısı geçersiz. Beklenen biçim: https://steamcommunity.com/tradeoffer/new/?partner=...&token=...",
