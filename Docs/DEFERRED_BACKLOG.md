@@ -4,7 +4,9 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-08-25, WP9 — "bugün açık olan dört kalem"):** **12 aktif / 115 çözülmüş** (ölçüm komutu aşağıda). **🔴 YOK.**
+> **Durum (2026-08-28, ödeme bacağı kurulumu):** **13 aktif / 115 çözülmüş** (ölçüm komutu aşağıda — sayı dosyanın kendi `awk`'iyle türetildi, elle sayılmadı). **🔴 YOK.** Yeni satır `EnergyPerTrxAssumptionUnverified` §8'de.
+>
+> **Önceki durum (2026-08-25, WP9 — "bugün açık olan dört kalem"):** 12 aktif / 115 çözülmüş, 🔴 yok.
 >
 > **Dört kalemin üçü owner kararı bekliyordu ve karar alındıktan sonra ikisi tek oturumda kapandı.** `StubPayoutVerifier` (zincir onayladıysa otomatik çöz) · `F7Gate-EventsWithoutConsumer`'ın kalan yarısı (yeni bildirim tipi) · `AdminUsersDirectoryPermissionMismatch` (dizini görüntüleme yetkisine de aç) · `Doc12PreP2PStale` (karar gerektirmiyordu, iş gerektiriyordu).
 >
@@ -311,6 +313,7 @@
 | ✅ | TradeOfferMonitor-hotadd-T69 | **ÇÖZÜLDÜ → WP6 (resolved-by-design)** — statik pool (`BotManager` dinamik-add yok); idempotent `attachToSession` hook'u T69 dinamik pool için hazır + test edilmiş | — (statik pool'da sorun yok) |
 | ✅ | T33-SuccessRate-FractionVsPercent | **ÇÖZÜLDÜ → WP17 (no-op)** — kod (`HasPrecision(5,4)`) + 06 §3.1 + 07 örnekleri zaten fraction (0..1) üzerinde hizalı; detay §7 satırı | — |
 | ✅ | T107 | **ÇÖZÜLDÜ → F6** — E2E happy path (harness + smoke + UI), bağımsız validator PASS (PR #198); F6 Gate Check ✓ PASS | — |
+| 🟡 | EnergyPerTrxAssumptionUnverified 🆕 | Kodun enerji/TRX oranı varsayımı (200 TRX → ~16.000 Energy) ile `08 §3.3`'ün TRC-20 transfer maliyeti (~65.000 Energy) çelişiyor. Hangisinin doğru olduğu, satış başına maliyetin ~0$ mı ~10$ mı olduğunu belirliyor | Mainnet'e çıkışı |
 
 ---
 
@@ -483,6 +486,7 @@
 | ✅ | T55-DormantThresholdMandatoryUnconfigured 🆕 | **ÇÖZÜLDÜ → WP14:** 19 zorunlu ayar (gerçek sayı; "21" stale) `Docs/DEPLOY_RUNBOOK.md §A` + `.env.example`'da belgelendi. Fail-fast (06 §8.9) bilinçli olarak korundu — owner kararı seed-default DEĞİL. | `T55_REPORT.md:37` |
 | ✅ | T136-DeadRolePermissionRows | **ÇÖZÜLDÜ (ölçüldü 2026-08-25, WP5) — migration yazılmadı ve yazılmaması doğru.** Satır "kalmış **olabilir**" diyordu; ölçüm belirsizliği kaldırdı: `VIEW_STEAM_ACCOUNTS` / `MANAGE_STEAM_RECOVERY` **hiçbir migration'da seed edilmiyor** ve `PermissionCatalog`'da yok, dolayısıyla **taze bir kurulum bu satırları hiç görmez**. Yalnız T132 öncesinde bir admin tarafından elle atanmışlarsa uzun ömürlü bir dev/staging DB'sinde kalabilirler — ve T136'nın ölçtüğü gibi tuzak değiller: policy eşleşmiyor, ilk rol düzenlemesi soft-delete ediyor, FE ölü anahtarı geri yollayamıyor. Seed edilmemiş ve kendiliğinden düzelen satırlar için migration maliyeti karşılığını vermez; bunun yerine `DEPLOY_RUNBOOK §F.1` operatöre durumu ve tek adımlık çözümü (rolü bir kez kaydet) anlatıyor | T136 envanteri → ölçüm WP5 |
 | ✅ | T55-DormantThreshold | **ÇÖZÜLDÜ → WP14:** `dormant_account_value_threshold` dahil **19 zorunlu SystemSetting** (plan "21" stale — WP4a `price_deviation_threshold` + WP12 `timeout_warning_ratio` seed-default ile düştü) `Docs/DEPLOY_RUNBOOK.md §A`'da `SKINORA_SETTING_*` env listesi olarak belgelendi + `.env.example`'a eklendi. Owner kararı: seed-default DEĞİL → fail-fast bilinçli güvenlik korundu (06 §8.9 iş-kritik değerler). | — |
+| 🟡 | EnergyPerTrxAssumptionUnverified 🆕 | **Enerji/TRX oranı iki yerde farklı ve aradaki fark üretim maliyetini belirliyor.** `sidecar-blockchain/src/config/index.ts`'in `sweepEnergyDelegationSun` yorumu *"Stake 2.0 ~1 TRX delege → ~80 Energy, 200 TRX tek sweep/refund'ü rahat karşılar"* diyor; `08 §3.3` tablosu bir TRC-20 transferini **~65.000 Energy** sayıyor. 200 × 80 = **16.000**, yani gerekenin dörtte biri. İkisi aynı anda doğru olamaz — ya oran ağ koşuluna göre değişiyor (o zaman sabit 200 TRX yanlış varsayım), ya rakamlardan biri bayat. **Neden önemli:** oran yetmezse her sweep `sweepTrxFallbackSun` (15 TRX) yakma yoluna düşer; kilitleme modelinde satış başına ~0$ olan maliyet yakma yolunda ~30 TRX ≈ ~10$ olur (TRX 0,34$, 2026-08-28). **Ölçüm yolu:** Nile'da tek bir sweep koşup 200 TRX delegasyonunun kaç Energy ürettiğini ve transferin kaç Energy harcadığını okumak. **Doğrulanmadan mainnet'e çıkılmamalı.** | Ödeme bacağı kurulumu 2026-08-28 |
 
 ---
 
