@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
@@ -8,6 +9,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
@@ -76,6 +78,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             _outbox,
             _timeoutScheduling,
             _clock,
+            Options.Create(new StablecoinContractOptions()),
             NullLogger<AmountValidationService>.Instance);
     }
 

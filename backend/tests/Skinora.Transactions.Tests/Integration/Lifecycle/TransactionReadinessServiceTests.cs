@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Domain;
@@ -12,6 +13,7 @@ using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Application.Settings;
@@ -690,6 +692,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
             _tradeHold,
             new TimeoutSchedulingService(Context, _scheduler, _clock),
             _outbox,
+            Options.Create(new StablecoinContractOptions()),
             NullLogger<TransactionReadinessService>.Instance,
             _clock);
 

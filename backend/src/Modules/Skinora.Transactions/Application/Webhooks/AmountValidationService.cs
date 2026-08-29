@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -8,6 +9,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -24,6 +26,7 @@ public sealed class AmountValidationService : IAmountValidationService
     private readonly IOutboxService _outbox;
     private readonly ITimeoutSchedulingService _timeoutScheduling;
     private readonly TimeProvider _clock;
+    private readonly StablecoinContractOptions _contracts;
     private readonly ILogger<AmountValidationService> _logger;
 
     public AmountValidationService(
@@ -34,6 +37,7 @@ public sealed class AmountValidationService : IAmountValidationService
         IOutboxService outbox,
         ITimeoutSchedulingService timeoutScheduling,
         TimeProvider clock,
+        IOptions<StablecoinContractOptions> contracts,
         ILogger<AmountValidationService> logger)
     {
         _db = db;
@@ -43,6 +47,7 @@ public sealed class AmountValidationService : IAmountValidationService
         _outbox = outbox;
         _timeoutScheduling = timeoutScheduling;
         _clock = clock;
+        _contracts = contracts.Value;
         _logger = logger;
     }
 
@@ -624,31 +629,35 @@ public sealed class AmountValidationService : IAmountValidationService
             ? Task.FromResult<PaymentAddress?>(null)
             : _db.Set<PaymentAddress>().FirstOrDefaultAsync(p => p.Id == id.Value, cancellationToken);
 
-    // Allowlist resolution mirrors the sidecar's classifyToken (T71 — 08 §3.4).
-    // Backend uses contract-address equality without case-folding because Tron
-    // addresses ship as case-sensitive base58 (T70 derivation).
-    private static StablecoinType? ResolveStablecoinByContract(string? contractAddress)
-    {
-        if (string.IsNullOrWhiteSpace(contractAddress)) return null;
-        if (contractAddress.Equals(KnownStablecoinContracts.Usdt, StringComparison.Ordinal))
-            return StablecoinType.USDT;
-        if (contractAddress.Equals(KnownStablecoinContracts.Usdc, StringComparison.Ordinal))
-            return StablecoinType.USDC;
-        return null;
-    }
+    // Allowlist resolution mirrors the sidecar's classifyToken (T71 — 08 §3.4),
+    // including the network the deployment actually watches: resolving against
+    // the mainnet constants on a testnet made every real deposit look like an
+    // unknown token. See StablecoinContractOptions.
+    private StablecoinType? ResolveStablecoinByContract(string? contractAddress) =>
+        _contracts.ResolveByContract(contractAddress);
 }
 
 /// <summary>
-/// MVP allowlist of TRC-20 stablecoin contract addresses (08 §3.3). Mirrors
-/// the sidecar's <c>STABLECOIN_CONTRACTS_*</c> env block; kept in code on the
-/// backend side because the sidecar is the authoritative source and a
-/// migration round-trip is overkill for two constants.
+/// <b>Mainnet</b> TRC-20 stablecoin contract addresses (08 §3.3) — the
+/// defaults behind
+/// <see cref="Skinora.Transactions.Application.PaymentAddresses.StablecoinContractOptions"/>.
 /// </summary>
 /// <remarks>
-/// If the sidecar config diverges from these constants the validator path
-/// degrades safely — unknown contract addresses fall back to <c>USDT</c>
-/// rather than crashing, and the row's <c>ActualTokenAddress</c> already
-/// carries the raw contract for downstream investigation.
+/// <para>
+/// Resolve contracts through <c>StablecoinContractOptions</c>, not through
+/// these constants: a deployment pointed at a testnet overrides them, and
+/// reading them directly reintroduces the mainnet/testnet split that routed
+/// real deposits to auto-refund. They remain public because they are the
+/// mainnet source of truth and the fallback the options class applies when no
+/// address is configured.
+/// </para>
+/// <para>
+/// If the sidecar config diverges from the resolved address the validator path
+/// degrades safely — unknown contract addresses resolve to <c>null</c> and are
+/// treated as spam rather than crashing, and the row's
+/// <c>ActualTokenAddress</c> already carries the raw contract for downstream
+/// investigation.
+/// </para>
 /// </remarks>
 public static class KnownStablecoinContracts
 {

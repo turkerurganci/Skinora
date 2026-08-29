@@ -217,6 +217,14 @@ public static class TransactionsModule
         services.Configure<BlockchainSidecarOptions>(
             configuration.GetSection(BlockchainSidecarOptions.SectionName));
 
+        // TRC-20 contract addresses for the network this deployment watches
+        // (08 §3.3). Unset means mainnet; a testnet deployment must set these
+        // to the same addresses the sidecar reads from TRON_USDT_CONTRACT /
+        // TRON_USDC_CONTRACT, or the monitor is armed with an expectedContract
+        // the sidecar will classify as wrong_token.
+        services.Configure<StablecoinContractOptions>(
+            configuration.GetSection(StablecoinContractOptions.SectionName));
+
         services.AddHttpClient<HttpBlockchainSidecarClient>(
             HttpBlockchainSidecarClient.HttpClientName,
             (sp, client) =>

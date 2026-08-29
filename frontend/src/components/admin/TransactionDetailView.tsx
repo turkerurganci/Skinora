@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { StatusBadge } from "@/components/common";
 import type { ExtendedStatus } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
+import { tronscanTxUrl } from "@/lib/utils/blockchain";
 import { EmergencyHoldReleaseAction, TransactionStatus } from "@/types/enums";
 import type { AdminTransactionDetail, AdminTransactionParty } from "@/lib/api/admin";
 import { useApproveFlag, useRejectFlag } from "@/lib/hooks/useAdminFlagMutations";
@@ -23,7 +24,6 @@ import {
 const CANCEL_REASON_MIN = 10;
 const HOLD_REASON_MIN = 10;
 const RELEASE_NOTE_MIN = 1;
-const TRONSCAN_TX = "https://tronscan.org/#/transaction/";
 
 const TERMINAL_STATES: ReadonlySet<TransactionStatus> = new Set([
   TransactionStatus.COMPLETED,
@@ -70,7 +70,7 @@ function DescRow({ label, value }: { label: string; value: ReactNode }) {
 function TxHashLink({ hash }: { hash: string }) {
   return (
     <a
-      href={`${TRONSCAN_TX}${hash}`}
+      href={tronscanTxUrl(hash)}
       target="_blank"
       rel="noopener noreferrer"
       className="break-all font-mono text-xs text-blue-600 hover:text-blue-700"

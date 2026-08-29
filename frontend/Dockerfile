@@ -9,6 +9,15 @@ FROM node:20-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so a
+# runtime environment variable on the container never reaches the browser. The
+# explorer host has to be a build arg or every non-mainnet deployment links
+# transaction hashes to tronscan.org while the chain is a testnet. Empty falls
+# back to the mainnet default in src/lib/utils/blockchain.ts.
+ARG NEXT_PUBLIC_TRONSCAN_TX_BASE_URL
+ENV NEXT_PUBLIC_TRONSCAN_TX_BASE_URL=${NEXT_PUBLIC_TRONSCAN_TX_BASE_URL}
+
 RUN npm run build
 
 # Stage 3: Production

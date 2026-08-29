@@ -66,6 +66,12 @@ services:
       - SteamSidecar__InternalKey=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
       - BlockchainSidecar__InternalKey=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
+      # TRC-20 contracts the backend arms the payment monitor with. Same two
+      # values the sidecar reads below — they MUST agree, or the sidecar
+      # classifies a real deposit as wrong_token and auto-refunds it. Empty
+      # falls back to the mainnet constants (08 §3.3).
+      - StablecoinContracts__Usdt=${TRON_USDT_CONTRACT:-}
+      - StablecoinContracts__Usdc=${TRON_USDC_CONTRACT:-}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}
@@ -121,16 +127,23 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* must be passed HERE, not under `environment` — Next.js
+        # inlines them into the client bundle at build time. Empty keeps the
+        # mainnet default; set TRONSCAN_TX_BASE_URL on a testnet deployment
+        # (e.g. https://nile.tronscan.org/#/transaction/) or every explorer
+        # link points at a chain the deployment is not watching.
+        - NEXT_PUBLIC_TRONSCAN_TX_BASE_URL=${TRONSCAN_TX_BASE_URL:-}
     container_name: skinora-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      # NOTE: NEXT_PUBLIC_* are inlined by Next.js at BUILD time and this
-      # Dockerfile takes no build args, so this line does NOT reach the browser
-      # bundle. The image ships with the same-origin defaults ("/api/v1",
-      # "/hubs") which is exactly right behind nginx. Kept for parity with a
-      # future split-origin build; change the image, not this line.
+      # NOTE: NEXT_PUBLIC_* are inlined by Next.js at BUILD time, so this line
+      # does NOT reach the browser bundle — pass such values under `build.args`
+      # above instead. The image ships with the same-origin defaults
+      # ("/api/v1", "/hubs") which is exactly right behind nginx. Kept for
+      # parity with a future split-origin build; change the image, not this line.
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
     depends_on:
       skinora-backend:
