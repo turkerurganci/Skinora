@@ -5,8 +5,9 @@ namespace Skinora.Transactions.Tests.Unit.Lifecycle;
 /// <summary>
 /// Unit coverage for <see cref="TransactionParamsService"/> using a stub
 /// <see cref="ITransactionLimitsProvider"/>. Verifies storage minutes are
-/// converted to display hours via integer division and that documented
-/// defaults kick in for unconfigured settings (07 §7.4).
+/// projected onto whole display hours without ever offering an hour the
+/// creation endpoint would reject, and that documented defaults kick in for
+/// unconfigured settings (07 §7.4).
 /// </summary>
 public class TransactionParamsServiceTests
 {
@@ -70,15 +71,17 @@ public class TransactionParamsServiceTests
     }
 
     [Fact]
-    public async Task Converts_Minutes_To_Hours_Via_Integer_Division()
+    public async Task Rounds_Sub_Hour_Window_Inward_Instead_Of_Truncating_To_Zero()
     {
-        // 90 minutes → 1 hour (integer divide rounds toward zero, matches
-        // the ParamsService doc: admins set whole-hour values).
+        // The seeded values (SystemSettingSeed rows 3-5). Truncating toward
+        // zero published min 0 / default 0 / max 1, so the wizard pre-selected
+        // "0 hours" and treated it as valid while TransactionCreationService
+        // rejected the submission with TimeoutOutOfRange (0 < 15).
         var provider = new StubLimitsProvider(new TransactionLimits(
             null, null, null, null, null,
-            PaymentTimeoutMinMinutes: 90,
-            PaymentTimeoutMaxMinutes: 119,
-            PaymentTimeoutDefaultMinutes: 60,
+            PaymentTimeoutMinMinutes: 15,
+            PaymentTimeoutMaxMinutes: 60,
+            PaymentTimeoutDefaultMinutes: 30,
             null, null, null, false));
         var sut = new TransactionParamsService(provider);
 
@@ -87,6 +90,39 @@ public class TransactionParamsServiceTests
         Assert.Equal(1, dto.PaymentTimeout.MinHours);
         Assert.Equal(1, dto.PaymentTimeout.MaxHours);
         Assert.Equal(1, dto.PaymentTimeout.DefaultHours);
+    }
+
+    [Theory]
+    // Every hour the form offers must satisfy min <= hour*60 <= max, which is
+    // the exact predicate TransactionCreationService re-checks on submit.
+    [InlineData(15, 60, 30)]
+    [InlineData(6 * 60, 72 * 60, 24 * 60)]
+    [InlineData(45, 200, 90)]
+    [InlineData(60, 60, 60)]
+    public async Task Every_Offered_Hour_Is_Accepted_By_The_Creation_Endpoint(
+        int minMinutes,
+        int maxMinutes,
+        int defaultMinutes)
+    {
+        var provider = new StubLimitsProvider(new TransactionLimits(
+            null, null, null, null, null,
+            PaymentTimeoutMinMinutes: minMinutes,
+            PaymentTimeoutMaxMinutes: maxMinutes,
+            PaymentTimeoutDefaultMinutes: defaultMinutes,
+            null, null, null, false));
+        var sut = new TransactionParamsService(provider);
+
+        var dto = await sut.GetAsync(CancellationToken.None);
+        var window = dto.PaymentTimeout;
+
+        Assert.True(window.MinHours <= window.MaxHours, "window must not be empty");
+        Assert.InRange(window.DefaultHours, window.MinHours, window.MaxHours);
+
+        // Step2Details.tsx builds its dropdown as [minHours..maxHours].
+        for (var hour = window.MinHours; hour <= window.MaxHours; hour++)
+        {
+            Assert.InRange(hour * 60, minMinutes, maxMinutes);
+        }
     }
 
     private sealed class StubLimitsProvider : ITransactionLimitsProvider

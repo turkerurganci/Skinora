@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
-using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PaymentMonitoring;
@@ -191,15 +191,18 @@ public sealed class EnsurePaymentMonitorJob
 
     private readonly AppDbContext _db;
     private readonly IBlockchainSidecarClient _sidecar;
+    private readonly StablecoinContractOptions _contracts;
     private readonly ILogger<EnsurePaymentMonitorJob> _logger;
 
     public EnsurePaymentMonitorJob(
         AppDbContext db,
         IBlockchainSidecarClient sidecar,
+        IOptions<StablecoinContractOptions> contracts,
         ILogger<EnsurePaymentMonitorJob> logger)
     {
         _db = db;
         _sidecar = sidecar;
+        _contracts = contracts.Value;
         _logger = logger;
     }
 
@@ -288,7 +291,7 @@ public sealed class EnsurePaymentMonitorJob
 
                 if (action == PaymentMonitorAction.Arm)
                 {
-                    var contract = KnownStablecoinContracts.ResolveContractAddress(
+                    var contract = _contracts.ResolveContractAddress(
                         candidate.Address.ExpectedToken);
                     var startStatus = await _sidecar.StartMonitoringAsync(
                         new PaymentMonitorStartRequest(

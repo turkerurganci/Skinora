@@ -1,15 +1,16 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
-using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Settings;
@@ -39,6 +40,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
     private readonly ITradeHoldChecker _tradeHoldChecker;
     private readonly ITimeoutSchedulingService _timeouts;
     private readonly IOutboxService _outbox;
+    private readonly StablecoinContractOptions _contracts;
     private readonly ILogger<TransactionReadinessService> _logger;
     private readonly TimeProvider _clock;
 
@@ -49,6 +51,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         ITradeHoldChecker tradeHoldChecker,
         ITimeoutSchedulingService timeouts,
         IOutboxService outbox,
+        IOptions<StablecoinContractOptions> contracts,
         ILogger<TransactionReadinessService> logger,
         TimeProvider clock)
     {
@@ -58,6 +61,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         _tradeHoldChecker = tradeHoldChecker;
         _timeouts = timeouts;
         _outbox = outbox;
+        _contracts = contracts.Value;
         _logger = logger;
         _clock = clock;
     }
@@ -326,7 +330,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
                     PaymentAddressId: paymentAddress.Id,
                     Address: paymentAddress.Address,
                     ExpectedToken: paymentAddress.ExpectedToken,
-                    ExpectedContractAddress: KnownStablecoinContracts
+                    ExpectedContractAddress: _contracts
                         .ResolveContractAddress(paymentAddress.ExpectedToken),
                     OccurredAt: nowUtc),
                 cancellationToken);

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
@@ -338,7 +339,8 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private EnsurePaymentMonitorJob BuildSut()
-        => new(Context, _sidecar, NullLogger<EnsurePaymentMonitorJob>.Instance);
+        => new(Context, _sidecar, Options.Create(new StablecoinContractOptions()),
+            NullLogger<EnsurePaymentMonitorJob>.Instance);
 
     private async Task<MonitoringStatus> ReadStatusAsync(Guid paymentAddressId)
         => (await Context.Set<PaymentAddress>()

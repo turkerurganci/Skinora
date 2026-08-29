@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
-using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PostCancel;
@@ -71,6 +71,8 @@ public sealed class PostCancelMonitorRecoveryHook : IHostedService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var sidecar = scope.ServiceProvider.GetRequiredService<IBlockchainSidecarClient>();
+        var contracts = scope.ServiceProvider
+            .GetRequiredService<IOptions<StablecoinContractOptions>>().Value;
 
         var addresses = await db.Set<PaymentAddress>()
             .AsNoTracking()
@@ -100,7 +102,7 @@ public sealed class PostCancelMonitorRecoveryHook : IHostedService
             }
 
             var cancelledAt = address.MonitoringExpiresAt.Value - WindowFor(address.MonitoringStatus);
-            var contract = KnownStablecoinContracts.ResolveContractAddress(address.ExpectedToken);
+            var contract = contracts.ResolveContractAddress(address.ExpectedToken);
             var status = await sidecar.StartPostCancelMonitoringAsync(
                 new PostCancelMonitorStartRequest(
                     Address: address.Address,

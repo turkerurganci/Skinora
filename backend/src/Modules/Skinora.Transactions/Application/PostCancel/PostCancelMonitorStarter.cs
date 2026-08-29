@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
-using Skinora.Transactions.Application.Webhooks;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PostCancel;
@@ -21,15 +22,18 @@ public sealed class PostCancelMonitorStarter : IPostCancelMonitorStarter
 
     private readonly AppDbContext _db;
     private readonly IOutboxService _outbox;
+    private readonly StablecoinContractOptions _contracts;
     private readonly ILogger<PostCancelMonitorStarter> _logger;
 
     public PostCancelMonitorStarter(
         AppDbContext db,
         IOutboxService outbox,
+        IOptions<StablecoinContractOptions> contracts,
         ILogger<PostCancelMonitorStarter> logger)
     {
         _db = db;
         _outbox = outbox;
+        _contracts = contracts.Value;
         _logger = logger;
     }
 
@@ -72,7 +76,7 @@ public sealed class PostCancelMonitorStarter : IPostCancelMonitorStarter
         paymentAddress.MonitoringStatus = MonitoringStatus.POST_CANCEL_24H;
         paymentAddress.MonitoringExpiresAt = cancelledAt + InitialWindow;
 
-        var contract = KnownStablecoinContracts.ResolveContractAddress(paymentAddress.ExpectedToken);
+        var contract = _contracts.ResolveContractAddress(paymentAddress.ExpectedToken);
 
         await _outbox.PublishAsync(
             new PostCancelMonitorStartRequestedEvent(

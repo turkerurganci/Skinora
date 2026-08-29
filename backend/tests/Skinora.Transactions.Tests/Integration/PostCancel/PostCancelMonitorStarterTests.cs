@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -7,6 +8,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.PostCancel;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -132,8 +134,28 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
         Assert.Equal("TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", evt.ExpectedContractAddress);
     }
 
-    private PostCancelMonitorStarter BuildSut()
-        => new(Context, _outbox, NullLogger<PostCancelMonitorStarter>.Instance);
+    [Fact]
+    public async Task RequestStart_ArmsWithTheConfiguredNetworksContract()
+    {
+        // The sidecar compares an incoming transfer against this exact string.
+        // While it was read from the mainnet constants regardless of network, a
+        // testnet deposit could never match it and was auto-refunded as
+        // wrong_token — so this asserts the address travels from configuration
+        // all the way into the event, not just that some address does.
+        const string nileUsdt = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf";
+        var tx = await CreateTransactionWithPaymentAddressAsync(MonitoringStatus.ACTIVE, StablecoinType.USDT);
+        var cancelledAt = new DateTime(2026, 5, 17, 12, 0, 0, DateTimeKind.Utc);
+
+        var sut = BuildSut(new StablecoinContractOptions { Usdt = nileUsdt });
+        await sut.RequestStartAsync(tx.Id, cancelledAt, CancellationToken.None);
+
+        var evt = Assert.IsType<PostCancelMonitorStartRequestedEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(nileUsdt, evt.ExpectedContractAddress);
+    }
+
+    private PostCancelMonitorStarter BuildSut(StablecoinContractOptions? contracts = null)
+        => new(Context, _outbox, Options.Create(contracts ?? new StablecoinContractOptions()),
+            NullLogger<PostCancelMonitorStarter>.Instance);
 
     private sealed class RecordingOutboxService : IOutboxService
     {

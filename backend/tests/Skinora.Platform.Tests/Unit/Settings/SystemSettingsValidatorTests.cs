@@ -174,6 +174,38 @@ public class SystemSettingsValidatorTests
     }
 
     [Fact]
+    public void ValidateCrossKey_PaymentTimeout_WindowWithoutAWholeHour_Fails()
+    {
+        // 90..119 minutes is individually valid (min < max, default in range)
+        // but contains no whole hour, and GET /transactions/params publishes
+        // the window in hours — the wizard could only ever offer a value the
+        // creation endpoint rejects.
+        var snapshot = new Dictionary<string, string?>
+        {
+            ["payment_timeout_min_minutes"] = "90",
+            ["payment_timeout_max_minutes"] = "119",
+            ["payment_timeout_default_minutes"] = "100",
+        };
+        var result = _v.ValidateCrossKey(snapshot);
+        Assert.False(result.IsValid);
+        Assert.Contains("whole hour", result.ErrorMessage);
+    }
+
+    [Fact]
+    public void ValidateCrossKey_PaymentTimeout_SeededSubHourWindow_Passes()
+    {
+        // The seeded 15/30/60 window is narrower than two hours but still
+        // contains exactly one (60 minutes), so it must remain configurable.
+        var snapshot = new Dictionary<string, string?>
+        {
+            ["payment_timeout_min_minutes"] = "15",
+            ["payment_timeout_max_minutes"] = "60",
+            ["payment_timeout_default_minutes"] = "30",
+        };
+        Assert.True(_v.ValidateCrossKey(snapshot).IsValid);
+    }
+
+    [Fact]
     public void ValidateCrossKey_Monitoring_24h_Lt_7d_Lt_30d()
     {
         var snapshot = new Dictionary<string, string?>

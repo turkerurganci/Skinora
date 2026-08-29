@@ -104,6 +104,23 @@ public sealed class SystemSettingsValidator
                 "payment_timeout_default_minutes must be within [payment_timeout_min_minutes, payment_timeout_max_minutes].");
         }
 
+        // The payment-timeout window must contain at least one whole hour.
+        // GET /transactions/params publishes this window in hours (07 §7.4) and
+        // the wizard only offers whole-hour values, so a window with no whole
+        // hour inside it (e.g. 90–119 minutes) leaves the form unable to offer
+        // anything the creation endpoint will accept — every submission fails
+        // with TimeoutOutOfRange no matter what the seller picks. Rejecting the
+        // configuration is the only place this can be caught before a user hits
+        // it, because both halves are individually valid.
+        if (TryReadInt(snapshot, "payment_timeout_min_minutes", out var hmin) &&
+            TryReadInt(snapshot, "payment_timeout_max_minutes", out var hmax) &&
+            (hmax / 60) < ((hmin + 59) / 60))
+        {
+            return ValidationResult.Fail(
+                "payment_timeout_min_minutes..payment_timeout_max_minutes must contain at least "
+                + "one whole hour — the transaction form offers whole hours only.");
+        }
+
         // Monitoring 24h < 7d < 30d (06 §3.17 — logical order)
         if (TryReadInt(snapshot, "monitoring_post_cancel_24h_polling_seconds", out var p24) &&
             TryReadInt(snapshot, "monitoring_post_cancel_7d_polling_seconds", out var p7) &&
