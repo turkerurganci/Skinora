@@ -136,9 +136,11 @@ groups:
             datasourceUid: prometheus
             model:
               expr: |
-                sum(rate(http_requests_received_total{code=~"5.."}[5m]))
-                /
-                sum(rate(http_requests_received_total[5m]))
+                (
+                  sum(rate(http_requests_received_total{code=~"5.."}[5m]))
+                  /
+                  sum(rate(http_requests_received_total[5m]))
+                ) or vector(0)
               instant: true
               refId: A
           - refId: C
@@ -213,7 +215,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: sum(rate(skinora_steam_api_errors_total[5m]))
+              expr: sum(rate(skinora_steam_api_errors_total[5m])) or vector(0)
               instant: true
               refId: A
           - refId: C
@@ -250,7 +252,7 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
-              expr: sum(rate(skinora_blockchain_tron_api_errors_total[5m]))
+              expr: sum(rate(skinora_blockchain_tron_api_errors_total[5m])) or vector(0)
               instant: true
               refId: A
           - refId: C
@@ -276,3 +278,70 @@ groups:
         annotations:
           summary: TronGrid API error rate elevated
           description: TronGrid API errors are occurring at more than 0.1/s for the last 5 minutes.
+
+      # T139 — TronGrid kota reddi (DEFERRED_BACKLOG → T139-ActiveMonitorQuotaAlarm).
+      #
+      # Neden bu kural var: D3 ödeme penceresini sweep'e kadar açık tutuyor ve
+      # sweep `payout_settlement_days`'in 7 günlük sert tabanından önce
+      # kuyruklanamıyor, dolayısıyla eşzamanlı izleyici sayısı iki saatlik değil
+      # BİR HAFTALIK işlem hacmiyle ölçekleniyor (08 §3.4, T139 doğrulaması N1).
+      # Her izleyici her tick'te (3 sn) TronGrid'e sorgu üretiyor, yani istek
+      # hacmi izleyici sayısıyla doğrusal artıyor.
+      #
+      # Neden eşik "izleyici sayısı" DEĞİL: sayı eşiği ancak sağlayıcının istek
+      # bütçesi bilinirse yazılabilir ve TronGrid bu bütçeyi yanıt başlığında
+      # DÖNDÜRMÜYOR (2026-08-29'da canlı ölçüldü: Nile 200 dönüyor, rate/quota
+      # başlığı yok). Bütçeyi varsaymak, ölçülmemiş bir sayıyla kurulmuş sahte
+      # bir bekçi olurdu — bu projenin tekrar eden kusur ailesi. Bunun yerine
+      # kural, kotanın DOLDUĞUNU doğrudan gözleyen sinyale bağlandı: TronGrid'in
+      # kendi 429'u. İzleyici sayısına dayalı ÖNLEYİCİ eşik kapasite
+      # planlamasına ait ve backlog satırında açık kalıyor.
+      #
+      # `skinora_blockchain_active_monitors` gauge'u bu kuralın sayısal
+      # bağlamıdır (integration-metrics paneli çiziyor): alarm ateşlediğinde
+      # bakılacak ilk yer o paneldir.
+      - uid: tron-quota-rejections
+        title: TronGrid Quota Rejections
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              # `or vector(0)`: sayaç hiç artmadıysa seri YOKTUR ve kural
+              # NoData'ya düşer — "hiç 429 yok" ile "metrik hiç gelmiyor" aynı
+              # görünür. Sıfır serisi kuralı gerçekten değerlendirilebilir yapar;
+              # exporter'ın kendisi düşerse `blockchain-sidecar-down` yakalar.
+              expr: sum(rate(skinora_blockchain_tron_api_errors_total{error_type="http_429"}[5m])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: TronGrid is rejecting requests with 429 (quota)
+          description: >-
+            The blockchain sidecar has been receiving HTTP 429 from TronGrid for
+            more than 2 minutes. Payment detection polls every 3s per monitored
+            address, so quota exhaustion silently delays or stops deposit
+            detection. Check skinora_blockchain_active_monitors for the current
+            concurrent-monitor count and the TronGrid plan's request budget.

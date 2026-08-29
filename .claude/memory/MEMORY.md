@@ -5,8 +5,18 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-08-29 — prova provası koşuldu, backlog 15 aktif / 118 çözülmüş, 🔴 yok)
+## Current Status (2026-08-29 — T139 alarm turu, backlog 15 aktif / 119 çözülmüş, 🔴 yok)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **T139 alarm turu (2026-08-29, günün üçüncü turu)** ✓ **Kapandı.** `T139-ActiveMonitorQuotaAlarm` **daraltıldı**, backlog **15 aktif / 119 çözülmüş**.
+>
+> **Kurulan yarı:** `tron-quota-rejections` — `sum(rate(skinora_blockchain_tron_api_errors_total{error_type="http_429"}[5m])) > 0`, `for: 2m`, severity `critical`. Kotanın **fiilen** dolduğunun doğrudan kanıtı TronGrid'in kendi 429'udur ve bu hiçbir dış varsayım gerektirmez.
+>
+> **Kurulmayan yarı ve sebebi (asıl karar bu):** izleyici **sayısına** dayalı önleyici eşik yazılmadı. Eşik sağlayıcının istek bütçesini gerektirir ve **TronGrid bu bütçeyi yanıt başlığında döndürmüyor** — canlı probe ile ölçüldü (Nile `trc20` ucu 200 dönüyor, hiçbir rate/quota başlığı yok). Bütçeyi varsayarak yazılan bir eşik, **kurulduğu gün ölü doğan bir bekçi** olurdu; tam olarak `GrafanaAlertRulesNeverEvaluated` ve `SidecarHealthChecksArePlacebo`'nun ailesi. Eşik kapasite planlamasına ait kalıyor ([[feedback_check_external_assumptions]]).
+>
+> **Aynı turda ikinci katman bulundu ve kapatıldı** (`GrafanaCounterRulesNoData` ✅). #307 alarmları canlandırdıktan sonra ilk kez gerçek değerlendirme sonuçları okunabildi ve üç kural `health: nodata` döndü: bir sayaç **hiç artmadıysa serisi yoktur**, `sum(rate(x[5m]))` boş küme döndürür, kural karar veremez — yani *"hiç hata yok"* ile *"metrik hiç gelmiyor"* **aynı görünüyordu**. `or vector(0)` ile kapandı; maskeleme riski yok, exporter düşerse `up` sıfırlanır ve `*-down` kuralları yakalar. **İlk katmanda kural hiç koşmuyordu; ikinci katmanda koşuyor ama hiçbir zaman karar veremiyordu.**
+>
+> **Canlı doğrulama (kanıt, "healthy" değil):** Grafana yeniden kuruldu, `/api/prometheus/grafana/api/v1/rules` → **8/8 kural `health: ok`, hepsi `inactive`**. Projenin alarm katmanı ilk kez uçtan uca çalışır durumda **ölçüldü**. Ölçüm sırasında bir tuzak daha görüldü ve kayda geçti: `health` alanı kural bir sonraki değerlendirme turunu geçene kadar **eski değerini taşır** — düzeltmeden hemen sonra bakan biri "düzelmedi" sanır (üç kural sırayla 13:37 → 13:39 turunda `ok`'e döndü).
 
 > **Prova provası (2026-08-29, aynı günün ikinci turu)** ✓ **Kapandı.** Stack `main` `2e4c59c`'ye taşındı ve `DEPLOY_RUNBOOK §G.4` kontrolleri 1–9 koşuldu. Backlog **14 → 15 aktif / 118 çözülmüş**, 🔴 yok. **Turun ürünü provayı kurtaran iki ölçüm ve bir kayıt:**
 >
