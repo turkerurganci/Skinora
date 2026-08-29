@@ -3,6 +3,9 @@ apiVersion: 1
 
 datasources:
   - name: Loki
+    # Pinned for the same reason as Prometheus: a provisioned uid is the only
+    # stable handle a rule or dashboard can reference across a re-provision.
+    uid: loki
     type: loki
     access: proxy
     url: http://skinora-loki:3100

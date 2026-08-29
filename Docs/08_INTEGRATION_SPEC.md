@@ -453,10 +453,15 @@ function transfer(address to, uint256 value) returns (bool)
 
 **Energy ve Bandwidth gereksinimleri:**
 
-| İşlem | Tahmini Energy | Tahmini TRX maliyeti (Energy yoksa) |
-|-------|---------------|--------------------------------------|
-| TRC-20 transfer | ~65.000 Energy | ~13-15 TRX |
+| İşlem | Energy | TRX maliyeti (Energy yoksa) |
+|-------|--------|------------------------------|
+| TRC-20 transfer — **alıcının o token'da bakiyesi VAR** | **64.285** (ölçüldü) | ~6,4 TRX |
+| TRC-20 transfer — **alıcı o token'ı ilk kez alıyor** | **130.285** (ölçüldü) | ~13,0 TRX |
 | TRX transfer | Energy gerekmez | ~0.1 TRX (sadece bandwidth) |
+
+> **Ölçüm (2026-08-29), tahmin değil.** `POST /wallet/triggerconstantcontract` ile mainnet Tether kontratına `transfer(address,uint256)` simüle edildi (broadcast yok); dönen `energy_used` değerleri yukarıdaki tablo. Eski "~65.000 / ~13-15 TRX" satırı **doğruydu ama eksikti** — yalnız birinci kolu anlatıyor, sıfır bakiyeli alıcı kolu iki katı ve tabloda hiç yoktu. TRX karşılığı `getchainparameters` → `getEnergyFee = 100` SUN/Energy üzerinden.
+>
+> **Enerji kilitleme oranı ağ genelinde bir değerdir ve sabit değildir:** `TotalEnergyLimit / TotalEnergyWeight`. Aynı gün mainnet'te **~9,57 Energy / kilitlenen TRX**, Nile'da **~73,8**. Yani sidecar'ın 200 TRX'lik delegasyon varsayılanı mainnet'te bir transferin **~%3'ünü** karşılar (Nile'da neredeyse tamamını) — testnet provası bu kusuru **gizler**. Eşiğin belirlenmesi `DEFERRED_BACKLOG` → `EnergyPerTrxAssumptionUnverified`.
 
 **Hot wallet TRX bakiyesi:**
 
