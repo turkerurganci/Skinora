@@ -84,10 +84,22 @@ export const config = {
 
   // Energy delegation amounts — 08 §3.3 (T74). Both values are in SUN
   // (1 TRX = 1_000_000 SUN). Admin can override via SystemSetting at the
-  // backend layer; sidecar reads from env at startup. Defaults follow
-  // 08 §3.3 ("TRC-20 transfer ~65.000 Energy"), with headroom — Stake 2.0
-  // converts ~1 TRX delegated to ~80 Energy on mainnet, so 200 TRX
-  // comfortably covers a single sweep / refund.
+  // backend layer; sidecar reads from env at startup.
+  //
+  // WARNING — the 200 TRX default does NOT cover a mainnet sweep. Measured
+  // 2026-08-29 from the chain, not estimated:
+  //   mainnet  TotalEnergyLimit / TotalEnergyWeight = 180e9 / 18.81e9
+  //            = ~9.57 Energy per staked TRX  →  200 TRX = ~1,914 Energy
+  //   nile     180e9 / 2.44e9 = ~73.8 Energy per TRX  →  200 TRX = ~14,753
+  // A TRC-20 transfer costs ~64,285 Energy (triggerconstantcontract against
+  // mainnet Tether, recipient holding a balance) and ~130,285 to a recipient
+  // with none. So 200 TRX buys ~3% of one mainnet sweep, and every sweep
+  // falls through to sweepTrxFallbackSun and burns TRX instead.
+  //
+  // The ratio is a NETWORK-WIDE value that moves with total staked TRX, so it
+  // cannot stay a constant here. This default happens to be close to the Nile
+  // ratio, which is why a testnet rehearsal will look fine and mainnet will
+  // not. Sizing this properly is DEFERRED_BACKLOG "EnergyPerTrxAssumptionUnverified".
   sweepEnergyDelegationSun: parseInt(process.env.SWEEP_ENERGY_DELEGATION_SUN || '200000000', 10),
   sweepTrxFallbackSun: parseInt(process.env.SWEEP_TRX_FALLBACK_SUN || '15000000', 10),
 

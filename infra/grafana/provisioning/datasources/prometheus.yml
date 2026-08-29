@@ -3,6 +3,12 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+    # REQUIRED, not cosmetic: alerting/rules.yml addresses this datasource as
+    # `datasourceUid: prometheus`. Without an explicit uid Grafana assigns a
+    # random one at provisioning time, the reference resolves to nothing, and
+    # EVERY alert rule dies with "failed to build query 'A': data source not
+    # found" — the rules exist, fire nothing, and look configured from the UI.
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://skinora-prometheus:9090
