@@ -5,8 +5,18 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-08-29 — prova hazırlık turu kapandı, backlog 14 aktif / 118 çözülmüş, 🔴 yok)
+## Current Status (2026-08-29 — prova provası koşuldu, backlog 15 aktif / 118 çözülmüş, 🔴 yok)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **Prova provası (2026-08-29, aynı günün ikinci turu)** ✓ **Kapandı.** Stack `main` `2e4c59c`'ye taşındı ve `DEPLOY_RUNBOOK §G.4` kontrolleri 1–9 koşuldu. Backlog **14 → 15 aktif / 118 çözülmüş**, 🔴 yok. **Turun ürünü provayı kurtaran iki ölçüm ve bir kayıt:**
+>
+> **(1) Satıcının ödeme adresi 24 saatlik bir ZAMAN kapısıdır.** `POST /transactions` önce `SELLER_WALLET_ADDRESS_MISSING` (422) döndü; `PUT /users/me/wallet/seller` ile adres yazılınca kapı **`PAYOUT_ADDRESS_COOLDOWN_ACTIVE`**'e döndü (`wallet.payout_address_cooldown_hours` = **24**). Yani **adres prova günü girilseydi 31 Ağustos provası bir gün kayardı**. Adres bugün 13:21'de yazıldı → cooldown 30 Ağustos 13:21'de doluyor. Seçilen adres proje sahibi kararıyla alıcı TronLink cüzdanının aynısı; **bir daha değiştirilmemeli**, her değişiklik cooldown'ı sıfırlar.
+>
+> **(2) Alıcı prova öncesi profil iade adresine DOKUNMAMALI — sezginin tersi.** Kabul adımı iade adresini **işlem bazlı anlık görüntü** olarak alır (WP12/T90 K4: profil `DefaultRefundAddress` yazılmaz, profil cooldown'ı başlamaz), yani alıcının profilde adresi olması **gerekmez**. Ama `TransactionAcceptanceService` Stage 5 kapısı **profil** `RefundAddressChangedAt`'ine bakar → "hazır olayım" diye profilden adres girmek kabulü **24 saat bloke ederdi**. Alıcının profil adresi bugün yok; öyle kalmalı. **Bu, doğru görünen bir hazırlık tavsiyesinin provayı öldürdüğü bir durumdu ve yalnız kod okunarak görüldü.**
+>
+> **(3) #307'nin Grafana düzeltmesi yeniden kurmayla devreye GİRMİYOR** — yeni backlog satırı `GrafanaProvisioningRestartCoupling`. `up -d --build --wait` Grafana'yı yeniden başlatmaz (servis tanımı değişmez; değişen tek şey mount edilen volume'ün *içeriği*dir) ve Grafana provisioning'i **yalnız açılışta** okur. Ölçüm: render servisi 13:12'de koştu, Grafana 18 saattir ayaktaydı, **imajlar taze ve stack 11/11 healthy iken yedi kural hâlâ `health: error`** idi. `restart skinora-grafana` sonrası yedisi de **ilk kez** `health: ok`. **Kalıcı ders:** merge edilmiş bir düzeltme, devrede olduğu **ölçülene kadar** devrede değildir ([[feedback_verify_probe_subject]]).
+>
+> **Geçen kontroller (kanıt, "healthy" değil):** `:8080/health` 200 · bootstrap fail-fast yok · 63 ayar / 0 null · gerçek CS2 envanteri okundu (`Tec-9 | Groundwater`, `assetId 18514036356`) · sidecar `network: nile` · **backend `StablecoinContracts__Usdt` ile sidecar `TRON_USDT_CONTRACT` aynı Nile adresinde** · `/transactions/params` → `minHours: 1` · frontend bundle'ında `nile.tronscan.org` — #306'nın üç yarısı da canlı doğrulandı. **Koşulamayanlar:** kontrol 7 (tarayıcıda gerçek Steam girişi — JWT enjeksiyon yolu kullanıldı, o yol OpenID callback'ini atlar) ve alıcı bacağının tamamı (MA beklemesi, 31 Ağustos).
 
 > **Prova hazırlık turu (2026-08-28 → 2026-08-29)** ✓ **Kapandı.** On bir PR ([#297](https://github.com/turkerurganci/Skinora/pull/297)–[#307](https://github.com/turkerurganci/Skinora/pull/307)), ikisi kod düzeltmesi. Backlog **12 → 14 aktif / 118 çözülmüş** (dosyanın kendi `awk`'iyle ölçüldü). Sayı **arttı**, çünkü tur yeni kusur buldu. **🔴 yok.** Hedef: **31 Ağustos'taki canlı P2P provası**.
 >
