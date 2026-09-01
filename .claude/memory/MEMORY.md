@@ -5,9 +5,27 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-08-29 — T139 alarm turu, backlog 15 aktif / 119 çözülmüş, 🔴 yok)
+## Current Status (2026-09-01 — canlı prova turu, backlog 17 aktif / 119 çözülmüş, 🔴 VAR)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
+> **Canlı prova turu (2026-09-01)** — **prova blokajı kalktı, ve blokajı doğrularken iki kusur çıktı.** Backlog **17 aktif / 119 çözülmüş**, **🔴 VAR** (aylardır ilk kez).
+>
+> **Steam engeli beklenerek çözüldü, öngörülen tarihte.** İkinci hesabın (`76561198652999063`) MA'sı 2026-08-24'te kuruldu, 7 gün 08-31'de doldu; 09-01'de canlı probe (`IEconService/GetTradeHoldDurations`) `their_escrow.escrow_end_duration_seconds = 0` döndürdü. Bayrak **DB'ye elle yazılmadı** — ürünün kendi U17 ucundan (`PUT /users/me/settings/steam/trade-url`, aynı URL) tazelendi: 200 + `mobileAuthenticatorActive: true`, DB `MobileAuthenticatorVerified 0 → 1`. 08-29'da kaydedilen iki tahmin de tuttu (kısayol yok · rol takası ~2 hafta).
+>
+> **Ölçüm tuzağı — kontrol probu olmasa yanlış rapor edilecekti.** `trade_offer_access_token` **olmadan** Steam `{"response":{}}` döndürüyor; boş cevap "MA yok" değil "token vermedin" demek (arkadaş olmayan hedef için token zorunlu, `TradeHoldService.ts:15-18`). MA'sı kesin aktif olan birinci hesap **aynı boş cevabı** verdi — ayırt edici ölçüm buydu ([[feedback_differential_before_causal_claim]]).
+>
+> **Tracker'ın üç iddiası ölçümle düzeltildi:** alıcının `SteamTradeUrl`'i NULL **değildi**, kayıtlıydı (bayrak `0`'da kalmıştı çünkü URL hold > 0 iken kaydedilmişti) · `.env`'de 8 anahtar boş **değil** (4 boş, hiçbiri bloke etmiyor) · `hot_wallet_address` **kurulmuş**. İlk ikisi auto-memory'de, üçüncüsü de oradaydı; `IMPLEMENTATION_STATUS.md` adım 5 ve 9 zaten güncelmiş.
+>
+> **Turun asıl ürünü prova değil, iki kusur** (backlog **§11**), ikisi de **aynı kökten**: uygunluk kapısı satıcının **profil** ödeme adresini okuyor, `POST /transactions` adresi **istek gövdesinden** alıp işleme yazıyor, ve ikisi hiç karşılaştırılmıyor.
+> 1. 🔴 `Prova-SellerPayoutAddressBypassesCooldown` — 02 §12.3 adres değişikliğine iki kontrol koyuyor (Steam yeniden-onayı + 24 saatlik cooldown) ve ikisi de yalnız **profil** alanını koruyor; ama payout parayı **gövdeden gelen** adrese gönderiyor (`TransactionCreationService.cs:293` → `SellerPayoutQueueJob.cs:220`), kapı ikisini karşılaştırmıyor (`TransactionEligibilityService.cs:91-94`). Profilinde 24 saatten eski adres duran satıcı, Steam onayı vermeden ve cooldown'ı tetiklemeden her ilanda başka adrese ödeme yönlendirebilir. **Abartılmadı:** sömürü anlık değil (oturum ele geçirme + işlemin tamamlanması gerekir), ama cooldown'ın var oluş sebebi tam olarak o senaryo.
+> 2. 🟡 `Prova-InlineSellerWalletUnreachable` — 04 §7.2 adım 3'ün satır içi cüzdan girişi **hiç çalışmıyor**: frontend `SELLER_WALLET_ADDRESS_MISSING`'i bilerek süzüp sihirbazı açıyor (`EligibilityGate.tsx:28-38`, gerekçesi kendi yorumunda yazılı), backend gövdeye değil profile bakıp 422 dönüyor.
+>
+> **Kalıcı ders:** `wallet.payout_address_cooldown_hours` yapılandırılmış, ölçülmüş, `DEPLOY_RUNBOOK §G.5`'e *"provadan 24 saat önce yapılması gereken TEK ŞEY"* diye yazılmış ve prova planlaması onun etrafında kurulmuştu — **ama koruduğu değer o kapıdan hiç geçmiyor.** `SidecarHealthChecksArePlacebo` ve `GrafanaAlertRulesNeverEvaluated` ile aynı sınıf: bir kontrolün **var olması**, koruduğu şeyi koruduğu anlamına gelmiyor.
+>
+> **Prova için ölçülen dört kısıt:** `open_link_enabled = false` → **STEAM_ID** yöntemi zorunlu · satıcı yeni hesap kotası **3 işlem** (2026-09-06'ya kadar, iptaller de sayılıyor) · ödeme süresi tek geçerli değer **1 saat** · alıcının profil iade adresi NULL kalmalı (girerse kabul 24 saat bloke). Ortam: 11/11 healthy · Grafana 8/8 `health: ok` · hot wallet 798,9 TRX · alıcı cüzdanı 200 TRX + 1000 USDT · satıcı `eligibility` → `eligible: true`.
+>
+> **Hafıza bakımı:** auto-memory `MEMORY.md` okuma sınırına yaklaşmıştı (22,6KB / 24,4KB); faz geçmişi [[project_phase_history]]'e taşındı ve dosya 12,5KB'a indi. İki depo senkron.
+>
 > **T139 alarm turu (2026-08-29, günün üçüncü turu)** ✓ **Kapandı.** `T139-ActiveMonitorQuotaAlarm` **daraltıldı**, backlog **15 aktif / 119 çözülmüş**.
 >
 > **Kurulan yarı:** `tron-quota-rejections` — `sum(rate(skinora_blockchain_tron_api_errors_total{error_type="http_429"}[5m])) > 0`, `for: 2m`, severity `critical`. Kotanın **fiilen** dolduğunun doğrudan kanıtı TronGrid'in kendi 429'udur ve bu hiçbir dış varsayım gerektirmez.
@@ -317,6 +335,7 @@
 - [feedback_single_session_worktree.md](feedback_single_session_worktree.md) — Bu worktree'de paralel session yok; HEAD session ortasinda degisirse anomali olarak bildir
 
 ## Project
+- [project_phase_history.md](project_phase_history.md) — Faz gecmisi: MVP/F6/F7 gate sonuclari, backlog kapatma turlari ve kalici dersleri (auto-memory MEMORY.md'den 2026-09-01'de tasindi)
 - [project_gpt_review_workflow.md](project_gpt_review_workflow.md) — GPT cross-review sureci ve etki yansitma akisi
 - [project_implementation_decisions.md](project_implementation_decisions.md) — Implementation fazi calisma modeli, dogrulama, ortam, CI/CD kararlari
 - [project_validator_merge_flow.md](project_validator_merge_flow.md) — Validator merge akisi (B — skill §17 korunur, T27'den itibaren validator chat squash merge)
