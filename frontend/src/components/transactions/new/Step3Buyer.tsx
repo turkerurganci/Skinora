@@ -98,7 +98,6 @@ export function Step3Buyer({
           {steamIdError && <p className="text-xs text-red-600">{steamIdError}</p>}
         </div>
       )}
-
     </div>
   );
 }
