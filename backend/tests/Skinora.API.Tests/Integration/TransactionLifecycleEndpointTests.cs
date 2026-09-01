@@ -25,6 +25,7 @@ using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Domain.Entities;
 
@@ -220,7 +221,6 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             paymentTimeoutHours = 24,
             buyerIdentificationMethod = "STEAM_ID",
             buyerSteamId = "76561198000000999",
-            sellerWalletAddress = ValidWallet,
         };
 
         var response = await client.PostAsJsonAsync("/api/v1/transactions", request);
@@ -235,6 +235,82 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.Single(db.Set<OutboxMessage>().AsNoTracking().ToList());
+    }
+
+    /// <summary>
+    /// The wire-level half of the payout-address fix, and the ONLY test that can
+    /// catch its regression. `System.Text.Json` silently drops unknown members,
+    /// so an old client that still sends `sellerWalletAddress` gets a 201 either
+    /// way — every existing create test would stay green even if the service
+    /// went back to reading the body. This one plants a DIFFERENT address in the
+    /// body and asserts the persisted column still holds the PROFILE address.
+    /// </summary>
+    [Fact]
+    public async Task Create_Ignores_SellerWalletAddress_In_Request_Body()
+    {
+        const string attackerAddress = "TAttackerAddressABCDEFGH23456789zy";
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562893", "AWP | Asiimov");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562893",
+            stablecoin = "USDT",
+            price = "100.00",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+            sellerWalletAddress = attackerAddress,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var id = body.GetProperty("data").GetProperty("id").GetGuid();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var persisted = db.Set<Transaction>().AsNoTracking().Single(t => t.Id == id);
+        Assert.Equal(ValidWallet, persisted.SellerPayoutAddress);
+        Assert.NotEqual(attackerAddress, persisted.SellerPayoutAddress);
+    }
+
+    /// <summary>
+    /// With the body field gone, a seller with no profile payout address can no
+    /// longer reach a listing at all. This reason was always produced by
+    /// `TransactionEligibilityService`, but the wizard filtered it out and let
+    /// the seller fill four steps before hitting a 422 dead end
+    /// (`Prova-InlineSellerWalletUnreachable`); now it is the gate, up front.
+    /// </summary>
+    [Fact]
+    public async Task Create_Returns_422_SELLER_WALLET_ADDRESS_MISSING_When_Profile_Has_No_Address()
+    {
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = null;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562894", "Glock-18 | Fade");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562894",
+            stablecoin = "USDT",
+            price = "100.00",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("SELLER_WALLET_ADDRESS_MISSING",
+            body.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -352,7 +428,6 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         paymentTimeoutHours = 24,
         buyerIdentificationMethod = "STEAM_ID",
         buyerSteamId = "76561198000000999",
-        sellerWalletAddress = ValidWallet,
     };
 
     [Fact]
@@ -374,7 +449,6 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             paymentTimeoutHours = 24,
             buyerIdentificationMethod = "STEAM_ID",
             buyerSteamId = "76561198000000999",
-            sellerWalletAddress = ValidWallet,
         };
 
         // Force the configured minimum to be larger than the request price.
@@ -1182,7 +1256,6 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             paymentTimeoutHours = 24,
             buyerIdentificationMethod = "STEAM_ID",
             buyerSteamId = "76561198000000999",
-            sellerWalletAddress = ValidWallet,
         };
 
         var response = await client.PostAsJsonAsync("/api/v1/transactions", request);

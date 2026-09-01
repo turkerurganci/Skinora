@@ -1123,7 +1123,7 @@
       "indicatorLabel": "Adım göstergesi",
       "step1": "Item Seç",
       "step2": "Detaylar",
-      "step3": "Alıcı & Cüzdan",
+      "step3": "Alıcı",
       "step4": "Özet"
     },
     "nav": {
@@ -1161,6 +1161,11 @@
       },
       "unknown": {
         "title": "İşlem başlatılamıyor"
+      },
+      "walletMissing": {
+        "title": "Profilinizde ödeme adresi yok",
+        "description": "Ödemeler profilinizde kayıtlı adrese yapılır. Profilinizden bir adres ekleyip geri dönün — güvenlik nedeniyle adres, kaydettikten 24 saat sonra kullanılabilir olur.",
+        "cta": "Profile git"
       }
     },
     "step1": {
@@ -1211,7 +1216,7 @@
       }
     },
     "step3": {
-      "title": "Alıcı ve Cüzdan",
+      "title": "Alıcı",
       "buyer": {
         "label": "Alıcıyı nasıl belirleyeceksiniz?",
         "steamId": {
@@ -1228,12 +1233,6 @@
           "description": "İlk kabul eden kullanıcı alıcı olur.",
           "disabled": "Bu yöntem şu an yönetici tarafından kapatılmıştır."
         }
-      },
-      "wallet": {
-        "label": "Ödeme Alacağınız Cüzdan Adresi",
-        "description": "Satışın tamamlanması durumunda ödemenizi bu TRC-20 adresinden alacaksınız.",
-        "confirmed": "Ödeme adresi onaylandı",
-        "change": "Değiştir"
       }
     },
     "step4": {
@@ -1274,7 +1273,7 @@
         "OPEN_LINK_DISABLED": "Açık link yöntemi şu an kapalı. Lütfen Steam ID yöntemini kullanın.",
         "BUYER_STEAM_ID_NOT_FOUND": "Belirttiğiniz Steam ID kayıtlı bir kullanıcıya ait değil.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "Ödeme adresi cooldown'u devam ediyor.",
-        "SELLER_WALLET_ADDRESS_MISSING": "Ödeme adresi zorunludur. Lütfen geçerli bir TRC-20 adresi girin."
+        "SELLER_WALLET_ADDRESS_MISSING": "Profilinizde ödeme adresi yok. Önce profilinizden bir adres ekleyin."
       }
     }
   },

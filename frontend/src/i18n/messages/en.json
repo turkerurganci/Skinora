@@ -1123,7 +1123,7 @@
       "indicatorLabel": "Form step indicator",
       "step1": "Select item",
       "step2": "Details",
-      "step3": "Buyer & wallet",
+      "step3": "Buyer",
       "step4": "Review"
     },
     "nav": {
@@ -1161,6 +1161,11 @@
       },
       "unknown": {
         "title": "Cannot start a transaction"
+      },
+      "walletMissing": {
+        "title": "No payout address on your profile",
+        "description": "Listings pay out to the address saved on your profile. Add one in your profile, then come back — for security the address becomes usable 24 hours after you save it.",
+        "cta": "Go to profile"
       }
     },
     "step1": {
@@ -1211,7 +1216,7 @@
       }
     },
     "step3": {
-      "title": "Buyer and wallet",
+      "title": "Buyer",
       "buyer": {
         "label": "How will you identify the buyer?",
         "steamId": {
@@ -1228,12 +1233,6 @@
           "description": "The first user who accepts becomes the buyer.",
           "disabled": "This method is currently disabled by the administrator."
         }
-      },
-      "wallet": {
-        "label": "Wallet address to receive payment",
-        "description": "If the sale completes, you will receive payment at this TRC-20 address.",
-        "confirmed": "Payout address confirmed",
-        "change": "Change"
       }
     },
     "step4": {
@@ -1274,7 +1273,7 @@
         "OPEN_LINK_DISABLED": "The open-link method is currently disabled. Please use the Steam ID method.",
         "BUYER_STEAM_ID_NOT_FOUND": "The Steam ID you entered does not belong to a registered user.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "The payout address cooldown is still in effect.",
-        "SELLER_WALLET_ADDRESS_MISSING": "A payout address is required. Please enter a valid TRC-20 address."
+        "SELLER_WALLET_ADDRESS_MISSING": "Your profile has no payout address. Add one in your profile first."
       }
     }
   },

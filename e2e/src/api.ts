@@ -43,7 +43,6 @@ export interface CreateTransactionBody {
   paymentTimeoutHours: number;
   buyerIdentificationMethod: string;
   buyerSteamId: string;
-  sellerWalletAddress: string;
 }
 
 export function createTransaction(token: string, body: CreateTransactionBody): Promise<ApiResult> {

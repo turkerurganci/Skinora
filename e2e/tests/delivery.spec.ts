@@ -88,7 +88,6 @@ async function driveToPaymentReceived(): Promise<{
     paymentTimeoutHours: 1,
     buyerIdentificationMethod: 'STEAM_ID',
     buyerSteamId: seed.buyerSteamId,
-    sellerWalletAddress: seed.sellerPayoutAddress,
   });
   expect(create.ok, `create failed: ${JSON.stringify(create.body)}`).toBeTruthy();
   const txId = String(api.unwrap(create.body).id);

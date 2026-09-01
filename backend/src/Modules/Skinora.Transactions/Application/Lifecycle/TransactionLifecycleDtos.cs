@@ -39,15 +39,26 @@ public sealed record PaymentTimeoutWindowDto(int MinHours, int MaxHours, int Def
 
 // ---------- POST /transactions (07 §7.2) ----------
 
-/// <summary>Request body for <c>POST /transactions</c> (07 §7.2).</summary>
+/// <summary>
+/// Request body for <c>POST /transactions</c> (07 §7.2).
+///
+/// <para>
+/// Carries NO payout address. The seller's payout address is read from the
+/// profile (<c>User.DefaultPayoutAddress</c>, written only by U3
+/// <c>PUT /users/me/wallet/seller</c>) so that the two controls 02 §12.3
+/// assigns to it — Steam re-authentication and the
+/// <c>wallet.payout_address_cooldown_hours</c> window — actually guard the
+/// value that gets paid. While this record carried the address, both controls
+/// sat on the profile write path and the body bypassed them.
+/// </para>
+/// </summary>
 public sealed record CreateTransactionRequest(
     string ItemAssetId,
     StablecoinType Stablecoin,
     string Price,
     int PaymentTimeoutHours,
     BuyerIdentificationMethod BuyerIdentificationMethod,
-    string? BuyerSteamId,
-    string SellerWalletAddress);
+    string? BuyerSteamId);
 
 /// <summary>Response body for <c>POST /transactions</c> (07 §7.2).</summary>
 public sealed record CreateTransactionResponse(

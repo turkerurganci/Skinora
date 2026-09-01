@@ -97,8 +97,6 @@ public sealed class TransactionCreationService : ITransactionCreationService
             return Validation("Unsupported buyer identification method.");
         if (string.IsNullOrWhiteSpace(request.ItemAssetId))
             return Validation("itemAssetId is required.");
-        if (string.IsNullOrWhiteSpace(request.SellerWalletAddress))
-            return Validation("sellerWalletAddress is required.");
 
         if (!TryParsePositiveDecimal(request.Price, out var price))
             return Validation("price must be a positive decimal with up to 2 fractional digits.");
@@ -141,16 +139,6 @@ public sealed class TransactionCreationService : ITransactionCreationService
             && !IsSteamId64(request.BuyerSteamId))
             return Validation("buyerSteamId is required and must be a 17-digit Steam ID 64.");
 
-        // ---------- Stage 4: seller wallet pipeline (02 §12.3) ----------
-        if (!_addressValidator.IsValid(request.SellerWalletAddress))
-            return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
-                "sellerWalletAddress fails TRC-20 validation (02 §12.3).");
-
-        var sanctions = await _sanctions.EvaluateAsync(request.SellerWalletAddress, cancellationToken);
-        if (sanctions.IsMatch)
-            return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
-                $"sellerWalletAddress matched sanctions list '{sanctions.MatchedList}'.");
-
         // ---------- Stage 5: seller lookup + Steam inventory ----------
         // T105a: a suspended seller cannot start a transaction (02 §14.0
         // fund-flow restriction) — treated as not-eligible at the guard
@@ -162,6 +150,46 @@ public sealed class TransactionCreationService : ITransactionCreationService
         if (seller is null)
             return Failure(CreateTransactionStatus.SellerNotFound, TransactionErrorCodes.AccountFlagged,
                 "Seller not found.");
+
+        // ---------- Stage 5b: seller payout address pipeline (02 §12.3) ----------
+        // The address is read from the PROFILE, never from the request body.
+        // Both controls 02 §12.3 assigns to this value — Steam re-authentication
+        // and the `wallet.payout_address_cooldown_hours` window — live on the
+        // profile write path (U3 `PUT /users/me/wallet/seller`). While the body
+        // could name any address, a seller whose profile address was set more
+        // than the cooldown ago could redirect every payout to a fresh address
+        // without re-authenticating and without arming the cooldown, so neither
+        // control protected the value that actually gets paid
+        // (`SellerPayoutQueueJob` sends to `Transaction.SellerPayoutAddress`).
+        // Reading the profile here makes the write path the single gate.
+        //
+        // Runs AFTER the seller lookup on purpose: the address now comes from
+        // `seller`, so it cannot be validated before that entity is loaded.
+        //
+        // The two checks below are NOT redundant with `WalletAddressService`,
+        // which validates on write:
+        //   - format: rows can reach the column without passing that service
+        //     (migrations, seeds, e2e `db.ts` writes `DefaultPayoutAddress` in
+        //     raw SQL), so this stays defense-in-depth against a malformed row;
+        //   - sanctions: the list GROWS after an address is stored. The write
+        //     path can only screen against the list as it was that day; this is
+        //     the only point that screens against the list as it is TODAY, so
+        //     removing it would let an address sanctioned after it was saved go
+        //     on opening transactions.
+        var payoutAddress = seller.DefaultPayoutAddress;
+        if (string.IsNullOrWhiteSpace(payoutAddress))
+            return Failure(CreateTransactionStatus.SellerWalletAddressMissing,
+                TransactionErrorCodes.SellerWalletAddressMissing,
+                "Seller profile has no payout address (02 §12.3).");
+
+        if (!_addressValidator.IsValid(payoutAddress))
+            return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
+                "Seller profile payout address fails TRC-20 validation (02 §12.3).");
+
+        var sanctions = await _sanctions.EvaluateAsync(payoutAddress, cancellationToken);
+        if (sanctions.IsMatch)
+            return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
+                $"Seller profile payout address matched sanctions list '{sanctions.MatchedList}'.");
 
         // ---------- Stage 5a: one open transaction per item (02 §2.3) ----------
         // T128 — the rule is a money-safety rule, not a tidiness one: delivery
@@ -290,7 +318,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
             CommissionAmount = commissionAmount,
             TotalAmount = totalAmount,
             MarketPriceAtCreation = fraud.MarketPrice,
-            SellerPayoutAddress = request.SellerWalletAddress,
+            SellerPayoutAddress = payoutAddress,
             PaymentTimeoutMinutes = paymentTimeoutMinutes,
             // CREATED state requires AcceptDeadline NOT NULL (06 §3.5);
             // FLAGGED keeps every deadline NULL until admin approval (03 §7).

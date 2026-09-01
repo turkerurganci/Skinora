@@ -5,9 +5,23 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-01 — canlı prova turu, backlog 17 aktif / 119 çözülmüş, 🔴 VAR)
+## Current Status (2026-09-02 — ödeme adresi tek-kaynak turu, backlog 15 aktif / 121 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
+> **Ödeme adresi tek-kaynak turu (2026-09-02)** — dün açılan tek 🔴 ve onun 🟡 ikizi **tek düzeltmeyle** kapandı ([#312](https://github.com/turkerurganci/Skinora/pull/312)). Backlog **15 aktif / 121 çözülmüş**, **🔴 YOK**.
+>
+> **Değişiklik:** `sellerWalletAddress` `POST /transactions` gövdesinden **kaldırıldı**; adres yalnız `User.DefaultPayoutAddress`'ten okunuyor (`TransactionCreationService` Stage 5b, satıcı kaydı yüklendikten sonra). Böylece 02 §12.3'ün adrese atadığı iki kontrol — Steam yeniden-onayı ve `wallet.payout_address_cooldown_hours` — ilk kez **ödenen değeri** koruyor; daha önce ikisi de profil yazma yolunda duruyor, ödeme ise gövdeden gelen adrese gidiyordu.
+>
+> **İki kontrol korunarak taşındı, kaldırılmadı — ve ilk yargı yanlıştı.** "Profil kaydında zaten taranıyor, gereksiz" düşüncesi ölçülünce çürüdü: **sanctions taraması** kalmalıydı, çünkü yaptırım listesi adres kaydedildikten **sonra** büyüyebilir ve U3 yalnız o günkü listeye bakabilir — create anı bugünküne bakan tek noktadır. **Format doğrulaması** da kaldı: kolona servis dışından ulaşan yollar var (migration, seed, e2e harness'ı raw SQL yazıyor).
+>
+> **Ürün tarafı: alan düzeltilmedi, KALDIRILDI** (çalışamazdı). `Step3BuyerWallet` → `Step3Buyer`; `EligibilityGate`'in `SELLER_WALLET_ADDRESS_MISSING` filtresi kalktı ve sebep profile CTA'lı bloke edici banner oldu. 04 §7.2 adım 3, 04 §95/§478, 03 §2.2 adım 14, 03 §9, 07 §7.2 yeniden yazıldı. **Kabul edilen bedel açıkça yazıldı:** ödeme adresi olmayan yeni satıcı ilk ilanını 24 saat sonra açabilir — zaten fiili davranıştı.
+>
+> **TURUN KALICI DERSİ KENDİ DEĞİŞİKLİĞİMİZDEN ÇIKTI.** `wizardDraft` depolama anahtarı v1→v2 yükseltilince, test dosyasının **kendi kopyaladığı** `STORAGE_KEY` sabiti bayatladı: 11 ret vakasının hepsi v1'e yazıp v2'den okumaya başladı, hepsi `null` aldı ve **hepsi geçti** — süit yeşildi ve hiçbir şey ölçmüyordu. Anahtar modülden export edildi, test import ediyor, düzeltmenin yük taşıdığı mutasyonla doğrulandı. **Genellenebilir kural: bir sabiti test tarafında yeniden bildirmek, o testi sessizce boşaltabilecek bir çatal açar** — `SidecarHealthChecksArePlacebo` ailesinin testlere düşmüş hâli.
+>
+> **CI lint kırılmasının teşhisi de aynı aileden.** Lokal prettier **159 dosya** uyarıyordu ve hepsi CRLF gürültüsüydü ([[e2e-prettier-crlf-local-artifact]]); o listede arayan kaybolurdu. Ayırt edici ölçüm: prettier'ı yalnız PR'ın **22 dosyasına** uygulayıp **`git diff`**'ine bakmak — git satır sonlarını normalize ettiği için diff yalnız içerik farkını gösterdi ve **tek satır** çıktı (cüzdan bloğu silinirken `</div>` öncesinde kalan boş satır).
+>
+> **Ölçüm:** backend 36/36 + 52/52, iki yeni test **mutasyonla doğrulandı** · FE tsc temiz / eslint 0 / vitest 245/245 / build ✓ · e2e tsc temiz (11 satır mekanik temizlik, 0 senaryo yeniden yazımı) · i18n 4×1326 parity OK (1327→1326). **Kritik test:** `Create_Ignores_SellerWalletAddress_In_Request_Body` — `System.Text.Json` bilinmeyen alanı sessizce attığı için eski istemci yine 201 alır ve mevcut create testlerinin hepsi yeşil kalırdı; geri dönüşü yakalayabilen tek testtir.
+>
 > **Canlı prova turu (2026-09-01)** — **prova blokajı kalktı, ve blokajı doğrularken iki kusur çıktı.** Backlog **17 aktif / 119 çözülmüş**, **🔴 VAR** (aylardır ilk kez).
 >
 > **Steam engeli beklenerek çözüldü, öngörülen tarihte.** İkinci hesabın (`76561198652999063`) MA'sı 2026-08-24'te kuruldu, 7 gün 08-31'de doldu; 09-01'de canlı probe (`IEconService/GetTradeHoldDurations`) `their_escrow.escrow_end_duration_seconds = 0` döndürdü. Bayrak **DB'ye elle yazılmadı** — ürünün kendi U17 ucundan (`PUT /users/me/settings/steam/trade-url`, aynı URL) tazelendi: 200 + `mobileAuthenticatorActive: true`, DB `MobileAuthenticatorVerified 0 → 1`. 08-29'da kaydedilen iki tahmin de tuttu (kısayol yok · rol takası ~2 hafta).

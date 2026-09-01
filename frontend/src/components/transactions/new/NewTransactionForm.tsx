@@ -25,7 +25,7 @@ import { EligibilityGate, getBlockingReasons } from "./EligibilityGate";
 import { StepIndicator } from "./StepIndicator";
 import { Step1ItemSelection } from "./Step1ItemSelection";
 import { Step2Details } from "./Step2Details";
-import { Step3BuyerWallet } from "./Step3BuyerWallet";
+import { Step3Buyer } from "./Step3Buyer";
 import { Step4Summary } from "./Step4Summary";
 
 type StepNumber = 1 | 2 | 3 | 4;
@@ -68,26 +68,20 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     draft?.method ?? BuyerIdentificationMethod.STEAM_ID,
   );
   const [buyerSteamId, setBuyerSteamId] = useState(draft?.buyerSteamId ?? "");
-  const [walletConfirmed, setWalletConfirmed] = useState(draft?.walletConfirmed ?? false);
 
-  // WP2b (profile-prefill-image) — prefill the seller payout address from the
-  // saved profile. U1 already backs the buyer-side refund-wallet prefill in S07
-  // and returns `sellerWalletAddress`, so this is the missing symmetric half:
-  // a seller with an address on file should not retype it for every listing.
+  // The payout address is NOT wizard state any more — it is read from the
+  // profile server-side (02 §12.3). The profile query stays because step 4 still
+  // has to show the seller where the money will go (03 §2.2 step 15); it is now
+  // display-only, so there is no input, no draft field and no confirm step.
+  //
+  // What was here before (WP2b prefill + `walletInput`/`walletConfirmed`) could
+  // not work: the typed address went into the request body, the backend gate
+  // read the profile, and the seller met a 422 after four steps.
   const profile = useMyProfile(!isGated);
-
-  // `null` means "neither the draft nor the seller has supplied a value yet",
-  // which is what makes the profile a *fallback* rather than an override. Once
-  // the field holds a string it wins for good — including the empty string, so
-  // a seller who deliberately clears the address is not fought by a late query
-  // resolution or a refetch.
-  const [walletInput, setWalletInput] = useState<string | null>(draft?.sellerWalletAddress ?? null);
-  const sellerWalletAddress = walletInput ?? profile.data?.sellerWalletAddress ?? "";
-  const setSellerWalletAddress = useCallback((next: string) => setWalletInput(next), []);
+  const sellerWalletAddress = profile.data?.sellerWalletAddress ?? "";
 
   // Persisting to sessionStorage is exactly the external-system synchronisation
-  // an effect is for. `sellerWalletAddress` (not `walletInput`) is stored so a
-  // profile-prefilled address survives the refresh the same way a typed one does.
+  // an effect is for.
   useEffect(() => {
     writeWizardDraft({
       item,
@@ -96,19 +90,8 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
       paymentTimeoutHours,
       method,
       buyerSteamId,
-      sellerWalletAddress,
-      walletConfirmed,
     });
-  }, [
-    item,
-    stablecoin,
-    price,
-    paymentTimeoutHours,
-    method,
-    buyerSteamId,
-    sellerWalletAddress,
-    walletConfirmed,
-  ]);
+  }, [item, stablecoin, price, paymentTimeoutHours, method, buyerSteamId]);
 
   const inventory = useSteamInventory(!isGated);
 
@@ -139,9 +122,11 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     priceError === null &&
     paymentTimeoutHours >= params.paymentTimeout.minHours &&
     paymentTimeoutHours <= params.paymentTimeout.maxHours;
+  // No `walletConfirmed` term any more: with the address input gone there is
+  // nothing left to confirm, and keeping the term would make step 3 permanently
+  // impassable.
   const isStep3Valid =
     isStep2Valid &&
-    walletConfirmed &&
     (method === BuyerIdentificationMethod.OPEN_LINK
       ? params.openLinkEnabled
       : STEAM_ID_REGEX.test(buyerSteamId));
@@ -190,7 +175,6 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
         paymentTimeoutHours,
         buyerIdentificationMethod: method,
         buyerSteamId: method === BuyerIdentificationMethod.STEAM_ID ? buyerSteamId : undefined,
-        sellerWalletAddress,
       });
     },
     onSuccess: (data) => {
@@ -271,22 +255,13 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
 
       {step === 3 && item && (
         <>
-          <Step3BuyerWallet
+          <Step3Buyer
             method={method}
             buyerSteamId={buyerSteamId}
-            sellerWalletAddress={sellerWalletAddress}
-            walletConfirmed={walletConfirmed}
             steamIdError={steamIdError}
             openLinkEnabled={params.openLinkEnabled}
             onChangeMethod={setMethod}
             onChangeBuyerSteamId={setBuyerSteamId}
-            onConfirmWallet={(address) => {
-              setSellerWalletAddress(address);
-              setWalletConfirmed(true);
-            }}
-            onResetWallet={() => {
-              setWalletConfirmed(false);
-            }}
           />
           <NavButtons
             onBack={() => setStep(2)}

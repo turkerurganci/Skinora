@@ -13,8 +13,8 @@ export type { Step1ItemSelectionProps } from "./Step1ItemSelection";
 export { Step2Details } from "./Step2Details";
 export type { Step2DetailsProps } from "./Step2Details";
 
-export { Step3BuyerWallet } from "./Step3BuyerWallet";
-export type { Step3BuyerWalletProps } from "./Step3BuyerWallet";
+export { Step3Buyer } from "./Step3Buyer";
+export type { Step3BuyerProps } from "./Step3Buyer";
 
 export { Step4Summary } from "./Step4Summary";
 export type { Step4SummaryProps } from "./Step4Summary";
