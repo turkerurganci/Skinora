@@ -1123,7 +1123,7 @@
       "indicatorLabel": "步骤指示器",
       "step1": "选择物品",
       "step2": "详情",
-      "step3": "买家和钱包",
+      "step3": "买家",
       "step4": "确认"
     },
     "nav": {
@@ -1161,6 +1161,11 @@
       },
       "unknown": {
         "title": "无法发起交易"
+      },
+      "walletMissing": {
+        "title": "您的个人资料中没有收款地址",
+        "description": "款项将支付到您个人资料中保存的地址。请先在个人资料中添加地址再返回 — 出于安全考虑，地址在保存 24 小时后才可使用。",
+        "cta": "前往个人资料"
       }
     },
     "step1": {
@@ -1211,7 +1216,7 @@
       }
     },
     "step3": {
-      "title": "买家和钱包",
+      "title": "买家",
       "buyer": {
         "label": "您将如何指定买家?",
         "steamId": {
@@ -1228,12 +1233,6 @@
           "description": "首位接受的用户即为买家。",
           "disabled": "此方式当前已被管理员关闭。"
         }
-      },
-      "wallet": {
-        "label": "用于接收付款的钱包地址",
-        "description": "若交易完成,您将通过此 TRC-20 地址收到付款。",
-        "confirmed": "收款地址已确认",
-        "change": "更改"
       }
     },
     "step4": {
@@ -1274,7 +1273,7 @@
         "OPEN_LINK_DISABLED": "公开链接方式当前已关闭。请使用 Steam ID 方式。",
         "BUYER_STEAM_ID_NOT_FOUND": "您输入的 Steam ID 不属于已注册用户。",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "收款地址冷却期仍在生效。",
-        "SELLER_WALLET_ADDRESS_MISSING": "收款地址为必填项。请输入有效的 TRC-20 地址。"
+        "SELLER_WALLET_ADDRESS_MISSING": "您的个人资料中没有收款地址。请先在个人资料中添加。"
       }
     }
   },

@@ -17,7 +17,16 @@ import type { SteamInventoryItem } from "@/lib/api/steam";
  * and it must not follow a shared link.
  */
 
-const STORAGE_KEY = "skinora.newTransaction.draft.v1";
+// v2: the payout address left the wizard (02 §12.3 — it is read from the
+// profile now), so `sellerWalletAddress` and `walletConfirmed` are gone. The key
+// is bumped rather than reused so a v1 draft left in a tab from before the
+// change is dropped instead of failing the shape guard on every read.
+// Exported so the tests address the same key the module uses. They used to
+// hardcode their own copy, and bumping v1 → v2 here silently pointed all eleven
+// rejection cases at a key `readWizardDraft` no longer reads: every one of them
+// went on passing while asserting nothing.
+export const WIZARD_DRAFT_STORAGE_KEY = "skinora.newTransaction.draft.v2";
+const STORAGE_KEY = WIZARD_DRAFT_STORAGE_KEY;
 
 export interface WizardDraft {
   item: SteamInventoryItem | null;
@@ -26,8 +35,6 @@ export interface WizardDraft {
   paymentTimeoutHours: number;
   method: BuyerIdentificationMethod;
   buyerSteamId: string;
-  sellerWalletAddress: string;
-  walletConfirmed: boolean;
 }
 
 /**
@@ -86,9 +93,7 @@ function isWizardDraft(value: unknown): value is WizardDraft {
     Number.isFinite(d.paymentTimeoutHours) &&
     typeof d.method === "string" &&
     Object.values(BuyerIdentificationMethod).includes(d.method as BuyerIdentificationMethod) &&
-    typeof d.buyerSteamId === "string" &&
-    typeof d.sellerWalletAddress === "string" &&
-    typeof d.walletConfirmed === "boolean"
+    typeof d.buyerSteamId === "string"
   );
 }
 

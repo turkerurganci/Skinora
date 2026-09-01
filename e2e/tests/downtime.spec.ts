@@ -87,7 +87,6 @@ async function createCreated(sellerToken: string): Promise<string> {
     paymentTimeoutHours: 1,
     buyerIdentificationMethod: 'STEAM_ID',
     buyerSteamId: seed.buyerSteamId,
-    sellerWalletAddress: seed.sellerPayoutAddress,
   });
   expect(create.ok, `create failed: ${JSON.stringify(create.body)}`).toBeTruthy();
   const created = api.unwrap(create.body);

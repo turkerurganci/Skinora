@@ -26,16 +26,19 @@ export interface EligibilityGateProps {
 }
 
 /**
- * Computes the effective gating reasons. `SELLER_WALLET_ADDRESS_MISSING` is
- * intentionally filtered out: 04 §7.2 step 3 lets the seller enter the
- * address inline ("Profilde yoksa: boş, zorunlu"), so the missing default is
- * informational rather than blocking. When it is the *only* reason we render
- * the form anyway and step 3 starts empty.
+ * Computes the effective gating reasons — every reason blocks.
+ *
+ * `SELLER_WALLET_ADDRESS_MISSING` used to be filtered out here, on the premise
+ * that 04 §7.2 step 3 let the seller type the address inline. That premise was
+ * never true in practice: the wizard put the typed address in the request body,
+ * but the backend gate read the PROFILE, so the seller filled four steps and hit
+ * a 422 dead end (`Prova-InlineSellerWalletUnreachable`). The payout address is
+ * now read from the profile only, so the inline field is gone and this reason is
+ * a real gate — surfaced up front with a link to the profile page.
  */
 export function getBlockingReasons(eligibility: EligibilityResponse): string[] {
   if (eligibility.eligible) return [];
-  const reasons = eligibility.reasons ?? [];
-  return reasons.filter((r) => r !== REASON.WALLET_MISSING);
+  return eligibility.reasons ?? [];
 }
 
 export function EligibilityGate({ eligibility }: EligibilityGateProps) {
@@ -124,6 +127,21 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
           title={t("payoutCooldown.title")}
           description={t("payoutCooldown.description")}
         />
+      );
+    case REASON.WALLET_MISSING:
+      return (
+        <Banner
+          tone="red"
+          title={t("walletMissing.title")}
+          description={t("walletMissing.description")}
+        >
+          <Link
+            href={`/${locale}/profile`}
+            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            {t("walletMissing.cta")}
+          </Link>
+        </Banner>
       );
     default:
       return <Banner tone="red" title={t("unknown.title")} description={reason} />;

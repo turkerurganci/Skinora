@@ -92,7 +92,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | 2.2 | 2-4 | Limit/cooldown kontrolleri | S06 (error state'ler) |
 | 2.2 | 5-8 | Envanter okuma, item seçimi, tradeable kontrolü | S06 (item picker) |
 | 2.2 | 9-12 | Stablecoin, fiyat, timeout | S06 (işlem detayları) |
-| 2.2 | 13-14 | Alıcı ve cüzdan adresi belirleme | S06 (alıcı & cüzdan) |
+| 2.2 | 13 | Alıcı belirleme (cüzdan adresi v3.1'de bu adımdan kalktı — profilden okunur) | S06 (alıcı) |
 | 2.2 | 15-16 | Özet ve onay | S06 (review step) |
 | 2.2 | 17-20 | Oluşturma, bildirim, bekleme | S07 (seller, CREATED) |
 | 2.3 | 1-8 | Satıcı hazırlık onayı (adım 3) | S07 (seller, ACCEPTED → SELLER_CONFIRMED) |
@@ -475,7 +475,7 @@ Cüzdan adresi giriş bileşeni. S06 ve S08'de kullanılır.
 - Onay adımı: "Bu adres doğru mu?" + adresin tam gösterimi
 - "Onayla" + "Düzenle" butonları
 
-> **Merkezi doğrulama:** Bu bileşen tüm cüzdan adresi giriş noktalarında (S06, S07, S08, profil) aynı doğrulama pipeline'ını uygular (02 §12.3).
+> **Merkezi doğrulama:** Bu bileşen tüm cüzdan adresi giriş noktalarında (S07, S08, profil) aynı doğrulama pipeline’ını uygular (02 §12.3). **S06 v3.1'de listeden düştü** — satıcı ödeme adresi artık ilan sihirbazında girilmiyor, profilden okunuyor (§7.2 adım 3).
 
 ### C12 — Copy Button
 
@@ -836,10 +836,11 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
     - Aktifleştirildiğinde Steam ID alanı gizlenir
     - Açıklama: "İlk kabul eden kişi alıcı olur"
     - Oluşturulan link opaque invite token kullanır: `/invite/:token` (transaction ID bazlı değil — enumeration koruması). Token tek kullanımlık, kabul sonrası geçersiz olur (06 §3.5 InviteToken)
-- **Satıcı Ödeme Adresi** (satıcıya payout yapılacak TRC-20 adresi — 02 §12.1):
-  - Profilde kayıtlı satıcı adresi varsa: ön doldurulmuş, değiştirilebilir
-  - Profilde yoksa: boş, zorunlu
-  - C11 (Wallet Address Input) bileşeni — label: "Ödeme Alacağınız Cüzdan Adresi"
+> **Cüzdan adresi alanı bu adımdan KALDIRILDI (v3.1).** Satıcının ödeme adresi artık yalnız profilden okunur (02 §12.3) ve bu ekranda girilmez. Adresi olmayan satıcı sihirbaza hiç giremez: `SELLER_WALLET_ADDRESS_MISSING` bloke edici bir uygunluk sebebidir ve S05 üstünde profile yönlendiren bir banner gösterilir.
+>
+> **Neden kaldırıldı — satır içi giriş hiçbir zaman çalışmıyordu.** Eski metin *“profilde yoksa: boş, zorunlu”* diyordu ve sihirbaz bunu uyguluyordu; ama girilen adres istek gövdesine konuyor, backend kapısı ise **profile** bakıyordu, dolayısıyla satıcı dört adımı doldurup 422 ile duvara çarpıyordu (`Prova-InlineSellerWalletUnreachable`). Aynı ayrışmanın güvenlik yüzü daha ağırdı: 02 §12.3'ün adrese atadığı iki kontrol (Steam yeniden-onayı + 24 saatlik cooldown) profil yazma yolunda dururken ödeme gövdedeki adrese gidiyordu.
+>
+> **Sonucu kabul edilen bedel:** ödeme adresi olmayan yeni satıcı ilk ilanını, adresi Ayarlar'dan kaydettikten **24 saat sonra** açabilir (`wallet.payout_address_cooldown_hours`). Bu zaten fiili davranıştı; artık ekranda dürüstçe söyleniyor.
 
 #### Adım 4: Özet ve Onay
 

@@ -88,9 +88,7 @@ Bu doküman, Skinora platformundaki tüm kullanıcı akışlarını adım adım 
 13. Satıcı alıcıyı belirler:
     - **Yöntem 1 (Steam ID):** Alıcının Steam ID'sini girer
     - **Yöntem 2 (Açık link — aktifse):** Açık link seçeneğini tercih eder
-14. Satıcı cüzdan adresi belirler:
-    - Profilinde varsayılan adres varsa → otomatik gösterilir, isterse değiştirebilir
-    - Profilinde yoksa → cüzdan adresi girmesi zorunlu
+14. ~~Satıcı cüzdan adresi belirler~~ — **v3.1'de kalktı.** Ödeme adresi bu akışta girilmez; profilde kayıtlı adres (§9.1) kullanılır ve satıcıya özet adımında salt-okunur gösterilir. Profilinde adres yoksa satıcı sihirbaza hiç giremez (`SELLER_WALLET_ADDRESS_MISSING` bloke edici uygunluk sebebi, 04 §7.2 adım 3). Gerekçe: adres gövdeden geldiği sürece 02 §12.3'ün ona atadığı iki kontrol — Steam yeniden-onayı ve adres değişikliği cooldown'ı — ödenen değeri korumuyordu.
 15. Satıcıya işlem özeti gösterilir (item, fiyat, stablecoin, timeout, alıcı, cüzdan adresi)
 16. Satıcı onaylar
 17. **Sistem kontrolü (arka plan):** Piyasa fiyatından sapma eşiği aşılıyor mu?
@@ -663,7 +661,7 @@ Platform Steam hesabı işletmez (02 §15); izlenecek bot durumu, emanet item sa
 
 ## 9. Profil ve Cüzdan Yönetimi Akışları
 
-> **Merkezi Cüzdan Adresi Doğrulama Kuralı:** Cüzdan adresi hangi ekran veya akıştan girilirse girilsin (profil §9.1, işlem başlatma §2.2 adım 14, işlem kabul §3.2 adım 4, adres değiştirme §9.2) aynı doğrulama pipeline'ından geçer: (1) Tron TRC-20 format geçerliliği, (2) sanctions screening (§11a.3). Geçersiz veya yaptırımlı adres hiçbir noktada kaydedilmez/kullanılmaz (02 §12.3).
+> **Merkezi Cüzdan Adresi Doğrulama Kuralı:** Cüzdan adresi hangi ekran veya akıştan girilirse girilsin (profil §9.1, işlem kabul §3.2 adım 4, adres değiştirme §9.2 — **işlem başlatma v3.1'de listeden düştü**, satıcı adresi orada girilmiyor) aynı doğrulama pipeline'ından geçer: (1) Tron TRC-20 format geçerliliği, (2) sanctions screening (§11a.3). Geçersiz veya yaptırımlı adres hiçbir noktada kaydedilmez/kullanılmaz (02 §12.3).
 
 ### 9.1 Cüzdan Adresi Tanımlama
 

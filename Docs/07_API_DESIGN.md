@@ -1024,8 +1024,7 @@ Kişisel veriler temizlenir, işlem geçmişi + AuditLog anonim korunur (03 §10
   "price": "100.00",
   "paymentTimeoutHours": 24,
   "buyerIdentificationMethod": "STEAM_ID",
-  "buyerSteamId": "76561198099999999",
-  "sellerWalletAddress": "TXyz1234567890abcdef1234567890ab"
+  "buyerSteamId": "76561198099999999"
 }
 ```
 
@@ -1037,7 +1036,8 @@ Kişisel veriler temizlenir, işlem geçmişi + AuditLog anonim korunur (03 §10
 | `paymentTimeoutHours` | Evet | Admin min-max aralığında |
 | `buyerIdentificationMethod` | Evet | `STEAM_ID` veya `OPEN_LINK` |
 | `buyerSteamId` | Koşullu | Method=STEAM_ID ise zorunlu |
-| `sellerWalletAddress` | Evet | TRC-20 adresi |
+
+> **Ödeme adresi gövdede TAŞINMAZ (v3.1).** Satıcının ödeme adresi profilden okunur (`User.DefaultPayoutAddress`; tek yazıcısı §5.3 U3 `PUT /users/me/wallet/seller`). Gövdede `sellerWalletAddress` gönderilirse **yok sayılır**. Gerekçe 02 §12.3: adres değişikliğine atanan iki kontrol — Steam yeniden-onayı ve `wallet.payout_address_cooldown_hours` penceresi — profil yazma yolunda duruyor; adres gövdeden gelirken ödeme (`SellerPayoutQueueJob`) gövdedeki adrese gidiyordu, yani **iki kontrol de fiilen ödenen değeri korumuyordu**. Adres artık yalnız profilden geldiği için yazma yolu tek kapıdır.
 
 **Response (201) `data`:**
 ```json
@@ -1055,9 +1055,9 @@ FLAGGED olursa `status: "FLAGGED"` + `flagReason: "PRICE_DEVIATION"` döner.
 
 Response header: `Location: /api/v1/transactions/guid`
 
-**Doğrulama:** `sellerWalletAddress` merkezi doğrulama pipeline'ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (02 §12.3).
+**Doğrulama:** Satıcının **profil** ödeme adresi merkezi doğrulama pipeline’ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (02 §12.3). Kontroller satıcı kaydı yüklendikten sonra koşar ve U3’ün yazma anındaki taramasıyla **çakışmaz**: format kontrolü kolona servis dışından (migration, seed, test harness) ulaşan satırlara karşı savunma derinliğidir; sanctions taraması ise listenin adres kaydedildikten **sonra** büyüyebilmesine karşı tek zamansal korumadır — U3 yalnız o günkü listeye bakabilir, bu nokta bugünküne bakar.
 
-**Hatalar:** 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 422 `CONCURRENT_LIMIT_REACHED`, 422 `CANCEL_COOLDOWN_ACTIVE`, 422 `NEW_ACCOUNT_LIMIT_REACHED`, 422 `MOBILE_AUTHENTICATOR_REQUIRED`, 422 `ITEM_NOT_TRADEABLE`, 422 `ITEM_NOT_IN_INVENTORY`, 422 `ITEM_ALREADY_LISTED` *(v3.0)*, 422 `INVENTORY_PRIVATE` *(v3.0)*, 503 `STEAM_UNAVAILABLE` *(v3.0 — tekrar denenebilir)*, 422 `PRICE_OUT_OF_RANGE`, 422 `TIMEOUT_OUT_OF_RANGE`, 422 `OPEN_LINK_DISABLED`, 422 `BUYER_STEAM_ID_NOT_FOUND`
+**Hatalar:** 400 `VALIDATION_ERROR`, 400 `INVALID_WALLET_ADDRESS`, 403 `SANCTIONS_MATCH`, 422 `SELLER_WALLET_ADDRESS_MISSING` *(v3.1 — profilde ödeme adresi yok)*, 422 `PAYOUT_ADDRESS_COOLDOWN_ACTIVE` *(v3.1 — adres kaydedileli `wallet.payout_address_cooldown_hours` dolmadı)*, 422 `CONCURRENT_LIMIT_REACHED`, 422 `CANCEL_COOLDOWN_ACTIVE`, 422 `NEW_ACCOUNT_LIMIT_REACHED`, 422 `MOBILE_AUTHENTICATOR_REQUIRED`, 422 `ITEM_NOT_TRADEABLE`, 422 `ITEM_NOT_IN_INVENTORY`, 422 `ITEM_ALREADY_LISTED` *(v3.0)*, 422 `INVENTORY_PRIVATE` *(v3.0)*, 503 `STEAM_UNAVAILABLE` *(v3.0 — tekrar denenebilir)*, 422 `PRICE_OUT_OF_RANGE`, 422 `TIMEOUT_OUT_OF_RANGE`, 422 `OPEN_LINK_DISABLED`, 422 `BUYER_STEAM_ID_NOT_FOUND`
 
 > **Aynı item ikinci kez listelenemez (v3.0, 02 §2.3 — T128):** Satıcının aynı `itemAssetId` üzerinde terminal olmayan bir işlemi varsa uç 422 `ITEM_ALREADY_LISTED` döner. Kural bir düzen kuralı değil, para güvenliği kuralıdır: teslimat kanıtı item **sınıfı** üzerinden sayılır (02 §9.2), dolayısıyla aynı asset'i hedefleyen iki canlı işlem gelen item'ı yanlış işleme atfeder ve parayı yanlış satıcıya gönderir. Aynı değişmez 06 §5.1'de `UQ_Transactions_SellerId_ItemAssetId_Active` filtered unique index'i olarak yazılıdır; uç, indeksin filtresini birebir aynalayan bir ön-kontrolle aynı cevabı verir ve iki eşzamanlı isteğin yarıştığı durumda indeksin ürettiği çakışmayı da aynı koda çevirir — yani cevap tek, kaynak iki. Terminal statüler (`COMPLETED`, dört `CANCELLED_*`, `REFUNDED`) kapsam dışıdır: işlem bittikten sonra satıcı aynı item'ı yeniden listeleyebilir.
 

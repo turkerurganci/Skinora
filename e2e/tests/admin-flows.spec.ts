@@ -64,7 +64,6 @@ function createBody(price: string): api.CreateTransactionBody {
     paymentTimeoutHours: 1,
     buyerIdentificationMethod: 'STEAM_ID',
     buyerSteamId: seed.buyerSteamId,
-    sellerWalletAddress: seed.sellerPayoutAddress,
   };
 }
 

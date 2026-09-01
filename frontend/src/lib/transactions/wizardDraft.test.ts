@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
-import { clearWizardDraft, readWizardDraft, writeWizardDraft } from "./wizardDraft";
+import {
+  clearWizardDraft,
+  readWizardDraft,
+  WIZARD_DRAFT_STORAGE_KEY,
+  writeWizardDraft,
+} from "./wizardDraft";
 
-const STORAGE_KEY = "skinora.newTransaction.draft.v1";
+// Imported, never re-declared: a local copy is exactly what let a version bump
+// turn every rejection case below into a no-op.
+const STORAGE_KEY = WIZARD_DRAFT_STORAGE_KEY;
 
 const DRAFT = {
   item: { assetId: "12345", name: "AK-47 | Redline", tradeable: true },
@@ -11,8 +18,6 @@ const DRAFT = {
   paymentTimeoutHours: 24,
   method: BuyerIdentificationMethod.STEAM_ID,
   buyerSteamId: "76561198000000000",
-  sellerWalletAddress: "TXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  walletConfirmed: true,
 } as const;
 
 describe("wizardDraft", () => {
@@ -51,7 +56,7 @@ describe("wizardDraft", () => {
       ["a NaN timeout", JSON.stringify({ ...DRAFT, paymentTimeoutHours: null })],
       ["an item without assetId", JSON.stringify({ ...DRAFT, item: { tradeable: true } })],
       ["an item without tradeable", JSON.stringify({ ...DRAFT, item: { assetId: "1" } })],
-      ["a boolean field carrying a string", JSON.stringify({ ...DRAFT, walletConfirmed: "true" })],
+      ["a non-string buyerSteamId", JSON.stringify({ ...DRAFT, buyerSteamId: 76561198000000000 })],
     ])("rejects %s", (_label, raw) => {
       window.sessionStorage.setItem(STORAGE_KEY, raw);
       expect(readWizardDraft()).toBeNull();

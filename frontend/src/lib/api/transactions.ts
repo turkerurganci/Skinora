@@ -158,7 +158,6 @@ export interface CreateTransactionRequest {
   paymentTimeoutHours: number;
   buyerIdentificationMethod: BuyerIdentificationMethod;
   buyerSteamId?: string;
-  sellerWalletAddress: string;
 }
 
 /**

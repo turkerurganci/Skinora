@@ -331,17 +331,54 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.StartsWith("/invite/", outcome.Body.InviteUrl);
     }
 
+    /// <summary>
+    /// The format check survives the move to the profile because rows can reach
+    /// <c>DefaultPayoutAddress</c> without passing <c>WalletAddressService</c>
+    /// (migrations, seeds, the e2e harness writes it in raw SQL). The request
+    /// body can no longer carry an address at all, so the malformed value is
+    /// planted on the profile — which is the only way it can now occur.
+    /// </summary>
     [Fact]
-    public async Task Rejects_Invalid_Wallet_Format()
+    public async Task Rejects_Invalid_Wallet_Format_On_Seller_Profile()
     {
+        _seller.DefaultPayoutAddress = "NOT_A_TRC20_ADDRESS";
+        Context.Set<User>().Update(_seller);
+        await Context.SaveChangesAsync();
+
         var sut = BuildSut();
-        var outcome = await sut.CreateAsync(
-            _seller.Id,
-            ValidRequest() with { SellerWalletAddress = "NOT_A_TRC20_ADDRESS" },
-            CancellationToken.None);
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
 
         Assert.Equal(CreateTransactionStatus.InvalidWallet, outcome.Status);
         Assert.Equal(TransactionErrorCodes.InvalidWalletAddress, outcome.ErrorCode);
+    }
+
+    /// <summary>
+    /// The payout address is a snapshot of the PROFILE, never of anything the
+    /// caller supplies (02 §12.3). Pinned because the request body used to carry
+    /// the address and the payout job pays whatever lands in this column
+    /// (<c>SellerPayoutQueueJob</c>), so the two controls on the profile write
+    /// path — Steam re-auth and the cooldown — guarded a value that was never
+    /// the one paid.
+    /// </summary>
+    [Fact]
+    public async Task Snapshots_Payout_Address_From_Seller_Profile()
+    {
+        // 34 chars, Base58, 'T' prefix — and deliberately NOT ValidWallet, so the
+        // assertion fails if the column is fed from anywhere but this profile.
+        const string profileAddress = "TSnapshotSourceABCDEFGH23456789zyx";
+        Assert.NotEqual(ValidWallet, profileAddress);
+        _seller.DefaultPayoutAddress = profileAddress;
+        Context.Set<User>().Update(_seller);
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        Assert.NotNull(outcome.Body);
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == outcome.Body!.Id);
+        Assert.Equal(profileAddress, persisted.SellerPayoutAddress);
     }
 
     [Fact]
@@ -747,8 +784,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Price: "100.00",
         PaymentTimeoutHours: 24,
         BuyerIdentificationMethod: BuyerIdentificationMethod.STEAM_ID,
-        BuyerSteamId: BuyerSteamId,
-        SellerWalletAddress: ValidWallet);
+        BuyerSteamId: BuyerSteamId);
 
     private async Task ConfigureHighVolumeAsync(int periodHours, int countThreshold, decimal amountThreshold)
     {

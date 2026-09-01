@@ -1123,7 +1123,7 @@
       "indicatorLabel": "Indicador de pasos",
       "step1": "Elegir artículo",
       "step2": "Detalles",
-      "step3": "Comprador y monedero",
+      "step3": "Comprador",
       "step4": "Resumen"
     },
     "nav": {
@@ -1161,6 +1161,11 @@
       },
       "unknown": {
         "title": "No se puede iniciar la transacción"
+      },
+      "walletMissing": {
+        "title": "No hay dirección de pago en tu perfil",
+        "description": "Los pagos se envían a la dirección guardada en tu perfil. Añade una en tu perfil y vuelve — por seguridad, la dirección se puede usar 24 horas después de guardarla.",
+        "cta": "Ir al perfil"
       }
     },
     "step1": {
@@ -1211,7 +1216,7 @@
       }
     },
     "step3": {
-      "title": "Comprador y monedero",
+      "title": "Comprador",
       "buyer": {
         "label": "¿Cómo vas a identificar al comprador?",
         "steamId": {
@@ -1228,12 +1233,6 @@
           "description": "El primer usuario que acepte se convierte en comprador.",
           "disabled": "Este método está deshabilitado actualmente por el administrador."
         }
-      },
-      "wallet": {
-        "label": "Dirección del monedero para recibir el pago",
-        "description": "Si la venta se completa, recibirás el pago en esta dirección TRC-20.",
-        "confirmed": "Dirección de pago confirmada",
-        "change": "Cambiar"
       }
     },
     "step4": {
@@ -1274,7 +1273,7 @@
         "OPEN_LINK_DISABLED": "El método de enlace abierto está deshabilitado actualmente. Usa el método de Steam ID.",
         "BUYER_STEAM_ID_NOT_FOUND": "El Steam ID que introdujiste no pertenece a un usuario registrado.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "El periodo de espera de la dirección de pago sigue activo.",
-        "SELLER_WALLET_ADDRESS_MISSING": "Se requiere una dirección de pago. Introduce una dirección TRC-20 válida."
+        "SELLER_WALLET_ADDRESS_MISSING": "Tu perfil no tiene dirección de pago. Añade una en tu perfil primero."
       }
     }
   },

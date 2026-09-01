@@ -72,7 +72,6 @@ function createBody(
     paymentTimeoutHours: 1,
     buyerIdentificationMethod: 'STEAM_ID',
     buyerSteamId: seed.buyerSteamId,
-    sellerWalletAddress: seed.sellerPayoutAddress,
   };
 }
 
