@@ -67,3 +67,23 @@ Ayrıca ölçülenler: 63 ayar / 0 null · gerçek CS2 envanteri okundu (`Tec-9 
 **Turun asıl ürünü prova değil, provayı doğrularken çıkan iki kusur** — ikisi de `Docs/DEFERRED_BACKLOG.md` §11'de: 🔴 `Prova-SellerPayoutAddressBypassesCooldown` (ödeme adresini koruyan iki kontrol de `POST /transactions` üzerinden atlanabiliyor — kapı profili okuyor, payout gövdeden gelen adrese gidiyor) ve 🟡 `Prova-InlineSellerWalletUnreachable` (04 §7.2'nin satır içi cüzdan girişi hiç çalışmıyor). **Kalıcı ders:** `wallet.payout_address_cooldown_hours` yapılandırılmış, ölçülmüş ve prova planlaması onun etrafında kurulmuştu — ama koruduğu değer o kapıdan hiç geçmiyor. [[feedback_verify_probe_subject]]'in kardeşi: bir kontrolün **var olması**, koruduğu şeyi koruduğu anlamına gelmiyor.
 
 **⚠️ Hâlâ geri alınmadı:** `auth.min_steam_account_age_days` = **1** (üretim değeri 30). İkinci hesabın Steam hesabı 8 günlük olduğu için prova bitmeden geri alınamaz.
+
+## Canlı prova — 2026-09-02 (ödeme bacağı ✓, teslimat Steam hesap kısıtına takıldı)
+
+**Koşan ve ölçülen zincir:** ilan açma → alıcı kabulü (canlı MA probu geçti) → hazırlık onayı (deposit adresi açıldı, **ödeme izleyicisi gerçekten kuruldu** — sidecar `"Monitor started"`, T133b'nin sessizce durduğu nokta) → alıcı 10.20 USDT gönderdi → **63 sn'de tespit** → 20/20 onay, blok **70617761** → `PAYMENT_RECEIVED`. #312 de canlıda doğrulandı: `SellerPayoutAddress` ilk kez profilden yazıldı, ikisi birebir eşleşti.
+
+**Durduğu yer ve sebebi:** satıcı trade offer'ı açtığında Steam *"turkerurganci_2 takas yapmak için uygun değil"* dedi. İki kapı birden kapalıydı ve **platform ikisini de hiç okumuyor**:
+1. **Limited account** — 5 USD'lik **mağaza harcaması** yapmamış hesap takas edemez. Cüzdana yükleme **saymıyor**, harcamak gerekiyor. Market alışverişi de saymıyor (üstelik limited hesap Market'i zaten kullanamıyor).
+2. **15 günlük bekleme** — hesap yaşı / Steam Guard süresi. Prova hesabı 2026-08-24'te açıldı, 15 günü **2026-09-08**'de doluyor. 5 USD harcansa bile bu tarihe kadar takas açılmıyor.
+
+**Kök neden bir çıkarım hatası ve sidecar kendi yorumunda yazıyor** (`TradeHoldService.ts:8-13`): MA doğrudan ölçülmüyor, `GetTradeHoldDurations`'tan **çıkarılıyor**. Zincir: `escrow == 0` → "MA aktif" → "takas edebilir". İlk iki adım doğru, **üçüncüsü yanlış** — o uç *"bekletme ne kadar"* sorusuna cevap veriyor, *"bu hesap takas edebilir mi"* sorusuna değil, ve limited hesap da `0` döndürüyor. Backlog 🔴 `Prova-LimitedAccountNeverChecked`.
+
+**Neden bu, ailenin en pahalı örneği:** kapı **vardı**, **geçti**, ve koruduğu sanılan şeyi korumuyordu — ama bu kez bedel teoride kalmadı. Alıcının parası zincirde onaylandı, teslimat imkânsız çıktı, ve süre dolsaydı sistem kusuru **satıcıya** yazacaktı (03 §4.4) oysa engel tamamen alıcının hesap kısıtıydı.
+
+**Nasıl kapatıldı:** timeout'tan 15 dk önce admin iptali → `CANCELLED_ADMIN`, `paymentRefunded: true`, iade **8.20** USDT (10.20 − 2.00 gas, 02 §195-197), `FraudFlags = 0`. **Böylece hiç koşulmamış bir bacak daha ölçüldü: admin iptali + iade kuyruğu.** Yan ölçüm: `gas_fee_protection_ratio` (%10) şüphesi **yersiz çıktı** — iadeyi bastıran kural `min_refund_threshold_ratio = 2.0` (net < gas×2 ise durdurulur); 8.20 > 4.00, doğru davranış.
+
+**ÖLÇÜM ARACI UYARISI — iki kez yanlış alarm verdi.** `steamcommunity.com/profiles/<id>?xml=1` → `<isLimitedAccount>` **tek okumada güvenilmez**: arada bir bayat `0` döndürüyor ve hemen ardından yine `1` diyor. İki nöbetçi de "limit kalktı" dedi, peş peşe 5 örnekleme ikisini de yalanladı. **Kural: en az 5 ardışık aynı okuma; nihai test üründen (trade offer sayfası açılıyor mu).** [[feedback_verify_probe_subject]]'in kardeşi — bu kez sorun probe'un öznesi değil, **kararlılığı**.
+
+**Proje sahibi isteği (2026-09-02):** ürün bu duvara toslayan kullanıcıya **sebebi ve ne yapması gerektiğini** söylemeli. Bugün hiçbir ekran söylemiyor; kullanıcı Steam'in jenerik sayfasını görüp platformda açıklama bulamıyor. Üç koşul üç farklı eylem gerektiriyor (5 USD harca · N gün bekle · MA kur), jenerik tek mesaj yanlış yönlendirir.
+
+**Sonraki prova için:** hesabın 15 günü 2026-09-08'de doluyor; `auth.min_steam_account_age_days` hâlâ **1** (üretim 30) ve prova bitince geri alınmalı. Ölçülemeyen bacaklar: teslimat · mutabakat · payout.
