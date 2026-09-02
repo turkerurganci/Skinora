@@ -581,6 +581,8 @@ P2P pivotu sırasında bilinçli olarak kapsam dışında bırakılan kalemler (
 
 ## 11. Canlı prova turu (2026-09-01) — alıcı bacağı açılırken çıkan bulgular
 
+> **Prova raporu:** [`Docs/TEST_REPORTS/REHEARSAL_2026-09-02.md`](TEST_REPORTS/REHEARSAL_2026-09-02.md) — koşulan 7 senaryo, koşulamayan 3 senaryo, adım adım ölçümler, zincir hash'leri, ölçümle çürütülen 7 tez ve bir sonraki prova için kontrol listesi.
+
 > **2026-09-02 canlı prova sonucu — ödeme bacağı ✓, teslimat bacağı ⛔.** İlan açma → kabul → hazırlık onayı → ödeme (10.20 USDT, 63 sn'de tespit, 20/20 onay, blok 70617761) → `PAYMENT_RECEIVED` **koşuldu ve ölçüldü**. Teslimat adımında Steam *“turkerurganci_2 takas yapmak için uygun değil”* dedi (`Prova-LimitedAccountNeverChecked`). İşlem timeout'tan 15 dk önce **admin iptaliyle** kapatıldı (`CANCELLED_ADMIN`, `paymentRefunded: true`, iade 8.20 USDT = 10.20 − 2.00 gas, 02 §195-197) — böylece satıcıya **kusur yazılmadı** (`FraudFlags = 0`); timeout'a bırakılsaydı kusur satıcıya yazılacaktı (03 §4.4) ve engel tamamen alıcının hesap kısıtıyken satıcı cezalanacaktı. **Ölçülemeyen bacaklar:** teslimat, mutabakat, payout. **Ölçülen yeni bacak:** admin iptali + iade kuyruğu, ki bu tura kadar hiç koşulmamıştı.
 
 > **Turun var oluş nedeni:** ikinci Steam hesabının mobil doğrulayıcısı 7 günlük bekleme süresini 2026-08-31'de doldurdu ve prova blokajı kalktı. Blokajın kalktığını **ölçmek** için `POST /transactions`'ın satıcı uygunluk zinciri baştan sona okundu — iki bulgu oradan çıktı ve ikisi de aranmıyordu.

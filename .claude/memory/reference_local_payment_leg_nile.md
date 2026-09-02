@@ -70,6 +70,8 @@ Ayrıca ölçülenler: 63 ayar / 0 null · gerçek CS2 envanteri okundu (`Tec-9 
 
 ## Canlı prova — 2026-09-02 (ödeme bacağı ✓, teslimat Steam hesap kısıtına takıldı)
 
+**Tam rapor:** `Docs/TEST_REPORTS/REHEARSAL_2026-09-02.md` (senaryolar, ölçümler, zincir hash'leri, çürütülen tezler, sonraki prova kontrol listesi). Aşağısı özet.
+
 **Koşan ve ölçülen zincir:** ilan açma → alıcı kabulü (canlı MA probu geçti) → hazırlık onayı (deposit adresi açıldı, **ödeme izleyicisi gerçekten kuruldu** — sidecar `"Monitor started"`, T133b'nin sessizce durduğu nokta) → alıcı 10.20 USDT gönderdi → **63 sn'de tespit** → 20/20 onay, blok **70617761** → `PAYMENT_RECEIVED`. #312 de canlıda doğrulandı: `SellerPayoutAddress` ilk kez profilden yazıldı, ikisi birebir eşleşti.
 
 **Durduğu yer ve sebebi:** satıcı trade offer'ı açtığında Steam *"turkerurganci_2 takas yapmak için uygun değil"* dedi. İki kapı birden kapalıydı ve **platform ikisini de hiç okumuyor**:
