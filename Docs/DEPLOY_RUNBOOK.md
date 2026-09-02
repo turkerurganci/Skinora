@@ -325,6 +325,8 @@ Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir
 
 ### G.5 Bilinen tuzaklar
 
+> **Prova raporu:** son canlı prova ve bulguları [`Docs/TEST_REPORTS/REHEARSAL_2026-09-02.md`](TEST_REPORTS/REHEARSAL_2026-09-02.md)'de; §8 prova öncesi kontrol listesidir.
+
 - **⛔ PROVA HESAPLARININ İKİSİ DE “limited” OLMAMALI — 2026-09-02'de canlı provada ölçüldü ve provayı tam da teslimat adımında durdurdu.** Steam, **en az 5 USD** harcamamış hesabı *limited* sayar ve **takas etmesini tümüyle engeller**. Bu, MA'dan ve trade hold'dan **bağımsız** bir kapıdır.
   **Platform bu kısıtı hiç okumuyor** (`isLimitedAccount` → `backend/src` ve `sidecar-steam/src` altında 0 eşleşme, backlog `Prova-LimitedAccountNeverChecked`), dolayısıyla tüm kapılar geçilir ve engel **ancak satıcı trade offer'ı açmaya çalıştığında** görünür — o noktada alıcının parası çoktan zincirde onaylanmıştır.
   **Neden MA probu bunu yakalamıyor:** `GetTradeHoldDurations` *“takas ne kadar bekletilir”* sorusuna cevap verir, *“bu hesap takas edebilir mi”* sorusuna değil; limited hesap da `escrow_end_duration_seconds = 0` döndürür. `TradeHoldService.ts:8-13` MA'yı bu değerden **çıkardığını** kendi yorumunda söylüyor — çıkarımın üçüncü adımı (“demek ki takas edebilir”) yanlıştır.
