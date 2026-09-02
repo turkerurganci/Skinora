@@ -77,13 +77,11 @@ export function estimateFeeHandler(service: FeeEstimationService) {
         { err: (err as Error).message, correlationId: req.correlationId },
         'Fee estimate unexpected error',
       );
-      res
-        .status(500)
-        .json({
-          error: 'INTERNAL_ERROR',
-          message: 'Unexpected fee estimate failure.',
-          retryable: true,
-        });
+      res.status(500).json({
+        error: 'INTERNAL_ERROR',
+        message: 'Unexpected fee estimate failure.',
+        retryable: true,
+      });
     }
   };
 }
