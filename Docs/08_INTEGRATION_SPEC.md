@@ -393,6 +393,20 @@ Tüm blockchain işlemleri (adres üretimi, ödeme izleme, transfer, iade) Node.
 | `POST /wallet/createtransaction` | TRX transfer transaction oluşturma | Gas (Energy) yönetimi |
 | `POST /wallet/delegateresource` | Deposit adresine geçici Energy delegation (sweep/refund öncesi) | Sweep ve doğrudan refund/payout akışlarında (05 §3.3) |
 | `POST /wallet/undelegateresource` | Delegation geri alımı (sweep/refund sonrası) | Delegation kaynağını serbest bırakma |
+| `POST /wallet/getaccountresource` | Hesabın harcanabilir Energy/Bandwidth durumu | Gönderim öncesi gas fee tahmini (§3.1a) |
+| `GET /wallet/getchainparameters` | Zincir birim fiyatları (`getEnergyFee`, `getTransactionFee`) | Gönderim öncesi gas fee tahmini (§3.1a) |
+
+### 3.1a Kullanıcıdan kesilen gas fee — gönderim öncesi zincir tahmini
+
+Kullanıcıdan kesilen gas fee (iade kesintisi 02 §4.6, payout koruma split'i 02 §4.7) sabit bir ayardan değil, sidecar'ın **gönderim öncesi zincir tahmininden** gelir (`POST /api/transfer/estimate-fee`, Prova-GasFeeChargedIsFixedGuess — 2026-09-02 proje sahibi kararı: kesin tutar kesilir):
+
+1. `triggerconstantcontract` ile **tam bu transferin** enerjisi simüle edilir (alıcının token bakiyesi var/yok farkı ~64k/~130k Energy — tek sabit bunu ifade edemezdi).
+2. Hot wallet'ın harcanabilir enerjisi düşülür (`getaccountresource`) — payout onu doğrudan, iade `delegateresource` üzerinden kullanır; karşılanan enerji TRX yakmaz.
+3. Açık kalan enerji + gönderenin bandwidth açığı, zincirin **güncel** birim fiyatlarıyla (`getchainparameters`) yakılacak TRX'e çevrilir.
+4. TRX → USDT çevrimi canlı kurla yapılır (birincil Binance `TRXUSDT` ticker, yedek CoinGecko; sidecar içinde 5 dk cache + 60 dk bayat-tolerans). İki sağlayıcı da anahtarsızdır.
+5. Sonuç 2 ondalığa **yukarı** yuvarlanır ve `BlockchainTransaction.GasFee`'ye snapshot'lanır (07 §7.5 kırılımı değişmez).
+
+Tahmin alınamazsa (sidecar/zincir/kur erişilemez) backend `blockchain.refund_gas_fee_estimate_usdt` / `blockchain.payout_gas_fee_estimate_usdt` ayarlarına düşer — para yolu tahmin servisine asla bloke olmaz. Gerçekleşen ücret ancak gönderim sonrası kesinleşir; tahmin ile gerçekleşen arasındaki kalıntı fark tasarım gereği platformda kalır.
 
 ### 3.2 HD Wallet (BIP-44) Yönetimi
 

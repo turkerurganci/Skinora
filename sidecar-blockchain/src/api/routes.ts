@@ -16,11 +16,13 @@ import {
   sweepHandler,
   transferStatusHandler,
 } from './transferHandlers.js';
+import { estimateFeeHandler } from './feeHandlers.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import type { MonitorRegistry } from '../monitor/MonitorRegistry.js';
 import type { PostCancelMonitorRegistry } from '../monitor/PostCancelMonitor.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { RefundService } from '../transfer/RefundService.js';
+import type { FeeEstimationService } from '../fee/FeeEstimationService.js';
 
 export interface RouterDeps {
   walletManager: WalletManager;
@@ -28,6 +30,7 @@ export interface RouterDeps {
   postCancelMonitorRegistry: PostCancelMonitorRegistry;
   transferService: TransferService;
   refundService: RefundService;
+  feeEstimationService: FeeEstimationService;
 }
 
 export function createRouter(deps: RouterDeps): Router {
@@ -105,6 +108,14 @@ export function createRouter(deps: RouterDeps): Router {
   //                  'INVALID_TRANSFER_AMOUNT' | 'TOKEN_CONTRACT_NOT_CONFIGURED' }
   //   → 502 { error: 'TRANSFER_BROADCAST_REJECTED' | 'TRANSFER_BROADCAST_FAILED' }
   apiRouter.post('/transfer/cold-wallet', coldWalletTransferHandler(deps.transferService));
+
+  // Pre-send fee estimate — Prova-GasFeeChargedIsFixedGuess (2026-09-02)
+  // POST /api/transfer/estimate-fee { fromAddress?, toAddress, amount, token }
+  //   → 200 { feeUsdt, energyRequired, energyAvailable, energyShortfall,
+  //           bandwidthRequired, bandwidthAvailable, burnSun, trxPriceUsdt, priceSource }
+  //   → 400 { error: 'INVALID_ESTIMATE_REQUEST' | 'TOKEN_CONTRACT_NOT_CONFIGURED' | 'HOT_WALLET_NOT_CONFIGURED' }
+  //   → 502 { error: 'FEE_ESTIMATE_*' | 'TRX_PRICE_UNAVAILABLE' }  (backend falls back to the static setting)
+  apiRouter.post('/transfer/estimate-fee', estimateFeeHandler(deps.feeEstimationService));
 
   // GET /api/transfer/status/:txHash
   //   → 200 { txHash, blockNumber?, contractRet?, confirmations }

@@ -12,6 +12,9 @@ import { TronDelegationClient } from './tron/TronDelegationClient.js';
 import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
 import { TransferService } from './transfer/TransferService.js';
 import { RefundService } from './transfer/RefundService.js';
+import { TronResourceClient } from './tron/TronResourceClient.js';
+import { TrxPriceService } from './fee/TrxPriceService.js';
+import { FeeEstimationService } from './fee/FeeEstimationService.js';
 
 const app = express();
 const walletManager = new WalletManager();
@@ -76,6 +79,13 @@ const refundService = new RefundService({
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
 });
+const feeEstimationService = new FeeEstimationService({
+  resourceClient: new TronResourceClient(config.tronFullNodeUrl, config.tronApiKey),
+  priceService: new TrxPriceService(),
+  tokenContracts,
+  hotWalletAddress: config.hotWalletAddress,
+  tokenDecimals: config.tokenDecimals,
+});
 
 // Middleware
 app.use(express.json());
@@ -89,6 +99,7 @@ app.use(
     postCancelMonitorRegistry,
     transferService,
     refundService,
+    feeEstimationService,
   }),
 );
 

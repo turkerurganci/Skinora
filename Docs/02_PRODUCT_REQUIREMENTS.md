@@ -207,6 +207,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |
+| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
 
 ---
 

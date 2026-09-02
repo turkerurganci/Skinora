@@ -179,6 +179,29 @@ public static class TransactionsModule
         services.AddScoped<IRefundDecisionService, RefundDecisionService>();
         services.AddScoped<IRefundBlockedAlertService, RefundBlockedAlertService>();
 
+        // Prova-GasFeeChargedIsFixedGuess (2026-09-02) — runtime pre-send gas
+        // estimate via the sidecar; the static *_gas_fee_estimate_usdt
+        // settings above survive as the resolver's fallback so an estimator
+        // outage degrades to the pre-round constants instead of blocking
+        // refunds or payouts.
+        services.AddHttpClient<HttpSidecarGasFeeEstimator>(
+            HttpSidecarGasFeeEstimator.HttpClientName,
+            (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                // The estimate fans out into several chain reads plus a price
+                // fetch on the sidecar — same budget as the transfer client.
+                var seconds = options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds * 3;
+                client.Timeout = TimeSpan.FromSeconds(seconds);
+            });
+        services.AddScoped<IGasFeeEstimator>(sp =>
+            sp.GetRequiredService<HttpSidecarGasFeeEstimator>());
+        services.AddScoped<IChargedGasFeeResolver, ChargedGasFeeResolver>();
+
         // T59 — admin transaction lifecycle orchestrator. Composes the T44
         // state machine + T50 freeze service for AD19 / AD19b / AD19c
         // (07 §9.20–§9.22, 02 §7, 03 §8.8).

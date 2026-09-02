@@ -1031,7 +1031,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 **Satıcı — Ödeme Özeti (COMPLETED):**
 
-> **Not:** Komisyon alıcı tarafından fiyata ek olarak ödenir — satıcının alacağından düşülmez (bkz. 02 §5). Gas fee ise önce komisyondan karşılanır; komisyonun admin tarafından belirlenen eşiğini (%10 varsayılan) aşan kısım satıcının alacağından kesilir (bkz. 02 §4.7).
+> **Not:** Komisyon alıcı tarafından fiyata ek olarak ödenir — satıcının alacağından düşülmez (bkz. 02 §5). Gas fee ise önce komisyondan karşılanır; komisyonun admin tarafından belirlenen eşiğini (%10 varsayılan) aşan kısım satıcının alacağından kesilir (bkz. 02 §4.7). Gas fee tutarı gönderim öncesi zincirden hesaplanır (08 §3.1a); aşağıdaki 0.50 bir örnek değerdir — hesaplama yapılamadığında kullanılan fallback ayarına denk gelir, tipik gerçek değer delege enerji yeterliyken 0'a iner.
 
 ```
 ┌──────────────────────────────────┐

@@ -117,10 +117,11 @@ public static class SystemSettingSeed
         Default     (48, "retention.batch_size_notification",           "int",     "Retention",     "500",  "Bağımsız bildirim retention job'unun tek iterasyonda işleyebileceği maksimum Notification sayısı. Bağlı NotificationDelivery kayıtları aynı iterasyon içinde silinir."),
         Default     (49, "retention.batch_size_user_login_log",         "int",     "Retention",     "1000", "UserLoginLog retention job'unun tek iterasyonda işleyebileceği maksimum kayıt sayısı."),
         // --- T72: Blockchain amount validation — refund gas fee estimate (08 §3.4, 02 §4.4, 09 §14.4) ---
-        // T74 will replace this MVP estimate with a live TronGrid-derived value; for now
-        // the refund-decision path uses this admin-tunable USDT amount when classifying
-        // under/over/wrong-token cases against the 2× gas fee minimum threshold.
-        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "T72 MVP iade gas fee tahmini (USDT). RefundDecisionService bu değeri kullanarak iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine karar verir. T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // Since Prova-GasFeeChargedIsFixedGuess (2026-09-02) the charged value comes from
+        // the sidecar's pre-send estimate (triggerconstantcontract + resource/price probes,
+        // ChargedGasFeeResolver); this setting is only the FALLBACK when that estimate is
+        // unavailable, and still feeds the 2× minimum-refund threshold in that case.
+        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir."),
         // --- T73: Outbound transfer dispatcher retry intervals (08 §3.3, 05 §3.3, 11 T73) ---
         // CSV (dakika) — sıralı; her transient failure'da `RetryCount` artırılır ve bu listenin
         // RetryCount'inci elemanı `NextAttemptAt`'a eklenir. Liste tükendiğinde transfer FAILED
@@ -156,9 +157,10 @@ public static class SystemSettingSeed
         // seller-send gas is the quantity the protection split measures against
         // the commission threshold (04 §7.3 worked example uses 0.50). Fed to
         // CalculateSellerPayout when SellerPayoutQueueJob enqueues the
-        // SELLER_PAYOUT row. T74 energy delegation replaces this MVP estimate
-        // with a runtime Energy/Bandwidth-derived value.
-        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "WP1 MVP satıcı payout gas fee tahmini (USDT). SellerPayoutQueueJob bu değeri gas-fee koruma split'inde (02 §4.7) kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30). T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // SELLER_PAYOUT row. Since Prova-GasFeeChargedIsFixedGuess (2026-09-02)
+        // the split input comes from the sidecar's pre-send estimate; this
+        // setting is only the FALLBACK when that estimate is unavailable.
+        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "Satıcı payout gas fee FALLBACK değeri (USDT). Normalde gas-fee koruma split'inin (02 §4.7) girdisi sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa SellerPayoutQueueJob bu değeri kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30)."),
         // --- T125: Delivery evidence launch gate (02 §9.2, DEPLOY_RUNBOOK §H) ---
         // Seeded FALSE and deliberately not env-bootstrappable (Default(...) ⇒
         // IsConfigured = true, which SettingsBootstrapService never overrides):
