@@ -393,20 +393,26 @@ Tüm blockchain işlemleri (adres üretimi, ödeme izleme, transfer, iade) Node.
 | `POST /wallet/createtransaction` | TRX transfer transaction oluşturma | Gas (Energy) yönetimi |
 | `POST /wallet/delegateresource` | Deposit adresine geçici Energy delegation (sweep/refund öncesi) | Sweep ve doğrudan refund/payout akışlarında (05 §3.3) |
 | `POST /wallet/undelegateresource` | Delegation geri alımı (sweep/refund sonrası) | Delegation kaynağını serbest bırakma |
-| `POST /wallet/getaccountresource` | Hesabın harcanabilir Energy/Bandwidth durumu | Gönderim öncesi gas fee tahmini (§3.1a) |
+| `POST /wallet/getaccountresource` | Hesabın harcanabilir Energy/Bandwidth durumu + ağ Energy/TRX oranı | Gönderim öncesi gas fee tahmini (§3.1a) |
 | `GET /wallet/getchainparameters` | Zincir birim fiyatları (`getEnergyFee`, `getTransactionFee`) | Gönderim öncesi gas fee tahmini (§3.1a) |
+| `POST /wallet/getcontract` | Kontratın `consume_user_resource_percent` ayarı — enerjiyi kim öder | Gönderim öncesi gas fee tahmini (§3.1a adım 2) |
 
 ### 3.1a Kullanıcıdan kesilen gas fee — gönderim öncesi zincir tahmini
 
 Kullanıcıdan kesilen gas fee (iade kesintisi 02 §4.6, payout koruma split'i 02 §4.7) sabit bir ayardan değil, sidecar'ın **gönderim öncesi zincir tahmininden** gelir (`POST /api/transfer/estimate-fee`, Prova-GasFeeChargedIsFixedGuess — 2026-09-02 proje sahibi kararı: kesin tutar kesilir):
 
 1. `triggerconstantcontract` ile **tam bu transferin** enerjisi simüle edilir (alıcının token bakiyesi var/yok farkı ~64k/~130k Energy — tek sabit bunu ifade edemezdi).
-2. Hot wallet'ın harcanabilir enerjisi düşülür (`getaccountresource`) — payout onu doğrudan, iade `delegateresource` üzerinden kullanır; karşılanan enerji TRX yakmaz.
-3. Açık kalan enerji + gönderenin bandwidth açığı, zincirin **güncel** birim fiyatlarıyla (`getchainparameters`) yakılacak TRX'e çevrilir.
-4. TRX → USDT çevrimi canlı kurla yapılır (birincil Binance `TRXUSDT` ticker, yedek CoinGecko; sidecar içinde 5 dk cache + 60 dk bayat-tolerans). İki sağlayıcı da anahtarsızdır.
-5. Sonuç 2 ondalığa **yukarı** yuvarlanır ve `BlockchainTransaction.GasFee`'ye snapshot'lanır (07 §7.5 kırılımı değişmez).
+2. **Enerjiyi kim ödeyecek?** Kontratın `consume_user_resource_percent` ayarı okunur (`getcontract`). Bir TRC-20 kontratı, çağıranlarının enerjisini **sahibinin** ödeyeceği şekilde deploy edilebilir; provalarda kullanılan Nile test USDT'si (`TXYZop…`) tam olarak böyledir ve **provadaki `fee: 0`'ın gerçek sebebi budur** — delegasyon değil (hot cüzdanın stake'i sıfırdı, delege edecek enerjisi yoktu). Sahibin ödediği pay kullanıcıdan kesilmez; kimsenin ödemediği bir maliyeti faturalamak olurdu. Mainnet Tether bu değeri 100 yapar, yani orada gönderen öder. Prob başarısız olursa **"gönderen %100 öder"** varsayılır — tahmin yalnızca büyür, asla küçülmez.
+3. **Platform ne kadar enerji getirebilir?** Payout'ta hot wallet doğrudan gönderdiği için havuzunun tamamı geçerlidir. İadede gönderen, hiçbir şeyi olmayan bir deposit adresidir ve ona **sabit bir delegasyon** aktarılır (`sweepEnergyDelegationSun`, 200 TRX). Bu yüzden iade yolunda kredi, o delegasyonun **ürettiği** enerjiyle sınırlanır (`min(havuz, 200 TRX × TotalEnergyLimit/TotalEnergyWeight)`) — havuzla değil. Sınır olmadan, stake'li bir mainnet hot cüzdanı tahmine `0.00` dedirtirken transfer neredeyse tamamını yakar ve farkı platform sessizce üstlenir.
+4. Açık kalan enerji + gönderenin bandwidth açığı, zincirin **güncel** birim fiyatlarıyla (`getchainparameters`) yakılacak TRX'e çevrilir. Bandwidth TRON'da **ya hep ya hiç**: tam byte sayısını karşılayamayan hesap eksik kalan kısmı değil, **işlemin tamamını** yakar.
+5. TRX → USDT çevrimi canlı kurla yapılır (birincil Binance `TRXUSDT` ticker, yedek CoinGecko; sidecar içinde 5 dk cache + 60 dk bayat-tolerans). İki sağlayıcı da anahtarsızdır.
+6. Sonuç 2 ondalığa **yukarı** yuvarlanır ve `BlockchainTransaction.GasFee`'ye snapshot'lanır (07 §7.5 kırılımı değişmez).
 
-Tahmin alınamazsa (sidecar/zincir/kur erişilemez) backend `blockchain.refund_gas_fee_estimate_usdt` / `blockchain.payout_gas_fee_estimate_usdt` ayarlarına düşer — para yolu tahmin servisine asla bloke olmaz. Gerçekleşen ücret ancak gönderim sonrası kesinleşir; tahmin ile gerçekleşen arasındaki kalıntı fark tasarım gereği platformda kalır.
+**Üst sınır — `blockchain.max_charged_gas_fee_usdt` (varsayılan 10.0).** Tahmin bir zincir probunu **canlı kurla** çarpar; tek bir bozuk kotasyon, birim kayması ya da yanlış okunan ondalık, kullanıcının kendi parasından sınırsız bir kesintiye dönüşürdü ve aşağı akışta bunu sorgulayan hiçbir kapı yoktu. Tahmin bu tavanı aşarsa **kırpılmaz, reddedilir** (kırpılmış bir rakam yanlış ama makul görünür ve sessizce geçerdi): statik fallback kesilir, `GasFeeSource.EstimateRejected` üretilir ve hata loglanır. `0` tavanı kapatır.
+
+**Gerçekleşen ücret kaydedilir, tahsil edilmez.** Onay anında zincir makbuzundan `fee` / `energy_usage_total` / `origin_energy_usage` okunup `BlockchainTransaction`'a yazılır. Kesinti kuyruğa alma anında sabitlenmiştir ve **geriye dönük düzeltilmez** — farkı toplamak ikinci bir transfer gerektirir ve o transfer (mainnet'te ~6,4 TRX ≈ 2 USDT) farkın kendisinden (sent mertebesi) pahalıdır. Kayıt, tahminin ne kadar tutturduğunu **varsaymak yerine ölçmek** içindir. `origin_energy_usage` sıfırdan büyükken `fee: 0` görmek, transferin bedava olduğu değil **kontratın ödediği** anlamına gelir.
+
+Tahmin alınamazsa (sidecar/zincir/kur erişilemez) backend `blockchain.refund_gas_fee_estimate_usdt` / `blockchain.payout_gas_fee_estimate_usdt` ayarlarına düşer — para yolu tahmin servisine asla bloke olmaz. Tahmin ile gerçekleşen arasındaki kalıntı fark tasarım gereği platformda kalır.
 
 ### 3.2 HD Wallet (BIP-44) Yönetimi
 

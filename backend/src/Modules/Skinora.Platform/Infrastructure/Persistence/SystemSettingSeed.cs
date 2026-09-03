@@ -179,6 +179,14 @@ public static class SystemSettingSeed
         Default     (61, "payout_settlement_days",                        "int",  "Settlement",   "8",            "Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletileceği süre (02 §4.5.1). `PayoutEligibleAt = ItemDeliveredAt + bu değer` olarak ITEM_DELIVERED girişinde hesaplanır; süre dolmadan ne satıcı payout'u ne de depozit sweep'i kuyruğa girer. Steam'in 7 günlük trade geri alma penceresini kapsamalıdır — 7'nin altına ayarlanamaz (02 §16.2)."),
         Default     (62, "settlement.unreadable_escalation_hours",        "int",  "Settlement",   "48",           "Mutabakat sonu kontrolü envanter okunamadığı için sonuca varamadığında, kaç saat sonra admin'e eskale edileceği (03 §2.4 adım 2 üçüncü dal). Eşiğe kadar kontrol her turda tekrarlanır; eşik aşılınca admin bildirimi gider ve işlem insan incelemesine düşer. Ödeme her iki durumda da parkta kalır — eşik yalnızca 'ne zaman insana sorulur' sorusunu yanıtlar, ödemeyi serbest bırakmaz."),
         Default     (63, "settlement.reversal_auto_refund_enabled",       "bool", "Settlement",   "false",        "Geri alma tespitinde OTOMATİK iade açık mı (T129 launch kapısı, T125 kapısının ikizi). false iken imza kayda geçer ve admin'e eskale edilir, para hareket etmez; kararı admin verir — satıcı lehine AD32 clear-settlement, alıcı lehine dispute üzerinden AD29. İki kol AYNI sonucu üretmez: DeliveryReversedAt'i yalnız otomatik dal yazar, itibar paydası ve fraud flag yalnız orada oluşur. true iken imza delivery_reversed tetikler. Gerçek geri alma ölçülene kadar (T122 §7) kapalı kalır."),
+        // --- Gas fee tavani (2026-09-04, gas fee turu) ---
+        // Runtime tahmin bir zincir probunu CANLI kurla carpiyor; tek bir bozuk
+        // kotasyon, birim kaymasi ya da yanlis okunan ondalik, kullanicinin KENDI
+        // parasindan sinirsiz bir kesintiye donusebilirdi ve asagi akista bunu
+        // sorgulayan hicbir kapi yoktu. Tahmin bu tavani asarsa KIRPILMAZ —
+        // kirpilmis bir rakam yanlis ama makul gorunur; tahmin reddedilir,
+        // statik fallback kesilir ve hata loglanir (GasFeeSource.EstimateRejected).
+        Default     (64, "blockchain.max_charged_gas_fee_usdt",           "decimal", "Monitoring",   "10.0",         "Kullanicidan kesilebilecek gas fee ust siniri (USDT). Runtime tahmin bu degeri asarsa tahmin REDDEDILIR (kirpilmaz) ve statik fallback kesilir; admin logu duser. Gercek bir mainnet TRC-20 gonderimi ~6,4 TRX (~2 USDT) yaktigi icin varsayilan 10.0 saglikli hicbir tahmini tetiklemez — bozuk bir tahmini yakalamak icindir. 0 = tavan kapali."),
     ];
 
     private static SystemSetting Unconfigured(

@@ -49,13 +49,31 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
         string flow,
         CancellationToken cancellationToken)
     {
+        var settings = await _settings.GetAsync(cancellationToken);
         var estimate = await _estimator.EstimateFeeUsdtAsync(request, cancellationToken);
+
         if (estimate is { } fee)
         {
+            // Sanity ceiling. The estimate multiplies a chain probe by a live
+            // exchange rate; a single bad quote, unit slip or misread decimal
+            // turns into an unbounded deduction from a user's own money, and
+            // nothing downstream would question it. The cap does NOT clamp —
+            // clamping would silently charge a wrong-but-plausible amount.
+            // Exceeding it means the estimate is not trustworthy, so the
+            // static fallback is used and an operator can see why.
+            var cap = settings.MaxChargedGasFeeUsdt;
+            if (cap > 0m && fee > cap)
+            {
+                var capped = fallbackSelector(settings);
+                _logger.LogError(
+                    "Gas fee estimate {Fee} USDT for {Flow} to {To} exceeds the {Cap} USDT ceiling — refusing the estimate and charging the static fallback {Fallback} USDT. Investigate the price feed and chain probes.",
+                    fee, flow, request.ToAddress, cap, capped);
+                return new ResolvedGasFee(capped, GasFeeSource.EstimateRejected);
+            }
+
             return new ResolvedGasFee(fee, GasFeeSource.RuntimeEstimate);
         }
 
-        var settings = await _settings.GetAsync(cancellationToken);
         var fallback = fallbackSelector(settings);
         _logger.LogWarning(
             "Gas fee runtime estimate unavailable for {Flow} to {To} — charging static fallback {Fallback} USDT.",

@@ -36,6 +36,15 @@ public enum GasFeeSource
 
     /// <summary>Static SystemSetting — estimator unavailable.</summary>
     StaticFallback,
+
+    /// <summary>
+    /// An estimate came back but exceeded <c>blockchain.max_charged_gas_fee_usdt</c>,
+    /// so it was refused and the static setting used instead. Distinct from
+    /// <see cref="StaticFallback"/> on purpose: that one means the estimator
+    /// was silent, this one means it spoke and was not believed — which is an
+    /// operator signal, not routine degradation.
+    /// </summary>
+    EstimateRejected,
 }
 
 public sealed record ResolvedGasFee(decimal FeeUsdt, GasFeeSource Source);

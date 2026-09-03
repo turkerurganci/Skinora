@@ -194,7 +194,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     payload.BlockNumber,
                     payload.Confirmations,
                     payload.ContractRet,
-                    null);
+                    null,
+                    payload.RealizedFeeSun,
+                    payload.EnergyUsageTotal,
+                    payload.OriginEnergyUsage);
             }
             return new TransferStatusResult(
                 TransferStatusOutcome.Pending,
@@ -286,7 +289,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("txHash")] string? TxHash,
         [property: JsonPropertyName("blockNumber")] long? BlockNumber,
         [property: JsonPropertyName("contractRet")] string? ContractRet,
-        [property: JsonPropertyName("confirmations")] int Confirmations);
+        [property: JsonPropertyName("confirmations")] int Confirmations,
+        [property: JsonPropertyName("realizedFeeSun")] long? RealizedFeeSun = null,
+        [property: JsonPropertyName("energyUsageTotal")] long? EnergyUsageTotal = null,
+        [property: JsonPropertyName("originEnergyUsage")] long? OriginEnergyUsage = null);
 
     private sealed record ErrorEnvelope(
         [property: JsonPropertyName("error")] string? Error,

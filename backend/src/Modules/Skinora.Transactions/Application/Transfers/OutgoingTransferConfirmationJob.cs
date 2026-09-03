@@ -103,6 +103,15 @@ public sealed class OutgoingTransferConfirmationJob
                 row.ConfirmationCount = status.Confirmations ?? 20;
                 row.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
                 row.ErrorMessage = null;
+                // Realized cost, recorded for measurement only. The charge in
+                // GasFee was fixed when the row was queued and is NOT revised
+                // here: collecting a difference afterwards would need a second
+                // transfer costing more than the difference. What this enables
+                // is the question the estimate itself raises — how close does
+                // it land — which was previously assumed rather than measured.
+                row.RealizedFeeSun = status.RealizedFeeSun;
+                row.EnergyUsageTotal = status.EnergyUsageTotal;
+                row.OriginEnergyUsage = status.OriginEnergyUsage;
 
                 // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
                 // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the
@@ -123,8 +132,9 @@ public sealed class OutgoingTransferConfirmationJob
 
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
-                    "Outbound transfer CONFIRMED — row {Id} ({Type}) tx {TxHash} @ block {Block}",
-                    row.Id, row.Type, row.TxHash, status.BlockNumber);
+                    "Outbound transfer CONFIRMED — row {Id} ({Type}) tx {TxHash} @ block {Block}; charged {Charged} USDT, realized {RealizedSun} SUN (energy {Energy}, owner-paid {OwnerEnergy})",
+                    row.Id, row.Type, row.TxHash, status.BlockNumber,
+                    row.GasFee, status.RealizedFeeSun, status.EnergyUsageTotal, status.OriginEnergyUsage);
                 return;
 
             case TransferStatusOutcome.Failed:

@@ -61,7 +61,7 @@ public sealed class AmountValidationServiceTests : IDisposable
                 ProtectionRatio: 0.10m,
                 MinRefundThresholdRatio: 2m,
                 RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m),
+                PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m),
         };
         _alerts = new StubRefundBlockedAlertService();
         _outbox = new CapturingOutboxService();
@@ -622,7 +622,7 @@ public sealed class AmountValidationServiceTests : IDisposable
     private sealed class StubGasFeeSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; init; } =
-            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m);
+            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m);
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken)
             => Task.FromResult(Settings);

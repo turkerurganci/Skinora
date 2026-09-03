@@ -35,12 +35,23 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
     /// </summary>
     public const decimal DefaultPayoutGasFeeEstimateUsdt = 0.50m;
 
+    public const string MaxChargedGasFeeKey = "blockchain.max_charged_gas_fee_usdt";
+
+    /// <summary>
+    /// Code-side fallback for <see cref="MaxChargedGasFeeKey"/>. Set well
+    /// above any plausible real transfer cost (a mainnet TRC-20 send burns
+    /// roughly 6.4 TRX, about 2 USDT) so it never fires on a healthy estimate
+    /// — it exists to catch a broken one.
+    /// </summary>
+    public const decimal DefaultMaxChargedGasFeeUsdt = 10.0m;
+
     private static readonly string[] _allKeys =
     [
         ProtectionRatioKey,
         MinRefundThresholdRatioKey,
         RefundGasFeeEstimateKey,
         PayoutGasFeeEstimateKey,
+        MaxChargedGasFeeKey,
     ];
 
     private readonly AppDbContext _db;
@@ -62,7 +73,8 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
             ProtectionRatio: ReadProtectionRatio(rows),
             MinRefundThresholdRatio: ReadMinRefundThresholdRatio(rows),
             RefundGasFeeEstimateUsdt: ReadRefundGasFeeEstimate(rows),
-            PayoutGasFeeEstimateUsdt: ReadPayoutGasFeeEstimate(rows));
+            PayoutGasFeeEstimateUsdt: ReadPayoutGasFeeEstimate(rows),
+            MaxChargedGasFeeUsdt: ReadDecimal(rows, MaxChargedGasFeeKey, DefaultMaxChargedGasFeeUsdt));
     }
 
     private static decimal ReadRefundGasFeeEstimate(IReadOnlyDictionary<string, string?> rows)
@@ -125,5 +137,23 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
             return parsed;
         }
         return FinancialCalculator.DefaultMinimumRefundThresholdRatio;
+    }
+
+    /// <summary>
+    /// Generic positive-decimal read with a documented default. Same read-side
+    /// envelope as the estimates above: missing, unconfigured or poisoned rows
+    /// fall back rather than propagate a nonsense value into a money path.
+    /// </summary>
+    private static decimal ReadDecimal(
+        IReadOnlyDictionary<string, string?> rows, string key, decimal fallback)
+    {
+        if (rows.TryGetValue(key, out var raw)
+            && raw is not null
+            && decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0m)
+        {
+            return parsed;
+        }
+        return fallback;
     }
 }

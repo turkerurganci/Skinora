@@ -55,7 +55,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 ProtectionRatio: 0.10m,
                 MinRefundThresholdRatio: 2m,
                 RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m),
+                PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m),
         };
         _gasFee = new StubChargedGasFeeResolver { PayoutFee = 0.50m };
         _clock = new FakeTimeProvider();
@@ -475,7 +475,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     private sealed class StubGasFeeSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; set; } =
-            new(0.10m, 2m, 2m, 0.50m);
+            new(0.10m, 2m, 2m, 0.50m, 10m);
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Settings);

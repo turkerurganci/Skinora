@@ -85,6 +85,9 @@ const feeEstimationService = new FeeEstimationService({
   tokenContracts,
   hotWalletAddress: config.hotWalletAddress,
   tokenDecimals: config.tokenDecimals,
+  // Same constant the sweeper actually delegates — the estimate must credit
+  // the refund path with what this stake produces, not the hot wallet's pool.
+  delegationAmountSun: config.sweepEnergyDelegationSun,
 });
 
 // Middleware

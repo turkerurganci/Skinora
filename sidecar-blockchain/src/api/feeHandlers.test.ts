@@ -31,6 +31,9 @@ function buildRequest(body: unknown): Request {
 const SAMPLE_RESULT: FeeEstimateResult = {
   feeUsdt: '0.18',
   energyRequired: 29_650,
+  energyPayableByCaller: 29_650,
+  contractCallerPercent: 100,
+  delegationCapEnergy: null,
   energyAvailable: 100_000,
   energyShortfall: 0,
   bandwidthRequired: 350,
