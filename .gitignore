@@ -70,3 +70,8 @@ coverage/
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
+
+# /gorus ara dosyalari — gonderilen soru ve yapistirilan cevap nihai kayda
+# (Docs/GPT_OPINIONS/YYYY-MM-DD_<slug>.md) birebir gomulur; yalniz o commit'lenir.
+Docs/GPT_OPINIONS/*.prompt.md
+Docs/GPT_OPINIONS/*.answer.md

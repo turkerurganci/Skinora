@@ -316,6 +316,7 @@ Bir task BLOCKED durumuna düştüğünde:
 - `/deep-review` — 8 katmanlı doküman kalite ve tutarlılık analizi yapar.
 - `/audit` — Envanter bazlı sistematik doküman denetimi yapar.
 - `/gpt-cross-review` — Dokümanı GPT o3'e gönderir, Claude bulguları bağımsız değerlendirir.
+- `/gorus <konu>` — Anlık ikinci görüş: konuya göre soruyu hazırlar, **proje sahibinin onayıyla** ChatGPT'ye gönderir, cevabı birebir sunar ve **durur**. Ne yapılacağına sahibi karar verir. Cross-review'la karıştırma — o doküman turu, bu tek sorunun tek atışlık görüşü.
 
 ---
 

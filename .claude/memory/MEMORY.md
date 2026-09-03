@@ -316,6 +316,7 @@
 - Implementation skills: `.claude/skills/task.md`, `.claude/skills/validate.md`, `.claude/skills/gate-check.md`
 - Audit reports: `Docs/AUDIT_REPORTS/` (00-12)
 - GPT review reports: `Docs/GPT_REVIEW_REPORTS/` (02: R1-R6, 03: R1-R5, 04: R1-R14, 05: R1-R8, 06: R1-R26, 07: R1-R6, 08: R1-R12, 09: R1-R9, 11: R1-R4, 12: R1-R4)
+- GPT görüş kayıtları (**ayrı akış**): `Docs/GPT_OPINIONS/` — `/gorus` skill'i, tek soruluk anlık ikinci görüş. Soru sahibinin **onayıyla** gider, cevap birebir sunulur, **karar sahibinindir**; Claude cevaba göre kendiliğinden uygulamaya geçmez. Taşıyıcı `scripts/gpt-ask.mjs` (codex CLI → API → manuel yapıştırma).
 - Checkpoint reports: `Docs/CHECKPOINT_REPORTS/` (CP1-CP18)
 
 ## User
