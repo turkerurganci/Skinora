@@ -189,6 +189,41 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Single(_outbox.Events.OfType<TransferDispatchFailedEvent>());
     }
 
+    // ÖLÇÜM (2026-09-06) — yanlış token iadesinde sidecar'a HANGİ token
+    // söyleniyor? 06 §3.8 semantiği: `Token` beklenen stablecoin'i, depozit
+    // adresinde fiilen duran yanlış token'ın kimliği `ActualTokenAddress`'i
+    // taşır. Dispatcher broadcast'e `row.Token`'ı veriyor ve sidecar o sembolü
+    // kontrata çeviriyor (RefundService.resolveContract). `ActualTokenAddress`
+    // hiçbir alanda taşınmıyorsa, broadcast depozit adresinden onda BULUNMAYAN
+    // bir token'ı istemiş olur. Bu test bugünkü davranışı sabitler: iki
+    // assertion da BUGÜN geçer; ikincisi broadcast sözleşmesine gerçek
+    // kontratı taşıyan bir alan eklendiği gün kırılır — testin yeniden
+    // okunması gereken an tam olarak odur.
+    [Fact]
+    public async Task WrongTokenRefund_BroadcastCarriesExpectedToken_NotTheTokenOnTheDeposit()
+    {
+        var fixture = await SeedRefundAsync(
+            BlockchainTransactionType.WRONG_TOKEN_REFUND, amount: 80m);
+        Assert.Equal("TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", fixture.RefundRow.ActualTokenAddress);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(BlockchainTransactionType.WRONG_TOKEN_REFUND, call.Type);
+
+        // Satırın BEKLENEN stablecoin'i — alıcının parasını fiilen tutan
+        // kontrat değil.
+        Assert.Equal(StablecoinType.USDT, call.Token);
+
+        // Ve broadcast sözleşmesinde gerçek kontratı taşıyabilecek bir alan yok.
+        var carriers = typeof(TransferBroadcastRequest).GetProperties()
+            .Select(p => p.Name)
+            .Where(n => n.Contains("Actual", StringComparison.Ordinal)
+                || n.Contains("Contract", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Empty(carriers);
+    }
+
     [Fact]
     public async Task NotYetEligible_RowsAreSkipped()
     {
