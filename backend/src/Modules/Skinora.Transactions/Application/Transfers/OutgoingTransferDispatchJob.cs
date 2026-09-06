@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -60,6 +62,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly IBlockchainTransferClient _client;
     private readonly ITransferRetryPolicy _retryPolicy;
     private readonly IOutboxService _outbox;
+    private readonly StablecoinContractOptions _contracts;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -68,6 +71,7 @@ public sealed class OutgoingTransferDispatchJob
         IBlockchainTransferClient client,
         ITransferRetryPolicy retryPolicy,
         IOutboxService outbox,
+        IOptions<StablecoinContractOptions> contracts,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -75,6 +79,7 @@ public sealed class OutgoingTransferDispatchJob
         _client = client;
         _retryPolicy = retryPolicy;
         _outbox = outbox;
+        _contracts = contracts.Value;
         _clock = clock;
         _logger = logger;
     }
@@ -151,10 +156,42 @@ public sealed class OutgoingTransferDispatchJob
             row.FromAddress = addressRow.Address;
         }
 
+        // 06 §3.8 stores the EXPECTED stablecoin in Token for the wrong-token
+        // family and the contract that actually landed on the deposit address
+        // in ActualTokenAddress. The sidecar resolves the symbol we send here
+        // to a contract (RefundService.resolveContract), so forwarding
+        // row.Token would ask the deposit address to move a token it does not
+        // hold — the refund could never broadcast. Translate the stored
+        // contract back to its symbol instead; the sidecar's allowlist means
+        // it is always USDT or USDC (AmountValidationService §wrong-token).
+        var broadcastToken = row.Token;
+        if (row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND)
+        {
+            var actualToken = _contracts.ResolveByContract(row.ActualTokenAddress);
+            if (actualToken is null)
+            {
+                // Unresolvable contract cannot be broadcast under any symbol.
+                // Fail terminally rather than send the expected token and let
+                // the chain reject it: same admin alert, no wasted attempts.
+                await HandleFailureAsync(
+                    row,
+                    new TransferBroadcastResult(
+                        TransferBroadcastStatus.InvalidRequest,
+                        null,
+                        "WRONG_TOKEN_CONTRACT_UNRESOLVED",
+                        $"ActualTokenAddress '{row.ActualTokenAddress}' does not match a configured stablecoin contract."),
+                    terminal: true,
+                    cancellationToken);
+                return;
+            }
+
+            broadcastToken = actualToken.Value;
+        }
+
         var request = new TransferBroadcastRequest(
             BlockchainTransactionId: row.Id,
             Type: row.Type,
-            Token: row.Token,
+            Token: broadcastToken,
             Amount: row.Amount,
             ToAddress: row.ToAddress,
             DepositIndex: depositIndex,

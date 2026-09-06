@@ -822,6 +822,8 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 
 > **Token semantiği:** Token field'ı normal işlemlerde gerçek stablecoin türünü temsil eder. `WRONG_TOKEN_INCOMING` ve `WRONG_TOKEN_REFUND` kayıtlarında ise işlemin **beklenen** token'ını (USDT veya USDC) tutar; gerçekte gelen/refund edilen yanlış token'ın kimliği `ActualTokenAddress` field'ından takip edilir.
 >
+> **Gönderim kuralı (2026-09-06 ölçümü):** Bu ayrım yüzünden `WRONG_TOKEN_REFUND` satırı **olduğu gibi broadcast edilemez.** Sidecar kendisine gönderilen sembolü kontrata çevirir (`RefundService.resolveContract`), dolayısıyla `Token` alanı iletilirse depozit adresinden onda **bulunmayan** token istenmiş olur ve iade hiç yayınlanamaz. `OutgoingTransferDispatchJob` bu tek tipte `ActualTokenAddress`'i sembole geri çevirip onu gönderir (allowlist gereği daima USDT ya da USDC); kontrat çözülemezse satır `WRONG_TOKEN_CONTRACT_UNRESOLVED` ile terminal FAILED olur ve admin uyarısı düşer.
+>
 > **Silme politikası:** Workflow Record (Arşivlenebilir) — DELETE tanımlı değil; yaşam döngüsü boyunca Status, ConfirmationCount, RetryCount güncellenir. Terminal state sonrası frozen. Archive tabloya taşınabilir (§8.8).
 >
 > **Retry notu:** Giden transferlerde (SELLER_PAYOUT, BUYER_REFUND, EXCESS_REFUND, WRONG_TOKEN_REFUND, LATE_PAYMENT_REFUND, INCORRECT_AMOUNT_REFUND, SWEEP) başarısız olursa exponential backoff ile yeniden denenir (3 deneme: 1dk, 5dk, 15dk — 05 §3.3). RetryCount ve ErrorMessage bu süreci takip eder.

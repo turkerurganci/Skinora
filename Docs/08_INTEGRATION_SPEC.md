@@ -602,7 +602,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 | Yanlış token (desteklenen) | Red → iade denemesi (USDT/USDC allowlist'te), başarısızsa admin alert |
 | Spam/bilinmeyen token | Ignore + log → otomatik iade yapılmaz, admin dashboard'da görünür |
 
-> **Not:** Yanlış token tespiti: izlenen adreste beklenen token dışında TRC-20 transfer tespit edildiğinde `BlockchainTransaction` kaydı `WRONG_TOKEN_INCOMING` type ile oluşturulur. `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır. Otomatik iade denemesi `WRONG_TOKEN_REFUND` kaydı ile takip edilir (06 §3.8).
+> **Not:** Yanlış token tespiti: izlenen adreste beklenen token dışında TRC-20 transfer tespit edildiğinde `BlockchainTransaction` kaydı `WRONG_TOKEN_INCOMING` type ile oluşturulur. `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır. Otomatik iade denemesi `WRONG_TOKEN_REFUND` kaydı ile takip edilir (06 §3.8). **Broadcast'e giden token bu tek tipte satırın `Token` alanı değildir:** `Token` beklenen stablecoin'i tutar (06 §3.8 semantiği), oysa depozit adresinde duran ve iade edilecek olan `ActualTokenAddress`'tir; dispatcher kontratı sembole çevirip `/api/transfer/refund` gövdesine onu koyar. Çeviri yapılmazsa sidecar beklenen token'ın kontratını seçer ve transfer bakiye yokluğundan yayınlanamaz (2026-09-06 ölçümü).
 
 | Minimum iade eşiği | İade tutarı < 2× gas fee ise iade yapılmaz — gas fee iadenin büyük kısmını yutar. Admin alert gönderilir, manuel değerlendirme (05 §3.3) |
 
