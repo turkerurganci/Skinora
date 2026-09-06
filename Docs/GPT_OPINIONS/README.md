@@ -109,3 +109,5 @@ Script bu yüzden `login status`'u yalnız **ucuz ön eleme** olarak kullanır; 
 | Tarih | Konu | Kaynak | Karar |
 |---|---|---|---|
 <!-- INDEX -->
+| 2026-09-04 | [gas-fee-rezervasyon-itiraz](2026-09-04_gas-fee-rezervasyon-itiraz.md) | codex | ⏳ |
+| 2026-09-03 | [canli-prova](2026-09-03_canli-prova.md) | codex | ⏳ |
