@@ -53,7 +53,7 @@ public sealed class PaymentRefundToBuyerConsumer
     : INotificationHandler<PaymentRefundToBuyerRequestedEvent>
 {
     private readonly AppDbContext _db;
-    private readonly IGasFeeSettingsProvider _gasFeeSettings;
+    private readonly IChargedGasFeeResolver _chargedGasFee;
     private readonly IRefundDecisionService _refundDecision;
     private readonly IRefundBlockedAlertService _refundBlockedAlert;
     private readonly TimeProvider _clock;
@@ -61,14 +61,14 @@ public sealed class PaymentRefundToBuyerConsumer
 
     public PaymentRefundToBuyerConsumer(
         AppDbContext db,
-        IGasFeeSettingsProvider gasFeeSettings,
+        IChargedGasFeeResolver chargedGasFee,
         IRefundDecisionService refundDecision,
         IRefundBlockedAlertService refundBlockedAlert,
         TimeProvider clock,
         ILogger<PaymentRefundToBuyerConsumer> logger)
     {
         _db = db;
-        _gasFeeSettings = gasFeeSettings;
+        _chargedGasFee = chargedGasFee;
         _refundDecision = refundDecision;
         _refundBlockedAlert = refundBlockedAlert;
         _clock = clock;
@@ -104,7 +104,25 @@ public sealed class PaymentRefundToBuyerConsumer
             return;
         }
 
-        var gasFee = (await _gasFeeSettings.GetAsync(cancellationToken)).RefundGasFeeEstimateUsdt;
+        // Runtime pre-send estimate of the actual refund transfer (deposit →
+        // buyer); the static refund setting only as fallback
+        // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02). The
+        // deposit address is the refund's sender (RefundService broadcasts
+        // deposit-sourced); a missing PaymentAddress row degrades to the
+        // hot-wallet default inside the sidecar, which only shifts the tiny
+        // bandwidth component.
+        var depositAddress = await _db.Set<PaymentAddress>()
+            .AsNoTracking()
+            .Where(p => p.TransactionId == transaction.Id)
+            .Select(p => (string?)p.Address)
+            .FirstOrDefaultAsync(cancellationToken);
+        var resolvedGasFee = await _chargedGasFee.ResolveRefundFeeAsync(
+            depositAddress,
+            notification.BuyerRefundAddress,
+            transaction.TotalAmount,
+            transaction.StablecoinType,
+            cancellationToken);
+        var gasFee = resolvedGasFee.FeeUsdt;
 
         // 02 §4.6 — buyer receives Price + Commission − gas fee = TotalAmount −
         // gasFee. ResolveBuyerRefundAsync applies the negative / dust-threshold

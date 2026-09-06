@@ -59,12 +59,26 @@ public enum TransferBroadcastStatus
     TransientFailure,
 }
 
+/// <param name="RealizedFeeSun">
+/// TRX actually burned by the transfer, in SUN, straight from the chain
+/// receipt. NULL until the sidecar can read it; legitimately <c>0</c> when the
+/// transfer cost the sender nothing.
+/// </param>
+/// <param name="EnergyUsageTotal">Total Energy the call consumed.</param>
+/// <param name="OriginEnergyUsage">
+/// Energy the contract owner absorbed on the sender's behalf. A zero fee next
+/// to a non-zero value here means the CONTRACT paid — not that the transfer
+/// was free to arrange.
+/// </param>
 public sealed record TransferStatusResult(
     TransferStatusOutcome Outcome,
     long? BlockNumber,
     int? Confirmations,
     string? ContractRet,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    long? RealizedFeeSun = null,
+    long? EnergyUsageTotal = null,
+    long? OriginEnergyUsage = null);
 
 public enum TransferStatusOutcome
 {

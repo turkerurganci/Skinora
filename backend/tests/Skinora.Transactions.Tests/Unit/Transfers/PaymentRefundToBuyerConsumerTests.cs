@@ -37,6 +37,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     private readonly DbContextOptions<AppDbContext> _options;
     private readonly AppDbContext _db;
     private readonly StubGasFeeSettingsProvider _settings;
+    private readonly StubChargedGasFeeResolver _gasFee;
     private readonly RecordingRefundBlockedAlertService _alert;
     private readonly FakeTimeProvider _clock;
     private readonly PaymentRefundToBuyerConsumer _sut;
@@ -57,8 +58,9 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
                 ProtectionRatio: 0.10m,
                 MinRefundThresholdRatio: 2m,
                 RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m),
+                PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m),
         };
+        _gasFee = new StubChargedGasFeeResolver { RefundFee = 2m };
         _alert = new RecordingRefundBlockedAlertService();
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
@@ -74,7 +76,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
 
     private PaymentRefundToBuyerConsumer NewConsumer(
         AppDbContext db, ILogger<PaymentRefundToBuyerConsumer> logger) =>
-        new(db, _settings, new RefundDecisionService(_settings), _alert, _clock, logger);
+        new(db, _gasFee, new RefundDecisionService(_settings), _alert, _clock, logger);
 
     [Fact]
     public async Task ValidRefund_QueuesPendingBuyerRefund_WithNetAmountAndGasSnapshot()
@@ -100,6 +102,31 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     }
 
     [Fact]
+    public async Task RuntimeEstimate_IsChargedAndSnapshotted()
+    {
+        // Prova-GasFeeChargedIsFixedGuess: the net amount and the GasFee
+        // snapshot must carry the RESOLVED runtime value, not the static 2.00
+        // setting. TotalAmount 102, fee 0.18 → net 101.82.
+        _gasFee.RefundFee = 0.18m;
+        var tx = await SeedCancelledAsync(price: 100m, commission: 2m);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        var refund = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.BUYER_REFUND);
+        Assert.Equal(101.82m, refund.Amount);
+        Assert.Equal(0.18m, refund.GasFee);
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(BuyerRefundAddress, call.To);
+        Assert.Equal(102m, call.Amount);
+        Assert.Equal(StablecoinType.USDT, call.Token);
+        // No PaymentAddress row seeded → the consumer passes null and the
+        // sidecar defaults to the hot wallet as sender.
+        Assert.Null(call.From);
+    }
+
+    [Fact]
     public async Task Redelivery_QueuesExactlyOneRow()
     {
         // At-least-once outbox redelivery: the AnyAsync guard makes the second
@@ -120,7 +147,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     public async Task BelowThresholdRefund_RaisesAdminAlert_AndQueuesNoRow()
     {
         // gasFee 51 → net 51, threshold 51×2=102 → net < threshold → Block.
-        _settings.Settings = _settings.Settings with { RefundGasFeeEstimateUsdt = 51m };
+        _gasFee.RefundFee = 51m;
         var tx = await SeedCancelledAsync(price: 100m, commission: 2m);
 
         await _sut.Handle(EventFor(tx), CancellationToken.None);
@@ -138,7 +165,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     public async Task NegativeRefund_RaisesAdminAlert_AndQueuesNoRow()
     {
         // gasFee 200 > TotalAmount 102 → net negative → Block (NegativeAmount).
-        _settings.Settings = _settings.Settings with { RefundGasFeeEstimateUsdt = 200m };
+        _gasFee.RefundFee = 200m;
         var tx = await SeedCancelledAsync(price: 100m, commission: 2m);
 
         await _sut.Handle(EventFor(tx), CancellationToken.None);
@@ -291,10 +318,31 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     private sealed class StubGasFeeSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; set; } =
-            new(0.10m, 2m, 2m, 0.50m);
+            new(0.10m, 2m, 2m, 0.50m, 10m);
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Settings);
+    }
+
+    private sealed class StubChargedGasFeeResolver : IChargedGasFeeResolver
+    {
+        public decimal RefundFee { get; set; } = 2m;
+        public decimal PayoutFee { get; set; } = 0.50m;
+        public GasFeeSource Source { get; set; } = GasFeeSource.RuntimeEstimate;
+        public List<(string? From, string To, decimal Amount, StablecoinType Token)> RefundCalls { get; } = [];
+
+        public Task<ResolvedGasFee> ResolveRefundFeeAsync(
+            string? fromDepositAddress, string toAddress, decimal amount,
+            StablecoinType token, CancellationToken cancellationToken)
+        {
+            RefundCalls.Add((fromDepositAddress, toAddress, amount, token));
+            return Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+        }
+
+        public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
+            string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGasFee(PayoutFee, Source));
     }
 
     private sealed class RecordingRefundBlockedAlertService : IRefundBlockedAlertService

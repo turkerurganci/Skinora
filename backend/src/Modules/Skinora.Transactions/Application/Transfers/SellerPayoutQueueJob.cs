@@ -98,20 +98,20 @@ public sealed class SellerPayoutQueueJob
 
     private readonly AppDbContext _db;
     private readonly IRefundDecisionService _refundDecisionService;
-    private readonly IGasFeeSettingsProvider _gasFeeSettings;
+    private readonly IChargedGasFeeResolver _chargedGasFee;
     private readonly TimeProvider _clock;
     private readonly ILogger<SellerPayoutQueueJob> _logger;
 
     public SellerPayoutQueueJob(
         AppDbContext db,
         IRefundDecisionService refundDecisionService,
-        IGasFeeSettingsProvider gasFeeSettings,
+        IChargedGasFeeResolver chargedGasFee,
         TimeProvider clock,
         ILogger<SellerPayoutQueueJob> logger)
     {
         _db = db;
         _refundDecisionService = refundDecisionService;
-        _gasFeeSettings = gasFeeSettings;
+        _chargedGasFee = chargedGasFee;
         _clock = clock;
         _logger = logger;
     }
@@ -190,8 +190,14 @@ public sealed class SellerPayoutQueueJob
             return;
         }
 
-        var gasSettings = await _gasFeeSettings.GetAsync(cancellationToken);
-        var gasEstimate = gasSettings.PayoutGasFeeEstimateUsdt;
+        // Runtime pre-send estimate; the static payout setting only as fallback
+        // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02).
+        var resolvedGasFee = await _chargedGasFee.ResolvePayoutFeeAsync(
+            transaction.SellerPayoutAddress,
+            transaction.Price,
+            transaction.StablecoinType,
+            cancellationToken);
+        var gasEstimate = resolvedGasFee.FeeUsdt;
 
         // Gas-fee-protection split (02 §4.7) — ResolveSellerPayoutAsync reads
         // the live gas_fee_protection_ratio internally.

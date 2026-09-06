@@ -195,7 +195,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Alıcıya iade tutarı | Fiyat + komisyon - gas fee |
 | İade adresi | Alıcının işlem kabul ederken belirlediği iade adresine gönderilir (detaylar §12.2) |
 | Gas fee | İade işleminin gas fee'si iade tutarından düşülür (alıcı karşılar) |
-| Platform maliyeti | Sıfır — platform hiçbir iade senaryosunda kendi cebinden ödeme yapmaz |
+| Platform maliyeti | Alıcı, iadenin **zincirde yanan** ücretini karşılar; platform bu kalemden zarar etmez. **Sıfır değildir:** yakma olmadığında (delege enerji ya da kontratın kendi kullanıcılarının enerjisini ödemesi) kesinti 0 çıkar ve gönderimi mümkün kılan kaynağı platform sağlamış olur. O kaynağın bedeli ayrı bir kalemdir — kullanıcıya "gas fee" adıyla yansıtılmaz (`EnergyPerTrxAssumptionUnverified`, mainnet öncesi açık karar) |
 
 ### 4.7 Gas Fee Yönetimi
 
@@ -207,6 +207,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |
+| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
 
 ---
 

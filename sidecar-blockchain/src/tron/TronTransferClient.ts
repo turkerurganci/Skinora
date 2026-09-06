@@ -38,6 +38,12 @@ export interface TransactionStatusResult {
   contractRet?: string;
   /** Number of solid blocks since inclusion; -1 while the tx is still pending. */
   confirmations: number;
+  /** TRX actually burned, in SUN. 0 means the transfer cost the sender nothing. */
+  realizedFeeSun?: number;
+  /** Total Energy the call consumed, however it was paid for. */
+  energyUsageTotal?: number;
+  /** Energy the contract owner absorbed on the caller's behalf. */
+  originEnergyUsage?: number;
 }
 
 /**
@@ -212,7 +218,14 @@ export class TronTransferClient {
     const info = (await infoResponse.json()) as {
       id?: string;
       blockNumber?: number;
-      receipt?: { result?: string };
+      fee?: number;
+      receipt?: {
+        result?: string;
+        energy_usage_total?: number;
+        energy_fee?: number;
+        origin_energy_usage?: number;
+        net_fee?: number;
+      };
     };
     const block = (await blockResponse.json()) as {
       block_header?: { raw_data?: { number?: number } };
@@ -234,6 +247,17 @@ export class TronTransferClient {
       blockNumber: txBlock,
       contractRet: info.receipt?.result,
       confirmations,
+      // What the transfer ACTUALLY cost. The chain has always returned this
+      // and it was being discarded, which left the platform unable to answer
+      // the one question its own estimate raises: how close was it? Recording
+      // it does not change any charge — the deduction was fixed at queue time
+      // — it makes the residual measurable instead of assumed.
+      realizedFeeSun: typeof info.fee === 'number' ? info.fee : undefined,
+      energyUsageTotal: info.receipt?.energy_usage_total,
+      // Energy the CONTRACT OWNER absorbed. Non-zero means the sender paid
+      // less than the raw energy figure suggests — the Nile test USDT works
+      // exactly this way, which is why rehearsal transfers measured fee: 0.
+      originEnergyUsage: info.receipt?.origin_energy_usage,
     };
   }
 }

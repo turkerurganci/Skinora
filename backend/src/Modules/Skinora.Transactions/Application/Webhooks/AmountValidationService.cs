@@ -20,7 +20,7 @@ namespace Skinora.Transactions.Application.Webhooks;
 public sealed class AmountValidationService : IAmountValidationService
 {
     private readonly AppDbContext _db;
-    private readonly IGasFeeSettingsProvider _gasFeeSettings;
+    private readonly IChargedGasFeeResolver _chargedGasFee;
     private readonly IRefundDecisionService _refundDecision;
     private readonly IRefundBlockedAlertService _refundBlockedAlert;
     private readonly IOutboxService _outbox;
@@ -31,7 +31,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
     public AmountValidationService(
         AppDbContext db,
-        IGasFeeSettingsProvider gasFeeSettings,
+        IChargedGasFeeResolver chargedGasFee,
         IRefundDecisionService refundDecision,
         IRefundBlockedAlertService refundBlockedAlert,
         IOutboxService outbox,
@@ -41,7 +41,7 @@ public sealed class AmountValidationService : IAmountValidationService
         ILogger<AmountValidationService> logger)
     {
         _db = db;
-        _gasFeeSettings = gasFeeSettings;
+        _chargedGasFee = chargedGasFee;
         _refundDecision = refundDecision;
         _refundBlockedAlert = refundBlockedAlert;
         _outbox = outbox;
@@ -81,21 +81,22 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var settings = await _gasFeeSettings.GetAsync(cancellationToken);
-        var gasFee = settings.RefundGasFeeEstimateUsdt;
         var expected = paymentAddress.ExpectedAmount;
         var received = confirmedPayment.Amount;
 
         // 02 §4.4 + 08 §3.4 tutar doğrulama tablosu — strict equality (no tolerance, 06 §8.3).
         // Branch order: multi-payment is detected by Transaction.Status (state already past
         // SELLER_CONFIRMED) regardless of equality, so it must precede the exact/over/under split.
+        // The gas fee is resolved per refund branch, not up front — the
+        // exact-match happy path queues no refund and must not pay for a
+        // runtime estimate probe (Prova-GasFeeChargedIsFixedGuess).
         if (transaction.Status != TransactionStatus.SELLER_CONFIRMED)
         {
             return await HandleMultiPaymentAsync(
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                gasFee,
+                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -115,7 +116,7 @@ public sealed class AmountValidationService : IAmountValidationService
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                gasFee,
+                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -124,7 +125,7 @@ public sealed class AmountValidationService : IAmountValidationService
             confirmedPayment,
             paymentAddress,
             transaction,
-            gasFee,
+            await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
             correlationId,
             cancellationToken);
     }
@@ -159,8 +160,7 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var settings = await _gasFeeSettings.GetAsync(cancellationToken);
-        var gasFee = settings.RefundGasFeeEstimateUsdt;
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, wrongTokenIncoming, cancellationToken);
         var received = wrongTokenIncoming.Amount;
 
         var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
@@ -237,8 +237,7 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var settings = await _gasFeeSettings.GetAsync(cancellationToken);
-        var gasFee = settings.RefundGasFeeEstimateUsdt;
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, latePayment, cancellationToken);
         var received = latePayment.Amount;
 
         // 02 §4.4 / 08 §3.4 — refund decision is the same minimum-threshold
@@ -623,6 +622,23 @@ public sealed class AmountValidationService : IAmountValidationService
         _db.Set<BlockchainTransaction>().Add(refund);
         return refund;
     }
+
+    // Every refund this service queues is broadcast FROM the deposit address
+    // back TO the incoming row's source address (08 §562), so those two ends
+    // plus the received amount describe the exact transfer the estimate must
+    // price. The token is the expected stablecoin — close enough for the
+    // wrong-token family too (same TRC-20 transfer energy class); a resolver
+    // fallback yields the static refund setting, i.e. the pre-round charge.
+    private async Task<decimal> ResolveRefundGasFeeAsync(
+        PaymentAddress paymentAddress,
+        BlockchainTransaction incoming,
+        CancellationToken cancellationToken) =>
+        (await _chargedGasFee.ResolveRefundFeeAsync(
+            paymentAddress.Address,
+            incoming.FromAddress,
+            incoming.Amount,
+            paymentAddress.ExpectedToken,
+            cancellationToken)).FeeUsdt;
 
     private Task<PaymentAddress?> LoadPaymentAddressAsync(Guid? id, CancellationToken cancellationToken) =>
         id is null

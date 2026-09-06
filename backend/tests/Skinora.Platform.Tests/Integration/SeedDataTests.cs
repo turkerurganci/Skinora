@@ -79,9 +79,10 @@ public class SeedDataTests : IntegrationTestBase
         // 3 T129 settlement settings (payout_settlement_days,
         //   settlement.unreadable_escalation_hours,
         //   settlement.reversal_auto_refund_enabled).
+        // + 1 blockchain.max_charged_gas_fee_usdt ceiling (2026-09-04 gas fee round).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(63, rows.Count);
-        Assert.Equal(63, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(64, rows.Count);
+        Assert.Equal(64, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -114,6 +115,7 @@ public class SeedDataTests : IntegrationTestBase
         {
             "auth.banned_countries",
             "auth.min_steam_account_age_days",
+            "blockchain.max_charged_gas_fee_usdt",
             "blockchain.payout_gas_fee_estimate_usdt",
             "blockchain.refund_gas_fee_estimate_usdt",
             "blockchain.sweep_energy_delegation_sun",
