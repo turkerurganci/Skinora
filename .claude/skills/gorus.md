@@ -115,7 +115,7 @@ Taşıyıcılar sırayla denenir: **codex** (ChatGPT aboneliği, API anahtarı g
 1. "Proje Sahibinin Kararı" bölümünü tek satırla doldur (ne yapılacağı + varsa gerekçesi).
 2. `README.md` index satırındaki `⏳` işaretini güncelle.
 3. Karar bir PR / backlog satırı / task raporuyla ilgiliyse oraya tek satır bağlantı düş.
-4. Ara dosyalar (`*.prompt.md`, `*.answer.md`) gitignore'ludur; yalnız kayıt commit'lenir.
+4. Ara dosyalar (`*.prompt.md`, `*.answer.md`, `*.send.md`) gitignore'ludur; yalnız kayıt commit'lenir.
 
 ---
 
@@ -125,6 +125,7 @@ Taşıyıcılar sırayla denenir: **codex** (ChatGPT aboneliği, API anahtarı g
 Docs/GPT_OPINIONS/
 ├── README.md                        # amaç, şablon, çalışan çağrı, index
 ├── 2026-09-03_ornek-konu.md         # kayıt (commit'lenir)
-├── 2026-09-03_ornek-konu.prompt.md  # ara dosya (gitignore)
+├── 2026-09-03_ornek-konu.prompt.md  # senin yazdığın soru (gitignore)
+├── 2026-09-03_ornek-konu.send.md    # gönderilen tam metin — sistem promptu + soru (gitignore)
 └── 2026-09-03_ornek-konu.answer.md  # manuel yolun cevabı (gitignore)
 ```

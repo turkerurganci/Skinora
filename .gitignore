@@ -75,3 +75,7 @@ coverage/
 # (Docs/GPT_OPINIONS/YYYY-MM-DD_<slug>.md) birebir gomulur; yalniz o commit'lenir.
 Docs/GPT_OPINIONS/*.prompt.md
 Docs/GPT_OPINIONS/*.answer.md
+# .send.md is not an edge case: when the skill's own question path
+# (<tarih>_<slug>.prompt.md) is followed, the manual transport ALWAYS writes
+# here rather than overwrite the approved question.
+Docs/GPT_OPINIONS/*.send.md

@@ -45,6 +45,23 @@ const ASSIGNMENT = new RegExp(
 );
 
 /**
+ * Tron/EVM private key shape.
+ *
+ * The `\b[0-9a-f]{64}\b` this was ported from is defeated by the `0x` prefix —
+ * the way every EVM wallet exports a key. `\b` never falls between `x` and a
+ * hex digit, so the flagship rule saw nothing. Measured, single variable:
+ * `deger: <hex>` blocked, `deger: 0x<hex>` sent.
+ *
+ * Lookaround rather than `\b`, so the prefix is allowed WITHOUT letting a
+ * 64-char window slide along a longer hex run — a 66-hex blob is not a key and
+ * must stay quiet.
+ */
+const HEX64 = /(?<![0-9a-zA-Z_])(?:0x)?([0-9a-f]{64})(?![0-9a-zA-Z_])/i;
+
+/** A secret key name anywhere in a string — used to find one in a table cell. */
+const KEY_ANYWHERE = new RegExp(SECRET_KEYS, "i");
+
+/**
  * The hook skips comment-prefixed lines because in a DIFF they are prose
  * describing a key name. A question document is not a diff: `#` is a heading,
  * `>` is a quote of real material, `--` opens a SQL snippet. Pasting a live
@@ -127,6 +144,37 @@ export function scanForSecrets(text, options = {}) {
     });
   });
 
+  // 4b) Markdown table row — `| KEY | value |`.
+  //
+  // Rule 4 cannot see this: a pipe is not `:` or `=`. That matters more here
+  // than anywhere else, because the question template in .claude/skills/gorus.md
+  // MANDATES tables ("Baglam", "Elenen alternatifler") — so a table is the one
+  // document shape this guard is guaranteed to be handed.
+  //
+  // The value must FILL its cell: one token, no spaces. A prose cell
+  // ("| REDIS_PASSWORD | prod'da ayri tutulur |") documents a key rather than
+  // carrying one, and the template is full of exactly that kind of cell.
+  lines.forEach((line, i) => {
+    if (!/^\s*\|.*\|\s*$/.test(line)) return;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (!cells.some((c) => KEY_ANYWHERE.test(c))) return;
+    for (const cell of cells) {
+      if (KEY_ANYWHERE.test(cell)) continue;
+      const value = cell.replace(/^["'`]+|["'`]+$/g, "");
+      if (!/^\S{8,}$/.test(value)) continue;
+      if (/^[-:]+$/.test(value)) continue; // |---|---| separator row
+      if (PLACEHOLDER.test(value)) continue;
+      if (/\$\{?[A-Za-z_]/.test(value)) continue;
+      if (/^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(value)) continue;
+      blocking.push({
+        rule: "tablo hucresinde sir degeri",
+        hint: `${value.slice(0, 6)}...`,
+        line: i + 1,
+      });
+      break;
+    }
+  });
+
   // 5) Secret key and value on SEPARATE lines — the shape a pasted JSON/YAML
   //    block or a markdown table has, which the single-line rule cannot see.
   lines.forEach((line, i) => {
@@ -145,19 +193,21 @@ export function scanForSecrets(text, options = {}) {
     });
   });
 
-  // 6) Bare 64-hex. BLOCKING by default: a Tron/EVM private key has exactly
-  //    this shape and a warning printed after approval stops nothing. Tron tx
-  //    hashes share the shape and are legitimate, so --allow-hex downgrades
-  //    this to a warning — a decision someone makes, not a notice they miss.
+  // 6) 64-hex, bare or `0x`-prefixed. BLOCKING by default: a Tron/EVM private
+  //    key has exactly this shape and a warning printed after approval stops
+  //    nothing. Tron tx hashes share the shape and are legitimate, so
+  //    --allow-hex downgrades this to a warning — a decision someone makes,
+  //    not a notice they miss.
   lines.forEach((line, i) => {
-    const m = line.match(/\b[0-9a-f]{64}\b/i);
+    const m = line.match(HEX64);
     if (!m) return;
-    if (/^(.)\1{63}$/.test(m[0])) return; // aaaa... fixture
+    const hex = m[1]; // without any 0x prefix, so the fixture test still holds
+    if (/^(.)\1{63}$/.test(hex)) return; // aaaa... fixture
     const finding = {
       rule: options.allowHex
         ? "64-hex dizi (--allow-hex ile gecildi)"
         : "64-hex dizi — private key olabilir (tx hash ise --allow-hex veya kisalt)",
-      hint: `${m[0].slice(0, 8)}...`,
+      hint: `${hex.slice(0, 8)}...`,
       line: i + 1,
     };
     (options.allowHex ? warnings : blocking).push(finding);

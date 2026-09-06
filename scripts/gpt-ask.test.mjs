@@ -106,6 +106,29 @@ describe("secret-guard — bloke edilmesi gerekenler", () => {
     assert.ok(blocking.length >= 1);
   });
 
+  test("0x onekli 64-hex de bloklar", () => {
+    // Dogrulama turu bulgusu: `\b[0-9a-f]{64}\b` sinir kosulu `x` ile ilk hex
+    // rakami arasinda hic olusmuyor, yani EVM cuzdanlarinin disari verdigi
+    // KANONIK bicim bayrak kurali komple deviriyordu.
+    const { blocking } = scanForSecrets(`key: 0x${HEX64}`);
+    assert.equal(blocking.length, 1);
+    assert.match(blocking[0].rule, /64-hex/);
+    assert.match(blocking[0].hint, /^9f2c4bd8/, "ipucu 0x'siz hex'i gostermeli");
+  });
+
+  test("tablo hucresindeki sir degeri bloklar", () => {
+    // Soru sablonu tabloyu ZORUNLU kiliyor; boru isareti `:`/`=` olmadigi icin
+    // atama kurali bu satiri hic gormuyordu.
+    const { blocking } = scanForSecrets(`| ${KEY_JWT} | ${VALUE} |`);
+    assert.equal(blocking.length, 1);
+    assert.match(blocking[0].rule, /tablo hucresinde/);
+  });
+
+  test("tablo + 0x hex: iki kural birden atlanmamali", () => {
+    const { blocking } = scanForSecrets(`| ${KEY_PRIVATE} | 0x${HEX64} |`);
+    assert.ok(blocking.length >= 1, "her iki bosluk da kapali olmali");
+  });
+
   test("satirin baska yerindeki 'test-' gercek degeri kurtarmaz", () => {
     // PLACEHOLDER artik tum satira degil DEGERE bakiyor.
     const { blocking } = scanForSecrets(`prod ${KEY_JWT} (test-ortaminda farkli): ${VALUE}`);
@@ -154,6 +177,32 @@ describe("secret-guard — bloke EDILMEMESI gerekenler", () => {
   test("tek karakter tekrari fixture'i uyarmaz", () => {
     const { warnings } = scanForSecrets(`key=${"a".repeat(64)}`);
     assert.equal(warnings.length, 0);
+  });
+
+  test("64 hex'ten UZUN dizi 64-hex kurali saymaz", () => {
+    // 0x izni verilirken pencerenin uzun bir hex blogu boyunca kaymamasi
+    // gerekiyordu; kayarsa her uzun hash yanlis pozitif olurdu.
+    const { blocking, warnings } = scanForSecrets(`blob: ${HEX64}ff`);
+    assert.equal(blocking.length, 0);
+    assert.equal(warnings.length, 0);
+  });
+
+  test("0x onekli fixture tekrari yine uyarmaz", () => {
+    const { blocking } = scanForSecrets(`key=0x${"a".repeat(64)}`);
+    assert.equal(blocking.length, 0);
+  });
+
+  test("tablo hucresindeki DUZYAZI anahtar adini anlatir, deger tasimaz", () => {
+    // Sablonun kendi tablolari boyle hucrelerle dolu — deger hucreyi
+    // DOLDURMALI (tek token), yoksa kural her aciklama satirinda patlar.
+    const rows = [
+      `| ${KEY_REDIS} | prod'da ayri tutulur |`,
+      `| Anahtar | Deger |`,
+      `|---|---|`,
+      `| ${KEY_JWT} | en az 32 karakter |`,
+    ].join("\n");
+    const { blocking } = scanForSecrets(rows);
+    assert.equal(blocking.length, 0);
   });
 
   test("sade Turkce soru metni temiz gecer", () => {

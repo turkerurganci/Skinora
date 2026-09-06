@@ -36,12 +36,15 @@ Claude bu akışta **karar vermez**. Soruyu hazırlar, **onay alır**, gönderir
 
 **Sır kuralı:** private key, mnemonic, gerçek parola veya API anahtarı girmez — script göndermeden önce tarar ve bulursa **durur** (`scripts/lib/secret-guard.mjs`, pre-commit hook'un Layer 2 desenlerinin dışa giden yol için portu).
 
-Şekillendirici asimetri: **yanlış pozitif bir düzenlemeye mal olur, yanlış negatif kalıcıdır.** Bu yüzden port, hook'un blokladığı her yerde bloklar ve iki noktada ondan **daha katıdır**:
+Şekillendirici asimetri: **yanlış pozitif bir düzenlemeye mal olur, yanlış negatif kalıcıdır.** Bu yüzden port, hook'un blokladığı her yerde bloklar ve **üç** noktada ondan **daha katıdır**:
 
-- **Çıplak 64-hex bloke edilir.** Tron/EVM private key tam bu şekildedir. Kısa süre uyarı olarak durdu; sonra fark edildi ki uyarı sahibin onayından **sonra** basılıyor ve hiçbir şeyi durdurmuyor — *uyarı kapı değildir*. Tam bir tx hash'i kasten göndermek gerekiyorsa `--allow-hex` ile geçilir; şablon zaten kısaltılmış hash ister (tam hash kayıt commit'inde pre-commit'in 64-hex kuralına da takılır).
+- **64-hex bloke edilir — `0x` önekli hâli dahil.** Tron/EVM private key tam bu şekildedir. Kısa süre uyarı olarak durdu; sonra fark edildi ki uyarı sahibin onayından **sonra** basılıyor ve hiçbir şeyi durdurmuyor — *uyarı kapı değildir*. Tam bir tx hash'i kasten göndermek gerekiyorsa `--allow-hex` ile geçilir; şablon zaten kısaltılmış hash ister (tam hash kayıt commit'inde pre-commit'in 64-hex kuralına da takılır).
+- **Markdown tablo hücresindeki değer yakalanır.** Atama kuralı ayırıcı olarak `:` veya `=` ister, boru işaretini saymaz. Bu boşluk burada özellikle ağır: **soru şablonu tabloyu zorunlu kılıyor**, yani bekçinin karşılaşacağı biçim garanti olarak tablodur. Değerin hücreyi **doldurması** aranır (tek kelime, boşluksuz) — `| REDIS_PASSWORD | prod'da ayrı tutulur |` bir anahtarı *anlatır*, taşımaz.
 - **Yorum/başlık önekli satırlar elenmez.** Hook bir *diff*'te `#` ile başlayan satırı "anahtar adını anlatan düzyazı" sayar; bir *soru dokümanında* `#` başlıktır, `>` alıntıdır, `--` SQL açar — canlı bir değer oralara yapıştırılabilir.
 
 Ayrıca satırlara bölünmüş / numaralandırılmış mnemonic, değeri bir sonraki satırda duran anahtar ve `JWT_SECRET (prod): <değer>` gibi araya parantez giren biçimler de yakalanır.
+
+> İlk iki madde **doğrulama turunda ölçülerek** eklendi; ikisi de hook'tan miras alınan biçimlerdi ve ilk sürümde açıktı. Ayırt edici ölçüm, tek değişken: `deger: <64hex>` → çıkış 5 (bloke) ama `deger: 0x<64hex>` → çıkış 0 (giderdi); `JWT_SECRET=<parola>` → çıkış 5 ama `| JWT_SECRET | <parola> |` → çıkış 0. Sebep: `\b` sınırı `x` ile ilk hex rakamı arasında hiç oluşmuyor, yani bayrak kuralı EVM cüzdanlarının **kanonik** çıktı biçimiyle deviriliyordu. Ders tanıdık: bir kapının *yapılandırılmış, belgelenmiş ve testli* olması, koruduğunu iddia ettiği değerin oradan geçtiği anlamına gelmiyor.
 
 ## Kullanım
 

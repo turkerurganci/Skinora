@@ -78,7 +78,17 @@ function parseArgs(argv) {
       case "--model": opts.model = next(); break;
       case "--transport": opts.transport = next(); break;
       case "--effort": opts.effort = next(); break;
-      case "--timeout": opts.timeout = parseInt(next(), 10); break;
+      // Validated, not just parsed: `--timeout abc` yields NaN, and a NaN
+      // timeout does not fail — it silently disables the deadline, so a hung
+      // transport would wait forever instead of falling through to the next.
+      case "--timeout": {
+        const raw = next();
+        opts.timeout = parseInt(raw, 10);
+        if (!Number.isFinite(opts.timeout) || opts.timeout <= 0) {
+          usage(`--timeout pozitif bir saniye degeri olmali: ${raw}`);
+        }
+        break;
+      }
       case "--resume": opts.resume = next(); break;
       case "--dry-run": opts.dryRun = true; break;
       case "--allow-hex": opts.allowHex = true; break;
