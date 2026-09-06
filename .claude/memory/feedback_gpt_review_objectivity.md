@@ -13,3 +13,4 @@ GPT cross-review bulgularını değerlendirirken rubber stamp olma — her bulgu
 2. GPT yanlışsa veya bağlamı kaçırıyorsa açıkça "katılmıyorum" de, somut gerekçe sun.
 3. GPT'nin kaçırdığı sorunları da raporla — sadece GPT'nin listesiyle sınırlı kalma.
 4. Karar dağılımında doğal çeşitlilik olmalı (KABUL / RET / KISMİ) — %100 kabul şüpheli.
+5. **Aynı ilke `/gorus` için de geçerli, ama yetki farkıyla:** orada Claude cevabı birebir sunar ve **durur** — değerlendirme ancak proje sahibi istediğinde verilir. İstendiğinde de kural aynıdır: GPT'ye nezaketen katılma, haksız yere de karşı çıkma. Karar sahibinindir ([[project_gpt_review_workflow]]).

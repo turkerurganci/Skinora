@@ -295,11 +295,27 @@ Bir task BLOCKED durumuna düştüğünde:
 
 ---
 
-## 8. Dil
+## 8. Dil ve Anlatım
 
 - Dokümanlar ve tartışmalar Türkçe.
 - Teknik terimler İngilizce kalabilir.
 - Kod ve kod yorumları İngilizce.
+
+### 8.1 Sohbet yanıtları sade dille yazılır — İSTİSNASIZ
+
+Bu kural üç kez ayrı ayrı istendi (2026-08-09, 2026-08-28, 2026-09-04) ve üçüncüsünde *"asla atlama"* diye pekiştirildi. Ayrıntılı gerekçe ve geçmiş: [`.claude/memory/feedback_plain_language.md`](memory/feedback_plain_language.md).
+
+- **Sonucu önce söyle**, gerekçeyi sonra.
+- **Kısa cümle** — bir cümlede tek fikir.
+- **Terimi çevir** — İngilizce terimin Türkçesini ilk geçtiğinde yaz.
+- **Rakamı hesabıyla göster** — "~2 dolar" yetmez, hangi çarpımdan çıktığını göster.
+- **Kod adını serpme** — dosya/fonksiyon adı yalnız oraya bakılacaksa, cümlede en fazla bir tane.
+- **Tabloyu az kullan** — gerçek karşılaştırma varsa tablo, anlatı varsa düz cümle.
+- **Tek cümlelik soruyla kapat** — "ne yapmamı istersin?"
+
+**Kontrol:** Göndermeden önce sor — *"bu alanda çalışmayan biri okusa anlar mıydı?"* Anlamazsa yeniden yaz.
+
+**Kapsam:** Yalnız sohbet yanıtları. `Docs/*.md`, task raporları, commit mesajları ve PR gövdeleri teknik ve ayrıntılı kalır.
 
 ---
 
@@ -316,6 +332,7 @@ Bir task BLOCKED durumuna düştüğünde:
 - `/deep-review` — 8 katmanlı doküman kalite ve tutarlılık analizi yapar.
 - `/audit` — Envanter bazlı sistematik doküman denetimi yapar.
 - `/gpt-cross-review` — Dokümanı GPT o3'e gönderir, Claude bulguları bağımsız değerlendirir.
+- `/gorus <konu>` — Anlık ikinci görüş: konuya göre soruyu hazırlar, **proje sahibinin onayıyla** ChatGPT'ye gönderir, cevabı birebir sunar ve **durur**. Ne yapılacağına sahibi karar verir. Cross-review'la karıştırma — o doküman turu, bu tek sorunun tek atışlık görüşü.
 
 ---
 

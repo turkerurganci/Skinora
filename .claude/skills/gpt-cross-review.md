@@ -4,7 +4,9 @@
 >
 > **Temel fark:** Audit ve deep-review Claude'un kendi iç denetimidir. GPT Cross-Review ise farklı bir AI modeline dokümanı okutarak Claude'un kaçırmış olabileceği sorunları yakalar. Claude, GPT bulgularını objektif şekilde değerlendirerek rubber stamp olmaktan kaçınır.
 >
-> **Tetikleme:** Kalite döngüsünde audit sonrası otomatik önerilir. Proje sahibi "GPT review", "cross-review" veya "ikinci görüş" dediğinde de çalıştırılır.
+> **Tetikleme:** Kalite döngüsünde audit sonrası otomatik önerilir. Proje sahibi "GPT review" veya "cross-review" dediğinde de çalıştırılır.
+>
+> **Karıştırma:** Bir **doküman** için değil de **tek bir karar/soru** için anlık görüş isteniyorsa (*"bu yöntem doğru mu?"*, *"bunu GPT'ye sor"*) bu skill değil `/gorus` kullanılır — o tek atıştır, sorusu onaya sunulur ve kararı proje sahibi verir.
 
 ## Parametreler
 
