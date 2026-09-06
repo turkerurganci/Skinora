@@ -1,13 +1,16 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Transfers;
+using Skinora.Transactions.Application.Webhooks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -56,11 +59,14 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
+        // Empty options resolve to the mainnet constants (StablecoinContractOptions),
+        // which is what SeedRefundAsync's ActualTokenAddress fixture matches.
         _sut = new OutgoingTransferDispatchJob(
             _db,
             _client,
             _retryPolicy,
             _outbox,
+            Options.Create(new StablecoinContractOptions()),
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
@@ -189,39 +195,59 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Single(_outbox.Events.OfType<TransferDispatchFailedEvent>());
     }
 
-    // ÖLÇÜM (2026-09-06) — yanlış token iadesinde sidecar'a HANGİ token
-    // söyleniyor? 06 §3.8 semantiği: `Token` beklenen stablecoin'i, depozit
-    // adresinde fiilen duran yanlış token'ın kimliği `ActualTokenAddress`'i
-    // taşır. Dispatcher broadcast'e `row.Token`'ı veriyor ve sidecar o sembolü
-    // kontrata çeviriyor (RefundService.resolveContract). `ActualTokenAddress`
-    // hiçbir alanda taşınmıyorsa, broadcast depozit adresinden onda BULUNMAYAN
-    // bir token'ı istemiş olur. Bu test bugünkü davranışı sabitler: iki
-    // assertion da BUGÜN geçer; ikincisi broadcast sözleşmesine gerçek
-    // kontratı taşıyan bir alan eklendiği gün kırılır — testin yeniden
-    // okunması gereken an tam olarak odur.
+    // The wrong-token family is the one place where the row's Token is NOT the
+    // token being moved: 06 §3.8 keeps the EXPECTED stablecoin there and the
+    // contract that actually landed on the deposit address in
+    // ActualTokenAddress. The sidecar turns the symbol we broadcast into a
+    // contract (RefundService.resolveContract), so sending row.Token would ask
+    // the deposit address to move a token it does not hold. Measured on
+    // 2026-09-06: it did exactly that, and nothing else in the pipeline ever
+    // read ActualTokenAddress (git grep -- backend/src), so the refund could
+    // not broadcast at all. The assertion below is the whole fix in one line.
     [Fact]
-    public async Task WrongTokenRefund_BroadcastCarriesExpectedToken_NotTheTokenOnTheDeposit()
+    public async Task WrongTokenRefund_BroadcastsTheTokenOnTheDeposit_NotTheExpectedOne()
     {
         var fixture = await SeedRefundAsync(
             BlockchainTransactionType.WRONG_TOKEN_REFUND, amount: 80m);
-        Assert.Equal("TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", fixture.RefundRow.ActualTokenAddress);
+        // Fixture: row expects USDT, the buyer actually sent USDC.
+        Assert.Equal(StablecoinType.USDT, fixture.RefundRow.Token);
+        Assert.Equal(KnownStablecoinContracts.Usdc, fixture.RefundRow.ActualTokenAddress);
 
         await _sut.ExecuteAsync();
 
         var call = Assert.Single(_client.Calls);
         Assert.Equal(BlockchainTransactionType.WRONG_TOKEN_REFUND, call.Type);
+        Assert.Equal(StablecoinType.USDC, call.Token);
+    }
 
-        // Satırın BEKLENEN stablecoin'i — alıcının parasını fiilen tutan
-        // kontrat değil.
-        Assert.Equal(StablecoinType.USDT, call.Token);
+    // A contract we cannot name has no symbol to broadcast under. Failing here
+    // costs the same admin alert as letting the chain reject the transfer, and
+    // spends no on-chain attempts doing it. The sidecar's allowlist should keep
+    // this unreachable — AmountValidationService already treats it as the
+    // defensive branch — so reaching it means the allowlist and this deployment
+    // disagree about which contracts exist.
+    [Fact]
+    public async Task WrongTokenRefund_WithUnresolvableContract_FailsTerminally_WithoutBroadcast()
+    {
+        var fixture = await SeedRefundAsync(
+            BlockchainTransactionType.WRONG_TOKEN_REFUND, amount: 80m);
+        fixture.RefundRow.ActualTokenAddress = "TUnknownContractAddressNotInAllowlist00";
+        await _db.SaveChangesAsync();
 
-        // Ve broadcast sözleşmesinde gerçek kontratı taşıyabilecek bir alan yok.
-        var carriers = typeof(TransferBroadcastRequest).GetProperties()
-            .Select(p => p.Name)
-            .Where(n => n.Contains("Actual", StringComparison.Ordinal)
-                || n.Contains("Contract", StringComparison.Ordinal))
-            .ToArray();
-        Assert.Empty(carriers);
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.FAILED, reloaded.Status);
+        Assert.Equal(0, reloaded.RetryCount);
+        Assert.Null(reloaded.NextAttemptAt);
+        Assert.Contains("WRONG_TOKEN_CONTRACT_UNRESOLVED", reloaded.ErrorMessage);
+
+        var failedEvent = Assert.Single(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+        Assert.Equal(fixture.RefundRow.Id, failedEvent.BlockchainTransactionId);
+        Assert.Equal("WRONG_TOKEN_CONTRACT_UNRESOLVED", failedEvent.LastErrorCode);
     }
 
     [Fact]
