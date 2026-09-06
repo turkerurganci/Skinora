@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Persistence;
 
@@ -11,9 +12,11 @@ using Skinora.Shared.Persistence;
 namespace Skinora.Shared.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902211055_RuntimeGasFeeEstimateFallbackDescriptions")]
+    partial class RuntimeGasFeeEstimateFallbackDescriptions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1716,19 +1719,6 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "false"
-                        },
-                        new
-                        {
-                            Id = new Guid("0aa51010-0000-0000-0000-000000000040"),
-                            Category = "Monitoring",
-                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DataType = "decimal",
-                            Description = "Kullanicidan kesilebilecek gas fee ust siniri (USDT). Runtime tahmin bu degeri asarsa tahmin REDDEDILIR (kirpilmaz) ve statik fallback kesilir; admin logu duser. Gercek bir mainnet TRC-20 gonderimi ~6,4 TRX (~2 USDT) yaktigi icin varsayilan 10.0 saglikli hicbir tahmini tetiklemez — bozuk bir tahmini yakalamak icindir. 0 = tavan kapali.",
-                            IsConfigured = true,
-                            Key = "blockchain.max_charged_gas_fee_usdt",
-                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
-                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "10.0"
                         });
                 });
 
@@ -1917,9 +1907,6 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("EnergyUsageTotal")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -1939,14 +1926,8 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("OriginEnergyUsage")
-                        .HasColumnType("bigint");
-
                     b.Property<Guid?>("PaymentAddressId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<long?>("RealizedFeeSun")
-                        .HasColumnType("bigint");
 
                     b.Property<int>("RetryCount")
                         .ValueGeneratedOnAdd()

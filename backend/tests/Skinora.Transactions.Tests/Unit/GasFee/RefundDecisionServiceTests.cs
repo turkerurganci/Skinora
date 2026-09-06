@@ -17,7 +17,7 @@ public class RefundDecisionServiceTests
     private sealed class StubSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; init; } =
-            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m);
+            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m);
 
         public int CallCount { get; private set; }
 
@@ -32,7 +32,7 @@ public class RefundDecisionServiceTests
     {
         var stub = new StubSettingsProvider
         {
-            Settings = settings ?? new GasFeeSettings(0.10m, 2m, 2m, 0.50m),
+            Settings = settings ?? new GasFeeSettings(0.10m, 2m, 2m, 0.50m, 10m),
         };
         return new RefundDecisionService(stub);
     }
@@ -108,7 +108,7 @@ public class RefundDecisionServiceTests
         // Admin bumps min_refund_threshold_ratio to 5 — a refund that would
         // have cleared at 2× now blocks at 5×. This is the whole point of
         // the live SystemSetting read.
-        var svc = NewService(new GasFeeSettings(0.10m, 5m, 2m, 0.50m));
+        var svc = NewService(new GasFeeSettings(0.10m, 5m, 2m, 0.50m, 10m));
         var decision = await svc.ResolveBuyerRefundAsync(totalPaid: 4m, gasFee: 1m, default);
 
         Assert.Equal(RefundOutcome.Block, decision.Outcome);
@@ -235,7 +235,7 @@ public class RefundDecisionServiceTests
     public async Task SellerPayout_AdminRaisesProtectionRatio_PlatformAbsorbsMore()
     {
         // ratio 0.10 → 0.50 admin update; same gasFee 0.50 now ≤ threshold 1.0.
-        var svc = NewService(new GasFeeSettings(0.50m, 2m, 2m, 0.50m));
+        var svc = NewService(new GasFeeSettings(0.50m, 2m, 2m, 0.50m, 10m));
         var payout = await svc.ResolveSellerPayoutAsync(
             price: 100m, commissionAmount: 2m, gasFee: 0.50m, default);
 

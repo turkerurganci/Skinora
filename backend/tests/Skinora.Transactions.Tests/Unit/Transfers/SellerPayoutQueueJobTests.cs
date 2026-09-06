@@ -35,6 +35,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     private readonly DbContextOptions<AppDbContext> _options;
     private readonly AppDbContext _db;
     private readonly StubGasFeeSettingsProvider _settings;
+    private readonly StubChargedGasFeeResolver _gasFee;
     private readonly FakeTimeProvider _clock;
     private readonly SellerPayoutQueueJob _sut;
 
@@ -54,15 +55,16 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 ProtectionRatio: 0.10m,
                 MinRefundThresholdRatio: 2m,
                 RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m),
+                PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m),
         };
+        _gasFee = new StubChargedGasFeeResolver { PayoutFee = 0.50m };
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
         _sut = new SellerPayoutQueueJob(
             _db,
             new RefundDecisionService(_settings),
-            _settings,
+            _gasFee,
             _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
     }
@@ -94,6 +96,28 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         Assert.Null(payout.ActualTokenAddress);
         Assert.Equal(string.Empty, payout.FromAddress);
         Assert.Null(payout.NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task RuntimeEstimate_FlowsIntoSplitAndSnapshot()
+    {
+        // Prova-GasFeeChargedIsFixedGuess: the split and the GasFee snapshot
+        // must carry the RESOLVED runtime value, not the static 0.50 setting.
+        // 0.02 ≤ threshold 0.20 → platform absorbs, net = price; snapshot 0.02.
+        _gasFee.PayoutFee = 0.02m;
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
+
+        await _sut.ExecuteAsync();
+
+        var payout = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
+        Assert.Equal(100m, payout.Amount);
+        Assert.Equal(0.02m, payout.GasFee);
+        var call = Assert.Single(_gasFee.PayoutCalls);
+        Assert.Equal(tx.SellerPayoutAddress, call.To);
+        Assert.Equal(100m, call.Amount);
+        Assert.Equal(StablecoinType.USDT, call.Token);
     }
 
     [Fact]
@@ -330,7 +354,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             await competing.SaveChangesAsync();
         });
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _settings, _clock, logger);
+            raceDb, new RefundDecisionService(_settings), _gasFee, _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw
 
@@ -352,7 +376,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
         await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
         var sut = new SellerPayoutQueueJob(
-            throwingDb, new RefundDecisionService(_settings), _settings, _clock,
+            throwingDb, new RefundDecisionService(_settings), _gasFee, _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
@@ -451,10 +475,31 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     private sealed class StubGasFeeSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; set; } =
-            new(0.10m, 2m, 2m, 0.50m);
+            new(0.10m, 2m, 2m, 0.50m, 10m);
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(Settings);
+    }
+
+    private sealed class StubChargedGasFeeResolver : IChargedGasFeeResolver
+    {
+        public decimal RefundFee { get; set; } = 2m;
+        public decimal PayoutFee { get; set; } = 0.50m;
+        public GasFeeSource Source { get; set; } = GasFeeSource.RuntimeEstimate;
+        public List<(string To, decimal Amount, StablecoinType Token)> PayoutCalls { get; } = [];
+
+        public Task<ResolvedGasFee> ResolveRefundFeeAsync(
+            string? fromDepositAddress, string toAddress, decimal amount,
+            StablecoinType token, CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+
+        public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
+            string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken)
+        {
+            PayoutCalls.Add((toAddress, amount, token));
+            return Task.FromResult(new ResolvedGasFee(PayoutFee, Source));
+        }
     }
 
     /// <summary>

@@ -119,6 +119,14 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.GasFee)
             .HasPrecision(18, 6);
 
+        // Realized on-chain cost, filled at confirmation. Nullable and
+        // deliberately unconstrained: 0 is a real, common answer (delegated
+        // energy, or a contract that pays for its callers) and must not be
+        // confused with "not measured", which is NULL.
+        builder.Property(b => b.RealizedFeeSun);
+        builder.Property(b => b.EnergyUsageTotal);
+        builder.Property(b => b.OriginEnergyUsage);
+
         builder.Property(b => b.Status)
             .IsRequired();
 

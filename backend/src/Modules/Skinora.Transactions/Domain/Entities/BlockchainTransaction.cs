@@ -33,6 +33,30 @@ public class BlockchainTransaction
     public StablecoinType Token { get; set; }
     public string? ActualTokenAddress { get; set; }
     public decimal? GasFee { get; set; }
+
+    /// <summary>
+    /// TRX actually burned by this transfer, in SUN, read from the chain
+    /// receipt at confirmation time. NULL until confirmed, and legitimately
+    /// <c>0</c> when the transfer cost the sender nothing.
+    /// </summary>
+    /// <remarks>
+    /// Recorded for measurement, never for charging: <see cref="GasFee"/> was
+    /// fixed when the row was queued and is not revisited — collecting the
+    /// difference afterwards would need a second transfer costing more than
+    /// the difference itself. What this column buys is the ability to ask how
+    /// close the pre-send estimate actually lands, which until now was assumed
+    /// rather than known. Read together with <see cref="OriginEnergyUsage"/>:
+    /// a zero fee alongside a non-zero owner-paid energy means the CONTRACT
+    /// absorbed the cost, not that the transfer was free to arrange.
+    /// </remarks>
+    public long? RealizedFeeSun { get; set; }
+
+    /// <summary>Total Energy the call consumed, however it was paid for.</summary>
+    public long? EnergyUsageTotal { get; set; }
+
+    /// <summary>Energy the contract owner absorbed on the sender's behalf.</summary>
+    public long? OriginEnergyUsage { get; set; }
+
     public BlockchainTransactionStatus Status { get; set; }
     public long? BlockNumber { get; set; }
     public int ConfirmationCount { get; set; }

@@ -117,10 +117,11 @@ public static class SystemSettingSeed
         Default     (48, "retention.batch_size_notification",           "int",     "Retention",     "500",  "Bağımsız bildirim retention job'unun tek iterasyonda işleyebileceği maksimum Notification sayısı. Bağlı NotificationDelivery kayıtları aynı iterasyon içinde silinir."),
         Default     (49, "retention.batch_size_user_login_log",         "int",     "Retention",     "1000", "UserLoginLog retention job'unun tek iterasyonda işleyebileceği maksimum kayıt sayısı."),
         // --- T72: Blockchain amount validation — refund gas fee estimate (08 §3.4, 02 §4.4, 09 §14.4) ---
-        // T74 will replace this MVP estimate with a live TronGrid-derived value; for now
-        // the refund-decision path uses this admin-tunable USDT amount when classifying
-        // under/over/wrong-token cases against the 2× gas fee minimum threshold.
-        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "T72 MVP iade gas fee tahmini (USDT). RefundDecisionService bu değeri kullanarak iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine karar verir. T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // Since Prova-GasFeeChargedIsFixedGuess (2026-09-02) the charged value comes from
+        // the sidecar's pre-send estimate (triggerconstantcontract + resource/price probes,
+        // ChargedGasFeeResolver); this setting is only the FALLBACK when that estimate is
+        // unavailable, and still feeds the 2× minimum-refund threshold in that case.
+        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir."),
         // --- T73: Outbound transfer dispatcher retry intervals (08 §3.3, 05 §3.3, 11 T73) ---
         // CSV (dakika) — sıralı; her transient failure'da `RetryCount` artırılır ve bu listenin
         // RetryCount'inci elemanı `NextAttemptAt`'a eklenir. Liste tükendiğinde transfer FAILED
@@ -156,9 +157,10 @@ public static class SystemSettingSeed
         // seller-send gas is the quantity the protection split measures against
         // the commission threshold (04 §7.3 worked example uses 0.50). Fed to
         // CalculateSellerPayout when SellerPayoutQueueJob enqueues the
-        // SELLER_PAYOUT row. T74 energy delegation replaces this MVP estimate
-        // with a runtime Energy/Bandwidth-derived value.
-        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "WP1 MVP satıcı payout gas fee tahmini (USDT). SellerPayoutQueueJob bu değeri gas-fee koruma split'inde (02 §4.7) kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30). T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir."),
+        // SELLER_PAYOUT row. Since Prova-GasFeeChargedIsFixedGuess (2026-09-02)
+        // the split input comes from the sidecar's pre-send estimate; this
+        // setting is only the FALLBACK when that estimate is unavailable.
+        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "Satıcı payout gas fee FALLBACK değeri (USDT). Normalde gas-fee koruma split'inin (02 §4.7) girdisi sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa SellerPayoutQueueJob bu değeri kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30)."),
         // --- T125: Delivery evidence launch gate (02 §9.2, DEPLOY_RUNBOOK §H) ---
         // Seeded FALSE and deliberately not env-bootstrappable (Default(...) ⇒
         // IsConfigured = true, which SettingsBootstrapService never overrides):
@@ -177,6 +179,14 @@ public static class SystemSettingSeed
         Default     (61, "payout_settlement_days",                        "int",  "Settlement",   "8",            "Mutabakat süresi (gün) — teslimat doğrulandıktan sonra satıcı ödemesinin bekletileceği süre (02 §4.5.1). `PayoutEligibleAt = ItemDeliveredAt + bu değer` olarak ITEM_DELIVERED girişinde hesaplanır; süre dolmadan ne satıcı payout'u ne de depozit sweep'i kuyruğa girer. Steam'in 7 günlük trade geri alma penceresini kapsamalıdır — 7'nin altına ayarlanamaz (02 §16.2)."),
         Default     (62, "settlement.unreadable_escalation_hours",        "int",  "Settlement",   "48",           "Mutabakat sonu kontrolü envanter okunamadığı için sonuca varamadığında, kaç saat sonra admin'e eskale edileceği (03 §2.4 adım 2 üçüncü dal). Eşiğe kadar kontrol her turda tekrarlanır; eşik aşılınca admin bildirimi gider ve işlem insan incelemesine düşer. Ödeme her iki durumda da parkta kalır — eşik yalnızca 'ne zaman insana sorulur' sorusunu yanıtlar, ödemeyi serbest bırakmaz."),
         Default     (63, "settlement.reversal_auto_refund_enabled",       "bool", "Settlement",   "false",        "Geri alma tespitinde OTOMATİK iade açık mı (T129 launch kapısı, T125 kapısının ikizi). false iken imza kayda geçer ve admin'e eskale edilir, para hareket etmez; kararı admin verir — satıcı lehine AD32 clear-settlement, alıcı lehine dispute üzerinden AD29. İki kol AYNI sonucu üretmez: DeliveryReversedAt'i yalnız otomatik dal yazar, itibar paydası ve fraud flag yalnız orada oluşur. true iken imza delivery_reversed tetikler. Gerçek geri alma ölçülene kadar (T122 §7) kapalı kalır."),
+        // --- Gas fee tavani (2026-09-04, gas fee turu) ---
+        // Runtime tahmin bir zincir probunu CANLI kurla carpiyor; tek bir bozuk
+        // kotasyon, birim kaymasi ya da yanlis okunan ondalik, kullanicinin KENDI
+        // parasindan sinirsiz bir kesintiye donusebilirdi ve asagi akista bunu
+        // sorgulayan hicbir kapi yoktu. Tahmin bu tavani asarsa KIRPILMAZ —
+        // kirpilmis bir rakam yanlis ama makul gorunur; tahmin reddedilir,
+        // statik fallback kesilir ve hata loglanir (GasFeeSource.EstimateRejected).
+        Default     (64, "blockchain.max_charged_gas_fee_usdt",           "decimal", "Monitoring",   "10.0",         "Kullanicidan kesilebilecek gas fee ust siniri (USDT). Runtime tahmin bu degeri asarsa tahmin REDDEDILIR (kirpilmaz) ve statik fallback kesilir; admin logu duser. Gercek bir mainnet TRC-20 gonderimi ~6,4 TRX (~2 USDT) yaktigi icin varsayilan 10.0 saglikli hicbir tahmini tetiklemez — bozuk bir tahmini yakalamak icindir. 0 = tavan kapali."),
     ];
 
     private static SystemSetting Unconfigured(

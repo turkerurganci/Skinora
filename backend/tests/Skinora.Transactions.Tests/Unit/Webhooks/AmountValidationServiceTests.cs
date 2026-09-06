@@ -38,6 +38,7 @@ public sealed class AmountValidationServiceTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubGasFeeSettingsProvider _settings;
+    private readonly StubChargedGasFeeResolver _gasFee;
     private readonly StubRefundBlockedAlertService _alerts;
     private readonly CapturingOutboxService _outbox;
     private readonly RecordingTimeoutScheduling _timeoutScheduling;
@@ -60,7 +61,7 @@ public sealed class AmountValidationServiceTests : IDisposable
                 ProtectionRatio: 0.10m,
                 MinRefundThresholdRatio: 2m,
                 RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m),
+                PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m),
         };
         _alerts = new StubRefundBlockedAlertService();
         _outbox = new CapturingOutboxService();
@@ -68,11 +69,12 @@ public sealed class AmountValidationServiceTests : IDisposable
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
+        _gasFee = new StubChargedGasFeeResolver { RefundFee = 2m };
         var decisionService = new RefundDecisionService(_settings);
 
         _sut = new AmountValidationService(
             _db,
-            _settings,
+            _gasFee,
             decisionService,
             _alerts,
             _outbox,
@@ -223,6 +225,36 @@ public sealed class AmountValidationServiceTests : IDisposable
     }
 
     // ─── Underpayment ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ConfirmedPayment_Underpayment_ResolvesGasFeeForDepositToSourceTransfer()
+    {
+        // Prova-GasFeeChargedIsFixedGuess: the resolver must be asked about
+        // the ACTUAL refund transfer — deposit address → payer's source
+        // address, for the received amount — so the runtime estimate prices
+        // the right broadcast.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 50m);
+
+        await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-gf1", default);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(fixture.PaymentAddress.Address, call.From);
+        Assert.Equal(fixture.BlockchainTransaction.FromAddress, call.To);
+        Assert.Equal(50m, call.Amount);
+    }
+
+    [Fact]
+    public async Task ConfirmedPayment_ExactMatch_NeverProbesTheGasFeeResolver()
+    {
+        // The happy path queues no refund; paying for a runtime estimate
+        // probe (sidecar + chain + price feed) on every clean payment would
+        // put an external dependency in the hot path for nothing.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 100m);
+
+        await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-gf2", default);
+
+        Assert.Empty(_gasFee.RefundCalls);
+    }
 
     [Fact]
     public async Task ConfirmedPayment_Underpayment_AboveThreshold_QueuesIncorrectAmountRefund()
@@ -590,10 +622,30 @@ public sealed class AmountValidationServiceTests : IDisposable
     private sealed class StubGasFeeSettingsProvider : IGasFeeSettingsProvider
     {
         public GasFeeSettings Settings { get; init; } =
-            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m);
+            new(ProtectionRatio: 0.10m, MinRefundThresholdRatio: 2m, RefundGasFeeEstimateUsdt: 2m, PayoutGasFeeEstimateUsdt: 0.50m, MaxChargedGasFeeUsdt: 10m);
 
         public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken)
             => Task.FromResult(Settings);
+    }
+
+    private sealed class StubChargedGasFeeResolver : IChargedGasFeeResolver
+    {
+        public decimal RefundFee { get; set; } = 2m;
+        public GasFeeSource Source { get; set; } = GasFeeSource.RuntimeEstimate;
+        public List<(string? From, string To, decimal Amount, StablecoinType Token)> RefundCalls { get; } = [];
+
+        public Task<ResolvedGasFee> ResolveRefundFeeAsync(
+            string? fromDepositAddress, string toAddress, decimal amount,
+            StablecoinType token, CancellationToken cancellationToken)
+        {
+            RefundCalls.Add((fromDepositAddress, toAddress, amount, token));
+            return Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+        }
+
+        public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
+            string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGasFee(0.50m, Source));
     }
 
     private sealed class StubRefundBlockedAlertService : IRefundBlockedAlertService

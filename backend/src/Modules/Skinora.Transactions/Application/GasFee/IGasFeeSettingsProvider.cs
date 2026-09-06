@@ -43,8 +43,18 @@ public interface IGasFeeSettingsProvider
 /// <c>value &gt; 0</c>; the seeded default is <c>0.50</c>. T74 energy
 /// delegation will replace this estimate with a runtime-measured value.
 /// </param>
+/// <param name="MaxChargedGasFeeUsdt">
+/// Sanity ceiling on what may be deducted from a user for gas, in USDT. The
+/// runtime estimate multiplies a chain probe by a live exchange rate, so a
+/// single bad quote or unit slip would otherwise become an unbounded
+/// deduction from money that is not the platform's. An estimate above this is
+/// refused (not clamped — a clamped figure would be wrong but plausible) and
+/// the static setting is charged instead, with an error logged.
+/// <c>0</c> disables the ceiling.
+/// </param>
 public sealed record GasFeeSettings(
     decimal ProtectionRatio,
     decimal MinRefundThresholdRatio,
     decimal RefundGasFeeEstimateUsdt,
-    decimal PayoutGasFeeEstimateUsdt);
+    decimal PayoutGasFeeEstimateUsdt,
+    decimal MaxChargedGasFeeUsdt);

@@ -108,13 +108,22 @@ Zincir: `escrow_end_duration_seconds == 0` → "MA aktif" → "takas edebilir". 
 
 **Belirti.** İadede alıcıdan **2.00 USDT** kesildi (10.20 → 8.20, **%19,6**).
 
-**Ölçüm.** Kesinti kuralı doğru (02 §195-197: iade gas'i alıcıya yüklenir) ama tutar sabit bir ayardan geliyor: `blockchain.refund_gas_fee_estimate_usdt = 2.0` (payout ikizi `0.50`). Aynı gün aynı ağdaki **gerçek** transferin ücreti ölçüldü (`gettransactioninfobyid`, hash `fbfd958b…`):
+**Ölçüm.** Kesinti kuralı doğru (02 §195-197: iade gas'i alıcıya yüklenir) ama tutar sabit bir ayardan geliyor: `blockchain.refund_gas_fee_estimate_usdt = 2.0` (payout ikizi `0.50`). Aynı ağdaki gerçek transferlerin ücreti `gettransactioninfobyid` ile ölçüldü:
 
-```
-fee: 0   ·   energy_usage_total: 29.650   ·   energy_fee: 0   ·   net_fee: 0
-```
+| İşlem | hash | fee | energy_usage_total | origin_energy_usage |
+|---|---|---|---|---|
+| Alıcının ödemesi | `fbfd958b…` | **0** | 29.650 | **29.650** |
+| **Platformun iadesi** | `a89d6675…` | **0** | 14.650 | **14.650** |
 
-Sıfır, çünkü delege enerji yakılacak TRX bırakmadı. Mainnet'te enerji satın alınsaydı ~0,6–0,9 USD tutardı — yani sabit değer gerçeğin **2–3 katı**, bu işlemde ise tamamen gereksizdi.
+> **⚠️ DÜZELTME — 2026-09-04.** Bu bölümün ilk hâli iki şeyi yanlış yazmıştı ve ikisi de sonraki turda ölçülerek düzeltildi.
+>
+> **(1) Yanlış özne ölçülmüştü.** Yalnız `fbfd958b…` (alıcının **gelen** ödemesi) ölçülüp platformun kesintisine gerekçe yapılmıştı; oysa gerekçeyi taşıması gereken işlem `a89d6675…`, yani platformun imzaladığı **iade**. İkisi de sıfır çıktığı için sonuç tesadüfen doğruydu — `feedback_verify_probe_subject` ailesi.
+>
+> **(2) Sıfırın sebebi yanlış açıklanmıştı.** *"Delege enerji yakılacak TRX bırakmadı"* denmişti. Delegasyon hiçbir şey teslim edemez: hot cüzdanın stake'i **sıfır** (`getaccountresource` → `EnergyLimit: 0`, 2026-09-04 ölçümü), dolayısıyla delege edilecek enerji yok. Gerçek sebep `origin_energy_usage` kolonunda duruyor: bu Nile test USDT'si (`TXYZop…`) `consume_user_resource_percent = 0` ile deploy edilmiş, yani **enerjiyi kontratın sahibi ödüyor**. Mainnet Tether bunu 100 yapar; orada gönderen öder.
+>
+> Bir sonucu görüp sebebini varsaymak, sonuç doğru olsa bile yanlış bir kural üretiyor — bu kural üzerine kurulan tahmin, bu ölçümden çıkan üçüncü kusuru doğurdu (aşağıda).
+
+Mainnet'te enerji satın alınsaydı ~0,6–0,9 USD tutardı — yani sabit değer gerçeğin **2–3 katı**, bu işlemde ise tamamen gereksizdi.
 
 **Tasarım tercihi değil, yarım kalmış iş.** Kodun kendi seed yorumu söylüyor (`SystemSettingSeed.cs:123`, payout ikizi `:161`): *"T72 MVP iade gas fee tahmini … **T74 energy delegation tamamlandıktan sonra runtime Energy/Bandwidth bedeli ile değiştirilir**"*. T74 çıktı, değiştirme yapılmadı.
 
@@ -122,7 +131,13 @@ Sıfır, çünkü delege enerji yakılacak TRX bırakmadı. Mainnet'te enerji sa
 
 **Fark platformda kalıyor ve muhasebesi yok.** Kesilen 2.00 USDT yakılmadı — deposit adresinde duruyor (zincirden ölçüldü) ve sweep turu onu sıcak cüzdana taşıyacak. Yani kullanıcı sessizce fazla ödüyor, fazlası platforma geçiyor.
 
-**Proje sahibi kararı (2026-09-02): kesin tutar kesilmeli.** Kısıt: gerçekleşen ücret ancak gönderim **sonrası** bilinir ve o noktada kesilecek bakiye kalmaz; fark için ikinci transfer çoğu vakada farkın kendisinden pahalıdır. **Yapılabilir olan gönderim öncesi hesaplanmış maliyet:** `triggerconstantcontract` ile bu transferin enerjisi + hot wallet'ın delege/stake enerjisi + güncel enerji fiyatı → yakılacak TRX → USDT. Bugün bu yapılsaydı sonuç **0** çıkardı.
+**Proje sahibi kararı (2026-09-02): kesin tutar kesilmeli.** Kısıt: gerçekleşen ücret ancak gönderim **sonrası** bilinir ve o noktada kesilecek bakiye kalmaz; fark için ikinci transfer çoğu vakada farkın kendisinden pahalıdır. **Yapılabilir olan gönderim öncesi hesaplanmış maliyet:** `triggerconstantcontract` ile bu transferin enerjisi + hot wallet'ın delege/stake enerjisi + güncel enerji fiyatı → yakılacak TRX → USDT.
+
+> **⚠️ DÜZELTME — 2026-09-04.** Bu paragrafın son cümlesi *"bugün bu yapılsaydı sonuç 0 çıkardı"* diyordu. **Yanlış, ölçüldü.** Aynı transfer için canlı `triggerconstantcontract` **29.650** enerji raporluyor; hot cüzdanın enerjisi **0** olduğu için hesabın tamamı açığa yazılıyor: 29.650 × 100 sun = 2,965 TRX × 0,3244 = **0,97 USDT**. Yani ilk hâliyle tahmin, hiç kimsenin ödemediği bir maliyet için kullanıcıdan 0,97 dolar keserdi — eski sabitin yarısı, ama sıfır değil.
+>
+> **Gerekçenin kendisi de eksikti:** "hot wallet'ın delege/stake enerjisi" ifadesi delegasyonun tavanını görmezden geliyordu. Deposit adresine hot cüzdanın **havuzu** değil, sabit bir delegasyon (`sweepEnergyDelegationSun`, 200 TRX) aktarılıyor; mainnet'te bu ~1.914 enerji eder, bir transfer ise ~64.285 ister.
+>
+> **Üç düzeltme 2026-09-04'te yapıldı** (`FeeEstimationService`): kontratın `consume_user_resource_percent` ayarı okunuyor (sahip ödüyorsa kullanıcıdan kesilmiyor) · iade yolunda enerji kredisi delegasyonun taşıyabileceğiyle sınırlı · bandwidth ya-hep-ya-hiç yakılıyor. Bugün aynı iade **0.00** keser, çünkü kontrat sahibi ödüyor — bu kez sebebi ölçülerek.
 
 **Dikkat — payout sabitinin ikinci tüketicisi var:** 02 §4.7 gas-fee koruma split'i (04 §7.3 örneği `0.50` → satıcıdan `0.30`). Değer değişince o eşik de yeniden ölçülmeli.
 
