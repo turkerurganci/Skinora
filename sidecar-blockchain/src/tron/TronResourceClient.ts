@@ -69,6 +69,7 @@ interface AccountResourceResponse {
 }
 
 interface ContractResponse {
+  contract_address?: string;
   consume_user_resource_percent?: number;
   origin_energy_limit?: number;
 }
@@ -80,6 +81,7 @@ interface ChainParametersResponse {
 interface TriggerConstantResponse {
   result?: { result?: boolean; message?: string };
   energy_used?: number;
+  transaction?: { ret?: { ret?: string }[] };
 }
 
 export class TronResourceClient {
@@ -96,8 +98,11 @@ export class TronResourceClient {
    * as <paramref name="fromAddress"/> and return the Energy the real broadcast
    * would consume. The simulation runs against current chain state, so the
    * sender must actually hold the tokens for the result to be the success-path
-   * cost — both callers satisfy this (refund → deposit address holding the
-   * buyer's payment, payout → hot wallet).
+   * cost. That is the ordinary case (refund → deposit address holding the
+   * buyer's payment, payout → hot wallet) but NOT a guarantee: a wrong-token
+   * refund simulates a token the deposit does not hold, and a payout may run
+   * before the sweep funds the hot wallet. Those simulations revert, and a
+   * reverted simulation is rejected here rather than passed off as a cost.
    */
   async estimateTransferEnergy(
     contractAddress: string,
@@ -123,9 +128,28 @@ export class TronResourceClient {
       fetchFn,
     );
 
-    if (body.result?.result !== true || typeof body.energy_used !== 'number') {
+    // `result.result: true` only means the node ACCEPTED the call, not that the
+    // call succeeded. A reverting transfer answers HTTP 200 with that same
+    // true, and reports the failure in `result.message` / `transaction.ret`
+    // instead (measured against Nile 2026-09-06 — a revert returns
+    // energy_used 1984 where the same transfer succeeding returns 29650).
+    // Reading the revert as an estimate would charge a fifteenth of the real
+    // cost, and the platform would silently absorb the rest: exactly the
+    // failure shape this estimate exists to remove. It is reachable without
+    // any outage — the wrong-token refund simulates the EXPECTED token, which
+    // the deposit address by definition does not hold, and a payout simulates
+    // from a hot wallet that may not be funded yet.
+    const revertReason =
+      typeof body.result?.message === 'string' && body.result.message.length > 0
+        ? body.result.message
+        : body.transaction?.ret?.find(
+            (entry) =>
+              typeof entry?.ret === 'string' && entry.ret !== '' && entry.ret !== 'SUCCESS',
+          )?.ret;
+
+    if (body.result?.result !== true || typeof body.energy_used !== 'number' || revertReason) {
       throw new SidecarError(
-        `triggerconstantcontract simulation failed: ${body.result?.message ?? 'no energy_used in response'}`,
+        `triggerconstantcontract simulation failed: ${revertReason ?? body.result?.message ?? 'no energy_used in response'}`,
         'FEE_ESTIMATE_SIMULATION_FAILED',
         true,
       );
@@ -175,6 +199,19 @@ export class TronResourceClient {
       { value: contractAddress, visible: true },
       fetchFn,
     );
+    // An address that is not a contract answers HTTP 200 with an EMPTY object
+    // (measured on Nile 2026-09-06), which the "omitted field means 0" rule
+    // below would read as "the owner pays everything" — i.e. a mistyped or
+    // unmigrated contract address would silently charge 0 forever. An
+    // identity-less body is a failed probe, not an answer, so it takes the
+    // caller's conservative fallback (the sender pays 100%) instead.
+    if (typeof body.contract_address !== 'string' || body.contract_address.length === 0) {
+      throw new SidecarError(
+        `getcontract returned no contract at ${contractAddress}.`,
+        'FEE_ESTIMATE_CONTRACT_NOT_FOUND',
+        true,
+      );
+    }
     // The field is omitted entirely when it is 0 — i.e. an absent
     // `consume_user_resource_percent` means the OWNER pays everything, the
     // opposite of what a naive `?? 100` default would conclude.
