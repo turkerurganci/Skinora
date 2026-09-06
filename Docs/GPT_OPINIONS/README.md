@@ -71,9 +71,13 @@ Testler:
 node --test scripts/gpt-ask.test.mjs
 ```
 
-Dosyayı **adıyla** ver: `node --test scripts/` dizini bir paket girişi sanır (`scripts/package.json`'ın `main` alanı yüzünden) ve hiç test koşmadan patlar; `node --test` (kök) ise frontend'in vitest dosyalarını toplayıp yanlış kırmızı verir.
+Dizini **verme**: `node --test scripts/` orayı bir paket girişi sanır (`scripts/package.json`'ın `main` alanı yüzünden) ve hiç test koşmadan patlar; `node --test` (kök) ise frontend'in vitest dosyalarını toplayıp yanlış kırmızı verir.
 
-> **Bilinen boşluk — bu testleri hiçbir kapı koşmuyor.** `.github/workflows/ci.yml`'ın `paths-filter` tanımlarında `scripts/**` yok; yalnız `scripts/` altını değiştiren bir PR'da lint/build/test job'larının hepsi *skipped* olur. Yani sır bekçisinin testleri **elle** koşulmadıkça sessizce bayatlayabilir. Bilinçli olarak burada bırakıldı (`/gorus` bir CI işi değil), ama `secret-guard.mjs` değiştirilirse yukarıdaki komut elle koşulmalıdır.
+**CI kapısı: `3c. Script test (node --test)`.** `scripts/**` artık `paths-filter`'da ve job `ci-gate`'in `needs` listesinde — yani bu testler bloke edicidir. Kurulum adımı yok: süit ve çektiği modüller `node_modules`'dan hiçbir şey okumuyor (`openai` yalnız `askOpenAI` içinde dinamik `import` ile geliyor), `node_modules` silinmiş bir checkout'ta ölçüldü, 37/37.
+
+Kapı **glob** kullanır (`scripts/**/*.test.mjs`), dosya adı değil. Ölçüldü: yeni bir `scripts/lib/kanarya.test.mjs` eklendiğinde glob 38 raporladı, dosya adıyla çağrı 37'de kaldı — yani ad vermek, kapının yeni testleri sessizce atlamasına izin verirdi.
+
+> **Bu kapı neden sonradan eklendi:** ilk sürümde `scripts/**` hiçbir filtrede yoktu ve bilinçli olarak öyle bırakılmıştı (*"`/gorus` bir CI işi değil"*). Doğrulama turu bu tercihin bedelini ölçtü: sır bekçisinde **üç yanlış negatif** vardı ve CI yeşil koşarken hiçbiri hakkında tek kelime etmemişti — çünkü CI o testleri hiç çalıştırmıyordu. *Elle koşulacak* diye not düşülmüş bir test, koşulmayan bir testtir.
 
 ## Taşıyıcılar
 
