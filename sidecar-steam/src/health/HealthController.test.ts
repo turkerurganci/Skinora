@@ -122,10 +122,9 @@ describe('steam sidecar /health', () => {
     // Bu turun açtığı açık: 08 §2.2a kapısı community'ye bağlı, ama /health
     // yalnız Web API'ye bakıyordu. O hâliyle community kesintisinde kapı her
     // işlemi reddederken PlatformHealthProbeJob timeout'ları dondurmuyordu.
-    const s = await serve(
-      () => Promise.resolve({ ok: true, status: 200 }),
-      { isUnhealthy: () => true },
-    );
+    const s = await serve(() => Promise.resolve({ ok: true, status: 200 }), {
+      isUnhealthy: () => true,
+    });
     try {
       const res = await fetch(s.url);
       expect(res.status).toBe(503);
@@ -142,10 +141,9 @@ describe('steam sidecar /health', () => {
   });
 
   it('community sağlıklıyken genel durum sağlıklı kalır', async () => {
-    const s = await serve(
-      () => Promise.resolve({ ok: true, status: 200 }),
-      { isUnhealthy: () => false },
-    );
+    const s = await serve(() => Promise.resolve({ ok: true, status: 200 }), {
+      isUnhealthy: () => false,
+    });
     try {
       const res = await fetch(s.url);
       expect(res.status).toBe(200);

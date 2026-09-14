@@ -76,7 +76,12 @@ export class SteamProfileUnreadableError extends SidecarError {
   constructor(
     message: string,
     /** Log/metrik etiketi: cevabın neye benzediği. Karara GİRMEZ, yalnız teşhis içindir. */
-    public readonly bodyShape: 'html' | 'profile_error' | 'field_missing' | 'transport' | 'deadline',
+    public readonly bodyShape:
+      | 'html'
+      | 'profile_error'
+      | 'field_missing'
+      | 'transport'
+      | 'deadline',
   ) {
     super(message, 'STEAM_PROFILE_UNREADABLE', true);
     this.name = 'SteamProfileUnreadableError';
