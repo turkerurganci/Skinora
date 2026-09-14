@@ -1159,18 +1159,18 @@
         "title": "Ödeme adresi cooldown'u",
         "description": "Ödeme adresiniz yakın zamanda değiştirildi. Güvenlik nedeniyle bekleme süresi boyunca yeni işlem başlatılamaz."
       },
-        "steamLimited": {
-          "title": "Steam hesabınız kısıtlı",
-          "description": "Steam, hiç harcama yapmamış hesapların takas yapmasına izin vermiyor. Steam üzerinden en az 5 USD tutarında bir alışveriş yaptıktan sonra bu engel kalkar."
-        },
-        "steamTooNew": {
-          "title": "Steam hesabınız çok yeni",
-          "description": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Süre dolduğunda işlem başlatabilirsiniz."
-        },
-        "steamUnavailable": {
-          "title": "Steam şu anda kontrol edilemedi",
-          "description": "Takas uygunluğunuz Steam üzerinden doğrulanamadı. Bu geçici bir durum — biraz sonra tekrar deneyin."
-        },
+      "steamLimited": {
+        "title": "Steam hesabınız kısıtlı",
+        "description": "Steam, hiç harcama yapmamış hesapların takas yapmasına izin vermiyor. Steam üzerinden en az 5 USD tutarında bir alışveriş yaptıktan sonra bu engel kalkar."
+      },
+      "steamTooNew": {
+        "title": "Steam hesabınız çok yeni",
+        "description": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Süre dolduğunda işlem başlatabilirsiniz."
+      },
+      "steamUnavailable": {
+        "title": "Steam şu anda kontrol edilemedi",
+        "description": "Takas uygunluğunuz Steam üzerinden doğrulanamadı. Bu geçici bir durum — biraz sonra tekrar deneyin."
+      },
       "unknown": {
         "title": "İşlem başlatılamıyor"
       },

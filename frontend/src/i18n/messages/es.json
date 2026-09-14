@@ -1159,18 +1159,18 @@
         "title": "Periodo de espera de la dirección de pago",
         "description": "Tu dirección de pago se cambió recientemente. Por motivos de seguridad no puedes iniciar nuevas transacciones durante el periodo de espera."
       },
-        "steamLimited": {
-          "title": "Tu cuenta de Steam está limitada",
-          "description": "Steam no permite intercambiar a las cuentas que nunca han gastado dinero. Gastar al menos 5 USD en Steam levanta esta restricción."
-        },
-        "steamTooNew": {
-          "title": "Tu cuenta de Steam es demasiado nueva",
-          "description": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Podrás iniciar una transacción cuando termine la espera."
-        },
-        "steamUnavailable": {
-          "title": "No se pudo consultar a Steam",
-          "description": "No se pudo verificar tu elegibilidad de intercambio con Steam. Es temporal; inténtalo de nuevo en unos minutos."
-        },
+      "steamLimited": {
+        "title": "Tu cuenta de Steam está limitada",
+        "description": "Steam no permite intercambiar a las cuentas que nunca han gastado dinero. Gastar al menos 5 USD en Steam levanta esta restricción."
+      },
+      "steamTooNew": {
+        "title": "Tu cuenta de Steam es demasiado nueva",
+        "description": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Podrás iniciar una transacción cuando termine la espera."
+      },
+      "steamUnavailable": {
+        "title": "No se pudo consultar a Steam",
+        "description": "No se pudo verificar tu elegibilidad de intercambio con Steam. Es temporal; inténtalo de nuevo en unos minutos."
+      },
       "unknown": {
         "title": "No se puede iniciar la transacción"
       },

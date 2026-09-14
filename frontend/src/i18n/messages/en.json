@@ -1159,18 +1159,18 @@
         "title": "Payout address cooldown",
         "description": "Your payout address was changed recently. For security reasons you cannot start a new transaction during the cooldown."
       },
-        "steamLimited": {
-          "title": "Your Steam account is limited",
-          "description": "Steam does not allow accounts that have never spent money to trade. Spending at least US$5 on Steam lifts this restriction."
-        },
-        "steamTooNew": {
-          "title": "Your Steam account is too new",
-          "description": "Steam does not allow trading during an account’s first 15 days. You can start a transaction once the wait is over."
-        },
-        "steamUnavailable": {
-          "title": "Steam could not be checked",
-          "description": "Your trade eligibility could not be verified with Steam. This is temporary — please try again shortly."
-        },
+      "steamLimited": {
+        "title": "Your Steam account is limited",
+        "description": "Steam does not allow accounts that have never spent money to trade. Spending at least US$5 on Steam lifts this restriction."
+      },
+      "steamTooNew": {
+        "title": "Your Steam account is too new",
+        "description": "Steam does not allow trading during an account’s first 15 days. You can start a transaction once the wait is over."
+      },
+      "steamUnavailable": {
+        "title": "Steam could not be checked",
+        "description": "Your trade eligibility could not be verified with Steam. This is temporary — please try again shortly."
+      },
       "unknown": {
         "title": "Cannot start a transaction"
       },

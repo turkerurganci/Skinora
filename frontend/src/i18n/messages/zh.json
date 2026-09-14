@@ -1159,18 +1159,18 @@
         "title": "收款地址冷却期",
         "description": "您的收款地址近期已更改。出于安全考虑,冷却期内无法发起新交易。"
       },
-        "steamLimited": {
-          "title": "你的 Steam 账户受限",
-          "description": "Steam 不允许从未消费过的账户进行交易。在 Steam 上消费至少 5 美元即可解除该限制。"
-        },
-        "steamTooNew": {
-          "title": "你的 Steam 账户太新",
-          "description": "Steam 不允许账户在最初 15 天内交易。等待期结束后即可发起交易。"
-        },
-        "steamUnavailable": {
-          "title": "暂时无法向 Steam 查询",
-          "description": "无法通过 Steam 验证你的交易资格。这是暂时的，请稍后再试。"
-        },
+      "steamLimited": {
+        "title": "你的 Steam 账户受限",
+        "description": "Steam 不允许从未消费过的账户进行交易。在 Steam 上消费至少 5 美元即可解除该限制。"
+      },
+      "steamTooNew": {
+        "title": "你的 Steam 账户太新",
+        "description": "Steam 不允许账户在最初 15 天内交易。等待期结束后即可发起交易。"
+      },
+      "steamUnavailable": {
+        "title": "暂时无法向 Steam 查询",
+        "description": "无法通过 Steam 验证你的交易资格。这是暂时的，请稍后再试。"
+      },
       "unknown": {
         "title": "无法发起交易"
       },
