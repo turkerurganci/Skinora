@@ -19,7 +19,8 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `.claude/skills/handoff.md` | `/handoff` skill — chat geçişi |
 | `.claude/skills/deep-review.md` | `/deep-review` skill — 8 katmanlı doküman kalite analizi |
 | `.claude/skills/audit.md` | `/audit` skill — envanter bazlı sistematik doküman denetimi |
-| `.claude/skills/gpt-cross-review.md` | `/gpt-cross-review` skill — GPT o3 ile ikinci AI review döngüsü |
+| `.claude/skills/gpt-cross-review.md` | `/gpt-cross-review` skill — GPT o3 ile ikinci AI review döngüsü (doküman bazlı, round'lu) |
+| `.claude/skills/gorus.md` | `/gorus` skill — anlık ikinci görüş; soruyu hazırlar, onayla gönderir, cevabı getirir, karar sahibinde |
 | `.claude/skills/task.md` | `/task` skill — implementation yapım chat'i başlatma |
 | `.claude/skills/validate.md` | `/validate` skill — implementation doğrulama chat'i |
 | `.claude/skills/gate-check.md` | `/gate-check` skill — faz sonu doğrulama |
@@ -45,7 +46,8 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/IMPLEMENTATION_STATUS.md` | Implementation ilerleme tablosu (tüm task'lar) |
 | `Docs/TASK_REPORTS/` | Task bazlı detaylı raporlar (TXX_REPORT.md) |
 | `Docs/AUDIT_REPORTS/` | Doküman audit raporları (00-12) |
-| `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı) |
+| `Docs/GPT_REVIEW_REPORTS/` | GPT cross-review raporları (round bazlı, doküman denetimi) |
+| `Docs/GPT_OPINIONS/` | `/gorus` kayıtları — tek soruluk anlık GPT görüşleri ve sahibinin kararı |
 | `Docs/CHECKPOINT_REPORTS/` | Checkpoint raporları (CP1-CP18) + Gate Check raporları (F0) |
 
 ### Transactions Modülü (T19–T20)
@@ -242,3 +244,5 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | Dosya | İçerik |
 |---|---|
 | `scripts/gpt-review.mjs` | GPT o3 cross-review scripti — dokümanı GPT'ye gönderir, yapılandırılmış bulgu alır |
+| `scripts/gpt-ask.mjs` | `/gorus` taşıyıcısı — onaylı soruyu ChatGPT'ye gönderir (codex CLI → API → manuel), cevabı `Docs/GPT_OPINIONS/`'a yazar |
+| `scripts/lib/` | Ortak script yardımcıları — repo kökü, sır bekçisi (dışa giden yol), codex taşıyıcısı, OpenAI istemcisi, pano |

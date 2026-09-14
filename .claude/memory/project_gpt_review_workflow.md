@@ -4,6 +4,8 @@ description: GPT cross-review sureci, etki yansitma akisi ve tamamlanan/bekleyen
 type: project
 ---
 
+> **Karıştırma uyarısı:** Bu dosya **doküman** cross-review'ını anlatır (round'lu, "TEMİZ"e kadar). Proje sahibinin **tek bir karar/soru** için anlık görüş istediği ayrı bir akış vardır: `/gorus` skill'i (`.claude/skills/gorus.md`, taşıyıcı `scripts/gpt-ask.mjs`, kayıt `Docs/GPT_OPINIONS/`). Orada soru **sahibinin onayıyla** gönderilir, cevap birebir sunulur ve **karar sahibinindir** — Claude cevaba göre kendiliğinden hiçbir şey uygulamaz.
+
 GPT cross-review süreci (02-08 dokümanları için):
 
 1. Dokümanı GPT'ye gönder (manuel — ChatGPT)

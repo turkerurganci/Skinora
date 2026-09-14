@@ -59,6 +59,7 @@ jobs:
       sidecar-fake: ${{ steps.filter.outputs['sidecar-fake'] }}
       e2e: ${{ steps.filter.outputs.e2e }}
       e2e-stack: ${{ steps.filter.outputs['e2e-stack'] }}
+      scripts: ${{ steps.filter.outputs.scripts }}
       docker-matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
       - name: Checkout
@@ -119,6 +120,16 @@ jobs:
               # network stayed silent about a change it was the only thing
               # covering.
               - 'nginx/**'
+              - '.github/workflows/**'
+            # The repo's own tooling under scripts/ had NO filter and therefore
+            # no gate: a PR touching only scripts/ skipped every job, and the
+            # suite that guards the outbound secret scanner could rot in
+            # silence. It did — the /gorus validation round measured three
+            # false negatives in scripts/lib/secret-guard.mjs (0x-prefixed
+            # 64-hex, and a value in a markdown table cell) that a green CI had
+            # said nothing about, because CI had never run those tests.
+            scripts:
+              - 'scripts/**'
               - '.github/workflows/**'
 
       # Build a matrix JSON for docker-build-check. Empty array when no
@@ -371,6 +382,41 @@ jobs:
         if: needs.changes.outputs['sidecar-fake'] == 'true'
         working-directory: sidecar-fake
         run: npm ci && npm run test
+
+  # ----------------------------------------------------------------------------
+  # 3c. Script test (node --test) — the repo's own tooling under scripts/.
+  #
+  # No `npm ci`: the suite and the modules it imports pull nothing from
+  # node_modules (openai is loaded by a dynamic import INSIDE askOpenAI, so it
+  # never resolves at load time). Measured on a checkout with node_modules
+  # removed — 37/37 — so an install step here would only add ~30s of nothing.
+  #
+  # GLOB, not a filename. `node --test scripts/gpt-ask.test.mjs` passes today
+  # and would keep passing after someone adds scripts/lib/foo.test.mjs that
+  # nothing runs — measured: the glob reported 38 where the named file reported
+  # 37. A gate that silently omits new tests is the failure this job exists to
+  # end. (`node --test scripts/` cannot be used: it reads scripts/package.json
+  # as a package entry point and dies before running anything.)
+  #
+  # `needs: [changes]` only — see the T137 note on 3b: depending on a job that
+  # can skip makes THIS job skip with it.
+  # ----------------------------------------------------------------------------
+  scripts-test:
+    name: 3c. Script test (node --test)
+    needs: [changes]
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run script test suites
+        run: node --test "scripts/**/*.test.mjs"
 
   # ----------------------------------------------------------------------------
   # 3. Unit test  (09 §21.4 step 3)
@@ -825,6 +871,7 @@ jobs:
       - lint
       - build
       - frontend-test
+      - scripts-test
       - unit-test
       - integration-test
       - contract-test

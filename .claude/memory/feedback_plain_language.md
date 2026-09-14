@@ -21,4 +21,15 @@ Bu kullanıcıya yazarken **sade dil** kullanılır. Uzun, yoğun teknik anlatı
 
 **Ek kural — soru tipine göre uzunluk.** *"X ne işe yarıyor / neden gerekli"* türü bir soru **2-3 kısa cümle** ile cevaplanır: dosya/satır bağlantısı yok, tablo yok, kod adı ancak zorunluysa. Kod dayanağı yalnız **istenirse** ya da bir iddia tartışmalıysa eklenir. Ölçüt basit: kullanıcı bir **kavramı** sorduysa kavramı anlat, **kanıtı** değil.
 
+**ÜÇÜNCÜ TEKRAR — 2026-09-04. Kural artık "genelde uygula" değil, "İSTİSNASIZ uygula".** Gas fee turunda aynı geri bildirim üst üste geldi: *"ben anlamadım daha anlaşılır dilde anlat"* → *"artan 1 kuruşa neden 2 dolar masraf ödüyoruz"* → *"bundan sonra her şeyi daha anlaşılır anlat ve bu kuralı not al ve asla atlama"*. Üçüncü mesaj ayrıca **kuralın nereye yazıldığını** sorguladı: kural önce yalnız Claude'un özel auto-memory'sine yazılmıştı, repoya değil. **Kurallar repoda yaşar** (`.claude/memory/`), yoksa proje sahibi göremez ve başka bir oturum devralamaz.
+
+**Tetikleyen desen — kanıt yığmak.** Yanıtlar teknik olarak doğruydu ama "GPT ne dedi" sorusuna kaynak adı, dosya yolu, İngilizce terim ve iç içe gerekçe ile cevap veriliyordu. Proje sahibi konuyu takip edemedi ve **iki kez daha sormak zorunda kaldı**. Sadeleştirmeyi ona hatırlatmak zorunda bırakmak, kuralın uygulanmadığının kanıtıdır.
+
+**Bu turda eklenen iki somut kural:**
+
+- **Rakamı hesabıyla göster.** "~2 dolar" yetmiyor; hangi çarpımdan çıktığı gösterilmeli. Proje sahibi tam olarak bunu sordu: *"artan 1 kuruşa neden 2 dolar masraf ödüyoruz"*. Bir sayı gerekçesiz verilirse bir sonraki soru o sayı olur.
+- **Sonunda tek cümlelik soru.** Yanıt "ne yapmamı istersin?" ile kapanır. Uzun seçenek listesi değil, tek soru.
+
+**Kontrol — göndermeden önce sor:** *"bu alanda çalışmayan biri okusa anlar mıydı?"* Anlamazsa yeniden yaz.
+
 **Neyi bozmaz:** Doküman içeriği (`Docs/*.md`), task raporları ve commit mesajları teknik ve ayrıntılı kalmaya devam eder — bu kural **sohbet yanıtları** içindir. [[feedback_respond_in_turkish]] ile birlikte geçerlidir.
