@@ -4,6 +4,10 @@ import { metricsHandler } from '../metrics.js';
 import { internalKeyAuth } from './middleware.js';
 import type { InventoryService } from '../trade/InventoryService.js';
 import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
+import {
+  SteamProfileUnreadableError,
+  type LimitedAccountService,
+} from '../trade/LimitedAccountService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
 /** SteamID64 is a 17-digit decimal — looser regex catches obvious garbage early. */
@@ -11,14 +15,16 @@ const STEAM_ID64_REGEX = /^7656119[0-9]{10}$/;
 
 /**
  * Everything this sidecar serves (T133). The surface is deliberately
- * read-only: both routes ask Steam a question and neither changes anything on
- * Steam's side. The bot pool, trade offer send/monitor and bot-status routes
- * went with the custody layer (02 §2.1) — the platform holds no items and
- * sends no offers, so there is nothing left here to write.
+ * read-only: every route asks Steam a question and none of them changes
+ * anything on Steam's side. The bot pool, trade offer send/monitor and
+ * bot-status routes went with the custody layer (02 §2.1) — the platform holds
+ * no items and sends no offers, so there is nothing left here to write. The
+ * only local write is a cache invalidation, which touches nothing upstream.
  */
 export interface RouterDeps {
   inventoryService?: InventoryService;
   tradeHoldService?: TradeHoldService;
+  limitedAccountService?: LimitedAccountService;
   /**
    * WP5 — overrides the `/health` outbound probe. Threaded through so tests can
    * exercise the route without reaching the real Steam API; production passes
@@ -28,7 +34,7 @@ export interface RouterDeps {
 }
 
 export function buildRouter(deps: RouterDeps = {}): Router {
-  const { inventoryService, tradeHoldService, health } = deps;
+  const { inventoryService, tradeHoldService, limitedAccountService, health } = deps;
   const router = Router();
 
   // Health check — no auth required
@@ -47,6 +53,16 @@ export function buildRouter(deps: RouterDeps = {}): Router {
   // Trade-hold / Mobile Authenticator check (08 §2.2, 07 §5.16a + §4.8).
   // Web-API-key call (no bot session) → IEconService/GetTradeHoldDurations/v1.
   apiRouter.get('/trade-hold/:steamId', tradeHoldGetHandler(tradeHoldService));
+
+  // Limited-account check (08 §2.2a). Anonymous Steam Community profile XML —
+  // NOT a Web API call and NOT the same question as trade-hold: a limited
+  // account also reports a 0-second hold, which is exactly how the 2026-09-02
+  // rehearsal reached escrowed payment on an account that could never trade.
+  apiRouter.get('/account-limited/:steamId', accountLimitedGetHandler(limitedAccountService));
+  apiRouter.delete(
+    '/account-limited/:steamId/cache',
+    accountLimitedInvalidateHandler(limitedAccountService),
+  );
 
   router.use('/api', apiRouter);
   return router;
@@ -179,6 +195,54 @@ function tradeHoldGetHandler(service?: TradeHoldService) {
       req.log.error({ err, steamId }, 'TradeHoldService.getTradeHold threw');
       res.status(500).json({ error: (err as Error).message });
     }
+  };
+}
+
+function accountLimitedGetHandler(service?: LimitedAccountService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    if (!service) {
+      res.status(503).json({ error: 'LimitedAccountService not initialized' });
+      return;
+    }
+    const steamId = resolveSteamIdParam(req.params.steamId);
+    if (!steamId) {
+      res.status(400).json({ error: 'steamId must be a valid SteamID64' });
+      return;
+    }
+    // 08 §2.2a — no accessToken here on purpose: the profile XML is anonymous.
+    // Requiring one would put this check out of reach of the seller-side gate,
+    // which holds no trade token for the account it is about to clear.
+    try {
+      const result = await service.isLimited(steamId);
+      res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof SteamProfileUnreadableError) {
+        req.log.warn(
+          { steamId, shape: err.bodyShape, err: err.message },
+          'Limited-account probe failed — gate closes',
+        );
+        res.status(503).json({ code: err.code, error: err.message });
+        return;
+      }
+      req.log.error({ err, steamId }, 'LimitedAccountService.isLimited threw');
+      res.status(500).json({ error: (err as Error).message });
+    }
+  };
+}
+
+function accountLimitedInvalidateHandler(service?: LimitedAccountService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    if (!service) {
+      res.status(503).json({ error: 'LimitedAccountService not initialized' });
+      return;
+    }
+    const steamId = resolveSteamIdParam(req.params.steamId);
+    if (!steamId) {
+      res.status(400).json({ error: 'steamId must be a valid SteamID64' });
+      return;
+    }
+    await service.invalidate(steamId);
+    res.status(204).send();
   };
 }
 

@@ -530,6 +530,8 @@ public class FraudFlagServiceTests : IntegrationTestBase
             new NoOpDeliveryTimeoutRound(),
             // WP7 — delivery-phase warning sweep; this test never reaches it.
             new NoOpWarningDispatcher(),
+            // 08 §2.2a — bu test ACCEPT son tarihini ölçüyor; kapı sabit tutulur.
+            new AlwaysEligibleTradeEligibilityChecker(),
             Options.Create(new TimeoutSchedulingOptions()),
             NullLogger<DeadlineScannerJob>.Instance);
         await scanner.ScanAndRescheduleAsync();
@@ -538,6 +540,13 @@ public class FraudFlagServiceTests : IntegrationTestBase
             .SingleAsync(t => t.Id == tx.Id);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
         Assert.Equal(CancelledByType.TIMEOUT, persisted.CancelledBy);
+    }
+
+    private sealed class AlwaysEligibleTradeEligibilityChecker : ISteamTradeEligibilityChecker
+    {
+        public Task<SteamTradeEligibilityResult> EvaluateAsync(
+            Skinora.Users.Domain.Entities.User user, CancellationToken cancellationToken)
+            => Task.FromResult(SteamTradeEligibilityResult.Eligible);
     }
 
     private sealed class NoOpTimeoutSideEffectPublisher : ITimeoutSideEffectPublisher

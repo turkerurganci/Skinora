@@ -12,6 +12,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Steam;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
@@ -55,6 +56,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
     private RecordingOutboxService _outbox = null!;
     private FakeSteamInventoryReader _inventory = null!;
     private CountingTradeHoldChecker _tradeHold = null!;
+    private ISteamTradeEligibilityChecker _steamEligibility = null!;
     private RecordingJobScheduler _scheduler = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
@@ -80,6 +82,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
         _clock = new FakeTimeProvider(new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero));
         _outbox = new RecordingOutboxService();
         _tradeHold = new CountingTradeHoldChecker(new TradeHoldResult(true, true, null));
+        _steamEligibility = new FakeSteamTradeEligibilityChecker();
         _scheduler = new RecordingJobScheduler();
 
         // Default world: the seller still holds the listed, tradeable item and
@@ -358,6 +361,54 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
         Assert.Equal(ConfirmReadyStatus.BuyerMobileAuthenticatorInactive, outcome.Status);
         Assert.Equal(TransactionErrorCodes.BuyerMobileAuthenticatorInactive, outcome.ErrorCode);
         Assert.NotEqual(TransactionErrorCodes.MobileAuthenticatorRequired, outcome.ErrorCode);
+        await AssertUnchangedAsync(transaction.Id);
+    }
+
+    // ---------- 08 §2.2a — buyer trade eligibility ----------
+
+    [Fact]
+    public async Task Limited_Buyer_Blocks_Confirm_Ready_With_A_Seller_Facing_Code()
+    {
+        // The seller is told, because the seller is the one being asked to act.
+        // Its own code, not BUYER_MOBILE_AUTHENTICATOR_INACTIVE: the buyer's
+        // authenticator may be on and the remedy (a US$5 purchase) is different.
+        var transaction = await CreateAcceptedTransactionAsync();
+        _steamEligibility = FakeSteamTradeEligibilityChecker.Limited();
+
+        var outcome = await BuildSut().ConfirmReadyAsync(
+            _seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(ConfirmReadyStatus.BuyerSteamAccountLimited, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.BuyerSteamAccountLimited, outcome.ErrorCode);
+        Assert.NotEqual(TransactionErrorCodes.SteamAccountLimited, outcome.ErrorCode);
+        await AssertUnchangedAsync(transaction.Id);
+    }
+
+    [Fact]
+    public async Task Buyer_Inside_The_15_Day_Wait_Blocks_Confirm_Ready()
+    {
+        var transaction = await CreateAcceptedTransactionAsync();
+        _steamEligibility = FakeSteamTradeEligibilityChecker.TooNew(3);
+
+        var outcome = await BuildSut().ConfirmReadyAsync(
+            _seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(ConfirmReadyStatus.BuyerSteamAccountTooNew, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.BuyerSteamAccountTooNew, outcome.ErrorCode);
+        Assert.Contains("3", outcome.ErrorMessage);
+        await AssertUnchangedAsync(transaction.Id);
+    }
+
+    [Fact]
+    public async Task Unreadable_Buyer_Eligibility_Fails_Closed()
+    {
+        var transaction = await CreateAcceptedTransactionAsync();
+        _steamEligibility = FakeSteamTradeEligibilityChecker.Unknown();
+
+        var outcome = await BuildSut().ConfirmReadyAsync(
+            _seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(ConfirmReadyStatus.SteamUnavailable, outcome.Status);
         await AssertUnchangedAsync(transaction.Id);
     }
 
@@ -690,6 +741,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
             // with must come out of the same contract the accept endpoint wrote.
             new TradeUrlParser(),
             _tradeHold,
+            _steamEligibility,
             new TimeoutSchedulingService(Context, _scheduler, _clock),
             _outbox,
             Options.Create(new StablecoinContractOptions()),

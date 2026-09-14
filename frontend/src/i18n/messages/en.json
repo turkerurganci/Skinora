@@ -1159,6 +1159,18 @@
         "title": "Payout address cooldown",
         "description": "Your payout address was changed recently. For security reasons you cannot start a new transaction during the cooldown."
       },
+        "steamLimited": {
+          "title": "Your Steam account is limited",
+          "description": "Steam does not allow accounts that have never spent money to trade. Spending at least US$5 on Steam lifts this restriction."
+        },
+        "steamTooNew": {
+          "title": "Your Steam account is too new",
+          "description": "Steam does not allow trading during an account’s first 15 days. You can start a transaction once the wait is over."
+        },
+        "steamUnavailable": {
+          "title": "Steam could not be checked",
+          "description": "Your trade eligibility could not be verified with Steam. This is temporary — please try again shortly."
+        },
       "unknown": {
         "title": "Cannot start a transaction"
       },
@@ -1261,6 +1273,8 @@
         "CONCURRENT_LIMIT_REACHED": "You have reached your active transaction limit. You can start a new transaction once existing ones are completed.",
         "CANCEL_COOLDOWN_ACTIVE": "A cancellation cooldown is in effect. You cannot start a new transaction until it expires.",
         "NEW_ACCOUNT_LIMIT_REACHED": "You have reached the new-account transaction limit.",
+        "STEAM_ACCOUNT_LIMITED": "Your Steam account is limited and cannot trade. Spend at least US$5 on Steam, then try again.",
+        "STEAM_ACCOUNT_TOO_NEW": "Your Steam account is too new to trade. Steam does not allow trading during an account’s first 15 days.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Steam Mobile Authenticator must be active on your account.",
         "ACCOUNT_FLAGGED": "Your account is under review. You cannot start a new transaction.",
         "ITEM_NOT_TRADEABLE": "The item you selected is not tradeable. Please pick a different item.",
@@ -1426,6 +1440,8 @@
         "VALIDATION_ERROR": "The submitted data is invalid. Please check the address.",
         "ACCOUNT_FLAGGED": "Your account is under review and can't accept transactions right now. Please contact support.",
         "INVALID_TRADE_URL": "Enter a valid Steam trade URL that belongs to your own account.",
+        "STEAM_ACCOUNT_LIMITED": "Your Steam account is limited and cannot receive trades. Spend at least US$5 on Steam, then try again.",
+        "STEAM_ACCOUNT_TOO_NEW": "Your Steam account is too new to trade. Steam does not allow trading during an account’s first 15 days.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Your Steam Mobile Authenticator must be active to accept. Without it Steam holds the trade for 15 days.",
         "STEAM_UNAVAILABLE": "Steam could not be reached right now, so your Mobile Authenticator could not be verified. Please try again shortly.",
         "generic": "Could not accept the transaction. Please try again."
@@ -1462,6 +1478,8 @@
             "ITEM_NO_LONGER_AVAILABLE": "This item can no longer be sent — it is not in your inventory, or it is not tradeable.",
             "INVENTORY_PRIVATE": "We could not read your Steam inventory because your profile is private. Make your inventory public and try again.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "The buyer's Steam Mobile Authenticator is not active yet. They have been notified — you can try again once they enable it.",
+            "BUYER_STEAM_ACCOUNT_LIMITED": "The buyer’s Steam account is limited, so Steam will not let a trade reach it. The buyer has been notified — you can retry once the restriction is lifted.",
+            "BUYER_STEAM_ACCOUNT_TOO_NEW": "The buyer’s Steam account is too new to trade (Steam blocks the first 15 days). You can retry once the wait is over.",
             "STEAM_UNAVAILABLE": "Steam could not be reached. Please try again in a moment.",
             "INVALID_STATE_TRANSITION": "This transaction is no longer waiting for your confirmation.",
             "NOT_A_PARTY": "You are not a party to this transaction.",

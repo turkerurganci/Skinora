@@ -34,6 +34,10 @@ import {
 } from '../trade/InventoryService.js';
 import { InMemoryInventoryCache } from '../cache/InventoryCache.js';
 import { SteamApiKeyMissingError, type TradeHoldService } from '../trade/TradeHoldService.js';
+import {
+  SteamProfileUnreadableError,
+  type LimitedAccountService,
+} from '../trade/LimitedAccountService.js';
 import { SteamApiError } from '../errors/SidecarError.js';
 
 beforeEach(() => {
@@ -429,6 +433,122 @@ describe('GET /api/trade-hold/:steamId (WP6)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 08 §2.2a — GET /api/account-limited/:steamId (limited-account check)
+// ---------------------------------------------------------------------------
+
+async function startLimitedAccountApp(
+  service: LimitedAccountService,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const app = express();
+  app.use(express.json());
+  app.use(correlationMiddleware);
+  app.use(buildRouter({ limitedAccountService: service }));
+  const server = await new Promise<import('http').Server>((resolve) => {
+    const s = app.listen(0, () => resolve(s));
+  });
+  const port = (server.address() as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+describe('GET /api/account-limited/:steamId (08 §2.2a)', () => {
+  it('returns the limited-account result on success', async () => {
+    const isLimited = vi.fn().mockResolvedValue({ limited: true, samples: 1, source: 'live' });
+    const service = { isLimited } as unknown as LimitedAccountService;
+
+    const ctx = await startLimitedAccountApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/account-limited/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ limited: true, samples: 1, source: 'live' });
+      expect(isLimited).toHaveBeenCalledWith(VALID_STEAM_ID);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('needs no accessToken — the seller-side gate holds none', async () => {
+    const isLimited = vi.fn().mockResolvedValue({ limited: false, samples: 3, source: 'live' });
+    const service = { isLimited } as unknown as LimitedAccountService;
+
+    const ctx = await startLimitedAccountApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/account-limited/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(200);
+      expect(isLimited).toHaveBeenCalledTimes(1);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('rejects an invalid SteamID64 with 400 without calling the service', async () => {
+    const isLimited = vi.fn();
+    const service = { isLimited } as unknown as LimitedAccountService;
+
+    const ctx = await startLimitedAccountApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/account-limited/not-a-steam-id`);
+      expect(res.status).toBe(400);
+      expect(isLimited).not.toHaveBeenCalled();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('maps an unreadable profile to 503 STEAM_PROFILE_UNREADABLE (fail-closed)', async () => {
+    const isLimited = vi
+      .fn()
+      .mockRejectedValue(new SteamProfileUnreadableError('no field', 'html'));
+    const service = { isLimited } as unknown as LimitedAccountService;
+
+    const ctx = await startLimitedAccountApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/account-limited/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('STEAM_PROFILE_UNREADABLE');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('returns 503 when LimitedAccountService is not initialized', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    app.use(buildRouter({}));
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const res = await fetch(`http://127.0.0.1:${port}/api/account-limited/${VALID_STEAM_ID}`);
+      expect(res.status).toBe(503);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('DELETE .../cache invalidates and returns 204', async () => {
+    const invalidate = vi.fn();
+    const service = { invalidate, isLimited: vi.fn() } as unknown as LimitedAccountService;
+
+    const ctx = await startLimitedAccountApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/account-limited/${VALID_STEAM_ID}/cache`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(204);
+      expect(invalidate).toHaveBeenCalledWith(VALID_STEAM_ID);
+    } finally {
+      await ctx.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T133 — the surface is READ-ONLY
 // ---------------------------------------------------------------------------
 
@@ -471,7 +591,7 @@ describe('retired custody surface (T133)', () => {
     }
   });
 
-  it('still serves the two read-only routes and /health', async () => {
+  it('still serves the read-only routes and /health', async () => {
     resetHealthCacheForTests();
     const app = express();
     app.use(express.json());
@@ -496,6 +616,7 @@ describe('retired custody surface (T133)', () => {
       expect((await fetch(`${base}/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok`)).status).toBe(
         503,
       );
+      expect((await fetch(`${base}/api/account-limited/${VALID_STEAM_ID}`)).status).toBe(503);
 
       // /health is healthy WITHOUT any Steam credential — the point of T133.
       const health = await fetch(`${base}/health`);

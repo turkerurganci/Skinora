@@ -279,6 +279,46 @@ public class ReputationAggregatorTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// <b>08 §2.2a — a timeout the COUNTERPARTY's Steam account made impossible
+    /// is nobody's fault either.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Same fixture as the two cases above, one field changed again. The
+    /// concrete case is the 2026-09-02 rehearsal: the buyer's Steam account was
+    /// limited, so no trade could reach them at all, and the delivery window
+    /// expiring said nothing about the seller. Before this column the map
+    /// charged it to the seller — the single strongest negative signal 02 §13
+    /// defines, applied to someone who could not have acted.
+    /// </para>
+    /// <para>
+    /// Note what is NOT marked: an unreadable Steam answer. The mark is written
+    /// only on a positive finding, so a Steam outage cannot quietly erase real
+    /// non-delivery from every seller's record.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Recompute_Cancelled_Timeout_Blocked_By_Counterparty_Counts_For_Neither_Party()
+    {
+        var tx = await InsertTransactionAsync(
+            _alice.Id, _bob.Id, TransactionStatus.CANCELLED_TIMEOUT, dayOffset: -50,
+            timeoutBlockedByCounterpartyAt: DateTime.UtcNow.AddDays(-50));
+        await InsertTimeoutHistoryAsync(tx.Id, previousStatus: TransactionStatus.PAYMENT_RECEIVED);
+        await InsertTransactionAsync(_alice.Id, _bob.Id, TransactionStatus.COMPLETED, dayOffset: -10);
+
+        var aggregator = new ReputationAggregator(Context);
+        var aliceSnap = await aggregator.RecomputeAsync(_alice.Id, CancellationToken.None);
+        var bobSnap = await aggregator.RecomputeAsync(_bob.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        // 1 success / 1 attempt — the blocked timeout left the denominator.
+        // The unmarked twin of this fixture gives 0.5.
+        Assert.Equal(1m, aliceSnap.SuccessfulTransactionRate);
+        Assert.Equal(1m, bobSnap.SuccessfulTransactionRate);
+        Assert.Equal(1, aliceSnap.CompletedTransactionCount);
+    }
+
+    /// <summary>
     /// The B1 exclusion is scoped to the delivery phase's admin release — an
     /// ordinary timeout in any other phase is untouched by it.
     /// </summary>
@@ -393,7 +433,8 @@ public class ReputationAggregatorTests : IntegrationTestBase
         TransactionStatus status,
         int dayOffset,
         DateTime? deliveryReversedAt = null,
-        DateTime? timeoutReleasedByAdminRulingAt = null)
+        DateTime? timeoutReleasedByAdminRulingAt = null,
+        DateTime? timeoutBlockedByCounterpartyAt = null)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
@@ -447,6 +488,7 @@ public class ReputationAggregatorTests : IntegrationTestBase
                            : null,
             DeliveryReversedAt = deliveryReversedAt,
             TimeoutReleasedByAdminRulingAt = timeoutReleasedByAdminRulingAt,
+            TimeoutBlockedByCounterpartyAt = timeoutBlockedByCounterpartyAt,
         };
 
         Context.Set<Transaction>().Add(tx);

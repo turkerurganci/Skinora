@@ -51,6 +51,33 @@ export const config = {
     10,
   ),
 
+  // Limited-account probe (08 §2.2a) — Steam Community profil XML'i, yani
+  // yukarıdaki Community kotasını envanter okumalarıyla PAYLAŞIR.
+  //
+  // Varsayılan 3 örnek, DEPLOY_RUNBOOK §G.5'teki "en az 5 ardışık okuma"
+  // kuralının ALTINDA ve bu bilinçli: runbook'taki kural tek seferlik bir insan
+  // prosedürü, buradaki ise her soğuk kullanıcı için kotadan örnek sayısı kadar
+  // görev harcıyor. Kota ölçümü üretim IP'sinden yenilendiğinde (08 §2.6'nın
+  // kendi açık borcu) değer rebuild olmadan yükseltilebilsin diye env'e bağlı.
+  steamLimitedAccountSamples: positiveIntFromEnv(process.env.STEAM_LIMITED_ACCOUNT_SAMPLES, 3),
+  // Örnekler arası aralık — ölçülmüş yordamdaki `sleep 3` (REHEARSAL_2026-09-02).
+  // Aralıksız örnekleme aynı bayat CDN düğümünü okur ve hiçbir şey doğrulamaz.
+  steamLimitedAccountSampleDelayMs: positiveIntFromEnv(
+    process.env.STEAM_LIMITED_ACCOUNT_SAMPLE_DELAY_MS,
+    3_000,
+  ),
+  // Kontrolün üst sınırı; backend istemcisi 30 sn'de kesiyor, bu ondan kısa
+  // olmalı ki arıza "backend timeout" yerine kodlu 503 olarak görünsün.
+  steamLimitedAccountDeadlineMs: positiveIntFromEnv(
+    process.env.STEAM_LIMITED_ACCOUNT_DEADLINE_MS,
+    20_000,
+  ),
+  // Yalnız DOĞRULANMIŞ TEMİZ sonuç bu süre boyunca saklanır (08 §2.2a).
+  steamLimitedAccountCacheTtlSeconds: positiveIntFromEnv(
+    process.env.STEAM_LIMITED_ACCOUNT_CACHE_TTL_SECONDS,
+    86_400,
+  ),
+
   // Graceful shutdown
   shutdownTimeoutMs: 10_000,
 } as const;

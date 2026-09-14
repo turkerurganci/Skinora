@@ -6,6 +6,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -56,6 +57,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -76,6 +78,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -104,6 +107,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -217,6 +221,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -263,6 +268,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(batchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -321,6 +327,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -358,6 +365,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -406,6 +414,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryRoundRecheckSeconds: 900),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -433,6 +442,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -466,6 +476,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -486,6 +497,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(scannerSeconds: 45),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -513,6 +525,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -600,6 +613,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             warnings,
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 

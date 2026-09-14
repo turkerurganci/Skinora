@@ -19,6 +19,14 @@ const REASON = {
   NEW_ACCOUNT: "NEW_ACCOUNT_LIMIT_REACHED",
   PAYOUT_COOLDOWN: "PAYOUT_ADDRESS_COOLDOWN_ACTIVE",
   WALLET_MISSING: "SELLER_WALLET_ADDRESS_MISSING",
+  // 08 §2.2a — Steam'in kendi takas kısıtları. MA ile karıştırılmamalı: kısıtlı
+  // hesap da "bekletme 0 saniye" döndürüyor, yani MA rozeti yeşilken bu iki
+  // engel sessizce duruyordu.
+  STEAM_LIMITED: "STEAM_ACCOUNT_LIMITED",
+  STEAM_TOO_NEW: "STEAM_ACCOUNT_TOO_NEW",
+  // Bu listedeki TEK geçici sebep: "Steam'e sorulamadı". Kalıcı bir ret gibi
+  // gösterilmemeli, yoksa kullanıcı düzeltemeyeceği bir şeyin peşine düşer.
+  STEAM_UNAVAILABLE: "STEAM_UNAVAILABLE",
 } as const;
 
 export interface EligibilityGateProps {
@@ -142,6 +150,31 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
             {t("walletMissing.cta")}
           </Link>
         </Banner>
+      );
+    case REASON.STEAM_LIMITED:
+      return (
+        <Banner
+          tone="red"
+          title={t("steamLimited.title")}
+          description={t("steamLimited.description")}
+        />
+      );
+    case REASON.STEAM_TOO_NEW:
+      return (
+        <Banner
+          tone="amber"
+          title={t("steamTooNew.title")}
+          description={t("steamTooNew.description")}
+        />
+      );
+    case REASON.STEAM_UNAVAILABLE:
+      // Amber, kırmızı değil: engel kullanıcıda değil, geçici bir arızada.
+      return (
+        <Banner
+          tone="amber"
+          title={t("steamUnavailable.title")}
+          description={t("steamUnavailable.description")}
+        />
       );
     default:
       return <Banner tone="red" title={t("unknown.title")} description={reason} />;

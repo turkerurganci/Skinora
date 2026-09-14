@@ -23,6 +23,7 @@ using Skinora.Auth.Application.Session;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Steam;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -1427,6 +1428,15 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         /// </summary>
         public AccountSettingsEndpointTests.ConfigurableTradeHoldStub TradeHold { get; } = new();
 
+        /// <summary>
+        /// 08 §2.2a — buyer/seller limited-account probe. Defaults to "reachable,
+        /// not limited"; tests flip it and reset it in a finally block. Without
+        /// this swap the registered HttpSteamAccountLimitedClient would reach for
+        /// a sidecar this host never configures, fail closed, and turn every
+        /// create/accept/confirm-ready into a 403 or 503.
+        /// </summary>
+        public AccountSettingsEndpointTests.ConfigurableAccountLimitedStub AccountLimited { get; } = new();
+
         public Factory()
         {
             _connection = new SqliteConnection("DataSource=:memory:");
@@ -1717,6 +1727,11 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // never configures, fail closed, and turn every accept into a 503.
                 services.RemoveAll<ITradeHoldChecker>();
                 services.AddSingleton<ITradeHoldChecker>(TradeHold);
+
+                // 08 §2.2a — same reasoning one condition over: the gates now
+                // also ask whether the account may trade at all.
+                services.RemoveAll<ISteamAccountLimitedProbe>();
+                services.AddSingleton<ISteamAccountLimitedProbe>(AccountLimited);
             });
         }
 

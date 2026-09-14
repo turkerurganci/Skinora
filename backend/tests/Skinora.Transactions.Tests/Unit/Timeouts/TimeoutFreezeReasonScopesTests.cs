@@ -28,15 +28,29 @@ public class TimeoutFreezeReasonScopesTests
     }
 
     [Fact]
-    public void For_STEAM_OUTAGE_Returns_Two_Steam_Bound_States()
+    public void For_STEAM_OUTAGE_Returns_The_Steam_Bound_States()
     {
         // The parties can still trade during a Steam outage; what breaks is the
-        // platform's ability to verify it. So the states that freeze are the two
-        // whose deadlines depend on a Steam-side observation (02 §23, 03 §11.2).
+        // platform's ability to verify it. So the states that freeze are the
+        // ones whose deadlines depend on a Steam-side observation (02 §23,
+        // 03 §11.2).
+        //
+        // CREATED joined the list with the 08 §2.2a trade-eligibility gate. Its
+        // AcceptDeadline used to expire only on the buyer's own inaction; the
+        // accept step now fails closed when Steam cannot be read, so an outage
+        // can run that window out and record the lapse against a buyer who was
+        // never able to act. Dropping CREATED from this list would restore that
+        // defect silently — which is why the state is asserted here and not
+        // only in the scope helper.
         var statuses = TimeoutFreezeReasonScopes.For(TimeoutFreezeReason.STEAM_OUTAGE);
 
         Assert.Equal(
-            new[] { TransactionStatus.ACCEPTED, TransactionStatus.PAYMENT_RECEIVED },
+            new[]
+            {
+                TransactionStatus.CREATED,
+                TransactionStatus.ACCEPTED,
+                TransactionStatus.PAYMENT_RECEIVED,
+            },
             statuses);
     }
 

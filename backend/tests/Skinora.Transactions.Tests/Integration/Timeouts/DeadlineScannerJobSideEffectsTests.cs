@@ -7,6 +7,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -60,6 +61,7 @@ public class DeadlineScannerJobSideEffectsTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             new NoOpDeliveryTimeoutRound { Decision = deliveryDecision },
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 

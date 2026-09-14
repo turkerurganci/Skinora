@@ -141,6 +141,25 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // inference re-derived in whichever file happens to ask.
     public DateTime? TimeoutReleasedByAdminRulingAt { get; set; }
 
+    // 08 §2.2a — set when the party who ran out of time could not act because the
+    // COUNTERPARTY's Steam account forbade the trade: the account is limited
+    // (no US$5 lifetime spend) or still inside Steam's 15-day trade wait.
+    //
+    // The third sibling of TimeoutReleasedByAdminRulingAt and DeliveryReversedAt,
+    // and it exists for the same reason: a CANCELLED_TIMEOUT out of ACCEPTED or
+    // PAYMENT_RECEIVED is charged to the SELLER by 06 §3.1, and before this
+    // column nothing could tell "the seller did not send" apart from "the seller
+    // COULD not send". The 2026-09-02 rehearsal is the concrete case — the
+    // buyer's account was limited, the trade was impossible from the start, and
+    // the timeout would have recorded the failure against the seller.
+    //
+    // Written only on a POSITIVE finding: Steam was asked and answered that the
+    // counterparty cannot trade. An unreadable answer leaves it NULL — "could
+    // not check" is not evidence that the counterparty blocked anything, and
+    // inventing fault-clearing from silence would hide real non-delivery behind
+    // any Steam outage.
+    public DateTime? TimeoutBlockedByCounterpartyAt { get; set; }
+
     // --- Settlement (02 §4.5.1) ---
     // Steam lets either side reverse a protected trade for 7 days, with no
     // Steam Support involvement. Paying out before that window closes would let

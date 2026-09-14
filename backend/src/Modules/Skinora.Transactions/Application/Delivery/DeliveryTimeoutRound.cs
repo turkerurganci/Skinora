@@ -7,10 +7,12 @@ using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
+using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Delivery;
 
@@ -63,6 +65,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     private readonly IDeliveryMisdeliveryEscalator _escalator;
     private readonly ISettlementSettingsProvider _settlementSettings;
     private readonly IOutboxService _outbox;
+    private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly ILogger<DeliveryTimeoutRound> _logger;
     private readonly TimeProvider _clock;
 
@@ -72,6 +75,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         IDeliveryMisdeliveryEscalator escalator,
         ISettlementSettingsProvider settlementSettings,
         IOutboxService outbox,
+        ISteamTradeEligibilityChecker steamTradeEligibility,
         ILogger<DeliveryTimeoutRound> logger,
         TimeProvider clock)
     {
@@ -80,6 +84,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
         _verification = verification;
         _escalator = escalator;
         _outbox = outbox;
+        _steamTradeEligibility = steamTradeEligibility;
         _logger = logger;
         _clock = clock;
     }
@@ -168,7 +173,7 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
             case DeliveryVerdict.NoMovement:
             case DeliveryVerdict.Inconclusive:
             default:
-                return Undelivered(transaction, result);
+                return await UndeliveredAsync(transaction, result, nowUtc, cancellationToken);
         }
     }
 
@@ -390,11 +395,21 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
     /// No delivery was established. Whether that may become a cancellation
     /// depends on how much the platform could actually see.
     /// </summary>
-    private DeliveryTimeoutDecision Undelivered(
-        Transaction transaction, DeliveryVerificationResult result)
+    private async Task<DeliveryTimeoutDecision> UndeliveredAsync(
+        Transaction transaction,
+        DeliveryVerificationResult result,
+        DateTime nowUtc,
+        CancellationToken cancellationToken)
     {
         if (SellerProvenToStillHoldTheItem(result))
         {
+            // 08 §2.2a — the item being in the seller's inventory answers WHETHER
+            // it was sent, not whether it COULD be. Ask Steam about the buyer
+            // before the cancellation is charged to the seller: a limited buyer,
+            // or one inside the 15-day trade wait, cannot receive a trade at all
+            // and no action by the seller would have changed that.
+            await StampIfCounterpartyBlockedAsync(transaction, nowUtc, cancellationToken);
+
             _logger.LogInformation(
                 "Transaction {TransactionId}: delivery deadline passed and the item is still in "
                 + "the seller's inventory — timeout proceeds to cancellation (03 §4.4)",
@@ -410,6 +425,46 @@ public sealed class DeliveryTimeoutRound : IDeliveryTimeoutRound
             transaction.Id, result.Verdict, result.SellerVisibility);
 
         return DeliveryTimeoutDecision.Held;
+    }
+
+    /// <summary>
+    /// 08 §2.2a — record that the counterparty's Steam account is what made the
+    /// action impossible, so the reputation aggregator and the cancel-cooldown
+    /// evaluator both skip this row.
+    /// </summary>
+    /// <remarks>
+    /// Stamped only on a POSITIVE finding. An unreadable answer leaves the
+    /// column NULL and the ordinary attribution stands: "Steam could not be
+    /// asked" is not evidence that the buyer blocked anything, and clearing
+    /// fault from silence would let any Steam outage erase real non-delivery.
+    /// That is the same rule <see cref="SellerProvenToStillHoldTheItem"/>
+    /// applies one question earlier, pointed at the other party.
+    /// </remarks>
+    private async Task StampIfCounterpartyBlockedAsync(
+        Transaction transaction, DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        if (transaction.BuyerId is not { } buyerId) return;
+
+        var buyer = await _db.Set<User>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == buyerId, cancellationToken);
+        if (buyer is null) return;
+
+        var eligibility = await _steamTradeEligibility.EvaluateAsync(buyer, cancellationToken);
+        if (eligibility.Status is not (SteamTradeEligibilityStatus.Limited
+            or SteamTradeEligibilityStatus.TooNew))
+        {
+            return;
+        }
+
+        transaction.TimeoutBlockedByCounterpartyAt = nowUtc;
+
+        _logger.LogWarning(
+            "Transaction {TransactionId}: the delivery window expired but the BUYER's Steam "
+            + "account cannot trade ({Status}) — the cancellation proceeds and the buyer is "
+            + "refunded, but it is NOT recorded against the seller, who could not have delivered "
+            + "to that account at all (08 §2.2a, 02 §13)",
+            transaction.Id, eligibility.Status);
     }
 
     /// <summary>

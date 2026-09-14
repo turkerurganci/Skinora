@@ -10,9 +10,12 @@ import { healthCheckFactory, resetHealthCacheForTests } from './HealthController
  * a constant `healthy` meant the outage could never be detected and the freeze
  * could never fire.
  */
-async function serve(fetchImpl: () => Promise<{ ok: boolean; status: number }>) {
+async function serve(
+  fetchImpl: () => Promise<{ ok: boolean; status: number }>,
+  communityHealth?: { isUnhealthy(): boolean },
+) {
   const app = express();
-  app.get('/health', healthCheckFactory({ fetchImpl }));
+  app.get('/health', healthCheckFactory({ fetchImpl, communityHealth }));
   const server = await new Promise<import('http').Server>((resolve) => {
     const s = app.listen(0, () => resolve(s));
   });
@@ -98,6 +101,57 @@ describe('steam sidecar /health', () => {
       await fetch(s.url);
       await fetch(s.url);
       expect(calls).toBe(1);
+    } finally {
+      await s.close();
+    }
+  });
+
+  // --- 08 §2.2a — Steam Community, ikinci ve bağımsız arıza yüzeyi ---
+
+  it('community sağlığı verilmezse kontrol HİÇ raporlanmaz — bilmediğini iddia etmez', async () => {
+    const s = await serve(() => Promise.resolve({ ok: true, status: 200 }));
+    try {
+      const body = (await (await fetch(s.url)).json()) as { checks: Array<{ name: string }> };
+      expect(body.checks.map((c) => c.name)).not.toContain('steam-community');
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('Web API ayakta ama community çökmüşse SAĞLIKSIZ döner', async () => {
+    // Bu turun açtığı açık: 08 §2.2a kapısı community'ye bağlı, ama /health
+    // yalnız Web API'ye bakıyordu. O hâliyle community kesintisinde kapı her
+    // işlemi reddederken PlatformHealthProbeJob timeout'ları dondurmuyordu.
+    const s = await serve(
+      () => Promise.resolve({ ok: true, status: 200 }),
+      { isUnhealthy: () => true },
+    );
+    try {
+      const res = await fetch(s.url);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as {
+        status: string;
+        checks: Array<{ name: string; status: string }>;
+      };
+      expect(body.status).toBe('unhealthy');
+      const community = body.checks.find((c) => c.name === 'steam-community');
+      expect(community?.status).toBe('unhealthy');
+    } finally {
+      await s.close();
+    }
+  });
+
+  it('community sağlıklıyken genel durum sağlıklı kalır', async () => {
+    const s = await serve(
+      () => Promise.resolve({ ok: true, status: 200 }),
+      { isUnhealthy: () => false },
+    );
+    try {
+      const res = await fetch(s.url);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { status: string; checks: Array<{ name: string }> };
+      expect(body.status).toBe('healthy');
+      expect(body.checks.map((c) => c.name)).toContain('steam-community');
     } finally {
       await s.close();
     }

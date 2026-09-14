@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getTradeHold, inventoryResponse } from '../inventoryStore.js';
+import { getLimitedAccount, getTradeHold, inventoryResponse } from '../inventoryStore.js';
 
 /**
  * Steam sidecar surface (:5100) — the outbound calls the backend makes.
@@ -38,4 +38,18 @@ steamRouter.get('/api/trade-hold/:steamId', (req, res) => {
   // untouched; a test drives `active: false` to exercise the 403
   // MOBILE_AUTHENTICATOR_REQUIRED branch T119a wired into the accept endpoint.
   res.json(getTradeHold(req.params.steamId));
+});
+
+steamRouter.get('/api/account-limited/:steamId', (req, res) => {
+  // 08 §2.2a — the THIRD trade-eligibility condition, deliberately its own
+  // route: a limited account reports a 0-second hold too, so answering it from
+  // `/api/trade-hold` would reproduce the very inference that let the
+  // 2026-09-02 rehearsal reach escrowed payment on an untradeable account.
+  // `samples` mirrors the real shape; the fake takes no samples.
+  const { limited } = getLimitedAccount(req.params.steamId);
+  res.json({ limited, samples: limited ? 1 : 3, source: 'live' });
+});
+
+steamRouter.delete('/api/account-limited/:steamId/cache', (_req, res) => {
+  res.status(204).end();
 });

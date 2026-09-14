@@ -176,6 +176,71 @@ Hold süresi > 0 ise 1. çağrıda kullanıcıya "Mobile Authenticator aktif etm
 | `steamid_target` | Kullanıcının SteamID64 | Kontrol edilecek kullanıcı |
 | `trade_offer_access_token` | Trade URL'den parse | Arkadaş olmayan kullanıcılar için zorunlu |
 
+### 2.2a Steam Takas Uygunluğu — limited account + 15 günlük bekleme
+
+> **Bu bölüm §2.2'nin düzeltmesidir.** Yukarıdaki çıkarım — *"bekletme 0 saniye → MA aktif"* — doğrudur, ama **üçüncü adımı yanlıştır**: "demek ki bu hesap takas edebilir". `GetTradeHoldDurations` *"takas ne kadar bekletilir"* sorusuna cevap verir, *"bu hesap takas edebilir mi"* sorusuna değil.
+
+**Takas edebilirlik üç bağımsız koşuldur ve platform bunları ayrı ayrı okur:**
+
+| # | Koşul | Kaynak | Bu koşul sağlanmazsa |
+|---|---|---|---|
+| 1 | Hesap **limited değil** | Steam Community profil XML'i (aşağıda) | Hesap hiç takas edemez |
+| 2 | Hesap **15 günü doldurmuş** | `GetPlayerSummaries.timecreated` → `User.SteamAccountCreatedAt` (06 §3.1) | Steam ilk 15 gün takasa izin vermez |
+| 3 | Escrow bekletmesi **0** | `GetTradeHoldDurations` (§2.2) | Takas 15 gün Steam emanetinde bekler |
+
+**Neden ayrı ayrı:** limited bir hesap ve 15 günü dolmamış bir hesap da `escrow_end_duration_seconds = 0` döndürür. 2026-09-02 canlı provası tam buna takıldı — alıcının parası zincirde onaylandıktan **sonra** item'ın teslim edilemeyeceği ortaya çıktı (`Docs/TEST_REPORTS/REHEARSAL_2026-09-02.md`, backlog 🔴 `Prova-LimitedAccountNeverChecked`).
+
+**Uç (sidecar-steam):**
+
+```
+GET /api/account-limited/{steamId64}        → { limited, samples, source }
+DELETE /api/account-limited/{steamId64}/cache → 204
+```
+
+Sidecar arkada **anonim** profil belgesini okur — Web API anahtarı ve trade token GEREKMEZ, bu yüzden kontrol satıcı kapısında da kullanılabilir:
+
+```
+GET https://steamcommunity.com/profiles/{steamId64}?xml=1
+→ <isLimitedAccount>0</isLimitedAccount>   (0 = takas edebilir · 1 = limited)
+```
+
+**Bu uç §2.3'ün Community kotasını paylaşır** (§2.6: ~10 istek/dk, IP başına) — envanter okumalarıyla aynı kuyruğa girer.
+
+**Arıza, cevap gibi görünür (2026-09-14 canlı ölçümü):**
+
+| Deneme | Steam'in cevabı | Platform kararı |
+|---|---|---|
+| Geçerli profil | HTTP 200 + XML + alan | Okunur |
+| **Olmayan SteamID64** | **HTTP 200 + HTML hata sayfası** | Fail-closed |
+| **Bozuk id** | **HTTP 200 + `<error>` XML'i** | Fail-closed |
+| Bayat cevap | HTTP 200 + alan, ama değer eski | Aşağıdaki teyit kuralı |
+
+`response.ok` bu uçta geçerlilik testi **değildir**. Tek geçerlilik testi `<isLimitedAccount>` alanının kendisidir; alan yoksa sonuç okunamamış sayılır ve kapı **kapanır** (503 `STEAM_PROFILE_UNREADABLE` → backend `STEAM_UNAVAILABLE`). Alanın yokluğunu "limited değil" saymak kapıyı doğduğu gün fail-open yapardı.
+
+**Asimetrik teyit.** Profil XML'i arada bayat cevap döndürüyor ve ölçülmüş yalan yönü **tek taraflı**: 2026-09-02'de iki kez "limit kalktı" (`0`) dedi, ardışık örnekleme ikisini de yalanladı; ters yönde hiç gözlenmedi. Bu yüzden:
+
+- `1` okundu → **tek okuma bağlayıcıdır**, anında blok.
+- `0` okundu → varsayılan **3 ardışık örnek** (aralarında 3 sn) aynı sonucu vermeden kabul edilmez.
+- Cevap okunamadı → blok, hiçbir şey saklanmaz.
+
+> Örnek sayısı `DEPLOY_RUNBOOK §G.5`'in insan prosedüründeki **5**'in altındadır ve bu bilinçlidir: runbook'taki kural tek seferlik çalışır, buradaki her soğuk kullanıcı için kotadan örnek sayısı kadar görev harcar. Değer `STEAM_LIMITED_ACCOUNT_SAMPLES` ile rebuild olmadan yükseltilebilir.
+
+**Önbellek — yalnız "temiz" sonuç saklanır (24 saat, `REDIS_URL` ile kalıcı).** Kısıtlı sonuç ve arıza **saklanmaz**: 5 USD'yi harcayıp kısıtı kaldıran kullanıcı anında geçebilmeli, ve dakikalık bir kesinti bir güne yayılmamalı. Kabul edilen bedel: temiz okunduktan sonra 24 saat içinde kısıtlanan bir hesap bir kapıdan daha geçebilir; kaçış yolu yukarıdaki `DELETE .../cache` ucudur.
+
+**Kapılar ve hata kodları (07 §7.2/§7.6/§7.6a):**
+
+| Kapı | Kim kontrol edilir | Limited | 15 gün dolmamış | Okunamadı |
+|---|---|---|---|---|
+| `GET /transactions/eligibility` + `POST /transactions` | Satıcı | `STEAM_ACCOUNT_LIMITED` (403) | `STEAM_ACCOUNT_TOO_NEW` (403) | `STEAM_UNAVAILABLE` (503) |
+| `POST /transactions/:id/accept` | Alıcı | `STEAM_ACCOUNT_LIMITED` (403) | `STEAM_ACCOUNT_TOO_NEW` (403) | `STEAM_UNAVAILABLE` (503) |
+| `POST /transactions/:id/confirm-ready` | **Alıcı**, satıcıya raporlanır | `BUYER_STEAM_ACCOUNT_LIMITED` (403) | `BUYER_STEAM_ACCOUNT_TOO_NEW` (403) | `STEAM_UNAVAILABLE` (503) |
+
+"Okunamadı" ayrı bir koddur ve bilerek geçicidir: bilgi yokluğu ile olumsuz bulgu aynı koda çöktürülmez (06 §3.5 ailesi).
+
+**Timeout kusuru.** Teslimat ya da hazırlık onayı süresi, karşı tarafın Steam hesabı yüzünden dolduysa kusur o tarafa yazılmaz — `Transaction.TimeoutBlockedByCounterpartyAt` (06 §3.5) damgalanır ve hem itibar hesabı hem iptal cooldown'u o satırı atlar. Damga yalnız **olumlu bulguda** yazılır; okunamayan bir cevap kusuru temizlemez, yoksa herhangi bir Steam kesintisi gerçek teslim etmemeyi de silerdi.
+
+**Sağlık izleme.** Sidecar'ın `/health` ucu Web API'yi yokluyordu; bu kontrol Community host'una bağlı olduğu için ikinci bir kontrol eklendi (`steam-community`). Ek istek harcamaz — zaten yapılan çağrıların sonuçlarını sayar, üst üste 3 başarısızlıkta arıza bildirir ve 5 dakika sessizlikten sonra sağlıklıya döner. Bu olmadan community-only bir kesintide kapılar reddederken timeout'lar donmazdı (02 §3.3).
+
 ### 2.3 Steam Envanter Okuma
 
 **Endpoint:** `https://steamcommunity.com/inventory/{steamId}/730/2`

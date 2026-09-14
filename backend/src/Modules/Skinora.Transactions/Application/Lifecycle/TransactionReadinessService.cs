@@ -38,6 +38,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
     private readonly ISteamInventoryReader _inventory;
     private readonly ITradeUrlParser _tradeUrlParser;
     private readonly ITradeHoldChecker _tradeHoldChecker;
+    private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly ITimeoutSchedulingService _timeouts;
     private readonly IOutboxService _outbox;
     private readonly StablecoinContractOptions _contracts;
@@ -49,6 +50,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         ISteamInventoryReader inventory,
         ITradeUrlParser tradeUrlParser,
         ITradeHoldChecker tradeHoldChecker,
+        ISteamTradeEligibilityChecker steamTradeEligibility,
         ITimeoutSchedulingService timeouts,
         IOutboxService outbox,
         IOptions<StablecoinContractOptions> contracts,
@@ -59,6 +61,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         _inventory = inventory;
         _tradeUrlParser = tradeUrlParser;
         _tradeHoldChecker = tradeHoldChecker;
+        _steamTradeEligibility = steamTradeEligibility;
         _timeouts = timeouts;
         _outbox = outbox;
         _contracts = contracts.Value;
@@ -189,6 +192,29 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
             return Failure(ConfirmReadyStatus.BuyerMobileAuthenticatorInactive,
                 TransactionErrorCodes.BuyerMobileAuthenticatorInactive,
                 "The buyer's Steam Mobile Authenticator is not active (02 §9.1).");
+
+        // ---------- Stage 5b: buyer's Steam trade eligibility (08 §2.2a) ------
+        // This is the gate the 2026-09-02 rehearsal needed and did not have.
+        // The probe above cannot see it: a limited buyer, and a buyer inside
+        // Steam's 15-day wait, both report a 0-second hold. Without this check
+        // the seller is told to go ahead, the buyer pays, and the item turns
+        // out to be undeliverable AFTER the money is escrowed on-chain.
+        var eligibility = await _steamTradeEligibility.EvaluateAsync(buyer, cancellationToken);
+        switch (eligibility.Status)
+        {
+            case SteamTradeEligibilityStatus.Limited:
+                return Failure(ConfirmReadyStatus.BuyerSteamAccountLimited,
+                    TransactionErrorCodes.BuyerSteamAccountLimited,
+                    "The buyer's Steam account is limited and cannot trade (08 §2.2a).");
+            case SteamTradeEligibilityStatus.TooNew:
+                return Failure(ConfirmReadyStatus.BuyerSteamAccountTooNew,
+                    TransactionErrorCodes.BuyerSteamAccountTooNew,
+                    $"The buyer's Steam account is inside Steam's {SteamTradeEligibilityChecker.SteamTradeEligibilityWaitDays}-day trade wait ({eligibility.RemainingDays} day(s) left).");
+            case SteamTradeEligibilityStatus.Unknown:
+                return Failure(ConfirmReadyStatus.SteamUnavailable,
+                    TransactionErrorCodes.SteamUnavailable,
+                    "Steam could not be queried to verify the buyer's trade eligibility (08 §2.2a).");
+        }
 
         // ---------- Stage 6: delivery baseline (md.3 — NON-blocking) --------
         // 03 §2.3 step 3 is explicit that an unreadable buyer inventory does not

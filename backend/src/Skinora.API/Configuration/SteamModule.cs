@@ -69,6 +69,23 @@ public static class SteamModule
         services.AddScoped<ISteamTradeHoldProbe>(sp =>
             sp.GetRequiredService<HttpSteamTradeHoldClient>());
 
+        // 08 §2.2a — sidecar limited-account probe. Its own typed client again:
+        // this one talks to Steam Community (10 req/min, cached) while the
+        // trade-hold client talks to the Web API (60 req/min, never cached), so
+        // sharing a client would put two unrelated budgets behind one timeout.
+        services.AddHttpClient<HttpSteamAccountLimitedClient>(
+            HttpSteamAccountLimitedClient.HttpClientName, (sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<SteamSidecarOptions>>().Value;
+                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+                {
+                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+                }
+                client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds);
+            });
+        services.Replace(ServiceDescriptor.Scoped<ISteamAccountLimitedProbe>(sp =>
+            sp.GetRequiredService<HttpSteamAccountLimitedClient>()));
+
         // Swap the stub `ITradeHoldChecker` registered by Users module
         // (TryAddScoped → first wins) with the sidecar-backed checker (U17
         // trade-URL save). The IMobileAuthenticatorCheck swap (A7) lives in

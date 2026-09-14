@@ -10,6 +10,7 @@ import {
   getInventory,
   resetSteamState,
   setInventory,
+  setLimitedAccount,
   setTradeHold,
   simulateTrade,
 } from '../inventoryStore.js';
@@ -207,6 +208,11 @@ interface TradeHoldBody {
   escrowEndDurationSeconds?: number;
 }
 
+interface LimitedAccountBody {
+  steamId?: string;
+  limited?: boolean;
+}
+
 /** Map a control-surface validation failure onto 400; anything else is a bug. */
 function handleControlError(err: unknown, res: Response): void {
   if (err instanceof InventoryControlError) {
@@ -275,8 +281,22 @@ controlRouter.post('/__e2e/steam/trade-hold', (req, res) => {
   }
 });
 
-// Drop every driven inventory + trade hold. Tests call this between scenarios
-// so one scenario's seeded inventory never leaks into the next.
+// Drive the 08 §2.2a limited-account probe for one steamId. `limited: true`
+// means "Steam blocks this account from trading at all", which the gates answer
+// with 403 STEAM_ACCOUNT_LIMITED — the condition that stopped the 2026-09-02
+// rehearsal AFTER the buyer's payment had already been confirmed on-chain.
+controlRouter.post('/__e2e/steam/limited-account', (req, res) => {
+  const { steamId = '', limited } = (req.body ?? {}) as LimitedAccountBody;
+  try {
+    const state = setLimitedAccount(steamId, { limited });
+    res.json({ ok: true, steamId, ...state });
+  } catch (err) {
+    handleControlError(err, res);
+  }
+});
+
+// Drop every driven inventory + trade hold + limited flag. Tests call this
+// between scenarios so one scenario's seeded state never leaks into the next.
 controlRouter.post('/__e2e/steam/reset', (_req, res) => {
   resetSteamState();
   res.json({ ok: true });

@@ -38,6 +38,14 @@ type FetchLike = (
 export interface HealthDeps {
   /** Override the outbound probe. Defaults to the global fetch. */
   fetchImpl?: FetchLike;
+  /**
+   * 08 §2.2a — passive Steam Community health. Reports from the outcomes of
+   * calls the sidecar already makes, so the check costs no extra request on a
+   * budget of ~10/min. Absent in tests that do not care; the check is then
+   * omitted entirely rather than reported as healthy, so nothing claims to
+   * know what it was never told.
+   */
+  communityHealth?: { isUnhealthy(): boolean };
 }
 
 let cached: { at: number; check: HealthCheck } | null = null;
@@ -68,8 +76,25 @@ export function healthCheckFactory(deps: HealthDeps = {}) {
   // Steam API from a unit test would be both slow and flaky, and would report
   // the network rather than the code.
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
+  const communityHealth = deps.communityHealth;
   return async function healthCheck(_req: Request, res: Response): Promise<void> {
     const checks: HealthCheck[] = [await probeSteam(fetchImpl)];
+
+    // Second host, independent failure mode. The Web API probe above cannot see
+    // a steamcommunity.com outage, and since 08 §2.2a the trade-eligibility gate
+    // depends on that host: without this check a community-only outage would
+    // block every gate while `PlatformHealthProbeJob` kept the timeouts running.
+    if (communityHealth) {
+      checks.push(
+        communityHealth.isUnhealthy()
+          ? {
+              name: 'steam-community',
+              status: 'unhealthy',
+              message: 'Steam Community reads are failing consecutively',
+            }
+          : { name: 'steam-community', status: 'healthy', message: 'no recent failure streak' },
+      );
+    }
 
     const overallStatus = checks.every((c) => c.status === 'healthy')
       ? 'healthy'

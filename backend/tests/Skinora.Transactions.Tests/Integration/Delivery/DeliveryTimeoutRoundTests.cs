@@ -10,6 +10,8 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
+using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Settlement;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -63,6 +65,7 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     private FakeTimeProvider _clock = null!;
     private FakeSteamInventoryReader _inventory = null!;
     private RecordingOutboxService _outbox = null!;
+    private ISteamTradeEligibilityChecker _steamEligibility = null!;
     private RecordingEscalator _escalator = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
@@ -82,6 +85,7 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
         _clock = new FakeTimeProvider(new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero));
         _inventory = new FakeSteamInventoryReader();
         _outbox = new RecordingOutboxService();
+        _steamEligibility = new FakeSteamTradeEligibilityChecker();
         _escalator = new RecordingEscalator();
     }
 
@@ -724,6 +728,7 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
             // as production does.
             new SettlementSettingsProvider(Context),
             _outbox,
+            _steamEligibility,
             NullLogger<DeliveryTimeoutRound>.Instance,
             _clock);
 

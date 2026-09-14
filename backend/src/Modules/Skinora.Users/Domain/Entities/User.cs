@@ -39,6 +39,27 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
     // --- Steam verification ---
     public bool MobileAuthenticatorVerified { get; set; }
 
+    /// <summary>
+    /// Steam account creation time (<c>GetPlayerSummaries.timecreated</c>) —
+    /// 06 §3.1, 08 §2.2a.
+    ///
+    /// <para>
+    /// NOT the same as <see cref="BaseEntity.CreatedAt"/>, which is the
+    /// PLATFORM registration time and drives the new-account transaction quota.
+    /// This one feeds Steam's own 15-day trade-eligibility wait: an account
+    /// inside that window cannot trade no matter what the escrow probe says.
+    /// </para>
+    ///
+    /// <para>
+    /// Refreshed on every Steam login. Null means "never captured" — the value
+    /// was fetched at login and discarded before this column existed, so users
+    /// provisioned earlier carry null until their next sign-in. The gates treat
+    /// null as UNKNOWN and fail closed on a transient code; they never treat it
+    /// as "old enough".
+    /// </para>
+    /// </summary>
+    public DateTime? SteamAccountCreatedAt { get; set; }
+
     // --- Reputation (denormalized) ---
     public int CompletedTransactionCount { get; set; }
     public decimal? SuccessfulTransactionRate { get; set; }

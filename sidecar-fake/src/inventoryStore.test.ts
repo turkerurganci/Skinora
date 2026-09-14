@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  DEFAULT_LIMITED_ACCOUNT,
   DEFAULT_TRADE_HOLD,
   InventoryControlError,
   ITEM_CATALOG,
   getInventory,
+  getLimitedAccount,
   getTradeHold,
   inventoryResponse,
   resetSteamState,
   resolveItem,
   setInventory,
+  setLimitedAccount,
   setTradeHold,
   simulateTrade,
 } from './inventoryStore.js';
@@ -297,13 +300,40 @@ describe('inventoryStore', () => {
     });
   });
 
+  describe('setLimitedAccount (08 §2.2a)', () => {
+    it('drives the limited flag per steamId', () => {
+      expect(setLimitedAccount(BUYER, { limited: true })).toEqual({ limited: true });
+      expect(getLimitedAccount(BUYER).limited).toBe(true);
+      // Untouched steamIds keep the permissive default — every pre-existing
+      // scenario predates this check and none of them seeds it.
+      expect(getLimitedAccount(SELLER)).toEqual(DEFAULT_LIMITED_ACCOUNT);
+    });
+
+    it('stays independent of the trade hold — a limited account still reports a 0-second hold', () => {
+      setLimitedAccount(BUYER, { limited: true });
+      expect(getTradeHold(BUYER)).toEqual({ active: true, escrowEndDurationSeconds: 0 });
+      expect(getLimitedAccount(BUYER).limited).toBe(true);
+    });
+
+    it('rejects malformed input', () => {
+      expect(() => setLimitedAccount('', { limited: true })).toThrow(/steamId is required/);
+      expect(() => setLimitedAccount(BUYER, { limited: 'yes' as unknown as boolean })).toThrow(
+        /must be a boolean/,
+      );
+    });
+  });
+
   describe('resetSteamState', () => {
-    it('clears inventories and trade holds together', () => {
+    it('clears inventories, trade holds and limited flags together', () => {
       setInventory(SELLER, { items: [{ catalog: 'AK47_REDLINE' }], visibility: 'PRIVATE' });
       setTradeHold(SELLER, { active: false });
+      setLimitedAccount(SELLER, { limited: true });
       resetSteamState();
       expect(getInventory(SELLER)).toEqual({ visibility: 'PUBLIC', items: [] });
       expect(getTradeHold(SELLER)).toEqual(DEFAULT_TRADE_HOLD);
+      // Without this line a scenario's limited buyer leaks into the next one
+      // and blocks it at accept with an unrelated 403.
+      expect(getLimitedAccount(SELLER)).toEqual(DEFAULT_LIMITED_ACCOUNT);
     });
   });
 });

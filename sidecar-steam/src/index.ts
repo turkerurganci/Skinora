@@ -7,13 +7,24 @@ import { buildRouter } from './api/routes.js';
 import { InventoryService } from './trade/InventoryService.js';
 import { HttpInventoryFetcher } from './trade/HttpInventoryFetcher.js';
 import { TradeHoldService } from './trade/TradeHoldService.js';
+import { LimitedAccountService } from './trade/LimitedAccountService.js';
 import { RateLimitedQueue } from './queue/RateLimitedQueue.js';
-import { inventoryCacheTotal, rateLimitedQueueDepth } from './metrics.js';
+import { CommunityHealthTracker } from './health/CommunityHealth.js';
+import {
+  inventoryCacheTotal,
+  limitedAccountChecksTotal,
+  rateLimitedQueueDepth,
+} from './metrics.js';
 import {
   InMemoryInventoryCache,
   RedisInventoryCache,
   type InventoryCache,
 } from './cache/InventoryCache.js';
+import {
+  InMemoryLimitedAccountCache,
+  RedisLimitedAccountCache,
+  type LimitedAccountCache,
+} from './cache/LimitedAccountCache.js';
 
 // T133 — the sidecar is a READ-ONLY Steam proxy. It boots with no Steam
 // account of any kind: the bot pool, its credentials and the trade offer
@@ -55,8 +66,12 @@ const steamCommunityQueue = new RateLimitedQueue(
 //   * Anonymous SteamCommunity instance (read-only; profile auth not required)
 //   * Redis when REDIS_URL is set, else in-memory fallback (dev/test friendly).
 //   * The Community queue above (T120).
-const inventoryCache: InventoryCache = config.redisUrl
-  ? new RedisInventoryCache(new Redis(config.redisUrl))
+// Tek Redis bağlantısı iki önbelleğe de hizmet eder. İstemci bilerek bir
+// değişkene alındı: `new Redis(...)`'i her önbelleğin kendi üçlü ifadesinde
+// kurmak ikinci bir bağlantı açardı ve bunu kimse fark etmezdi.
+const redisClient = config.redisUrl ? new Redis(config.redisUrl) : null;
+const inventoryCache: InventoryCache = redisClient
+  ? new RedisInventoryCache(redisClient)
   : new InMemoryInventoryCache();
 const inventoryService = new InventoryService(
   // F2 — `steamcommunity` paketi yerine doğrudan HTTP: paketin taşıdığı
@@ -68,12 +83,42 @@ const inventoryService = new InventoryService(
   (result) => inventoryCacheTotal.inc({ result }),
 );
 
+// Limited-account kontrolü (08 §2.2a) — Steam Community profil XML'i, yani
+// envanter okumalarıyla AYNI kotayı paylaşır ve bu yüzden aynı kuyruğa girer.
+// Önbellek yalnız doğrulanmış TEMİZ sonucu tutar; kısıtlı ve arıza cevapları
+// her seferinde canlı okunur (bloke eden karar bayat veriden verilmez).
+const limitedAccountCache: LimitedAccountCache = redisClient
+  ? new RedisLimitedAccountCache(redisClient, config.steamLimitedAccountCacheTtlSeconds)
+  : new InMemoryLimitedAccountCache(config.steamLimitedAccountCacheTtlSeconds * 1000);
+const communityHealth = new CommunityHealthTracker();
+const limitedAccountService = new LimitedAccountService({
+  cache: limitedAccountCache,
+  queue: steamCommunityQueue,
+  sampleCount: config.steamLimitedAccountSamples,
+  sampleDelayMs: config.steamLimitedAccountSampleDelayMs,
+  deadlineMs: config.steamLimitedAccountDeadlineMs,
+  onOutcome: (result) => {
+    limitedAccountChecksTotal.inc({ result });
+    // Pasif community sağlığı: bu çağrılar zaten yapılıyor, sonuçları
+    // sayılınca community kesintisi ek istek harcamadan görünür olur.
+    if (result === 'unreadable') communityHealth.recordFailure();
+    else if (result !== 'cache_hit') communityHealth.recordSuccess();
+  },
+});
+
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);
 
 // Routes
-app.use(buildRouter({ inventoryService, tradeHoldService }));
+app.use(
+  buildRouter({
+    inventoryService,
+    tradeHoldService,
+    limitedAccountService,
+    health: { communityHealth },
+  }),
+);
 
 // Start server
 const server = app.listen(config.port, '0.0.0.0', () => {

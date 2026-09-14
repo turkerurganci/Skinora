@@ -13,6 +13,15 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// <c>User.MobileAuthenticatorVerified</c> flag (set by
 /// <c>SteamTradeUrlService</c> at trade-URL save) — no live sidecar call,
 /// matching the T33 profile read pattern.
+///
+/// <para>
+/// 08 §2.2a added ONE live call: the Steam trade-eligibility check (limited
+/// account + 15-day wait). It is not foldable into the persisted flag, because
+/// that flag records the escrow hold and Steam reports a 0-second hold for an
+/// account it forbids from trading entirely. Its transient failure is reported
+/// as its own reason code rather than dropped — a check that quietly does not
+/// run is the defect this gate exists to close.
+/// </para>
 /// </summary>
 public sealed class TransactionEligibilityService : ITransactionEligibilityService
 {
@@ -29,17 +38,20 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
     private readonly AppDbContext _db;
     private readonly ITransactionLimitsProvider _limitsProvider;
     private readonly IAccountFlagChecker _flagChecker;
+    private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly TimeProvider _clock;
 
     public TransactionEligibilityService(
         AppDbContext db,
         ITransactionLimitsProvider limitsProvider,
         IAccountFlagChecker flagChecker,
+        ISteamTradeEligibilityChecker steamTradeEligibility,
         TimeProvider clock)
     {
         _db = db;
         _limitsProvider = limitsProvider;
         _flagChecker = flagChecker;
+        _steamTradeEligibility = steamTradeEligibility;
         _clock = clock;
     }
 
@@ -93,6 +105,30 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
             reasons.Add(TransactionErrorCodes.EligibilityReasons.SellerWalletAddressMissing);
         if (payoutCooldownActive)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.PayoutAddressCooldownActive);
+
+        // 08 §2.2a — the seller's own trade eligibility. Symmetric to the buyer
+        // gates and open for exactly the same reason: a seller Steam blocks
+        // from trading can list an item, take a buyer's escrowed payment and
+        // then be unable to send anything. Evaluated LAST so the cheap
+        // database-only rules above reject first and no doomed request spends
+        // a Steam Community request (10/min, shared with delivery verification).
+        var steamEligibility = await _steamTradeEligibility.EvaluateAsync(user, cancellationToken);
+        switch (steamEligibility.Status)
+        {
+            case SteamTradeEligibilityStatus.Limited:
+                reasons.Add(TransactionErrorCodes.EligibilityReasons.SteamAccountLimited);
+                break;
+            case SteamTradeEligibilityStatus.TooNew:
+                reasons.Add(TransactionErrorCodes.EligibilityReasons.SteamAccountTooNew);
+                break;
+            case SteamTradeEligibilityStatus.Unknown:
+                // A TRANSIENT reason, and the only one in this list. It is
+                // reported rather than swallowed because swallowing it is
+                // fail-open; the create path maps it to 503 so the caller is
+                // told to retry instead of reading a permanent rejection.
+                reasons.Add(TransactionErrorCodes.EligibilityReasons.SteamUnavailable);
+                break;
+        }
 
         return new EligibilityDto(
             Eligible: reasons.Count == 0,
