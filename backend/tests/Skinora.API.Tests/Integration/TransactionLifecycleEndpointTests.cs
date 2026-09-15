@@ -1610,6 +1610,15 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 SteamDisplayName = "Tester",
                 PreferredLanguage = "en",
                 CreatedAt = DateTime.UtcNow.AddDays(-200),
+                // 08 §2.2a — the column production fills from the Steam login
+                // (`GetPlayerSummaries.timecreated`). These users are inserted
+                // straight into the database, so that path never runs; leaving
+                // it null makes every gate answer "trade eligibility unknown"
+                // and fail closed, which turns the whole class into 503s for a
+                // reason none of these cases is about. Far past Steam's 15-day
+                // wait on purpose — the threshold itself is pinned in unit
+                // tests, and no endpoint case here should measure it by accident.
+                SteamAccountCreatedAt = DateTime.UtcNow.AddDays(-400),
             };
             customize?.Invoke(user);
             db.Set<User>().Add(user);
