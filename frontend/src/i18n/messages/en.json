@@ -1165,7 +1165,8 @@
       },
       "steamTooNew": {
         "title": "Your Steam account is too new",
-        "description": "Steam does not allow trading during an account’s first 15 days. You can start a transaction once the wait is over."
+        "description": "Steam does not allow trading during an account’s first 15 days. You can start a transaction once the wait is over.",
+        "descriptionWithDays": "Steam does not allow trading during an account’s first 15 days. Time left: {days, plural, one {# day} other {# days}}."
       },
       "steamUnavailable": {
         "title": "Steam could not be checked",

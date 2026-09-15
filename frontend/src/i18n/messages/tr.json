@@ -1165,7 +1165,8 @@
       },
       "steamTooNew": {
         "title": "Steam hesabınız çok yeni",
-        "description": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Süre dolduğunda işlem başlatabilirsiniz."
+        "description": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Süre dolduğunda işlem başlatabilirsiniz.",
+        "descriptionWithDays": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Kalan süre: {days} gün."
       },
       "steamUnavailable": {
         "title": "Steam şu anda kontrol edilemedi",

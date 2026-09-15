@@ -111,6 +111,13 @@ export interface EligibilityResponse {
   cancelCooldown: EligibilityCancelCooldown;
   newAccountLimit: EligibilityNewAccountLimit;
   reasons?: string[];
+  /**
+   * Days left in Steam's 15-day trade wait (08 §2.2a). Present exactly when
+   * `reasons` carries `STEAM_ACCOUNT_TOO_NEW`, absent otherwise — the other
+   * gates end by doing something, not by waiting, so a day count next to them
+   * would name a deadline that does not exist.
+   */
+  steamAccountRemainingDays?: number;
 }
 
 export function getEligibility(): Promise<EligibilityResponse> {

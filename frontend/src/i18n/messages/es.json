@@ -1165,7 +1165,8 @@
       },
       "steamTooNew": {
         "title": "Tu cuenta de Steam es demasiado nueva",
-        "description": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Podrás iniciar una transacción cuando termine la espera."
+        "description": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Podrás iniciar una transacción cuando termine la espera.",
+        "descriptionWithDays": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Tiempo restante: {days, plural, one {# día} other {# días}}."
       },
       "steamUnavailable": {
         "title": "No se pudo consultar a Steam",
