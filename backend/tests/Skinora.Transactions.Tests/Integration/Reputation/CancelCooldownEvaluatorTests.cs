@@ -273,6 +273,86 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
         Assert.Equal(2, sellerResult.ResponsibleCancelCount);
     }
 
+    /// <summary>
+    /// <b>08 §2.2a — a delivery timeout the BUYER's Steam account made
+    /// impossible never reaches the cooldown.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <c>TimeoutReleasedByAdminRulingAt</c> pair above, one column over.
+    /// Same fixture as <c>Delivery_Timeouts_Push_The_Seller_Into_Cooldown</c>
+    /// with one field changed on each row, so the assertion is its exact
+    /// inverse: three delivery timeouts, every one of them blocked by the
+    /// buyer's account, and the seller stays out of cooldown.
+    /// </para>
+    /// <para>
+    /// This is the heavier of the stamp's two consumers and the reason it is
+    /// pinned separately from <c>ReputationAggregatorTests</c>. Reputation is a
+    /// number on a profile; <c>CooldownExpiresAt</c> stops the seller from
+    /// opening a transaction at all (02 §14.2) — so the 2026-09-02 rehearsal's
+    /// seller, whose buyer was limited and could never have received anything,
+    /// would be locked out of the platform for the buyer's restriction.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Counterparty_Blocked_Delivery_Timeouts_Never_Reach_The_Cooldown()
+    {
+        var thresholds = new StubThresholds(new CancelCooldownThresholds(LimitCount: 2, WindowHours: 24, CooldownHours: 12));
+        var evaluator = new CancelCooldownEvaluator(Context, thresholds, _clock);
+
+        foreach (var hoursAgo in new[] { 1, 5, 10 })
+        {
+            var tx = await InsertCancellationAsync(
+                _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo,
+                blockedByCounterparty: true);
+            await InsertTimeoutHistoryAsync(tx.Id, TransactionStatus.PAYMENT_RECEIVED);
+        }
+
+        var sellerResult = await evaluator.EvaluateAsync(_seller.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(0, sellerResult.ResponsibleCancelCount);
+        Assert.Null(sellerResult.NewCooldownExpiresAt);
+
+        var seller = await Context.Set<User>().FindAsync(_seller.Id);
+        Assert.Null(seller!.CooldownExpiresAt);
+    }
+
+    /// <summary>
+    /// The 08 §2.2a exclusion removes only the blocked row, not the seller's
+    /// other delivery timeouts in the same window.
+    /// </summary>
+    /// <remarks>
+    /// The guard against over-correcting, and the reason the exclusion is
+    /// restated in the evaluator's own switch as well as in the query: the
+    /// column lives on the transaction, so a filter written one level too wide
+    /// would quietly exempt a repeat non-deliverer from 02 §14.2's primary
+    /// abuse control on the strength of a single blocked counterparty.
+    /// </remarks>
+    [Fact]
+    public async Task Counterparty_Block_Removes_Only_Its_Own_Row_From_The_Count()
+    {
+        var thresholds = new StubThresholds(new CancelCooldownThresholds(LimitCount: 5, WindowHours: 24, CooldownHours: 12));
+        var evaluator = new CancelCooldownEvaluator(Context, thresholds, _clock);
+
+        var blocked = await InsertCancellationAsync(
+            _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo: 1,
+            blockedByCounterparty: true);
+        await InsertTimeoutHistoryAsync(blocked.Id, TransactionStatus.PAYMENT_RECEIVED);
+
+        foreach (var hoursAgo in new[] { 5, 10 })
+        {
+            var tx = await InsertCancellationAsync(
+                _seller.Id, _buyer.Id, TransactionStatus.CANCELLED_TIMEOUT, hoursAgo);
+            await InsertTimeoutHistoryAsync(tx.Id, TransactionStatus.PAYMENT_RECEIVED);
+        }
+
+        var sellerResult = await evaluator.EvaluateAsync(_seller.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(2, sellerResult.ResponsibleCancelCount);
+    }
+
     [Fact]
     public async Task Timeout_Without_History_Row_Counts_For_Neither_Party()
     {
@@ -301,7 +381,8 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
         Guid buyerId,
         TransactionStatus status,
         int hoursAgo,
-        bool releasedByAdminRuling = false)
+        bool releasedByAdminRuling = false,
+        bool blockedByCounterparty = false)
     {
         var cancelledAt = _clock.GetUtcNow().UtcDateTime.AddHours(-hoursAgo);
         var tx = new Transaction
@@ -341,6 +422,10 @@ public class CancelCooldownEvaluatorTests : IntegrationTestBase
             // T131 — the delivery timeout ran only because an admin had ruled
             // on the misdelivery dispute (finding B1).
             TimeoutReleasedByAdminRulingAt = releasedByAdminRuling ? cancelledAt : null,
+            // 08 §2.2a — Steam was asked and answered that the COUNTERPARTY's
+            // account cannot trade, so the party who ran out of time could not
+            // have acted.
+            TimeoutBlockedByCounterpartyAt = blockedByCounterparty ? cancelledAt : null,
         };
 
         Context.Set<Transaction>().Add(tx);

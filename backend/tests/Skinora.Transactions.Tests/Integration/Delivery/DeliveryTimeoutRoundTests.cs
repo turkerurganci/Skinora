@@ -470,6 +470,77 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// <b>08 §2.2a — a delivery timeout the BUYER's account made impossible is
+    /// stamped, so neither responsibility map charges it to the seller.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The 2026-09-02 rehearsal in one fixture: the item is demonstrably still
+    /// with the seller, which is normally the whole proof of non-delivery — but
+    /// the buyer's Steam account is limited, so no trade could have reached them
+    /// and nothing the seller did or failed to do changed the outcome. The
+    /// cancellation still proceeds and the buyer is still refunded; what the
+    /// stamp removes is the fault, not the exit.
+    /// </para>
+    /// <para>
+    /// Pinned here rather than only at the consumers because the producer is the
+    /// half nothing else can observe: a column that is never written and a
+    /// consumer that correctly skips a column nobody writes look identical from
+    /// every test downstream.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SteamTradeEligibilityStatus.Limited)]
+    [InlineData(SteamTradeEligibilityStatus.TooNew)]
+    public async Task Delivery_Timeout_Blocked_By_The_Buyers_Account_Is_Stamped(
+        SteamTradeEligibilityStatus buyerStatus)
+    {
+        var transaction = await CreateOverdueAsync();
+        RegisterSellerStillHoldsItem();
+        _steamEligibility = buyerStatus == SteamTradeEligibilityStatus.Limited
+            ? FakeSteamTradeEligibilityChecker.Limited()
+            : FakeSteamTradeEligibilityChecker.TooNew(4);
+
+        var decision = await Run(transaction);
+
+        // The cancellation is NOT withheld — the money must still leave escrow.
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        await Context.SaveChangesAsync();
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime,
+            (await ReloadAsync(transaction.Id)).TimeoutBlockedByCounterpartyAt);
+    }
+
+    /// <summary>
+    /// <b>08 §2.2a — an unreadable Steam answer leaves the stamp unset.</b>
+    /// </summary>
+    /// <remarks>
+    /// The negative half, and the one that matters more: "Steam could not be
+    /// asked" is not evidence that the buyer blocked anything. Clearing fault
+    /// from silence would let any Steam Community outage erase real
+    /// non-delivery from every seller's record — the strongest negative signal
+    /// 02 §13 defines, deleted by an outage nobody at fault caused.
+    /// </remarks>
+    [Theory]
+    [InlineData(SteamTradeEligibilityStatus.Unknown)]
+    [InlineData(SteamTradeEligibilityStatus.Eligible)]
+    public async Task Delivery_Timeout_Is_Not_Stamped_Without_A_Positive_Finding(
+        SteamTradeEligibilityStatus buyerStatus)
+    {
+        var transaction = await CreateOverdueAsync();
+        RegisterSellerStillHoldsItem();
+        _steamEligibility = buyerStatus == SteamTradeEligibilityStatus.Unknown
+            ? FakeSteamTradeEligibilityChecker.Unknown()
+            : new FakeSteamTradeEligibilityChecker();
+
+        var decision = await Run(transaction);
+
+        Assert.Equal(DeliveryTimeoutDecision.Cancel, decision);
+        await Context.SaveChangesAsync();
+        Assert.Null((await ReloadAsync(transaction.Id)).TimeoutBlockedByCounterpartyAt);
+    }
+
+    /// <summary>
     /// <b>T131 finding N2 — a ruling the escalator reports as made WITHOUT the
     /// signature keeps the hold.</b>
     /// </summary>
