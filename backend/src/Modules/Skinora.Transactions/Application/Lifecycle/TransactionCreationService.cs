@@ -517,6 +517,14 @@ public sealed class TransactionCreationService : ITransactionCreationService
         TransactionErrorCodes.NewAccountLimitReached => CreateTransactionStatus.EligibilityFailed,
         TransactionErrorCodes.PayoutAddressCooldownActive => CreateTransactionStatus.PayoutAddressCooldownActive,
         TransactionErrorCodes.SellerWalletAddressMissing => CreateTransactionStatus.SellerWalletAddressMissing,
+        // 08 §2.2a — both are 403 rejections with their own remedy, so neither
+        // may collapse onto the generic EligibilityFailed text.
+        TransactionErrorCodes.SteamAccountLimited => CreateTransactionStatus.SteamAccountLimited,
+        TransactionErrorCodes.SteamAccountTooNew => CreateTransactionStatus.SteamAccountTooNew,
+        // The one TRANSIENT reason in the list. Without this arm it would fall
+        // into the `_` default and surface as 422 — a permanent-looking answer
+        // for a Steam outage the caller should simply retry.
+        TransactionErrorCodes.SteamUnavailable => CreateTransactionStatus.SteamUnavailable,
         _ => CreateTransactionStatus.EligibilityFailed,
     };
 

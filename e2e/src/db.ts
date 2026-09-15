@@ -146,6 +146,14 @@ export async function seedHappyPath(): Promise<typeof seed> {
     });
 
   // Seller — MA verified + payout address + backdated account (dodges new-account limit).
+  //
+  // 08 §2.2a — `SteamAccountCreatedAt` DOLU seed edilir ve bilerek çok eskidir.
+  // Bu kolonu üretimde Steam girişi yazar (`GetPlayerSummaries.timecreated`);
+  // e2e kullanıcıları DB'ye doğrudan ekleniyor, yani o yol hiç koşmuyor. NULL
+  // bırakılırsa işlem kapıları koşulu ÖLÇEMEZ ve fail-closed davranır — her
+  // senaryo `STEAM_UNAVAILABLE` ile create adımında durur. Tarih Steam'in
+  // 15 günlük takas beklemesinin çok ötesinde seçildi ki süitler o eşiği
+  // kazara ölçmesin; eşiğin kendisi birim testlerde pinli.
   await r()
     .input('id', sql.UniqueIdentifier, seed.sellerId)
     .input('steamId', sql.NVarChar(20), seed.sellerSteamId)
@@ -153,9 +161,10 @@ export async function seedHappyPath(): Promise<typeof seed> {
     .input('payout', sql.NVarChar(50), seed.sellerPayoutAddress)
     .query(
       `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage, DefaultPayoutAddress,
-         MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+         MobileAuthenticatorVerified, SteamAccountCreatedAt,
+         CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
          CreatedAt, UpdatedAt)
-       VALUES (@id, @steamId, @name, 'en', @payout, 1, 0, 0, 0, 0,
+       VALUES (@id, @steamId, @name, 'en', @payout, 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 
@@ -247,9 +256,10 @@ export async function ensureAdmin(): Promise<void> {
     .query(
       `IF NOT EXISTS (SELECT 1 FROM Users WHERE Id = @id)
          INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
-           MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+           MobileAuthenticatorVerified, SteamAccountCreatedAt,
+           CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
            CreatedAt, UpdatedAt)
-         VALUES (@id, @steamId, @name, 'en', 1, 0, 0, 0, 0,
+         VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
            DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 }
@@ -264,9 +274,10 @@ async function insertBuyer(): Promise<void> {
     .input('name', sql.NVarChar(100), 'E2E Buyer')
     .query(
       `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
-         MobileAuthenticatorVerified, CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+         MobileAuthenticatorVerified, SteamAccountCreatedAt,
+         CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
          CreatedAt, UpdatedAt)
-       VALUES (@id, @steamId, @name, 'en', 1, 0, 0, 0, 0,
+       VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 }

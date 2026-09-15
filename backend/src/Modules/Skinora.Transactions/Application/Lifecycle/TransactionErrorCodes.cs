@@ -75,6 +75,47 @@ public static class TransactionErrorCodes
     /// </summary>
     public const string BuyerMobileAuthenticatorInactive = "BUYER_MOBILE_AUTHENTICATOR_INACTIVE";
 
+    // 08 §2.2a — Steam trade eligibility beyond the escrow hold.
+    //
+    // A 0-second hold answers "how long would a trade be held", NOT "may this
+    // account trade at all". Two further conditions block trading outright and
+    // neither was read anywhere before this round (🔴
+    // `Prova-LimitedAccountNeverChecked`): Steam's "limited account" restriction
+    // (no US$5 lifetime spend) and its 15-day trade-eligibility wait. Both are
+    // positive findings with their own remedy, so each gets its own code rather
+    // than collapsing onto MOBILE_AUTHENTICATOR_REQUIRED — telling a limited
+    // buyer to "enable your authenticator" sends them after a problem they do
+    // not have. "Could not check" stays SteamUnavailable: absence of
+    // information and a negative finding never share a code.
+
+    /// <summary>
+    /// 403 — the CALLER's Steam account is limited and cannot trade at all
+    /// (08 §2.2a). Remedy is a US$5 lifetime purchase on Steam, not a platform
+    /// action.
+    /// </summary>
+    public const string SteamAccountLimited = "STEAM_ACCOUNT_LIMITED";
+
+    /// <summary>
+    /// 403 — the BUYER's Steam account is limited, reported to the SELLER
+    /// (07 §7.6a). Sibling of <see cref="BuyerMobileAuthenticatorInactive"/>:
+    /// the fix belongs to the other party, so the seller-facing text must not
+    /// read as an instruction to the seller.
+    /// </summary>
+    public const string BuyerSteamAccountLimited = "BUYER_STEAM_ACCOUNT_LIMITED";
+
+    /// <summary>
+    /// 403 — the CALLER's Steam account has not yet cleared Steam's 15-day
+    /// trade-eligibility wait (08 §2.2a). Unlike the limited restriction this
+    /// one resolves by waiting, so the message carries the remaining days.
+    /// </summary>
+    public const string SteamAccountTooNew = "STEAM_ACCOUNT_TOO_NEW";
+
+    /// <summary>
+    /// 403 — the BUYER's Steam account is inside the 15-day wait, reported to
+    /// the SELLER (07 §7.6a).
+    /// </summary>
+    public const string BuyerSteamAccountTooNew = "BUYER_STEAM_ACCOUNT_TOO_NEW";
+
     // T51 — cancel (07 §7.7).
     public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
     public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";
@@ -90,5 +131,15 @@ public static class TransactionErrorCodes
         public const string AccountFlagged = TransactionErrorCodes.AccountFlagged;
         public const string PayoutAddressCooldownActive = TransactionErrorCodes.PayoutAddressCooldownActive;
         public const string SellerWalletAddressMissing = TransactionErrorCodes.SellerWalletAddressMissing;
+        public const string SteamAccountLimited = TransactionErrorCodes.SteamAccountLimited;
+        public const string SteamAccountTooNew = TransactionErrorCodes.SteamAccountTooNew;
+
+        /// <summary>
+        /// 08 §2.2a — Steam could not be asked whether the seller may trade.
+        /// A TRANSIENT reason, unlike every other entry here: the create path
+        /// maps it to 503 rather than 422 so the caller is told to retry
+        /// instead of being shown a permanent-looking rejection.
+        /// </summary>
+        public const string SteamUnavailable = TransactionErrorCodes.SteamUnavailable;
     }
 }

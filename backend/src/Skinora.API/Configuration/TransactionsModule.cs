@@ -8,6 +8,7 @@ using Skinora.API.Services;
 using Skinora.API.Services.HotWallet;
 using Skinora.Platform.Application.Settings;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Steam;
 using Skinora.Fraud.Application.Account;
 using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Admin;
@@ -124,6 +125,14 @@ public static class TransactionsModule
         // pass a NullSteamInventoryCacheInvalidator to keep the flow closed.
         services.TryAddScoped<ISteamInventoryReader, StubSteamInventoryReader>();
         services.TryAddScoped<ISteamInventoryCacheInvalidator, NullSteamInventoryCacheInvalidator>();
+
+        // 08 §2.2a — Steam trade-eligibility (limited account + 15-day wait).
+        // Same shape as the inventory ports: a conservative stub here,
+        // SteamModule.Replace() swaps in the sidecar-backed probe. The stub
+        // answers "could not ask", so a forgotten swap fails closed loudly
+        // instead of quietly reopening the gate.
+        services.TryAddScoped<ISteamAccountLimitedProbe, StubSteamAccountLimitedProbe>();
+        services.AddScoped<ISteamTradeEligibilityChecker, SteamTradeEligibilityChecker>();
 
         // WP12 (T90 K3) — Steam trade-offer URL resolver port. Null default
         // (returns no URL) registered via TryAddScoped; SteamModule.Replace()

@@ -60,8 +60,11 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
                             // T131 (finding B1) — the admin-released kind of
                             // CANCELLED_TIMEOUT is not a responsible
                             // cancellation for either party.
+                            // 08 §2.2a — nor is the kind the counterparty's Steam
+                            // account made impossible.
                             || (t.Status == TransactionStatus.CANCELLED_TIMEOUT
-                                && t.TimeoutReleasedByAdminRulingAt == null)))
+                                && t.TimeoutReleasedByAdminRulingAt == null
+                                && t.TimeoutBlockedByCounterpartyAt == null)))
             .Select(t => new
             {
                 t.Id,
@@ -69,7 +72,8 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
                 t.SellerId,
                 t.BuyerId,
                 t.CancelledAt,
-                t.TimeoutReleasedByAdminRulingAt
+                t.TimeoutReleasedByAdminRulingAt,
+                t.TimeoutBlockedByCounterpartyAt
             })
             .ToListAsync(cancellationToken);
 
@@ -94,7 +98,8 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
                 .ToDictionaryAsync(x => x.TxId, x => x.PreviousStatus, cancellationToken);
 
         var responsibleCount = cancellations.Count(c => IsResponsibleFor(
-            c.Status, c.SellerId, c.BuyerId, c.Id, c.TimeoutReleasedByAdminRulingAt, userId, previousStatusByTx));
+            c.Status, c.SellerId, c.BuyerId, c.Id, c.TimeoutReleasedByAdminRulingAt,
+            c.TimeoutBlockedByCounterpartyAt, userId, previousStatusByTx));
 
         if (responsibleCount <= thresholds.LimitCount)
             return new CooldownEvaluationResult(responsibleCount, thresholds.LimitCount, thresholds.WindowHours, null);
@@ -115,6 +120,7 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
         Guid? buyerId,
         Guid txId,
         DateTime? timeoutReleasedByAdminRulingAt,
+        DateTime? timeoutBlockedByCounterpartyAt,
         Guid userId,
         IReadOnlyDictionary<Guid, TransactionStatus> previousStatusByTx)
     {
@@ -129,6 +135,10 @@ public sealed class CancelCooldownEvaluator : IUserCancelCooldownEvaluator
             // later widening of the query cannot silently push a seller the
             // admin cleared over the cooldown limit.
             TransactionStatus.CANCELLED_TIMEOUT when timeoutReleasedByAdminRulingAt is not null => false,
+            // 08 §2.2a — restated here for the same reason as the line above: a
+            // seller who could not send because the buyer's Steam account
+            // forbade the trade must not be pushed toward a cooldown for it.
+            TransactionStatus.CANCELLED_TIMEOUT when timeoutBlockedByCounterpartyAt is not null => false,
             TransactionStatus.CANCELLED_TIMEOUT when previousStatusByTx.TryGetValue(txId, out var prev) =>
                 prev switch
                 {

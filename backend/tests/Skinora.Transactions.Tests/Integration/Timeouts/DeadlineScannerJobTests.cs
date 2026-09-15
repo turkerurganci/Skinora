@@ -5,7 +5,9 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Delivery;
+using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
@@ -56,6 +58,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -76,6 +79,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -83,6 +87,69 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
         Assert.Equal(CancelledByType.TIMEOUT, persisted.CancelledBy);
+    }
+
+    /// <summary>
+    /// <b>08 §2.2a — the ACCEPTED half of the same defect the delivery round
+    /// fixes one phase later.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>confirm-ready</c> refuses with 403 <c>BUYER_STEAM_ACCOUNT_*</c> while
+    /// the buyer is limited or inside Steam's 15-day wait, so the seller cannot
+    /// confirm, <c>SellerConfirmDeadline</c> expires, and 06 §3.1 charges the
+    /// lapse to the seller for obeying a gate the platform itself shut.
+    /// </para>
+    /// <para>
+    /// The timeout still fires — the buyer's money and the seller's item must
+    /// not be held hostage to it. Only the attribution changes.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(SteamTradeEligibilityStatus.Limited, true)]
+    [InlineData(SteamTradeEligibilityStatus.TooNew, true)]
+    // Absence of information is not evidence that the buyer blocked anything:
+    // a Steam outage must not clear a seller who simply never confirmed.
+    [InlineData(SteamTradeEligibilityStatus.Unknown, false)]
+    [InlineData(SteamTradeEligibilityStatus.Eligible, false)]
+    public async Task Accepted_Timeout_Is_Stamped_Only_On_A_Positive_Buyer_Finding(
+        SteamTradeEligibilityStatus buyerStatus, bool expectStamp)
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var transaction = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.ACCEPTED, nowUtc,
+            sellerConfirmDeadline: nowUtc.AddMinutes(-1),
+            buyerId: (await TimeoutTestFixtures.AddBuyerAsync(Context)).Id,
+            buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+        Context.Set<Transaction>().Add(transaction);
+        await Context.SaveChangesAsync();
+
+        var eligibility = buyerStatus switch
+        {
+            SteamTradeEligibilityStatus.Limited => FakeSteamTradeEligibilityChecker.Limited(),
+            SteamTradeEligibilityStatus.TooNew => FakeSteamTradeEligibilityChecker.TooNew(4),
+            SteamTradeEligibilityStatus.Unknown => FakeSteamTradeEligibilityChecker.Unknown(),
+            _ => new FakeSteamTradeEligibilityChecker(),
+        };
+
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            TimeoutTestFixtures.NoOpReputationRefresher(),
+            TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
+            eligibility,
+            TimeoutTestFixtures.Options(),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await sut.ScanAndRescheduleAsync();
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, persisted.Status);
+        if (expectStamp)
+            Assert.Equal(nowUtc, persisted.TimeoutBlockedByCounterpartyAt);
+        else
+            Assert.Null(persisted.TimeoutBlockedByCounterpartyAt);
     }
 
     [Fact]
@@ -104,6 +171,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -217,6 +285,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -263,6 +332,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(batchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -321,6 +391,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -358,6 +429,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryVerificationBatchSize: 1),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -406,6 +478,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             round,
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(deliveryRoundRecheckSeconds: 900),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -433,6 +506,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -466,6 +540,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -486,6 +561,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(scannerSeconds: 45),
             NullLogger<DeadlineScannerJob>.Instance);
 
@@ -513,6 +589,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
         await sut.ScanAndRescheduleAsync();
@@ -600,6 +677,7 @@ public class DeadlineScannerJobTests : IntegrationTestBase
             TimeoutTestFixtures.NoOpReputationRefresher(),
             TimeoutTestFixtures.NoOpDeliveryRound(),
             warnings,
+            TimeoutTestFixtures.NoOpTradeEligibility(),
             TimeoutTestFixtures.Options(),
             NullLogger<DeadlineScannerJob>.Instance);
 

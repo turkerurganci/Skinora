@@ -47,6 +47,22 @@ export const inventoryCacheTotal = new client.Counter({
 });
 
 /**
+ * Limited-account kontrollerinin sonuç dağılımı (08 §2.2a).
+ *
+ * BU SAYAÇ OLMADAN "herkes bloke oldu" ile "kimse sormuyor" göstergede birebir
+ * aynı görünür — bu depoda aynı kusur ailesi iki kez yaşandı
+ * (`SidecarHealthChecksArePlacebo`, `GrafanaAlertRulesNeverEvaluated`).
+ * `unreadable`, fail-closed'ın ateşlendiği tek etikettir: yükselmesi Steam
+ * tarafında bir arıza demektir ve her yükselişi bir kullanıcının kapıda
+ * durdurulması anlamına gelir.
+ */
+export const limitedAccountChecksTotal = new client.Counter({
+  name: 'skinora_steam_limited_account_checks_total',
+  help: 'Steam limited-account checks by outcome (limited / clean / cache_hit / unreadable)',
+  labelNames: ['result'] as const,
+});
+
+/**
  * Pending task depth per rate-limited Steam queue (T120 — 08 §2.6).
  *
  * The Web API and Community endpoints run in separate queues; a persistently

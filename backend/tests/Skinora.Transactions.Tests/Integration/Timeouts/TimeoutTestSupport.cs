@@ -9,7 +9,9 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.Reputation;
+using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Timeouts;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Application.Reputation;
 
@@ -301,6 +303,14 @@ internal static class TimeoutTestFixtures
     }
 
     public static RecordingWarningDispatcher NoOpWarnings() => new();
+
+    /// <summary>
+    /// 08 §2.2a — trade-eligibility double for scanner tests. Answers "eligible",
+    /// so these cases keep measuring the deadline logic they were written for
+    /// rather than the Steam gate.
+    /// </summary>
+    public static ISteamTradeEligibilityChecker NoOpTradeEligibility() =>
+        new FakeSteamTradeEligibilityChecker();
 
     public static IOptions<TimeoutSchedulingOptions> Options(
         int scannerSeconds = 30,

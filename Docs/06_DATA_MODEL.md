@@ -444,6 +444,7 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 | `TosAcceptedVersion` | string(20) | NULL | Kabul edilen ToS versiyonu |
 | `TosAcceptedAt` | datetime | NULL | ToS kabul tarihi |
 | `MobileAuthenticatorVerified` | bool | NOT NULL, DEFAULT 0 | Steam Mobile Auth durumu |
+| `SteamAccountCreatedAt` | datetime | NULL | Steam **hesabının** açılış anı (`GetPlayerSummaries.timecreated`). `CreatedAt` ile karıştırılmamalı: o platform kayıt tarihidir ve yeni-hesap işlem kotasını besler; bu ise Steam'in **15 günlük takas bekleme** kapısının verisidir (08 §2.2a). Her Steam girişinde tazelenir. NULL = **hiç yakalanmadı** (kolon bu hesaplardan sonra eklendi) ve işlem kapıları bunu "yeterince eski" DEĞİL, **bilinmiyor** olarak okur — fail-closed, çaresi bir kez yeniden giriştir |
 | `CompletedTransactionCount` | int | NOT NULL, DEFAULT 0 | Tamamlanan işlem sayısı (denormalized) |
 | `SuccessfulTransactionRate` | decimal(5,4) | NULL | Başarılı işlem oranı (denormalized, ör: 0.9500 = %95). Formül aşağıda |
 | `CooldownExpiresAt` | datetime | NULL | İptal sonrası geçici yasak bitiş zamanı |
@@ -465,7 +466,8 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 > **SuccessfulTransactionRate formülü:**
 > ```
 > completed / (completed + CANCELLED_SELLER + CANCELLED_BUYER
->              + CANCELLED_TIMEOUT[TimeoutReleasedByAdminRulingAt IS NULL]
+>              + CANCELLED_TIMEOUT[TimeoutReleasedByAdminRulingAt IS NULL
+>                                   AND TimeoutBlockedByCounterpartyAt IS NULL]
 >              + REFUNDED[DeliveryReversedAt NOT NULL])
 > ```
 > - CANCELLED_ADMIN paydaya dahil **değildir** — tamamen platform kararı, kullanıcının kontrolünde değil.
@@ -479,7 +481,7 @@ Kullanıcı profili, Steam kimliği, cüzdan adresleri ve itibar bilgileri.
 >     - Alıcı kabul timeout'u (adım 2, `PreviousStatus = CREATED`) → alıcı
 >     - Satıcı hazırlık onayı timeout'u (adım 3, `PreviousStatus = ACCEPTED`) → satıcı
 >     - Ödeme timeout'u (adım 4, `PreviousStatus = SELLER_CONFIRMED`) → alıcı
->     - Teslimat timeout'u (adım 6–7, `PreviousStatus = PAYMENT_RECEIVED`) → **satıcı**, **ancak** `TimeoutReleasedByAdminRulingAt IS NULL` ise. Dolu ise satır **hiçbir tarafa** yazılmaz (T131 B1 — yukarıdaki formül maddesi)
+>     - Teslimat timeout'u (adım 6–7, `PreviousStatus = PAYMENT_RECEIVED`) → **satıcı**, **ancak** `TimeoutReleasedByAdminRulingAt IS NULL` **ve** `TimeoutBlockedByCounterpartyAt IS NULL` ise. Biri doluysa satır **hiçbir tarafa** yazılmaz (T131 B1 · 08 §2.2a — yukarıdaki formül maddesi). Aynı ikinci koşul `ACCEPTED` çıkışlı timeout için de geçerlidir: alıcının hesabı takas edemiyorsa satıcının hazırlık onayı zaten reddedilirdi
 >
 >   > **v3.0 notu (T119):** Teslimat adımının sorumlusu custodial modelde **alıcıydı** — platformun gönderdiği teslim trade offer'ını kabul etmeyen taraf oydu. P2P'de trade'i satıcı gönderir, dolayısıyla gecikme de satıcıya yazılır (02 §3.1 tablosu, 02 §13 "Teslim etmeme etkisi"). Adım 3'ün adı da değişti: "satıcı trade offer'ı" değil, **hazırlık onayı** (03 §2.3). Sorumlu taraf adım 3'te değişmedi.
 >
@@ -644,6 +646,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `DeliveryEvidence` | int | NOT NULL, DEFAULT 0 | Enum (flags): `DeliveryEvidence`. Teslimatın hangi kanıtlarla doğrulandığı. Durum geçiş guard'ı bu alana bakar |
 | `DeliveryRoundAt` | datetime | NULL | Teslimat timeout doğrulama turunun bu satıra **en son ne zaman baktığı** (T127). Her turda yazılır — sonuca varmayan turlar dahil. `DeadlineScannerJob` teslimat penceresini bu kolona göre (NULL'lar önce) sıralar: beş verdict'ten üçü satırı `PAYMENT_RECEIVED` ve süresi kalıcı dolmuş bırakır, dolayısıyla deadline sırası bu satırların pencereyi kalıcı işgal etmesi demektir. Karar girdisi **değildir**, yalnız sıralama/aralık alanıdır |
 | `TimeoutReleasedByAdminRulingAt` | datetime | NULL | Teslimat timeout'unun iptale gitmesine **admin dispute kararının** izin verdiği an (T131 doğrulaması bulgu B1). Yalnız yanlış-teslimat imzasıyla bekletilen satırın serbest bırakılma kolu yazar (03 §6.4); kanıtla ispatlanmış olağan teslimat timeout'unda ve diğer üç fazda **NULL** kalır. Tek işlevi `CANCELLED_TIMEOUT`'un iki üreticisini ayırmaktır: doluysa satır **ne itibar formülüne ne cooldown sayımına** girer (§3.1, 02 §14.2), çünkü kaydettiği şey admin'in satıcıyı **akladığı** karardır — CANCELLED_ADMIN ile aynı sınıf (02 §13). `DeliveryReversedAt`'in ikizi: orada da tek status'ün iki üreticisi kusur hakkında zıt şey söylüyor ve ayrım satırda taşınıyor. Karar girdisi **değildir** — hiçbir para kapısı okumaz |
+| `TimeoutBlockedByCounterpartyAt` | datetime | NULL | Süresi dolan tarafın **karşı tarafın Steam hesabı** yüzünden hareket edemediği an (08 §2.2a). `TimeoutReleasedByAdminRulingAt` ve `DeliveryReversedAt`'in üçüncü kardeşi, aynı sebeple: `ACCEPTED`/`PAYMENT_RECEIVED` çıkışlı `CANCELLED_TIMEOUT` §3.1 uyarınca **satıcıya** yazılır ve bu kolon olmadan "satıcı göndermedi" ile "satıcı gönderEMEZDİ" ayırt edilemiyordu — 2026-09-02 provasında alıcının hesabı limited'dı, takas en baştan imkânsızdı. Yalnız **olumlu bulguda** yazılır (Steam soruldu ve karşı tarafın takas edemediğini söyledi); okunamayan cevap NULL bırakır, yoksa herhangi bir Steam kesintisi gerçek teslim etmemeyi de silerdi. Doluysa satır **ne itibara ne cooldown'a** girer |
 | **Mutabakat (v3.0)** | | | |
 | `PayoutEligibleAt` | datetime | NULL | Satıcı ödemesinin yapılabileceği en erken an = `ItemDeliveredAt` + mutabakat süresi (`payout_settlement_days`, varsayılan 8 gün). ITEM_DELIVERED girişinde hesaplanır ve o geçişin **guard koşuludur** (T129): kolonu yazmayan bir çağıran teslimatı gerçekleştiremez, çünkü kapı yalnız kapattığı yolu değil koruduğu değerin yazarlarını da denetlemelidir. Steam'in 7 günlük trade geri alma penceresini kapsar (02 §4.5.1) |
 | `SettlementVerifiedAt` | datetime | NULL | Mutabakat sonu kontrolünün yapıldığı an — item'ın hâlâ alıcıda olduğu doğrulandığında damgalanır. COMPLETED geçişinin ön koşulu; ayrıca satıcı payout'u ve depozit sweep'i bu damgayı bekler (T129) |

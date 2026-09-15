@@ -1159,6 +1159,18 @@
         "title": "Ödeme adresi cooldown'u",
         "description": "Ödeme adresiniz yakın zamanda değiştirildi. Güvenlik nedeniyle bekleme süresi boyunca yeni işlem başlatılamaz."
       },
+      "steamLimited": {
+        "title": "Steam hesabınız kısıtlı",
+        "description": "Steam, hiç harcama yapmamış hesapların takas yapmasına izin vermiyor. Steam üzerinden en az 5 USD tutarında bir alışveriş yaptıktan sonra bu engel kalkar."
+      },
+      "steamTooNew": {
+        "title": "Steam hesabınız çok yeni",
+        "description": "Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor. Süre dolduğunda işlem başlatabilirsiniz."
+      },
+      "steamUnavailable": {
+        "title": "Steam şu anda kontrol edilemedi",
+        "description": "Takas uygunluğunuz Steam üzerinden doğrulanamadı. Bu geçici bir durum — biraz sonra tekrar deneyin."
+      },
       "unknown": {
         "title": "İşlem başlatılamıyor"
       },
@@ -1261,6 +1273,8 @@
         "CONCURRENT_LIMIT_REACHED": "Aktif işlem limitine ulaştınız. Mevcut işlemleriniz tamamlandığında yeni işlem başlatabilirsiniz.",
         "CANCEL_COOLDOWN_ACTIVE": "İptal cooldown'u devam ediyor. Süre dolana kadar yeni işlem başlatamazsınız.",
         "NEW_ACCOUNT_LIMIT_REACHED": "Yeni hesap işlem limitinize ulaştınız.",
+        "STEAM_ACCOUNT_LIMITED": "Steam hesabınız kısıtlı olduğu için takas yapamıyor. Steam üzerinden en az 5 USD tutarında bir alışveriş yaptıktan sonra tekrar deneyin.",
+        "STEAM_ACCOUNT_TOO_NEW": "Steam hesabınız takas için henüz çok yeni. Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Hesabınızda Steam Mobile Authenticator aktif olmalıdır.",
         "ACCOUNT_FLAGGED": "Hesabınız inceleme altında. Yeni işlem başlatılamaz.",
         "ITEM_NOT_TRADEABLE": "Seçtiğiniz item takas edilemez. Lütfen başka bir item seçin.",
@@ -1426,7 +1440,9 @@
         "VALIDATION_ERROR": "Gönderilen veri geçersiz. Lütfen adresi kontrol edin.",
         "ACCOUNT_FLAGGED": "Hesabınız incelemede; şu anda işlem kabul edemezsiniz. Lütfen destek ile iletişime geçin.",
         "INVALID_TRADE_URL": "Kendi hesabınıza ait geçerli bir Steam trade URL girin.",
-        "MOBILE_AUTHENTICATOR_REQUIRED": "Kabul edebilmek için Steam Mobile Authenticator’ınız aktif olmalı. Aktif değilse Steam takası 15 gün bekletir.",
+        "STEAM_ACCOUNT_LIMITED": "Steam hesabınız kısıtlı olduğu için takas alamıyor. Steam üzerinden en az 5 USD tutarında bir alışveriş yaptıktan sonra tekrar deneyin.",
+        "STEAM_ACCOUNT_TOO_NEW": "Steam hesabınız takas için henüz çok yeni. Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor.",
+        "MOBILE_AUTHENTICATOR_REQUIRED": "Kabul edebilmek için Steam Mobile Authenticator’ınız aktif olmalı. Aktif değilse Steam takası 15 gün kendi emanetinde bekletir.",
         "STEAM_UNAVAILABLE": "Steam’e şu anda ulaşılamadı, Mobile Authenticator doğrulanamadı. Lütfen biraz sonra tekrar deneyin.",
         "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin."
       }
@@ -1462,6 +1478,8 @@
             "ITEM_NO_LONGER_AVAILABLE": "Item artık gönderilebilir durumda değil — envanterinizde yok ya da takas edilebilir değil.",
             "INVENTORY_PRIVATE": "Profiliniz gizli olduğu için Steam envanteriniz okunamadı. Envanterinizi herkese açık yapıp tekrar deneyin.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "Alıcının Steam Mobile Authenticator'ı henüz aktif değil. Alıcı bilgilendirildi — aktif ettiğinde tekrar deneyebilirsiniz.",
+            "BUYER_STEAM_ACCOUNT_LIMITED": "Alıcının Steam hesabı kısıtlı; Steam bu hesaba takas gönderilmesine izin vermiyor. Alıcı bilgilendirildi — kısıt kalktığında tekrar deneyebilirsiniz.",
+            "BUYER_STEAM_ACCOUNT_TOO_NEW": "Alıcının Steam hesabı takas için henüz çok yeni (Steam ilk 15 gün izin vermiyor). Süre dolduğunda tekrar deneyebilirsiniz.",
             "STEAM_UNAVAILABLE": "Steam'e şu anda ulaşılamadı. Birazdan tekrar deneyin.",
             "INVALID_STATE_TRANSITION": "Bu işlem artık onayınızı beklemiyor.",
             "NOT_A_PARTY": "Bu işlemin tarafı değilsiniz.",

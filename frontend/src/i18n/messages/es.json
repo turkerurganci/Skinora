@@ -1159,6 +1159,18 @@
         "title": "Periodo de espera de la dirección de pago",
         "description": "Tu dirección de pago se cambió recientemente. Por motivos de seguridad no puedes iniciar nuevas transacciones durante el periodo de espera."
       },
+      "steamLimited": {
+        "title": "Tu cuenta de Steam está limitada",
+        "description": "Steam no permite intercambiar a las cuentas que nunca han gastado dinero. Gastar al menos 5 USD en Steam levanta esta restricción."
+      },
+      "steamTooNew": {
+        "title": "Tu cuenta de Steam es demasiado nueva",
+        "description": "Steam no permite intercambios durante los primeros 15 días de una cuenta. Podrás iniciar una transacción cuando termine la espera."
+      },
+      "steamUnavailable": {
+        "title": "No se pudo consultar a Steam",
+        "description": "No se pudo verificar tu elegibilidad de intercambio con Steam. Es temporal; inténtalo de nuevo en unos minutos."
+      },
       "unknown": {
         "title": "No se puede iniciar la transacción"
       },
@@ -1261,6 +1273,8 @@
         "CONCURRENT_LIMIT_REACHED": "Has alcanzado el límite de transacciones activas. Podrás iniciar una nueva cuando se completen las existentes.",
         "CANCEL_COOLDOWN_ACTIVE": "Hay un periodo de espera por cancelación activo. No puedes iniciar nuevas transacciones hasta que termine.",
         "NEW_ACCOUNT_LIMIT_REACHED": "Has alcanzado el límite de transacciones para cuentas nuevas.",
+        "STEAM_ACCOUNT_LIMITED": "Tu cuenta de Steam está limitada y no puede intercambiar. Gasta al menos 5 USD en Steam y vuelve a intentarlo.",
+        "STEAM_ACCOUNT_TOO_NEW": "Tu cuenta de Steam es demasiado nueva para intercambiar. Steam no permite intercambios durante los primeros 15 días.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Steam Mobile Authenticator debe estar activo en tu cuenta.",
         "ACCOUNT_FLAGGED": "Tu cuenta está en revisión. No puedes iniciar nuevas transacciones.",
         "ITEM_NOT_TRADEABLE": "El artículo seleccionado no es intercambiable. Elige otro.",
@@ -1426,6 +1440,8 @@
         "VALIDATION_ERROR": "Los datos enviados son inválidos. Comprueba la dirección.",
         "ACCOUNT_FLAGGED": "Tu cuenta está en revisión y no puede aceptar transacciones por ahora. Contacta con soporte.",
         "INVALID_TRADE_URL": "Introduce una URL de intercambio de Steam válida que pertenezca a tu propia cuenta.",
+        "STEAM_ACCOUNT_LIMITED": "Tu cuenta de Steam está limitada y no puede recibir intercambios. Gasta al menos 5 USD en Steam y vuelve a intentarlo.",
+        "STEAM_ACCOUNT_TOO_NEW": "Tu cuenta de Steam es demasiado nueva para intercambiar. Steam no permite intercambios durante los primeros 15 días.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Tu Steam Mobile Authenticator debe estar activo para aceptar. Sin él, Steam retiene el intercambio durante 15 días.",
         "STEAM_UNAVAILABLE": "No se pudo contactar con Steam ahora mismo, así que no se pudo verificar tu Mobile Authenticator. Inténtalo de nuevo en unos minutos.",
         "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo."
@@ -1462,6 +1478,8 @@
             "ITEM_NO_LONGER_AVAILABLE": "Este artículo ya no se puede enviar: no está en tu inventario o no es intercambiable.",
             "INVENTORY_PRIVATE": "No pudimos leer tu inventario de Steam porque tu perfil es privado. Hazlo público e inténtalo de nuevo.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "El Mobile Authenticator de Steam del comprador aún no está activo. Ya se le notificó: podrás intentarlo de nuevo cuando lo active.",
+            "BUYER_STEAM_ACCOUNT_LIMITED": "La cuenta de Steam del comprador está limitada, por lo que Steam no permite que le llegue un intercambio. El comprador ha sido informado; puedes reintentar cuando se levante la restricción.",
+            "BUYER_STEAM_ACCOUNT_TOO_NEW": "La cuenta de Steam del comprador es demasiado nueva para intercambiar (Steam bloquea los primeros 15 días). Puedes reintentar cuando termine la espera.",
             "STEAM_UNAVAILABLE": "No se pudo contactar con Steam. Inténtalo de nuevo en un momento.",
             "INVALID_STATE_TRANSITION": "Esta transacción ya no espera tu confirmación.",
             "NOT_A_PARTY": "No eres parte de esta transacción.",

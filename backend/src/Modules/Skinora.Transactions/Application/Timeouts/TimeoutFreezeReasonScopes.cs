@@ -43,8 +43,17 @@ public static class TimeoutFreezeReasonScopes
     // What breaks is the platform's ability to *verify* it, so the delivery
     // phase must freeze; otherwise the seller is wrongly recorded as having
     // failed to deliver (02 §23, 03 §11.2).
+    //
+    // CREATED joined this list with the 08 §2.2a trade-eligibility gate. Until
+    // then the accept step needed nothing from Steam, so a CREATED transaction's
+    // AcceptDeadline could run out only through the buyer's own inaction. It now
+    // fails closed on an unreadable Steam answer, which makes that deadline
+    // Steam-bound too: leaving CREATED out would let a Steam outage expire the
+    // window and record the lapse against the BUYER — the same defect this scope
+    // exists to prevent, one phase earlier.
     private static readonly TransactionStatus[] SteamBound =
     [
+        TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
         TransactionStatus.PAYMENT_RECEIVED,
     ];

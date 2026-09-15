@@ -7,6 +7,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Entities;
@@ -759,6 +760,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             Context,
             limits,
             new AlwaysClearFlagChecker(),
+            new FakeSteamTradeEligibilityChecker(),
             _clock);
         var fraud = new FraudPreCheckService(Context, _marketPrice);
         return new TransactionCreationService(

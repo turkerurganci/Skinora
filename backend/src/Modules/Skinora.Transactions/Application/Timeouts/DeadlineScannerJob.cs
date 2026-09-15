@@ -11,8 +11,10 @@ using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
 using Skinora.Transactions.Application.Reputation;
+using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
+using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Timeouts;
 
@@ -51,6 +53,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
     private readonly ITransactionReputationRefresher _reputation;
     private readonly IDeliveryTimeoutRound _deliveryRound;
     private readonly IWarningDispatcher _warnings;
+    private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly TimeoutSchedulingOptions _options;
     private readonly ILogger<DeadlineScannerJob> _logger;
 
@@ -63,6 +66,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         ITransactionReputationRefresher reputation,
         IDeliveryTimeoutRound deliveryRound,
         IWarningDispatcher warnings,
+        ISteamTradeEligibilityChecker steamTradeEligibility,
         IOptions<TimeoutSchedulingOptions> options,
         ILogger<DeadlineScannerJob> logger)
     {
@@ -74,6 +78,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         _reputation = reputation;
         _deliveryRound = deliveryRound;
         _warnings = warnings;
+        _steamTradeEligibility = steamTradeEligibility;
         _options = options.Value;
         _logger = logger;
     }
@@ -177,6 +182,59 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             ? parsed
             : null;
     }
+    /// <summary>
+    /// 08 §2.2a — mark the ACCEPTED-phase timeouts whose seller could not act
+    /// because the buyer's Steam account forbids trading.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only ACCEPTED rows are examined. CREATED expires on the buyer's own
+    /// inaction and is charged to them; SELLER_CONFIRMED expires on the buyer's
+    /// payment, which no Steam restriction touches. So the seller-charged
+    /// ACCEPTED window is the only one here where the OTHER party's account can
+    /// be the cause.
+    /// </para>
+    /// <para>
+    /// One Steam call per expiring ACCEPTED transaction, and the sidecar caches
+    /// a confirmed "not limited" for a day, so the ordinary batch spends
+    /// nothing. As in the delivery round, an unreadable answer leaves the mark
+    /// unset: absence of information does not clear fault.
+    /// </para>
+    /// </remarks>
+    private async Task StampCounterpartyBlockedAcceptancesAsync(
+        IReadOnlyCollection<Transaction> candidates, DateTime nowUtc)
+    {
+        var accepted = candidates
+            .Where(t => t.Status == TransactionStatus.ACCEPTED && t.BuyerId is not null)
+            .ToList();
+        if (accepted.Count == 0) return;
+
+        var buyerIds = accepted.Select(t => t.BuyerId!.Value).Distinct().ToList();
+        var buyers = await _db.Set<User>()
+            .AsNoTracking()
+            .Where(u => buyerIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id);
+
+        foreach (var transaction in accepted)
+        {
+            if (!buyers.TryGetValue(transaction.BuyerId!.Value, out var buyer)) continue;
+
+            var eligibility = await _steamTradeEligibility.EvaluateAsync(buyer, CancellationToken.None);
+            if (eligibility.Status is not (SteamTradeEligibilityStatus.Limited
+                or SteamTradeEligibilityStatus.TooNew))
+            {
+                continue;
+            }
+
+            transaction.TimeoutBlockedByCounterpartyAt = nowUtc;
+            _logger.LogWarning(
+                "Transaction {TransactionId}: the seller-confirmation window expired while the "
+                + "BUYER's Steam account cannot trade ({Status}) — confirm-ready would have "
+                + "refused, so the timeout is NOT recorded against the seller (08 §2.2a)",
+                transaction.Id, eligibility.Status);
+        }
+    }
+
     private async Task ScanBatchAsync()
     {
         var now = _clock.GetUtcNow().UtcDateTime;
@@ -211,6 +269,16 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         // WP15 — collect the parties of every transaction that actually timed
         // out so reputation/cooldown can be recomputed after the batch flush.
         var affected = new List<(Guid SellerId, Guid? BuyerId)>();
+
+        // 08 §2.2a — before any of these are charged to a party, ask whether the
+        // COUNTERPARTY's Steam account made the action impossible. This is the
+        // ACCEPTED half of the same defect the delivery round fixes one phase
+        // later: confirm-ready refuses while the buyer is limited or inside
+        // Steam's 15-day wait (403 BUYER_STEAM_ACCOUNT_*), the seller therefore
+        // cannot confirm, the SellerConfirmDeadline expires and 06 §3.1 records
+        // the lapse against the seller. The delivery phase is skipped here — the
+        // delivery round already stamped it with the evidence in hand.
+        await StampCounterpartyBlockedAcceptancesAsync(candidates, now);
 
         foreach (var transaction in candidates)
         {

@@ -443,7 +443,7 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         var sut = CreateSut();
         var affected = await sut.FreezeManyAsync(TimeoutFreezeReason.STEAM_OUTAGE, CancellationToken.None);
 
-        Assert.Equal(2, affected);
+        Assert.Equal(3, affected);
         var persistedSeller = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == steamSeller.Id);
         var persistedBuyer = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == steamBuyer.Id);
         var persistedPayment = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == payment.Id);
@@ -451,7 +451,11 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         Assert.Equal(TimeoutFreezeReason.STEAM_OUTAGE, persistedSeller.TimeoutFreezeReason);
         Assert.Equal(TimeoutFreezeReason.STEAM_OUTAGE, persistedBuyer.TimeoutFreezeReason);
         Assert.Null(persistedPayment.TimeoutFrozenAt);
-        Assert.Null(persistedCreated.TimeoutFrozenAt);
+        // 08 §2.2a — CREATED bu turda kapsama girdi. Kabul adımı artık canlı
+        // Steam okumasına bağlı ve okunamazsa fail-closed davranıyor, yani
+        // AcceptDeadline ilk kez Steam'e bağımlı. Donmasaydı kesintide süre
+        // dolar ve 06 §3.1 kusuru ALICIYA yazardı.
+        Assert.Equal(TimeoutFreezeReason.STEAM_OUTAGE, persistedCreated.TimeoutFreezeReason);
     }
 
     [Fact]

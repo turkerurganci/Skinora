@@ -108,6 +108,17 @@ export interface TradeHoldState {
 }
 
 /**
+ * Steam "limited account" state (08 §2.2a) — a THIRD, independent condition.
+ *
+ * Deliberately not folded into {@link TradeHoldState}: a limited account also
+ * reports `escrowEndDurationSeconds: 0`, so the two must be drivable apart or
+ * the e2e suite cannot reproduce the 2026-09-02 rehearsal failure at all.
+ */
+export interface LimitedAccountState {
+  limited: boolean;
+}
+
+/**
  * An inventory nobody has driven. Readable and EMPTY, never "the default two
  * items": a steamId the test never seeded holds nothing, and answering with
  * items instead would hand every buyer a copy of the skin they are waiting for
@@ -119,8 +130,19 @@ const DEFAULT_ENTRY: InventoryEntry = { visibility: 'PUBLIC', items: [] };
 /** MA verified, no Steam escrow hold — the pre-T137 constant, now per-steamId. */
 export const DEFAULT_TRADE_HOLD: TradeHoldState = { active: true, escrowEndDurationSeconds: 0 };
 
+/**
+ * Not limited — a steamId nobody drove can trade (08 §2.2a).
+ *
+ * The default has to be the PERMISSIVE one here even though the real gate is
+ * fail-closed: every existing scenario predates this check and none of them
+ * seeds it. Defaulting to `limited: true` would block all ten suites at the
+ * accept step. The fail-closed branch is exercised by driving it explicitly.
+ */
+export const DEFAULT_LIMITED_ACCOUNT: LimitedAccountState = { limited: false };
+
 const inventories = new Map<string, InventoryEntry>();
 const tradeHolds = new Map<string, TradeHoldState>();
+const limitedAccounts = new Map<string, LimitedAccountState>();
 
 /** Raised for a malformed control-surface request (mapped to HTTP 400). */
 export class InventoryControlError extends Error {}
@@ -318,10 +340,33 @@ export function getTradeHold(steamId: string): TradeHoldState {
   return { ...(tradeHolds.get(steamId) ?? DEFAULT_TRADE_HOLD) };
 }
 
-/** Drop every driven inventory and trade hold — the between-scenario reset. */
+/** Drive the 08 §2.2a limited-account probe for one steamId. */
+export function setLimitedAccount(
+  steamId: string,
+  opts: Partial<LimitedAccountState> = {},
+): LimitedAccountState {
+  if (!steamId) {
+    throw new InventoryControlError('steamId is required');
+  }
+  const current = limitedAccounts.get(steamId) ?? DEFAULT_LIMITED_ACCOUNT;
+  const limited = opts.limited === undefined ? current.limited : opts.limited;
+  if (typeof limited !== 'boolean') {
+    throw new InventoryControlError('limited must be a boolean');
+  }
+  const state: LimitedAccountState = { limited };
+  limitedAccounts.set(steamId, state);
+  return { ...state };
+}
+
+export function getLimitedAccount(steamId: string): LimitedAccountState {
+  return { ...(limitedAccounts.get(steamId) ?? DEFAULT_LIMITED_ACCOUNT) };
+}
+
+/** Drop every driven inventory, trade hold and limited flag — the between-scenario reset. */
 export function resetSteamState(): void {
   inventories.clear();
   tradeHolds.clear();
+  limitedAccounts.clear();
 }
 
 export interface InventoryHttpResponse {

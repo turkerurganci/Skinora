@@ -31,6 +31,12 @@ public sealed class UserProvisioningService : IUserProvisioningService
                 SteamId = steamId64,
                 SteamDisplayName = profile?.PersonaName ?? BuildPlaceholderDisplayName(steamId64),
                 SteamAvatarUrl = profile?.AvatarFull,
+                // 08 §2.2a — Steam'in 15 günlük takas bekleme kapısının verisi.
+                // Bu değer girişte ZATEN çekiliyordu (yaş kapısı için) ama
+                // hiçbir yere yazılmadan atılıyordu; işlem kapıları da bu yüzden
+                // hesabın Steam yaşını hiç göremiyordu
+                // (`Prova-LimitedAccountNeverChecked`in ikiz satırı).
+                SteamAccountCreatedAt = profile?.AccountCreatedAt,
                 // F4 — kullanıcının giriş yaptığı ARAYÜZ dili saklanır.
                 // Önceki hâl burada sabit "en" yazıyordu ve bu alan yalnız bir
                 // tercih kutusu değil, GİDEN HER MESAJIN dili: bildirimler
@@ -62,6 +68,17 @@ public sealed class UserProvisioningService : IUserProvisioningService
                 existing.SteamAvatarUrl != profile.AvatarFull)
             {
                 existing.SteamAvatarUrl = profile.AvatarFull;
+                changed = true;
+            }
+
+            // 08 §2.2a — her girişte tazelenir. Bu, kolon eklenmeden önce
+            // sağlanmış kullanıcıların BACKFILL yoludur: değer null kaldığı
+            // sürece işlem kapıları 15 günlük koşulu ÖLÇEMEZ ve fail-closed
+            // davranır, ilk yeniden girişte kendiliğinden düzelir.
+            if (profile.AccountCreatedAt is not null &&
+                existing.SteamAccountCreatedAt != profile.AccountCreatedAt)
+            {
+                existing.SteamAccountCreatedAt = profile.AccountCreatedAt;
                 changed = true;
             }
 

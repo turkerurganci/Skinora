@@ -122,6 +122,16 @@ public enum CreateTransactionStatus
     BuyerSteamIdNotFound,
     PayoutAddressCooldownActive,
     SellerWalletAddressMissing,
+
+    /// <summary>403 <c>STEAM_ACCOUNT_LIMITED</c> — Steam blocks the seller's
+    /// account from trading at all (08 §2.2a). A seller who cannot trade can
+    /// still list, take an escrowed payment and then deliver nothing, which is
+    /// why this is a create-time rejection and not a delivery-time surprise.</summary>
+    SteamAccountLimited,
+
+    /// <summary>403 <c>STEAM_ACCOUNT_TOO_NEW</c> — the seller's account is
+    /// inside Steam's 15-day trade wait (08 §2.2a).</summary>
+    SteamAccountTooNew,
 }
 
 // ---------- POST /transactions/:id/accept (07 §7.6) ----------
@@ -180,8 +190,22 @@ public enum AcceptTransactionStatus
 
     /// <summary>503 <c>STEAM_UNAVAILABLE</c> — the trade-hold probe could not
     /// reach Steam, so the Mobile Authenticator state is unknown. Fail-closed
-    /// per 08 §2.2; mirrors the 07 §7.6a confirm-ready contract.</summary>
+    /// per 08 §2.2; mirrors the 07 §7.6a confirm-ready contract. Also covers an
+    /// unreadable 08 §2.2a trade-eligibility answer — "could not check" never
+    /// shares a code with "checked, and blocked".</summary>
     SteamUnavailable,
+
+    /// <summary>403 <c>STEAM_ACCOUNT_LIMITED</c> — Steam blocks this account
+    /// from trading entirely (no US$5 lifetime spend, 08 §2.2a). Separate from
+    /// <see cref="MobileAuthenticatorRequired"/>: the hold probe reports a
+    /// 0-second hold for a limited account, so the two conditions are not
+    /// substitutes and their remedies differ.</summary>
+    SteamAccountLimited,
+
+    /// <summary>403 <c>STEAM_ACCOUNT_TOO_NEW</c> — the account is inside
+    /// Steam's 15-day trade wait (08 §2.2a). Resolves by waiting, so the
+    /// message carries the remaining days.</summary>
+    SteamAccountTooNew,
 }
 
 // ---------- POST /transactions/:id/confirm-ready (07 §7.6a) ----------
@@ -243,10 +267,21 @@ public enum ConfirmReadyStatus
     /// (02 §9.1).</summary>
     BuyerMobileAuthenticatorInactive,
 
+    /// <summary>403 <c>BUYER_STEAM_ACCOUNT_LIMITED</c> — the buyer's Steam
+    /// account is limited and cannot receive a trade at all (08 §2.2a). The
+    /// seller is told, because the seller is the one being asked to act; the
+    /// remedy belongs to the buyer.</summary>
+    BuyerSteamAccountLimited,
+
+    /// <summary>403 <c>BUYER_STEAM_ACCOUNT_TOO_NEW</c> — the buyer's account is
+    /// inside Steam's 15-day trade wait (08 §2.2a).</summary>
+    BuyerSteamAccountTooNew,
+
     /// <summary>503 <c>STEAM_UNAVAILABLE</c> — Steam could not be reached for
-    /// the item check or the trade-hold probe. Fail-closed and retryable
-    /// (08 §2.2); the buyer-baseline read is explicitly NOT part of this — an
-    /// unreadable buyer inventory never blocks (03 §2.3 step 3).</summary>
+    /// the item check, the trade-hold probe or the 08 §2.2a eligibility probe.
+    /// Fail-closed and retryable (08 §2.2); the buyer-baseline read is
+    /// explicitly NOT part of this — an unreadable buyer inventory never blocks
+    /// (03 §2.3 step 3).</summary>
     SteamUnavailable,
 }
 

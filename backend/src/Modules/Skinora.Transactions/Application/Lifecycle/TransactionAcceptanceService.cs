@@ -58,6 +58,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     private readonly IAccountFlagChecker _flagChecker;
     private readonly ITradeUrlParser _tradeUrlParser;
     private readonly ITradeHoldChecker _tradeHoldChecker;
+    private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
 
@@ -68,6 +69,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         IAccountFlagChecker flagChecker,
         ITradeUrlParser tradeUrlParser,
         ITradeHoldChecker tradeHoldChecker,
+        ISteamTradeEligibilityChecker steamTradeEligibility,
         IOutboxService outbox,
         TimeProvider clock)
     {
@@ -77,6 +79,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         _flagChecker = flagChecker;
         _tradeUrlParser = tradeUrlParser;
         _tradeHoldChecker = tradeHoldChecker;
+        _steamTradeEligibility = steamTradeEligibility;
         _outbox = outbox;
         _clock = clock;
     }
@@ -231,6 +234,34 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             return Failure(AcceptTransactionStatus.MobileAuthenticatorRequired,
                 TransactionErrorCodes.MobileAuthenticatorRequired,
                 "Buyer's Steam Mobile Authenticator is not active (02 §9.1).");
+
+        // ---------- Stage 5c: Steam trade eligibility (08 §2.2a) -------------
+        // The probe above answers "how long would a trade be held", NOT "may
+        // this account trade". A limited account and an account inside Steam's
+        // 15-day wait both report a 0-second hold, which is exactly how the
+        // 2026-09-02 rehearsal reached escrowed payment on a buyer who could
+        // never receive the item. Runs AFTER the hold check on purpose: this
+        // one spends the Steam Community budget (10/min, shared with delivery
+        // verification), the hold check spends the Web API budget (60/min).
+        var eligibility = await _steamTradeEligibility.EvaluateAsync(buyer, cancellationToken);
+        switch (eligibility.Status)
+        {
+            case SteamTradeEligibilityStatus.Limited:
+                return Failure(AcceptTransactionStatus.SteamAccountLimited,
+                    TransactionErrorCodes.SteamAccountLimited,
+                    "Buyer's Steam account is limited and cannot trade (08 §2.2a).");
+            case SteamTradeEligibilityStatus.TooNew:
+                return Failure(AcceptTransactionStatus.SteamAccountTooNew,
+                    TransactionErrorCodes.SteamAccountTooNew,
+                    $"Buyer's Steam account is inside Steam's {SteamTradeEligibilityChecker.SteamTradeEligibilityWaitDays}-day trade wait ({eligibility.RemainingDays} day(s) left).");
+            case SteamTradeEligibilityStatus.Unknown:
+                // Same transient treatment as an unavailable hold probe: the
+                // buyer's account may be perfectly fine and a permanent-looking
+                // rejection would send them after a problem they do not have.
+                return Failure(AcceptTransactionStatus.SteamUnavailable,
+                    TransactionErrorCodes.SteamUnavailable,
+                    "Steam could not be queried to verify trade eligibility (08 §2.2a).");
+        }
 
         // ---------- Stage 6: state transition + snapshot ----------
         // 06 §3.5 invariants: BuyerId + BuyerRefundAddress + BuyerTradeUrl must

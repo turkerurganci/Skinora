@@ -192,6 +192,16 @@ services:
       # the Web API queue; unset → 10/min (conservative end of the estimated
       # 10-20/min per-IP range).
       - STEAM_COMMUNITY_REQUESTS_PER_MINUTE=${STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE:-}
+      # Limited-account probe (08 §2.2a). The sample count is deliberately below
+      # DEPLOY_RUNBOOK §G.5's measured 5, and 08 §2.2a's stated mitigation is
+      # that it can be raised without a rebuild — which only holds if the
+      # variable actually reaches the container. Compose enumerates every
+      # variable explicitly (see the note above), so omitting these four made
+      # that sentence false. Empty → the measured defaults (3 / 3s / 20s / 24h).
+      - STEAM_LIMITED_ACCOUNT_SAMPLES=${STEAM_SIDECAR_LIMITED_ACCOUNT_SAMPLES:-}
+      - STEAM_LIMITED_ACCOUNT_SAMPLE_DELAY_MS=${STEAM_SIDECAR_LIMITED_ACCOUNT_SAMPLE_DELAY_MS:-}
+      - STEAM_LIMITED_ACCOUNT_DEADLINE_MS=${STEAM_SIDECAR_LIMITED_ACCOUNT_DEADLINE_MS:-}
+      - STEAM_LIMITED_ACCOUNT_CACHE_TTL_SECONDS=${STEAM_SIDECAR_LIMITED_ACCOUNT_CACHE_TTL_SECONDS:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     depends_on:
       skinora-backend:

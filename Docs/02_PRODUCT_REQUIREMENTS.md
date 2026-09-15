@@ -289,6 +289,17 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 - Satıcı için kontrol işlem oluşturmada, alıcı için kabul adımında (adım 2) yapılır
 - MA durumu Steam üzerinden `GetTradeHoldDurations` ile doğrulanır; hold süresi 0 değilse taraf işleme giremez
 
+### 9.1a Steam Takas Uygunluğu — MA tek koşul değildir
+
+> **§9.1'in düzeltmesi (2026-09-14).** "Hold süresi 0" **takas edebilirlik değildir**. Steam'in iki ayrı kısıtı daha var ve ikisi de hold süresini 0 gösterir; platform bunları 2026-09-02 canlı provasına kadar hiç okumuyordu (prova alıcının parası zincirde onaylandıktan sonra teslimat adımında durdu).
+
+- **Limited hesap.** Steam, ömrü boyunca **en az 5 USD** harcamamış hesapların takas yapmasına izin vermez. Bu kısıt MA'dan ve hold süresinden bağımsızdır; çaresi harcamadır, beklemek değildir.
+- **15 günlük bekleme.** Steam yeni hesapların ilk **15 gün** takas yapmasına izin vermez. Çaresi beklemektir.
+- **Her iki taraf için de** geçerlidir: satıcı gönderemez, alıcı alamaz. Bu yüzden kontrol her iki yüzde de yapılır — satıcıda işlem oluştururken, alıcıda kabul ve hazırlık onayı adımlarında.
+- Üç koşul (**limited değil · 15 gün dolmuş · hold 0**) **ayrı ayrı** taşınır ve ayrı hata kodlarıyla reddedilir. Tek bir "uygun/uygun değil" bayrağına indirgenmez: kullanıcıya yanlış çareyi söylemek, engeli hiç söylememek kadar zararlıdır.
+- Steam'e sorulamazsa kapı **kapanır** ve bu **geçici** bir hata olarak bildirilir — "kısıtlısın" denmez. Ayrıntı: 08 §2.2a.
+- Süresi dolan bir işlemde engel **karşı tarafın** hesabından geliyorsa kusur kimseye yazılmaz (§13, §14.2 ile aynı sınıf: platform/dış kısıt kaydı, kullanıcı kusuru değil).
+
 ### 9.2 Teslimat Doğrulama
 
 Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API yalnızca kendi hesabının trade offer'larını gösterir). Teslimat iki bağımsız yoldan doğrulanır:

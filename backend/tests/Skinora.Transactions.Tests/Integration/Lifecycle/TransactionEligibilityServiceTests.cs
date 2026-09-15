@@ -2,6 +2,7 @@ using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
@@ -25,6 +26,7 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
 
     private User _seller = null!;
     private FakeTimeProvider _clock = null!;
+    private FakeSteamTradeEligibilityChecker _steamEligibility = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -47,6 +49,7 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
         await context.ConfigureSettingAsync(TransactionLimitsProvider.PayoutCooldownKey, "24");
 
         _clock = new FakeTimeProvider(new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero));
+        _steamEligibility = new FakeSteamTradeEligibilityChecker();
     }
 
     [Fact]
@@ -143,6 +146,7 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
             Context,
             limits,
             new StubFlagChecker(flagsActive),
+            _steamEligibility,
             _clock);
     }
 

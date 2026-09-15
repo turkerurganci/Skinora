@@ -176,6 +176,14 @@ public sealed class TransactionsController : ControllerBase
                 or CreateTransactionStatus.ItemAlreadyListed
                 => UnprocessableEntity(CreateErrorEnvelope(outcome)),
 
+            // 08 §2.2a — 403: Steam forbids this seller from trading, so the
+            // listing can never be fulfilled. 403 rather than 422 because the
+            // block is an account-level permission on Steam's side, matching
+            // how the accept endpoint answers the same two conditions.
+            CreateTransactionStatus.SteamAccountLimited
+                or CreateTransactionStatus.SteamAccountTooNew
+                => StatusCode(StatusCodes.Status403Forbidden, CreateErrorEnvelope(outcome)),
+
             // T121 — 503 STEAM_UNAVAILABLE: the inventory check is undecided,
             // not negative. Retryable, mirroring the accept endpoint's
             // fail-closed 503 (07 §7.6).
@@ -294,6 +302,12 @@ public sealed class TransactionsController : ControllerBase
                 or AcceptTransactionStatus.AccountFlagged
                 // T119a — 403 MOBILE_AUTHENTICATOR_REQUIRED (07 §7.6).
                 or AcceptTransactionStatus.MobileAuthenticatorRequired
+                // 08 §2.2a — 403 STEAM_ACCOUNT_LIMITED / STEAM_ACCOUNT_TOO_NEW.
+                // Separate codes from MOBILE_AUTHENTICATOR_REQUIRED because the
+                // remedies differ (spend US$5 / wait N days / turn on MA) and
+                // the escrow probe cannot distinguish them.
+                or AcceptTransactionStatus.SteamAccountLimited
+                or AcceptTransactionStatus.SteamAccountTooNew
                 => StatusCode(StatusCodes.Status403Forbidden,
                     AcceptErrorEnvelope(outcome)),
 
@@ -348,6 +362,11 @@ public sealed class TransactionsController : ControllerBase
                 // MOBILE_AUTHENTICATOR_REQUIRED: the caller here is the seller
                 // and the fix belongs to the buyer (07 §7.6a).
                 or ConfirmReadyStatus.BuyerMobileAuthenticatorInactive
+                // 08 §2.2a — same shape, two more conditions the seller is told
+                // about but cannot fix: the buyer's account is limited, or it
+                // is inside Steam's 15-day trade wait.
+                or ConfirmReadyStatus.BuyerSteamAccountLimited
+                or ConfirmReadyStatus.BuyerSteamAccountTooNew
                 => StatusCode(StatusCodes.Status403Forbidden,
                     ConfirmReadyErrorEnvelope(outcome)),
 

@@ -7,6 +7,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Application.Settings;
@@ -265,6 +266,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             new StubAccountFlagChecker(false),
             new TradeUrlParser(),
             _tradeHold,
+            new FakeSteamTradeEligibilityChecker(),
             _outbox,
             _clock);
 
@@ -313,6 +315,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             new StubAccountFlagChecker(false),
             new TradeUrlParser(),
             _tradeHold,
+            new FakeSteamTradeEligibilityChecker(),
             _outbox,
             _clock);
 
@@ -668,6 +671,89 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Empty(_outbox.Published);
     }
 
+    // ---------- 08 §2.2a — Steam trade eligibility (the 🔴 this round closes) ----------
+
+    [Fact]
+    public async Task Limited_Buyer_Is_Rejected_With_Its_Own_Code()
+    {
+        // The 2026-09-02 rehearsal in one test: the trade-hold probe says the
+        // buyer is fine (a limited account reports a 0-second hold too), and
+        // before this gate the accept went through, the buyer paid, and the
+        // item turned out to be undeliverable AFTER the money was escrowed.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(steamEligibility: FakeSteamTradeEligibilityChecker.Limited());
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SteamAccountLimited, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamAccountLimited, outcome.ErrorCode);
+
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.BuyerId);
+        Assert.Null(persisted.BuyerTradeUrl);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Buyer_Inside_The_15_Day_Wait_Is_Rejected_With_Its_Own_Code()
+    {
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(steamEligibility: FakeSteamTradeEligibilityChecker.TooNew(4));
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SteamAccountTooNew, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamAccountTooNew, outcome.ErrorCode);
+        // The remedy is time, so the message has to carry how much is left.
+        Assert.Contains("4", outcome.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Unreadable_Eligibility_Fails_Closed_As_SteamUnavailable()
+    {
+        // Absence of information is not a positive finding: a buyer whose
+        // account is perfectly fine must not be told they are limited.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut(steamEligibility: FakeSteamTradeEligibilityChecker.Unknown());
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SteamUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamUnavailable, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Eligibility_Is_Not_Probed_When_A_Cheaper_Rule_Already_Rejected()
+    {
+        // The Steam Community budget is ~10 requests a minute and it is shared
+        // with delivery verification, so a request already doomed by the MA
+        // check must not spend one.
+        var transaction = await CreateTransactionAsync(BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+        var eligibility = new FakeSteamTradeEligibilityChecker();
+
+        var sut = BuildSut(
+            tradeHold: new CountingTradeHoldChecker(
+                new TradeHoldResult(Available: true, Active: false, SetupGuideUrl: "https://guide")),
+            steamEligibility: eligibility);
+        await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(0, eligibility.CallCount);
+    }
+
     [Fact]
     public async Task Accept_Arms_The_SellerConfirmDeadline_From_The_SystemSetting()
     {
@@ -775,7 +861,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     private TransactionAcceptanceService BuildSut(
         IWalletSanctionsCheck? sanctions = null,
         IAccountFlagChecker? flagChecker = null,
-        ITradeHoldChecker? tradeHold = null) =>
+        ITradeHoldChecker? tradeHold = null,
+        ISteamTradeEligibilityChecker? steamEligibility = null) =>
         new(
             Context,
             new Trc20AddressValidator(),
@@ -785,6 +872,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             // trade-URL contract IS that parser's contract (07 §7.6 md.2).
             new TradeUrlParser(),
             tradeHold ?? _tradeHold,
+            steamEligibility ?? new FakeSteamTradeEligibilityChecker(),
             _outbox,
             _clock);
 

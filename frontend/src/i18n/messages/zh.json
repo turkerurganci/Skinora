@@ -1159,6 +1159,18 @@
         "title": "收款地址冷却期",
         "description": "您的收款地址近期已更改。出于安全考虑,冷却期内无法发起新交易。"
       },
+      "steamLimited": {
+        "title": "你的 Steam 账户受限",
+        "description": "Steam 不允许从未消费过的账户进行交易。在 Steam 上消费至少 5 美元即可解除该限制。"
+      },
+      "steamTooNew": {
+        "title": "你的 Steam 账户太新",
+        "description": "Steam 不允许账户在最初 15 天内交易。等待期结束后即可发起交易。"
+      },
+      "steamUnavailable": {
+        "title": "暂时无法向 Steam 查询",
+        "description": "无法通过 Steam 验证你的交易资格。这是暂时的，请稍后再试。"
+      },
       "unknown": {
         "title": "无法发起交易"
       },
@@ -1261,6 +1273,8 @@
         "CONCURRENT_LIMIT_REACHED": "您已达到活跃交易上限。现有交易完成后即可发起新交易。",
         "CANCEL_COOLDOWN_ACTIVE": "取消冷却期生效中。冷却期结束前无法发起新交易。",
         "NEW_ACCOUNT_LIMIT_REACHED": "您已达到新账户交易上限。",
+        "STEAM_ACCOUNT_LIMITED": "你的 Steam 账户受限，无法交易。请在 Steam 上消费至少 5 美元后重试。",
+        "STEAM_ACCOUNT_TOO_NEW": "你的 Steam 账户太新，暂时无法交易。Steam 不允许账户在最初 15 天内交易。",
         "MOBILE_AUTHENTICATOR_REQUIRED": "您的账户必须启用 Steam Mobile Authenticator。",
         "ACCOUNT_FLAGGED": "您的账户正在审核中。无法发起新交易。",
         "ITEM_NOT_TRADEABLE": "您选择的物品不可交易。请选择其他物品。",
@@ -1426,6 +1440,8 @@
         "VALIDATION_ERROR": "提交的数据无效。请检查地址。",
         "ACCOUNT_FLAGGED": "您的账户正在审核中，暂时无法接受交易。请联系支持团队。",
         "INVALID_TRADE_URL": "请输入属于你本人账户的有效 Steam 交易链接。",
+        "STEAM_ACCOUNT_LIMITED": "你的 Steam 账户受限，无法接收交易。请在 Steam 上消费至少 5 美元后重试。",
+        "STEAM_ACCOUNT_TOO_NEW": "你的 Steam 账户太新，暂时无法交易。Steam 不允许账户在最初 15 天内交易。",
         "MOBILE_AUTHENTICATOR_REQUIRED": "接受交易前必须启用 Steam Mobile Authenticator。否则 Steam 会将该交易冻结 15 天。",
         "STEAM_UNAVAILABLE": "目前无法连接 Steam，因此无法验证你的 Mobile Authenticator。请稍后重试。",
         "generic": "无法接受此交易。请重试。"
@@ -1462,6 +1478,8 @@
             "ITEM_NO_LONGER_AVAILABLE": "该物品已无法发送——它不在您的库存中，或不可交易。",
             "INVENTORY_PRIVATE": "由于您的资料为私密，我们无法读取您的 Steam 库存。请将库存设为公开后重试。",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "买家的 Steam Mobile Authenticator 尚未启用。已通知买家——启用后您可以重试。",
+            "BUYER_STEAM_ACCOUNT_LIMITED": "买家的 Steam 账户受限，Steam 不允许向该账户发送交易。买家已收到通知——限制解除后可再次尝试。",
+            "BUYER_STEAM_ACCOUNT_TOO_NEW": "买家的 Steam 账户太新，暂时无法交易（Steam 限制最初 15 天）。等待期结束后可再次尝试。",
             "STEAM_UNAVAILABLE": "无法连接 Steam。请稍后重试。",
             "INVALID_STATE_TRANSITION": "该交易不再等待您的确认。",
             "NOT_A_PARTY": "您不是该交易的当事方。",

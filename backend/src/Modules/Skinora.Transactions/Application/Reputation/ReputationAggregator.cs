@@ -79,8 +79,13 @@ public sealed class ReputationAggregator : IReputationAggregator
                             // REFUNDED filter below and the same reason: the
                             // status has two producers, and this one is a
                             // platform decision that CLEARED the seller.
+                            // 08 §2.2a — nor the kind the counterparty's Steam
+                            // account made impossible. Same shape, same reason:
+                            // the timing-out party could not act, so the row
+                            // records a Steam restriction, not their fault.
                             || (t.Status == TransactionStatus.CANCELLED_TIMEOUT
-                                && t.TimeoutReleasedByAdminRulingAt == null)
+                                && t.TimeoutReleasedByAdminRulingAt == null
+                                && t.TimeoutBlockedByCounterpartyAt == null)
                             // T129 — only the reversal kind of REFUNDED. The
                             // filter is what keeps 02 §13 intact: an admin
                             // dispute refund is a platform decision and stays
@@ -97,7 +102,8 @@ public sealed class ReputationAggregator : IReputationAggregator
                 t.CancelledAt,
                 t.CompletedAt,
                 t.DeliveryReversedAt,
-                t.TimeoutReleasedByAdminRulingAt))
+                t.TimeoutReleasedByAdminRulingAt,
+                t.TimeoutBlockedByCounterpartyAt))
             .ToListAsync(cancellationToken);
 
         // Raw COMPLETED count — wash filter intentionally NOT applied
@@ -163,7 +169,8 @@ public sealed class ReputationAggregator : IReputationAggregator
         DateTime? CancelledAt,
         DateTime? CompletedAt,
         DateTime? DeliveryReversedAt,
-        DateTime? TimeoutReleasedByAdminRulingAt);
+        DateTime? TimeoutReleasedByAdminRulingAt,
+        DateTime? TimeoutBlockedByCounterpartyAt);
 
     private readonly record struct ClassifiedRow(TxRow Tx, ResponsibilityEffect Effect);
 
@@ -213,6 +220,13 @@ public sealed class ReputationAggregator : IReputationAggregator
                 // future widening of the query must not silently start charging
                 // a seller for the cancellation an admin's ruling authorised.
                 if (row.TimeoutReleasedByAdminRulingAt is not null) return new(false, false);
+
+                // 08 §2.2a — restated here as well as in the query, for the same
+                // reason as the line above: the party who ran out of time could
+                // not act, because the counterparty's Steam account forbade the
+                // trade. Charging them would record a Steam restriction as a
+                // user's fault.
+                if (row.TimeoutBlockedByCounterpartyAt is not null) return new(false, false);
 
                 if (!previousStatusByTx.TryGetValue(row.Id, out var previous))
                     return new(false, false);

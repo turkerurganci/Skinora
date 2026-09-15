@@ -25,6 +25,7 @@ using Skinora.Notifications.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Steam;
 using Skinora.Users.Application.Settings;
 using Skinora.Users.Domain.Entities;
 
@@ -654,6 +655,29 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
             => Task.FromResult(new TradeHoldResult(Available, Active, Active ? null : SetupGuideUrl));
     }
 
+    /// <summary>
+    /// 08 §2.2a — drivable limited-account probe for the API-level factories.
+    ///
+    /// <para>
+    /// Defaults to "Steam reachable, not limited" so tests written before this
+    /// gate keep passing on their own merits. Note this is the INVERSE of the
+    /// production stub (<c>StubSteamAccountLimitedProbe</c>, which answers
+    /// "could not ask"): in a host that never configures a sidecar, the
+    /// production default would fail every gate closed and every unrelated
+    /// assertion would come back 403 — the exact confusion the trade-hold swap
+    /// above documents.
+    /// </para>
+    /// </summary>
+    public sealed class ConfigurableAccountLimitedStub : ISteamAccountLimitedProbe
+    {
+        public bool Available { get; set; } = true;
+        public bool IsLimited { get; set; }
+
+        public Task<SteamAccountLimitedProbeResult> ProbeAsync(
+            string steamId64, CancellationToken cancellationToken)
+            => Task.FromResult(new SteamAccountLimitedProbeResult(Available, IsLimited));
+    }
+
     private sealed class NoopBackgroundJobScheduler : IBackgroundJobScheduler
     {
         public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay)
@@ -674,6 +698,9 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         private int _userSuffix;
 
         public ConfigurableTradeHoldStub TradeHoldStub { get; } = new();
+
+        /// <summary>08 §2.2a — limited-account probe double for this host.</summary>
+        public ConfigurableAccountLimitedStub AccountLimitedStub { get; } = new();
 
         public Factory()
         {
@@ -857,6 +884,11 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
 
                 services.RemoveAll<ITradeHoldChecker>();
                 services.AddSingleton<ITradeHoldChecker>(TradeHoldStub);
+
+                // 08 §2.2a — see ConfigurableAccountLimitedStub: a host without a
+                // sidecar would otherwise fail every trade-eligibility gate closed.
+                services.RemoveAll<ISteamAccountLimitedProbe>();
+                services.AddSingleton<ISteamAccountLimitedProbe>(AccountLimitedStub);
             });
         }
 
