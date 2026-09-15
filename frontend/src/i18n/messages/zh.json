@@ -1165,7 +1165,8 @@
       },
       "steamTooNew": {
         "title": "你的 Steam 账户太新",
-        "description": "Steam 不允许账户在最初 15 天内交易。等待期结束后即可发起交易。"
+        "description": "Steam 不允许账户在最初 15 天内交易。等待期结束后即可发起交易。",
+        "descriptionWithDays": "Steam 不允许账户在最初 15 天内交易。剩余 {days} 天。"
       },
       "steamUnavailable": {
         "title": "暂时无法向 Steam 查询",

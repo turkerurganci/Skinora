@@ -345,7 +345,7 @@ function NavButtons({ onBack, onNext, backDisabled, nextDisabled, backHref }: Na
 // Backend `POST /transactions` error codes that the step 4 error panel
 // recognises (07 §7.2 + TransactionErrorCodes). Codes outside this set fall
 // through to the generic message.
-const POST_ERROR_CODES = new Set([
+export const POST_ERROR_CODES = new Set([
   "VALIDATION_ERROR",
   "INVALID_WALLET_ADDRESS",
   "SANCTIONS_MATCH",
@@ -367,6 +367,13 @@ const POST_ERROR_CODES = new Set([
   // the other asks them to wait and retry.
   "INVENTORY_PRIVATE",
   "STEAM_UNAVAILABLE",
+  // 08 §2.2a — the seller's own Steam trade restrictions. Their step-4 strings
+  // shipped in all four locales with #319 but never reached a screen: the codes
+  // were missing from this set, so a real 403 fell through to the generic
+  // message and the seller was told "something went wrong" about the one class
+  // of rejection they can actually act on (spend US$5 / wait out the 15 days).
+  "STEAM_ACCOUNT_LIMITED",
+  "STEAM_ACCOUNT_TOO_NEW",
   "PRICE_OUT_OF_RANGE",
   "TIMEOUT_OUT_OF_RANGE",
   "OPEN_LINK_DISABLED",

@@ -109,10 +109,19 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
         // 08 §2.2a — the seller's own trade eligibility. Symmetric to the buyer
         // gates and open for exactly the same reason: a seller Steam blocks
         // from trading can list an item, take a buyer's escrowed payment and
-        // then be unable to send anything. Evaluated LAST so the cheap
-        // database-only rules above reject first and no doomed request spends
-        // a Steam Community request (10/min, shared with delivery verification).
+        // then be unable to send anything.
+        //
+        // Evaluated UNCONDITIONALLY, like every other rule in this method: the
+        // endpoint's contract is the complete reason list, so a seller who is
+        // blocked by two things is told both at once instead of clearing one
+        // and meeting the next. (An earlier revision of this comment claimed
+        // the cheap database rules reject first and spare the Steam Community
+        // request — they never did, there is no early return above. Reordering
+        // would not save the quota either: the probe caches a CLEAN result for
+        // 24h and never caches a restricted one, so the accounts that would
+        // spend the quota are exactly the ones that keep spending it.)
         var steamEligibility = await _steamTradeEligibility.EvaluateAsync(user, cancellationToken);
+        int? steamAccountRemainingDays = null;
         switch (steamEligibility.Status)
         {
             case SteamTradeEligibilityStatus.Limited:
@@ -120,6 +129,11 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
                 break;
             case SteamTradeEligibilityStatus.TooNew:
                 reasons.Add(TransactionErrorCodes.EligibilityReasons.SteamAccountTooNew);
+                // The wait is the only gate here the seller can neither shorten
+                // nor observe, so the number travels with the reason. Null for
+                // every other status — a day count next to "limited account"
+                // would name a deadline Steam never gave.
+                steamAccountRemainingDays = steamEligibility.RemainingDays;
                 break;
             case SteamTradeEligibilityStatus.Unknown:
                 // A TRANSIENT reason, and the only one in this list. It is
@@ -136,7 +150,8 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
             ConcurrentLimit: concurrent,
             CancelCooldown: cancelCooldown,
             NewAccountLimit: newAccount,
-            Reasons: reasons.Count == 0 ? null : reasons);
+            Reasons: reasons.Count == 0 ? null : reasons,
+            SteamAccountRemainingDays: steamAccountRemainingDays);
     }
 
     private async Task<(bool IsNewAccount, int Current, int? Max)> EvaluateNewAccountLimitAsync(

@@ -5,14 +5,29 @@ namespace Skinora.Transactions.Application.Lifecycle;
 
 // ---------- GET /transactions/eligibility (07 §7.3) ----------
 
-/// <summary>Eligibility envelope returned by <c>GET /transactions/eligibility</c> (07 §7.3).</summary>
+/// <summary>
+/// Eligibility envelope returned by <c>GET /transactions/eligibility</c> (07 §7.3).
+///
+/// <para>
+/// <c>SteamAccountRemainingDays</c> is the only reason-scoped number in this
+/// envelope: it is populated exactly when <c>Reasons</c> carries
+/// <c>STEAM_ACCOUNT_TOO_NEW</c> and is null otherwise.
+///
+/// Why it exists: the 15-day wait is the only gate here that the seller can
+/// neither shorten nor watch. "Steam blocks the first 15 days" never says when
+/// that ends. The value is already computed one layer down
+/// (<see cref="SteamTradeEligibilityResult.RemainingDays"/>), and it was being
+/// discarded at this boundary.
+/// </para>
+/// </summary>
 public sealed record EligibilityDto(
     bool Eligible,
     bool MobileAuthenticatorActive,
     EligibilityConcurrentLimit ConcurrentLimit,
     EligibilityCancelCooldown CancelCooldown,
     EligibilityNewAccountLimit NewAccountLimit,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Reasons);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Reasons,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SteamAccountRemainingDays = null);
 
 public sealed record EligibilityConcurrentLimit(int Current, int Max);
 

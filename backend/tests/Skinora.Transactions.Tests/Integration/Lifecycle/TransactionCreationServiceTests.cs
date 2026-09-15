@@ -478,6 +478,51 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(TransactionErrorCodes.MobileAuthenticatorRequired, outcome.ErrorCode);
     }
 
+    // ---- 08 §2.2a — Steam trade eligibility on the create path ----------------
+    //
+    // Each of the three Steam reasons leaves the eligibility envelope with its
+    // OWN status, because the controller answers them differently: the two
+    // refusals are 403 (an account-level permission on Steam's side) while
+    // "could not ask" is a retryable 503. Falling into the shared
+    // EligibilityFailed status would answer all three with 422 and tell a
+    // seller to fix something Steam never said was wrong.
+
+    [Fact]
+    public async Task Rejects_Limited_Steam_Account_With_Its_Own_Status()
+    {
+        var sut = BuildSut(FakeSteamTradeEligibilityChecker.Limited());
+
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SteamAccountLimited, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamAccountLimited, outcome.ErrorCode);
+        Assert.Null(outcome.Body);
+    }
+
+    [Fact]
+    public async Task Rejects_Too_New_Steam_Account_With_Its_Own_Status()
+    {
+        var sut = BuildSut(FakeSteamTradeEligibilityChecker.TooNew(remainingDays: 4));
+
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SteamAccountTooNew, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamAccountTooNew, outcome.ErrorCode);
+        Assert.Null(outcome.Body);
+    }
+
+    [Fact]
+    public async Task Rejects_Unreadable_Steam_Answer_As_Retryable_Not_As_Refusal()
+    {
+        var sut = BuildSut(FakeSteamTradeEligibilityChecker.Unknown());
+
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SteamUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SteamUnavailable, outcome.ErrorCode);
+        Assert.Null(outcome.Body);
+    }
+
     // ---- T70 — payment-address inline allocation -----------------------------
 
     [Fact]
@@ -753,14 +798,15 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         public string Generate() => _token;
     }
 
-    private TransactionCreationService BuildSut()
+    private TransactionCreationService BuildSut(
+        FakeSteamTradeEligibilityChecker? steamEligibility = null)
     {
         var limits = new TransactionLimitsProvider(Context);
         var eligibility = new TransactionEligibilityService(
             Context,
             limits,
             new AlwaysClearFlagChecker(),
-            new FakeSteamTradeEligibilityChecker(),
+            steamEligibility ?? new FakeSteamTradeEligibilityChecker(),
             _clock);
         var fraud = new FraudPreCheckService(Context, _marketPrice);
         return new TransactionCreationService(
