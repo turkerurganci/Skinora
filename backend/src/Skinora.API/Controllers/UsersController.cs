@@ -229,6 +229,24 @@ public sealed class UsersController : ControllerBase
         if (!TryGetUserId(out var userId)) return Unauthorized();
 
         var result = await _emailVerification.SendAsync(userId, cancellationToken);
+        if (result.Status == EmailVerificationSendStatus.Cooldown)
+        {
+            // 07 §2.9: every 429 on this API carries Retry-After, and the
+            // rate-limit middleware already honours that. This cooldown 429
+            // used to put the wait only in the human-readable message, so the
+            // one value a retrying client needs was unreadable to machines.
+            // Seconds are already rounded up by the service, so the header
+            // never says 0 while the cooldown is still running.
+            Response.Headers["Retry-After"] =
+                result.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return StatusCode(
+                StatusCodes.Status429TooManyRequests,
+                ApiResponse<object>.Fail(
+                    SettingsErrorCodes.VerificationCooldown,
+                    $"Wait {result.RetryAfterSeconds}s before requesting another code.",
+                    traceId: HttpContext.TraceIdentifier));
+        }
+
         return result.Status switch
         {
             EmailVerificationSendStatus.Sent => Ok(new EmailVerificationSentResponse(
@@ -238,12 +256,6 @@ public sealed class UsersController : ControllerBase
                 SettingsErrorCodes.NoEmailSet,
                 "No email address is configured on the account.",
                 traceId: HttpContext.TraceIdentifier)),
-            EmailVerificationSendStatus.Cooldown => StatusCode(
-                StatusCodes.Status429TooManyRequests,
-                ApiResponse<object>.Fail(
-                    SettingsErrorCodes.VerificationCooldown,
-                    $"Wait {result.RetryAfterSeconds}s before requesting another code.",
-                    traceId: HttpContext.TraceIdentifier)),
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }

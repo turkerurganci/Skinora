@@ -241,6 +241,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(fixture.PaymentAddress.Address, call.From);
         Assert.Equal(fixture.BlockchainTransaction.FromAddress, call.To);
         Assert.Equal(50m, call.Amount);
+        // A buyer payment refunds the token it arrived in, which is the
+        // expected one — the wrong-token family is the only place they differ.
+        Assert.Equal(StablecoinType.USDT, call.Token);
     }
 
     [Fact]
@@ -452,6 +455,60 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Single(_alerts.Raised);
     }
 
+    [Fact]
+    public async Task WrongTokenIncoming_EstimatesGasFee_WithTheTokenThatWillBeBroadcast()
+    {
+        // WrongTokenRefundFeeEstimatesExpectedToken: the dispatcher broadcasts
+        // this refund in the token that LANDED (USDC, resolved from
+        // ActualTokenAddress), so the estimate must price a USDC transfer. It
+        // used to price a USDT transfer out of an address holding no USDT —
+        // measured call and broadcast call were two different transfers.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 0m);
+        var wrongTokenRow = await SeedWrongTokenIncomingAsync(
+            fixture,
+            amount: 50m,
+            actualContract: KnownStablecoinContractsForTest.Usdc);
+
+        await _sut.ValidateWrongTokenIncomingAsync(wrongTokenRow, "corr-w3", default);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(StablecoinType.USDC, call.Token);
+        Assert.Equal(fixture.PaymentAddress.Address, call.From);
+        Assert.Equal(wrongTokenRow.FromAddress, call.To);
+        Assert.Equal(50m, call.Amount);
+    }
+
+    [Theory]
+    [InlineData(StablecoinType.USDT)]
+    [InlineData(StablecoinType.USDC)]
+    public async Task WrongTokenIncoming_UnresolvableContract_EstimatesWithTheExpectedToken(
+        StablecoinType expectedToken)
+    {
+        // Reachable only when the backend and sidecar allowlists diverge. The
+        // dispatcher then fails the refund terminally without broadcasting, so
+        // there is no real transfer to price; the expected token keeps the
+        // pre-round charge rather than inventing a symbol for an unknown
+        // contract.
+        //
+        // Both stablecoins run because one alone cannot tell "the expected
+        // token" from a hard-coded constant: with only a USDT expectation a
+        // `?? StablecoinType.USDT` fallback — the very default this method
+        // gives the event's ActualStablecoin — passed green.
+        var fixture = await SeedAsync(
+            expectedAmount: 100m,
+            receivedAmount: 0m,
+            expectedToken: expectedToken);
+        var wrongTokenRow = await SeedWrongTokenIncomingAsync(
+            fixture,
+            amount: 50m,
+            actualContract: "TUnknownContract00000000000000000000");
+
+        await _sut.ValidateWrongTokenIncomingAsync(wrongTokenRow, "corr-w4", default);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(expectedToken, call.Token);
+    }
+
     // ─── State machine refused ──────────────────────────────────────────
 
     [Fact]
@@ -488,7 +545,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         decimal expectedAmount,
         decimal receivedAmount,
         TransactionStatus initialStatus = TransactionStatus.SELLER_CONFIRMED,
-        bool isOnHold = false)
+        bool isOnHold = false,
+        StablecoinType expectedToken = StablecoinType.USDT)
     {
         var seller = new User
         {
@@ -527,7 +585,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             ItemAssetId = "asset-1",
             ItemClassId = "cls",
             ItemName = "AK-47 | Redline",
-            StablecoinType = StablecoinType.USDT,
+            StablecoinType = expectedToken,
             Price = expectedAmount - 2m,
             CommissionRate = 0.02m,
             CommissionAmount = 2m,
@@ -556,7 +614,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
             HdWalletIndex = 1,
             ExpectedAmount = expectedAmount,
-            ExpectedToken = StablecoinType.USDT,
+            ExpectedToken = expectedToken,
             MonitoringStatus = MonitoringStatus.ACTIVE,
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -571,7 +629,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             FromAddress = "TBuyerSource0000000000000000000000000",
             ToAddress = paymentAddress.Address,
             Amount = receivedAmount,
-            Token = StablecoinType.USDT,
+            Token = expectedToken,
             Status = BlockchainTransactionStatus.CONFIRMED,
             BlockNumber = 1_500_000L,
             ConfirmationCount = 20,
@@ -602,7 +660,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             FromAddress = "TBuyerSource0000000000000000000000000",
             ToAddress = fixture.PaymentAddress.Address,
             Amount = amount,
-            Token = StablecoinType.USDT, // expected per 06 §3.8 token semantiği
+            Token = fixture.PaymentAddress.ExpectedToken, // expected per 06 §3.8 token semantiği
             ActualTokenAddress = actualContract,
             Status = BlockchainTransactionStatus.DETECTED,
             BlockNumber = null,
