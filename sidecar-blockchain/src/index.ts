@@ -55,11 +55,14 @@ const tronTransferClient = new TronTransferClient(
   config.tronApiKey,
 );
 const tronDelegationClient = new TronDelegationClient(config.tronFullNodeUrl, config.tronApiKey);
+// One resource client for both consumers: the delegation flow and the fee
+// estimate must read the chain the same way (planDelegation is shared too).
+const tronResourceClient = new TronResourceClient(config.tronFullNodeUrl, config.tronApiKey);
 const energyDelegation = new EnergyDelegationService({
   client: tronDelegationClient,
+  resources: tronResourceClient,
   sweeperAddress: config.hotWalletAddress,
   sweeperPrivateKey: config.hotWalletPrivateKey,
-  delegationAmountSun: config.sweepEnergyDelegationSun,
   fallbackAmountSun: config.sweepTrxFallbackSun,
 });
 const tokenContracts = { USDT: config.usdtContract, USDC: config.usdcContract };
@@ -80,14 +83,11 @@ const refundService = new RefundService({
   energyDelegation,
 });
 const feeEstimationService = new FeeEstimationService({
-  resourceClient: new TronResourceClient(config.tronFullNodeUrl, config.tronApiKey),
+  resourceClient: tronResourceClient,
   priceService: new TrxPriceService(),
   tokenContracts,
   hotWalletAddress: config.hotWalletAddress,
   tokenDecimals: config.tokenDecimals,
-  // Same constant the sweeper actually delegates — the estimate must credit
-  // the refund path with what this stake produces, not the hot wallet's pool.
-  delegationAmountSun: config.sweepEnergyDelegationSun,
 });
 
 // Middleware

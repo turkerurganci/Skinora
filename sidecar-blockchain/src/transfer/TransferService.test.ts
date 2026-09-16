@@ -56,7 +56,7 @@ function buildStubDelegation(
   return {
     withDelegation: vi.fn(
       async (
-        _depositAddress: string,
+        _transfer: { depositAddress: string },
         action: () => Promise<unknown>,
         _context: { blockchainTransactionId: string; correlationId: string },
       ) => {
@@ -263,8 +263,15 @@ describe('TransferService.sweep()', () => {
     });
 
     expect(wallet.deriveSigner).toHaveBeenCalledWith(7);
+    // The spec the delegation flow simulates must be the transfer that is
+    // broadcast — same sender, contract, recipient and raw amount.
     expect(delegation.withDelegation).toHaveBeenCalledWith(
-      'TDepositAddress7',
+      {
+        depositAddress: 'TDepositAddress7',
+        contractAddress: TOKEN_USDC,
+        toAddress: 'THotWallet',
+        amountUnits: '100000000',
+      },
       expect.any(Function),
       expect.objectContaining({
         blockchainTransactionId: 'bx-sweep-1',
@@ -450,7 +457,12 @@ describe('RefundService.refund()', () => {
 
     expect(wallet.deriveSigner).toHaveBeenCalledWith(11);
     expect(delegation.withDelegation).toHaveBeenCalledWith(
-      'TDeposit11',
+      {
+        depositAddress: 'TDeposit11',
+        contractAddress: TOKEN_USDT,
+        toAddress: 'TBuyerSource',
+        amountUnits: '95500000',
+      },
       expect.any(Function),
       expect.objectContaining({
         blockchainTransactionId: 'bx-refund-1',

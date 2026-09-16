@@ -6,14 +6,17 @@ import type {
   ContractEnergyPolicy,
 } from '../tron/TronResourceClient.js';
 import type { TrxPriceService } from './TrxPriceService.js';
+import { DELEGATION_MARGIN, MIN_DELEGATION_SUN } from '../wallet/DelegationPlanner.js';
 
 const HOT_WALLET = 'THotWalletFixtureAddress';
 const DEPOSIT = 'TDepositFixtureAddress';
 const BUYER = 'TBuyerFixtureAddress';
 const USDT_CONTRACT = 'TUsdtContractFixture';
 
-/** 200 TRX, the sweeper's per-transfer delegation (config.sweepEnergyDelegationSun). */
-const DELEGATION_SUN = 200_000_000;
+/** Required delegation for a transfer at a ratio — mirrors DelegationPlanner. */
+function requiredDelegationSun(energy: number, ratio: number): number {
+  return Math.max(MIN_DELEGATION_SUN, Math.ceil((energy / ratio) * DELEGATION_MARGIN) * 1_000_000);
+}
 
 interface ResourceFixture {
   energyRequired?: number;
@@ -23,6 +26,10 @@ interface ResourceFixture {
   bandwidthFeeSun?: number;
   policy?: ContractEnergyPolicy;
   policyThrows?: boolean;
+  /** SUN the hot wallet can delegate (default 0 — nothing staked). */
+  delegatableSun?: number;
+  /** Whether the deposit account exists on-chain (default true). */
+  senderExists?: boolean;
 }
 
 function account(partial: Partial<AccountResources> = {}): AccountResources {
@@ -43,6 +50,8 @@ function buildService(fixture: ResourceFixture = {}, priceUsdt = 0.5) {
         ? account({ bandwidthAvailable: 600, ...fixture.hotWallet })
         : account({ ...fixture.sender }),
     ),
+    getAccountState: vi.fn(async () => ({ exists: fixture.senderExists ?? true, balanceSun: 0 })),
+    getDelegatableEnergySun: vi.fn(async () => fixture.delegatableSun ?? 0),
     getChainFeeParameters: vi.fn(async () => ({
       energyFeeSun: fixture.energyFeeSun ?? 420,
       bandwidthFeeSun: fixture.bandwidthFeeSun ?? 1000,
@@ -63,7 +72,6 @@ function buildService(fixture: ResourceFixture = {}, priceUsdt = 0.5) {
     tokenContracts: { USDT: USDT_CONTRACT, USDC: '' },
     hotWalletAddress: HOT_WALLET,
     tokenDecimals: 6,
-    delegationAmountSun: DELEGATION_SUN,
   });
   return { service, resourceClient, priceService };
 }
@@ -81,7 +89,7 @@ describe('FeeEstimationService — payout path (hot wallet sends directly)', () 
     expect(result.energyShortfall).toBe(0);
     expect(result.burnSun).toBe(0);
     // No delegation on this path — the whole pool legitimately applies.
-    expect(result.delegationCapEnergy).toBeNull();
+    expect(result.delegationPlan).toBeNull();
   });
 
   it('prices the energy shortfall at the chain energy fee', async () => {
@@ -100,15 +108,43 @@ describe('FeeEstimationService — payout path (hot wallet sends directly)', () 
 });
 
 describe('FeeEstimationService — refund path (deposit sends, energy is delegated)', () => {
-  it('credits only what the delegation delivers, not the hot wallet pool', async () => {
-    // The defect this pins: a staked hot wallet made the estimate say 0.00
-    // while the deposit only ever receives 200 TRX worth of energy and the
-    // transfer burned nearly all of it — the platform silently ate the gap.
-    // 200 TRX × 9.57 = 1,914 Energy delivered, against 64,285 needed.
+  it.each([
+    { name: 'mainnet ratio', ratio: 9.52, energy: 64_285 },
+    { name: 'nile ratio', ratio: 73.7, energy: 130_285 },
+  ])(
+    'charges no Energy when the stake can delegate the WHOLE shortfall ($name)',
+    async ({ ratio, energy }) => {
+      const { service } = buildService({
+        energyRequired: energy,
+        hotWallet: { energyAvailable: 0, bandwidthAvailable: 600, energyPerTrx: ratio },
+        sender: { bandwidthAvailable: 600 },
+        delegatableSun: requiredDelegationSun(energy, ratio),
+      });
+
+      const result = await service.estimate({
+        fromAddress: DEPOSIT,
+        toAddress: BUYER,
+        amount: '10.20',
+        token: 'USDT',
+      });
+
+      expect(result.delegationPlan).toBe('delegate');
+      expect(result.delegationSun).toBe(requiredDelegationSun(energy, ratio));
+      expect(result.energyShortfall).toBe(0);
+      expect(result.feeUsdt).toBe('0.00');
+    },
+  );
+
+  it('charges the WHOLE shortfall when the stake is one SUN short — no partial credit', async () => {
+    // The broadcast will not delegate a partial amount (a deposit without TRX
+    // would fail on the rest), so the refund must not be charged as if part
+    // were covered. A large hot wallet POOL is irrelevant here: only what can
+    // be delegated in full counts.
     const { service } = buildService({
       energyRequired: 64_285,
-      hotWallet: { energyAvailable: 5_000_000, bandwidthAvailable: 600 },
+      hotWallet: { energyAvailable: 5_000_000, bandwidthAvailable: 600, energyPerTrx: 9.52 },
       sender: { bandwidthAvailable: 600 },
+      delegatableSun: requiredDelegationSun(64_285, 9.52) - 1,
     });
 
     const result = await service.estimate({
@@ -118,18 +154,18 @@ describe('FeeEstimationService — refund path (deposit sends, energy is delegat
       token: 'USDT',
     });
 
-    expect(result.delegationCapEnergy).toBe(1_914);
-    expect(result.energyAvailable).toBe(1_914);
-    expect(result.energyShortfall).toBe(64_285 - 1_914);
-    expect(Number(result.feeUsdt)).toBeGreaterThan(0);
+    expect(result.delegationPlan).toBe('burn');
+    expect(result.delegationSun).toBeNull();
+    expect(result.energyShortfall).toBe(64_285);
+    expect(result.burnSun).toBe(64_285 * 420);
   });
 
-  it('still caps at the hot wallet pool when the pool is smaller than the delegation', async () => {
-    // Today's Nile reality: nothing is staked, so nothing can be delegated.
+  it('charges the whole shortfall when nothing is staked', async () => {
     const { service } = buildService({
       energyRequired: 64_285,
       hotWallet: { energyAvailable: 0, bandwidthAvailable: 600 },
       sender: { bandwidthAvailable: 600 },
+      delegatableSun: 0,
     });
 
     const result = await service.estimate({
@@ -141,6 +177,28 @@ describe('FeeEstimationService — refund path (deposit sends, energy is delegat
 
     expect(result.energyAvailable).toBe(0);
     expect(result.energyShortfall).toBe(64_285);
+  });
+
+  it('charges no Bandwidth for a never-activated deposit — activation grants the free allowance', async () => {
+    // Measured on Nile 2026-09-16: before activation the account reports 0
+    // Bandwidth; right after it, 600 free, and the transfer used 345 of them.
+    const { service } = buildService({
+      energyRequired: 29_650,
+      hotWallet: { energyAvailable: 0, bandwidthAvailable: 600 },
+      sender: { bandwidthAvailable: 0 },
+      senderExists: false,
+      policy: { callerPercent: 0, originEnergyLimit: 1_000_000_000 },
+    });
+
+    const result = await service.estimate({
+      fromAddress: DEPOSIT,
+      toAddress: BUYER,
+      amount: '8.20',
+      token: 'USDT',
+    });
+
+    expect(result.bandwidthAvailable).toBe(600);
+    expect(result.burnSun).toBe(0);
   });
 
   it('burns the whole transaction when the sender is short of bandwidth', async () => {

@@ -3,6 +3,12 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { TronResourceClient } from '../tron/TronResourceClient.js';
 import { TransferService, TokenContractMap, TokenSymbol } from '../transfer/TransferService.js';
 import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
+import {
+  ACTIVATED_ACCOUNT_FREE_BANDWIDTH,
+  ESTIMATED_TRANSFER_TX_BYTES,
+  planDelegation,
+  type DelegationPlan,
+} from '../wallet/DelegationPlanner.js';
 
 /**
  * Pre-send fee estimate for an outbound TRC-20 transfer
@@ -30,8 +36,9 @@ import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
  * computed here, snapshotted onto <c>BlockchainTransaction.GasFee</c>.
  */
 
-/** Typical size of a signed TRC-20 `triggersmartcontract` transaction. */
-export const ESTIMATED_TRANSFER_TX_BYTES = 350;
+// Lives with the planner so the delegation flow can use it without importing this
+// module (which imports TransferService, which imports the delegation flow).
+export { ESTIMATED_TRANSFER_TX_BYTES } from '../wallet/DelegationPlanner.js';
 
 export interface FeeEstimateRequest {
   /** Sender. Omitted → hot wallet (payout path). Refunds pass the deposit address. */
@@ -54,8 +61,14 @@ export interface FeeEstimateResult {
   contractCallerPercent: number;
   /** Energy the platform can actually bring to this transfer. */
   energyAvailable: number;
-  /** Delegation ceiling applied on the refund path, null when not applicable. */
-  delegationCapEnergy: number | null;
+  /**
+   * Refund path only (null on payouts): the plan the broadcast will follow,
+   * from the same <c>planDelegation</c> the delegation flow uses — so a refund
+   * is charged for exactly the path it will take.
+   */
+  delegationPlan: DelegationPlan['kind'] | null;
+  /** SUN the sweeper will delegate when <c>delegationPlan</c> is 'delegate'; null otherwise. */
+  delegationSun: number | null;
   energyShortfall: number;
   bandwidthRequired: number;
   bandwidthAvailable: number;
@@ -70,13 +83,6 @@ export interface FeeEstimationServiceDeps {
   tokenContracts: TokenContractMap;
   hotWalletAddress: string;
   tokenDecimals?: number;
-  /**
-   * TRX (in SUN) the sweeper delegates to a deposit address for one outbound
-   * transfer — `config.sweepEnergyDelegationSun`. The refund path can only
-   * bring THIS much stake to the transfer, not the hot wallet's whole pool,
-   * so it is the ceiling on the energy credit there.
-   */
-  delegationAmountSun?: number;
 }
 
 export class FeeEstimationService {
@@ -85,7 +91,6 @@ export class FeeEstimationService {
   private readonly tokens: TokenContractMap;
   private readonly hotWalletAddress: string;
   private readonly decimalsPower: bigint;
-  private readonly delegationAmountSun: number;
 
   constructor(deps: FeeEstimationServiceDeps) {
     this.resources = deps.resourceClient;
@@ -93,7 +98,6 @@ export class FeeEstimationService {
     this.tokens = deps.tokenContracts;
     this.hotWalletAddress = deps.hotWalletAddress;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
-    this.delegationAmountSun = deps.delegationAmountSun ?? 0;
   }
 
   async estimate(request: FeeEstimateRequest): Promise<FeeEstimateResult> {
@@ -119,22 +123,32 @@ export class FeeEstimationService {
     const isDelegatedPath =
       Boolean(request.fromAddress) && request.fromAddress !== this.hotWalletAddress;
 
-    const [energyRequired, hotWalletResources, senderResources, feeParams, priceQuote, policy] =
-      await Promise.all([
-        this.resources.estimateTransferEnergy(
-          contractAddress,
-          sender,
-          request.toAddress,
-          amountUnits,
-        ),
-        this.resources.getAccountResources(this.hotWalletAddress || sender),
-        // Bandwidth belongs to the sender itself; skip the duplicate fetch
-        // when the sender IS the hot wallet.
-        isDelegatedPath ? this.resources.getAccountResources(request.fromAddress!) : null,
-        this.resources.getChainFeeParameters(),
-        this.price.getPrice(request.correlationId),
-        this.readContractPolicy(contractAddress, request.correlationId),
-      ]);
+    const [
+      energyRequired,
+      hotWalletResources,
+      senderResources,
+      senderState,
+      delegatableSun,
+      feeParams,
+      priceQuote,
+      policy,
+    ] = await Promise.all([
+      this.resources.estimateTransferEnergy(
+        contractAddress,
+        sender,
+        request.toAddress,
+        amountUnits,
+      ),
+      this.resources.getAccountResources(this.hotWalletAddress || sender),
+      // Bandwidth belongs to the sender itself; skip the duplicate fetch
+      // when the sender IS the hot wallet.
+      isDelegatedPath ? this.resources.getAccountResources(request.fromAddress!) : null,
+      isDelegatedPath ? this.resources.getAccountState(request.fromAddress!) : null,
+      isDelegatedPath ? this.resources.getDelegatableEnergySun(this.hotWalletAddress) : null,
+      this.resources.getChainFeeParameters(),
+      this.price.getPrice(request.correlationId),
+      this.readContractPolicy(contractAddress, request.correlationId),
+    ]);
 
     // (1) WHO PAYS. A contract can absorb its callers' execution cost
     //     (`consume_user_resource_percent = 0`). The Nile test USDT is
@@ -145,27 +159,45 @@ export class FeeEstimationService {
     const energyPayableByCaller = Math.ceil((energyRequired * policy.callerPercent) / 100);
 
     // (2) WHAT WE CAN BRING. On the payout path the hot wallet sends
-    //     directly, so its whole pool applies. On the refund path the sender
-    //     is a deposit address that owns nothing; it receives a FIXED
-    //     delegation (`sweepEnergyDelegationSun`), so the credit is capped by
-    //     what that stake actually produces — not by the pool it came from.
-    //     Without this cap a staked mainnet hot wallet makes the estimate say
-    //     0.00 while the transfer burns nearly everything, and the platform
-    //     silently eats the difference.
-    const energyPerTrx = hotWalletResources.energyPerTrx;
-    const delegationCapEnergy =
-      isDelegatedPath && energyPerTrx !== null
-        ? Math.floor((this.delegationAmountSun / 1_000_000) * energyPerTrx)
-        : null;
-    const energyAvailable =
-      delegationCapEnergy === null
-        ? hotWalletResources.energyAvailable
-        : Math.min(hotWalletResources.energyAvailable, delegationCapEnergy);
+    //     directly, so its whole pool applies and whatever it lacks burns. On
+    //     the refund path the sender is a deposit address; the broadcast
+    //     follows `planDelegation` — the stake covers the WHOLE shortfall or
+    //     none of it (partial delegation leaves a deposit with no TRX short of
+    //     Energy, and the transfer fails). The estimate asks the same function
+    //     so the refund is charged for the path it will actually take.
+    let energyAvailable: number;
+    let energyShortfall: number;
+    let delegationPlan: DelegationPlan['kind'] | null = null;
+    let delegationSun: number | null = null;
+    if (isDelegatedPath) {
+      const plan = planDelegation({
+        energyRequired,
+        callerPercent: policy.callerPercent,
+        senderEnergyAvailable: senderResources!.energyAvailable,
+        energyPerTrx: hotWalletResources.energyPerTrx,
+        delegatableSun: delegatableSun ?? 0,
+      });
+      delegationPlan = plan.kind;
+      delegationSun = plan.kind === 'delegate' ? plan.delegationSun : null;
+      energyShortfall = plan.kind === 'burn' ? plan.energyShortfall : 0;
+      energyAvailable =
+        plan.kind === 'delegate'
+          ? plan.callerEnergy
+          : Math.min(plan.callerEnergy, senderResources!.energyAvailable);
+    } else {
+      energyAvailable = hotWalletResources.energyAvailable;
+      energyShortfall = Math.max(0, energyPayableByCaller - energyAvailable);
+    }
 
-    const energyShortfall = Math.max(0, energyPayableByCaller - energyAvailable);
-    const bandwidthSource = senderResources ?? hotWalletResources;
     const bandwidthRequired = ESTIMATED_TRANSFER_TX_BYTES;
-    const bandwidthAvailable = bandwidthSource.bandwidthAvailable;
+    // A deposit that has never received TRX is not an account yet and reports
+    // no Bandwidth; the flow activates it before the transfer, after which it
+    // has the free daily allowance (measured on Nile 2026-09-16).
+    const bandwidthAvailable = !isDelegatedPath
+      ? hotWalletResources.bandwidthAvailable
+      : senderState!.exists
+        ? senderResources!.bandwidthAvailable
+        : ACTIVATED_ACCOUNT_FREE_BANDWIDTH;
     // Bandwidth is all-or-nothing on TRON: an account short of the full byte
     // count burns TRX for the WHOLE transaction, not just the missing bytes.
     const bandwidthBurnBytes = bandwidthAvailable >= bandwidthRequired ? 0 : bandwidthRequired;
@@ -185,7 +217,8 @@ export class FeeEstimationService {
       energyPayableByCaller,
       contractCallerPercent: policy.callerPercent,
       energyAvailable,
-      delegationCapEnergy,
+      delegationPlan,
+      delegationSun,
       energyShortfall,
       bandwidthRequired,
       bandwidthAvailable,

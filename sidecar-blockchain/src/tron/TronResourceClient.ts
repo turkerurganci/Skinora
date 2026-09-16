@@ -50,6 +50,19 @@ export interface ContractEnergyPolicy {
   originEnergyLimit: number;
 }
 
+export interface AccountState {
+  /**
+   * Whether the account exists on-chain. An address that has only RECEIVED a
+   * TRC-20 token is NOT an account: measured on Nile 2026-09-16, both
+   * `delegateresource` to it ("Account[…] not exists") and a transfer FROM it
+   * ("account […] does not exist") are rejected at validation. Only a TRX (or
+   * TRC-10) transfer creates it.
+   */
+  exists: boolean;
+  /** TRX balance in SUN; 0 when the account does not exist. */
+  balanceSun: number;
+}
+
 export interface ChainFeeParameters {
   /** Sun burned per 1 Energy when the account has none (getEnergyFee). */
   energyFeeSun: number;
@@ -182,6 +195,44 @@ export class TronResourceClient {
         ? body.TotalEnergyLimit / body.TotalEnergyWeight
         : null;
     return { energyAvailable, bandwidthAvailable, energyPerTrx };
+  }
+
+  /**
+   * Existence + TRX balance of <paramref name="address"/> (`getaccount`).
+   *
+   * An empty body is the node's answer for a non-existent account, and here —
+   * unlike `getcontract` — that is a real answer, not a failed probe: the
+   * caller acts on it by creating the account, which is harmless if the probe
+   * was wrong (a TRX transfer to an existing account just adds balance).
+   */
+  async getAccountState(address: string, fetchFn: typeof fetch = fetch): Promise<AccountState> {
+    const body = await this.post<{ address?: string; balance?: number }>(
+      '/wallet/getaccount',
+      { address, visible: true },
+      fetchFn,
+    );
+    const exists = typeof body.address === 'string' && body.address.length > 0;
+    return { exists, balanceSun: exists ? Math.max(0, body.balance ?? 0) : 0 };
+  }
+
+  /**
+   * How much staked TRX (in SUN) <paramref name="ownerAddress"/> can delegate
+   * as ENERGY right now (`getcandelegatedmaxsize`, type 1).
+   *
+   * The node answers `{}` when nothing is delegatable (measured on Nile
+   * 2026-09-16 with no stake). Reading that as 0 is safe in the only direction
+   * that matters: 0 sends the caller down the burn path, which always works.
+   */
+  async getDelegatableEnergySun(
+    ownerAddress: string,
+    fetchFn: typeof fetch = fetch,
+  ): Promise<number> {
+    const body = await this.post<{ max_size?: number }>(
+      '/wallet/getcandelegatedmaxsize',
+      { owner_address: ownerAddress, type: 1, visible: true },
+      fetchFn,
+    );
+    return typeof body.max_size === 'number' && body.max_size > 0 ? body.max_size : 0;
   }
 
   /**

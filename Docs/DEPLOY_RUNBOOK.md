@@ -134,6 +134,38 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
 > docker logs skinora-backend 2>&1 | grep "PRICE_DEVIATION rule"
 > ```
 
+### C.2 Hot cüzdan enerji kilidi (hibrit enerji kararı — SystemSetting değil)
+
+> **Proje sahibi kararı (2026-09-16): HİBRİT.** Hot cüzdan beklenen günlük **taban** satış hacmi kadar TRX'i ENERGY için kilitler; kilidin karşılayamadığı her transfer otomatik yakar. Kilit yapılmazsa hiçbir şey kırılmaz — her sweep ve payout yakma yoluna düşer ve satış başına ~14,6–21,2 TRX harcanır (08 §3.3). Deposit'ten yapılan transferlerde devredilecek miktar **ayar değildir**; sidecar her transfer için güncel orandan hesaplar.
+
+**Kilit miktarını hesapla:**
+
+1. Beklenen günlük taban satış sayısını belirle (`N`). Zirveleri değil, her gün kesin kullanılacak hacmi al — kullanılmayan enerji birikmez, boşa gider.
+2. Güncel oranı zincirden oku (hot cüzdan adresiyle):
+   ```bash
+   curl -s -X POST https://api.trongrid.io/wallet/getaccountresource \
+     -H 'Content-Type: application/json' \
+     -d '{"address":"<HOT_WALLET_ADDRESS>","visible":true}'
+   # oran = TotalEnergyLimit / TotalEnergyWeight   (2026-09-16: ≈ 9,52)
+   ```
+3. Kilit ≈ `N × 194.570 ÷ oran` TRX. 194.570 = sweep (64.285) + alıcısı token'ı ilk kez alan bir payout (130.285); satıcıların çoğu USDT tutuyorsa alt sınır `N × 128.570 ÷ oran`. Örnek, `N = 5`, oran 9,52: `5 × 194.570 ÷ 9,52 ≈ 102.200 TRX`.
+
+**Kilitle ve doğrula:**
+
+4. Hot cüzdanda ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). İşlem hash'ini kaydet. Kilit **14 gün** beklemeden çözülemez.
+5. Doğrula — devredilebilir miktar kilide yakın dönmeli:
+   ```bash
+   curl -s -X POST https://api.trongrid.io/wallet/getcandelegatedmaxsize \
+     -H 'Content-Type: application/json' \
+     -d '{"owner_address":"<HOT_WALLET_ADDRESS>","type":1,"visible":true}'
+   # {"max_size": <SUN>}   — boş gövde {} = devredilebilir hiçbir şey yok
+   ```
+6. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed` geldiğini gör. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir.
+
+**Bant genişliği:** hot cüzdanın günlük ücretsiz bandı 600 bayttır. Hibritte her satış hot cüzdandan ~3 işlem (devretme, geri alma, payout ≈ 900 bayt) çıkarır; kota bitince işlem başına ~0,28–0,35 TRX bant yakılır (Nile'da ölçüldü). Bu, enerjiye göre küçük bir kalemdir; ayrıca BANDWIDTH için kilitlemek bu turda ölçülmedi.
+
+**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir.
+
 ---
 
 ## D. Sidecar config parity (cadence / sweep) — env otoriter, restart-bound
@@ -147,8 +179,7 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 | monitoring_post_cancel_24h_polling_seconds | `POST_CANCEL_CADENCE_24H_MS` | 30 sn | İptal sonrası 0-24 saat polling |
 | monitoring_post_cancel_7d_polling_seconds | `POST_CANCEL_CADENCE_7D_MS` | 300 sn | 1-7 gün polling |
 | monitoring_post_cancel_30d_polling_seconds | `POST_CANCEL_CADENCE_30D_MS` | 3600 sn | 7-30 gün polling |
-| blockchain.sweep_energy_delegation_sun | `SWEEP_ENERGY_DELEGATION_SUN` | 200000000 | Sweep öncesi Energy delegation (SUN) |
-| blockchain.sweep_trx_fallback_sun | `SWEEP_TRX_FALLBACK_SUN` | 15000000 | Energy delegation fallback TRX (SUN) |
+| blockchain.sweep_trx_fallback_sun | `SWEEP_TRX_FALLBACK_SUN` | 15000000 | Kaynak planı hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX (SUN). Devretme miktarı artık ayar değil, transfer başına hesaplanır (08 §3.3) |
 
 **Parite kuralı:** Bir cadence/sweep değerini değiştirirken **hem** backend SystemSetting'i (admin görünürlüğü/audit için) **hem** sidecar env'ini güncelle, sonra sidecar'ı restart et. Yalnız backend SystemSetting'i değiştirmek runtime davranışı değiştirmez.
 

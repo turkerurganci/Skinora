@@ -658,7 +658,6 @@
       "blockchain_refund_gas_fee_estimate_usdt": "退款 gas fee 估算 (T72 MVP, T74 后 runtime)",
       "blockchain_payout_gas_fee_estimate_usdt": "卖家 payout gas fee 估算 (WP1 MVP, T74 后 runtime)",
       "blockchain_transfer_retry_intervals_minutes": "出站 transfer 重试间隔 (CSV, 分钟 — T73)",
-      "blockchain_sweep_energy_delegation_sun": "Sweep/refund Energy delegation 金额 (T74)",
       "blockchain_sweep_trx_fallback_sun": "Energy delegation 回退 TRX 金额 (T74)",
       "reconciliation_schedule_cron": "Reconciliation job cron 表达式 (T76)",
       "reconciliation_hot_wallet_address": "Reconciliation hot wallet 地址 (T76)",

@@ -163,3 +163,74 @@ describe('TronResourceClient.getAccountResources', () => {
     });
   });
 });
+
+describe('TronResourceClient.getAccountState — a TRC-20-only address is not an account', () => {
+  it('reads the measured non-existent shape (HTTP 200, empty body) as not existing', async () => {
+    // Measured on Nile 2026-09-16 for a derived deposit that had never
+    // received TRX: `{}`. Delegation to it and a transfer from it were both
+    // rejected at validation.
+    const fetchFn = fetchReturning({});
+
+    await expect(client().getAccountState(SENDER, fetchFn)).resolves.toEqual({
+      exists: false,
+      balanceSun: 0,
+    });
+  });
+
+  it('reads an existing account with its balance', async () => {
+    // Shape measured on Nile 2026-09-16 right after activation with 1 SUN.
+    const fetchFn = fetchReturning({ address: SENDER, balance: 1, create_time: 1789579602000 });
+
+    await expect(client().getAccountState(SENDER, fetchFn)).resolves.toEqual({
+      exists: true,
+      balanceSun: 1,
+    });
+  });
+
+  it('reads an existing account without a balance field as 0 SUN', async () => {
+    const fetchFn = fetchReturning({ address: SENDER });
+
+    await expect(client().getAccountState(SENDER, fetchFn)).resolves.toEqual({
+      exists: true,
+      balanceSun: 0,
+    });
+  });
+
+  it('queries getaccount for the given address', async () => {
+    const fetchFn = fetchReturning({});
+
+    await client().getAccountState(SENDER, fetchFn);
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://nile.example/wallet/getaccount');
+    expect(JSON.parse(init.body as string)).toEqual({ address: SENDER, visible: true });
+  });
+});
+
+describe('TronResourceClient.getDelegatableEnergySun', () => {
+  it('returns max_size as measured with 100 TRX staked', async () => {
+    const fetchFn = fetchReturning({ max_size: 100_000_000 });
+
+    await expect(client().getDelegatableEnergySun(SENDER, fetchFn)).resolves.toBe(100_000_000);
+  });
+
+  it('reads the measured no-stake shape (empty body) as 0 — the burn path', async () => {
+    const fetchFn = fetchReturning({});
+
+    await expect(client().getDelegatableEnergySun(SENDER, fetchFn)).resolves.toBe(0);
+  });
+
+  it('asks for ENERGY (type 1) delegation capacity of the owner', async () => {
+    const fetchFn = fetchReturning({ max_size: 5 });
+
+    await client().getDelegatableEnergySun(SENDER, fetchFn);
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://nile.example/wallet/getcandelegatedmaxsize');
+    expect(JSON.parse(init.body as string)).toEqual({
+      owner_address: SENDER,
+      type: 1,
+      visible: true,
+    });
+  });
+});
