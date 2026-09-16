@@ -5,9 +5,21 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-15 — satıcı kapısı testle pinlendi + kalan gün sayısı ekrana ulaştı, backlog 16 aktif / 126 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-16 — satıcı kapısı turu ✓ PASS doğrulandı, backlog 16 aktif / 126 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
+> **Doğrulama ✓ PASS (2026-09-16, ayrı chat) — bulgu 0, düzeltme gerekmedi.** PR [#320](https://github.com/turkerurganci/Skinora/pull/320), commit `adaa4a6`.
+>
+> **Turun merkezî iddiası karşı-olguyla ölçüldü, çünkü tek başına "3 test kırılıyor" hiçbir şey kanıtlamaz.** Dalda `Limited` kolu silinince tam 3 test kırılıyor (uygunluk · çift sebep · create) — ama satırın iddiası bu değil, *"tur öncesinde aynı silme süiti yeşil bırakıyordu"*. O yüzden ikinci ölçüm koşuldu: iki kaynak dosya **ve** iki test dosyası `origin/main`'e geri alındı, aynı kol silindi, süit **42/42 yeşil** geçti. Testin yük taşıdığını gösteren şey mutasyonun kendisi değil, **mutasyonun iki ağaçtaki farkı**.
+>
+> Dört mutasyon daha bağımsız koşuldu, her biri yalnız kendi testini kırdı: DTO ataması silindi → 1 test · banner'dan sayı kaldırıldı → **4** vitest · `STEAM_ACCOUNT_LIMITED` tanınan kümeden çıkarıldı → **3** test · **İspanyolca değerden `{days}` yer tutucusu düşürüldü → 1 test**, yani dört-dil testi gerçekten yer tutucuyu ölçüyor, çeviri metnini değil.
+>
+> **Turun iki doğrulanabilir iddiası çürütülmeye çalışıldı, ikisi de doğru çıktı** — ve ikisi de "yorum düzeltildi" turunun kendi dersinin tekrarını engelliyordu: yeni yorumun önbellek iddiası ölçüldü (`LIMITED_ACCOUNT_CACHE_TTL_SECONDS = 86_400`; `markClean` **yalnız** temiz dalda, kısıtlı dalda `forget`) ve 08 §2.2a'nın *"alıcı kabul kapısında erken çıkış testle pinli"* iddiası ölçüldü (`TransactionAcceptanceServiceTests.cs:754` → `Assert.Equal(0, eligibility.CallCount)`). Bir turun ürünü yanlış bir yorumu düzeltmekse, **yerine koyduğu yorum da ölçülmelidir**; ikisi de ölçüldü.
+>
+> **Sözleşmenin bir yarısı testte değil tipte duruyor:** gün sayısı `TooNew` dışında hiç yazılamaz, çünkü `SteamTradeEligibilityResult.TooNew(int)` null kabul etmiyor ve atama tek `case` içinde — `Assert.Null` testleri bunu pekiştiriyor ama garanti eden yapı bu değil.
+>
+> **Ölçüm:** hedef integration sınıfları **50/50** (lokal, Testcontainers) · frontend vitest **256/256** · `tsc` temiz · eslint 0 · i18n parity **4×1339**, anahtar diff'i sıfır · backlog sayımı dosyanın **kendi `awk`'iyle** bağımsız koşuldu (16/126, taban 18/124 → tam −2/+2) · PR CI run `35020050197` 23 job yeşil · main son 3 run yeşil. Güvenlik: secret yok, yeni bağımlılık yok, uç `[Authorize]` + `TryGetUserId` ile kullanıcıya kapalı ve yeni alan çağıranın kendi hesabına ait.
+>
 > **Satıcı kapısı turu (2026-09-15, günün ikinci turu)** — sabahki doğrulamanın açtığı iki 🟡 kapandı. Backlog **16 aktif / 126 çözülmüş, 🔴 YOK**.
 >
 > **Turun sırası bilerek "önce harita, sonra kod" idi** ve haritanın getirisi ilk 20 dakikada çıktı: dört paralel okuyucu, backlog'un iki satırını doğrulamakla kalmadı, **üçüncü bir kusur** buldu — ilan açma formunun tanıdığı hata kodları kümesinde (`POST_ERROR_CODES`) iki Steam kodu yoktu. Dört dilde metinleri #319'da gelmişti ama **ölüydüler**: gerçek bir 403 jenerik *"bir şeyler ters gitti"* gösteriyordu, yani satıcı, düzeltebileceği tek ret sınıfında (5 USD harca / 15 günü bekle) ne olduğunu öğrenemiyordu.
