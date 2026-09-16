@@ -96,7 +96,7 @@ public sealed class AmountValidationService : IAmountValidationService
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
+                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -116,7 +116,7 @@ public sealed class AmountValidationService : IAmountValidationService
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
+                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -125,7 +125,7 @@ public sealed class AmountValidationService : IAmountValidationService
             confirmedPayment,
             paymentAddress,
             transaction,
-            await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, cancellationToken),
+            await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
             correlationId,
             cancellationToken);
     }
@@ -160,7 +160,19 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, wrongTokenIncoming, cancellationToken);
+        // Price the transfer the dispatcher will actually broadcast. For this
+        // family it sends the token that LANDED on the deposit address, resolved
+        // from ActualTokenAddress with the same options — not the expected one.
+        // An unresolvable contract is reachable only if the backend and sidecar
+        // allowlists diverge; the dispatcher then fails the refund terminally
+        // without broadcasting, so there is no real transfer to price and the
+        // expected token keeps this path's pre-round charge.
+        var resolvedActualToken = ResolveStablecoinByContract(wrongTokenIncoming.ActualTokenAddress);
+        var gasFee = await ResolveRefundGasFeeAsync(
+            paymentAddress,
+            wrongTokenIncoming,
+            resolvedActualToken ?? paymentAddress.ExpectedToken,
+            cancellationToken);
         var received = wrongTokenIncoming.Amount;
 
         var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
@@ -173,7 +185,7 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.WrongTokenAdminAlert;
         }
 
-        var actualToken = ResolveStablecoinByContract(wrongTokenIncoming.ActualTokenAddress)
+        var actualToken = resolvedActualToken
             ?? StablecoinType.USDT; // Defensive fallback — sidecar already filtered allowlist.
 
         var refundRow = QueueRefundIntent(
@@ -237,7 +249,7 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, latePayment, cancellationToken);
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, latePayment, paymentAddress.ExpectedToken, cancellationToken);
         var received = latePayment.Amount;
 
         // 02 §4.4 / 08 §3.4 — refund decision is the same minimum-threshold
@@ -626,18 +638,25 @@ public sealed class AmountValidationService : IAmountValidationService
     // Every refund this service queues is broadcast FROM the deposit address
     // back TO the incoming row's source address (08 §562), so those two ends
     // plus the received amount describe the exact transfer the estimate must
-    // price. The token is the expected stablecoin — close enough for the
-    // wrong-token family too (same TRC-20 transfer energy class); a resolver
-    // fallback yields the static refund setting, i.e. the pre-round charge.
+    // price. The token is the third half of that description and the caller
+    // passes it explicitly: it must be the token the dispatcher will BROADCAST,
+    // which is not the expected stablecoin for the wrong-token family
+    // (OutgoingTransferDispatchJob resolves ActualTokenAddress). An earlier
+    // revision hard-wired the expected token here as "close enough"; it was
+    // not — the estimate simulated a transfer of a token the deposit address
+    // does not hold, and the two contracts differ in both energy use and
+    // consume_user_resource_percent (who pays). A resolver fallback yields the
+    // static refund setting, i.e. the pre-round charge.
     private async Task<decimal> ResolveRefundGasFeeAsync(
         PaymentAddress paymentAddress,
         BlockchainTransaction incoming,
+        StablecoinType broadcastToken,
         CancellationToken cancellationToken) =>
         (await _chargedGasFee.ResolveRefundFeeAsync(
             paymentAddress.Address,
             incoming.FromAddress,
             incoming.Amount,
-            paymentAddress.ExpectedToken,
+            broadcastToken,
             cancellationToken)).FeeUsdt;
 
     private Task<PaymentAddress?> LoadPaymentAddressAsync(Guid? id, CancellationToken cancellationToken) =>

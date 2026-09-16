@@ -195,6 +195,39 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
     }
 
     [Fact]
+    public async Task SendEmailVerification_DuringCooldown_Returns429WithRetryAfterHeader()
+    {
+        // EmailCooldownRetryAfterHeaderMissing: the wait used to live only in
+        // the message text. 07 §2.9 promises Retry-After on every 429, and the
+        // error code is asserted too — the rate-limit middleware answers 429
+        // with the same header, so the status alone would pass for the wrong
+        // reason.
+        var user = await _factory.CreateUserAsync(u => u.Email = "cooldown@example.com");
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var first = await client.PostAsync(
+            "/api/v1/users/me/settings/email/send-verification", content: null);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await client.PostAsync(
+            "/api/v1/users/me/settings/email/send-verification", content: null);
+
+        Assert.Equal((HttpStatusCode)429, second.StatusCode);
+        var body = await second.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("VERIFICATION_COOLDOWN",
+            body.GetProperty("error").GetProperty("code").GetString());
+
+        var retryAfter = second.Headers.RetryAfter?.Delta;
+        Assert.NotNull(retryAfter);
+        Assert.True(retryAfter!.Value.TotalSeconds >= 1,
+            $"Retry-After must name a positive wait while the cooldown runs; got {retryAfter}.");
+        // Header and message must name the same wait — two sources of truth
+        // for one number is how they drift.
+        Assert.Contains($"Wait {(int)retryAfter.Value.TotalSeconds}s",
+            body.GetProperty("error").GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task SendEmailVerification_SendThenVerify_SetsEmailVerifiedAt()
     {
         var user = await _factory.CreateUserAsync(u => u.Email = "alice@example.com");

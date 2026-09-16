@@ -5,8 +5,18 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-16 — satıcı kapısı turu ✓ PASS doğrulandı, backlog 16 aktif / 126 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-16 — iki backend kalemi kapandı: yanlış token tahmini + cooldown Retry-After, backlog 14 aktif / 128 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **İki backend kalemi turu (2026-09-16)** — backlog **14 aktif / 128 çözülmüş, 🔴 YOK**.
+>
+> **(1) `WrongTokenRefundFeeEstimatesExpectedToken` — kusurun kökü gizli bir seçimdi.** `AmountValidationService.ResolveRefundGasFeeAsync` token'ı parametre almıyordu, içeride hep `paymentAddress.ExpectedToken` kullanıyordu ve yorumu bunu *"close enough for the wrong-token family too"* diye bütün aile adına onaylıyordu. #317'den beri gönderim yanlış token iadesini fiilen gelen token'la yayınlıyor, yani tahmin deposit adresinde **olmayan** bir token'ın transferini simüle ediyordu. Yardımcı artık token'ı parametre alıyor, beş çağrı yeri onu açıkça veriyor; yanlış token yolu kontratı `OutgoingTransferDispatchJob` ile **aynı** `StablecoinContractOptions` çözümüyle bir kez çözüp hem tahmine hem `WrongTokenRefundRequestedEvent`'e veriyor. Sidecar'a kontrat alanı eklenmedi — allowlist USDT/USDC olduğu için sembol yeterli (satırın önerdiği ikinci yol). **Çözülemeyen kontrat** beklenen token'a düşüyor ve testle pinli: o durumda gönderim iadeyi yayınlamadan terminal düşürür, fiyatlanacak transfer yok.
+>
+> **(2) `EmailCooldownRetryAfterHeaderMissing`** — 07 §2.9 her 429'a `Retry-After` koyuyor, middleware öyle yapıyordu, bu uç istisnaydı. Başlık eklendi; değer servisin `Math.Ceiling` ile yuvarladığı saniye, mesajdaki sayıyla aynı kaynaktan. **Test tuzağı önceden düşünüldü:** middleware de aynı başlıkla 429 döndürür, bu yüzden test hata kodunu (`VERIFICATION_COOLDOWN`) ve başlık-mesaj eşitliğini de iddia ediyor — yalnız statüye bakan test yanlış sebeple geçerdi.
+>
+> **Küçük ama öğretici bir kayma yakalandı:** ilk yazımda üç yerde (kod yorumu, test yorumu, 07 §5.7) kural "07 §3" diye anılıyordu; bölüm aslında **§2.9 Rate Limiting**. Yazılan atıf doğrulanmadan bırakılsaydı doküman kendi içinde var olmayan bir kurala işaret ederdi.
+>
+> **Ölçüm:** unit süiti 11 assembly yeşil (Transactions 627/627, toplam 1611) · `AccountSettingsEndpointTests` 28/28 · mutasyon: tahmin geri alınınca 15/16, başlık silinince 27/28 — her biri yalnız kendi yeni testini kırdı. Doküman: 07 §5.7 (v4.1) · 08 §3.1a (v3.7).
 
 > **Doğrulama ✓ PASS (2026-09-16, ayrı chat) — bulgu 0, düzeltme gerekmedi.** PR [#320](https://github.com/turkerurganci/Skinora/pull/320), commit `adaa4a6`.
 >

@@ -241,6 +241,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(fixture.PaymentAddress.Address, call.From);
         Assert.Equal(fixture.BlockchainTransaction.FromAddress, call.To);
         Assert.Equal(50m, call.Amount);
+        // A buyer payment refunds the token it arrived in, which is the
+        // expected one — the wrong-token family is the only place they differ.
+        Assert.Equal(StablecoinType.USDT, call.Token);
     }
 
     [Fact]
@@ -450,6 +453,49 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(0, refundCount);
         Assert.Empty(_outbox.Events.OfType<WrongTokenRefundRequestedEvent>());
         Assert.Single(_alerts.Raised);
+    }
+
+    [Fact]
+    public async Task WrongTokenIncoming_EstimatesGasFee_WithTheTokenThatWillBeBroadcast()
+    {
+        // WrongTokenRefundFeeEstimatesExpectedToken: the dispatcher broadcasts
+        // this refund in the token that LANDED (USDC, resolved from
+        // ActualTokenAddress), so the estimate must price a USDC transfer. It
+        // used to price a USDT transfer out of an address holding no USDT —
+        // measured call and broadcast call were two different transfers.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 0m);
+        var wrongTokenRow = await SeedWrongTokenIncomingAsync(
+            fixture,
+            amount: 50m,
+            actualContract: KnownStablecoinContractsForTest.Usdc);
+
+        await _sut.ValidateWrongTokenIncomingAsync(wrongTokenRow, "corr-w3", default);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(StablecoinType.USDC, call.Token);
+        Assert.Equal(fixture.PaymentAddress.Address, call.From);
+        Assert.Equal(wrongTokenRow.FromAddress, call.To);
+        Assert.Equal(50m, call.Amount);
+    }
+
+    [Fact]
+    public async Task WrongTokenIncoming_UnresolvableContract_EstimatesWithTheExpectedToken()
+    {
+        // Reachable only when the backend and sidecar allowlists diverge. The
+        // dispatcher then fails the refund terminally without broadcasting, so
+        // there is no real transfer to price; the expected token keeps the
+        // pre-round charge rather than inventing a symbol for an unknown
+        // contract.
+        var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 0m);
+        var wrongTokenRow = await SeedWrongTokenIncomingAsync(
+            fixture,
+            amount: 50m,
+            actualContract: "TUnknownContract00000000000000000000");
+
+        await _sut.ValidateWrongTokenIncomingAsync(wrongTokenRow, "corr-w4", default);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(StablecoinType.USDT, call.Token);
     }
 
     // ─── State machine refused ──────────────────────────────────────────
