@@ -89,6 +89,42 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         Assert.Equal(CancelledByType.TIMEOUT, persisted.CancelledBy);
     }
 
+    [Fact]
+    public async Task Scanner_Asks_The_NonDelivery_Sanction_For_Each_Timed_Out_Transaction_After_The_Flush()
+    {
+        // 02 §14.2 — the scanner does not decide which timeouts are non-delivery
+        // events (the evaluator does, from the flushed history row); its job is
+        // to ask for EVERY transaction it timed out, and to ask after the write.
+        // Asked before, the evaluator would read the pre-timeout status.
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var first = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.CREATED, nowUtc, acceptDeadline: nowUtc.AddMinutes(-1));
+        var second = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.CREATED, nowUtc, acceptDeadline: nowUtc.AddMinutes(-2));
+        var notDue = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.CREATED, nowUtc, acceptDeadline: nowUtc.AddHours(1));
+        Context.Set<Transaction>().AddRange(first, second, notDue);
+        await Context.SaveChangesAsync();
+        var refresher = new RecordingNonDeliveryRefresher(Context);
+
+        var sut = new DeadlineScannerJob(
+            Context, _scheduler, _clock,
+            TimeoutTestFixtures.NoOpSideEffects(),
+            TimeoutTestFixtures.NoOpPostCancelMonitor(),
+            refresher,
+            TimeoutTestFixtures.NoOpDeliveryRound(),
+            TimeoutTestFixtures.NoOpWarnings(),
+            new FakeSteamTradeEligibilityChecker(),
+            TimeoutTestFixtures.Options(),
+            NullLogger<DeadlineScannerJob>.Instance);
+        await sut.ScanAndRescheduleAsync();
+
+        Assert.Equal(
+            new[] { first.Id, second.Id }.OrderBy(id => id),
+            refresher.NonDeliveryCalls.Select(c => c.TransactionId).OrderBy(id => id));
+        Assert.All(refresher.NonDeliveryCalls, c => Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, c.StatusInDb));
+    }
+
     /// <summary>
     /// <b>08 §2.2a — the ACCEPTED half of the same defect the delivery round
     /// fixes one phase later.</b>
@@ -694,5 +730,29 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         setting.IsConfigured = value is not null;
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
+    }
+
+    private sealed class RecordingNonDeliveryRefresher
+        : Skinora.Transactions.Application.Reputation.ITransactionReputationRefresher
+    {
+        private readonly AppDbContext _db;
+
+        public RecordingNonDeliveryRefresher(AppDbContext db) => _db = db;
+
+        public List<(Guid TransactionId, TransactionStatus StatusInDb)> NonDeliveryCalls { get; } = [];
+
+        public Task RefreshAsync(
+            Guid sellerId, Guid? buyerId, bool evaluateCooldown, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public async Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken)
+        {
+            var status = await _db.Set<Transaction>()
+                .AsNoTracking()
+                .Where(t => t.Id == transactionId)
+                .Select(t => t.Status)
+                .SingleAsync(cancellationToken);
+            NonDeliveryCalls.Add((transactionId, status));
+        }
     }
 }

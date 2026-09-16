@@ -243,5 +243,7 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
         public StubFlagChecker(bool result) => _result = result;
         public Task<bool> HasActiveAccountFlagAsync(Guid userId, CancellationToken cancellationToken)
             => Task.FromResult(_result);
+        public Task<bool> HasPendingAccountFlagAsync(Guid userId, Skinora.Shared.Enums.FraudFlagType type, CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 }

@@ -367,6 +367,10 @@ builder.Services.AddHostedService<HealthProbeRegistrar>();
 
 // Account suspension (T105a) — admin suspend/unsuspend service + the temp-block
 // auto-unsuspend recurring job (lifts expired suspensions every 6h).
+// IUserSuspensionWriter is the single definition of what a suspension writes, shared
+// by the admin service and the 02 §14.2 automatic non-delivery suspension.
+builder.Services.AddScoped<Skinora.Platform.Application.UserSuspension.IUserSuspensionWriter,
+    Skinora.Platform.Application.UserSuspension.UserSuspensionWriter>();
 builder.Services.AddScoped<Skinora.API.Services.UserSuspension.IAdminUserSuspensionService,
     Skinora.API.Services.UserSuspension.AdminUserSuspensionService>();
 builder.Services.AddScoped<Skinora.API.Services.UserSuspension.AutoUnsuspendJob>();

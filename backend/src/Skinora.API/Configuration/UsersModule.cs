@@ -48,6 +48,8 @@ public static class UsersModule
         // Skinora.Transactions (owns Transaction + TransactionHistory).
         services.AddScoped<IReputationThresholdsProvider, ReputationThresholdsProvider>();
         services.AddScoped<ICancelCooldownThresholdsProvider, CancelCooldownThresholdsProvider>();
+        // 02 §14.2 — non-delivery sanction thresholds (same Users-port / Platform-reader split).
+        services.AddScoped<INonDeliveryAbuseThresholdsProvider, NonDeliveryAbuseThresholdsProvider>();
         services.AddScoped<IReputationScoreCalculator, ReputationScoreCalculator>();
         services.AddScoped<IReputationAggregator, ReputationAggregator>();
         services.AddScoped<IUserCancelCooldownEvaluator, CancelCooldownEvaluator>();

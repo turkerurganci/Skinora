@@ -118,6 +118,12 @@ public static class TransactionsModule
         services.AddScoped<Skinora.Transactions.Application.Reputation.ITransactionReputationRefresher,
             Skinora.Transactions.Application.Reputation.TransactionReputationRefresher>();
 
+        // 02 §14.2 — non-delivery sanction (flag on the first repeat, automatic
+        // suspension on the next). Keyed to the terminal transition, called from
+        // the refresher (delivery timeout, reversal) and the cancel service.
+        services.AddScoped<Skinora.Transactions.Application.Reputation.INonDeliveryAbuseEvaluator,
+            Skinora.Transactions.Application.Reputation.NonDeliveryAbuseEvaluator>();
+
         // T67 — Steam inventory reader + cache invalidator ports. Stubs are
         // registered with TryAddScoped so SteamModule.AddSteamModule can
         // swap them for the sidecar-backed implementations via Replace().

@@ -414,6 +414,11 @@ public sealed class SettlementVerificationJob
         await _reputation.RefreshAsync(
             transaction.SellerId, transaction.BuyerId, evaluateCooldown: false, cancellationToken);
 
+        // 02 §14.2 — a reversal is the third member of the non-delivery family:
+        // the buyer paid and ends without the item. It counts toward the repeat
+        // sanction next to delivery timeouts and post-payment seller cancels.
+        await _reputation.EvaluateNonDeliveryAsync(transaction.Id, cancellationToken);
+
         await _db.SaveChangesAsync(cancellationToken);
     }
 

@@ -568,6 +568,9 @@ public class FraudFlagServiceTests : IntegrationTestBase
         public Task RefreshAsync(
             Guid sellerId, Guid? buyerId, bool evaluateCooldown,
             CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class NoOpDeliveryTimeoutRound : IDeliveryTimeoutRound

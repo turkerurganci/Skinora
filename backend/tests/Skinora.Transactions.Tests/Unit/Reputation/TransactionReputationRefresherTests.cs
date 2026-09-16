@@ -15,8 +15,9 @@ public class TransactionReputationRefresherTests
 {
     private readonly RecordingAggregator _aggregator = new();
     private readonly RecordingCooldown _cooldown = new();
+    private readonly RecordingNonDelivery _nonDelivery = new();
 
-    private TransactionReputationRefresher CreateSut() => new(_aggregator, _cooldown);
+    private TransactionReputationRefresher CreateSut() => new(_aggregator, _cooldown, _nonDelivery);
 
     [Fact]
     public async Task Completed_Recomputes_Both_Parties_And_Skips_Cooldown()
@@ -53,6 +54,29 @@ public class TransactionReputationRefresherTests
         Assert.Equal(new[] { seller }, _cooldown.EvaluatedUserIds);
     }
 
+    [Fact]
+    public async Task Refresh_Never_Runs_The_NonDelivery_Sanction()
+    {
+        // 02 §14.2 — the sanction is keyed to the transaction that went terminal,
+        // not to the parties. If a party refresh triggered it, an unrelated
+        // completion would re-suspend a seller an admin had just cleared.
+        await CreateSut().RefreshAsync(Guid.NewGuid(), Guid.NewGuid(), evaluateCooldown: true, CancellationToken.None);
+
+        Assert.Empty(_nonDelivery.EvaluatedTransactionIds);
+    }
+
+    [Fact]
+    public async Task EvaluateNonDelivery_Delegates_The_Transaction_Id()
+    {
+        var transactionId = Guid.NewGuid();
+
+        await CreateSut().EvaluateNonDeliveryAsync(transactionId, CancellationToken.None);
+
+        Assert.Equal(new[] { transactionId }, _nonDelivery.EvaluatedTransactionIds);
+        Assert.Empty(_aggregator.RecomputedUserIds);
+        Assert.Empty(_cooldown.EvaluatedUserIds);
+    }
+
     private sealed class RecordingAggregator : IReputationAggregator
     {
         public List<Guid> RecomputedUserIds { get; } = [];
@@ -72,6 +96,17 @@ public class TransactionReputationRefresherTests
         {
             EvaluatedUserIds.Add(userId);
             return Task.FromResult(new CooldownEvaluationResult(0, 0, 0, null));
+        }
+    }
+
+    private sealed class RecordingNonDelivery : INonDeliveryAbuseEvaluator
+    {
+        public List<Guid> EvaluatedTransactionIds { get; } = [];
+
+        public Task<NonDeliveryAbuseOutcome> EvaluateAsync(Guid transactionId, CancellationToken cancellationToken)
+        {
+            EvaluatedTransactionIds.Add(transactionId);
+            return Task.FromResult(new NonDeliveryAbuseOutcome(NonDeliveryAbuseAction.NotANonDeliveryEvent, 0));
         }
     }
 }

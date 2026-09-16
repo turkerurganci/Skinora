@@ -167,6 +167,25 @@ public sealed class SettlementVerificationJobTests : IDisposable
         Assert.Equal(TransactionStatus.REFUNDED, Assert.Single(_reputation.StatusInDbAtCallTime));
     }
 
+    [Fact]
+    public async Task ReversalSignature_WithGateOpen_AsksTheNonDeliverySanction_AfterTheFlush()
+    {
+        // 02 §14.2 — a reversal is a non-delivery event. The evaluator counts
+        // REFUNDED rows by DeliveryReversedAt read with AsNoTracking, so the
+        // request must see both already written.
+        var tx = await SeedAsync();
+        _settings.ReversalAutoRefundEnabled = true;
+        _verification.Result = Verdict(SettlementVerdict.ReversalSignature,
+            buyerHoldsItem: false, sellerAssetReturned: true);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_reputation.NonDeliveryCalls);
+        Assert.Equal(tx.Id, call.TransactionId);
+        Assert.Equal(TransactionStatus.REFUNDED, call.StatusInDb);
+        Assert.NotNull(call.DeliveryReversedAtInDb);
+    }
+
 
     // ================= Reversal, gate closed =================
 
@@ -197,6 +216,8 @@ public sealed class SettlementVerificationJobTests : IDisposable
         Assert.Empty(_outbox.Published.OfType<PaymentRefundToBuyerRequestedEvent>());
         Assert.Empty(_flags.Calls);
         Assert.Empty(_reputation.Calls);
+        // The admin decides this one; the sanction counts only observed reversals.
+        Assert.Empty(_reputation.NonDeliveryCalls);
     }
 
     // ================= Ambiguous =================
@@ -715,6 +736,23 @@ public sealed class SettlementVerificationJobTests : IDisposable
                 .Where(t => t.SellerId == sellerId)
                 .Select(t => t.Status)
                 .ToListAsync(cancellationToken));
+        }
+
+        /// <summary>
+        /// 02 §14.2 — each non-delivery evaluation request, with the DB state at
+        /// call time: DeliveryReversedAt must already be flushed, or the real
+        /// evaluator would not count the reversal it was asked about.
+        /// </summary>
+        public List<(Guid TransactionId, TransactionStatus StatusInDb, DateTime? DeliveryReversedAtInDb)> NonDeliveryCalls { get; } = [];
+
+        public async Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken)
+        {
+            var row = await _db.Set<Transaction>()
+                .AsNoTracking()
+                .Where(t => t.Id == transactionId)
+                .Select(t => new { t.Status, t.DeliveryReversedAt })
+                .SingleAsync(cancellationToken);
+            NonDeliveryCalls.Add((transactionId, row.Status, row.DeliveryReversedAt));
         }
     }
 

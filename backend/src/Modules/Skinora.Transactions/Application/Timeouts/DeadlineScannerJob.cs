@@ -268,7 +268,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
 
         // WP15 — collect the parties of every transaction that actually timed
         // out so reputation/cooldown can be recomputed after the batch flush.
-        var affected = new List<(Guid SellerId, Guid? BuyerId)>();
+        var affected = new List<(Guid TransactionId, Guid SellerId, Guid? BuyerId)>();
 
         // 08 §2.2a — before any of these are charged to a party, ask whether the
         // COUNTERPARTY's Steam account made the action impossible. This is the
@@ -312,7 +312,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
             TransactionHistoryRecorder.Record(
                 _db, transaction, previousStatus, TransactionTrigger.Timeout,
                 ActorType.SYSTEM, SeedConstants.SystemUserId, cancelledAt);
-            affected.Add((transaction.SellerId, transaction.BuyerId));
+            affected.Add((transaction.Id, transaction.SellerId, transaction.BuyerId));
         }
 
         // Not `affected.Count == 0`: a delivery round can leave real work
@@ -329,8 +329,17 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         // first. One DB transaction wraps the whole batch (09 §13.3).
         await using var dbTx = await _db.Database.BeginTransactionAsync();
         await _db.SaveChangesAsync();
-        foreach (var (sellerId, buyerId) in affected)
+        foreach (var (_, sellerId, buyerId) in affected)
             await _reputation.RefreshAsync(sellerId, buyerId, evaluateCooldown: true, CancellationToken.None);
+
+        // 02 §14.2 — the non-delivery sanction, per transaction. Only delivery
+        // timeouts qualify (the evaluator checks), and the delivery round has
+        // already stamped TimeoutBlockedByCounterpartyAt on the ones the buyer's
+        // Steam account made impossible, so those are excluded before they are
+        // counted. Same transaction and same flush precondition as the refresh.
+        foreach (var (transactionId, _, _) in affected)
+            await _reputation.EvaluateNonDeliveryAsync(transactionId, CancellationToken.None);
+
         await _db.SaveChangesAsync();
         await dbTx.CommitAsync();
     }
