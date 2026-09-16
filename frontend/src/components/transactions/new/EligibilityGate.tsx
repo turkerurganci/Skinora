@@ -159,14 +159,25 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
           description={t("steamLimited.description")}
         />
       );
-    case REASON.STEAM_TOO_NEW:
+    case REASON.STEAM_TOO_NEW: {
+      // Bu listedeki tek "beklemekle geçen" engel, ve bitiş tarihini satıcı
+      // hiçbir yerden göremiyor — sayıyı sunucu hesaplıyor ve bu tura kadar
+      // sınırda atılıyordu. Sayı yoksa metin sayısız hâline düşer: eski
+      // sunucuya konuşan bir istemci "kalan: gün" gibi yarım bir cümle
+      // görmemeli.
+      const days = eligibility.steamAccountRemainingDays;
       return (
         <Banner
           tone="amber"
           title={t("steamTooNew.title")}
-          description={t("steamTooNew.description")}
+          description={
+            typeof days === "number"
+              ? t("steamTooNew.descriptionWithDays", { days })
+              : t("steamTooNew.description")
+          }
         />
       );
+    }
     case REASON.STEAM_UNAVAILABLE:
       // Amber, kırmızı değil: engel kullanıcıda değil, geçici bir arızada.
       return (
