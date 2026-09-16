@@ -95,7 +95,7 @@ public class NonDeliveryAbuseEvaluatorTests : IntegrationTestBase
     {
         // The earlier event is a DIFFERENT kind, so each run proves two kinds
         // are counted together rather than one kind twice.
-        await InsertEventAsync(_seller.Id, Next(kind), daysAgo: 10);
+        var earlier = await InsertEventAsync(_seller.Id, Next(kind), daysAgo: 10);
         var trigger = await InsertEventAsync(_seller.Id, kind, daysAgo: 0);
 
         var outcome = await BuildSut().EvaluateAsync(trigger.Id, CancellationToken.None);
@@ -107,9 +107,14 @@ public class NonDeliveryAbuseEvaluatorTests : IntegrationTestBase
         Assert.Equal(FraudFlagType.ABNORMAL_BEHAVIOR, flag.Type);
         using var details = JsonDocument.Parse(flag.Details);
         Assert.Equal(NonDeliveryAbuseEvaluator.FlagPattern, details.RootElement.GetProperty("pattern").GetString());
-        // The admin reviews from the description — it must name both trades.
+        // The admin reviews from the description — it must name both trades,
+        // each with its date (07 §9.3). Asserting the trigger alone let a
+        // description that dropped every earlier event pass (validation finding).
         var description = details.RootElement.GetProperty("description").GetString()!;
-        Assert.Contains(trigger.Id.ToString(), description);
+        Assert.Contains($"{earlier.Id} (", description);
+        Assert.Contains($"{trigger.Id} (", description);
+        Assert.Contains(DateOf(daysAgo: 10), description);
+        Assert.Contains(DateOf(daysAgo: 0), description);
         Assert.False((await ReloadSellerAsync()).IsSuspended);
     }
 
@@ -173,6 +178,29 @@ public class NonDeliveryAbuseEvaluatorTests : IntegrationTestBase
 
         Assert.Equal(NonDeliveryAbuseAction.FlagAlreadyPending, outcome.Action);
         Assert.Empty(_flags.Staged);
+    }
+
+    [Fact]
+    public async Task A_Count_That_Jumps_Past_The_Flag_Threshold_In_One_Batch_Still_Flags()
+    {
+        // The deadline scanner flushes a whole batch before evaluating, so one
+        // pass can take a seller from one event to three. Flag 2 / suspend 5
+        // puts that count strictly between the thresholds. Every other flag test
+        // lands exactly on the threshold, where "count >= 2" and "count == 2"
+        // agree — a version that flagged only on the exact count passed all of
+        // them and never flagged this seller (validation finding).
+        await InsertEventAsync(_seller.Id, EventKind.DeliveryReversed, daysAgo: 7);
+        var first = await InsertEventAsync(_seller.Id, EventKind.DeliveryTimeout, daysAgo: 0);
+        var second = await InsertEventAsync(_seller.Id, EventKind.DeliveryTimeout, daysAgo: 0);
+        var sut = BuildSut(new NonDeliveryAbuseThresholds(WindowDays: 30, FlagCount: 2, SuspendCount: 5));
+
+        var outcome = await sut.EvaluateAsync(first.Id, CancellationToken.None);
+        var again = await sut.EvaluateAsync(second.Id, CancellationToken.None);
+
+        Assert.Equal(NonDeliveryAbuseAction.Flagged, outcome.Action);
+        Assert.Equal(3, outcome.EventCount);
+        Assert.Equal(NonDeliveryAbuseAction.FlagAlreadyPending, again.Action);
+        Assert.Single(_flags.Staged);
     }
 
     [Theory]
@@ -317,6 +345,30 @@ public class NonDeliveryAbuseEvaluatorTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task A_New_Event_Resuspends_A_Seller_An_Admin_Cleared()
+    {
+        // The other half of the rule above (02 §14.2): the window still holds
+        // three events, the seller is not suspended because an admin lifted it,
+        // and the seller then fails a FOURTH buyer — a new failure brings the
+        // suspension back. The count is 4 on purpose: every other suspension
+        // test lands exactly on the threshold, where "count >= 3" and
+        // "count == 3" agree, and a version that suspended only on the exact
+        // count passed all of them while never re-suspending (validation finding).
+        await InsertEventAsync(_seller.Id, EventKind.DeliveryTimeout, daysAgo: 12);
+        await InsertEventAsync(_seller.Id, EventKind.SellerCancelAfterPayment, daysAgo: 8);
+        await InsertEventAsync(_seller.Id, EventKind.DeliveryReversed, daysAgo: 4);
+        var trigger = await InsertEventAsync(_seller.Id, EventKind.DeliveryTimeout, daysAgo: 0);
+
+        var outcome = await BuildSut().EvaluateAsync(trigger.Id, CancellationToken.None);
+        await Context.SaveChangesAsync();
+
+        Assert.Equal(NonDeliveryAbuseAction.Suspended, outcome.Action);
+        Assert.Equal(4, outcome.EventCount);
+        Assert.True((await ReloadSellerAsync()).IsSuspended);
+        Assert.Single(_audit.Entries);
+    }
+
+    [Fact]
     public async Task Already_Suspended_Seller_Is_Not_Suspended_Twice()
     {
         var seller = await Context.Set<User>().SingleAsync(u => u.Id == _seller.Id);
@@ -387,6 +439,9 @@ public class NonDeliveryAbuseEvaluatorTests : IntegrationTestBase
         NullLogger<NonDeliveryAbuseEvaluator>.Instance);
 
     private static EventKind Next(EventKind kind) => (EventKind)(((int)kind + 1) % 3);
+
+    private string DateOf(int daysAgo) =>
+        _clock.GetUtcNow().UtcDateTime.AddDays(-daysAgo).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     private async Task<User> ReloadSellerAsync() =>
         await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _seller.Id);

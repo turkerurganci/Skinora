@@ -20,8 +20,11 @@ namespace Skinora.Platform.Application.UserSuspension;
 /// </para>
 /// <para>
 /// Stages only: the caller owns <c>SaveChangesAsync</c>, so the suspension
-/// commits atomically with whatever produced it (for the non-delivery rule,
-/// the terminal transition that crossed the threshold).
+/// commits with the caller's unit of work. For the non-delivery rule that is
+/// the terminal transition's own DB transaction on the cancel and
+/// deadline-scanner paths; the settlement reversal path commits the transition
+/// first and saves the sanction in a second <c>SaveChangesAsync</c>, exactly
+/// like its reputation refresh.
 /// </para>
 /// </remarks>
 public interface IUserSuspensionWriter

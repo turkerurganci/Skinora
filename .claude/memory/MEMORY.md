@@ -5,8 +5,24 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-16 — teslim etmeme yaptırımı kodda: 30 gün · 2.'de flag · 3.'de süresiz askı, backlog 13 aktif / 129 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-16 — teslim etmeme yaptırımı ✓ PASS doğrulandı, 4 bulgu doğrulamada kapatıldı; backlog 13 aktif / 129 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **Doğrulama ✓ PASS (2026-09-16, ayrı chat) — 4 bulgu, proje sahibi kararıyla doğrulamada kapatıldı.** PR [#322](https://github.com/turkerurganci/Skinora/pull/322), commit `12312ce`. Kod davranışı değişmedi.
+>
+> **Bulguların dördü de aynı aileden: kural doğru uygulanmış, ama onu bozan en basit değişiklik hiçbir testi kırmıyor.** Bağımsız 8 mutasyon koşuldu; yapım turunun raporladığı üçü aynı sayıyla yakalandı (karşı taraf istisnası 2 · tetik üyeliği 5 · tarayıcı kancası 1), **beşi yeşil kaldı:**
+> - **Eşikte duran düzenek.** Askı ve flag testlerinin hepsi sayıyı tam eşiğe koyuyordu; orada `count >= 3` ile `count == 3` aynı sonucu verir. `==` mutasyonu 35/35 yeşil. Oysa 02 §14.2'nin *"admin askıyı kaldırdıktan sonra yeni bir olay askıyı geri getirir"* cümlesi **4. olayda** yaşıyor; tarayıcının tek partide eşiği aşan sayı yakaladığı durum da öyle. Yapım turu #321 dersini **değerler** için uygulamıştı (varsayılan dışı eşik testleri), **karşılaştırma operatörü** için değil.
+> - **Yorum ile iddia ayrı.** Açıklama testi *"iki işlemi de adlandırmalı"* diyordu, yalnız tetikleyeni arıyordu; açıklamayı son işleme indiren mutasyon yeşil.
+> - **Filtrenin sınandığı değer hiç yoktu.** Bekleyen flag kontrolünün hesap düzeyi filtresi kaldırılınca 11/11 yeşil — hiçbir test işlem düzeyi bir flag kurmuyordu. Gerçek sonucu: bekleyen dormant (işlem düzeyi) `ABNORMAL_BEHAVIOR` flag'i hesap flag'ini sessizce engellerdi. İki yarı (sorgu · change tracker) ayrı mutasyonla ayrı koşulara bağlandı.
+> - **Paylaşılan yazıcının yalnız bir çağıranı sınanıyordu.** Ortak askı yazıcısı aktörü sabit SYSTEM yazınca admin testleri 17/17 yeşil: iki yol da `USER_BANNED` yazdığı için "kim askıya aldı" yalnız `ActorType`'ta, ve onu yalnız SYSTEM çağıranın testi okuyordu. *"İki yol ayrışamaz"* yapısal olarak doğruydu; ayrışmanın **gözlenebildiği tek alan** ölçülmüyordu.
+>
+> Beşine de test eklendi, aynı mutasyonlar artık yalnız kendi yeni testini kırıyor. **Genellenebilir soru** ([`feedback_differential_before_causal_claim`](feedback_differential_before_causal_claim.md)'e eklendi): *"bu kuralı bozan en basit değişiklik ne — `==`, sabit değer, yalnız son eleman, filtresiz sorgu — ve düzeneğim onun üreteceği sonuçtan farklı bir şey bekliyor mu?"*
+>
+> **Doküman:** 06 §3.17 üç satırı tablonun ortasına eklemiş, sayıyı "63"te bırakmıştı → seed sırasına taşındı, #315'ten kalan eksik `blockchain.max_charged_gas_fee_usdt` satırı eklendi (proje sahibi kararı), **67** anahtar, tablo seed'le betikle birebir karşılaştırıldı. 06 §2.19 `USER_BANNED` ikinci üreticiyi (SYSTEM) anıyor. `IUserSuspensionWriter` yorumundaki "her yolda atomik" iddiası daraltıldı — mutabakat geri alma yolunda yaptırım ikinci `SaveChangesAsync`'te.
+>
+> **Bilinen sonuçlar (kayda geçti, düzeltme gerekmedi):** seed varsayılanı açık, canlı provada aynı satıcıyla iki "ödeme sonrası iptal" hesabı flag'ler · askı anında bekleyen flag varsa yeni flag açılmaz ve eski açıklama tetikleyen işlemi içermez · eşzamanlı iki iş biriminde çift flag / gecikmiş askı mümkün.
+>
+> **Ölçüm:** PR CI run `35089005690` yeşil (unit 1615 · integration 1476) · lokal unit 1615/1615, hedef integration Transactions 176 · Fraud 81 · Platform 71 · API 26 · 8 + 7 mutasyon koşusu · backlog `awk`'i bağımsız (14/128 → 13/129) · main son 3 run yeşil. Güvenlik temiz.
 
 > **Teslim etmeme yaptırımı turu (2026-09-16)** — `P2P-NonDeliveryAbuseWindow` kapandı; kod kalemlerinin sonuncusu. Backlog **13 aktif / 129 çözülmüş, 🔴 YOK**.
 >

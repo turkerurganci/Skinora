@@ -344,8 +344,14 @@ public class AdminUserSuspensionEndpointTests
             new { reason = "Multi-account fraud detected" });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
+        // The writer is shared with the 02 §14.2 automatic suspension and both
+        // paths write USER_BANNED, so the actor is the only thing in the audit
+        // trail that says WHO suspended the account. Asserting the action alone
+        // let a writer that recorded every suspension as SYSTEM pass (validation finding).
         var audits = await GetAuditLogsForUserAsync(target.Id);
-        Assert.Contains(audits, a => a.Action == AuditAction.USER_BANNED);
+        var banned = Assert.Single(audits, a => a.Action == AuditAction.USER_BANNED);
+        Assert.Equal(ActorType.ADMIN, banned.ActorType);
+        Assert.Equal(admin.Id, banned.ActorId);
 
         var outbox = await GetOutboxAsync();
         Assert.Contains(outbox, m => m.EventType.Contains("AccountSuspendedEvent", StringComparison.Ordinal));
