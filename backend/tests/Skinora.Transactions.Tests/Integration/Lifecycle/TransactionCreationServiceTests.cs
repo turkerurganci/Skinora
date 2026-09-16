@@ -901,6 +901,8 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     {
         public Task<bool> HasActiveAccountFlagAsync(Guid userId, CancellationToken cancellationToken)
             => Task.FromResult(false);
+        public Task<bool> HasPendingAccountFlagAsync(Guid userId, FraudFlagType type, CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
     private sealed class RecordingOutboxService : IOutboxService

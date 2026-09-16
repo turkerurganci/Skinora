@@ -4,22 +4,25 @@ namespace Skinora.Transactions.Application.Reputation;
 
 /// <summary>
 /// Default <see cref="ITransactionReputationRefresher"/> — thin orchestration
-/// over <see cref="IReputationAggregator"/> + <see cref="IUserCancelCooldownEvaluator"/>.
-/// Holds no state of its own; both dependencies mutate tracked <c>User</c>
-/// entities without saving, so the caller's unit of work commits the projection
-/// atomically with the terminal transition (WP15).
+/// over <see cref="IReputationAggregator"/> + <see cref="IUserCancelCooldownEvaluator"/>
+/// + <see cref="INonDeliveryAbuseEvaluator"/>. Holds no state of its own; the
+/// dependencies mutate tracked entities without saving, so the caller's unit of
+/// work commits the projection atomically with the terminal transition (WP15).
 /// </summary>
 public sealed class TransactionReputationRefresher : ITransactionReputationRefresher
 {
     private readonly IReputationAggregator _reputation;
     private readonly IUserCancelCooldownEvaluator _cooldown;
+    private readonly INonDeliveryAbuseEvaluator _nonDelivery;
 
     public TransactionReputationRefresher(
         IReputationAggregator reputation,
-        IUserCancelCooldownEvaluator cooldown)
+        IUserCancelCooldownEvaluator cooldown,
+        INonDeliveryAbuseEvaluator nonDelivery)
     {
         _reputation = reputation;
         _cooldown = cooldown;
+        _nonDelivery = nonDelivery;
     }
 
     public async Task RefreshAsync(
@@ -46,4 +49,7 @@ public sealed class TransactionReputationRefresher : ITransactionReputationRefre
         if (buyerId is { } cooldownBuyer)
             await _cooldown.EvaluateAsync(cooldownBuyer, cancellationToken);
     }
+
+    public Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken)
+        => _nonDelivery.EvaluateAsync(transactionId, cancellationToken);
 }

@@ -80,9 +80,10 @@ public class SeedDataTests : IntegrationTestBase
         //   settlement.unreadable_escalation_hours,
         //   settlement.reversal_auto_refund_enabled).
         // + 1 blockchain.max_charged_gas_fee_usdt ceiling (2026-09-04 gas fee round).
+        // + 3 non_delivery_{window_days,flag_count,suspend_count} (2026-09-16, 02 §14.2).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(64, rows.Count);
-        Assert.Equal(64, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(67, rows.Count);
+        Assert.Equal(67, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -133,6 +134,11 @@ public class SeedDataTests : IntegrationTestBase
             "monitoring_post_cancel_7d_polling_seconds",
             "monitoring_stop_after_days",
             "multi_account.exchange_addresses",
+            // 02 §14.2 — the non-delivery sanction ships with the owner-approved
+            // defaults (30 days · flag on the 2nd event · suspend on the 3rd).
+            "non_delivery_flag_count",
+            "non_delivery_suspend_count",
+            "non_delivery_window_days",
             "open_link_enabled",
             // T129 — the settlement window ships with its documented default
             // (8 days = Steam's 7-day reversal window + one day of margin), so

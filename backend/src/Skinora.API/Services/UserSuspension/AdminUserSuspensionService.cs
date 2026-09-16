@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Application.Audit;
+using Skinora.Platform.Application.UserSuspension;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
@@ -45,17 +46,20 @@ public sealed class AdminUserSuspensionService : IAdminUserSuspensionService
     private readonly AppDbContext _db;
     private readonly IAuditLogger _audit;
     private readonly IOutboxService _outbox;
+    private readonly IUserSuspensionWriter _suspensionWriter;
     private readonly TimeProvider _clock;
 
     public AdminUserSuspensionService(
         AppDbContext db,
         IAuditLogger audit,
         IOutboxService outbox,
+        IUserSuspensionWriter suspensionWriter,
         TimeProvider clock)
     {
         _db = db;
         _audit = audit;
         _outbox = outbox;
+        _suspensionWriter = suspensionWriter;
         _clock = clock;
     }
 
@@ -101,42 +105,23 @@ public sealed class AdminUserSuspensionService : IAdminUserSuspensionService
             return SuspendFailure(SuspendUserStatus.AlreadySuspended,
                 UserSuspensionErrorCodes.AlreadySuspended, "User is already suspended.");
 
-        // ---------- Stage 3: stamp suspension ----------
+        // ---------- Stage 3: expiry ----------
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var expiresAt = request.DurationDays.HasValue
             ? nowUtc.AddDays(request.DurationDays.Value)
             : (DateTime?)null;
 
-        user.IsSuspended = true;
-        user.SuspendedAt = nowUtc;
-        user.SuspensionReason = trimmedReason;
-        user.SuspensionExpiresAt = expiresAt;
-
-        // ---------- Stage 4: side effects ----------
-        await _audit.LogAsync(
-            new AuditLogEntry(
-                UserId: targetUserId,
-                ActorId: adminUserId,
-                ActorType: ActorType.ADMIN,
-                Action: AuditAction.USER_BANNED,
-                EntityType: nameof(User),
-                EntityId: targetUserId.ToString(),
-                OldValue: null,
-                NewValue: JsonSerializer.Serialize(new
-                {
-                    Reason = trimmedReason,
-                    ExpiresAt = expiresAt,
-                }, JsonOptions),
-                IpAddress: ipAddress),
-            cancellationToken);
-
-        await _outbox.PublishAsync(
-            new AccountSuspendedEvent(
-                EventId: Guid.NewGuid(),
-                UserId: targetUserId,
-                Reason: trimmedReason,
-                ExpiresAt: expiresAt,
-                OccurredAt: nowUtc),
+        // ---------- Stage 4: stamp + side effects ----------
+        // Shared with the 02 §14.2 automatic suspension so "what a suspension
+        // writes" has one definition (IUserSuspensionWriter remarks).
+        await _suspensionWriter.StageSuspensionAsync(
+            user,
+            trimmedReason,
+            expiresAt,
+            actorId: adminUserId,
+            actorType: ActorType.ADMIN,
+            ipAddress: ipAddress,
+            nowUtc: nowUtc,
             cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);

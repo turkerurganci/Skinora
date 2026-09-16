@@ -926,6 +926,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         public StubAccountFlagChecker(bool flagged) => _flagged = flagged;
         public Task<bool> HasActiveAccountFlagAsync(Guid userId, CancellationToken cancellationToken)
             => Task.FromResult(_flagged);
+        public Task<bool> HasPendingAccountFlagAsync(Guid userId, FraudFlagType type, CancellationToken cancellationToken)
+            => Task.FromResult(false);
     }
 
     // WP12 (T46) — fires the injected hook once, immediately before the first

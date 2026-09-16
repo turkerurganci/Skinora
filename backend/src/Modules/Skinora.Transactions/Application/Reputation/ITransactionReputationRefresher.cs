@@ -34,4 +34,14 @@ public interface ITransactionReputationRefresher
         Guid? buyerId,
         bool evaluateCooldown,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 02 §14.2 — runs the non-delivery sanction for a transaction that has just
+    /// gone terminal (<see cref="INonDeliveryAbuseEvaluator"/>). Separate from
+    /// <see cref="RefreshAsync"/> because it is keyed to the TRANSACTION, not to
+    /// the parties: a refresh for an unrelated completion must never re-apply a
+    /// sanction an admin has lifted. Same flush precondition as
+    /// <see cref="RefreshAsync"/>; the caller owns <c>SaveChangesAsync</c>.
+    /// </summary>
+    Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken);
 }

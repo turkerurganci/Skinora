@@ -187,6 +187,16 @@ public static class SystemSettingSeed
         // kirpilmis bir rakam yanlis ama makul gorunur; tahmin reddedilir,
         // statik fallback kesilir ve hata loglanir (GasFeeSource.EstimateRejected).
         Default     (64, "blockchain.max_charged_gas_fee_usdt",           "decimal", "Monitoring",   "10.0",         "Kullanicidan kesilebilecek gas fee ust siniri (USDT). Runtime tahmin bu degeri asarsa tahmin REDDEDILIR (kirpilmaz) ve statik fallback kesilir; admin logu duser. Gercek bir mainnet TRC-20 gonderimi ~6,4 TRX (~2 USDT) yaktigi icin varsayilan 10.0 saglikli hicbir tahmini tetiklemez — bozuk bir tahmini yakalamak icindir. 0 = tavan kapali."),
+
+        // --- Teslim etmeme yaptırımı (2026-09-16, P2P-NonDeliveryAbuseWindow) ---
+        // 02 §14.2: eşiği aşan ilk tekrarda ABNORMAL_BEHAVIOR flag'i, sonraki
+        // tekrarda otomatik askı; 02 §16.2 "Teslimat ihlali eşikleri". Varsayılanlar
+        // proje sahibi kararı (30 gün · 2. olayda flag · 3. olayda askı). Seed'li,
+        // çünkü kural bir varsayılanla çalışmak üzere onaylandı; herhangi biri 0
+        // ya da okunamaz olursa kural devre dışı kalır (sessizce askı üretmez).
+        Default     (65, "non_delivery_window_days",                      "int",     "Fraud",        "30",           "Teslim etmeme yaptırımının yuvarlanan penceresi (gün) — 02 §14.2. Sayılan olaylar: ödeme alındıktan sonra teslimat süresinin dolması, ödeme sonrası satıcı iptali, teslimattan sonra geri alma (DeliveryReversedAt). Admin kararıyla serbest bırakılan ve alıcının Steam hesabı yüzünden dolan süreler sayılmaz. 0 = kural kapalı."),
+        Default     (66, "non_delivery_flag_count",                       "int",     "Fraud",        "2",            "Pencere içindeki kaçıncı teslim etmeme olayında satıcı hesabına ABNORMAL_BEHAVIOR flag'i (pattern NON_DELIVERY_REPEAT) yazılacağı — 02 §14.2 'eşiği aşan ilk tekrar'. Hesap flag'i yeni işlem açmayı engeller; açık işlemler dondurulmaz (02 §14.0 cascade yalnız yaptırım listesi / hesap ele geçirme içindir). 0 = kural kapalı."),
+        Default     (67, "non_delivery_suspend_count",                    "int",     "Fraud",        "3",            "Pencere içindeki kaçıncı teslim etmeme olayında satıcı hesabının OTOMATİK askıya alınacağı — 02 §14.2 'sonraki tekrar'. Askı süresizdir, admin incelemesiyle kalkar; giriş engellenmez, para hareketi yolları kapanır. Askı yalnız YENİ bir olayla tetiklenir: admin askıyı kaldırdıktan sonra pencere hâlâ eşiğin üstündeyse, başka bir işlemin tamamlanması askıyı geri getirmez. 0 = kural kapalı."),
     ];
 
     private static SystemSetting Unconfigured(

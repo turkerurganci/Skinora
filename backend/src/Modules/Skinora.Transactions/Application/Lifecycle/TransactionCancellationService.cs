@@ -6,6 +6,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.PostCancel;
+using Skinora.Transactions.Application.Reputation;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -65,6 +66,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
     private readonly ITimeoutSchedulingService _timeouts;
     private readonly IReputationAggregator _reputation;
     private readonly IUserCancelCooldownEvaluator _cooldown;
+    private readonly INonDeliveryAbuseEvaluator _nonDelivery;
     private readonly IPostCancelMonitorStarter _postCancelMonitor;
     private readonly TimeProvider _clock;
 
@@ -74,6 +76,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         ITimeoutSchedulingService timeouts,
         IReputationAggregator reputation,
         IUserCancelCooldownEvaluator cooldown,
+        INonDeliveryAbuseEvaluator nonDelivery,
         IPostCancelMonitorStarter postCancelMonitor,
         TimeProvider clock)
     {
@@ -82,6 +85,7 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         _timeouts = timeouts;
         _reputation = reputation;
         _cooldown = cooldown;
+        _nonDelivery = nonDelivery;
         _postCancelMonitor = postCancelMonitor;
         _clock = clock;
     }
@@ -239,6 +243,12 @@ public sealed class TransactionCancellationService : ITransactionCancellationSer
         // (CANCELLED_SELLER → seller; CANCELLED_BUYER → buyer; non-responsible
         // counter-parties are filtered out inside the evaluator).
         await _cooldown.EvaluateAsync(callerUserId, cancellationToken);
+
+        // 7c. 02 §14.2 — non-delivery sanction. Only a SELLER cancel from
+        // PAYMENT_RECEIVED qualifies (03 §2.5 step 8: the seller gives up on
+        // sending an item the buyer already paid for); the evaluator checks that
+        // against the history row flushed above, so every other cancel is a no-op.
+        await _nonDelivery.EvaluateAsync(transaction.Id, cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
         await dbTx.CommitAsync(cancellationToken);

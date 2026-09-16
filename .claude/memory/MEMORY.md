@@ -5,8 +5,24 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-16 — iki backend kalemi turu ✓ PASS doğrulandı, 1 bulgu doğrulamada kapatıldı; backlog 14 aktif / 128 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-16 — teslim etmeme yaptırımı kodda: 30 gün · 2.'de flag · 3.'de süresiz askı, backlog 13 aktif / 129 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **Teslim etmeme yaptırımı turu (2026-09-16)** — `P2P-NonDeliveryAbuseWindow` kapandı; kod kalemlerinin sonuncusu. Backlog **13 aktif / 129 çözülmüş, 🔴 YOK**.
+>
+> **Proje sahibi kararları (modal, 2026-09-16):** sayılan olaylar üç — ödeme sonrası teslimat süresinin dolması · ödeme sonrası satıcı iptali · teslimattan sonra geri alma (`DeliveryReversedAt`); itibar hesabının satıcıya yazdığı teslimat ailesiyle aynı tanım. Varsayılanlar **30 gün · 2. olayda flag · 3. olayda askı**. Askı **süresiz**, admin kaldırır. Emergency hold cascade YOK — 02 §14.0 onu yaptırım listesi/hesap ele geçirme için ayırıyor (soru sorulmadı, doküman zaten karar vermişti).
+>
+> **Yapı.** `NonDeliveryAbuseEvaluator` (Transactions.Application.Reputation) — `CancelCooldownEvaluator`'ın deseni: akışsız okuma + `TransactionHistory.PreviousStatus`. Flag mevcut `ITransactionFraudFlagWriter` portundan (`ABNORMAL_BEHAVIOR`, `pattern = NON_DELIVERY_REPEAT`, `{pattern, description}` şekli admin ekranının zaten render ettiği biçim). Askı yeni **`IUserSuspensionWriter`** (Platform) — `AdminUserSuspensionService` de artık oradan geçiyor; "askı ne yazar" (4 User alanı + `USER_BANNED` audit + `AccountSuspendedEvent`) tek tanımda. Eşikler `INonDeliveryAbuseThresholdsProvider` (port Users, okuyucu Platform — cooldown ile aynı ayrım); 0 ya da okunamaz değer kuralı **kapatır**. Üç SystemSetting seed'li + migration `NonDeliveryAbuseSettings` (yalnız InsertData) + `SystemSettingsCatalog` + 4 dilde admin etiketi. `IAccountFlagChecker`'a `HasPendingAccountFlagAsync` eklendi.
+>
+> **İki kilit karar, ikisi de "yanlış olay tekrar sayılmasın" ailesinden.** (1) Değerlendirme **işleme** bağlı, kullanıcıya değil: tetikleyen işlem kendisi bir olay değilse hiçbir şey yapılmaz. Kullanıcıya bağlı olsaydı admin'in kaldırdığı askı, satıcının ilgisiz bir işleminin tamamlanmasıyla geri gelirdi — pencere hâlâ 3 olay tutuyor. Tetik niteliği ile sayım **aynı listeden** okunuyor (üyelik kontrolü), iki tanım ayrışamaz. (2) Bekleyen flag kontrolü **diske yazılmamış** flag'leri de görür (`Local`): zaman aşımı tarayıcısı bütün partiyi yazıp sonra değerlendirir, aynı satıcının iki olayı tek iş biriminde gelebilir. Askı için aynı sorunu EF identity map çözüyor (izlenen User örneği).
+>
+> **Kancalar:** `TransactionCancellationService` (doğrudan evaluator) · `DeadlineScannerJob` ve `SettlementVerificationJob` (itibar yenileyicinin yeni `EvaluateNonDeliveryAsync` metodu — tarayıcıyı kuran 14 test çağrısına dokunmamak için). Üçü de değişiklik yazıldıktan **sonra** soruyor; her kanca testi çağrı anındaki veritabanı durumunu kaydediyor.
+>
+> **TURUN KÖR NOKTASI #321 DERSİNİN BİREBİR TEKRARIYDI ve bu kez yapım turunda yakalandı.** 13 mutasyon koşuldu, 12'si yakalandı; 13.'sü (eşikleri sabit 30/2/3'e çevirmek) ilk yazımda **31 testin hiçbirini kırmadı** — çünkü her test eşikleri varsayılanla kuruyordu. Yani admin'in eşik değiştirebilmesi hiç ölçülmüyordu. Varsayılan dışı eşik (10 gün · 3 · 5) ve pencere testleri eklendi, aynı mutasyon artık 3 testi kırıyor. Ek olarak sağlayıcı **gerçek seed'e** karşı test edildi: değerlendirici testleri eşikleri stub'dan aldığı için ayar anahtarının yazımı seed'dekinden farklı olsa kural üretimde kapanır ve her test yeşil kalırdı (mutasyonla doğrulandı: 5 test kırılıyor). [[feedback_vary_fixture_against_fallback]]
+>
+> **Ölçüm:** backend unit süiti 11 assembly yeşil (Transactions **631/631**, toplam 1615) · hedef integration sınıfları (iptal 27 · tarayıcı 21 · evaluator 35 · flag denetleyici 11 · sağlayıcı 6 · seed) yeşil · 13/13 mutasyon. Doküman: 02 §14.2/§16.2 (v4.0) · 06 §3.17 (v6.14) · 07 §9.3 (v4.2).
+>
+> **Süreç notu:** bir doküman sürüm güncellemesinde perl `-CSD` ile ortam değişkeninden gelen UTF-8 metin çift kodlandı ("Â§"); satır 3 git'teki orijinalden bayt modunda yeniden kuruldu. Ortam değişkenleri Perl'e çözülmemiş bayt olarak gelir — `-CSD` yalnız dosya/akışları çözer.
 
 > **Doğrulama ✓ PASS (2026-09-16, ayrı chat) — 1 bulgu, proje sahibi kararıyla doğrulamada kapatıldı.** PR [#321](https://github.com/turkerurganci/Skinora/pull/321), commit `e0eb553`.
 >

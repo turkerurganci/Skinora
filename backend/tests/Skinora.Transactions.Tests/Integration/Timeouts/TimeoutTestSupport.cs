@@ -268,7 +268,8 @@ internal static class TimeoutTestFixtures
     /// without exercising the cooldown rule (e.g. COMPLETED).
     /// </summary>
     public static ITransactionReputationRefresher RealReputationRefresher(AppDbContext db)
-        => new TransactionReputationRefresher(new ReputationAggregator(db), new NoOpCooldownEvaluator());
+        => new TransactionReputationRefresher(
+            new ReputationAggregator(db), new NoOpCooldownEvaluator(), new NoOpNonDeliveryAbuseEvaluator());
 
     /// <summary>
     /// Default <see cref="Skinora.Transactions.Application.PostCancel.IPostCancelMonitorStarter"/>
@@ -334,6 +335,9 @@ internal sealed class NoOpTransactionReputationRefresher : ITransactionReputatio
 {
     public Task RefreshAsync(Guid sellerId, Guid? buyerId, bool evaluateCooldown, CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    public Task EvaluateNonDeliveryAsync(Guid transactionId, CancellationToken cancellationToken)
+        => Task.CompletedTask;
 }
 
 /// <summary>No-op <see cref="IUserCancelCooldownEvaluator"/> (WP15) — used when a
@@ -344,3 +348,11 @@ internal sealed class NoOpCooldownEvaluator : IUserCancelCooldownEvaluator
         => Task.FromResult(new CooldownEvaluationResult(0, 0, 0, null));
 }
 
+
+/// <summary>No-op <see cref="INonDeliveryAbuseEvaluator"/> (02 §14.2) — used when a
+/// reputation test does not exercise the non-delivery sanction.</summary>
+internal sealed class NoOpNonDeliveryAbuseEvaluator : INonDeliveryAbuseEvaluator
+{
+    public Task<NonDeliveryAbuseOutcome> EvaluateAsync(Guid transactionId, CancellationToken cancellationToken)
+        => Task.FromResult(new NonDeliveryAbuseOutcome(NonDeliveryAbuseAction.NotANonDeliveryEvent, 0));
+}

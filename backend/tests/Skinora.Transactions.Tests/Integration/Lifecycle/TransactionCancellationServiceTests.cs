@@ -42,6 +42,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     private FakeTimeProvider _clock = null!;
     private RecordingOutboxService _outbox = null!;
     private RecordingTimeoutScheduler _timeouts = null!;
+    private Skinora.Transactions.Tests.Helpers.RecordingNonDeliveryAbuseEvaluator _nonDelivery = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -302,6 +303,45 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Seller_Cancel_From_PaymentReceived_Asks_The_NonDelivery_Sanction_After_The_Flush()
+    {
+        // 02 §14.2 / 03 §2.5 step 8 — a post-payment seller cancel is a
+        // non-delivery event. The evaluator reads with AsNoTracking and
+        // qualifies the event from the flushed history row, so the call must
+        // come after the cancel is written: asked earlier, it would see
+        // PAYMENT_RECEIVED and never count the event.
+        var tx = await CreateTransactionAsync(TransactionStatus.PAYMENT_RECEIVED, withBuyer: true);
+
+        var sut = BuildSut();
+        await sut.CancelAsync(
+            _seller.Id, tx.Id,
+            new CancelTransactionRequest("Item'ı göndermekten vazgeçtim"),
+            CancellationToken.None);
+
+        var call = Assert.Single(_nonDelivery.Calls);
+        Assert.Equal(tx.Id, call.TransactionId);
+        Assert.Equal(TransactionStatus.CANCELLED_SELLER, call.StatusInDb);
+        var history = await Context.Set<TransactionHistory>().AsNoTracking()
+            .SingleAsync(h => h.TransactionId == tx.Id && h.NewStatus == TransactionStatus.CANCELLED_SELLER);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, history.PreviousStatus);
+    }
+
+    [Fact]
+    public async Task Rejected_Cancel_Never_Asks_The_NonDelivery_Sanction()
+    {
+        // A refused cancel changed nothing; there is no transition to evaluate.
+        var tx = await CreateTransactionAsync(TransactionStatus.ITEM_DELIVERED, withBuyer: true);
+
+        var sut = BuildSut();
+        await sut.CancelAsync(
+            _seller.Id, tx.Id,
+            new CancelTransactionRequest("Item'ı göndermekten vazgeçtim"),
+            CancellationToken.None);
+
+        Assert.Empty(_nonDelivery.Calls);
+    }
+
+    [Fact]
     public async Task Seller_Cancel_From_ItemDelivered_Returns_409_InvalidStateTransition()
     {
         // ITEM_DELIVERED has no seller-cancel edge (05 §4.2): the item is with
@@ -495,14 +535,20 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
     }
 
     private TransactionCancellationService BuildSut()
-        => new(
+    {
+        // Bound to the test Context (not the seed context) so the recorded status
+        // is read from the same database the service writes to.
+        _nonDelivery = new Skinora.Transactions.Tests.Helpers.RecordingNonDeliveryAbuseEvaluator(Context);
+        return new(
             Context,
             _outbox,
             _timeouts,
             new ReputationAggregator(Context),
             new CancelCooldownEvaluator(Context, new SettingsBackedThresholdsProvider(Context), _clock),
+            _nonDelivery,
             new Skinora.Transactions.Tests.Helpers.NoOpPostCancelMonitorStarter(),
             _clock);
+    }
 
     private sealed class RecordingOutboxService : IOutboxService
     {
