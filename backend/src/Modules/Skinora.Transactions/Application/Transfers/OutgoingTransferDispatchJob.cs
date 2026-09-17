@@ -1,3 +1,4 @@
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,6 +30,15 @@ namespace Skinora.Transactions.Application.Transfers;
 /// inside the loop so a concurrent admin action (force-cancel, manual
 /// retry) cannot be overwritten by a stale dispatcher tick.
 /// </para>
+///
+/// <para>
+/// One tick at a time (<see cref="DisableConcurrentExecutionAttribute"/>). A
+/// deposit-sourced broadcast now takes several blocks on the sidecar (08 §3.3
+/// — every resource step waits for its block), so a batch outlives the
+/// one-minute cadence. The re-read above cannot close the overlap: two ticks
+/// can both read a row as PENDING before either writes, and both would run the
+/// sidecar flow — activation, delegation and transfer — for the same deposit.
+/// </para>
 /// </summary>
 public sealed class OutgoingTransferDispatchJob
 {
@@ -36,6 +46,14 @@ public sealed class OutgoingTransferDispatchJob
 
     /// <summary>Cron — every minute. Mirrors <c>EnsurePaymentAddressJob.Cron</c>.</summary>
     public const string Cron = "* * * * *";
+
+    /// <summary>
+    /// Distributed-lock acquisition timeout for
+    /// <see cref="DisableConcurrentExecutionAttribute"/>. Shorter than the
+    /// one-minute cadence so a tick that cannot get the lock gives up before
+    /// the next one fires (same rationale as <c>SweepQueueJob</c>).
+    /// </summary>
+    public const int ConcurrencyLockTimeoutSeconds = 50;
 
     /// <summary>
     /// Maximum rows processed per tick. The 1-minute cadence keeps a 100-row
@@ -300,5 +318,8 @@ public sealed class OutgoingTransferDispatchJob
 
     // Hangfire serializes Expression<Action<T>>, so the entry point exposes a
     // synchronous wrapper that delegates to the async body on the worker.
+    // [DisableConcurrentExecution] keeps a long tick from overlapping the next
+    // one (see the class remarks).
+    [DisableConcurrentExecution(ConcurrencyLockTimeoutSeconds)]
     public void Execute() => ExecuteAsync().GetAwaiter().GetResult();
 }

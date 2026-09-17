@@ -136,7 +136,7 @@ public static class SystemSettingSeed
         // energy decision made the delegated amount a per-transfer computation
         // (sidecar DelegationPlanner), so a fixed amount no longer exists to configure. Do not
         // reuse the index — the seed Id is derived from it.
-        Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Energy delegation başarısız olursa deposit adresine fallback olarak gönderilen TRX tutarı (SUN). Default 15 TRX (08 §3.3 — TRC-20 transferin gas için yaklaşık üst sınırı). Deposit bu TRX'i kendi gas'ı için yakar."),
+        Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Depozit kaynak planı hiç hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX tutarı (SUN). Default 15 TRX = en pahalı TRC-20 transfer 13,03 TRX + bandı 0,35 TRX (08 §3.3). Kilidin yetmediği transfer bu ayarı kullanmaz; yakacağı TRX'i transfer başına hesaplar."),
         // --- T76: Blockchain reconciliation job (05 §3.3) ---
         // Daily on-chain vs ledger reconciliation. Cron default is 03:00 UTC
         // (admin-tunable, host restart required to re-register). Hot/cold

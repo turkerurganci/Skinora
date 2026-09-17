@@ -98,7 +98,7 @@ public static class SystemSettingsCatalog
         new("blockchain.payout_gas_fee_estimate_usdt",    "blockchain_health",    "Satıcı payout gas fee fallback'i (runtime tahmin alınamazsa)", "USDT"),
         new("blockchain.max_charged_gas_fee_usdt",        "blockchain_health",    "Kesilebilecek gas fee üst sınırı — aşan tahmin reddedilir", "USDT"),
         new("blockchain.transfer_retry_intervals_minutes","blockchain_health",    "Outbound transfer retry aralıkları (CSV, dakika — T73)",    "dakika"),
-        new("blockchain.sweep_trx_fallback_sun",          "blockchain_health",    "Energy delegation fallback TRX tutarı (T74)",               "SUN"),
+        new("blockchain.sweep_trx_fallback_sun",          "blockchain_health",    "Kaynak planı hesaplanamazsa gönderilen yedek TRX (T74)",    "SUN"),
         new("reconciliation.schedule_cron",               "blockchain_health",    "Reconciliation job cron ifadesi (T76)",                     null),
         new("reconciliation.hot_wallet_address",          "blockchain_health",    "Reconciliation hot wallet adresi (T76)",                    null),
         new("reconciliation.cold_wallet_address",         "blockchain_health",    "Reconciliation cold wallet adresi (T76, opsiyonel)",        null),

@@ -209,9 +209,9 @@ public static class TransactionsModule
                     client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
                 }
                 // The estimate fans out into several chain reads plus a price
-                // fetch on the sidecar — same budget as the transfer client.
-                var seconds = options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds * 3;
-                client.Timeout = TimeSpan.FromSeconds(seconds);
+                // fetch on the sidecar — a chain-read budget. It waits for no
+                // block, unlike a broadcast.
+                client.Timeout = options.ResolveChainReadTimeout();
             });
         services.AddScoped<IGasFeeEstimator>(sp =>
             sp.GetRequiredService<HttpSidecarGasFeeEstimator>());
@@ -327,11 +327,11 @@ public static class TransactionsModule
                 {
                     client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
                 }
-                // Transfer broadcast may serialize behind the sidecar's
-                // RateLimitedQueue (TronGrid RPS budget) — give the call a
-                // longer budget than the cheap derive endpoint.
-                var seconds = options.TimeoutSeconds <= 0 ? 30 : options.TimeoutSeconds * 3;
-                client.Timeout = TimeSpan.FromSeconds(seconds);
+                // A deposit-sourced broadcast waits on the sidecar for each
+                // resource step to land in a block (08 §3.3). The client
+                // timeout is that broadcast budget; the status read on the same
+                // client narrows itself to the chain-read budget.
+                client.Timeout = options.ResolveTransferTimeout();
             });
         services.AddScoped<IBlockchainTransferClient>(sp =>
             sp.GetRequiredService<HttpBlockchainTransferClient>());

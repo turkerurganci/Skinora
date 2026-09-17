@@ -25,7 +25,8 @@ export interface RefundRequest {
 export interface RefundResult extends SendTransferResult {
   /** Resource path used (08 §3.3 audit field): <c>delegated</c> (stake covered
    * the Energy), <c>burn</c> (TRX sent for this transfer), <c>no-energy</c>
-   * (the contract owner pays) or <c>fallback</c> (plan unavailable, fixed TRX). */
+   * (the deposit already held the Energy) or <c>fallback</c> (plan unavailable,
+   * fixed TRX). */
   delegationMode: DelegationMode;
   delegationAmountSun: number;
   fallbackAmountSun: number;

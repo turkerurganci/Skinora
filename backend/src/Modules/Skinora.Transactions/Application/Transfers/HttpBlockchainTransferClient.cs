@@ -143,10 +143,16 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         using var httpRequest = new HttpRequestMessage(HttpMethod.Get, path);
         ApplyAuth(httpRequest);
 
+        // The client's own timeout is the broadcast budget, which waits for
+        // blocks; a status read is one chain lookup and keeps the chain-read
+        // budget so a stuck call cannot hold the confirmation job for minutes.
+        using var readBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        readBudget.CancelAfter(_options.ResolveChainReadTimeout());
+
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(httpRequest, cancellationToken);
+            response = await _http.SendAsync(httpRequest, readBudget.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {

@@ -86,14 +86,15 @@ export const config = {
   // (HYBRID). There is no delegation AMOUNT to configure any more: the flow
   // simulates each transfer, reads the network ratio (TotalEnergyLimit /
   // TotalEnergyWeight — measured mainnet ~9.5, Nile ~73.7 Energy per staked
-  // TRX) and delegates exactly the shortfall when the stake can cover all of
-  // it, or burns otherwise (wallet/DelegationPlanner.ts). The fixed 200 TRX
-  // this replaced bought ~3% of a mainnet sweep and, once the hot wallet
-  // staked, would have made sweeps fail rather than fall back.
+  // TRX) and delegates the whole transfer's shortfall when the stake can cover
+  // all of it, or burns otherwise (wallet/DelegationPlanner.ts). The fixed
+  // 200 TRX this replaced bought ~3% of a mainnet sweep and, once the hot
+  // wallet staked, would have made sweeps fail rather than fall back.
   //
   // What remains is the TRX sent when the plan itself cannot be computed
   // (probe outage) — sized for the most expensive transfer (130,285 Energy ×
-  // 100 SUN = 13.03 TRX) plus activation, in SUN.
+  // 100 SUN = 13.03 TRX) plus its Bandwidth (0.35 TRX), in SUN. Activation is
+  // not in it: the sweeper pays that when it sends the deposit its first SUN.
   sweepTrxFallbackSun: parseInt(process.env.SWEEP_TRX_FALLBACK_SUN || '15000000', 10),
 
   // Logging

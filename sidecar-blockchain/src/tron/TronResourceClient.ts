@@ -3,9 +3,10 @@ import { SidecarError } from '../errors/SidecarError.js';
 
 /**
  * Read-only chain probes backing the pre-send fee estimate
- * (Prova-GasFeeChargedIsFixedGuess). Three primitives, all against the full
- * node's REST API with an injectable <c>fetchFn</c> (mirrors
- * <c>TronTransferClient.getTransactionStatus</c>):
+ * (Prova-GasFeeChargedIsFixedGuess) and the deposit transfer resource flow
+ * (EnergyDelegationService), all against the full node's REST API with an
+ * injectable <c>fetchFn</c> (mirrors <c>TronTransferClient.getTransactionStatus</c>).
+ * The core ones:
  *
  * <list type="bullet">
  *   <item><c>estimateTransferEnergy</c> — `triggerconstantcontract` simulation
@@ -17,6 +18,9 @@ import { SidecarError } from '../errors/SidecarError.js';
  *   <item><c>getChainFeeParameters</c> — `getchainparameters` unit prices
  *     (sun per Energy, sun per Bandwidth byte). Network-wide values that the
  *     committee can change, so they are read, not assumed.</item>
+ *   <item><c>getTransactionBlockNumber</c> — `gettransactioninfobyid`: whether
+ *     a broadcast step is actually IN a block, which no account read can
+ *     tell.</item>
  * </list>
  */
 
@@ -35,19 +39,23 @@ export interface AccountResources {
 
 export interface ContractEnergyPolicy {
   /**
-   * Share of the call's Energy the CALLER pays, 0-100.
+   * The contract's NOMINAL caller share, 0-100 (`consume_user_resource_percent`).
    *
-   * A TRC-20 contract can be deployed so its owner absorbs the execution cost
-   * (`consume_user_resource_percent = 0`), and the Nile test USDT used for
-   * rehearsals is deployed exactly that way — which is why every measured
-   * rehearsal transfer shows `fee: 0` while the hot wallet holds no stake at
-   * all. Mainnet Tether sets 100, so the sender pays. Charging a user for
-   * energy the contract owner covers is charging for a cost nobody incurred,
-   * so the estimate has to read this rather than assume it.
+   * Nominal only: the owner pays its share out of its OWN remaining Energy, so
+   * the split the chain actually applies also needs <see cref="originAddress"/>'s
+   * resources (`callerEnergyShare`, DelegationPlanner). A TRC-20 contract can
+   * be deployed so its owner absorbs the execution cost, and the Nile test USDT
+   * used for rehearsals is (0 here, ~197M Energy left on 2026-09-17) — which is
+   * why rehearsal transfers show `fee: 0`. Mainnet Tether sets 30, but its
+   * owner has no Energy left, and across 542 USDT calls in five blocks the
+   * callers paid 100.00% (measured 2026-09-17). Read alone, this number charged
+   * a mainnet user 30% of the real cost.
    */
   callerPercent: number;
   /** Owner's Energy ceiling for a single call; 0 means the owner subsidises nothing. */
   originEnergyLimit: number;
+  /** The contract owner (`origin_address`) whose remaining Energy pays its share; null when not reported. */
+  originAddress: string | null;
 }
 
 export interface AccountState {
@@ -83,6 +91,7 @@ interface AccountResourceResponse {
 
 interface ContractResponse {
   contract_address?: string;
+  origin_address?: string;
   consume_user_resource_percent?: number;
   origin_energy_limit?: number;
 }
@@ -272,7 +281,40 @@ export class TronResourceClient {
         : 0;
     const originEnergyLimit =
       typeof body.origin_energy_limit === 'number' ? body.origin_energy_limit : 0;
-    return { callerPercent, originEnergyLimit };
+    const originAddress =
+      typeof body.origin_address === 'string' && body.origin_address.length > 0
+        ? body.origin_address
+        : null;
+    return { callerPercent, originEnergyLimit, originAddress };
+  }
+
+  /**
+   * The block <paramref name="txHash"/> landed in, or null while no block holds
+   * it (`gettransactioninfobyid` on the full node).
+   *
+   * This — not an account read — is what "the step happened" means. Account
+   * reads answer from the node's PENDING state: in the 2026-09-16 Nile run a
+   * delegation, the transfer broadcast after its "Energy arrived" check and the
+   * reclaim all landed in ONE block (71,019,348), so their order was only the
+   * order the block producer received them in. The node answers `{}` for a
+   * hash no block holds (measured 2026-09-17 on mainnet and Nile) and a
+   * `blockNumber` as soon as it applies the block — no solidity lag. Anything
+   * without a positive integer `blockNumber` is "not yet", never a block.
+   */
+  async getTransactionBlockNumber(
+    txHash: string,
+    fetchFn: typeof fetch = fetch,
+  ): Promise<number | null> {
+    const body = await this.post<{ id?: string; blockNumber?: unknown }>(
+      '/wallet/gettransactioninfobyid',
+      { value: txHash },
+      fetchFn,
+    );
+    return typeof body.blockNumber === 'number' &&
+      Number.isInteger(body.blockNumber) &&
+      body.blockNumber > 0
+      ? body.blockNumber
+      : null;
   }
 
   async getChainFeeParameters(fetchFn: typeof fetch = fetch): Promise<ChainFeeParameters> {

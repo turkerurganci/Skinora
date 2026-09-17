@@ -5,7 +5,6 @@ import type {
   AccountResources,
   AccountState,
   ChainFeeParameters,
-  ContractEnergyPolicy,
 } from '../tron/TronResourceClient.js';
 import {
   ESTIMATED_TRANSFER_TX_BYTES,
@@ -26,21 +25,48 @@ import {
  *     validation (measured on Nile 2026-09-16). One SUN from the sweeper
  *     creates it; the chain charges the SENDER the creation fee
  *     (1 TRX + 0.1 TRX bandwidth, measured).</item>
- *   <item><b>Plan.</b> Simulate the exact transfer, read who pays its Energy,
- *     and decide with <see cref="planDelegation"/>: delegate the WHOLE
- *     shortfall if the stake can, otherwise burn the whole of it.</item>
- *   <item><b>Delegate path.</b> Delegate exactly the planned amount, then
- *     confirm the deposit actually received the Energy before broadcasting.
- *     If it did not (the ratio moved, the block has not landed), reclaim and
- *     burn instead — a broadcast short of Energy fails on-chain and no
+ *   <item><b>Plan.</b> Simulate the exact transfer and decide with
+ *     <see cref="planDelegation"/> for ALL of its Energy (owner decision
+ *     2026-09-17): delegate the whole shortfall if the stake can, otherwise
+ *     burn the whole of it. Who the chain bills is deliberately not consulted —
+ *     a contract owner's share comes out of a pool the contract's other callers
+ *     drain in the same block, and a transfer sized around it fails on-chain
+ *     when that pool runs dry.</item>
+ *   <item><b>Delegate path.</b> Delegate the planned amount, wait until it is
+ *     in a block and the deposit shows the Energy, broadcast, wait until the
+ *     transfer is in a block, reclaim. If the Energy does not show, reclaim
+ *     and burn instead — a broadcast short of Energy fails on-chain and no
  *     fallback would follow.</item>
- *   <item><b>Burn path.</b> Send the deposit the TRX it will burn (computed
- *     from the simulation and current chain prices), confirm it arrived, then
- *     broadcast.</item>
+ *   <item><b>Burn path.</b> Send the deposit the TRX it will burn, wait until
+ *     it is in a block and in the balance, then broadcast.</item>
  *   <item><b>Probe failure.</b> If the plan cannot be computed at all, send
  *     the configured fixed fallback — the pre-decision behaviour, which never
  *     blocks the money path.</item>
  * </list>
+ *
+ * <para>
+ * EVERY STEP WAITS FOR ITS BLOCK (#323 validation, 2026-09-17). An account
+ * read answers from the node's pending state, so "the Energy arrived" held
+ * before the delegation was in any block: the 2026-09-16 Nile run put the
+ * delegation, the transfer and the reclaim in ONE block, ordered only by how
+ * they reached the block producer. Waits come in two lengths. Where giving up
+ * only means "retry later" (activation, a TRX top-up — a late landing is simply
+ * seen by the next attempt) the flow waits <c>retryableWaitAttempts</c> polls.
+ * Where giving up early could strand a delegation or reclaim it ahead of the
+ * transfer it funds, it waits <c>expiryWaitAttempts</c> polls — longer than the
+ * 60 s expiration the node stamps on every transaction it builds, after which
+ * a transaction no block holds can never land.
+ * </para>
+ *
+ * <para>
+ * THE TRANSFER IS ONLY BROADCAST WHILE THE BACKEND IS STILL WAITING. Past
+ * <c>transferBroadcastDeadlineMs</c> the flow stops before the broadcast with a
+ * retryable error. A backend that gave up on this call retries it; if this
+ * call had broadcast anyway, the retry would find the tokens already gone and
+ * the first transfer would never be recorded. The backend's transfer timeout
+ * (<c>BlockchainSidecarOptions.TransferTimeoutSeconds</c>) is sized to this
+ * deadline plus the reclaim wait that follows a broadcast.
+ * </para>
  *
  * Undelegation after the broadcast is best-effort: the transfer is already
  * on-chain, and failing here would re-broadcast it.
@@ -52,8 +78,12 @@ export class EnergyDelegationService {
   private readonly sweeperPrivateKey: string;
   private readonly fallbackAmountSun: number;
   private readonly pollIntervalMs: number;
-  private readonly pollAttempts: number;
+  private readonly retryableWaitAttempts: number;
+  private readonly expiryWaitAttempts: number;
+  private readonly stateWaitAttempts: number;
+  private readonly transferBroadcastDeadlineMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly now: () => number;
 
   constructor(deps: EnergyDelegationServiceDeps) {
     this.client = deps.client;
@@ -62,20 +92,38 @@ export class EnergyDelegationService {
     this.sweeperPrivateKey = deps.sweeperPrivateKey;
     this.fallbackAmountSun = deps.fallbackAmountSun;
     this.pollIntervalMs = deps.pollIntervalMs ?? 3_000;
-    this.pollAttempts = deps.pollAttempts ?? 20;
+    this.retryableWaitAttempts = deps.retryableWaitAttempts ?? 10;
+    this.expiryWaitAttempts = deps.expiryWaitAttempts ?? 25;
+    this.stateWaitAttempts = deps.stateWaitAttempts ?? 3;
+    this.transferBroadcastDeadlineMs = deps.transferBroadcastDeadlineMs ?? 150_000;
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.now = deps.now ?? Date.now;
   }
 
-  async withDelegation<T>(
+  async withDelegation<T extends { txHash: string }>(
     transfer: DelegatedTransfer,
     action: () => Promise<T>,
     context: DelegationContext,
   ): Promise<DelegationOutcome<T>> {
     this.assertConfigured();
+    const startedAt = this.now();
     const deposit = transfer.depositAddress;
 
     const activationSun = await this.ensureAccount(deposit, context);
     const budget = await this.acquireBudget(transfer, context);
+
+    const elapsedMs = this.now() - startedAt;
+    if (elapsedMs > this.transferBroadcastDeadlineMs) {
+      if (budget.mode === 'delegated') {
+        await this.tryUndelegate(deposit, budget.delegationAmountSun, context, 'deadline-elapsed');
+      }
+      throw new SidecarError(
+        `Resources for ${deposit} took ${elapsedMs} ms; not broadcasting the transfer past ` +
+          `${this.transferBroadcastDeadlineMs} ms, where the backend may already have given up on this call.`,
+        'TRANSFER_WINDOW_ELAPSED',
+        true,
+      );
+    }
 
     let actionResult: T;
     try {
@@ -89,6 +137,7 @@ export class EnergyDelegationService {
     }
 
     if (budget.mode === 'delegated') {
+      await this.awaitTransferBlock(deposit, actionResult.txHash, context);
       await this.tryUndelegate(deposit, budget.delegationAmountSun, context, 'action-succeeded');
     }
 
@@ -100,25 +149,27 @@ export class EnergyDelegationService {
     const state = await this.resources.getAccountState(deposit);
     if (state.exists) return 0;
 
-    await this.client.sendTrx({
+    const { txHash } = await this.client.sendTrx({
       fromAddress: this.sweeperAddress,
       fromPrivateKey: this.sweeperPrivateKey,
       toAddress: deposit,
       amountSun: 1,
     });
-    const created = await this.waitFor(
+    const landed = await this.landed(
+      txHash,
+      this.retryableWaitAttempts,
       async () => (await this.resources.getAccountState(deposit)).exists,
     );
-    if (!created) {
+    if (landed !== 'confirmed') {
       throw new SidecarError(
-        `Deposit ${deposit} activation was broadcast but the account is not visible yet.`,
+        `Deposit ${deposit} activation ${txHash} ${describeWait(landed)}.`,
         'DEPOSIT_ACTIVATION_NOT_CONFIRMED',
         true,
       );
     }
     logger.info(
-      { depositAddress: deposit, ...contextFields(context) },
-      'Deposit account activated (1 SUN; creation fee charged to the sweeper)',
+      { depositAddress: deposit, txHash, ...contextFields(context) },
+      'Deposit account activated in a block (1 SUN; creation fee charged to the sweeper)',
     );
     return 1;
   }
@@ -131,7 +182,7 @@ export class EnergyDelegationService {
 
     let probes: PlanProbes;
     try {
-      probes = await this.readProbes(transfer, context);
+      probes = await this.readProbes(transfer);
     } catch (err) {
       logger.warn(
         { err: (err as Error).message, depositAddress: deposit, ...contextFields(context) },
@@ -154,8 +205,20 @@ export class EnergyDelegationService {
     if (plan.kind === 'delegate') {
       const delegated = await this.tryDelegate(deposit, plan, context);
       if (delegated) {
-        await this.topUpBandwidthIfNeeded(deposit, probes, context);
-        return { mode: 'delegated', delegationAmountSun: plan.delegationSun, fallbackAmountSun: 0 };
+        let sent: number;
+        try {
+          sent = await this.topUpBandwidthIfNeeded(deposit, probes, context);
+        } catch (err) {
+          // Nothing is broadcast after this; a delegation left in place would
+          // stay with the deposit until an admin reclaims it.
+          await this.tryUndelegate(deposit, plan.delegationSun, context, 'bandwidth-failed');
+          throw err;
+        }
+        return {
+          mode: 'delegated',
+          delegationAmountSun: plan.delegationSun,
+          fallbackAmountSun: sent,
+        };
       }
       // Delegation did not deliver: burn the whole shortfall instead.
       return this.burn(deposit, plan.energyShortfall, probes, context);
@@ -165,17 +228,14 @@ export class EnergyDelegationService {
       return this.burn(deposit, plan.energyShortfall, probes, context);
     }
 
-    // no-energy-needed — the contract owner (or existing Energy) pays; only
-    // Bandwidth can still be short.
+    // no-energy-needed — the deposit already holds the Energy for the whole
+    // transfer; only Bandwidth can still be short.
     const sent = await this.topUpBandwidthIfNeeded(deposit, probes, context);
     return { mode: 'no-energy', delegationAmountSun: 0, fallbackAmountSun: sent };
   }
 
-  private async readProbes(
-    transfer: DelegatedTransfer,
-    context: DelegationContext,
-  ): Promise<PlanProbes> {
-    const [energyRequired, policy, depositResources, hotResources, delegatableSun, fees, state] =
+  private async readProbes(transfer: DelegatedTransfer): Promise<PlanProbes> {
+    const [energyRequired, depositResources, sweeperResources, delegatableSun, fees, state] =
       await Promise.all([
         this.resources.estimateTransferEnergy(
           transfer.contractAddress,
@@ -183,19 +243,8 @@ export class EnergyDelegationService {
           transfer.toAddress,
           transfer.amountUnits,
         ),
-        this.resources.getContractEnergyPolicy(transfer.contractAddress).catch((err: Error) => {
-          // Conservative: the caller pays everything. Mainnet Tether sets 100.
-          logger.warn(
-            {
-              err: err.message,
-              contractAddress: transfer.contractAddress,
-              ...contextFields(context),
-            },
-            'Contract energy policy unreadable — planning as if the caller pays 100%',
-          );
-          return { callerPercent: 100, originEnergyLimit: 0 } satisfies ContractEnergyPolicy;
-        }),
         this.resources.getAccountResources(transfer.depositAddress),
+        // Only for the network-wide Energy/TRX ratio, which every account read carries.
         this.resources.getAccountResources(this.sweeperAddress),
         this.resources.getDelegatableEnergySun(this.sweeperAddress),
         this.resources.getChainFeeParameters(),
@@ -204,27 +253,27 @@ export class EnergyDelegationService {
 
     const plan = planDelegation({
       energyRequired,
-      callerPercent: policy.callerPercent,
       senderEnergyAvailable: depositResources.energyAvailable,
-      energyPerTrx: hotResources.energyPerTrx,
+      energyPerTrx: sweeperResources.energyPerTrx,
       delegatableSun,
     });
     return { plan, depositResources, fees, balanceSun: state.balanceSun };
   }
 
-  /** Delegate and confirm the Energy arrived; reclaim and report false if it did not. */
+  /** Delegate and confirm the Energy is usable in a block; reclaim and report false if not. */
   private async tryDelegate(
     deposit: string,
     plan: Extract<DelegationPlan, { kind: 'delegate' }>,
     context: DelegationContext,
   ): Promise<boolean> {
+    let txHash: string;
     try {
-      await this.client.delegateEnergy({
+      ({ txHash } = await this.client.delegateEnergy({
         ownerAddress: this.sweeperAddress,
         ownerPrivateKey: this.sweeperPrivateKey,
         receiverAddress: deposit,
         amountSun: plan.delegationSun,
-      });
+      }));
     } catch (err) {
       logger.warn(
         {
@@ -238,34 +287,50 @@ export class EnergyDelegationService {
       return false;
     }
 
-    const arrived = await this.waitFor(
+    const landed = await this.landed(
+      txHash,
+      this.expiryWaitAttempts,
       async () =>
-        (await this.resources.getAccountResources(deposit)).energyAvailable >= plan.callerEnergy,
+        (await this.resources.getAccountResources(deposit)).energyAvailable >= plan.energyRequired,
     );
-    if (arrived) {
-      logger.info(
-        {
-          depositAddress: deposit,
-          amountSun: plan.delegationSun,
-          callerEnergy: plan.callerEnergy,
-          ...contextFields(context),
-        },
-        'Energy delegation confirmed',
-      );
+    const fields = {
+      depositAddress: deposit,
+      txHash,
+      amountSun: plan.delegationSun,
+      energyRequired: plan.energyRequired,
+      ...contextFields(context),
+    };
+    if (landed === 'confirmed') {
+      logger.info(fields, 'Energy delegation confirmed in a block');
       return true;
     }
 
     logger.warn(
-      {
-        depositAddress: deposit,
-        amountSun: plan.delegationSun,
-        callerEnergy: plan.callerEnergy,
-        ...contextFields(context),
-      },
-      'Delegated Energy did not reach the required amount — reclaiming and burning instead',
+      { ...fields, outcome: landed },
+      'Delegated Energy is not usable — reclaiming and burning instead',
     );
     await this.tryUndelegate(deposit, plan.delegationSun, context, 'delegation-short');
     return false;
+  }
+
+  /**
+   * A reclaim that reaches a block ahead of the transfer it funds leaves that
+   * transfer without Energy, and it fails on-chain. Wait for the transfer's
+   * block; a transfer no block holds within the expiry wait can no longer land,
+   * so reclaiming after it is safe either way.
+   */
+  private async awaitTransferBlock(
+    deposit: string,
+    txHash: string,
+    context: DelegationContext,
+  ): Promise<void> {
+    const block = await this.waitForBlock(txHash, this.expiryWaitAttempts);
+    if (block === null) {
+      logger.warn(
+        { depositAddress: deposit, txHash, ...contextFields(context) },
+        'Transfer is in no block after its expiration window — reclaiming the delegation anyway',
+      );
+    }
   }
 
   private async burn(
@@ -315,13 +380,14 @@ export class EnergyDelegationService {
     context: DelegationContext,
     purpose: 'FALLBACK' | 'BURN_TOP_UP' | 'BANDWIDTH_TOP_UP',
   ): Promise<void> {
+    let txHash: string;
     try {
-      await this.client.sendTrx({
+      ({ txHash } = await this.client.sendTrx({
         fromAddress: this.sweeperAddress,
         fromPrivateKey: this.sweeperPrivateKey,
         toAddress: deposit,
         amountSun,
-      });
+      }));
     } catch (err) {
       throw new SidecarError(
         `TRX ${purpose} to ${deposit} failed: ${(err as Error).message}`,
@@ -329,22 +395,24 @@ export class EnergyDelegationService {
         true,
       );
     }
-    // Broadcasting the transfer before the TRX lands would make it fail on
-    // Energy with nothing left to fall back to.
-    const arrived = await this.waitFor(
+    // A transfer broadcast before the TRX is in a block can reach the block
+    // producer first and fail on Energy with nothing left to fall back to.
+    const landed = await this.landed(
+      txHash,
+      this.retryableWaitAttempts,
       async () =>
         (await this.resources.getAccountState(deposit)).balanceSun >= balanceBeforeSun + amountSun,
     );
-    if (!arrived) {
+    if (landed !== 'confirmed') {
       throw new SidecarError(
-        `TRX ${purpose} to ${deposit} was broadcast but has not arrived yet.`,
+        `TRX ${purpose} to ${deposit} (${txHash}) ${describeWait(landed)}.`,
         'TRX_TOP_UP_NOT_CONFIRMED',
         true,
       );
     }
     logger.info(
-      { depositAddress: deposit, amountSun, purpose, ...contextFields(context) },
-      'TRX sent to deposit and confirmed',
+      { depositAddress: deposit, txHash, amountSun, purpose, ...contextFields(context) },
+      'TRX sent to deposit and confirmed in a block',
     );
   }
 
@@ -352,7 +420,12 @@ export class EnergyDelegationService {
     deposit: string,
     amountSun: number,
     context: DelegationContext,
-    phase: 'action-succeeded' | 'action-failed' | 'delegation-short',
+    phase:
+      | 'action-succeeded'
+      | 'action-failed'
+      | 'delegation-short'
+      | 'bandwidth-failed'
+      | 'deadline-elapsed',
   ): Promise<void> {
     try {
       await this.client.undelegateEnergy({
@@ -375,8 +448,35 @@ export class EnergyDelegationService {
     }
   }
 
-  private async waitFor(condition: () => Promise<boolean>): Promise<boolean> {
-    for (let attempt = 0; attempt < this.pollAttempts; attempt++) {
+  /**
+   * <paramref name="txHash"/> in a block, then the account read showing it.
+   * TronGrid load-balances reads, so the node answering the second question
+   * can be a block behind the one that answered the first.
+   */
+  private async landed(
+    txHash: string,
+    blockWaitAttempts: number,
+    reflected: () => Promise<boolean>,
+  ): Promise<WaitOutcome> {
+    if ((await this.waitForBlock(txHash, blockWaitAttempts)) === null) return 'not-in-block';
+    return (await this.waitFor(reflected, this.stateWaitAttempts)) ? 'confirmed' : 'not-reflected';
+  }
+
+  private async waitForBlock(txHash: string, attempts: number): Promise<number | null> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const block = await this.resources.getTransactionBlockNumber(txHash);
+        if (block !== null) return block;
+      } catch {
+        // A transient probe error is not an answer; keep polling.
+      }
+      await this.sleep(this.pollIntervalMs);
+    }
+    return null;
+  }
+
+  private async waitFor(condition: () => Promise<boolean>, attempts: number): Promise<boolean> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         if (await condition()) return true;
       } catch {
@@ -405,6 +505,14 @@ export class EnergyDelegationService {
   }
 }
 
+type WaitOutcome = 'confirmed' | 'not-in-block' | 'not-reflected';
+
+function describeWait(outcome: Exclude<WaitOutcome, 'confirmed'>): string {
+  return outcome === 'not-in-block'
+    ? 'is not in a block yet'
+    : 'is in a block, but the account read does not show it yet';
+}
+
 function contextFields(context: DelegationContext) {
   return {
     correlationId: context.correlationId,
@@ -420,11 +528,11 @@ export interface DelegationResourceProbe {
     toAddress: string,
     amountUnits: string,
   ): Promise<number>;
-  getContractEnergyPolicy(contractAddress: string): Promise<ContractEnergyPolicy>;
   getAccountResources(address: string): Promise<AccountResources>;
   getAccountState(address: string): Promise<AccountState>;
   getDelegatableEnergySun(ownerAddress: string): Promise<number>;
   getChainFeeParameters(): Promise<ChainFeeParameters>;
+  getTransactionBlockNumber(txHash: string): Promise<number | null>;
 }
 
 export interface EnergyDelegationServiceDeps {
@@ -435,10 +543,21 @@ export interface EnergyDelegationServiceDeps {
   sweeperPrivateKey: string;
   /** SUN sent when the plan itself cannot be computed (08 §3.3 fallback). */
   fallbackAmountSun: number;
-  /** Confirmation polling (defaults: 3 s × 20). */
+  /** Poll spacing — one TRON block (default 3 s). */
   pollIntervalMs?: number;
-  pollAttempts?: number;
+  /** Block wait where a timeout only means "retry later": activation, TRX top-ups (default 10 polls ≈ 30 s). */
+  retryableWaitAttempts?: number;
+  /**
+   * Block wait that must outlast the node's 60 s transaction expiration: the
+   * delegation, and the transfer before its reclaim (default 25 polls ≈ 75 s).
+   */
+  expiryWaitAttempts?: number;
+  /** Polls, after the block, for the account read to show it (default 3). */
+  stateWaitAttempts?: number;
+  /** No transfer broadcast after this long since the call started (default 150 s). */
+  transferBroadcastDeadlineMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 }
 
 export interface DelegatedTransfer {
@@ -455,9 +574,9 @@ export interface DelegationContext {
 
 /**
  * <c>delegated</c> — stake covered the Energy · <c>burn</c> — the deposit burned
- * TRX sent for exactly this transfer · <c>no-energy</c> — the caller owed no
- * Energy (contract owner pays) · <c>fallback</c> — the plan could not be
- * computed and the fixed amount was sent.
+ * TRX sent for exactly this transfer · <c>no-energy</c> — the deposit already
+ * held the Energy for the whole transfer · <c>fallback</c> — the plan could not
+ * be computed and the fixed amount was sent.
  */
 export type DelegationMode = 'delegated' | 'burn' | 'no-energy' | 'fallback';
 

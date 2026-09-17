@@ -104,6 +104,24 @@ describe('TronResourceClient.getContractEnergyPolicy — who pays the energy', (
     await expect(client().getContractEnergyPolicy(CONTRACT, fetchFn)).resolves.toEqual({
       callerPercent: 0,
       originEnergyLimit: 50_000,
+      originAddress: null,
+    });
+  });
+
+  it("reads mainnet Tether's measured shape, including the owner whose Energy pays its share", async () => {
+    // Verbatim fields of mainnet getcontract TR7NHq… on 2026-09-17 (bytecode/abi omitted).
+    const fetchFn = fetchReturning({
+      origin_address: 'THPvaUhoh2Qn2y9THCZML3H815hhFhn5YC',
+      contract_address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      consume_user_resource_percent: 30,
+      name: 'TetherToken',
+      origin_energy_limit: 10_000_000,
+    });
+
+    await expect(client().getContractEnergyPolicy(CONTRACT, fetchFn)).resolves.toEqual({
+      callerPercent: 30,
+      originEnergyLimit: 10_000_000,
+      originAddress: 'THPvaUhoh2Qn2y9THCZML3H815hhFhn5YC',
     });
   });
 
@@ -130,6 +148,49 @@ describe('TronResourceClient.getContractEnergyPolicy — who pays the energy', (
 
     expect(error).toBeInstanceOf(SidecarError);
     expect((error as SidecarError).code).toBe('FEE_ESTIMATE_CONTRACT_NOT_FOUND');
+  });
+});
+
+describe('TronResourceClient.getTransactionBlockNumber — in a block, or not yet', () => {
+  it('returns the block of an included transaction (measured shape)', async () => {
+    // Keys measured on mainnet 2026-09-17 for a transaction of the latest block
+    // (tx 08cfbdc2…; the id is shortened — a 64-hex literal trips the secret scan).
+    const fetchFn = fetchReturning({
+      id: '08cfbdc250037382…',
+      blockNumber: 86_324_100,
+      blockTimeStamp: 1_789_645_398_000,
+      contractResult: [''],
+      receipt: { net_usage: 281 },
+    });
+
+    await expect(client().getTransactionBlockNumber('08cf…', fetchFn)).resolves.toBe(86_324_100);
+  });
+
+  it('reads the empty body as "no block holds it yet" — the measured answer for an unknown hash', async () => {
+    const fetchFn = fetchReturning({});
+
+    await expect(client().getTransactionBlockNumber('dead…', fetchFn)).resolves.toBeNull();
+  });
+
+  it.each([
+    { name: 'zero', blockNumber: 0 },
+    { name: 'a fraction', blockNumber: 1.5 },
+    { name: 'a string', blockNumber: '86324100' },
+  ])('never reads $name as a block', async ({ blockNumber }) => {
+    const fetchFn = fetchReturning({ id: 'abc', blockNumber });
+
+    await expect(client().getTransactionBlockNumber('abc', fetchFn)).resolves.toBeNull();
+  });
+
+  it('asks the full node, not the solidity node, by transaction id', async () => {
+    // The solidity node lags ~19 blocks; the flow needs "in a block", not "final".
+    const fetchFn = fetchReturning({});
+
+    await client().getTransactionBlockNumber('abc123', fetchFn);
+
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://nile.example/wallet/gettransactioninfobyid');
+    expect(JSON.parse(init.body as string)).toEqual({ value: 'abc123' });
   });
 });
 

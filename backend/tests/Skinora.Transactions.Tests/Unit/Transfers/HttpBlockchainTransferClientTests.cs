@@ -350,6 +350,34 @@ public class HttpBlockchainTransferClientTests
     }
 
     [Fact]
+    public async Task GetStatus_KeepsTheChainReadBudget_OnAClientSizedForBroadcasts()
+    {
+        // The named client's timeout is the broadcast budget (300 s — it waits
+        // for blocks). A status read must still give up on its own, shorter
+        // budget: TimeoutSeconds 1 → 3 s. Without that, the handler below
+        // answers after 20 s and the stuck read looks like a confirmation.
+        var handler = new RecordingHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "tx-slow",
+                    blockNumber = 1L,
+                    contractRet = "SUCCESS",
+                    confirmations = 25,
+                }),
+            };
+        });
+        var sut = BuildClient(handler, timeoutSeconds: 1);
+
+        var result = await sut.GetStatusAsync("tx-slow", CancellationToken.None);
+
+        Assert.Equal(TransferStatusOutcome.Unavailable, result.Outcome);
+    }
+
+    [Fact]
     public async Task GetStatus_Unavailable_On_Non200()
     {
         var handler = new RecordingHandler((_, _) =>
@@ -400,19 +428,23 @@ public class HttpBlockchainTransferClientTests
     }
 
     private static HttpBlockchainTransferClient BuildClient(
-        HttpMessageHandler handler, string internalKey = "")
+        HttpMessageHandler handler, string internalKey = "", int timeoutSeconds = 5)
     {
-        var http = new HttpClient(handler)
-        {
-            BaseAddress = new Uri(SidecarBaseUrl),
-        };
-        var options = Options.Create(new BlockchainSidecarOptions
+        var sidecarOptions = new BlockchainSidecarOptions
         {
             BaseUrl = SidecarBaseUrl,
             InternalKey = internalKey,
-            TimeoutSeconds = 5,
-        });
-        return new HttpBlockchainTransferClient(http, options, NullLogger<HttpBlockchainTransferClient>.Instance);
+            TimeoutSeconds = timeoutSeconds,
+        };
+        // Wired as TransactionsModule wires it: the client timeout is the
+        // broadcast budget.
+        var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri(SidecarBaseUrl),
+            Timeout = sidecarOptions.ResolveTransferTimeout(),
+        };
+        return new HttpBlockchainTransferClient(
+            http, Options.Create(sidecarOptions), NullLogger<HttpBlockchainTransferClient>.Instance);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

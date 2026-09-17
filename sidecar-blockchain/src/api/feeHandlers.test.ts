@@ -33,6 +33,7 @@ const SAMPLE_RESULT: FeeEstimateResult = {
   energyRequired: 29_650,
   energyPayableByCaller: 29_650,
   contractCallerPercent: 100,
+  contractOwnerEnergyAvailable: 0,
   delegationPlan: null,
   delegationSun: null,
   energyAvailable: 100_000,
