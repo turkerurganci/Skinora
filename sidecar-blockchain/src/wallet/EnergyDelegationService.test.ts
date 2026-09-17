@@ -65,6 +65,14 @@ interface ChainOptions {
   neverInBlock?: TxKind[];
   /** The node answering account reads never shows the deposit's activation. */
   activationReadLags?: boolean;
+  /**
+   * How many account reads after a TRX send still answer with the balance the
+   * deposit had BEFORE it — TronGrid load-balances reads, so the node
+   * answering can be behind the one that reported the block.
+   */
+  balanceReadLagPolls?: number;
+  /** Milliseconds the plan probes take (the call's own clock, not block time). */
+  probeDelayMs?: number;
   /** The simulation probe itself fails (no answer about the transfer). */
   simulationThrows?: boolean;
   /** The node runs the transfer and it reverts (an answer: it would fail on-chain). */
@@ -133,9 +141,13 @@ function buildChain(o: ChainOptions = {}) {
     throw new Error(`fake chain: no account ${address}`);
   };
 
+  let balanceLagLeft = 0;
+  let balanceBeforeLastSend = 0;
+
   const resources = {
     estimateTransferEnergy: vi.fn(async () => {
       seen.activationBlockAtPlan.push(blockOfLatest('activation'));
+      clockMs += o.probeDelayMs ?? 0;
       if (o.simulationThrows) throw new Error('simulation probe answered HTTP 503');
       if (o.simulationReverts) {
         // Settle after every other probe, so a flow that raised the first
@@ -162,9 +174,12 @@ function buildChain(o: ChainOptions = {}) {
     getAccountState: vi.fn(async (address: string) => {
       if (address === SWEEPER) return sweeperState;
       if (address !== DEPOSIT) return unexpected(address);
-      return deposit.exists && !o.activationReadLags
-        ? { exists: true, balanceSun: deposit.balanceSun }
-        : { exists: false, balanceSun: 0 };
+      if (!deposit.exists || o.activationReadLags) return { exists: false, balanceSun: 0 };
+      if (balanceLagLeft > 0) {
+        balanceLagLeft -= 1;
+        return { exists: true, balanceSun: balanceBeforeLastSend };
+      }
+      return { exists: true, balanceSun: deposit.balanceSun };
     }),
     getDelegatableEnergySun: vi.fn(async (address: string) => {
       if (address === SWEEPER) return o.delegatableSun ?? 0;
@@ -184,6 +199,8 @@ function buildChain(o: ChainOptions = {}) {
       if (o.sendTrxThrows) throw new Error('sendTrx rejected');
       const hash = broadcast(deposit.exists ? 'trx' : 'activation', request.amountSun);
       // Pending view: the node shows it before any block holds it.
+      balanceBeforeLastSend = deposit.balanceSun;
+      balanceLagLeft = o.balanceReadLagPolls ?? 0;
       deposit.exists = true;
       deposit.balanceSun += request.amountSun;
       return { txHash: hash };
@@ -561,6 +578,31 @@ describe('burn path — the stake cannot cover the whole transfer', () => {
     });
     expect(chain.transfer).not.toHaveBeenCalled();
   });
+
+  it('waits for the account read to catch up with the top-up block before broadcasting', async () => {
+    // The block is only half the answer: TronGrid load-balances reads, so the
+    // node answering the balance can be behind the one that reported the
+    // block. Two lagging reads must not end the wait (default: 3 polls).
+    const chain = buildChain({ balanceReadLagPolls: 2 });
+
+    const outcome = await chain.run();
+
+    expect(chain.seen.atTransfer[0].trx).not.toBeNull();
+    expect(outcome).toMatchObject({ mode: 'burn', fallbackAmountSun: BURN_TOP_UP_64K_SUN });
+  });
+
+  it('does not broadcast when the top-up is in a block the balance read never shows', async () => {
+    // A transfer broadcast against a node that has not applied the top-up is
+    // rejected or fails on Energy; the retry finds the TRX already there.
+    const chain = buildChain({ balanceReadLagPolls: 99 });
+
+    await expect(chain.run()).rejects.toMatchObject({
+      code: 'TRX_TOP_UP_NOT_CONFIRMED',
+      retryable: true,
+      message: expect.stringContaining('does not show it'),
+    });
+    expect(chain.transfer).not.toHaveBeenCalled();
+  });
 });
 
 describe('no-energy path — the deposit already holds the Energy', () => {
@@ -663,6 +705,32 @@ describe('the transfer itself would revert — nothing is sent (owner decision 2
 });
 
 describe('broadcast deadline — the backend must still be waiting', () => {
+  it.each([
+    { name: 'exactly at the deadline', elapsedMs: 150_000, broadcasts: true },
+    { name: 'one millisecond past it', elapsedMs: 150_001, broadcasts: false },
+  ])(
+    'the DEFAULT deadline is 150 s — $name broadcasts: $broadcasts',
+    async ({ elapsedMs, broadcasts }) => {
+      // Pinned on both sides, because nothing else pins it: the backend's
+      // transfer budget (BlockchainSidecarOptions.DefaultTransferTimeoutSeconds
+      // = 300 s) is sized as this window plus the ~75 s block wait that follows
+      // a broadcast. Raising this default alone would let the sidecar broadcast
+      // into a call the backend has already abandoned and retried.
+      // No delegation, no top-up on this path, so the call's whole elapsed time
+      // is the probe delay.
+      const chain = buildChain({ depositEnergy: 70_000, probeDelayMs: elapsedMs });
+
+      if (broadcasts) {
+        const outcome = await chain.run();
+        expect(outcome.mode).toBe('no-energy');
+        expect(chain.transfer).toHaveBeenCalledOnce();
+      } else {
+        await expect(chain.run()).rejects.toMatchObject({ code: 'TRANSFER_WINDOW_ELAPSED' });
+        expect(chain.transfer).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it('reclaims and asks for a retry instead of broadcasting past the deadline', async () => {
     const chain = buildChain({
       depositExists: false,

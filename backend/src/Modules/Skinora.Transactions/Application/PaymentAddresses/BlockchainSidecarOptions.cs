@@ -37,8 +37,11 @@ public sealed class BlockchainSidecarOptions
     public const int DefaultTransferTimeoutSeconds = 300;
 
     /// <summary>
-    /// HTTP timeout, in seconds, for transfer BROADCAST calls (payout, sweep,
-    /// refund family, cold wallet). A deposit-sourced broadcast waits on the
+    /// HTTP timeout, in seconds, for the transfer BROADCAST calls that go
+    /// through <c>HttpBlockchainTransferClient</c> (payout, sweep, refund
+    /// family). The admin cold-wallet transfer is NOT one of them — it goes
+    /// through <c>HttpBlockchainSidecarClient</c>, waits for no block and
+    /// keeps <see cref="TimeoutSeconds"/>. A deposit-sourced broadcast waits on the
     /// sidecar for each resource step to land in a block (08 §3.3): the
     /// sidecar refuses to broadcast a transfer more than 150 s into the call,
     /// and after a broadcast waits up to ~75 s — past the node's 60 s
