@@ -1,11 +1,12 @@
 import TronWeb from 'tronweb';
-import { SidecarError } from '../errors/SidecarError.js';
+import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 
 /**
  * Read-only chain probes backing the pre-send fee estimate
- * (Prova-GasFeeChargedIsFixedGuess). Three primitives, all against the full
- * node's REST API with an injectable <c>fetchFn</c> (mirrors
- * <c>TronTransferClient.getTransactionStatus</c>):
+ * (Prova-GasFeeChargedIsFixedGuess) and the deposit transfer resource flow
+ * (EnergyDelegationService), all against the full node's REST API with an
+ * injectable <c>fetchFn</c> (mirrors <c>TronTransferClient.getTransactionStatus</c>).
+ * The core ones:
  *
  * <list type="bullet">
  *   <item><c>estimateTransferEnergy</c> — `triggerconstantcontract` simulation
@@ -17,6 +18,9 @@ import { SidecarError } from '../errors/SidecarError.js';
  *   <item><c>getChainFeeParameters</c> — `getchainparameters` unit prices
  *     (sun per Energy, sun per Bandwidth byte). Network-wide values that the
  *     committee can change, so they are read, not assumed.</item>
+ *   <item><c>getTransactionBlockNumber</c> — `gettransactioninfobyid`: whether
+ *     a broadcast step is actually IN a block, which no account read can
+ *     tell.</item>
  * </list>
  */
 
@@ -35,19 +39,36 @@ export interface AccountResources {
 
 export interface ContractEnergyPolicy {
   /**
-   * Share of the call's Energy the CALLER pays, 0-100.
+   * The contract's NOMINAL caller share, 0-100 (`consume_user_resource_percent`).
    *
-   * A TRC-20 contract can be deployed so its owner absorbs the execution cost
-   * (`consume_user_resource_percent = 0`), and the Nile test USDT used for
-   * rehearsals is deployed exactly that way — which is why every measured
-   * rehearsal transfer shows `fee: 0` while the hot wallet holds no stake at
-   * all. Mainnet Tether sets 100, so the sender pays. Charging a user for
-   * energy the contract owner covers is charging for a cost nobody incurred,
-   * so the estimate has to read this rather than assume it.
+   * Nominal only: the owner pays its share out of its OWN remaining Energy, so
+   * the split the chain actually applies also needs <see cref="originAddress"/>'s
+   * resources (`callerEnergyShare`, DelegationPlanner). A TRC-20 contract can
+   * be deployed so its owner absorbs the execution cost, and the Nile test USDT
+   * used for rehearsals is (0 here, ~197M Energy left on 2026-09-17) — which is
+   * why rehearsal transfers show `fee: 0`. Mainnet Tether sets 30, but its
+   * owner has no Energy left, and across 542 USDT calls in five blocks the
+   * callers paid 100.00% (measured 2026-09-17). Read alone, this number charged
+   * a mainnet user 30% of the real cost.
    */
   callerPercent: number;
   /** Owner's Energy ceiling for a single call; 0 means the owner subsidises nothing. */
   originEnergyLimit: number;
+  /** The contract owner (`origin_address`) whose remaining Energy pays its share; null when not reported. */
+  originAddress: string | null;
+}
+
+export interface AccountState {
+  /**
+   * Whether the account exists on-chain. An address that has only RECEIVED a
+   * TRC-20 token is NOT an account: measured on Nile 2026-09-16, both
+   * `delegateresource` to it ("Account[…] not exists") and a transfer FROM it
+   * ("account […] does not exist") are rejected at validation. Only a TRX (or
+   * TRC-10) transfer creates it.
+   */
+  exists: boolean;
+  /** TRX balance in SUN; 0 when the account does not exist. */
+  balanceSun: number;
 }
 
 export interface ChainFeeParameters {
@@ -70,6 +91,7 @@ interface AccountResourceResponse {
 
 interface ContractResponse {
   contract_address?: string;
+  origin_address?: string;
   consume_user_resource_percent?: number;
   origin_energy_limit?: number;
 }
@@ -128,28 +150,41 @@ export class TronResourceClient {
       fetchFn,
     );
 
-    // `result.result: true` only means the node ACCEPTED the call, not that the
+    // `result.result: true` only means the node RAN the call, not that the
     // call succeeded. A reverting transfer answers HTTP 200 with that same
     // true, and reports the failure in `result.message` / `transaction.ret`
-    // instead (measured against Nile 2026-09-06 — a revert returns
-    // energy_used 1984 where the same transfer succeeding returns 29650).
-    // Reading the revert as an estimate would charge a fifteenth of the real
-    // cost, and the platform would silently absorb the rest: exactly the
-    // failure shape this estimate exists to remove. It is reachable without
-    // any outage — the wrong-token refund simulates the EXPECTED token, which
-    // the deposit address by definition does not hold, and a payout simulates
-    // from a hot wallet that may not be funded yet.
-    const revertReason =
-      typeof body.result?.message === 'string' && body.result.message.length > 0
-        ? body.result.message
-        : body.transaction?.ret?.find(
-            (entry) =>
-              typeof entry?.ret === 'string' && entry.ret !== '' && entry.ret !== 'SUCCESS',
-          )?.ret;
+    // instead (measured on Nile 2026-09-06 — revert energy_used 1984 against
+    // 29650 for the same transfer succeeding; on mainnet 2026-09-17 —
+    // "REVERT opcode executed", ret FAILED, energy_used 8624 from an address
+    // holding no USDT). Reading the revert as an estimate would charge a
+    // fraction of the real cost and the platform would silently absorb the
+    // rest. It is reachable without any outage: a payout simulates from a hot
+    // wallet the sweep may not have funded yet, and a deposit transfer retried
+    // after an unrecorded first attempt finds its tokens already gone.
+    //
+    // A node that REFUSES the call answers without `result: true`
+    // (`OTHER_ERROR` for a malformed address, `CONTRACT_VALIDATE_ERROR` for a
+    // missing contract — measured on mainnet 2026-09-17): that is a failed
+    // probe, not an answer about the transfer, and it is not a revert.
+    const executedButFailed =
+      body.result?.result === true
+        ? typeof body.result.message === 'string' && body.result.message.length > 0
+          ? body.result.message
+          : body.transaction?.ret?.find(
+              (entry) =>
+                typeof entry?.ret === 'string' && entry.ret !== '' && entry.ret !== 'SUCCESS',
+            )?.ret
+        : undefined;
 
-    if (body.result?.result !== true || typeof body.energy_used !== 'number' || revertReason) {
+    if (executedButFailed) {
+      throw new SimulationRevertedError(
+        `triggerconstantcontract simulation failed: ${executedButFailed}`,
+        executedButFailed,
+      );
+    }
+    if (body.result?.result !== true || typeof body.energy_used !== 'number') {
       throw new SidecarError(
-        `triggerconstantcontract simulation failed: ${revertReason ?? body.result?.message ?? 'no energy_used in response'}`,
+        `triggerconstantcontract simulation failed: ${body.result?.message ?? 'no energy_used in response'}`,
         'FEE_ESTIMATE_SIMULATION_FAILED',
         true,
       );
@@ -182,6 +217,44 @@ export class TronResourceClient {
         ? body.TotalEnergyLimit / body.TotalEnergyWeight
         : null;
     return { energyAvailable, bandwidthAvailable, energyPerTrx };
+  }
+
+  /**
+   * Existence + TRX balance of <paramref name="address"/> (`getaccount`).
+   *
+   * An empty body is the node's answer for a non-existent account, and here —
+   * unlike `getcontract` — that is a real answer, not a failed probe: the
+   * caller acts on it by creating the account, which is harmless if the probe
+   * was wrong (a TRX transfer to an existing account just adds balance).
+   */
+  async getAccountState(address: string, fetchFn: typeof fetch = fetch): Promise<AccountState> {
+    const body = await this.post<{ address?: string; balance?: number }>(
+      '/wallet/getaccount',
+      { address, visible: true },
+      fetchFn,
+    );
+    const exists = typeof body.address === 'string' && body.address.length > 0;
+    return { exists, balanceSun: exists ? Math.max(0, body.balance ?? 0) : 0 };
+  }
+
+  /**
+   * How much staked TRX (in SUN) <paramref name="ownerAddress"/> can delegate
+   * as ENERGY right now (`getcandelegatedmaxsize`, type 1).
+   *
+   * The node answers `{}` when nothing is delegatable (measured on Nile
+   * 2026-09-16 with no stake). Reading that as 0 is safe in the only direction
+   * that matters: 0 sends the caller down the burn path, which always works.
+   */
+  async getDelegatableEnergySun(
+    ownerAddress: string,
+    fetchFn: typeof fetch = fetch,
+  ): Promise<number> {
+    const body = await this.post<{ max_size?: number }>(
+      '/wallet/getcandelegatedmaxsize',
+      { owner_address: ownerAddress, type: 1, visible: true },
+      fetchFn,
+    );
+    return typeof body.max_size === 'number' && body.max_size > 0 ? body.max_size : 0;
   }
 
   /**
@@ -221,7 +294,40 @@ export class TronResourceClient {
         : 0;
     const originEnergyLimit =
       typeof body.origin_energy_limit === 'number' ? body.origin_energy_limit : 0;
-    return { callerPercent, originEnergyLimit };
+    const originAddress =
+      typeof body.origin_address === 'string' && body.origin_address.length > 0
+        ? body.origin_address
+        : null;
+    return { callerPercent, originEnergyLimit, originAddress };
+  }
+
+  /**
+   * The block <paramref name="txHash"/> landed in, or null while no block holds
+   * it (`gettransactioninfobyid` on the full node).
+   *
+   * This — not an account read — is what "the step happened" means. Account
+   * reads answer from the node's PENDING state: in the 2026-09-16 Nile run a
+   * delegation, the transfer broadcast after its "Energy arrived" check and the
+   * reclaim all landed in ONE block (71,019,348), so their order was only the
+   * order the block producer received them in. The node answers `{}` for a
+   * hash no block holds (measured 2026-09-17 on mainnet and Nile) and a
+   * `blockNumber` as soon as it applies the block — no solidity lag. Anything
+   * without a positive integer `blockNumber` is "not yet", never a block.
+   */
+  async getTransactionBlockNumber(
+    txHash: string,
+    fetchFn: typeof fetch = fetch,
+  ): Promise<number | null> {
+    const body = await this.post<{ id?: string; blockNumber?: unknown }>(
+      '/wallet/gettransactioninfobyid',
+      { value: txHash },
+      fetchFn,
+    );
+    return typeof body.blockNumber === 'number' &&
+      Number.isInteger(body.blockNumber) &&
+      body.blockNumber > 0
+      ? body.blockNumber
+      : null;
   }
 
   async getChainFeeParameters(fetchFn: typeof fetch = fetch): Promise<ChainFeeParameters> {

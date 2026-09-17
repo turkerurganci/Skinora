@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Skinora.Shared.Persistence;
 
@@ -11,9 +12,11 @@ using Skinora.Shared.Persistence;
 namespace Skinora.Shared.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916180056_RemoveSweepEnergyDelegationSetting")]
+    partial class RemoveSweepEnergyDelegationSetting
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1567,7 +1570,7 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Monitoring",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "string",
-                            Description = "Depozit kaynak planı hiç hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX tutarı (SUN). Default 15 TRX = en pahalı TRC-20 transfer 13,03 TRX + bandı 0,35 TRX (08 §3.3). Kilidin yetmediği transfer bu ayarı kullanmaz; yakacağı TRX'i transfer başına hesaplar.",
+                            Description = "Energy delegation başarısız olursa deposit adresine fallback olarak gönderilen TRX tutarı (SUN). Default 15 TRX (08 §3.3 — TRC-20 transferin gas için yaklaşık üst sınırı). Deposit bu TRX'i kendi gas'ı için yakar.",
                             IsConfigured = true,
                             Key = "blockchain.sweep_trx_fallback_sun",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },

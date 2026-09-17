@@ -16,9 +16,9 @@ import { transfersTotal } from '../metrics.js';
  *   <item><c>undelegateEnergy</c> — delegation reclaim via
  *     <c>undelegateresource</c>, used after the broadcast succeeds. With
  *     <c>lock=false</c> (the only mode we use), reclaim is instant.</item>
- *   <item><c>sendTrx</c> — fallback TRX transfer (08 §3.3 "delegation
- *     başarısızsa deposit adresine minimum TRX transfer"). Used when
- *     delegation itself fails so the deposit can still pay its own gas.</item>
+ *   <item><c>sendTrx</c> — plain TRX transfer to a deposit (08 §3.3): the
+ *     1 SUN that activates it, the TRX its transfer will burn, or the fixed
+ *     fallback when no plan could be computed.</item>
  * </list>
  * </para>
  *
@@ -167,10 +167,10 @@ export class TronDelegationClient {
   }
 
   /**
-   * Plain TRX transfer used as 08 §3.3 fallback when the delegation path
-   * cannot deliver Energy (e.g. sweeper Energy budget exhausted, network
-   * regression in the staking module). The receiver then burns TRX to cover
-   * its own TRC-20 transfer gas.
+   * Plain TRX transfer to a deposit (08 §3.3): activation (1 SUN), the burn
+   * top-up when the stake cannot cover a transfer, or the fixed fallback when
+   * no plan could be computed. The receiver then burns TRX to cover its own
+   * TRC-20 transfer gas.
    */
   async sendTrx(request: TrxTransferRequest): Promise<DelegationResult> {
     const tronWeb = this.bind(request.fromPrivateKey) as TronWebDelegationShape;

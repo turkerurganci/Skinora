@@ -2,7 +2,7 @@
 
 **Oluşturma:** WP14 (2026-06-19) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
 
-> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (63 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
+> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (66 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
 ---
 
@@ -134,6 +134,42 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
 > docker logs skinora-backend 2>&1 | grep "PRICE_DEVIATION rule"
 > ```
 
+### C.2 Hot cüzdan enerji kilidi (hibrit enerji kararı — SystemSetting değil)
+
+> **Proje sahibi kararı (2026-09-16): HİBRİT.** Hot cüzdan beklenen günlük **taban** satış hacmi kadar TRX'i ENERGY için kilitler; kilidin karşılayamadığı her transfer otomatik yakar. Kilit yapılmazsa hiçbir şey kırılmaz — her sweep ve payout yakma yoluna düşer ve satış başına ~15,2–21,8 TRX harcanır (08 §3.3). Deposit'ten yapılan transferlerde devredilecek miktar **ayar değildir**; sidecar her transfer için güncel orandan hesaplar.
+
+**Kilit miktarını hesapla:**
+
+1. Beklenen günlük taban satış sayısını belirle (`N`). Zirveleri değil, her gün kesin kullanılacak hacmi al — kullanılmayan enerji birikmez, boşa gider.
+2. Güncel oranı zincirden oku (hot cüzdan adresiyle):
+   ```bash
+   curl -s -X POST https://api.trongrid.io/wallet/getaccountresource \
+     -H 'Content-Type: application/json' \
+     -d '{"address":"<HOT_WALLET_ADDRESS>","visible":true}'
+   # oran = TotalEnergyLimit / TotalEnergyWeight   (2026-09-16: ≈ 9,52)
+   ```
+3. Kilit ≈ `N × 194.570 ÷ oran` TRX. 194.570 = sweep (64.285) + alıcısı token'ı ilk kez alan bir payout (130.285); satıcıların çoğu USDT tutuyorsa alt sınır `N × 128.570 ÷ oran`. Örnek, `N = 5`, oran 9,52: `5 × 194.570 ÷ 9,52 ≈ 102.200 TRX`.
+
+**Kilitle ve doğrula:**
+
+4. Hot cüzdanda ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). İşlem hash'ini kaydet. Kilit **14 gün** beklemeden çözülemez.
+5. Doğrula — devredilebilir miktar kilide yakın dönmeli:
+   ```bash
+   curl -s -X POST https://api.trongrid.io/wallet/getcandelegatedmaxsize \
+     -H 'Content-Type: application/json' \
+     -d '{"owner_address":"<HOT_WALLET_ADDRESS>","type":1,"visible":true}'
+   # {"max_size": <SUN>}   — boş gövde {} = devredilebilir hiçbir şey yok
+   ```
+6. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed in a block` geldiğini gör. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir. Plan transferin **tamamı** için yapılır (kontrat sahibinin payı düşülmez) ve devretme %10 pay içerir: mainnet'te bir sweep için o an ~7.430 TRX devredilebilir olmalıdır (64.285 ÷ 9,52 × 1,1).
+
+**Transfer çağrısının süresi (backend).** Depozitten yapılan her gönderimde sidecar her adımın bir bloğa girmesini bekler (08 §3.3 "Blok onayı"); bir çağrı olağan durumda ~10–25 sn sürer (Nile ölçümü, hesap açma + yakma: 11,6 sn). Backend bu çağrıya `BlockchainSidecar__TransferTimeoutSeconds` kadar (varsayılan **300**) bekler; sidecar çağrının 150. saniyesinden sonra transfer yayınlamaz. **300'ün altına indirme:** backend sidecar'dan önce vazgeçerse yeniden dener, ilk çağrının yayınladığı transfer kaydedilmez. Logda `TRANSFER_WINDOW_ELAPSED` görmek, zincir okumalarının ya da blokların yavaşladığını gösterir — transfer yayınlanmamıştır, backend bir sonraki denemede baştan başlar.
+
+**`DEPOSIT_TRANSFER_WOULD_REVERT` görürsen.** Sidecar transferi zincirde simüle etti ve transfer düşüyor; hiçbir şey gönderilmedi, hiçbir şey yayınlanmadı. Backend yeniden dener (varsayılan 1, 5, 15 dk — `blockchain.transfer_retry_intervals_minutes`), sonra satır `FAILED` olur ve admin uyarısı gelir. **İadeyi ya da sweep'i elle yeniden başlatmadan önce** depozitin giden TRC-20 transferlerine bak (`GET /v1/accounts/<DEPOZIT>/transactions/trc20?only_from=true`): en olası sebep, önceki bir denemenin token'ı göndermiş ama backend'in bunu kaydedememiş olmasıdır. Transfer oradaysa para yerine ulaşmıştır; yeniden başlatmak ikinci bir iade demektir.
+
+**Bant genişliği:** hot cüzdanın günlük ücretsiz bandı 600 bayttır. Hibritte her satış hot cüzdandan ~3 işlem (devretme, geri alma, payout ≈ 900 bayt) çıkarır; kota bitince işlem başına ~0,28–0,35 TRX bant yakılır (Nile'da ölçüldü). Bu, enerjiye göre küçük bir kalemdir; ayrıca BANDWIDTH için kilitlemek bu turda ölçülmedi.
+
+**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir.
+
 ---
 
 ## D. Sidecar config parity (cadence / sweep) — env otoriter, restart-bound
@@ -147,8 +183,7 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 | monitoring_post_cancel_24h_polling_seconds | `POST_CANCEL_CADENCE_24H_MS` | 30 sn | İptal sonrası 0-24 saat polling |
 | monitoring_post_cancel_7d_polling_seconds | `POST_CANCEL_CADENCE_7D_MS` | 300 sn | 1-7 gün polling |
 | monitoring_post_cancel_30d_polling_seconds | `POST_CANCEL_CADENCE_30D_MS` | 3600 sn | 7-30 gün polling |
-| blockchain.sweep_energy_delegation_sun | `SWEEP_ENERGY_DELEGATION_SUN` | 200000000 | Sweep öncesi Energy delegation (SUN) |
-| blockchain.sweep_trx_fallback_sun | `SWEEP_TRX_FALLBACK_SUN` | 15000000 | Energy delegation fallback TRX (SUN) |
+| blockchain.sweep_trx_fallback_sun | `SWEEP_TRX_FALLBACK_SUN` | 15000000 | Kaynak planı hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX (SUN). Devretme miktarı artık ayar değil, transfer başına hesaplanır (08 §3.3) |
 
 **Parite kuralı:** Bir cadence/sweep değerini değiştirirken **hem** backend SystemSetting'i (admin görünürlüğü/audit için) **hem** sidecar env'ini güncelle, sonra sidecar'ı restart et. Yalnız backend SystemSetting'i değiştirmek runtime davranışı değiştirmez.
 
@@ -379,7 +414,7 @@ Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir
 
   **Çözüm:** `docker compose -f docker-compose.yml restart skinora-reverse-proxy`. **Teşhis:** `docker logs skinora-reverse-proxy` içinde `connect() failed (111: Connection refused) while connecting to upstream, upstream: "http://172.20.0.X:5000/..."` satırındaki IP ile `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' skinora-backend` çıktısını karşılaştırın; tutmuyorsa tuzak budur.
 - **Nile kontratları.** Testnet USDT/USDC adresleri sabit değildir; faucet'in verdiğini kullanın ve sidecar'ın bakiye çağrısıyla teyit edin. Boş bırakılırsa allowlist boş kalır.
-- **Energy.** Sweep `delegateresource` ile 200 TRX delege eder; hot wallet'ta yeterli testnet TRX yoksa 15 TRX fallback'i de tükenir → `OUT_OF_ENERGY`.
+- **Energy (2026-09-17 ölçüldü).** Nile test USDT'sinde enerjiyi kontrat sahibi öder, ama akış yine **transferin tamamı** için plan yapar (08 §3.3). Bir transfer 14.584 enerji ister → 14.584 ÷ 73,7 × 1,1 ≈ **218 TRX** devretme gerekir; hot cüzdandaki 100 TRX'lik kilit buna yetmediği için Nile'da her sweep/iade **yakma yoluna** düşer: hiç TRX almamış depozit için hesap açma 1,1 TRX (sweeper öder) + depozite 1.604.239 SUN (~1,6 TRX). Sahip ödediği için bu TRX yakılmaz, depozitte kalır. Hot cüzdanda işlem başına ~3 TRX bulunsun; sabit 15 TRX yedeği yalnız zincir probları okunamazsa gider.
 - **`SteamMarket__Provider`.** Provada `logging` (default) bırakmak önerilir — PRICE_DEVIATION sessiz kalır ve `steamcommunity.com`'a çıkılmaz (§C.1).
 - **Hangfire dashboard.** nginx `/hangfire`'ı proxy'lemez (`/` frontend'e gider); doğrudan `http://localhost:5000/hangfire` kullanın.
 

@@ -6,7 +6,11 @@ import {
   SendTransferResult,
   TransactionStatusResult,
 } from '../tron/TronTransferClient.js';
-import { EnergyDelegationService, DelegationOutcome } from '../wallet/EnergyDelegationService.js';
+import {
+  EnergyDelegationService,
+  DelegationMode,
+  DelegationOutcome,
+} from '../wallet/EnergyDelegationService.js';
 
 export type TokenSymbol = 'USDT' | 'USDC';
 
@@ -67,9 +71,11 @@ export interface TransferServiceDeps {
 }
 
 export interface SweepResult extends SendTransferResult {
-  /** Delegation path used: <c>delegated</c> (delegateresource) or
-   * <c>fallback</c> (TRX prefund). 08 §3.3 audit field. */
-  delegationMode: 'delegated' | 'fallback';
+  /** Resource path used (08 §3.3 audit field): <c>delegated</c> (stake covered
+   * the Energy), <c>burn</c> (TRX sent for this transfer), <c>no-energy</c>
+   * (the deposit already held the Energy) or <c>fallback</c> (plan unavailable,
+   * fixed TRX). */
+  delegationMode: DelegationMode;
   delegationAmountSun: number;
   fallbackAmountSun: number;
 }
@@ -224,7 +230,12 @@ export class TransferService {
 
     const outcome: DelegationOutcome<SendTransferResult> =
       await this.energyDelegation.withDelegation(
-        request.depositAddress,
+        {
+          depositAddress: request.depositAddress,
+          contractAddress: contract,
+          toAddress: request.toHotWalletAddress,
+          amountUnits,
+        },
         () =>
           this.client.sendTransfer({
             fromAddress: signer.address,

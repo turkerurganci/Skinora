@@ -3,6 +3,13 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { TronResourceClient } from '../tron/TronResourceClient.js';
 import { TransferService, TokenContractMap, TokenSymbol } from '../transfer/TransferService.js';
 import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
+import {
+  ACTIVATED_ACCOUNT_FREE_BANDWIDTH,
+  ESTIMATED_TRANSFER_TX_BYTES,
+  callerEnergyShare,
+  planDelegation,
+  type DelegationPlan,
+} from '../wallet/DelegationPlanner.js';
 
 /**
  * Pre-send fee estimate for an outbound TRC-20 transfer
@@ -13,25 +20,30 @@ import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
  * <list type="number">
  *   <item>Energy the transfer needs — `triggerconstantcontract` simulation of
  *     the exact call (captures the recipient-holds-balance ~64k vs ~130k split).</item>
- *   <item>Energy the platform already owns — the HOT WALLET's spendable
- *     Energy, because it is the resource provider on both paths: payouts
- *     spend it directly, refunds receive it via `delegateresource`
- *     (EnergyDelegationService). Covered Energy costs nothing reusable-stake
- *     aside; only the shortfall burns TRX at the chain's Energy unit price.</item>
+ *   <item>Energy the chain bills the SENDER — the contract owner pays its share
+ *     out of its own remaining Energy, so the split is read from the owner's
+ *     account, not assumed from the contract's percent
+ *     (<c>callerEnergyShare</c>).</item>
+ *   <item>Energy the platform brings — on a payout the hot wallet sends
+ *     directly and its whole pool applies; on a refund the deposit sends and
+ *     the broadcast follows <c>planDelegation</c>: the stake covers the whole
+ *     transfer, or nothing.</item>
  *   <item>Bandwidth — the SENDER's own allowance (deposit addresses typically
  *     have none); the shortfall burns TRX at the chain's byte price.</item>
  *   <item>Burned sun → USDT at the live TRX/USDT price, rounded UP to the
  *     2-decimal charge precision.</item>
  * </list>
  *
- * The estimate can still drift from the realized fee (recipient balance or
- * chain prices may change between estimate and broadcast); that residual
- * variance stays on the platform by design — the user is charged the value
- * computed here, snapshotted onto <c>BlockchainTransaction.GasFee</c>.
+ * The estimate can still drift from the realized fee (recipient balance, the
+ * owner's remaining Energy or chain prices may change between estimate and
+ * broadcast); that residual variance stays on the platform by design — the
+ * user is charged the value computed here, snapshotted onto
+ * <c>BlockchainTransaction.GasFee</c>.
  */
 
-/** Typical size of a signed TRC-20 `triggersmartcontract` transaction. */
-export const ESTIMATED_TRANSFER_TX_BYTES = 350;
+// Lives with the planner so the delegation flow can use it without importing this
+// module (which imports TransferService, which imports the delegation flow).
+export { ESTIMATED_TRANSFER_TX_BYTES } from '../wallet/DelegationPlanner.js';
 
 export interface FeeEstimateRequest {
   /** Sender. Omitted → hot wallet (payout path). Refunds pass the deposit address. */
@@ -48,14 +60,25 @@ export interface FeeEstimateResult {
   feeUsdt: string;
   /** Total Energy the call consumes, before working out who pays it. */
   energyRequired: number;
-  /** Share of that Energy the SENDER pays (`consume_user_resource_percent`). */
+  /**
+   * Energy the chain bills the SENDER: the whole call minus what the contract
+   * owner pays out of its remaining Energy (<c>callerEnergyShare</c>).
+   */
   energyPayableByCaller: number;
-  /** Percent the contract assigns to the caller; 0 = owner subsidises fully. */
+  /** The contract's nominal caller percent; 0 = its owner pays whatever its Energy covers. */
   contractCallerPercent: number;
+  /** The contract owner's remaining Energy when estimated; 0 when unreadable. */
+  contractOwnerEnergyAvailable: number;
   /** Energy the platform can actually bring to this transfer. */
   energyAvailable: number;
-  /** Delegation ceiling applied on the refund path, null when not applicable. */
-  delegationCapEnergy: number | null;
+  /**
+   * Refund path only (null on payouts): the plan the broadcast will follow,
+   * from the same <c>planDelegation</c> the delegation flow uses — so a refund
+   * is charged for exactly the path it will take.
+   */
+  delegationPlan: DelegationPlan['kind'] | null;
+  /** SUN the sweeper will delegate when <c>delegationPlan</c> is 'delegate'; null otherwise. */
+  delegationSun: number | null;
   energyShortfall: number;
   bandwidthRequired: number;
   bandwidthAvailable: number;
@@ -70,13 +93,12 @@ export interface FeeEstimationServiceDeps {
   tokenContracts: TokenContractMap;
   hotWalletAddress: string;
   tokenDecimals?: number;
-  /**
-   * TRX (in SUN) the sweeper delegates to a deposit address for one outbound
-   * transfer — `config.sweepEnergyDelegationSun`. The refund path can only
-   * bring THIS much stake to the transfer, not the hot wallet's whole pool,
-   * so it is the ceiling on the energy credit there.
-   */
-  delegationAmountSun?: number;
+}
+
+interface ContractShare {
+  callerPercent: number;
+  originEnergyLimit: number;
+  ownerEnergyAvailable: number;
 }
 
 export class FeeEstimationService {
@@ -85,7 +107,6 @@ export class FeeEstimationService {
   private readonly tokens: TokenContractMap;
   private readonly hotWalletAddress: string;
   private readonly decimalsPower: bigint;
-  private readonly delegationAmountSun: number;
 
   constructor(deps: FeeEstimationServiceDeps) {
     this.resources = deps.resourceClient;
@@ -93,7 +114,6 @@ export class FeeEstimationService {
     this.tokens = deps.tokenContracts;
     this.hotWalletAddress = deps.hotWalletAddress;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
-    this.delegationAmountSun = deps.delegationAmountSun ?? 0;
   }
 
   async estimate(request: FeeEstimateRequest): Promise<FeeEstimateResult> {
@@ -119,53 +139,87 @@ export class FeeEstimationService {
     const isDelegatedPath =
       Boolean(request.fromAddress) && request.fromAddress !== this.hotWalletAddress;
 
-    const [energyRequired, hotWalletResources, senderResources, feeParams, priceQuote, policy] =
-      await Promise.all([
-        this.resources.estimateTransferEnergy(
-          contractAddress,
-          sender,
-          request.toAddress,
-          amountUnits,
-        ),
-        this.resources.getAccountResources(this.hotWalletAddress || sender),
-        // Bandwidth belongs to the sender itself; skip the duplicate fetch
-        // when the sender IS the hot wallet.
-        isDelegatedPath ? this.resources.getAccountResources(request.fromAddress!) : null,
-        this.resources.getChainFeeParameters(),
-        this.price.getPrice(request.correlationId),
-        this.readContractPolicy(contractAddress, request.correlationId),
-      ]);
+    const [
+      energyRequired,
+      hotWalletResources,
+      senderResources,
+      senderState,
+      delegatableSun,
+      feeParams,
+      priceQuote,
+      contractShare,
+    ] = await Promise.all([
+      this.resources.estimateTransferEnergy(
+        contractAddress,
+        sender,
+        request.toAddress,
+        amountUnits,
+      ),
+      this.resources.getAccountResources(this.hotWalletAddress || sender),
+      // Bandwidth belongs to the sender itself; skip the duplicate fetch
+      // when the sender IS the hot wallet.
+      isDelegatedPath ? this.resources.getAccountResources(request.fromAddress!) : null,
+      isDelegatedPath ? this.resources.getAccountState(request.fromAddress!) : null,
+      isDelegatedPath ? this.resources.getDelegatableEnergySun(this.hotWalletAddress) : null,
+      this.resources.getChainFeeParameters(),
+      this.price.getPrice(request.correlationId),
+      this.readContractShare(contractAddress, request.correlationId),
+    ]);
 
-    // (1) WHO PAYS. A contract can absorb its callers' execution cost
-    //     (`consume_user_resource_percent = 0`). The Nile test USDT is
-    //     deployed that way, which is the real reason every rehearsal
-    //     transfer measured `fee: 0` — not delegation, which delivered
-    //     nothing while the hot wallet held no stake. Charging the sender for
-    //     the owner's share would bill a cost nobody incurs.
-    const energyPayableByCaller = Math.ceil((energyRequired * policy.callerPercent) / 100);
+    // (1) WHO PAYS. A contract can have its owner absorb its callers' execution
+    //     cost — but only out of the owner's REMAINING Energy. The Nile test
+    //     USDT's owner has plenty, which is why rehearsal transfers measure
+    //     `fee: 0`; mainnet Tether's owner has none, so although the contract
+    //     says 30% its callers pay 100% (542/542 calls, 2026-09-17). Charging
+    //     the nominal percent billed mainnet users 30% of the real cost;
+    //     charging 100% would bill a cost nobody incurs wherever an owner pays.
+    const energyPayableByCaller = callerEnergyShare({
+      energyRequired,
+      callerPercent: contractShare.callerPercent,
+      originEnergyLimit: contractShare.originEnergyLimit,
+      ownerEnergyAvailable: contractShare.ownerEnergyAvailable,
+    });
 
     // (2) WHAT WE CAN BRING. On the payout path the hot wallet sends
-    //     directly, so its whole pool applies. On the refund path the sender
-    //     is a deposit address that owns nothing; it receives a FIXED
-    //     delegation (`sweepEnergyDelegationSun`), so the credit is capped by
-    //     what that stake actually produces — not by the pool it came from.
-    //     Without this cap a staked mainnet hot wallet makes the estimate say
-    //     0.00 while the transfer burns nearly everything, and the platform
-    //     silently eats the difference.
-    const energyPerTrx = hotWalletResources.energyPerTrx;
-    const delegationCapEnergy =
-      isDelegatedPath && energyPerTrx !== null
-        ? Math.floor((this.delegationAmountSun / 1_000_000) * energyPerTrx)
-        : null;
-    const energyAvailable =
-      delegationCapEnergy === null
-        ? hotWalletResources.energyAvailable
-        : Math.min(hotWalletResources.energyAvailable, delegationCapEnergy);
+    //     directly, so its whole pool applies and whatever it lacks burns. On
+    //     the refund path the sender is a deposit address and the broadcast
+    //     follows `planDelegation`, which plans the WHOLE transfer: the stake
+    //     covers all of it or none of it. The path is decided exactly as the
+    //     broadcast decides it; what the user pays on the burn path is only
+    //     what the chain bills the deposit (TRX sent for the owner's share
+    //     stays in the deposit unburned).
+    let energyAvailable: number;
+    let energyShortfall: number;
+    let delegationPlan: DelegationPlan['kind'] | null = null;
+    let delegationSun: number | null = null;
+    if (isDelegatedPath) {
+      const depositEnergy = senderResources!.energyAvailable;
+      const plan = planDelegation({
+        energyRequired,
+        senderEnergyAvailable: depositEnergy,
+        energyPerTrx: hotWalletResources.energyPerTrx,
+        delegatableSun: delegatableSun ?? 0,
+      });
+      delegationPlan = plan.kind;
+      delegationSun = plan.kind === 'delegate' ? plan.delegationSun : null;
+      energyAvailable =
+        plan.kind === 'delegate' ? energyRequired : Math.min(energyRequired, depositEnergy);
+      energyShortfall =
+        plan.kind === 'burn' ? Math.max(0, energyPayableByCaller - depositEnergy) : 0;
+    } else {
+      energyAvailable = hotWalletResources.energyAvailable;
+      energyShortfall = Math.max(0, energyPayableByCaller - energyAvailable);
+    }
 
-    const energyShortfall = Math.max(0, energyPayableByCaller - energyAvailable);
-    const bandwidthSource = senderResources ?? hotWalletResources;
     const bandwidthRequired = ESTIMATED_TRANSFER_TX_BYTES;
-    const bandwidthAvailable = bandwidthSource.bandwidthAvailable;
+    // A deposit that has never received TRX is not an account yet and reports
+    // no Bandwidth; the flow activates it before the transfer, after which it
+    // has the free daily allowance (measured on Nile 2026-09-16).
+    const bandwidthAvailable = !isDelegatedPath
+      ? hotWalletResources.bandwidthAvailable
+      : senderState!.exists
+        ? senderResources!.bandwidthAvailable
+        : ACTIVATED_ACCOUNT_FREE_BANDWIDTH;
     // Bandwidth is all-or-nothing on TRON: an account short of the full byte
     // count burns TRX for the WHOLE transaction, not just the missing bytes.
     const bandwidthBurnBytes = bandwidthAvailable >= bandwidthRequired ? 0 : bandwidthRequired;
@@ -183,9 +237,11 @@ export class FeeEstimationService {
       feeUsdt,
       energyRequired,
       energyPayableByCaller,
-      contractCallerPercent: policy.callerPercent,
+      contractCallerPercent: contractShare.callerPercent,
+      contractOwnerEnergyAvailable: contractShare.ownerEnergyAvailable,
       energyAvailable,
-      delegationCapEnergy,
+      delegationPlan,
+      delegationSun,
       energyShortfall,
       bandwidthRequired,
       bandwidthAvailable,
@@ -208,24 +264,54 @@ export class FeeEstimationService {
   }
 
   /**
-   * Contract energy policy, degrading to "the caller pays everything" when the
-   * probe fails.
+   * The contract's split and its owner's remaining Energy, degrading to "the
+   * owner pays nothing" (the caller pays everything) when a probe fails.
    *
    * That fallback is the conservative direction on the axis that matters: it
    * can only make the estimate LARGER than reality, never smaller, so a probe
    * outage cannot silently shift the platform's cost onto a user who was
-   * charged too little. Mainnet Tether sets 100 anyway, so the fallback is
-   * also the mainnet-correct value.
+   * charged too little. On mainnet USDT it is also today's real split.
    */
-  private async readContractPolicy(contractAddress: string, correlationId?: string) {
+  private async readContractShare(
+    contractAddress: string,
+    correlationId?: string,
+  ): Promise<ContractShare> {
+    let policy;
     try {
-      return await this.resources.getContractEnergyPolicy(contractAddress);
+      policy = await this.resources.getContractEnergyPolicy(contractAddress);
     } catch (err) {
       logger.warn(
         { err: (err as Error).message, contractAddress, correlationId },
         'Contract energy policy unreadable — assuming the caller pays 100%',
       );
-      return { callerPercent: 100, originEnergyLimit: 0 };
+      return { callerPercent: 100, originEnergyLimit: 0, ownerEnergyAvailable: 0 };
+    }
+
+    const share = {
+      callerPercent: policy.callerPercent,
+      originEnergyLimit: policy.originEnergyLimit,
+    };
+    if (!policy.originAddress) {
+      logger.warn(
+        { contractAddress, correlationId },
+        'Contract owner not reported — assuming the owner pays nothing',
+      );
+      return { ...share, ownerEnergyAvailable: 0 };
+    }
+    try {
+      const owner = await this.resources.getAccountResources(policy.originAddress);
+      return { ...share, ownerEnergyAvailable: owner.energyAvailable };
+    } catch (err) {
+      logger.warn(
+        {
+          err: (err as Error).message,
+          contractAddress,
+          originAddress: policy.originAddress,
+          correlationId,
+        },
+        'Contract owner resources unreadable — assuming the owner pays nothing',
+      );
+      return { ...share, ownerEnergyAvailable: 0 };
     }
   }
 }

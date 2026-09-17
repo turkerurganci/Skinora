@@ -81,9 +81,11 @@ public class SeedDataTests : IntegrationTestBase
         //   settlement.reversal_auto_refund_enabled).
         // + 1 blockchain.max_charged_gas_fee_usdt ceiling (2026-09-04 gas fee round).
         // + 3 non_delivery_{window_days,flag_count,suspend_count} (2026-09-16, 02 §14.2).
+        // − 1 blockchain.sweep_energy_delegation_sun (2026-09-16 hybrid energy decision:
+        //   the delegated amount is computed per transfer, so the fixed knob was removed).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(67, rows.Count);
-        Assert.Equal(67, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(66, rows.Count);
+        Assert.Equal(66, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -119,7 +121,6 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.max_charged_gas_fee_usdt",
             "blockchain.payout_gas_fee_estimate_usdt",
             "blockchain.refund_gas_fee_estimate_usdt",
-            "blockchain.sweep_energy_delegation_sun",
             "blockchain.sweep_trx_fallback_sun",
             "blockchain.transfer_retry_intervals_minutes",
             "commission_rate",

@@ -128,13 +128,15 @@ public static class SystemSettingSeed
         // edilir ve TransferDispatchFailedEvent yayınlanır. Default "1,5,15" = 3 deneme
         // exponential backoff (1dk, 5dk, 15dk). Admin tarafından değiştirilebilir.
         Default     (51, "blockchain.transfer_retry_intervals_minutes",  "string",  "Monitoring",    "1,5,15", "Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV). Her transient failure NextAttemptAt'i listedeki sıradaki değerle ileriye iter; liste bittiğinde transfer FAILED + admin alert. Default '1,5,15' = T73 plan'ı."),
-        // --- T74: Sweep / refund Energy delegation amounts (08 §3.3, 11 T74) ---
-        // Both stored as SUN strings (1 TRX = 1_000_000 SUN). Sidecar reads matching env vars
-        // (SWEEP_ENERGY_DELEGATION_SUN, SWEEP_TRX_FALLBACK_SUN) at startup; these SystemSetting
-        // rows give admin visibility and a single canonical source — runtime propagation from
-        // backend to sidecar is a T-future task (see T74 K1).
-        Default     (52, "blockchain.sweep_energy_delegation_sun",       "string",  "Monitoring",    "200000000", "Sweep / deposit-sourced refund öncesi sweeper hot wallet'tan deposit adresine geçici Energy delegation tutarı (SUN, 1 TRX = 1_000_000 SUN). Default 200 TRX — Stake 2.0 ile ~16.000 Energy headroom (TRC-20 transfer ~65k Energy, dış API oran dalgalanması payı dahil). 08 §3.3."),
-        Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Energy delegation başarısız olursa deposit adresine fallback olarak gönderilen TRX tutarı (SUN). Default 15 TRX (08 §3.3 — TRC-20 transferin gas için yaklaşık üst sınırı). Deposit bu TRX'i kendi gas'ı için yakar."),
+        // --- T74: Sweep / refund TRX fallback (08 §3.3, 11 T74) ---
+        // Stored as a SUN string (1 TRX = 1_000_000 SUN). Sidecar reads the matching env var
+        // (SWEEP_TRX_FALLBACK_SUN) at startup; this row gives admin visibility — runtime
+        // propagation from backend to sidecar is a T-future task (see T74 K1).
+        // Index 52 (blockchain.sweep_energy_delegation_sun) was REMOVED 2026-09-16: the hybrid
+        // energy decision made the delegated amount a per-transfer computation
+        // (sidecar DelegationPlanner), so a fixed amount no longer exists to configure. Do not
+        // reuse the index — the seed Id is derived from it.
+        Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Depozit kaynak planı hiç hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX tutarı (SUN). Default 15 TRX = en pahalı TRC-20 transfer 13,03 TRX + bandı 0,35 TRX (08 §3.3). Kilidin yetmediği transfer bu ayarı kullanmaz; yakacağı TRX'i transfer başına hesaplar."),
         // --- T76: Blockchain reconciliation job (05 §3.3) ---
         // Daily on-chain vs ledger reconciliation. Cron default is 03:00 UTC
         // (admin-tunable, host restart required to re-register). Hot/cold

@@ -82,25 +82,19 @@ export const config = {
   hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
   hotWalletPrivateKey: process.env.HOT_WALLET_PRIVATE_KEY || '',
 
-  // Energy delegation amounts — 08 §3.3 (T74). Both values are in SUN
-  // (1 TRX = 1_000_000 SUN). Admin can override via SystemSetting at the
-  // backend layer; sidecar reads from env at startup.
+  // Deposit-sourced transfer resources — 08 §3.3, owner decision 2026-09-16
+  // (HYBRID). There is no delegation AMOUNT to configure any more: the flow
+  // simulates each transfer, reads the network ratio (TotalEnergyLimit /
+  // TotalEnergyWeight — measured mainnet ~9.5, Nile ~73.7 Energy per staked
+  // TRX) and delegates the whole transfer's shortfall when the stake can cover
+  // all of it, or burns otherwise (wallet/DelegationPlanner.ts). The fixed
+  // 200 TRX this replaced bought ~3% of a mainnet sweep and, once the hot
+  // wallet staked, would have made sweeps fail rather than fall back.
   //
-  // WARNING — the 200 TRX default does NOT cover a mainnet sweep. Measured
-  // 2026-08-29 from the chain, not estimated:
-  //   mainnet  TotalEnergyLimit / TotalEnergyWeight = 180e9 / 18.81e9
-  //            = ~9.57 Energy per staked TRX  →  200 TRX = ~1,914 Energy
-  //   nile     180e9 / 2.44e9 = ~73.8 Energy per TRX  →  200 TRX = ~14,753
-  // A TRC-20 transfer costs ~64,285 Energy (triggerconstantcontract against
-  // mainnet Tether, recipient holding a balance) and ~130,285 to a recipient
-  // with none. So 200 TRX buys ~3% of one mainnet sweep, and every sweep
-  // falls through to sweepTrxFallbackSun and burns TRX instead.
-  //
-  // The ratio is a NETWORK-WIDE value that moves with total staked TRX, so it
-  // cannot stay a constant here. This default happens to be close to the Nile
-  // ratio, which is why a testnet rehearsal will look fine and mainnet will
-  // not. Sizing this properly is DEFERRED_BACKLOG "EnergyPerTrxAssumptionUnverified".
-  sweepEnergyDelegationSun: parseInt(process.env.SWEEP_ENERGY_DELEGATION_SUN || '200000000', 10),
+  // What remains is the TRX sent when the plan itself cannot be computed
+  // (probe outage) — sized for the most expensive transfer (130,285 Energy ×
+  // 100 SUN = 13.03 TRX) plus its Bandwidth (0.35 TRX), in SUN. Activation is
+  // not in it: the sweeper pays that when it sends the deposit its first SUN.
   sweepTrxFallbackSun: parseInt(process.env.SWEEP_TRX_FALLBACK_SUN || '15000000', 10),
 
   // Logging

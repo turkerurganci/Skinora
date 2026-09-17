@@ -3,7 +3,11 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import { TronTransferClient, SendTransferResult } from '../tron/TronTransferClient.js';
 import { TokenContractMap, TokenSymbol, TransferService } from './TransferService.js';
-import { EnergyDelegationService, DelegationOutcome } from '../wallet/EnergyDelegationService.js';
+import {
+  EnergyDelegationService,
+  DelegationMode,
+  DelegationOutcome,
+} from '../wallet/EnergyDelegationService.js';
 
 export interface RefundRequest {
   blockchainTransactionId: string;
@@ -19,9 +23,11 @@ export interface RefundRequest {
 }
 
 export interface RefundResult extends SendTransferResult {
-  /** Delegation path used: <c>delegated</c> (delegateresource) or
-   * <c>fallback</c> (TRX prefund). 08 §3.3 audit field. */
-  delegationMode: 'delegated' | 'fallback';
+  /** Resource path used (08 §3.3 audit field): <c>delegated</c> (stake covered
+   * the Energy), <c>burn</c> (TRX sent for this transfer), <c>no-energy</c>
+   * (the deposit already held the Energy) or <c>fallback</c> (plan unavailable,
+   * fixed TRX). */
+  delegationMode: DelegationMode;
   delegationAmountSun: number;
   fallbackAmountSun: number;
 }
@@ -98,7 +104,12 @@ export class RefundService {
 
     const outcome: DelegationOutcome<SendTransferResult> =
       await this.energyDelegation.withDelegation(
-        request.depositAddress,
+        {
+          depositAddress: request.depositAddress,
+          contractAddress: contract,
+          toAddress: request.toBuyerAddress,
+          amountUnits,
+        },
         () =>
           this.client.sendTransfer({
             fromAddress: signer.address,
