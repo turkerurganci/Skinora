@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TronResourceClient } from './TronResourceClient.js';
-import { SidecarError } from '../errors/SidecarError.js';
+import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 
 /**
  * These probes back the money-path fee estimate, and both branches covered
@@ -63,12 +63,30 @@ describe('TronResourceClient.estimateTransferEnergy — a reverted simulation is
       .estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '10200000', fetchFn)
       .catch((err: unknown) => err);
 
-    expect(error).toBeInstanceOf(SidecarError);
+    // The node RAN the transfer: an answer about it, typed so the deposit flow
+    // does not mistake it for a probe outage.
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect((error as SimulationRevertedError).reason).toBe('REVERT opcode executed');
     expect((error as SidecarError).code).toBe('FEE_ESTIMATE_SIMULATION_FAILED');
     // Retryable → the handler answers 502 → the backend charges the static
     // fallback. Undercharging by 15x is the outcome this prevents.
     expect((error as SidecarError).retryable).toBe(true);
     expect((error as SidecarError).message).toContain('REVERT opcode executed');
+  });
+
+  it("types mainnet Tether's measured revert shape as a revert", async () => {
+    // Verbatim fields, mainnet 2026-09-17: a 1 USDT transfer from an address
+    // holding none.
+    const fetchFn = fetchReturning({
+      result: { result: true, message: 'REVERT opcode executed' },
+      energy_used: 8624,
+      constant_result: [''],
+      transaction: { ret: [{ ret: 'FAILED' }] },
+    });
+
+    await expect(
+      client().estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '1000000', fetchFn),
+    ).rejects.toBeInstanceOf(SimulationRevertedError);
   });
 
   it('rejects a failed ret even when the node volunteers no message', async () => {
@@ -78,18 +96,45 @@ describe('TronResourceClient.estimateTransferEnergy — a reverted simulation is
       transaction: { ret: [{ ret: 'OUT_OF_ENERGY' }] },
     });
 
-    await expect(
-      client().estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '10200000', fetchFn),
-    ).rejects.toThrow(/OUT_OF_ENERGY/);
+    const error = await client()
+      .estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '10200000', fetchFn)
+      .catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(SimulationRevertedError);
+    expect((error as Error).message).toMatch(/OUT_OF_ENERGY/);
   });
 
-  it('rejects a response with no energy_used at all', async () => {
-    const fetchFn = fetchReturning({ result: { result: true } });
+  it.each([
+    // Measured on mainnet 2026-09-17: the node refuses the call itself.
+    {
+      name: 'a malformed address (OTHER_ERROR)',
+      body: {
+        result: {
+          code: 'OTHER_ERROR',
+          message:
+            'class org.tron.core.services.http.JsonFormat$ParseException : 1:18: invalid address for field: protocol.TriggerSmartContract.owner_address',
+        },
+      },
+    },
+    {
+      name: 'a missing contract (CONTRACT_VALIDATE_ERROR)',
+      body: {
+        result: { code: 'CONTRACT_VALIDATE_ERROR', message: 'Smart contract is not exist.' },
+      },
+    },
+    { name: 'a response without energy_used', body: { result: { result: true } } },
+  ])(
+    'does not call $name a revert — the probe failed, the transfer was never run',
+    async ({ body }) => {
+      const error = await client()
+        .estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '10200000', fetchReturning(body))
+        .catch((err: unknown) => err);
 
-    await expect(
-      client().estimateTransferEnergy(CONTRACT, SENDER, RECIPIENT, '10200000', fetchFn),
-    ).rejects.toBeInstanceOf(SidecarError);
-  });
+      expect(error).toBeInstanceOf(SidecarError);
+      expect(error).not.toBeInstanceOf(SimulationRevertedError);
+      expect((error as SidecarError).code).toBe('FEE_ESTIMATE_SIMULATION_FAILED');
+    },
+  );
 });
 
 describe('TronResourceClient.getContractEnergyPolicy — who pays the energy', () => {

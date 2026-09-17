@@ -1,5 +1,5 @@
 import { logger } from '../logger.js';
-import { SidecarError } from '../errors/SidecarError.js';
+import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 import { TronDelegationClient } from '../tron/TronDelegationClient.js';
 import type {
   AccountResources,
@@ -42,6 +42,12 @@ import {
  *   <item><b>Probe failure.</b> If the plan cannot be computed at all, send
  *     the configured fixed fallback — the pre-decision behaviour, which never
  *     blocks the money path.</item>
+ *   <item><b>The transfer itself would revert.</b> A simulation the node ran
+ *     and that did not succeed is not a probe failure: nothing is sent and
+ *     nothing is broadcast, and the call fails retryable (owner decision
+ *     2026-09-17). The likeliest cause is an earlier attempt that moved the
+ *     tokens without the backend recording it; the fixed fallback there only
+ *     stranded 15 TRX in the deposit and put a doomed transfer on-chain.</item>
  * </list>
  *
  * <para>
@@ -184,6 +190,18 @@ export class EnergyDelegationService {
     try {
       probes = await this.readProbes(transfer);
     } catch (err) {
+      if (err instanceof SimulationRevertedError) {
+        logger.warn(
+          { reason: err.reason, depositAddress: deposit, ...contextFields(context) },
+          'Deposit transfer would fail on-chain — nothing sent, nothing broadcast',
+        );
+        throw new SidecarError(
+          `The transfer from ${deposit} simulates as failed (${err.reason}); nothing was sent or broadcast. ` +
+            "If an earlier attempt of this transfer timed out, check the deposit's outgoing transfers before re-issuing it.",
+          'DEPOSIT_TRANSFER_WOULD_REVERT',
+          true,
+        );
+      }
       logger.warn(
         { err: (err as Error).message, depositAddress: deposit, ...contextFields(context) },
         'Delegation plan unavailable — sending the fixed TRX fallback',
@@ -235,21 +253,28 @@ export class EnergyDelegationService {
   }
 
   private async readProbes(transfer: DelegatedTransfer): Promise<PlanProbes> {
-    const [energyRequired, depositResources, sweeperResources, delegatableSun, fees, state] =
-      await Promise.all([
-        this.resources.estimateTransferEnergy(
-          transfer.contractAddress,
-          transfer.depositAddress,
-          transfer.toAddress,
-          transfer.amountUnits,
-        ),
-        this.resources.getAccountResources(transfer.depositAddress),
-        // Only for the network-wide Energy/TRX ratio, which every account read carries.
-        this.resources.getAccountResources(this.sweeperAddress),
-        this.resources.getDelegatableEnergySun(this.sweeperAddress),
-        this.resources.getChainFeeParameters(),
-        this.resources.getAccountState(transfer.depositAddress),
-      ]);
+    const simulation = this.resources.estimateTransferEnergy(
+      transfer.contractAddress,
+      transfer.depositAddress,
+      transfer.toAddress,
+      transfer.amountUnits,
+    );
+    const reads = Promise.all([
+      this.resources.getAccountResources(transfer.depositAddress),
+      // Only for the network-wide Energy/TRX ratio, which every account read carries.
+      this.resources.getAccountResources(this.sweeperAddress),
+      this.resources.getDelegatableEnergySun(this.sweeperAddress),
+      this.resources.getChainFeeParameters(),
+      this.resources.getAccountState(transfer.depositAddress),
+    ]);
+    // Everything settles before a failure is raised, and the simulation's own
+    // failure wins: "this transfer would revert" must not be lost to an
+    // unrelated read failing first, which would send the fixed fallback.
+    const [simulated, read] = await Promise.allSettled([simulation, reads]);
+    if (simulated.status === 'rejected') throw simulated.reason;
+    if (read.status === 'rejected') throw read.reason;
+    const energyRequired = simulated.value;
+    const [depositResources, sweeperResources, delegatableSun, fees, state] = read.value;
 
     const plan = planDelegation({
       energyRequired,

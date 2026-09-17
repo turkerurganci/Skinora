@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EnergyDelegationService } from './EnergyDelegationService.js';
+import { SimulationRevertedError } from '../errors/SidecarError.js';
 
 /**
  * 08 §3.3 hybrid flow against a fake chain that behaves like the node measured
@@ -64,7 +65,11 @@ interface ChainOptions {
   neverInBlock?: TxKind[];
   /** The node answering account reads never shows the deposit's activation. */
   activationReadLags?: boolean;
+  /** The simulation probe itself fails (no answer about the transfer). */
   simulationThrows?: boolean;
+  /** The node runs the transfer and it reverts (an answer: it would fail on-chain). */
+  simulationReverts?: boolean;
+  feeParametersThrow?: boolean;
   delegateThrows?: boolean;
   undelegateThrows?: boolean;
   sendTrxThrows?: boolean;
@@ -131,7 +136,16 @@ function buildChain(o: ChainOptions = {}) {
   const resources = {
     estimateTransferEnergy: vi.fn(async () => {
       seen.activationBlockAtPlan.push(blockOfLatest('activation'));
-      if (o.simulationThrows) throw new Error('simulation reverted');
+      if (o.simulationThrows) throw new Error('simulation probe answered HTTP 503');
+      if (o.simulationReverts) {
+        // Settle after every other probe, so a flow that raised the first
+        // failure it saw would never see this one.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        throw new SimulationRevertedError(
+          'triggerconstantcontract simulation failed: REVERT opcode executed',
+          'REVERT opcode executed',
+        );
+      }
       return o.energyRequired ?? 64_285;
     }),
     getAccountResources: vi.fn(async (address: string) => {
@@ -157,7 +171,10 @@ function buildChain(o: ChainOptions = {}) {
       if (address === DEPOSIT) return 0;
       return unexpected(address);
     }),
-    getChainFeeParameters: vi.fn(async () => ({ energyFeeSun: 100, bandwidthFeeSun: 1_000 })),
+    getChainFeeParameters: vi.fn(async () => {
+      if (o.feeParametersThrow) throw new Error('getchainparameters answered HTTP 429');
+      return { energyFeeSun: 100, bandwidthFeeSun: 1_000 };
+    }),
     getTransactionBlockNumber: vi.fn(async (hash: string) => blockOf.get(hash) ?? null),
   };
 
@@ -586,6 +603,20 @@ describe('plan unavailable — fixed fallback keeps the money path open', () => 
     expect(outcome).toMatchObject({ mode: 'fallback', fallbackAmountSun: FALLBACK_SUN });
   });
 
+  it('sends the configured fallback when another probe fails and the simulation succeeds', async () => {
+    const chain = buildChain({
+      feeParametersThrow: true,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+    });
+
+    const outcome = await chain.run();
+
+    expect(chain.client.sendTrx).toHaveBeenCalledWith(
+      expect.objectContaining({ amountSun: FALLBACK_SUN }),
+    );
+    expect(outcome.mode).toBe('fallback');
+  });
+
   it('raises DELEGATION_AND_FALLBACK_FAILED (retryable) when the TRX cannot be sent', async () => {
     const chain = buildChain({ simulationThrows: true, sendTrxThrows: true });
 
@@ -593,6 +624,41 @@ describe('plan unavailable — fixed fallback keeps the money path open', () => 
       code: 'DELEGATION_AND_FALLBACK_FAILED',
       retryable: true,
     });
+  });
+});
+
+describe('the transfer itself would revert — nothing is sent (owner decision 2026-09-17)', () => {
+  it('sends no fallback and broadcasts nothing, and asks for a retry', async () => {
+    // The likeliest cause: an earlier attempt moved the tokens and the backend
+    // never recorded it. The fixed fallback used to strand 15 TRX in the
+    // deposit and put a transfer on-chain that could only revert.
+    const chain = buildChain({
+      simulationReverts: true,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+    });
+
+    await expect(chain.run()).rejects.toMatchObject({
+      code: 'DEPOSIT_TRANSFER_WOULD_REVERT',
+      retryable: true,
+      message: expect.stringContaining('nothing was sent or broadcast'),
+    });
+    expect(chain.client.sendTrx).not.toHaveBeenCalled();
+    expect(chain.client.delegateEnergy).not.toHaveBeenCalled();
+    expect(chain.transfer).not.toHaveBeenCalled();
+  });
+
+  it('is not lost to another probe that fails first', async () => {
+    // The fee probe rejects at once, the revert only after it; raising the
+    // first failure would take the fixed-fallback path.
+    const chain = buildChain({
+      simulationReverts: true,
+      feeParametersThrow: true,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+    });
+
+    await expect(chain.run()).rejects.toMatchObject({ code: 'DEPOSIT_TRANSFER_WOULD_REVERT' });
+    expect(chain.client.sendTrx).not.toHaveBeenCalled();
+    expect(chain.transfer).not.toHaveBeenCalled();
   });
 });
 
