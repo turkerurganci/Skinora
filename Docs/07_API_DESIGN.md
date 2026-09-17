@@ -2030,7 +2030,8 @@ T5'teki tüm alanlar + admin'e özel bölümler:
       "label": "Komisyon oranı",
       "description": "Komisyon oranı (%2)",
       "unit": "oran",
-      "valueType": "number"
+      "valueType": "number",
+      "isEditable": true
     }
   ]
 }
@@ -2039,8 +2040,9 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 **Kategoriler (API lehçesi):** `timeout`, `commission`, `gas_fee`, `transaction_limits`, `new_account`, `cancel_rules`, `fraud_detection`, `buyer_identification`, `geo_blocking`, `age_verification`, `blockchain_health`, `wallet_security`, `reputation`, `platform_maintenance`, `retention`, `delivery_verification`, `settlement`
 
 > **Notlar:**
-> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (63 anahtar — T129 mutabakat penceresi için üç `settlement` anahtarı ekledi; T125 öncesi 59). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
+> - Yalnızca `SystemSettingsCatalog` (kod) içindeki anahtarlar döner (**66 giriş**: 64 `SystemSetting` satırı + 2 ortam değişkeninden okunan cüzdan adresi). `category`, DB `Category` kolonunun (06 §3.17, daha kaba) ince API lehçesidir — eşleme kataloğda tanımlıdır.
 > - `valueType` ∈ `number` (int/decimal) | `boolean` | `string`. `value`, henüz yapılandırılmamış anahtarlarda `null` döner (06 §3.17 `IsConfigured = false`).
+> - `isEditable` (bool, varsayılan `true`): `false` olan girişler **deployment yapılandırmasıdır**, `SystemSetting` satırları yoktur ve değerleri ortam değişkeninden okunur — bugün yalnız `reconciliation.hot_wallet_address` ve `reconciliation.cold_wallet_address` (05 §3.3, owner kararı 2026-09-16). S17 bu satırları düzenleme düğmesi olmadan gösterir; yine de denenirse AD9 422 `SETTING_READ_ONLY` döner.
 > - DTO **etki-kapsamı** alanı taşımaz; S17 UI etkiyi (yeni işlem / runtime) kategoriden türetir (04 §8.6).
 > - Sanctions taraması (yaptırımlı adres listesi) ayrı bir admin yüzeyinden yönetilir (T82) — SystemSetting değildir; bu yüzden kategori listesinde `sanctions_screening` yoktur.
 
@@ -2058,7 +2060,7 @@ T5'teki tüm alanlar + admin'e özel bölümler:
 { "key": "commission_rate", "value": "3", "updatedAt": "..." }
 ```
 
-**Hatalar:** 404 `SETTING_NOT_FOUND`, 400 `VALIDATION_ERROR`
+**Hatalar:** 404 `SETTING_NOT_FOUND`, 400 `VALIDATION_ERROR`, 422 `SETTING_READ_ONLY` (ortam değişkeninden okunan anahtar — panelden değiştirilemez; sunucudaki değeri değiştirip backend ile blockchain sidecar'ı yeniden başlatmak gerekir, 05 §3.3)
 
 ### 9.10 AD10 — `GET /admin/steam-accounts`
 

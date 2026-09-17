@@ -27,6 +27,16 @@ public static class SystemSettingsCatalog
     public const string ValueTypeBoolean = "boolean";
     public const string ValueTypeString = "string";
 
+    /// <summary>
+    /// The platforms own wallet addresses. They are listed here so the admin
+    /// panel still shows what the deployment is pointed at, but they are
+    /// <see cref="SystemSettingMetadata.EnvSourced"/>: their value comes from
+    /// the same environment variables the signer pins itself to and the update
+    /// endpoint refuses to write them (05 §3.3, owner decision 2026-09-16).
+    /// </summary>
+    public const string HotWalletAddressKey = "reconciliation.hot_wallet_address";
+    public const string ColdWalletAddressKey = "reconciliation.cold_wallet_address";
+
     private static readonly Dictionary<string, SystemSettingMetadata> _byKey =
         BuildCatalog().ToDictionary(m => m.Key, StringComparer.Ordinal);
 
@@ -100,8 +110,8 @@ public static class SystemSettingsCatalog
         new("blockchain.transfer_retry_intervals_minutes","blockchain_health",    "Outbound transfer retry aralıkları (CSV, dakika — T73)",    "dakika"),
         new("blockchain.sweep_trx_fallback_sun",          "blockchain_health",    "Kaynak planı hesaplanamazsa gönderilen yedek TRX (T74)",    "SUN"),
         new("reconciliation.schedule_cron",               "blockchain_health",    "Reconciliation job cron ifadesi (T76)",                     null),
-        new("reconciliation.hot_wallet_address",          "blockchain_health",    "Reconciliation hot wallet adresi (T76)",                    null),
-        new("reconciliation.cold_wallet_address",         "blockchain_health",    "Reconciliation cold wallet adresi (T76, opsiyonel)",        null),
+        new(HotWalletAddressKey,                          "blockchain_health",    "Hot wallet adresi (ortam değişkeni, salt okunur)",          null, EnvSourced: true),
+        new(ColdWalletAddressKey,                         "blockchain_health",    "Cold wallet adresi (ortam değişkeni, salt okunur)",         null, EnvSourced: true),
         new("hot_wallet.monitor_cron",                    "blockchain_health",    "Hot wallet monitor job cron ifadesi (T77)",                 null),
         new("hot_wallet.trx_balance_minimum",             "wallet_security",      "Hot wallet TRX bakiye alt eşiği (gas için)",                "TRX"),
 
@@ -155,4 +165,11 @@ public sealed record SystemSettingMetadata(
     string Key,
     string ApiCategory,
     string Label,
-    string? Unit);
+    string? Unit,
+    /// <summary>
+    /// True when the value is deployment configuration rather than an
+    /// admin-editable row: it has no <c>SystemSetting</c> record, the list
+    /// endpoint reads it from configuration and the update endpoint refuses
+    /// it (05 §3.3, owner decision 2026-09-16).
+    /// </summary>
+    bool EnvSourced = false);

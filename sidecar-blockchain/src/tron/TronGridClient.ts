@@ -38,6 +38,10 @@ export interface ListTrc20Options {
   fingerprint?: string;
   /** Default 20 — matches 08 §3.4 paging strategy. */
   limit?: number;
+  /** Outgoing transfers only — the daily outflow guard's question (05 §3.3). */
+  onlyFrom?: boolean;
+  /** Unix ms lower bound; TronGrid filters server-side so paging stays short. */
+  minTimestamp?: number;
 }
 
 export interface TransactionInfo {
@@ -203,6 +207,12 @@ export class TronGridClient {
     }
     if (options.fingerprint) {
       params.set('fingerprint', options.fingerprint);
+    }
+    if (options.onlyFrom) {
+      params.set('only_from', 'true');
+    }
+    if (typeof options.minTimestamp === 'number') {
+      params.set('min_timestamp', String(options.minTimestamp));
     }
 
     const url = `${this.fullNodeUrl}/v1/accounts/${encodeURIComponent(options.address)}/transactions/trc20?${params.toString()}`;

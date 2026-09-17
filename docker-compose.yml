@@ -72,6 +72,12 @@ services:
       # falls back to the mainnet constants (08 §3.3).
       - StablecoinContracts__Usdt=${TRON_USDT_CONTRACT:-}
       - StablecoinContracts__Usdc=${TRON_USDC_CONTRACT:-}
+      # Platform-owned destinations (05 §3.3, owner decision 2026-09-16).
+      # Same two values the signer pins itself to below: one .env entry feeds
+      # both services, so a drift fails loudly at the sidecar instead of
+      # sending money where an admin panel pointed it. Not signing material.
+      - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
+      - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}
@@ -239,6 +245,11 @@ services:
       # Hot wallet signing material — ONLY this service receives it (05 §3.3/§3.5).
       - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
       - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY:-}
+      # Pinned consolidation destination + outbound ceilings (08 §3.3a).
+      # Fail-closed: unset ceilings refuse payouts and refunds.
+      - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
+      - MAX_SINGLE_TRANSFER_USDT=${MAX_SINGLE_TRANSFER_USDT:-}
+      - MAX_DAILY_OUTFLOW_USDT=${MAX_DAILY_OUTFLOW_USDT:-}
       # Must match the backend's BlockchainSidecar__InternalKey above.
       - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       - WEBHOOK_SECRET=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}

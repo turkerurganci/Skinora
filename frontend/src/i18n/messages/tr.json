@@ -691,6 +691,7 @@
     "operationalNote": "04 §8.6'da listelenmeyen, çalışma zamanı/operasyonel ayarlar.",
     "saved": "Parametre güncellendi.",
     "saveError": "Parametre kaydedilemedi. Değeri kontrol edip tekrar deneyin.",
+    "managedByEnv": "Sunucu yapılandırmasında",
     "edit": "Düzenle",
     "save": "Kaydet",
     "cancel": "İptal",

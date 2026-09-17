@@ -1,11 +1,54 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TransferService } from './TransferService.js';
 import { RefundService } from './RefundService.js';
+import { TransferGuard, OutflowHistoryPage, OutflowHistoryRecord } from './TransferGuard.js';
 import { SidecarError } from '../errors/SidecarError.js';
 
 const SIGNER_HOT_KEY = '01'.padStart(64, '0');
 const TOKEN_USDT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const TOKEN_USDC = 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8';
+// Real base58check addresses: TransferGuard refuses to construct on a
+// malformed pinned address, so the placeholders this suite used before
+// ('THotWallet') can no longer stand in for one.
+const HOT_WALLET = 'TMmY2ARUpirKFwuW8HMGDuEkBWZZjK44jE';
+const COLD_WALLET = 'TGpQ6KteKAbJDu7zZuoRnUvUTxvjKG4tv5';
+const OTHER_ADDRESS = 'TGkh6US9LiJc1iovkYoAfTZpCGZtfM6nY5';
+const UNIT = 1_000_000n;
+// dummy signing material for the stub wallet — never reaches a chain
+const DUMMY_SIGNER = 'ab'.padStart(64, 'a');
+
+interface GuardOptions {
+  hotWalletAddress?: string;
+  coldWalletAddress?: string;
+  maxSingleTransferUnits?: bigint | null;
+  maxDailyOutflowUnits?: bigint | null;
+  history?: OutflowHistoryRecord[];
+  now?: number;
+}
+
+/**
+ * Guard with limits wide enough that the pre-existing expectations of this
+ * suite keep measuring what they measured before; the limit-specific cases
+ * narrow them explicitly.
+ */
+function buildGuard(options: GuardOptions = {}): TransferGuard {
+  const records = options.history ?? [];
+  return new TransferGuard({
+    hotWalletAddress: options.hotWalletAddress ?? HOT_WALLET,
+    coldWalletAddress: options.coldWalletAddress ?? COLD_WALLET,
+    maxSingleTransferUnits:
+      options.maxSingleTransferUnits === undefined
+        ? 10_000n * UNIT
+        : options.maxSingleTransferUnits,
+    maxDailyOutflowUnits:
+      options.maxDailyOutflowUnits === undefined ? 100_000n * UNIT : options.maxDailyOutflowUnits,
+    tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+    history: {
+      listTrc20: vi.fn(async (): Promise<OutflowHistoryPage> => ({ records, fingerprint: null })),
+    },
+    now: () => options.now ?? 1_700_000_000_000,
+  });
+}
 
 function buildStubClient() {
   return {
@@ -102,7 +145,8 @@ describe('TransferService.payout()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
     });
 
@@ -116,7 +160,7 @@ describe('TransferService.payout()', () => {
 
     expect(result.txHash).toBe('tx-fake');
     expect(client.sendTransfer).toHaveBeenCalledWith({
-      fromAddress: 'THotWallet',
+      fromAddress: HOT_WALLET,
       privateKey: SIGNER_HOT_KEY,
       contractAddress: TOKEN_USDT,
       toAddress: 'TSellerAddress',
@@ -133,7 +177,8 @@ describe('TransferService.payout()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: '',
     });
 
@@ -160,13 +205,14 @@ describe('TransferService.coldWalletTransfer()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
     });
 
     const result = await service.coldWalletTransfer({
       coldTransferId: 'cwt-77',
-      toColdAddress: 'TColdVault',
+      toColdAddress: COLD_WALLET,
       amount: '10000',
       token: 'USDC',
       correlationId: 'corr-cwt',
@@ -174,10 +220,10 @@ describe('TransferService.coldWalletTransfer()', () => {
 
     expect(result.txHash).toBe('tx-fake');
     expect(client.sendTransfer).toHaveBeenCalledWith({
-      fromAddress: 'THotWallet',
+      fromAddress: HOT_WALLET,
       privateKey: SIGNER_HOT_KEY,
       contractAddress: TOKEN_USDC,
-      toAddress: 'TColdVault',
+      toAddress: COLD_WALLET,
       amountUnits: '10000000000',
     });
   });
@@ -191,6 +237,7 @@ describe('TransferService.coldWalletTransfer()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
       hotWalletAddress: '',
       hotWalletPrivateKey: '',
     });
@@ -198,7 +245,7 @@ describe('TransferService.coldWalletTransfer()', () => {
     await expect(
       service.coldWalletTransfer({
         coldTransferId: 'cwt-77',
-        toColdAddress: 'TCold',
+        toColdAddress: COLD_WALLET,
         amount: '100',
         token: 'USDT',
         correlationId: 'corr-cwt',
@@ -216,14 +263,15 @@ describe('TransferService.coldWalletTransfer()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
     });
 
     await expect(
       service.coldWalletTransfer({
         coldTransferId: 'cwt-77',
-        toColdAddress: 'TCold',
+        toColdAddress: COLD_WALLET,
         amount: '1.0000001',
         token: 'USDT',
         correlationId: 'corr-cwt',
@@ -246,7 +294,8 @@ describe('TransferService.sweep()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
@@ -256,7 +305,7 @@ describe('TransferService.sweep()', () => {
       blockchainTransactionId: 'bx-sweep-1',
       depositIndex: 7,
       depositAddress: 'TDepositAddress7',
-      toHotWalletAddress: 'THotWallet',
+      toHotWalletAddress: HOT_WALLET,
       amount: '100',
       token: 'USDC',
       correlationId: 'corr-sweep-1',
@@ -269,7 +318,7 @@ describe('TransferService.sweep()', () => {
       {
         depositAddress: 'TDepositAddress7',
         contractAddress: TOKEN_USDC,
-        toAddress: 'THotWallet',
+        toAddress: HOT_WALLET,
         amountUnits: '100000000',
       },
       expect.any(Function),
@@ -282,7 +331,7 @@ describe('TransferService.sweep()', () => {
       expect.objectContaining({
         fromAddress: 'TDepositAddress7',
         contractAddress: TOKEN_USDC,
-        toAddress: 'THotWallet',
+        toAddress: HOT_WALLET,
         amountUnits: '100000000',
       }),
     );
@@ -306,7 +355,8 @@ describe('TransferService.sweep()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
@@ -316,7 +366,7 @@ describe('TransferService.sweep()', () => {
       blockchainTransactionId: 'bx-sweep-fb',
       depositIndex: 9,
       depositAddress: 'TDepositFB9',
-      toHotWalletAddress: 'THotWallet',
+      toHotWalletAddress: HOT_WALLET,
       amount: '50',
       token: 'USDT',
       correlationId: 'corr-fb',
@@ -345,7 +395,8 @@ describe('TransferService.sweep()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
@@ -356,7 +407,7 @@ describe('TransferService.sweep()', () => {
         blockchainTransactionId: 'bx-sweep-err',
         depositIndex: 7,
         depositAddress: 'TDepositAddress7',
-        toHotWalletAddress: 'THotWallet',
+        toHotWalletAddress: HOT_WALLET,
         amount: '100',
         token: 'USDT',
         correlationId: 'corr-err',
@@ -376,7 +427,8 @@ describe('TransferService.sweep()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
     });
 
@@ -385,7 +437,7 @@ describe('TransferService.sweep()', () => {
         blockchainTransactionId: 'bx-sweep-1',
         depositIndex: 7,
         depositAddress: 'TDepositAddress7',
-        toHotWalletAddress: 'THotWallet',
+        toHotWalletAddress: HOT_WALLET,
         amount: '100',
         token: 'USDT',
         correlationId: 'corr-sweep-1',
@@ -406,7 +458,8 @@ describe('TransferService.sweep()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
-      hotWalletAddress: 'THotWallet',
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
       hotWalletPrivateKey: SIGNER_HOT_KEY,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
@@ -417,7 +470,7 @@ describe('TransferService.sweep()', () => {
         blockchainTransactionId: 'bx-sweep-1',
         depositIndex: 7,
         depositAddress: 'TDepositAddress7',
-        toHotWalletAddress: 'THotWallet',
+        toHotWalletAddress: HOT_WALLET,
         amount: '100',
         token: 'USDT',
         correlationId: 'corr-sweep-1',
@@ -441,6 +494,7 @@ describe('RefundService.refund()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
     });
@@ -497,6 +551,7 @@ describe('RefundService.refund()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       energyDelegation: delegation as any,
     });
@@ -527,6 +582,7 @@ describe('RefundService.refund()', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
     });
 
     await expect(
@@ -540,6 +596,247 @@ describe('RefundService.refund()', () => {
         correlationId: 'corr-refund-1',
       }),
     ).rejects.toMatchObject({ code: 'DELEGATION_NOT_WIRED', retryable: false });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+});
+
+describe('destination pinning and amount limits (05 §3.3)', () => {
+  function buildSweepService(guard: TransferGuard) {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({
+      7: { address: 'TDepositAddress7', privateKey: DUMMY_SIGNER },
+    });
+    const delegation = buildStubDelegation('delegated');
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard,
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      energyDelegation: delegation as any,
+    });
+    return { service, client, wallet, delegation };
+  }
+
+  it('refuses a sweep that would credit anything but the configured hot wallet', async () => {
+    const { service, client, wallet, delegation } = buildSweepService(buildGuard());
+
+    await expect(
+      service.sweep({
+        blockchainTransactionId: 'bx-sweep-evil',
+        depositIndex: 7,
+        depositAddress: 'TDepositAddress7',
+        toHotWalletAddress: OTHER_ADDRESS,
+        amount: '100',
+        token: 'USDT',
+        correlationId: 'corr-evil',
+      }),
+    ).rejects.toMatchObject({ code: 'DESTINATION_NOT_ALLOWED', retryable: false });
+    expect(wallet.deriveSigner).not.toHaveBeenCalled();
+    expect(delegation.withDelegation).not.toHaveBeenCalled();
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('sweeps any amount — the ceilings guard customer-facing transfers, not a pinned destination', async () => {
+    const { service, client } = buildSweepService(buildGuard({ maxSingleTransferUnits: 1n }));
+
+    const result = await service.sweep({
+      blockchainTransactionId: 'bx-sweep-big',
+      depositIndex: 7,
+      depositAddress: 'TDepositAddress7',
+      toHotWalletAddress: HOT_WALLET,
+      amount: '9000',
+      token: 'USDT',
+      correlationId: 'corr-big',
+    });
+
+    expect(result.txHash).toBe('tx-fake');
+    expect(client.sendTransfer).toHaveBeenCalled();
+  });
+
+  it('refuses a cold consolidation to anything but the configured cold wallet', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+    });
+
+    await expect(
+      service.coldWalletTransfer({
+        coldTransferId: 'cwt-evil',
+        toColdAddress: OTHER_ADDRESS,
+        amount: '5000',
+        token: 'USDT',
+        correlationId: 'corr-evil',
+      }),
+    ).rejects.toMatchObject({ code: 'DESTINATION_NOT_ALLOWED', retryable: false });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('consolidates above the single-transfer ceiling — the destination is pinned', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard({ maxSingleTransferUnits: 1n, maxDailyOutflowUnits: 1n }),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+    });
+
+    const result = await service.coldWalletTransfer({
+      coldTransferId: 'cwt-big',
+      toColdAddress: COLD_WALLET,
+      amount: '50000',
+      token: 'USDT',
+      correlationId: 'corr-cwt-big',
+    });
+
+    expect(result.txHash).toBe('tx-fake');
+    expect(client.sendTransfer).toHaveBeenCalled();
+  });
+
+  it('refuses a payout above the single-transfer ceiling', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard({ maxSingleTransferUnits: 100n * UNIT }),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+    });
+
+    await expect(
+      service.payout({
+        blockchainTransactionId: 'bx-big',
+        toAddress: OTHER_ADDRESS,
+        amount: '100.000001',
+        token: 'USDT',
+        correlationId: 'corr-big',
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSFER_AMOUNT_ABOVE_LIMIT', retryable: false });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a payout that would push the last 24h of hot wallet outflow past the ceiling', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard({
+        maxDailyOutflowUnits: 1_000n * UNIT,
+        history: [
+          {
+            transaction_id: 'tx-earlier',
+            from: HOT_WALLET,
+            to: OTHER_ADDRESS,
+            value: (950n * UNIT).toString(),
+            block_timestamp: 1_700_000_000_000 - 60_000,
+            token_info: { address: TOKEN_USDT },
+          },
+        ],
+      }),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+    });
+
+    await expect(
+      service.payout({
+        blockchainTransactionId: 'bx-daily',
+        toAddress: OTHER_ADDRESS,
+        amount: '51',
+        token: 'USDT',
+        correlationId: 'corr-daily',
+      }),
+    ).rejects.toMatchObject({ code: 'DAILY_OUTFLOW_LIMIT_EXCEEDED', retryable: false });
+    expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+
+  it('counts a payout it just broadcast against the next one, before the chain shows it', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({});
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      // History stays empty: only the in-flight record can stop the second one.
+      guard: buildGuard({ maxDailyOutflowUnits: 100n * UNIT }),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: DUMMY_SIGNER,
+    });
+
+    await service.payout({
+      blockchainTransactionId: 'bx-1',
+      toAddress: OTHER_ADDRESS,
+      amount: '60',
+      token: 'USDT',
+      correlationId: 'corr-1',
+    });
+    await expect(
+      service.payout({
+        blockchainTransactionId: 'bx-2',
+        toAddress: OTHER_ADDRESS,
+        amount: '60',
+        token: 'USDT',
+        correlationId: 'corr-2',
+      }),
+    ).rejects.toMatchObject({ code: 'DAILY_OUTFLOW_LIMIT_EXCEEDED' });
+    expect(client.sendTransfer).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a refund above the single-transfer ceiling', async () => {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({
+      11: { address: 'TDeposit11', privateKey: DUMMY_SIGNER },
+    });
+    const delegation = buildStubDelegation('delegated');
+    const service = new RefundService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard({ maxSingleTransferUnits: 10n * UNIT }),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      energyDelegation: delegation as any,
+    });
+
+    await expect(
+      service.refund({
+        blockchainTransactionId: 'bx-refund-big',
+        depositIndex: 11,
+        depositAddress: 'TDeposit11',
+        toBuyerAddress: OTHER_ADDRESS,
+        amount: '11',
+        token: 'USDT',
+        correlationId: 'corr-refund-big',
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSFER_AMOUNT_ABOVE_LIMIT', retryable: false });
+    expect(delegation.withDelegation).not.toHaveBeenCalled();
     expect(client.sendTransfer).not.toHaveBeenCalled();
   });
 });

@@ -29,6 +29,8 @@ declare module 'tronweb' {
     }): TronWeb;
     address: TronWeb.AddressUtility;
     utils: TronWeb.Utils;
+    /** Base58check validation incl. checksum — used to pin platform addresses. */
+    isAddress(address: string): boolean;
   };
 
   export = TronWeb;

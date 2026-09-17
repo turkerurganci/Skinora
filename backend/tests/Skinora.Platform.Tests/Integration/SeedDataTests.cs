@@ -22,7 +22,7 @@ namespace Skinora.Platform.Tests.Integration;
 /// 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
 /// 1 T73 blockchain.transfer_retry_intervals_minutes setting +
 /// 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
-/// 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings).
+/// 1 T76 reconciliation.schedule_cron setting).
 /// </summary>
 public class SeedDataTests : IntegrationTestBase
 {
@@ -72,7 +72,7 @@ public class SeedDataTests : IntegrationTestBase
         // 1 T72 blockchain.refund_gas_fee_estimate_usdt setting +
         // 1 T73 blockchain.transfer_retry_intervals_minutes setting +
         // 2 T74 blockchain.sweep_{energy_delegation,trx_fallback}_sun settings +
-        // 3 T76 reconciliation.{schedule_cron,hot_wallet_address,cold_wallet_address} settings +
+        // 1 T76 reconciliation.schedule_cron setting +
         // 2 T77 hot_wallet.{monitor_cron,trx_balance_minimum} settings +
         // 1 WP1 blockchain.payout_gas_fee_estimate_usdt setting +
         // 1 T125 delivery.inventory_evidence_auto_release_enabled launch gate +
@@ -83,16 +83,21 @@ public class SeedDataTests : IntegrationTestBase
         // + 3 non_delivery_{window_days,flag_count,suspend_count} (2026-09-16, 02 §14.2).
         // − 1 blockchain.sweep_energy_delegation_sun (2026-09-16 hybrid energy decision:
         //   the delegated amount is computed per transfer, so the fixed knob was removed).
+        // − 2 reconciliation.{hot,cold}_wallet_address (2026-09-16 custody round:
+        //   the platform's own destinations became deployment configuration —
+        //   a MANAGE_SETTINGS admin could otherwise redirect sweeps and
+        //   consolidation; see IPlatformWalletAddressProvider. The catalog
+        //   still lists them, read-only, so the panel shows what is configured).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(66, rows.Count);
-        Assert.Equal(66, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(64, rows.Count);
+        Assert.Equal(64, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Seed_SystemSettings_Defaulted_Parameters_Are_Configured()
     {
-        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + NONE-sentinel hot/cold addresses + T77 hot wallet monitor + TRX floor:
+        // 06 §3.17 + 02 §21.1 + 02 §12.3 + 02 §13 + 02 §14.3 + 07 §10.2 + T63b retention + T72 refund estimate + T73 retry intervals + T74 sweep amounts + T76 reconciliation cron + T77 hot wallet monitor + TRX floor:
         // 44 rows ship with a documented default (8 T26 + 2 T30 + 2 T34 + 2 T43 + 1 T55
         // + 1 T56 + 4 T63a + 8 T63b + 1 T72 + 1 T73 + 2 T74 + 3 T76 + 2 T77 + 1 WP1
         // + 1 WP4a price_deviation_threshold=1.0
@@ -150,8 +155,6 @@ public class SeedDataTests : IntegrationTestBase
             "platform.maintenance.planned_end",
             "platform.maintenance.type",
             "price_deviation_threshold",
-            "reconciliation.cold_wallet_address",
-            "reconciliation.hot_wallet_address",
             "reconciliation.schedule_cron",
             "reputation.min_account_age_days",
             "reputation.min_completed_transactions",
@@ -188,9 +191,10 @@ public class SeedDataTests : IntegrationTestBase
         // price_deviation_threshold (21→20) and WP12 flipped
         // timeout_warning_ratio (20→19) from Unconfigured to a seeded default,
         // so neither is deploy-mandatory anymore.
-        // T76 reconciliation hot/cold wallet addresses follow the NONE-sentinel
-        // pattern (Default("NONE")) instead of Unconfigured because their env
-        // var key includes a dot which the env var provider cannot bind safely.
+        // The two platform wallet addresses used to sit here as NONE-sentinel
+        // defaults (their dotted key could not bind to an env var); the
+        // 2026-09-16 custody round moved them out of this table entirely and
+        // into HOT_WALLET_ADDRESS / COLD_WALLET_ADDRESS, which have no dot.
         var unconfigured = await Context.Set<SystemSetting>()
             .Where(s => !s.IsConfigured)
             .ToListAsync();

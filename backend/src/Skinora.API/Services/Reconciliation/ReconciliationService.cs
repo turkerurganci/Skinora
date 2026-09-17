@@ -3,7 +3,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Payments.Domain.Entities;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Domain.Seed;
@@ -26,13 +28,13 @@ namespace Skinora.API.Services.Reconciliation;
 ///   <item><b>DepositAddress</b> — every <see cref="PaymentAddress"/> whose
 ///   monitoring is still active. Expected = sum of CONFIRMED inflows minus
 ///   CONFIRMED outflows recorded in <see cref="BlockchainTransaction"/>.</item>
-///   <item><b>HotWallet</b> — the address stored in the
-///   <c>reconciliation.hot_wallet_address</c> SystemSetting. Expected =
-///   CONFIRMED SWEEP inflows minus outbound transfers and minus hot→cold
-///   ledger transfers.</item>
-///   <item><b>ColdWallet</b> — the address stored in the
-///   <c>reconciliation.cold_wallet_address</c> SystemSetting. Expected =
-///   sum of <see cref="ColdWalletTransfer"/> inflows. MVP has no
+///   <item><b>HotWallet</b> — the address from
+///   <see cref="IPlatformWalletAddressProvider"/> (<c>HOT_WALLET_ADDRESS</c>).
+///   Expected = CONFIRMED SWEEP inflows minus outbound transfers and minus
+///   hot→cold ledger transfers.</item>
+///   <item><b>ColdWallet</b> — the address from
+///   <see cref="IPlatformWalletAddressProvider"/> (<c>COLD_WALLET_ADDRESS</c>).
+///   Expected = sum of <see cref="ColdWalletTransfer"/> inflows. MVP has no
 ///   cold→external outflow path.</item>
 /// </list>
 ///
@@ -51,8 +53,6 @@ namespace Skinora.API.Services.Reconciliation;
 /// </summary>
 public sealed class ReconciliationService : IReconciliationService
 {
-    public const string HotWalletAddressKey = "reconciliation.hot_wallet_address";
-    public const string ColdWalletAddressKey = "reconciliation.cold_wallet_address";
 
     /// <summary>
     /// Sidecar accepts at most 100 addresses per request. Reconcile up to
@@ -123,6 +123,7 @@ public sealed class ReconciliationService : IReconciliationService
     private readonly AppDbContext _db;
     private readonly IBlockchainSidecarClient _sidecar;
     private readonly INotificationRealtimePublisher _realtime;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<ReconciliationService> _logger;
 
@@ -130,51 +131,37 @@ public sealed class ReconciliationService : IReconciliationService
         AppDbContext db,
         IBlockchainSidecarClient sidecar,
         INotificationRealtimePublisher realtime,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<ReconciliationService> logger)
     {
         _db = db;
         _sidecar = sidecar;
         _realtime = realtime;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
 
     public async Task<ReconciliationOutcome> RunAsync(CancellationToken cancellationToken)
     {
-        var settings = await _db.Set<SystemSetting>()
-            .AsNoTracking()
-            .Where(s => s.Key == HotWalletAddressKey || s.Key == ColdWalletAddressKey)
-            .Select(s => new { s.Key, s.Value, s.IsConfigured })
-            .ToListAsync(cancellationToken);
-
-        string? hotWallet = null;
-        string? coldWallet = null;
-        foreach (var row in settings)
-        {
-            var value = row.IsConfigured && !string.IsNullOrWhiteSpace(row.Value)
-                ? row.Value!.Trim()
-                : null;
-            // String settings use the documented "NONE" sentinel for "not set"
-            // (auth.banned_countries pattern, 06 §3.17 + T63a maintenance
-            // string columns). Production deploy replaces NONE with the real
-            // Tron address; until then we treat it as unconfigured.
-            if (string.Equals(value, "NONE", StringComparison.Ordinal)) value = null;
-            if (row.Key == HotWalletAddressKey) hotWallet = value;
-            if (row.Key == ColdWalletAddressKey) coldWallet = value;
-        }
+        // Deployment configuration, not an admin-editable setting: the same
+        // env var the signer pins its destinations to (05 §3.3, owner decision
+        // 2026-09-16). Unset behaves exactly as the old "NONE" sentinel did.
+        var hotWallet = _walletAddresses.HotWalletAddress;
+        var coldWallet = _walletAddresses.ColdWalletAddress;
 
         if (string.IsNullOrEmpty(hotWallet))
         {
             _logger.LogWarning(
                 "Reconciliation skipping hot wallet scope: {Key} is unconfigured.",
-                HotWalletAddressKey);
+                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
         }
         if (string.IsNullOrEmpty(coldWallet))
         {
             _logger.LogInformation(
                 "Reconciliation skipping cold wallet scope: {Key} is unconfigured.",
-                ColdWalletAddressKey);
+                EnvPlatformWalletAddressProvider.ColdWalletConfigurationKey);
         }
 
         var depositAddresses = await _db.Set<PaymentAddress>()

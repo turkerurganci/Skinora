@@ -82,6 +82,17 @@ export const config = {
   hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
   hotWalletPrivateKey: process.env.HOT_WALLET_PRIVATE_KEY || '',
 
+  // Platform-owned destinations and value ceilings — owner decisions
+  // 2026-09-16/17 (05 §3.3). The cold wallet address lives here, not in an
+  // admin-editable SystemSetting, because the sidecar is the last component
+  // that can refuse to sign; the same reasoning pins the sweep destination to
+  // `hotWalletAddress` above. Both limits are decimal USDT strings and both
+  // are fail-closed: unset or malformed refuses customer-facing transfers
+  // rather than allowing unlimited ones (transfer/TransferGuard.ts).
+  coldWalletAddress: process.env.COLD_WALLET_ADDRESS || '',
+  maxSingleTransferUsdt: process.env.MAX_SINGLE_TRANSFER_USDT || '',
+  maxDailyOutflowUsdt: process.env.MAX_DAILY_OUTFLOW_USDT || '',
+
   // Deposit-sourced transfer resources — 08 §3.3, owner decision 2026-09-16
   // (HYBRID). There is no delegation AMOUNT to configure any more: the flow
   // simulates each transfer, reads the network ratio (TotalEnergyLimit /

@@ -13,4 +13,7 @@ public static class SettingsErrorCodes
 
     /// <summary>400 — value failed type/range/cross-key validation (07 §9.9).</summary>
     public const string ValidationError = "VALIDATION_ERROR";
+
+    /// <summary>422 — key is env-sourced; change it in deployment config (07 §9.9).</summary>
+    public const string SettingReadOnly = "SETTING_READ_ONLY";
 }

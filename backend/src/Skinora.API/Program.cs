@@ -24,7 +24,9 @@ using Skinora.Notifications;
 using Skinora.Notifications.Infrastructure.Persistence;
 using Skinora.Payments.Infrastructure.Persistence;
 using Skinora.Platform;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Infrastructure.Bootstrap;
+using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.API.Services;
 using Skinora.Realtime;
@@ -304,6 +306,11 @@ builder.Services.AddHangfireModule(builder.Configuration);
 // primes once configuration is proven complete. IHostedService StartAsync
 // order follows registration order.
 builder.Services.AddScoped<SettingsBootstrapService>();
+// The platform own wallet addresses are deployment configuration, not
+// admin-editable settings (05 §3.3, owner decision 2026-09-16). Singleton:
+// the value cannot change without a restart, and a malformed one throws here
+// at first resolve — which SettingsBootstrapHook forces before traffic.
+builder.Services.AddSingleton<IPlatformWalletAddressProvider, EnvPlatformWalletAddressProvider>();
 builder.Services.AddHostedService<SettingsBootstrapHook>();
 
 // WP1 (T81) — report whether the PRICE_DEVIATION fraud rule can actually fire.

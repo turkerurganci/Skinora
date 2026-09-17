@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Infrastructure.Bootstrap;
 
 namespace Skinora.API.Startup;
@@ -33,6 +34,12 @@ public class SettingsBootstrapHook : IHostedService
     {
         using var scope = _scopeFactory.CreateScope();
         var bootstrap = scope.ServiceProvider.GetRequiredService<SettingsBootstrapService>();
+
+        // Same fail-fast contract for the env-sourced wallet addresses: the
+        // provider validates its input while constructing, so resolving it here
+        // stops a misconfigured deploy before any job or request reads it
+        // (05 §3.3, owner decision 2026-09-16).
+        scope.ServiceProvider.GetRequiredService<IPlatformWalletAddressProvider>();
 
         try
         {

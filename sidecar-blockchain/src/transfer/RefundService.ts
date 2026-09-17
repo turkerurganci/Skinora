@@ -3,6 +3,7 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import { TronTransferClient, SendTransferResult } from '../tron/TronTransferClient.js';
 import { TokenContractMap, TokenSymbol, TransferService } from './TransferService.js';
+import { TransferGuard } from './TransferGuard.js';
 import {
   EnergyDelegationService,
   DelegationMode,
@@ -37,6 +38,9 @@ export interface RefundServiceDeps {
   client: TronTransferClient;
   tokenContracts: TokenContractMap;
   tokenDecimals?: number;
+  /** Amount limits (05 §3.3). Required for the same reason as on
+   * <c>TransferService</c>: no signer without the ability to refuse. */
+  guard: TransferGuard;
   /** Energy delegation orchestrator (T74). Refund originates from a deposit
    * address with no TRX, so delegation is mandatory in production. Tests can
    * omit this only when explicitly exercising the <c>DELEGATION_NOT_WIRED</c>
@@ -62,6 +66,7 @@ export class RefundService {
   private readonly tokens: TokenContractMap;
   private readonly decimalsPower: bigint;
   private readonly energyDelegation?: EnergyDelegationService;
+  private readonly guard: TransferGuard;
 
   constructor(deps: RefundServiceDeps) {
     this.wallet = deps.walletManager;
@@ -69,6 +74,7 @@ export class RefundService {
     this.tokens = deps.tokenContracts;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
     this.energyDelegation = deps.energyDelegation;
+    this.guard = deps.guard;
   }
 
   async refund(request: RefundRequest): Promise<RefundResult> {
@@ -89,6 +95,11 @@ export class RefundService {
     }
     const contract = this.resolveContract(request.token);
     const amountUnits = TransferService.toRawUnits(request.amount, this.decimalsPower);
+
+    // Buyer addresses cannot be pinned either. A refund is bounded by its own
+    // deposit, so only the single-transfer ceiling applies here — the daily
+    // ceiling measures hot-wallet outflow, and this leaves a deposit address.
+    this.guard.assertSingleTransferLimit(BigInt(amountUnits));
 
     logger.info(
       {

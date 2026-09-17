@@ -139,13 +139,13 @@ public static class SystemSettingSeed
         Default     (53, "blockchain.sweep_trx_fallback_sun",            "string",  "Monitoring",    "15000000",  "Depozit kaynak planı hiç hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX tutarı (SUN). Default 15 TRX = en pahalı TRC-20 transfer 13,03 TRX + bandı 0,35 TRX (08 §3.3). Kilidin yetmediği transfer bu ayarı kullanmaz; yakacağı TRX'i transfer başına hesaplar."),
         // --- T76: Blockchain reconciliation job (05 §3.3) ---
         // Daily on-chain vs ledger reconciliation. Cron default is 03:00 UTC
-        // (admin-tunable, host restart required to re-register). Hot/cold
-        // wallet addresses ship unconfigured — production deploy sets them
-        // via SystemSetting before the first run, otherwise that scope is
-        // skipped with a warn log.
+        // (admin-tunable, host restart required to re-register). The hot and
+        // cold wallet addresses used to live here (indices 55/56, now free and
+        // not to be reused): they became deployment configuration in the
+        // 2026-09-16 custody round because a MANAGE_SETTINGS admin could
+        // rewrite them and redirect real money — see
+        // IPlatformWalletAddressProvider.
         Default     (54, "reconciliation.schedule_cron",                 "string",  "Monitoring",    "0 3 * * *", "Reconciliation job cron ifadesi (05 §3.3). Default '0 3 * * *' (03:00 UTC günlük). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
-        Default     (55, "reconciliation.hot_wallet_address",            "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için hot wallet Tron adresi. 'NONE' ise hot wallet kapsamı atlanır (warn log). Production deploy bu değeri ayarlamalıdır (05 §3.3) — auth.banned_countries NONE sentinel pattern."),
-        Default     (56, "reconciliation.cold_wallet_address",           "string",  "Monitoring",    "NONE",      "Reconciliation karşılaştırması için cold wallet Tron adresi (opsiyonel). 'NONE' ise cold wallet kapsamı atlanır (info log). MVP'de cold transfer manuel başlatılır — ColdWalletTransfer ledger'a eşleştirilir."),
         // --- T77: Hot wallet monitoring job (05 §3.3) ---
         // Periodic hot wallet balance monitor (independent of the daily
         // reconciliation pass). Default 15 dakika — operationally adequate

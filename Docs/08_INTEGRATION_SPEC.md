@@ -603,6 +603,21 @@ Deposit adreslerinden sweep veya doğrudan refund/payout yapabilmek için Energy
 | **Canlı doğrulama** | **2026-09-17 (düzeltilmiş kod):** *Nile* — hiç TRX almamış depozit #9010, 0 USDT sweep (sahip öder, %100 boyut → 100 TRX'lik kilit 218 TRX'lik devretmeye yetmez → yakma): hesap açma `26af8cf4…` blok **71.041.351** → yakma TRX'i 1.604.239 SUN `6c062b4d…` blok **71.041.352** → transfer `b8b27d71…` blok **71.041.354** (`SUCCESS`); çağrı 11,6 sn. *Mainnet, hiçbir şey yayınlanmadan* (derlenmiş kod + canlı okumalar + kayıt tutan sahte imzacı; depozit 0 enerji / 0 TRX): simülasyon **64.285**, oran 9,5177, Tether sahibinin enerjisi 0 → kilit yeterliyse **7.430 TRX** devredilir = 70.716 enerji; kilit yoksa **7.071.350 SUN** gönderilir = 70.713 enerjilik yakma; ikisi de ≥ 64.285. Kesinti 64.285 × 100 SUN = 6,43 TRX (eski kod 19.286 enerji → 0,65 USDT kesiyordu). **2026-09-16 (ilk kod):** üç yol Nile'da geçti ama adımlar aynı bloğa düştü (yukarıdaki "Blok onayı") | 2026-09-16, 2026-09-17 |
 | Batch optimizasyon | Aynı blokta birden fazla deposit adresi için toplu delegation | 05 §3.3 |
 
+#### 3.3a Hedef sabitleme ve tutar tavanları (imzalayan servis, owner kararı 2026-09-16/17)
+
+Blockchain sidecar yalnız *nasıl* imzalayacağını değil, **neyi imzalamayacağını** da bilir. Backend hangi transferin yapılacağına karar verir; backend, veritabanı ya da bir admin hesabı ele geçirilirse "hayır" diyebilecek tek bileşen imzalayan servistir (05 §3.3).
+
+| Kural | Uygulama | Hata |
+|---|---|---|
+| **Sweep hedefi sabit** | `toHotWalletAddress` sidecar'ın kendi `HOT_WALLET_ADDRESS` değeriyle karşılaştırılır. Alan istekte kalır ki backend ile sidecar ayrışırsa gönderim **sessizce başka yere gitmek yerine** burada dursun | 400 `DESTINATION_NOT_ALLOWED` (kalıcı) |
+| **Soğuk cüzdan hedefi sabit** | `toColdAddress` sidecar'ın `COLD_WALLET_ADDRESS` değeriyle karşılaştırılır; ayar yoksa konsolidasyon hiç yapılmaz | 400 `DESTINATION_NOT_ALLOWED` / `COLD_WALLET_NOT_CONFIGURED` |
+| **Tek gönderim tavanı** | `MAX_SINGLE_TRANSFER_USDT` — payout ve iadeye uygulanır (satıcının/alıcının adresi sabitlenemez, tavan onların yolunu korur). Sweep ve soğuk konsolidasyon muaftır: hedefleri sabittir | 400 `TRANSFER_AMOUNT_ABOVE_LIMIT` |
+| **Günlük çıkış tavanı** | `MAX_DAILY_OUTFLOW_USDT` — sıcak cüzdanın son 24 saatteki TRC-20 çıkış toplamı + bu gönderim. Toplam **zincirden** okunur (`/v1/accounts/{addr}/transactions/trc20?only_from=true&only_confirmed=true&min_timestamp=…`, allowlist kontratları, soğuk cüzdana gidenler hariç) ve sidecar'ın kendi henüz zincirde görünmeyen yayınları eklenir; yeniden başlatma sayacı sıfırlamaz | 400 `DAILY_OUTFLOW_LIMIT_EXCEEDED` |
+| **Fail-closed** | Tavan ayarlanmamış ya da bozuksa payout/iade **yapılmaz** (sınırsız çalışmaz). Sabitlenen adres bozuksa sidecar hiç açılmaz | 400 `TRANSFER_LIMIT_NOT_CONFIGURED` |
+| **Geçmiş okunamazsa** | Günlük tavan değerlendirilemez: yeniden denenebilir hata döner (backend 1/5/15 dk sonra dener). Geçmiş sayfa bütçesini aşarsa kalıcı hata — operatör bütçeyi ya da tavanı gözden geçirir | 502 `OUTFLOW_HISTORY_UNAVAILABLE` / 400 `OUTFLOW_HISTORY_INCOMPLETE` |
+
+**Yeni ortam değişkenleri:** `COLD_WALLET_ADDRESS` (boş = konsolidasyon kapalı), `MAX_SINGLE_TRANSFER_USDT`, `MAX_DAILY_OUTFLOW_USDT` (ikisi de ondalık USDT, boş = payout/iade kapalı). `HOT_WALLET_ADDRESS` zaten vardı; artık backend de aynı iki adresi okur (05 §3.3), böylece `.env` tek kaynaktır. Değer boyutlandırması `DEPLOY_RUNBOOK §C.3`.
+
 ### 3.4 Monitoring ve Polling Stratejisi
 
 **Aktif ödeme izleme (işlem devam ederken):**

@@ -691,6 +691,7 @@
     "operationalNote": "规范 04 §8.6 未列出的运行时/运营设置。",
     "saved": "参数已更新。",
     "saveError": "无法保存参数。请检查值后重试。",
+    "managedByEnv": "由部署配置设定",
     "edit": "编辑",
     "save": "保存",
     "cancel": "取消",

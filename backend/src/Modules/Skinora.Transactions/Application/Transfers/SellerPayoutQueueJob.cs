@@ -63,6 +63,22 @@ namespace Skinora.Transactions.Application.Transfers;
 /// </para>
 ///
 /// <para>
+/// <b>The payout waits for its own sweep (owner decision 2026-09-17).</b>
+/// <see cref="SweepQueueJob"/> reads the same settlement gate, so before this
+/// change both jobs opened in the same minute: the payout left the hot wallet
+/// in seconds while the sweep that funds it went through account activation
+/// and Energy delegation. The gap was covered by an operating balance the
+/// platform had to park in the hot wallet — DEPLOY_RUNBOOK §I sized it at the
+/// largest single payout — and when that balance ran short the transfer
+/// reverted on chain and retried. Requiring the CONFIRMED sweep row instead
+/// removes the float requirement entirely: the hot wallet only ever pays out
+/// money it has already received for that transaction, and what accumulates
+/// there is commission. The cost is the sweep's own latency (a few minutes on
+/// top of an eight-day window) and a sweep that fails permanently now holds
+/// its payout — which the existing sweep-failure alert already surfaces.
+/// </para>
+///
+/// <para>
 /// Concurrency hardening (WP1 F1 — S2 money-safety). The <c>AnyAsync</c>
 /// idempotency check is not atomic with the subsequent insert, so two
 /// overlapping ticks could both pass it and queue two PENDING payouts →
@@ -122,12 +138,17 @@ public sealed class SellerPayoutQueueJob
 
         // Soft-delete query filter excludes IsDeleted rows. Skip held /
         // disputed transactions, transactions whose settlement window has not
-        // elapsed (02 §4.5.1), and any that already have a payout row queued.
+        // elapsed (02 §4.5.1), those whose sweep has not landed in the hot
+        // wallet yet (owner decision 2026-09-17), and any that already have a
+        // payout row queued.
         var candidateIds = await _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
                 && !t.IsOnHold
                 && !t.HasActiveDispute
+                && t.BlockchainTransactions.Any(
+                    b => b.Type == BlockchainTransactionType.SWEEP
+                        && b.Status == BlockchainTransactionStatus.CONFIRMED)
                 && t.PayoutEligibleAt != null
                 && t.PayoutEligibleAt <= nowUtc
                 && t.SettlementVerifiedAt != null
@@ -172,6 +193,19 @@ public sealed class SellerPayoutQueueJob
         {
             return;
         }
+
+        // Funding gate, re-read for the same reason the others are: the batch
+        // was selected before this row was loaded, and a sweep can only move
+        // forward (PENDING → CONFIRMED), never backwards, so reading it again
+        // here can only be more conservative.
+        var sweepConfirmed = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .AnyAsync(
+                b => b.TransactionId == transaction.Id
+                    && b.Type == BlockchainTransactionType.SWEEP
+                    && b.Status == BlockchainTransactionStatus.CONFIRMED,
+                cancellationToken);
+        if (!sweepConfirmed) return;
 
         // Idempotency — never queue a second payout for the same transaction.
         var alreadyQueued = await _db.Set<BlockchainTransaction>()

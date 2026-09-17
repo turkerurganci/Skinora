@@ -153,7 +153,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     [Fact]
@@ -165,7 +166,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     [Fact]
@@ -177,7 +179,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     /// <summary>
@@ -197,7 +200,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     /// <summary>
@@ -213,7 +217,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
 
         // And the causality, so this test fails for the right reason: the clock
         // reaching the eligibility instant is the single step that releases it.
@@ -241,7 +246,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
 
         // Causality: the stamp is the single step that releases it.
         tx.SettlementVerifiedAt = _clock.GetUtcNow().UtcDateTime;
@@ -267,7 +273,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     [Fact]
@@ -395,7 +402,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
-            b => b.TransactionId == tx.Id));
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
     private BlockchainTransaction NewSellerPayoutRow(Transaction tx) => new()
@@ -414,8 +422,59 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         CreatedAt = _clock.GetUtcNow().UtcDateTime,
     };
 
+    /// <summary>
+    /// Owner decision 2026-09-17 — the hot wallet pays out money it has
+    /// already received for that transaction, so an unswept (or still
+    /// in-flight) deposit holds the payout instead of drawing on an operating
+    /// balance the platform would have to park there (DEPLOY_RUNBOOK §I).
+    /// </summary>
+    [Fact]
+    public async Task SweepNotQueued_IsSkipped()
+    {
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, sweepStatus: null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
+    [Fact]
+    public async Task SweepStillPending_IsSkipped_ThenQueuedOnceItConfirms()
+    {
+        var tx = await SeedDeliveredAsync(
+            price: 100m, commission: 2m, sweepStatus: BlockchainTransactionStatus.PENDING);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+
+        // Causality: confirming that one sweep is the single step that releases
+        // the payout — nothing else about the transaction changes.
+        var sweep = await _db.Set<BlockchainTransaction>()
+            .SingleAsync(b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SWEEP);
+        sweep.Status = BlockchainTransactionStatus.CONFIRMED;
+        sweep.TxHash = $"sweep-{Guid.NewGuid():N}";
+        sweep.ConfirmationCount = 20;
+        sweep.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == tx.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
     private async Task<Transaction> SeedDeliveredAsync(
-        decimal price, decimal commission, Action<Transaction>? configure = null)
+        decimal price,
+        decimal commission,
+        Action<Transaction>? configure = null,
+        BlockchainTransactionStatus? sweepStatus = BlockchainTransactionStatus.CONFIRMED)
     {
         var seller = new User
         {
@@ -468,6 +527,51 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         configure?.Invoke(tx);
 
         _db.Set<Transaction>().Add(tx);
+
+        // Owner decision 2026-09-17 — the payout is funded by this
+        // transaction's own sweep, so the default fixture has one CONFIRMED.
+        // Cases that probe the funding gate pass PENDING or null instead.
+        if (sweepStatus is { } status)
+        {
+            var deposit = new PaymentAddress
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = tx.Id,
+                Address = "TDepositPayoutFixture000000000000000",
+                HdWalletIndex = 4242,
+                ExpectedAmount = tx.TotalAmount,
+                ExpectedToken = StablecoinType.USDT,
+                MonitoringStatus = MonitoringStatus.STOPPED,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+                UpdatedAt = _clock.GetUtcNow().UtcDateTime,
+                RowVersion = new byte[8],
+            };
+            _db.Set<PaymentAddress>().Add(deposit);
+            _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = tx.Id,
+                PaymentAddressId = deposit.Id,
+                Type = BlockchainTransactionType.SWEEP,
+                TxHash = status == BlockchainTransactionStatus.CONFIRMED
+                    ? $"sweep-{Guid.NewGuid():N}"
+                    : null,
+                FromAddress = deposit.Address,
+                ToAddress = "THotWalletPayoutFixture000000000000",
+                Amount = tx.TotalAmount,
+                Token = StablecoinType.USDT,
+                Status = status,
+                ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+                // CK_BlockchainTransactions_Status_Confirmed: a CONFIRMED row
+                // carries both the count and the stamp.
+                ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED
+                    ? _clock.GetUtcNow().UtcDateTime
+                    : null,
+                RetryCount = 0,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            });
+        }
+
         await _db.SaveChangesAsync();
         return tx;
     }

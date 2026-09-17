@@ -180,13 +180,20 @@ export function SettingRow({ setting }: SettingRowProps) {
         ) : (
           <div className="flex items-center gap-3 sm:justify-end">
             <span className="text-sm font-semibold text-gray-900">{displayValue}</span>
-            <button
-              type="button"
-              onClick={startEdit}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              {t("edit")}
-            </button>
+            {/* Deployment configuration (05 §3.3): shown so an operator can see
+                what the services are pointed at, but the API refuses a write —
+                offering the button would only produce a 422. */}
+            {setting.isEditable === false ? (
+              <span className="text-xs text-gray-400">{t("managedByEnv")}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={startEdit}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                {t("edit")}
+              </button>
+            )}
           </div>
         )}
       </div>

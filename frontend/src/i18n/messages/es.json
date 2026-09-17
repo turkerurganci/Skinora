@@ -691,6 +691,7 @@
     "operationalNote": "Ajustes de tiempo de ejecución / operativos no listados en la especificación 04 §8.6.",
     "saved": "Parámetro actualizado.",
     "saveError": "No se pudo guardar el parámetro. Verifica el valor e inténtalo de nuevo.",
+    "managedByEnv": "Definido en la configuración del despliegue",
     "edit": "Editar",
     "save": "Guardar",
     "cancel": "Cancelar",

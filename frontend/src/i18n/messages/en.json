@@ -691,6 +691,7 @@
     "operationalNote": "Runtime / operational settings not listed in spec 04 §8.6.",
     "saved": "Parameter updated.",
     "saveError": "Could not save the parameter. Check the value and try again.",
+    "managedByEnv": "Set in deployment config",
     "edit": "Edit",
     "save": "Save",
     "cancel": "Cancel",
