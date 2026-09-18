@@ -38,6 +38,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     private readonly StubChargedGasFeeResolver _gasFee;
     private readonly FakeTimeProvider _clock;
     private readonly SellerPayoutQueueJob _sut;
+    private int _seedCount;
 
     public SellerPayoutQueueJobTests()
     {
@@ -470,23 +471,55 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
     }
 
+    /// <summary>
+    /// The gate is "this transaction's own sweep", not "a sweep landed
+    /// somewhere". Two layers enforce it — the candidate query walks the
+    /// navigation and the re-read carries an explicit
+    /// <c>TransactionId</c> term — and with a single transaction in the fixture
+    /// neither scope is observable: dropping the re-read's term, or the
+    /// candidate clause, leaves every other case green. This one seeds two
+    /// delivered transactions, funds only the first, and pins that the hot
+    /// wallet pays for the money it actually received.
+    /// </summary>
+    [Fact]
+    public async Task AnotherTransactionsConfirmedSweep_DoesNotFundThisPayout()
+    {
+        var funded = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        var unswept = await SeedDeliveredAsync(
+            price: 100m, commission: 2m, sweepStatus: null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == funded.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == unswept.Id
+                && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
     private async Task<Transaction> SeedDeliveredAsync(
         decimal price,
         decimal commission,
         Action<Transaction>? configure = null,
         BlockchainTransactionStatus? sweepStatus = BlockchainTransactionStatus.CONFIRMED)
     {
+        // SteamId and the deposit address/index are unique in the schema, so
+        // every seeded transaction needs its own — a case that seeds two
+        // transactions (the funding gate's scope) would otherwise fail on the
+        // index rather than on what it means to assert.
+        var n = ++_seedCount;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000811",
+            SteamId = $"7656119800000{n:D4}1",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000812",
+            SteamId = $"7656119800000{n:D4}2",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -537,8 +570,8 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             {
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
-                Address = "TDepositPayoutFixture000000000000000",
-                HdWalletIndex = 4242,
+                Address = $"TDepositPayoutFixture{n:D14}",
+                HdWalletIndex = 4242 + n,
                 ExpectedAmount = tx.TotalAmount,
                 ExpectedToken = StablecoinType.USDT,
                 MonitoringStatus = MonitoringStatus.STOPPED,

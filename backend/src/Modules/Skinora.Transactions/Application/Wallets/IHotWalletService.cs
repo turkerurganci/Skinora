@@ -16,10 +16,12 @@ public interface IHotWalletService
     /// <summary>
     /// Initiate a hot → cold wallet TRC-20 transfer. <paramref name="amount"/>
     /// is a positive decimal (scale 6 truncated, 09 §14.3); the destination
-    /// cold wallet address is read from the
-    /// <c>reconciliation.cold_wallet_address</c> SystemSetting. Returns a
-    /// discriminated outcome describing where the request stopped — admin
-    /// controller maps the result to the HTTP envelope.
+    /// cold wallet address is deployment configuration
+    /// (<c>COLD_WALLET_ADDRESS</c>, read through
+    /// <c>IPlatformWalletAddressProvider</c>) and the signer refuses anything
+    /// else, so the caller cannot choose where consolidation lands (05 §3.3).
+    /// Returns a discriminated outcome describing where the request stopped —
+    /// admin controller maps the result to the HTTP envelope.
     /// </summary>
     Task<HotWalletColdTransferOutcome> InitiateColdTransferAsync(
         decimal amount,

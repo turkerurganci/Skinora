@@ -135,6 +135,17 @@ describe('TransferGuard single-transfer limit', () => {
 });
 
 describe('TransferGuard daily outflow limit', () => {
+  // The window's MAGNITUDE is the requirement, not just its internal
+  // consistency: 05 §3.3 and 08 §3.3a promise "the last 24 hours", and the
+  // operator sizes MAX_DAILY_OUTFLOW_USDT for a day. Every other test here
+  // derives its fixture timestamps from OUTFLOW_WINDOW_MS, so they move with
+  // the constant and would stay green if it were shortened — a one-hour window
+  // carrying a day-sized ceiling lets 24× through. This is the one assertion
+  // that does not import its expectation.
+  it('measures exactly 24 hours', () => {
+    expect(OUTFLOW_WINDOW_MS).toBe(86_400_000);
+  });
+
   it('asks the chain only for confirmed outgoing transfers inside the window', async () => {
     const { guard, listTrc20 } = build();
     await guard.assertHotWalletDailyLimit(1n * UNIT);
@@ -142,7 +153,7 @@ describe('TransferGuard daily outflow limit', () => {
       expect.objectContaining({
         address: HOT,
         onlyFrom: true,
-        minTimestamp: NOW - OUTFLOW_WINDOW_MS,
+        minTimestamp: NOW - 86_400_000,
       }),
     );
   });
