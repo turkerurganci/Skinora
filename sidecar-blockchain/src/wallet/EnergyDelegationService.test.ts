@@ -24,6 +24,7 @@ import { SimulationRevertedError } from '../errors/SidecarError.js';
 
 const DEPOSIT = 'TDepositAddress42';
 const SWEEPER = 'TSweeperHotWallet';
+const STAKE_ACCOUNT = 'TStakeAccountHoldingTheFrozenTrx';
 const DUMMY_SWEEPER_KEY = 'aa'.padStart(64, 'a');
 const CONTRACT = 'TContractUsdt';
 const RECIPIENT = 'THotWalletRecipient';
@@ -48,6 +49,12 @@ const BURN_TOP_UP_64K_SUN = 7_071_350;
 const BANDWIDTH_TOP_UP_SUN = 385_000;
 /** The node stamps every transaction it builds with a 60 s expiration. */
 const TX_EXPIRATION_MS = 60_000;
+
+interface SignedRequest {
+  ownerAddress: string;
+  ownerPermissionId?: number;
+  amountSun: number;
+}
 
 type TxKind = 'activation' | 'trx' | 'delegate' | 'undelegate' | 'transfer';
 
@@ -83,10 +90,17 @@ interface ChainOptions {
   sendTrxThrows?: boolean;
   transferThrows?: boolean;
   transferBroadcastDeadlineMs?: number;
+  /** Dedicated stake account (owner decision 2026-09-17). Unset = the hot
+   * wallet holds its own stake, the pre-split arrangement. */
+  stakeAddress?: string;
+  stakePermissionId?: number;
 }
 
 function buildChain(o: ChainOptions = {}) {
   const ratio = o.ratio === undefined ? MAINNET_RATIO : o.ratio;
+  // Who actually holds the frozen TRX in this scenario.
+  const stakeHolder = o.stakeAddress ?? SWEEPER;
+  const expectedPermissionId = o.stakeAddress ? (o.stakePermissionId ?? 2) : undefined;
   const deposit = {
     exists: o.depositExists ?? true,
     balanceSun: o.depositBalanceSun ?? 0,
@@ -144,6 +158,29 @@ function buildChain(o: ChainOptions = {}) {
   let balanceLagLeft = 0;
   let balanceBeforeLastSend = 0;
 
+  /**
+   * The chain checks the signature against the permission named in the
+   * transaction, and rejects everything else — measured on Nile 2026-09-18:
+   * offering the hot key without the permission id returns
+   * <c>SIGERROR … is not contained of permission</c>, and a key that does not
+   * own the account cannot sign for it at all. The fake refuses the same way,
+   * so delegating from the wrong account, or with the wrong id, fails here
+   * instead of quietly succeeding against a stub that ignores both.
+   */
+  function assertSignedForTheStake(request: SignedRequest): void {
+    if (request.ownerAddress !== stakeHolder) {
+      throw new Error(
+        `fake chain: SIGERROR — ${request.ownerAddress} holds no stake (it is ${stakeHolder}).`,
+      );
+    }
+    if (request.ownerPermissionId !== expectedPermissionId) {
+      throw new Error(
+        `fake chain: SIGERROR — signature is not contained of permission ` +
+          `${request.ownerPermissionId ?? '(none)'} on ${request.ownerAddress}.`,
+      );
+    }
+  }
+
   const resources = {
     estimateTransferEnergy: vi.fn(async () => {
       seen.activationBlockAtPlan.push(blockOfLatest('activation'));
@@ -182,7 +219,12 @@ function buildChain(o: ChainOptions = {}) {
       return { exists: true, balanceSun: deposit.balanceSun };
     }),
     getDelegatableEnergySun: vi.fn(async (address: string) => {
-      if (address === SWEEPER) return o.delegatableSun ?? 0;
+      // The stake lives in exactly ONE account. Asking the other platform
+      // account answers 0, the way the chain answers an account with nothing
+      // frozen — so a read pointed at the signer instead of the stake holder
+      // plans a burn where it should have planned a delegation.
+      if (address === stakeHolder) return o.delegatableSun ?? 0;
+      if (address === SWEEPER || address === STAKE_ACCOUNT) return 0;
       if (address === DEPOSIT) return 0;
       return unexpected(address);
     }),
@@ -205,7 +247,8 @@ function buildChain(o: ChainOptions = {}) {
       deposit.balanceSun += request.amountSun;
       return { txHash: hash };
     }),
-    delegateEnergy: vi.fn(async (request: { receiverAddress: string; amountSun: number }) => {
+    delegateEnergy: vi.fn(async (request: SignedRequest & { receiverAddress: string }) => {
+      assertSignedForTheStake(request);
       if (o.delegateThrows) throw new Error('delegate rejected');
       if (!deposit.exists) throw new Error(`Account[${request.receiverAddress}] not exists`);
       const hash = broadcast('delegate', request.amountSun);
@@ -215,7 +258,8 @@ function buildChain(o: ChainOptions = {}) {
       deposit.energy += delivered;
       return { txHash: hash };
     }),
-    undelegateEnergy: vi.fn(async (request: { amountSun: number }) => {
+    undelegateEnergy: vi.fn(async (request: SignedRequest) => {
+      assertSignedForTheStake(request);
       seen.transferBlockAtReclaim.push(blockOfLatest('transfer'));
       if (o.undelegateThrows) throw new Error('undelegate rejected');
       const hash = broadcast('undelegate', request.amountSun);
@@ -243,6 +287,8 @@ function buildChain(o: ChainOptions = {}) {
     resources,
     sweeperAddress: SWEEPER,
     sweeperPrivateKey: DUMMY_SWEEPER_KEY,
+    stakeAddress: o.stakeAddress,
+    stakePermissionId: o.stakePermissionId,
     fallbackAmountSun: FALLBACK_SUN,
     transferBroadcastDeadlineMs: o.transferBroadcastDeadlineMs,
     sleep,
@@ -763,6 +809,76 @@ describe('configuration', () => {
       code: 'SWEEPER_NOT_CONFIGURED',
       retryable: false,
     });
+  });
+
+  /**
+   * The stake split (owner decision 2026-09-17). Two halves have to move
+   * together and only those two: the delegation is owned by the stake account
+   * and signed against its permission, while every TRX this flow SENDS still
+   * leaves the hot wallet — the stake account's permission denies transfers, so
+   * a flow that tried to fund the deposit from it would be rejected on-chain.
+   */
+  it('delegates from the stake account while the TRX still leaves the hot wallet', async () => {
+    const chain = buildChain({
+      stakeAddress: STAKE_ACCOUNT,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+      depositExists: false,
+    });
+
+    const outcome = await chain.run();
+
+    expect(outcome.mode).toBe('delegated');
+    expect(chain.client.delegateEnergy).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: STAKE_ACCOUNT, ownerPermissionId: 2 }),
+    );
+    expect(chain.client.undelegateEnergy).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: STAKE_ACCOUNT, ownerPermissionId: 2 }),
+    );
+    // The activation TRX: hot wallet, signing for itself.
+    expect(chain.client.sendTrx).toHaveBeenCalledWith(
+      expect.objectContaining({ fromAddress: SWEEPER, fromPrivateKey: DUMMY_SWEEPER_KEY }),
+    );
+  });
+
+  it('reads the delegatable stake from the account that holds it', async () => {
+    const chain = buildChain({
+      stakeAddress: STAKE_ACCOUNT,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+    });
+
+    await chain.run();
+
+    // Pointed at the hot wallet this answers 0 and the flow burns instead.
+    expect(chain.resources.getDelegatableEnergySun).toHaveBeenCalledWith(STAKE_ACCOUNT);
+  });
+
+  it('carries a non-default permission id rather than assuming 2', async () => {
+    const chain = buildChain({
+      stakeAddress: STAKE_ACCOUNT,
+      stakePermissionId: 5,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN,
+    });
+
+    const outcome = await chain.run();
+
+    expect(outcome.mode).toBe('delegated');
+    expect(chain.client.delegateEnergy).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: STAKE_ACCOUNT, ownerPermissionId: 5 }),
+    );
+  });
+
+  it('keeps the pre-split arrangement when no stake account is configured', async () => {
+    const chain = buildChain({ delegatableSun: DELEGATION_64K_MAINNET_SUN });
+
+    const outcome = await chain.run();
+
+    expect(outcome.mode).toBe('delegated');
+    // No permission id at all — the hot wallet owns the stake and signs for
+    // itself, which is the only case trx.sign accepts.
+    expect(chain.client.delegateEnergy).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: SWEEPER, ownerPermissionId: undefined }),
+    );
+    expect(chain.resources.getDelegatableEnergySun).toHaveBeenCalledWith(SWEEPER);
   });
 
   it('rejects a non-positive fallback amount', async () => {

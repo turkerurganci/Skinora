@@ -7,6 +7,7 @@ const API_KEY = 'fake-api-key';
 const OWNER_ADDR = 'TSweeperHotWallet';
 const RECEIVER_ADDR = 'TDepositAddress42';
 const OWNER_KEY = 'aa'.padStart(64, 'a');
+const STAKE_ADDR = 'TStakeAccountHoldingTheFrozenTrx';
 
 function buildTronWebStub(overrides: Partial<StubTronWeb> = {}): StubTronWeb {
   return {
@@ -16,7 +17,13 @@ function buildTronWebStub(overrides: Partial<StubTronWeb> = {}): StubTronWeb {
       sendTrx: vi.fn(async () => ({ txID: 'trx-tx-1' })),
     },
     trx: {
+      // The real TronWeb refuses here when the key does not own the
+      // transaction's address — measured on Nile 2026-09-18, "Private key does
+      // not match address in transaction". The stub mirrors that so a test
+      // that wires the permission path to the wrong signer fails the way
+      // production would, instead of quietly succeeding.
       sign: vi.fn(async (transaction: unknown) => transaction),
+      multiSign: vi.fn(async (transaction: unknown) => transaction),
       sendRawTransaction: vi.fn(async () => ({ result: true, txid: 'broadcast-tx-1' })),
     },
     ...overrides,
@@ -31,6 +38,7 @@ interface StubTronWeb {
   };
   trx: {
     sign: ReturnType<typeof vi.fn>;
+    multiSign: ReturnType<typeof vi.fn>;
     sendRawTransaction: ReturnType<typeof vi.fn>;
   };
 }
@@ -62,9 +70,123 @@ describe('TronDelegationClient.delegateEnergy()', () => {
       'ENERGY',
       OWNER_ADDR,
       false,
+      undefined,
+      undefined,
     );
+    // No permission id: the key owns the account, so the owning signer is used
+    // and the permission signer must stay untouched.
     expect(tronWeb.trx.sign).toHaveBeenCalled();
+    expect(tronWeb.trx.multiSign).not.toHaveBeenCalled();
     expect(tronWeb.trx.sendRawTransaction).toHaveBeenCalled();
+  });
+
+  /**
+   * The stake split (owner decision 2026-09-17): the TRX is frozen in an
+   * account whose owner key is offline, and the hot wallet's key signs against
+   * an active permission on it. Both halves have to reach TronWeb — the id in
+   * the BUILT transaction (the chain checks the signature against that
+   * permission) and the id passed to the signer.
+   */
+  it('signs on the stake account behalf when a permission id is configured', async () => {
+    const tronWeb = buildTronWebStub();
+    const factory: DelegationTronWebFactory = vi.fn(() => tronWeb);
+    const client = new TronDelegationClient(FULL_NODE, API_KEY, factory);
+
+    await client.delegateEnergy({
+      ownerAddress: STAKE_ADDR,
+      ownerPrivateKey: OWNER_KEY,
+      ownerPermissionId: 2,
+      receiverAddress: RECEIVER_ADDR,
+      amountSun: 200_000_000,
+    });
+
+    expect(tronWeb.transactionBuilder.delegateResource).toHaveBeenCalledWith(
+      200_000_000,
+      RECEIVER_ADDR,
+      'ENERGY',
+      STAKE_ADDR,
+      false,
+      undefined,
+      { permissionId: 2 },
+    );
+    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), OWNER_KEY, 2);
+    expect(tronWeb.trx.sign).not.toHaveBeenCalled();
+  });
+
+  it('carries a non-default permission id rather than assuming 2', async () => {
+    const tronWeb = buildTronWebStub();
+    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+    await client.delegateEnergy({
+      ownerAddress: STAKE_ADDR,
+      ownerPrivateKey: OWNER_KEY,
+      ownerPermissionId: 5,
+      receiverAddress: RECEIVER_ADDR,
+      amountSun: 1,
+    });
+
+    expect(tronWeb.transactionBuilder.delegateResource).toHaveBeenCalledWith(
+      1,
+      RECEIVER_ADDR,
+      'ENERGY',
+      STAKE_ADDR,
+      false,
+      undefined,
+      { permissionId: 5 },
+    );
+    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), OWNER_KEY, 5);
+  });
+
+  /**
+   * TronWeb rejects a signature it will not produce with a bare string, not an
+   * Error — measured on Nile 2026-09-18 by running the compiled client without
+   * a permission id: the operator got "Energy delegation failed: undefined".
+   * The causes that land here (wrong permission id, an account that granted
+   * none) are precisely the ones whose text an operator needs.
+   */
+  it('reports a non-Error rejection instead of "undefined"', async () => {
+    const tronWeb = buildTronWebStub();
+    tronWeb.trx.multiSign.mockRejectedValueOnce(
+      'Private key does not match address in transaction',
+    );
+    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+    await expect(
+      client.delegateEnergy({
+        ownerAddress: STAKE_ADDR,
+        ownerPrivateKey: OWNER_KEY,
+        ownerPermissionId: 2,
+        receiverAddress: RECEIVER_ADDR,
+        amountSun: 1,
+      }),
+    ).rejects.toMatchObject({
+      code: 'DELEGATE_BROADCAST_FAILED',
+      // Verbatim, not JSON-quoted: an operator reads this in an alert.
+      message: 'Energy delegation failed: Private key does not match address in transaction',
+    });
+  });
+
+  it('reports an object rejection that carries no message', async () => {
+    const tronWeb = buildTronWebStub();
+    // TronGrid answers some rejections with a body, not a thrown Error.
+    tronWeb.trx.sendRawTransaction.mockRejectedValueOnce({
+      code: 'SIGERROR',
+      txid: 'abc123',
+    });
+    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+    await expect(
+      client.delegateEnergy({
+        ownerAddress: STAKE_ADDR,
+        ownerPrivateKey: OWNER_KEY,
+        ownerPermissionId: 2,
+        receiverAddress: RECEIVER_ADDR,
+        amountSun: 1,
+      }),
+    ).rejects.toMatchObject({
+      code: 'DELEGATE_BROADCAST_FAILED',
+      message: expect.stringContaining('SIGERROR'),
+    });
   });
 
   it('rejects DELEGATE_NO_PRIVATE_KEY when key is empty', async () => {
@@ -133,7 +255,12 @@ describe('TronDelegationClient.delegateEnergy()', () => {
         receiverAddress: RECEIVER_ADDR,
         amountSun: 200_000_000,
       }),
-    ).rejects.toMatchObject({ code: 'DELEGATE_BROADCAST_FAILED', retryable: true });
+    ).rejects.toMatchObject({
+      code: 'DELEGATE_BROADCAST_FAILED',
+      retryable: true,
+      // Plain Error: the message passes through unwrapped.
+      message: 'Energy delegation failed: socket reset',
+    });
   });
 });
 
@@ -157,6 +284,7 @@ describe('TronDelegationClient.undelegateEnergy()', () => {
       RECEIVER_ADDR,
       'ENERGY',
       OWNER_ADDR,
+      undefined,
     );
   });
 

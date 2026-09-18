@@ -64,6 +64,8 @@ const energyDelegation = new EnergyDelegationService({
   resources: tronResourceClient,
   sweeperAddress: config.hotWalletAddress,
   sweeperPrivateKey: config.hotWalletPrivateKey,
+  stakeAddress: config.stakeAccountAddress,
+  stakePermissionId: config.stakeAccountPermissionId,
   fallbackAmountSun: config.sweepTrxFallbackSun,
 });
 const tokenContracts = { USDT: config.usdtContract, USDC: config.usdcContract };

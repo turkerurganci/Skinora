@@ -82,6 +82,9 @@ export class EnergyDelegationService {
   private readonly resources: DelegationResourceProbe;
   private readonly sweeperAddress: string;
   private readonly sweeperPrivateKey: string;
+  /** Account the Energy is delegated FROM — see <c>delegationOwner</c>. */
+  private readonly stakeAddress: string;
+  private readonly stakePermissionId: number | undefined;
   private readonly fallbackAmountSun: number;
   private readonly pollIntervalMs: number;
   private readonly retryableWaitAttempts: number;
@@ -96,6 +99,11 @@ export class EnergyDelegationService {
     this.resources = deps.resources;
     this.sweeperAddress = deps.sweeperAddress;
     this.sweeperPrivateKey = deps.sweeperPrivateKey;
+    // Unset stake account = the pre-split arrangement, where the hot wallet
+    // both holds the stake and signs for itself. Configuring one moves only
+    // the stake; the signing key does not change and never becomes an owner.
+    this.stakeAddress = deps.stakeAddress || '';
+    this.stakePermissionId = this.stakeAddress ? (deps.stakePermissionId ?? 2) : undefined;
     this.fallbackAmountSun = deps.fallbackAmountSun;
     this.pollIntervalMs = deps.pollIntervalMs ?? 3_000;
     this.retryableWaitAttempts = deps.retryableWaitAttempts ?? 10;
@@ -104,6 +112,25 @@ export class EnergyDelegationService {
     this.transferBroadcastDeadlineMs = deps.transferBroadcastDeadlineMs ?? 150_000;
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = deps.now ?? Date.now;
+  }
+
+  /**
+   * Whose stake backs the delegation (owner decision 2026-09-17).
+   *
+   * <para>
+   * The staked TRX is the largest value behind the hot key — a day's sales of
+   * deposits sit in their own addresses, so what the hot key guards is the
+   * stake plus commission. Moving the stake into its own account, whose owner
+   * key stays offline, means a stolen hot key can delegate and reclaim Energy
+   * but cannot unstake, transfer TRX, or rewrite the permission: all three are
+   * rejected with <c>SIGERROR "Permission denied"</c> (measured on Nile,
+   * 2026-09-17). The TRX this service SENDS — activation, a burn top-up, the
+   * fixed fallback — still leaves the hot wallet, because that same permission
+   * denies transfers; only the delegation moves.
+   * </para>
+   */
+  private get delegationOwner(): string {
+    return this.stakeAddress || this.sweeperAddress;
   }
 
   async withDelegation<T extends { txHash: string }>(
@@ -261,9 +288,13 @@ export class EnergyDelegationService {
     );
     const reads = Promise.all([
       this.resources.getAccountResources(transfer.depositAddress),
-      // Only for the network-wide Energy/TRX ratio, which every account read carries.
+      // Only for the network-wide Energy/TRX ratio, which every account read
+      // carries — deliberately NOT the delegation owner, so that reading the
+      // ratio and reading the stake stay two separate questions.
       this.resources.getAccountResources(this.sweeperAddress),
-      this.resources.getDelegatableEnergySun(this.sweeperAddress),
+      // How much this account may still delegate out. It must be the account
+      // that HOLDS the stake, not the one that signs for it.
+      this.resources.getDelegatableEnergySun(this.delegationOwner),
       this.resources.getChainFeeParameters(),
       this.resources.getAccountState(transfer.depositAddress),
     ]);
@@ -294,8 +325,9 @@ export class EnergyDelegationService {
     let txHash: string;
     try {
       ({ txHash } = await this.client.delegateEnergy({
-        ownerAddress: this.sweeperAddress,
+        ownerAddress: this.delegationOwner,
         ownerPrivateKey: this.sweeperPrivateKey,
+        ownerPermissionId: this.stakePermissionId,
         receiverAddress: deposit,
         amountSun: plan.delegationSun,
       }));
@@ -454,8 +486,9 @@ export class EnergyDelegationService {
   ): Promise<void> {
     try {
       await this.client.undelegateEnergy({
-        ownerAddress: this.sweeperAddress,
+        ownerAddress: this.delegationOwner,
         ownerPrivateKey: this.sweeperPrivateKey,
+        ownerPermissionId: this.stakePermissionId,
         receiverAddress: deposit,
         amountSun,
       });
@@ -563,9 +596,17 @@ export interface DelegationResourceProbe {
 export interface EnergyDelegationServiceDeps {
   client: TronDelegationClient;
   resources: DelegationResourceProbe;
-  /** Sweeper account (hot wallet in MVP — 2026-05-17 scope decision). */
+  /** Hot wallet: the signing key, and the account every TRX this service sends
+   * leaves from (activation, burn top-up, fixed fallback). */
   sweeperAddress: string;
   sweeperPrivateKey: string;
+  /** Dedicated stake account holding the frozen TRX, signed for by the hot
+   * wallet's key through an active permission. Empty = the hot wallet holds
+   * its own stake, the arrangement before the 2026-09-17 split. */
+  stakeAddress?: string;
+  /** Active-permission id on the stake account; ignored when there is none.
+   * Default 2 — the first id the chain assigns to an added active permission. */
+  stakePermissionId?: number;
   /** SUN sent when the plan itself cannot be computed (08 §3.3 fallback). */
   fallbackAmountSun: number;
   /** Poll spacing — one TRON block (default 3 s). */

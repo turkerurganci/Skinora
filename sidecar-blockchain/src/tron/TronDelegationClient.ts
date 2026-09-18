@@ -59,6 +59,8 @@ export class TronDelegationClient {
         'ENERGY',
         request.ownerAddress,
         false,
+        undefined,
+        permissionOptions(request.ownerPermissionId),
       );
       if (!built?.txID) {
         transfersTotal.inc({ type: 'delegate', status: 'build_failed' });
@@ -68,7 +70,7 @@ export class TronDelegationClient {
           true,
         );
       }
-      const signed = await tronWeb.trx.sign(built, request.ownerPrivateKey);
+      const signed = await this.sign(tronWeb, built, request);
       const broadcast = await tronWeb.trx.sendRawTransaction(signed);
       if (!broadcast.result || !broadcast.txid) {
         transfersTotal.inc({ type: 'delegate', status: 'broadcast_rejected' });
@@ -95,11 +97,11 @@ export class TronDelegationClient {
       }
       transfersTotal.inc({ type: 'delegate', status: 'broadcast_failed' });
       logger.error(
-        { err: (err as Error).message, receiver: request.receiverAddress },
+        { err: describeError(err), receiver: request.receiverAddress },
         'Energy delegation failed',
       );
       throw new SidecarError(
-        `Energy delegation failed: ${(err as Error).message}`,
+        `Energy delegation failed: ${describeError(err)}`,
         'DELEGATE_BROADCAST_FAILED',
         true,
       );
@@ -119,6 +121,7 @@ export class TronDelegationClient {
         request.receiverAddress,
         'ENERGY',
         request.ownerAddress,
+        permissionOptions(request.ownerPermissionId),
       );
       if (!built?.txID) {
         transfersTotal.inc({ type: 'undelegate', status: 'build_failed' });
@@ -128,7 +131,7 @@ export class TronDelegationClient {
           true,
         );
       }
-      const signed = await tronWeb.trx.sign(built, request.ownerPrivateKey);
+      const signed = await this.sign(tronWeb, built, request);
       const broadcast = await tronWeb.trx.sendRawTransaction(signed);
       if (!broadcast.result || !broadcast.txid) {
         transfersTotal.inc({ type: 'undelegate', status: 'broadcast_rejected' });
@@ -155,11 +158,11 @@ export class TronDelegationClient {
       }
       transfersTotal.inc({ type: 'undelegate', status: 'broadcast_failed' });
       logger.error(
-        { err: (err as Error).message, receiver: request.receiverAddress },
+        { err: describeError(err), receiver: request.receiverAddress },
         'Energy undelegation failed',
       );
       throw new SidecarError(
-        `Energy undelegation failed: ${(err as Error).message}`,
+        `Energy undelegation failed: ${describeError(err)}`,
         'UNDELEGATE_BROADCAST_FAILED',
         true,
       );
@@ -215,15 +218,41 @@ export class TronDelegationClient {
       }
       transfersTotal.inc({ type: 'fallback_trx', status: 'broadcast_failed' });
       logger.error(
-        { err: (err as Error).message, to: request.toAddress },
+        { err: describeError(err), to: request.toAddress },
         'TRX fallback transfer failed',
       );
       throw new SidecarError(
-        `TRX fallback transfer failed: ${(err as Error).message}`,
+        `TRX fallback transfer failed: ${describeError(err)}`,
         'FALLBACK_TRX_BROADCAST_FAILED',
         true,
       );
     }
+  }
+
+  /**
+   * Sign as the transaction's owner, or <i>on behalf of</i> it.
+   *
+   * <para>
+   * When the staked TRX lives in its own account (owner key offline) the hot
+   * wallet's key is listed in that account's active permission, and
+   * <c>trx.sign</c> refuses the transaction outright — measured on Nile
+   * 2026-09-18: <c>"Private key does not match address in transaction"</c>.
+   * <c>trx.multiSign</c> is the path that produces a signature the node
+   * accepts against a permission the signer does not own; a signature offered
+   * without the permission id is rejected by the chain with
+   * <c>SIGERROR … is not contained of permission</c>, so a misconfigured id
+   * fails loudly rather than signing something unintended.
+   * </para>
+   */
+  private async sign(
+    tronWeb: TronWebDelegationShape,
+    built: unknown,
+    request: DelegationRequest,
+  ): Promise<unknown> {
+    if (request.ownerPermissionId === undefined) {
+      return tronWeb.trx.sign(built, request.ownerPrivateKey);
+    }
+    return tronWeb.trx.multiSign(built, request.ownerPrivateKey, request.ownerPermissionId);
   }
 
   private bind(privateKey: string): unknown {
@@ -243,10 +272,16 @@ export class TronDelegationClient {
 }
 
 export interface DelegationRequest {
-  /** Owner account that holds the staked TRX (typically the hot wallet). */
+  /** Account that holds the staked TRX — the dedicated stake account, or the
+   * hot wallet itself while no stake account is configured. */
   ownerAddress: string;
-  /** Owner's signing key — scoped to a single broadcast. */
+  /** The signing key. It belongs to <c>ownerAddress</c> only when
+   * <c>ownerPermissionId</c> is unset; otherwise it is the hot wallet's key,
+   * signing on the stake account's behalf. */
   ownerPrivateKey: string;
+  /** Active-permission id the signature is offered against. Unset means the
+   * key owns the account and signs for itself (the pre-split arrangement). */
+  ownerPermissionId?: number;
   /** Deposit address receiving the temporary Energy budget. */
   receiverAddress: string;
   /** SUN units (1 TRX = 1_000_000 SUN). Stake 2.0 takes the TRX amount the
@@ -271,6 +306,42 @@ export type DelegationTronWebFactory = (config: {
   privateKey?: string;
 }) => unknown;
 
+/**
+ * What actually went wrong, in a form an operator can read.
+ *
+ * <para>
+ * TronWeb does not always reject with an <c>Error</c>: offering a key that
+ * does not own the transaction it is signing rejects with a bare string, and
+ * reading <c>.message</c> off it yields <c>undefined</c> — measured on Nile
+ * 2026-09-18, where a delegation misconfigured to skip the permission id
+ * failed with the text "Energy delegation failed: undefined" and told the
+ * operator nothing. The most likely causes of that rejection (a wrong
+ * permission id, a stake account that never granted one) are exactly the ones
+ * whose message matters.
+ * </para>
+ */
+function describeError(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  try {
+    const text = JSON.stringify(err);
+    if (text && text !== '{}') return text;
+  } catch {
+    // A value that cannot be serialised still deserves a name below.
+  }
+  return String(err);
+}
+/** <c>{ permissionId }</c>, or nothing at all — TronWeb treats an empty object
+ * as "no permission" but an explicit <c>undefined</c> keeps the builder's own
+ * argument-shuffling (it accepts callbacks in these positions) unambiguous. */
+function permissionOptions(permissionId: number | undefined): PermissionOptions | undefined {
+  return permissionId === undefined ? undefined : { permissionId };
+}
+
+interface PermissionOptions {
+  permissionId: number;
+}
+
 interface TronWebDelegationShape {
   transactionBuilder: {
     delegateResource(
@@ -280,12 +351,14 @@ interface TronWebDelegationShape {
       ownerAddress: string,
       lock: boolean,
       lockPeriod?: number,
+      options?: PermissionOptions,
     ): Promise<{ txID?: string } | undefined>;
     undelegateResource(
       balance: number,
       receiverAddress: string,
       resource: 'ENERGY' | 'BANDWIDTH',
       ownerAddress: string,
+      options?: PermissionOptions,
     ): Promise<{ txID?: string } | undefined>;
     sendTrx(
       toAddress: string,
@@ -295,6 +368,8 @@ interface TronWebDelegationShape {
   };
   trx: {
     sign(transaction: unknown, privateKey: string): Promise<unknown>;
+    /** Signs against a permission the key does not own (see <c>sign</c>). */
+    multiSign(transaction: unknown, privateKey: string, permissionId: number): Promise<unknown>;
     sendRawTransaction(signed: unknown): Promise<{
       result?: boolean;
       txid?: string;
