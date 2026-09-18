@@ -12,6 +12,7 @@ import { TronDelegationClient } from './tron/TronDelegationClient.js';
 import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
 import { TransferService } from './transfer/TransferService.js';
 import { RefundService } from './transfer/RefundService.js';
+import { TransferGuard, parseLimitUnits } from './transfer/TransferGuard.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
 import { TrxPriceService } from './fee/TrxPriceService.js';
 import { FeeEstimationService } from './fee/FeeEstimationService.js';
@@ -66,6 +67,19 @@ const energyDelegation = new EnergyDelegationService({
   fallbackAmountSun: config.sweepTrxFallbackSun,
 });
 const tokenContracts = { USDT: config.usdtContract, USDC: config.usdcContract };
+const decimalsPower = 10n ** BigInt(config.tokenDecimals);
+// Shared by payout, refund, sweep and cold consolidation: destinations the
+// caller may not choose and amounts it may not exceed (05 §3.3). Constructing
+// it throws on a malformed pinned address, so a misconfigured signer never
+// reaches the listen call.
+const transferGuard = new TransferGuard({
+  hotWalletAddress: config.hotWalletAddress,
+  coldWalletAddress: config.coldWalletAddress,
+  maxSingleTransferUnits: parseLimitUnits(config.maxSingleTransferUsdt, decimalsPower),
+  maxDailyOutflowUnits: parseLimitUnits(config.maxDailyOutflowUsdt, decimalsPower),
+  tokenContracts,
+  history: tronGridClient,
+});
 const transferService = new TransferService({
   walletManager,
   client: tronTransferClient,
@@ -74,6 +88,7 @@ const transferService = new TransferService({
   hotWalletPrivateKey: config.hotWalletPrivateKey,
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
+  guard: transferGuard,
 });
 const refundService = new RefundService({
   walletManager,
@@ -81,6 +96,7 @@ const refundService = new RefundService({
   tokenContracts,
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
+  guard: transferGuard,
 });
 const feeEstimationService = new FeeEstimationService({
   resourceClient: tronResourceClient,

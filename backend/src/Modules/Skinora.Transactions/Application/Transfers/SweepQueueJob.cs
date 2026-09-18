@@ -1,7 +1,8 @@
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Application.Wallets;
+using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -89,45 +90,36 @@ public sealed class SweepQueueJob
     /// </summary>
     public const int ConcurrencyLockTimeoutSeconds = 50;
 
-    /// <summary>
-    /// Hot wallet Tron address SystemSetting key. Canonical definition is
-    /// <c>Skinora.API.Services.Reconciliation.ReconciliationService.HotWalletAddressKey</c>;
-    /// duplicated here as a literal because that reconciliation service lives in
-    /// the API composition root, which Skinora.Transactions cannot reference
-    /// (mirrors GasFeeSettingsProvider's own key constants). The seed default is
-    /// the "NONE" sentinel — treated as unconfigured until production deploy
-    /// sets the real address (06 §3.17 + T76).
-    /// </summary>
-    public const string HotWalletAddressKey = "reconciliation.hot_wallet_address";
-
-    private const string UnconfiguredSentinel = "NONE";
-
     private readonly AppDbContext _db;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<SweepQueueJob> _logger;
 
     public SweepQueueJob(
         AppDbContext db,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<SweepQueueJob> logger)
     {
         _db = db;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
-        // Resolve the sweep destination once per tick. Until the operator
-        // configures it (NONE sentinel), there is nowhere to sweep to — skip
-        // the whole run rather than queue rows with a bogus ToAddress (mirrors
-        // ReconciliationService / HotWalletService NONE handling).
-        var hotWallet = await ResolveHotWalletAddressAsync(cancellationToken);
+        // The sweep destination is deployment configuration, the same value the
+        // signer pins itself to (05 §3.3, owner decision 2026-09-16): it is not
+        // an admin-editable setting, so no panel action can redirect a settled
+        // sale's deposit. Unset means there is nowhere to sweep to — skip the
+        // run rather than queue rows with a bogus ToAddress.
+        var hotWallet = _walletAddresses.HotWalletAddress;
         if (hotWallet is null)
         {
             _logger.LogWarning(
-                "SweepQueueJob skipped: {Key} is unconfigured (NONE) — cannot queue sweeps.",
-                HotWalletAddressKey);
+                "SweepQueueJob skipped: {Key} is unconfigured — cannot queue sweeps.",
+                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
             return;
         }
 
@@ -257,19 +249,6 @@ public sealed class SweepQueueJob
         _logger.LogInformation(
             "Sweep queued — transaction {TransactionId} sweep row {RowId} amount {Amount} {Token} from deposit {Deposit} → hot wallet",
             transaction.Id, sweepRow.Id, transaction.TotalAmount, transaction.StablecoinType, deposit.Address);
-    }
-
-    private async Task<string?> ResolveHotWalletAddressAsync(CancellationToken cancellationToken)
-    {
-        var row = await _db.Set<SystemSetting>()
-            .AsNoTracking()
-            .Where(s => s.Key == HotWalletAddressKey)
-            .Select(s => new { s.Value, s.IsConfigured })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (row is null || !row.IsConfigured || string.IsNullOrWhiteSpace(row.Value)) return null;
-        var value = row.Value.Trim();
-        return string.Equals(value, UnconfiguredSentinel, StringComparison.Ordinal) ? null : value;
     }
 
     // Hangfire serializes Expression<Action<T>>; expose a sync wrapper.

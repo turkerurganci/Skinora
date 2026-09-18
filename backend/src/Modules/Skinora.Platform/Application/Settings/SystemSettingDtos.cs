@@ -11,7 +11,12 @@ public sealed record SettingItemDto(
     string Label,
     string? Description,
     string? Unit,
-    string ValueType);
+    string ValueType,
+    /// <summary>
+    /// False for env-sourced rows the panel renders read-only (05 §3.3,
+    /// owner decision 2026-09-16).
+    /// </summary>
+    bool IsEditable = true);
 
 /// <summary>Body of 07 §9.9 — <c>PUT /admin/settings/:key</c> request.</summary>
 public sealed record UpdateSettingRequest(string? Value);

@@ -16,13 +16,48 @@ public class SystemSettingsCatalogTests
     public void Catalog_Covers_Every_Seeded_Key()
     {
         var seedKeys = SystemSettingSeed.All.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
-        var catalogKeys = SystemSettingsCatalog.All.Select(m => m.Key).ToHashSet(StringComparer.Ordinal);
+        // Env-sourced entries are catalog-only by design: they have no
+        // SystemSetting row because their value is deployment configuration
+        // (05 §3.3, owner decision 2026-09-16). They are excluded here rather
+        // than from the catalog so the panel still lists them, read-only.
+        var catalogKeys = SystemSettingsCatalog.All
+            .Where(m => !m.EnvSourced)
+            .Select(m => m.Key)
+            .ToHashSet(StringComparer.Ordinal);
 
         var missingFromCatalog = seedKeys.Except(catalogKeys).OrderBy(k => k).ToList();
         var orphanedInCatalog = catalogKeys.Except(seedKeys).OrderBy(k => k).ToList();
 
         Assert.Empty(missingFromCatalog);
         Assert.Empty(orphanedInCatalog);
+    }
+
+    /// <summary>
+    /// The exclusion above must stay narrow: exactly the two platform wallet
+    /// addresses, and each one must really be seedless. A third env-sourced
+    /// entry, or a seed row sneaking back under one of these keys, would make
+    /// the panel show a value nothing keeps in sync.
+    /// </summary>
+    [Fact]
+    public void Env_Sourced_Entries_Are_The_Two_Wallet_Addresses_And_Have_No_Seed_Row()
+    {
+        var envSourced = SystemSettingsCatalog.All
+            .Where(m => m.EnvSourced)
+            .Select(m => m.Key)
+            .OrderBy(k => k, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(
+            new[]
+            {
+                SystemSettingsCatalog.ColdWalletAddressKey,
+                SystemSettingsCatalog.HotWalletAddressKey,
+            },
+            envSourced);
+
+        var seedKeys = SystemSettingSeed.All.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain(SystemSettingsCatalog.HotWalletAddressKey, seedKeys);
+        Assert.DoesNotContain(SystemSettingsCatalog.ColdWalletAddressKey, seedKeys);
     }
 
     [Fact]

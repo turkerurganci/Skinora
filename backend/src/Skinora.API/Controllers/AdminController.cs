@@ -392,6 +392,13 @@ public sealed class AdminController : ControllerBase
                 validation.Message,
                 traceId: HttpContext.TraceIdentifier)),
 
+            UpdateSettingOutcome.ReadOnly readOnly => UnprocessableEntity(ApiResponse<object>.Fail(
+                SettingsErrorCodes.SettingReadOnly,
+                $"Setting '{readOnly.Key}' is deployment configuration and cannot be changed " +
+                "from the panel; set the environment variable on the backend and the blockchain " +
+                "sidecar, then restart both.",
+                traceId: HttpContext.TraceIdentifier)),
+
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }

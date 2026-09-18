@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.API.Tests.Common;
 using Skinora.API.Services.HotWallet;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Platform.Domain.Entities;
@@ -30,6 +31,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
     private readonly StubBalancesSidecarClient _sidecar = new();
     private readonly RecordingPublisher _publisher = new();
     private readonly FakeTimeProvider _clock = new();
+    private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
     private readonly HotWalletMonitorService _sut;
 
     public HotWalletMonitorServiceTests()
@@ -48,6 +50,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             _db,
             _sidecar,
             _publisher,
+            _walletAddresses,
             _clock,
             NullLogger<HotWalletMonitorService>.Instance);
     }
@@ -227,23 +230,18 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
         Assert.Empty(_publisher.Breaches);
     }
 
-    [Fact]
-    public async Task RunAsync_HotWalletAddressIsNoneSentinel_TreatsAsUnconfigured()
-    {
-        await UpsertSystemSettingAsync(
-            ReconciliationService.HotWalletAddressKey, "NONE", "string");
-
-        var outcome = await _sut.RunAsync(CancellationToken.None);
-
-        Assert.False(outcome.HotWalletChecked);
-        Assert.Empty(_sidecar.Calls);
-    }
 
     // ─── Helpers ────────────────────────────────────────────────────────
 
-    private Task ConfigureHotWalletAsync() =>
-        UpsertSystemSettingAsync(
-            ReconciliationService.HotWalletAddressKey, HotWalletAddress, "string");
+    /// <summary>
+    /// The address is deployment configuration now (05 §3.3, owner decision
+    /// 2026-09-16); the thresholds below stay admin-tunable SystemSettings.
+    /// </summary>
+    private Task ConfigureHotWalletAsync()
+    {
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        return Task.CompletedTask;
+    }
 
     private async Task UpsertSystemSettingAsync(string key, string value, string dataType)
     {

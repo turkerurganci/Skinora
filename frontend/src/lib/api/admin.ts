@@ -688,6 +688,12 @@ export interface AdminSettingItem {
   description: string | null;
   unit: string | null;
   valueType: AdminSettingValueType;
+  /**
+   * False for deployment-configured rows the panel renders read-only — the
+   * platform wallet addresses (05 §3.3, owner decision 2026-09-16). Optional
+   * so a response from an older backend still parses as editable.
+   */
+  isEditable?: boolean;
 }
 
 /** AD8 envelope (07 §9.8). */

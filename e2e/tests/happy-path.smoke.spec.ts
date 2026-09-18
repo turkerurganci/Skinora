@@ -179,7 +179,10 @@ test('happy path: CREATED → COMPLETED through the P2P chain, with WP19 notific
 
   // 8. Seller payout pipeline (queue → dispatch → confirm → complete, each on a
   //    per-minute cron, all gated on that stamp) → COMPLETED.
-  await api.pollStatus(buyerToken, txId, 'COMPLETED', { timeoutMs: 300_000 });
+  // 480s, not 300s: since 2026-09-17 the payout waits for its own SWEEP row
+  // to confirm (05 §3.3), which adds a queue → dispatch → confirm hop of up
+  // to three job ticks between ITEM_DELIVERED and COMPLETED.
+  await api.pollStatus(buyerToken, txId, 'COMPLETED', { timeoutMs: 480_000 });
 
   // 9. WP19 notifications: every producer fired, COMPLETED fanned out to both
   //    parties, ITEM_DELIVERED suppressed (AC2 — all notifications correct).

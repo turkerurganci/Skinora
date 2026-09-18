@@ -96,13 +96,17 @@ public sealed class AdminWalletsController : ControllerBase
             HotWalletColdTransferOutcome.HotWalletNotConfigured => UnprocessableEntity(
                 ApiResponse<object>.Fail(
                     ErrorHotWalletNotConfigured,
-                    "reconciliation.hot_wallet_address SystemSetting is unconfigured or 'NONE'.",
+                    "HOT_WALLET_ADDRESS is not configured on the backend. It is deployment "
+                    + "configuration shared with the blockchain sidecar, not a panel setting "
+                    + "(05 §3.3) — set it in .env and restart both services.",
                     traceId: HttpContext.TraceIdentifier)),
 
             HotWalletColdTransferOutcome.ColdWalletNotConfigured => UnprocessableEntity(
                 ApiResponse<object>.Fail(
                     ErrorColdWalletNotConfigured,
-                    "reconciliation.cold_wallet_address SystemSetting is unconfigured or 'NONE'.",
+                    "COLD_WALLET_ADDRESS is not configured, so consolidation is disabled. It is "
+                    + "deployment configuration shared with the blockchain sidecar, not a panel "
+                    + "setting (05 §3.3) — set it in .env and restart both services.",
                     traceId: HttpContext.TraceIdentifier)),
 
             HotWalletColdTransferOutcome.SidecarUnavailable unavailable => StatusCode(

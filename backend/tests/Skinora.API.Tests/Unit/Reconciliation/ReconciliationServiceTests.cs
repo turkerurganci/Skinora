@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.API.Tests.Common;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Payments.Domain.Entities;
 using Skinora.Platform.Domain.Entities;
@@ -34,6 +35,7 @@ public sealed class ReconciliationServiceTests : IDisposable
     private readonly StubBalancesSidecarClient _sidecar = new();
     private readonly RecordingPublisher _publisher = new();
     private readonly FakeTimeProvider _clock = new();
+    private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
     private readonly ReconciliationService _sut;
     private int _syntheticSweepSeq;
 
@@ -53,6 +55,7 @@ public sealed class ReconciliationServiceTests : IDisposable
             _db,
             _sidecar,
             _publisher,
+            _walletAddresses,
             _clock,
             NullLogger<ReconciliationService>.Instance);
     }
@@ -571,50 +574,22 @@ public sealed class ReconciliationServiceTests : IDisposable
         await _db.SaveChangesAsync();
     }
 
-    private async Task ConfigureHotWalletAsync()
+    /// <summary>
+    /// Both scopes are keyed on deployment configuration now, not
+    /// admin-editable SystemSetting rows (05 §3.3, owner decision 2026-09-16).
+    /// </summary>
+    private Task ConfigureHotWalletAsync()
     {
-        await UpsertSystemSettingAsync(
-            ReconciliationService.HotWalletAddressKey, HotWalletAddress);
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        return Task.CompletedTask;
     }
 
-    private async Task ConfigureColdWalletAsync()
+    private Task ConfigureColdWalletAsync()
     {
-        await UpsertSystemSettingAsync(
-            ReconciliationService.ColdWalletAddressKey, ColdWalletAddress);
+        _walletAddresses.ColdWalletAddress = ColdWalletAddress;
+        return Task.CompletedTask;
     }
 
-    private async Task UpsertSystemSettingAsync(string key, string value)
-    {
-        // SystemSettingSeed.All ships every reconciliation key as Unconfigured
-        // via HasData, so EnsureCreated leaves a row in place; the fixture
-        // simply flips IsConfigured + Value rather than inserting a duplicate
-        // (UQ_SystemSettings_Key would otherwise reject the second row).
-        var existing = await _db.Set<SystemSetting>()
-            .FirstOrDefaultAsync(s => s.Key == key);
-        if (existing is null)
-        {
-            _db.Set<SystemSetting>().Add(new SystemSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = key,
-                Value = value,
-                IsConfigured = true,
-                DataType = "string",
-                Category = "Monitoring",
-                Description = "Reconciliation fixture",
-                CreatedAt = _clock.GetUtcNow().UtcDateTime,
-                UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-                RowVersion = new byte[8],
-            });
-        }
-        else
-        {
-            existing.Value = value;
-            existing.IsConfigured = true;
-            existing.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
-        }
-        await _db.SaveChangesAsync();
-    }
 
     private async Task<List<AuditLog>> LoadAuditLogsAsync() =>
         await _db.Set<AuditLog>().AsNoTracking()

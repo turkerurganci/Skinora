@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Application.Audit;
+using Skinora.Platform.Tests.Common;
 using Skinora.Platform.Application.Settings;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
@@ -39,11 +40,106 @@ public class SystemSettingsServiceTests : IntegrationTestBase
         await context.SaveChangesAsync();
     }
 
+    private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
+
     private SystemSettingsService CreateService(AppDbContext? ctx = null)
     {
         var dbContext = ctx ?? Context;
         var auditLogger = new AuditLogger(dbContext, TimeProvider.System);
-        return new SystemSettingsService(dbContext, TimeProvider.System, auditLogger);
+        return new SystemSettingsService(
+            dbContext,
+            TimeProvider.System,
+            auditLogger,
+            NoOpSettingChangePropagator.Instance,
+            _walletAddresses);
+    }
+
+    /// <summary>
+    /// The platform's own wallet addresses have no SystemSetting row any more
+    /// (05 §3.3, owner decision 2026-09-16). They still appear in the list so
+    /// an operator can see what the deployment points at — sourced from
+    /// configuration and marked not editable.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ListAsync_Surfaces_Env_Sourced_Addresses_From_Configuration_As_ReadOnly()
+    {
+        _walletAddresses.HotWalletAddress = "TMmY2ARUpirKFwuW8HMGDuEkBWZZjK44jE";
+        _walletAddresses.ColdWalletAddress = "TGpQ6KteKAbJDu7zZuoRnUvUTxvjKG4tv5";
+        var service = CreateService();
+
+        var response = await service.ListAsync(CancellationToken.None);
+
+        var hot = Assert.Single(
+            response.Settings, s => s.Key == SystemSettingsCatalog.HotWalletAddressKey);
+        Assert.Equal("TMmY2ARUpirKFwuW8HMGDuEkBWZZjK44jE", hot.Value);
+        Assert.False(hot.IsEditable);
+
+        var cold = Assert.Single(
+            response.Settings, s => s.Key == SystemSettingsCatalog.ColdWalletAddressKey);
+        Assert.Equal("TGpQ6KteKAbJDu7zZuoRnUvUTxvjKG4tv5", cold.Value);
+        Assert.False(cold.IsEditable);
+
+        // Every other row stays editable — the flag is not a blanket.
+        Assert.All(
+            response.Settings.Where(s =>
+                s.Key != SystemSettingsCatalog.HotWalletAddressKey
+                && s.Key != SystemSettingsCatalog.ColdWalletAddressKey),
+            s => Assert.True(s.IsEditable));
+
+        // No DB row backs either one.
+        Assert.False(await Context.Set<SystemSetting>()
+            .AnyAsync(s => s.Key == SystemSettingsCatalog.HotWalletAddressKey
+                || s.Key == SystemSettingsCatalog.ColdWalletAddressKey));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ListAsync_Reports_Unset_Env_Sourced_Address_As_Null()
+    {
+        var service = CreateService();
+
+        var response = await service.ListAsync(CancellationToken.None);
+
+        var hot = Assert.Single(
+            response.Settings, s => s.Key == SystemSettingsCatalog.HotWalletAddressKey);
+        Assert.Null(hot.Value);
+        Assert.False(hot.IsEditable);
+    }
+
+    /// <summary>
+    /// The whole point of moving these two out of the settings table: a
+    /// MANAGE_SETTINGS admin could otherwise point sweeps or consolidation at
+    /// an address of their choosing (#312's defect family).
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task UpdateAsync_Refuses_Env_Sourced_Address_And_Writes_Nothing()
+    {
+        _walletAddresses.HotWalletAddress = "TMmY2ARUpirKFwuW8HMGDuEkBWZZjK44jE";
+        var service = CreateService();
+
+        var outcome = await service.UpdateAsync(
+            SystemSettingsCatalog.HotWalletAddressKey,
+            new UpdateSettingRequest("TGkh6US9LiJc1iovkYoAfTZpCGZtfM6nY5"),
+            _admin.Id,
+            ipAddress: null,
+            CancellationToken.None);
+
+        var readOnly = Assert.IsType<UpdateSettingOutcome.ReadOnly>(outcome);
+        Assert.Equal(SystemSettingsCatalog.HotWalletAddressKey, readOnly.Key);
+
+        // Nothing persisted, nothing audited, and the configured value stands.
+        await using var readCtx = CreateContext();
+        Assert.False(await readCtx.Set<SystemSetting>()
+            .AnyAsync(s => s.Key == SystemSettingsCatalog.HotWalletAddressKey));
+        Assert.False(await readCtx.Set<AuditLog>()
+            .AnyAsync(a => a.EntityId == SystemSettingsCatalog.HotWalletAddressKey));
+
+        var response = await service.ListAsync(CancellationToken.None);
+        var hot = Assert.Single(
+            response.Settings, s => s.Key == SystemSettingsCatalog.HotWalletAddressKey);
+        Assert.Equal("TMmY2ARUpirKFwuW8HMGDuEkBWZZjK44jE", hot.Value);
     }
 
     [Fact]
@@ -234,7 +330,7 @@ public class SystemSettingsServiceTests : IntegrationTestBase
     {
         var spy = new SpyPropagator();
         var service = new SystemSettingsService(
-            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy);
+            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy, new StubPlatformWalletAddressProvider());
 
         var outcome = await service.UpdateAsync(
             "reconciliation.schedule_cron",
@@ -263,7 +359,7 @@ public class SystemSettingsServiceTests : IntegrationTestBase
         // never reaches the side-effect hook.
         var spy = new SpyPropagator();
         var service = new SystemSettingsService(
-            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy);
+            Context, TimeProvider.System, new AuditLogger(Context, TimeProvider.System), spy, new StubPlatformWalletAddressProvider());
 
         await service.UpdateAsync(
             "commission_rate",

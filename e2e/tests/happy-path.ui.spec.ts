@@ -142,7 +142,8 @@ test('UI happy path: badge tracks CREATED → COMPLETED for both parties', async
     ).toBeTruthy();
 
     // Seller payout pipeline → COMPLETED, seen by both badges.
-    await waitForUiStatus(page, 'COMPLETED', { timeoutMs: 300_000 });
+    // 480s — the payout now waits for its own sweep to confirm (05 §3.3).
+    await waitForUiStatus(page, 'COMPLETED', { timeoutMs: 480_000 });
     await waitForUiStatus(sellerPage, 'COMPLETED', { timeoutMs: 60_000, intervalMs: 3_000 });
   } finally {
     await sellerContext.close();

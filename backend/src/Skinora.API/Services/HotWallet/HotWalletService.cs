@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Payments.Domain.Entities;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
@@ -28,17 +29,20 @@ public sealed class HotWalletService : IHotWalletService
 
     private readonly AppDbContext _db;
     private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<HotWalletService> _logger;
 
     public HotWalletService(
         AppDbContext db,
         IBlockchainSidecarClient sidecar,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<HotWalletService> logger)
     {
         _db = db;
         _sidecar = sidecar;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
@@ -69,7 +73,7 @@ public sealed class HotWalletService : IHotWalletService
                 $"Amount must be a multiple of {AmountScaleQuantum.ToString(CultureInfo.InvariantCulture)}.");
         }
 
-        var addresses = await ReadWalletAddressesAsync(cancellationToken);
+        var addresses = ReadWalletAddresses();
         if (addresses.HotWallet is null)
         {
             return new HotWalletColdTransferOutcome.HotWalletNotConfigured();
@@ -153,28 +157,14 @@ public sealed class HotWalletService : IHotWalletService
             ToAddress: addresses.ColdWallet);
     }
 
-    private async Task<(string? HotWallet, string? ColdWallet)> ReadWalletAddressesAsync(
-        CancellationToken cancellationToken)
-    {
-        var rows = await _db.Set<SystemSetting>()
-            .AsNoTracking()
-            .Where(s => s.Key == ReconciliationService.HotWalletAddressKey
-                        || s.Key == ReconciliationService.ColdWalletAddressKey)
-            .Select(s => new { s.Key, s.Value, s.IsConfigured })
-            .ToListAsync(cancellationToken);
-
-        string? hot = null;
-        string? cold = null;
-        foreach (var row in rows)
-        {
-            var value = row.IsConfigured && !string.IsNullOrWhiteSpace(row.Value)
-                ? row.Value!.Trim()
-                : null;
-            if (string.Equals(value, "NONE", StringComparison.Ordinal)) value = null;
-            if (row.Key == ReconciliationService.HotWalletAddressKey) hot = value;
-            if (row.Key == ReconciliationService.ColdWalletAddressKey) cold = value;
-        }
-        return (hot, cold);
-    }
+    /// <summary>
+    /// Both addresses are deployment configuration shared with the signer, not
+    /// admin-editable settings (05 §3.3, owner decision 2026-09-16): the
+    /// sidecar refuses to sign a consolidation to anything but its own
+    /// <c>COLD_WALLET_ADDRESS</c>, so a drifted value fails there rather than
+    /// sending platform funds to an address someone typed into the panel.
+    /// </summary>
+    private (string? HotWallet, string? ColdWallet) ReadWalletAddresses() =>
+        (_walletAddresses.HotWalletAddress, _walletAddresses.ColdWalletAddress);
 
 }

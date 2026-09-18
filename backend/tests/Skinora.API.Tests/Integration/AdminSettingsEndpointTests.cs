@@ -183,6 +183,29 @@ public class AdminSettingsEndpointTests : IClassFixture<AdminSettingsEndpointTes
             json.GetProperty("error").GetProperty("code").GetString());
     }
 
+    /// <summary>
+    /// 05 §3.3 / owner decision 2026-09-16 — the platform's own wallet
+    /// addresses are deployment configuration. MANAGE_SETTINGS is enough to
+    /// reach this endpoint, which is exactly why the key itself has to refuse:
+    /// a single admin account could otherwise redirect every sweep.
+    /// </summary>
+    [Fact]
+    public async Task UpdateSetting_EnvSourcedWalletAddress_Returns422_ReadOnly()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.Admin, ["MANAGE_SETTINGS"]);
+
+        var response = await client.PutAsJsonAsync(
+            "/api/v1/admin/settings/reconciliation.hot_wallet_address",
+            new { value = "TGkh6US9LiJc1iovkYoAfTZpCGZtfM6nY5" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        var json = JsonDocument.Parse(body).RootElement;
+        Assert.Equal("SETTING_READ_ONLY",
+            json.GetProperty("error").GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task UpdateSetting_MissingPermission_Returns403()
     {

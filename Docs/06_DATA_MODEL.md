@@ -1096,7 +1096,7 @@ Admin tarafından yönetilen platform parametreleri.
 
 **Başlangıç parametreleri (02 §16.2):** Varsayılan sütununda "—" olan parametreler seed'de `Value = NULL, IsConfigured = false` olarak oluşturulur; lansman öncesi admin tarafından yapılandırılması zorunludur.
 
-Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **66 anahtar**. `Category`, DB kolonudur (07 §9.8'in API lehçesinden daha kaba — eşleme `SystemSettingsCatalog` kodundadır).
+Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **64 anahtar**. Platformun kendi cüzdan adresleri (`reconciliation.{hot,cold}_wallet_address`) 2026-09-16 custody turunda bu tablodan **çıkarıldı** (migration `RemovePlatformWalletAddressSettings`; seed index 55/56 boş, yeniden kullanılmamalı) — artık `HOT_WALLET_ADDRESS` / `COLD_WALLET_ADDRESS` ortam değişkenleridir (05 §3.3). Admin panelinde salt okunur görünürler ama `SystemSetting` satırları yoktur (07 §9.8 `isEditable: false`). `Category`, DB kolonudur (07 §9.8'in API lehçesinden daha kaba — eşleme `SystemSettingsCatalog` kodundadır).
 
 | Key | Category | DataType | Varsayılan | Açıklama |
 |-----|----------|----------|------------|----------|
@@ -1153,8 +1153,6 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **66 anahtar**. 
 | `blockchain.transfer_retry_intervals_minutes` | Monitoring | string | `1,5,15` | Outbound transfer (payout/refund/sweep) retry aralıkları (dakika, CSV); biter → FAILED + alert (T73, 08 §3.3) |
 | `blockchain.sweep_trx_fallback_sun` | Monitoring | string | 15000000 | Depozit kaynak planı hiç hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX tutarı (SUN). Kilidin yetmediği transfer bu ayarı kullanmaz, yakacağı TRX'i transfer başına hesaplar (T74, 08 §3.3) |
 | `reconciliation.schedule_cron` | Monitoring | string | `0 3 * * *` | Reconciliation job cron ifadesi (03:00 UTC); değişince host restart (T76, 05 §3.3) |
-| `reconciliation.hot_wallet_address` | Monitoring | string | NONE | Reconciliation hot wallet Tron adresi; 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
-| `reconciliation.cold_wallet_address` | Monitoring | string | NONE | Reconciliation cold wallet Tron adresi (opsiyonel); 'NONE' ise kapsam atlanır (T76, 05 §3.3) |
 | `hot_wallet.monitor_cron` | Monitoring | string | `*/15 * * * *` | Hot wallet bakiye monitor job cron ifadesi (15 dk); değişince host restart (T77, 05 §3.3) |
 | `hot_wallet.trx_balance_minimum` | Wallet | decimal | 100 | Hot wallet TRX bakiye alt eşiği (TRX, gas için); altına düşerse audit + admin alert (T77, 05 §3.3) |
 | `blockchain.payout_gas_fee_estimate_usdt` | Commission | decimal | 0.50 | Satıcı payout gas fee tahmini (USDT) — `SellerPayoutQueueJob` gas-fee koruma split'inde kullanır: gas fee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (WP1, 02 §4.7, 04 §7.3); T74 energy delegation sonrası runtime değerle değiştirilir |

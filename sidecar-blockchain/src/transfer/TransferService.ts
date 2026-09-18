@@ -11,6 +11,7 @@ import {
   DelegationMode,
   DelegationOutcome,
 } from '../wallet/EnergyDelegationService.js';
+import { TransferGuard } from './TransferGuard.js';
 
 export type TokenSymbol = 'USDT' | 'USDC';
 
@@ -29,9 +30,10 @@ export interface ColdWalletTransferRequest {
    * — used in logs and correlation only; nothing is persisted on the sidecar
    * (the backend owns the ledger row, T77 — 05 §3.3, 06 §3.22). */
   coldTransferId: string;
-  /** Destination cold wallet address — backend reads it from the
-   * <c>reconciliation.cold_wallet_address</c> SystemSetting (T76) and passes
-   * it through; the sidecar does not store it. */
+  /** Destination cold wallet address the backend recorded on its ledger row.
+   * It is checked against this sidecar's own <c>COLD_WALLET_ADDRESS</c> and
+   * a mismatch is refused — the caller cannot choose where consolidation
+   * lands (owner decision 2026-09-16). */
   toColdAddress: string;
   amount: string;
   token: TokenSymbol;
@@ -63,6 +65,9 @@ export interface TransferServiceDeps {
   hotWalletPrivateKey: string;
   /** Token decimals — 6 for USDT and USDC per 08 §3.3 (mainnet + testnet). */
   tokenDecimals?: number;
+  /** Destination pinning + amount limits (05 §3.3). Required: the signer must
+   * never be constructible without the guards that let it refuse. */
+  guard: TransferGuard;
   /** Energy delegation orchestrator (T74). Optional so unit tests that focus
    * on payout (hot-wallet-sourced, no delegation needed) can omit it. Sweep
    * requires it — calling <c>sweep()</c> without one throws
@@ -117,6 +122,7 @@ export class TransferService {
   private readonly hotWalletPrivateKey: string;
   private readonly decimalsPower: bigint;
   private readonly energyDelegation?: EnergyDelegationService;
+  private readonly guard: TransferGuard;
 
   constructor(deps: TransferServiceDeps) {
     this.wallet = deps.walletManager;
@@ -126,6 +132,7 @@ export class TransferService {
     this.hotWalletPrivateKey = deps.hotWalletPrivateKey;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
     this.energyDelegation = deps.energyDelegation;
+    this.guard = deps.guard;
   }
 
   async payout(request: PayoutRequest): Promise<SendTransferResult> {
@@ -139,6 +146,13 @@ export class TransferService {
     const contract = this.resolveContract(request.token);
     const amountUnits = TransferService.toRawUnits(request.amount, this.decimalsPower);
 
+    // The seller's address cannot be pinned — it is the seller's own. Both
+    // limits therefore guard this path: the single-transfer ceiling catches a
+    // miscomputed amount, the 24-hour ceiling caps what a compromised caller
+    // can drain in many small steps (05 §3.3 "Transfer limitleri").
+    this.guard.assertSingleTransferLimit(BigInt(amountUnits));
+    await this.guard.assertHotWalletDailyLimit(BigInt(amountUnits));
+
     logger.info(
       {
         blockchainTransactionId: request.blockchainTransactionId,
@@ -150,13 +164,17 @@ export class TransferService {
       'Broadcasting SELLER_PAYOUT',
     );
 
-    return this.client.sendTransfer({
+    const result = await this.client.sendTransfer({
       fromAddress: this.hotWalletAddress,
       privateKey: this.hotWalletPrivateKey,
       contractAddress: contract,
       toAddress: request.toAddress,
       amountUnits,
     });
+    // Chain history lags a broadcast by a block or two; record it so a burst
+    // inside one window cannot each read a stale total and all pass.
+    this.guard.recordHotWalletOutflow(result.txHash, BigInt(amountUnits));
+    return result;
   }
 
   async coldWalletTransfer(request: ColdWalletTransferRequest): Promise<SendTransferResult> {
@@ -167,6 +185,11 @@ export class TransferService {
         false,
       );
     }
+    // Pinned destination: consolidation may only credit this sidecar's own
+    // cold wallet, so neither an admin-editable setting nor a tampered backend
+    // can point it elsewhere. Exempt from the amount limits for the same
+    // reason — the money cannot leave the platform this way.
+    this.guard.assertColdDestination(request.toColdAddress);
     const contract = this.resolveContract(request.token);
     const amountUnits = TransferService.toRawUnits(request.amount, this.decimalsPower);
 
@@ -205,6 +228,10 @@ export class TransferService {
         false,
       );
     }
+    // Pinned destination: a sweep may only credit this sidecar's own hot
+    // wallet (05 §3.3). The request still carries the address the backend
+    // recorded on the ledger row, so drift fails here instead of redirecting.
+    this.guard.assertSweepDestination(request.toHotWalletAddress);
     const signer = this.wallet.deriveSigner(request.depositIndex);
     if (signer.address !== request.depositAddress) {
       throw new SidecarError(

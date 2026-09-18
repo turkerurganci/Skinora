@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Persistence;
 using Skinora.Shared.Enums;
@@ -41,6 +42,7 @@ public sealed class SweepQueueJobTests : IDisposable
     private readonly DbContextOptions<AppDbContext> _options;
     private readonly AppDbContext _db;
     private readonly FakeTimeProvider _clock;
+    private readonly StubWalletAddresses _walletAddresses = new();
     private readonly SweepQueueJob _sut;
 
     public SweepQueueJobTests()
@@ -56,7 +58,7 @@ public sealed class SweepQueueJobTests : IDisposable
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
 
-        _sut = new SweepQueueJob(_db, _clock, NullLogger<SweepQueueJob>.Instance);
+        _sut = new SweepQueueJob(_db, _walletAddresses, _clock, NullLogger<SweepQueueJob>.Instance);
     }
 
     public void Dispose()
@@ -90,9 +92,8 @@ public sealed class SweepQueueJobTests : IDisposable
     [Fact]
     public async Task HotWalletUnconfigured_QueuesNoSweep()
     {
-        // The seeded reconciliation.hot_wallet_address is the "NONE" sentinel —
-        // leave it; the job must skip the whole run rather than queue a row
-        // with a bogus destination.
+        // HOT_WALLET_ADDRESS is unset in this fixture; the job must skip the
+        // whole run rather than queue a row with a bogus destination.
         var (tx, _) = await SeedDeliveredAsync(price: 100m, commission: 2m);
 
         await _sut.ExecuteAsync();
@@ -280,7 +281,7 @@ public sealed class SweepQueueJobTests : IDisposable
             competing.Set<BlockchainTransaction>().Add(NewSweepRow(tx, deposit));
             await competing.SaveChangesAsync();
         });
-        var sut = new SweepQueueJob(raceDb, _clock, logger);
+        var sut = new SweepQueueJob(raceDb, _walletAddresses, _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw
 
@@ -300,7 +301,7 @@ public sealed class SweepQueueJobTests : IDisposable
         await ConfigureHotWalletAsync();
         var (tx, _) = await SeedDeliveredAsync(price: 100m, commission: 2m);
         await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
-        var sut = new SweepQueueJob(throwingDb, _clock, NullLogger<SweepQueueJob>.Instance);
+        var sut = new SweepQueueJob(throwingDb, _walletAddresses, _clock, NullLogger<SweepQueueJob>.Instance);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
 
@@ -327,37 +328,23 @@ public sealed class SweepQueueJobTests : IDisposable
         CreatedAt = _clock.GetUtcNow().UtcDateTime,
     };
 
-    private async Task ConfigureHotWalletAsync()
+    /// <summary>
+    /// The sweep destination is deployment configuration now, not an
+    /// admin-editable SystemSetting (05 §3.3, owner decision 2026-09-16), so
+    /// the fixture sets the provider rather than a row. Kept async so the
+    /// call sites read unchanged.
+    /// </summary>
+    private Task ConfigureHotWalletAsync()
     {
-        // SystemSettingSeed ships reconciliation.hot_wallet_address as the
-        // "NONE" sentinel via HasData, so EnsureCreated already left a row;
-        // flip it to a real address rather than insert a duplicate
-        // (UQ_SystemSettings_Key).
-        const string key = "reconciliation.hot_wallet_address";
-        var existing = await _db.Set<SystemSetting>().FirstOrDefaultAsync(s => s.Key == key);
-        if (existing is null)
-        {
-            _db.Set<SystemSetting>().Add(new SystemSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = key,
-                Value = HotWalletAddress,
-                IsConfigured = true,
-                DataType = "string",
-                Category = "Monitoring",
-                Description = "Sweep fixture",
-                CreatedAt = _clock.GetUtcNow().UtcDateTime,
-                UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-                RowVersion = new byte[8],
-            });
-        }
-        else
-        {
-            existing.Value = HotWalletAddress;
-            existing.IsConfigured = true;
-            existing.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
-        }
-        await _db.SaveChangesAsync();
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Mutable stand-in for the configuration-backed provider.</summary>
+    private sealed class StubWalletAddresses : IPlatformWalletAddressProvider
+    {
+        public string? HotWalletAddress { get; set; }
+        public string? ColdWalletAddress { get; set; }
     }
 
     private async Task<(Transaction Tx, PaymentAddress Deposit)> SeedDeliveredAsync(

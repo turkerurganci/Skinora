@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.API.Tests.Common;
 using Skinora.API.Services.HotWallet;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Payments.Domain.Entities;
@@ -32,6 +33,7 @@ public sealed class HotWalletServiceTests : IDisposable
     private readonly AppDbContext _db;
     private readonly StubSidecarClient _sidecar = new();
     private readonly FakeTimeProvider _clock = new();
+    private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
     private readonly HotWalletService _sut;
 
     public HotWalletServiceTests()
@@ -59,9 +61,12 @@ public sealed class HotWalletServiceTests : IDisposable
         });
         _db.SaveChanges();
 
+        // Addresses are deployment configuration now (05 §3.3, owner decision
+        // 2026-09-16), so the fixture sets a provider instead of SystemSetting rows.
         _sut = new HotWalletService(
             _db,
             _sidecar,
+            _walletAddresses,
             _clock,
             NullLogger<HotWalletService>.Instance);
     }
@@ -103,7 +108,7 @@ public sealed class HotWalletServiceTests : IDisposable
     [Fact]
     public async Task InitiateColdTransferAsync_HotWalletUnconfigured_ReturnsHotWalletNotConfigured()
     {
-        await UpsertSettingAsync(ReconciliationService.ColdWalletAddressKey, ColdWalletAddress);
+        _walletAddresses.ColdWalletAddress = ColdWalletAddress;
 
         var outcome = await _sut.InitiateColdTransferAsync(
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
@@ -116,7 +121,7 @@ public sealed class HotWalletServiceTests : IDisposable
     [Fact]
     public async Task InitiateColdTransferAsync_ColdWalletUnconfigured_ReturnsColdWalletNotConfigured()
     {
-        await UpsertSettingAsync(ReconciliationService.HotWalletAddressKey, HotWalletAddress);
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
 
         var outcome = await _sut.InitiateColdTransferAsync(
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
@@ -126,17 +131,6 @@ public sealed class HotWalletServiceTests : IDisposable
         Assert.Empty(await LoadLedgerAsync());
     }
 
-    [Fact]
-    public async Task InitiateColdTransferAsync_ColdWalletIsNoneSentinel_ReturnsColdWalletNotConfigured()
-    {
-        await UpsertSettingAsync(ReconciliationService.HotWalletAddressKey, HotWalletAddress);
-        await UpsertSettingAsync(ReconciliationService.ColdWalletAddressKey, "NONE");
-
-        var outcome = await _sut.InitiateColdTransferAsync(
-            100m, StablecoinType.USDT, AdminId, CancellationToken.None);
-
-        Assert.IsType<HotWalletColdTransferOutcome.ColdWalletNotConfigured>(outcome);
-    }
 
     [Fact]
     public async Task InitiateColdTransferAsync_SidecarUnavailable_NoLedgerOrAuditWritten()
@@ -213,38 +207,10 @@ public sealed class HotWalletServiceTests : IDisposable
 
     private async Task ConfigureBothWalletsAsync()
     {
-        await UpsertSettingAsync(ReconciliationService.HotWalletAddressKey, HotWalletAddress);
-        await UpsertSettingAsync(ReconciliationService.ColdWalletAddressKey, ColdWalletAddress);
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        _walletAddresses.ColdWalletAddress = ColdWalletAddress;
     }
 
-    private async Task UpsertSettingAsync(string key, string value)
-    {
-        var existing = await _db.Set<SystemSetting>()
-            .FirstOrDefaultAsync(s => s.Key == key);
-        if (existing is null)
-        {
-            _db.Set<SystemSetting>().Add(new SystemSetting
-            {
-                Id = Guid.NewGuid(),
-                Key = key,
-                Value = value,
-                IsConfigured = true,
-                DataType = "string",
-                Category = "Monitoring",
-                Description = "HotWalletService fixture",
-                CreatedAt = _clock.GetUtcNow().UtcDateTime,
-                UpdatedAt = _clock.GetUtcNow().UtcDateTime,
-                RowVersion = new byte[8],
-            });
-        }
-        else
-        {
-            existing.Value = value;
-            existing.IsConfigured = true;
-            existing.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
-        }
-        await _db.SaveChangesAsync();
-    }
 
     private async Task<List<ColdWalletTransfer>> LoadLedgerAsync() =>
         await _db.Set<ColdWalletTransfer>().AsNoTracking().ToListAsync();

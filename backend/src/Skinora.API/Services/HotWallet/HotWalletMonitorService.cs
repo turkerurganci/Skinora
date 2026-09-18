@@ -3,7 +3,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.API.Services.Reconciliation;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Domain.Seed;
@@ -25,9 +27,10 @@ namespace Skinora.API.Services.HotWallet;
 /// unit) is compared against the USDT and USDC balances separately — the
 /// admin-tunable cap applies per stablecoin. <c>hot_wallet.trx_balance_minimum</c>
 /// (decimal, TRX unit) is the gas floor; below it the alert direction is
-/// <c>Lower</c>. The hot wallet address itself ships unconfigured — until
-/// the operator sets <c>reconciliation.hot_wallet_address</c> the job emits
-/// a warn log and exits cleanly.
+/// <c>Lower</c>. The hot wallet address is deployment configuration shared
+/// with the signer (<see cref="IPlatformWalletAddressProvider"/>) — until
+/// <c>HOT_WALLET_ADDRESS</c> is set the job emits a warn log and exits
+/// cleanly.
 /// </para>
 /// </summary>
 public interface IHotWalletMonitorService
@@ -63,6 +66,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     private readonly AppDbContext _db;
     private readonly IBlockchainSidecarClient _sidecar;
     private readonly INotificationRealtimePublisher _realtime;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<HotWalletMonitorService> _logger;
 
@@ -70,12 +74,14 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         AppDbContext db,
         IBlockchainSidecarClient sidecar,
         INotificationRealtimePublisher realtime,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<HotWalletMonitorService> logger)
     {
         _db = db;
         _sidecar = sidecar;
         _realtime = realtime;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
@@ -87,7 +93,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         {
             _logger.LogWarning(
                 "HotWalletMonitor skipping run: {Key} is unconfigured.",
-                ReconciliationService.HotWalletAddressKey);
+                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
             return new HotWalletMonitorOutcome(false, 0, null);
         }
 
@@ -218,13 +224,14 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     {
         var rows = await _db.Set<SystemSetting>()
             .AsNoTracking()
-            .Where(s => s.Key == ReconciliationService.HotWalletAddressKey
-                        || s.Key == HotWalletLimitKey
+            .Where(s => s.Key == HotWalletLimitKey
                         || s.Key == TrxBalanceMinimumKey)
             .Select(s => new { s.Key, s.Value, s.IsConfigured })
             .ToListAsync(cancellationToken);
 
-        string? hotWalletAddress = null;
+        // The address is configuration, the two thresholds stay admin-tunable
+        // (05 §3.3, owner decision 2026-09-16).
+        var hotWalletAddress = _walletAddresses.HotWalletAddress;
         decimal? hotWalletLimit = null;
         decimal? trxMinimum = null;
         foreach (var row in rows)
@@ -233,11 +240,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
             var trimmed = row.Value!.Trim();
             if (string.Equals(trimmed, "NONE", StringComparison.Ordinal)) continue;
 
-            if (row.Key == ReconciliationService.HotWalletAddressKey)
-            {
-                hotWalletAddress = trimmed;
-            }
-            else if (row.Key == HotWalletLimitKey
+            if (row.Key == HotWalletLimitKey
                      && decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.InvariantCulture, out var limit))
             {
                 hotWalletLimit = limit;

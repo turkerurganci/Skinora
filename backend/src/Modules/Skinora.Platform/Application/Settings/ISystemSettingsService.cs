@@ -28,4 +28,11 @@ public abstract record UpdateSettingOutcome
     public sealed record NotFound(string Key) : UpdateSettingOutcome;
 
     public sealed record ValidationFailed(string Message) : UpdateSettingOutcome;
+
+    /// <summary>
+    /// The key exists but its value is deployment configuration, not an
+    /// admin-editable row (05 §3.3, owner decision 2026-09-16) — the panel
+    /// shows it and the update endpoint refuses it.
+    /// </summary>
+    public sealed record ReadOnly(string Key) : UpdateSettingOutcome;
 }
