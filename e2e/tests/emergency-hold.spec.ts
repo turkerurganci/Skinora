@@ -344,6 +344,7 @@ test('apply hold at ITEM_DELIVERED → cancel rejected (422), resume only → CO
     verified?.settlementVerifiedAt,
     `settlement never verified after resume: ${JSON.stringify(verified)}`,
   ).toBeTruthy();
-  const completed = await api.pollStatus(sellerToken, txId, 'COMPLETED', { timeoutMs: 300_000 });
+  // 480s — the payout now waits for its own sweep to confirm (05 §3.3).
+  const completed = await api.pollStatus(sellerToken, txId, 'COMPLETED', { timeoutMs: 480_000 });
   expect(completed).toBe('COMPLETED');
 });
