@@ -143,6 +143,13 @@ services:
       - SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS=24
       - SKINORA_SETTING_HOT_WALLET_LIMIT=100000.0
       - SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD=1000.0
+      # Platform wallet addresses (05 §3.3, owner decision 2026-09-16). The e2e
+      # stack has no real signer — the fake sidecar signs nothing and pins
+      # nothing — but the backend needs the hot wallet address to queue a sweep
+      # at all, and since 2026-09-17 the seller payout waits for that sweep to
+      # confirm. Without these two the chain stalls at ITEM_DELIVERED.
+      - HOT_WALLET_ADDRESS=TE2eHotWa11etFakeAddress2222222222
+      - COLD_WALLET_ADDRESS=TE2eCo1dWa11etFakeAddress333333333
     depends_on:
       skinora-db:
         condition: service_healthy
