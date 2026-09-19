@@ -1,3 +1,4 @@
+import TronWeb from 'tronweb';
 import { logger } from '../logger.js';
 import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 import { TronDelegationClient } from '../tron/TronDelegationClient.js';
@@ -77,11 +78,14 @@ import {
  * Undelegation after the broadcast is best-effort: the transfer is already
  * on-chain, and failing here would re-broadcast it.
  */
-export class EnergyDelegationService {
+export class EnergyDelegationService implements DelegationSource {
   private readonly client: TronDelegationClient;
   private readonly resources: DelegationResourceProbe;
   private readonly sweeperAddress: string;
   private readonly sweeperPrivateKey: string;
+  /** Account the Energy is delegated FROM — see <c>delegationOwner</c>. */
+  private readonly stakeAddress: string;
+  private readonly stakePermissionId: number | undefined;
   private readonly fallbackAmountSun: number;
   private readonly pollIntervalMs: number;
   private readonly retryableWaitAttempts: number;
@@ -96,6 +100,16 @@ export class EnergyDelegationService {
     this.resources = deps.resources;
     this.sweeperAddress = deps.sweeperAddress;
     this.sweeperPrivateKey = deps.sweeperPrivateKey;
+    // Unset stake account = the pre-split arrangement, where the hot wallet
+    // both holds the stake and signs for itself. Configuring one moves only
+    // the stake; the signing key does not change and never becomes an owner.
+    this.stakeAddress = deps.stakeAddress || '';
+    this.stakePermissionId = this.stakeAddress ? (deps.stakePermissionId ?? 2) : undefined;
+    // Eager-fail, as TransferGuard does for a pinned destination (owner
+    // decision 2026-09-19). A malformed stake configuration never fails loudly
+    // on its own: every delegation is rejected on-chain, the flow burns
+    // instead, and the only trace is a WARN line per transfer.
+    if (this.stakeAddress) assertStakeConfiguration(this.stakeAddress, this.stakePermissionId!);
     this.fallbackAmountSun = deps.fallbackAmountSun;
     this.pollIntervalMs = deps.pollIntervalMs ?? 3_000;
     this.retryableWaitAttempts = deps.retryableWaitAttempts ?? 10;
@@ -104,6 +118,43 @@ export class EnergyDelegationService {
     this.transferBroadcastDeadlineMs = deps.transferBroadcastDeadlineMs ?? 150_000;
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = deps.now ?? Date.now;
+  }
+
+  /**
+   * Whose stake backs the delegation (owner decision 2026-09-17).
+   *
+   * <para>
+   * The staked TRX is the largest value behind the hot key — a day's sales of
+   * deposits sit in their own addresses, so what the hot key guards is the
+   * stake plus commission. Moving the stake into its own account, whose owner
+   * key stays offline, means a stolen hot key can delegate and reclaim Energy
+   * but cannot unstake, transfer TRX, or rewrite the permission: all three are
+   * rejected with <c>SIGERROR "Permission denied"</c> (measured on Nile,
+   * 2026-09-17). The TRX this service SENDS — activation, a burn top-up, the
+   * fixed fallback — still leaves the hot wallet, because that same permission
+   * denies transfers; only the delegation moves.
+   * </para>
+   *
+   * <para>
+   * Public: the refund fee estimate (<c>FeeEstimationService</c>) must read
+   * the stake from this same account. An estimate that kept reading the
+   * hot wallet saw nothing to delegate once the stake moved, planned a burn,
+   * and charged the buyer for Energy the broadcast then delegated for free
+   * (#325 validation, B1).
+   * </para>
+   */
+  get delegationOwner(): string {
+    return this.stakeAddress || this.sweeperAddress;
+  }
+
+  /**
+   * Active-permission id the delegation and the reclaim are signed against;
+   * undefined while no stake account is set — the hot wallet then signs for
+   * itself. Read by the startup line (index.ts) so the wiring can be checked
+   * from the running process.
+   */
+  get delegationPermissionId(): number | undefined {
+    return this.stakePermissionId;
   }
 
   async withDelegation<T extends { txHash: string }>(
@@ -261,9 +312,13 @@ export class EnergyDelegationService {
     );
     const reads = Promise.all([
       this.resources.getAccountResources(transfer.depositAddress),
-      // Only for the network-wide Energy/TRX ratio, which every account read carries.
+      // Only for the network-wide Energy/TRX ratio, which every account read
+      // carries — deliberately NOT the delegation owner, so that reading the
+      // ratio and reading the stake stay two separate questions.
       this.resources.getAccountResources(this.sweeperAddress),
-      this.resources.getDelegatableEnergySun(this.sweeperAddress),
+      // How much this account may still delegate out. It must be the account
+      // that HOLDS the stake, not the one that signs for it.
+      this.resources.getDelegatableEnergySun(this.delegationOwner),
       this.resources.getChainFeeParameters(),
       this.resources.getAccountState(transfer.depositAddress),
     ]);
@@ -294,8 +349,9 @@ export class EnergyDelegationService {
     let txHash: string;
     try {
       ({ txHash } = await this.client.delegateEnergy({
-        ownerAddress: this.sweeperAddress,
+        ownerAddress: this.delegationOwner,
         ownerPrivateKey: this.sweeperPrivateKey,
+        ownerPermissionId: this.stakePermissionId,
         receiverAddress: deposit,
         amountSun: plan.delegationSun,
       }));
@@ -454,8 +510,9 @@ export class EnergyDelegationService {
   ): Promise<void> {
     try {
       await this.client.undelegateEnergy({
-        ownerAddress: this.sweeperAddress,
+        ownerAddress: this.delegationOwner,
         ownerPrivateKey: this.sweeperPrivateKey,
+        ownerPermissionId: this.stakePermissionId,
         receiverAddress: deposit,
         amountSun,
       });
@@ -545,6 +602,47 @@ function contextFields(context: DelegationContext) {
   };
 }
 
+/**
+ * The chain numbers the owner permission 0 and the witness permission 1;
+ * active permissions start at 2, and the hot key is only ever listed in an
+ * active one. A value outside that — or a stake address that is not an
+ * address — can only be rejected on-chain, one transfer at a time.
+ *
+ * <para>
+ * Base58 only. <c>TronWeb.isAddress</c> also accepts the hex form (41…), but
+ * every read the flow makes sends <c>visible: true</c>, and the node answers a
+ * hex address there with HTTP 200 and an <c>Error</c> body instead of a
+ * number — measured on Nile 2026-09-19 for <c>getcandelegatedmaxsize</c>. The
+ * stake would read as 0 and every transfer would burn, the silent shape this
+ * check exists to stop (#325 re-validation).
+ * </para>
+ */
+function assertStakeConfiguration(address: string, permissionId: number): void {
+  if (!address.startsWith('T') || !TronWeb.isAddress(address)) {
+    throw new SidecarError(
+      `STAKE_ACCOUNT_ADDRESS is not a base58 Tron address (T…): ${address}`,
+      'STAKE_ACCOUNT_MISCONFIGURED',
+      false,
+    );
+  }
+  if (!Number.isInteger(permissionId) || permissionId < 2) {
+    throw new SidecarError(
+      `STAKE_ACCOUNT_PERMISSION_ID must be an active-permission id (an integer of at least 2): ${permissionId}`,
+      'STAKE_ACCOUNT_MISCONFIGURED',
+      false,
+    );
+  }
+}
+
+/**
+ * The one account the stake lives in, as the delegation flow sees it. The
+ * refund fee estimate asks the flow instead of working it out again, so the
+ * two cannot drift apart when the stake moves.
+ */
+export interface DelegationSource {
+  readonly delegationOwner: string;
+}
+
 /** The subset of <c>TronResourceClient</c> the flow needs — injectable for tests. */
 export interface DelegationResourceProbe {
   estimateTransferEnergy(
@@ -563,9 +661,20 @@ export interface DelegationResourceProbe {
 export interface EnergyDelegationServiceDeps {
   client: TronDelegationClient;
   resources: DelegationResourceProbe;
-  /** Sweeper account (hot wallet in MVP — 2026-05-17 scope decision). */
+  /** Hot wallet: the signing key, and the account every TRX this service sends
+   * leaves from (activation, burn top-up, fixed fallback). */
   sweeperAddress: string;
   sweeperPrivateKey: string;
+  /** Dedicated stake account holding the frozen TRX, signed for by the hot
+   * wallet's key through an active permission. Empty = the hot wallet holds
+   * its own stake, the arrangement before the 2026-09-17 split. */
+  stakeAddress?: string;
+  /** Active-permission id on the stake account; ignored when there is none.
+   * Default 2 — the first id the chain assigns to an added active permission.
+   * With a stake account configured, an address that is not base58 (hex
+   * included) or an id that is not an integer of at least 2 stops
+   * construction (and so the sidecar). */
+  stakePermissionId?: number;
   /** SUN sent when the plan itself cannot be computed (08 §3.3 fallback). */
   fallbackAmountSun: number;
   /** Poll spacing — one TRON block (default 3 s). */

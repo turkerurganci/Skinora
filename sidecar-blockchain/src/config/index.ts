@@ -47,6 +47,22 @@ const TOKEN_CONTRACTS = {
   },
 } as const;
 
+/**
+ * STAKE_ACCOUNT_PERMISSION_ID as a number. Unset or blank is the documented
+ * default, 2 — the first id the chain assigns to an added active permission.
+ *
+ * The previous `parseInt(env ?? '2')` turned a blank value (a
+ * `STAKE_ACCOUNT_PERMISSION_ID=` line outside compose, which applies its own
+ * `:-2`) into NaN and read `2abc` as 2. Anything but a plain integer is NaN
+ * here, which the delegation flow refuses at construction while a stake
+ * account is configured (#325 validation).
+ */
+export function parseStakePermissionId(raw: string | undefined): number {
+  const trimmed = (raw ?? '').trim();
+  if (trimmed === '') return 2;
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '5200', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -92,6 +108,16 @@ export const config = {
   coldWalletAddress: process.env.COLD_WALLET_ADDRESS || '',
   maxSingleTransferUsdt: process.env.MAX_SINGLE_TRANSFER_USDT || '',
   maxDailyOutflowUsdt: process.env.MAX_DAILY_OUTFLOW_USDT || '',
+
+  // Dedicated stake account (05 §3.3, owner decision 2026-09-17). The frozen
+  // TRX lives here and its owner key stays offline; the hot wallet's key is
+  // listed in an active permission that allows Energy delegation and reclaim
+  // and nothing else, so a stolen hot key cannot unstake or move the TRX.
+  // Empty = the hot wallet holds its own stake (the pre-split arrangement).
+  // A malformed address or permission id stops the sidecar at startup
+  // (wallet/EnergyDelegationService.ts, owner decision 2026-09-19).
+  stakeAccountAddress: process.env.STAKE_ACCOUNT_ADDRESS || '',
+  stakeAccountPermissionId: parseStakePermissionId(process.env.STAKE_ACCOUNT_PERMISSION_ID),
 
   // Deposit-sourced transfer resources — 08 §3.3, owner decision 2026-09-16
   // (HYBRID). There is no delegation AMOUNT to configure any more: the flow

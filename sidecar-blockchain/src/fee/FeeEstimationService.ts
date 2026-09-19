@@ -10,6 +10,7 @@ import {
   planDelegation,
   type DelegationPlan,
 } from '../wallet/DelegationPlanner.js';
+import type { DelegationSource } from '../wallet/EnergyDelegationService.js';
 
 /**
  * Pre-send fee estimate for an outbound TRC-20 transfer
@@ -25,9 +26,12 @@ import {
  *     account, not assumed from the contract's percent
  *     (<c>callerEnergyShare</c>).</item>
  *   <item>Energy the platform brings — on a payout the hot wallet sends
- *     directly and its whole pool applies; on a refund the deposit sends and
- *     the broadcast follows <c>planDelegation</c>: the stake covers the whole
- *     transfer, or nothing.</item>
+ *     directly and its whole pool applies (its own stake, or the payout share
+ *     the stake account delegates to it permanently — DEPLOY_RUNBOOK §C.2);
+ *     on a refund the deposit sends and the broadcast follows
+ *     <c>planDelegation</c>: the stake covers the whole transfer, or nothing.
+ *     What the stake can delegate is read from the account the broadcast
+ *     delegates from, asked of the delegation flow itself.</item>
  *   <item>Bandwidth — the SENDER's own allowance (deposit addresses typically
  *     have none); the shortfall burns TRX at the chain's byte price.</item>
  *   <item>Burned sun → USDT at the live TRX/USDT price, rounded UP to the
@@ -77,7 +81,7 @@ export interface FeeEstimateResult {
    * is charged for exactly the path it will take.
    */
   delegationPlan: DelegationPlan['kind'] | null;
-  /** SUN the sweeper will delegate when <c>delegationPlan</c> is 'delegate'; null otherwise. */
+  /** SUN the stake will delegate when <c>delegationPlan</c> is 'delegate'; null otherwise. */
   delegationSun: number | null;
   energyShortfall: number;
   bandwidthRequired: number;
@@ -92,6 +96,12 @@ export interface FeeEstimationServiceDeps {
   priceService: TrxPriceService;
   tokenContracts: TokenContractMap;
   hotWalletAddress: string;
+  /**
+   * The delegation flow — the one place that knows which account holds the
+   * stake. Required, so the refund estimate cannot silently fall back to
+   * reading the hot wallet after the stake has moved (#325 validation, B1).
+   */
+  delegationSource: DelegationSource;
   tokenDecimals?: number;
 }
 
@@ -106,6 +116,7 @@ export class FeeEstimationService {
   private readonly price: TrxPriceService;
   private readonly tokens: TokenContractMap;
   private readonly hotWalletAddress: string;
+  private readonly delegationSource: DelegationSource;
   private readonly decimalsPower: bigint;
 
   constructor(deps: FeeEstimationServiceDeps) {
@@ -113,7 +124,17 @@ export class FeeEstimationService {
     this.price = deps.priceService;
     this.tokens = deps.tokenContracts;
     this.hotWalletAddress = deps.hotWalletAddress;
+    this.delegationSource = deps.delegationSource;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
+  }
+
+  /**
+   * The account a refund estimate reads the delegatable stake from — the
+   * delegation flow's own answer. Read by the startup line (index.ts), where
+   * it must name the same account the flow delegates from.
+   */
+  get delegationOwner(): string {
+    return this.delegationSource.delegationOwner;
   }
 
   async estimate(request: FeeEstimateRequest): Promise<FeeEstimateResult> {
@@ -160,7 +181,11 @@ export class FeeEstimationService {
       // when the sender IS the hot wallet.
       isDelegatedPath ? this.resources.getAccountResources(request.fromAddress!) : null,
       isDelegatedPath ? this.resources.getAccountState(request.fromAddress!) : null,
-      isDelegatedPath ? this.resources.getDelegatableEnergySun(this.hotWalletAddress) : null,
+      // The account that HOLDS the stake, exactly as the broadcast reads it —
+      // the dedicated stake account once one is configured, not the hot wallet.
+      isDelegatedPath
+        ? this.resources.getDelegatableEnergySun(this.delegationSource.delegationOwner)
+        : null,
       this.resources.getChainFeeParameters(),
       this.price.getPrice(request.correlationId),
       this.readContractShare(contractAddress, request.correlationId),

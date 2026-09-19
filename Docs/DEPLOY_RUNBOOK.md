@@ -82,6 +82,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `HOT_WALLET_ADDRESS` | blockchain sidecar **+ backend** | Platformun sıcak cüzdan adresi. Sidecar sweep hedefini bununla karşılaştırır ve başka adrese imzalamaz; backend aynı değeri `IPlatformWalletAddressProvider` üzerinden okur (sweep `ToAddress`, reconciliation kapsamı, hot wallet monitörü). **Tek kaynak `.env`** — ikisi ayrışırsa sweep `DESTINATION_NOT_ALLOWED` ile durur. Değiştirmek iki servisin de yeniden başlatılmasını gerektirir (05 §3.3, owner kararı 2026-09-16) |
 | `COLD_WALLET_ADDRESS` | blockchain sidecar **+ backend** | Soğuk cüzdan adresi, aynı sabitleme kuralı. Boş bırakılırsa hot→cold konsolidasyon **kapalıdır** (AD20 `COLD_WALLET_NOT_CONFIGURED`) ve reconciliation'ın cold kapsamı atlanır |
 | `MAX_SINGLE_TRANSFER_USDT` / `MAX_DAILY_OUTFLOW_USDT` | blockchain sidecar | Tek gönderim ve sıcak cüzdanın 24 saatlik çıkış tavanı (ondalık USDT, 08 §3.3a). **Fail-closed: boş ya da bozuksa payout ve iade yapılmaz.** Boyutlandırma §C.3 |
+| `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Bozuk ya da base58 olmayan adres (`41…` hex dahil) ya da 2'den küçük / tam sayı olmayan izin kimliği sidecar'ı açılışta durdurur (`STAKE_ACCOUNT_MISCONFIGURED`); açılan sidecar hangi hesaptan devredeceğini `Energy delegation:` satırında yazar. Kurulum, ödeme payının sıcak cüzdana kalıcı devretilmesi ve bant boyutlandırması §C.2 |
 | `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation. **Bugün düz env değişkeni** (`docker inspect` ile görünür); Docker secret'a taşınması ve çevrimdışı yedek prosedürü owner kararı 2026-09-17 ile ayrı bir tura bırakıldı (05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
 | `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10) |
@@ -158,9 +159,11 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
 > docker logs skinora-backend 2>&1 | grep "PRICE_DEVIATION rule"
 > ```
 
-### C.2 Hot cüzdan enerji kilidi (hibrit enerji kararı — SystemSetting değil)
+### C.2 Enerji kilidi ve kilit hesabı (hibrit enerji kararı — SystemSetting değil)
 
-> **Proje sahibi kararı (2026-09-16): HİBRİT.** Hot cüzdan beklenen günlük **taban** satış hacmi kadar TRX'i ENERGY için kilitler; kilidin karşılayamadığı her transfer otomatik yakar. Kilit yapılmazsa hiçbir şey kırılmaz — her sweep ve payout yakma yoluna düşer ve satış başına ~15,2–21,8 TRX harcanır (08 §3.3). Deposit'ten yapılan transferlerde devredilecek miktar **ayar değildir**; sidecar her transfer için güncel orandan hesaplar.
+> **Proje sahibi kararı (2026-09-16): HİBRİT.** Beklenen günlük **taban** satış hacmi kadar TRX ENERGY için kilitlenir; kilidin karşılayamadığı her transfer otomatik yakar. Kilit yapılmazsa hiçbir şey kırılmaz — her sweep ve payout yakma yoluna düşer ve satış başına ~15,2–21,8 TRX harcanır (08 §3.3). Deposit'ten yapılan transferlerde devredilecek miktar **ayar değildir**; sidecar her transfer için güncel orandan hesaplar.
+>
+> **Proje sahibi kararı (2026-09-17): kilit AYRI BİR HESAPTA durur.** Kilitli TRX, sıcak anahtarın arkasındaki en büyük değerdir (satışların parası T129'dan beri kendi depozit adreslerinde bekler; sıcak cüzdanda biriken komisyondur). Kilit sıcak cüzdanda dururken, anahtarı çalan kişi hesabın izinlerini değiştirip kilidi kendine geçirebilirdi. Artık kilit kendi hesabındadır: **owner anahtarı çevrimdışıdır**, sıcak cüzdanın anahtarı o hesapta yalnız *enerji devret / geri al* yetkisi olan bir active permission ile listelidir. Çalınan sıcak anahtar enerjiyi başka adrese devredebilir (mainnet en fazla ~30 günlük yakma zararı) ama **kilitli TRX'e dokunamaz**: unstake, TRX transferi ve izin değiştirme `SIGERROR "Permission denied"` alır (Nile'da ölçüldü 2026-09-17).
 
 **Kilit miktarını hesapla:**
 
@@ -172,27 +175,85 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
      -d '{"address":"<HOT_WALLET_ADDRESS>","visible":true}'
    # oran = TotalEnergyLimit / TotalEnergyWeight   (2026-09-16: ≈ 9,52)
    ```
-3. Kilit ≈ `N × 194.570 ÷ oran` TRX. 194.570 = sweep (64.285) + alıcısı token'ı ilk kez alan bir payout (130.285); satıcıların çoğu USDT tutuyorsa alt sınır `N × 128.570 ÷ oran`. Örnek, `N = 5`, oran 9,52: `5 × 194.570 ÷ 9,52 ≈ 102.200 TRX`.
+3. Kilit iki paydan oluşur (proje sahibi kararı 2026-09-18, kalıcı devretme):
+   - **Ödeme payı** `P = N × 130.285 ÷ oran` TRX. Payout'u sıcak cüzdan kendisi gönderir ve enerjiyi **kendi havuzundan** kullanır; bu pay adım 8'de sıcak cüzdana kalıcı devredilir. 130.285 = alıcısı token'ı ilk kez alan bir payout (üst sınır); satıcıların çoğu USDT tutuyorsa alt sınır `N × 64.285 ÷ oran`.
+   - **Depozit payı** `D = (N + 0,1) × 64.285 ÷ oran` TRX. Sweep ve depozitten yapılan iade için sidecar her transferde anlık devreder, transfer bitince geri alır. Her devretme %10 pay içerir; gönderim işi transferleri sırayla yaptığı için kilitte aynı anda yalnız bir devretmenin payı durur — `+ 0,1` odur. Depozitten iade oranı yüksekse `N`'i o kadar artır.
+   - Kilit = `P + D`. Örnek, `N = 5`, oran 9,52: `P = 651.425 ÷ 9,52 ≈ 68.430`, `D = 327.854 ÷ 9,52 ≈ 34.440`, kilit ≈ **102.870 TRX**.
 
-**Kilitle ve doğrula:**
+**Kilit hesabını kur (hesap başına bir kez):**
 
-4. Hot cüzdanda ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). İşlem hash'ini kaydet. Kilit **14 gün** beklemeden çözülemez.
-5. Doğrula — devredilebilir miktar kilide yakın dönmeli:
+4. **Yeni bir Tron hesabı üret ve owner anahtarını çevrimdışı sakla.** Bu anahtar hiçbir sunucuya, hiçbir konteynere, hiçbir `.env` dosyasına girmez — yalnız kilidi çözmek ya da izni değiştirmek gerektiğinde elle kullanılır. **Hesabı fonla:** kilit (`P + D`, adım 3) + **100 TRX izin güncelleme ücreti** (adım 5 — `getUpdateAccountPermissionFee` = 100.000.000 SUN, mainnet ve Nile'da ölçüldü) + bant kilidi (aşağıda "Bant genişliği") + birkaç TRX serbest tampon. İlk gönderim hesabı açar; açma ücretini gönderen öder.
+5. **Sıcak cüzdanın anahtarına yalnız devretme yetkisi veren active permission ekle.** Bu işlem kilit hesabından **100 TRX** alır — bakiye yetmezse zincir reddeder. İşlemi **düğüm API'siyle** kur — TronWeb 5.3.5 ile kurma: `updateAccountPermissions` işlemi zincirde `CONTRACT_VALIDATE_ERROR No contract!` alıyor ve `permissionId` seçeneğini sessizce düşürüyor (2026-09-17'de ölçüldü; iki farklı izin aynı txid'i üretti, yani "reddedilmeli" testleri izin hiç kurulmadığı hâlde geçmiş göründü).
+   ```bash
+   # owner anahtarıyla imzalanır (çevrimdışı makinede), sonra broadcasthex ile yayınlanır
+   curl -s -X POST https://api.trongrid.io/wallet/accountpermissionupdate \
+     -H 'Content-Type: application/json' \
+     -d '{
+       "owner_address": "<STAKE_ACCOUNT_ADDRESS>",
+       "owner": {"type":0,"permission_name":"owner","threshold":1,
+                 "keys":[{"address":"<STAKE_ACCOUNT_ADDRESS>","weight":1}]},
+       "actives": [{"type":2,"permission_name":"energy-delegation","threshold":1,
+                    "operations":"0000000000000006000000000000000000000000000000000000000000000000",
+                    "keys":[{"address":"<HOT_WALLET_ADDRESS>","weight":1}]}],
+       "visible": true
+     }'
+   # operations = yalnız DelegateResource + UnDelegateResource. Başka hiçbir bit açık değil.
+   ```
+6. **İzni doğrula — kabul ve ret ayrı ayrı görülmeli.** `getaccount` çıktısında `active_permission` içinde `id: 2` ve yukarıdaki `operations` dizisi görünmeli. Ardından kilit hesabı adına iki işlem kur, ikisinin gövdesine de `"Permission_id": 2` ekle ve **sıcak anahtarla** imzala: bir **devretme** (kabul edilmeli) ve bir **TRX transferi** (`SIGERROR` almalı; mesaj `Permission denied`). Aynı kimlikle bir `unfreezebalancev2` denemesi de `Permission denied` almalı. Retleri de koşmadan izin kurulmuş sayılmaz.
+   ```bash
+   curl -s -X POST https://api.trongrid.io/wallet/createtransaction \
+     -H 'Content-Type: application/json' \
+     -d '{"owner_address":"<STAKE_ACCOUNT_ADDRESS>","to_address":"<HOT_WALLET_ADDRESS>",
+          "amount":1,"Permission_id":2,"visible":true}'
+   # sıcak anahtarla imzala → broadcasttransaction → SIGERROR, "Permission denied"
+   ```
+   **`Permission_id` vermeden kurulan ret hiçbir şey kanıtlamaz.** Kimlik 0 (owner izni) olur; zincir önce kimliği 0'dan farklı işlemlerde izin kapsamını, sonra imzacıyı denetler (java-tron `TransactionCapsule.checkPermission` → `checkWeight`). Kimliksiz denemede ilk denetim atlanır ve sıcak anahtar owner izninde olmadığı için `"… is not contained of permission"` gelir — active izin "her şeye yetki" diye kurulmuş olsa bile. İznin kapsamını yalnız `Permission denied` gösterir.
+7. **Kilit miktarını (`P + D`) bu hesapta** ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). Kilit **14 gün** (mainnet) beklemeden çözülemez.
+8. **Ödeme payını sıcak cüzdana kalıcı devret** (proje sahibi kararı 2026-09-18). Kilit bu hesaba taşınınca sıcak cüzdanın kendi havuzu boşalır ve her payout 6,43–13,03 TRX yakar; bu adım o havuzu geri doldurur. Bir kez ve **kilitsiz** (`lock: false`) devret — devretme sürekli durur. Sidecar ona dokunmaz: yalnız depozitlere yaptığı devretmeleri geri alır.
+   ```bash
+   # P_SUN = P × 1.000.000 (TRX → SUN). İmza: kurulum oturumunda owner anahtarıyla (çevrimdışı), ya da
+   # gövdeye "Permission_id": 2 eklenip sıcak anahtarla — izin devretmeyi kapsar. Sonra broadcasttransaction.
+   curl -s -X POST https://api.trongrid.io/wallet/delegateresource \
+     -H 'Content-Type: application/json' \
+     -d '{"owner_address":"<STAKE_ACCOUNT_ADDRESS>","receiver_address":"<HOT_WALLET_ADDRESS>",
+          "balance":<P_SUN>,"resource":"ENERGY","lock":false,"visible":true}'
+   ```
+   Doğrula: sıcak cüzdanın `getaccountresource` çıktısında `EnergyLimit` ≈ `P × oran` olmalı. Devredilen enerji alıcının kendi `EnergyLimit`'inde görünür (Nile'da ölçüldü 2026-09-18: 1 TRX için 7.370 → 7.444); payout ve payout ücret tahmini bu havuzu okur.
+9. Doğrula — devredilebilir miktar **depozit payına** (`D`) yakın dönmeli; kalıcı devretme bu değerden zaten düşülür:
    ```bash
    curl -s -X POST https://api.trongrid.io/wallet/getcandelegatedmaxsize \
      -H 'Content-Type: application/json' \
-     -d '{"owner_address":"<HOT_WALLET_ADDRESS>","type":1,"visible":true}'
+     -d '{"owner_address":"<STAKE_ACCOUNT_ADDRESS>","type":1,"visible":true}'
    # {"max_size": <SUN>}   — boş gövde {} = devredilebilir hiçbir şey yok
    ```
-6. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed in a block` geldiğini gör. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir. Plan transferin **tamamı** için yapılır (kontrat sahibinin payı düşülmez) ve devretme %10 pay içerir: mainnet'te bir sweep için o an ~7.430 TRX devredilebilir olmalıdır (64.285 ÷ 9,52 × 1,1).
+10. `.env`'e **yalnız adresi** yaz: `STAKE_ACCOUNT_ADDRESS=<...>`, `T…` ile başlayan base58 biçiminde (ve izin kimliği 2 değilse `STAKE_ACCOUNT_PERMISSION_ID`). Blockchain sidecar'ı yeniden başlat — iki değişken yalnız o servise gider. Adres geçersizse ya da base58 değilse (`41…` hex biçimi dahil — düğüm okumaları onu reddeder ve kilit 0 görünürdü) ya da izin kimliği 2'den küçük / tam sayı değilse sidecar **açılmaz** ve sebebi logda yazar (`STAKE_ACCOUNT_MISCONFIGURED`). Açıldıysa ilk sweep'i beklemeden doğrula:
+   ```bash
+   docker logs skinora-blockchain-sidecar 2>&1 | grep "Energy delegation:"
+   # delegationOwner ve refundEstimateReadsStakeFrom = kilit hesabı, permissionId = 2 (ya da verdiğin kimlik).
+   # Sıcak cüzdan görünüyorsa değişken sidecar'a ulaşmamıştır: her sweep ve iade yakar.
+   ```
+   Boş bırakılırsa sıcak cüzdan kendi kilidini kullanır — eski düzen: o durumda kilidi (`P + D`) sıcak cüzdanın kendisinde yap, kalıcı devretme gerekmez.
+11. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed in a block` geldiğini gör. `Energy delegation broadcast` satırındaki `owner` alanı **kilit hesabının** adresi olmalı; sıcak cüzdanınki görünüyorsa `STAKE_ACCOUNT_ADDRESS` sidecar'a ulaşmamıştır. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir. Plan transferin **tamamı** için yapılır (kontrat sahibinin payı düşülmez) ve devretme %10 pay içerir: mainnet'te bir sweep için o an ~7.430 TRX devredilebilir olmalıdır (64.285 ÷ 9,52 × 1,1). İlk payout'tan sonra makbuza bak (`gettransactioninfobyid`): `receipt.energy_usage` > 0 ve `receipt.energy_fee` 0 olmalı — enerji sıcak cüzdanın havuzundan geldi, TRX yakılmadı. `energy_fee` > 0 ise adım 8 yapılmamış ya da yetmemiştir.
 
 **Transfer çağrısının süresi (backend).** Depozitten yapılan her gönderimde sidecar her adımın bir bloğa girmesini bekler (08 §3.3 "Blok onayı"); bir çağrı olağan durumda ~10–25 sn sürer (Nile ölçümü, hesap açma + yakma: 11,6 sn). Backend bu çağrıya `BlockchainSidecar__TransferTimeoutSeconds` kadar (varsayılan **300**) bekler; sidecar çağrının 150. saniyesinden sonra transfer yayınlamaz. **300'ün altına indirme:** backend sidecar'dan önce vazgeçerse yeniden dener, ilk çağrının yayınladığı transfer kaydedilmez. Logda `TRANSFER_WINDOW_ELAPSED` görmek, zincir okumalarının ya da blokların yavaşladığını gösterir — transfer yayınlanmamıştır, backend bir sonraki denemede baştan başlar.
 
 **`DEPOSIT_TRANSFER_WOULD_REVERT` görürsen.** Sidecar transferi zincirde simüle etti ve transfer düşüyor; hiçbir şey gönderilmedi, hiçbir şey yayınlanmadı. Backend yeniden dener (varsayılan 1, 5, 15 dk — `blockchain.transfer_retry_intervals_minutes`), sonra satır `FAILED` olur ve admin uyarısı gelir. **İadeyi ya da sweep'i elle yeniden başlatmadan önce** depozitin giden TRC-20 transferlerine bak (`GET /v1/accounts/<DEPOZIT>/transactions/trc20?only_from=true`): en olası sebep, önceki bir denemenin token'ı göndermiş ama backend'in bunu kaydedememiş olmasıdır. Transfer oradaysa para yerine ulaşmıştır; yeniden başlatmak ikinci bir iade demektir.
 
-**Bant genişliği:** hot cüzdanın günlük ücretsiz bandı 600 bayttır. Hibritte her satış hot cüzdandan ~3 işlem (devretme, geri alma, payout ≈ 900 bayt) çıkarır; kota bitince işlem başına ~0,28–0,35 TRX bant yakılır (Nile'da ölçüldü). Bu, enerjiye göre küçük bir kalemdir; ayrıca BANDWIDTH için kilitlemek bu turda ölçülmedi.
+**Bant genişliği — kilit hesabında da BANDWIDTH kilitle (proje sahibi kararı 2026-09-17).** Devretme ve geri alma işlemlerinin ücreti **kilit hesabının** bakiyesinden çıkar, sıcak cüzdanınkinden değil: imza sıcak anahtarla atılsa da işlemin sahibi kilit hesabıdır. Her hesabın günlük ücretsiz bandı 600 bayttır ve **bir devret+geri al çifti bunun 558 baytını yer** (Nile'da ölçüldü 2026-09-18) — yani ücretsiz kota günde ancak tek bir çifte yeter. Ötesinde işlem başına ~0,28 TRX yakılır (ölçülen: devretme 279.000 SUN, geri alma 281.000 SUN).
 
-**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir.
+Boyutlandırma: günlük `N` satış → `2N` işlem × ~280 bayt. `N = 5` için ~2.800 bayt/gün, yani ~2,8 TRX/gün yakma (yılda ~1.000 TRX). Bunun yerine kilit hesabında **BANDWIDTH için** birkaç yüz TRX kilitlemek aynı işlemleri ücretsiz hâle getirir ve kilitlenen TRX geri alınabilir (mainnet 14 gün). Kilitledikten sonra doğrula:
+
+```bash
+curl -s -X POST https://api.trongrid.io/wallet/getaccountresource \
+  -H 'Content-Type: application/json' \
+  -d '{"address":"<STAKE_ACCOUNT_ADDRESS>","visible":true}'
+# NetLimit  = kilitten gelen bant (0 ise yalnız ücretsiz 600 bayt var)
+# freeNetUsed / freeNetLimit = günün ücretsiz kotası
+```
+
+Kilit hesabında yine de küçük bir serbest TRX tamponu bırak: bant kilidi yetmezse işlemler yakmaya düşer ve bakiye biterse **devretme başarısız olur**, akış pahalı yakma yoluna geçer. **Bu bakiyeyi izleyen bir alarm henüz yok** (backlog `StakeAccountUnmonitored`) — launch'a kadar haftada bir elle bak (`getaccount` → `balance`). Sıcak cüzdanın kendi bandı ayrı bir kalemdir — payout ve depozite gönderilen TRX oradan çıkar.
+
+**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir. Kilidi büyütmek owner anahtarını ister (adım 7). Kalıcı devretmeyi büyütmek ya da küçültmek (adım 8) owner anahtarı olmadan da yapılır: sıcak anahtarın izni devretme ve geri almayı kapsar (`Permission_id: 2`).
 
 ---
 
@@ -345,7 +406,7 @@ Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir
 | 3 | `docker logs skinora-backend` | fail-fast **yok**; `SettingsBootstrap` 19 anahtarı configured yaptı |
 | 4 | `curl http://localhost:5100/health` | 200 döner ve `status: healthy` der — ama **bu satır bir bağlantı kanıtı DEĞİLDİR** (ölçüm 2026-08-23): tek check `steam-api`'nin sonucu kaynakta sabittir (`sidecar-steam/src/health/HealthController.ts:29`, mesaj *"Connectivity probe deferred to T67"*), yani uç Steam'e hiç çıkmaz ve 200'den başkasını döndüremez. Aynısı blockchain sidecar'ın `tron-node` / `hot-wallet` check'leri için de geçerlidir. Bu satır yalnız **sürecin ayakta ve HTTP'ye cevap verir** olduğunu gösterir; bot kimlik bilgisi **beklenmez** (T133). Gerçek bağlantı kanıtı **kontrol 5–6'daki log satırlarıdır**. Backlog: `SidecarHealthChecksArePlacebo` |
 | 5 | `docker logs skinora-steam-sidecar` | `Steam sidecar listening {port: 5100}`; bot/credential satırı **yok** |
-| 6 | `docker logs skinora-blockchain-sidecar` | nile bağlantısı + USDT/USDC allowlist dolu |
+| 6 | `docker logs skinora-blockchain-sidecar` | nile bağlantısı + USDT/USDC allowlist dolu + `Energy delegation:` satırı beklenen kilit sahibini gösteriyor (§C.2 adım 10) |
 | 7 | Tarayıcı → `http://localhost:8080` | gerçek Steam login, profil adı/avatar gerçek |
 | 8 | `GET /api/v1/admin/settings` | **66** giriş — 64 `SystemSetting` satırı (`SeedDataTests` bu sayıyı assert eder) + ortam değişkeninden okunan 2 cüzdan adresi (`isEditable: false`, değerleri `HOT_WALLET_ADDRESS`/`COLD_WALLET_ADDRESS` boşsa `null`); başarılı boot'ta **hiçbir satırın `value`'su null değildir**. Yanıt `isConfigured` **taşımaz** (07 §9.8 gereği configured'lık bilinçli olarak projekte edilmez; gözlenebilir vekil `value != null`), dolayısıyla 45 seed + 19 env dağılımı bu uçtan **okunamaz** — 19'un kanıtı kontrol 3'teki `SystemSetting bootstrap complete — {N} env-hydrated` log satırı, 45'inki `SELECT COUNT(*) FROM SystemSettings WHERE IsConfigured = 1` (seed sonrası, boot öncesi) |
 | 9 | Envanter listesi | gerçek CS2 envanteri (`steam-inventory` limiti 5/dk) |
