@@ -6,27 +6,65 @@ const FULL_NODE = 'https://nile.trongrid.io';
 const API_KEY = 'fake-api-key';
 const OWNER_ADDR = 'TSweeperHotWallet';
 const RECEIVER_ADDR = 'TDepositAddress42';
-const OWNER_KEY = 'aa'.padStart(64, 'a');
+const DUMMY_OWNER_KEY = 'aa'.padStart(64, 'a');
 const STAKE_ADDR = 'TStakeAccountHoldingTheFrozenTrx';
+
+/** What a built transaction carries that the stub's signer checks: its owner. */
+interface BuiltTransaction {
+  txID: string;
+  owner: string;
+}
 
 function buildTronWebStub(overrides: Partial<StubTronWeb> = {}): StubTronWeb {
   return {
     transactionBuilder: {
-      delegateResource: vi.fn(async () => ({ txID: 'delegate-tx-1' })),
-      undelegateResource: vi.fn(async () => ({ txID: 'undelegate-tx-1' })),
-      sendTrx: vi.fn(async () => ({ txID: 'trx-tx-1' })),
+      // Each built transaction names its owner, as the real one does in
+      // raw_data.contract[0].parameter.value.owner_address.
+      delegateResource: vi.fn(
+        async (_balance: number, _receiver: string, _resource: string, owner: string) => ({
+          txID: 'delegate-tx-1',
+          owner,
+        }),
+      ),
+      undelegateResource: vi.fn(
+        async (_balance: number, _receiver: string, _resource: string, owner: string) => ({
+          txID: 'undelegate-tx-1',
+          owner,
+        }),
+      ),
+      sendTrx: vi.fn(async (_to: string, _amount: number, from: string) => ({
+        txID: 'trx-tx-1',
+        owner: from,
+      })),
     },
     trx: {
       // The real TronWeb refuses here when the key does not own the
       // transaction's address — measured on Nile 2026-09-18, "Private key does
-      // not match address in transaction". The stub mirrors that so a test
-      // that wires the permission path to the wrong signer fails the way
-      // production would, instead of quietly succeeding.
-      sign: vi.fn(async (transaction: unknown) => transaction),
+      // not match address in transaction", rejected as a bare string. The stub
+      // does the same (DUMMY_OWNER_KEY owns OWNER_ADDR only), so a test that
+      // wires the permission path to this signer fails the way production
+      // would, instead of quietly succeeding.
+      sign: vi.fn(async (transaction: BuiltTransaction) => {
+        if (transaction.owner !== OWNER_ADDR) {
+          return Promise.reject('Private key does not match address in transaction');
+        }
+        return transaction;
+      }),
       multiSign: vi.fn(async (transaction: unknown) => transaction),
       sendRawTransaction: vi.fn(async () => ({ result: true, txid: 'broadcast-tx-1' })),
     },
     ...overrides,
+  };
+}
+
+/** A delegation request signed on the stake account's behalf. */
+function stakeRequest(permissionId: number) {
+  return {
+    ownerAddress: STAKE_ADDR,
+    ownerPrivateKey: DUMMY_OWNER_KEY,
+    ownerPermissionId: permissionId,
+    receiverAddress: RECEIVER_ADDR,
+    amountSun: 1,
   };
 }
 
@@ -51,7 +89,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
 
     const result = await client.delegateEnergy({
       ownerAddress: OWNER_ADDR,
-      ownerPrivateKey: OWNER_KEY,
+      ownerPrivateKey: DUMMY_OWNER_KEY,
       receiverAddress: RECEIVER_ADDR,
       amountSun: 200_000_000,
     });
@@ -61,7 +99,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
       expect.objectContaining({
         fullHost: FULL_NODE,
         apiKey: API_KEY,
-        privateKey: OWNER_KEY,
+        privateKey: DUMMY_OWNER_KEY,
       }),
     );
     expect(tronWeb.transactionBuilder.delegateResource).toHaveBeenCalledWith(
@@ -94,7 +132,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
 
     await client.delegateEnergy({
       ownerAddress: STAKE_ADDR,
-      ownerPrivateKey: OWNER_KEY,
+      ownerPrivateKey: DUMMY_OWNER_KEY,
       ownerPermissionId: 2,
       receiverAddress: RECEIVER_ADDR,
       amountSun: 200_000_000,
@@ -109,7 +147,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
       undefined,
       { permissionId: 2 },
     );
-    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), OWNER_KEY, 2);
+    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), DUMMY_OWNER_KEY, 2);
     expect(tronWeb.trx.sign).not.toHaveBeenCalled();
   });
 
@@ -119,7 +157,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
 
     await client.delegateEnergy({
       ownerAddress: STAKE_ADDR,
-      ownerPrivateKey: OWNER_KEY,
+      ownerPrivateKey: DUMMY_OWNER_KEY,
       ownerPermissionId: 5,
       receiverAddress: RECEIVER_ADDR,
       amountSun: 1,
@@ -134,59 +172,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
       undefined,
       { permissionId: 5 },
     );
-    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), OWNER_KEY, 5);
-  });
-
-  /**
-   * TronWeb rejects a signature it will not produce with a bare string, not an
-   * Error — measured on Nile 2026-09-18 by running the compiled client without
-   * a permission id: the operator got "Energy delegation failed: undefined".
-   * The causes that land here (wrong permission id, an account that granted
-   * none) are precisely the ones whose text an operator needs.
-   */
-  it('reports a non-Error rejection instead of "undefined"', async () => {
-    const tronWeb = buildTronWebStub();
-    tronWeb.trx.multiSign.mockRejectedValueOnce(
-      'Private key does not match address in transaction',
-    );
-    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
-
-    await expect(
-      client.delegateEnergy({
-        ownerAddress: STAKE_ADDR,
-        ownerPrivateKey: OWNER_KEY,
-        ownerPermissionId: 2,
-        receiverAddress: RECEIVER_ADDR,
-        amountSun: 1,
-      }),
-    ).rejects.toMatchObject({
-      code: 'DELEGATE_BROADCAST_FAILED',
-      // Verbatim, not JSON-quoted: an operator reads this in an alert.
-      message: 'Energy delegation failed: Private key does not match address in transaction',
-    });
-  });
-
-  it('reports an object rejection that carries no message', async () => {
-    const tronWeb = buildTronWebStub();
-    // TronGrid answers some rejections with a body, not a thrown Error.
-    tronWeb.trx.sendRawTransaction.mockRejectedValueOnce({
-      code: 'SIGERROR',
-      txid: 'abc123',
-    });
-    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
-
-    await expect(
-      client.delegateEnergy({
-        ownerAddress: STAKE_ADDR,
-        ownerPrivateKey: OWNER_KEY,
-        ownerPermissionId: 2,
-        receiverAddress: RECEIVER_ADDR,
-        amountSun: 1,
-      }),
-    ).rejects.toMatchObject({
-      code: 'DELEGATE_BROADCAST_FAILED',
-      message: expect.stringContaining('SIGERROR'),
-    });
+    expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(expect.anything(), DUMMY_OWNER_KEY, 5);
   });
 
   it('rejects DELEGATE_NO_PRIVATE_KEY when key is empty', async () => {
@@ -216,7 +202,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
     await expect(
       client.delegateEnergy({
         ownerAddress: OWNER_ADDR,
-        ownerPrivateKey: OWNER_KEY,
+        ownerPrivateKey: DUMMY_OWNER_KEY,
         receiverAddress: RECEIVER_ADDR,
         amountSun: 200_000_000,
       }),
@@ -235,7 +221,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
     await expect(
       client.delegateEnergy({
         ownerAddress: OWNER_ADDR,
-        ownerPrivateKey: OWNER_KEY,
+        ownerPrivateKey: DUMMY_OWNER_KEY,
         receiverAddress: RECEIVER_ADDR,
         amountSun: 200_000_000,
       }),
@@ -251,7 +237,7 @@ describe('TronDelegationClient.delegateEnergy()', () => {
     await expect(
       client.delegateEnergy({
         ownerAddress: OWNER_ADDR,
-        ownerPrivateKey: OWNER_KEY,
+        ownerPrivateKey: DUMMY_OWNER_KEY,
         receiverAddress: RECEIVER_ADDR,
         amountSun: 200_000_000,
       }),
@@ -273,7 +259,7 @@ describe('TronDelegationClient.undelegateEnergy()', () => {
 
     const result = await client.undelegateEnergy({
       ownerAddress: OWNER_ADDR,
-      ownerPrivateKey: OWNER_KEY,
+      ownerPrivateKey: DUMMY_OWNER_KEY,
       receiverAddress: RECEIVER_ADDR,
       amountSun: 200_000_000,
     });
@@ -286,7 +272,40 @@ describe('TronDelegationClient.undelegateEnergy()', () => {
       OWNER_ADDR,
       undefined,
     );
+    expect(tronWeb.trx.sign).toHaveBeenCalled();
+    expect(tronWeb.trx.multiSign).not.toHaveBeenCalled();
   });
+
+  /**
+   * The reclaim is signed against the same permission as the delegation. Only
+   * the delegation was pinned (#325 validation): TronWeb 5.3.5 happens to write
+   * a missing id into the transaction itself inside multiSign, so dropping it
+   * from the builder here would be harmless today and silently wrong on the
+   * next TronWeb that stops doing so.
+   */
+  it.each([2, 5])(
+    'reclaims on the stake account behalf with permission id %i — both halves reach TronWeb',
+    async (permissionId) => {
+      const tronWeb = buildTronWebStub();
+      const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+      await client.undelegateEnergy(stakeRequest(permissionId));
+
+      expect(tronWeb.transactionBuilder.undelegateResource).toHaveBeenCalledWith(
+        1,
+        RECEIVER_ADDR,
+        'ENERGY',
+        STAKE_ADDR,
+        { permissionId },
+      );
+      expect(tronWeb.trx.multiSign).toHaveBeenCalledWith(
+        expect.anything(),
+        DUMMY_OWNER_KEY,
+        permissionId,
+      );
+      expect(tronWeb.trx.sign).not.toHaveBeenCalled();
+    },
+  );
 
   it('raises UNDELEGATE_BROADCAST_REJECTED when result is false', async () => {
     const tronWeb = buildTronWebStub();
@@ -300,7 +319,7 @@ describe('TronDelegationClient.undelegateEnergy()', () => {
     await expect(
       client.undelegateEnergy({
         ownerAddress: OWNER_ADDR,
-        ownerPrivateKey: OWNER_KEY,
+        ownerPrivateKey: DUMMY_OWNER_KEY,
         receiverAddress: RECEIVER_ADDR,
         amountSun: 200_000_000,
       }),
@@ -317,7 +336,7 @@ describe('TronDelegationClient.sendTrx()', () => {
 
     const result = await client.sendTrx({
       fromAddress: OWNER_ADDR,
-      fromPrivateKey: OWNER_KEY,
+      fromPrivateKey: DUMMY_OWNER_KEY,
       toAddress: RECEIVER_ADDR,
       amountSun: 15_000_000,
     });
@@ -339,7 +358,7 @@ describe('TronDelegationClient.sendTrx()', () => {
     await expect(
       client.sendTrx({
         fromAddress: OWNER_ADDR,
-        fromPrivateKey: OWNER_KEY,
+        fromPrivateKey: DUMMY_OWNER_KEY,
         toAddress: RECEIVER_ADDR,
         amountSun: 15_000_000,
       }),
@@ -356,10 +375,77 @@ describe('TronDelegationClient.sendTrx()', () => {
     await expect(
       client.sendTrx({
         fromAddress: OWNER_ADDR,
-        fromPrivateKey: OWNER_KEY,
+        fromPrivateKey: DUMMY_OWNER_KEY,
         toAddress: RECEIVER_ADDR,
         amountSun: 15_000_000,
       }),
     ).rejects.toBe(upstream);
   });
+});
+
+/**
+ * TronWeb rejects a signature it will not produce with a bare string, not an
+ * Error — measured on Nile 2026-09-18 by running the compiled client without a
+ * permission id: the operator got "Energy delegation failed: undefined". The
+ * causes that land here (wrong permission id, an account that granted none)
+ * are precisely the ones whose text an operator needs. All three call sites
+ * share the describer; only the delegation was pinned (#325 validation).
+ */
+const CALL_SITES = [
+  {
+    name: 'delegateEnergy',
+    call: (client: TronDelegationClient) => client.delegateEnergy(stakeRequest(2)),
+    signer: 'multiSign' as const,
+    code: 'DELEGATE_BROADCAST_FAILED',
+    prefix: 'Energy delegation failed: ',
+  },
+  {
+    name: 'undelegateEnergy',
+    call: (client: TronDelegationClient) => client.undelegateEnergy(stakeRequest(2)),
+    signer: 'multiSign' as const,
+    code: 'UNDELEGATE_BROADCAST_FAILED',
+    prefix: 'Energy undelegation failed: ',
+  },
+  {
+    name: 'sendTrx',
+    call: (client: TronDelegationClient) =>
+      client.sendTrx({
+        fromAddress: OWNER_ADDR,
+        fromPrivateKey: DUMMY_OWNER_KEY,
+        toAddress: RECEIVER_ADDR,
+        amountSun: 1,
+      }),
+    signer: 'sign' as const,
+    code: 'FALLBACK_TRX_BROADCAST_FAILED',
+    prefix: 'TRX fallback transfer failed: ',
+  },
+];
+
+describe('TronDelegationClient — a rejection that is not an Error reaches the operator', () => {
+  it.each(CALL_SITES)('$name: a bare string, verbatim', async ({ call, signer, code, prefix }) => {
+    const tronWeb = buildTronWebStub();
+    tronWeb.trx[signer].mockRejectedValueOnce('Private key does not match address in transaction');
+    const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+    await expect(call(client)).rejects.toMatchObject({
+      code,
+      // Verbatim, not JSON-quoted: an operator reads this in an alert.
+      message: `${prefix}Private key does not match address in transaction`,
+    });
+  });
+
+  it.each(CALL_SITES)(
+    '$name: an object without a message, serialised',
+    async ({ call, code, prefix }) => {
+      const tronWeb = buildTronWebStub();
+      // TronGrid answers some rejections with a body, not a thrown Error.
+      tronWeb.trx.sendRawTransaction.mockRejectedValueOnce({ code: 'SIGERROR', txid: 'abc123' });
+      const client = new TronDelegationClient(FULL_NODE, API_KEY, () => tronWeb);
+
+      await expect(call(client)).rejects.toMatchObject({
+        code,
+        message: `${prefix}{"code":"SIGERROR","txid":"abc123"}`,
+      });
+    },
+  );
 });

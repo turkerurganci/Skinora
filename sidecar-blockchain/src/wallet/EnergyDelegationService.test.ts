@@ -24,7 +24,9 @@ import { SimulationRevertedError } from '../errors/SidecarError.js';
 
 const DEPOSIT = 'TDepositAddress42';
 const SWEEPER = 'TSweeperHotWallet';
-const STAKE_ACCOUNT = 'TStakeAccountHoldingTheFrozenTrx';
+/** A real address: the service refuses a malformed stake account at
+ * construction. The Nile stake account measured 2026-09-18. */
+const STAKE_ACCOUNT = 'TVqvXQhRcmcCQudYx6uhq1WWuNHVmEEyQ6';
 const DUMMY_SWEEPER_KEY = 'aa'.padStart(64, 'a');
 const CONTRACT = 'TContractUsdt';
 const RECIPIENT = 'THotWalletRecipient';
@@ -53,6 +55,13 @@ const TX_EXPIRATION_MS = 60_000;
 interface SignedRequest {
   ownerAddress: string;
   ownerPermissionId?: number;
+  amountSun: number;
+}
+
+interface TrxSend {
+  fromAddress: string;
+  fromPrivateKey: string;
+  toAddress: string;
   amountSun: number;
 }
 
@@ -181,6 +190,22 @@ function buildChain(o: ChainOptions = {}) {
     }
   }
 
+  /**
+   * Every TRX this flow sends leaves the hot wallet, signed by its own key.
+   * The stake account's permission covers delegation and reclaim only — a TRX
+   * transfer signed for it is rejected (measured on Nile 2026-09-17,
+   * <c>SIGERROR "Permission denied"</c>) — so a flow that funded a deposit
+   * from the stake account fails here as it would on-chain (#325 validation,
+   * B3: a stub that ignored the sender let exactly that pass 321/321).
+   */
+  function assertSentByTheHotWallet(request: TrxSend): void {
+    if (request.fromAddress !== SWEEPER || request.fromPrivateKey !== DUMMY_SWEEPER_KEY) {
+      throw new Error(
+        `fake chain: SIGERROR "Permission denied" — the hot wallet key cannot send TRX from ${request.fromAddress}.`,
+      );
+    }
+  }
+
   const resources = {
     estimateTransferEnergy: vi.fn(async () => {
       seen.activationBlockAtPlan.push(blockOfLatest('activation'));
@@ -237,7 +262,8 @@ function buildChain(o: ChainOptions = {}) {
 
   let delivered = 0;
   const client = {
-    sendTrx: vi.fn(async (request: { toAddress: string; amountSun: number }) => {
+    sendTrx: vi.fn(async (request: TrxSend) => {
+      assertSentByTheHotWallet(request);
       if (o.sendTrxThrows) throw new Error('sendTrx rejected');
       const hash = broadcast(deposit.exists ? 'trx' : 'activation', request.amountSun);
       // Pending view: the node shows it before any block holds it.
@@ -305,6 +331,12 @@ function buildChain(o: ChainOptions = {}) {
     blockOf,
     produceBlock,
     firstBroadcast,
+    /**
+     * Energy still delegated to the deposit. The flow swallows a failed
+     * reclaim (the transfer is already on-chain), so a reclaim the chain
+     * refused — wrong owner, wrong permission id — shows only here.
+     */
+    strandedEnergy: () => delivered,
     run: () => service.withDelegation(TRANSFER, transfer, CONTEXT),
   };
 }
@@ -793,6 +825,71 @@ describe('broadcast deadline — the backend must still be waiting', () => {
   });
 });
 
+/**
+ * #325 validation, B3. With a stake account configured, every path that SENDS
+ * TRX must still send it from the hot wallet — the stake account's permission
+ * denies transfers — and every delegation must come back. Before the fake
+ * checked the sender, pointing the burn top-up and the fixed fallback at the
+ * stake account left the suite green; on-chain each of those transfers would
+ * have stopped at DELEGATION_AND_FALLBACK_FAILED.
+ */
+describe('stake account configured — TRX leaves the hot wallet on every path', () => {
+  it.each([
+    {
+      path: 'activation, then delegation',
+      options: { depositExists: false, delegatableSun: DELEGATION_64K_MAINNET_SUN },
+      mode: 'delegated',
+      sent: [1],
+    },
+    {
+      path: 'delegation with a Bandwidth top-up',
+      options: { delegatableSun: DELEGATION_64K_MAINNET_SUN, depositBandwidth: 100 },
+      mode: 'delegated',
+      sent: [BANDWIDTH_TOP_UP_SUN],
+    },
+    {
+      path: 'burn — the stake is one SUN short',
+      options: { delegatableSun: DELEGATION_64K_MAINNET_SUN - 1 },
+      mode: 'burn',
+      sent: [BURN_TOP_UP_64K_SUN],
+    },
+    {
+      path: 'burn after a delegation that delivered too little',
+      options: { delegatableSun: DELEGATION_64K_MAINNET_SUN, delegationDelivers: 0.5 },
+      mode: 'burn',
+      sent: [BURN_TOP_UP_64K_SUN],
+    },
+    {
+      path: 'no Energy needed, Bandwidth top-up only',
+      options: { depositEnergy: 70_000, depositBandwidth: 100 },
+      mode: 'no-energy',
+      sent: [BANDWIDTH_TOP_UP_SUN],
+    },
+    {
+      path: 'fixed fallback — the plan could not be computed',
+      options: { simulationThrows: true, delegatableSun: DELEGATION_64K_MAINNET_SUN },
+      mode: 'fallback',
+      sent: [FALLBACK_SUN],
+    },
+  ])('$path', async ({ options, mode, sent }) => {
+    const chain = buildChain({ stakeAddress: STAKE_ACCOUNT, ...options });
+
+    const outcome = await chain.run();
+
+    expect(outcome.mode).toBe(mode);
+    expect(chain.transfer).toHaveBeenCalledOnce();
+    expect(chain.client.sendTrx.mock.calls.map(([request]) => request)).toEqual(
+      sent.map((amountSun) => ({
+        fromAddress: SWEEPER,
+        fromPrivateKey: DUMMY_SWEEPER_KEY,
+        toAddress: DEPOSIT,
+        amountSun,
+      })),
+    );
+    expect(chain.strandedEnergy()).toBe(0);
+  });
+});
+
 describe('configuration', () => {
   it('rejects missing sweeper credentials', async () => {
     const service = new EnergyDelegationService({
@@ -838,6 +935,7 @@ describe('configuration', () => {
     expect(chain.client.sendTrx).toHaveBeenCalledWith(
       expect.objectContaining({ fromAddress: SWEEPER, fromPrivateKey: DUMMY_SWEEPER_KEY }),
     );
+    expect(chain.strandedEnergy()).toBe(0);
   });
 
   it('reads the delegatable stake from the account that holds it', async () => {
@@ -852,7 +950,7 @@ describe('configuration', () => {
     expect(chain.resources.getDelegatableEnergySun).toHaveBeenCalledWith(STAKE_ACCOUNT);
   });
 
-  it('carries a non-default permission id rather than assuming 2', async () => {
+  it('carries a non-default permission id rather than assuming 2 — for the reclaim too', async () => {
     const chain = buildChain({
       stakeAddress: STAKE_ACCOUNT,
       stakePermissionId: 5,
@@ -865,6 +963,13 @@ describe('configuration', () => {
     expect(chain.client.delegateEnergy).toHaveBeenCalledWith(
       expect.objectContaining({ ownerAddress: STAKE_ACCOUNT, ownerPermissionId: 5 }),
     );
+    // A reclaim offered against a fixed 2 is refused on-chain and the flow
+    // swallows it: every delegation would stay with its deposit (#325
+    // validation — only the delegation was checked).
+    expect(chain.client.undelegateEnergy).toHaveBeenCalledWith(
+      expect.objectContaining({ ownerAddress: STAKE_ACCOUNT, ownerPermissionId: 5 }),
+    );
+    expect(chain.strandedEnergy()).toBe(0);
   });
 
   it('keeps the pre-split arrangement when no stake account is configured', async () => {
@@ -879,6 +984,62 @@ describe('configuration', () => {
       expect.objectContaining({ ownerAddress: SWEEPER, ownerPermissionId: undefined }),
     );
     expect(chain.resources.getDelegatableEnergySun).toHaveBeenCalledWith(SWEEPER);
+  });
+
+  /**
+   * Owner decision 2026-09-19, as TransferGuard does for a pinned destination.
+   * A malformed stake configuration never fails loudly by itself: every
+   * delegation is rejected on-chain, the flow burns instead, and the only
+   * trace is one WARN line per transfer (#325 validation — a blank id outside
+   * compose became NaN and nothing checked it).
+   */
+  describe('a malformed stake configuration stops construction', () => {
+    const construct = (stakeAddress: string | undefined, stakePermissionId: number) =>
+      new EnergyDelegationService({
+        client: {} as never,
+        resources: {} as never,
+        sweeperAddress: SWEEPER,
+        sweeperPrivateKey: DUMMY_SWEEPER_KEY,
+        stakeAddress,
+        stakePermissionId,
+        fallbackAmountSun: FALLBACK_SUN,
+      });
+    const constructionError = (stakeAddress: string, stakePermissionId: number): unknown => {
+      try {
+        construct(stakeAddress, stakePermissionId);
+      } catch (err) {
+        return err;
+      }
+      return undefined;
+    };
+
+    it.each([
+      { name: 'a blank id read as NaN', id: Number.NaN },
+      { name: 'the owner permission (0)', id: 0 },
+      { name: 'the witness permission (1)', id: 1 },
+      { name: 'a fraction', id: 2.5 },
+    ])('refuses $name', ({ id }) => {
+      expect(constructionError(STAKE_ACCOUNT, id)).toMatchObject({
+        code: 'STAKE_ACCOUNT_MISCONFIGURED',
+        retryable: false,
+        message: expect.stringContaining('STAKE_ACCOUNT_PERMISSION_ID'),
+      });
+    });
+
+    it('refuses a stake address that is not a Tron address', () => {
+      expect(constructionError('TStakeAccountHoldingTheFrozenTrx', 2)).toMatchObject({
+        code: 'STAKE_ACCOUNT_MISCONFIGURED',
+        message: expect.stringContaining('STAKE_ACCOUNT_ADDRESS'),
+      });
+    });
+
+    it('accepts the first active permission id', () => {
+      expect(construct(STAKE_ACCOUNT, 2).delegationOwner).toBe(STAKE_ACCOUNT);
+    });
+
+    it('ignores the id while no stake account is configured', () => {
+      expect(construct(undefined, Number.NaN).delegationOwner).toBe(SWEEPER);
+    });
   });
 
   it('rejects a non-positive fallback amount', async () => {

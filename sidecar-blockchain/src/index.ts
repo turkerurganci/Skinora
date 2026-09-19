@@ -105,6 +105,9 @@ const feeEstimationService = new FeeEstimationService({
   priceService: new TrxPriceService(),
   tokenContracts,
   hotWalletAddress: config.hotWalletAddress,
+  // A refund is charged for the path it will take: the estimate reads the
+  // stake from the same account the broadcast delegates from.
+  delegationSource: energyDelegation,
   tokenDecimals: config.tokenDecimals,
 });
 

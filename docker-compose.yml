@@ -77,10 +77,6 @@ services:
       # both services, so a drift fails loudly at the sidecar instead of
       # sending money where an admin panel pointed it. Not signing material.
       - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
-      # Stake account the Energy delegation is owned by (08 §3.3). Only the
-      # ADDRESS travels — its owner key is offline and never reaches a container.
-      - STAKE_ACCOUNT_ADDRESS=${STAKE_ACCOUNT_ADDRESS:-}
-      - STAKE_ACCOUNT_PERMISSION_ID=${STAKE_ACCOUNT_PERMISSION_ID:-2}
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
@@ -254,6 +250,11 @@ services:
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
       - MAX_SINGLE_TRANSFER_USDT=${MAX_SINGLE_TRANSFER_USDT:-}
       - MAX_DAILY_OUTFLOW_USDT=${MAX_DAILY_OUTFLOW_USDT:-}
+      # Stake account the Energy delegation is owned by (08 §3.3). Only the
+      # ADDRESS travels — its owner key is offline and never reaches a container.
+      # Only this service reads it; unset = the hot wallet holds its own stake.
+      - STAKE_ACCOUNT_ADDRESS=${STAKE_ACCOUNT_ADDRESS:-}
+      - STAKE_ACCOUNT_PERMISSION_ID=${STAKE_ACCOUNT_PERMISSION_ID:-2}
       # Must match the backend's BlockchainSidecar__InternalKey above.
       - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       - WEBHOOK_SECRET=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}

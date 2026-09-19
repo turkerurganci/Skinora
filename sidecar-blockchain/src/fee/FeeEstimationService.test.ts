@@ -6,8 +6,13 @@ import type {
   ContractEnergyPolicy,
 } from '../tron/TronResourceClient.js';
 import type { TrxPriceService } from './TrxPriceService.js';
+import { EnergyDelegationService } from '../wallet/EnergyDelegationService.js';
 
 const HOT_WALLET = 'THotWalletFixtureAddress';
+/** A real address: the delegation flow refuses a malformed stake account. The
+ * Nile stake account measured 2026-09-18. */
+const STAKE_ACCOUNT = 'TVqvXQhRcmcCQudYx6uhq1WWuNHVmEEyQ6';
+const DUMMY_HOT_WALLET_KEY = 'aa'.padStart(64, 'a');
 const DEPOSIT = 'TDepositFixtureAddress';
 const BUYER = 'TBuyerFixtureAddress';
 const USDT_CONTRACT = 'TUsdtContractFixture';
@@ -32,8 +37,14 @@ interface Fixture {
   deposit?: Partial<AccountResources>;
   /** Whether the deposit account exists on-chain (default true). */
   depositExists?: boolean;
-  /** SUN the hot wallet can delegate (default 0 — nothing staked). */
-  hotWalletDelegatableSun?: number;
+  /**
+   * The stake lives in a dedicated stake account (owner decision 2026-09-17)
+   * rather than in the hot wallet — the chain side of it; the delegation flow
+   * is configured to match, as production wires both from one variable.
+   */
+  stakeAccount?: boolean;
+  /** SUN the account holding the stake can delegate (default 0 — nothing staked). */
+  delegatableSun?: number;
   /** The contract owner's remaining Energy (default 0 — mainnet Tether). */
   ownerEnergy?: number;
   ownerThrows?: boolean;
@@ -63,6 +74,8 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
   const unexpected = (address: string): never => {
     throw new Error(`fake chain: no account ${address}`);
   };
+  // Who actually holds the frozen TRX in this scenario.
+  const stakeHolder = fixture.stakeAccount ? STAKE_ACCOUNT : HOT_WALLET;
 
   const resourceClient = {
     estimateTransferEnergy: vi.fn(async () => fixture.energyRequired ?? 64_285),
@@ -85,8 +98,12 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
       return unexpected(address);
     }),
     getDelegatableEnergySun: vi.fn(async (address: string) => {
-      if (address === HOT_WALLET) return fixture.hotWalletDelegatableSun ?? 0;
-      if (address === DEPOSIT) return 0;
+      // The stake lives in exactly ONE account. The other platform account
+      // answers 0, the way the chain answers an account with nothing frozen —
+      // so a read pointed at the hot wallet after the stake moved plans a burn
+      // where the broadcast will delegate, and the charge shows it.
+      if (address === stakeHolder) return fixture.delegatableSun ?? 0;
+      if (address === HOT_WALLET || address === STAKE_ACCOUNT || address === DEPOSIT) return 0;
       return unexpected(address);
     }),
     getChainFeeParameters: vi.fn(async () => ({
@@ -103,11 +120,24 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
     getPrice: vi.fn(async () => ({ priceUsdt, source: 'binance' as const })),
   } as unknown as TrxPriceService;
 
+  // The production object, not a copy of its rule: which account holds the
+  // stake is the delegation flow's answer, and the estimate must use it
+  // (#325 validation, B1). Only its configuration is exercised here.
+  const delegationSource = new EnergyDelegationService({
+    client: {} as never,
+    resources: {} as never,
+    sweeperAddress: HOT_WALLET,
+    sweeperPrivateKey: DUMMY_HOT_WALLET_KEY,
+    stakeAddress: fixture.stakeAccount ? STAKE_ACCOUNT : undefined,
+    fallbackAmountSun: 15_000_000,
+  });
+
   const service = new FeeEstimationService({
     resourceClient,
     priceService,
     tokenContracts: { USDT: USDT_CONTRACT, USDC: '' },
     hotWalletAddress: HOT_WALLET,
+    delegationSource,
     tokenDecimals: 6,
   });
   return { service, resourceClient, priceService };
@@ -141,6 +171,24 @@ describe('FeeEstimationService — payout path (hot wallet sends directly)', () 
     expect(result.energyShortfall).toBe(60_000);
     expect(result.burnSun).toBe(25_200_000);
     expect(result.feeUsdt).toBe('12.60');
+  });
+
+  it('prices a payout from the hot wallet pool even with a stake account — the payout share is delegated into that pool', async () => {
+    // #325 validation, B2 (owner decision 2026-09-18): the stake account
+    // delegates the payout share to the hot wallet once and leaves it there.
+    // The chain reports delegated Energy in the receiver's own EnergyLimit
+    // (Nile, 2026-09-18: 7,370 → 7,444 for 1 TRX), and the payout sends from
+    // the hot wallet — the stake account is never asked on this path.
+    const { service } = buildService({
+      stakeAccount: true,
+      hotWallet: { energyAvailable: 130_285 },
+    });
+
+    const result = await service.estimate(payout);
+
+    expect(result.energyShortfall).toBe(0);
+    expect(result.feeUsdt).toBe('0.00');
+    expect(result.delegationPlan).toBeNull();
   });
 
   it('charges the WHOLE transfer on mainnet Tether although the contract says 30%', async () => {
@@ -269,7 +317,7 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
       const { service } = buildService({
         energyRequired: energy,
         hotWallet: { energyPerTrx: ratio },
-        hotWalletDelegatableSun: sun,
+        delegatableSun: sun,
       });
 
       const result = await service.estimate(refund);
@@ -281,13 +329,34 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
     },
   );
 
+  /**
+   * #325 validation, B1. Once the stake moves to its own account the hot
+   * wallet has nothing to delegate, but the broadcast delegates from the stake
+   * account. An estimate still reading the hot wallet planned a burn and took
+   * 64,285 × 100 SUN = 6.4285 TRX × 0.336 = 2.16 USDT from the buyer's refund
+   * for Energy the broadcast then delegated for free.
+   */
+  it('reads what can be delegated from the stake account once one is configured, as the broadcast does', async () => {
+    const { service, resourceClient } = buildService(
+      { stakeAccount: true, delegatableSun: 7_428_000_000 },
+      0.336,
+    );
+
+    const result = await service.estimate(refund);
+
+    expect(resourceClient.getDelegatableEnergySun).toHaveBeenCalledWith(STAKE_ACCOUNT);
+    expect(result.delegationPlan).toBe('delegate');
+    expect(result.delegationSun).toBe(7_428_000_000);
+    expect(result.feeUsdt).toBe('0.00');
+  });
+
   it('plans for the WHOLE transfer even when the owner would pay all of it — as the broadcast does', async () => {
     // One SUN short of delegating the whole 64,285 → the broadcast burns. A plan
     // sized to the caller's share (0 here) would claim no Energy is needed.
     const { service } = buildService({
       policy: OWNER_PAYS_POLICY,
       ownerEnergy: 197_517_927,
-      hotWalletDelegatableSun: 7_427_999_999,
+      delegatableSun: 7_427_999_999,
     });
 
     const result = await service.estimate(refund);
@@ -302,7 +371,7 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
     // only what can be delegated in full counts.
     const { service } = buildService({
       hotWallet: { energyAvailable: 5_000_000 },
-      hotWalletDelegatableSun: 7_427_999_999,
+      delegatableSun: 7_427_999_999,
     });
 
     const result = await service.estimate(refund);

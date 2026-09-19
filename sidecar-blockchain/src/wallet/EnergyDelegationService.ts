@@ -1,3 +1,4 @@
+import TronWeb from 'tronweb';
 import { logger } from '../logger.js';
 import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 import { TronDelegationClient } from '../tron/TronDelegationClient.js';
@@ -77,7 +78,7 @@ import {
  * Undelegation after the broadcast is best-effort: the transfer is already
  * on-chain, and failing here would re-broadcast it.
  */
-export class EnergyDelegationService {
+export class EnergyDelegationService implements DelegationSource {
   private readonly client: TronDelegationClient;
   private readonly resources: DelegationResourceProbe;
   private readonly sweeperAddress: string;
@@ -104,6 +105,11 @@ export class EnergyDelegationService {
     // the stake; the signing key does not change and never becomes an owner.
     this.stakeAddress = deps.stakeAddress || '';
     this.stakePermissionId = this.stakeAddress ? (deps.stakePermissionId ?? 2) : undefined;
+    // Eager-fail, as TransferGuard does for a pinned destination (owner
+    // decision 2026-09-19). A malformed stake configuration never fails loudly
+    // on its own: every delegation is rejected on-chain, the flow burns
+    // instead, and the only trace is a WARN line per transfer.
+    if (this.stakeAddress) assertStakeConfiguration(this.stakeAddress, this.stakePermissionId!);
     this.fallbackAmountSun = deps.fallbackAmountSun;
     this.pollIntervalMs = deps.pollIntervalMs ?? 3_000;
     this.retryableWaitAttempts = deps.retryableWaitAttempts ?? 10;
@@ -128,8 +134,16 @@ export class EnergyDelegationService {
    * fixed fallback — still leaves the hot wallet, because that same permission
    * denies transfers; only the delegation moves.
    * </para>
+   *
+   * <para>
+   * Public: the refund fee estimate (<c>FeeEstimationService</c>) must read
+   * the stake from this same account. An estimate that kept reading the
+   * hot wallet saw nothing to delegate once the stake moved, planned a burn,
+   * and charged the buyer for Energy the broadcast then delegated for free
+   * (#325 validation, B1).
+   * </para>
    */
-  private get delegationOwner(): string {
+  get delegationOwner(): string {
     return this.stakeAddress || this.sweeperAddress;
   }
 
@@ -578,6 +592,38 @@ function contextFields(context: DelegationContext) {
   };
 }
 
+/**
+ * The chain numbers the owner permission 0 and the witness permission 1;
+ * active permissions start at 2, and the hot key is only ever listed in an
+ * active one. A value outside that — or a stake address that is not an
+ * address — can only be rejected on-chain, one transfer at a time.
+ */
+function assertStakeConfiguration(address: string, permissionId: number): void {
+  if (!TronWeb.isAddress(address)) {
+    throw new SidecarError(
+      `STAKE_ACCOUNT_ADDRESS is not a valid Tron address: ${address}`,
+      'STAKE_ACCOUNT_MISCONFIGURED',
+      false,
+    );
+  }
+  if (!Number.isInteger(permissionId) || permissionId < 2) {
+    throw new SidecarError(
+      `STAKE_ACCOUNT_PERMISSION_ID must be an active-permission id (an integer of at least 2): ${permissionId}`,
+      'STAKE_ACCOUNT_MISCONFIGURED',
+      false,
+    );
+  }
+}
+
+/**
+ * The one account the stake lives in, as the delegation flow sees it. The
+ * refund fee estimate asks the flow instead of working it out again, so the
+ * two cannot drift apart when the stake moves.
+ */
+export interface DelegationSource {
+  readonly delegationOwner: string;
+}
+
 /** The subset of <c>TronResourceClient</c> the flow needs — injectable for tests. */
 export interface DelegationResourceProbe {
   estimateTransferEnergy(
@@ -605,7 +651,9 @@ export interface EnergyDelegationServiceDeps {
    * its own stake, the arrangement before the 2026-09-17 split. */
   stakeAddress?: string;
   /** Active-permission id on the stake account; ignored when there is none.
-   * Default 2 — the first id the chain assigns to an added active permission. */
+   * Default 2 — the first id the chain assigns to an added active permission.
+   * With a stake account configured, a malformed address or an id that is not
+   * an integer of at least 2 stops construction (and so the sidecar). */
   stakePermissionId?: number;
   /** SUN sent when the plan itself cannot be computed (08 §3.3 fallback). */
   fallbackAmountSun: number;
