@@ -128,6 +128,15 @@ export class FeeEstimationService {
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
   }
 
+  /**
+   * The account a refund estimate reads the delegatable stake from — the
+   * delegation flow's own answer. Read by the startup line (index.ts), where
+   * it must name the same account the flow delegates from.
+   */
+  get delegationOwner(): string {
+    return this.delegationSource.delegationOwner;
+  }
+
   async estimate(request: FeeEstimateRequest): Promise<FeeEstimateResult> {
     const contractAddress = this.tokens[request.token];
     if (!contractAddress) {

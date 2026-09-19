@@ -348,6 +348,8 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
     expect(result.delegationPlan).toBe('delegate');
     expect(result.delegationSun).toBe(7_428_000_000);
     expect(result.feeUsdt).toBe('0.00');
+    // What the startup line reports for the estimate (index.ts).
+    expect(service.delegationOwner).toBe(STAKE_ACCOUNT);
   });
 
   it('plans for the WHOLE transfer even when the owner would pay all of it — as the broadcast does', async () => {

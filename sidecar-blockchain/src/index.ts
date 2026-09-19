@@ -111,6 +111,22 @@ const feeEstimationService = new FeeEstimationService({
   tokenDecimals: config.tokenDecimals,
 });
 
+// Which account the Energy is delegated from, read back from the two services
+// that use it. An operator checks it right after a restart (DEPLOY_RUNBOOK
+// §C.2 step 10) instead of waiting for the first sweep to burn, and
+// startupWiring.test.ts pins the path from .env to both services, which no
+// unit test reaches (#325 re-validation).
+logger.info(
+  {
+    delegationOwner: energyDelegation.delegationOwner,
+    permissionId: energyDelegation.delegationPermissionId ?? null,
+    refundEstimateReadsStakeFrom: feeEstimationService.delegationOwner,
+  },
+  energyDelegation.delegationPermissionId === undefined
+    ? 'Energy delegation: the hot wallet holds its own stake (STAKE_ACCOUNT_ADDRESS unset)'
+    : 'Energy delegation: stake account, signed by the hot wallet key through an active permission',
+);
+
 // Middleware
 app.use(express.json());
 app.use(correlationMiddleware);

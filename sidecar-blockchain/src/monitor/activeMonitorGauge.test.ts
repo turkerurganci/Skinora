@@ -16,8 +16,8 @@ const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
 const TRANSACTION_ID = '22222222-2222-2222-2222-222222222222';
 // The registry refuses to arm an address whose 30-day post-cancel window has
 // already passed, so the cancellation date and "now" are pinned together.
-// Against the wall clock this date turned both registry tests red on
-// 2026-09-19 — 30 days after it — and the second one kept passing without
+// Against the wall clock this date turned the first registry test red on
+// 2026-09-19 — 30 days after it — while the second kept passing without
 // arming anything.
 const CANCELLED_AT = new Date('2026-08-20T09:00:00Z');
 const NOW = new Date('2026-08-20T10:00:00Z');

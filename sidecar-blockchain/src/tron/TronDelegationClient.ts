@@ -9,10 +9,11 @@ import { transfersTotal } from '../metrics.js';
  * <para>
  * Three primitives live here:
  * <list type="bullet">
- *   <item><c>delegateEnergy</c> — sweeper account → deposit address Energy
- *     delegation via <c>delegateresource</c>, used before deposit-sourced
- *     sweep / refund broadcasts so the deposit pays no TRX out of its own
- *     balance.</item>
+ *   <item><c>delegateEnergy</c> — Energy delegation from the account holding
+ *     the stake (the dedicated stake account, or the hot wallet while none is
+ *     configured) to a deposit address via <c>delegateresource</c>, used
+ *     before deposit-sourced sweep / refund broadcasts so the deposit pays no
+ *     TRX out of its own balance.</item>
  *   <item><c>undelegateEnergy</c> — delegation reclaim via
  *     <c>undelegateresource</c>, used after the broadcast succeeds. With
  *     <c>lock=false</c> (the only mode we use), reclaim is instant.</item>

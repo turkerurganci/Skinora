@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import TronWeb from 'tronweb';
 import { EnergyDelegationService } from './EnergyDelegationService.js';
 import { SimulationRevertedError } from '../errors/SidecarError.js';
 
@@ -1033,12 +1034,32 @@ describe('configuration', () => {
       });
     });
 
+    /**
+     * #325 re-validation. The same account in hex passes TronWeb.isAddress,
+     * but the flow's reads send visible:true and the node answers a hex
+     * address with HTTP 200 and an Error body (Nile, 2026-09-19) — the stake
+     * reads as 0 and every transfer burns without a word.
+     */
+    it('refuses the stake account in hex, which TronWeb itself accepts', () => {
+      const hex = TronWeb.address.toHex(STAKE_ACCOUNT);
+      expect(TronWeb.isAddress(hex)).toBe(true);
+
+      expect(constructionError(hex, 2)).toMatchObject({
+        code: 'STAKE_ACCOUNT_MISCONFIGURED',
+        message: expect.stringContaining('STAKE_ACCOUNT_ADDRESS'),
+      });
+    });
+
     it('accepts the first active permission id', () => {
-      expect(construct(STAKE_ACCOUNT, 2).delegationOwner).toBe(STAKE_ACCOUNT);
+      const service = construct(STAKE_ACCOUNT, 2);
+      expect(service.delegationOwner).toBe(STAKE_ACCOUNT);
+      expect(service.delegationPermissionId).toBe(2);
     });
 
     it('ignores the id while no stake account is configured', () => {
-      expect(construct(undefined, Number.NaN).delegationOwner).toBe(SWEEPER);
+      const service = construct(undefined, Number.NaN);
+      expect(service.delegationOwner).toBe(SWEEPER);
+      expect(service.delegationPermissionId).toBeUndefined();
     });
   });
 

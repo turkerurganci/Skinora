@@ -147,6 +147,16 @@ export class EnergyDelegationService implements DelegationSource {
     return this.stakeAddress || this.sweeperAddress;
   }
 
+  /**
+   * Active-permission id the delegation and the reclaim are signed against;
+   * undefined while no stake account is set — the hot wallet then signs for
+   * itself. Read by the startup line (index.ts) so the wiring can be checked
+   * from the running process.
+   */
+  get delegationPermissionId(): number | undefined {
+    return this.stakePermissionId;
+  }
+
   async withDelegation<T extends { txHash: string }>(
     transfer: DelegatedTransfer,
     action: () => Promise<T>,
@@ -597,11 +607,20 @@ function contextFields(context: DelegationContext) {
  * active permissions start at 2, and the hot key is only ever listed in an
  * active one. A value outside that — or a stake address that is not an
  * address — can only be rejected on-chain, one transfer at a time.
+ *
+ * <para>
+ * Base58 only. <c>TronWeb.isAddress</c> also accepts the hex form (41…), but
+ * every read the flow makes sends <c>visible: true</c>, and the node answers a
+ * hex address there with HTTP 200 and an <c>Error</c> body instead of a
+ * number — measured on Nile 2026-09-19 for <c>getcandelegatedmaxsize</c>. The
+ * stake would read as 0 and every transfer would burn, the silent shape this
+ * check exists to stop (#325 re-validation).
+ * </para>
  */
 function assertStakeConfiguration(address: string, permissionId: number): void {
-  if (!TronWeb.isAddress(address)) {
+  if (!address.startsWith('T') || !TronWeb.isAddress(address)) {
     throw new SidecarError(
-      `STAKE_ACCOUNT_ADDRESS is not a valid Tron address: ${address}`,
+      `STAKE_ACCOUNT_ADDRESS is not a base58 Tron address (T…): ${address}`,
       'STAKE_ACCOUNT_MISCONFIGURED',
       false,
     );
@@ -652,8 +671,9 @@ export interface EnergyDelegationServiceDeps {
   stakeAddress?: string;
   /** Active-permission id on the stake account; ignored when there is none.
    * Default 2 — the first id the chain assigns to an added active permission.
-   * With a stake account configured, a malformed address or an id that is not
-   * an integer of at least 2 stops construction (and so the sidecar). */
+   * With a stake account configured, an address that is not base58 (hex
+   * included) or an id that is not an integer of at least 2 stops
+   * construction (and so the sidecar). */
   stakePermissionId?: number;
   /** SUN sent when the plan itself cannot be computed (08 §3.3 fallback). */
   fallbackAmountSun: number;
