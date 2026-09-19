@@ -14,6 +14,13 @@ const ACTIVE_ADDRESS = 'TActiveDepositAddrFakeFakeFakeFake1';
 const POST_CANCEL_ADDRESS = 'TPostCancelDepositAddrFakeFakeFake1';
 const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
 const TRANSACTION_ID = '22222222-2222-2222-2222-222222222222';
+// The registry refuses to arm an address whose 30-day post-cancel window has
+// already passed, so the cancellation date and "now" are pinned together.
+// Against the wall clock this date turned both registry tests red on
+// 2026-09-19 — 30 days after it — and the second one kept passing without
+// arming anything.
+const CANCELLED_AT = new Date('2026-08-20T09:00:00Z');
+const NOW = new Date('2026-08-20T10:00:00Z');
 
 // Neither start(), stop() nor shutdown() touches the TronGrid client — only
 // tick() does, and these tests never tick.
@@ -45,6 +52,7 @@ function buildPostCancelRegistry(): PostCancelMonitorRegistry {
   const deps: PostCancelMonitorRegistryDeps = {
     client: UNUSED_CLIENT,
     allowlist: { USDT, USDC },
+    clock: () => NOW,
     tickIntervalMs: 3_600_000,
     pageLimit: 20,
     webhookEndpoints: {
@@ -117,7 +125,7 @@ describe('activeMonitorGauge', () => {
         transactionId: TRANSACTION_ID,
         expectedContract: USDT,
         expectedSymbol: 'USDT',
-        cancelledAt: new Date('2026-08-20T09:00:00Z'),
+        cancelledAt: CANCELLED_AT,
       });
 
       // Before the fix this read 1: the post-cancel registry's `.set(1)`
@@ -147,8 +155,10 @@ describe('activeMonitorGauge', () => {
         transactionId: TRANSACTION_ID,
         expectedContract: USDT,
         expectedSymbol: 'USDT',
-        cancelledAt: new Date('2026-08-20T09:00:00Z'),
+        cancelledAt: CANCELLED_AT,
       });
+      // Both armed — otherwise the 1 below holds without testing anything.
+      expect(await gaugeValue()).toBe(2);
 
       await postCancel.shutdown();
 
