@@ -82,7 +82,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `HOT_WALLET_ADDRESS` | blockchain sidecar **+ backend** | Platformun sıcak cüzdan adresi. Sidecar sweep hedefini bununla karşılaştırır ve başka adrese imzalamaz; backend aynı değeri `IPlatformWalletAddressProvider` üzerinden okur (sweep `ToAddress`, reconciliation kapsamı, hot wallet monitörü). **Tek kaynak `.env`** — ikisi ayrışırsa sweep `DESTINATION_NOT_ALLOWED` ile durur. Değiştirmek iki servisin de yeniden başlatılmasını gerektirir (05 §3.3, owner kararı 2026-09-16) |
 | `COLD_WALLET_ADDRESS` | blockchain sidecar **+ backend** | Soğuk cüzdan adresi, aynı sabitleme kuralı. Boş bırakılırsa hot→cold konsolidasyon **kapalıdır** (AD20 `COLD_WALLET_NOT_CONFIGURED`) ve reconciliation'ın cold kapsamı atlanır |
 | `MAX_SINGLE_TRANSFER_USDT` / `MAX_DAILY_OUTFLOW_USDT` | blockchain sidecar | Tek gönderim ve sıcak cüzdanın 24 saatlik çıkış tavanı (ondalık USDT, 08 §3.3a). **Fail-closed: boş ya da bozuksa payout ve iade yapılmaz.** Boyutlandırma §C.3 |
-| `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Kurulum ve bant boyutlandırması §C.2 |
+| `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Bozuk adres ya da 2'den küçük / tam sayı olmayan izin kimliği sidecar'ı açılışta durdurur (`STAKE_ACCOUNT_MISCONFIGURED`). Kurulum, ödeme payının sıcak cüzdana kalıcı devretilmesi ve bant boyutlandırması §C.2 |
 | `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation. **Bugün düz env değişkeni** (`docker inspect` ile görünür); Docker secret'a taşınması ve çevrimdışı yedek prosedürü owner kararı 2026-09-17 ile ayrı bir tura bırakıldı (05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
 | `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10) |
@@ -175,12 +175,15 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
      -d '{"address":"<HOT_WALLET_ADDRESS>","visible":true}'
    # oran = TotalEnergyLimit / TotalEnergyWeight   (2026-09-16: ≈ 9,52)
    ```
-3. Kilit ≈ `N × 194.570 ÷ oran` TRX. 194.570 = sweep (64.285) + alıcısı token'ı ilk kez alan bir payout (130.285); satıcıların çoğu USDT tutuyorsa alt sınır `N × 128.570 ÷ oran`. Örnek, `N = 5`, oran 9,52: `5 × 194.570 ÷ 9,52 ≈ 102.200 TRX`.
+3. Kilit iki paydan oluşur (proje sahibi kararı 2026-09-18, kalıcı devretme):
+   - **Ödeme payı** `P = N × 130.285 ÷ oran` TRX. Payout'u sıcak cüzdan kendisi gönderir ve enerjiyi **kendi havuzundan** kullanır; bu pay adım 8'de sıcak cüzdana kalıcı devredilir. 130.285 = alıcısı token'ı ilk kez alan bir payout (üst sınır); satıcıların çoğu USDT tutuyorsa alt sınır `N × 64.285 ÷ oran`.
+   - **Depozit payı** `D = (N + 0,1) × 64.285 ÷ oran` TRX. Sweep ve depozitten yapılan iade için sidecar her transferde anlık devreder, transfer bitince geri alır. Her devretme %10 pay içerir; gönderim işi transferleri sırayla yaptığı için kilitte aynı anda yalnız bir devretmenin payı durur — `+ 0,1` odur. Depozitten iade oranı yüksekse `N`'i o kadar artır.
+   - Kilit = `P + D`. Örnek, `N = 5`, oran 9,52: `P = 651.425 ÷ 9,52 ≈ 68.430`, `D = 327.854 ÷ 9,52 ≈ 34.440`, kilit ≈ **102.870 TRX**.
 
 **Kilit hesabını kur (hesap başına bir kez):**
 
-4. **Yeni bir Tron hesabı üret ve owner anahtarını çevrimdışı sakla.** Bu anahtar hiçbir sunucuya, hiçbir konteynere, hiçbir `.env` dosyasına girmez — yalnız kilidi çözmek ya da izni değiştirmek gerektiğinde elle kullanılır. Hesabı 1 TRX göndererek etkinleştir.
-5. **Sıcak cüzdanın anahtarına yalnız devretme yetkisi veren active permission ekle.** İşlemi **düğüm API'siyle** kur — TronWeb 5.3.5 ile kurma: `updateAccountPermissions` işlemi zincirde `CONTRACT_VALIDATE_ERROR No contract!` alıyor ve `permissionId` seçeneğini sessizce düşürüyor (2026-09-17'de ölçüldü; iki farklı izin aynı txid'i üretti, yani "reddedilmeli" testleri izin hiç kurulmadığı hâlde geçmiş göründü).
+4. **Yeni bir Tron hesabı üret ve owner anahtarını çevrimdışı sakla.** Bu anahtar hiçbir sunucuya, hiçbir konteynere, hiçbir `.env` dosyasına girmez — yalnız kilidi çözmek ya da izni değiştirmek gerektiğinde elle kullanılır. **Hesabı fonla:** kilit (`P + D`, adım 3) + **100 TRX izin güncelleme ücreti** (adım 5 — `getUpdateAccountPermissionFee` = 100.000.000 SUN, mainnet ve Nile'da ölçüldü) + bant kilidi (aşağıda "Bant genişliği") + birkaç TRX serbest tampon. İlk gönderim hesabı açar; açma ücretini gönderen öder.
+5. **Sıcak cüzdanın anahtarına yalnız devretme yetkisi veren active permission ekle.** Bu işlem kilit hesabından **100 TRX** alır — bakiye yetmezse zincir reddeder. İşlemi **düğüm API'siyle** kur — TronWeb 5.3.5 ile kurma: `updateAccountPermissions` işlemi zincirde `CONTRACT_VALIDATE_ERROR No contract!` alıyor ve `permissionId` seçeneğini sessizce düşürüyor (2026-09-17'de ölçüldü; iki farklı izin aynı txid'i üretti, yani "reddedilmeli" testleri izin hiç kurulmadığı hâlde geçmiş göründü).
    ```bash
    # owner anahtarıyla imzalanır (çevrimdışı makinede), sonra broadcasthex ile yayınlanır
    curl -s -X POST https://api.trongrid.io/wallet/accountpermissionupdate \
@@ -197,16 +200,26 @@ Fraud PRICE_DEVIATION kuralının kod yolu tamdır (WP4a: `IMarketPriceProvider`
    # operations = yalnız DelegateResource + UnDelegateResource. Başka hiçbir bit açık değil.
    ```
 6. **İzni doğrula — kabul ve ret ayrı ayrı görülmeli.** `getaccount` çıktısında `active_permission` içinde `id: 2` ve yukarıdaki `operations` dizisi görünmeli. Ardından sıcak anahtarla bir **devretme** yap (kabul edilmeli) ve bir **TRX transferi** dene (`SIGERROR "... is not contained of permission"` almalı). Retleri de koşmadan izin kurulmuş sayılmaz.
-7. **Kilit miktarını bu hesapta** ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). Kilit **14 gün** (mainnet) beklemeden çözülemez.
-8. Doğrula — devredilebilir miktar kilide yakın dönmeli:
+7. **Kilit miktarını (`P + D`) bu hesapta** ENERGY için kilitle (Stake 2.0 `freezebalancev2`, kaynak `ENERGY`). Kilit **14 gün** (mainnet) beklemeden çözülemez.
+8. **Ödeme payını sıcak cüzdana kalıcı devret** (proje sahibi kararı 2026-09-18). Kilit bu hesaba taşınınca sıcak cüzdanın kendi havuzu boşalır ve her payout 6,43–13,03 TRX yakar; bu adım o havuzu geri doldurur. Bir kez ve **kilitsiz** (`lock: false`) devret — devretme sürekli durur. Sidecar ona dokunmaz: yalnız depozitlere yaptığı devretmeleri geri alır.
+   ```bash
+   # P_SUN = P × 1.000.000 (TRX → SUN). İmza: kurulum oturumunda owner anahtarıyla (çevrimdışı), ya da
+   # gövdeye "Permission_id": 2 eklenip sıcak anahtarla — izin devretmeyi kapsar. Sonra broadcasttransaction.
+   curl -s -X POST https://api.trongrid.io/wallet/delegateresource \
+     -H 'Content-Type: application/json' \
+     -d '{"owner_address":"<STAKE_ACCOUNT_ADDRESS>","receiver_address":"<HOT_WALLET_ADDRESS>",
+          "balance":<P_SUN>,"resource":"ENERGY","lock":false,"visible":true}'
+   ```
+   Doğrula: sıcak cüzdanın `getaccountresource` çıktısında `EnergyLimit` ≈ `P × oran` olmalı. Devredilen enerji alıcının kendi `EnergyLimit`'inde görünür (Nile'da ölçüldü 2026-09-18: 1 TRX için 7.370 → 7.444); payout ve payout ücret tahmini bu havuzu okur.
+9. Doğrula — devredilebilir miktar **depozit payına** (`D`) yakın dönmeli; kalıcı devretme bu değerden zaten düşülür:
    ```bash
    curl -s -X POST https://api.trongrid.io/wallet/getcandelegatedmaxsize \
      -H 'Content-Type: application/json' \
      -d '{"owner_address":"<STAKE_ACCOUNT_ADDRESS>","type":1,"visible":true}'
    # {"max_size": <SUN>}   — boş gövde {} = devredilebilir hiçbir şey yok
    ```
-9. `.env`'e **yalnız adresi** yaz: `STAKE_ACCOUNT_ADDRESS=<...>` (ve izin kimliği 2 değilse `STAKE_ACCOUNT_PERMISSION_ID`). Blockchain sidecar'ı yeniden başlat. Boş bırakılırsa sıcak cüzdan kendi kilidini kullanır — eski düzen, hiçbir şey kırılmaz.
-10. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed in a block` geldiğini gör. `Energy delegation broadcast` satırındaki `owner` alanı **kilit hesabının** adresi olmalı; sıcak cüzdanınki görünüyorsa `STAKE_ACCOUNT_ADDRESS` okunmamıştır. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir. Plan transferin **tamamı** için yapılır (kontrat sahibinin payı düşülmez) ve devretme %10 pay içerir: mainnet'te bir sweep için o an ~7.430 TRX devredilebilir olmalıdır (64.285 ÷ 9,52 × 1,1).
+10. `.env`'e **yalnız adresi** yaz: `STAKE_ACCOUNT_ADDRESS=<...>` (ve izin kimliği 2 değilse `STAKE_ACCOUNT_PERMISSION_ID`). Blockchain sidecar'ı yeniden başlat — iki değişken yalnız o servise gider. Adres geçersizse ya da izin kimliği 2'den küçük / tam sayı değilse sidecar **açılmaz** ve sebebi logda yazar (`STAKE_ACCOUNT_MISCONFIGURED`). Boş bırakılırsa sıcak cüzdan kendi kilidini kullanır — eski düzen: o durumda kilidi (`P + D`) sıcak cüzdanın kendisinde yap, kalıcı devretme gerekmez.
+11. İlk sweep'ten sonra sidecar logunda `Deposit transfer resource plan` satırının `kind: "delegate"` olduğunu, ardından `Energy delegation confirmed in a block` geldiğini gör. `Energy delegation broadcast` satırındaki `owner` alanı **kilit hesabının** adresi olmalı; sıcak cüzdanınki görünüyorsa `STAKE_ACCOUNT_ADDRESS` sidecar'a ulaşmamıştır. `kind: "burn"` + `reason: "insufficient-stake"` ise kilit o transfer için yetmemiştir. Plan transferin **tamamı** için yapılır (kontrat sahibinin payı düşülmez) ve devretme %10 pay içerir: mainnet'te bir sweep için o an ~7.430 TRX devredilebilir olmalıdır (64.285 ÷ 9,52 × 1,1). İlk payout'tan sonra makbuza bak (`gettransactioninfobyid`): `receipt.energy_usage` > 0 ve `receipt.energy_fee` 0 olmalı — enerji sıcak cüzdanın havuzundan geldi, TRX yakılmadı. `energy_fee` > 0 ise adım 8 yapılmamış ya da yetmemiştir.
 
 **Transfer çağrısının süresi (backend).** Depozitten yapılan her gönderimde sidecar her adımın bir bloğa girmesini bekler (08 §3.3 "Blok onayı"); bir çağrı olağan durumda ~10–25 sn sürer (Nile ölçümü, hesap açma + yakma: 11,6 sn). Backend bu çağrıya `BlockchainSidecar__TransferTimeoutSeconds` kadar (varsayılan **300**) bekler; sidecar çağrının 150. saniyesinden sonra transfer yayınlamaz. **300'ün altına indirme:** backend sidecar'dan önce vazgeçerse yeniden dener, ilk çağrının yayınladığı transfer kaydedilmez. Logda `TRANSFER_WINDOW_ELAPSED` görmek, zincir okumalarının ya da blokların yavaşladığını gösterir — transfer yayınlanmamıştır, backend bir sonraki denemede baştan başlar.
 
@@ -224,9 +237,9 @@ curl -s -X POST https://api.trongrid.io/wallet/getaccountresource \
 # freeNetUsed / freeNetLimit = günün ücretsiz kotası
 ```
 
-Kilit hesabında yine de küçük bir serbest TRX tamponu bırak: bant kilidi yetmezse işlemler yakmaya düşer ve bakiye biterse **devretme başarısız olur**, akış pahalı yakma yoluna geçer. Sıcak cüzdanın kendi bandı ayrı bir kalemdir — payout ve depozite gönderilen TRX oradan çıkar.
+Kilit hesabında yine de küçük bir serbest TRX tamponu bırak: bant kilidi yetmezse işlemler yakmaya düşer ve bakiye biterse **devretme başarısız olur**, akış pahalı yakma yoluna geçer. **Bu bakiyeyi izleyen bir alarm henüz yok** (backlog `StakeAccountUnmonitored`) — launch'a kadar haftada bir elle bak (`getaccount` → `balance`). Sıcak cüzdanın kendi bandı ayrı bir kalemdir — payout ve depozite gönderilen TRX oradan çıkar.
 
-**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir.
+**Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir. Kilidi büyütmek owner anahtarını ister (adım 7). Kalıcı devretmeyi büyütmek ya da küçültmek (adım 8) owner anahtarı olmadan da yapılır: sıcak anahtarın izni devretme ve geri almayı kapsar (`Permission_id: 2`).
 
 ---
 
