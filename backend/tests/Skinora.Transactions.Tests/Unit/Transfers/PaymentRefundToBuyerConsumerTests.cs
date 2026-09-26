@@ -121,8 +121,9 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
         Assert.Equal(BuyerRefundAddress, call.To);
         Assert.Equal(102m, call.Amount);
         Assert.Equal(StablecoinType.USDT, call.Token);
-        // No PaymentAddress row seeded → the consumer passes null and the
-        // sidecar defaults to the hot wallet as sender.
+        // No PaymentAddress row seeded → the consumer passes null; what a
+        // missing sender costs is the resolver's decision (static fallback —
+        // ChargedGasFeeResolverTests).
         Assert.Null(call.From);
     }
 

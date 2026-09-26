@@ -42,7 +42,8 @@ export function estimateFeeHandler(service: FeeEstimationService) {
     ) {
       res.status(400).json({
         error: 'INVALID_ESTIMATE_REQUEST',
-        message: 'Fields {toAddress, amount, token=USDT|USDC} are required; fromAddress optional.',
+        message:
+          'Fields {toAddress, amount, token=USDT|USDC} are required; fromAddress, when sent, must be a non-empty string — omit it (do not send null) to price a hot-wallet transfer.',
       });
       return;
     }

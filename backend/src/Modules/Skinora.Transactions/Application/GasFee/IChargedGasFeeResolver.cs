@@ -13,7 +13,11 @@ namespace Skinora.Transactions.Application.GasFee;
 /// </summary>
 public interface IChargedGasFeeResolver
 {
-    /// <summary>Fee charged on a refund-family transfer (deposit → recipient).</summary>
+    /// <summary>
+    /// Fee charged on a refund-family transfer (deposit → recipient). Without a
+    /// <paramref name="fromDepositAddress"/> there is no sender to price, so no
+    /// estimate is asked for and the static refund setting is charged.
+    /// </summary>
     Task<ResolvedGasFee> ResolveRefundFeeAsync(
         string? fromDepositAddress,
         string toAddress,

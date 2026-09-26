@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import { estimateFeeHandler } from './feeHandlers.js';
@@ -123,5 +125,69 @@ describe('estimateFeeHandler', () => {
     await handler(buildRequest({ toAddress: 'TBuyer', amount: '1.0', token: 'USDT' }), res);
 
     expect(captured.statusCode).toBe(500);
+  });
+});
+
+/**
+ * The bodies the backend actually sends, as files both sides read
+ * (PayoutGasEstimateAlwaysFallsBack). The backend's contract test
+ * (`BlockchainSidecarEstimateFeeContractTests`) proves it emits exactly these;
+ * this block proves the handler accepts them. Until the 2026-09-23 rehearsal
+ * each side was tested only against its own idea of the other, and the payout
+ * body — sent with `"fromAddress": null` — was rejected on every call.
+ */
+const CONTRACT_DIR = resolve(__dirname, '../../contracts/estimate-fee');
+
+function loadExample(name: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(resolve(CONTRACT_DIR, name), 'utf8')) as Record<string, unknown>;
+}
+
+describe('estimateFeeHandler — the backend request contract', () => {
+  it('accepts the payout body and prices it from the hot wallet', async () => {
+    const body = loadExample('payout.request.json');
+    const estimate = vi.fn(async () => SAMPLE_RESULT);
+    const handler = estimateFeeHandler({ estimate } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest(body), res);
+
+    expect(captured.statusCode).toBe(200);
+    expect(estimate).toHaveBeenCalledWith({
+      fromAddress: undefined,
+      toAddress: body.toAddress,
+      amount: body.amount,
+      token: body.token,
+      correlationId: 'corr-1',
+    });
+  });
+
+  it('accepts the refund body and prices it from its deposit address', async () => {
+    const body = loadExample('refund.request.json');
+    const estimate = vi.fn(async () => SAMPLE_RESULT);
+    const handler = estimateFeeHandler({ estimate } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest(body), res);
+
+    expect(captured.statusCode).toBe(200);
+    expect(estimate).toHaveBeenCalledWith({
+      fromAddress: body.fromAddress,
+      toAddress: body.toAddress,
+      amount: body.amount,
+      token: body.token,
+      correlationId: 'corr-1',
+    });
+  });
+
+  it('rejects the payout body with an explicit null sender — why the backend omits the key', async () => {
+    const estimate = vi.fn();
+    const handler = estimateFeeHandler({ estimate } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ ...loadExample('payout.request.json'), fromAddress: null }), res);
+
+    expect(captured.statusCode).toBe(400);
+    expect((captured.body as { error: string }).error).toBe('INVALID_ESTIMATE_REQUEST');
+    expect(estimate).not.toHaveBeenCalled();
   });
 });
