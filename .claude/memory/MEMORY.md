@@ -5,8 +5,20 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-19 — #325 kilit hesabı: bağımsız yeniden doğrulama ✓ PASS, 5 bulgu doğrulamada kapatıldı; backlog 15 aktif / 135 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-23 — CANLI PROVA uçtan uca koşuldu, happy path `COMPLETED`; backlog 18 aktif / 136 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **CANLI PROVA (2026-09-23, dal `prova/canli-2026-09-20`) — happy path uçtan uca koşuldu, işlem `COMPLETED`.** Post-MVP tablosunun son açık satırı (§G adım 10) kapandı; `T133b-LiveRehearsalUnrun` ✅. Backlog **18 aktif / 136 çözülmüş** (taban 15/135 + 4 yeni − 1 kapanan), **🔴 YOK**. Rapor: `Docs/TEST_REPORTS/REHEARSAL_2026-09-23.md`.
+>
+> **İlk kez ölçülen beş bacak.** (1) **Gerçek Steam girişi** — §G.4 kontrol 7 bugüne kadar hiç koşulmamıştı; koşmak zorunlu çıktı çünkü `SteamAccountCreatedAt` yalnız girişte doluyor (`UserProvisioningService.cs:39`) ve boşken uygunluk kapısı `STEAM_UNAVAILABLE` ile fail-closed davranıyor. **JWT enjeksiyonu bu kapıyı açamaz** — ölçüm/okuma için kullanılabilir, prova için değil. (2) **Teslimat** — gerçek Steam takası `9382179489`, satıcı teklifi gönderdi (mobil onay), alıcı kabul etti, *Trade Accepted*; item 7 gün takas kilitli (CS2 kuralı). (3) **Mutabakat** — `SETTLEMENT_NO_DELIVERY_REFERENCE` ile eskale etti (alıcı envanteri gizli → baseline hiç doğmamış). (4) **AD32** — `clear-settlement` runbook §I.5 adım 3'ü birebir çalıştırdı, audit `SETTLEMENT_CLEARED_ADMIN`. (5) **Süpürme + payout** — süpürme enerji planı `burn` (`insufficient-stake`; Nile kilidi 18 TRX, gereken ≈ 3.100), yakma takviyesi 3,26 TRX; payout süpürme `CONFIRMED` olduktan **sonra** kuyruğa girdi (#324 kuralı canlıda doğrulandı) ve 9,52 USDT gönderildi.
+>
+> **Muhasebe birebir kapandı:** alıcı/satıcı cüzdanı −0,68 USDT, sıcak cüzdan +0,68 = komisyon 0,20 + gas kesintisi 0,48. Payout hesabı 02 §4.7: eşik = komisyon × 0,10 = 0,02; kesinti = 0,50 − 0,02 = 0,48.
+>
+> **Bulgular.** 🟡 **`PayoutGasEstimateAlwaysFallsBack`** — payout gas tahmini **hiç çalışmıyor**: `ChargedGasFeeResolver.cs:41` isteği `FromAddress: null` ile kuruyor, sidecar `null`'ı reddediyor (`feeHandlers.ts:41` yalnız `undefined`'ı hoş görüyor) → **400** → sessizce sabit ayara düşüyor. **Fark ölçümüyle kanıtlandı:** alan olmadan aynı istek doğrulamayı geçiyor. Görünmemesinin sebebi iade yolunun aynı çözücüyü `fromDepositAddress` **dolu** çağırması — #315'in tahmini yalnız orada çalışıyor. İkinci katman: istek düzelse bile bu ortamda `TRX_PRICE_UNAVAILABLE` (Binance + CoinGecko erişilemiyor), yani düzeltme fiyat kaynağına çıkabilen ortamda doğrulanmalı. ⚪ `PrivateInventoryForcesManualPayout` — gizli envanterli alıcıda payout yalnız admin kararıyla çıkıyor ve ürün bu **sonucu** söylemiyor. ⚪ `AdminCanClearOwnSettlement` — AD32 yalnız yetkiye bakıyor, tarafa bakmıyor; provada mutabakatı kapatan hesap işlemin satıcısıydı. ⚪ `FrontendBuildContextUnfiltered` — repoda `.dockerignore` yok, frontend bağlamı 600 MB (239 sn aktarım).
+>
+> **Ortam dersleri.** (1) `.env` şablonun 12 anahtarını taşımıyordu (#319/#324/#325); **gönderim tavanları fail-closed** — boş kalsalardı sidecar hiçbir transferi imzalamazdı ve prova ödeme bacağında sessizce dururdu. Prova öncesi `comm -23` ile anahtar farkı alınmalı. (2) Docker 2026-09-17'den beri çökük duruyordu: C: diskinde 2,5 GB kalmıştı (Temp'te 7 günden eski 254 öğe = 18,6 GB + Docker derleme önbelleği temizlendi; Temp'in çoğu SYSTEM sahipli, yönetici yetkisi gerekti). (3) Şema 41 → 49, `SystemSettings` 64. (4) #325'in kablosu üretim ortamında ilk kez doğrulandı: sidecar açılış satırı `delegationOwner=TVqvXQ…, permissionId=2`.
+>
+> **⚠️ Hâlâ geri alınacak:** `auth.min_steam_account_age_days` = 1 (üretim 30); alıcı hesabı 2026-09-23'te 30 günü dolduruyor.
 
 > **#325 bağımsız yeniden doğrulaması (2026-09-19, doğrulama chat'i) — ✓ PASS, 5 bulgu proje sahibi kararıyla ("hepsini burada kapat") doğrulamada kapatıldı.** Dal `feat/wallet-stake-account`, doğrulanan HEAD `13c57f9`. Backlog **15 aktif / 135 çözülmüş, 🔴 YOK** (dosyanın kendi awk'iyle; sayı değişmedi).
 >
@@ -563,7 +575,7 @@
 - [feedback_commit_infra_changes_before_task.md](feedback_commit_infra_changes_before_task.md) — Infra/meta degisiklikleri working tree'de birakma, task basindan once commit+PR akisini proaktif baslat
 - [feedback_claude_watches_ci_always.md](feedback_claude_watches_ci_always.md) — Her actigim PR'in CI'sini ben izlerim — task/chore/infra/docs ayrimi yok, "sen mi izleyeceksin" sorusu yasak
 - [feedback_clean_worktree_before_work.md](feedback_clean_worktree_before_work.md) — Session basinda dirty working tree'yi gormezden gelme, commit/stash/discard kararini kullanicidan al
-- [feedback_verify_status_before_quoting.md](feedback_verify_status_before_quoting.md) — "Sirada ne var / nerede kaldik" sorularinda MEMORY snapshot'a guvenme, IMPLEMENTATION_STATUS.md'yi oku
+- [feedback_verify_status_before_quoting.md](feedback_verify_status_before_quoting.md) — "Sirada ne var / nerede kaldik" sorularinda MEMORY snapshot'a guvenme, IMPLEMENTATION_STATUS.md'yi oku; cevap EN FAZLA 3 kisa satir (neredeyiz + siradaki adim + tek soru), detay sorulursa
 - [feedback_no_edit_permission_asks.md](feedback_no_edit_permission_asks.md) — Onay verildikten sonra edit/commit/push/PR adimlari icin ara onay isteme, tek akista uygula
 - [feedback_respond_in_turkish.md](feedback_respond_in_turkish.md) — Sohbet/aciklama/rapor iletisimi Turkce; kod ve kod yorumlari Ingilizce kalir
 - [feedback_differential_before_causal_claim.md](feedback_differential_before_causal_claim.md) — Belirtiyi nedene baglamadan once ayirt edici olcum yap; dis bagimlilik arizasinda once bagimliliga dogrudan sor; ayni probu tekrarlamak tutarlilik verir, dogruluk vermez (UI turu dersi)
