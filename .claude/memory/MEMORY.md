@@ -5,8 +5,20 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-23 — CANLI PROVA uçtan uca koşuldu, happy path `COMPLETED`; backlog 18 aktif / 136 çözülmüş, 🔴 YOK)
+## Current Status (2026-09-30 — #327 payout gas tahmini: yapım tamam, bağımsız doğrulama bekliyor; #326 + #328 merge edildi; backlog 18 aktif / 137 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **Payout gas tahmini düzeltmesi (yapım 2026-09-26, kayıt 2026-09-30; dal `fix/payout-gas-estimate-sender`, PR [#327](https://github.com/turkerurganci/Skinora/pull/327)) — bağımsız doğrulama bekliyor, merge YOK.** Provanın 🟡 `PayoutGasEstimateAlwaysFallsBack` satırı kapandı. Backlog **18 aktif / 137 çözülmüş**, 🔴 YOK (taban 18/136 → 1 ✅ + 1 yeni ⚪ `GasFeeFallbackUnmonitored`).
+>
+> **Kusur.** Backend payout tahmin isteğini `"fromAddress": null` ile yazıyordu; sidecar alanı yalnız **yoksa** ya da dolu string ise kabul ediyor, `null`'a `400 INVALID_ESTIMATE_REQUEST` dönüyordu → #315'ten beri her payout sessizce sabit ayara düştü (provada 0,50 → kesinti 0,48). **Neden görünmedi:** iki tarafın testi kendi varsayımına karşı koşuyordu — backend testi yalnız dolu gönderenle (iade şekli) gövde üretti, sidecar testi elle yazılmış isteklerle koştu; kimse diğerinin baytlarını görmedi. İade yolu hep dolu depozit adresi taşıdığı için orada da çıkmadı.
+>
+> **Düzeltme.** (1) `WhenWritingNull` — alan yazılmıyor, sidecar yokluğu sıcak cüzdan diye okuyor (payout'un gerçek göndereni). (2) Depozit adresi olmayan iade tahmin istemiyor, sabit iade ayarı kesiliyor — (1) tek başına bu yolu sessizce sıcak cüzdanı fiyatlamaya çevirirdi, sıcak cüzdanın devredilmiş enerjisi yüzünden tahmin düşük çıkardı. (3) Sözleşme dosyaları `sidecar-blockchain/contracts/estimate-fee/{payout,refund}.request.json`: backend gerçek çözücü + tahminciyle bu gövdeleri birebir üretiyor (`JsonNode.DeepEquals`), sidecar handler'ı aynı dosyaları kabul ediyor; `null`'ın reddi sidecar'da pinli. (4) Sidecar'ın `{error, message}` zarfı log'a yazılıyor — `INVALID_ESTIMATE_REQUEST` ile `TRX_PRICE_UNAVAILABLE` ayrışıyor. 08 §3.1a istek sözleşmesi paragrafı eklendi.
+>
+> **Ölçüm.** 13/13 bozma (backend 10 + sidecar 3; S3 iki tarafı birden kırıyor) · Transactions 650/650 · sidecar 362/362 · canlı Nile (derlenmiş sidecar, kur sabit 0,336 — Binance/CoinGecko bu ağdan erişilemiyor): eski gövde 400 (zincire gitmiyor), alan yokken 200 (`energyRequired` 14.650) · dal CI `36260061174` ✓ (HEAD `0f4f728`). **Açık kalan:** gerçek kur kaynağıyla uçtan uca tahmin üretimde görülmeli; sürekli fallback'i sayan bir şey yok → ⚪ `GasFeeFallbackUnmonitored` (proje sahibi onayı 2026-09-26; `GasFeeSource`'u üç çağıranın hiçbiri okumuyor, 2026-09-30'da ölçüldü).
+>
+> **Ders ([[feedback_vary_fixture_against_fallback]] yedinci katman):** süreç sınırını (JSON) geçen bir değerde iki tarafın testi **aynı örnek dosyaya** bağlanır; her taraf kendi elle yazdığı örneğe karşı test edilirse sözleşme kayması iki tarafta da yeşil kalır.
+>
+> **Kayıt sırası.** Backlog satırı #326'da açıldığı için kayıt commit'i #326 birleşince eklendi: dal `origin/main` ile **birleştirildi** (merge commit; squash'ta düzleşir — rebase yapılmadı ki PR'daki commit kimlikleri korunsun). Aynı gün #328 (hafıza: "nerede kaldık" cevabı en fazla 3 satır, [[feedback_verify_status_before_quoting]]) ve #326 squash merge edildi; main'de `ca79234` CI `36768820621` ✓ + Docker Publish `36768820535` ✓. `02964ca`'nın CI'ı `cancel-in-progress` ile iptal oldu (sonraki merge onu durdurdu) — kırılma değil, doğrulayıcı "son 3 main run" kontrolünde bunu FAIL saymamalı.
 
 > **CANLI PROVA (2026-09-23, dal `prova/canli-2026-09-20`) — happy path uçtan uca koşuldu, işlem `COMPLETED`.** Post-MVP tablosunun son açık satırı (§G adım 10) kapandı; `T133b-LiveRehearsalUnrun` ✅. Backlog **18 aktif / 136 çözülmüş** (taban 15/135 + 4 yeni − 1 kapanan), **🔴 YOK**. Rapor: `Docs/TEST_REPORTS/REHEARSAL_2026-09-23.md`.
 >
