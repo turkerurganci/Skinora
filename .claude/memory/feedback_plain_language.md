@@ -21,6 +21,8 @@ Bu kullanıcıya yazarken **sade dil** kullanılır. Uzun, yoğun teknik anlatı
 
 **Ek kural — soru tipine göre uzunluk.** *"X ne işe yarıyor / neden gerekli"* türü bir soru **2-3 kısa cümle** ile cevaplanır: dosya/satır bağlantısı yok, tablo yok, kod adı ancak zorunluysa. Kod dayanağı yalnız **istenirse** ya da bir iddia tartışmalıysa eklenir. Ölçüt basit: kullanıcı bir **kavramı** sorduysa kavramı anlat, **kanıtı** değil.
 
+**Durum sorusu (2026-09-30).** *"Nerede kaldık"* cevabı **en fazla 3 kısa satır** — kalıbı ve örneği [[feedback_verify_status_before_quoting]]'da.
+
 **ÜÇÜNCÜ TEKRAR — 2026-09-04. Kural artık "genelde uygula" değil, "İSTİSNASIZ uygula".** Gas fee turunda aynı geri bildirim üst üste geldi: *"ben anlamadım daha anlaşılır dilde anlat"* → *"artan 1 kuruşa neden 2 dolar masraf ödüyoruz"* → *"bundan sonra her şeyi daha anlaşılır anlat ve bu kuralı not al ve asla atlama"*. Üçüncü mesaj ayrıca **kuralın nereye yazıldığını** sorguladı: kural önce yalnız Claude'un özel auto-memory'sine yazılmıştı, repoya değil. **Kurallar repoda yaşar** (`.claude/memory/`), yoksa proje sahibi göremez ve başka bir oturum devralamaz.
 
 **Tetikleyen desen — kanıt yığmak.** Yanıtlar teknik olarak doğruydu ama "GPT ne dedi" sorusuna kaynak adı, dosya yolu, İngilizce terim ve iç içe gerekçe ile cevap veriliyordu. Proje sahibi konuyu takip edemedi ve **iki kez daha sormak zorunda kaldı**. Sadeleştirmeyi ona hatırlatmak zorunda bırakmak, kuralın uygulanmadığının kanıtıdır.
