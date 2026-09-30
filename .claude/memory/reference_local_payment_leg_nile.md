@@ -89,3 +89,20 @@ Ayrıca ölçülenler: 63 ayar / 0 null · gerçek CS2 envanteri okundu (`Tec-9 
 **Proje sahibi isteği (2026-09-02):** ürün bu duvara toslayan kullanıcıya **sebebi ve ne yapması gerektiğini** söylemeli. Bugün hiçbir ekran söylemiyor; kullanıcı Steam'in jenerik sayfasını görüp platformda açıklama bulamıyor. Üç koşul üç farklı eylem gerektiriyor (5 USD harca · N gün bekle · MA kur), jenerik tek mesaj yanlış yönlendirir.
 
 **Sonraki prova için:** hesabın 15 günü 2026-09-08'de doluyor; `auth.min_steam_account_age_days` hâlâ **1** (üretim 30) ve prova bitince geri alınmalı. Ölçülemeyen bacaklar: teslimat · mutabakat · payout.
+
+## Hibrit enerji ölçümü — 2026-09-16 (Nile durumu değişti)
+
+- **Hot wallet'ta 100 TRX ENERGY için kilitli** (`freezeBalanceV2`, tx `bcada12d…`, 2026-09-16) — Stake 2.0'da 14 gün çözülemez, **~2026-09-30'a kadar**. Bakiye ölçüm sonrası **675,69 TRX** serbest. `getcandelegatedmaxsize` artık `{"max_size":100000000}` döner (önceden `{}`) — sidecar'ın devretme yolu Nile'da bu kilitle **5.000 enerji altı** açıklarda çalışır, üstünde yakma yoluna düşer.
+- **Test için açılmış HD depozitleri:** index **9001** `TKiQDYK…`, **9003** `TJtzWKMS…`, **9004** `TH1ATdBy…`, **9005** `TNW1XzPW…` (9005'te ~1,6 TRX kaldı). Index **9002** `TMdTRpU3…` bilerek açılmadı (açılmamış adres cevabının ölçüm örneği: `getaccount` → HTTP 200 `{}`). Ürünün adres sırası bu numaralardan çok uzakta; **index 0** depoziti (`TF6nQDf6…`, 2 USDT + 15 TRX) provadaki işleme bağlı — ölçümlerde dokunulmadı.
+- Ölçüm betikleri sidecar'ın kendi `tronweb` + `ethers` paketleriyle yazıldı (türetme üretimle aynı), sırlar `.env`'den okundu, ekrana basılmadı.
+- **Nile'ın sınırı:** Nile test USDT'si `consume_user_resource_percent = 0` — enerjiyi kontrat öder, yani "devredilen enerji transferde tüketildi mi" Nile'da ölçülemez; yalnız hesap açma / devretme / varış / geri alma zinciri ölçülebilir.
+
+## Canlı prova — 2026-09-23 (happy path TAMAMLANDI, kalan üç bacak ölçüldü)
+
+**Tam rapor:** repo `Docs/TEST_REPORTS/REHEARSAL_2026-09-23.md` · PR #326. Aşağısı yalnız cüzdan/ortam durumu.
+
+- İşlem `918b79d3` **`COMPLETED`** (20:59 → 21:36 UTC). Ödeme 10,20 USDT (hash `96a32f96…`, blok 71195307) · süpürme 10,20 (`ab11d76e…`) · payout **9,52** (`853a5fbb…`).
+- **Cüzdan durumu (prova sonrası):** alıcı/satıcı cüzdanı `TWrbG7F3…` **997,32 USDT + 200 TRX** · sıcak cüzdan `TP6e9Yqa…` **0,68 USDT + 538,6 TRX** (hesap açma + yakma takviyesi + ücretler ≈ 7,5 TRX gitti).
+- **Nile'da devretme çalışmaz:** kilit hesabı `TVqvXQ…EyQ6` yalnız 18 TRX kilitli; bir transfer 29.650 enerji istiyor (≈ 3.100 TRX kilit gerekir) → plan her seferinde `burn`, sebep `insufficient-stake`. Kod doğru, ortam yetersiz.
+- **Item artık alıcıda ve 7 gün takas kilitli** (30 Eylül'e kadar) — ardışık prova için ikinci bir item gerekir.
+- **⚠️ `auth.min_steam_account_age_days` hâlâ 1** (üretim 30). Alıcı hesabı 2026-09-23'te 30 günü dolduruyor, o andan sonra geri almak kimseyi kapıda bırakmaz. Geri alındığında DB'den teyit et.

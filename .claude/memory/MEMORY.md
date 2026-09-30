@@ -578,7 +578,7 @@
 - [feedback_verify_status_before_quoting.md](feedback_verify_status_before_quoting.md) — "Sirada ne var / nerede kaldik" sorularinda MEMORY snapshot'a guvenme, IMPLEMENTATION_STATUS.md'yi oku; cevap EN FAZLA 3 kisa satir (neredeyiz + siradaki adim + tek soru), detay sorulursa
 - [feedback_no_edit_permission_asks.md](feedback_no_edit_permission_asks.md) — Onay verildikten sonra edit/commit/push/PR adimlari icin ara onay isteme, tek akista uygula
 - [feedback_respond_in_turkish.md](feedback_respond_in_turkish.md) — Sohbet/aciklama/rapor iletisimi Turkce; kod ve kod yorumlari Ingilizce kalir
-- [feedback_differential_before_causal_claim.md](feedback_differential_before_causal_claim.md) — Belirtiyi nedene baglamadan once ayirt edici olcum yap; dis bagimlilik arizasinda once bagimliliga dogrudan sor; ayni probu tekrarlamak tutarlilik verir, dogruluk vermez (UI turu dersi)
+- [feedback_differential_before_causal_claim.md](feedback_differential_before_causal_claim.md) — Belirtiyi nedene baglamadan once ayirt edici olcum yap; dis bagimlilik arizasinda once bagimliliga dogrudan sor; ayni probu tekrarlamak tutarlilik verir, dogruluk vermez (UI turu dersi); bozan en basit degisiklik operator (>= / ==), kismi koleksiyon, filtresiz sorgu, tek cagiran ya da probun oznesi de olabilir (PR #322/#323 dersleri)
 - [feedback_plain_language.md](feedback_plain_language.md) — Sade yaz: kisa cumle, az tablo, terimleri cevir, tek konu; uzun teknik anlatim anlasilmiyor
 - [feedback_ask_questions_via_modal.md](feedback_ask_questions_via_modal.md) — Kararlari AskUserQuestion (modal) ile sor; duz metinde numarali soru listesi verme
 - [feedback_be_concise.md](feedback_be_concise.md) — Kisa yaz; olcum/kanit detayini rapora-PR'a birak, sohbette sonuc + kisa soru
@@ -589,6 +589,11 @@
 - [feedback_refetch_branch_before_verdict.md](feedback_refetch_branch_before_verdict.md) — Validate'te verdict'i kapatmadan once git fetch'i tekrarla; CI kaniti dal HEAD'ine ait olsun
 - [feedback_merge_teyit_not_direct_pushable.md](feedback_merge_teyit_not_direct_pushable.md) — Post-merge "merge teyit" run ID'leri dogrudan main'e push edilemez (pre-push hook); teyiti sonraki dalda ekle
 - [feedback_single_session_worktree.md](feedback_single_session_worktree.md) — Bu worktree'de paralel session yok; HEAD session ortasinda degisirse anomali olarak bildir
+- [feedback_measure_the_failure_shape.md](feedback_measure_the_failure_shape.md) — Dis probu entegre ederken BASARISIZLIGIN nasil gorundugunu de olc; HTTP 200 ile donen hata cevabi sessizce gecer; bir ret kontrolu ozellik bozukken de gelen reddi bekliyor olabilir (#315, #325)
+- [feedback_measure_effective_on_mainnet.md](feedback_measure_effective_on_mainnet.md) — Testnet cevaplayamiyorsa ana agdaki ETKIN sonucu makbuzlardan olc; ayar alani ve dugumun bekleyen durumu gercegi soylemez (#323)
+- [feedback_added_latency_check_caller_timeout.md](feedback_added_latency_check_caller_timeout.md) — Senkron cagriya bekleme eklemeden once cagiranin zaman asimi / yeniden deneme / eszamanlilik kilidini oku; vazgecilmis cagri geri dondurulemez adim atmasin (#323)
+- [feedback_scripted_doc_edits_verify_against_head.md](feedback_scripted_doc_edits_verify_against_head.md) — Betikle dokuman satiri degistirince HEAD'e karsi normalize diff al; perl'e cok satirli metni $ENV degil dosyadan byte modunda ver
+- [feedback_vary_fixture_against_fallback.md](feedback_vary_fixture_against_fallback.md) — "Testle pinli" demeden once olc: fixture bozan sabite esit mi, test uretim kablosunu kendi mi kuruyor, sabiti import edip onunla mi kayiyor, deger dogru konteynere ve calisan surece ulasiyor mu, surec sinirinin iki tarafi ayni ornek dosyaya bagli mi (#321–#327)
 
 ## Project
 - [project_phase_history.md](project_phase_history.md) — Faz gecmisi: MVP/F6/F7 gate sonuclari, backlog kapatma turlari ve kalici dersleri (auto-memory MEMORY.md'den 2026-09-01'de tasindi)
