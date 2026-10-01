@@ -3,8 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Persistence.Outbox;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
@@ -20,7 +24,9 @@ namespace Skinora.Transactions.Tests.Unit.Transfers;
 /// SELLER_PAYOUT row, the gas estimate is snapshotted, and held / disputed /
 /// non-delivered / already-paid / addressless transactions are skipped.
 /// Extended by the T126 validation (finding F1) with the 02 §4.5.1 settlement
-/// gate: delivery alone never releases the payout.
+/// gate: delivery alone never releases the payout. Extended again for
+/// PayoutStallsOnNonPositiveNet: a non-positive net is deferred on a backoff,
+/// stays out of the window meanwhile, and alerts the admins once.
 /// </summary>
 [Trait("Category", "Unit")]
 public sealed class SellerPayoutQueueJobTests : IDisposable
@@ -36,6 +42,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     private readonly AppDbContext _db;
     private readonly StubGasFeeSettingsProvider _settings;
     private readonly StubChargedGasFeeResolver _gasFee;
+    private readonly RecordingOutbox _outbox = new();
     private readonly FakeTimeProvider _clock;
     private readonly SellerPayoutQueueJob _sut;
     private int _seedCount;
@@ -66,6 +73,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             _db,
             new RefundDecisionService(_settings),
             _gasFee,
+            _outbox,
             _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
     }
@@ -362,7 +370,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             await competing.SaveChangesAsync();
         });
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _gasFee, _clock, logger);
+            raceDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw
 
@@ -384,7 +392,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
         await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
         var sut = new SellerPayoutQueueJob(
-            throwingDb, new RefundDecisionService(_settings), _gasFee, _clock,
+            throwingDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
@@ -496,6 +504,301 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(
             b => b.TransactionId == unswept.Id
                 && b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
+    // ---------- Non-positive net → deferral (owner decision 2026-10-01) ----------
+    //
+    // PayoutStallsOnNonPositiveNet. price 1, commission 0.02 → protection share
+    // 0.002; a 3.00 estimate (mainnet burn ≈ 2.2–4.4 USDT) leaves
+    // 1 − (3 − 0.002) = −1.998. The backoff and the alert threshold are written
+    // out as literals: their size IS the requirement, and a test that read them
+    // back from the job would move with them.
+
+    private static readonly DateTime T0 = new(2026, 5, 16, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task NonPositivePayout_QueuesNoRow_AndIsDeferredAnHour()
+    {
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await HasPayoutRowAsync(tx.Id));
+        var row = await ReloadAsync(tx.Id);
+        Assert.Equal(1, row.PayoutDeferralCount);
+        Assert.Equal(T0.AddHours(1), row.PayoutDeferredUntil);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task ExactlyZeroPayout_IsDeferredToo()
+    {
+        // 1 − (1.002 − 0.002) = 0: nothing to send is as unsendable as less.
+        _gasFee.PayoutFee = 1.002m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await HasPayoutRowAsync(tx.Id));
+        Assert.Equal(1, (await ReloadAsync(tx.Id)).PayoutDeferralCount);
+    }
+
+    [Fact]
+    public async Task DeferredPayout_IsNotRepricedBeforeItsRetryTime_AndIsAtIt()
+    {
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+        await _sut.ExecuteAsync();                      // deferral 1 → 13:00
+
+        _clock.Advance(TimeSpan.FromMinutes(59));
+        await _sut.ExecuteAsync();
+        Assert.Single(_gasFee.PayoutCalls);            // 12:59 — left alone
+
+        _clock.Advance(TimeSpan.FromMinutes(1));
+        await _sut.ExecuteAsync();                      // 13:00 — due
+        Assert.Equal(2, _gasFee.PayoutCalls.Count);
+        var row = await ReloadAsync(tx.Id);
+        Assert.Equal(2, row.PayoutDeferralCount);
+        Assert.Equal(T0.AddHours(1 + 4), row.PayoutDeferredUntil);
+    }
+
+    [Fact]
+    public async Task DeferralBackoff_Is1h_4h_12h_ThenDaily()
+    {
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+
+        var waits = new List<TimeSpan>();
+        for (var i = 0; i < 6; i++)
+        {
+            var at = _clock.GetUtcNow().UtcDateTime;
+            await _sut.ExecuteAsync();
+            var until = (await ReloadAsync(tx.Id)).PayoutDeferredUntil!.Value;
+            waits.Add(until - at);
+            _clock.Advance(until - at);
+        }
+
+        Assert.Equal(
+            [
+                TimeSpan.FromHours(1), TimeSpan.FromHours(4), TimeSpan.FromHours(12),
+                TimeSpan.FromHours(24), TimeSpan.FromHours(24), TimeSpan.FromHours(24),
+            ],
+            waits);
+        Assert.Equal(6, (await ReloadAsync(tx.Id)).PayoutDeferralCount);
+    }
+
+    [Fact]
+    public async Task ThirdDeferral_AlertsTheAdminsOnce_WithTheSplitInputs()
+    {
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+
+        await RunAtRetryAsync(tx.Id, times: 2);
+        Assert.Empty(_outbox.Published);
+
+        await AdvanceToRetryAsync(tx.Id);
+        var thirdAt = _clock.GetUtcNow().UtcDateTime;
+        await _sut.ExecuteAsync();
+
+        var alert = Assert.IsType<SellerPayoutDeferredEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(tx.Id, alert.TransactionId);
+        Assert.Equal(tx.SellerId, alert.SellerId);
+        Assert.Equal(1m, alert.Price);
+        Assert.Equal(0.02m, alert.CommissionAmount);
+        Assert.Equal(3.00m, alert.GasFeeEstimate);
+        Assert.Equal(-1.998m, alert.ComputedPayout);
+        Assert.Equal(3, alert.DeferralCount);
+        Assert.Equal(thirdAt.AddHours(12), alert.NextAttemptAt);
+        Assert.Equal(thirdAt, alert.OccurredAt);
+
+        await RunAtRetryAsync(tx.Id, times: 3);         // 4th–6th: no second alert
+        Assert.Single(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task ThirdDeferral_AlertCommitsInTheSameSaveAsTheStamp()
+    {
+        // Once the third deferral is written, its alert is in the database too —
+        // not left in the change tracker for some later save to pick up.
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m, configure: t =>
+        {
+            t.PayoutDeferralCount = 2;
+            t.PayoutDeferredUntil = T0.AddMinutes(-1);
+        });
+        await using var jobDb = new AppDbContext(_options);
+        var sut = new SellerPayoutQueueJob(
+            jobDb, new RefundDecisionService(_settings), _gasFee,
+            new DbContextOutbox(jobDb), _clock, NullLogger<SellerPayoutQueueJob>.Instance);
+
+        await sut.ExecuteAsync();
+
+        Assert.Equal(3, (await ReloadAsync(tx.Id)).PayoutDeferralCount);
+        var message = await _db.Set<OutboxMessage>().AsNoTracking().SingleAsync();
+        Assert.Equal(typeof(SellerPayoutDeferredEvent).FullName, message.EventType);
+    }
+
+    [Fact]
+    public async Task TwentyStuckPayouts_DoNotStarveANewerOne()
+    {
+        // The #327 validation's measurement, kept: before the deferral these 20
+        // held the oldest-first window every minute and the newer payout was
+        // never queued (3 ticks → 0 rows, 60 estimates).
+        _gasFee.PayoutFee = 3.00m;
+        for (var i = 0; i < 20; i++)
+        {
+            var minute = i;
+            await SeedDeliveredAsync(price: 1m, commission: 0.02m,
+                configure: t => t.ItemDeliveredAt = T0.AddDays(-10).AddMinutes(minute));
+        }
+        var newer = await SeedDeliveredAsync(price: 100m, commission: 2m,
+            configure: t => t.ItemDeliveredAt = T0.AddDays(-9));
+
+        await _sut.ExecuteAsync();
+        _clock.Advance(TimeSpan.FromMinutes(1));
+        await _sut.ExecuteAsync();
+
+        // 100 − (3 − 0.2) = 97.2; the 20 were priced once each, not again.
+        Assert.Equal(97.20m, (await PayoutRowAsync(newer.Id)).Amount);
+        Assert.Equal(21, _gasFee.PayoutCalls.Count);
+    }
+
+    [Fact]
+    public async Task FreshPayout_GoesBeforeDeferredOnesThatAreDue()
+    {
+        // At their retry time these 20 are candidates again, and they were
+        // delivered earlier: ordered by delivery alone they would fill the
+        // batch and push the fresh payout out of every tick in which they
+        // come due.
+        _gasFee.PayoutFee = 3.00m;
+        for (var i = 0; i < 20; i++)
+        {
+            var minute = i;
+            await SeedDeliveredAsync(price: 1m, commission: 0.02m, configure: t =>
+            {
+                t.ItemDeliveredAt = T0.AddDays(-10).AddMinutes(minute);
+                t.PayoutDeferralCount = 1;
+                t.PayoutDeferredUntil = T0.AddMinutes(-1);
+            });
+        }
+        var fresh = await SeedDeliveredAsync(price: 100m, commission: 2m,
+            configure: t => t.ItemDeliveredAt = T0.AddDays(-9));
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(97.20m, (await PayoutRowAsync(fresh.Id)).Amount);
+    }
+
+    [Fact]
+    public async Task DuePayout_IsNotCrowdedOutByDeferredOnesStillWaiting()
+    {
+        // 20 rows deferred once and not due for another hour sort ahead of a row
+        // deferred twice that is due now. Only the query's retry-time filter
+        // keeps them out of the batch; without it they fill all 20 slots, the
+        // loop skips each one, and the due payout waits for them.
+        _gasFee.PayoutFee = 3.00m;
+        for (var i = 0; i < 20; i++)
+        {
+            var minute = i;
+            await SeedDeliveredAsync(price: 1m, commission: 0.02m, configure: t =>
+            {
+                t.ItemDeliveredAt = T0.AddDays(-10).AddMinutes(minute);
+                t.PayoutDeferralCount = 1;
+                t.PayoutDeferredUntil = T0.AddHours(1);
+            });
+        }
+        var due = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+        {
+            t.ItemDeliveredAt = T0.AddDays(-9);
+            t.PayoutDeferralCount = 2;
+            t.PayoutDeferredUntil = T0.AddMinutes(-1);
+        });
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(97.20m, (await PayoutRowAsync(due.Id)).Amount);
+    }
+
+    [Fact]
+    public async Task DeferredPayout_IsQueuedAtTheFullPrice_OnceTheEstimateDrops()
+    {
+        _gasFee.PayoutFee = 3.00m;
+        var tx = await SeedDeliveredAsync(price: 1m, commission: 0.02m);
+        await _sut.ExecuteAsync();
+
+        // Energy regenerated: the estimate is back under the platform's share.
+        _gasFee.PayoutFee = 0.001m;
+        _clock.Advance(TimeSpan.FromHours(1));
+        await _sut.ExecuteAsync();
+
+        var payout = await PayoutRowAsync(tx.Id);
+        Assert.Equal(1m, payout.Amount);
+        Assert.Equal(0.001m, payout.GasFee);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task RowChangedMidDeferral_DropsTheStampAndItsAlert_AndTheBatchGoesOn()
+    {
+        // The older row's third deferral raises the alert, and another writer
+        // moves that row between the job's load and its save. RowVersion refuses
+        // the stamp; the alert queued in the same unit of work must go with it
+        // rather than ride along with the next candidate's payout insert.
+        _gasFee.PayoutFee = 3.00m;
+        var stuck = await SeedDeliveredAsync(price: 1m, commission: 0.02m, configure: t =>
+        {
+            t.ItemDeliveredAt = T0.AddDays(-10);
+            t.PayoutDeferralCount = 2;
+            t.PayoutDeferredUntil = T0.AddMinutes(-1);
+        });
+        var payable = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
+        {
+            t.ItemDeliveredAt = T0.AddDays(-9);
+            t.PayoutDeferralCount = 2;
+            t.PayoutDeferredUntil = T0.AddMinutes(-1);
+        });
+
+        await using var raceDb = new TransactionWriteRaceDbContext(_options);
+        var logger = new ListLogger<SellerPayoutQueueJob>();
+        var sut = new SellerPayoutQueueJob(
+            raceDb, new RefundDecisionService(_settings), _gasFee,
+            new DbContextOutbox(raceDb), _clock, logger);
+
+        await sut.ExecuteAsync();   // must not throw
+
+        Assert.Equal(2, (await ReloadAsync(stuck.Id)).PayoutDeferralCount);
+        Assert.Equal(0, await _db.Set<OutboxMessage>().CountAsync());
+        Assert.Equal(97.20m, (await PayoutRowAsync(payable.Id)).Amount);
+        Assert.Contains(logger.Entries, e =>
+            e.Level == LogLevel.Warning && e.Message.Contains("changed while"));
+    }
+
+    private Task<Transaction> ReloadAsync(Guid id) =>
+        _db.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == id);
+
+    private Task<bool> HasPayoutRowAsync(Guid id) =>
+        _db.Set<BlockchainTransaction>().AnyAsync(
+            b => b.TransactionId == id && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
+
+    private Task<BlockchainTransaction> PayoutRowAsync(Guid id) =>
+        _db.Set<BlockchainTransaction>().AsNoTracking().SingleAsync(
+            b => b.TransactionId == id && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
+
+    private async Task AdvanceToRetryAsync(Guid id)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime;
+        if ((await ReloadAsync(id)).PayoutDeferredUntil is { } until && until > now)
+            _clock.Advance(until - now);
+    }
+
+    private async Task RunAtRetryAsync(Guid id, int times)
+    {
+        for (var i = 0; i < times; i++)
+        {
+            await AdvanceToRetryAsync(id);
+            await _sut.ExecuteAsync();
+        }
     }
 
     private async Task<Transaction> SeedDeliveredAsync(
@@ -680,6 +983,78 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 {
                     await _injectBeforeSave();
                 }
+            }
+
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private sealed class RecordingOutbox : IOutboxService
+    {
+        public List<IDomainEvent> Published { get; } = [];
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            Published.Add(domainEvent);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the production outbox's one property this suite needs: the
+    /// message joins the caller's unit of work (05 §5.1) and commits with it,
+    /// or not at all.
+    /// </summary>
+    private sealed class DbContextOutbox : IOutboxService
+    {
+        private readonly AppDbContext _db;
+
+        public DbContextOutbox(AppDbContext db) => _db = db;
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            _db.OutboxMessages.Add(new OutboxMessage
+            {
+                Id = domainEvent.EventId,
+                EventType = domainEvent.GetType().FullName!,
+                Payload = "{}",
+                Status = OutboxMessageStatus.PENDING,
+                CreatedAt = domainEvent.OccurredAt,
+                Sequence = 1,
+            });
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// On the first save that modifies a <see cref="Transaction"/>, a separate
+    /// context on the same connection commits a change to that row first — the
+    /// hold or dispute that lands between the job's load and its save.
+    /// </summary>
+    private sealed class TransactionWriteRaceDbContext : AppDbContext
+    {
+        private readonly DbContextOptions<AppDbContext> _options;
+        private bool _fired;
+
+        public TransactionWriteRaceDbContext(DbContextOptions<AppDbContext> options)
+            : base(options)
+        {
+            _options = options;
+        }
+
+        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var modified = _fired
+                ? null
+                : ChangeTracker.Entries<Transaction>().FirstOrDefault(e => e.State == EntityState.Modified);
+            if (modified is not null)
+            {
+                _fired = true;
+                await using var other = new AppDbContext(_options);
+                var row = await other.Set<Transaction>()
+                    .SingleAsync(t => t.Id == modified.Entity.Id, cancellationToken);
+                row.RowVersion = [1, 0, 0, 0, 0, 0, 0, 0];
+                await other.SaveChangesAsync(cancellationToken);
             }
 
             return await base.SaveChangesAsync(cancellationToken);

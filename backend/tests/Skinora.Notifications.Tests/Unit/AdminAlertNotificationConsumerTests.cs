@@ -117,6 +117,42 @@ public class AdminAlertNotificationConsumerTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task SellerPayoutDeferred_FansOutPaymentFailure_WithDeferredErrorCode()
+    {
+        var dispatcher = new RecordingDispatcher();
+        var sut = new SellerPayoutDeferredAdminNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            NullLogger<SellerPayoutDeferredAdminNotificationConsumer>.Instance);
+
+        var transactionId = Guid.NewGuid();
+        var domainEvent = new SellerPayoutDeferredEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: transactionId,
+            SellerId: Guid.NewGuid(),
+            Price: 1m,
+            CommissionAmount: 0.02m,
+            GasFeeEstimate: 3m,
+            ComputedPayout: -1.998m,
+            DeferralCount: 3,
+            NextAttemptAt: DateTime.UtcNow.AddHours(12),
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin1);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin2);
+        Assert.All(dispatcher.Requests, r =>
+        {
+            Assert.Equal(NotificationType.ADMIN_PAYMENT_FAILURE, r.Type);
+            Assert.Equal(transactionId, r.TransactionId);
+            Assert.Equal(transactionId.ToString("D"), r.Parameters["TransactionId"]);
+            Assert.Equal("SELLER_PAYOUT_DEFERRED", r.Parameters["ErrorCode"]);
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task RefundBlocked_FansOutPaymentFailure_WithReasonErrorCode()
     {
         var dispatcher = new RecordingDispatcher();

@@ -2,6 +2,8 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Domain.Entities;
@@ -79,6 +81,22 @@ namespace Skinora.Transactions.Application.Transfers;
 /// </para>
 ///
 /// <para>
+/// <b>A non-positive net is deferred, not dropped (owner decision 2026-10-01,
+/// PayoutStallsOnNonPositiveNet).</b> Since #327 the split takes the runtime
+/// estimate, and on mainnet a payout the hot wallet's Energy no longer covers
+/// burns 6.43–13.03 TRX (~2.2–4.4 USDT). Below that price the net is zero or
+/// negative and nothing may be sent. The job used to log and return without a
+/// trace: the same rows were re-priced every minute and, once 20 of them held
+/// the oldest-first window, no newer payout was ever queued. Now the row is
+/// stamped with a retry time on a backoff (1 h → 4 h → 12 h → every 24 h) and
+/// leaves the candidate set until then; the batch is ordered by the deferral
+/// count so fresh payouts are always taken first; the third deferral raises
+/// <see cref="SellerPayoutDeferredEvent"/> once. Energy regenerates over a
+/// day, so the common case — a burst that exhausted the payout share —
+/// resolves on a later retry with no manual step.
+/// </para>
+///
+/// <para>
 /// Concurrency hardening (WP1 F1 — S2 money-safety). The <c>AnyAsync</c>
 /// idempotency check is not atomic with the subsequent insert, so two
 /// overlapping ticks could both pass it and queue two PENDING payouts →
@@ -112,9 +130,28 @@ public sealed class SellerPayoutQueueJob
     /// </summary>
     public const int ConcurrencyLockTimeoutSeconds = 50;
 
+    /// <summary>
+    /// Wait before retrying a payout whose net came out non-positive, indexed
+    /// by the deferral count it has just reached (1st → 1 h, 2nd → 4 h, 3rd →
+    /// 12 h); the fourth and every later deferral waits the last entry, a day.
+    /// Hours, not the minutes the transfer retries use: what has to change is
+    /// the hot wallet's Energy, which regenerates over 24 h.
+    /// </summary>
+    public static readonly IReadOnlyList<TimeSpan> DeferralBackoff =
+    [
+        TimeSpan.FromHours(1),
+        TimeSpan.FromHours(4),
+        TimeSpan.FromHours(12),
+        TimeSpan.FromHours(24),
+    ];
+
+    /// <summary>The deferral that alerts the admins — once, as 03 §2.4a Senaryo B escalates after three attempts.</summary>
+    public const int EscalateAtDeferral = 3;
+
     private readonly AppDbContext _db;
     private readonly IRefundDecisionService _refundDecisionService;
     private readonly IChargedGasFeeResolver _chargedGasFee;
+    private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<SellerPayoutQueueJob> _logger;
 
@@ -122,12 +159,14 @@ public sealed class SellerPayoutQueueJob
         AppDbContext db,
         IRefundDecisionService refundDecisionService,
         IChargedGasFeeResolver chargedGasFee,
+        IOutboxService outbox,
         TimeProvider clock,
         ILogger<SellerPayoutQueueJob> logger)
     {
         _db = db;
         _refundDecisionService = refundDecisionService;
         _chargedGasFee = chargedGasFee;
+        _outbox = outbox;
         _clock = clock;
         _logger = logger;
     }
@@ -139,8 +178,11 @@ public sealed class SellerPayoutQueueJob
         // Soft-delete query filter excludes IsDeleted rows. Skip held /
         // disputed transactions, transactions whose settlement window has not
         // elapsed (02 §4.5.1), those whose sweep has not landed in the hot
-        // wallet yet (owner decision 2026-09-17), and any that already have a
-        // payout row queued.
+        // wallet yet (owner decision 2026-09-17), any that already have a
+        // payout row queued, and any whose non-positive net is waiting out its
+        // retry time. Never-deferred rows come first: a deferred row is likely
+        // to defer again, and ordering by delivery alone let them hold the
+        // window (PayoutStallsOnNonPositiveNet).
         var candidateIds = await _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
@@ -154,8 +196,10 @@ public sealed class SellerPayoutQueueJob
                 && t.SettlementVerifiedAt != null
                 && t.DeliveryReversedAt == null
                 && !t.BlockchainTransactions.Any(
-                    b => b.Type == BlockchainTransactionType.SELLER_PAYOUT))
-            .OrderBy(t => t.ItemDeliveredAt)
+                    b => b.Type == BlockchainTransactionType.SELLER_PAYOUT)
+                && (t.PayoutDeferredUntil == null || t.PayoutDeferredUntil <= nowUtc))
+            .OrderBy(t => t.PayoutDeferralCount)
+            .ThenBy(t => t.ItemDeliveredAt)
             .Take(BatchSize)
             .Select(t => t.Id)
             .ToListAsync(cancellationToken);
@@ -189,7 +233,8 @@ public sealed class SellerPayoutQueueJob
             || transaction.SettlementVerifiedAt is null
             || transaction.DeliveryReversedAt is not null
             || transaction.PayoutEligibleAt is not { } eligibleAt
-            || eligibleAt > _clock.GetUtcNow().UtcDateTime)
+            || eligibleAt > _clock.GetUtcNow().UtcDateTime
+            || transaction.PayoutDeferredUntil > _clock.GetUtcNow().UtcDateTime)
         {
             return;
         }
@@ -240,12 +285,10 @@ public sealed class SellerPayoutQueueJob
 
         if (payout <= 0m)
         {
-            // Pathological: gas estimate consumed the whole price. Do not
-            // broadcast a non-positive transfer — leave the transaction in
-            // ITEM_DELIVERED for operator review (03 §2.4a Senaryo B).
-            _logger.LogError(
-                "SellerPayout: computed payout {Payout} for transaction {TransactionId} (price={Price}, commission={Commission}, gasEstimate={Gas}) is non-positive — skipping.",
-                payout, transaction.Id, transaction.Price, transaction.CommissionAmount, gasEstimate);
+            // The gas estimate consumed the whole price: never broadcast a
+            // non-positive transfer. Defer with a retry time instead of
+            // returning silently (02 §4.7).
+            await DeferAsync(transaction, payout, gasEstimate, cancellationToken);
             return;
         }
 
@@ -302,6 +345,65 @@ public sealed class SellerPayoutQueueJob
         _logger.LogInformation(
             "SellerPayout queued — transaction {TransactionId} payout row {RowId} amount {Amount} {Token} (gasEstimate {Gas})",
             transaction.Id, payoutRow.Id, payout, transaction.StablecoinType, gasEstimate);
+    }
+
+    private async Task DeferAsync(
+        Transaction transaction,
+        decimal payout,
+        decimal gasEstimate,
+        CancellationToken cancellationToken)
+    {
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var count = transaction.PayoutDeferralCount + 1;
+        var nextAttemptAt = nowUtc + DeferralBackoff[Math.Min(count, DeferralBackoff.Count) - 1];
+
+        transaction.PayoutDeferralCount = count;
+        transaction.PayoutDeferredUntil = nextAttemptAt;
+
+        // The count only grows, so it equals the threshold on exactly one
+        // deferral: the admins hear about a stuck payout once, not daily. The
+        // outbox row commits with the stamp below, or not at all.
+        var escalated = count == EscalateAtDeferral;
+        if (escalated)
+        {
+            await _outbox.PublishAsync(
+                new SellerPayoutDeferredEvent(
+                    EventId: Guid.NewGuid(),
+                    TransactionId: transaction.Id,
+                    SellerId: transaction.SellerId,
+                    Price: transaction.Price,
+                    CommissionAmount: transaction.CommissionAmount,
+                    GasFeeEstimate: gasEstimate,
+                    ComputedPayout: payout,
+                    DeferralCount: count,
+                    NextAttemptAt: nextAttemptAt,
+                    OccurredAt: nowUtc),
+                cancellationToken);
+        }
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Another writer (a hold, a dispute) moved the row between the load
+            // and this save; RowVersion refuses the stamp instead of writing
+            // over it. Drop the stamp and any alert with it — clearing the
+            // tracker keeps them out of the next candidate's save — and let the
+            // next tick decide against the fresh row.
+            _db.ChangeTracker.Clear();
+            _logger.LogWarning(
+                ex,
+                "SellerPayout: transaction {TransactionId} changed while its non-positive payout was being deferred — nothing written, retrying next tick.",
+                transaction.Id);
+            return;
+        }
+
+        _logger.LogWarning(
+            "SellerPayout deferred — transaction {TransactionId} computed payout {Payout} (price={Price}, commission={Commission}, gasEstimate={Gas}) is non-positive; deferral {Count}, next attempt {NextAttemptAt:o}{Escalation}.",
+            transaction.Id, payout, transaction.Price, transaction.CommissionAmount, gasEstimate,
+            count, nextAttemptAt, escalated ? " — admins alerted" : string.Empty);
     }
 
     // Hangfire serializes Expression<Action<T>>; expose a sync wrapper.
