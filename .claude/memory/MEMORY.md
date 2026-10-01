@@ -5,10 +5,20 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-09-30 — #327 payout gas tahmini: yapım tamam, bağımsız doğrulama bekliyor; #326 + #328 merge edildi; backlog 18 aktif / 137 çözülmüş, 🔴 YOK)
+## Current Status (2026-10-01 — #327 payout gas tahmini: bağımsız doğrulama ✓ PASS, bulgular doğrulamada kapatıldı, merge; backlog 22 aktif / 137 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
-> **Payout gas tahmini düzeltmesi (yapım 2026-09-26, kayıt 2026-09-30; dal `fix/payout-gas-estimate-sender`, PR [#327](https://github.com/turkerurganci/Skinora/pull/327)) — bağımsız doğrulama bekliyor, merge YOK.** Provanın 🟡 `PayoutGasEstimateAlwaysFallsBack` satırı kapandı. Backlog **18 aktif / 137 çözülmüş**, 🔴 YOK (taban 18/136 → 1 ✅ + 1 yeni ⚪ `GasFeeFallbackUnmonitored`).
+> **#327 bağımsız doğrulaması ✓ PASS (2026-10-01, ayrı chat) — PR'ın kendi kodundaki bulgular proje sahibi kararıyla doğrulamada kapatıldı (`bc83431`), squash merge.** Backlog **22 aktif / 137 çözülmüş**, 🔴 YOK (taban 18/137 → 4 yeni satır: 🟡 `PayoutStallsOnNonPositiveNet` · ⚪ `RealizedFeeNullOnZeroCostTransfer` · ⚪ `WalletAddressesLoggedUnmasked` · ⚪ `QueuedPayoutSkipsHoldCheck`).
+>
+> **Bağımsız ölçüm.** Karşı-olgu: PR'ın testleri main'in eski üretim koduna karşı 6 test kırdı (sözleşme testi gönderilen `"fromAddress":null`'ı gösterdi). Canlı Nile + **gerçek Binance kuru (0,3381)**: gerçek çözücü + tahminci → derlenmiş sidecar — PR kodu payout'ta `RuntimeEstimate` (200), main kodu `StaticFallback` 0,50 (400); yapım turunun "gerçek kurla ölçülemedi" notu kapandı. PR CI `36769494009` ✓ (yeni testlerin hepsi koştu) · yerel Transactions 654/654 · sidecar 365/365.
+>
+> **Doğrulamada kapatılanlar.** (1) Yeni `ReadErrorAsync` tanınmayan karakter setinde `InvalidOperationException`'ı yakalamıyordu → ödeme turu yarıda kalıyordu (main aynı cevapta sabit ayara dönüyordu); artık iptal dışında her istisna yakalanıyor. (2) Bağımsız ~48 bozmanın 8'i yeşildi: tutar biçimi yalnız "10"/"10.2" ile deneniyordu (payout örneği artık `1234.567891`), sidecar örnek tutarlarını servisin kuralından geçirmiyordu (`toRawUnits`), gönderensiz payout'un sıcak cüzdandan fiyatlandığı ve iade tüketicisinin depozit adresi sabitli değildi → 10/10 yakalanıyor. (3) 08 §3.1a + yorumlarda üç abartılı cümle ve üç bayat `FromAddress` yorumu.
+>
+> **Dolaylı risk (🟡, mainnet öncesi karar).** Gerçek tahmin fiyatı aşınca `SellerPayoutQueueJob` satır yazmadan dönüyor, eskalasyon yok; aday sorgusu en eski 20'yi aldığı için 20 takılı işlem sonraki ödemeleri durduruyor (ölçüldü: 3 turda 0 ödeme; aynı işlemler sabit 0,50 ile 21/21). Mainnet'te enerji açığında tahmin 6,43–13,03 TRX × ~0,34 ≈ 2,2–4,4 USDT. Seçenekler satırda: fiyat tabanı · park edip aday sorgusundan çıkarma · admin alarmı.
+>
+> **Ders:** [[feedback_vary_fixture_against_fallback]] sekizinci katman — ortak örnek dosya yalnız örnek değerlerin sınadığı kadarını pinler. **Merge teyidi** (post-merge CI + Docker Publish) sonraki dalda kayda geçecek ([[feedback_merge_teyit_not_direct_pushable]]).
+
+> **Payout gas tahmini düzeltmesi (yapım 2026-09-26, kayıt 2026-09-30; dal `fix/payout-gas-estimate-sender`, PR [#327](https://github.com/turkerurganci/Skinora/pull/327)) — ✓ doğrulandı (yukarıdaki blok).** Provanın 🟡 `PayoutGasEstimateAlwaysFallsBack` satırı kapandı. Backlog **18 aktif / 137 çözülmüş**, 🔴 YOK (taban 18/136 → 1 ✅ + 1 yeni ⚪ `GasFeeFallbackUnmonitored`).
 >
 > **Kusur.** Backend payout tahmin isteğini `"fromAddress": null` ile yazıyordu; sidecar alanı yalnız **yoksa** ya da dolu string ise kabul ediyor, `null`'a `400 INVALID_ESTIMATE_REQUEST` dönüyordu → #315'ten beri her payout sessizce sabit ayara düştü (provada 0,50 → kesinti 0,48). **Neden görünmedi:** iki tarafın testi kendi varsayımına karşı koşuyordu — backend testi yalnız dolu gönderenle (iade şekli) gövde üretti, sidecar testi elle yazılmış isteklerle koştu; kimse diğerinin baytlarını görmedi. İade yolu hep dolu depozit adresi taşıdığı için orada da çıkmadı.
 >
