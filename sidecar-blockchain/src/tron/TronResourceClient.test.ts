@@ -256,7 +256,22 @@ describe('TronResourceClient.getAccountResources', () => {
 
     expect(resources.energyAvailable).toBe(65_000);
     expect(resources.bandwidthAvailable).toBe(500);
+    expect(resources.stakedBandwidthAvailable).toBe(0);
     expect(resources.energyPerTrx).toBeCloseTo(9.57, 2);
+  });
+
+  it('reports the STAKED allowance on its own — the only Bandwidth that can create an account', async () => {
+    const fetchFn = fetchReturning({
+      freeNetLimit: 600,
+      freeNetUsed: 0,
+      NetLimit: 400,
+      NetUsed: 130,
+    });
+
+    const resources = await client().getAccountResources(SENDER, fetchFn);
+
+    expect(resources.stakedBandwidthAvailable).toBe(270);
+    expect(resources.bandwidthAvailable).toBe(870);
   });
 
   it('reads an unactivated account as zero of everything, ratio unknown', async () => {
@@ -265,7 +280,58 @@ describe('TronResourceClient.getAccountResources', () => {
     await expect(client().getAccountResources(SENDER, fetchFn)).resolves.toEqual({
       energyAvailable: 0,
       bandwidthAvailable: 0,
+      stakedBandwidthAvailable: 0,
       energyPerTrx: null,
+    });
+  });
+});
+
+describe('TronResourceClient.getChainFeeParameters', () => {
+  /** The keys and values both networks answered on 2026-10-02 (mainnet and Nile agree). */
+  const MEASURED = {
+    chainParameter: [
+      { key: 'getTransactionFee', value: 1_000 },
+      { key: 'getEnergyFee', value: 100 },
+      { key: 'getCreateAccountFee', value: 100_000 },
+      { key: 'getCreateNewAccountFeeInSystemContract', value: 1_000_000 },
+      { key: 'getCreateNewAccountBandwidthRate', value: 1 },
+      { key: 'getExchangeCreateFee', value: 1_024_000_000 },
+    ],
+  };
+
+  it('reads the unit prices and the account-creation fees from the measured shape', async () => {
+    const fetchFn = fetchReturning(MEASURED);
+
+    await expect(client().getChainFeeParameters(fetchFn)).resolves.toEqual({
+      energyFeeSun: 100,
+      bandwidthFeeSun: 1_000,
+      createNewAccountFeeSun: 1_000_000,
+      createAccountBandwidthFeeSun: 100_000,
+      createNewAccountBandwidthRate: 1,
+    });
+  });
+
+  it('answers null for an omitted creation fee instead of failing — only an activating refund needs it', async () => {
+    const fetchFn = fetchReturning({
+      chainParameter: MEASURED.chainParameter.filter(
+        (p) => p.key.startsWith('getE') || p.key === 'getTransactionFee',
+      ),
+    });
+
+    const params = await client().getChainFeeParameters(fetchFn);
+
+    expect(params.createNewAccountFeeSun).toBeNull();
+    expect(params.createAccountBandwidthFeeSun).toBeNull();
+    expect(params.createNewAccountBandwidthRate).toBeNull();
+  });
+
+  it('still fails when a unit price every estimate needs is missing', async () => {
+    const fetchFn = fetchReturning({
+      chainParameter: MEASURED.chainParameter.filter((p) => p.key !== 'getEnergyFee'),
+    });
+
+    await expect(client().getChainFeeParameters(fetchFn)).rejects.toMatchObject({
+      code: 'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
     });
   });
 });

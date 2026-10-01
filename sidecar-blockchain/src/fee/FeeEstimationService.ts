@@ -6,6 +6,7 @@ import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
 import {
   ACTIVATED_ACCOUNT_FREE_BANDWIDTH,
   ESTIMATED_TRANSFER_TX_BYTES,
+  activationBurnSun,
   callerEnergyShare,
   planDelegation,
   type DelegationPlan,
@@ -34,6 +35,11 @@ import type { DelegationSource } from '../wallet/EnergyDelegationService.js';
  *     delegates from, asked of the delegation flow itself.</item>
  *   <item>Bandwidth — the SENDER's own allowance (deposit addresses typically
  *     have none); the shortfall burns TRX at the chain's byte price.</item>
+ *   <item>Activation — a refund from a deposit that has never received TRX
+ *     first creates the account, and the chain burns the creation fee from the
+ *     hot wallet that sends the 1 SUN (<c>activationBurnSun</c>: 1 TRX, plus
+ *     0.1 TRX unless the hot wallet's STAKED Bandwidth covers the bytes). The
+ *     buyer is charged it (owner decision 2026-10-02, 02 §4.6).</item>
  *   <item>Burned sun → USDT at the live TRX/USDT price, rounded UP to the
  *     2-decimal charge precision.</item>
  * </list>
@@ -86,6 +92,12 @@ export interface FeeEstimateResult {
   energyShortfall: number;
   bandwidthRequired: number;
   bandwidthAvailable: number;
+  /**
+   * SUN the hot wallet burns to activate a never-activated deposit before a
+   * refund (refund path only; 0 otherwise). Included in <c>burnSun</c>.
+   */
+  activationBurnSun: number;
+  /** Everything the charge prices: Energy shortfall + Bandwidth + activation. */
   burnSun: number;
   trxPriceUsdt: number;
   priceSource: TrxPriceSource;
@@ -249,8 +261,32 @@ export class FeeEstimationService {
     // count burns TRX for the WHOLE transaction, not just the missing bytes.
     const bandwidthBurnBytes = bandwidthAvailable >= bandwidthRequired ? 0 : bandwidthRequired;
 
+    // (3) ACTIVATION. A deposit that has only received TRC-20 is not an
+    //     account; the broadcast creates it with 1 SUN from the hot wallet
+    //     (EnergyDelegationService.ensureAccount) and the chain burns the
+    //     creation fee from the hot wallet. That burn exists only because this
+    //     refund is being sent, so it is part of what the buyer pays.
+    const activationSun = isDelegatedPath
+      ? activationBurnSun({
+          depositExists: senderState!.exists,
+          senderStakedBandwidth: hotWalletResources.stakedBandwidthAvailable,
+          createNewAccountFeeSun: feeParams.createNewAccountFeeSun,
+          createAccountBandwidthFeeSun: feeParams.createAccountBandwidthFeeSun,
+          createNewAccountBandwidthRate: feeParams.createNewAccountBandwidthRate,
+        })
+      : 0;
+    if (activationSun === null) {
+      throw new SidecarError(
+        'getchainparameters response is missing the account-creation fees a never-activated deposit needs.',
+        'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
+        true,
+      );
+    }
+
     const burnSun =
-      energyShortfall * feeParams.energyFeeSun + bandwidthBurnBytes * feeParams.bandwidthFeeSun;
+      energyShortfall * feeParams.energyFeeSun +
+      bandwidthBurnBytes * feeParams.bandwidthFeeSun +
+      activationSun;
 
     // Sun → TRX → USDT, rounded UP to the 2-decimal charge precision so the
     // charge never undershoots its own basis by a sub-cent artifact.
@@ -270,6 +306,7 @@ export class FeeEstimationService {
       energyShortfall,
       bandwidthRequired,
       bandwidthAvailable,
+      activationBurnSun: activationSun,
       burnSun,
       trxPriceUsdt: priceQuote.priceUsdt,
       priceSource: priceQuote.source,

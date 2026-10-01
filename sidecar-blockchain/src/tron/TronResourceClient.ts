@@ -16,8 +16,9 @@ import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js
  *   <item><c>getAccountResources</c> — `getaccountresource` snapshot of an
  *     account's spendable Energy / Bandwidth.</item>
  *   <item><c>getChainFeeParameters</c> — `getchainparameters` unit prices
- *     (sun per Energy, sun per Bandwidth byte). Network-wide values that the
- *     committee can change, so they are read, not assumed.</item>
+ *     (sun per Energy, sun per Bandwidth byte) and the account-creation fees a
+ *     refund from a never-activated deposit incurs. Network-wide values that
+ *     the committee can change, so they are read, not assumed.</item>
  *   <item><c>getTransactionBlockNumber</c> — `gettransactioninfobyid`: whether
  *     a broadcast step is actually IN a block, which no account read can
  *     tell.</item>
@@ -29,6 +30,14 @@ export interface AccountResources {
   energyAvailable: number;
   /** Spendable Bandwidth: free + staked allowances net of usage, floored at 0. */
   bandwidthAvailable: number;
+  /**
+   * The STAKED (or delegated-in) part of <see cref="bandwidthAvailable"/>:
+   * NetLimit − NetUsed, floored at 0. Creating an account can only draw on
+   * this part — the free daily allowance does not count (java-tron
+   * `consumeForCreateNewAccount`), so a sender without it burns
+   * `getCreateAccountFee` instead.
+   */
+  stakedBandwidthAvailable: number;
   /**
    * Network-wide Energy produced per staked TRX (TotalEnergyLimit /
    * TotalEnergyWeight), or null when the node omits the fields. Needed to turn
@@ -76,6 +85,25 @@ export interface ChainFeeParameters {
   energyFeeSun: number;
   /** Sun burned per 1 Bandwidth byte when the account has none (getTransactionFee). */
   bandwidthFeeSun: number;
+  /**
+   * Sun the chain burns from the sender when a system contract (a TRX
+   * transfer) creates a new account — getCreateNewAccountFeeInSystemContract,
+   * 1 TRX on mainnet and Nile (2026-10-02). Null when the node omits it; only
+   * a refund from a never-activated deposit needs it.
+   */
+  createNewAccountFeeSun: number | null;
+  /**
+   * Sun burned for the creating transaction's Bandwidth when the sender's
+   * STAKED Bandwidth cannot cover it — getCreateAccountFee, 0.1 TRX on mainnet
+   * and Nile (2026-10-02). Null when the node omits it.
+   */
+  createAccountBandwidthFeeSun: number | null;
+  /**
+   * Multiplier on the creating transaction's byte size when it is paid from
+   * staked Bandwidth — getCreateNewAccountBandwidthRate, 1 on mainnet and Nile.
+   * Null when the node omits it.
+   */
+  createNewAccountBandwidthRate: number | null;
 }
 
 interface AccountResourceResponse {
@@ -204,9 +232,9 @@ export class TronResourceClient {
     // An unactivated account returns an empty object — zero of everything,
     // which is exactly what the fee math should see.
     const energyAvailable = Math.max(0, (body.EnergyLimit ?? 0) - (body.EnergyUsed ?? 0));
+    const stakedBandwidthAvailable = Math.max(0, (body.NetLimit ?? 0) - (body.NetUsed ?? 0));
     const bandwidthAvailable =
-      Math.max(0, (body.freeNetLimit ?? 0) - (body.freeNetUsed ?? 0)) +
-      Math.max(0, (body.NetLimit ?? 0) - (body.NetUsed ?? 0));
+      Math.max(0, (body.freeNetLimit ?? 0) - (body.freeNetUsed ?? 0)) + stakedBandwidthAvailable;
     // Network-wide ratio, returned on every account response. Moves with the
     // total staked supply, so it is read per call and never cached as a
     // constant (measured 2026-08-29: mainnet ~9.57, Nile ~73.8).
@@ -216,7 +244,7 @@ export class TronResourceClient {
       body.TotalEnergyWeight > 0
         ? body.TotalEnergyLimit / body.TotalEnergyWeight
         : null;
-    return { energyAvailable, bandwidthAvailable, energyPerTrx };
+    return { energyAvailable, bandwidthAvailable, stakedBandwidthAvailable, energyPerTrx };
   }
 
   /**
@@ -356,7 +384,13 @@ export class TronResourceClient {
         true,
       );
     }
-    return { energyFeeSun, bandwidthFeeSun };
+    return {
+      energyFeeSun,
+      bandwidthFeeSun,
+      createNewAccountFeeSun: find('getCreateNewAccountFeeInSystemContract'),
+      createAccountBandwidthFeeSun: find('getCreateAccountFee'),
+      createNewAccountBandwidthRate: find('getCreateNewAccountBandwidthRate'),
+    };
   }
 
   private async post<T>(path: string, payload: unknown, fetchFn: typeof fetch): Promise<T> {
