@@ -20,17 +20,37 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
         _logger = logger;
     }
 
-    public Task<ResolvedGasFee> ResolveRefundFeeAsync(
+    public async Task<ResolvedGasFee> ResolveRefundFeeAsync(
         string? fromDepositAddress,
         string toAddress,
         decimal amount,
         StablecoinType token,
-        CancellationToken cancellationToken) =>
-        ResolveAsync(
+        CancellationToken cancellationToken)
+    {
+        // A refund is broadcast FROM its deposit address (the dispatch skips a
+        // refund row it cannot resolve a deposit for), so that address is the
+        // only sender an estimate can price. Asked without one, the sidecar
+        // would price a hot-wallet transfer instead — another account's Energy
+        // and Bandwidth, so the figure could be wrong either way: low where the
+        // deposit would burn, high where it would be delegated Energy. No
+        // sender, no estimate: the static setting is charged, as for any
+        // estimator outage.
+        if (string.IsNullOrWhiteSpace(fromDepositAddress))
+        {
+            var settings = await _settings.GetAsync(cancellationToken);
+            var fallback = settings.RefundGasFeeEstimateUsdt;
+            _logger.LogWarning(
+                "Gas fee estimate skipped for refund to {To}: no deposit address to price the transfer from — charging static fallback {Fallback} USDT.",
+                toAddress, fallback);
+            return new ResolvedGasFee(fallback, GasFeeSource.StaticFallback);
+        }
+
+        return await ResolveAsync(
             new GasFeeEstimateRequest(fromDepositAddress, toAddress, amount, token),
             static s => s.RefundGasFeeEstimateUsdt,
             "refund",
             cancellationToken);
+    }
 
     public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
         string toAddress,

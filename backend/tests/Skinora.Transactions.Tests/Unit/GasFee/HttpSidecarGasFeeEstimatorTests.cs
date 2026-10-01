@@ -1,7 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Skinora.Shared.Enums;
@@ -67,6 +69,33 @@ public class HttpSidecarGasFeeEstimatorTests
     }
 
     [Fact]
+    public async Task NullSender_IsOmittedFromTheBody_NotSentAsNull()
+    {
+        // The payout shape. The sidecar reads an ABSENT fromAddress as "the hot
+        // wallet" and rejects an explicit null with 400, so null must never
+        // reach the wire (PayoutGasEstimateAlwaysFallsBack).
+        string? observedBody = null;
+        var handler = new RecordingHandler(async (req, ct) =>
+        {
+            observedBody = await req.Content!.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { feeUsdt = "0.10" }),
+            };
+        });
+
+        var fee = await BuildEstimator(handler).EstimateFeeUsdtAsync(
+            SampleRequest with { FromAddress = null }, CancellationToken.None);
+
+        Assert.Equal(0.10m, fee);
+        using var body = JsonDocument.Parse(observedBody!);
+        Assert.False(
+            body.RootElement.TryGetProperty("fromAddress", out _),
+            $"fromAddress must be omitted, got: {observedBody}");
+        Assert.Equal("TBuyer0000000000000000000000000000000", body.RootElement.GetProperty("toAddress").GetString());
+    }
+
+    [Fact]
     public async Task ZeroFee_IsReturnedAsZero()
     {
         var sut = BuildEstimator(RespondWith(new { feeUsdt = "0.00" }));
@@ -89,6 +118,85 @@ public class HttpSidecarGasFeeEstimatorTests
             .EstimateFeeUsdtAsync(SampleRequest, CancellationToken.None);
 
         Assert.Null(fee);
+    }
+
+    [Fact]
+    public async Task Non200_LogsTheSidecarErrorCode()
+    {
+        // The status alone cannot say which rejection it was: a malformed
+        // request (INVALID_ESTIMATE_REQUEST — recurs on every call, a contract
+        // bug) and a missing token contract (TOKEN_CONTRACT_NOT_CONFIGURED)
+        // both answer 400. The code in the log can.
+        var logger = new ListLogger<HttpSidecarGasFeeEstimator>();
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = JsonContent.Create(new
+                {
+                    error = "INVALID_ESTIMATE_REQUEST",
+                    message = "fromAddress must be a non-empty string",
+                }),
+            }));
+
+        var fee = await BuildEstimator(handler, logger: logger)
+            .EstimateFeeUsdtAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Null(fee);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains("INVALID_ESTIMATE_REQUEST", entry.Message);
+        Assert.Contains("fromAddress must be a non-empty string", entry.Message);
+    }
+
+    [Fact]
+    public async Task Non200_WithUnreadableBody_StillReturnsNull()
+    {
+        // A proxy in front of the sidecar answers with HTML, not the error
+        // envelope; reading the code is best-effort and must not turn a
+        // fallback into an exception on a money path.
+        var logger = new ListLogger<HttpSidecarGasFeeEstimator>();
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadGateway)
+            {
+                Content = new StringContent("<html>502 Bad Gateway</html>", Encoding.UTF8, "text/html"),
+            }));
+
+        var fee = await BuildEstimator(handler, logger: logger)
+            .EstimateFeeUsdtAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Null(fee);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Contains("502", entry.Message);
+    }
+
+    [Theory]
+    [InlineData("windows-1252")] // no code-pages provider registered: InvalidOperationException
+    [InlineData("bogus")]        // unknown charset name: InvalidOperationException
+    [InlineData("utf-7")]        // refused by .NET: NotSupportedException
+    public async Task Non200_WithUndecodableCharset_StillReturnsNull(string charset)
+    {
+        // Reading the envelope decodes the body with the charset the response
+        // declares, and a charset .NET cannot decode throws something other
+        // than JsonException — none of which the outer filter catches. Before
+        // ReadErrorAsync swallowed them, such an answer escaped the estimator
+        // and aborted the payout batch instead of falling back (#327
+        // validation; the main code fell back here because it read no body).
+        var logger = new ListLogger<HttpSidecarGasFeeEstimator>();
+        var handler = new RecordingHandler((_, _) =>
+        {
+            var content = new ByteArrayContent(Encoding.UTF8.GetBytes(
+                "{\"error\":\"INVALID_ESTIMATE_REQUEST\",\"message\":\"m\"}"));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = charset };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = content });
+        });
+
+        var fee = await BuildEstimator(handler, logger: logger)
+            .EstimateFeeUsdtAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Null(fee);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains("400", entry.Message);
     }
 
     [Fact]
@@ -143,7 +251,9 @@ public class HttpSidecarGasFeeEstimatorTests
         }));
 
     private static HttpSidecarGasFeeEstimator BuildEstimator(
-        HttpMessageHandler handler, string internalKey = "")
+        HttpMessageHandler handler,
+        string internalKey = "",
+        ILogger<HttpSidecarGasFeeEstimator>? logger = null)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) };
         var options = Options.Create(new BlockchainSidecarOptions
@@ -152,7 +262,24 @@ public class HttpSidecarGasFeeEstimatorTests
             InternalKey = internalKey,
         });
         return new HttpSidecarGasFeeEstimator(
-            http, options, NullLogger<HttpSidecarGasFeeEstimator>.Instance);
+            http, options, logger ?? NullLogger<HttpSidecarGasFeeEstimator>.Instance);
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

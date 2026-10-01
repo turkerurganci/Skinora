@@ -47,6 +47,30 @@ public class ChargedGasFeeResolverTests
         Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task RefundFee_WithoutDepositAddress_ChargesStaticFallback_WithoutEstimating(
+        string? depositAddress)
+    {
+        // A refund is broadcast FROM its deposit, so the deposit is the only
+        // sender an estimate can price. Sent without one, the sidecar would
+        // price a hot-wallet transfer instead — another account's Energy and
+        // Bandwidth, so the figure could be wrong in either direction.
+        // The estimator's answer here (0.18) differs from the fallback (2.00)
+        // on purpose: a regression that still asks it must show.
+        var estimator = new StubEstimator { Result = 0.18m };
+        var sut = BuildResolver(estimator);
+
+        var resolved = await sut.ResolveRefundFeeAsync(
+            depositAddress, "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(StaticRefundFee, resolved.FeeUsdt);
+        Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
+        Assert.Empty(estimator.Requests);
+    }
+
     [Fact]
     public async Task PayoutFee_UsesRuntimeEstimate_WithHotWalletSender()
     {
@@ -60,7 +84,8 @@ public class ChargedGasFeeResolverTests
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
         var request = Assert.Single(estimator.Requests);
         // Payouts broadcast from the hot wallet — the sidecar resolves the
-        // sender itself, so the request must not pin one.
+        // sender itself, so the request must not pin one. How "no sender"
+        // reaches the wire is pinned by BlockchainSidecarEstimateFeeContractTests.
         Assert.Null(request.FromAddress);
     }
 

@@ -108,9 +108,9 @@ public sealed class PaymentRefundToBuyerConsumer
         // buyer); the static refund setting only as fallback
         // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02). The
         // deposit address is the refund's sender (RefundService broadcasts
-        // deposit-sourced); a missing PaymentAddress row degrades to the
-        // hot-wallet default inside the sidecar, which only shifts the tiny
-        // bandwidth component.
+        // deposit-sourced); without a PaymentAddress row there is no sender to
+        // price and the resolver charges the static setting instead — a
+        // hot-wallet estimate would price another account's resources.
         var depositAddress = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .Where(p => p.TransactionId == transaction.Id)
@@ -149,7 +149,7 @@ public sealed class PaymentRefundToBuyerConsumer
             PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for BUYER_REFUND.
             Type = BlockchainTransactionType.BUYER_REFUND,
             TxHash = null,
-            FromAddress = string.Empty,        // Hot-wallet address set at broadcast time (T73).
+            FromAddress = string.Empty,        // Deposit address set at dispatch (OutgoingTransferDispatchJob).
             ToAddress = notification.BuyerRefundAddress,
             Amount = decision.NetRefund,       // Net (TotalAmount − gasFee), 02 §4.6.
             Token = transaction.StablecoinType,
