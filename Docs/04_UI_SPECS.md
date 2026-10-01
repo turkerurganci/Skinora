@@ -809,6 +809,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 - Yükleniyor: Skeleton grid
 - Envanter boş: "Steam envanterinizde tradeable item bulunamadı"
 - Steam API hatası: "Envanter okunamadı, lütfen tekrar deneyin"
+- Envanter gizli (`INVENTORY_PRIVATE`): "Envanteriniz gizli — işlem başlatmak için herkese açık yapın"; tekrar dene butonu yok
+- Hesabın CS2 envanteri yok (`INVENTORY_NOT_FOUND`, Steam 401 — 07 §6.1): "Bu hesapta CS2 envanteri yok — item başka bir Steam hesabındaysa o hesapla giriş yapın"; tekrar dene butonu yok (kalıcı durum)
 
 #### Adım 2: İşlem Detayları
 

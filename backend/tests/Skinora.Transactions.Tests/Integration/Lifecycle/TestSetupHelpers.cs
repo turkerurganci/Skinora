@@ -64,6 +64,14 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
     public InventoryVisibility? ForcedVisibility { get; set; }
 
     /// <summary>
+    /// P2P-InventoryUnauthorizedMapping — the item read answers Steam's 401
+    /// (<see cref="InventoryLookupResult.NoInventory"/>: Unavailable with the
+    /// "no CS2 inventory" reason attached). Takes precedence over
+    /// <see cref="ForcedVisibility"/>.
+    /// </summary>
+    public bool ForcedNoInventory { get; set; }
+
+    /// <summary>
     /// T123 — the freshness every call arrived with, newest last. Lets a test
     /// assert that confirm-ready asked for an uncached read (07 §7.6a) without
     /// reaching into the HTTP layer.
@@ -112,6 +120,8 @@ internal sealed class FakeSteamInventoryReader : ISteamInventoryReader
 
     private Task<InventoryLookupResult> GetItemCoreAsync(string steamId64, string itemAssetId)
     {
+        if (ForcedNoInventory)
+            return Task.FromResult(InventoryLookupResult.NoInventory);
         if (ForcedVisibility is InventoryVisibility.Private)
             return Task.FromResult(InventoryLookupResult.Private);
         if (ForcedVisibility is InventoryVisibility.Unavailable)

@@ -1199,9 +1199,11 @@
       },
       "error": {
         "title": "Envanter okunamadı",
-        "message": "Steam envanteriniz şu an okunamadı. Lütfen biraz sonra tekrar deneyin. Sorun sürüyorsa Steam Community profilinizin kurulu ve envanterinizin herkese açık olduğundan emin olun — bu durumda tekrar denemek tek başına çözmez. CS2'yi bu hesapta hiç çalıştırmadıysanız envanteriniz henüz oluşmamış olabilir; oyunu bir kez açmak onu oluşturur.",
+        "message": "Steam envanteriniz şu an okunamadı. Lütfen biraz sonra tekrar deneyin.",
         "privateTitle": "Envanteriniz gizli",
-        "privateMessage": "Steam envanteriniz gizli olarak ayarlanmış. İşlem başlatmak için envanterinizi 'public' yapmalısınız."
+        "privateMessage": "Steam envanteriniz gizli olarak ayarlanmış. İşlem başlatmak için envanterinizi 'public' yapmalısınız.",
+        "notFoundTitle": "Bu hesapta CS2 envanteri yok",
+        "notFoundMessage": "Steam bu hesapta CS2 envanteri olmadığını bildiriyor — hesap hiç CS2 item'ı edinmemiş. Satmak istediğiniz item bu hesabın CS2 envanterinde olmalı; başka bir Steam hesabındaysa o hesapla giriş yapın. Tekrar denemek bunu değiştirmez."
       }
     },
     "step2": {
@@ -1285,6 +1287,7 @@
         "ITEM_NOT_IN_INVENTORY": "Seçtiğiniz item envanterinizde bulunamadı. Envanteri yenileyip tekrar deneyin.",
         "ITEM_ALREADY_LISTED": "Bu item için zaten açık bir işleminiz var. O işlemi iptal edin veya başka bir item seçin.",
         "INVENTORY_PRIVATE": "Steam envanteriniz gizli olduğu için kontrol edilemedi. Envanterinizi herkese açık yapıp tekrar deneyin.",
+        "INVENTORY_NOT_FOUND": "Steam bu hesapta CS2 envanteri olmadığını bildirdiği için item kontrol edilemedi. Item başka bir Steam hesabındaysa o hesapla giriş yapın.",
         "STEAM_UNAVAILABLE": "Steam'e ulaşılamadığı için envanteriniz kontrol edilemedi. Lütfen biraz sonra tekrar deneyin.",
         "PRICE_OUT_OF_RANGE": "Fiyat platform sınırlarının dışında. Lütfen yeniden girin.",
         "TIMEOUT_OUT_OF_RANGE": "Ödeme süresi platform sınırlarının dışında.",
@@ -1481,6 +1484,7 @@
           "errors": {
             "ITEM_NO_LONGER_AVAILABLE": "Item artık gönderilebilir durumda değil — envanterinizde yok ya da takas edilebilir değil.",
             "INVENTORY_PRIVATE": "Profiliniz gizli olduğu için Steam envanteriniz okunamadı. Envanterinizi herkese açık yapıp tekrar deneyin.",
+            "INVENTORY_NOT_FOUND": "Steam bu hesapta CS2 envanteri olmadığını bildirdiği için item doğrulanamadı. Tekrar denemek bunu değiştirmez — item hâlâ envanterinizdeyse destekle iletişime geçin.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "Alıcının Steam Mobile Authenticator'ı henüz aktif değil. Alıcı bilgilendirildi — aktif ettiğinde tekrar deneyebilirsiniz.",
             "BUYER_STEAM_ACCOUNT_LIMITED": "Alıcının Steam hesabı kısıtlı; Steam bu hesaba takas gönderilmesine izin vermiyor. Alıcı bilgilendirildi — kısıt kalktığında tekrar deneyebilirsiniz.",
             "BUYER_STEAM_ACCOUNT_TOO_NEW": "Alıcının Steam hesabı takas için henüz çok yeni (Steam ilk 15 gün izin vermiyor). Süre dolduğunda tekrar deneyebilirsiniz.",

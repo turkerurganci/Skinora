@@ -1,0 +1,8 @@
+{
+  "status": 404,
+  "body": {
+    "visibility": "NO_INVENTORY",
+    "code": "INVENTORY_NOT_FOUND",
+    "error": "Steam account 76561198347608388 has no CS2 inventory"
+  }
+}

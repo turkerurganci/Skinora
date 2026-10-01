@@ -1199,9 +1199,11 @@
       },
       "error": {
         "title": "No se pudo cargar el inventario",
-        "message": "No pudimos leer tu inventario de Steam en este momento. Vuelve a intentarlo en unos minutos. Si sigue fallando, comprueba que tu perfil de Steam Community esté configurado y que tu inventario sea público: reintentar por sí solo no lo resolverá. Si nunca has iniciado CS2 en esta cuenta, puede que su inventario aún no exista: basta con abrir el juego una vez para crearlo.",
+        "message": "No pudimos leer tu inventario de Steam en este momento. Vuelve a intentarlo en unos minutos.",
         "privateTitle": "Tu inventario es privado",
-        "privateMessage": "Tu inventario de Steam está configurado como privado. Para iniciar una transacción debes hacerlo 'público'."
+        "privateMessage": "Tu inventario de Steam está configurado como privado. Para iniciar una transacción debes hacerlo 'público'.",
+        "notFoundTitle": "Esta cuenta no tiene inventario de CS2",
+        "notFoundMessage": "Steam indica que esta cuenta no tiene inventario de CS2: nunca ha tenido un objeto de CS2. El objeto que quieres vender debe estar en el inventario de CS2 de esta cuenta; si está en otra cuenta de Steam, inicia sesión con esa. Reintentar no cambiará esto."
       }
     },
     "step2": {
@@ -1285,6 +1287,7 @@
         "ITEM_NOT_IN_INVENTORY": "El artículo seleccionado no se encontró en tu inventario. Actualiza el inventario e inténtalo de nuevo.",
         "ITEM_ALREADY_LISTED": "Ya tienes una transacción abierta para este artículo. Cancélala o elige otro artículo.",
         "INVENTORY_PRIVATE": "Tu inventario de Steam es privado, así que no se pudo comprobar. Hazlo público e inténtalo de nuevo.",
+        "INVENTORY_NOT_FOUND": "Steam indica que esta cuenta no tiene inventario de CS2, así que no se pudo comprobar el objeto. Si el objeto está en otra cuenta de Steam, inicia sesión con esa.",
         "STEAM_UNAVAILABLE": "No se pudo contactar con Steam, así que no se pudo comprobar tu inventario. Inténtalo de nuevo en unos minutos.",
         "PRICE_OUT_OF_RANGE": "El precio está fuera de los límites de la plataforma. Vuelve a introducirlo.",
         "TIMEOUT_OUT_OF_RANGE": "El plazo de pago está fuera de los límites de la plataforma.",
@@ -1481,6 +1484,7 @@
           "errors": {
             "ITEM_NO_LONGER_AVAILABLE": "Este artículo ya no se puede enviar: no está en tu inventario o no es intercambiable.",
             "INVENTORY_PRIVATE": "No pudimos leer tu inventario de Steam porque tu perfil es privado. Hazlo público e inténtalo de nuevo.",
+            "INVENTORY_NOT_FOUND": "Steam indica que esta cuenta no tiene inventario de CS2, así que no se pudo verificar el objeto. Reintentar no cambiará esto: si el objeto sigue en tu inventario, contacta con soporte.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "El Mobile Authenticator de Steam del comprador aún no está activo. Ya se le notificó: podrás intentarlo de nuevo cuando lo active.",
             "BUYER_STEAM_ACCOUNT_LIMITED": "La cuenta de Steam del comprador está limitada, por lo que Steam no permite que le llegue un intercambio. El comprador ha sido informado; puedes reintentar cuando se levante la restricción.",
             "BUYER_STEAM_ACCOUNT_TOO_NEW": "La cuenta de Steam del comprador es demasiado nueva para intercambiar (Steam bloquea los primeros 15 días). Puedes reintentar cuando termine la espera.",

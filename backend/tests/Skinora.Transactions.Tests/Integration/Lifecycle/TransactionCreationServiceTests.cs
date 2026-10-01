@@ -414,6 +414,22 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_With_InventoryNotFound_When_The_Seller_Has_No_Cs2_Inventory()
+    {
+        // P2P-InventoryUnauthorizedMapping — Steam's 401 is Unavailable to the
+        // evidence paths but permanent: the seller is told the account has no
+        // CS2 inventory instead of being sent to retry (STEAM_UNAVAILABLE) or
+        // to look for the item (ITEM_NOT_IN_INVENTORY).
+        _inventory.ForcedNoInventory = true;
+
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.InventoryNotFound, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InventoryNotFound, outcome.ErrorCode);
+    }
+
+    [Fact]
     public async Task Rejects_With_SteamUnavailable_When_Inventory_Cannot_Be_Read()
     {
         // T121 — a Steam outage is absence of information, not a missing item

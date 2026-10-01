@@ -87,7 +87,8 @@ function inventoryGetHandler(service?: InventoryService) {
     try {
       // 08 §2.3 — status codes are the contract the backend consumes today
       // (07 §6.1 maps them to 200 / 422 INVENTORY_PRIVATE / 503
-      // STEAM_UNAVAILABLE). `visibility` is carried in the body ALONGSIDE
+      // STEAM_UNAVAILABLE / 422 INVENTORY_NOT_FOUND — the last from this
+      // route's 404 + NO_INVENTORY body). `visibility` is carried in the body ALONGSIDE
       // them, never instead of them: collapsing every outcome onto 200 would
       // make a private profile look like an empty inventory to any consumer
       // that has not yet been taught to read the new field.
@@ -106,6 +107,18 @@ function inventoryGetHandler(service?: InventoryService) {
         case 'UNAVAILABLE':
           req.log.warn({ steamId, err: result.error.message }, 'Steam inventory upstream failure');
           res.status(503).json({
+            visibility: result.visibility,
+            code: result.error.code,
+            error: result.error.message,
+          });
+          return;
+        case 'NO_INVENTORY':
+          // Steam 401 — the account has no CS2 inventory (P2P-InventoryUnauthorizedMapping).
+          // 404, not 422: 422 already means PRIVATE to the backend, and a
+          // backend that predates this branch reads 404 as Unavailable — the
+          // behaviour it had before. The backend honours a 404 only when the
+          // body says NO_INVENTORY, so a missing route can never pass for it.
+          res.status(404).json({
             visibility: result.visibility,
             code: result.error.code,
             error: result.error.message,

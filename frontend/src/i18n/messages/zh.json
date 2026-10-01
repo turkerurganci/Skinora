@@ -1199,9 +1199,11 @@
       },
       "error": {
         "title": "无法加载库存",
-        "message": "目前无法读取你的 Steam 库存。请稍后重试。如果持续失败，请检查你的 Steam 社区个人资料是否已设置、库存是否公开——仅靠重试无法解决该情况。 如果你从未在此账户上启动过 CS2，其库存可能尚未创建——打开一次游戏即可创建。",
+        "message": "目前无法读取你的 Steam 库存。请稍后重试。",
         "privateTitle": "您的库存为私密",
-        "privateMessage": "您的 Steam 库存已设为私密。要发起交易,请将库存设为 'public'。"
+        "privateMessage": "您的 Steam 库存已设为私密。要发起交易,请将库存设为 'public'。",
+        "notFoundTitle": "此账户没有 CS2 库存",
+        "notFoundMessage": "Steam 显示此账户没有 CS2 库存——该账户从未拥有过 CS2 物品。要出售的物品必须在此账户的 CS2 库存中；如果物品在另一个 Steam 账户中，请使用该账户登录。重试不会改变这一情况。"
       }
     },
     "step2": {
@@ -1285,6 +1287,7 @@
         "ITEM_NOT_IN_INVENTORY": "您选择的物品未在库存中找到。请刷新库存后重试。",
         "ITEM_ALREADY_LISTED": "您已有该物品的进行中交易。请先取消该交易，或选择其他物品。",
         "INVENTORY_PRIVATE": "您的 Steam 库存设为私密，因此无法检查。请将其设为公开后重试。",
+        "INVENTORY_NOT_FOUND": "Steam 显示此账户没有 CS2 库存，因此无法检查该物品。如果物品在另一个 Steam 账户中，请使用该账户登录。",
         "STEAM_UNAVAILABLE": "无法连接 Steam，因此无法检查您的库存。请稍后重试。",
         "PRICE_OUT_OF_RANGE": "价格超出平台限制范围。请重新输入。",
         "TIMEOUT_OUT_OF_RANGE": "付款时限超出平台限制范围。",
@@ -1481,6 +1484,7 @@
           "errors": {
             "ITEM_NO_LONGER_AVAILABLE": "该物品已无法发送——它不在您的库存中，或不可交易。",
             "INVENTORY_PRIVATE": "由于您的资料为私密，我们无法读取您的 Steam 库存。请将库存设为公开后重试。",
+            "INVENTORY_NOT_FOUND": "Steam 显示此账户没有 CS2 库存，因此无法验证该物品。重试不会改变这一情况——如果物品仍在您的库存中，请联系客服。",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "买家的 Steam Mobile Authenticator 尚未启用。已通知买家——启用后您可以重试。",
             "BUYER_STEAM_ACCOUNT_LIMITED": "买家的 Steam 账户受限，Steam 不允许向该账户发送交易。买家已收到通知——限制解除后可再次尝试。",
             "BUYER_STEAM_ACCOUNT_TOO_NEW": "买家的 Steam 账户太新，暂时无法交易（Steam 限制最初 15 天）。等待期结束后可再次尝试。",

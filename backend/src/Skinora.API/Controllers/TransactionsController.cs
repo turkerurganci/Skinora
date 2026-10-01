@@ -167,6 +167,10 @@ public sealed class TransactionsController : ControllerBase
                 // (07 §6.1), so the seller sees one vocabulary across the
                 // create flow.
                 or CreateTransactionStatus.InventoryPrivate
+                // P2P-InventoryUnauthorizedMapping — 422 INVENTORY_NOT_FOUND:
+                // the account has no CS2 inventory (Steam 401). Same code the
+                // listing endpoint uses (07 §6.1); permanent, so not a 503.
+                or CreateTransactionStatus.InventoryNotFound
                 // T128 — 422 ITEM_ALREADY_LISTED (02 §2.3). 422 rather than
                 // 409: every business-rule rejection this endpoint can produce
                 // is a 422, and the seller's fix here is the same class of
@@ -379,6 +383,9 @@ public sealed class TransactionsController : ControllerBase
             // purpose: 409 would assert the item is gone. Same code and status
             // the create path uses for the same read (07 §7.2, T121).
             ConfirmReadyStatus.InventoryPrivate
+                // P2P-InventoryUnauthorizedMapping — 422 INVENTORY_NOT_FOUND,
+                // kept off the 409 for the same reason: nothing was found gone.
+                or ConfirmReadyStatus.InventoryNotFound
                 => UnprocessableEntity(ConfirmReadyErrorEnvelope(outcome)),
 
             // 503 STEAM_UNAVAILABLE — fail-closed and retryable (08 §2.2).

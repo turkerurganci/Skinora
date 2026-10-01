@@ -96,11 +96,24 @@ export function Step1ItemSelection({
 
   if (isError) {
     const isPrivate = errorCode === "INVENTORY_PRIVATE";
+    // P2P-InventoryUnauthorizedMapping — Steam's 401: the account has no CS2
+    // inventory at all. Permanent like a private profile, so no retry button.
+    const isNotFound = errorCode === "INVENTORY_NOT_FOUND";
+    const titleKey = isPrivate
+      ? "error.privateTitle"
+      : isNotFound
+        ? "error.notFoundTitle"
+        : "error.title";
+    const messageKey = isPrivate
+      ? "error.privateMessage"
+      : isNotFound
+        ? "error.notFoundMessage"
+        : "error.message";
     return (
       <ErrorState
-        title={isPrivate ? t("error.privateTitle") : t("error.title")}
-        message={isPrivate ? t("error.privateMessage") : t("error.message")}
-        onRetry={isPrivate ? undefined : onRetry}
+        title={t(titleKey)}
+        message={t(messageKey)}
+        onRetry={isPrivate || isNotFound ? undefined : onRetry}
       />
     );
   }

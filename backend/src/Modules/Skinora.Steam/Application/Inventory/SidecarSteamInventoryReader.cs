@@ -89,6 +89,11 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     "Inventory for {SteamId} is private — no evidence either way", steamId64);
                 return InventoryLookupResult.Private;
 
+            case SteamSidecarStatus.InventoryNotFound:
+                _logger.LogInformation(
+                    "Steam account {SteamId} has no CS2 inventory — no evidence either way", steamId64);
+                return InventoryLookupResult.NoInventory;
+
             case SteamSidecarStatus.Unavailable:
             default:
                 _logger.LogWarning(
@@ -138,10 +143,14 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     "Inventory for {SteamId} is private — no delivery baseline (02 §9.2)", steamId64);
                 return InventoryClassBaselineResult.Private;
 
+            // No CS2 inventory (Steam 401) leaves the baseline NULL exactly like an
+            // unreachable Steam (owner decision 2026-10-02 — message only).
+            case SteamSidecarStatus.InventoryNotFound:
             case SteamSidecarStatus.Unavailable:
             default:
                 _logger.LogWarning(
-                    "Steam sidecar unavailable for {SteamId} — no delivery baseline", steamId64);
+                    "Steam sidecar unavailable for {SteamId} ({Status}) — no delivery baseline",
+                    steamId64, result.Status);
                 return InventoryClassBaselineResult.Unavailable;
         }
     }
@@ -179,10 +188,12 @@ public sealed class SidecarSteamInventoryReader : ISteamInventoryReader
                     "Inventory for {SteamId} is private — no fingerprint (03 §6.3)", steamId64);
                 return InventoryFingerprintResult.Private;
 
+            case SteamSidecarStatus.InventoryNotFound:
             case SteamSidecarStatus.Unavailable:
             default:
                 _logger.LogWarning(
-                    "Steam sidecar unavailable for {SteamId} — no fingerprint", steamId64);
+                    "Steam sidecar unavailable for {SteamId} ({Status}) — no fingerprint",
+                    steamId64, result.Status);
                 return InventoryFingerprintResult.Unavailable;
         }
     }

@@ -34,6 +34,11 @@ public static class TransactionErrorCodes
     // Skinora.Transactions does not reference Skinora.Steam (the dependency
     // runs the other way), exactly as SteamUnavailable below already does.
     public const string InventoryPrivate = "INVENTORY_PRIVATE";
+
+    // P2P-InventoryUnauthorizedMapping — Steam's 401: the seller's account has
+    // no CS2 inventory at all. Same literal as the listing endpoint's code
+    // (07 §6.1); permanent, so it is 422 and never STEAM_UNAVAILABLE's "retry".
+    public const string InventoryNotFound = "INVENTORY_NOT_FOUND";
     public const string PriceOutOfRange = "PRICE_OUT_OF_RANGE";
     public const string TimeoutOutOfRange = "TIMEOUT_OUT_OF_RANGE";
     public const string OpenLinkDisabled = "OPEN_LINK_DISABLED";

@@ -21,4 +21,7 @@ public enum GetInventoryStatus
     Success,
     InventoryPrivate,
     SteamUnavailable,
+
+    /// <summary>The account has no CS2 inventory (Steam 401) — 422 <c>INVENTORY_NOT_FOUND</c>.</summary>
+    InventoryNotFound,
 }

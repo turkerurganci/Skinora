@@ -30,7 +30,7 @@ Anonim envanter ucu ölçümde **dört** statü döndürdü. Başarısızlık g�
 | `200` | `{assets, descriptions, asset_properties, more_items*, last_assetid*, total_inventory_count, success, rwgrsn}` | Envanter okundu |
 
 <sup>\* `more_items` ve `last_assetid` **koşulludur** — yalnız devam eden bir sayfa varken gelirler; son sayfada anahtar olarak hiç bulunmazlar (§4.2, B9).</sup>
-| `401` | `null` | **Private değil** — ayrı bir başarısızlık modu, §2 |
+| `401` | `null` | **Private değil** — hesabın bu uygulama için **hiç envanteri yok** (2026-10-02 ölçümü, §2) |
 | `403` | `null` | Envanter gizli (**private**) |
 | `429` | `null` | Rate limit, §3 |
 
@@ -101,6 +101,27 @@ hesaplarında yaygın bir durum.
 
 **Sahiplik:** bu görev kod teslim etmez (11 §P2.5 *"spike, kod teslimi yok"*). Kayıt:
 `DEFERRED_BACKLOG` → `P2P-InventoryUnauthorizedMapping`.
+
+### 2026-10-02 ölçümü — 401'in sebebi: uygulama envanteri yok
+
+Aynı altı hesap + üç hesap daha, anonim, istekler arası 8–20 sn (Community ucu 8 sn arayla 15 istekten sonra 429 verdi; o hesap 4 dk sonra yeniden ölçüldü):
+
+| SteamID64 | `730/2` (CS2) | `753/6` (Steam) | Diğer uygulama | Profil (`?xml=1`) |
+|---|---|---|---|---|
+| `76561197960287930` | 403 | 403 | — | `friendsonly` |
+| `76561198311457678` | 403 | 403 | `440/2` (TF2) **403** · `570/2` (Dota 2) **401** | `public` |
+| `76561198347608388` | 401 | 403 | — | *"has not yet set up their Steam Community profile"* |
+| `76561199494563496` | 401 | 403 | — | (aynı) |
+| `76561199601092865` | 401 | 403 | — | (aynı) |
+| `76561199593523305` | 401 | 403 | — | `public` |
+| `76561199053273410` | **200**, `total_inventory_count: 0` | 200, `0` | `440/2` **401** | — |
+| `76561198652999063` | 200, `1` | — | `440/2` **401** | — |
+
+**Kanıtlanan:** 401 = hesabın **o uygulama için envanteri hiç yok**, ve bu kontrol gizlilikten **önce** gelir — envanteri gizli olan hesap, envanteri bulunan bir oyunda (TF2) 403, hiç bulunmayan bir oyunda (Dota 2) 401 döndürdü. Boş ama var olan bir envanter 401 değil, 200 + `total_inventory_count: 0` döner. Yukarıdaki dört 401 vakası da böyle açıklanıyor: profili kurulmamış üç hesabın `753/6`'sı 403 (kurulmamış profil gizlidir) ama CS2 envanterleri hiç yok; dördüncü vakada profil açık ama envanteri gizli (`753/6` 403) ve CS2 envanteri yok. 2026-08-29 prova hesabı (`730/2` 401, `753/6` 200) da aynı kurala uyuyor.
+
+**Düzeltilen kayıt:** backlog satırındaki *"ikisi de 401 → gizlilik"* ayırt etme kuralı yanlıştı — profili kurulmamış hesaplar 401/403 veriyor, gizli hesaplar 403/403; iki 401'e hiç rastlanmadı. İkinci bir Steam çağrısına (`753/6`) gerek yok: 401'in kendisi cevaptır.
+
+**Uygulanan (proje sahibi kararı 2026-10-02 — yalnız mesaj):** fetcher ilk sayfadaki 401 + `null`'ı ayrı bir dizgeyle fırlatır, sidecar `NO_INVENTORY` (HTTP 404) döner, backend `SteamSidecarStatus.InventoryNotFound`'a çevirir; satıcıya bakan üç uç 422 `INVENTORY_NOT_FOUND` gösterir (07 §6.1, §7.2, §7.6a). Teslimat kanıtı, mutabakat ve başlangıç sayımı için okuma `Unavailable` olarak kalır — 401'den sıfır sayım türetilmez. Yukarıdaki *"Kaybolduğu yer"* zinciri bu nedenle artık satıcı mesajında kopmuyor.
 
 ---
 

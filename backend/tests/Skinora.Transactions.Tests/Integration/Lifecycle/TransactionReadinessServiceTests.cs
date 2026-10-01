@@ -321,6 +321,23 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Seller_Without_A_Cs2_Inventory_Gets_InventoryNotFound_Not_A_Retry()
+    {
+        // P2P-InventoryUnauthorizedMapping — Steam's 401: permanent, so not the
+        // retryable STEAM_UNAVAILABLE; and nothing was found gone, so not the
+        // 409 ITEM_NO_LONGER_AVAILABLE either.
+        var transaction = await CreateAcceptedTransactionAsync();
+        _inventory.ForcedNoInventory = true;
+
+        var outcome = await BuildSut().ConfirmReadyAsync(
+            _seller.Id, transaction.Id, CancellationToken.None);
+
+        Assert.Equal(ConfirmReadyStatus.InventoryNotFound, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InventoryNotFound, outcome.ErrorCode);
+        await AssertUnchangedAsync(transaction.Id);
+    }
+
+    [Fact]
     public async Task The_Three_Unreadable_Outcomes_Map_To_Three_Distinct_Codes()
     {
         // Guard against a future refactor collapsing them back onto one code —

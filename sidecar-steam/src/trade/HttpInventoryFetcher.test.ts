@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Logger } from '../logger.js';
-import { HttpInventoryFetcher, PRIVATE_INVENTORY_MESSAGE } from './HttpInventoryFetcher.js';
+import {
+  HttpInventoryFetcher,
+  NO_INVENTORY_MESSAGE,
+  PRIVATE_INVENTORY_MESSAGE,
+} from './HttpInventoryFetcher.js';
 
 /**
  * F2 — `UITour-InventoryClientRefusedBySteam`.
@@ -150,6 +154,30 @@ describe('HttpInventoryFetcher (F2)', () => {
     const { fetcher } = makeFetcher([textResponse('{"success":0}', 403)]);
 
     await expect(fetcher.fetch('765', 'english')).rejects.toThrow('HTTP error 403');
+  });
+
+  // P2P-InventoryUnauthorizedMapping — 2026-10-02 ölçümü: 401 + `null` = bu
+  // hesabın bu uygulama için hiç envanteri yok (gizlilikten önce gelir).
+  it('ilk sayfada 401 + gövde `null` → envanter-yok dizgesi, yeniden denenmez', async () => {
+    const { fetcher, fetchImpl } = makeFetcher([textResponse('null', 401)]);
+
+    await expect(fetcher.fetch('765', 'english')).rejects.toThrow(NO_INVENTORY_MESSAGE);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('401 ama gövde `null` DEĞİL → envanter-yok sayılmaz', async () => {
+    const { fetcher } = makeFetcher([textResponse('{"success":0}', 401)]);
+
+    await expect(fetcher.fetch('765', 'english')).rejects.toThrow('HTTP error 401');
+  });
+
+  it('sonraki bir sayfada 401 → envanter-yok sayılmaz (ilk sayfası okunmuş envanter vardır)', async () => {
+    const { fetcher } = makeFetcher([
+      jsonResponse({ ...PAGE_ONE, more_items: 1, last_assetid: 'A1' }),
+      textResponse('null', 401),
+    ]);
+
+    await expect(fetcher.fetch('765', 'english')).rejects.toThrow('HTTP error 401');
   });
 
   it('429 yeniden denenir ve sonunda başarılı olur', async () => {

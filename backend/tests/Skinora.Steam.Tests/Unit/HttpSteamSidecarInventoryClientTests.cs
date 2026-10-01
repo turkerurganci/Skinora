@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Skinora.Steam.Application.Inventory;
@@ -95,6 +96,7 @@ public sealed class HttpSteamSidecarInventoryClientTests
     [InlineData("PRIVATE", SteamSidecarStatus.InventoryPrivate)]
     [InlineData("private", SteamSidecarStatus.InventoryPrivate)]
     [InlineData("UNAVAILABLE", SteamSidecarStatus.Unavailable)]
+    [InlineData("NO_INVENTORY", SteamSidecarStatus.InventoryNotFound)]
     // An unknown value is absence of information, never "readable".
     [InlineData("SOMETHING_NEW", SteamSidecarStatus.Unavailable)]
     public async Task GetInventoryAsync_Honours_A_NonPublic_Visibility_On_200(
@@ -218,6 +220,51 @@ public sealed class HttpSteamSidecarInventoryClientTests
         Assert.Null(result.Inventory);
     }
 
+    /// <summary>
+    /// P2P-InventoryUnauthorizedMapping — the response the sidecar sends for
+    /// Steam's 401, read from the file the sidecar's own route test answers
+    /// against (<c>sidecar-steam/contracts/inventory/no-inventory.response.json</c>).
+    /// </summary>
+    [Fact]
+    public async Task GetInventoryAsync_Returns_InventoryNotFound_For_The_Sidecar_NoInventory_Contract()
+    {
+        var contract = JsonNode.Parse(File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(), "sidecar-steam", "contracts", "inventory",
+            "no-inventory.response.json")))!;
+        var status = (HttpStatusCode)contract["status"]!.GetValue<int>();
+        var body = contract["body"]!.ToJsonString();
+        var handler = new StubHandler(_ => new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        });
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: true, CancellationToken.None);
+
+        Assert.Equal(SteamSidecarStatus.InventoryNotFound, result.Status);
+        Assert.Null(result.Inventory);
+    }
+
+    [Theory]
+    // A missing route answers 404 too — without the body it must not tell a
+    // seller that their inventory does not exist.
+    [InlineData("")]
+    [InlineData("{\"error\":\"Not Found\"}")]
+    [InlineData("{\"visibility\":\"UNAVAILABLE\",\"code\":\"STEAM_UNAVAILABLE\"}")]
+    [InlineData("not json")]
+    public async Task GetInventoryAsync_Reads_A_404_Without_The_NoInventory_Body_As_Unavailable(string body)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+        });
+        var sut = BuildClient(handler);
+
+        var result = await sut.GetInventoryAsync(SteamId, bypassCache: false, CancellationToken.None);
+
+        Assert.Equal(SteamSidecarStatus.Unavailable, result.Status);
+    }
+
     [Fact]
     public async Task GetInventoryAsync_Returns_Unavailable_On_5xx()
     {
@@ -289,6 +336,18 @@ public sealed class HttpSteamSidecarInventoryClientTests
     }
 
     // ---------- helpers ----------
+
+    private static string FindRepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "docker-compose.yml")))
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        throw new InvalidOperationException("Repository root (docker-compose.yml) not found.");
+    }
 
     private static HttpResponseMessage OkJson(string json) =>
         new(HttpStatusCode.OK)

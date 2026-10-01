@@ -158,6 +158,26 @@ public sealed class SidecarSteamInventoryReaderTests
         Assert.All(new[] { empty, priv, down }, r => Assert.Null(r.Item));
     }
 
+    /// <summary>
+    /// P2P-InventoryUnauthorizedMapping — owner decision 2026-10-02, message
+    /// only: Steam's 401 must read exactly like Unavailable to every evidence
+    /// path (Visibility), and carry its reason only for the seller-facing ones.
+    /// </summary>
+    [Fact]
+    public async Task GetItemAsync_Reports_No_Cs2_Inventory_As_Unavailable_With_The_Reason_Attached()
+    {
+        var missing = await ReadWith(new SteamSidecarInventoryResult(
+            SteamSidecarStatus.InventoryNotFound, Inventory: null));
+        var down = await ReadWith(new SteamSidecarInventoryResult(
+            SteamSidecarStatus.Unavailable, Inventory: null));
+
+        Assert.Equal(InventoryVisibility.Unavailable, missing.Visibility);
+        Assert.Null(missing.Item);
+        Assert.True(missing.InventoryMissing);
+        // An ordinary outage must not claim the inventory does not exist.
+        Assert.False(down.InventoryMissing);
+    }
+
     [Fact]
     public async Task GetItemAsync_Returns_Unavailable_On_Empty_Inputs_Without_Calling_Sidecar()
     {
@@ -303,6 +323,19 @@ public sealed class SidecarSteamInventoryReaderTests
         Assert.Equal(InventoryVisibility.Private, priv.Visibility);
         Assert.Equal(InventoryVisibility.Unavailable, down.Visibility);
         Assert.All(new[] { priv, down }, r => Assert.Empty(r.AssetIds));
+    }
+
+    [Fact]
+    public async Task CaptureClassBaseline_Leaves_No_Baseline_For_An_Account_Without_A_Cs2_Inventory()
+    {
+        // Message only (owner decision 2026-10-02): the 401 does NOT become a
+        // zero baseline. A zero is a claim a delivery would later be measured
+        // against; this change was approved without that claim.
+        var missing = await BaselineWith(new SteamSidecarInventoryResult(
+            SteamSidecarStatus.InventoryNotFound, Inventory: null));
+
+        Assert.Equal(InventoryVisibility.Unavailable, missing.Visibility);
+        Assert.Empty(missing.AssetIds);
     }
 
     [Fact]

@@ -366,6 +366,9 @@ export const POST_ERROR_CODES = new Set([
   // Each needs its own message: one asks the seller to change a Steam setting,
   // the other asks them to wait and retry.
   "INVENTORY_PRIVATE",
+  // P2P-InventoryUnauthorizedMapping — Steam's 401: the account has no CS2
+  // inventory. Permanent, so it must not borrow STEAM_UNAVAILABLE's "retry".
+  "INVENTORY_NOT_FOUND",
   "STEAM_UNAVAILABLE",
   // 08 §2.2a — the seller's own Steam trade restrictions. Their step-4 strings
   // shipped in all four locales with #319 but never reached a screen: the codes

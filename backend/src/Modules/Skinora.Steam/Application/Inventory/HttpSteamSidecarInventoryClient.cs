@@ -80,6 +80,21 @@ public sealed class HttpSteamSidecarInventoryClient
                 return new SteamSidecarInventoryResult(SteamSidecarStatus.InventoryPrivate, Inventory: null);
             }
 
+            // P2P-InventoryUnauthorizedMapping — Steam's 401 ("this account has
+            // no CS2 inventory") arrives as 404. The body must say so: a 404
+            // without it is a missing route or an older sidecar, i.e. absence
+            // of information, and must not tell a seller their inventory does
+            // not exist.
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                var declaredNotFound = await ReadsNoInventoryAsync(response, cancellationToken);
+                if (declaredNotFound)
+                {
+                    _logger.LogInformation("Steam account {SteamId} has no CS2 inventory", steamId);
+                    return new SteamSidecarInventoryResult(SteamSidecarStatus.InventoryNotFound, Inventory: null);
+                }
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
@@ -176,9 +191,35 @@ public sealed class HttpSteamSidecarInventoryClient
         {
             "PUBLIC" => SteamSidecarStatus.Success,
             "PRIVATE" => SteamSidecarStatus.InventoryPrivate,
+            "NO_INVENTORY" => SteamSidecarStatus.InventoryNotFound,
             _ => SteamSidecarStatus.Unavailable,
         };
     }
+
+    /// <summary>
+    /// Whether a 404 body carries <c>visibility: NO_INVENTORY</c>. Any read or
+    /// parse failure answers <c>false</c>, so the caller falls through to
+    /// Unavailable.
+    /// </summary>
+    private async Task<bool> ReadsNoInventoryAsync(
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var body = await response.Content
+                .ReadFromJsonAsync<SidecarFailureEnvelope>(JsonOptions, cancellationToken);
+            return ParseVisibility(body?.Visibility) == SteamSidecarStatus.InventoryNotFound;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            _logger.LogWarning(ex, "Steam sidecar 404 body could not be parsed");
+            return false;
+        }
+    }
+
+    private sealed record SidecarFailureEnvelope(
+        [property: JsonPropertyName("visibility")] string? Visibility,
+        [property: JsonPropertyName("code")] string? Code);
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string relativeUri)
     {

@@ -53,15 +53,21 @@ export interface InventoryResponse {
 }
 
 /**
- * 08 §2.3 — three-valued read outcome (v3.0).
+ * 08 §2.3 — the read outcome (v3.0: three values; NO_INVENTORY added 2026-10-02).
  *
  * `Private` and `Unavailable` are NOT interchangeable and neither is
  * "inventory read, item absent": the first is a closed evidence path, the
  * second is absence of information, the third is evidence. Collapsing them
  * lets a Steam outage be read as "item never delivered" and refund a
  * transaction that was in fact settled.
+ *
+ * `NO_INVENTORY` (P2P-InventoryUnauthorizedMapping, 2026-10-02) is Steam's
+ * 401: the account has no CS2 inventory at all. It is reported on its own so
+ * the seller is told the real, permanent reason instead of "retry later"; the
+ * backend still treats it as absence of information for delivery evidence
+ * (owner decision: message only).
  */
-export type InventoryVisibility = 'PUBLIC' | 'PRIVATE' | 'UNAVAILABLE';
+export type InventoryVisibility = 'PUBLIC' | 'PRIVATE' | 'UNAVAILABLE' | 'NO_INVENTORY';
 
 /**
  * Result of one inventory read. The visibility is a **value**, not control
@@ -75,7 +81,8 @@ export type InventoryVisibility = 'PUBLIC' | 'PRIVATE' | 'UNAVAILABLE';
 export type InventoryReadResult =
   | { visibility: 'PUBLIC'; inventory: InventoryResponse }
   | { visibility: 'PRIVATE'; error: InventoryPrivateError }
-  | { visibility: 'UNAVAILABLE'; error: SteamUnavailableError };
+  | { visibility: 'UNAVAILABLE'; error: SteamUnavailableError }
+  | { visibility: 'NO_INVENTORY'; error: InventoryNotFoundError };
 
 /** Per-read options (08 §2.3 cache bypass). */
 export interface InventoryReadOptions {
@@ -194,7 +201,7 @@ export class SteamCommunityInventoryFetcher implements InventoryFetcher {
  *      `assets + descriptions` table) and write it back to cache.
  *
  * The read never throws for expected Steam conditions — it returns an
- * {@link InventoryReadResult} whose `visibility` distinguishes Public / Private
+ * {@link InventoryReadResult} whose `visibility` distinguishes Public / Private / NoInventory
  * / Unavailable (08 §2.3). Only programming errors propagate.
  *
  * Invalidation: callers (backend on transaction create) hit the cache directly
@@ -213,6 +220,13 @@ export class InventoryService {
    */
   private static readonly PRIVATE_INVENTORY_MARKER = 'This profile is private.';
 
+  /**
+   * The fetcher's message for Steam's 401 + `null`: the account has no CS2
+   * inventory at all (`HttpInventoryFetcher.NO_INVENTORY_MESSAGE`). Matched
+   * by equality like the private marker; anything else stays Unavailable.
+   */
+  private static readonly NO_INVENTORY_MARKER = 'This account has no inventory for this app.';
+
   constructor(
     private readonly fetcher: InventoryFetcher,
     private readonly cache: InventoryCache,
@@ -222,7 +236,7 @@ export class InventoryService {
   ) {}
 
   /**
-   * Resolve `steamId`'s CS2 inventory as a three-valued result (08 §2.3).
+   * Resolve `steamId`'s CS2 inventory as a visibility-tagged result (08 §2.3).
    *
    * Pass `{ refresh: true }` to bypass the cache read; the fresh result is
    * still cached for subsequent ordinary readers. A failed refresh leaves any
@@ -256,6 +270,10 @@ export class InventoryService {
       if (message === InventoryService.PRIVATE_INVENTORY_MARKER) {
         this.log.info({ steamId }, 'Steam inventory is private');
         return { visibility: 'PRIVATE', error: new InventoryPrivateError(steamId) };
+      }
+      if (message === InventoryService.NO_INVENTORY_MARKER) {
+        this.log.info({ steamId }, 'Steam account has no CS2 inventory (401)');
+        return { visibility: 'NO_INVENTORY', error: new InventoryNotFoundError(steamId) };
       }
       this.log.warn({ steamId, err: message }, 'Steam inventory fetch failed');
       return { visibility: 'UNAVAILABLE', error: new SteamUnavailableError(message) };
@@ -313,6 +331,18 @@ export class InventoryPrivateError extends SidecarError {
   constructor(public readonly steamId: string) {
     super(`Steam inventory for ${steamId} is private`, 'INVENTORY_PRIVATE', false);
     this.name = 'InventoryPrivateError';
+  }
+}
+
+/**
+ * Steam's 401: the account has no CS2 inventory — never created, because the
+ * account has never held a CS2 item. Not retryable (08 §2.7): the condition
+ * lasts until the account gets one.
+ */
+export class InventoryNotFoundError extends SidecarError {
+  constructor(public readonly steamId: string) {
+    super(`Steam account ${steamId} has no CS2 inventory`, 'INVENTORY_NOT_FOUND', false);
+    this.name = 'InventoryNotFoundError';
   }
 }
 
