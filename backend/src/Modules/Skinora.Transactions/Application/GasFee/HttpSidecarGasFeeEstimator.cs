@@ -100,12 +100,15 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
         }
     }
 
-    // The sidecar answers every rejection with {error, message}. The code is
-    // what separates "this request is malformed" (INVALID_ESTIMATE_REQUEST —
-    // recurs on every call) from a price-feed outage; with the bare status
-    // code alone, every payout estimate fell back unnoticed until a live
-    // rehearsal (PayoutGasEstimateAlwaysFallsBack). Best-effort: a proxy page
-    // in place of the envelope still falls back, it just logs no code.
+    // The sidecar answers every rejection with {error, message}. The status
+    // separates a rejected request (400) from a retryable outage (502); the
+    // code says which one it was — INVALID_ESTIMATE_REQUEST, a malformed
+    // request, recurs on every call. Best-effort: a body that cannot be read
+    // still falls back, it just logs no code. That covers more than JSON
+    // errors — a proxy's HTML page throws JsonException, a charset .NET cannot
+    // decode InvalidOperationException, UTF-7 NotSupportedException — and none
+    // of them may turn a fallback into an exception on a money path (#327
+    // validation). Cancellation still propagates.
     private static async Task<ErrorEnvelope?> ReadErrorAsync(
         HttpResponseMessage response, CancellationToken cancellationToken)
     {
@@ -114,7 +117,7 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
             return await response.Content.ReadFromJsonAsync<ErrorEnvelope>(
                 JsonOptions, cancellationToken);
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }

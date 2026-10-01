@@ -110,7 +110,7 @@ public sealed class PaymentRefundToBuyerConsumer
         // deposit address is the refund's sender (RefundService broadcasts
         // deposit-sourced); without a PaymentAddress row there is no sender to
         // price and the resolver charges the static setting instead — a
-        // hot-wallet estimate would miss the deposit's Energy cost.
+        // hot-wallet estimate would price another account's resources.
         var depositAddress = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .Where(p => p.TransactionId == transaction.Id)
@@ -149,7 +149,7 @@ public sealed class PaymentRefundToBuyerConsumer
             PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for BUYER_REFUND.
             Type = BlockchainTransactionType.BUYER_REFUND,
             TxHash = null,
-            FromAddress = string.Empty,        // Hot-wallet address set at broadcast time (T73).
+            FromAddress = string.Empty,        // Deposit address set at dispatch (OutgoingTransferDispatchJob).
             ToAddress = notification.BuyerRefundAddress,
             Amount = decision.NetRefund,       // Net (TotalAmount − gasFee), 02 §4.6.
             Token = transaction.StablecoinType,

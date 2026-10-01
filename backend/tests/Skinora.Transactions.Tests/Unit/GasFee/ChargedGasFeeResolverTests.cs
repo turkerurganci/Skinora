@@ -56,8 +56,8 @@ public class ChargedGasFeeResolverTests
     {
         // A refund is broadcast FROM its deposit, so the deposit is the only
         // sender an estimate can price. Sent without one, the sidecar would
-        // price a hot-wallet transfer instead — and the hot wallet carries
-        // delegated Energy a deposit does not, so the figure comes back low.
+        // price a hot-wallet transfer instead — another account's Energy and
+        // Bandwidth, so the figure could be wrong in either direction.
         // The estimator's answer here (0.18) differs from the fallback (2.00)
         // on purpose: a regression that still asks it must show.
         var estimator = new StubEstimator { Result = 0.18m };

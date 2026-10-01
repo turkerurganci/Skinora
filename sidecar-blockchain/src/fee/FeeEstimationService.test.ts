@@ -456,4 +456,23 @@ describe('FeeEstimationService — request handling', () => {
       '10200000',
     );
   });
+
+  it('simulates a payout as the hot wallet when the request names no sender', async () => {
+    // The backend omits fromAddress on payouts (PayoutGasEstimateAlwaysFallsBack),
+    // and the hot wallet is the account that signs them. A stake account is
+    // configured so that a sender taken from the delegation owner — or from
+    // the recipient — differs from the hot wallet and fails here; before this
+    // test only an EMPTY sender failed, via HOT_WALLET_NOT_CONFIGURED (#327
+    // validation).
+    const { service, resourceClient } = buildService({ stakeAccount: true });
+
+    await service.estimate(payout);
+
+    expect(resourceClient.estimateTransferEnergy).toHaveBeenCalledWith(
+      USDT_CONTRACT,
+      HOT_WALLET,
+      BUYER,
+      '10200000',
+    );
+  });
 });

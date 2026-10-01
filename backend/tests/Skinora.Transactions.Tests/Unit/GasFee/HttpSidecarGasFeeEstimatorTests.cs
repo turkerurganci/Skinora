@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -122,10 +123,10 @@ public class HttpSidecarGasFeeEstimatorTests
     [Fact]
     public async Task Non200_LogsTheSidecarErrorCode()
     {
-        // The code is what tells "our request is malformed" (recurs on every
-        // call — a contract bug) apart from a price-feed outage. The bare
-        // status code the log used to carry hid the former until a live
-        // rehearsal measured it.
+        // The status alone cannot say which rejection it was: a malformed
+        // request (INVALID_ESTIMATE_REQUEST — recurs on every call, a contract
+        // bug) and a missing token contract (TOKEN_CONTRACT_NOT_CONFIGURED)
+        // both answer 400. The code in the log can.
         var logger = new ListLogger<HttpSidecarGasFeeEstimator>();
         var handler = new RecordingHandler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
@@ -166,6 +167,36 @@ public class HttpSidecarGasFeeEstimatorTests
         Assert.Null(fee);
         var entry = Assert.Single(logger.Entries);
         Assert.Contains("502", entry.Message);
+    }
+
+    [Theory]
+    [InlineData("windows-1252")] // no code-pages provider registered: InvalidOperationException
+    [InlineData("bogus")]        // unknown charset name: InvalidOperationException
+    [InlineData("utf-7")]        // refused by .NET: NotSupportedException
+    public async Task Non200_WithUndecodableCharset_StillReturnsNull(string charset)
+    {
+        // Reading the envelope decodes the body with the charset the response
+        // declares, and a charset .NET cannot decode throws something other
+        // than JsonException — none of which the outer filter catches. Before
+        // ReadErrorAsync swallowed them, such an answer escaped the estimator
+        // and aborted the payout batch instead of falling back (#327
+        // validation; the main code fell back here because it read no body).
+        var logger = new ListLogger<HttpSidecarGasFeeEstimator>();
+        var handler = new RecordingHandler((_, _) =>
+        {
+            var content = new ByteArrayContent(Encoding.UTF8.GetBytes(
+                "{\"error\":\"INVALID_ESTIMATE_REQUEST\",\"message\":\"m\"}"));
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = charset };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = content });
+        });
+
+        var fee = await BuildEstimator(handler, logger: logger)
+            .EstimateFeeUsdtAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Null(fee);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains("400", entry.Message);
     }
 
     [Fact]

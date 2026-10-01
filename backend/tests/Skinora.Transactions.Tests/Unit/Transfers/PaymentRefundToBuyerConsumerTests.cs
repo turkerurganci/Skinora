@@ -128,6 +128,37 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     }
 
     [Fact]
+    public async Task DepositAddress_IsTheRefundEstimateSender()
+    {
+        // The refund is broadcast FROM the transaction's deposit, so the
+        // deposit is the sender the estimate must price. A broken lookup would
+        // not fail loudly: the resolver charges the static refund setting for
+        // a sender-less refund, so every cancellation refund would silently
+        // pay 2.00 instead of the runtime estimate (#327 validation — passing
+        // null here left every test green).
+        var tx = await SeedCancelledAsync(price: 100m, commission: 2m);
+        const string depositAddress = "TDepositRefund0000000000000000000000";
+        _db.Set<PaymentAddress>().Add(new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            Address = depositAddress,
+            HdWalletIndex = 7,
+            ExpectedAmount = tx.TotalAmount,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+        await _db.SaveChangesAsync();
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(depositAddress, call.From);
+        Assert.Equal(BuyerRefundAddress, call.To);
+    }
+
+    [Fact]
     public async Task Redelivery_QueuesExactlyOneRow()
     {
         // At-least-once outbox redelivery: the AnyAsync guard makes the second

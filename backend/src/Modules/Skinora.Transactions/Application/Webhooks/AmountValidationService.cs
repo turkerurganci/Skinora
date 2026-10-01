@@ -619,7 +619,7 @@ public sealed class AmountValidationService : IAmountValidationService
             PaymentAddressId = null,
             Type = type,
             TxHash = null,
-            FromAddress = string.Empty, // Hot-wallet address set at T73 broadcast time.
+            FromAddress = string.Empty, // Deposit address set at dispatch (OutgoingTransferDispatchJob).
             ToAddress = sourceAddress,
             Amount = amount,
             Token = token,

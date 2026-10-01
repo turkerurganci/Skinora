@@ -256,7 +256,7 @@ public sealed class SellerPayoutQueueJob
             PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for SELLER_PAYOUT.
             Type = BlockchainTransactionType.SELLER_PAYOUT,
             TxHash = null,
-            FromAddress = string.Empty,        // Hot-wallet address set at broadcast time.
+            FromAddress = string.Empty,        // Stays empty: the sidecar signs with the hot wallet; nothing writes it back.
             ToAddress = transaction.SellerPayoutAddress,
             Amount = payout,
             Token = transaction.StablecoinType,

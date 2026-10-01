@@ -32,7 +32,16 @@ namespace Skinora.Transactions.Tests.Contract;
 /// <see cref="HttpSidecarGasFeeEstimator"/>, so a regression in either — the
 /// resolver's choice of sender, the serializer's null handling, the amount
 /// format — breaks this test. The sidecar test breaks if the handler stops
-/// accepting the same files.
+/// accepting the same files, or if an example's amount stops passing the
+/// service's own amount rule.
+/// </para>
+/// <para>
+/// The payout example carries four integer and six fraction digits on
+/// purpose: USDT and USDC have six decimals, and only a value that uses them
+/// all pins the format. The first examples ("10", "10.2") read the same under
+/// "0.#" as under "0.######", so a format that dropped precision — or added a
+/// group separator the sidecar rejects — left both sides green (#327
+/// validation).
 /// </para>
 /// </remarks>
 public sealed class BlockchainSidecarEstimateFeeContractTests
