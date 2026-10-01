@@ -721,6 +721,30 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     }
 
     [Fact]
+    public async Task SameDeferralCount_OldestDeliveryIsTakenFirst()
+    {
+        // The deferral count only goes in front of the delivery order; within
+        // one count the window still takes the oldest delivery first. 21
+        // payable rows for a 20-row batch: the one left for the next tick must
+        // be the newest. It is seeded first so that insertion order cannot pass
+        // for delivery order.
+        var newest = await SeedDeliveredAsync(price: 100m, commission: 2m,
+            configure: t => t.ItemDeliveredAt = T0.AddDays(-9));
+        for (var i = 0; i < 20; i++)
+        {
+            var minute = i;
+            await SeedDeliveredAsync(price: 100m, commission: 2m,
+                configure: t => t.ItemDeliveredAt = T0.AddDays(-10).AddMinutes(minute));
+        }
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await HasPayoutRowAsync(newest.Id));
+        Assert.Equal(20, await _db.Set<BlockchainTransaction>().CountAsync(
+            b => b.Type == BlockchainTransactionType.SELLER_PAYOUT));
+    }
+
+    [Fact]
     public async Task DeferredPayout_IsQueuedAtTheFullPrice_OnceTheEstimateDrops()
     {
         _gasFee.PayoutFee = 3.00m;
