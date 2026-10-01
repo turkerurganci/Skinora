@@ -34,7 +34,7 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 | 4 | `SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES` | payment_timeout_max_minutes | int | 60 | Ödeme timeout max |
 | 5 | `SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES` | payment_timeout_default_minutes | int | 30 | Ödeme timeout varsayılan (min ≤ x ≤ max) |
 | 6 | `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` | delivery_timeout_minutes | int | 60 | Satıcı teslimat penceresi (02 §2.2 adım 6) — T123'te yeniden adlandırıldı, T124'te tüketilmeye başlandı; **60 bağlayıcı değil**, aşağıdaki uyarıya bak |
-| 7 | `SKINORA_SETTING_MIN_TRANSACTION_AMOUNT` | min_transaction_amount | decimal | 1.0 | Minimum işlem tutarı (USDT) |
+| 7 | `SKINORA_SETTING_MIN_TRANSACTION_AMOUNT` | min_transaction_amount | decimal | 5.0 | Minimum işlem tutarı (USDT). **1 önerilmez:** sıcak cüzdanın ödeme enerjisi bittiğinde bir payout 6,43–13,03 TRX yakar (TRX 0,34 $ ile ~2,2–4,4 USDT); fiyatı bunun altındaki satışta satıcıya kalan tutar sıfırın altına düşer ve ödeme ertelenir (02 §4.7). Ucuz satışları açık tutup tutmamak iş kararıdır, kod zorlamaz |
 | 8 | `SKINORA_SETTING_MAX_TRANSACTION_AMOUNT` | max_transaction_amount | decimal | 10000.0 | Maksimum işlem tutarı (USDT) |
 | 9 | `SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS` | max_concurrent_transactions | int | 5 | Eşzamanlı aktif işlem limiti |
 | 10 | `SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT` | new_account_transaction_limit | int | 3 | Yeni hesap işlem limiti |
@@ -252,6 +252,8 @@ curl -s -X POST https://api.trongrid.io/wallet/getaccountresource \
 ```
 
 Kilit hesabında yine de küçük bir serbest TRX tamponu bırak: bant kilidi yetmezse işlemler yakmaya düşer ve bakiye biterse **devretme başarısız olur**, akış pahalı yakma yoluna geçer. **Bu bakiyeyi izleyen bir alarm henüz yok** (backlog `StakeAccountUnmonitored`) — launch'a kadar haftada bir elle bak (`getaccount` → `balance`). Sıcak cüzdanın kendi bandı ayrı bir kalemdir — payout ve depozite gönderilen TRX oradan çıkar.
+
+**`SELLER_PAYOUT_DEFERRED` alarmı gelirse.** Bir satıcı ödemesinin gas tahmini fiyatı tüketti ve ödeme üç kez ertelendi (02 §4.7); iş 24 saatte bir yeniden denemeye devam ediyor. En olası sebep sıcak cüzdanın ödeme enerjisinin bitmesidir: `getaccountresource` ile sıcak cüzdanın `EnergyLimit − EnergyUsed` değerine bak. Gün içindeki ödeme sayısı `N`'i aştıysa enerji 24 saat içinde kendiliğinden yenilenir ve ödeme bir sonraki denemede çıkar; sık tekrarlıyorsa adım 8'deki kalıcı devretmeyi büyüt. İşleme elle dokunmak gerekmez — enerji geri geldiğinde sıradaki deneme ödemeyi kuyruğa alır.
 
 **Hacim değişince** 1–3. adımları yeniden koş. Oran ağın toplam kilidiyle oynar; aylık kontrol yeterlidir. Kilidi büyütmek owner anahtarını ister (adım 7). Kalıcı devretmeyi büyütmek ya da küçültmek (adım 8) owner anahtarı olmadan da yapılır: sıcak anahtarın izni devretme ve geri almayı kapsar (`Permission_id: 2`).
 
