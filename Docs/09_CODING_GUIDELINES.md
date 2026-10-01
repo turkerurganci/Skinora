@@ -1,6 +1,6 @@
 # Skinora — Coding Guidelines
 
-**Versiyon: v1.0** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
+**Versiyon: v1.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
 
 > **Amaç:** Bu doküman, projede kod üretirken ve mevcut kodu değiştirirken uyulması gereken teknik geliştirme kurallarını tanımlar.
 >
@@ -1596,6 +1596,9 @@ eğer gas_fee ≤ gas_fee_eşiği:
 değilse:
     aşan_kısım = gas_fee - gas_fee_eşiği
     satıcı_alacağı = işlem_tutarı - aşan_kısım
+
+eğer satıcı_alacağı ≤ 0:
+    ödeme gönderilmez → ertelenir (1 sa → 4 sa → 12 sa → her 24 sa), 3. ertelemede admin alert (02 §4.7)
 ```
 
 **Fazla ödeme:**

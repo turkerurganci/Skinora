@@ -204,6 +204,19 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // the audit trail alike.
     public Guid? SettlementClearedByAdminId { get; set; }
 
+    // --- Payout deferral (02 §4.7, PayoutStallsOnNonPositiveNet) ---
+    // A runtime gas estimate above price + protection threshold leaves the
+    // seller a non-positive net, and nothing may be sent. Without a record of
+    // that the payout job re-priced the same rows every minute and, once 20 of
+    // them sat at the head of its oldest-first window, starved every newer
+    // payout. The estimate falls as the hot wallet's Energy regenerates, so the
+    // row is retried on a backoff instead of parked for good; the job orders by
+    // the count so fresh payouts always come first, and the third deferral
+    // alerts the admins once. Both columns are history once a payout row
+    // exists — no gate after the payout job reads them.
+    public DateTime? PayoutDeferredUntil { get; set; }
+    public int PayoutDeferralCount { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

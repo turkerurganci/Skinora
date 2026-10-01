@@ -201,6 +201,11 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .IsRequired()
             .HasDefaultValue(false);
 
+        // --- Payout deferral (02 §4.7) ---
+        builder.Property(t => t.PayoutDeferralCount)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         // --- ISoftDeletable ---
         builder.Property(t => t.IsDeleted)
             .IsRequired()

@@ -5,8 +5,26 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-10-01 — #327 payout gas tahmini: bağımsız doğrulama ✓ PASS, bulgular doğrulamada kapatıldı, merge; backlog 22 aktif / 137 çözülmüş, 🔴 YOK)
+## Current Status (2026-10-01 — ödeme takılması PR #330: bağımsız doğrulama ✓ PASS, iki küçük bulgu doğrulamada kapatıldı, merge; backlog 21 aktif / 138 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **#330 bağımsız doğrulaması ✓ PASS (2026-10-01, ayrı chat) — iki küçük bulgu proje sahibi kararıyla doğrulamada kapatıldı (`b55a1ef`, üretim kodu değişmedi), squash merge.** Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK (dosyanın kendi awk'iyle bağımsız: main 22/137 → dal 21/138).
+>
+> **Bağımsız ölçüm.** Main son 3 run yeşil · PR CI `36908439119` ✓ (HEAD `5b37ae1`) · yerel birim 1661/1661 (Docker açıkken Telegram/Discord 16'sı dahil) · EF "No changes" · migration SQL'i yalnız iki `ADD`. **43 bozma, 40 yakalandı;** işin eski hâli 10/30 test kırdı. Yeşil kalan üçü: döngüdeki yeniden kontrol (sorgu filtresi maskeliyor, ikisi birlikte 3 test kırıyor) · sonraki denemenin önceki damgadan hesaplanması (iş zamanında koştukça eşdeğer) · aynı erteleme sayısında teslimat sırasının ters çevrilmesi (bulgu 2). **Gerçek SQL Server'da geçici prob (Testcontainers, repoya girmedi) 3/3:** 1/4/12/24 sa damgaları + tek alarm; tahmin sırasında başka bağlantıdan gelen UPDATE gerçek rowversion'ı değiştirince damga ve alarm düşüyor, parti sürüyor; vakti gelmemiş 20 satır pencereyi doldurmuyor. Prob notu: Transactions test assembly'si yalnız iki modülü kaydettiği için `UseMigrations => true` "pending model changes" ile düşüyor — bu assembly'de `EnsureCreated` kullan (migration ayrıca EF + CI dry-run ile doğrulanır).
+>
+> **Kapatılanlar.** (1) ⚪ runbook §C.2 alarm paragrafı "iş 24 saatte bir yeniden deniyor" diyordu — alarm 3. ertelemede, o ertelemenin beklemesi 12 sa; sonrakiler 24 sa. (2) ⚪ aynı erteleme sayısında en eski teslimatın önce alınması testsizdi (`ThenByDescending` 663/663 yeşil; main'de de sabitli değildi, PR satırı yeniden yazdı) → `SameDeferralCount_OldestDeliveryIsTakenFirst` (en yeni ilk eklenir ki ekleme sırası teslimat sırası sanılmasın); ödeme işi testleri 31/31. **Ders:** [[feedback_differential_before_causal_claim]] — sıralamaya öncelikli anahtar eklemek eskisini ikincil yapar; yeni testler hep öncelikli anahtarı farklı satırlarla kurarsa ikincil sıra testsiz kalır. **Merge teyidi** sonraki dalda kayda geçecek ([[feedback_merge_teyit_not_direct_pushable]]).
+
+> **Ödeme takılması (2026-10-01, dal `fix/payout-stall-deferral`, PR [#330](https://github.com/turkerurganci/Skinora/pull/330)) — ✓ doğrulandı (yukarıdaki blok).** #327 doğrulamasının 🟡 `PayoutStallsOnNonPositiveNet` satırı kapandı. Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK.
+>
+> **Kusur.** #327'den beri split'e çalışma anı tahmini giriyor; mainnet'te ödeme enerjisi bitince tahmin 2,2–4,4 USDT (6,43–13,03 TRX × ~0,34). Daha ucuz satışta tutar `<= 0` → `SellerPayoutQueueJob` iz bırakmadan dönüyordu; satırlar her dakika yeniden fiyatlanıyor, 20'si pencereyi doldurunca daha yeni ödemeler hiç kuyruğa girmiyordu.
+>
+> **Proje sahibi kararları (modal).** (1) Beklet / yeniden dene / alarm: `PayoutDeferredUntil` + `PayoutDeferralCount` (migration `PayoutDeferral`), bekleme 1 → 4 → 12 → her 24 sa, aday sorgusu bekleyeni almaz, sıralama önce erteleme sayısı (taze ödeme önce); üçüncü ertelemede `SellerPayoutDeferredEvent` damgayla aynı kayıtta → adminlere `ADMIN_PAYMENT_FAILURE` / `SELLER_PAYOUT_DEFERRED`. (2) Fiyat tabanı kodda değil: runbook §A örneği 1,0 → 5,0 gerekçesiyle; `.env.example` değeri test fikstürünü yansıttığı için 1,0 kaldı, üstüne uyarı satırı.
+>
+> **Tasarım notları.** Transaction RowVersion taşıyor → erteleme kaydı çatışırsa `ChangeTracker.Clear` (`EnsurePaymentMonitorJob` kalıbı): damga ve outbox'taki alarm birlikte düşer, sonraki adayın kaydına binmez. Sıralama ile sorgu filtresi ayrı işler yapıyor: sıralama tazeyi öne alır, filtre vakti gelmemiş ertelenmişlerin vakti gelmiş olanı pencereden itmesini önler — ilk bozma turunda filtreyi tek başına kaldıran bozma yeşil kaldı, çünkü hiçbir test "vakti gelmemiş 20 ertelenmiş + 1 vakti gelmiş" düzeneğini kurmuyordu; o test eklendi.
+>
+> **Ölçüm.** Ödeme işi testleri 30/30 (11 yeni), admin uyarı tüketicileri 10/10, **15/15 bozma**. Bozma koşucusu ilk turda iki kalıbı CRLF yüzünden uygulayamadı ve `NOT_APPLIED` dedi (uygulandı-mı kontrolü yanlış "yakalandı"yı engelledi); kalıplar `\r?\n` ile düzeltilip yeniden koşuldu. Release build + unit (CI filtresi) yeşil; yerelde Docker isteyen 16 Telegram/Discord testi düşüyor (bilinen). Entegrasyon testleri yerelde koşulamadı (Docker kapalı) — CI'da.
+>
+> **Kayıt.** Bu dal #327 (`139fd02`: main CI `36817506534` + Docker `36817506557`, PR CI `36816249201` HEAD `92bb12a`) ve #329 (`cfb1051`: CI `36771849345` + Docker `36771849343`) merge teyitlerini ve #327 doğrulamasının satır açılmayan gözlemlerini `IMPLEMENTATION_STATUS`'a taşıdı. `feedback_resume_after_limit` repoya alındı.
 
 > **#327 bağımsız doğrulaması ✓ PASS (2026-10-01, ayrı chat) — PR'ın kendi kodundaki bulgular proje sahibi kararıyla doğrulamada kapatıldı (`bc83431`), squash merge.** Backlog **22 aktif / 137 çözülmüş**, 🔴 YOK (taban 18/137 → 4 yeni satır: 🟡 `PayoutStallsOnNonPositiveNet` · ⚪ `RealizedFeeNullOnZeroCostTransfer` · ⚪ `WalletAddressesLoggedUnmasked` · ⚪ `QueuedPayoutSkipsHoldCheck`).
 >
@@ -616,6 +634,7 @@
 - [feedback_added_latency_check_caller_timeout.md](feedback_added_latency_check_caller_timeout.md) — Senkron cagriya bekleme eklemeden once cagiranin zaman asimi / yeniden deneme / eszamanlilik kilidini oku; vazgecilmis cagri geri dondurulemez adim atmasin (#323)
 - [feedback_scripted_doc_edits_verify_against_head.md](feedback_scripted_doc_edits_verify_against_head.md) — Betikle dokuman satiri degistirince HEAD'e karsi normalize diff al; perl'e cok satirli metni $ENV degil dosyadan byte modunda ver
 - [feedback_vary_fixture_against_fallback.md](feedback_vary_fixture_against_fallback.md) — "Testle pinli" demeden once olc: fixture bozan sabite esit mi, test uretim kablosunu kendi mi kuruyor, sabiti import edip onunla mi kayiyor, deger dogru konteynere ve calisan surece ulasiyor mu, surec sinirinin iki tarafi ayni ornek dosyaya bagli mi (#321–#327)
+- [feedback_resume_after_limit.md](feedback_resume_after_limit.md) — Uzun iste kullanim limiti dolarsa limit acilinca kendiliginden devam et (oturum ici ~30 dk cron; is bitince sil; sahip onayi gereken adimlari atlatmaz)
 
 ## Project
 - [project_phase_history.md](project_phase_history.md) — Faz gecmisi: MVP/F6/F7 gate sonuclari, backlog kapatma turlari ve kalici dersleri (auto-memory MEMORY.md'den 2026-09-01'de tasindi)
