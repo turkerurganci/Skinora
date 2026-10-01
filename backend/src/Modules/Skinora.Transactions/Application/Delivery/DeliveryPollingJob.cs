@@ -143,30 +143,29 @@ public sealed class DeliveryPollingJob : IDeliveryPollingJob
         var now = _clock.GetUtcNow().UtcDateTime;
         var recheckBefore = now.AddSeconds(-_options.RecheckSeconds);
 
-        var candidates = await _db.Set<Transaction>()
-            .Where(t => !t.IsDeleted
-                        && !t.IsOnHold
-                        && t.TimeoutFrozenAt == null
-                        && t.Status == TransactionStatus.PAYMENT_RECEIVED
-                        && t.DeliveryDeadline != null
-                        && t.DeliveryDeadline > now
-                        && t.BuyerId != null
-                        && t.BuyerBaselineCapturedAt != null
-                        && t.BuyerBaselineClassCount != null
-                        && PollableEvidence.Contains(t.DeliveryEvidence)
-                        && (t.DeliveryPolledAt == null || t.DeliveryPolledAt <= recheckBefore))
+        var dueIds = await Pollable(now, recheckBefore)
             // Never-polled first, then least recently polled, then the payment
             // that has waited longest — the same fairness rule the deadline
             // scanner applies to DeliveryRoundAt.
             .OrderBy(t => t.DeliveryPolledAt == null ? 0 : 1)
             .ThenBy(t => t.DeliveryPolledAt)
             .ThenBy(t => t.PaymentReceivedAt)
+            .Select(t => t.Id)
             .Take(_options.BatchSize)
             .ToListAsync(cancellationToken);
 
         int examined = 0, delivered = 0, detected = 0;
-        foreach (var transaction in candidates)
+        foreach (var id in dueIds)
         {
+            // Each row is loaded on its own turn, tracked and re-checked. A lost
+            // concurrent update clears the whole change tracker below; rows
+            // loaded up front would then be detached, and the next round's
+            // flags would silently not be saved while its capture and outbox
+            // event were — the buyer asked again on every poll.
+            var transaction = await Pollable(now, recheckBefore)
+                .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+            if (transaction is null) continue;
+
             examined++;
             PollOutcome outcome;
             try
@@ -207,6 +206,21 @@ public sealed class DeliveryPollingJob : IDeliveryPollingJob
 
         return new DeliveryPollingRunSummary(examined, delivered, detected);
     }
+
+    /// <summary>The rows the poll may look at now (see the class remarks for each condition).</summary>
+    private IQueryable<Transaction> Pollable(DateTime now, DateTime recheckBefore) =>
+        _db.Set<Transaction>()
+            .Where(t => !t.IsDeleted
+                        && !t.IsOnHold
+                        && t.TimeoutFrozenAt == null
+                        && t.Status == TransactionStatus.PAYMENT_RECEIVED
+                        && t.DeliveryDeadline != null
+                        && t.DeliveryDeadline > now
+                        && t.BuyerId != null
+                        && t.BuyerBaselineCapturedAt != null
+                        && t.BuyerBaselineClassCount != null
+                        && PollableEvidence.Contains(t.DeliveryEvidence)
+                        && (t.DeliveryPolledAt == null || t.DeliveryPolledAt <= recheckBefore));
 
     private async Task<PollOutcome> PollAsync(
         Transaction transaction, DateTime now, CancellationToken cancellationToken)

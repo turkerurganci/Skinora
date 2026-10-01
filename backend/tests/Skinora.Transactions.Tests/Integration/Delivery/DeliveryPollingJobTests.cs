@@ -404,6 +404,59 @@ public class DeliveryPollingJobTests : IntegrationTestBase
         Assert.Equal(0, await CaptureCountAsync(transaction.Id));
     }
 
+    [Fact]
+    public async Task A_Lost_Concurrent_Update_Does_Not_Take_The_Next_Row_Down_With_It()
+    {
+        // The failed round's entities must leave the unit of work: still
+        // tracked, they would be saved again with the next row and fail it too.
+        var raced = await CreateAwaitingDeliveryAsync(paymentReceivedHoursAgo: 3);
+        var next = await CreateAwaitingDeliveryAsync(paymentReceivedHoursAgo: 1, assetId: "27348562892");
+        _inventory.Register(SellerSteamId, NewSnapshot(ItemAssetId));
+        _inventory.Register(SellerSteamId, NewSnapshot("27348562892"));
+        _inventory.OnItemRead = async () =>
+        {
+            _inventory.OnItemRead = null;
+            await using var other = CreateContext();
+            var row = await other.Set<Transaction>().SingleAsync(t => t.Id == raced.Id);
+            row.BuyerConfirmedReceiptAt = _clock.GetUtcNow().UtcDateTime;
+            await other.SaveChangesAsync();
+        };
+
+        var summary = await BuildSut(new DeliveryPollingOptions { BatchSize = 2 }).ExecuteAsync();
+
+        Assert.Equal(2, summary.Examined);
+        Assert.Null((await ReloadAsync(raced.Id)).DeliveryPolledAt);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, (await ReloadAsync(next.Id)).DeliveryPolledAt);
+    }
+
+    [Fact]
+    public async Task A_Row_Settled_While_An_Earlier_Row_Was_Being_Read_Is_Skipped()
+    {
+        // The batch is chosen up front, but each row is re-checked on its own
+        // turn: the buyer confirmed the second one while Steam answered for the
+        // first, so reading it now would spend budget on a settled delivery.
+        var first = await CreateAwaitingDeliveryAsync(paymentReceivedHoursAgo: 3);
+        var second = await CreateAwaitingDeliveryAsync(paymentReceivedHoursAgo: 1, assetId: "27348562892");
+        _inventory.Register(SellerSteamId, NewSnapshot(ItemAssetId));
+        _inventory.Register(SellerSteamId, NewSnapshot("27348562892"));
+        _inventory.OnItemRead = async () =>
+        {
+            _inventory.OnItemRead = null;
+            await using var other = CreateContext();
+            var row = await other.Set<Transaction>().SingleAsync(t => t.Id == second.Id);
+            row.DeliveryEvidence = DeliveryEvidence.BUYER_CONFIRMED;
+            row.BuyerConfirmedReceiptAt = _clock.GetUtcNow().UtcDateTime;
+            await other.SaveChangesAsync();
+        };
+
+        var summary = await BuildSut(new DeliveryPollingOptions { BatchSize = 2 }).ExecuteAsync();
+
+        Assert.Equal(1, summary.Examined);
+        Assert.Single(_inventory.ItemReadFreshness);
+        Assert.NotNull((await ReloadAsync(first.Id)).DeliveryPolledAt);
+        Assert.Null((await ReloadAsync(second.Id)).DeliveryPolledAt);
+    }
+
     // ================= Helpers =================
 
     private DeliveryPollingJob BuildSut(DeliveryPollingOptions? options = null) =>
