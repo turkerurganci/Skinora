@@ -26,13 +26,17 @@ describe('tron-quota-projection — wired to the series the sidecar exports', ()
   const block = ruleBlock('tron-quota-projection');
   const expr = /^\s+expr: (.+)$/m.exec(block)?.[1] ?? '';
 
-  it('projects the measured TronGrid request count, not some other series', () => {
-    expect(expr).toContain(`rate(${tronApiRequestDuration.name}_count[1h])`);
+  // The name as the registry reports it — prom-client's typings do not expose
+  // `.name` on the metric object, and the sidecar's tsconfig compiles tests too.
+  it('projects the measured TronGrid request count, not some other series', async () => {
+    const { name } = await tronApiRequestDuration.get();
+    expect(expr).toContain(`rate(${name}_count[1h])`);
     expect(expr).toContain('* 86400');
   });
 
-  it('divides by the budget gauge the sidecar publishes at startup', () => {
-    expect(expr).toContain(`/ max(${tronGridDailyRequestBudget.name})`);
+  it('divides by the budget gauge the sidecar publishes at startup', async () => {
+    const { name } = await tronGridDailyRequestBudget.get();
+    expect(expr).toContain(`/ max(${name})`);
   });
 
   it('warns at 80% of the budget', () => {
