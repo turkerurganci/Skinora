@@ -5,10 +5,16 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-10-01 — ödeme takılması PR #330: yapım tamam, bağımsız doğrulama bekliyor; backlog 21 aktif / 138 çözülmüş, 🔴 YOK)
+## Current Status (2026-10-01 — ödeme takılması PR #330: bağımsız doğrulama ✓ PASS, iki küçük bulgu doğrulamada kapatıldı, merge; backlog 21 aktif / 138 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
-> **Ödeme takılması (2026-10-01, dal `fix/payout-stall-deferral`, PR [#330](https://github.com/turkerurganci/Skinora/pull/330)) — bağımsız doğrulama bekliyor, merge YOK.** #327 doğrulamasının 🟡 `PayoutStallsOnNonPositiveNet` satırı kapandı. Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK.
+> **#330 bağımsız doğrulaması ✓ PASS (2026-10-01, ayrı chat) — iki küçük bulgu proje sahibi kararıyla doğrulamada kapatıldı (`b55a1ef`, üretim kodu değişmedi), squash merge.** Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK (dosyanın kendi awk'iyle bağımsız: main 22/137 → dal 21/138).
+>
+> **Bağımsız ölçüm.** Main son 3 run yeşil · PR CI `36908439119` ✓ (HEAD `5b37ae1`) · yerel birim 1661/1661 (Docker açıkken Telegram/Discord 16'sı dahil) · EF "No changes" · migration SQL'i yalnız iki `ADD`. **43 bozma, 40 yakalandı;** işin eski hâli 10/30 test kırdı. Yeşil kalan üçü: döngüdeki yeniden kontrol (sorgu filtresi maskeliyor, ikisi birlikte 3 test kırıyor) · sonraki denemenin önceki damgadan hesaplanması (iş zamanında koştukça eşdeğer) · aynı erteleme sayısında teslimat sırasının ters çevrilmesi (bulgu 2). **Gerçek SQL Server'da geçici prob (Testcontainers, repoya girmedi) 3/3:** 1/4/12/24 sa damgaları + tek alarm; tahmin sırasında başka bağlantıdan gelen UPDATE gerçek rowversion'ı değiştirince damga ve alarm düşüyor, parti sürüyor; vakti gelmemiş 20 satır pencereyi doldurmuyor. Prob notu: Transactions test assembly'si yalnız iki modülü kaydettiği için `UseMigrations => true` "pending model changes" ile düşüyor — bu assembly'de `EnsureCreated` kullan (migration ayrıca EF + CI dry-run ile doğrulanır).
+>
+> **Kapatılanlar.** (1) ⚪ runbook §C.2 alarm paragrafı "iş 24 saatte bir yeniden deniyor" diyordu — alarm 3. ertelemede, o ertelemenin beklemesi 12 sa; sonrakiler 24 sa. (2) ⚪ aynı erteleme sayısında en eski teslimatın önce alınması testsizdi (`ThenByDescending` 663/663 yeşil; main'de de sabitli değildi, PR satırı yeniden yazdı) → `SameDeferralCount_OldestDeliveryIsTakenFirst` (en yeni ilk eklenir ki ekleme sırası teslimat sırası sanılmasın); ödeme işi testleri 31/31. **Ders:** [[feedback_differential_before_causal_claim]] — sıralamaya öncelikli anahtar eklemek eskisini ikincil yapar; yeni testler hep öncelikli anahtarı farklı satırlarla kurarsa ikincil sıra testsiz kalır. **Merge teyidi** sonraki dalda kayda geçecek ([[feedback_merge_teyit_not_direct_pushable]]).
+
+> **Ödeme takılması (2026-10-01, dal `fix/payout-stall-deferral`, PR [#330](https://github.com/turkerurganci/Skinora/pull/330)) — ✓ doğrulandı (yukarıdaki blok).** #327 doğrulamasının 🟡 `PayoutStallsOnNonPositiveNet` satırı kapandı. Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK.
 >
 > **Kusur.** #327'den beri split'e çalışma anı tahmini giriyor; mainnet'te ödeme enerjisi bitince tahmin 2,2–4,4 USDT (6,43–13,03 TRX × ~0,34). Daha ucuz satışta tutar `<= 0` → `SellerPayoutQueueJob` iz bırakmadan dönüyordu; satırlar her dakika yeniden fiyatlanıyor, 20'si pencereyi doldurunca daha yeni ödemeler hiç kuyruğa girmiyordu.
 >
