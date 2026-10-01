@@ -136,7 +136,8 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             PaymentAddressId: request.PaymentAddressId.ToString("D"),
             TransactionId: request.TransactionId.ToString("D"),
             ExpectedContract: request.ExpectedContract,
-            ExpectedSymbol: request.ExpectedSymbol);
+            ExpectedSymbol: request.ExpectedSymbol,
+            Cadence: ToWire(request.Cadence));
 
         return await SendCommandAsync(
             "api/monitor/start",
@@ -443,7 +444,21 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("paymentAddressId")] string PaymentAddressId,
         [property: JsonPropertyName("transactionId")] string TransactionId,
         [property: JsonPropertyName("expectedContract")] string ExpectedContract,
-        [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol);
+        [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol,
+        [property: JsonPropertyName("cadence")] string Cadence);
+
+    /// <summary>
+    /// The sidecar's spelling (monitorHandlers.ts ALLOWED_CADENCES). An unknown
+    /// value throws rather than defaulting: the sidecar rejects anything else
+    /// with 400, and a silent default would pick one of the two costs the
+    /// field exists to choose between.
+    /// </summary>
+    private static string ToWire(PaymentMonitorCadence cadence) => cadence switch
+    {
+        PaymentMonitorCadence.Payment => "PAYMENT",
+        PaymentMonitorCadence.Holding => "HOLDING",
+        _ => throw new ArgumentOutOfRangeException(nameof(cadence), cadence, "Unknown monitor cadence."),
+    };
 
     private sealed record MonitorStopRequestBody(
         [property: JsonPropertyName("address")] string Address);

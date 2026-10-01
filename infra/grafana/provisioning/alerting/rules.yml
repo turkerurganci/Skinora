@@ -294,8 +294,9 @@ groups:
       # başlığı yok). Bütçeyi varsaymak, ölçülmemiş bir sayıyla kurulmuş sahte
       # bir bekçi olurdu — bu projenin tekrar eden kusur ailesi. Bunun yerine
       # kural, kotanın DOLDUĞUNU doğrudan gözleyen sinyale bağlandı: TronGrid'in
-      # kendi 429'u. İzleyici sayısına dayalı ÖNLEYİCİ eşik kapasite
-      # planlamasına ait ve backlog satırında açık kalıyor.
+      # kendi 429'u. ÖNLEYİCİ yarı 2026-10-02'de aşağıdaki
+      # `tron-quota-projection` kuralı olarak eklendi: ölçülen istek hızını,
+      # izleyici sayısını değil, planın yapılandırılmış bütçesiyle karşılaştırır.
       #
       # `skinora_blockchain_active_monitors` gauge'u bu kuralın sayısal
       # bağlamıdır (integration-metrics paneli çiziyor): alarm ateşlediğinde
@@ -341,7 +342,74 @@ groups:
           summary: TronGrid is rejecting requests with 429 (quota)
           description: >-
             The blockchain sidecar has been receiving HTTP 429 from TronGrid for
-            more than 2 minutes. Payment detection polls every 3s per monitored
-            address, so quota exhaustion silently delays or stops deposit
+            more than 2 minutes. Payment detection polls every 3s per address
+            awaiting payment and every 15 min per address in its settlement
+            window, so quota exhaustion silently delays or stops deposit
             detection. Check skinora_blockchain_active_monitors for the current
             concurrent-monitor count and the TronGrid plan's request budget.
+
+      # T139-ActiveMonitorQuotaAlarm — ÖNLEYİCİ yarı (proje sahibi kararı
+      # 2026-10-02). Ölçülen TronGrid istek hızı (son 1 saatin ortalaması, güne
+      # çevrilmiş) yapılandırılmış günlük bütçenin %80'ini geçerse uyarır — kota
+      # dolmadan, 429'lar başlamadan önce.
+      #
+      # Bütçe varsayılmıyor: sidecar `TRONGRID_DAILY_REQUEST_BUDGET`'ı açılışta
+      # `skinora_blockchain_trongrid_daily_request_budget` gauge'una yazıyor
+      # (geçersiz değerle açılmıyor). TronGrid bütçeyi ne yanıtta ne belgede
+      # veriyor; varsayılan 100.000 2026'da raporlanan ücretsiz plan, gerçek
+      # planın değeri DEPLOY_RUNBOOK §B'ye göre girilir.
+      #
+      # Sayılan: TronGridClient (izleme listeleri + kesinlik) ve fetch tabanlı
+      # probların hepsi (gas tahmini, devretme planı, transfer durumu). TronWeb'in
+      # kendi kurduğu yayın çağrıları sayılmıyor — giden transfer başına birkaç
+      # istek, %20'lik boşluğun içinde.
+      #
+      # Neden 1 saatlik pencere: izleyici sayısı saatler içinde değil günler
+      # içinde değişir (adresler ~8 gün açık kalır, 08 §3.4); 1 saat, ödeme
+      # bekleyen kısa patlamaları ortalamaya katıp günlük gidişi gösterir.
+      - uid: tron-quota-projection
+        title: TronGrid Daily Quota Projection
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              # Oran: günlük istek gidişi / günlük bütçe. `or vector(0)`: sayaç
+              # henüz yoksa seri olmaz ve kural NoData'ya düşerdi; sidecar
+              # tamamen düşerse `blockchain-sidecar-down` yakalar.
+              expr: (sum(rate(skinora_blockchain_tron_api_request_duration_seconds_count[1h])) * 86400 / max(skinora_blockchain_trongrid_daily_request_budget)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.8]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: TronGrid requests are on course to use 80% of the daily quota
+          description: >-
+            Over the last hour the blockchain sidecar's TronGrid request rate,
+            projected to a full day, exceeds 80% of the configured daily budget
+            (skinora_blockchain_trongrid_daily_request_budget). When the quota
+            runs out TronGrid answers 429 and deposit detection slows or stops.
+            Check skinora_blockchain_active_monitors and the per-endpoint rate,
+            then raise the plan (and TRONGRID_DAILY_REQUEST_BUDGET) or lengthen
+            PAYMENT_HOLDING_POLLING_INTERVAL_MS (DEPLOY_RUNBOOK §B, §D).

@@ -256,7 +256,8 @@ Tron blockchain (TRC-20) ile tüm etkileşimi yönetir.
 |---|---|---|
 | Minimum onay sayısı | **20 blok** (~60 saniye) | Tron'da 19 SR (Super Representative) onayı sonrası blok finalize olur. 20 blok güvenli eşik |
 | Ödeme durumu | `pending` → `confirmed` | 20 blok onayına kadar "pending", sonrasında "confirmed" ve state geçişi tetiklenir |
-| Polling aralığı | 3 saniye | TronGrid API rate limit'lerine uygun, kullanıcı deneyimi için yeterince hızlı |
+| Polling aralığı — ödeme beklenirken (`SELLER_CONFIRMED`) | 3 saniye | Ödemenin görülme gecikmesi kullanıcıya doğrudan yansır; bu aşama en çok ödeme timeout'u kadar sürer (15–60 dk) |
+| Polling aralığı — ödeme onaylandıktan sonra, sweep'e kadar (`PAYMENT_RECEIVED`, `ITEM_DELIVERED`) | 15 dakika (sidecar `PAYMENT_HOLDING_POLLING_INTERVAL_MS`) | Adres bu aşamada yalnız geç gelen ikinci ödemeyi ya da fazla ödemeyi yakalamak için izlenir ve ~8 gün açık kalır (08 §3.4). Tek 3 sn'lik kadansla adres başına günde 2 × 28.800 = 57.600 TronGrid isteği harcanıyordu; ~100.000/gün'lük ücretsiz plan aynı anda ~2 işlem taşıyordu, yani eski "rate limit'lere uygun" gerekçesi yalnız ödeme aşaması için doğruydu. 15 dk'da adres başına günde 192 istek (proje sahibi kararı 2026-10-02, `T139-ActiveMonitorQuotaAlarm`) |
 
 **Gecikmeli ödeme izleme (iptal sonrası):**
 

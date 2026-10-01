@@ -1,6 +1,7 @@
 import express from 'express';
 import { config } from './config/index.js';
 import { logger } from './logger.js';
+import { publishTronGridDailyRequestBudget } from './metrics.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
@@ -24,6 +25,7 @@ const monitorRegistry = new MonitorRegistry({
   client: tronGridClient,
   allowlist: { USDT: config.allowlist.USDT, USDC: config.allowlist.USDC },
   intervalMs: config.paymentPollingIntervalMs,
+  holdingIntervalMs: config.paymentHoldingPollingIntervalMs,
   minConfirmations: config.minConfirmations,
   pageLimit: config.monitorPageLimit,
   webhookEndpoints: config.webhookEndpoints,
@@ -125,6 +127,22 @@ logger.info(
   energyDelegation.delegationPermissionId === undefined
     ? 'Energy delegation: the hot wallet holds its own stake (STAKE_ACCOUNT_ADDRESS unset)'
     : 'Energy delegation: stake account, signed by the hot wallet key through an active permission',
+);
+
+// T139-ActiveMonitorQuotaAlarm — the two cadences and the budget the
+// tron-quota-projection alert divides by, read back from the objects that use
+// them. startupWiring.test.ts starts this file the way production does and
+// reads this line, so a value that never reaches the registry or the gauge
+// shows there rather than in a quota exhausted a week later.
+logger.info(
+  {
+    paymentPollingIntervalMs: monitorRegistry.cadenceIntervalMs('PAYMENT'),
+    holdingPollingIntervalMs: monitorRegistry.cadenceIntervalMs('HOLDING'),
+    tronGridDailyRequestBudget: publishTronGridDailyRequestBudget(
+      config.tronGridDailyRequestBudget,
+    ),
+  },
+  'Payment monitoring: cadences and TronGrid daily request budget',
 );
 
 // Middleware

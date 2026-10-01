@@ -218,7 +218,8 @@ public class HttpBlockchainSidecarClientTests
                 PaymentAddressId: paymentAddressId,
                 TransactionId: transactionId,
                 ExpectedContract: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-                ExpectedSymbol: "USDT"),
+                ExpectedSymbol: "USDT",
+                Cadence: PaymentMonitorCadence.Holding),
             CancellationToken.None);
 
         Assert.Equal(BlockchainSidecarStatus.Success, status);
@@ -233,6 +234,10 @@ public class HttpBlockchainSidecarClientTests
         // The sidecar validates this against its own USDT/USDC allowlist, so it
         // must be the enum NAME, not its numeric value.
         Assert.Contains("\"expectedSymbol\":\"USDT\"", body);
+        // T139-ActiveMonitorQuotaAlarm — the sidecar accepts exactly these two
+        // spellings (monitorHandlers.ts ALLOWED_CADENCES); the full bodies are
+        // pinned against the shared contract files in the Contract suite.
+        Assert.Contains("\"cadence\":\"HOLDING\"", body);
     }
 
     [Fact]
@@ -364,7 +369,8 @@ public class HttpBlockchainSidecarClientTests
             PaymentAddressId: Guid.NewGuid(),
             TransactionId: Guid.NewGuid(),
             ExpectedContract: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-            ExpectedSymbol: "USDT");
+            ExpectedSymbol: "USDT",
+            Cadence: PaymentMonitorCadence.Payment);
 
     private static HttpBlockchainSidecarClient BuildClient(
         HttpMessageHandler handler, string internalKey = "")

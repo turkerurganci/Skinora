@@ -140,6 +140,12 @@ export const config = {
 
   // Rate limiting — 08 §3.1 (TronGrid plan-based)
   tronGridRequestsPerSecond: parseInt(process.env.TRONGRID_RPS || '10', 10),
+  // The TronGrid plan's daily request budget. Published as a gauge so the
+  // tron-quota-projection alert can compare the measured request rate with it.
+  // TronGrid does not return the budget on responses (2026-08-29) and its docs
+  // no longer publish one (2026-09-08); 100,000 is the free tier as reported in
+  // 2026 — set the real plan's value (DEPLOY_RUNBOOK §B).
+  tronGridDailyRequestBudget: parseInt(process.env.TRONGRID_DAILY_REQUEST_BUDGET || '100000', 10),
 
   // TronGrid read-path resilience — 08 §3.5 / §3.6 (WP10). On a 429 /
   // key-suspension (403) the TronGridClient fails over to the secondary
@@ -161,6 +167,14 @@ export const config = {
 
   // Monitoring intervals (seconds)
   paymentPollingIntervalMs: parseInt(process.env.PAYMENT_POLLING_INTERVAL_MS || '3000', 10), // 05 §3.3 — 3 second active monitoring
+  // T139-ActiveMonitorQuotaAlarm (owner decision 2026-10-02): once the payment
+  // is confirmed the address is only watched for a late second payment or an
+  // overpayment until the sweep (08 §3.4), and polling it every 3 s for the
+  // ~8-day settlement window cost 57,600 TronGrid requests a day per address.
+  paymentHoldingPollingIntervalMs: parseInt(
+    process.env.PAYMENT_HOLDING_POLLING_INTERVAL_MS || '900000',
+    10,
+  ),
   minConfirmations: parseInt(process.env.MIN_CONFIRMATIONS || '20', 10), // 05 §3.3 — 20 blocks (~60s)
   monitorPageLimit: parseInt(process.env.MONITOR_PAGE_LIMIT || '20', 10), // 08 §3.4
 

@@ -1,5 +1,6 @@
 import TronWeb from 'tronweb';
 import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
+import { timedTronFetch } from '../metrics.js';
 
 /**
  * Read-only chain probes backing the pre-send fee estimate
@@ -359,10 +360,13 @@ export class TronResourceClient {
   }
 
   async getChainFeeParameters(fetchFn: typeof fetch = fetch): Promise<ChainFeeParameters> {
-    const response = await fetchFn(`${this.fullNodeUrl}/wallet/getchainparameters`, {
-      method: 'GET',
-      headers: this.headers(),
-    });
+    const response = await timedTronFetch(fetchFn, 'wallet.getchainparameters')(
+      `${this.fullNodeUrl}/wallet/getchainparameters`,
+      {
+        method: 'GET',
+        headers: this.headers(),
+      },
+    );
     if (!response.ok) {
       throw new SidecarError(
         `getchainparameters returned HTTP ${response.status}`,
@@ -394,7 +398,10 @@ export class TronResourceClient {
   }
 
   private async post<T>(path: string, payload: unknown, fetchFn: typeof fetch): Promise<T> {
-    const response = await fetchFn(`${this.fullNodeUrl}${path}`, {
+    // '/wallet/getaccountresource' → 'wallet.getaccountresource', the label
+    // shape TronGridClient uses.
+    const endpoint = path.split('/').filter(Boolean).join('.');
+    const response = await timedTronFetch(fetchFn, endpoint)(`${this.fullNodeUrl}${path}`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify(payload),

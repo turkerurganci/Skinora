@@ -30,7 +30,7 @@ interface Startup {
   output: string;
 }
 
-function start(env: Record<string, string>): Promise<Startup> {
+function start(env: Record<string, string>, message: string = STARTUP_MESSAGE): Promise<Startup> {
   return new Promise((done) => {
     const child = spawn(process.execPath, [TSX_CLI, 'src/index.ts'], {
       cwd: SIDECAR_ROOT,
@@ -60,7 +60,7 @@ function start(env: Record<string, string>): Promise<Startup> {
     child.stdout.on('data', (chunk: Buffer) => {
       output += chunk.toString();
       for (const raw of output.split('\n')) {
-        if (!raw.includes(STARTUP_MESSAGE)) continue;
+        if (!raw.includes(message)) continue;
         try {
           finish({ line: JSON.parse(raw) as Record<string, unknown>, output });
         } catch {
@@ -105,5 +105,43 @@ describe('sidecar startup — the stake account reaches both services index.ts b
     // Exited on its own — a process still running at the timeout has no code.
     expect(startup.exitCode ?? 0).toBeGreaterThan(0);
     expect(startup.output).toContain('STAKE_ACCOUNT_MISCONFIGURED');
+  }, 30_000);
+});
+
+/**
+ * T139-ActiveMonitorQuotaAlarm — the holding cadence and the TronGrid budget,
+ * read back from the MonitorRegistry and the budget gauge of the running process.
+ * composeWiring.test.ts pins .env → compose; this pins env → the objects.
+ */
+describe('sidecar startup — the polling cadences and the quota budget reach the process', () => {
+  const MONITORING_MESSAGE = 'Payment monitoring:';
+
+  it('polls a confirmed payment at the configured holding interval and publishes the configured budget', async () => {
+    // Non-default values, so a variable read under another name (or not read
+    // at all) shows up as its default.
+    const startup = await start(
+      {
+        PAYMENT_HOLDING_POLLING_INTERVAL_MS: '600000',
+        TRONGRID_DAILY_REQUEST_BUDGET: '250000',
+      },
+      MONITORING_MESSAGE,
+    );
+
+    expect(startup.line, startup.output).toMatchObject({
+      paymentPollingIntervalMs: 3000,
+      holdingPollingIntervalMs: 600000,
+      tronGridDailyRequestBudget: 250000,
+    });
+  }, 30_000);
+
+  it('refuses to start on a holding interval it could not parse', async () => {
+    const startup = await start(
+      { PAYMENT_HOLDING_POLLING_INTERVAL_MS: 'fifteen-minutes' },
+      MONITORING_MESSAGE,
+    );
+
+    expect(startup.line).toBeUndefined();
+    expect(startup.exitCode ?? 0).toBeGreaterThan(0);
+    expect(startup.output).toContain('PAYMENT_HOLDING_POLLING_INTERVAL_MS');
   }, 30_000);
 });

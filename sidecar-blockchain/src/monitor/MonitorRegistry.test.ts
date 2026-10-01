@@ -655,3 +655,155 @@ describe('MonitorRegistry — per-event dedup (WP10, 08 §3.4)', () => {
     expect(indices.sort()).toEqual([0, 1]);
   });
 });
+
+/**
+ * T139-ActiveMonitorQuotaAlarm — owner decision 2026-10-02: 3 s only while the
+ * payment is awaited, 15 min once it is confirmed (08 §3.4). At 3 s with two
+ * list queries per tick one address cost 57,600 TronGrid requests a day for
+ * its whole ~8-day window; a ~100,000/day plan held about two transactions.
+ */
+describe('MonitorRegistry — cadence (08 §3.4)', () => {
+  const TICK_MS = 3_000;
+  const HOLDING_MS = 900_000;
+  let fake: FakeTronClient;
+  let sender: ReturnType<typeof createFakeSender>;
+  let nowMs: number;
+
+  function cadenceRegistry(holdingIntervalMs: number = HOLDING_MS): MonitorRegistry {
+    return new MonitorRegistry({
+      client: fake.client,
+      allowlist: { USDT, USDC },
+      intervalMs: TICK_MS,
+      holdingIntervalMs,
+      minConfirmations: 20,
+      pageLimit: 20,
+      webhookEndpoints: ENDPOINTS,
+      clock: () => new Date(nowMs),
+      webhookSender: sender.sender,
+    });
+  }
+
+  function startOptions(cadence?: 'PAYMENT' | 'HOLDING') {
+    return {
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT' as const,
+      ...(cadence ? { cadence } : {}),
+    };
+  }
+
+  async function advance(ms: number, registry: MonitorRegistry): Promise<void> {
+    nowMs += ms;
+    await registry.tick();
+  }
+
+  beforeEach(() => {
+    fake = createFakeClient();
+    sender = createFakeSender();
+    nowMs = Date.parse('2026-10-02T12:00:00Z');
+  });
+
+  it('polls a PAYMENT address on every tick', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('PAYMENT'));
+
+    await registry.tick();
+    await advance(TICK_MS, registry);
+    await advance(TICK_MS, registry);
+
+    expect(fake.callsPhase1).toHaveLength(3);
+    expect(fake.callsPhase2).toHaveLength(3);
+  });
+
+  it('treats a start without a cadence as PAYMENT — what a backend predating cadences relies on', async () => {
+    const registry = cadenceRegistry();
+    const result = registry.start(startOptions());
+
+    await registry.tick();
+    await advance(TICK_MS, registry);
+
+    expect(result.cadence).toBe('PAYMENT');
+    expect(registry.cadenceOf(DEPOSIT_ADDRESS)).toBe('PAYMENT');
+    expect(fake.callsPhase1).toHaveLength(2);
+  });
+
+  it('polls a HOLDING address once, then not again until the holding interval has passed', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('HOLDING'));
+
+    await registry.tick(); // armed now → looked at once immediately
+    for (let i = 0; i < 299; i++) await advance(TICK_MS, registry); // 897 s
+
+    expect(fake.callsPhase1).toHaveLength(1);
+    expect(fake.callsPhase2).toHaveLength(1);
+
+    await advance(TICK_MS, registry); // 900 s → due
+
+    expect(fake.callsPhase1).toHaveLength(2);
+  });
+
+  it('moves an address from PAYMENT to HOLDING when the backend re-arms it — cursors kept', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('PAYMENT'));
+    fake.enqueuePhase1({ records: [], fingerprint: 'fp-before-switch' });
+    await registry.tick();
+
+    const rearmed = registry.start(startOptions('HOLDING'));
+
+    expect(rearmed).toEqual({ started: false, cadence: 'HOLDING' });
+    await advance(TICK_MS, registry);
+    expect(fake.callsPhase1).toHaveLength(1);
+
+    await advance(HOLDING_MS, registry);
+    expect(fake.callsPhase1).toHaveLength(2);
+    expect(fake.callsPhase1[1].fingerprint).toBe('fp-before-switch');
+  });
+
+  it('returns to every-tick polling when re-armed as PAYMENT', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('HOLDING'));
+    await registry.tick();
+
+    registry.start(startOptions('PAYMENT'));
+    await advance(TICK_MS, registry);
+    await advance(TICK_MS, registry);
+
+    expect(fake.callsPhase1).toHaveLength(3);
+  });
+
+  it('keeps finality checks on the tick for a transfer seen on a HOLDING address', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('HOLDING'));
+    fake.enqueuePhase1({
+      records: [transferRecord({ transaction_id: 'tx-late' })],
+      fingerprint: null,
+    });
+    fake.setSolidBlock(1_000);
+    await registry.tick(); // detected; not on the solid node yet
+
+    fake.setTxInfo('tx-late', { blockNumber: 900 });
+    await advance(TICK_MS, registry); // not due for a list poll — finality still runs
+
+    expect(fake.callsPhase1).toHaveLength(1);
+    expect(sender.sent.map((s) => s.endpoint)).toEqual([
+      ENDPOINTS.paymentDetected,
+      ENDPOINTS.paymentConfirmed,
+    ]);
+  });
+
+  it.each([Number.NaN, TICK_MS - 1])(
+    'refuses a holding interval of %s — a HOLDING address would never be due, or due faster than the tick',
+    (holding) => {
+      expect(() => cadenceRegistry(holding)).toThrow(/PAYMENT_HOLDING_POLLING_INTERVAL_MS/);
+    },
+  );
+
+  it('reports the interval each cadence stands for — what the startup line prints', () => {
+    const registry = cadenceRegistry();
+
+    expect(registry.cadenceIntervalMs('PAYMENT')).toBe(TICK_MS);
+    expect(registry.cadenceIntervalMs('HOLDING')).toBe(HOLDING_MS);
+  });
+});

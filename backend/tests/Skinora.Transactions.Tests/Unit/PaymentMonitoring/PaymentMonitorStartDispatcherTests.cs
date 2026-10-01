@@ -33,6 +33,9 @@ public class PaymentMonitorStartDispatcherTests
         // The sidecar's handler validates the symbol against its own
         // USDT/USDC allowlist, so the enum must arrive as its name.
         Assert.Equal("USDT", call.ExpectedSymbol);
+        // Published when the payment window opens — the payment is awaited,
+        // so the address starts at the 3 s cadence (08 §3.4).
+        Assert.Equal(PaymentMonitorCadence.Payment, call.Cadence);
     }
 
     [Fact]

@@ -49,7 +49,11 @@ public sealed class PaymentMonitorStartDispatcher
             PaymentAddressId: notification.PaymentAddressId,
             TransactionId: notification.TransactionId,
             ExpectedContract: notification.ExpectedContractAddress,
-            ExpectedSymbol: notification.ExpectedToken.ToString());
+            ExpectedSymbol: notification.ExpectedToken.ToString(),
+            // Published on ACCEPTED → SELLER_CONFIRMED: the payment is now
+            // awaited. EnsurePaymentMonitorJob moves the address to Holding
+            // once the payment is in (08 §3.4).
+            Cadence: PaymentMonitorCadence.Payment);
 
         var status = await _sidecar.StartMonitoringAsync(request, cancellationToken);
         switch (status)

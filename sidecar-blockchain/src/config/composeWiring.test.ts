@@ -31,6 +31,23 @@ function serviceBlock(compose: string, service: string): string {
   return lines.slice(start, next < 0 ? undefined : next).join('\n');
 }
 
+/**
+ * T139-ActiveMonitorQuotaAlarm — two more silent ones: the sidecar has defaults
+ * for both, so a value set in .env that never reaches the container is simply
+ * ignored (a paid plan's budget would keep the alert firing on the free tier's
+ * figure; a tuned holding cadence would never apply).
+ */
+describe('docker-compose — the blockchain sidecar receives the polling cadence and the quota budget', () => {
+  const sidecar = serviceBlock(readFileSync(COMPOSE_FILE, 'utf8'), 'skinora-blockchain-sidecar');
+
+  it.each(['PAYMENT_HOLDING_POLLING_INTERVAL_MS', 'TRONGRID_DAILY_REQUEST_BUDGET'])(
+    'passes %s from .env into skinora-blockchain-sidecar',
+    (name) => {
+      expect(sidecar).toMatch(new RegExp(`^ +- ${name}=\\$\\{${name}(:-[^}]*)?\\}$`, 'm'));
+    },
+  );
+});
+
 describe('docker-compose — the blockchain sidecar receives the stake account', () => {
   const sidecar = serviceBlock(readFileSync(COMPOSE_FILE, 'utf8'), 'skinora-blockchain-sidecar');
 

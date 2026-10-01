@@ -227,6 +227,20 @@ public sealed class EnsurePaymentMonitorJob
         return PaymentMonitorAction.Arm;
     }
 
+    /// <summary>
+    /// How often an armed address is polled (T139-ActiveMonitorQuotaAlarm,
+    /// owner decision 2026-10-02 — 08 §3.4). Only <c>SELLER_CONFIRMED</c>
+    /// awaits the payment and needs the 3 s cadence; in the two later armed
+    /// states the address only waits for a late second payment or an
+    /// overpayment, which a 15-minute look still refunds. This job re-arms
+    /// every open address every minute, so a transaction's next run moves its
+    /// address to the slow cadence within a minute of the payment landing.
+    /// </summary>
+    public static PaymentMonitorCadence CadenceFor(TransactionStatus status) =>
+        status == TransactionStatus.SELLER_CONFIRMED
+            ? PaymentMonitorCadence.Payment
+            : PaymentMonitorCadence.Holding;
+
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
         int armed = 0, disarmed = 0, failed = 0, examined = 0;
@@ -299,7 +313,8 @@ public sealed class EnsurePaymentMonitorJob
                             PaymentAddressId: candidate.Address.Id,
                             TransactionId: candidate.Address.TransactionId,
                             ExpectedContract: contract,
-                            ExpectedSymbol: candidate.Address.ExpectedToken.ToString()),
+                            ExpectedSymbol: candidate.Address.ExpectedToken.ToString(),
+                            Cadence: CadenceFor(candidate.Status)),
                         cancellationToken);
 
                     if (startStatus == BlockchainSidecarStatus.Success)

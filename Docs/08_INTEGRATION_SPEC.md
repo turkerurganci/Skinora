@@ -307,6 +307,8 @@ Teslimat doğrulaması için "envanter okunamadı" ile "envanter okundu ve item 
 | `Private` | Profil/envanter gizli | Kanıt yolu kapalı; yalnız alıcı onayı geçerli, kullanıcı uyarılır |
 | `Unavailable` | Steam erişilemedi / hata | Karar verilmez, tekrar denenir. **Asla "teslim edilmedi" olarak yorumlanmaz** |
 
+> **Steam'in 401'i — hesabın CS2 envanteri hiç yok (P2P-InventoryUnauthorizedMapping, ölçüm 2026-10-02).** Anonim envanter ucu dört statü döndürür: 200 (okundu), 403 + `null` (gizli), 401 + `null`, 429 (hız sınırı). 401 envanterin **var olmadığını** söyler ve gizlilikten önce gelir: envanteri gizli bir hesap, envanteri olan bir oyunda (TF2, `440/2`) 403, hiç olmayan bir oyunda (Dota 2, `570/2`) 401 döndürdü; CS2 envanteri boş ama var olan bir hesap 200 + `total_inventory_count: 0` döndürdü; Community profili kurulmamış üç hesap `730/2`'de 401, `753/6`'da 403 verdi (kurulmamış profil gizlidir; CS2 envanterleri yoktur). Sidecar bu cevabı ayrı raporlar (`NO_INVENTORY`, HTTP 404 — 422 backend'de zaten "gizli" demektir); satıcıya bakan üç uç onu 422 `INVENTORY_NOT_FOUND` olarak gösterir (07 §6.1). **Teslimat kanıtı tarafında `Unavailable` gibi işlenir:** alıcının 401'i sıfır başlangıç sayımı yazdırmaz (proje sahibi kararı 2026-10-02: yalnız mesaj). Ham ölçüm: [`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §2.
+
 > Bu ayrım yapılmazsa, Steam kesintisi sırasında teslim edilmiş bir işlem "item gelmemiş" sayılıp haksız yere iade edilebilir.
 
 **Teslimat doğrulamasında kullanılan alanlar (v3.0):**
@@ -391,6 +393,7 @@ Steam resmi rate limit belgeleri yayınlamaz. Aşağıdaki değerler topluluk de
 | Steam 503 | 503 | Aşağıdaki 503 karar ağacına göre işlenir | Karar ağacına bağlı |
 | API key geçersiz | 403 | Admin alert | Hayır — manuel müdahale |
 | Envanter private | — | Kullanıcıya "Envanterinizi public yapın" uyarısı | Hayır — kullanıcı aksiyonu gerekli |
+| CS2 envanteri yok | 401 | Kullanıcıya "bu hesapta CS2 envanteri yok" (07 §6.1 `INVENTORY_NOT_FOUND`); teslimat kanıtında `Unavailable` | Hayır — hesap bir CS2 item'ı edinene kadar kalıcı |
 
 **503 karar ağacı:**
 
@@ -454,7 +457,7 @@ Tüm blockchain işlemleri (adres üretimi, ödeme izleme, transfer, iade) Node.
 | Endpoint | Amaç | Kullanım sıklığı |
 |----------|-------|-------------------|
 | `POST /wallet/broadcasttransaction` | İmzalanmış transaction yayınlama | Her transfer işleminde |
-| `GET /v1/accounts/{address}/transactions/trc20` | Adrese gelen TRC-20 transferlerini sorgulama | Ödeme monitoring (3 saniye aralıkla — 05 §3.3) |
+| `GET /v1/accounts/{address}/transactions/trc20` | Adrese gelen TRC-20 transferlerini sorgulama | Ödeme monitoring (ödeme beklenirken 3 sn, onaylandıktan sonra sweep'e kadar 15 dk — 05 §3.3, §3.4) |
 | `POST /wallet/triggersmartcontract` | TRC-20 token transfer fonksiyonu çağrısı | Satıcıya ödeme, iade |
 | `POST /wallet/triggerconstantcontract` | TRC-20 bakiye sorgulama (read-only) | Doğrulama |
 | `POST /walletsolidity/gettransactioninfobyid` | Confirmed/solidified transaction detayı sorgulama (tx block numarası dahil) | Onay sayısı kontrolü — yalnızca solidified veri döner, mempool dahil edilmez |
@@ -628,7 +631,7 @@ Blockchain sidecar yalnız *nasıl* imzalayacağını değil, **neyi imzalamayac
 
 | Parametre | Değer | Kaynak |
 |-----------|-------|--------|
-| Polling aralığı | 3 saniye | 05 §3.3 |
+| Polling aralığı | Ödeme beklenirken (`SELLER_CONFIRMED`) 3 saniye; ödeme onaylandıktan sonra sweep'e kadar (`PAYMENT_RECEIVED`, `ITEM_DELIVERED`) 15 dakika | 05 §3.3 |
 | Minimum onay | 20 blok (~60 saniye) | 05 §3.3 |
 | İzlenen token | İşlemde belirlenen (USDT veya USDC) | 02 §4.3 |
 | İzleme yöntemi | TronGrid `trc20` transaction endpoint'i + aşağıdaki filtre/idempotency kuralları | |
@@ -640,13 +643,17 @@ Yukarıdaki parametreler *nasıl* izlendiğini anlatır; aşağıdaki tablo *ne 
 | Aşama | Tetikleyici | Mekanizma |
 |---|---|---|
 | **Kurma** | `ACCEPTED → SELLER_CONFIRMED` — deposit adresinin alıcıya ilk gösterildiği an (02 §2.2 adım 3), yani paranın gelebileceği ilk an | Geçişle **aynı** `SaveChanges` içinde outbox'a `PaymentMonitorStartRequestedEvent`; `PaymentMonitorStartDispatcher` `POST /api/monitor/start` çağırır |
-| **Yeniden kurma** | Her dakika, koşulsuz | `EnsurePaymentMonitorJob` açık penceredeki her adresi yeniden kurar. Backend restart'ı, **sidecar restart'ını** ve düşen outbox teslimini tek mekanizmayla kapatır; `start` adres bazında idempotent olduğu için tekrar kurma cursor/dedup durumunu bozmaz |
+| **Yeniden kurma** | Her dakika, koşulsuz | `EnsurePaymentMonitorJob` açık penceredeki her adresi, işlemin statüsünün gerektirdiği sıklıkla (`cadence`: `SELLER_CONFIRMED` → `PAYMENT`, sonrası → `HOLDING`) yeniden kurar; sidecar zaten izlenen bir adresin yalnız sıklığını günceller, imleç ve tekilleştirme durumu korunur. Ödeme onaylanan bir adres böylece en geç bir dakika içinde yavaş sıklığa geçer. Backend restart'ı, **sidecar restart'ını** ve düşen outbox teslimini tek mekanizmayla kapatır; `start` adres bazında idempotent olduğu için tekrar kurma cursor/dedup durumunu bozmaz |
 | **Durdurma — devir** | İptal/timeout | `PostCancelMonitorStartDispatcher` gecikmeli izleyiciyi kurmadan **önce** aktif izleyiciyi durdurur. Devir bir kopyalama değil taşımadır: iki registry aynı adresi yoklarsa her biri kendi webhook'unu üretir |
 | **Durdurma — pencere kapanışı** | Deposit sweep ile boşaldığında (`SWEEP` satırı `CONFIRMED`, 05 §3.3) **veya** işlem terminal statüye ulaştığında | `EnsurePaymentMonitorJob` `POST /api/monitor/stop` çağırır ve satırı `STOPPED` damgalar — damga yalnız sidecar onayladıysa yazılır |
 
 > **`PAYMENT_RECEIVED` ve `ITEM_DELIVERED` bilinçli olarak izlemede kalır.** Ödeme onaylandığında durdurmak ucuz olurdu ama bu bölümün kendi tutar doğrulama tablosundaki *fazla tutar* kolunu ve 03 §5.5'in *ikinci ödeme* kolunu öldürür: ikisi de ödeme kabul edildikten **sonra** gelen bir transferi tarif eder ve onayda duran bir izleyici o transferi hiç görmez. Pencereyi kapatan şey işlemin ilerlemesi değil, **depozitin boşalmasıdır**.
 
-> **Bu kararın ölçülmüş bedeli — eşzamanlı izleyici sayısı iki saatlik değil bir haftalık hacimle ölçeklenir (T139 doğrulaması, bulgu N1).** Yukarıdaki "Polling aralığı 3 saniye" satırı ödeme bacağını (30-120 dakika) tarif ediyormuş gibi okunur, ama pencereyi kapatan sweep `SettlementVerifiedAt` damgalanmadan kuyruklanamaz ve `payout_settlement_days`'in **sert tabanı 7 gündür** (`SystemSettingsValidator.MinimumSettlementDays`, 02 §16.2). Yani her deposit adresi teslimattan sonra **bir hafta veya daha uzun süre** 3 saniyelik aktif kadansta yoklanır. Sonuç: aynı anda izlenen adres sayısı ≈ *bir haftalık* işlem hacmi, ve TronGrid istek hacmi bu sayıyla doğru orantılıdır (izleyici başına tick başına iki sorgu fazı). Bu, D3'ün kabul edilmiş bedelidir — pencereyi kısaltmak yukarıdaki iki kolu öldürür — ama **kapasite planlamasının girdisidir**: throughput artırılmadan önce `skinora_blockchain_active_monitors` sağlayıcının rate limit'ine karşı izlenmelidir. Alarm eşiği henüz tanımlı değil (`DEFERRED_BACKLOG` → `T139-ActiveMonitorQuotaAlarm`).
+> **Bu kararın ölçülmüş bedeli — eşzamanlı izleyici sayısı iki saatlik değil bir haftalık hacimle ölçeklenir (T139 doğrulaması, bulgu N1).** Yukarıdaki "Polling aralığı 3 saniye" satırı ödeme bacağını (30-120 dakika) tarif ediyormuş gibi okunur, ama pencereyi kapatan sweep `SettlementVerifiedAt` damgalanmadan kuyruklanamaz ve `payout_settlement_days`'in **sert tabanı 7 gündür** (`SystemSettingsValidator.MinimumSettlementDays`, 02 §16.2). Yani her deposit adresi teslimattan sonra **bir hafta veya daha uzun süre** 3 saniyelik aktif kadansta yoklanır. Sonuç: aynı anda izlenen adres sayısı ≈ *bir haftalık* işlem hacmi, ve TronGrid istek hacmi bu sayıyla doğru orantılıdır (izleyici başına tick başına iki sorgu fazı). Bu, D3'ün kabul edilmiş bedelidir — pencereyi kısaltmak yukarıdaki iki kolu öldürür — ama **kapasite planlamasının girdisidir**: throughput artırılmadan önce `skinora_blockchain_active_monitors` sağlayıcının rate limit'ine karşı izlenmelidir.
+>
+> **Kadans ikiye ayrıldı (proje sahibi kararı 2026-10-02, `T139-ActiveMonitorQuotaAlarm`).** Tek 3 sn'lik kadansla bir adres (tick başına iki liste sorgusu) günde 2 × 28.800 = **57.600** istek harcıyordu; TronGrid'in ücretsiz planı ~**100.000**/gün (2026 raporu — TronGrid'in resmî sayfası 2026-09-08'den beri sabit sayı vermiyor ve "aynı hesabın anahtarları toplam kotayı paylaşabilir" diyor) ve adresler ~8 gün açık kaldığı için aynı anda ~2 işlem taşınıyordu. Pencere aynı kalıyor (D3'ün iki kolu yaşıyor), değişen yalnız sıklık: ödeme beklenirken 3 sn, onaylandıktan sonra 15 dk. Hesap: işlem başına ödeme aşaması en çok 30 dk (varsayılan timeout) = 600 tick × 2 = 1.200 istek, tutma penceresi 8 gün × 192 = 1.536 istek → günde D işlemde ≈ 2.736 × D istek; 100.000'lik bütçe ≈ **36 işlem/gün** (alarmın %80 eşiğinde ≈ 29). İptal edilen işlemlerin gecikmeli izleyicisi ayrıca ilk 24 saatte 30 sn'de yoklar (günde 5.760 istek) ve aynı bütçeden harcar; gerçek tavan iptal oranıyla düşer. Daha fazlası için plan büyütülür ya da kendi düğüm kullanılır (DEPLOY_RUNBOOK §B). Tutma aşamasında yeni bir transfer görülürse kesinlik kontrolleri (20 blok) tick'te sürer — fazla ödeme iadesi 15 dk beklemez.
+>
+> **Önleyici yarı kuruldu (2026-10-02):** `tron-quota-projection` (warning, `for: 15m`) ölçülen TronGrid istek hızını — son 1 saatin ortalaması, güne çevrilmiş — sidecar'ın açılışta yayımladığı `skinora_blockchain_trongrid_daily_request_budget` gauge'una böler ve oran 0,8'i geçince uyarır. Bütçe varsayılmaz, yapılandırılır (`TRONGRID_DAILY_REQUEST_BUDGET`, varsayılan 100.000; geçersiz değerle sidecar açılmaz). Sayılan istekler: `TronGridClient` (izleme listeleri, kesinlik) ve fetch tabanlı probların hepsi (gas tahmini, devretme planı, transfer durumu); TronWeb'in kendi kurduğu yayın çağrıları sayılmaz — giden transfer başına birkaç istek, %20'lik boşluğun içinde. Aşağıdaki 2026-08-29 paragrafı kuralın tarihçesidir.
 >
 > **Alarm bugün kısmen kuruldu ve eksik kalan yarısı ölçülmüş bir sebeple eksik (2026-08-29).** İki ayrı alarm sorulabilir ve ancak biri dış bilgi gerektirmeden yazılabilir. **Kotanın dolduğunu gözleyen** kural kuruldu — `tron-quota-rejections` (`error_type="http_429"` oranı > 0, `for: 2m`, severity `critical`): TronGrid'in kendi 429'u kotanın fiilen dolduğunun doğrudan kanıtıdır. **İzleyici sayısına dayalı ÖNLEYİCİ eşik yazılmadı**, çünkü sayı eşiği sağlayıcının istek bütçesini gerektirir ve **TronGrid bu bütçeyi yanıt başlığında döndürmez** (canlı probe: Nile `trc20` ucu 200 dönüyor, rate/quota başlığı yok). Ölçülmemiş bir bütçeden türetilen eşik, kurulduğu gün ölü doğan bir bekçi olurdu; eşik kapasite planlamasına ait kalıyor (`DEFERRED_BACKLOG` → `T139-ActiveMonitorQuotaAlarm`).
 >
