@@ -717,6 +717,16 @@ describe('MonitorRegistry — cadence (08 §3.4)', () => {
     expect(fake.callsPhase2).toHaveLength(3);
   });
 
+  it('polls a PAYMENT address on a tick that arrives a little early — setInterval drifts', async () => {
+    const registry = cadenceRegistry();
+    registry.start(startOptions('PAYMENT'));
+
+    await registry.tick();
+    await advance(TICK_MS - 1, registry);
+
+    expect(fake.callsPhase1).toHaveLength(2);
+  });
+
   it('treats a start without a cadence as PAYMENT — what a backend predating cadences relies on', async () => {
     const registry = cadenceRegistry();
     const result = registry.start(startOptions());
