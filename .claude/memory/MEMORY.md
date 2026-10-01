@@ -5,8 +5,16 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-10-01 — ödeme takılması PR #330: bağımsız doğrulama ✓ PASS, iki küçük bulgu doğrulamada kapatıldı, merge; backlog 21 aktif / 138 çözülmüş, 🔴 YOK)
+## Current Status (2026-10-02 — dört 🟡 backlog satırı tek dalda, PR #331: bağımsız doğrulama bekliyor; backlog 17 aktif / 142 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
+
+> **Dört 🟡 satır tek dalda (2026-10-02, dal `feat/backlog-round-2026-10-02`, PR [#331](https://github.com/turkerurganci/Skinora/pull/331)) — bağımsız doğrulama bekliyor, merge yok.** Proje sahibi dördünü birlikte istedi, dördüne modalla karar verdi: (1) `RefundActivationCostNotCharged` → alıcı öder (iade tahminine açılış: 1 TRX + kilitli bant yetmezse 0,1 TRX; zincirden okunur; Nile ölçümü 1.100.000 SUN) · (2) `P2P-InventoryUnauthorizedMapping` → yalnız mesaj (ölçüm: 401 = uygulama envanteri yok, gizlilikten önce gelir; sidecar 404 `NO_INVENTORY` → backend 422 `INVENTORY_NOT_FOUND`; teslimat kanıtında `Unavailable` kalır) · (3) `T139-ActiveMonitorQuotaAlarm` → ödeme sonrası 15 dk + alarm (asıl sorun kapasite: 3 sn × 2 sorgu = adres başına günde 57.600 istek; `PAYMENT`/`HOLDING` sıklığı, `tron-quota-projection` alarmı ölçülen hız / `TRONGRID_DAILY_REQUEST_BUDGET` > 0,8; ≈ 36 işlem/gün) · (4) `P2P-DeliveryPollingJob` → kaydet + alıcıya bildir (`DeliveryPollingJob`: dakikada ≤1 işlem, işlem başına ≤10 dk; önce yalnız satıcı okuması; yalnız aynı turdaki iki kanıtla davranır; kapı kapalıyken `DELIVERY_DETECTED`, açıkken `ITEM_DELIVERED`; kolon `DeliveryPolledAt`).
+>
+> **Ölçüm.** Backend tüm süit 3209/3209 (Docker açık, proje proje sıralı — paralel koşu kaynak çekişmesiyle onlarca sahte kırmızı veriyor), sidecar-blockchain 412/412, sidecar-steam 138/138, frontend 266/266; yerel bozma 46/46 (ilk turda 2 kaçak → kusur düzeltildi). Canlı: yerel Grafana'da yeni kural `health: ok`, bütçe 1.000'e çekilince **pending**.
+>
+> **Dersler.** (a) Partiyi baştan izlenen varlık olarak yükleyip çakışmada `ChangeTracker.Clear()` çağırmak sırası gelmemiş satırları koparır — eklenen varlıklar (capture, outbox) kaydedilir, değişen satır kaydedilmez; her satırı kendi sırasında yeniden yükle. (b) Sidecar tsconfig'i testleri de derler: vitest yeşilken `tsc --noEmit` / Docker derlemesi düşebilir — JS değişikliğinden sonra tsc koş. (c) Betikle yapılan doküman düzenlemesinde JSON kaçışı ters bölüleri yarıya indirir — regex/kaçış içeren düzenlemeyi Edit aracıyla yap.
+>
+> **#330 merge teyidi:** main CI `36924045682` ✓ + Docker Publish `36924045588` ✓ (bu dalda kayda girdi).
 
 > **#330 bağımsız doğrulaması ✓ PASS (2026-10-01, ayrı chat) — iki küçük bulgu proje sahibi kararıyla doğrulamada kapatıldı (`b55a1ef`, üretim kodu değişmedi), squash merge.** Backlog **21 aktif / 138 çözülmüş**, 🔴 YOK (dosyanın kendi awk'iyle bağımsız: main 22/137 → dal 21/138).
 >
