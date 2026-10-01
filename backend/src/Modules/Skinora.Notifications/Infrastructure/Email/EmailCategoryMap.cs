@@ -36,6 +36,10 @@ public static class EmailCategoryMap
             // sale, so it rides the transaction wrapper next to
             // SELLER_PAYMENT_SENT rather than the security one.
             [NotificationType.PAYOUT_ISSUE_RESOLVED] = EmailCategory.Transaction,
+            // P2P-DeliveryPollingJob — the buyer is asked to confirm a delivery
+            // the poll observed: a step in their own trade, next to
+            // DELIVERY_EXPECTED on the seller's side.
+            [NotificationType.DELIVERY_DETECTED] = EmailCategory.Transaction,
 
             // --- Timeout warnings (08 §4.2 — "Timeout uyarıları") ---
             [NotificationType.TIMEOUT_WARNING] = EmailCategory.Timeout,

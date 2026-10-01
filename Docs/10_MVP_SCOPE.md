@@ -1,6 +1,6 @@
 # Skinora — MVP Scope
 
-**Versiyon: v2.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v2.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
 
 ---
 

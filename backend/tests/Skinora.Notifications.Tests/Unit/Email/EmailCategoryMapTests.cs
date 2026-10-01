@@ -9,6 +9,7 @@ public sealed class EmailCategoryMapTests
     [Theory]
     [InlineData(NotificationType.PAYMENT_RECEIVED, EmailCategory.Transaction)]
     [InlineData(NotificationType.TRANSACTION_COMPLETED, EmailCategory.Transaction)]
+    [InlineData(NotificationType.DELIVERY_DETECTED, EmailCategory.Transaction)]
     [InlineData(NotificationType.TIMEOUT_WARNING, EmailCategory.Timeout)]
     [InlineData(NotificationType.EMERGENCY_HOLD_APPLIED, EmailCategory.Security)]
     [InlineData(NotificationType.TRANSACTION_FLAGGED, EmailCategory.Security)]

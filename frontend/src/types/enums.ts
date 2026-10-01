@@ -117,7 +117,7 @@ export enum ReviewStatus {
   REJECTED = "REJECTED",
 }
 
-// §2.13 — 26 values
+// §2.13 — 28 values
 export enum NotificationType {
   TRANSACTION_INVITE = "TRANSACTION_INVITE",
   BUYER_ACCEPTED = "BUYER_ACCEPTED",
@@ -164,6 +164,10 @@ export enum NotificationType {
   // this resolution does not carry (and, on the admin path, an observed
   // transfer that did not necessarily happen).
   PAYOUT_ISSUE_RESOLVED = "PAYOUT_ISSUE_RESOLVED",
+  // P2P-DeliveryPollingJob — the delivery poll saw the item arrive while the
+  // inventory-evidence launch gate is closed; the buyer is asked to check their
+  // Steam inventory and confirm receipt themselves (02 §9.2).
+  DELIVERY_DETECTED = "DELIVERY_DETECTED",
 }
 
 // §2.14 — 3 values

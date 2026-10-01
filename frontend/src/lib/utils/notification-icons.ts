@@ -26,6 +26,9 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   // v3.0 — the seller is now expected to send the item directly to the buyer.
   // Replaces TRADE_OFFER_SENT_TO_BUYER and keeps its 🔄 flow-update icon.
   [NotificationType.DELIVERY_EXPECTED]: "transactionUpdate",
+  // P2P-DeliveryPollingJob — the buyer's side of the same step: the item seems
+  // to have arrived, confirm receipt. A 🔄 flow update like its seller twin.
+  [NotificationType.DELIVERY_DETECTED]: "transactionUpdate",
 
   // v3.0 — replaces ITEM_ESCROWED, but not its icon: what opens here is the
   // payment window (the deposit address is revealed), so this is a 💰 row.

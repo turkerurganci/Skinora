@@ -574,6 +574,8 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 > sayısı da bu ritme bağlıdır, §H.3'ün sorgusu aynı işleme ait birden çok gözlem satırı görebilir —
 > `ORDER BY ObservedAt` ile en güncel olan okunur.
 
+> **Teslimat taraması (2026-10-02, `P2P-DeliveryPollingJob`).** Kapı kapalıyken artık süre sonunu beklemeden de kanıt toplanıyor: tarama her `PAYMENT_RECEIVED` işlemine en çok 10 dk'da bir bakar ve item'ın satıcıdan çıkıp alıcıya geldiğini **aynı turda** görürse `DeliveryEvidenceCaptures`'a satır yazar (verdict `InventoryEvidencePendingReview`) ve alıcıya `DELIVERY_DETECTED` bildirimi gönderir — alıcı kendi onayıyla (kapıdan bağımsız) işlemi kapatabilir. Sonuç: aşağıdaki B1 ölçümünün `ObservedAt`'ı artık teslimattan en çok ~10 dk sonrasını gösterir; önceden yalnız süre sonunda ya da dispute'ta yazıldığı için gecikmeyi değil kontrolün zamanını ölçüyordu. Kapı açıkken tarama işlemi doğrudan `ITEM_DELIVERED`'a geçirir (süre sonu turuyla aynı geçiş). Ayarlar `DeliveryPolling` bölümünde (`Enabled`, `BatchSize` = 1, `RecheckSeconds` = 600; env `DeliveryPolling__Enabled` vb.) ve restart-bound'dur; Steam 429 fırtınasında `DeliveryPolling__Enabled=false` taramayı durdurur.
+
 ### H.3 Kapıyı açma adımları
 
 1. **İlk N gerçek teslimatı topla.** N'yi deploy sahibi belirler; öneri **≥ 5** ayrı işlem (farklı satıcı/alıcı çiftleri, en az biri alıcının o skinden zaten kopyası olduğu vaka). Kayıtlar:
