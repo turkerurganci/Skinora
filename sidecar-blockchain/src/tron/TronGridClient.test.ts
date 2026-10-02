@@ -93,6 +93,18 @@ describe('TronGridClient.listTrc20()', () => {
     expect(url).not.toContain('contract_address');
   });
 
+  it('asks for oldest first with min_timestamp when order is asc — the forward scan query', async () => {
+    await client.listTrc20({ address: 'TDeposit', minTimestamp: 1_790_111_046_000, order: 'asc' });
+    const url = new URL(fetchMock.calls[0].url);
+    expect(url.searchParams.get('order_by')).toBe('block_timestamp,asc');
+    expect(url.searchParams.get('min_timestamp')).toBe('1790111046000');
+  });
+
+  it('leaves order_by out when no order is given — TronGrid default, newest first', async () => {
+    await client.listTrc20({ address: 'TDeposit' });
+    expect(fetchMock.calls[0].url).not.toContain('order_by');
+  });
+
   it('returns records and meta.fingerprint', async () => {
     const result = await client.listTrc20({ address: 'TDeposit', contractAddress: 'TUSDT' });
     expect(result.records).toHaveLength(1);
@@ -333,10 +345,20 @@ describe('TronGridClient.resolveTransferEventIndices()', () => {
     expect(calls[0].url).toBe('https://solid/walletsolidity/gettransactioninfobyid');
   });
 
-  it('returns [] when the lookup fails so the caller falls back to index 0', async () => {
+  it('throws when the lookup fails — an index-0 guess would be reported twice once the real index resolves', async () => {
     const { mock } = buildFetchMock([{ status: 500, body: {}, statusText: 'Server Error' }]);
     const client = new TronGridClient('https://full', 'https://solid', '', mock, {
       maxRetries: 0,
+      sleepFn: noSleep,
+    });
+    await expect(client.resolveTransferEventIndices('tx-x', CONTRACT, DEPOSIT)).rejects.toThrow(
+      TronGridHttpError,
+    );
+  });
+
+  it('returns [] when the solidity node has no logs for the transaction yet', async () => {
+    const { mock } = buildFetchMock([{ status: 200, body: {} }]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock, {
       sleepFn: noSleep,
     });
     const entries = await client.resolveTransferEventIndices('tx-x', CONTRACT, DEPOSIT);

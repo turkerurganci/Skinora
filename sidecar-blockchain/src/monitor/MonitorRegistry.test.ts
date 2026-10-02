@@ -9,6 +9,7 @@ import type {
 } from '../tron/TronGridClient.js';
 import { WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type { AnyBlockchainWebhookPayload } from '../webhook/WebhookPayloads.js';
+import { FakeTronGridLedger, type LedgerRecord } from '../testing/FakeTronGridLedger.js';
 
 const DEPOSIT_ADDRESS = 'TDeposit1234567890DepositAddrFakeXX';
 const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
@@ -20,6 +21,7 @@ const SPAM_TOKEN = 'TSpam111111111111111111111111111111';
 type ListCall = {
   contractAddress?: string;
   fingerprint?: string;
+  minTimestamp?: number;
 };
 
 interface FakeTronClient {
@@ -71,10 +73,11 @@ function createFakeClient(): FakeTronClient {
           callsPhase1.push({
             contractAddress: options.contractAddress,
             fingerprint: options.fingerprint,
+            minTimestamp: options.minTimestamp,
           });
           return phase1Queue.shift() ?? { records: [], fingerprint: null };
         }
-        callsPhase2.push({ fingerprint: options.fingerprint });
+        callsPhase2.push({ fingerprint: options.fingerprint, minTimestamp: options.minTimestamp });
         return phase2Queue.shift() ?? { records: [], fingerprint: null };
       },
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -757,7 +760,10 @@ describe('MonitorRegistry — cadence (08 §3.4)', () => {
   it('moves an address from PAYMENT to HOLDING when the backend re-arms it — cursors kept', async () => {
     const registry = cadenceRegistry();
     registry.start(startOptions('PAYMENT'));
-    fake.enqueuePhase1({ records: [], fingerprint: 'fp-before-switch' });
+    fake.enqueuePhase1({
+      records: [transferRecord({ block_timestamp: 1_790_111_046_000 })],
+      fingerprint: null,
+    });
     await registry.tick();
 
     const rearmed = registry.start(startOptions('HOLDING'));
@@ -768,7 +774,8 @@ describe('MonitorRegistry — cadence (08 §3.4)', () => {
 
     await advance(HOLDING_MS, registry);
     expect(fake.callsPhase1).toHaveLength(2);
-    expect(fake.callsPhase1[1].fingerprint).toBe('fp-before-switch');
+    expect(fake.callsPhase1[0].minTimestamp).toBeUndefined();
+    expect(fake.callsPhase1[1].minTimestamp).toBe(1_790_111_046_000);
   });
 
   it('returns to every-tick polling when re-armed as PAYMENT', async () => {
@@ -815,5 +822,179 @@ describe('MonitorRegistry — cadence (08 §3.4)', () => {
 
     expect(registry.cadenceIntervalMs('PAYMENT')).toBe(TICK_MS);
     expect(registry.cadenceIntervalMs('HOLDING')).toBe(HOLDING_MS);
+  });
+});
+
+/**
+ * The registry against a ledger that answers like TronGrid does (Nile probes
+ * 2026-10-02/03) — backlog `MonitorCursorPagesBackward`. The queue fakes above
+ * return whatever was enqueued whatever the query, which is how a cursor
+ * that walked toward older records passed every test.
+ */
+describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', () => {
+  const T0 = 1_790_000_000_000;
+  let ledger: FakeTronGridLedger;
+  let sender: ReturnType<typeof createFakeSender>;
+
+  beforeEach(() => {
+    ledger = new FakeTronGridLedger();
+    sender = createFakeSender();
+  });
+
+  function ledgerRecord(
+    overrides: Partial<LedgerRecord> & { transaction_id: string },
+  ): LedgerRecord {
+    return { ...transferRecord(overrides), logIndex: overrides.logIndex };
+  }
+
+  function start(registry: MonitorRegistry): void {
+    registry.start({
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+    });
+  }
+
+  function sentTo(endpoint: string): Array<{ txHash: string; eventIndex: number }> {
+    return sender.sent
+      .filter((s) => s.endpoint === endpoint)
+      .map((s) => s.envelope.data as unknown as { txHash: string; eventIndex: number })
+      .map(({ txHash, eventIndex }) => ({ txHash, eventIndex }));
+  }
+
+  it('sees a wrong-token transfer that arrives after 25 spam transfers filled phase 2', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    for (let i = 0; i < 25; i += 1) {
+      ledger.add(
+        ledgerRecord({
+          transaction_id: `spam-${i}`,
+          token_info: { address: SPAM_TOKEN, decimals: 6 },
+          block_timestamp: T0 + i * 3000,
+        }),
+      );
+    }
+    await registry.tick();
+    await registry.tick();
+
+    ledger.add(
+      ledgerRecord({
+        transaction_id: 'usdc-late',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0 + 100 * 3000,
+      }),
+    );
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'usdc-late', eventIndex: 0 }]);
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toHaveLength(25);
+  });
+
+  it('sees a late USDT payment after more than a page of USDT transfers (zero-value poisoning)', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    for (let i = 0; i < 21; i += 1) {
+      ledger.add(
+        ledgerRecord({ transaction_id: `poison-${i}`, value: '0', block_timestamp: T0 + i * 3000 }),
+      );
+    }
+    await registry.tick();
+    await registry.tick();
+
+    ledger.add(ledgerRecord({ transaction_id: 'late-payment', block_timestamp: T0 + 100 * 3000 }));
+    await registry.tick();
+
+    const detected = sentTo(ENDPOINTS.paymentDetected).filter((d) => d.txHash === 'late-payment');
+    expect(detected).toEqual([{ txHash: 'late-payment', eventIndex: 0 }]);
+  });
+
+  it('reports a transfer at log index 2 once — not again under index 0 on the re-read', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-contract', logIndex: 2, block_timestamp: T0 }));
+
+    await registry.tick();
+    await registry.tick();
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('a failed log lookup reports nothing; the next tick reports the real index once', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-contract', logIndex: 2, block_timestamp: T0 }));
+    ledger.failLogLookups = 1;
+
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([]);
+
+    await registry.tick();
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('a retryable webhook failure is delivered on the next tick, nothing twice', async () => {
+    let failures = 1;
+    sender = createFakeSender({
+      failNext: () =>
+        failures-- > 0
+          ? new WebhookDeliveryError(503, 'Service Unavailable', 'payment.detected')
+          : null,
+    });
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(
+      ledgerRecord({ transaction_id: 'tx-a', block_timestamp: T0 }),
+      ledgerRecord({ transaction_id: 'tx-b', block_timestamp: T0 + 3000 }),
+    );
+
+    await registry.tick();
+    await registry.tick();
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.paymentDetected).map((d) => d.txHash)).toEqual(['tx-a', 'tx-b']);
+  });
+
+  it('a quiet poll lists once per phase and re-reads only the newest block — not the history', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    for (let i = 0; i < 45; i += 1) {
+      ledger.add(
+        ledgerRecord({
+          transaction_id: `spam-${i}`,
+          token_info: { address: SPAM_TOKEN, decimals: 6 },
+          block_timestamp: T0 + i * 3000,
+        }),
+      );
+    }
+    await registry.tick();
+    const lists = ledger.listCalls.length;
+    const lookups = ledger.logLookups.length;
+
+    await registry.tick();
+
+    expect(ledger.listCalls.length - lists).toBe(2);
+    expect(ledger.logLookups.slice(lookups)).toEqual(['spam-44']);
+  });
+
+  it('keeps a separate watermark per phase — a newer USDT transfer does not hide older spam from phase 2', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(
+      ledgerRecord({
+        transaction_id: 'usdc-early',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0,
+      }),
+      ledgerRecord({ transaction_id: 'usdt-later', block_timestamp: T0 + 60_000 }),
+    );
+
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'usdc-early', eventIndex: 0 }]);
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'usdt-later', eventIndex: 0 }]);
   });
 });

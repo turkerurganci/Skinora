@@ -27,7 +27,13 @@ export interface Trc20Record {
 
 export interface Trc20ListResponse {
   records: Trc20Record[];
-  /** Cursor for the next page. Stable across polls per TronGrid contract. */
+  /**
+   * Cursor for the next page of the SAME query, in that query's order — null
+   * on the last page. It is not a "since the last poll" marker: in TronGrid's
+   * default order (newest first) it walks toward older records (Nile probe
+   * 2026-10-02). Forward monitoring keeps a timestamp watermark instead
+   * (monitor/ForwardScan.ts).
+   */
   fingerprint: string | null;
 }
 
@@ -40,8 +46,14 @@ export interface ListTrc20Options {
   limit?: number;
   /** Outgoing transfers only — the daily outflow guard's question (05 §3.3). */
   onlyFrom?: boolean;
-  /** Unix ms lower bound; TronGrid filters server-side so paging stays short. */
+  /**
+   * Unix ms lower bound; TronGrid filters server-side so paging stays short.
+   * Inclusive and floored to the second (Nile probe 2026-10-03: a record at
+   * T is still returned for min_timestamp = T + 999, not for T + 1000).
+   */
   minTimestamp?: number;
+  /** `asc` = oldest first. Omitted = TronGrid's default, newest first. */
+  order?: 'asc' | 'desc';
 }
 
 export interface TransactionInfo {
@@ -214,6 +226,9 @@ export class TronGridClient {
     if (typeof options.minTimestamp === 'number') {
       params.set('min_timestamp', String(options.minTimestamp));
     }
+    if (options.order) {
+      params.set('order_by', `block_timestamp,${options.order}`);
+    }
 
     const url = `${this.fullNodeUrl}/v1/accounts/${encodeURIComponent(options.address)}/transactions/trc20?${params.toString()}`;
     const endpointLabel = options.contractAddress ? 'trc20.filtered' : 'trc20.unfiltered';
@@ -325,8 +340,13 @@ export class TronGridClient {
    * transaction (08 §3.4 — WP10 event-index dedup). Returns each matching
    * log's canonical event index + decoded value so the monitor can assign a
    * stable, per-event identity. Returns an empty array when the solidity node
-   * has no logs yet (lag) or the lookup fails — the caller falls back to the
-   * status-quo single-event index 0 so it never regresses.
+   * has no logs for the transaction yet — the caller falls back to index 0.
+   *
+   * A failed lookup throws. It used to return an empty array as well, so the
+   * monitor reported the transfer under index 0; a later poll that resolved
+   * the real index (say 2) then reported the same transfer again, and the
+   * backend recorded it as a second payment. Throwing aborts the poll before
+   * anything is reported, and the next poll retries the lookup.
    */
   async resolveTransferEventIndices(
     txHash: string,
@@ -334,21 +354,13 @@ export class TronGridClient {
     toAddress: string,
   ): Promise<TransferLogEntry[]> {
     const url = `${this.solidityUrl}/walletsolidity/gettransactioninfobyid`;
-    try {
-      const json = await this.postJson<{ log?: RawTransactionLog[] }>(
-        url,
-        { value: txHash },
-        'walletsolidity.gettransactioninfobyid.logs',
-      );
-      const logs = Array.isArray(json.log) ? json.log : [];
-      return extractTransferLogEntries(logs, contractAddress, toAddress);
-    } catch (err) {
-      logger.debug(
-        { txHash, err: (err as Error).message },
-        'Event-index log lookup failed — caller falls back to index 0',
-      );
-      return [];
-    }
+    const json = await this.postJson<{ log?: RawTransactionLog[] }>(
+      url,
+      { value: txHash },
+      'walletsolidity.gettransactioninfobyid.logs',
+    );
+    const logs = Array.isArray(json.log) ? json.log : [];
+    return extractTransferLogEntries(logs, contractAddress, toAddress);
   }
 
   private async getJson<T>(url: string, endpointLabel: string): Promise<T> {
