@@ -67,5 +67,14 @@ public enum NotificationType
     // This type states what actually happened: the reported problem is closed.
     // Both resolution paths (chain-confirmed and admin) share it; the renderer
     // does not distinguish them, because to the seller the fact is the same.
-    PAYOUT_ISSUE_RESOLVED
+    PAYOUT_ISSUE_RESOLVED,
+
+    // --- P2P-DeliveryPollingJob (owner decision 2026-10-02, 02 §9.2) ---
+    // The delivery poll saw the item leave the seller and arrive at the BUYER
+    // in the same round, but the launch gate (DEPLOY_RUNBOOK §H) keeps that
+    // inference from releasing money. The buyer is asked to check and confirm:
+    // their own confirmation is not gated (it runs against their interest), so
+    // a passive buyer's transaction closes without waiting for the deadline.
+    // Appended last on purpose — Notification.Type is persisted as an int.
+    DELIVERY_DETECTED,
 }

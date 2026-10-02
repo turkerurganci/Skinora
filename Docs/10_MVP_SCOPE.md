@@ -1,6 +1,6 @@
 # Skinora — MVP Scope
 
-**Versiyon: v2.0** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-08-08
+**Versiyon: v2.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
 
 ---
 
@@ -223,6 +223,7 @@ MVP'nin hedefi:
 | Gizlilik | Taraflar birbirinin Steam profilini ve trade URL'ini görür — P2P modelinin kaçınılmaz sonucu (02 §21) |
 | Teslimat doğrulama hassasiyeti | Item sınıfı (`classid`/`instanceid`) düzeyinde. Aynı sınıftan iki item arasındaki aşınma/desen farkı otomatik tespit edilmez; `WRONG_ITEM` dispute'una tabidir (02 §9.2). Float doğrulaması post-MVP |
 | Eşzamanlı teslimat kapasitesi | Steam Community envanter ucunun rate limiti, aynı anda doğrulanabilen teslimat sayısına pratik bir tavan koyar (08 §2.6). Ölçek arttığında çoklu-IP/proxy havuzu gerekecektir — MVP kapsamı dışında |
+| Eşzamanlı ödeme izleme kapasitesi | Her depozit adresi ödeme beklenirken 3 sn, onaylandıktan sonra sweep'e kadar (~8 gün) 15 dk aralıkla TronGrid'e sorulur. TronGrid'in ücretsiz planı (~100.000 istek/gün) bu sıklıkla günde ~36 işlem taşır; iptal edilenlerin gecikmeli izleyicisi bunu düşürür (08 §3.4). Ölçek arttığında ücretli plan ya da kendi TRON düğümü gerekir; `tron-quota-projection` alarmı ölçülen istek hızı bütçenin %80'ine yaklaşınca uyarır |
 
 ### 4.1 Kabul Edilen Riskler
 

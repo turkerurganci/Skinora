@@ -120,6 +120,7 @@ function buildChain(o: ChainOptions = {}) {
   const sweeperResources = {
     energyAvailable: 5_000_000,
     bandwidthAvailable: 5_000,
+    stakedBandwidthAvailable: 0,
     energyPerTrx: ratio,
   };
   const sweeperState = { exists: true, balanceSun: 2_000_000_000 };
@@ -230,9 +231,15 @@ function buildChain(o: ChainOptions = {}) {
         ? {
             energyAvailable: deposit.energy,
             bandwidthAvailable: deposit.bandwidth,
+            stakedBandwidthAvailable: 0,
             energyPerTrx: ratio,
           }
-        : { energyAvailable: 0, bandwidthAvailable: 0, energyPerTrx: null };
+        : {
+            energyAvailable: 0,
+            bandwidthAvailable: 0,
+            stakedBandwidthAvailable: 0,
+            energyPerTrx: null,
+          };
     }),
     getAccountState: vi.fn(async (address: string) => {
       if (address === SWEEPER) return sweeperState;
@@ -256,7 +263,13 @@ function buildChain(o: ChainOptions = {}) {
     }),
     getChainFeeParameters: vi.fn(async () => {
       if (o.feeParametersThrow) throw new Error('getchainparameters answered HTTP 429');
-      return { energyFeeSun: 100, bandwidthFeeSun: 1_000 };
+      return {
+        energyFeeSun: 100,
+        bandwidthFeeSun: 1_000,
+        createNewAccountFeeSun: 1_000_000,
+        createAccountBandwidthFeeSun: 100_000,
+        createNewAccountBandwidthRate: 1,
+      };
     }),
     getTransactionBlockNumber: vi.fn(async (hash: string) => blockOf.get(hash) ?? null),
   };

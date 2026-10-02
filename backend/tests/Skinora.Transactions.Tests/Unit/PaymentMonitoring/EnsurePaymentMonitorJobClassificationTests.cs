@@ -1,4 +1,5 @@
 using Skinora.Shared.Enums;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.PaymentMonitoring;
 
 namespace Skinora.Transactions.Tests.Unit.PaymentMonitoring;
@@ -18,6 +19,15 @@ public class EnsurePaymentMonitorJobClassificationTests
         => Assert.Equal(
             PaymentMonitorAction.Arm,
             EnsurePaymentMonitorJob.Classify(status, depositSwept: false));
+
+    // T139-ActiveMonitorQuotaAlarm — only the awaited payment needs 3 s.
+    [Theory]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, PaymentMonitorCadence.Payment)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, PaymentMonitorCadence.Holding)]
+    [InlineData(TransactionStatus.ITEM_DELIVERED, PaymentMonitorCadence.Holding)]
+    public void Cadence_Follows_Whether_The_Payment_Is_Still_Awaited(
+        TransactionStatus status, PaymentMonitorCadence expected)
+        => Assert.Equal(expected, EnsurePaymentMonitorJob.CadenceFor(status));
 
     [Theory]
     [InlineData(TransactionStatus.COMPLETED)]

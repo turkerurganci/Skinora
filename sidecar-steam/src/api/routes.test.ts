@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import type { AddressInfo } from 'net';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('../logger.js', () => ({
   logger: {
@@ -26,6 +28,7 @@ import { buildRouter } from './routes.js';
 import { resetHealthCacheForTests } from '../health/HealthController.js';
 import { correlationMiddleware } from './middleware.js';
 import {
+  InventoryNotFoundError,
   InventoryPrivateError,
   InventoryService,
   SteamUnavailableError,
@@ -151,6 +154,35 @@ describe('GET /api/inventory/:steamId (T67)', () => {
       const body = (await res.json()) as { code: string; visibility: string };
       expect(body.code).toBe('STEAM_UNAVAILABLE');
       expect(body.visibility).toBe('UNAVAILABLE');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('answers the shared NO_INVENTORY contract when the account has no CS2 inventory (Steam 401)', async () => {
+    // The backend's client test serves this same file
+    // (HttpSteamSidecarInventoryClientTests), so the two sides cannot drift
+    // apart on the status or on the body fields the backend keys on.
+    const contract = JSON.parse(
+      readFileSync(
+        resolve(__dirname, '../../contracts/inventory/no-inventory.response.json'),
+        'utf8',
+      ),
+    ) as { status: number; body: { visibility: string; code: string } };
+    const { service } = inventoryServiceReturning({
+      visibility: 'NO_INVENTORY',
+      error: new InventoryNotFoundError(VALID_STEAM_ID),
+    });
+
+    const ctx = await startInventoryApp(service);
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`);
+      // Not 422 (PRIVATE to the backend) and not 200 (an empty list would be a
+      // claim about the items); the backend honours this 404 only with the body.
+      expect(res.status).toBe(contract.status);
+      const body = (await res.json()) as { code: string; visibility: string };
+      expect(body.code).toBe(contract.body.code);
+      expect(body.visibility).toBe(contract.body.visibility);
     } finally {
       await ctx.close();
     }

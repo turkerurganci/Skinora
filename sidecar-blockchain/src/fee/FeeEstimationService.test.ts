@@ -52,6 +52,12 @@ interface Fixture {
   policyThrows?: boolean;
   energyFeeSun?: number;
   bandwidthFeeSun?: number;
+  /** getCreateNewAccountFeeInSystemContract (default 1 TRX, mainnet and Nile 2026-10-02). */
+  createNewAccountFeeSun?: number | null;
+  /** getCreateAccountFee (default 0.1 TRX, mainnet and Nile 2026-10-02). */
+  createAccountBandwidthFeeSun?: number | null;
+  /** getCreateNewAccountBandwidthRate (default 1). */
+  createNewAccountBandwidthRate?: number | null;
 }
 
 /**
@@ -64,13 +70,25 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
   const hotWallet: AccountResources = {
     energyAvailable: 0,
     bandwidthAvailable: 5_000,
+    stakedBandwidthAvailable: 0,
     energyPerTrx: 9.52,
     ...fixture.hotWallet,
   };
   const depositExists = fixture.depositExists ?? true;
   const deposit: AccountResources = depositExists
-    ? { energyAvailable: 0, bandwidthAvailable: 600, energyPerTrx: 9.52, ...fixture.deposit }
-    : { energyAvailable: 0, bandwidthAvailable: 0, energyPerTrx: null };
+    ? {
+        energyAvailable: 0,
+        bandwidthAvailable: 600,
+        stakedBandwidthAvailable: 0,
+        energyPerTrx: 9.52,
+        ...fixture.deposit,
+      }
+    : {
+        energyAvailable: 0,
+        bandwidthAvailable: 0,
+        stakedBandwidthAvailable: 0,
+        energyPerTrx: null,
+      };
   const unexpected = (address: string): never => {
     throw new Error(`fake chain: no account ${address}`);
   };
@@ -87,6 +105,7 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
         return {
           energyAvailable: fixture.ownerEnergy ?? 0,
           bandwidthAvailable: 0,
+          stakedBandwidthAvailable: 0,
           energyPerTrx: 9.52,
         };
       }
@@ -109,6 +128,16 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
     getChainFeeParameters: vi.fn(async () => ({
       energyFeeSun: fixture.energyFeeSun ?? 100,
       bandwidthFeeSun: fixture.bandwidthFeeSun ?? 1000,
+      createNewAccountFeeSun:
+        fixture.createNewAccountFeeSun === undefined ? 1_000_000 : fixture.createNewAccountFeeSun,
+      createAccountBandwidthFeeSun:
+        fixture.createAccountBandwidthFeeSun === undefined
+          ? 100_000
+          : fixture.createAccountBandwidthFeeSun,
+      createNewAccountBandwidthRate:
+        fixture.createNewAccountBandwidthRate === undefined
+          ? 1
+          : fixture.createNewAccountBandwidthRate,
     })),
     getContractEnergyPolicy: vi.fn(async (contract: string) => {
       if (fixture.policyThrows) throw new Error('probe failed');
@@ -393,9 +422,10 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
     expect(result.burnSun).toBe(6_000_000);
   });
 
-  it('charges no Bandwidth for a never-activated deposit — activation grants the free allowance', async () => {
+  it("charges no Bandwidth for a never-activated deposit's transfer — activation grants the free allowance", async () => {
     // Measured on Nile 2026-09-16: before activation the account reports 0
     // Bandwidth; right after it, 600 free, and the transfer used 345 of them.
+    // The activation itself is priced separately (next block of tests).
     const { service } = buildService({
       energyRequired: 29_650,
       depositExists: false,
@@ -406,7 +436,7 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
     const result = await service.estimate(refund);
 
     expect(result.bandwidthAvailable).toBe(600);
-    expect(result.burnSun).toBe(0);
+    expect(result.burnSun - result.activationBurnSun).toBe(0);
   });
 
   it('burns the whole transaction when the sender is short of bandwidth', async () => {
@@ -423,6 +453,139 @@ describe('FeeEstimationService — refund path (deposit sends, the broadcast pla
 
     expect(result.burnSun).toBe(350_000);
     expect(result.feeUsdt).toBe('0.18');
+  });
+});
+
+/**
+ * RefundActivationCostNotCharged — owner decision 2026-10-02: the buyer pays
+ * the activation of a deposit that has only ever received TRC-20 (02 §4.6).
+ * The transfer itself is made free here (the contract owner absorbs it, the
+ * activated deposit's free Bandwidth covers the bytes), so every SUN in the
+ * charge is the activation.
+ */
+describe('FeeEstimationService — refund from a never-activated deposit', () => {
+  const freeTransfer = {
+    energyRequired: 29_650,
+    depositExists: false,
+    policy: OWNER_PAYS_POLICY,
+    ownerEnergy: 197_517_927,
+  };
+
+  it('charges the 1 TRX creation fee plus the 0.1 TRX Bandwidth fee when the hot wallet has no staked Bandwidth', async () => {
+    // Nile 2026-10-02: every 1-SUN activation from the hot wallet burned
+    // 1,100,000 SUN (`fee` 1 TRX, `receipt.net_fee` 0.1 TRX). The hot wallet's
+    // 5,000 FREE Bandwidth (fixture default) does not help: the chain cannot
+    // create an account from it. 1.1 TRX × 0.336 = 0.3696 → 0.37 USDT.
+    const { service } = buildService(freeTransfer, 0.336);
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_100_000);
+    expect(result.burnSun).toBe(1_100_000);
+    expect(result.feeUsdt).toBe('0.37');
+  });
+
+  it("drops the Bandwidth fee when the hot wallet's STAKED Bandwidth covers the activation bytes", async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      hotWallet: { stakedBandwidthAvailable: 270 },
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_000_000);
+  });
+
+  it('keeps the Bandwidth fee when staked Bandwidth is one byte short', async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      hotWallet: { stakedBandwidthAvailable: 269 },
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_100_000);
+  });
+
+  it('scales the activation bytes by getCreateNewAccountBandwidthRate', async () => {
+    // 300 staked covers 270 bytes at rate 1, not 540 at rate 2.
+    const { service } = buildService({
+      ...freeTransfer,
+      hotWallet: { stakedBandwidthAvailable: 300 },
+      createNewAccountBandwidthRate: 2,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_100_000);
+  });
+
+  it('counts an unread rate as "staked Bandwidth does not cover it" — the charge can only come out larger', async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      hotWallet: { stakedBandwidthAvailable: 10_000 },
+      createNewAccountBandwidthRate: null,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_100_000);
+  });
+
+  it('fails the estimate when the creation fee is unread — the backend then charges its configured refund fee', async () => {
+    const { service } = buildService({ ...freeTransfer, createNewAccountFeeSun: null });
+
+    await expect(service.estimate(refund)).rejects.toMatchObject({
+      code: 'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
+      retryable: true,
+    });
+  });
+
+  it('fails the estimate when the Bandwidth fee is needed but unread', async () => {
+    const { service } = buildService({ ...freeTransfer, createAccountBandwidthFeeSun: null });
+
+    await expect(service.estimate(refund)).rejects.toMatchObject({
+      code: 'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
+    });
+  });
+
+  it('does not need the Bandwidth fee when staked Bandwidth covers the bytes', async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      hotWallet: { stakedBandwidthAvailable: 270 },
+      createAccountBandwidthFeeSun: null,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_000_000);
+  });
+
+  it('charges no activation for a deposit that already exists — and does not need the creation fees', async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      depositExists: true,
+      createNewAccountFeeSun: null,
+      createAccountBandwidthFeeSun: null,
+      createNewAccountBandwidthRate: null,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(0);
+    expect(result.burnSun).toBe(0);
+  });
+
+  it('never charges activation on a payout — the hot wallet sends, and it exists', async () => {
+    const { service } = buildService({
+      ...freeTransfer,
+      createNewAccountFeeSun: null,
+      createAccountBandwidthFeeSun: null,
+    });
+
+    const result = await service.estimate(payout);
+
+    expect(result.activationBurnSun).toBe(0);
   });
 });
 

@@ -119,6 +119,23 @@ public sealed class SteamInventoryEndpointTests : IClassFixture<SteamInventoryEn
     }
 
     [Fact]
+    public async Task GetInventory_NoCs2Inventory_Returns422_InventoryNotFound()
+    {
+        // P2P-InventoryUnauthorizedMapping — Steam's 401 is permanent, so it is
+        // a 422 with its own code, never the retryable 503 STEAM_UNAVAILABLE.
+        var user = await _factory.CreateUserAsync();
+        _factory.InventoryFake.SetNoInventory();
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.GetAsync("/api/v1/steam/inventory");
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVENTORY_NOT_FOUND", body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task GetInventory_Unavailable_Returns503_SteamUnavailable()
     {
         var user = await _factory.CreateUserAsync();
@@ -225,6 +242,9 @@ public sealed class SteamInventoryEndpointTests : IClassFixture<SteamInventoryEn
 
         public void SetUnavailable()
             => _result = new GetInventoryResult(GetInventoryStatus.SteamUnavailable, Inventory: null);
+
+        public void SetNoInventory()
+            => _result = new GetInventoryResult(GetInventoryStatus.InventoryNotFound, Inventory: null);
 
         public Task<GetInventoryResult> GetForSteamIdAsync(
             string steamId, CancellationToken cancellationToken)

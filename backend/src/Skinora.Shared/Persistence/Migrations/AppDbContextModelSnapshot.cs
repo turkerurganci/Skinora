@@ -2309,6 +2309,9 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(0);
 
+                    b.Property<DateTime?>("DeliveryPolledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("DeliveryReversedAt")
                         .HasColumnType("datetime2");
 

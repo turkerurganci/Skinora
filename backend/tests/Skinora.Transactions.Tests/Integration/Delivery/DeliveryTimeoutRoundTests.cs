@@ -140,6 +140,12 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
         Assert.Equal(ActorType.SYSTEM, history.ActorType);
         Assert.Equal(SeedConstants.SystemUserId, history.ActorId);
 
+        // DEPLOY_RUNBOOK §H.3 reads the deliveries the open gate released too.
+        var capture = await Context.Set<DeliveryEvidenceCapture>().AsNoTracking()
+            .SingleAsync(c => c.TransactionId == transaction.Id);
+        Assert.Equal(nameof(DeliveryVerdict.Delivered), capture.Verdict);
+        Assert.False(capture.AutoReleaseGated);
+
         var evt = Assert.Single(_outbox.Published.OfType<TransactionStatusChangedEvent>());
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, evt.FromStatus);
         Assert.Equal(TransactionStatus.ITEM_DELIVERED, evt.ToStatus);

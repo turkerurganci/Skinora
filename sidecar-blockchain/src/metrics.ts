@@ -72,6 +72,54 @@ export const activeMonitors = getOrCreateGauge({
   help: 'Deposit addresses under monitoring — active payment (T71) plus post-cancel (T75)',
 });
 
+/**
+ * Wrap a `fetch` so every call lands in {@link tronApiRequestDuration} — the
+ * series whose rate the tron-quota-projection alert sums. TronGridClient
+ * measures its own calls; this covers the fetch-based probes beside it
+ * (fee estimate, delegation planning, transfer status), which spend the same
+ * key's quota. Calls TronWeb builds internally (broadcasts) stay uncounted:
+ * a few per outbound transfer, inside the alert's 20% headroom.
+ */
+export function timedTronFetch(fetchFn: typeof fetch, endpoint: string): typeof fetch {
+  return (async (...args: Parameters<typeof fetch>) => {
+    const stop = tronApiRequestDuration.startTimer({ endpoint });
+    try {
+      const response = await fetchFn(...args);
+      stop({ status: response.ok ? 'ok' : 'error' });
+      return response;
+    } catch (err) {
+      stop({ status: 'error' });
+      throw err;
+    }
+  }) as typeof fetch;
+}
+
+/**
+ * The TronGrid plan's daily request budget (TRONGRID_DAILY_REQUEST_BUDGET),
+ * set once at startup. The tron-quota-projection alert divides the measured
+ * request rate by it; TronGrid reports no budget of its own (08 §3.4).
+ */
+export const tronGridDailyRequestBudget = getOrCreateGauge({
+  name: 'skinora_blockchain_trongrid_daily_request_budget',
+  help: "Configured TronGrid daily request budget — the plan's quota the request rate is compared with",
+});
+
+/**
+ * Publish the budget and return what was published. Refuses anything but a
+ * positive whole number: an unparsable env value would publish NaN, the
+ * alert's division would yield no series, and the rule would sit in NoData —
+ * a watchman that never fires, which is the failure this alert exists to end.
+ */
+export function publishTronGridDailyRequestBudget(budget: number): number {
+  if (!Number.isInteger(budget) || budget <= 0) {
+    throw new Error(
+      `TRONGRID_DAILY_REQUEST_BUDGET must be a positive whole number of requests per day, got ${budget}`,
+    );
+  }
+  tronGridDailyRequestBudget.set(budget);
+  return budget;
+}
+
 export const transfersTotal = getOrCreateCounter({
   name: 'skinora_blockchain_transfers_total',
   help: 'Total blockchain transfers',

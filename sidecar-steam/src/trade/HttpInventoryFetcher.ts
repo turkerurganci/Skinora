@@ -23,6 +23,9 @@ import type { InventoryFetcher, InventoryFetchResult } from './InventoryService.
  *     bunu ölçüyor),
  *   - gizli envanter tam olarak `'This profile is private.'` mesajıyla fırlatılır
  *     — `InventoryService.PRIVATE_INVENTORY_MARKER` bu dizgeye eşitlik arıyor,
+ *   - hesabın CS2 envanteri hiç yoksa (ilk sayfada 401 + `null`) tam olarak
+ *     {@link NO_INVENTORY_MESSAGE} fırlatılır — kütüphanede karşılığı yoktu,
+ *     401 eskiden genel hataya düşüyordu (P2P-InventoryUnauthorizedMapping),
  *   - diğer HTTP hataları `'HTTP error {status}'` biçiminde fırlatılır, böylece
  *     loglar önceki uygulamayla karşılaştırılabilir kalır.
  *
@@ -52,6 +55,19 @@ const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 1_000;
 
 export const PRIVATE_INVENTORY_MESSAGE = 'This profile is private.';
+
+/**
+ * Steam'in 401 + `null` cevabı: bu hesabın bu uygulama için HİÇ envanteri yok.
+ *
+ * Ölçüm (2026-10-02, anonim, 9 hesap): 401 envanterin **var olmadığını**
+ * söyler ve gizlilikten önce gelir — envanteri gizli bir hesap, envanteri olan
+ * bir oyunda (440/2) 403, hiç olmayan bir oyunda (570/2) 401 döndü; CS2
+ * envanteri boş ama var olan bir hesap 200 + `total_inventory_count: 0`
+ * döndü. Community profili kurulmamış hesapların 401'i de buradan gelir: CS2
+ * envanterleri yoktur (753/6'ları 403 — gizli). Ayrıntı:
+ * INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md §2.
+ */
+export const NO_INVENTORY_MESSAGE = 'This account has no inventory for this app.';
 
 interface SteamAsset {
   assetid?: string;
@@ -175,6 +191,16 @@ export class HttpInventoryFetcher implements InventoryFetcher {
       if (response.status === 403) {
         const text = (await response.text()).trim();
         if (text === 'null' || text === '') throw new Error(PRIVATE_INVENTORY_MESSAGE);
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      // 401 + gövde `null` = "bu hesabın CS2 envanteri yok" (NO_INVENTORY_MESSAGE).
+      // Yalnız ilk sayfada: ilk sayfası okunmuş bir envanter vardır, sonraki
+      // bir sayfanın 401'i bu anlama gelemez ve genel hataya düşer. Durum
+      // kalıcıdır — yeniden denenmez.
+      if (response.status === 401 && !startAssetId) {
+        const text = (await response.text()).trim();
+        if (text === 'null' || text === '') throw new Error(NO_INVENTORY_MESSAGE);
         throw new Error(`HTTP error ${response.status}`);
       }
 

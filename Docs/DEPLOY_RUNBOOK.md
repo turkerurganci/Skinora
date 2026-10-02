@@ -85,7 +85,8 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Bozuk ya da base58 olmayan adres (`41…` hex dahil) ya da 2'den küçük / tam sayı olmayan izin kimliği sidecar'ı açılışta durdurur (`STAKE_ACCOUNT_MISCONFIGURED`); açılan sidecar hangi hesaptan devredeceğini `Energy delegation:` satırında yazar. Kurulum, ödeme payının sıcak cüzdana kalıcı devretilmesi ve bant boyutlandırması §C.2 |
 | `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation. **Bugün düz env değişkeni** (`docker inspect` ile görünür); Docker secret'a taşınması ve çevrimdışı yedek prosedürü owner kararı 2026-09-17 ile ayrı bir tura bırakıldı (05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
-| `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10) |
+| `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10). **Aynı TronGrid hesabının anahtarları toplam kotayı paylaşabilir** (TronGrid belgesi, 2026-09-08) — ikinci anahtar bütçe ekleyecekse başka bir hesaptan alınmalıdır |
+| `TRONGRID_DAILY_REQUEST_BUDGET` | blockchain sidecar | Planın günlük istek bütçesi; açılışta `skinora_blockchain_trongrid_daily_request_budget` gauge'una yazılır ve `tron-quota-projection` alarmı ölçülen istek hızını buna böler (oran > 0,8 → uyarı). Varsayılan 100.000 = 2026'da raporlanan ücretsiz plan; TronGrid bütçeyi ne yanıtta ne belgede veriyor, **gerçek planın değeri girilir**. Pozitif tam sayı değilse sidecar açılmaz. Kapasite hesabı 08 §3.4 |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `ALERT_EMAIL_TO` | monitoring (Grafana) | Alert kanalı — **ayrıca Grafana'nın açılması için zorunlu.** `contactpoints.yml` bir Telegram kanalı tanımlar; Grafana provisioning'inde koşul yoktur, tanımlı kanal doğrulanamazsa Grafana startup'ta abort eder ve container crash-loop'a girer. Değerler `skinora-grafana-provisioning` render adımıyla yerine konur (§G.6) |
 
 ---
@@ -272,6 +273,8 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 | monitoring_post_cancel_30d_polling_seconds | `POST_CANCEL_CADENCE_30D_MS` | 3600 sn | 7-30 gün polling |
 | blockchain.sweep_trx_fallback_sun | `SWEEP_TRX_FALLBACK_SUN` | 15000000 | Kaynak planı hesaplanamazsa (zincir probu arızası) depozite gönderilen sabit TRX (SUN). Devretme miktarı artık ayar değil, transfer başına hesaplanır (08 §3.3) |
 
+**Yalnız sidecar'da yaşayan sıklık (backend kopyası yok):** `PAYMENT_HOLDING_POLLING_INTERVAL_MS` (varsayılan 900000 = 15 dk) — ödemesi onaylanmış bir depozit adresinin sweep'e kadar yoklanma sıklığı (08 §3.4). Ödeme beklenirken `PAYMENT_POLLING_INTERVAL_MS` (3 sn) geçerlidir. Değer ödeme aralığından kısa ya da sayı değilse sidecar açılmaz. İkisi de açılışta `Payment monitoring:` satırında, bütçeyle birlikte yazılır — restart sonrası oradan doğrulanır.
+
 **Parite kuralı:** Bir cadence/sweep değerini değiştirirken **hem** backend SystemSetting'i (admin görünürlüğü/audit için) **hem** sidecar env'ini güncelle, sonra sidecar'ı restart et. Yalnız backend SystemSetting'i değiştirmek runtime davranışı değiştirmez.
 
 ---
@@ -301,6 +304,7 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 2. **SystemSetting listesi:** `GET /api/v1/admin/settings` ile tüm katalog + configured/value kontrol.
 3. **Cron re-register:** Admin UI'dan `reconciliation.schedule_cron` değiştir → log `ReconciliationJob re-registered with cron '...'` → Hangfire dashboard'da recurring job cron'u güncel.
 4. **Sidecar parity:** cadence/sweep değişikliği sonrası sidecar env güncellenip restart edildiğini doğrula.
+5. **TronGrid bütçesi ve izleme sıklığı:** blockchain sidecar açılış logunda `Payment monitoring:` satırı `paymentPollingIntervalMs` / `holdingPollingIntervalMs` / `tronGridDailyRequestBudget` değerlerini gösterir; bütçe planın gerçek değeri olmalı (§B). Grafana'da `TronGrid Daily Quota Projection` kuralı `health: ok` görünmeli.
 
 ---
 
@@ -569,6 +573,8 @@ Proje sahibi kararı (2026-08-13): manuel spike yerine **ölçüm üretimden gel
 > okunur hâle geldiğinde en geç bir saat içinde yakalanır; (3) `DeliveryEvidenceCaptures`'a yazılan satır
 > sayısı da bu ritme bağlıdır, §H.3'ün sorgusu aynı işleme ait birden çok gözlem satırı görebilir —
 > `ORDER BY ObservedAt` ile en güncel olan okunur.
+
+> **Teslimat taraması (2026-10-02, `P2P-DeliveryPollingJob`).** Kapı kapalıyken artık süre sonunu beklemeden de kanıt toplanıyor: tarama her `PAYMENT_RECEIVED` işlemine en çok 10 dk'da bir bakar ve item'ın satıcıdan çıkıp alıcıya geldiğini **aynı turda** görürse `DeliveryEvidenceCaptures`'a satır yazar (verdict `InventoryEvidencePendingReview`) ve alıcıya `DELIVERY_DETECTED` bildirimi gönderir — alıcı kendi onayıyla (kapıdan bağımsız) işlemi kapatabilir. Sonuç: aşağıdaki B1 ölçümünün `ObservedAt`'ı artık teslimattan en çok ~10 dk sonrasını gösterir — aynı anda en çok 10 açık teslimat varken; tarama dakikada tek işleme baktığı için N > 10 açık teslimatta her işleme ~N dakikada bir bakılır ve `ObservedAt` o kadar gecikir (B1'i okurken o günkü açık teslimat sayısına bakın); önceden yalnız süre sonunda ya da dispute'ta yazıldığı için gecikmeyi değil kontrolün zamanını ölçüyordu. Kapı açıkken tarama işlemi doğrudan `ITEM_DELIVERED`'a geçirir (süre sonu turuyla aynı geçiş). Ayarlar `DeliveryPolling` bölümünde (`Enabled`, `BatchSize` = 1, `RecheckSeconds` = 600; env `DeliveryPolling__Enabled` vb.) ve restart-bound'dur; Steam 429 fırtınasında `DeliveryPolling__Enabled=false` taramayı durdurur.
 
 ### H.3 Kapıyı açma adımları
 

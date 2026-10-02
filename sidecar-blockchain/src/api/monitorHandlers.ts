@@ -1,6 +1,10 @@
 import type { Request, Response } from 'express';
 import { logger } from '../logger.js';
-import type { MonitorRegistry, MonitorStartOptions } from '../monitor/MonitorRegistry.js';
+import type {
+  MonitorCadence,
+  MonitorRegistry,
+  MonitorStartOptions,
+} from '../monitor/MonitorRegistry.js';
 import type { StablecoinSymbol } from '../monitor/PaymentMonitorRules.js';
 import type {
   PostCancelMonitorRegistry,
@@ -15,6 +19,7 @@ interface StartRequestBody {
   transactionId?: unknown;
   expectedContract?: unknown;
   expectedSymbol?: unknown;
+  cadence?: unknown;
 }
 
 interface StopRequestBody {
@@ -22,6 +27,7 @@ interface StopRequestBody {
 }
 
 const ALLOWED_SYMBOLS: ReadonlySet<StablecoinSymbol> = new Set(['USDT', 'USDC']);
+const ALLOWED_CADENCES: ReadonlySet<MonitorCadence> = new Set(['PAYMENT', 'HOLDING']);
 
 /**
  * POST /api/monitor/start — backend asks the sidecar to begin watching a
@@ -61,12 +67,33 @@ export function startMonitorHandler(registry: MonitorRegistry) {
       return;
     }
 
+    // T139-ActiveMonitorQuotaAlarm — optional: absent means PAYMENT, the
+    // behaviour a backend that predates cadences relies on. A value that is
+    // present but unknown is rejected rather than guessed: guessing PAYMENT
+    // would silently spend the quota this field exists to save, guessing
+    // HOLDING would slow a live payment window to 15 minutes.
+    let cadence: MonitorCadence = 'PAYMENT';
+    if (body.cadence !== undefined) {
+      if (
+        typeof body.cadence !== 'string' ||
+        !ALLOWED_CADENCES.has(body.cadence as MonitorCadence)
+      ) {
+        res.status(400).json({
+          error: 'UNSUPPORTED_CADENCE',
+          message: `cadence must be one of: ${[...ALLOWED_CADENCES].join(', ')}`,
+        });
+        return;
+      }
+      cadence = body.cadence as MonitorCadence;
+    }
+
     const options: MonitorStartOptions = {
       address,
       paymentAddressId,
       transactionId,
       expectedContract,
       expectedSymbol: expectedSymbolRaw as StablecoinSymbol,
+      cadence,
     };
 
     try {
@@ -78,10 +105,13 @@ export function startMonitorHandler(registry: MonitorRegistry) {
           paymentAddressId,
           expectedSymbol: options.expectedSymbol,
           started: result.started,
+          cadence: result.cadence,
         },
         'Monitor start request handled',
       );
-      res.status(200).json({ acknowledged: true, started: result.started, address });
+      res
+        .status(200)
+        .json({ acknowledged: true, started: result.started, cadence: result.cadence, address });
     } catch (err) {
       logger.error({ err: (err as Error).message, address, transactionId }, 'Monitor start failed');
       res.status(500).json({ error: 'MONITOR_START_FAILED', message: (err as Error).message });

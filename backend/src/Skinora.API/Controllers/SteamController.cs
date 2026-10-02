@@ -26,6 +26,13 @@ public sealed class SteamController : ControllerBase
     /// <summary>Error code surfaced on sidecar / upstream Steam failures (07 §6.1).</summary>
     public const string SteamUnavailableErrorCode = "STEAM_UNAVAILABLE";
 
+    /// <summary>
+    /// Error code published when the account has no CS2 inventory at all —
+    /// Steam's 401 (07 §6.1, P2P-InventoryUnauthorizedMapping). Not retryable:
+    /// it lasts until the account holds a CS2 item.
+    /// </summary>
+    public const string InventoryNotFoundErrorCode = "INVENTORY_NOT_FOUND";
+
     private readonly ISteamInventoryQueryService _inventoryService;
 
     public SteamController(ISteamInventoryQueryService inventoryService)
@@ -52,6 +59,11 @@ public sealed class SteamController : ControllerBase
             GetInventoryStatus.InventoryPrivate => UnprocessableEntity(ApiResponse<object>.Fail(
                 InventoryPrivateErrorCode,
                 "Steam inventory is private. Profile must be public to read items.",
+                traceId: HttpContext.TraceIdentifier)),
+
+            GetInventoryStatus.InventoryNotFound => UnprocessableEntity(ApiResponse<object>.Fail(
+                InventoryNotFoundErrorCode,
+                "This Steam account has no CS2 inventory.",
                 traceId: HttpContext.TraceIdentifier)),
 
             GetInventoryStatus.SteamUnavailable => StatusCode(

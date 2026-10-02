@@ -91,6 +91,16 @@ public static class TransactionsModule
         // only maps its verdict onto what the buyer is told.
         services.AddScoped<IDeliveryDisputeRound, DeliveryDisputeRound>();
 
+        // P2P-DeliveryPollingJob (owner decision 2026-10-02) — looks for a
+        // delivery before the deadline, one cheap seller read per round, and
+        // either asks the buyer to confirm (launch gate closed) or delivers
+        // (gate open). Tunables in the DeliveryPolling section.
+        services.Configure<DeliveryPollingOptions>(
+            configuration.GetSection(DeliveryPollingOptions.SectionName));
+        services.AddScoped<DeliveryPollingJob>();
+        services.AddScoped<IDeliveryPollingJob>(sp => sp.GetRequiredService<DeliveryPollingJob>());
+        services.AddHostedService<DeliveryPollingJobRegistrar>();
+
         // T129 — settlement window (02 §4.5.1). The provider reads the three
         // settlement settings; the verification service answers the end-of-
         // window question ("is the item still with the buyer, and if not, did it

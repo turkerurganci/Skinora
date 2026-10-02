@@ -2,7 +2,7 @@ import TronWeb from 'tronweb';
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { SidecarError } from '../errors/SidecarError.js';
-import { transfersTotal } from '../metrics.js';
+import { timedTronFetch, transfersTotal } from '../metrics.js';
 
 /**
  * Resource budget for an outbound TRC-20 transfer (08 §3.3). TronWeb's
@@ -188,12 +188,12 @@ export class TronTransferClient {
     if (this.apiKey) headers['TRON-PRO-API-KEY'] = this.apiKey;
 
     const [infoResponse, blockResponse] = await Promise.all([
-      fetchFn(infoUrl, {
+      timedTronFetch(fetchFn, 'walletsolidity.gettransactioninfobyid')(infoUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({ value: txHash }),
       }),
-      fetchFn(blockUrl, {
+      timedTronFetch(fetchFn, 'walletsolidity.getnowblock')(blockUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({}),

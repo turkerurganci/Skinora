@@ -121,14 +121,35 @@ public sealed record BlockchainSidecarTransferResult(
 /// <summary>
 /// Input payload for the sidecar <c>POST /api/monitor/start</c> endpoint
 /// (T71). Mirrors the five fields <c>startMonitorHandler</c> requires —
-/// omitting any of them yields 400 <c>INVALID_MONITOR_REQUEST</c>.
+/// omitting any of them yields 400 <c>INVALID_MONITOR_REQUEST</c> — plus the
+/// <see cref="PaymentMonitorCadence"/> the address is polled at.
 /// </summary>
 public sealed record PaymentMonitorStartRequest(
     string Address,
     Guid PaymentAddressId,
     Guid TransactionId,
     string ExpectedContract,
-    string ExpectedSymbol);
+    string ExpectedSymbol,
+    PaymentMonitorCadence Cadence);
+
+/// <summary>
+/// How often the sidecar polls one deposit address (T139-ActiveMonitorQuotaAlarm,
+/// owner decision 2026-10-02 — 08 §3.4). Required on purpose: a caller that
+/// forgot it would either spend the TronGrid quota the slow cadence exists to
+/// save or slow a live payment window.
+/// </summary>
+public enum PaymentMonitorCadence
+{
+    /// <summary>The buyer's payment is awaited (<c>SELLER_CONFIRMED</c>) — every 3 s (05 §3.3).</summary>
+    Payment,
+
+    /// <summary>
+    /// The payment is confirmed; the address only stays watched for a late
+    /// second payment or an overpayment until the sweep empties it — every
+    /// 15 min by default (sidecar <c>PAYMENT_HOLDING_POLLING_INTERVAL_MS</c>).
+    /// </summary>
+    Holding,
+}
 
 /// <summary>
 /// Input payload for the sidecar <c>POST /api/monitor/post-cancel-start</c>

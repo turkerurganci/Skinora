@@ -25,18 +25,47 @@ import {
   type StablecoinSymbol,
 } from './PaymentMonitorRules.js';
 
+/**
+ * How often one deposit address is polled (T139-ActiveMonitorQuotaAlarm,
+ * owner decision 2026-10-02).
+ *
+ * <list type="bullet">
+ *   <item><c>PAYMENT</c> — the buyer's payment is still awaited
+ *     (<c>SELLER_CONFIRMED</c>): every tick, 3 s by default (05 §3.3).</item>
+ *   <item><c>HOLDING</c> — the payment is confirmed and the address only stays
+ *     watched for a late second payment or an overpayment until the sweep
+ *     empties it (08 §3.4, D3): every <c>holdingIntervalMs</c>, 15 min by
+ *     default.</item>
+ * </list>
+ *
+ * Why it exists: at 3 s with two list queries per tick one address costs
+ * 2 × 28,800 = 57,600 TronGrid requests a day, and an address stays watched
+ * for the whole ~8-day settlement window — so a ~100,000/day plan held about
+ * two transactions at once. At 15 min the holding window costs 192 a day.
+ */
+export type MonitorCadence = 'PAYMENT' | 'HOLDING';
+
 export interface MonitorStartOptions {
   address: string;
   paymentAddressId: string;
   transactionId: string;
   expectedContract: string;
   expectedSymbol: StablecoinSymbol;
+  /** Defaults to PAYMENT — a backend that predates cadences keeps the 3 s behaviour. */
+  cadence?: MonitorCadence;
 }
 
 export interface MonitorRegistryDeps {
   client: TronGridClient;
   allowlist: StablecoinAllowlist;
+  /** The tick, and the PAYMENT cadence: a PAYMENT monitor is polled on every tick. */
   intervalMs: number;
+  /**
+   * The HOLDING cadence (PAYMENT_HOLDING_POLLING_INTERVAL_MS, default 15 min).
+   * Optional so the existing unit fixtures stay valid; unset means "same as
+   * the tick", i.e. no slowdown.
+   */
+  holdingIntervalMs?: number;
   minConfirmations: number;
   pageLimit: number;
   webhookEndpoints: {
@@ -61,6 +90,9 @@ interface PendingFinality {
 interface MonitorState {
   options: MonitorStartOptions;
   correlationId: string;
+  cadence: MonitorCadence;
+  /** Epoch ms of the next list poll. A PAYMENT monitor ignores it (every tick). */
+  nextPollAt: number;
   phase1Fingerprint?: string;
   phase2Fingerprint?: string;
   /**
@@ -96,8 +128,10 @@ function eventKey(txHash: string, eventIndex: number): string {
  *
  * <para>
  * Polling cadence is driven by a single shared `setInterval` regardless of
- * monitor count — each tick visits every address sequentially. The
- * registry is `polling`-guarded so a slow tick never overlaps itself.
+ * monitor count — each tick visits every address sequentially and polls the
+ * ones that are due: a PAYMENT address on every tick, a HOLDING address once
+ * per holding interval ({@link MonitorCadence}). The registry is
+ * `polling`-guarded so a slow tick never overlaps itself.
  * </para>
  *
  * <para>
@@ -121,6 +155,15 @@ export class MonitorRegistry {
   private readonly webhookSender: typeof sendCallback;
 
   constructor(private readonly deps: MonitorRegistryDeps) {
+    // A NaN holding interval (unparsable env) would make every HOLDING address
+    // never due — silently unwatched for the rest of its window. Refuse it.
+    const holding = deps.holdingIntervalMs;
+    if (holding !== undefined && (!Number.isFinite(holding) || holding < deps.intervalMs)) {
+      throw new Error(
+        `PAYMENT_HOLDING_POLLING_INTERVAL_MS must be a number of milliseconds no shorter than ` +
+          `the ${deps.intervalMs} ms payment interval, got ${holding}`,
+      );
+    }
     this.clock = deps.clock ?? (() => new Date());
     this.webhookSender = deps.webhookSender ?? sendCallback;
   }
@@ -129,20 +172,39 @@ export class MonitorRegistry {
    * Register a deposit address for active monitoring. Idempotent — restarting
    * the same address keeps existing pagination cursors and dedup state.
    */
-  start(options: MonitorStartOptions): { started: boolean } {
+  start(options: MonitorStartOptions): { started: boolean; cadence: MonitorCadence } {
     if (this.stopped) {
       throw new Error('MonitorRegistry has been shut down');
     }
-    if (this.monitors.has(options.address)) {
-      logger.info(
-        { address: options.address, transactionId: options.transactionId },
-        'Monitor already active for address — no-op restart',
-      );
-      return { started: false };
+    const cadence: MonitorCadence = options.cadence ?? 'PAYMENT';
+    const existing = this.monitors.get(options.address);
+    if (existing) {
+      // The backend's per-minute reconciler re-arms every open address with
+      // the cadence its transaction status calls for, so a re-start is also
+      // how an address moves from PAYMENT to HOLDING once the payment is in.
+      if (existing.cadence !== cadence) {
+        existing.cadence = cadence;
+        existing.nextPollAt = this.clock().getTime() + this.cadenceIntervalMs(cadence);
+        logger.info(
+          { address: options.address, transactionId: options.transactionId, cadence },
+          'Monitor cadence changed',
+        );
+      } else {
+        logger.info(
+          { address: options.address, transactionId: options.transactionId },
+          'Monitor already active for address — no-op restart',
+        );
+      }
+      return { started: false, cadence };
     }
     this.monitors.set(options.address, {
       options,
       correlationId: crypto.randomUUID(),
+      cadence,
+      // First poll on the next tick, whatever the cadence: an address armed
+      // straight into HOLDING (sidecar restart mid-settlement) is looked at
+      // once now, then every holding interval.
+      nextPollAt: this.clock().getTime(),
       seenEvents: new Set(),
       pendingFinality: new Map(),
     });
@@ -152,11 +214,24 @@ export class MonitorRegistry {
         address: options.address,
         transactionId: options.transactionId,
         expectedSymbol: options.expectedSymbol,
+        cadence,
       },
       'Monitor started',
     );
     this.ensureTimer();
-    return { started: true };
+    return { started: true, cadence };
+  }
+
+  /** The list-poll interval a cadence stands for. Read by the startup line (index.ts). */
+  cadenceIntervalMs(cadence: MonitorCadence): number {
+    return cadence === 'HOLDING'
+      ? (this.deps.holdingIntervalMs ?? this.deps.intervalMs)
+      : this.deps.intervalMs;
+  }
+
+  /** The cadence an address is polled at, or undefined when it is not monitored. */
+  cadenceOf(address: string): MonitorCadence | undefined {
+    return this.monitors.get(address)?.cadence;
   }
 
   /**
@@ -196,10 +271,35 @@ export class MonitorRegistry {
     try {
       const states = [...this.monitors.values()];
       for (const state of states) {
-        await this.pollOne(state);
+        const now = this.clock().getTime();
+        if (state.cadence === 'PAYMENT' || now >= state.nextPollAt) {
+          state.nextPollAt = now + this.cadenceIntervalMs(state.cadence);
+          await this.pollOne(state);
+        } else if (state.pendingFinality.size > 0) {
+          // A transfer already seen on a HOLDING address keeps its finality
+          // checks on the tick: they are a handful of calls for about a
+          // minute, and waiting a whole holding interval would delay the
+          // overpayment refund for nothing.
+          await this.checkFinalityOnly(state);
+        }
       }
     } finally {
       this.polling = false;
+    }
+  }
+
+  private async checkFinalityOnly(state: MonitorState): Promise<void> {
+    try {
+      await this.checkFinality(state);
+    } catch (err) {
+      logger.error(
+        {
+          err: (err as Error).message,
+          address: state.options.address,
+          correlationId: state.correlationId,
+        },
+        'Monitor finality check failed — will retry next tick',
+      );
     }
   }
 

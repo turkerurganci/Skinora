@@ -123,6 +123,14 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
             seller.SteamId, transaction.ItemAssetId,
             InventoryReadFreshness.Fresh, cancellationToken);
 
+        // P2P-InventoryUnauthorizedMapping — the account has no CS2 inventory
+        // (Steam 401): absence of information like Unavailable, but permanent,
+        // so the seller is told the reason instead of being sent to retry.
+        if (lookup.InventoryMissing)
+            return Failure(ConfirmReadyStatus.InventoryNotFound,
+                TransactionErrorCodes.InventoryNotFound,
+                "The seller's Steam account has no CS2 inventory, so the item could not be verified (Steam 401).");
+
         switch (lookup.Visibility)
         {
             // T121 — the three read outcomes are not interchangeable. Only a

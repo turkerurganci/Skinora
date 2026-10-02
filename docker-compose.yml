@@ -261,6 +261,11 @@ services:
       - TRON_API_KEY=${TRON_API_KEY}
       - TRON_API_KEY_SECONDARY=${TRON_API_KEY_SECONDARY:-}
       - PAYMENT_POLLING_INTERVAL_MS=${PAYMENT_POLLING_INTERVAL_MS:-3000}
+      # T139-ActiveMonitorQuotaAlarm — once the payment is confirmed the address
+      # is polled every 15 min until the sweep (08 §3.4), and the quota alert
+      # compares the measured TronGrid request rate with the plan's daily budget.
+      - PAYMENT_HOLDING_POLLING_INTERVAL_MS=${PAYMENT_HOLDING_POLLING_INTERVAL_MS:-900000}
+      - TRONGRID_DAILY_REQUEST_BUDGET=${TRONGRID_DAILY_REQUEST_BUDGET:-100000}
       - MIN_CONFIRMATIONS=${MIN_CONFIRMATIONS:-20}
       # Sidecar-authoritative cadence/sweep knobs (DEPLOY_RUNBOOK §D). The
       # backend SystemSetting copies are for admin visibility only and do NOT

@@ -2,7 +2,8 @@ import { activeMonitors } from '../metrics.js';
 
 /**
  * The two registries that watch deposit addresses: the active payment monitor
- * (T71, 3-second cadence) and the post-cancel monitor (T75, gradual cadence).
+ * (T71 — every 3 s while the payment is awaited, every 15 min after it, until the
+ * sweep) and the post-cancel monitor (T75, gradual cadence).
  */
 export type ActiveMonitorSource = 'active' | 'post_cancel';
 

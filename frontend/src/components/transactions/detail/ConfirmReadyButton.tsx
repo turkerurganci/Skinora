@@ -29,6 +29,8 @@ export interface ConfirmReadyButtonProps {
  *     untradeable. Paired with the cancel hint 04 §7.3 asks for.
  *   • INVENTORY_PRIVATE — an absence of information about the SELLER's own
  *     profile. The instruction is "open your profile", not "find your item".
+ *   • INVENTORY_NOT_FOUND — Steam's 401: the account has no CS2 inventory.
+ *     Permanent, so not a retry either (P2P-InventoryUnauthorizedMapping).
  *   • BUYER_MOBILE_AUTHENTICATOR_INACTIVE — the fix belongs to the other party,
  *     so the message must not read as "enable your authenticator".
  *   • STEAM_UNAVAILABLE — retryable; everything else here is not.

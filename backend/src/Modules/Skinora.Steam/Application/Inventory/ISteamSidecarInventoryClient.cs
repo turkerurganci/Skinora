@@ -51,4 +51,13 @@ public enum SteamSidecarStatus
 
     /// <summary>Sidecar 5xx, transport failure, or timeout — caller maps to 503 / falls back.</summary>
     Unavailable,
+
+    /// <summary>
+    /// The Steam account has no CS2 inventory at all — Steam's 401, relayed by
+    /// the sidecar as 404 with a <c>NO_INVENTORY</c> body
+    /// (P2P-InventoryUnauthorizedMapping, 2026-10-02). Permanent until the
+    /// account holds a CS2 item, so it is reported to the seller as its own
+    /// condition; for delivery evidence it stays absence of information.
+    /// </summary>
+    InventoryNotFound,
 }

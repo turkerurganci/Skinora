@@ -12,6 +12,7 @@ vi.mock('../logger.js', () => ({
 
 import {
   InventoryService,
+  InventoryNotFoundError,
   InventoryPrivateError,
   InventoryShortReadError,
   SteamUnavailableError,
@@ -20,6 +21,7 @@ import {
   type InventoryReadResult,
   type InventoryResponse,
 } from './InventoryService.js';
+import { NO_INVENTORY_MESSAGE } from './HttpInventoryFetcher.js';
 import type { TaskQueue } from '../queue/RateLimitedQueue.js';
 import { InMemoryInventoryCache, INVENTORY_CACHE_TTL_SECONDS } from '../cache/InventoryCache.js';
 
@@ -192,6 +194,26 @@ describe('InventoryService (T67 — 08 §2.3)', () => {
     expect(result.error.code).toBe('INVENTORY_PRIVATE');
     // 08 §2.7: a private profile needs a user action, so it is NOT retryable.
     expect(result.error.retryable).toBe(false);
+  });
+
+  it('reports NO_INVENTORY (not UNAVAILABLE) when Steam says the account has no CS2 inventory (401)', async () => {
+    const fetcher: InventoryFetcher = {
+      async fetch() {
+        throw new Error(NO_INVENTORY_MESSAGE);
+      },
+    };
+    const svc = new InventoryService(fetcher, cache);
+
+    const result = await svc.getInventory('76561198000000015');
+
+    expect(result.visibility).toBe('NO_INVENTORY');
+    if (result.visibility !== 'NO_INVENTORY') throw new Error('unreachable');
+    expect(result.error).toBeInstanceOf(InventoryNotFoundError);
+    expect(result.error.code).toBe('INVENTORY_NOT_FOUND');
+    // Permanent until the account gets a CS2 item — retrying does not help.
+    expect(result.error.retryable).toBe(false);
+    // And never cached as an (empty) inventory.
+    expect(await cache.get('76561198000000015')).toBeNull();
   });
 
   it('reports UNAVAILABLE for any other fetch error', async () => {

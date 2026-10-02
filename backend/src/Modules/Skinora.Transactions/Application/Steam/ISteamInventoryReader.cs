@@ -158,14 +158,29 @@ public enum InventoryVisibility
 /// </remarks>
 public sealed record InventoryLookupResult
 {
-    private InventoryLookupResult(InventoryVisibility visibility, InventoryItemSnapshot? item)
+    private InventoryLookupResult(
+        InventoryVisibility visibility, InventoryItemSnapshot? item, bool inventoryMissing = false)
     {
         Visibility = visibility;
         Item = item;
+        InventoryMissing = inventoryMissing;
     }
 
     /// <summary>Which of the 08 §2.3 states the read ended in.</summary>
     public InventoryVisibility Visibility { get; }
+
+    /// <summary>
+    /// True only for <see cref="NoInventory"/>: Steam said the account has no
+    /// CS2 inventory at all (its 401, P2P-InventoryUnauthorizedMapping).
+    /// </summary>
+    /// <remarks>
+    /// Visibility stays <see cref="InventoryVisibility.Unavailable"/> on purpose
+    /// (owner decision 2026-10-02 — message only): every evidence path keyed on
+    /// visibility treats the read exactly as before. Only the seller-facing
+    /// create and readiness paths read this flag, to name the real, permanent
+    /// reason instead of "Steam is unavailable, retry".
+    /// </remarks>
+    public bool InventoryMissing { get; }
 
     /// <summary>
     /// The resolved item. Non-null only for <see cref="Found"/>; a
@@ -192,6 +207,14 @@ public sealed record InventoryLookupResult
     /// <summary>Steam unreachable — nothing is known about the asset.</summary>
     public static InventoryLookupResult Unavailable { get; } =
         new(InventoryVisibility.Unavailable, item: null);
+
+    /// <summary>
+    /// The account has no CS2 inventory (Steam 401). Unavailable to every
+    /// evidence path; <see cref="InventoryMissing"/> carries the reason to the
+    /// seller-facing paths.
+    /// </summary>
+    public static InventoryLookupResult NoInventory { get; } =
+        new(InventoryVisibility.Unavailable, item: null, inventoryMissing: true);
 }
 
 /// <summary>

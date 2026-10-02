@@ -231,6 +231,12 @@ public sealed class TransactionCreationService : ITransactionCreationService
         var lookup = await _inventory.GetItemAsync(
             seller.SteamId, request.ItemAssetId,
             InventoryReadFreshness.Cached, cancellationToken);
+        // P2P-InventoryUnauthorizedMapping — Steam's 401 reads as Unavailable
+        // to every evidence path, but the seller must hear the real reason: the
+        // account has no CS2 inventory, and retrying will not change that.
+        if (lookup.InventoryMissing)
+            return Failure(CreateTransactionStatus.InventoryNotFound, TransactionErrorCodes.InventoryNotFound,
+                "The seller's Steam account has no CS2 inventory (Steam 401, 07 §6.1).");
         switch (lookup.Visibility)
         {
             case InventoryVisibility.Private:

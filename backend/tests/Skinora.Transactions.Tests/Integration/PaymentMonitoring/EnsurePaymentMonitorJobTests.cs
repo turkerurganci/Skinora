@@ -85,6 +85,23 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
         Assert.Equal(MonitoringStatus.ACTIVE, await ReadStatusAsync(address.Id));
     }
 
+    // T139-ActiveMonitorQuotaAlarm — owner decision 2026-10-02 (08 §3.4): the
+    // 3 s cadence only while the payment is awaited; once it is in, the job
+    // re-arms the address at the 15-minute holding cadence.
+    [Theory]
+    [InlineData(TransactionStatus.SELLER_CONFIRMED, PaymentMonitorCadence.Payment)]
+    [InlineData(TransactionStatus.PAYMENT_RECEIVED, PaymentMonitorCadence.Holding)]
+    [InlineData(TransactionStatus.ITEM_DELIVERED, PaymentMonitorCadence.Holding)]
+    public async Task Arms_At_The_Cadence_The_Transaction_Status_Calls_For(
+        TransactionStatus status, PaymentMonitorCadence expected)
+    {
+        await SeedAddressAsync(status, MonitoringStatus.ACTIVE);
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(expected, Assert.Single(_sidecar.MonitorStartCalls).Cadence);
+    }
+
     [Fact]
     public async Task Arming_Is_Repeated_Every_Run_So_A_Sidecar_Restart_Self_Heals()
     {

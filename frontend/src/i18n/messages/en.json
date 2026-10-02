@@ -1199,9 +1199,11 @@
       },
       "error": {
         "title": "Inventory could not be loaded",
-        "message": "We couldn't read your Steam inventory right now. Please try again shortly. If it keeps failing, check that your Steam Community profile is set up and your inventory is public — retrying alone will not fix that. If you have never launched CS2 on this account, its inventory may not exist yet — opening the game once creates it.",
+        "message": "We couldn't read your Steam inventory right now. Please try again shortly.",
         "privateTitle": "Your inventory is private",
-        "privateMessage": "Your Steam inventory is set to private. Make it public to start a transaction."
+        "privateMessage": "Your Steam inventory is set to private. Make it public to start a transaction.",
+        "notFoundTitle": "No CS2 inventory on this account",
+        "notFoundMessage": "Steam reports that this account has no CS2 inventory — it has never held a CS2 item. The item you want to sell must be in this account's CS2 inventory; if it is on another Steam account, sign in with that one. Retrying will not change this."
       }
     },
     "step2": {
@@ -1285,6 +1287,7 @@
         "ITEM_NOT_IN_INVENTORY": "The item was not found in your inventory. Refresh the inventory and try again.",
         "ITEM_ALREADY_LISTED": "You already have an open transaction for this item. Cancel it or pick a different item.",
         "INVENTORY_PRIVATE": "Your Steam inventory is set to private, so it could not be checked. Make it public and try again.",
+        "INVENTORY_NOT_FOUND": "Steam reports that this account has no CS2 inventory, so the item could not be checked. If the item is on another Steam account, sign in with that one.",
         "STEAM_UNAVAILABLE": "Steam could not be reached, so your inventory could not be checked. Please try again shortly.",
         "PRICE_OUT_OF_RANGE": "The price is outside the platform limits. Please re-enter.",
         "TIMEOUT_OUT_OF_RANGE": "The payment window is outside the platform limits.",
@@ -1481,6 +1484,7 @@
           "errors": {
             "ITEM_NO_LONGER_AVAILABLE": "This item can no longer be sent — it is not in your inventory, or it is not tradeable.",
             "INVENTORY_PRIVATE": "We could not read your Steam inventory because your profile is private. Make your inventory public and try again.",
+            "INVENTORY_NOT_FOUND": "Steam reports that this account has no CS2 inventory, so the item could not be verified. Retrying will not change this — if the item is still in your inventory, please contact support.",
             "BUYER_MOBILE_AUTHENTICATOR_INACTIVE": "The buyer's Steam Mobile Authenticator is not active yet. They have been notified — you can try again once they enable it.",
             "BUYER_STEAM_ACCOUNT_LIMITED": "The buyer’s Steam account is limited, so Steam will not let a trade reach it. The buyer has been notified — you can retry once the restriction is lifted.",
             "BUYER_STEAM_ACCOUNT_TOO_NEW": "The buyer’s Steam account is too new to trade (Steam blocks the first 15 days). You can retry once the wait is over.",

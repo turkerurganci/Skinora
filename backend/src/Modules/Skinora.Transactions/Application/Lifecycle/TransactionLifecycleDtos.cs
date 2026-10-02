@@ -117,6 +117,11 @@ public enum CreateTransactionStatus
     /// them (T121).</summary>
     InventoryPrivate,
 
+    /// <summary>422 <c>INVENTORY_NOT_FOUND</c> — the seller's Steam account has
+    /// no CS2 inventory at all (Steam 401, P2P-InventoryUnauthorizedMapping).
+    /// Same code as the listing endpoint (07 §6.1); retrying does not help.</summary>
+    InventoryNotFound,
+
     /// <summary>503 <c>STEAM_UNAVAILABLE</c> — Steam could not be reached, so
     /// the inventory check is undecided and retryable. Mirrors the accept
     /// endpoint's fail-closed 503 (07 §7.6, T119a) rather than reporting an
@@ -276,6 +281,12 @@ public enum ConfirmReadyStatus
     /// seller has to open their profile, which only this code tells them.
     /// </summary>
     InventoryPrivate,
+
+    /// <summary>422 <c>INVENTORY_NOT_FOUND</c> — the SELLER's account has no CS2
+    /// inventory (Steam 401). Not a 409 for the same reason as
+    /// <see cref="InventoryPrivate"/>: the platform could not look, it did not
+    /// find the item gone (P2P-InventoryUnauthorizedMapping).</summary>
+    InventoryNotFound,
 
     /// <summary>403 <c>BUYER_MOBILE_AUTHENTICATOR_INACTIVE</c> — the buyer's MA
     /// is off, so the seller's trade would land in Steam's 15-day escrow

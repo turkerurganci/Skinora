@@ -315,6 +315,35 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     }
 
     [Fact]
+    public async Task Create_Returns_422_INVENTORY_NOT_FOUND_When_Seller_Has_No_Cs2_Inventory()
+    {
+        // P2P-InventoryUnauthorizedMapping — same code the listing endpoint
+        // answers for Steam's 401 (07 §6.1), so the seller sees one vocabulary.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
+        _factory.InventoryMissingOverride = true;
+
+        try
+        {
+            var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+            var response = await client.PostAsJsonAsync("/api/v1/transactions", CreateRequestBody());
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("INVENTORY_NOT_FOUND",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryMissingOverride = false;
+        }
+    }
+
+    [Fact]
     public async Task Create_Returns_422_INVENTORY_PRIVATE_When_Seller_Profile_Hidden()
     {
         // T121 — 07 §6.1's inventory vocabulary, reused on the create path. The
@@ -789,6 +818,30 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         finally
         {
             _factory.InventoryVisibilityOverride = null;
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmReady_Seller_Without_A_Cs2_Inventory_Returns_422_InventoryNotFound()
+    {
+        // P2P-InventoryUnauthorizedMapping — 422 like INVENTORY_PRIVATE: the
+        // platform could not look, it did not find the item gone (not 409), and
+        // the condition is permanent (not 503).
+        var (_, transactionId, client) = await SetUpConfirmReadyAsync();
+        _factory.InventoryMissingOverride = true;
+        try
+        {
+            var response = await client.PostAsync(
+                $"/api/v1/transactions/{transactionId:D}/confirm-ready", content: null);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+            Assert.Equal("INVENTORY_NOT_FOUND",
+                body.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            _factory.InventoryMissingOverride = false;
         }
     }
 
@@ -1324,6 +1377,12 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
 
         public InventoryVisibility? ForcedVisibility { get; set; }
 
+        /// <summary>
+        /// P2P-InventoryUnauthorizedMapping — the item read answers Steam's 401
+        /// (<see cref="InventoryLookupResult.NoInventory"/>).
+        /// </summary>
+        public bool ForcedNoInventory { get; set; }
+
         public void Register(string steamId, string assetId, string name)
             => _items[(steamId, assetId)] = new InventoryItemSnapshot(
                 AssetId: assetId,
@@ -1354,6 +1413,8 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         {
             ItemReadFreshness.Add(freshness);
 
+            if (ForcedNoInventory)
+                return Task.FromResult(InventoryLookupResult.NoInventory);
             if (ForcedVisibility is InventoryVisibility.Private)
                 return Task.FromResult(InventoryLookupResult.Private);
             if (ForcedVisibility is InventoryVisibility.Unavailable)
@@ -1456,6 +1517,16 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         {
             get => _inventory.ForcedVisibility;
             set => _inventory.ForcedVisibility = value;
+        }
+
+        /// <summary>
+        /// P2P-InventoryUnauthorizedMapping — makes the seller's item read answer
+        /// Steam's 401. Tests that flip it reset it in a finally block.
+        /// </summary>
+        public bool InventoryMissingOverride
+        {
+            get => _inventory.ForcedNoInventory;
+            set => _inventory.ForcedNoInventory = value;
         }
 
         /// <summary>

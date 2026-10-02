@@ -120,6 +120,14 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // column, nulls first, makes the queue fair by construction (T127).
     public DateTime? DeliveryRoundAt { get; set; }
 
+    // P2P-DeliveryPollingJob — when the pre-deadline delivery poll last looked
+    // at this row. Kept apart from DeliveryRoundAt on purpose: the deadline
+    // scanner throttles re-examinations by that column, and a poll stamping it
+    // a minute before the deadline would push the timeout round — the one that
+    // may cancel — back by its whole recheck interval (DEPLOY_RUNBOOK §H.2:
+    // "süresi yeni dolan bir teslimat ilk taramada incelenir").
+    public DateTime? DeliveryPolledAt { get; set; }
+
     // T131 (validation finding B1) — set when an ADMIN's dispute ruling is what
     // let this delivery timeout proceed to cancellation, rather than the
     // platform proving the seller still held the item. Written only on the

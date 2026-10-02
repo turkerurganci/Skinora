@@ -29,6 +29,8 @@ public sealed class SteamInventoryQueryService : ISteamInventoryQueryService
                 new GetInventoryResult(GetInventoryStatus.Success, inv),
             SteamSidecarStatus.InventoryPrivate =>
                 new GetInventoryResult(GetInventoryStatus.InventoryPrivate, Inventory: null),
+            SteamSidecarStatus.InventoryNotFound =>
+                new GetInventoryResult(GetInventoryStatus.InventoryNotFound, Inventory: null),
             _ =>
                 new GetInventoryResult(GetInventoryStatus.SteamUnavailable, Inventory: null),
         };
