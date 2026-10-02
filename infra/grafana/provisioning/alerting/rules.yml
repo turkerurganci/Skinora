@@ -285,8 +285,9 @@ groups:
       # sweep `payout_settlement_days`'in 7 günlük sert tabanından önce
       # kuyruklanamıyor, dolayısıyla eşzamanlı izleyici sayısı iki saatlik değil
       # BİR HAFTALIK işlem hacmiyle ölçekleniyor (08 §3.4, T139 doğrulaması N1).
-      # Her izleyici her tick'te (3 sn) TronGrid'e sorgu üretiyor, yani istek
-      # hacmi izleyici sayısıyla doğrusal artıyor.
+      # Her izleyici TronGrid'e sorgu üretiyor — ödeme beklenirken her tick'te
+      # (3 sn), ödeme onaylandıktan sonra 15 dk'da bir (2026-10-02'den beri) —,
+      # yani istek hacmi izleyici sayısıyla doğrusal artıyor.
       #
       # Neden eşik "izleyici sayısı" DEĞİL: sayı eşiği ancak sağlayıcının istek
       # bütçesi bilinirse yazılabilir ve TronGrid bu bütçeyi yanıt başlığında

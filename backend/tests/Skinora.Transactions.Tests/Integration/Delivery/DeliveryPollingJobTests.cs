@@ -175,6 +175,14 @@ public class DeliveryPollingJobTests : IntegrationTestBase
         Assert.Equal(nameof(TransactionTrigger.DeliverItem), history.Trigger);
         Assert.Equal(ActorType.SYSTEM, history.ActorType);
 
+        // DEPLOY_RUNBOOK §H.3 reads the deliveries the open gate released too —
+        // the capture is the only record of what the inference rested on.
+        var capture = await Context.Set<DeliveryEvidenceCapture>().AsNoTracking()
+            .SingleAsync(c => c.TransactionId == transaction.Id);
+        Assert.Equal(nameof(DeliveryVerdict.Delivered), capture.Verdict);
+        Assert.False(capture.AutoReleaseGated);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, capture.ObservedAt);
+
         // The realtime relay is told; the buyer is not asked to confirm what
         // the platform has already concluded.
         var changed = Assert.IsType<TransactionStatusChangedEvent>(Assert.Single(_outbox.Published));
@@ -298,6 +306,30 @@ public class DeliveryPollingJobTests : IntegrationTestBase
         Assert.Equal(
             _clock.GetUtcNow().UtcDateTime.AddMinutes(-30),
             (await ReloadAsync(polledLongAgo.Id)).DeliveryPolledAt);
+    }
+
+    [Fact]
+    public async Task Among_Rows_Due_Again_The_Least_Recently_Polled_Goes_First()
+    {
+        // Both rows were polled before and are due again. The one looked at
+        // longest ago goes first although its payment is the newer one: ordered
+        // by payment age alone, the oldest payments would take every slot once
+        // more than ten deliveries are open (one row a minute, ten minutes
+        // apart). Created in the opposite order, so insertion order cannot pass
+        // for the rule.
+        var polledRecently = await CreateAwaitingDeliveryAsync(
+            paymentReceivedHoursAgo: 3, polledMinutesAgo: 15);
+        var polledLongAgo = await CreateAwaitingDeliveryAsync(
+            paymentReceivedHoursAgo: 1, polledMinutesAgo: 30, assetId: "27348562892");
+        _inventory.Register(SellerSteamId, NewSnapshot(ItemAssetId));
+        _inventory.Register(SellerSteamId, NewSnapshot("27348562892"));
+
+        await BuildSut().ExecuteAsync();
+
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, (await ReloadAsync(polledLongAgo.Id)).DeliveryPolledAt);
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime.AddMinutes(-15),
+            (await ReloadAsync(polledRecently.Id)).DeliveryPolledAt);
     }
 
     [Fact]

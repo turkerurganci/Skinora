@@ -6,6 +6,7 @@ import {
   tronGridDailyRequestBudget,
 } from './metrics.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
+import { TronTransferClient } from './tron/TronTransferClient.js';
 
 /**
  * T139-ActiveMonitorQuotaAlarm — the two series the tron-quota-projection
@@ -95,5 +96,21 @@ describe('TronResourceClient — its probes spend the same quota and are counted
     );
 
     expect((await requestCount('wallet.getchainparameters')) - before).toBe(1);
+  });
+});
+
+describe('TronTransferClient — the transfer status probe spends the same quota and is counted', () => {
+  it('counts both reads behind getTransactionStatus', async () => {
+    const infoBefore = await requestCount('walletsolidity.gettransactioninfobyid');
+    const blockBefore = await requestCount('walletsolidity.getnowblock');
+
+    await new TronTransferClient(
+      'https://nile.example',
+      'https://nile.example',
+      'key',
+    ).getTransactionStatus('tx-1', respond(true));
+
+    expect((await requestCount('walletsolidity.gettransactioninfobyid')) - infoBefore).toBe(1);
+    expect((await requestCount('walletsolidity.getnowblock')) - blockBefore).toBe(1);
   });
 });

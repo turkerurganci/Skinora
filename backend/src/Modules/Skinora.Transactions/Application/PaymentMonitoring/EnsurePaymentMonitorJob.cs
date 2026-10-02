@@ -51,15 +51,18 @@ public enum PaymentMonitorAction
 /// the sweep that closes it cannot be queued before <c>SettlementVerifiedAt</c>
 /// is stamped, which <c>payout_settlement_days</c> floors at <b>7 days</b>
 /// (<c>SystemSettingsValidator.MinimumSettlementDays</c>, 02 §16.2). So each
-/// deposit address is polled at the 3-second active cadence for a week or more
-/// after delivery, not for the length of the payment leg. That is deliberate —
-/// D3 keeps the window open so the 02 §4.4 overpayment branch and the 03 §5.5
-/// second-transfer branch stay observable — but it means concurrent-monitor
-/// count tracks <em>a week</em> of transaction volume rather than two hours of
-/// it, and TronGrid request volume scales with that count (two query phases per
-/// monitor per tick). The consequence is recorded in 08 §3.4; watch
-/// <c>skinora_blockchain_active_monitors</c> against the provider's rate limit
-/// before raising throughput.
+/// deposit address stays watched for a week or more after delivery, not for
+/// the length of the payment leg. That is deliberate — D3 keeps the window open
+/// so the 02 §4.4 overpayment branch and the 03 §5.5 second-transfer branch
+/// stay observable — but it means concurrent-monitor count tracks <em>a
+/// week</em> of transaction volume rather than two hours of it. Until
+/// 2026-10-02 every one of those addresses was polled at the 3-second payment
+/// cadence (two query phases per tick, 57,600 TronGrid requests a day per
+/// address); since T139-ActiveMonitorQuotaAlarm only <c>SELLER_CONFIRMED</c>
+/// keeps it and the rest of the window is polled every 15 minutes
+/// (<see cref="CadenceFor"/>). The capacity sum is in 08 §3.4, and the
+/// <c>tron-quota-projection</c> alert compares the measured request rate with
+/// the plan's budget.
 /// </para>
 /// <para>
 /// Re-arming is safe to do unconditionally: <c>MonitorRegistry.start</c> is
@@ -117,13 +120,13 @@ public sealed class EnsurePaymentMonitorJob
     /// </summary>
     /// <remarks>
     /// The ceiling is deliberately far above any set the platform could serve:
-    /// at 5 000 concurrent monitors the sidecar is already issuing ~3 300
-    /// TronGrid queries per second at its own 3-second cadence, an order of
-    /// magnitude past any plausible plan budget, so
-    /// <c>T139-ActiveMonitorQuotaAlarm</c> fires long before this does. One
-    /// <c>start</c> per monitor per <em>minute</em> is ~0.5% of the load the
-    /// sidecar already carries for the same address, which is why paging the
-    /// whole set is cheap enough to be the default.
+    /// even at the 15-minute holding cadence 5 000 concurrent monitors cost
+    /// ~960 000 TronGrid requests a day (192 each), about ten times the free
+    /// plan's budget, so the <c>tron-quota-projection</c> alert
+    /// (T139-ActiveMonitorQuotaAlarm) fires long before this does. One
+    /// <c>start</c> per monitor per <em>minute</em> costs the sidecar a map
+    /// lookup and no TronGrid request, which is why paging the whole set is
+    /// cheap enough to be the default.
     /// </remarks>
     public const int MaxAddressesPerRun = 5_000;
 
