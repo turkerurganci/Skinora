@@ -9,6 +9,7 @@ import type { ListTrc20Options, Trc20ListResponse, Trc20Record } from '../tron/T
 import { WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type { AnyBlockchainWebhookPayload } from '../webhook/WebhookPayloads.js';
 import { PostCancelMonitorStates } from '../webhook/WebhookPayloads.js';
+import { FakeTronGridLedger } from '../testing/FakeTronGridLedger.js';
 
 const DEPOSIT_ADDRESS = 'TDeposit1234567890DepositAddrFakeXX';
 const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
@@ -758,5 +759,120 @@ describe('PostCancelMonitorRegistry — default constants match 08 §3.4 spec', 
     expect(DEFAULT_POST_CANCEL_WINDOWS.POST_CANCEL_24H).toBe(24 * 60 * 60 * 1000);
     expect(DEFAULT_POST_CANCEL_WINDOWS.POST_CANCEL_7D).toBe(7 * 24 * 60 * 60 * 1000);
     expect(DEFAULT_POST_CANCEL_WINDOWS.POST_CANCEL_30D).toBe(30 * 24 * 60 * 60 * 1000);
+  });
+});
+
+/** Same ledger as the active registry's forward-scan tests (backlog `MonitorCursorPagesBackward`). */
+describe('PostCancelMonitorRegistry — forward scan against a TronGrid-shaped ledger', () => {
+  const T0 = 1_790_000_000_000;
+  const cancelledAt = new Date('2026-05-17T12:00:00Z');
+  let ledger: FakeTronGridLedger;
+  let webhook: ReturnType<typeof createFakeSender>;
+  let harness: RegistryHarness;
+  let elapsedMs: number;
+
+  beforeEach(() => {
+    ledger = new FakeTronGridLedger();
+    webhook = createFakeSender();
+    harness = buildRegistry({
+      client: ledger.client as never,
+      sender: webhook.sender,
+      now: cancelledAt,
+    });
+    harness.registry.start({
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+      cancelledAt,
+    });
+    elapsedMs = 0;
+  });
+
+  /** One tick per POST_CANCEL_24H cadence step, so every tick polls. */
+  async function pollAgain(): Promise<void> {
+    await harness.registry.tick();
+    elapsedMs += 35_000;
+    harness.setNow(new Date(cancelledAt.getTime() + elapsedMs));
+  }
+
+  function sentTo(endpoint: string): Array<{ txHash: string; eventIndex: number }> {
+    return webhook.sent
+      .filter((s) => s.endpoint === endpoint)
+      .map((s) => s.envelope.data as unknown as { txHash: string; eventIndex: number })
+      .map(({ txHash, eventIndex }) => ({ txHash, eventIndex }));
+  }
+
+  it('sees a late payment after 25 spam transfers filled phase 2 and more than a page of phase 1', async () => {
+    for (let i = 0; i < 25; i += 1) {
+      ledger.add(
+        buildRecord({
+          txHash: `spam-${i}`,
+          token_info: { address: SPAM_TOKEN, decimals: 6, symbol: 'SPAM' },
+          block_timestamp: T0 + i * 3000,
+        }),
+        buildRecord({ txHash: `poison-${i}`, value: '0', block_timestamp: T0 + i * 3000 + 1000 }),
+      );
+    }
+    await pollAgain();
+    await pollAgain();
+
+    ledger.add(buildRecord({ txHash: 'late-usdt', block_timestamp: T0 + 100 * 3000 }));
+    ledger.add(
+      buildRecord({
+        txHash: 'late-usdc',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0 + 101 * 3000,
+      }),
+    );
+    await pollAgain();
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected).filter((d) => d.txHash === 'late-usdt')).toEqual([
+      { txHash: 'late-usdt', eventIndex: 0 },
+    ]);
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'late-usdc', eventIndex: 0 }]);
+  });
+
+  it('reports a transfer at log index 2 once — not again under index 0 on the re-read', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-contract', block_timestamp: T0 }), logIndex: 2 });
+
+    await pollAgain();
+    await pollAgain();
+    await pollAgain();
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([
+      { txHash: 'tx-contract', eventIndex: 2 },
+    ]);
+  });
+
+  it('a quiet poll lists once per phase and re-reads only the newest block — not the history', async () => {
+    for (let i = 0; i < 45; i += 1) {
+      ledger.add(buildRecord({ txHash: `usdt-${i}`, block_timestamp: T0 + i * 3000 }));
+    }
+    await pollAgain();
+    const lists = ledger.listCalls.length;
+    const lookups = ledger.logLookups.length;
+
+    await pollAgain();
+
+    expect(ledger.listCalls.length - lists).toBe(2);
+    // The newest block only; phase 2 meets the same record and reuses the per-tick lookup.
+    expect(ledger.logLookups.slice(lookups)).toEqual(['usdt-44']);
+  });
+
+  it('keeps a separate watermark per phase — a newer USDT transfer does not hide older spam from phase 2', async () => {
+    ledger.add(
+      buildRecord({
+        txHash: 'usdc-early',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0,
+      }),
+      buildRecord({ txHash: 'usdt-later', block_timestamp: T0 + 60_000 }),
+    );
+
+    await pollAgain();
+
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'usdc-early', eventIndex: 0 }]);
   });
 });

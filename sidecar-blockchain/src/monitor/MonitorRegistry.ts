@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
+import { pickEventIndex, scanForward, type ForwardCursor } from './ForwardScan.js';
 import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
@@ -93,8 +94,9 @@ interface MonitorState {
   cadence: MonitorCadence;
   /** Epoch ms of the next list poll. A PAYMENT monitor ignores it (every tick). */
   nextPollAt: number;
-  phase1Fingerprint?: string;
-  phase2Fingerprint?: string;
+  /** Where each phase's next poll resumes (ForwardScan.ts). */
+  phase1Cursor: ForwardCursor;
+  phase2Cursor: ForwardCursor;
   /**
    * `${txHash}:${eventIndex}` keys for which an event has been emitted —
    * guards against re-emit on polling overlap. WP10 dedups at event-index
@@ -170,7 +172,7 @@ export class MonitorRegistry {
 
   /**
    * Register a deposit address for active monitoring. Idempotent — restarting
-   * the same address keeps existing pagination cursors and dedup state.
+   * the same address keeps its scan cursors and dedup state.
    */
   start(options: MonitorStartOptions): { started: boolean; cadence: MonitorCadence } {
     if (this.stopped) {
@@ -205,6 +207,8 @@ export class MonitorRegistry {
       // straight into HOLDING (sidecar restart mid-settlement) is looked at
       // once now, then every holding interval.
       nextPollAt: this.clock().getTime(),
+      phase1Cursor: {},
+      phase2Cursor: {},
       seenEvents: new Set(),
       pendingFinality: new Map(),
     });
@@ -347,88 +351,80 @@ export class MonitorRegistry {
     state: MonitorState,
     logCache: Map<string, TransferLogEntry[]>,
   ): Promise<void> {
-    const response = await this.deps.client.listTrc20({
+    await scanForward({
+      client: this.deps.client,
       address: state.options.address,
       contractAddress: state.options.expectedContract,
-      fingerprint: state.phase1Fingerprint,
-      limit: this.deps.pageLimit,
-    });
-    if (response.fingerprint) {
-      state.phase1Fingerprint = response.fingerprint;
-    }
-    for (const record of response.records) {
-      if (!this.shouldEmit(record, state)) continue;
-      // Defensive: only proceed if the record really belongs to the expected contract.
-      if (record.token_info.address !== state.options.expectedContract) {
-        logger.debug(
-          { txHash: record.transaction_id, contract: record.token_info.address },
-          'Phase 1 returned a non-expected contract row — skipping',
-        );
-        continue;
-      }
-      const eventIndex = await this.resolveEventIndex(state, record, logCache);
-      const key = eventKey(record.transaction_id, eventIndex);
-      if (state.seenEvents.has(key)) continue;
-      await this.emitPaymentDetected(state, record, eventIndex);
-      state.seenEvents.add(key);
-      state.pendingFinality.set(key, {
-        txHash: record.transaction_id,
-        eventIndex,
-        blockNumber: null,
-        firstSeenAt: this.clock().getTime(),
-      });
-    }
-  }
-
-  private async pollPhase2(
-    state: MonitorState,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<void> {
-    const response = await this.deps.client.listTrc20({
-      address: state.options.address,
-      fingerprint: state.phase2Fingerprint,
-      limit: this.deps.pageLimit,
-    });
-    if (response.fingerprint) {
-      state.phase2Fingerprint = response.fingerprint;
-    }
-    for (const record of response.records) {
-      if (!this.shouldEmit(record, state)) continue;
-      const classification = classifyToken({
-        contractAddress: record.token_info.address,
-        expectedContract: state.options.expectedContract,
-        allowlist: this.deps.allowlist,
-      });
-      const eventIndex = await this.resolveEventIndex(state, record, logCache);
-      const key = eventKey(record.transaction_id, eventIndex);
-      if (state.seenEvents.has(key)) continue;
-      if (classification.kind === 'expected') {
-        // Late catch — phase 1's fingerprint advanced past this record (rare
-        // but possible if phase 1's first call missed it). Treat as detected.
+      pageLimit: this.deps.pageLimit,
+      cursor: state.phase1Cursor,
+      handle: async (record) => {
+        if (!this.shouldEmit(record, state)) return;
+        // Defensive: only proceed if the record really belongs to the expected contract.
+        if (record.token_info.address !== state.options.expectedContract) {
+          logger.debug(
+            { txHash: record.transaction_id, contract: record.token_info.address },
+            'Phase 1 returned a non-expected contract row — skipping',
+          );
+          return;
+        }
+        const eventIndex = await this.resolveEventIndex(state, record, logCache);
+        const key = eventKey(record.transaction_id, eventIndex);
+        if (state.seenEvents.has(key)) return;
         await this.emitPaymentDetected(state, record, eventIndex);
+        state.seenEvents.add(key);
         state.pendingFinality.set(key, {
           txHash: record.transaction_id,
           eventIndex,
           blockNumber: null,
           firstSeenAt: this.clock().getTime(),
         });
-      } else if (classification.kind === 'wrong_token') {
-        await this.emitWrongTokenIncoming(state, record, classification.symbol, eventIndex);
-      } else {
-        await this.emitSpamTokenIncoming(state, record, eventIndex);
-      }
-      state.seenEvents.add(key);
-    }
+      },
+    });
+  }
+
+  private async pollPhase2(
+    state: MonitorState,
+    logCache: Map<string, TransferLogEntry[]>,
+  ): Promise<void> {
+    await scanForward({
+      client: this.deps.client,
+      address: state.options.address,
+      pageLimit: this.deps.pageLimit,
+      cursor: state.phase2Cursor,
+      handle: async (record) => {
+        if (!this.shouldEmit(record, state)) return;
+        const classification = classifyToken({
+          contractAddress: record.token_info.address,
+          expectedContract: state.options.expectedContract,
+          allowlist: this.deps.allowlist,
+        });
+        const eventIndex = await this.resolveEventIndex(state, record, logCache);
+        const key = eventKey(record.transaction_id, eventIndex);
+        if (state.seenEvents.has(key)) return;
+        if (classification.kind === 'expected') {
+          // Late catch — phase 1 has not reported this transfer (e.g. the
+          // indexer surfaced it between the two calls). Treat as detected.
+          await this.emitPaymentDetected(state, record, eventIndex);
+          state.pendingFinality.set(key, {
+            txHash: record.transaction_id,
+            eventIndex,
+            blockNumber: null,
+            firstSeenAt: this.clock().getTime(),
+          });
+        } else if (classification.kind === 'wrong_token') {
+          await this.emitWrongTokenIncoming(state, record, classification.symbol, eventIndex);
+        } else {
+          await this.emitSpamTokenIncoming(state, record, eventIndex);
+        }
+        state.seenEvents.add(key);
+      },
+    });
   }
 
   /**
-   * Resolve the on-chain log index for a trc20-list record (08 §3.4 — WP10).
-   * The record is correlated to its log entry by matching the raw transfer
-   * value, so the per-event amount stays authoritative while a stable, real
-   * event index is assigned. Falls back to index 0 (status-quo single-event
-   * behaviour) when the solidity node has not yet surfaced the logs or the
-   * value cannot be matched — this never regresses the common single-transfer
-   * case and degrades gracefully to today's txid-level behaviour.
+   * Resolve the on-chain log index for a trc20-list record (08 §3.4 — WP10);
+   * the matching rule, re-reads included, is {@link pickEventIndex}. A failed
+   * log lookup throws and aborts the poll before anything is reported.
    */
   private async resolveEventIndex(
     state: MonitorState,
@@ -445,12 +441,9 @@ export class MonitorRegistry {
       );
       logCache.set(cacheKey, entries);
     }
-    for (const entry of entries) {
-      if (entry.value !== record.value) continue;
-      if (state.seenEvents.has(eventKey(record.transaction_id, entry.index))) continue;
-      return entry.index;
-    }
-    return 0;
+    return pickEventIndex(entries, record.value, (index) =>
+      state.seenEvents.has(eventKey(record.transaction_id, index)),
+    );
   }
 
   private async checkFinality(state: MonitorState): Promise<void> {
