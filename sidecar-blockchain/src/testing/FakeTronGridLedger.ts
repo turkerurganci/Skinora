@@ -19,6 +19,9 @@ import type {
  *     the previous page, in the query's order — so in the default order it
  *     leads to OLDER records. The last page carries no fingerprint, even when
  *     it is exactly <c>limit</c> long.</item>
+ *   <item>The solidity node answers a transaction it does not know with an
+ *     empty object, and a known one with its id and every log at once
+ *     (2026-10-03) — <c>unknownToNode</c> plays the first answer.</item>
  * </list>
  *
  * The queue-based fakes in the registry tests answer whatever was enqueued,
@@ -28,6 +31,8 @@ import type {
 export interface LedgerRecord extends Trc20Record {
   /** Position of the Transfer log inside its transaction. Default 0. */
   logIndex?: number;
+  /** The transaction emits no matching Transfer log (a standard-breaking token). */
+  noLog?: boolean;
 }
 
 export class FakeTronGridLedger {
@@ -37,6 +42,11 @@ export class FakeTronGridLedger {
   readonly logLookups: string[] = [];
   /** Remaining log lookups that fail (HTTP error on the solidity node). */
   failLogLookups = 0;
+  /**
+   * txHash → log lookups left that answer null: the solidity node does not
+   * know the transaction yet. Infinity: it never learns it.
+   */
+  readonly unknownToNode = new Map<string, number>();
   solidBlock = 0;
   readonly txInfo = new Map<string, TransactionInfo>();
 
@@ -58,17 +68,23 @@ export class FakeTronGridLedger {
       txHash: string,
       contractAddress: string,
       toAddress: string,
-    ): Promise<TransferLogEntry[]> => {
+    ): Promise<TransferLogEntry[] | null> => {
       this.logLookups.push(txHash);
       if (this.failLogLookups > 0) {
         this.failLogLookups -= 1;
         throw new Error('TronGrid HTTP 503 Service Unavailable');
+      }
+      const unknownFor = this.unknownToNode.get(txHash) ?? 0;
+      if (unknownFor > 0) {
+        this.unknownToNode.set(txHash, unknownFor - 1);
+        return null;
       }
       return this.records
         .map((r) => r.record)
         .filter(
           (r) =>
             r.transaction_id === txHash &&
+            !r.noLog &&
             r.token_info.address === contractAddress &&
             r.to === toAddress,
         )
@@ -113,8 +129,9 @@ export class FakeTronGridLedger {
     return {
       // The list endpoint does not carry the log position — only the log lookup does.
       records: page.map(({ record }) => {
-        const listed: Trc20Record & { logIndex?: number } = { ...record };
+        const listed: Trc20Record & { logIndex?: number; noLog?: boolean } = { ...record };
         delete listed.logIndex;
+        delete listed.noLog;
         return listed;
       }),
       fingerprint: more ? `after-seq-${page[page.length - 1].seq}` : null,

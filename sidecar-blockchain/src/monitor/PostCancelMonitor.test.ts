@@ -846,6 +846,36 @@ describe('PostCancelMonitorRegistry — forward scan against a TronGrid-shaped l
     ]);
   });
 
+  it('a transfer the solidity node does not know yet waits, then is reported once under its real index', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-contract', block_timestamp: T0 }), logIndex: 2 });
+    ledger.unknownToNode.set('tx-contract', 1);
+
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([]);
+
+    await pollAgain();
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([
+      { txHash: 'tx-contract', eventIndex: 2 },
+    ]);
+  });
+
+  it('the wait is bounded: after two minutes the transfer is reported under 0, and the real index arriving later is not reported again', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-stuck', block_timestamp: T0 }), logIndex: 2 });
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    // pollAgain advances 35 s per poll: 0 / 35 / 70 / 105 s wait, 140 s reports.
+    for (let i = 0; i < 4; i += 1) await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([]);
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-stuck', eventIndex: 0 }]);
+
+    ledger.unknownToNode.delete('tx-stuck');
+    await pollAgain();
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-stuck', eventIndex: 0 }]);
+  });
+
   it('a quiet poll lists once per phase and re-reads only the newest block — not the history', async () => {
     for (let i = 0; i < 45; i += 1) {
       ledger.add(buildRecord({ txHash: `usdt-${i}`, block_timestamp: T0 + i * 3000 }));

@@ -10,6 +10,7 @@ import type {
 import { WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type { AnyBlockchainWebhookPayload } from '../webhook/WebhookPayloads.js';
 import { FakeTronGridLedger, type LedgerRecord } from '../testing/FakeTronGridLedger.js';
+import { LOG_WAIT_MS } from './EventIndexResolver.js';
 
 const DEPOSIT_ADDRESS = 'TDeposit1234567890DepositAddrFakeXX';
 const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
@@ -134,6 +135,7 @@ function buildRegistry(opts: {
   client: MonitorRegistryDeps['client'];
   sender: MonitorRegistryDeps['webhookSender'];
   now?: Date;
+  clock?: () => Date;
   minConfirmations?: number;
 }): MonitorRegistry {
   const fixedNow = opts.now ?? new Date('2026-05-16T12:00:00Z');
@@ -144,7 +146,7 @@ function buildRegistry(opts: {
     minConfirmations: opts.minConfirmations ?? 20,
     pageLimit: 20,
     webhookEndpoints: ENDPOINTS,
-    clock: () => fixedNow,
+    clock: opts.clock ?? (() => fixedNow),
     webhookSender: opts.sender,
   });
 }
@@ -613,10 +615,10 @@ describe('MonitorRegistry — per-event dedup (WP10, 08 §3.4)', () => {
     expect(detected).toHaveLength(1);
   });
 
-  it('falls back to index 0 when the solidity node has no logs yet (no regression)', async () => {
+  it('falls back to index 0 when the node knows the transaction but no log matches', async () => {
     const registry = buildRegistry({ client: fake.client, sender: sender.sender });
     startMonitor(registry);
-    // No setEventIndices → resolver returns [] → status-quo single-event index 0.
+    // No setEventIndices → resolver returns [] (final, not null) → index 0, no wait.
     fake.enqueuePhase1({
       records: [transferRecord({ transaction_id: 'tx-lag' })],
       fingerprint: null,
@@ -844,7 +846,7 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
   function ledgerRecord(
     overrides: Partial<LedgerRecord> & { transaction_id: string },
   ): LedgerRecord {
-    return { ...transferRecord(overrides), logIndex: overrides.logIndex };
+    return { ...transferRecord(overrides), logIndex: overrides.logIndex, noLog: overrides.noLog };
   }
 
   function start(registry: MonitorRegistry): void {
@@ -934,6 +936,76 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
     await registry.tick();
     await registry.tick();
     expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('a transfer the solidity node does not know yet waits, then is reported once under its real index', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-contract', logIndex: 2, block_timestamp: T0 }));
+    ledger.unknownToNode.set('tx-contract', 1);
+
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([]);
+
+    await registry.tick();
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('a token whose transaction the node knows but has no matching log is reported at once — no wait', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(
+      ledgerRecord({
+        transaction_id: 'spam-nolog',
+        token_info: { address: SPAM_TOKEN, decimals: 6 },
+        noLog: true,
+        block_timestamp: T0,
+      }),
+    );
+
+    await registry.tick();
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-nolog', eventIndex: 0 }]);
+  });
+
+  it('the wait is bounded: after two minutes the transfer is reported under 0, and the real index arriving later is not reported again', async () => {
+    let now = Date.parse('2026-10-03T12:00:00Z');
+    const registry = buildRegistry({
+      client: ledger.client as never,
+      sender: sender.sender,
+      clock: () => new Date(now),
+    });
+    start(registry);
+    // Same second: the watermark block, so every poll re-reads both.
+    ledger.add(
+      ledgerRecord({ transaction_id: 'tx-stuck', logIndex: 2, block_timestamp: T0 }),
+      ledgerRecord({ transaction_id: 'tx-behind', block_timestamp: T0 + 500 }),
+    );
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    await registry.tick();
+    now += LOG_WAIT_MS - 1;
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([]);
+
+    now += 1;
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([
+      { txHash: 'tx-stuck', eventIndex: 0 },
+      { txHash: 'tx-behind', eventIndex: 0 },
+    ]);
+
+    ledger.unknownToNode.delete('tx-stuck');
+    const lookups = ledger.logLookups.length;
+    await registry.tick();
+    await registry.tick();
+    expect(ledger.logLookups.slice(lookups)).toContain('tx-stuck');
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([
+      { txHash: 'tx-stuck', eventIndex: 0 },
+      { txHash: 'tx-behind', eventIndex: 0 },
+    ]);
   });
 
   it('a retryable webhook failure is delivered on the next tick, nothing twice', async () => {

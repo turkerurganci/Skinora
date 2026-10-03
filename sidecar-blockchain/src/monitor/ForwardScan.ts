@@ -130,8 +130,10 @@ export async function scanForward(args: ForwardScanArgs): Promise<void> {
  * </para>
  *
  * <para>
- * Index 0 remains the fallback when no log matches at all (the solidity node
- * has no logs for the transaction yet): the single-transfer case, unchanged.
+ * Index 0 remains the fallback when no log matches at all. The entries must
+ * then be final — the node knew the transaction — or a later re-read finds
+ * the real index and reports the transfer again; EventIndexResolver.ts only
+ * calls this with final entries, or with none once its wait ran out.
  * </para>
  */
 export function pickEventIndex(

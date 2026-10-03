@@ -356,8 +356,17 @@ describe('TronGridClient.resolveTransferEventIndices()', () => {
     );
   });
 
-  it('returns [] when the solidity node has no logs for the transaction yet', async () => {
+  it('returns null when the solidity node does not know the transaction yet — its answer is {}', async () => {
     const { mock } = buildFetchMock([{ status: 200, body: {} }]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock, {
+      sleepFn: noSleep,
+    });
+    const entries = await client.resolveTransferEventIndices('tx-x', CONTRACT, DEPOSIT);
+    expect(entries).toBeNull();
+  });
+
+  it('returns [] — final — when the node knows the transaction but no log matches', async () => {
+    const { mock } = buildFetchMock([{ status: 200, body: { id: 'tx-x' } }]);
     const client = new TronGridClient('https://full', 'https://solid', '', mock, {
       sleepFn: noSleep,
     });
