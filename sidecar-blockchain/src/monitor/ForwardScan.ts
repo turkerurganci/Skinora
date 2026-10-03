@@ -45,6 +45,20 @@ export interface ForwardCursor {
  */
 export const MAX_PAGES_PER_POLL = 5;
 
+/**
+ * Thrown by a <c>handle</c> for a record it cannot handle yet. The scan does
+ * not stop there: it hands the rest of the page to <c>handle</c>, then throws
+ * the first such error without moving the cursor past that page, so the
+ * next poll reads the record again (and dedup skips the ones handled).
+ * One record waiting does not hold back the records after it.
+ */
+export class RecordNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordNotReadyError';
+  }
+}
+
 export interface ForwardScanArgs {
   client: { listTrc20(options: ListTrc20Options): Promise<Trc20ListResponse> };
   address: string;
@@ -53,7 +67,11 @@ export interface ForwardScanArgs {
   pageLimit: number;
   /** Advanced in place, and only after every record of a page was handled. */
   cursor: ForwardCursor;
-  /** Called for each record, oldest first. A throw aborts the scan; the page is read again next poll. */
+  /**
+   * Called for each record, oldest first. A throw aborts the scan and the page
+   * is read again next poll — except {@link RecordNotReadyError}, which lets
+   * the page finish first.
+   */
   handle: (record: Trc20Record) => Promise<void>;
   maxPages?: number;
 }
@@ -80,9 +98,16 @@ export async function scanForward(args: ForwardScanArgs): Promise<void> {
       limit: pageLimit,
       order: 'asc',
     });
+    let notReady: RecordNotReadyError | undefined;
     for (const record of response.records) {
-      await handle(record);
+      try {
+        await handle(record);
+      } catch (err) {
+        if (!(err instanceof RecordNotReadyError)) throw err;
+        notReady ??= err;
+      }
     }
+    if (notReady) throw notReady;
     for (const record of response.records) {
       if (
         Number.isFinite(record.block_timestamp) &&
@@ -133,7 +158,7 @@ export async function scanForward(args: ForwardScanArgs): Promise<void> {
  * Index 0 remains the fallback when no log matches at all. The entries must
  * then be final — the node knew the transaction — or a later re-read finds
  * the real index and reports the transfer again; EventIndexResolver.ts only
- * calls this with final entries, or with none once its wait ran out.
+ * calls this with the entries of a transaction the node knew.
  * </para>
  */
 export function pickEventIndex(

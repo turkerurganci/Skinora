@@ -3,16 +3,18 @@ import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
 import {
+  catchLogsNotReady,
   createEventIndexBook,
+  createEventIndexScan,
   eventKey,
-  LogsNotReadyError,
   markReported,
   resolveEventIndex,
   type EventIndexBook,
   type EventIndexResolution,
+  type EventIndexScan,
 } from './EventIndexResolver.js';
 import { scanForward, type ForwardCursor } from './ForwardScan.js';
-import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
+import type { Trc20Record, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
   AnyBlockchainWebhookPayload,
@@ -299,17 +301,16 @@ export class PostCancelMonitorRegistry {
       }
       const now = this.clock();
       if (now.getTime() < entry.nextPollAt.getTime()) return;
-      // Per-tick cache of resolved transfer-log entries keyed by
-      // `${txHash}:${contract}` (08 §3.4 — WP10), shared across both phases.
-      const logCache = new Map<string, TransferLogEntry[] | null>();
-      await this.pollPhase1(entry, logCache);
-      await this.pollPhase2(entry, logCache);
-      entry.nextPollAt = new Date(now.getTime() + this.cadenceFor(entry.state));
-    } catch (err) {
-      if (err instanceof LogsNotReadyError) {
+      // A record the solidity node does not know yet waits (EventIndexResolver.ts)
+      // without holding back the other phase.
+      const phase1 = await catchLogsNotReady(() => this.pollPhase1(entry));
+      const phase2 = await catchLogsNotReady(() => this.pollPhase2(entry));
+      const waiting = phase1 ?? phase2;
+      if (waiting) {
+        // nextPollAt stays: the entry is polled again on the next tick, whatever its cadence.
         logger.info(
           {
-            txHash: err.txHash,
+            txHash: waiting.txHash,
             address: entry.options.address,
             correlationId: entry.correlationId,
           },
@@ -317,6 +318,8 @@ export class PostCancelMonitorRegistry {
         );
         return;
       }
+      entry.nextPollAt = new Date(now.getTime() + this.cadenceFor(entry.state));
+    } catch (err) {
       logger.error(
         {
           err: (err as Error).message,
@@ -426,10 +429,8 @@ export class PostCancelMonitorRegistry {
     return PostCancelMonitorStates.Stopped;
   }
 
-  private async pollPhase1(
-    entry: PostCancelMonitorEntry,
-    logCache: Map<string, TransferLogEntry[] | null>,
-  ): Promise<void> {
+  private async pollPhase1(entry: PostCancelMonitorEntry): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: entry.options.address,
@@ -445,7 +446,7 @@ export class PostCancelMonitorRegistry {
           );
           return;
         }
-        const resolution = await this.resolveEventIndex(entry, record, logCache);
+        const resolution = await this.resolveEventIndex(entry, record, scan);
         const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (entry.seenEvents.has(key)) return;
@@ -455,10 +456,8 @@ export class PostCancelMonitorRegistry {
     });
   }
 
-  private async pollPhase2(
-    entry: PostCancelMonitorEntry,
-    logCache: Map<string, TransferLogEntry[] | null>,
-  ): Promise<void> {
+  private async pollPhase2(entry: PostCancelMonitorEntry): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: entry.options.address,
@@ -471,7 +470,7 @@ export class PostCancelMonitorRegistry {
           expectedContract: entry.options.expectedContract,
           allowlist: this.deps.allowlist,
         });
-        const resolution = await this.resolveEventIndex(entry, record, logCache);
+        const resolution = await this.resolveEventIndex(entry, record, scan);
         const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (entry.seenEvents.has(key)) return;
@@ -495,13 +494,13 @@ export class PostCancelMonitorRegistry {
   private resolveEventIndex(
     entry: PostCancelMonitorEntry,
     record: Trc20Record,
-    logCache: Map<string, TransferLogEntry[] | null>,
+    scan: EventIndexScan,
   ): Promise<EventIndexResolution> {
     return resolveEventIndex({
       client: this.deps.client,
       record,
       depositAddress: entry.options.address,
-      logCache,
+      scan,
       seenEvents: entry.seenEvents,
       book: entry.eventIndexBook,
       now: this.clock().getTime(),

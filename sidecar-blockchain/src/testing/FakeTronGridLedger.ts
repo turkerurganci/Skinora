@@ -43,8 +43,9 @@ export class FakeTronGridLedger {
   /** Remaining log lookups that fail (HTTP error on the solidity node). */
   failLogLookups = 0;
   /**
-   * txHash → log lookups left that answer null: the solidity node does not
-   * know the transaction yet. Infinity: it never learns it.
+   * txHash (or `${txHash}:${contract}`, which wins for that token's lookups)
+   * → log lookups left that answer null: the solidity node does not know the
+   * transaction yet. Infinity: it never learns it.
    */
   readonly unknownToNode = new Map<string, number>();
   solidBlock = 0;
@@ -74,9 +75,12 @@ export class FakeTronGridLedger {
         this.failLogLookups -= 1;
         throw new Error('TronGrid HTTP 503 Service Unavailable');
       }
-      const unknownFor = this.unknownToNode.get(txHash) ?? 0;
+      const unknownKey = this.unknownToNode.has(`${txHash}:${contractAddress}`)
+        ? `${txHash}:${contractAddress}`
+        : txHash;
+      const unknownFor = this.unknownToNode.get(unknownKey) ?? 0;
       if (unknownFor > 0) {
-        this.unknownToNode.set(txHash, unknownFor - 1);
+        this.unknownToNode.set(unknownKey, unknownFor - 1);
         return null;
       }
       return this.records
