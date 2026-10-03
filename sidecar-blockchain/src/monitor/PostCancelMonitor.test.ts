@@ -846,7 +846,142 @@ describe('PostCancelMonitorRegistry — forward scan against a TronGrid-shaped l
     ]);
   });
 
-  it('a quiet poll lists once per phase and re-reads only the newest block — not the history', async () => {
+  it('a transfer the solidity node does not know yet waits, then is reported once under its real index', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-contract', block_timestamp: T0 }), logIndex: 2 });
+    // Unknown to both phases of the first poll.
+    ledger.unknownToNode.set('tx-contract', 2);
+
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([]);
+
+    await pollAgain();
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([
+      { txHash: 'tx-contract', eventIndex: 2 },
+    ]);
+  });
+
+  it('a transfer reported under its real index is not reported again when a lagging node then answers "unknown" for longer than the wait', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-contract', block_timestamp: T0 }), logIndex: 2 });
+    await pollAgain();
+
+    ledger.unknownToNode.set('tx-contract', Infinity);
+    for (let i = 0; i < 6; i += 1) await pollAgain(); // 35 s apart: past the two-minute wait
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([
+      { txHash: 'tx-contract', eventIndex: 2 },
+    ]);
+  });
+
+  it('a record waiting for the node holds back neither phase 2 nor the late payment after it', async () => {
+    ledger.add(
+      { ...buildRecord({ txHash: 'tx-stuck', block_timestamp: T0 }), logIndex: 2 },
+      buildRecord({ txHash: 'tx-next', block_timestamp: T0 + 3000 }),
+      buildRecord({
+        txHash: 'usdc-next',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0 + 6000,
+      }),
+    );
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    await pollAgain();
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-next', eventIndex: 0 }]);
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'usdc-next', eventIndex: 0 }]);
+  });
+
+  it('a guess made in phase 2 is remembered: the real index arriving later is not reported again', async () => {
+    ledger.add({
+      ...buildRecord({
+        txHash: 'spam-stuck',
+        token_info: { address: SPAM_TOKEN, decimals: 6, symbol: 'SPAM' },
+        block_timestamp: T0,
+      }),
+      logIndex: 2,
+    });
+    ledger.unknownToNode.set('spam-stuck', Infinity);
+
+    for (let i = 0; i < 5; i += 1) await pollAgain(); // 140 s: the guess
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-stuck', eventIndex: 0 }]);
+
+    ledger.unknownToNode.delete('spam-stuck');
+    await pollAgain();
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-stuck', eventIndex: 0 }]);
+  });
+
+  it('a guess whose webhook failed is not remembered: the transfer is reported under its real index once the node knows it', async () => {
+    let fail = false;
+    webhook = createFakeSender({
+      failNext: () =>
+        fail ? new WebhookDeliveryError(503, 'Service Unavailable', 'late.payment') : null,
+    });
+    harness = buildRegistry({
+      client: ledger.client as never,
+      sender: webhook.sender,
+      now: cancelledAt,
+    });
+    harness.registry.start({
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+      cancelledAt,
+    });
+    ledger.add({ ...buildRecord({ txHash: 'tx-stuck', block_timestamp: T0 }), logIndex: 2 });
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    for (let i = 0; i < 4; i += 1) await pollAgain();
+    fail = true;
+    await pollAgain(); // 140 s: the guess goes out and fails
+    fail = false;
+    ledger.unknownToNode.delete('tx-stuck');
+    await pollAgain();
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-stuck', eventIndex: 2 }]);
+  });
+
+  it('an entry on a slow cadence whose record waits is polled again on the next tick', async () => {
+    // Two days after the cancel: POST_CANCEL_7D, a list poll every 5 min.
+    const cancelled = new Date(cancelledAt.getTime() - 2 * 24 * 60 * 60 * 1000);
+    harness.registry.stop(DEPOSIT_ADDRESS);
+    harness.registry.start({
+      address: DEPOSIT_ADDRESS,
+      paymentAddressId: PAYMENT_ADDRESS_ID,
+      transactionId: TRANSACTION_ID,
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+      cancelledAt: cancelled,
+    });
+    ledger.add({ ...buildRecord({ txHash: 'tx-late', block_timestamp: T0 }), logIndex: 2 });
+    ledger.unknownToNode.set('tx-late', 2);
+
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([]);
+    await pollAgain(); // 35 s later, well inside the 5 min cadence
+
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-late', eventIndex: 2 }]);
+  });
+
+  it('the wait is bounded: after two minutes the transfer is reported under 0, and the real index arriving later is not reported again', async () => {
+    ledger.add({ ...buildRecord({ txHash: 'tx-stuck', block_timestamp: T0 }), logIndex: 2 });
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    // pollAgain advances 35 s per poll: 0 / 35 / 70 / 105 s wait, 140 s reports.
+    for (let i = 0; i < 4; i += 1) await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([]);
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-stuck', eventIndex: 0 }]);
+
+    ledger.unknownToNode.delete('tx-stuck');
+    await pollAgain();
+    await pollAgain();
+    expect(sentTo(ENDPOINTS.latePaymentDetected)).toEqual([{ txHash: 'tx-stuck', eventIndex: 0 }]);
+  });
+
+  it('a quiet poll lists once per phase, re-reads only the newest block and asks the node nothing', async () => {
     for (let i = 0; i < 45; i += 1) {
       ledger.add(buildRecord({ txHash: `usdt-${i}`, block_timestamp: T0 + i * 3000 }));
     }
@@ -857,8 +992,8 @@ describe('PostCancelMonitorRegistry — forward scan against a TronGrid-shaped l
     await pollAgain();
 
     expect(ledger.listCalls.length - lists).toBe(2);
-    // The newest block only; phase 2 meets the same record and reuses the per-tick lookup.
-    expect(ledger.logLookups.slice(lookups)).toEqual(['usdt-44']);
+    // The newest block is re-read, but the node's answer for it is kept — not asked again.
+    expect(ledger.logLookups.slice(lookups)).toEqual([]);
   });
 
   it('keeps a separate watermark per phase — a newer USDT transfer does not hide older spam from phase 2', async () => {

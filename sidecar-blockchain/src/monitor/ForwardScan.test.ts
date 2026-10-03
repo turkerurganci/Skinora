@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_PAGES_PER_POLL,
   pickEventIndex,
+  RecordNotReadyError,
   scanForward,
   type ForwardCursor,
 } from './ForwardScan.js';
@@ -177,6 +178,52 @@ describe('scanForward', () => {
     expect(handled).toEqual(['tx-0', 'tx-0', 'tx-1', 'tx-2']);
   });
 
+  it('a record that is not ready lets the rest of its page through, then leaves that page to the next poll', async () => {
+    const ledger = new FakeTronGridLedger();
+    ledger.add(...series('tx', 3, T0));
+    const cursor: ForwardCursor = {};
+    const handled: string[] = [];
+    let waitOn: string | undefined = 'tx-0';
+    const handle = async (r: Trc20Record) => {
+      if (r.transaction_id === waitOn) throw new RecordNotReadyError('node lags');
+      handled.push(r.transaction_id);
+    };
+
+    await expect(
+      scanForward({ client: ledger.client, address: ADDRESS, pageLimit: 20, cursor, handle }),
+    ).rejects.toBeInstanceOf(RecordNotReadyError);
+    expect(handled).toEqual(['tx-1', 'tx-2']);
+    expect(cursor).toEqual({});
+
+    waitOn = undefined;
+    await scanForward({ client: ledger.client, address: ADDRESS, pageLimit: 20, cursor, handle });
+    expect(handled).toEqual(['tx-1', 'tx-2', 'tx-0', 'tx-1', 'tx-2']);
+    expect(cursor.minTimestamp).toBe(T0 + 6000);
+  });
+
+  it('a record that is not ready stops the scan at the end of its page — later pages wait', async () => {
+    const ledger = new FakeTronGridLedger();
+    ledger.add(...series('tx', 30, T0));
+    const cursor: ForwardCursor = {};
+    const handled: string[] = [];
+
+    await expect(
+      scanForward({
+        client: ledger.client,
+        address: ADDRESS,
+        pageLimit: 20,
+        cursor,
+        handle: async (r) => {
+          if (r.transaction_id === 'tx-25') throw new RecordNotReadyError('node lags');
+          handled.push(r.transaction_id);
+        },
+      }),
+    ).rejects.toBeInstanceOf(RecordNotReadyError);
+
+    expect(handled).toHaveLength(29);
+    expect(cursor.minTimestamp).toBe(T0 + 19 * 3000);
+  });
+
   it('keeps the pages it finished when a later page fails', async () => {
     const ledger = new FakeTronGridLedger();
     ledger.add(...series('tx', 30, T0));
@@ -256,7 +303,7 @@ describe('pickEventIndex', () => {
     expect(pickEventIndex([{ index: 2, value: '5' }], '5', (i) => i === 2)).toBe(2);
   });
 
-  it('falls back to 0 when no log matches (solidity node has no logs yet)', () => {
+  it('falls back to 0 when no log of the known transaction matches', () => {
     expect(pickEventIndex([], '5', none)).toBe(0);
     expect(pickEventIndex([{ index: 3, value: '7' }], '5', none)).toBe(0);
   });

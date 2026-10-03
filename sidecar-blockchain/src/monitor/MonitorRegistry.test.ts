@@ -10,6 +10,7 @@ import type {
 import { WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type { AnyBlockchainWebhookPayload } from '../webhook/WebhookPayloads.js';
 import { FakeTronGridLedger, type LedgerRecord } from '../testing/FakeTronGridLedger.js';
+import { LOG_WAIT_MS } from './EventIndexResolver.js';
 
 const DEPOSIT_ADDRESS = 'TDeposit1234567890DepositAddrFakeXX';
 const PAYMENT_ADDRESS_ID = '11111111-1111-1111-1111-111111111111';
@@ -134,6 +135,7 @@ function buildRegistry(opts: {
   client: MonitorRegistryDeps['client'];
   sender: MonitorRegistryDeps['webhookSender'];
   now?: Date;
+  clock?: () => Date;
   minConfirmations?: number;
 }): MonitorRegistry {
   const fixedNow = opts.now ?? new Date('2026-05-16T12:00:00Z');
@@ -144,7 +146,7 @@ function buildRegistry(opts: {
     minConfirmations: opts.minConfirmations ?? 20,
     pageLimit: 20,
     webhookEndpoints: ENDPOINTS,
-    clock: () => fixedNow,
+    clock: opts.clock ?? (() => fixedNow),
     webhookSender: opts.sender,
   });
 }
@@ -613,10 +615,10 @@ describe('MonitorRegistry — per-event dedup (WP10, 08 §3.4)', () => {
     expect(detected).toHaveLength(1);
   });
 
-  it('falls back to index 0 when the solidity node has no logs yet (no regression)', async () => {
+  it('falls back to index 0 when the node knows the transaction but no log matches', async () => {
     const registry = buildRegistry({ client: fake.client, sender: sender.sender });
     startMonitor(registry);
-    // No setEventIndices → resolver returns [] → status-quo single-event index 0.
+    // No setEventIndices → resolver returns [] (final, not null) → index 0, no wait.
     fake.enqueuePhase1({
       records: [transferRecord({ transaction_id: 'tx-lag' })],
       fingerprint: null,
@@ -844,7 +846,7 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
   function ledgerRecord(
     overrides: Partial<LedgerRecord> & { transaction_id: string },
   ): LedgerRecord {
-    return { ...transferRecord(overrides), logIndex: overrides.logIndex };
+    return { ...transferRecord(overrides), logIndex: overrides.logIndex, noLog: overrides.noLog };
   }
 
   function start(registry: MonitorRegistry): void {
@@ -936,6 +938,238 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
     expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
   });
 
+  it('a transfer the solidity node does not know yet waits, then is reported once under its real index', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-contract', logIndex: 2, block_timestamp: T0 }));
+    // Unknown to both phases of the first poll.
+    ledger.unknownToNode.set('tx-contract', 2);
+
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([]);
+
+    await registry.tick();
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('a transfer reported under its real index is not reported again when a lagging node then answers "unknown" for longer than the wait', async () => {
+    // Validation finding 1 (2026-10-03): the re-read went to the index-0 guess.
+    let now = Date.parse('2026-10-03T12:00:00Z');
+    const registry = buildRegistry({
+      client: ledger.client as never,
+      sender: sender.sender,
+      clock: () => new Date(now),
+    });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-contract', logIndex: 2, block_timestamp: T0 }));
+    await registry.tick();
+
+    ledger.unknownToNode.set('tx-contract', Infinity);
+    for (let i = 0; i < 3; i += 1) {
+      now += LOG_WAIT_MS;
+      await registry.tick();
+    }
+
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-contract', eventIndex: 2 }]);
+  });
+
+  it('waits per token: a known USDT log in the same transaction does not keep restarting the USDC wait', async () => {
+    // Validation finding 2: phase 1's known USDT answer cleared a wait keyed
+    // by tx alone and phase 2's unknown USDC restarted it, every poll.
+    let now = Date.parse('2026-10-03T12:00:00Z');
+    const registry = buildRegistry({
+      client: ledger.client as never,
+      sender: sender.sender,
+      clock: () => new Date(now),
+    });
+    start(registry);
+    ledger.add(
+      ledgerRecord({ transaction_id: 'tx-two', logIndex: 1, block_timestamp: T0 }),
+      ledgerRecord({
+        transaction_id: 'tx-two',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        value: '7000000',
+        logIndex: 3,
+        block_timestamp: T0,
+      }),
+    );
+    ledger.unknownToNode.set(`tx-two:${USDC}`, Infinity);
+
+    await registry.tick();
+    now += LOG_WAIT_MS;
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-two', eventIndex: 1 }]);
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'tx-two', eventIndex: 0 }]);
+  });
+
+  it('a waiting record holds back neither the finality checks, the payments after it nor phase 2', async () => {
+    // Validation finding 3: the wait aborted the whole poll.
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(ledgerRecord({ transaction_id: 'tx-paid', block_timestamp: T0 }));
+    await registry.tick();
+
+    ledger.add(
+      ledgerRecord({ transaction_id: 'tx-stuck', logIndex: 2, block_timestamp: T0 + 3000 }),
+      ledgerRecord({ transaction_id: 'tx-next', block_timestamp: T0 + 6000 }),
+      ledgerRecord({
+        transaction_id: 'usdc-next',
+        token_info: { address: USDC, decimals: 6, symbol: 'USDC' },
+        block_timestamp: T0 + 9000,
+      }),
+    );
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+    ledger.solidBlock = 1_000;
+    ledger.txInfo.set('tx-paid', { blockNumber: 900 } as never);
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([
+      { txHash: 'tx-paid', eventIndex: 0 },
+      { txHash: 'tx-next', eventIndex: 0 },
+    ]);
+    expect(sentTo(ENDPOINTS.paymentConfirmed)).toEqual([{ txHash: 'tx-paid', eventIndex: 0 }]);
+    expect(sentTo(ENDPOINTS.wrongTokenIncoming)).toEqual([{ txHash: 'usdc-next', eventIndex: 0 }]);
+  });
+
+  it.each([
+    { phase: 'phase 1 (USDT)', token: USDT, endpoint: ENDPOINTS.paymentDetected },
+    { phase: 'phase 2 only (USDC)', token: USDC, endpoint: ENDPOINTS.wrongTokenIncoming },
+  ])(
+    'a HOLDING address whose record waits in $phase is polled again on the next tick, then back on its cadence',
+    async ({ token, endpoint }) => {
+      // Validation finding 4: nextPollAt had moved a whole holding interval
+      // ahead, so the second look came after the wait had run out.
+      let now = Date.parse('2026-10-03T12:00:00Z');
+      const registry = new MonitorRegistry({
+        client: ledger.client as never,
+        allowlist: { USDT, USDC },
+        intervalMs: 3_000,
+        holdingIntervalMs: 900_000,
+        minConfirmations: 20,
+        pageLimit: 20,
+        webhookEndpoints: ENDPOINTS,
+        clock: () => new Date(now),
+        webhookSender: sender.sender,
+      });
+      registry.start({
+        address: DEPOSIT_ADDRESS,
+        paymentAddressId: PAYMENT_ADDRESS_ID,
+        transactionId: TRANSACTION_ID,
+        expectedContract: USDT,
+        expectedSymbol: 'USDT',
+        cadence: 'HOLDING',
+      });
+      ledger.add(
+        ledgerRecord({
+          transaction_id: 'tx-over',
+          token_info: { address: token, decimals: 6 },
+          logIndex: 2,
+          block_timestamp: T0,
+        }),
+      );
+      // USDT is asked in both phases of the first poll, USDC only in phase 2.
+      ledger.unknownToNode.set('tx-over', token === USDT ? 2 : 1);
+
+      await registry.tick();
+      now += 3_000;
+      await registry.tick();
+      expect(sentTo(endpoint)).toEqual([{ txHash: 'tx-over', eventIndex: 2 }]);
+
+      const lists = ledger.listCalls.length;
+      now += 3_000;
+      await registry.tick();
+      expect(ledger.listCalls.length).toBe(lists);
+    },
+  );
+
+  it('a guess made in phase 2 is remembered: the real index arriving later is not reported again', async () => {
+    let now = Date.parse('2026-10-03T12:00:00Z');
+    const registry = buildRegistry({
+      client: ledger.client as never,
+      sender: sender.sender,
+      clock: () => new Date(now),
+    });
+    start(registry);
+    ledger.add(
+      ledgerRecord({
+        transaction_id: 'spam-stuck',
+        token_info: { address: SPAM_TOKEN, decimals: 6 },
+        logIndex: 2,
+        block_timestamp: T0,
+      }),
+    );
+    ledger.unknownToNode.set('spam-stuck', Infinity);
+
+    await registry.tick();
+    now += LOG_WAIT_MS;
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-stuck', eventIndex: 0 }]);
+
+    ledger.unknownToNode.delete('spam-stuck');
+    await registry.tick();
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-stuck', eventIndex: 0 }]);
+  });
+
+  it('a token whose transaction the node knows but has no matching log is reported at once — no wait', async () => {
+    const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
+    start(registry);
+    ledger.add(
+      ledgerRecord({
+        transaction_id: 'spam-nolog',
+        token_info: { address: SPAM_TOKEN, decimals: 6 },
+        noLog: true,
+        block_timestamp: T0,
+      }),
+    );
+
+    await registry.tick();
+    await registry.tick();
+
+    expect(sentTo(ENDPOINTS.spamTokenIncoming)).toEqual([{ txHash: 'spam-nolog', eventIndex: 0 }]);
+  });
+
+  it('the wait is bounded: after two minutes the transfer is reported under 0, and the real index arriving later is not reported again', async () => {
+    let now = Date.parse('2026-10-03T12:00:00Z');
+    const registry = buildRegistry({
+      client: ledger.client as never,
+      sender: sender.sender,
+      clock: () => new Date(now),
+    });
+    start(registry);
+    // Same second: the watermark block, so every poll re-reads both.
+    ledger.add(
+      ledgerRecord({ transaction_id: 'tx-stuck', logIndex: 2, block_timestamp: T0 }),
+      ledgerRecord({ transaction_id: 'tx-behind', block_timestamp: T0 + 500 }),
+    );
+    ledger.unknownToNode.set('tx-stuck', Infinity);
+
+    // The record behind the waiting one does not wait with it.
+    await registry.tick();
+    now += LOG_WAIT_MS - 1;
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([{ txHash: 'tx-behind', eventIndex: 0 }]);
+
+    now += 1;
+    await registry.tick();
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([
+      { txHash: 'tx-behind', eventIndex: 0 },
+      { txHash: 'tx-stuck', eventIndex: 0 },
+    ]);
+
+    ledger.unknownToNode.delete('tx-stuck');
+    const lookups = ledger.logLookups.length;
+    await registry.tick();
+    await registry.tick();
+    expect(ledger.logLookups.slice(lookups)).toContain('tx-stuck');
+    expect(sentTo(ENDPOINTS.paymentDetected)).toEqual([
+      { txHash: 'tx-behind', eventIndex: 0 },
+      { txHash: 'tx-stuck', eventIndex: 0 },
+    ]);
+  });
+
   it('a retryable webhook failure is delivered on the next tick, nothing twice', async () => {
     let failures = 1;
     sender = createFakeSender({
@@ -958,7 +1192,7 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
     expect(sentTo(ENDPOINTS.paymentDetected).map((d) => d.txHash)).toEqual(['tx-a', 'tx-b']);
   });
 
-  it('a quiet poll lists once per phase and re-reads only the newest block — not the history', async () => {
+  it('a quiet poll lists once per phase, re-reads only the newest block and asks the node nothing', async () => {
     const registry = buildRegistry({ client: ledger.client as never, sender: sender.sender });
     start(registry);
     for (let i = 0; i < 45; i += 1) {
@@ -977,7 +1211,8 @@ describe('MonitorRegistry — forward scan against a TronGrid-shaped ledger', ()
     await registry.tick();
 
     expect(ledger.listCalls.length - lists).toBe(2);
-    expect(ledger.logLookups.slice(lookups)).toEqual(['spam-44']);
+    // The newest block is re-read, but the node's answer for it is kept — not asked again.
+    expect(ledger.logLookups.slice(lookups)).toEqual([]);
   });
 
   it('keeps a separate watermark per phase — a newer USDT transfer does not hide older spam from phase 2', async () => {

@@ -2,8 +2,19 @@ import crypto from 'crypto';
 import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
-import { pickEventIndex, scanForward, type ForwardCursor } from './ForwardScan.js';
-import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
+import {
+  catchLogsNotReady,
+  createEventIndexBook,
+  createEventIndexScan,
+  eventKey,
+  markReported,
+  resolveEventIndex,
+  type EventIndexBook,
+  type EventIndexResolution,
+  type EventIndexScan,
+} from './EventIndexResolver.js';
+import { scanForward, type ForwardCursor } from './ForwardScan.js';
+import type { Trc20Record, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
   AnyBlockchainWebhookPayload,
@@ -105,11 +116,8 @@ interface PostCancelMonitorEntry {
   phase2Cursor: ForwardCursor;
   /** `${txHash}:${eventIndex}` keys already emitted — per-event dedup (08 §3.4, WP10). */
   seenEvents: Set<string>;
-}
-
-/** Composite dedup key (08 §3.4 — WP10). */
-function eventKey(txHash: string, eventIndex: number): string {
-  return `${txHash}:${eventIndex}`;
+  /** Waits for the solidity node and index-0 guesses (EventIndexResolver.ts). */
+  eventIndexBook: EventIndexBook;
 }
 
 /**
@@ -227,6 +235,7 @@ export class PostCancelMonitorRegistry {
       phase1Cursor: {},
       phase2Cursor: {},
       seenEvents: new Set(),
+      eventIndexBook: createEventIndexBook(),
     };
     this.monitors.set(options.address, entry);
     reportActiveMonitorCount('post_cancel', this.monitors.size);
@@ -292,11 +301,23 @@ export class PostCancelMonitorRegistry {
       }
       const now = this.clock();
       if (now.getTime() < entry.nextPollAt.getTime()) return;
-      // Per-tick cache of resolved transfer-log entries keyed by
-      // `${txHash}:${contract}` (08 §3.4 — WP10), shared across both phases.
-      const logCache = new Map<string, TransferLogEntry[]>();
-      await this.pollPhase1(entry, logCache);
-      await this.pollPhase2(entry, logCache);
+      // A record the solidity node does not know yet waits (EventIndexResolver.ts)
+      // without holding back the other phase.
+      const phase1 = await catchLogsNotReady(() => this.pollPhase1(entry));
+      const phase2 = await catchLogsNotReady(() => this.pollPhase2(entry));
+      const waiting = phase1 ?? phase2;
+      if (waiting) {
+        // nextPollAt stays: the entry is polled again on the next tick, whatever its cadence.
+        logger.info(
+          {
+            txHash: waiting.txHash,
+            address: entry.options.address,
+            correlationId: entry.correlationId,
+          },
+          'Post-cancel monitor waiting for the solidity node to know a listed transaction — will retry next tick',
+        );
+        return;
+      }
       entry.nextPollAt = new Date(now.getTime() + this.cadenceFor(entry.state));
     } catch (err) {
       logger.error(
@@ -408,10 +429,8 @@ export class PostCancelMonitorRegistry {
     return PostCancelMonitorStates.Stopped;
   }
 
-  private async pollPhase1(
-    entry: PostCancelMonitorEntry,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<void> {
+  private async pollPhase1(entry: PostCancelMonitorEntry): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: entry.options.address,
@@ -427,19 +446,18 @@ export class PostCancelMonitorRegistry {
           );
           return;
         }
-        const eventIndex = await this.resolveEventIndex(entry, record, logCache);
+        const resolution = await this.resolveEventIndex(entry, record, scan);
+        const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (entry.seenEvents.has(key)) return;
         await this.emitLatePaymentDetected(entry, record, eventIndex);
-        entry.seenEvents.add(key);
+        markReported(entry.seenEvents, entry.eventIndexBook, record, resolution);
       },
     });
   }
 
-  private async pollPhase2(
-    entry: PostCancelMonitorEntry,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<void> {
+  private async pollPhase2(entry: PostCancelMonitorEntry): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: entry.options.address,
@@ -452,7 +470,8 @@ export class PostCancelMonitorRegistry {
           expectedContract: entry.options.expectedContract,
           allowlist: this.deps.allowlist,
         });
-        const eventIndex = await this.resolveEventIndex(entry, record, logCache);
+        const resolution = await this.resolveEventIndex(entry, record, scan);
+        const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (entry.seenEvents.has(key)) return;
         if (classification.kind === 'expected') {
@@ -463,33 +482,29 @@ export class PostCancelMonitorRegistry {
         } else {
           await this.emitSpamTokenIncoming(entry, record, eventIndex);
         }
-        entry.seenEvents.add(key);
+        markReported(entry.seenEvents, entry.eventIndexBook, record, resolution);
       },
     });
   }
 
   /**
    * Resolve the on-chain log index for a record (08 §3.4 — WP10) with
-   * {@link pickEventIndex}. Mirrors <c>MonitorRegistry.resolveEventIndex</c>.
+   * {@link resolveEventIndex}. Mirrors <c>MonitorRegistry.resolveEventIndex</c>.
    */
-  private async resolveEventIndex(
+  private resolveEventIndex(
     entry: PostCancelMonitorEntry,
     record: Trc20Record,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<number> {
-    const cacheKey = `${record.transaction_id}:${record.token_info.address}`;
-    let entries = logCache.get(cacheKey);
-    if (entries === undefined) {
-      entries = await this.deps.client.resolveTransferEventIndices(
-        record.transaction_id,
-        record.token_info.address,
-        entry.options.address,
-      );
-      logCache.set(cacheKey, entries);
-    }
-    return pickEventIndex(entries, record.value, (index) =>
-      entry.seenEvents.has(eventKey(record.transaction_id, index)),
-    );
+    scan: EventIndexScan,
+  ): Promise<EventIndexResolution> {
+    return resolveEventIndex({
+      client: this.deps.client,
+      record,
+      depositAddress: entry.options.address,
+      scan,
+      seenEvents: entry.seenEvents,
+      book: entry.eventIndexBook,
+      now: this.clock().getTime(),
+    });
   }
 
   private shouldEmit(record: Trc20Record, entry: PostCancelMonitorEntry): boolean {

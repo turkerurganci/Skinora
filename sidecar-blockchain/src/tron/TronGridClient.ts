@@ -339,8 +339,14 @@ export class TronGridClient {
    * <c>contractAddress</c> contract sent to <c>toAddress</c> inside the given
    * transaction (08 §3.4 — WP10 event-index dedup). Returns each matching
    * log's canonical event index + decoded value so the monitor can assign a
-   * stable, per-event identity. Returns an empty array when the solidity node
-   * has no logs for the transaction yet — the caller falls back to index 0.
+   * stable, per-event identity.
+   *
+   * Returns null when the solidity node does not know the transaction yet: it
+   * answers with an empty object, no <c>id</c> (Nile probe 2026-10-03). A
+   * known transaction comes with its id and every log at once, so an empty
+   * array is final — no matching log — and the caller may fall back to index
+   * 0; null is not, and the caller waits (backlog
+   * `EventIndexFallbackDoubleReport`).
    *
    * A failed lookup throws. It used to return an empty array as well, so the
    * monitor reported the transfer under index 0; a later poll that resolved
@@ -352,13 +358,16 @@ export class TronGridClient {
     txHash: string,
     contractAddress: string,
     toAddress: string,
-  ): Promise<TransferLogEntry[]> {
+  ): Promise<TransferLogEntry[] | null> {
     const url = `${this.solidityUrl}/walletsolidity/gettransactioninfobyid`;
-    const json = await this.postJson<{ log?: RawTransactionLog[] }>(
+    const json = await this.postJson<{ id?: string; log?: RawTransactionLog[] }>(
       url,
       { value: txHash },
       'walletsolidity.gettransactioninfobyid.logs',
     );
+    if (!json || !json.id) {
+      return null;
+    }
     const logs = Array.isArray(json.log) ? json.log : [];
     return extractTransferLogEntries(logs, contractAddress, toAddress);
   }

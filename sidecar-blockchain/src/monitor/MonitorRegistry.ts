@@ -2,8 +2,20 @@ import crypto from 'crypto';
 import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
-import { pickEventIndex, scanForward, type ForwardCursor } from './ForwardScan.js';
-import type { Trc20Record, TransferLogEntry, TronGridClient } from '../tron/TronGridClient.js';
+import {
+  catchLogsNotReady,
+  createEventIndexBook,
+  createEventIndexScan,
+  eventKey,
+  markReported,
+  resolveEventIndex,
+  type EventIndexBook,
+  type EventIndexResolution,
+  type EventIndexScan,
+  type LogsNotReadyError,
+} from './EventIndexResolver.js';
+import { scanForward, type ForwardCursor } from './ForwardScan.js';
+import type { Trc20Record, TronGridClient } from '../tron/TronGridClient.js';
 import { sendCallback, WebhookDeliveryError } from '../webhook/WebhookClient.js';
 import type {
   AnyBlockchainWebhookPayload,
@@ -105,12 +117,9 @@ interface MonitorState {
    * single-transfer case is `${txHash}:0`.
    */
   seenEvents: Set<string>;
+  /** Waits for the solidity node and index-0 guesses (EventIndexResolver.ts). */
+  eventIndexBook: EventIndexBook;
   pendingFinality: Map<string, PendingFinality>;
-}
-
-/** Composite dedup / pending-finality key (08 §3.4 — WP10). */
-function eventKey(txHash: string, eventIndex: number): string {
-  return `${txHash}:${eventIndex}`;
 }
 
 /**
@@ -144,8 +153,9 @@ function eventKey(txHash: string, eventIndex: number): string {
  * transaction carrying multiple Transfer events to the deposit address is
  * now dedup'd at event-index granularity, with the real on-chain log index
  * resolved via `TronGridClient.resolveTransferEventIndices`. When the
- * solidity node has not yet surfaced the logs the resolver falls back to
- * index 0 (status-quo single-event behaviour) so it never regresses.
+ * solidity node does not know the transaction yet that record waits, up to
+ * two minutes, before index 0 is guessed (EventIndexResolver.ts); the rest of
+ * the page, the other phase and the finality checks go on meanwhile.
  * </para>
  */
 export class MonitorRegistry {
@@ -210,6 +220,7 @@ export class MonitorRegistry {
       phase1Cursor: {},
       phase2Cursor: {},
       seenEvents: new Set(),
+      eventIndexBook: createEventIndexBook(),
       pendingFinality: new Map(),
     });
     reportActiveMonitorCount('active', this.monitors.size);
@@ -325,13 +336,13 @@ export class MonitorRegistry {
   }
 
   private async pollOne(state: MonitorState): Promise<void> {
-    // Per-tick cache of resolved transfer-log entries keyed by
-    // `${txHash}:${contract}` so multiple list records of the same
-    // transaction share a single `gettransactioninfobyid` lookup (08 §3.4).
-    const logCache = new Map<string, TransferLogEntry[]>();
     try {
-      await this.pollPhase1(state, logCache);
-      await this.pollPhase2(state, logCache);
+      // A record the solidity node does not know yet waits (EventIndexResolver.ts)
+      // without holding back the other phase or the finality checks.
+      const phase1 = await catchLogsNotReady(() => this.pollPhase1(state));
+      if (phase1) this.retryOnNextTick(state, phase1);
+      const phase2 = await catchLogsNotReady(() => this.pollPhase2(state));
+      if (phase2 && !phase1) this.retryOnNextTick(state, phase2);
       if (state.pendingFinality.size > 0) {
         await this.checkFinality(state);
       }
@@ -347,10 +358,25 @@ export class MonitorRegistry {
     }
   }
 
-  private async pollPhase1(
-    state: MonitorState,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<void> {
+  /**
+   * A record waits for the solidity node: poll the address again on the next
+   * tick even when it is HOLDING. The wait is two minutes (LOG_WAIT_MS); a
+   * whole holding interval would let it run out before a second look.
+   */
+  private retryOnNextTick(state: MonitorState, notReady: LogsNotReadyError): void {
+    state.nextPollAt = this.clock().getTime();
+    logger.info(
+      {
+        txHash: notReady.txHash,
+        address: state.options.address,
+        correlationId: state.correlationId,
+      },
+      'Monitor waiting for the solidity node to know a listed transaction — will retry next tick',
+    );
+  }
+
+  private async pollPhase1(state: MonitorState): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: state.options.address,
@@ -367,11 +393,12 @@ export class MonitorRegistry {
           );
           return;
         }
-        const eventIndex = await this.resolveEventIndex(state, record, logCache);
+        const resolution = await this.resolveEventIndex(state, record, scan);
+        const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (state.seenEvents.has(key)) return;
         await this.emitPaymentDetected(state, record, eventIndex);
-        state.seenEvents.add(key);
+        markReported(state.seenEvents, state.eventIndexBook, record, resolution);
         state.pendingFinality.set(key, {
           txHash: record.transaction_id,
           eventIndex,
@@ -382,10 +409,8 @@ export class MonitorRegistry {
     });
   }
 
-  private async pollPhase2(
-    state: MonitorState,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<void> {
+  private async pollPhase2(state: MonitorState): Promise<void> {
+    const scan = createEventIndexScan();
     await scanForward({
       client: this.deps.client,
       address: state.options.address,
@@ -398,7 +423,8 @@ export class MonitorRegistry {
           expectedContract: state.options.expectedContract,
           allowlist: this.deps.allowlist,
         });
-        const eventIndex = await this.resolveEventIndex(state, record, logCache);
+        const resolution = await this.resolveEventIndex(state, record, scan);
+        const eventIndex = resolution.index;
         const key = eventKey(record.transaction_id, eventIndex);
         if (state.seenEvents.has(key)) return;
         if (classification.kind === 'expected') {
@@ -416,34 +442,31 @@ export class MonitorRegistry {
         } else {
           await this.emitSpamTokenIncoming(state, record, eventIndex);
         }
-        state.seenEvents.add(key);
+        markReported(state.seenEvents, state.eventIndexBook, record, resolution);
       },
     });
   }
 
   /**
-   * Resolve the on-chain log index for a trc20-list record (08 §3.4 — WP10);
-   * the matching rule, re-reads included, is {@link pickEventIndex}. A failed
-   * log lookup throws and aborts the poll before anything is reported.
+   * Resolve the on-chain log index for a trc20-list record (08 §3.4 — WP10)
+   * with {@link resolveEventIndex}. A failed log lookup, or a transaction the
+   * solidity node does not know yet, aborts the poll before anything is
+   * reported.
    */
-  private async resolveEventIndex(
+  private resolveEventIndex(
     state: MonitorState,
     record: Trc20Record,
-    logCache: Map<string, TransferLogEntry[]>,
-  ): Promise<number> {
-    const cacheKey = `${record.transaction_id}:${record.token_info.address}`;
-    let entries = logCache.get(cacheKey);
-    if (entries === undefined) {
-      entries = await this.deps.client.resolveTransferEventIndices(
-        record.transaction_id,
-        record.token_info.address,
-        state.options.address,
-      );
-      logCache.set(cacheKey, entries);
-    }
-    return pickEventIndex(entries, record.value, (index) =>
-      state.seenEvents.has(eventKey(record.transaction_id, index)),
-    );
+    scan: EventIndexScan,
+  ): Promise<EventIndexResolution> {
+    return resolveEventIndex({
+      client: this.deps.client,
+      record,
+      depositAddress: state.options.address,
+      scan,
+      seenEvents: state.seenEvents,
+      book: state.eventIndexBook,
+      now: this.clock().getTime(),
+    });
   }
 
   private async checkFinality(state: MonitorState): Promise<void> {
