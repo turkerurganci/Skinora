@@ -74,6 +74,11 @@ Mnemonic: BIP-39 referans "abandon ×11 about", parola boş. İndeks-0 TRON öze
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 
+## Doğrulama sonucu (2026-10-18)
+
+- **✓ PASS** (head `cf99cdb`, temiz bağlamlı doğrulama alt ajanı). Üçüncü, bağımsız bir uygulamayla (yalnız `node:crypto` + elle Keccak/base58check/EIP-55) 14 vektörün 14'ü eşleşti; eski iç içe yolda main'in 5 eski vektörü de üretildi (kusur doğrulandı). Mutasyon probu: 8 bozma öldürüldü, 4 eşdeğer yaşadı. Sidecar 506/506, backend 25/25. Sıcak cüzdan ve kilit hesabı bu tohumdan türemiyor (600 adres tarandı).
+- **Bloke etmeyen bulgular T150'ye devredildi:** (1) `masterNodeFromPhrase` yalnız testlerde kullanılıyor, `getRoot` aynı mantığı ayrıca kuruyor — Ethereum vektörleri üretim yolunu sınamıyor; (2) `getRoot` içindeki `assertMasterNode` çağrısı servis üzerinden test edilmiyor. T150 kabul kriterine eklendi.
+
 ## Altyapı Değişiklikleri
 
 - Migration: Yok (`PaymentAddress` türetme yolunu saklamıyor; yalnız adres + indeks)

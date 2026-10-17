@@ -4798,6 +4798,11 @@ Task T150: Ethereum servis iskeleti
       anahtarları yalnız bu serviste; yakıt cüzdanının anahtarı sıcak
       cüzdanınkinden ayrı (öneriyle kaydedildi — ⚠)
     - Sağlık, metrikler, iç anahtar zorunlu (anahtarsız açılmaz)
+    - Kök düğüm TRON ve Ethereum için tek bir üretim fonksiyonundan kuruluyor
+      (T143'ün `masterNodeFromPhrase` yardımcısı `getRoot` ile birleşir);
+      T143'ün Ethereum bilinen-cevap vektörleri bu üretim yolundan geçiyor;
+      kök-düğüm kontrolünün (`HD_ROOT_NOT_MASTER`) servis üzerinden testi var
+      (T143 doğrulamasının bloke etmeyen iki bulgusu)
   Test beklentisi: Unit
 
 Task T151: Ethereum ödeme izleyicisi [RİSKLİ]
@@ -5161,7 +5166,7 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | Satıcının kabul ettiği ağlar (`TransactionNetworkOption`) ve alıcının ağ seçimi (`Transaction.Network`); depozit seçilen ağda, HD indeksi ağ başına; payout ve iade aynı ağdan | 02 §4.2, 03 §2.2, §3.2, 06 §1.4, 07 §7.2, §7.4, §7.6 | T147 | |
 | Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, geç ödeme, fazladan transfer) alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi); `AmountValidationService` `FromAddress` kullanmaz | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |
 | Alıcının ödeyeceği toplam 2 ondalık; gösterilen = beklenen | 02 §5, 06 §8.3, 07 §1.3, 09 §7.2 | T144 | |
-| TRON HD yolu standart `m/44'/195'/0'/0/{i}`; Ethereum ayrı tohum + `m/44'/60'/0'/0/{i}` (K7) | 05 §3.3, §3.5, 08 §3.2, §3.7.2, secrets/README.md | T143, T150 | |
+| TRON HD yolu standart `m/44'/195'/0'/0/{i}`; Ethereum ayrı tohum + `m/44'/60'/0'/0/{i}` (K7) | 05 §3.3, §3.5, 08 §3.2, §3.7.2, secrets/README.md | T143, T150 | kısmen — TRON ✓ T143 (PR #338); Ethereum T150 |
 | Ağ başına servis sözleşmesi: her ağın ayrı servisi, webhook yükünde `network`, ağ başına ayarlar, ağ başına sağlık dondurması | 05 §3.3a, 06 §1.4 | T148 | |
 | TRON ağ ücreti satırı (K8): kabul anında sabitlenir, 2 haneye yukarı; payout satıcıya mevcut %10 kuralıyla; sweep öncesi iadede tam iade; kabul anında tahmin yoksa ağ başına sabit yedek, satır sonradan düzeltilmez (öneriyle kaydedildi — ⚠) | 02 §4.6, §4.7, §5, 06 §3.5, §8.3, 07 §7.5, 08 §3.1a | T149 | |
 | Sweep'ten sonra yapılan iadede TRON ağ ücreti satırının işlenişi (T141'de açık bırakıldı) | 02 §4.6, 08 §3.1a | T149 | |
