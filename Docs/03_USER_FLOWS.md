@@ -139,7 +139,7 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
 4. **TRON'da** gas fee komisyonun %10'unu (veya admin'in belirlediği eşiği) aşıyor mu kontrol edilir:
    - **Aşmıyorsa →** Gas fee komisyondan karşılanır
    - **Aşıyorsa →** Gas fee satıcının payından kesilir
-   - **Ethereum'da** (F8 hedefi) gas fee'yi platform bir tavana kadar karşılar, satıcının payından kesilmez; tavanın üstünde payout bekler ve admin'e alarm gider (02 §4.7, öneriyle kaydedildi — ⚠)
+   - **Ethereum'da** (F8 hedefi) gas fee'yi platform bir tavana kadar karşılar, satıcının payından kesilmez; tavanın üstünde payout bekler ve admin'e alarm gider (öneriyle kaydedildi — ⚠) (02 §4.7)
 5. Platform kalan tutarı, alıcının ödediği ağdan, satıcının **o ağdaki** cüzdan adresine gönderir (ağlar arası para taşıma yok — 02 §4.2)
    - **Ödeme gönderimi başarısız olursa →** Sistem otomatik yeniden dener. Tekrarlayan başarısızlıkta admin'e bildirim gider. İşlem COMPLETED'a geçmez, ödeme başarılı olana kadar bekler.
 6. Satıcıya "Ödemeniz gönderildi" bildirimi gider

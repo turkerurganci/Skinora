@@ -51,7 +51,7 @@ Versioning: URL prefix tabanlı (05 §2.2).
 
 ### 1.3 Ağ Boyutu — F8 Hedef Sözleşmesi (11 §F8; T141)
 
-Bugünkü API tek ağlıdır: hiçbir istek ağ taşımaz ve `payment.network` yalnız gösterim metnidir (`"Tron (TRC-20)"`). F8 hedefinde ağ, sözleşmenin açık bir alanıdır. Aşağıdaki kurallar ilgili uç bölümlerindeki "F8 hedefi" notlarıyla bağlanır; biçim (alan adları, hata kodları) T141 yapımcı önerisidir (öneriyle kaydedildi — ⚠; 11 §F8 "F8 veri modeli ve API biçimi").
+Bugünkü API tek ağlıdır: hiçbir istek ağ taşımaz ve `payment.network` yalnız gösterim metnidir (`"Tron (TRC-20)"`). F8 hedefinde ağ, sözleşmenin açık bir alanıdır. Aşağıdaki kurallar ilgili uç bölümlerindeki "F8 hedefi" notlarıyla bağlanır; biçim (alan adları, hata kodları) T141 yapımcı önerisidir (öneriyle kaydedildi — ⚠) (11 §F8 "F8 veri modeli ve API biçimi").
 
 | Konu | Hedef sözleşme | Görev |
 |---|---|---|

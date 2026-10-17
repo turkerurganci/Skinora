@@ -442,7 +442,7 @@ Tüm blockchain işlemleri (adres üretimi, ödeme izleme, transfer, iade) ağ b
 | **Ağ seçimi** | Satıcı ilanda kabul ettiği ağları seçer; yalnız kayıtlı ödeme adresi olan ağları seçebilir. Alıcı kabul ederken bunlardan birini seçer (K3) | T147 |
 | **Aynı ağ kuralı** | Ödeme, satıcıya payout ve her türlü iade, alıcının seçtiği ağda yapılır. Ağlar arası para taşıma, köprü ya da borsa üzerinden dengeleme **yoktur** (K3). Her ağın sıcak ve soğuk cüzdanı ayrıdır; bir ağın bakiyesi diğerinin ödemesini karşılamaz | T147, T148 |
 | **Ağ başına servis** | Her ağın kendi servisi, kendi konteyneri ve kendi tohumu vardır (K7). Backend her ağın servisiyle ayrı konuşur; webhook yükü ağı taşır (05 §3.3a). Bir ağın servisi ya da zinciri durursa yalnız o ağın işlemlerinin timeout'u donar; diğer ağ çalışır | T148 |
-| **Depozit adresi** | **İşlem başınadır** (öneriyle kaydedildi — ⚠; 11 §F8 "(b)"). Seçilen ağda, o ağın HD indeksinden türer; HD indeksi ağ başına monoton artar | T147 |
+| **Depozit adresi** | **İşlem başınadır** (öneriyle kaydedildi — ⚠) (11 §F8 "(b)"). Seçilen ağda, o ağın HD indeksinden türer; HD indeksi ağ başına monoton artar | T147 |
 | **Ödeme kabulü** | TRON: 20 blok (§3.4). Ethereum: blok **`finalized`** olunca (~15 dk), kısa yol yok (K5) | T148, T151 |
 | **İade hedefi** | Reddedilen ödemeler de dahil her iade, alıcının kabul anında **o ağ için** kaydettiği iade adresine gider (K9; §3.4 "Refund politikası") | T146, T147 |
 | **Ağ ücreti** | TRON: sweep ücreti alıcıya (kabul anında ayrı satır), payout ücreti satıcıya mevcut %10 kuralıyla (K8; §3.1a, 02 §4.6–§4.7). Ethereum: sweep ve payout ücretini platform bir tavana kadar üstlenir (⚠; §3.7.7). İade her iki ağda ölçülen ücreti düşer | T149 |
@@ -585,7 +585,7 @@ function transfer(address to, uint256 value) returns (bool)
 >
 > **Enerji kilitleme oranı ağ genelinde bir değerdir ve sabit değildir:** `TotalEnergyLimit / TotalEnergyWeight`. Mainnet'te **~9,57** (2026-08-29) ve **~9,52** (2026-09-16) Energy / kilitlenen TRX, Nile'da **~73,7**. Bu yüzden devredilecek miktar bir ayar değil, **her transfer için** güncel orandan hesaplanır (aşağıdaki model). Eski sabit 200 TRX'lik delegasyon mainnet'te bir transferin **~%3'ünü** karşılıyordu ve testnet provası bunu **gizliyordu**.
 
-> **F8 — hibrit kararın yerini K4/K8 aldı; kilit kodu uykuda (öneriyle kaydedildi — ⚠; 11 §F8).** TRON'da sweep ücretini alıcı (kabul anında sabitlenen "TRON ağ ücreti" satırı, §3.1a), payout ücretini satıcı (02 §4.7) öder; platformun TRX kilitleyerek ücreti düşürmesine gerek kalmaz. Kilit kodu (devretme planı, kilit hesabı, kalıcı devretme) **silinmez**: açık bir kapama anahtarının arkasında **varsayılan kapalı** durur ve kullanılmazsa sonra kaldırılır. Anahtar bugün kodda yoktur — `STAKE_ACCOUNT_ADDRESS` boşken sıcak cüzdan kendi kilidini kullanır, kilidi yoksa plan yakmaya düşer; anahtarı T149 ekler. Anahtar kapalıyken her sweep, iade ve payout aşağıdaki "Yakma" sütunuyla çalışır. Aşağıdaki hibrit metin ve DEPLOY_RUNBOOK §C.2 yalnız anahtar açılırsa geçerlidir.
+> **F8 — hibrit kararın yerini K4/K8 aldı; kilit kodu uykuda (öneriyle kaydedildi — ⚠) (11 §F8).** TRON'da sweep ücretini alıcı (kabul anında sabitlenen "TRON ağ ücreti" satırı, §3.1a), payout ücretini satıcı (02 §4.7) öder; platformun TRX kilitleyerek ücreti düşürmesine gerek kalmaz. Kilit kodu (devretme planı, kilit hesabı, kalıcı devretme) **silinmez**: açık bir kapama anahtarının arkasında **varsayılan kapalı** durur ve kullanılmazsa sonra kaldırılır. Anahtar bugün kodda yoktur — `STAKE_ACCOUNT_ADDRESS` boşken sıcak cüzdan kendi kilidini kullanır, kilidi yoksa plan yakmaya düşer; anahtarı T149 ekler. Anahtar kapalıyken her sweep, iade ve payout aşağıdaki "Yakma" sütunuyla çalışır. Aşağıdaki hibrit metin ve DEPLOY_RUNBOOK §C.2 yalnız anahtar açılırsa geçerlidir.
 
 **Enerji kararı — HİBRİT (proje sahibi, 2026-09-16; F8'de yerini K4/K8 aldı, yukarıdaki not).** Beklenen günlük taban hacim kadar TRX ENERGY için kilitlenir; kilidin karşılayamadığı her transfer yakar. Kilit 2026-09-17'den beri ayrı bir **kilit hesabında** durur ve ödeme payı oradan sıcak cüzdana **kalıcı** devredilir (2026-09-18 — aşağıdaki "Kilidin sahibi ve imzacısı"). Ölçülen maliyetler (2026-09-16, TRX 0,336 $, `getEnergyFee` 100 SUN):
 
@@ -718,7 +718,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 |-------|---------|
 | Token, desteklenen allowlist'te (USDT/USDC kontratları) ve beklenen tokenden farklı | `WRONG_TOKEN_INCOMING` → otomatik iade denemesi (§3.4 tutar doğrulama tablosu) |
 | Token, desteklenen allowlist'te değil (bilinmeyen/spam token) | `SPAM_TOKEN_INCOMING` → ignore + log. Otomatik iade yapılmaz — TRX/Energy israfı önlenir. Admin dashboard'da görünür, manuel değerlendirme opsiyonel. |
-| Transfer tutarı < minimum iade eşiği (2× gas fee) | Desteklenen token olsa bile iade yapılmaz — log + admin alert. F8 hedefinde eşik çarpanı ağ başına bir ayardır (öneriyle kaydedildi — ⚠; T149) |
+| Transfer tutarı < minimum iade eşiği (2× gas fee) | Desteklenen token olsa bile iade yapılmaz — log + admin alert. F8 hedefinde eşik çarpanı ağ başına bir ayardır (öneriyle kaydedildi — ⚠) (T149) |
 
 > **Gerekçe:** Deposit adresleri public olduğundan üçüncü taraflar spam/dust token gönderebilir. Tüm bilinmeyen token'ları otomatik refund'a sokmak TRX/Energy tüketir ve operasyonel DoS yüzeyi oluşturur. Yalnızca desteklenen token'lar (USDT/USDC) otomatik iade akışına girer. F8'de ödeme token'ı yalnız USDT olduğu için izin listesindeki "beklenenden farklı" token pratikte USDC'dir. Ethereum'un izin listesi aynı kuralı izler (§3.7.4).
 
@@ -808,7 +808,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 
 ### 3.7 Ethereum (ERC-20) Entegrasyonu — F8 hedefi
 
-> **Durum:** Bu bölüm **hedef sözleşmedir**; Ethereum kodu henüz yoktur. Kaynak kararlar 11 §F8 K1–K9 ve T141 yönetici kararlarıdır (⚠ işaretliler). Kararla gelmeyen uygulama ayrıntıları — yakıtın bir bloğa girmesinin yeterli sayılması, imzalanan işlem tipleri (0 ve 2), giden işlemin `finalized`'da `CONFIRMED` kaydı, açılışta USDT ücret anahtarı kontrolü, kara liste için yayın öncesi `eth_call` simülasyonu — T141 yapımcı önerisidir (öneriyle kaydedildi — ⚠; 11 §F8 "Ethereum akış ayrıntıları"). Sağlayıcı seçimi, ücret tavanı, bekleme eşiği ve `finalized` gecikmesi gibi sayılar T142'nin ölçümünden gelir; bu bölüm sayı yerine kuralı yazar ve sayının hangi görevden geleceğini söyler. Akışın her adımı TRON'daki karşılığıyla aynı iş kuralını izler (02 §4, 05 §3.3); farklar yalnız zincirin kendisinden doğar.
+> **Durum:** Bu bölüm **hedef sözleşmedir**; Ethereum kodu henüz yoktur. Kaynak kararlar 11 §F8 K1–K9 ve T141 yönetici kararlarıdır (⚠ işaretliler). Kararla gelmeyen uygulama ayrıntıları — yakıtın bir bloğa girmesinin yeterli sayılması, imzalanan işlem tipleri (0 ve 2), giden işlemin `finalized`'da `CONFIRMED` kaydı, açılışta USDT ücret anahtarı kontrolü, kara liste için yayın öncesi `eth_call` simülasyonu — T141 yapımcı önerisidir (öneriyle kaydedildi — ⚠) (11 §F8 "Ethereum akış ayrıntıları"). Sağlayıcı seçimi, ücret tavanı, bekleme eşiği ve `finalized` gecikmesi gibi sayılar T142'nin ölçümünden gelir; bu bölüm sayı yerine kuralı yazar ve sayının hangi görevden geleceğini söyler. Akışın her adımı TRON'daki karşılığıyla aynı iş kuralını izler (02 §4, 05 §3.3); farklar yalnız zincirin kendisinden doğar.
 
 #### 3.7.1 Ağ, token ve sağlayıcı
 
@@ -834,7 +834,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 
 #### 3.7.3 Depozit adresi (K6)
 
-- Her işlem için Ethereum tohumundan sıradan bir HD adresi türetilir. **İşlem başınadır** (öneriyle kaydedildi — ⚠; 11 §F8 "(b)"): kullanıcı başına sabit adres borsaların 2 ondalıkla gönderdiği tutarda ödemeyi işleme bağlamayı bozar, geç ödemeyi belirsizleştirir ve birkaç işlemin 8 günlük bekleyişini tek adreste karıştırır.
+- Her işlem için Ethereum tohumundan sıradan bir HD adresi türetilir. **İşlem başınadır** (öneriyle kaydedildi — ⚠) (11 §F8 "(b)"): kullanıcı başına sabit adres borsaların 2 ondalıkla gönderdiği tutarda ödemeyi işleme bağlamayı bozar, geç ödemeyi belirsizleştirir ve birkaç işlemin 8 günlük bekleyişini tek adreste karıştırır.
 - Akıllı kontrat **kullanılmaz** (CREATE2, EIP-7702, `permit` yok — K6). Depozit sıradan bir hesaptır; aynı anahtar her EVM ağında aynı adresi kontrol eder, bu yüzden yanlış EVM ağına gelen para kurtarılabilir kalır.
 - Depozit adresi alıcıya `SELLER_CONFIRMED`'dan sonra gösterilir (02 §2.2 adım 3) — TRON'la aynı.
 
