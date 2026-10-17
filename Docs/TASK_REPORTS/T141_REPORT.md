@@ -93,9 +93,10 @@ Yalnız doküman. Kod, migration, config, Docker değişikliği yok.
 
 - Branch: `task/T141-cok-agli-odeme-dokuman` (origin/main `2e70a03`'tan)
 - Commit: `960cb11` — T141: çok ağlı ödemenin karar tabanı dokümanlara işlendi (K7–K9, ağ boyutu, Ethereum akışı)
-- Commit: rapor + status + memory (bu commit)
+- Commit: `24a3bd2` — T141: rapor, status (⏳ + #334 merge teyidi), repo hafızası; ⚠ işaretleri tam biçime çekildi
+- Commit: CI run zincirinin rapora yazılması (bu commit — yalnız bu rapor)
 - PR: #337
-- CI: PR run'ı izleniyor — sonuç yönetici raporunda ve PR kontrollerinde
+- CI (PR, `pull_request`): `960cb11` → [`39067628786`](https://github.com/turkerurganci/Skinora/actions/runs/39067628786) ✓ success · `24a3bd2` → [`39067906983`](https://github.com/turkerurganci/Skinora/actions/runs/39067906983) ✓ success (docs-only: "Detect changed paths" + "1. Lint" + "CI Gate" koştu, kod adımları yol filtresiyle atlandı). Bu commit'in run'ı PR kontrollerinde
 
 ## Known Limitations / Follow-up
 
