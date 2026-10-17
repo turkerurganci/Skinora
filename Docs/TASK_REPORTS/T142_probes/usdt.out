@@ -1,0 +1,52 @@
+2026-10-17T21:32:32.726Z endpoint https://ethereum.publicnode.com finalized block 26214908 ts 2026-10-17T21:17:11.000Z
+2026-10-17T21:32:32.809Z USDT codeBytes 11075
+2026-10-17T21:32:32.896Z USDT decimals 0x0000000000000000000000000000000000000000000000000000000000000006 => 6
+2026-10-17T21:32:32.978Z USDT name 0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a5465746865722055534400000000000000000000000000000000000000000000
+2026-10-17T21:32:33.072Z USDT symbol 0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000045553445400000000000000000000000000000000000000000000000000000000
+2026-10-17T21:32:33.155Z USDT totalSupply 0x0000000000000000000000000000000000000000000000000139b6c6e4044e7c => 88302633055702652
+2026-10-17T21:32:33.235Z USDT basisPointsRate 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:33.322Z USDT maximumFee 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:33.398Z USDT paused 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:33.481Z USDT deprecated 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:33.560Z USDT upgradedAddress 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:33.641Z USDT owner 0x000000000000000000000000c6cde7c39eb2f0f0095f41570af89efc2c1ea828 => 1134972014892877928712953364190483482895670224936
+2026-10-17T21:32:33.719Z USDC codeBytes 2186
+2026-10-17T21:32:33.799Z USDC decimals 0x0000000000000000000000000000000000000000000000000000000000000006 => 6
+2026-10-17T21:32:33.879Z USDC name 0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000855534420436f696e000000000000000000000000000000000000000000000000
+2026-10-17T21:32:33.955Z USDC symbol 0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000045553444300000000000000000000000000000000000000000000000000000000
+2026-10-17T21:32:34.042Z USDC totalSupply 0x00000000000000000000000000000000000000000000000000aab58abf9d52a4 => 48050353565684388
+2026-10-17T21:32:34.136Z USDC paused 0x0000000000000000000000000000000000000000000000000000000000000000 => 0
+2026-10-17T21:32:34.246Z USDC owner 0x000000000000000000000000fcb19e6a322b27c06842a71e8c725399f049ae3a => 1442626706025541066953462928744535818996053290554
+2026-10-17T21:32:34.324Z USDC proxy impl slot 0x00000000000000000000000043506849d7c04f9138d1a2050bbf3a0c054402dd
+2026-10-17T21:32:34.401Z USDT holder 0x28c6c06298d514db089934071355e5743bf21d60 balance raw 993381341221223
+2026-10-17T21:32:34.494Z USDT eth_call transfer(fresh,1) from holder -> returnData "0x" len 0
+2026-10-17T21:32:34.693Z USDT estimateGas transfer(fresh,1) 64007
+2026-10-17T21:32:34.773Z USDC holder 0x28c6c06298d514db089934071355e5743bf21d60 balance raw 52017308220
+2026-10-17T21:32:34.852Z USDC eth_call transfer(fresh,1) from holder -> returnData "0x0000000000000000000000000000000000000000000000000000000000000001" len 32
+2026-10-17T21:32:34.930Z USDC estimateGas transfer(fresh,1) 63054
+2026-10-17T21:32:35.013Z getLogs err 26164909 26214908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:36.104Z getLogs err 26114909 26164908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:37.201Z getLogs err 26064909 26114908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:38.283Z getLogs err 26014909 26064908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:39.362Z getLogs err 25964909 26014908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:40.440Z getLogs err 25914909 25964908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:41.519Z getLogs err 25864909 25914908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:42.599Z getLogs err 25814909 25864908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:43.680Z getLogs err 25764909 25814908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:44.784Z getLogs err 25714909 25764908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:45.789Z USDT AddedBlackList events found 0
+2026-10-17T21:32:45.863Z getLogs err 26164909 26214908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:46.949Z getLogs err 26114909 26164908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:48.034Z getLogs err 26064909 26114908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:49.117Z getLogs err 26014909 26064908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:50.228Z getLogs err 25964909 26014908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:51.343Z getLogs err 25914909 25964908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:52.429Z getLogs err 25864909 25914908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:53.507Z getLogs err 25814909 25864908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:54.585Z getLogs err 25764909 25814908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:55.674Z getLogs err 25714909 25764908 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:56.682Z USDC Blacklisted events found 0
+2026-10-17T21:32:56.758Z USDT Params full-range getLogs err {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:56.832Z USDT Pause full-range getLogs err {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:56.907Z USDT Unpause full-range getLogs err {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:32:56.907Z done; rate-limit retries 0

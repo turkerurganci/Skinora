@@ -1,0 +1,10 @@
+{"t":"2026-10-17T21:42:44.542Z","url":"https://ethereum-rpc.publicnode.com","mode":"sequential60","ok":60,"seconds":"4.9","rps":"12.2","errs":{}}
+{"t":"2026-10-17T21:42:47.790Z","url":"https://ethereum-rpc.publicnode.com","mode":"parallel30","ok":30,"errs":{}}
+{"t":"2026-10-17T21:42:55.470Z","url":"https://eth.drpc.org","mode":"sequential60","ok":60,"seconds":"4.7","rps":"12.8","errs":{}}
+{"t":"2026-10-17T21:42:58.731Z","url":"https://eth.drpc.org","mode":"parallel30","ok":30,"errs":{}}
+{"t":"2026-10-17T21:43:06.105Z","url":"https://mainnet.gateway.tenderly.co","mode":"sequential60","ok":60,"seconds":"4.4","rps":"13.7","errs":{}}
+{"t":"2026-10-17T21:43:09.336Z","url":"https://mainnet.gateway.tenderly.co","mode":"parallel30","ok":30,"errs":{}}
+{"t":"2026-10-17T21:43:17.165Z","url":"https://ethereum-sepolia-rpc.publicnode.com","mode":"sequential60","ok":60,"seconds":"4.8","rps":"12.4","errs":{}}
+{"t":"2026-10-17T21:43:20.405Z","url":"https://ethereum-sepolia-rpc.publicnode.com","mode":"parallel30","ok":30,"errs":{}}
+{"t":"2026-10-17T21:43:27.770Z","url":"https://sepolia.gateway.tenderly.co","mode":"sequential60","ok":60,"seconds":"4.4","rps":"13.8","errs":{}}
+{"t":"2026-10-17T21:43:31.001Z","url":"https://sepolia.gateway.tenderly.co","mode":"parallel30","ok":30,"errs":{}}

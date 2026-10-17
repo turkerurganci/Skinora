@@ -1,0 +1,102 @@
+start 2026-10-17T21:31:06.302Z net mainnet finalized 26214908 realRecipients 20 seedLogs 8435
+{"t":"2026-10-17T21:31:06.393Z","url":"https://ethereum-rpc.publicnode.com","list":1,"range":10,"ms":89,"reqBytes":362,"res":"ok logs=9"}
+{"t":"2026-10-17T21:31:07.680Z","url":"https://ethereum-rpc.publicnode.com","list":1,"range":100,"ms":85,"reqBytes":362,"res":"ok logs=56"}
+{"t":"2026-10-17T21:31:09.022Z","url":"https://ethereum-rpc.publicnode.com","list":1,"range":1000,"ms":132,"reqBytes":362,"res":"ok logs=337"}
+{"t":"2026-10-17T21:31:10.549Z","url":"https://ethereum-rpc.publicnode.com","list":1,"range":5000,"ms":321,"reqBytes":362,"res":"ok logs=1477"}
+{"t":"2026-10-17T21:31:11.844Z","url":"https://ethereum-rpc.publicnode.com","list":1,"range":10000,"ms":79,"reqBytes":362,"res":"ERR 403 -32602 Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+{"t":"2026-10-17T21:31:13.139Z","url":"https://ethereum-rpc.publicnode.com","list":100,"range":10,"ms":87,"reqBytes":7195,"res":"ok logs=98"}
+{"t":"2026-10-17T21:31:14.456Z","url":"https://ethereum-rpc.publicnode.com","list":100,"range":100,"ms":108,"reqBytes":7195,"res":"ok logs=900"}
+{"t":"2026-10-17T21:31:16.072Z","url":"https://ethereum-rpc.publicnode.com","list":100,"range":1000,"ms":401,"reqBytes":7195,"res":"ok logs=8848"}
+{"t":"2026-10-17T21:31:18.912Z","url":"https://ethereum-rpc.publicnode.com","list":100,"range":5000,"ms":1550,"reqBytes":7195,"res":"ok logs=38320"}
+{"t":"2026-10-17T21:31:20.200Z","url":"https://ethereum-rpc.publicnode.com","list":100,"range":10000,"ms":76,"reqBytes":7195,"res":"ERR 403 -32602 Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+{"t":"2026-10-17T21:31:21.551Z","url":"https://ethereum-rpc.publicnode.com","list":1000,"range":10,"ms":143,"reqBytes":69295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:31:22.927Z","url":"https://ethereum-rpc.publicnode.com","list":1000,"range":100,"ms":169,"reqBytes":69295,"res":"ok logs=900"}
+{"t":"2026-10-17T21:31:24.224Z","url":"https://ethereum-rpc.publicnode.com","list":1000,"range":1000,"ms":82,"reqBytes":69295,"res":"ERR 403 -32602 Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+{"t":"2026-10-17T21:31:27.590Z","url":"https://ethereum-rpc.publicnode.com","list":1000,"range":5000,"ms":2068,"reqBytes":69295,"res":"ok logs=38320"}
+{"t":"2026-10-17T21:31:28.882Z","url":"https://ethereum-rpc.publicnode.com","list":1000,"range":10000,"ms":79,"reqBytes":69295,"res":"ERR 403 -32602 Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+{"t":"2026-10-17T21:31:31.084Z","url":"https://ethereum-rpc.publicnode.com","list":5000,"range":10,"ms":963,"reqBytes":345295,"res":"ERR 200 -32602 query exceeds the maximum of 1000 addresses or topics per search position"}
+{"t":"2026-10-17T21:31:32.844Z","url":"https://ethereum-rpc.publicnode.com","list":5000,"range":100,"ms":555,"reqBytes":345295,"res":"ERR 200 -32602 query exceeds the maximum of 1000 addresses or topics per search position"}
+{"t":"2026-10-17T21:31:34.450Z","url":"https://ethereum-rpc.publicnode.com","list":5000,"range":1000,"ms":399,"reqBytes":345295,"res":"ERR 200 -32602 query exceeds the maximum of 1000 addresses or topics per search position"}
+{"t":"2026-10-17T21:31:36.057Z","url":"https://ethereum-rpc.publicnode.com","list":5000,"range":5000,"ms":398,"reqBytes":345295,"res":"ERR 200 -32602 query exceeds the maximum of 1000 addresses or topics per search position"}
+{"t":"2026-10-17T21:31:37.531Z","url":"https://ethereum-rpc.publicnode.com","list":5000,"range":10000,"ms":264,"reqBytes":345295,"res":"ERR 403 -32602 Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+{"t":"2026-10-17T21:31:38.965Z","url":"https://eth.drpc.org","list":1,"range":10,"ms":230,"reqBytes":362,"res":"ok logs=9"}
+{"t":"2026-10-17T21:31:40.257Z","url":"https://eth.drpc.org","list":1,"range":100,"ms":91,"reqBytes":362,"res":"ok logs=56"}
+{"t":"2026-10-17T21:31:41.549Z","url":"https://eth.drpc.org","list":1,"range":1000,"ms":85,"reqBytes":362,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:42.837Z","url":"https://eth.drpc.org","list":1,"range":5000,"ms":77,"reqBytes":362,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:44.132Z","url":"https://eth.drpc.org","list":1,"range":10000,"ms":87,"reqBytes":362,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:45.434Z","url":"https://eth.drpc.org","list":100,"range":10,"ms":92,"reqBytes":7195,"res":"ok logs=98"}
+{"t":"2026-10-17T21:31:46.788Z","url":"https://eth.drpc.org","list":100,"range":100,"ms":137,"reqBytes":7195,"res":"ok logs=900"}
+{"t":"2026-10-17T21:31:48.081Z","url":"https://eth.drpc.org","list":100,"range":1000,"ms":92,"reqBytes":7195,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:49.362Z","url":"https://eth.drpc.org","list":100,"range":5000,"ms":78,"reqBytes":7195,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:50.667Z","url":"https://eth.drpc.org","list":100,"range":10000,"ms":101,"reqBytes":7195,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:52.047Z","url":"https://eth.drpc.org","list":1000,"range":10,"ms":166,"reqBytes":69295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:31:53.438Z","url":"https://eth.drpc.org","list":1000,"range":100,"ms":178,"reqBytes":69295,"res":"ok logs=900"}
+{"t":"2026-10-17T21:31:54.790Z","url":"https://eth.drpc.org","list":1000,"range":1000,"ms":145,"reqBytes":69295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:56.156Z","url":"https://eth.drpc.org","list":1000,"range":5000,"ms":159,"reqBytes":69295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:57.495Z","url":"https://eth.drpc.org","list":1000,"range":10000,"ms":139,"reqBytes":69295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:31:59.247Z","url":"https://eth.drpc.org","list":5000,"range":10,"ms":511,"reqBytes":345295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:32:00.974Z","url":"https://eth.drpc.org","list":5000,"range":100,"ms":512,"reqBytes":345295,"res":"ok logs=900"}
+{"t":"2026-10-17T21:32:02.764Z","url":"https://eth.drpc.org","list":5000,"range":1000,"ms":587,"reqBytes":345295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:32:04.426Z","url":"https://eth.drpc.org","list":5000,"range":5000,"ms":445,"reqBytes":345295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:32:06.172Z","url":"https://eth.drpc.org","list":5000,"range":10000,"ms":533,"reqBytes":345295,"res":"ERR 400 35 ranges over 10000 blocks are not supported on free plan"}
+{"t":"2026-10-17T21:32:07.557Z","url":"https://mainnet.gateway.tenderly.co","list":1,"range":10,"ms":175,"reqBytes":362,"res":"ok logs=9"}
+{"t":"2026-10-17T21:32:08.899Z","url":"https://mainnet.gateway.tenderly.co","list":1,"range":100,"ms":140,"reqBytes":362,"res":"ok logs=56"}
+{"t":"2026-10-17T21:32:10.530Z","url":"https://mainnet.gateway.tenderly.co","list":1,"range":1000,"ms":418,"reqBytes":362,"res":"ok logs=337"}
+{"t":"2026-10-17T21:32:12.136Z","url":"https://mainnet.gateway.tenderly.co","list":1,"range":5000,"ms":397,"reqBytes":362,"res":"ok logs=1477"}
+{"t":"2026-10-17T21:32:13.722Z","url":"https://mainnet.gateway.tenderly.co","list":1,"range":10000,"ms":368,"reqBytes":362,"res":"ok logs=3185"}
+{"t":"2026-10-17T21:32:15.015Z","url":"https://mainnet.gateway.tenderly.co","list":100,"range":10,"ms":89,"reqBytes":7195,"res":"ok logs=98"}
+{"t":"2026-10-17T21:32:16.288Z","url":"https://mainnet.gateway.tenderly.co","list":100,"range":100,"ms":65,"reqBytes":7195,"res":"ERR 429 -32005 rate limit exceeded"}
+{"t":"2026-10-17T21:32:18.025Z","url":"https://mainnet.gateway.tenderly.co","list":100,"range":1000,"ms":511,"reqBytes":7195,"res":"ok logs=8848"}
+{"t":"2026-10-17T21:32:19.487Z","url":"https://mainnet.gateway.tenderly.co","list":100,"range":5000,"ms":252,"reqBytes":7195,"res":"ERR 200 -32602 invalid params"}
+{"t":"2026-10-17T21:32:21.194Z","url":"https://mainnet.gateway.tenderly.co","list":100,"range":10000,"ms":502,"reqBytes":7195,"res":"ERR 200 -32602 invalid params"}
+{"t":"2026-10-17T21:32:22.532Z","url":"https://mainnet.gateway.tenderly.co","list":1000,"range":10,"ms":131,"reqBytes":69295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:32:23.893Z","url":"https://mainnet.gateway.tenderly.co","list":1000,"range":100,"ms":152,"reqBytes":69295,"res":"ok logs=900"}
+{"t":"2026-10-17T21:32:25.706Z","url":"https://mainnet.gateway.tenderly.co","list":1000,"range":1000,"ms":594,"reqBytes":69295,"res":"ok logs=8848"}
+{"t":"2026-10-17T21:32:27.130Z","url":"https://mainnet.gateway.tenderly.co","list":1000,"range":5000,"ms":216,"reqBytes":69295,"res":"ERR 200 -32602 invalid params"}
+{"t":"2026-10-17T21:32:28.565Z","url":"https://mainnet.gateway.tenderly.co","list":1000,"range":10000,"ms":220,"reqBytes":69295,"res":"ERR 200 -32602 invalid params"}
+{"t":"2026-10-17T21:32:30.271Z","url":"https://mainnet.gateway.tenderly.co","list":5000,"range":10,"ms":462,"reqBytes":345295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:32:31.946Z","url":"https://mainnet.gateway.tenderly.co","list":5000,"range":100,"ms":472,"reqBytes":345295,"res":"ERR 200 -32002 not supported"}
+{"t":"2026-10-17T21:32:33.605Z","url":"https://mainnet.gateway.tenderly.co","list":5000,"range":1000,"ms":444,"reqBytes":345295,"res":"ERR 200 -32002 not supported"}
+{"t":"2026-10-17T21:32:35.043Z","url":"https://mainnet.gateway.tenderly.co","list":5000,"range":5000,"ms":226,"reqBytes":345295,"res":"ERR 200 -32002 not supported"}
+{"t":"2026-10-17T21:32:36.470Z","url":"https://mainnet.gateway.tenderly.co","list":5000,"range":10000,"ms":225,"reqBytes":345295,"res":"ERR 200 -32002 not supported"}
+{"t":"2026-10-17T21:32:38.251Z","url":"https://1rpc.io/eth","list":1,"range":10,"ms":574,"reqBytes":362,"res":"ERR 200 -32000 method not available"}
+{"t":"2026-10-17T21:32:39.858Z","url":"https://1rpc.io/eth","list":1,"range":100,"ms":401,"reqBytes":362,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:41.410Z","url":"https://1rpc.io/eth","list":1,"range":1000,"ms":343,"reqBytes":362,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:42.814Z","url":"https://1rpc.io/eth","list":1,"range":5000,"ms":199,"reqBytes":362,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:44.183Z","url":"https://1rpc.io/eth","list":1,"range":10000,"ms":154,"reqBytes":362,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:45.791Z","url":"https://1rpc.io/eth","list":100,"range":10,"ms":393,"reqBytes":7195,"res":"ERR 301 <html> <head><title>301 Moved Permanently</title></head> <body> <center><h1>301 Moved Permanently</h1></center> <hr><center>nginx/1.24.0 (Ubuntu)</center> </bod"}
+{"t":"2026-10-17T21:32:47.500Z","url":"https://1rpc.io/eth","list":100,"range":100,"ms":500,"reqBytes":7195,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:48.966Z","url":"https://1rpc.io/eth","list":100,"range":1000,"ms":260,"reqBytes":7195,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:50.375Z","url":"https://1rpc.io/eth","list":100,"range":5000,"ms":196,"reqBytes":7195,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:51.776Z","url":"https://1rpc.io/eth","list":100,"range":10000,"ms":195,"reqBytes":7195,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:53.386Z","url":"https://1rpc.io/eth","list":1000,"range":10,"ms":403,"reqBytes":69295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:32:54.873Z","url":"https://1rpc.io/eth","list":1000,"range":100,"ms":286,"reqBytes":69295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:56.403Z","url":"https://1rpc.io/eth","list":1000,"range":1000,"ms":317,"reqBytes":69295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:57.883Z","url":"https://1rpc.io/eth","list":1000,"range":5000,"ms":273,"reqBytes":69295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:32:59.719Z","url":"https://1rpc.io/eth","list":1000,"range":10000,"ms":624,"reqBytes":69295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:33:07.376Z","url":"https://1rpc.io/eth","list":5000,"range":10,"ms":6417,"reqBytes":345295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:33:09.874Z","url":"https://1rpc.io/eth","list":5000,"range":100,"ms":1290,"reqBytes":345295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:33:11.946Z","url":"https://1rpc.io/eth","list":5000,"range":1000,"ms":858,"reqBytes":345295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:33:14.092Z","url":"https://1rpc.io/eth","list":5000,"range":5000,"ms":928,"reqBytes":345295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:33:16.127Z","url":"https://1rpc.io/eth","list":5000,"range":10000,"ms":834,"reqBytes":345295,"res":"ERR 200 -32602 eth_getLogs is limited to 0 - 50 blocks range"}
+{"t":"2026-10-17T21:33:17.642Z","url":"https://eth-mainnet.public.blastapi.io","list":1,"range":10,"ms":304,"reqBytes":362,"res":"ok logs=9"}
+{"t":"2026-10-17T21:33:19.009Z","url":"https://eth-mainnet.public.blastapi.io","list":1,"range":100,"ms":160,"reqBytes":362,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x1900199, 0x19001a2]"}
+{"t":"2026-10-17T21:33:20.377Z","url":"https://eth-mainnet.public.blastapi.io","list":1,"range":1000,"ms":157,"reqBytes":362,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18ffe15, 0x18ffe1e]"}
+{"t":"2026-10-17T21:33:21.751Z","url":"https://eth-mainnet.public.blastapi.io","list":1,"range":5000,"ms":164,"reqBytes":362,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fee75, 0x18fee7e]"}
+{"t":"2026-10-17T21:33:23.117Z","url":"https://eth-mainnet.public.blastapi.io","list":1,"range":10000,"ms":163,"reqBytes":362,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fdaed, 0x18fdaf6]"}
+{"t":"2026-10-17T21:33:24.490Z","url":"https://eth-mainnet.public.blastapi.io","list":100,"range":10,"ms":169,"reqBytes":7195,"res":"ok logs=98"}
+{"t":"2026-10-17T21:33:25.862Z","url":"https://eth-mainnet.public.blastapi.io","list":100,"range":100,"ms":159,"reqBytes":7195,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x1900199, 0x19001a2]"}
+{"t":"2026-10-17T21:33:27.237Z","url":"https://eth-mainnet.public.blastapi.io","list":100,"range":1000,"ms":161,"reqBytes":7195,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18ffe15, 0x18ffe1e]"}
+{"t":"2026-10-17T21:33:28.609Z","url":"https://eth-mainnet.public.blastapi.io","list":100,"range":5000,"ms":162,"reqBytes":7195,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fee75, 0x18fee7e]"}
+{"t":"2026-10-17T21:33:29.987Z","url":"https://eth-mainnet.public.blastapi.io","list":100,"range":10000,"ms":164,"reqBytes":7195,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fdaed, 0x18fdaf6]"}
+{"t":"2026-10-17T21:33:31.506Z","url":"https://eth-mainnet.public.blastapi.io","list":1000,"range":10,"ms":305,"reqBytes":69295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:33:33.018Z","url":"https://eth-mainnet.public.blastapi.io","list":1000,"range":100,"ms":306,"reqBytes":69295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x1900199, 0x19001a2]"}
+{"t":"2026-10-17T21:33:34.532Z","url":"https://eth-mainnet.public.blastapi.io","list":1000,"range":1000,"ms":300,"reqBytes":69295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18ffe15, 0x18ffe1e]"}
+{"t":"2026-10-17T21:33:36.043Z","url":"https://eth-mainnet.public.blastapi.io","list":1000,"range":5000,"ms":302,"reqBytes":69295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fee75, 0x18fee7e]"}
+{"t":"2026-10-17T21:33:37.555Z","url":"https://eth-mainnet.public.blastapi.io","list":1000,"range":10000,"ms":304,"reqBytes":69295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fdaed, 0x18fdaf6]"}
+{"t":"2026-10-17T21:33:39.772Z","url":"https://eth-mainnet.public.blastapi.io","list":5000,"range":10,"ms":1002,"reqBytes":345295,"res":"ok logs=98"}
+{"t":"2026-10-17T21:33:41.934Z","url":"https://eth-mainnet.public.blastapi.io","list":5000,"range":100,"ms":950,"reqBytes":345295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x1900199, 0x19001a2]"}
+{"t":"2026-10-17T21:33:44.097Z","url":"https://eth-mainnet.public.blastapi.io","list":5000,"range":1000,"ms":948,"reqBytes":345295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18ffe15, 0x18ffe1e]"}
+{"t":"2026-10-17T21:33:46.259Z","url":"https://eth-mainnet.public.blastapi.io","list":5000,"range":5000,"ms":948,"reqBytes":345295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fee75, 0x18fee7e]"}
+{"t":"2026-10-17T21:33:48.409Z","url":"https://eth-mainnet.public.blastapi.io","list":5000,"range":10000,"ms":932,"reqBytes":345295,"res":"ERR 400 -32600 You can make eth_getLogs requests with up to a 10 block range. Based on your parameters, this block range should work: [0x18fdaed, 0x18fdaf6]"}
+end 2026-10-17T21:33:49.610Z

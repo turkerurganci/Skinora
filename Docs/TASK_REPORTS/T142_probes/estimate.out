@@ -1,0 +1,5 @@
+2026-10-17T21:40:09.036Z estimateGas at block-1 for real transfers (same from/to/value)
+existingRecipient+senderKeeps: n=12 estimate min=46431 p50=46479 max=46491 | gasUsed p50=46097 | sender's own gasLimit p50=69718 max=322968
+newRecipient+senderKeeps: n=12 estimate min=64019 p50=64031 max=64043 | gasUsed p50=63197 | sender's own gasLimit p50=70434 max=1050000
+existingRecipient+senderEmptied: n=12 estimate min=46189 p50=46201 max=46201 | gasUsed p50=41285 | sender's own gasLimit p50=51249 max=156885
+newRecipient+senderEmptied: n=8 estimate min=63459 p50=63471 max=64043 | gasUsed p50=58373 | sender's own gasLimit p50=100348 max=636239
