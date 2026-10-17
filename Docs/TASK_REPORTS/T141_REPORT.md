@@ -113,6 +113,13 @@ Bulgular PR #337'deki doğrulama yorumundan (`gh pr view 337 --comments`). Yaln�
 7. N3/N4 — `sed -n '/^### 7.6 F8/,/^\*\*F8 boşluk/p' Docs/11_IMPLEMENTATION_PLAN.md | grep -c "^| "` → 23 (başlık + 22 satır).
 8. N5 — 1,1 + 6,43 + 0,64 + 0,3 = 8,47 TRX; × 0,34 = 2,8798 ≈ 2,88 $; 2,90 / 2,88 = 1,0069 → ~%0,7.
 
+## Doğrulama sonucu (2026-10-18)
+
+- **Tur 1 ✗ FAIL** (head `b928ea7`): B1 iade formüllerinde TRON ağ ücreti satırı yok · B2 08 §3.7.5 ↔ §3.7.8 çelişkisi · B3 08 §3.7.7 "8 günlük pencere içinde" · B4 K9 ve imzacı ayrıntılarını uygulayan görev kriteri yok; N1–N6 bloke etmeyen.
+- **Tur 2 ✓ PASS** (head `2223fcc`): on bulgunun onu kapalı, bağımsız grep'lerle ölçüldü; regresyon yok.
+- **Tur 2'nin bloke etmeyen bulguları yönetici tarafından aynı dalda kapatıldı** (`0a82660`): T152'ye yakıt cüzdanının yerel ETH gönderimi istisnası (aksi hâlde T153 imzacıda reddedilirdi) · ⚠ sayısı 12 (8 yönetici + 4 yapımcı) · 06 `TotalAmount` ve 04'teki iki TRON-tek etiketine F8 notu.
+- **Gate'te proje sahibine gösterilecek iki para konusu (⚠ listesinde):** tavan üstündeki Ethereum sweep'inin üst sınırsız beklemesi (payout onunla bekler) · TRON ağ ücreti satırı gerçek sweep maliyetinden yüksek kalırsa farkın platformda kalması.
+
 ## Altyapı Değişiklikleri
 
 - Migration: Yok (06 §1.4 hedef modeli T145'te tek forward migration ile uygulanır)

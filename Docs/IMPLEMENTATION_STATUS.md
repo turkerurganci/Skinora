@@ -327,7 +327,7 @@
 
 | # | Task | Durum |
 |---|---|---|
-| T141 | Çok ağlı ödeme — doküman ve karar tabanı | ⏳ Devam ediyor — doğrulama tur 1 ✗ FAIL, düzeltme turu 1 yapıldı, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T141_REPORT.md), PR [#337](https://github.com/turkerurganci/Skinora/pull/337)) |
+| T141 | Çok ağlı ödeme — doküman ve karar tabanı | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T141_REPORT.md), PR [#337](https://github.com/turkerurganci/Skinora/pull/337)) |
 | T142 | Ethereum ön ölçümleri (Sepolia + mainnet salt okuma) [ÖLÇÜM GÖREVİ] | ⬚ Bekliyor |
 | T143 | HD türetme yolunun standarda çekilmesi [RİSKLİ] | ⬚ Bekliyor |
 | T144 | Ödenecek tutarın iki haneye sabitlenmesi [RİSKLİ] | ⬚ Bekliyor |
