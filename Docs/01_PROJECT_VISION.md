@@ -139,4 +139,4 @@ Hedef rakamlar MVP lansmanı sonrası belirlenecektir.
 
 ---
 
-*Skinora — Project Vision v1.1*
+*Skinora — Project Vision v1.2*

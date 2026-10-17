@@ -39,7 +39,7 @@ MVP'nin hedefi:
 - Dış cüzdan modeli — her işlem için, seçilen ağda benzersiz ödeme adresi
 - Otomatik blockchain doğrulama
 - Ödeme edge case yönetimi (eksik tutar, fazla tutar, yanlış token, desteklenmeyen token, çoklu/parçalı ödeme, gecikmeli ödeme)
-- Gas fee yönetimi (satıcı payout: komisyondan karşılanır + koruma eşiği, iade: tutarından düşülür). F8 hedefi (K8): TRON'da sweep ücreti alıcıya ayrı "TRON ağ ücreti" satırı; Ethereum'da sweep ve payout ücretini platform bir tavana kadar üstlenir (⚠)
+- Gas fee yönetimi (satıcı payout: komisyondan karşılanır + koruma eşiği, iade: tutarından düşülür). F8 hedefi (K8): TRON'da sweep ücreti alıcıya ayrı "TRON ağ ücreti" satırı; Ethereum'da sweep ve payout ücretini platform bir tavana kadar üstlenir (öneriyle kaydedildi — ⚠)
 
 ### 2.3 Timeout Sistemi
 

@@ -4632,20 +4632,22 @@ Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 >
 > **Proje sahibi kararları — T141 (2026-10-17, çok kritik soru olarak soruldu):**
 > - **K7 — Ethereum depozit anahtarları ayrı kök tohumdan (T141 kararı a).** Ethereum servisi **kendi konteynerinde** çalışır ve kendi tohumunu taşır: kendi mnemonic'i, kendi Docker secret'ı, kendi çevrimdışı yedeği. Türetme yolu `m/44'/60'/0'/0/{i}`. TRON kendi tohumunda kalır; T143'ten sonra standart yol `m/44'/195'/0'/0/{i}`. Gerekçe: bir servisteki sızıntı yalnız o ağı açar; yanlış EVM ağına gelen paranın kurtarılması TRON anahtarlarına hiç dokunmaz. Bedel: iki çevrimdışı yedek ve iki geri yükleme provası (T163 zaten "iki ağın tohumları" diyor). Belge: 05 §3.3, §3.5 · 08 §3.0, §3.2, §3.7.
-> - **K8 — TRON ağ ücretinin dağılımı (T141 kararı c; K4'ün "kesin dağılım"ını kapatır).** **Alıcı** depozit → sıcak cüzdan sweep maliyetini öder. Bu maliyet kabul anında ayrı bir **"TRON ağ ücreti"** satırı olarak sabitlenir ve 2 haneye **yukarı** yuvarlanır. Satırın içinde %10 yakma payı ve sweep'e kadar TRX fiyat oynamasına karşı küçük bir tampon vardır. Bugünkü değer ≈ 8,5 TRX ≈ 2,9 $ (TRX 0,34 $): 1,1 hesap açma + 6,43 yakma + 0,64 pay + ~0,3 bant. **Satıcı** payout maliyetini mevcut kuralla öder: platform komisyonun %10'una kadar üstlenir, kalanı satıcının alacağından düşer (02 §4.7). TRON'da payout 2,29–4,53 $ tutar; borsa depozit adresleri boşaltıldığı için olağan durum 13,03 TRX'lik koldur. Sweep'ten önce yapılan bir iadede alıcının ödediği sweep ücreti, komisyon gibi, **tam** iade edilir. Ethereum'da ağ ücretini platform üstlenir (aşağıdaki yönetici kararı "Ethereum ücret politikası"). Örnek (komisyon %2): 20 $'lık satış — TRON'da alıcı 20 + 0,40 + 2,90 = **23,30** gönderir, satıcı 20 − (2,29 − 0,04) = **17,75** ile 20 − (4,53 − 0,04) = **15,51** arası alır; Ethereum'da **20,40 / 20,00**. 200 $'lık satış — TRON **206,90 / 195,87–198,11**; Ethereum **204,00 / 200,00**. Belge: 02 §4.6, §4.7, §5 · 06 §8.3 · 07 §7.5 · 08 §3.1a, §3.3. Uygulayan: T149 (ücret satırı ve dağılım), T144 (2 haneli toplam).
+> - **K8 — TRON ağ ücretinin dağılımı (T141 kararı c; K4'ün "kesin dağılım"ını kapatır).** **Alıcı** depozit → sıcak cüzdan sweep maliyetini öder. Bu maliyet kabul anında ayrı bir **"TRON ağ ücreti"** satırı olarak sabitlenir ve 2 haneye **yukarı** yuvarlanır. Satırın içinde %10 yakma payı ve sweep'e kadar TRX fiyat oynamasına karşı küçük bir tampon vardır. Bugünkü değer ≈ 8,5 TRX ≈ 2,9 $ (TRX 0,34 $): 1,1 hesap açma + 6,43 yakma + 0,64 pay + ~0,3 bant. **Satıcı** payout maliyetini mevcut kuralla öder: platform komisyonun %10'una kadar üstlenir, kalanı satıcının alacağından düşer (02 §4.7). TRON'da payout 2,29–4,53 $ tutar; borsa depozit adresleri boşaltıldığı için olağan durum 13,03 TRX'lik koldur. Sweep'ten önce yapılan bir iadede alıcının ödediği sweep ücreti, komisyon gibi, **tam** iade edilir. Ethereum'da ağ ücretini platform üstlenir (aşağıdaki yönetici kararı "Ethereum ücret politikası"). Örnek (komisyon %2; 2,90 örnektir, TRX fiyat tamponu dahil — 8,47 TRX ≈ 2,88 $, 2,90 ~%0,7 tampon içerir): 20 $'lık satış — TRON'da alıcı 20 + 0,40 + 2,90 = **23,30** gönderir, satıcı 20 − (2,29 − 0,04) = **17,75** ile 20 − (4,53 − 0,04) = **15,51** arası alır; Ethereum'da **20,40 / 20,00**. 200 $'lık satış — TRON **206,90 / 195,87–198,11**; Ethereum **204,00 / 200,00**. Belge: 02 §4.6, §4.7, §5 · 06 §8.3 · 07 §7.5 · 08 §3.1a, §3.3. Uygulayan: T149 (ücret satırı ve dağılım), T144 (2 haneli toplam).
 > - **K9 — Reddedilen ödemelerin iadesi alıcının iade adresine (yeni karar).** Eksik ödeme, fazla ödemenin fazlası, yanlış token, iptal sonrası geç ödeme ve fazladan transferler, alıcının kabul anında **o ağ için** kaydettiği iade adresine gider — gönderen adrese **değil**. Bu karar **T110-K1'i tersine çevirir** (eski kural: "paranın geldiği adrese", 02 §4.4 notu ve 08 §3.4 "Refund politikası"). Gerekçe: MASAK düzenlemesiyle alıcıların çoğu doğrudan bir Türk borsasından ödeyecek; borsanın gönderen adresi paylaşılan bir sıcak cüzdandır ve oraya dönen iade ya kaybolur ya da destek talebi ister. Depozit adresi yalnız `SELLER_CONFIRMED`'dan sonra gösterildiği için bir depozite para geldiğinde işlemin `BuyerRefundAddress`'i her zaman doludur. **Kod bugün eski kuralla çalışır** (`AmountValidationService` iade hedefi olarak `FromAddress` kullanıyor); değişiklik T146/T147'nin işidir, T141 yalnız kuralı belgeler. Belge: 02 §4.4, §12.2 · 03 §3.4, §4.3, §5 · 05 §3.3 · 06 §3.5, §3.8 · 08 §3.4.
 >
 > **Yönetici kararları — T141 (2026-10-17; öneriyle verildi, F8 Gate Check'ten önce proje sahibine tek listede gösterilir):**
 > - **(b) Depozit adresi işlem başına kalır** (öneriyle kaydedildi — ⚠). Kullanıcı başına sabit adres MASAK'ta yalnız küçük bir kolaylık sağlar: bekleme, tavan ve açıklama her **çekim** için ayrı işler; "karşı tarafı beyan" kuralı alıcının ödediği tarafın kimliğiyle ilgilidir ve o taraf hep Skinora'dır. Buna karşılık kullanıcı başına adres ödemeyi işleme bağlamayı bozar (borsalar yalnız 2 ondalık gönderir, tutar ayırt edici olamaz), geç ödemeyi belirsizleştirir, birkaç işlemin 8 günlük bekleyişini tek adreste karıştırır ve ~4–6 görev ister. Geri dönüşlüdür. Belge: 05 §3.3 · 08 §3.0.
 > - **Kilit (hibrit enerji) kodu uykuda** (öneriyle kaydedildi — ⚠). Kod silinmez; açık bir kapama anahtarının arkasında **varsayılan kapalı** durur (anahtar bugün yok, T149 ekler). Kullanılmazsa sonra kaldırılır. 2026-09-16 hibrit kararının yerini K4/K8 aldı. Belge: 02 §4.6 · 05 §3.3 · 08 §3.3 · DEPLOY_RUNBOOK §C.2.
 > - **(d) Ethereum'da yanlış token** (öneriyle kaydedildi — ⚠). Otomatik iade yalnız izin listesine yapılır: USDT ve Circle USDC (`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`, 6 ondalık). TRON'daki sınıflandırmanın aynısı: beklenen → ödeme · izin listesindeki yanlış token → en düşük iade kontrolüyle iade · listede olmayan token → yok sayılır, admin'e görünür. Depozite **yerel ETH** gelirse admin alarmı (Transfer log'u yoktur; bakiye mutabakatı yakalar). İmzacı yalnız izin listesindeki token'ın `transfer` çağrısını, yapılandırılmış `chainId`'yi ve standart işlem tiplerini imzalar; **tip 4 (EIP-7702)** ve keyfi kontrat çağrısı asla. Belge: 08 §3.7.
-> - **Ethereum ücret politikası** (öneriyle kaydedildi — ⚠). Ethereum'da sweep ve payout ücretini platform bir tavana kadar üstlenir; tavanın üstünde gönderim bekler (8 günlük pencere içinde) ve alarm verir. İadeden, bugünkü gibi, ölçülen ücret düşülür. Kesin tavan ve bekleme eşiği T142'nin ölçümünden gelir. Belge: 02 §4.7 · 08 §3.7.
+> - **Ethereum ücret politikası** (öneriyle kaydedildi — ⚠). Ethereum'da sweep ve payout ücretini platform bir tavana kadar üstlenir; tavanın üstünde gönderim bekler ve alarm verir. Sweep 8 günlük pencere kapandıktan sonra çalıştığı için bu beklemenin sabit bir üst sınırı yoktur; beklerken o işlemin payout'u da bekler. Ücret tavanı iadeyi durdurmaz: iadeden, bugünkü gibi, ölçülen ücret düşülür ve yalnız en düşük iade eşiği uygulanır. Kesin tavan ve alarm eşiği T142'nin ölçümünden gelir. Belge: 02 §4.7 · 08 §3.7.
 > - **Yakıt cüzdanının kendi anahtarı** (öneriyle kaydedildi — ⚠). Yakıt (gas besleme) cüzdanı Ethereum sıcak cüzdanından ayrı bir anahtar taşır. Belge: 05 §3.3, §3.5 · 08 §3.7.
 > - **İade eşiği ağ başına** (öneriyle kaydedildi — ⚠). "Net iade < 2 × gas → iade yapılmaz" kuralı kalır ve ağ başına bir ayar olur. Kural zaten canlı tahmini kullandığı için Ethereum'da yalnız tozu, TRON'da ~8–15 $ altını engeller. Belge: 02 §4.6 · 06 §3.17 · 08 §3.4.
 > - **TRON için en düşük satış tutarı — açık kalem** (öneriyle kaydedildi — ⚠). ~50 $'ın altında TRON'u gizlemek ya da TRON'a ayrı bir en düşük tutar koymak burada **karara bağlanmadı**; T169'un kalan sahip kararları listesine eklendi.
 > - **MASAK notları T167'ye** (öneriyle kaydedildi — ⚠). Alıcının USDT'yi önceden elinde tutması gerekir: borsada yeni alınan kripto 48–72 saat çekilemez, ödeme penceresi 15–60 dk'dır. T167 bunu ödeme ekranlarına ve yardım metnine taşır. Bu analiz ikincil kaynaklara dayandı; ayrıntılar T167'de Resmî Gazete metnine karşı doğrulanır.
 > - **F8 veri modeli ve API biçimi** (öneriyle kaydedildi — ⚠) (yapımcı önerisi, T141). Ağ başına kullanıcı adresleri yeni `UserWalletAddress` tablosunda; satıcının kabul ettiği ağlar ve o ağların ödeme adresi oluşturma anında `TransactionNetworkOption` satırlarında sabitlenir; EVM adresleri küçük harfle saklanır ve karşılaştırılır, ekranda EIP-55 biçiminde gösterilir; TRON ağ ücreti `Transaction.NetworkFeeAmount`'ta tutulur; API'de ağ `network` alanıyla (`TRON`/`ETHEREUM`) taşınır, ilan `acceptedNetworks`, kabul `network` alır, yeni hata kodları `NETWORK_NOT_ACCEPTED` (422) ve `NETWORK_UNAVAILABLE` (503). Belge: 06 §1.4, 07 §1.3. Uygulayan: T145–T147, T149.
 > - **Ethereum akış ayrıntıları** (öneriyle kaydedildi — ⚠) (yapımcı önerisi, T141). Yakıt işleminin bir bloğa girmesi yeterli sayılır (`finalized` beklenmez — kendi cüzdanımızdan kendi depozitimize); imzacı yalnız tip 0 ve tip 2 işlemleri imzalar; giden işlem `finalized` olunca `CONFIRMED` kaydedilir; servis açılışta USDT kontratının ücret anahtarının kapalı olduğunu doğrular; kara listeye takılacak transfer yayından önce `eth_call` simülasyonuyla yakalanır; ağı `PaymentAddress.Network` ile uyuşmayan webhook reddedilir. Belge: 08 §3.7, 05 §3.3a. Uygulayan: T148, T151–T153.
+> - **TRON ağ ücreti satırının yedeği ve kesinliği** (öneriyle kaydedildi — ⚠) (yapımcı önerisi, T141). (i) Kabul anında ücret tahmini alınamazsa ağ başına sabit bir yedek ücret yazılır; kabul tahmin servisine bloke olmaz. (ii) Satır bir kez sabitlenir ve sonradan düzeltilmez: alıcıdan ek ücret istenmez, alıcıya fark dönmez; sweep'in gerçek ücreti satırı aşarsa eksik kalan kısım platformda kalır. Belge: 08 §3.1a. Uygulayan: T149.
+> - **Yanlış EVM ağına gelen para** (öneriyle kaydedildi — ⚠) (yapımcı önerisi, T141). Otomatik kurtarma yoktur. Alıcı destek talebi açar; kurtarma runbook'taki elle adımlarla, Ethereum tohumuyla yapılır ve TRON anahtarlarına dokunmaz. Belge: 08 §3.0. Uygulayan: T158 (runbook).
 >
 > **Sıra:** P0 → P1 → P2 → P3 → P4 → P5. P1'in üç görevi (T143–T145) Ethereum kodundan **önce** kapanır; Ethereum servisi onların üstüne kurulur. P3, P2'nin T148'i (ağ başına servis sözleşmesi) kapanınca başlayabilir; T155 P3 ile paralel yürür.
 
@@ -4698,6 +4700,8 @@ Task T143: HD türetme yolunun standarda çekilmesi [RİSKLİ]
       güncellendi: Ethereum kendi konteynerinde, kendi tohumuyla); bu
       yolun bilinen-cevap vektörü de bağımsız uygulamadan üretildi
     - Nile verisi sıfırlama adımı runbook'ta
+    - secrets/README.md'deki türetme yolu satırı (bugün standart yolu
+      yazıyor, kod başka yoldan türetiyor) düzeltilen gerçek yolla aynı
   Test beklentisi: Unit (bilinen cevap vektörleri, iki ağ)
   Neden: gerçek para yokken düzeltmek ücretsiz; sonra her adres değişir.
 
@@ -4747,6 +4751,11 @@ Task T147: İşlem akışında ağ seçimi
       ağlar); alıcı bunlardan birini seçiyor
     - Depozit adresi seçilen ağda ayrılıyor; HD indeksi ağ başına
     - Payout ve iade, ödemenin geldiği ağdan yapılıyor
+    - Reddedilen ödemelerin iadesi (eksik ödeme, fazla ödemenin fazlası,
+      yanlış token, iptal sonrası geç ödeme, fazladan transfer) alıcının
+      kabul anında o ağ için kaydettiği iade adresine gidiyor (K9);
+      AmountValidationService iade hedefi olarak FromAddress kullanmıyor
+      — her ret türü için test
   Test beklentisi: Integration (iki ağ, uçtan uca durum makinesi)
 
 Task T148: Ağ başına sidecar sözleşmesi ve ayarlar
@@ -4765,11 +4774,18 @@ Task T149: Ağ ücreti politikası
   Kabul kriterleri:
     - K4/K8: TRON ağ ücreti satırı kabul anında alıcıya sabitleniyor,
       payout ücreti satıcıya mevcut %10 kuralıyla; sweep öncesi iadede
-      ağ ücreti tam iade; Ethereum ücret politikası (T141 ⚠) uygulanıyor
+      ağ ücreti tam iade; Ethereum ücret politikası (T141)
+      (öneriyle kaydedildi — ⚠) uygulanıyor
+    - Sweep'ten sonra yapılan iadede TRON ağ ücreti satırının işlenişi
+      belirlendi ve 02 §4.6 ile 08 §3.1a'ya yazıldı (T141 açık bıraktı)
+    - Kabul anında ücret tahmini alınamazsa ağ başına sabit yedek ücret
+      yazılıyor; satır sonradan düzeltilmiyor, eksik kalan platformda
+      kalıyor (öneriyle kaydedildi — ⚠) (08 §3.1a)
     - Küçük iade eşikleri ağ başına; kullanıcıya ağ seçerken ücret farkı
       gösteriliyor
     - Kilit (hibrit enerji) kodu açık bir kapama anahtarının arkasında,
-      varsayılan kapalı (T141 ⚠ — kader T141'de kararlaştırıldı)
+      varsayılan kapalı (öneriyle kaydedildi — ⚠) — kader T141'de
+      kararlaştırıldı
   Test beklentisi: Unit (finansal sınır değerler)
 
 --- P3: Ethereum servisi ---
@@ -4780,7 +4796,7 @@ Task T150: Ethereum servis iskeleti
     - Ağ bağlantısı birincil + yedek RPC; açık blok numaralarıyla okuma
     - Adres türetme K7'nin ayrı tohumundan, T143'ün yolundan; imza
       anahtarları yalnız bu serviste; yakıt cüzdanının anahtarı sıcak
-      cüzdanınkinden ayrı (T141 ⚠)
+      cüzdanınkinden ayrı (öneriyle kaydedildi — ⚠)
     - Sağlık, metrikler, iç anahtar zorunlu (anahtarsız açılmaz)
   Test beklentisi: Unit
 
@@ -4791,6 +4807,12 @@ Task T151: Ethereum ödeme izleyicisi [RİSKLİ]
       yalnız finalized bloklar (K5); tekillik (ağ, txHash, logIndex)
     - Yanlış token, eksik/fazla ödeme, iptal sonrası 30 gün izleme
     - Bakiye mutabakatı (izlenen her depozitin zincir bakiyesi ↔ kayıtlar)
+    - Yanlış token izin listesiyle sınıflanıyor: USDT + Circle USDC → en
+      düşük iade kontrolüyle iade; listede olmayan token → iade yok,
+      admin'e görünür (08 §3.7.4) (öneriyle kaydedildi — ⚠)
+    - Depozite yerel ETH gelirse bakiye mutabakatı yakalıyor ve admin
+      alarmı üretiyor (Transfer log'u yok, otomatik iade yok); yakıt
+      cüzdanından gelen ETH alarm üretmiyor (08 §3.7.4)
   Test beklentisi: Unit, Integration (sahte zincir; reorg ve sayfa sınırı)
 
 Task T152: Ethereum gönderim servisi [ÇOK RİSKLİ]
@@ -4800,9 +4822,13 @@ Task T152: Ethereum gönderim servisi [ÇOK RİSKLİ]
     - Çift ödeme imkânsız: nonce yönetimi tek yerde, imzalı işlem yayından
       önce saklanıyor, yeniden deneme aynı baytları yayınlıyor, ücret
       artırma aynı nonce ile
-    - Sabit hedefler + tek/günlük tavanlar korunuyor; imzacı yalnız izin
-      verilen token transfer çağrısını ve yapılandırılmış chainId'yi kabul
-      ediyor (mainnet 1, Sepolia 11155111)
+    - Sabit hedefler + tek/günlük tavanlar korunuyor
+    - İmzacı yalnız izin listesindeki token'ın transfer(address,uint256)
+      çağrısını imzalıyor (USDT; USDC yalnız yanlış token iadesinde),
+      yalnız yapılandırılmış chainId'yi (mainnet 1, Sepolia 11155111) ve
+      yalnız işlem tipi 0 ve 2'yi kabul ediyor; tip 4 (EIP-7702) ve keyfi
+      kontrat çağrısı asla imzalanmıyor — her biri için ret testi
+      (08 §3.7.6) (öneriyle kaydedildi — ⚠)
   Test beklentisi: Unit, Integration (takılan işlem, nonce çakışması)
 
 Task T153: Yakıt cüzdanı
@@ -4810,7 +4836,10 @@ Task T153: Yakıt cüzdanı
   Kabul kriterleri:
     - Sweep/iade öncesi depozite tam gereken kadar ETH; hedef yalnız
       servisin kendi türettiği adresler; tek ve günlük tavan
-    - Ücret tavanı aşılırsa gönderim bekler ve alarm verir
+    - Ücret tavanı yalnız sweep yakıtını durduruyor: tavan aşılırsa sweep
+      yakıtı gönderilmiyor, sweep bekliyor ve alarm veriyor. İade yakıtı
+      ücret tavanına takılmıyor; iade ölçülen ücreti düşüyor ve yalnız en
+      düşük iade eşiğine bağlı (08 §3.7.5)
     - Yakıt cüzdanı bakiyesine alarm
   Test beklentisi: Unit, Integration
 
@@ -4853,7 +4882,8 @@ Task T158: Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook
   Bağımlılık: T151–T154
   Kabul kriterleri: compose/env, Docker secret, Grafana alarmları
     (finalized ilerlemiyor, RPC gecikmesi, yakıt bakiyesi), DEPLOY_RUNBOOK
-    Ethereum bölümü
+    Ethereum bölümü; yanlış EVM ağına gelen paranın elle kurtarma
+    adımları (otomatik kurtarma yok, alıcı destek talebi açar — 08 §3.0)
   Test beklentisi: Yok (kurulum)
 
 Task T159: Sepolia canlı provası + TRON regresyonu
@@ -5127,21 +5157,22 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | Ağ başına kullanıcı ödeme / iade adresleri (`UserWalletAddress`), cooldown ve adres geçmişi ağ başına | 02 §12, 03 §9, 06 §1.4, §3.1, 07 §5.3–§5.4 | T145, T146 | |
 | Adres doğrulayıcılar: TRON base58check, EVM EIP-55 (karışık harfte sağlama zorunlu, tümü küçük harfte ikinci onay) | 02 §12.3, 03 §9.1, 07 §5.3 | T146 | |
 | Satıcının kabul ettiği ağlar (`TransactionNetworkOption`) ve alıcının ağ seçimi (`Transaction.Network`); depozit seçilen ağda, HD indeksi ağ başına; payout ve iade aynı ağdan | 02 §4.2, 03 §2.2, §3.2, 06 §1.4, 07 §7.2, §7.4, §7.6 | T147 | |
-| Reddedilen ödeme iadeleri alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi) | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |
+| Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, geç ödeme, fazladan transfer) alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi); `AmountValidationService` `FromAddress` kullanmaz | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |
 | Alıcının ödeyeceği toplam 2 ondalık; gösterilen = beklenen | 02 §5, 06 §8.3, 07 §1.3, 09 §7.2 | T144 | |
-| TRON HD yolu standart `m/44'/195'/0'/0/{i}`; Ethereum ayrı tohum + `m/44'/60'/0'/0/{i}` (K7) | 05 §3.3, §3.5, 08 §3.2, §3.7.2 | T143, T150 | |
+| TRON HD yolu standart `m/44'/195'/0'/0/{i}`; Ethereum ayrı tohum + `m/44'/60'/0'/0/{i}` (K7) | 05 §3.3, §3.5, 08 §3.2, §3.7.2, secrets/README.md | T143, T150 | |
 | Ağ başına servis sözleşmesi: her ağın ayrı servisi, webhook yükünde `network`, ağ başına ayarlar, ağ başına sağlık dondurması | 05 §3.3a, 06 §1.4 | T148 | |
-| TRON ağ ücreti satırı (K8): kabul anında sabitlenir, 2 haneye yukarı; payout satıcıya mevcut %10 kuralıyla; sweep öncesi iadede tam iade | 02 §4.6, §4.7, §5, 06 §3.5, §8.3, 07 §7.5, 08 §3.1a | T149 | |
+| TRON ağ ücreti satırı (K8): kabul anında sabitlenir, 2 haneye yukarı; payout satıcıya mevcut %10 kuralıyla; sweep öncesi iadede tam iade; kabul anında tahmin yoksa ağ başına sabit yedek, satır sonradan düzeltilmez (öneriyle kaydedildi — ⚠) | 02 §4.6, §4.7, §5, 06 §3.5, §8.3, 07 §7.5, 08 §3.1a | T149 | |
+| Sweep'ten sonra yapılan iadede TRON ağ ücreti satırının işlenişi (T141'de açık bırakıldı) | 02 §4.6, 08 §3.1a | T149 | |
 | Kilit (hibrit enerji) kodu kapama anahtarının arkasında, varsayılan kapalı | 05 §3.3, 08 §3.3, DEPLOY_RUNBOOK §C.2 | T149 | |
 | İade eşiği (`net < 2 × gas`) ağ başına ayar | 02 §4.6, 06 §3.17, 08 §3.4 | T149 | |
 | Ethereum ödeme izleyicisi: `eth_getLogs`, ileri blok imleci, yalnız `finalized` (K5), tekillik (ağ, txHash, logIndex), yanlış token izin listesi, yerel ETH alarmı, 30 gün geç ödeme, bakiye mutabakatı | 08 §3.7.4 | T151 | |
-| Ethereum gönderimi: sweep / payout / iade / soğuk aktarım; tek yerde nonce, imzalı işlemin yayından önce saklanması, imzacı izin listesi (token `transfer`, `chainId`, tip 4 yok), sabit hedefler + tavanlar | 08 §3.7.6 | T152 | |
-| Yakıt cüzdanı (ayrı anahtar, yalnız servisin türettiği depozitlere, tek/günlük tavan, bakiye alarmı) | 08 §3.7.5 | T153 | |
-| Ethereum ücret tahmini (wei, kayıpsız) + ücret tavanı / bekleme | 08 §3.7.7 | T154, T149 | |
+| Ethereum gönderimi: sweep / payout / iade / soğuk aktarım; tek yerde nonce, imzalı işlemin yayından önce saklanması, imzacı izin listesi (token `transfer` — USDT, USDC yalnız yanlış token iadesinde; `chainId`; tip 0/2, tip 4 yok), sabit hedefler + tavanlar | 08 §3.7.6 | T152 | |
+| Yakıt cüzdanı (ayrı anahtar, yalnız servisin türettiği depozitlere, tek/günlük tavan, bakiye alarmı; ücret tavanı yalnız sweep yakıtını durdurur, iade yakıtını durdurmaz) | 08 §3.7.5 | T153 | |
+| Ethereum ücret tahmini (wei, kayıpsız) + ücret tavanı; tavanın üstündeki sweep sabit bir üst sınır olmadan bekler, payout tutulur, alarm verilir | 08 §3.7.7 | T154, T149 | |
 | sidecar-fake Ethereum biçimleri + iki ağda E2E | 08 §3.7 | T155 | |
 | Kullanıcı arayüzü: ağ seçimi, ağ etiketi, yanlış ağ uyarısı, ağ başına adres girişi, USDC seçeneğinin kalkması, borsa uyarısının değişmesi | 02 §4.1, §12.2, 03 §3.4, 04 S06/S07 | T156, T166 | |
 | Admin ekranları ağ başına (cüzdanlar, bakiyeler, yakıt, transferler) | 07 §1.3 | T157 | |
-| Ethereum kurulumu: compose, Docker secret, alarmlar, runbook bölümü | 05 §3.5, 08 §9, DEPLOY_RUNBOOK | T158 | |
+| Ethereum kurulumu: compose, Docker secret, alarmlar, runbook bölümü (yanlış EVM ağına gelen paranın elle kurtarılması dahil) | 05 §3.5, 08 §3.0, §9, DEPLOY_RUNBOOK | T158 | |
 
 **F8 boşluk (T141 yazımında): 0** — T141'in yazdığı her hedef kural bir F8 (ya da F9 T166/T167/T169) görevine eşlendi.
 
@@ -5187,4 +5218,4 @@ Aşağıdaki özellikler MVP kapsamı dışıdır (10_MVP_SCOPE §3). Task liste
 
 ---
 
-*Skinora — Implementation Plan v0.5*
+*Skinora — Implementation Plan v1.1*

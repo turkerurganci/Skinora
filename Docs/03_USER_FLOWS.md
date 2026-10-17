@@ -172,7 +172,7 @@ Bu adımın amacı, alıcı parasını göndermeden önce satışın hâlâ ger�
    - **Hayır →** Devam eder
 4. Satıcıdan iptal sebebi istenir (zorunlu)
 5. Satıcı sebebi yazar ve iptal onaylar
-6. Ödeme alınmışsa → alıcıya iade edilir (iade tutarı = fiyat + komisyon − gas fee). Item hiçbir zaman platformda bulunmadığı için item iadesi diye bir adım yoktur
+6. Ödeme alınmışsa → alıcıya iade edilir (iade tutarı = fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep öncesi iadede tam — 02 §4.6) − gas fee). Item hiçbir zaman platformda bulunmadığı için item iadesi diye bir adım yoktur
 7. İşlem CANCELLED_SELLER durumuna geçer
 8. İptal kaydı satıcının profiline eklenir (itibar skoru etkilenir). Ödeme alındıktan sonraki iptaller teslim etmeme olarak değerlendirilir ve tekrarı yaptırıma tabidir (02 §14.2)
 9. Alıcıya "İşlem satıcı tarafından iptal edildi, ödemeniz iade ediliyor" bildirimi gider
@@ -202,7 +202,7 @@ Kayıt ve giriş süreci satıcı akışı ile aynıdır (bkz. §2.1) — Steam 
    - Satılan item (isim, görsel, detaylar)
    - Fiyat (örn: 100 USDT)
    - Komisyon (örn: 2 USDT)
-   - Toplam ödeyeceği tutar (örn: 102 USDT) — ağa göre: TRON'da + TRON ağ ücreti satırı (örn: 2,90 USDT), Ethereum'da ek satır yok (02 §5)
+   - Toplam ödeyeceği tutar (örn: 102 USDT) — ağa göre: TRON'da + TRON ağ ücreti satırı (örn: 2,90 USDT — TRX fiyat tamponu dahil, 02 §5), Ethereum'da ek satır yok (02 §5)
    - Satıcının kabul ettiği ağlar (ödeme token'ı USDT)
    - Ödeme timeout süresi
    - Satıcı bilgileri ve itibar skoru
@@ -332,7 +332,7 @@ Bu adımda trade **doğrudan satıcı ile alıcı arasında** geçer. Platform t
    - **Kanıt yoksa →** aşağıdaki iptal akışı işler
 2. İşlem CANCELLED_TIMEOUT durumuna geçer
 3. Item hiçbir zaman platformda olmadı → item iadesi yoktur
-4. Ödeme emanette → alıcıya iade edilir (iade tutarı = fiyat + komisyon − gas fee)
+4. Ödeme emanette → alıcıya iade edilir (iade tutarı = fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep öncesi iadede tam — 02 §4.6) − gas fee)
 5. Satıcıya "Item'ı zamanında göndermediniz, işlem iptal oldu ve ödeme alıcıya iade edildi" bildirimi gider
 6. Alıcıya "Satıcı item'ı göndermedi, ödemeniz iade edildi" bildirimi gider
 7. Timeout satıcının sorumluluğuna yazılır; tekrarlanan ihlaller fraud flag'i ve otomatik askıya alma üretir (02 §14.2)
@@ -626,7 +626,7 @@ Platform Steam hesabı işletmez (02 §15); izlenecek bot durumu, emanet item sa
 4. İptal sebebi girmesi istenir (zorunlu)
 5. Admin sebebi yazar ve iptal onaylar
 6. **İade kuralları (standart iptal kurallarıyla aynı):**
-   - Ödeme alınmışsa → alıcıya iade edilir (fiyat + komisyon − gas fee)
+   - Ödeme alınmışsa → alıcıya iade edilir (fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep öncesi iadede tam — 02 §4.6) − gas fee)
    - **Item iadesi diye bir adım yoktur** — item hiçbir zaman platformda bulunmadığı için platformun geri verebileceği tek varlık paradır (02 §3.2)
 7. İşlem CANCELLED_ADMIN durumuna geçer
 8. Her iki tarafa "İşleminiz admin tarafından iptal edildi" bildirimi gider (admin notu dahil)
@@ -849,4 +849,4 @@ Platform Steam hesabı işletmediği için kısıtlanacak, banlanacak veya item'
 
 ---
 
-*Skinora — User Flows v3.7*
+*Skinora — User Flows v3.10*

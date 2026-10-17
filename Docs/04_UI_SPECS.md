@@ -411,7 +411,7 @@ Kullanıcı bilgilerini gösteren kart bileşeni.
 **İçerik:**
 1. Uyarı başlığı: "İşlemi iptal etmek istediğinize emin misiniz?"
 2. İptal sebebi (zorunlu textarea, min 10 karakter)
-3. İade bilgisi: ödeme alınmışsa "Ödeme alıcıya iade edilecektir (fiyat + komisyon − gas fee)", alınmamışsa "İade edilecek bir ödeme yok". Item iadesi diye bir işlem yoktur — item hiçbir aşamada platformda bulunmaz (02 §3.2)
+3. İade bilgisi: ödeme alınmışsa "Ödeme alıcıya iade edilecektir (fiyat + komisyon − gas fee)", alınmamışsa "İade edilecek bir ödeme yok". F8 hedefinde TRON işleminde ilk metin "(fiyat + komisyon + TRON ağ ücreti − gas fee)" olur (02 §4.6, K8; T156). Item iadesi diye bir işlem yoktur — item hiçbir aşamada platformda bulunmaz (02 §3.2)
 4. "İptal Et" butonu (kırmızı) + "Vazgeç" butonu (gri)
 
 ### C07 — Dispute Form
@@ -1084,10 +1084,10 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 | Alan | Satıcı | Alıcı |
 |------|--------|-------|
 | Aksiyon alanı | İptal bilgisi (sebep, tür) | İptal bilgisi (sebep, tür) |
-| İade bilgisi (CANCELLED_TIMEOUT, ödeme sonrası) | "Item'ı zamanında göndermediniz; ödeme alıcıya iade edildi" — item sizde kaldı, iade edilecek bir eşya yoktur | İade özeti: orijinal tutar (fiyat + komisyon), gas fee kesintisi, net iade tutarı, tx hash |
+| İade bilgisi (CANCELLED_TIMEOUT, ödeme sonrası) | "Item'ı zamanında göndermediniz; ödeme alıcıya iade edildi" — item sizde kaldı, iade edilecek bir eşya yoktur | İade özeti: orijinal tutar (fiyat + komisyon; TRON'da + ağ ücreti satırı — 02 §4.6), gas fee kesintisi, net iade tutarı, tx hash |
 | İade bilgisi (CANCELLED_TIMEOUT, ödeme öncesi) | İade yok — para gönderilmedi, item sizde kaldı | — |
-| İade bilgisi (CANCELLED_SELLER/BUYER, ödeme sonrası) | "Ödeme alıcıya iade edildi" bilgisi | İade özeti: orijinal tutar (fiyat + komisyon), gas fee kesintisi, net iade tutarı, tx hash |
-| İade bilgisi (CANCELLED_ADMIN) | Ödeme alınmışsa iade bilgisi gösterilir (fiyat + komisyon − gas fee, tx hash) | Aynı |
+| İade bilgisi (CANCELLED_SELLER/BUYER, ödeme sonrası) | "Ödeme alıcıya iade edildi" bilgisi | İade özeti: orijinal tutar (fiyat + komisyon; TRON'da + ağ ücreti satırı — 02 §4.6), gas fee kesintisi, net iade tutarı, tx hash |
+| İade bilgisi (CANCELLED_ADMIN) | Ödeme alınmışsa iade bilgisi gösterilir (fiyat + komisyon (+ TRON'da ağ ücreti satırı — 02 §4.6) − gas fee, tx hash) | Aynı |
 | Ek bilgi (CANCELLED_ADMIN) | "İşleminiz admin tarafından reddedildi" + admin notu (varsa) | Aynı |
 
 ##### FLAGGED Durumu
@@ -1557,7 +1557,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
    - Gönderim zamanı
 
 6. **İade Detayları** (iptal olduysa)
-   - İade edilen tutar (fiyat + komisyon − gas fee) — item iadesi diye bir kalem yoktur (02 §3.2)
+   - İade edilen tutar (fiyat + komisyon (+ TRON'da ağ ücreti satırı — 02 §4.6) − gas fee) — item iadesi diye bir kalem yoktur (02 §3.2)
    - İade tx hash'leri
 
 7. **Bildirim Geçmişi**
@@ -1922,4 +1922,4 @@ Aşağıdaki terimler tüm dillerde İngilizce kalır:
 
 ---
 
-*Skinora — UI Specifications v4.6*
+*Skinora — UI Specifications v4.8*

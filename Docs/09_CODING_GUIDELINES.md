@@ -2291,4 +2291,4 @@ Her kod tesliminde sorulacak sorular:
 
 ---
 
-*Skinora — Coding Guidelines v1.0*
+*Skinora — Coding Guidelines v1.2*
