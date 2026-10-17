@@ -1191,7 +1191,7 @@ Task T52: Komisyon ve finansal hesaplamalar
   Bağımlılık: T19
   Dokümanlar: 02 §5, §4.6–§4.7, 06 §8.3, 09 §14
   Kabul kriterleri:
-    - CommissionAmount = ROUND(Price × CommissionRate, 6, MidpointRounding.ToZero)
+    - CommissionAmount = ROUND(Price × CommissionRate, 6, MidpointRounding.ToZero) (T144 ile 2 haneye çekildi)
     - TotalAmount = Price + CommissionAmount
     - İade tutarı = Price + CommissionAmount - GasFee
     - Gas fee koruma eşiği: gas fee > komisyon × %10 → aşan kısım satıcı payından kesilir

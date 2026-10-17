@@ -70,6 +70,18 @@
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 
+## Doğrulama sonucu (2026-10-18)
+
+**PASS** — dal başı `77379ac`. Doğrulama alt ajanı, F8 yönetici düzeni.
+
+- Bağımsız 1.200.000 vakalık ızgara: Python `Decimal` referansına karşı 0 uyuşmazlık.
+- Backend mutasyon probları: hepsi yakalandı.
+- 10,761 fazla / 10,759 eksik ödeme davranışı doğrulandı.
+- Hook atlatması meşru bulundu (yerel `main` bayattı).
+- Birim 1726/1726; entegrasyon Transactions 58/58 + API 21/21; FE 184/184.
+- Bulgular N1–N3 bu dalda uygulandı (FE `Step2Details` / `Step4Summary` bileşen testleri, 07 §2.10 notu, 11 T52 notu); N4 kabul edildi.
+- Bilinen davranış: kuruş altı her fazla ödeme bir yönetici uyarısı üretir.
+
 ## Altyapı Değişiklikleri
 
 - Migration: **Yok** (kolon tipleri `decimal(18,6)` aynı; backfill yok — gerekçe yukarıda "Mevcut veri")

@@ -235,7 +235,7 @@ X-RateLimit-Reset: 1710600000
 | ID field isimleri | 06 FK ile birebir: `transactionId`, `sellerId`, `buyerId` |
 | Enum değerleri | 06 §2 ile birebir aynı string |
 | Cüzdan adresleri | Her zaman tam adres, maskeleme frontend'in işi |
-| Para tutarları | Her zaman 2 ondalık: `"100.00"`; ödenecek tutarlarda metin tutarın kendisidir (T144 — §2.8) |
+| Para tutarları | Her zaman 2 ondalık (ödenecek alanların istisnası §2.8): `"100.00"`; ödenecek tutarlarda metin tutarın kendisidir (T144 — §2.8) |
 
 > **İstisna:** API response field isimleri kullanıcı perspektifinden anlamlı isimler kullanabilir, doğrudan DB entity field adlarını yansıtmak zorunda değildir. Örneğin 06'daki `DefaultPayoutAddress` API'de `sellerWalletAddress` olarak döner. Eşleştirme semantik düzeyde yapılır — aynı kavramı temsil eden field'lar farklı isimlenebilir.
 
