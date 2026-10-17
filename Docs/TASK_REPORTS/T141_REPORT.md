@@ -125,7 +125,8 @@ Bulgular PR #337'deki doğrulama yorumundan (`gh pr view 337 --comments`). Yaln�
 - Commit: `960cb11` — T141: çok ağlı ödemenin karar tabanı dokümanlara işlendi (K7–K9, ağ boyutu, Ethereum akışı)
 - Commit: `24a3bd2` — T141: rapor, status (⏳ + #334 merge teyidi), repo hafızası; ⚠ işaretleri tam biçime çekildi
 - Commit: `b928ea7` — T141: CI run zinciri rapora kaydedildi
-- Commit (düzeltme turu 1): T141 düzeltme turu 1 — B1–B4 ve N1–N6 (bu commit). CI run'ı PR kontrollerinde
+- Commit (düzeltme turu 1): `15226ee` — T141 düzeltme turu 1 — B1–B4 ve N1–N6 → CI [`39069601287`](https://github.com/turkerurganci/Skinora/actions/runs/39069601287) ✓ success
+- Commit: CI run'ının rapora yazılması (bu commit — yalnız bu rapor). Run'ı PR kontrollerinde
 - PR: #337
 - CI (PR, `pull_request`): `960cb11` → [`39067628786`](https://github.com/turkerurganci/Skinora/actions/runs/39067628786) ✓ success · `24a3bd2` → [`39067906983`](https://github.com/turkerurganci/Skinora/actions/runs/39067906983) ✓ success (docs-only: "Detect changed paths" + "1. Lint" + "CI Gate" koştu, kod adımları yol filtresiyle atlandı). Bu commit'in run'ı PR kontrollerinde
 
