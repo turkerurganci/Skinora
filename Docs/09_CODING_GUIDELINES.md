@@ -1,6 +1,6 @@
 # Skinora — Coding Guidelines
 
-**Versiyon: v1.1** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
+**Versiyon: v1.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-17 (**T141** — §7.2'ye F8 hedef notu: alıcının ödeyeceği toplam 2 ondalıklı ve gösterilen = beklenen; bugünkü 6 haneli beklenen tutar / 2 haneli gösterim farkı T144'te kapanır, 11 §F8) · 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
 
 > **Amaç:** Bu doküman, projede kod üretirken ve mevcut kodu değiştirirken uyulması gereken teknik geliştirme kurallarını tanımlar.
 >
@@ -649,6 +649,7 @@ Skinora.Shared'a **yalnızca** şunlar konur:
 |-------|----------|
 | API'de | String, 2 ondalık: `"100.00"` (07 §2.8 K8) |
 | DB'de | `decimal(18,6)` — hesaplama hassasiyeti için 6 ondalık |
+| Ödenecek toplam (F8 hedefi, T144) | Alıcının ödeyeceği toplam her zaman **2 ondalıklıdır** ve ekranda gösterilen tutar beklenen tutarın (`PaymentAddress.ExpectedAmount`) kendisidir. Bugün komisyon 6 haneyle hesaplanıyor ve beklenen tutar 6 haneli kalırken API 2 haneye yuvarlıyor (10,55 fiyat → beklenen 10,761, ekranda "10,76"); BtcTurk ve Paribu USDT'yi 2 haneden fazla göndermediği için bu ödemeler eşleşmez. Komisyon yuvarlama kuralı T144'te 02/06/07/09'a tek biçimde yazılır (06 §8.3, 11 §F8) |
 | Kod içinde | `decimal` tipi zorunlu. `float` / `double` YASAK (§14'te detaylandırılır) |
 
 ### 7.3 ID Formatı

@@ -1,6 +1,6 @@
 # Skinora — Project Vision
 
-**Versiyon: v1.1** | **Bağımlılıklar:** `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-03-15
+**Versiyon: v1.2** | **Bağımlılıklar:** `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-17 (**T141** — §6.1 ödeme ağı ve token: yalnız USDT, TRON + Ethereum; 11 §F8 K1–K3) · 2026-03-15
 
 ---
 
@@ -97,7 +97,7 @@ CS2 item alışverişleri çoğunlukla Discord, Steam chat, sosyal medya ve topl
 
 ### 6.1 Kısa Vadeli (MVP)
 
-CS2 item ticareti için güvenilir, otomatik, kripto (Tron TRC-20) tabanlı bir escrow platformu. Tek item, işlem başına tek stablecoin ödeme (USDT veya USDC — satıcı işlem başlatırken seçer), web platformu.
+CS2 item ticareti için güvenilir, otomatik, kripto tabanlı bir escrow platformu. Tek item, işlem başına tek stablecoin ödeme — **yalnız USDT**, **TRON (TRC-20) ya da Ethereum (ERC-20)** ağında: satıcı kabul ettiği ağları seçer, alıcı birini seçer (2026-10-17, 11 §F8 K1–K3; ilk vizyon "Tron TRC-20, USDT veya USDC" idi), web platformu.
 
 ### 6.2 Orta Vadeli
 

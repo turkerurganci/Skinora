@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.7** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-02 (**S06 adım 1** — envanter gizli ve CS2 envanteri yok (`INVENTORY_NOT_FOUND`, Steam 401) durumları ayrı mesajla, tekrar dene butonu olmadan (`P2P-InventoryUnauthorizedMapping`)) · 2026-09-15 (**§7.2 form öncesi engeller — üç Steam satırı** — tablo #319'un eklediği üç kodu hiç tanımıyordu: kısıtlı hesap, 15 günden yeni hesap ("kalan süre: N gün", sunucudan gelir) ve "Steam'e sorulamadı" satırları eklendi. Adım 4 hata panelinde gün sayısının neden taşınmadığı da yazıldı: kapı geçildikten sonra bir hesap "15 günden yeni" durumuna geri düşemez.) · 2026-08-19 (**T133a** — custodial kalıntı turu: §2.1 ekran sayımı S18 çıkarılarak 23'e indi; §3.1/§3.2/§3.3 izlenebilirlik satırlarındaki `ITEM_ESCROWED`, "trade offer timeout'u", "çift iade" ve S18/AD10 referansları v3.0 karşılıklarıyla değiştirildi ya da silindi; §4.3 admin navigasyonundan S18 girişi kaldırıldı; C05 zaman çizelgesi 8 → **6 adım** ("Item Emanet" kaldırıldı, doğrulama adımları geçişin koşulu olarak yazıldı) ve §9.3 responsive notu hizalandı; C06 iptal modal'ı, S01 "Nasıl Çalışır" akışı, §7.3'ün üç "Item'ınız iade edildi" satırı ve §8.5'in "item ve/veya para" kalemi P2P para-iadesi diline çekildi; §8.1 S12 layout'undan Steam hesapları menüsü + sağlık paneli, §8.7'den S18 tarihsel tasarımı (50 satır) silindi — §9.10 AD10 / 03 §8.5 deseniyle yalnız kaldırma notu kaldı; admin iptal aralığı iki yerde `CREATED → PAYMENT_RECEIVED`'a çekildi. **§8.8 yetki matrisi 10 → 12 satır** (`VIEW_DISPUTES` + `MANAGE_DISPUTES` WP5'ten beri eksikti) ve tabloya `Anahtar` kolonu eklendi — parity artık makinece doğrulanabilir; `EMERGENCY_HOLD` etiketi kod kataloğuna hizalandı. §8.6 Timeout Süreleri tablosu T119/T123'te kapandığı hâliyle korundu. Davranış değişikliği yok.) · 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.8** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-17 (**T141 — çok ağlı ödeme**, yalnız F8 hedef notları (ekran tasarımı T156'da): S06 adım 2 USDT/USDC seçimi yerine ağ seçimi (yalnız USDT, K2–K3); S07 ödeme bilgilerinde ağ etiketi, TRON ağ ücreti satırı ve borsa uyarısı yerine ağ uyarısı (K8, K9); C11 adres girişi ağ başına (TRON base58check / EVM EIP-55); terimler listesine ERC-20, Ethereum.) · 2026-10-02 (**S06 adım 1** — envanter gizli ve CS2 envanteri yok (`INVENTORY_NOT_FOUND`, Steam 401) durumları ayrı mesajla, tekrar dene butonu olmadan (`P2P-InventoryUnauthorizedMapping`)) · 2026-09-15 (**§7.2 form öncesi engeller — üç Steam satırı** — tablo #319'un eklediği üç kodu hiç tanımıyordu: kısıtlı hesap, 15 günden yeni hesap ("kalan süre: N gün", sunucudan gelir) ve "Steam'e sorulamadı" satırları eklendi. Adım 4 hata panelinde gün sayısının neden taşınmadığı da yazıldı: kapı geçildikten sonra bir hesap "15 günden yeni" durumuna geri düşemez.) · 2026-08-19 (**T133a** — custodial kalıntı turu: §2.1 ekran sayımı S18 çıkarılarak 23'e indi; §3.1/§3.2/§3.3 izlenebilirlik satırlarındaki `ITEM_ESCROWED`, "trade offer timeout'u", "çift iade" ve S18/AD10 referansları v3.0 karşılıklarıyla değiştirildi ya da silindi; §4.3 admin navigasyonundan S18 girişi kaldırıldı; C05 zaman çizelgesi 8 → **6 adım** ("Item Emanet" kaldırıldı, doğrulama adımları geçişin koşulu olarak yazıldı) ve §9.3 responsive notu hizalandı; C06 iptal modal'ı, S01 "Nasıl Çalışır" akışı, §7.3'ün üç "Item'ınız iade edildi" satırı ve §8.5'in "item ve/veya para" kalemi P2P para-iadesi diline çekildi; §8.1 S12 layout'undan Steam hesapları menüsü + sağlık paneli, §8.7'den S18 tarihsel tasarımı (50 satır) silindi — §9.10 AD10 / 03 §8.5 deseniyle yalnız kaldırma notu kaldı; admin iptal aralığı iki yerde `CREATED → PAYMENT_RECEIVED`'a çekildi. **§8.8 yetki matrisi 10 → 12 satır** (`VIEW_DISPUTES` + `MANAGE_DISPUTES` WP5'ten beri eksikti) ve tabloya `Anahtar` kolonu eklendi — parity artık makinece doğrulanabilir; `EMERGENCY_HOLD` etiketi kod kataloğuna hizalandı. §8.6 Timeout Süreleri tablosu T119/T123'te kapandığı hâliyle korundu. Davranış değişikliği yok.) · 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -471,6 +471,7 @@ Cüzdan adresi giriş bileşeni. S06 ve S08'de kullanılır.
 **İçerik:**
 - TRC-20 adresi input alanı
 - Format validation (T ile başlar, 34 karakter)
+- **F8 hedefi (T146/T156):** bileşen ağ alır; Ethereum adresinde `0x` + 40 hex ve EIP-55 sağlaması (tümü küçük harfli adreste ek onay kutusu) — 02 §12.3
 - Sanctions screening kontrolü (02 §12.3, 03 §11a.3) — geçersiz format veya yaptırımlı adres → error state, kayıt engellenir
 - Onay adımı: "Bu adres doğru mu?" + adresin tam gösterimi
 - "Onayla" + "Düzenle" butonları
@@ -816,7 +817,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 **İçerik:**
 - Seçili item özeti (C03 Compact, değiştirilebilir → adım 1'e geri)
-- **Stablecoin seçimi:** USDT / USDC toggle butonları
+- **Stablecoin seçimi:** USDT / USDC toggle butonları. **F8 hedefi (T156/T166; 02 §4.2):** toggle kalkar, token her zaman USDT'dir; yerine **kabul edilen ağlar** seçimi gelir (TRON / Ethereum çoklu seçim; yalnız profilde ödeme adresi kayıtlı ağlar seçilebilir)
 - **Fiyat girişi:**
   - Input alanı + seçili stablecoin etiketi (örn: `[___] USDT`)
   - Min/max bilgisi altında gösterilir: "Min: X, Max: Y"
@@ -998,6 +999,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 │    — iade adresinize ulaşamayabilir│
 └──────────────────────────────────┘
 ```
+
+> **F8 hedefi (T156; 02 §4.2, §5, §12.2):** "Token" ve "Ağ" satırları alıcının seçtiği ağı gösterir (TRON TRC-20 ya da Ethereum ERC-20, açık ağ etiketiyle); TRON'da "Gönderilecek Tutar" altında fiyat + komisyon + **TRON ağ ücreti** kırılımı görünür; tutar 2 ondalıklıdır ve beklenen tutarın aynısıdır (T144). "Exchange'den gönderim yapmayın" uyarısı **kalkar** — reddedilen ödemeler artık alıcının iade adresine döner (11 §F8 K9). Yerine **ağ uyarısı** gelir: "Yalnız <ağ> ağında USDT gönderin" (aynı `0x` adresi birçok EVM ağında geçerlidir). Gezgin bağlantısı ağa göre Tronscan / Etherscan.
 
 ##### PAYMENT_RECEIVED Durumu
 
@@ -1501,7 +1504,7 @@ S13'te hesap flag'i seçildiğinde S14 farklı bir layout gösterir:
 - Tarih aralığı: Başlangıç — Bitiş
 - Kullanıcı: Steam ID veya kullanıcı adı (arama)
 - Tutar aralığı: Min — Max
-- Stablecoin: USDT / USDC / Tümü
+- Stablecoin: USDT / USDC / Tümü (F8 hedefi: yerine Ağ: TRON / Ethereum / Tümü — T157)
 
 **Tablo Kolonları:**
 
@@ -1911,7 +1914,7 @@ Mobil:
 ### 10.4 Çevrilmeyecek Terimler
 
 Aşağıdaki terimler tüm dillerde İngilizce kalır:
-- USDT, USDC, TRC-20, Tron
+- USDT, USDC, TRC-20, Tron, ERC-20, Ethereum
 - Steam, Steam ID, Mobile Authenticator
 - Trade offer
 - CS2
