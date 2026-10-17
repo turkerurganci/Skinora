@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-17 (T141 — §C.2 enerji kilidi **uykuda**: hibrit kararın yerini 11 §F8 K4/K8 aldı, kilit kodu varsayılan kapalı bir anahtarın arkasında; `STAKE_ACCOUNT_*` satırına not) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-18 (T143 — §G.0b: HD türetme yolu düzeltmesinden sonra Nile ortamının sıfırlanması — eski depozit envanteri, isteğe bağlı boşaltma, yerel veritabanı sıfırlama, yeni yol doğrulaması; sıcak cüzdan ve kilit hesabının tohumdan türemediği ölçüldü) · 2026-10-17 (T141 — §C.2 enerji kilidi **uykuda**: hibrit kararın yerini 11 §F8 K4/K8 aldı, kilit kodu varsayılan kapalı bir anahtarın arkasında; `STAKE_ACCOUNT_*` satırına not) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (66 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -333,7 +333,7 @@ Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migr
 | Docker Desktop (çalışır durumda) | 11 container + SQL Server |
 | .NET 9 SDK + `dotnet-ef` | Migration host'tan uygulanır — backend startup'ta **auto-migrate yoktur** |
 | `STEAM_API_KEY` | steamcommunity.com/dev/apikey. Steam sidecar'ın **tek** kimlik bilgisi — bot hesabı gerekmez (T133) |
-| Tron testnet cüzdanı | HD mnemonic + ayrı hot wallet (adres + private key), içinde faucet TRX |
+| Tron testnet cüzdanı | HD mnemonic + ayrı hot wallet (adres + private key), içinde faucet TRX. Mnemonic T143'ten önce depozit açmak için kullanıldıysa önce §G.0b |
 | `TRON_API_KEY` | trongrid.io ücretsiz plan — yoksa monitor 429 yer |
 | Nile USDT/USDC kontrat adresleri | Testnet'te koda gömülü değil, env'den gelir |
 
@@ -355,6 +355,23 @@ Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migr
 | 8 | **Doğrula: 63 SystemSetting** | `SELECT COUNT(*) FROM SystemSettings;` → **63** (F6: 59; T125 `delivery_verification` + T129 üç `settlement` anahtarı) | 07 §9.8 ile hizalı |
 
 > **Sıra bağlayıcıdır:** adım 7'yi adım 1'den önce koşarsan F7 backend'i F6 şemasına bakar. Adım 3'ü atlarsan stack ayağa kalkar ama iki timeout ayarı env'den hidrate edilemez.
+
+### G.0b T143 HD türetme yolu düzeltmesi (2026-10-18'den önce kullanılmış bir Nile ortamı için)
+
+> **Kimin için:** `HD_WALLET_MNEMONIC`'i T143'ten önce depozit açmak için kullanılmış bir ortam. **Sıfırdan kuranlar atlar.** Mainnet'te bu tohumla hiç depozit açılmadı (canlıya çıkış F9), yani adım yalnız Nile içindir.
+>
+> **Neden gerekli (T143, 08 §3.2):** T143 öncesi kod depozitleri `m/44'/60'/0'/0/0/44'/195'/0'/0/{i}`'den türetiyordu; T143'ten sonra standart `m/44'/195'/0'/0/{i}`'den türetir. Aynı mnemonic ve aynı indeks artık **başka bir adres** verir. Üç sonucu var: (1) eski depozitlerdeki bakiye yeni koddan imzalanamaz — sweep ve iade, yeniden türetilen adres kayıtlı adresle uyuşmadığı için `DEPOSIT_ADDRESS_MISMATCH` (400, yeniden denenmez) ile reddedilir. Para kaybolmaz (tohum aynı) ama yalnız eski yolu bilen elle bir araçla çıkarılabilir. (2) Veritabanındaki `PaymentAddresses` satırları eski adresleri taşır; ödeme penceresi açık bir işlem ödeme alabilir ama iadesi ve sweep'i yapılamaz — iptal sonrası 30 günlük geç ödeme izlemesi de aynı adresleri izlemeye devam eder. (3) Yeni işlemler sıradaki indeksten yeni yolla doğru açılır; indeks çakışması olmaz. Bu yüzden yerel veritabanı sıfırlanır.
+
+| # | Adım | Komut / kontrol | Neden |
+|---|---|---|---|
+| 1 | **Yükseltmeden ÖNCE envanter** | `SELECT HdWalletIndex, Address, MonitoringStatus, TransactionId FROM PaymentAddresses ORDER BY HdWalletIndex;` → adres listesiyle `POST /api/wallet/balances` (en çok 100 adres). Ürün dışında elle açılmış test depozitlerini de ekleyin (2026-09-16 enerji ölçümü: indeks 9001, 9003, 9004, 9005 — veritabanında satırları yok) | Hangi eski depozitte TRX/USDT kaldığını bilmeden sıfırlarsanız o adresler kayıttan da düşer |
+| 2 | **Bakiyeleri boşaltın ya da bilerek bırakın** | Karar operatörün; Nile değeri yoktur. Boşaltmak için anahtar **eski yolla** türetilir: `HDNodeWallet.fromMnemonic(Mnemonic.fromPhrase(mnemonic))` (yol verilmeden — `m/44'/60'/0'/0/0` düğümü) `.derivePath("44'/195'/0'/0/<indeks>")`; türetilen adresin adım 1'deki adresle aynı olduğunu **önce** doğrulayın, sonra TronWeb ile USDT'yi (`trc20` `transfer`) ve TRX'i sıcak cüzdana gönderin. Mnemonic `.env`'den okunur, ekrana ve log'a basılmaz | Sıfırlamadan sonra bu paranın kayıtla bağı kalmaz; eski yol yalnız bu dipnotta yaşar |
+| 3 | **İmajı T143 kodundan yeniden kurun** | `docker compose -f docker-compose.yml up -d --build --wait` (§G.3) | Eski imaj eski yolla türetmeye devam eder |
+| 4 | **Yerel veritabanını sıfırlayın** | `docker compose -f docker-compose.yml down` → `docker volume ls \| grep skinora-db-data` ile bulunan birimi `docker volume rm <ad>` → §G.2 adım 2, 3, 4 ve 6 (veritabanı, migration, stack, süper admin) | Eski adres satırlarının hiçbiri artık imzalanabilir değil (yukarıdaki (1)–(2)). **Sıfırlamanın bedeli:** kullanıcılar, ilanlar ve admin ayarları gider; satıcı ödeme adresi yeniden girildiğinde **24 saatlik bekleme** baştan başlar ve prova planı ona göre kurulur (§G.5, `wallet.payout_address_cooldown_hours`) |
+| 5 | **Doğrulayın: yeni yol** | `POST /api/wallet/derive {"index":0}` → `derivationPath` = `m/44'/195'/0'/0/0` ve adres, adım 1'deki eski indeks-0 adresinden **farklı**. Bağımsız kontrol: aynı mnemonic'i **çevrimdışı** çalışan bir BIP-44 aracına (coin 195, hesap 0, değişim 0) girip indeks 0'ı karşılaştırın — mnemonic çevrimiçi bir sayfaya yapıştırılmaz | Kod yolu artık standart: aynı tohumu tanıyan her TRON cüzdanı aynı adresi görmeli |
+| 6 | **Sıcak cüzdan ve kilit hesabı değişmez** | Bu ikisi HD tohumundan türemez (05 §3.3 — sıcak cüzdan ayrı anahtardır). **Ölçüldü (2026-10-18, bu makinedeki `.env`):** `HOT_WALLET_ADDRESS` ve `STAKE_ACCOUNT_ADDRESS`, tohumun eski ve yeni yolunda indeks 0–50 ve 9001–9005 ile iki kök düğümün hiçbirine eşit değil. Başka bir ortamda sıcak cüzdan bu tohumdan türetilmişse: yeni sıcak cüzdan üretin, `HOT_WALLET_ADDRESS` + `HOT_WALLET_PRIVATE_KEY`'i birlikte değiştirin (adres backend'e de aynı `.env`'den gider), iki servisi yeniden başlatın ve eski sıcak cüzdanın bakiyesini taşıyın | Sıcak cüzdan değişmediği sürece payout ve sweep hedefi aynı kalır |
+
+> **Sıra bağlayıcıdır:** adım 1–2 eski imaj ve eski veritabanı ayaktayken koşulur; adım 3'ten sonra eski adreslerin anahtarı yalnız adım 2'deki elle yolla türetilebilir.
 
 ### G.1 Sırlar
 

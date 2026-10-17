@@ -85,7 +85,11 @@ export const config = {
   usdcContract: TOKEN_CONTRACTS[network].USDC,
   tokenDecimals: 6,
 
-  // HD Wallet — 08 §3.2, derivation path: m/44'/195'/0'/0/{index}
+  // HD Wallet — 08 §3.2, derivation path: m/44'/195'/0'/0/{index} from the
+  // BIP-32 master node of this mnemonic (empty BIP-39 passphrase), so any
+  // standard TRON wallet restoring the phrase sees the same addresses. Before
+  // T143 the code derived under m/44'/60'/0'/0/0 instead; deposit addresses
+  // created before T143 are not reachable from this code (DEPLOY_RUNBOOK §G.0b).
   hdWalletMnemonic: process.env.HD_WALLET_MNEMONIC || '',
 
   // Hot wallet — operationally distinct from HD wallet master mnemonic

@@ -26,7 +26,7 @@ public class HttpBlockchainSidecarClientTests
             {
                 Content = JsonContent.Create(new
                 {
-                    address = "TV54FrPiVbUqxAuDMH6nKT32DPWzNwcpUu",
+                    address = "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH",
                     derivationPath = "m/44'/195'/0'/0/0",
                     index = 0,
                 }),
@@ -38,7 +38,7 @@ public class HttpBlockchainSidecarClientTests
         var result = await sut.DeriveAddressAsync(0, Guid.NewGuid(), CancellationToken.None);
 
         Assert.Equal(BlockchainSidecarStatus.Success, result.Status);
-        Assert.Equal("TV54FrPiVbUqxAuDMH6nKT32DPWzNwcpUu", result.Address);
+        Assert.Equal("TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH", result.Address);
         Assert.Equal("m/44'/195'/0'/0/0", result.DerivationPath);
     }
 
@@ -55,7 +55,7 @@ public class HttpBlockchainSidecarClientTests
             {
                 Content = JsonContent.Create(new
                 {
-                    address = "TV54FrPiVbUqxAuDMH6nKT32DPWzNwcpUu",
+                    address = "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH",
                     derivationPath = "m/44'/195'/0'/0/0",
                     index = 0,
                 }),
@@ -168,7 +168,7 @@ public class HttpBlockchainSidecarClientTests
             {
                 Content = JsonContent.Create(new
                 {
-                    address = "TV54FrPiVbUqxAuDMH6nKT32DPWzNwcpUu",
+                    address = "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH",
                     derivationPath = "m/44'/195'/0'/0/42",
                     index = 42,
                 }),
