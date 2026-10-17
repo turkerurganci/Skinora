@@ -1,0 +1,28 @@
+2026-10-17T21:46:47.210Z sepolia finalized 11936669
+2026-10-17T21:46:47.498Z rep 0 PublicNode list 20 range 1000 logs=1569
+2026-10-17T21:46:48.711Z rep 0 Tenderly list 20 range 1000 logs=1569
+2026-10-17T21:46:49.842Z rep 0 PublicNode list 1000 range 1000 logs=1569
+2026-10-17T21:46:51.218Z rep 0 Tenderly list 1000 range 1000 logs=1569
+2026-10-17T21:46:52.306Z rep 0 PublicNode list 2000 range 1000 logs=1569
+2026-10-17T21:46:53.928Z rep 0 Tenderly list 2000 range 1000 logs=1569
+2026-10-17T21:46:55.443Z rep 0 PublicNode list 3000 range 1000 logs=1569
+2026-10-17T21:46:57.171Z rep 0 Tenderly list 3000 range 1000 logs=1569
+2026-10-17T21:46:58.512Z rep 0 PublicNode list 5000 range 1000 logs=1569
+2026-10-17T21:47:00.256Z rep 0 Tenderly list 5000 range 1000 logs=622
+2026-10-17T21:47:01.266Z rep 1 PublicNode list 20 range 1000 logs=1569
+2026-10-17T21:47:02.254Z rep 1 Tenderly list 20 range 1000 logs=1569
+2026-10-17T21:47:03.772Z rep 1 PublicNode list 1000 range 1000 logs=1569
+2026-10-17T21:47:04.902Z rep 1 Tenderly list 1000 range 1000 logs=1569
+2026-10-17T21:47:06.572Z rep 1 PublicNode list 2000 range 1000 logs=1569
+2026-10-17T21:47:07.853Z rep 1 Tenderly list 2000 range 1000 logs=1569
+2026-10-17T21:47:09.110Z rep 1 PublicNode list 3000 range 1000 logs=1569
+2026-10-17T21:47:10.598Z rep 1 Tenderly list 3000 range 1000 logs=1569
+2026-10-17T21:47:11.787Z rep 1 PublicNode list 5000 range 1000 logs=1569
+2026-10-17T21:47:13.436Z rep 1 Tenderly list 5000 range 1000 logs=622
+2026-10-17T21:47:14.407Z Circle USDC (Sepolia) 0x1c7d4b196cb0c7b01d743fbc6116a902379c7238 codeBytes 1798 name USDC symbol USDC decimals 6
+2026-10-17T21:47:15.671Z Circle USDC (Sepolia) transfer(fresh,1) from holder 0x3103ed5c1cfcc9246f9933dc71d434df0b52e997 returnData 0x0000000000000000000000000000000000000000000000000000000000000001 (recent Transfer logs in 5000 blocks: 13000)
+2026-10-17T21:47:15.825Z Aave USDT (Sepolia) 0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0 codeBytes 5462 name USDT symbol USDT decimals 6
+2026-10-17T21:47:16.550Z Aave USDT (Sepolia) transfer(fresh,1) from holder 0x8944e68634bb858cb74419173559d99ead86aa3d returnData 0x0000000000000000000000000000000000000000000000000000000000000001 (recent Transfer logs in 5000 blocks: 408)
+2026-10-17T21:47:16.705Z Aave USDC (Sepolia) 0x94a9d9ac8a22534e3faca9f4e7f2e2cf85d5e4c8 codeBytes 5462 name USDC symbol USDC decimals 6
+2026-10-17T21:47:17.222Z Aave USDC (Sepolia) transfer(fresh,1) from holder 0xe815718d44694ec4637cb775c468d87f6e15b538 returnData 0x0000000000000000000000000000000000000000000000000000000000000001 (recent Transfer logs in 5000 blocks: 450)
+2026-10-17T21:47:17.328Z Sepolia baseFee gwei last 1024 blocks: p50 0.000005 p99 0.000158 max 0.000181 | tip p50 0.000000

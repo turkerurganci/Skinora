@@ -1,0 +1,20 @@
+2026-10-17T21:49:24.593Z endpoint https://mainnet.gateway.tenderly.co finalized 26215003
+2026-10-17T21:49:24.998Z USDT Params events since deploy (block 4634748): 0 
+2026-10-17T21:49:26.236Z USDT Pause events since deploy (block 4634748): 0 
+2026-10-17T21:49:29.059Z USDT AddedBlackList events found 16
+2026-10-17T21:49:29.331Z USDT AddedBlackList 0xe69196c922e2caf3401d263fe15752e1c5200a38 block 26184056 tx 0x2bdf81481cb32602c56d25ab7950620f4569471eff15167150c2fc5f3cd60f9d isBlackListed now 1 balance 2000000011878
+2026-10-17T21:49:29.473Z USDT AddedBlackList 0x472cd9988acd0df87bc2ee00d699fd910c612925 block 26184056 tx 0x101df20b2dfe9cfef0f0f4d851e5e28a06f6a652e1b3d9417e861ce346867646 isBlackListed now 1 balance 2000010010000
+2026-10-17T21:49:29.612Z USDT AddedBlackList 0x3080344eea71c3a5c3afd260363b553de01abda5 block 26184056 tx 0x2e98cc0c8202e69af66666461cc03fdf0978aa3cb6ae79bacb88dec7be554349 isBlackListed now 1 balance 1500110020000
+2026-10-17T21:49:29.763Z USDT AddedBlackList 0x9144f2bc0c3af2436054cfc3a5a92c29a5fe996f block 26184056 tx 0xa550eddcb13493dcd5d3de274a79c1935d679d6866a75faa7e501cfaf14f59c8 isBlackListed now 1 balance 1788710000000
+2026-10-17T21:49:29.902Z USDT AddedBlackList 0x8dd2984cf4a5c84de28ff3c664058750746f2927 block 26184056 tx 0xe0ef12b5e52672815b956a4b88340e32b432e03c0bed3dfa6f7f3ccd72120a19 isBlackListed now 1 balance 2000020000000
+2026-10-17T21:49:31.111Z USDT AddedBlackList 0xb255cb537ac9feba3220b81149b90b9ce0f6b3b9 block 26184056 tx 0x4ffef5b1444b59e491f7017482a3bad6df64e0bddc44c6f4416b30d7c8a3d249 isBlackListed now 1 balance 2000020000000
+2026-10-17T21:49:31.250Z USDT AddedBlackList 0xc0be46997794851b698a93063b4c6ad23294d643 block 26184056 tx 0xfbeeacaf81b173731a3bcdbbb6b27b5da5173cb113b11b7682722d6cb999b03a isBlackListed now 1 balance 1347665013900
+2026-10-17T21:49:31.390Z USDT AddedBlackList 0xa36d830464127ff8b95b9de7c10a1705c7904cad block 26184056 tx 0x8a472d0b4fcf294f9da4906e6e4a30711e4d4834ac7b446677db6f22822b1a0f isBlackListed now 1 balance 2834714955040
+2026-10-17T21:49:31.462Z USDT transfer(fresh,1) FROM blacklisted 0xa36d830464127ff8b95b9de7c10a1705c7904cad -> REVERT/ERR {"code":3,"message":"execution reverted"}
+2026-10-17T21:49:31.532Z USDT transfer(blacklisted,1) TO blacklisted 0xa36d830464127ff8b95b9de7c10a1705c7904cad from holder -> "0x"
+2026-10-17T21:49:36.399Z USDC Blacklisted events found 3
+2026-10-17T21:49:36.468Z USDC Blacklisted 0x8c3e09ec45f8ae9e21b481526b49378353c33412 block 26114456 isBlacklisted now 1
+2026-10-17T21:49:36.651Z USDC transfer(blacklisted,1) TO blacklisted from holder -> "REVERT/ERR {\"code\":3,\"message\":\"execution reverted: Blacklistable: account is blacklisted\",\"data\":\"0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000"
+2026-10-17T21:49:36.720Z USDC Blacklisted 0x286ff9428c3400e1d901d9b14158f27b3f333420 block 26114461 isBlacklisted now 1
+2026-10-17T21:49:36.806Z USDC transfer(blacklisted,1) TO blacklisted from holder -> "REVERT/ERR {\"code\":3,\"message\":\"execution reverted: Blacklistable: account is blacklisted\",\"data\":\"0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000"
+2026-10-17T21:49:36.806Z done retries 1

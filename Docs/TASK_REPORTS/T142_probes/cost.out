@@ -1,0 +1,24 @@
+
+mainnet poll 10s: 25105 calls/day = 0.75M/month; mix {"getBlock":8640,"getLogs":225,"call":7240,"getBalance":7200,"estimateGas":40,"txCount":40,"sendRaw":40,"receipt":200,"feeHistory":1480}
+  Alchemy Free: 17.43M CU/month of 30M => 58% (getLogs calls/day 900)
+  Chainstack Developer: 0.75M RU/month of 3M => 25% (getLogs calls/day 225)
+  Infura Core: 2.06M credits/day of 3M => 69% (getLogs calls/day 225)
+  QuickNode trial (1 month): 15.87M credits/month of 10M => 159% (getLogs calls/day 1575)
+  dRPC Free (keyed): 15.06M CU/month of 210M => 7% (getLogs calls/day 225)
+  Ankr Freemium: 150.63M credits/month of 200M => 75% (getLogs calls/day 225)
+
+mainnet poll 30s: 19345 calls/day = 0.58M/month; mix {"getBlock":2880,"getLogs":225,"call":7240,"getBalance":7200,"estimateGas":40,"txCount":40,"sendRaw":40,"receipt":200,"feeHistory":1480}
+  Alchemy Free: 13.98M CU/month of 30M => 47% (getLogs calls/day 900)
+  Chainstack Developer: 0.58M RU/month of 3M => 19% (getLogs calls/day 225)
+  Infura Core: 1.60M credits/day of 3M => 53% (getLogs calls/day 225)
+  QuickNode trial (1 month): 12.42M credits/month of 10M => 124% (getLogs calls/day 1575)
+  dRPC Free (keyed): 11.61M CU/month of 210M => 6% (getLogs calls/day 225)
+  Ankr Freemium: 116.07M credits/month of 200M => 58% (getLogs calls/day 225)
+
+sepolia test env poll 30s: 5605 calls/day = 0.17M/month; mix {"getBlock":2880,"getLogs":225,"call":490,"getBalance":480,"estimateGas":10,"txCount":10,"sendRaw":10,"receipt":50,"feeHistory":1450}
+  Alchemy Free: 4.51M CU/month of 30M => 15% (getLogs calls/day 900)
+  Chainstack Developer: 0.17M RU/month of 3M => 6% (getLogs calls/day 225)
+  Infura Core: 0.49M credits/day of 3M => 16% (getLogs calls/day 225)
+  QuickNode trial (1 month): 4.17M credits/month of 10M => 42% (getLogs calls/day 1575)
+  dRPC Free (keyed): 3.36M CU/month of 210M => 2% (getLogs calls/day 225)
+  Ankr Freemium: 33.63M credits/month of 200M => 17% (getLogs calls/day 225)
