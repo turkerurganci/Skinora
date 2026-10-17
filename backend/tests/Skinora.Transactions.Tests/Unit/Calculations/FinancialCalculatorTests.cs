@@ -13,48 +13,66 @@ namespace Skinora.Transactions.Tests.Unit.Calculations;
 public class FinancialCalculatorTests
 {
     // ===================================================================
-    // Commission (02 §5, 06 §8.3 — ROUND(price × rate, 6, ToZero))
+    // Commission (T144; 02 §5, 06 §8.3 — ROUND(price × rate, 2, ToZero))
     // ===================================================================
 
     [Fact]
-    public void Commission_NormalCase_RoundsToZeroAtScaleSix()
+    public void Commission_NormalCase_IsWholeCents()
     {
-        // 100.00 USDT × 2% = 2.000000 — clean case used in 06 §8.3 example.
+        // 100.00 USDT × 2% = 2.00 — clean case used in 06 §8.3 example.
         var commission = FinancialCalculator.CalculateCommission(100m, 0.02m);
 
         Assert.Equal(2m, commission);
     }
 
     [Fact]
-    public void Commission_TruncatesTowardZero_NotBankersRound()
+    public void Commission_ReportedDefect_10_55_Becomes_0_21()
     {
-        // 33.333333 × 0.02 = 0.66666666 → ToZero truncates to 0.666666.
-        // Banker's rounding would yield 0.666667 — the assertion guards
-        // against MidpointRounding default drift.
-        var commission = FinancialCalculator.CalculateCommission(33.333333m, 0.02m);
+        // The T144 defect: 10.55 × 0.02 = 0.211. The old rule kept 0.211, so
+        // the buyer was expected to send 10.761 while the screen said 10.76.
+        var commission = FinancialCalculator.CalculateCommission(10.55m, 0.02m);
 
-        Assert.Equal(0.666666m, commission);
+        Assert.Equal(0.21m, commission);
+        Assert.Equal(10.76m, FinancialCalculator.CalculateTotal(10.55m, commission));
     }
 
-    [Fact]
-    public void Commission_AtPrecisionBoundary_KeepsSixDecimals()
+    [Theory]
+    // Exact half cent: half-up / away-from-zero would charge 0.21 / 0.21.
+    [InlineData(10.25, 0.02, 0.20)]
+    [InlineData(10.75, 0.02, 0.21)]
+    // Just under the next cent — truncation, not rounding to nearest.
+    [InlineData(99.99, 0.025, 2.49)]  // 2.49975
+    [InlineData(0.49, 0.02, 0.00)]    // 0.0098 — sub-cent commission is 0
+    public void Commission_TruncatesTowardZero_AtTheCent(decimal price, decimal rate, decimal expected)
     {
-        // 0.999999 × 0.02 = 0.01999998 → ToZero → 0.019999.
-        var commission = FinancialCalculator.CalculateCommission(0.999999m, 0.02m);
+        var commission = FinancialCalculator.CalculateCommission(price, rate);
 
-        Assert.Equal(0.019999m, commission);
+        Assert.Equal(expected, commission);
     }
 
     [Theory]
     [InlineData(10, 0.02, 0.2)]
     [InlineData(50000, 0.02, 1000)]
-    [InlineData(123.45, 0.02, 2.469)]
-    [InlineData(99.99, 0.025, 2.49975)]
+    [InlineData(123.45, 0.02, 2.46)]   // 2.469
+    [InlineData(10.55, 0.0175, 0.18)]  // 0.184625
+    [InlineData(0.01, 0.02, 0)]        // 0.0002
     public void Commission_KnownPairs_MatchSpec(decimal price, decimal rate, decimal expected)
     {
         var commission = FinancialCalculator.CalculateCommission(price, rate);
 
         Assert.Equal(expected, commission);
+    }
+
+    [Theory]
+    [InlineData(33.333333)]
+    [InlineData(10.555)]
+    [InlineData(0.001)]
+    public void Commission_SubCentPrice_Throws(decimal price)
+    {
+        // The create path rejects >2-decimal prices (07 §7.2); the calculator
+        // refuses them too, so a payable total can never pick up a third digit.
+        Assert.Throws<ArgumentException>(
+            () => FinancialCalculator.CalculateCommission(price, 0.02m));
     }
 
     [Fact]
@@ -78,7 +96,7 @@ public class FinancialCalculatorTests
     }
 
     // ===================================================================
-    // Total (06 §8.3 — price + commissionAmount, no rounding)
+    // Total (06 §8.3 — price + commissionAmount [+ networkFee], no rounding)
     // ===================================================================
 
     [Fact]
@@ -90,11 +108,36 @@ public class FinancialCalculatorTests
     }
 
     [Fact]
-    public void Total_HandlesSixDecimalCommission()
+    public void Total_AddsNetworkFeeLine_WhenGiven()
     {
-        var total = FinancialCalculator.CalculateTotal(33.333333m, 0.666666m);
+        // 11 §F8 K8 example: 20 + 0.40 + 2.90 = 23.30 (the line arrives in T149).
+        var total = FinancialCalculator.CalculateTotal(20m, 0.40m, 2.90m);
 
-        Assert.Equal(33.999999m, total);
+        Assert.Equal(23.30m, total);
+    }
+
+    [Theory]
+    [InlineData(33.333333, 0.66)]
+    [InlineData(33.33, 0.666666)]
+    public void Total_SubCentComponent_Throws(decimal price, decimal commission)
+    {
+        Assert.Throws<ArgumentException>(
+            () => FinancialCalculator.CalculateTotal(price, commission));
+    }
+
+    [Fact]
+    public void Total_SubCentNetworkFee_Throws()
+    {
+        // T149 must round the fee line up to the cent before summing.
+        Assert.Throws<ArgumentException>(
+            () => FinancialCalculator.CalculateTotal(20m, 0.40m, 2.881m));
+    }
+
+    [Fact]
+    public void Total_NegativeNetworkFee_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => FinancialCalculator.CalculateTotal(20m, 0.40m, -0.01m));
     }
 
     [Fact]
@@ -374,7 +417,8 @@ public class FinancialCalculatorTests
         var commission = FinancialCalculator.CalculateCommission(price, rate);
         var total = FinancialCalculator.CalculateTotal(price, commission);
 
-        Assert.Equal(5.015m, commission);
-        Assert.Equal(255.765m, total);
+        // T144 — 5.015 truncates to 5.01; the total is whole-cent.
+        Assert.Equal(5.01m, commission);
+        Assert.Equal(255.76m, total);
     }
 }

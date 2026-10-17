@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-18 (T143 — §G.0b: HD türetme yolu düzeltmesinden sonra Nile ortamının sıfırlanması — eski depozit envanteri, isteğe bağlı boşaltma, yerel veritabanı sıfırlama, yeni yol doğrulaması; sıcak cüzdan ve kilit hesabının tohumdan türemediği ölçüldü) · 2026-10-17 (T141 — §C.2 enerji kilidi **uykuda**: hibrit kararın yerini 11 §F8 K4/K8 aldı, kilit kodu varsayılan kapalı bir anahtarın arkasında; `STAKE_ACCOUNT_*` satırına not) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-18 (T144 — §G.0b sonuna not: ödenecek tutar 2 ondalıklı, migration/backfill yok, sıfırlama T144 öncesi 6 haneli tutarları da temizler) · 2026-10-18 (T143 — §G.0b: HD türetme yolu düzeltmesinden sonra Nile ortamının sıfırlanması — eski depozit envanteri, isteğe bağlı boşaltma, yerel veritabanı sıfırlama, yeni yol doğrulaması; sıcak cüzdan ve kilit hesabının tohumdan türemediği ölçüldü) · 2026-10-17 (T141 — §C.2 enerji kilidi **uykuda**: hibrit kararın yerini 11 §F8 K4/K8 aldı, kilit kodu varsayılan kapalı bir anahtarın arkasında; `STAKE_ACCOUNT_*` satırına not) · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı.
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (66 satır), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -372,6 +372,8 @@ Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migr
 | 6 | **Sıcak cüzdan ve kilit hesabı değişmez** | Bu ikisi HD tohumundan türemez (05 §3.3 — sıcak cüzdan ayrı anahtardır). **Ölçüldü (2026-10-18, bu makinedeki `.env`):** `HOT_WALLET_ADDRESS` ve `STAKE_ACCOUNT_ADDRESS`, tohumun eski ve yeni yolunda indeks 0–50 ve 9001–9005 ile iki kök düğümün hiçbirine eşit değil. Başka bir ortamda sıcak cüzdan bu tohumdan türetilmişse: yeni sıcak cüzdan üretin, `HOT_WALLET_ADDRESS` + `HOT_WALLET_PRIVATE_KEY`'i birlikte değiştirin (adres backend'e de aynı `.env`'den gider), iki servisi yeniden başlatın ve eski sıcak cüzdanın bakiyesini taşıyın | Sıcak cüzdan değişmediği sürece payout ve sweep hedefi aynı kalır |
 
 > **Sıra bağlayıcıdır:** adım 1–2 eski imaj ve eski veritabanı ayaktayken koşulur; adım 3'ten sonra eski adreslerin anahtarı yalnız adım 2'deki elle yolla türetilebilir.
+
+> **T144 notu (ödenecek tutar 2 ondalıklı):** T144 için ayrı bir migration ya da backfill yoktur (06 §8.3 "Mevcut veri"). Adım 4'teki sıfırlama T144 öncesi açılmış işlemlerin 6 haneli `TotalAmount` / `ExpectedAmount` değerlerini de temizler. Sıfırlanmamış bir ortamda böyle bir işlem ekranda tutarını yuvarlamadan tam gösterir (ör. `10.761`) ve 2 haneli bir borsa ödemesiyle eşleşmez; o işlem iptal edilip yeniden açılır. T144'ten sonra açılan her işlemin tutarı 2 ondalıklıdır.
 
 ### G.1 Sırlar
 

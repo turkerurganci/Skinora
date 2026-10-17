@@ -47,7 +47,7 @@ public class LatePaymentRefundRequestedNotificationConsumerTests
         Assert.Equal(buyerId, request.UserId);
         Assert.Equal(NotificationType.LATE_PAYMENT_REFUNDED, request.Type);
         Assert.Equal(transactionId, request.TransactionId);
-        Assert.Equal("42.5", request.Parameters["Amount"]);
+        Assert.Equal("42.50", request.Parameters["Amount"]);
         Assert.Equal("USDT", request.Parameters["Stablecoin"]);
     }
 

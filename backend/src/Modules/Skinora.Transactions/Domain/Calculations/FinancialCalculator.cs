@@ -14,9 +14,18 @@ namespace Skinora.Transactions.Domain.Calculations;
 /// </para>
 /// <para>
 /// Rounding is applied <em>only</em> at the boundary where a value lands
-/// in storage or the wire — i.e. <see cref="CalculateCommission"/>, since
-/// <c>CommissionAmount</c> persists as <c>decimal(18,6)</c>. Sums and
+/// in storage or the wire — i.e. <see cref="CalculateCommission"/>. Sums and
 /// subtractions stay at full <see cref="decimal"/> precision per 09 §14.3.
+/// </para>
+/// <para>
+/// T144 — the amount the buyer is asked to send is a whole-cent value
+/// (02 §5, 06 §8.3, 09 §7.2). Turkish exchanges (BtcTurk, Paribu) send USDT
+/// with at most two decimals and payment validation is exact, so a payable
+/// total with a third digit could never be matched. The price is already
+/// whole-cent (07 §7.2), the commission is truncated to the cent
+/// (<see cref="PayableScale"/>, <see cref="MidpointRounding.ToZero"/> — never
+/// in the platform's favour), and the total is their sum, so it is
+/// whole-cent by construction. Storage stays <c>decimal(18,6)</c>.
 /// </para>
 /// </remarks>
 public static class FinancialCalculator
@@ -27,6 +36,13 @@ public static class FinancialCalculator
     /// <c>TransactionConfiguration</c> and 06 §8.3.
     /// </summary>
     public const int MoneyScale = 6;
+
+    /// <summary>
+    /// Scale of every amount the buyer is asked to send (T144): price,
+    /// commission, the TRON network fee line (T149) and their total. Two
+    /// decimals — the most a Turkish exchange withdrawal carries.
+    /// </summary>
+    public const int PayableScale = 2;
 
     /// <summary>
     /// Documented default for <c>gas_fee_protection_ratio</c> (02 §4.7,
@@ -54,34 +70,64 @@ public static class FinancialCalculator
         Math.Round(value, MoneyScale, MidpointRounding.ToZero);
 
     /// <summary>
-    /// <c>commission = ROUND(price × commissionRate, 6, ToZero)</c>
-    /// (02 §5, 06 §8.3). The result is the snapshot that lands in
-    /// <c>Transaction.CommissionAmount</c>.
+    /// True when <paramref name="value"/> has no digits beyond the cent,
+    /// i.e. it is a valid payable amount (T144).
     /// </summary>
+    public static bool IsWholeCents(decimal value) =>
+        decimal.Round(value, PayableScale) == value;
+
+    /// <summary>
+    /// <c>commission = ROUND(price × commissionRate, 2, ToZero)</c>
+    /// (T144; 02 §5, 06 §8.3, 09 §14.3). The result is the snapshot that
+    /// lands in <c>Transaction.CommissionAmount</c>. Truncation means the
+    /// buyer never pays more than <c>price × rate</c>; the platform forgoes
+    /// less than one cent per transaction.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="price"/> has digits beyond the cent. The create path
+    /// already rejects such prices (07 §7.2); this guards the invariant that
+    /// the payable total is whole-cent.
+    /// </exception>
     public static decimal CalculateCommission(decimal price, decimal commissionRate)
     {
         if (price < 0)
             throw new ArgumentOutOfRangeException(nameof(price), price, "Price must be non-negative.");
         if (commissionRate < 0)
             throw new ArgumentOutOfRangeException(nameof(commissionRate), commissionRate, "Commission rate must be non-negative.");
+        EnsureWholeCents(price, nameof(price));
 
-        return RoundMoney(price * commissionRate);
+        return Math.Round(price * commissionRate, PayableScale, MidpointRounding.ToZero);
     }
 
     /// <summary>
-    /// <c>totalAmount = price + commissionAmount</c> — what the buyer
-    /// transfers and what <c>PaymentAddress.ExpectedAmount</c> persists
-    /// (06 §8.3, 02 §5). Caller must pass an already-rounded
-    /// <paramref name="commissionAmount"/>.
+    /// <c>totalAmount = price + commissionAmount + networkFeeAmount</c> — what
+    /// the buyer transfers and what <c>PaymentAddress.ExpectedAmount</c>
+    /// persists (06 §8.3, 02 §5). Every component must already be whole-cent,
+    /// so the sum is too (T144). <paramref name="networkFeeAmount"/> is the
+    /// TRON network fee line (11 §F8 K8): always 0 until T149 adds the line,
+    /// and T149 rounds it up to the cent before it reaches this method.
     /// </summary>
-    public static decimal CalculateTotal(decimal price, decimal commissionAmount)
+    public static decimal CalculateTotal(decimal price, decimal commissionAmount, decimal networkFeeAmount = 0m)
     {
         if (price < 0)
             throw new ArgumentOutOfRangeException(nameof(price), price, "Price must be non-negative.");
         if (commissionAmount < 0)
             throw new ArgumentOutOfRangeException(nameof(commissionAmount), commissionAmount, "Commission amount must be non-negative.");
+        if (networkFeeAmount < 0)
+            throw new ArgumentOutOfRangeException(nameof(networkFeeAmount), networkFeeAmount, "Network fee must be non-negative.");
+        EnsureWholeCents(price, nameof(price));
+        EnsureWholeCents(commissionAmount, nameof(commissionAmount));
+        EnsureWholeCents(networkFeeAmount, nameof(networkFeeAmount));
 
-        return price + commissionAmount;
+        return price + commissionAmount + networkFeeAmount;
+    }
+
+    private static void EnsureWholeCents(decimal value, string paramName)
+    {
+        if (!IsWholeCents(value))
+            throw new ArgumentException(
+                $"{paramName} {value} must be a whole-cent amount — the buyer's payable total is 2-decimal (T144).",
+                paramName);
     }
 
     /// <summary>

@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -49,7 +49,7 @@ public sealed class LatePaymentRefundRequestedNotificationConsumer
                 // LATE_PAYMENT_REFUNDED_Body template references {Amount}; the
                 // refund row carries the full received amount (gas deducted at
                 // broadcast, 02 §4.6).
-                ["Amount"] = domainEvent.ReceivedAmount.ToString("0.######", CultureInfo.InvariantCulture),
+                ["Amount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
                 ["Stablecoin"] = domainEvent.Stablecoin.ToString(),
                 ["SourceAddress"] = domainEvent.SourceAddress,
             },

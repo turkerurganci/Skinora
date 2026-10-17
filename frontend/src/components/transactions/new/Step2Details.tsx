@@ -7,6 +7,7 @@ import type { TransactionParamsResponse } from "@/lib/api/transactions";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 import { cn } from "@/lib/utils/cn";
 import { formatStablecoin } from "@/lib/utils/format";
+import { calculateCommission } from "@/lib/utils/money";
 
 export interface Step2DetailsProps {
   item: SteamInventoryItem;
@@ -32,16 +33,11 @@ function toCardItem(item: SteamInventoryItem): ItemCardItem {
   };
 }
 
-function parseDecimal(value: string): number | null {
-  if (!value || value.trim() === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
+// T144 — same rule as the backend (truncated to the cent), so the preview
+// is the commission the transaction will actually carry.
 function commissionPreview(price: string, rate: number, stablecoin: StablecoinType): string | null {
-  const n = parseDecimal(price);
-  if (n === null || n <= 0) return null;
-  return formatStablecoin(n * rate, stablecoin);
+  const commission = calculateCommission(price, rate);
+  return commission === null ? null : formatStablecoin(commission, stablecoin);
 }
 
 export function Step2Details({

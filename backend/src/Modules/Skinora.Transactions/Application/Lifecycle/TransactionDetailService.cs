@@ -327,11 +327,14 @@ public sealed class TransactionDetailService : ITransactionDetailService
             Status: ProjectStatus(transaction),
             UserRole: role,
             Item: item,
-            Price: FormatMoney(transaction.Price),
+            Price: MoneyFormat.Display(transaction.Price),
             Stablecoin: transaction.StablecoinType,
             CommissionRate: transaction.CommissionRate,
-            CommissionAmount: FormatMoney(transaction.CommissionAmount),
-            TotalAmount: FormatMoney(transaction.TotalAmount),
+            // T144 — payable fields are whole-cent, so this is the 2-decimal
+            // form; a pre-T144 row is shown in full instead of being rounded
+            // into an amount validation would not accept.
+            CommissionAmount: MoneyFormat.Display(transaction.CommissionAmount),
+            TotalAmount: MoneyFormat.Display(transaction.TotalAmount),
             Seller: sellerParty,
             Buyer: buyerParty,
             Timeout: timeout,
@@ -375,7 +378,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
                 Type: null,
                 ImageUrl: transaction.ItemIconUrl,
                 Wear: null),
-            Price: FormatMoney(transaction.Price),
+            Price: MoneyFormat.Display(transaction.Price),
             Stablecoin: transaction.StablecoinType,
             CommissionRate: null,
             CommissionAmount: null,
@@ -691,7 +694,9 @@ public sealed class TransactionDetailService : ITransactionDetailService
 
         return new TransactionPaymentDto(
             Address: address.Address,
-            ExpectedAmount: FormatMoney(address.ExpectedAmount),
+            // T144 — the amount the buyer sends; validation compares the
+            // received amount against this exact value (no tolerance).
+            ExpectedAmount: MoneyFormat.Display(address.ExpectedAmount),
             Stablecoin: address.ExpectedToken,
             Network: TronNetworkLabel,
             // Still null before anything arrives — the three fields together
@@ -835,6 +840,9 @@ public sealed class TransactionDetailService : ITransactionDetailService
         return Math.Round(successRate.Value * 5m, 1, MidpointRounding.ToZero);
     }
 
+    // Informational, chain-measured amounts (gas fees, refund nets, payout
+    // breakdown) — rounded to 2 decimals for display (07 §2.8). Amounts the
+    // buyer must send use MoneyFormat.Display, which never rounds (T144).
     private static string FormatMoney(decimal value) =>
         value.ToString("0.00", CultureInfo.InvariantCulture);
 }

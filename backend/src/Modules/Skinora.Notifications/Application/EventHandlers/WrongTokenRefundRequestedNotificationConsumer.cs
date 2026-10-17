@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -39,7 +39,7 @@ public sealed class WrongTokenRefundRequestedNotificationConsumer
             {
                 ["ExpectedStablecoin"] = domainEvent.ExpectedStablecoin.ToString(),
                 ["ActualStablecoin"] = domainEvent.ActualStablecoin.ToString(),
-                ["ReceivedAmount"] = domainEvent.ReceivedAmount.ToString("0.######", CultureInfo.InvariantCulture),
+                ["ReceivedAmount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
                 ["SourceAddress"] = domainEvent.SourceAddress,
             },
         };
