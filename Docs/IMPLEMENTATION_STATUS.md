@@ -329,7 +329,7 @@
 |---|---|---|
 | T141 | Çok ağlı ödeme — doküman ve karar tabanı | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T141_REPORT.md), PR [#337](https://github.com/turkerurganci/Skinora/pull/337)) |
 | T142 | Ethereum ön ölçümleri (Sepolia + mainnet salt okuma) [ÖLÇÜM GÖREVİ] | ⬚ Bekliyor |
-| T143 | HD türetme yolunun standarda çekilmesi [RİSKLİ] | ⬚ Bekliyor |
+| T143 | HD türetme yolunun standarda çekilmesi [RİSKLİ] | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T143_REPORT.md), PR [#338](https://github.com/turkerurganci/Skinora/pull/338)) |
 | T144 | Ödenecek tutarın iki haneye sabitlenmesi [RİSKLİ] | ⬚ Bekliyor |
 | T145 | Veri modeline ağ boyutu + adres biçimi [RİSKLİ] | ⬚ Bekliyor |
 | T146 | Ağ başına kullanıcı ödeme/iade adresleri | ⬚ Bekliyor |
