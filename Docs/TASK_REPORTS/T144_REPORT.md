@@ -81,7 +81,9 @@
 - Branch: `task/T144-iki-haneli-tutar`
 - Commit: `d386a1e` — T144: Ödenecek tutar iki haneye sabitlendi — komisyon kuruşa aşağı kesilir
 - PR: #340
-- CI: rapor commit'inden sonraki run izleniyor (sonuç PR'da ve repo memory satırında)
+- Birleştirme: T142 (#339) main'e girince PR yalnız `Docs/05_TECHNICAL_ARCHITECTURE.md` sürüm başlığında çakıştı (iki dal da v3.12 yazmıştı); `origin/main` normal merge ile alındı, başlık **v3.13** olarak iki girdiyi de taşıyor (`12120d7`). Durum ve memory satırları otomatik birleşti (T142 ve T144 satırları yan yana).
+- Push: yerel `main` ref'i ana çalışma kopyasında check-out olduğu için güncellenemedi (`b9b42da`); pre-push Layer 3 `main..HEAD`'de main'den gelen T142 commit'ini "yabancı TXX" saydı. `origin/main..HEAD` yalnız T144 içerdiği için push `SKINORA_ALLOW_BUNDLED=1` ile yapıldı ve `Docs/BYPASS_LOG.md`'ye kaydı bu commit'le girdi.
+- CI: dal HEAD'inin run'ı yapımcı tarafından sonuçlanana kadar izlendi; run kimliği ve sonucu PR #340 checks'te (bu rapor push'tan önce yazıldı)
 
 ## Known Limitations / Follow-up
 
