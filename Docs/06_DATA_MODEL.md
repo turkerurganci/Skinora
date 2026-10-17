@@ -636,7 +636,7 @@ Kullanıcının bildirim kanalı tercihleri ve dış hesap bağlantıları.
 | `Price` | decimal(18,6) | NOT NULL | Satıcının belirlediği fiyat |
 | `CommissionRate` | decimal(5,4) | NOT NULL | Oluşturma anındaki komisyon oranı (snapshot) |
 | `CommissionAmount` | decimal(18,6) | NOT NULL | ROUND(Price × CommissionRate, 6, ToZero) |
-| `TotalAmount` | decimal(18,6) | NOT NULL | Price + CommissionAmount (rounding sonrası toplam) |
+| `TotalAmount` | decimal(18,6) | NOT NULL | Price + CommissionAmount (rounding sonrası toplam). **F8 hedefi (T144, T149; §1.4, §8.3):** 2 ondalığa sabit; TRON'da alıcının ağ ücreti satırı (`NetworkFeeAmount`) ayrıca eklenir |
 | `MarketPriceAtCreation` | decimal(18,6) | NULL | Oluşturma anındaki piyasa fiyatı (fraud kontrolü için) |
 | **Cüzdan Adresleri (Snapshot)** | | | |
 | `SellerPayoutAddress` | string(50) | NOT NULL | Satıcının cüzdan adresi — oluşturma anında sabitlenir. **F8 hedefi:** satıcının kabul ettiği her ağın adresi oluşturma anında `TransactionNetworkOption`'da sabitlenir; bu kolon kabul anında seçilen ağın adresiyle dolar ve o zamana kadar NULL'dır (§1.4, T147) |

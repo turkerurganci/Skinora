@@ -865,6 +865,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 └─────────────────────────────────┘
 ```
 
+> **F8 hedefi (T156; 02 §4.2):** özetteki "Token" satırı satıcının kabul ettiği ağları gösterir (TRON TRC-20 / Ethereum ERC-20); tek ağ etiketi kalkar.
+
 - Tüm bilgiler salt okunur gösterilir
 - "Geri" butonu → önceki adımlara dönüş
 - "İşlemi Başlat" butonu (birincil)
@@ -1119,7 +1121,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 |---------|----------------|
 | Eksik tutar gönderildi | Uyarı banner: "Eksik tutar gönderildi (X USDT). Ödemeniz iade edildi. Lütfen doğru tutarı gönderin: Y USDT" |
 | Fazla tutar gönderildi | Bilgi banner: "Fazla tutar gönderildi. Z USDT iade edildi. İşlem devam ediyor." |
-| Yanlış token gönderildi | Uyarı banner: "Yanlış token gönderildi. İade edildi. Lütfen USDT (TRC-20) gönderin." |
+| Yanlış token gönderildi | **F8 hedefi (T156):** metindeki ağ etiketi alıcının seçtiği ağı gösterir (TRC-20 / ERC-20). Uyarı banner: "Yanlış token gönderildi. İade edildi. Lütfen USDT (TRC-20) gönderin." |
 | Gecikmeli ödeme (iptal sonrası) | CANCELLED state'te bilgi: "Gecikmeli ödemeniz tespit edildi ve iade edildi." + tx hash |
 
 #### S07 — Dispute Gösterimi

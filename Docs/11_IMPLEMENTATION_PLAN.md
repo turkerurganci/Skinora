@@ -4828,7 +4828,9 @@ Task T152: Ethereum gönderim servisi [ÇOK RİSKLİ]
       yalnız yapılandırılmış chainId'yi (mainnet 1, Sepolia 11155111) ve
       yalnız işlem tipi 0 ve 2'yi kabul ediyor; tip 4 (EIP-7702) ve keyfi
       kontrat çağrısı asla imzalanmıyor — her biri için ret testi
-      (08 §3.7.6) (öneriyle kaydedildi — ⚠)
+      (08 §3.7.6) (öneriyle kaydedildi — ⚠). Tek istisna: yakıt cüzdanı
+      anahtarıyla, yalnız servisin kendi türettiği depozit adreslerine,
+      tek/günlük tavan içinde yerel ETH gönderimi (T153, 08 §3.7.6)
   Test beklentisi: Unit, Integration (takılan işlem, nonce çakışması)
 
 Task T153: Yakıt cüzdanı
