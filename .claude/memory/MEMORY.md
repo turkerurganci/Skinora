@@ -75,6 +75,7 @@
 - [e2e-prettier-crlf-local-artifact.md](e2e-prettier-crlf-local-artifact.md) — Lokal e2e prettier uyarilari core.autocrlf CRLF artifakti; CI "1. Lint" (LF) yetkili — bulgu sayma
 - [wp5-validation-pass.md](wp5-validation-pass.md) — WP5 admin dispute resolution bagimsiz validator PASS (2026-06-17, 8/8 AC, 2384/2384 test)
 - [project_playbook_template.md](project_playbook_template.md) — Skinora metodunu uygulama-bagimsiz public GitHub template'ine donusturme projesi; yayinda, v1.1.0 (2026-08-01), isTemplate=false
+- [project_f8_yonetici_duzeni.md](project_f8_yonetici_duzeni.md) — F8 boyunca yonetici duzeni: gorev + dogrulama temiz alt ajanda, PASS + CI yesilse ben merge ederim, yalniz cok kritik sorular (2026-10-17)
 
 ## Reference
 - [reference_remote_control.md](reference_remote_control.md) — VS Code Claude Code /remote-control (/rc) komutu — mobil session izleme/kontrol
