@@ -239,6 +239,27 @@ Bloklar 26.214.869–26.214.908 (40 blok), 430 sade USDT transferi (`to = USDT`,
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 
+## Doğrulama sonucu (2026-10-18)
+
+**Karar: ✓ PASS** (doğrulama alt ajanı, F8 yönetici düzeni; PR #339, dal başı `a4aa0d0`).
+
+Doğrulayıcı ölçümleri bağımsız yeniden yaptı:
+
+- USDT davranışı: alıcı kara liste denetimine girmiyor (Sourcify kaynağı + simülasyon).
+- PublicNode 1.000'lik adres listesi sınırı.
+- Tenderly'nin 5.000'lik listede sessizce eksik log döndürmesi tekrarlandı.
+- Gas birimleri.
+- `finalized` gecikmesi.
+- Ücretsiz plan aritmetiği.
+
+Bloke etmeyen beş bulgu bu commit'te uygulandı:
+
+1. USDT `deprecated == false` ve `paused == false` denetimi; her gönderimden önce tekrar (08 §3.7.1, 11 T151/T152 + yönetici listesi).
+2. 08 §3.7.4: "PublicNode 5.000'i reddetti" yalnız mainnet için; Sepolia PublicNode 5.000'i kabul etti.
+3. T151: Alchemy Free saniyede 300 CU; saatlik mutabakat en az ~46 sn'ye yayılır.
+4. 05 §3.3 `/health`: yakıt cüzdanının yanına sıcak cüzdanın ETH bakiyesi (alarm 0,06 ETH).
+5. T150/T151: `finalized` 25 dakikadan uzun durursa durum okuma arşiv erişimi isteyebilir (Chainstack'te 2 RU, PublicNode'da imkânsız).
+
 ## Altyapı Değişiklikleri
 
 - Migration: Yok
