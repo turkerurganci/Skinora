@@ -13,5 +13,5 @@ Türker 2026-10-17'de F8'in (TRON + Ethereum, T141–T160) Shopfolio'daki yönte
 - Her görev için temiz bağlamlı yapım alt ajanı; ardından yapım raporunu görmeyen ayrı doğrulama alt ajanı (INSTRUCTIONS §3.3 izolasyon girdileri aynen). PASS + PR CI yeşilse squash-merge, merge sonrası CI izlenir; teyit run ID'leri sonraki dalda kayda girer ([[feedback_merge_teyit_not_direct_pushable]]).
 - Kolay kararlar öneriyle verilir, `(öneriyle kaydedildi — ⚠)` işaretlenir, F8 Gate Check'ten önce tek listede gösterilir. Para, güvenlik, geri dönüşü zor kararlar sorulur.
 - Yarım saati aşan adımda tek satır ara durum; faz sonunda tahmin–gerçekleşen süre tablosu (ölçüm scratchpad'deki PROGRESS.md'de).
-- Türker bir PR'ın doğrulamasını kendisi yaptırabilir — o PR'a dokunma (#335, 2026-10-17).
+- Bekleyen #335 ve #334 da bu düzenle doğrulanıp birleştirilir (Türker 2026-10-17: "onu da sen yapacaksın").
 - Yetki ve soru düzeni yalnız F8 içindir; F9 açılışında yeniden sorulur. Kural katmanındaki evi: `.claude/INSTRUCTIONS.md` §3.3 "F8 yönetici düzeni" maddesi.
