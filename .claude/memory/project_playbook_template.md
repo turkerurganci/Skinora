@@ -1,10 +1,12 @@
 ---
 name: project_playbook_template
-description: Skinora metodunu uygulama-bağımsız GitHub template'ine dönüştürme projesi — üretim tamamlandı (2026-07-27), bağımsız doğrulama bekliyor
+description: Skinora metodunu uygulama-bağımsız GitHub template'ine dönüştürme projesi — public, v1.1.0 (2026-08-01); doğrulama turları kapandı
 type: project
 ---
 
 Skinora MVP'si bittikten sonra proje sahibi, Skinora'nın discovery → MVP yönteminin son hâlini uygulama-bağımsız bir **public GitHub template repository**'sine dönüştürmeye karar verdi. Klasör: `c:\projects\project-playbook`.
+
+**GÜNCEL DURUM (2026-10-17, GitHub'dan ölçüldü): YAYINDA.** `turkerurganci/project-playbook` **public** (son push 2026-08-01). Son sürüm **v1.1.0** — PR #3 `2b7ef86` ("skill'leri gerçekten çağrılabilir hâle getir"); öncesinde v1.0.2 (#1, doğrulama bulguları) ve v1.0.3 (#2). Git tag'i ve GitHub release'i yok (sürüm commit mesajında). Repo GitHub'da **template olarak işaretli değil** (`isTemplate=false`) — "Use this template" düğmesi görünmüyor; isteniyorsa ayar açılmalı. Aşağıdaki tarihsel kayıttaki "SIRADA: delta yeniden doğrulama" adımı bu sürümlerle kapandı.
 
 **Durum (2026-07-27): ÜRETİM TAMAMLANDI.** Lokal repo `git init` edildi, tek commit `364551e` (57 dosya, ~5.4K satır), working tree temiz. Playbook v1.0.
 
