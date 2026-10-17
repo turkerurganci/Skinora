@@ -5,7 +5,7 @@
 - **Type:** Implementation phase (product discovery complete)
 - **Language:** Turkish docs, English code
 
-## Current Status (2026-10-17 — F8 + F9 tanımlandı: TRON'un yanına Ethereum, açılış ikisi hazır olunca; backlog sayacı düzeltildi 37 aktif / 156 çözülmüş, 🔴 YOK)
+## Current Status (2026-10-17 — F8 + F9 tanımlandı: TRON'un yanına Ethereum, açılış ikisi hazır olunca; backlog sayacı düzeltildi 38 aktif / 155 çözülmüş, 🔴 YOK)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
 
 > **F8 + F9 tanımlandı (2026-10-17, kayıt dalı `docs/f8-ethereum-plan`).** Proje sahibi ödeme altyapısının platforma neredeyse sıfır maliyetli olmasını istedi; TRON'da satış başı ağ ücreti kilitsiz 5–7 $. Ucuz ağ araştırması (2026-10-04/05; yedi araştırma + bağımsız çapraz doğrulama + eleştirmen; zincirden ve borsaların resmi uçlarından ölçüm) sonucu: Türkiye'deki 9 SPK-listeli borsanın hepsinde bulunan yalnız TRON ve Ethereum; Ethereum'da satış başı ~0,05 $; Arbitrum/Polygon USDT'si USDT0 (aracı şirket), BSC'ninki Binance-Peg, Base'de Tether USDT'si yok. **Kararlar K1–K6** (`Docs/11_IMPLEMENTATION_PLAN.md` §F8): TRON kalır + Ethereum eklenir · yalnız USDT · satıcı kabul ettiği ağları seçer, alıcı birini seçer, satıcı aynı ağdan alır (ağlar arası para yok) · TRON'u seçen TRON ücretini öder (hibrit kilit gereksizleşir) · Ethereum ödemesi finalized (~15 dk) · Ethereum depozitleri HD adres + yakıt cüzdanı, kontrat yok. **F8 = T141–T160, F9 = T161–T175** (canlıya çıkış listesi). Arbitrum/Avalanche açılış sonrası +1–2 görev.

@@ -4615,7 +4615,7 @@ Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 >
 > **Araştırmanın kararı belirleyen bulguları (2026-10-04 ölçümü, fiyatlar o günkü):**
 > - Ucuz ağların hepsinde bir satışın ağ ücreti (depozite yakıt + sweep + payout) platforma **1 sentin altında** (BSC ~0,004 $ · Arbitrum/Avalanche ~0,007 $ · Solana ~0,002 $); **Ethereum ~0,05 $** (365 günün p99'u ~1,66 $; 2025-10-10 çöküşünün zirve dakikasında ~254 $ — 8 günlük mutabakat penceresi sayesinde ücret tavanı + bekleme ile yönetilir).
-> - Türkiye'de SPK faaliyet listesindeki 9 borsanın (Binance TR · BtcTurk · Paribu · OKX TR · Bybit TR · KuCoin TR · GateTR · Bitlo · CoinTR) **hepsinde bulunan yalnız iki ağ var: TRON ve Ethereum.** Arbitrum 7/9 (BtcTurk ve KuCoin TR'de yok) · Avalanche 5/9 · BSC 5/9 (BtcTurk, Paribu, OKX TR'de yok) · Solana 5/9 (BtcTurk'te yok) · Polygon 3/9 · Base 0/9. Hacmi en büyük üç Türk borsasının (Binance TR, BtcTurk, Paribu) ortak ağları yalnız TRON ve Ethereum.
+> - Türkiye'de SPK faaliyet listesindeki 9 borsanın (Binance TR · BtcTurk · Paribu · OKX TR · Bybit TR · KuCoin TR · GateTR · Bitlo · CoinTR) **hepsinde bulunan yalnız iki ağ var: TRON ve Ethereum.** Arbitrum 7/9 (BtcTurk ve KuCoin TR'de yok) · Avalanche 5/9 (Paribu, Bybit TR, KuCoin TR, CoinTR'de yok) · BSC 5/9 (BtcTurk, Paribu, OKX TR, KuCoin TR'de yok) · Solana 5/9 (BtcTurk, Bybit TR, KuCoin TR, CoinTR'de yok) · Polygon 3/9 · Base 0/9. Hacmi en büyük üç Türk borsasının (Binance TR, BtcTurk, Paribu) ortak ağları yalnız TRON ve Ethereum.
 > - Kullanıcının çekim ücreti çoğu Türk borsasında Ethereum'da TRON'dan düşük (BtcTurk 0,61 / 5 · Paribu 1,5 / 5 · Binance TR 0,5 / 1,5 USDT).
 > - USDT'yi Tether'in kendisi çıkarıyor: TRON, Ethereum, Avalanche, Solana (+TON, Aptos). Arbitrum/Polygon/Optimism'deki USDT **USDT0** (Everdawn Labs, BVI; Ethereum'da kilitli USDT karşılığı, 3/5 multisig gecikmesiz yönetiyor). BSC'deki USDT **Binance-Peg** (Binance'in tek anahtarlı kopyası, 18 ondalık; Tether listesinde yok; OKX desteklemiyor). Base'de Tether USDT'si yok.
 > - Dünyadaki USDT'nin %50,4'ü TRON'da ve artıyor (bir yılda +%22); Ethereum %40–47.
@@ -4647,7 +4647,11 @@ Task T141: Çok ağlı ödeme — doküman ve karar tabanı
       ayrı kök tohum mu, aynı tohumdan ayrı yol mu; (b) depozit adresi işlem
       başına mı, kullanıcı başına mı — MASAK Tebliğ 29'un "karşı tarafı beyan"
       kuralının alıcıya her ödemede yük olup olmadığı bu kararla birlikte
-      tartılır; (c) TRON ağ ücretinin alıcı/satıcı dağılımı (K4)
+      tartılır; (c) TRON ağ ücretinin alıcı/satıcı dağılımı (K4); (d) Ethereum'da
+      yanlış token gelirse iade edilip edilmeyeceği (imzacının izin listesi
+      buna göre kurulur)
+    - §7'ye "F8 kaynak öğeleri" izlenebilirlik tablosu eklendi (F7'nin §7.5'i
+      gibi; F7 gate bulgusu F7-N1)
     - "Yalnız USDT" kararı 10_MVP_SCOPE ve 02'ye yansıdı
   Test beklentisi: Yok (doküman)
 
@@ -4751,7 +4755,7 @@ Task T149: Ağ ücreti politikası
 --- P3: Ethereum servisi ---
 
 Task T150: Ethereum servis iskeleti
-  Bağımlılık: T143, T148
+  Bağımlılık: T142, T143, T148
   Kabul kriterleri:
     - Ağ bağlantısı birincil + yedek RPC; açık blok numaralarıyla okuma
     - Adres türetme T143'ün yolundan; imza anahtarları yalnız bu serviste
@@ -4759,7 +4763,7 @@ Task T150: Ethereum servis iskeleti
   Test beklentisi: Unit
 
 Task T151: Ethereum ödeme izleyicisi [RİSKLİ]
-  Bağımlılık: T150
+  Bağımlılık: T142, T150
   Kabul kriterleri:
     - Tek eth_getLogs ile tüm aktif depozitler; ileri giden blok imleci,
       yalnız finalized bloklar (K5); tekillik (ağ, txHash, logIndex)
@@ -4774,8 +4778,9 @@ Task T152: Ethereum gönderim servisi [ÇOK RİSKLİ]
     - Çift ödeme imkânsız: nonce yönetimi tek yerde, imzalı işlem yayından
       önce saklanıyor, yeniden deneme aynı baytları yayınlıyor, ücret
       artırma aynı nonce ile
-    - Sabit hedefler + tek/günlük tavanlar korunuyor; imzacı yalnız USDT
-      transfer çağrısı ve chainId 1 kabul ediyor
+    - Sabit hedefler + tek/günlük tavanlar korunuyor; imzacı yalnız izin
+      verilen token transfer çağrısını ve yapılandırılmış chainId'yi kabul
+      ediyor (mainnet 1, Sepolia 11155111)
   Test beklentisi: Unit, Integration (takılan işlem, nonce çakışması)
 
 Task T153: Yakıt cüzdanı
@@ -4788,14 +4793,14 @@ Task T153: Yakıt cüzdanı
   Test beklentisi: Unit, Integration
 
 Task T154: Ethereum ücret tahmini + ETH fiyatı
-  Bağımlılık: T150
+  Bağımlılık: T142, T150
   Kabul kriterleri:
     - Ücret tahmini ve gerçekleşen ücret wei cinsinden, hassasiyet kaybı
       olmadan backend'e ulaşıyor
   Test beklentisi: Unit, Contract
 
 Task T155: sidecar-fake Ethereum desteği + E2E
-  Bağımlılık: T148
+  Bağımlılık: T147, T148, T149
   Kabul kriterleri:
     - Sahte servis Ethereum biçimli adres/hash üretiyor, izleyici başlat/
       durdur ve ücret tahmini uçlarını sunuyor
@@ -4815,7 +4820,7 @@ Task T156: Kullanıcı arayüzü — ağ seçimi
   Test beklentisi: Unit (FE), E2E
 
 Task T157: Admin ekranları ağ başına
-  Bağımlılık: T148
+  Bağımlılık: T148, T153
   Kabul kriterleri: cüzdanlar, bakiyeler, yakıt cüzdanı ve transferler ağ
     başına görünür
   Test beklentisi: Unit (FE)
@@ -4912,7 +4917,7 @@ Task T173: Mainnet pilotu
     satış her iki ağda; soğuk cüzdana aktarım dahil
 
 Task T174: DEFERRED_BACKLOG §4 triyajı
-  Kabul kriterleri: 2026-10-17'de ⚪ sayılan 15 satır bugünkü kodla
+  Kabul kriterleri: 2026-10-17'de ⚪ sayılan 16 satır bugünkü kodla
     ölçüldü; bayat olanlar kapandı (bloke etmez)
 
 Task T175: Çıkış kapısı (12 §6.3) + açılış
