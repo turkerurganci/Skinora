@@ -52,7 +52,7 @@ ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 
 | Anahtar | Kim kullanır | Not |
 |---|---|---|
-| `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme (`m/44'/195'/0'/0/{index}`) |
+| `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme — BIP-32 kök düğümünden `m/44'/195'/0'/0/{index}`, BIP-39 parolası boş (08 §3.2). T143'ten (2026-10-18) önce kod `m/44'/60'/0'/0/0/44'/195'/0'/0/{index}`'ten türetiyordu; o tarihten önce açılmış Nile depozitleri koddan erişilemez (DEPLOY_RUNBOOK §G.0b). Sıcak cüzdan bu tohumdan **türemez** |
 | `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + Energy delegation. **Backend'e geçilmez.** |
 | `STEAM_API_KEY` | steam sidecar + backend | Envanter okuma + trade-hold probu + OpenID profil |
 | `TRON_API_KEY` / `_SECONDARY` | blockchain sidecar | TronGrid rate limit + failover |
