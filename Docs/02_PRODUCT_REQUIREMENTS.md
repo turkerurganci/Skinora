@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.3** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-02 (**§4.6 — depozit açılışı alıcıya yansıyor** (`RefundActivationCostNotCharged`, proje sahibi kararı: hiç TRX almamış depozitten iadede açılış ücreti iade kesintisine eklenir, zincirden okunur) · **§9.2 — teslimat süresi içinde periyodik tarama** (`P2P-DeliveryPollingJob`): aynı turda iki kanıt birlikte görülürse kapı kapalıyken alıcıya `DELIVERY_DETECTED`, kapı açıkken teslim) · 2026-10-01 (**§4.7 — satıcıya kalan tutar sıfır ya da altındaysa** — #327'den beri split'e çalışma anı gas tahmini giriyor; mainnet'te ödeme enerjisi bittiğinde tahmin 2,2–4,4 USDT'ye çıkıyor ve daha ucuz satışlarda satıcıya kalan tutar sıfırın altına düşüyordu. Ödeme sessizce takılıyor, 20 takılı işlem bütün ödeme kuyruğunu durduruyordu. Proje sahibi kararı: ödeme bekletilir, saatler arayla yeniden denenir, üçüncü ertelemede admin'e alarm gider (`PayoutStallsOnNonPositiveNet`).) · 2026-09-16 (**§4.6 — enerji kaynağı kararı: hibrit** — "mainnet öncesi açık karar" notu kapandı: hot cüzdan taban hacim kadar TRX kilitler, kalanı yakılır (08 §3.3). Hiç TRX almamış depozitten yapılan iadede hesap açılış ücretinin (1,1 TRX) bugün alıcıya yansıtılmadığı ve platformun bu kalemden zarar ettiği açık kalem olarak yazıldı (`RefundActivationCostNotCharged`).) · 2026-09-16 (**§14.2 teslim etmeme yaptırımı — tanım ve varsayılanlar** — sayılan üç olay (ödeme sonrası teslimat süresinin dolması · ödeme sonrası satıcı iptali · teslimattan sonra geri alma) ve sayılmayanlar yazıldı; proje sahibinin varsayılanları (30 gün · 2. olayda flag · 3. olayda süresiz askı) kayda geçti. Yaptırımın yalnız yeni bir olayla tetiklendiği, admin kararını geri almadığı ve açık işlemleri dondurmadığı eklendi; §16.2 satırına pencere eklendi.) · 2026-09-15 (**Steam takas uygunluğu — kalan gün sayısı** — §9.1a'ya bir madde eklendi: 15 günlük beklemede kalan gün sayısı satıcıya gösterilir (yukarı yuvarlanır, en az 1). Diğer iki engele gün sayısı iliştirilmez — kısıtlı hesabın çaresi harcamadır, "sorulamadı"nın çaresi tekrar denemektir.) · 2026-08-19 (**T133a** — §18.2 tetikleyici tablosu koda hizalandı: alıcı satırındaki emekli "item platforma ulaştı" (`ITEM_ESCROWED`) ve "item gönderildi — trade offer'ı kabul et" (`TRADE_OFFER_SENT_TO_BUYER`) metinleri kaldırıldı, satıcı satırına v3.0'ın teslimat tetikleyicisi (`DELIVERY_EXPECTED`) yazıldı. Tablonun altına kataloğun tek doğru kaynağının 06 §2.13 olduğunu ve tablonun tip listesi DEĞİL ürün seviyesi özet olduğunu söyleyen kaynak notu eklendi. Bu bölüm bildirim kataloğunun **dördüncü** nüshasıydı ve hiçbir görevin kapsamında değildi; kapsam genişletmesi proje sahibi onayıyla yapıldı ve plan §P6 T133a'ya işlendi. Gereksinim değişikliği yok.) · 2026-08-18 (**T131 düzeltme turu** — §10.2'ye **yeniden eskalasyon** satırı eklendi (doğrulama bulgusu N2, proje sahibi kararı): "aynı türde dispute tekrar açılamaz" kuralı ikinci bir dispute **SATIRI** yasağıdır (`UQ_Disputes_TransactionId_Type`), karara bağlanmış bir satırın bir daha ele alınamayacağı değil. Karardan **sonra** platformun kendisi yeni bir olgu gözlemlerse — teslimat turu, kararın ardından item'ın satıcıdan ayrıldığını tespit ederse — **aynı satır** `ESCALATED`'a döner, `ResolvedAt` temizlenir, `AdminNote`/`AdminId` korunur ve önceki karar değiştirilemez audit kaydında (06 §3.20) kalır. Kapıyı yalnız **platformun yeni gözlemi** açar; kullanıcı itirazı veya eski kararın yeniden tartışılması açmaz. `CLOSED` (§2.10 sistemin kendi otomatik çözümü) kuralın **dışındadır**. Gerekçe: aksi hâlde imzayı hiç görmemiş bir kararın üstünden işlem sessizce iptal edilip alıcıya iade yapılıyor, item'ı çoktan envanterinden çıkmış satıcı hem item'sız hem parasız kalıyordu.) · 2026-08-17 (**T131** — §10.4'e üç kural yazıldı: (1) alıcı lehine karar **item iadesi içermez** (§3.2'nin admin kolundaki karşılığı); (2) teslimatı **kanıtlanmış** bir işlemde (`ITEM_DELIVERED`) alıcı lehine karar **istisnadır** ve gerekçesi admin notundan **ayrı** bir alanda kalıcı olarak kayda geçer — kapı **duruma** bakar, kanıt bayrağına değil, aksi hâlde admin'in gerekçe yazma yükümlülüğü vakanın gücüne değil Steam envanterinin o an okunabilir olmasına bağlanırdı; (3) admin kararı, yanlış-teslimat imzası nedeniyle bekletilen işlemi **serbest bırakır** — §9.2'nin yasakladığı şey **sessiz** iptaldir ve admin baktıktan sonra iptal sessiz değildir; sistemin kendi otomatik çözümü (`CLOSED`) bu kapıyı açmaz. Kural daha önce yalnız 03 §6.4'te vardı; 03 ve 05 ona "(02 §10)" diye atıf yapıyordu ve atfın hedefi §10'da **yoktu** — bu turda yazıldı.) · 2026-08-17 (**T130** — §10.1 teslim itirazı satırına **kapı istisnası** yazıldı: envanter kanıtı yeterli ama otomatik onay kapısı (`delivery.inventory_evidence_auto_release_enabled`) kapalıysa dispute **kapanmaz**, OPEN kalır ve eskale edilebilir (03 §6.2 **Sonuç E**). Gerekçe: kapı zaten parayı bırakmıyorken dispute'u "teslim edildi" diye kapatmak alıcıya hiçbir çıkış bırakmıyordu — otomatik yol kapılı, elle yol kapalı (T127 doğrulaması bulgu B5). Kanıt kuralları ve kapının kendisi DEĞİŞMEDİ.) · 2026-08-17 (T129 ikinci düzeltme turu — §4.5.1 launch kapısı notunda yapışkanlığın **kaydedilen gerekçeyi de kapsadığı** yazıldı (gerekçe yalnız güçlendirilebilir, düşürülemez — güç sırası 06 §3.5; aksi hâlde tek bir "okunamadı" turu imzayı siliyor ve sonraki okuma parayı açık eskalasyonun üstünden bırakıyordu, bulgu B4). "Bilinen sonuçları" listesine dördüncü madde: mutabakat kapısı süpürmenin de kapısı olduğu için sıcak cüzdanın **kendi işletme bakiyesini** tutması gerekir — eski T+0 süpürme / T+8g ödeme sırası sıcak cüzdanı kendiliğinden fonluyordu, artık iki kapı aynı ana açılıyor (bulgu N9; boyutlandırma DEPLOY_RUNBOOK §I.2).) · 2026-08-17 (T129 düzeltme turu — §4.5.1'e üçüncü "karar verilmez" dalı eklendi: kontrolün karar girdisi hiç üretilememiş vakalar eşik beklemeden admin'e düşer ve admin mutabakatı satıcı lehine kapatabilir (07 §9.22b); geri alma imzası artık item'ın satıcıdan **ayrıldığının gözlenmiş olmasını** da şart koşar — yalnız "satıcıda duruyor" dürüst satıcıya yanlış-pozitif üretiyordu; kaydedilen imza **yapışkan** hâle geldi.) · 2026-08-16 (T129 — §4.5.1 mutabakat sonu kontrolü **iki taraflı** hâle getirildi: "item alıcıda değil" tek başına geri alma sayılmaz, item'ın satıcıda yeniden belirmesi aranır; ayırt edilemeyen ayrılma admin'e düşer. Gerekçe: Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde bittiği için alıcının meşru devri tek taraflı okumada geri almayla aynı görünüyordu. Ayrıca geri alma sonuçlarına hesap düzeyi `DELIVERY_REVERSED` flag tipi ve itibar paydası (06 §3.1) eklendi, otomatik iade launch kapısına bağlandı.) · 2026-08-14 (T125 — §9.2 envanter kanıtı yoluna launch kapısı notu eklendi: `delivery.inventory_evidence_auto_release_enabled` kapalıyken kanıt üretilir ve saklanır ama tek başına para bırakmaz; alıcı onayı yolu etkilenmez. Kanıt kuralları değişmedi.) · 2026-08-13
+**Versiyon: v4.4** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-17 (**T141 — çok ağlı ödeme** (11 §F8 K1–K9): §2.2/§2.3/§4.1/§4.2 — **yalnız USDT** (K2), ağlar **TRON + Ethereum**, satıcı kabul ettiği ağları seçer, alıcı birini seçer, para aynı ağda kalır (K3); §4.4 — **reddedilen ödeme iadeleri alıcının iade adresine** (K9; T110-K1 tersine döndü); §4.6/§4.7/§5 — **TRON ağ ücreti** satırı alıcıya (sweep), payout satıcıya mevcut %10 kuralıyla, Ethereum'da ücreti platform üstlenir (öneriyle kaydedildi — ⚠), örnek tutarlar; hibrit kilit kararının yerini K4/K8 aldı; §12 — ağ başına adresler, borsa uyarısı kalkar; §16.2 — ağ başına ayarlar.) · 2026-10-02 (**§4.6 — depozit açılışı alıcıya yansıyor** (`RefundActivationCostNotCharged`, proje sahibi kararı: hiç TRX almamış depozitten iadede açılış ücreti iade kesintisine eklenir, zincirden okunur) · **§9.2 — teslimat süresi içinde periyodik tarama** (`P2P-DeliveryPollingJob`): aynı turda iki kanıt birlikte görülürse kapı kapalıyken alıcıya `DELIVERY_DETECTED`, kapı açıkken teslim) · 2026-10-01 (**§4.7 — satıcıya kalan tutar sıfır ya da altındaysa** — #327'den beri split'e çalışma anı gas tahmini giriyor; mainnet'te ödeme enerjisi bittiğinde tahmin 2,2–4,4 USDT'ye çıkıyor ve daha ucuz satışlarda satıcıya kalan tutar sıfırın altına düşüyordu. Ödeme sessizce takılıyor, 20 takılı işlem bütün ödeme kuyruğunu durduruyordu. Proje sahibi kararı: ödeme bekletilir, saatler arayla yeniden denenir, üçüncü ertelemede admin'e alarm gider (`PayoutStallsOnNonPositiveNet`).) · 2026-09-16 (**§4.6 — enerji kaynağı kararı: hibrit** — "mainnet öncesi açık karar" notu kapandı: hot cüzdan taban hacim kadar TRX kilitler, kalanı yakılır (08 §3.3). Hiç TRX almamış depozitten yapılan iadede hesap açılış ücretinin (1,1 TRX) bugün alıcıya yansıtılmadığı ve platformun bu kalemden zarar ettiği açık kalem olarak yazıldı (`RefundActivationCostNotCharged`).) · 2026-09-16 (**§14.2 teslim etmeme yaptırımı — tanım ve varsayılanlar** — sayılan üç olay (ödeme sonrası teslimat süresinin dolması · ödeme sonrası satıcı iptali · teslimattan sonra geri alma) ve sayılmayanlar yazıldı; proje sahibinin varsayılanları (30 gün · 2. olayda flag · 3. olayda süresiz askı) kayda geçti. Yaptırımın yalnız yeni bir olayla tetiklendiği, admin kararını geri almadığı ve açık işlemleri dondurmadığı eklendi; §16.2 satırına pencere eklendi.) · 2026-09-15 (**Steam takas uygunluğu — kalan gün sayısı** — §9.1a'ya bir madde eklendi: 15 günlük beklemede kalan gün sayısı satıcıya gösterilir (yukarı yuvarlanır, en az 1). Diğer iki engele gün sayısı iliştirilmez — kısıtlı hesabın çaresi harcamadır, "sorulamadı"nın çaresi tekrar denemektir.) · 2026-08-19 (**T133a** — §18.2 tetikleyici tablosu koda hizalandı: alıcı satırındaki emekli "item platforma ulaştı" (`ITEM_ESCROWED`) ve "item gönderildi — trade offer'ı kabul et" (`TRADE_OFFER_SENT_TO_BUYER`) metinleri kaldırıldı, satıcı satırına v3.0'ın teslimat tetikleyicisi (`DELIVERY_EXPECTED`) yazıldı. Tablonun altına kataloğun tek doğru kaynağının 06 §2.13 olduğunu ve tablonun tip listesi DEĞİL ürün seviyesi özet olduğunu söyleyen kaynak notu eklendi. Bu bölüm bildirim kataloğunun **dördüncü** nüshasıydı ve hiçbir görevin kapsamında değildi; kapsam genişletmesi proje sahibi onayıyla yapıldı ve plan §P6 T133a'ya işlendi. Gereksinim değişikliği yok.) · 2026-08-18 (**T131 düzeltme turu** — §10.2'ye **yeniden eskalasyon** satırı eklendi (doğrulama bulgusu N2, proje sahibi kararı): "aynı türde dispute tekrar açılamaz" kuralı ikinci bir dispute **SATIRI** yasağıdır (`UQ_Disputes_TransactionId_Type`), karara bağlanmış bir satırın bir daha ele alınamayacağı değil. Karardan **sonra** platformun kendisi yeni bir olgu gözlemlerse — teslimat turu, kararın ardından item'ın satıcıdan ayrıldığını tespit ederse — **aynı satır** `ESCALATED`'a döner, `ResolvedAt` temizlenir, `AdminNote`/`AdminId` korunur ve önceki karar değiştirilemez audit kaydında (06 §3.20) kalır. Kapıyı yalnız **platformun yeni gözlemi** açar; kullanıcı itirazı veya eski kararın yeniden tartışılması açmaz. `CLOSED` (§2.10 sistemin kendi otomatik çözümü) kuralın **dışındadır**. Gerekçe: aksi hâlde imzayı hiç görmemiş bir kararın üstünden işlem sessizce iptal edilip alıcıya iade yapılıyor, item'ı çoktan envanterinden çıkmış satıcı hem item'sız hem parasız kalıyordu.) · 2026-08-17 (**T131** — §10.4'e üç kural yazıldı: (1) alıcı lehine karar **item iadesi içermez** (§3.2'nin admin kolundaki karşılığı); (2) teslimatı **kanıtlanmış** bir işlemde (`ITEM_DELIVERED`) alıcı lehine karar **istisnadır** ve gerekçesi admin notundan **ayrı** bir alanda kalıcı olarak kayda geçer — kapı **duruma** bakar, kanıt bayrağına değil, aksi hâlde admin'in gerekçe yazma yükümlülüğü vakanın gücüne değil Steam envanterinin o an okunabilir olmasına bağlanırdı; (3) admin kararı, yanlış-teslimat imzası nedeniyle bekletilen işlemi **serbest bırakır** — §9.2'nin yasakladığı şey **sessiz** iptaldir ve admin baktıktan sonra iptal sessiz değildir; sistemin kendi otomatik çözümü (`CLOSED`) bu kapıyı açmaz. Kural daha önce yalnız 03 §6.4'te vardı; 03 ve 05 ona "(02 §10)" diye atıf yapıyordu ve atfın hedefi §10'da **yoktu** — bu turda yazıldı.) · 2026-08-17 (**T130** — §10.1 teslim itirazı satırına **kapı istisnası** yazıldı: envanter kanıtı yeterli ama otomatik onay kapısı (`delivery.inventory_evidence_auto_release_enabled`) kapalıysa dispute **kapanmaz**, OPEN kalır ve eskale edilebilir (03 §6.2 **Sonuç E**). Gerekçe: kapı zaten parayı bırakmıyorken dispute'u "teslim edildi" diye kapatmak alıcıya hiçbir çıkış bırakmıyordu — otomatik yol kapılı, elle yol kapalı (T127 doğrulaması bulgu B5). Kanıt kuralları ve kapının kendisi DEĞİŞMEDİ.) · 2026-08-17 (T129 ikinci düzeltme turu — §4.5.1 launch kapısı notunda yapışkanlığın **kaydedilen gerekçeyi de kapsadığı** yazıldı (gerekçe yalnız güçlendirilebilir, düşürülemez — güç sırası 06 §3.5; aksi hâlde tek bir "okunamadı" turu imzayı siliyor ve sonraki okuma parayı açık eskalasyonun üstünden bırakıyordu, bulgu B4). "Bilinen sonuçları" listesine dördüncü madde: mutabakat kapısı süpürmenin de kapısı olduğu için sıcak cüzdanın **kendi işletme bakiyesini** tutması gerekir — eski T+0 süpürme / T+8g ödeme sırası sıcak cüzdanı kendiliğinden fonluyordu, artık iki kapı aynı ana açılıyor (bulgu N9; boyutlandırma DEPLOY_RUNBOOK §I.2).) · 2026-08-17 (T129 düzeltme turu — §4.5.1'e üçüncü "karar verilmez" dalı eklendi: kontrolün karar girdisi hiç üretilememiş vakalar eşik beklemeden admin'e düşer ve admin mutabakatı satıcı lehine kapatabilir (07 §9.22b); geri alma imzası artık item'ın satıcıdan **ayrıldığının gözlenmiş olmasını** da şart koşar — yalnız "satıcıda duruyor" dürüst satıcıya yanlış-pozitif üretiyordu; kaydedilen imza **yapışkan** hâle geldi.) · 2026-08-16 (T129 — §4.5.1 mutabakat sonu kontrolü **iki taraflı** hâle getirildi: "item alıcıda değil" tek başına geri alma sayılmaz, item'ın satıcıda yeniden belirmesi aranır; ayırt edilemeyen ayrılma admin'e düşer. Gerekçe: Steam'in 7 günlük kısıtı 8 günlük pencerenin bir gün öncesinde bittiği için alıcının meşru devri tek taraflı okumada geri almayla aynı görünüyordu. Ayrıca geri alma sonuçlarına hesap düzeyi `DELIVERY_REVERSED` flag tipi ve itibar paydası (06 §3.1) eklendi, otomatik iade launch kapısına bağlandı.) · 2026-08-14 (T125 — §9.2 envanter kanıtı yoluna launch kapısı notu eklendi: `delivery.inventory_evidence_auto_release_enabled` kapalıyken kanıt üretilir ve saklanır ama tek başına para bırakmaz; alıcı onayı yolu etkilenmez. Kanıt kuralları değişmedi.) · 2026-08-13
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -31,10 +31,10 @@ Platformdaki her işlem aşağıdaki 8 adımdan oluşur:
 
 | Adım | Açıklama | Doğrulama |
 |---|---|---|
-| 1. İşlem oluşturma | Satıcı item'ı seçer, stablecoin türünü belirler, fiyat ve ödeme timeout süresini girer | Platform envanter okuyarak item'ın var ve tradeable olduğunu doğrular |
-| 2. Alıcı kabulü | Alıcı işlem detaylarını görür, kabul eder, iade adresini ve Steam trade URL'ini verir. Henüz ödeme yapmaz | Platform alıcının Mobile Authenticator'ının aktif olduğunu doğrular (§9) |
+| 1. İşlem oluşturma | Satıcı item'ı seçer, kabul ettiği ödeme ağlarını seçer (§4.2), fiyat ve ödeme timeout süresini girer | Platform envanter okuyarak item'ın var ve tradeable olduğunu doğrular |
+| 2. Alıcı kabulü | Alıcı işlem detaylarını görür, satıcının kabul ettiği ağlardan birini seçer, kabul eder, o ağ için iade adresini ve Steam trade URL'ini verir. Henüz ödeme yapmaz | Platform alıcının Mobile Authenticator'ının aktif olduğunu doğrular (§9) |
 | 3. Satıcı hazırlık onayı | Satıcı item'ı göndermeye hazır olduğunu onaylar | Platform item'ın hâlâ satıcının envanterinde ve tradeable olduğunu yeniden doğrular, alıcı envanteri için referans anlık görüntü (baseline) alır. Ödeme adresi alıcıya **ancak bu adımdan sonra** açılır |
-| 4. Ödeme | Platform benzersiz ödeme adresi üretir, alıcı bu adrese toplam tutarı (fiyat + komisyon) gönderir | Platform blockchain üzerinden otomatik doğrular |
+| 4. Ödeme | Platform seçilen ağda benzersiz ödeme adresi üretir, alıcı bu adrese toplam tutarı (fiyat + komisyon; TRON'da + TRON ağ ücreti — §5) gönderir | Platform blockchain üzerinden otomatik doğrular |
 | 5. Ödeme doğrulama | Blockchain üzerinden otomatik | Otomatik |
 | 6. Item teslimi | **Satıcı, alıcıya doğrudan Steam trade offer gönderir** — platform taraf değildir, yalnızca satıcıya alıcının trade URL'ini içeren hazır bağlantıyı sunar | — |
 | 7. Teslim doğrulama | Alıcının "teslim aldım" onayı **veya** envanter kanıtı (item satıcının envanterinden düştü **ve** alıcının envanterinde beklenen item sayısı arttı) | Yarı otomatik — detay §9.2 |
@@ -45,7 +45,7 @@ Platformdaki her işlem aşağıdaki 8 adımdan oluşur:
 - Her işlem tek bir item içerir
 - Sadece item karşılığı kripto ödeme yapılır (barter yok)
 - İşlemi her zaman satıcı başlatır
-- İşlem detayları (item, fiyat, stablecoin türü) oluşturulduktan sonra değiştirilemez — değiştirmek isteyen satıcı iptal edip yeniden başlatır
+- İşlem detayları (item, fiyat, kabul edilen ağlar) oluşturulduktan sonra değiştirilemez — değiştirmek isteyen satıcı iptal edip yeniden başlatır
 - Sadece tradeable item'larla işlem yapılabilir (trade lock'lu ve trade-protected item'lar desteklenmez)
 - Aynı item aynı anda birden fazla açık işlemde kullanılamaz — ikinci işlem oluşturma denemesi reddedilir
 - Her iki tarafın da Steam Mobile Authenticator'ı aktif olmalıdır (§9.1)
@@ -100,17 +100,21 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 | Gereksinim | Detay |
 |---|---|
 | Ödeme yöntemi | Kripto (stablecoin) |
-| Desteklenen stablecoin'ler | USDT ve USDC |
-| Blockchain ağı | Tron (TRC-20) |
+| Desteklenen stablecoin | **Yalnız USDT** (11 §F8 K2, 2026-10-17). USDC ürün yüzeyinden kalkar — bugünkü kodda satıcı hâlâ USDC seçebiliyor, kaldıran görev T166. USDC yalnız yanlış token izin listesinde kalır: yanlışlıkla gönderilen USDC otomatik iade edilir (§4.4) |
+| Blockchain ağları | **TRON (USDT TRC-20) ve Ethereum (USDT ERC-20)** (11 §F8 K1). Bugün yalnız TRON çalışır; Ethereum F8'de eklenir (T150–T159) ve açılış iki ağ hazır olunca yapılır. İki ağ Türkiye'deki 9 lisanslı borsanın hepsinde bulunur, bu yüzden her alıcı–satıcı çiftinin en az bir ortak yolu vardır |
 | Ödeme modeli | Dış cüzdan — platformda kullanıcı bakiyesi tutulmaz, kullanıcılar kendi cüzdanlarından gönderim yapar. Escrow, iade ve payout işlemleri için platform kontrolündeki operasyonel adres altyapısı kullanılır (detaylar 05 §3.2) |
-| Adres üretimi | Her işlem için platform benzersiz bir ödeme adresi üretir |
+| Adres üretimi | Her işlem için platform, alıcının seçtiği ağda benzersiz bir ödeme adresi üretir (adres işlem başınadır — 08 §3.0) |
 | Doğrulama | Blockchain üzerinden otomatik — ödeme, blockchain üzerinde nihai (final) kabul edildikten sonra onaylanır (teknik doğrulama kriterleri: 05 §3.2) |
 
-### 4.2 Stablecoin Seçimi
+### 4.2 Token ve Ağ Seçimi
 
-- Satıcı işlem başlatırken USDT veya USDC'den birini seçer
-- Alıcı satıcının seçtiği token ile ödeme yapar
-- Bir işlemde yalnızca bir stablecoin kabul edilir
+> **v4.4 (T141, 11 §F8 K2–K3):** eski kural "satıcı USDT veya USDC'den birini seçer" idi. Hedef kural aşağıdadır; ağ seçimi T147'de, arayüzü T156'da, USDC'nin kalkması T166'da uygulanır.
+
+- Ödeme token'ı her zaman **USDT**'dir; satıcı token seçmez
+- Satıcı işlem başlatırken **kabul ettiği ağları** seçer (TRON, Ethereum ya da ikisi). Yalnız profilinde o ağ için ödeme adresi kayıtlı olan ağları seçebilir (§12.1)
+- Alıcı işlemi kabul ederken satıcının kabul ettiği ağlardan **birini** seçer ve o ağ için iade adresini verir (§12.2)
+- Bir işlemde tek ağ ve tek token kabul edilir. Ödeme, satıcıya payout ve her türlü iade **alıcının seçtiği ağda** yapılır; ağlar arası para taşıma, köprü ya da borsa üzerinden dengeleme yoktur
+- Ağın ücret farkı alıcıya ağ seçerken gösterilir (TRON'da ayrı bir ağ ücreti satırı vardır, Ethereum'da yoktur — §5)
 
 ### 4.3 Fiyatlandırma
 
@@ -125,15 +129,16 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 |---|---|
 | Eksik tutar | Platform kabul etmez, gelen tutar iade edilir, alıcı doğru tutarı baştan gönderir |
 | Fazla tutar | Platform doğru tutarı kabul eder, fazlayı alıcıya iade eder, işlem devam eder |
-| Yanlış token (desteklenen TRC-20) | Platform kabul etmez, **geldiği adrese** otomatik iade edilir. *Veri modeli notu: Yanlış token ile gelen transfer `WRONG_TOKEN_INCOMING` tipiyle blockchain audit kaydı oluşturulur; `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır (06 §3.8).* |
+| Yanlış token (izin listesindeki token — TRON'da TRC-20 USDC, Ethereum'da ERC-20 USDC) | Platform kabul etmez, alıcının **iade adresine** otomatik iade edilir (aşağıdaki not, K9). *Veri modeli notu: Yanlış token ile gelen transfer `WRONG_TOKEN_INCOMING` tipiyle blockchain audit kaydı oluşturulur; `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır (06 §3.8).* |
 | Desteklenmeyen token/kontrat | Platform bu varlığı işleyemez — otomatik iade garanti edilemez, manuel incelemeye (admin review) düşer |
 | Timeout sonrası gecikmeli ödeme | İşlem zaten iptal, platform adresi izlemeye devam eder, gelen ödeme alıcıya otomatik iade edilir |
 | Çoklu/parçalı ödeme | Platform parçalı ödemeleri birleştirmez — tek seferde doğru tutarın gönderilmesi gerekir. İlk doğru transfer kabul edilir, sonraki transferler fazla tutar kuralıyla iade edilir. İşlem tamamlandıktan sonra gelen ek transferler gecikmeli ödeme kuralıyla iade edilir |
 
-> **İki farklı iade hedefi vardır ve karıştırılmamalıdır (T110-K1):**
+> **Tek iade hedefi: alıcının iade adresi (11 §F8 K9, proje sahibi kararı 2026-10-17 — T110-K1'i tersine çevirir).**
 >
-> - **Bu tablodaki reddedilen ödeme iadeleri** (eksik tutar · fazla tutar · yanlış token · timeout sonrası gecikmeli ödeme · çoklu transferin fazlası) **paranın geldiği adrese** geri gönderilir. Ödeme hiç kabul edilmediği için platformun o para ile ilgili tek bildiği şey nereden geldiğidir; alıcının beyan ettiği iade adresine göndermek, kabul edilmemiş bir transferi doğrulanmamış bir adrese yönlendirmek olurdu. Normatif kaynak: **08 §562**.
-> - **§4.6'daki `BUYER_REFUND`** (kabul edilmiş ödemenin iadesi — iptal, dispute, mutabakat geri alma) **alıcının kabul anında belirlediği iade adresine** gider. Orada ödeme kabul edilmiş ve adres işlemle birlikte sabitlenmiştir (`BuyerRefundAddress`, 06 §3.5).
+> - **Bu tablodaki reddedilen ödeme iadeleri** (eksik tutar · fazla tutarın fazlası · yanlış token · timeout sonrası gecikmeli ödeme · çoklu transferin fazlası) de, §4.6'daki `BUYER_REFUND` gibi, **alıcının kabul anında o ağ için belirlediği iade adresine** gider (`BuyerRefundAddress`, 06 §3.5). Depozit adresi yalnız satıcının hazırlık onayından sonra gösterildiği için (§2.2 adım 3) depozite para geldiğinde bu adres her zaman bellidir. Normatif kaynak: **08 §3.4 "Refund politikası"**.
+> - **Eski kural (T110-K1; 2026-10-17'ye kadar geçerliydi):** reddedilen ödemeler "paranın geldiği adrese" dönüyordu; gerekçe, kabul edilmemiş bir transferi beyan edilmiş bir adrese yönlendirmemekti. **Tersine dönme gerekçesi:** MASAK düzenlemesiyle alıcıların çoğu doğrudan bir Türk borsasından ödeyecek; borsanın gönderen adresi paylaşılan bir sıcak cüzdandır ve oraya dönen iade ya kaybolur ya da destek talebi ister. İade adresi ise alıcının kendisinin girdiği, biçim ve yaptırım kontrolünden geçmiş ve adres değişikliği korumasına (§12.3) tabi bir adrestir.
+> - **Bugünkü kod eski kuralla çalışır:** reddedilen ödeme iadelerinin hedefi kaynak transferin gönderen adresinden (`FromAddress`) alınıyor. Değişiklik ağ başına iade adresleriyle (T146) ve ağ seçimiyle (T147) birlikte yapılır.
 
 ### 4.5 Satıcıya Ödeme
 
@@ -191,23 +196,25 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 
 | Gereksinim | Detay |
 |---|---|
-| İade kapsamı | Tam iade — komisyon dahil (alıcı hizmet almadığı için komisyon da iade edilir) |
-| Alıcıya iade tutarı | Fiyat + komisyon - gas fee |
-| İade adresi | Alıcının işlem kabul ederken belirlediği iade adresine gönderilir (detaylar §12.2) |
+| İade kapsamı | Tam iade — komisyon dahil (alıcı hizmet almadığı için komisyon da iade edilir). **TRON ağ ücreti satırı da** (§5, K8) sweep'ten önce yapılan iadede komisyon gibi **tam** iade edilir — sweep hiç yapılmadığı için ücret harcanmamıştır (uygulayan T149). Sweep'ten sonra yapılan bir iadede satırın işlenişi T149'da belirlenir |
+| Alıcıya iade tutarı | Fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep'ten önceki iadede tam — yukarıdaki satır) − iadenin gas fee'si |
+| İade adresi | Alıcının işlem kabul ederken **seçtiği ağ için** belirlediği iade adresine gönderilir (detaylar §12.2). Reddedilen ödeme iadeleri de aynı adrese gider (§4.4 notu, K9) |
 | Gas fee | İade işleminin gas fee'si iade tutarından düşülür (alıcı karşılar) |
-| Platform maliyeti | Alıcı, iadenin **zincirde yanan** ücretini karşılar; platform bu kalemden zarar etmez. **Sıfır değildir:** yakma olmadığında (delege enerji ya da kontratın kendi kullanıcılarının enerjisini ödemesi) kesinti 0 çıkar ve gönderimi mümkün kılan kaynağı platform sağlamış olur. O kaynağın bedeli ayrı bir kalemdir — kullanıcıya "gas fee" adıyla yansıtılmaz. **Kaynak kararı: hibrit** (proje sahibi, 2026-09-16 — hot cüzdan taban hacim kadar TRX kilitler, kalanı yakılır; 08 §3.3). **Depozit açılışı alıcıya yansır** (proje sahibi kararı 2026-10-02, `RefundActivationCostNotCharged`): hiç TRX almamış bir deposit adresinden iade yapılabilmesi için adresin önce açılması gerekir ve zincir açılış ücretini (1 TRX + hot cüzdanın kilitli bandı yetmezse 0,1 TRX; 1,1 TRX × 0,336 $ ≈ 0,37 $) hot cüzdandan yakar. Bu yakma yalnız iade gönderildiği için oluştuğundan iadenin gas fee'sine eklenir ve iade tutarından düşülür; ücretler zincirden okunur (08 §3.1a adım 4). Sweep'teki açılış platformun maliyeti olarak kalır |
+| Platform maliyeti | Alıcı, iadenin **zincirde yanan** ücretini karşılar; platform bu kalemden zarar etmez. **Sıfır değildir:** yakma olmadığında (delege enerji ya da kontratın kendi kullanıcılarının enerjisini ödemesi) kesinti 0 çıkar ve gönderimi mümkün kılan kaynağı platform sağlamış olur. O kaynağın bedeli ayrı bir kalemdir — kullanıcıya "gas fee" adıyla yansıtılmaz. **Kaynak kararı: hibrit** (proje sahibi, 2026-09-16 — hot cüzdan taban hacim kadar TRX kilitler, kalanı yakılır; 08 §3.3). **F8'de bu kararın yerini K4/K8 aldı:** sweep ücretini alıcı, payout ücretini satıcı öder; kilit kodu kapalı bir anahtarın arkasında uykuda kalır (öneriyle kaydedildi — ⚠) (11 §F8, anahtarı T149 ekler). **Depozit açılışı alıcıya yansır** (proje sahibi kararı 2026-10-02, `RefundActivationCostNotCharged`): hiç TRX almamış bir deposit adresinden iade yapılabilmesi için adresin önce açılması gerekir ve zincir açılış ücretini (1 TRX + hot cüzdanın kilitli bandı yetmezse 0,1 TRX; 1,1 TRX × 0,336 $ ≈ 0,37 $) hot cüzdandan yakar. Bu yakma yalnız iade gönderildiği için oluştuğundan iadenin gas fee'sine eklenir ve iade tutarından düşülür; ücretler zincirden okunur (08 §3.1a adım 4). Sweep'teki açılış bugün platformun maliyetidir; F8 hedefinde sweep'in tamamı (açılış dahil) alıcının kabul anında ödediği TRON ağ ücreti satırıyla karşılanır (§5, K8; T149) |
+| En düşük iade eşiği | İadenin ağ ücreti iade tutarının büyük kısmını yutuyorsa (net iade < 2 × gas fee) iade yapılmaz, admin'e alarm gider (05 §3.3, 08 §3.4). Çarpan F8 hedefinde **ağ başına** bir ayardır (öneriyle kaydedildi — ⚠) (T149). Eşik canlı ücret tahminini kullandığı için Ethereum'da yalnız çok küçük tutarları, TRON'da ~8–15 $ altındaki iadeleri engeller |
 
 ### 4.7 Gas Fee Yönetimi
 
 | Gereksinim | Detay |
 |---|---|
 | Alıcının ödeme gas fee'si | Alıcı karşılar (kendi cüzdanından gönderiyor) |
-| Satıcıya gönderim gas fee'si | Platform karşılar (komisyondan düşülür) |
-| İade gas fee'leri | İade tutarından düşülür (alıcı karşılar — alıcı alır: fiyat + komisyon - gas fee) |
-| Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür |
+| Sweep (depozit → sıcak cüzdan) gas fee'si | **TRON: alıcı karşılar** — kabul anında ayrı bir "TRON ağ ücreti" satırı olarak sabitlenir ve ödenecek toplama eklenir (§5; 11 §F8 K8; 08 §3.1a). **Ethereum: platform karşılar**, bir tavana kadar; tavanın üstünde sweep bekler ve alarm verir (öneriyle kaydedildi — ⚠) (08 §3.7.7). Bugünkü kodda TRON sweep'i de platformun maliyetidir; satırı T149 ekler |
+| Satıcıya gönderim gas fee'si | **TRON:** platform karşılar (komisyondan düşülür) — aşağıdaki koruma eşiğiyle; TRON'da 2,29–4,53 $, olağan durum 13,03 TRX'lik koldur çünkü borsa depozit adresleri boşaltılır (11 §F8 K8). **Ethereum:** platform bir tavana kadar karşılar, satıcının alacağından düşülmez; tavanın üstünde payout bekler ve alarm verir (öneriyle kaydedildi — ⚠) (08 §3.7.7) |
+| İade gas fee'leri | İade tutarından düşülür (alıcı karşılar — alıcı alır: fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep'ten önceki iadede tam — §4.6) − gas fee) |
+| Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür (TRON; Ethereum'da uygulanmaz — yukarıdaki satır) |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |
-| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
+| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (TRON: transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a; Ethereum: gas tahmini wei cinsinden + canlı ETH/USDT kuru — 08 §3.7.7, T154). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
 | Satıcıya kalan tutar sıfır ya da altındaysa | Gas tahmini fiyatı ve platformun payını birlikte aşarsa satıcıya gönderilecek bir şey kalmaz — ödeme gönderilmez. İşlem ödeme kuyruğunu tıkamadan bekletilir ve 1 sa → 4 sa → 12 sa → her 24 sa arayla yeniden fiyatlanır: sıcak cüzdanın enerjisi yenilendikçe tahmin düşer ve ödeme kendiliğinden çıkar. Üçüncü ertelemede admin'e bir kez alarm gider; denemeler sürer. En düşük satış fiyatını gas maliyetinin üstünde tutmak bu durumu seyrekleştirir (DEPLOY_RUNBOOK §A) |
 
 ---
@@ -217,12 +224,21 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Gereksinim | Detay |
 |---|---|
 | Komisyonu ödeyen | Alıcı |
-| Alıcının ödediği toplam | Item fiyatı + komisyon |
+| Alıcının ödediği toplam | Item fiyatı + komisyon; **TRON'da + TRON ağ ücreti satırı** (11 §F8 K8 — sweep maliyeti, kabul anında sabitlenir, 2 haneye yukarı yuvarlanır; örnek 2,90 USDT, TRX fiyat tamponu dahil — aşağıdaki örnek tutarlar notu). Ethereum'da ağ ücreti satırı yoktur |
 | Varsayılan oran | %2 |
 | Oran esnekliği | Admin tarafından değiştirilebilir |
 | Gelir modeli | MVP'de sadece komisyon |
 
-> **Veri modeli notu:** Finansal hesaplamalar: `MidpointRounding.ToZero` (truncation), scale 6 ondalık basamak. Payment validation tolerance yok — gelen tutar beklenen tutarla tam eşleşmeli (06 §8.3, 09 §14.3).
+> **Veri modeli notu:** Finansal hesaplamalar: `MidpointRounding.ToZero` (truncation), scale 6 ondalık basamak. Payment validation tolerance yok — gelen tutar beklenen tutarla tam eşleşmeli (06 §8.3, 09 §14.3). **F8 hedefi (T144):** alıcının ödeyeceği toplam her zaman **2 ondalıklıdır** ve ekranda gösterilen tutar beklenen tutarla birebir aynıdır — BtcTurk ve Paribu USDT'yi 2 haneden fazla göndermediği için çözüm daha fazla hane göstermek değil, toplamı 2 haneli yapmaktır. Bugün 10,55 fiyatta beklenen tutar 10,761, ekrandaki "10,76"dır.
+
+**Örnek tutarlar (11 §F8 K8; komisyon %2, TRX 0,34 $, TRON ağ ücreti 2,90 — örnek, TRX fiyat tamponu dahil: 1,1 + 6,43 + 0,64 + ~0,3 = 8,47 TRX ≈ 2,88 $, 2,90 ~%0,7 tampon içerir; tamponun oranı T149'da ağ başına ayardır):** satıcının alacağı = fiyat − max(0, payout ücreti − komisyonun %10'u). TRON payout ücreti 2,29–4,53 $.
+
+| Satış | Ağ | Alıcı gönderir | Satıcı alır |
+|---|---|---|---|
+| 20 $ | TRON | 20 + 0,40 + 2,90 = **23,30** | 20 − (4,53 − 0,04) = **15,51** ile 20 − (2,29 − 0,04) = **17,75** arası |
+| 20 $ | Ethereum | 20 + 0,40 = **20,40** | **20,00** (ağ ücretini platform üstlenir) (öneriyle kaydedildi — ⚠) |
+| 200 $ | TRON | 200 + 4 + 2,90 = **206,90** | 200 − (4,53 − 0,40) = **195,87** ile 200 − (2,29 − 0,40) = **198,11** arası |
+| 200 $ | Ethereum | 200 + 4 = **204,00** | **200,00** |
 
 ---
 
@@ -394,9 +410,12 @@ Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API ya
 
 ### 12.1 Satıcı Cüzdan Adresi (Ödeme Alma)
 
+> **F8 hedefi (T141; uygulayan T145/T146):** cüzdan adresleri **ağ başınadır**. Kullanıcı her ağ (TRON, Ethereum) için ayrı ödeme ve ayrı iade adresi kaydeder; bu bölümdeki her kural (zorunluluk, ek doğrulama, cooldown, snapshot) her ağın adresine ayrı ayrı uygulanır. Bugünkü kodda kullanıcı başına tek TRON adresi vardır.
+
 | Gereksinim | Detay |
 |---|---|
-| Varsayılan adres | Satıcı profilinde tanımlar |
+| Varsayılan adres | Satıcı profilinde **her ağ için ayrı** tanımlar |
+| Ağ seçimiyle ilişkisi | Satıcı ilanda yalnız ödeme adresi kayıtlı olan ağları kabul edebilir (§4.2). Kabul ettiği her ağın adresi işlem oluşturulurken sabitlenir; alıcı ağ seçince o ağın adresi payout hedefi olur |
 | İşlem bazlı adres | Satıcı işlem başlatırken farklı adres girebilir, girmezse profildeki kullanılır |
 | Adres zorunluluğu | Cüzdan adresi olmadan işlem başlatılamaz (profil veya işlem bazlı en az biri tanımlı olmalı) |
 | Adres değişikliği | Ek doğrulama istenir (Steam üzerinden tekrar onay) |
@@ -407,20 +426,21 @@ Platform, taraf olmadığı bir Steam trade'ini doğrudan göremez (Steam API ya
 
 | Gereksinim | Detay |
 |---|---|
-| Varsayılan adres | Alıcı profilinde tanımlar |
-| İşlem bazlı adres | Alıcı işlemi kabul ederken farklı adres girebilir, girmezse profildeki kullanılır |
+| Varsayılan adres | Alıcı profilinde **her ağ için ayrı** tanımlar |
+| İşlem bazlı adres | Alıcı işlemi kabul ederken seçtiği ağ için farklı adres girebilir, girmezse profildeki o ağın adresi kullanılır |
+| Kapsamı | İade adresi kabul edilmiş ödemenin iadesinin **ve** reddedilen ödeme iadelerinin (eksik/fazla tutar, yanlış token, gecikmeli ödeme, fazladan transfer) tek hedefidir (§4.4 notu, K9) |
 | Adres zorunluluğu | İade adresi olmadan işlem kabul edilemez (profil veya işlem bazlı en az biri tanımlı olmalı) |
 | Adres değişikliği | Ek doğrulama istenir (Steam üzerinden tekrar onay) |
 | Aktif işlem varken değişiklik | Profildeki adres değiştirilse bile aktif işlemler eski adresle tamamlanır |
 | Yanlış adres koruması | Adres girişinde kullanıcıya onay adımı gösterilir |
-| Exchange uyarısı | Ödeme ekranında "Exchange'den gönderim yapmayın, iade adresinize ulaşamayabilir" uyarısı gösterilir |
+| Exchange uyarısı | **F8 hedefinde kalkar** (K9 — iadeler artık gönderen adrese değil iade adresine gider, borsadan ödemek iadeyi riske atmaz; uygulayan T156). Bugünkü ekranda uyarı hâlâ "Exchange'den gönderim yapmayın, iade adresinize ulaşamayabilir" der. Yerine ödeme ekranında **ağ uyarısı** gösterilir: "Yalnız <ağ> ağında USDT gönderin" — aynı `0x` adresi birçok EVM ağında geçerli olduğu için yanlış ağ seçimi en olası hatadır |
 
 ### 12.3 Ortak Kurallar
 
 | Gereksinim | Detay |
 |---|---|
-| Adres formatı | Geçerli Tron (TRC-20) adresi olmalı |
-| Merkezi doğrulama pipeline | Cüzdan adresi hangi noktadan girilirse girilsin (profil, işlem başlatma, işlem kabul, adres değiştirme) aynı doğrulama pipeline'ından geçer: (1) TRC-20 format geçerliliği, (2) sanctions screening (§21.1). Geçersiz veya yaptırımlı adres hiçbir noktada kaydedilmez |
+| Adres formatı | Adresin ait olduğu ağın biçimi: **TRON** — base58check, `T` ile başlar, 34 karakter. **Ethereum** (F8 hedefi, T146) — `0x` + 40 hex; karışık harfli girilirse EIP-55 sağlaması zorunlu, tümü küçük harfli girilirse kullanıcıdan ikinci onay istenir. EVM adresleri küçük harfle saklanır ve karşılaştırılır (06 §1.4) |
+| Merkezi doğrulama pipeline | Cüzdan adresi hangi noktadan girilirse girilsin (profil, işlem başlatma, işlem kabul, adres değiştirme) aynı doğrulama pipeline'ından geçer: (1) o ağın format geçerliliği, (2) sanctions screening (§21.1; F8 hedefinde yaptırım listesi ağ başına). Geçersiz veya yaptırımlı adres hiçbir noktada kaydedilmez |
 | Adres değişikliği doğrulaması | Tüm adres değişiklikleri Steam üzerinden ek onay gerektirir |
 | Adres değişikliği cooldown | Değişiklik sonrası admin tarafından ayarlanabilir süre boyunca fon akışı aksiyonları engellenir. **Satıcı payout-address cooldown:** yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam edebilir. **Alıcı refund-address cooldown:** yeni işlem başlatma ve işlem kabul etme engellenir |
 | Snapshot prensibi | İşlem başlatıldığında/kabul edildiğinde adres sabitlenir, sonraki profil değişiklikleri aktif işlemi etkilemez |
@@ -531,6 +551,7 @@ Bu bölümün kaldırılmasıyla ortadan kalkan gereksinimler: bot havuzu ve ris
 | İptal limiti ve cooldown | Dinamik belirlenir |
 | Yeni hesap işlem limiti | Dinamik belirlenir |
 | Gas fee koruma eşiği | Değiştirilebilir |
+| Ağ başına ödeme ayarları (F8 hedefi, T148/T149) | En düşük iade eşiği çarpanı, TRON ağ ücreti tamponu, Ethereum ücret tavanı ve "bekle" eşiği her ağ için ayrı. Sıcak/soğuk adresler ve gönderim tavanları ayar değil deployment yapılandırmasıdır (05 §3.3) |
 | Fraud sapma eşiği | Piyasa fiyatından sapma yüzdesi |
 | Yüksek hacim eşikleri | Tutar eşiği, işlem sayısı eşiği ve kontrol periyodu (saat) |
 | Dormant hesap anomali eşikleri | Minimum hesap yaşı (gün) ve tek işlem tutar eşiği — birlikte değerlendirilir (§14.3, §14.4) |
@@ -663,4 +684,4 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 
 ---
 
-*Skinora — Product Requirements v4.1*
+*Skinora — Product Requirements v4.4*

@@ -1,6 +1,6 @@
 # Skinora — MVP Scope
 
-**Versiyon: v2.1** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
+**Versiyon: v2.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-17 (**T141 — çok ağlı ödeme** (11 §F8 K1–K3): §2.2 ve §4 — **yalnız USDT**, ağlar **TRON + Ethereum**, satıcı kabul ettiği ağları seçer, para aynı ağda kalır; ağ ücreti dağılımı (K8); §3.2 ve §6 — Ethereum kapsamdan çıktı, Arbitrum/Avalanche açılış sonrası ayrı karar.) · 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
 
 ---
 
@@ -34,11 +34,12 @@ MVP'nin hedefi:
 
 ### 2.2 Ödeme
 
-- USDT ve USDC desteği (Tron TRC-20)
-- Dış cüzdan modeli — her işlem için benzersiz ödeme adresi
+- **Yalnız USDT** (11 §F8 K2, 2026-10-17 — USDC ürün yüzeyinden kalkar, T166; yanlışlıkla gönderilen USDC otomatik iade edilir)
+- **İki ağ: TRON (USDT TRC-20) ve Ethereum (USDT ERC-20)** (11 §F8 K1 — Ethereum F8'de eklenir, açılış iki ağ hazır olunca). Satıcı kabul ettiği ağları seçer, alıcı birini seçer; ödeme, payout ve iade aynı ağda (K3)
+- Dış cüzdan modeli — her işlem için, seçilen ağda benzersiz ödeme adresi
 - Otomatik blockchain doğrulama
 - Ödeme edge case yönetimi (eksik tutar, fazla tutar, yanlış token, desteklenmeyen token, çoklu/parçalı ödeme, gecikmeli ödeme)
-- Gas fee yönetimi (satıcı payout: komisyondan karşılanır + koruma eşiği, iade: tutarından düşülür)
+- Gas fee yönetimi (satıcı payout: komisyondan karşılanır + koruma eşiği, iade: tutarından düşülür). F8 hedefi (K8): TRON'da sweep ücreti alıcıya ayrı "TRON ağ ücreti" satırı; Ethereum'da sweep ve payout ücretini platform bir tavana kadar üstlenir (öneriyle kaydedildi — ⚠)
 
 ### 2.3 Timeout Sistemi
 
@@ -171,7 +172,7 @@ MVP'nin hedefi:
 | Özellik | Neden MVP dışı |
 |---|---|
 | Platform cüzdanı (bakiye yükleme) | Yasal sorumluluk ve karmaşıklık |
-| Ek blockchain ağları | Tron ile başlamak yeterli |
+| Ek blockchain ağları (Ethereum dışında) | Ethereum F8'e alındı (2026-10-17, 11 §F8 K1). Arbitrum ve Avalanche açılıştan sonra aynı EVM servisine ayar + prova ile eklenir, her biri ayrı karar; BSC, Polygon, Base, Optimism, Solana, TON, Aptos, Plasma kapsam dışı |
 | Fiat ödeme desteği | Chargeback riski ve yasal yükümlülükler |
 
 ### 3.3 Kullanıcı Deneyimi Genişletmeleri
@@ -213,7 +214,7 @@ MVP'nin hedefi:
 |---|---|
 | Oyun | Sadece CS2 |
 | Item | Tek item per işlem, sadece tradeable |
-| Ödeme | Sadece USDT/USDC, sadece Tron (TRC-20), sadece dış cüzdan |
+| Ödeme | Sadece USDT; TRON (TRC-20) ve Ethereum (ERC-20); sadece dış cüzdan; ağlar arası para hareketi yok (11 §F8 K1–K3) |
 | Platform | Sadece web |
 | Dil | İngilizce, Çince, İspanyolca, Türkçe |
 | Gelir | Sadece komisyon (%2 varsayılan) |
@@ -256,7 +257,7 @@ Hedef rakamlar MVP lansmanı sonrası belirlenecektir.
 - Barter desteği
 - Kullanıcı yorum/değerlendirme sistemi
 - Kullanıcıya piyasa fiyatı gösterimi
-- Ek blockchain ağları
+- Ek blockchain ağları (Arbitrum, Avalanche — açılış sonrası ayrı karar; Ethereum F8'de)
 - Trade lock'lu item desteği
 - Platform cüzdanı
 - Yüksek tutarlı işlemler için KYC
@@ -265,4 +266,4 @@ Hedef rakamlar MVP lansmanı sonrası belirlenecektir.
 
 ---
 
-*Skinora — MVP Scope v2.0*
+*Skinora — MVP Scope v2.2*
