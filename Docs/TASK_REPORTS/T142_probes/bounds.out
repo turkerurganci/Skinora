@@ -1,0 +1,38 @@
+2026-10-17T21:34:40.044Z head 26214994 finalized 26214908
+2026-10-17T21:34:40.271Z dRPC range 100 ok logs=0
+2026-10-17T21:34:41.565Z dRPC range 101 ok logs=0
+2026-10-17T21:34:42.857Z dRPC range 200 ERR 400 {"message":"ranges over 10000 blocks are not supported on free plan","code":35}
+2026-10-17T21:34:44.155Z dRPC range 500 ERR 400 {"message":"ranges over 10000 blocks are not supported on free plan","code":35}
+2026-10-17T21:34:45.446Z dRPC range 999 ERR 400 {"message":"ranges over 10000 blocks are not supported on free plan","code":35}
+2026-10-17T21:34:46.730Z dRPC range 1000 ERR 400 {"message":"ranges over 10000 blocks are not supported on free plan","code":35}
+2026-10-17T21:34:48.158Z PublicNode 10-block window ending head - 1000 ok logs=0
+2026-10-17T21:34:49.455Z PublicNode 10-block window ending head - 5000 ok logs=0
+2026-10-17T21:34:50.736Z PublicNode 10-block window ending head - 7000 ok logs=0
+2026-10-17T21:34:52.022Z PublicNode 10-block window ending head - 8000 ok logs=0
+2026-10-17T21:34:53.310Z PublicNode 10-block window ending head - 8100 ok logs=0
+2026-10-17T21:34:54.607Z PublicNode 10-block window ending head - 8191 ok logs=0
+2026-10-17T21:34:55.907Z PublicNode 10-block window ending head - 8300 ok logs=0
+2026-10-17T21:34:57.193Z PublicNode 10-block window ending head - 9000 ERR 403 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:34:58.481Z PublicNode 10-block window ending head - 9500 ok logs=0
+2026-10-17T21:34:59.766Z PublicNode 10-block window ending head - 12000 ERR 403 {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:01.057Z PublicNode range 5000 ending finalized ok logs=0
+2026-10-17T21:35:02.349Z PublicNode range 6000 ending finalized ok logs=0
+2026-10-17T21:35:03.637Z PublicNode range 7000 ending finalized ok logs=0
+2026-10-17T21:35:04.932Z PublicNode range 8000 ending finalized ok logs=0
+2026-10-17T21:35:06.214Z PublicNode eth_call at head - 64 ok
+2026-10-17T21:35:07.105Z PublicNode eth_call at head - 128 ERR {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:07.993Z PublicNode eth_call at head - 129 ERR {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:08.876Z PublicNode eth_call at head - 1000 ERR {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:09.759Z PublicNode eth_call at head - 9000 ERR {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:10.642Z PublicNode eth_call at head - 20000 ERR {"code":-32602,"message":"Archive requests require a personal token. Get one at: https://www.allnodes.com/publicnode"}
+2026-10-17T21:35:11.898Z Tenderly list 2000 range 10 ok logs=0
+2026-10-17T21:35:14.310Z Tenderly list 3000 range 10 ok logs=0
+2026-10-17T21:35:16.835Z Tenderly list 4000 range 10 ok logs=0
+2026-10-17T21:35:19.072Z Tenderly list 1000 range 2000 ok logs=0
+2026-10-17T21:35:21.214Z Tenderly list 200 range 2000 ok logs=0
+2026-10-17T21:35:23.365Z Tenderly list 200 range 3000 ok logs=0
+2026-10-17T21:35:25.511Z Tenderly unfiltered USDT range 1000 ERR 200 {"code":-32602,"message":"invalid params","data":"Query returned more than 20000 results. Try with this block range [0x18ffe15, 0x18fffed]."
+2026-10-17T21:35:27.707Z Tenderly unfiltered USDT range 1200 ERR 200 {"code":-32602,"message":"invalid params","data":"Query returned more than 20000 results. Try with this block range [0x18ffd4d, 0x18fff89]."
+2026-10-17T21:35:29.856Z Tenderly unfiltered USDT range 1500 ERR 200 {"code":-32602,"message":"invalid params","data":"Query returned more than 20000 results. Try with this block range [0x18ffc21, 0x18ffef3]."
+2026-10-17T21:35:31.998Z Tenderly unfiltered USDT range 2000 ERR 200 {"code":-32602,"message":"invalid params","data":"Query returned more than 20000 results. Try with this block range [0x18ffa2d, 0x18ffdf9]."
+2026-10-17T21:35:34.003Z end

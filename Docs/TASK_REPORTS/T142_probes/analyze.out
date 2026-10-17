@@ -1,0 +1,50 @@
+
+=== fee_d30.json | collected 2026-10-17T21:36:47.821Z via https://eth.drpc.org | blocks 215040 (25998929..26214992)
+baseFee gwei: p50=0.1197 p90=0.8987 p99=3.88 p99.9=11.38 max=24.86 mean=0.3830
+tip p50 (per-block median) gwei: p50=0.0643 p90=0.6000 p99=2.20 p99.9=10.00 max=476.19 mean=0.2505
+effective = base + tip50 gwei: p50=0.1923 p90=1.47 p99=5.95 p99.9=20.97 max=476.27 mean=0.6334
+  per-sale @eff p50 0.1923 gwei: used-gas cost 0.0571 $ (fuel 0.0096 + sweep 0.0188 + payout 0.0287)
+  per-sale @eff p90 1.47 gwei: used-gas cost 0.4349 $ (fuel 0.0728 + sweep 0.1431 + payout 0.2190)
+  per-sale @eff p99 5.95 gwei: used-gas cost 1.7659 $ (fuel 0.2955 + sweep 0.5809 + payout 0.8894)
+  per-sale @eff p99.9 20.97 gwei: used-gas cost 6.2228 $ (fuel 1.0413 + sweep 2.0472 + payout 3.1343)
+  per-sale @eff max 476.27 gwei: 141.32 $
+  eff > 2 gwei: 6.534% of blocks; longest contiguous run 846 blocks (~2.82 h) ending 26149292
+  eff > 3 gwei: 3.203% of blocks; longest contiguous run 592 blocks (~1.97 h) ending 26049047
+  eff > 5 gwei: 1.350% of blocks; longest contiguous run 451 blocks (~1.50 h) ending 26048958
+  eff > 10 gwei: 0.476% of blocks; longest contiguous run 202 blocks (~0.67 h) ending 26069673
+  eff > 20 gwei: 0.114% of blocks; longest contiguous run 94 blocks (~0.31 h) ending 26048868
+  eff > 50 gwei: 0.009% of blocks; longest contiguous run 1 blocks (~0.00 h) ending 26019491
+
+=== fee_d365.json | collected 2026-10-17T21:38:39.454Z via https://mainnet.gateway.tenderly.co | blocks 373760 (23591637..26214992)
+baseFee gwei: p50=0.1010 p90=0.4832 p99=2.21 p99.9=5.39 max=13.04 mean=0.2270
+tip p50 (per-block median) gwei: p50=0.0150 p90=0.2911 p99=1.63 p99.9=8.63 max=3671.34 mean=0.2104
+effective = base + tip50 gwei: p50=0.1299 p90=0.8384 p99=3.65 p99.9=12.48 max=3671.40 mean=0.4374
+  per-sale @eff p50 0.1299 gwei: used-gas cost 0.0386 $ (fuel 0.0065 + sweep 0.0127 + payout 0.0194)
+  per-sale @eff p90 0.8384 gwei: used-gas cost 0.2488 $ (fuel 0.0416 + sweep 0.0818 + payout 0.1253)
+  per-sale @eff p99 3.65 gwei: used-gas cost 1.0843 $ (fuel 0.1814 + sweep 0.3567 + payout 0.5462)
+  per-sale @eff p99.9 12.48 gwei: used-gas cost 3.7025 $ (fuel 0.6196 + sweep 1.2180 + payout 1.8649)
+  per-sale @eff max 3671.40 gwei: 1089.41 $
+  eff > 2 gwei: 3.015% of blocks; longest contiguous run 639 blocks (~2.13 h) ending 25252263
+  eff > 3 gwei: 1.414% of blocks; longest contiguous run 456 blocks (~1.52 h) ending 25252086
+  eff > 5 gwei: 0.537% of blocks; longest contiguous run 273 blocks (~0.91 h) ending 25050431
+  eff > 10 gwei: 0.141% of blocks; longest contiguous run 83 blocks (~0.28 h) ending 25050366
+  eff > 20 gwei: 0.067% of blocks; longest contiguous run 2 blocks (~0.01 h) ending 24380568
+  eff > 50 gwei: 0.038% of blocks; longest contiguous run 2 blocks (~0.01 h) ending 24563902
+
+=== fee_crash.json | collected 2026-10-17T21:39:48.458Z via https://mainnet.gateway.tenderly.co | blocks 6144 (23546872..23553015)
+baseFee gwei: p50=1.98 p90=49.51 p99=354.44 p99.9=495.60 max=547.23 mean=20.26
+tip p50 (per-block median) gwei: p50=0.5750 p90=2.00 p99=9.00 p99.9=60.65 max=318.32 mean=1.25
+effective = base + tip50 gwei: p50=2.62 p90=52.49 p99=360.74 p99.9=509.35 max=547.23 mean=21.51
+  per-sale @eff p50 2.62 gwei: used-gas cost 0.7761 $ (fuel 0.1299 + sweep 0.2553 + payout 0.3909)
+  per-sale @eff p90 52.49 gwei: used-gas cost 15.5752 $ (fuel 2.6063 + sweep 5.1239 + payout 7.8449)
+  per-sale @eff p99 360.74 gwei: used-gas cost 107.0429 $ (fuel 17.9124 + sweep 35.2149 + payout 53.9155)
+  per-sale @eff p99.9 509.35 gwei: used-gas cost 151.1375 $ (fuel 25.2912 + sweep 49.7212 + payout 76.1252)
+  per-sale @eff max 547.23 gwei: 162.38 $
+  eff > 2 gwei: 56.868% of blocks; longest contiguous run 1990 blocks (~6.63 h) ending 23551852
+  eff > 3 gwei: 46.973% of blocks; longest contiguous run 1877 blocks (~6.26 h) ending 23551755
+  eff > 5 gwei: 37.581% of blocks; longest contiguous run 1694 blocks (~5.65 h) ending 23551576
+  eff > 10 gwei: 25.765% of blocks; longest contiguous run 1158 blocks (~3.86 h) ending 23551056
+  eff > 20 gwei: 15.658% of blocks; longest contiguous run 943 blocks (~3.14 h) ending 23550893
+  eff > 50 gwei: 10.205% of blocks; longest contiguous run 605 blocks (~2.02 h) ending 23550571
+
+ETH 2364.48 | gas per sale (used) 125494 | 1 gwei => 0.2967 $ per sale

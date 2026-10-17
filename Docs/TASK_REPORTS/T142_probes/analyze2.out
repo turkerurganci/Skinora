@@ -1,0 +1,30 @@
+
+=== fee_d30.json (https://eth.drpc.org, collected 2026-10-17T21:36:47.821Z) blocks=215040 range 25998929..26214992
+smoothed tip gwei: p50=0.0573 p90=0.5406 p99=2.16 max=15.31
+effective (base + smoothed tip) gwei: p50=0.1816 p90=1.45 p99=5.82 p99.9=19.67 max=38.73
+per-sale cost $ (gas used only): p50=0.0539 p90=0.4305 p99=1.7270 p99.9=5.8373 max=11.49
+per-sale cost $ (fuel sent = sweepLimit x maxFee, dust lost): p50=0.0691 p90=0.5460 p99=2.2244 p99.9=7.1737 max=14.66
+latest block 26214992: base 0.1669 tip 0.0500 eff 0.2169 gwei -> per-sale 0.0644 $ (with dust 0.0851 $)
+cap 2 gwei (~0.318 $ sweep op, ~0.303 $ payout at ETH 2364.48): above 6.38% of blocks; episodes>=10min: 51, duration h p50=0.46 p90=2.03 max=4.48
+cap 3 gwei (~0.477 $ sweep op, ~0.454 $ payout at ETH 2364.48): above 3.14% of blocks; episodes>=10min: 29, duration h p50=0.43 p90=1.68 max=2.06
+cap 5 gwei (~0.794 $ sweep op, ~0.757 $ payout at ETH 2364.48): above 1.30% of blocks; episodes>=10min: 14, duration h p50=0.48 p90=1.16 max=1.70
+
+=== fee_d365.json (https://mainnet.gateway.tenderly.co, collected 2026-10-17T21:38:39.454Z) blocks=373760 range 23591637..26214992
+smoothed tip gwei: p50=0.0108 p90=0.1812 p99=1.00 max=168.16
+effective (base + smoothed tip) gwei: p50=0.1174 p90=0.6812 p99=3.34 p99.9=7.39 max=168.22
+per-sale cost $ (gas used only): p50=0.0348 p90=0.2021 p99=0.9904 p99.9=2.1936 max=49.92
+per-sale cost $ (fuel sent = sweepLimit x maxFee, dust lost): p50=0.0474 p90=0.2638 p99=1.2640 p99.9=2.8504 max=51.88
+latest block 26214992: base 0.1669 tip 0.0500 eff 0.2169 gwei -> per-sale 0.0644 $ (with dust 0.0851 $)
+cap 2 gwei (~0.318 $ sweep op, ~0.303 $ payout at ETH 2364.48): above 2.53% of blocks; episodes>=10min: 39, duration h p50=0.45 p90=2.16 max=2.66
+cap 3 gwei (~0.477 $ sweep op, ~0.454 $ payout at ETH 2364.48): above 1.20% of blocks; episodes>=10min: 23, duration h p50=0.42 p90=1.38 max=1.55
+cap 5 gwei (~0.794 $ sweep op, ~0.757 $ payout at ETH 2364.48): above 0.40% of blocks; episodes>=10min: 5, duration h p50=0.61 p90=0.96 max=0.96
+
+=== fee_crash.json (https://mainnet.gateway.tenderly.co, collected 2026-10-17T21:39:48.458Z) blocks=6144 range 23546872..23553015
+smoothed tip gwei: p50=0.5276 p90=2.00 p99=5.29 max=10.00
+effective (base + smoothed tip) gwei: p50=2.47 p90=51.53 p99=359.70 p99.9=502.60 max=552.20
+per-sale cost $ (gas used only): p50=0.7334 p90=15.2900 p99=106.7336 p99.9=149.1367 max=163.85
+per-sale cost $ (fuel sent = sweepLimit x maxFee, dust lost): p50=0.9798 p90=21.2551 p99=149.3809 p99.9=209.1192 max=230.05
+latest block 23553015: base 0.9737 tip 0.4383 eff 1.41 gwei -> per-sale 0.4190 $ (with dust 0.5418 $)
+cap 2 gwei (~0.318 $ sweep op, ~0.303 $ payout at ETH 2364.48): above 54.30% of blocks; episodes>=10min: 3, duration h p50=2.71 p90=6.96 max=6.96
+cap 3 gwei (~0.477 $ sweep op, ~0.454 $ payout at ETH 2364.48): above 46.60% of blocks; episodes>=10min: 3, duration h p50=1.73 p90=6.45 max=6.45
+cap 5 gwei (~0.794 $ sweep op, ~0.757 $ payout at ETH 2364.48): above 37.16% of blocks; episodes>=10min: 3, duration h p50=1.12 p90=5.67 max=5.67
