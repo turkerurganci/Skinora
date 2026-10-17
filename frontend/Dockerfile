@@ -1,8 +1,12 @@
 # Stage 1: Dependencies
 FROM node:20-slim AS deps
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# Install exactly what the lockfile pins. `npm install` without the lockfile
+# resolved every dependency afresh on each build, so a new registry release
+# could break the image with no change in this repo (2026-10-17: npm
+# "Cannot read properties of null (reading 'edgesOut')" on main's Docker Publish).
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Stage 2: Build
 FROM node:20-slim AS builder
