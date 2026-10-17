@@ -248,9 +248,9 @@ Bloklar 26.214.869–26.214.908 (40 blok), 430 sade USDT transferi (`to = USDT`,
 ## Commit & PR
 
 - Branch: `task/T142-ethereum-olcumleri`
-- Commit: (push sonrası dolduruldu — PR açıklamasında)
-- PR: (aşağıda, PR açıldıktan sonra yazıldı)
-- CI: (aşağıda)
+- Commit: `2175e43` — T142: Ethereum ön ölçümleri — mainnet + Sepolia salt okuma (bu PR numarası satırı sonraki commit'te)
+- PR: #339 — https://github.com/turkerurganci/Skinora/pull/339
+- CI: dal HEAD'inin run'ı PR açıklamasına ve doğrulama yorumuna yazılır (yalnız `Docs/` değiştiği için kod işleri paths-filter'la atlanır, CI Gate koşar)
 
 ## Known Limitations / Follow-up
 
