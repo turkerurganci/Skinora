@@ -49,8 +49,8 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit (backend, bütün `*.Tests`) | ✓ UNIT_RESULT | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
-| Integration + Contract (gerçek SQL Server, Testcontainers) | ✓ INT_RESULT | `dotnet test Skinora.sln -m:1` (Integration + Contract filtreli sayım aşağıda) |
+| Unit (backend, bütün `*.Tests`) | ✓ 1846/1846 (11 assembly) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Transactions 702, Shared 511, Platform 139, Notifications 133, Auth 92, API 77, Steam 59, Users 49, Realtime 40, Disputes 25, Fraud 19 |
+| Integration + Contract (gerçek SQL Server, Testcontainers) | ✓ 1653/1653 (10 assembly) | `dotnet test Skinora.sln -m:1` tam koşu 3499/3499; birim çıkarıldığında Integration + Contract: Transactions 706, API 584, Fraud 82, Platform 74, Notifications 60, Disputes 58, Auth 40, Admin 22, Shared 21, Payments 6. Migration provaları (T147 7/7, T146 ve T145 provaları T147 Down/Up üstünden) ve iki ağda uçtan uca test bu koşuda |
 | e2e harness | ✓ | `npx tsc --noEmit`, `prettier --check` (değişen dosyalar), `eslint` (değişen dosyalar) |
 | Format | ✓ | `dotnet format Skinora.sln --verify-no-changes --severity error` |
 | Build | ✓ | `dotnet build Skinora.sln` 0 hata |
@@ -73,9 +73,9 @@
 ## Commit & PR
 
 - Branch: `task/T147-islem-akisinda-ag-secimi`
-- Commit: COMMITS
-- PR: #PR_NUMBER
-- CI: CI_RESULT
+- Commit: `8db30f3` — T147: işlem akışında ağ seçimi (kod + testler) · `bb81ad5` — uçtan uca test, e2e, doküman, rapor · sonraki commit — PR numarası ve test sayıları
+- PR: #344
+- CI: PR CI run sonucu yönetici raporunda (son commit'in run'ı izlendi; ilk run `39098588462`)
 
 ## Known Limitations / Follow-up
 
@@ -88,7 +88,7 @@
 ## Notlar
 
 - **Working tree:** temiz (başlangıçta `git status --short` boş).
-- **Main CI startup check:** son tamamlanan run'lar `39087410609` ✓ (T145 CI), `39087410574` ✓ (T145 Docker Publish), `39081681867` ✓ (T144 Docker Publish); T146 merge run'ları (`39095082123` CI, `39095082208` Docker Publish) başlangıçta sürüyordu.
+- **Main CI startup check:** son tamamlanan run'lar `39087410609` ✓ (T145 CI), `39087410574` ✓ (T145 Docker Publish), `39081681867` ✓ (T144 Docker Publish); T146 merge run'ları (`39095082123` CI, `39095082208` Docker Publish) başlangıçta sürüyordu, sonra ikisi de ✓ bitti.
 - **Bağımlılık:** T146 ✓ (PR #342).
 - **Dış varsayımlar:** yok (dış servis, paket ya da plan katmanı varsayımı yok). Kullanılan EIP-55 vektörleri spesifikasyondan (eips.ethereum.org/EIPS/eip-55); TRON adresleri T146'nın tronweb 5.3.5 ile üretilmiş fikstürleri. Migration komutu: `dotnet ef migrations add T147_TransactionNetworkOptions --project Skinora.Shared --startup-project Skinora.API`; çıktı elle düzenlendi (veri kopyası, koruma, Down).
 - **Docker:** testler sırasında Docker Desktop bir kez kapandı (paralel T148 ajanının işi bitince kapatması olası); `docker desktop start` ile yeniden açıldı. Yerel Skinora yığını `unless-stopped` ile kalkar (beklenen). İş sonunda `docker desktop stop`.
