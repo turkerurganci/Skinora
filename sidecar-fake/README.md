@@ -62,7 +62,7 @@ real service refuses it (below).
 | `POST /api/monitor/start` · `/stop` | registry, readable via `/__e2e/blockchain/monitors` | same |
 | `POST /api/monitor/post-cancel-start` · `/post-cancel-stop` | acknowledged | acknowledged |
 | `POST /api/transfer/{payout,refund,sweep,cold-wallet}` | 64-hex `txHash` | `0x` + 64-hex `txHash` |
-| `GET /api/transfer/status/:txHash` | `confirmations: 25`, `SUCCESS` | `finalized: true`, `confirmations: null`, `realizedFeeWei` (K5, T154) |
+| `GET /api/transfer/status/:txHash` | `confirmations: 25`, `SUCCESS` | `finalized: true`, `confirmations: 13` (bilgi amaçlı — gerçek servis T152 gibi; kesinlik yalnız `finalized`), `realizedFeeWei` (K5, T154) |
 | `POST /api/transfer/estimate-fee` | `feeUsdt` 2.00 + Energy breakdown | T154 shape: `feeWei` / `ethPriceUsdt` as strings, `feeUsdt` = their rounded-up product (0.05) |
 | `POST /api/transfer/estimate-sweep-fee` | 8,441,349 SUN at 0.34 → the backend's 2.90 line (T149) | 501 `NOT_IMPLEMENTED` (no buyer-paid line on Ethereum) |
 

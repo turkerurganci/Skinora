@@ -6,9 +6,10 @@ import { EthereumHdWallet } from './wallet/HdWalletService.js';
 import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js';
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { createApp } from './api/routes.js';
-import { buildServices } from './wiring.js';
-import { EthPriceService } from './price/EthPriceService.js';
-import { EthFeeEstimationService } from './fee/FeeEstimationService.js';
+import { TxJournal } from './transfer/TxJournal.js';
+import { FEE_CAP_WAIT_REASONS } from './transfer/FeeWaitTracker.js';
+import { setTransferWaitSource, transferWaitAlarmSeconds } from './metrics.js';
+import { buildOutbound, buildServices } from './wiring.js';
 
 /**
  * Entry point of the Ethereum service (T150 — 05 §3.3a, 08 §3.7).
@@ -34,11 +35,14 @@ function main(): void {
   let config: EthereumServiceConfig;
   let wallet: EthereumHdWallet;
   let keys: WalletKeyAddresses;
+  let journal: TxJournal;
   try {
     config = loadConfig(process.env);
     wallet = new EthereumHdWallet(config.hdMnemonic);
     wallet.derive(0);
     keys = checkWalletKeys(config);
+    // T152 — a signer that cannot remember what it signed must not sign.
+    journal = new TxJournal(config.transfers.journalDir);
   } catch (err) {
     refuseToStart(err);
     return;
@@ -86,6 +90,14 @@ function main(): void {
       coldWalletConfigured: config.coldWalletAddress !== null,
       webhookConfigured: config.webhookHmacKey !== '',
       tokenContracts: config.tokenContracts,
+      txJournal: { dir: config.transfers.journalDir, records: journal.size },
+      sendLimitsConfigured: {
+        single: config.transfers.maxSingleTransferUnits !== null,
+        daily: config.transfers.maxDailyOutflowUnits !== null,
+        fuelSingle: config.transfers.fuelMaxSingleWei !== null,
+        fuelDaily: config.transfers.fuelMaxDailyWei !== null,
+      },
+      feeCapWaitAlarmSeconds: config.transfers.waitAlarmSeconds,
     },
     'Ethereum service configured',
   );
@@ -109,11 +121,41 @@ function main(): void {
     'Ethereum payment monitor configured',
   );
 
+  // T152 sends (08 §3.7.6, §3.7.7) and T154's fee estimate, over ONE ETH
+  // price service: the fee cap and the estimate use the same price.
+  const { feeEstimator, feeWaits, transfers } = buildOutbound(config, {
+    rpc,
+    journal,
+    wallet,
+    finalizedHead: () => finality.status().snapshot?.number ?? null,
+    // The configured address prices a payout even before the key is mounted.
+    feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
+  });
+  transferWaitAlarmSeconds.set(config.transfers.waitAlarmSeconds);
+  setTransferWaitSource({
+    feeCapWaitSeconds: () => feeWaits.longestWaitSeconds(FEE_CAP_WAIT_REASONS),
+    unminedSeconds: () => transfers.oldestUnminedSeconds(),
+    gasWaitSeconds: () => feeWaits.longestWaitSeconds(['FUEL_REQUIRED', 'HOT_WALLET_GAS_LOW']),
+    nonceConflicts: () => transfers.nonceConflictCount(),
+    journalBehindChain: () => transfers.journalBehindChain().length,
+    journalAckAheadOfChain: () => transfers.acknowledgementsAheadOfChain().length,
+  });
+  let keeping = false;
+  const keeper = setInterval(() => {
+    if (keeping) return;
+    keeping = true;
+    void transfers.keepAll().finally(() => {
+      keeping = false;
+    });
+  }, config.transfers.keeperIntervalMs);
+  keeper.unref();
+
   const app = createApp({
     internalKey: config.internalKey,
     chainId: config.chainId,
     wallet,
     finality: () => finality.status(),
+    transfers,
     payments: {
       registry,
       allowlist,
@@ -121,13 +163,7 @@ function main(): void {
       maxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
       readiness,
     },
-    feeEstimator: new EthFeeEstimationService({
-      rpc,
-      prices: new EthPriceService(),
-      tokenContracts: config.tokenContracts,
-      // The configured address prices a payout even before the key is mounted.
-      hotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
-    }),
+    feeEstimator,
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {
@@ -138,6 +174,7 @@ function main(): void {
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
     services.stop();
+    clearInterval(keeper);
     server.close(() => logger.info('HTTP server closed'));
     const forceTimer = setTimeout(() => {
       logger.error('Forced shutdown — timeout exceeded');

@@ -185,6 +185,81 @@ describe('loadConfig — values', () => {
   });
 });
 
+describe('loadConfig — sends (T152)', () => {
+  it('leaves every send cap unset by default (fail closed) and defaults the journal, alarm and bump', () => {
+    const config = loadConfig(baseEnv, secrets());
+    expect(config.transfers).toEqual({
+      journalDir: '/var/lib/skinora-ethereum/tx-journal',
+      maxSingleTransferUnits: null,
+      maxDailyOutflowUnits: null,
+      fuelMaxSingleWei: null,
+      fuelMaxDailyWei: null,
+      waitAlarmSeconds: 10_800,
+      keeperIntervalMs: 30_000,
+      bumpAfterSeconds: 300,
+      journalAcknowledgedNonces: new Map(),
+    });
+  });
+
+  it('reads operator nonce acknowledgements as canonical address → nonce (T152 düzeltme turu 2)', () => {
+    const config = loadConfig(
+      {
+        ...baseEnv,
+        ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES: `${signer.address}:12, 0x${'2'.repeat(40)}:0`,
+      },
+      secrets(),
+    );
+    expect([...config.transfers.journalAcknowledgedNonces]).toEqual([
+      [signer.address.toLowerCase(), 12],
+      ['0x' + '2'.repeat(40), 0],
+    ]);
+  });
+
+  it.each([
+    'abc',
+    '0x1234:1',
+    `0x${'2'.repeat(40)}`,
+    `0x${'2'.repeat(40)}:-1`,
+    `0x${'2'.repeat(40)}:1.5`,
+    `0x${'2'.repeat(40)}:1,0x${'2'.repeat(40)}:2`,
+  ])('refuses to start on a malformed acknowledgement %j', (bad) => {
+    expect(
+      errorOf(() =>
+        loadConfig({ ...baseEnv, ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES: bad }, secrets()),
+      ).code,
+    ).toBe('INVALID_CONFIG');
+  });
+
+  it('parses the caps in token units (6 decimals) and wei (18 decimals)', () => {
+    const config = loadConfig(
+      {
+        ...baseEnv,
+        ETHEREUM_MAX_SINGLE_TRANSFER_USDT: '5000',
+        ETHEREUM_MAX_DAILY_OUTFLOW_USDT: '20000.5',
+        ETHEREUM_FUEL_MAX_SINGLE_ETH: '0.001',
+        ETHEREUM_FUEL_MAX_DAILY_ETH: '0.05',
+        ETHEREUM_TX_JOURNAL_DIR: '/data/journal',
+      },
+      secrets(),
+    );
+    expect(config.transfers.maxSingleTransferUnits).toBe(5_000_000_000n);
+    expect(config.transfers.maxDailyOutflowUnits).toBe(20_000_500_000n);
+    expect(config.transfers.fuelMaxSingleWei).toBe(1_000_000_000_000_000n);
+    expect(config.transfers.fuelMaxDailyWei).toBe(50_000_000_000_000_000n);
+    expect(config.transfers.journalDir).toBe('/data/journal');
+  });
+
+  it.each(['0', '-1', '1e3', '1.0000001', 'abc'])(
+    'refuses to start on a malformed cap %j rather than run without it',
+    (bad) => {
+      expect(
+        errorOf(() => loadConfig({ ...baseEnv, ETHEREUM_MAX_SINGLE_TRANSFER_USDT: bad }, secrets()))
+          .code,
+      ).toBe('INVALID_CONFIG');
+    },
+  );
+});
+
 describe('providerHost', () => {
   it('shows the host only — the path carries the API key', () => {
     expect(providerHost(PRIMARY_URL)).toBe('eth-sepolia.g.alchemy.com');

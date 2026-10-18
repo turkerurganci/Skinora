@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-18 — **T155 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (sidecar-fake Ethereum desteği + E2E; rapor [`T155_REPORT.md`](TASK_REPORTS/T155_REPORT.md), PR [#351](https://github.com/turkerurganci/Skinora/pull/351), doğrulanan HEAD `b09067a`, CI [`39137404205`](https://github.com/turkerurganci/Skinora/actions/runs/39137404205) ✓, multi-network bacağı 14,9 dk). Beş küçük bulgu kapandı (EIP-55 adres kuralı, webhook imza sırrı birim testi, `EXPECTED_CONTRACT_MISMATCH`, USDC yalnız yapılandırılırsa, spam kontratı testi); e2e TRON satıcı ödemesi 98,20 elle doğrulandı; main (T151) bütünleştirildi. Merge yönetici tarafından yapılır.
+**Son güncelleme:** 2026-10-18 — **T152 ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu 2 → tur 2 ✓ PASS** (Ethereum gönderim servisi; rapor [`T152_REPORT.md`](TASK_REPORTS/T152_REPORT.md), PR [#349](https://github.com/turkerurganci/Skinora/pull/349), doğrulanan HEAD `10992e0d`, CI [`39147530928`](https://github.com/turkerurganci/Skinora/actions/runs/39147530928) ✓). Kapanışta yönetici kararlarıyla: zincir nonce'undan büyük operatör onayı yok sayılır (yeni kritik alarm `ethereum-journal-ack-ahead-of-chain`), kalıcı ret yalnız gerçek EVM geri dönüşü kalıbı, yeniden oynatma kimliği ve makbuz göndericisi test boşlukları kapandı; T157 (admin kapatma aracı) ve T158 (g) (durum ucunda Transfer log doğrulaması) kriterleri eklendi (⚠ PARA). Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -338,7 +338,7 @@
 | T149 | Ağ ücreti politikası | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T150 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345)) |
 | T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347)) |
-| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
+| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu 2 → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T152_REPORT.md), PR [#349](https://github.com/turkerurganci/Skinora/pull/349)) |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |

@@ -333,6 +333,8 @@ public static class TransactionsModule
         // DETECTED → CONFIRMED / FAILED by that network's finality rule.
         services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
         services.AddScoped<OutgoingTransferDispatchJob>();
+        // T152 — per-network outbound queue gauges (outbound-transfer-stuck).
+        services.AddSingleton<IOutboundQueueObserver, Skinora.API.Monitoring.PrometheusOutboundQueueObserver>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
         // WP3 — deposit → hot wallet sweep producer. Queues the PENDING SWEEP

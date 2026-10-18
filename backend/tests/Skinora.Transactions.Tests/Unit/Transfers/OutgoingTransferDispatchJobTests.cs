@@ -74,9 +74,14 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             _retryPolicy,
             _outbox,
             StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
+            _settings,
+            _observer,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
+
+    private readonly SeededNetworkSettings _settings = new();
+    private readonly CapturingQueueObserver _observer = new();
 
     public void Dispose()
     {
@@ -566,6 +571,200 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
         Assert.Equal("tx-hash-sweep", reloaded.TxHash);
         Assert.Equal(fixture.PaymentAddress.Address, reloaded.FromAddress);
+    }
+
+    // -------------------- T152 — fee cap and deferral (08 §3.7.7) --------------------
+
+    [Fact]
+    public async Task Every_Ethereum_Send_Carries_The_Fee_Cap_Setting_Tron_Does_Not()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _settings.EthereumFeeCap = 0.75m;
+
+        var ethPayout = await SeedPayoutAsync(amount: 20m);
+        ethPayout.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        var ethSweep = await SeedSweepAsync(amount: 20m, hotWallet: "0xhot");
+        ethSweep.SweepRow.Network = BlockchainNetwork.ETHEREUM;
+        var ethRefund = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 5m);
+        ethRefund.RefundRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+        var tronPayout = await SeedPayoutAsync(amount: 30m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(0.75m, ethereum.Calls.Single(c => c.Type == BlockchainTransactionType.SELLER_PAYOUT).FeeCapUsd);
+        Assert.Equal(0.75m, ethereum.Calls.Single(c => c.Type == BlockchainTransactionType.SWEEP).FeeCapUsd);
+        // Yönetici kararı 2026-10-18: refunds are capped too (they wait above it).
+        Assert.Equal(0.75m, ethereum.Calls.Single(c => c.Type == BlockchainTransactionType.BUYER_REFUND).FeeCapUsd);
+        Assert.Null(Assert.Single(_client.Calls, c => c.BlockchainTransactionId == tronPayout.PayoutRow.Id).FeeCapUsd);
+    }
+
+    [Fact]
+    public async Task Deferred_Row_Stays_Pending_Without_Spending_A_Retry_And_Does_Not_Stop_The_Network()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(
+                TransferBroadcastStatus.Deferred, null, "FEE_ABOVE_CAP", "fee 4 gwei above cap 3.3 gwei"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var first = await SeedPayoutAsync(amount: 20m);
+        first.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        first.PayoutRow.RetryCount = 1;
+        var second = await SeedPayoutAsync(amount: 21m);
+        second.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        // Both asked in the same run: a wait is not an outage.
+        Assert.Equal(2, ethereum.Calls.Count);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == first.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(1, reloaded.RetryCount);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime + OutgoingTransferDispatchJob.DeferredRetryDelay, reloaded.NextAttemptAt);
+        Assert.StartsWith("FEE_ABOVE_CAP", reloaded.ErrorMessage);
+        Assert.Null(reloaded.TxHash);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+
+        // Many waits never exhaust the retry budget (a 3-hour wait is ~180 runs).
+        for (var i = 0; i < 10; i++)
+        {
+            _clock.Advance(OutgoingTransferDispatchJob.DeferredRetryDelay);
+            await _sut.ExecuteAsync();
+        }
+        reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == first.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(1, reloaded.RetryCount);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+    }
+
+    // -------------------- T152 düzeltme turu — Ethereum never FAILs on a transient error --------------------
+
+    [Theory]
+    [InlineData(HttpBlockchainTransferClient.TransportFailureCode, "timeout / connection lost")]
+    [InlineData("INTERNAL_ERROR", "sidecar 500")]
+    [InlineData("RPC_ALL_PROVIDERS_FAILED", "sidecar 502")]
+    public async Task Ethereum_Transient_Failures_Past_The_Retry_Budget_Never_Fail_The_Row_And_Reuse_Its_Id(
+        string code, string message)
+    {
+        // Proje sahibi kararı 2026-10-18: the Ethereum signer answers a repeated
+        // id with the same transaction, so after a timeout the row keeps trying
+        // with the SAME id instead of becoming FAILED (which would invite a
+        // manual re-send under a new id).
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(TransferBroadcastStatus.TransientFailure, null, code, message),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var fixture = await SeedPayoutAsync(amount: 20m);
+        fixture.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        const int runs = 8; // retry budget is 3 (1, 5, 15 min)
+        for (var i = 0; i < runs; i++)
+        {
+            await _sut.ExecuteAsync();
+            _clock.Advance(TimeSpan.FromMinutes(16));
+        }
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(runs, reloaded.RetryCount);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+        Assert.Equal(runs, ethereum.Calls.Count);
+        Assert.All(ethereum.Calls, c => Assert.Equal(fixture.PayoutRow.Id, c.BlockchainTransactionId));
+        // Past the budget it keeps the policy's last interval.
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(16) + TimeSpan.FromMinutes(15), reloaded.NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task Ethereum_Permanent_Refusal_Still_Fails_The_Row_With_An_Admin_Event()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(
+                TransferBroadcastStatus.InvalidRequest, null, "TOKEN_CONTRACT_UNSAFE", "USDT paused"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var fixture = await SeedPayoutAsync(amount: 20m);
+        fixture.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.FAILED, reloaded.Status);
+        Assert.Equal("TOKEN_CONTRACT_UNSAFE", Assert.Single(_outbox.Events.OfType<TransferDispatchFailedEvent>()).LastErrorCode);
+    }
+
+    [Fact]
+    public async Task Tron_Still_Fails_After_The_Retry_Budget()
+    {
+        var fixture = await SeedPayoutAsync(amount: 20m);
+        fixture.PayoutRow.RetryCount = 3;
+        await _db.SaveChangesAsync();
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.TransientFailure, null, HttpBlockchainTransferClient.TransportFailureCode, "timeout");
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.FAILED, reloaded.Status);
+    }
+
+    [Fact]
+    public async Task Every_Run_Reports_Each_Networks_Pending_Count_Oldest_Age_And_Threshold()
+    {
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(TransferBroadcastStatus.TransientFailure, null, "INTERNAL_ERROR", "500"),
+        });
+        var first = await SeedPayoutAsync(amount: 20m);
+        first.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        _clock.Advance(TimeSpan.FromMinutes(30));
+        var second = await SeedPayoutAsync(amount: 21m);
+        second.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+        _clock.Advance(TimeSpan.FromHours(3));
+        _health.Degraded.Add(BlockchainNetwork.ETHEREUM); // reported even while skipped
+
+        await _sut.ExecuteAsync();
+
+        var eth = _observer.Last[BlockchainNetwork.ETHEREUM];
+        Assert.Equal(2, eth.Rows);
+        Assert.Equal(TimeSpan.FromMinutes(210).TotalSeconds, eth.Oldest);
+        Assert.Equal(180 * 60d, eth.Alarm);
+        var tron = _observer.Last[BlockchainNetwork.TRON];
+        Assert.Equal(0, tron.Rows);
+        Assert.Null(tron.Alarm);
+    }
+
+    private sealed class CapturingQueueObserver : IOutboundQueueObserver
+    {
+        public Dictionary<BlockchainNetwork, (int Rows, double Oldest, double? Alarm)> Last { get; } = new();
+
+        public void Report(BlockchainNetwork network, int pendingRows, double oldestPendingSeconds, double? alarmSeconds) =>
+            Last[network] = (pendingRows, oldestPendingSeconds, alarmSeconds);
+    }
+
+    private sealed class SeededNetworkSettings : IBlockchainNetworkSettingsProvider
+    {
+        public decimal EthereumFeeCap { get; set; } = 0.50m;
+
+        public Task<BlockchainNetworkSettings> GetAsync(BlockchainNetwork network, CancellationToken cancellationToken)
+        {
+            var defaults = BlockchainNetworkSettingsProvider.DefaultsFor(network);
+            return Task.FromResult(network == BlockchainNetwork.ETHEREUM
+                ? defaults with { FeeCapUsdPerTransfer = EthereumFeeCap }
+                : defaults);
+        }
     }
 
     private async Task<SweepFixture> SeedSweepAsync(decimal amount, string hotWallet)

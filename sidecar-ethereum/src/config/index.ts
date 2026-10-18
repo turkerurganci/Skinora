@@ -3,6 +3,7 @@ import { checksummedEvmAddress } from '../address/evmAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { ETHEREUM_CHAINS, MAINNET_TOKEN_CONTRACTS, type EthereumChainName } from '../network.js';
 import { readSecretFile } from './secretFile.js';
+import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
 
 /**
  * Configuration of the Ethereum service (T150 — 05 §3.3a, §3.5; 08 §3.7).
@@ -71,6 +72,31 @@ export interface EthereumServiceConfig {
     /** Finalized block older than this → unhealthy and alarm (08 §3.7.8: 30 min). */
     readonly stallThresholdSeconds: number;
   };
+  /** Outbound sends (T152 — 08 §3.7.6, §3.7.7). */
+  readonly transfers: {
+    /** Durable journal of signed transactions (a Docker volume); the service does not start without it. */
+    readonly journalDir: string;
+    /** Raw USDT units; null = not configured → payouts / refunds refused (fail closed). */
+    readonly maxSingleTransferUnits: bigint | null;
+    /** Raw USDT units; null = not configured → payouts refused (fail closed). */
+    readonly maxDailyOutflowUnits: bigint | null;
+    /** Fuel caps in wei (T153 sends fuel; the signer enforces them); null = fuel refused. */
+    readonly fuelMaxSingleWei: bigint | null;
+    readonly fuelMaxDailyWei: bigint | null;
+    /** Wait that raises the fee-cap alarm (08 §3.7.7: 3 h). */
+    readonly waitAlarmSeconds: number;
+    /** Keeper cadence: re-broadcast, fee bump, finality, conflict check. */
+    readonly keeperIntervalMs: number;
+    /** A head-of-line send not mined after this long is re-signed with higher fees. */
+    readonly bumpAfterSeconds: number;
+    /**
+     * Operator acknowledgements of nonces the journal does not hold
+     * (`ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES` = `0xaddr:N[,0xaddr:N]`):
+     * canonical address → nonce up to which the chain is accounted for. Empty
+     * by default; set only by the DEPLOY_RUNBOOK §D journal-behind-chain step.
+     */
+    readonly journalAcknowledgedNonces: ReadonlyMap<string, number>;
+  };
   /** T151 — the payment monitor (08 §3.7.4). */
   readonly monitor: {
     /** How often the monitor looks for new finalized blocks (it reads the FinalityTracker's head). */
@@ -93,6 +119,22 @@ export interface EthereumServiceConfig {
   /** T151 — how often USDT's fee / pause / deprecation switches are re-read (08 §3.7.1). */
   readonly usdtStatusIntervalMs: number;
   readonly shutdownTimeoutMs: number;
+}
+
+/** Default journal location — the `ethereum_tx_journal` volume in docker-compose.yml. */
+export const DEFAULT_TX_JOURNAL_DIR = '/var/lib/skinora-ethereum/tx-journal';
+
+function limit(env: Env, name: string, decimals: number): bigint | null {
+  const raw = value(env, name);
+  if (raw === '') return null;
+  const parsed = parseLimit(raw, decimals);
+  if (parsed === null) {
+    throw new ConfigError(
+      'INVALID_CONFIG',
+      `${name} must be a positive decimal with at most ${decimals} fraction digits, got "${raw}".`,
+    );
+  }
+  return parsed;
 }
 
 export const DEFAULT_SECRET_PATHS = {
@@ -124,6 +166,28 @@ function positiveInt(env: Env, name: string, fallback: number): number {
 }
 
 /** PORT: 0..65535 (0 = any free port, used by the startup tests). */
+/** `0xaddr:N[,0xaddr:N]` → canonical address → N. Malformed refuses to start. */
+function acknowledgedNonces(env: Env, name: string): ReadonlyMap<string, number> {
+  const raw = value(env, name);
+  const out = new Map<string, number>();
+  if (raw === '') return out;
+  for (const part of raw.split(',')) {
+    const match = /^\s*(0x[0-9a-fA-F]{40}):(\d{1,15})\s*$/.exec(part);
+    if (!match || checksummedEvmAddress(match[1]) === null) {
+      throw new ConfigError(
+        'INVALID_CONFIG',
+        `${name} must be a comma-separated list of 0xaddress:nonce, got "${part.trim()}".`,
+      );
+    }
+    const address = canonicalAddress(match[1]);
+    if (out.has(address)) {
+      throw new ConfigError('INVALID_CONFIG', `${name} names ${address} twice.`);
+    }
+    out.set(address, Number(match[2]));
+  }
+  return out;
+}
+
 function listenPort(env: Env): number {
   const raw = value(env, 'PORT');
   if (raw === '') return 5300;
@@ -275,6 +339,17 @@ export function loadConfig(
     finality: {
       pollIntervalMs: positiveInt(env, 'ETHEREUM_FINALIZED_POLL_INTERVAL_MS', 30_000),
       stallThresholdSeconds: positiveInt(env, 'ETHEREUM_FINALIZED_STALL_SECONDS', 1800),
+    },
+    transfers: {
+      journalDir: value(env, 'ETHEREUM_TX_JOURNAL_DIR') || DEFAULT_TX_JOURNAL_DIR,
+      maxSingleTransferUnits: limit(env, 'ETHEREUM_MAX_SINGLE_TRANSFER_USDT', TOKEN_DECIMALS),
+      maxDailyOutflowUnits: limit(env, 'ETHEREUM_MAX_DAILY_OUTFLOW_USDT', TOKEN_DECIMALS),
+      fuelMaxSingleWei: limit(env, 'ETHEREUM_FUEL_MAX_SINGLE_ETH', 18),
+      fuelMaxDailyWei: limit(env, 'ETHEREUM_FUEL_MAX_DAILY_ETH', 18),
+      waitAlarmSeconds: positiveInt(env, 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 10_800),
+      keeperIntervalMs: positiveInt(env, 'ETHEREUM_OUTGOING_KEEPER_INTERVAL_MS', 30_000),
+      bumpAfterSeconds: positiveInt(env, 'ETHEREUM_FEE_BUMP_AFTER_SECONDS', 300),
+      journalAcknowledgedNonces: acknowledgedNonces(env, 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'),
     },
     monitor: {
       tickIntervalMs: positiveInt(env, 'ETHEREUM_MONITOR_TICK_MS', 15_000),

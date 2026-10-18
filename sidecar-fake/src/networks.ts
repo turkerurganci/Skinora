@@ -161,14 +161,16 @@ export const ETHEREUM: NetworkProfile = {
   paymentConfirmationCount: 64,
   blockNumber: 21_000_000,
   networkFieldRequired: true,
-  // K5 — final means `finalized: true`; a block count alone never qualifies,
-  // so the fake reports none. `realizedFeeWei` is a decimal string (T154 —
-  // wei passes 2^53).
+  // K5 — final means `finalized: true`; a block count alone never qualifies.
+  // The real service still reports the blocks from the transaction to
+  // `finalized` (T152; its contract example carries 13) — informational, the
+  // backend decides on `finalized` only. `realizedFeeWei` is a decimal string
+  // (T154 — wei passes 2^53).
   finalTransferStatus: (txHash) => ({
     txHash,
     blockNumber: 21_000_000,
     contractRet: 'SUCCESS',
-    confirmations: null,
+    confirmations: 13,
     finalized: true,
     realizedFeeWei: '21000000000000',
   }),

@@ -137,6 +137,21 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                 // Sidecar may return non-JSON 5xx body — fall back to status text below.
             }
 
+            // T152 — "not now, nothing signed" (fee above the cap, no ETH price,
+            // no gas on the sender — 08 §3.7.7). Keyed on the body's flag, not
+            // on the status code, so no other 5xx can be mistaken for a wait.
+            if (error?.Deferred == true)
+            {
+                _logger.LogInformation(
+                    "Blockchain sidecar deferred broadcast for {BlockchainTransactionId} ({Type}): {Code} — {Message} (waiting since {WaitingSince})",
+                    request.BlockchainTransactionId, request.Type, error.Error, error.Message, error.WaitingSince);
+                return new TransferBroadcastResult(
+                    TransferBroadcastStatus.Deferred,
+                    null,
+                    error.Error ?? "DEFERRED",
+                    error.WaitingSince is null ? error.Message : $"{error.Message} (waiting since {error.WaitingSince})");
+            }
+
             if (response.StatusCode == HttpStatusCode.BadRequest)
             {
                 _logger.LogError(
@@ -195,8 +210,16 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                 _logger.LogWarning(
                     "Blockchain sidecar status returned {StatusCode} for {TxHash}",
                     (int)response.StatusCode, txHash);
+                // T152 (T150 doğrulaması) — a 4xx about THIS hash (unknown,
+                // nonce conflict, malformed) is row-specific and must not end
+                // the network's turn in the confirmation job. A 4xx that says
+                // the SERVICE is wrong for every row (auth, timeout, rate
+                // limit) and every 5xx is the network's.
                 return new TransferStatusResult(
-                    TransferStatusOutcome.Unavailable, null, null, null, response.ReasonPhrase);
+                    IsRowSpecific(response.StatusCode)
+                        ? TransferStatusOutcome.Rejected
+                        : TransferStatusOutcome.Unavailable,
+                    null, null, null, $"{(int)response.StatusCode} {response.ReasonPhrase}");
             }
 
             TransferStatusResponse? payload = null;
@@ -234,7 +257,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     tronResources ? payload.RealizedFeeSun : null,
                     tronResources ? payload.EnergyUsageTotal : null,
                     tronResources ? payload.OriginEnergyUsage : null,
-                    _policy.ReportsFeeInWei ? ReadRealizedFeeWei(payload.RealizedFeeWei, txHash) : null);
+                    TxHash: string.IsNullOrWhiteSpace(payload.TxHash) ? null : payload.TxHash,
+                    RealizedFeeWei: _policy.ReportsFeeInWei ? ReadRealizedFeeWei(payload.RealizedFeeWei, txHash) : null);
             }
             return new TransferStatusResult(
                 TransferStatusOutcome.Pending,
@@ -243,6 +267,17 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                 payload.ContractRet,
                 null);
         }
+    }
+
+    /// <summary>A 4xx about the asked transaction, not about the service (T152).</summary>
+    private static bool IsRowSpecific(HttpStatusCode code)
+    {
+        var value = (int)code;
+        return value is >= 400 and < 500
+            && code is not HttpStatusCode.Unauthorized
+            && code is not HttpStatusCode.Forbidden
+            && code is not HttpStatusCode.RequestTimeout
+            && code is not HttpStatusCode.TooManyRequests;
     }
 
     // T154 — the realized fee is measurement, never a gate: a missing or
@@ -276,12 +311,16 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         var amountStr = request.Amount.ToString("0.######", CultureInfo.InvariantCulture);
         var tokenStr = request.Token.ToString();
         var idStr = request.BlockchainTransactionId.ToString("D");
+        // T152 — only for a network with a fee cap (Ethereum: payout, sweep and,
+        // since the düzeltme turu, refunds);
+        // omitted from the body otherwise, so TRON's service sees no change.
+        var feeCapStr = request.FeeCapUsd?.ToString("0.######", CultureInfo.InvariantCulture);
 
         return request.Type switch
         {
             BlockchainTransactionType.SELLER_PAYOUT => (
                 "api/transfer/payout",
-                new PayoutBody(network, idStr, request.ToAddress, amountStr, tokenStr)),
+                new PayoutBody(network, idStr, request.ToAddress, amountStr, tokenStr, feeCapStr)),
             BlockchainTransactionType.BUYER_PAYMENT or BlockchainTransactionType.WRONG_TOKEN_INCOMING
                 or BlockchainTransactionType.SPAM_TOKEN_INCOMING =>
                 throw new InvalidOperationException(
@@ -301,7 +340,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                         "DepositAddress is required for SWEEP."),
                     request.ToAddress,
                     amountStr,
-                    tokenStr)),
+                    tokenStr,
+                    feeCapStr)),
             _ => (
                 "api/transfer/refund",
                 new RefundBody(
@@ -313,7 +353,11 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                         $"DepositAddress is required for {request.Type}."),
                     request.ToAddress,
                     amountStr,
-                    tokenStr)),
+                    tokenStr,
+                    // T152 — the Ethereum signer moves USDC only for a
+                    // WRONG_TOKEN_REFUND (08 §3.7.6); TRON's service ignores it.
+                    request.Type.ToString(),
+                    feeCapStr)),
         };
     }
 
@@ -322,7 +366,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
         [property: JsonPropertyName("toAddress")] string ToAddress,
         [property: JsonPropertyName("amount")] string Amount,
-        [property: JsonPropertyName("token")] string Token);
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
 
     private sealed record RefundBody(
         [property: JsonPropertyName("network")] string Network,
@@ -331,7 +376,9 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
         [property: JsonPropertyName("toBuyerAddress")] string ToBuyerAddress,
         [property: JsonPropertyName("amount")] string Amount,
-        [property: JsonPropertyName("token")] string Token);
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("refundType")] string RefundType,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
 
     private sealed record SweepBody(
         [property: JsonPropertyName("network")] string Network,
@@ -340,7 +387,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
         [property: JsonPropertyName("toHotWalletAddress")] string ToHotWalletAddress,
         [property: JsonPropertyName("amount")] string Amount,
-        [property: JsonPropertyName("token")] string Token);
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
 
     private sealed record TransferBroadcastResponse(
         [property: JsonPropertyName("txHash")] string? TxHash);
@@ -361,5 +409,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
     private sealed record ErrorEnvelope(
         [property: JsonPropertyName("error")] string? Error,
         [property: JsonPropertyName("message")] string? Message,
-        [property: JsonPropertyName("retryable")] bool? Retryable);
+        [property: JsonPropertyName("retryable")] bool? Retryable,
+        [property: JsonPropertyName("deferred")] bool? Deferred = null,
+        [property: JsonPropertyName("waitingSince")] string? WaitingSince = null);
 }

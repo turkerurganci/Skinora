@@ -45,6 +45,8 @@ export class RpcError extends SidecarError {
     public readonly kind: RpcFailureKind,
     public readonly provider: string,
     public readonly rpcCode?: number,
+    /** The JSON-RPC error's `data` (a revert's return data on geth-style nodes). */
+    public readonly rpcData?: unknown,
   ) {
     super(
       message,
@@ -57,6 +59,27 @@ export class RpcError extends SidecarError {
     );
     this.name = 'RpcError';
   }
+}
+
+/**
+ * Whether a JSON-RPC answer is the EVM's own revert of the call (T152
+ * düzeltme turu 2): JSON-RPC code 3, revert data in `data` (`0x` + selector
+ * …), or the exact wording clients use for it — geth's `execution reverted`
+ * and Ganache / Hardhat's `VM Exception while processing transaction:
+ * revert`. Only this is an answer about the transaction that no retry can
+ * change; every other `rpc` answer (`header not found`, `missing trie node`,
+ * an internal error of a lagging node, and messages that merely contain the
+ * word — `revision id 3 cannot be reverted`, `upstream block reverted
+ * (reorg)`) is about the node at that moment — the send path treats it as
+ * transient (08 §3.7.6; T152 doğrulaması, yönetici kararı (b)).
+ */
+const REVERT_MESSAGE = /execution reverted|VM Exception while processing transaction: revert/i;
+
+export function isExecutionRevert(err: unknown): boolean {
+  if (!(err instanceof RpcError) || err.kind !== 'rpc') return false;
+  if (err.rpcCode === 3) return true;
+  if (REVERT_MESSAGE.test(err.message)) return true;
+  return typeof err.rpcData === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(err.rpcData);
 }
 
 export class AllProvidersFailedError extends SidecarError {
@@ -82,6 +105,8 @@ export interface BlockHeader {
   readonly timestamp: number;
   /** The provider that answered. */
   readonly provider: string;
+  /** EIP-1559 base fee of the block (wei); null on a pre-London block. T152 prices sends with it. */
+  readonly baseFeePerGas?: bigint | null;
 }
 
 export interface LogFilter {
@@ -187,7 +212,7 @@ class ProviderEndpoint {
           this.name,
         );
       }
-      let body: { result?: T; error?: { code?: number; message?: string } };
+      let body: { result?: T; error?: { code?: number; message?: string; data?: unknown } };
       try {
         body = JSON.parse(text) as typeof body;
       } catch {
@@ -201,7 +226,13 @@ class ProviderEndpoint {
             ? 'transport'
             : 'rpc';
         outcome = kind;
-        throw new RpcError(`${method}: ${message}`, kind, this.name, body.error.code);
+        throw new RpcError(
+          `${method}: ${message}`,
+          kind,
+          this.name,
+          body.error.code,
+          body.error.data,
+        );
       }
       if (!('result' in body)) {
         throw new RpcError(
@@ -254,10 +285,12 @@ export class EthereumRpcClient {
       );
     }
     return this.withFailover('eth_getBlockByNumber', async (ep) => {
-      const raw = await ep.request<{ number: string; hash: string; timestamp: string } | null>(
-        'eth_getBlockByNumber',
-        [param, false],
-      );
+      const raw = await ep.request<{
+        number: string;
+        hash: string;
+        timestamp: string;
+        baseFeePerGas?: string;
+      } | null>('eth_getBlockByNumber', [param, false]);
       if (!raw) {
         throw new RpcError(`eth_getBlockByNumber(${param}) returned no block`, 'rpc', ep.name);
       }
@@ -266,6 +299,7 @@ export class EthereumRpcClient {
         hash: raw.hash,
         timestamp: Number(BigInt(raw.timestamp)),
         provider: ep.name,
+        baseFeePerGas: raw.baseFeePerGas ? BigInt(raw.baseFeePerGas) : undefined,
       };
     });
   }
@@ -291,18 +325,19 @@ export class EthereumRpcClient {
    * gas price is sent, so the node does not check the sender's ETH balance —
    * a deposit is priced before the fuel wallet has funded it (08 §3.7.5).
    * A revert is an `rpc` error (an answer about the request, not failed over).
+   * T152's send simulation calls it too (08 §3.7.6); `value` is sent only
+   * when given.
    */
   async estimateGas(
-    tx: { from: string; to: string; data: string },
+    tx: { from: string; to: string; data: string; value?: bigint },
     blockNumber: bigint,
   ): Promise<bigint> {
     assertBlockNumber(blockNumber, 'estimateGas block');
+    const call: Record<string, string> = { from: tx.from, to: tx.to, data: tx.data };
+    if (tx.value !== undefined) call.value = '0x' + tx.value.toString(16);
     return this.withFailover('eth_estimateGas', async (ep) =>
       parseQuantity(
-        await ep.request<string>('eth_estimateGas', [
-          { from: tx.from, to: tx.to, data: tx.data },
-          hexBlock(blockNumber),
-        ]),
+        await ep.request<string>('eth_estimateGas', [call, hexBlock(blockNumber)]),
         'eth_estimateGas',
         ep.name,
       ),
@@ -366,6 +401,102 @@ export class EthereumRpcClient {
       }
     }
     return logs;
+  }
+
+  // ---- Outbound transfers (T152 — 08 §3.7.6) -------------------------------
+
+  /** Number of transactions `address` has sent as of an explicit block — its next nonce there. */
+  async getTransactionCount(address: string, blockNumber: bigint): Promise<number> {
+    assertBlockNumber(blockNumber, 'getTransactionCount block');
+    return this.withFailover('eth_getTransactionCount', async (ep) =>
+      Number(
+        BigInt(
+          await ep.request<string>('eth_getTransactionCount', [address, hexBlock(blockNumber)]),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Next nonce of `address` counting the node's pending transactions
+   * (`eth_getTransactionCount(address, "pending")`) — the one read that is not
+   * at an explicit block: it asks what the network has seen, signed by
+   * anyone, beyond the last block. T152 düzeltme turu 2: before a new
+   * signature the service compares it with what its journal knows (08 §3.7.6
+   * "Günlük zincirin gerisinde").
+   */
+  async getPendingTransactionCount(address: string): Promise<number> {
+    return this.withFailover('eth_getTransactionCount', async (ep) =>
+      Number(BigInt(await ep.request<string>('eth_getTransactionCount', [address, 'pending']))),
+    );
+  }
+
+  /** `eth_call` with a sender, at an explicit block — the pre-broadcast simulation (08 §3.7.6). */
+  async callFrom(
+    tx: { from: string; to: string; data: string },
+    blockNumber: bigint,
+  ): Promise<string> {
+    assertBlockNumber(blockNumber, 'callFrom block');
+    return this.withFailover('eth_call', (ep) =>
+      ep.request<string>('eth_call', [
+        { from: tx.from, to: tx.to, data: tx.data },
+        hexBlock(blockNumber),
+      ]),
+    );
+  }
+
+  /**
+   * Median priority fee (wei) of the last <c>blockCount</c> blocks up to an
+   * explicit block — `eth_feeHistory` at the 50th percentile. T142 measured
+   * the effective price as base fee + this median; `eth_maxPriorityFeePerGas`
+   * is not used because a keyless provider answered it with 0 (2026-10-18).
+   */
+  async medianPriorityFee(blockCount: number, newestBlock: bigint): Promise<bigint> {
+    assertBlockNumber(newestBlock, 'feeHistory newest block');
+    return this.withFailover('eth_feeHistory', async (ep) => {
+      const raw = await ep.request<{ reward?: string[][] } | null>('eth_feeHistory', [
+        '0x' + blockCount.toString(16),
+        hexBlock(newestBlock),
+        [50],
+      ]);
+      const rewards = (raw?.reward ?? [])
+        .map((r) => (r && r[0] ? BigInt(r[0]) : null))
+        .filter((r): r is bigint => r !== null)
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      if (rewards.length === 0) return 0n;
+      return rewards[Math.floor(rewards.length / 2)];
+    });
+  }
+
+  /**
+   * Broadcasts signed bytes. A transport failure falls over to the next
+   * provider with the SAME bytes (a node that already has them answers
+   * "already known"); a JSON-RPC answer (nonce too low, underpriced, ...) is
+   * returned to the caller as an `rpc` RpcError — 08 §3.7.6.
+   */
+  async sendRawTransaction(raw: string): Promise<string> {
+    return this.withFailover('eth_sendRawTransaction', (ep) =>
+      ep.request<string>('eth_sendRawTransaction', [raw]),
+    );
+  }
+
+  /** Receipt of a mined transaction, or null while it is not in a block (on the answering provider). */
+  async getTransactionReceipt(hash: string): Promise<TransactionReceipt | null> {
+    return this.withFailover('eth_getTransactionReceipt', async (ep) => {
+      const raw = await ep.request<RawReceipt | null>('eth_getTransactionReceipt', [hash]);
+      if (!raw) return null;
+      return {
+        transactionHash: raw.transactionHash,
+        blockNumber: BigInt(raw.blockNumber),
+        blockHash: raw.blockHash,
+        status: raw.status === undefined ? null : Number(BigInt(raw.status)),
+        from: raw.from,
+        to: raw.to ?? null,
+        gasUsed: BigInt(raw.gasUsed),
+        effectiveGasPrice: raw.effectiveGasPrice ? BigInt(raw.effectiveGasPrice) : null,
+        logs: (raw.logs ?? []).map(parseLog),
+      };
+    });
   }
 
   private async logsChunk(
@@ -472,6 +603,31 @@ export class EthereumRpcClient {
     });
     return check;
   }
+}
+
+export interface TransactionReceipt {
+  readonly transactionHash: string;
+  readonly blockNumber: bigint;
+  readonly blockHash: string;
+  /** 1 = success, 0 = reverted; null on a pre-Byzantium receipt (never for our sends). */
+  readonly status: number | null;
+  readonly from: string;
+  readonly to: string | null;
+  readonly gasUsed: bigint;
+  readonly effectiveGasPrice: bigint | null;
+  readonly logs: readonly RpcLog[];
+}
+
+interface RawReceipt {
+  transactionHash: string;
+  blockNumber: string;
+  blockHash: string;
+  status?: string;
+  from: string;
+  to?: string | null;
+  gasUsed: string;
+  effectiveGasPrice?: string;
+  logs?: RawLog[];
 }
 
 interface RawLog {

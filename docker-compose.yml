@@ -359,7 +359,25 @@ services:
       - ETHEREUM_USDC_CONTRACT=${ETHEREUM_USDC_CONTRACT:-}
       - ETHEREUM_HOT_WALLET_ADDRESS=${ETHEREUM_HOT_WALLET_ADDRESS:-}
       - ETHEREUM_COLD_WALLET_ADDRESS=${ETHEREUM_COLD_WALLET_ADDRESS:-}
+      # T152 — send caps (fail closed: unset refuses payouts / refunds / fuel;
+      # 08 §3.7.6, §3.3a twin) and the fee-cap wait alarm threshold, which must
+      # equal the backend's blockchain.ethereum.fee_cap_wait_alarm_minutes × 60
+      # (DEPLOY_RUNBOOK §D). The fee cap itself comes from the backend setting.
+      - ETHEREUM_MAX_SINGLE_TRANSFER_USDT=${ETHEREUM_MAX_SINGLE_TRANSFER_USDT:-}
+      - ETHEREUM_MAX_DAILY_OUTFLOW_USDT=${ETHEREUM_MAX_DAILY_OUTFLOW_USDT:-}
+      - ETHEREUM_FUEL_MAX_SINGLE_ETH=${ETHEREUM_FUEL_MAX_SINGLE_ETH:-}
+      - ETHEREUM_FUEL_MAX_DAILY_ETH=${ETHEREUM_FUEL_MAX_DAILY_ETH:-}
+      - ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS=${ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS:-10800}
+      - ETHEREUM_FEE_BUMP_AFTER_SECONDS=${ETHEREUM_FEE_BUMP_AFTER_SECONDS:-300}
+      - ETHEREUM_TX_JOURNAL_DIR=/var/lib/skinora-ethereum/tx-journal
+      # T152 düzeltme turu 2 — empty by default. Set ONLY by the
+      # DEPLOY_RUNBOOK §D "ethereum-journal-behind-chain" step (0xaddr:nonce,...).
+      - ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES=${ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    # T152 — the journal of signed transactions must outlive the container: a
+    # restart resumes from it instead of signing again (08 §3.7.6, FK8-5).
+    volumes:
+      - skinora-ethereum-tx-journal:/var/lib/skinora-ethereum/tx-journal
     # Mounted at /run/secrets/<name>; the service reads them from there.
     secrets:
       - ethereum_hd_mnemonic
@@ -588,6 +606,9 @@ volumes:
   # every `up` by skinora-grafana-provisioning. Never edit it directly.
   skinora-grafana-provisioning:
   skinora-uptime-kuma-data:
+  # T152 — the Ethereum service's journal of signed transactions. Back it up
+  # with the database; never delete it while a send is pending (DEPLOY_RUNBOOK §D).
+  skinora-ethereum-tx-journal:
 
 # T150 — Docker secrets of the Ethereum service (05 §3.5, 08 §3.7.2, K7). Files
 # under ./secrets (gitignored; secrets/README.md). Only the "ethereum" profile

@@ -154,12 +154,12 @@ describe('transfers', () => {
 });
 
 describe('transfer status', () => {
-  it('Ethereum reports finality as finalized:true with no block count (K5)', async () => {
+  it('Ethereum reports finality as finalized:true; the block count is the real service’s informational one (K5)', async () => {
     const hash = ETHEREUM.txHash('x');
     const r = await get('ETHEREUM', `/api/transfer/status/${hash}`);
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ txHash: hash, contractRet: 'SUCCESS', finalized: true });
-    expect(r.body.confirmations).toBeNull();
+    expect(typeof r.body.confirmations).toBe('number');
     expect(typeof r.body.realizedFeeWei).toBe('string');
   });
 

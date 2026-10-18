@@ -11,6 +11,7 @@ import { SidecarError } from '../errors/SidecarError.js';
 import { RpcError } from '../rpc/RpcClient.js';
 import { parseScaled, realizedFeeWei, weiToUsdtCentsCeil, formatCents } from '../fee/feeMath.js';
 import type { EthPriceQuote } from '../price/EthPriceService.js';
+import type { TransferService } from '../transfer/TransferService.js';
 
 const KEY = 'k'.repeat(64);
 const HOT = '0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed';
@@ -54,6 +55,8 @@ beforeAll(async () => {
     chainId: 1,
     wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
     finality: () => ({ state: 'starting', snapshot: null, ageSeconds: null, lastError: null }),
+    // T152 — sends have their own route tests (transferHandlers.test.ts).
+    transfers: {} as TransferService,
     feeEstimator: new EthFeeEstimationService({
       rpc,
       prices: {

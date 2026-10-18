@@ -180,7 +180,7 @@ export function createBlockchainRouter(profile: NetworkProfile): Router {
     }
     // Immediate finality so the confirmation job settles the transfer on its
     // first poll — in this network's own terms (TRON: >= 20 blocks; Ethereum:
-    // `finalized: true`, no block count).
+    // `finalized: true`; its block count is informational).
     res.json(profile.finalTransferStatus(txHash));
   });
 

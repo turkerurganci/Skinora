@@ -83,8 +83,14 @@ public sealed class OutgoingTransferConfirmationJob
         // network gets its own oldest-first batch, worked round-robin, and the
         // first "unavailable" answer of a network ends its turn for this run
         // (NetworkWorkQueue). A down service therefore never holds another
-        // network's confirmations. (Rotation among one network's own long-
-        // pending rows is T152's criterion.)
+        // network's confirmations.
+        //
+        // T152 — rotation inside a network: a DETECTED row's NextAttemptAt is
+        // stamped each time it is asked and still not final, and the batch is
+        // taken least-recently-asked first (never-asked rows, NULL, lead). More
+        // than BatchSize long-pending rows (Ethereum waits ~15 min for
+        // finalized) therefore take turns instead of the oldest 30 holding the
+        // batch forever.
         var reachable = _services.ReachableNetworks(_health);
         if (reachable.Count == 0) return;
 
@@ -98,7 +104,8 @@ public sealed class OutgoingTransferConfirmationJob
                     && b.TxHash != null
                     && OutboundTypes.Contains(b.Type)
                     && b.Network == network)
-                .OrderBy(b => b.CreatedAt)
+                .OrderBy(b => b.NextAttemptAt)
+                .ThenBy(b => b.CreatedAt)
                 .Take(BatchSize)
                 .Select(b => b.Id)
                 .ToListAsync(cancellationToken);
@@ -108,6 +115,9 @@ public sealed class OutgoingTransferConfirmationJob
         var candidates = NetworkWorkQueue.Interleave(perNetwork);
         if (candidates.Count == 0) return;
 
+        // T152 (T150 doğrulaması) — the breaker opens only on Unavailable, i.e.
+        // a transport failure or a 5xx (HttpBlockchainTransferClient); a 4xx
+        // about one row (Rejected) leaves the network's other rows in the run.
         var breaker = new NetworkRunBreaker();
         foreach (var (network, id) in candidates)
         {
@@ -138,6 +148,7 @@ public sealed class OutgoingTransferConfirmationJob
         switch (status.Outcome)
         {
             case TransferStatusOutcome.Confirmed:
+                AdoptReportedHash(row, status);
                 row.Status = BlockchainTransactionStatus.CONFIRMED;
                 row.BlockNumber = status.BlockNumber;
                 row.ConfirmationCount = policy.RecordedConfirmationCount(status.Confirmations);
@@ -189,6 +200,7 @@ public sealed class OutgoingTransferConfirmationJob
                 return false;
 
             case TransferStatusOutcome.Failed:
+                AdoptReportedHash(row, status);
                 row.Status = BlockchainTransactionStatus.FAILED;
                 row.BlockNumber = status.BlockNumber;
                 row.ConfirmationCount = status.Confirmations ?? 0;
@@ -206,11 +218,42 @@ public sealed class OutgoingTransferConfirmationJob
                     row.Id, row.TxHash, status.ErrorMessage);
                 return true;
 
+            case TransferStatusOutcome.Rejected:
+                _logger.LogWarning(
+                    "Outbound transfer status refused for this row — row {Id} ({Type}) tx {TxHash}: {Message}; the network's other rows continue",
+                    row.Id, row.Type, row.TxHash, status.ErrorMessage);
+                await StampAskedAsync(row, cancellationToken);
+                return false;
+
             case TransferStatusOutcome.Pending:
             default:
-                // Solidity node has not caught up — keep DETECTED, no row mutation.
+                // Not final yet — keep DETECTED; only the rotation stamp moves.
+                await StampAskedAsync(row, cancellationToken);
                 return false;
         }
+    }
+
+    /// <summary>T152 — send the row to the back of its network's rotation.</summary>
+    private async Task StampAskedAsync(BlockchainTransaction row, CancellationToken cancellationToken)
+    {
+        row.NextAttemptAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// T152 — an Ethereum fee bump re-signs the same nonce, so the transaction
+    /// in the block can have another hash than the one stored at broadcast.
+    /// The final row carries the hash that is on chain.
+    /// </summary>
+    private void AdoptReportedHash(BlockchainTransaction row, TransferStatusResult status)
+    {
+        if (string.IsNullOrWhiteSpace(status.TxHash)) return;
+        var reported = BlockchainAddress.Canonicalize(status.TxHash);
+        if (string.Equals(reported, row.TxHash, StringComparison.Ordinal)) return;
+        _logger.LogWarning(
+            "Outbound transfer row {Id} ({Type}) landed as {Reported} (stored {Stored}) — a same-nonce replacement; the row now carries the on-chain hash",
+            row.Id, row.Type, reported, row.TxHash);
+        row.TxHash = reported;
     }
 
     private static string? TruncateError(string? message)

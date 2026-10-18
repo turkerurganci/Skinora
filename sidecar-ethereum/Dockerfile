@@ -19,5 +19,10 @@ COPY --from=builder /app/dist ./dist
 # so the process user must be able to read what the operator created there —
 # the image runs as root like the other sidecars (DEPLOY_RUNBOOK §B).
 
+# T152 — the durable journal of signed transactions (08 §3.7.6). Compose mounts
+# the ethereum_tx_journal volume here; the service refuses to start if it
+# cannot write it.
+RUN mkdir -p /var/lib/skinora-ethereum/tx-journal
+
 EXPOSE 5300
 CMD ["node", "dist/index.js"]

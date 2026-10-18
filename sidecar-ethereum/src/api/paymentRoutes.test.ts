@@ -8,6 +8,7 @@ import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import { paymentReadiness, type PaymentReadiness } from '../health/paymentReadiness.js';
 import type { AddressBalances } from '../reconcile/BalanceReader.js';
 import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
+import type { TransferService } from '../transfer/TransferService.js';
 
 /**
  * T151 endpoints over HTTP: `/api/monitor/*`, `/api/wallet/balances` and the
@@ -40,6 +41,8 @@ beforeAll(async () => {
     wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
     finality: () => finality,
     feeEstimator: {} as EthFeeEstimationService,
+    // T152 — sends have their own route tests (transferHandlers.test.ts).
+    transfers: {} as TransferService,
     payments: {
       registry,
       allowlist: { USDT, USDC },

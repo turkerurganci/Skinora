@@ -1,6 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EthereumRpcClient } from './rpc/RpcClient.js';
-import { buildServices, type WiringConfig } from './wiring.js';
+import { buildOutbound, buildServices, type OutboundConfig, type WiringConfig } from './wiring.js';
+import type { FeePriceSource } from './fee/FeeEstimationService.js';
+import type { EthUsdPriceSource } from './transfer/FeePolicy.js';
+import { TxJournal } from './transfer/TxJournal.js';
+import { EthereumHdWallet } from './wallet/HdWalletService.js';
 import { FakeEthereumChain } from './testing/FakeEthereumChain.js';
 import { BUYER, USDC, USDT, deposit } from './testing/monitorHarness.js';
 import type { BlockchainWebhookEvent } from './webhook/WebhookPayloads.js';
@@ -146,5 +153,103 @@ describe('the real finality tracker feeds the monitor — only finalized blocks 
       .map((c) => c.params[0]);
     expect(heads).toContain('finalized');
     expect(heads).not.toContain('latest');
+  });
+});
+
+/**
+ * T152 × T154 bütünleştirmesi — the fee cap a send is signed under and the fee
+ * estimate the backend shows convert ETH with the SAME EthPriceService
+ * instance (one cache, one reference price), built by `buildOutbound` exactly
+ * as index.ts builds it. Two instances would let the cap and the estimate
+ * disagree on the price — and would double the calls to the price sources.
+ */
+describe('outbound wiring — sends and the fee estimate share one ETH price service', () => {
+  const NOW = 1_790_000_000_000;
+  let dir: string;
+  let fetches: string[];
+  let ethUsdt: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'eth-outbound-'));
+    fetches = [];
+    ethUsdt = '2500.12';
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const priceFetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    fetches.push(url);
+    const body = url.includes('binance')
+      ? { mins: 5, price: ethUsdt, closeTime: NOW }
+      : { ethereum: { usd: Number(ethUsdt), last_updated_at: Math.floor(NOW / 1000) } };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  function outbound(fetchFn: typeof fetch = priceFetch) {
+    const config: OutboundConfig = {
+      chainId: 11155111,
+      tokenContracts: { USDT, USDC },
+      hotWalletKey: null,
+      hotWalletAddress: null,
+      coldWalletAddress: null,
+      transfers: {
+        journalDir: dir,
+        maxSingleTransferUnits: null,
+        maxDailyOutflowUnits: null,
+        fuelMaxSingleWei: null,
+        fuelMaxDailyWei: null,
+        waitAlarmSeconds: 10_800,
+        keeperIntervalMs: 30_000,
+        bumpAfterSeconds: 300,
+        journalAcknowledgedNonces: new Map(),
+      },
+    };
+    const built = buildOutbound(config, {
+      rpc: new EthereumRpcClient({
+        providers: CONFIG.rpc.providers,
+        chainId: 11155111,
+        timeoutMs: 1000,
+        failoverCooldownMs: 30_000,
+        fetchFn: new FakeEthereumChain().fetchFn,
+      }),
+      journal: new TxJournal(dir),
+      wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
+      finalizedHead: () => null,
+      feeHotWalletAddress: null,
+      priceOptions: { fetchFn, now: () => NOW },
+    });
+    // What each consumer actually holds (private deps — read, never changed).
+    const estimatorPrices = (built.feeEstimator as unknown as { deps: { prices: FeePriceSource } })
+      .deps.prices;
+    const sendPrices = (built.transfers as unknown as { deps: { prices: EthUsdPriceSource } }).deps
+      .prices;
+    return { ...built, estimatorPrices, sendPrices };
+  }
+
+  it('the estimate holds the built price service itself', () => {
+    const { ethPrice, estimatorPrices } = outbound();
+    expect(estimatorPrices).toBe(ethPrice);
+  });
+
+  it('a send reads the price the estimate fetched — same cache, no second fetch', async () => {
+    const { estimatorPrices, sendPrices } = outbound();
+    const quote = await estimatorPrices.getPrice();
+    expect(quote.priceMicroUsdt).toBe(2_500_120_000n);
+    expect(fetches).toHaveLength(2); // Binance + CoinGecko, once
+
+    ethUsdt = '3100.00'; // the market moves; a SEPARATE service would fetch and see it
+    expect(await sendPrices.ethUsdMicros()).toBe(2_500_120_000n);
+    expect(fetches).toHaveLength(2);
+  });
+
+  it('no trusted price → the send sees none and waits (fail closed)', async () => {
+    const down = (async () => new Response('', { status: 503 })) as unknown as typeof fetch;
+    const { sendPrices } = outbound(down);
+    expect(await sendPrices.ethUsdMicros()).toBeNull();
   });
 });

@@ -5,13 +5,15 @@ import type { Request, Response } from 'express';
  * (05 §3.3a "Uçlar"), and the task that brings each (11 §F8 P3). T151's
  * monitor and balance endpoints are served by routes.ts (`PAYMENT_ENDPOINTS`).
  */
-export const NOT_YET_IMPLEMENTED = [
-  { method: 'post', path: '/transfer/payout', task: 'T152' },
-  { method: 'post', path: '/transfer/refund', task: 'T152' },
-  { method: 'post', path: '/transfer/sweep', task: 'T152' },
-  { method: 'post', path: '/transfer/cold-wallet', task: 'T152' },
-  { method: 'get', path: '/transfer/status/:txHash', task: 'T152' },
-] as const;
+export const NOT_YET_IMPLEMENTED: readonly {
+  readonly method: 'get' | 'post';
+  readonly path: string;
+  readonly task: string;
+}[] = [
+  // Empty since T151 + T152 + T154 joined on main: every endpoint of the
+  // contract is served. The 501 handler below still answers T151's monitor
+  // endpoints when routes.ts gets no `payments` deps (the skeleton shape).
+];
 
 /**
  * 501 `NOT_IMPLEMENTED`, with no side effect: nothing is read, signed, sent
@@ -25,7 +27,7 @@ export function notImplementedHandler(task: string) {
     req.log.warn({ url: req.url, task }, 'Endpoint not implemented in the Ethereum service yet');
     res.status(501).json({
       error: 'NOT_IMPLEMENTED',
-      message: `This endpoint of the Ethereum service arrives with ${task}; so far the service serves /api/wallet/derive and /api/transfer/estimate-fee.`,
+      message: `This endpoint of the Ethereum service arrives with ${task}; it is not served yet.`,
       retryable: true,
     });
   };

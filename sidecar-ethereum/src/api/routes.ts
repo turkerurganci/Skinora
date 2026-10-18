@@ -7,8 +7,16 @@ import type { DepositRegistry } from '../monitor/DepositRegistry.js';
 import type { StablecoinAllowlist } from '../monitor/tokenRules.js';
 import type { BalanceReader } from '../reconcile/BalanceReader.js';
 import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
+import type { TransferService } from '../transfer/TransferService.js';
 import { correlationMiddleware, internalKeyAuth, networkGuard } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
+import {
+  coldWalletTransferHandler,
+  payoutHandler,
+  refundHandler,
+  sweepHandler,
+  transferStatusHandler,
+} from './transferHandlers.js';
 import { walletBalancesHandler } from './balancesHandler.js';
 import {
   postCancelStartHandler,
@@ -34,6 +42,8 @@ export interface AppDeps {
   chainId: number;
   wallet: EthereumHdWallet;
   finality: () => FinalityStatus;
+  /** Outbound sends (T152). */
+  transfers: TransferService;
   /** Absent = the T150 skeleton shape: the monitor endpoints answer 501, `acceptsPayments` is false. */
   payments?: PaymentDeps;
   /** T154 — `POST /api/transfer/estimate-fee`. */
@@ -74,6 +84,12 @@ export function createApp(deps: AppDeps): Express {
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
   api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  // T152 — sends (08 §3.7.6). Bodies and answers: transferHandlers.ts.
+  api.post('/transfer/payout', payoutHandler(deps.transfers));
+  api.post('/transfer/refund', refundHandler(deps.transfers));
+  api.post('/transfer/sweep', sweepHandler(deps.transfers));
+  api.post('/transfer/cold-wallet', coldWalletTransferHandler(deps.transfers));
+  api.get('/transfer/status/:txHash', transferStatusHandler(deps.transfers));
   const payments = deps.payments;
   if (payments) {
     api.post(

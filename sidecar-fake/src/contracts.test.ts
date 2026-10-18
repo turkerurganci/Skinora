@@ -268,7 +268,7 @@ const ethStatusDir = path.join(ETH_CONTRACTS, 'transfer-status');
 describe.skipIf(!existsSync(ethStatusDir))(
   'ETHEREUM — sidecar-ethereum/contracts/transfer-status',
   () => {
-    it('a final transfer has the example shape (finalized:true, no block count, wei as a string)', async () => {
+    it('a final transfer has the example shape (finalized:true, informational block count, wei as a string)', async () => {
       const example = readJson(path.join(ethStatusDir, 'confirmed.response.json'));
       const hash = String(example.txHash);
       const res = await fetch(`${base.ETHEREUM}/api/transfer/status/${hash}`);

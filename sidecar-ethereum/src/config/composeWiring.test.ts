@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SECRET_PATHS } from './index.js';
+import { DEFAULT_SECRET_PATHS, DEFAULT_TX_JOURNAL_DIR } from './index.js';
 
 /**
  * docker-compose.yml, read the way production starts the stack (T150 —
@@ -56,8 +56,26 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     ['ETHEREUM_USDT_CONTRACT', 'ETHEREUM_USDT_CONTRACT'],
     ['ETHEREUM_HOT_WALLET_ADDRESS', 'ETHEREUM_HOT_WALLET_ADDRESS'],
     ['ETHEREUM_COLD_WALLET_ADDRESS', 'ETHEREUM_COLD_WALLET_ADDRESS'],
+    // T152 — send caps (fail closed) and the fee-cap wait alarm threshold.
+    ['ETHEREUM_MAX_SINGLE_TRANSFER_USDT', 'ETHEREUM_MAX_SINGLE_TRANSFER_USDT'],
+    ['ETHEREUM_MAX_DAILY_OUTFLOW_USDT', 'ETHEREUM_MAX_DAILY_OUTFLOW_USDT'],
+    ['ETHEREUM_FUEL_MAX_SINGLE_ETH', 'ETHEREUM_FUEL_MAX_SINGLE_ETH'],
+    ['ETHEREUM_FUEL_MAX_DAILY_ETH', 'ETHEREUM_FUEL_MAX_DAILY_ETH'],
+    ['ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS'],
+    // T152 düzeltme turu 2 — operator acknowledgement of nonces the journal does not hold.
+    ['ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES', 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'],
   ])('passes %s from .env (%s)', (inside, outside) => {
     expect(ethereum).toMatch(new RegExp(`^ +- ${inside}=\\$\\{${outside}(:-[^}]*)?\\}$`, 'm'));
+  });
+
+  it('keeps the journal of signed transactions on a named volume at the path the service reads (T152)', () => {
+    expect(ethereum).toMatch(
+      new RegExp(`^ +- ETHEREUM_TX_JOURNAL_DIR=${DEFAULT_TX_JOURNAL_DIR}$`, 'm'),
+    );
+    expect(ethereum).toMatch(
+      new RegExp(`^ +- skinora-ethereum-tx-journal:${DEFAULT_TX_JOURNAL_DIR}$`, 'm'),
+    );
+    expect(block('volumes', '')).toMatch(/^ {2}skinora-ethereum-tx-journal:$/m);
   });
 
   it('mounts its seed and keys as Docker secrets at the paths the service reads', () => {

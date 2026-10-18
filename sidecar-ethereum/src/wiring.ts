@@ -10,6 +10,14 @@ import { Reconciler } from './reconcile/Reconciler.js';
 import type { EthereumRpcClient } from './rpc/RpcClient.js';
 import { UsdtStatusMonitor } from './token/UsdtStatus.js';
 import { createWebhookSender, type SendWebhook } from './webhook/WebhookClient.js';
+import { EthFeeEstimationService } from './fee/FeeEstimationService.js';
+import { EthPriceService, type EthPriceServiceOptions } from './price/EthPriceService.js';
+import { ethUsdFromPriceService } from './transfer/FeePolicy.js';
+import { FeeWaitTracker } from './transfer/FeeWaitTracker.js';
+import { TransferGuard } from './transfer/TransferGuard.js';
+import { TransferService } from './transfer/TransferService.js';
+import type { TxJournal } from './transfer/TxJournal.js';
+import type { EthereumHdWallet } from './wallet/HdWalletService.js';
 
 /**
  * The service's moving parts and the order they are started in — the one
@@ -110,3 +118,75 @@ export function buildServices(
 }
 
 export type Services = ReturnType<typeof buildServices>;
+
+/** What {@link buildOutbound} reads from the configuration. */
+export type OutboundConfig = Pick<
+  EthereumServiceConfig,
+  | 'chainId'
+  | 'tokenContracts'
+  | 'hotWalletKey'
+  | 'hotWalletAddress'
+  | 'coldWalletAddress'
+  | 'transfers'
+>;
+
+export interface OutboundDeps {
+  rpc: EthereumRpcClient;
+  journal: TxJournal;
+  wallet: EthereumHdWallet;
+  /** Number of the last `finalized` block (the FinalityTracker built by {@link buildServices}). */
+  finalizedHead: () => bigint | null;
+  /** The address the fee estimate prices a payout from (the key's own, else the configured one). */
+  feeHotWalletAddress: string | null;
+  /** Options of the ONE ETH price service (tests inject `fetchFn` / `now`). */
+  priceOptions?: EthPriceServiceOptions;
+}
+
+/**
+ * The sends (T152) and the fee estimate (T154) over ONE ETH/USDT price
+ * service: the fee cap a send is signed under and the fee the backend shows
+ * the user are converted with the same price, cache and reference
+ * (wiring.test.ts pins it). Used by `index.ts`.
+ */
+export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
+  const { rpc, journal, wallet } = deps;
+  const tokens = config.tokenContracts;
+  const ethPrice = new EthPriceService(deps.priceOptions);
+  const feeEstimator = new EthFeeEstimationService({
+    rpc,
+    prices: ethPrice,
+    tokenContracts: tokens,
+    hotWalletAddress: deps.feeHotWalletAddress,
+  });
+  const feeWaits = new FeeWaitTracker(config.transfers.journalDir);
+  const transfers = new TransferService({
+    rpc,
+    journal,
+    feeWaits,
+    guard: new TransferGuard({
+      rpc,
+      hotWalletAddress: config.hotWalletAddress,
+      coldWalletAddress: config.coldWalletAddress,
+      tokenContracts: [tokens.USDT, tokens.USDC].filter((c) => c !== ''),
+      maxSingleTransferUnits: config.transfers.maxSingleTransferUnits,
+      maxDailyOutflowUnits: config.transfers.maxDailyOutflowUnits,
+    }),
+    wallet,
+    policy: {
+      chainId: BigInt(config.chainId),
+      paymentToken: tokens.USDT,
+      wrongTokenRefundToken: tokens.USDC,
+      maxTokenGasLimit: 150_000n,
+    },
+    hotWalletKey: config.hotWalletKey,
+    hotWalletAddress: config.hotWalletKey ? config.hotWalletAddress : null,
+    tokenContracts: tokens,
+    // The fee cap's ETH price: the same service the estimate above uses.
+    prices: ethUsdFromPriceService(ethPrice),
+    finalizedHead: deps.finalizedHead,
+    bumpAfterMs: config.transfers.bumpAfterSeconds * 1000,
+    conflictConfirmMs: config.transfers.keeperIntervalMs,
+    acknowledgedNonces: config.transfers.journalAcknowledgedNonces,
+  });
+  return { ethPrice, feeEstimator, feeWaits, transfers };
+}

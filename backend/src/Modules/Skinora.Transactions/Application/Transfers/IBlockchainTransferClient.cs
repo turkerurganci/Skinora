@@ -33,6 +33,16 @@ public interface IBlockchainTransferClient
         CancellationToken cancellationToken);
 }
 
+/// <param name="FeeCapUsd">
+/// T152 — the fee cap of the row's network in USD
+/// (<c>blockchain.ethereum.fee_cap_usd_per_transfer</c>, 08 §3.7.7) for a
+/// SELLER_PAYOUT, a SWEEP and every refund type (refunds are capped too —
+/// yönetici kararı 2026-10-18); null for a network without one (TRON). The
+/// Ethereum service converts it with the live ETH price into the most the
+/// signed transaction may cost (<c>gasLimit × maxFeePerGas</c>, per
+/// transaction — yönetici kararı, T152 doğrulaması) and refuses to sign above
+/// it (the send waits: <see cref="TransferBroadcastStatus.Deferred"/>).
+/// </param>
 public sealed record TransferBroadcastRequest(
     Guid BlockchainTransactionId,
     BlockchainTransactionType Type,
@@ -40,7 +50,8 @@ public sealed record TransferBroadcastRequest(
     decimal Amount,
     string ToAddress,
     int? DepositIndex,
-    string? DepositAddress);
+    string? DepositAddress,
+    decimal? FeeCapUsd = null);
 
 public sealed record TransferBroadcastResult(
     TransferBroadcastStatus Status,
@@ -58,6 +69,15 @@ public enum TransferBroadcastStatus
 
     /// <summary>Sidecar 5xx / network / build / broadcast transient failure — caller retries.</summary>
     TransientFailure,
+
+    /// <summary>
+    /// T152 — the service refused to sign <i>for now</i> and nothing was signed:
+    /// the network fee is above the platform's cap, no ETH price is available,
+    /// or the sender has no ETH for gas (08 §3.7.7). The row stays PENDING
+    /// without spending a retry and is asked again next minute; the 3-hour wait
+    /// alarm is the service's (<c>ethereum-transfer-wait</c>).
+    /// </summary>
+    Deferred,
 }
 
 /// <param name="RealizedFeeSun">
@@ -70,6 +90,12 @@ public enum TransferBroadcastStatus
 /// Energy the contract owner absorbed on the sender's behalf. A zero fee next
 /// to a non-zero value here means the CONTRACT paid — not that the transfer
 /// was free to arrange.
+/// </param>
+/// <param name="TxHash">
+/// T152 — the hash the service reports for the transfer. On Ethereum a fee bump
+/// re-signs the same nonce, so the transaction that enters the chain can carry
+/// another hash than the one the row stored at broadcast; the confirmation job
+/// records the reported one. Null when the service did not send one.
 /// </param>
 /// <param name="RealizedFeeWei">
 /// T154 — Ethereum: what the transfer paid, in wei (receipt
@@ -86,6 +112,7 @@ public sealed record TransferStatusResult(
     long? RealizedFeeSun = null,
     long? EnergyUsageTotal = null,
     long? OriginEnergyUsage = null,
+    string? TxHash = null,
     decimal? RealizedFeeWei = null);
 
 public enum TransferStatusOutcome
@@ -101,4 +128,12 @@ public enum TransferStatusOutcome
 
     /// <summary>Sidecar unreachable / 5xx — caller retries on next tick.</summary>
     Unavailable,
+
+    /// <summary>
+    /// T152 — the service answered about THIS transfer with a 4xx (unknown hash,
+    /// nonce conflict, malformed hash). Row-specific: the confirmation job keeps
+    /// asking about the network's other rows in the same run (only transport
+    /// failures and 5xx end a network's turn).
+    /// </summary>
+    Rejected,
 }
