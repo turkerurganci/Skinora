@@ -166,9 +166,36 @@ describe('token keys — every rule refuses', () => {
     ],
   ];
 
-  it.each(cases)('%s', (_label, build, intent) => {
+  // The rule that must fire for each case — so a case is not "refused" only
+  // because a later rule happened to trip (a removed type check would let a
+  // type-4 transaction reach the fee rule; a lenient length check would let
+  // trailing bytes reach the amount rule).
+  const RULE: Record<string, string> = {
+    'another chainId (mainnet tx on a Sepolia signer)': 'chainId',
+    'type 1 (EIP-2930)': 'type',
+    'type 4 (EIP-7702 delegation)': 'type',
+    'a contract that is not allowlisted': 'contract',
+    'USDC outside a wrong-token refund': 'contract',
+    'another contract than the request names': 'contract',
+    'ETH value on a token call': 'value',
+    'approve() instead of transfer()': 'calldata',
+    'approve(spender, max)': 'calldata',
+    'trailing bytes after the arguments': 'calldata',
+    'a dirty address word': 'calldata',
+    'another recipient': 'recipient',
+    'another amount (decimal shift)': 'amount',
+    'one unit more': 'amount',
+    'a gas limit above the bound': 'gasLimit',
+    'a fee ceiling above the cap': 'feeCap',
+    'an access list': 'accessList',
+    'contract creation': 'to',
+    'tip above max fee': 'fees',
+    'an already signed transaction': 'unsigned',
+  };
+
+  it.each(cases)('%s', (label, build, intent) => {
     expect(() => assertSignableTokenTransfer(build(), intent ?? INTENT, CONFIG)).toThrow(
-      expect.objectContaining(refusal),
+      expect.objectContaining({ ...refusal, message: expect.stringContaining(`(${RULE[label]})`) }),
     );
   });
 
@@ -245,9 +272,21 @@ describe('fuel key — the one exception (T153)', () => {
     ['daily cap not configured', () => fuel(), { maxDailyWei: null }],
     ['another chain', () => fuel({ chainId: 1n })],
     ['type 4', () => fuel({ type: 4, authorizationList: [] })],
-  ])('%s → refused', (_label, build, intent) => {
+  ])('%s → refused', (label, build, intent) => {
+    const rule: Record<string, string> = {
+      'an address the service does not derive': 'recipient',
+      'calldata on a fuel send': 'calldata',
+      'a gas limit other than 21,000': 'gasLimit',
+      'another value than asked': 'value',
+      'above the single cap': 'fuelCaps',
+      'above the daily cap': 'fuelCaps',
+      'caps not configured': 'fuelCaps',
+      'daily cap not configured': 'fuelCaps',
+      'another chain': 'chainId',
+      'type 4': 'type',
+    };
     expect(() => assertSignableFuel(build(), { ...FUEL, ...(intent ?? {}) }, CONFIG)).toThrow(
-      expect.objectContaining(refusal),
+      expect.objectContaining({ ...refusal, message: expect.stringContaining(`(${rule[label]})`) }),
     );
   });
 });

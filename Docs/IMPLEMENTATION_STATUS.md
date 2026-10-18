@@ -338,7 +338,7 @@
 | T149 | Ağ ücreti politikası | ⬚ Bekliyor |
 | T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
-| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
+| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T152_REPORT.md)) |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ⬚ Bekliyor |
 | T155 | sidecar-fake Ethereum desteği + E2E | ⬚ Bekliyor |

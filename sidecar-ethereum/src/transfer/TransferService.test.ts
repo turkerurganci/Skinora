@@ -335,8 +335,10 @@ describe('keeper — fee bump, finality, conflicts', () => {
     clock += 300_000;
     await service.keepAll(); // nothing above the cap is possible
     const attempts = journal.get(`transfer:${ID(1)}`)!.attempts;
-    for (const a of attempts) expect(BigInt(a.maxFeePerGas)).toBeLessThanOrEqual(cap);
-    expect(attempts.length).toBeLessThanOrEqual(2);
+    // Exactly one bump, clamped to the cap (not refused by the signer, not above it).
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1].maxFeePerGas).toBe(cap.toString());
+    expect(chain.mempool.size).toBe(1);
   });
 
   it('marks the record final once its block is at or below finalized and still canonical', async () => {
