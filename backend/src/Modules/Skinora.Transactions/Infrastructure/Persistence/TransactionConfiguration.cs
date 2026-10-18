@@ -69,6 +69,12 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             t.HasCheckConstraint("CK_Transactions_Network_Accepted",
                 "(AcceptedAt IS NULL) " +
                 "OR (Network IS NOT NULL AND SellerPayoutAddress IS NOT NULL)");
+
+            // --- CHECK: the network fee line is never negative (T149, 06 §1.4) ---
+            // NULL until acceptance; a negative line would lower what the buyer
+            // pays below price + commission.
+            t.HasCheckConstraint("CK_Transactions_NetworkFeeAmount_NonNegative",
+                "NetworkFeeAmount IS NULL OR NetworkFeeAmount >= 0");
         });
 
         // --- Primary key ---
@@ -166,6 +172,10 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 
         builder.Property(t => t.CommissionAmount)
             .IsRequired()
+            .HasPrecision(18, 6);
+
+        // T149 — NULL until acceptance fixes the line (06 §1.4).
+        builder.Property(t => t.NetworkFeeAmount)
             .HasPrecision(18, 6);
 
         builder.Property(t => t.TotalAmount)

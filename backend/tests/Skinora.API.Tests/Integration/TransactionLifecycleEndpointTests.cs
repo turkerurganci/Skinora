@@ -431,9 +431,13 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         Assert.Equal(["TRON"], before.GetProperty("acceptedNetworks").EnumerateArray().Select(e => e.GetString()));
         var quote = Assert.Single(before.GetProperty("networkQuotes").EnumerateArray().ToList());
         Assert.Equal("TRON", quote.GetProperty("network").GetString());
-        Assert.Equal("0.00", quote.GetProperty("networkFeeAmount").GetString());
-        Assert.Equal("102.00", quote.GetProperty("totalAmount").GetString());
+        // T149 — TRON's network fee line, shown before the buyer picks.
+        Assert.Equal("2.90", quote.GetProperty("networkFeeAmount").GetString());
+        Assert.Equal("104.90", quote.GetProperty("totalAmount").GetString());
+        // The listing's own total is still price + commission until acceptance.
+        Assert.Equal("102.00", before.GetProperty("totalAmount").GetString());
         Assert.False(before.TryGetProperty("network", out _));
+        Assert.False(before.TryGetProperty("networkFeeAmount", out _));
 
         var accept = await buyerClient.PostAsJsonAsync(
             $"/api/v1/transactions/{transactionId:D}/accept",
@@ -441,11 +445,15 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
         var acceptData = (await accept.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
         Assert.Equal("TRON", acceptData.GetProperty("network").GetString());
-        Assert.Equal("102.00", acceptData.GetProperty("totalAmount").GetString());
+        // The line shown is the line fixed (same cached estimate).
+        Assert.Equal("2.90", acceptData.GetProperty("networkFeeAmount").GetString());
+        Assert.Equal("104.90", acceptData.GetProperty("totalAmount").GetString());
 
         var after = (await (await buyerClient.GetAsync($"/api/v1/transactions/{transactionId:D}"))
             .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
         Assert.Equal("TRON", after.GetProperty("network").GetString());
+        Assert.Equal("2.90", after.GetProperty("networkFeeAmount").GetString());
+        Assert.Equal("104.90", after.GetProperty("totalAmount").GetString());
         Assert.False(after.TryGetProperty("acceptedNetworks", out _));
         Assert.False(after.TryGetProperty("networkQuotes", out _));
     }
@@ -2066,7 +2074,34 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 // also ask whether the account may trade at all.
                 services.RemoveAll<ISteamAccountLimitedProbe>();
                 services.AddSingleton<ISteamAccountLimitedProbe>(AccountLimited);
+
+                // T149 — the real quote service and the real seeded settings,
+                // but TRON's sweep estimate from a fixed stand-in instead of a
+                // sidecar this host never runs: 8,441,349 SUN at TRX 0.34 →
+                // CEIL₂(2.870059 × 1.007) = 2.90 (02 §5 example).
+                services.RemoveAll<Skinora.Transactions.Application.GasFee.INetworkFeeQuoteService>();
+                services.AddScoped<Skinora.Transactions.Application.GasFee.INetworkFeeQuoteService>(sp =>
+                    new Skinora.Transactions.Application.GasFee.NetworkFeeQuoteService(
+                        new FakeBlockchainServiceRegistry().With(
+                            BlockchainNetwork.TRON, gasFee: new FixedSweepEstimator()),
+                        sp.GetRequiredService<Skinora.Transactions.Application.Networks.IBlockchainNetworkSettingsProvider>(),
+                        sp.GetRequiredService<Skinora.Transactions.Application.GasFee.SweepCostEstimateCache>(),
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                            Skinora.Transactions.Application.GasFee.NetworkFeeQuoteService>.Instance));
             });
+        }
+
+        /// <summary>T149 — TRON's sweep cost as the sidecar would quote it today.</summary>
+        private sealed class FixedSweepEstimator : Skinora.Transactions.Application.GasFee.IGasFeeEstimator
+        {
+            public Task<decimal?> EstimateFeeUsdtAsync(
+                Skinora.Transactions.Application.GasFee.GasFeeEstimateRequest request,
+                CancellationToken cancellationToken) => Task.FromResult<decimal?>(null);
+
+            public Task<Skinora.Transactions.Application.GasFee.SweepCostEstimate?> EstimateSweepCostAsync(
+                StablecoinType token, CancellationToken cancellationToken) =>
+                Task.FromResult<Skinora.Transactions.Application.GasFee.SweepCostEstimate?>(
+                    new(8_441_349, 0.34m));
         }
 
         protected override IHost CreateHost(IHostBuilder builder)

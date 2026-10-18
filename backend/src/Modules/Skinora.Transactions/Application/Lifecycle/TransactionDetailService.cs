@@ -4,6 +4,7 @@ using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
@@ -42,15 +43,18 @@ public sealed class TransactionDetailService : ITransactionDetailService
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
     private readonly ITransactionDisputeSummaryProvider _disputeSummaries;
+    private readonly INetworkFeeQuoteService _networkFees;
 
     public TransactionDetailService(
         AppDbContext db,
         TimeProvider clock,
-        ITransactionDisputeSummaryProvider disputeSummaries)
+        ITransactionDisputeSummaryProvider disputeSummaries,
+        INetworkFeeQuoteService networkFees)
     {
         _db = db;
         _clock = clock;
         _disputeSummaries = disputeSummaries;
+        _networkFees = networkFees;
     }
 
     public async Task<TransactionDetailOutcome> GetAsync(
@@ -361,6 +365,11 @@ public sealed class TransactionDetailService : ITransactionDetailService
             CreatedAt: transaction.CreatedAt,
             UpdatedAt: transaction.UpdatedAt,
             Network: transaction.Network?.ToString(),
+            // T149 (07 §1.3, §7.5) — from acceptance on, the line fixed then
+            // (2 decimals; "0.00" on Ethereum and on rows accepted before T149).
+            NetworkFeeAmount: transaction.Network is null
+                ? null
+                : MoneyFormat.Display(transaction.NetworkFeeAmount ?? 0m),
             AcceptedNetworks: acceptedNetworks,
             NetworkQuotes: networkQuotes);
 
@@ -682,12 +691,21 @@ public sealed class TransactionDetailService : ITransactionDetailService
         if (networks.Count == 0) return (null, null);
 
         networks.Sort();
-        // T149 replaces TRON's zero with its fee line and adds it to the total;
-        // until then the buyer pays the same total on every network.
-        var total = MoneyFormat.Display(transaction.TotalAmount);
-        return (
-            networks.Select(n => n.ToString()).ToList(),
-            networks.Select(n => new NetworkQuoteDto(n.ToString(), "0.00", total)).ToList());
+        // T149 (11 §F8 K8) — per network, the line the buyer would pay and the
+        // total with it: TRON's network fee line from the same (cached)
+        // estimate acceptance will fix it from, Ethereum's 0. Before acceptance
+        // TotalAmount is price + commission.
+        var quotes = new List<NetworkQuoteDto>(networks.Count);
+        foreach (var network in networks)
+        {
+            var fee = await _networkFees.GetBuyerNetworkFeeAsync(
+                network, transaction.StablecoinType, cancellationToken);
+            quotes.Add(new NetworkQuoteDto(
+                network.ToString(),
+                MoneyFormat.Display(fee.Amount),
+                MoneyFormat.Display(transaction.TotalAmount + fee.Amount)));
+        }
+        return (networks.Select(n => n.ToString()).ToList(), quotes);
     }
 
     private static string NetworkLabel(BlockchainNetwork? network) => network switch
@@ -850,8 +868,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
         // transaction. Reconstructed from the row exactly as the admin detail
         // does (AdminTransactionQueryService.BuildRefundDetail): the gas
         // estimate was snapshotted onto GasFee, so originalAmount = Amount +
-        // GasFee = TotalAmount (02 §4.6). TxHash / RefundedAt stay null until
-        // the dispatcher broadcasts and the confirmation job finalises on chain.
+        // GasFee = the refund base the consumer used (02 §4.6, T149
+        // FinancialCalculator.CalculateRefundableTotal): TotalAmount while the
+        // deposit has not been swept (the TRON network fee line returned in
+        // full), TotalAmount − NetworkFeeAmount once the sweep has run (the
+        // line was spent on it; price and commission still in full). TxHash /
+        // RefundedAt stay null until the dispatcher broadcasts and the
+        // confirmation job finalises on chain.
         if (role != "buyer")
             return null;
 

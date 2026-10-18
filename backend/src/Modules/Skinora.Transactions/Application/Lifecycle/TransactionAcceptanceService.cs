@@ -8,9 +8,11 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Settings;
@@ -74,6 +76,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     private readonly IOutboxService _outbox;
     private readonly IBlockchainNetworkAvailability _networks;
     private readonly IPaymentAddressAllocator _paymentAddressAllocator;
+    private readonly INetworkFeeQuoteService _networkFees;
     private readonly ILogger<TransactionAcceptanceService> _logger;
     private readonly TimeProvider _clock;
 
@@ -88,6 +91,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         IOutboxService outbox,
         IBlockchainNetworkAvailability networks,
         IPaymentAddressAllocator paymentAddressAllocator,
+        INetworkFeeQuoteService networkFees,
         TimeProvider clock,
         ILogger<TransactionAcceptanceService>? logger = null)
     {
@@ -101,6 +105,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         _outbox = outbox;
         _networks = networks;
         _paymentAddressAllocator = paymentAddressAllocator;
+        _networkFees = networkFees;
         _clock = clock;
         _logger = logger ?? NullLogger<TransactionAcceptanceService>.Instance;
     }
@@ -337,6 +342,16 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                     "Steam could not be queried to verify trade eligibility (08 §2.2a).");
         }
 
+        // ---------- Stage 5d: network fee line (T149 — 11 §F8 K8) -----------
+        // TRON: the buyer pays the deposit → hot wallet sweep as a separate
+        // line, priced now from the network service's sweep estimate (the same
+        // cached estimate the detail view quoted) and rounded UP to the cent;
+        // the per-network fallback when the estimate is unavailable — never a
+        // wait. Ethereum: 0. Read after every rule that can refuse the request,
+        // so a doomed acceptance spends no estimate; it writes nothing.
+        var networkFee = await _networkFees.GetBuyerNetworkFeeAsync(
+            network, transaction.StablecoinType, cancellationToken);
+
         // ---------- Stage 6: state transition + snapshot ----------
         // 06 §3.5 invariants: BuyerId + BuyerRefundAddress + BuyerTradeUrl must
         // be set BEFORE the state-machine guard fires (HasFieldsForAccepted).
@@ -357,6 +372,33 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // canonical https/lowercase-host shape with the tracking parameters a
         // pasted Steam URL often carries stripped off.
         transaction.BuyerTradeUrl = parsedTradeUrl.Normalized;
+
+        // T149 — the line is fixed here, once, and never corrected afterwards
+        // (08 §3.1a): no extra charge if the sweep costs more, no refund of
+        // the difference if it costs less. The total the buyer sends — and
+        // the deposit's ExpectedAmount, derived from it right after the
+        // commit — carries it (06 §8.3).
+        transaction.NetworkFeeAmount = networkFee.Amount;
+        transaction.TotalAmount = FinancialCalculator.IsWholeCents(transaction.CommissionAmount)
+            ? FinancialCalculator.CalculateTotal(
+                transaction.Price, transaction.CommissionAmount, networkFee.Amount)
+            // A listing created before T144 carries a 6-decimal commission
+            // (06 §8.3 "Mevcut veri"); its creation total is kept as it was and
+            // the line added, rather than refusing the acceptance with a 500.
+            : transaction.Price + transaction.CommissionAmount + networkFee.Amount;
+
+        // A listing created before T147 already carries a TRON deposit, derived
+        // at creation with the creation-time total as its ExpectedAmount (T147
+        // moved the derivation to acceptance; 08 §3.4 "Refund politikası"
+        // istisnası). Amount validation matches against that column, so it must
+        // carry the line too — otherwise the buyer would be asked for the new
+        // total and the payment judged an overpayment of exactly the line. The
+        // deposit is shown only from SELLER_CONFIRMED on and the sidecar's
+        // monitor does not carry the amount, so nothing has used the old value.
+        var preT147Deposit = await _db.Set<PaymentAddress>()
+            .FirstOrDefaultAsync(p => p.TransactionId == transaction.Id, cancellationToken);
+        if (preT147Deposit is not null && preT147Deposit.ExpectedAmount != transaction.TotalAmount)
+            preT147Deposit.ExpectedAmount = transaction.TotalAmount;
 
         // T123 — arm the seller's readiness window (03 §2.3 step 8 → §4.2).
         // Nothing wrote this column before: AcceptDeadline is armed at create
@@ -461,7 +503,8 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 Status: transaction.Status,
                 AcceptedAt: transaction.AcceptedAt!.Value,
                 Network: network.ToString(),
-                TotalAmount: MoneyFormat.Display(transaction.TotalAmount)),
+                TotalAmount: MoneyFormat.Display(transaction.TotalAmount),
+                NetworkFeeAmount: MoneyFormat.Display(networkFee.Amount)),
             ErrorCode: null,
             ErrorMessage: null);
     }

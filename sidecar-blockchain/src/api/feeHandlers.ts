@@ -86,3 +86,56 @@ export function estimateFeeHandler(service: FeeEstimationService) {
     }
   };
 }
+
+/**
+ * POST /api/transfer/estimate-sweep-fee — T149 (11 §F8 K8, 08 §3.1a). What
+ * sweeping one fresh deposit to the hot wallet will cost the platform, priced
+ * now: the basis of the buyer's TRON network fee line, which the backend fixes
+ * at acceptance. Read-only. Body <c>{ network?, token }</c> (network checked by
+ * the router's guard). Any failure is answered by the backend with its
+ * per-network fallback line — acceptance never waits on this endpoint.
+ */
+export function estimateSweepFeeHandler(service: FeeEstimationService) {
+  return async (req: Request, res: Response): Promise<void> => {
+    const body = (req.body ?? {}) as { token?: unknown };
+    const token = asTokenSymbol(body.token);
+    if (token === null) {
+      res.status(400).json({
+        error: 'INVALID_ESTIMATE_REQUEST',
+        message: 'Field token=USDT|USDC is required.',
+      });
+      return;
+    }
+
+    try {
+      const result = await service.estimateSweepCost(token, req.correlationId);
+      res.status(200).json(result);
+    } catch (err) {
+      if (err instanceof SidecarError) {
+        const status = err.retryable ? 502 : 400;
+        logger.warn(
+          {
+            code: err.code,
+            retryable: err.retryable,
+            err: err.message,
+            correlationId: req.correlationId,
+          },
+          'Sweep fee estimate rejected',
+        );
+        res
+          .status(status)
+          .json({ error: err.code, message: err.message, retryable: err.retryable });
+        return;
+      }
+      logger.error(
+        { err: (err as Error).message, correlationId: req.correlationId },
+        'Sweep fee estimate unexpected error',
+      );
+      res.status(500).json({
+        error: 'INTERNAL_ERROR',
+        message: 'Unexpected sweep fee estimate failure.',
+        retryable: true,
+      });
+    }
+  };
+}

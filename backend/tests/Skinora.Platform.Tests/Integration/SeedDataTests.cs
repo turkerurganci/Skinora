@@ -91,9 +91,11 @@ public class SeedDataTests : IntegrationTestBase
         // + 8 T148 blockchain.ethereum.* per-network rows (05 §3.3a, 06 §3.17 —
         //   seed indices 68–75, T142 values; Ethereum's hot/cold addresses are
         //   env-sourced catalogue entries, not rows).
+        // + 3 T149 network fee policy rows (seed indices 76–78: TRON fee line
+        //   buffer + fallback, Ethereum minimum-refund multiplier).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(72, rows.Count);
-        Assert.Equal(72, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(75, rows.Count);
+        Assert.Equal(75, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -133,6 +135,8 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.ethereum.fuel_wallet_eth_balance_minimum",
             "blockchain.ethereum.hot_wallet_eth_balance_minimum",
             "blockchain.ethereum.max_charged_gas_fee_usdt",
+            // T149 — Ethereum's own minimum-refund multiplier (2.0).
+            "blockchain.ethereum.min_refund_threshold_ratio",
             "blockchain.ethereum.payout_gas_fee_estimate_usdt",
             "blockchain.ethereum.refund_gas_fee_estimate_usdt",
             "blockchain.max_charged_gas_fee_usdt",
@@ -140,6 +144,9 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.refund_gas_fee_estimate_usdt",
             "blockchain.sweep_trx_fallback_sun",
             "blockchain.transfer_retry_intervals_minutes",
+            // T149 — TRON network fee line buffer (0.007) and fallback (3.00).
+            "blockchain.tron.network_fee_buffer_ratio",
+            "blockchain.tron.network_fee_fallback_usdt",
             "commission_rate",
             "delivery.inventory_evidence_auto_release_enabled",
             "dormant_account_min_age_days",

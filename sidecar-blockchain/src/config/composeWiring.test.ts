@@ -51,10 +51,20 @@ describe('docker-compose — the blockchain sidecar receives the polling cadence
 describe('docker-compose — the blockchain sidecar receives the stake account', () => {
   const sidecar = serviceBlock(readFileSync(COMPOSE_FILE, 'utf8'), 'skinora-blockchain-sidecar');
 
-  it.each(['STAKE_ACCOUNT_ADDRESS', 'STAKE_ACCOUNT_PERMISSION_ID'])(
+  // T149 — the dormant stake switch travels the same way; it must default to
+  // false in compose too, so an .env without it keeps the stake off.
+  it.each(['STAKE_ACCOUNT_ADDRESS', 'STAKE_ACCOUNT_PERMISSION_ID', 'ENERGY_STAKING_ENABLED'])(
     'passes %s from .env into skinora-blockchain-sidecar',
     (name) => {
       expect(sidecar).toMatch(new RegExp(`^ +- ${name}=\\$\\{${name}(:-[^}]*)?\\}$`, 'm'));
     },
   );
+});
+
+describe('docker-compose — the dormant stake switch defaults to off', () => {
+  const sidecar = serviceBlock(readFileSync(COMPOSE_FILE, 'utf8'), 'skinora-blockchain-sidecar');
+
+  it('passes ENERGY_STAKING_ENABLED with a false default', () => {
+    expect(sidecar).toMatch(/^ +- ENERGY_STAKING_ENABLED=\$\{ENERGY_STAKING_ENABLED:-false\}$/m);
+  });
 });

@@ -81,6 +81,59 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
         AssertSameJson(expected, Assert.Single(sent));
     }
 
+    /// <summary>
+    /// T149 — <c>POST /api/transfer/estimate-sweep-fee</c>: the body the real
+    /// quote service + estimator send is the sidecar's example
+    /// (<c>sweep.request.json</c>), and the answer in the shape the sidecar's
+    /// handler returns (its <c>SweepCostEstimateResult</c>) parses into the
+    /// buyer's line: 8,441,349 SUN × 0.34 × (1 + 0.007) = 2.8901 → 2.90.
+    /// </summary>
+    [Fact]
+    public async Task SweepRequest_IsTheBodyTheSidecarAccepts_AndItsAnswerBecomesTheLine()
+    {
+        var expected = LoadExample("sweep.request.json");
+        var sent = new List<(string Path, string Body)>();
+        var handler = new RecordingHandler(async (request, ct) =>
+        {
+            sent.Add((request.RequestUri!.AbsolutePath, await request.Content!.ReadAsStringAsync(ct)));
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                // The sidecar's SweepCostEstimateResult, field for field.
+                Content = JsonContent.Create(new
+                {
+                    sweepCostSun = 8_441_349,
+                    activationSun = 1_100_000,
+                    burnTopUpSun = 7_071_349,
+                    bandwidthSun = 270_000,
+                    energyRequired = 64_285,
+                    trxPriceUsdt = 0.34,
+                    priceSource = "binance",
+                    costUsdt = "2.870059",
+                }),
+            };
+        });
+        const string baseUrl = "http://blockchain-sidecar.test/";
+        var estimator = new HttpSidecarGasFeeEstimator(
+            BlockchainNetwork.TRON,
+            new HttpClient(handler) { BaseAddress = new Uri(baseUrl) },
+            new BlockchainSidecarOptions { BaseUrl = baseUrl },
+            NullLogger<HttpSidecarGasFeeEstimator>.Instance);
+        var quotes = new NetworkFeeQuoteService(
+            FakeBlockchainServiceRegistry.ForTron(gasFee: estimator),
+            new StubSettings(),
+            new SweepCostEstimateCache(TimeProvider.System),
+            NullLogger<NetworkFeeQuoteService>.Instance);
+
+        var quote = await quotes.GetBuyerNetworkFeeAsync(
+            Network(expected), Token(expected), CancellationToken.None);
+
+        var (path, body) = Assert.Single(sent);
+        Assert.Equal("/api/transfer/estimate-sweep-fee", path);
+        AssertSameJson(expected, body);
+        Assert.Equal(NetworkFeeSource.RuntimeEstimate, quote.Source);
+        Assert.Equal(2.90m, quote.Amount);
+    }
+
     private static void AssertSameJson(JsonNode expected, string actualBody)
     {
         var actual = JsonNode.Parse(actualBody);

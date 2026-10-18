@@ -198,14 +198,16 @@ public sealed record AcceptTransactionRequest(
 /// <summary>
 /// Response body for <c>POST /transactions/:id/accept</c> (07 §7.6). T147 adds
 /// the chosen <paramref name="Network"/> and the amount the buyer pays on it
-/// (<paramref name="TotalAmount"/>, 2 decimals). The TRON network fee line
-/// (<c>networkFeeAmount</c>) arrives with T149.
+/// (<paramref name="TotalAmount"/>, 2 decimals). T149 adds the network fee
+/// line fixed at this moment (<paramref name="NetworkFeeAmount"/>, 2 decimals;
+/// <c>"0.00"</c> on Ethereum), already included in the total.
 /// </summary>
 public sealed record AcceptTransactionResponse(
     TransactionStatus Status,
     DateTime AcceptedAt,
     string Network,
-    string TotalAmount);
+    string TotalAmount,
+    string NetworkFeeAmount);
 
 /// <summary>
 /// Outcome of <see cref="ITransactionAcceptanceService.AcceptAsync"/>. The
