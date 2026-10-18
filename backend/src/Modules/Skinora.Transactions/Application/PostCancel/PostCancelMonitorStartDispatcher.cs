@@ -41,6 +41,21 @@ public sealed class PostCancelMonitorStartDispatcher
         PostCancelMonitorStartRequestedEvent notification,
         CancellationToken cancellationToken)
     {
+        // T148 düzeltme turu 1 (F1) — a network with no service configured
+        // cannot answer, and a configuration change needs a restart. Throwing
+        // here would leave the outbox row FAILED and re-read at the head of the
+        // oldest-first outbox batch on every poll, for good — enough of them
+        // would stall every other event. Log and stop instead: the address is
+        // already in a POST_CANCEL_* status, so PostCancelMonitorRecoveryHook
+        // registers it on the restart that configures the service.
+        if (!_services.IsConfigured(notification.Network))
+        {
+            _logger.LogError(
+                "Post-cancel monitor start not sent: {Network} has no blockchain service configured — address={Address} transactionId={TransactionId}; the startup recovery hook registers it once the service is configured.",
+                notification.Network, notification.Address, notification.TransactionId);
+            return;
+        }
+
         // T139 — hand the address over, do not double-register it. Until T139
         // nothing ever armed the active monitor, so there was nothing to stop.
         // Now the cancel path must drop the 3-second monitor before the

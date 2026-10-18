@@ -118,10 +118,23 @@ public sealed class SweepQueueJob
         // means there is nowhere to sweep to on that network — that
         // transaction is skipped rather than queued with a bogus ToAddress.
 
+        // T148 düzeltme turu 1 (F1) — only deposits on a network that has a
+        // hot wallet are candidates. A deposit on a network without one is
+        // skipped below and never gets a sweep row, so selecting it would keep
+        // it at the head of the oldest-first batch forever: BatchSize of them
+        // would starve every other network's sweeps (and the payouts gated on
+        // them). The waiting ones are counted once per run instead.
+        var sweepable = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => _walletAddresses.For(n).HotWalletAddress is not null)
+            .ToList();
+        var unsweepable = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => !sweepable.Contains(n))
+            .ToList();
+
         // Soft-delete query filter excludes IsDeleted rows. Defer past the
         // buyer-refund window (ITEM_DELIVERED), skip held / disputed
         // transactions, and any that already have a sweep row queued.
-        var candidateIds = await _db.Set<Transaction>()
+        var eligible = _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
                 && !t.IsOnHold
@@ -129,7 +142,27 @@ public sealed class SweepQueueJob
                 && t.SettlementVerifiedAt != null
                 && t.DeliveryReversedAt == null
                 && !t.BlockchainTransactions.Any(
-                    b => b.Type == BlockchainTransactionType.SWEEP))
+                    b => b.Type == BlockchainTransactionType.SWEEP));
+
+        if (unsweepable.Count > 0)
+        {
+            var waiting = await eligible
+                .Where(t => t.PaymentAddress != null && unsweepable.Contains(t.PaymentAddress.Network))
+                .GroupBy(t => t.PaymentAddress!.Network)
+                .Select(g => new { Network = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            foreach (var group in waiting)
+            {
+                _logger.LogWarning(
+                    "Sweep: {Count} delivered transaction(s) on {Network} are waiting — the {Network} hot wallet address is unconfigured; other networks unaffected.",
+                    group.Count, group.Network, group.Network);
+            }
+        }
+
+        // A transaction without a deposit row stays a candidate so the
+        // defensive error below still reports it.
+        var candidateIds = await eligible
+            .Where(t => t.PaymentAddress == null || sweepable.Contains(t.PaymentAddress.Network))
             .OrderBy(t => t.ItemDeliveredAt)
             .Take(BatchSize)
             .Select(t => t.Id)

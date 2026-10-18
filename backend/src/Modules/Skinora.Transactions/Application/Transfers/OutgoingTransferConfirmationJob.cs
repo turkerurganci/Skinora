@@ -70,12 +70,21 @@ public sealed class OutgoingTransferConfirmationJob
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        // T148 düzeltme turu 1 (F1) — a DETECTED row whose network's service is
+        // no longer configured cannot be answered (the fail-closed client says
+        // Unavailable and the row stays DETECTED). Selecting it would keep it at
+        // the head of the oldest-first batch forever and starve every other
+        // network's confirmations, so only configured networks are candidates.
+        var configured = _services.ConfiguredNetworks.ToList();
+        if (configured.Count == 0) return;
+
         var candidateIds = await _db.Set<BlockchainTransaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(b => b.Status == BlockchainTransactionStatus.DETECTED
                 && b.TxHash != null
-                && OutboundTypes.Contains(b.Type))
+                && OutboundTypes.Contains(b.Type)
+                && configured.Contains(b.Network))
             .OrderBy(b => b.CreatedAt)
             .Take(BatchSize)
             .Select(b => b.Id)

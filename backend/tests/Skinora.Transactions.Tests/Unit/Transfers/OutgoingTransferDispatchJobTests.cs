@@ -45,6 +45,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly OutgoingTransferDispatchJob _sut;
+    private int _seedSequence;
 
     public OutgoingTransferDispatchJobTests()
     {
@@ -167,6 +168,80 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
             .FirstAsync(b => b.Id == ethPayout.PayoutRow.Id);
         Assert.Equal("0xeth", reloaded.TxHash);
+    }
+
+    // T148 düzeltme turu 1 (F1). Parked rows (unconfigured network) are never
+    // sent and keep NextAttemptAt null, so if the oldest-first batch could
+    // select them they would take every slot on every run. Measured in round-1
+    // validation: 20 parked Ethereum rows → TRON's client was never called;
+    // 19 → it was. The newer TRON row must go out on the FIRST run, at exactly
+    // BatchSize parked rows and above it.
+    [Theory]
+    [InlineData(OutgoingTransferDispatchJob.BatchSize)]
+    [InlineData(OutgoingTransferDispatchJob.BatchSize + 5)]
+    public async Task Parked_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parkedRows)
+    {
+        var parked = new List<Guid>();
+        for (var i = 0; i < parkedRows; i++)
+        {
+            var eth = await SeedPayoutAsync(amount: 1m + i);
+            eth.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+            parked.Add(eth.PayoutRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tron = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 77m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-tron-behind-parked", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(tron.RefundRow.Id, call.BlockchainTransactionId);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == tron.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Equal("tx-hash-tron-behind-parked", reloaded.TxHash);
+
+        // The parked rows are still untouched: PENDING, no retry spent, never
+        // asked of any service.
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        var parkedRowsAfter = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => parked.Contains(b.Id))
+            .ToListAsync();
+        Assert.Equal(parkedRows, parkedRowsAfter.Count);
+        Assert.All(parkedRowsAfter, r =>
+        {
+            Assert.Equal(BlockchainTransactionStatus.PENDING, r.Status);
+            Assert.Equal(0, r.RetryCount);
+            Assert.Null(r.NextAttemptAt);
+        });
+    }
+
+    [Fact]
+    public async Task A_Full_Tron_Batch_Is_Still_Taken_Oldest_First_Behind_Parked_Rows()
+    {
+        // Ordering and batching are unchanged for the networks that can move:
+        // BatchSize + 1 TRON rows → the oldest BatchSize go out, the newest waits.
+        for (var i = 0; i < OutgoingTransferDispatchJob.BatchSize; i++)
+        {
+            var eth = await SeedPayoutAsync(amount: 1m);
+            eth.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tronRows = new List<Guid>();
+        for (var i = 0; i <= OutgoingTransferDispatchJob.BatchSize; i++)
+        {
+            tronRows.Add((await SeedRefundAsync(BlockchainTransactionType.EXCESS_REFUND, amount: 1m + i)).RefundRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tronRows.Take(OutgoingTransferDispatchJob.BatchSize), _client.Calls.Select(c => c.BlockchainTransactionId));
     }
 
     [Fact]
@@ -448,17 +523,20 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
 
     private async Task<(Transaction, PaymentAddress, BlockchainTransaction)> SeedTransactionAsync()
     {
+        // Unique per call (SteamId and (Network, HdWalletIndex) are unique) so a
+        // test can seed a whole batch of transactions.
+        var seq = ++_seedSequence;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000801",
+            SteamId = $"7656119800{seq * 2:D7}",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000802",
+            SteamId = $"7656119800{(seq * 2) + 1:D7}",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -489,7 +567,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             Id = Guid.NewGuid(),
             TransactionId = tx.Id,
             Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
-            HdWalletIndex = 7,
+            HdWalletIndex = 6 + seq,
             ExpectedAmount = 100m,
             ExpectedToken = StablecoinType.USDT,
             MonitoringStatus = MonitoringStatus.ACTIVE,

@@ -45,6 +45,20 @@ public sealed class PaymentMonitorStartDispatcher
         PaymentMonitorStartRequestedEvent notification,
         CancellationToken cancellationToken)
     {
+        // T148 düzeltme turu 1 (F1) — a network with no service configured
+        // cannot answer, and a configuration change needs a restart. Throwing
+        // here would leave the outbox row FAILED and re-read at the head of the
+        // oldest-first outbox batch on every poll, for good — enough of them
+        // would stall every other event. Log and stop instead: the per-minute
+        // EnsurePaymentMonitorJob arms the address once the service exists.
+        if (!_services.IsConfigured(notification.Network))
+        {
+            _logger.LogError(
+                "Payment monitor start not sent: {Network} has no blockchain service configured — address={Address} transactionId={TransactionId}; EnsurePaymentMonitorJob arms it once the service is configured.",
+                notification.Network, notification.Address, notification.TransactionId);
+            return;
+        }
+
         var request = new PaymentMonitorStartRequest(
             Address: notification.Address,
             PaymentAddressId: notification.PaymentAddressId,

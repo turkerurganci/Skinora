@@ -18,7 +18,9 @@ namespace Skinora.API.Controllers;
 /// <para>
 /// <b>Network (T148 — 05 §3.3a "Webhook yükü").</b> Every body names its
 /// network. The controller rejects — before the handler runs — a body whose
-/// <c>network</c> is missing or unknown (400 <c>WEBHOOK_NETWORK_INVALID</c>) or
+/// <c>network</c> is missing or unknown (400 <c>WEBHOOK_NETWORK_INVALID</c>;
+/// one exception: a body with no <c>network</c> field signed with TRON's
+/// secret is taken as TRON, the pre-T148 sidecar's shape) or
 /// differs from the network whose secret signed the request (409
 /// <c>WEBHOOK_NETWORK_MISMATCH</c>); the handler then rejects one that differs
 /// from the referenced deposit's <c>PaymentAddress.Network</c> (409, same
@@ -130,6 +132,29 @@ public sealed class BlockchainWebhooksController : ControllerBase
 
         var correlationId = ResolveCorrelationId();
 
+        var authenticated =
+            HttpContext.Items.TryGetValue(WebhookSignatureMiddleware.AuthenticatedNetworkItemKey, out var raw)
+            && raw is BlockchainNetwork signer
+                ? signer
+                : (BlockchainNetwork?)null;
+
+        // T148 düzeltme turu 1 (F2) — a body WITHOUT a network field that was
+        // signed with TRON's secret is TRON's: before T148 the TRON service
+        // sent no network, and the sidecar's request-body rule is the same
+        // (field absent → accepted). Without this, a backend deployed ahead of
+        // its sidecar would 400 every TRON callback, and the sidecar treats a
+        // 4xx as terminal — a real payment event would be lost. Only absence
+        // is defaulted, only for the TRON signer: an explicit wrong or unknown
+        // value is still 400/409, and the Ethereum service must always name
+        // its network.
+        if (envelope.Network is null && authenticated == BlockchainNetwork.TRON)
+        {
+            _logger.LogWarning(
+                "Blockchain webhook {Event} has no network field — signed with TRON's secret, taken as TRON (pre-T148 sidecar). correlationId={CorrelationId}",
+                envelope.Event, correlationId);
+            envelope.Network = nameof(BlockchainNetwork.TRON);
+        }
+
         if (!BlockchainWebhookHandler.TryParseNetwork(envelope.Network, out var claimed))
         {
             _logger.LogWarning(
@@ -144,9 +169,7 @@ public sealed class BlockchainWebhooksController : ControllerBase
         // The secret that signed the request decides who the caller is
         // (WebhookSignatureMiddleware). A body claiming another network is a
         // misrouted or forged callback: one service may only speak for itself.
-        if (HttpContext.Items.TryGetValue(WebhookSignatureMiddleware.AuthenticatedNetworkItemKey, out var raw)
-            && raw is BlockchainNetwork authenticated
-            && authenticated != claimed)
+        if (authenticated is not null && authenticated != claimed)
         {
             _logger.LogError(
                 "Blockchain webhook {Event} REJECTED — body claims {Claimed} but was signed with the {Authenticated} service's secret. correlationId={CorrelationId}",

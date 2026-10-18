@@ -106,11 +106,23 @@ public sealed class OutgoingTransferDispatchJob
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
         var now = _clock.GetUtcNow().UtcDateTime;
+
+        // T148 düzeltme turu 1 (F1) — only rows of a network whose service is
+        // configured are candidates. A row on an unconfigured network is parked
+        // (never sent, NextAttemptAt stays null), so selecting it would put it
+        // back at the head of the oldest-first batch on every run: BatchSize
+        // parked rows would starve every other network's payouts, refunds and
+        // sweeps. Filtering in the query keeps the batch for rows that can move.
+        var configured = _services.ConfiguredNetworks.ToList();
+        await LogParkedRowsAsync(configured, cancellationToken);
+        if (configured.Count == 0) return;
+
         var candidateIds = await _db.Set<BlockchainTransaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(b => b.Status == BlockchainTransactionStatus.PENDING
                 && OutboundTypes.Contains(b.Type)
+                && configured.Contains(b.Network)
                 && (b.NextAttemptAt == null || b.NextAttemptAt <= now))
             .OrderBy(b => b.CreatedAt)
             .Take(BatchSize)
@@ -129,6 +141,38 @@ public sealed class OutgoingTransferDispatchJob
         }
     }
 
+    /// <summary>
+    /// One error line per run and unconfigured network that still holds
+    /// PENDING outbound rows — the visibility the per-row log gave before the
+    /// candidate query learned to skip them.
+    /// </summary>
+    private async Task LogParkedRowsAsync(
+        List<BlockchainNetwork> configured,
+        CancellationToken cancellationToken)
+    {
+        var unconfigured = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => !configured.Contains(n))
+            .ToList();
+        if (unconfigured.Count == 0) return;
+
+        var parked = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                && OutboundTypes.Contains(b.Type)
+                && unconfigured.Contains(b.Network))
+            .GroupBy(b => b.Network)
+            .Select(g => new { Network = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        foreach (var group in parked)
+        {
+            _logger.LogError(
+                "{Count} outbound row(s) on {Network} are waiting PENDING: that network has no blockchain service configured — nothing sent, other networks unaffected.",
+                group.Count, group.Network);
+        }
+    }
+
     private async Task DispatchOneAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await _db.Set<BlockchainTransaction>()
@@ -137,9 +181,10 @@ public sealed class OutgoingTransferDispatchJob
 
         // T148 — fail closed per network (05 §3.3a). A row whose network has no
         // service configured is left PENDING untouched: no broadcast, no retry
-        // budget spent, no FAILED flip. It is picked up again on every run and
-        // goes out as soon as the service is configured; the other network's
-        // rows are unaffected. (Before T147 every row is TRON.)
+        // budget spent, no FAILED flip. The candidate query already skips such
+        // rows, so they never take another network's batch slots; this
+        // re-check is the defensive second layer. The row goes out as soon as
+        // its service is configured. (Before T147 every row is TRON.)
         if (!_services.IsConfigured(row.Network))
         {
             _logger.LogError(

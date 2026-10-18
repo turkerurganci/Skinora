@@ -67,6 +67,23 @@ public class PaymentMonitorStartDispatcherTests
             () => BuildSut(sidecar).Handle(BuildEvent(), CancellationToken.None));
     }
 
+    // T148 düzeltme turu 1 (F1) — an event for a network with no service must
+    // not throw: the outbox would keep the row FAILED at the head of its
+    // oldest-first batch forever. TRON's 503 "not configured" above still
+    // throws (a booting sidecar is transient); this is the registry's answer.
+    [Fact]
+    public async Task Event_For_An_Unconfigured_Network_Is_Dropped_Without_Throwing_Or_Calling()
+    {
+        var tron = new StubBlockchainSidecarClient();
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: tron);
+        var sut = new PaymentMonitorStartDispatcher(registry, NullLogger<PaymentMonitorStartDispatcher>.Instance);
+
+        await sut.Handle(BuildEvent() with { Network = BlockchainNetwork.ETHEREUM }, CancellationToken.None);
+
+        Assert.Empty(tron.MonitorStartCalls);
+        Assert.Empty(registry.Requests);
+    }
+
     private static PaymentMonitorStartDispatcher BuildSut(IBlockchainSidecarClient sidecar)
         => new(FakeBlockchainServiceRegistry.ForTron(sidecar: sidecar), NullLogger<PaymentMonitorStartDispatcher>.Instance);
 

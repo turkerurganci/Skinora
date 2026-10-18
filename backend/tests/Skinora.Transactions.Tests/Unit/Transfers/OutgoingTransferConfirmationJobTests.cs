@@ -37,6 +37,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly OutgoingTransferConfirmationJob _sut;
+    private int _seedSequence;
 
     public OutgoingTransferConfirmationJobTests()
     {
@@ -175,6 +176,40 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
     }
 
+    // T148 düzeltme turu 1 (F1) — a DETECTED row on a network whose service is
+    // gone is answered Unavailable and stays DETECTED; selected oldest-first it
+    // would hold every slot of the batch on every run. The TRON row behind
+    // BatchSize (and more) such rows must be confirmed on the first run.
+    [Theory]
+    [InlineData(OutgoingTransferConfirmationJob.BatchSize)]
+    [InlineData(OutgoingTransferConfirmationJob.BatchSize + 5)]
+    public async Task Detected_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parkedRows)
+    {
+        for (var i = 0; i < parkedRows; i++)
+        {
+            var eth = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+            eth.Network = BlockchainNetwork.ETHEREUM;
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tron = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_000L, 20, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == tron.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(
+            parkedRows,
+            await _db.Set<BlockchainTransaction>().AsNoTracking().CountAsync(b =>
+                b.Network == BlockchainNetwork.ETHEREUM && b.Status == BlockchainTransactionStatus.DETECTED));
+    }
+
     [Fact]
     public async Task InboundDetectedRow_IsNotPolled()
     {
@@ -249,17 +284,20 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
 
     private async Task<BlockchainTransaction> SeedDetectedAsync(BlockchainTransactionType type)
     {
+        // Unique per call (SteamId and (Network, HdWalletIndex) are unique) so a
+        // test can seed a whole batch.
+        var seq = ++_seedSequence;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000711",
+            SteamId = $"7656119800{seq * 2:D7}",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000712",
+            SteamId = $"7656119800{(seq * 2) + 1:D7}",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -296,7 +334,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
                 Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
-                HdWalletIndex = 1,
+                HdWalletIndex = seq,
                 ExpectedAmount = 100m,
                 ExpectedToken = StablecoinType.USDT,
                 MonitoringStatus = MonitoringStatus.ACTIVE,

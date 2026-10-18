@@ -251,8 +251,10 @@ public sealed class WebhookSignatureMiddleware
 
         // A secret shared by two networks would let either service speak for
         // the other — exactly what per-network secrets exist to prevent. The
-        // first (TRON) keeps it, so TRON keeps working; the duplicate cannot
-        // authenticate anything (DEPLOY_RUNBOOK: the secrets must differ).
+        // host refuses to start with one (WebhookSettings.AddWebhookSettings,
+        // T148 düzeltme turu 1 — F3); this is the second layer for a settings
+        // instance that skipped that validation: the first (TRON) keeps it,
+        // the duplicate cannot authenticate anything.
         return candidates
             .Where(c => !string.IsNullOrWhiteSpace(c.Secret))
             .DistinctBy(c => c.Secret, StringComparer.Ordinal)

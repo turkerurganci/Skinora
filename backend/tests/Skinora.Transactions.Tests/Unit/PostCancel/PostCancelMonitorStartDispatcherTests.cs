@@ -60,6 +60,23 @@ public class PostCancelMonitorStartDispatcherTests
             () => BuildSut(sidecar).Handle(BuildEvent(), CancellationToken.None));
     }
 
+    // T148 düzeltme turu 1 (F1) — see the payment-monitor twin: an event for a
+    // network with no service must not throw (the outbox would re-read it at
+    // the head of its batch forever); the startup recovery hook registers the
+    // address once the service is configured.
+    [Fact]
+    public async Task Event_For_An_Unconfigured_Network_Is_Dropped_Without_Throwing_Or_Calling()
+    {
+        var tron = new OrderRecordingSidecarClient();
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: tron);
+        var sut = new PostCancelMonitorStartDispatcher(registry, NullLogger<PostCancelMonitorStartDispatcher>.Instance);
+
+        await sut.Handle(BuildEvent() with { Network = BlockchainNetwork.ETHEREUM }, CancellationToken.None);
+
+        Assert.Empty(tron.Log);
+        Assert.Empty(registry.Requests);
+    }
+
     private static PostCancelMonitorStartDispatcher BuildSut(IBlockchainSidecarClient sidecar)
         => new(FakeBlockchainServiceRegistry.ForTron(sidecar: sidecar), NullLogger<PostCancelMonitorStartDispatcher>.Instance);
 

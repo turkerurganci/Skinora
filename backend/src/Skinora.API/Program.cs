@@ -293,8 +293,8 @@ builder.Services.AddRateLimiting(builder.Configuration);
 // T68 — webhook signature parameters (HMAC-SHA256 shared secret + replay
 // window). The Steam sidecar reads the same secret from its WEBHOOK_SECRET
 // env var (sidecar-steam/src/config/index.ts).
-builder.Services.Configure<WebhookSettings>(
-    builder.Configuration.GetSection(WebhookSettings.SectionName));
+// T148 — one secret per network; two networks sharing one fails the start.
+WebhookSettings.AddWebhookSettings(builder.Services, builder.Configuration);
 
 // Hangfire (T09) — SQL Server storage, UTC, AutomaticRetry(3) global filter,
 // IBackgroundJobScheduler abstraction. Dashboard mount happens later in the

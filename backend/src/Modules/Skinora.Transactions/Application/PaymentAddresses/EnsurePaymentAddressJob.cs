@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PaymentAddresses;
@@ -39,26 +40,42 @@ public sealed class EnsurePaymentAddressJob
 
     private readonly AppDbContext _db;
     private readonly IPaymentAddressAllocator _allocator;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<EnsurePaymentAddressJob> _logger;
 
     public EnsurePaymentAddressJob(
         AppDbContext db,
         IPaymentAddressAllocator allocator,
+        IBlockchainServiceRegistry services,
         ILogger<EnsurePaymentAddressJob> logger)
     {
         _db = db;
         _allocator = allocator;
+        _services = services;
         _logger = logger;
     }
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        // T148 düzeltme turu 1 (F1) — only transactions on a network whose
+        // service is configured are candidates. Derivation on an unconfigured
+        // network fails closed every time and leaves the transaction without an
+        // address, so selecting it would keep it at the head of the
+        // oldest-first batch forever: BatchSize of them would starve every
+        // other network's allocations. A transaction without a network predates
+        // F8 and is TRON (06 §1.4), the same reading the allocator uses.
+        var configured = _services.ConfiguredNetworks.ToList();
+        if (configured.Count == 0) return;
+        var tronConfigured = configured.Contains(BlockchainNetwork.TRON);
+
         var pending = await _db.Set<Transaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(t => !t.IsDeleted
                 && EligibleStates.Contains(t.Status)
-                && t.PaymentAddress == null)
+                && t.PaymentAddress == null
+                && ((t.Network == null && tronConfigured)
+                    || (t.Network != null && configured.Contains(t.Network.Value))))
             .OrderBy(t => t.CreatedAt)
             .Take(BatchSize)
             .Select(t => t.Id)
