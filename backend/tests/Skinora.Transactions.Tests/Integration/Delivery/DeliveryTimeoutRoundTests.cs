@@ -892,6 +892,7 @@ public class DeliveryTimeoutRoundTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet1,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddHours(-4),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = nowUtc.AddHours(-3),
             PaymentReceivedAt = nowUtc.AddHours(-2),
             DeliveryDeadline = nowUtc.AddMinutes(-1),

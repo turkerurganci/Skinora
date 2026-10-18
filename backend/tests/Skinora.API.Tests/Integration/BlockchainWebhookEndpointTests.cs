@@ -354,7 +354,10 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(50m, refund.Amount);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
-        Assert.Equal(detected.data.fromAddress, refund.ToAddress);
+        // K9 (T147) — the buyer's refund address fixed at acceptance, not the
+        // sender of the rejected transfer.
+        Assert.Equal(tx.BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(detected.data.fromAddress, refund.ToAddress);
         Assert.Null(refund.PaymentAddressId);
 
         var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);

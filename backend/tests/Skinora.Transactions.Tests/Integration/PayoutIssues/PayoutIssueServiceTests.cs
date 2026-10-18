@@ -434,6 +434,7 @@ public class PayoutIssueServiceTests : IntegrationTestBase
             SellerPayoutAddress = SellerWallet,
             PaymentTimeoutMinutes = 60,
             AcceptedAt = now.AddMinutes(-30),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
         };
         Context.Set<Transaction>().Add(tx);
         await Context.SaveChangesAsync();

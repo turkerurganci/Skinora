@@ -30,7 +30,7 @@ public enum WalletUpdateStatus
     /// <summary>07 §5.3 — 403 <c>SANCTIONS_MATCH</c>.</summary>
     SanctionsMatch,
 
-    /// <summary>07 §5.3 — 403 <c>RE_AUTH_REQUIRED</c> (existing address on this network, caller omitted <c>X-ReAuth-Token</c>).</summary>
+    /// <summary>07 §5.3 — 403 <c>RE_AUTH_REQUIRED</c> (existing address on this network, or — T147 — an address of the same type on another network; caller omitted <c>X-ReAuth-Token</c>).</summary>
     ReAuthRequired,
 }
 

@@ -1057,6 +1057,7 @@ public class DisputeServiceTests : IntegrationTestBase
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
             UpdatedAt = _clock.GetUtcNow().UtcDateTime,
             AcceptedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(-10),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
         };
         Context.Set<Transaction>().Add(tx);
         await Context.SaveChangesAsync();

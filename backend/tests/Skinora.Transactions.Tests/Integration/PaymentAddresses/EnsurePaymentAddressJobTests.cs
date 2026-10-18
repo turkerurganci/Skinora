@@ -49,10 +49,12 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Picks_Up_CREATED_Transactions_Without_PaymentAddress()
+    public async Task Picks_Up_Accepted_Transactions_Without_PaymentAddress()
     {
-        var t1 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t2 = await SeedTransactionAsync(TransactionStatus.CREATED);
+        // T147 — ACCEPTED and SELLER_CONFIRMED: the network is chosen at
+        // acceptance, and the confirmed state is the one that shows the address.
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
 
         var sut = BuildJob();
         await sut.ExecuteAsync();
@@ -67,7 +69,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     [Fact]
     public async Task Skips_Transactions_That_Already_Have_PaymentAddress()
     {
-        var t = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var t = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         Context.Set<PaymentAddress>().Add(new PaymentAddress
         {
             Id = Guid.NewGuid(),
@@ -89,17 +91,19 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Ignores_FLAGGED_Transactions()
+    public async Task Ignores_FLAGGED_And_CREATED_Listings_No_Network_Yet()
     {
         await SeedTransactionAsync(TransactionStatus.FLAGGED);
         await SeedTransactionAsync(TransactionStatus.CREATED);
+        var accepted = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         var sut = BuildJob();
         await sut.ExecuteAsync();
 
-        // Only one sidecar call — for the CREATED transaction; FLAGGED was
-        // filtered out because it is not in EligibleStates.
-        Assert.Single(_sidecar.Calls);
+        // Only one sidecar call — for the ACCEPTED transaction. FLAGGED and
+        // CREATED have no network yet (T147), so there is nothing to derive on.
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(accepted.Id, call.TransactionId);
     }
 
     [Fact]
@@ -120,8 +124,8 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     [Fact]
     public async Task Continues_On_Per_Transaction_Failure()
     {
-        var t1 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t2 = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         // First sidecar call fails (NotConfigured), second succeeds. We can't
         // guarantee the ordering of t1/t2 since the job uses CreatedAt order
@@ -149,7 +153,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         // processes at most BatchSize per execution.
         for (var i = 0; i < EnsurePaymentAddressJob.BatchSize + 2; i++)
         {
-            await SeedTransactionAsync(TransactionStatus.CREATED);
+            await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         }
 
         var sut = BuildJob();
@@ -171,39 +175,44 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         // one makes the Ethereum transactions strictly the oldest.
         for (var i = 0; i < parked; i++)
         {
-            await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.ETHEREUM);
+            await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
         }
 
-        // Newest of all; one explicitly TRON, one legacy (no network = TRON).
-        var tron = await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.TRON);
-        var legacy = await SeedTransactionAsync(TransactionStatus.CREATED, network: null);
+        // Newest of all: one TRON transaction, and one accepted row without a
+        // network — T147 (11 §F8 kararı xiii): no default network is invented
+        // for it, so it is not a candidate either.
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+        var networkless = await SeedTransactionAsync(TransactionStatus.ACCEPTED, withoutNetwork: true);
 
         var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
         await BuildJob(registry).ExecuteAsync();
 
-        Assert.Equal(2, _sidecar.Calls.Count);
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(tron.Id, call.TransactionId);
         Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
         await using var verify = CreateContext();
         Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
-        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == legacy.Id));
-        Assert.Equal(2, await verify.Set<PaymentAddress>().CountAsync());
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == networkless.Id));
+        Assert.Equal(1, await verify.Set<PaymentAddress>().CountAsync());
     }
 
     [Fact]
-    public async Task Legacy_Transactions_Wait_When_Tron_Itself_Is_Unconfigured()
+    public async Task Only_Transactions_On_A_Configured_Network_Are_Candidates()
     {
-        // No network = TRON (06 §1.4): with only Ethereum configured, the
-        // legacy transaction is not a candidate, the Ethereum one is.
-        var legacy = await SeedTransactionAsync(TransactionStatus.CREATED, network: null);
-        var eth = await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.ETHEREUM);
+        // With only Ethereum configured, the TRON transaction waits and the
+        // Ethereum one is derived on Ethereum's service.
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+        var eth = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
 
         var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, sidecar: _sidecar);
         await BuildJob(registry).ExecuteAsync();
 
-        Assert.Single(_sidecar.Calls);
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(eth.Id, call.TransactionId);
+        Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.TRON);
         await using var verify = CreateContext();
         Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == eth.Id));
-        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == legacy.Id));
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
     }
 
     private EnsurePaymentAddressJob BuildJob(FakeBlockchainServiceRegistry? registry = null)
@@ -217,13 +226,13 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
 
     private async Task<Transaction> SeedTransactionAsync(
         TransactionStatus status,
-        BlockchainNetwork? network = null)
+        BlockchainNetwork? network = null,
+        bool withoutNetwork = false)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
         {
             Id = Guid.NewGuid(),
-            Network = network,
             Status = status,
             SellerId = _seller.Id,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
@@ -238,6 +247,10 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
             CommissionAmount = 2.00m,
             TotalAmount = 100.00m,
             SellerPayoutAddress = SellerWallet,
+            // T147 — the network is chosen at acceptance; a listing has none.
+            Network = withoutNetwork || status is TransactionStatus.CREATED or TransactionStatus.FLAGGED
+                ? null
+                : network ?? BlockchainNetwork.TRON,
             PaymentTimeoutMinutes = 24 * 60,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
         };

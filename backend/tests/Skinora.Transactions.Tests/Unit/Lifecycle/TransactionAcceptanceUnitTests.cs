@@ -25,12 +25,17 @@ public class TransactionAcceptanceUnitTests
     {
         var dto = new AcceptTransactionResponse(
             Status: TransactionStatus.ACCEPTED,
-            AcceptedAt: new DateTime(2026, 5, 2, 14, 45, 0, DateTimeKind.Utc));
+            AcceptedAt: new DateTime(2026, 5, 2, 14, 45, 0, DateTimeKind.Utc),
+            Network: "ETHEREUM",
+            TotalAmount: "102.00");
 
         var json = JsonSerializer.Serialize(dto, JsonOptions);
 
         Assert.Contains("\"status\":\"ACCEPTED\"", json);
         Assert.Contains("\"acceptedAt\":\"2026-05-02T14:45:00Z\"", json);
+        // T147 (07 §1.3) — the chosen network and the amount to pay on it.
+        Assert.Contains("\"network\":\"ETHEREUM\"", json);
+        Assert.Contains("\"totalAmount\":\"102.00\"", json);
     }
 
     [Fact]

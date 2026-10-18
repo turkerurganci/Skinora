@@ -436,6 +436,7 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
             SellerPayoutAddress = Wallet,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddMinutes(-30),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = nowUtc.AddMinutes(-25),
         };
         Context.Set<Transaction>().Add(transaction);

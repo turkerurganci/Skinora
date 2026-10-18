@@ -26,11 +26,16 @@ namespace Skinora.Shared.Events;
 /// </param>
 /// <param name="ReceivedAmount">Confirmed on-chain amount that landed late.</param>
 /// <param name="Stablecoin">USDT or USDC — the expected token.</param>
-/// <param name="SourceAddress">Refund destination — parsed from the inbound transfer.</param>
+/// <param name="SourceAddress">Sender of the inbound transfer (evidence only — since T147 the refund goes to <c>RefundAddress</c>, 11 §F8 K9).</param>
 /// <param name="TxHash">Inbound transaction hash for cross-reference.</param>
 /// <param name="MonitorState">Post-cancel state observed at detection
 /// (audit only — drives the operator dashboard window bucket).</param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>
+/// <param name="RefundAddress">
+/// T147 (11 §F8 K9) — where the refund is actually sent: the buyer's refund
+/// address on the transaction's network, fixed at acceptance. Null only on an
+/// event written before T147, whose refund went to <c>SourceAddress</c>.
+/// </param>
 public record LatePaymentRefundRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -41,4 +46,5 @@ public record LatePaymentRefundRequestedEvent(
     string SourceAddress,
     string TxHash,
     MonitoringStatus MonitorState,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    string? RefundAddress = null) : IDomainEvent;

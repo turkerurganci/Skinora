@@ -735,6 +735,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet1,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = status == TransactionStatus.CREATED ? null : nowUtc.AddMinutes(-5),
+            Network = status == TransactionStatus.CREATED ? null : Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerConfirmDeadline = status == TransactionStatus.ACCEPTED ? nowUtc.AddHours(1) : null,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             // 06 §3.5 cumulative-milestone rule: states past SELLER_CONFIRMED

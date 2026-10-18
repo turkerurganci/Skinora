@@ -272,7 +272,9 @@ public sealed class SellerPayoutQueueJob
         // Runtime pre-send estimate; the static payout setting only as fallback
         // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02).
         // T148 — the payout leaves on the transaction's own network (11 §F8 K3).
-        // A transaction that never chose one predates F8 and is TRON (06 §1.4).
+        // T147 — the buyer chose it at acceptance and CK_Transactions_Network_Accepted
+        // keeps it set on every accepted row (the T147 migration backfilled
+        // pre-F8 rows to TRON), so the TRON fallback is only a defensive read.
         var network = transaction.Network ?? BlockchainNetwork.TRON;
 
         var resolvedGasFee = await _chargedGasFee.ResolvePayoutFeeAsync(

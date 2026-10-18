@@ -643,6 +643,7 @@ public sealed class SettlementVerificationJobTests : IDisposable
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddDays(-9),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = nowUtc.AddDays(-9),
             PaymentReceivedAt = nowUtc.AddDays(-9),
             ItemDeliveredAt = nowUtc.AddDays(-8),

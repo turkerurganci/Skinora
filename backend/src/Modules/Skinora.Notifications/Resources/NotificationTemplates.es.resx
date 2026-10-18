@@ -142,19 +142,19 @@
     <value>Pago insuficiente — vuelve a enviar el importe correcto</value>
   </data>
   <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
-    <value>Recibimos {ReceivedAmount} {Stablecoin} pero esperábamos {ExpectedAmount} {Stablecoin}. El importe recibido será reembolsado a {SourceAddress}; vuelve a enviar el total de {ExpectedAmount} {Stablecoin} antes de que expire el tiempo.</value>
+    <value>Recibimos {ReceivedAmount} {Stablecoin} pero esperábamos {ExpectedAmount} {Stablecoin}. El importe recibido será reembolsado a {RefundAddress}; vuelve a enviar el total de {ExpectedAmount} {Stablecoin} antes de que expire el tiempo.</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Pago excedente reembolsado</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>Enviaste {ReceivedAmount} {Stablecoin} pero solo se requerían {ExpectedAmount} {Stablecoin}. El excedente de {ExcessAmount} {Stablecoin} se está reembolsando a {SourceAddress}.</value>
+    <value>Enviaste {ReceivedAmount} {Stablecoin} pero solo se requerían {ExpectedAmount} {Stablecoin}. El excedente de {ExcessAmount} {Stablecoin} se está reembolsando a {RefundAddress}.</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
     <value>Token incorrecto detectado — reembolsando</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
-    <value>La transacción esperaba {ExpectedStablecoin} pero recibió {ReceivedAmount} {ActualStablecoin}. El importe se está reembolsando a {SourceAddress}; envía el token correcto.</value>
+    <value>La transacción esperaba {ExpectedStablecoin} pero recibió {ReceivedAmount} {ActualStablecoin}. El importe se está reembolsando a {RefundAddress}; envía el token correcto.</value>
   </data>
   <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
     <value>Tu cuenta ha sido suspendida</value>

@@ -9,7 +9,6 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
 using Skinora.Transactions.Application.Lifecycle;
-using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
@@ -43,7 +42,6 @@ public sealed class FraudFlagService : IFraudFlagService
     private readonly IOutboxService _outbox;
     private readonly ITransactionLimitsProvider _limits;
     private readonly ITimeoutFreezeService _freeze;
-    private readonly IPaymentAddressAllocator _paymentAddressAllocator;
     private readonly TimeProvider _clock;
     private readonly ILogger<FraudFlagService> _logger;
 
@@ -53,7 +51,6 @@ public sealed class FraudFlagService : IFraudFlagService
         IOutboxService outbox,
         ITransactionLimitsProvider limits,
         ITimeoutFreezeService freeze,
-        IPaymentAddressAllocator paymentAddressAllocator,
         TimeProvider clock,
         ILogger<FraudFlagService> logger)
     {
@@ -62,7 +59,6 @@ public sealed class FraudFlagService : IFraudFlagService
         _outbox = outbox;
         _limits = limits;
         _freeze = freeze;
-        _paymentAddressAllocator = paymentAddressAllocator;
         _clock = clock;
         _logger = logger;
     }
@@ -201,11 +197,6 @@ public sealed class FraudFlagService : IFraudFlagService
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         TransactionStatus? finalTxStatus = null;
 
-        // Set when a TRANSACTION_PRE_CREATE flag promotes its transaction
-        // FLAGGED → CREATED, so the post-commit eager payment-address
-        // allocation (WP4b) runs only for that path.
-        Guid? promotedTransactionId = null;
-
         await using (var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken))
         {
             if (flag.Scope == FraudFlagScope.TRANSACTION_PRE_CREATE)
@@ -234,7 +225,6 @@ public sealed class FraudFlagService : IFraudFlagService
                     limits.AcceptTimeoutMinutes ?? DefaultAcceptTimeoutMinutes);
 
                 finalTxStatus = transaction.Status;
-                promotedTransactionId = transaction.Id;
             }
 
             flag.Status = ReviewStatus.APPROVED;
@@ -267,16 +257,11 @@ public sealed class FraudFlagService : IFraudFlagService
             await dbTx.CommitAsync(cancellationToken);
         }
 
-        // ---------- Post-commit: eager payment-address allocation (WP4b) ----------
-        // The FLAGGED → CREATED transition has committed, so the allocator's
-        // CREATED/ACCEPTED eligibility guard now passes. Mirrors the inline
-        // allocation TransactionCreationService runs for natively-CREATED
-        // transactions — whose comment names this approve path the "future task
-        // entry point". Best-effort/non-fatal: a sidecar outage must never turn
-        // a committed approval into a 500 — EnsurePaymentAddressJob recovers any
-        // transaction this inline call could not allocate.
-        if (promotedTransactionId is { } promotedTxId)
-            await TryAllocatePaymentAddressAsync(promotedTxId, cancellationToken);
+        // No deposit address here (T147). WP4b derived one right after the
+        // FLAGGED → CREATED promotion, mirroring the creation-time allocation.
+        // The deposit now lives on the network the buyer chooses at acceptance
+        // (06 §1.4), so TransactionAcceptanceService derives it for a promoted
+        // listing exactly as for any other.
 
         return new ApproveFlagOutcome.Success(new FraudFlagReviewResultDto(
             ReviewStatus: ReviewStatus.APPROVED,
@@ -432,43 +417,6 @@ public sealed class FraudFlagService : IFraudFlagService
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// Best-effort eager payment-address allocation for a just-approved
-    /// transaction (WP4b). Runs OUTSIDE the approve DB transaction (the
-    /// FLAGGED → CREATED transition must be committed before the allocator's
-    /// CREATED/ACCEPTED eligibility guard passes). Mirrors
-    /// <see cref="Skinora.Users.Application.Wallet"/>'s swallow pattern: rethrow
-    /// cancellation, swallow everything else so a sidecar outage never turns a
-    /// committed approval into a 500 — <c>EnsurePaymentAddressJob</c> recovers
-    /// any transaction this call could not allocate.
-    /// </summary>
-    private async Task TryAllocatePaymentAddressAsync(
-        Guid transactionId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var allocation = await _paymentAddressAllocator.AllocateAsync(
-                transactionId, cancellationToken);
-            if (allocation.Status is not PaymentAddressAllocationStatus.Created
-                and not PaymentAddressAllocationStatus.AlreadyExisted)
-            {
-                _logger.LogWarning(
-                    "Inline payment-address allocation skipped for approved transaction {TransactionId}: {Status} — {Message}. EnsurePaymentAddressJob will retry.",
-                    transactionId, allocation.Status, allocation.ErrorMessage);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Inline payment-address allocation threw for approved transaction {TransactionId}. EnsurePaymentAddressJob will retry.",
-                transactionId);
-        }
     }
 
     private static string? NormalizeNote(string? note)

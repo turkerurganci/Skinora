@@ -49,9 +49,9 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Created_Inserts_PaymentAddress_Row_With_Next_Index()
+    public async Task Accepted_Inserts_PaymentAddress_Row_With_Next_Index()
     {
-        var transaction = await SeedTransactionAsync(TransactionStatus.CREATED, totalAmount: 102.00m);
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED, totalAmount: 102.00m);
 
         var sut = BuildSut();
 
@@ -73,7 +73,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     [Fact]
     public async Task Second_Allocate_For_Same_Transaction_Returns_AlreadyExisted_Without_Calling_Sidecar()
     {
-        var transaction = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         var sut = BuildSut();
 
         var first = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
@@ -91,9 +91,9 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     [Fact]
     public async Task Increments_Index_Across_Successive_Transactions()
     {
-        var t1 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t2 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t3 = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t3 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         var sut = BuildSut();
 
         var r1 = await sut.AllocateAsync(t1.Id, CancellationToken.None);
@@ -114,11 +114,11 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         // at index 1 and queue a sidecar response that mirrors index 1's
         // address: the allocator hits the UNIQUE constraint, the loop reads
         // MAX (still 1) → nextIndex=2, second call succeeds.
-        var preExistingTx = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var preExistingTx = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         await SeedPaymentAddressAsync(preExistingTx.Id, index: 1,
             address: StubBlockchainSidecarClient.DeterministicAddress(1));
 
-        var target = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         var sut = BuildSut();
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
@@ -137,7 +137,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         // unambiguous. Then queue *N* duplicate-of-index-7 responses so the
         // allocator burns retries on the same UNIQUE violation, finally
         // returning a fresh address on the (N+1)th call.
-        var pre = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var pre = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         await SeedPaymentAddressAsync(pre.Id, index: 7,
             address: StubBlockchainSidecarClient.DeterministicAddress(7));
 
@@ -151,7 +151,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         _sidecar.Responses.Enqueue(new BlockchainSidecarDeriveResult(
             BlockchainSidecarStatus.Success, "TUniqueAddressForRetryTest__________", "m/44'/195'/0'/0/8"));
 
-        var target = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         var sut = BuildSut();
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
@@ -163,7 +163,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     [Fact]
     public async Task Returns_ExhaustedRetries_When_All_Attempts_Collide()
     {
-        var pre = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var pre = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         await SeedPaymentAddressAsync(pre.Id, index: 7,
             address: StubBlockchainSidecarClient.DeterministicAddress(7));
 
@@ -174,7 +174,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
                 BlockchainSidecarStatus.Success, duplicate, "m/44'/195'/0'/0/8"));
         }
 
-        var target = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         var sut = BuildSut();
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
@@ -186,7 +186,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     [Fact]
     public async Task Returns_SidecarNotConfigured_When_Sidecar_Reports_503()
     {
-        var transaction = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         _sidecar.Responses.Enqueue(new BlockchainSidecarDeriveResult(
             BlockchainSidecarStatus.NotConfigured, null, null));
 
@@ -202,7 +202,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     [Fact]
     public async Task Returns_SidecarUnavailable_When_Sidecar_Reports_Unavailable()
     {
-        var transaction = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         _sidecar.Responses.Enqueue(new BlockchainSidecarDeriveResult(
             BlockchainSidecarStatus.Unavailable, null, null));
 
@@ -235,14 +235,62 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Allocates_For_ACCEPTED_Status_Not_Only_CREATED()
+    public async Task Allocates_For_SELLER_CONFIRMED_So_A_Lost_Inline_Allocation_Is_Recovered()
     {
-        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        // T147 — the inline allocation moved to acceptance; a seller who
+        // confirms before the recovery job ran must not leave the buyer
+        // without an address in the one state that shows it.
+        var transaction = await SeedTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
         var sut = BuildSut();
 
         var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
 
         Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
+    }
+
+    // ---------- T147 — the deposit lives on the network chosen at acceptance ----------
+
+    [Fact]
+    public async Task CREATED_Listing_Has_No_Network_Yet_So_No_Address_Is_Derived()
+    {
+        var transaction = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var sut = BuildSut();
+
+        var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.TransactionIneligible, result.Status);
+        Assert.Empty(_sidecar.Calls);
+    }
+
+    [Fact]
+    public async Task Accepted_Row_Without_A_Network_Is_Not_Given_A_Default_One()
+    {
+        // No fallback network: an accepted row missing its network is a data
+        // fault, not a TRON transaction.
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED, network: null);
+        var sut = BuildSut();
+
+        var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.TransactionIneligible, result.Status);
+        Assert.Empty(_sidecar.Calls);
+    }
+
+    [Fact]
+    public async Task An_Existing_Deposit_On_Another_Network_Is_Reported_Not_Returned()
+    {
+        // Same-network rule (11 §F8 K3): a TRON deposit is never handed out for
+        // an Ethereum transaction, and nothing new is derived over it.
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED, network: BlockchainNetwork.ETHEREUM);
+        await SeedPaymentAddressAsync(transaction.Id, index: 3,
+            address: "TPreExistingTron000000000000000000", network: BlockchainNetwork.TRON);
+        var sut = BuildSut();
+
+        var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.NetworkMismatch, result.Status);
+        Assert.Null(result.Address);
+        Assert.Empty(_sidecar.Calls);
     }
 
     // ---------- T145 — HD index per network (06 §1.4) ----------
@@ -252,12 +300,12 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     {
         // Another network's indices (its own seed, 11 §F8 K7) must not push
         // the TRON counter forward: TRON's first deposit is still index 0.
-        var ethTx = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var ethTx = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         await SeedPaymentAddressAsync(ethTx.Id, index: 9,
             address: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
             network: BlockchainNetwork.ETHEREUM);
 
-        var target = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         var sut = BuildSut();
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
 
@@ -274,8 +322,6 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     public async Task Allocated_Row_Carries_The_Transaction_Network()
     {
         var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
-        transaction.Network = BlockchainNetwork.TRON;
-        await Context.SaveChangesAsync();
 
         var sut = BuildSut();
         var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
@@ -290,7 +336,8 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         new(Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar), NullLogger<PaymentAddressAllocator>.Instance);
 
     private async Task<Transaction> SeedTransactionAsync(
-        TransactionStatus status, decimal totalAmount = 100.00m)
+        TransactionStatus status, decimal totalAmount = 100.00m,
+        BlockchainNetwork? network = BlockchainNetwork.TRON)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
@@ -310,6 +357,8 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
             CommissionAmount = 2.00m,
             TotalAmount = totalAmount,
             SellerPayoutAddress = SellerWallet,
+            // T147 — the network is chosen at acceptance; a listing has none.
+            Network = status is TransactionStatus.CREATED or TransactionStatus.FLAGGED ? null : network,
             PaymentTimeoutMinutes = 24 * 60,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
         };

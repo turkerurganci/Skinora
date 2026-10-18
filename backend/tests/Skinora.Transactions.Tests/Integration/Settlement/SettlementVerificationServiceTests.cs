@@ -335,6 +335,7 @@ public class SettlementVerificationServiceTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet1,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = deliveredAt.AddHours(-3),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = deliveredAt.AddHours(-2),
             PaymentReceivedAt = deliveredAt.AddHours(-1),
             ItemDeliveredAt = deliveredAt,

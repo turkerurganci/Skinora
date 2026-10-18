@@ -8,12 +8,13 @@ using Skinora.Transactions.Domain.Entities;
 namespace Skinora.Transactions.Application.PaymentAddresses;
 
 /// <summary>
-/// Hangfire recurring job that scans for <c>CREATED</c> / <c>ACCEPTED</c>
-/// transactions without a <c>PaymentAddress</c> row and re-runs the
-/// <see cref="IPaymentAddressAllocator"/>. Inline allocation in
-/// <c>TransactionCreationService</c> is best-effort; this job recovers from
-/// transient sidecar outages so a transaction can never be stuck waiting on
-/// an address forever.
+/// Hangfire recurring job that scans for accepted transactions (<c>ACCEPTED</c>
+/// / <c>SELLER_CONFIRMED</c>, network chosen) without a <c>PaymentAddress</c>
+/// row and re-runs the <see cref="IPaymentAddressAllocator"/>. Inline
+/// allocation in <c>TransactionAcceptanceService</c> is best-effort (T147 —
+/// it moved there from creation with the network choice); this job recovers
+/// from transient sidecar outages so a transaction can never be stuck waiting
+/// on an address forever.
 /// </summary>
 public sealed class EnsurePaymentAddressJob
 {
@@ -33,10 +34,7 @@ public sealed class EnsurePaymentAddressJob
     public const int BatchSize = 50;
 
     private static readonly TransactionStatus[] EligibleStates =
-    [
-        TransactionStatus.CREATED,
-        TransactionStatus.ACCEPTED,
-    ];
+        PaymentAddressAllocator.EligibleStates;
 
     private readonly AppDbContext _db;
     private readonly IPaymentAddressAllocator _allocator;
@@ -62,11 +60,12 @@ public sealed class EnsurePaymentAddressJob
         // network fails closed every time and leaves the transaction without an
         // address, so selecting it would keep it at the head of the
         // oldest-first batch forever: BatchSize of them would starve every
-        // other network's allocations. A transaction without a network predates
-        // F8 and is TRON (06 §1.4), the same reading the allocator uses.
+        // other network's allocations. T147 — only an accepted transaction
+        // with a chosen network is a candidate: the allocator never invents a
+        // default network (11 §F8 T147 kararı xiii), and every accepted row
+        // carries one (CK_Transactions_Network_Accepted).
         var configured = _services.ConfiguredNetworks.ToList();
         if (configured.Count == 0) return;
-        var tronConfigured = configured.Contains(BlockchainNetwork.TRON);
 
         var pending = await _db.Set<Transaction>()
             .AsNoTracking()
@@ -74,8 +73,8 @@ public sealed class EnsurePaymentAddressJob
             .Where(t => !t.IsDeleted
                 && EligibleStates.Contains(t.Status)
                 && t.PaymentAddress == null
-                && ((t.Network == null && tronConfigured)
-                    || (t.Network != null && configured.Contains(t.Network.Value))))
+                && t.Network != null
+                && configured.Contains(t.Network.Value))
             .OrderBy(t => t.CreatedAt)
             .Take(BatchSize)
             .Select(t => t.Id)

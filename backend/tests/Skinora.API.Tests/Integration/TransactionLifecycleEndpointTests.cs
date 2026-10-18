@@ -321,9 +321,188 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
 
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var persisted = db.Set<Transaction>().AsNoTracking().Single(t => t.Id == id);
-        Assert.Equal(ValidWallet, persisted.SellerPayoutAddress);
-        Assert.NotEqual(attackerAddress, persisted.SellerPayoutAddress);
+        // T147 — before acceptance the payout snapshot lives in the listing's
+        // TRON option row; the column is filled from it at acceptance.
+        var option = db.Set<TransactionNetworkOption>().AsNoTracking().Single(o => o.TransactionId == id);
+        Assert.Equal(BlockchainNetwork.TRON, option.Network);
+        Assert.Equal(ValidWallet, option.SellerPayoutAddress);
+        Assert.NotEqual(attackerAddress, option.SellerPayoutAddress);
+    }
+
+    // ---------- T147: network choice on the wire (07 §1.3) ----------
+
+    [Fact]
+    public async Task Create_With_A_Network_That_Has_No_Service_Returns_503_NETWORK_UNAVAILABLE_With_Details()
+    {
+        // Ethereum has no configured service until T150 — fail closed.
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"));
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562894", "AK-47 | Redline");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562894",
+            stablecoin = "USDT",
+            price = "100.00",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+            acceptedNetworks = new[] { "TRON", "ETHEREUM" },
+        });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("error");
+        Assert.Equal("NETWORK_UNAVAILABLE", error.GetProperty("code").GetString());
+        Assert.Equal("ETHEREUM", error.GetProperty("details").GetProperty("network").GetString());
+    }
+
+    [Fact]
+    public async Task Create_With_An_Unknown_Network_Returns_400_VALIDATION_ERROR()
+    {
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
+        });
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562895",
+            stablecoin = "USDT",
+            price = "100.00",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+            acceptedNetworks = new[] { "BSC" },
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("error");
+        Assert.Equal("VALIDATION_ERROR", error.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Create_Missing_Payout_Address_Names_The_Network_In_Details()
+    {
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            // Only an Ethereum payout address — the default (TRON) listing has none.
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"));
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562896", "AK-47 | Redline");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var response = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562896",
+            stablecoin = "USDT",
+            price = "100.00",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+        });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("error");
+        Assert.Equal("SELLER_WALLET_ADDRESS_MISSING", error.GetProperty("code").GetString());
+        Assert.Equal("TRON", error.GetProperty("details").GetProperty("network").GetString());
+    }
+
+    [Fact]
+    public async Task Detail_Before_Acceptance_Lists_The_Accepted_Networks_And_Quotes_After_Acceptance_The_Network()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+        var buyerClient = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+
+        var before = (await (await buyerClient.GetAsync($"/api/v1/transactions/{transactionId:D}"))
+            .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal(["TRON"], before.GetProperty("acceptedNetworks").EnumerateArray().Select(e => e.GetString()));
+        var quote = Assert.Single(before.GetProperty("networkQuotes").EnumerateArray().ToList());
+        Assert.Equal("TRON", quote.GetProperty("network").GetString());
+        Assert.Equal("0.00", quote.GetProperty("networkFeeAmount").GetString());
+        Assert.Equal("102.00", quote.GetProperty("totalAmount").GetString());
+        Assert.False(before.TryGetProperty("network", out _));
+
+        var accept = await buyerClient.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new { refundWalletAddress = ValidWallet, steamTradeUrl = TradeUrlFor(buyer.SteamId), network = "TRON" });
+        Assert.Equal(HttpStatusCode.OK, accept.StatusCode);
+        var acceptData = (await accept.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("TRON", acceptData.GetProperty("network").GetString());
+        Assert.Equal("102.00", acceptData.GetProperty("totalAmount").GetString());
+
+        var after = (await (await buyerClient.GetAsync($"/api/v1/transactions/{transactionId:D}"))
+            .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("TRON", after.GetProperty("network").GetString());
+        Assert.False(after.TryGetProperty("acceptedNetworks", out _));
+        Assert.False(after.TryGetProperty("networkQuotes", out _));
+    }
+
+    [Fact]
+    public async Task Accept_On_A_Network_The_Listing_Does_Not_Accept_Returns_422_NETWORK_NOT_ACCEPTED()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new
+            {
+                refundWalletAddress = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+                steamTradeUrl = TradeUrlFor(buyer.SteamId),
+                network = "ETHEREUM",
+            });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("error");
+        Assert.Equal("NETWORK_NOT_ACCEPTED", error.GetProperty("code").GetString());
+        Assert.Equal("ETHEREUM", error.GetProperty("details").GetProperty("network").GetString());
+    }
+
+    [Fact]
+    public async Task Accept_On_An_Accepted_Network_Without_A_Service_Returns_503_NETWORK_UNAVAILABLE()
+    {
+        var seller = await _factory.CreateUserAsync();
+        var buyer = await _factory.CreateUserAsync();
+        var transactionId = await _factory.SeedTransactionAsync(
+            seller.Id, targetBuyerSteamId: buyer.SteamId,
+            networks: [BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM]);
+
+        var client = BuildAuthenticatedClient(buyer.Id, buyer.SteamId);
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/transactions/{transactionId:D}/accept",
+            new
+            {
+                refundWalletAddress = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+                steamTradeUrl = TradeUrlFor(buyer.SteamId),
+                network = "ETHEREUM",
+            });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        var error = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("error");
+        Assert.Equal("NETWORK_UNAVAILABLE", error.GetProperty("code").GetString());
+        Assert.Equal("ETHEREUM", error.GetProperty("details").GetProperty("network").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var persisted = db.Set<Transaction>().AsNoTracking().Single(t => t.Id == transactionId);
+        Assert.Equal(Skinora.Shared.Enums.TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.Network);
     }
 
     /// <summary>
@@ -1622,7 +1801,9 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             // T123 — confirm-ready re-reads the listed asset, so a test that
             // drives it has to pin the id it registered in the fake inventory.
             string? itemAssetId = null,
-            string? buyerTradeUrl = null)
+            string? buyerTradeUrl = null,
+            // T147 — the networks the listing accepts (one option row each).
+            BlockchainNetwork[]? networks = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -1658,6 +1839,15 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                     or Skinora.Shared.Enums.TransactionStatus.COMPLETED
                     ? nowUtc.AddMinutes(-5)
                     : null,
+                // T147 — CK_Transactions_Network_Accepted: an accepted row has
+                // its network.
+                Network = status is Skinora.Shared.Enums.TransactionStatus.ACCEPTED
+                    or Skinora.Shared.Enums.TransactionStatus.SELLER_CONFIRMED
+                    or Skinora.Shared.Enums.TransactionStatus.PAYMENT_RECEIVED
+                    or Skinora.Shared.Enums.TransactionStatus.ITEM_DELIVERED
+                    or Skinora.Shared.Enums.TransactionStatus.COMPLETED
+                    ? Skinora.Shared.Enums.BlockchainNetwork.TRON
+                    : null,
                 SellerConfirmDeadline = status == Skinora.Shared.Enums.TransactionStatus.ACCEPTED
                     ? nowUtc.AddHours(1)
                     : null,
@@ -1676,6 +1866,19 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
                 CommissionAmount = 2m,
                 TotalAmount = 102m,
                 SellerPayoutAddress = ValidWallet,
+                // T147 — every listing has its accepted networks; acceptance
+                // reads the chosen one's payout snapshot from here.
+                NetworkOptions = (networks ?? [BlockchainNetwork.TRON])
+                    .Select(n => new TransactionNetworkOption
+                    {
+                        Id = Guid.NewGuid(),
+                        Network = n,
+                        SellerPayoutAddress = n == BlockchainNetwork.TRON
+                            ? ValidWallet
+                            : "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+                        CreatedAt = nowUtc,
+                    })
+                    .ToList(),
                 PaymentTimeoutMinutes = 1440,
                 AcceptDeadline = status == Skinora.Shared.Enums.TransactionStatus.CREATED
                     ? nowUtc.AddHours(1)
@@ -1759,6 +1962,9 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             // stamp IsDeleted and the row would still hold the FK.
             db.Set<Skinora.Transactions.Domain.Entities.PaymentAddress>()
                 .IgnoreQueryFilters().ExecuteDelete();
+            // T147 — option rows FK to Transaction (NO ACTION) and are
+            // append-only, so they go through ExecuteDelete too.
+            db.Set<TransactionNetworkOption>().ExecuteDelete();
             db.Set<OutboxMessage>().RemoveRange(db.Set<OutboxMessage>());
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
                 .RemoveRange(db.Set<Skinora.Transactions.Domain.Entities.Transaction>());

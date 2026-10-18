@@ -37,8 +37,17 @@ public enum PaymentAddressAllocationStatus
     /// <summary>The transaction does not exist or is soft-deleted.</summary>
     TransactionNotFound,
 
-    /// <summary>The transaction is in a state that does not need a payment address.</summary>
+    /// <summary>
+    /// The transaction is in a state that does not need a payment address, or
+    /// has no network yet (T147 — not accepted).
+    /// </summary>
     TransactionIneligible,
+
+    /// <summary>
+    /// T147 — the transaction already has a deposit on another network than
+    /// its own. Never repaired automatically (11 §F8 K3 same-network rule).
+    /// </summary>
+    NetworkMismatch,
 
     /// <summary>Sidecar returned <c>HD_WALLET_NOT_CONFIGURED</c> (503).</summary>
     SidecarNotConfigured,

@@ -27,8 +27,9 @@ import * as api from '../src/api';
  *   4. Unsupported (§5.3a)  → SPAM_TOKEN_INCOMING audit row, no refund, no state change.
  *   5. Late payment (§5.4)  → LATE_PAYMENT_REFUND after a payment-timeout cancel.
  *   6. Multi-payment (§5.5) → first exact accepted, second refunded in full.
- * Every refund returns to the payment source wallet (08 §562 = fakeBuyerWallet),
- * NOT the trade-side refund wallet. Refund amounts are chosen so net > 2× gas
+ * Every refund goes to the buyer's refund address fixed at acceptance
+ * (seed.buyerRefundAddress — 11 §F8 K9, T147), NOT back to the payment source
+ * wallet (fakeBuyerWallet) as the old T110-K1 rule did. Refund amounts are chosen so net > 2× gas
  * (gas estimate 2.0, threshold 4.0) → the refund proceeds rather than blocking.
  *
  * The P2P rewrite moved ONE thing, and it moved everything with it: the state a
@@ -117,7 +118,8 @@ test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays SELLER_CON
   expect(refund, 'INCORRECT_AMOUNT_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
   expect(Number(refund?.amount)).toBe(10);
-  expect(refund?.toAddress).toBe(fakeBuyerWallet);
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+  expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
   // step 6 — buyer notified.
   const recipients = await pollNotificationRecipients('INSUFFICIENT_PAYMENT', [seed.buyerId]);
@@ -151,7 +153,8 @@ test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (exces
   expect(refund, 'EXCESS_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
   expect(Number(refund?.amount)).toBeCloseTo(overpayMargin, 2);
-  expect(refund?.toAddress).toBe(fakeBuyerWallet);
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+  expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
   // step 7 — buyer notified.
   const recipients = await pollNotificationRecipients('OVERPAYMENT_REFUNDED', [seed.buyerId]);
@@ -176,7 +179,8 @@ test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays SELLER_CONFIRMED
   expect(refund, 'WRONG_TOKEN_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
   expect(Number(refund?.amount)).toBe(10);
-  expect(refund?.toAddress).toBe(fakeBuyerWallet);
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+  expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
   // step 6 — buyer notified.
   const recipients = await pollNotificationRecipients('WRONG_TOKEN_REFUND', [seed.buyerId]);
@@ -231,7 +235,8 @@ test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELL
   expect(refund, 'LATE_PAYMENT_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
   expect(Number(refund?.amount)).toBe(10);
-  expect(refund?.toAddress).toBe(fakeBuyerWallet);
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+  expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
   // The transaction stays in its terminal cancel state.
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('CANCELLED_TIMEOUT');
@@ -261,7 +266,8 @@ test('§5.5 multi-payment → first exact accepted (proceeds), second refunded i
   expect(refund, 'EXCESS_REFUND (multi-payment) not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
   expect(Number(refund?.amount)).toBe(50);
-  expect(refund?.toAddress).toBe(fakeBuyerWallet);
+  expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
+  expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
   // step 5 — buyer notified (multi-payment reuses the OVERPAYMENT_REFUNDED type).
   const recipients = await pollNotificationRecipients('OVERPAYMENT_REFUNDED', [seed.buyerId]);

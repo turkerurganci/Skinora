@@ -42,6 +42,9 @@ public sealed class BuyerPaymentInsufficientNotificationConsumer
                 ["ReceivedAmount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
                 ["Stablecoin"] = domainEvent.Stablecoin.ToString(),
                 ["SourceAddress"] = domainEvent.SourceAddress,
+                // K9 (T147) — where the refund is sent; a pre-T147 event has none and
+                // its refund went to the sender.
+                ["RefundAddress"] = domainEvent.RefundAddress ?? domainEvent.SourceAddress,
             },
         };
 

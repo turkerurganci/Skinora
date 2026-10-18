@@ -58,6 +58,17 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             t.HasCheckConstraint("CK_Transactions_BuyerMethod_OpenLink",
                 "(BuyerIdentificationMethod != 'OPEN_LINK') " +
                 "OR (InviteToken IS NOT NULL AND TargetBuyerSteamId IS NULL)");
+
+            // --- CHECK: an accepted transaction has its network (06 §1.4, T147) ---
+            // Both columns are NULL from creation until the buyer picks one of the
+            // listing's networks; from acceptance on, payout, refunds and the
+            // deposit all resolve their network from this row (11 §F8 K3), so a
+            // row that reached acceptance without them must not be writable.
+            // AcceptedAt, not Status: a transaction cancelled after acceptance
+            // keeps its network for the refund of a late payment.
+            t.HasCheckConstraint("CK_Transactions_Network_Accepted",
+                "(AcceptedAt IS NULL) " +
+                "OR (Network IS NOT NULL AND SellerPayoutAddress IS NOT NULL)");
         });
 
         // --- Primary key ---
@@ -166,13 +177,15 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 
         // --- Wallet Addresses ---
         // 06 §1.4 (T145) — NULL until the buyer accepts, then fixed. Existing
-        // accepted rows were backfilled to TRON by the migration.
+        // accepted rows were backfilled to TRON by the migration; T147 makes it
+        // required once accepted (CK_Transactions_Network_Accepted).
         builder.Property(t => t.Network)
             .HasMaxLength(20);
 
-        // Wallet snapshots in the canonical form (06 §1.4).
+        // Wallet snapshots in the canonical form (06 §1.4). The payout address
+        // is NULL until acceptance copies it from the chosen network's
+        // TransactionNetworkOptions row (T147).
         builder.Property(t => t.SellerPayoutAddress)
-            .IsRequired()
             .HasMaxLength(50)
             .HasConversion(CanonicalChainIdentifierConverter.Instance);
 

@@ -22,7 +22,7 @@ public enum PaymentMonitorAction
     Disarm,
 
     /// <summary>The address exists but its window has not opened yet
-    /// (allocated at CREATED, revealed at SELLER_CONFIRMED) — leave both the
+    /// (allocated at acceptance, revealed at SELLER_CONFIRMED) — leave both the
     /// sidecar and the row alone.</summary>
     Idle,
 }

@@ -142,19 +142,19 @@
     <value>付款不足 — 请重新发送正确金额</value>
   </data>
   <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
-    <value>我们收到了 {ReceivedAmount} {Stablecoin}，但应为 {ExpectedAmount} {Stablecoin}。已收到的金额将退回至 {SourceAddress}；请在超时之前重新发送完整的 {ExpectedAmount} {Stablecoin}。</value>
+    <value>我们收到了 {ReceivedAmount} {Stablecoin}，但应为 {ExpectedAmount} {Stablecoin}。已收到的金额将退回至 {RefundAddress}；请在超时之前重新发送完整的 {ExpectedAmount} {Stablecoin}。</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>超额付款已退款</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>您发送了 {ReceivedAmount} {Stablecoin}，但仅需 {ExpectedAmount} {Stablecoin}。超出的 {ExcessAmount} {Stablecoin} 正在退回至 {SourceAddress}。</value>
+    <value>您发送了 {ReceivedAmount} {Stablecoin}，但仅需 {ExpectedAmount} {Stablecoin}。超出的 {ExcessAmount} {Stablecoin} 正在退回至 {RefundAddress}。</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
     <value>检测到错误代币 — 正在退款</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
-    <value>该交易应为 {ExpectedStablecoin}，但收到的是 {ReceivedAmount} {ActualStablecoin}。该金额正在退回至 {SourceAddress}；请发送正确的代币。</value>
+    <value>该交易应为 {ExpectedStablecoin}，但收到的是 {ReceivedAmount} {ActualStablecoin}。该金额正在退回至 {RefundAddress}；请发送正确的代币。</value>
   </data>
   <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
     <value>您的账户已被暂停</value>
