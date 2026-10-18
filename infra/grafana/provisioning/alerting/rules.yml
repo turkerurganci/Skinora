@@ -840,6 +840,57 @@ groups:
             the blockchain.ethereum.fee_cap_usd_per_transfer setting
             (DEPLOY_RUNBOOK §D).
 
+      # T153 — 08 §3.7.5 (T142: 0,06 ETH, öneriyle kaydedildi — ⚠): the fuel
+      # wallet (gas for every deposit's sweep / refund) or the hot wallet (gas
+      # for payouts and cold transfers) holds less ETH than the floor the
+      # service publishes next to it (ETHEREUM_FUEL_WALLET_MIN_ETH /
+      # ETHEREUM_HOT_WALLET_MIN_ETH, parity with the backend's
+      # blockchain.ethereum.{fuel,hot}_wallet_eth_balance_minimum). A wallet
+      # without a mounted key publishes no series and stays quiet.
+      - uid: ethereum-wallet-eth-low
+        title: Ethereum Platform Wallet ETH Low
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (min by (wallet) (skinora_ethereum_wallet_eth_balance) / min by (wallet) (skinora_ethereum_wallet_eth_floor)) or vector(1)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: An Ethereum platform wallet holds less ETH than its floor
+          description: >-
+            The fuel wallet (label wallet="fuel") or the hot wallet
+            (wallet="hot") is below its ETH floor (0.06 ETH by default — seven
+            days of peak sweep fuel at the fee cap plus one crash-day refund,
+            08 §3.7.5). Below it, deposits are not fuelled (FUEL_WALLET_LOW) or
+            payouts wait (HOT_WALLET_GAS_LOW) — nothing is lost, sends wait.
+            Top the wallet up by hand from the operator's wallet
+            (DEPLOY_RUNBOOK §D "Yakıt ve sıcak cüzdan ETH'si").
+
       # T152 düzeltme turu (proje sahibi kararı 2026-10-18): an Ethereum outbound
       # row is never FAILED for a transient error — it keeps retrying with the
       # same id. A stalled network is therefore seen here, per network (not per

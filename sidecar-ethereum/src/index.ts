@@ -7,7 +7,7 @@ import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { createApp } from './api/routes.js';
 import { TxJournal } from './transfer/TxJournal.js';
-import { FEE_CAP_WAIT_REASONS } from './transfer/FeeWaitTracker.js';
+import { FEE_CAP_WAIT_REASONS, GAS_WAIT_REASONS } from './transfer/FeeWaitTracker.js';
 import { setTransferWaitSource, transferWaitAlarmSeconds } from './metrics.js';
 import { buildOutbound, buildServices } from './wiring.js';
 
@@ -123,19 +123,41 @@ function main(): void {
 
   // T152 sends (08 §3.7.6, §3.7.7) and T154's fee estimate, over ONE ETH
   // price service: the fee cap and the estimate use the same price.
-  const { feeEstimator, feeWaits, transfers } = buildOutbound(config, {
-    rpc,
-    journal,
-    wallet,
-    finalizedHead: () => finality.status().snapshot?.number ?? null,
-    // The configured address prices a payout even before the key is mounted.
-    feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
-  });
+  const { feeEstimator, feeWaits, transfers, walletBalances, fuelLedgerSeeded } = buildOutbound(
+    config,
+    {
+      rpc,
+      journal,
+      wallet,
+      finalizedHead: () => finality.status().snapshot?.number ?? null,
+      // The configured address prices a payout even before the key is mounted.
+      feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
+      // T153 — fuel the journal holds in a block is not foreign ETH.
+      fuelLedger: services.fuel,
+    },
+  );
+  logger.info(
+    {
+      fuelWalletAddress: keys.fuelWalletAddress,
+      fuelCapsConfigured:
+        config.transfers.fuelMaxSingleWei !== null && config.transfers.fuelMaxDailyWei !== null,
+      fuelLedgerSeeded,
+      fuelWalletFloorWei: config.walletBalances.fuelFloorWei.toString(),
+      hotWalletFloorWei: config.walletBalances.hotFloorWei.toString(),
+      walletBalanceIntervalMs: config.walletBalances.intervalMs,
+    },
+    'Ethereum fuel wallet configured',
+  );
+  if (!config.fuelWalletKey) {
+    logger.warn(
+      'The fuel wallet key is not mounted (ethereum_fuel_wallet_private_key) — sweeps and refunds from deposits wait (FUEL_REQUIRED) until it is (T153).',
+    );
+  }
   transferWaitAlarmSeconds.set(config.transfers.waitAlarmSeconds);
   setTransferWaitSource({
     feeCapWaitSeconds: () => feeWaits.longestWaitSeconds(FEE_CAP_WAIT_REASONS),
     unminedSeconds: () => transfers.oldestUnminedSeconds(),
-    gasWaitSeconds: () => feeWaits.longestWaitSeconds(['FUEL_REQUIRED', 'HOT_WALLET_GAS_LOW']),
+    gasWaitSeconds: () => feeWaits.longestWaitSeconds(GAS_WAIT_REASONS),
     nonceConflicts: () => transfers.nonceConflictCount(),
     journalBehindChain: () => transfers.journalBehindChain().length,
     journalAckAheadOfChain: () => transfers.acknowledgementsAheadOfChain().length,
@@ -169,11 +191,13 @@ function main(): void {
   const server = app.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port, network: SERVICE_NETWORK }, 'Ethereum service listening');
     services.start();
+    walletBalances.start();
   });
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
     services.stop();
+    walletBalances.stop();
     clearInterval(keeper);
     server.close(() => logger.info('HTTP server closed'));
     const forceTimer = setTimeout(() => {

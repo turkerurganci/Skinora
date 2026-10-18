@@ -22,6 +22,7 @@ const USDT = canonicalAddress(MAINNET_TOKEN_CONTRACTS.USDT);
 const USDC = canonicalAddress(MAINNET_TOKEN_CONTRACTS.USDC);
 const RECIPIENT = '0x1111111111111111111111111111111111111111';
 const DEPOSIT = '0x3333333333333333333333333333333333333333';
+const HOT_WALLET = '0x4444444444444444444444444444444444444444';
 
 const CONFIG: SignerPolicyConfig = {
   chainId: 11_155_111n,
@@ -251,6 +252,10 @@ describe('fuel key — the one exception (T153)', () => {
     maxSingleWei: 1_000_000_000_000_000n,
     maxDailyWei: 10_000_000_000_000_000n,
     spentLast24hWei: 0n,
+    // T153: no more than the token send needs; its share of the fee cap.
+    maxForSendWei: 300_000_000_000_000n,
+    platformAddresses: [HOT_WALLET, ''],
+    feeCapWei: 21_000n * 2_050_000_000n,
   };
 
   function fuel(overrides: Partial<TransactionLike> = {}): Transaction {
@@ -285,13 +290,21 @@ describe('fuel key — the one exception (T153)', () => {
     [
       'above the single cap',
       () => fuel({ value: 1_000_000_000_000_001n }),
-      { amountWei: 1_000_000_000_000_001n },
+      { amountWei: 1_000_000_000_000_001n, maxForSendWei: 10n ** 18n },
     ],
     ['above the daily cap', () => fuel(), { spentLast24hWei: 9_800_000_000_000_000n }],
     ['caps not configured', () => fuel(), { maxSingleWei: null }],
     ['daily cap not configured', () => fuel(), { maxDailyWei: null }],
     ['another chain', () => fuel({ chainId: 1n })],
     ['type 4', () => fuel({ type: 4, authorizationList: [] })],
+    // T153 — more than the send needs, a platform wallet, above its fee share.
+    ['more than the token send needs', () => fuel(), { maxForSendWei: 300_000_000_000_000n - 1n }],
+    [
+      'a platform wallet the seed also derives',
+      () => fuel({ to: HOT_WALLET }),
+      { recipient: HOT_WALLET, isOwnDeposit: () => true },
+    ],
+    ['above its share of the fee cap', () => fuel(), { feeCapWei: 21_000n * 2_050_000_000n - 1n }],
   ])('%s → refused', (label, build, intent) => {
     const rule: Record<string, string> = {
       'an address the service does not derive': 'recipient',
@@ -304,6 +317,9 @@ describe('fuel key — the one exception (T153)', () => {
       'daily cap not configured': 'fuelCaps',
       'another chain': 'chainId',
       'type 4': 'type',
+      'more than the token send needs': 'amount',
+      'a platform wallet the seed also derives': 'recipient',
+      'above its share of the fee cap': 'feeCap',
     };
     expect(() => assertSignableFuel(build(), { ...FUEL, ...(intent ?? {}) }, CONFIG)).toThrow(
       expect.objectContaining({ ...refusal, message: expect.stringContaining(`(${rule[label]})`) }),

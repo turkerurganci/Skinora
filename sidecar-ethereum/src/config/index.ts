@@ -97,6 +97,17 @@ export interface EthereumServiceConfig {
      */
     readonly journalAcknowledgedNonces: ReadonlyMap<string, number>;
   };
+  /**
+   * T153 — ETH floors of the two gas-paying wallets (08 §3.7.5, T142: 0.06
+   * each) and how often they are read; alert `ethereum-wallet-eth-low`.
+   * Parity with the backend's `blockchain.ethereum.{fuel,hot}_wallet_eth_balance_minimum`
+   * (DEPLOY_RUNBOOK §D).
+   */
+  readonly walletBalances: {
+    readonly fuelFloorWei: bigint;
+    readonly hotFloorWei: bigint;
+    readonly intervalMs: number;
+  };
   /** T151 — the payment monitor (08 §3.7.4). */
   readonly monitor: {
     /** How often the monitor looks for new finalized blocks (it reads the FinalityTracker's head). */
@@ -123,6 +134,14 @@ export interface EthereumServiceConfig {
 
 /** Default journal location — the `ethereum_tx_journal` volume in docker-compose.yml. */
 export const DEFAULT_TX_JOURNAL_DIR = '/var/lib/skinora-ethereum/tx-journal';
+
+/** T153 — the wallets' ETH floor (T142: 0.06 ETH). */
+export const DEFAULT_WALLET_ETH_FLOOR = '0.06';
+
+/** An ETH amount with a default (a floor, not a cap: unset takes the default). */
+function ethAmount(env: Env, name: string, fallback: string): bigint {
+  return limit(env, name, 18) ?? (parseLimit(fallback, 18) as bigint);
+}
 
 function limit(env: Env, name: string, decimals: number): bigint | null {
   const raw = value(env, name);
@@ -350,6 +369,11 @@ export function loadConfig(
       keeperIntervalMs: positiveInt(env, 'ETHEREUM_OUTGOING_KEEPER_INTERVAL_MS', 30_000),
       bumpAfterSeconds: positiveInt(env, 'ETHEREUM_FEE_BUMP_AFTER_SECONDS', 300),
       journalAcknowledgedNonces: acknowledgedNonces(env, 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'),
+    },
+    walletBalances: {
+      fuelFloorWei: ethAmount(env, 'ETHEREUM_FUEL_WALLET_MIN_ETH', DEFAULT_WALLET_ETH_FLOOR),
+      hotFloorWei: ethAmount(env, 'ETHEREUM_HOT_WALLET_MIN_ETH', DEFAULT_WALLET_ETH_FLOOR),
+      intervalMs: positiveInt(env, 'ETHEREUM_WALLET_BALANCE_INTERVAL_MS', 300_000),
     },
     monitor: {
       tickIntervalMs: positiveInt(env, 'ETHEREUM_MONITOR_TICK_MS', 15_000),

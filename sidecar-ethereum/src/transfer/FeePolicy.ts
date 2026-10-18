@@ -92,14 +92,27 @@ export interface FeeQuote {
   readonly maxFeePerGas: bigint;
 }
 
+/**
+ * Why a send waits (503 `deferred: true`). The four fuel reasons are T153's
+ * (08 §3.7.5): `FUEL_REQUIRED` — the deposit has no gas and no fuel can be
+ * sent now (fuel key or caps not configured, the fuel arrived short);
+ * `FUEL_PENDING` — the fuel for this send is signed and waits for a block;
+ * `FUEL_LIMIT_REACHED` — the fuel single-send or 24-hour cap stops it;
+ * `FUEL_WALLET_LOW` — the fuel wallet cannot pay the fuel.
+ */
+export type DeferralReason =
+  | 'FEE_ABOVE_CAP'
+  | 'ETH_PRICE_UNAVAILABLE'
+  | 'FUEL_REQUIRED'
+  | 'FUEL_PENDING'
+  | 'FUEL_LIMIT_REACHED'
+  | 'FUEL_WALLET_LOW'
+  | 'HOT_WALLET_GAS_LOW';
+
 export class TransferDeferredError extends SidecarError {
   constructor(
     message: string,
-    public readonly reason:
-      | 'FEE_ABOVE_CAP'
-      | 'ETH_PRICE_UNAVAILABLE'
-      | 'FUEL_REQUIRED'
-      | 'HOT_WALLET_GAS_LOW',
+    public readonly reason: DeferralReason,
     public waitingSince: number | null = null,
   ) {
     super(message, reason, true);
@@ -153,6 +166,22 @@ export function capWeiPerTransaction(
   );
 }
 
+/**
+ * T153 — the fuel send's share of a deposit flow's cap, wei: capUsd ÷ ETH
+ * price × 21,000 ÷ reference gas, rounded down. With
+ * {@link capWeiPerTransaction} it splits the one 0.50 $ of a sweep (or a
+ * refund before the sweep) between its two transactions; the two shares
+ * never add up to more than the cap (08 §3.7.7, T142).
+ */
+export function fuelCapWei(
+  capUsdMicros: bigint,
+  flow: 'SWEEP' | 'REFUND',
+  ethUsdMicros: bigint,
+): bigint {
+  if (capUsdMicros <= 0n || ethUsdMicros <= 0n) return 0n;
+  return (capUsdMicros * WEI_PER_ETH * FUEL_SEND_GAS) / (CAP_REFERENCE_GAS[flow] * ethUsdMicros);
+}
+
 /** Highest `maxFeePerGas` a transaction of `gasLimit` may carry under a budget: ⌊budget ÷ gasLimit⌋. */
 export function feeCeilingPerGas(capWei: bigint, gasLimit: bigint): bigint {
   return gasLimit > 0n ? capWei / gasLimit : 0n;
@@ -169,7 +198,7 @@ export async function cappedMaxFee(
   capUsdMicros: bigint,
   prices: EthUsdPriceSource,
   gasLimit: bigint,
-): Promise<{ maxFeePerGas: bigint; capWei: bigint }> {
+): Promise<{ maxFeePerGas: bigint; capWei: bigint; ethUsdMicros: bigint }> {
   const ethUsd = await prices.ethUsdMicros();
   if (ethUsd === null || ethUsd <= 0n) {
     throw new TransferDeferredError(
@@ -189,5 +218,7 @@ export async function cappedMaxFee(
   return {
     maxFeePerGas: quote.maxFeePerGas < ceiling ? quote.maxFeePerGas : ceiling,
     capWei,
+    // T153: the fuel send's share is priced with the SAME reading.
+    ethUsdMicros: ethUsd,
   };
 }

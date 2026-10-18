@@ -197,6 +197,12 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
       hotWalletKey: null,
       hotWalletAddress: null,
       coldWalletAddress: null,
+      fuelWalletKey: null,
+      walletBalances: {
+        fuelFloorWei: 6n * 10n ** 16n,
+        hotFloorWei: 6n * 10n ** 16n,
+        intervalMs: 300_000,
+      },
       transfers: {
         journalDir: dir,
         maxSingleTransferUnits: null,

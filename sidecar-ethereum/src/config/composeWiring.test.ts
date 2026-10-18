@@ -62,6 +62,10 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     ['ETHEREUM_FUEL_MAX_SINGLE_ETH', 'ETHEREUM_FUEL_MAX_SINGLE_ETH'],
     ['ETHEREUM_FUEL_MAX_DAILY_ETH', 'ETHEREUM_FUEL_MAX_DAILY_ETH'],
     ['ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS'],
+    // T153 — the fuel and hot wallet ETH floors (parity with the backend settings).
+    ['ETHEREUM_FUEL_WALLET_MIN_ETH', 'ETHEREUM_FUEL_WALLET_MIN_ETH'],
+    ['ETHEREUM_HOT_WALLET_MIN_ETH', 'ETHEREUM_HOT_WALLET_MIN_ETH'],
+    ['ETHEREUM_WALLET_BALANCE_INTERVAL_MS', 'ETHEREUM_WALLET_BALANCE_INTERVAL_MS'],
     // T152 düzeltme turu 2 — operator acknowledgement of nonces the journal does not hold.
     ['ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES', 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'],
   ])('passes %s from .env (%s)', (inside, outside) => {

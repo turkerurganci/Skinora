@@ -131,7 +131,10 @@ export function setTransferWaitSource(source: TransferWaitSource): void {
  * Longest current wait, seconds, by kind: `fee_cap` — a sweep / payout / cold
  * transfer not signed because the fee is above the cap or the ETH price is
  * missing (08 §3.7.7, 3-hour alarm); `unmined` — a signed transfer not yet in a
- * block; `gas` — a sender without ETH for gas (fuel, T153).
+ * block; `gas` — a sender without ETH for gas (a deposit waiting for its
+ * fuel or for a fuel that cannot be sent, T153; the hot wallet out of ETH) —
+ * no alarm of its own: `ethereum-wallet-eth-low` and the backend's
+ * `outbound-transfer-stuck` see those.
  */
 export const transferWaitSeconds = getOrCreateGauge({
   name: 'skinora_ethereum_transfer_wait_seconds',
@@ -194,6 +197,45 @@ export const journalAckAheadOfChain = getOrCreateGauge({
     const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
     if (source) this.set(source.journalAckAheadOfChain());
   },
+});
+
+// ---- Platform wallet ETH (T153 — 08 §3.7.5) -------------------------------
+
+/**
+ * ETH balance of the fuel and hot wallets (in ETH, gwei precision), read
+ * every `ETHEREUM_WALLET_BALANCE_INTERVAL_MS`. Alert `ethereum-wallet-eth-low`
+ * divides it by {@link walletEthFloor}. Not set for a wallet whose key is not
+ * mounted.
+ */
+export const walletEthBalance = getOrCreateGauge({
+  name: 'skinora_ethereum_wallet_eth_balance',
+  help: 'ETH balance of an Ethereum platform wallet (fuel | hot), in ETH',
+  labelNames: ['wallet'] as const,
+});
+
+/**
+ * The floor each wallet is held to (`ETHEREUM_FUEL_WALLET_MIN_ETH` /
+ * `ETHEREUM_HOT_WALLET_MIN_ETH`, 0.06 — parity with the backend's
+ * `blockchain.ethereum.*_wallet_eth_balance_minimum`, DEPLOY_RUNBOOK §D).
+ */
+export const walletEthFloor = getOrCreateGauge({
+  name: 'skinora_ethereum_wallet_eth_floor',
+  help: 'ETH floor below which an Ethereum platform wallet raises an alarm, in ETH',
+  labelNames: ['wallet'] as const,
+});
+
+/** Balance reads of a platform wallet that failed (the last value is kept). */
+export const walletBalanceReadFailuresTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_wallet_balance_read_failures_total',
+  help: 'Failed ETH balance reads of an Ethereum platform wallet',
+  labelNames: ['wallet'] as const,
+});
+
+/** Fuel sends signed (T153), by the flow they pay for (sweep | refund). */
+export const fuelSendsTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_fuel_sends_total',
+  help: 'Fuel (gas top-up) sends the Ethereum service signed, by the flow they pay for',
+  labelNames: ['flow'] as const,
 });
 
 // --- T151 — payment monitor, reconciliation, USDT status (08 §3.7.4, §3.7.1) ---

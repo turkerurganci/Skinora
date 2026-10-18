@@ -1,7 +1,8 @@
-import { SigningKey, Transaction } from 'ethers';
+import { SigningKey, Transaction, computeAddress } from 'ethers';
 import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { logger } from '../logger.js';
+import { fuelSendsTotal } from '../metrics.js';
 import {
   RpcError,
   isExecutionRevert,
@@ -12,16 +13,24 @@ import {
 import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { TOKEN_ABI, TRANSFER_TOPIC, addressTopic, encodeTransfer } from './erc20.js';
 import {
+  FUEL_SEND_GAS,
   TransferDeferredError,
   cappedMaxFee,
   feeCeilingPerGas,
+  fuelCapWei,
   quoteFees,
   type CappedFlow,
   type EthUsdPriceSource,
+  type FeeQuote,
 } from './FeePolicy.js';
 import type { FeeWaitTracker } from './FeeWaitTracker.js';
 import { KeyedMutex } from './KeyedMutex.js';
-import { assertSignableTokenTransfer, type SignerPolicyConfig } from './SignerPolicy.js';
+import {
+  assertSignableFuel,
+  assertSignableTokenTransfer,
+  type FuelIntent,
+  type SignerPolicyConfig,
+} from './SignerPolicy.js';
 import { assertUsdtSendable } from './TokenSafety.js';
 import type { TransferGuard } from './TransferGuard.js';
 import { recordFeeCapWei } from './TxJournal.js';
@@ -78,8 +87,29 @@ import { formatTokenUnits, toTokenUnits, usdToMicros } from './units.js';
  * estimate and an `eth_call` simulation from the sender (a revert — e.g. a
  * blacklisted SENDER — refuses; any other node error is transient), the fee
  * cap per transaction (sweep / payout / refund / cold wait above it), the
- * sender's ETH for gas (a deposit without fuel waits for T153) and the
- * journal-behind-chain check.
+ * journal-behind-chain check and the sender's ETH for gas.
+ * </para>
+ *
+ * <para>
+ * <b>Fuel (T153, 08 §3.7.5).</b> A deposit pays its own gas in ETH it does
+ * not hold, so a sweep or a refund before the sweep is preceded by a fuel
+ * send from the fuel wallet — and only by this path: there is no fuel
+ * endpoint. When every check above has passed and the deposit (after what
+ * its other sends and other requests' unspent fuel reserve) holds less than
+ * the send's worst-case fee (`gasLimit × maxFeePerGas`), the fuel key signs
+ * <b>exactly the missing amount</b> to the deposit — re-derived from this
+ * service's seed, never a platform wallet — under its own journal id
+ * (`fuel:<request id>`: one fuel per request, ever; a retry, a parallel tick
+ * or a restart finds it), within its share of the fee cap (21,000 of the
+ * flow's reference gas), the fuel single-send and 24-hour caps and the fuel
+ * wallet's balance. The request answers 503 `FUEL_PENDING`; the backend asks
+ * again a minute later and the token send is signed only when the fuel is
+ * <b>in a block at or below the priced head</b> (and so in the deposit's
+ * balance) — never before. A fuel mined but short of a later, higher fee is
+ * spent as it is (the send is signed at the fee it affords) or the send
+ * waits; nothing tops it up. Any reason fuel cannot go out is a wait (503
+ * `deferred`), never a refusal: a refused sweep would be re-queued with a new
+ * id and fuelled twice.
  * </para>
  */
 
@@ -155,6 +185,22 @@ export interface TransferStatus {
   readonly realizedFeeWei: string | null;
 }
 
+/** T153 — the fuel wallet (08 §3.7.5). */
+export interface FuelDeps {
+  /** Fuel wallet signing key, or null while not provisioned (then every fuel waits). Never logged. */
+  readonly key: string | null;
+  /** `ETHEREUM_FUEL_MAX_SINGLE_ETH` / `_DAILY_ETH` in wei; null = no fuel (the send waits). */
+  readonly maxSingleWei: bigint | null;
+  readonly maxDailyWei: bigint | null;
+  /** Canonical cold wallet (with the hot wallet and the fuel wallet itself: never a fuel destination). */
+  readonly coldWalletAddress: string | null;
+  /** A fuel transaction seen in a block — the reconciliation's FuelLedger (T151) is fed from here. */
+  readonly onMined?: (deposit: string, wei: bigint, block: bigint, hash: string) => void;
+}
+
+/** 24 hours, for the fuel daily cap (counted from the journal — T152 karar (xii)). */
+export const FUEL_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export interface TransferServiceDeps {
   rpc: Pick<
     EthereumRpcClient,
@@ -172,7 +218,7 @@ export interface TransferServiceDeps {
   journal: TxJournal;
   feeWaits: FeeWaitTracker;
   guard: TransferGuard;
-  wallet: Pick<EthereumHdWallet, 'deriveSigner'>;
+  wallet: Pick<EthereumHdWallet, 'deriveSigner' | 'derive'>;
   policy: SignerPolicyConfig;
   /** Hot wallet signing key, or null while not provisioned. Never logged. */
   hotWalletKey: string | null;
@@ -192,7 +238,22 @@ export interface TransferServiceDeps {
    * address → the account nonce up to which the chain is accounted for.
    */
   acknowledgedNonces?: ReadonlyMap<string, number>;
+  /** T153 — absent: no fuel is ever sent (a deposit without ETH waits, `FUEL_REQUIRED`). */
+  fuel?: FuelDeps;
   now?: () => number;
+}
+
+/** What the deposit's send needs, as priced in signNew (T153). */
+interface FuelContext {
+  readonly head: BlockHeader;
+  readonly quote: FeeQuote;
+  readonly gasLimit: bigint;
+  /** The token send's fee ceiling per gas (capped). */
+  readonly maxFeePerGas: bigint;
+  /** ETH on the deposit not reserved by its other sends (≥ 0). */
+  readonly available: bigint;
+  /** ETH price of the cap conversion (null: uncapped — never for a deposit flow). */
+  readonly ethUsdMicros: bigint | null;
 }
 
 interface SendPlan {
@@ -285,9 +346,12 @@ export class TransferService {
   private readonly behind = new Map<string, JournalBehind>();
   private readonly ackAhead = new Map<string, AcknowledgementAhead>();
   private readonly now: () => number;
+  /** Canonical fuel wallet address (from its key), or null. */
+  private readonly fuelAddress: string | null;
 
   constructor(private readonly deps: TransferServiceDeps) {
     this.now = deps.now ?? (() => Date.now());
+    this.fuelAddress = deps.fuel?.key ? canonicalAddress(computeAddress(deps.fuel.key)) : null;
   }
 
   // ---- Requests ---------------------------------------------------------------
@@ -511,6 +575,24 @@ export class TransferService {
     return longest;
   }
 
+  /** T153 — the fuel wallet's address (from its key), or null while not provisioned. */
+  fuelWalletAddress(): string | null {
+    return this.fuelAddress;
+  }
+
+  /** T153 — fuel signed in the last 24 h, wei (what the daily cap counts). */
+  fuelSpentLast24hWei(excludeId: string | null = null): bigint {
+    const since = this.now() - FUEL_DAILY_WINDOW_MS;
+    let sum = 0n;
+    for (const record of this.deps.journal.all()) {
+      // Conservative: a reverted or conflicted fuel still counts — it was signed.
+      if (record.purpose !== 'FUEL' || record.createdAt < since || record.id === excludeId)
+        continue;
+      sum += BigInt(record.amountUnits);
+    }
+    return sum;
+  }
+
   nonceConflictCount(): number {
     return this.deps.journal.all().filter((r) => r.conflict !== null).length;
   }
@@ -541,6 +623,7 @@ export class TransferService {
       };
       if (JSON.stringify(mined) !== JSON.stringify(record.mined)) {
         this.deps.journal.put({ ...record, mined, conflictSuspectedAt: null });
+        this.noteFuelMined(record, receipt);
         if (final) {
           logger.info(
             { id, hash: mined.hash, block: mined.blockNumber, status: mined.status },
@@ -636,6 +719,7 @@ export class TransferService {
 
     let maxFeePerGas = quote.maxFeePerGas;
     let capWei: bigint | null = null;
+    let ethUsdMicros: bigint | null = null;
     if (plan.capFlow !== null && plan.capUsdMicros !== null) {
       try {
         const capped = await cappedMaxFee(
@@ -647,26 +731,42 @@ export class TransferService {
         );
         maxFeePerGas = capped.maxFeePerGas;
         capWei = capped.capWei;
+        ethUsdMicros = capped.ethUsdMicros;
       } catch (err) {
         throw this.deferral(plan, err);
       }
     }
-    const priorityFee =
-      quote.priorityFeePerGas < maxFeePerGas ? quote.priorityFeePerGas : maxFeePerGas;
+    // The sender's nonce first: a deposit whose journal is behind the chain
+    // is never fuelled (the fuel would only wait there).
+    const nonce = await this.nextNonce(plan.from, head.number);
 
     const balance = await rpc.getBalance(plan.from, head.number);
-    const needed = gasLimit * maxFeePerGas;
-    if (balance < needed) {
+    if (plan.signer === 'DEPOSIT') {
+      // T153: what the deposit's other unmined sends (and other requests'
+      // fuel not yet spent) reserve is not this send's gas.
+      const reserved = await this.reservedOn(plan.from, plan.id, head.number);
+      const available = balance > reserved ? balance - reserved : 0n;
+      if (available < gasLimit * maxFeePerGas) {
+        maxFeePerGas = await this.fuelFor(plan, {
+          head,
+          quote,
+          gasLimit,
+          maxFeePerGas,
+          available,
+          ethUsdMicros,
+        });
+      }
+    } else if (balance < gasLimit * maxFeePerGas) {
       throw this.deferral(
         plan,
         new TransferDeferredError(
-          `${plan.signer === 'DEPOSIT' ? 'Deposit' : 'Hot wallet'} ${plan.from} holds ${balance} wei, the send needs up to ${needed} wei of gas — it waits (${plan.signer === 'DEPOSIT' ? 'fuel, T153' : 'hot wallet ETH top-up, 08 §3.7.5'}).`,
-          plan.signer === 'DEPOSIT' ? 'FUEL_REQUIRED' : 'HOT_WALLET_GAS_LOW',
+          `Hot wallet ${plan.from} holds ${balance} wei, the send needs up to ${gasLimit * maxFeePerGas} wei of gas — it waits (hot wallet ETH top-up, 08 §3.7.5).`,
+          'HOT_WALLET_GAS_LOW',
         ),
       );
     }
-
-    const nonce = await this.nextNonce(plan.from, head.number);
+    const priorityFee =
+      quote.priorityFeePerGas < maxFeePerGas ? quote.priorityFeePerGas : maxFeePerGas;
 
     const tx = Transaction.from({
       type: 2,
@@ -976,8 +1076,10 @@ export class TransferService {
     if (maxFee * 10n < oldMax * 11n || tip * 10n < oldTip * 11n) {
       return false; // At the cap: it waits for the base fee to fall (08 §3.7.7).
     }
+    const isFuel = record.purpose === 'FUEL';
+    const value = isFuel ? BigInt(record.amountUnits) : 0n;
     const balance = await this.deps.rpc.getBalance(record.from, head.number);
-    if (balance < gasLimit * maxFee) {
+    if (balance < value + gasLimit * maxFee) {
       logger.warn(
         { id: record.id, from: record.from, balance: String(balance) },
         'Fee bump skipped — sender has too little ETH for the higher fee',
@@ -991,24 +1093,26 @@ export class TransferService {
       gasLimit,
       maxFeePerGas: maxFee,
       maxPriorityFeePerGas: tip,
-      to: record.contract ?? '',
-      value: 0n,
-      data: encodeTransfer(record.recipient, BigInt(record.amountUnits)),
+      to: isFuel ? record.recipient : (record.contract ?? ''),
+      value,
+      data: isFuel ? '0x' : encodeTransfer(record.recipient, BigInt(record.amountUnits)),
       accessList: [],
     });
-    const attempt = this.sign(
-      tx,
-      {
-        signer: record.signer,
-        depositIndex: record.depositIndex,
-        from: record.from,
-        contract: record.contract ?? '',
-        recipient: record.recipient,
-        amountUnits: BigInt(record.amountUnits),
-        refundType: (record.refundType as RefundType | null) ?? null,
-      },
-      capWei,
-    );
+    const attempt = isFuel
+      ? this.bumpFuel(tx, record, capWei)
+      : this.sign(
+          tx,
+          {
+            signer: record.signer,
+            depositIndex: record.depositIndex,
+            from: record.from,
+            contract: record.contract ?? '',
+            recipient: record.recipient,
+            amountUnits: BigInt(record.amountUnits),
+            refundType: (record.refundType as RefundType | null) ?? null,
+          },
+          capWei,
+        );
     const bumped: JournalRecord = { ...record, attempts: [...record.attempts, attempt] };
     this.deps.journal.put(bumped);
     logger.warn(
@@ -1025,6 +1129,39 @@ export class TransferService {
     return true;
   }
 
+  /**
+   * A fuel's fee bump: the same value to the same deposit at the same nonce,
+   * re-checked by the fuel policy (its own amount is not counted twice
+   * against the daily cap — the bump replaces it).
+   */
+  private bumpFuel(tx: Transaction, record: JournalRecord, capWei: bigint | null): JournalAttempt {
+    const fuel = this.deps.fuel;
+    if (!fuel?.key || this.fuelAddress === null || !sameAddress(record.from, this.fuelAddress)) {
+      throw new SidecarError(
+        'The fuel key that signed this record is not provisioned — no bump.',
+        'FUEL_WALLET_NOT_CONFIGURED',
+        false,
+      );
+    }
+    const depositIndex = record.depositIndex ?? -1;
+    return this.signFuel(tx, fuel.key, this.fuelAddress, {
+      recipient: record.recipient,
+      amountWei: BigInt(record.amountUnits),
+      isOwnDeposit: (address) =>
+        depositIndex >= 0 && sameAddress(this.deps.wallet.derive(depositIndex).address, address),
+      maxSingleWei: fuel.maxSingleWei,
+      maxDailyWei: fuel.maxDailyWei,
+      spentLast24hWei: this.fuelSpentLast24hWei(record.id),
+      maxForSendWei: BigInt(record.amountUnits),
+      platformAddresses: [
+        this.deps.hotWalletAddress ?? '',
+        fuel.coldWalletAddress ?? '',
+        this.fuelAddress,
+      ],
+      feeCapWei: capWei ?? 0n,
+    });
+  }
+
   private async findMined(record: JournalRecord): Promise<TransactionReceipt | null> {
     for (let i = record.attempts.length - 1; i >= 0; i--) {
       const receipt = await this.deps.rpc.getTransactionReceipt(record.attempts[i].hash);
@@ -1039,6 +1176,353 @@ export class TransferService {
     if (finalized === null || receipt.blockNumber > finalized) return false;
     const header = await this.deps.rpc.getBlockHeader(receipt.blockNumber);
     return header.hash.toLowerCase() === receipt.blockHash.toLowerCase();
+  }
+
+  // ---- Fuel (T153 — 08 §3.7.5) -----------------------------------------------
+
+  /** `transfer:<guid>` → `fuel:<guid>` — the one fuel record a request may ever have. */
+  private static fuelIdOf(requestId: string): string {
+    return `fuel:${requestId.slice(requestId.indexOf(':') + 1)}`;
+  }
+
+  /**
+   * ETH on the deposit that is not this request's to spend: the worst-case
+   * fee of the deposit's own sends not yet in a block (the node holds that
+   * much back), and the fuel other requests sent here that is already in the
+   * balance but whose own send is not signed yet (it is theirs — taking it
+   * would leave their send short, with nothing to top it up).
+   */
+  private async reservedOn(deposit: string, requestId: string, head: bigint): Promise<bigint> {
+    let reserved = 0n;
+    for (const record of this.deps.journal.bySender(deposit)) {
+      if (record.mined || record.conflict) continue;
+      const latest = record.attempts[record.attempts.length - 1];
+      reserved += BigInt(record.gasLimit) * BigInt(latest.maxFeePerGas);
+    }
+    const own = TransferService.fuelIdOf(requestId);
+    for (const fuel of this.deps.journal.all()) {
+      if (fuel.purpose !== 'FUEL' || fuel.id === own || fuel.recipient !== deposit) continue;
+      if (this.deps.journal.get(`transfer:${fuel.id.slice('fuel:'.length)}`)) continue;
+      if (fuel.conflict) continue;
+      const receipt = fuel.mined ? null : await this.findMined(fuel);
+      const inBlock = fuel.mined
+        ? fuel.mined.status === 1 && BigInt(fuel.mined.blockNumber) <= head
+        : receipt !== null && receipt.status === 1 && receipt.blockNumber <= head;
+      if (inBlock) reserved += BigInt(fuel.amountUnits);
+    }
+    return reserved;
+  }
+
+  /**
+   * The deposit cannot pay the send's fee. Either this request's fuel is
+   * already in a block — then the send is signed at the fee it affords, if
+   * that still clears the base fee and tip (returned) — or the request waits:
+   * its fuel is signed now (`FUEL_PENDING`), is still waiting for a block, or
+   * cannot be sent. Never returns without the fuel being in a block.
+   */
+  private async fuelFor(plan: SendPlan, ctx: FuelContext): Promise<bigint> {
+    const fuelId = TransferService.fuelIdOf(plan.id);
+    const existing = this.deps.journal.get(fuelId);
+    if (!existing) {
+      await this.sendFuel(plan, fuelId, ctx);
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `Fuel for ${plan.from} is signed and broadcast — the ${plan.purpose.toLowerCase()} is signed once it is in a block (08 §3.7.5).`,
+          'FUEL_PENDING',
+        ),
+      );
+    }
+    if (existing.conflict) {
+      logger.error(
+        { id: plan.id, fuelId, deposit: plan.from },
+        'Fuel for this send is in NONCE CONFLICT — it will not arrive; the send waits (investigate the fuel key, 08 §3.7.6).',
+      );
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `The fuel for ${plan.from} is in nonce conflict — the send waits (08 §3.7.6).`,
+          'FUEL_REQUIRED',
+        ),
+      );
+    }
+    const receipt = await this.findMined(existing);
+    if (!receipt || receipt.blockNumber > ctx.head.number) {
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `Fuel ${existing.attempts[existing.attempts.length - 1].hash} for ${plan.from} is not in a block yet — the send waits for it (08 §3.7.5).`,
+          'FUEL_PENDING',
+        ),
+      );
+    }
+    this.noteFuelMined(existing, receipt);
+    if (receipt.status !== 1) {
+      logger.error(
+        { id: plan.id, fuelId, hash: receipt.transactionHash, deposit: plan.from },
+        'Fuel transaction reverted — the deposit has no gas; the send waits (investigate).',
+      );
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `The fuel for ${plan.from} reverted — the send waits.`,
+          'FUEL_REQUIRED',
+        ),
+      );
+    }
+    // Fuel in a block, but today's fee asks more than it carries: spend it
+    // as it is when that still clears base fee + tip; nothing tops it up.
+    const affordable = ctx.available / ctx.gasLimit;
+    if (affordable >= ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas) {
+      logger.warn(
+        {
+          id: plan.id,
+          deposit: plan.from,
+          available: ctx.available.toString(),
+          asked: (ctx.gasLimit * ctx.maxFeePerGas).toString(),
+          maxFeePerGas: affordable.toString(),
+        },
+        'Deposit fuel is short of the quoted fee ceiling — signing at the fee it affords',
+      );
+      return affordable;
+    }
+    logger.warn(
+      {
+        id: plan.id,
+        deposit: plan.from,
+        available: ctx.available.toString(),
+        needsPerGas: (ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas).toString(),
+      },
+      "Deposit fuel is in a block but below today's base fee + tip — the send waits for the fee to fall",
+    );
+    throw this.deferral(
+      plan,
+      new TransferDeferredError(
+        `The fuel on ${plan.from} (${ctx.available} wei) no longer covers today's fee — the send waits for the base fee to fall (one fuel per send, 08 §3.7.5).`,
+        'FUEL_REQUIRED',
+      ),
+    );
+  }
+
+  /**
+   * Signs, journals and broadcasts the one fuel of a request: the missing
+   * amount, from the fuel wallet, to the re-derived deposit. Every reason it
+   * cannot is a wait ({@link TransferDeferredError}), so a sweep or refund is
+   * never refused (→ backend FAILED → re-queued with a new id → fuelled twice)
+   * for want of fuel.
+   */
+  private async sendFuel(plan: SendPlan, fuelId: string, ctx: FuelContext): Promise<void> {
+    const fuel = this.deps.fuel;
+    const wait = (
+      message: string,
+      reason: 'FUEL_REQUIRED' | 'FUEL_LIMIT_REACHED' | 'FUEL_WALLET_LOW' | 'FEE_ABOVE_CAP',
+    ) => this.deferral(plan, new TransferDeferredError(message, reason));
+    if (!fuel || !fuel.key || this.fuelAddress === null) {
+      throw wait(
+        `Deposit ${plan.from} has no gas and the fuel wallet is not provisioned (ethereum_fuel_wallet_private_key) — the send waits.`,
+        'FUEL_REQUIRED',
+      );
+    }
+    if (fuel.maxSingleWei === null || fuel.maxDailyWei === null) {
+      throw wait(
+        'Fuel caps are not configured (ETHEREUM_FUEL_MAX_SINGLE_ETH / _DAILY_ETH) — no fuel, the send waits (fail closed).',
+        'FUEL_REQUIRED',
+      );
+    }
+    if (
+      plan.depositIndex === null ||
+      plan.capUsdMicros === null ||
+      (plan.capFlow !== 'SWEEP' && plan.capFlow !== 'REFUND') ||
+      ctx.ethUsdMicros === null
+    ) {
+      throw wait(`No fee cap for the fuel of ${plan.id} — the send waits.`, 'FUEL_REQUIRED');
+    }
+    const fuelKey = fuel.key;
+    const fuelAddress = this.fuelAddress;
+    const maxSingleWei = fuel.maxSingleWei;
+    const maxDailyWei = fuel.maxDailyWei;
+    const depositIndex = plan.depositIndex;
+    // The token send's whole fee budget; fuel is what the deposit lacks of it.
+    const sendNeeds = ctx.gasLimit * ctx.maxFeePerGas;
+    const amount = sendNeeds - ctx.available;
+    // The fuel send's own share of the one cap (21,000 of the reference gas),
+    // priced with the same ETH reading as the token send's share.
+    const capWei = fuelCapWei(plan.capUsdMicros, plan.capFlow, ctx.ethUsdMicros);
+    const ceiling = feeCeilingPerGas(capWei, FUEL_SEND_GAS);
+    if (ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas > ceiling) {
+      throw wait(
+        `Fuel send ${FUEL_SEND_GAS} gas × ${ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas} wei/gas is above its share of the cap ${capWei} wei — no fuel, the send waits (08 §3.7.7).`,
+        'FEE_ABOVE_CAP',
+      );
+    }
+    const maxFee = ctx.quote.maxFeePerGas < ceiling ? ctx.quote.maxFeePerGas : ceiling;
+    const tip = ctx.quote.priorityFeePerGas < maxFee ? ctx.quote.priorityFeePerGas : maxFee;
+    if (amount > maxSingleWei) {
+      logger.error(
+        {
+          id: plan.id,
+          deposit: plan.from,
+          amount: amount.toString(),
+          cap: maxSingleWei.toString(),
+        },
+        'Fuel above ETHEREUM_FUEL_MAX_SINGLE_ETH — not sent; the send waits',
+      );
+      throw wait(
+        `Fuel ${amount} wei for ${plan.from} is above the single-send cap ${maxSingleWei} wei — the send waits.`,
+        'FUEL_LIMIT_REACHED',
+      );
+    }
+
+    await this.locks.run(fuelAddress, async () => {
+      const spent = this.fuelSpentLast24hWei();
+      if (spent + amount > maxDailyWei) {
+        logger.error(
+          {
+            id: plan.id,
+            spent: spent.toString(),
+            amount: amount.toString(),
+            cap: maxDailyWei.toString(),
+          },
+          'Fuel would exceed ETHEREUM_FUEL_MAX_DAILY_ETH — not sent; the send waits',
+        );
+        throw wait(
+          `Fuel in 24 h would reach ${spent + amount} wei, above the daily cap ${maxDailyWei} wei — the send waits.`,
+          'FUEL_LIMIT_REACHED',
+        );
+      }
+      // The fuel wallet's own unmined fuel is still in its balance on chain.
+      let reserved = 0n;
+      for (const record of this.deps.journal.bySender(fuelAddress)) {
+        if (record.mined || record.conflict) continue;
+        const latest = record.attempts[record.attempts.length - 1];
+        reserved +=
+          BigInt(record.amountUnits) + BigInt(record.gasLimit) * BigInt(latest.maxFeePerGas);
+      }
+      const balance = await this.deps.rpc.getBalance(fuelAddress, ctx.head.number);
+      const needed = amount + FUEL_SEND_GAS * maxFee;
+      if (balance < reserved + needed) {
+        logger.error(
+          {
+            fuelWallet: fuelAddress,
+            balance: balance.toString(),
+            reserved: reserved.toString(),
+            needed: needed.toString(),
+          },
+          'FUEL WALLET LOW — cannot fuel a deposit; the send waits (top up the fuel wallet, DEPLOY_RUNBOOK §D)',
+        );
+        throw wait(
+          `Fuel wallet holds ${balance} wei (${reserved} reserved), the fuel needs ${needed} wei — the send waits.`,
+          'FUEL_WALLET_LOW',
+        );
+      }
+      const nonce = await this.nextNonce(fuelAddress, ctx.head.number);
+      const tx = Transaction.from({
+        type: 2,
+        chainId: this.deps.policy.chainId,
+        nonce,
+        gasLimit: FUEL_SEND_GAS,
+        maxFeePerGas: maxFee,
+        maxPriorityFeePerGas: tip,
+        to: plan.from,
+        value: amount,
+        data: '0x',
+        accessList: [],
+      });
+      const attempt = this.signFuel(tx, fuelKey, fuelAddress, {
+        recipient: plan.from,
+        amountWei: amount,
+        isOwnDeposit: (address) =>
+          sameAddress(this.deps.wallet.derive(depositIndex).address, address),
+        maxSingleWei: maxSingleWei,
+        maxDailyWei: maxDailyWei,
+        spentLast24hWei: spent,
+        maxForSendWei: sendNeeds,
+        platformAddresses: [
+          this.deps.hotWalletAddress ?? '',
+          fuel.coldWalletAddress ?? '',
+          fuelAddress,
+        ],
+        feeCapWei: capWei,
+      });
+      const record: JournalRecord = {
+        id: fuelId,
+        purpose: 'FUEL',
+        refundType: null,
+        signer: 'FUEL',
+        from: fuelAddress,
+        depositIndex,
+        contract: null,
+        token: null,
+        recipient: plan.from,
+        amountUnits: amount.toString(),
+        nonce,
+        gasLimit: FUEL_SEND_GAS.toString(),
+        feeCapWei: capWei.toString(),
+        attempts: [attempt],
+        createdAt: this.now(),
+        lastBroadcastAt: null,
+        lastBroadcastError: null,
+        mined: null,
+        conflictSuspectedAt: null,
+        conflict: null,
+      };
+      // Durable BEFORE broadcast, like every send (08 §3.7.6).
+      this.deps.journal.put(record);
+      logger.info(
+        {
+          id: fuelId,
+          forRequest: plan.id,
+          purpose: plan.purpose,
+          from: fuelAddress,
+          to: plan.from,
+          wei: amount.toString(),
+          nonce,
+          hash: attempt.hash,
+          maxFeePerGas: attempt.maxFeePerGas,
+          capWei: capWei.toString(),
+        },
+        'Fuel signed and journalled',
+      );
+      fuelSendsTotal.inc({ flow: plan.purpose.toLowerCase() });
+      await this.broadcast(record, attempt);
+    });
+  }
+
+  /** The fuel key's one kind of transaction: policy on the exact object, signature, sender re-check. */
+  private signFuel(
+    tx: Transaction,
+    key: string,
+    fuelAddress: string,
+    intent: FuelIntent,
+  ): JournalAttempt {
+    assertSignableFuel(tx, intent, this.deps.policy);
+    tx.signature = new SigningKey(key).sign(tx.unsignedHash);
+    const signed = Transaction.from(tx.serialized);
+    if (!sameAddress(signed.from, fuelAddress)) {
+      throw new SidecarError(
+        `Signed fuel recovers to ${signed.from}, expected ${fuelAddress} — refusing to broadcast.`,
+        'SIGNER_KEY_MISMATCH',
+        false,
+      );
+    }
+    return {
+      hash: (signed.hash ?? '').toLowerCase(),
+      raw: signed.serialized,
+      maxFeePerGas: (signed.maxFeePerGas ?? 0n).toString(),
+      maxPriorityFeePerGas: (signed.maxPriorityFeePerGas ?? 0n).toString(),
+      signedAt: this.now(),
+    };
+  }
+
+  /** A fuel transaction in a block feeds the reconciliation's FuelLedger (T151: not an ETH alarm). */
+  private noteFuelMined(record: JournalRecord, receipt: TransactionReceipt): void {
+    if (record.purpose !== 'FUEL' || receipt.status !== 1) return;
+    this.deps.fuel?.onMined?.(
+      record.recipient,
+      BigInt(record.amountUnits),
+      receipt.blockNumber,
+      receipt.transactionHash,
+    );
   }
 
   private deferral(plan: SendPlan, err: unknown): unknown {
