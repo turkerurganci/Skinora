@@ -249,19 +249,19 @@ public class AdminWalletOverviewTests : IntegrationTestBase
         Guid transactionId, BlockchainNetwork network, BlockchainTransactionStatus status,
         DateTime createdAt, string? hash = null,
         BlockchainTransactionType type = BlockchainTransactionType.SELLER_PAYOUT) => new()
-    {
-        Id = Guid.NewGuid(),
-        TransactionId = transactionId,
-        Network = network,
-        Type = type,
-        TxHash = hash,
-        FromAddress = network == BlockchainNetwork.TRON ? TronHot : EthHotLower,
-        ToAddress = network == BlockchainNetwork.TRON ? SellerWallet : EthColdLower,
-        Amount = 50m,
-        Token = StablecoinType.USDT,
-        Status = status,
-        CreatedAt = createdAt,
-    };
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            Network = network,
+            Type = type,
+            TxHash = hash,
+            FromAddress = network == BlockchainNetwork.TRON ? TronHot : EthHotLower,
+            ToAddress = network == BlockchainNetwork.TRON ? SellerWallet : EthColdLower,
+            Amount = 50m,
+            Token = StablecoinType.USDT,
+            Status = status,
+            CreatedAt = createdAt,
+        };
 
     private ColdWalletTransfer Cold(BlockchainNetwork network, decimal amount, string hash) => new()
     {

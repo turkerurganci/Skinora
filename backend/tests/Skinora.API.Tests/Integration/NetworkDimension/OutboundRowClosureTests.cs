@@ -708,18 +708,18 @@ public class OutboundRowClosureTests : IntegrationTestBase
 
         OutboundRowClosure Make(Guid rowId, string hash, OutboundRowClosureStatus status,
             Guid? decidedBy, string network = "ETHEREUM") => new()
-        {
-            Id = Guid.NewGuid(),
-            BlockchainTransactionId = rowId,
-            TxHash = hash,
-            Reason = GoodReason,
-            Status = status,
-            ProposedByAdminId = _alice.Id,
-            DecidedByAdminId = decidedBy,
-            DecidedAt = decidedBy is null ? null : Start.UtcDateTime,
-            CreatedAt = Start.UtcDateTime,
-            UpdatedAt = Start.UtcDateTime,
-        };
+            {
+                Id = Guid.NewGuid(),
+                BlockchainTransactionId = rowId,
+                TxHash = hash,
+                Reason = GoodReason,
+                Status = status,
+                ProposedByAdminId = _alice.Id,
+                DecidedByAdminId = decidedBy,
+                DecidedAt = decidedBy is null ? null : Start.UtcDateTime,
+                CreatedAt = Start.UtcDateTime,
+                UpdatedAt = Start.UtcDateTime,
+            };
 
         // Same admin on both sides.
         await using (var ctx = CreateContext())

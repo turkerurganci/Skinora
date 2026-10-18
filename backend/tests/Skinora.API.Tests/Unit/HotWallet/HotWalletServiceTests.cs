@@ -83,11 +83,11 @@ public sealed class HotWalletServiceTests : IDisposable
     [Fact]
     public async Task InitiateColdTransferAsync_ZeroOrNegativeAmount_ReturnsInvalidAmount()
     {
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             0m, StablecoinType.USDT, AdminId, CancellationToken.None);
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
 
-        outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             -1m, StablecoinType.USDT, AdminId, CancellationToken.None);
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
 
@@ -100,7 +100,7 @@ public sealed class HotWalletServiceTests : IDisposable
     public async Task InitiateColdTransferAsync_OutOfScaleAmount_ReturnsInvalidAmount()
     {
         // 7 fractional digits — exceeds scale 6
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             1.0000001m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
@@ -113,7 +113,7 @@ public sealed class HotWalletServiceTests : IDisposable
     {
         _walletAddresses.ColdWalletAddress = ColdWalletAddress;
 
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.HotWalletNotConfigured>(outcome);
@@ -126,7 +126,7 @@ public sealed class HotWalletServiceTests : IDisposable
     {
         _walletAddresses.HotWalletAddress = HotWalletAddress;
 
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.ColdWalletNotConfigured>(outcome);
@@ -141,7 +141,7 @@ public sealed class HotWalletServiceTests : IDisposable
         await ConfigureBothWalletsAsync();
         _sidecar.QueueUnavailable();
 
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.SidecarUnavailable>(outcome);
@@ -155,7 +155,7 @@ public sealed class HotWalletServiceTests : IDisposable
         await ConfigureBothWalletsAsync();
         _sidecar.QueueSuccess("0xtxhash-cold-001");
 
-        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON,
             250.5m, StablecoinType.USDC, AdminId, CancellationToken.None);
 
         var success = Assert.IsType<HotWalletColdTransferOutcome.Success>(outcome);
