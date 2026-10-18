@@ -39,17 +39,20 @@ public sealed class EnsurePaymentAddressJob
     private readonly AppDbContext _db;
     private readonly IPaymentAddressAllocator _allocator;
     private readonly IBlockchainServiceRegistry _services;
+    private readonly IBlockchainNetworkHealth _health;
     private readonly ILogger<EnsurePaymentAddressJob> _logger;
 
     public EnsurePaymentAddressJob(
         AppDbContext db,
         IPaymentAddressAllocator allocator,
         IBlockchainServiceRegistry services,
+        IBlockchainNetworkHealth health,
         ILogger<EnsurePaymentAddressJob> logger)
     {
         _db = db;
         _allocator = allocator;
         _services = services;
+        _health = health;
         _logger = logger;
     }
 
@@ -64,31 +67,47 @@ public sealed class EnsurePaymentAddressJob
         // with a chosen network is a candidate: the allocator never invents a
         // default network (11 §F8 T147 kararı xiii), and every accepted row
         // carries one (CK_Transactions_Network_Accepted).
-        var configured = _services.ConfiguredNetworks.ToList();
-        if (configured.Count == 0) return;
+        //
+        // T150 — and only networks not in a detected outage; each reachable
+        // network gets its own oldest-first batch, worked round-robin
+        // (NetworkWorkQueue): a configured-but-down service cannot hold back
+        // the other network's deposit addresses.
+        var reachable = _services.ReachableNetworks(_health);
+        if (reachable.Count == 0) return;
 
-        var pending = await _db.Set<Transaction>()
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .Where(t => !t.IsDeleted
-                && EligibleStates.Contains(t.Status)
-                && t.PaymentAddress == null
-                && t.Network != null
-                && configured.Contains(t.Network.Value))
-            .OrderBy(t => t.CreatedAt)
-            .Take(BatchSize)
-            .Select(t => t.Id)
-            .ToListAsync(cancellationToken);
+        var perNetwork = new List<IReadOnlyList<(BlockchainNetwork Network, Guid Id)>>();
+        foreach (var network in reachable)
+        {
+            var ids = await _db.Set<Transaction>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(t => !t.IsDeleted
+                    && EligibleStates.Contains(t.Status)
+                    && t.PaymentAddress == null
+                    && t.Network == network)
+                .OrderBy(t => t.CreatedAt)
+                .Take(BatchSize)
+                .Select(t => t.Id)
+                .ToListAsync(cancellationToken);
+            perNetwork.Add(ids.Select(id => (network, id)).ToList());
+        }
 
+        var pending = NetworkWorkQueue.Interleave(perNetwork);
         if (pending.Count == 0) return;
 
         _logger.LogInformation(
             "EnsurePaymentAddressJob found {Count} transactions awaiting address allocation",
             pending.Count);
 
+        // No per-run breaker here (unlike the transfer jobs): the allocator's
+        // SidecarUnavailable also covers a 400 for one transaction, which says
+        // nothing about the service, so one failure must not hold back the
+        // rest of the network's batch. Round-robin already keeps a slow
+        // network from delaying the other's allocations by more than its own
+        // calls, and the health probe takes a down service out within minutes.
         var succeeded = 0;
         var failed = 0;
-        foreach (var transactionId in pending)
+        foreach (var (_, transactionId) in pending)
         {
             cancellationToken.ThrowIfCancellationRequested();
 

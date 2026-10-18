@@ -109,4 +109,23 @@ public class OutboxMessage
     /// Required to be NULL in any other status.
     /// </summary>
     public DateTime? ProcessedAt { get; set; }
+
+    /// <summary>
+    /// Earliest UTC time the dispatcher retries a <see cref="OutboxMessageStatus.FAILED"/>
+    /// row (T150 — <c>OutboxNoBackoffOrDeadLetter</c>). Set on every failure from an
+    /// exponential backoff (<c>OutboxOptions.RetryBackoffBaseSeconds</c> ·
+    /// 2^(RetryCount−1), capped at <c>RetryBackoffMaxSeconds</c>). NULL on a
+    /// PENDING row, and on a FAILED row written before the column existed —
+    /// such a row is due immediately, which is how it was treated before.
+    ///
+    /// <para>
+    /// <b>Why.</b> FAILED rows used to be re-read on every poll, oldest first,
+    /// in the same batch as fresh ones: a configured-but-unreachable network
+    /// whose monitor-start handler throws filled the batch with its own
+    /// failures and starved every other event, TRON's included (T148
+    /// validation N1). Now a failed row waits for its turn and fresh rows are
+    /// read first (<c>OutboxDispatcher</c>).
+    /// </para>
+    /// </summary>
+    public DateTime? NextAttemptAt { get; set; }
 }

@@ -26,14 +26,19 @@ namespace Skinora.API.Outbox;
 /// deployments collapse to one (09 §13.4 tekillik garantisi).
 /// </para>
 /// <para>
-/// The batch query selects <c>PENDING</c> and <c>FAILED</c> rows together
-/// (06 §3.18 retry semantiği). Each row is deserialized using its persisted
-/// <see cref="OutboxMessage.EventType"/>, published via
+/// Each iteration reads the oldest <c>PENDING</c> rows first and then the
+/// <c>FAILED</c> rows whose <see cref="OutboxMessage.NextAttemptAt"/> has
+/// passed (06 §3.18 retry semantiği, T150). Each row is deserialized using its
+/// persisted <see cref="OutboxMessage.EventType"/>, published via
 /// <see cref="IPublisher.Publish(object, CancellationToken)"/>, and the
 /// status is flipped to <c>PROCESSED</c>. On exception the row's status is
 /// set to <c>FAILED</c>, <see cref="OutboxMessage.RetryCount"/> is
-/// incremented, and once the configured max retry is reached the
-/// <see cref="IOutboxAdminAlertSink"/> hook is invoked.
+/// incremented, the next attempt is pushed out by an exponential backoff
+/// (capped), and on the attempt that reaches the configured max retry the
+/// <see cref="IOutboxAdminAlertSink"/> hook is invoked — once. A failing row
+/// is never dropped: it keeps retrying at the capped backoff, because the
+/// events that fail this way (another network's monitor start while its
+/// service is down) must still be delivered when the service returns.
 /// </para>
 /// <para>
 /// Rescheduling is wrapped in a <c>try/finally</c> so an exception in the
@@ -53,6 +58,7 @@ public class OutboxDispatcher : IOutboxDispatcher
     private readonly IDistributedLockProvider _lockProvider;
     private readonly IBackgroundJobScheduler _jobScheduler;
     private readonly OutboxOptions _options;
+    private readonly TimeProvider _clock;
     private readonly ILogger<OutboxDispatcher> _logger;
 
     public OutboxDispatcher(
@@ -62,6 +68,7 @@ public class OutboxDispatcher : IOutboxDispatcher
         IDistributedLockProvider lockProvider,
         IBackgroundJobScheduler jobScheduler,
         IOptions<OutboxOptions> options,
+        TimeProvider clock,
         ILogger<OutboxDispatcher> logger)
     {
         _dbContext = dbContext;
@@ -70,6 +77,7 @@ public class OutboxDispatcher : IOutboxDispatcher
         _lockProvider = lockProvider;
         _jobScheduler = jobScheduler;
         _options = options.Value;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -120,9 +128,18 @@ public class OutboxDispatcher : IOutboxDispatcher
 
     private async Task ProcessBatchAsync()
     {
-        var batch = await _dbContext.OutboxMessages
-            .Where(m => m.Status == OutboxMessageStatus.PENDING
-                        || m.Status == OutboxMessageStatus.FAILED)
+        var now = _clock.GetUtcNow().UtcDateTime;
+
+        // T150 (OutboxNoBackoffOrDeadLetter, T148 validation N1). Fresh rows and
+        // retries are read separately. Before, PENDING and FAILED were one
+        // oldest-first batch re-read on every poll: enough failures — a
+        // configured-but-unreachable network's monitor starts, say — took every
+        // slot, and every other event (TRON's included) waited behind them for
+        // good. Now fresh rows come first and are dispatched first; a failed
+        // row is only read once its backoff has passed, into the slots fresh
+        // rows left plus RetrySlotsPerBatch kept for retries.
+        var fresh = await _dbContext.OutboxMessages
+            .Where(m => m.Status == OutboxMessageStatus.PENDING)
             // CreatedAt alone left ties undefined: rows published in one unit of
             // work share it, because DateTime.UtcNow resolves far coarser than
             // the gap between two Add calls. Sequence breaks those ties in
@@ -132,6 +149,20 @@ public class OutboxDispatcher : IOutboxDispatcher
             .Take(_options.BatchSize)
             .ToListAsync();
 
+        var retrySlots = Math.Max(_options.BatchSize - fresh.Count, _options.RetrySlotsPerBatch);
+        var due = await _dbContext.OutboxMessages
+            .Where(m => m.Status == OutboxMessageStatus.FAILED
+                        && (m.NextAttemptAt == null || m.NextAttemptAt <= now))
+            // Longest-waiting retry first (a pre-T150 row has no stamp and
+            // sorts first), so a few rows that fail fast cannot keep the slots
+            // from the rest of the failures; publish order breaks ties.
+            .OrderBy(m => m.NextAttemptAt)
+            .ThenBy(m => m.CreatedAt)
+            .ThenBy(m => m.Sequence)
+            .Take(retrySlots)
+            .ToListAsync();
+
+        var batch = fresh.Concat(due).ToList();
         if (batch.Count == 0)
             return;
 
@@ -162,24 +193,31 @@ public class OutboxDispatcher : IOutboxDispatcher
                 await _publisher.Publish(deserialized);
 
                 message.Status = OutboxMessageStatus.PROCESSED;
-                message.ProcessedAt = DateTime.UtcNow;
+                message.ProcessedAt = _clock.GetUtcNow().UtcDateTime;
                 message.ErrorMessage = null;
+                message.NextAttemptAt = null;
             }
             catch (Exception ex)
             {
                 message.Status = OutboxMessageStatus.FAILED;
                 message.ErrorMessage = Truncate(ex.ToString(), 2000);
                 message.RetryCount += 1;
+                var delay = RetryDelay(_options, message.RetryCount);
+                message.NextAttemptAt = _clock.GetUtcNow().UtcDateTime.Add(delay);
 
                 _logger.LogWarning(
                     ex,
-                    "Outbox event {EventId} ({EventType}) failed on attempt {RetryCount}/{MaxRetry}.",
+                    "Outbox event {EventId} ({EventType}) failed on attempt {RetryCount} (alert at {MaxRetry}); next attempt in {Delay}.",
                     message.Id,
                     message.EventType,
                     message.RetryCount,
-                    _options.MaxRetryCount);
+                    _options.MaxRetryCount,
+                    delay);
 
-                if (message.RetryCount >= _options.MaxRetryCount)
+                // Once, on the attempt that reaches the threshold — the row
+                // keeps retrying at the capped backoff afterwards, and an alert
+                // per retry would repeat the same news every 15 minutes.
+                if (message.RetryCount == _options.MaxRetryCount)
                 {
                     try
                     {
@@ -198,6 +236,21 @@ public class OutboxDispatcher : IOutboxDispatcher
         }
 
         await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Backoff before the next attempt of a row that has failed
+    /// <paramref name="retryCount"/> times: base · 2^(retryCount−1), capped.
+    /// </summary>
+    public static TimeSpan RetryDelay(OutboxOptions options, int retryCount)
+    {
+        var baseSeconds = Math.Max(1, options.RetryBackoffBaseSeconds);
+        var maxSeconds = Math.Max(baseSeconds, options.RetryBackoffMaxSeconds);
+        // 2^30 already exceeds any sane cap; clamp the exponent so the shift
+        // cannot overflow for a row that has failed for weeks.
+        var exponent = Math.Clamp(retryCount - 1, 0, 30);
+        var seconds = Math.Min((double)baseSeconds * (1L << exponent), maxSeconds);
+        return TimeSpan.FromSeconds(seconds);
     }
 
     private static string Truncate(string value, int maxLength)

@@ -57,6 +57,9 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
 
         builder.Property(x => x.ProcessedAt);
 
+        // T150 — retry backoff of a FAILED row (OutboxNoBackoffOrDeadLetter).
+        builder.Property(x => x.NextAttemptAt);
+
         // Publish ordinal within the producing unit of work. Defaults to 0 so
         // rows written before this column existed keep sorting purely by
         // CreatedAt — their relative order was never recorded and cannot be

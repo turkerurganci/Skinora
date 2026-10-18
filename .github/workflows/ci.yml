@@ -57,6 +57,7 @@ jobs:
       sidecar-steam: ${{ steps.filter.outputs['sidecar-steam'] }}
       sidecar-blockchain: ${{ steps.filter.outputs['sidecar-blockchain'] }}
       sidecar-fake: ${{ steps.filter.outputs['sidecar-fake'] }}
+      sidecar-ethereum: ${{ steps.filter.outputs['sidecar-ethereum'] }}
       e2e: ${{ steps.filter.outputs.e2e }}
       e2e-stack: ${{ steps.filter.outputs['e2e-stack'] }}
       scripts: ${{ steps.filter.outputs.scripts }}
@@ -75,6 +76,7 @@ jobs:
               - 'frontend/**'
               - 'sidecar-steam/**'
               - 'sidecar-blockchain/**'
+              - 'sidecar-ethereum/**'
               - '.github/workflows/**'
             backend:
               - 'backend/**'
@@ -100,6 +102,17 @@ jobs:
               - '.github/workflows/**'
             sidecar-fake:
               - 'sidecar-fake/**'
+              - '.github/workflows/**'
+            # T150 — the Ethereum service. Its suite also reads files outside
+            # its directory: docker-compose.yml + infra/ (wiring and alert-rule
+            # tests) and the TRON service's hdRoot.ts (the byte-for-byte parity
+            # test of the shared root builder) — a change to any of them must
+            # run it.
+            sidecar-ethereum:
+              - 'sidecar-ethereum/**'
+              - 'sidecar-blockchain/src/wallet/hdRoot.ts'
+              - 'docker-compose.yml'
+              - 'infra/**'
               - '.github/workflows/**'
             e2e:
               - 'e2e/**'
@@ -144,12 +157,14 @@ jobs:
           F_FRONTEND: ${{ steps.filter.outputs.frontend }}
           F_SIDECAR_STEAM: ${{ steps.filter.outputs['sidecar-steam'] }}
           F_SIDECAR_BLOCKCHAIN: ${{ steps.filter.outputs['sidecar-blockchain'] }}
+          F_SIDECAR_ETHEREUM: ${{ steps.filter.outputs['sidecar-ethereum'] }}
         run: |
           components=()
           [ "$F_BACKEND" = "true" ]           && components+=('{"name":"backend","context":"backend"}')
           [ "$F_FRONTEND" = "true" ]          && components+=('{"name":"frontend","context":"frontend"}')
           [ "$F_SIDECAR_STEAM" = "true" ]     && components+=('{"name":"sidecar-steam","context":"sidecar-steam"}')
           [ "$F_SIDECAR_BLOCKCHAIN" = "true" ]&& components+=('{"name":"sidecar-blockchain","context":"sidecar-blockchain"}')
+          [ "$F_SIDECAR_ETHEREUM" = "true" ]  && components+=('{"name":"sidecar-ethereum","context":"sidecar-ethereum"}')
           if [ ${#components[@]} -eq 0 ]; then
             matrix='{"component":[]}'
           else
@@ -253,6 +268,11 @@ jobs:
         working-directory: sidecar-blockchain
         run: npm run format:check
 
+      # T150 — the Ethereum service: typecheck + format + lint, blocking.
+      - name: Sidecar-ethereum typecheck + format + lint
+        working-directory: sidecar-ethereum
+        run: npm ci && npx tsc --noEmit && npm run format:check && npm run lint
+
       # T107 — fake sidecar (E2E test double) + e2e harness quality gates
       # (validator N1). Blocking like the other sidecars; sidecar-fake also runs
       # its vitest suite in the JS test job.
@@ -283,6 +303,15 @@ jobs:
       - name: Sidecar-blockchain npm audit (blocking — prod criticals)
         working-directory: sidecar-blockchain
         run: npm audit --omit=dev --audit-level=critical
+
+      # T150 — the Ethereum service starts clean (0 prod advisories, 2026-10-18;
+      # ethers 6.17.0 + express 4.22.3 + pino + prom-client), so its gate is
+      # stricter than the TRON service's: any prod advisory of HIGH or above
+      # fails CI. It signs with keys of its own; a high in its tree is not
+      # accept-risk by default.
+      - name: Sidecar-ethereum npm audit (blocking — prod highs)
+        working-directory: sidecar-ethereum
+        run: npm audit --omit=dev --audit-level=high
 
   # ----------------------------------------------------------------------------
   # 2. Build  (09 §21.4 step 2)
@@ -342,7 +371,7 @@ jobs:
   frontend-test:
     name: 3b. JS test (vitest)
     needs: [changes]
-    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['fe-parity-sources'] == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true'
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs['fe-parity-sources'] == 'true' || needs.changes.outputs['sidecar-steam'] == 'true' || needs.changes.outputs['sidecar-blockchain'] == 'true' || needs.changes.outputs['sidecar-fake'] == 'true' || needs.changes.outputs['sidecar-ethereum'] == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -381,6 +410,13 @@ jobs:
       - name: Sidecar-fake vitest
         if: needs.changes.outputs['sidecar-fake'] == 'true'
         working-directory: sidecar-fake
+        run: npm ci && npm run test
+
+      # T150 — the Ethereum service. Its startup tests spawn the entry point
+      # through tsx, and its parity test reads sidecar-blockchain/src/wallet/hdRoot.ts.
+      - name: Sidecar-ethereum vitest
+        if: needs.changes.outputs['sidecar-ethereum'] == 'true'
+        working-directory: sidecar-ethereum
         run: npm ci && npm run test
 
   # ----------------------------------------------------------------------------
