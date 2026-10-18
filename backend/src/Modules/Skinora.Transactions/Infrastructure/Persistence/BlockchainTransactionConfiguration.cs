@@ -146,6 +146,11 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.EnergyUsageTotal);
         builder.Property(b => b.OriginEnergyUsage);
 
+        // T154 — Ethereum's realized fee in wei: an integer column, never a
+        // float. 0 is a real answer here too, NULL is "not measured".
+        builder.Property(b => b.RealizedFeeWei)
+            .HasPrecision(38, 0);
+
         builder.Property(b => b.Status)
             .IsRequired();
 

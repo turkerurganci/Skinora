@@ -1,0 +1,15 @@
+{
+  "network": "ETHEREUM",
+  "feeUsdt": "22.07",
+  "feeWei": "9139361000067201",
+  "sender": "DEPOSIT",
+  "blockNumber": "26215000",
+  "gasLimit": "46201",
+  "fuelGasLimit": "21000",
+  "baseFeePerGasWei": "80000000000",
+  "maxPriorityFeePerGasWei": "1000000001",
+  "maxFeePerGasWei": "161000000001",
+  "ethPriceUsdt": "2414.579991",
+  "priceSource": "binance",
+  "priceAgeSeconds": 0
+}

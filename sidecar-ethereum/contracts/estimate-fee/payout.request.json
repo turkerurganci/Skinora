@@ -1,0 +1,6 @@
+{
+  "network": "ETHEREUM",
+  "toAddress": "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+  "amount": "1234.567891",
+  "token": "USDT"
+}
