@@ -64,7 +64,7 @@
 
 - Branch: `task/T157-admin-ag-basina`
 - PR: #354
-- CI: {CI}
+- CI: ✓ PASS — run 39177506961 (HEAD bc0d421b; ilk run 39175939001 yalnız yeni test dosyalarında dotnet format boşluk hatasıyla kırıldı, düzeltme ileri taşındı)
 
 ## Known Limitations / Follow-up
 
