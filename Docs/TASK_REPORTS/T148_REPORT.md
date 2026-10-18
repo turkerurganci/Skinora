@@ -74,9 +74,9 @@
 ## Commit & PR
 
 - Branch: `task/T148-ag-basina-sidecar-sozlesmesi`
-- Commit: `b64e0ba` — T148: ağ başına sidecar sözleşmesi ve ayarlar (+ test güncellemesi, rapor/status/memory commit'leri)
+- Commit: `b64e0ba` — T148: ağ başına sidecar sözleşmesi ve ayarlar · `1fdd2d7` ayar listesi/seed testleri · `1ce6401` rapor, status, memory, §7.6 · `b8a1ec5` dotnet format (NetworkContractTests boşlukları)
 - PR: #343
-- CI: (aşağıdaki son durum satırına bakınız)
+- CI: ✓ PASS — run [`39093771009`](https://github.com/turkerurganci/Skinora/actions/runs/39093771009) (`b8a1ec5`): Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker build (backend, sidecar-blockchain), JS test ve 10 advisory E2E işinin hepsi success. Önceki run `39092446780` (`1ce6401`) yalnız `dotnet format` adımında düştü (`NetworkContractTests.cs` nesne başlatıcı boşlukları); aynı run'daki 10 E2E işi o hâliyle de success idi (sidecar-fake'in `network`'lü zarfları backend'den geçti). Düzeltme push'unu pre-push CI koruması (Layer 2) son run `failure` olduğu için durdurdu; bypass kullanılmadı — eski run yeniden kuyruğa alındı (koruma tamamlanmamış run'ı engellemez), düzeltme push'lanınca eski run iptal edildi.
 
 ## Known Limitations / Follow-up
 
