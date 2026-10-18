@@ -63,6 +63,25 @@ export function parseStakePermissionId(raw: string | undefined): number {
   return /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
 }
 
+/**
+ * ENERGY_STAKING_ENABLED as a boolean — T149 (11 §F8, öneriyle kaydedildi — ⚠).
+ * The hybrid Energy-stake model (delegation from a stake, 2026-09-16) is
+ * superseded by K4/K8: on TRON the buyer pays the sweep as a fee line and the
+ * seller the payout, so the platform no longer needs to stake. Its code stays,
+ * dormant, behind this switch. Unset or blank is the default, OFF. Only the
+ * literal words are accepted: a typo ("ture", "1", "yes") would otherwise flip
+ * a money path silently in one direction or the other, so it stops the
+ * sidecar at startup instead.
+ */
+export function parseStakingEnabled(raw: string | undefined): boolean {
+  const trimmed = (raw ?? '').trim().toLowerCase();
+  if (trimmed === '' || trimmed === 'false') return false;
+  if (trimmed === 'true') return true;
+  throw new Error(
+    `ENERGY_STAKING_ENABLED must be 'true' or 'false' (blank = false); got '${raw}'.`,
+  );
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '5200', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -120,6 +139,10 @@ export const config = {
   // Empty = the hot wallet holds its own stake (the pre-split arrangement).
   // A malformed address or permission id stops the sidecar at startup
   // (wallet/EnergyDelegationService.ts, owner decision 2026-09-19).
+  // T149 — the hybrid stake is dormant: OFF by default. While off the flow
+  // never reads a stake (no getcandelegatedmaxsize), never delegates, and the
+  // two STAKE_ACCOUNT_* values below are ignored; every deposit transfer burns.
+  energyStakingEnabled: parseStakingEnabled(process.env.ENERGY_STAKING_ENABLED),
   stakeAccountAddress: process.env.STAKE_ACCOUNT_ADDRESS || '',
   stakeAccountPermissionId: parseStakePermissionId(process.env.STAKE_ACCOUNT_PERMISSION_ID),
 

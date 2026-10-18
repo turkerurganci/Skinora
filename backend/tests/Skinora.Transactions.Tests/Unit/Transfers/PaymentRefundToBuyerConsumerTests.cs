@@ -6,6 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
@@ -76,7 +77,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
 
     private PaymentRefundToBuyerConsumer NewConsumer(
         AppDbContext db, ILogger<PaymentRefundToBuyerConsumer> logger) =>
-        new(db, _gasFee, new RefundDecisionService(_settings), _alert, _clock, logger);
+        new(db, _gasFee, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _alert, _clock, logger);
 
     [Fact]
     public async Task ValidRefund_QueuesPendingBuyerRefund_WithNetAmountAndGasSnapshot()
@@ -272,6 +273,125 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
         Assert.Equal(0, await _db.Set<BlockchainTransaction>().CountAsync(
             b => b.TransactionId == tx.Id
                 && b.Type == BlockchainTransactionType.BUYER_REFUND));
+    }
+
+    // ─── T149: the TRON network fee line (11 §F8 K8, 02 §4.6, 08 §3.1a) ───
+
+    /// <summary>02 §5 example: 20 + 0.40 + 2.90 = 23.30 on TRON.</summary>
+    private Task<Transaction> SeedTronWithFeeLineAsync() =>
+        SeedCancelledAsync(price: 20m, commission: 0.40m, configure: t =>
+        {
+            t.Network = BlockchainNetwork.TRON;
+            t.NetworkFeeAmount = 2.90m;
+            t.TotalAmount = 23.30m;
+        });
+
+    private async Task AddSweepAsync(Transaction tx, BlockchainTransactionStatus status, bool broadcast)
+    {
+        var deposit = new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            Address = "TDepositSwept00000000000000000000000",
+            HdWalletIndex = 11,
+            ExpectedAmount = tx.TotalAmount,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        };
+        _db.Set<PaymentAddress>().Add(deposit);
+        _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            PaymentAddressId = deposit.Id,
+            Type = BlockchainTransactionType.SWEEP,
+            TxHash = broadcast ? "sweep" + Guid.NewGuid().ToString("N") : null,
+            FromAddress = deposit.Address,
+            ToAddress = "THotWallet000000000000000000000000",
+            Amount = tx.TotalAmount,
+            Token = StablecoinType.USDT,
+            Status = status,
+            BlockNumber = status == BlockchainTransactionStatus.CONFIRMED ? 1_000L : null,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? _clock.GetUtcNow().UtcDateTime : null,
+            RetryCount = 0,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task<BlockchainTransaction> RefundRowAsync(Transaction tx) =>
+        await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.TransactionId == tx.Id && b.Type == BlockchainTransactionType.BUYER_REFUND);
+
+    [Fact]
+    public async Task FeeLine_RefundBeforeSweep_ReturnsTheLineInFull()
+    {
+        // No sweep has run: 23.30 − 2.00 gas = 21.30 (price, commission and the
+        // 2.90 line all come back, like the commission — K8).
+        var tx = await SeedTronWithFeeLineAsync();
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        var refund = await RefundRowAsync(tx);
+        Assert.Equal(21.30m, refund.Amount);
+        Assert.Equal(23.30m, Assert.Single(_gasFee.RefundCalls).Amount);
+    }
+
+    [Fact]
+    public async Task FeeLine_SweepQueuedButNotBroadcast_StillReturnsTheLine()
+    {
+        var tx = await SeedTronWithFeeLineAsync();
+        await AddSweepAsync(tx, BlockchainTransactionStatus.PENDING, broadcast: false);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        Assert.Equal(21.30m, (await RefundRowAsync(tx)).Amount);
+    }
+
+    [Fact]
+    public async Task FeeLine_FailedSweep_StillReturnsTheLine()
+    {
+        // A sweep that failed left the money in the deposit — it did not happen.
+        var tx = await SeedTronWithFeeLineAsync();
+        await AddSweepAsync(tx, BlockchainTransactionStatus.FAILED, broadcast: true);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        Assert.Equal(21.30m, (await RefundRowAsync(tx)).Amount);
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.CONFIRMED)]
+    [InlineData(BlockchainTransactionStatus.PENDING)]   // broadcast, awaiting confirmation
+    public async Task FeeLine_RefundAfterSweep_KeepsTheLine(BlockchainTransactionStatus sweepStatus)
+    {
+        // The sweep ran, so the line was spent on what it paid for: the refund
+        // returns price + commission (20.40) − 2.00 gas = 18.40.
+        var tx = await SeedTronWithFeeLineAsync();
+        await AddSweepAsync(tx, sweepStatus, broadcast: true);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        var refund = await RefundRowAsync(tx);
+        Assert.Equal(18.40m, refund.Amount);
+        Assert.Equal(20.40m, Assert.Single(_gasFee.RefundCalls).Amount);
+    }
+
+    [Fact]
+    public async Task FeeLine_Threshold_Uses_The_Refundable_Base()
+    {
+        // gas 6.80: before the sweep 23.30 − 6.80 = 16.50 ≥ 13.60 → refunded;
+        // after it 20.40 − 6.80 = 13.60 ≥ 13.60 → still refunded (boundary, ≥).
+        _gasFee.RefundFee = 6.80m;
+        var tx = await SeedTronWithFeeLineAsync();
+        await AddSweepAsync(tx, BlockchainTransactionStatus.CONFIRMED, broadcast: true);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        Assert.Equal(13.60m, (await RefundRowAsync(tx)).Amount);
+        Assert.Empty(_alert.Raised);
     }
 
     private PaymentRefundToBuyerRequestedEvent EventFor(Transaction tx) =>

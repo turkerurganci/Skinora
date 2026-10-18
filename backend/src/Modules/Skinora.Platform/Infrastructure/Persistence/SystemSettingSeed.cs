@@ -218,6 +218,19 @@ public static class SystemSettingSeed
         Default     (73, "blockchain.ethereum.finality_stall_alarm_minutes",  "int",     "Monitoring",   "30",           "Ethereum'da son finalized bloğun zaman damgası bu süreden (dakika) eskiyse alarm — yeni ödeme kabul edilemiyordur (08 §3.7.8). Olağan gecikme 12,8–18,8 dk ölçüldü (T142)."),
         Default     (74, "blockchain.ethereum.hot_wallet_eth_balance_minimum","decimal", "Wallet",       "0.06",         "Ethereum sıcak cüzdanının ETH bakiye alt eşiği (ETH). Payout, sweep sonrası iade ve soğuk aktarımın gas'ını sıcak cüzdan kendi ETH'siyle öder; altına düşerse admin alarmı (08 §3.7.5). 0,06 = 7 gün × 20 payout × 0,000211 ETH + bir çöküş günü iadesi (T142)."),
         Default     (75, "blockchain.ethereum.fuel_wallet_eth_balance_minimum","decimal","Wallet",       "0.06",         "Ethereum yakıt cüzdanının ETH bakiye alt eşiği (ETH). Yakıt cüzdanı depozitlere gas için ETH gönderir; altına düşerse admin alarmı (08 §3.7.5). 0,06 = 7 günlük en yoğun sweep yakıtı (0,030 ETH) + bir çöküş günü iade yakıtı (0,031 ETH) (T142)."),
+
+        // --- T149: network fee policy (11 §F8 K4/K8, 02 §4.6–§5, 08 §3.1a) ---
+        // TRON's buyer-paid network fee line: the sweep cost the blockchain
+        // service estimates at acceptance (activation + burn top-up with its
+        // 10% margin + the top-up's Bandwidth), times the TRX price, times
+        // (1 + buffer), rounded UP to the cent. The fallback is written when
+        // that estimate is unavailable — acceptance never waits on it. The line
+        // is fixed once and never corrected (öneriyle kaydedildi — ⚠). TRON's
+        // minimum-refund multiplier keeps its unprefixed key (row 26);
+        // Ethereum gets its own.
+        Default     (76, "blockchain.tron.network_fee_buffer_ratio",     "decimal", "Commission",   "0.007",        "TRON ağ ücreti satırı — sweep'e kadar (~8 gün) TRX fiyat oynamasına karşı tampon oranı (11 §F8 K8). Satır = YUKARI_2_HANE(sweep maliyeti TRX × canlı TRX/USDT × (1 + bu oran)). 0,007 = 02 §5 örneği (8,44 TRX × 0,34 × 1,007 = 2,8901 → 2,90). 0 ≤ değer < 1."),
+        Default     (77, "blockchain.tron.network_fee_fallback_usdt",    "decimal", "Commission",   "3.00",         "TRON ağ ücreti satırı YEDEĞİ (USDT) — kabul anında sweep tahmini alınamazsa (servis/zincir/kur erişilemez ya da tahmin blockchain.max_charged_gas_fee_usdt'yi aşar) satıra bu değer yazılır; kabul tahmine bloke olmaz. Satır sonradan düzeltilmez (08 §3.1a)."),
+        Default     (78, "blockchain.ethereum.min_refund_threshold_ratio", "decimal", "Monitoring", "2.0",          "Ethereum minimum iade eşiği — net iade < gas fee × bu oran ise iade yapılmaz, admin uyarısı (02 §4.6). Canlı tahmin kullandığı için Ethereum'da yalnız tozu engeller. TRON'un karşılığı min_refund_threshold_ratio."),
     ];
 
     private static SystemSetting Unconfigured(

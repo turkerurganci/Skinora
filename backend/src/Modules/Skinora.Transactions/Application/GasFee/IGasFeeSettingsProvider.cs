@@ -24,7 +24,9 @@ public interface IGasFeeSettingsProvider
 /// <param name="MinRefundThresholdRatio">
 /// Multiplier against the gas fee that defines the minimum payable refund
 /// floor (09 §14.4). Validator stage 2 enforces <c>ratio &gt; 0</c>; the
-/// documented default is <c>2.0</c>.
+/// documented default is <c>2.0</c>. <b>T149:</b> this is TRON's key only —
+/// the refund decision reads the per-network value
+/// (<c>BlockchainNetworkSettings.MinRefundThresholdRatio</c>), never this one.
 /// </param>
 /// <param name="RefundGasFeeEstimateUsdt">
 /// T72 MVP refund gas fee estimate in USDT (08 §3.4). Used by the amount

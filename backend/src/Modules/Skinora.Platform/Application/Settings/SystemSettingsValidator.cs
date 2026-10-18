@@ -230,11 +230,23 @@ public sealed class SystemSettingsValidator
         // (default 2.0 — iade < gas fee × 2.0 ise iade yapılmaz). The generic
         // positive-number rule below would also accept it, but the explicit
         // branch documents the intent and keeps the rule discoverable.
-        if (key == "min_refund_threshold_ratio")
+        if (key is "min_refund_threshold_ratio" or "blockchain.ethereum.min_refund_threshold_ratio")
         {
             var d = decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
             if (d <= 0m)
                 return $"{key} must be greater than 0 (got {value}).";
+            return null;
+        }
+
+        // T149 — TRON network fee line buffer (11 §F8 K8): head-room against the
+        // TRX price moving before the sweep. 0 is meaningful (no head-room), so
+        // this is the half-open [0, 1) interval, not the open ratio interval;
+        // 1 or more would at least double the buyer's line.
+        if (key == "blockchain.tron.network_fee_buffer_ratio")
+        {
+            var d = decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
+            if (d < 0m || d >= 1m)
+                return $"{key} must satisfy 0 <= value < 1 (got {value}).";
             return null;
         }
 

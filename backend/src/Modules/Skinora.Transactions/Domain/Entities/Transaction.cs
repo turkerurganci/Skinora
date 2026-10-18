@@ -52,6 +52,22 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public decimal Price { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }
+
+    /// <summary>
+    /// T149 (11 §F8 K8, 06 §1.4) — the buyer's network fee line, fixed once at
+    /// acceptance and never corrected afterwards. TRON: the deposit → hot
+    /// wallet sweep cost, rounded UP to the cent; Ethereum: 0 (the platform
+    /// absorbs its fees up to the cap). <c>null</c> until acceptance (and on
+    /// rows accepted before T149, which the migration backfilled to 0).
+    /// Included in <see cref="TotalAmount"/>.
+    /// </summary>
+    public decimal? NetworkFeeAmount { get; set; }
+
+    /// <summary>
+    /// What the buyer sends: <c>Price + CommissionAmount</c> at creation;
+    /// from acceptance on <c>Price + CommissionAmount + NetworkFeeAmount</c>
+    /// (T149). Always whole-cent (T144).
+    /// </summary>
     public decimal TotalAmount { get; set; }
     public decimal? MarketPriceAtCreation { get; set; }
 

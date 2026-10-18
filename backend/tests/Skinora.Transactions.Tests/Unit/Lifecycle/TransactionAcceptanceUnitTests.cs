@@ -27,7 +27,8 @@ public class TransactionAcceptanceUnitTests
             Status: TransactionStatus.ACCEPTED,
             AcceptedAt: new DateTime(2026, 5, 2, 14, 45, 0, DateTimeKind.Utc),
             Network: "ETHEREUM",
-            TotalAmount: "102.00");
+            TotalAmount: "102.00",
+            NetworkFeeAmount: "0.00");
 
         var json = JsonSerializer.Serialize(dto, JsonOptions);
 
@@ -36,6 +37,8 @@ public class TransactionAcceptanceUnitTests
         // T147 (07 §1.3) — the chosen network and the amount to pay on it.
         Assert.Contains("\"network\":\"ETHEREUM\"", json);
         Assert.Contains("\"totalAmount\":\"102.00\"", json);
+        // T149 (07 §7.6) — the network fee line fixed at acceptance.
+        Assert.Contains("\"networkFeeAmount\":\"0.00\"", json);
     }
 
     [Fact]

@@ -244,6 +244,90 @@ public class HttpSidecarGasFeeEstimatorTests
         Assert.Null(fee);
     }
 
+    // ─── T149: sweep cost (the TRON network fee line basis) ──────────
+
+    [Fact]
+    public async Task Sweep_Ok_ParsesCostAndPrice_AndPostsNetworkAndToken()
+    {
+        HttpRequestMessage? observed = null;
+        string? observedBody = null;
+        var handler = new RecordingHandler(async (req, ct) =>
+        {
+            observed = req;
+            observedBody = await req.Content!.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    sweepCostSun = 8_441_349,
+                    activationSun = 1_100_000,
+                    burnTopUpSun = 7_071_349,
+                    bandwidthSun = 270_000,
+                    energyRequired = 64_285,
+                    trxPriceUsdt = 0.34,
+                    priceSource = "binance",
+                    costUsdt = "2.870059",
+                }),
+            };
+        });
+
+        var estimate = await BuildEstimator(handler, internalKey: "k")
+            .EstimateSweepCostAsync(StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(new SweepCostEstimate(8_441_349, 0.34m), estimate);
+        Assert.Equal("api/transfer/estimate-sweep-fee", observed!.RequestUri!.PathAndQuery.TrimStart('/'));
+        Assert.Equal("k", Assert.Single(observed.Headers.GetValues("X-Internal-Key")));
+        using var body = JsonDocument.Parse(observedBody!);
+        Assert.Equal("TRON", body.RootElement.GetProperty("network").GetString());
+        Assert.Equal("USDT", body.RootElement.GetProperty("token").GetString());
+    }
+
+    public static TheoryData<object> UnusableSweepBodies => new()
+    {
+        new { trxPriceUsdt = 0.34 },                         // no cost
+        new { sweepCostSun = 8_441_349 },                    // no price
+        new { sweepCostSun = -1, trxPriceUsdt = 0.34 },      // negative cost
+        new { sweepCostSun = 8_441_349, trxPriceUsdt = 0 },  // zero price
+    };
+
+    [Theory]
+    [MemberData(nameof(UnusableSweepBodies))]
+    public async Task Sweep_UnusableBody_IsNull(object body)
+    {
+        var estimate = await BuildEstimator(RespondWith(body))
+            .EstimateSweepCostAsync(StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Null(estimate);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.NotFound)]   // a service that predates the endpoint (sidecar-fake)
+    public async Task Sweep_NonSuccess_IsNull(HttpStatusCode status)
+    {
+        var handler = new RecordingHandler((_, _) => Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = JsonContent.Create(new { error = "FEE_ESTIMATE_SIMULATION_FAILED", message = "revert" }),
+        }));
+
+        var estimate = await BuildEstimator(handler)
+            .EstimateSweepCostAsync(StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Null(estimate);
+    }
+
+    [Fact]
+    public async Task Sweep_TransportFailure_IsNull()
+    {
+        var handler = new RecordingHandler((_, _) => throw new HttpRequestException("connection refused"));
+
+        var estimate = await BuildEstimator(handler)
+            .EstimateSweepCostAsync(StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Null(estimate);
+    }
+
     private static RecordingHandler RespondWith(object body) =>
         new((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
         {

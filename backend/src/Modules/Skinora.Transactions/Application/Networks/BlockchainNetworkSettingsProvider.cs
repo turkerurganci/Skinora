@@ -29,7 +29,10 @@ public sealed record BlockchainNetworkSettings(
     decimal? FuelWalletNativeBalanceMinimum,
     decimal? FeeCapUsdPerTransfer,
     int? FeeCapWaitAlarmMinutes,
-    int? FinalityStallAlarmMinutes);
+    int? FinalityStallAlarmMinutes,
+    decimal MinRefundThresholdRatio,
+    decimal? NetworkFeeBufferRatio,
+    decimal? NetworkFeeFallbackUsdt);
 
 /// <summary>
 /// Default <see cref="IBlockchainNetworkSettingsProvider"/>. Same read-side
@@ -49,7 +52,10 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
         FuelWalletNativeBalanceMinimum: null,
         FeeCapUsdPerTransfer: null,
         FeeCapWaitAlarmMinutes: null,
-        FinalityStallAlarmMinutes: null);
+        FinalityStallAlarmMinutes: null,
+        MinRefundThresholdRatio: 2.0m,
+        NetworkFeeBufferRatio: 0.007m,
+        NetworkFeeFallbackUsdt: 3.00m);
 
     /// <inheritdoc cref="TronDefaults"/>
     public static readonly BlockchainNetworkSettings EthereumDefaults = new(
@@ -61,7 +67,10 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
         FuelWalletNativeBalanceMinimum: 0.06m,
         FeeCapUsdPerTransfer: 0.50m,
         FeeCapWaitAlarmMinutes: 180,
-        FinalityStallAlarmMinutes: 30);
+        FinalityStallAlarmMinutes: 30,
+        MinRefundThresholdRatio: 2.0m,
+        NetworkFeeBufferRatio: null,
+        NetworkFeeFallbackUsdt: null);
 
     private readonly AppDbContext _db;
 
@@ -100,7 +109,31 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
             FuelWalletNativeBalanceMinimum: ReadOptionalDecimal(rows, keys.FuelWalletNativeBalanceMinimum, defaults.FuelWalletNativeBalanceMinimum),
             FeeCapUsdPerTransfer: ReadOptionalDecimal(rows, keys.FeeCapUsdPerTransfer, defaults.FeeCapUsdPerTransfer),
             FeeCapWaitAlarmMinutes: ReadOptionalInt(rows, keys.FeeCapWaitAlarmMinutes, defaults.FeeCapWaitAlarmMinutes),
-            FinalityStallAlarmMinutes: ReadOptionalInt(rows, keys.FinalityStallAlarmMinutes, defaults.FinalityStallAlarmMinutes));
+            FinalityStallAlarmMinutes: ReadOptionalInt(rows, keys.FinalityStallAlarmMinutes, defaults.FinalityStallAlarmMinutes),
+            MinRefundThresholdRatio: ReadDecimal(rows, keys.MinRefundThresholdRatio, defaults.MinRefundThresholdRatio),
+            NetworkFeeBufferRatio: ReadOptionalBufferRatio(rows, keys.NetworkFeeBufferRatio, defaults.NetworkFeeBufferRatio),
+            NetworkFeeFallbackUsdt: ReadOptionalDecimal(rows, keys.NetworkFeeFallbackUsdt, defaults.NetworkFeeFallbackUsdt));
+    }
+
+    /// <summary>
+    /// T149 — the network fee buffer is a ratio where 0 is meaningful ("no
+    /// head-room"), so unlike the positive-only reads it accepts
+    /// <c>0 ≤ value &lt; 1</c> (the validator's envelope); anything else falls
+    /// back to the seeded default.
+    /// </summary>
+    private static decimal? ReadOptionalBufferRatio(
+        IReadOnlyDictionary<string, string?> rows, string? key, decimal? fallback)
+    {
+        if (key is null || fallback is null) return null;
+        if (rows.TryGetValue(key, out var raw)
+            && raw is not null
+            && decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)
+            && parsed >= 0m
+            && parsed < 1m)
+        {
+            return parsed;
+        }
+        return fallback;
     }
 
     private static decimal ReadDecimal(

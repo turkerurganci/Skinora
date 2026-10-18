@@ -104,6 +104,12 @@ interface ChainOptions {
    * wallet holds its own stake, the pre-split arrangement. */
   stakeAddress?: string;
   stakePermissionId?: number;
+  /**
+   * T149 — the dormant stake switch. These scenarios were written for the
+   * hybrid model, so they run with it ON unless a test says otherwise; the
+   * production default (OFF) has its own describe block.
+   */
+  stakingEnabled?: boolean;
 }
 
 function buildChain(o: ChainOptions = {}) {
@@ -327,6 +333,7 @@ function buildChain(o: ChainOptions = {}) {
     resources,
     sweeperAddress: SWEEPER,
     sweeperPrivateKey: DUMMY_SWEEPER_KEY,
+    stakingEnabled: o.stakingEnabled ?? true,
     stakeAddress: o.stakeAddress,
     stakePermissionId: o.stakePermissionId,
     fallbackAmountSun: FALLBACK_SUN,
@@ -697,6 +704,68 @@ describe('burn path — the stake cannot cover the whole transfer', () => {
   });
 });
 
+/**
+ * T149 (11 §F8, öneriyle kaydedildi — ⚠) — the hybrid stake is dormant behind
+ * ENERGY_STAKING_ENABLED, default OFF. Off means no stake read and no
+ * delegation, even with a stake that could cover the whole transfer: the
+ * transfer burns exactly as on the burn path.
+ */
+describe('staking switched off (production default) — no stake read, no delegation', () => {
+  it('burns although the stake could cover the whole transfer, and never reads it', async () => {
+    const chain = buildChain({
+      stakingEnabled: false,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN * 10,
+    });
+
+    const outcome = await chain.run();
+
+    expect(chain.resources.getDelegatableEnergySun).not.toHaveBeenCalled();
+    expect(chain.client.delegateEnergy).not.toHaveBeenCalled();
+    expect(chain.client.undelegateEnergy).not.toHaveBeenCalled();
+    expect(chain.client.sendTrx).toHaveBeenCalledWith({
+      fromAddress: SWEEPER,
+      fromPrivateKey: DUMMY_SWEEPER_KEY,
+      toAddress: DEPOSIT,
+      amountSun: BURN_TOP_UP_64K_SUN,
+    });
+    expect(chain.transfer).toHaveBeenCalledOnce();
+    expect(outcome).toMatchObject({
+      mode: 'burn',
+      delegationAmountSun: 0,
+      fallbackAmountSun: BURN_TOP_UP_64K_SUN,
+    });
+  });
+
+  it('ignores a configured stake account: nothing is signed for it and nothing read from it', async () => {
+    const chain = buildChain({
+      stakingEnabled: false,
+      stakeAddress: STAKE_ACCOUNT,
+      stakePermissionId: 5,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN * 10,
+    });
+
+    await chain.run();
+
+    expect(chain.resources.getDelegatableEnergySun).not.toHaveBeenCalled();
+    expect(chain.client.delegateEnergy).not.toHaveBeenCalled();
+    expect(chain.service.stakingEnabled).toBe(false);
+    expect(chain.service.delegationOwner).toBe(SWEEPER);
+  });
+
+  it('with the switch ON the same stake is read and delegated (the switch is what decides)', async () => {
+    const chain = buildChain({
+      stakingEnabled: true,
+      delegatableSun: DELEGATION_64K_MAINNET_SUN * 10,
+    });
+
+    const outcome = await chain.run();
+
+    expect(chain.resources.getDelegatableEnergySun).toHaveBeenCalledWith(SWEEPER);
+    expect(chain.client.delegateEnergy).toHaveBeenCalledOnce();
+    expect(outcome).toMatchObject({ mode: 'delegated' });
+  });
+});
+
 describe('no-energy path — the deposit already holds the Energy', () => {
   it('sends nothing when the deposit covers the whole transfer and has Bandwidth', async () => {
     const chain = buildChain({ depositEnergy: 70_000, delegatableSun: DELEGATION_64K_MAINNET_SUN });
@@ -913,6 +982,7 @@ describe('configuration', () => {
       resources: {} as any,
       sweeperAddress: '',
       sweeperPrivateKey: '',
+      stakingEnabled: false,
       fallbackAmountSun: FALLBACK_SUN,
     });
 
@@ -1008,12 +1078,17 @@ describe('configuration', () => {
    * compose became NaN and nothing checked it).
    */
   describe('a malformed stake configuration stops construction', () => {
-    const construct = (stakeAddress: string | undefined, stakePermissionId: number) =>
+    const construct = (
+      stakeAddress: string | undefined,
+      stakePermissionId: number,
+      stakingEnabled = true,
+    ) =>
       new EnergyDelegationService({
         client: {} as never,
         resources: {} as never,
         sweeperAddress: SWEEPER,
         sweeperPrivateKey: DUMMY_SWEEPER_KEY,
+        stakingEnabled,
         stakeAddress,
         stakePermissionId,
         fallbackAmountSun: FALLBACK_SUN,
@@ -1074,6 +1149,15 @@ describe('configuration', () => {
       expect(service.delegationOwner).toBe(SWEEPER);
       expect(service.delegationPermissionId).toBeUndefined();
     });
+
+    // T149 — with the dormant stake switched off the stake settings are not
+    // used at all, so a leftover value cannot stop the sidecar either.
+    it('ignores the whole stake configuration while staking is off', () => {
+      const service = construct('TStakeAccountHoldingTheFrozenTrx', Number.NaN, false);
+      expect(service.stakingEnabled).toBe(false);
+      expect(service.delegationOwner).toBe(SWEEPER);
+      expect(service.delegationPermissionId).toBeUndefined();
+    });
   });
 
   it('rejects a non-positive fallback amount', async () => {
@@ -1084,6 +1168,7 @@ describe('configuration', () => {
       resources: {} as any,
       sweeperAddress: SWEEPER,
       sweeperPrivateKey: DUMMY_SWEEPER_KEY,
+      stakingEnabled: false,
       fallbackAmountSun: 0,
     });
 
