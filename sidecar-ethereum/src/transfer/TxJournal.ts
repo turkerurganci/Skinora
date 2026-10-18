@@ -92,6 +92,23 @@ export interface JournalRecord {
   readonly conflictSuspectedAt: number | null;
   /** Confirmed: the nonce was consumed by a transaction this journal does not know. */
   readonly conflict: { readonly detectedAt: number; readonly chainNonce: number } | null;
+  /**
+   * T153 — a fuel record only: the identity of the request it was sent for
+   * (bulgu e). While the request's own `transfer:<id>` is not signed yet, the
+   * same id asked with another identity is IDEMPOTENCY_CONFLICT, as it would
+   * be against the transfer record.
+   */
+  readonly fuelFor?: FuelRequestIdentity | null;
+}
+
+/** What a fuel record remembers of the request it was sent for (T153). */
+export interface FuelRequestIdentity {
+  readonly purpose: TransferPurpose;
+  readonly token: 'USDT' | 'USDC';
+  /** Canonical token recipient. */
+  readonly recipient: string;
+  readonly amountUnits: string;
+  readonly refundType: string | null;
 }
 
 /** A record's fee budget in wei (legacy per-gas records: per gas × gas limit), or null. */

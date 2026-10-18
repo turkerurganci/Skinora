@@ -278,6 +278,26 @@ describe('fuel key — the one exception (T153)', () => {
     expect(() => assertSignableFuel(fuel(), FUEL, CONFIG)).not.toThrow();
   });
 
+  it('the daily cap counts the fuel’s own worst-case fee with its value (bulgu a) — equality signs', () => {
+    const fee = NATIVE_TRANSFER_GAS * 2_050_000_000n;
+    const room = 10_000_000_000_000_000n - 300_000_000_000_000n - fee;
+    expect(() =>
+      assertSignableFuel(fuel(), { ...FUEL, spentLast24hWei: room }, CONFIG),
+    ).not.toThrow();
+    // One wei more: the value alone would still fit, value + fee does not.
+    expect(() =>
+      assertSignableFuel(fuel(), { ...FUEL, spentLast24hWei: room + 1n }, CONFIG),
+    ).toThrow(
+      expect.objectContaining({ ...refusal, message: expect.stringContaining('(fuelCaps)') }),
+    );
+  });
+
+  it('the single cap is inclusive: a fuel of exactly the cap signs', () => {
+    expect(() =>
+      assertSignableFuel(fuel(), { ...FUEL, maxSingleWei: 300_000_000_000_000n }, CONFIG),
+    ).not.toThrow();
+  });
+
   it.each<[string, () => Transaction, Partial<FuelIntent>?]>([
     [
       'an address the service does not derive',

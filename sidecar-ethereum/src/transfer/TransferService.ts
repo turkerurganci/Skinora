@@ -580,7 +580,13 @@ export class TransferService {
     return this.fuelAddress;
   }
 
-  /** T153 — fuel signed in the last 24 h, wei (what the daily cap counts). */
+  /**
+   * T153 — ETH the fuel wallet signed away in the last 24 h, wei (what the
+   * daily cap counts): each fuel's value plus its own worst-case fee
+   * (`21,000 × maxFeePerGas` of its latest attempt — a fee bump replaces the
+   * earlier price, it is not added to it). Yönetici kararı (T153 doğrulaması,
+   * bulgu a): the fuel's fee leaves the platform too, so it is under the cap.
+   */
   fuelSpentLast24hWei(excludeId: string | null = null): bigint {
     const since = this.now() - FUEL_DAILY_WINDOW_MS;
     let sum = 0n;
@@ -588,7 +594,8 @@ export class TransferService {
       // Conservative: a reverted or conflicted fuel still counts — it was signed.
       if (record.purpose !== 'FUEL' || record.createdAt < since || record.id === excludeId)
         continue;
-      sum += BigInt(record.amountUnits);
+      const latest = record.attempts[record.attempts.length - 1];
+      sum += BigInt(record.amountUnits) + BigInt(record.gasLimit) * BigInt(latest.maxFeePerGas);
     }
     return sum;
   }
@@ -687,6 +694,17 @@ export class TransferService {
     return this.idLocks.run(id, async () => {
       const existing = this.deps.journal.get(id);
       if (existing) return this.replay(existing, id, identity);
+      // Only a fuel so far (bulgu e): the id is taken by the request it fuels.
+      const fuel = id.startsWith('transfer:')
+        ? this.deps.journal.get(TransferService.fuelIdOf(id))
+        : undefined;
+      if (fuel && !TransferService.fuelMatches(fuel, identity)) {
+        throw this.idempotencyConflict(
+          id,
+          { purpose: 'FUEL', to: fuel.recipient, amount: fuel.fuelFor?.amountUnits ?? null },
+          identity,
+        );
+      }
       const planned = plan(id);
       return this.locks.run(planned.from, async () => {
         try {
@@ -889,6 +907,50 @@ export class TransferService {
     return Math.max(chainNext, journalNext);
   }
 
+  private idempotencyConflict(
+    id: string,
+    recorded: { purpose: string; to: string; amount: string | null },
+    identity: RequestIdentity,
+  ): SidecarError {
+    logger.error(
+      {
+        id,
+        recorded,
+        asked: {
+          purpose: identity.purpose,
+          to: identity.recipient,
+          amount: identity.amountUnits.toString(),
+        },
+      },
+      'IDEMPOTENCY CONFLICT — an id already signed is asked again with different parameters; refused',
+    );
+    return new SidecarError(
+      `Request ${id} was already signed with different parameters — refused (08 §3.7.6).`,
+      'IDEMPOTENCY_CONFLICT',
+      false,
+    );
+  }
+
+  /**
+   * A request id that so far holds only its fuel (bulgu e): the same deposit
+   * (index and address) and — when the record keeps it — the same request
+   * identity. Anything else is another request under a used id.
+   */
+  private static fuelMatches(fuel: JournalRecord, identity: RequestIdentity): boolean {
+    if (fuel.depositIndex !== identity.depositIndex) return false;
+    if (identity.depositAddress === null || fuel.recipient !== identity.depositAddress)
+      return false;
+    const asked = fuel.fuelFor;
+    if (!asked) return true;
+    return (
+      asked.purpose === identity.purpose &&
+      asked.token === identity.token &&
+      asked.recipient === identity.recipient &&
+      asked.amountUnits === identity.amountUnits.toString() &&
+      asked.refundType === identity.refundType
+    );
+  }
+
   private async replay(
     existing: JournalRecord,
     id: string,
@@ -903,26 +965,10 @@ export class TransferService {
       (identity.depositAddress === null || existing.from === identity.depositAddress) &&
       existing.refundType === identity.refundType;
     if (!same) {
-      logger.error(
-        {
-          id,
-          recorded: {
-            purpose: existing.purpose,
-            to: existing.recipient,
-            amount: existing.amountUnits,
-          },
-          asked: {
-            purpose: identity.purpose,
-            to: identity.recipient,
-            amount: identity.amountUnits.toString(),
-          },
-        },
-        'IDEMPOTENCY CONFLICT — an id already signed is asked again with different parameters; refused',
-      );
-      throw new SidecarError(
-        `Request ${id} was already signed with different parameters — refused (08 §3.7.6).`,
-        'IDEMPOTENCY_CONFLICT',
-        false,
+      throw this.idempotencyConflict(
+        id,
+        { purpose: existing.purpose, to: existing.recipient, amount: existing.amountUnits },
+        identity,
       );
     }
     if (existing.conflict) {
@@ -1224,7 +1270,8 @@ export class TransferService {
     const fuelId = TransferService.fuelIdOf(plan.id);
     const existing = this.deps.journal.get(fuelId);
     if (!existing) {
-      await this.sendFuel(plan, fuelId, ctx);
+      const withoutFuel = await this.sendFuel(plan, fuelId, ctx);
+      if (withoutFuel !== null) return withoutFuel;
       throw this.deferral(
         plan,
         new TransferDeferredError(
@@ -1272,17 +1319,30 @@ export class TransferService {
     }
     // Fuel in a block, but today's fee asks more than it carries: spend it
     // as it is when that still clears base fee + tip; nothing tops it up.
+    return this.feeTheDepositAffords(plan, ctx, 'its fuel is in a block');
+  }
+
+  /**
+   * No (more) fuel for this send: sign it at the fee the deposit's own ETH
+   * affords (`⌊available ÷ gasLimit⌋`) when that still clears today's base
+   * fee + tip (returned), otherwise wait for the fee to fall (`FUEL_REQUIRED`).
+   * Used when the request's one fuel is in a block but short of a later,
+   * higher fee, and when the deposit lacks less than a fuel's own fee
+   * (bulgu a: no fuel smaller than what it costs to send).
+   */
+  private feeTheDepositAffords(plan: SendPlan, ctx: FuelContext, why: string): bigint {
     const affordable = ctx.available / ctx.gasLimit;
     if (affordable >= ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas) {
       logger.warn(
         {
           id: plan.id,
           deposit: plan.from,
+          why,
           available: ctx.available.toString(),
           asked: (ctx.gasLimit * ctx.maxFeePerGas).toString(),
           maxFeePerGas: affordable.toString(),
         },
-        'Deposit fuel is short of the quoted fee ceiling — signing at the fee it affords',
+        'Deposit ETH is short of the quoted fee ceiling — signing at the fee it affords, no further fuel',
       );
       return affordable;
     }
@@ -1290,15 +1350,16 @@ export class TransferService {
       {
         id: plan.id,
         deposit: plan.from,
+        why,
         available: ctx.available.toString(),
         needsPerGas: (ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas).toString(),
       },
-      "Deposit fuel is in a block but below today's base fee + tip — the send waits for the fee to fall",
+      "Deposit ETH is below today's base fee + tip and no further fuel goes out — the send waits for the fee to fall",
     );
     throw this.deferral(
       plan,
       new TransferDeferredError(
-        `The fuel on ${plan.from} (${ctx.available} wei) no longer covers today's fee — the send waits for the base fee to fall (one fuel per send, 08 §3.7.5).`,
+        `The ETH on ${plan.from} (${ctx.available} wei; ${why}) no longer covers today's fee — the send waits for the base fee to fall (08 §3.7.5).`,
         'FUEL_REQUIRED',
       ),
     );
@@ -1309,9 +1370,11 @@ export class TransferService {
    * amount, from the fuel wallet, to the re-derived deposit. Every reason it
    * cannot is a wait ({@link TransferDeferredError}), so a sweep or refund is
    * never refused (→ backend FAILED → re-queued with a new id → fuelled twice)
-   * for want of fuel.
+   * for want of fuel. Returns null once the fuel is broadcast — or, when the
+   * deposit lacks less than the fuel send's own worst-case fee, signs no fuel
+   * and returns the fee the deposit affords on its own (bulgu a).
    */
-  private async sendFuel(plan: SendPlan, fuelId: string, ctx: FuelContext): Promise<void> {
+  private async sendFuel(plan: SendPlan, fuelId: string, ctx: FuelContext): Promise<bigint | null> {
     const fuel = this.deps.fuel;
     const wait = (
       message: string,
@@ -1357,6 +1420,18 @@ export class TransferService {
     }
     const maxFee = ctx.quote.maxFeePerGas < ceiling ? ctx.quote.maxFeePerGas : ceiling;
     const tip = ctx.quote.priorityFeePerGas < maxFee ? ctx.quote.priorityFeePerGas : maxFee;
+    // Yönetici kararı (T153 doğrulaması, bulgu a): a fuel smaller than its
+    // own worst-case fee is never sent — it would cost more to send than it
+    // delivers, and many of them would spend the fuel wallet on fees. The
+    // deposit then signs at the fee it affords, or waits.
+    const fuelFee = FUEL_SEND_GAS * maxFee;
+    if (amount < fuelFee) {
+      return this.feeTheDepositAffords(
+        plan,
+        ctx,
+        `it lacks ${amount} wei, less than a fuel's own fee ${fuelFee} wei`,
+      );
+    }
     if (amount > maxSingleWei) {
       logger.error(
         {
@@ -1374,19 +1449,21 @@ export class TransferService {
     }
 
     await this.locks.run(fuelAddress, async () => {
+      // Value + the fuel's own worst-case fee, past fuels counted the same way (bulgu a).
       const spent = this.fuelSpentLast24hWei();
-      if (spent + amount > maxDailyWei) {
+      if (spent + amount + fuelFee > maxDailyWei) {
         logger.error(
           {
             id: plan.id,
             spent: spent.toString(),
             amount: amount.toString(),
+            fee: fuelFee.toString(),
             cap: maxDailyWei.toString(),
           },
           'Fuel would exceed ETHEREUM_FUEL_MAX_DAILY_ETH — not sent; the send waits',
         );
         throw wait(
-          `Fuel in 24 h would reach ${spent + amount} wei, above the daily cap ${maxDailyWei} wei — the send waits.`,
+          `Fuel value + fee in 24 h would reach ${spent + amount + fuelFee} wei, above the daily cap ${maxDailyWei} wei — the send waits.`,
           'FUEL_LIMIT_REACHED',
         );
       }
@@ -1399,7 +1476,7 @@ export class TransferService {
           BigInt(record.amountUnits) + BigInt(record.gasLimit) * BigInt(latest.maxFeePerGas);
       }
       const balance = await this.deps.rpc.getBalance(fuelAddress, ctx.head.number);
-      const needed = amount + FUEL_SEND_GAS * maxFee;
+      const needed = amount + fuelFee;
       if (balance < reserved + needed) {
         logger.error(
           {
@@ -1436,7 +1513,10 @@ export class TransferService {
         maxSingleWei: maxSingleWei,
         maxDailyWei: maxDailyWei,
         spentLast24hWei: spent,
-        maxForSendWei: sendNeeds,
+        // Computed apart from `amount` (bulgu b): what the send lacks once the
+        // deposit's ETH that is this request's is counted — a fuel above it
+        // is refused by the signer.
+        maxForSendWei: ctx.gasLimit * ctx.maxFeePerGas - ctx.available,
         platformAddresses: [
           this.deps.hotWalletAddress ?? '',
           fuel.coldWalletAddress ?? '',
@@ -1465,6 +1545,13 @@ export class TransferService {
         mined: null,
         conflictSuspectedAt: null,
         conflict: null,
+        fuelFor: {
+          purpose: plan.purpose,
+          token: plan.token,
+          recipient: plan.recipient,
+          amountUnits: plan.amountUnits.toString(),
+          refundType: plan.refundType,
+        },
       };
       // Durable BEFORE broadcast, like every send (08 §3.7.6).
       this.deps.journal.put(record);
@@ -1486,6 +1573,7 @@ export class TransferService {
       fuelSendsTotal.inc({ flow: plan.purpose.toLowerCase() });
       await this.broadcast(record, attempt);
     });
+    return null;
   }
 
   /** The fuel key's one kind of transaction: policy on the exact object, signature, sender re-check. */

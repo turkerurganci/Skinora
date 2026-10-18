@@ -2,7 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Transaction } from 'ethers';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createApp } from '../api/routes.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 import { canonicalAddress } from '../address/canonicalAddress.js';
 import { MAINNET_TOKEN_CONTRACTS } from '../network.js';
 import { FuelLedger } from '../reconcile/FuelLedger.js';
@@ -11,7 +15,14 @@ import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { seedFuelLedger } from '../wiring.js';
 import { decodeTransferCall } from './erc20.js';
 import { FEE_CAP_WAIT_REASONS, FeeWaitTracker, GAS_WAIT_REASONS } from './FeeWaitTracker.js';
-import { CAP_REFERENCE_GAS, fuelCapWei, capWeiPerTransaction } from './FeePolicy.js';
+import {
+  CAP_REFERENCE_GAS,
+  fuelCapWei,
+  capWeiPerTransaction,
+  feeCeilingPerGas,
+} from './FeePolicy.js';
+import * as signerPolicy from './SignerPolicy.js';
+import type { FuelIntent } from './SignerPolicy.js';
 import { TransferGuard } from './TransferGuard.js';
 import {
   TransferService,
@@ -40,6 +51,15 @@ import { TxJournal } from './TxJournal.js';
  *     reconciliation's FuelLedger learns every fuel in a block.</item>
  * </list>
  */
+
+// A pass-through spy: the real policy runs; the test reads the intent the
+// service built (bulgu b — what `maxForSendWei` the signer is given).
+vi.mock('./SignerPolicy.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./SignerPolicy.js')>();
+  return { ...original, assertSignableFuel: vi.fn(original.assertSignableFuel) };
+});
+const fuelIntents = () =>
+  vi.mocked(signerPolicy.assertSignableFuel).mock.calls.map((call) => call[1] as FuelIntent);
 
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
 const wallet = new EthereumHdWallet(MNEMONIC);
@@ -76,6 +96,7 @@ beforeEach(() => {
   chain.setToken(USDT, DEPOSIT_B.address, 50_000_000n);
   clock = 1_800_000_000_000;
   ledger = new FuelLedger();
+  vi.mocked(signerPolicy.assertSignableFuel).mockClear();
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -171,6 +192,10 @@ async function reason(promise: Promise<unknown>): Promise<string | undefined> {
 // Sweep at T142's prices: gas 46,201 → limit 50,822; tip 0.05 gwei, base 1 gwei.
 const SWEEP_GAS_LIMIT = 50_822n;
 const QUOTED_MAX_FEE = 2n * 1_000_000_000n + 50_000_000n; // 2 × base + tip
+// What one fuel takes off the daily cap at these prices: value + its own worst-case fee.
+const ONE_FUEL = SWEEP_GAS_LIMIT * QUOTED_MAX_FEE;
+const ONE_FUEL_FEE = 21_000n * QUOTED_MAX_FEE;
+const ONE_FUEL_OUTFLOW = ONE_FUEL + ONE_FUEL_FEE;
 
 describe('fuel before a deposit send — exactly what it lacks, to the deposit itself', () => {
   it('an empty deposit: the sweep waits (FUEL_PENDING) and the fuel wallet signs exactly gasLimit × maxFeePerGas to it', async () => {
@@ -343,7 +368,8 @@ describe('one fuel per request, ever', () => {
 describe('a fuel that reverted', () => {
   it('is not taken as delivered — the send waits even if the deposit could afford a lower fee', async () => {
     const needs = SWEEP_GAS_LIMIT * QUOTED_MAX_FEE;
-    chain.setEth(DEPOSIT.address, (needs * 2n) / 3n); // affords ~1.37 gwei, above base + tip
+    // Lacks 45 % (above a fuel's own fee); affords ~1.13 gwei on its own, above base + tip.
+    chain.setEth(DEPOSIT.address, (needs * 55n) / 100n);
     chain.revertEthTo.add(canonicalAddress(DEPOSIT.address));
     const { service } = build();
     expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
@@ -456,15 +482,14 @@ describe('fuel caps and the fuel wallet — a wait, never a refusal', () => {
   });
 
   it('the 24-hour cap counts every fuel the journal signed, survives a restart and frees up after 24 h', async () => {
-    const one = SWEEP_GAS_LIMIT * QUOTED_MAX_FEE;
-    const caps = { maxDailyWei: 2n * one };
+    const caps = { maxDailyWei: 2n * ONE_FUEL_OUTFLOW };
     const { service } = build(caps);
     expect(await reason(service.sweep(sweep(1)))).toBe('FUEL_PENDING');
     expect(
       await reason(service.sweep(sweep(2, { depositIndex: 6, depositAddress: DEPOSIT_B.address }))),
     ).toBe('FUEL_PENDING');
     const restarted = build(caps);
-    expect(restarted.service.fuelSpentLast24hWei()).toBe(2n * one);
+    expect(restarted.service.fuelSpentLast24hWei()).toBe(2n * ONE_FUEL_OUTFLOW);
     const third = wallet.derive(7);
     chain.setToken(USDT, third.address, 50_000_000n);
     const thirdSweep = sweep(3, { depositIndex: 7, depositAddress: third.address });
@@ -591,14 +616,16 @@ describe('keeper and reconciliation', () => {
     expect(canonicalAddress(bumped.to!)).toBe(canonicalAddress(DEPOSIT.address));
     expect(bumped.maxFeePerGas! * 10n).toBeGreaterThanOrEqual(first.maxFeePerGas! * 11n);
     expect(21_000n * bumped.maxFeePerGas!).toBeLessThanOrEqual(BigInt(record.feeCapWei!));
-    expect(service.fuelSpentLast24hWei()).toBe(first.value); // the bump is not a second fuel
+    // The bump is not a second fuel: one value, and the fee of the latest attempt only.
+    expect(service.fuelSpentLast24hWei()).toBe(first.value + 21_000n * bumped.maxFeePerGas!);
     chain.mine();
     expect(chain.ethOf(DEPOSIT.address)).toBe(first.value);
   });
 
   it('a fee bump is not counted twice against the 24-hour fuel cap', async () => {
-    const one = SWEEP_GAS_LIMIT * QUOTED_MAX_FEE;
-    const { service, journal } = build({ maxDailyWei: one }); // room for exactly this fuel
+    // Room for exactly this fuel at its highest possible fee (its share of the cap).
+    const room = ONE_FUEL + fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD);
+    const { service, journal } = build({ maxDailyWei: room });
     await reason(service.sweep(sweep()));
     chain.baseFee = 2_500_000_000n;
     chain.mine();
@@ -656,5 +683,224 @@ describe('keeper and reconciliation', () => {
       to: canonicalAddress(HOT.address),
       amountUnits: 50_000_000n,
     });
+  });
+});
+
+/*
+ * T153 doğrulaması — bulgular (yönetici kararları). Each test names the
+ * finding it pins; every one was shown red against the code it guards.
+ */
+
+describe('bulgu a — the fuel’s own fee is under the daily cap; no fuel smaller than its fee', () => {
+  it('40 small fuels: value + fee hits the daily cap where value alone would not', async () => {
+    const small = ONE_FUEL_FEE + 1n; // the smallest fuel that is sent: just above its own fee
+    const count = 40;
+    const { service } = build({ maxDailyWei: BigInt(count) * small }); // all 40 values would fit
+    const reasons: Array<string | undefined> = [];
+    for (let i = 0; i < count; i++) {
+      const deposit = wallet.derive(100 + i);
+      chain.setToken(USDT, deposit.address, 50_000_000n);
+      chain.setEth(deposit.address, ONE_FUEL - small);
+      reasons.push(
+        await reason(
+          service.sweep(sweep(100 + i, { depositIndex: 100 + i, depositAddress: deposit.address })),
+        ),
+      );
+    }
+    const fuels = fuelTxs();
+    for (const fuel of fuels) expect(fuel.value).toBe(small);
+    const outflow = fuels.reduce((sum, tx) => sum + tx.value + 21_000n * tx.maxFeePerGas!, 0n);
+    expect(outflow).toBeLessThanOrEqual(BigInt(count) * small);
+    expect(fuels).toHaveLength(Math.floor((count * Number(small)) / Number(small + ONE_FUEL_FEE)));
+    expect(reasons.filter((r) => r === 'FUEL_LIMIT_REACHED')).toHaveLength(count - fuels.length);
+    expect(service.fuelSpentLast24hWei()).toBe(outflow);
+  });
+
+  it('a deposit lacking less than a fuel’s own fee gets no fuel — it signs at the fee it affords', async () => {
+    chain.setEth(DEPOSIT.address, ONE_FUEL - 1n); // the validator's probe: 1 wei short
+    const { service } = build();
+    const result = await service.sweep(sweep());
+    expect(result.replayed).toBe(false);
+    expect(fuelTxs()).toHaveLength(0);
+    const [token] = tokenTxs();
+    expect(token.maxFeePerGas).toBe((ONE_FUEL - 1n) / SWEEP_GAS_LIMIT);
+    expect(service.fuelSpentLast24hWei()).toBe(0n);
+  });
+
+  it('…and waits FUEL_REQUIRED, still with no fuel, when that fee is below base + tip', async () => {
+    chain.tip = 500_000_000n; // quoted 2.5 gwei; a fuel's own fee 21,000 × 2.5 gwei
+    const need = SWEEP_GAS_LIMIT * 2_500_000_000n;
+    const fuelFee = 21_000n * 2_500_000_000n;
+    chain.setEth(DEPOSIT.address, need - fuelFee + 1n); // lacks one wei less than a fuel's fee
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_REQUIRED'); // affords ~1.47 < 1.5 gwei
+    expect(chain.sent).toHaveLength(0);
+
+    chain.baseFee = 800_000_000n; // base + tip 1.3 gwei: the deposit's own ETH is enough now
+    await service.sweep(sweep());
+    expect(tokenTxs()).toHaveLength(1);
+    expect(fuelTxs()).toHaveLength(0);
+  });
+});
+
+describe('bulgu b — the signer is given what the send lacks, not its whole budget', () => {
+  it('maxForSendWei = gasLimit × maxFeePerGas − the deposit’s ETH that is this request’s', async () => {
+    chain.setEth(DEPOSIT.address, ONE_FUEL / 3n);
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    const [intent] = fuelIntents();
+    expect(intent.maxForSendWei).toBe(ONE_FUEL - ONE_FUEL / 3n);
+    expect(intent.maxForSendWei).toBe(fuelTxs()[0].value);
+  });
+
+  it('another request’s fuel in the balance is not this send’s: the bound excludes it', async () => {
+    const { service } = build();
+    await reason(service.sweep(sweep(1, { amount: '40' })));
+    chain.mine(); // the sweep's fuel is on the deposit, its sweep not signed yet
+    expect(await reason(service.refund(refund(2)))).toBe('FUEL_PENDING');
+    const intents = fuelIntents();
+    expect(intents).toHaveLength(2);
+    expect(intents[1].maxForSendWei).toBe(ONE_FUEL);
+  });
+});
+
+describe('bulgu c — money test gaps', () => {
+  it('M35: when the token share of the cap binds, the fuel is the capped budget, not the quoted one', async () => {
+    chain.baseFee = 1_420_000_000n; // quoted 2.89 gwei; the token share allows ~2.86
+    const ceiling = feeCeilingPerGas(
+      capWeiPerTransaction(CAP_MICROS, 'SWEEP', ETH_USD),
+      SWEEP_GAS_LIMIT,
+    );
+    const quoted = 2n * 1_420_000_000n + 50_000_000n;
+    expect(ceiling).toBeLessThan(quoted);
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[0].value).toBe(SWEEP_GAS_LIMIT * ceiling);
+  });
+
+  describe('M36: every fuel wait reaches the backend as 503 { deferred: true }, not only its code', () => {
+    let server: Server | null = null;
+    afterEach(async () => {
+      const s = server;
+      server = null;
+      if (s) await new Promise((resolve) => s.close(resolve));
+    });
+
+    async function postSweep(service: TransferService) {
+      const app = createApp({
+        internalKey: 'k'.repeat(64),
+        chainId: 11155111,
+        wallet,
+        finality: () => ({ state: 'ok', snapshot: null, ageSeconds: null, lastError: null }),
+        transfers: service,
+        feeEstimator: {} as EthFeeEstimationService,
+      });
+      const s = app.listen(0, '127.0.0.1');
+      server = s;
+      await new Promise((resolve) => s.once('listening', resolve));
+      const res = await fetch(
+        `http://127.0.0.1:${(s.address() as AddressInfo).port}/api/transfer/sweep`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-internal-key': 'k'.repeat(64) },
+          body: JSON.stringify({ network: 'ETHEREUM', ...sweep() }),
+        },
+      );
+      return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+    }
+
+    it.each<[string, () => Partial<FuelDeps> | null, () => void]>([
+      ['FUEL_PENDING', () => ({}), () => {}],
+      ['FUEL_REQUIRED', () => ({ key: null }), () => {}],
+      ['FUEL_LIMIT_REACHED', () => ({ maxSingleWei: ONE_FUEL - 1n }), () => {}],
+      ['FUEL_LIMIT_REACHED', () => ({ maxDailyWei: ONE_FUEL_OUTFLOW - 1n }), () => {}],
+      ['FUEL_WALLET_LOW', () => ({}), () => chain.setEth(FUEL.address, ONE_FUEL)],
+      [
+        'FEE_ABOVE_CAP',
+        () => ({}),
+        () => {
+          chain.estimate = 20_000n; // the fuel's own share binds, the token's does not
+          chain.baseFee = 4_000_000_000n;
+        },
+      ],
+    ])('%s', async (expected, fuel, arrange) => {
+      arrange();
+      const { status, body } = await postSweep(build(fuel()).service);
+      expect(status).toBe(503);
+      expect(body).toMatchObject({ error: expected, deferred: true, retryable: true });
+      if (expected !== 'FUEL_PENDING') expect(fuelTxs()).toHaveLength(0);
+    });
+  });
+
+  it('M44: another request’s fuel not yet in a block is not reserved — it is not in the balance', async () => {
+    const { service } = build();
+    expect(await reason(service.sweep(sweep(1, { amount: '40' })))).toBe('FUEL_PENDING');
+    // Sweep's fuel still in the mempool; the deposit holds half a send's gas of its own.
+    chain.setEth(DEPOSIT.address, ONE_FUEL / 2n);
+    expect(await reason(service.refund(refund(2)))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[1].value).toBe(ONE_FUEL - ONE_FUEL / 2n);
+  });
+});
+
+describe('bulgu d — small test gaps', () => {
+  it('M40: the 24-hour window — a fuel signed exactly 24 h ago still counts, one ms later it does not', async () => {
+    const { service } = build({ maxDailyWei: ONE_FUEL_OUTFLOW });
+    expect(await reason(service.sweep(sweep(1)))).toBe('FUEL_PENDING');
+    const second = sweep(2, { depositIndex: 6, depositAddress: DEPOSIT_B.address });
+    expect(await reason(service.sweep(second))).toBe('FUEL_LIMIT_REACHED');
+    clock += 24 * 60 * 60 * 1000;
+    expect(await reason(service.sweep(second))).toBe('FUEL_LIMIT_REACHED');
+    clock += 1;
+    expect(await reason(service.sweep(second))).toBe('FUEL_PENDING');
+  });
+
+  it('M27/M29: a reverted fuel never reaches the FuelLedger — neither live nor rebuilt at startup', async () => {
+    chain.revertEthTo.add(canonicalAddress(DEPOSIT.address));
+    const { service, journal } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    chain.mine();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_REQUIRED'); // fuelFor sees the revert
+    await service.keepAll(); // the keeper records it as mined, status 0
+    const fuel = journal.get(`fuel:${ID(1)}`)!;
+    expect(fuel.mined?.status).toBe(0);
+    expect(ledger.sentBetween(DEPOSIT.address, 0n, chain.head + 1n)).toBe(0n);
+    const fresh = new FuelLedger();
+    expect(seedFuelLedger(new TxJournal(dir), fresh)).toBe(0);
+    expect(fresh.sentBetween(DEPOSIT.address, 0n, chain.head + 1n)).toBe(0n);
+  });
+
+  it('M02: the single-send cap is inclusive — a fuel of exactly the cap is sent', async () => {
+    const { service } = build({ maxSingleWei: ONE_FUEL });
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[0].value).toBe(ONE_FUEL);
+  });
+});
+
+describe('bulgu e — an id that holds only its fuel is taken', () => {
+  it.each<[string, (s: TransferService) => Promise<unknown>]>([
+    [
+      'another deposit',
+      (s) => s.sweep(sweep(1, { depositIndex: 6, depositAddress: DEPOSIT_B.address })),
+    ],
+    ['another index for the same deposit', (s) => s.sweep(sweep(1, { depositIndex: 6 }))],
+    ['another amount', (s) => s.sweep(sweep(1, { amount: '40' }))],
+    ['another flow on the same deposit', (s) => s.refund(refund(1))],
+  ])('%s → IDEMPOTENCY_CONFLICT (refused for good), no second fuel', async (_label, ask) => {
+    const { service } = build();
+    expect(await reason(service.sweep(sweep(1)))).toBe('FUEL_PENDING');
+    const err = await ask(service).then(
+      () => undefined,
+      (e: unknown) => e as { code?: string; retryable?: boolean },
+    );
+    expect(err).toMatchObject({ code: 'IDEMPOTENCY_CONFLICT', retryable: false });
+    // After a restart too: the fuel record keeps the request it was sent for.
+    const err2 = await ask(build().service).then(
+      () => undefined,
+      (e: unknown) => e as { code?: string },
+    );
+    expect(err2?.code).toBe('IDEMPOTENCY_CONFLICT');
+    expect(distinctFuelSignatures()).toBe(1);
+    // The same request is still the fuel's own: it keeps waiting for it.
+    expect(await reason(service.sweep(sweep(1)))).toBe('FUEL_PENDING');
   });
 });
