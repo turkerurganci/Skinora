@@ -2104,6 +2104,10 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<long?>("RealizedFeeSun")
                         .HasColumnType("bigint");
 
+                    b.Property<decimal?>("RealizedFeeWei")
+                        .HasPrecision(38)
+                        .HasColumnType("decimal(38,0)");
+
                     b.Property<int>("RetryCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
