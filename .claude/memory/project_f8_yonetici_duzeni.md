@@ -14,4 +14,5 @@ Türker 2026-10-17'de F8'in (TRON + Ethereum, T141–T160) Shopfolio'daki yönte
 - Kolay kararlar öneriyle verilir, `(öneriyle kaydedildi — ⚠)` işaretlenir, F8 Gate Check'ten önce tek listede gösterilir. Para, güvenlik, geri dönüşü zor kararlar sorulur.
 - Yarım saati aşan adımda tek satır ara durum; faz sonunda tahmin–gerçekleşen süre tablosu (ölçüm scratchpad'deki PROGRESS.md'de).
 - Bekleyen #335 ve #334 da bu düzenle doğrulanıp birleştirilir (Türker 2026-10-17: "onu da sen yapacaksın").
+- **Her merge'den sonra ana checkout'ta `git pull` (main).** Hook'lar yerel `main` ref'ine bakıyor; bayat kalırsa paralel yapım ajanları main'in yeni commit'lerini "başka görev" sayıp engelleniyor ve `SKINORA_ALLOW_BUNDLED` ile atlatmaya gidiyor (T144, 2026-10-18).
 - Yetki ve soru düzeni yalnız F8 içindir; F9 açılışında yeniden sorulur. Kural katmanındaki evi: `.claude/INSTRUCTIONS.md` §3.3 "F8 yönetici düzeni" maddesi.

@@ -46,7 +46,7 @@ public class TransactionInviteNotificationConsumerTests
         Assert.Equal(NotificationType.TRANSACTION_INVITE, request.Type);
         Assert.Equal(domainEvent.TransactionId, request.TransactionId);
         Assert.Equal("AK-47 | Redline", request.Parameters["ItemName"]);
-        Assert.Equal("100", request.Parameters["Amount"]);
+        Assert.Equal("100.00", request.Parameters["Amount"]);
     }
 
     [Fact]

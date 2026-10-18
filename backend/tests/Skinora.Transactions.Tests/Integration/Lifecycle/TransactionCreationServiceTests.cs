@@ -134,6 +134,30 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Null(evt.BuyerId);
     }
 
+    [Theory]
+    // T144 — the persisted payable is whole-cent (commission truncated to the
+    // cent). Before T144: 10.55 → 0.211 / 10.761, 10.25 → 0.205 / 10.455.
+    [InlineData("10.55", "0.21", "10.76")]
+    [InlineData("10.25", "0.20", "10.45")]
+    [InlineData("99.99", "1.99", "101.98")]
+    [InlineData("250.75", "5.01", "255.76")]
+    public async Task Persists_Whole_Cent_Commission_And_Total(
+        string price, string commission, string total)
+    {
+        var sut = BuildSut();
+        _marketPrice.Price = decimal.Parse(price, System.Globalization.CultureInfo.InvariantCulture);
+
+        var outcome = await sut.CreateAsync(
+            _seller.Id, ValidRequest() with { Price = price }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        var persisted = await Context.Set<Transaction>()
+            .AsNoTracking()
+            .SingleAsync(t => t.Id == outcome.Body!.Id);
+        Assert.Equal(decimal.Parse(commission, System.Globalization.CultureInfo.InvariantCulture), persisted.CommissionAmount);
+        Assert.Equal(decimal.Parse(total, System.Globalization.CultureInfo.InvariantCulture), persisted.TotalAmount);
+    }
+
     [Fact]
     public async Task Resolves_Buyer_Id_When_Steam_Id_Belongs_To_Registered_User()
     {

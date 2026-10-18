@@ -1,6 +1,6 @@
 # Skinora — Coding Guidelines
 
-**Versiyon: v1.2** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-17 (**T141** — §7.2'ye F8 hedef notu: alıcının ödeyeceği toplam 2 ondalıklı ve gösterilen = beklenen; bugünkü 6 haneli beklenen tutar / 2 haneli gösterim farkı T144'te kapanır, 11 §F8) · 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
+**Versiyon: v1.3** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 (**T144 — ödenecek tutar 2 ondalıklı**: §7.2 "Ödenecek tutar" ve "Gösterim metni" satırları (komisyon kuruşa aşağı, gösterilen = beklenen, `MoneyFormat.Display` yuvarlamasız, FE önizlemesi tamsayı kuruşla); §14.2 ödenecek tutarlar 2 ondalık; §14.3 komisyon satırı (öneriyle kaydedildi — ⚠); §14.4 formül; §14.5 ızgara testi.) · 2026-10-17 (**T141** — §7.2'ye F8 hedef notu: alıcının ödeyeceği toplam 2 ondalıklı ve gösterilen = beklenen; bugünkü 6 haneli beklenen tutar / 2 haneli gösterim farkı T144'te kapanır, 11 §F8) · 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
 
 > **Amaç:** Bu doküman, projede kod üretirken ve mevcut kodu değiştirirken uyulması gereken teknik geliştirme kurallarını tanımlar.
 >
@@ -648,8 +648,9 @@ Skinora.Shared'a **yalnızca** şunlar konur:
 | Kural | Açıklama |
 |-------|----------|
 | API'de | String, 2 ondalık: `"100.00"` (07 §2.8 K8) |
-| DB'de | `decimal(18,6)` — hesaplama hassasiyeti için 6 ondalık |
-| Ödenecek toplam (F8 hedefi, T144) | Alıcının ödeyeceği toplam her zaman **2 ondalıklıdır** ve ekranda gösterilen tutar beklenen tutarın (`PaymentAddress.ExpectedAmount`) kendisidir. Bugün komisyon 6 haneyle hesaplanıyor ve beklenen tutar 6 haneli kalırken API 2 haneye yuvarlıyor (10,55 fiyat → beklenen 10,761, ekranda "10,76"); BtcTurk ve Paribu USDT'yi 2 haneden fazla göndermediği için bu ödemeler eşleşmez. Komisyon yuvarlama kuralı T144'te 02/06/07/09'a tek biçimde yazılır (06 §8.3, 11 §F8) |
+| DB'de | `decimal(18,6)` — hesaplama hassasiyeti için 6 ondalık (depolama ölçeği; ödenecek tutarlar bu kolonlarda 2 ondalıklı değer taşır) |
+| Ödenecek tutar (T144) | Komisyon kuruşa **aşağı** kesilir: `ROUND(fiyat × oran, 2, ToZero)` (`FinancialCalculator.CalculateCommission`). Fiyat 2 ondalıklı olduğu için alıcının ödeyeceği toplam (`TotalAmount` = `PaymentAddress.ExpectedAmount`) her zaman **2 ondalıklıdır** ve ekranda/bildirimde gösterilen tutar bunun kendisidir. Yön aşağı (öneriyle kaydedildi — ⚠): alıcı `fiyat × oran`dan fazla ödemez. Gerekçe: BtcTurk ve Paribu USDT'yi 2 haneden fazla göndermez; T144 öncesi 6 haneli komisyonla 10,55 fiyatta beklenen 10,761, ekrandaki "10,76" idi (02 §5, 06 §8.3). Ödenecek bir tutarı 2 ondalığa **yuvarlayarak göstermek yasaktır** — hata tam olarak buydu |
+| Gösterim metni (T144) | Kullanıcının okuduğu tutarlar (işlem detayındaki ödenecek alanlar, bildirim şablonlarının `{Amount}`/`{ExpectedAmount}`/`{ReceivedAmount}` parametreleri) `MoneyFormat.Display` ile yazılır: en az 2, en çok 6 hane, **yuvarlamasız** (`10.76`, `102.00`; zincirden gelen `10.761` olduğu gibi). Frontend önizlemesi aynı kuralı tamsayı kuruşla hesaplar (`lib/utils/money.ts`); `fiyat × oran`ı kayan noktayla çarpıp `Intl` ile 2 haneye yuvarlamak yasaktır |
 | Kod içinde | `decimal` tipi zorunlu. `float` / `double` YASAK (§14'te detaylandırılır) |
 
 ### 7.3 ID Formatı
@@ -1557,6 +1558,7 @@ Tüm para hesaplamalarında `decimal` kullanılır. `float` ve `double` **YASAK*
 | C# kod | `decimal` | 28-29 anlamlı basamak |
 | SQL Server | `decimal(18,6)` | 6 ondalık (hesaplama hassasiyeti) |
 | API response | `string` | 2 ondalık (`"100.00"`) — §7.2 |
+| Ödenecek tutarlar (fiyat, komisyon, ağ ücreti satırı, toplam) | `decimal` | **2 ondalık** (T144 — §7.2, 06 §8.3) |
 | Blockchain | — | Token'ın native hassasiyetinde (USDT/USDC: 6 ondalık) |
 
 ### 14.3 Rounding Stratejisi
@@ -1564,6 +1566,7 @@ Tüm para hesaplamalarında `decimal` kullanılır. `float` ve `double` **YASAK*
 | Kural | Açıklama |
 |-------|----------|
 | Varsayılan | `MidpointRounding.ToZero` (truncation) — kullanıcı aleyhine yuvarlama yapılmaz |
+| Komisyon (T144) | `ROUND(fiyat × oran, 2, ToZero)` — kuruşa aşağı; ödenecek toplamı 2 ondalıklı yapan kural budur (02 §5, 06 §8.3, §7.2). Yön (öneriyle kaydedildi — ⚠): alıcı hiçbir zaman `fiyat × oran`dan fazla ödemez, platform işlem başına 1 sentten azını bırakır. TRON ağ ücreti satırı istisnadır: 2 haneye **yukarı** yuvarlanır (11 §F8 K8, T149) |
 | Uygulanma noktası | Yalnızca son adımda (API'ye dönmeden veya blockchain'e göndermeden hemen önce). Ara hesaplamalarda yuvarlama yapılmaz. |
 | Gerekçe | Banker's rounding küçük farklar üretir. Escrow'da "nereye gitti bu 0.01 USDT?" sorusu güven kırar. Truncation öngörülebilir. |
 
@@ -1571,8 +1574,8 @@ Tüm para hesaplamalarında `decimal` kullanılır. `float` ve `double` **YASAK*
 
 **Komisyon:**
 ```
-komisyon = işlem_tutarı × komisyon_oranı
-alıcı_ödemesi = işlem_tutarı + komisyon
+komisyon = ROUND(işlem_tutarı × komisyon_oranı, 2, ToZero)   ← kuruşa aşağı (T144, §14.3)
+alıcı_ödemesi = işlem_tutarı + komisyon         ← her zaman 2 ondalıklı (işlem_tutarı 2 ondalıklı girilir)
 satıcı_alacağı = işlem_tutarı                  ← komisyon alıcıdan alınır, satıcının tutarına dokunmaz (02 §5)
 platform_geliri = komisyon - gönderim_gas_fee
 ```
@@ -1625,6 +1628,7 @@ Her hesaplama formülü için birim test zorunludur. Test senaryoları:
 | Fazla ödeme | Küçük fazla (iade eşiği altı), büyük fazla |
 | Eksik ödeme | Kısmi ödeme → iade |
 | Precision | 6 ondalık basamağa kadar doğruluk |
+| Ödenecek tutar ızgarası (T144) | 10,00–99,99 arası her fiyat ve uç fiyatlar, birkaç oranla: komisyon ve toplam 2 ondalıklı, komisyon ≤ `fiyat × oran` ve farkı < 0,01, gösterilen metin beklenen tutarın kendisi; beklenen değer üretim kodundan bağımsız tamsayı kuruş hesabıyla üretilir |
 
 > Para hesaplaması içeren her PR'da bu testlerin güncel ve geçer durumda olması zorunludur.
 
@@ -2291,4 +2295,4 @@ Her kod tesliminde sorulacak sorular:
 
 ---
 
-*Skinora — Coding Guidelines v1.2*
+*Skinora — Coding Guidelines v1.3*

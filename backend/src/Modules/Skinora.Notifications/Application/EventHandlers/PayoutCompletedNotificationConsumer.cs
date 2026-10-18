@@ -1,7 +1,7 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -75,7 +75,7 @@ public sealed class PayoutCompletedNotificationConsumer
                 TransactionId = domainEvent.TransactionId,
                 Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["Amount"] = domainEvent.NetAmount.ToString("0.######", CultureInfo.InvariantCulture),
+                    ["Amount"] = MoneyFormat.Display(domainEvent.NetAmount),
                 },
             },
             // 03 §2.4 step 6 / 06 §2.13 — completion notice to the seller.

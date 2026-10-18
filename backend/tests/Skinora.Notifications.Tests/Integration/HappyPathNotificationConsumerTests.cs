@@ -156,7 +156,7 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
         Assert.Equal(_seller.Id, request.UserId);
         Assert.Equal(NotificationType.PAYMENT_RECEIVED, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
-        Assert.Equal("102", request.Parameters["Amount"]);
+        Assert.Equal("102.00", request.Parameters["Amount"]);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
         Assert.Equal(_buyer.Id, request.UserId);
         Assert.Equal(NotificationType.PAYMENT_WINDOW_OPEN, request.Type);
         Assert.Equal(tx.Id, request.TransactionId);
-        Assert.Equal("102", request.Parameters["Amount"]);
+        Assert.Equal("102.00", request.Parameters["Amount"]);
         Assert.Equal(PaymentAddressValue, request.Parameters["PaymentAddress"]);
     }
 
@@ -279,7 +279,7 @@ public class HappyPathNotificationConsumerTests : IntegrationTestBase
             dispatcher.Requests,
             r => r.Type == NotificationType.SELLER_PAYMENT_SENT);
         Assert.Equal(_seller.Id, sellerPayout.UserId);
-        Assert.Equal("99.7", sellerPayout.Parameters["Amount"]);
+        Assert.Equal("99.70", sellerPayout.Parameters["Amount"]);
 
         var completed = dispatcher.Requests
             .Where(r => r.Type == NotificationType.TRANSACTION_COMPLETED)

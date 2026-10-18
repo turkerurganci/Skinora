@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -50,7 +50,7 @@ public sealed class TransactionInviteNotificationConsumer
                         Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
                         {
                             ["ItemName"] = domainEvent.ItemName,
-                            ["Amount"] = domainEvent.Price.ToString("0.######", CultureInfo.InvariantCulture),
+                            ["Amount"] = MoneyFormat.Display(domainEvent.Price),
                         },
                     },
                   ]
