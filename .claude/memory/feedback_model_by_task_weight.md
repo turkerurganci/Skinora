@@ -19,4 +19,13 @@ Türker 2026-10-18'de, F8 yönetici düzeninde her alt ajanın Opus'la koştuğu
 - Emin değilsen: işin içinde "bulgu bulmak, doğrulamak ya da karar vermek" varsa Opus; yoksa Sonnet/Haiku. Ucuz modele verilen işin çıktısını yönetici olarak gözden geçir.
 - CI izleme, merge, PR yorumu gibi işleri ajan açmadan doğrudan Bash ile yap.
 
+**Ek (Türker, 2026-10-18): "daha pahalı olmasın! maliyeti düşürmeye çalışıyorum".** Model seçimi işin RİSKİNE göre, yalnız türüne göre değil:
+- **Opus yalnız para/güvenlik görevlerinde:** para gönderen, imzalayan, tutar hesaplayan, ödeme izleyen görevlerin yapımı ve doğrulaması (F8'de T152, T153 ve benzeri).
+- **Sonnet:** para/güvenlik dışı görevlerin yapımı ve doğrulaması (arayüz, admin ekranı, sahte servis/E2E, ayar/runbook), belge çakışmalı birleştirme ve kapanışlar, bulgusu verilmiş düzeltme turları.
+- **Haiku ya da doğrudan komut:** tek satırla bitecek iş için ajan açma (ajan açmak proje kurallarını yükleyip komutu çalıştırmaktan pahalı); çok adımlı ama karar gerektirmeyen işler Haiku.
+- Ucuz modelin çıktısını yönetici gözden geçirir; şüphe varsa yalnız o noktaya hedefli Opus kontrolü (tam doğrulama değil).
+- Ajan istemlerini kısa tut. Devam mesajı (SendMessage) YALNIZ ajanın geçmişi küçükse ve düzeltme birkaç satırsa ucuz; geçmişi büyük (yüz binlerce token) ajanda her adım tüm geçmişi yeniden okur (önbellek süresi dolduysa tam fiyat) — o durumda kısa, hedefli istemle yeni ajan aç (Türker'in itirazı, 2026-10-18).
+
+**Efor (Türker, 2026-10-18): "efor en fazla medium olsun, çok gerekli olan yerde high veya üstü olacak".** Her alt ajana Agent `effort` parametresiyle açıkça ver: varsayılan `medium` (ucuz mekanik işte `low`); `high`/üstü yalnız para gönderen/imzalayan/tutar hesaplayan görevlerin yapımı ve doğrulamasında (F8'de T152, T153), gerekçesi ilerleme notunda.
+
 İlgili: [[project_f8_yonetici_duzeni]].

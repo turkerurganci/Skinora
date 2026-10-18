@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-18 — **T151 ⏳ yapım bitti, doğrulama bekliyor** (Ethereum ödeme izleyicisi; rapor [`T151_REPORT.md`](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347)).
+
 **Önceki güncelleme:** 2026-10-18 — **T149 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (ağ ücreti politikası; rapor [`T149_REPORT.md`](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345), doğrulanan HEAD `2a1f5e5`, CI [`39122769568`](https://github.com/turkerurganci/Skinora/actions/runs/39122769568) ✓). Arada main'e birleşen T150 dala merge commit'le bütünleştirildi (çakışan dokuz dosyada iki tarafın içeriği korundu; migration sırası T149 → T150, model değişikliği bekleyen yok). **Proje sahibi kararı (2026-10-18):** sweep **sonrası** iadede TRON ağ ücreti satırı geri verilmez. Küçük bulgular kapatıldı: iki test boşluğu (Ethereum payout'unda satıcıya tam fiyat; tampon 0'ın 0 okunması), sweep sonrası iadenin yolu (`AdminResolveRefund` — admin iptali değil), 08 §3.1a yedeğin bekleme süresi, detay servisi yorumu. Merge yönetici tarafından yapılır.
 
 **Önceki güncelleme:** 2026-10-18 — **T150 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum servis iskeleti; rapor [`T150_REPORT.md`](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346), HEAD `2f0ba0b`, CI [`39120152616`](https://github.com/turkerurganci/Skinora/actions/runs/39120152616) ✓). Dört küçük bulgu: kesinti istisnası 05/06/08'e yayıldı; T151 (kod düzeyi kapı), T152 (onay işi kesicisi), T158 (metrik + testler + runbook) kriterlerine eklendi. Merge yönetici tarafından yapılır.

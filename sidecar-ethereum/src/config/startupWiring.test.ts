@@ -148,4 +148,29 @@ describe('Ethereum service startup — the configured values reach the running p
     expect(startup.output).not.toContain('rpc-key-in-path');
     expect(startup.output).not.toContain(MNEMONIC);
   }, 30_000);
+
+  it('T151 — starts the payment monitor with the configured read-back and reconciliation budget', async () => {
+    const startup = await start(
+      {
+        ETHEREUM_MONITOR_RESTART_LOOKBACK_BLOCKS: '3600',
+        ETHEREUM_RECONCILIATION_CU_PER_SECOND: '150',
+        ETHEREUM_RECONCILIATION_INTERVAL_MS: '1800000',
+        ETHEREUM_USDT_CONTRACT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+      },
+      'Ethereum payment monitor configured',
+    );
+    expect(startup.line, startup.output).toMatchObject({
+      restartLookbackBlocks: 3600,
+      reconciliationCuPerSecond: 150,
+      reconciliationIntervalMs: 1_800_000,
+      reconciliationMaxFinalizedAgeSeconds: 1500,
+      // eth_getBalance 20 + USDT balanceOf 26 (USDC not configured on Sepolia).
+      reconciliationCuPerDeposit: 46,
+    });
+  }, 30_000);
+
+  it('T151 — says loudly that payments cannot be reported without the webhook secret', async () => {
+    const startup = await start({ WEBHOOK_SECRET: '' }, 'WEBHOOK_SECRET is not set');
+    expect(startup.line, startup.output).toMatchObject({ level: 50 });
+  }, 30_000);
 });
