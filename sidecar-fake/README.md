@@ -1,10 +1,11 @@
 # skinora-fake-sidecar
 
-E2E-only test double for the **Steam** and **blockchain** sidecars (T107). It
-implements the exact HTTP surface the backend calls outbound, and drives the
-escrow happy path forward by emitting **HMAC-signed inbound webhooks** — so the
-full `CREATED → COMPLETED` flow runs with **no real Steam account and no real
-Tron node**.
+E2E-only test double for the **Steam**, **TRON** and **Ethereum** sidecars (T107;
+Ethereum since T155). It implements the exact HTTP surface the backend calls
+outbound, and drives the escrow happy path forward by emitting **HMAC-signed
+inbound webhooks** — so the full `CREATED → COMPLETED` flow runs with **no real
+Steam account and no real TRON or Ethereum node**, on either payment network
+(11 §F8 K1).
 
 > ⚠️ **Never deployed to production.** It exists solely for `docker-compose.e2e.yml`.
 
@@ -15,16 +16,25 @@ only clean, deterministic seam is the backend's **webhook ⇄ sidecar-client
 boundary** (owner decision, T107 approach **B**). This service stands in for
 both real sidecars at that boundary.
 
-One process listens on **two ports** so the backend reaches each surface where
+One process listens on **three ports** so the backend reaches each surface where
 it expects it:
 
 | Port | Surface | Backend config |
 |------|---------|----------------|
 | 5100 | Steam   | `SteamSidecar:BaseUrl` |
-| 5200 | Blockchain | `BlockchainSidecar:BaseUrl` |
+| 5200 | TRON blockchain | `BlockchainSidecar:BaseUrl` |
+| 5300 | Ethereum blockchain (T155) | `EthereumSidecar:BaseUrl` |
 
-In `docker-compose.e2e.yml` the container is aliased to both
-`skinora-steam-sidecar` and `skinora-blockchain-sidecar` hostnames.
+In `docker-compose.e2e.yml` the container is aliased to
+`skinora-steam-sidecar`, `skinora-blockchain-sidecar` and
+`skinora-ethereum-sidecar`.
+
+The TRON and Ethereum surfaces serve the **same paths** (05 §3.3a — one
+contract, one service per network), so each port has its own router bound to
+one network profile ([`src/networks.ts`](src/networks.ts)): address and hash
+formats, HD path, token contracts, webhook secret, and how a final transfer is
+reported. A call that reaches the wrong network's surface is refused the way the
+real service refuses it (below).
 
 ## Implemented surface (backend → fake, `X-Internal-Key` when set)
 
@@ -43,15 +53,38 @@ In `docker-compose.e2e.yml` the container is aliased to both
 > went with T117/T118). The seller→buyer trade is simulated by moving inventory
 > instead — see `POST /__e2e/steam/trade` below.
 
-**Blockchain (`:5200`)**
-- `POST /api/wallet/derive` — deterministic fake Tron deposit address
-- `POST /api/wallet/balances`
-- `POST /api/monitor/post-cancel-start` · `/post-cancel-stop`
-- `POST /api/transfer/{payout,refund,sweep,cold-wallet}` — returns a fake `txHash`
-- `GET  /api/transfer/status/:txHash` — immediate finality (`confirmations ≥ 20`,
-  `SUCCESS`) so the seller payout confirms on the first poll ⇒ `COMPLETED`
+**Blockchain — TRON (`:5200`) and Ethereum (`:5300`), same paths**
 
-**Health**: `GET /health` (both ports).
+| Endpoint | TRON | Ethereum |
+|---|---|---|
+| `POST /api/wallet/derive` | base58 `T…`, `m/44'/195'/0'/0/{i}` | EIP-55 `0x…`, `m/44'/60'/0'/0/{i}` |
+| `POST /api/wallet/balances` | empty token map | empty token map |
+| `POST /api/monitor/start` · `/stop` | registry, readable via `/__e2e/blockchain/monitors` | same |
+| `POST /api/monitor/post-cancel-start` · `/post-cancel-stop` | acknowledged | acknowledged |
+| `POST /api/transfer/{payout,refund,sweep,cold-wallet}` | 64-hex `txHash` | `0x` + 64-hex `txHash` |
+| `GET /api/transfer/status/:txHash` | `confirmations: 25`, `SUCCESS` | `finalized: true`, `confirmations: 13` (bilgi amaçlı — gerçek servis T152 gibi; kesinlik yalnız `finalized`), `realizedFeeWei` (K5, T154) |
+| `POST /api/transfer/estimate-fee` | `feeUsdt` 2.00 + Energy breakdown | T154 shape: `feeWei` / `ethPriceUsdt` as strings, `feeUsdt` = their rounded-up product (0.05) |
+| `POST /api/transfer/estimate-sweep-fee` | 8,441,349 SUN at 0.34 → the backend's 2.90 line (T149) | 501 `NOT_IMPLEMENTED` (no buyer-paid line on Ethereum) |
+
+Immediate finality on both: the confirmation job settles a transfer on its
+first poll, in that network's own terms ⇒ `COMPLETED`.
+
+What each blockchain surface **refuses** (400), like the real services:
+
+- a POST whose `network` names another network — or, on Ethereum, none
+  (`NETWORK_MISMATCH`; TRON lets an absent field through — T148 iv / T150 iv);
+- an address in another network's format (`INVALID_ADDRESS`) — a TRON refund
+  address sent through the Ethereum service never confirms;
+- `monitor/start` with another network's (or another symbol's) token contract
+  (`UNEXPECTED_CONTRACT`);
+- a `transfer/status` hash in another network's format (`INVALID_TX_HASH`).
+
+Every call is journalled with its network and the status it was answered with
+(`GET /__e2e/blockchain/calls`).
+
+**Health**: `GET /health` on every port. The TRON and Ethereum surfaces name
+their `network`; Ethereum also declares `acceptsPayments: true` (the T151 gate:
+without it the backend keeps Ethereum out of `supportedNetworks`).
 
 ## E2E control surface (test → fake, no auth)
 
@@ -61,12 +94,33 @@ Simulates what the platform cannot observe by itself.
 
 Resolves the transaction's deposit `PaymentAddress` from SQL Server so the
 inbound webhook carries a valid `paymentAddressId` + the **exact**
-`ExpectedAmount`.
+`ExpectedAmount` — and, since T155, the deposit's **network**: the webhook is
+the one that network's service would send (its hash format, payer wallet, token
+contracts), signed with that network's secret. The same call drives a TRON and
+an Ethereum transaction.
 
 - `POST /__e2e/payment/pay`     `{ transactionId, amount? }` — detect **then**
   confirm (exact amount) ⇒ `PAYMENT_RECEIVED`. Happy-path entry point.
 - `POST /__e2e/payment/detect`  `{ transactionId, amount? }` — DETECTED row only
 - `POST /__e2e/payment/confirm` `{ transactionId }` — CONFIRMED + amount validation
+- `POST /__e2e/payment/{wrong-token,spam-token,late-detected}` — the 03 §5.3 /
+  §5.3a / §5.4 levers, on the deposit's network
+
+Two negative levers on every payment endpoint send what the backend must refuse
+(409 `WEBHOOK_NETWORK_MISMATCH`, T148): `claimNetwork` (the envelope's
+`network`) and `signAs` (whose secret signs). A refused webhook answers 502 with
+the backend's `backendStatus` + `backendBody`.
+
+### Blockchain read-back + fee knobs (T155)
+
+- `GET  /__e2e/blockchain/calls?network=&path=&sinceSeq=` — every backend →
+  blockchain-service call, oldest first (`path` is a prefix)
+- `GET  /__e2e/blockchain/monitors?network=` — deposits currently watched
+- `POST /__e2e/blockchain/fees` `{ network, available?, tronFeeUsdt?,
+  tronSweepCostSun?, tronTrxPriceUsdt?, ethFeeWei?, ethPriceUsdt? }` — drive one
+  network's estimate answers; `available: false` ⇒ 502 and the backend takes its
+  fallback. `GET /__e2e/blockchain/fees/:network` reads them back.
+- `POST /__e2e/blockchain/reset` — journal, monitors and fee knobs to defaults
 
 ### Steam inventory (T137 — the P2P trade the platform is not a party to)
 
@@ -102,16 +156,21 @@ HMAC-SHA256 over `timestamp + nonce + body` with the per-sidecar shared secret,
 sent as `X-Signature` / `X-Timestamp` / `X-Nonce` — identical to the real
 sidecars and verified by the backend's `WebhookSignatureMiddleware` (05 §3.4).
 Only blockchain webhooks are signed: `BLOCKCHAIN_WEBHOOK_SECRET` must match the
-backend's `Webhook__BlockchainSharedSecret`. There is no Steam counterpart —
+backend's `Webhook__BlockchainSharedSecret` (TRON) and `ETHEREUM_WEBHOOK_SECRET`
+its `Webhook__EthereumSharedSecret` (T155). The two must differ — the backend
+refuses to start otherwise, and the secret that verifies is what tells it which
+network is speaking (T148). There is no Steam counterpart —
 T132 removed the inbound Steam webhook route together with
 `Webhook__SteamSharedSecret`, and T133 removed the publishing half.
 
 ## Configuration
 
 See [`src/config.ts`](src/config.ts). Key env vars: `STEAM_PORT` (5100),
-`BLOCKCHAIN_PORT` (5200), `BACKEND_URL`, `BLOCKCHAIN_WEBHOOK_SECRET`,
-`INTERNAL_KEY` (optional), `DB_*` (control-endpoint lookups),
-`FAKE_TRANSFER_CONFIRMATIONS`.
+`BLOCKCHAIN_PORT` (5200), `ETHEREUM_PORT` (5300), `BACKEND_URL`,
+`BLOCKCHAIN_WEBHOOK_SECRET`, `ETHEREUM_WEBHOOK_SECRET`,
+`ETHEREUM_USDT_CONTRACT` / `ETHEREUM_USDC_CONTRACT` (empty = mainnet, the
+backend's default), `INTERNAL_KEY` (optional), `DB_*` (control-endpoint
+lookups), `FAKE_TRANSFER_CONFIRMATIONS`.
 
 `FAKE_BOT_STEAM_ID` and `FAKE_TRADE_ACCEPT_DELAY_MS` were removed in T137 with
 the custody trade surface — there is no bot identity and no self-accept delay
@@ -125,8 +184,15 @@ npm install
 npm run build      # tsc
 npm run lint       # eslint
 npm run format:check
-npm test           # vitest (hmac signing, id generators, inventory store)
+npm test           # vitest (hmac, ids + EIP-55, keccak, fee math, inventory
+                   # store, both blockchain surfaces over HTTP, contract examples)
 ```
+
+`src/contracts.test.ts` holds the fake against the real services' example
+bodies — `sidecar-blockchain/contracts/` and `sidecar-ethereum/contracts/`, the
+same files the backend's contract tests replay. An Ethereum block runs once its
+directory exists (T151 adds `webhook/`, T154 `estimate-fee/` and
+`transfer-status/`); a new webhook example without a builder fails the test.
 
 ## Scope
 

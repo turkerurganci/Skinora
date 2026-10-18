@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { keccak256Hex } from './keccak.js';
 
 const BASE58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
@@ -37,6 +38,40 @@ export function fakeTronAddress(index: number): string {
 /** Deterministic 64-hex Tron transaction hash for the given seed. */
 export function fakeTxHash(seed: string): string {
   return sha256(`tx:${seed}`).toString('hex');
+}
+
+/**
+ * EIP-55 mixed-case form of a 20-byte hex address: each hex letter is
+ * upper-cased where the matching nibble of keccak256(lowercase address) is
+ * >= 8. The real Ethereum service answers `derive` in this form; the backend
+ * stores the address lower-cased (06 §1.4) and shows it EIP-55 again.
+ */
+export function toChecksumAddress(address: string): string {
+  const lower = address.toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]{40}$/.test(lower)) {
+    throw new Error(`not a 20-byte hex address: ${address}`);
+  }
+  const hash = keccak256Hex(Buffer.from(lower, 'ascii'));
+  let out = '0x';
+  for (let i = 0; i < 40; i++) {
+    out += parseInt(hash[i], 16) >= 8 ? lower[i].toUpperCase() : lower[i];
+  }
+  return out;
+}
+
+/**
+ * T155 — deterministic, well-formed Ethereum deposit address for an HD index,
+ * EIP-55 cased like the real service's `derive` answer. Seeded apart from
+ * {@link fakeTronAddress} so the two networks' index 0 never look related.
+ * Not a key-derived address — the backend only persists the string.
+ */
+export function fakeEthereumAddress(index: number): string {
+  return toChecksumAddress(sha256(`ethereum-addr:${index}`).subarray(0, 20).toString('hex'));
+}
+
+/** T155 — deterministic Ethereum transaction hash: `0x` + 64 lowercase hex. */
+export function fakeEthereumTxHash(seed: string): string {
+  return '0x' + sha256(`eth-tx:${seed}`).toString('hex');
 }
 
 // T137 — `fakeOfferId` was removed with the custody trade surface: the platform

@@ -1,6 +1,7 @@
 # E2E-only fake sidecar (T107). Mirrors the sidecar-steam multi-stage build.
-# Serves the backend's outbound Steam + blockchain HTTP surface on BOTH ports
-# (5100 + 5200) and drives the escrow happy path via signed inbound webhooks.
+# Serves the backend's outbound Steam + blockchain HTTP surface on three ports
+# (5100 Steam, 5200 TRON, 5300 Ethereum — T155) and drives the escrow happy
+# path via signed inbound webhooks.
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -17,6 +18,6 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY --from=builder /app/dist ./dist
 
-# 5100 = Steam sidecar surface, 5200 = blockchain sidecar surface.
-EXPOSE 5100 5200
+# 5100 = Steam sidecar surface, 5200 = TRON surface, 5300 = Ethereum surface.
+EXPOSE 5100 5200 5300
 CMD ["node", "dist/index.js"]

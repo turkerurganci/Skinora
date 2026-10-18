@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { config } from './config.js';
+import { isNetwork, type Network } from './networks.js';
 
 // StablecoinType enum order (backend Skinora.Shared.Enums.StablecoinType):
 // 0 = USDT, 1 = USDC. Stored as int; mapped back to the symbol the backend's
@@ -31,6 +32,8 @@ export interface DepositPaymentAddress {
   /** Exact expected amount as a 6-fraction-digit decimal string. */
   expectedAmount: string;
   tokenSymbol: string;
+  /** T155 — the network the deposit was allocated on (06 §1.4 `PaymentAddress.Network`). */
+  network: Network;
 }
 
 /**
@@ -46,7 +49,7 @@ export async function lookupPaymentAddress(
     .request()
     .input('txId', sql.UniqueIdentifier, transactionId)
     .query(
-      'SELECT TOP 1 Id, TransactionId, Address, ExpectedAmount, ExpectedToken ' +
+      'SELECT TOP 1 Id, TransactionId, Address, ExpectedAmount, ExpectedToken, Network ' +
         'FROM PaymentAddresses WHERE TransactionId = @txId AND IsDeleted = 0 ' +
         'ORDER BY CreatedAt DESC',
     );
@@ -56,12 +59,17 @@ export async function lookupPaymentAddress(
   }
   const row = result.recordset[0];
   const tokenIndex = Number(row.ExpectedToken);
+  const network = String(row.Network);
+  if (!isNetwork(network)) {
+    throw new Error(`PaymentAddress ${String(row.Id)} has an unknown network "${network}"`);
+  }
   return {
     paymentAddressId: String(row.Id),
     transactionId: String(row.TransactionId),
     address: String(row.Address),
     expectedAmount: Number(row.ExpectedAmount).toFixed(6),
     tokenSymbol: TOKEN_SYMBOLS[tokenIndex] ?? 'USDT',
+    network,
   };
 }
 

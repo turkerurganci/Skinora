@@ -8,6 +8,10 @@ export const e2eConfig = {
   baseUrl: process.env.E2E_BASE_URL || 'http://localhost:8080',
   // Fake sidecar control surface (/__e2e/payment/*). Published from compose.
   fakeUrl: process.env.E2E_FAKE_URL || 'http://localhost:5200',
+  // T155 — the fake's Ethereum surface (the backend's EthereumSidecar BaseUrl).
+  // Only a test that calls a backend-facing Ethereum route itself needs it;
+  // the control surface answers on every port.
+  fakeEthereumUrl: process.env.E2E_FAKE_ETHEREUM_URL || 'http://localhost:5300',
 
   // JWT-inject login — must equal the backend's Jwt__Secret in the e2e stack.
   jwtSecret: process.env.E2E_JWT_SECRET || 'e2e-jwt-secret-do-not-use-in-prod-0123456789',

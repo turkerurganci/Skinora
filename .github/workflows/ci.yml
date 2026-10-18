@@ -106,6 +106,10 @@ jobs:
               - '.github/workflows/**'
             sidecar-fake:
               - 'sidecar-fake/**'
+              # T155 — the fake's contract test reads the real services'
+              # example bodies; a changed example must re-run it.
+              - 'sidecar-blockchain/contracts/**'
+              - 'sidecar-ethereum/contracts/**'
               - '.github/workflows/**'
             # T150 — the Ethereum service. Its suite also reads files outside
             # its directory: docker-compose.yml + infra/ (wiring and alert-rule
@@ -807,6 +811,13 @@ jobs:
             script: test:downtime
           - suite: T138 delivery
             script: test:delivery
+          # T155 — both payment networks end to end (11 §F8): the fake answers
+          # TRON on :5200 and Ethereum on :5300. 40 minutes like happy-path:
+          # its happy-path test waits out the settlement window once, for a
+          # TRON and an Ethereum sale in flight together.
+          - suite: T155 multi-network
+            script: test:network
+            timeoutMinutes: 40
     timeout-minutes: ${{ matrix.timeoutMinutes || 30 }}
     steps:
       - name: Checkout

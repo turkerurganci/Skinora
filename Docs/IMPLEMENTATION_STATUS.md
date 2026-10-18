@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-18 — **T156 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (kullanıcı arayüzünde ağ seçimi; rapor [`T156_REPORT.md`](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350), doğrulanan HEAD `905d521`, CI [`39137342419`](https://github.com/turkerurganci/Skinora/actions/runs/39137342419) ✓). Yönetici kararı (GÜVENLİK): kabul ucunda sunucu da `confirmLowercase` ister (sağlamasız Ethereum iade adresi onaysız 400 `CHECKSUM_CONFIRMATION_REQUIRED`); 07 §7.6 yazıldı, kabul formu alanı gönderir. Küçük bulgu (07 §1.3 eski `payment.network` cümlesi) düzeltildi; main ile bütünleştirildi. Merge yönetici tarafından yapılır. · **Önceki:** 2026-10-18 — **T151 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum ödeme izleyicisi; rapor [`T151_REPORT.md`](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347), doğrulanan HEAD `b2e4757`, CI [`39129005912`](https://github.com/turkerurganci/Skinora/actions/runs/39129005912) ✓). Bulgular kapandı (açılışta USDT durumu, `finalized` etiketi testi, test boşlukları); main ile bütünleştirildi; yeni T158 kriterleri 11 §F8'de. Merge yönetici tarafından yapılır.
+**Son güncelleme:** 2026-10-18 — **T155 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (sidecar-fake Ethereum desteği + E2E; rapor [`T155_REPORT.md`](TASK_REPORTS/T155_REPORT.md), PR [#351](https://github.com/turkerurganci/Skinora/pull/351), doğrulanan HEAD `b09067a`, CI [`39137404205`](https://github.com/turkerurganci/Skinora/actions/runs/39137404205) ✓, multi-network bacağı 14,9 dk). Beş küçük bulgu kapandı (EIP-55 adres kuralı, webhook imza sırrı birim testi, `EXPECTED_CONTRACT_MISMATCH`, USDC yalnız yapılandırılırsa, spam kontratı testi); e2e TRON satıcı ödemesi 98,20 elle doğrulandı; main (T151) bütünleştirildi. Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -341,7 +341,7 @@
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⏳ Devam ediyor — doğrulama ✗ FAIL → düzeltme turu 2 bitti (günlük önce, kimlik kilidi, yalnız revert kalıcı, `realizedFeeWei`, günlük zincirin gerisinde imza durur, işlem başına ücret tavanı — iki yönetici kararı), yeniden doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T152_REPORT.md)) |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
-| T155 | sidecar-fake Ethereum desteği + E2E | ⬚ Bekliyor |
+| T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⬚ Bekliyor |
