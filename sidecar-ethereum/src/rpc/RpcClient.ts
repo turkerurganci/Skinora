@@ -282,6 +282,58 @@ export class EthereumRpcClient {
   }
 
   /**
+   * `eth_estimateGas` of a call, evaluated at an explicit block (T154). No
+   * gas price is sent, so the node does not check the sender's ETH balance —
+   * a deposit is priced before the fuel wallet has funded it (08 §3.7.5).
+   * A revert is an `rpc` error (an answer about the request, not failed over).
+   */
+  async estimateGas(
+    tx: { from: string; to: string; data: string },
+    blockNumber: bigint,
+  ): Promise<bigint> {
+    assertBlockNumber(blockNumber, 'estimateGas block');
+    return this.withFailover('eth_estimateGas', async (ep) =>
+      parseQuantity(
+        await ep.request<string>('eth_estimateGas', [
+          { from: tx.from, to: tx.to, data: tx.data },
+          hexBlock(blockNumber),
+        ]),
+        'eth_estimateGas',
+        ep.name,
+      ),
+    );
+  }
+
+  /**
+   * `eth_feeHistory` ending at an explicit block (T154). `baseFeePerGas` has
+   * `blockCount + 1` entries — the last is the base fee of the block after
+   * `newestBlock`; `reward[i][j]` is block i's priority fee at percentile j.
+   */
+  async feeHistory(
+    blockCount: number,
+    newestBlock: bigint,
+    rewardPercentiles: readonly number[],
+  ): Promise<FeeHistory> {
+    assertBlockNumber(newestBlock, 'feeHistory newestBlock');
+    return this.withFailover('eth_feeHistory', async (ep) => {
+      const raw = await ep.request<{ baseFeePerGas?: unknown; reward?: unknown } | null>(
+        'eth_feeHistory',
+        ['0x' + blockCount.toString(16), hexBlock(newestBlock), rewardPercentiles],
+      );
+      if (!raw || !Array.isArray(raw.baseFeePerGas) || raw.baseFeePerGas.length === 0) {
+        throw new RpcError('eth_feeHistory returned no baseFeePerGas', 'transport', ep.name);
+      }
+      const reward = Array.isArray(raw.reward) ? raw.reward : [];
+      return {
+        baseFeePerGas: raw.baseFeePerGas.map((v) => parseQuantity(v, 'eth_feeHistory', ep.name)),
+        reward: reward.map((row: unknown) =>
+          (Array.isArray(row) ? row : []).map((v) => parseQuantity(v, 'eth_feeHistory', ep.name)),
+        ),
+      };
+    });
+  }
+
+  /**
    * `eth_getLogs` over an explicit, inclusive block range. Split so that no
    * single request exceeds the answering provider's block range or its
    * per-position list limit (08 §3.7.4: Alchemy Free 10 blocks, Chainstack
@@ -437,6 +489,28 @@ function parseLog(raw: RawLog): RpcLog {
     logIndex: Number(BigInt(raw.logIndex)),
     removed: raw.removed === true,
   };
+}
+
+/** `eth_feeHistory`, decoded to bigints (T154). */
+export interface FeeHistory {
+  readonly baseFeePerGas: readonly bigint[];
+  readonly reward: ReadonlyArray<readonly bigint[]>;
+}
+
+/**
+ * A JSON-RPC quantity (`0x`-prefixed hex) → bigint. Anything else is a
+ * malformed answer from that provider (transport kind, so the backup is
+ * asked) — never a number that silently became 0 or lost precision.
+ */
+function parseQuantity(value: unknown, method: string, provider: string): bigint {
+  if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) {
+    throw new RpcError(
+      `${method} returned a malformed quantity ${JSON.stringify(value)}`,
+      'transport',
+      provider,
+    );
+  }
+  return BigInt(value);
 }
 
 function chunk<T>(items: readonly T[], size: number): T[][] {

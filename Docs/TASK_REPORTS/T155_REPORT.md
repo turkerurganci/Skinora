@@ -40,14 +40,14 @@
 | 4 | E2E: iki ağda mutlu yol | ✓ | `multi-network.spec.ts` test 1 yerelde yeşil (5,2 dk; iki işlem birlikte `COMPLETED`) |
 | 5 | E2E: iki ağda iade | ✓ | test 2 yerelde yeşil (1,7 dk): `INCORRECT_AMOUNT_REFUND` her ağda kendi ağından, K9 iade adresine |
 | 6 | (yönetici) ağ seçimi, kesinleşme, K9, payout/iade aynı ağdan | ✓ | test 1 (`networkQuotes`, kabulde ağ, K5 kesinleşme biçimi), test 2 (K9), test 3 (yanlış ağ webhook'u), test 4 (kabul edilmeyen ağ); sahte servis günlüğüyle "hangi servise gitti" iki taraftan |
-| 7 | (yönetici) sahte servis gerçek servisle aynı sözleşme örneklerine bağlı | ~ | TRON örnekleri bağlı ve CI'da koşuyor. Ethereum örnekleri T151/T154 ile geliyor; bloklar dizin varsa koşuyor, o dallardaki dosyalarla yerelde 22/22. Main'e girdiklerinde ek iş gerekmeden devreye girer (CI süzgeci örnek dizinlerini izliyor) |
+| 7 | (yönetici) sahte servis gerçek servisle aynı sözleşme örneklerine bağlı | ~ | TRON örnekleri bağlı. T154 (#348) çalışma sırasında main'e girdi ve dala birleştirildi: Ethereum `estimate-fee/` + `transfer-status/` blokları artık koşuyor ve yeşil. Yalnız `webhook/` bloğu T151 (#347) bekliyor; o dalın dosyalarıyla yerelde yeşil ölçüldü, main'e girince ek iş gerekmeden devreye girer (CI süzgeci örnek dizinlerini izliyor) |
 | 8 | (yönetici) T149 bulgusu: TRON sweep ücret tahmini ucu | ✓ | `estimate-sweep-fee` eklendi; E2E 1 TRON satırını 2,90 okuyor |
 
 ## Test Sonuçları
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| sidecar-fake (vitest) | ✓ 94/94 (+4 atlanan: Ethereum örnek dizinleri yok) | `cd sidecar-fake && npm test` — 7 dosya; `tsc`, `eslint src/`, `prettier --check` temiz. T151/T154 örnekleri geçici yerleştirilince `contracts.test.ts` 22/22 |
+| sidecar-fake (vitest) | ✓ 98/98 (T154 birleşmesinden sonra; öncesinde 94/94 + 4 atlanan) | `cd sidecar-fake && npm test` — 7 dosya; `tsc`, `eslint src/`, `prettier --check` temiz. T151/T154 örnekleri geçici yerleştirilince `contracts.test.ts` 22/22 |
 | E2E yeni süit (yerel, `docker-compose.e2e.yml`) | ✓ 4/4 | `npx playwright test multi-network` — mutlu yol 5,2 dk, iade 1,7 dk, yanlış ağ 33 sn, kabul edilmeyen ağ 7 sn |
 | E2E regresyon (yerel) | ✓ 12/12 (24,2 dk) | `npx playwright test payment-edge-cases happy-path.smoke cancellation` (Ethereum açık yığında) |
 | e2e lint/tip | ✓ | `npx tsc --noEmit`, `npx eslint .`, `prettier --check` temiz |
@@ -78,13 +78,13 @@
 ## Commit & PR
 
 - Branch: `task/T155-fake-ethereum-e2e`
-- Commit'ler: `af94b45` (sahte servis + E2E + compose + CI) · `1251a14` (belgeler) · rapor/durum/hafıza commit'i (bu dosya)
+- Commit'ler: `af94b45` (sahte servis + E2E + compose + CI) · `1251a14` (belgeler) · `f95f35f` (rapor/durum/hafıza) · origin/main birleştirmesi (T154 — belge çakışmaları: 08 sürümü v3.28'e, 11 §F8 T154 bloğu T155'ten önce, durum ve hafıza satırları ikisi de)
 - PR: #351 (https://github.com/turkerurganci/Skinora/pull/351)
 - CI: ✓ PASS — run [`39135451547`](https://github.com/turkerurganci/Skinora/actions/runs/39135451547) (`1251a14`, kod + belgeler): bütün işler success, 11 E2E advisory bacağının hepsi yeşil (yeni "T155 multi-network" dahil). Rapor/durum/hafıza commit'inin run'ı PR'da.
 
 ## Known Limitations / Follow-up
 
-- **Ethereum sözleşme örnekleri henüz main'de değil** (T151 #347, T154 #348 doğrulamada). Sahte servisin Ethereum bağlaması onlar birleşince kendiliğinden devreye girer; birleşme sonrası main CI'da `sidecar-fake` testinin koştuğu ve yeşil kaldığı görülmeli (süzgeç `sidecar-ethereum/contracts/**`'ı izliyor). O dallardaki dosyalar değişirse sahte servisin ilgili cevabı da değişmeli.
+- **Ethereum webhook örnekleri henüz main'de değil** (T151 #347 doğrulamada; T154 örnekleri birleşti ve bağlı). Webhook bağlaması T151 birleşince kendiliğinden devreye girer; birleşme sonrası main CI'da `sidecar-fake` testinin koştuğu ve yeşil kaldığı görülmeli (süzgeç `sidecar-ethereum/contracts/**`'ı izliyor). O dallardaki dosyalar değişirse sahte servisin ilgili cevabı da değişmeli.
 - **T151 `acceptsPayments` kapısı:** sahte servis bugünden `acceptsPayments: true` yayınlıyor; T151 birleşmeden önce backend bu alanı okumuyor, sonra okuyacak — e2e iki durumda da açık.
 - **TRON payout ücreti e2e'de değişti:** sahte servis artık TRON `estimate-fee`'yi 2,00 ile cevaplıyor (yedek 0,50 yerine); e2e TRON satıcı payı 99,70 → 98,20. İade aritmetiği (2,00) aynı. Önceki hiçbir süit payout tutarını doğrulamıyordu.
 - **Ödeme kolları izleyiciyi şart koşmuyor:** gerçek dünyada izlenmeyen depozite gelen ödeme görülmez; sahte serviste kol, izleyici kurulmamış olsa da webhook gönderir (outbox zamanlaması eski süitleri kırmasın diye). Yeni süit izleyiciyi ayrıca bekleyip ağını ve kontratını doğruluyor.

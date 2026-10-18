@@ -28,6 +28,7 @@ public class BlockchainNetworkPolicyTests
         Assert.Equal(6, tron.NativeAssetDecimals);
         Assert.Equal("SUN", tron.NativeFeeUnit);
         Assert.True(tron.ReportsTronResourceUsage);
+        Assert.False(tron.ReportsFeeInWei);
     }
 
     [Fact]
@@ -41,6 +42,7 @@ public class BlockchainNetworkPolicyTests
         Assert.Equal(18, eth.NativeAssetDecimals);
         Assert.Equal("wei", eth.NativeFeeUnit);
         Assert.False(eth.ReportsTronResourceUsage);
+        Assert.True(eth.ReportsFeeInWei);
     }
 
     [Theory]

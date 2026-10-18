@@ -133,6 +133,45 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         Assert.Null(reloaded.OriginEnergyUsage);
     }
 
+    // -------------------- T154 — Ethereum's realized fee is wei, exact --------------------
+
+    [Fact]
+    public async Task Ethereum_Confirmation_Records_The_Realized_Fee_In_Wei_Exactly()
+    {
+        // 9,007,282,507,774,707 wei — above 2^53, so a double would store …708.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 21_000_000L, null, "SUCCESS", null,
+                RealizedFeeWei: 9_007_282_507_774_707m),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(9_007_282_507_774_707m, reloaded.RealizedFeeWei);
+        Assert.Null(reloaded.RealizedFeeSun);
+    }
+
+    [Fact]
+    public async Task Tron_Confirmation_Never_Records_A_Wei_Fee()
+    {
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_020L, null, "SUCCESS", null,
+            RealizedFeeSun: 6_400_000L, RealizedFeeWei: 123m);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Null(reloaded.RealizedFeeWei);
+        Assert.Equal(6_400_000L, reloaded.RealizedFeeSun);
+    }
+
     [Fact]
     public async Task FailedStatus_FlipsRowToFailed_WithContractRetMessage()
     {

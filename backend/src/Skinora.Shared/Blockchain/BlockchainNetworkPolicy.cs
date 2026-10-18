@@ -53,6 +53,12 @@ public enum ConfirmationRule
 /// Ethereum has no Energy; its realized fee is wei and is recorded in its own
 /// field (T154).
 /// </param>
+/// <param name="ReportsFeeInWei">
+/// <c>true</c> when the network's service reports fees in wei as decimal
+/// strings (T154, 05 §3.3a): the estimate's <c>feeWei</c> + <c>ethPriceUsdt</c>
+/// (the backend re-derives <c>feeUsdt</c> from them exactly) and the receipt's
+/// <c>realizedFeeWei</c>, recorded in <c>BlockchainTransaction.RealizedFeeWei</c>.
+/// </param>
 public sealed record BlockchainNetworkPolicy(
     BlockchainNetwork Network,
     ConfirmationRule Confirmation,
@@ -60,7 +66,8 @@ public sealed record BlockchainNetworkPolicy(
     string NativeAssetSymbol,
     int NativeAssetDecimals,
     string NativeFeeUnit,
-    bool ReportsTronResourceUsage)
+    bool ReportsTronResourceUsage,
+    bool ReportsFeeInWei)
 {
     /// <summary>TRON — 20 blocks, TRX in SUN, Energy/Bandwidth receipts (05 §3.3, 08 §3.3).</summary>
     public static readonly BlockchainNetworkPolicy Tron = new(
@@ -70,7 +77,8 @@ public sealed record BlockchainNetworkPolicy(
         NativeAssetSymbol: "TRX",
         NativeAssetDecimals: 6,
         NativeFeeUnit: "SUN",
-        ReportsTronResourceUsage: true);
+        ReportsTronResourceUsage: true,
+        ReportsFeeInWei: false);
 
     /// <summary>Ethereum — <c>finalized</c> blocks, ETH in wei, no Energy (08 §3.7).</summary>
     public static readonly BlockchainNetworkPolicy Ethereum = new(
@@ -80,7 +88,8 @@ public sealed record BlockchainNetworkPolicy(
         NativeAssetSymbol: "ETH",
         NativeAssetDecimals: 18,
         NativeFeeUnit: "wei",
-        ReportsTronResourceUsage: false);
+        ReportsTronResourceUsage: false,
+        ReportsFeeInWei: true);
 
     /// <summary>The policy of <paramref name="network"/>. Throws for a value no policy exists for.</summary>
     public static BlockchainNetworkPolicy For(BlockchainNetwork network) => network switch

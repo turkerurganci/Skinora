@@ -80,6 +80,10 @@ jobs:
               - '.github/workflows/**'
             backend:
               - 'backend/**'
+              # Example bodies the backend contract tests replay (T154 —
+              # a change there must re-run the backend half too).
+              - 'sidecar-blockchain/contracts/**'
+              - 'sidecar-ethereum/contracts/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'
