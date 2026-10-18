@@ -5184,10 +5184,10 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 
 | Kaynak öğe | Doküman | Task | Implemented |
 |---|---|---|---|
-| Ağ kavramı: `BlockchainNetwork` enum'u, `PaymentAddress` / `Transaction` / `BlockchainTransaction` / `ColdWalletTransfer` / `SellerPayoutIssue`'da `Network` alanı, ağı içeren tekillik anahtarları (`Network`+`TxHash`+`EventIndex`, `Network`+`Address`, `Network`+`HdWalletIndex`) | 06 §1.4, §2.25, §5.1 | T145 | |
-| Kanonik adres biçimi (EVM küçük harf saklama/karşılaştırma, EIP-55 gösterim) ve büyük/küçük harf duyarlı karşılaştırmaların kapanması | 06 §1.4 | T145 | |
-| Ağ başına yaptırım listesi (`SanctionedAddress.Network` = `TRON` / `ETHEREUM`) | 06 §3.25, 07 §9.23–§9.24 | T145 | |
-| Ağ başına kullanıcı ödeme / iade adresleri (`UserWalletAddress`), cooldown ve adres geçmişi ağ başına | 02 §12, 03 §9, 06 §1.4, §3.1, 07 §5.3–§5.4 | T145, T146 | |
+| Ağ kavramı: `BlockchainNetwork` enum'u, `PaymentAddress` / `Transaction` / `BlockchainTransaction` / `ColdWalletTransfer` / `SellerPayoutIssue`'da `Network` alanı, ağı içeren tekillik anahtarları (`Network`+`TxHash`+`EventIndex`, `Network`+`Address`, `Network`+`HdWalletIndex`) | 06 §1.4, §2.25, §5.1 | T145 | ✓ T145 (PR #341) |
+| Kanonik adres biçimi (EVM küçük harf saklama/karşılaştırma, EIP-55 gösterim) ve büyük/küçük harf duyarlı karşılaştırmaların kapanması | 06 §1.4 | T145 | ✓ T145 (PR #341) — EIP-55 gösterimi T156 |
+| Ağ başına yaptırım listesi (`SanctionedAddress.Network` = `TRON` / `ETHEREUM`) | 06 §3.25, 07 §9.23–§9.24 | T145 | ✓ T145 (PR #341) |
+| Ağ başına kullanıcı ödeme / iade adresleri (`UserWalletAddress`), cooldown ve adres geçmişi ağ başına | 02 §12, 03 §9, 06 §1.4, §3.1, 07 §5.3–§5.4 | T145, T146 | kısmen — adres geçmişi ✓ T145 (PR #341); `UserWalletAddress` + cooldown T146 (öneriyle kaydedildi — ⚠) |
 | Adres doğrulayıcılar: TRON base58check, EVM EIP-55 (karışık harfte sağlama zorunlu, tümü küçük harfte ikinci onay) | 02 §12.3, 03 §9.1, 07 §5.3 | T146 | |
 | Satıcının kabul ettiği ağlar (`TransactionNetworkOption`) ve alıcının ağ seçimi (`Transaction.Network`); depozit seçilen ağda, HD indeksi ağ başına; payout ve iade aynı ağdan | 02 §4.2, 03 §2.2, §3.2, 06 §1.4, 07 §7.2, §7.4, §7.6 | T147 | |
 | Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, geç ödeme, fazladan transfer) alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi); `AmountValidationService` `FromAddress` kullanmaz | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |
