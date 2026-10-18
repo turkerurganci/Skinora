@@ -617,6 +617,8 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         public TransferBroadcastResult NextResult { get; set; } =
             new(TransferBroadcastStatus.Success, "tx-stub", null, null);
 
+        private int _hashSeq;
+
         public TransferStatusResult NextStatus { get; set; } =
             new(TransferStatusOutcome.Pending, null, 0, null, null);
 
@@ -628,7 +630,13 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             CancellationToken cancellationToken)
         {
             Calls.Add(request);
-            return Task.FromResult(NextResult);
+            var result = NextResult;
+            if (result.Status == TransferBroadcastStatus.Success && result.TxHash == "tx-stub")
+            {
+                // Her çağrıya benzersiz hash: TxHash unique index'i (SQL Server).
+                result = result with { TxHash = $"tx-stub-{++_hashSeq}" };
+            }
+            return Task.FromResult(result);
         }
 
         public Task<TransferStatusResult> GetStatusAsync(

@@ -4830,6 +4830,9 @@ Task T150: Ethereum servis iskeleti
       (T145 doğrulaması)
     - Not: `finalized` uzun durursa (> ~25 dk) o blokta durum okumak arşiv
       erişimi isteyebilir; sağlayıcı seçimi ve hata davranışı buna göre (T151)
+    - Yapılandırılmış ama erişilemeyen ağ (servis kapalı) ortak kuyrukları
+      tıkamaz: outbox ve gönderim/onay işleri için backoff ya da ölü-mektup;
+      testli (T148 doğrulaması N1–N2)
   Test beklentisi: Unit
 
 Task T151: Ethereum ödeme izleyicisi [RİSKLİ]
@@ -4874,6 +4877,8 @@ Task T152: Ethereum gönderim servisi [ÇOK RİSKLİ]
       gönderimden önce tekrarlanır (ya da `Params` / `Deprecate` / `Pause`
       olayları izlenir); biri bozuksa gönderim yok, admin alarmı (08 §3.7.1)
       (öneriyle kaydedildi — ⚠)
+    - Onay işi takılı kalan satırlarda döner (rotasyon), diğer ağın satırlarını
+      bekletmez
   Test beklentisi: Unit, Integration (takılan işlem, nonce çakışması)
 
 Task T153: Yakıt cüzdanı

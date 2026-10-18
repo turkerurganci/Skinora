@@ -100,6 +100,12 @@ Sidecar koduna dokunulmadı (sidecar testleri yeniden koşulmadı).
 | Bulgu sayısı | Tur 1: 5 (F1 bloke eden; F2–F5 bloke etmeyen) — hepsi düzeltme turu 1'de kapatıldı |
 | Düzeltme gerekli mi | Yapıldı (yukarıda "Düzeltme turu 1") |
 
+## Doğrulama sonucu (2026-10-18)
+
+- **Tur 1 ✗ FAIL.** F1 (bloke eden): filtresiz en-eski-20 toplu işi, park edilmiş Ethereum satırlarının TRON'u aç bırakmasına izin veriyordu. F2–F5 bloke etmeyen.
+- **Tur 2 ✓ PASS** (`713c32f`): doğrulayıcı açlık probunu dört işte de yeniden koştu (gerçek SQL Server dahil); her filtreyi geri alarak testlerin yakaladığını kanıtladı; `EnsurePaymentMonitorJob`'un ağ yapılandırıldığında Ethereum adreslerini bir kez devreye aldığını kanıtladı; F2/F3 testleri geri alınınca kırmızı. Unit 1907/1907, Transactions 680/680, API 589/589, sözleşme 26/26.
+- **Bloke etmeyen notlar (N1–N3) burada işlendi:** N1 `OutboxDispatcher` backoff/ölü-mektup yok -> backlog 🟡 `OutboxNoBackoffOrDeadLetter` + T150 ölçütü; N2 onay işi rotasyonu -> T152 ölçütü (+ T150 ölçütü); N3 `A_Full_Tron_Batch_Is_Still_Taken_Oldest_First_Behind_Parked_Rows` SQL Server'da aynı `tx-stub` hash'i yüzünden düşüyordu -> sahte istemci çağrı başına benzersiz hash üretiyor.
+
 ## Altyapı Değişiklikleri
 
 - **Migration:** Var — `20261018040534_T148_NetworkSettings`, yalnız veri (8 `SystemSettings` satırı, seed index 68–75). Şema değişikliği yok. T146'nın `20261018015746_T146_UserWalletAddresses`'ı main'e girince birleştirildi ve T148 migration'ı onun modelinin **üstünde yeniden üretildi** (eski `20261018021338_…` dosyaları silindi; snapshot main'inki + T148'in 8 satırı).

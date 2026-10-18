@@ -4,6 +4,8 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
+> **Durum (2026-10-18, T148 doğrulama tur 2 ✓ PASS — PR [#343](https://github.com/turkerurganci/Skinora/pull/343)):** **40 aktif / 155 çözülmüş** (dosyanın kendi `awk`'iyle; 39/155 → +1). **Açık 🔴 YOK.** Yeni 🟡 `OutboxNoBackoffOrDeadLetter` (§4, T150 öncesi kapanmalı): outbox FAILED satırlarını geri çekilmesiz, en eskiden 50'şer yeniden seçiyor; erişilemeyen yapılandırılmış ağ ≥50 olayla tüm kuyruğu (TRON dahil) tıkayabilir. Onay işi rotasyonu T152 ölçütünde.
+>
 > **Durum (2026-10-18, T148 düzeltme turu 1 — PR [#343](https://github.com/turkerurganci/Skinora/pull/343)):** **39 aktif / 155 çözülmüş** (dosyanın kendi `awk`'iyle; 38/155 → +1). **Açık 🔴 YOK.** Yeni ⚪ `PrePushGuardBlocksFixForward` (§7): pre-push Layer 2 koruması kendi istediği düzeltme push'unu engelliyor; öneri — kırmızı run'ın head SHA'sı push edilen commit'in atasıysa otomatik geçiş + `BYPASS_LOG` satırı.
 >
 > **Durum (2026-10-17, T141 — çok ağlı ödeme doküman turu):** **38 aktif / 155 çözülmüş** (dosyanın kendi `awk`'iyle; değişmedi). **Açık 🔴 YOK.** Yeni satır açılmadı, satır kapanmadı; üç satıra not düşüldü: `StakeAccountUnmonitored` ⚪ **uykuda** (kilit kodu F8'de varsayılan kapalı — kilit açılmadan önce kapatılır), `T110-RefundAddressDocConflict` ✅ (kuralı 11 §F8 K9 ile tersine döndü — kayıt tarihsel), `sanctions-expansion` ⚪ (ağ boyutu T145'in kapsamında).
@@ -471,6 +473,7 @@
 | ✅ | T61-SteamTransitionRealtimePush | **ÇÖZÜLDÜ → WP9** — `SteamWebhookHandler.PublishStatusChangedAsync` status flip'iyle aynı unit-of-work'te outbox'a `TransactionStatusChangedEvent` yazar (escrow + delivery geçişleri); `TransactionStatusChangedRealtimeConsumer` bunu SignalR'a push eder | backend-gap | `T61_REPORT.md:146` (K2) |
 | ✅ | T38-AdminFlagAlert-FlagId | **ÇÖZÜLDÜ → WP8** — `Notification.FlagId` (`Guid?`) kolonu + `IX_Notifications_FlagId` filtered index + migration `20260617194020_WP8_AddNotificationFlagId`; `FraudFlagCreatedAdminNotificationConsumer` `FraudFlagId`'yi geçiriyor → admin flag-link hedefi çalışıyor | backend-gap | `T38_REPORT.md:20`, `NotificationTargetMapper.cs:25` |
 | ✅ | T30-TosVersionReprompt 🆕 | **ÇÖZÜLDÜ → WP11** — `tosAcceptedVersion` /auth/me'de sunulur + `tos/accept` versiyon-upgrade (409 yalnız aynı versiyon) + FE `TosRepromptGate` | backend-gap | `T30_REPORT.md:155` |
+| 🟡 | OutboxNoBackoffOrDeadLetter | **T150 öncesi kapanmalı.** `OutboxDispatcher` FAILED satırları sonsuza dek yeniden seçiyor: en eskiden başlayıp parti başına 50, geri çekilme (backoff) ya da ölü-mektup yok. Yapılandırılmış ama erişilemeyen (servisi kapalı) bir ağda izleyici-başlatma işleyicileri hata fırlatır; bu türden ≥50 olay birikirse TRON'unkiler dahil tüm outbox olayları durur. Aynı kalıp `OutgoingTransferConfirmationJob` için de geçerli (en eski 30 DETECTED satır, rotasyon yok; T152 ölçütüne eklendi). Kapanış ölçütü T150'de (`11_IMPLEMENTATION_PLAN.md`) | backend-gap | T148 doğrulaması N1–N2 (2026-10-18) |
 
 ### Düşük öncelik
 
