@@ -593,7 +593,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
     /// <para>
     /// The gate is the seller's readiness confirmation (see
     /// <see cref="HasReachedPaymentWindow"/>), which is the whole point of
-    /// 03 §2.3: the address is allocated at creation (the allocator runs there
+    /// 03 §2.3: the address is allocated at acceptance (the allocator runs there
     /// so it can be retried by <c>EnsurePaymentAddressJob</c>), but revealing
     /// it before the seller re-confirms would let a buyer pay into a stale
     /// listing whose item has since been sold. Allocation and disclosure are
@@ -763,7 +763,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
     /// </para>
     /// <para>
     /// A status set would get the cancelled states wrong in both directions. The
-    /// deposit address is allocated at creation, so a transaction that timed out
+    /// deposit address is allocated at acceptance, so a transaction that timed out
     /// while still CREATED already has one; listing CANCELLED_TIMEOUT would
     /// disclose an address whose window never opened. Dropping the cancelled
     /// states instead would hide it from a buyer whose late transfer needs

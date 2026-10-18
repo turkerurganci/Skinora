@@ -344,7 +344,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         // a monitor armed on an address the buyer was never told about.
         //
         // A missing PaymentAddress row does NOT block the confirmation.
-        // Allocation is best-effort at creation and swept by
+        // Allocation is best-effort at acceptance and swept by
         // EnsurePaymentAddressJob (T70/T123); EnsurePaymentMonitorJob arms
         // whatever exists a minute later. Blocking here would punish the seller
         // for a sidecar outage whose only real effect is on the buyer's ability

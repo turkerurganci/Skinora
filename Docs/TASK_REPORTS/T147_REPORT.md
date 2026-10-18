@@ -84,16 +84,18 @@ T148 (PR #343) main'e birleşti (`7f7d47f`); `origin/main` bu dala `git merge` i
 | 4 | Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, iptal sonrası geç, fazladan transfer) alıcının o ağdaki iade adresine; `AmountValidationService` `FromAddress` kullanmıyor — her ret türü için test | ✓ | Birim (`AmountValidationServiceTests`): eksik `ConfirmedPayment_Underpayment_AboveThreshold_QueuesIncorrectAmountRefund`, fazla `ConfirmedPayment_Overpayment_AdvancesStateAndQueuesExcessRefund`, fazladan transfer `ConfirmedPayment_MultiPayment_PostEscrowState_RefundsEntireAmount`, yanlış token `WrongTokenIncoming_AboveThreshold_QueuesWrongTokenRefund`, geç ödeme `LatePayment_AfterCancel_QueuesLatePaymentRefund_ToTheBuyersRefundAddress` — hepsi `ToAddress == BuyerRefundAddress` ve `!= FromAddress`; ücret tahmini hedefi iade adresi (`…ResolvesGasFeeForDepositToRefundAddressTransfer`, `WrongTokenIncoming_EstimatesGasFee_…`); adres yoksa beş türde de iade yok + uyarı (`Rejected_Payment_Without_A_Refund_Address_Is_Not_Sent_To_The_Sender_Admin_Is_Alerted` ×5). Gerçek SQL Server, webhook ucundan: `PaymentConfirmed_Underpayment_QueuesIncorrectAmountRefundAndBuyerEvent`; iki ağda uçtan uca fazladan transfer: `NetworkChoiceLifecycleTests` |
 | 5 | Başka ağda aynı türde adres varken yeni ağa İLK adres de Steam yeniden doğrulaması ister | ✓ | `UpdateSellerWallet_FirstAddressOnSecondNetwork_WithoutReAuth_Returns403_NothingWritten`, `…_WithReAuth_Persists_AndLeavesTronUntouched`, `UpdateRefundWallet_FirstRefundAddressOnSecondNetwork_WithoutReAuth_Returns403`, `UpdateRefundWallet_FirstRefundAddressAnywhere_NeedsNoReAuth_EvenWithAPayoutAddressOnAnotherNetwork` (tür başına) |
 | — | `Transaction.Network` kabulden sonra NOT NULL DB CHECK'i (T145 kararı v) | ✓ | `CleanDatabase_An_Accepted_Row_Without_Network_Or_Payout_Address_Is_Refused` (2), `CleanDatabase_T147IsApplied_TableKeysAndCheckHaveTheTargetShape` |
-| — | NETWORK_UNAVAILABLE servisi olmayan ağda (Ethereum, T150'ye kadar), fail-closed | ✓ | Oluşturma ve kabul testleri yukarıda (servis + telden); ara uygulama yalnız TRON'u açar |
+| — | NETWORK_UNAVAILABLE servisi olmayan ağda (Ethereum, T150'ye kadar), fail-closed | ✓ | Oluşturma ve kabul testleri yukarıda (servis + telden) |
 | — | TRON akışları mevcut istemciler için aynı | ✓ | Ağ alanı vermeyen bütün mevcut oluşturma/kabul testleri (servis + uç) yeşil; `Omitted_Network_Reads_As_Tron_For_The_Pre_F8_Client`; uygunluk TRON-yalnız satıcıda aynı cevap |
-| — | Migration provası (temiz DB + mevcut satırlar + Down) | ✓ | `TransactionNetworkOptionMigrationRehearsalTests` (7): temiz şema; T147 öncesine inip satırlarla tekrar yukarı (3 işlem → 3 TRON seçeneği, soft-delete dahil, kolonlar dokunulmadan); Down TRON ilanını kolona geri yazar; Ethereum ilan/işlem varken Down 50147 ile reddeder ve hiçbir şey değişmez. T145/T146 provaları T147 Down/Up'tan geçerek yeşil |
+| — | Migration provası (temiz DB + mevcut satırlar + Down) | ✓ | `TransactionNetworkOptionMigrationRehearsalTests` (8): temiz şema; T147 öncesine inip satırlarla tekrar yukarı (3 işlem → 3 TRON seçeneği, soft-delete dahil, kolonlar dokunulmadan); Down TRON ilanını kolona geri yazar; Ethereum ilan/işlem varken Down 50147 ile reddeder ve hiçbir şey değişmez. T145/T146 provaları T147 Down/Up'tan geçerek yeşil |
 
 ## Test Sonuçları
+
+> Bu tablo T148 entegrasyonundan **önceki** ölçümdür (1846/1653); nihai sayılar yukarıdaki Entegrasyon > Kanıt tablosundadır: unit 1913, integration + contract 1701.
 
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Unit (backend, bütün `*.Tests`) | ✓ 1846/1846 (11 assembly) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Transactions 702, Shared 511, Platform 139, Notifications 133, Auth 92, API 77, Steam 59, Users 49, Realtime 40, Disputes 25, Fraud 19 |
-| Integration + Contract (gerçek SQL Server, Testcontainers) | ✓ 1653/1653 (10 assembly) | `dotnet test Skinora.sln -m:1` tam koşu 3499/3499; birim çıkarıldığında Integration + Contract: Transactions 706, API 584, Fraud 82, Platform 74, Notifications 60, Disputes 58, Auth 40, Admin 22, Shared 21, Payments 6. Migration provaları (T147 7/7, T146 ve T145 provaları T147 Down/Up üstünden) ve iki ağda uçtan uca test bu koşuda |
+| Integration + Contract (gerçek SQL Server, Testcontainers) | ✓ 1653/1653 (10 assembly) | `dotnet test Skinora.sln -m:1` tam koşu 3499/3499; birim çıkarıldığında Integration + Contract: Transactions 706, API 584, Fraud 82, Platform 74, Notifications 60, Disputes 58, Auth 40, Admin 22, Shared 21, Payments 6. Migration provaları (T147 8/8, T146 ve T145 provaları T147 Down/Up üstünden) ve iki ağda uçtan uca test bu koşuda |
 | e2e harness | ✓ | `npx tsc --noEmit`, `prettier --check` (değişen dosyalar), `eslint` (değişen dosyalar) |
 | Format | ✓ | `dotnet format Skinora.sln --verify-no-changes --severity error` |
 | Build | ✓ | `dotnet build Skinora.sln` 0 hata |
@@ -102,9 +104,19 @@ T148 (PR #343) main'e birleşti (`7f7d47f`); `origin/main` bu dala `git merge` i
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (aşağıya bkz.) |
+| Bulgu sayısı | 5 (F1–F5; hiçbiri engelleyici değil) |
+| Düzeltme gerekli mi | Hayır — F1–F3 ve F5 bu commit'te uygulandı |
+
+## Doğrulama sonucu (2026-10-18)
+
+- **PASS**, doğrulanan HEAD `48e42b1`.
+- K3 / K9 / yeniden doğrulama (re-auth) mutasyon probları: bir eşdeğer sağ kalan dışında hepsi yakalandı (eşdeğer olan DB CHECK yüzünden imkânsız).
+- Migration elle prova edildi: 5 tohum satır, CHECK, Down koruması (50147), temiz Down.
+- Depozitin kabulde ayrılmasının sonuçları kontrol edildi: takılı kalan işlem yok.
+- Sayılar: unit 1913, integration 1675, contract 26. `HangfireTests` `ObjectDisposedException` uyarısı 2026-10-01'den beri var (bu görevden bağımsız).
+- Bulgular: F1 eski yorumlar, F2 eski ilan iade notu (08 §3.4 + runbook), F3 T156 kriteri, F5 rapor düzeltmeleri — bu commit'te uygulandı. F4 (EF uyarısı 10622) zararsız.
+- Üç açık soru: oluşturmada 503 kalır; `BuyerRefundAddress` CHECK'e ancak üretimde sayım yapıldıktan sonra eklenir (F9 öncesi takip); uygunluk müsaitlikten bağımsız kalır.
 
 ## Altyapı Değişiklikleri
 
