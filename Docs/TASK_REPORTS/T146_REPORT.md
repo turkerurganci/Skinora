@@ -57,8 +57,8 @@
 | Tür | Sonuç | Detay |
 |---|---|---|
 | Unit (backend, bütün `*.Tests` projeleri) | ✓ 1840/1840 (11 assembly) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Shared 511, Transactions 696, Platform 139, Notifications 133, Auth 92, API 77, Steam 59, Users 49, Realtime 40, Disputes 25, Fraud 19 |
-| Integration + Contract (gerçek SQL Server, Testcontainers) | INTEG_RESULT | `dotnet test Skinora.sln -m:1 --filter "FullyQualifiedName~.Integration\|FullyQualifiedName~.Contract"` |
-| Format | FORMAT_RESULT | `dotnet format Skinora.sln --verify-no-changes --severity error` |
+| Integration + Contract (gerçek SQL Server, Testcontainers) | ✓ 1604/1604 (10 assembly) | `dotnet test Skinora.sln -m:1 --filter "FullyQualifiedName~.Integration\|FullyQualifiedName~.Contract"` — Transactions 675, API 567, Fraud 84, Platform 74, Notifications 60, Disputes 58, Auth 37, Admin 22, Shared 21, Payments 6. Migration provası (`UserWalletAddressMigrationRehearsalTests` 5/5) ve T145 provası bu koşuda |
+| Format | ✓ | `dotnet format Skinora.sln --verify-no-changes --severity error` |
 | Build | ✓ | `dotnet build Skinora.sln` 0 hata |
 
 ## Doğrulama
