@@ -8,10 +8,10 @@ namespace Skinora.Users.Domain.Entities;
 /// (T105b — 06 §3.1, §4.2; 04 §8.9.3). One row is written each time a user
 /// replaces an existing wallet address; it records the address that was just
 /// superseded and the date that address had originally been set. The current
-/// addresses continue to live on <see cref="User"/> (DefaultPayoutAddress /
-/// DefaultRefundAddress) — they are not duplicated here. Immutability is
+/// addresses live in <see cref="UserWalletAddress"/> (one row per network and
+/// type, T146) — they are not duplicated here. Immutability is
 /// enforced at the <c>AppDbContext</c> level via <see cref="IAppendOnly"/>
-/// (06 §4.2), so "current" is derived from the <see cref="User"/> row at read
+/// (06 §4.2), so "current" is derived from the <see cref="UserWalletAddress"/> rows at read
 /// time and never stored as a mutable flag.
 /// </summary>
 public class WalletAddressHistory : IAppendOnly
@@ -28,8 +28,8 @@ public class WalletAddressHistory : IAppendOnly
 
     /// <summary>
     /// The network the superseded address belonged to (06 §1.4, T145): an
-    /// address history is kept per network. Until T146 moves user addresses to
-    /// per-network rows every user address is a TRON address.
+    /// address history is kept per network, like the addresses themselves
+    /// (<see cref="UserWalletAddress"/>, T146).
     /// </summary>
     public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
 
@@ -38,7 +38,7 @@ public class WalletAddressHistory : IAppendOnly
 
     /// <summary>
     /// When the superseded address had originally been set — copied from
-    /// <c>User.PayoutAddressChangedAt</c> / <c>RefundAddressChangedAt</c>
+    /// <see cref="UserWalletAddress.ChangedAt"/>
     /// before the overwrite. Null only for an address that predates change
     /// tracking (T34).
     /// </summary>

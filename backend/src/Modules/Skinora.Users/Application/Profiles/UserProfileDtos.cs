@@ -1,3 +1,5 @@
+using Skinora.Users.Application.Wallet;
+
 namespace Skinora.Users.Application.Profiles;
 
 /// <summary>
@@ -20,6 +22,10 @@ namespace Skinora.Users.Application.Profiles;
 /// is "pre-filled by the client"; without it the buyer would have to paste the
 /// URL by hand on every acceptance even after saving it to their profile. Read
 /// path only — the value is still written exclusively through U17.</para>
+/// <para>T146 — <c>wallets</c> lists every saved address, one entry per
+/// network and type (07 §1.3, §5.1). <c>sellerWalletAddress</c> /
+/// <c>refundWalletAddress</c> stay for the pre-F8 client and carry the
+/// <b>TRON</b> addresses only (07 §5.1).</para>
 /// </remarks>
 public sealed record UserProfileDto(
     Guid Id,
@@ -35,7 +41,8 @@ public sealed record UserProfileDto(
     string? SellerWalletAddress,
     string? RefundWalletAddress,
     bool MobileAuthenticatorActive,
-    string? SteamTradeUrl);
+    string? SteamTradeUrl,
+    IReadOnlyList<UserWalletAddressDto> Wallets);
 
 /// <summary>
 /// Matches 07 §5.2 (U2 — <c>GET /users/me/stats</c>) response <c>data</c>

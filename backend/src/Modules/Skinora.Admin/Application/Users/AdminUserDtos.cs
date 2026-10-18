@@ -63,6 +63,7 @@ public sealed record AdminUserDetailStatsDto(
 
 public sealed record AdminUserWalletEntryDto(
     string Type,
+    string Network,
     string Address,
     DateTime? SetAt,
     bool Current);

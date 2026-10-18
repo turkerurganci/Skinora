@@ -72,7 +72,17 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var cooldownActive = user.CooldownExpiresAt.HasValue && user.CooldownExpiresAt.Value > nowUtc;
-        var payoutCooldownActive = IsPayoutCooldownActive(user, limits, nowUtc);
+        // T146 — payout addresses are per network (06 §1.4). Until T147 lets a
+        // listing accept other networks every transaction is TRON, so the TRON
+        // payout address (and its own cooldown) is the one that gates creation.
+        var tronPayout = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == userId
+                        && w.Network == BlockchainNetwork.TRON
+                        && w.Type == WalletAddressType.PAYOUT)
+            .Select(w => new { w.Address, w.ChangedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+        var payoutCooldownActive = IsPayoutCooldownActive(tronPayout?.ChangedAt, limits, nowUtc);
 
         var (isNewAccount, currentNewAccountTx, maxNewAccountTx) =
             await EvaluateNewAccountLimitAsync(userId, user.CreatedAt, limits, nowUtc, cancellationToken);
@@ -101,7 +111,7 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
             reasons.Add(TransactionErrorCodes.EligibilityReasons.ConcurrentLimitReached);
         if (isNewAccount && maxNewAccountTx.HasValue && currentNewAccountTx >= maxNewAccountTx.Value)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.NewAccountLimitReached);
-        if (string.IsNullOrEmpty(user.DefaultPayoutAddress))
+        if (string.IsNullOrEmpty(tronPayout?.Address))
             reasons.Add(TransactionErrorCodes.EligibilityReasons.SellerWalletAddressMissing);
         if (payoutCooldownActive)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.PayoutAddressCooldownActive);
@@ -179,11 +189,11 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
         return (true, startedCount, limits.NewAccountTransactionLimit);
     }
 
-    private static bool IsPayoutCooldownActive(User user, TransactionLimits limits, DateTime nowUtc)
+    private static bool IsPayoutCooldownActive(DateTime? payoutAddressChangedAt, TransactionLimits limits, DateTime nowUtc)
     {
         if (!limits.PayoutAddressCooldownHours.HasValue) return false;
-        if (!user.PayoutAddressChangedAt.HasValue) return false;
-        var elapsed = nowUtc - user.PayoutAddressChangedAt.Value;
+        if (!payoutAddressChangedAt.HasValue) return false;
+        var elapsed = nowUtc - payoutAddressChangedAt.Value;
         return elapsed < TimeSpan.FromHours(limits.PayoutAddressCooldownHours.Value);
     }
 }

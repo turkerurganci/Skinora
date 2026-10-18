@@ -19,15 +19,16 @@ async function getPool(): Promise<sql.ConnectionPool> {
 }
 
 // Fixed seed identities — the e2e stack runs against a fresh DB, so these never
-// collide. Two valid TRC-20 addresses (format-only validation: 'T' + 34 chars,
-// base58, no 0/O/I/l).
+// collide. Two real TRON addresses — since T146 the backend checks the
+// base58check checksum and the 0x41 version byte, not only the shape
+// (tronweb `isAddress` = true for both).
 export const seed = {
   sellerId: '11111111-1111-1111-1111-111111111111',
   sellerSteamId: '76561198000000060',
   sellerPayoutAddress: 'TKzxdSv2FZKQrEqkKVgp5DcwEXBEKMg2Ax',
   buyerId: '22222222-2222-2222-2222-222222222222',
   buyerSteamId: '76561198000000061',
-  buyerRefundAddress: 'TJRyWwFs9wTFGZg3JbrVriFbSfCByEEkEN',
+  buyerRefundAddress: 'TVjCCQghBmKJK4ZGa26fpJYxTxvZzzAK1W',
   // T119a — POST /accept requires a Steam trade URL whose `partner` resolves to
   // the accepting buyer's own SteamID64 (partner = SteamID64 - 76561197960265728).
   // 76561198000000061 - 76561197960265728 = 39734333.
@@ -138,6 +139,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
        DELETE FROM TransactionHistory WHERE TransactionId IN (SELECT Id FROM Transactions WHERE SellerId=@s);
        DELETE FROM Transactions WHERE SellerId=@s;
        DELETE FROM AdminUserRoles WHERE UserId IN (@s,@b);
+       DELETE FROM UserWalletAddresses WHERE UserId IN (@s,@b);
        DELETE FROM Users WHERE Id IN (@s,@b);
        DELETE FROM ItemPriceCaches WHERE MarketHashName IN (@item,@item2);`,
     )
@@ -154,18 +156,24 @@ export async function seedHappyPath(): Promise<typeof seed> {
   // senaryo `STEAM_UNAVAILABLE` ile create adımında durur. Tarih Steam'in
   // 15 günlük takas beklemesinin çok ötesinde seçildi ki süitler o eşiği
   // kazara ölçmesin; eşiğin kendisi birim testlerde pinli.
+  //
+  // T146 — the payout address is a per-network row (UserWalletAddresses,
+  // 06 §1.4), not a Users column. ChangedAt stays NULL: an address with no
+  // change time carries no payout cooldown, as the old NULL column did.
   await r()
     .input('id', sql.UniqueIdentifier, seed.sellerId)
     .input('steamId', sql.NVarChar(20), seed.sellerSteamId)
     .input('name', sql.NVarChar(100), 'E2E Seller')
     .input('payout', sql.NVarChar(50), seed.sellerPayoutAddress)
     .query(
-      `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage, DefaultPayoutAddress,
+      `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
          MobileAuthenticatorVerified, SteamAccountCreatedAt,
          CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
          CreatedAt, UpdatedAt)
-       VALUES (@id, @steamId, @name, 'en', @payout, 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
-         DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
+       VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
+         DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());
+       INSERT INTO UserWalletAddresses (Id, UserId, Network, Type, Address, ChangedAt, CreatedAt, UpdatedAt)
+       VALUES (NEWID(), @id, 'TRON', 'PAYOUT', @payout, NULL, SYSUTCDATETIME(), SYSUTCDATETIME());`,
     );
 
   // Buyer — registered STEAM_ID user, seeded up-front so create sets BuyerId.

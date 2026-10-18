@@ -4,6 +4,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Users.Application.Account;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
+using Skinora.Shared.Enums;
 
 namespace Skinora.Users.Tests.Unit.Account;
 
@@ -54,7 +55,7 @@ public sealed class AccountLifecycleServiceTests : IDisposable
             SteamId = "76561198000000900",
             SteamDisplayName = "Victim",
             Email = "victim@example.com",
-            DefaultRefundAddress = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567",
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.REFUND, "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567") },
         };
         _db.Set<User>().Add(user);
         await _db.SaveChangesAsync();
@@ -83,7 +84,9 @@ public sealed class AccountLifecycleServiceTests : IDisposable
         Assert.Equal("76561198000000900", reloaded.SteamId);
         Assert.Equal("Victim", reloaded.SteamDisplayName);
         Assert.Equal("victim@example.com", reloaded.Email);
-        Assert.Equal("TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567", reloaded.DefaultRefundAddress);
+        // T146 — the removal of the saved address rows rolls back too.
+        Assert.Equal("TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567", Assert.Single(
+            await verifyCtx.Set<UserWalletAddress>().Where(w => w.UserId == user.Id).ToListAsync()).Address);
     }
 
     [Fact]
@@ -95,6 +98,11 @@ public sealed class AccountLifecycleServiceTests : IDisposable
             SteamId = "76561198000000901",
             SteamDisplayName = "Leaver",
             Email = "leaver@example.com",
+            WalletAddresses =
+            {
+                UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TWHPPkNRxo1ovxC2uCWmyoir9AiWpt4F2H"),
+                UserWalletAddress.For(BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"),
+            },
         };
         _db.Set<User>().Add(user);
         await _db.SaveChangesAsync();
@@ -120,6 +128,8 @@ public sealed class AccountLifecycleServiceTests : IDisposable
         Assert.NotNull(reloaded.DeletedAt);
         Assert.Equal("Deleted User", reloaded.SteamDisplayName);
         Assert.Null(reloaded.Email);
+        // T146 (06 §6.2) — saved addresses on every network are removed.
+        Assert.False(await verifyCtx.Set<UserWalletAddress>().AnyAsync(w => w.UserId == user.Id));
     }
 
     private sealed class FalseActiveTransactionChecker : IUserActiveTransactionChecker

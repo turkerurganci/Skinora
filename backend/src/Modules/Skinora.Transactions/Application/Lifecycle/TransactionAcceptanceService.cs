@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Domain.Entities;
-using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
@@ -17,7 +16,7 @@ namespace Skinora.Transactions.Application.Lifecycle;
 
 /// <summary>
 /// T46 — 07 §7.6, 03 §3.2 implementation. All side effects (entity update,
-/// outbox publish, <c>User.RefundAddressChangedAt</c>) land inside a single
+/// outbox publish) land inside a single
 /// <see cref="DbContext.SaveChangesAsync"/> so the
 /// <c>CREATED → ACCEPTED</c> transition is atomic with the
 /// <c>BuyerAcceptedEvent</c> emission.
@@ -54,7 +53,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     private const ulong SteamId64ToId32Offset = 76561197960265728UL;
 
     private readonly AppDbContext _db;
-    private readonly ITrc20AddressValidator _addressValidator;
+    private readonly IWalletAddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
     private readonly IAccountFlagChecker _flagChecker;
     private readonly ITradeUrlParser _tradeUrlParser;
@@ -65,7 +64,7 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
 
     public TransactionAcceptanceService(
         AppDbContext db,
-        ITrc20AddressValidator addressValidator,
+        IWalletAddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
         IAccountFlagChecker flagChecker,
         ITradeUrlParser tradeUrlParser,
@@ -166,15 +165,19 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         }
 
         // ---------- Stage 4: refund wallet pipeline (02 §12.3) ----------
-        if (!_addressValidator.IsValid(request.RefundWalletAddress))
+        // The refund address is validated and screened on the transaction's
+        // network; the only network before T147 adds the buyer's choice is
+        // TRON (06 §1.4). The validator is the per-network one the profile
+        // write path uses (T146 — TRON base58check with the real checksum).
+        const BlockchainNetwork network = BlockchainNetwork.TRON;
+        var refundValidation = _addressValidator.Validate(network, request.RefundWalletAddress);
+        if (!refundValidation.IsUsable)
             return Failure(AcceptTransactionStatus.InvalidWallet,
                 TransactionErrorCodes.InvalidWalletAddress,
-                "refundWalletAddress fails TRC-20 validation (02 §12.3).");
+                "refundWalletAddress fails TRON address validation (02 §12.3).");
 
-        // The refund address is screened on the transaction's network; the
-        // only network before T147 adds the buyer's choice is TRON (06 §1.4).
         var sanctions = await _sanctions.EvaluateAsync(
-            BlockchainNetwork.TRON, request.RefundWalletAddress, cancellationToken);
+            network, refundValidation.CanonicalAddress!, cancellationToken);
         if (sanctions.IsMatch)
             return Failure(AcceptTransactionStatus.SanctionsMatch,
                 TransactionErrorCodes.SanctionsMatch,
@@ -207,7 +210,17 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // ---------- Stage 5: refund-address cooldown (02 §12.3) ----------
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var cooldownHours = await ReadRefundCooldownHoursAsync(cancellationToken);
-        if (IsRefundCooldownActive(buyer, cooldownHours, nowUtc))
+        // T146 — the cooldown is per network (02 §12.3, 06 §1.4): only a
+        // recent change of the buyer's refund address ON THIS NETWORK blocks
+        // acceptance.
+        var refundAddressChangedAt = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == buyerId
+                        && w.Network == network
+                        && w.Type == WalletAddressType.REFUND)
+            .Select(w => w.ChangedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (IsRefundCooldownActive(refundAddressChangedAt, cooldownHours, nowUtc))
             return Failure(AcceptTransactionStatus.WalletCooldownActive,
                 TransactionErrorCodes.WalletChangeCooldownActive,
                 "Refund-address cooldown is active (02 §12.3).");
@@ -274,8 +287,10 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // 06 §1.4 (T145) — the network is fixed at acceptance and never changes
         // afterwards. TRON is the only network until T147 adds the buyer's
         // choice; the refund address is stored in canonical form.
-        transaction.Network = BlockchainNetwork.TRON;
-        transaction.BuyerRefundAddress = BlockchainAddress.Canonicalize(request.RefundWalletAddress!);
+        transaction.Network = network;
+        // K9 (11 §F8): this snapshot is the target of every refund on the
+        // transaction's network, rejected payments included (T147 routes them).
+        transaction.BuyerRefundAddress = refundValidation.CanonicalAddress!;
         // Store the normalized form, never the raw input: the seller's delivery
         // link is generated from this column (08 §2.2), so it must be a single
         // canonical https/lowercase-host shape with the tracking parameters a
@@ -319,12 +334,12 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // işlem için geçerli adres değişikliği, profil adresi etkilenmez") +
         // 02 §12.3 snapshot prensibi: entering a different address while
         // accepting must NOT mutate the buyer's profile default
-        // (User.DefaultRefundAddress) and must NOT start the profile-level
+        // (the buyer's UserWalletAddress REFUND row) and must NOT start the profile-level
         // refund-address cooldown. The Stage-5 cooldown gate above still READS
         // the profile cooldown — an in-progress *profile* address change (T34
         // wallet flow) still blocks acceptance per 02 §12.3 — but acceptance
         // itself only fixes transaction.BuyerRefundAddress (Stage 6). The prior
-        // T46 implementation wrote DefaultRefundAddress + RefundAddressChangedAt
+        // T46 implementation wrote the profile refund address + its change time
         // here, which contradicted the snapshot principle and could lock the
         // buyer out of accepting other open invites within the cooldown window.
 
@@ -437,10 +452,10 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         return buyerId64 - SteamId64ToId32Offset == partnerId32;
     }
 
-    private static bool IsRefundCooldownActive(User buyer, int? cooldownHours, DateTime nowUtc)
+    private static bool IsRefundCooldownActive(DateTime? refundAddressChangedAt, int? cooldownHours, DateTime nowUtc)
     {
-        if (!cooldownHours.HasValue || !buyer.RefundAddressChangedAt.HasValue) return false;
-        return nowUtc - buyer.RefundAddressChangedAt.Value < TimeSpan.FromHours(cooldownHours.Value);
+        if (!cooldownHours.HasValue || !refundAddressChangedAt.HasValue) return false;
+        return nowUtc - refundAddressChangedAt.Value < TimeSpan.FromHours(cooldownHours.Value);
     }
 
     private static AcceptTransactionOutcome Failure(

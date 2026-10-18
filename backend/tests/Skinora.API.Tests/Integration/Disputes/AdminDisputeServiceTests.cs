@@ -62,7 +62,7 @@ public class AdminDisputeServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000301",
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = SellerWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, SellerWallet) },
         };
         _buyer = new User
         {

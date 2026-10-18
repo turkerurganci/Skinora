@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -82,6 +83,17 @@ public sealed class CurrentUserService : ICurrentUserService
 
         if (user is null) return null;
 
+        // T146 — addresses are per network (06 §1.4). "Has a wallet" means a
+        // saved address of that type on ANY network (07 §4.5): the flag tells
+        // the client whether the user has set one up at all, not which
+        // network a listing can use (that is T147's per-network check).
+        var walletTypes = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == userId)
+            .Select(w => w.Type)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
         return new CurrentUserDto(
             Id: user.Id,
             SteamId: user.SteamId,
@@ -92,8 +104,8 @@ public sealed class CurrentUserService : ICurrentUserService
             TosAcceptedVersion: user.TosAcceptedVersion,
             Role: role,
             Language: user.PreferredLanguage,
-            HasSellerWallet: !string.IsNullOrWhiteSpace(user.DefaultPayoutAddress),
-            HasRefundWallet: !string.IsNullOrWhiteSpace(user.DefaultRefundAddress),
+            HasSellerWallet: walletTypes.Contains(WalletAddressType.PAYOUT),
+            HasRefundWallet: walletTypes.Contains(WalletAddressType.REFUND),
             CreatedAt: user.CreatedAt,
             IsSuspended: user.IsSuspended,
             Permissions: permissions);

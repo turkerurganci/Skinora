@@ -2647,14 +2647,6 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<DateTime?>("DeactivatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("DefaultPayoutAddress")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("DefaultRefundAddress")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -2685,18 +2677,12 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
-                    b.Property<DateTime?>("PayoutAddressChangedAt")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("PreferredLanguage")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(5)
                         .HasColumnType("nvarchar(5)")
                         .HasDefaultValue("en");
-
-                    b.Property<DateTime?>("RefundAddressChangedAt")
-                        .HasColumnType("datetime2");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -2758,12 +2744,6 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("DefaultPayoutAddress")
-                        .HasDatabaseName("IX_Users_DefaultPayoutAddress");
-
-                    b.HasIndex("DefaultRefundAddress")
-                        .HasDatabaseName("IX_Users_DefaultRefundAddress");
 
                     b.HasIndex("SteamId")
                         .IsUnique()
@@ -2840,6 +2820,56 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasDatabaseName("IX_UserLoginLogs_UserId");
 
                     b.ToTable("UserLoginLogs", (string)null);
+                });
+
+            modelBuilder.Entity("Skinora.Users.Domain.Entities.UserWalletAddress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Network", "Address")
+                        .HasDatabaseName("IX_UserWalletAddresses_Network_Address");
+
+                    b.HasIndex("UserId", "Network", "Type")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_UserWalletAddresses_UserId_Network_Type");
+
+                    b.ToTable("UserWalletAddresses", (string)null);
                 });
 
             modelBuilder.Entity("Skinora.Users.Domain.Entities.WalletAddressHistory", b =>
@@ -3147,6 +3177,17 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Skinora.Users.Domain.Entities.UserWalletAddress", b =>
+                {
+                    b.HasOne("Skinora.Users.Domain.Entities.User", "User")
+                        .WithMany("WalletAddresses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Skinora.Users.Domain.Entities.WalletAddressHistory", b =>
                 {
                     b.HasOne("Skinora.Users.Domain.Entities.User", "User")
@@ -3177,6 +3218,8 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Navigation("LoginLogs");
 
                     b.Navigation("WalletAddressHistory");
+
+                    b.Navigation("WalletAddresses");
                 });
 #pragma warning restore 612, 618
         }

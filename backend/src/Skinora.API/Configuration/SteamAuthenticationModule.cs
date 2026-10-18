@@ -128,7 +128,7 @@ public static class SteamAuthenticationModule
         }
 
         // T82 — DbLoginSanctionsCheck queries User by SteamId64, then runs
-        // both DefaultPayoutAddress + DefaultRefundAddress against the
+        // every saved payout/refund address (UserWalletAddress, per network) against the
         // SanctionedAddress list (Skinora.Shared.Sanctions.ISanctionedAddressLookup;
         // Platform owns the impl). Replaces the T29 NoMatchSanctionsCheck stub.
         services.AddScoped<ISanctionsCheck, DbLoginSanctionsCheck>();

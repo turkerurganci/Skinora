@@ -22,6 +22,7 @@ using Skinora.API.Tests.Common;
 using Skinora.Auth.Application.Session;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -68,8 +69,14 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
             u.SteamAvatarUrl = "https://steamcdn.test/avatar.jpg";
             u.CompletedTransactionCount = 24;
             u.SuccessfulTransactionRate = 0.9600m;
-            u.DefaultPayoutAddress = "TXyz1234567890abcdef1234567890ab";
-            u.DefaultRefundAddress = "TAbcdef1234567890abcdef12345678cd";
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TXyz1234567890abcdef1234567890ab"));
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.REFUND, "TAbcdef1234567890abcdef12345678cd"));
+            // T146 — an Ethereum payout address, stored lowercase (06 §1.4).
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT,
+                "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", DateTime.UtcNow.AddDays(-1)));
             u.MobileAuthenticatorVerified = true;
             u.CreatedAt = DateTime.UtcNow.AddDays(-200);
         });
@@ -95,6 +102,22 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
         Assert.Equal("TXyz1234567890abcdef1234567890ab", data.GetProperty("sellerWalletAddress").GetString());
         Assert.Equal("TAbcdef1234567890abcdef12345678cd", data.GetProperty("refundWalletAddress").GetString());
         Assert.True(data.GetProperty("mobileAuthenticatorActive").GetBoolean());
+
+        // T146 — wallets[] lists every saved address, TRON before Ethereum,
+        // payout before refund; the Ethereum address in its EIP-55 spelling.
+        // The pre-F8 fields above stay TRON-only.
+        var wallets = data.GetProperty("wallets").EnumerateArray()
+            .Select(w => $"{w.GetProperty("network").GetString()}|{w.GetProperty("type").GetString()}|{w.GetProperty("address").GetString()}")
+            .ToList();
+        Assert.Equal(
+            [
+                "TRON|PAYOUT|TXyz1234567890abcdef1234567890ab",
+                "TRON|REFUND|TAbcdef1234567890abcdef12345678cd",
+                "ETHEREUM|PAYOUT|0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+            ],
+            wallets);
+        Assert.Equal(JsonValueKind.String,
+            data.GetProperty("wallets")[2].GetProperty("changedAt").ValueKind);
     }
 
     [Fact]
@@ -162,7 +185,8 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
             u.SteamAvatarUrl = "https://steamcdn.test/avatar.jpg";
             u.CompletedTransactionCount = 10;
             u.SuccessfulTransactionRate = 0.9000m;
-            u.DefaultPayoutAddress = "TShouldNotLeak11111111111111111111";
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TShouldNotLeak11111111111111111111"));
             u.CreatedAt = DateTime.UtcNow.AddDays(-400);
         });
 
@@ -292,6 +316,8 @@ public class UserProfileEndpointTests : IClassFixture<UserProfileEndpointTests.F
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
+            // T146 — saved addresses reference Users (FK); remove them first.
+            db.Set<UserWalletAddress>().RemoveRange(db.Set<UserWalletAddress>());
             db.Set<User>().RemoveRange(db.Set<User>().Where(u => !seedIds.Contains(u.Id)));
             db.SaveChanges();
         }

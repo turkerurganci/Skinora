@@ -25,8 +25,8 @@ public interface ISanctionsViolationHandler
     /// Wallet pipeline match path (T34 — adres kaydı/güncelleme sırasında).
     /// <paramref name="userId"/> kayıtlı bir kullanıcıdır;
     /// <paramref name="attemptedAddress"/> reddedilen yeni adres (savunma
-    /// amaçlı kayıt — User.DefaultPayoutAddress / DefaultRefundAddress'e
-    /// yazılmaz).
+    /// amaçlı kayıt — kullanıcının ağ başına adres satırına (UserWalletAddress,
+    /// T146) yazılmaz).
     /// </summary>
     Task RecordWalletAttemptAsync(
         Guid userId,
@@ -46,8 +46,8 @@ public interface ISanctionsViolationHandler
 
     /// <summary>
     /// Admin retroaktif scan (AD23 POST /admin/sanctions/addresses sonrası).
-    /// Belirli bir adresi <c>DefaultPayoutAddress</c> veya
-    /// <c>DefaultRefundAddress</c> olarak tutan kullanıcılar için sanctions
+    /// Belirli bir adresi aynı ağda ödeme ya da iade adresi olarak
+    /// (UserWalletAddress, T146) tutan kullanıcılar için sanctions
     /// match'i kaydeder. Caller (admin service) eşleşen kullanıcıları zaten
     /// listeler ve her biri için bu metodu çağırır.
     /// </summary>

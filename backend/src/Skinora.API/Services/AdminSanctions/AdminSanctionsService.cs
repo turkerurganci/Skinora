@@ -20,14 +20,14 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
 
     private readonly AppDbContext _db;
     private readonly IAuditLogger _audit;
-    private readonly ITrc20AddressValidator _addressValidator;
+    private readonly IWalletAddressValidator _addressValidator;
     private readonly ISanctionsViolationHandler _violations;
     private readonly TimeProvider _clock;
 
     public AdminSanctionsService(
         AppDbContext db,
         IAuditLogger audit,
-        ITrc20AddressValidator addressValidator,
+        IWalletAddressValidator addressValidator,
         ISanctionsViolationHandler violations,
         TimeProvider clock)
     {
@@ -153,20 +153,18 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             return Fail(AddSanctionedAddressStatus.ValidationFailed,
                 $"network must be one of: {string.Join(", ", SanctionedAddressNetworks.All)}.");
 
-        switch (network)
-        {
-            case BlockchainNetwork.TRON when !_addressValidator.IsValid(rawAddress):
-                return Fail(AddSanctionedAddressStatus.InvalidAddress,
-                    "Wallet address is not a valid Tron (TRC-20) address.");
-            // EIP-55: a mixed-case address must carry a valid checksum. An
-            // all-lowercase / all-uppercase address has no checksum to verify
-            // and is accepted — the list is curated by an admin copying from
-            // the source feed, and the stored form is lowercase either way
-            // (06 §1.4).
-            case BlockchainNetwork.ETHEREUM when EvmAddress.Check(rawAddress) == EvmAddressCheck.Invalid:
-                return Fail(AddSanctionedAddressStatus.InvalidAddress,
-                    "Wallet address is not a valid Ethereum address (0x + 40 hex, EIP-55 checksum when mixed case).");
-        }
+        // Validator by network (T146 — the same one the profile write path uses).
+        // TRON: base58check with the real checksum. Ethereum: a mixed-case
+        // address must carry a valid EIP-55 checksum; an all-lowercase /
+        // all-uppercase address has no checksum to verify and is accepted — the
+        // list is curated by an admin copying from the source feed, and the
+        // stored form is lowercase either way (06 §1.4).
+        var validation = _addressValidator.Validate(network, rawAddress);
+        if (!validation.IsUsable)
+            return Fail(AddSanctionedAddressStatus.InvalidAddress,
+                network == BlockchainNetwork.TRON
+                    ? "Wallet address is not a valid Tron (TRC-20) address (base58check)."
+                    : "Wallet address is not a valid Ethereum address (0x + 40 hex, EIP-55 checksum when mixed case).");
 
         // Canonical form (06 §1.4): what is stored, compared and echoed back.
         var address = BlockchainAddress.Canonicalize(rawAddress);
@@ -241,30 +239,22 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             throw;
         }
 
-        // 06 §3.25 retroaktif eşleşme: yeni adres mevcut kullanıcıların
-        // DefaultPayoutAddress / DefaultRefundAddress'i ile eşleşirse fraud
-        // flag + emergency hold cascade tetikle (07 §9.24 "Yan etkiler").
-        // Profil adresleri T146'ya kadar TRON adresidir (06 §1.4); başka bir
-        // ağın listesi bugün hiçbir profil adresiyle eşleşemez. Son karar
-        // kanonik biçimin birebir karşılaştırmasıdır — DB collation'ı
+        // 06 §3.25 retroaktif eşleşme: yeni adres mevcut kullanıcıların aynı
+        // ağdaki ödeme ya da iade adresiyle (UserWalletAddress, T146) eşleşirse
+        // fraud flag + emergency hold cascade tetikle (07 §9.24 "Yan etkiler").
+        // Son karar kanonik biçimin birebir karşılaştırmasıdır — DB collation'ı
         // büyük/küçük harfe duyarsız olsa da TRON base58 duyarlı kalır.
-        var affectedUserIds = new List<Guid>();
-        if (network == BlockchainNetwork.TRON)
-        {
-            var candidates = await _db.Set<User>()
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .Where(u =>
-                    u.DefaultPayoutAddress == address
-                    || u.DefaultRefundAddress == address)
-                .Select(u => new { u.Id, u.DefaultPayoutAddress, u.DefaultRefundAddress })
-                .ToListAsync(cancellationToken);
+        var candidates = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.Network == network && w.Address == address)
+            .Select(w => new { w.UserId, w.Address })
+            .ToListAsync(cancellationToken);
 
-            affectedUserIds.AddRange(candidates
-                .Where(u => string.Equals(u.DefaultPayoutAddress, address, StringComparison.Ordinal)
-                            || string.Equals(u.DefaultRefundAddress, address, StringComparison.Ordinal))
-                .Select(u => u.Id));
-        }
+        var affectedUserIds = candidates
+            .Where(w => string.Equals(w.Address, address, StringComparison.Ordinal))
+            .Select(w => w.UserId)
+            .Distinct()
+            .ToList();
 
         foreach (var userId in affectedUserIds)
         {

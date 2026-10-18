@@ -72,12 +72,13 @@ public sealed class MultiAccountRetroScanJob
 
     public async Task<MultiAccountRetroScanOutcome> ExecuteAsync(CancellationToken cancellationToken)
     {
+        // T146 — a candidate is an active user with at least one saved
+        // address on any network (06 §1.4).
         var candidateIds = await _db.Set<User>()
             .AsNoTracking()
             .Where(u => !u.IsDeleted
                         && !u.IsDeactivated
-                        && ((u.DefaultPayoutAddress != null && u.DefaultPayoutAddress != "")
-                            || (u.DefaultRefundAddress != null && u.DefaultRefundAddress != "")))
+                        && _db.Set<UserWalletAddress>().Any(w => w.UserId == u.Id))
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 

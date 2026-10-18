@@ -66,7 +66,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet1,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet1) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User

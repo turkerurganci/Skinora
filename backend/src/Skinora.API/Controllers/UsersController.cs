@@ -5,7 +5,9 @@ using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
 using Skinora.Auth.Configuration;
+using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Discord;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Users.Application.Account;
 using Skinora.Users.Application.Profiles;
@@ -26,6 +28,7 @@ public sealed class UsersController : ControllerBase
 
     private readonly IUserProfileService _profileService;
     private readonly IWalletAddressService _walletService;
+    private readonly IWalletAddressValidator _walletAddressValidator;
     private readonly IReAuthTokenValidator _reAuthValidator;
     private readonly IAccountSettingsService _settingsService;
     private readonly ILanguageService _languageService;
@@ -49,6 +52,7 @@ public sealed class UsersController : ControllerBase
     public UsersController(
         IUserProfileService profileService,
         IWalletAddressService walletService,
+        IWalletAddressValidator walletAddressValidator,
         IReAuthTokenValidator reAuthValidator,
         IAccountSettingsService settingsService,
         ILanguageService languageService,
@@ -63,6 +67,7 @@ public sealed class UsersController : ControllerBase
     {
         _profileService = profileService;
         _walletService = walletService;
+        _walletAddressValidator = walletAddressValidator;
         _reAuthValidator = reAuthValidator;
         _settingsService = settingsService;
         _languageService = languageService;
@@ -548,6 +553,34 @@ public sealed class UsersController : ControllerBase
                 traceId: HttpContext.TraceIdentifier));
         }
 
+        // 07 §1.3 (T146) — the network the address belongs to. Omitted means
+        // TRON so the pre-F8 body keeps working until the network-aware UI
+        // (T156) sends it; an unknown value is a validation error. Enum names
+        // only, case-sensitive — the same wire rule as the admin sanctions API.
+        var network = BlockchainNetwork.TRON;
+        if (request.Network is not null
+            && !SanctionedAddressNetworks.TryParse(request.Network, out network))
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                WalletErrorCodes.ValidationError,
+                $"network must be one of: {string.Join(", ", SanctionedAddressNetworks.All)}.",
+                traceId: HttpContext.TraceIdentifier));
+        }
+
+        var confirmedWithoutChecksum = request.ConfirmLowercase == true;
+
+        // Format + checksum-confirmation gate BEFORE the re-auth token is
+        // consumed: the token is single-use, so a request that only needs the
+        // user's "yes, this lowercase address is right" (or a corrected typo)
+        // must not burn it — the retry carries the same token. The service
+        // repeats the check; this one only decides the order.
+        var precheck = _walletAddressValidator.Validate(network, request.WalletAddress);
+        if (!precheck.IsUsable
+            || (precheck.Status == WalletAddressValidationStatus.ValidWithoutChecksum && !confirmedWithoutChecksum))
+        {
+            return InvalidWalletAddress(network, precheck.Reason);
+        }
+
         // 07 §4.7 / §5.3 "Ek Auth": validate re-auth token *before* touching
         // domain state. Token is single-use and bound to a user id — reject
         // with RE_AUTH_TOKEN_INVALID if it fails for any reason (missing
@@ -571,21 +604,22 @@ public sealed class UsersController : ControllerBase
         }
 
         var result = await _walletService.UpdateWalletAsync(
-            userId, role, request.WalletAddress, reAuthValidated, cancellationToken);
+            userId, role, network, request.WalletAddress, confirmedWithoutChecksum,
+            reAuthValidated, cancellationToken);
 
         return result.Status switch
         {
             WalletUpdateStatus.Success => Ok(new UpdateWalletResponse(
                 result.WalletAddress!,
+                result.Network.ToString(),
                 result.UpdatedAt!.Value,
-                result.ActiveTransactionsUsingOldAddress)),
+                result.ActiveTransactionsUsingOldAddress,
+                result.ChecksumVerified)),
 
             WalletUpdateStatus.UserNotFound => Unauthorized(),
 
-            WalletUpdateStatus.InvalidAddress => BadRequest(ApiResponse<object>.Fail(
-                WalletErrorCodes.InvalidWalletAddress,
-                "Wallet address is not a valid Tron (TRC-20) address.",
-                traceId: HttpContext.TraceIdentifier)),
+            WalletUpdateStatus.InvalidAddress or WalletUpdateStatus.ChecksumConfirmationRequired =>
+                InvalidWalletAddress(result.Network, result.Reason),
 
             WalletUpdateStatus.SanctionsMatch => StatusCode(
                 StatusCodes.Status403Forbidden,
@@ -603,6 +637,35 @@ public sealed class UsersController : ControllerBase
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
+    }
+
+    /// <summary>
+    /// 400 <c>INVALID_WALLET_ADDRESS</c> (07 §5.3) with
+    /// <c>details: { network, reason, requiresConfirmation }</c> — the reason
+    /// is <c>INVALID_FORMAT</c>, <c>CHECKSUM_MISMATCH</c> or
+    /// <c>CHECKSUM_CONFIRMATION_REQUIRED</c>; the last one (and only it) sets
+    /// <c>requiresConfirmation</c>, telling the client to ask the user and
+    /// resend with <c>confirmLowercase: true</c> (07 §1.3).
+    /// </summary>
+    private BadRequestObjectResult InvalidWalletAddress(BlockchainNetwork network, string? reason)
+    {
+        var requiresConfirmation = reason == WalletAddressRejectionReasons.ChecksumConfirmationRequired;
+        var message = requiresConfirmation
+            ? "The Ethereum address has no EIP-55 checksum (all lowercase or all uppercase); confirm it with confirmLowercase: true."
+            : network == BlockchainNetwork.TRON
+                ? "Wallet address is not a valid Tron (TRC-20) address."
+                : "Wallet address is not a valid Ethereum address.";
+
+        return BadRequest(ApiResponse<object>.Fail(
+            WalletErrorCodes.InvalidWalletAddress,
+            message,
+            details: new
+            {
+                network = network.ToString(),
+                reason = reason ?? WalletAddressRejectionReasons.InvalidFormat,
+                requiresConfirmation,
+            },
+            traceId: HttpContext.TraceIdentifier));
     }
 
     private bool TryGetUserId(out Guid userId)

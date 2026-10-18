@@ -67,7 +67,7 @@ public class DisputeServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteam,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = SellerWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, SellerWallet) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User

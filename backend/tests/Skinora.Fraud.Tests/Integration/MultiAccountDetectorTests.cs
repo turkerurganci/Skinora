@@ -150,6 +150,60 @@ public class MultiAccountDetectorTests : IntegrationTestBase
         Assert.Equal(twin.SteamId, detail.GetProperty("linkedAccounts")[0].GetProperty("steamId").GetString());
     }
 
+    // ---------- T146: addresses are per network (06 §1.4) ----------
+
+    [Fact]
+    public async Task Flags_When_Other_Account_Shares_Ethereum_Payout_In_Other_Letter_Case()
+    {
+        // The same Ethereum address in another spelling is the same address
+        // (06 §1.4 — stored lowercase, compared canonically).
+        var subject = await InsertUserAsync("subject", PayoutAddressA, RefundAddressA,
+            ethereumPayout: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed");
+        var twin = await InsertUserAsync("twin", PayoutAddressB, RefundAddressB,
+            ethereumPayout: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+
+        var result = await BuildDetector().EvaluateAsync(subject.Id, CancellationToken.None);
+
+        Assert.Equal(MultiAccountEvaluationStatus.Flagged, result.Status);
+        Assert.Equal(MultiAccountMatchType.WALLET_PAYOUT, result.PrimaryMatchType);
+        Assert.Equal("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", result.PrimaryMatchValue);
+
+        var flag = await Context.Set<FraudFlag>().SingleAsync(f => f.UserId == subject.Id);
+        var detail = JsonSerializer.Deserialize<JsonElement>(flag.Details);
+        Assert.Equal("ETHEREUM", detail.GetProperty("matchNetwork").GetString());
+        Assert.Equal(twin.SteamId, detail.GetProperty("linkedAccounts")[0].GetProperty("steamId").GetString());
+    }
+
+    [Fact]
+    public async Task Tron_Match_Is_Reported_With_Its_Network()
+    {
+        var subject = await InsertUserAsync("subject", PayoutAddressA, RefundAddressA,
+            ethereumPayout: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+        await InsertUserAsync("twin", PayoutAddressA, RefundAddressB);
+
+        await BuildDetector().EvaluateAsync(subject.Id, CancellationToken.None);
+
+        var flag = await Context.Set<FraudFlag>().SingleAsync(f => f.UserId == subject.Id);
+        var detail = JsonSerializer.Deserialize<JsonElement>(flag.Details);
+        Assert.Equal("TRON", detail.GetProperty("matchNetwork").GetString());
+        Assert.Equal(PayoutAddressA, detail.GetProperty("matchValue").GetString());
+    }
+
+    [Fact]
+    public async Task Same_Ethereum_Address_As_Payout_And_Refund_Is_No_Match()
+    {
+        // Matching is per type, as before T146: one account's payout address
+        // equal to another's refund address is not the strong signal.
+        var subject = await InsertUserAsync("subject", PayoutAddressA, RefundAddressA,
+            ethereumPayout: "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359");
+        await InsertUserAsync("other", PayoutAddressB, RefundAddressB,
+            ethereumRefund: "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359");
+
+        var result = await BuildDetector().EvaluateAsync(subject.Id, CancellationToken.None);
+
+        Assert.Equal(MultiAccountEvaluationStatus.NoSignal, result.Status);
+    }
+
     [Fact]
     public async Task Payout_Match_Wins_Over_Refund_Match()
     {
@@ -371,20 +425,31 @@ public class MultiAccountDetectorTests : IntegrationTestBase
         string? payout,
         string? refund,
         bool isDeleted = false,
-        bool isDeactivated = false)
+        bool isDeactivated = false,
+        string? ethereumPayout = null,
+        string? ethereumRefund = null)
     {
         var user = new User
         {
             Id = Guid.NewGuid(),
             SteamId = $"7656119854000{Interlocked.Increment(ref _userCounter):D4}",
             SteamDisplayName = handle,
-            DefaultPayoutAddress = payout,
-            DefaultRefundAddress = refund,
             IsDeleted = isDeleted,
             DeletedAt = isDeleted ? _clock.GetUtcNow().UtcDateTime : null,
             IsDeactivated = isDeactivated,
             DeactivatedAt = isDeactivated ? _clock.GetUtcNow().UtcDateTime : null,
         };
+        // T146 — one row per (network, type) that has an address (06 §1.4).
+        void AddWallet(BlockchainNetwork network, WalletAddressType type, string? address)
+        {
+            if (address is not null)
+                user.WalletAddresses.Add(UserWalletAddress.For(network, type, address));
+        }
+        AddWallet(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, payout);
+        AddWallet(BlockchainNetwork.TRON, WalletAddressType.REFUND, refund);
+        AddWallet(BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, ethereumPayout);
+        AddWallet(BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND, ethereumRefund);
+
         Context.Set<User>().Add(user);
         await Context.SaveChangesAsync();
         return user;
