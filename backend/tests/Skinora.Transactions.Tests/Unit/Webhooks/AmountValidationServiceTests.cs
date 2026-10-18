@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Networks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -71,7 +72,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
         _gasFee = new StubChargedGasFeeResolver { RefundFee = 2m };
-        var decisionService = new RefundDecisionService(_settings);
+        var decisionService = GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings);
 
         _sut = new AmountValidationService(
             _db,

@@ -125,6 +125,66 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
         }
     }
 
+    /// <summary>
+    /// T149 — <c>POST /api/transfer/estimate-sweep-fee</c>: the TRX one sweep
+    /// of a fresh deposit will cost the platform and the TRX/USDT price, for
+    /// the buyer's network fee line (11 §F8 K8, 08 §3.1a). Every failure shape
+    /// collapses to <c>null</c> — the caller writes the per-network fallback.
+    /// </summary>
+    public async Task<SweepCostEstimate?> EstimateSweepCostAsync(
+        StablecoinType token, CancellationToken cancellationToken)
+    {
+        var body = new EstimateSweepFeeBody(_policy.Network.ToString(), token.ToString());
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Post, "api/transfer/estimate-sweep-fee")
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        if (!string.IsNullOrWhiteSpace(_options.InternalKey))
+        {
+            httpRequest.Headers.TryAddWithoutValidation(InternalKeyHeader, _options.InternalKey);
+        }
+
+        try
+        {
+            using var response = await _http.SendAsync(httpRequest, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await ReadErrorAsync(response, cancellationToken);
+                _logger.LogWarning(
+                    "Sweep fee estimate returned HTTP {StatusCode} {ErrorCode} on {Network}: {ErrorMessage} — the network fee line falls back to its static setting.",
+                    (int)response.StatusCode, error?.Error, _policy.Network, error?.Message);
+                return null;
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<EstimateSweepFeeResponse>(
+                JsonOptions, cancellationToken);
+            if (payload is not { SweepCostSun: { } costSun, TrxPriceUsdt: { } price }
+                || costSun < 0
+                || price <= 0m)
+            {
+                _logger.LogWarning(
+                    "Sweep fee estimate on {Network} returned an unusable body (sweepCostSun '{SweepCostSun}', trxPriceUsdt '{TrxPrice}') — the network fee line falls back to its static setting.",
+                    _policy.Network, payload?.SweepCostSun, payload?.TrxPriceUsdt);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "Sweep fee estimate on {Network}: {SweepCostSun} sun (activation {ActivationSun}, burn top-up {BurnTopUpSun}, bandwidth {BandwidthSun}; energy {EnergyRequired}) at TRX price {TrxPrice} ({PriceSource}).",
+                _policy.Network, costSun, payload.ActivationSun, payload.BurnTopUpSun,
+                payload.BandwidthSun, payload.EnergyRequired, price, payload.PriceSource);
+            return new SweepCostEstimate(costSun, price);
+        }
+        catch (Exception ex) when (
+            ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            _logger.LogWarning(ex,
+                "Sweep fee estimate call failed on {Network} — the network fee line falls back to its static setting.",
+                _policy.Network);
+            return null;
+        }
+    }
+
     // The sidecar answers every rejection with {error, message}. The status
     // separates a rejected request (400) from a retryable outage (502); the
     // code says which one it was — INVALID_ESTIMATE_REQUEST, a malformed
@@ -161,6 +221,19 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
         string Token);
 
     private sealed record ErrorEnvelope(string? Error, string? Message);
+
+    // T149 — sidecar-blockchain/contracts/estimate-fee/sweep.request.json is
+    // the body both sides replay.
+    private sealed record EstimateSweepFeeBody(string Network, string Token);
+
+    private sealed record EstimateSweepFeeResponse(
+        long? SweepCostSun,
+        decimal? TrxPriceUsdt,
+        string? PriceSource,
+        long? ActivationSun,
+        long? BurnTopUpSun,
+        long? BandwidthSun,
+        long? EnergyRequired);
 
     // Everything but FeeUsdt is TRON's breakdown (Energy, SUN, TRX price) —
     // nullable so a network whose answer does not carry it still parses.

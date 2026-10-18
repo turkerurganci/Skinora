@@ -45,6 +45,12 @@ interface Fixture {
   stakeAccount?: boolean;
   /** SUN the account holding the stake can delegate (default 0 — nothing staked). */
   delegatableSun?: number;
+  /**
+   * T149 — the dormant stake switch. The refund scenarios below were written
+   * for the hybrid model and run with it ON; the production default (OFF) has
+   * its own describe block.
+   */
+  stakingEnabled?: boolean;
   /** The contract owner's remaining Energy (default 0 — mainnet Tether). */
   ownerEnergy?: number;
   ownerThrows?: boolean;
@@ -157,6 +163,7 @@ function buildService(fixture: Fixture = {}, priceUsdt = 0.5) {
     resources: {} as never,
     sweeperAddress: HOT_WALLET,
     sweeperPrivateKey: DUMMY_HOT_WALLET_KEY,
+    stakingEnabled: fixture.stakingEnabled ?? true,
     stakeAddress: fixture.stakeAccount ? STAKE_ACCOUNT : undefined,
     fallbackAmountSun: 15_000_000,
   });
@@ -637,5 +644,125 @@ describe('FeeEstimationService — request handling', () => {
       BUYER,
       '10200000',
     );
+  });
+});
+
+/**
+ * T149 (11 §F8, öneriyle kaydedildi — ⚠) — with the dormant stake OFF (the
+ * production default) the refund estimate reads no stake and plans the burn
+ * the broadcast will take, whatever the stake could cover.
+ */
+describe('FeeEstimationService — staking switched off (production default)', () => {
+  it('reads no stake and charges the burn, although the stake could delegate the whole transfer', async () => {
+    const { service, resourceClient } = buildService({
+      stakingEnabled: false,
+      delegatableSun: 7_428_000_000 * 10,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(resourceClient.getDelegatableEnergySun).not.toHaveBeenCalled();
+    expect(result.delegationPlan).toBe('burn');
+    expect(result.delegationSun).toBeNull();
+    // 64,285 × 100 SUN = 6.4285 TRX × 0.5 = 3.21425 → 3.22.
+    expect(result.feeUsdt).toBe('3.22');
+  });
+
+  it('the same stake is read and delegated with the switch ON — the switch is what decides', async () => {
+    const { service, resourceClient } = buildService({
+      stakingEnabled: true,
+      delegatableSun: 7_428_000_000 * 10,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(resourceClient.getDelegatableEnergySun).toHaveBeenCalledOnce();
+    expect(result.delegationPlan).toBe('delegate');
+    expect(result.feeUsdt).toBe('0.00');
+  });
+});
+
+/**
+ * T149 — the basis of the buyer's TRON network fee line (11 §F8 K8, 08 §3.1a):
+ * one fresh deposit swept to the hot wallet on the burn path. Expected values
+ * are worked out by hand from the mainnet parameters (2026-09/10): 100 SUN per
+ * Energy, 1,000 SUN per Bandwidth byte, 1 TRX + 0.1 TRX account creation.
+ */
+describe('FeeEstimationService — sweep cost (TRON network fee line)', () => {
+  it('prices activation + the whole-transfer burn top-up with its 10% margin + the top-up bandwidth', async () => {
+    const { service } = buildService({}, 0.34);
+
+    const result = await service.estimateSweepCost('USDT');
+
+    // 1,000,000 + 100,000 (hot wallet has no staked Bandwidth).
+    expect(result.activationSun).toBe(1_100_000);
+    // 64,285 × 100 = 6,428,500 × 1.1 = 7,071,350 − the 1 SUN activation left in the deposit.
+    expect(result.burnTopUpSun).toBe(7_071_349);
+    // 270 bytes × 1,000 SUN — the hot wallet's TRX transfer, assumed burned.
+    expect(result.bandwidthSun).toBe(270_000);
+    expect(result.sweepCostSun).toBe(8_441_349);
+    expect(result.energyRequired).toBe(64_285);
+    expect(result.trxPriceUsdt).toBe(0.34);
+    // 8.441349 × 0.34 = 2.870059 — unrounded; the backend adds its buffer and rounds once.
+    expect(result.costUsdt).toBe('2.870059');
+  });
+
+  it('simulates a 1-unit transfer into the hot wallet from the hot wallet — a transfer between two holders', async () => {
+    const { service, resourceClient } = buildService();
+
+    await service.estimateSweepCost('USDT');
+
+    expect(resourceClient.estimateTransferEnergy).toHaveBeenCalledWith(
+      USDT_CONTRACT,
+      HOT_WALLET,
+      HOT_WALLET,
+      '1',
+    );
+  });
+
+  it('prices the burn for the WHOLE transfer even when the contract owner would pay its share — the TRX sent is not recovered', async () => {
+    const { service } = buildService({ policy: OWNER_PAYS_POLICY, ownerEnergy: 10_000_000 });
+
+    const result = await service.estimateSweepCost('USDT');
+
+    expect(result.burnTopUpSun).toBe(7_071_349);
+  });
+
+  it("drops the activation's bandwidth fee when the hot wallet's staked Bandwidth covers it", async () => {
+    const { service } = buildService({ hotWallet: { stakedBandwidthAvailable: 270 } });
+
+    const result = await service.estimateSweepCost('USDT');
+
+    expect(result.activationSun).toBe(1_000_000);
+  });
+
+  it('reads no stake, whatever the switch says — the line always prices the burn path', async () => {
+    const { service, resourceClient } = buildService({
+      stakingEnabled: true,
+      delegatableSun: 7_428_000_000 * 10,
+    });
+
+    const result = await service.estimateSweepCost('USDT');
+
+    expect(resourceClient.getDelegatableEnergySun).not.toHaveBeenCalled();
+    expect(result.burnTopUpSun).toBe(7_071_349);
+  });
+
+  it('fails retryable when the account-creation fee is unread — the backend writes its fallback line', async () => {
+    const { service } = buildService({ createNewAccountFeeSun: null });
+
+    await expect(service.estimateSweepCost('USDT')).rejects.toMatchObject({
+      code: 'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
+      retryable: true,
+    });
+  });
+
+  it('rejects a token without a configured contract', async () => {
+    const { service } = buildService();
+
+    await expect(service.estimateSweepCost('USDC')).rejects.toMatchObject({
+      code: 'TOKEN_CONTRACT_NOT_CONFIGURED',
+      retryable: false,
+    });
   });
 });

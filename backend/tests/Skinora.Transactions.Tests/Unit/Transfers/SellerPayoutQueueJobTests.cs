@@ -9,6 +9,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
@@ -71,7 +72,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
 
         _sut = new SellerPayoutQueueJob(
             _db,
-            new RefundDecisionService(_settings),
+            GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings),
             _gasFee,
             _outbox,
             _clock,
@@ -370,7 +371,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             await competing.SaveChangesAsync();
         });
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock, logger);
+            raceDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee, _outbox, _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw
 
@@ -392,7 +393,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
         await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
         var sut = new SellerPayoutQueueJob(
-            throwingDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock,
+            throwingDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee, _outbox, _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
@@ -629,7 +630,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         });
         await using var jobDb = new AppDbContext(_options);
         var sut = new SellerPayoutQueueJob(
-            jobDb, new RefundDecisionService(_settings), _gasFee,
+            jobDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee,
             new DbContextOutbox(jobDb), _clock, NullLogger<SellerPayoutQueueJob>.Instance);
 
         await sut.ExecuteAsync();
@@ -786,7 +787,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await using var raceDb = new TransactionWriteRaceDbContext(_options);
         var logger = new ListLogger<SellerPayoutQueueJob>();
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _gasFee,
+            raceDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee,
             new DbContextOutbox(raceDb), _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw

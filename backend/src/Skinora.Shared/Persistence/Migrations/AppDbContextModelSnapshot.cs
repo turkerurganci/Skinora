@@ -1838,6 +1838,45 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "0.06"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000004c"),
+                            Category = "Commission",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "TRON ağ ücreti satırı — sweep'e kadar (~8 gün) TRX fiyat oynamasına karşı tampon oranı (11 §F8 K8). Satır = YUKARI_2_HANE(sweep maliyeti TRX × canlı TRX/USDT × (1 + bu oran)). 0,007 = 02 §5 örneği (8,44 TRX × 0,34 × 1,007 = 2,8901 → 2,90). 0 ≤ değer < 1.",
+                            IsConfigured = true,
+                            Key = "blockchain.tron.network_fee_buffer_ratio",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "0.007"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000004d"),
+                            Category = "Commission",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "TRON ağ ücreti satırı YEDEĞİ (USDT) — kabul anında sweep tahmini alınamazsa (servis/zincir/kur erişilemez ya da tahmin blockchain.max_charged_gas_fee_usdt'yi aşar) satıra bu değer yazılır; kabul tahmine bloke olmaz. Satır sonradan düzeltilmez (08 §3.1a).",
+                            IsConfigured = true,
+                            Key = "blockchain.tron.network_fee_fallback_usdt",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "3.00"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000004e"),
+                            Category = "Monitoring",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "Ethereum minimum iade eşiği — net iade < gas fee × bu oran ise iade yapılmaz, admin uyarısı (02 §4.6). Canlı tahmin kullandığı için Ethereum'da yalnız tozu engeller. TRON'un karşılığı min_refund_threshold_ratio.",
+                            IsConfigured = true,
+                            Key = "blockchain.ethereum.min_refund_threshold_ratio",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "2.0"
                         });
                 });
 
@@ -2520,6 +2559,10 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<decimal?>("NetworkFeeAmount")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<DateTime?>("PaymentDeadline")
                         .HasColumnType("datetime2");
 
@@ -2679,6 +2722,8 @@ namespace Skinora.Shared.Persistence.Migrations
                             t.HasCheckConstraint("CK_Transactions_FreezePassive", "(TimeoutFrozenAt IS NOT NULL) OR (TimeoutFreezeReason IS NULL AND TimeoutRemainingSeconds IS NULL)");
 
                             t.HasCheckConstraint("CK_Transactions_Hold", "(IsOnHold = 0) OR (EmergencyHoldAt IS NOT NULL AND EmergencyHoldReason IS NOT NULL AND EmergencyHoldByAdminId IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Transactions_NetworkFeeAmount_NonNegative", "NetworkFeeAmount IS NULL OR NetworkFeeAmount >= 0");
 
                             t.HasCheckConstraint("CK_Transactions_Network_Accepted", "(AcceptedAt IS NULL) OR (Network IS NOT NULL AND SellerPayoutAddress IS NOT NULL)");
                         });

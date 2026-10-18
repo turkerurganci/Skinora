@@ -180,7 +180,7 @@ public sealed class AmountValidationService : IAmountValidationService
             resolvedActualToken ?? paymentAddress.ExpectedToken,
             cancellationToken);
 
-        var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
+        var decision = await _refundDecision.ResolveBuyerRefundAsync(paymentAddress.Network, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
@@ -267,7 +267,7 @@ public sealed class AmountValidationService : IAmountValidationService
         // rule used for underpayment / wrong-token: net < 2× gas blocks the
         // refund. The post-cancel transaction never advances; this purely
         // queues a refund intent for T73 dispatch.
-        var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
+        var decision = await _refundDecision.ResolveBuyerRefundAsync(paymentAddress.Network, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
@@ -321,7 +321,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
-        var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
+        var decision = await _refundDecision.ResolveBuyerRefundAsync(paymentAddress.Network, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
@@ -388,7 +388,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
-        var decision = await _refundDecision.ResolveOverpaymentRefundAsync(expected, received, gasFee, cancellationToken);
+        var decision = await _refundDecision.ResolveOverpaymentRefundAsync(paymentAddress.Network, expected, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
@@ -454,7 +454,7 @@ public sealed class AmountValidationService : IAmountValidationService
         // 02 §4.4 — payments arriving after the transaction left SELLER_CONFIRMED
         // are refunded in full (the state machine never advances; multi-payment
         // is otherwise identical to underpayment from the refund-decision view).
-        var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
+        var decision = await _refundDecision.ResolveBuyerRefundAsync(paymentAddress.Network, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);

@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import type { Request, Response } from 'express';
-import { estimateFeeHandler } from './feeHandlers.js';
+import { estimateFeeHandler, estimateSweepFeeHandler } from './feeHandlers.js';
 import { SidecarError } from '../errors/SidecarError.js';
-import type { FeeEstimationService, FeeEstimateResult } from '../fee/FeeEstimationService.js';
+import type {
+  FeeEstimationService,
+  FeeEstimateResult,
+  SweepCostEstimateResult,
+} from '../fee/FeeEstimationService.js';
 import { TransferService } from '../transfer/TransferService.js';
 
 interface MockResponse {
@@ -212,4 +216,79 @@ describe('estimateFeeHandler — the backend request contract', () => {
       expect(() => TransferService.toRawUnits(amount as string, 10n ** 6n)).not.toThrow();
     },
   );
+});
+
+const SAMPLE_SWEEP: SweepCostEstimateResult = {
+  sweepCostSun: 8_441_349,
+  activationSun: 1_100_000,
+  burnTopUpSun: 7_071_349,
+  bandwidthSun: 270_000,
+  energyRequired: 64_285,
+  trxPriceUsdt: 0.34,
+  priceSource: 'binance',
+  costUsdt: '2.870059',
+};
+
+/** T149 — POST /api/transfer/estimate-sweep-fee (11 §F8 K8, 08 §3.1a). */
+describe('estimateSweepFeeHandler', () => {
+  it('accepts the backend body (contracts/estimate-fee/sweep.request.json) and returns the estimate', async () => {
+    const body = loadExample('sweep.request.json');
+    const estimateSweepCost = vi.fn(async () => SAMPLE_SWEEP);
+    const handler = estimateSweepFeeHandler({
+      estimateSweepCost,
+    } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest(body), res);
+
+    expect(captured.statusCode).toBe(200);
+    expect(captured.body).toEqual(SAMPLE_SWEEP);
+    expect(estimateSweepCost).toHaveBeenCalledWith(body.token, 'corr-1');
+  });
+
+  it('rejects a body without a supported token', async () => {
+    const estimateSweepCost = vi.fn();
+    const handler = estimateSweepFeeHandler({
+      estimateSweepCost,
+    } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ network: 'TRON', token: 'DAI' }), res);
+
+    expect(captured.statusCode).toBe(400);
+    expect(captured.body).toMatchObject({ error: 'INVALID_ESTIMATE_REQUEST' });
+    expect(estimateSweepCost).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { retryable: true, status: 502 },
+    { retryable: false, status: 400 },
+  ])('maps a SidecarError (retryable $retryable) to $status', async ({ retryable, status }) => {
+    const estimateSweepCost = vi.fn(async () => {
+      throw new SidecarError('probe failed', 'FEE_ESTIMATE_SIMULATION_FAILED', retryable);
+    });
+    const handler = estimateSweepFeeHandler({
+      estimateSweepCost,
+    } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ token: 'USDT' }), res);
+
+    expect(captured.statusCode).toBe(status);
+    expect(captured.body).toMatchObject({ error: 'FEE_ESTIMATE_SIMULATION_FAILED', retryable });
+  });
+
+  it('maps an unexpected error to 500', async () => {
+    const estimateSweepCost = vi.fn(async () => {
+      throw new Error('boom');
+    });
+    const handler = estimateSweepFeeHandler({
+      estimateSweepCost,
+    } as unknown as FeeEstimationService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ token: 'USDT' }), res);
+
+    expect(captured.statusCode).toBe(500);
+  });
 });

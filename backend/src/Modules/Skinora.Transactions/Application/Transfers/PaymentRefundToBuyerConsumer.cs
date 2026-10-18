@@ -5,6 +5,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -27,7 +28,10 @@ namespace Skinora.Transactions.Application.Transfers;
 /// <para>
 /// Refund amount (02 §4.6 / §4.7): the buyer receives <c>Price + Commission −
 /// gas fee</c>, i.e. <c>TotalAmount − refundGasFeeEstimate</c> — the buyer
-/// bears the on-chain gas, the platform's cost is zero. The gas estimate is
+/// bears the on-chain gas, the platform's cost is zero. T149: on TRON
+/// <c>TotalAmount</c> also carries the network fee line, returned in full
+/// unless the deposit has already been swept
+/// (<c>FinancialCalculator.CalculateRefundableTotal</c>). The gas estimate is
 /// snapshotted onto <see cref="BlockchainTransaction.GasFee"/> so the 07 §7.5
 /// refund breakdown is reconstructable from stored data (originalAmount =
 /// Amount + GasFee). When <see cref="IRefundDecisionService"/> blocks the
@@ -126,21 +130,40 @@ public sealed class PaymentRefundToBuyerConsumer
         // only a defensive read for rows that predate F8 (06 §1.4).
         var network = deposit?.Network ?? transaction.Network ?? BlockchainNetwork.TRON;
 
+        // T149 (11 §F8 K8, 02 §4.6, 08 §3.1a) — what the refund returns before
+        // its own gas: the whole TotalAmount (price + commission + the TRON
+        // network fee line) while the deposit has not been swept — the line
+        // paid for a sweep that never happened; once the sweep has run
+        // (broadcast or confirmed) the line was spent on it and is not
+        // returned (öneriyle kaydedildi — ⚠ PARA). Price and commission are
+        // returned in full either way.
+        var sweepHasRun = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .AnyAsync(
+                b => b.TransactionId == transaction.Id
+                    && b.Type == BlockchainTransactionType.SWEEP
+                    && (b.Status == BlockchainTransactionStatus.CONFIRMED
+                        || (b.Status == BlockchainTransactionStatus.PENDING && b.TxHash != null)),
+                cancellationToken);
+        var refundable = FinancialCalculator.CalculateRefundableTotal(
+            transaction.TotalAmount, transaction.NetworkFeeAmount, sweepHasRun);
+
         var resolvedGasFee = await _chargedGasFee.ResolveRefundFeeAsync(
             network,
             depositAddress,
             notification.BuyerRefundAddress,
-            transaction.TotalAmount,
+            refundable,
             transaction.StablecoinType,
             cancellationToken);
         var gasFee = resolvedGasFee.FeeUsdt;
 
-        // 02 §4.6 — buyer receives Price + Commission − gas fee = TotalAmount −
-        // gasFee. ResolveBuyerRefundAsync applies the negative / dust-threshold
-        // guard (09 §14.4); a blocked decision raises an admin alert and queues
+        // 02 §4.6 — buyer receives Price + Commission (+ the network fee line
+        // before the sweep) − gas fee. ResolveBuyerRefundAsync applies the
+        // negative / dust-threshold guard with the network's own multiplier
+        // (09 §14.4, T149); a blocked decision raises an admin alert and queues
         // no row, mirroring the webhook refund paths (AmountValidationService).
         var decision = await _refundDecision.ResolveBuyerRefundAsync(
-            transaction.TotalAmount, gasFee, cancellationToken);
+            network, refundable, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
         {
             // RaiseAsync only Adds the audit + outbox rows to the shared context
@@ -148,8 +171,8 @@ public sealed class PaymentRefundToBuyerConsumer
             await _refundBlockedAlert.RaiseAsync(transaction.Id, decision, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
             _logger.LogWarning(
-                "BuyerRefund blocked — transaction {TransactionId} totalPaid={TotalPaid} gasFee={GasFee} reason={Reason}; admin alerted, no row queued.",
-                transaction.Id, transaction.TotalAmount, gasFee, decision.Reason);
+                "BuyerRefund blocked — transaction {TransactionId} refundable={Refundable} (total {TotalPaid}, network fee {NetworkFee}, swept {Swept}) gasFee={GasFee} reason={Reason}; admin alerted, no row queued.",
+                transaction.Id, refundable, transaction.TotalAmount, transaction.NetworkFeeAmount, sweepHasRun, gasFee, decision.Reason);
             return;
         }
 
@@ -163,7 +186,7 @@ public sealed class PaymentRefundToBuyerConsumer
             TxHash = null,
             FromAddress = string.Empty,        // Deposit address set at dispatch (OutgoingTransferDispatchJob).
             ToAddress = notification.BuyerRefundAddress,
-            Amount = decision.NetRefund,       // Net (TotalAmount − gasFee), 02 §4.6.
+            Amount = decision.NetRefund,       // Net (refundable − gasFee), 02 §4.6 / T149.
             Token = transaction.StablecoinType,
             ActualTokenAddress = null,         // CK_..._Type_Outbound: NULL for BUYER_REFUND.
             GasFee = gasFee,                   // Snapshot the estimate (07 §7.5 reconstruction).

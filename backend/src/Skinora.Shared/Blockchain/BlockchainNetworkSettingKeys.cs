@@ -24,8 +24,10 @@ namespace Skinora.Shared.Blockchain;
 /// 02 §16.2) — see <c>IPlatformWalletAddressProvider</c> and the services'
 /// own <c>MAX_SINGLE_TRANSFER_USDT</c> / <c>MAX_DAILY_OUTFLOW_USDT</c>. The
 /// confirmation rule is a chain fact (<see cref="BlockchainNetworkPolicy"/>).
-/// The minimum-refund multiplier and the TRON network-fee buffer become
-/// per-network in T149.
+/// T149 added the minimum-refund multiplier (TRON keeps the unprefixed
+/// <c>min_refund_threshold_ratio</c>) and TRON's network fee line settings
+/// (buffer and fallback — <c>blockchain.tron.*</c>, new keys; Ethereum has no
+/// line).
 /// </para>
 /// </remarks>
 /// <param name="Network">The network these keys belong to.</param>
@@ -37,6 +39,9 @@ namespace Skinora.Shared.Blockchain;
 /// <param name="FeeCapUsdPerTransfer">Platform-paid fee cap per transfer in USD (08 §3.7.7); Ethereum only.</param>
 /// <param name="FeeCapWaitAlarmMinutes">Uninterrupted wait above the cap before an admin alarm (08 §3.7.7); Ethereum only.</param>
 /// <param name="FinalityStallAlarmMinutes">Age of the last <c>finalized</c> block that raises an alarm (08 §3.7.8); Ethereum only.</param>
+/// <param name="MinRefundThresholdRatio">Minimum-refund multiplier: a refund whose net is below <c>gasFee × ratio</c> is not sent (02 §4.6, T149).</param>
+/// <param name="NetworkFeeBufferRatio">TRX price head-room added to the buyer's network fee line (11 §F8 K8, T149); TRON only.</param>
+/// <param name="NetworkFeeFallbackUsdt">Network fee line written when the sweep estimate is unavailable at acceptance (T149); TRON only.</param>
 public sealed record BlockchainNetworkSettingKeys(
     BlockchainNetwork Network,
     string RefundGasFeeFallbackUsdt,
@@ -46,7 +51,10 @@ public sealed record BlockchainNetworkSettingKeys(
     string? FuelWalletNativeBalanceMinimum,
     string? FeeCapUsdPerTransfer,
     string? FeeCapWaitAlarmMinutes,
-    string? FinalityStallAlarmMinutes)
+    string? FinalityStallAlarmMinutes,
+    string MinRefundThresholdRatio,
+    string? NetworkFeeBufferRatio,
+    string? NetworkFeeFallbackUsdt)
 {
     /// <summary>TRON — the pre-F8 keys, unchanged.</summary>
     public static readonly BlockchainNetworkSettingKeys Tron = new(
@@ -58,7 +66,10 @@ public sealed record BlockchainNetworkSettingKeys(
         FuelWalletNativeBalanceMinimum: null,
         FeeCapUsdPerTransfer: null,
         FeeCapWaitAlarmMinutes: null,
-        FinalityStallAlarmMinutes: null);
+        FinalityStallAlarmMinutes: null,
+        MinRefundThresholdRatio: "min_refund_threshold_ratio",
+        NetworkFeeBufferRatio: "blockchain.tron.network_fee_buffer_ratio",
+        NetworkFeeFallbackUsdt: "blockchain.tron.network_fee_fallback_usdt");
 
     /// <summary>Ethereum — T148 keys, seeded with the T142 measurements.</summary>
     public static readonly BlockchainNetworkSettingKeys Ethereum = new(
@@ -70,7 +81,10 @@ public sealed record BlockchainNetworkSettingKeys(
         FuelWalletNativeBalanceMinimum: "blockchain.ethereum.fuel_wallet_eth_balance_minimum",
         FeeCapUsdPerTransfer: "blockchain.ethereum.fee_cap_usd_per_transfer",
         FeeCapWaitAlarmMinutes: "blockchain.ethereum.fee_cap_wait_alarm_minutes",
-        FinalityStallAlarmMinutes: "blockchain.ethereum.finality_stall_alarm_minutes");
+        FinalityStallAlarmMinutes: "blockchain.ethereum.finality_stall_alarm_minutes",
+        MinRefundThresholdRatio: "blockchain.ethereum.min_refund_threshold_ratio",
+        NetworkFeeBufferRatio: null,
+        NetworkFeeFallbackUsdt: null);
 
     /// <summary>The keys of <paramref name="network"/>.</summary>
     public static BlockchainNetworkSettingKeys For(BlockchainNetwork network) => network switch
@@ -93,6 +107,9 @@ public sealed record BlockchainNetworkSettingKeys(
             FeeCapUsdPerTransfer,
             FeeCapWaitAlarmMinutes,
             FinalityStallAlarmMinutes,
+            MinRefundThresholdRatio,
+            NetworkFeeBufferRatio,
+            NetworkFeeFallbackUsdt,
         }
         .Where(k => k is not null)
         .Select(k => k!)

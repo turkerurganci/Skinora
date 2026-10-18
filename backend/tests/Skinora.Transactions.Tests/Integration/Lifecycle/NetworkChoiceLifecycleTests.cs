@@ -83,6 +83,23 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
     private StubBlockchainSidecarClient _sidecar = null!;
     private FakeBlockchainServiceRegistry _services = null!;
     private RecordingGasFee _gasFee = null!;
+    private FixedSweepEstimator _sweepEstimator = null!;
+    private SweepCostEstimateCache _feeCache = null!;
+
+    // T149 — the real quote service over the real per-network settings (seeded
+    // buffer 0.007, fallback 3.00) and TRON's sweep estimate: 8,441,350 SUN =
+    // 1.1 TRX activation + 7.07135 TRX burn top-up (64,285 Energy × 100 SUN ×
+    // 110%) + 0.27 TRX top-up bandwidth, at TRX 0.34 → CEIL₂(2.8701 × 1.007)
+    // = 2.90 (02 §5 example).
+    private const long TronSweepCostSun = 8_441_350;
+    private const decimal TrxPrice = 0.34m;
+    private const decimal TronNetworkFee = 2.90m;
+
+    private NetworkFeeQuoteService NetworkFees => new(
+        _services,
+        new BlockchainNetworkSettingsProvider(Context),
+        _feeCache,
+        NullLogger<NetworkFeeQuoteService>.Instance);
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -132,9 +149,11 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             IsTradeable: true));
         _outbox = new NullOutbox();
         _sidecar = new StubBlockchainSidecarClient();
+        _sweepEstimator = new FixedSweepEstimator(new SweepCostEstimate(TronSweepCostSun, TrxPrice));
         _services = new FakeBlockchainServiceRegistry()
-            .With(BlockchainNetwork.TRON, sidecar: _sidecar)
+            .With(BlockchainNetwork.TRON, sidecar: _sidecar, gasFee: _sweepEstimator)
             .With(BlockchainNetwork.ETHEREUM, sidecar: _sidecar);
+        _feeCache = new SweepCostEstimateCache(_clock);
         _gasFee = new RecordingGasFee();
     }
 
@@ -159,6 +178,9 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         var refundStored = isEthereum ? BuyerEthereumRefundCanonical : BuyerTronRefund;
         var deposit = isEthereum ? EthereumDeposit : TronDeposit;
         var sender = isEthereum ? ExchangeEthereumSender : ExchangeTronSender;
+        // T149 (11 §F8 K8): TRON adds the buyer's network fee line, Ethereum 0.
+        var networkFee = isEthereum ? 0m : TronNetworkFee;
+        var total = 102m + networkFee;
 
         // ---- CREATED: the listing accepts both networks ----
         var created = await BuildCreation(networks).CreateAsync(_seller.Id, new CreateTransactionRequest(
@@ -181,17 +203,23 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             new AcceptTransactionRequest(refundInput, TradeUrl(BuyerSteamId), Network: chosen.ToString()),
             CancellationToken.None);
         Assert.Equal(AcceptTransactionStatus.Accepted, accepted.Status);
+        Assert.Equal(networkFee.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            accepted.Body!.NetworkFeeAmount);
+        Assert.Equal(total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+            accepted.Body.TotalAmount);
 
         var tx = await Reload(id);
         Assert.Equal(TransactionStatus.ACCEPTED, tx.Status);
         Assert.Equal(chosen, tx.Network);
         Assert.Equal(sellerPayout, tx.SellerPayoutAddress);
         Assert.Equal(refundStored, tx.BuyerRefundAddress);
+        Assert.Equal(networkFee, tx.NetworkFeeAmount);
+        Assert.Equal(total, tx.TotalAmount);
         var depositRow = await Context.Set<PaymentAddress>().AsNoTracking().SingleAsync(p => p.TransactionId == id);
         Assert.Equal(chosen, depositRow.Network);
         Assert.Equal(deposit, depositRow.Address);
         Assert.Equal(0, depositRow.HdWalletIndex);   // the chosen network's own counter
-        Assert.Equal(102m, depositRow.ExpectedAmount);
+        Assert.Equal(total, depositRow.ExpectedAmount);
         Assert.Contains(("Sidecar", chosen), _services.Requests);
         Assert.DoesNotContain(_services.Requests, r => r.Network != chosen);
 
@@ -204,7 +232,7 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
 
         // ---- PAYMENT_RECEIVED: the exact amount arrives on the chosen network ----
         var amountValidation = BuildAmountValidation();
-        var payment = await AddIncomingAsync(id, depositRow, sender, 102m);
+        var payment = await AddIncomingAsync(id, depositRow, sender, total);
         Assert.Equal(AmountValidationOutcome.AcceptedExact,
             await amountValidation.ValidateConfirmedBuyerPaymentAsync(payment, "corr-pay", CancellationToken.None));
         await Context.SaveChangesAsync();
@@ -241,6 +269,9 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         Assert.Equal(chosen, sweep.Network);
         Assert.Equal(deposit, sweep.FromAddress);
         Assert.Equal(isEthereum ? EthereumHotWallet : TronHotWallet, sweep.ToAddress);
+        // The whole escrowed total moves, network fee line included: the line
+        // is paid in USDT and the sweep's TRX cost is the platform's.
+        Assert.Equal(total, sweep.Amount);
         await ConfirmAsync(sweep);
 
         // ---- Then the seller is paid on the same network ----
@@ -250,6 +281,11 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         Assert.Equal(sellerPayout, payout.ToAddress);
         Assert.Equal(chosen, payout.Network);
         Assert.Equal(BlockchainTransactionStatus.PENDING, payout.Status);
+        // Payout fee 0.50 against 10% of the 2.00 commission (0.20): on TRON
+        // the seller bears the 0.30 overage (02 §4.7); on Ethereum the
+        // platform absorbs it and the seller receives the full price (K8).
+        Assert.Equal(isEthereum ? 100m : 99.70m, payout.Amount);
+        Assert.Equal(0.50m, payout.GasFee);
         Assert.Equal([chosen], _gasFee.PayoutNetworks);
     }
 
@@ -339,12 +375,13 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         _outbox,
         networks,
         new PaymentAddressAllocator(Context, _services, NullLogger<PaymentAddressAllocator>.Instance),
+        NetworkFees,
         _clock);
 
     private AmountValidationService BuildAmountValidation() => new(
         Context,
         _gasFee,
-        new RefundDecisionService(new FixedGasFeeSettings()),
+        GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(new FixedGasFeeSettings()),
         new NoRefundBlockedAlerts(),
         _outbox,
         new NoTimeoutScheduling(),
@@ -354,7 +391,7 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
 
     private SellerPayoutQueueJob BuildPayoutQueue() => new(
         Context,
-        new RefundDecisionService(new FixedGasFeeSettings()),
+        GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(new FixedGasFeeSettings()),
         _gasFee,
         _outbox,
         _clock,
@@ -408,6 +445,21 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         {
             PayoutNetworks.Add(network);
             return Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+        }
+    }
+
+    /// <summary>T149 — TRON's sweep cost estimate; no transfer fee estimate is asked here.</summary>
+    private sealed class FixedSweepEstimator(SweepCostEstimate estimate) : IGasFeeEstimator
+    {
+        public int SweepCalls { get; private set; }
+
+        public Task<decimal?> EstimateFeeUsdtAsync(GasFeeEstimateRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult<decimal?>(null);
+
+        public Task<SweepCostEstimate?> EstimateSweepCostAsync(StablecoinType token, CancellationToken cancellationToken)
+        {
+            SweepCalls++;
+            return Task.FromResult<SweepCostEstimate?>(estimate);
         }
     }
 

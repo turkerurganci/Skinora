@@ -16,7 +16,7 @@ import {
   sweepHandler,
   transferStatusHandler,
 } from './transferHandlers.js';
-import { estimateFeeHandler } from './feeHandlers.js';
+import { estimateFeeHandler, estimateSweepFeeHandler } from './feeHandlers.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import type { MonitorRegistry } from '../monitor/MonitorRegistry.js';
 import type { PostCancelMonitorRegistry } from '../monitor/PostCancelMonitor.js';
@@ -119,6 +119,17 @@ export function createRouter(deps: RouterDeps): Router {
   //   → 400 { error: 'INVALID_ESTIMATE_REQUEST' | 'TOKEN_CONTRACT_NOT_CONFIGURED' | 'HOT_WALLET_NOT_CONFIGURED' }
   //   → 502 { error: 'FEE_ESTIMATE_*' | 'TRX_PRICE_UNAVAILABLE' }  (backend falls back to the static setting)
   apiRouter.post('/transfer/estimate-fee', estimateFeeHandler(deps.feeEstimationService));
+
+  // T149 — the buyer's TRON network fee line basis (11 §F8 K8, 08 §3.1a)
+  // POST /api/transfer/estimate-sweep-fee { network?, token }
+  //   → 200 { sweepCostSun, activationSun, burnTopUpSun, bandwidthSun,
+  //           energyRequired, trxPriceUsdt, priceSource, costUsdt }
+  //   → 400 { error: 'INVALID_ESTIMATE_REQUEST' | 'TOKEN_CONTRACT_NOT_CONFIGURED' | 'HOT_WALLET_NOT_CONFIGURED' }
+  //   → 502 { error: 'FEE_ESTIMATE_*' | 'TRX_PRICE_UNAVAILABLE' }  (backend writes the fallback line)
+  apiRouter.post(
+    '/transfer/estimate-sweep-fee',
+    estimateSweepFeeHandler(deps.feeEstimationService),
+  );
 
   // GET /api/transfer/status/:txHash
   //   → 200 { txHash, blockNumber?, contractRet?, confirmations }
