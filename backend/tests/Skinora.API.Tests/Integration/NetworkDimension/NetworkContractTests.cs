@@ -89,44 +89,99 @@ public class NetworkContractTests : IntegrationTestBase
         {
             var h = NewHandler(ctx);
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandlePaymentDetectedAsync(
-                new() { Event = BlockchainWebhookEvents.PaymentDetected, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    FromAddress = TronAddress, ToAddress = pa.Address, TokenSymbol = "USDT", Amount = "51.000000",
-                } }, "c1", default));
+                    Event = BlockchainWebhookEvents.PaymentDetected,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        FromAddress = TronAddress,
+                        ToAddress = pa.Address,
+                        TokenSymbol = "USDT",
+                        Amount = "51.000000",
+                    }
+                }, "c1", default));
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandlePaymentConfirmedAsync(
-                new() { Event = BlockchainWebhookEvents.PaymentConfirmed, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    BlockNumber = 1, ConfirmationCount = 20,
-                } }, "c2", default));
+                    Event = BlockchainWebhookEvents.PaymentConfirmed,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        BlockNumber = 1,
+                        ConfirmationCount = 20,
+                    }
+                }, "c2", default));
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandleWrongTokenIncomingAsync(
-                new() { Event = BlockchainWebhookEvents.WrongTokenIncoming, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    FromAddress = TronAddress, ToAddress = pa.Address, ActualContractAddress = SellerWallet,
-                    ActualTokenSymbol = "USDC", Amount = "51.000000",
-                } }, "c3", default));
+                    Event = BlockchainWebhookEvents.WrongTokenIncoming,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        FromAddress = TronAddress,
+                        ToAddress = pa.Address,
+                        ActualContractAddress = SellerWallet,
+                        ActualTokenSymbol = "USDC",
+                        Amount = "51.000000",
+                    }
+                }, "c3", default));
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandleSpamTokenIncomingAsync(
-                new() { Event = BlockchainWebhookEvents.SpamTokenIncoming, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    FromAddress = TronAddress, ToAddress = pa.Address, ActualContractAddress = SellerWallet,
-                    Amount = "51.000000",
-                } }, "c4", default));
+                    Event = BlockchainWebhookEvents.SpamTokenIncoming,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        FromAddress = TronAddress,
+                        ToAddress = pa.Address,
+                        ActualContractAddress = SellerWallet,
+                        Amount = "51.000000",
+                    }
+                }, "c4", default));
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandleLatePaymentDetectedAsync(
-                new() { Event = BlockchainWebhookEvents.LatePaymentDetected, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    FromAddress = TronAddress, ToAddress = pa.Address, TokenSymbol = "USDT", Amount = "51.000000",
-                    MonitorState = "POST_CANCEL_24H",
-                } }, "c5", default));
+                    Event = BlockchainWebhookEvents.LatePaymentDetected,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        FromAddress = TronAddress,
+                        ToAddress = pa.Address,
+                        TokenSymbol = "USDT",
+                        Amount = "51.000000",
+                        MonitorState = "POST_CANCEL_24H",
+                    }
+                }, "c5", default));
             Assert.Equal(BlockchainWebhookResult.NetworkMismatch, await h.HandlePostCancelMonitorStateChangedAsync(
-                new() { Event = BlockchainWebhookEvents.PostCancelMonitorStateChanged, Network = wrong, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, Address = pa.Address,
-                    PreviousState = "POST_CANCEL_24H", NewState = "STOPPED",
-                } }, "c6", default));
+                    Event = BlockchainWebhookEvents.PostCancelMonitorStateChanged,
+                    Network = wrong,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        Address = pa.Address,
+                        PreviousState = "POST_CANCEL_24H",
+                        NewState = "STOPPED",
+                    }
+                }, "c6", default));
         }
 
         Assert.Equal(0, await RowsForAsync(pa.Id));
@@ -148,11 +203,21 @@ public class NetworkContractTests : IntegrationTestBase
         await using (var ctx = CreateContext())
         {
             var result = await NewHandler(ctx).HandlePaymentDetectedAsync(
-                new() { Event = BlockchainWebhookEvents.PaymentDetected, Network = network, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = new string('d', 64),
-                    FromAddress = TronAddress, ToAddress = pa.Address, TokenSymbol = "USDT", Amount = "51.000000",
-                } }, "c", default);
+                    Event = BlockchainWebhookEvents.PaymentDetected,
+                    Network = network,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = new string('d', 64),
+                        FromAddress = TronAddress,
+                        ToAddress = pa.Address,
+                        TokenSymbol = "USDT",
+                        Amount = "51.000000",
+                    }
+                }, "c", default);
             Assert.Equal(BlockchainWebhookResult.Invalid, result);
         }
 
@@ -175,18 +240,35 @@ public class NetworkContractTests : IntegrationTestBase
             var h = NewHandler(ctx);
             var network = pa.Network.ToString();
             Assert.Equal(BlockchainWebhookResult.Applied, await h.HandlePaymentDetectedAsync(
-                new() { Event = BlockchainWebhookEvents.PaymentDetected, Network = network, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    FromAddress = pa.Network == BlockchainNetwork.TRON ? SellerWallet : EvmLower2,
-                    ToAddress = pa.Address, TokenSymbol = "USDT", Amount = "51.000000",
-                } }, "d", default));
+                    Event = BlockchainWebhookEvents.PaymentDetected,
+                    Network = network,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        FromAddress = pa.Network == BlockchainNetwork.TRON ? SellerWallet : EvmLower2,
+                        ToAddress = pa.Address,
+                        TokenSymbol = "USDT",
+                        Amount = "51.000000",
+                    }
+                }, "d", default));
             Assert.Equal(BlockchainWebhookResult.Applied, await h.HandlePaymentConfirmedAsync(
-                new() { Event = BlockchainWebhookEvents.PaymentConfirmed, Network = network, Data = new()
+                new()
                 {
-                    PaymentAddressId = pa.Id, TransactionId = pa.TransactionId, TxHash = hash,
-                    BlockNumber = 100, ConfirmationCount = reportedConfirmations,
-                } }, "c", default));
+                    Event = BlockchainWebhookEvents.PaymentConfirmed,
+                    Network = network,
+                    Data = new()
+                    {
+                        PaymentAddressId = pa.Id,
+                        TransactionId = pa.TransactionId,
+                        TxHash = hash,
+                        BlockNumber = 100,
+                        ConfirmationCount = reportedConfirmations,
+                    }
+                }, "c", default));
         }
 
         // TRON reports 5 for a final transfer → stored at the 20 floor (the
@@ -211,12 +293,21 @@ public class NetworkContractTests : IntegrationTestBase
         await using (var ctx = CreateContext())
         {
             Assert.Equal(BlockchainWebhookResult.Applied, await NewHandler(ctx).HandleSpamTokenIncomingAsync(
-                new() { Event = BlockchainWebhookEvents.SpamTokenIncoming, Network = "ETHEREUM", Data = new()
+                new()
                 {
-                    PaymentAddressId = ethPa.Id, TransactionId = ethPa.TransactionId, TxHash = "0x" + new string('f', 64),
-                    FromAddress = EvmLower2, ToAddress = ethPa.Address, ActualContractAddress = EvmLower2,
-                    Amount = "1000.000000",
-                } }, "s", default));
+                    Event = BlockchainWebhookEvents.SpamTokenIncoming,
+                    Network = "ETHEREUM",
+                    Data = new()
+                    {
+                        PaymentAddressId = ethPa.Id,
+                        TransactionId = ethPa.TransactionId,
+                        TxHash = "0x" + new string('f', 64),
+                        FromAddress = EvmLower2,
+                        ToAddress = ethPa.Address,
+                        ActualContractAddress = EvmLower2,
+                        Amount = "1000.000000",
+                    }
+                }, "s", default));
         }
 
         await using var verify = CreateContext();
