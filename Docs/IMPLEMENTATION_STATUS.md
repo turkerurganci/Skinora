@@ -336,7 +336,7 @@
 | T147 | İşlem akışında ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T148 sonrası entegre edildi; [rapor](TASK_REPORTS/T147_REPORT.md), PR [#344](https://github.com/turkerurganci/Skinora/pull/344)) |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T148_REPORT.md), PR [#343](https://github.com/turkerurganci/Skinora/pull/343)) |
 | T149 | Ağ ücreti politikası | ⬚ Bekliyor |
-| T150 | Ethereum servis iskeleti | ⬚ Bekliyor |
+| T150 | Ethereum servis iskeleti | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), dal `task/T150-ethereum-servis-iskeleti`, PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
