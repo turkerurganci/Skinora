@@ -98,6 +98,8 @@ export interface RefundRequest {
   amount: string;
   token: TokenSymbol;
   refundType: RefundType;
+  /** T152 düzeltme turu — refunds are capped too (yönetici kararı 2026-10-18). */
+  feeCapUsd: string;
 }
 
 export interface SweepRequest {
@@ -254,8 +256,8 @@ export class TransferService {
       token: request.token,
       recipient: this.recipient(request.toBuyerAddress, deposit),
       amountUnits: units,
-      capFlow: null,
-      capUsdMicros: null,
+      capFlow: 'REFUND',
+      capUsdMicros: this.capOf(request.feeCapUsd),
     });
   }
 

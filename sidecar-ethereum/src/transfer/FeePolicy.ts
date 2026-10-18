@@ -17,7 +17,10 @@ import { WEI_PER_ETH } from './units.js';
  *     reference gas of the flow — sweep 67,201 (fuel 21,000 + sweep estimate
  *     46,201), payout 64,031. A send goes out only when base fee + tip is under
  *     the cap, and its `maxFeePerGas` never exceeds it. Above the cap, or with
- *     no ETH price, it waits (fail closed). Refunds are not capped.</item>
+ *     no ETH price, it waits (fail closed). Refunds are capped too (yönetici
+ *     kararı 2026-10-18 — the platform never pays an unforeseeably high fee on a
+ *     refund): reference gas 85,031 = fuel 21,000 + a transfer to a first-time
+ *     recipient 64,031 (08 §3.7.5).</item>
  * </list>
  */
 
@@ -39,6 +42,7 @@ export const CAP_REFERENCE_GAS = {
   SWEEP: 67_201n,
   PAYOUT: 64_031n,
   COLD: 64_031n,
+  REFUND: 85_031n,
 } as const;
 
 export type CappedFlow = keyof typeof CAP_REFERENCE_GAS;

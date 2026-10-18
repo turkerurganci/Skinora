@@ -292,7 +292,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         var amountStr = request.Amount.ToString("0.######", CultureInfo.InvariantCulture);
         var tokenStr = request.Token.ToString();
         var idStr = request.BlockchainTransactionId.ToString("D");
-        // T152 — only for a network with a platform-paid fee cap (Ethereum);
+        // T152 — only for a network with a fee cap (Ethereum: payout, sweep and,
+        // since the düzeltme turu, refunds);
         // omitted from the body otherwise, so TRON's service sees no change.
         var feeCapStr = request.FeeCapUsd?.ToString("0.######", CultureInfo.InvariantCulture);
 
@@ -336,7 +337,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     tokenStr,
                     // T152 — the Ethereum signer moves USDC only for a
                     // WRONG_TOKEN_REFUND (08 §3.7.6); TRON's service ignores it.
-                    request.Type.ToString())),
+                    request.Type.ToString(),
+                    feeCapStr)),
         };
     }
 
@@ -356,7 +358,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("toBuyerAddress")] string ToBuyerAddress,
         [property: JsonPropertyName("amount")] string Amount,
         [property: JsonPropertyName("token")] string Token,
-        [property: JsonPropertyName("refundType")] string RefundType);
+        [property: JsonPropertyName("refundType")] string RefundType,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
 
     private sealed record SweepBody(
         [property: JsonPropertyName("network")] string Network,

@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
@@ -91,6 +92,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly IOutboxService _outbox;
     private readonly IStablecoinContractRegistry _contracts;
     private readonly IBlockchainNetworkSettingsProvider _networkSettings;
+    private readonly IOutboundQueueObserver _queueObserver;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -102,6 +104,7 @@ public sealed class OutgoingTransferDispatchJob
         IOutboxService outbox,
         IStablecoinContractRegistry contracts,
         IBlockchainNetworkSettingsProvider networkSettings,
+        IOutboundQueueObserver queueObserver,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -112,6 +115,7 @@ public sealed class OutgoingTransferDispatchJob
         _outbox = outbox;
         _contracts = contracts;
         _networkSettings = networkSettings;
+        _queueObserver = queueObserver;
         _clock = clock;
         _logger = logger;
     }
@@ -128,6 +132,7 @@ public sealed class OutgoingTransferDispatchJob
         // sweeps. Filtering in the query keeps the batch for rows that can move.
         var configured = _services.ConfiguredNetworks.ToList();
         await LogParkedRowsAsync(configured, cancellationToken);
+        await ReportQueueAsync(now, cancellationToken);
 
         // T150 — a configured network in a detected outage is skipped the same
         // way (its rows keep their retry budget), every reachable network gets
@@ -210,6 +215,30 @@ public sealed class OutgoingTransferDispatchJob
             _logger.LogError(
                 "{Count} outbound row(s) on {Network} are waiting PENDING: that network has no blockchain service configured — nothing sent, other networks unaffected.",
                 group.Count, group.Network);
+        }
+    }
+
+    /// <summary>
+    /// T152 — per-network queue visibility every run, for every network, before
+    /// any network is skipped (an outage is exactly when the numbers matter).
+    /// </summary>
+    private async Task ReportQueueAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        var pending = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(b => b.Status == BlockchainTransactionStatus.PENDING && OutboundTypes.Contains(b.Type))
+            .GroupBy(b => b.Network)
+            .Select(g => new { Network = g.Key, Count = g.Count(), Oldest = g.Min(b => b.CreatedAt) })
+            .ToListAsync(cancellationToken);
+
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            var group = pending.FirstOrDefault(p => p.Network == network);
+            var settings = await _networkSettings.GetAsync(network, cancellationToken);
+            double? alarmSeconds = settings.FeeCapWaitAlarmMinutes is { } minutes ? minutes * 60d : null;
+            var oldestSeconds = group is null ? 0d : Math.Max(0d, (now - group.Oldest).TotalSeconds);
+            _queueObserver.Report(network, group?.Count ?? 0, oldestSeconds, alarmSeconds);
         }
     }
 
@@ -305,16 +334,13 @@ public sealed class OutgoingTransferDispatchJob
             broadcastToken = actualToken.Value;
         }
 
-        // T152 — sweep and payout are platform-paid on a network with a fee cap
-        // (Ethereum, 08 §3.7.7); the admin setting travels with the request and
-        // the signer refuses above it. Refunds are never capped. TRON has no cap
-        // (null), so its bodies are unchanged.
-        decimal? feeCapUsd = null;
-        if (row.Type is BlockchainTransactionType.SELLER_PAYOUT or BlockchainTransactionType.SWEEP)
-        {
-            feeCapUsd = (await _networkSettings.GetAsync(row.Network, cancellationToken))
-                .FeeCapUsdPerTransfer;
-        }
+        // T152 — on a network with a fee cap (Ethereum, 08 §3.7.7) every
+        // outbound send carries the admin setting and the signer refuses above
+        // it: sweep and payout, and — yönetici kararı 2026-10-18 — refunds too,
+        // so the platform never pays an unforeseeably high fee on a refund (it
+        // waits instead). TRON has no cap (null), so its bodies are unchanged.
+        var feeCapUsd = (await _networkSettings.GetAsync(row.Network, cancellationToken))
+            .FeeCapUsdPerTransfer;
 
         var request = new TransferBroadcastRequest(
             BlockchainTransactionId: row.Id,
@@ -395,9 +421,25 @@ public sealed class OutgoingTransferDispatchJob
         var delay = await _retryPolicy.GetRetryDelayAsync(nextRetryCount - 1, cancellationToken);
         if (delay is null)
         {
-            // Policy exhausted — terminal failure.
-            await HandleFailureAsync(row, result, terminal: true, cancellationToken);
-            return;
+            if (BlockchainNetworkPolicy.For(row.Network).OutboundSendsAreIdempotent)
+            {
+                // T152 (proje sahibi kararı 2026-10-18) — the service may already
+                // have signed this id (a timeout says nothing about that); a re-send
+                // with the SAME id returns the same transaction, so retrying cannot
+                // pay twice, while FAILED would invite a manual re-send under a new
+                // id that could. Keep retrying at the policy's last interval; the
+                // network's oldest-pending-row alarm covers a long stall.
+                delay = await LastRetryIntervalAsync(cancellationToken);
+                _logger.LogWarning(
+                    "Outbound transfer on {Network} still failing transiently after the retry budget — row {Id} ({Type}) is NOT failed (idempotent signer); retrying every {Delay} with the same id",
+                    row.Network, row.Id, row.Type, delay.Value);
+            }
+            else
+            {
+                // Policy exhausted — terminal failure.
+                await HandleFailureAsync(row, result, terminal: true, cancellationToken);
+                return;
+            }
         }
 
         row.RetryCount = nextRetryCount;
@@ -408,6 +450,16 @@ public sealed class OutgoingTransferDispatchJob
         _logger.LogWarning(
             "Outbound transfer transient failure — row {Id} ({Type}) attempt {Retry}, retrying after {Delay}: {Code} — {Message}",
             row.Id, row.Type, nextRetryCount, delay.Value, result.ErrorCode, result.ErrorMessage);
+    }
+
+    /// <summary>The policy's last (longest) interval; 15 min when it cannot be read.</summary>
+    private async Task<TimeSpan?> LastRetryIntervalAsync(CancellationToken cancellationToken)
+    {
+        var maxAttempts = await _retryPolicy.GetMaxAttemptsAsync(cancellationToken);
+        var last = maxAttempts >= 2
+            ? await _retryPolicy.GetRetryDelayAsync(maxAttempts - 2, cancellationToken)
+            : null;
+        return last ?? TimeSpan.FromMinutes(15);
     }
 
     private async Task HandleFailureAsync(

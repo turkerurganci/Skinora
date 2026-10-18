@@ -134,7 +134,7 @@ export function payoutHandler(service: TransferService) {
   };
 }
 
-/** POST /api/transfer/refund { network, blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token, refundType } */
+/** POST /api/transfer/refund { network, blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token, refundType, feeCapUsd } */
 export function refundHandler(service: TransferService) {
   return async (req: Request, res: Response): Promise<void> => {
     const b = (req.body ?? {}) as Body;
@@ -145,6 +145,7 @@ export function refundHandler(service: TransferService) {
     const amount = str(b, 'amount');
     const tok = token(b);
     const refundType = str(b, 'refundType');
+    const cap = str(b, 'feeCapUsd');
     if (
       !id ||
       depositIndex === null ||
@@ -153,11 +154,12 @@ export function refundHandler(service: TransferService) {
       !amount ||
       !tok ||
       !refundType ||
+      !cap ||
       !(REFUND_TYPES as readonly string[]).includes(refundType)
     ) {
       invalid(
         res,
-        'Fields {blockchainTransactionId (GUID), depositIndex>=0, depositAddress, toBuyerAddress, amount, token, refundType} are required.',
+        'Fields {blockchainTransactionId (GUID), depositIndex>=0, depositAddress, toBuyerAddress, amount, token, refundType, feeCapUsd} are required.',
       );
       return;
     }
@@ -170,6 +172,7 @@ export function refundHandler(service: TransferService) {
         amount,
         token: tok,
         refundType: refundType as RefundType,
+        feeCapUsd: cap,
       }),
     );
   };

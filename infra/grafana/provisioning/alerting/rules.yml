@@ -561,3 +561,55 @@ groups:
             price source, skinora_ethereum_transfer_wait_seconds by kind and
             the blockchain.ethereum.fee_cap_usd_per_transfer setting
             (DEPLOY_RUNBOOK §D).
+
+      # T152 düzeltme turu (proje sahibi kararı 2026-10-18): an Ethereum outbound
+      # row is never FAILED for a transient error — it keeps retrying with the
+      # same id. A stalled network is therefore seen here, per network (not per
+      # row): the oldest PENDING outbound row against the threshold the backend
+      # publishes next to it (blockchain.ethereum.fee_cap_wait_alarm_minutes × 60,
+      # the same 3 h as ethereum-transfer-wait). TRON publishes no threshold, so
+      # the division has no TRON series.
+      - uid: outbound-transfer-stuck
+        title: Outbound Transfers Stuck On A Network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max by (network) (skinora_backend_outbound_pending_oldest_seconds) / max by (network) (skinora_backend_outbound_pending_alarm_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbound transfers have been waiting PENDING longer than the network's threshold
+          description: >-
+            The oldest PENDING outbound transfer (payout, refund or sweep) on a
+            network has waited longer than its threshold (Ethereum: 3 h). On
+            Ethereum such rows are never failed for a transient error — they
+            keep retrying with the same id, so a dead or misbehaving Ethereum
+            service, a fee above the cap or a missing ETH price shows up here.
+            Check skinora_backend_outbound_pending_rows by network, the
+            Ethereum service's /health and skinora_ethereum_transfer_wait_seconds
+            (DEPLOY_RUNBOOK §D "Ethereum gönderim günlüğü").

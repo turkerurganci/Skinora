@@ -80,7 +80,24 @@ public sealed record BlockchainNetworkPolicy(
         NativeAssetSymbol: "ETH",
         NativeAssetDecimals: 18,
         NativeFeeUnit: "wei",
-        ReportsTronResourceUsage: false);
+        ReportsTronResourceUsage: false)
+    {
+        OutboundSendsAreIdempotent = true,
+    };
+
+    /// <summary>
+    /// T152 — the network's signing service binds a request id
+    /// (<c>BlockchainTransaction.Id</c>) to ONE signed transaction and answers
+    /// every repeat of that id with the same bytes (Ethereum's transaction
+    /// journal, 08 §3.7.6). For such a network a transient broadcast failure
+    /// (timeout, lost connection, 5xx) never turns the row <c>FAILED</c>: the
+    /// dispatcher keeps retrying with the same id, because the first attempt
+    /// may already have been signed and a re-send cannot pay twice — while a
+    /// <c>FAILED</c> row invites a manual re-send under a NEW id that could
+    /// (proje sahibi kararı 2026-10-18). Only the service's permanent refusals
+    /// (400) end a row. TRON's service has no such journal: <c>false</c>.
+    /// </summary>
+    public bool OutboundSendsAreIdempotent { get; init; }
 
     /// <summary>The policy of <paramref name="network"/>. Throws for a value no policy exists for.</summary>
     public static BlockchainNetworkPolicy For(BlockchainNetwork network) => network switch

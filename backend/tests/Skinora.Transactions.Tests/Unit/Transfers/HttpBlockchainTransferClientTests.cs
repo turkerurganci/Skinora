@@ -526,6 +526,7 @@ public class HttpBlockchainTransferClientTests
     [Theory]
     [InlineData(BlockchainTransactionType.SELLER_PAYOUT, "api/transfer/payout")]
     [InlineData(BlockchainTransactionType.SWEEP, "api/transfer/sweep")]
+    [InlineData(BlockchainTransactionType.BUYER_REFUND, "api/transfer/refund")]
     public async Task Fee_Cap_Travels_In_The_Body_When_Set_And_Is_Omitted_Otherwise(
         BlockchainTransactionType type, string path)
     {
@@ -539,8 +540,8 @@ public class HttpBlockchainTransferClientTests
         var sut = BuildClient(handler, network: BlockchainNetwork.ETHEREUM);
         TransferBroadcastRequest Request(decimal? cap) => new(
             Guid.NewGuid(), type, StablecoinType.USDT, 10m, "0x1111111111111111111111111111111111111111",
-            type == BlockchainTransactionType.SWEEP ? 3 : null,
-            type == BlockchainTransactionType.SWEEP ? "0x2222222222222222222222222222222222222222" : null,
+            type == BlockchainTransactionType.SELLER_PAYOUT ? null : 3,
+            type == BlockchainTransactionType.SELLER_PAYOUT ? null : "0x2222222222222222222222222222222222222222",
             cap);
 
         await sut.BroadcastAsync(Request(0.5m), CancellationToken.None);

@@ -143,7 +143,7 @@ describe('POST /api/transfer/payout', () => {
 });
 
 describe('POST /api/transfer/refund, /sweep, /cold-wallet', () => {
-  it('refund needs a known refundType', async () => {
+  it('refund needs a known refundType and feeCapUsd', async () => {
     const body = {
       network: 'ETHEREUM',
       blockchainTransactionId: ID,
@@ -153,10 +153,12 @@ describe('POST /api/transfer/refund, /sweep, /cold-wallet', () => {
       amount: '1',
       token: 'USDC',
       refundType: 'WRONG_TOKEN_REFUND',
+      feeCapUsd: '0.5',
     };
     expect((await post('/transfer/refund', body)).status).toBe(200);
     expect((await post('/transfer/refund', { ...body, refundType: 'SOMETHING' })).status).toBe(400);
     expect((await post('/transfer/refund', { ...body, refundType: undefined })).status).toBe(400);
+    expect((await post('/transfer/refund', { ...body, feeCapUsd: undefined })).status).toBe(400);
     expect(calls.map((c) => c.method)).toEqual(['refund']);
   });
 

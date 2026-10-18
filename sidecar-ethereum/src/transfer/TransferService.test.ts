@@ -488,6 +488,7 @@ describe('USDT switches and the blacklist (08 §3.7.1, §3.7.6)', () => {
         amount: '10',
         token: 'USDT',
         refundType: 'BUYER_REFUND',
+        feeCapUsd: '0.50',
       }),
     ).rejects.toMatchObject({ code: 'RECIPIENT_BLACKLISTED' });
   });
@@ -550,21 +551,31 @@ describe('fee cap and wait (08 §3.7.7)', () => {
     expect(chain.sent).toHaveLength(0);
   });
 
-  it('a refund is not capped: it goes out at a fee above the cap and without a price', async () => {
-    price = null;
-    chain.baseFee = 50_000_000_000n;
+  it('a refund is capped too (yönetici kararı 2026-10-18): above the cap or without a price it waits; under it, it goes', async () => {
     chain.setToken(USDT, DEPOSIT.address, 50_000_000n);
     chain.setEth(DEPOSIT.address, 10n ** 17n);
-    const { service } = build();
-    await service.refund({
+    const refund = {
       blockchainTransactionId: ID(8),
       depositIndex: 5,
       depositAddress: DEPOSIT.address,
       toBuyerAddress: BUYER,
       amount: '49.5',
-      token: 'USDT',
-      refundType: 'EXCESS_REFUND',
-    });
+      token: 'USDT' as const,
+      refundType: 'EXCESS_REFUND' as const,
+      feeCapUsd: '0.50',
+    };
+    chain.baseFee = 50_000_000_000n;
+    const { service, journal } = build();
+    await expect(service.refund(refund)).rejects.toMatchObject({ reason: 'FEE_ABOVE_CAP' });
+    price = null;
+    chain.baseFee = 1_000_000_000n;
+    await expect(service.refund(refund)).rejects.toMatchObject({ reason: 'ETH_PRICE_UNAVAILABLE' });
+    expect(chain.sent).toHaveLength(0);
+
+    price = ETH_USD;
+    await service.refund(refund);
+    // 0.50 $ / (85,031 gas × 2,364.48 $) — fuel 21,000 + first-time-recipient transfer 64,031.
+    expect(journal.get(`transfer:${ID(8)}`)?.feeCapWeiPerGas).toBe('2486892845');
     const tx = Transaction.from(chain.sent[0]);
     expect(canonicalAddress(tx.from!)).toBe(canonicalAddress(DEPOSIT.address));
     expect(decodeTransferCall(tx.data)).toEqual({ to: BUYER, amountUnits: 49_500_000n });
@@ -700,6 +711,7 @@ describe('pinned destinations and limits (§3.3a twin)', () => {
       toBuyerAddress: BUYER,
       amount: '7',
       token: 'USDC' as const,
+      feeCapUsd: '0.50',
     };
     await expect(
       service.refund({ ...base, blockchainTransactionId: ID(20), refundType: 'BUYER_REFUND' }),
