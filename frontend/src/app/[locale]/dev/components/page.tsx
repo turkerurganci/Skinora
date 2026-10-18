@@ -23,7 +23,12 @@ import {
   WalletAddressInput,
   useToast,
 } from "@/components/common";
-import { DisputeType, TimeoutFreezeReason, TransactionStatus } from "@/types/enums";
+import {
+  BlockchainNetwork,
+  DisputeType,
+  TimeoutFreezeReason,
+  TransactionStatus,
+} from "@/types/enums";
 
 // Every canonical status (06 §2.1), so the gallery shows the full C01 palette.
 // REFUNDED was missing before T134 — it is a badge tone of its own (04 §C01).
@@ -291,15 +296,19 @@ function ContentInner() {
       </Section>
 
       <Section id="c11" title="C11 — Wallet Address Input">
-        <WalletAddressInput
-          onValidate={async (addr) => {
-            await new Promise((r) => setTimeout(r, 600));
-            return addr.endsWith("X")
-              ? { status: "sanctioned" as const }
-              : { status: "ok" as const };
-          }}
-          onConfirm={(addr) => console.log("confirmed", addr)}
-        />
+        {[BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM].map((network) => (
+          <WalletAddressInput
+            key={network}
+            network={network}
+            onValidate={async (addr) => {
+              await new Promise((r) => setTimeout(r, 600));
+              return addr.endsWith("X")
+                ? { status: "sanctioned" as const }
+                : { status: "ok" as const };
+            }}
+            onConfirm={(addr, confirmation) => console.log("confirmed", addr, confirmation)}
+          />
+        ))}
       </Section>
 
       <Section id="c12" title="C12 — Copy Button">

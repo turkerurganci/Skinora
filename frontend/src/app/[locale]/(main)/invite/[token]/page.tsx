@@ -132,7 +132,7 @@ export default function InviteConsumePage({ params }: InviteConsumePageProps) {
 
       <StateActionPanel
         detail={data}
-        defaultRefundAddress={profile.data?.refundWalletAddress ?? null}
+        profileWallets={profile.data?.wallets ?? []}
         defaultSteamTradeUrl={profile.data?.steamTradeUrl ?? null}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}

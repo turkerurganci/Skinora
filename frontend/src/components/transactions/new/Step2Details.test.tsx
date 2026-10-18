@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import en from "@/i18n/messages/en.json";
-import { StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, StablecoinType } from "@/types/enums";
 import type { TransactionParamsResponse } from "@/lib/api/transactions";
 import { Step2Details } from "./Step2Details";
 
@@ -20,6 +20,7 @@ const params: TransactionParamsResponse = {
   paymentTimeout: { minHours: 1, maxHours: 72, defaultHours: 24 },
   openLinkEnabled: true,
   supportedStablecoins: [StablecoinType.USDT, StablecoinType.USDC],
+  supportedNetworks: [BlockchainNetwork.TRON],
 };
 
 function renderStep(price: string) {
@@ -32,6 +33,15 @@ function renderStep(price: string) {
         price={price}
         paymentTimeoutHours={24}
         priceError={null}
+        networkOptions={[
+          {
+            network: BlockchainNetwork.TRON,
+            payoutAddress: "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH",
+            selectable: true,
+          },
+        ]}
+        acceptedNetworks={[BlockchainNetwork.TRON]}
+        onToggleNetwork={vi.fn()}
         onChangeItem={vi.fn()}
         onChangeStablecoin={vi.fn()}
         onChangePrice={vi.fn()}

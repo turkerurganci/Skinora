@@ -36,7 +36,11 @@ export { LanguageSelector } from "./LanguageSelector";
 export type { LanguageSelectorProps } from "./LanguageSelector";
 
 export { WalletAddressInput } from "./WalletAddressInput";
-export type { WalletAddressInputProps, WalletValidationOutcome } from "./WalletAddressInput";
+export type {
+  WalletAddressConfirmation,
+  WalletAddressInputProps,
+  WalletValidationOutcome,
+} from "./WalletAddressInput";
 
 export { CopyButton } from "./CopyButton";
 export type { CopyButtonProps } from "./CopyButton";

@@ -21,6 +21,9 @@ COPY . .
 # back to the mainnet default in src/lib/utils/blockchain.ts.
 ARG NEXT_PUBLIC_TRONSCAN_TX_BASE_URL
 ENV NEXT_PUBLIC_TRONSCAN_TX_BASE_URL=${NEXT_PUBLIC_TRONSCAN_TX_BASE_URL}
+# T156 — same rule for Ethereum transaction links (Etherscan).
+ARG NEXT_PUBLIC_ETHERSCAN_TX_BASE_URL
+ENV NEXT_PUBLIC_ETHERSCAN_TX_BASE_URL=${NEXT_PUBLIC_ETHERSCAN_TX_BASE_URL}
 
 RUN npm run build
 

@@ -25,7 +25,7 @@
  * point of the check we are stepping around.
  */
 type DynamicTranslator = {
-  (key: string): string;
+  (key: string, values?: Record<string, string | number>): string;
   has(key: string): boolean;
 };
 
@@ -38,10 +38,17 @@ type DynamicTranslator = {
  * @param fallback Rendered when the key is absent — a translated string, or the
  *   raw value when showing the value itself is more useful than a generic
  *   message (an unmapped audit action, for instance).
+ * @param values ICU arguments for the message (T156 — e.g. the network name in
+ *   a network-scoped error). Messages without placeholders ignore them.
  */
-export function tDynamic(t: unknown, key: string, fallback: string): string {
+export function tDynamic(
+  t: unknown,
+  key: string,
+  fallback: string,
+  values?: Record<string, string | number>,
+): string {
   const dynamic = t as DynamicTranslator;
-  return dynamic.has(key) ? dynamic(key) : fallback;
+  return dynamic.has(key) ? dynamic(key, values) : fallback;
 }
 
 /**

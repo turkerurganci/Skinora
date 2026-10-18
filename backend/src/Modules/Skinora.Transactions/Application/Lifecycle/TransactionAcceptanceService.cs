@@ -236,7 +236,22 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             return Failure(AcceptTransactionStatus.InvalidWallet,
                 TransactionErrorCodes.InvalidWalletAddress,
                 $"refundWalletAddress fails {network} address validation (02 §12.3).",
-                NetworkDetails(network));
+                InvalidWalletDetails(network, refundValidation.Reason));
+
+        // T156 verification (owner decision, SECURITY): an all-lowercase or
+        // all-uppercase Ethereum address carries no EIP-55 checksum, so a typo
+        // would send every refund to a stranger. The server asks for the same
+        // explicit confirmation the profile write path asks for (T146) and does
+        // not trust the client UI to have shown it. TRON never reaches this
+        // branch (its validator is always Valid or unusable), so the field is
+        // ignored there. Still before any write — a refused acceptance leaves
+        // the listing open and allocates no deposit.
+        if (refundValidation.Status == WalletAddressValidationStatus.ValidWithoutChecksum
+            && request.ConfirmLowercase != true)
+            return Failure(AcceptTransactionStatus.InvalidWallet,
+                TransactionErrorCodes.InvalidWalletAddress,
+                "The Ethereum refund address has no EIP-55 checksum (all lowercase or all uppercase); confirm it with confirmLowercase: true.",
+                InvalidWalletDetails(network, refundValidation.Reason));
 
         var sanctions = await _sanctions.EvaluateAsync(
             network, refundValidation.CanonicalAddress!, cancellationToken);
@@ -607,4 +622,16 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
 
     /// <summary>07 §1.3 — network failures carry <c>details.network</c>.</summary>
     private static object NetworkDetails(BlockchainNetwork network) => new { network = network.ToString() };
+
+    /// <summary>
+    /// 400 <c>INVALID_WALLET_ADDRESS</c> details, the same shape as the profile
+    /// wallet endpoints (07 §5.3): <c>requiresConfirmation</c> is set only for
+    /// <c>CHECKSUM_CONFIRMATION_REQUIRED</c>.
+    /// </summary>
+    private static object InvalidWalletDetails(BlockchainNetwork network, string? reason) => new
+    {
+        network = network.ToString(),
+        reason = reason ?? WalletAddressRejectionReasons.InvalidFormat,
+        requiresConfirmation = reason == WalletAddressRejectionReasons.ChecksumConfirmationRequired,
+    };
 }

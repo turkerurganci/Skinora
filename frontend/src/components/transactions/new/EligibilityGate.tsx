@@ -4,6 +4,9 @@ import { useLocale, useTranslations } from "next-intl";
 import Link from "next/link";
 import { CountdownTimer } from "@/components/common";
 import type { EligibilityResponse } from "@/lib/api/transactions";
+import type { NetworkGateReason } from "@/lib/transactions/networkChoice";
+import { networkLabel } from "@/lib/utils/blockchain";
+import type { BlockchainNetwork } from "@/types/enums";
 
 /**
  * Reason codes emitted by `GET /transactions/eligibility` mapped from the
@@ -190,6 +193,51 @@ function ReasonBanner({ reason, eligibility, locale, t }: ReasonBannerProps) {
     default:
       return <Banner tone="red" title={t("unknown.title")} description={reason} />;
   }
+}
+
+export interface NetworkGateProps {
+  reason: NetworkGateReason;
+  /** `supportedNetworks` of `GET /transactions/params` — the networks open now. */
+  openNetworks: readonly BlockchainNetwork[];
+}
+
+/**
+ * T156 (11 T156, from the T147 validation) — the form-level gate the
+ * eligibility endpoint cannot raise: eligibility asks "does the seller have a
+ * payout address on ANY network" and ignores which networks are open (T147
+ * decision iv), so a seller whose only address is on a closed network passes
+ * it. Same banner language as the reasons above, with the open networks named
+ * so the seller knows which address to add.
+ */
+export function NetworkGate({ reason, openNetworks }: NetworkGateProps) {
+  const t = useTranslations("newTransaction.gate");
+  const locale = useLocale();
+  return (
+    <div className="space-y-3" role="region" aria-label={t("regionLabel")}>
+      {reason === "NO_OPEN_NETWORK" ? (
+        <Banner
+          tone="amber"
+          title={t("noOpenNetwork.title")}
+          description={t("noOpenNetwork.description")}
+        />
+      ) : (
+        <Banner
+          tone="red"
+          title={t("noPayoutOnOpenNetwork.title")}
+          description={t("noPayoutOnOpenNetwork.description", {
+            networks: openNetworks.map(networkLabel).join(", "),
+          })}
+        >
+          <Link
+            href={`/${locale}/profile`}
+            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            {t("walletMissing.cta")}
+          </Link>
+        </Banner>
+      )}
+    </div>
+  );
 }
 
 type BannerTone = "red" | "orange" | "amber";
