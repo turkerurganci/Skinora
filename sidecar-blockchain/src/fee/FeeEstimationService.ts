@@ -1,5 +1,6 @@
 import { logger } from '../logger.js';
 import { SidecarError } from '../errors/SidecarError.js';
+import { sameAddress } from '../address/canonicalAddress.js';
 import { TronResourceClient } from '../tron/TronResourceClient.js';
 import { TransferService, TokenContractMap, TokenSymbol } from '../transfer/TransferService.js';
 import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
@@ -170,7 +171,7 @@ export class FeeEstimationService {
     const amountUnits = TransferService.toRawUnits(request.amount, this.decimalsPower);
 
     const isDelegatedPath =
-      Boolean(request.fromAddress) && request.fromAddress !== this.hotWalletAddress;
+      Boolean(request.fromAddress) && !sameAddress(request.fromAddress, this.hotWalletAddress);
 
     const [
       energyRequired,

@@ -4816,6 +4816,10 @@ Task T150: Ethereum servis iskeleti
       T143'ün Ethereum bilinen-cevap vektörleri bu üretim yolundan geçiyor;
       kök-düğüm kontrolünün (`HD_ROOT_NOT_MASTER`) servis üzerinden testi var
       (T143 doğrulamasının bloke etmeyen iki bulgusu)
+    - Sidecar adres karşılaştırma çağrı yerleri (TransferGuard sweep hedefi,
+      MonitorRegistry anahtarı, izin verilen kontrat kümesi,
+      FeeEstimationService) EVM yazımıyla (karışık/küçük harf) testli
+      (T145 doğrulaması)
     - Not: `finalized` uzun durursa (> ~25 dk) o blokta durum okumak arşiv
       erişimi isteyebilir; sağlayıcı seçimi ve hata davranışı buna göre (T151)
   Test beklentisi: Unit

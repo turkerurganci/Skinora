@@ -13,7 +13,7 @@
   - `SanctionedAddresses.Network` string → enum; değerler `'TRC-20'` → `TRON` / `ETHEREUM`, CHECK `IN ('TRON','ETHEREUM')`.
 - **Tekillik anahtarları ağı içeriyor:** `UQ_PaymentAddresses_Network_Address`, `UQ_PaymentAddresses_Network_HdWalletIndex`, `UQ_BlockchainTransactions_Network_TxHash_EventIndex` (`WHERE TxHash IS NOT NULL`), `UQ_ColdWalletTransfers_Network_TxHash`, `UQ_SanctionedAddresses_Network_Address_Active` (`WHERE IsActive = 1`); `IX_WalletAddressHistory_UserId_Network_Type`.
 - **Onay CHECK'leri ağa duyarlı** (06 §1.4 "Onay alanları"): `CONFIRMED` → `ConfirmedAt NOT NULL AND (Network <> 'TRON' OR ConfirmationCount >= 20)`; `PENDING` → `Network <> 'TRON' OR ConfirmationCount < 20`. TRON davranışı birebir aynı.
-- **Tek forward migration `20261017230514_T145_NetworkDimension`:** NOT NULL kolonlar önce NULL eklenir → `TRON` ile doldurulur → NOT NULL yapılır; **veritabanı DEFAULT'u kalmaz** (ağsız INSERT başarısız olur, sessizce TRON olmaz). `Transactions.Network` yalnız kabul edilmiş (`AcceptedAt`/`BuyerId` dolu) ya da depozit adresi ayrılmış satırlarda `TRON`; kabul edilmemiş satır NULL. `SanctionedAddresses` `'TRC-20'` → `TRON` (eski CHECK düşürüldükten sonra, yeni CHECK eklenmeden önce). **Down** önce korur: herhangi bir tabloda TRON dışı satır varsa `THROW 50145` (eski şema onu taşıyamaz), yoksa eski şemaya ve `'TRC-20'`'ye döner. Para kolonlarına dokunulmadı (`decimal(18,6)`).
+- **Tek forward migration `20261017230514_T145_NetworkDimension`:** NOT NULL kolonlar önce NULL eklenir → `TRON` ile doldurulur → NOT NULL yapılır; **veritabanı DEFAULT'u kalmaz** (ağsız INSERT başarısız olur, sessizce TRON olmaz). `Transactions.Network` yalnız kabul edilmiş (`AcceptedAt` dolu; `BuyerId` kabul sayılmaz — SteamID hedefli ilanda oluşturulurken dolar) ya da depozit adresi ayrılmış satırlarda `TRON`; kabul edilmemiş satır NULL. `SanctionedAddresses` `'TRC-20'` → `TRON` (eski CHECK düşürüldükten sonra, yeni CHECK eklenmeden önce). **Down** önce korur: herhangi bir tabloda TRON dışı satır varsa `THROW 50145` (eski şema onu taşıyamaz), yoksa eski şemaya ve `'TRC-20'`'ye döner. Para kolonlarına dokunulmadı (`decimal(18,6)`).
 - **Kanonik biçim (06 §1.4):**
   - `Skinora.Shared.Blockchain.BlockchainAddress` — kural değerin biçiminden okunur: `0x` + hex → küçük harf; geri kalan her şey (TRON base58 adresi, TRON işlem kimliği) **dokunulmadan** döner (base58'de `0` yok, TRON adresi `0x` ile başlayamaz). `AreEqual` / `Comparer` (null hiçbir şeyle eşleşmez).
   - `CanonicalChainIdentifierConverter` — EF kolon dönüştürücüsü; adres kolonları (`User.DefaultPayout/RefundAddress`, `WalletAddressHistory.Address`, `Transaction.SellerPayoutAddress/BuyerRefundAddress`, `PaymentAddress.Address`, `BlockchainTransaction.FromAddress/ToAddress/ActualTokenAddress`, `ColdWalletTransfer.FromAddress/ToAddress`, `SanctionedAddress.Address`) ve hash kolonları (`BlockchainTransaction.TxHash`, `ColdWalletTransfer.TxHash`, `SellerPayoutIssue.PayoutTxHash`). Yazarken uygulanır; EF o kolonla karşılaştırılan sorgu parametresini de aynı biçime çevirir. Okurken de uygulanır (bugün EVM satırı yok; TRON için kimlik).
@@ -70,6 +70,16 @@
 | Doğrulama durumu | Bekliyor (ayrı doğrulama alt ajanı) |
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
+
+## Doğrulama sonucu (2026-10-18)
+
+- **PASS** — `8cd1472` üzerinde (doğrulama alt ajanı).
+- Migration doğrulayıcı tarafından temiz bir veritabanında ve gerçek Nile verisinin T145 öncesine geri alınmış bir kopyasında prova edildi: Up, Down ve koruma (50145) belirtildiği gibi çalıştı; model snapshot'ında bekleyen değişiklik yok.
+- Keccak yayımlanmış vektörlerle ve `@noble/hashes` ile doğrulandı.
+- Unit 1780/1780; integration bütün assembly'ler yeşil (paralel yükte zaman aşımına uğrayanlar tek başına geçti); sidecar 518/518.
+- Mutasyon kontrolleri: 7 yakalandı, 3 sidecar çağrı yeri mutantı hayatta kaldı (T150 kabul kriterine eklendi).
+- Webhook'ta Unknown-vs-Idempotent değişikliği risksiz bulundu (PaymentConfirmed için de geçerli).
+- Bulgular F1 (migration backfill: `BuyerId` kabul sayılmaz), F2 (`FeeEstimationService` adres karşılaştırması `sameAddress`), F4 (04 / 02 / 05 belge notları) bu dalda uygulandı; F3 T150 kabul kriterine yazıldı.
 
 ## Altyapı Değişiklikleri
 

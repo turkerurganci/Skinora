@@ -143,6 +143,8 @@ public class NetworkDimensionMigrationRehearsalTests : IntegrationTestBase
         accepted.BuyerRefundAddress = TronAddress;
 
         var unaccepted = NewTransaction(seller.Id);              // CREATED, no network
+        var targeted = NewTransaction(seller.Id);                // SteamID-targeted listing: BuyerId set at creation, not accepted
+        targeted.BuyerId = buyer.Id;
 
         var allocatedOnly = NewTransaction(seller.Id);           // CREATED but a deposit exists
         var completed = NewTransaction(seller.Id, TransactionStatus.COMPLETED, BlockchainNetwork.TRON);
@@ -152,7 +154,7 @@ public class NetworkDimensionMigrationRehearsalTests : IntegrationTestBase
         await using (var ctx = CreateContext())
         {
             ctx.Set<User>().AddRange(admin, seller, buyer);
-            ctx.Set<Transaction>().AddRange(accepted, unaccepted, allocatedOnly, completed);
+            ctx.Set<Transaction>().AddRange(accepted, unaccepted, targeted, allocatedOnly, completed);
             await ctx.SaveChangesAsync();
 
             var pa = NewPaymentAddress(accepted.Id, BlockchainNetwork.TRON, TronAddress, 0);
@@ -236,6 +238,7 @@ public class NetworkDimensionMigrationRehearsalTests : IntegrationTestBase
         Assert.Equal("TRON", await TxNetwork(completed.Id));
         Assert.Equal("TRON", await TxNetwork(allocatedOnly.Id));
         Assert.Null(await TxNetwork(unaccepted.Id));
+        Assert.Null(await TxNetwork(targeted.Id));
 
         // The rolled-forward schema is the model again: EF reads every row.
         await using var read = CreateContext();

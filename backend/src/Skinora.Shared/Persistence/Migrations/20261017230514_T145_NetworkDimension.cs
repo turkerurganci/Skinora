@@ -116,7 +116,7 @@ namespace Skinora.Shared.Persistence.Migrations
 
             migrationBuilder.Sql(
                 "UPDATE [t] SET [Network] = N'TRON' FROM [Transactions] AS [t] " +
-                "WHERE [t].[AcceptedAt] IS NOT NULL OR [t].[BuyerId] IS NOT NULL " +
+                "WHERE [t].[AcceptedAt] IS NOT NULL " +
                 "OR EXISTS (SELECT 1 FROM [PaymentAddresses] AS [p] WHERE [p].[TransactionId] = [t].[Id]);");
 
             // Sanctions list: the CHECK was dropped above; move the pre-F8 value
