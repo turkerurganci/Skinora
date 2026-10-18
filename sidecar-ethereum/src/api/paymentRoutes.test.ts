@@ -7,6 +7,7 @@ import { DepositRegistry } from '../monitor/DepositRegistry.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import { paymentReadiness, type PaymentReadiness } from '../health/paymentReadiness.js';
 import type { AddressBalances } from '../reconcile/BalanceReader.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 
 /**
  * T151 endpoints over HTTP: `/api/monitor/*`, `/api/wallet/balances` and the
@@ -38,6 +39,7 @@ beforeAll(async () => {
     chainId: 1,
     wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
     finality: () => finality,
+    feeEstimator: {} as EthFeeEstimationService,
     payments: {
       registry,
       allowlist: { USDT, USDC },

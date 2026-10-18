@@ -16,6 +16,8 @@ import {
   startMonitorHandler,
   stopMonitorHandler,
 } from './monitorHandlers.js';
+import { estimateFeeHandler } from './feeHandlers.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 import { NOT_YET_IMPLEMENTED, notImplementedHandler } from './notImplemented.js';
 
 /** The payment monitor's half of the surface (T151). */
@@ -34,6 +36,8 @@ export interface AppDeps {
   finality: () => FinalityStatus;
   /** Absent = the T150 skeleton shape: the monitor endpoints answer 501, `acceptsPayments` is false. */
   payments?: PaymentDeps;
+  /** T154 — `POST /api/transfer/estimate-fee`. */
+  feeEstimator: EthFeeEstimationService;
 }
 
 /** The endpoints T151 brings (05 §3.3a "Uçlar"). */
@@ -90,6 +94,7 @@ export function createApp(deps: AppDeps): Express {
   } else {
     for (const path of PAYMENT_ENDPOINTS) api.post(path, notImplementedHandler('T151'));
   }
+  api.post('/transfer/estimate-fee', estimateFeeHandler(deps.feeEstimator));
   for (const endpoint of NOT_YET_IMPLEMENTED) {
     api[endpoint.method](endpoint.path, notImplementedHandler(endpoint.task));
   }

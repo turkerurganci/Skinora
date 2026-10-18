@@ -10,7 +10,6 @@ export const NOT_YET_IMPLEMENTED = [
   { method: 'post', path: '/transfer/refund', task: 'T152' },
   { method: 'post', path: '/transfer/sweep', task: 'T152' },
   { method: 'post', path: '/transfer/cold-wallet', task: 'T152' },
-  { method: 'post', path: '/transfer/estimate-fee', task: 'T154' },
   { method: 'get', path: '/transfer/status/:txHash', task: 'T152' },
 ] as const;
 
@@ -26,7 +25,7 @@ export function notImplementedHandler(task: string) {
     req.log.warn({ url: req.url, task }, 'Endpoint not implemented in the Ethereum service yet');
     res.status(501).json({
       error: 'NOT_IMPLEMENTED',
-      message: `This endpoint of the Ethereum service arrives with ${task}; the skeleton (T150) serves only /api/wallet/derive.`,
+      message: `This endpoint of the Ethereum service arrives with ${task}; so far the service serves /api/wallet/derive and /api/transfer/estimate-fee.`,
       retryable: true,
     });
   };

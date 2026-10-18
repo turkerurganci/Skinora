@@ -5,6 +5,7 @@ import { createApp } from './routes.js';
 import { NOT_YET_IMPLEMENTED } from './notImplemented.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 
 const KEY = 'i'.repeat(64);
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
@@ -24,6 +25,8 @@ beforeAll(async () => {
     chainId: 11155111,
     wallet: new EthereumHdWallet(MNEMONIC),
     finality: () => finality,
+    // T154 — covered by feeHandlers.test.ts; never reached here.
+    feeEstimator: {} as EthFeeEstimationService,
   });
   server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));

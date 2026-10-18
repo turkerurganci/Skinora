@@ -67,6 +67,16 @@ public class BlockchainTransaction
     /// <summary>Energy the contract owner absorbed on the sender's behalf.</summary>
     public long? OriginEnergyUsage { get; set; }
 
+    /// <summary>
+    /// T154 — Ethereum: what the transfer paid in wei, from the receipt
+    /// (<c>gasUsed × effectiveGasPrice</c>) at confirmation. NULL on TRON and
+    /// until measured. Same rule as <see cref="RealizedFeeSun"/>: recorded,
+    /// never charged. <c>decimal(38,0)</c> — an integer, exact; values are
+    /// parsed from the service's decimal string (at most 28 digits, so they
+    /// always fit <see cref="decimal"/>) and never pass through a double.
+    /// </summary>
+    public decimal? RealizedFeeWei { get; set; }
+
     public BlockchainTransactionStatus Status { get; set; }
     public long? BlockNumber { get; set; }
     public int ConfirmationCount { get; set; }

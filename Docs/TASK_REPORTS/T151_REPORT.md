@@ -75,7 +75,7 @@
   - Kapanış bozma kanıtı: USDT yeniden denemesi kaldırıldı → 3 test kırıldı; `finalized` → `latest` → 2; kapı `true` → 1; mutabakat bloğu (baş / imleç) → 1 + 1; `removed` süzgeci → 1; aralık süzgeci → 1; bölme sınırı `limit + 1` → 1, parça boyutu `-1` / adım `+1` → 1 + 1. `>=` bozması eşdeğer (tam sınırdaki liste tek parça kalır); adres-listesi bölmesi yalnız izin listesi geri düşüşünde ve en çok 2 adresle kullanıldığından ulaşılamaz.
 - **Para riski değerlendirmesi:** para kaybı yok; geç tespit var. Bulgu 1 yalnız yeni işlemlerin açılışını geciktiriyordu (fail-closed); `finalized` etiketi bulgusu yalnız test boşluğuydu, kod doğru.
 - **Yönetici kararları (11 §F8 T151 kararları):** 24 sa+ kesinti için T151'de runbook, kalıcı çözüm T158 (⚠ PARA); backend 10 sn zaman aşımı T158. T158'e dört yeni kriter eklendi (kalıcı "şu bloktan izle" bilgisi, bakiye isteği parçalama + mutabakat alarmı, webhook 401 yeniden deneme/alarm, `monitor_scan_failures_total` alarmı).
-- **Main bütünleştirmesi:** `origin/main` (T149, T150) dala merge commit'le alındı; çakışmalar yalnız belgelerde (MEMORY.md, 05, 07, 08, 11, DEPLOY_RUNBOOK, IMPLEMENTATION_STATUS), iki taraf korundu; başlık versiyonları iki tarafın büyüğü +1.
+- **Main bütünleştirmesi:** `origin/main` (T149, T150, T154) dala merge commit (iki tur)'le alındı; çakışmalar yalnız belgelerde (MEMORY.md, 05, 07, 08, 11, DEPLOY_RUNBOOK, IMPLEMENTATION_STATUS), iki taraf korundu; başlık versiyonları iki tarafın büyüğü +1.
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
