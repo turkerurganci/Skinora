@@ -340,7 +340,7 @@
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
-| T154 | Ethereum ücret tahmini + ETH fiyatı | ⬚ Bekliyor |
+| T154 | Ethereum ücret tahmini + ETH fiyatı | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ⬚ Bekliyor |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ⬚ Bekliyor |
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
