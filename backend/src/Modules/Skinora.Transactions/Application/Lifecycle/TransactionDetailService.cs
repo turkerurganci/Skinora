@@ -868,8 +868,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
         // transaction. Reconstructed from the row exactly as the admin detail
         // does (AdminTransactionQueryService.BuildRefundDetail): the gas
         // estimate was snapshotted onto GasFee, so originalAmount = Amount +
-        // GasFee = TotalAmount (02 §4.6). TxHash / RefundedAt stay null until
-        // the dispatcher broadcasts and the confirmation job finalises on chain.
+        // GasFee = the refund base the consumer used (02 §4.6, T149
+        // FinancialCalculator.CalculateRefundableTotal): TotalAmount while the
+        // deposit has not been swept (the TRON network fee line returned in
+        // full), TotalAmount − NetworkFeeAmount once the sweep has run (the
+        // line was spent on it; price and commission still in full). TxHash /
+        // RefundedAt stay null until the dispatcher broadcasts and the
+        // confirmation job finalises on chain.
         if (role != "buyer")
             return null;
 

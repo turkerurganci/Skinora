@@ -147,6 +147,27 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
     }
 
     [Fact]
+    public async Task EthereumTransaction_SellerGetsTheFullPrice_EvenAboveTheProtectionThreshold()
+    {
+        // T149 (11 §F8 K8, 02 §4.7) — the payout rule follows the transaction's
+        // own network. The same inputs as the TRON case above (price 100,
+        // commission 2 → threshold 0.20; gas 0.50) would cost a TRON seller
+        // 0.30 (net 99.70); on Ethereum the platform absorbs the payout fee and
+        // the seller receives the whole price. Pins the network the job passes
+        // to the split: a constant TRON there turns this into 99.70.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m,
+            configure: t => t.Network = BlockchainNetwork.ETHEREUM);
+
+        await _sut.ExecuteAsync();
+
+        var payout = await PayoutRowAsync(tx.Id);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, payout.Network);
+        Assert.Equal(100m, payout.Amount);
+        Assert.Equal(0.50m, payout.GasFee);   // the estimate is still snapshotted
+        Assert.Equal(BlockchainNetwork.ETHEREUM, Assert.Single(_gasFee.Networks));
+    }
+
+    [Fact]
     public async Task HeldTransaction_IsSkipped()
     {
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m, configure: t =>
