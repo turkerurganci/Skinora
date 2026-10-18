@@ -3,11 +3,15 @@ import type { TransactionDetailPaymentEvent } from "@/lib/api/transactions";
 import { cn } from "@/lib/utils/cn";
 import { TxHashLink } from "./TxHashLink";
 import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
+import { networkMeta } from "@/lib/utils/blockchain";
+import { BlockchainNetwork } from "@/types/enums";
 
 export interface PaymentEventBannersProps {
   events: TransactionDetailPaymentEvent[];
   stablecoin: string;
   cancelled?: boolean;
+  /** T156 — the transaction's network: explorer links and the token standard in copy. */
+  network: BlockchainNetwork | null;
 }
 
 /**
@@ -21,7 +25,12 @@ export interface PaymentEventBannersProps {
  * event sadece CANCELLED state'inde aktif anlamlıdır; aksi durumda hep
  * cancelled olur ve burada tekrar render edilir).
  */
-export function PaymentEventBanners({ events, stablecoin, cancelled }: PaymentEventBannersProps) {
+export function PaymentEventBanners({
+  events,
+  stablecoin,
+  cancelled,
+  network,
+}: PaymentEventBannersProps) {
   const t = useTranslations("transactionDetail.paymentEvents");
   if (!events || events.length === 0) return null;
 
@@ -43,11 +52,11 @@ export function PaymentEventBanners({ events, stablecoin, cancelled }: PaymentEv
             role={variant === "warning" ? "alert" : "status"}
           >
             <p className="font-medium">{tDynamicOrKey(t, `${event.type}.title`)}</p>
-            <p>{messageFor(event, stablecoin, t)}</p>
+            <p>{messageFor(event, stablecoin, network, t)}</p>
             {event.refundTxHash && (
               <p className="mt-1 flex items-center gap-1 font-mono text-xs">
                 <span>{t("refundTxHashLabel")}:</span>
-                <TxHashLink txHash={event.refundTxHash} />
+                <TxHashLink txHash={event.refundTxHash} network={network} />
               </p>
             )}
           </div>
@@ -66,6 +75,7 @@ function bannerVariant(type: string): Variant {
 function messageFor(
   event: TransactionDetailPaymentEvent,
   stablecoin: string,
+  network: BlockchainNetwork | null,
   t: ReturnType<typeof useTranslations<"transactionDetail.paymentEvents">>,
 ): string {
   switch (event.type) {
@@ -82,7 +92,12 @@ function messageFor(
         token: stablecoin,
       });
     case "WRONG_TOKEN":
-      return t("WRONG_TOKEN.body", { token: stablecoin });
+      // 04 §7.3 (T156): the standard follows the buyer's network (TRC-20 /
+      // ERC-20). A record without a network is pre-F8, i.e. TRON.
+      return t("WRONG_TOKEN.body", {
+        token: stablecoin,
+        standard: networkMeta(network ?? BlockchainNetwork.TRON).standard,
+      });
     case "LATE_PAYMENT":
       return t("LATE_PAYMENT.body");
     default:

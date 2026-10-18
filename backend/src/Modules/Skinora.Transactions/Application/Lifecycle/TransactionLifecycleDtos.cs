@@ -189,11 +189,20 @@ public enum CreateTransactionStatus
 /// must be an address on that network. Omitted means <c>"TRON"</c>
 /// (<see cref="TransactionNetworks.Default"/>, ⚠).
 /// </para>
+/// <para>
+/// <paramref name="ConfirmLowercase"/> (T156 verification, 07 §7.6): the
+/// buyer's explicit second confirmation for an Ethereum refund address with no
+/// EIP-55 checksum (all lowercase or all uppercase). Without it such an address
+/// is refused with 400 <c>INVALID_WALLET_ADDRESS</c> and
+/// <c>details.reason = "CHECKSUM_CONFIRMATION_REQUIRED"</c> — same contract as
+/// the profile wallet endpoints (07 §5.3). Ignored on TRON.
+/// </para>
 /// </summary>
 public sealed record AcceptTransactionRequest(
     string RefundWalletAddress,
     string SteamTradeUrl,
-    string? Network = null);
+    string? Network = null,
+    bool? ConfirmLowercase = null);
 
 /// <summary>
 /// Response body for <c>POST /transactions/:id/accept</c> (07 §7.6). T147 adds

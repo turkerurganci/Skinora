@@ -115,7 +115,7 @@
       "summary": {
         "escrow": "Tu pago se mantiene en custodia hasta que el vendedor entrega el ítem; la plataforma nunca retiene el ítem.",
         "commission": "Se cobra una comisión al vendedor al completarse la operación.",
-        "crypto": "Los pagos se hacen en USDT o USDC únicamente en la red TRON.",
+        "crypto": "Los pagos se hacen en USDT o USDC únicamente en la red TRON o Ethereum.",
         "disputes": "Las disputas son revisadas por administradores de Skinora.",
         "kyc": "Las carteras sancionadas y las regiones embargadas están bloqueadas."
       },
@@ -821,7 +821,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Datos que recopilamos",
-          "body": "Cuando inicias sesión con Steam (Steam OpenID), recibimos tu perfil público de Steam, incluidos tu Steam ID, nombre visible y avatar. También almacenamos las direcciones de billetera que proporcionas para pagos en stablecoins TRC-20 (USDT, USDC) en la red TRON, y un registro de tu actividad de transacciones en la plataforma, como ofertas, estado de custodia, pagos, reembolsos y disputas. No recibimos tu contraseña de Steam ni las credenciales de tu Steam Mobile Authenticator."
+          "body": "Cuando inicias sesión con Steam (Steam OpenID), recibimos tu perfil público de Steam, incluidos tu Steam ID, nombre visible y avatar. También almacenamos las direcciones de billetera que proporcionas, por red, para pagos en stablecoins (USDT, USDC) en las redes TRON (TRC-20) y Ethereum (ERC-20), y un registro de tu actividad de transacciones en la plataforma, como ofertas, estado de custodia, pagos, reembolsos y disputas. No recibimos tu contraseña de Steam ni las credenciales de tu Steam Mobile Authenticator."
         },
         "howWeUse": {
           "heading": "Cómo usamos tus datos",
@@ -829,7 +829,7 @@
         },
         "dataSharing": {
           "heading": "Intercambio de datos",
-          "body": "Compartimos datos únicamente con las partes necesarias para prestar el servicio, como Steam para la verificación de intercambios y la red blockchain TRON para los pagos en cadena, y con proveedores de servicios que actúan en nuestro nombre. Ten en cuenta que las transacciones registradas en una blockchain pública son inherentemente visibles para otros. También podemos divulgar datos cuando la ley lo exija o para hacer cumplir nuestros términos, y no vendemos datos personales."
+          "body": "Compartimos datos únicamente con las partes necesarias para prestar el servicio, como Steam para la verificación de intercambios y la red blockchain en la que pagas (TRON o Ethereum) para los pagos en cadena, y con proveedores de servicios que actúan en nuestro nombre. Ten en cuenta que las transacciones registradas en una blockchain pública son inherentemente visibles para otros. También podemos divulgar datos cuando la ley lo exija o para hacer cumplir nuestros términos, y no vendemos datos personales."
         },
         "dataRetention": {
           "heading": "Conservación de datos",
@@ -855,7 +855,7 @@
         },
         "serviceDescription": {
           "heading": "El servicio",
-          "body": "Skinora actúa como intermediario que retiene en custodia el pago en stablecoin TRC-20 del comprador hasta que el vendedor entrega el objeto de CS2 acordado mediante un intercambio de Steam. Una vez confirmada la entrega, liberamos el pago al vendedor tras deducir la comisión de la plataforma y la tarifa de gas de la red. El intercambio suele requerir una cuenta de Steam en buen estado y puede requerir un Steam Mobile Authenticator. Skinora es un servicio independiente y no está afiliado, respaldado ni operado por Valve o Steam."
+          "body": "Skinora actúa como intermediario que retiene en custodia el pago en stablecoin del comprador (TRC-20 en TRON o ERC-20 en Ethereum, en la red que eligió el comprador) hasta que el vendedor entrega el objeto de CS2 acordado mediante un intercambio de Steam. Una vez confirmada la entrega, liberamos el pago al vendedor en la misma red tras deducir la comisión de la plataforma y, en su caso, la tarifa de gas de la red. El intercambio suele requerir una cuenta de Steam en buen estado y puede requerir un Steam Mobile Authenticator. Skinora es un servicio independiente y no está afiliado, respaldado ni operado por Valve o Steam."
         },
         "userObligations": {
           "heading": "Tus obligaciones",
@@ -863,7 +863,7 @@
         },
         "fees": {
           "heading": "Tarifas",
-          "body": "Cada transacción está sujeta a una comisión de la plataforma y a una tarifa de red blockchain (gas). Los importes aplicables se te muestran en la aplicación antes de que confirmes una transacción, y las tarifas exactas son configurables y pueden cambiar con el tiempo. Las tarifas de la red blockchain las determina la red TRON y están fuera de nuestro control."
+          "body": "Cada transacción está sujeta a una comisión de la plataforma y, según la red, a una tarifa de red blockchain (gas). Los importes aplicables se te muestran en la aplicación antes de que confirmes una transacción, y las tarifas exactas son configurables y pueden cambiar con el tiempo. En TRON el comprador paga una tarifa de red TRON aparte, fijada al aceptar la transacción; en Ethereum la plataforma cubre la tarifa de red. Las tarifas de la red blockchain las determina la red (TRON o Ethereum) y están fuera de nuestro control."
         },
         "liability": {
           "heading": "Responsabilidad",
@@ -1042,16 +1042,20 @@
     "ariaLabel": "Seleccionar idioma"
   },
   "walletAddress": {
-    "label": "Dirección de billetera TRC-20",
-    "hint": "Debe comenzar con T, 34 caracteres",
-    "invalidFormat": "Dirección TRC-20 inválida",
+    "label": "Dirección de billetera {network}",
+    "invalidFormat": "Introduce una dirección {network} válida.",
     "sanctioned": "Esta dirección está en una lista de sanciones. Por favor, usa otra.",
     "validationError": "Ocurrió un error durante la validación",
     "edit": "Editar",
     "confirm": "Confirmar",
     "validating": "Validando",
     "continue": "Continuar",
-    "confirmTitle": "¿Es correcta esta dirección?"
+    "confirmTitle": "¿Es correcta esta dirección?",
+    "hintTron": "Dirección TRON: empieza por T, 34 caracteres.",
+    "hintEthereum": "Dirección Ethereum: 0x seguido de 40 caracteres hexadecimales. Pégala tal como la muestra tu billetera (las mayúsculas y minúsculas llevan el checksum EIP-55).",
+    "networkLabel": "Red",
+    "evmSameAddressNote": "La misma dirección 0x también existe en otras redes EVM. Esta dirección se guarda solo para Ethereum.",
+    "noChecksumConfirm": "Esta dirección está toda en minúsculas (o toda en mayúsculas), así que no lleva checksum EIP-55 y no se puede detectar un error de escritura. La he revisado carácter por carácter."
   },
   "pagination": {
     "ariaLabel": "Paginación",
@@ -1182,6 +1186,14 @@
         "title": "No hay dirección de pago en tu perfil",
         "description": "Los pagos se envían a la dirección guardada en tu perfil. Añade una en tu perfil y vuelve — por seguridad, la dirección se puede usar 24 horas después de guardarla.",
         "cta": "Ir al perfil"
+      },
+      "noOpenNetwork": {
+        "title": "No hay ninguna red abierta para nuevas transacciones",
+        "description": "Los pagos no están disponibles temporalmente en ninguna red. Es algo temporal: vuelve a intentarlo más tarde."
+      },
+      "noPayoutOnOpenNetwork": {
+        "title": "No tienes dirección de cobro en una red abierta",
+        "description": "Las nuevas transacciones pueden abrirse en: {networks}. No tienes dirección de cobro en estas redes. Añade una en tu perfil para iniciar una transacción."
       }
     },
     "step1": {
@@ -1231,6 +1243,16 @@
         "label": "Comisión (la paga el comprador)",
         "value": "El comprador paga el {percent}% de comisión: {amount}",
         "placeholder": "Se calcula cuando introduzcas el precio ({percent}%)"
+      },
+      "networks": {
+        "label": "Redes que aceptas",
+        "hint": "El token es siempre USDT. El comprador elige una de estas redes; tu cobro y cualquier reembolso se mueven en esa misma red.",
+        "payoutAddress": "Dirección de cobro",
+        "noPayoutAddress": "No tienes dirección de cobro en esta red.",
+        "addInProfile": "Añádela en tu perfil",
+        "tronFeeNote": "En TRON el comprador también paga una tarifa de red TRON, fijada al aceptar. La parte de la tarifa de red de tu cobro que la comisión no cubre se descuenta de tu cobro.",
+        "ethereumFeeNote": "En Ethereum ni tú ni el comprador pagáis tarifa de red.",
+        "noneSelected": "Selecciona al menos una red."
       }
     },
     "step3": {
@@ -1260,13 +1282,13 @@
         "price": "Precio",
         "commission": "Comisión",
         "commissionPayer": "la paga el comprador",
-        "token": "Token",
         "timeout": "Plazo de pago",
         "timeoutValue": "{hours} horas",
         "buyer": "Comprador",
         "buyerSteamId": "Steam ID: {steamId}",
         "buyerOpenLink": "Enlace abierto (el primero que acepte)",
-        "wallet": "Dirección de pago"
+        "wallet": "Dirección de pago",
+        "networks": "Redes"
       },
       "back": "Atrás",
       "submit": "Iniciar transacción",
@@ -1274,7 +1296,7 @@
       "errors": {
         "generic": "No se pudo iniciar la transacción. Inténtalo de nuevo.",
         "VALIDATION_ERROR": "Hay un error en los datos del formulario. Revisa todos los campos.",
-        "INVALID_WALLET_ADDRESS": "La dirección de pago no es válida. Introduce una dirección TRC-20.",
+        "INVALID_WALLET_ADDRESS": "La dirección de cobro guardada en tu perfil no es válida para esta red. Actualízala en tu perfil.",
         "SANCTIONS_MATCH": "Esta dirección de monedero está en la lista de sanciones. Usa otra dirección.",
         "CONCURRENT_LIMIT_REACHED": "Has alcanzado el límite de transacciones activas. Podrás iniciar una nueva cuando se completen las existentes.",
         "CANCEL_COOLDOWN_ACTIVE": "Hay un periodo de espera por cancelación activo. No puedes iniciar nuevas transacciones hasta que termine.",
@@ -1294,12 +1316,13 @@
         "OPEN_LINK_DISABLED": "El método de enlace abierto está deshabilitado actualmente. Usa el método de Steam ID.",
         "BUYER_STEAM_ID_NOT_FOUND": "El Steam ID que introdujiste no pertenece a un usuario registrado.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "El periodo de espera de la dirección de pago sigue activo.",
-        "SELLER_WALLET_ADDRESS_MISSING": "Tu perfil no tiene dirección de pago. Añade una en tu perfil primero."
-      }
+        "SELLER_WALLET_ADDRESS_MISSING": "Tu perfil no tiene dirección de pago. Añade una en tu perfil primero.",
+        "NETWORK_UNAVAILABLE": "Una de las redes seleccionadas no está disponible temporalmente. Quítala o vuelve a intentarlo más tarde."
+      },
+      "errorNetwork": "Red: {network}"
     }
   },
   "transactionDetail": {
-    "viewOnTronscan": "Ver en Tronscan",
     "header": {
       "title": "Transacción #{id}"
     },
@@ -1308,7 +1331,11 @@
       "commission": "Comisión",
       "total": "Total",
       "token": "Token",
-      "createdAt": "Creada"
+      "createdAt": "Creada",
+      "tronNetworkFee": "Tarifa de red TRON",
+      "network": "Red",
+      "acceptedNetworks": "Redes aceptadas",
+      "totalExcludingTronFee": "Total (sin tarifa de red TRON)"
     },
     "parties": {
       "seller": "Vendedor",
@@ -1317,17 +1344,23 @@
     },
     "paymentInfo": {
       "title": "Detalles del pago",
-      "addressLabel": "Dirección de pago",
+      "addressLabel": "Dirección de pago ({network})",
       "amountLabel": "Importe a enviar",
       "tokenLabel": "Token",
       "networkLabel": "Red",
       "remainingLabel": "Tiempo restante",
       "warnings": {
         "title": "Importante",
-        "onlyTrc20": "Envía únicamente {token} en la red TRC-20.",
         "fullAmount": "Envía el importe exacto en una sola transferencia.",
         "noOtherToken": "No envíes ningún otro token.",
-        "noExchange": "No envíes desde un exchange — tu dirección de reembolso podría no ser accesible."
+        "onlyNetwork": "Envía {token} solo en la red {network}.",
+        "evmSameAddress": "La misma dirección 0x también existe en otras redes EVM (p. ej. BSC, Arbitrum, Polygon). Un pago enviado en otra red no cuenta para esta transacción y no se reembolsa automáticamente: tendrías que abrir una solicitud de soporte."
+      },
+      "unknownNetwork": "No se pudo leer la red de pago, así que no se muestra la dirección de pago. No envíes nada: recarga la página o contacta con soporte.",
+      "breakdown": {
+        "price": "Precio",
+        "commission": "Comisión",
+        "tronNetworkFee": "Tarifa de red TRON"
       }
     },
     "paymentEvents": {
@@ -1341,7 +1374,7 @@
       },
       "WRONG_TOKEN": {
         "title": "Token incorrecto recibido",
-        "body": "Se recibió un token no admitido y fue reembolsado. Envía únicamente {token} (TRC-20)."
+        "body": "Se recibió un token no admitido y se reembolsó. Envía solo {token} ({standard})."
       },
       "LATE_PAYMENT": {
         "title": "Pago tardío detectado",
@@ -1424,8 +1457,8 @@
       "buyerWillBeNotified": "Se notificará al comprador."
     },
     "accept": {
-      "addressLabel": "Tu dirección de reembolso",
-      "addressHint": "Si algo falla, el pago se reembolsa a esta dirección TRC-20.",
+      "addressLabel": "Tu dirección de reembolso ({network})",
+      "addressHint": "Todos los reembolsos de esta transacción, incluidos los pagos rechazados (importe o token incorrecto, pago tardío), van a esta dirección {network}.",
       "submit": "Acepto esta transacción",
       "submitting": "Aceptando...",
       "change": "Cambiar",
@@ -1437,7 +1470,7 @@
       "maSetupLink": "Cómo configurar Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "La dirección de reembolso es obligatoria.",
-        "INVALID_WALLET_ADDRESS": "La dirección de reembolso es inválida. Introduce una dirección TRC-20.",
+        "INVALID_WALLET_ADDRESS": "La dirección de reembolso no es una dirección {network} válida.",
         "SANCTIONS_MATCH": "Esta dirección está en lista de sanciones. Usa otra dirección.",
         "WALLET_COOLDOWN_ACTIVE": "Cambiaste tu dirección de reembolso recientemente. Espera a que termine el periodo.",
         "STEAM_ID_MISMATCH": "Esta transacción se creó para otra cuenta de Steam.",
@@ -1451,8 +1484,21 @@
         "STEAM_ACCOUNT_TOO_NEW": "Tu cuenta de Steam es demasiado nueva para intercambiar. Steam no permite intercambios durante los primeros 15 días.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Tu Steam Mobile Authenticator debe estar activo para aceptar. Sin él, Steam retiene el intercambio durante 15 días.",
         "STEAM_UNAVAILABLE": "No se pudo contactar con Steam ahora mismo, así que no se pudo verificar tu Mobile Authenticator. Inténtalo de nuevo en unos minutos.",
-        "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo."
-      }
+        "generic": "No se pudo aceptar la transacción. Inténtalo de nuevo.",
+        "NETWORK_REQUIRED": "Elige la red en la que pagarás.",
+        "addressFormat": "Introduce una dirección {network} válida.",
+        "CHECKSUM_CONFIRMATION_REQUIRED": "Confirma que has revisado la dirección sin checksum.",
+        "NETWORK_NOT_ACCEPTED": "El vendedor no acepta {network} en esta transacción. Elige otra red.",
+        "NETWORK_UNAVAILABLE": "{network} no está disponible temporalmente. Elige otra red o vuelve a intentarlo más tarde."
+      },
+      "networkLabel": "Red de pago",
+      "networkHint": "Elige la red en la que pagarás. Tu pago, el cobro del vendedor y cualquier reembolso se mueven en esta red. En TRON la tarifa de red se fija al aceptar.",
+      "quote": {
+        "total": "Envías: {amount}",
+        "tronFee": "incluye tarifa de red TRON: {amount}",
+        "unavailable": "El importe se muestra después de aceptar."
+      },
+      "noChecksumConfirm": "Esta dirección está toda en minúsculas (o toda en mayúsculas), así que no lleva checksum EIP-55 y no se puede detectar un error de escritura. La he revisado carácter por carácter."
     },
     "actions": {
       "countdownLabel": "Restante",
@@ -1564,7 +1610,8 @@
         "title": "No se pudo cargar la transacción",
         "message": "No se pudieron cargar los detalles. Inténtalo de nuevo."
       }
-    }
+    },
+    "viewOnExplorer": "Ver en {explorer}"
   },
   "profile": {
     "header": {
@@ -1593,13 +1640,17 @@
       "cancel": "Cancelar",
       "activeTransactionsNotice": "{count} transacción(es) activa(s) seguirán usando la dirección anterior.",
       "errors": {
-        "invalidAddress": "La dirección no es una dirección TRC-20 válida.",
+        "invalidAddress": "La dirección de billetera no es válida para esta red.",
         "sanctioned": "Esta dirección está en una lista de sanciones y no se puede usar.",
         "reAuthRequired": "Debes volver a autenticarte con Steam para cambiar esta dirección.",
         "reAuthTokenInvalid": "La sesión de verificación expiró o no es válida. Inténtalo de nuevo.",
         "validation": "Solicitud inválida. Inténtalo de nuevo.",
-        "generic": "No se pudo actualizar la dirección. Inténtalo de nuevo."
-      }
+        "generic": "No se pudo actualizar la dirección. Inténtalo de nuevo.",
+        "checksumMismatch": "El checksum de la dirección no coincide; revisa si hay un error de escritura.",
+        "checksumConfirmationRequired": "Esta dirección Ethereum no tiene checksum. Vuelve a introducirla y confírmala en el paso de confirmación."
+      },
+      "perNetworkNote": "Las direcciones se guardan por red (TRON, Ethereum). Los pagos, liquidaciones y reembolsos siempre se mueven en la red que eligió el comprador.",
+      "reAuthNote": "Se te pedirá volver a autenticarte con Steam; también aplica a la primera dirección en una red nueva."
     },
     "quickLinks": {
       "title": "Enlaces rápidos",

@@ -1,6 +1,17 @@
 import type { TransactionDetailResponse } from "@/lib/api/transactions";
-import { TimeoutFreezeReason, TransactionStatus } from "@/types/enums";
+import { BlockchainNetwork, TimeoutFreezeReason, TransactionStatus } from "@/types/enums";
 import type { ExtendedStatus } from "@/components/common";
+import { parseNetwork } from "@/lib/utils/blockchain";
+
+/**
+ * T156 — the network the buyer pays on, once chosen (07 §7.5 top-level
+ * `network`, set at acceptance; `payment.network` carries the same machine
+ * value). `null` before acceptance — the listing's `acceptedNetworks` answer
+ * then — and for an unrecognised value, which is never guessed.
+ */
+export function detailNetwork(detail: TransactionDetailResponse): BlockchainNetwork | null {
+  return parseNetwork(detail.network) ?? parseNetwork(detail.payment?.network);
+}
 
 /**
  * The unwind family: transactions that ended without the item changing hands

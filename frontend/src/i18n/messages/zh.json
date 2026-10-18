@@ -115,7 +115,7 @@
       "summary": {
         "escrow": "在卖家交付物品之前，您的款项将由托管保管；平台从不持有物品本身。",
         "commission": "交易完成时将从卖家收取佣金。",
-        "crypto": "付款仅通过 TRON 网络使用 USDT 或 USDC。",
+        "crypto": "付款仅通过 TRON 或 Ethereum 网络使用 USDT 或 USDC。",
         "disputes": "争议由 Skinora 管理员审核。",
         "kyc": "受制裁的钱包和受制裁地区将被阻止。"
       },
@@ -821,7 +821,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "我们收集的数据",
-          "body": "当您使用 Steam 登录（Steam OpenID）时，我们会接收您的 Steam 公开资料，包括 Steam ID、显示名称和头像。我们还会存储您为 TRON 网络上的 TRC-20 稳定币（USDT、USDC）付款而提供的钱包地址，以及您在平台上的交易活动记录，例如报价、托管状态、付款、退款和争议。我们不会获取您的 Steam 密码或 Steam Mobile Authenticator 凭据。"
+          "body": "当您使用 Steam 登录（Steam OpenID）时，我们会接收您的 Steam 公开资料，包括 Steam ID、显示名称和头像。我们还会按网络存储您为 TRON（TRC-20）和 Ethereum（ERC-20）网络上的稳定币（USDT、USDC）付款而提供的钱包地址，以及您在平台上的交易活动记录，例如报价、托管状态、付款、退款和争议。我们不会获取您的 Steam 密码或 Steam Mobile Authenticator 凭据。"
         },
         "howWeUse": {
           "heading": "我们如何使用您的数据",
@@ -829,7 +829,7 @@
         },
         "dataSharing": {
           "heading": "数据共享",
-          "body": "我们仅与提供服务所需的各方共享数据，例如用于交易验证的 Steam 和用于链上付款的 TRON 区块链网络，以及代表我们行事的服务提供商。请注意，记录在公共区块链上的交易本质上对他人可见。在法律要求或为执行我们的条款时，我们也可能披露数据；我们不会出售个人数据。"
+          "body": "我们仅与提供服务所需的各方共享数据，例如用于交易验证的 Steam 和用于链上付款的您所付款的区块链网络（TRON 或 Ethereum），以及代表我们行事的服务提供商。请注意，记录在公共区块链上的交易本质上对他人可见。在法律要求或为执行我们的条款时，我们也可能披露数据；我们不会出售个人数据。"
         },
         "dataRetention": {
           "heading": "数据保留",
@@ -855,7 +855,7 @@
         },
         "serviceDescription": {
           "heading": "服务",
-          "body": "Skinora 作为中介，托管买家的 TRC-20 稳定币款项，直至卖家通过 Steam 交易交付约定的 CS2 物品。交付确认后，我们在扣除平台佣金和网络 gas 费用后，将款项释放给卖家。交易通常需要状态良好的 Steam 账户，并可能需要 Steam Mobile Authenticator。Skinora 是独立服务，与 Valve 或 Steam 没有关联，也不受其认可或运营。"
+          "body": "Skinora 作为中介，托管买家的稳定币款项（在买家选择的网络上：TRON 上的 TRC-20 或 Ethereum 上的 ERC-20），直至卖家通过 Steam 交易交付约定的 CS2 物品。交付确认后，我们在扣除平台佣金及适用的网络 gas 费用后，在同一网络上将款项释放给卖家。交易通常需要状态良好的 Steam 账户，并可能需要 Steam Mobile Authenticator。Skinora 是独立服务，与 Valve 或 Steam 没有关联，也不受其认可或运营。"
         },
         "userObligations": {
           "heading": "您的义务",
@@ -863,7 +863,7 @@
         },
         "fees": {
           "heading": "费用",
-          "body": "每笔交易均适用平台佣金和区块链网络（gas）费用。适用金额会在您确认交易前于应用内向您显示，确切费率可配置且可能随时间变化。区块链网络费用由 TRON 网络确定，不在我们的控制范围内。"
+          "body": "每笔交易均适用平台佣金，并视网络而定适用区块链网络（gas）费用。适用金额会在您确认交易前于应用内向您显示，确切费率可配置且可能随时间变化。在 TRON 上，买家需另付一笔在交易被接受时确定的 TRON 网络费；在 Ethereum 上，网络费由平台承担。区块链网络费用由相应网络（TRON 或 Ethereum）确定，不在我们的控制范围内。"
         },
         "liability": {
           "heading": "责任",
@@ -1042,16 +1042,20 @@
     "ariaLabel": "选择语言"
   },
   "walletAddress": {
-    "label": "TRC-20 钱包地址",
-    "hint": "以 T 开头,34 个字符",
-    "invalidFormat": "无效的 TRC-20 地址",
+    "label": "{network} 钱包地址",
+    "invalidFormat": "请输入有效的 {network} 地址。",
     "sanctioned": "该地址在制裁名单中。请使用其他地址。",
     "validationError": "验证时发生错误",
     "edit": "编辑",
     "confirm": "确认",
     "validating": "验证中",
     "continue": "继续",
-    "confirmTitle": "此地址是否正确?"
+    "confirmTitle": "此地址是否正确?",
+    "hintTron": "TRON 地址：以 T 开头，34 个字符。",
+    "hintEthereum": "Ethereum 地址：0x 加 40 个十六进制字符。请按钱包显示的原样粘贴（大小写混合即 EIP-55 校验）。",
+    "networkLabel": "网络",
+    "evmSameAddressNote": "相同的 0x 地址在其他 EVM 网络上也存在。此地址仅为 Ethereum 保存。",
+    "noChecksumConfirm": "此地址全为小写（或全为大写），不含 EIP-55 校验，无法发现输入错误。我已逐个字符核对。"
   },
   "pagination": {
     "ariaLabel": "分页",
@@ -1182,6 +1186,14 @@
         "title": "您的个人资料中没有收款地址",
         "description": "款项将支付到您个人资料中保存的地址。请先在个人资料中添加地址再返回 — 出于安全考虑，地址在保存 24 小时后才可使用。",
         "cta": "前往个人资料"
+      },
+      "noOpenNetwork": {
+        "title": "暂无可用于新交易的网络",
+        "description": "所有网络的付款暂时不可用。这是临时情况——请稍后再试。"
+      },
+      "noPayoutOnOpenNetwork": {
+        "title": "开放网络上没有收款地址",
+        "description": "新交易可在以下网络开启：{networks}。您在这些网络上没有收款地址。请在个人资料中添加以开始交易。"
       }
     },
     "step1": {
@@ -1231,6 +1243,16 @@
         "label": "佣金(买家支付)",
         "value": "买家支付 {percent}% 佣金:{amount}",
         "placeholder": "输入价格后自动计算({percent}%)"
+      },
+      "networks": {
+        "label": "您接受的网络",
+        "hint": "代币始终为 USDT。买家从这些网络中选择一个；您的收款和任何退款都在同一网络上进行。",
+        "payoutAddress": "收款地址",
+        "noPayoutAddress": "您在此网络上没有收款地址。",
+        "addInProfile": "在个人资料中添加",
+        "tronFeeNote": "在 TRON 上，买家还需支付一笔在接受时确定的 TRON 网络费。您收款的网络费中佣金未覆盖的部分将从您的收款中扣除。",
+        "ethereumFeeNote": "在 Ethereum 上，您和买家都无需支付网络费。",
+        "noneSelected": "请至少选择一个网络。"
       }
     },
     "step3": {
@@ -1260,13 +1282,13 @@
         "price": "价格",
         "commission": "佣金",
         "commissionPayer": "买家支付",
-        "token": "代币",
         "timeout": "付款时限",
         "timeoutValue": "{hours} 小时",
         "buyer": "买家",
         "buyerSteamId": "Steam ID: {steamId}",
         "buyerOpenLink": "公开链接(首位接受者)",
-        "wallet": "收款地址"
+        "wallet": "收款地址",
+        "networks": "网络"
       },
       "back": "返回",
       "submit": "发起交易",
@@ -1274,7 +1296,7 @@
       "errors": {
         "generic": "无法发起交易。请重试。",
         "VALIDATION_ERROR": "表单数据存在错误。请检查所有字段。",
-        "INVALID_WALLET_ADDRESS": "收款地址无效。请输入 TRC-20 格式的地址。",
+        "INVALID_WALLET_ADDRESS": "您个人资料中保存的收款地址对此网络无效。请在个人资料中更新。",
         "SANCTIONS_MATCH": "此钱包地址在制裁名单中。请使用其他地址。",
         "CONCURRENT_LIMIT_REACHED": "您已达到活跃交易上限。现有交易完成后即可发起新交易。",
         "CANCEL_COOLDOWN_ACTIVE": "取消冷却期生效中。冷却期结束前无法发起新交易。",
@@ -1294,12 +1316,13 @@
         "OPEN_LINK_DISABLED": "公开链接方式当前已关闭。请使用 Steam ID 方式。",
         "BUYER_STEAM_ID_NOT_FOUND": "您输入的 Steam ID 不属于已注册用户。",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "收款地址冷却期仍在生效。",
-        "SELLER_WALLET_ADDRESS_MISSING": "您的个人资料中没有收款地址。请先在个人资料中添加。"
-      }
+        "SELLER_WALLET_ADDRESS_MISSING": "您的个人资料中没有收款地址。请先在个人资料中添加。",
+        "NETWORK_UNAVAILABLE": "所选网络之一暂时不可用。请移除该网络或稍后再试。"
+      },
+      "errorNetwork": "网络：{network}"
     }
   },
   "transactionDetail": {
-    "viewOnTronscan": "在 Tronscan 上查看",
     "header": {
       "title": "交易 #{id}"
     },
@@ -1308,7 +1331,11 @@
       "commission": "手续费",
       "total": "总计",
       "token": "代币",
-      "createdAt": "创建时间"
+      "createdAt": "创建时间",
+      "tronNetworkFee": "TRON 网络费",
+      "network": "网络",
+      "acceptedNetworks": "接受的网络",
+      "totalExcludingTronFee": "合计（不含 TRON 网络费）"
     },
     "parties": {
       "seller": "卖家",
@@ -1317,17 +1344,23 @@
     },
     "paymentInfo": {
       "title": "付款详情",
-      "addressLabel": "付款地址",
+      "addressLabel": "付款地址（{network}）",
       "amountLabel": "应付金额",
       "tokenLabel": "代币",
       "networkLabel": "网络",
       "remainingLabel": "剩余时间",
       "warnings": {
         "title": "重要提示",
-        "onlyTrc20": "请仅在 TRC-20 网络上发送 {token}。",
         "fullAmount": "请一次性转账完整金额。",
         "noOtherToken": "请勿发送任何其他代币。",
-        "noExchange": "请勿从交易所发送——退款地址可能无法到达。"
+        "onlyNetwork": "仅在 {network} 网络上发送 {token}。",
+        "evmSameAddress": "相同的 0x 地址在其他 EVM 网络（如 BSC、Arbitrum、Polygon）上也存在。在其他网络上发送的付款不计入本交易，也不会自动退还——您需要提交客服请求。"
+      },
+      "unknownNetwork": "无法读取付款网络，因此不显示付款地址。请勿发送任何款项——请刷新页面或联系客服。",
+      "breakdown": {
+        "price": "价格",
+        "commission": "佣金",
+        "tronNetworkFee": "TRON 网络费"
       }
     },
     "paymentEvents": {
@@ -1341,7 +1374,7 @@
       },
       "WRONG_TOKEN": {
         "title": "收到错误代币",
-        "body": "检测到不支持的代币并已退还。请仅发送 {token} (TRC-20)。"
+        "body": "收到不支持的代币，已退还。请仅发送 {token}（{standard}）。"
       },
       "LATE_PAYMENT": {
         "title": "检测到迟到付款",
@@ -1424,8 +1457,8 @@
       "buyerWillBeNotified": "将通知买家。"
     },
     "accept": {
-      "addressLabel": "您的退款地址",
-      "addressHint": "如有任何问题，款项将退还至该 TRC-20 地址。",
+      "addressLabel": "您的退款地址（{network}）",
+      "addressHint": "本交易的所有退款——包括被拒绝的付款（金额错误、代币错误、逾期付款）——都会发送到此 {network} 地址。",
       "submit": "接受此交易",
       "submitting": "接受中...",
       "change": "更改",
@@ -1437,7 +1470,7 @@
       "maSetupLink": "如何设置 Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "退款地址为必填项。",
-        "INVALID_WALLET_ADDRESS": "退款地址无效。请输入 TRC-20 地址。",
+        "INVALID_WALLET_ADDRESS": "退款地址不是有效的 {network} 地址。",
         "SANCTIONS_MATCH": "此钱包地址在制裁名单中。请使用其他地址。",
         "WALLET_COOLDOWN_ACTIVE": "您最近更改过退款地址。请等待冷却期结束。",
         "STEAM_ID_MISMATCH": "此交易是为另一个 Steam 账户创建的。",
@@ -1451,8 +1484,21 @@
         "STEAM_ACCOUNT_TOO_NEW": "你的 Steam 账户太新，暂时无法交易。Steam 不允许账户在最初 15 天内交易。",
         "MOBILE_AUTHENTICATOR_REQUIRED": "接受交易前必须启用 Steam Mobile Authenticator。否则 Steam 会将该交易冻结 15 天。",
         "STEAM_UNAVAILABLE": "目前无法连接 Steam，因此无法验证你的 Mobile Authenticator。请稍后重试。",
-        "generic": "无法接受此交易。请重试。"
-      }
+        "generic": "无法接受此交易。请重试。",
+        "NETWORK_REQUIRED": "请选择您要付款的网络。",
+        "addressFormat": "请输入有效的 {network} 地址。",
+        "CHECKSUM_CONFIRMATION_REQUIRED": "请确认您已核对这个不含校验的地址。",
+        "NETWORK_NOT_ACCEPTED": "卖家在本交易中不接受 {network}。请选择其他网络。",
+        "NETWORK_UNAVAILABLE": "{network} 暂时不可用。请选择其他网络或稍后再试。"
+      },
+      "networkLabel": "付款网络",
+      "networkHint": "选择您要付款的网络。您的付款、卖家收款以及任何退款都在此网络上进行。在 TRON 上，网络费在接受时确定。",
+      "quote": {
+        "total": "您需发送：{amount}",
+        "tronFee": "含 TRON 网络费：{amount}",
+        "unavailable": "金额将在接受后显示。"
+      },
+      "noChecksumConfirm": "此地址全为小写（或全为大写），不含 EIP-55 校验，无法发现输入错误。我已逐个字符核对。"
     },
     "actions": {
       "countdownLabel": "剩余",
@@ -1564,7 +1610,8 @@
         "title": "无法加载交易",
         "message": "无法加载交易详情。请重试。"
       }
-    }
+    },
+    "viewOnExplorer": "在 {explorer} 上查看"
   },
   "profile": {
     "header": {
@@ -1593,13 +1640,17 @@
       "cancel": "取消",
       "activeTransactionsNotice": "{count} 个进行中的交易将继续使用旧地址。",
       "errors": {
-        "invalidAddress": "钱包地址不是有效的 TRC-20 地址。",
+        "invalidAddress": "该钱包地址不是此网络的有效地址。",
         "sanctioned": "该地址在制裁列表中，无法使用。",
         "reAuthRequired": "更改此地址需要重新通过 Steam 验证。",
         "reAuthTokenInvalid": "验证会话已过期或无效，请重试。",
         "validation": "请求无效，请重试。",
-        "generic": "无法更新地址，请重试。"
-      }
+        "generic": "无法更新地址，请重试。",
+        "checksumMismatch": "地址校验不匹配——请检查是否有输入错误。",
+        "checksumConfirmationRequired": "此 Ethereum 地址没有校验。请重新输入并在确认步骤中确认。"
+      },
+      "perNetworkNote": "地址按网络分别保存（TRON、Ethereum）。付款、结算和退款始终在买家选择的网络上进行。",
+      "reAuthNote": "系统将要求您重新通过 Steam 验证——在新网络上添加第一个地址时同样适用。"
     },
     "quickLinks": {
       "title": "快捷链接",

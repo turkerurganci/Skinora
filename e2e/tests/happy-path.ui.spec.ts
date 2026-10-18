@@ -80,6 +80,12 @@ test('UI happy path: badge tracks CREATED → COMPLETED for both parties', async
       timeout: 30_000,
     });
 
+    // T156 — the accept form offers the listing's networks (07 §7.5
+    // acceptedNetworks). This listing accepts TRON only, so TRON is preselected
+    // and its quote names the TRON network fee as its own part (K8).
+    await expect(page.getByTestId('accept-network-TRON')).toBeChecked();
+    await expect(page.getByTestId('accept-quote-TRON')).toContainText('TRON network fee');
+
     // Accept via the real UI form → ACCEPTED. v3.0 made the Steam trade URL a
     // second mandatory field (07 §7.6): in P2P it is the address the seller
     // will actually send the item to, so the accept form collects it up front.
@@ -99,6 +105,25 @@ test('UI happy path: badge tracks CREATED → COMPLETED for both parties', async
     // carry the deposit address block (07 §7.5 populates payment from
     // SELLER_CONFIRMED onwards).
     await waitForUiStatus(page, 'SELLER_CONFIRMED', { timeoutMs: 30_000, intervalMs: 2_000 });
+
+    // T156 — the payment block names the network explicitly, shows the TRON
+    // network fee as its own line and carries the network warning; the old
+    // "do not send from an exchange" warning is gone (K9). The amount to send
+    // is the server's expected amount, verbatim (T144). Reload so the block is
+    // read from a fresh detail response (the deposit address is allocated
+    // best-effort at acceptance — 07 §7.6).
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('payment-network')).toContainText('TRON (TRC-20)', {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId('payment-network-fee')).toBeVisible();
+    await expect(page.getByTestId('payment-network-warning')).toContainText('TRON');
+    await expect(page.getByText('Do not send from an exchange')).toHaveCount(0);
+    const detailAfterReady = await api.getTransaction(buyerToken, txId);
+    const expectedAmount = String(
+      (api.unwrap(detailAfterReady.body).payment as { expectedAmount: string }).expectedAmount,
+    );
+    await expect(page.getByTestId('payment-amount')).toHaveText(`${expectedAmount} USDT`);
 
     // Buyer pays (fake control surface) → PAYMENT_RECEIVED.
     const pay = await api.payViaFake(txId);

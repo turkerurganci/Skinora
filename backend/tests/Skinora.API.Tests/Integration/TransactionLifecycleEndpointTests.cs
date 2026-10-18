@@ -1195,7 +1195,8 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             .Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
         var payment = after.GetProperty("payment");
         Assert.Equal("TPaymentAddr1234567890abcdef1234", payment.GetProperty("address").GetString());
-        Assert.Equal("Tron (TRC-20)", payment.GetProperty("network").GetString());
+        // T156 — machine value; the label is the client's (07 §1.3).
+        Assert.Equal("TRON", payment.GetProperty("network").GetString());
     }
 
     private async Task<(User Seller, Guid TransactionId, HttpClient Client)> SetUpConfirmReadyAsync(

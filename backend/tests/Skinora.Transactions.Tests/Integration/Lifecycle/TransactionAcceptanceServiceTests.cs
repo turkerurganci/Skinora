@@ -1044,6 +1044,79 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         await AssertUntouchedAsync(transaction.Id);
     }
 
+    // T156 verification (owner decision, SECURITY): the second confirmation for
+    // a checksum-less Ethereum refund address is enforced by the server, not
+    // only by the client UI.
+    [Theory]
+    [InlineData("0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359")]   // all lowercase
+    [InlineData("0xFB6916095CA1DF60BB79CE92CE3EA74C37C5D359")]   // all uppercase
+    public async Task Checksumless_Ethereum_Refund_Without_Confirmation_Is_Refused_Before_Any_Write(string refundAddress)
+    {
+        _networks = TestNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(refundAddress, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.InvalidWallet, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InvalidWalletAddress, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.Equal("CHECKSUM_CONFIRMATION_REQUIRED", DetailOf<string>(outcome.ErrorDetails, "reason"));
+        Assert.True(DetailOf<bool>(outcome.ErrorDetails, "requiresConfirmation"));
+        // No status change, no payout/refund snapshot, no event, no deposit.
+        await AssertUntouchedAsync(transaction.Id);
+    }
+
+    [Fact]
+    public async Task Checksumless_Ethereum_Refund_With_Confirmation_Is_Accepted_And_Stored_Canonical()
+    {
+        _networks = TestNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(
+                BuyerEthereumRefundCanonical, BuyerTradeUrl, Network: "ETHEREUM", ConfirmLowercase: true),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(BuyerEthereumRefundCanonical, persisted.BuyerRefundAddress);
+    }
+
+    [Fact]
+    public async Task Checksummed_Ethereum_Refund_Is_Accepted_Without_Confirmation()
+    {
+        _networks = TestNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConfirmLowercase_Is_Ignored_On_Tron(bool? confirm)
+    {
+        _networks = TestNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl, Network: "TRON", ConfirmLowercase: confirm),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+    }
+
     [Theory]
     [InlineData("BSC")]
     [InlineData("tron")]
@@ -1239,6 +1312,9 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
     private static string? NetworkOf(object? details) =>
         details?.GetType().GetProperty("network")?.GetValue(details) as string;
+
+    private static T? DetailOf<T>(object? details, string name) =>
+        details?.GetType().GetProperty(name)?.GetValue(details) is T value ? value : default;
 
     private async Task<Transaction> CreateTransactionAsync(
         BuyerIdentificationMethod method,

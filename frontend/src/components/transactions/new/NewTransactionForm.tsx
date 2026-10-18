@@ -5,14 +5,14 @@ import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
 import { ApiError } from "@/lib/api/client";
 import {
   createTransaction,
   type EligibilityResponse,
   type TransactionParamsResponse,
 } from "@/lib/api/transactions";
-import { Skeleton } from "@/components/common";
+import { ErrorState, Skeleton } from "@/components/common";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { useSteamInventory } from "@/lib/hooks/useSteamInventory";
 import type { SteamInventoryItem } from "@/lib/api/steam";
@@ -21,7 +21,13 @@ import {
   readWizardDraft,
   writeWizardDraft,
 } from "@/lib/transactions/wizardDraft";
-import { EligibilityGate, getBlockingReasons } from "./EligibilityGate";
+import {
+  effectiveAcceptedNetworks,
+  networkGateReason,
+  sellerNetworkOptions,
+} from "@/lib/transactions/networkChoice";
+import { networkLabel, parseNetwork } from "@/lib/utils/blockchain";
+import { EligibilityGate, NetworkGate, getBlockingReasons } from "./EligibilityGate";
 import { StepIndicator } from "./StepIndicator";
 import { Step1ItemSelection } from "./Step1ItemSelection";
 import { Step2Details } from "./Step2Details";
@@ -68,6 +74,11 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     draft?.method ?? BuyerIdentificationMethod.STEAM_ID,
   );
   const [buyerSteamId, setBuyerSteamId] = useState(draft?.buyerSteamId ?? "");
+  // T156 — the networks the seller ticked in step 2. `null` = untouched, which
+  // reads as "every selectable network" (effectiveAcceptedNetworks).
+  const [chosenNetworks, setChosenNetworks] = useState<BlockchainNetwork[] | null>(
+    draft?.acceptedNetworks ?? null,
+  );
 
   // The payout address is NOT wizard state any more — it is read from the
   // profile server-side (02 §12.3). The profile query stays because step 4 still
@@ -77,8 +88,26 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
   // What was here before (WP2b prefill + `walletInput`/`walletConfirmed`) could
   // not work: the typed address went into the request body, the backend gate
   // read the profile, and the seller met a 422 after four steps.
+  //
+  // T156 — the profile now also decides which networks the seller can accept
+  // (02 §4.2: only networks with a saved payout address), so step 2 needs it.
   const profile = useMyProfile(!isGated);
-  const sellerWalletAddress = profile.data?.sellerWalletAddress ?? "";
+  const networkOptions = useMemo(
+    () => sellerNetworkOptions(params.supportedNetworks, profile.data?.wallets),
+    [params.supportedNetworks, profile.data?.wallets],
+  );
+  const acceptedNetworks = useMemo(
+    () => effectiveAcceptedNetworks(chosenNetworks, networkOptions),
+    [chosenNetworks, networkOptions],
+  );
+  const networkGate = profile.data ? networkGateReason(networkOptions) : null;
+
+  function toggleNetwork(network: BlockchainNetwork) {
+    const next = acceptedNetworks.includes(network)
+      ? acceptedNetworks.filter((n) => n !== network)
+      : [...acceptedNetworks, network];
+    setChosenNetworks(next);
+  }
 
   // Persisting to sessionStorage is exactly the external-system synchronisation
   // an effect is for.
@@ -90,8 +119,9 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
       paymentTimeoutHours,
       method,
       buyerSteamId,
+      ...(chosenNetworks !== null ? { acceptedNetworks: chosenNetworks } : {}),
     });
-  }, [item, stablecoin, price, paymentTimeoutHours, method, buyerSteamId]);
+  }, [item, stablecoin, price, paymentTimeoutHours, method, buyerSteamId, chosenNetworks]);
 
   const inventory = useSteamInventory(!isGated);
 
@@ -120,6 +150,8 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     isStep1Valid &&
     price !== "" &&
     priceError === null &&
+    // T156 — a listing must accept at least one network (07 §7.2).
+    acceptedNetworks.length > 0 &&
     paymentTimeoutHours >= params.paymentTimeout.minHours &&
     paymentTimeoutHours <= params.paymentTimeout.maxHours;
   // No `walletConfirmed` term any more: with the address input gone there is
@@ -175,6 +207,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
         paymentTimeoutHours,
         buyerIdentificationMethod: method,
         buyerSteamId: method === BuyerIdentificationMethod.STEAM_ID ? buyerSteamId : undefined,
+        acceptedNetworks,
       });
     },
     onSuccess: (data) => {
@@ -199,10 +232,44 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     );
   }
 
-  const submitErrorMessage = (() => {
+  // T156 — the profile decides the network choice, so the wizard waits for it.
+  if (profile.isLoading) {
+    return <Skeleton className="h-48 w-full" />;
+  }
+  if (profile.isError || !profile.data) {
+    return (
+      <ErrorState
+        title={t("loadError.title")}
+        message={t("loadError.message")}
+        onRetry={() => profile.refetch()}
+      />
+    );
+  }
+
+  // T156 (T147 validation) — eligible on paper, but no open network carries a
+  // payout address: say why, instead of an empty step 2.
+  if (networkGate) {
+    return (
+      <div className="space-y-4">
+        <NetworkGate reason={networkGate} openNetworks={networkOptions.map((o) => o.network)} />
+        <Link
+          href={`/${locale}/dashboard`}
+          className="inline-block text-sm text-blue-600 hover:underline"
+        >
+          {t("gate.backToDashboard")}
+        </Link>
+      </div>
+    );
+  }
+
+  const submitError = (() => {
     if (!mutation.error) return null;
-    if (!(mutation.error instanceof ApiError)) return t("step4.errors.generic");
-    return resolveErrorMessage(mutation.error.code, (k) => t(k as never));
+    if (!(mutation.error instanceof ApiError)) return { message: t("step4.errors.generic") };
+    const network = parseNetwork(detailString(mutation.error, "network"));
+    return {
+      message: resolveErrorMessage(mutation.error.code, (k) => t(k as never)),
+      network: network ? networkLabel(network) : undefined,
+    };
   })();
 
   return (
@@ -240,6 +307,9 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
             price={price}
             paymentTimeoutHours={paymentTimeoutHours}
             priceError={priceError}
+            networkOptions={networkOptions}
+            acceptedNetworks={acceptedNetworks}
+            onToggleNetwork={toggleNetwork}
             onChangeItem={() => setStep(1)}
             onChangeStablecoin={setStablecoin}
             onChangePrice={setPrice}
@@ -280,8 +350,9 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
           paymentTimeoutHours={paymentTimeoutHours}
           buyerMethod={method}
           buyerSteamId={buyerSteamId}
-          sellerWalletAddress={sellerWalletAddress}
-          submitError={submitErrorMessage}
+          acceptedNetworks={acceptedNetworks}
+          networkOptions={networkOptions}
+          submitError={submitError}
           isSubmitting={mutation.isPending}
           onBack={() => setStep(3)}
           onSubmit={() => mutation.mutate()}
@@ -383,9 +454,19 @@ export const POST_ERROR_CODES = new Set([
   "BUYER_STEAM_ID_NOT_FOUND",
   "PAYOUT_ADDRESS_COOLDOWN_ACTIVE",
   "SELLER_WALLET_ADDRESS_MISSING",
+  // T147/T156 — one of the ticked networks is not open (no service or under a
+  // health freeze, 07 §7.2). Retryable; `details.network` names it.
+  "NETWORK_UNAVAILABLE",
 ]);
 
 function resolveErrorMessage(code: string, t: (key: string) => string): string {
   if (POST_ERROR_CODES.has(code)) return t(`step4.errors.${code}`);
   return t("step4.errors.generic");
+}
+
+/** T147 — network-scoped errors carry `details.network` (07 §7.2). */
+function detailString(err: ApiError, key: string): string | null {
+  const details = err.error.details as unknown as Record<string, unknown> | null;
+  const value = details?.[key];
+  return typeof value === "string" ? value : null;
 }

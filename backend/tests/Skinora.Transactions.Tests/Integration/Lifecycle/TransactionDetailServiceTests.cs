@@ -646,7 +646,8 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Equal(PaymentDepositAddress, payment!.Address);
         Assert.Equal("102.00", payment.ExpectedAmount);
         Assert.Equal(StablecoinType.USDT, payment.Stablecoin);
-        Assert.Equal("Tron (TRC-20)", payment.Network);
+        // T156 — machine value, not a display label (07 §1.3).
+        Assert.Equal("TRON", payment.Network);
         // T124+ fill these once payments land; 07 §7.5 scopes txHash to
         // PAYMENT_RECEIVED onwards.
         Assert.Null(payment.TxHash);
@@ -738,6 +739,30 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Null(outcome.Body!.Payment);
     }
 
+    // ─── T156: payment.network is the machine value (07 §1.3, §7.5) ───
+
+    [Fact]
+    public async Task Payment_Network_Is_The_Machine_Value_Of_The_Deposit_Network()
+    {
+        // The client builds the label and the explorer link from this value
+        // (T156); a display string here would label an Ethereum deposit with
+        // whatever the client fell back to.
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+        await AddPaymentAddressAsync(
+            transaction.Id,
+            network: Skinora.Shared.Enums.BlockchainNetwork.ETHEREUM,
+            address: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        var payment = outcome.Body!.Payment!;
+        Assert.Equal("ETHEREUM", payment.Network);
+        // Stored canonical (lowercase), shown EIP-55 (06 §1.4).
+        Assert.Equal("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", payment.Address);
+    }
+
     // ─── T149: network fee quotes and the fixed line (07 §7.5, 11 §F8 K8) ───
 
     [Fact]
@@ -805,13 +830,18 @@ public class TransactionDetailServiceTests : IntegrationTestBase
 
     private const string PaymentDepositAddress = "TPaymentAddr1234567890abcdef1234";
 
-    private async Task AddPaymentAddressAsync(Guid transactionId, decimal expectedAmount = 102m)
+    private async Task AddPaymentAddressAsync(
+        Guid transactionId,
+        decimal expectedAmount = 102m,
+        Skinora.Shared.Enums.BlockchainNetwork network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
+        string address = PaymentDepositAddress)
     {
         Context.Set<PaymentAddress>().Add(new PaymentAddress
         {
             Id = Guid.NewGuid(),
             TransactionId = transactionId,
-            Address = PaymentDepositAddress,
+            Network = network,
+            Address = address,
             HdWalletIndex = 1,
             ExpectedAmount = expectedAmount,
             ExpectedToken = StablecoinType.USDT,

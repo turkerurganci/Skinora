@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import en from "@/i18n/messages/en.json";
-import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
 import { Step4Summary } from "./Step4Summary";
 
 /**
@@ -21,7 +21,14 @@ function renderStep(price: string) {
         paymentTimeoutHours={24}
         buyerMethod={BuyerIdentificationMethod.OPEN_LINK}
         buyerSteamId=""
-        sellerWalletAddress="TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH"
+        acceptedNetworks={[BlockchainNetwork.TRON]}
+        networkOptions={[
+          {
+            network: BlockchainNetwork.TRON,
+            payoutAddress: "TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH",
+            selectable: true,
+          },
+        ]}
         submitError={null}
         isSubmitting={false}
         onBack={vi.fn()}

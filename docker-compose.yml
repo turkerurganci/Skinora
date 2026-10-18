@@ -155,6 +155,9 @@ services:
         # (e.g. https://nile.tronscan.org/#/transaction/) or every explorer
         # link points at a chain the deployment is not watching.
         - NEXT_PUBLIC_TRONSCAN_TX_BASE_URL=${TRONSCAN_TX_BASE_URL:-}
+        # T156 — Ethereum transaction links (Etherscan). Empty = mainnet; on
+        # Sepolia: https://sepolia.etherscan.io/tx/
+        - NEXT_PUBLIC_ETHERSCAN_TX_BASE_URL=${ETHERSCAN_TX_BASE_URL:-}
     container_name: skinora-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
