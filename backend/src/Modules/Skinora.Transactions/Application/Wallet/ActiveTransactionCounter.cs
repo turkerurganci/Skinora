@@ -33,9 +33,15 @@ public sealed class ActiveTransactionCounter : IActiveTransactionCounter
 
         query = role switch
         {
+            // T147 — before acceptance the payout snapshot lives in the
+            // listing's TransactionNetworkOptions rows (SellerPayoutAddress is
+            // NULL until the buyer picks a network); after acceptance in the
+            // column. Either way the open listing keeps the old address.
             WalletRole.Seller => query.Where(t =>
                 t.SellerId == userId &&
-                t.SellerPayoutAddress == previousAddress),
+                (t.SellerPayoutAddress == previousAddress ||
+                 (t.SellerPayoutAddress == null &&
+                  t.NetworkOptions.Any(o => o.SellerPayoutAddress == previousAddress)))),
             WalletRole.Buyer => query.Where(t =>
                 t.BuyerId == userId &&
                 t.BuyerRefundAddress != null &&

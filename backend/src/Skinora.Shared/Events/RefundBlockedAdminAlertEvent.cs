@@ -47,4 +47,11 @@ public enum RefundBlockedReason
     /// <summary>Net refund is negative — gas fee exceeds the source
     /// amount entirely. Treated as a stricter sub-threshold case.</summary>
     NegativeAmount,
+
+    /// <summary>T147 (11 §F8 K9) — the transaction has no buyer refund
+    /// address, the single target of every refund. The refund is not sent to
+    /// the incoming transfer's sender instead; the money waits on the deposit
+    /// for a manual decision. <c>TotalPaid</c> carries the amount to refund;
+    /// the fee and threshold fields are zero.</summary>
+    RefundAddressMissing,
 }

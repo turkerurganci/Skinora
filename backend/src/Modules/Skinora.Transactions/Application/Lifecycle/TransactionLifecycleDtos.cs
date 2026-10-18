@@ -58,13 +58,19 @@ public sealed record PaymentTimeoutWindowDto(int MinHours, int MaxHours, int Def
 /// Request body for <c>POST /transactions</c> (07 §7.2).
 ///
 /// <para>
-/// Carries NO payout address. The seller's payout address is read from the
-/// profile (the seller's TRON <c>UserWalletAddress</c> PAYOUT row until T147, written only by U3
+/// Carries NO payout address. The seller's payout address on every accepted
+/// network is read from the profile (the seller's <c>UserWalletAddress</c>
+/// PAYOUT row on that network, written only by U3
 /// <c>PUT /users/me/wallet/seller</c>) so that the two controls 02 §12.3
 /// assigns to it — Steam re-authentication and the
 /// <c>wallet.payout_address_cooldown_hours</c> window — actually guard the
 /// value that gets paid. While this record carried the address, both controls
 /// sat on the profile write path and the body bypassed them.
+/// </para>
+/// <para>
+/// <paramref name="AcceptedNetworks"/> (T147, 07 §1.3): the networks the
+/// listing accepts — enum names, at least one, no repeats. Omitted means
+/// <c>["TRON"]</c> (<see cref="TransactionNetworks.Default"/>, ⚠).
 /// </para>
 /// </summary>
 public sealed record CreateTransactionRequest(
@@ -73,7 +79,8 @@ public sealed record CreateTransactionRequest(
     string Price,
     int PaymentTimeoutHours,
     BuyerIdentificationMethod BuyerIdentificationMethod,
-    string? BuyerSteamId);
+    string? BuyerSteamId,
+    IReadOnlyList<string>? AcceptedNetworks = null);
 
 /// <summary>Response body for <c>POST /transactions</c> (07 §7.2).</summary>
 public sealed record CreateTransactionResponse(
@@ -94,7 +101,8 @@ public sealed record CreateTransactionOutcome(
     CreateTransactionStatus Status,
     CreateTransactionResponse? Body,
     string? ErrorCode,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    object? ErrorDetails = null);
 
 public enum CreateTransactionStatus
 {
@@ -152,6 +160,11 @@ public enum CreateTransactionStatus
     /// <summary>403 <c>STEAM_ACCOUNT_TOO_NEW</c> — the seller's account is
     /// inside Steam's 15-day trade wait (08 §2.2a).</summary>
     SteamAccountTooNew,
+
+    /// <summary>503 <c>NETWORK_UNAVAILABLE</c> — an accepted network has no
+    /// configured service or is in a health freeze (07 §1.3, T147). Retryable;
+    /// <c>details.network</c> names the network.</summary>
+    NetworkUnavailable,
 }
 
 // ---------- POST /transactions/:id/accept (07 §7.6) ----------
@@ -167,11 +180,29 @@ public enum CreateTransactionStatus
 /// every existing caller becomes a compile error rather than a silent runtime
 /// 400.
 /// </para>
+/// <para>
+/// <paramref name="Network"/> (T147, 07 §1.3): the network the buyer pays on —
+/// one of the listing's accepted networks. <paramref name="RefundWalletAddress"/>
+/// must be an address on that network. Omitted means <c>"TRON"</c>
+/// (<see cref="TransactionNetworks.Default"/>, ⚠).
+/// </para>
 /// </summary>
-public sealed record AcceptTransactionRequest(string RefundWalletAddress, string SteamTradeUrl);
+public sealed record AcceptTransactionRequest(
+    string RefundWalletAddress,
+    string SteamTradeUrl,
+    string? Network = null);
 
-/// <summary>Response body for <c>POST /transactions/:id/accept</c> (07 §7.6).</summary>
-public sealed record AcceptTransactionResponse(TransactionStatus Status, DateTime AcceptedAt);
+/// <summary>
+/// Response body for <c>POST /transactions/:id/accept</c> (07 §7.6). T147 adds
+/// the chosen <paramref name="Network"/> and the amount the buyer pays on it
+/// (<paramref name="TotalAmount"/>, 2 decimals). The TRON network fee line
+/// (<c>networkFeeAmount</c>) arrives with T149.
+/// </summary>
+public sealed record AcceptTransactionResponse(
+    TransactionStatus Status,
+    DateTime AcceptedAt,
+    string Network,
+    string TotalAmount);
 
 /// <summary>
 /// Outcome of <see cref="ITransactionAcceptanceService.AcceptAsync"/>. The
@@ -182,7 +213,8 @@ public sealed record AcceptTransactionOutcome(
     AcceptTransactionStatus Status,
     AcceptTransactionResponse? Body,
     string? ErrorCode,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    object? ErrorDetails = null);
 
 public enum AcceptTransactionStatus
 {
@@ -226,6 +258,15 @@ public enum AcceptTransactionStatus
     /// Steam's 15-day trade wait (08 §2.2a). Resolves by waiting, so the
     /// message carries the remaining days.</summary>
     SteamAccountTooNew,
+
+    /// <summary>422 <c>NETWORK_NOT_ACCEPTED</c> — the chosen network is not
+    /// one the listing accepts (07 §1.3, T147).</summary>
+    NetworkNotAccepted,
+
+    /// <summary>503 <c>NETWORK_UNAVAILABLE</c> — the chosen network has no
+    /// configured service or is in a health freeze (07 §1.3, T147). Fail-closed
+    /// and retryable; nothing is written.</summary>
+    NetworkUnavailable,
 }
 
 // ---------- POST /transactions/:id/confirm-ready (07 §7.6a) ----------

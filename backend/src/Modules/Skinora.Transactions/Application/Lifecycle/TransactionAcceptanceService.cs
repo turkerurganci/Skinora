@@ -1,11 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Domain.StateMachine;
 using Skinora.Users.Application.Settings;
@@ -21,6 +26,13 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// <c>CREATED → ACCEPTED</c> transition is atomic with the
 /// <c>BuyerAcceptedEvent</c> emission.
 /// </summary>
+/// <remarks>
+/// T147 — acceptance is where the transaction gets its network (11 §F8 K3):
+/// the buyer picks one of the listing's <see cref="TransactionNetworkOption"/>
+/// rows, the refund address is validated on that network, the seller's payout
+/// snapshot is copied from the chosen row, and the deposit address is derived
+/// on that network right after the commit.
+/// </remarks>
 public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
 {
     /// <summary>SystemSetting key for the buyer refund-address cooldown (02 §12.3).</summary>
@@ -60,6 +72,9 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     private readonly ITradeHoldChecker _tradeHoldChecker;
     private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly IOutboxService _outbox;
+    private readonly IBlockchainNetworkAvailability _networks;
+    private readonly IPaymentAddressAllocator _paymentAddressAllocator;
+    private readonly ILogger<TransactionAcceptanceService> _logger;
     private readonly TimeProvider _clock;
 
     public TransactionAcceptanceService(
@@ -71,7 +86,10 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         ITradeHoldChecker tradeHoldChecker,
         ISteamTradeEligibilityChecker steamTradeEligibility,
         IOutboxService outbox,
-        TimeProvider clock)
+        IBlockchainNetworkAvailability networks,
+        IPaymentAddressAllocator paymentAddressAllocator,
+        TimeProvider clock,
+        ILogger<TransactionAcceptanceService>? logger = null)
     {
         _db = db;
         _addressValidator = addressValidator;
@@ -81,7 +99,10 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         _tradeHoldChecker = tradeHoldChecker;
         _steamTradeEligibility = steamTradeEligibility;
         _outbox = outbox;
+        _networks = networks;
+        _paymentAddressAllocator = paymentAddressAllocator;
         _clock = clock;
+        _logger = logger ?? NullLogger<TransactionAcceptanceService>.Instance;
     }
 
     public async Task<AcceptTransactionOutcome> AcceptAsync(
@@ -96,6 +117,14 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             return Failure(AcceptTransactionStatus.ValidationFailed,
                 TransactionErrorCodes.RefundAddressRequired,
                 "refundWalletAddress is required (07 §7.6).");
+
+        // T147 — the network the buyer pays on (07 §1.3). Omitted reads as
+        // TRON (⚠) so the pre-F8 client keeps accepting exactly as before.
+        var network = TransactionNetworks.Default;
+        if (request.Network is not null && !TransactionNetworks.TryParse(request.Network, out network))
+            return Failure(AcceptTransactionStatus.ValidationFailed,
+                TransactionErrorCodes.ValidationError,
+                $"network must be one of: {string.Join(", ", Enum.GetNames<BlockchainNetwork>())}.");
 
         // ---------- Stage 1: load transaction + buyer ----------
         var transaction = await _db.Set<Transaction>()
@@ -164,17 +193,45 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                     "Seller cannot accept their own listing (02 §6.2).");
         }
 
+        // ---------- Stage 3b: network choice (11 §F8 K3, 07 §1.3) ----------
+        // The chosen network must be one the listing accepts; its row carries
+        // the seller's payout address on that network, fixed at creation
+        // (02 §12.3 snapshot). A listing with no row for it — including a
+        // pre-T147 row the migration did not reach — is not accepted: there
+        // would be no payout address to pay the seller on.
+        var option = await _db.Set<TransactionNetworkOption>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                o => o.TransactionId == transaction.Id && o.Network == network,
+                cancellationToken);
+        if (option is null)
+            return Failure(AcceptTransactionStatus.NetworkNotAccepted,
+                TransactionErrorCodes.NetworkNotAccepted,
+                $"The listing does not accept the {network} network.",
+                NetworkDetails(network));
+
+        // Fail closed: a network with no configured service (Ethereum until
+        // T150) or in a health freeze takes no new transaction. Checked before
+        // any write, so a refused acceptance leaves the listing open.
+        if (!_networks.IsOpenForNewTransactions(network))
+            return Failure(AcceptTransactionStatus.NetworkUnavailable,
+                TransactionErrorCodes.NetworkUnavailable,
+                $"The {network} network is not open for new transactions.",
+                NetworkDetails(network));
+
         // ---------- Stage 4: refund wallet pipeline (02 §12.3) ----------
-        // The refund address is validated and screened on the transaction's
-        // network; the only network before T147 adds the buyer's choice is
-        // TRON (06 §1.4). The validator is the per-network one the profile
-        // write path uses (T146 — TRON base58check with the real checksum).
-        const BlockchainNetwork network = BlockchainNetwork.TRON;
+        // The refund address is validated and screened on the chosen network
+        // with the per-network validator the profile write path uses (T146 —
+        // TRON base58check with the real checksum, Ethereum EIP-55). It is the
+        // single target of every refund on this transaction, rejected payments
+        // included (11 §F8 K9), so an address of another network is refused
+        // here rather than discovered at refund time.
         var refundValidation = _addressValidator.Validate(network, request.RefundWalletAddress);
         if (!refundValidation.IsUsable)
             return Failure(AcceptTransactionStatus.InvalidWallet,
                 TransactionErrorCodes.InvalidWalletAddress,
-                "refundWalletAddress fails TRON address validation (02 §12.3).");
+                $"refundWalletAddress fails {network} address validation (02 §12.3).",
+                NetworkDetails(network));
 
         var sanctions = await _sanctions.EvaluateAsync(
             network, refundValidation.CanonicalAddress!, cancellationToken);
@@ -284,12 +341,16 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // 06 §3.5 invariants: BuyerId + BuyerRefundAddress + BuyerTradeUrl must
         // be set BEFORE the state-machine guard fires (HasFieldsForAccepted).
         transaction.BuyerId = buyerId;
-        // 06 §1.4 (T145) — the network is fixed at acceptance and never changes
-        // afterwards. TRON is the only network until T147 adds the buyer's
-        // choice; the refund address is stored in canonical form.
+        // 06 §1.4 — the network is fixed at acceptance and never changes
+        // afterwards; payout, refunds and the deposit all resolve it from
+        // here. The seller's payout snapshot is the chosen network's row
+        // (T147); CK_Transactions_Network_Accepted refuses an accepted row
+        // without either.
         transaction.Network = network;
+        transaction.SellerPayoutAddress = option.SellerPayoutAddress;
         // K9 (11 §F8): this snapshot is the target of every refund on the
-        // transaction's network, rejected payments included (T147 routes them).
+        // transaction's network, rejected payments included
+        // (AmountValidationService). Stored in canonical form.
         transaction.BuyerRefundAddress = refundValidation.CanonicalAddress!;
         // Store the normalized form, never the raw input: the seller's delivery
         // link is generated from this column (08 §2.2), so it must be a single
@@ -384,13 +445,52 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
             throw;
         }
 
+        // ---------- Stage 8: deposit address on the chosen network (T147) ----
+        // Until T147 the deposit was derived at creation; the network is only
+        // known now (06 §1.4, 08 §3.0 "Depozit adresi"). Best effort and after
+        // the commit, like the creation-time call it replaces: the allocator
+        // needs the committed network, a lost sidecar round-trip is recovered
+        // by EnsurePaymentAddressJob, and the address is only shown from
+        // SELLER_CONFIRMED on — a failure here must not turn a committed
+        // acceptance into an error.
+        await TryAllocatePaymentAddressAsync(transaction.Id, cancellationToken);
+
         return new AcceptTransactionOutcome(
             AcceptTransactionStatus.Accepted,
             new AcceptTransactionResponse(
                 Status: transaction.Status,
-                AcceptedAt: transaction.AcceptedAt!.Value),
+                AcceptedAt: transaction.AcceptedAt!.Value,
+                Network: network.ToString(),
+                TotalAmount: MoneyFormat.Display(transaction.TotalAmount)),
             ErrorCode: null,
             ErrorMessage: null);
+    }
+
+    private async Task TryAllocatePaymentAddressAsync(
+        Guid transactionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var allocation = await _paymentAddressAllocator.AllocateAsync(
+                transactionId, cancellationToken);
+            if (allocation.Status is not PaymentAddressAllocationStatus.Created
+                and not PaymentAddressAllocationStatus.AlreadyExisted)
+            {
+                _logger.LogWarning(
+                    "Inline payment-address allocation skipped for accepted transaction {TransactionId}: {Status} — {Message}. EnsurePaymentAddressJob will retry.",
+                    transactionId, allocation.Status, allocation.ErrorMessage);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Inline payment-address allocation threw for accepted transaction {TransactionId}. EnsurePaymentAddressJob will retry.",
+                transactionId);
+        }
     }
 
     private async Task<int?> ReadRefundCooldownHoursAsync(CancellationToken cancellationToken)
@@ -459,6 +559,9 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
     }
 
     private static AcceptTransactionOutcome Failure(
-        AcceptTransactionStatus status, string errorCode, string message)
-        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+        AcceptTransactionStatus status, string errorCode, string message, object? details = null)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message, ErrorDetails: details);
+
+    /// <summary>07 §1.3 — network failures carry <c>details.network</c>.</summary>
+    private static object NetworkDetails(BlockchainNetwork network) => new { network = network.ToString() };
 }

@@ -227,19 +227,19 @@ public sealed class AmountValidationServiceTests : IDisposable
     // ─── Underpayment ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task ConfirmedPayment_Underpayment_ResolvesGasFeeForDepositToSourceTransfer()
+    public async Task ConfirmedPayment_Underpayment_ResolvesGasFeeForDepositToRefundAddressTransfer()
     {
         // Prova-GasFeeChargedIsFixedGuess: the resolver must be asked about
-        // the ACTUAL refund transfer — deposit address → payer's source
-        // address, for the received amount — so the runtime estimate prices
-        // the right broadcast.
+        // the ACTUAL refund transfer — deposit address → the buyer's refund
+        // address (K9, T147), for the received amount — so the runtime
+        // estimate prices the right broadcast.
         var fixture = await SeedAsync(expectedAmount: 100m, receivedAmount: 50m);
 
         await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-gf1", default);
 
         var call = Assert.Single(_gasFee.RefundCalls);
         Assert.Equal(fixture.PaymentAddress.Address, call.From);
-        Assert.Equal(fixture.BlockchainTransaction.FromAddress, call.To);
+        Assert.Equal(BuyerRefundAddress, call.To);
         Assert.Equal(50m, call.Amount);
         // A buyer payment refunds the token it arrived in, which is the
         // expected one — the wrong-token family is the only place they differ.
@@ -282,7 +282,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
-        Assert.Equal(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
+        // K9 (T147) — the buyer's refund address, never the sender.
+        Assert.Equal(BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
         Assert.Equal(50m, refund.Amount);
         Assert.Null(refund.PaymentAddressId);
 
@@ -293,6 +295,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(100m, domainEvent.ExpectedAmount);
         Assert.Equal(50m, domainEvent.ReceivedAmount);
         Assert.Equal(fixture.BlockchainTransaction.FromAddress, domainEvent.SourceAddress);
+        Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
         Assert.Empty(_alerts.Raised);
     }
 
@@ -336,11 +339,14 @@ public sealed class AmountValidationServiceTests : IDisposable
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
         Assert.Equal(10m, refund.Amount);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
-        Assert.Equal(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
+        // K9 (T147) — the excess goes to the buyer's refund address.
+        Assert.Equal(BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
 
         Assert.Single(_outbox.Events.OfType<PaymentReceivedEvent>());
         var domainEvent = Assert.Single(_outbox.Events.OfType<BuyerPaymentExcessRefundedEvent>());
         Assert.False(domainEvent.IsMultiPayment);
+        Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
         Assert.Equal(10m, domainEvent.ExcessAmount);
         Assert.Equal(100m, domainEvent.ExpectedAmount);
         Assert.Equal(110m, domainEvent.ReceivedAmount);
@@ -392,8 +398,12 @@ public sealed class AmountValidationServiceTests : IDisposable
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
         Assert.Equal(100m, refund.Amount); // full received amount
+        // K9 (T147) — an extra transfer is refunded to the buyer's refund address.
+        Assert.Equal(BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
         var domainEvent = Assert.Single(_outbox.Events.OfType<BuyerPaymentExcessRefundedEvent>());
         Assert.True(domainEvent.IsMultiPayment);
+        Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
         Assert.Equal(100m, domainEvent.ExcessAmount);
         Assert.Empty(_outbox.Events.OfType<PaymentReceivedEvent>());
         // WP4 (T140-MultiPaymentLeakPin) — the same pin the underpayment and
@@ -423,7 +433,9 @@ public sealed class AmountValidationServiceTests : IDisposable
             .SingleAsync(b => b.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND);
         Assert.Equal(50m, refund.Amount);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
-        Assert.Equal(wrongTokenRow.FromAddress, refund.ToAddress);
+        // K9 (T147) — the wrong token goes back to the buyer's refund address.
+        Assert.Equal(BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(wrongTokenRow.FromAddress, refund.ToAddress);
         Assert.Equal(KnownStablecoinContractsForTest.Usdc, refund.ActualTokenAddress);
         // 06 §3.8 token semantiği — refund row carries the *expected* stablecoin.
         Assert.Equal(StablecoinType.USDT, refund.Token);
@@ -432,6 +444,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(StablecoinType.USDT, domainEvent.ExpectedStablecoin);
         Assert.Equal(StablecoinType.USDC, domainEvent.ActualStablecoin);
         Assert.Equal(refund.Id, domainEvent.RefundTransactionId);
+        Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
         Assert.Empty(_alerts.Raised);
     }
 
@@ -474,7 +487,7 @@ public sealed class AmountValidationServiceTests : IDisposable
         var call = Assert.Single(_gasFee.RefundCalls);
         Assert.Equal(StablecoinType.USDC, call.Token);
         Assert.Equal(fixture.PaymentAddress.Address, call.From);
-        Assert.Equal(wrongTokenRow.FromAddress, call.To);
+        Assert.Equal(BuyerRefundAddress, call.To);
         Assert.Equal(50m, call.Amount);
     }
 
@@ -507,6 +520,93 @@ public sealed class AmountValidationServiceTests : IDisposable
 
         var call = Assert.Single(_gasFee.RefundCalls);
         Assert.Equal(expectedToken, call.Token);
+    }
+
+    // ─── Late payment after cancellation (K9, T147) ────────────────────
+
+    [Fact]
+    public async Task LatePayment_AfterCancel_QueuesLatePaymentRefund_ToTheBuyersRefundAddress()
+    {
+        // 02 §4.4 "Timeout sonrası gecikmeli ödeme": the transaction is already
+        // cancelled; the post-cancel monitor reports a transfer. K9 — it goes
+        // back to the refund address fixed at acceptance, not to the sender.
+        var fixture = await SeedAsync(
+            expectedAmount: 100m,
+            receivedAmount: 100m,
+            initialStatus: TransactionStatus.CANCELLED_TIMEOUT);
+
+        var outcome = await _sut.ValidateLatePaymentDetectedAsync(fixture.BlockchainTransaction, "corr-l1", default);
+        await _db.SaveChangesAsync();
+
+        Assert.Equal(AmountValidationOutcome.LatePaymentRefundQueued, outcome);
+        var refund = await _db.Set<BlockchainTransaction>()
+            .SingleAsync(b => b.Type == BlockchainTransactionType.LATE_PAYMENT_REFUND);
+        Assert.Equal(100m, refund.Amount);
+        Assert.Equal(BuyerRefundAddress, refund.ToAddress);
+        Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
+        var call = Assert.Single(_gasFee.RefundCalls);
+        Assert.Equal(BuyerRefundAddress, call.To);
+        var domainEvent = Assert.Single(_outbox.Events.OfType<LatePaymentRefundRequestedEvent>());
+        Assert.Equal(fixture.BlockchainTransaction.FromAddress, domainEvent.SourceAddress);
+        Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
+        Assert.Equal(TransactionStatus.CANCELLED_TIMEOUT, fixture.Transaction.Status);
+    }
+
+    // ─── No refund address: fail closed (K9, T147) ─────────────────────
+
+    public static TheoryData<string> RejectionKinds => new()
+    {
+        "underpayment", "overpayment", "multi-payment", "wrong-token", "late-payment",
+    };
+
+    [Theory]
+    [MemberData(nameof(RejectionKinds))]
+    public async Task Rejected_Payment_Without_A_Refund_Address_Is_Not_Sent_To_The_Sender_Admin_Is_Alerted(string kind)
+    {
+        // Unreachable in the normal flow (the deposit is only shown after
+        // acceptance fixed the address). If it happens anyway the refund must
+        // NOT fall back to the incoming FromAddress — that is the rule K9
+        // removed — and the money must not vanish silently either.
+        var (received, status) = kind switch
+        {
+            "underpayment" => (50m, TransactionStatus.SELLER_CONFIRMED),
+            "overpayment" => (110m, TransactionStatus.SELLER_CONFIRMED),
+            "multi-payment" => (100m, TransactionStatus.PAYMENT_RECEIVED),
+            "late-payment" => (100m, TransactionStatus.CANCELLED_TIMEOUT),
+            _ => (0m, TransactionStatus.SELLER_CONFIRMED),
+        };
+        var fixture = await SeedAsync(
+            expectedAmount: 100m, receivedAmount: received, initialStatus: status, buyerRefundAddress: null);
+
+        var outcome = kind switch
+        {
+            "wrong-token" => await _sut.ValidateWrongTokenIncomingAsync(
+                await SeedWrongTokenIncomingAsync(fixture, 50m, KnownStablecoinContractsForTest.Usdc), "corr-x", default),
+            "late-payment" => await _sut.ValidateLatePaymentDetectedAsync(fixture.BlockchainTransaction, "corr-x", default),
+            _ => await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-x", default),
+        };
+        await _db.SaveChangesAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(b =>
+            b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND
+            || b.Type == BlockchainTransactionType.EXCESS_REFUND
+            || b.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
+            || b.Type == BlockchainTransactionType.LATE_PAYMENT_REFUND));
+        Assert.Empty(_gasFee.RefundCalls);
+        var alert = Assert.Single(_alerts.Raised);
+        Assert.Equal(fixture.Transaction.Id, alert.TransactionId);
+        Assert.Equal(RefundBlockedReason.RefundAddressMissing, alert.Decision.Reason);
+        if (kind == "overpayment")
+        {
+            // The expected amount arrived — the payment itself still counts.
+            Assert.Equal(AmountValidationOutcome.AcceptedWithExcessRefund, outcome);
+            Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, fixture.Transaction.Status);
+            Assert.Equal(10m, alert.Decision.TotalPaid);
+        }
+        else
+        {
+            Assert.Equal(AmountValidationOutcome.RefundAddressMissing, outcome);
+        }
     }
 
     // ─── State machine refused ──────────────────────────────────────────
@@ -546,7 +646,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         decimal receivedAmount,
         TransactionStatus initialStatus = TransactionStatus.SELLER_CONFIRMED,
         bool isOnHold = false,
-        StablecoinType expectedToken = StablecoinType.USDT)
+        StablecoinType expectedToken = StablecoinType.USDT,
+        string? buyerRefundAddress = BuyerRefundAddress)
     {
         var seller = new User
         {
@@ -581,7 +682,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198000000301",
-            BuyerRefundAddress = "TBuyerRefund000000000000000000000000",
+            BuyerRefundAddress = buyerRefundAddress,
             ItemAssetId = "asset-1",
             ItemClassId = "cls",
             ItemName = "AK-47 | Redline",
@@ -593,6 +694,14 @@ public sealed class AmountValidationServiceTests : IDisposable
             SellerPayoutAddress = "TSellerPayout00000000000000000000000",
             IsOnHold = isOnHold,
         };
+
+        if (initialStatus == TransactionStatus.CANCELLED_TIMEOUT)
+        {
+            // CK_Transactions_Cancel (06 §3.5).
+            tx.CancelledBy = CancelledByType.TIMEOUT;
+            tx.CancelReason = "payment timeout (test)";
+            tx.CancelledAt = _clock.GetUtcNow().UtcDateTime;
+        }
 
         if (isOnHold)
         {
@@ -671,6 +780,10 @@ public sealed class AmountValidationServiceTests : IDisposable
         await _db.SaveChangesAsync();
         return row;
     }
+
+    // K9 (T147) — the buyer's refund address on the transaction, deliberately
+    // different from the incoming transfer's FromAddress ("TBuyerSource…").
+    private const string BuyerRefundAddress = "TBuyerRefund000000000000000000000000";
 
     private sealed record Fixture(
         Transaction Transaction,

@@ -29,11 +29,16 @@ namespace Skinora.Shared.Events;
 /// <param name="ReceivedAmount">Confirmed on-chain amount.</param>
 /// <param name="Stablecoin">USDT or USDC — the expected token.</param>
 /// <param name="SourceAddress">
-/// Refund destination — parsed from the inbound TRC-20 transfer
-/// <c>from</c> field (02 §4.6 source-address rule).
+/// Sender of the inbound transfer (its <c>from</c> field) — evidence only:
+/// since T147 the refund goes to <c>RefundAddress</c> (11 §F8 K9).
 /// </param>
 /// <param name="TxHash">Inbound transaction hash for cross-reference.</param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>
+/// <param name="RefundAddress">
+/// T147 (11 §F8 K9) — where the refund is actually sent: the buyer's refund
+/// address on the transaction's network, fixed at acceptance. Null only on an
+/// event written before T147, whose refund went to <c>SourceAddress</c>.
+/// </param>
 public record BuyerPaymentInsufficientEvent(
     Guid EventId,
     Guid TransactionId,
@@ -44,4 +49,5 @@ public record BuyerPaymentInsufficientEvent(
     StablecoinType Stablecoin,
     string SourceAddress,
     string TxHash,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    string? RefundAddress = null) : IDomainEvent;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -21,7 +22,12 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// </summary>
 public sealed class TransactionDetailService : ITransactionDetailService
 {
+    // The payment block's display label (07 §7.5 sample). The machine value
+    // travels in the top-level `network` field (T147); switching
+    // `payment.network` itself to the machine value is left to the
+    // network-aware UI (T156), so today's client keeps its label.
     private const string TronNetworkLabel = "Tron (TRC-20)";
+    private const string EthereumNetworkLabel = "Ethereum (ERC-20)";
 
     // States where the buyer may still cancel — i.e. before their money moves.
     // The seller's cancel window is wider (it includes PAYMENT_RECEIVED), so it
@@ -318,6 +324,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
             : BuildAuthenticatedActions(transaction, role!, nowUtc);
 
         var payment = await BuildPaymentAsync(transaction, role, cancellationToken);
+        var (acceptedNetworks, networkQuotes) = await BuildNetworkChoiceAsync(transaction, cancellationToken);
         var sellerPayout = await BuildSellerPayoutAsync(transaction, role, cancellationToken);
         var refund = await BuildRefundAsync(transaction, role, cancellationToken);
         var dispute = await BuildDisputeAsync(transaction, role, cancellationToken);
@@ -352,7 +359,10 @@ public sealed class TransactionDetailService : ITransactionDetailService
             BuyerInventoryVisible: BuildBuyerInventoryVisible(transaction, role),
             AvailableActions: actions,
             CreatedAt: transaction.CreatedAt,
-            UpdatedAt: transaction.UpdatedAt);
+            UpdatedAt: transaction.UpdatedAt,
+            Network: transaction.Network?.ToString(),
+            AcceptedNetworks: acceptedNetworks,
+            NetworkQuotes: networkQuotes);
 
         return new TransactionDetailOutcome(
             TransactionDetailStatus.Found,
@@ -652,6 +662,40 @@ public sealed class TransactionDetailService : ITransactionDetailService
         if (role is null) return null;
         return await _disputeSummaries.GetLatestAsync(transaction.Id, cancellationToken);
     }
+    /// <summary>
+    /// T147 (07 §1.3, §7.5) — before acceptance, the networks the listing
+    /// accepts and what the buyer would pay on each. Party / prospective-buyer
+    /// surfaces only (the public shape stays trimmed). Null once a network is
+    /// chosen: from then on the top-level <c>network</c> field answers.
+    /// </summary>
+    private async Task<(IReadOnlyList<string>? Accepted, IReadOnlyList<NetworkQuoteDto>? Quotes)> BuildNetworkChoiceAsync(
+        Transaction transaction,
+        CancellationToken cancellationToken)
+    {
+        if (transaction.Network is not null) return (null, null);
+
+        var networks = await _db.Set<TransactionNetworkOption>()
+            .AsNoTracking()
+            .Where(o => o.TransactionId == transaction.Id)
+            .Select(o => o.Network)
+            .ToListAsync(cancellationToken);
+        if (networks.Count == 0) return (null, null);
+
+        networks.Sort();
+        // T149 replaces TRON's zero with its fee line and adds it to the total;
+        // until then the buyer pays the same total on every network.
+        var total = MoneyFormat.Display(transaction.TotalAmount);
+        return (
+            networks.Select(n => n.ToString()).ToList(),
+            networks.Select(n => new NetworkQuoteDto(n.ToString(), "0.00", total)).ToList());
+    }
+
+    private static string NetworkLabel(BlockchainNetwork? network) => network switch
+    {
+        BlockchainNetwork.ETHEREUM => EthereumNetworkLabel,
+        _ => TronNetworkLabel,
+    };
+
     private async Task<TransactionPaymentDto?> BuildPaymentAsync(
         Transaction transaction,
         string? role,
@@ -693,12 +737,13 @@ public sealed class TransactionDetailService : ITransactionDetailService
             .FirstOrDefaultAsync(cancellationToken);
 
         return new TransactionPaymentDto(
-            Address: address.Address,
+            // Stored canonical (EVM lowercase); shown EIP-55 (06 §1.4).
+            Address: BlockchainAddress.ToDisplay(address.Address)!,
             // T144 — the amount the buyer sends; validation compares the
             // received amount against this exact value (no tolerance).
             ExpectedAmount: MoneyFormat.Display(address.ExpectedAmount),
             Stablecoin: address.ExpectedToken,
-            Network: TronNetworkLabel,
+            Network: NetworkLabel(transaction.Network),
             // Still null before anything arrives — the three fields together
             // mean "no transfer seen yet", which is different from "0 received".
             Status: payment?.Status.ToString(),

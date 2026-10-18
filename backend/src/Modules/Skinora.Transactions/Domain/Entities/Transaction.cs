@@ -41,11 +41,11 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
 
     /// <summary>
     /// The network the buyer pays on (06 §1.4, T145). NULL until the buyer
-    /// accepts; set once at acceptance and never changed afterwards. Before
-    /// T147 adds the buyer's choice, acceptance always writes
-    /// <see cref="BlockchainNetwork.TRON"/>. The deposit address, every
-    /// blockchain row and any payout issue of the transaction carry the same
-    /// network (11 §F8 K3).
+    /// accepts; set once at acceptance to the network the buyer chose among
+    /// <see cref="NetworkOptions"/> (T147) and never changed afterwards. The
+    /// deposit address, every blockchain row and any payout issue of the
+    /// transaction carry the same network (11 §F8 K3). The database refuses an
+    /// accepted row without it (<c>CK_Transactions_Network_Accepted</c>).
     /// </summary>
     public BlockchainNetwork? Network { get; set; }
 
@@ -56,7 +56,21 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     public decimal? MarketPriceAtCreation { get; set; }
 
     // --- Wallet Addresses (Snapshot) ---
-    public string SellerPayoutAddress { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The seller's payout address on <see cref="Network"/> (02 §12.3
+    /// snapshot). NULL between creation and acceptance: every accepted
+    /// network's address is fixed at creation in <see cref="NetworkOptions"/>,
+    /// and acceptance copies the chosen network's row here (06 §1.4, T147).
+    /// Required once accepted (<c>CK_Transactions_Network_Accepted</c>).
+    /// </summary>
+    public string? SellerPayoutAddress { get; set; }
+
+    /// <summary>
+    /// The buyer's refund address on <see cref="Network"/>, fixed at
+    /// acceptance — the single target of every refund on the transaction,
+    /// rejected payments included (11 §F8 K9, T147).
+    /// </summary>
     public string? BuyerRefundAddress { get; set; }
 
     // --- Timeout ---
@@ -250,5 +264,6 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
     // --- Navigation properties ---
     public ICollection<TransactionHistory> History { get; set; } = [];
     public PaymentAddress? PaymentAddress { get; set; }
+    public ICollection<TransactionNetworkOption> NetworkOptions { get; set; } = [];
     public ICollection<BlockchainTransaction> BlockchainTransactions { get; set; } = [];
 }

@@ -6,7 +6,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
-using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
@@ -20,8 +20,14 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// Orchestrates the full <c>POST /transactions</c> happy path (T45 — 07 §7.2,
 /// 03 §2.2). All side effects happen inside a single
 /// <see cref="DbContext.SaveChangesAsync"/> so the entity insert,
-/// <c>OutboxMessages</c> row and the payout-address snapshot land atomically.
+/// <c>OutboxMessages</c> row and the per-network payout-address snapshots
+/// (<see cref="TransactionNetworkOption"/>, T147) land atomically.
 /// </summary>
+/// <remarks>
+/// No deposit address is derived here (T147): the network the buyer pays on
+/// is unknown until acceptance, and the deposit lives on that network
+/// (06 §1.4). <c>TransactionAcceptanceService</c> allocates it.
+/// </remarks>
 public sealed class TransactionCreationService : ITransactionCreationService
 {
     /// <summary>
@@ -46,7 +52,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
     private readonly IInvitationCodeGenerator _inviteCodes;
     private readonly IOutboxService _outbox;
     private readonly ISteamInventoryCacheInvalidator _inventoryCacheInvalidator;
-    private readonly IPaymentAddressAllocator _paymentAddressAllocator;
+    private readonly IBlockchainNetworkAvailability _networks;
     private readonly ILogger<TransactionCreationService> _logger;
     private readonly TimeProvider _clock;
 
@@ -62,7 +68,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         IInvitationCodeGenerator inviteCodes,
         IOutboxService outbox,
         ISteamInventoryCacheInvalidator inventoryCacheInvalidator,
-        IPaymentAddressAllocator paymentAddressAllocator,
+        IBlockchainNetworkAvailability networks,
         ILogger<TransactionCreationService> logger,
         TimeProvider clock)
     {
@@ -77,7 +83,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         _inviteCodes = inviteCodes;
         _outbox = outbox;
         _inventoryCacheInvalidator = inventoryCacheInvalidator;
-        _paymentAddressAllocator = paymentAddressAllocator;
+        _networks = networks;
         _logger = logger;
         _clock = clock;
     }
@@ -99,6 +105,24 @@ public sealed class TransactionCreationService : ITransactionCreationService
 
         if (!TryParsePositiveDecimal(request.Price, out var price))
             return Validation("price must be a positive decimal with up to 2 fractional digits.");
+
+        // T147 — the networks the listing accepts (07 §1.3, 11 §F8 K3). An
+        // omitted field reads as TRON (⚠), so every pre-F8 client keeps
+        // creating exactly the transaction it created before.
+        if (!TransactionNetworks.TryParseAccepted(request.AcceptedNetworks, out var acceptedNetworks, out var networkError))
+            return Validation(networkError!);
+
+        // Fail closed (07 §1.3 NETWORK_UNAVAILABLE): a network with no
+        // configured service — Ethereum until T150 — or in a health freeze is
+        // closed for new transactions. Listing on it would advertise a payment
+        // route no buyer can take, so the seller hears it now and can retry or
+        // drop that network.
+        foreach (var network in acceptedNetworks)
+        {
+            if (!_networks.IsOpenForNewTransactions(network))
+                return Failure(CreateTransactionStatus.NetworkUnavailable, TransactionErrorCodes.NetworkUnavailable,
+                    $"The {network} network is not open for new transactions.", NetworkDetails(network));
+        }
 
         // ---------- Stage 2: eligibility re-check ----------
         var eligibility = await _eligibility.GetAsync(sellerId, cancellationToken);
@@ -176,31 +200,53 @@ public sealed class TransactionCreationService : ITransactionCreationService
         //     removing it would let an address sanctioned after it was saved go
         //     on opening transactions.
         //
-        // T146 — profile addresses are per network (06 §1.4). Until T147 lets
-        // the seller choose the networks a listing accepts, every transaction
-        // is a TRON transaction, so the TRON payout address is the one read.
-        const BlockchainNetwork network = BlockchainNetwork.TRON;
-        var payoutAddress = await _db.Set<UserWalletAddress>()
+        // T147 — the pipeline runs once per accepted network, on that network's
+        // PAYOUT row (06 §1.4): a listing may only accept a network the seller
+        // can be paid on (11 §F8 K3), and each network's address carries its own
+        // cooldown. Every failure names the network (07 §1.3 `details.network`).
+        var payoutRows = await _db.Set<UserWalletAddress>()
             .AsNoTracking()
-            .Where(w => w.UserId == seller.Id
-                        && w.Network == network
-                        && w.Type == WalletAddressType.PAYOUT)
-            .Select(w => w.Address)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(payoutAddress))
-            return Failure(CreateTransactionStatus.SellerWalletAddressMissing,
-                TransactionErrorCodes.SellerWalletAddressMissing,
-                "Seller profile has no payout address (02 §12.3).");
+            .Where(w => w.UserId == seller.Id && w.Type == WalletAddressType.PAYOUT)
+            .Select(w => new { w.Network, w.Address, w.ChangedAt })
+            .ToListAsync(cancellationToken);
 
-        if (!_addressValidator.Validate(network, payoutAddress).IsUsable)
-            return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
-                "Seller profile payout address fails TRON address validation (02 §12.3).");
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var options = new List<TransactionNetworkOption>(acceptedNetworks.Count);
+        foreach (var network in acceptedNetworks)
+        {
+            var row = payoutRows.FirstOrDefault(r => r.Network == network);
+            if (row is null || string.IsNullOrWhiteSpace(row.Address))
+                return Failure(CreateTransactionStatus.SellerWalletAddressMissing,
+                    TransactionErrorCodes.SellerWalletAddressMissing,
+                    $"Seller profile has no {network} payout address (02 §12.3).", NetworkDetails(network));
 
-        var sanctions = await _sanctions.EvaluateAsync(
-            network, payoutAddress, cancellationToken);
-        if (sanctions.IsMatch)
-            return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
-                $"Seller profile payout address matched sanctions list '{sanctions.MatchedList}'.");
+            var validation = _addressValidator.Validate(network, row.Address);
+            if (!validation.IsUsable)
+                return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
+                    $"Seller profile payout address fails {network} address validation (02 §12.3).",
+                    NetworkDetails(network));
+
+            if (TransactionNetworks.IsPayoutCooldownActive(row.ChangedAt, limits.PayoutAddressCooldownHours, nowUtc))
+                return Failure(CreateTransactionStatus.PayoutAddressCooldownActive,
+                    TransactionErrorCodes.PayoutAddressCooldownActive,
+                    $"The {network} payout address was changed less than the cooldown ago (02 §12.3).",
+                    NetworkDetails(network));
+
+            var sanctions = await _sanctions.EvaluateAsync(
+                network, validation.CanonicalAddress!, cancellationToken);
+            if (sanctions.IsMatch)
+                return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
+                    $"Seller profile {network} payout address matched sanctions list '{sanctions.MatchedList}'.",
+                    NetworkDetails(network));
+
+            options.Add(new TransactionNetworkOption
+            {
+                Id = Guid.NewGuid(),
+                Network = network,
+                SellerPayoutAddress = validation.CanonicalAddress!,
+                CreatedAt = nowUtc,
+            });
+        }
 
         // ---------- Stage 5a: one open transaction per item (02 §2.3) ----------
         // T128 — the rule is a money-safety rule, not a tidiness one: delivery
@@ -290,8 +336,6 @@ public sealed class TransactionCreationService : ITransactionCreationService
         var commissionAmount = FinancialCalculator.CalculateCommission(price, commissionRate);
         var totalAmount = FinancialCalculator.CalculateTotal(price, commissionAmount);
 
-        var nowUtc = _clock.GetUtcNow().UtcDateTime;
-
         var fraud = await _fraudPreCheck.EvaluateAsync(
             sellerId,
             inventoryItem.MarketHashName,
@@ -335,7 +379,10 @@ public sealed class TransactionCreationService : ITransactionCreationService
             CommissionAmount = commissionAmount,
             TotalAmount = totalAmount,
             MarketPriceAtCreation = fraud.MarketPrice,
-            SellerPayoutAddress = payoutAddress,
+            // T147 — NULL until acceptance copies the chosen network's
+            // snapshot from NetworkOptions (06 §1.4).
+            SellerPayoutAddress = null,
+            NetworkOptions = options,
             PaymentTimeoutMinutes = paymentTimeoutMinutes,
             // CREATED state requires AcceptDeadline NOT NULL (06 §3.5);
             // FLAGGED keeps every deadline NULL until admin approval (03 §7).
@@ -427,25 +474,13 @@ public sealed class TransactionCreationService : ITransactionCreationService
         // hard failure).
         await _inventoryCacheInvalidator.InvalidateAsync(seller.SteamId, cancellationToken);
 
-        // ---------- Stage 10c: best-effort payment-address allocation (T70) ----------
-        // 08 §3.2 — derive a Tron deposit address from the HD wallet and
-        // persist a PaymentAddress row. Only runs for CREATED transactions;
-        // FLAGGED transactions wait until admin approval transitions them
-        // back to CREATED (future task entry point). Failures here are NOT
-        // fatal: the EnsurePaymentAddressJob recurring sweep recovers any
-        // transaction whose inline allocation lost the sidecar round-trip.
-        if (status == TransactionStatus.CREATED)
-        {
-            var allocation = await _paymentAddressAllocator.AllocateAsync(
-                transaction.Id, cancellationToken);
-            if (allocation.Status is not PaymentAddressAllocationStatus.Created
-                and not PaymentAddressAllocationStatus.AlreadyExisted)
-            {
-                _logger.LogWarning(
-                    "Inline payment-address allocation skipped for transaction {TransactionId}: {Status} — {Message}. EnsurePaymentAddressJob will retry.",
-                    transaction.Id, allocation.Status, allocation.ErrorMessage);
-            }
-        }
+        // ---------- Stage 10c: no deposit address yet (T147) ----------
+        // Until T147 the TRON deposit address was derived here. The network the
+        // buyer pays on is now chosen at acceptance and the deposit lives on
+        // that network (06 §1.4, 08 §3.0), so TransactionAcceptanceService
+        // allocates it; EnsurePaymentAddressJob still recovers a lost
+        // allocation. The address is only shown from SELLER_CONFIRMED on
+        // (02 §2.2 step 3), so the move is invisible to both parties.
 
         // ---------- Stage 11: response ----------
         var response = new CreateTransactionResponse(
@@ -549,6 +584,9 @@ public sealed class TransactionCreationService : ITransactionCreationService
         Failure(CreateTransactionStatus.ValidationFailed, TransactionErrorCodes.ValidationError, message);
 
     private static CreateTransactionOutcome Failure(
-        CreateTransactionStatus status, string errorCode, string message)
-        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message);
+        CreateTransactionStatus status, string errorCode, string message, object? details = null)
+        => new(status, Body: null, ErrorCode: errorCode, ErrorMessage: message, ErrorDetails: details);
+
+    /// <summary>07 §1.3 — the per-network failures carry <c>details.network</c>.</summary>
+    private static object NetworkDetails(BlockchainNetwork network) => new { network = network.ToString() };
 }

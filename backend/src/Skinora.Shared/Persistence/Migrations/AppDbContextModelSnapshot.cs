@@ -2460,7 +2460,6 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("SellerPayoutAddress")
-                        .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
@@ -2576,6 +2575,8 @@ namespace Skinora.Shared.Persistence.Migrations
                             t.HasCheckConstraint("CK_Transactions_FreezePassive", "(TimeoutFrozenAt IS NOT NULL) OR (TimeoutFreezeReason IS NULL AND TimeoutRemainingSeconds IS NULL)");
 
                             t.HasCheckConstraint("CK_Transactions_Hold", "(IsOnHold = 0) OR (EmergencyHoldAt IS NOT NULL AND EmergencyHoldReason IS NOT NULL AND EmergencyHoldByAdminId IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Transactions_Network_Accepted", "(AcceptedAt IS NULL) OR (Network IS NOT NULL AND SellerPayoutAddress IS NOT NULL)");
                         });
                 });
 
@@ -2623,6 +2624,36 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasDatabaseName("IX_TransactionHistory_TransactionId");
 
                     b.ToTable("TransactionHistory", (string)null);
+                });
+
+            modelBuilder.Entity("Skinora.Transactions.Domain.Entities.TransactionNetworkOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("SellerPayoutAddress")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransactionId", "Network")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_TransactionNetworkOptions_TransactionId_Network");
+
+                    b.ToTable("TransactionNetworkOptions", (string)null);
                 });
 
             modelBuilder.Entity("Skinora.Users.Domain.Entities.User", b =>
@@ -3166,6 +3197,17 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Navigation("Transaction");
                 });
 
+            modelBuilder.Entity("Skinora.Transactions.Domain.Entities.TransactionNetworkOption", b =>
+                {
+                    b.HasOne("Skinora.Transactions.Domain.Entities.Transaction", "Transaction")
+                        .WithMany("NetworkOptions")
+                        .HasForeignKey("TransactionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Transaction");
+                });
+
             modelBuilder.Entity("Skinora.Users.Domain.Entities.UserLoginLog", b =>
                 {
                     b.HasOne("Skinora.Users.Domain.Entities.User", "User")
@@ -3209,6 +3251,8 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Navigation("BlockchainTransactions");
 
                     b.Navigation("History");
+
+                    b.Navigation("NetworkOptions");
 
                     b.Navigation("PaymentAddress");
                 });

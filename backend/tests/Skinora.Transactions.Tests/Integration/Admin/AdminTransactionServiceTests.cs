@@ -861,6 +861,7 @@ public class AdminTransactionServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = status >= TransactionStatus.ACCEPTED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-30) : null,
+            Network = status >= TransactionStatus.ACCEPTED && status != TransactionStatus.FLAGGED ? Skinora.Shared.Enums.BlockchainNetwork.TRON : null,
             SellerReadyConfirmedAt = status >= TransactionStatus.SELLER_CONFIRMED && status != TransactionStatus.FLAGGED
                 ? nowUtc.AddMinutes(-25) : null,
             PaymentReceivedAt = status >= TransactionStatus.PAYMENT_RECEIVED

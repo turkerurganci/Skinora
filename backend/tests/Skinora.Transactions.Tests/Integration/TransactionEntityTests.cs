@@ -122,6 +122,7 @@ public class TransactionEntityTests : IntegrationTestBase
         tx.BuyerId = _buyer.Id;
         tx.BuyerRefundAddress = "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL";
         tx.AcceptedAt = DateTime.UtcNow;
+        tx.Network = Skinora.Shared.Enums.BlockchainNetwork.TRON;
         await Context.SaveChangesAsync();
 
         await using var readCtx = CreateContext();
@@ -454,6 +455,7 @@ public class TransactionEntityTests : IntegrationTestBase
         tx1.Status = TransactionStatus.ACCEPTED;
         tx1.BuyerId = _buyer.Id;
         tx1.AcceptedAt = DateTime.UtcNow;
+        tx1.Network = Skinora.Shared.Enums.BlockchainNetwork.TRON;
         await ctx1.SaveChangesAsync();
 
         // Second update on stale RowVersion should fail

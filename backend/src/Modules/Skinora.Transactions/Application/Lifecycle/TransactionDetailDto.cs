@@ -66,7 +66,22 @@ public sealed record TransactionDetailDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? BuyerInventoryVisible,
     AvailableActionsDto AvailableActions,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? CreatedAt,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? UpdatedAt);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? UpdatedAt,
+    // T147 (07 §1.3, §7.5) — the network the buyer pays on, as the machine
+    // value ("TRON" / "ETHEREUM"). Set from acceptance on; null before.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Network = null,
+    // T147 — before acceptance: the networks the listing accepts (enum order)
+    // and, per network, what the buyer would pay on it. Null once accepted.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? AcceptedNetworks = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<NetworkQuoteDto>? NetworkQuotes = null);
+
+/// <summary>
+/// One element of <c>networkQuotes</c> (07 §1.3, §7.5 — T147): what the buyer
+/// pays if they choose <see cref="Network"/>. Both amounts are 2-decimal
+/// strings. <see cref="NetworkFeeAmount"/> is <c>"0.00"</c> on every network
+/// until T149 adds the TRON network fee line.
+/// </summary>
+public sealed record NetworkQuoteDto(string Network, string NetworkFeeAmount, string TotalAmount);
 
 /// <summary>Item snapshot for the detail response (07 §7.5).</summary>
 public sealed record TransactionItemDto(

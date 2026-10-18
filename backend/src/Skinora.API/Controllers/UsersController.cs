@@ -632,7 +632,7 @@ public sealed class UsersController : ControllerBase
                 StatusCodes.Status403Forbidden,
                 ApiResponse<object>.Fail(
                     WalletErrorCodes.ReAuthRequired,
-                    "Changing an existing wallet address requires Steam re-verification (X-ReAuth-Token).",
+                    "Changing an existing wallet address, or adding one on a new network while another network already has one, requires Steam re-verification (X-ReAuth-Token).",
                     traceId: HttpContext.TraceIdentifier)),
 
             _ => StatusCode(StatusCodes.Status500InternalServerError),

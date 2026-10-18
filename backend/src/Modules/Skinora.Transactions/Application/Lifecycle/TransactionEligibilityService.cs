@@ -72,17 +72,24 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
 
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var cooldownActive = user.CooldownExpiresAt.HasValue && user.CooldownExpiresAt.Value > nowUtc;
-        // T146 — payout addresses are per network (06 §1.4). Until T147 lets a
-        // listing accept other networks every transaction is TRON, so the TRON
-        // payout address (and its own cooldown) is the one that gates creation.
-        var tronPayout = await _db.Set<UserWalletAddress>()
+        // T147 — payout addresses are per network (06 §1.4) and a listing
+        // accepts the networks the seller picks among those with a payout
+        // address (11 §F8 K3). This envelope is read before any network is
+        // picked, so it answers "can the seller list on ANY network": the
+        // wallet reason means no network has a payout address, the cooldown
+        // reason means every one of them is still in its own cooldown. The
+        // create path then checks each requested network and names the one
+        // that fails (07 §1.3 details.network). For a TRON-only seller both
+        // answers are exactly the pre-T147 ones.
+        var payoutRows = await _db.Set<UserWalletAddress>()
             .AsNoTracking()
-            .Where(w => w.UserId == userId
-                        && w.Network == BlockchainNetwork.TRON
-                        && w.Type == WalletAddressType.PAYOUT)
+            .Where(w => w.UserId == userId && w.Type == WalletAddressType.PAYOUT)
             .Select(w => new { w.Address, w.ChangedAt })
-            .FirstOrDefaultAsync(cancellationToken);
-        var payoutCooldownActive = IsPayoutCooldownActive(tronPayout?.ChangedAt, limits, nowUtc);
+            .ToListAsync(cancellationToken);
+        var payoutAddresses = payoutRows.Where(r => !string.IsNullOrEmpty(r.Address)).ToList();
+        var payoutAddressMissing = payoutAddresses.Count == 0;
+        var payoutCooldownActive = !payoutAddressMissing && payoutAddresses.All(r =>
+            TransactionNetworks.IsPayoutCooldownActive(r.ChangedAt, limits.PayoutAddressCooldownHours, nowUtc));
 
         var (isNewAccount, currentNewAccountTx, maxNewAccountTx) =
             await EvaluateNewAccountLimitAsync(userId, user.CreatedAt, limits, nowUtc, cancellationToken);
@@ -111,7 +118,7 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
             reasons.Add(TransactionErrorCodes.EligibilityReasons.ConcurrentLimitReached);
         if (isNewAccount && maxNewAccountTx.HasValue && currentNewAccountTx >= maxNewAccountTx.Value)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.NewAccountLimitReached);
-        if (string.IsNullOrEmpty(tronPayout?.Address))
+        if (payoutAddressMissing)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.SellerWalletAddressMissing);
         if (payoutCooldownActive)
             reasons.Add(TransactionErrorCodes.EligibilityReasons.PayoutAddressCooldownActive);
@@ -187,13 +194,5 @@ public sealed class TransactionEligibilityService : ITransactionEligibilityServi
             .CountAsync(cancellationToken);
 
         return (true, startedCount, limits.NewAccountTransactionLimit);
-    }
-
-    private static bool IsPayoutCooldownActive(DateTime? payoutAddressChangedAt, TransactionLimits limits, DateTime nowUtc)
-    {
-        if (!limits.PayoutAddressCooldownHours.HasValue) return false;
-        if (!payoutAddressChangedAt.HasValue) return false;
-        var elapsed = nowUtc - payoutAddressChangedAt.Value;
-        return elapsed < TimeSpan.FromHours(limits.PayoutAddressCooldownHours.Value);
     }
 }

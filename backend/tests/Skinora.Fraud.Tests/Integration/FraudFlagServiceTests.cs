@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Fraud.Application.Flags;
-using Skinora.Fraud.Tests.TestSupport;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Platform.Application.Audit;
@@ -383,60 +382,26 @@ public class FraudFlagServiceTests : IntegrationTestBase
         Assert.Equal(note, refreshedFlag.AdminNote);
     }
 
-    // ── WP4b #3 — eager payment-address allocation on approve ─────────────
+    // ── T147 — no deposit address on approve ─────────────────────────────
+    // WP4b derived the deposit right after FLAGGED → CREATED. The deposit now
+    // lives on the network the buyer chooses at acceptance (06 §1.4), so an
+    // approved listing has none until it is accepted.
 
     [Fact]
-    public async Task Approve_TransactionFlag_AllocatesPaymentAddress_PostCommit()
+    public async Task Approve_TransactionFlag_DerivesNoDepositAddress()
     {
         var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
             status: TransactionStatus.FLAGGED);
         var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
 
-        var allocator = new StubPaymentAddressAllocator();
-        var sut = BuildSut(allocator);
+        var sut = BuildSut();
         var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, "ok", CancellationToken.None);
 
-        Assert.IsType<ApproveFlagOutcome.Success>(outcome);
-        Assert.Equal(new[] { tx.Id }, allocator.Allocations);
-    }
-
-    [Fact]
-    public async Task Approve_AccountFlag_DoesNotAllocatePaymentAddress()
-    {
-        var flag = await StageAccountFlagDirectlyAsync(_seller.Id);
-
-        var allocator = new StubPaymentAddressAllocator();
-        var sut = BuildSut(allocator);
-        await sut.ApproveAsync(flag.Id, _admin.Id, note: null, CancellationToken.None);
-
-        // Account flag → no transaction promotion → no allocation.
-        Assert.Empty(allocator.Allocations);
-    }
-
-    [Fact]
-    public async Task Approve_TransactionFlag_AllocatorThrows_ApprovalStillCommits()
-    {
-        var tx = await CreateTransactionAsync(_seller.Id, buyerId: null,
-            status: TransactionStatus.FLAGGED);
-        var flag = await StageTransactionFlagDirectlyAsync(_seller.Id, tx.Id);
-
-        var allocator = new StubPaymentAddressAllocator
-        {
-            Throw = new InvalidOperationException("sidecar down"),
-        };
-        var sut = BuildSut(allocator);
-        var outcome = await sut.ApproveAsync(flag.Id, _admin.Id, "ok", CancellationToken.None);
-
-        // Best-effort: a sidecar outage must NOT turn the committed approval
-        // into a failure — EnsurePaymentAddressJob recovers the address later.
         var success = Assert.IsType<ApproveFlagOutcome.Success>(outcome);
         Assert.Equal(TransactionStatus.CREATED, success.Result.TransactionStatus);
-        Assert.Contains(tx.Id, allocator.Allocations);
-
-        var refreshedTx = await Context.Set<Transaction>().FirstAsync(t => t.Id == tx.Id);
-        Assert.Equal(TransactionStatus.CREATED, refreshedTx.Status);
-        var refreshedFlag = await Context.Set<FraudFlag>().FirstAsync(f => f.Id == flag.Id);
-        Assert.Equal(ReviewStatus.APPROVED, refreshedFlag.Status);
+        Assert.False(await Context.Set<PaymentAddress>()
+            .IgnoreQueryFilters()
+            .AnyAsync(p => p.TransactionId == tx.Id));
     }
 
     // ── RejectAsync ──────────────────────────────────────────────────────
@@ -587,7 +552,7 @@ public class FraudFlagServiceTests : IntegrationTestBase
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private FraudFlagService BuildSut(StubPaymentAddressAllocator? allocator = null)
+    private FraudFlagService BuildSut()
     {
         var auditLogger = new AuditLogger(Context, _clock);
         var limits = new TransactionLimitsProvider(Context);
@@ -596,7 +561,6 @@ public class FraudFlagServiceTests : IntegrationTestBase
         var freeze = new TimeoutFreezeService(Context, scheduler, scheduling, _clock);
         return new FraudFlagService(
             Context, auditLogger, _outbox, limits, freeze,
-            allocator ?? new StubPaymentAddressAllocator(),
             _clock,
             NullLogger<FraudFlagService>.Instance);
     }

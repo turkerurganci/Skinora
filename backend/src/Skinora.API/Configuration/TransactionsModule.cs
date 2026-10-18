@@ -15,6 +15,7 @@ using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.PaymentMonitoring;
 using Skinora.Transactions.Application.PayoutIssues;
@@ -289,6 +290,9 @@ public static class TransactionsModule
             sp.GetRequiredService<HttpBlockchainSidecarClient>());
 
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
+        // T147 — interim network availability until the per-network service
+        // registry (T148) replaces it: only TRON has a service.
+        services.AddSingleton<IBlockchainNetworkAvailability, TronOnlyNetworkAvailability>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
 

@@ -41,6 +41,9 @@ public sealed class WrongTokenRefundRequestedNotificationConsumer
                 ["ActualStablecoin"] = domainEvent.ActualStablecoin.ToString(),
                 ["ReceivedAmount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
                 ["SourceAddress"] = domainEvent.SourceAddress,
+                // K9 (T147) — where the refund is sent; a pre-T147 event has none and
+                // its refund went to the sender.
+                ["RefundAddress"] = domainEvent.RefundAddress ?? domainEvent.SourceAddress,
             },
         };
 

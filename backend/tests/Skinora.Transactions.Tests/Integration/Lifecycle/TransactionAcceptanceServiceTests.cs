@@ -60,6 +60,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     private FakeTimeProvider _clock = null!;
     private RecordingOutboxService _outbox = null!;
     private CountingTradeHoldChecker _tradeHold = null!;
+    private FakeNetworkAvailability _networks = null!;
+    private RecordingPaymentAddressAllocator _allocator = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -87,6 +89,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         _outbox = new RecordingOutboxService();
         // T119a — default: Steam reachable, buyer's Mobile Authenticator active.
         _tradeHold = new CountingTradeHoldChecker(new TradeHoldResult(true, true, null));
+        _networks = new FakeNetworkAvailability();
+        _allocator = new RecordingPaymentAddressAllocator();
     }
 
     [Fact]
@@ -261,6 +265,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             row.BuyerRefundAddress = ValidWallet1;
             row.Status = TransactionStatus.ACCEPTED;
             row.AcceptedAt = _clock.GetUtcNow().UtcDateTime;
+            row.Network = Skinora.Shared.Enums.BlockchainNetwork.TRON;
+            row.SellerPayoutAddress = ValidWallet1;
             await competing.SaveChangesAsync();
         });
 
@@ -273,6 +279,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             _tradeHold,
             new FakeSteamTradeEligibilityChecker(),
             _outbox,
+            _networks,
+            _allocator,
             _clock);
 
         var outcome = await sut.AcceptAsync(
@@ -322,6 +330,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             _tradeHold,
             new FakeSteamTradeEligibilityChecker(),
             _outbox,
+            _networks,
+            _allocator,
             _clock);
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
@@ -865,10 +875,218 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(0, _tradeHold.CallCount);
     }
 
+    // ---- T147 — network choice at acceptance (07 §1.3, 11 §F8 K3/K9) -------
+
+    // EIP-55 specification vectors (eips.ethereum.org/EIPS/eip-55).
+    private const string SellerEthereumPayout = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+    private const string BuyerEthereumRefundChecksummed = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359";
+    private const string BuyerEthereumRefundCanonical = "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359";
+
+    private async Task<Transaction> CreateListingAsync(params BlockchainNetwork[] networks)
+    {
+        var transaction = await CreateTransactionAsync(
+            BuyerIdentificationMethod.STEAM_ID, BuyerSteamId, networks: networks);
+        return transaction;
+    }
+
+    [Fact]
+    public async Task Buyer_Chooses_Ethereum_Payout_And_Refund_Fixed_On_Ethereum_Deposit_Allocated()
+    {
+        _networks = FakeNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal("ETHEREUM", outcome.Body!.Network);
+        Assert.Equal("102.00", outcome.Body.TotalAmount);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, persisted.Network);
+        // K3 — the seller is paid on the network the buyer pays on, from the
+        // snapshot fixed at creation.
+        Assert.Equal(SellerEthereumPayout, persisted.SellerPayoutAddress);
+        // K9 — the refund target on that network, canonical (06 §1.4).
+        Assert.Equal(BuyerEthereumRefundCanonical, persisted.BuyerRefundAddress);
+        // The deposit is derived on acceptance, after the commit.
+        Assert.Equal([transaction.Id], _allocator.Allocations);
+    }
+
+    [Fact]
+    public async Task Buyer_Chooses_Tron_On_A_Two_Network_Listing_Gets_The_Tron_Payout()
+    {
+        _networks = FakeNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl, Network: "TRON"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(BlockchainNetwork.TRON, persisted.Network);
+        Assert.Equal(ValidWallet1, persisted.SellerPayoutAddress);
+        Assert.Equal(ValidWallet2, persisted.BuyerRefundAddress);
+    }
+
+    [Fact]
+    public async Task Omitted_Network_Reads_As_Tron_For_The_Pre_F8_Client()
+    {
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal("TRON", outcome.Body!.Network);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(BlockchainNetwork.TRON, persisted.Network);
+        Assert.Equal(ValidWallet1, persisted.SellerPayoutAddress);
+    }
+
+    [Theory]
+    [InlineData("ETHEREUM", new[] { BlockchainNetwork.TRON })]
+    [InlineData(null, new[] { BlockchainNetwork.ETHEREUM })]
+    public async Task A_Network_The_Listing_Does_Not_Accept_Is_Refused_And_Nothing_Is_Written(
+        string? chosen, BlockchainNetwork[] listed)
+    {
+        _networks = FakeNetworkAvailability.All();
+        var transaction = await CreateListingAsync(listed);
+        var refund = chosen == "ETHEREUM" ? BuyerEthereumRefundChecksummed : ValidWallet2;
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(refund, BuyerTradeUrl, Network: chosen),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.NetworkNotAccepted, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkNotAccepted, outcome.ErrorCode);
+        Assert.Equal(chosen ?? "TRON", NetworkOf(outcome.ErrorDetails));
+        await AssertUntouchedAsync(transaction.Id);
+    }
+
+    [Fact]
+    public async Task A_Network_Without_A_Service_Fails_Closed_And_Nothing_Is_Written()
+    {
+        // The listing accepts Ethereum (created while it was open); Ethereum
+        // then has no service / is frozen at acceptance time.
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.NetworkUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkUnavailable, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        await AssertUntouchedAsync(transaction.Id);
+        // Rejected before the Steam probes (no quota spent).
+        Assert.Equal(0, _tradeHold.CallCount);
+    }
+
+    [Theory]
+    [InlineData("ETHEREUM", ValidWallet2)]                          // TRON address on Ethereum
+    [InlineData("TRON", BuyerEthereumRefundChecksummed)]            // Ethereum address on TRON
+    [InlineData("ETHEREUM", "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d358")] // broken EIP-55 checksum
+    public async Task The_Refund_Address_Must_Be_Valid_On_The_Chosen_Network(string network, string refundAddress)
+    {
+        _networks = FakeNetworkAvailability.All();
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(refundAddress, BuyerTradeUrl, Network: network),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.InvalidWallet, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.InvalidWalletAddress, outcome.ErrorCode);
+        Assert.Equal(network, NetworkOf(outcome.ErrorDetails));
+        await AssertUntouchedAsync(transaction.Id);
+    }
+
+    [Theory]
+    [InlineData("BSC")]
+    [InlineData("tron")]
+    [InlineData("")]
+    public async Task An_Unknown_Network_Name_Is_A_Validation_Error(string network)
+    {
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl, Network: network),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.ValidationError, outcome.ErrorCode);
+        await AssertUntouchedAsync(transaction.Id);
+    }
+
+    [Fact]
+    public async Task Refund_Cooldown_Is_Read_From_The_Chosen_Networks_Refund_Row()
+    {
+        // A fresh Ethereum refund address blocks an Ethereum acceptance only.
+        _networks = FakeNetworkAvailability.All();
+        var row = UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND, BuyerEthereumRefundCanonical,
+            changedAt: _clock.GetUtcNow().UtcDateTime.AddHours(-1));
+        row.UserId = _buyer.Id;
+        Context.Set<UserWalletAddress>().Add(row);
+        await Context.SaveChangesAsync();
+        var ethereum = await CreateListingAsync(BlockchainNetwork.ETHEREUM);
+
+        var blocked = await BuildSut().AcceptAsync(
+            _buyer.Id, ethereum.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.WalletCooldownActive, blocked.Status);
+    }
+
+    [Fact]
+    public async Task Allocation_Failure_After_Commit_Does_Not_Undo_The_Acceptance()
+    {
+        // Best effort, like the creation-time call it replaces: the address is
+        // only shown from SELLER_CONFIRMED on and EnsurePaymentAddressJob
+        // recovers it.
+        _allocator.DefaultStatus = Skinora.Transactions.Application.PaymentAddresses
+            .PaymentAddressAllocationStatus.SidecarUnavailable;
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal([transaction.Id], _allocator.Allocations);
+    }
+
+    private async Task AssertUntouchedAsync(Guid transactionId)
+    {
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transactionId);
+        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
+        Assert.Null(persisted.Network);
+        Assert.Null(persisted.SellerPayoutAddress);
+        Assert.Null(persisted.BuyerRefundAddress);
+        Assert.Empty(_outbox.Published);
+        Assert.Empty(_allocator.Allocations);
+    }
+
+    private static string? NetworkOf(object? details) =>
+        details?.GetType().GetProperty("network")?.GetValue(details) as string;
+
     private async Task<Transaction> CreateTransactionAsync(
         BuyerIdentificationMethod method,
         string? targetSteamId,
-        TransactionStatus status = TransactionStatus.CREATED)
+        TransactionStatus status = TransactionStatus.CREATED,
+        BlockchainNetwork[]? networks = null)
     {
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transaction = new Transaction
@@ -887,7 +1105,18 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             CommissionRate = 0.02m,
             CommissionAmount = 2m,
             TotalAmount = 102m,
-            SellerPayoutAddress = ValidWallet1,
+            // T147 — the listing accepts TRON; the seller's payout address is
+            // the option row's snapshot until acceptance copies it.
+            SellerPayoutAddress = null,
+            NetworkOptions = (networks ?? [BlockchainNetwork.TRON])
+                .Select(n => new TransactionNetworkOption
+                {
+                    Id = Guid.NewGuid(),
+                    Network = n,
+                    SellerPayoutAddress = n == BlockchainNetwork.TRON ? ValidWallet1 : SellerEthereumPayout,
+                    CreatedAt = nowUtc,
+                })
+                .ToList(),
             PaymentTimeoutMinutes = 1440,
             // CREATED + FLAGGED have different deadline invariants (06 §3.5).
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
@@ -913,6 +1142,8 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             tradeHold ?? _tradeHold,
             steamEligibility ?? new FakeSteamTradeEligibilityChecker(),
             _outbox,
+            _networks,
+            _allocator,
             _clock);
 
     private sealed class RecordingOutboxService : IOutboxService

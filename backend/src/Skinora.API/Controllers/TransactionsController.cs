@@ -194,6 +194,11 @@ public sealed class TransactionsController : ControllerBase
             CreateTransactionStatus.SteamUnavailable => StatusCode(
                 StatusCodes.Status503ServiceUnavailable, CreateErrorEnvelope(outcome)),
 
+            // T147 — 503 NETWORK_UNAVAILABLE (07 §1.3): an accepted network has
+            // no configured service or is frozen. Retryable; details.network.
+            CreateTransactionStatus.NetworkUnavailable => StatusCode(
+                StatusCodes.Status503ServiceUnavailable, CreateErrorEnvelope(outcome)),
+
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
@@ -330,6 +335,16 @@ public sealed class TransactionsController : ControllerBase
             // Mobile Authenticator, so acceptance fails closed (08 §2.2) and the
             // caller may retry. Same code/status as 07 §7.6a confirm-ready.
             AcceptTransactionStatus.SteamUnavailable
+                => StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    AcceptErrorEnvelope(outcome)),
+
+            // T147 (07 §1.3) — 422 NETWORK_NOT_ACCEPTED: the chosen network is
+            // not one of the listing's; 503 NETWORK_UNAVAILABLE: it has no
+            // service or is frozen (fail closed, retryable). Both carry
+            // details.network.
+            AcceptTransactionStatus.NetworkNotAccepted
+                => UnprocessableEntity(AcceptErrorEnvelope(outcome)),
+            AcceptTransactionStatus.NetworkUnavailable
                 => StatusCode(StatusCodes.Status503ServiceUnavailable,
                     AcceptErrorEnvelope(outcome)),
 
@@ -496,12 +511,14 @@ public sealed class TransactionsController : ControllerBase
         ApiResponse<object>.Fail(
             outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
             outcome.ErrorMessage ?? "Transaction could not be created.",
+            details: outcome.ErrorDetails,
             traceId: HttpContext.TraceIdentifier);
 
     private ApiResponse<object> AcceptErrorEnvelope(AcceptTransactionOutcome outcome) =>
         ApiResponse<object>.Fail(
             outcome.ErrorCode ?? TransactionErrorCodes.ValidationError,
             outcome.ErrorMessage ?? "Transaction could not be accepted.",
+            details: outcome.ErrorDetails,
             traceId: HttpContext.TraceIdentifier);
 
     private ApiResponse<object> CancelErrorEnvelope(CancelTransactionOutcome outcome) =>

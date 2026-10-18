@@ -32,7 +32,7 @@ namespace Skinora.Shared.Events;
 /// <param name="ExcessAmount">Refund target (delta for overpayment, full
 /// amount for multi-payment).</param>
 /// <param name="Stablecoin">USDT or USDC — the expected token.</param>
-/// <param name="SourceAddress">Refund destination — parsed from the inbound transfer.</param>
+/// <param name="SourceAddress">Sender of the inbound transfer (evidence only — since T147 the refund goes to <c>RefundAddress</c>, 11 §F8 K9).</param>
 /// <param name="TxHash">Inbound transaction hash for cross-reference.</param>
 /// <param name="IsMultiPayment">
 /// <c>true</c> when this event represents a stray transfer after
@@ -40,6 +40,11 @@ namespace Skinora.Shared.Events;
 /// single-shot overpayment.
 /// </param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>
+/// <param name="RefundAddress">
+/// T147 (11 §F8 K9) — where the refund is actually sent: the buyer's refund
+/// address on the transaction's network, fixed at acceptance. Null only on an
+/// event written before T147, whose refund went to <c>SourceAddress</c>.
+/// </param>
 public record BuyerPaymentExcessRefundedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -52,4 +57,5 @@ public record BuyerPaymentExcessRefundedEvent(
     string SourceAddress,
     string TxHash,
     bool IsMultiPayment,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    string? RefundAddress = null) : IDomainEvent;

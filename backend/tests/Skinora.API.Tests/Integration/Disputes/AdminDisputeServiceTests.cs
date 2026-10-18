@@ -589,6 +589,7 @@ public class AdminDisputeServiceTests : IntegrationTestBase
             CreatedAt = now,
             UpdatedAt = now,
             AcceptedAt = now.AddMinutes(-60),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
         };
 
         if (withHold)

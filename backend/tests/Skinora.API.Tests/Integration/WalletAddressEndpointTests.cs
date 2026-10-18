@@ -631,14 +631,15 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
     }
 
     [Fact]
-    public async Task UpdateSellerWallet_FirstAddressOnSecondNetwork_NeedsNoReAuth_AndLeavesTronUntouched()
+    public async Task UpdateSellerWallet_FirstAddressOnSecondNetwork_WithoutReAuth_Returns403_NothingWritten()
     {
-        // Re-auth is per network (07 §1.3): the TRON payout address exists,
-        // but the Ethereum one is a first-time set.
-        var tronSetAt = DateTime.UtcNow.AddDays(-30);
+        // T147 (11 §F8 T146 decision xv): a hijacked session must not add a
+        // second payout target on another network. The user already has a
+        // TRON payout address, so the FIRST Ethereum payout address needs the
+        // same Steam re-verification as a change.
         var user = await _factory.CreateUserAsync(u =>
             u.WalletAddresses.Add(UserWalletAddress.For(
-                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidSellerAddress, tronSetAt)));
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidSellerAddress, DateTime.UtcNow.AddDays(-30))));
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
 
         var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
@@ -647,22 +648,81 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
             network = "ETHEREUM",
         });
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var tron = await _factory.GetWalletAsync(user.Id, BlockchainNetwork.TRON, WalletAddressType.PAYOUT);
-        Assert.Equal(ValidSellerAddress, tron!.Address);
-        // The TRON cooldown clock did not restart (02 §12.3 per network).
-        Assert.Equal(tronSetAt, tron.ChangedAt!.Value, TimeSpan.FromSeconds(1));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("RE_AUTH_REQUIRED", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Null(await _factory.GetWalletAsync(user.Id, BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT));
         Assert.Empty(await _factory.GetWalletHistoryAsync(user.Id));
+    }
 
-        // Changing the Ethereum address now needs re-auth.
-        var change = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
+    [Fact]
+    public async Task UpdateSellerWallet_FirstAddressOnSecondNetwork_WithReAuth_Persists_AndLeavesTronUntouched()
+    {
+        var tronSetAt = DateTime.UtcNow.AddDays(-30);
+        var user = await _factory.CreateUserAsync(u =>
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidSellerAddress, tronSetAt)));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        client.DefaultRequestHeaders.Add(
+            "X-ReAuth-Token", await _factory.IssueReAuthTokenAsync(user.Id, user.SteamId));
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/seller", new
         {
-            walletAddress = EthChecksummed2,
+            walletAddress = EthChecksummed,
             network = "ETHEREUM",
         });
-        Assert.Equal(HttpStatusCode.Forbidden, change.StatusCode);
-        var body = await change.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(await _factory.GetWalletAsync(user.Id, BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT));
+        var tron = await _factory.GetWalletAsync(user.Id, BlockchainNetwork.TRON, WalletAddressType.PAYOUT);
+        Assert.Equal(ValidSellerAddress, tron!.Address);
+        // The TRON cooldown clock did not restart (02 §12.3 per network) and a
+        // first address on a network is not a replacement (no history row).
+        Assert.Equal(tronSetAt, tron.ChangedAt!.Value, TimeSpan.FromSeconds(1));
+        Assert.Empty(await _factory.GetWalletHistoryAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task UpdateRefundWallet_FirstRefundAddressAnywhere_NeedsNoReAuth_EvenWithAPayoutAddressOnAnotherNetwork()
+    {
+        // The rule is per type: a payout address elsewhere does not make the
+        // first-ever refund address a "second target".
+        var user = await _factory.CreateUserAsync(u =>
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidSellerAddress)));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/refund", new
+        {
+            walletAddress = EthChecksummed,
+            network = "ETHEREUM",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(await _factory.GetWalletAsync(user.Id, BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND));
+    }
+
+    [Fact]
+    public async Task UpdateRefundWallet_FirstRefundAddressOnSecondNetwork_WithoutReAuth_Returns403()
+    {
+        // Same rule for the refund type: an existing TRON refund address makes
+        // the first Ethereum one a second refund target (K9 sends every
+        // rejected payment there).
+        var user = await _factory.CreateUserAsync(u =>
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.REFUND, ValidRefundAddress)));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PutAsJsonAsync("/api/v1/users/me/wallet/refund", new
+        {
+            walletAddress = EthChecksummed,
+            network = "ETHEREUM",
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
         Assert.Equal("RE_AUTH_REQUIRED", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Null(await _factory.GetWalletAsync(user.Id, BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND));
     }
 
     [Fact]

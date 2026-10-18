@@ -121,6 +121,22 @@ public static class TransactionErrorCodes
     /// </summary>
     public const string BuyerSteamAccountTooNew = "BUYER_STEAM_ACCOUNT_TOO_NEW";
 
+    // T147 — network choice (07 §1.3).
+
+    /// <summary>
+    /// 422 — the network the buyer chose at acceptance is not one of the
+    /// listing's <c>acceptedNetworks</c> (11 §F8 K3).
+    /// </summary>
+    public const string NetworkNotAccepted = "NETWORK_NOT_ACCEPTED";
+
+    /// <summary>
+    /// 503 — the network has no configured service (Ethereum until T150) or
+    /// is in a health freeze, so it is closed for new transactions. Fail
+    /// closed and retryable; returned by create (an accepted network) and by
+    /// accept (the chosen network).
+    /// </summary>
+    public const string NetworkUnavailable = "NETWORK_UNAVAILABLE";
+
     // T51 — cancel (07 §7.7).
     public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
     public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";

@@ -48,10 +48,12 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Picks_Up_CREATED_Transactions_Without_PaymentAddress()
+    public async Task Picks_Up_Accepted_Transactions_Without_PaymentAddress()
     {
-        var t1 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t2 = await SeedTransactionAsync(TransactionStatus.CREATED);
+        // T147 — ACCEPTED and SELLER_CONFIRMED: the network is chosen at
+        // acceptance, and the confirmed state is the one that shows the address.
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.SELLER_CONFIRMED);
 
         var sut = BuildJob();
         await sut.ExecuteAsync();
@@ -66,7 +68,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     [Fact]
     public async Task Skips_Transactions_That_Already_Have_PaymentAddress()
     {
-        var t = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var t = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         Context.Set<PaymentAddress>().Add(new PaymentAddress
         {
             Id = Guid.NewGuid(),
@@ -88,17 +90,19 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Ignores_FLAGGED_Transactions()
+    public async Task Ignores_FLAGGED_And_CREATED_Listings_No_Network_Yet()
     {
         await SeedTransactionAsync(TransactionStatus.FLAGGED);
         await SeedTransactionAsync(TransactionStatus.CREATED);
+        var accepted = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         var sut = BuildJob();
         await sut.ExecuteAsync();
 
-        // Only one sidecar call — for the CREATED transaction; FLAGGED was
-        // filtered out because it is not in EligibleStates.
-        Assert.Single(_sidecar.Calls);
+        // Only one sidecar call — for the ACCEPTED transaction. FLAGGED and
+        // CREATED have no network yet (T147), so there is nothing to derive on.
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(accepted.Id, call.TransactionId);
     }
 
     [Fact]
@@ -119,8 +123,8 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     [Fact]
     public async Task Continues_On_Per_Transaction_Failure()
     {
-        var t1 = await SeedTransactionAsync(TransactionStatus.CREATED);
-        var t2 = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
         // First sidecar call fails (NotConfigured), second succeeds. We can't
         // guarantee the ordering of t1/t2 since the job uses CreatedAt order
@@ -148,7 +152,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         // processes at most BatchSize per execution.
         for (var i = 0; i < EnsurePaymentAddressJob.BatchSize + 2; i++)
         {
-            await SeedTransactionAsync(TransactionStatus.CREATED);
+            await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         }
 
         var sut = BuildJob();
@@ -185,6 +189,10 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
             CommissionAmount = 2.00m,
             TotalAmount = 100.00m,
             SellerPayoutAddress = SellerWallet,
+            // T147 — the network is chosen at acceptance; a listing has none.
+            Network = status is TransactionStatus.CREATED or TransactionStatus.FLAGGED
+                ? null
+                : BlockchainNetwork.TRON,
             PaymentTimeoutMinutes = 24 * 60,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
         };

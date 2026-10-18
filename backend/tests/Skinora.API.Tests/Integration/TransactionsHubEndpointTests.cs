@@ -268,6 +268,7 @@ public class TransactionsHubEndpointTests : IClassFixture<TransactionsHubEndpoin
                 SellerPayoutAddress = "TRC20XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
                 PaymentTimeoutMinutes = 60,
                 AcceptedAt = DateTime.UtcNow,
+                Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             };
             db.Set<Transaction>().Add(tx);
             await db.SaveChangesAsync();
