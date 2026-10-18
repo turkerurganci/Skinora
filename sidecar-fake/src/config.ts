@@ -13,6 +13,11 @@ export const config = {
   // here, so the backend reaches each surface on its expected port.
   steamPort: parseInt(process.env.STEAM_PORT || '5100', 10),
   blockchainPort: parseInt(process.env.BLOCKCHAIN_PORT || '5200', 10),
+  // T155 — a third listener answers the ETHEREUM service surface (the real
+  // service is `skinora-ethereum-sidecar:5300`, 05 §3.3a). The TRON and
+  // Ethereum surfaces share route paths, so each port gets its own router
+  // bound to one network (app.ts).
+  ethereumPort: parseInt(process.env.ETHEREUM_PORT || '5300', 10),
 
   // Backend base URL the fake posts inbound webhooks to (05 §3.4).
   backendUrl: process.env.BACKEND_URL || 'http://skinora-backend:5000',
@@ -28,6 +33,21 @@ export const config = {
   // secret with no signer and no verifier.
   blockchainWebhookSecret:
     process.env.BLOCKCHAIN_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '',
+  // T155 — Ethereum's own secret (T148: one secret per network; the backend
+  // refuses to start when both are the same). Must match the backend's
+  // `Webhook__EthereumSharedSecret`. The secret that signs a webhook is what
+  // tells the backend which network is speaking.
+  // Value on its own line, like blockchainWebhookSecret above: the pre-commit
+  // secret scanner reads `<...Secret>: <value>` on one line as a literal.
+  // prettier-ignore
+  ethereumWebhookSecret:
+    process.env.ETHEREUM_WEBHOOK_SECRET || '',
+
+  // T155 — Ethereum token contracts the fake reports in payment webhooks and
+  // accepts in `monitor/start`. Empty = Ethereum mainnet USDT/USDC, the same
+  // default as the backend's `EthereumStablecoinContracts` section (T148).
+  ethereumUsdtContract: process.env.ETHEREUM_USDT_CONTRACT || '',
+  ethereumUsdcContract: process.env.ETHEREUM_USDC_CONTRACT || '',
 
   // T137 — `FAKE_TRADE_ACCEPT_DELAY_MS` and `FAKE_BOT_STEAM_ID` were removed
   // with the custody trade surface: the platform sends no trade offers (02

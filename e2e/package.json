@@ -15,6 +15,7 @@
     "test:admin": "playwright test admin-flows",
     "test:downtime": "playwright test downtime",
     "test:delivery": "playwright test delivery",
+    "test:network": "playwright test multi-network",
     "lint": "eslint .",
     "format:check": "prettier --check \"**/*.ts\""
   },
