@@ -572,6 +572,7 @@ public class DeliveryPollingJobTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet1,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddHours(-paymentReceivedHoursAgo - 2),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = nowUtc.AddHours(-paymentReceivedHoursAgo - 1),
             PaymentReceivedAt = nowUtc.AddHours(-paymentReceivedHoursAgo),
             DeliveryDeadline = nowUtc.AddMinutes(deadlineInMinutes),

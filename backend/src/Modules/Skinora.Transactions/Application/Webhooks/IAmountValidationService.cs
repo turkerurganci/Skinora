@@ -131,4 +131,10 @@ public enum AmountValidationOutcome
     /// <summary>Required navigation (PaymentAddress or Transaction) was
     /// missing — defensive branch; caller treats as <c>Unknown</c>.</summary>
     MissingNavigation,
+
+    /// <summary>T147 (K9) — the transaction has no buyer refund address, the
+    /// single target of every refund. No refund row; admin alert raised
+    /// (<c>RefundBlockedReason.RefundAddressMissing</c>). Unreachable in the
+    /// normal flow — the deposit is only shown after acceptance.</summary>
+    RefundAddressMissing,
 }

@@ -36,9 +36,14 @@ namespace Skinora.Shared.Events;
 /// <param name="ActualStablecoin">Token the buyer actually sent.</param>
 /// <param name="ActualContractAddress">Contract address of the wrong token.</param>
 /// <param name="ReceivedAmount">Confirmed on-chain amount in the wrong token's base units.</param>
-/// <param name="SourceAddress">Refund destination — parsed from the inbound transfer.</param>
+/// <param name="SourceAddress">Sender of the inbound transfer (evidence only — since T147 the refund goes to <c>RefundAddress</c>, 11 §F8 K9).</param>
 /// <param name="TxHash">Inbound transaction hash for cross-reference.</param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>
+/// <param name="RefundAddress">
+/// T147 (11 §F8 K9) — where the refund is actually sent: the buyer's refund
+/// address on the transaction's network, fixed at acceptance. Null only on an
+/// event written before T147, whose refund went to <c>SourceAddress</c>.
+/// </param>
 public record WrongTokenRefundRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -50,4 +55,5 @@ public record WrongTokenRefundRequestedEvent(
     decimal ReceivedAmount,
     string SourceAddress,
     string TxHash,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    string? RefundAddress = null) : IDomainEvent;

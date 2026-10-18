@@ -449,6 +449,7 @@ public class MisdeliveryDisputeEscalatorTests : IntegrationTestBase
             // seller's asset leave without anything reaching the buyer.
             DeliveryEvidence = DeliveryEvidence.SELLER_ASSET_GONE,
             AcceptedAt = now.AddHours(-4),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             PaymentReceivedAt = now.AddHours(-2),
             DeliveryDeadline = now.AddMinutes(-1),
             CreatedAt = now,

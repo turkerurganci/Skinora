@@ -754,6 +754,7 @@ public class DeliveryVerificationServiceTests : IntegrationTestBase
             SellerPayoutAddress = ValidWallet1,
             PaymentTimeoutMinutes = 1440,
             AcceptedAt = nowUtc.AddHours(-2),
+            Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             SellerReadyConfirmedAt = nowUtc.AddHours(-1),
             PaymentReceivedAt = paymentReceivedAt ?? nowUtc.AddMinutes(-30),
             DeliveryDeadline = nowUtc.AddHours(23),

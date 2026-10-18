@@ -793,6 +793,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
+            Network = status == TransactionStatus.ACCEPTED ? Skinora.Shared.Enums.BlockchainNetwork.TRON : null,
             // T123 — the payment-block gate reads this stamp (03 §2.3 step 4).
             SellerReadyConfirmedAt = sellerConfirmed ? nowUtc.AddMinutes(-3) : null,
             // T135 — the buyerInventoryVisible projection reads this column's

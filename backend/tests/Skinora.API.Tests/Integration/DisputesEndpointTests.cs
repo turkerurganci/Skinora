@@ -385,6 +385,7 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
                 SellerPayoutAddress = ValidWallet,
                 PaymentTimeoutMinutes = 1440,
                 AcceptedAt = DateTime.UtcNow.AddMinutes(-10),
+                Network = Skinora.Shared.Enums.BlockchainNetwork.TRON,
             };
             db.Set<Transaction>().Add(transaction);
             await db.SaveChangesAsync();

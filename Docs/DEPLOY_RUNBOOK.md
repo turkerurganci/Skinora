@@ -313,6 +313,7 @@ Aşağıdaki ayarlar **hem** backend SystemSetting **hem** sidecar env olarak ya
 3. **Cron re-register:** Admin UI'dan `reconciliation.schedule_cron` değiştir → log `ReconciliationJob re-registered with cron '...'` → Hangfire dashboard'da recurring job cron'u güncel.
 4. **Sidecar parity:** cadence/sweep değişikliği sonrası sidecar env güncellenip restart edildiğini doğrula.
 5. **TronGrid bütçesi ve izleme sıklığı:** blockchain sidecar açılış logunda `Payment monitoring:` satırı `paymentPollingIntervalMs` / `holdingPollingIntervalMs` / `tronGridDailyRequestBudget` değerlerini gösterir; bütçe planın gerçek değeri olmalı (§B). Grafana'da `TronGrid Daily Quota Projection` kuralı `health: ok` görünmeli.
+6. **Eski ilanlarda iade adresi yok (T147):** T147 öncesi oluşturulmuş ilanlar kabulden önce de bir TRON depozit adresi taşır. Böyle bir ilan kabulden önce iptal edilir ve adrese başıboş transfer gelirse alıcı iade adresi yoktur: iade gönderilmez, `REFUND_BLOCKED` admin uyarısı (sebep `RefundAddressMissing`) çıkar, para depozitte kalır ve admin elle karar verir (08 §3.4).
 
 ---
 

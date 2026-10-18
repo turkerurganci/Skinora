@@ -7,6 +7,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
@@ -45,7 +46,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     private FakeSteamInventoryReader _inventory = null!;
     private FakeMarketPriceProvider _marketPrice = null!;
     private RecordingOutboxService _outbox = null!;
-    private RecordingPaymentAddressAllocator _allocator = null!;
+    private IBlockchainNetworkAvailability _networks = null!;
 
     /// <summary>
     /// T128 — swappable so one test can force an <c>InviteToken</c> collision
@@ -82,7 +83,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         _inventory = new FakeSteamInventoryReader();
         _marketPrice = new FakeMarketPriceProvider();
         _outbox = new RecordingOutboxService();
-        _allocator = new RecordingPaymentAddressAllocator();
+        _networks = TestNetworkAvailability.TronOnly();
 
         _inventory.Register(SellerSteamId, new InventoryItemSnapshot(
             AssetId: ItemAssetId,
@@ -119,7 +120,11 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(100m, persisted.Price);
         Assert.Equal(2m, persisted.CommissionAmount); // 100 × 0.02 → 2.000000
         Assert.Equal(102m, persisted.TotalAmount);
-        Assert.Equal(ValidWallet, persisted.SellerPayoutAddress);
+        // T147 — the payout snapshot lives in the TRON option row until the
+        // buyer picks a network; the column is filled at acceptance.
+        Assert.Null(persisted.SellerPayoutAddress);
+        Assert.Null(persisted.Network);
+        Assert.Equal(ValidWallet, await OptionAddressAsync(persisted.Id, BlockchainNetwork.TRON));
         Assert.Equal("AK-47 | Redline", persisted.ItemName);
         Assert.NotNull(persisted.AcceptDeadline);
         Assert.Equal(BuyerIdentificationMethod.STEAM_ID, persisted.BuyerIdentificationMethod);
@@ -397,8 +402,8 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         const string profileAddress = "TGepRwJFoonb8B1Cfq66dUo6ZQFiBZES5L";
         Assert.NotEqual(ValidWallet, profileAddress);
         await SetTronPayoutAsync(profileAddress);
-        // T146 — another network's payout address is not the one snapshotted
-        // while every transaction is TRON (until T147).
+        // T146/T147 — another network's payout address is not snapshotted when
+        // the listing accepts only TRON (the default when the body names none).
         var ethereumPayout = UserWalletAddress.For(
             BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
         ethereumPayout.UserId = _seller.Id;
@@ -412,14 +417,16 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.NotNull(outcome.Body);
         var persisted = await Context.Set<Transaction>().AsNoTracking()
             .SingleAsync(t => t.Id == outcome.Body!.Id);
-        Assert.Equal(profileAddress, persisted.SellerPayoutAddress);
+        Assert.Equal(profileAddress, await OptionAddressAsync(persisted.Id, BlockchainNetwork.TRON));
+        Assert.Null(await OptionAddressAsync(persisted.Id, BlockchainNetwork.ETHEREUM));
     }
 
     private const string EthereumPayoutAddress = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
 
     /// <summary>
-    /// T146 — every transaction is TRON until T147, so a seller who only has an
-    /// ETHEREUM payout address has no usable payout address.
+    /// T147 — a body without <c>acceptedNetworks</c> lists on TRON (⚠ default),
+    /// so a seller who only has an ETHEREUM payout address has no payout
+    /// address for it; the rejection names the network (07 §1.3).
     /// </summary>
     [Fact]
     public async Task EthereumOnlySeller_Gets_SellerWalletAddressMissing()
@@ -437,6 +444,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
 
         Assert.Equal(CreateTransactionStatus.SellerWalletAddressMissing, outcome.Status);
         Assert.Equal(TransactionErrorCodes.SellerWalletAddressMissing, outcome.ErrorCode);
+        Assert.Equal("TRON", NetworkOf(outcome.ErrorDetails));
     }
 
     [Fact]
@@ -453,7 +461,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
         var persisted = await Context.Set<Transaction>().AsNoTracking()
             .SingleAsync(t => t.Id == outcome.Body!.Id);
-        Assert.Equal(ValidWallet, persisted.SellerPayoutAddress);
+        Assert.Equal(ValidWallet, await OptionAddressAsync(persisted.Id, BlockchainNetwork.TRON));
     }
 
     [Fact]
@@ -613,54 +621,28 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Null(outcome.Body);
     }
 
-    // ---- T70 — payment-address inline allocation -----------------------------
+    // ---- T147 — no deposit address at creation --------------------------------
 
     [Fact]
-    public async Task Invokes_PaymentAddress_Allocator_For_CREATED_Transactions()
+    public async Task Derives_No_Deposit_Address_At_Creation_The_Network_Is_Chosen_At_Acceptance()
     {
+        // Until T147 the TRON deposit was derived here (T70). The buyer now
+        // picks the network at acceptance and the deposit lives on it
+        // (06 §1.4), so a fresh listing has option rows and no address.
         var sut = BuildSut();
         var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
 
         Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
         Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
-        Assert.Single(_allocator.Allocations);
-        Assert.Equal(outcome.Body.Id, _allocator.Allocations[0]);
-    }
-
-    [Fact]
-    public async Task Skips_PaymentAddress_Allocator_For_FLAGGED_Transactions()
-    {
-        // Price deviation forces FLAGGED — payment-address allocation must
-        // wait until admin approval transitions the row back to CREATED
-        // (future task entry point).
-        _marketPrice.Price = 50m;
-        var sut = BuildSut();
-
-        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
-
-        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
-        Assert.Equal(TransactionStatus.FLAGGED, outcome.Body!.Status);
-        Assert.Empty(_allocator.Allocations);
-    }
-
-    [Fact]
-    public async Task Transaction_Is_Still_Created_When_Allocator_Reports_SidecarUnavailable()
-    {
-        // Best-effort semantics: a sidecar outage during creation must not
-        // bubble up as a transaction failure — EnsurePaymentAddressJob will
-        // retry the allocation on its next sweep.
-        _allocator.DefaultStatus = Skinora.Transactions.Application.PaymentAddresses
-            .PaymentAddressAllocationStatus.SidecarUnavailable;
-        var sut = BuildSut();
-
-        var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
-
-        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
-        Assert.Equal(TransactionStatus.CREATED, outcome.Body!.Status);
+        Assert.False(await Context.Set<PaymentAddress>().IgnoreQueryFilters()
+            .AnyAsync(p => p.TransactionId == outcome.Body.Id));
         var persisted = await Context.Set<Transaction>().AsNoTracking()
             .SingleAsync(t => t.Id == outcome.Body.Id);
-        Assert.Equal(TransactionStatus.CREATED, persisted.Status);
-        Assert.Single(_allocator.Allocations);
+        Assert.Null(persisted.Network);
+        Assert.Null(persisted.SellerPayoutAddress);
+        var option = Assert.Single(await Context.Set<TransactionNetworkOption>().AsNoTracking()
+            .Where(o => o.TransactionId == outcome.Body.Id).ToListAsync());
+        Assert.Equal(BlockchainNetwork.TRON, option.Network);
     }
 
     // ---- T128 — one open transaction per item (02 §2.3) ---------------------
@@ -681,7 +663,6 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(1, await Context.Set<Transaction>()
             .CountAsync(t => t.SellerId == _seller.Id && t.ItemAssetId == ItemAssetId));
         Assert.Empty(_outbox.Published);
-        Assert.Empty(_allocator.Allocations);
     }
 
     [Fact]
@@ -888,8 +869,171 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         public string Generate() => _token;
     }
 
+    // ---- T147 — accepted networks (07 §1.3, 11 §F8 K3) -----------------------
+
+    private async Task AddEthereumPayoutAsync(DateTime? changedAt = null)
+    {
+        var row = UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, EthereumPayoutAddress, changedAt);
+        row.UserId = _seller.Id;
+        Context.Set<UserWalletAddress>().Add(row);
+        await Context.SaveChangesAsync();
+    }
+
+    private CreateTransactionRequest RequestFor(params string[] networks) =>
+        ValidRequest() with { AcceptedNetworks = networks };
+
+    [Fact]
+    public async Task Listing_On_Both_Networks_Snapshots_Each_Networks_Payout_Address()
+    {
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync();
+
+        // Client order does not matter; rows are per network.
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("ETHEREUM", "TRON"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        var id = outcome.Body!.Id;
+        Assert.Equal(ValidWallet, await OptionAddressAsync(id, BlockchainNetwork.TRON));
+        Assert.Equal(EthereumPayoutAddress, await OptionAddressAsync(id, BlockchainNetwork.ETHEREUM));
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == id);
+        Assert.Null(persisted.Network);
+        Assert.Null(persisted.SellerPayoutAddress);
+    }
+
+    [Fact]
+    public async Task Listing_On_Ethereum_Only_Writes_Just_That_Option()
+    {
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        var networks = await Context.Set<TransactionNetworkOption>().AsNoTracking()
+            .Where(o => o.TransactionId == outcome.Body!.Id).Select(o => o.Network).ToListAsync();
+        Assert.Equal([BlockchainNetwork.ETHEREUM], networks);
+    }
+
+    [Fact]
+    public async Task Listing_On_A_Network_Without_A_Payout_Address_Is_Refused_Naming_It()
+    {
+        // 11 §F8 K3: only networks with a registered payout address.
+        _networks = TestNetworkAvailability.All();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SellerWalletAddressMissing, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SellerWalletAddressMissing, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+    }
+
+    [Fact]
+    public async Task Listing_On_A_Network_Without_A_Service_Fails_Closed_With_Network_Unavailable()
+    {
+        // Ethereum has no service until T150 — production answer today.
+        await AddEthereumPayoutAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkUnavailable, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Listing_On_A_Frozen_Network_Fails_Closed_With_Network_Unavailable()
+    {
+        // T148 health freeze (11 §6.2 FK8-6): a configured network in a
+        // detected outage is closed for new listings like one without a service.
+        _networks = TestNetworkAvailability.AllWithFrozen(BlockchainNetwork.ETHEREUM);
+        await AddEthereumPayoutAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkUnavailable, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+        Assert.Empty(_outbox.Published);
+    }
+
+    public static TheoryData<string[]> MalformedAcceptedNetworks => new()
+    {
+        Array.Empty<string>(),
+        new[] { "TRON", "TRON" },
+        new[] { "BSC" },
+        new[] { "tron" },
+        new[] { "" },
+    };
+
+    [Theory]
+    [MemberData(nameof(MalformedAcceptedNetworks))]
+    public async Task Malformed_AcceptedNetworks_Is_A_Validation_Error(string[] networks)
+    {
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor(networks), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.ValidationError, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Payout_Cooldown_Is_Checked_Per_Accepted_Network()
+    {
+        // 02 §12.3, per network (T146): a fresh Ethereum payout address blocks
+        // a listing that accepts Ethereum and names it; a TRON-only listing of
+        // the same seller still goes through.
+        await Context.ConfigureSettingAsync(TransactionLimitsProvider.PayoutCooldownKey, "24");
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync(changedAt: _clock.GetUtcNow().UtcDateTime.AddHours(-1));
+
+        var both = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+        Assert.Equal(CreateTransactionStatus.PayoutAddressCooldownActive, both.Status);
+        Assert.Equal(TransactionErrorCodes.PayoutAddressCooldownActive, both.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(both.ErrorDetails));
+
+        var tronOnly = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON"), CancellationToken.None);
+        Assert.Equal(CreateTransactionStatus.Created, tronOnly.Status);
+    }
+
+    [Fact]
+    public async Task Sanctions_Are_Screened_On_Each_Accepted_Networks_Payout_Address()
+    {
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync();
+        var sanctions = new NetworkMatchingSanctionsCheck(BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut(sanctions: sanctions)
+            .CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SanctionsMatch, outcome.Status);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.Contains((BlockchainNetwork.ETHEREUM, EthereumPayoutAddress), sanctions.Screened);
+        Assert.Contains((BlockchainNetwork.TRON, ValidWallet), sanctions.Screened);
+    }
+
+    private sealed class NetworkMatchingSanctionsCheck : IWalletSanctionsCheck
+    {
+        private readonly BlockchainNetwork _matching;
+        public NetworkMatchingSanctionsCheck(BlockchainNetwork matching) => _matching = matching;
+        public List<(BlockchainNetwork, string)> Screened { get; } = [];
+
+        public Task<WalletSanctionsDecision> EvaluateAsync(
+            BlockchainNetwork network, string walletAddress, CancellationToken cancellationToken)
+        {
+            Screened.Add((network, walletAddress));
+            return Task.FromResult(network == _matching
+                ? WalletSanctionsDecision.Match("TEST_LIST")
+                : WalletSanctionsDecision.NoMatch());
+        }
+    }
+
     private TransactionCreationService BuildSut(
-        FakeSteamTradeEligibilityChecker? steamEligibility = null)
+        FakeSteamTradeEligibilityChecker? steamEligibility = null,
+        IWalletSanctionsCheck? sanctions = null)
     {
         var limits = new TransactionLimitsProvider(Context);
         var eligibility = new TransactionEligibilityService(
@@ -907,14 +1051,23 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             fraud,
             new RecordingFraudFlagWriter(),
             new WalletAddressValidator(),
-            new NoMatchWalletSanctionsCheck(),
+            sanctions ?? new NoMatchWalletSanctionsCheck(),
             _inviteCodes,
             _outbox,
             new NullSteamInventoryCacheInvalidator(),
-            _allocator,
+            _networks,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<TransactionCreationService>.Instance,
             _clock);
     }
+
+    private Task<string?> OptionAddressAsync(Guid transactionId, BlockchainNetwork network) =>
+        Context.Set<TransactionNetworkOption>().AsNoTracking()
+            .Where(o => o.TransactionId == transactionId && o.Network == network)
+            .Select(o => (string?)o.SellerPayoutAddress)
+            .SingleOrDefaultAsync();
+
+    private static string? NetworkOf(object? details) =>
+        details?.GetType().GetProperty("network")?.GetValue(details) as string;
 
     private async Task SetTronPayoutAsync(string address)
     {

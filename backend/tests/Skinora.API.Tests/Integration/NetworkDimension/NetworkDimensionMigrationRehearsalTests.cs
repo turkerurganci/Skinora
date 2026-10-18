@@ -253,7 +253,11 @@ public class NetworkDimensionMigrationRehearsalTests : IntegrationTestBase
     public async Task Down_WithANonTronRow_IsRefused_AndChangesNothing()
     {
         var seller = new User { Id = Guid.NewGuid(), SteamId = "76561198000000921", SteamDisplayName = "Seller" };
-        var tx = NewTransaction(seller.Id, TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
+        // The transaction itself carries no network: T147's Down (which runs
+        // first on the way back) refuses a non-TRON transaction or listing
+        // with its own error, so the non-TRON row that must reach T145's guard
+        // is the deposit address.
+        var tx = NewTransaction(seller.Id);
 
         await using (var ctx = CreateContext())
         {

@@ -202,6 +202,7 @@ public class TransactionListServiceTests : IntegrationTestBase
             PaymentTimeoutMinutes = 1440,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
             AcceptedAt = status == TransactionStatus.ACCEPTED ? nowUtc.AddMinutes(-5) : null,
+            Network = status == TransactionStatus.ACCEPTED ? Skinora.Shared.Enums.BlockchainNetwork.TRON : null,
             CompletedAt = status == TransactionStatus.COMPLETED ? nowUtc.AddMinutes(-1) : null,
             CancelledAt = IsCancelled(status) ? nowUtc.AddMinutes(-1) : null,
             CancelledBy = IsCancelled(status) ? CancelledByType.BUYER : null,

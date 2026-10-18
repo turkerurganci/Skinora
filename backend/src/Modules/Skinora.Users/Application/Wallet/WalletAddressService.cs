@@ -77,13 +77,13 @@ public sealed class WalletAddressService : IWalletAddressService
         if (user is null)
             return WalletUpdateResult.Failure(WalletUpdateStatus.UserNotFound, network);
 
-        // One row per (user, network, type) — 06 §1.4. Every rule below is
-        // scoped to it: another network's address of the same type neither
-        // demands re-auth nor is affected by this change.
-        var row = await _db.Set<UserWalletAddress>()
-            .FirstOrDefaultAsync(
-                w => w.UserId == userId && w.Network == network && w.Type == type,
-                cancellationToken);
+        // One row per (user, network, type) — 06 §1.4. The cooldown, history
+        // and sanctions rules below are scoped to it: another network's
+        // address of the same type is not affected by this change.
+        var sameType = await _db.Set<UserWalletAddress>()
+            .Where(w => w.UserId == userId && w.Type == type)
+            .ToListAsync(cancellationToken);
+        var row = sameType.FirstOrDefault(w => w.Network == network);
 
         var previous = row?.Address;
         var previousChangedAt = row?.ChangedAt;
@@ -91,7 +91,15 @@ public sealed class WalletAddressService : IWalletAddressService
         // 02 §12.3 / 07 §5.3 "Ek Auth": changing an existing address requires
         // a valid X-ReAuth-Token. The controller consumes the token and passes
         // the outcome via reAuthValidated — see UsersController.
-        if (!string.IsNullOrEmpty(previous) && !reAuthValidated)
+        //
+        // T147 (11 §F8 T146 decision xv): so does the FIRST address of a type on
+        // a new network when the user already has one of that type on another
+        // network. Without it a hijacked session could not redirect the
+        // existing payout, but could add a second payout target on the other
+        // network and list on it alone. Only a user with no address of this
+        // type anywhere — the first-ever setup — is exempt, as before.
+        var hasSameTypeElsewhere = sameType.Any(w => w.Network != network && !string.IsNullOrEmpty(w.Address));
+        if ((!string.IsNullOrEmpty(previous) || hasSameTypeElsewhere) && !reAuthValidated)
             return WalletUpdateResult.Failure(WalletUpdateStatus.ReAuthRequired, network);
 
         // ---------- (2) Sanctions, on this network (02 §21.1, 06 §3.25) ----------

@@ -25,10 +25,17 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
     /// </summary>
     public const int MaxRetryAttempts = 5;
 
-    private static readonly TransactionStatus[] EligibleStates =
+    /// <summary>
+    /// T147 — a deposit is derived once the buyer has chosen the network, i.e.
+    /// from acceptance on (06 §1.4). SELLER_CONFIRMED is included so a
+    /// transaction whose inline allocation lost the sidecar round-trip and
+    /// whose seller confirmed before the recovery job ran still gets its
+    /// address — that is the state in which the buyer is shown it.
+    /// </summary>
+    internal static readonly TransactionStatus[] EligibleStates =
     [
-        TransactionStatus.CREATED,
         TransactionStatus.ACCEPTED,
+        TransactionStatus.SELLER_CONFIRMED,
     ];
 
     private readonly AppDbContext _db;
@@ -63,7 +70,18 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
         {
             return Failed(
                 PaymentAddressAllocationStatus.TransactionIneligible, transactionId,
-                $"Transaction is in {transaction.Status} — payment address only allocated for CREATED/ACCEPTED.");
+                $"Transaction is in {transaction.Status} — payment address only allocated for ACCEPTED/SELLER_CONFIRMED.");
+        }
+
+        // 06 §1.4 (T147) — the deposit lives on the network the buyer chose at
+        // acceptance and the HD index is counted per network (each network has
+        // its own seed, 11 §F8 K7). No network, no address: there is no
+        // fallback network to derive on.
+        if (transaction.Network is not { } network)
+        {
+            return Failed(
+                PaymentAddressAllocationStatus.TransactionIneligible, transactionId,
+                "Transaction has no network yet — the deposit is derived on the network chosen at acceptance.");
         }
 
         // Idempotent re-entry: if a row already exists (any soft-delete state),
@@ -71,10 +89,25 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
         var existing = await _db.Set<PaymentAddress>()
             .IgnoreQueryFilters()
             .Where(p => p.TransactionId == transactionId)
-            .Select(p => new { p.Address, p.HdWalletIndex })
+            .Select(p => new { p.Address, p.HdWalletIndex, p.Network })
             .FirstOrDefaultAsync(cancellationToken);
         if (existing is not null)
         {
+            // Same-network rule (11 §F8 K3): a deposit on another network than
+            // the transaction's would route the payment, its refunds and the
+            // sweep through the wrong service. Unreachable by construction (a
+            // pre-T147 deposit was derived on TRON and its listing accepts only
+            // TRON), so it is reported, never repaired.
+            if (existing.Network != network)
+            {
+                _logger.LogError(
+                    "Transaction {TransactionId} is on {Network} but its deposit {Address} is on {DepositNetwork}; no address is returned.",
+                    transactionId, network, existing.Address, existing.Network);
+                return Failed(
+                    PaymentAddressAllocationStatus.NetworkMismatch, transactionId,
+                    $"Existing deposit is on {existing.Network}, transaction is on {network}.");
+            }
+
             return new PaymentAddressAllocationResult(
                 PaymentAddressAllocationStatus.AlreadyExisted,
                 transactionId,
@@ -82,13 +115,6 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
                 existing.HdWalletIndex,
                 ErrorMessage: null);
         }
-
-        // 06 §1.4 (T145) — the deposit address lives on the transaction's
-        // network and the HD index is counted per network (each network has
-        // its own seed, 11 §F8 K7). Before T147 adds the buyer's choice the
-        // only network is TRON; a transaction allocated before acceptance has
-        // no network yet and is a TRON transaction by construction.
-        var network = transaction.Network ?? BlockchainNetwork.TRON;
 
         for (var attempt = 1; attempt <= MaxRetryAttempts; attempt++)
         {

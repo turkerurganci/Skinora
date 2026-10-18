@@ -120,8 +120,10 @@ public sealed class PaymentRefundToBuyerConsumer
 
         // T148 — same-network rule (11 §F8 K3): the refund leaves on the
         // network the money arrived on. The deposit's network is that fact;
-        // without a deposit row the transaction's own network stands in, and a
-        // transaction that never chose one predates F8 and is TRON (06 §1.4).
+        // without a deposit row the transaction's own network (chosen at
+        // acceptance, T147 — set on every accepted row by
+        // CK_Transactions_Network_Accepted) stands in; the TRON fallback is
+        // only a defensive read for rows that predate F8 (06 §1.4).
         var network = deposit?.Network ?? transaction.Network ?? BlockchainNetwork.TRON;
 
         var resolvedGasFee = await _chargedGasFee.ResolveRefundFeeAsync(

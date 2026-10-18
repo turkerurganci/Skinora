@@ -131,8 +131,8 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
     public async Task Payout_Cooldown_Is_Per_Network_Ethereum_Change_Does_Not_Block_Tron()
     {
         // T146 (02 §12.3, 06 §1.4): changing the Ethereum payout address arms
-        // only the Ethereum cooldown. Transactions are TRON until T147, so the
-        // seller stays eligible.
+        // only the Ethereum cooldown. The TRON address is still listable
+        // (T147), so the seller stays eligible.
         Context.Set<UserWalletAddress>().Add(WithUser(UserWalletAddress.For(
             BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT,
             "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
@@ -148,10 +148,12 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task Ethereum_Only_Payout_Address_Is_Missing_For_A_Tron_Transaction()
+    public async Task Ethereum_Only_Payout_Address_Makes_The_Seller_Able_To_List()
     {
-        // Until T147 every listing is TRON: an Ethereum payout address alone
-        // does not make the seller able to list.
+        // T147 (11 §F8 K3): a listing accepts the networks the seller has a
+        // payout address on, so an Ethereum payout address alone is enough
+        // for this envelope. Which network a listing may accept is checked
+        // per network at creation (07 §1.3 details.network).
         Context.Set<UserWalletAddress>().RemoveRange(
             Context.Set<UserWalletAddress>().Where(w => w.UserId == _seller.Id));
         Context.Set<UserWalletAddress>().Add(WithUser(UserWalletAddress.For(
@@ -162,8 +164,35 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
 
         var dto = await sut.GetAsync(_seller.Id, CancellationToken.None);
 
-        Assert.False(dto.Eligible);
-        Assert.Contains(TransactionErrorCodes.SellerWalletAddressMissing, dto.Reasons!);
+        Assert.DoesNotContain(TransactionErrorCodes.SellerWalletAddressMissing, dto.Reasons ?? []);
+        Assert.DoesNotContain(TransactionErrorCodes.PayoutAddressCooldownActive, dto.Reasons ?? []);
+    }
+
+    [Fact]
+    public async Task Payout_Cooldown_Blocks_Only_When_Every_Networks_Address_Is_In_Cooldown()
+    {
+        // T147 — with TRON in cooldown and Ethereum not, the seller can still
+        // list on Ethereum; with both in cooldown nothing is listable.
+        await Context.ConfigureSettingAsync(TransactionLimitsProvider.PayoutCooldownKey, "24");
+        var recent = _clock.GetUtcNow().UtcDateTime.AddHours(-1);
+        var tron = await Context.Set<UserWalletAddress>()
+            .SingleAsync(w => w.UserId == _seller.Id && w.Network == BlockchainNetwork.TRON);
+        tron.ChangedAt = recent;
+        Context.Set<UserWalletAddress>().Add(WithUser(UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT,
+            "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", _clock.GetUtcNow().UtcDateTime.AddDays(-5))));
+        await Context.SaveChangesAsync();
+
+        var oneOpen = await BuildSut(flagsActive: false).GetAsync(_seller.Id, CancellationToken.None);
+        Assert.DoesNotContain(TransactionErrorCodes.PayoutAddressCooldownActive, oneOpen.Reasons ?? []);
+
+        var ethereum = await Context.Set<UserWalletAddress>()
+            .SingleAsync(w => w.UserId == _seller.Id && w.Network == BlockchainNetwork.ETHEREUM);
+        ethereum.ChangedAt = recent;
+        await Context.SaveChangesAsync();
+
+        var none = await BuildSut(flagsActive: false).GetAsync(_seller.Id, CancellationToken.None);
+        Assert.Contains(TransactionErrorCodes.PayoutAddressCooldownActive, none.Reasons!);
     }
 
     private UserWalletAddress WithUser(UserWalletAddress row)

@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Fraud.Application.Flags;
 using Skinora.Fraud.Application.MultiAccount;
-using Skinora.Fraud.Tests.TestSupport;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Fraud.Infrastructure.Persistence;
 using Skinora.Platform.Application.Audit;
@@ -413,7 +412,7 @@ public class MultiAccountDetectorTests : IntegrationTestBase
         var freeze = new TimeoutFreezeService(Context, scheduler, scheduling, _clock);
         var flagService = new FraudFlagService(
             Context, auditLogger, _outbox, limits, freeze,
-            new StubPaymentAddressAllocator(), _clock,
+            _clock,
             NullLogger<FraudFlagService>.Instance);
         return new MultiAccountDetector(Context, flagService);
     }

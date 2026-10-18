@@ -88,16 +88,16 @@ public sealed class AmountValidationService : IAmountValidationService
         // 02 §4.4 + 08 §3.4 tutar doğrulama tablosu — strict equality (no tolerance, 06 §8.3).
         // Branch order: multi-payment is detected by Transaction.Status (state already past
         // SELLER_CONFIRMED) regardless of equality, so it must precede the exact/over/under split.
-        // The gas fee is resolved per refund branch, not up front — the
+        // The gas fee is resolved inside each refund branch, not up front — the
         // exact-match happy path queues no refund and must not pay for a
-        // runtime estimate probe (Prova-GasFeeChargedIsFixedGuess).
+        // runtime estimate probe (Prova-GasFeeChargedIsFixedGuess), and the
+        // estimate needs the refund target, which the branch resolves (K9).
         if (transaction.Status != TransactionStatus.SELLER_CONFIRMED)
         {
             return await HandleMultiPaymentAsync(
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -117,7 +117,6 @@ public sealed class AmountValidationService : IAmountValidationService
                 confirmedPayment,
                 paymentAddress,
                 transaction,
-                await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
                 correlationId,
                 cancellationToken);
         }
@@ -126,7 +125,6 @@ public sealed class AmountValidationService : IAmountValidationService
             confirmedPayment,
             paymentAddress,
             transaction,
-            await ResolveRefundGasFeeAsync(paymentAddress, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken),
             correlationId,
             cancellationToken);
     }
@@ -170,12 +168,17 @@ public sealed class AmountValidationService : IAmountValidationService
         // expected token keeps this path's pre-round charge.
         var resolvedActualToken = ResolveStablecoinByContract(
             paymentAddress.Network, wrongTokenIncoming.ActualTokenAddress);
+        var received = wrongTokenIncoming.Amount;
+
+        var refundTo = await RequireRefundTargetAsync(transaction, wrongTokenIncoming, received, correlationId, cancellationToken);
+        if (refundTo is null) return AmountValidationOutcome.RefundAddressMissing;
+
         var gasFee = await ResolveRefundGasFeeAsync(
             paymentAddress,
+            refundTo,
             wrongTokenIncoming,
             resolvedActualToken ?? paymentAddress.ExpectedToken,
             cancellationToken);
-        var received = wrongTokenIncoming.Amount;
 
         var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
@@ -194,7 +197,7 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id,
             paymentAddress.Network,
             BlockchainTransactionType.WRONG_TOKEN_REFUND,
-            wrongTokenIncoming.FromAddress,
+            refundTo,
             received,
             // 06 §3.8 token semantiği — Token = expected for wrong-token rows;
             // ActualTokenAddress carries the wrong contract.
@@ -213,7 +216,8 @@ public sealed class AmountValidationService : IAmountValidationService
                 ReceivedAmount: received,
                 SourceAddress: wrongTokenIncoming.FromAddress,
                 TxHash: wrongTokenIncoming.TxHash ?? string.Empty,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                RefundAddress: refundTo),
             cancellationToken);
 
         _logger.LogInformation(
@@ -252,8 +256,12 @@ public sealed class AmountValidationService : IAmountValidationService
             return AmountValidationOutcome.MissingNavigation;
         }
 
-        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, latePayment, paymentAddress.ExpectedToken, cancellationToken);
         var received = latePayment.Amount;
+
+        var refundTo = await RequireRefundTargetAsync(transaction, latePayment, received, correlationId, cancellationToken);
+        if (refundTo is null) return AmountValidationOutcome.RefundAddressMissing;
+
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, latePayment, paymentAddress.ExpectedToken, cancellationToken);
 
         // 02 §4.4 / 08 §3.4 — refund decision is the same minimum-threshold
         // rule used for underpayment / wrong-token: net < 2× gas blocks the
@@ -273,7 +281,7 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id,
             paymentAddress.Network,
             BlockchainTransactionType.LATE_PAYMENT_REFUND,
-            latePayment.FromAddress,
+            refundTo,
             received,
             paymentAddress.ExpectedToken);
 
@@ -288,7 +296,8 @@ public sealed class AmountValidationService : IAmountValidationService
                 SourceAddress: latePayment.FromAddress,
                 TxHash: latePayment.TxHash ?? string.Empty,
                 MonitorState: paymentAddress.MonitoringStatus,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                RefundAddress: refundTo),
             cancellationToken);
 
         _logger.LogInformation(
@@ -301,12 +310,16 @@ public sealed class AmountValidationService : IAmountValidationService
         BlockchainTransaction confirmedPayment,
         PaymentAddress paymentAddress,
         Transaction transaction,
-        decimal gasFee,
         string correlationId,
         CancellationToken cancellationToken)
     {
         var received = confirmedPayment.Amount;
         var expected = paymentAddress.ExpectedAmount;
+
+        var refundTo = await RequireRefundTargetAsync(transaction, confirmedPayment, received, correlationId, cancellationToken);
+        if (refundTo is null) return AmountValidationOutcome.RefundAddressMissing;
+
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
         var decision = await _refundDecision.ResolveBuyerRefundAsync(received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
@@ -330,7 +343,7 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id,
             paymentAddress.Network,
             BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
-            confirmedPayment.FromAddress,
+            refundTo,
             received,
             paymentAddress.ExpectedToken);
 
@@ -345,7 +358,8 @@ public sealed class AmountValidationService : IAmountValidationService
                 Stablecoin: paymentAddress.ExpectedToken,
                 SourceAddress: confirmedPayment.FromAddress,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                RefundAddress: refundTo),
             cancellationToken);
 
         _logger.LogInformation(
@@ -358,7 +372,6 @@ public sealed class AmountValidationService : IAmountValidationService
         BlockchainTransaction confirmedPayment,
         PaymentAddress paymentAddress,
         Transaction transaction,
-        decimal gasFee,
         string correlationId,
         CancellationToken cancellationToken)
     {
@@ -369,6 +382,11 @@ public sealed class AmountValidationService : IAmountValidationService
         // Advance the state machine BEFORE deciding refund — the platform has the
         // expected amount so the buyer has paid in full from the contract's view.
         await AdvanceStateMachineAsync(transaction, confirmedPayment, correlationId, cancellationToken);
+
+        var refundTo = await RequireRefundTargetAsync(transaction, confirmedPayment, excess, correlationId, cancellationToken);
+        if (refundTo is null) return AmountValidationOutcome.AcceptedWithExcessRefund;
+
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
         var decision = await _refundDecision.ResolveOverpaymentRefundAsync(expected, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
@@ -392,7 +410,7 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id,
             paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
-            confirmedPayment.FromAddress,
+            refundTo,
             excess,
             paymentAddress.ExpectedToken);
 
@@ -409,7 +427,8 @@ public sealed class AmountValidationService : IAmountValidationService
                 SourceAddress: confirmedPayment.FromAddress,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
                 IsMultiPayment: false,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                RefundAddress: refundTo),
             cancellationToken);
 
         _logger.LogInformation(
@@ -422,11 +441,15 @@ public sealed class AmountValidationService : IAmountValidationService
         BlockchainTransaction confirmedPayment,
         PaymentAddress paymentAddress,
         Transaction transaction,
-        decimal gasFee,
         string correlationId,
         CancellationToken cancellationToken)
     {
         var received = confirmedPayment.Amount;
+
+        var refundTo = await RequireRefundTargetAsync(transaction, confirmedPayment, received, correlationId, cancellationToken);
+        if (refundTo is null) return AmountValidationOutcome.RefundAddressMissing;
+
+        var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
         // 02 §4.4 — payments arriving after the transaction left SELLER_CONFIRMED
         // are refunded in full (the state machine never advances; multi-payment
@@ -453,7 +476,7 @@ public sealed class AmountValidationService : IAmountValidationService
             transaction.Id,
             paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
-            confirmedPayment.FromAddress,
+            refundTo,
             received,
             paymentAddress.ExpectedToken);
 
@@ -470,7 +493,8 @@ public sealed class AmountValidationService : IAmountValidationService
                 SourceAddress: confirmedPayment.FromAddress,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
                 IsMultiPayment: true,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                RefundAddress: refundTo),
             cancellationToken);
 
         _logger.LogInformation(
@@ -602,26 +626,25 @@ public sealed class AmountValidationService : IAmountValidationService
         Guid transactionId,
         BlockchainNetwork network,
         BlockchainTransactionType type,
-        string sourceAddress,
+        string refundAddress,
         decimal amount,
         StablecoinType token,
         string? actualTokenAddress = null)
     {
         // 06 §3.8 type-dependent CHECK constraints — outbound transfers
         // (BUYER_REFUND / EXCESS_REFUND / WRONG_TOKEN_REFUND / INCORRECT_AMOUNT_REFUND /
-        // LATE_PAYMENT_REFUND) MUST carry PaymentAddressId NULL. The
-        // destination is the source address (FromAddress on the source row =
-        // ToAddress on the refund row).
+        // LATE_PAYMENT_REFUND) MUST carry PaymentAddressId NULL.
         //
-        // Normative source is 08 §562, NOT 02 §4.6 — the citation used to point
-        // at the latter and that is the wrong rule for this path (T110-K1).
-        // §4.6 governs BUYER_REFUND, the unwind of an ACCEPTED payment, which
-        // goes to the buyer's designated BuyerRefundAddress. Everything queued
-        // here is a REJECTED payment (insufficient / excess / wrong-token /
-        // late), and a payment the platform never accepted returns to where it
-        // came from: sending it to a self-declared address instead would route
-        // an unaccepted transfer to an unverified destination. 02 §4.4 now
-        // spells the two destinations out side by side.
+        // The destination is the buyer's refund address on the transaction's
+        // network, fixed at acceptance (11 §F8 K9, 08 §3.4 "Refund politikası")
+        // — never the incoming row's FromAddress. K9 reversed T110-K1 ("a
+        // rejected payment returns to where it came from"): most buyers will
+        // pay straight from a Turkish exchange, whose sending address is a
+        // shared hot wallet where a returned refund is lost or needs a support
+        // ticket. The refund address is one the buyer entered, that passed the
+        // network's format and sanctions checks and the 02 §12.3 change
+        // protection. The incoming FromAddress stays on the incoming row and in
+        // the events' SourceAddress, as evidence only.
         var refund = new BlockchainTransaction
         {
             Id = Guid.NewGuid(),
@@ -633,7 +656,7 @@ public sealed class AmountValidationService : IAmountValidationService
             Type = type,
             TxHash = null,
             FromAddress = string.Empty, // Deposit address set at dispatch (OutgoingTransferDispatchJob).
-            ToAddress = sourceAddress,
+            ToAddress = refundAddress,
             Amount = amount,
             Token = token,
             ActualTokenAddress = actualTokenAddress,
@@ -649,9 +672,8 @@ public sealed class AmountValidationService : IAmountValidationService
     }
 
     // Every refund this service queues is broadcast FROM the deposit address
-    // back TO the incoming row's source address (08 §562), so those two ends
-    // plus the received amount describe the exact transfer the estimate must
-    // price. The token is the third half of that description and the caller
+    // TO the buyer's refund address (K9), so those two ends plus the received
+    // amount describe the exact transfer the estimate must price. The token is the third half of that description and the caller
     // passes it explicitly: it must be the token the dispatcher will BROADCAST,
     // which is not the expected stablecoin for the wrong-token family
     // (OutgoingTransferDispatchJob resolves ActualTokenAddress). An earlier
@@ -662,16 +684,57 @@ public sealed class AmountValidationService : IAmountValidationService
     // static refund setting, i.e. the pre-round charge.
     private async Task<decimal> ResolveRefundGasFeeAsync(
         PaymentAddress paymentAddress,
+        string refundAddress,
         BlockchainTransaction incoming,
         StablecoinType broadcastToken,
         CancellationToken cancellationToken) =>
         (await _chargedGasFee.ResolveRefundFeeAsync(
             paymentAddress.Network,
             paymentAddress.Address,
-            incoming.FromAddress,
+            refundAddress,
             incoming.Amount,
             broadcastToken,
             cancellationToken)).FeeUsdt;
+
+    /// <summary>
+    /// K9 (11 §F8) — the single refund target of a rejected payment: the
+    /// buyer's refund address fixed at acceptance on the transaction's network.
+    /// </summary>
+    /// <remarks>
+    /// A deposit address is only shown from SELLER_CONFIRMED on, i.e. after
+    /// acceptance fixed the address (06 §3.5 status matrix), so a missing one
+    /// is unreachable in the normal flow. It is not filled in from the incoming
+    /// <c>FromAddress</c> — that is exactly the fallback K9 removed. Fail
+    /// closed instead: no refund row, an admin alert through the same
+    /// REFUND_BLOCKED channel as a sub-threshold refund, and the money stays
+    /// on the deposit for a manual decision.
+    /// </remarks>
+    private async Task<string?> RequireRefundTargetAsync(
+        Transaction transaction,
+        BlockchainTransaction incoming,
+        decimal amount,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(transaction.BuyerRefundAddress))
+            return transaction.BuyerRefundAddress;
+
+        _logger.LogError(
+            "Refund of {Type} txHash={TxHash} amount={Amount} not queued — transaction {TransactionId} ({Status}) has no buyer refund address; admin alerted (K9). correlationId={CorrelationId}",
+            incoming.Type, incoming.TxHash, amount, transaction.Id, transaction.Status, correlationId);
+
+        await _refundBlockedAlert.RaiseAsync(
+            transaction.Id,
+            new RefundDecision(
+                RefundOutcome.Block,
+                NetRefund: 0m,
+                Threshold: 0m,
+                GasFee: 0m,
+                TotalPaid: amount,
+                Reason: RefundBlockedReason.RefundAddressMissing),
+            cancellationToken);
+        return null;
+    }
 
     private Task<PaymentAddress?> LoadPaymentAddressAsync(Guid? id, CancellationToken cancellationToken) =>
         id is null
