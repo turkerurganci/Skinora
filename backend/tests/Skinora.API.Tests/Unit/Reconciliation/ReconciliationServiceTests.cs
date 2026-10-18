@@ -136,6 +136,29 @@ public sealed class ReconciliationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_EvmDepositAddress_SnapshotInChecksumCase_IsMatched()
+    {
+        // T145 (06 §1.4) — the deposit is stored lowercase by the canonical
+        // converter while the balance snapshot echoes the EIP-55 form. Same
+        // address: the ledger must still be compared, not reported missing.
+        const string checksummed = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+        var deposit = await SeedDepositAddressAsync(checksummed);
+        await SeedConfirmedDepositInflowAsync(deposit.Id, checksummed,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 50m);
+
+        _sidecar.QueueSnapshot(blockNumber: 100, addressTokens: new()
+        {
+            [checksummed] = SnapshotForUsdt("50000000"),
+        });
+
+        var outcome = await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, outcome.DepositAddressesChecked);
+        Assert.Equal(0, outcome.MismatchCount);
+        Assert.Empty(await LoadAuditLogsAsync());
+    }
+
+    [Fact]
     public async Task RunAsync_DepositAddress_ShortfallRaisesMismatchAndPushesAdmin()
     {
         var deposit = await SeedDepositAddressAsync("TDepositFixture-2");

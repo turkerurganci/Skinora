@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Infrastructure.Persistence;
@@ -55,10 +56,14 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
 
             // ===== Status-dependent CHECK constraints (06 §3.8) =====
 
-            // CONFIRMED: ConfirmationCount >= 20, ConfirmedAt NOT NULL
+            // CONFIRMED: ConfirmedAt NOT NULL on every network; the 20-block
+            // count is TRON's finality rule only (06 §1.4, T145). Ethereum
+            // counts as confirmed when its block is `finalized` (11 §F8 K5,
+            // 08 §3.7.4) — a chain fact the database cannot see, enforced by
+            // the Ethereum service (T148/T151), not by a block count here.
             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Confirmed",
                 "(Status <> 'CONFIRMED') " +
-                "OR (ConfirmationCount >= 20 AND ConfirmedAt IS NOT NULL)");
+                "OR (ConfirmedAt IS NOT NULL AND (Network <> 'TRON' OR ConfirmationCount >= 20))");
 
             // DETECTED: ConfirmationCount = 0
             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Detected",
@@ -70,10 +75,12 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
                 "(Status <> 'FAILED') " +
                 "OR (ConfirmedAt IS NULL)");
 
-            // PENDING: ConfirmationCount < 20
+            // PENDING: ConfirmationCount < 20 on TRON (06 §1.4, T145). An
+            // Ethereum row legitimately stays PENDING past 20 blocks while it
+            // waits for `finalized` (~64–96 blocks), so the bound is TRON-only.
             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Pending",
                 "(Status <> 'PENDING') " +
-                "OR (ConfirmationCount < 20)");
+                "OR (Network <> 'TRON' OR ConfirmationCount < 20)");
 
             // EventIndex (WP10 — 08 §3.4): NULL for outbound rows, otherwise a
             // non-negative on-chain log index for inbound monitored transfers.
@@ -92,19 +99,30 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.Type)
             .IsRequired();
 
+        // 06 §1.4 (T145) — network of the transfer; NOT NULL, existing rows
+        // were backfilled to TRON by the migration.
+        builder.Property(b => b.Network)
+            .IsRequired()
+            .HasMaxLength(20);
+
+        // On-chain identifiers are stored in the canonical form (06 §1.4):
+        // EVM 0x-hex lowercase, TRON values unchanged.
         builder.Property(b => b.TxHash)
-            .HasMaxLength(100);
+            .HasMaxLength(100)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         // WP10 (08 §3.4) — on-chain event index; nullable for outbound rows.
         builder.Property(b => b.EventIndex);
 
         builder.Property(b => b.FromAddress)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(b => b.ToAddress)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(b => b.Amount)
             .IsRequired()
@@ -114,7 +132,8 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
             .IsRequired();
 
         builder.Property(b => b.ActualTokenAddress)
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(b => b.GasFee)
             .HasPrecision(18, 6);
@@ -158,17 +177,18 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         // Configured in PaymentAddressConfiguration via HasMany
 
         // --- Unique constraints (06 §5.1) ---
-        // WP10 (08 §3.4) — per-event uniqueness on (TxHash, EventIndex) so a
-        // single transaction carrying several Transfer events to the deposit
-        // address is recorded once per event rather than collapsed to one row.
-        // Filtered on [TxHash] IS NOT NULL (NULL before broadcast). Outbound
-        // rows have EventIndex NULL but each broadcast yields a distinct TxHash,
-        // so (distinctTxHash, NULL) pairs never collide; inbound rows carry a
-        // real >= 0 index. Replaces the former TxHash-only UQ index.
-        builder.HasIndex(b => new { b.TxHash, b.EventIndex })
+        // WP10 (08 §3.4) — per-event uniqueness so a single transaction
+        // carrying several Transfer events to the deposit address is recorded
+        // once per event rather than collapsed to one row. Filtered on
+        // [TxHash] IS NOT NULL (NULL before broadcast). Outbound rows have
+        // EventIndex NULL but each broadcast yields a distinct TxHash, so
+        // (distinctTxHash, NULL) pairs never collide; inbound rows carry a
+        // real >= 0 index. T145 (06 §1.4) leads the key with Network: a hash
+        // is only unique within the chain that produced it.
+        builder.HasIndex(b => new { b.Network, b.TxHash, b.EventIndex })
             .IsUnique()
             .HasFilter("[TxHash] IS NOT NULL")
-            .HasDatabaseName("UQ_BlockchainTransactions_TxHash_EventIndex");
+            .HasDatabaseName("UQ_BlockchainTransactions_Network_TxHash_EventIndex");
 
         // WP1 F1 (S2 money-safety) — at most one SELLER_PAYOUT row per
         // transaction. Database-level backstop behind SellerPayoutQueueJob's

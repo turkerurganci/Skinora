@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Infrastructure.Persistence;
@@ -21,9 +22,17 @@ public class PaymentAddressConfiguration : IEntityTypeConfiguration<PaymentAddre
         builder.Property(p => p.TransactionId)
             .IsRequired();
 
+        // 06 §1.4 (T145) — network of the deposit address; NOT NULL, existing
+        // rows were backfilled to TRON by the migration.
+        builder.Property(p => p.Network)
+            .IsRequired()
+            .HasMaxLength(20);
+
+        // Stored in the canonical form (06 §1.4): EVM lowercase, TRON as-is.
         builder.Property(p => p.Address)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(p => p.HdWalletIndex)
             .IsRequired();
@@ -59,13 +68,16 @@ public class PaymentAddressConfiguration : IEntityTypeConfiguration<PaymentAddre
             .IsUnique()
             .HasDatabaseName("UQ_PaymentAddresses_TransactionId");
 
-        builder.HasIndex(p => p.Address)
+        // 06 §1.4 (T145) — both keys are per network: every network has its
+        // own seed (11 §F8 K7), so HD index 0 exists once per network and the
+        // same address string can only collide within one network.
+        builder.HasIndex(p => new { p.Network, p.Address })
             .IsUnique()
-            .HasDatabaseName("UQ_PaymentAddresses_Address");
+            .HasDatabaseName("UQ_PaymentAddresses_Network_Address");
 
-        builder.HasIndex(p => p.HdWalletIndex)
+        builder.HasIndex(p => new { p.Network, p.HdWalletIndex })
             .IsUnique()
-            .HasDatabaseName("UQ_PaymentAddresses_HdWalletIndex");
+            .HasDatabaseName("UQ_PaymentAddresses_Network_HdWalletIndex");
 
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(p => p.MonitoringStatus)

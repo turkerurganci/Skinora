@@ -186,7 +186,9 @@ public sealed class TransactionCreationService : ITransactionCreationService
             return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
                 "Seller profile payout address fails TRC-20 validation (02 §12.3).");
 
-        var sanctions = await _sanctions.EvaluateAsync(payoutAddress, cancellationToken);
+        // The profile payout address is a TRON address until T146 (06 §1.4).
+        var sanctions = await _sanctions.EvaluateAsync(
+            BlockchainNetwork.TRON, payoutAddress, cancellationToken);
         if (sanctions.IsMatch)
             return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
                 $"Seller profile payout address matched sanctions list '{sanctions.MatchedList}'.");

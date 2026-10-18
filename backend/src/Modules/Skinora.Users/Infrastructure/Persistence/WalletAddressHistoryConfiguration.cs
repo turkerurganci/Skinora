@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Infrastructure.Persistence;
@@ -28,10 +29,17 @@ public class WalletAddressHistoryConfiguration : IEntityTypeConfiguration<Wallet
             .IsRequired()
             .HasMaxLength(10);
 
-        // Same length as User.DefaultPayoutAddress / DefaultRefundAddress.
+        // 06 §1.4 (T145) — the history is kept per network.
+        builder.Property(h => h.Network)
+            .IsRequired()
+            .HasMaxLength(20);
+
+        // Same length as User.DefaultPayoutAddress / DefaultRefundAddress;
+        // canonical form (06 §1.4).
         builder.Property(h => h.Address)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(h => h.SetAt);
 
@@ -47,7 +55,7 @@ public class WalletAddressHistoryConfiguration : IEntityTypeConfiguration<Wallet
         builder.HasIndex(h => h.UserId)
             .HasDatabaseName("IX_WalletAddressHistory_UserId");
 
-        builder.HasIndex(h => new { h.UserId, h.Type })
-            .HasDatabaseName("IX_WalletAddressHistory_UserId_Type");
+        builder.HasIndex(h => new { h.UserId, h.Network, h.Type })
+            .HasDatabaseName("IX_WalletAddressHistory_UserId_Network_Type");
     }
 }

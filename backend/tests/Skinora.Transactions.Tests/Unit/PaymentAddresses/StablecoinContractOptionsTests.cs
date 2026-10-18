@@ -106,6 +106,20 @@ public class StablecoinContractOptionsTests
         Assert.Null(sut.ResolveByContract(NileUsdt.ToUpperInvariant()));
     }
 
+    [Theory]
+    // T145 (06 §1.4) — an EVM contract is hex: its EIP-55 letter case is a
+    // checksum, not part of the identity. The configured checksummed form and
+    // the lowercase stored form name the same contract.
+    [InlineData("0xdac17f958d2ee523a2206206994597c13d831ec7")]
+    [InlineData("0xDAC17F958D2EE523A2206206994597C13D831EC7")]
+    [InlineData("0xdAC17F958D2ee523a2206206994597C13D831ec7")]
+    public void ResolveByContract_EvmContract_Matches_In_Any_Letter_Case(string reported)
+    {
+        var sut = new StablecoinContractOptions { Usdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7" };
+
+        Assert.Equal(StablecoinType.USDT, sut.ResolveByContract(reported));
+    }
+
     [Fact]
     public void ResolveContractAddress_Rejects_Undefined_Enum_Value()
     {

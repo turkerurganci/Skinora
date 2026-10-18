@@ -74,6 +74,18 @@ public class MultiAccountSignalEvaluatorTests
         Assert.Equal(2, result.Count);
     }
 
+    [Fact]
+    public void ParseExchangeAddresses_EvmAddress_Matches_In_Any_Letter_Case()
+    {
+        // T145 (06 §1.4) — payment FromAddress values are stored lowercase; an
+        // admin may paste the EIP-55 form. Both name the same EVM address.
+        var result = MultiAccountSignalEvaluator.ParseExchangeAddresses(
+            "0xdAC17F958D2ee523a2206206994597C13D831ec7,0xDAC17F958D2EE523A2206206994597C13D831EC7");
+
+        Assert.Single(result);
+        Assert.Contains("0xdac17f958d2ee523a2206206994597c13d831ec7", result);
+    }
+
     // ---------- PickStrongMatchType ----------
 
     [Fact]

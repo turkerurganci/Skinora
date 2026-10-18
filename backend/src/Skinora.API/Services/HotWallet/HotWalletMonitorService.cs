@@ -8,6 +8,7 @@ using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -107,7 +108,9 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         }
 
         var balances = snapshot.Balances
-            .FirstOrDefault(b => string.Equals(b.Address, settings.HotWalletAddress, StringComparison.Ordinal));
+            // Canonical comparison (06 §1.4, T145) — case-insensitive for an
+            // EVM address, exact for TRON base58.
+            .FirstOrDefault(b => BlockchainAddress.AreEqual(b.Address, settings.HotWalletAddress));
         if (balances is null)
         {
             _logger.LogWarning(

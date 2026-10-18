@@ -1,4 +1,5 @@
 using Skinora.Shared.Domain;
+using Skinora.Shared.Enums;
 
 namespace Skinora.Platform.Domain.Entities;
 
@@ -14,11 +15,12 @@ public class SanctionedAddress : BaseEntity
     public string Address { get; set; } = string.Empty;
 
     /// <summary>
-    /// Ağ kimliği — MVP'de yalnız <c>TRC-20</c> (06 §3.25). Reserved for
-    /// ERC-20 / BTC genişlemesi. CHECK constraint yalnız MVP değerini kabul
-    /// eder.
+    /// Ağ — <c>TRON</c> / <c>ETHEREUM</c> (06 §3.25, §2.25; T145). Eşleşme
+    /// <c>(Network, kanonik Address)</c> üzerinden yapılır; CHECK constraint
+    /// <see cref="BlockchainNetwork"/> değerlerini kabul eder. T145 öncesi
+    /// tek değer <c>'TRC-20'</c> idi — migration onu <c>TRON</c>'a çevirdi.
     /// </summary>
-    public string Network { get; set; } = SanctionedAddressNetworks.Trc20;
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
 
     /// <summary>
     /// Liste kaynağı — <c>OFAC</c>, <c>EU</c>, <c>UN</c>, <c>MANUAL</c>.

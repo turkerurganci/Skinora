@@ -891,7 +891,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     {
         private readonly string _list;
         public MatchingSanctionsCheck(string list) => _list = list;
-        public Task<WalletSanctionsDecision> EvaluateAsync(string address, CancellationToken cancellationToken)
+        public Task<WalletSanctionsDecision> EvaluateAsync(BlockchainNetwork network, string address, CancellationToken cancellationToken)
             => Task.FromResult(WalletSanctionsDecision.Match(_list));
     }
 

@@ -63,6 +63,32 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(TransactionStatus), Enum.Parse<TransactionStatus>(valueName)));
     }
 
+    // ── BlockchainNetwork (2) — 06 §2.25, T145 ─────────────────────
+
+    [Fact]
+    public void BlockchainNetwork_ShouldHave2Values()
+    {
+        var values = Enum.GetValues<BlockchainNetwork>();
+        Assert.Equal(2, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(BlockchainNetwork.TRON))]
+    [InlineData(nameof(BlockchainNetwork.ETHEREUM))]
+    public void BlockchainNetwork_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(BlockchainNetwork), Enum.Parse<BlockchainNetwork>(valueName)));
+    }
+
+    [Fact]
+    public void BlockchainNetwork_Tron_IsTheClrDefault()
+    {
+        // Rows created by code that does not set a network yet must land on
+        // TRON, the only network before F8 — reordering the enum would silently
+        // move every such row to another chain.
+        Assert.Equal(BlockchainNetwork.TRON, default(BlockchainNetwork));
+    }
+
     // ── StablecoinType (2) ──────────────────────────────────────────
 
     [Fact]
@@ -586,7 +612,7 @@ public class EnumTests
 
         // 25 after the v3.0 P2P pivot removed 5 bot/trade enums (TradeOfferDirection,
         // TradeOfferStatus, PlatformSteamBotStatus, BotRecoveryStatus, ItemRefundTrigger)
-        // and added DeliveryEvidence.
-        Assert.Equal(25, enumTypes.Count);
+        // and added DeliveryEvidence; 26 since T145 added BlockchainNetwork (06 §2.25).
+        Assert.Equal(26, enumTypes.Count);
     }
 }

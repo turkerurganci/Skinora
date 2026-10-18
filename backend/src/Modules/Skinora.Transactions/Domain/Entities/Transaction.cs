@@ -38,6 +38,17 @@ public class Transaction : BaseEntity, ISoftDeletable, IAuditableEntity
 
     // --- Price & Commission ---
     public StablecoinType StablecoinType { get; set; }
+
+    /// <summary>
+    /// The network the buyer pays on (06 §1.4, T145). NULL until the buyer
+    /// accepts; set once at acceptance and never changed afterwards. Before
+    /// T147 adds the buyer's choice, acceptance always writes
+    /// <see cref="BlockchainNetwork.TRON"/>. The deposit address, every
+    /// blockchain row and any payout issue of the transaction carry the same
+    /// network (11 §F8 K3).
+    /// </summary>
+    public BlockchainNetwork? Network { get; set; }
+
     public decimal Price { get; set; }
     public decimal CommissionRate { get; set; }
     public decimal CommissionAmount { get; set; }

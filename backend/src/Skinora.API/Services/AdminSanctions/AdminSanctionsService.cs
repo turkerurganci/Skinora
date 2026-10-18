@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Application.Audit;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
@@ -40,10 +41,6 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
     public async Task<PagedResult<SanctionedAddressDto>> ListAsync(
         AdminSanctionsListQuery query, CancellationToken cancellationToken)
     {
-        var network = string.IsNullOrWhiteSpace(query.Network)
-            ? SanctionedAddressNetworks.Trc20
-            : query.Network;
-
         var isActive = query.IsActive ?? true;
 
         var page = query.Page < 1 ? 1 : query.Page;
@@ -53,6 +50,26 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             > MaxPageSize => MaxPageSize,
             _ => query.PageSize,
         };
+
+        // 07 §9.23 — `network` filtresi BlockchainNetwork adıdır (T145);
+        // verilmezse TRON. Tanınmayan bir değer (ör. T145 öncesinin 'TRC-20')
+        // hiçbir satırla eşleşmez — eski davranışla aynı: bilinmeyen filtre
+        // boş sayfa döner, 400 değil.
+        if (!string.IsNullOrWhiteSpace(query.Network)
+            && !SanctionedAddressNetworks.TryParse(query.Network, out _))
+        {
+            return new PagedResult<SanctionedAddressDto>
+            {
+                Items = [],
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = 0,
+            };
+        }
+
+        var network = string.IsNullOrWhiteSpace(query.Network)
+            ? BlockchainNetwork.TRON
+            : Enum.Parse<BlockchainNetwork>(query.Network);
 
         var q = _db.Set<SanctionedAddress>()
             .AsNoTracking()
@@ -123,18 +140,36 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
         string? ipAddress,
         CancellationToken cancellationToken)
     {
-        var address = request.Address?.Trim();
-        if (string.IsNullOrWhiteSpace(address))
+        var rawAddress = request.Address?.Trim();
+        if (string.IsNullOrWhiteSpace(rawAddress))
             return Fail(AddSanctionedAddressStatus.ValidationFailed, "address is required.");
 
-        if (!_addressValidator.IsValid(address))
-            return Fail(AddSanctionedAddressStatus.InvalidAddress,
-                "Wallet address is not a valid Tron (TRC-20) address.");
-
-        var network = (request.Network ?? SanctionedAddressNetworks.Trc20).Trim();
-        if (!SanctionedAddressNetworks.IsKnown(network))
+        // 07 §9.24 (T145) — network is a BlockchainNetwork name; omitted means
+        // TRON (pre-F8 behaviour). The validator is chosen by network.
+        var networkValue = string.IsNullOrWhiteSpace(request.Network)
+            ? nameof(BlockchainNetwork.TRON)
+            : request.Network.Trim();
+        if (!SanctionedAddressNetworks.TryParse(networkValue, out var network))
             return Fail(AddSanctionedAddressStatus.ValidationFailed,
                 $"network must be one of: {string.Join(", ", SanctionedAddressNetworks.All)}.");
+
+        switch (network)
+        {
+            case BlockchainNetwork.TRON when !_addressValidator.IsValid(rawAddress):
+                return Fail(AddSanctionedAddressStatus.InvalidAddress,
+                    "Wallet address is not a valid Tron (TRC-20) address.");
+            // EIP-55: a mixed-case address must carry a valid checksum. An
+            // all-lowercase / all-uppercase address has no checksum to verify
+            // and is accepted — the list is curated by an admin copying from
+            // the source feed, and the stored form is lowercase either way
+            // (06 §1.4).
+            case BlockchainNetwork.ETHEREUM when EvmAddress.Check(rawAddress) == EvmAddressCheck.Invalid:
+                return Fail(AddSanctionedAddressStatus.InvalidAddress,
+                    "Wallet address is not a valid Ethereum address (0x + 40 hex, EIP-55 checksum when mixed case).");
+        }
+
+        // Canonical form (06 §1.4): what is stored, compared and echoed back.
+        var address = BlockchainAddress.Canonicalize(rawAddress);
 
         var source = (request.Source ?? SanctionedAddressSources.Manual).Trim();
         if (!SanctionedAddressSources.IsKnown(source))
@@ -146,12 +181,10 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             return Fail(AddSanctionedAddressStatus.ValidationFailed,
                 "reason must not exceed 500 characters.");
 
-        // 06 §3.25 filtered UQ — aktif satır başına benzersiz adres. Defansif
-        // pre-insert kontrolü: race race ihtimaline karşı DB constraint son
-        // hat olarak kalır; concurrent insert UQ ihlali ile düşer (catch).
-        var exists = await _db.Set<SanctionedAddress>()
-            .AsNoTracking()
-            .AnyAsync(s => s.IsActive && s.Address == address, cancellationToken);
+        // 06 §3.25 filtered UQ — ağ başına aktif satır başına benzersiz adres.
+        // Defansif pre-insert kontrolü: race ihtimaline karşı DB constraint
+        // son hat olarak kalır; concurrent insert UQ ihlali ile düşer (catch).
+        var exists = await IsAddressNowActiveAsync(network, address, cancellationToken);
 
         if (exists)
             return Fail(AddSanctionedAddressStatus.AlreadyListed,
@@ -183,7 +216,7 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             NewValue: JsonSerializer.Serialize(new
             {
                 address = entity.Address,
-                network = entity.Network,
+                network = entity.Network.ToString(),
                 source = entity.Source,
                 reason = entity.Reason,
             }),
@@ -195,11 +228,11 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
         }
         catch (DbUpdateException)
         {
-            // Concurrent admin AD23 — UQ_SanctionedAddresses_Address_Active
+            // Concurrent admin AD23 — UQ_SanctionedAddresses_Network_Address_Active
             // tetiklendi. Diğer admin'in girdiği satır aktifse 409 döndür;
             // değilse rethrow (await catch filter'ında yasak, bu yüzden
             // body içinde check yapılır).
-            if (await IsAddressNowActiveAsync(address, cancellationToken))
+            if (await IsAddressNowActiveAsync(network, address, cancellationToken))
             {
                 return Fail(AddSanctionedAddressStatus.AlreadyListed,
                     "Address is already on the active sanctions list.");
@@ -211,14 +244,27 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
         // 06 §3.25 retroaktif eşleşme: yeni adres mevcut kullanıcıların
         // DefaultPayoutAddress / DefaultRefundAddress'i ile eşleşirse fraud
         // flag + emergency hold cascade tetikle (07 §9.24 "Yan etkiler").
-        var affectedUserIds = await _db.Set<User>()
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(u =>
-                u.DefaultPayoutAddress == address
-                || u.DefaultRefundAddress == address)
-            .Select(u => u.Id)
-            .ToListAsync(cancellationToken);
+        // Profil adresleri T146'ya kadar TRON adresidir (06 §1.4); başka bir
+        // ağın listesi bugün hiçbir profil adresiyle eşleşemez. Son karar
+        // kanonik biçimin birebir karşılaştırmasıdır — DB collation'ı
+        // büyük/küçük harfe duyarsız olsa da TRON base58 duyarlı kalır.
+        var affectedUserIds = new List<Guid>();
+        if (network == BlockchainNetwork.TRON)
+        {
+            var candidates = await _db.Set<User>()
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Where(u =>
+                    u.DefaultPayoutAddress == address
+                    || u.DefaultRefundAddress == address)
+                .Select(u => new { u.Id, u.DefaultPayoutAddress, u.DefaultRefundAddress })
+                .ToListAsync(cancellationToken);
+
+            affectedUserIds.AddRange(candidates
+                .Where(u => string.Equals(u.DefaultPayoutAddress, address, StringComparison.Ordinal)
+                            || string.Equals(u.DefaultRefundAddress, address, StringComparison.Ordinal))
+                .Select(u => u.Id));
+        }
 
         foreach (var userId in affectedUserIds)
         {
@@ -280,6 +326,7 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             NewValue: JsonSerializer.Serialize(new
             {
                 address = row.Address,
+                network = row.Network.ToString(),
                 source = row.Source,
             }),
             IpAddress: ipAddress), cancellationToken);
@@ -293,11 +340,13 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
             null);
     }
 
+    // `address` is canonical. The UQ is evaluated by the database collation,
+    // so the pre-check asks the same question the index does.
     private async Task<bool> IsAddressNowActiveAsync(
-        string address, CancellationToken cancellationToken)
+        BlockchainNetwork network, string address, CancellationToken cancellationToken)
         => await _db.Set<SanctionedAddress>()
             .AsNoTracking()
-            .AnyAsync(s => s.IsActive && s.Address == address, cancellationToken);
+            .AnyAsync(s => s.IsActive && s.Network == network && s.Address == address, cancellationToken);
 
     private static AddSanctionedAddressOutcome Fail(
         AddSanctionedAddressStatus status, string message)
@@ -316,7 +365,7 @@ public sealed class AdminSanctionsService : IAdminSanctionsService
         return new SanctionedAddressDto(
             Id: row.Id,
             Address: row.Address,
-            Network: row.Network,
+            Network: row.Network.ToString(),
             Source: row.Source,
             Reason: row.Reason,
             ListedAt: row.ListedAt,

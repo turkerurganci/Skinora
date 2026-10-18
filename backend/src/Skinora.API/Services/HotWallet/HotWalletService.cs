@@ -109,6 +109,9 @@ public sealed class HotWalletService : IHotWalletService
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transfer = new ColdWalletTransfer
         {
+            // 06 §1.4 (T145) — the configured hot/cold pair is TRON's; per-
+            // network wallets arrive with T148.
+            Network = BlockchainNetwork.TRON,
             Amount = amount,
             Token = token,
             FromAddress = addresses.HotWallet,

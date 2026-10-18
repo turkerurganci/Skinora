@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
@@ -193,8 +194,10 @@ export class PostCancelMonitorRegistry {
     if (this.stopped) {
       throw new Error('PostCancelMonitorRegistry has been shut down');
     }
-    if (this.monitors.has(options.address)) {
-      const existing = this.monitors.get(options.address)!;
+    // Canonical key (06 §1.4, T145) — see MonitorRegistry.start.
+    const key = canonicalAddress(options.address);
+    if (this.monitors.has(key)) {
+      const existing = this.monitors.get(key)!;
       logger.info(
         {
           address: options.address,
@@ -237,7 +240,7 @@ export class PostCancelMonitorRegistry {
       seenEvents: new Set(),
       eventIndexBook: createEventIndexBook(),
     };
-    this.monitors.set(options.address, entry);
+    this.monitors.set(key, entry);
     reportActiveMonitorCount('post_cancel', this.monitors.size);
     logger.info(
       {
@@ -258,7 +261,7 @@ export class PostCancelMonitorRegistry {
    * does not need to know either way — both are idempotent on the backend.
    */
   stop(address: string): { stopped: boolean } {
-    const had = this.monitors.delete(address);
+    const had = this.monitors.delete(canonicalAddress(address));
     reportActiveMonitorCount('post_cancel', this.monitors.size);
     if (had) {
       logger.info({ address }, 'Post-cancel monitor stopped');
@@ -295,7 +298,7 @@ export class PostCancelMonitorRegistry {
       // Transition first — a window expiry must change cadence before any
       // polling decision based on the new state.
       await this.maybeAdvanceState(entry);
-      if (!this.monitors.has(entry.options.address)) {
+      if (!this.monitors.has(canonicalAddress(entry.options.address))) {
         // Stopped during transition (30d → STOPPED).
         return;
       }
@@ -369,7 +372,7 @@ export class PostCancelMonitorRegistry {
 
       if (nextState === PostCancelMonitorStates.Stopped) {
         // Drop the entry — no further polling after 30-day terminal.
-        this.monitors.delete(entry.options.address);
+        this.monitors.delete(canonicalAddress(entry.options.address));
         reportActiveMonitorCount('post_cancel', this.monitors.size);
         if (this.monitors.size === 0) {
           this.clearTimer();
@@ -439,7 +442,7 @@ export class PostCancelMonitorRegistry {
       cursor: entry.phase1Cursor,
       handle: async (record) => {
         if (!this.shouldEmit(record, entry)) return;
-        if (record.token_info.address !== entry.options.expectedContract) {
+        if (!sameAddress(record.token_info.address, entry.options.expectedContract)) {
           logger.debug(
             { txHash: record.transaction_id, contract: record.token_info.address },
             'Post-cancel phase 1 returned a non-expected contract row — skipping',

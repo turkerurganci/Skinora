@@ -231,6 +231,55 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
     }
 
 
+    // ─── T145 — canonical address comparison (06 §1.4) ─────────────────
+
+    [Fact]
+    public async Task RunAsync_EvmHotWallet_SnapshotInOtherLetterCase_IsStillMatched()
+    {
+        // Configured in EIP-55 form, echoed back lowercase: the same address.
+        _walletAddresses.HotWalletAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "1000", "decimal");
+
+        _sidecar.QueueSnapshot(blockNumber: 300, addressTokens: new()
+        {
+            ["0xdac17f958d2ee523a2206206994597c13d831ec7"] = new Dictionary<string, string>
+            {
+                ["USDT"] = "1500000000",
+                ["USDC"] = "0",
+                ["TRX"] = "200000000",
+            },
+        });
+
+        var outcome = await _sut.RunAsync(CancellationToken.None);
+
+        Assert.True(outcome.HotWalletChecked);
+        Assert.Equal(1, outcome.BreachCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_TronHotWallet_SnapshotInOtherLetterCase_IsNotMatched()
+    {
+        // Base58 is case-significant: a lowercased TRON address is a different
+        // address, so the snapshot does not describe the hot wallet.
+        await ConfigureHotWalletAsync();
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "1000", "decimal");
+
+        _sidecar.QueueSnapshot(blockNumber: 301, addressTokens: new()
+        {
+            [HotWalletAddress.ToLowerInvariant()] = new Dictionary<string, string>
+            {
+                ["USDT"] = "1500000000",
+                ["USDC"] = "0",
+                ["TRX"] = "0",
+            },
+        });
+
+        var outcome = await _sut.RunAsync(CancellationToken.None);
+
+        Assert.False(outcome.HotWalletChecked);
+        Assert.Equal(0, outcome.BreachCount);
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     /// <summary>

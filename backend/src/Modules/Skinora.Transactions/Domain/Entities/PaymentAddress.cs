@@ -10,6 +10,14 @@ namespace Skinora.Transactions.Domain.Entities;
 public class PaymentAddress : BaseEntity, ISoftDeletable
 {
     public Guid TransactionId { get; set; }
+
+    /// <summary>
+    /// The network this deposit address lives on (06 §1.4, T145). Equals the
+    /// transaction's network; the HD index is counted per network, so
+    /// uniqueness is <c>(Network, Address)</c> and <c>(Network, HdWalletIndex)</c>.
+    /// </summary>
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
+
     public string Address { get; set; } = string.Empty;
     public int HdWalletIndex { get; set; }
     public decimal ExpectedAmount { get; set; }

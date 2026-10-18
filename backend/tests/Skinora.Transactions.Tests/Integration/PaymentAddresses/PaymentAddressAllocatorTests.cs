@@ -244,6 +244,47 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
     }
 
+    // ---------- T145 — HD index per network (06 §1.4) ----------
+
+    [Fact]
+    public async Task HdWalletIndex_Is_Counted_Per_Network()
+    {
+        // Another network's indices (its own seed, 11 §F8 K7) must not push
+        // the TRON counter forward: TRON's first deposit is still index 0.
+        var ethTx = await SeedTransactionAsync(TransactionStatus.CREATED);
+        await SeedPaymentAddressAsync(ethTx.Id, index: 9,
+            address: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+            network: BlockchainNetwork.ETHEREUM);
+
+        var target = await SeedTransactionAsync(TransactionStatus.CREATED);
+        var sut = BuildSut();
+        var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
+        Assert.Equal(0, result.HdWalletIndex);
+        Assert.Equal(0, _sidecar.Calls.Single().Index);
+
+        await using var verify = CreateContext();
+        var row = await verify.Set<PaymentAddress>().SingleAsync(p => p.TransactionId == target.Id);
+        Assert.Equal(BlockchainNetwork.TRON, row.Network);
+    }
+
+    [Fact]
+    public async Task Allocated_Row_Carries_The_Transaction_Network()
+    {
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        transaction.Network = BlockchainNetwork.TRON;
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut();
+        var result = await sut.AllocateAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
+        await using var verify = CreateContext();
+        var row = await verify.Set<PaymentAddress>().SingleAsync(p => p.TransactionId == transaction.Id);
+        Assert.Equal(BlockchainNetwork.TRON, row.Network);
+    }
+
     private PaymentAddressAllocator BuildSut() =>
         new(Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance);
 
@@ -276,12 +317,15 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         return tx;
     }
 
-    private async Task SeedPaymentAddressAsync(Guid transactionId, int index, string address)
+    private async Task SeedPaymentAddressAsync(
+        Guid transactionId, int index, string address,
+        BlockchainNetwork network = BlockchainNetwork.TRON)
     {
         Context.Set<PaymentAddress>().Add(new PaymentAddress
         {
             Id = Guid.NewGuid(),
             TransactionId = transactionId,
+            Network = network,
             Address = address,
             HdWalletIndex = index,
             ExpectedAmount = 100.00m,

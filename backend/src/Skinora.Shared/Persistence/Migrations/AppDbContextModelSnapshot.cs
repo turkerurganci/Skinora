@@ -666,6 +666,11 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<Guid>("InitiatedByAdminId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("ToAddress")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -685,9 +690,9 @@ namespace Skinora.Shared.Persistence.Migrations
 
                     b.HasIndex("InitiatedByAdminId");
 
-                    b.HasIndex("TxHash")
+                    b.HasIndex("Network", "TxHash")
                         .IsUnique()
-                        .HasDatabaseName("UQ_ColdWalletTransfers_TxHash");
+                        .HasDatabaseName("UQ_ColdWalletTransfers_Network_TxHash");
 
                     b.ToTable("ColdWalletTransfers", (string)null);
                 });
@@ -811,14 +816,14 @@ namespace Skinora.Shared.Persistence.Migrations
 
                     b.HasIndex("AddedByAdminId");
 
-                    b.HasIndex("Address")
+                    b.HasIndex("Network", "Address")
                         .IsUnique()
-                        .HasDatabaseName("UQ_SanctionedAddresses_Address_Active")
+                        .HasDatabaseName("UQ_SanctionedAddresses_Network_Address_Active")
                         .HasFilter("[IsActive] = 1");
 
                     b.ToTable("SanctionedAddresses", null, t =>
                         {
-                            t.HasCheckConstraint("CK_SanctionedAddresses_Network", "[Network] IN ('TRC-20')");
+                            t.HasCheckConstraint("CK_SanctionedAddresses_Network", "[Network] IN ('TRON', 'ETHEREUM')");
 
                             t.HasCheckConstraint("CK_SanctionedAddresses_Source", "[Source] IN ('OFAC', 'EU', 'UN', 'MANUAL')");
                         });
@@ -1936,6 +1941,11 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
 
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime?>("NextAttemptAt")
                         .HasColumnType("datetime2");
 
@@ -1991,9 +2001,9 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.HasIndex("TransactionId")
                         .HasDatabaseName("IX_BlockchainTransactions_TransactionId");
 
-                    b.HasIndex("TxHash", "EventIndex")
+                    b.HasIndex("Network", "TxHash", "EventIndex")
                         .IsUnique()
-                        .HasDatabaseName("UQ_BlockchainTransactions_TxHash_EventIndex")
+                        .HasDatabaseName("UQ_BlockchainTransactions_Network_TxHash_EventIndex")
                         .HasFilter("[TxHash] IS NOT NULL");
 
                     b.HasIndex("Status", "NextAttemptAt", "CreatedAt")
@@ -2016,13 +2026,13 @@ namespace Skinora.Shared.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_BlockchainTransactions_EventIndex", "([EventIndex] IS NULL) OR ([EventIndex] >= 0)");
 
-                            t.HasCheckConstraint("CK_BlockchainTransactions_Status_Confirmed", "(Status <> 'CONFIRMED') OR (ConfirmationCount >= 20 AND ConfirmedAt IS NOT NULL)");
+                            t.HasCheckConstraint("CK_BlockchainTransactions_Status_Confirmed", "(Status <> 'CONFIRMED') OR (ConfirmedAt IS NOT NULL AND (Network <> 'TRON' OR ConfirmationCount >= 20))");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Detected", "(Status <> 'DETECTED') OR (ConfirmationCount = 0)");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Failed", "(Status <> 'FAILED') OR (ConfirmedAt IS NULL)");
 
-                            t.HasCheckConstraint("CK_BlockchainTransactions_Status_Pending", "(Status <> 'PENDING') OR (ConfirmationCount < 20)");
+                            t.HasCheckConstraint("CK_BlockchainTransactions_Status_Pending", "(Status <> 'PENDING') OR (Network <> 'TRON' OR ConfirmationCount < 20)");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Type_BuyerPayment", "(Type <> 'BUYER_PAYMENT') OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL)");
 
@@ -2120,6 +2130,11 @@ namespace Skinora.Shared.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -2134,14 +2149,6 @@ namespace Skinora.Shared.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Address")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_PaymentAddresses_Address");
-
-                    b.HasIndex("HdWalletIndex")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_PaymentAddresses_HdWalletIndex");
-
                     b.HasIndex("MonitoringStatus")
                         .HasDatabaseName("IX_PaymentAddresses_MonitoringStatus_Active")
                         .HasFilter("[MonitoringStatus] IN ('ACTIVE','POST_CANCEL_24H','POST_CANCEL_7D','POST_CANCEL_30D')");
@@ -2149,6 +2156,14 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.HasIndex("TransactionId")
                         .IsUnique()
                         .HasDatabaseName("UQ_PaymentAddresses_TransactionId");
+
+                    b.HasIndex("Network", "Address")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PaymentAddresses_Network_Address");
+
+                    b.HasIndex("Network", "HdWalletIndex")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PaymentAddresses_Network_HdWalletIndex");
 
                     b.ToTable("PaymentAddresses", (string)null);
                 });
@@ -2173,6 +2188,11 @@ namespace Skinora.Shared.Persistence.Migrations
 
                     b.Property<Guid?>("EscalatedToAdminId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("PayoutTxHash")
                         .HasMaxLength(100)
@@ -2391,6 +2411,10 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<decimal?>("MarketPriceAtCreation")
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("Network")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("PaymentDeadline")
                         .HasColumnType("datetime2");
@@ -2834,6 +2858,11 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime?>("SetAt")
                         .HasColumnType("datetime2");
 
@@ -2850,8 +2879,8 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("IX_WalletAddressHistory_UserId");
 
-                    b.HasIndex("UserId", "Type")
-                        .HasDatabaseName("IX_WalletAddressHistory_UserId_Type");
+                    b.HasIndex("UserId", "Network", "Type")
+                        .HasDatabaseName("IX_WalletAddressHistory_UserId_Network_Type");
 
                     b.ToTable("WalletAddressHistory", (string)null);
                 });

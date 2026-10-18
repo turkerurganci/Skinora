@@ -1,3 +1,4 @@
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.Webhooks;
 
@@ -70,11 +71,13 @@ public sealed class StablecoinContractOptions
     {
         if (string.IsNullOrWhiteSpace(contractAddress)) return null;
 
-        // Contract-address equality without case-folding: Tron addresses ship
-        // as case-sensitive base58 (T70 derivation).
-        if (contractAddress.Equals(ResolveContractAddress(StablecoinType.USDT), StringComparison.Ordinal))
+        // Canonical equality (06 §1.4, T145): TRON base58 contracts compare
+        // exactly — base58 is case-significant — while an EVM contract matches
+        // in any letter case (EIP-55 checksum case vs. the lowercase stored
+        // form).
+        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDT)))
             return StablecoinType.USDT;
-        if (contractAddress.Equals(ResolveContractAddress(StablecoinType.USDC), StringComparison.Ordinal))
+        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDC)))
             return StablecoinType.USDC;
 
         return null;

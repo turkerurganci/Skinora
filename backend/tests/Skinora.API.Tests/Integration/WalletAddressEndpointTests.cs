@@ -397,6 +397,9 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
         var row = Assert.Single(await _factory.GetWalletHistoryAsync(user.Id));
         Assert.Equal("seller", row.Type);
         Assert.Equal(ValidSellerAddress, row.Address);
+        // T145 (06 §1.4) — the history is kept per network; profile addresses
+        // are TRON addresses until T146.
+        Assert.Equal(BlockchainNetwork.TRON, row.Network);
         Assert.NotNull(row.SetAt);
         Assert.Equal(setAt, row.SetAt!.Value, TimeSpan.FromSeconds(1));
         Assert.NotEqual(default, row.CreatedAt);
@@ -527,7 +530,7 @@ public class WalletAddressEndpointTests : IClassFixture<WalletAddressEndpointTes
         public string MatchedList { get; set; } = "OFAC";
 
         public Task<WalletSanctionsDecision> EvaluateAsync(
-            string walletAddress, CancellationToken cancellationToken)
+            BlockchainNetwork network, string walletAddress, CancellationToken cancellationToken)
             => Task.FromResult(ShouldMatch
                 ? WalletSanctionsDecision.Match(MatchedList)
                 : WalletSanctionsDecision.NoMatch());

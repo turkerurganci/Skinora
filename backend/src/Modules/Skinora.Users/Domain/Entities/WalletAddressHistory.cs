@@ -1,4 +1,5 @@
 using Skinora.Shared.Domain;
+using Skinora.Shared.Enums;
 
 namespace Skinora.Users.Domain.Entities;
 
@@ -24,6 +25,13 @@ public class WalletAddressHistory : IAppendOnly
     /// (07 §9.16). Mirrors <c>AdminWalletEntryType</c> in Skinora.Admin.
     /// </summary>
     public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The network the superseded address belonged to (06 §1.4, T145): an
+    /// address history is kept per network. Until T146 moves user addresses to
+    /// per-network rows every user address is a TRON address.
+    /// </summary>
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
 
     /// <summary>The previous wallet address (the value that was superseded).</summary>
     public string Address { get; set; } = string.Empty;

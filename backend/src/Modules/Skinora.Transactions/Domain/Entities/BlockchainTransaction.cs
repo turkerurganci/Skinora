@@ -11,6 +11,16 @@ public class BlockchainTransaction
     public Guid Id { get; set; }
     public Guid TransactionId { get; set; }
     public Guid? PaymentAddressId { get; set; }
+
+    /// <summary>
+    /// The network the transfer happened on (06 §1.4, T145) — always the
+    /// network of the parent transaction (11 §F8 K3 same-network rule). Part of
+    /// the per-event uniqueness key <c>(Network, TxHash, EventIndex)</c> and of
+    /// the confirmation CHECKs (TRON counts 20 blocks; Ethereum waits for
+    /// <c>finalized</c>, 08 §3.7.4).
+    /// </summary>
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
+
     public BlockchainTransactionType Type { get; set; }
     public string? TxHash { get; set; }
 

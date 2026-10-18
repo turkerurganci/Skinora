@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skinora.Payments.Domain.Entities;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Payments.Infrastructure.Persistence;
@@ -27,6 +28,11 @@ public class ColdWalletTransferConfiguration
         builder.Property(c => c.Id)
             .ValueGeneratedOnAdd();
 
+        // 06 §1.4 (T145) — network of the hot/cold wallet pair.
+        builder.Property(c => c.Network)
+            .IsRequired()
+            .HasMaxLength(20);
+
         builder.Property(c => c.Amount)
             .IsRequired()
             .HasColumnType("decimal(18,6)");
@@ -35,17 +41,21 @@ public class ColdWalletTransferConfiguration
             .IsRequired()
             .HasMaxLength(20);
 
+        // Canonical on-chain identifiers (06 §1.4).
         builder.Property(c => c.FromAddress)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(c => c.ToAddress)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(c => c.TxHash)
             .IsRequired()
-            .HasMaxLength(100);
+            .HasMaxLength(100)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(c => c.InitiatedByAdminId)
             .IsRequired();
@@ -59,8 +69,9 @@ public class ColdWalletTransferConfiguration
             .HasForeignKey(c => c.InitiatedByAdminId);
 
         // --- Unique constraints (06 §5.1) ---
-        builder.HasIndex(c => c.TxHash)
+        // T145 (06 §1.4) — a hash is unique within its own chain.
+        builder.HasIndex(c => new { c.Network, c.TxHash })
             .IsUnique()
-            .HasDatabaseName("UQ_ColdWalletTransfers_TxHash");
+            .HasDatabaseName("UQ_ColdWalletTransfers_Network_TxHash");
     }
 }
