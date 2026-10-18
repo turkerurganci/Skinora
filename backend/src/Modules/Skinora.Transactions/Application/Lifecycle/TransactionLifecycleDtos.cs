@@ -48,7 +48,10 @@ public sealed record TransactionParamsDto(
     decimal CommissionRate,
     PaymentTimeoutWindowDto PaymentTimeout,
     bool OpenLinkEnabled,
-    IReadOnlyList<string> SupportedStablecoins);
+    IReadOnlyList<string> SupportedStablecoins,
+    // T148 (07 §1.3) — networks open for a new transaction ("TRON" /
+    // "ETHEREUM"): a configured service that is not in a health freeze.
+    IReadOnlyList<string> SupportedNetworks);
 
 public sealed record PaymentTimeoutWindowDto(int MinHours, int MaxHours, int DefaultHours);
 

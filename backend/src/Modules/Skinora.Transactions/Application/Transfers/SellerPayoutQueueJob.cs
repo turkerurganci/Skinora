@@ -271,7 +271,12 @@ public sealed class SellerPayoutQueueJob
 
         // Runtime pre-send estimate; the static payout setting only as fallback
         // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02).
+        // T148 — the payout leaves on the transaction's own network (11 §F8 K3).
+        // A transaction that never chose one predates F8 and is TRON (06 §1.4).
+        var network = transaction.Network ?? BlockchainNetwork.TRON;
+
         var resolvedGasFee = await _chargedGasFee.ResolvePayoutFeeAsync(
+            network,
             transaction.SellerPayoutAddress,
             transaction.Price,
             transaction.StablecoinType,
@@ -296,6 +301,7 @@ public sealed class SellerPayoutQueueJob
         {
             Id = Guid.NewGuid(),
             TransactionId = transaction.Id,
+            Network = network,
             PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for SELLER_PAYOUT.
             Type = BlockchainTransactionType.SELLER_PAYOUT,
             TxHash = null,

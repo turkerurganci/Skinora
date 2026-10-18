@@ -24,7 +24,8 @@ public interface IBlockchainTransferClient
 
     /// <summary>
     /// Look up a previously broadcast txid against the solidity node to
-    /// determine whether it has reached the 20-block confirmation threshold
+    /// determine whether it has reached its network's finality (T148 —
+    /// BlockchainNetworkPolicy: TRON 20 blocks, Ethereum `finalized`)
     /// (05 §3.3). Used by <c>OutgoingTransferConfirmationJob</c>.
     /// </summary>
     Task<TransferStatusResult> GetStatusAsync(
@@ -82,7 +83,7 @@ public sealed record TransferStatusResult(
 
 public enum TransferStatusOutcome
 {
-    /// <summary>Tx confirmed (`confirmations &gt;= 20`) and on-chain result is SUCCESS.</summary>
+    /// <summary>Tx final by its network's rule (TRON `confirmations &gt;= 20`, Ethereum `finalized`) and on-chain result is SUCCESS.</summary>
     Confirmed,
 
     /// <summary>Tx solidified but the contract reverted/failed.</summary>

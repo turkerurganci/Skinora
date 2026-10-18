@@ -1,3 +1,5 @@
+using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -356,7 +358,8 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
     // ─── Helpers ────────────────────────────────────────────────────────
 
     private EnsurePaymentMonitorJob BuildSut()
-        => new(Context, _sidecar, Options.Create(new StablecoinContractOptions()),
+        => new(Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
+            StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
             NullLogger<EnsurePaymentMonitorJob>.Instance);
 
     private async Task<MonitoringStatus> ReadStatusAsync(Guid paymentAddressId)

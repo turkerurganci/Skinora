@@ -328,6 +328,100 @@ public class HttpBlockchainTransferClientTests
         Assert.Equal("REVERT", result.ContractRet);
     }
 
+    // -------------------- T148 — finality is the network's policy --------------------
+
+    [Theory]
+    // Ethereum (11 §F8 K5): only an explicit `finalized` counts — a block count
+    // far past TRON's 20 does not.
+    [InlineData(BlockchainNetwork.ETHEREUM, 120, false, TransferStatusOutcome.Pending)]
+    [InlineData(BlockchainNetwork.ETHEREUM, 120, null, TransferStatusOutcome.Pending)]
+    [InlineData(BlockchainNetwork.ETHEREUM, 3, true, TransferStatusOutcome.Confirmed)]
+    // TRON counts blocks and ignores a `finalized` flag either way.
+    [InlineData(BlockchainNetwork.TRON, 20, false, TransferStatusOutcome.Confirmed)]
+    [InlineData(BlockchainNetwork.TRON, 19, true, TransferStatusOutcome.Pending)]
+    public async Task GetStatus_Applies_The_Networks_Finality_Rule(
+        BlockchainNetwork network, int confirmations, bool? finalized, TransferStatusOutcome expected)
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "tx-policy",
+                    blockNumber = 1_000L,
+                    contractRet = "SUCCESS",
+                    confirmations,
+                    finalized,
+                    realizedFeeSun = 6_400_000L,
+                    energyUsageTotal = 64_285L,
+                    originEnergyUsage = 0L,
+                }),
+            }));
+        var sut = BuildClient(handler, network: network);
+
+        var result = await sut.GetStatusAsync("tx-policy", CancellationToken.None);
+
+        Assert.Equal(expected, result.Outcome);
+    }
+
+    [Fact]
+    public async Task GetStatus_Drops_Tron_Resource_Fields_On_Ethereum()
+    {
+        // SUN and Energy are TRON's receipt vocabulary; an Ethereum answer that
+        // happened to carry them must not be recorded as such (T148).
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "0xhash",
+                    blockNumber = 1_000L,
+                    contractRet = "SUCCESS",
+                    confirmations = 64,
+                    finalized = true,
+                    realizedFeeSun = 6_400_000L,
+                    energyUsageTotal = 64_285L,
+                    originEnergyUsage = 0L,
+                }),
+            }));
+
+        var eth = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM)
+            .GetStatusAsync("0xhash", CancellationToken.None);
+        var tron = await BuildClient(handler, network: BlockchainNetwork.TRON)
+            .GetStatusAsync("0xhash", CancellationToken.None);
+
+        Assert.Equal(TransferStatusOutcome.Confirmed, eth.Outcome);
+        Assert.Null(eth.RealizedFeeSun);
+        Assert.Null(eth.EnergyUsageTotal);
+        Assert.Null(eth.OriginEnergyUsage);
+        Assert.Equal(6_400_000L, tron.RealizedFeeSun);
+        Assert.Equal(64_285L, tron.EnergyUsageTotal);
+    }
+
+    [Theory]
+    [InlineData(BlockchainNetwork.TRON, "TRON")]
+    [InlineData(BlockchainNetwork.ETHEREUM, "ETHEREUM")]
+    public async Task Broadcast_Body_Names_The_Clients_Network(BlockchainNetwork network, string wire)
+    {
+        string? body = null;
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            body = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { txHash = "tx" }),
+            };
+        });
+
+        await BuildClient(handler, network: network).BroadcastAsync(
+            new TransferBroadcastRequest(
+                Guid.NewGuid(), BlockchainTransactionType.SELLER_PAYOUT, StablecoinType.USDT,
+                1m, "TSeller000000000000000000000000000000", null, null),
+            CancellationToken.None);
+
+        Assert.Contains($"\"network\":\"{wire}\"", body);
+    }
+
     [Fact]
     public async Task GetStatus_Pending_When_Confirmations_LT_20()
     {
@@ -428,7 +522,8 @@ public class HttpBlockchainTransferClientTests
     }
 
     private static HttpBlockchainTransferClient BuildClient(
-        HttpMessageHandler handler, string internalKey = "", int timeoutSeconds = 5)
+        HttpMessageHandler handler, string internalKey = "", int timeoutSeconds = 5,
+        BlockchainNetwork network = BlockchainNetwork.TRON)
     {
         var sidecarOptions = new BlockchainSidecarOptions
         {
@@ -444,7 +539,7 @@ public class HttpBlockchainTransferClientTests
             Timeout = sidecarOptions.ResolveTransferTimeout(),
         };
         return new HttpBlockchainTransferClient(
-            http, Options.Create(sidecarOptions), NullLogger<HttpBlockchainTransferClient>.Instance);
+            network, http, sidecarOptions, NullLogger<HttpBlockchainTransferClient>.Instance);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

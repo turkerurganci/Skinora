@@ -27,7 +27,11 @@ import type {
   SpamTokenIncomingData,
   WrongTokenIncomingData,
 } from '../webhook/WebhookPayloads.js';
-import { BlockchainWebhookEvents, PostCancelMonitorStates } from '../webhook/WebhookPayloads.js';
+import {
+  BlockchainWebhookEvents,
+  PostCancelMonitorStates,
+  buildWebhookEnvelope,
+} from '../webhook/WebhookPayloads.js';
 import {
   classifyToken,
   formatTokenAmount,
@@ -640,11 +644,11 @@ export class PostCancelMonitorRegistry {
     data: TData;
     entry: PostCancelMonitorEntry;
   }): Promise<void> {
-    const envelope: BlockchainWebhookEnvelope<TData> = {
-      event: args.event,
-      timestamp: this.clock().toISOString(),
-      data: args.data,
-    };
+    const envelope: BlockchainWebhookEnvelope<TData> = buildWebhookEnvelope(
+      args.event,
+      args.data,
+      this.clock(),
+    );
     try {
       await this.webhookSender(
         args.endpoint,

@@ -800,7 +800,11 @@ describe('PostCancelMonitorRegistry — forward scan against a TronGrid-shaped l
   function sentTo(endpoint: string): Array<{ txHash: string; eventIndex: number }> {
     return webhook.sent
       .filter((s) => s.endpoint === endpoint)
-      .map((s) => s.envelope.data as unknown as { txHash: string; eventIndex: number })
+      .map((s) => {
+        // T148 (05 §3.3a) — every post-cancel callback names the network too.
+        expect(s.envelope.network).toBe('TRON');
+        return s.envelope.data as unknown as { txHash: string; eventIndex: number };
+      })
       .map(({ txHash, eventIndex }) => ({ txHash, eventIndex }));
   }
 

@@ -1,3 +1,5 @@
+using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -38,10 +40,12 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
+    private readonly FakeBlockchainServiceRegistry _registry;
     private readonly StubRetryPolicy _retryPolicy;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly OutgoingTransferDispatchJob _sut;
+    private int _seedSequence;
 
     public OutgoingTransferDispatchJobTests()
     {
@@ -54,6 +58,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         _db.Database.EnsureCreated();
 
         _client = new StubBlockchainTransferClient();
+        _registry = FakeBlockchainServiceRegistry.ForTron(transfers: _client);
         _retryPolicy = new StubRetryPolicy();
         _outbox = new CapturingOutboxService();
         _clock = new FakeTimeProvider();
@@ -63,10 +68,10 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         // which is what SeedRefundAsync's ActualTokenAddress fixture matches.
         _sut = new OutgoingTransferDispatchJob(
             _db,
-            _client,
+            _registry,
             _retryPolicy,
             _outbox,
-            Options.Create(new StablecoinContractOptions()),
+            StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
@@ -115,6 +120,128 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
         Assert.Equal("tx-hash-payout", reloaded.TxHash);
+    }
+
+    // -------------------- T148 — same-network rule, fail closed per network --------------------
+
+    [Fact]
+    public async Task Row_On_An_Unconfigured_Network_Stays_Pending_Untouched_And_Nothing_Is_Sent()
+    {
+        // Until T150 Ethereum has no service. A row on it must not be sent to
+        // TRON's service, must not burn its retry budget and must not flip to
+        // FAILED — it waits, PENDING, for its own network's service.
+        var fixture = await SeedPayoutAsync(amount: 100m);
+        fixture.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+        Assert.DoesNotContain(_registry.Requests, r => r.Kind == "Transfers");
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(0, reloaded.RetryCount);
+        Assert.Null(reloaded.NextAttemptAt);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+    }
+
+    [Fact]
+    public async Task Each_Row_Is_Broadcast_By_Its_Own_Networks_Service()
+    {
+        var ethereumClient = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(TransferBroadcastStatus.Success, "0xeth", null, null),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereumClient);
+
+        var ethPayout = await SeedPayoutAsync(amount: 20m);
+        ethPayout.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        // Same-network rule (11 §F8 K3): Ethereum's service, never TRON's.
+        Assert.Equal(20m, Assert.Single(ethereumClient.Calls).Amount);
+        Assert.Empty(_client.Calls);
+        Assert.Equal(("Transfers", BlockchainNetwork.ETHEREUM), Assert.Single(_registry.Requests, r => r.Kind == "Transfers"));
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == ethPayout.PayoutRow.Id);
+        Assert.Equal("0xeth", reloaded.TxHash);
+    }
+
+    // T148 düzeltme turu 1 (F1). Parked rows (unconfigured network) are never
+    // sent and keep NextAttemptAt null, so if the oldest-first batch could
+    // select them they would take every slot on every run. Measured in round-1
+    // validation: 20 parked Ethereum rows → TRON's client was never called;
+    // 19 → it was. The newer TRON row must go out on the FIRST run, at exactly
+    // BatchSize parked rows and above it.
+    [Theory]
+    [InlineData(OutgoingTransferDispatchJob.BatchSize)]
+    [InlineData(OutgoingTransferDispatchJob.BatchSize + 5)]
+    public async Task Parked_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parkedRows)
+    {
+        var parked = new List<Guid>();
+        for (var i = 0; i < parkedRows; i++)
+        {
+            var eth = await SeedPayoutAsync(amount: 1m + i);
+            eth.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+            parked.Add(eth.PayoutRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tron = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 77m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-tron-behind-parked", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(tron.RefundRow.Id, call.BlockchainTransactionId);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == tron.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Equal("tx-hash-tron-behind-parked", reloaded.TxHash);
+
+        // The parked rows are still untouched: PENDING, no retry spent, never
+        // asked of any service.
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        var parkedRowsAfter = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => parked.Contains(b.Id))
+            .ToListAsync();
+        Assert.Equal(parkedRows, parkedRowsAfter.Count);
+        Assert.All(parkedRowsAfter, r =>
+        {
+            Assert.Equal(BlockchainTransactionStatus.PENDING, r.Status);
+            Assert.Equal(0, r.RetryCount);
+            Assert.Null(r.NextAttemptAt);
+        });
+    }
+
+    [Fact]
+    public async Task A_Full_Tron_Batch_Is_Still_Taken_Oldest_First_Behind_Parked_Rows()
+    {
+        // Ordering and batching are unchanged for the networks that can move:
+        // BatchSize + 1 TRON rows → the oldest BatchSize go out, the newest waits.
+        for (var i = 0; i < OutgoingTransferDispatchJob.BatchSize; i++)
+        {
+            var eth = await SeedPayoutAsync(amount: 1m);
+            eth.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tronRows = new List<Guid>();
+        for (var i = 0; i <= OutgoingTransferDispatchJob.BatchSize; i++)
+        {
+            tronRows.Add((await SeedRefundAsync(BlockchainTransactionType.EXCESS_REFUND, amount: 1m + i)).RefundRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tronRows.Take(OutgoingTransferDispatchJob.BatchSize), _client.Calls.Select(c => c.BlockchainTransactionId));
     }
 
     [Fact]
@@ -396,17 +523,20 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
 
     private async Task<(Transaction, PaymentAddress, BlockchainTransaction)> SeedTransactionAsync()
     {
+        // Unique per call (SteamId and (Network, HdWalletIndex) are unique) so a
+        // test can seed a whole batch of transactions.
+        var seq = ++_seedSequence;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000801",
+            SteamId = $"7656119800{seq * 2:D7}",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000802",
+            SteamId = $"7656119800{(seq * 2) + 1:D7}",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -437,7 +567,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             Id = Guid.NewGuid(),
             TransactionId = tx.Id,
             Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
-            HdWalletIndex = 7,
+            HdWalletIndex = 6 + seq,
             ExpectedAmount = 100m,
             ExpectedToken = StablecoinType.USDT,
             MonitoringStatus = MonitoringStatus.ACTIVE,
@@ -487,6 +617,8 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         public TransferBroadcastResult NextResult { get; set; } =
             new(TransferBroadcastStatus.Success, "tx-stub", null, null);
 
+        private int _hashSeq;
+
         public TransferStatusResult NextStatus { get; set; } =
             new(TransferStatusOutcome.Pending, null, 0, null, null);
 
@@ -498,7 +630,13 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             CancellationToken cancellationToken)
         {
             Calls.Add(request);
-            return Task.FromResult(NextResult);
+            var result = NextResult;
+            if (result.Status == TransferBroadcastStatus.Success && result.TxHash == "tx-stub")
+            {
+                // Her çağrıya benzersiz hash: TxHash unique index'i (SQL Server).
+                result = result with { TxHash = $"tx-stub-{++_hashSeq}" };
+            }
+            return Task.FromResult(result);
         }
 
         public Task<TransferStatusResult> GetStatusAsync(

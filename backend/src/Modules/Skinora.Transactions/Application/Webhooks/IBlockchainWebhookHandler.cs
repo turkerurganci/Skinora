@@ -82,4 +82,13 @@ public enum BlockchainWebhookResult
     /// (decimal parse failure, malformed GUID etc.). Logged at Warning.
     /// </summary>
     Invalid,
+
+    /// <summary>
+    /// T148 (05 §3.3a, 11 §F8 "Ethereum akış ayrıntıları") — the envelope's
+    /// <c>network</c> differs from the referenced deposit's
+    /// <c>PaymentAddress.Network</c>. Nothing is written; logged at Error. The
+    /// controller answers 409 <c>WEBHOOK_NETWORK_MISMATCH</c>, which the
+    /// sidecar treats as terminal — re-sending cannot make the two agree.
+    /// </summary>
+    NetworkMismatch,
 }

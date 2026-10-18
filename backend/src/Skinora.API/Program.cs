@@ -293,8 +293,8 @@ builder.Services.AddRateLimiting(builder.Configuration);
 // T68 — webhook signature parameters (HMAC-SHA256 shared secret + replay
 // window). The Steam sidecar reads the same secret from its WEBHOOK_SECRET
 // env var (sidecar-steam/src/config/index.ts).
-builder.Services.Configure<WebhookSettings>(
-    builder.Configuration.GetSection(WebhookSettings.SectionName));
+// T148 — one secret per network; two networks sharing one fails the start.
+WebhookSettings.AddWebhookSettings(builder.Services, builder.Configuration);
 
 // Hangfire (T09) — SQL Server storage, UTC, AutomaticRetry(3) global filter,
 // IBackgroundJobScheduler abstraction. Dashboard mount happens later in the
@@ -362,6 +362,13 @@ builder.Services.AddHostedService<RetentionJobsRegistrar>();
 builder.Services.Configure<HealthProbeOptions>(
     builder.Configuration.GetSection(HealthProbeOptions.SectionName));
 builder.Services.AddSingleton<PlatformHealthMonitorState>();
+// T148 — per-network health (05 §3.3a): the network availability check
+// (07 §7.4 supportedNetworks) reads which network's service is in an outage
+// from the probe's state. Replaces the always-healthy default the
+// Transactions module registers for hosts without a probe.
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(builder.Services, ServiceDescriptor.Singleton<
+    Skinora.Transactions.Application.Networks.IBlockchainNetworkHealth,
+    ProbeBlockchainNetworkHealth>());
 builder.Services.AddHttpClient(SidecarHealthClient.HttpClientName, client =>
 {
     // Tight timeout — a stuck sidecar must surface as an outage, not hang the

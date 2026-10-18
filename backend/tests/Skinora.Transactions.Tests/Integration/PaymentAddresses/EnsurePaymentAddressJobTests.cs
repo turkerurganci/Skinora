@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
@@ -157,20 +158,72 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         Assert.Equal(EnsurePaymentAddressJob.BatchSize, _sidecar.Calls.Count);
     }
 
-    private EnsurePaymentAddressJob BuildJob()
+    // T148 düzeltme turu 1 (F1) — derivation on a network without a service
+    // fails closed every run and the transaction stays address-less. Picked
+    // oldest-first it would hold the whole batch forever; the TRON transaction
+    // behind BatchSize (and more) of them must get its address on the first run.
+    [Theory]
+    [InlineData(EnsurePaymentAddressJob.BatchSize)]
+    [InlineData(EnsurePaymentAddressJob.BatchSize + 5)]
+    public async Task Transactions_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parked)
     {
-        var allocator = new PaymentAddressAllocator(
-            Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance);
-        return new EnsurePaymentAddressJob(
-            Context, allocator, NullLogger<EnsurePaymentAddressJob>.Instance);
+        // CreatedAt is stamped by AppDbContext on each save, so seeding one by
+        // one makes the Ethereum transactions strictly the oldest.
+        for (var i = 0; i < parked; i++)
+        {
+            await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.ETHEREUM);
+        }
+
+        // Newest of all; one explicitly TRON, one legacy (no network = TRON).
+        var tron = await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.TRON);
+        var legacy = await SeedTransactionAsync(TransactionStatus.CREATED, network: null);
+
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
+        await BuildJob(registry).ExecuteAsync();
+
+        Assert.Equal(2, _sidecar.Calls.Count);
+        Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        await using var verify = CreateContext();
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == legacy.Id));
+        Assert.Equal(2, await verify.Set<PaymentAddress>().CountAsync());
     }
 
-    private async Task<Transaction> SeedTransactionAsync(TransactionStatus status)
+    [Fact]
+    public async Task Legacy_Transactions_Wait_When_Tron_Itself_Is_Unconfigured()
+    {
+        // No network = TRON (06 §1.4): with only Ethereum configured, the
+        // legacy transaction is not a candidate, the Ethereum one is.
+        var legacy = await SeedTransactionAsync(TransactionStatus.CREATED, network: null);
+        var eth = await SeedTransactionAsync(TransactionStatus.CREATED, BlockchainNetwork.ETHEREUM);
+
+        var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, sidecar: _sidecar);
+        await BuildJob(registry).ExecuteAsync();
+
+        Assert.Single(_sidecar.Calls);
+        await using var verify = CreateContext();
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == eth.Id));
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == legacy.Id));
+    }
+
+    private EnsurePaymentAddressJob BuildJob(FakeBlockchainServiceRegistry? registry = null)
+    {
+        registry ??= FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
+        var allocator = new PaymentAddressAllocator(
+            Context, registry, NullLogger<PaymentAddressAllocator>.Instance);
+        return new EnsurePaymentAddressJob(
+            Context, allocator, registry, NullLogger<EnsurePaymentAddressJob>.Instance);
+    }
+
+    private async Task<Transaction> SeedTransactionAsync(
+        TransactionStatus status,
+        BlockchainNetwork? network = null)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
         {
             Id = Guid.NewGuid(),
+            Network = network,
             Status = status,
             SellerId = _seller.Id,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,

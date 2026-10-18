@@ -37,6 +37,16 @@ public static class SystemSettingsCatalog
     public const string HotWalletAddressKey = "reconciliation.hot_wallet_address";
     public const string ColdWalletAddressKey = "reconciliation.cold_wallet_address";
 
+    /// <summary>
+    /// Ethereum's own pair (T148 — 05 §3.3a: every network has its own hot and
+    /// cold wallet). Same rule as the TRON keys above: listed so the panel
+    /// shows where the deployment points, read from
+    /// <c>ETHEREUM_HOT_WALLET_ADDRESS</c> / <c>ETHEREUM_COLD_WALLET_ADDRESS</c>,
+    /// never writable.
+    /// </summary>
+    public const string EthereumHotWalletAddressKey = "blockchain.ethereum.hot_wallet_address";
+    public const string EthereumColdWalletAddressKey = "blockchain.ethereum.cold_wallet_address";
+
     private static readonly Dictionary<string, SystemSettingMetadata> _byKey =
         BuildCatalog().ToDictionary(m => m.Key, StringComparer.Ordinal);
 
@@ -114,6 +124,21 @@ public static class SystemSettingsCatalog
         new(ColdWalletAddressKey,                         "blockchain_health",    "Cold wallet adresi (ortam değişkeni, salt okunur)",         null, EnvSourced: true),
         new("hot_wallet.monitor_cron",                    "blockchain_health",    "Hot wallet monitor job cron ifadesi (T77)",                 null),
         new("hot_wallet.trx_balance_minimum",             "wallet_security",      "Hot wallet TRX bakiye alt eşiği (gas için)",                "TRX"),
+
+        // --- Ethereum per-network parameters (T148 — 05 §3.3a, 06 §1.4 "Ayarlar") ---
+        // TRON keeps the unprefixed keys above. Values are the T142
+        // measurements; consumers land with T149 (fee cap / fallbacks in the
+        // fee policy), T153 (fuel wallet) and T158 (alarms).
+        new(EthereumHotWalletAddressKey,                  "blockchain_health",    "Ethereum hot wallet adresi (ortam değişkeni, salt okunur)", null, EnvSourced: true),
+        new(EthereumColdWalletAddressKey,                 "blockchain_health",    "Ethereum cold wallet adresi (ortam değişkeni, salt okunur)", null, EnvSourced: true),
+        new("blockchain.ethereum.refund_gas_fee_estimate_usdt", "blockchain_health", "Ethereum — iade gas fee fallback'i (runtime tahmin alınamazsa)", "USDT"),
+        new("blockchain.ethereum.payout_gas_fee_estimate_usdt", "blockchain_health", "Ethereum — satıcı payout gas fee fallback'i (runtime tahmin alınamazsa)", "USDT"),
+        new("blockchain.ethereum.max_charged_gas_fee_usdt",     "blockchain_health", "Ethereum — kesilebilecek gas fee üst sınırı (aşan tahmin reddedilir)", "USDT"),
+        new("blockchain.ethereum.fee_cap_usd_per_transfer",     "blockchain_health", "Ethereum — platformun üstlendiği ücret tavanı (gönderim başına)", "USD"),
+        new("blockchain.ethereum.fee_cap_wait_alarm_minutes",   "blockchain_health", "Ethereum — tavan yüzünden kesintisiz bekleme alarm eşiği", "dakika"),
+        new("blockchain.ethereum.finality_stall_alarm_minutes", "blockchain_health", "Ethereum — son finalized blok bu süreden eskiyse alarm", "dakika"),
+        new("blockchain.ethereum.hot_wallet_eth_balance_minimum",  "wallet_security", "Ethereum — hot wallet ETH bakiye alt eşiği (gas için)", "ETH"),
+        new("blockchain.ethereum.fuel_wallet_eth_balance_minimum", "wallet_security", "Ethereum — yakıt cüzdanı ETH bakiye alt eşiği", "ETH"),
 
         // --- Buyer identification (open link toggle, 02 §16.2 "Yöntem 2'yi aktif/pasif") ---
         new("open_link_enabled",                          "buyer_identification", "Açık link yöntemi aktif",                                   null),

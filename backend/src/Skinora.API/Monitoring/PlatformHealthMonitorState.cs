@@ -1,13 +1,68 @@
+using Skinora.Shared.Enums;
+using Skinora.Transactions.Application.Networks;
+
 namespace Skinora.API.Monitoring;
+
+/// <summary>
+/// <see cref="IBlockchainNetworkHealth"/> over the probe's in-memory state
+/// (T148): a network is degraded while its blockchain component is in a
+/// detected outage.
+/// </summary>
+public sealed class ProbeBlockchainNetworkHealth : IBlockchainNetworkHealth
+{
+    private readonly PlatformHealthMonitorState _state;
+
+    public ProbeBlockchainNetworkHealth(PlatformHealthMonitorState state)
+    {
+        _state = state;
+    }
+
+    public bool IsDegraded(BlockchainNetwork network) =>
+        _state.IsInOutage(PlatformComponents.BlockchainFor(network));
+}
 
 /// <summary>Stable component identifiers probed by the WP16 health monitor.</summary>
 public static class PlatformComponents
 {
     public const string Steam = "STEAM";
-    public const string Blockchain = "BLOCKCHAIN";
+
+    /// <summary>
+    /// TRON's blockchain service (T148 — health is per network, 05 §3.3a
+    /// "Sağlık ve dondurma"; before T148 this component was the single
+    /// <c>BLOCKCHAIN</c>).
+    /// </summary>
+    public const string BlockchainTron = "BLOCKCHAIN_TRON";
+
+    /// <summary>Ethereum's blockchain service (T148). Unmonitored while it has no base URL.</summary>
+    public const string BlockchainEthereum = "BLOCKCHAIN_ETHEREUM";
 
     /// <summary>The components the probe sweeps each run.</summary>
-    public static readonly IReadOnlyList<string> All = new[] { Steam, Blockchain };
+    public static readonly IReadOnlyList<string> All = new[] { Steam, BlockchainTron, BlockchainEthereum };
+
+    /// <summary>The health component of <paramref name="network"/>'s blockchain service.</summary>
+    public static string BlockchainFor(BlockchainNetwork network) => network switch
+    {
+        BlockchainNetwork.TRON => BlockchainTron,
+        BlockchainNetwork.ETHEREUM => BlockchainEthereum,
+        _ => throw new ArgumentOutOfRangeException(nameof(network), network, "No health component for this network."),
+    };
+
+    /// <summary>The network a blockchain component stands for; <c>false</c> for <see cref="Steam"/>.</summary>
+    public static bool TryGetNetwork(string component, out BlockchainNetwork network)
+    {
+        switch (component)
+        {
+            case BlockchainTron:
+                network = BlockchainNetwork.TRON;
+                return true;
+            case BlockchainEthereum:
+                network = BlockchainNetwork.ETHEREUM;
+                return true;
+            default:
+                network = default;
+                return false;
+        }
+    }
 }
 
 /// <summary>The health-state transition produced by recording a probe result.</summary>
@@ -96,6 +151,19 @@ public sealed class PlatformHealthMonitorState
             // re-detects Degraded. Recovered cleared it → set it back so the next
             // healthy probe re-detects Recovered.
             health.InOutage = transition == HealthTransition.Recovered;
+        }
+    }
+
+    /// <summary>
+    /// True while <paramref name="component"/> is in a detected outage — the
+    /// degraded edge fired and no recovery has been recorded since (T148: the
+    /// network availability check reads this).
+    /// </summary>
+    public bool IsInOutage(string component)
+    {
+        lock (_lock)
+        {
+            return _state.TryGetValue(component, out var health) && health.InOutage;
         }
     }
 

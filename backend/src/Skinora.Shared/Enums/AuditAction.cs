@@ -103,7 +103,8 @@ public enum AuditAction
     // once per state transition by the periodic health probe when a Steam /
     // blockchain sidecar crosses the consecutive-failure threshold (DEGRADED) or
     // recovers (RECOVERED). EntityType = "PlatformHealth"; EntityId = the
-    // component ("STEAM" / "BLOCKCHAIN"); NewValue is a JSON envelope
+    // component ("STEAM" / "BLOCKCHAIN_TRON" / "BLOCKCHAIN_ETHEREUM" — one per
+    // network since T148; earlier rows say "BLOCKCHAIN"); NewValue is a JSON envelope
     // {component, status, consecutiveFailures}. ActorType = SYSTEM. SECURITY_EVENT
     // category — sits beside the reconciliation operational alarms;
     // pairs 1:1 with the ADMIN_PLATFORM_OUTAGE admin notification.

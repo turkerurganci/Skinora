@@ -27,7 +27,7 @@ import type {
   SpamTokenIncomingData,
   WrongTokenIncomingData,
 } from '../webhook/WebhookPayloads.js';
-import { BlockchainWebhookEvents } from '../webhook/WebhookPayloads.js';
+import { BlockchainWebhookEvents, buildWebhookEnvelope } from '../webhook/WebhookPayloads.js';
 import {
   classifyToken,
   confirmationCount,
@@ -643,11 +643,11 @@ export class MonitorRegistry {
     data: TData;
     state: MonitorState;
   }): Promise<void> {
-    const envelope: BlockchainWebhookEnvelope<TData> = {
-      event: args.event,
-      timestamp: this.clock().toISOString(),
-      data: args.data,
-    };
+    const envelope: BlockchainWebhookEnvelope<TData> = buildWebhookEnvelope(
+      args.event,
+      args.data,
+      this.clock(),
+    );
     try {
       await this.webhookSender(
         args.endpoint,

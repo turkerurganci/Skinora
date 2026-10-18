@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { healthCheckFactory } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
-import { internalKeyAuth } from './middleware.js';
+import { internalKeyAuth, networkGuard } from './middleware.js';
 import { deriveAddressHandler, walletBalancesHandler } from './walletHandlers.js';
 import {
   postCancelStartHandler,
@@ -45,6 +45,9 @@ export function createRouter(deps: RouterDeps): Router {
   // Authenticated API routes
   const apiRouter = Router();
   apiRouter.use(internalKeyAuth);
+  // T148 (05 §3.3a) — every POST body names its network; one naming another
+  // network than this service's is refused with 400 NETWORK_MISMATCH.
+  apiRouter.use(networkGuard);
 
   // Wallet management — T70
   // POST /api/wallet/derive { index, transactionId? }

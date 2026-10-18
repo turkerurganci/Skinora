@@ -88,9 +88,12 @@ public class SeedDataTests : IntegrationTestBase
         //   a MANAGE_SETTINGS admin could otherwise redirect sweeps and
         //   consolidation; see IPlatformWalletAddressProvider. The catalog
         //   still lists them, read-only, so the panel shows what is configured).
+        // + 8 T148 blockchain.ethereum.* per-network rows (05 §3.3a, 06 §3.17 —
+        //   seed indices 68–75, T142 values; Ethereum's hot/cold addresses are
+        //   env-sourced catalogue entries, not rows).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(64, rows.Count);
-        Assert.Equal(64, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(72, rows.Count);
+        Assert.Equal(72, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -123,6 +126,15 @@ public class SeedDataTests : IntegrationTestBase
         {
             "auth.banned_countries",
             "auth.min_steam_account_age_days",
+            // T148 — Ethereum's per-network rows ship with the T142 values.
+            "blockchain.ethereum.fee_cap_usd_per_transfer",
+            "blockchain.ethereum.fee_cap_wait_alarm_minutes",
+            "blockchain.ethereum.finality_stall_alarm_minutes",
+            "blockchain.ethereum.fuel_wallet_eth_balance_minimum",
+            "blockchain.ethereum.hot_wallet_eth_balance_minimum",
+            "blockchain.ethereum.max_charged_gas_fee_usdt",
+            "blockchain.ethereum.payout_gas_fee_estimate_usdt",
+            "blockchain.ethereum.refund_gas_fee_estimate_usdt",
             "blockchain.max_charged_gas_fee_usdt",
             "blockchain.payout_gas_fee_estimate_usdt",
             "blockchain.refund_gas_fee_estimate_usdt",

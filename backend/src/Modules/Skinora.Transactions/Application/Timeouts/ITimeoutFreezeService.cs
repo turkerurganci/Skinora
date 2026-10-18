@@ -77,4 +77,20 @@ public interface ITimeoutFreezeService
     /// <see cref="ArgumentException"/> for <c>EMERGENCY_HOLD</c>.
     /// </summary>
     Task<int> ResumeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// <see cref="FreezeManyAsync(TimeoutFreezeReason, CancellationToken)"/>
+    /// limited to the transactions of <paramref name="network"/> (T148 —
+    /// 05 §3.3a "Sağlık ve dondurma": one network's outage must not freeze the
+    /// other's timeouts). Only <c>BLOCKCHAIN_DEGRADATION</c> is network-scoped;
+    /// any other reason throws <see cref="ArgumentException"/>.
+    /// </summary>
+    Task<int> FreezeManyAsync(TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// <see cref="ResumeManyAsync(TimeoutFreezeReason, CancellationToken)"/>
+    /// limited to the transactions of <paramref name="network"/> (T148). Only
+    /// <c>BLOCKCHAIN_DEGRADATION</c> is network-scoped.
+    /// </summary>
+    Task<int> ResumeManyAsync(TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken);
 }

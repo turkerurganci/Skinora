@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -33,12 +34,6 @@ namespace Skinora.Transactions.Application.Webhooks;
 /// </summary>
 public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
 {
-    // SPAM_TOKEN_INCOMING is recorded as terminal CONFIRMED but the sidecar
-    // never runs finality on it (08 §3.4). The Status=CONFIRMED CHECK
-    // constraint requires ConfirmationCount >= 20, so we pin to this
-    // synthetic floor. The reader treats spam rows as audit-only regardless.
-    private const int SpamConfirmationFloor = 20;
-
     private readonly AppDbContext _db;
     private readonly IAmountValidationService _amountValidation;
     private readonly TimeProvider _clock;
@@ -76,6 +71,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
                 "PaymentDetected rejected — amount={Amount} token={Token} unparseable. correlationId={CorrelationId}",
                 data.Amount, data.TokenSymbol, correlationId);
             return BlockchainWebhookResult.Invalid;
+        }
+
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "PaymentDetected", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
         }
 
         if (await ExistsByEventAsync(data.PaymentAddressId, data.TxHash, data.EventIndex, cancellationToken))
@@ -145,6 +145,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "PaymentConfirmed", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
+        }
+
         // WP10 (08 §3.4) — match on (TxHash, EventIndex). A transaction with
         // multiple Transfer events to the deposit address has one DETECTED row
         // per event; confirming the wrong row would mis-validate the amount.
@@ -187,7 +192,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
 
         existing.Status = BlockchainTransactionStatus.CONFIRMED;
         existing.BlockNumber = data.BlockNumber;
-        existing.ConfirmationCount = Math.Max(data.ConfirmationCount, 20);
+        // T148 — the network's policy, not a TRON constant: TRON never stores
+        // fewer than its 20 blocks on a CONFIRMED row (the CHECK requires it),
+        // Ethereum stores what its service reported.
+        existing.ConfirmationCount = BlockchainNetworkPolicy.For(existing.Network)
+            .RecordedConfirmationCount(data.ConfirmationCount);
         existing.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
 
         // T72 — amount validation pipeline runs INSIDE this unit of work so
@@ -229,6 +238,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
                 "WrongTokenIncoming rejected — amount={Amount} token={Token} unparseable. correlationId={CorrelationId}",
                 data.Amount, data.ActualTokenSymbol, correlationId);
             return BlockchainWebhookResult.Invalid;
+        }
+
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "WrongTokenIncoming", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
         }
 
         if (await ExistsByEventAsync(data.PaymentAddressId, data.TxHash, data.EventIndex, cancellationToken))
@@ -312,6 +326,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "SpamTokenIncoming", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
+        }
+
         if (await ExistsByEventAsync(data.PaymentAddressId, data.TxHash, data.EventIndex, cancellationToken))
         {
             _logger.LogInformation(
@@ -345,11 +364,13 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             Token = paymentAddress.ExpectedToken,
             ActualTokenAddress = data.ActualContractAddress,
             // 06 §3.8 — spam tokens land at terminal CONFIRMED so the row is
-            // immutable audit; ConfirmationCount=20 satisfies the
-            // CK_BlockchainTransactions_Status_Confirmed CHECK constraint.
+            // immutable audit. The sidecar never runs finality on them
+            // (08 §3.4); the network's policy supplies the count the CONFIRMED
+            // CHECK accepts — 20 on TRON, nothing reported on Ethereum (T148).
             Status = BlockchainTransactionStatus.CONFIRMED,
             BlockNumber = null,
-            ConfirmationCount = SpamConfirmationFloor,
+            ConfirmationCount = BlockchainNetworkPolicy.For(paymentAddress.Network)
+                .RecordedConfirmationCount(null),
             ConfirmedAt = nowUtc,
             CreatedAt = nowUtc,
         };
@@ -383,6 +404,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
                 "LatePaymentDetected rejected — amount={Amount} token={Token} unparseable. correlationId={CorrelationId}",
                 data.Amount, data.TokenSymbol, correlationId);
             return BlockchainWebhookResult.Invalid;
+        }
+
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "LatePaymentDetected", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
         }
 
         if (await ExistsByEventAsync(data.PaymentAddressId, data.TxHash, data.EventIndex, cancellationToken))
@@ -475,6 +501,11 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             return BlockchainWebhookResult.Invalid;
         }
 
+        if (await RejectOnNetworkAsync(envelope, data.PaymentAddressId, "PostCancelMonitorStateChanged", correlationId, cancellationToken) is { } rejected)
+        {
+            return rejected;
+        }
+
         var paymentAddress = await LoadPaymentAddressAsync(data.PaymentAddressId, cancellationToken);
         if (paymentAddress is null)
         {
@@ -515,6 +546,66 @@ public sealed class BlockchainWebhookHandler : IBlockchainWebhookHandler
             "PostCancelMonitorStateChanged applied: paymentAddressId={PaymentAddressId} {Previous} → {New} expiresAt={ExpiresAt} correlationId={CorrelationId}",
             paymentAddress.Id, previousStatus, newState, paymentAddress.MonitoringExpiresAt, correlationId);
         return BlockchainWebhookResult.Applied;
+    }
+
+    /// <summary>
+    /// T148 (05 §3.3a "Webhook yükü", 11 §F8 "Ethereum akış ayrıntıları") —
+    /// every webhook names its network, and it must be the referenced deposit's
+    /// network. A missing or unknown value is <see cref="BlockchainWebhookResult.Invalid"/>;
+    /// a known value that differs from <c>PaymentAddress.Network</c> is
+    /// <see cref="BlockchainWebhookResult.NetworkMismatch"/>. Either way nothing
+    /// is written. An unknown deposit falls through: the caller reports
+    /// <see cref="BlockchainWebhookResult.Unknown"/> as before.
+    /// </summary>
+    private async Task<BlockchainWebhookResult?> RejectOnNetworkAsync<TData>(
+        BlockchainWebhookEnvelope<TData> envelope,
+        Guid paymentAddressId,
+        string eventName,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseNetwork(envelope.Network, out var network))
+        {
+            _logger.LogWarning(
+                "{Event} rejected — network '{Network}' is missing or unknown. correlationId={CorrelationId}",
+                eventName, envelope.Network, correlationId);
+            return BlockchainWebhookResult.Invalid;
+        }
+
+        var addressNetwork = await _db.Set<PaymentAddress>()
+            .IgnoreQueryFilters()
+            .Where(p => p.Id == paymentAddressId)
+            .Select(p => (BlockchainNetwork?)p.Network)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (addressNetwork is { } stored && stored != network)
+        {
+            _logger.LogError(
+                "{Event} REJECTED — webhook network {WebhookNetwork} does not match PaymentAddress {PaymentAddressId} network {AddressNetwork}. Nothing recorded. correlationId={CorrelationId}",
+                eventName, network, paymentAddressId, stored, correlationId);
+            return BlockchainWebhookResult.NetworkMismatch;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Strict wire parse of a network name: the exact enum name only — no
+    /// numeric value (<c>"1"</c>), no other letter case.
+    /// </summary>
+    public static bool TryParseNetwork(string? value, out BlockchainNetwork network)
+    {
+        network = default;
+        if (string.IsNullOrEmpty(value)) return false;
+        foreach (var candidate in Enum.GetValues<BlockchainNetwork>())
+        {
+            if (string.Equals(candidate.ToString(), value, StringComparison.Ordinal))
+            {
+                network = candidate;
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool TryParseMonitoringStatus(string value, out MonitoringStatus status)

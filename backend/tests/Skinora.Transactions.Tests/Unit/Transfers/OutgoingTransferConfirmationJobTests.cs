@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,9 +33,11 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
+    private readonly FakeBlockchainServiceRegistry _registry;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
     private readonly OutgoingTransferConfirmationJob _sut;
+    private int _seedSequence;
 
     public OutgoingTransferConfirmationJobTests()
     {
@@ -47,13 +50,14 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         _db.Database.EnsureCreated();
 
         _client = new StubBlockchainTransferClient();
+        _registry = FakeBlockchainServiceRegistry.ForTron(transfers: _client);
         _outbox = new CapturingOutboxService();
         _clock = new FakeTimeProvider();
         _clock.SetUtcNow(new DateTimeOffset(2026, 5, 16, 12, 0, 0, TimeSpan.Zero));
 
         _sut = new OutgoingTransferConfirmationJob(
             _db,
-            _client,
+            _registry,
             _outbox,
             _clock,
             NullLogger<OutgoingTransferConfirmationJob>.Instance);
@@ -80,6 +84,51 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         Assert.Equal(1_500_020L, reloaded.BlockNumber);
         Assert.Equal(25, reloaded.ConfirmationCount);
         Assert.Equal(_clock.GetUtcNow().UtcDateTime, reloaded.ConfirmedAt);
+    }
+
+    // -------------------- T148 — the network's policy, not TRON's constants --------------------
+
+    [Fact]
+    public async Task Tron_Confirmation_Without_A_Count_Is_Stored_At_The_20_Block_Floor_With_Resource_Fields()
+    {
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_020L, null, "SUCCESS", null,
+            RealizedFeeSun: 6_400_000L, EnergyUsageTotal: 64_285L, OriginEnergyUsage: 0L);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(20, reloaded.ConfirmationCount);
+        Assert.Equal(6_400_000L, reloaded.RealizedFeeSun);
+        Assert.Equal(64_285L, reloaded.EnergyUsageTotal);
+    }
+
+    [Fact]
+    public async Task Ethereum_Confirmation_Is_Asked_Of_Ethereums_Service_And_Stores_No_Tron_Constants()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 21_000_000L, null, "SUCCESS", null,
+                RealizedFeeSun: 6_400_000L, EnergyUsageTotal: 64_285L, OriginEnergyUsage: 0L),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Single(ethereum.StatusCalls);
+        Assert.Empty(_client.StatusCalls);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        // No synthetic 20, no SUN / Energy on an Ethereum row.
+        Assert.Equal(0, reloaded.ConfirmationCount);
+        Assert.Null(reloaded.RealizedFeeSun);
+        Assert.Null(reloaded.EnergyUsageTotal);
+        Assert.Null(reloaded.OriginEnergyUsage);
     }
 
     [Fact]
@@ -125,6 +174,40 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
             .FirstAsync(b => b.Id == row.Id);
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+    }
+
+    // T148 düzeltme turu 1 (F1) — a DETECTED row on a network whose service is
+    // gone is answered Unavailable and stays DETECTED; selected oldest-first it
+    // would hold every slot of the batch on every run. The TRON row behind
+    // BatchSize (and more) such rows must be confirmed on the first run.
+    [Theory]
+    [InlineData(OutgoingTransferConfirmationJob.BatchSize)]
+    [InlineData(OutgoingTransferConfirmationJob.BatchSize + 5)]
+    public async Task Detected_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parkedRows)
+    {
+        for (var i = 0; i < parkedRows; i++)
+        {
+            var eth = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+            eth.Network = BlockchainNetwork.ETHEREUM;
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+
+        var tron = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_000L, 20, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == tron.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(
+            parkedRows,
+            await _db.Set<BlockchainTransaction>().AsNoTracking().CountAsync(b =>
+                b.Network == BlockchainNetwork.ETHEREUM && b.Status == BlockchainTransactionStatus.DETECTED));
     }
 
     [Fact]
@@ -201,17 +284,20 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
 
     private async Task<BlockchainTransaction> SeedDetectedAsync(BlockchainTransactionType type)
     {
+        // Unique per call (SteamId and (Network, HdWalletIndex) are unique) so a
+        // test can seed a whole batch.
+        var seq = ++_seedSequence;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000711",
+            SteamId = $"7656119800{seq * 2:D7}",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000712",
+            SteamId = $"7656119800{(seq * 2) + 1:D7}",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -248,7 +334,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
                 Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
-                HdWalletIndex = 1,
+                HdWalletIndex = seq,
                 ExpectedAmount = 100m,
                 ExpectedToken = StablecoinType.USDT,
                 MonitoringStatus = MonitoringStatus.ACTIVE,

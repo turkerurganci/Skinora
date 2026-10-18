@@ -1,3 +1,5 @@
+using Skinora.Transactions.Tests.Helpers;
+using Skinora.Transactions.Application.Networks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.GasFee;
@@ -24,7 +26,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(estimator);
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(0.18m, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
@@ -41,7 +43,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = null });
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(StaticRefundFee, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
@@ -64,7 +66,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(estimator);
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            depositAddress, "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, depositAddress, "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(StaticRefundFee, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
@@ -78,7 +80,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(estimator);
 
         var resolved = await sut.ResolvePayoutFeeAsync(
-            "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(0.02m, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
@@ -95,7 +97,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = null });
 
         var resolved = await sut.ResolvePayoutFeeAsync(
-            "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(StaticPayoutFee, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
@@ -111,7 +113,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = 0m });
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(0m, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
@@ -128,7 +130,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = 250m }, cap: 10m);
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(StaticRefundFee, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.EstimateRejected, resolved.Source);
@@ -140,7 +142,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = 10m }, cap: 10m);
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(10m, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
@@ -152,7 +154,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = 99m }, cap: 10m);
 
         var resolved = await sut.ResolvePayoutFeeAsync(
-            "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TSeller", 100m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(StaticPayoutFee, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.EstimateRejected, resolved.Source);
@@ -167,7 +169,7 @@ public class ChargedGasFeeResolverTests
         var sut = BuildResolver(new StubEstimator { Result = 250m }, cap: 0m);
 
         var resolved = await sut.ResolveRefundFeeAsync(
-            "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+            BlockchainNetwork.TRON, "TDeposit", "TBuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
 
         Assert.Equal(250m, resolved.FeeUsdt);
         Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
@@ -175,9 +177,51 @@ public class ChargedGasFeeResolverTests
 
     private static ChargedGasFeeResolver BuildResolver(
         StubEstimator estimator, decimal? cap = null) =>
-        new(estimator,
+        new(FakeBlockchainServiceRegistry.ForTron(gasFee: estimator),
             new StubSettings { Cap = cap ?? MaxChargedFee },
             NullLogger<ChargedGasFeeResolver>.Instance);
+
+    // -------------------- T148 — per-network estimate and fallback --------------------
+
+    [Fact]
+    public async Task Ethereum_Is_Priced_By_Ethereums_Service_Not_Trons()
+    {
+        var tron = new StubEstimator { Result = 2.40m };
+        var ethereum = new StubEstimator { Result = 0.07m };
+        var registry = FakeBlockchainServiceRegistry.ForTron(gasFee: tron)
+            .With(BlockchainNetwork.ETHEREUM, gasFee: ethereum);
+        var sut = new ChargedGasFeeResolver(
+            registry, new StubSettings(), NullLogger<ChargedGasFeeResolver>.Instance);
+
+        var resolved = await sut.ResolvePayoutFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xseller", 20m, StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(0.07m, resolved.FeeUsdt);
+        Assert.Single(ethereum.Requests);
+        Assert.Empty(tron.Requests);
+    }
+
+    [Fact]
+    public async Task Unconfigured_Ethereum_Charges_Ethereums_Fallback_Never_Trons()
+    {
+        // Until T150 Ethereum has no service: the registry hands out the
+        // fail-closed client (no estimate) and the fallback must be Ethereum's
+        // own row, not TRON's 2 USDT.
+        var tron = new StubEstimator { Result = 2.40m };
+        var sut = new ChargedGasFeeResolver(
+            FakeBlockchainServiceRegistry.ForTron(gasFee: tron),
+            new StubSettings(),
+            NullLogger<ChargedGasFeeResolver>.Instance);
+
+        var resolved = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdeposit", "0xbuyer", 20m, StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(EthereumRefundFallback, resolved.FeeUsdt);
+        Assert.Equal(GasFeeSource.StaticFallback, resolved.Source);
+        Assert.Empty(tron.Requests);
+    }
+
+    private const decimal EthereumRefundFallback = 0.50m;
 
     private sealed class StubEstimator : IGasFeeEstimator
     {
@@ -192,16 +236,23 @@ public class ChargedGasFeeResolverTests
         }
     }
 
-    private sealed class StubSettings : IGasFeeSettingsProvider
+    private sealed class StubSettings : IBlockchainNetworkSettingsProvider
     {
         public decimal Cap { get; set; } = MaxChargedFee;
 
-        public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new GasFeeSettings(
-                ProtectionRatio: 0.10m,
-                MinRefundThresholdRatio: 2m,
-                RefundGasFeeEstimateUsdt: StaticRefundFee,
-                PayoutGasFeeEstimateUsdt: StaticPayoutFee,
-                MaxChargedGasFeeUsdt: Cap));
+        public Task<BlockchainNetworkSettings> GetAsync(
+            BlockchainNetwork network, CancellationToken cancellationToken) =>
+            Task.FromResult(network == BlockchainNetwork.TRON
+                ? BlockchainNetworkSettingsProvider.TronDefaults with
+                {
+                    RefundGasFeeFallbackUsdt = StaticRefundFee,
+                    PayoutGasFeeFallbackUsdt = StaticPayoutFee,
+                    MaxChargedGasFeeUsdt = Cap,
+                }
+                : BlockchainNetworkSettingsProvider.EthereumDefaults with
+                {
+                    RefundGasFeeFallbackUsdt = EthereumRefundFallback,
+                    MaxChargedGasFeeUsdt = Cap,
+                });
     }
 }

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Events;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 #pragma warning disable IDE0005 // MediatR is added explicitly to keep the
@@ -29,14 +30,14 @@ namespace Skinora.Transactions.Application.PaymentMonitoring;
 public sealed class PaymentMonitorStartDispatcher
     : INotificationHandler<PaymentMonitorStartRequestedEvent>
 {
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PaymentMonitorStartDispatcher> _logger;
 
     public PaymentMonitorStartDispatcher(
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         ILogger<PaymentMonitorStartDispatcher> logger)
     {
-        _sidecar = sidecar;
+        _services = services;
         _logger = logger;
     }
 
@@ -44,6 +45,20 @@ public sealed class PaymentMonitorStartDispatcher
         PaymentMonitorStartRequestedEvent notification,
         CancellationToken cancellationToken)
     {
+        // T148 düzeltme turu 1 (F1) — a network with no service configured
+        // cannot answer, and a configuration change needs a restart. Throwing
+        // here would leave the outbox row FAILED and re-read at the head of the
+        // oldest-first outbox batch on every poll, for good — enough of them
+        // would stall every other event. Log and stop instead: the per-minute
+        // EnsurePaymentMonitorJob arms the address once the service exists.
+        if (!_services.IsConfigured(notification.Network))
+        {
+            _logger.LogError(
+                "Payment monitor start not sent: {Network} has no blockchain service configured — address={Address} transactionId={TransactionId}; EnsurePaymentMonitorJob arms it once the service is configured.",
+                notification.Network, notification.Address, notification.TransactionId);
+            return;
+        }
+
         var request = new PaymentMonitorStartRequest(
             Address: notification.Address,
             PaymentAddressId: notification.PaymentAddressId,
@@ -55,7 +70,9 @@ public sealed class PaymentMonitorStartDispatcher
             // once the payment is in (08 §3.4).
             Cadence: PaymentMonitorCadence.Payment);
 
-        var status = await _sidecar.StartMonitoringAsync(request, cancellationToken);
+        // T148 — the deposit address's own network's service (05 §3.3a).
+        var status = await _services.Sidecar(notification.Network)
+            .StartMonitoringAsync(request, cancellationToken);
         switch (status)
         {
             case BlockchainSidecarStatus.Success:

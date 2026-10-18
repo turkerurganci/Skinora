@@ -1,3 +1,4 @@
+using Skinora.Shared.Enums;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -257,7 +258,55 @@ public class HttpBlockchainSidecarClientTests
 
         Assert.Equal(BlockchainSidecarStatus.Success, status);
         Assert.Equal("/api/monitor/stop", path);
-        Assert.Equal("{\"address\":\"TDepositAddrFakeFakeFakeFakeFake123\"}", body);
+        // T148 — the body names the network (05 §3.3a), first.
+        Assert.Equal("{\"network\":\"TRON\",\"address\":\"TDepositAddrFakeFakeFakeFakeFake123\"}", body);
+    }
+
+    [Fact]
+    public async Task Every_Request_Body_Names_The_Clients_Network()
+    {
+        // T148 (05 §3.3a) — an Ethereum client says ETHEREUM on every call, so
+        // a TRON service reached at the Ethereum address refuses instead of
+        // acting (sidecar networkGuard → 400 NETWORK_MISMATCH).
+        var bodies = new List<string>();
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            bodies.Add(await req.Content!.ReadAsStringAsync());
+            return req.RequestUri!.AbsolutePath switch
+            {
+                "/api/wallet/derive" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { address = "0xabc", derivationPath = "m/44'/60'/0'/0/1", index = 1 }),
+                },
+                "/api/wallet/balances" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { blockNumber = 1, balances = Array.Empty<object>() }),
+                },
+                "/api/transfer/cold-wallet" => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new { txHash = "0xhash" }),
+                },
+                _ => new HttpResponseMessage(HttpStatusCode.OK),
+            };
+        });
+        var sut = BuildClient(handler, network: BlockchainNetwork.ETHEREUM);
+
+        await sut.DeriveAddressAsync(1, Guid.NewGuid(), CancellationToken.None);
+        await sut.StartMonitoringAsync(new PaymentMonitorStartRequest(
+            "0xabc", Guid.NewGuid(), Guid.NewGuid(), "0xdac17f958d2ee523a2206206994597c13d831ec7", "USDT",
+            PaymentMonitorCadence.Payment), CancellationToken.None);
+        await sut.StopMonitoringAsync("0xabc", CancellationToken.None);
+        await sut.StartPostCancelMonitoringAsync(new PostCancelMonitorStartRequest(
+            "0xabc", Guid.NewGuid(), Guid.NewGuid(), "0xdac17f958d2ee523a2206206994597c13d831ec7", "USDT",
+            DateTime.UtcNow), CancellationToken.None);
+        await sut.StopPostCancelMonitoringAsync("0xabc", CancellationToken.None);
+        await sut.GetWalletBalancesAsync(["0xabc"], CancellationToken.None);
+        await sut.SendHotToColdTransferAsync(
+            new HotToColdTransferRequest(Guid.NewGuid(), "0xcold", "1", "USDT"), CancellationToken.None);
+
+        Assert.Equal(7, bodies.Count);
+        Assert.All(bodies, b => Assert.Contains("\"network\":\"ETHEREUM\"", b));
+        Assert.Equal(BlockchainNetwork.ETHEREUM, sut.Network);
     }
 
     [Fact]
@@ -373,19 +422,20 @@ public class HttpBlockchainSidecarClientTests
             Cadence: PaymentMonitorCadence.Payment);
 
     private static HttpBlockchainSidecarClient BuildClient(
-        HttpMessageHandler handler, string internalKey = "")
+        HttpMessageHandler handler, string internalKey = "",
+        BlockchainNetwork network = BlockchainNetwork.TRON)
     {
         var http = new HttpClient(handler)
         {
             BaseAddress = new Uri(SidecarBaseUrl),
         };
-        var options = Options.Create(new BlockchainSidecarOptions
+        var options = new BlockchainSidecarOptions
         {
             BaseUrl = SidecarBaseUrl,
             InternalKey = internalKey,
             TimeoutSeconds = 5,
-        });
-        return new HttpBlockchainSidecarClient(http, options, NullLogger<HttpBlockchainSidecarClient>.Instance);
+        };
+        return new HttpBlockchainSidecarClient(network, http, options, NullLogger<HttpBlockchainSidecarClient>.Instance);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

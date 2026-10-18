@@ -40,6 +40,16 @@ public sealed class BlockchainWebhookEnvelope<TData>
     [JsonPropertyName("event")]
     public string Event { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The network the reporting service watches — <c>"TRON"</c> /
+    /// <c>"ETHEREUM"</c> (T148 — 05 §3.3a "Webhook yükü"). Required: the
+    /// backend rejects a webhook whose network is missing, does not match the
+    /// service whose secret signed it, or does not match the referenced
+    /// deposit's <c>PaymentAddress.Network</c>.
+    /// </summary>
+    [JsonPropertyName("network")]
+    public string? Network { get; set; }
+
     [JsonPropertyName("timestamp")]
     public string Timestamp { get; set; } = string.Empty;
 
@@ -94,7 +104,8 @@ public sealed class PaymentDetectedData
 }
 
 /// <summary>
-/// Finality reached — <c>currentSolidBlock - txBlock >= 20</c>. Backend flips
+/// Finality reached by the network's rule (T148 — <c>BlockchainNetworkPolicy</c>:
+/// TRON <c>currentSolidBlock - txBlock >= 20</c>, Ethereum <c>finalized</c>). Backend flips
 /// the BlockchainTransaction row to <c>Status=CONFIRMED</c> with
 /// <c>BlockNumber</c> + <c>ConfirmedAt</c>.
 /// </summary>

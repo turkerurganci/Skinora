@@ -22,6 +22,9 @@ namespace Skinora.Shared.Events;
 /// state. Sidecar anchors the 24h/7d/30d windows here so a sidecar restart
 /// resumes on the same boundary.</param>
 /// <param name="OccurredAt">UTC timestamp the event was committed.</param>
+/// <param name="Network">The deposit address's network (T148 — the dispatcher
+/// asks that network's service). Defaults to TRON so an outbox row written
+/// before the field existed still routes to the only network it could mean.</param>
 public record PostCancelMonitorStartRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -30,4 +33,5 @@ public record PostCancelMonitorStartRequestedEvent(
     StablecoinType ExpectedToken,
     string ExpectedContractAddress,
     DateTime CancelledAt,
-    DateTime OccurredAt) : IDomainEvent;
+    DateTime OccurredAt,
+    BlockchainNetwork Network = BlockchainNetwork.TRON) : IDomainEvent;

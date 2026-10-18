@@ -112,8 +112,10 @@ public sealed class SystemSettingsService : ISystemSettingsService
 
     private string? EnvSourcedValue(string key) => key switch
     {
-        SystemSettingsCatalog.HotWalletAddressKey => _walletAddresses.HotWalletAddress,
-        SystemSettingsCatalog.ColdWalletAddressKey => _walletAddresses.ColdWalletAddress,
+        SystemSettingsCatalog.HotWalletAddressKey => _walletAddresses.For(BlockchainNetwork.TRON).HotWalletAddress,
+        SystemSettingsCatalog.ColdWalletAddressKey => _walletAddresses.For(BlockchainNetwork.TRON).ColdWalletAddress,
+        SystemSettingsCatalog.EthereumHotWalletAddressKey => _walletAddresses.For(BlockchainNetwork.ETHEREUM).HotWalletAddress,
+        SystemSettingsCatalog.EthereumColdWalletAddressKey => _walletAddresses.For(BlockchainNetwork.ETHEREUM).ColdWalletAddress,
         _ => null,
     };
 
@@ -125,6 +127,12 @@ public sealed class SystemSettingsService : ISystemSettingsService
         SystemSettingsCatalog.ColdWalletAddressKey =>
             "Ortam değişkeni COLD_WALLET_ADDRESS. Panelden değiştirilemez; imzalayan servis " +
             "başka bir adrese soğuk cüzdan transferi yapmaz (05 §3.3).",
+        SystemSettingsCatalog.EthereumHotWalletAddressKey =>
+            "Ortam değişkeni ETHEREUM_HOT_WALLET_ADDRESS. Panelden değiştirilemez; Ethereum servisi " +
+            "başka bir adrese sweep yapmaz (05 §3.3a, 08 §3.7.6).",
+        SystemSettingsCatalog.EthereumColdWalletAddressKey =>
+            "Ortam değişkeni ETHEREUM_COLD_WALLET_ADDRESS. Panelden değiştirilemez; Ethereum servisi " +
+            "başka bir adrese soğuk cüzdan transferi yapmaz (05 §3.3a, 08 §3.7.6).",
         _ => string.Empty,
     };
 

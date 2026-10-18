@@ -80,11 +80,29 @@ public class SystemSettingsServiceTests : IntegrationTestBase
         Assert.Equal("TGpQ6KteKAbJDu7zZuoRnUvUTxvjKG4tv5", cold.Value);
         Assert.False(cold.IsEditable);
 
+        // T148 — Ethereum's pair is listed the same way: read-only, from its
+        // own variables (unset in this host, so null — never TRON's value).
+        foreach (var key in new[]
+                 {
+                     SystemSettingsCatalog.EthereumHotWalletAddressKey,
+                     SystemSettingsCatalog.EthereumColdWalletAddressKey,
+                 })
+        {
+            var eth = Assert.Single(response.Settings, s => s.Key == key);
+            Assert.Null(eth.Value);
+            Assert.False(eth.IsEditable);
+        }
+
         // Every other row stays editable — the flag is not a blanket.
+        var envSourced = new[]
+        {
+            SystemSettingsCatalog.HotWalletAddressKey,
+            SystemSettingsCatalog.ColdWalletAddressKey,
+            SystemSettingsCatalog.EthereumHotWalletAddressKey,
+            SystemSettingsCatalog.EthereumColdWalletAddressKey,
+        };
         Assert.All(
-            response.Settings.Where(s =>
-                s.Key != SystemSettingsCatalog.HotWalletAddressKey
-                && s.Key != SystemSettingsCatalog.ColdWalletAddressKey),
+            response.Settings.Where(s => !envSourced.Contains(s.Key)),
             s => Assert.True(s.IsEditable));
 
         // No DB row backs either one.
