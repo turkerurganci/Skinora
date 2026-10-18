@@ -6,10 +6,13 @@ import { TransferService, TokenContractMap, TokenSymbol } from '../transfer/Tran
 import { TrxPriceService, TrxPriceSource } from './TrxPriceService.js';
 import {
   ACTIVATED_ACCOUNT_FREE_BANDWIDTH,
+  ACTIVATION_TX_BYTES,
   ESTIMATED_TRANSFER_TX_BYTES,
   activationBurnSun,
+  burnSun as transferBurnSun,
   callerEnergyShare,
   planDelegation,
+  topUpSun,
   type DelegationPlan,
 } from '../wallet/DelegationPlanner.js';
 import type { DelegationSource } from '../wallet/EnergyDelegationService.js';
@@ -104,6 +107,28 @@ export interface FeeEstimateResult {
   priceSource: TrxPriceSource;
 }
 
+/**
+ * T149 — what sweeping ONE fresh deposit to the hot wallet costs the platform
+ * in TRX, priced now; the backend turns it into the buyer's TRON network fee
+ * line at acceptance (11 §F8 K8, 08 §3.1a). All amounts SUN.
+ */
+export interface SweepCostEstimateResult {
+  /** activationSun + burnTopUpSun + bandwidthSun — the line's basis. */
+  sweepCostSun: number;
+  /** The hot wallet activating the never-funded deposit (1 TRX + 0.1 TRX unless staked Bandwidth covers it). */
+  activationSun: number;
+  /** TRX sent to the deposit to burn for the WHOLE transfer, with the flow's 10% margin; never recovered. */
+  burnTopUpSun: number;
+  /** The hot wallet's Bandwidth for that top-up transaction, assumed burned. */
+  bandwidthSun: number;
+  /** Energy of a transfer into an account that already holds the token (the hot wallet). */
+  energyRequired: number;
+  trxPriceUsdt: number;
+  priceSource: TrxPriceSource;
+  /** sweepCostSun × price, unrounded — informational; the backend applies its buffer and rounds once. */
+  costUsdt: string;
+}
+
 export interface FeeEstimationServiceDeps {
   resourceClient: TronResourceClient;
   priceService: TrxPriceService;
@@ -196,7 +221,9 @@ export class FeeEstimationService {
       isDelegatedPath ? this.resources.getAccountState(request.fromAddress!) : null,
       // The account that HOLDS the stake, exactly as the broadcast reads it —
       // the dedicated stake account once one is configured, not the hot wallet.
-      isDelegatedPath
+      // T149 — with the dormant stake switched off the broadcast reads none
+      // and burns, so the estimate reads none either.
+      isDelegatedPath && this.delegationSource.stakingEnabled
         ? this.resources.getDelegatableEnergySun(this.delegationSource.delegationOwner)
         : null,
       this.resources.getChainFeeParameters(),
@@ -323,6 +350,112 @@ export class FeeEstimationService {
       },
       'Fee estimate computed',
     );
+    return result;
+  }
+
+  /**
+   * T149 — the sweep the buyer's TRON network fee line pays for, priced at
+   * acceptance, before the deposit exists (11 §F8 K8, 08 §3.1a). It mirrors
+   * the burn path (the deposit flow, dormant stake OFF)
+   * (<c>EnergyDelegationService</c>):
+   *
+   * <list type="number">
+   *   <item><b>Activation</b> — a fresh deposit has only received TRC-20, so
+   *     the hot wallet creates it with 1 SUN and the chain burns the creation
+   *     fee from the hot wallet (<c>activationBurnSun</c>).</item>
+   *   <item><b>Burn top-up</b> — the flow sizes the TRX it sends for the WHOLE
+   *     transfer, owner share ignored (owner decision 2026-09-17), with its
+   *     10% margin (<c>topUpSun</c>), less the 1 SUN activation left in the
+   *     deposit. None of it comes back: what is not burned stays in the
+   *     deposit, so all of it is the platform's cost.</item>
+   *   <item><b>Bandwidth</b> — the top-up is a TRX transfer from the hot
+   *     wallet; its bytes are priced as burned (the hot wallet's free daily
+   *     allowance is shared by every transfer it sends and cannot be counted
+   *     on eight days ahead). The deposit's own transfer runs on the free
+   *     allowance the activation gives it.</item>
+   * </list>
+   *
+   * The transfer's Energy is simulated as a hot wallet → hot wallet transfer
+   * of 1 raw unit: a sweep sends into the hot wallet, which already holds the
+   * token, and a self-transfer between holders measured exactly the same
+   * Energy as one between two holders on mainnet (64,285, 2026-10-18 —
+   * T149 report). A hot wallet holding no token reverts the simulation; the
+   * caller then writes its fallback line.
+   */
+  async estimateSweepCost(
+    token: TokenSymbol,
+    correlationId?: string,
+  ): Promise<SweepCostEstimateResult> {
+    const contractAddress = this.tokens[token];
+    if (!contractAddress) {
+      throw new SidecarError(
+        `Token contract for ${token} is not configured.`,
+        'TOKEN_CONTRACT_NOT_CONFIGURED',
+        false,
+      );
+    }
+    if (!this.hotWalletAddress) {
+      throw new SidecarError(
+        'Hot wallet address is not configured — the sweep has no destination to price.',
+        'HOT_WALLET_NOT_CONFIGURED',
+        false,
+      );
+    }
+
+    const [energyRequired, hotWalletResources, feeParams, priceQuote] = await Promise.all([
+      this.resources.estimateTransferEnergy(
+        contractAddress,
+        this.hotWalletAddress,
+        this.hotWalletAddress,
+        '1',
+      ),
+      this.resources.getAccountResources(this.hotWalletAddress),
+      this.resources.getChainFeeParameters(),
+      this.price.getPrice(correlationId),
+    ]);
+
+    const activationSun = activationBurnSun({
+      depositExists: false,
+      senderStakedBandwidth: hotWalletResources.stakedBandwidthAvailable,
+      createNewAccountFeeSun: feeParams.createNewAccountFeeSun,
+      createAccountBandwidthFeeSun: feeParams.createAccountBandwidthFeeSun,
+      createNewAccountBandwidthRate: feeParams.createNewAccountBandwidthRate,
+    });
+    if (activationSun === null) {
+      throw new SidecarError(
+        'getchainparameters response is missing the account-creation fees a fresh deposit needs.',
+        'FEE_ESTIMATE_CHAIN_PARAMS_FAILED',
+        true,
+      );
+    }
+
+    // What the burn path sends: the whole transfer's Energy at the chain's
+    // price (+ deposit Bandwidth, which the activated allowance covers), with
+    // the 10% margin, less the 1 SUN the activation left in the deposit.
+    const burnTopUpSun = topUpSun(
+      transferBurnSun({
+        energyToBurn: energyRequired,
+        energyFeeSun: feeParams.energyFeeSun,
+        bandwidthAvailable: ACTIVATED_ACCOUNT_FREE_BANDWIDTH,
+        txBytes: ESTIMATED_TRANSFER_TX_BYTES,
+        bandwidthFeeSun: feeParams.bandwidthFeeSun,
+      }),
+      1,
+    );
+    const bandwidthSun = ACTIVATION_TX_BYTES * feeParams.bandwidthFeeSun;
+    const sweepCostSun = activationSun + burnTopUpSun + bandwidthSun;
+
+    const result: SweepCostEstimateResult = {
+      sweepCostSun,
+      activationSun,
+      burnTopUpSun,
+      bandwidthSun,
+      energyRequired,
+      trxPriceUsdt: priceQuote.priceUsdt,
+      priceSource: priceQuote.source,
+      costUsdt: ((sweepCostSun / 1_000_000) * priceQuote.priceUsdt).toFixed(6),
+    };
+    logger.info({ ...result, token, correlationId }, 'Sweep fee estimate computed');
     return result;
   }
 

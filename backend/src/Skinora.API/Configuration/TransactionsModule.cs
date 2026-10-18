@@ -217,6 +217,13 @@ public static class TransactionsModule
         services.AddScoped<IBlockchainNetworkSettingsProvider, BlockchainNetworkSettingsProvider>();
         services.AddScoped<IChargedGasFeeResolver, ChargedGasFeeResolver>();
 
+        // T149 — the buyer's network fee line (11 §F8 K8): quoted in the
+        // detail view before the network is chosen, fixed at acceptance. The
+        // estimate cache is process-wide so the quote and the fixed line come
+        // from the same estimate.
+        services.AddSingleton<SweepCostEstimateCache>();
+        services.AddScoped<INetworkFeeQuoteService, NetworkFeeQuoteService>();
+
         // T59 — admin transaction lifecycle orchestrator. Composes the T44
         // state machine + T50 freeze service for AD19 / AD19b / AD19c
         // (07 §9.20–§9.22, 02 §7, 03 §8.8).

@@ -63,6 +63,10 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     private CountingTradeHoldChecker _tradeHold = null!;
     private IBlockchainNetworkAvailability _networks = null!;
     private RecordingPaymentAddressAllocator _allocator = null!;
+    // T149 — 0 on every network unless a test sets a line, so the pre-T149
+    // totals asserted below are unchanged.
+    private StubNetworkFeeQuotes _networkFees = new();
+    private Skinora.Transactions.Application.GasFee.INetworkFeeQuoteService? _networkFeesOverride;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -282,6 +286,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             _outbox,
             _networks,
             _allocator,
+            _networkFees,
             _clock);
 
         var outcome = await sut.AcceptAsync(
@@ -333,6 +338,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             _outbox,
             _networks,
             _allocator,
+            _networkFees,
             _clock);
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
@@ -1096,6 +1102,130 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal([transaction.Id], _allocator.Allocations);
     }
 
+    // ─── T149: the network fee line (11 §F8 K8, 07 §7.6, 08 §3.1a) ─────────
+
+    [Fact]
+    public async Task Tron_Acceptance_Fixes_The_Network_Fee_Line_Into_The_Total()
+    {
+        _networkFees.With(BlockchainNetwork.TRON, 2.90m);
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal("2.90", outcome.Body!.NetworkFeeAmount);
+        Assert.Equal("104.90", outcome.Body.TotalAmount);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(2.90m, persisted.NetworkFeeAmount);
+        Assert.Equal(104.90m, persisted.TotalAmount);
+        // Price and commission are untouched — the line is a separate item.
+        Assert.Equal(100m, persisted.Price);
+        Assert.Equal(2m, persisted.CommissionAmount);
+        Assert.Equal([BlockchainNetwork.TRON], _networkFees.Requests);
+    }
+
+    [Fact]
+    public async Task Ethereum_Acceptance_Writes_A_Zero_Line()
+    {
+        _networks = TestNetworkAvailability.All();
+        // Even if a quote for TRON exists, the Ethereum acceptance asks Ethereum's.
+        _networkFees.With(BlockchainNetwork.TRON, 2.90m);
+        var transaction = await CreateListingAsync(BlockchainNetwork.ETHEREUM);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal("0.00", outcome.Body!.NetworkFeeAmount);
+        Assert.Equal("102.00", outcome.Body.TotalAmount);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(0m, persisted.NetworkFeeAmount);
+        Assert.Equal(102m, persisted.TotalAmount);
+        Assert.Equal([BlockchainNetwork.ETHEREUM], _networkFees.Requests);
+    }
+
+    [Fact]
+    public async Task Tron_Acceptance_Without_An_Estimate_Writes_The_Seeded_Fallback_And_Does_Not_Wait()
+    {
+        // The real quote service over the real seeded settings, with a TRON
+        // service that cannot answer (none configured — fail closed): the
+        // acceptance goes through with the 3.00 fallback line (08 §3.1a).
+        _networkFeesOverride = new Skinora.Transactions.Application.GasFee.NetworkFeeQuoteService(
+            new FakeBlockchainServiceRegistry(),
+            new BlockchainNetworkSettingsProvider(Context),
+            new Skinora.Transactions.Application.GasFee.SweepCostEstimateCache(_clock),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                Skinora.Transactions.Application.GasFee.NetworkFeeQuoteService>.Instance);
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        Assert.Equal("3.00", outcome.Body!.NetworkFeeAmount);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Equal(3.00m, persisted.NetworkFeeAmount);
+        Assert.Equal(105.00m, persisted.TotalAmount);
+    }
+
+    [Fact]
+    public async Task Pre_T147_Deposit_Gets_The_Line_In_Its_Expected_Amount()
+    {
+        // A listing from before T147 already has a TRON deposit derived at
+        // creation with ExpectedAmount = 102. Amount validation matches on that
+        // column, so acceptance must carry the 2.90 line into it — or the
+        // buyer's 104.90 would be judged an overpayment of exactly the line.
+        _networkFees.With(BlockchainNetwork.TRON, 2.90m);
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+        Context.Set<PaymentAddress>().Add(new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transaction.Id,
+            Network = BlockchainNetwork.TRON,
+            Address = "TDepositPreT147000000000000000000",
+            HdWalletIndex = 41,
+            ExpectedAmount = 102m,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var outcome = await BuildSut().AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+        var deposit = await Context.Set<PaymentAddress>().AsNoTracking().SingleAsync(p => p.TransactionId == transaction.Id);
+        Assert.Equal(104.90m, deposit.ExpectedAmount);
+    }
+
+    [Fact]
+    public async Task Refused_Acceptance_Asks_No_Quote_And_Writes_No_Line()
+    {
+        _networkFees.With(BlockchainNetwork.TRON, 2.90m);
+        var transaction = await CreateListingAsync(BlockchainNetwork.TRON);
+
+        var outcome = await BuildSut(sanctions: new MatchingSanctionsCheck("OFAC")).AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.SanctionsMatch, outcome.Status);
+        Assert.Empty(_networkFees.Requests);
+        var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
+        Assert.Null(persisted.NetworkFeeAmount);
+        Assert.Equal(102m, persisted.TotalAmount);
+    }
+
     private async Task AssertUntouchedAsync(Guid transactionId)
     {
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transactionId);
@@ -1172,6 +1302,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             _outbox,
             _networks,
             _allocator,
+            _networkFeesOverride ?? _networkFees,
             _clock);
 
     private sealed class RecordingOutboxService : IOutboxService

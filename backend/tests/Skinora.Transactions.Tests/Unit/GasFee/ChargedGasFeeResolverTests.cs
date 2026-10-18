@@ -234,6 +234,11 @@ public class ChargedGasFeeResolverTests
             Requests.Add(request);
             return Task.FromResult(Result);
         }
+
+        // T149 — the resolver never prices a sweep; reaching this is a bug.
+        public Task<SweepCostEstimate?> EstimateSweepCostAsync(
+            StablecoinType token, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("ChargedGasFeeResolver must not ask for a sweep estimate.");
     }
 
     private sealed class StubSettings : IBlockchainNetworkSettingsProvider

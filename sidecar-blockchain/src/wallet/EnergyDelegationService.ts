@@ -20,6 +20,17 @@ import {
  * 08 §3.3, owner decision 2026-09-16: HYBRID. The hot wallet stakes for the
  * baseline volume; whatever the stake cannot cover burns.
  *
+ * <para>
+ * T149 (11 §F8, öneriyle kaydedildi — ⚠): the hybrid model is superseded by
+ * K4/K8 — the buyer pays the sweep as a TRON network fee line, the seller the
+ * payout — and its delegation half is DORMANT behind
+ * <c>ENERGY_STAKING_ENABLED</c>, default OFF. While off the flow never reads a
+ * stake (<c>getDelegatableEnergySun</c> is not called), never delegates, and
+ * the stake account settings are ignored: every transfer takes the burn path
+ * below (or needs no Energy at all). The code is kept, not deleted; it is
+ * removed later if it stays unused.
+ * </para>
+ *
  * <list type="number">
  *   <item><b>Activate.</b> A deposit that has only received TRC-20 is not an
  *     account: delegation to it and a transfer from it are both rejected at
@@ -81,6 +92,8 @@ import {
 export class EnergyDelegationService implements DelegationSource {
   private readonly client: TronDelegationClient;
   private readonly resources: DelegationResourceProbe;
+  /** T149 — the dormant stake switch; see the class remarks. */
+  private readonly staking: boolean;
   private readonly sweeperAddress: string;
   private readonly sweeperPrivateKey: string;
   /** Account the Energy is delegated FROM — see <c>delegationOwner</c>. */
@@ -100,10 +113,13 @@ export class EnergyDelegationService implements DelegationSource {
     this.resources = deps.resources;
     this.sweeperAddress = deps.sweeperAddress;
     this.sweeperPrivateKey = deps.sweeperPrivateKey;
+    this.staking = deps.stakingEnabled;
     // Unset stake account = the pre-split arrangement, where the hot wallet
     // both holds the stake and signs for itself. Configuring one moves only
     // the stake; the signing key does not change and never becomes an owner.
-    this.stakeAddress = deps.stakeAddress || '';
+    // T149 — with staking off the stake account is not used at all, so it is
+    // neither kept nor validated.
+    this.stakeAddress = this.staking ? deps.stakeAddress || '' : '';
     this.stakePermissionId = this.stakeAddress ? (deps.stakePermissionId ?? 2) : undefined;
     // Eager-fail, as TransferGuard does for a pinned destination (owner
     // decision 2026-09-19). A malformed stake configuration never fails loudly
@@ -155,6 +171,15 @@ export class EnergyDelegationService implements DelegationSource {
    */
   get delegationPermissionId(): number | undefined {
     return this.stakePermissionId;
+  }
+
+  /**
+   * T149 — whether the dormant stake model is switched on
+   * (<c>ENERGY_STAKING_ENABLED</c>, default false). The refund fee estimate
+   * reads it from here so the estimate and the broadcast take the same path.
+   */
+  get stakingEnabled(): boolean {
+    return this.staking;
   }
 
   async withDelegation<T extends { txHash: string }>(
@@ -271,7 +296,9 @@ export class EnergyDelegationService implements DelegationSource {
       'Deposit transfer resource plan',
     );
 
-    if (plan.kind === 'delegate') {
+    // T149 — belt and braces: with the stake off the plan cannot say
+    // "delegate" (it saw 0 delegatable), and if it ever did it burns.
+    if (plan.kind === 'delegate' && this.staking) {
       const delegated = await this.tryDelegate(deposit, plan, context);
       if (delegated) {
         let sent: number;
@@ -293,7 +320,7 @@ export class EnergyDelegationService implements DelegationSource {
       return this.burn(deposit, plan.energyShortfall, probes, context);
     }
 
-    if (plan.kind === 'burn') {
+    if (plan.kind === 'burn' || plan.kind === 'delegate') {
       return this.burn(deposit, plan.energyShortfall, probes, context);
     }
 
@@ -317,8 +344,11 @@ export class EnergyDelegationService implements DelegationSource {
       // ratio and reading the stake stay two separate questions.
       this.resources.getAccountResources(this.sweeperAddress),
       // How much this account may still delegate out. It must be the account
-      // that HOLDS the stake, not the one that signs for it.
-      this.resources.getDelegatableEnergySun(this.delegationOwner),
+      // that HOLDS the stake, not the one that signs for it. T149 — with the
+      // stake switched off nothing is read: the plan sees 0 and burns.
+      this.staking
+        ? this.resources.getDelegatableEnergySun(this.delegationOwner)
+        : Promise.resolve(0),
       this.resources.getChainFeeParameters(),
       this.resources.getAccountState(transfer.depositAddress),
     ]);
@@ -641,6 +671,8 @@ function assertStakeConfiguration(address: string, permissionId: number): void {
  */
 export interface DelegationSource {
   readonly delegationOwner: string;
+  /** T149 — false while the dormant stake model is off: nothing is delegated, so nothing is read. */
+  readonly stakingEnabled: boolean;
 }
 
 /** The subset of <c>TronResourceClient</c> the flow needs — injectable for tests. */
@@ -665,6 +697,12 @@ export interface EnergyDelegationServiceDeps {
    * leaves from (activation, burn top-up, fixed fallback). */
   sweeperAddress: string;
   sweeperPrivateKey: string;
+  /**
+   * T149 — the dormant hybrid stake switch (<c>ENERGY_STAKING_ENABLED</c>,
+   * production default false). Required, so no construction can switch the
+   * stake on by omission.
+   */
+  stakingEnabled: boolean;
   /** Dedicated stake account holding the frozen TRX, signed for by the hot
    * wallet's key through an active permission. Empty = the hot wallet holds
    * its own stake, the arrangement before the 2026-09-17 split. */

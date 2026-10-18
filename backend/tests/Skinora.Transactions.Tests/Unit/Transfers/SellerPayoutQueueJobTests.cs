@@ -9,6 +9,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
+using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
@@ -71,7 +72,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
 
         _sut = new SellerPayoutQueueJob(
             _db,
-            new RefundDecisionService(_settings),
+            GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings),
             _gasFee,
             _outbox,
             _clock,
@@ -143,6 +144,27 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
                 && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
         Assert.Equal(100m, payout.Amount);
         Assert.Equal(0.50m, payout.GasFee);
+    }
+
+    [Fact]
+    public async Task EthereumTransaction_SellerGetsTheFullPrice_EvenAboveTheProtectionThreshold()
+    {
+        // T149 (11 §F8 K8, 02 §4.7) — the payout rule follows the transaction's
+        // own network. The same inputs as the TRON case above (price 100,
+        // commission 2 → threshold 0.20; gas 0.50) would cost a TRON seller
+        // 0.30 (net 99.70); on Ethereum the platform absorbs the payout fee and
+        // the seller receives the whole price. Pins the network the job passes
+        // to the split: a constant TRON there turns this into 99.70.
+        var tx = await SeedDeliveredAsync(price: 100m, commission: 2m,
+            configure: t => t.Network = BlockchainNetwork.ETHEREUM);
+
+        await _sut.ExecuteAsync();
+
+        var payout = await PayoutRowAsync(tx.Id);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, payout.Network);
+        Assert.Equal(100m, payout.Amount);
+        Assert.Equal(0.50m, payout.GasFee);   // the estimate is still snapshotted
+        Assert.Equal(BlockchainNetwork.ETHEREUM, Assert.Single(_gasFee.Networks));
     }
 
     [Fact]
@@ -370,7 +392,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             await competing.SaveChangesAsync();
         });
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock, logger);
+            raceDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee, _outbox, _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw
 
@@ -392,7 +414,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         var tx = await SeedDeliveredAsync(price: 100m, commission: 2m);
         await using var throwingDb = new RaceDbContext(_options, throwUnrelated: true);
         var sut = new SellerPayoutQueueJob(
-            throwingDb, new RefundDecisionService(_settings), _gasFee, _outbox, _clock,
+            throwingDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee, _outbox, _clock,
             NullLogger<SellerPayoutQueueJob>.Instance);
 
         await Assert.ThrowsAsync<DbUpdateException>(() => sut.ExecuteAsync());
@@ -629,7 +651,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         });
         await using var jobDb = new AppDbContext(_options);
         var sut = new SellerPayoutQueueJob(
-            jobDb, new RefundDecisionService(_settings), _gasFee,
+            jobDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee,
             new DbContextOutbox(jobDb), _clock, NullLogger<SellerPayoutQueueJob>.Instance);
 
         await sut.ExecuteAsync();
@@ -786,7 +808,7 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         await using var raceDb = new TransactionWriteRaceDbContext(_options);
         var logger = new ListLogger<SellerPayoutQueueJob>();
         var sut = new SellerPayoutQueueJob(
-            raceDb, new RefundDecisionService(_settings), _gasFee,
+            raceDb, GasFeeSettingsBackedNetworkSettings.NewRefundDecisionService(_settings), _gasFee,
             new DbContextOutbox(raceDb), _clock, logger);
 
         await sut.ExecuteAsync();   // must not throw

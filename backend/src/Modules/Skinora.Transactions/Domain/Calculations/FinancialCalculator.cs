@@ -104,8 +104,9 @@ public static class FinancialCalculator
     /// the buyer transfers and what <c>PaymentAddress.ExpectedAmount</c>
     /// persists (06 §8.3, 02 §5). Every component must already be whole-cent,
     /// so the sum is too (T144). <paramref name="networkFeeAmount"/> is the
-    /// TRON network fee line (11 §F8 K8): always 0 until T149 adds the line,
-    /// and T149 rounds it up to the cent before it reaches this method.
+    /// TRON network fee line (11 §F8 K8): 0 at creation and on Ethereum; on
+    /// TRON the line fixed at acceptance (T149), already rounded up to the cent
+    /// by <see cref="CalculateTronNetworkFeeLine"/>.
     /// </summary>
     public static decimal CalculateTotal(decimal price, decimal commissionAmount, decimal networkFeeAmount = 0m)
     {
@@ -120,6 +121,77 @@ public static class FinancialCalculator
         EnsureWholeCents(networkFeeAmount, nameof(networkFeeAmount));
 
         return price + commissionAmount + networkFeeAmount;
+    }
+
+    /// <summary>SUN per TRX — TRON's smallest unit (08 §3.1a).</summary>
+    public const decimal SunPerTrx = 1_000_000m;
+
+    /// <summary>
+    /// Smallest whole-cent amount not below <paramref name="value"/>
+    /// (<see cref="MidpointRounding.ToPositiveInfinity"/> at
+    /// <see cref="PayableScale"/>). Used only for the TRON network fee line,
+    /// which 11 §F8 K8 rounds UP so the line never undershoots the cost it
+    /// covers; the commission keeps its truncation (T144).
+    /// </summary>
+    public static decimal RoundUpToCents(decimal value) =>
+        Math.Round(value, PayableScale, MidpointRounding.ToPositiveInfinity);
+
+    /// <summary>
+    /// T149 — the buyer's TRON network fee line (11 §F8 K8, 02 §5, 08 §3.1a):
+    /// <c>line = CEIL₂( sweepCostSun / 1 000 000 × trxPriceUsdt × (1 + bufferRatio) )</c>.
+    /// </summary>
+    /// <param name="sweepCostSun">
+    /// TRX the platform spends to sweep one fresh deposit to the hot wallet,
+    /// in SUN — activation + the burn top-up for the whole transfer with its
+    /// 10% margin + the top-up's Bandwidth (the blockchain service's
+    /// <c>estimate-sweep-fee</c>). Includes the margin; this method adds none.
+    /// </param>
+    /// <param name="trxPriceUsdt">Live TRX/USDT price the service quoted.</param>
+    /// <param name="bufferRatio">
+    /// Head-room against the TRX price moving before the sweep (~8 days later):
+    /// <c>blockchain.tron.network_fee_buffer_ratio</c>, 0 ≤ ratio &lt; 1.
+    /// </param>
+    /// <remarks>
+    /// Rounding happens once, at the end — rounding the USDT cost first and
+    /// then applying the buffer would round twice and move the 02 §5 example
+    /// (8.44 TRX × 0.34 × 1.007 = 2.8901 → 2.90) up a cent.
+    /// </remarks>
+    public static decimal CalculateTronNetworkFeeLine(long sweepCostSun, decimal trxPriceUsdt, decimal bufferRatio)
+    {
+        if (sweepCostSun < 0)
+            throw new ArgumentOutOfRangeException(nameof(sweepCostSun), sweepCostSun, "Sweep cost must be non-negative.");
+        if (trxPriceUsdt <= 0)
+            throw new ArgumentOutOfRangeException(nameof(trxPriceUsdt), trxPriceUsdt, "TRX price must be positive.");
+        if (bufferRatio < 0)
+            throw new ArgumentOutOfRangeException(nameof(bufferRatio), bufferRatio, "Buffer ratio must be non-negative.");
+
+        var costUsdt = sweepCostSun / SunPerTrx * trxPriceUsdt;
+        return RoundUpToCents(costUsdt * (1m + bufferRatio));
+    }
+
+    /// <summary>
+    /// T149 — the part of what the buyer paid that a buyer refund returns
+    /// before its own gas is deducted (02 §4.6, 08 §3.1a):
+    /// <list type="bullet">
+    ///   <item>sweep has not run → <c>totalAmount</c> (price + commission +
+    ///         the network fee line, in full — the line paid for a sweep that
+    ///         never happened);</item>
+    ///   <item>sweep has run → <c>totalAmount − networkFeeAmount</c> (the line
+    ///         was spent on the sweep it paid for; price and commission are
+    ///         still returned in full).</item>
+    /// </list>
+    /// </summary>
+    public static decimal CalculateRefundableTotal(decimal totalAmount, decimal? networkFeeAmount, bool sweepHasRun)
+    {
+        if (totalAmount < 0)
+            throw new ArgumentOutOfRangeException(nameof(totalAmount), totalAmount, "Total amount must be non-negative.");
+        var fee = networkFeeAmount ?? 0m;
+        if (fee < 0)
+            throw new ArgumentOutOfRangeException(nameof(networkFeeAmount), networkFeeAmount, "Network fee must be non-negative.");
+        if (fee > totalAmount)
+            throw new ArgumentOutOfRangeException(nameof(networkFeeAmount), networkFeeAmount, "Network fee cannot exceed the total paid.");
+
+        return sweepHasRun ? totalAmount - fee : totalAmount;
     }
 
     private static void EnsureWholeCents(decimal value, string paramName)

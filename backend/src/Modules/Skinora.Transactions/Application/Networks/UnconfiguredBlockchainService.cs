@@ -105,6 +105,13 @@ public sealed class UnconfiguredBlockchainService
         return Task.FromResult<decimal?>(null);
     }
 
+    public Task<SweepCostEstimate?> EstimateSweepCostAsync(
+        StablecoinType token, CancellationToken cancellationToken)
+    {
+        Refuse("transfer/estimate-sweep-fee");
+        return Task.FromResult<SweepCostEstimate?>(null);
+    }
+
     private Task<BlockchainSidecarStatus> NotConfigured(string operation)
     {
         Refuse(operation);
