@@ -7,6 +7,15 @@ import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { FinalityTracker } from './finality/FinalityTracker.js';
 import { createApp } from './api/routes.js';
+import { DepositRegistry } from './monitor/DepositRegistry.js';
+import { PaymentScanner } from './monitor/PaymentScanner.js';
+import { RatePacer } from './reconcile/RatePacer.js';
+import { BalanceReader } from './reconcile/BalanceReader.js';
+import { FuelLedger } from './reconcile/FuelLedger.js';
+import { Reconciler } from './reconcile/Reconciler.js';
+import { UsdtStatusMonitor } from './token/UsdtStatus.js';
+import { paymentReadiness } from './health/paymentReadiness.js';
+import { createWebhookSender } from './webhook/WebhookClient.js';
 
 /**
  * Entry point of the Ethereum service (T150 — 05 §3.3a, 08 §3.7).
@@ -92,21 +101,92 @@ function main(): void {
     'Ethereum service configured',
   );
 
+  // T151 — payment monitor, USDT status, balance reconciliation (08 §3.7.4).
+  const allowlist = config.tokenContracts;
+  const pacer = new RatePacer({ cuPerSecond: config.reconciliation.cuPerSecond });
+  const reader = new BalanceReader(rpc, allowlist, pacer);
+  const registry = new DepositRegistry();
+  const fuel = new FuelLedger();
+  const scanner = new PaymentScanner({
+    rpc,
+    registry,
+    finality: () => finality.status(),
+    allowlist,
+    send: createWebhookSender({ baseUrl: config.backendUrl, secret: config.webhookHmacKey }),
+    balances: reader,
+    pacer,
+    tickIntervalMs: config.monitor.tickIntervalMs,
+    restartLookbackBlocks: config.monitor.restartLookbackBlocks,
+    rearmWindowMs: config.monitor.rearmWindowMs,
+    catchUpBlocksPerTick: config.monitor.catchUpBlocksPerTick,
+    minProviderBlockRange: Math.min(...config.rpc.providers.map((p) => p.maxBlockRange)),
+  });
+  const usdt = new UsdtStatusMonitor({
+    rpc,
+    contract: allowlist.USDT,
+    finality: () => finality.status(),
+    intervalMs: config.usdtStatusIntervalMs,
+  });
+  const reconciler = new Reconciler({
+    registry,
+    finality: () => finality.status(),
+    scannedBlock: () => scanner.scannedBlock(),
+    reader,
+    fuel,
+    intervalMs: config.reconciliation.intervalMs,
+    maxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+  });
+  const readiness = () =>
+    paymentReadiness({
+      monitorRunning: scanner.isRunning(),
+      webhookConfigured: config.webhookHmacKey !== '',
+      usdt: usdt.status().state,
+    });
+  if (config.webhookHmacKey === '') {
+    logger.error(
+      'WEBHOOK_SECRET is not set — payments cannot be reported; /health declares acceptsPayments=false (T151).',
+    );
+  }
+  logger.info(
+    {
+      monitorTickMs: config.monitor.tickIntervalMs,
+      restartLookbackBlocks: config.monitor.restartLookbackBlocks,
+      reconciliationIntervalMs: config.reconciliation.intervalMs,
+      reconciliationCuPerSecond: config.reconciliation.cuPerSecond,
+      reconciliationMaxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      reconciliationCuPerDeposit: reader.costPerAddress(),
+    },
+    'Ethereum payment monitor configured',
+  );
+
   const app = createApp({
     internalKey: config.internalKey,
     chainId: config.chainId,
     wallet,
     finality: () => finality.status(),
+    payments: {
+      registry,
+      allowlist,
+      reader,
+      maxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      readiness,
+    },
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port, network: SERVICE_NETWORK }, 'Ethereum service listening');
     finality.start();
+    scanner.start();
+    usdt.start();
+    reconciler.start();
   });
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
     finality.stop();
+    scanner.stop();
+    usdt.stop();
+    reconciler.stop();
     server.close(() => logger.info('HTTP server closed'));
     const forceTimer = setTimeout(() => {
       logger.error('Forced shutdown — timeout exceeded');

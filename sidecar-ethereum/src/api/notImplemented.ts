@@ -2,14 +2,10 @@ import type { Request, Response } from 'express';
 
 /**
  * The per-network contract's endpoints this skeleton does not serve yet
- * (05 §3.3a "Uçlar"), and the task that brings each (11 §F8 P3).
+ * (05 §3.3a "Uçlar"), and the task that brings each (11 §F8 P3). T151's
+ * monitor and balance endpoints are served by routes.ts (`PAYMENT_ENDPOINTS`).
  */
 export const NOT_YET_IMPLEMENTED = [
-  { method: 'post', path: '/wallet/balances', task: 'T151' },
-  { method: 'post', path: '/monitor/start', task: 'T151' },
-  { method: 'post', path: '/monitor/stop', task: 'T151' },
-  { method: 'post', path: '/monitor/post-cancel-start', task: 'T151' },
-  { method: 'post', path: '/monitor/post-cancel-stop', task: 'T151' },
   { method: 'post', path: '/transfer/payout', task: 'T152' },
   { method: 'post', path: '/transfer/refund', task: 'T152' },
   { method: 'post', path: '/transfer/sweep', task: 'T152' },

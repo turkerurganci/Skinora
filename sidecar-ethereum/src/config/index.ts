@@ -71,6 +71,27 @@ export interface EthereumServiceConfig {
     /** Finalized block older than this → unhealthy and alarm (08 §3.7.8: 30 min). */
     readonly stallThresholdSeconds: number;
   };
+  /** T151 — the payment monitor (08 §3.7.4). */
+  readonly monitor: {
+    /** How often the monitor looks for new finalized blocks (it reads the FinalityTracker's head). */
+    readonly tickIntervalMs: number;
+    /** Blocks a re-armed / possibly funded deposit is read back (7,200 ≈ 24 h). */
+    readonly restartLookbackBlocks: number;
+    /** Deposits registered this long after start are treated as re-armed by the backend's reconciler. */
+    readonly rearmWindowMs: number;
+    /** Most past blocks read back per tick (bounds a restart's catch-up burst). */
+    readonly catchUpBlocksPerTick: number;
+  };
+  /** T151 — balance reconciliation (08 §3.7.4 "Bakiye mutabakatı"). */
+  readonly reconciliation: {
+    readonly intervalMs: number;
+    /** Compute units per second the paced reads may spend (Alchemy Free allows 300). */
+    readonly cuPerSecond: number;
+    /** Older finalized head → round skipped: state that deep may need archive access (25 min). */
+    readonly maxFinalizedAgeSeconds: number;
+  };
+  /** T151 — how often USDT's fee / pause / deprecation switches are re-read (08 §3.7.1). */
+  readonly usdtStatusIntervalMs: number;
   readonly shutdownTimeoutMs: number;
 }
 
@@ -255,6 +276,22 @@ export function loadConfig(
       pollIntervalMs: positiveInt(env, 'ETHEREUM_FINALIZED_POLL_INTERVAL_MS', 30_000),
       stallThresholdSeconds: positiveInt(env, 'ETHEREUM_FINALIZED_STALL_SECONDS', 1800),
     },
+    monitor: {
+      tickIntervalMs: positiveInt(env, 'ETHEREUM_MONITOR_TICK_MS', 15_000),
+      restartLookbackBlocks: positiveInt(env, 'ETHEREUM_MONITOR_RESTART_LOOKBACK_BLOCKS', 7200),
+      rearmWindowMs: positiveInt(env, 'ETHEREUM_MONITOR_REARM_WINDOW_MS', 300_000),
+      catchUpBlocksPerTick: positiveInt(env, 'ETHEREUM_MONITOR_CATCH_UP_BLOCKS_PER_TICK', 500),
+    },
+    reconciliation: {
+      intervalMs: positiveInt(env, 'ETHEREUM_RECONCILIATION_INTERVAL_MS', 3_600_000),
+      cuPerSecond: positiveInt(env, 'ETHEREUM_RECONCILIATION_CU_PER_SECOND', 200),
+      maxFinalizedAgeSeconds: positiveInt(
+        env,
+        'ETHEREUM_RECONCILIATION_MAX_FINALIZED_AGE_SECONDS',
+        1500,
+      ),
+    },
+    usdtStatusIntervalMs: positiveInt(env, 'ETHEREUM_USDT_STATUS_INTERVAL_MS', 600_000),
     shutdownTimeoutMs: 10_000,
   };
 }

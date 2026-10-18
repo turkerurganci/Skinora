@@ -100,6 +100,92 @@ export const finalizedReadFailuresTotal = getOrCreateCounter({
   help: 'Finalized-head reads that failed on every configured provider',
 });
 
+// --- T151 — payment monitor, reconciliation, USDT status (08 §3.7.4, §3.7.1) ---
+
+/** Deposits watched, by registry (`active` | `post_cancel`). */
+export const watchedDeposits = getOrCreateGauge({
+  name: 'skinora_ethereum_watched_deposits',
+  help: 'Ethereum deposit addresses the payment monitor watches',
+  labelNames: ['kind'] as const,
+});
+
+/** Highest finalized block whose logs the monitor has processed for every caught-up deposit. */
+export const monitorScannedBlock = getOrCreateGauge({
+  name: 'skinora_ethereum_monitor_scanned_block',
+  help: 'Highest finalized Ethereum block the payment monitor has fully processed',
+});
+
+/** Deposits still being read back from their start block (restart / late arming). */
+export const monitorCatchUpDeposits = getOrCreateGauge({
+  name: 'skinora_ethereum_monitor_catch_up_deposits',
+  help: 'Ethereum deposits whose past blocks the monitor is still reading',
+});
+
+/** Events delivered to the backend, by webhook event name. */
+export const paymentEventsTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_payment_events_total',
+  help: 'Payment monitor webhook events delivered to the backend',
+  labelNames: ['event'] as const,
+});
+
+/** Block ranges whose scan failed (RPC or retryable webhook failure) and is retried. */
+export const monitorScanFailuresTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_monitor_scan_failures_total',
+  help: 'Payment monitor block ranges that failed and will be read again',
+});
+
+/**
+ * A deposit's token balance moved differently from the transfers the monitor
+ * saw (a log the provider left out, 08 §3.7.8) — admin alarm
+ * (`ethereum-deposit-balance-mismatch`).
+ */
+export const reconciliationMismatchTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_reconciliation_mismatch_total',
+  help: 'Ethereum deposits whose token balance does not match the observed transfers',
+  labelNames: ['asset'] as const,
+});
+
+/** Native ETH that reached a deposit and is not recorded fuel — admin alarm (`ethereum-deposit-native-eth`). */
+export const nativeEthReceivedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_native_eth_received_total',
+  help: 'Ethereum deposits that received native ETH not sent by the fuel wallet',
+});
+
+/** Reconciliation rounds skipped, by reason (`finalized_stale`, `read_failed`, `no_finalized`). */
+export const reconciliationSkippedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_reconciliation_skipped_total',
+  help: 'Ethereum balance reconciliation rounds that did not run to completion',
+  labelNames: ['reason'] as const,
+});
+
+/** Unix seconds of the last completed reconciliation round (process start until the first). */
+export const reconciliationLastSuccess = getOrCreateGauge({
+  name: 'skinora_ethereum_reconciliation_last_success_timestamp_seconds',
+  help: 'Unix time of the last completed Ethereum balance reconciliation',
+});
+
+/** The configured reconciliation interval — the stale alarm divides by it. */
+export const reconciliationIntervalSeconds = getOrCreateGauge({
+  name: 'skinora_ethereum_reconciliation_interval_seconds',
+  help: 'Configured interval of the Ethereum balance reconciliation',
+});
+
+/** Seconds the last reconciliation round took (spread by the rate pacer). */
+export const reconciliationDurationSeconds = getOrCreateGauge({
+  name: 'skinora_ethereum_reconciliation_duration_seconds',
+  help: 'Duration of the last Ethereum balance reconciliation round',
+});
+
+/**
+ * 1 when the USDT contract is usable (fee switch off, not paused, not
+ * deprecated), 0 otherwise — admin alarm (`ethereum-usdt-status`). Not set
+ * while no USDT contract is configured (a testnet before T159).
+ */
+export const usdtStatusOk = getOrCreateGauge({
+  name: 'skinora_ethereum_usdt_status_ok',
+  help: 'Whether the configured USDT contract is usable for payments (1) or not (0)',
+});
+
 export function metricsHandler(_req: Request, res: Response): void {
   client.register
     .metrics()

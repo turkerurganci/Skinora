@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { SERVICE_NETWORK } from '../network.js';
 import { SERVICE_NAME } from '../logger.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
+import { NOT_ACCEPTING, type PaymentReadiness } from './paymentReadiness.js';
 
 interface HealthCheck {
   name: string;
@@ -30,17 +31,32 @@ interface HealthCheck {
  *     backup answers.</item>
  *   <item><b>healthy (200)</b>.</item>
  * </list>
+ *
+ * <para>
+ * <b>`acceptsPayments` (T151 kod düzeyi kapı).</b> A capability, not a
+ * liveness state: true only while the payment monitor runs, webhooks can be
+ * sent and USDT is usable (paymentReadiness.ts). It does not change the
+ * status code — the backend's probe reads the flag and reports the network
+ * unhealthy, and keeps it out of `supportedNetworks`, when it is not `true`.
+ * </para>
  */
-export function healthCheckFactory(deps: { finality: () => FinalityStatus; chainId: number }) {
+export function healthCheckFactory(deps: {
+  finality: () => FinalityStatus;
+  chainId: number;
+  readiness?: () => PaymentReadiness;
+}) {
   return function healthCheck(_req: Request, res: Response): void {
     const finality = deps.finality();
     const check = finalityCheck(finality);
     const statusCode = check.status === 'unhealthy' ? 503 : 200;
+    const readiness = deps.readiness?.() ?? NOT_ACCEPTING;
     res.status(statusCode).json({
       status: check.status,
       service: SERVICE_NAME,
       network: SERVICE_NETWORK,
       chainId: deps.chainId,
+      acceptsPayments: readiness.acceptsPayments,
+      payments: readiness,
       uptime: process.uptime(),
       finalized:
         finality.snapshot === null
