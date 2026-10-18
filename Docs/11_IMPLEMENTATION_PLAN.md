@@ -5199,7 +5199,7 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 | Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, geç ödeme, fazladan transfer) alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi); `AmountValidationService` `FromAddress` kullanmaz | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |
 | Alıcının ödeyeceği toplam 2 ondalık; gösterilen = beklenen | 02 §5, 06 §8.3, 07 §1.3, 09 §7.2 | T144 | |
 | TRON HD yolu standart `m/44'/195'/0'/0/{i}`; Ethereum ayrı tohum + `m/44'/60'/0'/0/{i}` (K7) | 05 §3.3, §3.5, 08 §3.2, §3.7.2, secrets/README.md | T143, T150 | kısmen — TRON ✓ T143 (PR #338); Ethereum T150 |
-| Ağ başına servis sözleşmesi: her ağın ayrı servisi, webhook yükünde `network`, ağ başına ayarlar, ağ başına sağlık dondurması | 05 §3.3a, 06 §1.4 | T148 | ✓ T148 (PR #PRNUM) — Ethereum servisinin kendisi T150 |
+| Ağ başına servis sözleşmesi: her ağın ayrı servisi, webhook yükünde `network`, ağ başına ayarlar, ağ başına sağlık dondurması | 05 §3.3a, 06 §1.4 | T148 | ✓ T148 (PR #343) — Ethereum servisinin kendisi T150 |
 | TRON ağ ücreti satırı (K8): kabul anında sabitlenir, 2 haneye yukarı; payout satıcıya mevcut %10 kuralıyla; sweep öncesi iadede tam iade; kabul anında tahmin yoksa ağ başına sabit yedek, satır sonradan düzeltilmez (öneriyle kaydedildi — ⚠) | 02 §4.6, §4.7, §5, 06 §3.5, §8.3, 07 §7.5, 08 §3.1a | T149 | |
 | Sweep'ten sonra yapılan iadede TRON ağ ücreti satırının işlenişi (T141'de açık bırakıldı) | 02 §4.6, 08 §3.1a | T149 | |
 | Kilit (hibrit enerji) kodu kapama anahtarının arkasında, varsayılan kapalı | 05 §3.3, 08 §3.3, DEPLOY_RUNBOOK §C.2 | T149 | |
