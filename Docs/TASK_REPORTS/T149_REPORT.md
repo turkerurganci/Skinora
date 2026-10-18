@@ -76,7 +76,7 @@
 - Branch: `task/T149-ag-ucreti-politikasi`
 - Commit: `1d556f6` — T149: Ağ ücreti politikası (kod + doküman); ardından sayım testleri + validator testleri + rapor/status/memory commit'i
 - PR: #345
-- CI: ilk run `39118435062` ✗ (3 eski sayım testi — düzeltildi); son run aşağıda/PR'da
+- CI: ilk run `39118435062` ✗ (3 eski sayım testi — düzeltildi); ikinci run `39119612459` (`d2dd6ba`): bütün bloke eden işler ✓ (Build, Unit, Integration, Contract, Migration dry-run, Docker build, CI Gate ✓) ama tavsiye niteliğindeki `E2E T109 timeout` işi `docker compose up --wait` adımında test başlamadan 28 dk asılı kaldı ve iptal edildi (run sonucu `cancelled`; aynı kodla ilk run'da 6 dk'da ✓) — bu rapor güncellemesiyle yeni run; sonucu PR'da
 
 ## Known Limitations / Follow-up
 - **Sweep sonrası iade otomatik çalışmaz:** otomatik iade depozitten çıkar; sweep ile payout arasındaki dar aralıkta (admin iptali) istenen iade boş depozitte `DEPOSIT_TRANSFER_WOULD_REVERT` ile `FAILED` olur ve admin'e düşer (T149 öncesi de böyleydi). T149 kuralı bu iadenin **tutarını** belirler; sıcak cüzdandan otomatik iade kapsam dışı.
