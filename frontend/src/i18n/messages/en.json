@@ -115,7 +115,7 @@
       "summary": {
         "escrow": "Your payment is held in escrow until the seller delivers the item; the platform never holds the item itself.",
         "commission": "A commission is taken from the seller upon completion.",
-        "crypto": "Payments use USDT or USDC on the TRON network only.",
+        "crypto": "Payments use USDT or USDC on the TRON or Ethereum network only.",
         "disputes": "Disputes are reviewed by Skinora administrators.",
         "kyc": "Sanctions-listed wallets and embargoed regions are blocked."
       },
@@ -821,7 +821,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Data we collect",
-          "body": "When you sign in with Steam (Steam OpenID), we receive your Steam public profile, including your Steam ID, display name, and avatar. We also store the wallet addresses you provide for TRC-20 stablecoin (USDT, USDC) payments on the TRON network, and a record of your transaction activity on the platform, such as offers, escrow status, payouts, refunds, and disputes. We do not receive your Steam password or your Steam Mobile Authenticator credentials."
+          "body": "When you sign in with Steam (Steam OpenID), we receive your Steam public profile, including your Steam ID, display name, and avatar. We also store the wallet addresses you provide, per network, for stablecoin (USDT, USDC) payments on the TRON (TRC-20) and Ethereum (ERC-20) networks, and a record of your transaction activity on the platform, such as offers, escrow status, payouts, refunds, and disputes. We do not receive your Steam password or your Steam Mobile Authenticator credentials."
         },
         "howWeUse": {
           "heading": "How we use your data",
@@ -829,7 +829,7 @@
         },
         "dataSharing": {
           "heading": "Data sharing",
-          "body": "We share data only with the parties needed to deliver the service, such as Steam for trade verification and the TRON blockchain network for on-chain payments, and with service providers acting on our behalf. Note that transactions recorded on a public blockchain are inherently visible to others. We may also disclose data where required by law or to enforce our terms, and we do not sell personal data."
+          "body": "We share data only with the parties needed to deliver the service, such as Steam for trade verification and the blockchain network you pay on (TRON or Ethereum) for on-chain payments, and with service providers acting on our behalf. Note that transactions recorded on a public blockchain are inherently visible to others. We may also disclose data where required by law or to enforce our terms, and we do not sell personal data."
         },
         "dataRetention": {
           "heading": "Data retention",
@@ -855,7 +855,7 @@
         },
         "serviceDescription": {
           "heading": "The service",
-          "body": "Skinora acts as an intermediary that holds the buyer's TRC-20 stablecoin payment in escrow until the seller delivers the agreed CS2 item via a Steam trade. Once delivery is confirmed, we release the payout to the seller after deducting the platform commission and network gas fee. Trading typically requires a Steam account in good standing and may require a Steam Mobile Authenticator. Skinora is an independent service and is not affiliated with, endorsed by, or operated by Valve or Steam."
+          "body": "Skinora acts as an intermediary that holds the buyer's stablecoin payment (TRC-20 on TRON or ERC-20 on Ethereum, on the network the buyer chose) in escrow until the seller delivers the agreed CS2 item via a Steam trade. Once delivery is confirmed, we release the payout to the seller on the same network after deducting the platform commission and any applicable network gas fee. Trading typically requires a Steam account in good standing and may require a Steam Mobile Authenticator. Skinora is an independent service and is not affiliated with, endorsed by, or operated by Valve or Steam."
         },
         "userObligations": {
           "heading": "Your obligations",
@@ -863,7 +863,7 @@
         },
         "fees": {
           "heading": "Fees",
-          "body": "Each transaction is subject to a platform commission and a blockchain network (gas) fee. The applicable amounts are shown to you in-app before you confirm a transaction, and exact rates are configurable and may change over time. Blockchain network fees are determined by the TRON network and are outside our control."
+          "body": "Each transaction is subject to a platform commission and, depending on the network, a blockchain network (gas) fee. The applicable amounts are shown to you in-app before you confirm a transaction, and exact rates are configurable and may change over time. On TRON the buyer pays a separate TRON network fee, fixed when the transaction is accepted; on Ethereum the platform covers the network fee. Blockchain network fees are determined by the network (TRON or Ethereum) and are outside our control."
         },
         "liability": {
           "heading": "Liability",
@@ -1042,16 +1042,20 @@
     "ariaLabel": "Select language"
   },
   "walletAddress": {
-    "label": "TRC-20 wallet address",
-    "hint": "Must start with T, 34 characters",
-    "invalidFormat": "Invalid TRC-20 address",
+    "label": "{network} wallet address",
+    "invalidFormat": "Enter a valid {network} address.",
     "sanctioned": "This address is on a sanctions list. Please use a different one.",
     "validationError": "An error occurred during validation",
     "edit": "Edit",
     "confirm": "Confirm",
     "validating": "Validating",
     "continue": "Continue",
-    "confirmTitle": "Is this address correct?"
+    "confirmTitle": "Is this address correct?",
+    "hintTron": "TRON address: starts with T, 34 characters.",
+    "hintEthereum": "Ethereum address: 0x followed by 40 hex characters. Paste it as your wallet shows it (mixed case carries the EIP-55 checksum).",
+    "networkLabel": "Network",
+    "evmSameAddressNote": "The same 0x address also exists on other EVM networks. This address is saved for Ethereum only.",
+    "noChecksumConfirm": "This address is all lowercase (or all uppercase), so it carries no EIP-55 checksum and a typo cannot be detected. I have checked it character by character."
   },
   "pagination": {
     "ariaLabel": "Pagination",
@@ -1182,6 +1186,14 @@
         "title": "No payout address on your profile",
         "description": "Listings pay out to the address saved on your profile. Add one in your profile, then come back — for security the address becomes usable 24 hours after you save it.",
         "cta": "Go to profile"
+      },
+      "noOpenNetwork": {
+        "title": "No network is open for new transactions",
+        "description": "Payments are temporarily unavailable on every network. This is temporary — please try again later."
+      },
+      "noPayoutOnOpenNetwork": {
+        "title": "No payout address on an open network",
+        "description": "New transactions can be opened on: {networks}. You have no payout address on these networks. Add one on your profile to start a transaction."
       }
     },
     "step1": {
@@ -1231,6 +1243,16 @@
         "label": "Commission (paid by buyer)",
         "value": "Buyer pays {percent}% commission: {amount}",
         "placeholder": "Calculated once you enter a price ({percent}%)"
+      },
+      "networks": {
+        "label": "Networks you accept",
+        "hint": "The token is always USDT. The buyer picks one of these networks; your payout and any refund move on that same network.",
+        "payoutAddress": "Payout address",
+        "noPayoutAddress": "You have no payout address on this network.",
+        "addInProfile": "Add it on your profile",
+        "tronFeeNote": "On TRON the buyer also pays a TRON network fee, fixed when they accept. The part of your payout's network fee that the commission does not cover is deducted from your payout.",
+        "ethereumFeeNote": "On Ethereum neither you nor the buyer pays a network fee.",
+        "noneSelected": "Select at least one network."
       }
     },
     "step3": {
@@ -1260,13 +1282,13 @@
         "price": "Price",
         "commission": "Commission",
         "commissionPayer": "buyer pays",
-        "token": "Token",
         "timeout": "Payment window",
         "timeoutValue": "{hours} hours",
         "buyer": "Buyer",
         "buyerSteamId": "Steam ID: {steamId}",
         "buyerOpenLink": "Open link (first to accept)",
-        "wallet": "Payout address"
+        "wallet": "Payout address",
+        "networks": "Networks"
       },
       "back": "Back",
       "submit": "Start transaction",
@@ -1274,7 +1296,7 @@
       "errors": {
         "generic": "Could not start the transaction. Please try again.",
         "VALIDATION_ERROR": "There is an error in the form data. Please check all fields.",
-        "INVALID_WALLET_ADDRESS": "The payout address is invalid. Enter a TRC-20 address.",
+        "INVALID_WALLET_ADDRESS": "The payout address saved on your profile is not valid for this network. Update it on your profile.",
         "SANCTIONS_MATCH": "This wallet address is sanctioned. Please use a different address.",
         "CONCURRENT_LIMIT_REACHED": "You have reached your active transaction limit. You can start a new transaction once existing ones are completed.",
         "CANCEL_COOLDOWN_ACTIVE": "A cancellation cooldown is in effect. You cannot start a new transaction until it expires.",
@@ -1294,12 +1316,13 @@
         "OPEN_LINK_DISABLED": "The open-link method is currently disabled. Please use the Steam ID method.",
         "BUYER_STEAM_ID_NOT_FOUND": "The Steam ID you entered does not belong to a registered user.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "The payout address cooldown is still in effect.",
-        "SELLER_WALLET_ADDRESS_MISSING": "Your profile has no payout address. Add one in your profile first."
-      }
+        "SELLER_WALLET_ADDRESS_MISSING": "Your profile has no payout address. Add one in your profile first.",
+        "NETWORK_UNAVAILABLE": "One of the selected networks is temporarily unavailable. Remove it or try again later."
+      },
+      "errorNetwork": "Network: {network}"
     }
   },
   "transactionDetail": {
-    "viewOnTronscan": "View on Tronscan",
     "header": {
       "title": "Transaction #{id}"
     },
@@ -1308,7 +1331,11 @@
       "commission": "Commission",
       "total": "Total",
       "token": "Token",
-      "createdAt": "Created at"
+      "createdAt": "Created at",
+      "tronNetworkFee": "TRON network fee",
+      "network": "Network",
+      "acceptedNetworks": "Accepted networks",
+      "totalExcludingTronFee": "Total (excl. TRON network fee)"
     },
     "parties": {
       "seller": "Seller",
@@ -1317,17 +1344,23 @@
     },
     "paymentInfo": {
       "title": "Payment details",
-      "addressLabel": "Payment address",
+      "addressLabel": "Payment address ({network})",
       "amountLabel": "Amount to send",
       "tokenLabel": "Token",
       "networkLabel": "Network",
       "remainingLabel": "Time remaining",
       "warnings": {
         "title": "Important",
-        "onlyTrc20": "Only send {token} on the TRC-20 network.",
         "fullAmount": "Send the exact amount in a single transfer.",
         "noOtherToken": "Do not send any other token.",
-        "noExchange": "Do not send from an exchange — your refund address may not be reachable."
+        "onlyNetwork": "Only send {token} on the {network} network.",
+        "evmSameAddress": "The same 0x address also exists on other EVM networks (e.g. BSC, Arbitrum, Polygon). A payment sent on another network is not counted for this transaction and is not refunded automatically — you would have to open a support request."
+      },
+      "unknownNetwork": "The payment network could not be read, so the payment address is not shown. Do not send anything — refresh the page or contact support.",
+      "breakdown": {
+        "price": "Price",
+        "commission": "Commission",
+        "tronNetworkFee": "TRON network fee"
       }
     },
     "paymentEvents": {
@@ -1341,7 +1374,7 @@
       },
       "WRONG_TOKEN": {
         "title": "Wrong token received",
-        "body": "An unsupported token was received and refunded. Please send {token} (TRC-20) only."
+        "body": "An unsupported token was received and refunded. Please send {token} ({standard}) only."
       },
       "LATE_PAYMENT": {
         "title": "Late payment detected",
@@ -1424,8 +1457,8 @@
       "buyerWillBeNotified": "The buyer will be notified."
     },
     "accept": {
-      "addressLabel": "Your refund address",
-      "addressHint": "If anything goes wrong, the payment is refunded to this TRC-20 address.",
+      "addressLabel": "Your refund address ({network})",
+      "addressHint": "Every refund of this transaction — including rejected payments (wrong amount, wrong token, late payment) — goes to this {network} address.",
       "submit": "I accept this transaction",
       "submitting": "Accepting...",
       "change": "Change",
@@ -1437,7 +1470,7 @@
       "maSetupLink": "How to set up Steam Mobile Authenticator",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "A refund address is required.",
-        "INVALID_WALLET_ADDRESS": "The refund address is invalid. Enter a TRC-20 address.",
+        "INVALID_WALLET_ADDRESS": "The refund address is not a valid {network} address.",
         "SANCTIONS_MATCH": "This wallet address is sanctioned. Please use a different address.",
         "WALLET_COOLDOWN_ACTIVE": "Your refund address was changed recently. Please wait for the cooldown to end.",
         "STEAM_ID_MISMATCH": "This transaction was created for a different Steam account.",
@@ -1451,8 +1484,21 @@
         "STEAM_ACCOUNT_TOO_NEW": "Your Steam account is too new to trade. Steam does not allow trading during an account’s first 15 days.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Your Steam Mobile Authenticator must be active to accept. Without it Steam holds the trade for 15 days.",
         "STEAM_UNAVAILABLE": "Steam could not be reached right now, so your Mobile Authenticator could not be verified. Please try again shortly.",
-        "generic": "Could not accept the transaction. Please try again."
-      }
+        "generic": "Could not accept the transaction. Please try again.",
+        "NETWORK_REQUIRED": "Choose the network you will pay on.",
+        "addressFormat": "Enter a valid {network} address.",
+        "CHECKSUM_CONFIRMATION_REQUIRED": "Confirm that you checked the address without a checksum.",
+        "NETWORK_NOT_ACCEPTED": "The seller does not accept {network} for this transaction. Choose another network.",
+        "NETWORK_UNAVAILABLE": "{network} is temporarily unavailable. Choose another network or try again later."
+      },
+      "networkLabel": "Payment network",
+      "networkHint": "Choose the network you will pay on. Your payment, the seller's payout and any refund all move on this network. On TRON the network fee is fixed when you accept.",
+      "quote": {
+        "total": "You send: {amount}",
+        "tronFee": "includes TRON network fee: {amount}",
+        "unavailable": "Amount shown after you accept."
+      },
+      "noChecksumConfirm": "This address is all lowercase (or all uppercase), so it carries no EIP-55 checksum and a typo cannot be detected. I have checked it character by character."
     },
     "actions": {
       "countdownLabel": "Remaining",
@@ -1564,7 +1610,8 @@
         "title": "Could not load the transaction",
         "message": "The transaction details could not be loaded. Please try again."
       }
-    }
+    },
+    "viewOnExplorer": "View on {explorer}"
   },
   "profile": {
     "header": {
@@ -1593,13 +1640,17 @@
       "cancel": "Cancel",
       "activeTransactionsNotice": "{count} active transaction(s) will continue using the previous address.",
       "errors": {
-        "invalidAddress": "The wallet address is not a valid TRC-20 address.",
+        "invalidAddress": "The wallet address is not a valid address for this network.",
         "sanctioned": "This address is on a sanctions list and cannot be used.",
         "reAuthRequired": "You must re-authenticate with Steam to change this address.",
         "reAuthTokenInvalid": "The verification session has expired or is invalid. Please try again.",
         "validation": "Invalid request. Please try again.",
-        "generic": "The address could not be updated. Please try again."
-      }
+        "generic": "The address could not be updated. Please try again.",
+        "checksumMismatch": "The address checksum does not match — check it for a typo.",
+        "checksumConfirmationRequired": "This Ethereum address has no checksum. Enter it again and confirm it on the confirmation step."
+      },
+      "perNetworkNote": "Addresses are kept per network (TRON, Ethereum). Payments, payouts and refunds always move on the network the buyer chose.",
+      "reAuthNote": "You will be asked to re-authenticate with Steam — this also applies to a first address on a new network."
     },
     "quickLinks": {
       "title": "Quick links",

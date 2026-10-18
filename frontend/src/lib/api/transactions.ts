@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type { PagedResult } from "@/types/api";
 import type {
+  BlockchainNetwork,
   BuyerIdentificationMethod,
   DisputeType,
   StablecoinType,
@@ -145,6 +146,13 @@ export interface TransactionParamsResponse {
   paymentTimeout: PaymentTimeoutWindow;
   openLinkEnabled: boolean;
   supportedStablecoins: StablecoinType[];
+  /**
+   * T148/T156 — networks open for a NEW transaction right now (07 §7.4):
+   * service configured and not under a health freeze, enum order. The wizard
+   * offers only these (11 T156: "satıcının ağ seçimi supportedNetworks ile
+   * süzülür"); a network missing from the list is not shown at all.
+   */
+  supportedNetworks: BlockchainNetwork[];
 }
 
 export function getTransactionParams(): Promise<TransactionParamsResponse> {
@@ -165,6 +173,12 @@ export interface CreateTransactionRequest {
   paymentTimeoutHours: number;
   buyerIdentificationMethod: BuyerIdentificationMethod;
   buyerSteamId?: string;
+  /**
+   * T147/T156 — networks the listing accepts (07 §7.2), at least one, no
+   * duplicates. Always sent by this client; the server's "missing means
+   * [TRON]" fallback is for the pre-T156 client only.
+   */
+  acceptedNetworks: BlockchainNetwork[];
 }
 
 /**
@@ -225,9 +239,16 @@ export interface TransactionDetailTimeout {
 }
 
 export interface TransactionDetailPayment {
+  /** Deposit address in display form (EIP-55 on Ethereum — 06 §1.4). */
   address: string;
+  /** The exact amount to send, 2 decimals (T144); shown verbatim. */
   expectedAmount: string;
   stablecoin: StablecoinType;
+  /**
+   * T156 — machine value (`"TRON"` / `"ETHEREUM"`, 07 §1.3); the label and the
+   * explorer link are built on the client. Typed as string because it crosses
+   * the wire: read it through `parseNetwork`.
+   */
   network: string;
   status?: string | null;
   txHash?: string | null;
@@ -287,6 +308,18 @@ export interface TransactionDetailDispute {
   canSubmitTxHash: boolean;
   canEscalate: boolean;
   createdAt: string;
+}
+
+/**
+ * One `networkQuotes` element (07 §1.3, §7.5): `networkFeeAmount` is TRON's
+ * network fee line (what acceptance would fix now) and `"0.00"` on Ethereum;
+ * `totalAmount` = price + commission + that line. Both 2-decimal strings,
+ * rendered exactly as received — the client never adds them up itself.
+ */
+export interface TransactionNetworkQuote {
+  network: string;
+  networkFeeAmount: string;
+  totalAmount: string;
 }
 
 export interface TransactionDetailInviteInfo {
@@ -372,6 +405,24 @@ export interface TransactionDetailResponse {
   paymentEvents?: TransactionDetailPaymentEvent[] | null;
   deliveredBuyerAssetId?: string | null;
   /**
+   * T147 — the network the buyer pays on, as the machine value. Set from
+   * acceptance on; absent before (then `acceptedNetworks` / `networkQuotes`
+   * answer).
+   */
+  network?: string | null;
+  /**
+   * T149 — the network fee line fixed at acceptance, 2 decimals (TRON's
+   * sweep cost; `"0.00"` on Ethereum). Shown verbatim; never recomputed.
+   */
+  networkFeeAmount?: string | null;
+  /** T147 — before acceptance: the networks the listing accepts (enum order). */
+  acceptedNetworks?: string[] | null;
+  /**
+   * T147/T149 — before acceptance, per network, what the buyer would pay on
+   * it (07 §7.5). Authenticated views only.
+   */
+  networkQuotes?: TransactionNetworkQuote[] | null;
+  /**
    * Steam trade deep link (07 §7.5). v3.0: populated only in PAYMENT_RECEIVED
    * for the SELLER, where it is the buyer's own trade URL — the platform builds
    * no offer of its own (02 §2.2 step 6). Null in every other state, in the
@@ -424,11 +475,19 @@ export interface AcceptTransactionRequest {
    * otherwise the backend answers 400 INVALID_TRADE_URL.
    */
   steamTradeUrl: string;
+  /**
+   * T147/T156 — the network the buyer pays on: one of the listing's
+   * `acceptedNetworks` (07 §7.6). Always sent by this client.
+   */
+  network: BlockchainNetwork;
 }
 
 export interface AcceptTransactionResponse {
   status: TransactionStatus;
   acceptedAt: string;
+  network?: string;
+  totalAmount?: string;
+  networkFeeAmount?: string;
 }
 
 export function acceptTransaction(

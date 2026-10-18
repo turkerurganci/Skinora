@@ -4,10 +4,13 @@ import { CopyButton } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 import { TxHashLink } from "./TxHashLink";
+import type { BlockchainNetwork } from "@/types/enums";
 
 export interface SellerPayoutSummaryProps {
   payout: TransactionDetailSellerPayout;
   stablecoin: string;
+  /** T156 — picks the explorer for the payout hash. */
+  network: BlockchainNetwork | null;
 }
 
 /**
@@ -17,7 +20,7 @@ export interface SellerPayoutSummaryProps {
  * Backend her zaman tam DTO döner; ayrımı `gasFeeFromSeller === "0"` veya
  * "0.00" / sıfır parse karşılığı ile yapıyoruz.
  */
-export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryProps) {
+export function SellerPayoutSummary({ payout, stablecoin, network }: SellerPayoutSummaryProps) {
   const t = useTranslations("transactionDetail.sellerPayout");
   const locale = useLocale();
   const sellerCovered = parseFloat(payout.gasFeeFromSeller) > 0;
@@ -78,7 +81,7 @@ export function SellerPayoutSummary({ payout, stablecoin }: SellerPayoutSummaryP
               className="flex items-center gap-2 font-mono text-xs text-gray-900"
               title={payout.txHash}
             >
-              <TxHashLink txHash={payout.txHash} />
+              <TxHashLink txHash={payout.txHash} network={network} />
             </dd>
           </div>
           <div className="flex justify-between gap-3">

@@ -54,7 +54,7 @@ function renderPanel(detail: TransactionDetailResponse, isSuspended = false) {
       <NextIntlClientProvider locale="en" messages={messages}>
         <StateActionPanel
           detail={detail}
-          defaultRefundAddress={null}
+          profileWallets={[]}
           defaultSteamTradeUrl={null}
           isAuthenticated
           isSuspended={isSuspended}
@@ -111,7 +111,7 @@ describe("ACCEPTED row", () => {
         <NextIntlClientProvider locale="en" messages={messages}>
           <StateActionPanel
             detail={accepted("seller")}
-            defaultRefundAddress={null}
+            profileWallets={[]}
             defaultSteamTradeUrl={null}
             isAuthenticated
             isSuspended={false}

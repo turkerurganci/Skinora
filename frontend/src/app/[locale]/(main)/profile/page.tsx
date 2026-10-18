@@ -8,6 +8,8 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { useMyProfile } from "@/lib/hooks/useMyProfile";
 import { ErrorState, Skeleton } from "@/components/common";
 import { SuspendedBanner } from "@/components/dashboard";
+import { parseNetwork } from "@/lib/utils/blockchain";
+import type { BlockchainNetwork } from "@/types/enums";
 import {
   ProfileHeader,
   QuickLinks,
@@ -25,14 +27,19 @@ import {
 function captureReAuthFromUrl(): {
   token: string | null;
   role: WalletRole | null;
+  network: BlockchainNetwork | null;
 } {
-  if (typeof window === "undefined") return { token: null, role: null };
+  if (typeof window === "undefined") return { token: null, role: null, network: null };
   const params = new URLSearchParams(window.location.search);
   const token = params.get("reAuthToken");
   const change = params.get("walletChange");
   const role: WalletRole | null =
     change === "seller" || change === "refund" ? (change as WalletRole) : null;
-  return { token: role ? token : null, role };
+  // T156 — the network the re-auth was started for. Unknown / absent reads as
+  // null; the section then treats it as TRON (the only network a pre-T156
+  // callback link could have been started for).
+  const network = parseNetwork(params.get("walletNetwork"));
+  return { token: role ? token : null, role, network };
 }
 
 /**
@@ -73,6 +80,7 @@ export default function ProfilePage() {
   const [reAuthState, setReAuthState] = useState(captureReAuthFromUrl);
   const reAuthToken = reAuthState.token;
   const reAuthRole = reAuthState.role;
+  const reAuthNetwork = reAuthState.network;
 
   // After the lazy initializer captured the token + role, strip them from
   // the URL so the token doesn't linger in browser history. Backend
@@ -85,12 +93,13 @@ export default function ProfilePage() {
     if (!params.has("reAuthToken") && !params.has("walletChange")) return;
     params.delete("reAuthToken");
     params.delete("walletChange");
+    params.delete("walletNetwork");
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   }, [pathname, reAuthToken, router]);
 
   function clearReAuth() {
-    setReAuthState({ token: null, role: null });
+    setReAuthState({ token: null, role: null, network: null });
   }
 
   if (!isAuthenticated) {
@@ -150,9 +159,10 @@ export default function ProfilePage() {
 
       <WalletSection
         role="seller"
-        currentAddress={data.sellerWalletAddress}
+        wallets={data.wallets ?? []}
         activeReAuthToken={reAuthToken}
         activeRoleFromCallback={reAuthRole}
+        activeNetworkFromCallback={reAuthNetwork}
         onChangeCancelled={() => {
           if (reAuthRole === "seller") clearReAuth();
         }}
@@ -161,9 +171,10 @@ export default function ProfilePage() {
 
       <WalletSection
         role="refund"
-        currentAddress={data.refundWalletAddress}
+        wallets={data.wallets ?? []}
         activeReAuthToken={reAuthToken}
         activeRoleFromCallback={reAuthRole}
+        activeNetworkFromCallback={reAuthNetwork}
         onChangeCancelled={() => {
           if (reAuthRole === "refund") clearReAuth();
         }}

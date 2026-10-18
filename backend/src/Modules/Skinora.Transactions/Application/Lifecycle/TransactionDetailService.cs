@@ -23,13 +23,6 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// </summary>
 public sealed class TransactionDetailService : ITransactionDetailService
 {
-    // The payment block's display label (07 §7.5 sample). The machine value
-    // travels in the top-level `network` field (T147); switching
-    // `payment.network` itself to the machine value is left to the
-    // network-aware UI (T156), so today's client keeps its label.
-    private const string TronNetworkLabel = "Tron (TRC-20)";
-    private const string EthereumNetworkLabel = "Ethereum (ERC-20)";
-
     // States where the buyer may still cancel — i.e. before their money moves.
     // The seller's cancel window is wider (it includes PAYMENT_RECEIVED), so it
     // is evaluated separately in BuildAvailableActions (02 §7).
@@ -708,12 +701,6 @@ public sealed class TransactionDetailService : ITransactionDetailService
         return (networks.Select(n => n.ToString()).ToList(), quotes);
     }
 
-    private static string NetworkLabel(BlockchainNetwork? network) => network switch
-    {
-        BlockchainNetwork.ETHEREUM => EthereumNetworkLabel,
-        _ => TronNetworkLabel,
-    };
-
     private async Task<TransactionPaymentDto?> BuildPaymentAsync(
         Transaction transaction,
         string? role,
@@ -728,7 +715,7 @@ public sealed class TransactionDetailService : ITransactionDetailService
         var address = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .Where(p => p.TransactionId == transaction.Id)
-            .Select(p => new { p.Address, p.ExpectedAmount, p.ExpectedToken })
+            .Select(p => new { p.Address, p.ExpectedAmount, p.ExpectedToken, p.Network })
             .FirstOrDefaultAsync(cancellationToken);
 
         // Allocation is asynchronous and retried by EnsurePaymentAddressJob, so
@@ -761,7 +748,12 @@ public sealed class TransactionDetailService : ITransactionDetailService
             // received amount against this exact value (no tolerance).
             ExpectedAmount: MoneyFormat.Display(address.ExpectedAmount),
             Stablecoin: address.ExpectedToken,
-            Network: NetworkLabel(transaction.Network),
+            // T156 (07 §1.3, §7.5) — the machine value ("TRON" / "ETHEREUM"):
+            // the label and the explorer link are built by the client. Read
+            // from the deposit row itself — the network this address lives on
+            // is the one the buyer must send on (the allocator never hands out
+            // a deposit of another network, T147 decision xiii).
+            Network: address.Network.ToString(),
             // Still null before anything arrives — the three fields together
             // mean "no transfer seen yet", which is different from "0 received".
             Status: payment?.Status.ToString(),

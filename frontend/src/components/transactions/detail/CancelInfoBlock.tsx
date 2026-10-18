@@ -5,11 +5,14 @@ import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 import { TxHashLink } from "./TxHashLink";
 import { tDynamicOrKey } from "@/lib/i18n/dynamicKey";
+import type { BlockchainNetwork } from "@/types/enums";
 
 export interface CancelInfoBlockProps {
   cancelInfo: TransactionDetailCancelInfo;
   refund?: TransactionDetailRefund | null;
   stablecoin: string;
+  /** T156 — picks the explorer for the refund hash. */
+  network: BlockchainNetwork | null;
 }
 
 /**
@@ -17,7 +20,7 @@ export interface CancelInfoBlockProps {
  * özeti. cancelledBy enum: TIMEOUT / SELLER / BUYER / ADMIN — her birinin
  * kendi başlığı.
  */
-export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBlockProps) {
+export function CancelInfoBlock({ cancelInfo, refund, stablecoin, network }: CancelInfoBlockProps) {
   const t = useTranslations("transactionDetail.cancelInfo");
   const locale = useLocale();
   return (
@@ -75,7 +78,7 @@ export function CancelInfoBlock({ cancelInfo, refund, stablecoin }: CancelInfoBl
                 className="flex items-center gap-2 font-mono text-xs text-gray-900"
                 title={refund.txHash}
               >
-                <TxHashLink txHash={refund.txHash} />
+                <TxHashLink txHash={refund.txHash} network={network} />
               </dd>
             </div>
           )}

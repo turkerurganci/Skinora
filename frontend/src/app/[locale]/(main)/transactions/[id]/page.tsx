@@ -24,7 +24,11 @@ import {
   TransactionInfoPanel,
 } from "@/components/transactions/detail";
 import { TransactionStatus } from "@/types/enums";
-import { isCancelledStatus, isEmergencyHold } from "@/components/transactions/detail/helpers";
+import {
+  detailNetwork,
+  isCancelledStatus,
+  isEmergencyHold,
+} from "@/components/transactions/detail/helpers";
 
 interface TransactionDetailPageProps {
   params: Promise<{ id: string }>;
@@ -110,6 +114,9 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
   const role = data.userRole;
   const cancelled = isCancelledStatus(status);
   const emergencyHold = isEmergencyHold(status);
+  // T156 — the chosen network (null before acceptance): labels, the TRON fee
+  // line and the explorer each block links to.
+  const network = detailNetwork(data);
   // 04 §7.3 SELLER_CONFIRMED — the deposit address is revealed to the buyer only
   // once the seller has confirmed readiness (02 §2.2 step 3).
   const showPaymentInfo =
@@ -174,15 +181,27 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
           events={data.paymentEvents}
           stablecoin={data.stablecoin}
           cancelled={cancelled}
+          network={network}
         />
       )}
 
       {showPaymentInfo && data.payment && (
-        <PaymentInfoBlock payment={data.payment} timeout={data.timeout} />
+        <PaymentInfoBlock
+          payment={data.payment}
+          timeout={data.timeout}
+          network={network}
+          price={data.price}
+          commissionAmount={data.commissionAmount}
+          networkFeeAmount={data.networkFeeAmount}
+        />
       )}
 
       {showSellerPayout && data.sellerPayout && (
-        <SellerPayoutSummary payout={data.sellerPayout} stablecoin={data.stablecoin} />
+        <SellerPayoutSummary
+          payout={data.sellerPayout}
+          stablecoin={data.stablecoin}
+          network={network}
+        />
       )}
 
       {cancelled && data.cancelInfo && (
@@ -190,6 +209,7 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
           cancelInfo={data.cancelInfo}
           refund={data.refund}
           stablecoin={data.stablecoin}
+          network={network}
         />
       )}
 
@@ -199,7 +219,7 @@ export default function TransactionDetailPage({ params }: TransactionDetailPageP
 
       <StateActionPanel
         detail={data}
-        defaultRefundAddress={profile.data?.refundWalletAddress ?? null}
+        profileWallets={profile.data?.wallets ?? []}
         defaultSteamTradeUrl={profile.data?.steamTradeUrl ?? null}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}

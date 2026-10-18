@@ -298,3 +298,14 @@ export enum EmergencyHoldReleaseAction {
   RESUME = "RESUME",
   CANCEL = "CANCEL",
 }
+
+/**
+ * §2.25 — the blockchain a payment moves on (11 §F8 K1). The wire value is the
+ * name, case-sensitive (07 §1.3). Order is normative, as in the C# enum
+ * (`Skinora.Shared.Enums.BlockchainNetwork`): the backend lists networks in this
+ * order (`supportedNetworks`, `acceptedNetworks`, `wallets[]`) and the UI keeps it.
+ */
+export enum BlockchainNetwork {
+  TRON = "TRON",
+  ETHEREUM = "ETHEREUM",
+}

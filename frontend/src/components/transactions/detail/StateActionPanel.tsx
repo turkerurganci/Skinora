@@ -5,6 +5,7 @@ import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { ApiError } from "@/lib/api/client";
 import { cancelTransaction, type TransactionDetailResponse } from "@/lib/api/transactions";
+import type { UserWalletEntry } from "@/lib/api/users";
 import { CancelModal, CountdownTimer } from "@/components/common";
 import {
   asFreezeReason,
@@ -25,7 +26,11 @@ import { tDynamic } from "@/lib/i18n/dynamicKey";
 
 export interface StateActionPanelProps {
   detail: TransactionDetailResponse;
-  defaultRefundAddress: string | null;
+  /**
+   * T156 — the viewer's saved addresses (07 §5.1 `wallets[]`). The accept
+   * form prefills the refund address of the network the buyer picks.
+   */
+  profileWallets: readonly UserWalletEntry[];
   defaultSteamTradeUrl: string | null;
   isAuthenticated: boolean;
   isSuspended: boolean;
@@ -67,7 +72,7 @@ export interface StateActionPanelProps {
  */
 export function StateActionPanel({
   detail,
-  defaultRefundAddress,
+  profileWallets,
   defaultSteamTradeUrl,
   isAuthenticated,
   isSuspended,
@@ -216,7 +221,7 @@ export function StateActionPanel({
       <PrimaryActionPanel
         row={row}
         detail={detail}
-        defaultRefundAddress={defaultRefundAddress}
+        profileWallets={profileWallets}
         defaultSteamTradeUrl={defaultSteamTradeUrl}
         isAuthenticated={isAuthenticated}
         isSuspended={isSuspended}
@@ -290,7 +295,7 @@ export function StateActionPanel({
 interface PrimaryActionPanelProps {
   row: PanelRow;
   detail: TransactionDetailResponse;
-  defaultRefundAddress: string | null;
+  profileWallets: readonly UserWalletEntry[];
   defaultSteamTradeUrl: string | null;
   isAuthenticated: boolean;
   isSuspended: boolean;
@@ -305,7 +310,7 @@ interface PrimaryActionPanelProps {
 function PrimaryActionPanel({
   row,
   detail,
-  defaultRefundAddress,
+  profileWallets,
   defaultSteamTradeUrl,
   isAuthenticated,
   isSuspended,
@@ -325,7 +330,10 @@ function PrimaryActionPanel({
       return (
         <AcceptForm
           transactionId={detail.id}
-          defaultRefundAddress={defaultRefundAddress}
+          acceptedNetworks={detail.acceptedNetworks}
+          networkQuotes={detail.networkQuotes}
+          stablecoin={detail.stablecoin}
+          profileWallets={profileWallets}
           defaultSteamTradeUrl={defaultSteamTradeUrl}
           disabled={cantAccept || isSuspended || !isAuthenticated}
           disabledReason={
