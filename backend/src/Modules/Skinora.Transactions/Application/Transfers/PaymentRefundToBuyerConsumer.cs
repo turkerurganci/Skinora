@@ -148,13 +148,25 @@ public sealed class PaymentRefundToBuyerConsumer
         var refundable = FinancialCalculator.CalculateRefundableTotal(
             transaction.TotalAmount, transaction.NetworkFeeAmount, sweepHasRun);
 
-        var resolvedGasFee = await _chargedGasFee.ResolveRefundFeeAsync(
-            network,
-            depositAddress,
-            notification.BuyerRefundAddress,
-            refundable,
-            transaction.StablecoinType,
-            cancellationToken);
+        // T158 (f) — after the sweep (or while it is in flight) an Ethereum
+        // refund leaves the hot wallet, so that is the sender priced; the
+        // dispatcher asks RefundSourceResolver the same question when it sends.
+        var source = await RefundSourceResolver.ResolveAsync(
+            _db, network, BlockchainTransactionType.BUYER_REFUND, transaction.Id, cancellationToken);
+        var resolvedGasFee = source == RefundSource.Deposit
+            ? await _chargedGasFee.ResolveRefundFeeAsync(
+                network,
+                depositAddress,
+                notification.BuyerRefundAddress,
+                refundable,
+                transaction.StablecoinType,
+                cancellationToken)
+            : await _chargedGasFee.ResolveHotWalletRefundFeeAsync(
+                network,
+                notification.BuyerRefundAddress,
+                refundable,
+                transaction.StablecoinType,
+                cancellationToken);
         var gasFee = resolvedGasFee.FeeUsdt;
 
         // 02 §4.6 — buyer receives Price + Commission (+ the network fee line

@@ -51,6 +51,10 @@ export function createBlockchainRouter(profile: NetworkProfile): Router {
       address: profile.depositAddress(index),
       derivationPath: profile.derivationPath(index),
       index,
+      // T158 (h) — the real Ethereum service names the finalized head the
+      // address was derived at; the backend persists it as the deposit's
+      // start block and refuses an Ethereum derive answer without it.
+      ...(profile.network === 'ETHEREUM' ? { watchFromBlock: String(profile.blockNumber) } : {}),
     });
   });
 
@@ -154,9 +158,28 @@ export function createBlockchainRouter(profile: NetworkProfile): Router {
     ['/api/transfer/sweep', ['depositAddress', 'toHotWalletAddress']],
     ['/api/transfer/cold-wallet', ['toColdAddress']],
   ];
-  for (const [path, addressFields] of transfers) {
+  for (const [path, defaultFields] of transfers) {
     router.post(path, (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
+      // T158 (f) — an Ethereum refund after the sweep leaves the hot wallet:
+      // `source: "HOT_WALLET"`, no deposit fields (the real service refuses
+      // either deposit field on that body, and TRON has no such source).
+      let addressFields = defaultFields;
+      if (path === '/api/transfer/refund' && body.source !== undefined) {
+        const hot =
+          profile.network === 'ETHEREUM' &&
+          body.source === 'HOT_WALLET' &&
+          body.depositIndex === undefined &&
+          body.depositAddress === undefined;
+        if (!hot && !(profile.network === 'ETHEREUM' && body.source === 'DEPOSIT')) {
+          res.status(400).json({
+            error: 'INVALID_TRANSFER_REQUEST',
+            message: `source ${String(body.source)} is not accepted with this body on ${profile.network}.`,
+          });
+          return;
+        }
+        if (hot) addressFields = ['toBuyerAddress'];
+      }
       for (const field of addressFields) {
         const value = str(body[field]);
         if (!value || !profile.isAddress(value)) {

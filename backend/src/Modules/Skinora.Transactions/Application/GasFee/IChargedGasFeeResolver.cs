@@ -32,6 +32,19 @@ public interface IChargedGasFeeResolver
     /// Fee used in the seller-payout gas-protection split (hot wallet → seller)
     /// on <paramref name="network"/> (T148).
     /// </summary>
+    /// <summary>
+    /// T158 (f) — fee charged on a refund that leaves the network's HOT wallet
+    /// because the deposit was already swept (08 §3.7.6 "Kaynaklar"; Ethereum).
+    /// The service prices a hot-wallet transfer (no fuel — T154 (iii)); the
+    /// refund fallback and the ceiling apply as for any refund.
+    /// </summary>
+    Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+        BlockchainNetwork network,
+        string toAddress,
+        decimal amount,
+        StablecoinType token,
+        CancellationToken cancellationToken);
+
     Task<ResolvedGasFee> ResolvePayoutFeeAsync(
         BlockchainNetwork network,
         string toAddress,

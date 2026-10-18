@@ -60,6 +60,16 @@ public class PostCancelMonitorStartDispatcherTests
             () => BuildSut(sidecar).Handle(BuildEvent(), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task T158h_The_Event_Start_Block_Reaches_The_PostCancel_Start()
+    {
+        var sidecar = new OrderRecordingSidecarClient();
+
+        await BuildSut(sidecar).Handle(BuildEvent() with { WatchFromBlock = 26_214_908L }, CancellationToken.None);
+
+        Assert.Equal(26_214_908L, Assert.Single(sidecar.PostCancelRequests).WatchFromBlock);
+    }
+
     // T148 düzeltme turu 1 (F1) — see the payment-monitor twin: an event for a
     // network with no service must not throw (the outbox would re-read it at
     // the head of its batch forever); the startup recovery hook registers the
@@ -112,9 +122,12 @@ public class PostCancelMonitorStartDispatcherTests
             return Task.FromResult(StopResult);
         }
 
+        public List<PostCancelMonitorStartRequest> PostCancelRequests { get; } = new();
+
         public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
             PostCancelMonitorStartRequest request, CancellationToken cancellationToken)
         {
+            PostCancelRequests.Add(request);
             Log.Add($"post-cancel-start:{request.Address}");
             return Task.FromResult(PostCancelStartResult);
         }

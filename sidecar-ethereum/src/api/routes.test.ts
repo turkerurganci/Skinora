@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -7,6 +9,14 @@ import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
+
+/** T158 — an example body both sides of the contract test against (sidecar-ethereum/contracts/). */
+function example(path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(resolve(__dirname, '../../contracts', path), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+}
 
 const KEY = 'i'.repeat(64);
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
@@ -86,7 +96,48 @@ describe('POST /api/wallet/derive', () => {
       address: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94',
       derivationPath: "m/44'/60'/0'/0/0",
       index: 0,
+      // T158 (h) — the finalized head the service last read: the backend
+      // persists it as the deposit's start block.
+      watchFromBlock: '100',
     });
+  });
+
+  it('T158 (h): without a finalized head it answers 502 FINALIZED_HEAD_UNAVAILABLE (the allocator retries) — no address without a start block', async () => {
+    const saved = finality;
+    finality = { state: 'starting', snapshot: null, ageSeconds: null, lastError: 'down' };
+    try {
+      const res = await post('/api/wallet/derive', { network: 'ETHEREUM', index: 0 });
+      expect(res.status).toBe(502);
+      expect(await res.json()).toMatchObject({ error: 'FINALIZED_HEAD_UNAVAILABLE' });
+    } finally {
+      finality = saved;
+    }
+  });
+
+  it('T158 (h): the answer is the contract example the backend parses (contracts/wallet-derive/response.json)', async () => {
+    const sample = example('wallet-derive/response.json');
+    const saved = finality;
+    finality = {
+      ...saved,
+      snapshot: { ...saved.snapshot!, number: BigInt(sample.watchFromBlock as string) },
+    };
+    try {
+      const res = await post('/api/wallet/derive', { network: 'ETHEREUM', index: sample.index });
+      expect(await res.json()).toEqual(sample);
+    } finally {
+      finality = saved;
+    }
+  });
+
+  it('T158 (h): the start block is the head read at derive time (a later head moves it)', async () => {
+    const saved = finality;
+    finality = { ...saved, snapshot: { ...saved.snapshot!, number: 26_214_908n } };
+    try {
+      const res = await post('/api/wallet/derive', { network: 'ETHEREUM', index: 1 });
+      expect(((await res.json()) as { watchFromBlock: string }).watchFromBlock).toBe('26214908');
+    } finally {
+      finality = saved;
+    }
   });
 
   it.each([-1, 1.5, 'zero', 2_147_483_648])('refuses index %s with 400', async (index) => {

@@ -72,6 +72,15 @@ export interface WatchEntry {
   readonly correlationId: string;
   /** Epoch ms the entry was registered. */
   readonly armedAt: number;
+  /**
+   * T158 (h) — the block the backend persisted for this deposit
+   * (`PaymentAddress.MonitorFromBlock`: the finalized head when the address
+   * was derived). Nothing can have reached the address at or before it, so
+   * the deposit is read from the next block on with a zero balance baseline,
+   * however long the service was down. Null for a deposit allocated before
+   * T158 (the restart read-back rules apply).
+   */
+  readonly watchFromBlock: bigint | null;
   cadence: MonitorCadence;
   /** Post-cancel only. */
   postCancel?: {
@@ -89,6 +98,8 @@ export interface ActiveStartOptions {
   expectedContract: string;
   expectedSymbol: StablecoinSymbol;
   cadence?: MonitorCadence;
+  /** T158 (h) — see {@link WatchEntry.watchFromBlock}. */
+  watchFromBlock?: bigint | null;
 }
 
 export interface PostCancelStartOptions extends Omit<ActiveStartOptions, 'cadence'> {
@@ -286,6 +297,7 @@ export class DepositRegistry {
       expectedSymbol: options.expectedSymbol,
       correlationId: crypto.randomUUID(),
       armedAt: this.clock().getTime(),
+      watchFromBlock: options.watchFromBlock ?? null,
       cadence,
       scan: inherited ?? newScanState(),
     };

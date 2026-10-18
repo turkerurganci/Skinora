@@ -92,7 +92,50 @@ public sealed record BlockchainNetworkPolicy(
         ReportsFeeInWei: true)
     {
         OutboundSendsAreIdempotent = true,
+        ReportsMonitorStartBlock = true,
+        RefundsAfterSweepFromHotWallet = true,
+        VerifiesUnjournalledTransferStatus = true,
+        BalanceSnapshotChunkSize = 20,
     };
+
+    /// <summary>
+    /// T158 (h) — the network's service names the block a newly derived
+    /// deposit is watched from (<c>watchFromBlock</c>, its last
+    /// <c>finalized</c> head — 08 §3.7.4). The backend persists it
+    /// (<c>PaymentAddress.MonitorFromBlock</c>) and sends it with every monitor
+    /// start, so an outage longer than the service's restart read-back cannot
+    /// hide a payment. A derive answer without it is not accepted (the
+    /// allocator retries): an Ethereum deposit without a start block would be
+    /// back to the bounded read-back. TRON's service reports none: <c>false</c>.
+    /// </summary>
+    public bool ReportsMonitorStartBlock { get; init; }
+
+    /// <summary>
+    /// T158 (f) — a buyer refund queued after the deposit was swept leaves the
+    /// network's HOT wallet (08 §3.7.6 "Kaynaklar"): the deposit is empty, the
+    /// escrowed money is in the hot wallet. A refund while the sweep is in
+    /// flight waits for it to settle. TRON's service only signs deposit-sourced
+    /// refunds: <c>false</c> (unchanged behaviour).
+    /// </summary>
+    public bool RefundsAfterSweepFromHotWallet { get; init; }
+
+    /// <summary>
+    /// T158 (g) — every status read carries what the row says the transfer is
+    /// (contract, sender, recipient, amount): for a hash the service's journal
+    /// does not hold (lost journal) the service checks the receipt's Transfer
+    /// log against it and answers <c>UNKNOWN</c> when it does not match —
+    /// the row is then never confirmed (fail closed). TRON: <c>false</c>.
+    /// </summary>
+    public bool VerifiesUnjournalledTransferStatus { get; init; }
+
+    /// <summary>
+    /// T158 (i) — most addresses per balance-snapshot request to the network's
+    /// service; <c>null</c> = one request. The Ethereum service paces its reads
+    /// (200 CU/s, ~0.36 s per address with ETH + USDT + USDC — 08 §3.7.4), so
+    /// one request for every deposit outlived the backend's 10-second client
+    /// timeout past ~27 addresses; 20 keeps a chunk at ~7 s.
+    /// </summary>
+    public int? BalanceSnapshotChunkSize { get; init; }
 
     /// <summary>
     /// T152 — the network's signing service binds a request id

@@ -83,7 +83,7 @@ export function createApp(deps: AppDeps): Express {
   const api = Router();
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
-  api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  api.post('/wallet/derive', deriveAddressHandler(deps.wallet, deps.finality));
   // T152 — sends (08 §3.7.6). Bodies and answers: transferHandlers.ts.
   api.post('/transfer/payout', payoutHandler(deps.transfers));
   api.post('/transfer/refund', refundHandler(deps.transfers));

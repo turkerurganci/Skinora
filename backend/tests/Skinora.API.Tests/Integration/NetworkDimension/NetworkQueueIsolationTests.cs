@@ -240,6 +240,7 @@ public class NetworkQueueIsolationTests : IntegrationTestBase
                 ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new FixedRetryPolicy(),
                 new OutboxService(ctx), StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
                 new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
+                new StubPlatformWalletAddressProvider(),
                 _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
             await job.ExecuteAsync();
         }
@@ -275,6 +276,8 @@ public class NetworkQueueIsolationTests : IntegrationTestBase
         {
             var job = new OutgoingTransferConfirmationJob(
                 ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OutboxService(ctx),
+                StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
+                new StubPlatformWalletAddressProvider(),
                 _clock, NullLogger<OutgoingTransferConfirmationJob>.Instance);
             await job.ExecuteAsync();
         }

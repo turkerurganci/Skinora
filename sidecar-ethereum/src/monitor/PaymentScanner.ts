@@ -84,6 +84,14 @@ import {
  * A transfer older than the lookback is not reported by the log path; the
  * balance reconciliation is the second path for it (08 §3.7.8).
  * </para>
+ *
+ * <para>
+ * <b>T158 (h) — the persisted start block wins.</b> A deposit the backend
+ * arms with `watchFromBlock` (its `PaymentAddress.MonitorFromBlock`, the
+ * finalized head when the address was derived) is read from the block after
+ * it with a zero baseline, whatever the restart or the outage — the rules
+ * above only apply to deposits allocated before T158.
+ * </para>
  */
 
 export interface PaymentScannerDeps {
@@ -197,6 +205,22 @@ export class PaymentScanner {
     for (const entry of this.deps.registry.entries()) {
       const scan = entry.scan;
       if (scan.scannedThrough !== null) continue;
+      if (entry.watchFromBlock !== null) {
+        // T158 (h) — the backend persisted the finalized head of the moment
+        // the address was derived: nothing can have reached it at or before
+        // that block, so it is read from the next one on — however long this
+        // service was down, past any restart read-back — and its balance
+        // there is zero by construction (the reconciliation compares from it).
+        const start = entry.watchFromBlock < finalized ? entry.watchFromBlock : finalized;
+        scan.scannedThrough = start;
+        scan.assumeEmptyStart = true;
+        scan.baseline = { block: start, eth: 0n, tokens: this.zeroTokens() };
+        logger.info(
+          { address: entry.address, kind: entry.kind, fromBlock: String(start + 1n) },
+          'Ethereum deposit picked up — read from the block the backend persisted',
+        );
+        continue;
+      }
       const rearmed = entry.armedAt - this.bootAt < this.deps.rearmWindowMs;
       if (entry.kind === 'active' && entry.cadence === 'PAYMENT' && !rearmed) {
         // A fresh deposit: if nothing is on it at the finalized head, nothing

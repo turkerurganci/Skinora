@@ -2273,6 +2273,9 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<long?>("MonitorFromBlock")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime?>("MonitoringExpiresAt")
                         .HasColumnType("datetime2");
 
@@ -2315,7 +2318,10 @@ namespace Skinora.Shared.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("UQ_PaymentAddresses_Network_HdWalletIndex");
 
-                    b.ToTable("PaymentAddresses", (string)null);
+                    b.ToTable("PaymentAddresses", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentAddresses_MonitorFromBlock", "[MonitorFromBlock] IS NULL OR [MonitorFromBlock] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Skinora.Transactions.Domain.Entities.SellerPayoutIssue", b =>

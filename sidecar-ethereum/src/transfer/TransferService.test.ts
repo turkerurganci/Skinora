@@ -471,6 +471,96 @@ describe('status (GET /api/transfer/status/:txHash)', () => {
   });
 });
 
+describe('T158 (g) — status of a hash the journal does not hold (lost journal) — fail closed', () => {
+  /** A payout signed and finalized by one service, then asked of a service whose journal is gone. */
+  async function lostJournal() {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    finalizeAll();
+    rmSync(dir, { recursive: true, force: true });
+    dir = mkdtempSync(join(tmpdir(), 'eth-transfer-lost-'));
+    const { service: fresh } = build();
+    return { fresh, txHash };
+  }
+  const expected = {
+    contract: USDT,
+    from: canonicalAddress(HOT.address),
+    to: canonicalAddress(SELLER),
+    amountUnits: 12_345_678n,
+  };
+
+  it('the Transfer log matches the backend row (contract, sender, recipient, amount) → SUCCESS', async () => {
+    const { fresh, txHash } = await lostJournal();
+    expect(await fresh.status(txHash, expected)).toMatchObject({
+      contractRet: 'SUCCESS',
+      finalized: true,
+    });
+  });
+
+  it.each([
+    ['no expectation sent', null],
+    ['another amount', { ...expected, amountUnits: 12_345_679n }],
+    ['another recipient', { ...expected, to: canonicalAddress(BUYER) }],
+    ['another sender', { ...expected, from: canonicalAddress(DEPOSIT.address) }],
+    ['another (known) contract', { ...expected, contract: USDC }],
+    ['a contract this service does not know', { ...expected, contract: canonicalAddress(SELLER) }],
+  ])('%s → UNKNOWN (never SUCCESS) and counted for the alarm', async (_label, exp) => {
+    const { fresh, txHash } = await lostJournal();
+    const client = (await import('prom-client')).default;
+    const read = async () =>
+      (
+        (
+          await client.register
+            .getSingleMetric('skinora_ethereum_transfer_status_unverified_total')
+            ?.get()
+        )?.values ?? []
+      ).reduce((s, v) => s + v.value, 0);
+    const before = await read();
+    expect(await fresh.status(txHash, exp)).toMatchObject({
+      contractRet: 'UNKNOWN',
+      finalized: true,
+    });
+    expect(await read()).toBe(before + 1);
+  });
+
+  it('the UNKNOWN answer has the shape of the contract example the backend maps to Unverified', async () => {
+    const { fresh, txHash } = await lostJournal();
+    const answer = await fresh.status(txHash, null);
+    const sample = JSON.parse(
+      readFileSync(
+        resolve(__dirname, '../../contracts/transfer-status/unknown.response.json'),
+        'utf8',
+      ),
+    ) as Record<string, unknown>;
+    expect(Object.keys(answer).sort()).toEqual(Object.keys(sample).sort());
+    expect(answer.contractRet).toBe(sample.contractRet);
+    expect(answer.finalized).toBe(true);
+  });
+
+  it('a reverted unjournalled hash stays REVERT (the chain says nothing moved)', async () => {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.setToken(USDT, HOT.address, 0n);
+    chain.mine();
+    finalizeAll();
+    rmSync(dir, { recursive: true, force: true });
+    dir = mkdtempSync(join(tmpdir(), 'eth-transfer-lost-'));
+    const { service: fresh } = build();
+    expect(await fresh.status(txHash, expected)).toMatchObject({ contractRet: 'REVERT' });
+  });
+
+  it('a journalled hash ignores the expectation: the record is authoritative (existing NO_TRANSFER_LOG rule unchanged)', async () => {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    finalizeAll();
+    expect(await service.status(txHash, { ...expected, amountUnits: 1n })).toMatchObject({
+      contractRet: 'SUCCESS',
+    });
+  });
+});
+
 describe('USDT switches and the blacklist (08 §3.7.1, §3.7.6)', () => {
   it.each([
     ['paused', () => (chain.usdtState.paused = true)],
@@ -1357,5 +1447,118 @@ describe('daily cap window boundary — 7,200 blocks (M19)', () => {
     chain.addOutflowLog(USDT, HOT.address, SELLER, 15_000_000_000n, 10_000n - 7_200n);
     const outside = build({ maxDaily: 20_000_000_000n, maxSingle: 20_000_000_000n });
     expect((await outside.service.payout(payout(2, { amount: '20000' }))).replayed).toBe(false);
+  });
+});
+
+// ---- T158 (f) — refund after the sweep, from the hot wallet ------------------
+
+describe('T158 (f) — a refund after the sweep leaves the hot wallet (08 §3.7.6 "Kaynaklar")', () => {
+  function hotRefund(n: number, overrides: Record<string, unknown> = {}) {
+    return {
+      blockchainTransactionId: ID(n),
+      source: 'HOT_WALLET' as const,
+      depositIndex: null,
+      depositAddress: null,
+      toBuyerAddress: BUYER,
+      amount: '10',
+      token: 'USDT' as const,
+      refundType: 'BUYER_REFUND' as const,
+      feeCapUsd: '0.50',
+      ...overrides,
+    };
+  }
+
+  it('the hot key signs a USDT transfer to the buyer, with the whole cap (no fuel) — the empty deposit is not touched', async () => {
+    const { service, journal } = build();
+    const result = await service.refund(hotRefund(60));
+    expect(result.replayed).toBe(false);
+    const tx = Transaction.from(chain.sent[0]);
+    expect(canonicalAddress(tx.from!)).toBe(canonicalAddress(HOT.address));
+    expect(canonicalAddress(tx.to!)).toBe(USDT);
+    expect(decodeTransferCall(tx.data)).toEqual({ to: BUYER, amountUnits: 10_000_000n });
+    const record = journal.get(`transfer:${ID(60)}`)!;
+    expect(record).toMatchObject({ purpose: 'REFUND', signer: 'HOT', depositIndex: null });
+    // 0.50 $ / 2,364.48 $ — the payout's whole budget (64,031 / 64,031), not the deposit refund's share.
+    expect(record.feeCapWei).toBe('211462985519014');
+    expect(chain.sent).toHaveLength(1); // no fuel send
+  });
+
+  it('a retry with the same id replays; the same id as a DEPOSIT refund is IDEMPOTENCY_CONFLICT (no second signature)', async () => {
+    chain.setToken(USDT, DEPOSIT.address, 50_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 16n);
+    const { service } = build();
+    const first = await service.refund(hotRefund(61));
+    expect((await service.refund(hotRefund(61))).txHash).toBe(first.txHash);
+    await expect(service.refund({ ...refundRequest(61) })).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    expect(new Set(chain.sent.map((raw) => Transaction.from(raw).hash)).size).toBe(1);
+  });
+
+  it('a DEPOSIT refund id asked again as HOT_WALLET is IDEMPOTENCY_CONFLICT', async () => {
+    chain.setToken(USDT, DEPOSIT.address, 50_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 16n);
+    const { service } = build();
+    await service.refund(refundRequest(62));
+    await expect(service.refund(hotRefund(62))).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+  });
+
+  it('a wrong-token refund never leaves the hot wallet (USDC is not swept) and USDC is refused', async () => {
+    const { service } = build();
+    await expect(
+      service.refund(hotRefund(63, { refundType: 'WRONG_TOKEN_REFUND', token: 'USDC' })),
+    ).rejects.toMatchObject({ code: 'TOKEN_NOT_ALLOWED' });
+    await expect(service.refund(hotRefund(64, { token: 'USDC' }))).rejects.toMatchObject({
+      code: 'TOKEN_NOT_ALLOWED',
+    });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('a HOT_WALLET refund naming a deposit is a bad request', async () => {
+    const { service } = build();
+    await expect(
+      service.refund(hotRefund(65, { depositIndex: 5, depositAddress: DEPOSIT.address })),
+    ).rejects.toMatchObject({ code: 'INVALID_TRANSFER_REQUEST' });
+  });
+
+  it("counts against the hot wallet's daily cap (chain + signed-not-seen), like a payout", async () => {
+    const { service } = build({ maxDaily: 15_000_000n, maxSingle: 15_000_000n });
+    await service.refund(hotRefund(66)); // 10 — signed, not mined
+    await expect(service.payout(payout(67, { amount: '6' }))).rejects.toMatchObject({
+      code: 'DAILY_OUTFLOW_LIMIT_EXCEEDED',
+    });
+    await expect(service.refund(hotRefund(68, { amount: '6' }))).rejects.toMatchObject({
+      code: 'DAILY_OUTFLOW_LIMIT_EXCEEDED',
+    });
+  });
+
+  it('respects the single-transfer cap and waits above the fee cap (no FAILED for a fee)', async () => {
+    const capped = build({ maxSingle: 5_000_000n });
+    await expect(capped.service.refund(hotRefund(69))).rejects.toMatchObject({
+      code: 'TRANSFER_AMOUNT_ABOVE_LIMIT',
+    });
+    chain.baseFee = 50_000_000_000n;
+    const { service } = build();
+    await expect(service.refund(hotRefund(70))).rejects.toMatchObject({ reason: 'FEE_ABOVE_CAP' });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('a hot wallet without ETH waits (HOT_WALLET_GAS_LOW) — no fuel is sent to it', async () => {
+    chain.setEth(HOT.address, 0n);
+    const { service } = build();
+    await expect(service.refund(hotRefund(71))).rejects.toMatchObject({
+      reason: 'HOT_WALLET_GAS_LOW',
+    });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('status checks the Transfer from the hot wallet to the buyer (NO_TRANSFER_LOG rule applies)', async () => {
+    const { service } = build();
+    const { txHash } = await service.refund(hotRefund(72));
+    chain.mine();
+    finalizeAll();
+    expect(await service.status(txHash)).toMatchObject({ contractRet: 'SUCCESS', finalized: true });
   });
 });

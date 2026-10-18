@@ -40,6 +40,16 @@ public class PaymentMonitorStartDispatcherTests
     }
 
     [Fact]
+    public async Task T158h_The_Event_Start_Block_Reaches_The_Sidecar()
+    {
+        var sidecar = new StubBlockchainSidecarClient();
+
+        await BuildSut(sidecar).Handle(BuildEvent() with { WatchFromBlock = 26_214_908L }, CancellationToken.None);
+
+        Assert.Equal(26_214_908L, Assert.Single(sidecar.MonitorStartCalls).WatchFromBlock);
+    }
+
+    [Fact]
     public async Task InvalidRequest_Is_Terminal_And_Does_Not_Throw()
     {
         // 400 means the payload itself is wrong — re-delivering it would fail

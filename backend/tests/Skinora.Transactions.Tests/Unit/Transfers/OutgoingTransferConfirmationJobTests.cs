@@ -3,11 +3,14 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
@@ -34,6 +37,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
     private readonly SettableNetworkHealth _health = new();
+    private readonly StubWalletAddresses _walletAddresses = new();
     private readonly FakeBlockchainServiceRegistry _registry;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
@@ -61,6 +65,8 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
             _registry,
             _health,
             _outbox,
+            StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
+            _walletAddresses,
             _clock,
             NullLogger<OutgoingTransferConfirmationJob>.Instance);
     }
@@ -131,6 +137,77 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         Assert.Null(reloaded.RealizedFeeSun);
         Assert.Null(reloaded.EnergyUsageTotal);
         Assert.Null(reloaded.OriginEnergyUsage);
+    }
+
+    // -------------------- T158 (g) — unverifiable final transfer: fail closed --------------------
+
+    [Fact]
+    public async Task T158g_Unverified_Status_Leaves_The_Row_Detected_Never_Confirmed_Never_Failed()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Unverified, 26_215_000L, 13, "UNKNOWN", null),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Null(reloaded.ConfirmedAt);
+        Assert.StartsWith("TRANSFER_UNVERIFIED", reloaded.ErrorMessage);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, reloaded.NextAttemptAt); // rotation stamp
+        Assert.Empty(_outbox.Events); // no PayoutCompletedEvent
+    }
+
+    [Fact]
+    public async Task T158g_Ethereum_Status_Reads_Carry_The_Row_Expectation_Payout_Names_The_Hot_Wallet()
+    {
+        const string hot = "0x7070707070707070707070707070707070707070";
+        _walletAddresses.EthereumHotWalletAddress = hot;
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var payout = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        payout.Network = BlockchainNetwork.ETHEREUM;
+        payout.FromAddress = string.Empty; // a payout never records its sender
+        var refund = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        refund.Network = BlockchainNetwork.ETHEREUM;
+        refund.FromAddress = "0x9858effd232b4033e47d90003d41ec34ecaeda94";
+        var wrong = await SeedDetectedAsync(BlockchainTransactionType.WRONG_TOKEN_REFUND);
+        wrong.Network = BlockchainNetwork.ETHEREUM;
+        wrong.ActualTokenAddress = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var byHash = ethereum.StatusCalls.Zip(ethereum.Expectations).ToDictionary(p => p.First, p => p.Second);
+        var usdt = StablecoinContractRegistry.FromOptions(new StablecoinContractOptions())
+            .ResolveContractAddress(BlockchainNetwork.ETHEREUM, StablecoinType.USDT);
+        Assert.Equal(new TransferStatusExpectation(usdt, hot, payout.ToAddress, payout.Amount), byHash[payout.TxHash!]);
+        Assert.Equal(refund.FromAddress, byHash[refund.TxHash!]!.FromAddress);
+        Assert.Equal("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", byHash[wrong.TxHash!]!.Contract);
+    }
+
+    [Fact]
+    public async Task T158g_Without_A_Known_Sender_No_Expectation_Is_Sent_And_Tron_Never_Sends_One()
+    {
+        _walletAddresses.EthereumHotWalletAddress = null;
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var payout = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        payout.Network = BlockchainNetwork.ETHEREUM;
+        payout.FromAddress = string.Empty;
+        await _db.SaveChangesAsync();
+        await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT); // TRON
+
+        await _sut.ExecuteAsync();
+
+        Assert.Null(Assert.Single(ethereum.Expectations));
+        Assert.All(_client.Expectations, Assert.Null);
     }
 
     // -------------------- T154 — Ethereum's realized fee is wei, exact --------------------
@@ -602,6 +679,20 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         return row;
     }
 
+    /// <summary>T158 (g) — the hot wallet a payout's expectation names as sender.</summary>
+    private sealed class StubWalletAddresses : IPlatformWalletAddressProvider
+    {
+        public string? HotWalletAddress { get; set; }
+        public string? ColdWalletAddress { get; set; }
+        public string? EthereumHotWalletAddress { get; set; }
+
+        public PlatformWalletAddresses For(BlockchainNetwork network) => network switch
+        {
+            BlockchainNetwork.TRON => new(network, HotWalletAddress, ColdWalletAddress),
+            _ => new(network, EthereumHotWalletAddress, null),
+        };
+    }
+
     private sealed class StubBlockchainTransferClient : IBlockchainTransferClient
     {
         public TransferStatusResult NextStatus { get; set; } =
@@ -618,9 +709,17 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
             throw new InvalidOperationException("Confirmation job should not call Broadcast.");
 
         public Task<TransferStatusResult> GetStatusAsync(
-            string txHash, CancellationToken cancellationToken)
+            string txHash, CancellationToken cancellationToken) =>
+            GetStatusAsync(txHash, null, cancellationToken);
+
+        /// <summary>T158 (g) — the expectation each status read carried.</summary>
+        public List<TransferStatusExpectation?> Expectations { get; } = new();
+
+        public Task<TransferStatusResult> GetStatusAsync(
+            string txHash, TransferStatusExpectation? expected, CancellationToken cancellationToken)
         {
             StatusCalls.Add(txHash);
+            Expectations.Add(expected);
             return Task.FromResult(Respond?.Invoke(txHash) ?? NextStatus);
         }
     }

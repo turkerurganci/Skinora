@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 
 namespace Skinora.Transactions.Application.PaymentAddresses;
@@ -137,9 +138,45 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
                     BlockchainSidecarStatus.Unavailable, null, null);
             }
 
+            // T158 (h) — a network whose service names the start block must
+            // name it: an Ethereum deposit persisted without one would fall
+            // back to the service's bounded restart read-back, the gap T158
+            // closes. Refused as Unavailable — the allocator retries the run.
+            long? watchFromBlock = null;
+            if (BlockchainNetworkPolicy.For(_network).ReportsMonitorStartBlock)
+            {
+                watchFromBlock = ReadBlockNumber(payload.WatchFromBlock);
+                if (watchFromBlock is null)
+                {
+                    _logger.LogError(
+                        "{Network} derive answer for transaction {TransactionId} has no usable watchFromBlock ({Raw}) — the deposit is not allocated (retried next run).",
+                        _network, transactionId, payload.WatchFromBlock?.GetRawText() ?? "absent");
+                    return new BlockchainSidecarDeriveResult(
+                        BlockchainSidecarStatus.Unavailable, null, null);
+                }
+            }
+
             return new BlockchainSidecarDeriveResult(
-                BlockchainSidecarStatus.Success, payload.Address, payload.DerivationPath);
+                BlockchainSidecarStatus.Success, payload.Address, payload.DerivationPath, watchFromBlock);
         }
+    }
+
+    /// <summary>A non-negative block number as a decimal string or a JSON integer; null otherwise.</summary>
+    private static long? ReadBlockNumber(JsonElement? raw)
+    {
+        if (raw is not { } value) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) && number >= 0)
+        {
+            return number;
+        }
+        if (value.ValueKind == JsonValueKind.String
+            && value.GetString() is { Length: > 0 and <= 19 } text
+            && text.All(char.IsAsciiDigit)
+            && long.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+        return null;
     }
 
     public async Task<BlockchainSidecarStatus> StartMonitoringAsync(
@@ -153,7 +190,8 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             TransactionId: request.TransactionId.ToString("D"),
             ExpectedContract: request.ExpectedContract,
             ExpectedSymbol: request.ExpectedSymbol,
-            Cadence: ToWire(request.Cadence));
+            Cadence: ToWire(request.Cadence),
+            WatchFromBlock: request.WatchFromBlock?.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         return await SendCommandAsync(
             "api/monitor/start",
@@ -187,7 +225,8 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             ExpectedSymbol: request.ExpectedSymbol,
             CancelledAt: request.CancelledAt.ToUniversalTime().ToString("O"),
             InitialState: request.InitialState,
-            InitialStateExpiresAt: request.InitialStateExpiresAt?.ToUniversalTime().ToString("O"));
+            InitialStateExpiresAt: request.InitialStateExpiresAt?.ToUniversalTime().ToString("O"),
+            WatchFromBlock: request.WatchFromBlock?.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         return await SendCommandAsync(
             "api/monitor/post-cancel-start",
@@ -456,7 +495,10 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     private sealed record DeriveResponse(
         [property: JsonPropertyName("address")] string? Address,
         [property: JsonPropertyName("derivationPath")] string? DerivationPath,
-        [property: JsonPropertyName("index")] int Index);
+        [property: JsonPropertyName("index")] int Index,
+        // T158 (h) — Ethereum: the finalized head the address was derived at
+        // (decimal string; a JSON number is read too). TRON sends none.
+        [property: JsonPropertyName("watchFromBlock")] JsonElement? WatchFromBlock = null);
 
     private sealed record MonitorStartRequestBody(
         [property: JsonPropertyName("network")] string Network,
@@ -465,7 +507,10 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("transactionId")] string TransactionId,
         [property: JsonPropertyName("expectedContract")] string ExpectedContract,
         [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol,
-        [property: JsonPropertyName("cadence")] string Cadence);
+        [property: JsonPropertyName("cadence")] string Cadence,
+        // T158 (h) — omitted when null, so TRON's body is unchanged.
+        [property: JsonPropertyName("watchFromBlock"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? WatchFromBlock = null);
 
     /// <summary>
     /// The sidecar's spelling (monitorHandlers.ts ALLOWED_CADENCES). An unknown
@@ -493,7 +538,10 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("expectedSymbol")] string ExpectedSymbol,
         [property: JsonPropertyName("cancelledAt")] string CancelledAt,
         [property: JsonPropertyName("initialState")] string? InitialState,
-        [property: JsonPropertyName("initialStateExpiresAt")] string? InitialStateExpiresAt);
+        [property: JsonPropertyName("initialStateExpiresAt")] string? InitialStateExpiresAt,
+        // T158 (h) — omitted when null, so TRON's body is unchanged.
+        [property: JsonPropertyName("watchFromBlock"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? WatchFromBlock = null);
 
     private sealed record PostCancelStopRequestBody(
         [property: JsonPropertyName("network")] string Network,

@@ -199,6 +199,31 @@ export const journalAckAheadOfChain = getOrCreateGauge({
   },
 });
 
+/**
+ * T158 (g) — status reads of a mined hash the journal does not hold whose
+ * receipt did not carry the Transfer the backend expects (`reason`:
+ * `no_expectation` | `no_matching_log` | `unknown_contract`). Answered
+ * `UNKNOWN`; the backend never confirms the row. Alert
+ * `ethereum-transfer-status-unverified` (critical).
+ */
+export const transferStatusUnverifiedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_transfer_status_unverified_total',
+  help: 'Status reads of an unjournalled Ethereum transfer whose Transfer log did not match the expectation (answered UNKNOWN)',
+  labelNames: ['reason'] as const,
+});
+
+/**
+ * T158 (j) — webhook deliveries the backend refused, by HTTP status. A 401
+ * (signature / secret mismatch) is retried — the range is read again until
+ * the secrets agree, the event is never dropped; the scan-failure alarm
+ * (`ethereum-monitor-scan-failing`) sees it.
+ */
+export const webhookRejectedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_webhook_rejected_total',
+  help: 'Webhook deliveries the backend answered with a non-2xx status, by status',
+  labelNames: ['status'] as const,
+});
+
 // ---- Platform wallet ETH (T153 — 08 §3.7.5) -------------------------------
 
 /**

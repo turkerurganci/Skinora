@@ -403,6 +403,149 @@ groups:
             signed. Set the value to the chain nonce found in DEPLOY_RUNBOOK §D
             "ethereum-journal-behind-chain" step 7 and restart the service.
 
+      # T158 (k) — 11 §F8 T151 doğrulamasından: a monitor pass that fails (RPC,
+      # retryable webhook answer, T158 (j) 401) is counted and the range is read
+      # again; continuous failure means no payment is being reported. The monitor
+      # ticks every 15 s, so a healthy service fails a handful of passes at most.
+      - uid: ethereum-monitor-scan-failing
+        title: Ethereum Payment Monitor Scan Failing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_monitor_scan_failures_total[15m])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [20]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Ethereum payment monitor keeps failing to read or deliver a block range
+          description: >-
+            More than 20 of the monitor's ~60 passes in 15 minutes failed
+            (skinora_ethereum_monitor_scan_failures_total). The failing range is
+            read again every pass, so nothing is lost — but no new Ethereum payment
+            is reported to the backend while it lasts, and a buyer's payment window
+            can run out with the money on chain. Causes: both RPC providers failing
+            eth_getLogs, or the backend refusing the webhook in a retryable way (a
+            401 is a webhook secret mismatch — ethereum-webhook-signature-refused).
+            Read the service log ("payment monitor pass failed") (DEPLOY_RUNBOOK §J).
+
+      # T158 (j) — 11 §F8 T151 doğrulamasından: a 401 used to be a final 4xx and
+      # the event was dropped for good; it is now retried, and this rule names the
+      # cause directly (ethereum-monitor-scan-failing sees the effect).
+      - uid: ethereum-webhook-signature-refused
+        title: Ethereum Webhook Signature Refused By The Backend
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_webhook_rejected_total{status="401"}[15m])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: The backend refuses the Ethereum service's webhook signature (401)
+          description: >-
+            The backend answered an Ethereum payment webhook with 401: the two sides
+            hold different webhook secrets (WEBHOOK_SECRET of the Ethereum service vs
+            the backend's ETHEREUM_WEBHOOK_SECRET / Webhook__EthereumSharedSecret).
+            The event is kept and sent again every pass until they agree — nothing is
+            lost, but no payment is reported meanwhile. Put the same value on both
+            sides and restart both (DEPLOY_RUNBOOK §J).
+
+      # T158 (g) — 11 §F8 T152 doğrulamasından (⚠ PARA): fail closed. Every
+      # status read of an unverifiable row counts again, so the rule keeps firing
+      # while such a row exists.
+      - uid: ethereum-transfer-status-unverified
+        title: Ethereum Transfer Not Verifiable — Row Not Confirmed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_transfer_status_unverified_total[1h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: A final Ethereum transfer unknown to the journal — its Transfer log does not match the backend row
+          description: >-
+            The status of a mined outgoing Ethereum transfer was asked for a hash the
+            service's transaction journal does not hold (a lost or restored journal),
+            and the receipt's Transfer log does not match the backend row's contract,
+            sender, recipient and amount — or the backend sent no expectation. The
+            service answered UNKNOWN; the backend leaves the row DETECTED (never
+            CONFIRMED, never FAILED) with ErrorMessage TRANSFER_UNVERIFIED. Find the
+            row, compare the hash on Etherscan and decide by hand
+            (DEPLOY_RUNBOOK §J "Doğrulanamayan gönderim").
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
@@ -942,3 +1085,145 @@ groups:
             Check skinora_backend_outbound_pending_rows by network, the
             Ethereum service's /health and skinora_ethereum_transfer_wait_seconds
             (DEPLOY_RUNBOOK §D "Ethereum gönderim günlüğü").
+
+      # T158 — "RPC gecikmesi" alarmı (11 T158 temel kriter). Bound from 08
+      # §3.7.4: a healthy eth_getLogs / eth_call answers in well under a second;
+      # 3 s p95 over 15 min is a provider problem, not a burst.
+      - uid: ethereum-rpc-latency-high
+        title: Ethereum RPC Latency High
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: histogram_quantile(0.95, sum by (le) (rate(skinora_ethereum_rpc_request_duration_seconds_bucket[10m]))) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [3]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The Ethereum service's JSON-RPC calls are slow (p95 above 3 s)
+          description: >-
+            The 95th percentile of the Ethereum service's JSON-RPC requests (every
+            provider, method and outcome) has been above 3 seconds for 15 minutes.
+            Slow reads stretch the monitor's catch-up, the hourly reconciliation and
+            the backend's 10-second balance chunks (reconciliation-network-failed),
+            and sends wait longer. Check the providers' status pages and
+            skinora_ethereum_rpc_failover_total; switch ETHEREUM_RPC_PRIMARY_URL if
+            one provider stays slow (DEPLOY_RUNBOOK §J).
+
+      # T158 (a) — 11 §F8 T150 doğrulamasından: per network, the row count against
+      # the threshold published next to it (same pattern as outbound-transfer-stuck).
+      - uid: outbound-transfer-backlog
+        title: Outbound Transfers Piling Up On A Network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max by (network) (skinora_backend_outbound_pending_rows) / max by (network) (skinora_backend_outbound_pending_rows_alarm_threshold)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More PENDING outbound transfers wait on a network than its threshold
+          description: >-
+            The number of PENDING outbound rows (payouts, refunds, sweeps) on a
+            network has been above the threshold the backend publishes
+            (OutboundQueueAlarm__PendingRowsThreshold, default 25 — more than a
+            dispatcher batch) for 15 minutes. During an outage rows pile up PENDING
+            (Ethereum rows never fail on a transient error); this sees it before
+            the oldest row reaches outbound-transfer-stuck, and on TRON, which has
+            no age threshold. Check the network's service /health and the
+            dispatcher log (DEPLOY_RUNBOOK §J).
+
+      # T158 (i) — 11 §F8 T151 doğrulamasından: a failed round used to be only a
+      # warning log line. The gauge is published after each round; a backend
+      # restart clears it until the next round.
+      - uid: reconciliation-network-failed
+        title: Ledger Reconciliation Round Failed On A Network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max by (network) (skinora_backend_reconciliation_last_run_failed)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A network's ledger reconciliation round could not read its balances
+          description: >-
+            The backend's last reconciliation round of a network (label network)
+            aborted because the network's service could not answer the balance
+            snapshot — its books were not checked this round. The alarm clears when a
+            later round of that network completes (the round runs on
+            reconciliation.schedule_cron). On Ethereum the snapshot is read in chunks
+            of 20 addresses under the 10-second client timeout; a slow provider
+            (ethereum-rpc-latency-high) or the service being down shows up here
+            (DEPLOY_RUNBOOK §J).

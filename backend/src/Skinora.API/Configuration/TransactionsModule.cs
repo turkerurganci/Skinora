@@ -334,6 +334,9 @@ public static class TransactionsModule
         services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
         services.AddScoped<OutgoingTransferDispatchJob>();
         // T152 — per-network outbound queue gauges (outbound-transfer-stuck).
+        // T158 (a) — and the row-count threshold of outbound-transfer-backlog.
+        services.Configure<Skinora.API.Monitoring.OutboundQueueAlarmOptions>(
+            configuration.GetSection(Skinora.API.Monitoring.OutboundQueueAlarmOptions.SectionName));
         services.AddSingleton<IOutboundQueueObserver, Skinora.API.Monitoring.PrometheusOutboundQueueObserver>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
@@ -387,6 +390,8 @@ public static class TransactionsModule
         // sidecar batch-snapshot endpoint, the Hangfire recurring job, and
         // the registrar that reads the cron from SystemSettings at startup.
         services.AddScoped<IReconciliationService, ReconciliationService>();
+        // T158 (i) — per-network round outcome for the reconciliation-network-failed alarm.
+        services.AddSingleton<IReconciliationRunObserver, Skinora.API.Monitoring.PrometheusReconciliationRunObserver>();
         services.AddScoped<ReconciliationJob>();
         // WP14 — the registrar is also an ICronJobReconfigurer so an admin
         // change to reconciliation.schedule_cron re-registers the recurring job

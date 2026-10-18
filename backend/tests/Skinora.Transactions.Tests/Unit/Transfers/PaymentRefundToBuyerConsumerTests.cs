@@ -394,6 +394,77 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
         Assert.Empty(_alert.Raised);
     }
 
+    // ---- T158 (f) — an Ethereum refund after the sweep is priced from the hot wallet ----
+
+    private async Task<Transaction> SeedEthereumWithSweepAsync(BlockchainTransactionStatus? sweepStatus)
+    {
+        var tx = await SeedCancelledAsync(price: 20m, commission: 0.40m, t => t.Network = BlockchainNetwork.ETHEREUM);
+        var deposit = new PaymentAddress
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            Network = BlockchainNetwork.ETHEREUM,
+            Address = "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+            HdWalletIndex = 21,
+            ExpectedAmount = tx.TotalAmount,
+            ExpectedToken = StablecoinType.USDT,
+            MonitoringStatus = MonitoringStatus.ACTIVE,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        };
+        _db.Set<PaymentAddress>().Add(deposit);
+        if (sweepStatus is { } status)
+        {
+            _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = tx.Id,
+                PaymentAddressId = deposit.Id,
+                Network = BlockchainNetwork.ETHEREUM,
+                Type = BlockchainTransactionType.SWEEP,
+                TxHash = status == BlockchainTransactionStatus.PENDING ? null : "0xsweep" + Guid.NewGuid().ToString("N"),
+                FromAddress = deposit.Address,
+                ToAddress = "0x7070707070707070707070707070707070707070",
+                Amount = tx.TotalAmount,
+                Token = StablecoinType.USDT,
+                Status = status,
+                BlockNumber = status == BlockchainTransactionStatus.CONFIRMED ? 26_215_000L : null,
+                ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? _clock.GetUtcNow().UtcDateTime : null,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            });
+        }
+        await _db.SaveChangesAsync();
+        return tx;
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.CONFIRMED)]
+    [InlineData(BlockchainTransactionStatus.DETECTED)]
+    [InlineData(BlockchainTransactionStatus.PENDING)]
+    public async Task T158f_Ethereum_Refund_After_Or_During_The_Sweep_Is_Priced_From_The_Hot_Wallet(
+        BlockchainTransactionStatus sweepStatus)
+    {
+        var tx = await SeedEthereumWithSweepAsync(sweepStatus);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        Assert.Empty(_gasFee.RefundCalls);
+        Assert.Equal((BuyerRefundAddress, 20.40m), Assert.Single(_gasFee.HotWalletRefundCalls));
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.FAILED)]
+    [InlineData(null)]
+    public async Task T158f_Ethereum_Refund_Before_Or_Without_A_Settled_Sweep_Is_Priced_From_The_Deposit(
+        BlockchainTransactionStatus? sweepStatus)
+    {
+        var tx = await SeedEthereumWithSweepAsync(sweepStatus);
+
+        await _sut.Handle(EventFor(tx), CancellationToken.None);
+
+        Assert.Empty(_gasFee.HotWalletRefundCalls);
+        Assert.Equal("0x9858effd232b4033e47d90003d41ec34ecaeda94", Assert.Single(_gasFee.RefundCalls).From);
+    }
+
     private PaymentRefundToBuyerRequestedEvent EventFor(Transaction tx) =>
         new(
             EventId: Guid.NewGuid(),
@@ -490,6 +561,18 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
         {
             Networks.Add(network);
             RefundCalls.Add((fromDepositAddress, toAddress, amount, token));
+            return Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+        }
+
+        /// <summary>T158 (f) — hot-wallet-sourced refunds are recorded with a null sender.</summary>
+        public List<(string To, decimal Amount)> HotWalletRefundCalls { get; } = [];
+
+        public Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken)
+        {
+            Networks.Add(network);
+            HotWalletRefundCalls.Add((toAddress, amount));
             return Task.FromResult(new ResolvedGasFee(RefundFee, Source));
         }
 

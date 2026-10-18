@@ -44,6 +44,24 @@ interface Common {
   transactionId: string;
   expectedContract: string;
   expectedSymbol: StablecoinSymbol;
+  /** T158 (h) — absent/null for a deposit allocated before T158. */
+  watchFromBlock: bigint | null;
+}
+
+const BLOCK_NUMBER = /^(?:0|[1-9]\d{0,18})$/;
+
+/**
+ * T158 (h) — `watchFromBlock`: the block the backend persisted for the
+ * deposit (`PaymentAddress.MonitorFromBlock`), a decimal string (a JSON
+ * number is accepted too). Absent or null = not known (deposit allocated
+ * before T158). Anything else is a bad body: following a garbled start block
+ * could skip the payment.
+ */
+function watchFromBlockOf(value: unknown): bigint | null | 'invalid' {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === 'string' && BLOCK_NUMBER.test(value)) return BigInt(value);
+  return 'invalid';
 }
 
 /** Shared validation of the start bodies; answers 400 itself and returns null on a bad body. */
@@ -70,6 +88,11 @@ function common(
     bad(res, invalidCode, 'address is not an Ethereum address.');
     return null;
   }
+  const watchFromBlock = watchFromBlockOf(body.watchFromBlock);
+  if (watchFromBlock === 'invalid') {
+    bad(res, invalidCode, 'watchFromBlock, when sent, must be a non-negative block number.');
+    return null;
+  }
   if (!SYMBOLS.has(expectedSymbol)) {
     bad(res, 'UNSUPPORTED_SYMBOL', 'expectedSymbol must be one of: USDT, USDC');
     return null;
@@ -89,6 +112,7 @@ function common(
     transactionId,
     expectedContract,
     expectedSymbol: expectedSymbol as StablecoinSymbol,
+    watchFromBlock,
   };
 }
 

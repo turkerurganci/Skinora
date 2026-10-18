@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Skinora.API.Monitoring;
 using Skinora.Shared.Enums;
 
@@ -39,6 +41,52 @@ public sealed class PrometheusOutboundQueueObserverTests
             $"max by (network) ({PrometheusOutboundQueueObserver.OldestPendingSeconds.Name}) / max by (network) ({PrometheusOutboundQueueObserver.AlarmSeconds.Name})",
             block);
         Assert.Matches(@"type: gt\s+params: \[1\]", block);
+    }
+
+    [Fact]
+    public void T158a_Publishes_The_Row_Count_Threshold_Per_Network_Default_25_And_Configurable()
+    {
+        new PrometheusOutboundQueueObserver().Report(BlockchainNetwork.TRON, 3, 10d, null);
+        Assert.Equal(25d, PrometheusOutboundQueueObserver.PendingRowsAlarmThreshold.WithLabels("TRON").Value);
+
+        new PrometheusOutboundQueueObserver(Options.Create(new OutboundQueueAlarmOptions { PendingRowsThreshold = 40 }))
+            .Report(BlockchainNetwork.ETHEREUM, 3, 10d, 10_800d);
+        Assert.Equal(40d, PrometheusOutboundQueueObserver.PendingRowsAlarmThreshold.WithLabels("ETHEREUM").Value);
+
+        // A non-positive value would page on an empty queue — the default stands.
+        new PrometheusOutboundQueueObserver(Options.Create(new OutboundQueueAlarmOptions { PendingRowsThreshold = 0 }))
+            .Report(BlockchainNetwork.ETHEREUM, 3, 10d, 10_800d);
+        Assert.Equal(25d, PrometheusOutboundQueueObserver.PendingRowsAlarmThreshold.WithLabels("ETHEREUM").Value);
+    }
+
+    [Fact]
+    public void T158a_The_Backlog_Rule_Divides_The_Row_Count_By_The_Published_Threshold_Per_Network()
+    {
+        var block = RuleBlock("outbound-transfer-backlog");
+
+        Assert.Contains(
+            $"max by (network) ({PrometheusOutboundQueueObserver.PendingRows.Name}) / max by (network) ({PrometheusOutboundQueueObserver.PendingRowsAlarmThreshold.Name})",
+            block);
+        Assert.Matches(@"type: gt\s+params: \[1\]", block);
+    }
+
+    [Fact]
+    public void T158i_The_Reconciliation_Gauge_Marks_A_Failed_Round_Until_A_Later_One_Completes()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 19, 3, 0, 0, TimeSpan.Zero));
+        var observer = new PrometheusReconciliationRunObserver(clock);
+
+        observer.Report(BlockchainNetwork.ETHEREUM, succeeded: false);
+        Assert.Equal(1, PrometheusReconciliationRunObserver.LastRunFailed.WithLabels("ETHEREUM").Value);
+
+        observer.Report(BlockchainNetwork.ETHEREUM, succeeded: true);
+        Assert.Equal(0, PrometheusReconciliationRunObserver.LastRunFailed.WithLabels("ETHEREUM").Value);
+        Assert.Equal(clock.GetUtcNow().ToUnixTimeSeconds(),
+            PrometheusReconciliationRunObserver.LastSuccess.WithLabels("ETHEREUM").Value);
+
+        var block = RuleBlock("reconciliation-network-failed");
+        Assert.Contains($"max by (network) ({PrometheusReconciliationRunObserver.LastRunFailed.Name})", block);
+        Assert.Matches(@"type: gt\s+params: \[0\]", block);
     }
 
     private static string RuleBlock(string uid)

@@ -25,6 +25,17 @@ public class PaymentAddress : BaseEntity, ISoftDeletable
     public MonitoringStatus MonitoringStatus { get; set; }
     public DateTime? MonitoringExpiresAt { get; set; }
 
+    /// <summary>
+    /// T158 (h) — "watch from this block" (06 §3.7, 08 §3.7.4): the network
+    /// service's last <c>finalized</c> block when it derived the address.
+    /// Nothing can reach a new address at or before it, so every monitor
+    /// start sends it and the service reads the deposit from the next block
+    /// with a zero balance baseline — however long the service was down, past
+    /// its bounded restart read-back. NULL on TRON (its service does not
+    /// report one) and on rows allocated before T158.
+    /// </summary>
+    public long? MonitorFromBlock { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

@@ -113,7 +113,9 @@ public sealed class PostCancelMonitorRecoveryHook : IHostedService
                     ExpectedSymbol: address.ExpectedToken.ToString(),
                     CancelledAt: cancelledAt,
                     InitialState: address.MonitoringStatus.ToString(),
-                    InitialStateExpiresAt: address.MonitoringExpiresAt),
+                    InitialStateExpiresAt: address.MonitoringExpiresAt,
+                    // T158 (h) — the persisted start block (Ethereum).
+                    WatchFromBlock: address.MonitorFromBlock),
                 cancellationToken);
 
             switch (status)

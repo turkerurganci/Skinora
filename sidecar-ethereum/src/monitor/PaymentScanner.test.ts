@@ -351,6 +351,42 @@ describe('re-reading never double-reports a transfer under another key', () => {
     expect(h.scanner.scannedBlock()).toBe(block);
   });
 
+  it('T158 (j): a 401 (webhook secret mismatch) keeps the range and the scan-failure counter climbs; once the secrets agree the payment is delivered', async () => {
+    const client = (await import('prom-client')).default;
+    const failures = async () =>
+      (
+        (
+          await client.register
+            .getSingleMetric('skinora_ethereum_monitor_scan_failures_total')
+            ?.get()
+        )?.values ?? []
+      ).reduce((s, v) => s + v.value, 0);
+    const h = monitorHarness();
+    h.chain.mineTo(100n);
+    h.chain.finalize(100n);
+    await h.scanner.tick();
+    afterRearmWindow(h);
+    const d = deposit(19);
+    h.arm(d);
+    await h.scanner.tick();
+    const pay = h.chain.mine([{ contract: USDT, from: BUYER, to: d, value: 1n }]);
+    h.chain.mineTo(pay.block + 40n);
+    h.chain.finalize(pay.block);
+    const before = await failures();
+    h.failAt.set(h.attempts() + 1, 401);
+    h.failAt.set(h.attempts() + 2, 401);
+    await h.scanner.tick();
+    await h.scanner.tick();
+    expect(h.sent).toEqual([]);
+    expect(h.scanner.scannedBlock()).toBe(100n); // never passed: nothing is dropped
+    expect(await failures()).toBe(before + 2);
+    await h.scanner.tick(); // the operator fixed the secret
+    expect(keysOf(h.sent)).toEqual([
+      `payment.detected:${pay.txHashes[0]}:0`,
+      `payment.confirmed:${pay.txHashes[0]}:0`,
+    ]);
+  });
+
   it('several transfers in one transaction are reported once each, under their own log index', async () => {
     const h = monitorHarness();
     h.chain.mineTo(100n);

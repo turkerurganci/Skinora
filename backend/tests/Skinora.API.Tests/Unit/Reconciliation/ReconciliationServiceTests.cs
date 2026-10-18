@@ -10,6 +10,7 @@ using Skinora.Payments.Domain.Entities;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -36,6 +37,7 @@ public sealed class ReconciliationServiceTests : IDisposable
     private readonly RecordingPublisher _publisher = new();
     private readonly FakeTimeProvider _clock = new();
     private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
+    private readonly RecordingRunObserver _runs = new();
     private readonly ReconciliationService _sut;
     private int _syntheticSweepSeq;
 
@@ -56,6 +58,7 @@ public sealed class ReconciliationServiceTests : IDisposable
             FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
             _publisher,
             _walletAddresses,
+            _runs,
             _clock,
             NullLogger<ReconciliationService>.Instance);
     }
@@ -620,6 +623,118 @@ public sealed class ReconciliationServiceTests : IDisposable
             .ToListAsync();
 
     // ─── Stubs ──────────────────────────────────────────────────────────
+
+    // ─── T158 (i) — Ethereum balance chunks + failed-round signal ───────
+
+    [Fact]
+    public async Task T158_Ethereum_BalanceSnapshot_IsReadInChunksOfTwenty_AndEveryAddressIsChecked()
+    {
+        var eth = new EchoBalancesSidecar();
+        var sut = EthereumSut(eth);
+        for (var i = 0; i < 45; i++) await SeedEthereumDepositAsync(EthAddress(i));
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(45, outcome.DepositAddressesChecked);
+        Assert.Equal(new[] { 20, 20, 5 }, eth.Calls.Select(c => c.Count).ToArray());
+        Assert.Equal(45, eth.Calls.SelectMany(c => c).Distinct().Count());
+        Assert.All(eth.Calls, c => Assert.True(c.Count <= BlockchainNetworkPolicy.Ethereum.BalanceSnapshotChunkSize));
+        Assert.Equal(1_000L, outcome.BlockNumber); // the lowest chunk's block
+        Assert.Equal((BlockchainNetwork.ETHEREUM, true), Assert.Single(_runs.Reports));
+    }
+
+    [Fact]
+    public async Task T158_Ethereum_OneFailedChunk_FailsTheRound_NoPartialCheck_AndIsReportedForTheAlarm()
+    {
+        var eth = new EchoBalancesSidecar { FailOnCall = 2 };
+        var sut = EthereumSut(eth);
+        for (var i = 0; i < 45; i++) await SeedEthereumDepositAsync(EthAddress(i));
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(0, outcome.DepositAddressesChecked);
+        Assert.Equal(2, eth.Calls.Count); // stopped at the failed chunk
+        Assert.Empty(await LoadAuditLogsAsync());
+        Assert.Equal((BlockchainNetwork.ETHEREUM, false), Assert.Single(_runs.Reports));
+    }
+
+    [Fact]
+    public async Task T158_Tron_IsStillOneRequest_AndAnAbortedRoundIsReportedFailed()
+    {
+        for (var i = 0; i < 45; i++) await SeedDepositAddressAsync($"TDeposit{i:D30}");
+        _sidecar.QueueUnavailable();
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(45, Assert.Single(_sidecar.Calls).Count);
+        Assert.Equal((BlockchainNetwork.TRON, false), Assert.Single(_runs.Reports));
+    }
+
+    private ReconciliationService EthereumSut(IBlockchainSidecarClient eth) =>
+        new(
+            _db,
+            new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, sidecar: eth),
+            _publisher,
+            _walletAddresses,
+            _runs,
+            _clock,
+            NullLogger<ReconciliationService>.Instance);
+
+    private static string EthAddress(int i) => "0x" + i.ToString("x").PadLeft(40, 'e');
+
+    private async Task SeedEthereumDepositAsync(string address)
+    {
+        var pa = await SeedDepositAddressAsync(address);
+        pa.Network = BlockchainNetwork.ETHEREUM;
+        pa.HdWalletIndex = (int)(pa.HdWalletIndex % 1_000_000) + _ethIndex++;
+        await _db.SaveChangesAsync();
+    }
+
+    private int _ethIndex;
+
+    private sealed class RecordingRunObserver : IReconciliationRunObserver
+    {
+        public List<(BlockchainNetwork Network, bool Succeeded)> Reports { get; } = new();
+
+        public void Report(BlockchainNetwork network, bool succeeded) => Reports.Add((network, succeeded));
+    }
+
+    /// <summary>Answers every asked address with zero balances; the n-th call (1-based) fails when set.</summary>
+    private sealed class EchoBalancesSidecar : IBlockchainSidecarClient
+    {
+        public List<IReadOnlyList<string>> Calls { get; } = new();
+        public int? FailOnCall { get; set; }
+
+        public Task<BlockchainSidecarDeriveResult> DeriveAddressAsync(
+            int index, Guid transactionId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<BlockchainSidecarStatus> StartMonitoringAsync(
+            PaymentMonitorStartRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<BlockchainSidecarStatus> StopMonitoringAsync(
+            string address, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<BlockchainSidecarStatus> StartPostCancelMonitoringAsync(
+            PostCancelMonitorStartRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<BlockchainSidecarStatus> StopPostCancelMonitoringAsync(
+            string address, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
+            HotToColdTransferRequest request, CancellationToken cancellationToken) => throw new NotImplementedException();
+
+        public Task<BlockchainSidecarBalancesResult> GetWalletBalancesAsync(
+            IReadOnlyList<string> addresses, CancellationToken cancellationToken)
+        {
+            Calls.Add(addresses.ToList());
+            if (FailOnCall == Calls.Count) return Task.FromResult(BlockchainSidecarBalancesResult.Unavailable);
+            var rows = addresses
+                .Select(a => new BlockchainSidecarAddressBalances(a, new Dictionary<string, string>
+                {
+                    ["USDT"] = "0",
+                    ["USDC"] = "0",
+                    ["ETH"] = "0",
+                }))
+                .ToList();
+            return Task.FromResult(new BlockchainSidecarBalancesResult(
+                BlockchainSidecarStatus.Success, 1_000L + Calls.Count - 1, rows));
+        }
+    }
 
     private sealed class StubBalancesSidecarClient : IBlockchainSidecarClient
     {
